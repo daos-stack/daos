@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 from getpass import getuser
@@ -29,20 +12,20 @@ from general_utils import get_remote_file_size
 from ior_test_base import IorTestBase
 
 
-# pylint: disable=too-many-ancestors
 class DfuseSparseFile(IorTestBase):
-    """Dfuse Sparse File base class
+    # pylint: disable=too-many-ancestors,too-few-public-methods
+    """Dfuse Sparse File base class.
 
     :avocado: recursive
     """
 
     def __init__(self, *args, **kwargs):
         """Initialize a DfuseSparseFile object."""
-        super(DfuseSparseFile, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.space_before = None
 
     def test_dfusesparsefile(self):
-        """Jira ID: DAOS-3768
+        """Jira ID: DAOS-3768.
 
         Test Description:
             Purpose of this test is to mount dfuse and verify behavior
@@ -64,7 +47,7 @@ class DfuseSparseFile(IorTestBase):
         # Create a pool, container and start dfuse.
         self.create_pool()
         self.create_cont()
-        self._start_dfuse()
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # get scm space before write
         self.space_before = self.pool.get_pool_free_space("nvme")
@@ -73,7 +56,7 @@ class DfuseSparseFile(IorTestBase):
         # space.
         sparse_file = str(self.dfuse.mount_dir.value + "/" +
                           "sparsefile.txt")
-        self.execute_cmd(u"touch {}".format(sparse_file))
+        self.execute_cmd("touch {}".format(sparse_file))
         self.log.info("File size (in bytes) before truncate: %s",
                       get_remote_file_size(
                           self.hostlist_clients[0], sparse_file))
@@ -98,7 +81,7 @@ class DfuseSparseFile(IorTestBase):
         self.assertTrue(fsize_after_truncate == self.space_before)
 
         # write to the first byte of the file with char 'A'
-        dd_first_byte = u"echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
+        dd_first_byte = "echo 'A' | dd conv=notrunc of={} bs=1 count=1".\
                         format(sparse_file)
         self.execute_cmd(dd_first_byte)
         fsize_write_1stbyte = get_remote_file_size(self.hostlist_clients[0],
@@ -109,7 +92,7 @@ class DfuseSparseFile(IorTestBase):
         self.assertTrue(fsize_write_1stbyte == self.space_before)
 
         # write to the 1024th byte position of the file
-        dd_1024_byte = u"echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
+        dd_1024_byte = "echo 'A' | dd conv=notrunc of={} obs=1 seek=1023 \
                        bs=1 count=1".format(sparse_file)
         self.execute_cmd(dd_1024_byte)
         fsize_write_1024thwrite = get_remote_file_size(self.hostlist_clients[0],
@@ -127,13 +110,14 @@ class DfuseSparseFile(IorTestBase):
         self.assertTrue(check_first_byte == check_1024th_byte)
 
         # check the middle 1022 bytes if they are filled with zeros
-        middle_1022_bytes = u"cmp --ignore-initial=1 --bytes=1022 {} {}".\
-                                  format(sparse_file, "/dev/zero")
+        middle_1022_bytes = \
+            "cmp --ignore-initial=1 --bytes=1022 {} {}".format(
+                sparse_file, "/dev/zero")
         self.execute_cmd(middle_1022_bytes)
 
         # read last 512 bytes which should be zeros till end of file.
         ignore_bytes = self.space_before - 512
-        read_till_eof = u"cmp --ignore-initial={} {} {}".format(
+        read_till_eof = "cmp --ignore-initial={} {} {}".format(
             ignore_bytes, sparse_file, "/dev/zero")
 #        self.execute_cmd(read_till_eof, False)
         # fail the test if the above command is successful.

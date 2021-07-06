@@ -9,14 +9,14 @@ hosts:
 #is taking ~600 seconds to finish so larger timeout to run tests.
 timeout: 7500
 server_config:
-  servers_per_host: 2
+  engines_per_host: 2
   name: daos_server
   servers:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       bdev_class: nvme
       bdev_list: ["0000:81:00.0"]
       scm_class: dcpm

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements the CaRT context related APIs.
@@ -166,18 +149,19 @@ crt_context_init(crt_context_t crt_ctx)
 				      NULL /* priv */, &crt_timeout_bh_ops,
 				      &ctx->cc_bh_timeout);
 	if (rc != 0) {
-		D_ERROR("d_binheap_create_inplace failed, rc: %d.\n", rc);
+		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_mutex_destroy, rc);
 	}
 
 	/* create epi table, use external lock */
-	rc =  d_hash_table_create_inplace(D_HASH_FT_NOLOCK, CRT_EPI_TABLE_BITS,
-					  NULL, &epi_table_ops,
-					  &ctx->cc_epi_table);
+	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, CRT_EPI_TABLE_BITS,
+					 NULL, &epi_table_ops,
+					 &ctx->cc_epi_table);
 	if (rc != 0) {
-		D_ERROR("d_hash_table_create_inplace failed, rc: %d.\n", rc);
+		D_ERROR("d_hash_table_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_GOTO(out_binheap_destroy, rc);
 	}
+
 	D_GOTO(out, rc);
 
 out_binheap_destroy:
@@ -189,20 +173,29 @@ out:
 }
 
 int
-crt_context_create(crt_context_t *crt_ctx)
+crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
+	na_size_t		uri_len = CRT_ADDR_STR_MAX_LEN;
+	bool			sep_mode;
+	int			cur_ctx_num;
+	int			max_ctx_num;
+	d_list_t		*ctx_list;
 
 	if (crt_ctx == NULL) {
 		D_ERROR("invalid parameter of NULL crt_ctx.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (crt_gdata.cg_sep_mode &&
-	    crt_gdata.cg_ctx_num >= crt_gdata.cg_ctx_max_num) {
+	sep_mode = crt_provider_is_sep(provider);
+	cur_ctx_num = crt_provider_get_cur_ctx_num(provider);
+	max_ctx_num = crt_provider_get_max_ctx_num(provider);
+
+	if (sep_mode &&
+	    cur_ctx_num >= max_ctx_num) {
 		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
-			crt_gdata.cg_ctx_num, crt_gdata.cg_ctx_max_num);
+			cur_ctx_num, max_ctx_num);
 		D_GOTO(out, -DER_AGAIN);
 	}
 
@@ -212,33 +205,93 @@ crt_context_create(crt_context_t *crt_ctx)
 
 	rc = crt_context_init(ctx);
 	if (rc != 0) {
-		D_ERROR("crt_context_init failed, rc: %d.\n", rc);
+		D_ERROR("crt_context_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_FREE_PTR(ctx);
 		D_GOTO(out, rc);
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
+	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
 
-	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, crt_gdata.cg_ctx_num);
 	if (rc != 0) {
-		D_ERROR("crt_hg_ctx_init failed rc: %d.\n", rc);
+		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 		crt_context_destroy(ctx, true);
 		D_GOTO(out, rc);
 	}
 
-	ctx->cc_idx = crt_gdata.cg_ctx_num;
-	d_list_add_tail(&ctx->cc_link, &crt_gdata.cg_ctx_list);
-	crt_gdata.cg_ctx_num++;
+	rc = crt_hg_get_addr(ctx->cc_hg_ctx.chc_hgcla,
+			     ctx->cc_self_uri, &uri_len);
+	if (rc != 0) {
+		D_ERROR("ctx_hg_get_addr() failed; rc: %d.\n", rc);
+		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+		crt_context_destroy(ctx, true);
+		D_GOTO(out, rc);
+	}
+
+	ctx->cc_idx = cur_ctx_num;
+
+	ctx_list = crt_provider_get_ctx_list(provider);
+
+	d_list_add_tail(&ctx->cc_link, ctx_list);
+	crt_provider_inc_cur_ctx_num(provider);
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
+
+	/** initialize sensors */
+	if (crt_gdata.cg_use_sensors) {
+		int	ret;
+
+		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
+				      "Total number of timed out RPC requests",
+				      "", "net/%d/%u/req_timeout",
+				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
+		if (ret)
+			D_WARN("Failed to create timed out req counter: "DF_RC
+			       "\n", DP_RC(ret));
+
+		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
+				      "Total number of timed out URI lookup "
+				      "requests", "",
+				      "net/%d/%u/uri_lookup_timeout",
+				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
+		if (ret)
+			D_WARN("Failed to create timed out uri req counter: "
+			       DF_RC"\n", DP_RC(ret));
+
+		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
+				      "Total number of failed address "
+				      "resolution attempts", "",
+				      "net/%d/%u/failed_addr",
+				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
+		if (ret)
+			D_WARN("Failed to create failed addr counter: "DF_RC
+			       "\n", DP_RC(ret));
+	}
+
+	if (crt_is_service() &&
+	    crt_gdata.cg_auto_swim_disable == 0 &&
+	    ctx->cc_idx == CRT_DEFAULT_PROGRESS_CTX_IDX) {
+		rc = crt_swim_init(CRT_DEFAULT_PROGRESS_CTX_IDX);
+		if (rc) {
+			D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
+			crt_context_destroy(ctx, true);
+			D_GOTO(out, rc);
+		}
+	}
 
 	*crt_ctx = (crt_context_t)ctx;
 	D_DEBUG(DB_TRACE, "created context (idx %d)\n", ctx->cc_idx);
 
 out:
 	return rc;
+}
+
+int
+crt_context_create(crt_context_t *crt_ctx)
+{
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_init_prov);
 }
 
 int
@@ -283,17 +336,20 @@ crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 			cbinfo.cci_rc = rpc_priv->crp_reply_hdr.cch_rc;
 
 		if (cbinfo.cci_rc != 0)
-			RPC_ERROR(rpc_priv, "RPC failed; rc: %d\n",
-				  cbinfo.cci_rc);
+			RPC_ERROR(rpc_priv, "failed, " DF_RC "\n",
+				  DP_RC(cbinfo.cci_rc));
 
 		RPC_TRACE(DB_TRACE, rpc_priv,
-			  "Invoking RPC callback (rank %d tag %d) rc: %d.\n",
+			  "Invoking RPC callback (rank %d tag %d) rc: "
+			  DF_RC "\n",
 			  rpc_priv->crp_pub.cr_ep.ep_rank,
 			  rpc_priv->crp_pub.cr_ep.ep_tag,
-			  cbinfo.cci_rc);
+			  DP_RC(cbinfo.cci_rc));
 
 		rpc_priv->crp_complete_cb(&cbinfo);
 	}
+
+	RPC_DECREF(rpc_priv);
 }
 
 /* Flag bits definition for crt_ctx_epi_abort */
@@ -353,8 +409,6 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		d_list_del_init(&rpc_priv->crp_epi_link);
 		epi->epi_req_wait_num--;
 		crt_rpc_complete(rpc_priv, -DER_CANCELED);
-		/* corresponds to ref taken when adding to waitq */
-		RPC_DECREF(rpc_priv);
 	}
 
 	/* abort RPCs in inflight queue */
@@ -414,6 +468,7 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
 	struct crt_context	*ctx;
+	uint32_t		 timeout_sec;
 	int			 flags;
 	int			 rc = 0;
 	int			 i;
@@ -435,6 +490,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			D_GOTO(out, rc);
 	}
 
+	timeout_sec = crt_swim_rpc_timeout();
 	flags = force ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
 	D_MUTEX_LOCK(&ctx->cc_mutex);
 	for (i = 0; i < CRT_SWIM_FLUSH_ATTEMPTS; i++) {
@@ -448,7 +504,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		/* Flush SWIM RPC already sent */
-		rc = crt_context_flush(crt_ctx, crt_swim_rpc_timeout);
+		rc = crt_context_flush(crt_ctx, timeout_sec);
 		if (rc)
 			/* give a chance to other threads to complete */
 			usleep(1000); /* 1ms */
@@ -471,6 +527,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
+	int provider = ctx->cc_hg_ctx.chc_provider;
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {
 		D_ERROR("crt_hg_ctx_fini failed rc: %d.\n", rc);
@@ -478,7 +535,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
-	crt_gdata.cg_ctx_num--;
+	crt_provider_dec_cur_ctx_num(provider);
 	d_list_del(&ctx->cc_link);
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
@@ -527,21 +584,22 @@ crt_context_flush(crt_context_t crt_ctx, uint64_t timeout)
 }
 
 int
-crt_ep_abort(crt_endpoint_t *ep)
+crt_rank_abort(d_rank_t rank)
 {
 	struct crt_context	*ctx = NULL;
 	d_list_t		*rlink;
 	int			 flags;
 	int			 rc = 0;
+	d_list_t		*ctx_list;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		rc = 0;
 		D_MUTEX_LOCK(&ctx->cc_mutex);
 		rlink = d_hash_rec_find(&ctx->cc_epi_table,
-					(void *)&ep->ep_rank,
-					sizeof(ep->ep_rank));
+					(void *)&rank, sizeof(rank));
 		if (rlink != NULL) {
 			flags = CRT_EPI_ABORT_FORCE;
 			rc = crt_ctx_epi_abort(rlink, &flags);
@@ -551,7 +609,7 @@ crt_ep_abort(crt_endpoint_t *ep)
 		if (rc != 0) {
 			D_ERROR("context (idx %d), ep_abort (rank %d), "
 				"failed rc: %d.\n",
-				ctx->cc_idx, ep->ep_rank, rc);
+				ctx->cc_idx, rank, rc);
 			break;
 		}
 	}
@@ -559,6 +617,46 @@ crt_ep_abort(crt_endpoint_t *ep)
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	return rc;
+}
+
+int
+crt_ep_abort(crt_endpoint_t *ep) {
+	return crt_rank_abort(ep->ep_rank);
+}
+
+int
+crt_rank_abort_all(crt_group_t *grp)
+{
+	struct crt_grp_priv	*grp_priv;
+	d_rank_list_t		*grp_membs;
+	int			i;
+	int			rc, rc2;
+
+	grp_priv = crt_grp_pub2priv(grp);
+	grp_membs = grp_priv_get_membs(grp_priv);
+	rc2 = 0;
+
+	if (grp_membs == NULL) {
+		D_ERROR("No members in the group\n");
+		D_GOTO(out, rc2 = -DER_INVAL);
+	}
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	for (i = 0; i < grp_membs->rl_nr; i++) {
+		D_DEBUG(DB_ALL, "Aborting RPCs to rank=%d\n",
+			grp_membs->rl_ranks[i]);
+
+		rc = crt_rank_abort(grp_membs->rl_ranks[i]);
+		if (rc != DER_SUCCESS) {
+			D_WARN("Abort to rank=%d failed with rc=%d\n",
+			       grp_membs->rl_ranks[i], rc);
+			rc2 = rc;
+		}
+	}
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+out:
+	return rc2;
 }
 
 /* caller should already hold crt_ctx->cc_mutex */
@@ -610,23 +708,26 @@ crt_req_timeout_untrack(struct crt_rpc_priv *rpc_priv)
 static void
 crt_exec_timeout_cb(struct crt_rpc_priv *rpc_priv)
 {
-	struct crt_timeout_cb_priv *cb_priv;
+	struct crt_timeout_cb_priv	*cbs_timeout;
+	crt_timeout_cb			 cb_func;
+	void				*cb_args;
+	size_t				 cbs_size;
+	size_t				 i;
 
-	if (crt_plugin_gdata.cpg_inited == 0)
+	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || rpc_priv == NULL))
 		return;
-	if (rpc_priv == NULL) {
-		D_ERROR("Invalid parameter, rpc_priv == NULL\n");
-		return;
+
+	cbs_size = crt_plugin_gdata.cpg_timeout_size;
+	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		cb_func = cbs_timeout[i].ctcp_func;
+		cb_args = cbs_timeout[i].ctcp_args;
+		/* check for and execute timeout callbacks here */
+		if (cb_func != NULL)
+			cb_func(rpc_priv->crp_pub.cr_ctx, &rpc_priv->crp_pub,
+				cb_args);
 	}
-	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
-	d_list_for_each_entry(cb_priv,
-			      &crt_plugin_gdata.cpg_timeout_cbs,
-			      ctcp_link) {
-		cb_priv->ctcp_func(rpc_priv->crp_pub.cr_ctx,
-				   &rpc_priv->crp_pub,
-				   cb_priv->ctcp_args);
-	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
 }
 
 static bool
@@ -681,6 +782,7 @@ crt_req_timeout_reset(struct crt_rpc_priv *rpc_priv)
 static inline void
 crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 {
+	struct crt_context		*crt_ctx;
 	struct crt_grp_priv		*grp_priv;
 	crt_endpoint_t			*tgt_ep;
 	crt_rpc_t			*ul_req;
@@ -695,6 +797,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 
 	tgt_ep = &rpc_priv->crp_pub.cr_ep;
 	grp_priv = crt_grp_pub2priv(tgt_ep->ep_grp);
+	crt_ctx = rpc_priv->crp_pub.cr_ctx;
+
+	if (crt_gdata.cg_use_sensors)
+		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
 
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_URI_LOOKUP:
@@ -708,6 +814,9 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  ul_in->ul_grp_id,
 			  ul_in->ul_rank,
 			  ul_req->cr_ep.ep_rank);
+
+		if (crt_gdata.cg_use_sensors)
+			d_tm_inc_counter(crt_ctx->cc_timedout_uri, 1);
 		crt_req_abort(ul_req);
 		/*
 		 * don't crt_rpc_complete rpc_priv here, because crt_req_abort
@@ -723,9 +832,10 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  grp_priv->gp_pub.cg_grpid,
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
+		if (crt_gdata.cg_use_sensors)
+			d_tm_inc_counter(crt_ctx->cc_failed_addr, 1);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
-		RPC_DECREF(rpc_priv);
 		break;
 	case RPC_STATE_FWD_UNREACH:
 		RPC_ERROR(rpc_priv,
@@ -735,7 +845,6 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  rpc_priv->crp_tgt_uri);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
-		RPC_DECREF(rpc_priv);
 		break;
 	default:
 		if (rpc_priv->crp_on_wire) {
@@ -764,6 +873,38 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 	D_ASSERT(crt_ctx != NULL);
 
+	if (crt_gdata.cg_swim_inited) {
+		struct crt_grp_priv	*gp = crt_gdata.cg_grp->gg_primary_grp;
+		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
+		swim_id_t		 self_id = swim_self_get(csm->csm_ctx);
+
+		/*
+		 * Check for network idle in SWIM context.
+		 * If the time passed from last received RPC till now is more
+		 * than 2/3 of suspicion timeout suspends eviction.
+		 * The max_delay should be less suspicion timeout to guarantee
+		 * the already suspected members will not be expired.
+		 */
+		if (crt_ctx->cc_idx == csm->csm_crt_ctx_idx &&
+		    crt_ctx->cc_last_unpack_hlc != 0 &&
+		    self_id != SWIM_ID_INVALID) {
+			uint64_t delay = crt_hlc2msec(crt_hlc_get() -
+						   crt_ctx->cc_last_unpack_hlc);
+			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
+
+			if (delay > max_delay) {
+				D_ERROR("Network outage detected (idle during "
+					"%lu.%lu sec >  maximum allowed "
+					"%lu.%lu sec). Suspend SWIM eviction "
+					"until network stabilized.\n",
+					delay / 1000, delay % 1000,
+					max_delay / 1000, max_delay % 1000);
+				crt_swim_suspend_all();
+				crt_ctx->cc_last_unpack_hlc = 0;
+			}
+		}
+	}
+
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
 
@@ -782,12 +923,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 		crt_req_timeout_untrack(rpc_priv);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
-		RPC_ERROR(rpc_priv,
-			  "ctx_id %d, (status: %#x) timed out, tgt rank %d, tag %d\n",
-			  crt_ctx->cc_idx,
-			  rpc_priv->crp_state,
-			  rpc_priv->crp_pub.cr_ep.ep_rank,
-			  rpc_priv->crp_pub.cr_ep.ep_tag);
 	};
 	D_MUTEX_UNLOCK(&crt_ctx->cc_mutex);
 
@@ -795,6 +930,15 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	while ((rpc_priv = d_list_pop_entry(&timeout_list,
 					    struct crt_rpc_priv,
 					    crp_tmp_link))) {
+		RPC_ERROR(rpc_priv,
+			  "ctx_id %d, (status: %#x) timed out (%d seconds), "
+			  "target (%d:%d)\n",
+			  crt_ctx->cc_idx,
+			  rpc_priv->crp_state,
+			  rpc_priv->crp_timeout_sec,
+			  rpc_priv->crp_pub.cr_ep.ep_rank,
+			  rpc_priv->crp_pub.cr_ep.ep_tag);
+
 		/* check for and execute RPC timeout callbacks here */
 		crt_exec_timeout_cb(rpc_priv);
 		crt_req_timeout_hdlr(rpc_priv);
@@ -817,7 +961,6 @@ crt_context_req_track(struct crt_rpc_priv *rpc_priv)
 	d_rank_t		 ep_rank;
 	int			 rc = 0;
 	struct crt_grp_priv	*grp_priv;
-
 
 	D_ASSERT(crt_ctx != NULL);
 
@@ -972,10 +1115,11 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 
 	/* remove from inflight queue */
 	d_list_del_init(&rpc_priv->crp_epi_link);
-	if (rpc_priv->crp_state == RPC_STATE_COMPLETED)
+	if (rpc_priv->crp_state == RPC_STATE_COMPLETED) {
 		epi->epi_reply_num++;
-	else /* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
+	} else {/* RPC_CANCELED or RPC_INITED or RPC_TIMEOUT */
 		epi->epi_req_num--;
+	}
 	D_ASSERT(epi->epi_req_num >= epi->epi_reply_num);
 
 	if (!crt_req_timedout(rpc_priv)) {
@@ -1043,16 +1187,19 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 		crt_context_req_untrack(tmp_rpc);
 		/* for error case here */
 		crt_rpc_complete(tmp_rpc, rc);
-		RPC_DECREF(tmp_rpc);
 	}
 }
 
+/* TODO: Need per-provider call */
 crt_context_t
 crt_context_lookup_locked(int ctx_idx)
 {
 	struct crt_context	*ctx;
+	d_list_t		*ctx_list;
 
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx)
 			return ctx;
 	}
@@ -1060,14 +1207,19 @@ crt_context_lookup_locked(int ctx_idx)
 	return NULL;
 }
 
+/* TODO: Need per-provider call */
 crt_context_t
 crt_context_lookup(int ctx_idx)
 {
 	struct crt_context	*ctx;
 	bool			found = false;
+	d_list_t		*ctx_list;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx) {
 			found = true;
 			break;
@@ -1102,8 +1254,7 @@ crt_self_uri_get(int tag, char **uri)
 {
 	struct crt_context	*tmp_crt_ctx;
 	char			*tmp_uri = NULL;
-	na_size_t		 uri_len = CRT_ADDR_STR_MAX_LEN;
-	int			 rc;
+	int			 rc = 0;
 
 	if (uri == NULL) {
 		D_ERROR("uri can't be NULL.\n");
@@ -1116,17 +1267,7 @@ crt_self_uri_get(int tag, char **uri)
 		D_GOTO(out, rc = -DER_NONEXIST);
 	}
 
-	D_ALLOC(tmp_uri, CRT_ADDR_STR_MAX_LEN);
-	if (tmp_uri == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	rc = crt_hg_get_addr(tmp_crt_ctx->cc_hg_ctx.chc_hgcla,
-			tmp_uri, &uri_len);
-	if (rc != 0) {
-		D_ERROR("crt_hg_get_addr failed, rc: %d.\n", rc);
-		D_FREE(tmp_uri);
-		D_GOTO(out, rc = -DER_HG);
-	}
+	D_STRNDUP(tmp_uri, tmp_crt_ctx->cc_self_uri, CRT_ADDR_STR_MAX_LEN - 1);
 
 	*uri = tmp_uri;
 
@@ -1142,19 +1283,19 @@ crt_context_num(int *ctx_num)
 		return -DER_INVAL;
 	}
 
-	*ctx_num = crt_gdata.cg_ctx_num;
+	*ctx_num = crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov].cpg_ctx_num;
 	return 0;
 }
 
 bool
-crt_context_empty(int locked)
+crt_context_empty(int provider, int locked)
 {
 	bool rc = false;
 
 	if (locked == 0)
 		D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	rc = d_list_empty(&crt_gdata.cg_ctx_list);
+	rc = d_list_empty(&crt_gdata.cg_prov_gdata[provider].cpg_ctx_list);
 
 	if (locked == 0)
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -1165,35 +1306,32 @@ crt_context_empty(int locked)
 static void
 crt_exec_progress_cb(struct crt_context *ctx)
 {
-	struct crt_prog_cb_priv	*cb_priv;
+	struct crt_prog_cb_priv	*cbs_prog;
+	crt_progress_cb		 cb_func;
+	void			*cb_args;
+	size_t i, cbs_size;
 	int ctx_idx;
 	int rc;
 
-	if (crt_plugin_gdata.cpg_inited == 0)
+	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || ctx == NULL))
 		return;
-
-	if (ctx == NULL) {
-		D_ERROR("Invalid parameter.\n");
-		return;
-	}
 
 	rc = crt_context_idx(ctx, &ctx_idx);
-	if (rc) {
+	if (unlikely(rc)) {
 		D_ERROR("crt_context_idx() failed, rc: %d.\n", rc);
 		return;
 	}
 
-	/* avoid lock and list traverse overhead if no progress cb */
-	if (d_list_empty(&crt_plugin_gdata.cpg_prog_cbs[ctx_idx]))
-		return;
+	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
+	cbs_prog = crt_plugin_gdata.cpg_prog_cbs[ctx_idx];
 
-	D_RWLOCK_RDLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
-	d_list_for_each_entry(cb_priv, &crt_plugin_gdata.cpg_prog_cbs[ctx_idx],
-			      cpcp_link) {
+	for (i = 0; i < cbs_size; i++) {
+		cb_func = cbs_prog[i].cpcp_func;
+		cb_args = cbs_prog[i].cpcp_args;
 		/* check for and execute progress callbacks here */
-		cb_priv->cpcp_func(ctx, cb_priv->cpcp_args);
+		if (cb_func != NULL)
+			cb_func(ctx, cb_args);
 	}
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
 }
 
 int
@@ -1338,55 +1476,94 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
  * 2) call crt_register_progress_cb(user_cb);
  */
 int
-crt_register_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg)
+crt_register_progress_cb(crt_progress_cb func, int ctx_idx, void *args)
 {
-	/* save the function pointer and arg to a global list */
-	struct crt_prog_cb_priv	*cb_priv = NULL;
-	int			 rc = 0;
+	struct crt_prog_cb_priv	*cbs_prog;
+	size_t i, cbs_size;
+	int rc = 0;
 
 	if (ctx_idx >= CRT_SRV_CONTEXT_NUM) {
 		D_ERROR("ctx_idx %d >= %d\n", ctx_idx, CRT_SRV_CONTEXT_NUM);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_ALLOC_PTR(cb_priv);
-	if (cb_priv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
 
-	cb_priv->cpcp_func = cb;
-	cb_priv->cpcp_args = arg;
+	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
+	cbs_prog = crt_plugin_gdata.cpg_prog_cbs[ctx_idx];
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
-	d_list_add_tail(&cb_priv->cpcp_link,
-			&crt_plugin_gdata.cpg_prog_cbs[ctx_idx]);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_prog[i].cpcp_func == func &&
+		    cbs_prog[i].cpcp_args == args) {
+			D_GOTO(out_unlock, rc = -DER_EXIST);
+		}
+	}
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_prog[i].cpcp_func == NULL) {
+			cbs_prog[i].cpcp_args = args;
+			cbs_prog[i].cpcp_func = func;
+			D_GOTO(out_unlock, rc = 0);
+		}
+	}
+
+	if (crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] != NULL)
+		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
+
+	crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] = cbs_prog;
+	cbs_size += CRT_CALLBACKS_NUM;
+
+	D_ALLOC_ARRAY(cbs_prog, cbs_size);
+	if (cbs_prog == NULL) {
+		crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx] = NULL;
+		D_GOTO(out_unlock, rc = -DER_NOMEM);
+	}
+
+	if (i > 0)
+		memcpy(cbs_prog, crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx],
+		       i * sizeof(*cbs_prog));
+	cbs_prog[i].cpcp_args = args;
+	cbs_prog[i].cpcp_func = func;
+
+	crt_plugin_gdata.cpg_prog_cbs[ctx_idx]  = cbs_prog;
+	crt_plugin_gdata.cpg_prog_size[ctx_idx] = cbs_size;
+
+out_unlock:
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 out:
 	return rc;
 }
 
 int
-crt_unregister_progress_cb(crt_progress_cb cb, int ctx_idx, void *arg)
+crt_unregister_progress_cb(crt_progress_cb func, int ctx_idx, void *args)
 {
-	struct crt_prog_cb_priv *tmp, *cb_priv;
-	int			 rc = -DER_NONEXIST;
+	struct crt_prog_cb_priv	*cbs_prog;
+	size_t i, cbs_size;
+	int rc = -DER_NONEXIST;
 
 	if (ctx_idx >= CRT_SRV_CONTEXT_NUM) {
 		D_ERROR("ctx_idx %d >= %d\n", ctx_idx, CRT_SRV_CONTEXT_NUM);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
-	d_list_for_each_entry_safe(cb_priv, tmp,
-				   &crt_plugin_gdata.cpg_prog_cbs[ctx_idx],
-				   cpcp_link) {
-		if (cb_priv->cpcp_func == cb && cb_priv->cpcp_args == arg) {
-			d_list_del_init(&cb_priv->cpcp_link);
-			D_FREE(cb_priv);
-			D_GOTO(out_unlock, rc = -DER_SUCCESS);
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
+
+	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
+	cbs_prog = crt_plugin_gdata.cpg_prog_cbs[ctx_idx];
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_prog[i].cpcp_func == func &&
+		    cbs_prog[i].cpcp_args == args) {
+			cbs_prog[i].cpcp_func = NULL;
+			cbs_prog[i].cpcp_args = NULL;
+			D_GOTO(out_unlock, rc = 0);
 		}
 	}
+
 out_unlock:
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_prog_rwlock[ctx_idx]);
+	D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[ctx_idx]);
+
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 out:
 	return rc;
 }
@@ -1397,23 +1574,54 @@ out:
  * 2) call crt_register_timeout_cb_core(user_cb);
  */
 int
-crt_register_timeout_cb(crt_timeout_cb cb, void *arg)
+crt_register_timeout_cb(crt_timeout_cb func, void *args)
 {
-	/* TODO: save the function pointer somewhere for retrieval later on */
-	struct crt_timeout_cb_priv	*timeout_cb_priv = NULL;
-	int				 rc = 0;
+	struct crt_timeout_cb_priv *cbs_timeout;
+	size_t i, cbs_size;
+	int rc = 0;
 
-	D_ALLOC_PTR(timeout_cb_priv);
-	if (timeout_cb_priv == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-	timeout_cb_priv->ctcp_func = cb;
-	timeout_cb_priv->ctcp_args = arg;
-	D_RWLOCK_WRLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
-	d_list_add_tail(&timeout_cb_priv->ctcp_link,
-			&crt_plugin_gdata.cpg_timeout_cbs);
-	D_RWLOCK_UNLOCK(&crt_plugin_gdata.cpg_timeout_rwlock);
+	D_MUTEX_LOCK(&crt_plugin_gdata.cpg_mutex);
 
-out:
+	cbs_size = crt_plugin_gdata.cpg_timeout_size;
+	cbs_timeout = crt_plugin_gdata.cpg_timeout_cbs;
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_timeout[i].ctcp_func == func &&
+		    cbs_timeout[i].ctcp_args == args) {
+			D_GOTO(out_unlock, rc = -DER_EXIST);
+		}
+	}
+
+	for (i = 0; i < cbs_size; i++) {
+		if (cbs_timeout[i].ctcp_func == NULL) {
+			cbs_timeout[i].ctcp_args = args;
+			cbs_timeout[i].ctcp_func = func;
+			D_GOTO(out_unlock, rc = 0);
+		}
+	}
+
+	D_FREE(crt_plugin_gdata.cpg_timeout_cbs_old);
+
+	crt_plugin_gdata.cpg_timeout_cbs_old = cbs_timeout;
+	cbs_size += CRT_CALLBACKS_NUM;
+
+	D_ALLOC_ARRAY(cbs_timeout, cbs_size);
+	if (cbs_timeout == NULL) {
+		crt_plugin_gdata.cpg_timeout_cbs_old = NULL;
+		D_GOTO(out_unlock, rc = -DER_NOMEM);
+	}
+
+	if (i > 0)
+		memcpy(cbs_timeout, crt_plugin_gdata.cpg_timeout_cbs_old,
+		       i * sizeof(*cbs_timeout));
+	cbs_timeout[i].ctcp_args = args;
+	cbs_timeout[i].ctcp_func = func;
+
+	crt_plugin_gdata.cpg_timeout_cbs  = cbs_timeout;
+	crt_plugin_gdata.cpg_timeout_size = cbs_size;
+
+out_unlock:
+	D_MUTEX_UNLOCK(&crt_plugin_gdata.cpg_mutex);
 	return rc;
 }
 

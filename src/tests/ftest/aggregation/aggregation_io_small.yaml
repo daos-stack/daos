@@ -39,7 +39,7 @@ ior:
         flags: "-v -w -W -k"
     api: DFS
     transfer_size: '1K'
-    block_size: '256M'
+    block_size: '256MiB'
     objectclass:
       oclass_SX:
         dfs_oclass: "SX"

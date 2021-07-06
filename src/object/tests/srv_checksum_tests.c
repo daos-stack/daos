@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <stddef.h>
@@ -29,8 +12,7 @@
 #include <daos/checksum.h>
 #include <daos_srv/evtree.h>
 #include <daos_srv/srv_csum.h>
-
-#define ASSERT_SUCCESS(exp) assert_int_equal(0, (exp))
+#include <daos/tests_lib.h>
 
 static void
 print_chars(const uint8_t *buf, const size_t len, const uint32_t max)
@@ -51,7 +33,7 @@ static int fake_update_bytes;
 static int fake_update_called;
 
 static int
-fake_reset(struct daos_csummer *obj)
+fake_reset(void *daos_mhash_ctx)
 {
 	fake_update_buf[0] = '>';
 	fake_update_buf++;
@@ -60,10 +42,8 @@ fake_reset(struct daos_csummer *obj)
 }
 
 static int
-fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
+fake_update(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
 {
-	int	i;
-
 	fake_update_called++;
 
 	if (fake_update_bytes + buf_len < FAKE_UPDATE_BUF_LEN) {
@@ -75,16 +55,24 @@ fake_update(struct daos_csummer *obj, uint8_t *buf, size_t buf_len)
 		fake_update_bytes++;
 	}
 
+	return 0;
+}
+
+static int
+fake_finish(void *daos_mhash_ctx, uint8_t *buf, size_t buf_len)
+{
+	int i;
+
 	/** Fill checksum with 'N' to indicate creating new checksum */
-	for (i = 0; i < daos_csummer_get_csum_len(obj); i++)
-		obj->dcs_csum_buf[i] = 'N';
+	for (i = 0; i < buf_len; i++)
+		buf[i] = 'N';
 
 	return 0;
 }
 
 static int fake_compare_called;
 static bool
-fake_compare(struct daos_csummer *obj,
+fake_compare(void *daos_mhash_ctx,
 	     uint8_t *buf1, uint8_t *buf2,
 	     size_t buf_len)
 {
@@ -92,13 +80,14 @@ fake_compare(struct daos_csummer *obj,
 	return true;
 }
 
-static struct csum_ft fake_algo = {
-	.cf_reset = fake_reset,
-	.cf_update = fake_update,
-	.cf_compare = fake_compare,
-	.cf_csum_len = sizeof(uint32_t),
-	.cf_type = 999,
-	.cf_name = "fake"
+static struct hash_ft fake_algo = {
+	.cf_reset	= fake_reset,
+	.cf_update	= fake_update,
+	.cf_finish	= fake_finish,
+	.cf_compare	= fake_compare,
+	.cf_hash_len	= sizeof(uint32_t),
+	.cf_type	= 999,
+	.cf_name	= "fake"
 };
 
 static void
@@ -237,7 +226,7 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 				  rec_size);
 
 		if (l->is_hole) {
-			biov->bi_addr.ba_hole = true;
+			BIO_ADDR_SET_HOLE(&biov->bi_addr);
 			biov->bi_buf = NULL;
 		} else {
 			D_ALLOC(biov->bi_buf, data_len);
@@ -339,7 +328,7 @@ request_that_matches_single_extent(void **state)
 	       ctx.iod_csum->ic_data->cs_buf_len);
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 
@@ -375,7 +364,7 @@ extent_smaller_than_chunk(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSS");
@@ -415,7 +404,7 @@ request_that_matches_single_extent_multiple_chunks(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSS");
@@ -451,7 +440,7 @@ request_that_matches_single_extent_multiple_chunks_not_aligned(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSSSSSSSSSSSSSS");
@@ -489,7 +478,7 @@ request_that_matches_multiple_aligned_extents(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSSSSSS");
@@ -527,7 +516,7 @@ request_that_matches_multiple_aligned_extents2(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSSSSSS");
@@ -563,7 +552,7 @@ request_that_is_more_than_extents(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSS");
@@ -602,7 +591,7 @@ partial_chunk_request0(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">ZYXW|>ZYXWVUTS|");
@@ -640,7 +629,7 @@ partial_chunk_request1(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">VUTS|>ZYXWVUTS|");
@@ -678,7 +667,7 @@ partial_chunk_request2(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">XWVU|>ZYXWVUTS|");
@@ -721,7 +710,7 @@ request_needs_new_and_copy(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">XW|>ZYXW|>VU|>VUTS|");
@@ -765,7 +754,7 @@ unaligned_chunks_csums_new_csum_is_created(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">1|A|>12|>A|");
@@ -815,7 +804,7 @@ extent_larger_than_request(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">5|ABC|>567|>ABCDEFG|");
@@ -857,7 +846,7 @@ unaligned_first_chunk(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
@@ -898,7 +887,7 @@ fetch_multiple_unaligned_extents(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">D|EF|>D|>EF|");
@@ -948,7 +937,7 @@ many_extents(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">A|B|C|D|>A|>B|>C|>D|>E|F|>E|>F|");
@@ -989,7 +978,7 @@ request_that_begins_before_extent(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	ASSERT_CSUM(ctx, "SSSS");
@@ -1032,7 +1021,7 @@ fetch_with_hole(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
@@ -1071,7 +1060,7 @@ fetch_with_hole2(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">ABC|GH|>ABC|>GH|");
@@ -1127,7 +1116,7 @@ fetch_with_hole3(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">A|B|C|D|E|F|>A|>B|>C|>D|>E|>F|");
@@ -1163,7 +1152,7 @@ fetch_with_hole4(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
@@ -1206,7 +1195,7 @@ fetch_with_hole5(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">A|BC|>A|>BC|");
@@ -1247,7 +1236,7 @@ fetch_with_hole6(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW(">A|>ABCD|");
@@ -1287,7 +1276,7 @@ request_is_only_part_of_biovs(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	FAKE_UPDATE_SAW("");
@@ -1326,7 +1315,7 @@ larger_records(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	/** 1 record from 1st extent (mnop) and 2 records from 2nd extent
@@ -1367,7 +1356,7 @@ larger_records2(void **state)
 	});
 
 	/** Act */
-	ASSERT_SUCCESS(fetch_csum_verify_bsgl_with_args(&ctx));
+	assert_success(fetch_csum_verify_bsgl_with_args(&ctx));
 
 	/** Verify */
 	assert_int_equal(4, fake_update_called);
@@ -1379,12 +1368,14 @@ larger_records2(void **state)
 	D_FREE(large_data02);
 }
 
-int setup(void **state)
+static int
+sct_setup(void **state)
 {
 	return 0;
 }
 
-int teardown(void **state)
+static int
+sct_teardown(void **state)
 {
 	reset_fake_algo();
 	return 0;
@@ -1392,7 +1383,7 @@ int teardown(void **state)
 
 /* Convenience macro for unit tests */
 #define	TA(desc, test_fn) \
-	{ desc, test_fn, setup, teardown }
+	{ desc, test_fn, sct_setup, sct_teardown }
 
 static const struct CMUnitTest array_tests[] = {
 	TA("SRV_CSUM_ARRAY01: Whole extent requested",
@@ -1494,14 +1485,16 @@ update_fetch_sv(void **state)
 	daos_csummer_destroy(&csummer);
 }
 
-
 #define	TS(desc, test_fn) \
-	{ "SRV_CSUM_SV" desc, test_fn, setup, teardown }
+	{ "SRV_CSUM_SV" desc, test_fn, sct_setup, sct_teardown }
 
 static const struct CMUnitTest sv_tests[] = {
 	TS("01: Various scenarios for update/fetch with fault injection",
 	   update_fetch_sv),
 };
+
+/** in srv_scrubbing_tests.c */
+extern int run_scrubbing_tests(void);
 
 int
 main(int argc, char **argv)
@@ -1516,7 +1509,6 @@ main(int argc, char **argv)
 	}
 #endif
 
-
 	rc += cmocka_run_group_tests_name(
 		"Storage and retrieval of checksums for Array Type",
 		array_tests, NULL, NULL);
@@ -1526,5 +1518,4 @@ main(int argc, char **argv)
 		sv_tests, NULL, NULL);
 
 	return rc;
-
 }

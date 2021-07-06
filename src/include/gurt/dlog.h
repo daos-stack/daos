@@ -1,51 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
- *
- * Portions of this file are based on The Self-* Storage System Project
- * Copyright (c) 2004-2011, Carnegie Mellon University.
- * All rights reserved.
- * http://www.pdl.cmu.edu/  (Parallel Data Lab at Carnegie Mellon)
- *
- * This software is being provided by the copyright holders under the
- * following license. By obtaining, using and/or copying this software,
- * you agree that you have read, understood, and will comply with the
- * following terms and conditions:
- *
- * Permission to reproduce, use, and prepare derivative works of this
- * software is granted provided the copyright and "No Warranty" statements
- * are included with all reproductions and derivative works and associated
- * documentation. This software may also be redistributed without charge
- * provided that the copyright and "No Warranty" statements are included
- * in all redistributions.
- *
- * NO WARRANTY. THIS SOFTWARE IS FURNISHED ON AN "AS IS" BASIS.
- * CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY KIND, EITHER
- * EXPRESSED OR IMPLIED AS TO THE MATTER INCLUDING, BUT NOT LIMITED
- * TO: WARRANTY OF FITNESS FOR PURPOSE OR MERCHANTABILITY, EXCLUSIVITY
- * OF RESULTS OR RESULTS OBTAINED FROM USE OF THIS SOFTWARE. CARNEGIE
- * MELLON UNIVERSITY DOES NOT MAKE ANY WARRANTY OF ANY KIND WITH RESPECT
- * TO FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
- * COPYRIGHT HOLDERS WILL BEAR NO LIABILITY FOR ANY USE OF THIS SOFTWARE
- * OR DOCUMENTATION.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -87,8 +43,9 @@ typedef uint64_t d_dbug_t;
 #define DLOG_STDERR     0x20000000	/**< always log to stderr */
 #define DLOG_STDOUT     0x10000000	/**< always log to stdout */
 
-#define DLOG_PRIMASK    0x07ffff00	/**< priority mask */
+#define DLOG_PRIMASK    0x0fffff00	/**< priority mask */
 #define D_FOREACH_PRIO_MASK(ACTION, arg)				    \
+	ACTION(DLOG_EMIT,  emit,  emit,  0x08000000, arg) /**< emit */	    \
 	ACTION(DLOG_EMERG, fatal, fatal, 0x07000000, arg) /**< emergency */ \
 	ACTION(DLOG_ALERT, alert, alert, 0x06000000, arg) /**< alert */	    \
 	ACTION(DLOG_CRIT,  crit,  crit,  0x05000000, arg) /**< critical */  \
@@ -113,10 +70,13 @@ enum d_log_flag_bits {
 	D_LOG_SET_AS_DEFAULT	= 1U,
 };
 
-#define DLOG_PRISHIFT   24		/**< to get non-debug level */
-#define DLOG_DPRISHIFT  8		/**< to get debug level */
-#define DLOG_FACMASK    0x000000ff	/**< facility mask */
-#define DLOG_UNINIT	0x80000000	/**< Reserve one bit mask cache */
+#define DLOG_PRISHIFT     24		/**< to get non-debug level */
+#define DLOG_DPRISHIFT    8		/**< to get debug level */
+#define DLOG_PRINDMASK    0x0f000000	/**< mask for non-debug level bits */
+#define DLOG_FACMASK      0x000000ff	/**< facility mask */
+#define DLOG_UNINIT       0x80000000	/**< Reserve one bit mask cache */
+
+#define DLOG_PRI(flag) ((flag & DLOG_PRINDMASK) >> DLOG_PRISHIFT)
 
 /** The environment variable for the default debug bit-mask */
 #define DD_MASK_ENV	"DD_MASK"
@@ -164,8 +124,8 @@ struct d_debug_data {
 
 /**
  * Priority level for debug message.
- * It is only used by D_INFO, D_NOTE, D_WARN, D_ERROR, D_CRIT and
- * D_FATAL.
+ * It is only used by D_INFO, D_NOTE, D_WARN, D_ERROR, D_CRIT,
+ * D_FATAL and D_EMIT.
  * - All priority debug messages are always stored in the debug log.
  * - User can decide the priority level to output to stderr by setting
  *   env variable DD_STDERR, the default level is D__CRIT.
@@ -366,6 +326,11 @@ int d_log_allocfacility(const char *aname, const char *lname);
 int d_log_init(void);
 
 /**
+ * Callback to get XS id and ULT id
+ */
+typedef void (*d_log_id_cb_t)(uint32_t *xs_id, uint64_t *ult_id);
+
+/**
  * Advanced version of log initialing function. User can specify log tag,
  * output log file, the default log mask and the mask for output errors.
  *
@@ -374,11 +339,12 @@ int d_log_init(void);
  * \param[in] flavor		Flavor controlling output
  * \param[in] def_mask		Default log mask
  * \param[in] err_mask		Output errors mask
+ * \param[in] id_cb		callback to get tid/ult id.
  *
  * \return			0 on success, -1 on failure
  */
 int d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-		     d_dbug_t def_mask, d_dbug_t err_mask);
+		   d_dbug_t def_mask, d_dbug_t err_mask, d_log_id_cb_t id_cb);
 
 /**
  * Remove a reference on the default cart log.  Calls d_log_close
@@ -411,11 +377,12 @@ void d_log_sync_mask(void);
  *				in d_log).
  * \param[in] logfile		log file name, or null if no log file
  * \param[in] flags		STDERR, LOGPID
+ * \param[in] id_cb		callback to get tid/ult id.
  *
  * \return			0 on success, -1 on error.
  */
 int d_log_open(char *tag, int maxfac_hint, int default_mask,
-	      int stderr_mask, char *logfile, int flags);
+	       int stderr_mask, char *logfile, int flags, d_log_id_cb_t id_cb);
 
 /**
  * set the logmask for a given facility.
@@ -471,6 +438,11 @@ int d_log_getmasks(char *buf, int discard, int len, int unterm);
  * reset log masks in such rare occasions isn't a showstopper.
  */
 void d_log_add_cache(int *cache, int nr);
+
+/**
+ * Fsync log files.
+ */
+void d_log_sync(void);
 
 #if defined(__cplusplus)
 }

@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>1.1.0-SNAPSHOT</version>
+    <version>1.2.1-SNAPSHOT</version>
   </parent>
 
   <groupId>io.daos</groupId>
@@ -54,6 +54,31 @@
               <finalName>daos-java-${project.version}</finalName>
               <descriptors>
                 <descriptor>src/assembly/make-assembly-with-dependencies.xml</descriptor>
+              </descriptors>
+            </configuration>
+            <executions>
+              <execution>
+                <phase>package</phase>
+                <goals>
+                  <goal>single</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>with-proto3-netty4-deps</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-assembly-plugin</artifactId>
+            <configuration>
+              <finalName>daos-java-${project.version}</finalName>
+              <descriptors>
+                <descriptor>src/assembly/make-assembly-with-proto3-netty4-deps.xml</descriptor>
               </descriptors>
             </configuration>
             <executions>

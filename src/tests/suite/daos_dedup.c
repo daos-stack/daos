@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC	DD_FAC(tests)
@@ -27,12 +10,6 @@
 #include <daos/checksum.h>
 #include <gurt/types.h>
 #include <daos_prop.h>
-
-#define assert_success(r) do {\
-	int __rc = (r); \
-	if (__rc != 0) \
-		fail_msg("Not successful!! Error code: " DF_RC, DP_RC(__rc)); \
-	} while (0)
 
 struct dedup_test_ctx {
 	/** Pool */
@@ -56,6 +33,20 @@ enum THRESHOLD_SETTING {
 	THRESHOLD_GREATER_THAN_DATA = 1,
 	THRESHOLD_LESS_THAN_DATA,
 };
+
+static bool
+dedup_is_nvme_enabled(test_arg_t *arg)
+{
+	daos_pool_info_t	 pinfo = { 0 };
+	struct daos_pool_space	*ps = &pinfo.pi_space;
+	int			 rc;
+
+	pinfo.pi_bits = DPI_ALL;
+	rc = test_pool_get_info(arg, &pinfo);
+	assert_rc_equal(rc, 0);
+
+	return ps->ps_free_min[DAOS_MEDIA_NVME] != 0;
+}
 
 /** easily setup an iov and allocate */
 static void
@@ -87,7 +78,7 @@ setup_sgl(struct dedup_test_ctx *ctx)
 					 " sed do eiusmod tempor incididunt ut"
 					 " labore et dolore magna aliqua.");
 
-	daos_sgl_init(&ctx->fetch_sgl, 1);
+	d_sgl_init(&ctx->fetch_sgl, 1);
 	iov_alloc(&ctx->fetch_sgl.sg_iovs[0],
 		daos_sgl_buf_size(&ctx->update_sgl));
 }
@@ -159,16 +150,16 @@ setup_cont_obj(struct dedup_test_ctx *ctx,
 	props->dpp_entries[2].dpe_val = dedup_threshold;
 
 	rc = daos_cont_create(ctx->poh, ctx->uuid, props, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 	daos_prop_free(props);
 
 	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 
-	ctx->oid = dts_oid_gen(oclass, 0, 1);
+	ctx->oid = daos_test_oid_gen(ctx->coh, oclass, 0, 0, 1);
 	rc = daos_obj_open(ctx->coh, ctx->oid, 0, &ctx->oh, NULL);
-	assert_int_equal(0, rc);
+	assert_rc_equal(0, rc);
 }
 
 static void
@@ -231,6 +222,11 @@ with_identical_updates(void *const *state, uint32_t iod_type, int csum_type,
 	daos_size_t		delta;
 	int			rc;
 
+	if (dedup_is_nvme_enabled(*state)) {
+		print_message("Currently dedup doesn't support NVMe.\n");
+		skip();
+	}
+
 	setup_context(&ctx, *state, iod_type, csum_type, oc, dedup_type,
 		      dedup_threshold_setting);
 
@@ -243,7 +239,7 @@ with_identical_updates(void *const *state, uint32_t iod_type, int csum_type,
 	assert_success(rc);
 
 	/** if threshold is less than data size, dedup should prevent the extra
-	 * update and therefor the data used from the pool is much less.
+	 * update and therefore the data used from the pool is much less.
 	 * Otherwise, the data used from the pool will be larger.
 	 */
 	after_second_update = get_size(&ctx);
@@ -318,7 +314,7 @@ static int
 setup(void **state)
 {
 	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			  NULL);
+			  0, NULL);
 }
 
 #define DEDUP_TEST(dsc, test) { dsc, test, NULL, test_case_teardown }
@@ -343,11 +339,11 @@ run_daos_dedup_test(int rank, int size, int *sub_tests, int sub_tests_size)
 
 	if (rank == 0) {
 		if (sub_tests_size == 0) {
-			rc = cmocka_run_group_tests_name("DAOS Checksum Tests",
+			rc = cmocka_run_group_tests_name("DAOS_Checksum",
 							 dedup_tests, setup,
 							 test_teardown);
 		} else {
-			rc = run_daos_sub_tests("DAOS Checksum Tests",
+			rc = run_daos_sub_tests("DAOS_Checksum",
 						dedup_tests,
 						ARRAY_SIZE(dedup_tests),
 						sub_tests,

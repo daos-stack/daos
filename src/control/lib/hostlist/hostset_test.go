@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package hostlist_test
 
@@ -53,6 +36,16 @@ func TestHostSet_Create(t *testing.T) {
 			startList: "server[1,3,5,7,9]:10000,server[2,4,6,8,10]:10001",
 			expOut:    "server[1,3,5,7,9]:10000,server[2,4,6,8,10]:10001",
 			expCount:  10,
+		},
+		"single hyphen": {
+			startList: "dserver-0001,dserver-0002,dserver-0003",
+			expOut:    "dserver-[0001-0003]",
+			expCount:  3,
+		},
+		"multiple hyphens": {
+			startList: "d-server-j-0001,d-server-j-0002,d-server-j-0003",
+			expOut:    "d-server-j-[0001-0003]",
+			expCount:  3,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -192,6 +185,22 @@ func TestHostSet_MergeSet(t *testing.T) {
 	gotCount := a.Count()
 	if gotCount != expCount {
 		t.Fatalf("expected count to be %d, got %d", expCount, gotCount)
+	}
+}
+
+func TestHostSet_ReplaceSet(t *testing.T) {
+	a, err := hostlist.CreateSet("host[1-8]")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := hostlist.CreateSet("host[8-15]")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	a.ReplaceSet(b)
+	if a.String() != b.String() {
+		t.Fatalf("%s != %s", a, b)
 	}
 }
 

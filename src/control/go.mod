@@ -3,19 +3,29 @@ module github.com/daos-stack/daos/src/control
 go 1.13
 
 require (
+	github.com/Jille/raft-grpc-transport v1.1.1
+	github.com/armon/go-metrics v0.3.6 // indirect
 	github.com/dustin/go-humanize v1.0.0
-	github.com/golang/protobuf v1.3.5
-	github.com/google/go-cmp v0.4.0
-	github.com/google/uuid v1.1.1
+	github.com/fatih/color v1.10.0 // indirect
+	github.com/google/go-cmp v0.5.5
+	github.com/google/uuid v1.1.2
+	github.com/hashicorp/go-hclog v0.16.0
+	github.com/hashicorp/go-immutable-radix v1.3.0 // indirect
+	github.com/hashicorp/go-msgpack v1.1.5 // indirect
+	github.com/hashicorp/golang-lru v0.5.4 // indirect
+	github.com/hashicorp/raft v1.2.0
+	github.com/hashicorp/raft-boltdb/v2 v2.0.0-20210409134258-03c10cc3d4ea
 	github.com/jessevdk/go-flags v1.4.0
-	github.com/kr/pretty v0.1.0 // indirect
-	github.com/mitchellh/hashstructure v1.0.0
+	github.com/mitchellh/hashstructure/v2 v2.0.1
 	github.com/pkg/errors v0.9.1
-	golang.org/x/net v0.0.0-20200301022130-244492dfa37a
-	golang.org/x/sys v0.0.0-20200317113312-5766fd39f98d
-	golang.org/x/text v0.3.2 // indirect
-	google.golang.org/genproto v0.0.0-20200318110522-7735f76e9fa5
-	google.golang.org/grpc v1.28.0
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
-	gopkg.in/yaml.v2 v2.2.8
+	github.com/prometheus/client_golang v1.10.0
+	github.com/prometheus/client_model v0.2.0
+	github.com/prometheus/common v0.20.0
+	golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
+	golang.org/x/sys v0.0.0-20210403161142-5e06dd20ab57
+	golang.org/x/text v0.3.6 // indirect
+	google.golang.org/genproto v0.0.0-20210406143921-e86de6bf7a46
+	google.golang.org/grpc v1.37.0
+	google.golang.org/protobuf v1.26.0
+	gopkg.in/yaml.v2 v2.3.0
 )

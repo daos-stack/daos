@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import time
@@ -36,13 +19,7 @@ from daos_utils import DaosCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
-
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+import queue
 
 
 class NvmeFragmentation(TestWithServers):
@@ -58,14 +35,14 @@ class NvmeFragmentation(TestWithServers):
 
     def setUp(self):
         """Set up for test case."""
-        super(NvmeFragmentation, self).setUp()
+        super().setUp()
 
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_transfer_size = self.params.get("transfer_block_size",
-                                                 '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*')
+        self.ior_transfer_size = self.params.get(
+            "transfer_block_size", '/run/ior/iorflags/*')
+        self.ior_dfs_oclass = self.params.get(
+            "obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -114,31 +91,31 @@ class NvmeFragmentation(TestWithServers):
                                    test[0])] = str(uuid.uuid4())
 
             # Define the job manager for the IOR command
-            manager = Mpirun(ior_cmd, mpitype="mpich")
-            manager.job.dfs_cont.update(container_info
-                                         ["{}{}{}".format(oclass,
-                                                          api,
-                                                          test[0])])
-            env = ior_cmd.get_default_env(str(manager))
-            manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-            manager.assign_processes(processes)
-            manager.assign_environment(env, True)
+            self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
+            key = "{}{}{}".format(oclass, api, test[0])
+            self.job_manager.job.dfs_cont.update(container_info[key])
+            env = ior_cmd.get_default_env(str(self.job_manager))
+            self.job_manager.assign_hosts(
+                self.hostlist_clients, self.workdir, None)
+            self.job_manager.assign_processes(processes)
+            self.job_manager.assign_environment(env, True)
 
             # run IOR Command
             try:
-                manager.run()
+                self.job_manager.run()
             except CommandFailure as _error:
                 results.put("FAIL")
 
         # Destroy the container created by thread
         for key in container_info:
             cmd.sub_command_class.sub_command_class.pool.value = self.pool.uuid
-            cmd.sub_command_class.sub_command_class.svc.value = \
-                self.pool.svc_ranks
+            #cmd.sub_command_class.sub_command_class.svc.value = \
+            #    self.pool.svc_ranks
             cmd.sub_command_class.sub_command_class.cont.value = \
                 container_info[key]
 
             try:
+                # pylint: disable=protected-access
                 cmd._get_result()
             except CommandFailure as _error:
                 results.put("FAIL")
@@ -161,7 +138,7 @@ class NvmeFragmentation(TestWithServers):
         """
         no_of_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         self.pool.create()
         self.pool.display_pool_daos_space("Pool space at the Beginning")

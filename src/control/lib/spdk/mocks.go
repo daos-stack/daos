@@ -1,30 +1,14 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package spdk
 
 import (
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // MockEnvCfg controls the behavior of the MockEnvImpl.
@@ -38,7 +22,7 @@ type MockEnvImpl struct {
 }
 
 // InitSPDKEnv initializes the SPDK environment.
-func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
+func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	if e.Cfg.InitErr == nil {
 		log.Debugf("mock spdk init go opts: %+v", opts)
 	}
@@ -46,12 +30,12 @@ func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
 }
 
 // FiniSPDKEnv finalizes the SPDK environment.
-func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) {
+func (e *MockEnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 }
 
 // MockNvmeCfg controls the behavior of the MockNvmeImpl.
 type MockNvmeCfg struct {
-	DiscoverCtrlrs []Controller
+	DiscoverCtrlrs storage.NvmeControllers
 	DiscoverErr    error
 	FormatRes      []*FormatResult
 	FormatErr      error
@@ -72,7 +56,7 @@ func (n *MockNvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) er
 
 // Discover NVMe devices, including NVMe devices behind VMDs if enabled,
 // accessible by SPDK on a given host.
-func (n *MockNvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
+func (n *MockNvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
 	if n.Cfg.DiscoverErr != nil {
 		return nil, n.Cfg.DiscoverErr
 	}

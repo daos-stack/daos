@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Governments rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
@@ -48,7 +31,7 @@ class ContainerQueryAttributeTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ContainerQueryAttribute object."""
-        super(ContainerQueryAttributeTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.expected_cont_uuid = None
         self.daos_cmd = None
 
@@ -60,8 +43,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         self.add_pool()
         self.daos_cmd = DaosCommand(self.bin)
         self.expected_cont_uuid = self.daos_cmd.get_output(
-            "container_create", pool=self.pool.uuid,
-            svc=self.pool.svc_ranks[0])[0]
+            "container_create", pool=self.pool.uuid)[0]
 
     def test_container_query_attr(self):
         """JIRA ID: DAOS-4640
@@ -81,7 +63,6 @@ class ContainerQueryAttributeTest(TestWithServers):
         # compare against those used when creating the pool and the container.
         kwargs = {
             "pool": self.pool.uuid,
-            "svc": self.pool.svc_ranks[0],
             "cont": self.expected_cont_uuid
         }
         query_output = self.daos_cmd.get_output("container_query", **kwargs)[0]
@@ -129,13 +110,12 @@ class ContainerQueryAttributeTest(TestWithServers):
         errors = []
         expected_attrs = []
         for attr_value in attr_values:
-            _ = self.daos_cmd.container_set_attr(
+            self.daos_cmd.container_set_attr(
                 pool=actual_pool_uuid, cont=actual_cont_uuid,
-                attr=attr_value[0], val=attr_value[1],
-                svc=self.pool.svc_ranks[0])
+                attr=attr_value[0], val=attr_value[1])
             kwargs["attr"] = attr_value[0]
-            actual_val = self.daos_cmd.get_output(
-                "container_get_attr", **kwargs)[0]
+            output = self.daos_cmd.container_get_attr(**kwargs)
+            actual_val = output["value"]
             if attr_value[1] in escape_to_not:
                 # Special character string.
                 if actual_val != escape_to_not[attr_value[1]]:
@@ -159,11 +139,10 @@ class ContainerQueryAttributeTest(TestWithServers):
         expected_attrs.sort()
         kwargs = {
             "pool": actual_pool_uuid,
-            "svc": self.pool.svc_ranks[0],
             "cont": actual_cont_uuid
         }
-        actual_attrs = self.daos_cmd.get_output(
-            "container_list_attrs", **kwargs)
+        data = self.daos_cmd.container_list_attrs(**kwargs)
+        actual_attrs = data["attrs"]
         actual_attrs.sort()
         self.log.debug(str(actual_attrs))
         self.assertEqual(actual_attrs, expected_attrs)
@@ -188,15 +167,14 @@ class ContainerQueryAttributeTest(TestWithServers):
         for expected_attr, val in zip(expected_attrs, vals):
             _ = self.daos_cmd.container_set_attr(
                 pool=self.pool.uuid, cont=self.expected_cont_uuid,
-                attr=expected_attr, val=val, svc=self.pool.svc_ranks[0])
+                attr=expected_attr, val=val)
         expected_attrs.sort()
         kwargs = {
             "pool": self.pool.uuid,
-            "svc": self.pool.svc_ranks[0],
             "cont": self.expected_cont_uuid
         }
-        actual_attrs = self.daos_cmd.get_output(
-            "container_list_attrs", **kwargs)
+        data = self.daos_cmd.container_list_attrs(**kwargs)
+        actual_attrs = data["attrs"]
         actual_attrs.sort()
         self.assertEqual(
             expected_attrs, actual_attrs, "Unexpected output from list_attrs")

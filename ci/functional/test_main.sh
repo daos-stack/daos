@@ -2,12 +2,12 @@
 
 set -eux
 
-test_tag=$(git show -s --format=%B | \
-           sed -ne "/^Test-tag$PRAGMA_SUFFIX:/s/^.*: *//p")
-if [ -z "$test_tag" ]; then
-    # shellcheck disable=SC2153
-    test_tag=$TEST_TAG
+if [ -z "$TEST_TAG" ]; then
+    echo "TEST_TAG must be set"
+    exit 1
 fi
+
+test_tag="$TEST_TAG"
 
 tnodes=$(echo "$NODELIST" | cut -d ',' -f 1-"$NODE_COUNT")
 first_node=${NODELIST%%,*}
@@ -28,8 +28,8 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 
 # Setup the Jenkins build artifacts directory before running the tests to ensure
 # there is enough disk space to report the results.
-rm -rf "Functional/"
-mkdir "Functional/"
+rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
+mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1

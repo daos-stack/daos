@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Implementation for pool specific functions in VOS
@@ -31,6 +14,7 @@
 
 #include <daos/common.h>
 #include <daos_srv/vos.h>
+#include <daos_srv/ras.h>
 #include <daos_errno.h>
 #include <gurt/hash.h>
 #include <sys/stat.h>
@@ -45,6 +29,22 @@
 
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
+
+int
+vos_pool_settings_init(void)
+{
+	int					rc;
+	enum pobj_arenas_assignment_type	atype;
+
+	atype = POBJ_ARENAS_ASSIGNMENT_GLOBAL;
+
+	rc = pmemobj_ctl_set(NULL, "heap.arenas_assignment_type", &atype);
+	if (rc != 0)
+		D_ERROR("Could not configure PMDK for global arena: %s\n",
+			strerror(errno));
+
+	return rc;
+}
 
 static inline PMEMobjpool *
 vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
@@ -86,23 +86,6 @@ vos_pool_pop2df(PMEMobjpool *pop)
 	return D_RW(pool_df);
 }
 
-static int
-umem_get_type(void)
-{
-	/* NB: BYPASS_PM and BYPASS_PM_SNAP can't coexist */
-	if (daos_io_bypass & IOBP_PM) {
-		D_PRINT("Running in DRAM mode, all data are volatile.\n");
-		return UMEM_CLASS_VMEM;
-
-	} else if (daos_io_bypass & IOBP_PM_SNAP) {
-		D_PRINT("Ignore PMDK snapshot, data can be lost on failure.\n");
-		return UMEM_CLASS_PMEM_NO_SNAP;
-
-	} else {
-		return UMEM_CLASS_PMEM;
-	}
-}
-
 static struct vos_pool *
 pool_hlink2ptr(struct d_ulink *hlink)
 {
@@ -120,20 +103,22 @@ pool_hop_free(struct d_ulink *hlink)
 	D_ASSERT(!gc_have_pool(pool));
 
 	if (pool->vp_io_ctxt != NULL) {
-		rc = bio_ioctxt_close(pool->vp_io_ctxt);
+		rc = bio_ioctxt_close(pool->vp_io_ctxt,
+				      pool->vp_pool_df->pd_nvme_sz == 0);
 		if (rc)
-			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID"\n",
-				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
+			D_ERROR("Closing VOS I/O context:%p pool:"DF_UUID" : "
+				DF_RC"\n", pool->vp_io_ctxt,
+				DP_UUID(pool->vp_id), DP_RC(rc));
 		else
 			D_DEBUG(DB_MGMT, "Closed VOS I/O context:%p pool:"
-				""DF_UUID"\n",
+				DF_UUID"\n",
 				pool->vp_io_ctxt, DP_UUID(pool->vp_id));
 	}
 
 	if (pool->vp_vea_info != NULL)
 		vea_unload(pool->vp_vea_info);
 
-	if (!daos_handle_is_inval(pool->vp_cont_th))
+	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
 	if (pool->vp_uma.uma_pool)
@@ -153,7 +138,6 @@ static int
 pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 {
 	struct vos_pool		*pool;
-	struct umem_attr	 uma;
 
 	D_ALLOC_PTR(pool);
 	if (pool == NULL)
@@ -161,10 +145,9 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 
 	d_uhash_ulink_init(&pool->vp_hlink, &pool_uuid_hops);
 	D_INIT_LIST_HEAD(&pool->vp_gc_link);
+	D_INIT_LIST_HEAD(&pool->vp_gc_cont);
 	uuid_copy(pool->vp_id, uuid);
 
-	memset(&uma, 0, sizeof(uma));
-	uma.uma_id = UMEM_CLASS_VMEM;
 	*pool_p = pool;
 	return 0;
 }
@@ -210,21 +193,22 @@ vos_blob_format_cb(void *cb_data, struct umem_instance *umem)
 	int			 rc;
 
 	/* Create a bio_io_context to get the blob */
-	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, umem, blob_hdr->bbh_pool);
+	rc = bio_ioctxt_open(&ioctxt, xs_ctxt, umem, blob_hdr->bbh_pool, false);
 	if (rc) {
-		D_ERROR("Failed to create an ioctxt for writing blob header\n");
+		D_ERROR("Failed to create an I/O context for writing blob "
+			"header: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
 	/* Write the blob header info to blob offset 0 */
 	rc = bio_write_blob_hdr(ioctxt, blob_hdr);
 	if (rc)
-		D_ERROR("Failed to write header for blob:"DF_U64"\n",
-			blob_hdr->bbh_blob_id);
+		D_ERROR("Failed to write header for blob:"DF_U64" : "DF_RC"\n",
+			blob_hdr->bbh_blob_id, DP_RC(rc));
 
-	rc = bio_ioctxt_close(ioctxt);
+	rc = bio_ioctxt_close(ioctxt, false);
 	if (rc)
-		D_ERROR("Failed to free ioctxt\n");
+		D_ERROR("Failed to free I/O context: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
@@ -246,12 +230,12 @@ vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
 	return rc;
 }
 
-/**
- * Create a Versioning Object Storage Pool (VOSP) and its root object.
- */
+static int pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
+		     unsigned int flags, daos_handle_t *poh);
+
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t nvme_sz)
+		daos_size_t nvme_sz, unsigned int flags, daos_handle_t *poh)
 {
 	PMEMobjpool		*ph;
 	struct umem_attr	 uma = {0};
@@ -260,6 +244,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
 	struct bio_blob_hdr	 blob_hdr;
 	daos_handle_t		 hdl;
+	struct d_uuid		 ukey;
+	struct vos_pool		*pool = NULL;
 	int			 rc = 0, enabled = 1;
 
 	if (!path || uuid_is_null(uuid))
@@ -267,6 +253,19 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 
 	D_DEBUG(DB_MGMT, "Pool Path: %s, size: "DF_U64":"DF_U64", "
 		"UUID: "DF_UUID"\n", path, scm_sz, nvme_sz, DP_UUID(uuid));
+
+	if (flags & VOS_POF_SMALL)
+		flags |= VOS_POF_EXCL;
+
+	uuid_copy(ukey.uuid, uuid);
+	rc = pool_lookup(&ukey, &pool);
+	if (rc == 0) {
+		D_ASSERT(pool != NULL);
+		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
+			pool->vp_opened, pool);
+		vos_pool_decref(pool);
+		return -DER_EXIST;
+	}
 
 	/* Path must be a file with a certain size when size argument is 0 */
 	if (!scm_sz && access(path, F_OK) == -1) {
@@ -277,9 +276,10 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), scm_sz,
 				0600);
 	if (!ph) {
-		D_ERROR("Failed to create pool %s, size="DF_U64", errno=%d\n",
-			path, scm_sz, errno);
-		return daos_errno2der(errno);
+		rc = errno;
+		D_ERROR("Failed to create pool %s, size="DF_U64": %s\n", path,
+			scm_sz, pmemobj_errormsg());
+		return daos_errno2der(rc);
 	}
 
 	rc = pmemobj_ctl_set(ph, "stats.enabled", &enabled);
@@ -298,11 +298,13 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	if (!scm_sz) {
 		struct stat lstat;
 
-		stat(path, &lstat);
+		rc = stat(path, &lstat);
+		if (rc != 0)
+			D_GOTO(close, rc = daos_errno2der(errno));
 		scm_sz = lstat.st_size;
 	}
 
-	uma.uma_id = umem_get_type();
+	uma.uma_id = UMEM_CLASS_PMEM;
 	uma.uma_pool = ph;
 
 	rc = umem_class_init(&uma, &umem);
@@ -352,8 +354,8 @@ end:
 	}
 
 	/* SCM only pool or NVMe device isn't configured */
-	if (nvme_sz == 0 || xs_ctxt == NULL)
-		goto close;
+	if (nvme_sz == 0 || !bio_nvme_configured())
+		goto open;
 
 	/* Create SPDK blob on NVMe device */
 	D_DEBUG(DB_MGMT, "Creating blob for xs:%p pool:"DF_UUID"\n",
@@ -379,10 +381,24 @@ end:
 			xs_ctxt, DP_UUID(uuid), DP_RC(rc));
 		/* Destroy the SPDK blob on error */
 		rc = bio_blob_delete(uuid, xs_ctxt);
+		goto close;
 	}
+
+open:
+	/* If the caller does not want a VOS pool handle, we're done. */
+	if (poh == NULL)
+		goto close;
+
+	/* Create a VOS pool handle using ph. */
+	rc = pool_open(ph, pool_df, uuid, flags, poh);
+	if (rc != 0)
+		goto close;
+	ph = NULL;
+
 close:
-	/* Close this local handle, opened using pool_open */
-	vos_pmemobj_close(ph);
+	/* Close this local handle, if it hasn't been consumed by pool_open. */
+	if (ph != NULL)
+		vos_pmemobj_close(ph);
 	return rc;
 }
 
@@ -433,7 +449,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
 
 	/* NVMe device is configured */
-	if (xs_ctxt) {
+	if (bio_nvme_configured()) {
 		D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
 		rc = bio_blob_delete(uuid, xs_ctxt);
@@ -456,6 +472,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 
 	D_DEBUG(DB_MGMT, "delete path: %s UUID: "DF_UUID"\n",
 		path, DP_UUID(uuid));
+
 	rc = vos_pool_kill(uuid, false);
 	if (rc)
 		return rc;
@@ -471,6 +488,9 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 
 		fd = open(path, O_RDWR);
 		if (fd < 0) {
+			if (errno == ENOENT)
+				D_GOTO(exit, rc = 0);
+
 			D_ERROR("Failed to open %s: %d\n", path, errno);
 			D_GOTO(exit, rc = daos_errno2der(errno));
 		}
@@ -493,11 +513,13 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 		close(fd);
 	} else {
 		rc = remove(path);
-		if (rc)
+		if (rc) {
+			if (errno == ENOENT)
+				D_GOTO(exit, rc = 0);
 			D_ERROR("Failure deleting file from PMEM: %s\n",
 				strerror(errno));
+		}
 	}
-
 exit:
 	return rc;
 }
@@ -588,38 +610,19 @@ vos_register_slabs(struct umem_attr *uma)
 	return 0;
 }
 
-/**
- * Open a Versioning Object Storage Pool (VOSP), load its root object
- * and other internal data structures.
+/*
+ * If successful, this function consumes ph, which the caller shall not close
+ * in this case.
  */
-int
-vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
+static int
+pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
+	  unsigned int flags, daos_handle_t *poh)
 {
 	struct bio_xs_context	*xs_ctxt;
-	struct vos_pool_df	*pool_df;
 	struct vos_pool		*pool = NULL;
 	struct umem_attr	*uma;
 	struct d_uuid		 ukey;
-	int			 rc, enabled = 1;
-
-	if (path == NULL || poh == NULL) {
-		D_ERROR("Invalid parameters.\n");
-		return -DER_INVAL;
-	}
-
-	uuid_copy(ukey.uuid, uuid);
-	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
-		DP_UUID(uuid));
-
-	rc = pool_lookup(&ukey, &pool);
-	if (rc == 0) {
-		D_ASSERT(pool != NULL);
-		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
-			pool->vp_opened, pool);
-		pool->vp_opened++;
-		*poh = vos_pool2hdl(pool);
-		return 0;
-	}
+	int			 rc;
 
 	/* Create a new handle during open */
 	rc = pool_alloc(uuid, &pool); /* returned with refcount=1 */
@@ -629,14 +632,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	}
 
 	uma = &pool->vp_uma;
-	uma->uma_id = umem_get_type();
-	uma->uma_pool = vos_pmemobj_open(path,
-				   POBJ_LAYOUT_NAME(vos_pool_layout));
-	if (uma->uma_pool == NULL) {
-		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
-			DP_UUID(uuid), pmemobj_errormsg());
-		D_GOTO(failed, rc = -DER_NO_HDL);
-	}
+	uma->uma_id = UMEM_CLASS_PMEM;
+	uma->uma_pool = ph;
 
 	rc = vos_register_slabs(uma);
 	if (rc) {
@@ -651,31 +648,6 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_GOTO(failed, rc);
 	}
 
-	rc = pmemobj_ctl_set(uma->uma_pool, "stats.enabled", &enabled);
-	if (rc) {
-		D_ERROR("Enable SCM usage statistics failed. rc:%d\n",
-			umem_tx_errno(rc));
-		D_GOTO(failed, rc);
-	}
-
-	pool_df = vos_pool_pop2df(uma->uma_pool);
-	if (pool_df->pd_magic != POOL_DF_MAGIC) {
-		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
-		D_GOTO(failed, rc = -DER_DF_INVAL);
-	}
-
-	if (pool_df->pd_version > POOL_DF_VERSION ||
-	    pool_df->pd_version < POOL_DF_VER_1) {
-		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
-		D_GOTO(failed, rc = -DER_DF_INCOMPT);
-	}
-
-	if (uuid_compare(uuid, pool_df->pd_id)) {
-		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
-			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
-		D_GOTO(failed, rc = -DER_IO);
-	}
-
 	/* Cache container table btree hdl */
 	rc = dbtree_open_inplace_ex(&pool_df->pd_cont_root, &pool->vp_uma,
 				    DAOS_HDL_INVAL, pool, &pool->vp_cont_th);
@@ -684,11 +656,12 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		D_GOTO(failed, rc);
 	}
 
-	xs_ctxt = pool_df->pd_nvme_sz == 0 ? NULL : vos_xsctxt_get();
+	xs_ctxt = vos_xsctxt_get();
 
 	D_DEBUG(DB_MGMT, "Opening VOS I/O context for xs:%p pool:"DF_UUID"\n",
 		xs_ctxt, DP_UUID(uuid));
-	rc = bio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, uuid);
+	rc = bio_ioctxt_open(&pool->vp_io_ctxt, xs_ctxt, &pool->vp_umm, uuid,
+			     pool_df->pd_nvme_sz == 0);
 	if (rc) {
 		D_ERROR("Failed to open VOS I/O context for xs:%p "
 			"pool:"DF_UUID" rc="DF_RC"\n", xs_ctxt, DP_UUID(uuid),
@@ -696,7 +669,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		goto failed;
 	}
 
-	if (xs_ctxt != NULL) {
+	if (bio_nvme_configured() && pool_df->pd_nvme_sz != 0) {
 		struct vea_unmap_context unmap_ctxt;
 
 		/* set unmap callback fp */
@@ -716,6 +689,7 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 		goto failed;
 
 	/* Insert the opened pool to the uuid hash table */
+	uuid_copy(ukey.uuid, uuid);
 	rc = pool_link(pool, &ukey, poh);
 	if (rc) {
 		D_ERROR("Error inserting into vos DRAM hash\n");
@@ -724,6 +698,8 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
+	pool->vp_excl = !!(flags & VOS_POF_EXCL);
+	pool->vp_small = !!(flags & VOS_POF_SMALL);
 	vos_space_sys_init(pool);
 	/* Ensure GC is triggered after server restart */
 	gc_add_pool(pool);
@@ -731,6 +707,94 @@ vos_pool_open(const char *path, uuid_t uuid, daos_handle_t *poh)
 	return 0;
 failed:
 	vos_pool_decref(pool); /* -1 for myself */
+	return rc;
+}
+
+int
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
+	      daos_handle_t *poh)
+{
+	struct vos_pool_df	*pool_df;
+	struct vos_pool		*pool = NULL;
+	struct d_uuid		 ukey;
+	PMEMobjpool		*ph;
+	int			 rc, enabled = 1;
+
+	if (path == NULL || poh == NULL) {
+		D_ERROR("Invalid parameters.\n");
+		return -DER_INVAL;
+	}
+
+	uuid_copy(ukey.uuid, uuid);
+	D_DEBUG(DB_MGMT, "Pool Path: %s, UUID: "DF_UUID"\n", path,
+		DP_UUID(uuid));
+
+	if (flags & VOS_POF_SMALL)
+		flags |= VOS_POF_EXCL;
+
+	rc = pool_lookup(&ukey, &pool);
+	if (rc == 0) {
+		D_ASSERT(pool != NULL);
+		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
+			pool->vp_opened, pool);
+		if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
+			vos_pool_decref(pool);
+			return -DER_BUSY;
+		}
+		pool->vp_opened++;
+		*poh = vos_pool2hdl(pool);
+		return 0;
+	}
+
+	ph = vos_pmemobj_open(path, POBJ_LAYOUT_NAME(vos_pool_layout));
+	if (ph == NULL) {
+		rc = errno;
+		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
+			DP_UUID(uuid), pmemobj_errormsg());
+		return daos_errno2der(rc);
+	}
+
+	rc = pmemobj_ctl_set(ph, "stats.enabled", &enabled);
+	if (rc) {
+		D_ERROR("Enable SCM usage statistics failed. rc:%d\n",
+			umem_tx_errno(rc));
+		goto out;
+	}
+
+	pool_df = vos_pool_pop2df(ph);
+	if (pool_df->pd_magic != POOL_DF_MAGIC) {
+		D_CRIT("Unknown DF magic %x\n", pool_df->pd_magic);
+		rc = -DER_DF_INVAL;
+		goto out;
+	}
+
+	if (pool_df->pd_version > POOL_DF_VERSION ||
+	    pool_df->pd_version < POOL_DF_VER_1) {
+		D_ERROR("Unsupported DF version %x\n", pool_df->pd_version);
+		/** Send a RAS notification */
+		vos_report_layout_incompat("VOS pool", pool_df->pd_version,
+					   POOL_DF_VER_1, POOL_DF_VERSION,
+					   &ukey.uuid);
+		rc = -DER_DF_INCOMPT;
+		goto out;
+	}
+
+	if (uuid_compare(uuid, pool_df->pd_id)) {
+		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
+			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
+		rc = -DER_IO;
+		goto out;
+	}
+
+	rc = pool_open(ph, pool_df, uuid, flags, poh);
+	if (rc != 0)
+		goto out;
+	ph = NULL;
+
+out:
+	/* Close this local handle, if it hasn't been consumed by pool_open. */
+	if (ph != NULL)
+		vos_pmemobj_close(ph);
 	return rc;
 }
 

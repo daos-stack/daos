@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of DSR
@@ -726,6 +709,18 @@ ring_map_print(struct pl_map *map)
 		ring_print(rimap, i);
 }
 
+static int
+ring_map_query(struct pl_map *map, struct pl_map_attr *attr)
+{
+	struct pl_ring_map *rimap = pl_map2rimap(map);
+
+	attr->pa_type	   = PL_TYPE_RING;
+	attr->pa_domain	   = rimap->rmp_domain;
+	attr->pa_domain_nr = rimap->rmp_domain_nr;
+	attr->pa_target_nr = rimap->rmp_target_nr;
+	return 0;
+}
+
 /** hash object ID, find a ring by consistent hash */
 static struct pl_ring *
 ring_oid2ring(struct pl_ring_map *rimap, daos_obj_id_t id)
@@ -819,7 +814,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	int rc;
 
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid);
+	oc_attr = daos_oclass_attr_find(oid, NULL);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
@@ -1027,7 +1022,8 @@ ring_obj_remap_shards(struct pl_ring_map *rimap, struct daos_obj_md *md,
 		spare_tgt = &tgts[plts[spare_idx].pt_pos];
 
 		determine_valid_spares(spare_tgt, md, spare_avail, &current,
-				       remap_list, for_reint, f_shard, l_shard);
+				       remap_list, for_reint, f_shard, l_shard,
+				       NULL);
 	}
 
 	remap_dump(remap_list, md, "after remap:");
@@ -1095,15 +1091,13 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	rc = ring_obj_remap_shards(rimap, md, layout, rop, remap_list,
-			for_reint);
+				   for_reint);
 
 	if (rc == 0)
 		obj_layout_dump(md->omd_id, layout);
 out:
-	if (rc) {
+	if (rc)
 		D_ERROR("ring_obj_layout_fill failed, rc "DF_RC"\n", DP_RC(rc));
-		remap_list_free_all(remap_list);
-	}
 	return rc;
 }
 
@@ -1138,6 +1132,7 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	if (rc) {
 		D_ERROR("ring_obj_layout_fill failed, rc "DF_RC"\n", DP_RC(rc));
 		pl_obj_layout_free(layout);
+		remap_list_free_all(&remap_list);
 		return rc;
 	}
 
@@ -1151,8 +1146,7 @@ int
 ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		      struct daos_obj_shard_md *shard_md,
 		      uint32_t rebuild_ver, uint32_t *tgt_id,
-		      uint32_t *shard_idx, unsigned int array_size,
-		      int myrank)
+		      uint32_t *shard_idx, unsigned int array_size)
 {
 	struct ring_obj_placement  rop;
 	struct pl_ring_map	  *rimap = pl_map2rimap(map);
@@ -1203,7 +1197,7 @@ ring_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		goto out;
 
 	remap_list_fill(map, md, shard_md, rebuild_ver, tgt_id, shard_idx,
-			array_size, myrank, &idx, layout, &remap_list, false);
+			array_size, &idx, layout, &remap_list, false);
 out:
 	remap_list_free_all(&remap_list);
 	if (shards_count > SHARDS_ON_STACK_COUNT)
@@ -1216,8 +1210,7 @@ int
 ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t reint_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size,
-			int myrank)
+			uint32_t *shard_id, unsigned int array_size)
 {
 	uint32_t                   reint_shard_cnt = SHARDS_ON_STACK_COUNT / 2;
 	struct ring_obj_placement  rop;
@@ -1312,7 +1305,7 @@ ring_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	remap_list_fill(map, md, shard_md, reint_ver, tgt_rank, shard_id,
-			array_size, myrank, &idx, layout, &reint_list, false);
+			array_size, &idx, layout, &reint_list, false);
 out:
 	remap_list_free_all(&remap_list);
 	remap_list_free_all(&reint_list);
@@ -1329,6 +1322,7 @@ struct pl_map_ops	ring_map_ops = {
 	.o_create		= ring_map_create,
 	.o_destroy		= ring_map_destroy,
 	.o_print		= ring_map_print,
+	.o_query		= ring_map_query,
 	.o_obj_place		= ring_obj_place,
 	.o_obj_find_rebuild	= ring_obj_find_rebuild,
 	.o_obj_find_reint	= ring_obj_find_reint,

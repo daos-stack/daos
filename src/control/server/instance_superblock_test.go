@@ -1,39 +1,22 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
 
 import (
-	"net"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-	"golang.org/x/net/context"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestServer_Instance_createSuperblock(t *testing.T) {
@@ -43,56 +26,28 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	testDir, cleanup := CreateTestDir(t)
 	defer cleanup()
 
-	defaultApList := []string{"1.2.3.4:5"}
-	ctrlAddrs := []string{"1.2.3.4:5", "6.7.8.9:10"}
-	h := NewIOServerHarness(log)
+	h := NewEngineHarness(log)
 	for idx, mnt := range []string{"one", "two"} {
 		if err := os.MkdirAll(filepath.Join(testDir, mnt), 0777); err != nil {
 			t.Fatal(err)
 		}
-		cfg := ioserver.NewConfig().
+		cfg := engine.NewConfig().
 			WithRank(uint32(idx)).
 			WithSystemName(t.Name()).
 			WithScmClass("ram").
 			WithScmRamdiskSize(1).
 			WithScmMountPoint(mnt)
-		r := ioserver.NewRunner(log, cfg)
-		ctrlAddr, err := net.ResolveTCPAddr("tcp", ctrlAddrs[idx])
-		if err != nil {
-			t.Fatal(err)
-		}
-		ms := newMgmtSvcClient(
-			context.Background(), log, mgmtSvcClientCfg{
-				ControlAddr:  ctrlAddr,
-				AccessPoints: defaultApList,
-			},
-		)
+		r := engine.NewRunner(log, cfg)
 		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
 		}
 		mp := scm.NewMockProvider(log, nil, msc)
-		srv := NewIOServerInstance(log, nil, mp, ms, r)
-		srv.fsRoot = testDir
-		if err := h.AddInstance(srv); err != nil {
+		ei := NewEngineInstance(log, nil, mp, nil, r).
+			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
+		ei.fsRoot = testDir
+		if err := h.AddInstance(ei); err != nil {
 			t.Fatal(err)
 		}
-	}
-
-	// ugh, this isn't ideal
-	oldGetAddrFn := getInterfaceAddrs
-	defer func() {
-		getInterfaceAddrs = oldGetAddrFn
-	}()
-	getInterfaceAddrs = func() ([]net.Addr, error) {
-		addrs := make([]net.Addr, len(ctrlAddrs))
-		var err error
-		for i, ca := range ctrlAddrs {
-			addrs[i], err = net.ResolveTCPAddr("tcp", ca)
-			if err != nil {
-				return nil, err
-			}
-		}
-		return addrs, nil
 	}
 
 	for _, instance := range h.Instances() {
@@ -102,10 +57,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 	}
 
 	h.started.SetTrue()
-	mi, err := h.GetMSLeaderInstance()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mi := h.instances[0]
 	if mi._superblock == nil {
 		t.Fatal("instance superblock is nil after createSuperblock()")
 	}
@@ -117,6 +69,9 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		if i._superblock.Rank.Uint32() != uint32(idx) {
 			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}
+
+		AssertEqual(t, i.hostFaultDomain.String(), i._superblock.HostFaultDomain, fmt.Sprintf("instance %d", idx))
+
 		if i == mi {
 			continue
 		}

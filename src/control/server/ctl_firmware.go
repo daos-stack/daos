@@ -1,26 +1,8 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
-//
-// +build firmware
 
 package server
 
@@ -47,7 +29,7 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 	pbResp := new(ctlpb.FirmwareQueryResp)
 
 	if pbReq.QueryScm {
-		scmResults, err := svc.querySCMFirmware()
+		scmResults, err := svc.querySCMFirmware(pbReq)
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +37,7 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 	}
 
 	if pbReq.QueryNvme {
-		nvmeResults, err := svc.queryNVMeFirmware()
+		nvmeResults, err := svc.queryNVMeFirmware(pbReq)
 		if err != nil {
 			return nil, err
 		}
@@ -66,8 +48,12 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 	return pbResp, nil
 }
 
-func (svc *ControlService) querySCMFirmware() ([]*ctlpb.ScmFirmwareQueryResp, error) {
-	queryResp, err := svc.scm.QueryFirmware(scm.FirmwareQueryRequest{})
+func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.ScmFirmwareQueryResp, error) {
+	queryResp, err := svc.scm.QueryFirmware(scm.FirmwareQueryRequest{
+		FirmwareRev: pbReq.FirmwareRev,
+		ModelID:     pbReq.ModelID,
+		DeviceUIDs:  pbReq.DeviceIDs,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -91,16 +77,20 @@ func (svc *ControlService) querySCMFirmware() ([]*ctlpb.ScmFirmwareQueryResp, er
 	return scmResults, nil
 }
 
-func (svc *ControlService) queryNVMeFirmware() ([]*ctlpb.NvmeFirmwareQueryResp, error) {
-	scanResp, err := svc.bdev.Scan(bdev.ScanRequest{})
+func (svc *ControlService) queryNVMeFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.NvmeFirmwareQueryResp, error) {
+	queryResp, err := svc.bdev.QueryFirmware(bdev.FirmwareQueryRequest{
+		FirmwareRev: pbReq.FirmwareRev,
+		ModelID:     pbReq.ModelID,
+		DeviceAddrs: pbReq.DeviceIDs,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	nvmeResults := make([]*ctlpb.NvmeFirmwareQueryResp, 0, len(scanResp.Controllers))
-	for _, ctrlr := range scanResp.Controllers {
+	nvmeResults := make([]*ctlpb.NvmeFirmwareQueryResp, 0, len(queryResp.Results))
+	for _, res := range queryResp.Results {
 		pbResult := &ctlpb.NvmeFirmwareQueryResp{}
-		if err := convert.Types(ctrlr, &pbResult.Device); err != nil {
+		if err := convert.Types(res.Device, &pbResult.Device); err != nil {
 			return nil, errors.Wrap(err, "unable to convert NVMe controller")
 		}
 
@@ -150,6 +140,9 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
 	updateResp, err := svc.scm.UpdateFirmware(scm.FirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
+		FirmwareRev:  pbReq.FirmwareRev,
+		ModelID:      pbReq.ModelID,
+		DeviceUIDs:   pbReq.DeviceIDs,
 	})
 	if err != nil {
 		return err
@@ -170,6 +163,9 @@ func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctl
 func (svc *ControlService) updateNVMe(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
 	updateResp, err := svc.bdev.UpdateFirmware(bdev.FirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
+		FirmwareRev:  pbReq.FirmwareRev,
+		ModelID:      pbReq.ModelID,
+		DeviceAddrs:  pbReq.DeviceIDs,
 	})
 	if err != nil {
 		return err

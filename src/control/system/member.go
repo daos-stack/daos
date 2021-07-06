@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -27,16 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
-	"sort"
-	"strconv"
 	"strings"
-	"sync"
 
+	"github.com/dustin/go-humanize/english"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
-
-	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // MemberState represents the activity state of DAOS system members.
@@ -44,41 +22,91 @@ type MemberState int
 
 const (
 	// MemberStateUnknown is the default invalid state.
-	MemberStateUnknown MemberState = iota
+	MemberStateUnknown MemberState = 0x0000
 	// MemberStateAwaitFormat indicates the member is waiting for format.
-	MemberStateAwaitFormat
+	MemberStateAwaitFormat MemberState = 0x0001
 	// MemberStateStarting indicates the member has started but is not
 	// ready.
-	MemberStateStarting
+	MemberStateStarting MemberState = 0x0002
 	// MemberStateReady indicates the member has setup successfully.
-	MemberStateReady
+	MemberStateReady MemberState = 0x0004
 	// MemberStateJoined indicates the member has joined the system.
-	MemberStateJoined
+	MemberStateJoined MemberState = 0x0008
 	// MemberStateStopping indicates prep-shutdown successfully run.
-	MemberStateStopping
+	MemberStateStopping MemberState = 0x0010
 	// MemberStateStopped indicates process has been stopped.
-	MemberStateStopped
-	// MemberStateEvicted indicates rank has been evicted from DAOS system.
-	MemberStateEvicted
+	MemberStateStopped MemberState = 0x0020
+	// MemberStateExcluded indicates rank has been automatically excluded from DAOS system.
+	MemberStateExcluded MemberState = 0x0040
 	// MemberStateErrored indicates the process stopped with errors.
-	MemberStateErrored
+	MemberStateErrored MemberState = 0x0080
 	// MemberStateUnresponsive indicates the process is not responding.
-	MemberStateUnresponsive
+	MemberStateUnresponsive MemberState = 0x0100
+	// MemberStateAdminExcluded indicates that the rank has been administratively excluded.
+	MemberStateAdminExcluded MemberState = 0x0200
+
+	// ExcludedMemberFilter defines the state(s) to be used when determining
+	// whether or not a member should be excluded from CaRT group map updates.
+	ExcludedMemberFilter = MemberStateAwaitFormat | MemberStateExcluded | MemberStateAdminExcluded
+	// AvailableMemberFilter defines the state(s) to be used when determining
+	// whether or not a member is available for the purposes of pool creation, etc.
+	AvailableMemberFilter = MemberStateReady | MemberStateJoined
+	// AllMemberFilter will match all valid member states.
+	AllMemberFilter = MemberState(0xFFFF)
 )
 
 func (ms MemberState) String() string {
-	return [...]string{
-		"Unknown",
-		"AwaitFormat",
-		"Starting",
-		"Ready",
-		"Joined",
-		"Stopping",
-		"Stopped",
-		"Evicted",
-		"Errored",
-		"Unresponsive",
-	}[ms]
+	switch ms {
+	case MemberStateAwaitFormat:
+		return "AwaitFormat"
+	case MemberStateStarting:
+		return "Starting"
+	case MemberStateReady:
+		return "Ready"
+	case MemberStateJoined:
+		return "Joined"
+	case MemberStateStopping:
+		return "Stopping"
+	case MemberStateStopped:
+		return "Stopped"
+	case MemberStateExcluded:
+		return "Excluded"
+	case MemberStateAdminExcluded:
+		return "AdminExcluded"
+	case MemberStateErrored:
+		return "Errored"
+	case MemberStateUnresponsive:
+		return "Unresponsive"
+	default:
+		return "Unknown"
+	}
+}
+
+func memberStateFromString(in string) MemberState {
+	switch strings.ToLower(in) {
+	case "awaitformat":
+		return MemberStateAwaitFormat
+	case "starting":
+		return MemberStateStarting
+	case "ready":
+		return MemberStateReady
+	case "joined":
+		return MemberStateJoined
+	case "stopping":
+		return MemberStateStopping
+	case "stopped":
+		return MemberStateStopped
+	case "excluded":
+		return MemberStateExcluded
+	case "adminexcluded":
+		return MemberStateAdminExcluded
+	case "errored":
+		return MemberStateErrored
+	case "unresponsive":
+		return MemberStateUnresponsive
+	default:
+		return MemberStateUnknown
+	}
 }
 
 // isTransitionIllegal indicates if given state transitions is legal.
@@ -92,33 +120,34 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 	if ms == to {
 		return true // identical state
 	}
+
 	return map[MemberState]map[MemberState]bool{
-		MemberStateAwaitFormat: map[MemberState]bool{
-			MemberStateEvicted: true,
+		MemberStateAwaitFormat: {
+			MemberStateExcluded: true,
 		},
-		MemberStateStarting: map[MemberState]bool{
-			MemberStateEvicted: true,
+		MemberStateStarting: {
+			MemberStateExcluded: true,
 		},
-		MemberStateReady: map[MemberState]bool{
-			MemberStateEvicted: true,
+		MemberStateReady: {
+			MemberStateExcluded: true,
 		},
-		MemberStateJoined: map[MemberState]bool{
+		MemberStateJoined: {
 			MemberStateReady: true,
 		},
-		MemberStateStopping: map[MemberState]bool{
+		MemberStateStopping: {
 			MemberStateReady: true,
 		},
-		MemberStateEvicted: map[MemberState]bool{
+		MemberStateExcluded: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
 		},
-		MemberStateErrored: map[MemberState]bool{
+		MemberStateErrored: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
 		},
-		MemberStateUnresponsive: map[MemberState]bool{
+		MemberStateUnresponsive: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
@@ -129,26 +158,35 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // Member refers to a data-plane instance that is a member of this DAOS
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
-	Rank  Rank
-	UUID  string
-	Addr  net.Addr
-	state MemberState
-	Info  string
+	Rank           Rank         `json:"rank"`
+	UUID           uuid.UUID    `json:"uuid"`
+	Addr           *net.TCPAddr `json:"addr"`
+	FabricURI      string       `json:"fabric_uri"`
+	FabricContexts uint32       `json:"fabric_contexts"`
+	state          MemberState
+	Info           string       `json:"info"`
+	FaultDomain    *FaultDomain `json:"fault_domain"`
 }
 
 // MarshalJSON marshals system.Member to JSON.
 func (sm *Member) MarshalJSON() ([]byte, error) {
+	if sm == nil {
+		return nil, errors.New("tried to marshal nil Member")
+	}
+
 	// use a type alias to leverage the default marshal for
 	// most fields
 	type toJSON Member
 	return json.Marshal(&struct {
-		Addr  string
-		State int
+		Addr        string `json:"addr"`
+		State       string `json:"state"`
+		FaultDomain string `json:"fault_domain"`
 		*toJSON
 	}{
-		Addr:   sm.Addr.String(),
-		State:  int(sm.state),
-		toJSON: (*toJSON)(sm),
+		Addr:        sm.Addr.String(),
+		State:       strings.ToLower(sm.state.String()),
+		FaultDomain: sm.FaultDomain.String(),
+		toJSON:      (*toJSON)(sm),
 	})
 }
 
@@ -162,8 +200,9 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON Member
 	from := &struct {
-		Addr  string
-		State int
+		Addr        string `json:"addr"`
+		State       string `json:"state"`
+		FaultDomain string `json:"fault_domain"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(sm),
@@ -179,7 +218,13 @@ func (sm *Member) UnmarshalJSON(data []byte) error {
 	}
 	sm.Addr = addr
 
-	sm.state = MemberState(from.State)
+	sm.state = memberStateFromString(from.State)
+
+	fd, err := NewFaultDomainFromString(from.FaultDomain)
+	if err != nil {
+		return err
+	}
+	sm.FaultDomain = fd
 
 	return nil
 }
@@ -199,9 +244,19 @@ func (sm *Member) WithInfo(msg string) *Member {
 	return sm
 }
 
+// WithFaultDomain adds the fault domain field and returns the updated member.
+func (sm *Member) WithFaultDomain(fd *FaultDomain) *Member {
+	sm.FaultDomain = fd
+	return sm
+}
+
 // NewMember returns a reference to a new member struct.
-func NewMember(rank Rank, uuid string, addr net.Addr, state MemberState) *Member {
-	return &Member{Rank: rank, UUID: uuid, Addr: addr, state: state}
+func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberState) *Member {
+	// FIXME: Either require a valid uuid.UUID to be supplied
+	// or else change the return signature to include an error
+	newUUID := uuid.MustParse(uuidStr)
+	return &Member{Rank: rank, UUID: newUUID, FabricURI: uri, Addr: addr,
+		state: state, FaultDomain: MustCreateFaultDomain()}
 }
 
 // Members is a type alias for a slice of member references
@@ -214,7 +269,7 @@ type MemberResult struct {
 	Action  string
 	Errored bool
 	Msg     string
-	State   MemberState
+	State   MemberState `json:"state"`
 }
 
 // MarshalJSON marshals system.MemberResult to JSON.
@@ -223,10 +278,10 @@ func (mr *MemberResult) MarshalJSON() ([]byte, error) {
 	// most fields
 	type toJSON MemberResult
 	return json.Marshal(&struct {
-		State int
+		State string `json:"state"`
 		*toJSON
 	}{
-		State:  int(mr.State),
+		State:  strings.ToLower(mr.State.String()),
 		toJSON: (*toJSON)(mr),
 	})
 }
@@ -241,7 +296,7 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 	// most fields
 	type fromJSON MemberResult
 	from := &struct {
-		State int
+		State string `json:"state"`
 		*fromJSON
 	}{
 		fromJSON: (*fromJSON)(mr),
@@ -251,7 +306,7 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	mr.State = MemberState(from.State)
+	mr.State = memberStateFromString(from.State)
 
 	return nil
 }
@@ -259,11 +314,14 @@ func (mr *MemberResult) UnmarshalJSON(data []byte) error {
 // NewMemberResult returns a reference to a new member result struct.
 //
 // Host address and action fields are not always used so not populated here.
-func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
+func NewMemberResult(rank Rank, err error, state MemberState, action ...string) *MemberResult {
 	result := MemberResult{Rank: rank, State: state}
 	if err != nil {
 		result.Errored = true
 		result.Msg = err.Error()
+	}
+	if len(action) > 0 {
+		result.Action = action[0]
 	}
 
 	return &result
@@ -272,329 +330,24 @@ func NewMemberResult(rank Rank, err error, state MemberState) *MemberResult {
 // MemberResults is a type alias for a slice of member result references.
 type MemberResults []*MemberResult
 
-// HasErrors returns true if any of the member results errored.
-func (smr MemberResults) HasErrors() bool {
-	for _, res := range smr {
-		if res.Errored {
-			return true
-		}
-	}
-
-	return false
-}
-
-// Membership tracks details of system members.
-type Membership struct {
-	sync.RWMutex
-	log     logging.Logger
-	members map[Rank]*Member
-}
-
-func (m *Membership) addMember(member *Member) error {
-	if _, found := m.members[member.Rank]; found {
-		return FaultMemberExists(member.Rank)
-	}
-	m.log.Debugf("adding system member: %s", member)
-
-	m.members[member.Rank] = member
-
-	return nil
-}
-
-func (m *Membership) updateMember(member *Member) {
-	old := m.members[member.Rank]
-	m.log.Debugf("updating system member: %s->%s", old, member)
-
-	m.members[member.Rank] = member
-}
-
-// Add adds member to membership, returns member count.
-func (m *Membership) Add(member *Member) (int, error) {
-	m.Lock()
-	defer m.Unlock()
-
-	if err := m.addMember(member); err != nil {
-		return -1, err
-	}
-
-	return len(m.members), nil
-}
-
-// AddOrReplace adds member to membership or replaces member if it exists.
-//
-// Note: this method updates state without checking if state transition is
-//       legal so use with caution.
-func (m *Membership) AddOrReplace(newMember *Member) {
-	m.Lock()
-	defer m.Unlock()
-
-	if err := m.addMember(newMember); err == nil {
-		return
-	}
-
-	m.updateMember(newMember)
-}
-
-// Remove removes member from membership, idempotent.
-func (m *Membership) Remove(rank Rank) {
-	m.Lock()
-	defer m.Unlock()
-
-	delete(m.members, rank)
-}
-
-func (m *Membership) getMember(rank Rank) (*Member, error) {
-	if member, found := m.members[rank]; found {
-		return member, nil
-	}
-
-	return nil, FaultMemberMissing(rank)
-}
-
-// Get retrieves member reference from membership based on Rank.
-func (m *Membership) Get(rank Rank) (*Member, error) {
-	m.RLock()
-	defer m.RUnlock()
-
-	return m.getMember(rank)
-}
-
-// RankList returns slice of all ordered member ranks.
-func (m *Membership) RankList() (ranks []Rank) {
-	m.RLock()
-	defer m.RUnlock()
-
-	for rank := range m.members {
-		ranks = append(ranks, rank)
-	}
-
-	sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
-
-	return
-}
-
-func (m *Membership) getHostRanks(rankSet *RankSet) map[string][]Rank {
-	var rankList []Rank
-	hostRanks := make(map[string][]Rank)
-
-	if rankSet != nil {
-		rankList = rankSet.Ranks()
-	}
-
-	for _, member := range m.members {
-		addr := member.Addr.String()
-
-		if len(rankList) != 0 && !member.Rank.InList(rankList) {
-			continue
-		}
-
-		if _, exists := hostRanks[addr]; exists {
-			hostRanks[addr] = append(hostRanks[addr], member.Rank)
-			ranks := hostRanks[addr]
-			sort.Slice(ranks, func(i, j int) bool { return ranks[i] < ranks[j] })
-			continue
-		}
-		hostRanks[addr] = []Rank{member.Rank}
-	}
-
-	return hostRanks
-}
-
-// HostRanks returns mapping of control addresses to ranks managed by harness at
-// that address.
-//
-// Filter to include only host keys with any of the provided ranks, if supplied.
-func (m *Membership) HostRanks(rankSet *RankSet) map[string][]Rank {
-	m.RLock()
-	defer m.RUnlock()
-
-	return m.getHostRanks(rankSet)
-}
-
-// HostList returns slice of control addresses that contain any of the ranks
-// in the input rank list.
-//
-// If input rank list is empty, return all hosts in membership and ignore ranks
-// that are not in the membership.
-func (m *Membership) HostList(rankSet *RankSet) []string {
-	m.RLock()
-	defer m.RUnlock()
-
-	hostRanks := m.getHostRanks(rankSet)
-	hosts := make([]string, 0, len(hostRanks))
-
-	for host := range hostRanks {
-		hosts = append(hosts, host)
-	}
-	sort.Strings(hosts)
-
-	return hosts
-}
-
-// Members returns slice of references to all system members ordered by rank.
-//
-// Empty rank list implies no filtering/include all and ignore ranks that are
-// not in the membership.
-func (m *Membership) Members(rankSet *RankSet) (members Members) {
-	m.RLock()
-	defer m.RUnlock()
-
-	if rankSet == nil || rankSet.Count() == 0 {
-		for _, member := range m.members {
-			members = append(members, member)
-		}
-	} else {
-		for _, rank := range rankSet.Ranks() {
-			if member, exists := m.members[rank]; exists {
-				members = append(members, member)
-			}
-		}
-	}
-	sort.Slice(members, func(i, j int) bool { return members[i].Rank < members[j].Rank })
-
-	return
-}
-
-// UpdateMemberStates updates member's state according to result state.
-//
-// If updateOnFail is false, only update member state and info if result is a
-// success, if true then update state even if result is errored.
-func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool) error {
-	m.Lock()
-	defer m.Unlock()
-
-	for _, result := range results {
-		member, err := m.getMember(result.Rank)
-		if err != nil {
-			return err
-		}
-
-		// use opportunity to update host address in result
-		if result.Addr == "" {
-			result.Addr = member.Addr.String()
-		}
-
-		// don't update members if:
-		// - result reports an error and updateOnFail is false or
-		// - if transition from current to result state is illegal
-		if result.Errored {
-			if !updateOnFail {
-				continue
-			}
-			if result.State != MemberStateErrored {
-				return errors.Errorf(
-					"errored result for rank %d has conflicting state '%s'",
-					result.Rank, result.State)
-			}
-		}
-		if member.State().isTransitionIllegal(result.State) {
-			continue
-		}
-		member.state = result.State
-		member.Info = result.Msg
-	}
-
-	return nil
-}
-
-// CheckRanks returns rank sets of existing and missing membership ranks from
-// provided rank set string, if empty string is given then return hit rank set
-// containing all ranks in the membership.
-func (m *Membership) CheckRanks(ranks string) (hit, miss *RankSet, err error) {
-	m.RLock()
-	defer m.RUnlock()
-
-	hit, err = CreateRankSet("")
-	if err != nil {
-		return
-	}
-	miss, err = CreateRankSet("")
-	if err != nil {
-		return
-	}
-
-	var rankList []Rank
-	if ranks == "" {
-		rankList = m.RankList()
-	} else {
-		rankList, err = ParseRanks(ranks)
-		if err != nil {
-			return
-		}
-	}
-
-	for _, rank := range rankList {
-		if _, found := m.members[rank]; !found {
-			if err = miss.Add(rank); err != nil {
-				return
-			}
-			continue
-		}
-		if err = hit.Add(rank); err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-type resolveFnSig func(string, string) (*net.TCPAddr, error)
-
-// CheckHosts returns set of all ranks on any of the hosts in provided host set
-// string and another slice of all hosts from input hostset string that are
-// missing from the membership.
-func (m *Membership) CheckHosts(hosts string, ctlPort int, resolveFn resolveFnSig) (*RankSet, *hostlist.HostSet, error) {
-	m.RLock()
-	defer m.RUnlock()
-
-	hostRanks := m.getHostRanks(nil)
+// Errors returns an error indicating if and which ranks failed.
+func (mrs MemberResults) Errors() error {
 	rs, err := CreateRankSet("")
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
-	hs, err := hostlist.CreateSet(hosts)
-	if err != nil {
-		return nil, nil, err
-	}
-	missHS, err := hostlist.CreateSet("")
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, host := range strings.Split(hs.DerangedString(), ",") {
-		origHostString := host
-		if !common.HasPort(host) {
-			host = net.JoinHostPort(host, strconv.Itoa(ctlPort))
-		}
-
-		tcpAddr, resolveErr := resolveFn("tcp", host)
-		if resolveErr != nil {
-			m.log.Debugf("host addr %q didn't resolve: %s", host, resolveErr)
-			if _, err := missHS.Insert(origHostString); err != nil {
-				return nil, nil, err
-			}
-			continue
-		}
-
-		if rankList, exists := hostRanks[tcpAddr.String()]; exists {
-			m.log.Debugf("CheckHosts(): %v ranks found at %s", rankList, origHostString)
-			for _, rank := range rankList {
-				if err = rs.Add(rank); err != nil {
-					return nil, nil, err
-				}
-			}
-			continue
-		}
-
-		if _, err := missHS.Insert(origHostString); err != nil {
-			return nil, nil, err
+	for _, mr := range mrs {
+		if mr.Errored {
+			rs.Add(mr.Rank)
 		}
 	}
 
-	return rs, missHS, nil
-}
+	if rs.Count() > 0 {
+		return errors.Errorf("failed %s %s",
+			english.PluralWord(rs.Count(), "rank", "ranks"),
+			rs.String())
+	}
 
-// NewMembership returns a reference to a new DAOS system membership.
-func NewMembership(log logging.Logger) *Membership {
-	return &Membership{members: make(map[Rank]*Member), log: log}
+	return nil
 }

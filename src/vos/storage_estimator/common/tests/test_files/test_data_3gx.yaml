@@ -1,0 +1,396 @@
+---
+# Sample conflig file DFS files and directories
+#
+# Chunk size  = 1MiB
+# I/O size    = 128KiB
+# DIR OClass  = S1
+# File OClass = RP_3GX
+#
+# .
+# +-- data
+# |   +-- deploy
+# |   |   +-- [5767168] driver.bin
+# |   |   +-- [34] my_file -> ../../specs/very_importan_file.txt
+# |   +-- [3670016] secret_plan.txt
+# +-- specs
+#     +-- [1572864] readme.txt
+#     +-- [2621440] very_importan_file.txt
+
+num_shards: 1000
+
+# A-Key
+dfs_magic: &dfs_magic
+  count: 1
+  type: hashed
+  size: 9
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8, "aligned": "Yes"}]
+
+# A-Key
+dfs_sb_version: &dfs_sb_version
+  count: 1
+  type: hashed
+  size: 14
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 2, "aligned": "Yes"}]
+
+# A-Key
+dfs_layout_version: &dfs_layout_version
+  count: 1
+  type: hashed
+  size: 18
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 2, "aligned": "Yes"}]
+
+# A-Key
+dfs_chunk_size: &dfs_chunk_size
+  count: 1
+  type: hashed
+  size: 14
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 8, "aligned": "Yes"}]
+
+# A-Key
+dfs_obj_class: &dfs_obj_class
+  count: 1
+  type: hashed
+  size: 13
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 1, "size": 2, "aligned": "Yes"}]
+
+# D-Key
+dfs_sb_metadata: &dfs_sb_metadata
+  count: 1
+  type: hashed
+  size: 15
+  overhead: meta
+  akeys: [ *dfs_magic, *dfs_sb_version, *dfs_layout_version, *dfs_chunk_size, *dfs_obj_class ]
+
+# Dir A-Key
+dfs_inode: &dfs_inode
+  count: 1
+  type: hashed
+  size: 9           # DFS_INODE
+  overhead: meta
+  value_type: array
+  values: [{"count": 1, "size": 64, "aligned": "Yes"}]
+
+# Root Directory D-Key
+rootdir_dkey: &rootdir_dkey
+  count: 1
+  type: hashed
+  size: 1
+  overhead: user
+  akeys: [*dfs_inode]
+
+# SB Object
+superblock: &superblock_obj
+  count: 1
+  dkeys: [*dfs_sb_metadata, *rootdir_dkey]
+
+# data D-Key
+data_dkey: &data_dkey
+  count: 1
+  type: hashed
+  size: 4
+  overhead: user
+  akeys: [*dfs_inode]
+
+# specs D-Key
+specs_dkey: &specs_dkey
+  count: 1
+  type: hashed
+  size: 5
+  overhead: user
+  akeys: [*dfs_inode]
+
+# Root Directory Object
+rootdir_obj: &rootdir_obj
+  count: 1
+  dkeys: [*data_dkey, *specs_dkey]
+
+# data/deploy D-Key
+deploy_dkey: &deploy_dkey
+  count: 1
+  type: hashed
+  size: 6
+  overhead: user
+  akeys: [*dfs_inode]
+
+# data/secret_plan.txt D-Key
+secret_plan_dkey: &secret_plan_dkey
+  count: 1
+  type: hashed
+  size: 15
+  overhead: user
+  akeys: [*dfs_inode]
+
+# data Object
+data_obj: &data_obj
+  count: 1
+  dkeys: [*deploy_dkey, *secret_plan_dkey]
+
+# data/deploy/driver.bin D-Key
+driver_dkey: &driver_dkey
+  count: 1
+  type: hashed
+  size: 10
+  overhead: user
+  akeys: [*dfs_inode]
+
+# data/deploy/my_file -> ../../specs/very_importan_file.txt A-Key
+my_file_akey: &my_file_akey
+  count: 1
+  type: hashed
+  size: 9
+  overhead: meta
+  value_type: array
+  values: [{"count": 1, "size": 64, "aligned": "Yes"},{"count": 1, "size": 34, "aligned": "Yes"}]
+
+# data/deploy/my_file -> ../../specs/very_importan_file.txt D-Key
+my_file_dkey: &my_file_dkey
+  count: 1
+  type: hashed
+  size: 7
+  overhead: user
+  akeys: [*my_file_akey]
+
+ # data/deploy Object
+deploy_obj: &deploy_obj
+  count: 1
+  dkeys: [*driver_dkey, *my_file_dkey]
+
+# specs/readme.txt D-Key
+readme_dkey: &readme_dkey
+  count: 1
+  type: hashed
+  size: 10
+  overhead: user
+  akeys: [*dfs_inode]
+
+# specs/very_importan_file.txt D-Key
+very_importan_file_dkey: &very_importan_file_dkey
+  count: 1
+  type: hashed
+  size: 22
+  overhead: user
+  akeys: [*dfs_inode]
+
+# specs Object
+specs_obj: &specs_obj
+  count: 1
+  dkeys: [*readme_dkey, *very_importan_file_dkey]
+
+# data/secret_plan.txt A-Key 0
+secret_plan_akey0: &secret_plan_akey0
+  count: 1
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 3, "size": 64, "aligned": "Yes"}]
+
+# data/secret_plan.txt D-Key 0
+secret_plan_dkey0: &secret_plan_dkey0
+  count: 3
+  type: integer
+  overhead: meta
+  akeys: [*secret_plan_akey0]
+
+# data/secret_plan.txt A-Key 1
+secret_plan_akey1: &secret_plan_akey1
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 8, "size": 131072, "aligned": "Yes"}]
+
+# data/secret_plan.txt D-Key 1
+secret_plan_dkey1: &secret_plan_dkey1
+  count: 9
+  type: integer
+  overhead: user
+  akeys: [*secret_plan_akey1]
+
+# data/secret_plan.txt A-Key 4
+secret_plan_akey4: &secret_plan_akey4
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"}]
+
+# data/secret_plan.txt D-Key 4
+secret_plan_dkey4: &secret_plan_dkey4
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*secret_plan_akey4]
+
+# data/secret_plan.txt Object
+secret_plan_obj: &secret_plan_obj
+  count: 1
+  dkeys: [*secret_plan_dkey0, *secret_plan_dkey1, *secret_plan_dkey4]
+
+# data/deploy/driver.bin A-Key 0
+driver_akey0: &driver_akey0
+  count: 1
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 3, "size": 64, "aligned": "Yes"}]
+
+# data/deploy/driver.bin D-Key 0
+driver_dkey0: &driver_dkey0
+  count: 3
+  type: integer
+  overhead: meta
+  akeys: [*driver_akey0]
+
+# data/deploy/driver.bin A-Key 1
+driver_akey1: &driver_akey1
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 8, "size": 131072, "aligned": "Yes"}]
+
+# data/deploy/driver.bin D-Key 1
+driver_dkey1: &driver_dkey1
+  count: 15
+  type: integer
+  overhead: user
+  akeys: [*driver_akey1]
+
+# data/deploy/driver.bin A-Key 6
+driver_akey6: &driver_akey6
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"}]
+
+# data/deploy/driver.bin D-Key 6
+driver_dkey6: &driver_dkey6
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*driver_akey6]
+
+# data/deploy/driver.bin Object
+driver_obj: &driver_obj
+  count: 1
+  dkeys: [*driver_dkey0, *driver_dkey1, *driver_dkey6]
+
+# data/readme.txt A-Key 0
+readme_akey0: &readme_akey0
+  count: 1
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 3, "size": 64, "aligned": "Yes"}]
+
+# specs/readme.txt D-Key 0
+readme_dkey0: &readme_dkey0
+  count: 3
+  type: integer
+  overhead: meta
+  akeys: [*readme_akey0]
+
+# specs/readme.txt A-Key 1
+readme_akey1: &readme_akey1
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 8, "size": 131072, "aligned": "Yes"}]
+
+# specs/readme.txt D-Key 1
+readme_dkey1: &readme_dkey1
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*readme_akey1]
+
+# specs/readme.txt A-Key 2
+readme_akey2: &readme_akey2
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"}]
+
+# specs/readme.txt D-Key 2
+readme_dkey2: &readme_dkey2
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*readme_akey2]
+
+# specs/readme.txt Object
+readme_obj: &readme_obj
+  count: 1
+  dkeys: [*readme_dkey0, *readme_dkey1, *readme_dkey2]
+
+# specs/very_importan_file.txt A-Key 0
+very_important_akey0: &very_important_akey0
+  count: 1
+  type: integer
+  overhead: meta
+  value_type: single_value
+  values: [{"count": 3, "size": 64, "aligned": "Yes"}]
+
+# specs/very_importan_file.txt D-Key 0
+very_important_dkey0: &very_important_dkey0
+  count: 3
+  type: integer
+  overhead: meta
+  akeys: [*very_important_akey0]
+
+# specs/very_importan_file.txt A-Key 1
+very_important_akey1: &very_important_akey1
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 8, "size": 131072, "aligned": "Yes"}]
+
+# specs/very_importan_file.txt D-Key 1
+very_important_dkey1: &very_important_dkey1
+  count: 6
+  type: integer
+  overhead: user
+  akeys: [*very_important_akey1]
+
+# specs/very_importan_file.txt A-Key 3
+very_important_akey3: &very_important_akey3
+  count: 1
+  type: integer
+  overhead: user
+  value_type: array
+  values: [{"count": 4, "size": 131072, "aligned": "Yes"}]
+
+# specs/very_importan_file.txt D-Key 3
+very_important_dkey3: &very_important_dkey3
+  count: 3
+  type: integer
+  overhead: user
+  akeys: [*very_important_akey3]
+
+# specs/very_important_file.txt Object
+very_important_obj: &very_important_obj
+  count: 1
+  dkeys: [*very_important_dkey0, *very_important_dkey1, *very_important_dkey3]
+
+# Containers
+posix_key: &posix
+  count: 1
+  csum_size: 0
+  csum_gran: 16384
+  objects: [*superblock_obj, *rootdir_obj, *data_obj, *deploy_obj, *specs_obj, *secret_plan_obj, *driver_obj, *readme_obj, *very_important_obj]
+
+containers: [*posix]

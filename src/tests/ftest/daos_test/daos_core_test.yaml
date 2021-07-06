@@ -10,25 +10,52 @@ hosts:
 # should be a general average of all tests not including outliers
 # (I'm looking at you "rebuild tests")
 timeout: 600
+timeouts:
+    test_daos_degraded_mode: 450
+    test_daos_management: 110
+    test_daos_pool: 120
+    test_daos_container: 250
+    test_daos_epoch: 125
+    test_daos_verify_consistency: 105
+    test_daos_io: 290
+    test_daos_ec_io: 450
+    test_daos_ec_obj: 300
+    test_daos_object_array: 105
+    test_daos_array: 106
+    test_daos_kv: 105
+    test_daos_capability: 104
+    test_daos_epoch_recovery: 104
+    test_daos_md_replication: 104
+    test_daos_rebuild_simple: 900
+    test_daos_drain_simple: 500
+    test_daos_oid_allocator: 320
+    test_daos_checksum: 500
+    test_daos_rebuild_ec: 1800
+    test_daos_degraded_ec_0to6: 900
+    test_daos_degraded_ec_8to23: 950
+    test_daos_dedup: 220
 pool:
   #This will create 8G of SCM and 16G of NVMe size of pool.
   scm_size: 8G
   nvme_size: 16G
 server_config:
-  servers_per_host: 2
+  engines_per_host: 2
   name: daos_server
   servers:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
       fabric_iface: ib0
-      fabric_iface_port: 31416
+      fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
       bdev_list: ["0000:81:00.0"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,io,md,epc,rebuild
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -40,6 +67,9 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,io,md,epc,rebuild
   transport_config:
     allow_insecure: True
 agent_config:
@@ -49,72 +79,81 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
-  num_clients:
-    num_clients: 1
-  num_replicas:
-    num_replicas: 1
-  Tests: !mux
-    test_d:
-      daos_test: d
-      test_name: DAOS degraded-mode tests
-      scalable_endpoint: True
-    test_m:
-      daos_test: m
-      test_name: Management tests
-    test_p:
-      daos_test: p
-      test_name: Pool tests
-    test_c:
-      daos_test: c
-      test_name: DAOS container tests
-    test_e:
-      daos_test: e
-      test_name: DAOS epoch tests
-    test_X:
-      daos_test: X
-      test_name: DAOS DTX tests
-    test_V:
-      daos_test: V
-      test_name: DAOS verify consistency tests
-      test_timeout: 900
-    test_i:
-      daos_test: i
-      test_name: IO test
-      test_timeout: 900
-    test_A:
-      daos_test: A
-      test_name: DAOS Object Array tests
-    test_D:
-      daos_test: D
-      test_name: DAOS Array tests
-    test_K:
-      daos_test: K
-      test_name: DAOS KV tests
-    test_F:
-      daos_test: F
-      test_name: DAOS File System tests
-    test_C:
-      daos_test: C
-      test_name: DAOS capability tests
-    test_o:
-      daos_test: o
-      test_name: Epoch recovery tests
-    test_R:
-      daos_test: R
-      test_name: DAOS MD replication tests
-    test_v:
-      daos_test: v
-      test_name: DAOS rebuild simple tests
-      test_timeout: 1500
-    test_b:
-      daos_test: b
-      test_name: DAOS drain simple tests
-      test_timeout: 1500
-    test_O:
-      daos_test: O
-      test_name: OID Allocator tests
-      test_timeout: 1350
-    test_z:
-      daos_test: z
-      test_name: Checksum tests
-      test_timeout: 900
+  num_clients: 1
+  test_name:
+    test_daos_degraded_mode: DAOS_Degraded_Mode
+    test_daos_management: DAOS_Management
+    test_daos_pool: DAOS_Pool
+    test_daos_container: DAOS_Container
+    test_daos_epoch: DAOS_Epoch
+    test_daos_single_rdg_tx: DAOS_Single_RDG_TX
+    test_daos_distributed_tx: DAOS_Distributed_TX
+    test_daos_verify_consistency: DAOS_Verify_Consistency
+    test_daos_io: DAOS_IO
+    test_daos_ec_io: DAOS_IO_EC_4P2G1
+    test_daos_ec_obj: DAOS_EC
+    test_daos_object_array: DAOS_Object_Array
+    test_daos_array: DAOS_Array
+    test_daos_kv: DAOS_KV
+    test_daos_capability: DAOS_Capability
+    test_daos_epoch_recovery: DAOS_Epoch_Recovery
+    test_daos_md_replication: DAOS_MD_Replication
+    test_daos_rebuild_simple: DAOS_Rebuild_Simple
+    test_daos_drain_simple: DAOS_Drain_Simple
+    test_daos_oid_allocator: DAOS_OID_Allocator
+    test_daos_checksum: DAOS_Checksum
+    test_daos_rebuild_ec: DAOS_Rebuild_EC
+    test_daos_aggregate_ec: DAOS_Aggregate_EC
+    test_daos_degraded_ec_0to6: DAOS_Degraded_EC_0to6
+    test_daos_degraded_ec_8to23: DAOS_Degraded_EC_8to23
+    test_daos_dedup: DAOS_Dedup
+    test_daos_capability: DAOS_Capability
+    test_daos_epoch_recovery: DAOS_Epoch_Recovery
+    test_daos_md_replication: DAOS_MD_Replication
+    test_daos_rebuild_simple: DAOS_Rebuild_Simple
+    test_daos_drain_simple: DAOS_Drain_Simple
+    test_daos_extend_simple: DAOS_Extend_Simple
+    test_daos_oid_allocator: DAOS_OID_Allocator
+    test_daos_checksum: DAOS_Checksum
+    test_daos_rebuild_ec: DAOS_Rebuild_EC
+    test_daos_aggregate_ec: DAOS_Aggregate_EC
+    test_daos_degraded_ec_0to6: DAOS_Degraded_EC_0to6
+    test_daos_degraded_ec_8to23: DAOS_Degraded_EC_8to23
+    test_daos_dedup: DAOS_Dedup
+  daos_test:
+    test_daos_degraded_mode: d
+    test_daos_management: m
+    test_daos_pool: p
+    test_daos_container: c
+    test_daos_epoch: e
+    test_daos_single_rdg_tx: t
+    test_daos_distributed_tx: T
+    test_daos_verify_consistency: V
+    test_daos_io: i
+    test_daos_ec_io: i
+    test_daos_ec_obj: I
+    test_daos_object_array: A
+    test_daos_array: D
+    test_daos_kv: K
+    test_daos_capability: C
+    test_daos_epoch_recovery: o
+    test_daos_md_replication: R
+    test_daos_rebuild_simple: v
+    test_daos_drain_simple: b
+    test_daos_extend_simple: B
+    test_daos_oid_allocator: O
+    test_daos_checksum: z
+    test_daos_rebuild_ec: S
+    test_daos_aggregate_ec: Z
+    test_daos_degraded_ec_0to6: X
+    test_daos_degraded_ec_8to23: X
+    test_daos_dedup: U
+  args:
+    test_daos_degraded_ec_0to6: -u subtests="0-6" --csum_type=crc64
+    test_daos_degraded_ec_8to23: -u subtests="8-23" --csum_type=crc64
+    test_daos_ec_io: -l"EC_4P2G1"
+  scalable_endpoint:
+    test_daos_degraded_mode: True
+  stopped_ranks:
+    test_daos_degraded_mode: [5, 6, 7]
+    test_daos_oid_allocator: [6, 7]

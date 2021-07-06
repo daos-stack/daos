@@ -2,19 +2,20 @@
 
 ## Building against the DAOS library
 
-To build application or I/O middleware against the native DAOS API, include
-the daos.h header file in your program and link with `-Ldaos`. Examples are
-available under src/tests.
+To build an application or I/O middleware against the native DAOS API, include
+the `daos.h` header file in your program and link with `-Ldaos`. Examples are
+available under `src/tests`.
 
 ## DAOS API Reference
 
-libdaos is written in C and uses Doxygen comments that are added to C header
-files. The Doxygen documentation is available [here](api/index.html).
+`libdaos` is written in C and uses Doxygen comments that are added to C header
+files. The Doxygen documentation is available
+[here](https://daos-stack.github.io/html/).
 
 ## Python Bindings
 
 A python module called [PyDAOS](https://github.com/daos-stack/daos/blob/master/src/client/pydaos)
-provides the DAOS python to python users.
+provides the DAOS API to python users.
 
 ### pydaos
 
@@ -23,37 +24,37 @@ provides a native DAOS python interface exported by a C module. It integrates
 the DAOS key-value store API with python dictionaries. Only strings are
 supported for both the key and value for now.
 
-Key-value pair can be inserted/looked up once at a time (see put/get) or
-in bulk (see bput/bget) taking a python dict as an input. The bulk
+Key-value pairs can be inserted/looked up one at a time (see put/get) or
+in bulk (see bput/bget), taking a python dict as an input. The bulk
 operations are issued in parallel (up to 16 operations in flight) to
 maximize the operation rate.
 
-Key-value pair are deleted via the put/bput operations by setting the value
+Key-value pairs are deleted via the put/bput operations by setting the value
 to either None or the empty string. Once deleted, the key won't be reported
 during iteration. It also supports the del operation via 'del dkv.key'.
-The DAOS KV objects behave like a python dictionary and supports:
+The DAOS KV objects behave like a python dictionary and support:
 
 - 'dkv[key]' which invokes 'dkv.get(key)'
 
 - 'dkv[key] = val' which invokes 'dkv.put(key, val)'
 
-- 'for key in dkv:' allows to walk through the key space via the support of
+- 'for key in dkv:' allows for walking through the key space via the support of
   python iterators
 
-- 'if key is in dkv:' allows to test whether a give key is present in the
+- 'if key is in dkv:' allows testing whether a given key is present in the
   DAOS KV store.
 
-- 'len(dkv)' returns the number of key-value pairs
+- 'len(dkv)' returns the number of key-value pairs.
 
-- 'bool(dkv)' reports 'False' if there is no key-value pairs in the DAOS KV
+- 'bool(dkv)' reports 'False' if there are no key-value pairs in the DAOS KV
   and 'True' otherwise.
 
 Python iterators are supported, which means that "for key in kvobj:" will
 allow you to walk through the key space.
-For each method, a PyDError exception is raised with proper DAOS error code
+For each method, a PyDError exception is raised with a proper DAOS error code
 (in string format) if the operation cannot be completed.
 
-Both python 2.7 and 3.x are supported.
+Both Python 2.7 and 3.x is supported.
 
 ### pydaos.raw
 
@@ -118,7 +119,7 @@ asynchronous execution, and the Python API exposes this same functionality.
 Each API takes an input event. `DaosEvent` is the Python representation of this
 event. If the input event is `NULL`, the call is synchronous. If an event is
 supplied, the function will return immediately after submitting API requests to
-the underlying stack and the user can poll and query the event for completion.
+the underlying stack, and the user can poll and query the event for completion.
 
 #### Ctypes
 
@@ -139,8 +140,7 @@ C function being cast via ctypes. This also demonstrates struct representation v
 
 int
 daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
-                          const d_rank_list_t *svc, struct d_tgt_list *tgts,
-                          daos_event_t *ev);
+                          struct d_tgt_list *tgts, daos_event_t *ev);
 ```
 
 All input parameters must be represented via ctypes. If a struct is required as
@@ -178,14 +178,13 @@ p_ranks = DaosPool.__pylist_to_array([2])
 # cast python variables via ctypes as necessary
 c_uuid = str_to_c_uuid(p_uuid)
 c_grp = ctypes.create_string_buffer(b"daos_group_name")
-c_svc = ctypes.POINTER(2) # ensure pointers are cast/passed as such
 c_tgt_list = ctypes.POINTER(DTgtList(p_ranks, p_tgts, 2))) # again, DTgtList must be passed as pointer
 
 # load the shared object
 my_lib = ctypes.CDLL('/full/path/to/daos_exclude.so')
 
 # now call it
-my_lib.daos_pool_tgt_exclude_out(c_uuid, c_grp, c_svc, c_tgt_list, None)
+my_lib.daos_pool_tgt_exclude_out(c_uuid, c_grp, c_tgt_list, None)
 ```
 
 #### Error Handling

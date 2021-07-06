@@ -1,0 +1,112 @@
+//
+// (C) Copyright 2018-2021 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+syntax = "proto3";
+package mgmt;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
+
+// Management Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS IO Engines.
+
+// Generic response just containing DER from I/O Engine.
+message DaosResp {
+	int32 status = 1;	// DAOS error code.
+}
+
+message GroupUpdateReq {
+	message Engine {
+		uint32 rank = 1;
+		string uri = 2;
+	}
+	uint32 map_version = 1;
+	repeated Engine engines = 2;
+}
+
+message GroupUpdateResp {
+	int32 status = 1;
+}
+
+message JoinReq {
+	string sys = 1;		// DAOS system name.
+	string uuid = 2;	// Server UUID.
+	uint32 rank = 3;	// Server rank desired, if not MAX_UINT32.
+	string uri = 4;		// Server CaRT base URI (i.e., for context 0).
+	uint32 nctxs = 5;	// Server CaRT context count.
+	string addr = 6;	// Server management address.
+	string srvFaultDomain = 7; // Fault domain for this instance's server
+	uint32 idx = 8;		// Instance index on server node.
+}
+
+message JoinResp {
+	int32 status = 1;	// DAOS error code
+	uint32 rank = 2;	// Server rank assigned.
+	enum State {
+		IN = 0;		// Server in the system.
+		OUT = 1;	// Server excluded from the system.
+	}
+	State state = 3;	// Server state in the system map.
+	string faultDomain = 4; // Fault domain for the instance
+	bool localJoin = 5;	// Join processed locally.
+}
+
+message LeaderQueryReq {
+	string sys = 1;		// System name.
+}
+
+message LeaderQueryResp {
+	string currentLeader = 1;
+	repeated string replicas = 2;
+}
+
+message GetAttachInfoReq {
+	string sys = 1;		// System name. For daos_agent only.
+	bool all_ranks = 2;	// Return Rank URIs for all ranks.
+}
+
+message GetAttachInfoResp {
+	int32 status = 1;		// DAOS error code
+	message RankUri {
+		uint32 rank = 1;
+		string uri = 2;
+	}
+	repeated RankUri rank_uris = 2;	// Rank URIs
+					// These CaRT settings are shared with the
+					// libdaos client to aid in CaRT initialization.
+	string provider = 3;		// CaRT OFI provider
+	string interface = 4;		// CaRT OFI_INTERFACE
+	string domain = 5;		// CaRT OFI_DOMAIN for given OFI_INTERFACE
+	uint32 crt_ctx_share_addr = 6;	// CaRT CRT_CTX_SHARE_ADDR
+	uint32 crt_timeout = 7;		// CaRT CRT_TIMEOUT
+	uint32 net_dev_class = 8;	// ARP protocol hardware identifier of the
+					// I/O Engine network interface
+	repeated uint32 ms_ranks = 9;	// Ranks local to MS replicas
+}
+
+message PrepShutdownReq {
+	uint32 rank = 1;	// DAOS I/O Engine unique identifier.
+}
+
+// PrepShutdownResp is identical to DaosResp.
+
+message PingRankReq {
+	uint32 rank = 1;	// DAOS I/O Engine unique identifier.
+}
+
+// PingRankResp is identical to DaosResp.
+
+message SetRankReq {
+	uint32 rank = 1;	// DAOS I/O Engine unique identifier.
+}
+
+// SetRankResp is identical to DaosResp.
+
+message PoolMonitorReq {
+	string sys = 1; // DAOS system identifier
+	string poolUUID = 2;	// Pool UUID associated with the Pool Handle
+	string poolHandleUUID = 3; // Pool Handle UUID for the connection
+	string jobid = 4;	// Job ID to associate instance with.
+}

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -131,8 +114,9 @@ struct evt_rect {
 
 /** A search rectangle to limit scope of a search */
 struct evt_filter {
-	struct evt_extent	fr_ex;	/**< extent range */
-	daos_epoch_range_t	fr_epr;	/**< epoch range */
+	struct evt_extent	fr_ex;		/**< extent range */
+	daos_epoch_range_t	fr_epr;		/**< range with uncertainty */
+	daos_epoch_t		fr_epoch;	/**< actual epoch */
 	/** higher level punch epoch (0 if not punched) */
 	daos_epoch_t		fr_punch_epc;
 	/** Minor epc for higher level punch */
@@ -141,7 +125,7 @@ struct evt_filter {
 
 /** Log format of extent */
 #define DF_EXT				\
-	DF_U64"-"DF_U64
+	DF_X64"-"DF_X64
 
 /** Log format of rectangle */
 #define DF_RECT				\
@@ -166,12 +150,12 @@ struct evt_filter {
 
 /** Log format of evtree filter */
 #define DF_FILTER			\
-	DF_EXT "@" DF_X64"-"DF_X64"(punch="DF_X64".%d)"
+	DF_EXT "@" DF_X64"-"DF_X64"(epoch="DF_X64",punch="DF_X64".%d)"
 
 #define DP_FILTER(filter)					\
 	DP_EXT(&(filter)->fr_ex), (filter)->fr_epr.epr_lo,	\
 	(filter)->fr_epr.epr_hi, (filter)->fr_punch_epc,	\
-	(filter)->fr_punch_minor_epc
+	(filter)->fr_epoch, (filter)->fr_punch_minor_epc
 
 /** Return the width of an extent */
 static inline daos_size_t
@@ -207,10 +191,12 @@ struct evt_weight {
 struct evt_rect_df {
 	/** Epoch of update */
 	uint64_t	rd_epc;
-	/** Length of record */
-	uint64_t	rd_len:48;
+	/** Upper bits of record length */
+	uint32_t	rd_len_hi;
+	/** Lower bits of record length */
+	uint16_t	rd_len_lo;
 	/** Minor epoch of update */
-	uint64_t	rd_minor_epc:16;
+	uint16_t	rd_minor_epc;
 	/** Low offset */
 	uint64_t	rd_lo;
 };
@@ -294,6 +280,8 @@ struct evt_entry_in {
 	struct evt_rect		ei_rect;
 	/** checksum of entry */
 	struct dcs_csum_info	ei_csum;
+	/** epoch uncertainty boundary */
+	daos_epoch_t		ei_bound;
 	/** pool map version */
 	uint32_t		ei_ver;
 	/** number of bytes per record, zero for punch */
@@ -350,8 +338,9 @@ struct evt_list_entry {
 
 #define EVT_EMBEDDED_NR 16
 /**
- * list head of \a evt_entry, it contains a few embedded entries to support
- * lightweight allocation of entries.
+ * list head of \a evt_entry.  Do not use directly.  Instead, allocate
+ * on the stack using the EVT_ENT_ARRAY_*_PTR macros below.  This
+ * will allocate some embedded entries to reduce some allocations.
  */
 struct evt_entry_array {
 	/** Array of allocated entries */
@@ -365,8 +354,31 @@ struct evt_entry_array {
 	/** Number of bytes per index */
 	uint32_t			 ea_inob;
 	/* Small array of embedded entries */
-	struct evt_list_entry		 ea_embedded_ents[EVT_EMBEDDED_NR];
+	struct evt_list_entry		 ea_embedded_ents[0];
 };
+
+struct evt_entry_array_lg {
+	struct evt_entry_array		 ea_data;
+	struct evt_list_entry		 ea_embedded[EVT_EMBEDDED_NR];
+};
+
+struct evt_entry_array_sm {
+	struct evt_entry_array		 ea_data;
+	struct evt_list_entry		 ea_embedded[1];
+};
+
+#define EVT_ENT_ARRAY_LG_PTR(name)					\
+	struct evt_entry_array_lg	 name##_alloc;			\
+	struct evt_entry_array		*name
+
+#define EVT_ENT_ARRAY_SM_PTR(name)					\
+	struct evt_entry_array_sm	 name##_alloc;			\
+	struct evt_entry_array		*name
+
+D_CASSERT(offsetof(struct evt_entry_array_lg, ea_embedded) ==
+	  offsetof(struct evt_entry_array, ea_embedded_ents));
+D_CASSERT(offsetof(struct evt_entry_array_sm, ea_embedded) ==
+	  offsetof(struct evt_entry_array, ea_embedded_ents));
 
 static inline char
 evt_debug_print_visibility(const struct evt_entry *ent)
@@ -433,8 +445,17 @@ evt_entry_selected_offset(const struct evt_entry *entry)
 
 #define evt_ent_array_empty(ea)		(ea->ea_ent_nr == 0)
 
-void evt_ent_array_init(struct evt_entry_array *ent_array);
-void evt_ent_array_fini(struct evt_entry_array *ent_array);
+/** Passing max of 0 tells evtree functions to calculate the maximum size */
+#define evt_ent_array_init(basename, max)							\
+	do {											\
+		(basename) = &basename##_alloc.ea_data;						\
+		evt_ent_array_init_(basename, ARRAY_SIZE(basename##_alloc.ea_embedded), max);	\
+	} while (0)
+void evt_ent_array_init_(struct evt_entry_array *ent_array, int embedded_nr,
+			int max);
+#define evt_ent_array_fini(basename)	\
+	evt_ent_array_fini_(basename, ARRAY_SIZE(basename##_alloc.ea_embedded))
+void evt_ent_array_fini_(struct evt_entry_array *ent_array, int embedded);
 
 struct evt_context;
 
@@ -619,8 +640,10 @@ enum {
 
 	/** The iterator is for purge operation */
 	EVT_ITER_FOR_PURGE	= (1 << 5),
-	/** The iterator is for rebuild scan */
-	EVT_ITER_FOR_REBUILD	= (1 << 6),
+	/** The iterator is for data migration scan */
+	EVT_ITER_FOR_MIGRATION	= (1 << 6),
+	/** Skip extents removed by vos_obj_array_remove */
+	EVT_ITER_SKIP_REMOVED	= (1 << 7),
 };
 
 /**
@@ -641,7 +664,7 @@ enum {
 int evt_iter_prepare(daos_handle_t toh, unsigned int options,
 		     const struct evt_filter *filter, daos_handle_t *ih);
 /**
- * Finalise iterator.
+ * Finalize iterator.
  */
 int evt_iter_finish(daos_handle_t ih);
 

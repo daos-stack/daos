@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -31,9 +14,10 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 )
 
-type serverStarter func(*logging.LeveledLogger, *server.Configuration) error
+type serverStarter func(*logging.LeveledLogger, *config.Server) error
 
 type startCmd struct {
 	logCmd
@@ -46,7 +30,7 @@ type startCmd struct {
 	NrXsHelpers         *uint16 `short:"x" long:"xshelpernr" description:"number of helper XS per VOS target"`
 	FirstCore           uint16  `short:"f" long:"firstcore" default:"0" description:"index of first core for service thread"`
 	Group               string  `short:"g" long:"group" description:"Server group name"`
-	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_io_server sockets"`
+	SocketDir           string  `short:"d" long:"socket_dir" description:"Location for all daos_server & daos_engine sockets"`
 	Insecure            bool    `short:"i" long:"insecure" description:"allow for insecure connections"`
 	RecreateSuperblocks bool    `long:"recreate-superblocks" description:"recreate missing superblocks rather than failing"`
 }
@@ -73,14 +57,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 	}
 	cmd.config.RecreateSuperblocks = cmd.RecreateSuperblocks
 
-	host, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-
-	for _, srv := range cmd.config.Servers {
-		srv.WithHostname(host)
-
+	for _, srv := range cmd.config.Engines {
 		if cmd.Targets > 0 {
 			srv.WithTargetCount(int(cmd.Targets))
 		}
@@ -92,7 +69,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 		}
 	}
 
-	return cmd.config.Validate(cmd.log)
+	return nil
 }
 
 func (cmd *startCmd) configureLogging() error {
@@ -118,7 +95,7 @@ func (cmd *startCmd) configureLogging() error {
 		return err
 	}
 
-	for i, srv := range cmd.config.Servers {
+	for i, srv := range cmd.config.Engines {
 		if srv.LogFile == "" {
 			cmd.log.Errorf("no daos log file specified for server %d", i)
 		}

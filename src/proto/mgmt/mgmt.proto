@@ -1,69 +1,39 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 syntax = "proto3";
 package mgmt;
 
-import "pool.proto";
-import "cont.proto";
-import "srv.proto";
-import "storage_query.proto"; // storage query req/resp BIO data and SMD device list
-import "acl.proto"; // ACL-related requests
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 
-// Generic request indicating which ranks to operate on.
-// Used in gRPC fanout to operate on hosts with multiple ranks.
-message RanksReq {
-	bool force = 3; // force operation
-	string ranks = 4; // rankset to operate over
-}
-
-// Generic response containing DER result from multiple ranks.
-// Used in gRPC fanout to operate on hosts with multiple ranks.
-message RanksResp {
-	// Identical to ctl.system.RankResult proto message.
-	message RankResult {
-		uint32 rank = 1;
-		string action = 2;
-		bool errored = 3;
-		string msg = 4;
-		uint32 state = 5;
-	}
-	repeated RankResult results = 1;
-}
+import "shared/event.proto";
+import "mgmt/pool.proto";
+import "mgmt/cont.proto";
+import "mgmt/svc.proto";
+import "mgmt/acl.proto"; // ACL-related requests
+import "mgmt/system.proto";
 
 // Management Service is replicated on a small number of servers in the system,
 // these requests will be processed on a host that is a member of the management
 // service.
 //
-// All MgmtSvc RPCs will be forwarded over dRPC to be handled in data plane.
+// MgmtSvc RPCs will be forwarded over dRPC to be handled in data plane or
+// forwarded over gRPC to be handled by the management service.
 service MgmtSvc {
 	// Join the server described by JoinReq to the system.
 	rpc Join(JoinReq) returns (JoinResp) {}
+	// ClusterEvent notify MS of a RAS event in the cluster.
+	rpc ClusterEvent(shared.ClusterEventReq) returns (shared.ClusterEventResp) {}
 	// LeaderQuery provides a mechanism for clients to discover
 	// the system's current Management Service leader
 	rpc LeaderQuery(LeaderQueryReq) returns (LeaderQueryResp) {}
 	// Create a DAOS pool allocated across a number of ranks
 	rpc PoolCreate(PoolCreateReq) returns (PoolCreateResp) {}
+	// Resolve a user-friendly DAOS pool id to a UUID.
+	rpc PoolResolveID(PoolResolveIDReq) returns (PoolResolveIDResp) {}
 	// Destroy a DAOS pool allocated across a number of ranks.
 	rpc PoolDestroy(PoolDestroyReq) returns (PoolDestroyResp) {}
 	// Evict a DAOS pool's connections.
@@ -92,20 +62,16 @@ service MgmtSvc {
 	rpc GetAttachInfo(GetAttachInfoReq) returns (GetAttachInfoResp) {}
 	// List all pools in a DAOS system: basic info: UUIDs, service ranks.
 	rpc ListPools(ListPoolsReq) returns (ListPoolsResp) {}
-	// Query the per-server metadata
-	rpc SmdQuery(SmdQueryReq) returns (SmdQueryResp) {}
 	// List all containers in a pool
 	rpc ListContainers(ListContReq) returns (ListContResp) {}
-	// Prepare DAOS IO servers on a host for controlled shutdown. (gRPC fanout)
-	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
-	// Stop DAOS IO servers on a host. (gRPC fanout)
-	rpc StopRanks(RanksReq) returns (RanksResp) {}
-	// Ping DAOS IO servers on a host. (gRPC fanout)
-	rpc PingRanks(RanksReq) returns (RanksResp) {}
-	// ResetFormat DAOS IO servers on a host. (gRPC fanout)
-	rpc ResetFormatRanks(RanksReq) returns (RanksResp) {}
-	// Start DAOS IO servers on a host. (gRPC fanout)
-	rpc StartRanks(RanksReq) returns (RanksResp) {}
 	// Change the owner of a DAOS container
 	rpc ContSetOwner(ContSetOwnerReq) returns (ContSetOwnerResp) {}
+	// Query DAOS system status
+	rpc SystemQuery(SystemQueryReq) returns(SystemQueryResp) {}
+	// Stop DAOS system (shutdown data-plane instances)
+	rpc SystemStop(SystemStopReq) returns(SystemStopResp) {}
+	// Start DAOS system (restart data-plane instances)
+	rpc SystemStart(SystemStartReq) returns(SystemStartResp) {}
+	// Erase DAOS system database prior to reformat
+	rpc SystemErase(SystemEraseReq) returns(SystemEraseResp) {}
 }

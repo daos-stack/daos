@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Object related API and structures
@@ -72,6 +55,13 @@ struct vos_object {
 	struct vos_container		*obj_cont;
 };
 
+enum {
+	/** Only return the object if it's visible */
+	VOS_OBJ_VISIBLE		= (1 << 0),
+	/** Create the object if it doesn't exist */
+	VOS_OBJ_CREATE		= (1 << 1),
+};
+
 /**
  * Find an object in the cache \a occ and take its reference. If the object is
  * not in cache, this function will load it from PMEM pool or create it, then
@@ -83,14 +73,14 @@ struct vos_object {
  * \param epr		[IN,OUT]	Epoch range.   High epoch should be set
  *					to requested epoch.   The lower epoch
  *					can be 0 or bounded.
- * \param no_create	[IN]		If object doesn't exist, do not create
+ * \param bound		[IN]		Epoch uncertainty bound
+ * \param flags		[IN]		Object flags
  * \param intent	[IN]		The request intent.
- * \param visible_only	[IN]		Return the object only if it's visible
  * \param obj_p		[OUT]		Returned object cache reference.
  * \param ts_set	[IN]		Timestamp set
  *
  * \return	0			The object is visible or, if
- *					\p visible_only is false, it has
+ *					\p VOS_OBJ_VISIBLE is not set, it has
  *					punched data or is entirely empty.
  * \return	-DER_NONEXIST		The conditions for success don't apply
  *		-DER_INPROGRESS		The local target doesn't have the
@@ -99,8 +89,8 @@ struct vos_object {
  */
 int
 vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
-	     daos_unit_oid_t oid, daos_epoch_range_t *epr, bool no_create,
-	     uint32_t intent, bool visible_only, struct vos_object **obj_p,
+	     daos_unit_oid_t oid, daos_epoch_range_t *epr, daos_epoch_t bound,
+	     uint64_t flags, uint32_t intent, struct vos_object **obj_p,
 	     struct vos_ts_set *ts_set);
 
 /**
@@ -213,8 +203,9 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
  */
 int
 vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
-	     daos_epoch_t epoch, uint64_t flags, struct vos_obj_df *obj,
-	     struct vos_ilog_info *info, struct vos_ts_set *ts_set);
+	     daos_epoch_t epoch, daos_epoch_t bound, uint64_t flags,
+	     struct vos_obj_df *obj, struct vos_ilog_info *info,
+	     struct vos_ts_set *ts_set);
 
 
 /** delete an object from OI table */

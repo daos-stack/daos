@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
@@ -33,7 +16,7 @@ class DaosServerTransportCredentials(TransportCredentials):
 
     def __init__(self, log_dir="/tmp"):
         """Initialize a TransportConfig object."""
-        super(DaosServerTransportCredentials, self).__init__(
+        super().__init__(
             "/run/server_config/transport_config/*",
             "transport_config", log_dir)
 
@@ -58,9 +41,7 @@ class DaosServerTransportCredentials(TransportCredentials):
         """
         # Ensure the client cert directory includes the required certificate
         name_list.remove("client_cert_dir")
-        data = super(
-            DaosServerTransportCredentials, self).get_certificate_data(
-                name_list)
+        data = super().get_certificate_data(name_list)
         if not self.allow_insecure.value and self.client_cert_dir.value:
             if self.client_cert_dir.value not in data:
                 data[self.client_cert_dir.value] = ["agent.crt"]
@@ -79,8 +60,7 @@ class DaosServerYamlParameters(YamlParameters):
             filename (str): yaml configuration file name
             common_yaml (YamlParameters): [description]
         """
-        super(DaosServerYamlParameters, self).__init__(
-            "/run/server_config/*", filename, None, common_yaml)
+        super().__init__("/run/server_config/*", filename, None, common_yaml)
 
         # daos_server configuration file parameters
         #
@@ -131,21 +111,22 @@ class DaosServerYamlParameters(YamlParameters):
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
+        self.telemetry_port = BasicParameter(None, 9191)
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
         self.user_name = BasicParameter(None)
         self.group_name = BasicParameter(None)
 
-        # Defines the number of single server config parameters to define in
+        # Defines the number of single engine config parameters to define in
         # the yaml file
-        self.servers_per_host = BasicParameter(None)
+        self.engines_per_host = BasicParameter(None)
 
-        # Single server config parameters. Default to one set of I/O server
+        # Single engine config parameters. Default to one set of I/O Engine
         # parameters - for the config_file_gen.py tool. Calling get_params()
-        # will update the list to match the number of I/O servers requested by
-        # the self.servers_per_host.value.
-        self.server_params = [self.PerServerYamlParameters()]
+        # will update the list to match the number of I/O Engines requested by
+        # the self.engines_per_host.value.
+        self.engine_params = [self.PerEngineYamlParameters()]
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -156,18 +137,18 @@ class DaosServerYamlParameters(YamlParameters):
         Args:
             test (Test): avocado Test object
         """
-        super(DaosServerYamlParameters, self).get_params(test)
+        super().get_params(test)
 
         # Create the requested number of single server parameters
-        if isinstance(self.servers_per_host.value, int):
-            self.server_params = [
-                self.PerServerYamlParameters(index)
-                for index in range(self.servers_per_host.value)]
+        if isinstance(self.engines_per_host.value, int):
+            self.engine_params = [
+                self.PerEngineYamlParameters(index)
+                for index in range(self.engines_per_host.value)]
         else:
-            self.server_params = [self.PerServerYamlParameters()]
+            self.engine_params = [self.PerEngineYamlParameters()]
 
-        for server_params in self.server_params:
-            server_params.get_params(test)
+        for engine_params in self.engine_params:
+            engine_params.get_params(test)
 
     def get_yaml_data(self):
         """Convert the parameters into a dictionary to use to write a yaml file.
@@ -177,22 +158,43 @@ class DaosServerYamlParameters(YamlParameters):
 
         """
         # Get the common config yaml parameters
-        yaml_data = super(DaosServerYamlParameters, self).get_yaml_data()
+        yaml_data = super().get_yaml_data()
 
-        # Remove the "servers_per_host" BasicParameter as it is not an actual
+        # Remove the "engines_per_host" BasicParameter as it is not an actual
         # daos_server configuration file parameter
-        yaml_data.pop("servers_per_host", None)
+        yaml_data.pop("engines_per_host", None)
 
-        # Add the per-server yaml parameters
-        yaml_data["servers"] = []
-        for index in range(len(self.server_params)):
-            yaml_data["servers"].append({})
-            for name in self.server_params[index].get_param_names():
-                value = getattr(self.server_params[index], name).value
+        # Add the per-engine yaml parameters
+        yaml_data["engines"] = []
+        for index in range(len(self.engine_params)):
+            yaml_data["engines"].append({})
+            for name in self.engine_params[index].get_param_names():
+                value = getattr(self.engine_params[index], name).value
                 if value is not None and value is not False:
-                    yaml_data["servers"][index][name] = value
+                    yaml_data["engines"][index][name] = value
 
         return yaml_data
+
+    def is_yaml_data_updated(self):
+        """Determine if any of the yaml file parameters have been updated.
+
+        Returns:
+            bool: whether or not a yaml file parameter has been updated
+
+        """
+        yaml_data_updated = super().is_yaml_data_updated()
+        if not yaml_data_updated:
+            for engine_params in self.engine_params:
+                if engine_params.is_yaml_data_updated():
+                    yaml_data_updated = True
+                    break
+        return yaml_data_updated
+
+    def reset_yaml_data_updated(self):
+        """Reset each yaml file parameter updated state to False."""
+        super().reset_yaml_data_updated()
+        for engine_params in self.engine_params:
+            engine_params.reset_yaml_data_updated()
 
     def set_value(self, name, value):
         """Set the value for a specified attribute name.
@@ -205,12 +207,12 @@ class DaosServerYamlParameters(YamlParameters):
             bool: if the attribute name was found and the value was set
 
         """
-        status = super(DaosServerYamlParameters, self).set_value(name, value)
+        status = super().set_value(name, value)
 
-        # Set the value for each per-server configuration attribute name
+        # Set the value for each per-engine configuration attribute name
         if not status:
-            for server_params in self.server_params:
-                if server_params.set_value(name, value):
+            for engine_params in self.engine_params:
+                if engine_params.set_value(name, value):
                     status = True
 
         return status
@@ -225,16 +227,32 @@ class DaosServerYamlParameters(YamlParameters):
             object: the object's value referenced by the attribute name
 
         """
-        value = super(DaosServerYamlParameters, self).get_value(name)
+        value = super().get_value(name)
 
-        # Look for the value in the per-server configuration parameters.  The
+        # Look for the value in the per-engine configuration parameters.  The
         # first value found will be returned.
         index = 0
-        while value is None and index < len(self.server_params):
-            value = self.server_params[index].get_value(name)
+        while value is None and index < len(self.engine_params):
+            value = self.engine_params[index].get_value(name)
             index += 1
 
         return value
+
+    def get_engine_values(self, name):
+        """Get the value of the specified attribute name for each engine.
+
+        Args:
+            name (str): name of the attribute from which to get the value
+
+        Returns:
+            list: a list of the value of each matching configuration attribute
+                name per engine
+
+        """
+        engine_values = []
+        for engine_params in self.engine_params:
+            engine_values.append(engine_params.get_value(name))
+        return engine_values
 
     @property
     def using_nvme(self):
@@ -245,8 +263,8 @@ class DaosServerYamlParameters(YamlParameters):
                 the config file; False otherwise
 
         """
-        for server_params in self.server_params:
-            if server_params.using_nvme:
+        for engine_params in self.engine_params:
+            if engine_params.using_nvme:
                 return True
         return False
 
@@ -259,16 +277,16 @@ class DaosServerYamlParameters(YamlParameters):
                 the config file; False otherwise
 
         """
-        for server_params in self.server_params:
-            if server_params.using_dcpm:
+        for engine_params in self.engine_params:
+            if engine_params.using_dcpm:
                 return True
         return False
 
     def update_log_files(self, control_log, helper_log, server_log):
         """Update the logfile parameter for the daos server.
 
-        If there are multiple server configurations defined the server_log value
-        will be made unique for each server's log_file parameter.
+        If there are multiple engine configurations defined the server_log value
+        will be made unique for each engine's log_file parameter.
 
         Any log file name set to None will result in no update to the respective
         log file parameter value.
@@ -276,7 +294,7 @@ class DaosServerYamlParameters(YamlParameters):
         Args:
             control_log (str): control log file name
             helper_log (str): helper (admin) log file name
-            server_log (str): per server log file name
+            server_log (str): per engine log file name
         """
         if control_log is not None:
             self.control_log_file.update(
@@ -285,16 +303,16 @@ class DaosServerYamlParameters(YamlParameters):
             self.helper_log_file.update(
                 helper_log, "server_config.helper_log_file")
         if server_log is not None:
-            for index, server_params in enumerate(self.server_params):
+            for index, engine_params in enumerate(self.engine_params):
                 log_name = list(os.path.splitext(server_log))
-                if len(self.server_params) > 1:
-                    # Create unique log file names for each daos_io_server
+                if len(self.engine_params) > 1:
+                    # Create unique log file names for each I/O Engine
                     log_name.insert(1, "_{}".format(index))
-                server_params.log_file.update(
+                engine_params.log_file.update(
                     "".join(log_name),
                     "server_config.server[{}].log_file".format(index))
 
-    class PerServerYamlParameters(YamlParameters):
+    class PerEngineYamlParameters(YamlParameters):
         """Defines the configuration yaml parameters for a single server."""
 
         def __init__(self, index=None):
@@ -307,9 +325,7 @@ class DaosServerYamlParameters(YamlParameters):
             namespace = "/run/server_config/servers/*"
             if isinstance(index, int):
                 namespace = "/run/server_config/servers/{}/*".format(index)
-            super(
-                DaosServerYamlParameters.PerServerYamlParameters,
-                self).__init__(namespace)
+            super().__init__(namespace)
 
             # Use environment variables to get default parameters
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
@@ -322,19 +338,17 @@ class DaosServerYamlParameters(YamlParameters):
             log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
 
             # Parameters
-            #   targets:                count of VOS targets
+            #   targets:                I/O service threads per engine
             #   first_core:             starting index for targets
-            #   nr_xs_helpers:          offload helpers per server
+            #   nr_xs_helpers:          I/O offload threads per engine
             #   fabric_iface:           map to OFI_INTERFACE=eth0
             #   fabric_iface_port:      map to OFI_PORT=31416
             #   log_mask:               map to D_LOG_MASK env
             #   log_file:               map to D_LOG_FILE env
-            #   env_vars:               influences DAOS IO Server behavior
+            #   env_vars:               influences DAOS I/O Engine behavior
             #       Add to enable scalable endpoint:
             #           - CRT_CTX_SHARE_ADDR=1
             #           - CRT_CTX_NUM=8
-            #       nvme options:
-            #           - IO_STAT_PERIOD=10
             self.targets = BasicParameter(None, 8)
             self.first_core = BasicParameter(None, 0)
             self.nr_xs_helpers = BasicParameter(None, 16)
@@ -355,10 +369,7 @@ class DaosServerYamlParameters(YamlParameters):
                 default_env_vars.extend([
                     "FI_SOCKETS_MAX_CONN_RETRY=5",
                     "FI_SOCKETS_CONN_TIMEOUT=2000",
-                    "CRT_SWIM_RPC_TIMEOUT=10",
-                    "SWIM_PING_TIMEOUT=10000",
-                    "SWIM_PROTOCOL_PERIOD_LEN=30000",
-                    "SWIM_SUSPECT_TIMEOUT=90000",
+                    "CRT_SWIM_RPC_TIMEOUT=10"
                 ])
             self.env_vars = BasicParameter(None, default_env_vars)
 
@@ -422,9 +433,7 @@ class DaosServerYamlParameters(YamlParameters):
             Args:
                 test (Test): avocado Test object
             """
-            super(
-                DaosServerYamlParameters.PerServerYamlParameters,
-                self).get_params(test)
+            super().get_params(test)
 
             # Override the log file file name with the test log file name
             if hasattr(test, "server_log") and test.server_log is not None:

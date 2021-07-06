@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -79,22 +62,6 @@ extern void		*ds_mgmt_pool_delete_acl_result_ptr;
 
 void mock_ds_mgmt_pool_delete_acl_setup(void);
 void mock_ds_mgmt_pool_delete_acl_teardown(void);
-
-/*
- * Mock ds_mgmt_list_pools
- */
-extern int				ds_mgmt_list_pools_return;
-extern char				ds_mgmt_list_pools_group[];
-extern void				*ds_mgmt_list_pools_npools_ptr;
-extern uint64_t				ds_mgmt_list_pools_npools;
-extern void				*ds_mgmt_list_pools_poolsp_ptr;
-extern struct mgmt_list_pools_one	*ds_mgmt_list_pools_poolsp_out;
-extern void				*ds_mgmt_list_pools_len_ptr;
-extern size_t				ds_mgmt_list_pools_len_out;
-
-void mock_ds_mgmt_list_pools_setup(void);
-void mock_ds_mgmt_list_pools_teardown(void);
-void mock_ds_mgmt_list_pools_gen_pools(size_t num_pools);
 
 /*
  * Mock ds_mgmt_pool_list_cont

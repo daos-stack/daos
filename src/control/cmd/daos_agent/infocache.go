@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -28,8 +11,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
@@ -77,17 +60,53 @@ func (aic *attachInfoCache) loadBalance(numaNode int) int {
 	return deviceIndex
 }
 
+// selectRemote is called when no local network adapters
+// was detected on the local NUMA node and we need to pick
+// one attached to a remote NUMA node. Some balancing is
+// still required here to avoid overloading a specific interface
+func (aic *attachInfoCache) selectRemote() (int, int) {
+	aic.mutex.Lock()
+	defer aic.mutex.Unlock()
+
+	deviceIndex := invalidIndex
+	// restart from previous NUMA node
+	numaNode := aic.defaultNumaNode
+
+	if len(aic.numaDeviceMarshResp) == 0 {
+		aic.log.Infof("No network device available")
+		return numaNode, deviceIndex
+	}
+
+	for i := 1; i <= len(aic.numaDeviceMarshResp); i++ {
+		node := (numaNode + i) % len(aic.numaDeviceMarshResp)
+		numDevs := len(aic.numaDeviceMarshResp[node])
+		if numDevs > 0 {
+			numaNode = node
+			deviceIndex = aic.currentNumaDevIdx[numaNode]
+			aic.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
+			break
+		}
+	}
+
+	// update the default with the one we finally picked
+	aic.defaultNumaNode = numaNode
+
+	return numaNode, deviceIndex
+}
+
 func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 	deviceIndex := aic.loadBalance(numaNode)
 	// If there is no response available for the client's actual NUMA node,
 	// use the default NUMA node
 	if deviceIndex == invalidIndex {
-		deviceIndex = aic.loadBalance(aic.defaultNumaNode)
+		var numaSel int
+
+		numaSel, deviceIndex = aic.selectRemote()
 		if deviceIndex == invalidIndex {
-			return nil, errors.Errorf("No default response found for the default NUMA node %d", aic.defaultNumaNode)
+			return nil, errors.Errorf("No fallback network device found")
 		}
-		aic.log.Infof("No network devices bound to client NUMA node %d.  Using response from NUMA %d", numaNode, aic.defaultNumaNode)
-		numaNode = aic.defaultNumaNode
+		aic.log.Infof("No network devices bound to client NUMA node %d.  Using response from NUMA %d", numaNode, numaSel)
+		numaNode = numaSel
 	}
 
 	aic.mutex.Lock()
@@ -107,7 +126,7 @@ func (aic *attachInfoCache) isCached() bool {
 
 // initResponseCache generates a unique dRPC response corresponding to each device specified
 // in the scanResults.  The responses are differentiated based on the network device NUMA affinity.
-func (aic *attachInfoCache) initResponseCache(ctx context.Context, resp *mgmtpb.GetAttachInfoResp, scanResults []netdetect.FabricScan) error {
+func (aic *attachInfoCache) initResponseCache(ctx context.Context, resp *mgmtpb.GetAttachInfoResp, scanResults []*netdetect.FabricScan) error {
 	aic.mutex.Lock()
 	defer aic.mutex.Unlock()
 

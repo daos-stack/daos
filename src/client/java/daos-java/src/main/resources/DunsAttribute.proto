@@ -94,7 +94,7 @@ enum PropType {
   DAOS_PROP_CO_REDUN_FAC = 0x1007;
   /**
    * Redundancy level: default fault domain level for placement.
-   * default = rack (DAOS_PROP_CO_REDUN_RACK)
+   * default = rack (DAOS_PROP_CO_REDUN_NODE)
    */
   DAOS_PROP_CO_REDUN_LVL = 0x1008;
   /**
@@ -170,7 +170,9 @@ message DunsAttribute {
   Layout layout_type = 3;
   string object_type = 4;
   uint64  chunk_size = 5;
-  bool   on_lustre  = 6;
-  Properties properties = 7;
+  string rel_path = 6;
+  bool   on_lustre  = 7;
+  Properties properties = 8;
+  bool no_prefix = 9;
 }
 

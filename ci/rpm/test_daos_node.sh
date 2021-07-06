@@ -1,10 +1,19 @@
 #!/bin/bash
 
 set -uex
-sudo yum -y install --exclude ompi daos{,-client}-"${DAOS_PKG_VERSION}"
+sudo yum -y install --exclude ompi,libpmemobj,argobots,spdk \
+     daos-client-"${DAOS_PKG_VERSION}"
+if rpm -q daos-server; then
+  echo "daos-server RPM should not be installed as a dependency of daos-client"
+  exit 1
+fi
 sudo yum -y history rollback last-1
-sudo yum -y install --exclude ompi daos{,-{server,client}}-"${DAOS_PKG_VERSION}"
-sudo yum -y install --exclude ompi daos{,-tests}-"${DAOS_PKG_VERSION}"
+sudo yum -y install --exclude ompi daos-server-"${DAOS_PKG_VERSION}"
+if rpm -q daos-client; then
+  echo "daos-client RPM should not be installed as a dependency of daos-server"
+  exit 1
+fi
+sudo yum -y install --exclude ompi daos-tests-"${DAOS_PKG_VERSION}"
 
 me=$(whoami)
 for dir in server agent; do
@@ -32,7 +41,7 @@ while [[ "$line" != *started\ on\ rank\ 0* ]]; do
   echo "Server stdout: $line"
 done
 echo "Server started!"
-daos_agent &
+daos_agent --debug &
 AGENT_PID=$!
 trap 'set -x; kill -INT $AGENT_PID $COPROC_PID' EXIT
 OFI_INTERFACE=eth0 daos_test -m

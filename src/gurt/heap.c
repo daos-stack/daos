@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2011,2016-2020 Intel Corporation.
+ * (C) Copyright 2011,2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of gurt, it implements the gurt bin heap functions.
@@ -195,7 +178,8 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
 	while (h->d_bh_hwm < count) { /* preallocate */
 	rc = d_binheap_grow(h);
 		if (rc != 0) {
-			D_ERROR("d_binheap_grow failed, rc: %d.\n", rc);
+			D_ERROR("d_binheap_grow() failed, " DF_RC "\n",
+				DP_RC(rc));
 			d_binheap_destroy_inplace(h);
 			return rc;
 		}
@@ -203,7 +187,7 @@ d_binheap_create_inplace(uint32_t feats, uint32_t count, void *priv,
 
 	rc = dbh_lock_init(h);
 	if (rc != 0) {
-		D_ERROR("dbg_lock_init() failed, rc: %d.\n", rc);
+		D_ERROR("dbg_lock_init() failed, " DF_RC "\n", DP_RC(rc));
 		d_binheap_destroy_inplace(h);
 	}
 
@@ -232,7 +216,7 @@ d_binheap_create(uint32_t feats, uint32_t count, void *priv,
 
 	rc = d_binheap_create_inplace(feats, count, priv, ops, bh_created);
 	if (rc != 0) {
-		D_ERROR("d_binheap_create_inplace failed, rc: %d.\n", rc);
+		D_ERROR("d_binheap_create() failed, " DF_RC "\n", DP_RC(rc));
 		D_FREE_PTR(bh_created);
 		return rc;
 	}
@@ -488,7 +472,8 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	if (new_idx == h->d_bh_hwm) {
 		rc = d_binheap_grow(h);
 		if (rc != 0) {
-			D_ERROR("d_binheap_grow failed, rc: %d.\n", rc);
+			D_ERROR("d_binheap_grow() failed, " DF_RC "\n",
+				DP_RC(rc));
 			dbh_unlock(h, false /* read-only */);
 			return rc;
 		}
@@ -497,7 +482,8 @@ d_binheap_insert(struct d_binheap *h, struct d_binheap_node *e)
 	if (h->d_bh_ops->hop_enter) {
 		rc = h->d_bh_ops->hop_enter(h, e);
 		if (rc != 0) {
-			D_ERROR("d_bh_ops->hop_enter failed, rc: %d.\n", rc);
+			D_ERROR("d_bh_ops->hop_enter() failed, " DF_RC "\n",
+				DP_RC(rc));
 			dbh_unlock(h, false /* read-only */);
 			return rc;
 		}

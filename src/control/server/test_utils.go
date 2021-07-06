@@ -1,40 +1,25 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
 
 import (
 	"context"
+	"net"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -86,13 +71,18 @@ func (cfg *mockDrpcClientConfig) setResponseDelay(duration time.Duration) {
 	cfg.ResponseDelay = duration
 }
 
+type mockDrpcCall struct {
+	Method drpc.Method
+	Body   []byte
+}
+
 // mockDrpcClient is a mock of the DomainSocketClient interface
 type mockDrpcClient struct {
 	sync.Mutex
 	cfg              mockDrpcClientConfig
 	CloseCallCount   int
 	SendMsgInputCall *drpc.Call
-	Calls            []drpc.Method
+	calls            []*mockDrpcCall
 }
 
 func (c *mockDrpcClient) IsConnected() bool {
@@ -108,18 +98,25 @@ func (c *mockDrpcClient) Close() error {
 	return c.cfg.CloseError
 }
 
+func (c *mockDrpcClient) CalledMethods() (methods []drpc.Method) {
+	for _, call := range c.calls {
+		methods = append(methods, call.Method)
+	}
+	return
+}
+
 func (c *mockDrpcClient) SendMsg(call *drpc.Call) (*drpc.Response, error) {
 	c.SendMsgInputCall = call
 	method, err := drpc.ModuleMgmt.GetMethod(call.GetMethod())
 	if err != nil {
 		return nil, err
 	}
-	c.Calls = append(c.Calls, method)
+	c.calls = append(c.calls, &mockDrpcCall{method, call.Body})
 
 	<-time.After(c.cfg.ResponseDelay)
 
 	if len(c.cfg.SendMsgResponseList) > 0 {
-		idx := len(c.Calls) - 1
+		idx := len(c.calls) - 1
 		if idx < 0 {
 			idx = 0
 		}
@@ -145,8 +142,7 @@ func newMockDrpcClient(cfg *mockDrpcClientConfig) *mockDrpcClient {
 // setupMockDrpcClientBytes sets up the dRPC client for the mgmtSvc to return
 // a set of bytes as a response.
 func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
-	mi, _ := svc.harness.GetMSLeaderInstance()
-
+	mi := svc.harness.instances[0]
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
 	mi.setDrpcClient(newMockDrpcClient(cfg))
@@ -159,49 +155,57 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 	setupMockDrpcClientBytes(svc, respBytes, err)
 }
 
-// newTestIOServer returns an IOServerInstance configured for testing.
-func newTestIOServer(log logging.Logger, isAP bool) *IOServerInstance {
-	r := ioserver.NewTestRunner(&ioserver.TestRunnerConfig{
-		Running: atm.NewBool(true),
-	}, ioserver.NewConfig())
-
-	var msCfg mgmtSvcClientCfg
-	if isAP {
-		msCfg.AccessPoints = append(msCfg.AccessPoints, "localhost")
+// newTestEngine returns an EngineInstance configured for testing.
+func newTestEngine(log logging.Logger, isAP bool, engineCfg ...*engine.Config) *EngineInstance {
+	if len(engineCfg) == 0 {
+		engineCfg = append(engineCfg, engine.NewConfig().WithTargetCount(1))
 	}
+	rCfg := new(engine.TestRunnerConfig)
+	rCfg.Running.SetTrue()
+	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
-	srv := NewIOServerInstance(log, nil, nil, newMgmtSvcClient(context.TODO(), log, msCfg), r)
+	srv := NewEngineInstance(log, nil, nil, nil, r)
 	srv.setSuperblock(&Superblock{
 		Rank: system.NewRankPtr(0),
-		MS:   isAP,
 	})
 	srv.ready.SetTrue()
+	srv.OnReady()
 
 	return srv
 }
 
-// newTestMgmtSvc creates a mgmtSvc that contains an IOServerInstance
-// properly set up as an MS.
-func newTestMgmtSvc(log logging.Logger) *mgmtSvc {
-	srv := newTestIOServer(log, true)
+// mockTCPResolver returns successful resolve results for any input.
+func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
+	if netString != "tcp" {
+		return nil, errors.Errorf("unexpected network type in test: %s, want 'tcp'", netString)
+	}
 
-	harness := NewIOServerHarness(log)
+	return &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 10001}, nil
+}
+
+// newTestMgmtSvc creates a mgmtSvc that contains an EngineInstance
+// properly set up as an MS.
+func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
+	srv := newTestEngine(log, true)
+
+	harness := NewEngineHarness(log)
 	if err := harness.AddInstance(srv); err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil)
+	ms, db := system.MockMembership(t, log, mockTCPResolver)
+	return newMgmtSvc(harness, ms, db, nil, events.NewPubSub(context.Background(), log))
 }
 
 // newTestMgmtSvcMulti creates a mgmtSvc that contains the requested
-// number of IOServerInstances. If requested, the first instance is
+// number of EngineInstances. If requested, the first instance is
 // configured as an access point.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
-	harness := NewIOServerHarness(log)
+	harness := NewEngineHarness(log)
 
 	for i := 0; i < count; i++ {
-		srv := newTestIOServer(log, i == 0 && isAP)
+		srv := newTestEngine(log, i == 0 && isAP)
 		srv._superblock.Rank = system.NewRankPtr(uint32(i))
 
 		if err := harness.AddInstance(srv); err != nil {
@@ -210,5 +214,16 @@ func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool)
 	}
 	harness.started.SetTrue()
 
-	return newMgmtSvc(harness, nil, nil)
+	svc := newTestMgmtSvc(t, log)
+	svc.harness = harness
+
+	return svc
+}
+
+// newTestMgmtSvcNonReplica creates a mgmtSvc that is configured to
+// fail if operations expect it to be a replica.
+func newTestMgmtSvcNonReplica(t *testing.T, log logging.Logger) *mgmtSvc {
+	svc := newTestMgmtSvc(t, log)
+	svc.sysdb = system.MockDatabaseWithAddr(t, log, nil)
+	return svc
 }

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <unistd.h>
@@ -50,6 +33,7 @@ dc_sec_request_creds(d_iov_t *creds)
 
 	rc = request_credentials_via_drpc(&response);
 	if (rc != DER_SUCCESS) {
+		drpc_response_free(response);
 		return rc;
 	}
 
@@ -73,7 +57,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 
 	rc = drpc_connect(dc_agent_sockpath, &agent_socket);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("Can't connect to agent socket " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Can't connect to agent socket "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
@@ -82,7 +66,7 @@ request_credentials_via_drpc(Drpc__Response **response)
 			      DRPC_METHOD_SEC_AGENT_REQUEST_CREDS,
 			      &request);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("Couldn't allocate dRPC call " DF_RC "\n", DP_RC(rc));
+		D_ERROR("Couldn't allocate dRPC call "DF_RC"\n", DP_RC(rc));
 		drpc_close(agent_socket);
 		return rc;
 	}
@@ -135,6 +119,7 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	int			rc = 0;
 	Auth__GetCredResp	*cred_resp = NULL;
+	Auth__Token		*verifier = NULL;
 
 	cred_resp = auth__get_cred_resp__unpack(&alloc.alloc,
 						response->body.len,
@@ -162,7 +147,16 @@ get_cred_from_response(Drpc__Response *response, d_iov_t *cred)
 		D_GOTO(out, rc = -DER_PROTO);
 	}
 
+	if (cred_resp->cred->verifier == NULL) {
+		D_ERROR("Credential did not include verifier\n");
+		D_GOTO(out, rc = -DER_PROTO);
+	}
+
 	rc = auth_cred_to_iov(cred_resp->cred, cred);
+
+	/* If present clear out the verifier (the secret part) */
+	verifier = cred_resp->cred->verifier;
+	explicit_bzero(verifier->data.data, verifier->data.len);
 out:
 	auth__get_cred_resp__free_unpacked(cred_resp, &alloc.alloc);
 	return rc;

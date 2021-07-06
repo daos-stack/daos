@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Object cache for VOS OI table.
@@ -199,7 +182,7 @@ vos_obj_cache_evict(struct daos_lru_cache *cache, struct vos_container *cont)
 struct daos_lru_cache *
 vos_obj_cache_current(void)
 {
-	return vos_get_obj_cache();
+	return vos_obj_cache_get();
 }
 
 void
@@ -216,8 +199,8 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 
 int
 vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
-	     daos_unit_oid_t oid, daos_epoch_range_t *epr, bool no_create,
-	     uint32_t intent, bool visible_only, struct vos_object **obj_p,
+	     daos_unit_oid_t oid, daos_epoch_range_t *epr, daos_epoch_t bound,
+	     uint64_t flags, uint32_t intent, struct vos_object **obj_p,
 	     struct vos_ts_set *ts_set)
 {
 	struct vos_object	*obj;
@@ -226,6 +209,8 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	int			 rc = 0;
 	int			 tmprc;
 	uint32_t		 cond_mask = 0;
+	bool			 create;
+	bool			 visible_only;
 
 	D_ASSERT(cont != NULL);
 	D_ASSERT(cont->vc_pool);
@@ -235,10 +220,13 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (cont->vc_pool->vp_dying)
 		return -DER_SHUTDOWN;
 
+	create = flags & VOS_OBJ_CREATE;
+	visible_only = flags & VOS_OBJ_VISIBLE;
+
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
-		" create=%s epr="DF_U64"-"DF_U64"\n",
+		" create=%s epr="DF_X64"-"DF_X64"\n",
 		DP_UUID(cont->vc_id), DP_UOID(oid),
-		no_create ? "false" : "true", epr->epr_lo, epr->epr_hi);
+		create ? "true" : "false", epr->epr_lo, epr->epr_hi);
 
 	/* Create the key for obj cache */
 	lkey.olk_cont = cont;
@@ -266,19 +254,22 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	if (obj->obj_df) {
 		D_DEBUG(DB_TRACE, "looking up object ilog");
-		tmprc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog, &oid,
-					sizeof(oid));
+		if (create || intent == DAOS_INTENT_PUNCH)
+			vos_ilog_ts_ignore(vos_obj2umm(obj),
+					   &obj->obj_df->vo_ilog);
+		tmprc = vos_ilog_ts_add(ts_set, &obj->obj_df->vo_ilog,
+					&oid, sizeof(oid));
 		D_ASSERT(tmprc == 0); /* Non-zero only valid for akey */
 		goto check_object;
 	}
 
 	 /* newly cached object */
-	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_U64"-"DF_U64"\n",
-		no_create ? "find" : "find/create", DP_UOID(oid), epr->epr_lo,
+	D_DEBUG(DB_TRACE, "%s Got empty obj "DF_UOID" epr="DF_X64"-"DF_X64"\n",
+		create ? "find/create" : "find", DP_UOID(oid), epr->epr_lo,
 		epr->epr_hi);
 
 	obj->obj_sync_epoch = 0;
-	if (no_create) {
+	if (!create) {
 		rc = vos_oi_find(cont, oid, &obj->obj_df, ts_set);
 		if (rc == -DER_NONEXIST) {
 			D_DEBUG(DB_TRACE, "non exist oid "DF_UOID"\n",
@@ -302,15 +293,17 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	}
 
 check_object:
-	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH ||
-	    intent == DAOS_INTENT_COS)
+	if (intent == DAOS_INTENT_KILL || intent == DAOS_INTENT_PUNCH)
 		goto out;
 
-	if (no_create) {
+	if (!create) {
 		rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 				    intent, &obj->obj_df->vo_ilog, epr->epr_hi,
-				    0, NULL, &obj->obj_ilog_info);
+				    bound, NULL, NULL, &obj->obj_ilog_info);
 		if (rc != 0) {
+			if (vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
+						epr->epr_hi, bound))
+				rc = -DER_TX_RESTART;
 			D_DEBUG(DB_TRACE, "Object "DF_UOID" not found at "
 				DF_U64"\n", DP_UOID(oid), epr->epr_hi);
 			goto failed;
@@ -322,7 +315,14 @@ check_object:
 			D_DEBUG(DB_TRACE, "Object "DF_UOID" not visible at "
 				DF_U64"-"DF_U64"\n", DP_UOID(oid), epr->epr_lo,
 				epr->epr_hi);
-			goto failed;
+			if (!vos_has_uncertainty(ts_set, &obj->obj_ilog_info,
+						 epr->epr_hi, bound))
+				goto failed;
+
+			/** If the creation is uncertain, go ahead and fall
+			 *  through as if the object exists so we can do
+			 *  actual uncertainty check.
+			 */
 		}
 		goto out;
 	}
@@ -332,8 +332,10 @@ check_object:
 	 */
 	if (ts_set && ts_set->ts_flags & VOS_COND_UPDATE_OP_MASK)
 		cond_mask = VOS_ILOG_COND_UPDATE;
-	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr,
-			     NULL, &obj->obj_ilog_info, cond_mask, ts_set);
+	rc = vos_ilog_update(cont, &obj->obj_df->vo_ilog, epr, bound, NULL,
+			     &obj->obj_ilog_info, cond_mask, ts_set);
+	if (rc == -DER_TX_RESTART)
+		goto failed;
 	if (rc == -DER_NONEXIST && cond_mask)
 		goto out;
 	if (rc != 0) {
@@ -348,8 +350,8 @@ out:
 		obj->obj_sync_epoch = obj->obj_df->vo_sync;
 
 	if (obj->obj_df != NULL && epr->epr_hi <= obj->obj_sync_epoch &&
-	    (intent == DAOS_INTENT_COS || (vos_dth_get() != NULL &&
-	     (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)))) {
+	    vos_dth_get() != NULL &&
+	    (intent == DAOS_INTENT_PUNCH || intent == DAOS_INTENT_UPDATE)) {
 		/* If someone has synced the object against the
 		 * obj->obj_sync_epoch, then we do not allow to modify the
 		 * object with old epoch. Let's ask the caller to retry with
@@ -367,6 +369,7 @@ out:
 	}
 
 	*obj_p = obj;
+
 	return 0;
 failed:
 	vos_obj_release(occ, obj, true);

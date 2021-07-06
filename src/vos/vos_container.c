@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * VOS Container API implementation
@@ -79,7 +62,8 @@ cont_df_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	vos_ts_evict(&cont_df->cd_ts_idx, VOS_TS_TYPE_CONT);
 
-	return gc_add_item(tins->ti_priv, GC_CONT, rec->rec_off, 0);
+	return gc_add_item(tins->ti_priv, DAOS_HDL_INVAL, GC_CONT, rec->rec_off,
+			   0);
 }
 
 static int
@@ -99,7 +83,8 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	args = (struct cont_df_args *)val_iov->iov_buf;
 	pool = args->ca_pool;
 
-	D_DEBUG(DB_DF, "Allocating container uuid=%s\n", DP_UUID(ukey->uuid));
+	D_DEBUG(DB_DF, "Allocating container uuid=" DF_UUID "\n",
+		DP_UUID(ukey->uuid));
 	offset = umem_zalloc(&tins->ti_umm, sizeof(struct vos_cont_df));
 	if (UMOFF_IS_NULL(offset))
 		return -DER_NOSPACE;
@@ -116,6 +101,7 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	}
 	dbtree_close(hdl);
 
+	gc_init_cont(&tins->ti_umm, cont_df);
 	args->ca_cont_df = cont_df;
 	rec->rec_off = offset;
 	return 0;
@@ -191,9 +177,9 @@ cont_free_internal(struct vos_container *cont)
 
 	D_ASSERT(cont->vc_open_count == 0);
 
-	if (!daos_handle_is_inval(cont->vc_dtx_active_hdl))
+	if (daos_handle_is_valid(cont->vc_dtx_active_hdl))
 		dbtree_destroy(cont->vc_dtx_active_hdl, NULL);
-	if (!daos_handle_is_inval(cont->vc_dtx_committed_hdl))
+	if (daos_handle_is_valid(cont->vc_dtx_committed_hdl))
 		dbtree_destroy(cont->vc_dtx_committed_hdl, NULL);
 
 	if (cont->vc_dtx_array)
@@ -201,8 +187,12 @@ cont_free_internal(struct vos_container *cont)
 
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_list));
 	D_ASSERT(d_list_empty(&cont->vc_dtx_committed_tmp_list));
+	D_ASSERT(d_list_empty(&cont->vc_dtx_act_list));
 
 	dbtree_close(cont->vc_btr_hdl);
+
+	if (!d_list_empty(&cont->vc_gc_link))
+		d_list_del(&cont->vc_gc_link);
 
 	for (i = 0; i < VOS_IOS_CNT; i++) {
 		if (cont->vc_hint_ctxt[i])
@@ -382,8 +372,10 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 	cont->vc_dtx_committed_hdl = DAOS_HDL_INVAL;
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_list);
 	D_INIT_LIST_HEAD(&cont->vc_dtx_committed_tmp_list);
+	D_INIT_LIST_HEAD(&cont->vc_dtx_act_list);
 	cont->vc_dtx_committed_count = 0;
 	cont->vc_dtx_committed_tmp_count = 0;
+	gc_check_cont(cont);
 
 	/* Cache this btr object ID in container handle */
 	rc = dbtree_open_inplace_ex(&cont->vc_cont_df->cd_obj_root,
@@ -671,7 +663,7 @@ cont_iter_fini(struct vos_iterator *iter)
 
 	co_iter = vos_iter2co_iter(iter);
 
-	if (!daos_handle_is_inval(co_iter->cot_hdl)) {
+	if (daos_handle_is_valid(co_iter->cot_hdl)) {
 		rc = dbtree_iter_finish(co_iter->cot_hdl);
 		if (rc)
 			D_ERROR("co_iter_fini failed: "DF_RC"\n", DP_RC(rc));
@@ -686,7 +678,7 @@ cont_iter_fini(struct vos_iterator *iter)
 
 int
 cont_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
-	       struct vos_iterator **iter_pp)
+	       struct vos_iterator **iter_pp, struct vos_ts_set *ts_set)
 {
 	struct cont_iterator	*co_iter = NULL;
 	struct vos_pool		*vpool = NULL;

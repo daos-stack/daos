@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -30,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <daos_types.h>
 #include <daos_security.h>
 #include <daos_errno.h>
@@ -456,7 +440,7 @@ test_ace_is_valid_bad_principal(void **state)
 static void
 test_acl_is_valid_null(void **state)
 {
-	assert_int_equal(daos_acl_validate(NULL), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(NULL), -DER_INVAL);
 }
 
 static void
@@ -466,7 +450,7 @@ test_acl_is_valid_empty(void **state)
 
 	acl = daos_acl_create(NULL, 0);
 
-	assert_int_equal(daos_acl_validate(acl), 0);
+	assert_rc_equal(daos_acl_validate(acl), 0);
 
 	daos_acl_free(acl);
 }
@@ -479,7 +463,7 @@ expect_acl_invalid_with_version(uint16_t version)
 	acl = daos_acl_create(NULL, 0);
 	acl->dal_ver = version;
 
-	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 }
@@ -501,7 +485,7 @@ test_acl_is_valid_len_too_small(void **state)
 	acl = daos_acl_create(&ace, 1);
 	acl->dal_len = sizeof(struct daos_ace) - 8; /* still aligned */
 
-	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	daos_ace_free(ace);
@@ -517,7 +501,7 @@ test_acl_is_valid_len_unaligned(void **state)
 	acl = daos_acl_create(&ace, 1);
 	acl->dal_len = sizeof(struct daos_ace) + 1;
 
-	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	daos_ace_free(ace);
@@ -533,7 +517,7 @@ test_acl_is_valid_one_invalid_ace(void **state)
 	ace->dae_access_types = 1 << 7; /* invalid access type */
 	acl = daos_acl_create(&ace, 1);
 
-	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	daos_ace_free(ace);
@@ -549,7 +533,7 @@ test_acl_is_valid_valid_aces(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_validate(acl), 0);
+	assert_rc_equal(daos_acl_validate(acl), 0);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -566,7 +550,7 @@ test_acl_is_valid_later_ace_invalid(void **state)
 	ace[num_aces - 1]->dae_access_types = 1 << 7; /* invalid access type */
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -584,7 +568,7 @@ test_acl_is_valid_duplicate_ace_type(void **state)
 	ace[2] = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -605,7 +589,7 @@ test_acl_is_valid_duplicate_user(void **state)
 	ace[2]->dae_allow_perms = DAOS_ACL_PERM_READ;
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -623,7 +607,7 @@ test_acl_is_valid_duplicate_group(void **state)
 	ace[2] = daos_ace_create(DAOS_ACL_GROUP, "grp1@");
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -680,7 +664,7 @@ expect_acl_invalid_bad_ordering(enum daos_acl_principal_type type1,
 	ace[1] = daos_ace_create(type2, name2);
 	acl = acl_create_in_exact_order(ace, num_aces);
 
-	assert_int_equal(daos_acl_validate(acl), -DER_INVAL);
+	assert_rc_equal(daos_acl_validate(acl), -DER_INVAL);
 
 	daos_acl_free(acl);
 	free_all_aces(ace, num_aces);
@@ -729,7 +713,7 @@ expect_acl_random_buffer_not_valid(void)
 		printf("Surprise! The random buffer was a valid ACL:\n");
 		daos_acl_dump(random_acl);
 	} else {
-		assert_int_equal(result, -DER_INVAL);
+		assert_rc_equal(result, -DER_INVAL);
 	}
 
 	D_FREE(buf);
@@ -751,7 +735,7 @@ test_acl_random_buffer(void **state)
 static void
 test_acl_is_valid_for_pool_null(void **state)
 {
-	assert_int_equal(daos_acl_pool_validate(NULL), -DER_INVAL);
+	assert_rc_equal(daos_acl_pool_validate(NULL), -DER_INVAL);
 }
 
 static struct daos_acl *
@@ -788,7 +772,7 @@ expect_pool_acl_with_type_perms(enum daos_acl_access_type type,
 	acl = create_acl_with_type_perms(type, perms);
 	assert_non_null(acl);
 
-	assert_int_equal(daos_acl_pool_validate(acl), exp_result);
+	assert_rc_equal(daos_acl_pool_validate(acl), exp_result);
 
 	daos_acl_free(acl);
 }
@@ -835,7 +819,7 @@ test_acl_is_valid_for_pool_good_perms(void **state)
 static void
 test_acl_is_valid_for_cont_null(void **state)
 {
-	assert_int_equal(daos_acl_cont_validate(NULL), -DER_INVAL);
+	assert_rc_equal(daos_acl_cont_validate(NULL), -DER_INVAL);
 }
 
 static void
@@ -847,7 +831,7 @@ expect_cont_acl_with_type_perms(enum daos_acl_access_type type,
 	acl = create_acl_with_type_perms(type, perms);
 	assert_non_null(acl);
 
-	assert_int_equal(daos_acl_cont_validate(acl), exp_result);
+	assert_rc_equal(daos_acl_cont_validate(acl), exp_result);
 
 	daos_acl_free(acl);
 }
@@ -938,5 +922,5 @@ main(void)
 		cmocka_unit_test(test_acl_is_valid_for_cont_good_perms),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("acl_valid", tests, NULL, NULL);
 }

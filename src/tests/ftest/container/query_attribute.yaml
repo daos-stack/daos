@@ -1,7 +1,7 @@
 hosts:
   test_servers:
     - server-A
-timeout: 155
+timeout: 180
 server_config:
   name: daos_server
   servers:

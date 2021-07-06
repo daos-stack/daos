@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <daos_types.h>
@@ -77,8 +60,11 @@ struct test_case_args {
 	uint32_t		holes_nr;
 };
 
-#define	CSUM_FOR_ARRAYS_TEST_CASE(state, ...) \
-	csum_for_arrays_test_case(state, (struct test_case_args)__VA_ARGS__)
+#define	CSUM_FOR_ARRAYS_TEST_CASE(state, args...) do { \
+	struct test_case_args __args = args; \
+	csum_for_arrays_test_case(state, &__args); \
+	} while (0)
+
 /** index to a specific csum within a csum info array */
 struct cia_idx {
 	uint32_t ci_idx;
@@ -103,8 +89,8 @@ cia_idx_get_csum(struct cia_idx *idx, struct dcs_csum_info *infos)
 	return ci_idx2csum(&infos[idx->ci_idx], idx->csum_idx);
 }
 
-void
-csum_for_arrays_test_case(void *const *state, struct test_case_args test)
+static void
+csum_for_arrays_test_case(void *const *state, const struct test_case_args *test)
 {
 	struct dcs_csum_info	*csum_infos;
 	struct dcs_iod_csums	 iod_csums = {0};
@@ -130,18 +116,18 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	extent_key_from_test_args(&k, *state);
 	csum_size = 8;
 
-	while (test.update_recxs[update_recx_nr].nr > 0) {
-		data_size += test.update_recxs[update_recx_nr].nr *
-			     test.rec_size;
+	while (test->update_recxs[update_recx_nr].nr > 0) {
+		data_size += test->update_recxs[update_recx_nr].nr *
+			     test->rec_size;
 		update_recx_nr++;
 	}
 
-	while (test.fetch_recxs[fetch_recx_nr].nr > 0)
+	while (test->fetch_recxs[fetch_recx_nr].nr > 0)
 		fetch_recx_nr++;
 
 	for (i = 0; i < update_recx_nr; i++) {
-		recx[i].rx_nr = test.update_recxs[i].nr;
-		recx[i].rx_idx = test.update_recxs[i].idx;
+		recx[i].rx_nr = test->update_recxs[i].nr;
+		recx[i].rx_idx = test->update_recxs[i].idx;
 	}
 
 	D_ALLOC_ARRAY(csum_infos, update_recx_nr);
@@ -152,10 +138,10 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 		uint64_t csum_buf_len;
 
 		csum_buf_len = (uint64_t)csum_size *
-				test.update_recxs[i].csum_count;
+				test->update_recxs[i].csum_count;
 		csum_infos[i].cs_type = 1;
-		csum_infos[i].cs_nr = test.update_recxs[i].csum_count;
-		csum_infos[i].cs_chunksize = test.chunksize;
+		csum_infos[i].cs_nr = test->update_recxs[i].csum_count;
+		csum_infos[i].cs_chunksize = test->chunksize;
 		D_ALLOC(csum_infos[i].cs_csum, csum_buf_len);
 		memset(csum_infos[i].cs_csum, i + 1, csum_buf_len);
 
@@ -164,7 +150,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	}
 
 	iod.iod_name = k.akey;
-	iod.iod_size = test.rec_size;
+	iod.iod_size = test->rec_size;
 	iod.iod_nr = update_recx_nr;
 	iod.iod_recxs = recx;
 	iod.iod_type = DAOS_IOD_ARRAY;
@@ -180,8 +166,8 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 
 	iod.iod_nr = fetch_recx_nr;
 	for (i = 0; i < fetch_recx_nr; i++) {
-		recx[i].rx_nr = test.fetch_recxs[i].nr;
-		recx[i].rx_idx = test.fetch_recxs[i].idx;
+		recx[i].rx_nr = test->fetch_recxs[i].nr;
+		recx[i].rx_idx = test->fetch_recxs[i].idx;
 	}
 
 	/**
@@ -189,7 +175,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	 * have access to the vos io handler to get the checksums (this is
 	 * how the server object layer already interfaces with VOS)
 	 */
-	vos_fetch_begin(k.container_hdl, k.object_id, 1, 0, &k.dkey, 1, &iod,
+	vos_fetch_begin(k.container_hdl, k.object_id, 1, &k.dkey, 1, &iod,
 			0, NULL, &ioh, NULL);
 
 	biod = vos_ioh2desc(ioh);
@@ -197,18 +183,18 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 	f_csums_nr = vos_ioh2ci_nr(ioh);
 	f_csums = vos_ioh2ci(ioh);
 
-	assert_int_equal(test.biovs_nr, bsgl->bs_nr_out);
+	assert_int_equal(test->biovs_nr, bsgl->bs_nr_out);
 
 	for (i = 0; i < bsgl->bs_nr_out; i++) {
 		struct bio_iov *biov = &bsgl->bs_iovs[i];
-		struct expected_biov *expected_biov = &test.biovs[i];
+		const struct expected_biov *expected_biov = &test->biovs[i];
 
 		assert_int_equal(expected_biov->prefix, biov->bi_prefix_len);
 		assert_int_equal(expected_biov->suffix, biov->bi_suffix_len);
 	}
 
 	/** should be 1 csum info per biov (minus holes) */
-	expected_csums_nr = test.biovs_nr - test.holes_nr;
+	expected_csums_nr = test->biovs_nr - test->holes_nr;
 	assert_int_equal(expected_csums_nr, f_csums_nr);
 	assert_non_null(f_csums);
 
@@ -220,7 +206,7 @@ csum_for_arrays_test_case(void *const *state, struct test_case_args test)
 		cia_idx_next(&f_csums_idx, f_csums, f_csums_nr));
 
 	/** Clean up */
-	vos_fetch_end(ioh, rc);
+	vos_fetch_end(ioh, NULL, rc);
 	d_sgl_fini(&sgl, true);
 
 	for (i = 0; i < update_recx_nr; i++)

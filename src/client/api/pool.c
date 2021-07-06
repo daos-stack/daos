@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015, 2016 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(client)
 
@@ -30,7 +13,7 @@
 
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, unsigned int flags,
+		  unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
 {
 	daos_pool_connect_t	*args;
@@ -47,11 +30,45 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
 
 	args = dc_task_get_args(task);
 	args->grp		= grp;
-	args->svc		= svc;
 	args->flags		= flags;
 	args->poh		= poh;
 	args->info		= info;
 	uuid_copy((unsigned char *)args->uuid, uuid);
+	args->label		= NULL;
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_pool_connect_by_label(const char *label, const char *grp,
+			   unsigned int flags, daos_handle_t *poh,
+			   daos_pool_info_t *info, daos_event_t *ev)
+{
+	daos_pool_connect_t	*args;
+	tse_task_t		*task;
+	size_t			 label_len = 0;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_CONNECT);
+	if (label)
+		label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
+	if (!label || (label_len == 0) ||
+	    (label_len > DAOS_PROP_LABEL_MAX_LEN)) {
+		D_ERROR("invalid label parameter\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_pool_connect_lbl, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->grp		= grp;
+	args->flags		= flags;
+	args->poh		= poh;
+	args->info		= info;
+	uuid_clear(args->uuid);
+	args->label		= label;
 
 	return dc_task_schedule(task, true);
 }
@@ -115,11 +132,27 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
 }
 
 int
-daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
-		       d_rank_list_t *failed, daos_target_info_t *info_list,
-		       daos_event_t *ev)
+daos_pool_query_target(daos_handle_t poh, uint32_t tgt_idx, d_rank_t rank,
+		       daos_target_info_t *info, daos_event_t *ev)
 {
-	return -DER_NOSYS;
+	daos_pool_query_target_t	*args;
+	tse_task_t			*task;
+	int				 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_QUERY_INFO);
+
+	rc = dc_task_create(dc_pool_query_target, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->tgt_idx	= tgt_idx;
+	args->rank	= rank;
+	args->info	= info;
+
+	return dc_task_schedule(task, true);
+
 }
 
 int
@@ -221,6 +254,28 @@ daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
 }
 
 int
+daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[],
+		   daos_event_t *ev)
+{
+	daos_pool_del_attr_t	*args;
+	tse_task_t		*task;
+	int			 rc;
+
+	DAOS_API_ARG_ASSERT(*args, POOL_DEL_ATTR);
+
+	rc = dc_task_create(dc_pool_del_attr, NULL, ev, &task);
+	if (rc)
+		return rc;
+
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	args->n		= n;
+	args->names	= names;
+
+	return dc_task_schedule(task, true);
+}
+
+int
 daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 {
 	daos_pool_stop_svc_t	*args;
@@ -237,28 +292,3 @@ daos_pool_stop_svc(daos_handle_t poh, daos_event_t *ev)
 
 	return dc_task_schedule(task, true);
 }
-
-int
-daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
-		daos_event_t *ev)
-{
-	daos_pool_evict_t       *args;
-	tse_task_t              *task;
-	int                      rc;
-
-	DAOS_API_ARG_ASSERT(*args, POOL_EVICT);
-	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
-
-	rc = dc_task_create(dc_pool_evict, NULL, ev, &task);
-	if (rc)
-		return rc;
-
-	args = dc_task_get_args(task);
-	args->grp       = grp;
-	args->svc       = (d_rank_list_t *)svc;
-	uuid_copy((unsigned char *)args->uuid, uuid);
-
-	return dc_task_schedule(task, true);
-}
-

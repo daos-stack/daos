@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_common.h"
@@ -27,6 +10,8 @@
 #include <sys/ioctl.h>
 
 #include "dfuse_ioctl.h"
+
+#define MAX_IOCTL_SIZE ((1024 * 16) - 1)
 
 static void
 handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
@@ -67,12 +52,24 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
 	hs_reply.fsr_pool_size = iov.iov_buf_len;
+	if (hs_reply.fsr_pool_size > MAX_IOCTL_SIZE)
+		D_GOTO(err, rc = EOVERFLOW);
 
 	rc = daos_cont_local2global(oh->doh_ie->ie_dfs->dfs_coh, &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
 	hs_reply.fsr_cont_size = iov.iov_buf_len;
+	if (hs_reply.fsr_cont_size > MAX_IOCTL_SIZE)
+		D_GOTO(err, rc = EOVERFLOW);
+
+	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
+	if (rc)
+		D_GOTO(err, rc);
+
+	hs_reply.fsr_dfs_size = iov.iov_buf_len;
+	if (hs_reply.fsr_dfs_size > MAX_IOCTL_SIZE)
+		D_GOTO(err, rc = EOVERFLOW);
 
 	DFUSE_REPLY_IOCTL(oh, req, hs_reply);
 	return;
@@ -148,18 +145,14 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
-	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
-	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
-
-	hsd_reply.fsr_dfs_size = iov.iov_buf_len;
-
 	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
 				  &iov);
 	if (rc)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
 	hsd_reply.fsr_dobj_size = iov.iov_buf_len;
+	if (hsd_reply.fsr_dobj_size > MAX_IOCTL_SIZE)
+		D_GOTO(err, rc = EOVERFLOW);
 
 	DFUSE_REPLY_IOCTL(oh, req, hsd_reply);
 	return;
@@ -224,9 +217,15 @@ err:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 }
 
+#ifdef FUSE_IOCTL_USE_INT
+void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+		    struct fuse_file_info *fi, unsigned int flags,
+		    const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+#else
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
 		    const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+#endif
 {
 	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int			rc;

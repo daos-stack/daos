@@ -1,26 +1,11 @@
-/**
- * (C) Copyright 2017-2018 Intel Corporation.
+/*
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
+ * \file
+ *
  * rdb: Replicated Database
  *
  * An RDB database comprises a hierarchy of key-value stores (KVSs), much like
@@ -128,7 +113,9 @@ struct rdb_cbs {
 	 * If not NULL, called after this replica becomes the leader of \a
 	 * term. A replicated service over rdb may want to take the chance to
 	 * start itself on this replica. If an error is returned, rdb steps
-	 * down, but without calling dc_step_down.
+	 * down, but without calling dc_step_down. If the error is
+	 * -DER_SHUTDOWN, rdb will also call the dc_stop callback to trigger a
+	 * replica stop.
 	 */
 	int (*dc_step_up)(struct rdb *db, uint64_t term, void *arg);
 
@@ -149,18 +136,19 @@ struct rdb_cbs {
 };
 
 /** Database methods */
-void rdb_get_uuid(struct rdb *db, uuid_t uuid);
 int rdb_create(const char *path, const uuid_t uuid, size_t size,
-	       const d_rank_list_t *replicas);
-int rdb_destroy(const char *path, const uuid_t uuid);
+	       const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	       struct rdb **dbp);
 int rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs,
 	      void *arg, struct rdb **dbp);
 void rdb_stop(struct rdb *db);
+int rdb_destroy(const char *path, const uuid_t uuid);
 void rdb_resign(struct rdb *db, uint64_t term);
 int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
 int rdb_get_leader(struct rdb *db, uint64_t *term, d_rank_t *rank);
 int rdb_get_ranks(struct rdb *db, d_rank_list_t **ranksp);
+void rdb_get_uuid(struct rdb *db, uuid_t uuid);
 int rdb_add_replicas(struct rdb *db, d_rank_list_t *replicas);
 int rdb_remove_replicas(struct rdb *db, d_rank_list_t *replicas);
 
@@ -192,7 +180,7 @@ int rdb_path_push(rdb_path_t *path, const d_iov_t *key);
  */
 #define RDB_STRING_KEY(prefix, name)					\
 static char	prefix ## name ## _buf[] = #name;			\
-d_iov_t	prefix ## name = {					\
+d_iov_t		prefix ## name = {					\
 	.iov_buf	= prefix ## name ## _buf,			\
 	.iov_buf_len	= sizeof(prefix ## name ## _buf),		\
 	.iov_len	= sizeof(prefix ## name ## _buf)		\

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Basic CORPC test with pre-forward callbacks. Rank0 sends CORPC request to
@@ -191,30 +174,24 @@ int main(void)
 		assert(0);
 	}
 
-	rc = crt_group_ranks_get(grp, &rank_list);
-	if (rc != 0) {
-		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
-	sleep(2);
-	rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list, 0,
-			1, 10, 100.0);
-	if (rc != 0) {
-		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
-	d_rank_list_free(rank_list);
-	rank_list = NULL;
-
-	rc = crt_swim_init(0);
-	if (rc != 0) {
-		D_ERROR("crt_swim_init() failed; rc=%d\n", rc);
-		assert(0);
-	}
-
 	if (my_rank == 0) {
+		rc = crt_group_ranks_get(grp, &rank_list);
+		if (rc != 0) {
+			D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+			assert(0);
+		}
+
+		sleep(2);
+		rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list,
+				       0, 1, 10, 100.0);
+		if (rc != 0) {
+			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
+			assert(0);
+		}
+
+		d_rank_list_free(rank_list);
+		rank_list = NULL;
+
 		DBG_PRINT("Rank 0 sending CORPC call\n");
 		rc = crt_corpc_req_create(g_main_ctx, NULL, &excluded_membs,
 			CRT_PROTO_OPC(TEST_CORPC_PREFWD_BASE,

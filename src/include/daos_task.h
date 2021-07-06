@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS task-based API
@@ -47,15 +30,10 @@ typedef enum {
 	DAOS_OPC_INVALID	= -1,
 
 	/** Management APIs */
-	DAOS_OPC_SVC_RIP = 0,
-	DAOS_OPC_POOL_CREATE,
-	DAOS_OPC_POOL_DESTROY,
-	DAOS_OPC_POOL_EXTEND,
-	DAOS_OPC_POOL_EVICT,
-	DAOS_OPC_SET_PARAMS,
-	DAOS_OPC_POOL_ADD_REPLICAS,
-	DAOS_OPC_POOL_REMOVE_REPLICAS,
-	DAOS_OPC_MGMT_LIST_POOLS,
+	/* Starting at 0 will break Application Binary Interface backward
+	 * compatibility */
+	DAOS_OPC_SET_PARAMS = 3,
+	DAOS_OPC_MGMT_GET_BS_STATE,
 
 	/** Pool APIs */
 	DAOS_OPC_POOL_CONNECT,
@@ -64,10 +42,11 @@ typedef enum {
 	DAOS_OPC_POOL_EXCLUDE_OUT,
 	DAOS_OPC_POOL_ADD,
 	DAOS_OPC_POOL_QUERY,
-	DAOS_OPC_POOL_QUERY_TARGET,
+	DAOS_OPC_POOL_QUERY_INFO,
 	DAOS_OPC_POOL_LIST_ATTR,
 	DAOS_OPC_POOL_GET_ATTR,
 	DAOS_OPC_POOL_SET_ATTR,
+	DAOS_OPC_POOL_DEL_ATTR,
 	DAOS_OPC_POOL_STOP_SVC,
 	DAOS_OPC_POOL_LIST_CONT,
 
@@ -86,6 +65,7 @@ typedef enum {
 	DAOS_OPC_CONT_LIST_ATTR,
 	DAOS_OPC_CONT_GET_ATTR,
 	DAOS_OPC_CONT_SET_ATTR,
+	DAOS_OPC_CONT_DEL_ATTR,
 	DAOS_OPC_CONT_ALLOC_OIDS,
 	DAOS_OPC_CONT_LIST_SNAP,
 	DAOS_OPC_CONT_CREATE_SNAP,
@@ -129,7 +109,10 @@ typedef enum {
 	DAOS_OPC_ARRAY_GET_SIZE,
 	DAOS_OPC_ARRAY_SET_SIZE,
 
-	/** HL APIs */
+	/** KV APIs */
+	DAOS_OPC_KV_OPEN,
+	DAOS_OPC_KV_CLOSE,
+	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
 	DAOS_OPC_KV_PUT,
 	DAOS_OPC_KV_REMOVE,
@@ -137,16 +120,6 @@ typedef enum {
 
 	DAOS_OPC_MAX
 } daos_opc_t;
-
-/** svc rip params */
-typedef struct {
-	/** Process set name of the DAOS servers managing the pool */
-	const char		*grp;
-	/** rank to kill */
-	d_rank_t		rank;
-	/** Abrupt shutdown, no cleanup */
-	bool			force;
-} daos_svc_rip_t;
 
 /** mgmt set params */
 typedef struct {
@@ -191,52 +164,30 @@ typedef struct {
 /** pool destroy args */
 typedef struct {
 	/** UUID of the pool to destroy. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Process set name of the DAOS servers managing the pool */
 	const char		*grp;
 	/** Force destruction even if there are active connections */
 	int			force;
 } daos_pool_destroy_t;
 
-/** pool extend args */
-typedef struct {
-	/** UUID of the pool to extend. */
-	const uuid_t		uuid;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-	/**  Optional, only extend the pool to included targets. */
-	d_rank_list_t		*tgts;
-	/** Optional, buffer to store faulty targets on failure. */
-	d_rank_list_t		*failed;
-} daos_pool_extend_t;
-
-/** pool evict args */
+/** pool connect by UUID args */
 typedef struct {
 	/** UUID of the pool. */
-	const uuid_t		uuid;
+	uuid_t			 uuid;
 	/** Process set name of the DAOS servers managing the pool. */
 	const char		*grp;
-	/** list of pool service ranks. */
-	d_rank_list_t		*svc;
-} daos_pool_evict_t;
-
-/** pool connect args */
-typedef struct {
-	/** UUID of the pool. */
-	const uuid_t		uuid;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-	/** Pool service replica ranks. */
-	const d_rank_list_t	*svc;
 	/** Connect mode represented by the DAOS_PC_ bits. */
-	unsigned int		flags;
+	unsigned int		 flags;
 	/** Returned open handle. */
 	daos_handle_t		*poh;
 	/** Optional, returned pool information. */
 	daos_pool_info_t	*info;
+	/** Pool label, API v1.2.2 (placed at end for ABI compatibility) */
+	const char		*label;
 } daos_pool_connect_t;
 
-/** poo disconnect args */
+/** pool disconnect args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
@@ -245,10 +196,10 @@ typedef struct {
 /** pool target update (add/exclude) args */
 typedef struct {
 	/** UUID of the pool. */
-	const uuid_t		uuid;
+	uuid_t			 uuid;
 	/** Process set name of the DAOS servers managing the pool */
 	const char		*grp;
-	/** Pool service replica ranks. */
+	/** Pool service replica ranks (used by server only). */
 	d_rank_list_t		*svc;
 	/** Target array */
 	struct d_tgt_list	*tgts;
@@ -270,12 +221,12 @@ typedef struct {
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Array of targets to query. */
-	d_rank_list_t		*tgts;
-	/** Optional, buffer to store faulty targets on failure. */
-	d_rank_list_t		*failed;
-	/** Returned storage information of targets. */
-	daos_target_info_t	*info_list;
+	/** Single targets to query. */
+	uint32_t		tgt_idx;
+	/** Rank of target to query. */
+	d_rank_t		rank;
+	/** Returned storage information of target. */
+	daos_target_info_t	*info;
 } daos_pool_query_target_t;
 
 /** pool container list args */
@@ -326,14 +277,22 @@ typedef struct {
 	size_t const		*sizes;
 } daos_pool_set_attr_t;
 
+/** pool del attributes args */
+typedef struct {
+	/** Pool open handle. */
+	daos_handle_t		poh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_pool_del_attr_t;
+
 /** pool add/remove replicas args */
 typedef struct {
 	/** UUID of the pool. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Name of DAOS server process set managing the service. */
 	const char		*group;
-	/** List of service ranks. */
-	d_rank_list_t		*svc;
 	/** Ranks of the replicas to be added/removed. */
 	d_rank_list_t		*targets;
 	/** Optional, list of ranks which could not be added/removed. */
@@ -350,6 +309,13 @@ typedef struct {
 	daos_size_t		*npools;
 } daos_mgmt_list_pools_t;
 
+/** Blobstore state query args */
+typedef struct {
+	const char		*grp;
+	uuid_t			uuid;
+	int			*state;
+} daos_mgmt_get_bs_state_t;
+
 /** pool service stop args */
 typedef struct {
 	/** Pool open handle. */
@@ -361,23 +327,25 @@ typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
 	/** Container UUID. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Optional container properties. */
 	daos_prop_t		*prop;
 } daos_cont_create_t;
 
-/** Container open args */
+/** Container open by UUID args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
 	/** Container UUID. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Open mode, represented by the DAOS_COO_ bits.*/
 	unsigned int		flags;
 	/** Returned container open handle. */
 	daos_handle_t		*coh;
 	/** Optional, return container information. */
 	daos_cont_info_t	*info;
+	/** Container label, API v1.2.2 (placed at end for ABI compatibility) */
+	const char		*label;
 } daos_cont_open_t;
 
 /** Container close args */
@@ -391,9 +359,11 @@ typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
 	/** Container UUID. */
-	const uuid_t		uuid;
+	uuid_t			uuid;
 	/** Force destroy even if there is outstanding open handles. */
 	int			force;
+	/* label, API v1.2.4 (placed at end for ABI compatibility) */
+	const char	       *label;
 } daos_cont_destroy_t;
 
 /** Container query args */
@@ -497,6 +467,16 @@ typedef struct {
 	size_t const		*sizes;
 } daos_cont_set_attr_t;
 
+/** Container attribute del args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** Number of attributes. */
+	int			n;
+	/** Array of \a n null-terminated attribute names. */
+	char   const *const	*names;
+} daos_cont_del_attr_t;
+
 /** Container Object ID allocation args */
 typedef struct {
 	/** Container open handle. */
@@ -528,6 +508,8 @@ typedef struct {
 typedef struct {
 	/** Container open handle. */
 	daos_handle_t		coh;
+	/** bit flags, see enum daos_snapshot_opts */
+	unsigned int		opts;
 	/** Returned epoch of persistent snapshot taken. */
 	daos_epoch_t		*epoch;
 	/** Optional null terminated name for snapshot. */
@@ -715,6 +697,10 @@ typedef struct {
 	daos_iom_t		*ioms;
 	/** extra arguments, for example obj_ec_fail_info for DIOF_EC_RECOV */
 	void			*extra_arg;
+	/** Pre-allocated buffer to pack checksums into (Optional, intended for
+	 * internal use only
+	 */
+	d_iov_t			*csum_iov;
 } daos_obj_rw_t;
 
 /** fetch args struct */
@@ -921,6 +907,32 @@ typedef struct {
 	daos_handle_t		th;
 } daos_array_destroy_t;
 
+/** KV open args */
+typedef struct {
+	/** Container open handle. */
+	daos_handle_t		coh;
+	/** KV ID, */
+	daos_obj_id_t		oid;
+	/** Open mode. */
+	unsigned int		mode;
+	/** Returned KV open handle */
+	daos_handle_t		*oh;
+} daos_kv_open_t;
+
+/** KV close args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+} daos_kv_close_t;
+
+/** KV destroy args */
+typedef struct {
+	/** KV open handle. */
+	daos_handle_t		oh;
+	/** Transaction open handle. */
+	daos_handle_t		th;
+} daos_kv_destroy_t;
+
 /** KV get args */
 typedef struct {
 	/** KV open handle. */
@@ -1012,6 +1024,23 @@ int
 daos_task_create(daos_opc_t opc, tse_sched_t *sched,
 		 unsigned int num_deps, tse_task_t *dep_tasks[],
 		 tse_task_t **taskp);
+
+/**
+ * Reset a DAOS task with another opcode. The task must have been completed or
+ * not in the running state yet, and has not been freed yet (use must take a
+ * ref count on the task to prevent it to be freed after the DAOS operation has
+ * completed).
+ *
+ * \param task	[IN]	Task to reset.
+ * \param opc	[IN]	Operation code to identify the daos op to associate with
+ *			the task.
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NOSYS	Unsupported opc
+ */
+int
+daos_task_reset(tse_task_t *task, daos_opc_t opc);
 
 /**
  * Return a pointer to the DAOS task argument structure. This is called to set

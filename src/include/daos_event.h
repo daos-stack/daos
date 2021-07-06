@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015 - 2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS Event Queue (EQ) and Event
@@ -201,6 +184,24 @@ daos_event_next(daos_event_t *parent, daos_event_t *child);
  */
 int
 daos_event_test(struct daos_event *ev, int64_t timeout, bool *flag);
+
+typedef int (*daos_event_comp_cb_t)(void *, daos_event_t *, int);
+
+/**
+ * Register completion callback on event.
+ *
+ * \param ev [IN]	Event (operation).
+ * \param cb [IN]	Completion callback to register.
+ * \param arg [IN]	User args passed to completion callback.
+ *
+ * \return		0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			negative rc of associated operation of the event.
+ */
+int
+daos_event_register_comp_cb(struct daos_event *ev, daos_event_comp_cb_t cb,
+			    void *arg);
 
 /**
  * Mark the parent event as a launched barrier, meaning no more child events can

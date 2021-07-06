@@ -1,24 +1,7 @@
 /**
-* (C) Copyright 2019 Intel Corporation.
+* (C) Copyright 2019-2021 Intel Corporation.
 *
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*    http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*
-* GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-* The Government's rights to use, modify, reproduce, release, perform, display,
-* or disclose this software are subject to the terms of the Apache License as
-* provided in Contract No. 8F-30005.
-* Any reproduction of computer software, computer software documentation, or
-* portions thereof marked with this legend must also reproduce the markings.
+* SPDX-License-Identifier: BSD-2-Clause-Patent
 */
 
 #include <stdarg.h>
@@ -47,13 +30,13 @@ static struct ret_t	*test_ret;
  */
 
 static int
-mock_get_dev_health_logs(struct spdk_nvme_ctrlr *ctrlr,
-			 struct dev_health_entry *entry)
+mock_get_health_logs(struct spdk_nvme_ctrlr *ctrlr,
+		     struct health_entry *health)
 {
-	struct spdk_nvme_health_information_page health_page;
+	struct spdk_nvme_health_information_page hp;
 
-	memset(&health_page, 0, sizeof(health_page));
-	entry->health_page = health_page;
+	memset(&hp, 0, sizeof(hp));
+	health->page = hp;
 
 	(void)ctrlr;
 	return 0;
@@ -94,10 +77,11 @@ mock_spdk_nvme_probe_fail(const struct spdk_nvme_transport_id *trid,
 }
 
 static int
-mock_copy_ctrlr_data(struct ctrlr_t *cdst, struct ctrlr_entry *csrc)
+mock_copy_ctrlr_data(struct ctrlr_t *ctrlr,
+		     const struct spdk_nvme_ctrlr_data *cdata)
 {
-	(void)cdst;
-	(void)csrc;
+	(void)ctrlr;
+	(void)cdata;
 	return 0;
 }
 
@@ -173,7 +157,7 @@ test_discover_null_controllers(void **state)
 	(void)state; /*unused*/
 
 	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			     &mock_get_dev_health_logs);
+			     &mock_get_health_logs);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -187,11 +171,11 @@ test_discover_set_controllers(void **state)
 	g_controllers = malloc(sizeof(struct ctrlr_entry));
 	g_controllers->ctrlr = NULL;
 	g_controllers->nss = NULL;
-	g_controllers->dev_health = NULL;
+	g_controllers->health = NULL;
 	g_controllers->next = NULL;
 
 	test_ret = _discover(&mock_spdk_nvme_probe_ok, false,
-			     &mock_get_dev_health_logs);
+			     &mock_get_health_logs);
 	assert_int_equal(test_ret->rc, 0);
 
 	assert_null(test_ret->ctrlrs);
@@ -205,11 +189,11 @@ test_discover_probe_fail(void **state)
 	g_controllers = malloc(sizeof(struct ctrlr_entry));
 	g_controllers->ctrlr = NULL;
 	g_controllers->nss = NULL;
-	g_controllers->dev_health = NULL;
+	g_controllers->health = NULL;
 	g_controllers->next = NULL;
 
 	test_ret = _discover(&mock_spdk_nvme_probe_fail, false,
-			     &mock_get_dev_health_logs);
+			     &mock_get_health_logs);
 	assert_int_equal(test_ret->rc, -1);
 
 	assert_null(test_ret->ctrlrs);
@@ -320,5 +304,6 @@ main(void)
 						teardown),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("control_nvme_control_ut", tests,
+					   NULL, NULL);
 }

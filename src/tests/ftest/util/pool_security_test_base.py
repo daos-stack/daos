@@ -1,27 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
 import random
@@ -33,9 +16,12 @@ import agent_utils as agu
 import security_test_base as secTestBase
 
 PERMISSIONS = ["", "r", "w", "rw"]
+DENY_ACCESS = "-1001"
 
 
 class PoolSecurityTestBase(TestWithServers):
+    # pylint: disable=no-member
+
     """Pool security test cases.
 
     Test Class Description:
@@ -47,12 +33,12 @@ class PoolSecurityTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a PoolSecurityTestBase object."""
-        super(PoolSecurityTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
 
     def setUp(self):
         """Set up each test case."""
-        super(PoolSecurityTestBase, self).setUp()
+        super().setUp()
 
         # Setup the dmg command object - requires a server to be started
         self.dmg = self.get_dmg_command()
@@ -98,10 +84,8 @@ class PoolSecurityTestBase(TestWithServers):
         result = self.dmg.pool_get_acl(uuid)
 
         pool_permission_list = []
-        for line in result.stdout.splitlines():
-            if not line.startswith("A:"):
-                continue
-            elif line.startswith("A::"):
+        for line in result.stdout_text.splitlines():
+            if line.startswith("A::"):
                 found_user = re.search(r"A::(.+)@:(.*)", line)
                 if found_user:
                     pool_permission_list.append(line)
@@ -132,7 +116,7 @@ class PoolSecurityTestBase(TestWithServers):
                       "\n  supported action: update, delete.".format(action))
         self.log.info(" At update_pool_acl_entry, dmg.run result=\n %s", result)
 
-    def verify_daos_pool_result(self, result, action, expect, err_code):
+    def verify_daos_pool_cont_result(self, result, action, expect, err_code):
         """Verify the daos pool read or write action result.
 
         Args:
@@ -146,14 +130,17 @@ class PoolSecurityTestBase(TestWithServers):
 
         """
         if expect.lower() == 'pass':
-            if result.exit_status != 0 or result.stderr != "":
+            if result.exit_status != 0 or result.stderr_text != "":
                 self.fail(
                     "##Test Fail on verify_daos_pool {}, expected Pass, but "
                     "Failed.".format(action))
             else:
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s, Succeed.\n", action)
-        elif err_code not in result.stderr:
+        # Remove "and err_code not in result.stdout_text" on the next statement
+        # elif after DAOS-5635 resolved.
+        elif (err_code not in result.stderr_text and
+                err_code not in result.stdout_text):
             self.fail(
                 "##Test Fail on verify_daos_pool {}, expected Failure of {}, "
                 "but Passed.".format(action, expect))
@@ -162,11 +149,189 @@ class PoolSecurityTestBase(TestWithServers):
                 " =Test Passed on verify_daos_pool %s expected error of %s.\n",
                 action, expect)
 
-    def verify_pool_readwrite(self, svc, uuid, action, expect='Pass'):
+    def verify_cont_rw_attribute(self, action, expect, attribute, value=None):
+        """verify container rw attribute.
+
+        Args:
+            action (str): daos pool read or write.
+            expect (str): expecting pass or deny.
+            attribute (str): Container attribute to be verified.
+            value (str optional): Container attribute value to write.
+
+        """
+        if action.lower() == "write":
+            result = self.set_container_attribute(self.pool_uuid,
+                                                  self.container_uuid,
+                                                  attribute,
+                                                  value)
+        elif action.lower() == "read":
+            result = self.get_container_attribute(self.pool_uuid,
+                                                  self.container_uuid,
+                                                  attribute)
+        else:
+            self.fail(
+                "##In verify_cont_rw_attribute, "
+                "invalid action: {}".format(action))
+        self.log.info(
+            "  In verify_cont_rw_attribute %s.\n =daos_cmd.run() result:\n%s",
+            action, result)
+        self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
+
+    def verify_cont_rw_property(
+            self, action, expect, cont_property=None, value=None):
+        """verify container rw property.
+
+        Args:
+            action (str): daos container read or write.
+            expect (str): expecting pass or deny.
+            cont_property (str optional): Container property to be verified.
+            value (str optional): Container property value to write.
+
+        """
+        if action.lower() == "write":
+            result = self.set_container_property(self.pool_uuid,
+                                                 self.container_uuid,
+                                                 cont_property,
+                                                 value)
+        elif action.lower() == "read":
+            result = self.get_container_property(self.pool_uuid,
+                                                 self.container_uuid)
+        else:
+            self.fail(
+                "##In verify_cont_rw_property, "
+                "invalid action: {}".format(action))
+        self.log.info(
+            "  In verify_cont_rw_property %s.\n =daos_cmd.run() result:\n%s",
+            action, result)
+        self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
+
+    def verify_cont_set_owner(self, expect, user, group):
+        """verify container set owner.
+
+        Args:
+            expect (str): expecting pass or deny.
+            user (str): New user to be set.
+            group (str): New group to be set.
+
+        """
+        action = "set"
+        result = self.set_container_owner(self.pool_uuid,
+                                          self.container_uuid,
+                                          user,
+                                          group)
+        self.log.info(
+            "  In verify_cont_set_owner %s.\n =daos_cmd.run() result:\n%s",
+            action, result)
+        self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
+
+    def verify_cont_rw_acl(self, action, expect, entry=None):
+        """verify container rw acl.
+
+        Args:
+            action (str): daos container read or write.
+            expect (str): expecting pass or deny.
+            entry (str optional): New ace entry to be write.
+
+        """
+        if action.lower() == "write":
+            result = self.update_container_acl(entry)
+        elif action.lower() == "read":
+            result = self.get_container_acl_list(self.pool_uuid,
+                                                 self.container_uuid)
+        else:
+            self.fail(
+                "##In verify_cont_rw_acl, invalid action: {}".format(action))
+        self.log.info(
+            "  In verify_cont_rw_acl %s.\n =daos_cmd.run() result:\n%s",
+            action, result)
+        if action == "read":
+            self.verify_cont_test_result(result, expect)
+        else:
+            self.verify_daos_pool_cont_result(
+                result, action, expect, DENY_ACCESS)
+
+    def verify_cont_test_result(self, result, expect):
+        """verify container acl test result and report pass or fail.
+
+        Args:
+            result (str): daos container cmd result to be verified.
+            expect (str): expecting pass or deny.
+
+        """
+        if expect.lower() == 'pass':
+            if DENY_ACCESS in result:
+                self.fail(
+                    "##Test Fail on verify_cont_test_result, expected Pass, "
+                    "but Failed.")
+            else:
+                self.log.info(
+                    " =Test Passed on verify_cont_test_result Succeed.\n")
+        elif DENY_ACCESS not in result:
+            self.fail(
+                "##Test Fail on verify_cont_test_result, expected Failure of "
+                "-1001, but Passed.")
+        else:
+            self.log.info(
+                " =Test Passed on verify_cont_test_result expected error of "
+                "denial error -1001.\n")
+
+    def verify_cont_delete(self, expect):
+        """verify container delete.
+
+        Args:
+            expect (str): expecting pass or deny.
+
+        """
+        action = "cont_delete"
+        result = self.destroy_test_container(
+            self.pool_uuid, self.container)
+        self.log.info(
+            "  In verify_cont_delete %s.\n =destroy_test_container() result:"
+            "\n%s", action, result)
+        self.verify_daos_pool_cont_result(result, action, expect, DENY_ACCESS)
+
+    def setup_container_acl_and_permission(
+            self, user_type, user_name, perm_type, perm_action):
+        """Setup container acl and permissions.
+
+        Args:
+            user_type (str): Container user_type.
+            user_name (str): Container user_name.
+            perm_type (str): Container permission type:
+                             (attribute, property, acl, or ownership)
+            perm_action (str): Container permission read/write action.
+
+        """
+        permission = "none"
+        if perm_type == "attribute":
+            permission = perm_action
+        elif perm_type == "property":
+            permission = perm_action.replace("r", "t")
+            permission = permission.replace("w", "T")
+        elif perm_type == "acl":
+            permission = perm_action.replace("r", "a")
+            permission = permission.replace("w", "A")
+        elif perm_type == "ownership":
+            permission = perm_action.replace("w", "to")
+            permission = permission.replace("r", "rwdTAa")
+        else:
+            self.fail(
+                "##In setup_container_acl_and_permission, unsupported "
+                "perm_type {}".format(perm_type))
+        self.log.info(
+            "At setup_container_acl_and_permission, setup %s, %s, %s, with %s",
+            user_type, user_name, perm_type, permission)
+        result = self.update_container_acl(
+            secTestBase.acl_entry(user_type, user_name, permission))
+        if result.stderr_text:
+            self.fail(
+                "##setup_container_acl_and_permission, fail on "
+                "update_container_acl, expected Pass, but Failed.")
+
+    def verify_pool_readwrite(self, uuid, action, expect='Pass'):
         """Verify client is able to perform read or write on a pool.
 
         Args:
-            svc (int):  pool svc number.
             uuid (str): pool uuid number.
             action (str): read or write on pool.
             expect (str): expecting behavior pass or deny with RC -1001.
@@ -179,16 +344,16 @@ class PoolSecurityTestBase(TestWithServers):
         daos_cmd = DaosCommand(self.bin)
         daos_cmd.exit_status_exception = False
         if action.lower() == "write":
-            result = daos_cmd.container_create(pool=uuid, svc=svc)
+            result = daos_cmd.container_create(pool=uuid)
         elif action.lower() == "read":
-            result = daos_cmd.pool_query(pool=uuid, svc=svc)
+            result = daos_cmd.pool_query(pool=uuid)
         else:
             self.fail(
                 "##In verify_pool_readwrite, invalid action: {}".format(action))
         self.log.info(
             "  In verify_pool_readwrite %s.\n =daos_cmd.run() result:\n%s",
             action, result)
-        self.verify_daos_pool_result(result, action, expect, deny_access)
+        self.verify_daos_pool_cont_result(result, action, expect, deny_access)
 
     def create_pool_acl(self, num_user, num_group, current_user_acl, acl_file):
         """Create pool get-acl file.
@@ -246,8 +411,7 @@ class PoolSecurityTestBase(TestWithServers):
             secTestBase.add_del_user(self.hostlist_clients, "groupdel",
                                      groupname)
 
-    def verify_pool_acl_prim_sec_groups(self, pool_acl_list, acl_file, uuid,
-                                        svc):
+    def verify_pool_acl_prim_sec_groups(self, pool_acl_list, acl_file, uuid):
         """Verify daos pool acl access.
 
         Verify access with primary and secondary groups access permission.
@@ -256,7 +420,6 @@ class PoolSecurityTestBase(TestWithServers):
             pool_acl_list (list): pool acl entry list.
             acl_file (str): acl file to be used.
             uuid (str): daos pool uuid.
-            svc (int):  daos pool svc.
 
         Return:
             None.
@@ -315,13 +478,13 @@ class PoolSecurityTestBase(TestWithServers):
         # daos pool query --pool <uuid>
         self.log.info("  (8-6)Verify pool read by: daos pool query --pool")
         exp_read = sec_group_rw[0]
-        self.verify_pool_readwrite(svc, uuid, "read", expect=exp_read)
+        self.verify_pool_readwrite(uuid, "read", expect=exp_read)
 
         # Verify pool write operation
         # daos container create --pool <uuid>
         self.log.info("  (8-7)Verify pool write by: daos container create pool")
         exp_write = sec_group_rw[1]
-        self.verify_pool_readwrite(svc, uuid, "write", expect=exp_write)
+        self.verify_pool_readwrite(uuid, "write", expect=exp_write)
 
         for group in sec_group:
             secTestBase.add_del_user(self.hostlist_clients, "groupdel", group)
@@ -368,21 +531,25 @@ class PoolSecurityTestBase(TestWithServers):
 
         # (3)Create a pool with acl
         self.dmg.exit_status_exception = False
-        data = self.dmg.pool_create(scm_size, acl_file=acl_file)
+        kwargs = {
+            "scm_size": scm_size,
+            "acl_file": acl_file
+        }
+        pool_uuid = self.dmg.pool_create(**kwargs)["uuid"]
         self.dmg.exit_status_exception = True
         self.log.info("  (2)dmg= %s", self.dmg)
         self.log.info("  (3)Create a pool with acl")
 
         # (4)Verify the pool create status
         self.log.info("  (4)dmg.run() result=\n%s", self.dmg.result)
-        if "ERR" in self.dmg.result.stderr:
+        if "ERR" in self.dmg.result.stderr_text:
             self.fail("##(4)Unable to parse pool uuid and svc.")
 
         # (5)Get the pool's acl list
         #    dmg pool get-acl --pool <UUID>
         self.log.info("  (5)Get a pool's acl list by: "
                       "dmg pool get-acl --pool --hostlist")
-        pool_acl_list = self.get_pool_acl_list(data["uuid"])
+        pool_acl_list = self.get_pool_acl_list(pool_uuid)
         self.log.info(
             "   pool original permission_list: %s", permission_list)
         self.log.info(
@@ -396,26 +563,27 @@ class PoolSecurityTestBase(TestWithServers):
         acl_principals = [secTestBase.acl_principal("user", tmp_ace),
                           secTestBase.acl_principal("group", tmp_ace)]
         for new_entry in new_entries:
-            self.update_pool_acl_entry(data["uuid"], "update", new_entry)
+            self.update_pool_acl_entry(pool_uuid, "update", new_entry)
         for principal in acl_principals:
-            self.update_pool_acl_entry(data["uuid"], "delete", principal)
+            self.update_pool_acl_entry(pool_uuid, "delete", principal)
 
         # (7)Verify pool read operation
         #    daos pool query --pool <uuid>
         self.log.info("  (7)Verify pool read by: daos pool query --pool")
         self.verify_pool_readwrite(
-            data["svc"], data["uuid"], "read", expect=read)
+            pool_uuid, "read", expect=read)
 
         # (8)Verify pool write operation
         #    daos container create --pool <uuid>
         self.log.info("  (8)Verify pool write by: daos container create --pool")
         self.verify_pool_readwrite(
-            data["svc"], data["uuid"], "write", expect=write)
+            pool_uuid, "write", expect=write)
         if secondary_grp_test:
             self.log.info("  (8-0)Verifying verify_pool_acl_prim_sec_groups")
             self.verify_pool_acl_prim_sec_groups(
-                pool_acl_list, acl_file, data["uuid"], data["svc"])
+                pool_acl_list, acl_file, pool_uuid)
 
         # (9)Cleanup user and destroy pool
         self.log.info("  (9)Cleanup users and groups")
         self.cleanup_user_group(num_user, num_group)
+        self.dmg.pool_destroy(pool=pool_uuid)

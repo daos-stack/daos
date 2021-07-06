@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_CHECKSUM_H
@@ -28,45 +11,42 @@
 #include <daos_obj.h>
 #include <daos_prop.h>
 
+#include <daos/multihash.h>
+
 #define	CSUM_NO_CHUNK -1
 
-/**
- * -----------------------------------------------------------
- * Container Property Knowledge
- * -----------------------------------------------------------
+/*
+ * Tag used in debug logs to easily find important checksum info, making it
+ * easier to trace checksums through the log files
  */
+#define CSTAG "[CSUM]"
 
-/** Convert a string into a property value for csum property */
-int
-daos_str2csumcontprop(const char *value);
+#define DF_C_IOD CSTAG"IOD {akey: "DF_KEY", type: %s, nr: %d, size: %lu} CSUM"
+#define DP_C_IOD(i) DP_KEY(&(i)->iod_name), \
+	(i)->iod_type == DAOS_IOD_SINGLE ? "SINGLE" : \
+	(i)->iod_type == DAOS_IOD_ARRAY ? "ARRAY" : "UNKNOWN", \
+	(i)->iod_nr, (i)->iod_size
 
-/** Convert a string into a property value for csum property */
-int
-daos_str2csumcontprop(const char *value);
+#define DF_C_UOID_DKEY CSTAG"OBJ ("DF_UOID", "DF_KEY")"
+#define DP_C_UOID_DKEY(oid, dkey) DP_UOID(oid), DP_KEY(dkey)
 
+#define DF_C_OID_DKEY CSTAG"OBJ ("DF_OID", "DF_KEY")"
+#define DP_C_OID_DKEY(oid, dkey) DP_OID(oid), DP_KEY(dkey)
+
+#define DF_LAYOUT "{bytes: %lu, nr: %d, even_dist: %s, cell_align: %s}"
+#define DP_LAYOUT(l) (l).cs_bytes, (l).cs_nr, DP_BOOL((l).cs_even_dist), \
+			DP_BOOL((l).cs_cell_align)
+#define	DF_CI_BUF "%"PRIu64
+#define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
+#define	DF_CI "{nr: %d, len: %d, first_csum: %lu, csum_buf_len: %d}"
+#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci), (ci).cs_buf_len
+#define DF_RANGE "{lo: %lu, hi: %lu, nr: %lu}"
+#define DP_RANGE(r) (r).dcr_lo, (r).dcr_hi, (r).dcr_nr
 /**
  * -----------------------------------------------------------
  * DAOS Checksummer
  * -----------------------------------------------------------
  */
-/** Type of checksums DAOS supports. Primarily used for looking up the
- * appropriate algorithm functions to be used for the csummer
- */
-enum DAOS_CSUM_TYPE {
-	CSUM_TYPE_UNKNOWN = 0,
-
-	CSUM_TYPE_ISAL_CRC16_T10DIF = 1,
-	CSUM_TYPE_ISAL_CRC32_ISCSI = 2,
-	CSUM_TYPE_ISAL_CRC64_REFL = 3,
-	CSUM_TYPE_ISAL_SHA1 = 4,
-	CSUM_TYPE_ISAL_SHA256 = 5,
-	CSUM_TYPE_ISAL_SHA512 = 6,
-
-	CSUM_TYPE_END = 7,
-};
-
-
-
 
 struct dcs_csum_info {
 	/** buffer to store the checksums */
@@ -101,23 +81,26 @@ struct dcs_layout {
 	/** targets number */
 	uint32_t	cs_nr;
 	/** even distribution flag */
-	uint32_t	cs_even_dist:1;
+	uint32_t	cs_even_dist:1,
+	/**
+	 * Align flag, used only for single value fetch that parity buffer's
+	 * location possibly not immediately following data buffer (to align
+	 * with cell size to avoid data movement in data recovery). For update
+	 * the data immediately followed by parity (this flag is zero).
+	 */
+			cs_cell_align:1;
 };
 
-/** Lookup the appropriate CSUM_TYPE given daos container property */
-enum DAOS_CSUM_TYPE daos_contprop2csumtype(int contprop_csum_val);
-
-struct csum_ft;
 struct daos_csummer {
 	/** Size of csum_buf. */
 	uint32_t	 dcs_csum_buf_size;
 	/** Cached configuration for chunk size*/
 	uint32_t	 dcs_chunk_size;
 	/** Pointer to the function table to be used for calculating csums */
-	struct csum_ft	*dcs_algo;
+	struct hash_ft	*dcs_algo;
 	/** Pointer to function table specific contexts */
 	void		*dcs_ctx;
-	/** Points to the buffer where the  calculated csum is to be written */
+	/** Points to the buffer where the calculated csum is to be written */
 	uint8_t		*dcs_csum_buf;
 	/** Whether or not to verify on the server on an update */
 	bool		 dcs_srv_verify;
@@ -125,37 +108,15 @@ struct daos_csummer {
 	bool		 dcs_skip_key_calc;
 	bool		 dcs_skip_key_verify;
 	bool		 dcs_skip_data_verify;
+	pthread_mutex_t	 dcs_lock;
 };
-
-struct csum_ft {
-	int		(*cf_init)(struct daos_csummer *obj);
-	void		(*cf_destroy)(struct daos_csummer *obj);
-	int		(*cf_finish)(struct daos_csummer *obj);
-	int		(*cf_update)(struct daos_csummer *obj,
-				     uint8_t *buf, size_t buf_len);
-	int		(*cf_reset)(struct daos_csummer *obj);
-	void		(*cf_get)(struct daos_csummer *obj);
-	uint16_t	(*cf_get_size)(struct daos_csummer *obj);
-	bool		(*cf_compare)(struct daos_csummer *obj,
-				      uint8_t *buf1, uint8_t *buf2,
-				      size_t buf_len);
-
-	/** Len in bytes. Ft can either statically set csum_len or provide
-	 *  a get_len function
-	 */
-	uint16_t	 cf_csum_len;
-	char		*cf_name;
-	uint16_t	 cf_type;
-};
-
-struct csum_ft *
-daos_csum_type2algo(enum DAOS_CSUM_TYPE type);
 
 /**
  * -----------------------------------------------------------------------------
  * daos_csummer Functions
  * -----------------------------------------------------------------------------
  */
+
 /**
  * Initialize the daos_csummer
  *
@@ -166,16 +127,16 @@ daos_csum_type2algo(enum DAOS_CSUM_TYPE type);
  * @param srv_verify	whether server-side checksum verification is enabled
  * @param dedup		whether deduplication is enabled on the server
  * @param dedup_verify	whether to memcmp data on the server for deduplication
- * @param dedup_bytes	deduplication size threashold in bytes
+ * @param dedup_bytes	deduplication size threshold in bytes
  *
  * @return		0 for success, or an error code
  */
 int
-daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
+daos_csummer_init(struct daos_csummer **obj, struct hash_ft *ft,
 		  size_t chunk_bytes, bool srv_verify);
 
 /**
- * Initialize the daos_csummer with a known DAOS_CSUM_TYPE
+ * Initialize the daos_csummer with a known DAOS_HASH_TYPE
  *
  * @param obj		daos_csummer to be initialized. Memory will be allocated
  *			for it.
@@ -189,7 +150,7 @@ daos_csummer_init(struct daos_csummer **obj, struct csum_ft *ft,
  * @return		0 for success, or an error code
  */
 int
-daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
+daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_HASH_TYPE type,
 			    size_t chunk_bytes, bool srv_verify);
 
 /**
@@ -202,6 +163,17 @@ daos_csummer_init_with_type(struct daos_csummer **obj, enum DAOS_CSUM_TYPE type,
  */
 int
 daos_csummer_init_with_props(struct daos_csummer **obj, daos_prop_t *props);
+
+/**
+ * Initialize the daos_csummer using information that's packed into the iov
+ * @param obj		daos_csummer to be initialized. Memory will be allocated
+ *			for it.
+ * @param csums_iov	iov that has csum_info structures in it.
+ * @return
+ */
+int
+daos_csummer_csum_init_with_packed(struct daos_csummer **csummer,
+				   const d_iov_t *csums_iov);
 
 /**
  * Initialize a daos_csummer as a copy of an existing daos_csummer
@@ -412,7 +384,7 @@ daos_csummer_allocation_size(struct daos_csummer *obj, daos_iod_t *iods,
  *				distributed to multiple targets. When it is NULL
  *				it means replica object, or EC object located
  *				in single target.
- * @param[out]	p_iods_csums	pointer that will reference the
+ * @param[out]	p_cds		pointer that will reference the
  *				the memory allocated
  * @return			number of iod_csums allocated, or
  *				negative if error
@@ -421,7 +393,25 @@ int
 daos_csummer_alloc_iods_csums(struct daos_csummer *obj, daos_iod_t *iods,
 			      uint32_t nr, bool akey_only,
 			      struct dcs_layout *singv_los,
-			      struct dcs_iod_csums **p_iods_csums);
+			      struct dcs_iod_csums **p_cds);
+
+/**
+ * Using the information from the iods and csums packed into the csum_iov
+ * allocate the memory for iod_csums structures and populate it appropriately
+ *
+ * @param iods_csums[out]		structure that will be allocated and
+ *					populated
+ * @param iods[in]			list of iod structures
+ * @param iod_cnt[in]			Number of iods
+ * @param csum_iov[in]			packed csum infos
+ * @param csummer			csummer
+ * @return
+ */
+int
+daos_csummer_alloc_iods_csums_with_packed(struct daos_csummer *csummer,
+					  daos_iod_t *iods, int iod_cnt,
+					  d_iov_t *csum_iov,
+					  struct dcs_iod_csums **iods_csums);
 
 /** Destroy the iods csums */
 void
@@ -458,6 +448,13 @@ ci_set(struct dcs_csum_info *csum_buf, void *buf, uint32_t csum_buf_size,
 	uint16_t csum_size, uint32_t csum_count, uint32_t chunksize,
 	uint16_t type);
 
+/**
+ * Setup the daos_csum_info with an existing daos_csum_info. This is not a copy,
+ * meaning that the same csum buf from the source is used in the destination.
+ */
+void
+ci_set_from_ci(struct dcs_csum_info *csum_buf, struct dcs_csum_info *csum2copy);
+
 /** Set the csum buf to a NULL value */
 void
 ci_set_null(struct dcs_csum_info *csum_buf);
@@ -492,10 +489,6 @@ ci_buf2uint64(const uint8_t *buf, uint16_t len);
 uint64_t
 ci2csum(struct dcs_csum_info ci);
 
-#define	DF_CI_BUF "%"PRIu64
-#define	DP_CI_BUF(buf, len) ci_buf2uint64(buf, len)
-#define	DF_CI "{nr: %d, len: %d, first_csum: %lu}"
-#define	DP_CI(ci) (ci).cs_nr, (ci).cs_len, ci2csum(ci)
 
 /**
  * return the number of bytes needed to serialize a dcs_csum_info into a
@@ -546,9 +539,11 @@ static inline bool
 csum_iod_is_supported(daos_iod_t *iod)
 {
 	/**
-	 * iod_size must be greater than 1
+	 * Needs to have something to actually checksum
+	 * iod_size must be greater than 1 and have records if it's an array
 	 */
-	return iod->iod_size > 0;
+	return iod->iod_size > 0 &&
+	       !(iod->iod_type == DAOS_IOD_ARRAY && iod->iod_nr == 0);
 }
 
 /**
@@ -641,4 +636,3 @@ void
 dcf_corrupt(d_sg_list_t *data, uint32_t nr);
 
 #endif /** __DAOS_CHECKSUM_H */
-

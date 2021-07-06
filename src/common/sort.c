@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -73,6 +56,17 @@ daos_array_sort(void *array, unsigned int len, bool unique,
 	return 0;
 }
 
+enum {
+	/* find the element whose key is equal to provided key */
+	FIND_OPC_EQ,
+	/* find the element whose key is less than or equal to provided key
+	 */
+	FIND_OPC_LE,
+	/* find the element whose key is greater than or equal to provided key
+	 */
+	FIND_OPC_GE
+};
+
 /**
  * Binary search in a sorted array.
  *
@@ -81,9 +75,9 @@ daos_array_sort(void *array, unsigned int len, bool unique,
  * If there are multiple elements have the same key, it returns the first
  * appearance.
  */
-int
-daos_array_find(void *array, unsigned int len, uint64_t key,
-		daos_sort_ops_t *ops)
+static int
+array_bin_search(void *array, unsigned int len, uint64_t key, int opc,
+		 daos_sort_ops_t *ops)
 {
 	int	start;
 	int	end;
@@ -105,8 +99,27 @@ daos_array_find(void *array, unsigned int len, uint64_t key,
 		else
 			end = cur - 1;
 	}
-	if (rc != 0)
-		return -1; /* not found */
+	if (rc < 0) {
+		/* array[cur]::key is smaller than @key */
+		switch (opc) {
+		case FIND_OPC_EQ:
+			return -1; /* not found */
+		case FIND_OPC_LE:
+			return cur;
+		case FIND_OPC_GE:
+			return (cur == len - 1) ? -1 : cur + 1;
+		}
+	} else if (rc > 0) {
+		/* array[cur]::key is larger than @key */
+		switch (opc) {
+		case FIND_OPC_EQ:
+			return -1; /* not found */
+		case FIND_OPC_LE:
+			return cur - 1; /* could be -1 */
+		case FIND_OPC_GE:
+			return cur;
+		}
+	}
 
 	for (; cur > 0; cur--) {
 		rc = ops->so_cmp_key(array, cur - 1, key);
@@ -114,6 +127,29 @@ daos_array_find(void *array, unsigned int len, uint64_t key,
 			break;
 	}
 	return cur;
+}
+
+int
+daos_array_find(void *array, unsigned int len, uint64_t key,
+		daos_sort_ops_t *ops)
+{
+	return array_bin_search(array, len, key, FIND_OPC_EQ, ops);
+}
+
+/* return the element whose key is less than or equal to @key */
+int
+daos_array_find_le(void *array, unsigned int len, uint64_t key,
+		   daos_sort_ops_t *ops)
+{
+	return array_bin_search(array, len, key, FIND_OPC_LE, ops);
+}
+
+/* return the element whose key is greater than or equal to @key */
+int
+daos_array_find_ge(void *array, unsigned int len, uint64_t key,
+		   daos_sort_ops_t *ops)
+{
+	return array_bin_search(array, len, key, FIND_OPC_GE, ops);
 }
 
 void

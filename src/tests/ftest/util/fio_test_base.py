@@ -1,40 +1,15 @@
-#!/usr/bin/python
-'''
-  (C) Copyright 2020 Intel Corporation.
+#!/usr/bin/python3
+"""
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
-'''
-from __future__ import print_function
-
-import re
-
-from ClusterShell.NodeSet import NodeSet
-from apricot import TestWithServers
-from test_utils_pool import TestPool
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+"""
+from dfuse_test_base import DfuseTestBase
 from fio_utils import FioCommand
-from command_utils_base import CommandFailure
-from dfuse_utils import Dfuse
 from daos_utils import DaosCommand
 
-
-class FioBase(TestWithServers):
+class FioBase(DfuseTestBase):
+    # pylint: disable=too-many-ancestors
     """Base fio class.
 
     :avocado: recursive
@@ -42,12 +17,10 @@ class FioBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a FioBase object."""
-        super(FioBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.fio_cmd = None
         self.processes = None
         self.manager = None
-        self.dfuse = None
-        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
@@ -55,77 +28,13 @@ class FioBase(TestWithServers):
         self.update_log_file_names()
 
         # Start the servers and agents
-        super(FioBase, self).setUp()
-
-        # initialize daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
+        super().setUp()
 
         # Get the parameters for Fio
         self.fio_cmd = FioCommand()
         self.fio_cmd.get_params(self)
         self.processes = self.params.get("np", '/run/fio/client_processes/*')
         self.manager = self.params.get("manager", '/run/fio/*', "MPICH")
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(FioBase, self).tearDown()
-
-    def _create_pool(self):
-        """Create a pool and execute Fio."""
-        # Get the pool params
-        # pylint: disable=attribute-defined-outside-init
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
-
-    def _create_cont(self):
-        """Create a container.
-
-        Returns:
-            str: UUID of the created container
-
-        """
-        cont_type = self.params.get("type", "/run/container/*")
-        result = self.daos_cmd.container_create(
-            pool=self.pool.uuid, svc=self.pool.svc_ranks,
-            cont_type=cont_type)
-
-        # Extract the container UUID from the daos container create output
-        cont_uuid = re.findall(
-            r"created\s+container\s+([0-9a-f-]+)", result.stdout)
-        if not cont_uuid:
-            self.fail(
-                "Error obtaining the container uuid from: {}".format(
-                    result.stdout))
-        return cont_uuid[0]
-
-    def _start_dfuse(self):
-        """Create a DfuseCommand object to start dfuse."""
-        # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        self.dfuse.set_dfuse_params(self.pool)
-        self.dfuse.set_dfuse_cont_param(self._create_cont())
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # start dfuse
-            self.dfuse.run()
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse), str(
-                               NodeSet.fromlist(self.dfuse.hosts)),
-                           exc_info=error)
-            self.fail("Unable to launch Dfuse.\n")
 
     def execute_fio(self, directory=None, stop_dfuse=True):
         """Runner method for Fio.
@@ -137,20 +46,27 @@ class FioBase(TestWithServers):
         """
         # Create a pool if one does not already exist
         if self.pool is None:
-            self._create_pool()
+            self.add_pool(connect=False)
 
         # start dfuse if api is POSIX
         if self.fio_cmd.api.value == "POSIX":
-            # Connect to the pool, create container and then start dfuse
-            # Uncomment below two lines once DAOS-3355 is resolved
-            # self.pool.connect()
-            # self.create_cont()
             if directory:
                 self.fio_cmd.update(
                     "global", "directory", directory,
                     "fio --name=global --directory")
             else:
-                self._start_dfuse()
+                self.add_container(self.pool)
+
+                daos_cmd = DaosCommand(self.bin)
+
+                # Instruct dfuse to disable direct-io for this container
+                daos_cmd.container_set_attr(pool=self.pool.uuid,
+                                            cont=self.container.uuid,
+                                            attr='dfuse-direct-io-disable',
+                                            val='on')
+
+                self.start_dfuse(
+                    self.hostlist_clients, self.pool, self.container)
                 self.fio_cmd.update(
                     "global", "directory", self.dfuse.mount_dir.value,
                     "fio --name=global --directory")
@@ -159,6 +75,5 @@ class FioBase(TestWithServers):
         self.fio_cmd.hosts = self.hostlist_clients
         self.fio_cmd.run()
 
-        if stop_dfuse and self.dfuse:
-            self.dfuse.stop()
-            self.dfuse = None
+        if stop_dfuse:
+            self.stop_dfuse()

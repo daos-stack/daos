@@ -1,25 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
 from daos_utils import DaosCommand
@@ -41,29 +24,27 @@ class ListContainerTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ListContainerTest object."""
-        super(ListContainerTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
-    def create_list(self, count, pool_uuid, sr, expected_uuids):
+    def create_list(self, count, pool_uuid, expected_uuids):
         """Create container and call daos pool list-cont to list and verify.
 
         Args:
             count (Integer): Number of containers to create.
             pool_uuid (String): Pool UUID to create containers in.
-            sr (String): Service replicas of the pool to create containers.
             expected_uuids (List of string): List that contains container UUID.
                 It should contain all the container UUIDs for the given pool.
         """
         # Create containers and store the container UUIDs into expected_uuids.
-        kwargs = {"pool": pool_uuid, "svc": sr}
+        kwargs = {"pool": pool_uuid}
         for _ in range(count):
             expected_uuids.append(
                 self.daos_cmd.get_output("container_create", **kwargs)[0])
         expected_uuids.sort()
-        # daos pool list-cont returns the date, host name, and container UUID
-        # as below:
-        # 03/31-21:32:24.53 wolf-3 2f69b198-8478-472e-b6c8-02a451f4de1b
-        actual_uuids = self.daos_cmd.get_output("pool_list_cont", **kwargs)
+        # daos pool list-cont returns container UUIDs as a list.
+        data = self.daos_cmd.pool_list_cont(**kwargs)
+        actual_uuids = data["uuids"]
         actual_uuids.sort()
         self.assertEqual(expected_uuids, actual_uuids)
 
@@ -83,13 +64,13 @@ class ListContainerTest(TestWithServers):
         self.daos_cmd = DaosCommand(self.bin)
 
         # 1. Create 1 container and list.
-        self.create_list(1, data1["uuid"], data1["svc"], expected_uuids1)
+        self.create_list(1, data1["uuid"], expected_uuids1)
 
         # 2. Create 1 more container and list; 2 total.
-        self.create_list(1, data1["uuid"], data1["svc"], expected_uuids1)
+        self.create_list(1, data1["uuid"], expected_uuids1)
 
         # 3. Create 98 more containers and list; 100 total.
-        self.create_list(98, data1["uuid"], data1["svc"], expected_uuids1)
+        self.create_list(98, data1["uuid"], expected_uuids1)
 
         # 4. Create 2 additional pools and create 10 containers in each pool.
         data2 = self.get_dmg_command().pool_create(scm_size="150MB")
@@ -97,7 +78,7 @@ class ListContainerTest(TestWithServers):
 
         # Create 10 containers in pool 2 and verify.
         expected_uuids2 = []
-        self.create_list(10, data2["uuid"], data2["svc"], expected_uuids2)
+        self.create_list(10, data2["uuid"], expected_uuids2)
         # Create 10 containers in pool 3 and verify.
         expected_uuids3 = []
-        self.create_list(10, data3["uuid"], data3["svc"], expected_uuids3)
+        self.create_list(10, data3["uuid"], expected_uuids3)

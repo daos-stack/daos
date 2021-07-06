@@ -135,7 +135,7 @@ typedef enum _Uns__PropType {
   /*
    **
    * Redundancy level: default fault domain level for placement.
-   * default = rack (DAOS_PROP_CO_REDUN_RACK)
+   * default = rack (DAOS_PROP_CO_REDUN_NODE)
    */
   UNS__PROP_TYPE__DAOS_PROP_CO_REDUN_LVL = 4104,
   /*
@@ -259,12 +259,14 @@ struct  _Uns__DunsAttribute
   Uns__Layout layout_type;
   char *object_type;
   uint64_t chunk_size;
+  char *rel_path;
   protobuf_c_boolean on_lustre;
   Uns__Properties *properties;
+  protobuf_c_boolean no_prefix;
 };
 #define UNS__DUNS_ATTRIBUTE__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&uns__duns_attribute__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, UNS__LAYOUT__UNKNOWN, (char *)protobuf_c_empty_string, 0, 0, NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, UNS__LAYOUT__UNKNOWN, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, NULL, 0 }
 
 
 /* Uns__DaosAce methods */

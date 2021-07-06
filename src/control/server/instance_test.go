@@ -1,41 +1,31 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/ioserver"
+	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
-func getTestIOServerInstance(logger logging.Logger) *IOServerInstance {
-	runner := ioserver.NewRunner(logger, &ioserver.Config{})
-	return NewIOServerInstance(logger, nil, nil, nil, runner)
+func getTestEngineInstance(logger logging.Logger) *EngineInstance {
+	runner := engine.NewRunner(logger, &engine.Config{})
+	return NewEngineInstance(logger, nil, nil, nil, runner)
 }
 
 func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
@@ -53,7 +43,7 @@ func TestServer_Instance_BioError(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	instance := getTestIOServerInstance(log)
+	instance := getTestEngineInstance(log)
 
 	req := getTestBioErrorReq(t, "/tmp/instance_test.sock", 0, 0, false, false, true)
 
@@ -62,5 +52,109 @@ func TestServer_Instance_BioError(t *testing.T) {
 	expectedOut := "detected blob I/O error"
 	if !strings.Contains(buf.String(), expectedOut) {
 		t.Fatal("No I/O error notification detected")
+	}
+}
+
+func TestServer_Instance_WithHostFaultDomain(t *testing.T) {
+	instance := &EngineInstance{}
+	fd, err := system.NewFaultDomainFromString("/one/two")
+	if err != nil {
+		t.Fatalf("couldn't create fault domain: %s", err)
+	}
+
+	updatedInstance := instance.WithHostFaultDomain(fd)
+
+	// Updated to include the fault domain
+	if diff := cmp.Diff(instance.hostFaultDomain, fd); diff != "" {
+		t.Fatalf("unexpected results (-want, +got):\n%s\n", diff)
+	}
+	// updatedInstance is the same ptr as instance
+	common.AssertEqual(t, updatedInstance, instance, "not the same structure")
+}
+
+func TestServer_Instance_updateFaultDomainInSuperblock(t *testing.T) {
+	for name, tc := range map[string]struct {
+		superblock *Superblock
+		newDomain  *system.FaultDomain
+		expErr     error
+		expWritten bool
+	}{
+		"nil superblock": {
+			newDomain: system.MustCreateFaultDomain("host"),
+			expErr:    errors.New("nil superblock"),
+		},
+		"removing domain": {
+			superblock: &Superblock{
+				HostFaultDomain: "/host",
+			},
+			expErr: errors.New("nil fault domain"),
+		},
+		"adding domain": {
+			superblock: &Superblock{},
+			newDomain:  system.MustCreateFaultDomain("host"),
+			expWritten: true,
+		},
+		"empty domain": {
+			superblock: &Superblock{
+				HostFaultDomain: "/",
+			},
+			newDomain: system.MustCreateFaultDomain(),
+		},
+		"same domain": {
+			superblock: &Superblock{
+				HostFaultDomain: "/host1",
+			},
+			newDomain: system.MustCreateFaultDomain("host1"),
+		},
+		"different domain": {
+			superblock: &Superblock{
+				HostFaultDomain: "/host1",
+			},
+			newDomain:  system.MustCreateFaultDomain("host2"),
+			expWritten: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			testDir, cleanupDir := common.CreateTestDir(t)
+			defer cleanupDir()
+
+			inst := getTestEngineInstance(log).WithHostFaultDomain(tc.newDomain)
+			inst.fsRoot = testDir
+			inst._superblock = tc.superblock
+
+			sbPath := inst.superblockPath()
+			if err := os.MkdirAll(filepath.Dir(sbPath), 0755); err != nil {
+				t.Fatalf("failed to make test superblock dir: %s", err.Error())
+			}
+
+			err := inst.updateFaultDomainInSuperblock()
+
+			common.CmpErr(t, tc.expErr, err)
+
+			// Ensure the newer value in the instance was written to the superblock
+			newSB, err := ReadSuperblock(sbPath)
+			if tc.expWritten {
+				if err != nil {
+					t.Fatalf("can't read expected superblock: %s", err.Error())
+				}
+
+				if newSB == nil {
+					t.Fatalf("expected non-nil superblock")
+				}
+
+				expDomainStr := ""
+				if tc.newDomain != nil {
+					expDomainStr = tc.newDomain.String()
+				}
+				common.AssertEqual(t, expDomainStr, newSB.HostFaultDomain, "")
+			} else if err == nil {
+				t.Fatal("expected no superblock written")
+			} else {
+				common.CmpErr(t, syscall.ENOENT, err)
+			}
+		})
 	}
 }

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -34,7 +17,8 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpceXViADKFCoRvbOzUdrNb"
+#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBI"
+
 /**
  * These tests will only be run if explicitly specified. They don't get
  * run if no test is specified.
@@ -59,28 +43,34 @@ print_usage(int rank)
 	print_message("\n\nDAOS TESTS\n=============================\n");
 	print_message("Tests: Use one of these arg(s) for specific test\n");
 	print_message("daos_test -m|--mgmt\n");
-	print_message("daos_test -p|--daos_pool_tests\n");
-	print_message("daos_test -c|--daos_container_tests\n");
+	print_message("daos_test -p|--pool\n");
+	print_message("daos_test -c|--cont\n");
 	print_message("daos_test -C|--capa\n");
 	print_message("daos_test -U|--dedup\n");
 	print_message("daos_test -z|--checksum\n");
-	print_message("daos_test -X|--dtx\n");
-	print_message("daos_test -i|--daos_io_tests\n");
+	print_message("daos_test -Z|--agg_ec\n");
+	print_message("daos_test -t|--base_dtx\n");
+	print_message("daos_test -T|--dist_dtx\n");
+	print_message("daos_test -i|--io\n");
+	print_message("daos_test -I|--ec_io\n");
 	print_message("daos_test -x|--epoch_io\n");
-	print_message("daos_test -A|--array\n");
-	print_message("daos_test -D|--daos_array\n");
+	print_message("daos_test -A|--obj_array\n");
+	print_message("daos_test -D|--array\n");
 	print_message("daos_test -K|--daos_kv\n");
 	print_message("daos_test -d|--degraded\n");
-	print_message("daos_test -e|--daos_epoch_tests\n");
-	print_message("daos_test -o|--daos_epoch_recovery_tests\n");
-	print_message("daos_test -V|--verify_consistency\n");
-	print_message("daos_test -R|--MD_replication_tests\n");
+	print_message("daos_test -e|--epoch\n");
+	print_message("daos_test -o|--erecov\n");
+	print_message("daos_test -V|--verify\n");
+	print_message("daos_test -R|--mdr\n");
 	print_message("daos_test -O|--oid_alloc\n");
 	print_message("daos_test -r|--rebuild\n");
 	print_message("daos_test -v|--rebuild_simple\n");
+	print_message("daos_test -S|--rebuild_ec\n");
+	print_message("daos_test -X|--degrade_ec\n");
 	print_message("daos_test -b|--drain_simple\n");
+	print_message("daos_test -B|--extend_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
-	print_message("daos_test -a|--daos_all_tests\n");
+	print_message("daos_test -a|--all\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
 			"tests that are run\n");
@@ -112,7 +102,8 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS management tests..");
 			daos_test_print(rank, "=====================");
-			nr_failed = run_daos_mgmt_test(rank, size);
+			nr_failed = run_daos_mgmt_test(rank, size, sub_tests,
+						       sub_tests_size);
 			break;
 		case 'p':
 			daos_test_print(rank, "\n\n=================");
@@ -124,7 +115,9 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS container tests..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_cont_test(rank, size);
+			nr_failed += run_daos_cont_test(rank, size,
+							   sub_tests,
+							   sub_tests_size);
 			break;
 		case 'C':
 			daos_test_print(rank, "\n\n=================");
@@ -132,12 +125,19 @@ run_specified_tests(const char *tests, int rank, int size,
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_capa_test(rank, size);
 			break;
-		case 'X':
+		case 't':
 			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "dtx test..");
+			daos_test_print(rank, "Single RDG TX test..");
 			daos_test_print(rank, "=================");
-			nr_failed += run_daos_dtx_test(rank, size, sub_tests,
-						       sub_tests_size);
+			nr_failed += run_daos_base_tx_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+		case 'T':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "Distributed TX tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_dist_tx_test(rank, size,
+						sub_tests, sub_tests_size);
 			break;
 		case 'i':
 			daos_test_print(rank, "\n\n=================");
@@ -146,11 +146,25 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_io_test(rank, size, sub_tests,
 						      sub_tests_size);
 			break;
+		case 'I':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS EC IO test..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_ec_io_test(rank, size, sub_tests,
+						      sub_tests_size);
+			break;
 		case 'z':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS checksum tests..");
 			daos_test_print(rank, "=================");
 			nr_failed += run_daos_checksum_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+		case 'Z':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS EC aggregation tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_aggregation_ec_test(rank, size,
 						sub_tests, sub_tests_size);
 			break;
 		case 'U':
@@ -230,13 +244,6 @@ run_specified_tests(const char *tests, int rank, int size,
 							   sub_tests,
 							   sub_tests_size);
 			break;
-		case 'F':
-			daos_test_print(rank, "\n\n=================");
-			daos_test_print(rank, "DAOS FileSystem (DFS) test..");
-			daos_test_print(rank, "=================");
-			nr_failed += run_daos_fs_test(rank, size, sub_tests,
-						      sub_tests_size);
-			break;
 		case 'N':
 			daos_test_print(rank, "\n\n=================");
 			daos_test_print(rank, "DAOS NVMe recovery tests..");
@@ -258,7 +265,29 @@ run_specified_tests(const char *tests, int rank, int size,
 			nr_failed += run_daos_drain_simple_test(rank, size,
 						sub_tests, sub_tests_size);
 			break;
-
+		case 'B':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS extend simple tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_extend_simple_test(rank, size,
+						sub_tests, sub_tests_size);
+			break;
+		case 'S':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS rebuild ec tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_rebuild_simple_ec_test(rank, size,
+								     sub_tests,
+								sub_tests_size);
+			break;
+		case 'X':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS degrade ec tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_degrade_simple_ec_test(rank, size,
+								     sub_tests,
+								sub_tests_size);
+			break;
 		default:
 			D_ASSERT(0);
 		}
@@ -303,11 +332,14 @@ main(int argc, char **argv)
 		{"pool",	no_argument,		NULL,	'p'},
 		{"cont",	no_argument,		NULL,	'c'},
 		{"capa",	no_argument,		NULL,	'C'},
-		{"dtx",		no_argument,		NULL,	'X'},
+		{"base_dtx",	no_argument,		NULL,	't'},
+		{"dist_dtx",	no_argument,		NULL,	'T'},
 		{"verify",	no_argument,		NULL,	'V'},
 		{"io",		no_argument,		NULL,	'i'},
+		{"ec_io",	no_argument,		NULL,	'I'},
 		{"checksum",	no_argument,		NULL,	'z'},
-		{"dedup",	no_argument,		NULL,	'u'},
+		{"agg_ec",	no_argument,		NULL,	'Z'},
+		{"dedup",	no_argument,		NULL,	'U'},
 		{"epoch_io",	no_argument,		NULL,	'x'},
 		{"obj_array",	no_argument,		NULL,	'A'},
 		{"array",	no_argument,		NULL,	'D'},
@@ -319,6 +351,8 @@ main(int argc, char **argv)
 		{"degraded",	no_argument,		NULL,	'd'},
 		{"rebuild",	no_argument,		NULL,	'r'},
 		{"rebuild_simple",	no_argument,	NULL,	'v'},
+		{"rebuild_ec",	no_argument,		NULL,	'S'},
+		{"degrade_ec",	no_argument,		NULL,	'X'},
 		{"drain_simple",	no_argument,	NULL,	'b'},
 		{"nvme_recovery",	no_argument,	NULL,	'N'},
 		{"group",	required_argument,	NULL,	'g'},
@@ -333,7 +367,6 @@ main(int argc, char **argv)
 		{"subtests",	required_argument,	NULL,	'u'},
 		{"exclude",	required_argument,	NULL,	'E'},
 		{"filter",	required_argument,	NULL,	'f'},
-		{"dfs",		no_argument,		NULL,	'F'},
 		{"work_dir",	required_argument,	NULL,	'W'},
 		{"workload_file", required_argument,	NULL,	'w'},
 		{"obj_class",	required_argument,	NULL,	'l'},
@@ -349,9 +382,10 @@ main(int argc, char **argv)
 
 	memset(tests, 0, sizeof(tests));
 
-	while ((opt = getopt_long(argc, argv,
-				  "ampcCdXVizxADKeoROg:n:s:u:E:f:Fw:W:hrNvbl:",
-				  long_options, &index)) != -1) {
+	while ((opt =
+		getopt_long(argc, argv,
+			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:",
+			     long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;
 			ntests++;
@@ -397,6 +431,7 @@ main(int argc, char **argv)
 			D_STRNDUP(test_io_dir, optarg, PATH_MAX);
 			if (test_io_dir == NULL)
 				return -1;
+			break;
 		case 'l':
 			dt_obj_class = daos_oclass_name2id(optarg);
 			if (dt_obj_class == OC_UNKNOWN)

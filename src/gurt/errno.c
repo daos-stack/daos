@@ -1,32 +1,17 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of GURT.
  */
+#include <string.h>
+
 #include <daos_errno.h>
-#include "gurt/debug.h"
-#include "gurt/list.h"
-#include "gurt/common.h"
+#include <gurt/debug.h>
+#include <gurt/list.h>
+#include <gurt/common.h>
 
 static D_LIST_HEAD(g_error_reg_list);
 
@@ -35,12 +20,16 @@ struct d_error_reg {
 	int			er_base;
 	int			er_limit;
 	const char * const	*er_strings;
+	const char * const	*er_strerror;
 	bool			er_alloc;
 };
 
 #define D_DEFINE_COMP_ERRSTR(name, base)				\
 	static const char * const g_##name##_errstr[] = {		\
 		D_FOREACH_##name##_ERR(D_DEFINE_ERRSTR)			\
+	};								\
+	static const char * const g_##name##_errstr_desc[] = {		\
+		D_FOREACH_##name##_ERR(D_DEFINE_ERRDESC)		\
 	};								\
 	D_CASSERT((sizeof(g_##name##_errstr) /				\
 			 sizeof(g_##name##_errstr[0])) ==		\
@@ -50,6 +39,7 @@ struct d_error_reg {
 		.er_base	= DER_ERR_##name##_BASE,		\
 		.er_limit	= DER_ERR_##name##_LIMIT,		\
 		.er_strings	= g_##name##_errstr,			\
+		.er_strerror	= g_##name##_errstr_desc,		\
 		.er_alloc	= false,				\
 	};
 
@@ -70,6 +60,8 @@ D_FOREACH_ERR_RANGE(D_DEFINE_COMP_ERRSTR)
 
 #define D_ABS(value) ((value) > 0 ? (value) : (-value))
 
+#define D_ERR_BUF_SIZE 32
+
 static __attribute__((constructor)) void
 d_err_init(void)
 {
@@ -83,6 +75,9 @@ const char *d_errstr(int rc)
 	if (rc == 0)
 		return "DER_SUCCESS";
 
+	if (rc > 0)
+		goto out;
+
 	rc = D_ABS(rc);
 
 	d_list_for_each_entry(entry, &g_error_reg_list, er_link) {
@@ -91,11 +86,13 @@ const char *d_errstr(int rc)
 		return entry->er_strings[rc - entry->er_base - 1];
 	}
 
+out:
 	return "DER_UNKNOWN";
 }
 
 int
-d_errno_register_range(int start, int end, const char * const *error_strings)
+d_errno_register_range(int start, int end, const char * const *error_strings,
+		       const char * const *strerror)
 {
 	struct	d_error_reg	*entry;
 
@@ -110,6 +107,7 @@ d_errno_register_range(int start, int end, const char * const *error_strings)
 	entry->er_base = start;
 	entry->er_limit = end;
 	entry->er_strings = error_strings;
+	entry->er_strerror = strerror;
 	entry->er_alloc = true;
 	d_list_add(&entry->er_link, &g_error_reg_list);
 
@@ -132,4 +130,33 @@ d_errno_deregister_range(int start)
 	}
 	D_ERROR("Attempted to deregister non-existent error range from %d\n",
 		start);
+}
+
+const char *
+d_errdesc(int errnum)
+{
+	struct d_error_reg *entry;
+	static char buf[D_ERR_BUF_SIZE];
+
+	if (errnum == DER_SUCCESS)
+		return "Success";
+
+	if (errnum == -DER_UNKNOWN)
+		return "Unknown error";
+
+	snprintf(buf, D_ERR_BUF_SIZE, "Unknown error code %d", errnum);
+
+	if (errnum > 0)
+		goto out;
+
+	errnum = D_ABS(errnum);
+
+	d_list_for_each_entry(entry, &g_error_reg_list, er_link) {
+		if (errnum <= entry->er_base || errnum >= entry->er_limit)
+			continue;
+		return entry->er_strerror[errnum - entry->er_base - 1];
+	}
+
+out:
+	return buf;
 }

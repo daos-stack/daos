@@ -5,9 +5,9 @@ def scons():
     """Execute build"""
     Import('denv', 'prereqs')
 
-    libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common',
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    libraries = ['smd', 'pmemobj', 'cmocka', 'daos_common_pmem',
                  'uuid', 'abt', 'gurt']
-
     tenv = denv.Clone()
 
     prereqs.require(tenv, 'argobots')

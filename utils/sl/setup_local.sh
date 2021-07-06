@@ -87,9 +87,7 @@ function export_pythonpath()
 {
   PYTHON_VERSION="${1}"
 
-  if [ "${PYTHON_VERSION}" -eq 2 ]; then
-    PYTHONPATH=${SL_PREFIX}/lib64/python2.7/site-packages:${PYTHONPATH}
-  elif [ "${PYTHON_VERSION}" -eq 3 ]; then
+  if [ "${PYTHON_VERSION}" -eq 3 ]; then
     PYTHONPATH=${SL_PREFIX}/lib64/python3/site-packages:${PYTHONPATH}
   else
     echo "unknown Python version: ${PYTHON_VERSION}"
@@ -100,15 +98,11 @@ function export_pythonpath()
 }
 
 # look for a valid installation of python
-if [ -x "$(command -v python)" ]; then
-  PYTHON_VERSION="$(python -c 'import sys; print(sys.version_info.major)')"
-  export_pythonpath "${PYTHON_VERSION}"
-# there is still a chance that python3 is installed
-elif [ -x "$(command -v python3)" ]; then
+if [ -x "$(command -v python3)" ]; then
   PYTHON_VERSION="$(python3 -c 'import sys; print(sys.version_info.major)')"
   export_pythonpath "${PYTHON_VERSION}"
 else
-  echo "python not found"
+  echo "python3 not found"
 fi
 
 function in_list()

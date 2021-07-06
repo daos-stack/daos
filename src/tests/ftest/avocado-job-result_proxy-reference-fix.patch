@@ -1,0 +1,25 @@
+commit 6d023677f5561b944da0f6358d982e88cefd3945
+Author: Brian J. Murrell <brian.murrell@intel.com>
+Date:   Mon Dec 7 09:46:17 2020 -0500
+
+    Fix orphan Job().result_proxy reference
+    
+    Job().result_proxy was removed in ed4dcd1 however references to it
+    remained.
+    
+    This removes one of the remaining references.
+    
+    Signed-off-by: Brian J. Murrell <brian.murrell@intel.com>
+
+diff --git a/avocado/core/runner.py b/avocado/core/runner.py
+index 787c0669..104a7dac 100644
+--- a/avocado/core/runner.py
++++ b/avocado/core/runner.py
+@@ -184,7 +184,6 @@ class TestStatus(object):
+                 self.interrupt = True
+             elif "paused" in msg:
+                 self.status = msg
+-                self.job.result_proxy.notify_progress(False)
+                 self.job._result_events_dispatcher.map_method('test_progress',
+                                                               False)
+                 if msg['paused']:

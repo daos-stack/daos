@@ -1,25 +1,9 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
-//
+
 package bdev
 
 import (
@@ -38,8 +22,8 @@ const (
 	defaultNrHugepages = 4096
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
-	pciWhiteListEnv    = "_PCI_WHITELIST"
-	pciBlackListEnv    = "_PCI_BLACKLIST"
+	pciAllowListEnv    = "_PCI_WHITELIST"
+	pciBlockListEnv    = "_PCI_BLACKLIST"
 	driverOverrideEnv  = "_DRIVER_OVERRIDE"
 	vfioDisabledDriver = "uio_pci_generic"
 )
@@ -80,7 +64,7 @@ func run(log logging.Logger, env []string, cmdStr string, args ...string) (strin
 	log.Debugf("running script: %s", cmdPath)
 	cmd := exec.Command(cmdPath, args...)
 	cmd.Env = env
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", &runCmdError{
 			wrapped: err,
@@ -133,15 +117,15 @@ func (s *spdkSetupScript) Prepare(req PrepareRequest) error {
 		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
 	}
 
-	if req.PCIWhitelist != "" && req.PCIBlacklist != "" {
-		return errors.New("bdev_include and bdev_exclude can't be used together\n")
+	if req.PCIAllowlist != "" && req.PCIBlocklist != "" {
+		return errors.New("bdev_include and bdev_exclude can not be used together")
 	}
 
-	if req.PCIWhitelist != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciWhiteListEnv, req.PCIWhitelist))
+	if req.PCIAllowlist != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowlist))
 	}
-	if req.PCIBlacklist != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciBlackListEnv, req.PCIBlacklist))
+	if req.PCIBlocklist != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciBlockListEnv, req.PCIBlocklist))
 	}
 	if req.DisableVFIO {
 		env = append(env, fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver))

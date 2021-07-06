@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /* This generates a summary of struct sizes to be used by vos_size.py
  * to generate metadata overhead estimates
@@ -122,6 +105,34 @@ print_record(struct d_string_buffer_t *buf, const char *name,
 	d_write_string_buffer(buf, "\n    ]\n");
 }
 
+static int
+get_daos_csummers(struct d_string_buffer_t *buf)
+{
+	enum DAOS_HASH_TYPE	 type;
+	struct daos_csummer	*csummer = NULL;
+	struct hash_ft *ft;
+	int	rc, csum_size;
+
+	d_write_string_buffer(buf, "csummers:\n");
+
+	for (type = HASH_TYPE_UNKNOWN + 1; type < HASH_TYPE_END; type++) {
+		ft = daos_mhash_type2algo(type);
+		rc = daos_csummer_init(&csummer, ft, 128, 0);
+
+		if (rc != 0) {
+			return rc;
+		}
+
+		csum_size = daos_csummer_get_csum_len(csummer);
+
+		d_write_string_buffer(buf, "    %s: %d\n",
+				      ft->cf_name, csum_size);
+		daos_csummer_destroy(&csummer);
+	}
+
+	return DER_SUCCESS;
+}
+
 int
 get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 {
@@ -136,20 +147,28 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 		goto exit_0;
 	}
 
-	rc = vos_init();
+	rc = vos_self_init("/mnt/daos");
 	if (rc) {
 		goto exit_1;
 	}
 
 	FOREACH_TYPE(CHECK_CALL)
 
-	d_write_string_buffer(buf, "---\n# VOS tree overheads\n"
-		"root: %d\nscm_cutoff: %d\n", vos_pool_get_msize(),
-		vos_pool_get_scm_cutoff());
+	d_write_string_buffer(buf, "---\n# VOS tree overheads\n");
+	d_write_string_buffer(buf, "root: %d\n", vos_pool_get_msize());
+	d_write_string_buffer(buf, "container: %d\n",
+			      vos_container_get_msize());
+	d_write_string_buffer(buf, "scm_cutoff: %d\n",
+			      vos_pool_get_scm_cutoff());
 
 	FOREACH_TYPE(PRINT_DYNAMIC)
 	d_write_string_buffer(buf, "trees:\n");
 	FOREACH_TYPE(PRINT_RECORD)
+
+	rc = get_daos_csummers(buf);
+	if (rc) {
+		goto exit_2;
+	}
 
 	if (buf->status != 0) {
 		d_free_string(buf);
@@ -158,7 +177,7 @@ get_vos_structure_sizes_yaml(int alloc_overhead, struct d_string_buffer_t *buf)
 	}
 
 exit_2:
-	vos_fini();
+	vos_self_fini();
 exit_1:
 	daos_debug_fini();
 exit_0:

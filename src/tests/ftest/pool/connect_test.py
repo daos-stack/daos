@@ -1,27 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import traceback
 
@@ -40,7 +23,7 @@ class ConnectTest(TestWithServers):
     def test_connect(self):
         """Test connecting to a pool.
 
-        :avocado: tags=all,pool,smoke,pr,small,poolconnect
+        :avocado: tags=all,pool,smoke,daily_regression,small,poolconnect
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -65,7 +48,7 @@ class ConnectTest(TestWithServers):
         scm_size = self.params.get("scm_size", "/run/pool*")
 
         try:
-            data = dmg.pool_create(scm_size=scm_size, group=set_id)
+            data = dmg.pool_create(scm_size=scm_size)
             if dmg.result.exit_status != 0:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 
@@ -82,8 +65,8 @@ class ConnectTest(TestWithServers):
                     "Pool {0} not found on host {1}.\n".format(
                         data["uuid"], host2))
 
-            result = dmg.pool_query(data["uuid"])
-            if result.exit_status != 0:
+            dmg.pool_query(data["uuid"])
+            if dmg.result.exit_status != 0:
                 self.fail("Could not connect to Pool {}\n".format(data["uuid"]))
 
             if expected_result == 'FAIL':

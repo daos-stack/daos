@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __TEST_EP_CRED_COMMON_H__
 #define __TEST_EP_CRED_COMMON_H__
@@ -52,6 +35,7 @@ struct test_global_t {
 	int			 tg_burst_count;
 	int			 tg_send_shutdown;
 	int			 tg_send_queue_front;
+	bool			 tg_use_cfg;
 	bool			 tg_save_cfg;
 	char			*tg_cfg_path;
 };
@@ -106,7 +90,7 @@ shutdown_handler(crt_rpc_t *rpc_req)
 
 	crt_reply_send(rpc_req);
 
-	g_shutdown = 1;
+	tc_progress_stop();
 	DBG_PRINT("server set shutdown flag.\n");
 }
 
@@ -154,11 +138,14 @@ test_parse_args(int argc, char **argv)
 		{"queue_front",	no_argument,		0, 'f'},
 		{"shutdown",	no_argument,		0, 'q'},
 		{"cfg_path",	required_argument,	0, 'p'},
+		{"use_cfg",	required_argument,	0, 'u'},
 		{0, 0, 0, 0}
 	};
 
+	test.tg_use_cfg = true;
+
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:b:c:p:fhsq", long_options,
+		rc = getopt_long(argc, argv, "n:a:b:c:p:u:fhsq", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
@@ -194,6 +181,9 @@ test_parse_args(int argc, char **argv)
 		case 'p':
 			test.tg_save_cfg = true;
 			test.tg_cfg_path = optarg;
+			break;
+		case 'u':
+			test.tg_use_cfg = atoi(optarg);
 			break;
 		case '?':
 			return 1;

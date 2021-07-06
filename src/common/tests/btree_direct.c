@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018-2019 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(tests)
 
@@ -60,12 +43,6 @@ struct test_input_value {
 };
 
 struct test_input_value tst_fn_val;
-
-/**
- * An example for string key
- */
-
-#define SK_MAX_KEY_LEN 128
 
 /** string key record */
 struct sk_rec {
@@ -317,7 +294,7 @@ sk_btr_open_create(void **state)
 	create = tst_fn_val.input;
 	arg = tst_fn_val.optval;
 
-	if (!daos_handle_is_inval(sk_toh)) {
+	if (daos_handle_is_valid(sk_toh)) {
 		fail_msg("Tree has been opened\n");
 	}
 
@@ -490,6 +467,7 @@ sk_btr_kv_operate(void **state)
 		switch (opc) {
 		default:
 			fail_msg("Invalid opcode\n");
+			break;
 		case BTR_OPC_UPDATE:
 			d_iov_set(&val_iov, val, strlen(val) + 1);
 			rc = dbtree_update(sk_toh, &key_iov, &val_iov);
@@ -758,6 +736,12 @@ sk_btr_sort_keys(struct kv_node *kv, unsigned int key_nr)
 const char valid[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 #define INT_LEN 32
+/**
+ * An example for string key
+ */
+D_CASSERT(EMBEDDED_KEY_MAX > INT_LEN);
+#define SK_MAX_KEY_LEN (EMBEDDED_KEY_MAX - INT_LEN)
+
 /* fill in @kv with random string keys/values */
 static void
 sk_btr_gen_keys(struct kv_node *kv, unsigned int key_nr)
@@ -786,6 +770,17 @@ sk_btr_gen_keys(struct kv_node *kv, unsigned int key_nr)
 		strcpy(&value[j], "VAL");
 		j = snprintf(key + j, INT_LEN, "key%d", i);
 		kv[i].key.iov_len = len + j + 1;
+	}
+}
+
+static void
+sk_btr_destroy_keys(struct kv_node *kv, unsigned int key_nr)
+{
+	int	 i;
+
+	for (i = 0; i < key_nr; i++) {
+		D_FREE(kv[i].key.iov_buf);
+		D_FREE(kv[i].val.iov_buf);
 	}
 }
 
@@ -963,6 +958,7 @@ sk_btr_batch_oper(void **state)
 		}
 	}
 	sk_btr_query(NULL);
+	sk_btr_destroy_keys(kv, key_nr);
 	D_FREE(kv);
 }
 
@@ -1037,6 +1033,7 @@ sk_btr_perf(void **state)
 	}
 	now = dts_time_now();
 	D_PRINT("delete = %10.2f/sec\n", key_nr / (now - then));
+	sk_btr_destroy_keys(kv, key_nr);
 	D_FREE(kv);
 }
 

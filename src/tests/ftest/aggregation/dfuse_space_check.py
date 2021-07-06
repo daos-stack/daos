@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import time
@@ -27,6 +10,7 @@ from ior_test_base import IorTestBase
 
 
 class DfuseSpaceCheck(IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Base Parallel IO test class.
 
     :avocado: recursive
@@ -34,27 +18,19 @@ class DfuseSpaceCheck(IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DfuseSpaceCheck object."""
-        super(DfuseSpaceCheck, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.space_before = None
         self.block_size = None
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(DfuseSpaceCheck, self).tearDown()
 
     def get_nvme_free_space(self, display=True):
         """Display pool free space.
 
-          Args:
+        Args:
             display (bool): boolean to display output of free space.
 
-          Returns:
-            free_space_nvme (int): Free space available in nvme.
+        Returns:
+            int: Free space available in nvme.
+
         """
         free_space_nvme = self.pool.get_pool_free_space("nvme")
         if display:
@@ -76,17 +52,17 @@ class DfuseSpaceCheck(IorTestBase):
             counter += 1
 
     def write_multiple_files(self):
-        """Write multiple files
+        """Write multiple files.
 
-          Returns:
-            file_count (int): Total number of files created before
-                              going out of space.
+        Returns:
+            int: Total number of files created before going out of space.
+
         """
         file_count = 0
         while self.get_nvme_free_space(False) >= self.block_size:
             file_loc = str(self.dfuse.mount_dir.value +
                            "/largefile_{}.txt".format(file_count))
-            write_dd_cmd = u"dd if=/dev/zero of={} bs={} count=1".format(
+            write_dd_cmd = "dd if=/dev/zero of={} bs={} count=1".format(
                 file_loc, self.block_size)
             if 0 in self.execute_cmd(write_dd_cmd, False, False):
                 file_count += 1
@@ -122,7 +98,7 @@ class DfuseSpaceCheck(IorTestBase):
         # Create a pool, container and start dfuse.
         self.create_pool()
         self.create_cont()
-        self._start_dfuse()
+        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # get scm space before write
         self.space_before = self.get_nvme_free_space()
@@ -130,15 +106,15 @@ class DfuseSpaceCheck(IorTestBase):
         # create large file and perform write to it so that if goes out of
         # space.
         large_file = str(self.dfuse.mount_dir.value + "/" + "largefile.txt")
-        cmd = u"touch {}".format(large_file)
+        cmd = "touch {}".format(large_file)
         self.execute_cmd(cmd)
         dd_count = ((self.space_before / self.block_size) + 1)
-        write_dd_cmd = u"dd if=/dev/zero of={} bs={} count={}".format(
+        write_dd_cmd = "dd if=/dev/zero of={} bs={} count={}".format(
             large_file, self.block_size, dd_count)
         self.execute_cmd(write_dd_cmd, False)
 
         # store free space after write and remove the file
-        rm_large_file = u"rm -rf {}".format(large_file)
+        rm_large_file = "rm -rf {}".format(large_file)
         self.execute_cmd(rm_large_file)
 
         # Check if aggregation is complete.
@@ -149,7 +125,7 @@ class DfuseSpaceCheck(IorTestBase):
         file_count1 = self.write_multiple_files()
 
         # remove all the small files created above.
-        self.execute_cmd(u"rm -rf {}/*".format(self.dfuse.mount_dir.value))
+        self.execute_cmd("rm -rf {}/*".format(self.dfuse.mount_dir.value))
 
         # Check for aggregation to complete after file removal.
         self.check_aggregation()

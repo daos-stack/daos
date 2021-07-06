@@ -1,30 +1,14 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B620873.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(bio)
 
 #include <spdk/nvme.h>
 #include <spdk/bdev.h>
-#include <spdk/io_channel.h>
+#include <spdk/blob.h>
+#include <spdk/thread.h>
 #include "bio_internal.h"
 #include <daos_srv/smd.h>
 
@@ -36,12 +20,41 @@
  * the device owner xstream.
  */
 struct dev_state_msg_arg {
-	struct bio_xs_context	*xs;
-	struct bio_dev_state	 devstate;
-	ABT_eventual		 eventual;
+	struct bio_xs_context		*xs;
+	struct nvme_stats		 devstate;
+	ABT_eventual			 eventual;
 };
 
-/* Copy out the bio_dev_state in the device owner xstream context */
+/*
+ * Used for getting bio device list, which requires exclusive access from
+ * the init xstream.
+ */
+struct bio_dev_list_msg_arg {
+	struct bio_xs_context		*xs;
+	d_list_t			*dev_list;
+	int				 dev_list_cnt;
+	ABT_eventual			 eventual;
+	int				 rc;
+};
+
+
+/* Collect space utilization for blobstore */
+static void
+collect_bs_usage(struct spdk_blob_store *bs, struct nvme_stats *stats)
+{
+	uint64_t	cl_sz;
+
+	if (bs == NULL)
+		return;
+
+	D_ASSERT(stats != NULL);
+
+	cl_sz = spdk_bs_get_cluster_size(bs);
+	stats->total_bytes = spdk_bs_total_data_cluster_count(bs) * cl_sz;
+	stats->avail_bytes = spdk_bs_free_cluster_count(bs) * cl_sz;
+}
+
+/* Copy out the nvme_stats in the device owner xstream context */
 static void
 bio_get_dev_state_internal(void *msg_arg)
 {
@@ -50,6 +63,7 @@ bio_get_dev_state_internal(void *msg_arg)
 	D_ASSERT(dsm != NULL);
 
 	dsm->devstate = dsm->xs->bxc_blobstore->bb_dev_health.bdh_health_state;
+	collect_bs_usage(dsm->xs->bxc_blobstore->bb_bs, &dsm->devstate);
 	ABT_eventual_set(dsm->eventual, NULL, 0);
 }
 
@@ -90,7 +104,7 @@ bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 
 /* Call internal method to get BIO device state from the device owner xstream */
 int
-bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
+bio_get_dev_state(struct nvme_stats *state, struct bio_xs_context *xs)
 {
 	struct dev_state_msg_arg	 dsm = { 0 };
 	int				 rc;
@@ -107,13 +121,22 @@ bio_get_dev_state(struct bio_dev_state *dev_state, struct bio_xs_context *xs)
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	*dev_state = dsm.devstate;
+	*state = dsm.devstate;
 
 	rc = ABT_eventual_free(&dsm.eventual);
 	if (rc != ABT_SUCCESS)
 		rc = dss_abterr2der(rc);
 
 	return rc;
+}
+
+/*
+ * Copy out the internal BIO blobstore device state.
+ */
+void
+bio_get_bs_state(int *bs_state, struct bio_xs_context *xs)
+{
+	*bs_state = xs->bxc_blobstore->bb_state;
 }
 
 /*
@@ -147,13 +170,28 @@ bio_dev_set_faulty(struct bio_xs_context *xs)
 	return rc;
 }
 
+static inline struct bio_dev_health *
+xs_ctxt2dev_health(struct bio_xs_context *ctxt)
+{
+	D_ASSERT(ctxt != NULL);
+	/* bio_xsctxt_free() is underway */
+	if (ctxt->bxc_blobstore == NULL)
+		return NULL;
+
+	return &ctxt->bxc_blobstore->bb_dev_health;
+}
+
 static void
 get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 				 void *cb_arg)
 {
-	struct bio_dev_health			 *dev_health = cb_arg;
-	int					  sc, sct;
-	uint32_t				  cdw0;
+	struct bio_xs_context	*ctxt = cb_arg;
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
+	int			 sc, sct;
+	uint32_t		 cdw0;
+
+	if (dev_health == NULL)
+		goto out;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -162,17 +200,19 @@ get_spdk_err_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	if (sc)
 		D_ERROR("NVMe status code/type: %d/%d\n", sc, sct);
 
-	/* Free I/O request in the completion callback */
-	spdk_bdev_free_io(bdev_io);
 	/*Decrease inflights on error or successful callback completion chain*/
 	dev_health->bdh_inflights--;
+out:
+	/* Free I/O request in the completion callback */
+	spdk_bdev_free_io(bdev_io);
 }
 
 static void
 get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 				   void *cb_arg)
 {
-	struct bio_dev_health		*dev_health = cb_arg;
+	struct bio_xs_context		*ctxt = cb_arg;
+	struct bio_dev_health		*dev_health = xs_ctxt2dev_health(ctxt);
 	struct spdk_nvme_ctrlr_data	*cdata;
 	struct spdk_bdev		*bdev;
 	struct spdk_nvme_cmd		 cmd;
@@ -182,6 +222,9 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	int				 rc;
 	int				 sc, sct;
 	uint32_t			 cdw0;
+
+	if (dev_health == NULL)
+		goto out;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -196,7 +239,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	D_ASSERT(bdev != NULL);
-	cdata = dev_health->bdh_ctrlr_buf;
 
 	/* Prep NVMe command to get device error log pages */
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
@@ -209,6 +251,7 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	cmd.cdw10 = numdl << 16;
 	cmd.cdw10 |= SPDK_NVME_LOG_ERROR;
 	cmd.cdw11 = numdu;
+	cdata = dev_health->bdh_ctrlr_buf;
 	if (cdata->elpe >= NVME_MAX_ERROR_LOG_PAGES) {
 		D_ERROR("Device error log page size exceeds buffer size\n");
 		dev_health->bdh_inflights--;
@@ -226,7 +269,7 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 					   dev_health->bdh_error_buf,
 					   ep_buf_sz,
 					   get_spdk_err_log_page_completion,
-					   dev_health);
+					   ctxt);
 	if (rc) {
 		D_ERROR("NVMe admin passthru (error log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
@@ -238,19 +281,83 @@ out:
 }
 
 static void
+populate_health_stats(struct bio_dev_health *bdh)
+{
+	struct spdk_nvme_health_information_page	*page;
+	struct nvme_stats				*dev_state;
+	union spdk_nvme_critical_warning_state		cw;
+
+	page		= bdh->bdh_health_buf;
+	cw		= page->critical_warning;
+	dev_state	= &bdh->bdh_health_state;
+
+	/** commands */
+	d_tm_set_counter(bdh->bdh_du_written, page->data_units_written[0]);
+	d_tm_set_counter(bdh->bdh_du_read, page->data_units_read[0]);
+	d_tm_set_counter(bdh->bdh_write_cmds, page->host_write_commands[0]);
+	d_tm_set_counter(bdh->bdh_read_cmds, page->host_read_commands[0]);
+	dev_state->ctrl_busy_time	= page->controller_busy_time[0];
+	d_tm_set_counter(bdh->bdh_ctrl_busy_time,
+			 page->controller_busy_time[0]);
+	dev_state->media_errs		= page->media_errors[0];
+	d_tm_set_counter(bdh->bdh_media_errs, page->media_errors[0]);
+
+	dev_state->power_cycles		= page->power_cycles[0];
+	d_tm_set_counter(bdh->bdh_power_cycles, page->power_cycles[0]);
+	dev_state->power_on_hours	= page->power_on_hours[0];
+	d_tm_set_counter(bdh->bdh_power_on_hours, page->power_on_hours[0]);
+	dev_state->unsafe_shutdowns	= page->unsafe_shutdowns[0];
+	d_tm_set_counter(bdh->bdh_unsafe_shutdowns,
+			 page->unsafe_shutdowns[0]);
+
+	/** temperature */
+	dev_state->warn_temp_time	= page->warning_temp_time;
+	d_tm_set_counter(bdh->bdh_temp_warn_time, page->warning_temp_time);
+	dev_state->crit_temp_time	= page->critical_temp_time;
+	d_tm_set_counter(bdh->bdh_temp_crit_time, page->critical_temp_time);
+	dev_state->temperature		= page->temperature;
+	d_tm_set_gauge(bdh->bdh_temp, page->temperature);
+	dev_state->temp_warn		= cw.bits.temperature ? true : false;
+	d_tm_set_gauge(bdh->bdh_temp_warn, dev_state->temp_warn);
+
+	/** reliability */
+	d_tm_set_counter(bdh->bdh_avail_spare, page->available_spare);
+	d_tm_set_counter(bdh->bdh_avail_spare_thres,
+			 page->available_spare_threshold);
+	dev_state->avail_spare_warn	= cw.bits.available_spare ? true
+								  : false;
+	d_tm_set_gauge(bdh->bdh_avail_spare_warn, dev_state->avail_spare_warn);
+	dev_state->dev_reliability_warn	= cw.bits.device_reliability ? true
+								     : false;
+	d_tm_set_gauge(bdh->bdh_reliability_warn,
+		       dev_state->dev_reliability_warn);
+
+	/** various critical warnings */
+	dev_state->read_only_warn	= cw.bits.read_only ? true : false;
+	d_tm_set_gauge(bdh->bdh_read_only_warn, dev_state->read_only_warn);
+	dev_state->volatile_mem_warn	= cw.bits.volatile_memory_backup ? true
+									: false;
+	d_tm_set_gauge(bdh->bdh_volatile_mem_warn,
+		       dev_state->volatile_mem_warn);
+
+	/** number of error log entries, internal use */
+	dev_state->err_log_entries = page->num_error_info_log_entries[0];
+}
+
+static void
 get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 			     void *cb_arg)
 {
-	struct bio_dev_health			 *dev_health = cb_arg;
-	struct bio_dev_state			 *dev_state;
-	struct spdk_nvme_health_information_page *hp;
-	struct spdk_bdev			 *bdev;
-	struct spdk_nvme_cmd			  cmd;
-	uint32_t				  cp_sz;
-	uint8_t					  crit_warn;
-	int					  rc;
-	int					  sc, sct;
-	uint32_t				  cdw0;
+	struct bio_xs_context	*ctxt = cb_arg;
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
+	struct spdk_bdev	*bdev;
+	struct spdk_nvme_cmd	 cmd;
+	uint32_t		 cp_sz;
+	int			 rc, sc, sct;
+	uint32_t		 cdw0;
+
+	if (dev_health == NULL)
+		goto out;
 
 	D_ASSERT(dev_health->bdh_inflights == 1);
 
@@ -265,24 +372,10 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	D_ASSERT(bdev != NULL);
-	hp = dev_health->bdh_health_buf;
 
 	/* Store device health info in in-memory health state log. */
-	dev_state = &dev_health->bdh_health_state;
-	dev_state->bds_timestamp = dev_health->bdh_stat_age;
-	dev_state->bds_temperature = hp->temperature;
-	crit_warn = hp->critical_warning.bits.temperature;
-	dev_state->bds_temp_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.available_spare;
-	dev_state->bds_avail_spare_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.device_reliability;
-	dev_state->bds_dev_reliabilty_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.read_only;
-	dev_state->bds_read_only_warning = crit_warn;
-	crit_warn = hp->critical_warning.bits.volatile_memory_backup;
-	dev_state->bds_volatile_mem_warning = crit_warn;
-	memcpy(dev_state->bds_media_errors, hp->media_errors,
-	       sizeof(hp->media_errors));
+	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
+	populate_health_stats(dev_health);
 
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
@@ -300,7 +393,7 @@ get_spdk_log_page_completion(struct spdk_bdev_io *bdev_io, bool success,
 					   dev_health->bdh_ctrlr_buf,
 					   cp_sz,
 					   get_spdk_identify_ctrlr_completion,
-					   dev_health);
+					   ctxt);
 	if (rc) {
 		D_ERROR("NVMe admin passthru (identify ctrlr), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
@@ -314,24 +407,37 @@ out:
 static int
 auto_detect_faulty(struct bio_blobstore *bbs)
 {
-	if (bbs->bb_state != BIO_BS_STATE_NORMAL &&
-	    bbs->bb_state != BIO_BS_STATE_REPLACED &&
-	    bbs->bb_state != BIO_BS_STATE_REINT)
+	uint64_t	tgtidx;
+	int		i;
+
+	if (bbs->bb_state != BIO_BS_STATE_NORMAL)
 		return 0;
 	/*
 	 * TODO: Check the health data stored in @bbs, and mark the bbs as
 	 *	 faulty when certain faulty criteria are satisfied.
 	 */
-	if (DAOS_FAIL_CHECK(DAOS_NVME_FAULTY))
-		return bio_bs_state_set(bbs, BIO_BS_STATE_FAULTY);
+
+	/*
+	 * Used for DAOS NVMe Recovery Tests. Will trigger bs faulty reaction
+	 * only if the specified target is assigned to the device.
+	 */
+	if (DAOS_FAIL_CHECK(DAOS_NVME_FAULTY)) {
+		tgtidx = daos_fail_value_get();
+		for (i = 0; i < bbs->bb_ref; i++) {
+			if (bbs->bb_xs_ctxts[i]->bxc_tgt_id == tgtidx)
+				return bio_bs_state_set(bbs,
+							BIO_BS_STATE_FAULTY);
+		}
+	}
 
 	return 0;
 }
 
 /* Collect the raw device health state through SPDK admin APIs */
 static void
-collect_raw_health_data(struct bio_dev_health *dev_health)
+collect_raw_health_data(struct bio_xs_context *ctxt)
 {
+	struct bio_dev_health	*dev_health = xs_ctxt2dev_health(ctxt);
 	struct spdk_bdev	*bdev;
 	struct spdk_nvme_cmd	 cmd;
 	uint32_t		 numd, numdl, numdu;
@@ -339,8 +445,10 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 	int			 rc;
 
 	D_ASSERT(dev_health != NULL);
+	if (dev_health->bdh_desc == NULL)
+		return;
+
 	D_ASSERT(dev_health->bdh_io_channel != NULL);
-	D_ASSERT(dev_health->bdh_desc != NULL);
 
 	bdev = spdk_bdev_desc_get_bdev(dev_health->bdh_desc);
 	if (bdev == NULL) {
@@ -383,7 +491,7 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 					   dev_health->bdh_health_buf,
 					   health_page_sz,
 					   get_spdk_log_page_completion,
-					   dev_health);
+					   ctxt);
 	if (rc) {
 		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
 		dev_health->bdh_inflights--;
@@ -391,74 +499,41 @@ collect_raw_health_data(struct bio_dev_health *dev_health)
 }
 
 void
-bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
+bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass)
 {
 	struct bio_dev_health	*dev_health;
+	struct bio_blobstore	*bbs;
 	int			 rc;
 	uint64_t		 monitor_period;
 
 	D_ASSERT(ctxt != NULL);
-	D_ASSERT(ctxt->bxc_blobstore != NULL);
-	dev_health = &ctxt->bxc_blobstore->bb_dev_health;
+	bbs = ctxt->bxc_blobstore;
 
-	if (dev_health->bdh_monitor_pd > 0)
-		monitor_period = dev_health->bdh_monitor_pd;
-	else
+	D_ASSERT(bbs != NULL);
+	dev_health = &bbs->bb_dev_health;
+
+	if (bbs->bb_state == BIO_BS_STATE_NORMAL ||
+	    bbs->bb_state == BIO_BS_STATE_OUT)
 		monitor_period = NVME_MONITOR_PERIOD;
+	else
+		monitor_period = NVME_MONITOR_SHORT_PERIOD;
 
 	if (dev_health->bdh_stat_age + monitor_period >= now)
 		return;
 	dev_health->bdh_stat_age = now;
 
-	rc = auto_detect_faulty(ctxt->bxc_blobstore);
+	rc = auto_detect_faulty(bbs);
 	if (rc)
 		D_ERROR("Auto faulty detect on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	rc = bio_bs_state_transit(ctxt->bxc_blobstore);
+	rc = bio_bs_state_transit(bbs);
 	if (rc)
 		D_ERROR("State transition on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	collect_raw_health_data(dev_health);
-}
-
-/* Print the io stat every few seconds, for debug only */
-void
-bio_xs_io_stat(struct bio_xs_context *ctxt, uint64_t now)
-{
-	struct spdk_bdev_io_stat	 stat;
-	struct spdk_bdev		*bdev;
-	struct spdk_io_channel		*channel;
-
-	/* check if IO_STAT_PERIOD environment variable is set */
-	if (io_stat_period == 0)
-		return;
-
-	if (ctxt->bxc_io_stat_age + io_stat_period >= now)
-		return;
-
-	if (ctxt->bxc_desc != NULL) {
-		channel = spdk_bdev_get_io_channel(ctxt->bxc_desc);
-		D_ASSERT(channel != NULL);
-		spdk_bdev_get_io_stat(NULL, channel, &stat);
-		spdk_put_io_channel(channel);
-
-		bdev = spdk_bdev_desc_get_bdev(ctxt->bxc_desc);
-
-		D_ASSERT(bdev != NULL);
-
-		D_PRINT("SPDK IO STAT: tgt[%d] dev[%s] read_bytes["DF_U64"], "
-			"read_ops["DF_U64"], write_bytes["DF_U64"], "
-			"write_ops["DF_U64"], read_latency_ticks["DF_U64"], "
-			"write_latency_ticks["DF_U64"]\n",
-			ctxt->bxc_tgt_id, spdk_bdev_get_name(bdev),
-			stat.bytes_read, stat.num_read_ops, stat.bytes_written,
-			stat.num_write_ops, stat.read_latency_ticks,
-			stat.write_latency_ticks);
-	}
-
-	ctxt->bxc_io_stat_age = now;
+	if (!bypass)
+		collect_raw_health_data(ctxt);
 }
 
 /* Free all device health monitoring info */
@@ -499,18 +574,18 @@ bio_fini_health_monitoring(struct bio_blobstore *bb)
  * all SPDK DMA-safe buffers for querying log entries.
  */
 int
-bio_init_health_monitoring(struct bio_blobstore *bb,
-			   struct spdk_bdev *bdev)
+bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 {
 	struct spdk_io_channel		*channel;
 	uint32_t			 hp_sz;
 	uint32_t			 cp_sz;
 	uint32_t			 ep_sz;
 	uint32_t			 ep_buf_sz;
+	struct bio_dev_info		*binfo;
 	int				 rc;
 
 	D_ASSERT(bb != NULL);
-	D_ASSERT(bdev != NULL);
+	D_ASSERT(bdev_name != NULL);
 
 	hp_sz = sizeof(struct spdk_nvme_health_information_page);
 	bb->bb_dev_health.bdh_health_buf = spdk_dma_zmalloc(hp_sz, 0, NULL);
@@ -520,27 +595,30 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
 	bb->bb_dev_health.bdh_ctrlr_buf = spdk_dma_zmalloc(cp_sz, 0, NULL);
 	if (bb->bb_dev_health.bdh_ctrlr_buf == NULL) {
-		spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto free_health_buf;
 	}
 
 	ep_sz = sizeof(struct spdk_nvme_error_information_entry);
 	ep_buf_sz = ep_sz * NVME_MAX_ERROR_LOG_PAGES;
 	bb->bb_dev_health.bdh_error_buf = spdk_dma_zmalloc(ep_buf_sz, 0, NULL);
 	if (bb->bb_dev_health.bdh_error_buf == NULL) {
-		spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
-		spdk_dma_free(bb->bb_dev_health.bdh_ctrlr_buf);
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto free_ctrlr_buf;
 	}
 
+	bb->bb_dev_health.bdh_inflights = 0;
+
+	if (bb->bb_state == BIO_BS_STATE_OUT)
+		return 0;
 
 	 /* Writable descriptor required for device health monitoring */
-	rc = spdk_bdev_open(bdev, true, NULL, NULL,
-			    &bb->bb_dev_health.bdh_desc);
+	rc = spdk_bdev_open_ext(bdev_name, true, bio_bdev_event_cb, NULL,
+				&bb->bb_dev_health.bdh_desc);
 	if (rc != 0) {
-		D_ERROR("Failed to open bdev %s, %d\n",
-			spdk_bdev_get_name(bdev), rc);
-		return daos_errno2der(-rc);
+		D_ERROR("Failed to open bdev %s, %d\n", bdev_name, rc);
+		rc = daos_errno2der(-rc);
+		goto free_error_buf;
 	}
 
 	/* Get and hold I/O channel for device health monitoring */
@@ -548,8 +626,47 @@ bio_init_health_monitoring(struct bio_blobstore *bb,
 	D_ASSERT(channel != NULL);
 	bb->bb_dev_health.bdh_io_channel = channel;
 
-	bb->bb_dev_health.bdh_inflights = 0;
-	bb->bb_dev_health.bdh_monitor_pd = NVME_MONITOR_PERIOD;
+	/** register DAOS metrics to export NVMe stats */
+	D_ALLOC_PTR(binfo);
+	if (binfo == NULL) {
+		D_WARN("Failed to allocate binfo\n");
+		return 0;
+	}
+#define X(field, fname, desc, unit, type)				\
+	memset(binfo, 0, sizeof(*binfo));				\
+	rc = fill_in_traddr(binfo, bdev_name);				\
+	if (rc || binfo->bdi_traddr == NULL) {				\
+		D_WARN("Failed to extract %s addr: "DF_RC"\n",		\
+		       bdev_name, DP_RC(rc));				\
+	} else {							\
+		rc = d_tm_add_metric(&bb->bb_dev_health.field,		\
+				     type,				\
+				     desc,				\
+				     unit,				\
+				     "/nvme/%s/%s",			\
+				     binfo->bdi_traddr,			\
+				     fname);				\
+		if (rc)							\
+			D_WARN("Failed to create %s sensor for %s: "	\
+			       DF_RC"\n", fname, bdev_name, DP_RC(rc));	\
+		D_FREE(binfo->bdi_traddr);				\
+	}
+
+	BIO_PROTO_NVME_STATS_LIST
+#undef X
+	D_FREE(binfo);
 
 	return 0;
+
+free_error_buf:
+	spdk_dma_free(bb->bb_dev_health.bdh_error_buf);
+	bb->bb_dev_health.bdh_error_buf = NULL;
+free_ctrlr_buf:
+	spdk_dma_free(bb->bb_dev_health.bdh_ctrlr_buf);
+	bb->bb_dev_health.bdh_ctrlr_buf = NULL;
+free_health_buf:
+	spdk_dma_free(bb->bb_dev_health.bdh_health_buf);
+	bb->bb_dev_health.bdh_health_buf = NULL;
+
+	return rc;
 }

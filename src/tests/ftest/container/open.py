@@ -1,36 +1,16 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import traceback
 import uuid
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
 from avocado.core.exceptions import TestFail
-from daos_utils import DaosCommand
 
-RESULT_PASS = "PASS"
+RESULT_PASS = "PASS" #nosec
 RESULT_FAIL = "FAIL"
 RESULT_TO_NUM = {RESULT_PASS: 0, RESULT_FAIL: 1}
 
@@ -54,7 +34,7 @@ class OpenContainerTest(TestWithServers):
     """
 
     def test_container_open(self):
-        """Jira ID: DAOS-3223
+        """JIRA ID: DAOS-3223
 
         Test Description:
             Test container's open function as described above
@@ -63,34 +43,22 @@ class OpenContainerTest(TestWithServers):
             Open container with valid and invalid pool handle and container
             UUID
 
-        :avocado: tags=all,container,tiny,full_regression,container_open
+        :avocado: tags=all,small,container,full_regression,container_open
         """
         self.pool = []
         self.container = []
 
-        # Get parameters from open.yaml
-        poh_states = self.params.get("poh", '/run/handle_states/*/')
-        uuid_states = self.params.get("uuid", '/run/container_uuid_states/*/')
+        uuid_state = self.params.get("uuid", "/run/uuid_poh/*/")
+        poh_state = self.params.get("poh", "/run/uuid_poh/*/")
+
+        expected_result = RESULT_PASS
+        if uuid_state == RESULT_FAIL or poh_state == RESULT_FAIL:
+            expected_result = RESULT_FAIL
 
         # Derive the test case number from the PASS/FAIL-PASS/FAIL combination
-        poh_state_num = RESULT_TO_NUM[poh_states[0]]
-        uuid_state_num = RESULT_TO_NUM[uuid_states[0]]
+        poh_state_num = RESULT_TO_NUM[poh_state]
+        uuid_state_num = RESULT_TO_NUM[uuid_state]
         test_case = (poh_state_num << 1) + uuid_state_num
-        if test_case == 3:
-            # Passing in handle2 and UUID2 to open will overwrite the
-            # container's members, so container1 effectively becomes container2
-            # and that wouldn't be a good test, so skip
-            self.cancel("Skip the case with container1.open(pool_handle2, " +
-                        "container_uuid2)")
-
-        expected_for_param = []
-        expected_for_param.append(uuid_states[0])
-        expected_for_param.append(poh_states[0])
-        expected_result = RESULT_PASS
-        for result in expected_for_param:
-            if result == RESULT_FAIL:
-                expected_result = RESULT_FAIL
-                break
 
         # Prepare the messages for the 3 test cases.
         # Test Bug! indicates that there's something wrong with the test since
@@ -121,20 +89,12 @@ class OpenContainerTest(TestWithServers):
         ]
         result_messages = [messages_case_1, messages_case_2, messages_case_3]
 
-        # Create the pool and connect. Then create the container from the pool
-        # Add the pool and the container created into a list
+        # Create the pool and connect. Then create a container with the pool.
+        # Add the pool and the container created into the list.
         container_uuids = []
         for _ in range(2):
-            self.pool.append(TestPool(
-                self.context, dmg_command=self.get_dmg_command()))
-            self.pool[-1].get_params(self)
-            self.pool[-1].create()
-            self.pool[-1].connect()
-            self.container.append(
-                TestContainer(pool=self.pool[-1],
-                              daos_command=DaosCommand(self.bin)))
-            self.container[-1].get_params(self)
-            self.container[-1].create()
+            self.pool.append(self.get_pool())
+            self.container.append(self.get_container(pool=self.pool[-1]))
             container_uuids.append(uuid.UUID(self.container[-1].uuid))
 
         # Decide which pool handle and container UUID to use. The PASS/FAIL
@@ -144,28 +104,28 @@ class OpenContainerTest(TestWithServers):
 
         # Case 1
         try:
-            self.container[0].open(self.pool[pool_handle_index].pool
-                                   .handle.value,
-                                   container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
-                             result_messages[test_case][0])
+            self.container[0].open(
+                self.pool[pool_handle_index].pool.handle,
+                container_uuids[container_uuid_index])
+            self.assertEqual(
+                expected_result, RESULT_PASS, result_messages[test_case][0])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
-                             result_messages[test_case][1])
+            self.assertEqual(
+                expected_result, RESULT_FAIL, result_messages[test_case][1])
 
         # Case 2. Symmetric to Case 1. Use the other handle and UUID
         pool_handle_index = pool_handle_index ^ 1
         container_uuid_index = container_uuid_index ^ 1
         try:
-            self.container[1].open(self.pool[pool_handle_index].pool
-                                   .handle.value,
-                                   container_uuids[container_uuid_index])
-            self.assertEqual(expected_result, RESULT_PASS,
-                             result_messages[test_case][2])
+            self.container[1].open(
+                self.pool[pool_handle_index].pool.handle,
+                container_uuids[container_uuid_index])
+            self.assertEqual(
+                expected_result, RESULT_PASS, result_messages[test_case][2])
         except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
-            self.assertEqual(expected_result, RESULT_FAIL,
-                             result_messages[test_case][3])
+            self.assertEqual(
+                expected_result, RESULT_FAIL, result_messages[test_case][3])

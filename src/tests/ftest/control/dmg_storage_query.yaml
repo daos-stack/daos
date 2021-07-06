@@ -1,6 +1,6 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
-timeout: 200
+timeout: 75
 hosts:
   test_servers:
     - server-A
@@ -19,8 +19,3 @@ pool:
     nvme_size: 9000000000
     svcn: 1
     control_method: dmg
-health_info:
-  - ["0s", "0", "0s", "0", "0", "0", "0", "0", "0", "0",
-    OK, OK, OK, OK, OK]
-  - ["0s", "0", "0s", "0", "0", "0", "0", "0", "0", "0",
-    OK, OK, OK, OK, OK]

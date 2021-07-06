@@ -1,29 +1,12 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from command_utils_base import FormattedParameter
 from command_utils import ExecutableCommand
-from general_utils import get_log_file
+from general_utils import get_log_file, pcmd
 
 
 class MacsioCommand(ExecutableCommand):
@@ -40,7 +23,7 @@ class MacsioCommand(ExecutableCommand):
         Args:
             path (str, optional): path to the macsio command. Defaults to "".
         """
-        super(MacsioCommand, self).__init__("/run/macsio/*", "macsio", path)
+        super().__init__("/run/macsio/*", "macsio", path)
 
         # MACSio command parameters - defaults specified in square brackets:
 
@@ -269,7 +252,7 @@ class MacsioCommand(ExecutableCommand):
 
         #   --no_validate_read []
         #       Don't validate data on read.
-        self.no_validate_read = FormattedParameter("--no_validate_read {}")
+        self.no_validate_read = FormattedParameter("--no_validate_read", False)
 
         #   --read_mesh %s []
         #       Specify mesh name to read.
@@ -284,7 +267,7 @@ class MacsioCommand(ExecutableCommand):
         #   --time_randomize []
         #       Make randomness in MACSio vary from dump to dump and run to run
         #       by using PRNGs seeded by time.
-        self.time_randomize = FormattedParameter("--time_randomize {}")
+        self.time_randomize = FormattedParameter("--time_randomize", False)
 
         #   --plugin_args %n []
         #       All arguments after this sentinel are passed to the I/O plugin
@@ -333,7 +316,7 @@ class MacsioCommand(ExecutableCommand):
 
         #   --show_errors []
         #       Show low-level HDF5 errors
-        self.show_errors = FormattedParameter("--show_errors {}")
+        self.show_errors = FormattedParameter("--show_errors", False)
 
         #   --compression %s %s []
         #       The first string argument is the compression algorithm name. The
@@ -404,11 +387,11 @@ class MacsioCommand(ExecutableCommand):
 
         #   --no_collective []
         #       Use independent, not collective, I/O calls in SIF mode.
-        self.no_collective = FormattedParameter("--no_collective {}")
+        self.no_collective = FormattedParameter("--no_collective", False)
 
         #   --no_single_chunk []
         #       Do not single chunk the datasets (currently ignored).
-        self.no_single_chunk = FormattedParameter("--no_single_chunk {}")
+        self.no_single_chunk = FormattedParameter("--no_single_chunk", False)
 
         #   --sieve_buf_size %d []
         #       Specify sieve buffer size (see H5Pset_sieve_buf_size)
@@ -425,7 +408,7 @@ class MacsioCommand(ExecutableCommand):
 
         #   --log []
         #       Use logging Virtual File Driver (see H5Pset_fapl_log)
-        self.log_virtual_file_driver = FormattedParameter("--log {}", "log")
+        self.log_virtual_file_driver = FormattedParameter("--log {}")
 
         # DAOS parameters
         self.daos_pool = None
@@ -461,22 +444,27 @@ class MacsioCommand(ExecutableCommand):
                 values to export prior to running daos_racer
 
         """
-        env = super(MacsioCommand, self).get_environment(manager, log_file)
+        env = super().get_environment(manager, log_file)
         mapping = {
             "DAOS_POOL": self.daos_pool,
             "DAOS_SVCL": self.daos_svcl,
             "DAOS_CONT": self.daos_cont,
         }
+        #mapping = {
+        #    "DAOS_POOL": self.daos_pool,
+        #    "DAOS_CONT": self.daos_cont,
+        #}
         for key in mapping:
             if mapping[key]:
                 env[key] = mapping[key]
         return env
 
-    def check_results(self, result):
+    def check_results(self, result, hosts):
         """Check the macsio command results.
 
         Args:
             results (CmdResult): macsio command execution result
+            hosts (list): list of hosts on which the macsio output files exist
 
         Returns:
             bool: status of the macsio command results
@@ -488,4 +476,12 @@ class MacsioCommand(ExecutableCommand):
 
         # Basic check of the macsio command status
         status = result.exit_status == 0
+
+        # Display the results from the macsio log and timings files
+        macsio_files = (self.log_file_name.value, self.timings_file_name.value)
+        for macsio_file in macsio_files:
+            if macsio_file:
+                self.log.info("Output from %s", macsio_file)
+                pcmd(hosts, "cat {}".format(macsio_file), timeout=30)
+
         return status

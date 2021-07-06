@@ -1,26 +1,11 @@
-/**
- * (C) Copyright 2017-2019 Intel Corporation.
+/*
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
+ * \file
+ *
  * rdb: Storage Layout
  *
  * A database replica stores its persistent state in a dedicated VOS pool, with
@@ -31,6 +16,7 @@
  *       Object RDB_MC_ATTRS		// attribute object
  *         D-key rdb_dkey
  *           A-key rdb_mc_uuid		// <db_uuid> (see rdb_create())
+ *           A-key rdb_mc_version	// layout version
  *           A-key rdb_mc_term		// term
  *           A-key rdb_mc_vote		// vote for term
  *           A-key rdb_mc_lc		// log container record
@@ -51,6 +37,8 @@
  *         D-key rdb_dkey
  *           ...
  *       ...
+ *
+ * The version of the whole layout is stored in rdb_mc_version.
  *
  * D-keys are insignificant in the layout. Every object has only one d-key
  * equal to rdb_dkey. A-keys are all DAOS_IOD_SINGLE.
@@ -82,6 +70,12 @@
 
 #ifndef RDB_LAYOUT_H
 #define RDB_LAYOUT_H
+
+/* Default layout version */
+#define RDB_LAYOUT_VERSION 1
+
+/* Lowest compatible layout version */
+#define RDB_LAYOUT_VERSION_LOW 1
 
 /*
  * Object ID
@@ -126,7 +120,8 @@ struct rdb_anchor {
  * rdb_layout.c using RDB_STRING_KEY().
  */
 extern d_iov_t rdb_mc_uuid;		/* uuid_t */
-extern d_iov_t rdb_mc_term;		/* int */
+extern d_iov_t rdb_mc_version;		/* uint32_t */
+extern d_iov_t rdb_mc_term;		/* uint64_t */
 extern d_iov_t rdb_mc_vote;		/* int */
 extern d_iov_t rdb_mc_lc;		/* rdb_lc_record */
 extern d_iov_t rdb_mc_slc;		/* rdb_lc_record */
@@ -158,14 +153,13 @@ struct rdb_lc_record {
 extern d_iov_t rdb_lc_entry_header;	/* rdb_entry */
 extern d_iov_t rdb_lc_entry_data;	/* uint8_t[] */
 extern d_iov_t rdb_lc_nreplicas;	/* uint8_t */
-extern d_iov_t rdb_lc_replicas;	/* uint32_t[] */
-extern d_iov_t rdb_lc_oid_next;	/* rdb_oid_t (classless) */
+extern d_iov_t rdb_lc_replicas;		/* uint32_t[] */
+extern d_iov_t rdb_lc_oid_next;		/* rdb_oid_t (classless) */
 extern d_iov_t rdb_lc_root;		/* rdb_oid_t */
 
 /* Log entry */
 struct rdb_entry {
 	uint64_t	dre_term;
-	uint64_t	dre_id;
 	uint32_t	dre_type;
 	uint32_t	dre_size;	/* of entry data */
 };

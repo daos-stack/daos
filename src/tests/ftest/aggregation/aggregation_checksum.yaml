@@ -1,0 +1,39 @@
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+timeout: 240
+server_config:
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0"]
+pool:
+  mode: 146
+  name: daos_server
+  scm_size: 1000000000
+  nvme_size: 10000000000
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+  control_method: daos
+ior:
+  api: "DFS"
+  client_processes:
+    np: 1
+  dfs_destroy: False
+  iorflags:
+      - "-w -E -k"
+      - "-r -R"
+  repetitions: 1
+  signature: 5
+  transfersize_blocksize:
+    2K:
+      transfer_size: '2K'
+      block_size: '268435456'  # 256M
+  objectclass:
+    SX:
+      dfs_oclass: "SX"

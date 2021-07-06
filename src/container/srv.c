@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_cont: Container Server
@@ -28,7 +11,7 @@
  */
 #define D_LOGFAC	DD_FAC(container)
 
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos/rpc.h>
 #include "rpc.h"
 #include "srv_internal.h"
@@ -44,15 +27,24 @@ init(void)
 
 	rc = ds_cont_iv_init();
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_oid_iv, rc);
 
 	rc = ds_cont_prop_default_init();
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_cont_iv, rc);
+
+	rc = ds_cont_metrics_init();
+	if (rc)
+		D_WARN("Unable to initialize container metrics, " DF_RC "\n",
+		       DP_RC(rc));
 
 	return 0;
-err:
+
+err_cont_iv:
+	ds_cont_iv_fini();
+err_oid_iv:
 	ds_oid_iv_fini();
+err:
 	return rc;
 }
 
@@ -62,17 +54,13 @@ fini(void)
 	ds_cont_iv_fini();
 	ds_oid_iv_fini();
 	ds_cont_prop_default_fini();
+	ds_cont_metrics_fini();
 
 	return 0;
 }
 
 static struct crt_corpc_ops ds_cont_tgt_destroy_co_ops = {
 	.co_aggregate   = ds_cont_tgt_destroy_aggregator,
-	.co_pre_forward = NULL,
-};
-
-static struct crt_corpc_ops ds_cont_tgt_close_co_ops = {
-	.co_aggregate   = ds_cont_tgt_close_aggregator,
 	.co_pre_forward = NULL,
 };
 
@@ -109,8 +97,7 @@ static struct daos_rpc_handler cont_handlers[] = {
 #undef X
 
 static void *
-dsm_tls_init(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key)
+dsm_tls_init(int xs_id, int tgt_id)
 {
 	struct dsm_tls *tls;
 	int		rc;
@@ -140,8 +127,7 @@ dsm_tls_init(const struct dss_thread_local_storage *dtls,
 }
 
 static void
-dsm_tls_fini(const struct dss_thread_local_storage *dtls,
-	     struct dss_module_key *key, void *data)
+dsm_tls_fini(void *data)
 {
 	struct dsm_tls *tls = data;
 

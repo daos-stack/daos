@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package security
@@ -37,8 +20,8 @@ const (
 	defaultCACert        = certDir + "daosCA.crt"
 	defaultServerCert    = certDir + "server.crt"
 	defaultServerKey     = certDir + "server.key"
-	defaultClientCert    = certDir + "client.crt"
-	defaultClientKey     = certDir + "client.key"
+	defaultAdminCert     = certDir + "admin.crt"
+	defaultAdminKey      = certDir + "admin.key"
 	defaultAgentCert     = certDir + "agent.crt"
 	defaultAgentKey      = certDir + "agent.key"
 	defaultClientCertDir = certDir + "clients"
@@ -99,8 +82,8 @@ func DefaultClientTransportConfig() *TransportConfig {
 			ServerName:      defaultServer,
 			ClientCertDir:   "",
 			CARootPath:      defaultCACert,
-			CertificatePath: defaultClientCert,
-			PrivateKeyPath:  defaultClientKey,
+			CertificatePath: defaultAdminCert,
+			PrivateKeyPath:  defaultAdminKey,
 			tlsKeypair:      nil,
 			caPool:          nil,
 		},
@@ -131,7 +114,7 @@ func (tc *TransportConfig) PreLoadCertData() error {
 	if tc == nil {
 		return errors.New("nil TransportConfig")
 	}
-	if tc.tlsKeypair != nil && tc.caPool != nil || tc.AllowInsecure == true {
+	if tc.tlsKeypair != nil && tc.caPool != nil || tc.AllowInsecure {
 		// In this case the data is already preloaded.
 		// In order to reload data use ReloadCertDatA
 		return nil
@@ -163,7 +146,7 @@ func (tc *TransportConfig) ReloadCertData() error {
 
 // PrivateKey returns the private key stored in the certificates loaded into the TransportConfig
 func (tc *TransportConfig) PrivateKey() (crypto.PrivateKey, error) {
-	if tc.AllowInsecure == true {
+	if tc.AllowInsecure {
 		return nil, nil
 	}
 	// If we don't have our keys loaded attempt to load them.
@@ -178,7 +161,7 @@ func (tc *TransportConfig) PrivateKey() (crypto.PrivateKey, error) {
 
 // PublicKey returns the private key stored in the certificates loaded into the TransportConfig
 func (tc *TransportConfig) PublicKey() (crypto.PublicKey, error) {
-	if tc.AllowInsecure == true {
+	if tc.AllowInsecure {
 		return nil, nil
 	}
 	// If we don't have our keys loaded attempt to load them.

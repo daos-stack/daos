@@ -1,25 +1,9 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
-//
+
 package scm
 
 import (
@@ -33,20 +17,25 @@ import (
 
 type (
 	MockSysConfig struct {
-		IsMountedBool  bool
-		IsMountedErr   error
-		MountErr       error
-		UnmountErr     error
-		MkfsErr        error
-		GetfsStr       string
-		GetfsErr       error
-		SourceToTarget map[string]string
+		IsMountedBool   bool
+		IsMountedErr    error
+		MountErr        error
+		UnmountErr      error
+		MkfsErr         error
+		GetfsStr        string
+		GetfsErr        error
+		SourceToTarget  map[string]string
+		GetfsUsageTotal uint64
+		GetfsUsageAvail uint64
+		GetfsUsageErr   error
+		isMounted       map[string]bool
+		statErrors      map[string]error
+		realStat        bool
 	}
 
 	MockSysProvider struct {
 		sync.RWMutex
-		cfg       MockSysConfig
-		isMounted map[string]bool
+		cfg MockSysConfig
 	}
 )
 
@@ -67,7 +56,7 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 
 	msp.RLock()
 	defer msp.RUnlock()
-	isMounted, exists := msp.isMounted[target]
+	isMounted, exists := msp.cfg.isMounted[target]
 	if !exists {
 		return msp.cfg.IsMountedBool, err
 	}
@@ -78,7 +67,7 @@ func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) erro
 	if msp.cfg.MountErr == nil {
 		msp.Lock()
 		defer msp.Unlock()
-		msp.isMounted[target] = true
+		msp.cfg.isMounted[target] = true
 	}
 	return msp.cfg.MountErr
 }
@@ -87,7 +76,7 @@ func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
 		msp.Lock()
 		defer msp.Unlock()
-		msp.isMounted[target] = false
+		msp.cfg.isMounted[target] = false
 	}
 	return msp.cfg.UnmountErr
 }
@@ -100,13 +89,35 @@ func (msp *MockSysProvider) Getfs(_ string) (string, error) {
 	return msp.cfg.GetfsStr, msp.cfg.GetfsErr
 }
 
+func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
+	return msp.cfg.GetfsUsageTotal, msp.cfg.GetfsUsageAvail, msp.cfg.GetfsUsageErr
+}
+
+func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
+	msp.RLock()
+	defer msp.RUnlock()
+
+	if msp.cfg.realStat {
+		return os.Stat(path)
+	}
+
+	// default return value for missing key is nil so
+	// add entries to indicate path failure e.g. perms or not-exist
+	return nil, msp.cfg.statErrors[path]
+}
+
 func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
 	if cfg == nil {
 		cfg = &MockSysConfig{}
 	}
+	if cfg.isMounted == nil {
+		cfg.isMounted = make(map[string]bool)
+	}
+	if cfg.statErrors == nil {
+		cfg.realStat = true
+	}
 	return &MockSysProvider{
-		cfg:       *cfg,
-		isMounted: make(map[string]bool),
+		cfg: *cfg,
 	}
 }
 
@@ -120,9 +131,9 @@ func DefaultMockSysProvider() *MockSysProvider {
 type MockBackendConfig struct {
 	DiscoverRes          storage.ScmModules
 	DiscoverErr          error
-	GetNamespaceRes      storage.ScmNamespaces
-	GetNamespaceErr      error
-	GetStateErr          error
+	GetPmemNamespaceRes  storage.ScmNamespaces
+	GetPmemNamespaceErr  error
+	GetPmemStateErr      error
 	StartingState        storage.ScmState
 	NextState            storage.ScmState
 	PrepNeedsReboot      bool
@@ -143,13 +154,13 @@ func (mb *MockBackend) Discover() (storage.ScmModules, error) {
 	return mb.cfg.DiscoverRes, mb.cfg.DiscoverErr
 }
 
-func (mb *MockBackend) GetNamespaces() (storage.ScmNamespaces, error) {
-	return mb.cfg.GetNamespaceRes, mb.cfg.GetNamespaceErr
+func (mb *MockBackend) GetPmemNamespaces() (storage.ScmNamespaces, error) {
+	return mb.cfg.GetPmemNamespaceRes, mb.cfg.GetPmemNamespaceErr
 }
 
-func (mb *MockBackend) GetState() (storage.ScmState, error) {
-	if mb.cfg.GetStateErr != nil {
-		return storage.ScmStateUnknown, mb.cfg.GetStateErr
+func (mb *MockBackend) GetPmemState() (storage.ScmState, error) {
+	if mb.cfg.GetPmemStateErr != nil {
+		return storage.ScmStateUnknown, mb.cfg.GetPmemStateErr
 	}
 	mb.RLock()
 	defer mb.RUnlock()

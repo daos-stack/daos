@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -103,7 +86,8 @@ enum daos_rpc_type {
 	DAOS_REQ_IV,
 	DAOS_REQ_BCAST,
 	DAOS_REQ_SWIM,
-	DAOS_REQ_DTX,
+	/** Per VOS target request */
+	DAOS_REQ_TGT,
 };
 
 /** DAOS_TGT0_OFFSET is target 0's cart context offset */
@@ -125,7 +109,7 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	switch (req_type) {
 	/* for normal IO request, send to the main service thread/context */
 	case DAOS_REQ_IO:
-	case DAOS_REQ_DTX:
+	case DAOS_REQ_TGT:
 		return DAOS_IO_CTX_ID(tgt_idx);
 	/* target tag 0 is to handle below requests */
 	case DAOS_REQ_MGMT:
@@ -141,18 +125,6 @@ daos_rpc_tag(int req_type, int tgt_idx)
 		D_ASSERTF(0, "bad req_type %d.\n", req_type);
 		return -DER_INVAL;
 	};
-}
-
-static inline struct daos_rpc_handler *
-daos_rpc_handler_find(struct daos_rpc_handler *handlers, crt_opcode_t opc)
-{
-	struct daos_rpc_handler *handler;
-
-	for (handler = handlers; handler->dr_opc != 0; handler++) {
-		if (handler->dr_opc == opc)
-			return handler;
-	}
-	return NULL;
 }
 
 /**
@@ -174,6 +146,8 @@ daos_rpc_register(struct crt_proto_format *proto_fmt, uint32_t cli_count,
 		  struct daos_rpc_handler *handlers, int mod_id)
 {
 	uint32_t i;
+
+	/* TODO: mod_in is unused */
 
 	if (proto_fmt == NULL)
 		return 0;
@@ -214,16 +188,22 @@ static inline bool
 daos_rpc_retryable_rc(int rc)
 {
 	return daos_crt_network_error(rc) || rc == -DER_TIMEDOUT ||
-	       rc == -DER_GRPVER || rc == -DER_EVICTED;
+	       rc == -DER_GRPVER || rc == -DER_EXCLUDED;
 }
 
 /* Determine if the RPC is from a client. If not, it's from a server rank. */
 static inline bool
 daos_rpc_from_client(crt_rpc_t *rpc)
 {
-	d_rank_t srcrank;
+	d_rank_t	srcrank;
+	int		rc;
 
-	crt_req_src_rank_get(rpc, &srcrank);
+	D_ASSERT(rpc != NULL);
+
+	rc = crt_req_src_rank_get(rpc, &srcrank);
+	/* Only possible failures here are invalid inputs */
+	D_ASSERTF(rc == 0, "error "DF_RC" should not be possible", DP_RC(rc));
+
 	return (srcrank == CRT_NO_RANK);
 }
 

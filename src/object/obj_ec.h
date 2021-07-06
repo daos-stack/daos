@@ -1,30 +1,14 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __OBJ_EC_H__
 #define __OBJ_EC_H__
 
 #include <daos_types.h>
+#include <daos/object.h>
 #include <daos_obj.h>
 
 #include <isa-l.h>
@@ -32,7 +16,7 @@
 /** MAX number of data cells */
 #define OBJ_EC_MAX_K		(64)
 /** MAX number of parity cells */
-#define OBJ_EC_MAX_P		(16)
+#define OBJ_EC_MAX_P		(8)
 #define OBJ_EC_MAX_M		(OBJ_EC_MAX_K + OBJ_EC_MAX_P)
 /** Length of target bitmap */
 #define OBJ_TGT_BITMAP_LEN						\
@@ -43,7 +27,7 @@
  * limits the addressing of user extents to the lower 63 bits of the offset
  * range. The client stack should enforce this limitation.
  */
-#define PARITY_INDICATOR (1ULL << 63)
+#define PARITY_INDICATOR DAOS_EC_PARITY_BIT
 
 /** EC codec for object EC encoding/decoding */
 struct obj_ec_codec {
@@ -62,10 +46,10 @@ struct obj_shard_iod {
 	uint32_t		 siod_tgt_idx;
 	/** start index in extend array in daos_iod_t */
 	uint32_t		 siod_idx;
-	/** number of extends in extend array in daos_iod_t */
-	uint32_t		 siod_nr;
 	/** the byte offset of this shard's data to the sgl/bulk */
 	uint64_t		 siod_off;
+	/** number of extends in extend array in daos_iod_t */
+	uint32_t		 siod_nr;
 };
 
 struct obj_iod_array {
@@ -235,6 +219,10 @@ struct obj_ec_recov_codec {
 /* EC recovery task */
 struct obj_ec_recov_task {
 	daos_iod_t		ert_iod;
+	/* the original user iod pointer, used for the case that in singv
+	 * degraded fetch, set the iod_size.
+	 */
+	daos_iod_t		*ert_oiod;
 	d_sg_list_t		ert_sgl;
 	daos_epoch_t		ert_epoch;
 	daos_handle_t		ert_th; /* read-only tx handle */
@@ -242,10 +230,6 @@ struct obj_ec_recov_task {
 
 /** EC obj IO failure information */
 struct obj_ec_fail_info {
-	/* the original user iods pointer, used for the case that in singv
-	 * degraded fetch, set the iod_size.
-	 */
-	daos_iod_t			*efi_uiods;
 	/* missed (to be recovered) recx list */
 	struct daos_recx_ep_list	*efi_recx_lists;
 	/* list of error targets */
@@ -330,12 +314,12 @@ struct obj_ec_singv_local {
 
 /** Query if the single value record is stored in one data target */
 static inline bool
-obj_ec_singv_one_tgt(daos_iod_t *iod, d_sg_list_t *sgl,
+obj_ec_singv_one_tgt(daos_size_t iod_size, d_sg_list_t *sgl,
 		     struct daos_oclass_attr *oca)
 {
 	uint64_t size = OBJ_EC_SINGV_EVENDIST_SZ(obj_ec_data_tgt_nr(oca));
 
-	if ((iod->iod_size != DAOS_REC_ANY && iod->iod_size <= size) ||
+	if ((iod_size != DAOS_REC_ANY && iod_size <= size) ||
 	    (sgl != NULL && daos_sgl_buf_size(sgl) <= size))
 		return true;
 
@@ -360,7 +344,8 @@ obj_ec_singv_cell_bytes(uint64_t rec_gsize, struct daos_oclass_attr *oca)
 /** Query local record size and needed padding for evenly distributed singv */
 static inline void
 obj_ec_singv_local_sz(uint64_t rec_gsize, struct daos_oclass_attr *oca,
-		      uint32_t tgt_idx, struct obj_ec_singv_local *loc)
+		      uint32_t tgt_idx, struct obj_ec_singv_local *loc,
+		      bool update)
 {
 	uint32_t	data_tgt_nr = obj_ec_data_tgt_nr(oca);
 	uint64_t	cell_size;
@@ -368,7 +353,15 @@ obj_ec_singv_local_sz(uint64_t rec_gsize, struct daos_oclass_attr *oca,
 	D_ASSERT(tgt_idx < obj_ec_tgt_nr(oca));
 
 	cell_size = obj_ec_singv_cell_bytes(rec_gsize, oca);
-	if (tgt_idx >= data_tgt_nr)
+	/* For update, the parity buffer is immediately following data buffer,
+	 * to avoid insert extra sgl segment (for last data shard's padding).
+	 * For fetch, fetching from parity shard is only for EC recovery, in
+	 * that case it allocates enough buffer (obj_ec_singv_stripe_buf_size)
+	 * and to simplify data recovery (avoid data movement for the case that
+	 * last data shard with padding bytes) the parity data's offset in fetch
+	 * buffer is aligned to cell size boundary.
+	 */
+	if (tgt_idx >= data_tgt_nr && update)
 		loc->esl_off = rec_gsize + (tgt_idx - data_tgt_nr) * cell_size;
 	else
 		loc->esl_off = tgt_idx * cell_size;
@@ -423,11 +416,13 @@ obj_io_desc_init(struct obj_io_desc *oiod, uint32_t tgt_nr, uint32_t flags)
 static inline void
 obj_io_desc_fini(struct obj_io_desc *oiod)
 {
-	if (oiod != NULL) {
-		if (oiod->oiod_siods != NULL)
-			D_FREE(oiod->oiod_siods);
-		memset(oiod, 0, sizeof(*oiod));
-	}
+	if (oiod == NULL)
+		return;
+
+	oiod->oiod_nr = 0;
+	oiod->oiod_tgt_idx = 0;
+	oiod->oiod_flags = 0;
+	D_FREE(oiod->oiod_siods);
 }
 
 /* translate the queried VOS shadow list to daos extents */
@@ -449,7 +444,7 @@ obj_shadow_list_vos2daos(uint32_t nr, struct daos_recx_ep_list *lists,
 		list = &lists[i];
 		for (j = 0; j < list->re_nr; j++) {
 			recx = &list->re_items[j].re_recx;
-			D_ASSERT(recx->rx_idx % cell_rec_nr == 0);
+			recx->rx_idx = rounddown(recx->rx_idx, cell_rec_nr);
 			stripe_nr = roundup(recx->rx_nr, cell_rec_nr) /
 				    cell_rec_nr;
 			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) != 0);
@@ -489,7 +484,8 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 		for (j = 0; j < stripe_nr; j++) {
 			if (j == 0) {
 				new_recx[i].rx_idx = recx->rx_idx;
-				new_recx[i].rx_nr = cell_size - recx->rx_idx;
+				new_recx[i].rx_nr = cell_size -
+						    (recx->rx_idx % cell_size);
 				rec_nr -= new_recx[i].rx_nr;
 			} else {
 				new_recx[i + j].rx_idx =
@@ -506,7 +502,7 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 			}
 		}
 		for (j = i + 1; j < iod->iod_nr; j++)
-			new_recx[j + stripe_nr] = iod->iod_recxs[j];
+			new_recx[j + stripe_nr - 1] = iod->iod_recxs[j];
 		i += (stripe_nr - 1);
 		iod->iod_nr += (stripe_nr - 1);
 		D_FREE(iod->iod_recxs);
@@ -516,10 +512,36 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 	return 0;
 }
 
+/* translate iod's recxs from unmapped daos extend to mapped vos extents */
+static inline void
+obj_iod_recx_daos2vos(uint32_t iod_nr, daos_iod_t *iods,
+		      struct daos_oclass_attr *oca)
+{
+	daos_iod_t	*iod;
+	daos_recx_t	*recx;
+	uint64_t	 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	uint64_t	 cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	uint32_t	 i, j;
+
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		if (iod->iod_type == DAOS_IOD_SINGLE)
+			continue;
+
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) == 0);
+			recx->rx_idx = obj_ec_idx_daos2vos(recx->rx_idx,
+							   stripe_rec_nr,
+							   cell_rec_nr);
+		}
+	}
+}
+
 /* translate iod's recxs from mapped VOS extend to unmapped daos extents */
 static inline int
 obj_iod_recx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
-		     struct daos_oclass_attr *oca)
+		      struct daos_oclass_attr *oca)
 {
 	daos_iod_t	*iod;
 	daos_recx_t	*recx;
@@ -601,15 +623,9 @@ obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
 }
 
 static inline bool
-obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr **p_attr)
+obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr *attr)
 {
-	struct daos_oclass_attr *attr;
-	bool is_ec;
-
-	is_ec = daos_oclass_is_ec(oid.id_pub, &attr);
-	if (p_attr != NULL)
-		*p_attr = attr;
-	if (!is_ec)
+	if (!daos_oclass_is_ec(attr))
 		return false;
 
 	if ((oid.id_shard % obj_ec_tgt_nr(attr)) < obj_ec_data_tgt_nr(attr))
@@ -622,6 +638,12 @@ obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr **p_attr)
 int obj_ec_codec_init(void);
 void obj_ec_codec_fini(void);
 struct obj_ec_codec *obj_ec_codec_get(daos_oclass_id_t oc_id);
+
+static inline struct obj_ec_codec *
+obj_id2ec_codec(daos_obj_id_t id)
+{
+	return obj_ec_codec_get(daos_obj_id2class(id));
+}
 
 /* cli_ec.c */
 int obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
@@ -637,6 +659,7 @@ struct obj_tgt_oiod *obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods,
 struct obj_tgt_oiod *obj_ec_tgt_oiod_get(struct obj_tgt_oiod *tgt_oiods,
 			uint32_t tgt_nr, uint32_t tgt_idx);
 void obj_ec_fetch_set_sgl(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
+void obj_ec_update_iod_size(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 		     struct daos_recx_ep_list *recx_lists, unsigned int nr);
 struct obj_ec_fail_info *obj_ec_fail_info_get(struct obj_reasb_req *reasb_req,
@@ -654,6 +677,7 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 struct obj_rw_in;
 int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			uint32_t iod_nr, uint32_t start_shard,
+			uint32_t max_shard, uint32_t leader_id,
 			void *tgt_map, uint32_t map_size,
 			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 			struct obj_ec_split_req **split_req);

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * rsvc: Replicated Service Utilities
@@ -49,18 +32,23 @@ rsvc_client_reset_leader(struct rsvc_client *client)
  * Initialize \a client.
  *
  * \param[out]	client	client state
- * \param[in]	ranks	ranks of (potential) service replicas
+ * \param[in]	ranks	(optional) ranks of (potential) service replicas
  */
 int
 rsvc_client_init(struct rsvc_client *client, const d_rank_list_t *ranks)
 {
-	int rc;
+	if (ranks) {
+		int	rc;
 
-	if (ranks->rl_nr == 0)
-		return -DER_INVAL;
-	rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, ranks);
-	if (rc != 0)
-		return rc;
+		rc = daos_rank_list_dup_sort_uniq(&client->sc_ranks, ranks);
+		if (rc != 0)
+			return rc;
+	} else {
+		client->sc_ranks = d_rank_list_alloc(0);
+
+		if (client->sc_ranks == NULL)
+			return -DER_NOMEM;
+	}
 	rsvc_client_reset_leader(client);
 	client->sc_next = 0;
 	return 0;
@@ -75,6 +63,7 @@ void
 rsvc_client_fini(struct rsvc_client *client)
 {
 	d_rank_list_free(client->sc_ranks);
+	client->sc_ranks = NULL;
 }
 
 /**
@@ -99,8 +88,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 	}
 
 	if (chosen == -1) {
-		D_WARN("replica list empty\n");
-		/* TODO: Request list of replicas from management service. */
+		D_DEBUG(DB_MD, "replica list empty\n");
 		return -DER_NOTREPLICA;
 	} else {
 		D_ASSERTF(chosen >= 0 && chosen < client->sc_ranks->rl_nr,
@@ -111,7 +99,7 @@ rsvc_client_choose(struct rsvc_client *client, crt_endpoint_t *ep)
 	return 0;
 }
 
-/* Process an error without any leadership hint. */
+/* Process an error without leadership hint. */
 static void
 rsvc_client_process_error(struct rsvc_client *client, int rc,
 			  const crt_endpoint_t *ep)
@@ -142,6 +130,9 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 			ep->ep_rank, DP_RC(rc));
 	} else if (client->sc_leader_known && client->sc_leader_aliveness > 0 &&
 		   ep->ep_rank == client->sc_ranks->rl_ranks[leader_index]) {
+		/* A leader stepping up may briefly reply NOTLEADER with hint.
+		 * "Give up" but "bump aliveness" in rsvc_client_process_hint().
+		 */
 		if (rc == -DER_NOTLEADER)
 			client->sc_leader_aliveness = 0;
 		else
@@ -151,6 +142,8 @@ rsvc_client_process_error(struct rsvc_client *client, int rc,
 			 * Gave up this leader. Start the hintless
 			 * search.
 			 */
+			D_DEBUG(DB_MD, "give up leader rank %u\n",
+				ep->ep_rank);
 			client->sc_next = client->sc_leader_index + 1;
 			client->sc_next %= client->sc_ranks->rl_nr;
 		}
@@ -164,6 +157,7 @@ rsvc_client_process_hint(struct rsvc_client *client,
 			 const crt_endpoint_t *ep)
 {
 	bool found;
+	bool becoming_leader;
 
 	D_ASSERT(hint->sh_flags & RSVC_HINT_VALID);
 
@@ -181,6 +175,15 @@ rsvc_client_process_hint(struct rsvc_client *client,
 				hint->sh_term, hint->sh_rank);
 			return;
 		} else if (hint->sh_term == client->sc_leader_term) {
+			if (ep->ep_rank == hint->sh_rank) {
+				if (client->sc_leader_aliveness < 2) {
+					D_DEBUG(DB_MD, "leader rank %u bump "
+						"aliveness %u -> 2\n",
+						hint->sh_rank,
+						client->sc_leader_aliveness);
+					client->sc_leader_aliveness = 2;
+				}
+			}
 			return;
 		}
 	}
@@ -209,9 +212,11 @@ rsvc_client_process_hint(struct rsvc_client *client,
 	 * If from_leader, set the aliveness to 2 so that upon a crt error
 	 * we'll give the leader another try before turning to others. (If node
 	 * failures were more frequent than message losses, then 1 should be
-	 * used instead.)
+	 * used instead.). A new leader may briefly reply NOTLEADER while
+	 * stepping up, in which case "from_leader=false" and inspect further.
 	 */
-	client->sc_leader_aliveness = from_leader ? 2 : 1;
+	becoming_leader = (ep->ep_rank == hint->sh_rank);
+	client->sc_leader_aliveness = (from_leader || becoming_leader) ? 2 : 1;
 	D_DEBUG(DB_MD, "new hint from rank %u: hint.term="DF_U64
 		" hint.rank=%u\n", ep->ep_rank, hint->sh_term, hint->sh_rank);
 }

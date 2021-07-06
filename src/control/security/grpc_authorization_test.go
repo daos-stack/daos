@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package security
@@ -56,45 +39,53 @@ func TestSecurity_CommonNameToComponent(t *testing.T) {
 		})
 	}
 }
-
+func inList(c Component, compList []Component) bool {
+	for _, comp := range compList {
+		if c == comp {
+			return true
+		}
+	}
+	return false
+}
 func TestSecurity_ComponentHasAccess(t *testing.T) {
 	allComponents := []Component{ComponentUndefined, ComponentAdmin, ComponentAgent, ComponentServer}
-	testCases := map[string]Component{
-		"/ctl.MgmtCtl/StoragePrepare":     ComponentAdmin,
-		"/ctl.MgmtCtl/StorageScan":        ComponentAdmin,
-		"/ctl.MgmtCtl/StorageFormat":      ComponentAdmin,
-		"/ctl.MgmtCtl/SystemQuery":        ComponentAdmin,
-		"/ctl.MgmtCtl/SystemStop":         ComponentAdmin,
-		"/ctl.MgmtCtl/SystemResetFormat":  ComponentAdmin,
-		"/ctl.MgmtCtl/SystemStart":        ComponentAdmin,
-		"/ctl.MgmtCtl/NetworkScan":        ComponentAdmin,
-		"/ctl.MgmtCtl/FirmwareQuery":      ComponentAdmin,
-		"/ctl.MgmtCtl/FirmwareUpdate":     ComponentAdmin,
-		"/mgmt.MgmtSvc/Join":              ComponentServer,
-		"/mgmt.MgmtSvc/LeaderQuery":       ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolCreate":        ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolDestroy":       ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolQuery":         ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolSetProp":       ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolGetACL":        ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolOverwriteACL":  ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolUpdateACL":     ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolDeleteACL":     ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolExclude":       ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolDrain":         ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolReintegrate":   ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolEvict":         ComponentAdmin,
-		"/mgmt.MgmtSvc/PoolExtend":        ComponentAdmin,
-		"/mgmt.MgmtSvc/GetAttachInfo":     ComponentAgent,
-		"/mgmt.MgmtSvc/SmdQuery":          ComponentAdmin,
-		"/mgmt.MgmtSvc/ListPools":         ComponentAdmin,
-		"/mgmt.MgmtSvc/ListContainers":    ComponentAdmin,
-		"/mgmt.MgmtSvc/ContSetOwner":      ComponentAdmin,
-		"/mgmt.MgmtSvc/PrepShutdownRanks": ComponentServer,
-		"/mgmt.MgmtSvc/StopRanks":         ComponentServer,
-		"/mgmt.MgmtSvc/PingRanks":         ComponentServer,
-		"/mgmt.MgmtSvc/ResetFormatRanks":  ComponentServer,
-		"/mgmt.MgmtSvc/StartRanks":        ComponentServer,
+	testCases := map[string][]Component{
+		"/ctl.CtlSvc/StorageScan":        {ComponentAdmin},
+		"/ctl.CtlSvc/StorageFormat":      {ComponentAdmin},
+		"/ctl.CtlSvc/NetworkScan":        {ComponentAdmin},
+		"/ctl.CtlSvc/FirmwareQuery":      {ComponentAdmin},
+		"/ctl.CtlSvc/FirmwareUpdate":     {ComponentAdmin},
+		"/ctl.CtlSvc/SmdQuery":           {ComponentAdmin},
+		"/ctl.CtlSvc/PrepShutdownRanks":  {ComponentServer},
+		"/ctl.CtlSvc/StopRanks":          {ComponentServer},
+		"/ctl.CtlSvc/PingRanks":          {ComponentServer},
+		"/ctl.CtlSvc/ResetFormatRanks":   {ComponentServer},
+		"/ctl.CtlSvc/StartRanks":         {ComponentServer},
+		"/mgmt.MgmtSvc/Join":             {ComponentServer},
+		"/mgmt.MgmtSvc/ClusterEvent":     {ComponentServer},
+		"/mgmt.MgmtSvc/LeaderQuery":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemQuery":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemStop":       {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemErase":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/SystemStart":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolCreate":       {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolDestroy":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolResolveID":    {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolQuery":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolSetProp":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolGetACL":       {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolOverwriteACL": {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolUpdateACL":    {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolDeleteACL":    {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolExclude":      {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolDrain":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolReintegrate":  {ComponentAdmin},
+		"/mgmt.MgmtSvc/PoolEvict":        {ComponentAdmin, ComponentAgent},
+		"/mgmt.MgmtSvc/PoolExtend":       {ComponentAdmin},
+		"/mgmt.MgmtSvc/GetAttachInfo":    {ComponentAgent},
+		"/mgmt.MgmtSvc/ListPools":        {ComponentAdmin},
+		"/mgmt.MgmtSvc/ListContainers":   {ComponentAdmin},
+		"/mgmt.MgmtSvc/ContSetOwner":     {ComponentAdmin},
 	}
 
 	var missing []string
@@ -121,7 +112,7 @@ func TestSecurity_ComponentHasAccess(t *testing.T) {
 		methodName := strings.SplitAfterN(method, "/", 3)[2]
 		t.Run(methodName, func(t *testing.T) {
 			for _, comp := range allComponents {
-				if comp == correctComponent {
+				if inList(comp, correctComponent) {
 					common.AssertTrue(t, comp.HasAccess(method), fmt.Sprintf("%s should have access to %s but does not", comp, methodName))
 				} else {
 					common.AssertFalse(t, comp.HasAccess(method), fmt.Sprintf("%s should not have access to %s but does", comp, methodName))
@@ -141,8 +132,8 @@ func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 			prefix:  "/mgmt.MgmtSvc/",
 		},
 		"ctl rpcs": {
-			service: (*ctlpb.MgmtCtlServer)(nil),
-			prefix:  "/ctl.MgmtCtl/",
+			service: (*ctlpb.CtlSvcServer)(nil),
+			prefix:  "/ctl.CtlSvc/",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -150,6 +141,9 @@ func TestSecurity_AllRpcsAreAuthorized(t *testing.T) {
 
 			var rpcNames []string
 			for i := 0; i < svcType.NumMethod(); i++ {
+				if strings.HasPrefix(svcType.Method(i).Name, "mustEmbedUnimplemented") {
+					continue
+				}
 				fullName := tc.prefix + svcType.Method(i).Name
 				rpcNames = append(rpcNames, fullName)
 			}
@@ -178,8 +172,8 @@ func TestSecurity_AuthorizedRpcsAreValid(t *testing.T) {
 			prefix:  "/mgmt.MgmtSvc/",
 		},
 		"ctl rpcs": {
-			service: (*ctlpb.MgmtCtlServer)(nil),
-			prefix:  "/ctl.MgmtCtl/",
+			service: (*ctlpb.CtlSvcServer)(nil),
+			prefix:  "/ctl.CtlSvc/",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

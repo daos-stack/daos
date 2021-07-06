@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * This file is part of daos
@@ -43,7 +26,7 @@
 struct dc_array {
 	/** link chain in the global handle hash table */
 	struct d_hlink		hlink;
-	/** DAOS KV object handle */
+	/** DAOS object handle */
 	daos_handle_t		daos_oh;
 	/** Array cell size of each element */
 	daos_size_t		cell_size;
@@ -62,7 +45,7 @@ struct dc_array {
 struct md_params {
 	daos_key_t		dkey;
 	uint64_t		dkey_val;
-	char			akey_str;
+	char			akey_val;
 	daos_iod_t		iod;
 	d_sg_list_t		sgl;
 	d_iov_t			sg_iov;
@@ -82,7 +65,7 @@ struct io_params {
 	tse_task_t		*task;
 	struct io_params	*next;
 	bool			user_sgl_used;
-	char			akey_str;
+	char			akey_val;
 };
 
 static void
@@ -179,11 +162,12 @@ free_io_params_cb(tse_task_t *task, void *data)
 	while (io_list) {
 		struct io_params *current = io_list;
 
-		if (current->iom.iom_recxs)
-			D_FREE(current->iom.iom_recxs);
-		if (current->iod.iod_recxs)
-			D_FREE(current->iod.iod_recxs);
-		if (!current->user_sgl_used && current->sgl.sg_iovs)
+		if (current->iom.iom_recxs) {
+			daos_recx_free(current->iom.iom_recxs);
+			current->iom.iom_recxs = NULL;
+		}
+		D_FREE(current->iod.iod_recxs);
+		if (!current->user_sgl_used)
 			D_FREE(current->sgl.sg_iovs);
 
 		io_list = current->next;
@@ -230,11 +214,17 @@ create_handle_cb(tse_task_t *task, void *data)
 
 err_obj:
 	if (daos_handle_is_valid(*args->oh)) {
-		daos_obj_close_t *close_args;
-		tse_task_t *close_task;
+		daos_obj_close_t	*close_args;
+		tse_task_t		*close_task;
+		int			rc2;
 
-		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
-				 0, NULL, &close_task);
+		rc2 = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
+				       0, NULL, &close_task);
+		if (rc2) {
+			D_ERROR("Failed to create task to cleanup obj hdl\n");
+			return rc;
+		}
+
 		close_args = daos_task_get_args(close_task);
 		close_args->oh = *args->oh;
 		tse_task_schedule(close_task, true);
@@ -459,7 +449,7 @@ dc_array_global2local(daos_handle_t coh, d_iov_t glob, unsigned int mode,
 		D_ASSERT(array_glob->magic == DC_ARRAY_GLOB_MAGIC);
 
 	} else if (array_glob->magic != DC_ARRAY_GLOB_MAGIC) {
-		D_ERROR("Bad magic value: 0x%x.\n", array_glob->magic);
+		D_ERROR("Bad magic value: %#x.\n", array_glob->magic);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
@@ -491,8 +481,8 @@ set_md_params(struct md_params *params)
 	params->sgl.sg_iovs	= &params->sg_iov;
 
 	/** set IOD */
-	params->akey_str = '0';
-	d_iov_set(&params->iod.iod_name, &params->akey_str, 1);
+	params->akey_val = '0';
+	d_iov_set(&params->iod.iod_name, &params->akey_val, 1);
 	params->iod.iod_nr	= 1;
 	params->iod.iod_size	= sizeof(params->md_vals);
 	params->iod.iod_recxs	= NULL;
@@ -513,10 +503,8 @@ write_md_cb(tse_task_t *task, void *data)
 	}
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	params->md_vals[0] = AKEY_MAGIC_V;
 	params->md_vals[1] = args->cell_size;
@@ -679,11 +667,17 @@ open_handle_cb(tse_task_t *task, void *data)
 
 err_obj:
 	if (daos_handle_is_valid(*args->oh)) {
-		daos_obj_close_t *close_args;
-		tse_task_t	 *close_task;
+		daos_obj_close_t	*close_args;
+		tse_task_t		*close_task;
+		int			rc2;
 
-		daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
-				 0, NULL, &close_task);
+		rc2 = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
+				       0, NULL, &close_task);
+		if (rc2) {
+			D_ERROR("Failed to create task to cleanup obj hdl\n");
+			return rc;
+		}
+
 		close_args = daos_task_get_args(close_task);
 		close_args->oh = *args->oh;
 		tse_task_schedule(close_task, true);
@@ -758,7 +752,8 @@ dc_array_open(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_OPEN, tse_task2sched(task),
 			      0, NULL, &open_task);
 	if (rc != 0) {
-		D_ERROR("Failed to open object_open task\n");
+		D_ERROR("Failed to open object_open task "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(err_ptask, rc);
 	}
 
@@ -773,14 +768,16 @@ dc_array_open(tse_task_t *task)
 		/** The upper task completes when the open task completes */
 		rc = tse_task_register_deps(task, 1, &open_task);
 		if (rc != 0) {
-			D_ERROR("Failed to register dependency\n");
-			D_GOTO(err_put2, rc);
+			D_ERROR("Failed to register dependency "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(err_put1, rc);
 		}
 
 		rc = tse_task_register_comp_cb(task, open_handle_cb, &args,
 					       sizeof(args));
 		if (rc != 0) {
-			D_ERROR("Failed to register completion cb\n");
+			D_ERROR("Failed to register completion cb "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(err_put1, rc);
 		}
 
@@ -818,10 +815,8 @@ dc_array_open(tse_task_t *task)
 	 * the open handle.
 	 */
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		D_GOTO(err_put2, rc = -DER_NOMEM);
-	}
 
 	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params,
 				       sizeof(params));
@@ -874,7 +869,8 @@ dc_array_close(tse_task_t *task)
 	rc = daos_task_create(DAOS_OPC_OBJ_CLOSE, tse_task2sched(task),
 			      0, NULL, &close_task);
 	if (rc != 0) {
-		D_ERROR("Failed to create object_close task\n");
+		D_ERROR("Failed to create object_close task "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(err_put1, rc);
 	}
 	close_args = daos_task_get_args(close_task);
@@ -883,7 +879,8 @@ dc_array_close(tse_task_t *task)
 	/** The upper task completes when the close task completes */
 	rc = tse_task_register_deps(task, 1, &close_task);
 	if (rc != 0) {
-		D_ERROR("Failed to register dependency\n");
+		D_ERROR("Failed to register dependency "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(err_put2, rc);
 	}
 
@@ -891,7 +888,8 @@ dc_array_close(tse_task_t *task)
 	rc = tse_task_register_cbs(task, NULL, NULL, 0, free_handle_cb,
 				   &array, sizeof(array));
 	if (rc != 0) {
-		D_ERROR("Failed to register completion cb\n");
+		D_ERROR("Failed to register completion cb "DF_RC"\n",
+			DP_RC(rc));
 		D_GOTO(err_put2, rc);
 	}
 
@@ -1052,10 +1050,11 @@ create_sgl(d_sg_list_t *user_sgl, daos_size_t cell_size,
 
 		D_ASSERT(user_sgl->sg_nr > cur_i);
 
-		sgl->sg_nr++;
-		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr);
+		D_REALLOC_ARRAY(new_sg_iovs, sgl->sg_iovs, sgl->sg_nr,
+				sgl->sg_nr + 1);
 		if (new_sg_iovs == NULL)
 			return -DER_NOMEM;
+		sgl->sg_nr++;
 		sgl->sg_iovs = new_sg_iovs;
 
 		sgl->sg_iovs[k].iov_buf = user_sgl->sg_iovs[cur_i].iov_buf +
@@ -1097,6 +1096,7 @@ struct hole_params {
 static int
 zero_out_cb(uint8_t *buf, size_t len, void *args)
 {
+	D_DEBUG(DB_IO, "zero hole segment, buf %p, len %zu\n", buf, len);
 	memset(buf, 0, len);
 	return 0;
 }
@@ -1157,6 +1157,10 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 		/** IOM is beyond the iod recx; this is a hole */
 		if (end <= iom->iom_recxs[i].rx_idx) {
 			bytes_proc = end - idx;
+			D_DEBUG(DB_IO, "zero out sg_idx %u/"DF_U64
+				" end "DF_U64" iom idx "DF_U64" idx "DF_U64"\n",
+				sg_idx->iov_idx, sg_idx->iov_offset,
+				end, iom->iom_recxs[i].rx_idx, idx);
 			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
 						zero_out_cb, NULL);
 			if (rc)
@@ -1173,6 +1177,9 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 		} else {
 			/** iom beyond current index, this is a hole */
 			bytes_proc = iom->iom_recxs[i].rx_idx - idx;
+			D_DEBUG(DB_IO, "zero out sg_idx %u/"DF_U64"/"DF_U64"\n",
+				sg_idx->iov_idx, sg_idx->iov_offset,
+				bytes_proc);
 			rc = daos_sgl_processor(sgl, true, sg_idx, bytes_proc,
 						zero_out_cb, NULL);
 		}
@@ -1183,37 +1190,6 @@ process_iod(daos_off_t start_off, daos_size_t array_size,
 	}
 
 	*iom_idx = i;
-	return 0;
-}
-
-static int
-reprocess_iom_cb(tse_task_t *task, void *data)
-{
-	struct io_params	*current = *((struct io_params **)data);
-	daos_obj_fetch_t	*io_arg = daos_task_get_args(task);
-	daos_off_t		start_off;
-	unsigned int		i, iom_nr;
-	struct daos_sgl_idx	idx = {0};
-	int			rc = task->dt_result;
-
-	if (rc != 0) {
-		D_ERROR("Array Read Failed (%d)\n", rc);
-		return rc;
-	}
-
-	D_ASSERT(current);
-
-	start_off = (current->dkey_val - 1) * current->chunk_size;
-	iom_nr = 0;
-
-	for (i = 0; i < current->iod.iod_nr; i++) {
-		rc = process_iod(start_off, current->array_size, io_arg->sgls,
-				 &idx, &current->iod.iod_recxs[i],
-				 &current->iom, &iom_nr);
-		if (rc)
-			return rc;
-	}
-
 	return 0;
 }
 
@@ -1242,63 +1218,7 @@ process_iomap(struct hole_params *params, daos_array_io_t *args)
 		if (sgl->sg_nr == 0)
 			goto next;
 
-		/*
-		 * If the iomap array was not enough, refetch with more ioms.
-		 * TODO - support iomap refresh without fetching data again.
-		 */
-		if (current->iom.iom_nr_out > current->iom.iom_nr) {
-			daos_obj_fetch_t	*io_arg;
-			tse_task_t		*io_task = NULL;
-
-			rc = daos_task_create(DAOS_OPC_OBJ_FETCH,
-					      tse_task2sched(params->ptask),
-					      0, NULL, &io_task);
-			if (rc)
-				return rc;
-
-			io_arg = daos_task_get_args(io_task);
-			io_arg->oh	= params->oh;
-			io_arg->th	= args->th;
-			io_arg->dkey	= &current->dkey;
-			io_arg->nr	= 1;
-			io_arg->iods	= &current->iod;
-			io_arg->sgls	= sgl;
-
-			current->iom.iom_nr = current->iom.iom_nr_out;
-			current->iom.iom_nr_out = 0;
-			D_FREE(current->iom.iom_recxs);
-			D_ALLOC_ARRAY(current->iom.iom_recxs,
-				      current->iom.iom_nr);
-			if (current->iom.iom_recxs == NULL) {
-				tse_task_complete(io_task, -DER_NOMEM);
-				return -DER_NOMEM;
-			}
-			io_arg->ioms = &current->iom;
-			current->array_size = params->array_size;
-
-			rc = tse_task_register_cbs(io_task, NULL, NULL, 0,
-						   reprocess_iom_cb, &current,
-						   sizeof(current));
-			if (rc) {
-				tse_task_complete(io_task, rc);
-				return rc;
-			}
-
-			rc = tse_task_register_deps(params->ptask, 1, &io_task);
-			if (rc) {
-				tse_task_complete(io_task, rc);
-				return rc;
-			}
-
-			rc = tse_task_schedule(io_task, false);
-			if (rc) {
-				tse_task_complete(io_task, rc);
-				return rc;
-			}
-
-			goto next;
-		}
-
+		D_ASSERT(current->iom.iom_nr_out <= current->iom.iom_nr);
 		start_off = (current->dkey_val - 1) * current->chunk_size;
 
 		iom_nr = 0;
@@ -1318,18 +1238,18 @@ next:
 static int
 set_short_read_cb(tse_task_t *task, void *data)
 {
-	struct hole_params	*params;
+	struct hole_params	*params = daos_task_get_priv(task);
 	daos_array_io_t		*args;
 	int			i;
 	int			rc = task->dt_result;
 
+	D_ASSERT(params != NULL);
+
 	if (rc != 0) {
-		D_ERROR("Failed to get array size (%d)\n", rc);
-		return rc;
+		D_ERROR("Failed to get array size "DF_RC"\n", DP_RC(rc));
+		goto out;
 	}
 
-	params = daos_task_get_priv(task);
-	D_ASSERT(params != NULL);
 	args = daos_task_get_args(params->ptask);
 	D_ASSERT(args);
 
@@ -1354,11 +1274,9 @@ set_short_read_cb(tse_task_t *task, void *data)
 
 	/** memset holes to 0 */
 	rc = process_iomap(params, args);
-	if (rc)
-		return rc;
-
+out:
 	D_FREE(params);
-	return 0;
+	return rc;
 }
 
 static int
@@ -1375,8 +1293,8 @@ check_short_read_cb(tse_task_t *task, void *data)
 	int			rc = task->dt_result;
 
 	if (rc != 0) {
-		D_ERROR("Array Read Failed (%d)\n", rc);
-		return rc;
+		D_ERROR("Array Read Failed "DF_RC"\n", DP_RC(rc));
+		D_GOTO(err_params, rc);
 	}
 
 	D_ASSERT(params);
@@ -1461,12 +1379,7 @@ next:
 		/** memset all holes to 0 */
 		params->array_size = UINT64_MAX;
 		rc = process_iomap(params, args);
-		if (rc)
-			return rc;
-
-		tse_task_complete(task, 0);
-		D_FREE(params);
-		return 0;
+		D_GOTO(err_params, rc);
 	}
 
 	/** Schedule the get size to properly check for short reads */
@@ -1504,6 +1417,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	daos_size_t	num_records;
 	daos_off_t	record_i;
 	struct io_params *head = NULL;
+	bool		head_cb_registered = false;
 	daos_size_t	num_ios;
 	d_list_t	io_task_list;
 	daos_size_t	tot_num_records = 0;
@@ -1597,10 +1511,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 		/** allocate params for this dkey io */
 		D_ALLOC_PTR(params);
-		if (params == NULL) {
-			D_ERROR("Failed memory allocation\n");
+		if (params == NULL)
 			D_GOTO(err_stask, rc = -DER_NOMEM);
-		}
 		params->dkey_val = dkey_val;
 
 		/*
@@ -1641,7 +1553,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		sgl	= &params->sgl;
 		dkey	= &params->dkey;
 
-		params->akey_str	= '0';
+		params->akey_val	= '0';
 		params->user_sgl_used	= false;
 		params->cell_size	= array->cell_size;
 		params->chunk_size	= array->chunk_size;
@@ -1650,7 +1562,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 		/** Set integer dkey descriptor */
 		d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 		/** Set character akey descriptor - TODO: should be NULL*/
-		d_iov_set(&iod->iod_name, &params->akey_str, 1);
+		d_iov_set(&iod->iod_name, &params->akey_val, 1);
 		/** Initialize the rest of the IOD fields */
 		iod->iod_nr	= 0;
 		iod->iod_recxs	= NULL;
@@ -1676,13 +1588,13 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			daos_off_t	old_array_idx;
 			daos_recx_t	*new_recxs;
 
-			iod->iod_nr++;
-
 			/** add another element to recxs */
-			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs, iod->iod_nr);
-			if (new_recxs == NULL) {
+			D_REALLOC_ARRAY(new_recxs, iod->iod_recxs,
+					iod->iod_nr, iod->iod_nr + 1);
+			if (new_recxs == NULL)
 				D_GOTO(err_stask, rc = -DER_NOMEM);
-			}
+
+			iod->iod_nr++;
 			iod->iod_recxs = new_recxs;
 
 			/** set the record access for this range */
@@ -1770,7 +1682,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			rc = create_sgl(user_sgl, array->cell_size,
 					dkey_records, &cur_off, &cur_i, sgl);
 			if (rc != 0) {
-				D_ERROR("Failed to create sgl\n");
+				D_ERROR("Failed to create sgl "DF_RC"\n",
+					DP_RC(rc));
 				D_GOTO(err_stask, rc);
 			}
 		}
@@ -1785,8 +1698,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 					      tse_task2sched(task),
 					      0, NULL, &io_task);
 			if (rc != 0) {
-				D_ERROR("Fetch dkey "DF_U64" failed (%d)\n",
-					params->dkey_val, rc);
+				D_ERROR("Fetch dkey "DF_U64" failed "DF_RC"\n",
+					params->dkey_val, DP_RC(rc));
 				D_GOTO(err_iotask, rc);
 			}
 			io_arg = daos_task_get_args(io_task);
@@ -1799,10 +1712,9 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 
 			/** if this is a byte array, add ioms for hole mgmt */
 			if (array->byte_array) {
-				iom->iom_nr = iod->iod_nr * 2;
-				D_ALLOC_ARRAY(iom->iom_recxs, iom->iom_nr);
-				if (iom->iom_recxs == NULL)
-					D_GOTO(err_iotask, rc = -DER_NOMEM);
+				iom->iom_nr = 0;
+				iom->iom_recxs = NULL;
+				iom->iom_flags = DAOS_IOMF_DETAIL;
 				io_arg->ioms = iom;
 				rc = tse_task_register_deps(stask, 1, &io_task);
 				if (rc)
@@ -1821,8 +1733,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 					      tse_task2sched(task),
 					      0, NULL, &io_task);
 			if (rc != 0) {
-				D_ERROR("Update dkey "DF_U64" failed (%d)\n",
-					params->dkey_val, rc);
+				D_ERROR("Update dkey "DF_U64" failed "DF_RC"\n",
+					params->dkey_val, DP_RC(rc));
 				D_GOTO(err_iotask, rc);
 			}
 			io_arg = daos_task_get_args(io_task);
@@ -1846,6 +1758,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				       sizeof(head));
 	if (rc)
 		D_GOTO(err_iotask, rc);
+	head_cb_registered = true;
 
 	/*
 	 * If this is a byte array, schedule the get_size task with a prep
@@ -1859,10 +1772,8 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			struct hole_params	*sparams;
 
 			D_ALLOC_PTR(sparams);
-			if (sparams == NULL) {
-				D_ERROR("Failed memory allocation\n");
+			if (sparams == NULL)
 				D_GOTO(err_iotask, rc = -DER_NOMEM);
-			}
 
 			sparams->io_list	= head;
 			sparams->records_req    = tot_num_records;
@@ -1901,7 +1812,7 @@ err_stask:
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array)
 		tse_task_complete(stask, rc);
 err_task:
-	if (head)
+	if (head && !head_cb_registered)
 		tse_task_register_comp_cb(task, free_io_params_cb, &head,
 					  sizeof(head));
 	if (array)
@@ -1946,7 +1857,7 @@ struct key_query_props {
 	daos_key_t		dkey;
 	uint64_t		dkey_val;
 	daos_key_t		akey;
-	char			akey_str;
+	char			akey_val;
 	daos_recx_t		recx;
 	daos_size_t		*size;
 	tse_task_t		*ptask;
@@ -2011,8 +1922,8 @@ dc_array_get_size(tse_task_t *task)
 
 	*args->size = 0;
 
-	kqp->akey_str	= '0';
-	d_iov_set(&kqp->akey, &kqp->akey_str, 1);
+	kqp->akey_val	= '0';
+	d_iov_set(&kqp->akey, &kqp->akey_val, 1);
 	kqp->dkey_val	= 0;
 	d_iov_set(&kqp->dkey, &kqp->dkey_val, sizeof(uint64_t));
 	kqp->ptask	= task;
@@ -2056,10 +1967,8 @@ dc_array_get_size(tse_task_t *task)
 err_query_task:
 	tse_task_complete(query_task, rc);
 err_task:
-	if (kqp)
-		D_FREE(kqp);
-	if (query_task)
-		D_FREE(query_task);
+	D_FREE(kqp);
+	D_FREE(query_task);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);
@@ -2090,8 +1999,7 @@ free_set_size_cb(tse_task_t *task, void *data)
 {
 	struct set_size_props *props = *((struct set_size_props **)data);
 
-	if (props->val)
-		D_FREE(props->val);
+	D_FREE(props->val);
 	if (props->array)
 		array_decref(props->array);
 	D_FREE(props);
@@ -2110,10 +2018,8 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	int			rc;
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	params->dkey_val = dkey_val;
 	dkey = &params->dkey;
@@ -2150,8 +2056,7 @@ punch_key(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2173,21 +2078,19 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 		record_i + 1, num_records, dkey_val);
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	iod = &params->iod;
 	sgl = NULL;
-	params->akey_str = '0';
+	params->akey_val = '0';
 	params->user_sgl_used = false;
 	params->dkey_val = dkey_val;
 	dkey = &params->dkey;
 	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/* set descriptor for KV object */
-	d_iov_set(&iod->iod_name, &params->akey_str, 1);
+	d_iov_set(&iod->iod_name, &params->akey_val, 1);
 	iod->iod_nr = 1;
 	iod->iod_size = 0; /* 0 to punch */
 	iod->iod_type = DAOS_IOD_ARRAY;
@@ -2223,8 +2126,7 @@ punch_extent(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2311,8 +2213,7 @@ err:
 	if (io_task)
 		tse_task_complete(io_task, rc);
 out:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	return rc;
 }
 
@@ -2329,14 +2230,12 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	int			rc;
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	iod = &params->iod;
 	sgl = NULL;
-	params->akey_str = '0';
+	params->akey_val = '0';
 	params->user_sgl_used = false;
 	params->cell_size = cell_size;
 	params->dkey_val = dkey_val;
@@ -2345,7 +2244,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 	d_iov_set(dkey, &params->dkey_val, sizeof(uint64_t));
 
 	/* set descriptor for KV object */
-	d_iov_set(&iod->iod_name, &params->akey_str, 1);
+	d_iov_set(&iod->iod_name, &params->akey_val, 1);
 	iod->iod_nr = 1;
 	iod->iod_size = DAOS_REC_ANY;
 	iod->iod_type = DAOS_IOD_ARRAY;
@@ -2384,8 +2283,7 @@ check_record(daos_handle_t oh, daos_handle_t th, daos_size_t dkey_val,
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2403,16 +2301,14 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	int			rc;
 
 	D_ALLOC_PTR(params);
-	if (params == NULL) {
-		D_ERROR("Failed memory allocation\n");
+	if (params == NULL)
 		return -DER_NOMEM;
-	}
 
 	iod = &params->iod;
 	sgl = &params->sgl;
 	dkey = &params->dkey;
 
-	params->akey_str = '0';
+	params->akey_val = '0';
 	params->next = NULL;
 	params->user_sgl_used = false;
 	params->dkey_val = props->dkey_val;
@@ -2425,7 +2321,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 	d_iov_set(&sgl->sg_iovs[0], props->val, props->cell_size);
 
 	/* set descriptor for KV object */
-	d_iov_set(&iod->iod_name, &params->akey_str, 1);
+	d_iov_set(&iod->iod_name, &params->akey_val, 1);
 	iod->iod_nr = 1;
 	iod->iod_size = props->cell_size;
 	iod->iod_type = DAOS_IOD_ARRAY;
@@ -2462,8 +2358,7 @@ add_record(daos_handle_t oh, daos_handle_t th, struct set_size_props *props)
 
 	return rc;
 err:
-	if (params)
-		D_FREE(params);
+	D_FREE(params);
 	if (io_task)
 		tse_task_complete(io_task, rc);
 	return rc;
@@ -2535,17 +2430,17 @@ adjust_array_size_cb(tse_task_t *task, void *data)
 		args->sgl->sg_nr = 1;
 		d_iov_set(&args->sgl->sg_iovs[0], props->buf, ENUM_DESC_BUF);
 
-		rc = tse_task_reinit(task);
-		if (rc) {
-			D_ERROR("FAILED to reinit task\n");
-			return rc;
-		}
-
 		rc = tse_task_register_cbs(task, NULL, NULL, 0,
 					   adjust_array_size_cb, &props,
 					   sizeof(props));
 		if (rc) {
 			tse_task_complete(task, rc);
+			return rc;
+		}
+
+		rc = tse_task_reinit(task);
+		if (rc) {
+			D_ERROR("FAILED to reinit task\n");
 			return rc;
 		}
 
@@ -2592,8 +2487,8 @@ dc_array_set_size(tse_task_t *task)
 		num_records = array->chunk_size;
 		record_i = 0;
 	} else {
-		rc = compute_dkey(array, args->size-1, &num_records, &record_i,
-				  &dkey_val);
+		rc = compute_dkey(array, args->size - 1, &num_records,
+				  &record_i, &dkey_val);
 		if (rc) {
 			D_ERROR("Failed to compute dkey\n");
 			D_GOTO(err_task, rc);
@@ -2665,8 +2560,7 @@ dc_array_set_size(tse_task_t *task)
 err_enum_task:
 	tse_task_complete(enum_task, rc);
 err_task:
-	if (set_size_props)
-		D_FREE(set_size_props);
+	D_FREE(set_size_props);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);

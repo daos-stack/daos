@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package common
@@ -26,7 +9,6 @@ package common
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 )
 
@@ -50,15 +32,8 @@ func GetIndex(varIdx ...int32) int32 {
 // MockUUID returns mock UUID values for use in tests.
 func MockUUID(varIdx ...int32) string {
 	idx := GetIndex(varIdx...)
-	idxStr := strconv.Itoa(int(idx))
 
-	return fmt.Sprintf("%s-%s-%s-%s-%s",
-		strings.Repeat(idxStr, 8),
-		strings.Repeat(idxStr, 4),
-		strings.Repeat(idxStr, 4),
-		strings.Repeat(idxStr, 4),
-		strings.Repeat(idxStr, 12),
-	)
+	return fmt.Sprintf("%08d-%04d-%04d-%04d-%012d", idx, idx, idx, idx, idx)
 }
 
 // MockHostAddr returns mock tcp addresses for use in tests.
@@ -74,4 +49,38 @@ func MockHostAddr(varIdx ...int32) *net.TCPAddr {
 	}
 
 	return hostAddrs[idx]
+}
+
+// MockPCIAddr returns mock PCIAddr values for use in tests.
+func MockPCIAddr(varIdx ...int32) string {
+	idx := GetIndex(varIdx...)
+
+	return fmt.Sprintf("0000:%02d:00.0", idx)
+}
+
+func MockPCIAddrs(idxs ...int) (addrs []string) {
+	for _, i := range idxs {
+		addrs = append(addrs, MockPCIAddr(int32(i)))
+	}
+
+	return
+}
+
+// MockWriter is a mock io.Writer that can be used to inject errors and check
+// values written.
+type MockWriter struct {
+	builder  strings.Builder
+	WriteErr error
+}
+
+func (w *MockWriter) Write(p []byte) (int, error) {
+	if w.WriteErr != nil {
+		return 0, w.WriteErr
+	}
+	return w.builder.Write(p)
+}
+
+// GetWritten gets the string value written using Write.
+func (w *MockWriter) GetWritten() string {
+	return w.builder.String()
 }

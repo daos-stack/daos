@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +26,7 @@ struct test_t {
 	char		*t_remote_group_name;
 	uint32_t	 t_remote_group_size;
 	d_rank_t	 t_my_rank;
+	int		 t_use_cfg;
 	int		 t_save_cfg;
 	char		*t_cfg_path;
 	unsigned int	 t_srv_ctx_num;
@@ -91,7 +75,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	case TEST_OPC_SHUTDOWN:
-		g_shutdown = 1;
+		tc_progress_stop();
 		sem_post(&test_g.t_token_to_proceed);
 		break;
 	default:
@@ -107,10 +91,11 @@ void test_shutdown_handler(crt_rpc_t *rpc_req)
 	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
 	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
 
-	g_shutdown = 1;
+	tc_progress_stop();
 	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
 }
 
+/* The ordering here must match the opcode ordering in test_group_rpc.h */
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_no_timeout[] = {
 	{
 		.prf_flags	= 0,
@@ -119,6 +104,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_no_timeout[] = {
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
+		.prf_req_fmt	= NULL,
+		.prf_hdlr	= NULL,
+		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= 0,
 		.prf_req_fmt	= NULL,
 		.prf_hdlr	= NULL,
 		.prf_co_ops	= NULL,
@@ -173,6 +163,8 @@ ping_delay_reply(crt_group_t *remote_group, int rank, int tag, uint32_t delay)
 	/* send an rpc, print out reply */
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+
+	/* buffer will be freed in the call back function client_cb_common */
 }
 
 void
@@ -200,7 +192,7 @@ test_run(void)
 			   test_g.t_remote_group_name,
 			   &grp, &rank_list, &test_g.t_crt_ctx[0],
 			   &test_g.t_tid[0], test_g.t_srv_ctx_num,
-			   test_g.t_save_cfg, NULL);
+			   test_g.t_use_cfg, NULL);
 
 	rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -257,8 +249,8 @@ test_run(void)
 		}
 	}
 
-	D_FREE(rank_list->rl_ranks);
-	D_FREE(rank_list);
+	d_rank_list_free(rank_list);
+	rank_list = NULL;
 
 	if (test_g.t_save_cfg) {
 		rc = crt_group_detach(grp);
@@ -269,7 +261,7 @@ test_run(void)
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	g_shutdown = 1;
+	tc_progress_stop();
 
 	rc = pthread_join(test_g.t_tid[0], NULL);
 	if (rc != 0)
@@ -296,11 +288,14 @@ test_parse_args(int argc, char **argv)
 		{"attach_to", required_argument, 0, 'a'},
 		{"srv_ctx_num", required_argument, 0, 'c'},
 		{"cfg_path", required_argument, 0, 's'},
+		{"use_cfg", required_argument, 0, 'u'},
 		{0, 0, 0, 0}
 	};
 
+	test_g.t_use_cfg = true;
+
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:u:h:", long_options,
 				 &option_index);
 		if (rc == -1)
 			break;
@@ -334,7 +329,9 @@ test_parse_args(int argc, char **argv)
 			test_g.t_save_cfg = 1;
 			test_g.t_cfg_path = optarg;
 			break;
-
+		case 'u':
+			test_g.t_use_cfg = atoi(optarg);
+			break;
 		case '?':
 			return 1;
 		default:

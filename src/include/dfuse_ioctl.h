@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #ifndef __DFUSE_IOCTL_H__
 #define __DFUSE_IOCTL_H__
@@ -28,7 +11,7 @@
 
 #define DFUSE_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
 #define DFUSE_IOCTL_REPLY_BASE 0xC1 /* Number of the IOCTL.  Also arbitrary */
-#define DFUSE_IOCTL_VERSION 5       /* Version of ioctl protocol */
+#define DFUSE_IOCTL_VERSION 6       /* Version of ioctl protocol */
 
 #define DFUSE_IOCTL_REPLY_CORE (DFUSE_IOCTL_REPLY_BASE)
 
@@ -56,12 +39,12 @@ struct dfuse_hs_reply {
 	int		fsr_version;
 	size_t		fsr_pool_size;
 	size_t		fsr_cont_size;
+	size_t		fsr_dfs_size;
 };
 
 /* Query for global dfs/object handle sizes */
 struct dfuse_hsd_reply {
 	int		fsr_version;
-	size_t		fsr_dfs_size;
 	size_t		fsr_dobj_size;
 };
 

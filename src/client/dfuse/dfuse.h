@@ -1,28 +1,13 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DFUSE_H__
 #define __DFUSE_H__
+
+#include <semaphore.h>
 
 #include <fuse3/fuse.h>
 #include <fuse3/fuse_lowlevel.h>
@@ -34,82 +19,85 @@
 #include "daos.h"
 #include "daos_fs.h"
 
+#include "dfs_internal.h"
+
 #include "dfuse_common.h"
 
 struct dfuse_info {
 	struct fuse_session		*di_session;
-	struct dfuse_projection_info	*di_handle;
-	char				*di_pool;
-	char				*di_cont;
 	char				*di_group;
 	char				*di_mountpoint;
-	d_rank_list_t			*di_svcl;
+	uint32_t			di_thread_count;
 	bool				di_threaded;
 	bool				di_foreground;
-	bool				di_direct_io;
 	bool				di_caching;
-	/* List head of dfuse_pool entries */
-	d_list_t			di_dfp_list;
-	pthread_mutex_t			di_lock;
+	bool				di_wb_cache;
+};
+
+struct dfuse_projection_info {
+	struct dfuse_info		*dpi_info;
+	/** Hash table of open inodes, this matches kernel ref counts */
+	struct d_hash_table		dpi_iet;
+	/** Hash table of open pools */
+	struct d_hash_table		dpi_pool_table;
+	/** Next available inode number */
+	ATOMIC uint64_t			dpi_ino_next;
+	/* Event queue for async events */
+	daos_handle_t			dpi_eq;
+	/** Semaphore to signal event waiting for async thread */
+	sem_t				dpi_sem;
+	pthread_t			dpi_thread;
+	bool				dpi_shutdown;
 };
 
 /* Launch fuse, and do not return until complete */
 bool
-dfuse_launch_fuse(struct dfuse_info *dfuse_info,
+dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
 		  struct fuse_lowlevel_ops *flo,
-		  struct fuse_args *args,
-		  struct dfuse_projection_info *dfi_handle);
-
-struct dfuse_projection_info {
-	struct dfuse_info		*dpi_info;
-	uint32_t			dpi_max_read;
-	uint32_t			dpi_max_write;
-	/** Hash table of open inodes */
-	struct d_hash_table		dpi_iet;
-	struct d_hash_table		dpi_irt;
-	ATOMIC uint64_t			dpi_ino_next;
-};
-
-/*
- * Max number of 4k (fuse buffer size for readdir) blocks that need offset
- * tracking in the readdir implementation. Since in readdir implementation we
- * specify a larger buffer size (16k) to fetch the dir entries, the buffer we
- * track those entries on the OH needs to know where fuse_add_direntry() exceeds
- * the 4k size of a block that we return to readdir. In the next call to
- * readdir, we need to resume from that last offset before we exceeded that 4k
- * size. We define this max number of blocks to 8 (not 4 - 16k/4k) to account
- * for the possibility that we need to re-alloc that buffer on OH since
- * fuse_add_direntry() adds more metadata (the fuse direntry attributes) in
- * addition to the entry name, which could exceed 16K in some cases. We just
- * double the buffer size inthis case to 32k, and so we need a max of 8 offsets
- * to track in this case.
- */
-#define READDIR_BLOCKS 8
+		  struct fuse_args *args);
 
 struct dfuse_inode_entry;
 
-/** what is returned as the handle for fuse fuse_file_info on create/open */
+struct dfuse_readdir_entry {
+	/* Name of this directory entry */
+	char	dre_name[NAME_MAX + 1];
+
+	/* Offset of this directory entry */
+	off_t	dre_offset;
+
+	/* Offset of the next directory entry
+	 * A value of DFUSE_READDIR_EOD means end
+	 * of directory.
+	 */
+	off_t	dre_next_offset;
+};
+
+/** what is returned as the handle for fuse fuse_file_info on
+ * create/open/opendir
+ */
 struct dfuse_obj_hdl {
 	/** pointer to dfs_t */
-	dfs_t		*doh_dfs;
+	dfs_t				*doh_dfs;
 	/** the DFS object handle */
-	dfs_obj_t	*doh_obj;
+	dfs_obj_t			*doh_obj;
 	/** the inode entry for the file */
-	struct dfuse_inode_entry *doh_ie;
+	struct dfuse_inode_entry	*doh_ie;
+
+	/** True if caching is enabled for this file. */
+	bool				doh_caching;
+
+	/* Below here is only used for directories */
 	/** an anchor to track listing in readdir */
-	daos_anchor_t	doh_anchor;
-	/** current offset in dir stream (what is returned to fuse) */
-	off_t		doh_fuse_off;
-	/** current offset in dir stream (includes cached entries) */
-	off_t		doh_dir_off[READDIR_BLOCKS];
-	/** Buffer with all entries listed from DFS with the fuse dirents */
-	void		*doh_buf;
-	/** offset to start from of doh_buffer */
-	off_t		doh_start_off[READDIR_BLOCKS];
-	/** ending offset in doh_buf */
-	off_t		doh_cur_off;
-	/** current idx to process in doh_start_off */
-	uint32_t	doh_idx;
+	daos_anchor_t			doh_anchor;
+
+	/** Array of entries returned by dfs but not reported to kernel */
+	struct dfuse_readdir_entry	*doh_dre;
+	/** Current index into doh_dre array */
+	uint32_t			doh_dre_index;
+	/** Last index containing valid data */
+	uint32_t			doh_dre_last_index;
+	/** Next value from anchor */
+	uint32_t			doh_anchor_index;
 };
 
 struct dfuse_inode_ops {
@@ -121,14 +109,12 @@ struct dfuse_inode_ops {
 			struct stat *attr, int to_set);
 	void (*lookup)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		       const char *name);
-	void (*mkdir)(fuse_req_t req, struct dfuse_inode_entry *parent,
+	void (*mknod)(fuse_req_t req, struct dfuse_inode_entry *parent,
 		      const char *name, mode_t mode);
 	void (*opendir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			struct fuse_file_info *fi);
 	void (*releasedir)(fuse_req_t req, struct dfuse_inode_entry *inode,
 			   struct fuse_file_info *fi);
-	void (*readdir)(fuse_req_t req, struct dfuse_inode_entry *inode,
-			size_t size, off_t offset, struct fuse_file_info *fi);
 	void (*rename)(fuse_req_t req, struct dfuse_inode_entry *parent_inode,
 		       const char *name,
 		       struct dfuse_inode_entry *newparent_inode,
@@ -149,70 +135,134 @@ struct dfuse_inode_ops {
 	void (*statfs)(fuse_req_t req, struct dfuse_inode_entry *inode);
 };
 
+struct dfuse_event {
+	fuse_req_t	de_req;
+	daos_event_t	de_ev;
+	void		(*de_complete_cb)(struct dfuse_event *ev);
+	size_t		de_len;
+	d_iov_t		de_iov;
+	d_sg_list_t	de_sgl;
+};
+
 extern struct dfuse_inode_ops dfuse_dfs_ops;
 extern struct dfuse_inode_ops dfuse_cont_ops;
 extern struct dfuse_inode_ops dfuse_pool_ops;
 
+/** Pool information
+ *
+ * This represents a pool that DFUSE is accessing.  All pools contain
+ * a hash table of open containers.
+ *
+ * uuid may be NULL for root inode where there is no pool.
+ *
+ */
 struct dfuse_pool {
-	daos_pool_info_t	dfp_pool_info;
+	/** UUID of the pool */
 	uuid_t			dfp_pool;
+	/** Pool handle */
 	daos_handle_t		dfp_poh;
-	/* List of dfuse_pool entries in the process */
-	d_list_t		dfp_list;
-	/* List head of dfuse_dfs entries using this pool */
-	d_list_t		dfp_dfs_list;
+	/** Hash table entry in dpi_pool_table */
+	d_list_t		dfp_entry;
+	/** Hash table reference count */
+	ATOMIC uint		dfp_ref;
+
+	/** Hash table of open containers in pool */
+	struct d_hash_table	dfp_cont_table;
 };
 
-struct dfuse_dfs {
+/** Container information
+ *
+ * This represents a container that DFUSE is accessing.  All containers
+ * will have a valid dfs_handle.
+ *
+ * Note this struct used to be dfuse_dfs, hence the dfs_prefix for it's
+ * members.
+ *
+ * uuid may be NULL for pool inodes.
+ */
+struct dfuse_cont {
+	/** Fuse handlers to use for this container */
 	struct dfuse_inode_ops	*dfs_ops;
+
+	/** Pointer to parent pool, where a reference is held */
 	struct dfuse_pool	*dfs_dfp;
+
+	/** dfs mount handle */
 	dfs_t			*dfs_ns;
+
+	/** UUID of the container */
 	uuid_t			dfs_cont;
+
+	/** Container handle */
 	daos_handle_t		dfs_coh;
-	daos_cont_info_t	dfs_co_info;
-	ino_t			dfs_root;
-	double			dfs_attr_timeout;
-	/* List of dfuse_dfs entries in the dfuse_pool */
-	d_list_t		dfs_list;
+
+	/** Hash table entry entry in dfp_cont_table */
+	d_list_t		dfs_entry;
+	/** Hash table reference count */
+	ATOMIC uint		dfs_ref;
+
+	/** Inode number of the root of this container */
+	ino_t			dfs_ino;
+
+	/** Caching information */
+	double			dfc_attr_timeout;
+	double			dfc_dentry_timeout;
+	double			dfc_dentry_dir_timeout;
+	double			dfc_ndentry_timeout;
+	bool			dfc_data_caching;
+	bool			dfc_direct_io_disable;
 	pthread_mutex_t		dfs_read_mutex;
 };
 
-/*
- * struct dfuse_info contains list of dfuse_pool
- *  One of these per process.
- * struct dfuse_pool contains list of dfuse_dfs
- *  may or may not have a pool
- *  has one or more dfs.
- * struct dfuse_dfs has callbacks.
- *  may or may not have a container
- *  has one or more inodes
+void
+dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
+
+int
+dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
+			 struct dfuse_pool *dfp,
+			 const char *label,
+			 struct dfuse_cont **_dfs);
+
+int
+dfuse_cont_open(struct dfuse_projection_info *fs_handle,
+		struct dfuse_pool *dfp, uuid_t *cont,
+		struct dfuse_cont **_dfs);
+
+int
+dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
+			const char *label,
+			struct dfuse_pool **_dfp);
+
+int
+dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
+		struct dfuse_pool **_dfp);
+
+/* Xattr namespace used by dfuse.
  *
- * struct dfuse_inode_entry is an inode.
- *  links to dfuse_dfs
- *
- * Every inode needs a dfs.
- *
- * In normal use inodes get evicted but every inode holds a ref on it's parent
- * so there's no need for inodes to hold a ref on their dfs, just the root.
- * During shutdown inodes can be processed in any order, which means we can't
- * just free the DFS when we release the root inode (unless we don't reference
- * the dfs in ie_close())
- *
+ * Extended attributes with this prefix can only be set by dfuse itself
+ * or directly though dfs/daos but not through dfuse.
  */
+#define DFUSE_XATTR_PREFIX "user.dfuse"
 
 /* dfuse_core.c */
 
-/* Init a dfs struct and copy essential data */
-void
-dfuse_dfs_init(struct dfuse_dfs *dfs, struct dfuse_dfs *parent);
+/* Setup internal structures */
+int
+dfuse_fs_init(struct dfuse_info *dfuse_info,
+	      struct dfuse_projection_info **fsh);
 
 /* Start a dfuse projection */
 int
-dfuse_start(struct dfuse_info *dfuse_info, struct dfuse_dfs *dfs);
+dfuse_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs);
 
 /* Drain and free resources used by a projection */
 int
-dfuse_destroy_fuse(struct dfuse_projection_info *fs_handle);
+dfuse_fs_fini(struct dfuse_projection_info *fs_handle);
+
+/* dfuse_thread.c */
+
+extern int
+dfuse_loop(struct dfuse_info *dfuse_info);
 
 struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 
@@ -230,6 +280,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
  * so set LARGEFILE here for debugging
  */
 #define LARGEFILE 0100000
+#define FMODE_EXEC 0x20
 #define LOG_FLAGS(HANDLE, INPUT) do {					\
 		int _flag = (INPUT);					\
 		LOG_MODE((HANDLE), _flag, O_APPEND);			\
@@ -251,14 +302,18 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 		LOG_MODE((HANDLE), _flag, O_PATH);			\
 		LOG_MODE((HANDLE), _flag, O_SYNC);			\
 		LOG_MODE((HANDLE), _flag, O_TRUNC);			\
+		LOG_MODE((HANDLE), _flag, O_NOFOLLOW);			\
+		LOG_MODE((HANDLE), _flag, FMODE_EXEC);			\
 		if (_flag)						\
-			DFUSE_TRA_ERROR(HANDLE, "Flags 0%o", _flag);	\
+			DFUSE_TRA_ERROR(HANDLE, "Flags %#o", _flag);	\
 	} while (0)
 
 /** Dump the file mode to the logfile. */
 #define LOG_MODES(HANDLE, INPUT) do {					\
 		int _flag = (INPUT) & S_IFMT;				\
 		LOG_MODE((HANDLE), _flag, S_IFREG);			\
+		LOG_MODE((HANDLE), _flag, S_IFDIR);			\
+		LOG_MODE((HANDLE), _flag, S_IFIFO);			\
 		LOG_MODE((HANDLE), _flag, S_ISUID);			\
 		LOG_MODE((HANDLE), _flag, S_ISGID);			\
 		LOG_MODE((HANDLE), _flag, S_ISVTX);			\
@@ -281,7 +336,7 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"Invalid call to fuse_reply_err: 0"); \
 			__err = EIO;					\
 		}							\
-		if (__err == ENOTSUP || __err == EIO || __err == EINVAL) \
+		if (__err == EIO || __err == EINVAL) \
 			DFUSE_TRA_WARNING(desc, "Returning %d '%s'",	\
 					  __err, strerror(__err));	\
 		else							\
@@ -308,24 +363,25 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 #define DFUSE_REPLY_ATTR(ie, req, attr)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(ie, "Returning attr mode %#x dir:%d",	\
-				(attr)->st_mode,			\
-				S_ISDIR(((attr)->st_mode)));		\
+		DFUSE_TRA_DEBUG(ie,					\
+				"Returning attr inode %#lx mode %#o",	\
+				(attr)->st_ino,				\
+				(attr)->st_mode);			\
 		__rc = fuse_reply_attr(req, attr,			\
-				(ie)->ie_dfs->dfs_attr_timeout);	\
+				(ie)->ie_dfs->dfc_attr_timeout);	\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_attr returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#define DFUSE_REPLY_READLINK(req, path)					\
+#define DFUSE_REPLY_READLINK(ie, req, path)				\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(req, "Returning path '%s'", path);	\
+		DFUSE_TRA_DEBUG(ie, "Returning target '%s'", path);	\
 		__rc = fuse_reply_readlink(req, path);			\
 		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(req,				\
+			DFUSE_TRA_ERROR(ie,				\
 					"fuse_reply_readlink returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
@@ -353,30 +409,11 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					__rc, strerror(-__rc));		\
 	} while (0)
 
-#if HAVE_CACHE_READDIR
-
 #define DFUSE_REPLY_OPEN(oh, req, _fi)					\
 	do {								\
 		int __rc;						\
-		DFUSE_TRA_DEBUG(oh, "Returning open");		\
-		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
-			(_fi)->keep_cache = 1;				\
-			(_fi)->cache_readdir = 1;			\
-		}							\
-		__rc = fuse_reply_open(req, _fi);			\
-		if (__rc != 0)						\
-			DFUSE_TRA_ERROR(oh,				\
-					"fuse_reply_open returned %d:%s", \
-					__rc, strerror(-__rc));		\
-	} while (0)
-
-#else
-
-#define DFUSE_REPLY_OPEN(oh, req, _fi)					\
-	do {								\
-		int __rc;						\
-		DFUSE_TRA_DEBUG(oh, "Returning open");		\
-		if ((oh)->doh_ie->ie_dfs->dfs_attr_timeout > 0) {	\
+		DFUSE_TRA_DEBUG(oh, "Returning open");			\
+		if ((oh)->doh_ie->ie_dfs->dfc_data_caching) {		\
 			(_fi)->keep_cache = 1;				\
 		}							\
 		__rc = fuse_reply_open(req, _fi);			\
@@ -385,8 +422,6 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 					"fuse_reply_open returned %d:%s", \
 					__rc, strerror(-__rc));		\
 	} while (0)
-
-#endif
 
 #define DFUSE_REPLY_CREATE(desc, req, entry, fi)			\
 	do {								\
@@ -403,10 +438,9 @@ struct fuse_lowlevel_ops *dfuse_get_fuse_ops();
 	do {								\
 		int __rc;						\
 		DFUSE_TRA_DEBUG(desc,					\
-				"Returning entry inode %li mode %#x dir:%d", \
+				"Returning entry inode %#lx mode %#o",	\
 				(entry).attr.st_ino,			\
-				(entry).attr.st_mode,			\
-				S_ISDIR((entry).attr.st_mode));		\
+				(entry).attr.st_mode);			\
 		__rc = fuse_reply_entry(req, &entry);			\
 		if (__rc != 0)						\
 			DFUSE_TRA_ERROR(desc,				\
@@ -455,6 +489,11 @@ struct dfuse_inode_entry {
 
 	dfs_obj_t		*ie_obj;
 
+	/** DAOS object ID of the dfs object.  Used for uniquely identifying
+	 * files
+	 */
+	daos_obj_id_t		ie_oid;
+
 	/** The name of the entry, relative to the parent.
 	 * This would have been valid when the inode was first observed
 	 * however may be incorrect at any point after that.  It may not
@@ -471,7 +510,7 @@ struct dfuse_inode_entry {
 	 */
 	fuse_ino_t		ie_parent;
 
-	struct dfuse_dfs	*ie_dfs;
+	struct dfuse_cont	*ie_dfs;
 
 	/** Hash table of inodes
 	 * All valid inodes are kept in a hash table, using the hash table
@@ -491,47 +530,37 @@ struct dfuse_inode_entry {
 	/** file was truncated from 0 to a certain size */
 	bool			ie_truncated;
 
-	/** Set to true if this is the root of the container */
 	bool			ie_root;
 };
 
-/**
- * Inode record.
+/* Generate the inode to use for this dfs object.  This is generating a single
+ * 64 bit number from three 64 bit numbers so will not be perfect but does
+ * avoid most conflicts.
  *
- * Describes all inodes observed by the system since start, including all inodes
- * known by the kernel, and all inodes that have been in the past.
- *
- * This is needed to be able to generate 64 bit inode numbers from 128 bit DAOS
- * objects, to support multiple containers/pools within a filesystem and to
- * provide consistent inode numbering for the same file over time, even if the
- * kernel cache is dropped, for example because of memory pressure.
+ * Take the sequence parts of both the hi and lo object id and put them in
+ * different parts of the inode, then or in the inode number of the root
+ * of this dfs object, to avoid conflicts across containers.
  */
-struct dfuse_inode_record_id {
-	struct dfuse_dfs	*irid_dfs;
-	daos_obj_id_t		irid_oid;
+static inline void
+dfuse_compute_inode(struct dfuse_cont *dfs,
+		    daos_obj_id_t *oid,
+		    ino_t *_ino)
+{
+	uint64_t hi;
+
+	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_ino << 48);
+
+	*_ino = hi ^ (oid->lo << 32);
 };
 
-struct dfuse_inode_record {
-	struct dfuse_inode_record_id	ir_id;
-	d_list_t			ir_htl;
-	ino_t				ir_ino;
-};
-
-/* dfuse_inode.c */
+extern char *duns_xattr_name;
 
 int
-dfuse_lookup_inode(struct dfuse_projection_info *fs_handle,
-		   struct dfuse_dfs *dfs,
-		   daos_obj_id_t *oid,
-		   ino_t *_ino);
-
-int
-dfuse_check_for_inode(struct dfuse_projection_info *fs_handle,
-		      struct dfuse_dfs *dfs,
-		      struct dfuse_inode_entry **_entry);
+check_for_uns_ep(struct dfuse_projection_info *fs_handle,
+		 struct dfuse_inode_entry *ie, char *attr, daos_size_t len);
 
 void
-ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
+dfuse_ie_close(struct dfuse_projection_info *, struct dfuse_inode_entry *);
 
 /* ops/...c */
 
@@ -551,7 +580,7 @@ void
 dfuse_cb_readlink(fuse_req_t, fuse_ino_t);
 
 void
-dfuse_cb_mkdir(fuse_req_t, struct dfuse_inode_entry *,
+dfuse_cb_mknod(fuse_req_t, struct dfuse_inode_entry *,
 	       const char *, mode_t);
 
 void
@@ -581,15 +610,14 @@ dfuse_cb_unlink(fuse_req_t, struct dfuse_inode_entry *,
 		const char *);
 
 void
-dfuse_cb_readdir(fuse_req_t, struct dfuse_inode_entry *, size_t, off_t,
-		 struct fuse_file_info *);
+dfuse_cb_readdir(fuse_req_t, struct dfuse_obj_hdl *, size_t, off_t, bool);
 
 void
 dfuse_cb_rename(fuse_req_t, struct dfuse_inode_entry *, const char *,
 		struct dfuse_inode_entry *, const char *, unsigned int);
 
 void
-dfuse_cb_write(fuse_req_t, fuse_ino_t, const char *, size_t, off_t,
+dfuse_cb_write(fuse_req_t, fuse_ino_t, struct fuse_bufvec *, off_t,
 	       struct fuse_file_info *);
 
 void
@@ -616,9 +644,15 @@ dfuse_cb_setattr(fuse_req_t, struct dfuse_inode_entry *, struct stat *, int);
 void
 dfuse_cb_statfs(fuse_req_t, struct dfuse_inode_entry *);
 
+#ifdef FUSE_IOCTL_USE_INT
+void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+		    struct fuse_file_info *fi, unsigned int flags,
+		    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#else
 void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 		    struct fuse_file_info *fi, unsigned int flags,
 		    const void *in_buf, size_t in_bufsz, size_t out_bufsz);
+#endif
 
 /* Return inode information to fuse
  *
@@ -628,6 +662,7 @@ void
 dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct dfuse_inode_entry *inode,
 		  struct fuse_file_info *fi_out,
+		  bool is_new,
 		  fuse_req_t req);
 
 /* dfuse_cont.c */
@@ -636,7 +671,7 @@ dfuse_cont_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		  const char *name);
 
 void
-dfuse_cont_mkdir(fuse_req_t req, struct dfuse_inode_entry *parent,
+dfuse_cont_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 		 const char *name, mode_t mode);
 
 /* dfuse_pool.c */

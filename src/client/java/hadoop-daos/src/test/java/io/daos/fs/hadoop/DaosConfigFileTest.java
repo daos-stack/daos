@@ -1,19 +1,5 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos.fs.hadoop;
@@ -58,7 +44,7 @@ public class DaosConfigFileTest {
   @Test
   public void testFsConfigNamesSize() throws Exception {
     DaosConfigFile cf = DaosConfigFile.getInstance();
-    Assert.assertEquals(10, cf.getFsConfigNames().size());
+    Assert.assertEquals(12, cf.getFsConfigNames().size());
   }
 
   @Test
@@ -88,7 +74,7 @@ public class DaosConfigFileTest {
     Configuration hadoopConfig = new Configuration(false);
     hadoopConfig.set(Constants.DAOS_POOL_UUID, "hadoop pid");
     hadoopConfig.set(Constants.DAOS_CONTAINER_UUID, "hadoop cid");
-    hadoopConfig.set(Constants.DAOS_PRELOAD_SIZE, "9876");
+    hadoopConfig.set(Constants.DAOS_READ_MINIMUM_SIZE, "9876");
 
     DaosConfigFile config = DaosConfigFile.getInstance();
     try {
@@ -104,14 +90,14 @@ public class DaosConfigFileTest {
     Configuration hadoopConfig = new Configuration(false);
     hadoopConfig.set(Constants.DAOS_POOL_UUID, "hadoop pid");
     hadoopConfig.set(Constants.DAOS_CONTAINER_UUID, "hadoop cid");
-    hadoopConfig.set(Constants.DAOS_PRELOAD_SIZE, "9876");
+    hadoopConfig.set(Constants.DAOS_READ_MINIMUM_SIZE, "9876");
     hadoopConfig.set(Constants.DAOS_CHUNK_SIZE, "45678");
 
     DaosConfigFile config = DaosConfigFile.getInstance();
     hadoopConfig = config.parseConfig("pkeyc3", hadoopConfig);
     Assert.assertEquals("hadoop pid", hadoopConfig.get(Constants.DAOS_POOL_UUID));
     Assert.assertEquals("hadoop cid", hadoopConfig.get(Constants.DAOS_CONTAINER_UUID));
-    Assert.assertEquals("9876", hadoopConfig.get(Constants.DAOS_PRELOAD_SIZE));
+    Assert.assertEquals("9876", hadoopConfig.get(Constants.DAOS_READ_MINIMUM_SIZE));
     Assert.assertEquals("0", hadoopConfig.get(Constants.DAOS_POOL_SVC));
   }
 
@@ -164,7 +150,7 @@ public class DaosConfigFileTest {
       Assert.assertEquals("234567", hadoopConfig.get(Constants.DAOS_WRITE_BUFFER_SIZE));
       Assert.assertEquals("1234567", hadoopConfig.get(Constants.DAOS_BLOCK_SIZE));
       Assert.assertEquals("1048", hadoopConfig.get(Constants.DAOS_CHUNK_SIZE));
-      Assert.assertEquals("-1", hadoopConfig.get(Constants.DAOS_PRELOAD_SIZE));
+      Assert.assertEquals("-1", hadoopConfig.get(Constants.DAOS_READ_MINIMUM_SIZE));
 
       DaosConfigFile config2 = constructor.newInstance();
       Assert.assertNotNull(config2.getFromDaosFile(Constants.DAOS_DEFAULT_FS));
@@ -172,7 +158,7 @@ public class DaosConfigFileTest {
       Configuration hadoopConfig2 = new Configuration(false);
       hadoopConfig2.set(Constants.DAOS_READ_BUFFER_SIZE, "765432");
       hadoopConfig2.set(Constants.DAOS_CONTAINER_UUID, "hc1 uuid");
-      hadoopConfig2.set(Constants.DAOS_PRELOAD_SIZE, "24567");
+      hadoopConfig2.set(Constants.DAOS_READ_MINIMUM_SIZE, "24567");
       hadoopConfig2 = config2.parseConfig("c2", hadoopConfig2);
       Assert.assertEquals("uuid of pool", hadoopConfig2.get(Constants.DAOS_POOL_UUID));
       Assert.assertEquals("hc1 uuid", hadoopConfig2.get(Constants.DAOS_CONTAINER_UUID));
@@ -180,7 +166,7 @@ public class DaosConfigFileTest {
       Assert.assertEquals("234567", hadoopConfig2.get(Constants.DAOS_WRITE_BUFFER_SIZE));
       Assert.assertEquals("1234567", hadoopConfig2.get(Constants.DAOS_BLOCK_SIZE));
       Assert.assertEquals("1048", hadoopConfig2.get(Constants.DAOS_CHUNK_SIZE));
-      Assert.assertEquals("24567", hadoopConfig2.get(Constants.DAOS_PRELOAD_SIZE));
+      Assert.assertEquals("24567", hadoopConfig2.get(Constants.DAOS_READ_MINIMUM_SIZE));
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -204,7 +190,7 @@ public class DaosConfigFileTest {
       Assert.assertEquals("234567", hadoopConfig.get(Constants.DAOS_WRITE_BUFFER_SIZE));
       Assert.assertEquals("1234567", hadoopConfig.get(Constants.DAOS_BLOCK_SIZE));
       Assert.assertEquals("1048", hadoopConfig.get(Constants.DAOS_CHUNK_SIZE));
-      Assert.assertEquals("4194304", hadoopConfig.get(Constants.DAOS_PRELOAD_SIZE));
+      Assert.assertEquals("4194304", hadoopConfig.get(Constants.DAOS_READ_MINIMUM_SIZE));
 
       DaosConfigFile config2 = constructor.newInstance();
       Assert.assertNotNull(config2.getFromDaosFile(Constants.DAOS_DEFAULT_FS));

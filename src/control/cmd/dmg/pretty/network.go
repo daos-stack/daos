@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package pretty
@@ -32,18 +15,19 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
 )
 
-type hfiMap map[uint32]map[string][]string
+type hfiMap map[uint]map[string][]string
 
 func (h hfiMap) addInterface(fi *control.HostFabricInterface) {
-	if _, ok := h[fi.NumaNode]; !ok {
-		h[fi.NumaNode] = make(map[string][]string)
+	nn := uint(fi.NumaNode)
+	if _, ok := h[nn]; !ok {
+		h[nn] = make(map[string][]string)
 	}
-	h[fi.NumaNode][fi.Provider] = append(h[fi.NumaNode][fi.Provider], fi.Device)
+	h[nn][fi.Provider] = append(h[nn][fi.Provider], fi.Device)
 }
 
 // PrintHostFabricMap generates a human-readable representation of the supplied
 // HostFabricMap and writes it to the supplied io.Writer.
-func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...control.PrintConfigOption) error {
+func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...PrintConfigOption) error {
 	if len(hfm) == 0 {
 		return nil
 	}
@@ -56,7 +40,7 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...contro
 
 	for _, key := range hfm.Keys() {
 		hfs := hfm[key]
-		hosts := control.GetPrintHosts(hfs.HostSet.RangedString(), opts...)
+		hosts := getPrintHosts(hfs.HostSet.RangedString(), opts...)
 		lineBreak := strings.Repeat("-", len(hosts))
 		iw := txtfmt.NewIndentWriter(ew, txtfmt.WithPadCount(4))
 		fmt.Fprintf(ew, "%s\n%s\n%s\n", lineBreak, hosts, lineBreak)
@@ -83,7 +67,7 @@ func PrintHostFabricMap(hfm control.HostFabricMap, out io.Writer, opts ...contro
 				table = append(table, row)
 			}
 
-			fmt.Fprintf(iwTable, fmt.Sprintf("%s", formatter.Format(table)))
+			fmt.Fprint(iwTable, formatter.Format(table))
 			fmt.Fprintln(ew)
 		}
 	}

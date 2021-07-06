@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * This file is part of common DAOS library.
@@ -47,7 +30,10 @@ struct tse_task_private {
 	/* links to scheduler */
 	d_list_t			 dtp_list;
 
-	/* links to tasks which dependent on it */
+	/* time to start running this task */
+	uint64_t			 dtp_wakeup_time;
+
+	/* list of tasks that depend on this task */
 	d_list_t			 dtp_dep_list;
 
 	/* daos prepare task callback list */
@@ -107,10 +93,13 @@ struct tse_task_cb {
 struct tse_sched_private {
 	/* lock to protect schedule status and sub task list */
 	pthread_mutex_t dsp_lock;
+	/* lock to protect sub task's dtp_comp_cb_list */
+	pthread_mutex_t dsp_comp_lock;
 
 	/* The task will be added to init list when it is initially
-	 * added to scheduler.
-	 **/
+	 * added to scheduler without any delay. A task with a delay
+	 * will be added to dsp_sleeping_list.
+	 */
 	d_list_t	dsp_init_list;
 
 	/* The task will be moved to complete list after the
@@ -122,6 +111,9 @@ struct tse_sched_private {
 	 * The task running list.
 	 **/
 	d_list_t	dsp_running_list;
+
+	/* list of sleeping tasks sorted by dtp_wakeup_time */
+	d_list_t	dsp_sleeping_list;
 
 	/* the list for complete callback */
 	d_list_t	dsp_comp_cb_list;

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -40,20 +23,75 @@ extern "C" {
 #define DAOS_COND_KEY_INSERT	DAOS_COND_DKEY_INSERT
 /* Conditional Op: Update key if it exists, fail otherwise */
 #define DAOS_COND_KEY_UPDATE	DAOS_COND_DKEY_UPDATE
-/* Conditional Op: Fetch key if it exists, fail otherwise */
-#define DAOS_COND_KEY_FETCH	DAOS_COND_DKEY_FETCH
-/* Conditional Op: Punch key if it exists, fail otherwise */
-#define DAOS_COND_KEY_PUNCH	DAOS_COND_DKEY_PUNCH
+/* Conditional Op: Get key if it exists, fail otherwise */
+#define DAOS_COND_KEY_GET	DAOS_COND_DKEY_FETCH
+/* Conditional Op: Remove key if it exists, fail otherwise */
+#define DAOS_COND_KEY_REMOVE	DAOS_COND_PUNCH
 
 /**
- * Insert or update a single object KV pair. The key specified will be mapped to
- * a dkey in DAOS. The object akey will be the same as the dkey. If a value
- * existed before it will be overwritten (punched first if not previously an
- * atomic value) with the new atomic value described by the sgl.
+ * Open a KV object. This is a local operation (no RPC involved).
+ * The feat bits in the oid must set DAOS_OF_KV_FLAT.
+ *
+ * \param[in]	coh	Container open handle.
+ * \param[in]	oid	Object ID. It is required that the feat for dkey type
+ *			be set to DAOS_OF_KV_FLAT.
+ * \param[in]	mode	Open mode: DAOS_OO_RO/RW
+ * \param[out]	oh	Returned kv object open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_kv_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
+	     daos_handle_t *oh, daos_event_t *ev);
+
+/**
+ * Close an opened KV object.
+ *
+ * \param[in]	oh	KV object open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ */
+int
+daos_kv_close(daos_handle_t oh, daos_event_t *ev);
+
+/**
+ * Destroy the kV object by punching all data (keys) in the kv object.
+ * daos_obj_punch() is called underneath. The oh still needs to be closed with a
+ * call to daos_kv_close().
+ *
+ * \param[in]	oh	KV object open handle.
+ * \param[in]	th	Transaction handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_HDL	Invalid object open handle
+ *			-DER_INVAL	Invalid parameter
+ */
+int
+daos_kv_destroy(daos_handle_t oh, daos_handle_t th, daos_event_t *ev);
+
+/**
+ * Insert or update a single object KV pair. If a value existed before it will
+ * be overwritten (punched first if not previously an atomic value) with the new
+ * atomic value described by the sgl.
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	flags	Update flags (currently ignored).
+ * \param[in]	flags	Update flags.
  * \param[in]	key	Key associated with the update operation.
  * \param[in]	size	Size of the buffer to be inserted as an atomic val.
  * \param[in]	buf	Pointer to user buffer of the atomic value.
@@ -78,7 +116,7 @@ daos_kv_put(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	flags	Fetch flags (currently ignored).
+ * \param[in]	flags	Fetch flags.
  * \param[in]	key	key associated with the update operation.
  * \param[in,out]
  *		size	[in]: Size of the user buf. if the size is unknown, set
@@ -106,7 +144,7 @@ daos_kv_get(daos_handle_t oh, daos_handle_t th, uint64_t flags, const char *key,
  *
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Transaction handle.
- * \param[in]	flags	Remove flags (currently ignored).
+ * \param[in]	flags	Remove flags.
  * \param[in]	key	Key to be punched/removed.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.

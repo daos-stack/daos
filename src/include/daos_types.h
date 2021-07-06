@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS Types and Functions Common to Layers/Components
@@ -81,41 +64,7 @@ typedef struct {
 	uint8_t		da_buf[DAOS_ANCHOR_BUF_MAX];
 } daos_anchor_t;
 
-static inline void
-daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
-{
-	anchor->da_flags = flags;
-}
-
-static inline uint32_t
-daos_anchor_get_flags(daos_anchor_t *anchor)
-{
-	return anchor->da_flags;
-}
-
-static inline void
-daos_anchor_set_zero(daos_anchor_t *anchor)
-{
-	anchor->da_type = DAOS_ANCHOR_TYPE_ZERO;
-}
-
-static inline void
-daos_anchor_set_eof(daos_anchor_t *anchor)
-{
-	anchor->da_type = DAOS_ANCHOR_TYPE_EOF;
-}
-
-static inline bool
-daos_anchor_is_zero(daos_anchor_t *anchor)
-{
-	return anchor->da_type == DAOS_ANCHOR_TYPE_ZERO;
-}
-
-static inline bool
-daos_anchor_is_eof(daos_anchor_t *anchor)
-{
-	return anchor->da_type == DAOS_ANCHOR_TYPE_EOF;
-}
+#define DAOS_ANCHOR_INIT	((daos_anchor_t){DAOS_ANCHOR_TYPE_ZERO})
 
 /** Generic handle for various DAOS components like container, object, etc. */
 typedef struct {
@@ -235,8 +184,22 @@ enum {
 	DAOS_HTYPE_OBJ		= 7, /**< object */
 	DAOS_HTYPE_ARRAY	= 9, /**< array */
 	DAOS_HTYPE_TX		= 11, /**< transaction */
+	DAOS_HTYPE_KV		= 13, /**< KV */
 	/* Must enlarge D_HTYPE_BITS to add more types */
 };
+
+/**
+ * ID of an object, 128 bits
+ * The high 32-bit of daos_obj_id_t::hi are reserved for DAOS, the rest is
+ * provided by the user and assumed to be unique inside a container.
+ *
+ * See daos_obj.h for more details
+ * It is put here because it's almost used by everyone.
+ */
+typedef struct {
+	uint64_t	lo;
+	uint64_t	hi;
+} daos_obj_id_t;
 
 #if defined(__cplusplus)
 }

@@ -1,163 +1,268 @@
-# Copyright (C) 2018-2020 Intel Corporation
+# Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted for any purpose (including commercial purposes)
-# provided that the following conditions are met:
-#
-# 1. Redistributions of source code must retain the above copyright notice,
-#    this list of conditions, and the following disclaimer.
-#
-# 2. Redistributions in binary form must reproduce the above copyright notice,
-#    this list of conditions, and the following disclaimer in the
-#    documentation and/or materials provided with the distribution.
-#
-# 3. In addition, redistributions of modified forms of the source or binary
-#    code must carry prominent notices stating that the original code was
-#    changed and the date of the change.
-#
-#  4. All publications or advertising materials mentioning features or use of
-#     this software are asked, but not required, to acknowledge that it was
-#     developed by Intel Corporation and credit the contributors.
-#
-# 5. Neither the name of Intel Corporation, nor the name of any Contributor
-#    may be used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
-# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
-# THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#
-# 'recipe' for Docker to build an image of centOS-based
+# 'recipe' for Docker to build an image of Leap based
 # environment for building the DAOS project.
 #
 
 # Pull base image
 FROM opensuse/leap:15.2
-MAINTAINER <daos@daos.groups.io>
+LABEL maintainer="daos@daos.groups.io"
 
-# Build arguments can be set via --build-arg
-# use same UID as host and default value of 1000 if not specified
+# Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
+ARG CB0
+
+# If a local distro repository is supplied, then we should use it
+# and disable using the distro repositories that can be mirrored.
+# The Docker image starts out with the DISTRO provided GPG keys
+# on the disk, but not installed.  These must be installed before
+# adding any repo that needs GPG keys but does not provide meta
+# data for installing those keys.
+ARG REPO_URL
+ARG REPO_DISTRO
+RUN if [ -n "${REPO_DISTRO}" ]; then                                           \
+      rm -f /etc/zypp/repos.d/*.repo &&                                        \
+      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
+            ${REPO_URL}${REPO_DISTRO}/ daos-stack-distro-group-repo &&         \
+      zypper --non-interactive modifyrepo --gpgcheck-allow-unsigned-repo       \
+             daos-stack-distro-group-repo &&                                   \
+      zypper clean --all;                                                      \
+    fi
+
+# If a local DAOS repository is supplied, then we should use it
+# This is mainly for quickbuilds
+ARG REPO_DAOS
+RUN if [ -n "$REPO_DAOS" ]; then                                \
+      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
+             ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&             \
+      zypper --non-interactive modifyrepo --no-gpgcheck                        \
+             daos-stack-daos-group-repo &&                                     \
+      zypper addlock --repo daos-stack-daos-group-repo                         \
+             'fuse<3' 'libfuse-devel<3' 'fuse-libs<3'                          \
+             'fuse-debuginfo<3' 'ompi' &&                                      \
+      zypper clean --all;                                                      \
+    fi
+# Allow packages to change vendors
+RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
+
+ARG JENKINS_URL
+ARG REPOS
+RUN for repo in $REPOS; do                                                                                 \
+        branch="master";                                                                                   \
+        build_number="lastSuccessfulBuild";                                                                \
+        if [[ $repo = *@* ]]; then                                                                         \
+            branch="${repo#*@}";                                                                           \
+            repo="${repo%@*}";                                                                             \
+            if [[ $branch = *:* ]]; then                                                                   \
+                build_number="${branch#*:}";                                                               \
+                branch="${branch%:*}";                                                                     \
+            fi;                                                                                            \
+        fi;                                                                                                \
+        zypper --non-interactive addrepo --no-gpgcheck                                                     \
+               ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/ \
+               $repo:$branch:$build_number;                                                                \
+    done
+
+# Install OS updates and package.  Include basic tools and daos dependencies
+# that come from the core repo.
+# Clean up any repos afterwards to save space.
+# Switch to dnf as it seems a bit faster.
+# libatomic should be in this list, but can not for now due to CI
+# post provisioning issue.
+RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+    zypper --non-interactive update && \
+    zypper --non-interactive install \
+        boost-devel \
+        clang \
+        cmake \
+        cunit-devel \
+        curl \
+        doxygen \
+        flex \
+        fuse3-devel \
+        gcc \
+        gcc-c++ \
+        git \
+        go1.14 \
+        go1.14-race \
+        graphviz \
+        gzip \
+        hwloc-devel \
+        ipmctl-devel \
+        java-1_8_0-openjdk-devel \
+        libaio-devel \
+        libcmocka-devel \
+        libevent-devel \
+        libiscsi-devel \
+        libjson-c-devel \
+        libltdl7 \
+        liblz4-devel \
+        libnuma-devel \
+        libopenssl-devel \
+        libtool \
+        libunwind-devel \
+        libuuid-devel \
+        libyaml-devel \
+        lua-lmod \
+        make \
+        man \
+        maven \
+        meson \
+        nasm \
+        ninja \
+        openmpi3-devel \
+        pandoc \
+        patch \
+        patchelf \
+        pciutils \
+        python3-devel \
+        python3-distro \
+        python3-junit-xml \
+        python3-pyxattr  \
+        python3-PyYAML \
+        python3-pyelftools \
+        python3-tabulate \
+        scons \
+        sg3_utils \
+        sudo \
+        valgrind-devel \
+        which \
+        yasm && \
+    zypper clean --all
+
+# Monkey-patch MODULEPATH
+RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then \
+        sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/'                  \
+               /etc/profile.d/lmod.sh;                                     \
+    fi
+
+RUN update-ca-certificates
+
 ARG UID=1000
 
-# Update distribution
-# It's better to put the zypper update in the same "cache layer" as the
-# zypper install command so that the database is updated if/when the
-# installed packages list below is updated
-RUN zypper --non-interactive --no-gpg-checks refresh; \
-    zypper --non-interactive update; \
-    zypper --non-interactive install                                  \
-           boost-devel clang cmake cunit-devel curl doxygen flex      \
-           gcc gcc-c++ git graphviz gzip                              \
-           libaio-devel libcmocka-devel libevent-devel libiscsi-devel \
-           libltdl7 libnuma-devel libopenssl-devel libtool            \
-           libuuid-devel libyaml-devel                                \
-           make man meson nasm ninja pandoc patch python2-pip         \
-           readline-devel sg3_utils which yasm                        \
-           python-devel python3-devel valgrind-devel hwloc-devel      \
-           openmpi3-devel man fuse3-devel patchelf scons lua-lmod     \
-           libjson-c-devel
-# Monkey-patch MODULEPATH
-RUN if ! grep MODULEPATH=.*/usr/share/modules /etc/profile.d/lmod.sh; then        \
-        sed -e '/MODULEPATH=/s/$/:\/usr\/share\/modules/' /etc/profile.d/lmod.sh; \
-    fi
-RUN update-ca-certificates
-RUN zypper --non-interactive install --allow-unsigned-rpm lua-lmod
-
-RUN zypper --non-interactive addrepo \
-    https://download.opensuse.org/repositories/devel:languages:go/openSUSE_Leap_15.1/devel:languages:go.repo; \
-    zypper --non-interactive --gpg-auto-import-keys refresh; \
-    zypper --non-interactive install -y ipmctl-devel go
-
-# Add DAOS user
-ENV USER daos
-ENV PASSWD daos
-RUN useradd -u $UID -ms /bin/bash $USER
-RUN echo "$USER:$PASSWD" | chpasswd
-
-# set maven mirror
-RUN mkdir -p /home/$USER/.m2
-
-RUN echo -e "<settings>\n\
-	<mirrors>\n\
-		<mirror>\n\
-			<id>google-maven-central</id>\n\
-			<name>GCS Maven Central mirror</name>\n\
-			<url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
-			<mirrorOf>central</mirrorOf>\n\
-		</mirror>\n\
-	</mirrors>\n\
-</settings>" > /home/$USER/.m2/settings.xml
+# Add DAOS users
+RUN useradd --uid $UID --user-group --create-home --shell /bin/bash \
+            --home /home/daos daos_server
+RUN echo "daos_server:daos_server" | chpasswd
+RUN useradd --user-group --create-home --shell /bin/bash daos_agent
+RUN echo "daos_agent:daos_agent" | chpasswd
+RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setup
 
 # Create directory for DAOS backend storage
-RUN mkdir /mnt/daos
-RUN chown daos.daos /mnt/daos || { cat /etc/passwd; cat /etc/group; cat /etc/shadow; chown daos /mnt/daos; chgrp daos /mnt/daos; ls -ld /mnt/daos; }
+RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
+    chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
+    chown daos_agent.daos_agent /var/run/daos_agent
 
-# Dependencies
-# Packages for NVML exist in CentOS, but are
-# unfortunately outdated. The DAOS build system will rebuild those packages.
-ARG JENKINS_URL=""
 ARG QUICKBUILD=false
-ARG QUICKBUILD_DEPS=""
-ARG REPOS=""
-ARG REPO_URL=""
-ARG REPO_LOCAL_LEAP15=""
-ARG REPO_GROUP_LEAP15=""
-RUN if $QUICKBUILD; then                                                                                 \
-        for REPO_LEAP15 in $REPO_LOCAL_LEAP15 $REPO_GROUP_LEAP15; do                                             \
-            MY_REPO="${REPO_URL}${REPO_LEAP15}";                                                                 \
-            MY_NAME="${MY_REPO#*//}";                                                                            \
-            MY_NAME="${MY_NAME//\//_}";                                                                          \
-            zypper --non-interactive addrepo --no-gpgcheck                                                       \
-                   ${MY_REPO} ${MY_NAME};                                                                        \
-        done;                                                                                                    \
-        for repo in $REPOS; do                                                                                   \
-            branch="master";                                                                                     \
-            build_number="lastSuccessfulBuild";                                                                  \
-            if [[ $repo = *@* ]]; then                                                                           \
-                branch="${repo#*@}";                                                                             \
-                repo="${repo%@*}";                                                                               \
-                if [[ $branch = *:* ]]; then                                                                     \
-                    build_number="${branch#*:}";                                                                 \
-                    branch="${branch%:*}";                                                                       \
-                fi;                                                                                              \
-            fi;                                                                                                  \
-            zypper --non-interactive addrepo --no-gpgcheck                                                       \
-                   ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/   \
-                   $repo:$branch:$build_number;                                                                  \
-        done;                                                                                                    \
-        echo "Installing: $QUICKBUILD_DEPS";                                                                     \
-        echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf;                                           \
-        echo "$QUICKBUILD_DEPS" | tr '\n' '\0' | xargs -0 zypper --non-interactive install;                      \
+ARG QUICKBUILD_DEPS
+RUN if $QUICKBUILD; then                                                       \
+        zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref;   \
+        echo "Installing: $QUICKBUILD_DEPS";                                   \
+        echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |              \
+              xargs -0 zypper --non-interactive install;                       \
+        zypper clean --all;                                                    \
     fi
 
+RUN zypper addlock fuse fuse-libs fuse-devel \
+           libraft0 raft-devel mercury mercury-devel
+
+# The COPY command has a --chown option but it's not well supported so copy as
+# root then run a chown command which is frustrating as the copy can take a few
+# seconds.
+WORKDIR /home/daos/pre
+COPY SConstruct .
+COPY site_scons site_scons
+COPY utils/build.config utils/
+RUN chown -R daos_server.daos_server /home/daos
+USER daos_server:daos_server
+
+# Control what to build.  By default Dockerfiles build everything to allow for
+# ease-of-use for users, however in CI everything is turned off and then
+# selectively enabled.  Turning off any step disables all future steps.
+ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_KEEP_BUILD=no
+ARG DAOS_TARGET_TYPE=release
+
+# Now do an update to ensure software is up to date for the deps build.  If the
+# src hasn't changed then this won't do anything, but if it has then we want to
+# ensure that latest dependencies are used.
+USER root:root
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    { zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+      zypper --non-interactive update && \
+      zypper clean --all; }
+USER daos_server:daos_server
+
+ARG DEPS_JOBS=1
+
+RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
+    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
+      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
+    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
+
 # force an upgrade to get any newly built RPMs
-ARG CACHEBUST=1
+USER root:root
+ARG CACHEBUST
+RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
+    zypper --non-interactive update && \
+    zypper clean --all
+USER daos_server:daos_server
 
-# Switch to new user
-#USER $USER
-WORKDIR /home/$USER
+# Set a label.  This is useful for searching for DAOS images, but is also used
+# in github-actions to prune elements of the dockerfile below this point.
+LABEL DAOS=stage1
 
-# set NOBUILD to disable git clone & build
-ARG NOBUILD
+WORKDIR /home/daos/daos/
+COPY VERSION LICENSE ftest.sh SConstruct ./
+COPY site_scons site_scons
+COPY utils utils
+COPY src src
+USER root:root
+RUN chown -R daos_server.daos_server /home/daos/daos/
+USER daos_server:daos_server
 
-# Fetch DAOS code
-RUN if [ "x$NOBUILD" = "x" ] ; then git clone https://github.com/daos-stack/daos.git; fi
-WORKDIR /home/$USER/daos
+# select compiler to use
+ARG COMPILER=gcc
+ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
+ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
-# Build DAOS & dependencies
-RUN if [ "x$NOBUILD" = "x" ] ; then git submodule init && git submodule update; fi
-RUN if [ "x$NOBUILD" = "x" ] ; then scons --build-deps=yes install PREFIX=/usr; fi
+# Build DAOS
+RUN [ "$DAOS_BUILD" != "yes" ] || \
+    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+    /bin/rm -rf build && go clean -cache && \
+    cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
-ENV LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
-ENV CRT_PHY_ADDR_STR="ofi+sockets"
-ENV OFI_INTERFACE=eth0
+ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
+
+USER root:root
+LABEL DAOS=true
+USER daos_server:daos_server
+
+# Build java and hadoop bindings
+WORKDIR /home/daos/daos/src/client/java
+# Set maven repo mirror
+RUN mkdir -p /home/daos/.m2
+RUN echo -e "<settings>\n\
+        <mirrors>\n\
+                <mirror>\n\
+                        <id>google-maven-central</id>\n\
+                        <name>GCS Maven Central mirror</name>\n\
+                        <url>https://maven-central.storage-download.googleapis.com/maven2/</url>\n\
+                        <mirrorOf>central</mirrorOf>\n\
+                </mirror>\n\
+        </mirrors>\n\
+</settings>" > /home/daos/.m2/settings.xml
+
+ARG DAOS_JAVA_BUILD=$DAOS_BUILD
+
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
+    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
+WORKDIR /home/daos
+
+ARG DAOS_KEEP_SRC=no
+# Remove local copy
+RUN [ $"DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*

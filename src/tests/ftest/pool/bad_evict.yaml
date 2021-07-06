@@ -4,29 +4,12 @@ hosts:
   test_servers:
     - server-A
 timeout: 650
+pool:
+  control_method: dmg
+  mode: 511
+  scm_size: 1073741824
+  name: daos_server
 evicttests:
-   svrlist: !mux
-     goodlist:
-          ranklist:
-             - VALID
-             - PASS
-     badlist:
-          ranklist:
-             - NULL
-             - FAIL
-   connectsetnames: !mux
-     goodname:
-          setname:
-             - daos_server
-             - PASS
-     badname:
-          setname:
-             - badname_server
-             - FAIL
-     nullname: #default name
-          setname:
-             - NULL
-             - PASS
    UUID: !mux
      gooduuid:
           uuid:
@@ -40,9 +23,3 @@ evicttests:
           uuid:
              - JUNK
              - FAIL
-   createmode:
-     mode: 511
-   createset:
-     setname: daos_server
-   createsize:
-     size: 1073741824

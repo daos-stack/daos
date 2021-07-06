@@ -1,4 +1,4 @@
-# change host names to your reserved nodes, the
+# change host names to your reserved nodes,  the
 # required quantity is indicated by the placeholders
 hosts:
   test_servers:
@@ -12,7 +12,7 @@ server_config:
    name: daos_server
 pool:
     name: daos_server
-    scm_size: 107374182
+    scm_size: 1G
     control_method: dmg
 snapshot:
     dkey: "dkey"
@@ -21,12 +21,12 @@ snapshot:
     num_of_snapshot: 20
 object_class: !mux
     OC_S1:
-        obj_class: 200
+        obj_class: OC_S1
     OC_S4:
-        obj_class: 202
+        obj_class: OC_S4
     OC_SX:
-        obj_class: 214
+        obj_class: OC_SX
     OC_RP_2G1:
-        obj_class: 220
+        obj_class: OC_RP_2G1
     OC_RP_2G2:
-        obj_class: 221
+        obj_class: OC_RP_2G2

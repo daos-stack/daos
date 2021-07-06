@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -51,7 +34,7 @@ type smdQueryCmd struct {
 	jsonOutputCmd
 }
 
-func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...control.PrintConfigOption) error {
+func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryReq, opts ...pretty.PrintConfigOption) error {
 	req.SetHostList(cmd.hostlist)
 	resp, err := control.SmdQuery(ctx, cmd.ctlInvoker, req)
 
@@ -64,7 +47,7 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 	}
 
 	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld, opts...); err != nil {
+	if err := pretty.PrintResponseErrors(resp, &bld, opts...); err != nil {
 		return err
 	}
 	if err := pretty.PrintSmdInfoMap(req, resp.HostStorage, &bld, opts...); err != nil {
@@ -77,44 +60,11 @@ func (cmd *smdQueryCmd) makeRequest(ctx context.Context, req *control.SmdQueryRe
 
 // storageQueryCmd is the struct representing the storage query subcommand
 type storageQueryCmd struct {
-	NVMeHealth   nvmeHealthQueryCmd  `command:"nvme-health" alias:"n" description:"Query the health of a NVMe device"`
 	TargetHealth tgtHealthQueryCmd   `command:"target-health" alias:"t" description:"Query the target health"`
 	DeviceHealth devHealthQueryCmd   `command:"device-health" alias:"d" description:"Query the device health"`
 	ListPools    listPoolsQueryCmd   `command:"list-pools" alias:"p" description:"List pools on the server"`
 	ListDevices  listDevicesQueryCmd `command:"list-devices" alias:"d" description:"List storage devices on the server"`
-}
-
-type nvmeHealthQueryCmd struct {
-	logCmd
-	ctlInvokerCmd
-	hostListCmd
-	jsonOutputCmd
-}
-
-func (cmd *nvmeHealthQueryCmd) Execute(args []string) error {
-	ctx := context.Background()
-	req := &control.StorageScanReq{ConfigDevicesOnly: true}
-	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	var bld strings.Builder
-	if err := control.PrintResponseErrors(resp, &bld); err != nil {
-		return err
-	}
-	if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
-		return err
-	}
-	cmd.log.Info(bld.String())
-
-	return resp.Errors()
+	Usage        usageQueryCmd       `command:"usage" alias:"u" description:"Show SCM & NVMe storage space utilization per storage server"`
 }
 
 type devHealthQueryCmd struct {
@@ -182,5 +132,44 @@ func (cmd *listPoolsQueryCmd) Execute(_ []string) error {
 		Rank:        cmd.GetRank(),
 		UUID:        cmd.UUID,
 	}
-	return cmd.makeRequest(ctx, req, control.PrintWithVerboseOutput(cmd.Verbose))
+	return cmd.makeRequest(ctx, req, pretty.PrintWithVerboseOutput(cmd.Verbose))
+}
+
+// usageQueryCmd is the struct representing the scan storage subcommand.
+type usageQueryCmd struct {
+	logCmd
+	ctlInvokerCmd
+	hostListCmd
+	jsonOutputCmd
+}
+
+// Execute is run when usageQueryCmd activates.
+//
+// Queries NVMe and SCM usage on hosts.
+func (cmd *usageQueryCmd) Execute(_ []string) error {
+	ctx := context.Background()
+	req := &control.StorageScanReq{Usage: true}
+	req.SetHostList(cmd.hostlist)
+	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, err)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	var bld strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+		return err
+	}
+	if err := pretty.PrintHostStorageUsageMap(resp.HostStorage, &bld); err != nil {
+		return err
+	}
+	// Infof prints raw string and doesn't try to expand "%"
+	// preserving column formatting in txtfmt table
+	cmd.log.Infof("%s", bld.String())
+
+	return resp.Errors()
 }

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS stoarge pool types and functions
@@ -54,6 +37,10 @@ typedef enum {
 	DAOS_TS_UP,
 	/* Up and running */
 	DAOS_TS_UP_IN,
+	/* Intermediate state for pool map change */
+	DAOS_TS_NEW,
+	/* Being drained */
+	DAOS_TS_DRAIN,
 } daos_target_state_t;
 
 /** Description of target performance */
@@ -173,6 +160,7 @@ typedef struct {
 /** DAOS pool container information */
 struct daos_pool_cont_info {
 	uuid_t		pci_uuid;
+	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
 };
 
 /**
@@ -182,8 +170,6 @@ struct daos_pool_cont_info {
  *
  * \param[in]	uuid	UUID to identify a pool.
  * \param[in]	grp	Process set name of the DAOS servers managing the pool
- * \param[in]	svc	Pool service replica ranks, as reported by
- *			daos_pool_create().
  * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
  * \param[out]	poh	Returned open handle.
  * \param[in,out]
@@ -202,8 +188,37 @@ struct daos_pool_cont_info {
  */
 int
 daos_pool_connect(const uuid_t uuid, const char *grp,
-		  const d_rank_list_t *svc, unsigned int flags,
+		  unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
+
+/**
+ * Connect to the DAOS pool identified by \a label. Upon a successful
+ * completion, \a poh returns the pool handle, and \a info returns the latest
+ * pool information.
+ *
+ * \param[in]	label	label string to identify a pool.
+ * \param[in]	grp	Process set name of the DAOS servers managing the pool
+ * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
+ * \param[out]	poh	Returned open handle.
+ * \param[in,out]
+ *		info	Optional, returned pool information,
+ *			see daos_pool_info_bit.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Pool is nonexistent
+ */
+int
+daos_pool_connect_by_label(const char *label, const char *grp,
+			   unsigned int flags,
+			   daos_handle_t *poh, daos_pool_info_t *info,
+			   daos_event_t *ev);
 
 /**
  * Disconnect from the DAOS pool. It should revoke all the container open
@@ -221,25 +236,6 @@ daos_pool_connect(const uuid_t uuid, const char *grp,
  */
 int
 daos_pool_disconnect(daos_handle_t poh, daos_event_t *ev);
-
-/**
- * Evict all connections to a pool.
- *
- * \param uuid	[IN]	UUID of the pool
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param svc	[IN]	list of pool service ranks
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NONEXIST	Pool is nonexistent
- */
-int
-daos_pool_evict(const uuid_t uuid, const char *grp, const d_rank_list_t *svc,
-		daos_event_t *ev);
 
 /*
  * Handle API
@@ -324,11 +320,9 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
  * Query information of storage targets within a DAOS pool.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	tgts	A list of targets to query.
- * \param[out]	failed	Optional, buffer to store faulty targets on failure.
- * \param[out]	info_list
- *			Returned storage information of \a tgts, it is an array
- *			and array size must equal to tgts::rl_llen.
+ * \param[in]	tgt	A single target index to query.
+ * \param[in]	rank	Rank of the target index to query.
+ * \param[out]	info	Returned storage information of \a tgt.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -338,12 +332,11 @@ daos_pool_query(daos_handle_t poh, d_rank_list_t *tgts, daos_pool_info_t *info,
  *			-DER_INVAL	Invalid parameter
  *			-DER_NO_HDL	Invalid pool handle
  *			-DER_UNREACH	Network is unreachable
- *			-DER_NONEXIST	No pool on specified targets
+ *			-DER_NONEXIST	No pool on specified target
  */
 int
-daos_pool_query_target(daos_handle_t poh, d_rank_list_t *tgts,
-		       d_rank_list_t *failed, daos_target_info_t *info_list,
-		       daos_event_t *ev);
+daos_pool_query_target(daos_handle_t poh, uint32_t tgt, d_rank_t rank,
+		       daos_target_info_t *info, daos_event_t *ev);
 
 /**
  * List the names of all user-defined pool attributes.
@@ -403,6 +396,28 @@ daos_pool_get_attr(daos_handle_t poh, int n, char const *const names[],
 int
 daos_pool_set_attr(daos_handle_t poh, int n, char const *const names[],
 		   void const *const values[], size_t const sizes[],
+		   daos_event_t *ev);
+
+/**
+ * Delete a list of user-defined pool attributes.
+ *
+ * \param[in]	poh	Pool handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_pool_del_attr(daos_handle_t poh, int n, char const *const names[],
 		   daos_event_t *ev);
 
 /**

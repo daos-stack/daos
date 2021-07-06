@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #include <daos/common.h>
 #include <daos_security.h>
@@ -65,13 +48,16 @@ copy_ace_array(struct daos_ace *aces[], uint16_t num_aces)
 	}
 
 	for (i = 0; i < num_aces; i++) {
-		D_ALLOC(copy[i], daos_ace_get_size(aces[i]));
+		ssize_t size = daos_ace_get_size(aces[i]);
+
+		D_ASSERTF(size > 0, "ACE should have already been validated");
+		D_ALLOC(copy[i], (size_t)size);
 		if (copy[i] == NULL) {
 			free_ace_array(copy, num_aces);
 			return NULL;
 		}
 
-		memcpy(copy[i], aces[i], daos_ace_get_size(aces[i]));
+		memcpy(copy[i], aces[i], (size_t)size);
 	}
 
 	return copy;
@@ -277,10 +263,12 @@ principals_match(struct daos_ace *ace1, struct daos_ace *ace2)
 static uint8_t *
 write_ace(struct daos_ace *ace, uint8_t *pen)
 {
-	size_t	len;
+	ssize_t	len;
 
 	len = daos_ace_get_size(ace);
-	memcpy(pen, (uint8_t *)ace, len);
+	D_ASSERTF(len > 0, "ACE should have already been validated");
+
+	memcpy(pen, (uint8_t *)ace, (size_t)len);
 
 	return pen + len;
 }
@@ -1092,8 +1080,7 @@ print_permissions(uint32_t indent_tabs, const char *name, uint64_t perms)
 
 		if (perms & bit) {
 			indent(indent_tabs + 1);
-			printf("%s (0x%lx)\n", get_perm_string(bit),
-					bit);
+			printf("%s (%#lx)\n", get_perm_string(bit), bit);
 		}
 	}
 }

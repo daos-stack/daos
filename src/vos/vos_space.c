@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(vos)
 
@@ -31,7 +14,7 @@
 #define POOL_NVME_HELD(pool)	((pool)->vp_space_held[DAOS_MEDIA_NVME])
 
 static inline daos_size_t
-get_frag_overhead(daos_size_t tot_size, int media)
+get_frag_overhead(daos_size_t tot_size, int media, bool small_pool)
 {
 	daos_size_t	min_sz = (2ULL << 30);	/* 2GB */
 	daos_size_t	max_sz = (10ULL << 30);	/* 10GB */
@@ -40,10 +23,13 @@ get_frag_overhead(daos_size_t tot_size, int media)
 	ovhd = (media == DAOS_MEDIA_SCM) ?
 		(tot_size * 5) / 100 : (tot_size * 2) / 100;
 
-	if (ovhd < min_sz)
-		ovhd = min_sz;
-	else if (ovhd > max_sz)
-		ovhd = max_sz;
+	/* If caller specified the pool is small, do not enforce a range */
+	if (!small_pool) {
+		if (ovhd < min_sz)
+			ovhd = min_sz;
+		else if (ovhd > max_sz)
+			ovhd = max_sz;
+	}
 
 	return ovhd;
 }
@@ -54,8 +40,10 @@ vos_space_sys_init(struct vos_pool *pool)
 	daos_size_t	scm_tot = pool->vp_pool_df->pd_scm_sz;
 	daos_size_t	nvme_tot = pool->vp_pool_df->pd_nvme_sz;
 
-	POOL_SCM_SYS(pool) = get_frag_overhead(scm_tot, DAOS_MEDIA_SCM);
-	POOL_NVME_SYS(pool) = get_frag_overhead(nvme_tot, DAOS_MEDIA_NVME);
+	POOL_SCM_SYS(pool) =
+		get_frag_overhead(scm_tot, DAOS_MEDIA_SCM, pool->vp_small);
+	POOL_NVME_SYS(pool) =
+		get_frag_overhead(nvme_tot, DAOS_MEDIA_NVME, pool->vp_small);
 
 	gc_reserve_space(&pool->vp_space_sys[0]);
 	agg_reserve_space(&pool->vp_space_sys[0]);
@@ -182,7 +170,7 @@ recx_csum_len(daos_recx_t *recx, struct dcs_csum_info *csum,
 {
 	if (!ci_is_valid(csum))
 		return 0;
-	return csum->cs_len * csum_chunk_count(csum->cs_chunksize,
+	return (daos_size_t)csum->cs_len * csum_chunk_count(csum->cs_chunksize,
 			recx->rx_idx, recx->rx_idx + recx->rx_nr - 1, rec_size);
 }
 

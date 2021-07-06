@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC       DD_FAC(tests)
 
@@ -36,7 +19,8 @@
 #include <daos/common.h>
 #include <daos/tests_lib.h>
 #include <daos_test.h>
-#include "dts_common.h"
+#include <daos/dts.h>
+#include <daos/credit.h>
 
 enum {
 	UPDATE,
@@ -52,7 +36,7 @@ enum {
 };
 
 #define MAX_ROUND	10
-#define MAX_REC_SIZE	(4 * 1024)	/* MAX REC */
+#define MAX_REC_SIZE	(8 * 1024)	/* MAX REC */
 #define MAX_KEY_SIZE	32
 #define MAX_KEY_CNT	10
 
@@ -62,10 +46,13 @@ enum {
 	RP_2G2,
 	RP_3G1,
 	RP_3G2,
+	EC_4P1G1,
+	EC_4P2G2,
+	EC_4P2GX,
 	OBJ_CNT
 };
 
-static struct dts_context	ts_ctx;
+static struct credit_context	ts_ctx;
 unsigned		seed;
 int			dkey_cnt = MAX_KEY_CNT;
 int			akey_cnt = MAX_KEY_CNT;
@@ -95,6 +82,12 @@ oclass_get(unsigned int random)
 		return OC_RP_3G1;
 	case RP_3G2:
 		return OC_RP_3G2;
+	case EC_4P1G1:
+		return OC_EC_4P1G1;
+	case EC_4P2G2:
+		return OC_EC_4P2G1;
+	case EC_4P2GX:
+		return OC_EC_4P2GX;
 	default:
 		assert(0);
 	}
@@ -117,7 +110,7 @@ racer_oid_gen(int random)
 	oid.lo	= random % obj_cnt_per_class;
 	oid.lo	|= oclass;
 	oid.hi	= oclass;
-	daos_obj_generate_id(&oid, 0, oclass, 0);
+	daos_obj_generate_oid(ts_ctx.tsc_coh, &oid, 0, oclass, 0, 0);
 
 	return oid;
 }
@@ -134,20 +127,21 @@ pack_dkey_iod_sgl(char *dkey, d_iov_t *dkey_iov, char akeys[][MAX_KEY_SIZE],
 
 	for (i = 0; i < iod_nr; i++) {
 		unsigned size;
+		unsigned val = rand() % 8;
 
 		sprintf(akeys[i], "%d", rand() % max_akey_per_dkey);
 		d_iov_set(&iods[i].iod_name, akeys[i], strlen(akeys[i]));
 
 		iods[i].iod_nr = 1;
-		if (rand() % 2 == 1) {
-			recxs[i].rx_idx = rand() % MAX_REC_SIZE;
-			recxs[i].rx_nr = rand() % MAX_REC_SIZE;
+		if (val % 2 == 1) {
+			recxs[i].rx_idx = rand() % (MAX_REC_SIZE / val);
+			recxs[i].rx_nr = rand() % (MAX_REC_SIZE / val);
 			iods[i].iod_recxs = &recxs[i];
 			iods[i].iod_size = 1;
 			size = recxs[i].rx_nr;
 			iods[i].iod_type = DAOS_IOD_ARRAY;
 		} else {
-			iods[i].iod_size = rand() % MAX_REC_SIZE;
+			iods[i].iod_size = rand() % (MAX_REC_SIZE / (val + 1));
 			size = iods[i].iod_size;
 			iods[i].iod_type = DAOS_IOD_SINGLE;
 		}
@@ -471,6 +465,7 @@ main(int argc, char **argv)
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	unsigned	duration = 60; /* seconds */
 	double		expire = 0;
+	daos_prop_t	*prop;
 	int		idx;
 	struct racer_sub_tests	sub_tests[TEST_SIZE] = { 0 };
 	int		rc;
@@ -516,6 +511,18 @@ main(int argc, char **argv)
 		}
 	}
 
+	/*
+	 * For daos_racer, if pool/cont uuids are supplied as command line
+	 * arguments it's assumed that the pool/cont were created. If only a
+	 * cont uuid is supplied then a pool and container will be created and
+	 * the cont uuid will be used during creation
+	 */
+	if (!uuid_is_null(ts_ctx.tsc_pool_uuid)) {
+		ts_ctx.tsc_skip_pool_create = true;
+		if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
+			ts_ctx.tsc_skip_cont_create = true;
+	}
+
 	if (seed == 0) {
 		gettimeofday(&tv, NULL);
 		seed = tv.tv_usec;
@@ -544,6 +551,12 @@ main(int argc, char **argv)
 	rc = dts_ctx_init(&ts_ctx);
 	if (rc)
 		D_GOTO(out, rc);
+
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	prop->dpp_entries[0].dpe_val = 1024;
+	daos_cont_set_prop(ts_ctx.tsc_coh, prop, NULL);
+	daos_prop_free(prop);
 
 	sub_tests_init(sub_tests, 0xFFFF);
 	expire = dts_time_now() + duration;

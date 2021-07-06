@@ -1,29 +1,12 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+import os
 from avocado.utils import process
-from general_utils import get_file_path
-from apricot import Test
+from apricot import TestWithoutServers
 
 
 def unittest_runner(self, unit_testname):
@@ -39,9 +22,9 @@ def unittest_runner(self, unit_testname):
     name = self.params.get("testname", '/run/UnitTest/{0}/'
                            .format(unit_testname))
     server = self.params.get("test_servers", "/run/hosts/*")
-    bin_path = get_file_path(name, "install/bin")
+    test_exe = os.path.join(self.bin, name)
 
-    cmd = ("/usr/bin/ssh {} {}".format(server[0], bin_path[0]))
+    cmd = ("/usr/bin/ssh {} {}".format(server[0], test_exe))
 
     return_code = process.system(cmd, ignore_status=True,
                                  allow_output_check="both")
@@ -51,7 +34,7 @@ def unittest_runner(self, unit_testname):
                   .format(unit_testname, return_code))
 
 
-class UnitTestWithoutServers(Test):
+class UnitTestWithoutServers(TestWithoutServers):
     """
     Test Class Description: Avocado Unit Test class for tests which don't
                             need servers.
@@ -78,14 +61,6 @@ class UnitTestWithoutServers(Test):
         :avocado: tags=all,unittest,tiny,full_regression,vea_ut
         """
         unittest_runner(self, "vea_ut")
-
-    def test_ring_pl_map(self):
-        """
-        Test Description: Test ring_pl_map unittest.
-        Use Case: This tests the ring placement map
-        :avocado: tags=all,unittest,tiny,full_regression,ring_pl_map
-        """
-        unittest_runner(self, "ring_pl_map")
 
     def test_jump_pl_map(self):
         """
@@ -119,3 +94,11 @@ class UnitTestWithoutServers(Test):
         :avocado: tags=all,unittest,tiny,full_regression,agent_tests
         """
         unittest_runner(self, "agent_tests")
+
+    def test_job_tests(self):
+        """
+        Test Description: Test daos job unittest.
+        Use Cases: daos_job tests for job environment variables.
+        :avocado: tags=all,unittest,tiny,full_regression,job_tests
+        """
+        unittest_runner(self, "job_tests")

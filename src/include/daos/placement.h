@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -109,6 +92,14 @@ struct pl_map {
 	struct pl_map_ops       *pl_ops;
 };
 
+/** attributes of the placement map */
+struct pl_map_attr {
+	int		pa_type;
+	int		pa_domain;
+	int		pa_domain_nr;
+	int		pa_target_nr;
+};
+
 int pl_init(void);
 void pl_fini(void);
 
@@ -121,6 +112,7 @@ struct pl_map *pl_map_find(uuid_t uuid, daos_obj_id_t oid);
 int  pl_map_update(uuid_t uuid, struct pool_map *new_map, bool connect,
 		pl_map_type_t default_type);
 void pl_map_disconnect(uuid_t uuid);
+int pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr);
 void pl_map_addref(struct pl_map *map);
 void pl_map_decref(struct pl_map *map);
 uint32_t pl_map_version(struct pl_map *map);
@@ -128,6 +120,9 @@ uint32_t pl_map_version(struct pl_map *map);
 void pl_obj_layout_free(struct pl_obj_layout *layout);
 int  pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
 			 struct pl_obj_layout **layout_pp);
+bool pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
+			    uint32_t rank, uint32_t target_index,
+			    uint32_t shard);
 
 int pl_obj_place(struct pl_map *map,
 		 struct daos_obj_md *md,
@@ -138,22 +133,24 @@ int pl_obj_find_rebuild(struct pl_map *map,
 			struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size,
-			int myrank);
+			uint32_t *shard_id, unsigned int array_size);
+
+int pl_obj_find_drain(struct pl_map *map, struct daos_obj_md *md,
+		      struct daos_obj_shard_md *shard_md,
+		      uint32_t rebuild_ver, uint32_t *tgt_rank,
+		      uint32_t *shard_id, unsigned int array_size);
 
 int pl_obj_find_reint(struct pl_map *map,
 			struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size,
-			int myrank);
+			uint32_t *shard_id, unsigned int array_size);
 
 int pl_obj_find_addition(struct pl_map *map,
 			 struct daos_obj_md *md,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
-			uint32_t *shard_id, unsigned int array_size,
-			int myrank);
+			uint32_t *shard_id, unsigned int array_size);
 
 typedef struct pl_obj_shard *(*pl_get_shard_t)(void *data, int idx);
 
@@ -166,7 +163,7 @@ pl_obj_get_shard(void *data, int idx)
 }
 
 int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
-		     bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data);
+		     int *tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
 void obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);
 

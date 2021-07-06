@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -30,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <time.h>
 #include <daos_types.h>
 #include <daos_security.h>
@@ -588,7 +572,7 @@ test_acl_get_ace_null_acl(void **state)
 {
 	struct daos_ace *ace = NULL;
 
-	assert_int_equal(daos_acl_get_ace_for_principal(NULL, DAOS_ACL_USER,
+	assert_rc_equal(daos_acl_get_ace_for_principal(NULL, DAOS_ACL_USER,
 			"user1@", &ace), -DER_INVAL);
 
 	assert_null(ace);
@@ -604,7 +588,7 @@ test_acl_get_ace_null_ace_ptr(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
 			"user1@", NULL), -DER_INVAL);
 
 	/* cleanup */
@@ -624,7 +608,7 @@ test_acl_get_ace_invalid_type(void **state)
 	acl = daos_acl_create(ace, num_aces);
 
 	/* bad type */
-	assert_int_equal(daos_acl_get_ace_for_principal(acl,
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl,
 			NUM_DAOS_ACL_TYPES,
 			ace[0]->dae_principal, &result), -DER_INVAL);
 
@@ -646,7 +630,7 @@ test_acl_get_ace_first_item(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
 			ace[0]->dae_principal, &result), 0);
 
 	assert_non_null(result);
@@ -669,7 +653,7 @@ test_acl_get_ace_later_item(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
 			ace[1]->dae_principal, &result), 0);
 
 	assert_non_null(result);
@@ -693,7 +677,7 @@ test_acl_get_ace_match_wrong_type(void **state)
 
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_GROUP,
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_GROUP,
 			ace[0]->dae_principal, &result), -DER_NONEXIST);
 
 	assert_null(result);
@@ -714,7 +698,7 @@ test_acl_get_ace_name_not_found(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
 			"notinthelist", &result), -DER_NONEXIST);
 
 	assert_null(result);
@@ -735,11 +719,11 @@ test_acl_get_ace_name_needed(void **state)
 	fill_ace_list_with_all_types_shuffled(ace, "user1@", "group1@");
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_USER,
 			NULL, &result), -DER_INVAL);
 	assert_null(result);
 
-	assert_int_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_GROUP,
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl, DAOS_ACL_GROUP,
 			NULL, &result), -DER_INVAL);
 	assert_null(result);
 
@@ -754,7 +738,7 @@ expect_acl_get_ace_returns_type(struct daos_acl *acl,
 {
 	struct daos_ace	*result = NULL;
 
-	assert_int_equal(daos_acl_get_ace_for_principal(acl, type, NULL,
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl, type, NULL,
 			&result), 0);
 
 	assert_non_null(result);
@@ -787,7 +771,7 @@ test_acl_add_ace_with_null_acl_ptr(void **state)
 
 	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
-	assert_int_equal(daos_acl_add_ace(NULL, ace),
+	assert_rc_equal(daos_acl_add_ace(NULL, ace),
 			-DER_INVAL);
 
 	daos_ace_free(ace);
@@ -801,7 +785,7 @@ test_acl_add_ace_with_null_acl(void **state)
 
 	ace = daos_ace_create(DAOS_ACL_EVERYONE, NULL);
 
-	assert_int_equal(daos_acl_add_ace(&acl, ace),
+	assert_rc_equal(daos_acl_add_ace(&acl, ace),
 			-DER_INVAL);
 
 	daos_ace_free(ace);
@@ -814,7 +798,7 @@ test_acl_add_ace_with_null_ace(void **state)
 
 	acl = daos_acl_create(NULL, 0);
 
-	assert_int_equal(daos_acl_add_ace(&acl, NULL),
+	assert_rc_equal(daos_acl_add_ace(&acl, NULL),
 			-DER_INVAL);
 
 	daos_acl_free(acl);
@@ -831,7 +815,7 @@ expect_empty_acl_adds_ace_as_only_item(struct daos_ace *ace)
 	acl = daos_acl_create(NULL, 0);
 	original_acl = daos_acl_dup(acl);
 
-	assert_int_equal(daos_acl_add_ace(&acl, ace), 0);
+	assert_rc_equal(daos_acl_add_ace(&acl, ace), 0);
 
 	assert_int_equal(acl->dal_ver, original_acl->dal_ver);
 	assert_int_equal(acl->dal_len, ace_len);
@@ -926,7 +910,7 @@ expect_ace_inserted_at_correct_location(struct daos_ace *ace[], int num_aces,
 	new_ace->dae_allow_perms = DAOS_ACL_PERM_READ;
 	expected_len += daos_ace_get_size(new_ace);
 
-	assert_int_equal(daos_acl_add_ace(&acl, new_ace), 0);
+	assert_rc_equal(daos_acl_add_ace(&acl, new_ace), 0);
 
 	assert_non_null(acl);
 	assert_int_equal(acl->dal_ver, orig_acl->dal_ver);
@@ -1067,7 +1051,7 @@ expect_add_duplicate_ace_unchanged(enum daos_acl_principal_type type)
 	memcpy(new_ace, ace[type],
 			daos_ace_get_size(ace[type]));
 
-	assert_int_equal(daos_acl_add_ace(&acl, new_ace), 0);
+	assert_rc_equal(daos_acl_add_ace(&acl, new_ace), 0);
 
 	/* Expect a copy of original */
 	assert_non_null(acl);
@@ -1120,7 +1104,7 @@ test_acl_add_ace_replace(void **state)
 	new_ace->dae_allow_perms = DAOS_ACL_PERM_READ;
 	new_ace->dae_alarm_perms = DAOS_ACL_PERM_WRITE;
 
-	assert_int_equal(daos_acl_add_ace(&acl, new_ace), 0);
+	assert_rc_equal(daos_acl_add_ace(&acl, new_ace), 0);
 
 	/* Expect the entry was replaced, not added */
 	assert_non_null(acl);
@@ -1144,7 +1128,7 @@ test_acl_remove_ace_null_acl_ptr(void **state)
 {
 	struct daos_acl	*result_acl = NULL;
 
-	assert_int_equal(daos_acl_remove_ace(NULL, DAOS_ACL_EVERYONE, NULL),
+	assert_rc_equal(daos_acl_remove_ace(NULL, DAOS_ACL_EVERYONE, NULL),
 			-DER_INVAL);
 
 	assert_null(result_acl);
@@ -1155,7 +1139,7 @@ test_acl_remove_ace_null_acl(void **state)
 {
 	struct daos_acl	*acl = NULL;
 
-	assert_int_equal(daos_acl_remove_ace(&acl, DAOS_ACL_EVERYONE, NULL),
+	assert_rc_equal(daos_acl_remove_ace(&acl, DAOS_ACL_EVERYONE, NULL),
 			-DER_INVAL);
 
 	/* cleanup */
@@ -1172,7 +1156,7 @@ test_acl_remove_ace_invalid_type(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_remove_ace(&acl,
+	assert_rc_equal(daos_acl_remove_ace(&acl,
 			NUM_DAOS_ACL_TYPES, ace[0]->dae_principal),
 			-DER_INVAL);
 
@@ -1191,7 +1175,7 @@ expect_acl_remove_ace_missing_name_fails(enum daos_acl_principal_type type)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_remove_ace(&acl, type, NULL), -DER_INVAL);
+	assert_rc_equal(daos_acl_remove_ace(&acl, type, NULL), -DER_INVAL);
 
 	/* cleanup */
 	daos_acl_free(acl);
@@ -1215,11 +1199,11 @@ test_acl_remove_ace_name_len_zero(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_remove_ace(&acl,
-			DAOS_ACL_USER, ""), -DER_INVAL);
+	assert_rc_equal(daos_acl_remove_ace(&acl,
+					    DAOS_ACL_USER, ""), -DER_INVAL);
 
-	assert_int_equal(daos_acl_remove_ace(&acl,
-			DAOS_ACL_GROUP, ""), -DER_INVAL);
+	assert_rc_equal(daos_acl_remove_ace(&acl,
+					    DAOS_ACL_GROUP, ""), -DER_INVAL);
 
 	/* cleanup */
 	daos_acl_free(acl);
@@ -1236,7 +1220,7 @@ test_acl_remove_ace_one_user(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_remove_ace(&acl,
+	assert_rc_equal(daos_acl_remove_ace(&acl,
 			ace[0]->dae_principal_type, ace[0]->dae_principal), 0);
 
 	/* Result should be empty ACL */
@@ -1262,7 +1246,7 @@ test_acl_remove_ace_multi_user(void **state)
 	acl = daos_acl_create(ace, num_aces);
 	orig_acl = daos_acl_dup(acl);
 
-	assert_int_equal(daos_acl_remove_ace(&acl,
+	assert_rc_equal(daos_acl_remove_ace(&acl,
 			ace[removed_idx]->dae_principal_type,
 			ace[removed_idx]->dae_principal),
 			0);
@@ -1280,10 +1264,10 @@ test_acl_remove_ace_multi_user(void **state)
 				ace[i]->dae_principal_type,
 				ace[i]->dae_principal, &current);
 		if (i == removed_idx) {
-			assert_int_equal(rc, -DER_NONEXIST);
+			assert_rc_equal(rc, -DER_NONEXIST);
 			assert_null(current);
 		} else {
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 			assert_non_null(current);
 		}
 	}
@@ -1308,14 +1292,15 @@ expect_acl_remove_ace_removes_principal(enum daos_acl_principal_type type,
 	acl = daos_acl_create(ace, num_aces);
 	orig_acl = daos_acl_dup(acl);
 
-	assert_int_equal(daos_acl_remove_ace(&acl, type, principal), 0);
+	assert_rc_equal(daos_acl_remove_ace(&acl, type, principal), 0);
 
 	/* Result should have the specific ACE removed */
 	assert_non_null(acl);
 	assert_int_equal(acl->dal_len,
-			orig_acl->dal_len - daos_ace_get_size(ace[type]));
-	assert_int_equal(daos_acl_get_ace_for_principal(acl, type, principal,
-			&ace_to_find), -DER_NONEXIST);
+			 orig_acl->dal_len - daos_ace_get_size(ace[type]));
+	assert_rc_equal(daos_acl_get_ace_for_principal(acl, type, principal,
+						       &ace_to_find),
+			-DER_NONEXIST);
 
 	/* cleanup */
 	daos_acl_free(acl);
@@ -1356,7 +1341,7 @@ test_acl_remove_ace_not_found(void **state)
 	fill_ace_list_with_users(ace, num_aces);
 	acl = daos_acl_create(ace, num_aces);
 
-	assert_int_equal(daos_acl_remove_ace(&acl, DAOS_ACL_USER, name),
+	assert_rc_equal(daos_acl_remove_ace(&acl, DAOS_ACL_USER, name),
 			-DER_NONEXIST);
 
 	/* cleanup */
@@ -1434,5 +1419,5 @@ main(void)
 		cmocka_unit_test(test_acl_remove_ace_not_found),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_acl_api", tests, NULL, NULL);
 }

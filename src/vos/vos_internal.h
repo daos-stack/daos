@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Layout definition for VOS root object
@@ -35,14 +18,15 @@
 #include <daos/btree.h>
 #include <daos/common.h>
 #include <daos/lru.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/bio.h>
 #include "vos_tls.h"
 #include "vos_layout.h"
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
+#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
+D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -119,7 +103,7 @@ enum {
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
-#define VOS_AGG_CREDITS_MAX	256
+#define VOS_AGG_CREDITS_MAX	32
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -153,6 +137,10 @@ struct vos_pool {
 	/** number of openers */
 	int			vp_opened:30;
 	int			vp_dying:1;
+	/** exclusive handle (see VOS_POF_EXCL) */
+	int			vp_excl:1;
+	/** caller specifies pool is small (for sys space reservation) */
+	bool			vp_small;
 	/** UUID of vos pool */
 	uuid_t			vp_id;
 	/** memory attribute of the @vp_umm */
@@ -165,6 +153,8 @@ struct vos_pool {
 	struct vos_gc_stat	vp_gc_stat;
 	/** link chain on vos_tls::vtl_gc_pools */
 	d_list_t		vp_gc_link;
+	/** List of open containers with objects in gc pool */
+	d_list_t		vp_gc_cont;
 	/** address of durable-format pool in SCM */
 	struct vos_pool_df	*vp_pool_df;
 	/** I/O context */
@@ -197,7 +187,7 @@ struct vos_container {
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
 	daos_handle_t		vc_dtx_committed_hdl;
-	/** The root of the B+ tree for ative DTXs. */
+	/** The root of the B+ tree for active DTXs. */
 	struct btr_root		vc_dtx_active_btr;
 	/** The root of the B+ tree for committed DTXs. */
 	struct btr_root		vc_dtx_committed_btr;
@@ -205,6 +195,8 @@ struct vos_container {
 	d_list_t		vc_dtx_committed_list;
 	/* The temporary list for committed DTXs during re-index. */
 	d_list_t		vc_dtx_committed_tmp_list;
+	/* The list for active DTXs, roughly ordered in time. */
+	d_list_t		vc_dtx_act_list;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
 	/* The items count in vc_dtx_committed_tmp_list. */
@@ -213,6 +205,8 @@ struct vos_container {
 	uint32_t		*vc_ts_idx;
 	/** Direct pointer to the VOS container */
 	struct vos_cont_df	*vc_cont_df;
+	/** Set if container has objects to garbage collect */
+	d_list_t		vc_gc_link;
 	/**
 	 * Corresponding in-memory block allocator hints for the
 	 * durable hints in vos_cont_df
@@ -237,16 +231,42 @@ struct vos_dtx_act_ent {
 	umem_off_t			*dae_records;
 	/* The capacity of dae_records, NOT including the inlined buffer. */
 	int				 dae_rec_cap;
+
+	/* The count of objects that are modified by this DTX. */
+	int				 dae_oid_cnt;
+
+	/* The single object OID if it is different from 'dae_base::dae_oid'. */
+	daos_unit_oid_t			 dae_oid_inline;
+
+	/* If single object is modified and if it is the same as the
+	 * 'dae_base::dae_oid', then 'dae_oids' points to 'dae_base::dae_oid'.
+	 *
+	 * If the single object is differet from 'dae_base::dae_oid',
+	 * then 'dae_oids' points to the 'dae_oid_inline'.
+	 *
+	 * Otherwise, 'dae_oids' points to new buffer to hold more.
+	 *
+	 * These information is used for EC aggregation optimization.
+	 * If server restarts, then we will lose the optimization but
+	 * it is not fatal.
+	 */
+	daos_unit_oid_t			*dae_oids;
+	/* The time (hlc) when the DTX entry is created. */
+	daos_epoch_t			 dae_start_time;
+	/* Link into container::vc_dtx_act_list. */
+	d_list_t			 dae_link;
+
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
-					 dae_aborted:1;
+					 dae_aborted:1,
+					 dae_maybe_shared:1,
+					 dae_prepared:1;
 };
 
-extern struct vos_tls	*standalone_tls;
 #ifdef VOS_STANDALONE
 #define VOS_TIME_START(start, op)		\
 do {						\
-	if (standalone_tls->vtl_dp == NULL)	\
+	if (vos_tls_get()->vtl_dp == NULL)	\
 		break;				\
 	start = daos_get_ntime();		\
 } while (0)
@@ -256,7 +276,7 @@ do {						\
 	struct daos_profile *dp;		\
 	int time_msec;				\
 						\
-	dp = standalone_tls->vtl_dp;		\
+	dp = vos_tls_get()->vtl_dp;		\
 	if ((dp) == NULL || start == 0)		\
 		break;				\
 	time_msec = (daos_get_ntime() - start)/1000; \
@@ -276,6 +296,7 @@ do {						\
 #define DAE_EPOCH(dae)		((dae)->dae_base.dae_epoch)
 #define DAE_LID(dae)		((dae)->dae_base.dae_lid)
 #define DAE_FLAGS(dae)		((dae)->dae_base.dae_flags)
+#define DAE_MBS_FLAGS(dae)	((dae)->dae_base.dae_mbs_flags)
 #define DAE_REC_INLINE(dae)	((dae)->dae_base.dae_rec_inline)
 #define DAE_REC_CNT(dae)	((dae)->dae_base.dae_rec_cnt)
 #define DAE_VER(dae)		((dae)->dae_base.dae_ver)
@@ -283,41 +304,26 @@ do {						\
 #define DAE_TGT_CNT(dae)	((dae)->dae_base.dae_tgt_cnt)
 #define DAE_GRP_CNT(dae)	((dae)->dae_base.dae_grp_cnt)
 #define DAE_MBS_DSIZE(dae)	((dae)->dae_base.dae_mbs_dsize)
-#define DAE_OID_CNT(dae)	((dae)->dae_base.dae_oid_cnt)
 #define DAE_INDEX(dae)		((dae)->dae_base.dae_index)
 #define DAE_MBS_INLINE(dae)	((dae)->dae_base.dae_mbs_inline)
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
-#define DAE_OID_INLINE(dae)	((dae)->dae_base.dae_oid_inline)
-#define DAE_OID_OFF(dae)	((dae)->dae_base.dae_oid_off)
 
 struct vos_dtx_cmt_ent {
 	/* Link into vos_conter::vc_dtx_committed_list */
 	d_list_t			 dce_committed_link;
 	struct vos_dtx_cmt_ent_df	 dce_base;
+
 	uint32_t			 dce_reindex:1,
-					 dce_exist:1;
+					 dce_exist:1,
+					 dce_invalid:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
 #define DCE_OID(dce)		((dce)->dce_base.dce_oid)
 #define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
-#define DCE_OID_OFF(dce)	((dce)->dce_base.dce_oid_off)
-#define DCE_OID_CNT(dce)	DCE_DKEY_HASH(dce)
 
-/* in-memory structures standalone instance */
-extern struct bio_xs_context		*vsa_xsctxt_inst;
 extern int vos_evt_feats;
-
-static inline struct bio_xs_context *
-vos_xsctxt_get(void)
-{
-#ifdef VOS_STANDALONE
-	return vsa_xsctxt_inst;
-#else
-	return dss_get_module_info()->dmi_nvme_ctxt;
-#endif
-}
 
 #define VOS_KEY_CMP_LEXICAL	(1ULL << 63)
 
@@ -355,7 +361,11 @@ vos_pool_hash_del(struct vos_pool *pool)
  * Getting object cache
  * Wrapper for TLS and standalone mode
  */
-struct daos_lru_cache *vos_get_obj_cache(void);
+static inline struct daos_lru_cache *
+vos_get_obj_cache(void)
+{
+	return vos_tls_get()->vtl_ocache;
+}
 
 /**
  * Register btree class for container table, it is called within vos_init()
@@ -403,7 +413,6 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
 /**
  * Check whether the record (to be accessible) is available to outside or not.
  *
- * \param umm		[IN]	Instance of an unified memory class.
  * \param coh		[IN]	The container open handle.
  * \param entry		[IN]	DTX local id
  * \param epoch		[IN]	Epoch of update
@@ -421,9 +430,29 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth);
  *		negative value	For error cases.
  */
 int
-vos_dtx_check_availability(struct umem_instance *umm, daos_handle_t coh,
-			   uint32_t entry, daos_epoch_t epoch,
-			   uint32_t intent, uint32_t type);
+vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
+			   daos_epoch_t epoch, uint32_t intent, uint32_t type);
+
+/**
+ * Get local entry DTX state. Only used by VOS aggregation.
+ *
+ * \param entry		[IN]	DTX local id
+ *
+ * \return		DTX_ST_COMMITTED, DTX_ST_PREPARED or
+ *			DTX_ST_ABORTED.
+ */
+static inline unsigned int
+vos_dtx_ent_state(uint32_t entry)
+{
+	switch (entry) {
+	case DTX_LID_COMMITTED:
+		return DTX_ST_COMMITTED;
+	case DTX_LID_ABORTED:
+		return DTX_ST_ABORTED;
+	default:
+		return DTX_ST_PREPARED;
+	}
+}
 
 /**
  * Register the record (to be modified) to the DTX entry.
@@ -474,10 +503,11 @@ int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
 			int counti, daos_epoch_t epoch,
 			struct dtx_cos_key *dcks,
-			struct vos_dtx_act_ent **daes);
+			struct vos_dtx_act_ent **daes,
+			struct vos_dtx_cmt_ent **dces);
 void
 vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
-		    int count, bool abort);
+		    struct vos_dtx_cmt_ent **dces, int count, bool abort);
 
 /**
  * Establish indexed active DTX table in DRAM.
@@ -555,20 +585,9 @@ struct vos_rec_bundle {
 	uint32_t		 rb_ver;
 	/** tree class */
 	enum vos_tree_class	 rb_tclass;
+	/** DTX state */
+	unsigned int		 rb_dtx_state;
 };
-
-/**
- * Inline data structure for embedding the key bundle and key into an anchor
- * for serialization.
- */
-#define	EMBEDDED_KEY_MAX	80
-struct vos_embedded_key {
-	/** Inlined iov key references */
-	d_iov_t		ek_kiov;
-	/** Inlined buffer the key references*/
-	unsigned char	ek_key[EMBEDDED_KEY_MAX];
-};
-D_CASSERT(sizeof(struct vos_embedded_key) == DAOS_ANCHOR_BUF_MAX);
 
 #define VOS_SIZE_ROUND		8
 
@@ -781,14 +800,19 @@ struct vos_iter_ops;
 
 /** the common part of vos iterators */
 struct vos_iterator {
+	struct dtx_handle	*it_dth;
 	struct vos_iter_ops	*it_ops;
 	struct vos_iterator	*it_parent; /* parent iterator */
+	struct vos_ts_set	*it_ts_set;
+	daos_epoch_t		 it_bound;
 	vos_iter_type_t		 it_type;
 	enum vos_iter_state	 it_state;
 	uint32_t		 it_ref_cnt;
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
-				 it_for_rebuild:1;
+				 it_for_migration:1,
+				 it_cleanup_stale_dtx:1,
+				 it_ignore_uncommitted:1;
 };
 
 /* Auxiliary structure for passing information between parent and nested
@@ -812,6 +836,8 @@ struct vos_iter_info {
 	/* Reference to vos object, set in iop_tree_prepare. */
 	struct vos_object	*ii_obj;
 	d_iov_t			*ii_akey; /* conditional akey */
+	/** address range (RECX); rx_nr == 0 means entire range (0:~0ULL) */
+	daos_recx_t              ii_recx;
 	daos_epoch_range_t	 ii_epr;
 	/** highest epoch where parent obj/key was punched */
 	struct vos_punch_record	 ii_punched;
@@ -826,7 +852,8 @@ struct vos_iter_info {
 struct vos_iter_ops {
 	/** prepare a new iterator with the specified type and parameters */
 	int	(*iop_prepare)(vos_iter_type_t type, vos_iter_param_t *param,
-			       struct vos_iterator **iter_pp);
+			       struct vos_iterator **iter_pp,
+			       struct vos_ts_set *ts_set);
 	/** fetch the record that the cursor points to and open the subtree
 	 *  corresponding to specified type, return info about the iterator
 	 *  and nested object.   If NULL, it isn't supported for the parent
@@ -842,7 +869,7 @@ struct vos_iter_ops {
 	int	(*iop_nested_prepare)(vos_iter_type_t type,
 				      struct vos_iter_info *info,
 				      struct vos_iterator **iter_pp);
-	/** finalise a iterator */
+	/** finalize a iterator */
 	int	(*iop_finish)(struct vos_iterator *iter);
 	/** Set the iterating cursor to the provided @anchor */
 	int	(*iop_probe)(struct vos_iterator *iter,
@@ -897,6 +924,8 @@ struct vos_obj_iter {
 	daos_key_t		 it_akey;
 	/* reference on the object */
 	struct vos_object	*it_obj;
+	/** condition of the iterator: extent range */
+	daos_recx_t              it_recx;
 };
 
 static inline struct vos_obj_iter *
@@ -975,9 +1004,11 @@ void
 key_tree_release(daos_handle_t toh, bool is_array);
 int
 key_tree_punch(struct vos_object *obj, daos_handle_t toh, daos_epoch_t epoch,
-	       d_iov_t *key_iov, d_iov_t *val_iov, uint64_t flags,
-	       struct vos_ts_set *ts_set, struct vos_ilog_info *parent,
-	       struct vos_ilog_info *info);
+	       daos_epoch_t bound, d_iov_t *key_iov, d_iov_t *val_iov,
+	       uint64_t flags, struct vos_ts_set *ts_set,
+	       struct vos_ilog_info *parent, struct vos_ilog_info *info);
+int
+key_tree_delete(struct vos_object *obj, daos_handle_t toh, d_iov_t *key_iov);
 
 /* vos_io.c */
 daos_size_t
@@ -1034,8 +1065,10 @@ vos_iter_intent(struct vos_iterator *iter)
 {
 	if (iter->it_for_purge)
 		return DAOS_INTENT_PURGE;
-	if (iter->it_for_rebuild)
-		return DAOS_INTENT_REBUILD;
+	if (iter->it_ignore_uncommitted)
+		return DAOS_INTENT_IGNORE_NONCOMMITTED;
+	if (iter->it_for_migration)
+		return DAOS_INTENT_MIGRATION;
 	return DAOS_INTENT_DEFAULT;
 }
 
@@ -1050,10 +1083,14 @@ gc_have_pool(struct vos_pool *pool);
 int
 gc_init_pool(struct umem_instance *umm, struct vos_pool_df *pd);
 int
-gc_add_item(struct vos_pool *pool, enum vos_gc_type type, umem_off_t item_off,
-	    uint64_t args);
+gc_init_cont(struct umem_instance *umm, struct vos_cont_df *cd);
+void
+gc_check_cont(struct vos_container *cont);
 int
-vos_gc_pool(daos_handle_t poh, int *credits);
+gc_add_item(struct vos_pool *pool, daos_handle_t coh,
+	    enum vos_gc_type type, umem_off_t item_off, uint64_t args);
+int
+vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(daos_size_t *rsrvd);
 
@@ -1087,6 +1124,30 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+
+/** Internal bit for initializing iterator from open tree handle */
+#define VOS_IT_KEY_TREE	(1 << 31)
+/** Ensure there is no overlap with public iterator flags (defined in
+ *  src/include/daos_srv/vos_types.h).
+ */
+D_CASSERT((VOS_IT_KEY_TREE & VOS_IT_MASK) == 0);
+
+/** Internal vos iterator API for iterating through keys using an
+ *  open tree handle to initialize the iterator
+ *
+ *  \param obj[IN]			VOS object
+ *  \param toh[IN]			Open key tree handle
+ *  \param type[IN]			Iterator type (VOS_ITER_AKEY/DKEY only)
+ *  \param epr[IN]			Valid epoch range for iteration
+ *  \param ignore_inprogress[IN]	Fail if there are uncommitted entries
+ *  \param cb[IN]			Callback for key
+ *  \param arg[IN]			argument to pass to callback
+ *  \param dth[IN]			dtx handle
+ */
+int
+vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
+		const daos_epoch_range_t *epr, bool ignore_inprogress,
+		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth);
 
 /** Start epoch of vos */
 extern daos_epoch_t	vos_start_epoch;
@@ -1148,5 +1209,64 @@ vos_epc_punched(daos_epoch_t epc, uint16_t minor_epc,
 	return false;
 }
 
+static inline bool
+vos_dtx_hit_inprogress(void)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	return dth != NULL && dth->dth_share_tbd_count > 0;
+}
+
+static inline bool
+vos_dtx_continue_detect(int rc)
+{
+	struct dtx_handle	*dth = vos_dth_get();
+
+	/* Continue to detect other potential in-prepared DTX. */
+	return rc == -DER_INPROGRESS && dth != NULL &&
+		dth->dth_share_tbd_count > 0 &&
+		dth->dth_share_tbd_count < DTX_REFRESH_MAX;
+}
+
+static inline bool
+vos_has_uncertainty(struct vos_ts_set *ts_set,
+		    const struct vos_ilog_info *info, daos_epoch_t epoch,
+		    daos_epoch_t bound)
+{
+	if (info->ii_uncertain_create)
+		return true;
+
+	return vos_ts_wcheck(ts_set, epoch, bound);
+}
+
+/** For dealing with common routines between punch and update where akeys are
+ *  passed in different structures
+ */
+struct vos_akey_data {
+	union {
+		/** If ad_is_iod is true, array of iods is used for akeys */
+		daos_iod_t	*ad_iods;
+		/** If ad_is_iod is false, it's an array of akeys */
+		daos_key_t	*ad_keys;
+	};
+	/** True if the the field above is an iod array */
+	bool		 ad_is_iod;
+};
+
+/** Add any missing timestamps to the read set when an operation fails due to
+ *  -DER_NONEXST.   This allows for fewer false conflicts on negative
+ *  entries.
+ *
+ *  \param[in]	ts_set	The timestamp set
+ *  \param[in]	dkey	Pointer to the dkey or NULL
+ *  \param[in]	akey_nr	Number of akeys (or 0 if no akeys)
+ *  \param[in]	ad	The actual akeys (either an array of akeys or iods)
+ */
+void
+vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
+		   struct vos_akey_data *ad);
+
+int
+vos_pool_settings_init(void);
 
 #endif /* __VOS_INTERNAL_H__ */

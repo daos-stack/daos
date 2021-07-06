@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of vos
@@ -79,7 +62,6 @@ static int akey_feats[] = {
 static inline int
 run_all_tests(int keys, bool nest_iterators)
 {
-	const char	*bypass = getenv("DAOS_IO_BYPASS");
 	const char	*it;
 	char		 cfg_desc_io[DTS_CFG_MAX];
 	int		 failed = 0;
@@ -87,16 +69,13 @@ run_all_tests(int keys, bool nest_iterators)
 	int		 i;
 	int		 j;
 
-	if (!bypass) {
-		if (!nest_iterators) {
-			dts_create_config(cfg_desc_io, "keys=%d", keys);
-			failed += run_ts_tests(cfg_desc_io);
-			failed += run_mvcc_tests(cfg_desc_io);
-		}
-		bypass = "none";
+	if (!nest_iterators) {
+		dts_create_config(cfg_desc_io, "keys=%d", keys);
+		failed += run_ts_tests(cfg_desc_io);
+		failed += run_mvcc_tests(cfg_desc_io);
 	}
 
-	dts_create_config(cfg_desc_io, "keys=%d bypass=%s", keys, bypass);
+	dts_create_config(cfg_desc_io, "keys=%d", keys);
 
 	if (nest_iterators == false) {
 		failed += run_pm_tests(cfg_desc_io);
@@ -113,8 +92,7 @@ run_all_tests(int keys, bool nest_iterators)
 	} else {
 		it = "nested";
 	}
-	dts_create_config(cfg_desc_io, "keys=%d bypass=%s iterator=%s", keys,
-		      bypass, it);
+	dts_create_config(cfg_desc_io, "keys=%d iterator=%s", keys, it);
 
 	for (i = 0; dkey_feats[i] >= 0; i++) {
 		for (j = 0; akey_feats[j] >= 0; j++) {
@@ -166,7 +144,7 @@ main(int argc, char **argv)
 		return rc;
 	}
 
-	rc = vos_init();
+	rc = vos_self_init("/mnt/daos");
 	if (rc) {
 		print_error("Error initializing VOS instance\n");
 		goto exit_0;
@@ -295,7 +273,7 @@ main(int argc, char **argv)
 		print_message("\nSUCCESS! NO TEST FAILURES\n");
 
 exit_1:
-	vos_fini();
+	vos_self_fini();
 exit_0:
 	daos_debug_fini();
 	return nr_failed;

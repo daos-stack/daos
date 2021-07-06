@@ -5,7 +5,7 @@ hosts:
     - server-A
   test_clients:
     - client-B
-timeout: 120
+timeout: 60
 server_config:
   name: daos_server
   transport_config:
@@ -45,7 +45,7 @@ agent_config_val: !mux
     config_val:
       - "name"
       - [amjustin, 12345, abcdef]
-      - "FAIl"
+      - "FAIL"
   access_point_noport:
     config_val:
       - "access_points"

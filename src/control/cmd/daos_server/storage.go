@@ -1,37 +1,23 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
 
 import (
 	"fmt"
+	"os/user"
+	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/common/proto"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
+	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -59,7 +45,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
 		cmd.scs = server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-			scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
+			scm.DefaultProvider(cmd.log), config.DefaultServer().Engines)
 	}
 
 	op := "Preparing"
@@ -72,18 +58,26 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	if prepNvme {
 		cmd.log.Info(op + " locally-attached NVMe storage...")
 
+		if cmd.TargetUser == "" {
+			runningUser, err := user.Current()
+			if err != nil {
+				return errors.Wrap(err, "couldn't lookup running user")
+			}
+			cmd.TargetUser = runningUser.Username
+		}
+
 		// Prepare NVMe access through SPDK
 		if _, err := cmd.scs.NvmePrepare(bdev.PrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
-			PCIWhitelist:  cmd.PCIWhiteList,
+			PCIAllowlist:  cmd.PCIAllowList,
 			ResetOnly:     cmd.Reset,
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}
 	}
 
-	scmScan, err := cmd.scs.ScmScan()
+	scmScan, err := cmd.scs.ScmScan(scm.ScanRequest{})
 	if err != nil {
 		return common.ConcatErrors(scanErrors, err)
 	}
@@ -102,9 +96,13 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
-			cmd.log.Info(scm.MsgScmRebootRequired)
+			cmd.log.Info(scm.MsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
-			cmd.log.Infof("SCM namespaces:\n\t%+v\n", resp.Namespaces)
+			var bld strings.Builder
+			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
+				return err
+			}
+			cmd.log.Infof("SCM namespaces:\n%s\n", bld.String())
 		} else {
 			cmd.log.Info("no SCM namespaces")
 		}
@@ -125,33 +123,49 @@ type storageScanCmd struct {
 
 func (cmd *storageScanCmd) Execute(args []string) error {
 	svc := server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-		scm.DefaultProvider(cmd.log), server.NewConfiguration().Servers)
+		scm.DefaultProvider(cmd.log), config.DefaultServer().Engines)
 
 	cmd.log.Info("Scanning locally-attached storage...")
 
+	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)
 
-	res, err := svc.NvmeScan()
+	nvmeResp, err := svc.NvmeScan(bdev.ScanRequest{})
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
-		ctrlrs := proto.NvmeControllers{}
-		if err := ctrlrs.FromNative(res.Controllers); err != nil {
-			scanErrors = append(scanErrors, err)
-		} else {
-			cmd.log.Info(ctrlrs.String())
+		_, err := fmt.Fprintf(&bld, "\n")
+		if err != nil {
+			return err
+		}
+		if err := pretty.PrintNvmeControllers(nvmeResp.Controllers, &bld); err != nil {
+			return err
 		}
 	}
 
-	scmResp, err := svc.ScmScan()
+	scmResp, err := svc.ScmScan(scm.ScanRequest{})
 	switch {
 	case err != nil:
 		scanErrors = append(scanErrors, err)
 	case len(scmResp.Namespaces) > 0:
-		cmd.log.Infof("SCM Namespaces:\n%s\n", scmResp.Namespaces)
+		_, err := fmt.Fprintf(&bld, "\n")
+		if err != nil {
+			return err
+		}
+		if err := pretty.PrintScmNamespaces(scmResp.Namespaces, &bld); err != nil {
+			return err
+		}
 	default:
-		cmd.log.Infof("SCM Modules:\n%s\n", scmResp.Modules)
+		_, err := fmt.Fprintf(&bld, "\n")
+		if err != nil {
+			return err
+		}
+		if err := pretty.PrintScmModules(scmResp.Modules, &bld); err != nil {
+			return err
+		}
 	}
+
+	cmd.log.Info(bld.String())
 
 	if len(scanErrors) > 0 {
 		errStr := "scan error(s):\n"

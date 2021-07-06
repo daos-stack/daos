@@ -1,26 +1,11 @@
-/**
- * (C) Copyright 2017-2019 Intel Corporation.
+/*
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
+ * \file
+ *
  * rdb: Internal Declarations
  */
 
@@ -97,6 +82,12 @@ struct rdb {
 	ABT_thread		d_compactd;
 };
 
+/* thresholds of free space for a leader to avoid appending new log entries
+ * and follower to warn if the situation is really dire.
+ */
+#define RDB_NOAPPEND_FREE_SPACE (262144)
+#define RDB_CRITICAL_FREE_SPACE (16384)
+
 /* Current rank */
 #define DF_RANK "%u"
 static inline d_rank_t
@@ -111,7 +102,7 @@ DP_RANK(void)
 }
 
 #define DF_DB		DF_UUID"["DF_RANK"]"
-#define DP_DB(db)	DP_UUID(db->d_uuid), DP_RANK()
+#define DP_DB(db)	DP_UUID((db)->d_uuid), DP_RANK()
 
 /* Number of "base" references that the rdb_stop() path expects to remain */
 #define RDB_BASE_REFS 1
@@ -171,7 +162,7 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RDB_VERSION 1
+#define DAOS_RDB_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -208,7 +199,7 @@ CRT_RPC_DECLARE(rdb_op, DAOS_ISEQ_RDB_OP, DAOS_OSEQ_RDB_OP)
 
 #define DAOS_ISEQ_RDB_REQUESTVOTE /* input fields */		 \
 	((struct rdb_op_in)	(rvi_op)		CRT_VAR) \
-	((msg_requestvote_t)	(rvi_msg)		CRT_VAR)
+	((msg_requestvote_t)	(rvi_msg)		CRT_RAW)
 
 #define DAOS_OSEQ_RDB_REQUESTVOTE /* output fields */		 \
 	((struct rdb_op_out)	(rvo_op)		CRT_VAR) \
@@ -223,24 +214,23 @@ CRT_RPC_DECLARE(rdb_requestvote, DAOS_ISEQ_RDB_REQUESTVOTE,
 
 #define DAOS_OSEQ_RDB_APPENDENTRIES /* output fields */		 \
 	((struct rdb_op_out)	(aeo_op)		CRT_VAR) \
-	((msg_appendentries_response_t) (aeo_msg)	CRT_VAR)
+	((msg_appendentries_response_t) (aeo_msg)	CRT_RAW)
 
 CRT_RPC_DECLARE(rdb_appendentries, DAOS_ISEQ_RDB_APPENDENTRIES,
 		DAOS_OSEQ_RDB_APPENDENTRIES)
 
 struct rdb_local {
-	d_iov_t		rl_kds_iov;	/* isi_kds buffer */
-	d_iov_t		rl_data_iov;	/* isi_data buffer */
+	d_iov_t	rl_kds_iov;	/* isi_kds buffer */
+	d_iov_t	rl_data_iov;	/* isi_data buffer */
 };
 
 #define DAOS_ISEQ_RDB_INSTALLSNAPSHOT /* input fields */	 \
 	((struct rdb_op_in)	(isi_op)		CRT_VAR) \
 	((msg_installsnapshot_t) (isi_msg)		CRT_VAR) \
-	((uint32_t)		(isi_padding)		CRT_VAR) \
 	/* chunk sequence number */				 \
 	((uint64_t)		(isi_seq)		CRT_VAR) \
 	/* chunk anchor */					 \
-	((struct rdb_anchor)	(isi_anchor)		CRT_VAR) \
+	((struct rdb_anchor)	(isi_anchor)		CRT_RAW) \
 	/* daos_key_desc_t[] */					 \
 	((crt_bulk_t)		(isi_kds)		CRT_VAR) \
 	/* described by isi_kds */				 \
@@ -251,13 +241,12 @@ struct rdb_local {
 #define DAOS_OSEQ_RDB_INSTALLSNAPSHOT /* output fields */	 \
 	((struct rdb_op_out)	(iso_op)		CRT_VAR) \
 	((msg_installsnapshot_response_t) (iso_msg)	CRT_VAR) \
-	((uint32_t)		(iso_padding)		CRT_VAR) \
 	/* chunk saved? */					 \
 	((uint64_t)		(iso_success)		CRT_VAR) \
 	/* last seq number */					 \
 	((uint64_t)		(iso_seq)		CRT_VAR) \
 	/* last anchor */					 \
-	((struct rdb_anchor)	(iso_anchor)		CRT_VAR)
+	((struct rdb_anchor)	(iso_anchor)		CRT_RAW)
 
 CRT_RPC_DECLARE(rdb_installsnapshot, DAOS_ISEQ_RDB_INSTALLSNAPSHOT,
 		DAOS_OSEQ_RDB_INSTALLSNAPSHOT)
@@ -299,9 +288,6 @@ int rdb_path_iterate(const rdb_path_t *path, rdb_path_iterate_cb_t cb,
 int rdb_path_pop(rdb_path_t *path);
 
 /* rdb_util.c *****************************************************************/
-
-#define DF_IOV		"<%p,"DF_U64">"
-#define DP_IOV(iov)	(iov)->iov_buf, (iov)->iov_len
 
 extern const daos_size_t rdb_iov_max;
 size_t rdb_encode_iov(const d_iov_t *iov, void *buf);
@@ -453,5 +439,8 @@ rdb_lc_iterate(daos_handle_t lc, uint64_t index, rdb_oid_t oid, bool backward,
 		" backward=%d\n", lc.cookie, index, oid, backward);
 	return rdb_vos_iterate(lc, index, oid, backward, cb, arg);
 }
+
+int
+rdb_scm_left(struct rdb *db, daos_size_t *scm_left_outp);
 
 #endif /* RDB_INTERNAL_H */

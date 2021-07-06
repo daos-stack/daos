@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -38,33 +21,10 @@ extern int dts_obj_replica_cnt;
 extern int dts_ec_obj_class;
 extern int dts_ec_grp_size;
 
-#define IOREQ_IOD_NR	5
-#define IOREQ_SG_NR	5
-#define IOREQ_SG_IOD_NR	5
-
-#define DTS_MAX_EXT_NUM		5
-#define DTS_MAX_DISTANCE	10
-#define DTS_MAX_EXTENT_SIZE	50
-#define DTS_MAX_OFFSET		1048576
-#define DTS_MAX_EPOCH_TIMES	20
-
-struct ioreq {
-	daos_handle_t		oh;
-	test_arg_t		*arg;
-	daos_event_t		ev;
-	daos_key_t		dkey;
-	daos_key_t		akey;
-	d_iov_t			val_iov[IOREQ_SG_IOD_NR][IOREQ_SG_NR];
-	d_sg_list_t		sgl[IOREQ_SG_IOD_NR];
-	daos_recx_t		rex[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
-	daos_epoch_range_t	erange[IOREQ_SG_IOD_NR][IOREQ_IOD_NR];
-	daos_iod_t		iod[IOREQ_SG_IOD_NR];
-	daos_iod_type_t		iod_type;
-	uint64_t		fail_loc;
-	int			result;
-};
-
+#define OW_IOD_SIZE	1024ULL
 #define SEGMENT_SIZE (10 * 1048576) /* 10MB */
+#define IO_SIZE_NVME (5ULL << 10) /* all records  >= 4K */
+#define IO_SIZE_SCM 64
 
 void
 ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
@@ -76,6 +36,11 @@ ioreq_fini(struct ioreq *req);
 void
 insert_single(const char *dkey, const char *akey, uint64_t idx, void *value,
 	      daos_size_t iod_size, daos_handle_t th, struct ioreq *req);
+
+void
+insert_single_with_flags(const char *dkey, const char *akey, uint64_t idx,
+			 void *value, daos_size_t iod_size, daos_handle_t th,
+			 struct ioreq *req, uint64_t flags);
 
 void
 insert_single_with_rxnr(const char *dkey, const char *akey, uint64_t idx,
@@ -106,9 +71,15 @@ enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	       daos_key_desc_t *kds, daos_anchor_t *anchor, void *buf,
 	       daos_size_t len, struct ioreq *req);
 void
+enumerate_rec(daos_handle_t th, char *dkey, char *akey,
+	      daos_size_t *size, uint32_t *number, daos_recx_t *recxs,
+	      daos_epoch_range_t *eprs, daos_anchor_t *anchor, bool incr,
+	      struct ioreq *req);
+
+void
 insert(const char *dkey, int nr, const char **akey, daos_size_t *iod_size,
-	int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
-	struct ioreq *req);
+       int *rx_nr, uint64_t *idx, void **val, daos_handle_t th,
+       struct ioreq *req, uint64_t flags);
 
 void
 insert_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
@@ -127,8 +98,17 @@ void
 punch_dkey(const char *dkey, daos_handle_t th, struct ioreq *req);
 
 void
+punch_dkey_with_flags(const char *dkey, daos_handle_t th, struct ioreq *req,
+		      uint64_t flags);
+
+void
 punch_akey(const char *dkey, const char *akey, daos_handle_t th,
 	   struct ioreq *req);
+
+void
+punch_akey_with_flags(const char *dkey, const char *akey, daos_handle_t th,
+		      struct ioreq *req, uint64_t flags);
+
 void
 punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
 	    int nr, daos_handle_t th, struct ioreq *req);
@@ -142,6 +122,11 @@ lookup_recxs(const char *dkey, const char *akey, daos_size_t iod_size,
 	     daos_size_t data_size, struct ioreq *req);
 
 void
+io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
+		   daos_iod_type_t iod_type, const char dkey[],
+	const char akey[]);
+
+void
 close_reopen_coh_oh(test_arg_t *arg, struct ioreq *req, daos_obj_id_t oid);
 
 int
@@ -151,6 +136,8 @@ int
 obj_teardown(void **state);
 
 int io_conf_run(test_arg_t *arg, const char *io_conf);
+
+int pool_storage_info(void **state, daos_pool_info_t *pinfo);
 
 /* below list the structure defined for epoch io testing */
 

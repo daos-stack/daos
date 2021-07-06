@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package common
@@ -26,6 +9,7 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"unicode"
 
 	"github.com/pkg/errors"
@@ -84,6 +68,12 @@ func Filter(ss []string, f func(string) bool) (nss []string) {
 		}
 	}
 	return
+}
+
+// FilterStringMatches checks whether a filter string matches the actual string
+// in a case-insensitive way. If the filter string is empty, a match is assumed.
+func FilterStringMatches(filterStr, actualStr string) bool {
+	return filterStr == "" || strings.EqualFold(actualStr, filterStr)
 }
 
 // IsAlphabetic checks of a string just contains alphabetic characters.
@@ -151,4 +141,51 @@ func DedupeStringSlice(in []string) []string {
 	}
 
 	return out
+}
+
+// StringSliceHasDuplicates checks whether there are duplicate strings in the
+// slice. Comparisons are case insensitive. If duplicates found, return true.
+func StringSliceHasDuplicates(slice []string) bool {
+	seen := make(map[string]struct{})
+
+	for _, s := range slice {
+		sl := strings.ToLower(s)
+		if _, already := seen[sl]; already {
+			return true
+		}
+		seen[sl] = struct{}{}
+	}
+
+	return false
+}
+
+// PercentageString returns string representation of percentage given
+// nominator and denominator unsigned integers.
+func PercentageString(part, total uint64) string {
+	if total == 0 {
+		return "N/A"
+	}
+	if part == 0 {
+		return fmt.Sprintf("%v %%", 0)
+	}
+
+	return fmt.Sprintf("%v %%",
+		int((float64(part)/float64(total))*float64(100)))
+}
+
+// TokenizeCommaSeparatedString splits the input string on comma boundaries,
+// and discards any empty strings in the result.
+func TokenizeCommaSeparatedString(str string) []string {
+	tokens := strings.Split(str, ",")
+	for i := len(tokens) - 1; i >= 0; i-- {
+		tokens[i] = strings.TrimSpace(tokens[i])
+		if tokens[i] == "" {
+			if i == len(tokens)-1 {
+				tokens = tokens[:i]
+			} else {
+				tokens = append(tokens[:i], tokens[i+1:]...)
+			}
+		}
+	}
+	return tokens
 }

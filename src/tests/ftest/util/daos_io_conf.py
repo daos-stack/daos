@@ -1,33 +1,17 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import random
 
 from apricot import TestWithServers
+from command_utils import ExecutableCommand
 from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
-from command_utils import ExecutableCommand
+
 from test_utils_pool import TestPool
 from job_manager_utils import Orterun
 
@@ -47,7 +31,7 @@ class IoConfGen(ExecutableCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to ""
         """
-        super(IoConfGen, self).__init__("/run/gen_io_conf/*",
+        super().__init__("/run/gen_io_conf/*",
                                         "daos_gen_io_conf", path)
         self.verbose = True
         self.env = env
@@ -60,19 +44,39 @@ class IoConfGen(ExecutableCommand):
         self.obj_class = FormattedParameter("-O {}")
         self.filename = BasicParameter(None, filename)
 
-    def run_conf(self):
+    def run_conf(self, dmg_config_file):
         """Run the daos_run_io_conf command as a foreground process.
 
-        Raises:
-            None
+        Args:
+            dmg_config_file: dmg file to run test.
+
+        Return:
+            Result bool: True if command success and false if any error.
 
         """
+        success_msg = 'daos_run_io_conf completed successfully'
         command = " ".join([os.path.join(self._path, "daos_run_io_conf"),
+                            " -n ", dmg_config_file,
                             self.filename.value])
 
         manager = Orterun(command)
         # run daos_run_io_conf Command using Openmpi
-        manager.run()
+        try:
+            out = manager.run()
+
+            #Return False if "ERROR" in stdout
+            for line in out.stdout_text.splitlines():
+                if 'ERROR' in line:
+                    return False
+            #Return False if not expected message to confirm test completed.
+            if success_msg not in out.stdout_text.splitlines()[-1]:
+                return False
+
+        #Return False if Command failed.
+        except CommandFailure as _error:
+            return False
+
+        return True
 
 def gen_unaligned_io_conf(record_size, filename="testfile"):
     """Generate the data-set file based on record size.
@@ -104,7 +108,6 @@ def gen_unaligned_io_conf(record_size, filename="testfile"):
     except Exception as error:
         raise error
 
-
 class IoConfTestBase(TestWithServers):
     """Base rebuild test class.
 
@@ -112,15 +115,19 @@ class IoConfTestBase(TestWithServers):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a IoConfTestBase object."""
-        super(IoConfTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.testfile = None
+        self.dmg = None
+        self.dmg_config_file = None
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
         self.testfile = os.path.join(avocao_tmp_dir, 'testfile')
+        self.dmg = self.get_dmg_command()
+        self.dmg_config_file = self.dmg.yaml.filename
 
     def execute_io_conf_run_test(self):
         """Execute the rebuild test steps."""
@@ -131,12 +138,12 @@ class IoConfTestBase(TestWithServers):
         io_conf.get_params(self)
         io_conf.run()
         # Run test file using daos_run_io_conf
-        io_conf.run_conf()
+        if not io_conf.run_conf(self.dmg_config_file):
+            self.fail("daos_run_io_conf failed")
 
     def unaligned_io(self):
         """Execute the unaligned IO test steps."""
         total_sizes = self.params.get("sizes", "/run/datasize/*")
-
         # Setup the pool
         self.setup_test_pool()
         pool_env = {"POOL_SCM_SIZE": "{}".format(self.pool.scm_size)}
@@ -148,4 +155,5 @@ class IoConfTestBase(TestWithServers):
             # Create unaligned test data set
             gen_unaligned_io_conf(record_size, self.testfile)
             # Run test file using daos_run_io_conf
-            io_conf.run_conf()
+            if not io_conf.run_conf(self.dmg_config_file):
+                self.fail("daos_run_io_conf failed")

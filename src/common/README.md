@@ -143,14 +143,14 @@ specific client session.
 The server flow is dependent on a custom handler function, whose job is to
 dispatch incoming `Drpc__Call` messages appropriately. The handler function
 should inspect the module and method IDs, ensure that the desired method is
-executed, and create a `Drpc__Response` based on the results.
+executed, and populate a `Drpc__Response` based on the results.
 
 #### Basic Server Workflow
 
 1. Set up the Unix Domain Socket at a given path and create a listening context
 using a custom handler function:
     ```
-    void my_handler(Drpc__Call *call, Drpc__Response **resp) {
+    void my_handler(Drpc__Call *call, Drpc__Response *resp) {
         /* Handle the message based on module/method IDs */
     }
     ...
@@ -205,42 +205,38 @@ noted above. Then `drpc_close()` the listener context.
 ### Checksummer
 
 A "Checksummer" is used to create checksums from a scatter gather list. The
- checksummer uses a function table (specified when initialized) to adapt common
- checksum calls to the underlying library that implements the checksum
- algorithm.
- Currently the isa-l and isa-l_crypto libraries are used to support crc16,
- crc32, crc64, and sha1. All of the function tables to support these
- algorithms are in [src/common/checksum.c](checksum.c).
- These function tables
- are not made public, but there is a helper function (daos_csum_type2algo) that
- will return the appropriate function table given a DAOS_CSUM_TYPE. There is
- another helper function (daos_contprop2csumtype) that will convert a container
- property value to the appropriate DAOS_CSUM_TYPE. The double "lookups" from
- container property checksum value to function table was done to remove the
- coupling from the checksummer and container info.
+checksummer uses a function table (specified when initialized) to adapt common
+checksum calls to the underlying library that implements the checksum algorithm.
+Currently the isa-l and isa-l_crypto libraries are used to support adler32,
+crc16, crc32, crc64, sha1, sha256, and sha512. All of the function tables to
+support these algorithms are in
+[src/common/multihash_isal.c](multihash_isal.c). These function tables are not
+made public, but there is a helper function (daos_mhash_type2algo) that will
+return the appropriate function table given a DAOS_CSUM_TYPE. There is another
+helper function (daos_contprop2csumtype) that will convert a container property
+value to the appropriate DAOS_CSUM_TYPE. The double "lookups" from container
+property checksum value to function table was done to remove the coupling from
+the checksummer and container info.
 
- All checksummer functions should start with daos_csummer_* and take a struct
- daos_csummer as the first argument. To initialize a new daos_csummer,
- daos_csummer_init takes the address to a pointer (so memory can be allocated),
- the address to a function table implementing the desired checksum algorithm,
- and because this is a DAOS checksummer, the size to be used for "chunks" (See
- [VOS](/src/vos/README.md) for details on chunks and chunk size). If it wasn't
- for the need to break the incoming data into chunks, the checksummer would not
- need the chunk size. When done with a checksummer, daos_csummer_destroy should
- be called to free allocated resources.
- Most checksummer functions are simple passthroughs to the function table if
- implemented. The main exception is daos_csummer_calc which, using the
- other checksummer functions, creates a checksum from the appropriate memory
- represented by the scatter gather list (d_sg_list_t) and the extents
- (daos_recx_t) of an I/O descriptor (daos_iod_t).
- The checksums are put into a collection of checksum buffers
- (daos_csum_buf_t), each containing multiple checksums. The memory for the
- daos_csum_buf_t's and the checksums will be allocated. Therefore, when done
- with the checksums, daos_csummer_destroy_csum_buf should be called to free
- this memory.
+All checksummer functions should start with daos_csummer_* and take a struct
+daos_csummer as the first argument. To initialize a new daos_csummer,
+daos_csummer_init takes the address to a pointer (so memory can be allocated),
+the address to a function table implementing the desired checksum algorithm, and
+because this is a DAOS checksummer, the size to be used for "chunks" (See
+[VOS](/src/vos/README.md) for details on chunks and chunk size). If it wasn't
+for the need to break the incoming data into chunks, the checksummer would not
+need the chunk size. When done with a checksummer, daos_csummer_destroy should
+be called to free allocated resources. Most checksummer functions are simple
+passthroughs to the function table if implemented. The main exception is
+daos_csummer_calc which, using the other checksummer functions, creates a
+checksum from the appropriate memory represented by the scatter gather list
+(d_sg_list_t) and the extents (daos_recx_t) of an I/O descriptor (daos_iod_t).
+The checksums are put into a collection of checksum buffers (daos_csum_buf_t),
+each containing multiple checksums. The memory for the daos_csum_buf_t's and the
+checksums will be allocated. Therefore, when done with the checksums,
+daos_csummer_destroy_csum_buf should be called to free this memory.
 
- There are a set of helper functions (prefixed with dcb) to act on a
- daos_csum_buf_t. These functions should be straight forward. The
- daos_csum_buf_t contains a pointer to the first byte of the checksums
- and information about the checksums, including count, size of
- checksum, etc.
+There are a set of helper functions (prefixed with dcb) to act on a
+daos_csum_buf_t. These functions should be straight forward. The daos_csum_buf_t
+contains a pointer to the first byte of the checksums and information about the
+checksums, including count, size of checksum, etc.

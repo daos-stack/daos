@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Governments rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
@@ -64,7 +47,7 @@ class QueryAttributeTest(TestWithServers):
         daos_cmd = DaosCommand(self.bin)
         # Call daos pool query, obtain pool UUID and SCM size, and compare
         # against those used when creating the pool.
-        kwargs = {"pool": expected["uuid"], "svc": expected["svc"]}
+        kwargs = {"pool": expected["uuid"]}
         query_result = daos_cmd.get_output("pool_query", **kwargs)
         actual_uuid = query_result[0][0]
         actual_size = query_result[2][4]
@@ -83,12 +66,11 @@ class QueryAttributeTest(TestWithServers):
             sample_attrs.append(sample_attr)
             sample_vals.append(sample_val)
             daos_cmd.pool_set_attr(
-                pool=actual_uuid, attr=sample_attr, value=sample_val,
-                svc=expected["svc"])
+                pool=actual_uuid, attr=sample_attr, value=sample_val)
             expected_attrs.append(sample_attr)
             expected_attrs_dict[sample_attr] = sample_val
         # List the attribute names and compare against those set.
-        kwargs = {"pool": actual_uuid, "svc": expected["svc"]}
+        kwargs = {"pool": actual_uuid}
         actual_attrs = daos_cmd.get_output("pool_list_attrs", **kwargs)
         actual_attrs.sort()
         expected_attrs.sort()
@@ -98,7 +80,6 @@ class QueryAttributeTest(TestWithServers):
             kwargs = {
                 "pool": actual_uuid,
                 "attr": sample_attrs[i],
-                "svc": expected["svc"]
             }
             actual_val = daos_cmd.get_output("pool_get_attr", **kwargs)[0]
             self.assertEqual(sample_vals[i], actual_val)

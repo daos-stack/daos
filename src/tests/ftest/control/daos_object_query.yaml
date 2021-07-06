@@ -1,0 +1,25 @@
+hosts:
+    test_servers:
+        - server-A
+        - server-B
+        - server-C
+        - server-D
+timeout: 80
+server_config:
+    name: daos_server
+pool:
+    name: daos_server
+    scm_size: 4G
+    control_method: dmg
+container:
+    control_method: daos
+    type: POSIX
+    class_names: !mux
+        oclass_s1:
+            oclass: S1
+        oclass_rp_2g1:
+            oclass: RP_2G1
+        oclass_rp_3g1:
+            oclass: RP_3G1
+        oclass_rp_2g2:
+            oclass: RP_2G2

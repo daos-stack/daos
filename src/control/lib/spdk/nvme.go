@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package spdk
@@ -28,12 +11,16 @@ package spdk
 
 /*
 #cgo CFLAGS: -I .
-#cgo LDFLAGS: -L . -lnvme_control -lspdk
+#cgo LDFLAGS: -L . -lnvme_control
+#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
+#cgo LDFLAGS: -lrte_mempool_ring -lrte_bus_pci
 
 #include "stdlib.h"
+#include "daos_srv/control.h"
 #include "spdk/stdinc.h"
-#include "spdk/nvme.h"
+#include "spdk/string.h"
 #include "spdk/env.h"
+#include "spdk/nvme.h"
 #include "include/nvme_control.h"
 #include "include/nvme_control_common.h"
 */
@@ -46,14 +33,15 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
+const lockfilePathPrefix = "/var/tmp/spdk_pci_lock_"
 
 // Nvme is the interface that provides SPDK NVMe functionality.
 type Nvme interface {
 	// Discover NVMe controllers and namespaces, and device health info
-	Discover(logging.Logger) ([]Controller, error)
+	Discover(logging.Logger) (storage.NvmeControllers, error)
 	// Format NVMe controller namespaces
 	Format(logging.Logger) ([]*FormatResult, error)
 	// CleanLockfiles removes SPDK lockfiles for specific PCI addresses
@@ -64,51 +52,6 @@ type Nvme interface {
 
 // NvmeImpl is an implementation of the Nvme interface.
 type NvmeImpl struct{}
-
-// Controller struct mirrors C.struct_ctrlr_t and
-// describes a NVMe controller.
-//
-// TODO: populate implicitly using inner member:
-// +inner C.struct_ctrlr_t
-type Controller struct {
-	Model       string
-	Serial      string
-	PCIAddr     string
-	FWRev       string
-	SocketID    int32
-	Namespaces  []*Namespace
-	HealthStats *DeviceHealth
-}
-
-// Namespace struct mirrors C.struct_ns_t and
-// describes a NVMe Namespace tied to a controller.
-//
-// TODO: populate implicitly using inner member:
-// +inner C.struct_ns_t
-type Namespace struct {
-	ID   uint32
-	Size uint64
-}
-
-// DeviceHealth struct mirrors C.struct_dev_health_t
-// and describes the raw SPDK device health stats
-// of a controller (NVMe SSD).
-type DeviceHealth struct {
-	Temperature     uint32
-	TempWarnTime    uint32
-	TempCritTime    uint32
-	CtrlBusyTime    uint64
-	PowerCycles     uint64
-	PowerOnHours    uint64
-	UnsafeShutdowns uint64
-	MediaErrors     uint64
-	ErrorLogEntries uint64
-	TempWarn        bool
-	AvailSpareWarn  bool
-	ReliabilityWarn bool
-	ReadOnlyWarn    bool
-	VolatileWarn    bool
-}
 
 // FormatResult struct mirrors C.struct_wipe_res_t
 // and describes the results of a format operation
@@ -163,10 +106,10 @@ func (n *NvmeImpl) CleanLockfiles(log logging.Logger, pciAddrs ...string) error 
 	return cleanLockfiles(log, realRemove, pciAddrs...)
 }
 
-func pciAddressList(ctrlrs []Controller) []string {
+func pciAddressList(ctrlrs storage.NvmeControllers) []string {
 	pciAddrs := make([]string, 0, len(ctrlrs))
 	for _, c := range ctrlrs {
-		pciAddrs = append(pciAddrs, c.PCIAddr)
+		pciAddrs = append(pciAddrs, c.PciAddr)
 	}
 
 	return pciAddrs
@@ -179,9 +122,8 @@ func pciAddressList(ctrlrs []Controller) []string {
 // ctrlr_t structs. These are converted and returned as Controller slices
 // containing any Namespace and DeviceHealth structs. Afterwards remove
 // lockfile for each discovered device.
-func (n *NvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
-	ctrlrs, err := collectCtrlrs(C.nvme_discover(),
-		"NVMe Discover(): C.nvme_discover")
+func (n *NvmeImpl) Discover(log logging.Logger) (storage.NvmeControllers, error) {
+	ctrlrs, err := collectCtrlrs(C.nvme_discover(), "NVMe Discover(): C.nvme_discover")
 
 	pciAddrs := pciAddressList(ctrlrs)
 	log.Debugf("discovered nvme ssds: %v", pciAddrs)
@@ -191,19 +133,10 @@ func (n *NvmeImpl) Discover(log logging.Logger) ([]Controller, error) {
 
 // Format devices available through SPDK, destructive operation!
 //
-// Attempt wipe of namespace #1 LBA-0.
-//
-// TODO DAOS-5485: reinstate fall back to full controller format if quick
-//      format failed, this requires reworking C.nvme_format() to format
-//      all available ctrlrs
+// Attempt wipe of each controller namespace's LBA-0.
 func (n *NvmeImpl) Format(log logging.Logger) ([]*FormatResult, error) {
 	return collectFormatResults(C.nvme_wipe_namespaces(),
 		"NVMe Format(): C.nvme_wipe_namespaces()")
-
-	//	log.Infof("falling back to full format on %s\n", ctrlrPciAddr)
-	//	_, err = collectCtrlrs(C.nvme_format(csPci), failMsg+"format()")
-	//
-	//	return
 }
 
 // Update updates the firmware image via SPDK in a given slot on the device.
@@ -221,39 +154,39 @@ func (n *NvmeImpl) Update(log logging.Logger, ctrlrPciAddr string, path string, 
 }
 
 // c2GoController is a private translation function.
-func c2GoController(ctrlr *C.struct_ctrlr_t) Controller {
-	return Controller{
+func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
+	return &storage.NvmeController{
 		Model:    C.GoString(&ctrlr.model[0]),
 		Serial:   C.GoString(&ctrlr.serial[0]),
-		PCIAddr:  C.GoString(&ctrlr.pci_addr[0]),
-		FWRev:    C.GoString(&ctrlr.fw_rev[0]),
+		PciAddr:  C.GoString(&ctrlr.pci_addr[0]),
+		FwRev:    C.GoString(&ctrlr.fw_rev[0]),
 		SocketID: int32(ctrlr.socket_id),
 	}
 }
 
 // c2GoDeviceHealth is a private translation function.
-func c2GoDeviceHealth(health *C.struct_dev_health_t) *DeviceHealth {
-	return &DeviceHealth{
-		Temperature:     uint32(health.temperature),
+func c2GoDeviceHealth(health *C.struct_nvme_stats) *storage.NvmeHealth {
+	return &storage.NvmeHealth{
 		TempWarnTime:    uint32(health.warn_temp_time),
 		TempCritTime:    uint32(health.crit_temp_time),
 		CtrlBusyTime:    uint64(health.ctrl_busy_time),
 		PowerCycles:     uint64(health.power_cycles),
 		PowerOnHours:    uint64(health.power_on_hours),
 		UnsafeShutdowns: uint64(health.unsafe_shutdowns),
-		MediaErrors:     uint64(health.media_errors),
-		ErrorLogEntries: uint64(health.error_log_entries),
-		TempWarn:        bool(health.temp_warning),
-		AvailSpareWarn:  bool(health.avail_spare_warning),
-		ReliabilityWarn: bool(health.dev_reliabilty_warning),
-		ReadOnlyWarn:    bool(health.read_only_warning),
-		VolatileWarn:    bool(health.volatile_mem_warning),
+		MediaErrors:     uint64(health.media_errs),
+		ErrorLogEntries: uint64(health.err_log_entries),
+		Temperature:     uint32(health.temperature),
+		TempWarn:        bool(health.temp_warn),
+		AvailSpareWarn:  bool(health.avail_spare_warn),
+		ReliabilityWarn: bool(health.dev_reliability_warn),
+		ReadOnlyWarn:    bool(health.read_only_warn),
+		VolatileWarn:    bool(health.volatile_mem_warn),
 	}
 }
 
 // c2GoNamespace is a private translation function.
-func c2GoNamespace(ns *C.struct_ns_t) *Namespace {
-	return &Namespace{
+func c2GoNamespace(ns *C.struct_ns_t) *storage.NvmeNamespace {
+	return &storage.NvmeNamespace{
 		ID:   uint32(ns.id),
 		Size: uint64(ns.size),
 	}
@@ -279,20 +212,28 @@ func clean(retPtr *C.struct_ret_t) {
 	C.free(unsafe.Pointer(retPtr))
 }
 
-// collectCtrlrs parses return struct to collect slice of nvme.Controller.
-func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller, err error) {
+// checkRet returns early if return struct is nil or rc is non-zero.
+func checkRet(retPtr *C.struct_ret_t, failMsg string) error {
 	if retPtr == nil {
-		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
+		return errors.Wrap(FaultBindingRetNull, failMsg)
 	}
-
-	defer clean(retPtr)
 
 	if retPtr.rc != 0 {
-		err = errors.Wrap(FaultBindingFailed(int(retPtr.rc),
-			C.GoString(&retPtr.info[0])), failMsg)
+		clean(retPtr)
 
-		return
+		return errors.Wrap(FaultBindingFailed(int(retPtr.rc),
+			C.GoString(&retPtr.info[0])), failMsg)
 	}
+
+	return nil
+}
+
+// collectCtrlrs parses return struct to collect slice of nvme.Controller.
+func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeControllers, err error) {
+	if err := checkRet(retPtr, failMsg); err != nil {
+		return nil, err
+	}
+	defer clean(retPtr)
 
 	ctrlrPtr := retPtr.ctrlrs
 	for ctrlrPtr != nil {
@@ -306,7 +247,7 @@ func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller,
 			}
 		}
 
-		healthPtr := ctrlrPtr.dev_health
+		healthPtr := ctrlrPtr.stats
 		if healthPtr == nil {
 			err = FaultCtrlrNoHealth
 
@@ -325,16 +266,10 @@ func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs []Controller,
 // collectFormatResults parses return struct to collect slice of
 // nvme.FormatResult.
 func collectFormatResults(retPtr *C.struct_ret_t, failMsg string) ([]*FormatResult, error) {
-	if retPtr == nil {
-		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
+	if err := checkRet(retPtr, failMsg); err != nil {
+		return nil, err
 	}
-
 	defer clean(retPtr)
-
-	if retPtr.rc != 0 {
-		return nil, errors.Wrap(FaultBindingFailed(int(retPtr.rc),
-			C.GoString(&retPtr.info[0])), failMsg)
-	}
 
 	var fmtResults []*FormatResult
 	fmtResult := retPtr.wipe_results

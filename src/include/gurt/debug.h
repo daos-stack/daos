@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __GURT_DEBUG_H__
@@ -44,7 +27,8 @@
 	ACTION(misc, misc, arg)  /* misc debug messages */              \
 	ACTION(mem,  mem,  arg)  /* memory debug messages */            \
 	ACTION(swim, swim, arg)  /* swim debug messages (move ?) */     \
-	ACTION(fi,   fi,   arg)  /* fault injection debug messages */
+	ACTION(fi,   fi,   arg)  /* fault injection debug messages */   \
+	ACTION(telem, telem, arg)  /* telemetry debug messages */
 
 /**
  * d_alt_assert is a pointer to an alternative assert function, meaning an
@@ -61,12 +45,16 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define DB_ALL_BITS	"all"
 
 #define D_LOG_FILE_ENV	"D_LOG_FILE"	/**< Env to specify log file */
+#define D_LOG_SIZE_ENV	"D_LOG_SIZE"	/**< Env to specify log max file size */
 #define D_LOG_MASK_ENV	"D_LOG_MASK"	/**< Env to specify log mask */
 
 /**< Env to specify log file pid append to filename*/
 #define D_LOG_FILE_APPEND_PID_ENV	"D_LOG_FILE_APPEND_PID"
 
 #define D_LOG_TRUNCATE_ENV		"D_LOG_TRUNCATE"
+
+/**< Env to specify flush priority */
+#define D_LOG_FLUSH_ENV			"D_LOG_FLUSH"
 
 /**< Env to specify stderr merge with logfile*/
 #define D_LOG_STDERR_IN_LOG_ENV	"D_LOG_STDERR_IN_LOG"
@@ -168,6 +156,19 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 			D_DEBUG(flag_false, __VA_ARGS__);	\
 	} while (0)
 
+/* Register a descriptor with a parent and a type */
+#define D_TRACE_UP(flag, ptr, parent, type)				\
+	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' from %p\n",	\
+		      type, parent)
+
+/* De-register a descriptor, including all aliases */
+#define D_TRACE_DOWN(flag, ptr)						\
+	D_TRACE_DEBUG(flag, ptr, "Deregistered\n")
+
+/** Register a root with type */
+#define D_TRACE_ROOT(flag, ptr, type)					\
+	D_TRACE_DEBUG(flag, ptr, "Registered new '%s' as root\n", type)
+
 /** Helper macros to conditionally output logs conditionally based on
  *  the message priority and the current log level.  See D_DEBUG and
  *  D_TRACE_DEBUG
@@ -176,8 +177,10 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 #define D_NOTE(fmt, ...)	D_DEBUG(DLOG_NOTE, fmt, ## __VA_ARGS__)
 #define D_WARN(fmt, ...)	D_DEBUG(DLOG_WARN, fmt, ## __VA_ARGS__)
 #define D_ERROR(fmt, ...)	D_DEBUG(DLOG_ERR, fmt, ## __VA_ARGS__)
+#define D_ALERT(fmt, ...)	D_DEBUG(DLOG_ALERT, fmt, ## __VA_ARGS__)
 #define D_CRIT(fmt, ...)	D_DEBUG(DLOG_CRIT, fmt, ## __VA_ARGS__)
 #define D_FATAL(fmt, ...)	D_DEBUG(DLOG_EMERG, fmt, ## __VA_ARGS__)
+#define D_EMIT(fmt, ...)	D_DEBUG(DLOG_EMIT, fmt, ## __VA_ARGS__)
 
 #define D_TRACE_INFO(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_INFO, ptr, fmt, ## __VA_ARGS__)
@@ -187,10 +190,14 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 	D_TRACE_DEBUG(DLOG_WARN, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_ERROR(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_ERR, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_ALERT(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_ALERT, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_CRIT(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_CRIT, ptr, fmt, ## __VA_ARGS__)
 #define D_TRACE_FATAL(ptr, fmt, ...)	\
 	D_TRACE_DEBUG(DLOG_EMERG, ptr, fmt, ## __VA_ARGS__)
+#define D_TRACE_EMIT(ptr, fmt, ...)	\
+	D_TRACE_DEBUG(DLOG_EMIT, ptr, fmt, ## __VA_ARGS__)
 
 #ifdef D_USE_GURT_FAC
 D_FOREACH_GURT_FAC(D_LOG_DECLARE_FAC, D_NOOP)
@@ -266,7 +273,7 @@ int d_log_getdbgbit(d_dbug_t *dbgbit, char *bitname);
  * \return			0 on success, -DER_INVAL on error
  */
 int d_register_alt_assert(void (*alt_assert)(const int, const char*,
-			  const char*, const int));
+					     const char*, const int));
 
 /**
  * D_PRINT can be used for output to stdout with or without clog being enabled
@@ -279,8 +286,10 @@ int d_register_alt_assert(void (*alt_assert)(const int, const char*,
 
 #define D_ASSERT(e)							\
 	do {								\
-		if (!(e))						\
-			D_FATAL("Assertion '%s' failed\n", #e);	\
+		if (!(e)) {						\
+			D_FATAL("Assertion '%s' failed\n", #e);		\
+			d_log_sync();					\
+		}							\
 		if (d_alt_assert != NULL)				\
 			d_alt_assert((int64_t)(e), #e, __FILE__, __LINE__);\
 		assert(e);						\
@@ -294,7 +303,6 @@ do {									\
 		d_alt_assert((int64_t)(cond), #cond, __FILE__, __LINE__);\
 	assert(cond);							\
 } while (0)
-
 
 #define D_CASSERT(cond, ...)						\
 	_Static_assert(cond, #cond ": " __VA_ARGS__)

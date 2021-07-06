@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -917,4 +900,68 @@ daos_acl_to_strs(struct daos_acl *acl, char ***ace_strs, size_t *ace_nr)
 	*ace_nr = ace_count;
 
 	return 0;
+}
+
+static int
+verbose_str_to_stream(FILE *stream, const char *ace_str)
+{
+	char	verbose_str[DAOS_ACL_MAX_ACE_STR_LEN * 2];
+	int	rc;
+
+	rc = daos_ace_str_get_verbose(ace_str, verbose_str,
+				      sizeof(verbose_str));
+	/* String may have been truncated - that's OK */
+	if (rc != 0 && rc != -DER_TRUNC) {
+		D_ERROR("failed verbose translation for ACE string '%s': %d\n",
+			ace_str, rc);
+		return rc;
+	}
+
+	return D_FPRINTF(stream, "# %s\n", verbose_str);
+}
+
+int
+daos_acl_to_stream(FILE *stream, struct daos_acl *acl, bool verbose)
+{
+	int	rc = 0;
+	char	**aces = NULL;
+	size_t	aces_nr, i;
+
+	if (stream == NULL) {
+		D_ERROR("Invalid stream\n");
+		return -DER_INVAL;
+	}
+
+	if (acl != NULL) {
+		rc = daos_acl_to_strs(acl, &aces, &aces_nr);
+		if (rc != 0)
+			return rc;
+	}
+
+	rc = D_FPRINTF(stream, "# Entries:\n");
+	if (rc != 0)
+		goto out;
+
+	if (acl == NULL || acl->dal_len == 0) {
+		rc = D_FPRINTF(stream, "#   None\n");
+		goto out;
+	}
+
+	for (i = 0; i < aces_nr; i++) {
+		if (verbose) {
+			rc = verbose_str_to_stream(stream, aces[i]);
+			if (rc != 0)
+				goto out;
+		}
+		rc = D_FPRINTF(stream, "%s\n", aces[i]);
+		if (rc != 0)
+			goto out;
+	}
+
+out:
+	if (aces != NULL) {
+		free_strings(aces, aces_nr);
+		D_FREE(aces);
+	}
+	return rc;
 }

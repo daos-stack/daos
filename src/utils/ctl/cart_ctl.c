@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements client side of the cart_ctl command
@@ -30,6 +13,9 @@
 #include <pthread.h>
 #include <getopt.h>
 #include <semaphore.h>
+
+/* for crt_register_proto_fi() */
+#include "crt_internal.h"
 
 #include "tests_common.h"
 
@@ -96,11 +82,9 @@ static int cmd2opcode(enum cmd_t cmd)
 	return -1;
 }
 
-
 struct cb_info {
 	enum cmd_t cmd;
 };
-
 
 struct ctl_g {
 	enum cmd_t			 cg_cmd_code;
@@ -370,7 +354,7 @@ parse_args(int argc, char **argv)
 	}
 
 	if (ctl_gdata.cg_cmd_code == CMD_LOG_ADD_MSG &&
-	    ctl_gdata.cg_log_msg_set == false) {
+	    !ctl_gdata.cg_log_msg_set) {
 		D_ERROR("log msg (-m 'message') missing for add_log_msg\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
@@ -415,7 +399,6 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 	struct crt_ctl_ep_ls_in			*in_args;
 	struct crt_ctl_get_uri_cache_out	*out_uri_cache_args;
 	struct crt_ctl_ep_ls_out		*out_ls_args;
-	struct crt_ctl_get_host_out		*out_get_host_args;
 	struct crt_ctl_get_pid_out		*out_get_pid_args;
 	struct crt_ctl_fi_attr_set_out		*out_set_fi_attr_args;
 	struct crt_ctl_fi_toggle_out		*out_fi_toggle_args;
@@ -445,7 +428,7 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 	} else if (info->cmd == CMD_LOG_SET) {
 		out_log_set_args = crt_reply_get(cb_info->cci_rpc);
 		fprintf(stdout, "rc: %d (%s)\n", out_log_set_args->rc,
-				d_errstr(out_log_set_args->rc));
+			d_errstr(out_log_set_args->rc));
 	} else if (info->cmd == CMD_LOG_ADD_MSG) {
 	} else if (cb_info->cci_rc == 0) {
 		fprintf(stdout, "group: %s, rank: %d\n",
@@ -469,12 +452,12 @@ ctl_cli_cb(const struct crt_cb_info *cb_info)
 				addr_str += (strlen(addr_str) + 1);
 			}
 		} else if (info->cmd == CMD_GET_HOSTNAME) {
-			out_get_host_args = crt_reply_get(cb_info->cci_rpc);
+			struct crt_ctl_get_host_out *out;
 
+			out = crt_reply_get(cb_info->cci_rpc);
 			fprintf(stdout, "hostname: %s\n",
-			    (char *)out_get_host_args->cgh_hostname.iov_buf);
+				(char *)out->cgh_hostname.iov_buf);
 		} else if (info->cmd == CMD_GET_PID) {
-
 			out_get_pid_args = crt_reply_get(cb_info->cci_rpc);
 
 			fprintf(stdout, "pid: %d\n",
@@ -557,6 +540,18 @@ ctl_fill_rpc_args(crt_rpc_t *rpc_req, int index)
 }
 
 static int
+ctl_register_fi(crt_endpoint_t *ep)
+{
+	return crt_register_proto_fi(ep);
+}
+
+static int
+ctl_register_ctl(crt_endpoint_t *ep)
+{
+	return crt_register_proto_ctl(ep);
+}
+
+static int
 ctl_init()
 {
 	int			 i;
@@ -571,12 +566,13 @@ ctl_init()
 
 	if (ctl_gdata.cg_save_cfg) {
 		rc = crt_group_config_path_set(ctl_gdata.cg_cfg_path);
-		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
+		D_ASSERTF(rc == 0, "crt_group_config_path_set() failed, "
+			DF_RC"\n", DP_RC(rc));
 	}
 
 	tc_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
-			    &rank_list, &ctl_gdata.cg_crt_ctx,
-			    &ctl_gdata.cg_tid, 1, ctl_gdata.cg_save_cfg, NULL);
+			   &rank_list, &ctl_gdata.cg_crt_ctx,
+			   &ctl_gdata.cg_tid, 1, true, NULL);
 
 	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);
@@ -587,7 +583,7 @@ ctl_init()
 	 * 5 - ping timeout
 	 * 150 - total timeout
 	 */
-	if (ctl_gdata.cg_no_wait_for_ranks == false) {
+	if (!ctl_gdata.cg_no_wait_for_ranks) {
 		rc = tc_wait_for_ranks(ctl_gdata.cg_crt_ctx, grp, rank_list,
 				       0, 1, 5, 150);
 		if (rc != 0) {
@@ -606,6 +602,22 @@ ctl_init()
 	} else {
 		num_ranks = ctl_gdata.cg_num_ranks;
 		ranks_to_send = ctl_gdata.cg_ranks;
+	}
+
+	ep.ep_grp = grp;
+	ep.ep_rank = ranks_to_send[0];
+	ep.ep_tag = 0;
+
+	if (ctl_gdata.cg_cmd_code == CMD_SET_FI_ATTR ||
+	    ctl_gdata.cg_cmd_code == CMD_DISABLE_FI ||
+	    ctl_gdata.cg_cmd_code == CMD_ENABLE_FI) {
+		rc = ctl_register_fi(&ep);
+		if (rc != -DER_SUCCESS)
+			return rc;
+	} else {
+		rc = ctl_register_ctl(&ep);
+		if (rc != -DER_SUCCESS)
+			return rc;
 	}
 
 	for (i = 0; i < num_ranks; i++) {
@@ -668,7 +680,7 @@ ctl_init()
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	g_shutdown = 1;
+	tc_progress_stop();
 
 	rc = pthread_join(ctl_gdata.cg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
@@ -690,6 +702,8 @@ main(int argc, char **argv)
 {
 	int		rc = 0;
 
+	d_log_init();
+
 	rc = parse_args(argc, argv);
 	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);
 
@@ -697,7 +711,11 @@ main(int argc, char **argv)
 	tc_test_init(0, 40, false, false);
 
 	rc = ctl_init();
-	D_ASSERTF(rc == 0, "ctl_init() failed, rc %d\n", rc);
+	if (rc)
+		D_ERROR("ctl_init() failed, rc "DF_RC"\n", DP_RC(rc));
 
-	return rc;
+	d_log_fini();
+	if (rc != 0)
+		return 1;
+	return 0;
 }

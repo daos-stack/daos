@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_COMMON_H__
@@ -47,17 +30,24 @@
 #include <gurt/common.h>
 #include <cart/api.h>
 #include <daos_types.h>
+#include <daos_obj.h>
 #include <daos_prop.h>
 #include <daos_security.h>
 #include <daos/profile.h>
 #include <daos/dtx.h>
+#include <daos/cmd_parser.h>
+
+#define DAOS_ON_VALGRIND D_ON_VALGRIND
 
 #define DF_OID		DF_U64"."DF_U64
 #define DP_OID(o)	(o).hi, (o).lo
 
 #define DF_UOID		DF_OID".%u"
 #define DP_UOID(uo)	DP_OID((uo).id_pub), (uo).id_shard
-
+#define DF_BOOL "%s"
+#define DP_BOOL(b) ((b) ? "true" : "false")
+#define DF_IOV "<%p, %zu/%zu>"
+#define DP_IOV(i) (i)->iov_buf, (i)->iov_len, (i)->iov_buf_len
 #define MAX_TREE_ORDER_INC	7
 
 struct daos_node_overhead {
@@ -89,6 +79,57 @@ struct daos_sgl_idx {
 	daos_off_t	iov_offset; /** byte offset of iov buf */
 };
 
+#define DF_SGL_IDX "{idx: %d, offset: "DF_U64"}"
+#define DP_SGL_IDX(i) (i)->iov_idx, (i)->iov_offset
+
+/*
+ * add bytes to the sgl index offset. If the new offset is greater than or
+ * equal to the indexed iov len, move the index to the next iov in the sgl.
+ */
+static inline void
+sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
+{
+	sgl_idx->iov_offset += bytes;
+	D_DEBUG(DB_TRACE, "Moving sgl index formward by %lu bytes."
+			  "Idx: "DF_SGL_IDX"\n",
+		bytes, DP_SGL_IDX(sgl_idx));
+
+	/** move to next iov if necessary */
+	if (sgl_idx->iov_offset >= sgl->sg_iovs[sgl_idx->iov_idx].iov_buf_len) {
+		sgl_idx->iov_idx++;
+		sgl_idx->iov_offset = 0;
+		D_DEBUG(DB_TRACE, "Moving to next iov in sgl\n");
+	}
+	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+}
+
+static inline void *
+sgl_indexed_byte(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx)
+{
+	D_DEBUG(DB_TRACE, "Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+	if (sgl_idx->iov_idx > sgl->sg_nr_out - 1) {
+		D_DEBUG(DB_TRACE, "Index too high. Returning NULL\n");
+		return NULL;
+	}
+	return sgl->sg_iovs[sgl_idx->iov_idx].iov_buf + sgl_idx->iov_offset;
+}
+
+/*
+ * If the byte count will exceed the current indexed iov, then move to
+ * the next.
+ */
+static inline void
+sgl_test_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
+{
+	D_DEBUG(DB_TRACE, "Before Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+	if (sgl_idx->iov_offset + bytes >
+	    sgl->sg_iovs[sgl_idx->iov_idx].iov_len) {
+		sgl_idx->iov_idx++;
+		sgl_idx->iov_offset = 0;
+	}
+	D_DEBUG(DB_TRACE, "After Idx: "DF_SGL_IDX"\n", DP_SGL_IDX(sgl_idx));
+}
+
 /*
  * Each thread has DF_UUID_MAX number of thread-local buffers for UUID strings.
  * Each debug message can have at most this many DP_UUIDs.
@@ -113,14 +154,17 @@ char *DP_UUID(const void *uuid);
 #else
 char *daos_key2str(daos_key_t *key);
 
-#define DF_KEY			"[%d] %.*s"
+#define DF_KEY			"[%d] '%.*s'"
 #define DP_KEY(key)		(int)(key)->iov_len,	\
 				(int)(key)->iov_len,	\
 				daos_key2str(key)
 #endif
 
-#define DF_RECX			"["DF_U64"-"DF_U64"]"
+#define DF_RECX			"["DF_X64"-"DF_X64"]"
 #define DP_RECX(r)		(r).rx_idx, ((r).rx_idx + (r).rx_nr - 1)
+#define DF_IOM			"{nr: %d, lo: "DF_RECX", hi: "DF_RECX"}"
+#define DP_IOM(m)		(m)->iom_nr, DP_RECX((m)->iom_recx_lo), \
+				DP_RECX((m)->iom_recx_hi)
 
 static inline uint64_t
 daos_u64_hash(uint64_t val, unsigned int bits)
@@ -136,7 +180,6 @@ daos_u32_hash(uint64_t key, unsigned int bits)
 {
 	return (DGOLDEN_RATIO_PRIME_32 * key) >> (32 - bits);
 }
-
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
@@ -201,6 +244,21 @@ daos_getntime_coarse(void)
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
 }
 
+static inline uint64_t
+daos_getmtime_coarse(void)
+{
+	return daos_getntime_coarse() / NSEC_PER_MSEC;
+}
+
+static inline uint64_t
+daos_getutime(void)
+{
+	struct timespec tv;
+
+	d_gettime(&tv);
+	return d_time2us(tv);
+}
+
 static inline int daos_gettime_coarse(uint64_t *time)
 {
 	struct timespec	now;
@@ -223,7 +281,7 @@ typedef struct {
 	 * -1	array[a] < array[b]
 	 */
 	int     (*so_cmp)(void *array, int a, int b);
-	/** for binary search */
+	/** for binary search, returned value is the same as so_cmp() */
 	int	(*so_cmp_key)(void *array, int i, uint64_t key);
 } daos_sort_ops_t;
 
@@ -231,10 +289,13 @@ int daos_array_sort(void *array, unsigned int len, bool unique,
 		    daos_sort_ops_t *ops);
 int daos_array_find(void *array, unsigned int len, uint64_t key,
 		    daos_sort_ops_t *ops);
+int daos_array_find_le(void *array, unsigned int len, uint64_t key,
+		       daos_sort_ops_t *ops);
+int daos_array_find_ge(void *array, unsigned int len, uint64_t key,
+		       daos_sort_ops_t *ops);
+
 void daos_array_shuffle(void *arr, unsigned int len, daos_sort_ops_t *ops);
 
-int  daos_sgl_init(d_sg_list_t *sgl, unsigned int nr);
-void daos_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
 int daos_sgls_copy_ptr(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 		       int src_nr);
 int daos_sgls_copy_data_out(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
@@ -244,6 +305,7 @@ int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 int daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
+int daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
 daos_size_t daos_sgls_buf_size(d_sg_list_t *sgls, int nr);
@@ -264,7 +326,8 @@ daos_sgl_buf_extend(d_sg_list_t *sgl, int idx, size_t new_size);
 /** get remaining space in an iov, assuming that iov_len is used and
  * iov_buf_len is total in buf
  */
-#define daos_iov_remaining(iov) ((iov).iov_buf_len - (iov).iov_len)
+#define daos_iov_remaining(iov) ((iov).iov_buf_len > (iov).iov_len ? \
+				(iov).iov_buf_len - (iov).iov_len : 0)
 /**
  * Move sgl forward from iov_idx/iov_off, with move_dist distance. It is
  * caller's responsibility to check the boundary.
@@ -364,6 +427,7 @@ int daos_sgl_processor(d_sg_list_t *sgl, bool check_buf,
 
 char *daos_str_trimwhite(char *str);
 int daos_iov_copy(d_iov_t *dst, d_iov_t *src);
+int daos_iov_alloc(d_iov_t *iov, daos_size_t size, bool set_full);
 void daos_iov_free(d_iov_t *iov);
 bool daos_iov_cmp(d_iov_t *iov1, d_iov_t *iov2);
 void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
@@ -374,11 +438,11 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 /* given a pointer @ptr to the field @member embedded into type (usually
  *  * struct) @type, return pointer to the embedding instance of @type. */
 # define container_of(ptr, type, member)		\
-	        ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+	 ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
 
 #ifndef offsetof
-# define offsetof(typ,memb)	((long)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ, memb)	((long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #ifndef ARRAY_SIZE
@@ -386,27 +450,27 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 #endif
 
 #ifndef MIN
-# define MIN(a,b) (((a)<(b)) ? (a): (b))
+# define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 #ifndef MAX
-# define MAX(a,b) (((a)>(b)) ? (a): (b))
+# define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
 #ifndef min
-#define min(x,y) ((x)<(y) ? (x) : (y))
+#define min(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
 #ifndef max
-#define max(x,y) ((x)>(y) ? (x) : (y))
+#define max(x, y) ((x) > (y) ? (x) : (y))
 #endif
 
 #ifndef min_t
-#define min_t(type,x,y) \
-	        ({ type __x = (x); type __y = (y); __x < __y ? __x: __y; })
+#define min_t(type, x, y) \
+	     ({ type __x = (x); type __y = (y); __x < __y ? __x : __y; })
 #endif
 #ifndef max_t
-#define max_t(type,x,y) \
-	        ({ type __x = (x); type __y = (y); __x > __y ? __x: __y; })
+#define max_t(type, x, y) \
+	     ({ type __x = (x); type __y = (y); __x > __y ? __x : __y; })
 #endif
 
 #define DAOS_UUID_STR_SIZE 37	/* 36 + 1 for '\0' */
@@ -449,6 +513,7 @@ daos_errno2der(int err)
 	case EPROTO:		return -DER_PROTO;
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
+	case EIO:		return -DER_IO;
 	case EFAULT:
 	case ENXIO:
 	case ENODEV:
@@ -498,6 +563,7 @@ daos_der2errno(int err)
 	case -DER_BADPATH:
 	case -DER_NOTDIR:	return ENOTDIR;
 	case -DER_STALE:	return ESTALE;
+	case -DER_TX_RESTART:	return ERESTART;
 	default:		return EIO;
 	}
 };
@@ -508,7 +574,7 @@ daos_crt_network_error(int err)
 	return err == -DER_HG || err == -DER_ADDRSTR_GEN ||
 	       err == -DER_PMIX || err == -DER_UNREG ||
 	       err == -DER_UNREACH || err == -DER_CANCELED ||
-	       err == -DER_NOREPLY;
+	       err == -DER_NOREPLY || err == -DER_OOG;
 }
 
 #define daos_rank_list_dup		d_rank_list_dup
@@ -568,6 +634,7 @@ daos_fail_fini(void);
 
 enum {
 	DAOS_FAIL_UNIT_TEST_GROUP = 1,
+	DAOS_FAIL_SYS_TEST_GROUP = 2,
 	DAOS_FAIL_MAX_GROUP
 };
 
@@ -575,6 +642,9 @@ enum {
 
 #define DAOS_FAIL_UNIT_TEST_GROUP_LOC	\
 		(DAOS_FAIL_UNIT_TEST_GROUP << DAOS_FAIL_GROUP_SHIFT)
+
+#define DAOS_FAIL_SYS_TEST_GROUP_LOC \
+		(DAOS_FAIL_SYS_TEST_GROUP << DAOS_FAIL_GROUP_SHIFT)
 
 #define DAOS_FAIL_GROUP_GET(fail_loc)	\
 		((fail_loc & DAOS_FAIL_GROUP_MASK) >> DAOS_FAIL_GROUP_SHIFT)
@@ -609,10 +679,6 @@ enum {
 #define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
 #define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
 
-#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
-#define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1c)
-#define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1d)
-
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
 #define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
 
@@ -640,13 +706,30 @@ enum {
 #define DAOS_DTX_LOST_RPC_REQUEST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x33)
 #define DAOS_DTX_LOST_RPC_REPLY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x34)
 #define DAOS_DTX_LONG_TIME_RESEND	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x35)
+#define DAOS_DTX_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x36)
+#define DAOS_DTX_NO_READ_TS		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x37)
+#define DAOS_DTX_SPEC_EPOCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x38)
+#define DAOS_DTX_STALE_PM		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x39)
+#define DAOS_DTX_FAIL_IO		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3a)
+#define DAOS_DTX_START_EPOCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3b)
+#define DAOS_DTX_NO_BATCHED_CMT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3d)
+#define DAOS_DTX_NO_COMMITTABLE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3e)
+#define DAOS_DTX_MISS_COMMIT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x3f)
 
 #define DAOS_VC_DIFF_REC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x40)
 #define DAOS_VC_DIFF_DKEY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x41)
 #define DAOS_VC_LOST_DATA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x42)
 #define DAOS_VC_LOST_REPLICA		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x43)
 
+#define DAOS_DTX_MISS_ABORT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x44)
+#define DAOS_DTX_SPEC_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x45)
+#define DAOS_DTX_SRV_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x46)
+#define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
+#define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
+
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
+#define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
+#define DAOS_NVME_READ_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x52)
 
 #define DAOS_POOL_CREATE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x60)
 #define DAOS_POOL_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x61)
@@ -656,12 +739,33 @@ enum {
 #define DAOS_CONT_DESTROY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x65)
 #define DAOS_CONT_CLOSE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x66)
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
+#define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
 #define FLC_POOL_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x71)
 
 #define DAOS_FAIL_LOST_REQ		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x72)
+
+#define DAOS_SHARD_OBJ_RW_DROP_REPLY (DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x80)
+#define DAOS_OBJ_FETCH_DATA_LOST	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x81)
+#define DAOS_OBJ_TRY_SPECIAL_SHARD	(DAOS_FAIL_SYS_TEST_GROUP_LOC | 0x82)
+
+#define DAOS_VOS_AGG_RANDOM_YIELD	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x90)
+#define DAOS_VOS_AGG_MW_THRESH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x91)
+#define DAOS_VOS_NON_LEADER		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x92)
+#define DAOS_VOS_AGG_BLOCKED		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x93)
+
+#define DAOS_VOS_GC_CONT		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x94)
+#define DAOS_VOS_GC_CONT_NULL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x95)
+
+#define DAOS_OBJ_SKIP_PARITY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x96)
+#define DAOS_OBJ_FORCE_DEGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x97)
+#define DAOS_FORCE_EC_AGG		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x98)
+#define DAOS_FORCE_EC_AGG_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
+#define DAOS_FORCE_EC_AGG_PEER_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9a)
+
+#define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
 #define DAOS_FAIL_CHECK(id) daos_fail_check(id)
 
@@ -701,22 +805,52 @@ bool daos_hhash_link_delete(struct d_hlink *hlink);
 	(((recx_1)->rx_idx < (recx_2)->rx_idx + (recx_2)->rx_nr) &&	\
 	 ((recx_2)->rx_idx < (recx_1)->rx_idx + (recx_1)->rx_nr))
 
+#define DAOS_RECX_ADJACENT(recx_1, recx_2)				\
+	(((recx_1).rx_idx == (recx_2).rx_idx + (recx_2).rx_nr) ||	\
+	 ((recx_2).rx_idx == (recx_1).rx_idx + (recx_1).rx_nr))
+#define DAOS_RECX_PTR_ADJACENT(recx_1, recx_2)				\
+	(((recx_1)->rx_idx == (recx_2)->rx_idx + (recx_2)->rx_nr) ||	\
+	 ((recx_2)->rx_idx == (recx_1)->rx_idx + (recx_1)->rx_nr))
+
+#define DAOS_RECX_END(recx)	((recx).rx_idx + (recx).rx_nr)
+#define DAOS_RECX_PTR_END(recx)	((recx)->rx_idx + (recx)->rx_nr)
+
+/**
+ * Merge \a src recx to \a dst recx.
+ */
+static inline void
+daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
+{
+	uint64_t	end;
+
+	end = max(DAOS_RECX_PTR_END(src), DAOS_RECX_PTR_END(dst));
+	dst->rx_idx = min(src->rx_idx, dst->rx_idx);
+	dst->rx_nr = end - dst->rx_idx;
+}
+
 /* NVMe shared constants */
 #define DAOS_NVME_SHMID_NONE	-1
 #define DAOS_NVME_MEM_PRIMARY	0
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
-int crt_proc_struct_dtx_id(crt_proc_t proc, struct dtx_id *dti);
-int crt_proc_daos_prop_t(crt_proc_t proc, daos_prop_t **data);
-int crt_proc_struct_daos_acl(crt_proc_t proc, struct daos_acl **data);
+int crt_proc_struct_dtx_id(crt_proc_t proc, crt_proc_op_t proc_op,
+			   struct dtx_id *dti);
+int crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			 daos_prop_t **data);
+int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
+			     struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
-daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
-struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
+daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool, bool input);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
+void daos_prop_fini(daos_prop_t *prop);
+
+struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
+daos_recx_t *daos_recx_alloc(uint32_t nr);
+void daos_recx_free(daos_recx_t *recx);
 
 static inline void
 daos_parse_ctype(const char *string, daos_cont_layout_t *type)
@@ -745,7 +879,46 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 	}
 }
 
+static inline void
+daos_anchor_set_flags(daos_anchor_t *anchor, uint32_t flags)
+{
+	anchor->da_flags = flags;
+}
+
+static inline uint32_t
+daos_anchor_get_flags(daos_anchor_t *anchor)
+{
+	return anchor->da_flags;
+}
+
+static inline void
+daos_anchor_set_eof(daos_anchor_t *anchor)
+{
+	anchor->da_type = DAOS_ANCHOR_TYPE_EOF;
+}
+
+static inline void
+daos_anchor_set_zero(daos_anchor_t *anchor)
+{
+	anchor->da_type = DAOS_ANCHOR_TYPE_ZERO;
+}
+
+static inline bool
+daos_anchor_is_zero(daos_anchor_t *anchor)
+{
+	return anchor->da_type == DAOS_ANCHOR_TYPE_ZERO;
+}
+
 /* default debug log file */
 #define DAOS_LOG_DEFAULT	"/tmp/daos.log"
+
+#ifdef NEED_EXPLICIT_BZERO
+/* Secure memory scrub */
+static inline void
+explicit_bzero(void *s, size_t count) {
+	memset(s, 0, count);
+	asm volatile("" :  : "r"(s) : "memory");
+}
+#endif /* NEED_EXPLICIT_BZERO */
 
 #endif /* __DAOS_COMMON_H__ */

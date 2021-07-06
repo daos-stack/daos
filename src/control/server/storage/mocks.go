@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package storage
@@ -27,6 +10,8 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+
+	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/common"
 )
@@ -48,42 +33,75 @@ func getRandIdx(n ...int32) int32 {
 	return rand.Int31()
 }
 
-func MockNvmeDeviceHealth(varIdx ...int32) *NvmeDeviceHealth {
+// MockNvmeHealth returns struct with examples values.
+func MockNvmeHealth(varIdx ...int32) *NvmeHealth {
 	idx := common.GetIndex(varIdx...)
 	tWarn := false
 	if idx > 0 {
 		tWarn = true
 	}
-	return &NvmeDeviceHealth{
-		Temperature:  uint32(getRandIdx(280)),
-		PowerCycles:  uint64(getRandIdx()),
-		PowerOnHours: uint64(getRandIdx()),
-		TempWarn:     tWarn,
+	return &NvmeHealth{
+		TempWarnTime:    uint32(idx),
+		TempCritTime:    uint32(idx),
+		CtrlBusyTime:    uint64(idx),
+		PowerCycles:     uint64(idx),
+		PowerOnHours:    uint64(idx),
+		UnsafeShutdowns: uint64(idx),
+		MediaErrors:     uint64(idx),
+		ErrorLogEntries: uint64(idx),
+		ReadErrors:      uint32(idx),
+		WriteErrors:     uint32(idx),
+		UnmapErrors:     uint32(idx),
+		ChecksumErrors:  uint32(idx),
+		Temperature:     uint32(idx),
+		TempWarn:        tWarn,
+		AvailSpareWarn:  tWarn,
+		ReliabilityWarn: tWarn,
+		ReadOnlyWarn:    tWarn,
+		VolatileWarn:    tWarn,
 	}
 }
 
+// MockNvmeNamespace returns struct with examples values.
 func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 	idx := common.GetIndex(varIdx...)
 	return &NvmeNamespace{
 		ID:   uint32(idx),
-		Size: uint64(idx),
+		Size: uint64(humanize.TByte) * uint64(idx+1),
 	}
 }
 
+// MockSmdDevice returns struct with examples values.
+func MockSmdDevice(parentTrAddr string, varIdx ...int32) *SmdDevice {
+	idx := common.GetIndex(varIdx...)
+	startTgt := (idx * 4) + 1
+	return &SmdDevice{
+		UUID:      common.MockUUID(idx),
+		TargetIDs: []int32{startTgt, startTgt + 1, startTgt + 2, startTgt + 3},
+		State:     "NORMAL",
+		TrAddr:    parentTrAddr,
+	}
+}
+
+// MockNvmeController returns struct with examples values.
 func MockNvmeController(varIdx ...int32) *NvmeController {
 	idx := common.GetIndex(varIdx...)
+	pciAddr := concat("0000:80:00", idx, ".")
 
 	return &NvmeController{
 		Model:       concat("model", idx),
 		Serial:      concat("serial", getRandIdx()),
-		PciAddr:     concat("0000:80:00", idx, "."),
+		PciAddr:     pciAddr,
 		FwRev:       concat("fwRev", idx),
-		SocketID:    idx,
-		HealthStats: MockNvmeDeviceHealth(idx),
-		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(idx)},
+		SocketID:    idx % 2,
+		HealthStats: MockNvmeHealth(idx),
+		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(1)},
+		SmdDevices:  []*SmdDevice{MockSmdDevice(pciAddr, idx)},
 	}
 }
 
+// MockNvmeControllers returns slice of example NvmeController structs with
+// examples values.
 func MockNvmeControllers(length int) NvmeControllers {
 	result := NvmeControllers{}
 	for i := 0; i < length; i++ {
@@ -93,20 +111,25 @@ func MockNvmeControllers(length int) NvmeControllers {
 	return result
 }
 
+// MockScmModule returns struct with examples values.
 func MockScmModule(varIdx ...int32) *ScmModule {
 	idx := uint32(common.GetIndex(varIdx...))
 
 	return &ScmModule{
-		ChannelID:       idx,
-		ChannelPosition: idx,
-		ControllerID:    idx,
-		SocketID:        idx,
-		PhysicalID:      idx,
-		Capacity:        uint64(idx),
-		UID:             fmt.Sprintf("Device%d", idx),
+		ChannelID:        idx,
+		ChannelPosition:  idx,
+		ControllerID:     idx,
+		SocketID:         idx,
+		PhysicalID:       idx,
+		Capacity:         uint64(humanize.GByte),
+		UID:              fmt.Sprintf("Device%d", idx),
+		PartNumber:       fmt.Sprintf("PartNumber%d", idx),
+		FirmwareRevision: fmt.Sprintf("FWRev%d", idx),
 	}
 }
 
+// MockScmModules returns slice of example ScmModule structs with examples
+// values.
 func MockScmModules(length int) ScmModules {
 	result := ScmModules{}
 	for i := 0; i < length; i++ {
@@ -116,14 +139,28 @@ func MockScmModules(length int) ScmModules {
 	return result
 }
 
+// MockScmMountPoint returns struct with examples values.
+// Avoid creating mock with zero sizes.
+func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
+	idx := common.GetIndex(varIdx...)
+
+	return &ScmMountPoint{
+		Path:       fmt.Sprintf("/mnt/daos%d", idx),
+		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
+		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
+	}
+}
+
+// MockScmNamespace returns struct with examples values.
+// Avoid creating mock with zero sizes.
 func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 	idx := common.GetIndex(varIdx...)
 
 	return &ScmNamespace{
 		UUID:        common.MockUUID(varIdx...),
-		BlockDevice: fmt.Sprintf("/dev/pmem%d", idx),
-		Name:        fmt.Sprintf("pmem%d", idx),
+		BlockDevice: fmt.Sprintf("pmem%d", idx),
+		Name:        fmt.Sprintf("namespace%d.0", idx),
 		NumaNode:    uint32(idx),
-		Size:        uint64(idx),
+		Size:        uint64(humanize.TByte) * uint64(idx+1),
 	}
 }

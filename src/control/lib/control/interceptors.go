@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -31,39 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/daos-stack/daos/src/control/common/proto"
-	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/fault"
 )
-
-// unwrapFault takes a gRPC status object
-// and unwraps additional information, if available.
-func unwrapFault(st *status.Status) error {
-	if st == nil {
-		return nil
-	}
-
-	f, err := proto.UnwrapFault(st)
-	if f != nil {
-		return f
-	}
-
-	return err
-}
-
-// unwrapDaosStatus takes a gRPC status object
-// and unwraps additional information, if available.
-func unwrapDaosStatus(st *status.Status) error {
-	if st == nil {
-		return nil
-	}
-
-	s, err := proto.UnwrapDaosStatus(st)
-	if err == nil {
-		return s
-	}
-
-	return err
-}
 
 // connErrToFault attempts to resolve a network connection
 // error to a more informative Fault with resolution.
@@ -72,7 +23,9 @@ func connErrToFault(st *status.Status, target string) error {
 	switch {
 	case strings.Contains(st.Message(), "connection refused"):
 		return FaultConnectionRefused(target)
-	case strings.Contains(st.Message(), "connection closed"):
+	case strings.Contains(st.Message(), "connection closed"),
+		strings.Contains(st.Message(), "transport is closing"),
+		strings.Contains(st.Message(), "closed the connection"):
 		return FaultConnectionClosed(target)
 	case strings.Contains(st.Message(), "no route to host"):
 		return FaultConnectionNoRoute(target)
@@ -89,11 +42,9 @@ func streamErrorInterceptor() grpc.DialOption {
 		cs, err := streamer(ctx, desc, cc, method, opts...)
 		if err != nil {
 			st := status.Convert(err)
-			if f, isFault := unwrapFault(st).(*fault.Fault); isFault {
-				return cs, f
-			}
-			if s, isStatus := unwrapDaosStatus(st).(drpc.DaosStatus); isStatus {
-				return cs, s
+			err = proto.UnwrapError(st)
+			if err.Error() != st.Err().Error() {
+				return cs, err
 			}
 			return cs, connErrToFault(st, cc.Target())
 		}
@@ -107,11 +58,9 @@ func unaryErrorInterceptor() grpc.DialOption {
 		err := invoker(ctx, method, req, reply, cc, opts...)
 		if err != nil {
 			st := status.Convert(err)
-			if f, isFault := unwrapFault(st).(*fault.Fault); isFault {
-				return f
-			}
-			if s, isStatus := unwrapDaosStatus(st).(drpc.DaosStatus); isStatus {
-				return s
+			err = proto.UnwrapError(st)
+			if err.Error() != st.Err().Error() {
+				return err
 			}
 			return connErrToFault(st, cc.Target())
 		}

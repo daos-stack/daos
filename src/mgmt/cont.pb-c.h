@@ -31,6 +31,10 @@ struct  _Mgmt__ContSetOwnerReq
 {
   ProtobufCMessage base;
   /*
+   * DAOS system identifier
+   */
+  char *sys;
+  /*
    * UUID of the container
    */
   char *contuuid;
@@ -46,10 +50,15 @@ struct  _Mgmt__ContSetOwnerReq
    * formatted group e.g. "builders@"
    */
   char *ownergroup;
+  /*
+   * List of pool service ranks
+   */
+  size_t n_svc_ranks;
+  uint32_t *svc_ranks;
 };
 #define MGMT__CONT_SET_OWNER_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__cont_set_owner_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL }
 
 
 /*

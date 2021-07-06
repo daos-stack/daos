@@ -1,0 +1,59 @@
+# .dockerignore file for DAOS.
+
+# Firsly deny everything and then allow only directories and files that we're
+# interested in.  Other files will not be required for the build and they
+# just generate noise and extra work for the docker deamon.
+*
+!src
+!utils
+!SConstruct
+!VERSION
+!LICENSE
+!ftest.sh
+!site_scons
+
+# Now disallow extra files which may be present but are not required.
+# Include the rdb repo as well.
+**/.git
+
+# Build and test output, in case tree has been used outside docker
+dnt*.xml
+daos.conf
+build
+install
+.build_vars.json
+.build_vars.sh
+config.log
+.sconf_temp
+.sconsign.dblite
+.daos_server.active.yml
+autodocs
+utils/rpms/_topdir
+
+# Doc isn't required for building.
+doc
+
+# Deny dockerfiles themselves.  Avoid rebuilding deps if only the instructions
+# have changed.
+utils/docker
+utils/sl/fake_scons
+utils/docker_nlt.sh
+
+# Test log files.
+dnt*
+nlt*
+
+# Any local downloads
+**/*.tar.gz
+**/*.tgz
+**/*.bz2
+
+# Any compiled python code
+**/*.pyc
+**/__pycache__
+
+# Editor temporary save files.
+**/*~
+**/*.orig
+**/*.rej
+**/#*#

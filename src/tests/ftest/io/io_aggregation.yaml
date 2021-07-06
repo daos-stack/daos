@@ -28,6 +28,7 @@ pool:
     nvme_size: 10000000000
   createsvc:
     svcn: 1
+  control_method: dmg
 container:
   type: POSIX
   control_method: daos
@@ -37,7 +38,7 @@ ior:
     np: 1
   dfs_destroy: False
   iorflags:
-      flags: "-w -E -k"
+      flags: "-w -k"
   repetitions: 1
   transfersize_blocksize:
     4K:

@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package drpc_test
 
@@ -51,6 +34,20 @@ func TestDrpc_Status(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ds := drpc.DaosStatus(tc.in)
 			common.CmpErr(t, tc.expErr, ds)
+		})
+	}
+}
+
+func TestDrpc_Error(t *testing.T) {
+	// Light test to make sure the error stringer works as expected.
+	for ds, expStr := range map[drpc.DaosStatus]string{
+		drpc.DaosSuccess:        "DER_SUCCESS(0): Success",
+		drpc.DaosProtocolError:  "DER_PROTO(-1014): Incompatible protocol",
+		drpc.DaosNotReplica:     "DER_NOTREPLICA(-2020): Not a service replica",
+		drpc.DaosStatus(424242): "DER_UNKNOWN(424242): Unknown error code 424242",
+	} {
+		t.Run(expStr, func(t *testing.T) {
+			common.AssertEqual(t, expStr, ds.Error(), "not equal")
 		})
 	}
 }

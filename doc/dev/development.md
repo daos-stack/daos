@@ -7,9 +7,20 @@ only required for development purposes.
 
 ## Building DAOS for Development
 
-Prerequisite when built using --build-deps are installed in component specific
-directories under PREFIX/prereq/$TARGET_TYPE.  Once the submodules have been
-initialized and updated, run the following commands:
+The DAOS repository is hosted on [GitHub](https://github.com/daos-stack/daos).
+To checkout the current development version, simply run:
+
+```bash
+$ git clone --recurse-submodules https://github.com/daos-stack/daos.git
+```
+
+For a specific branch or tag (e.g. v1.2), add `-b v1.2` to the command
+line above.
+
+Prerequisite when built using `--build-deps` are installed in component
+specific directories under PREFIX/prereq/$TARGET_TYPE.
+
+Run the following `scons` command:
 
 ```bash
 $ scons PREFIX=${daos_prefix_path}
@@ -19,61 +30,117 @@ $ scons PREFIX=${daos_prefix_path}
 ```
 
 Installing the components into separate directories allow upgrading the
-components individually by replacing --build-deps=yes with
---update-prereq={component\_name}. This requires a change to the environment
+components individually by replacing `--build-deps=yes` with
+`--update-prereq={component\_name}`. This requires a change to the environment
 configuration from before. For automated environment setup, source
-utils/sl/utils/setup_local.sh.
+`utils/sl/setup_local.sh`.
 
-The install path should be relocatable with the exception that daos_admin
+The install path should be relocatable with the exception that `daos_admin`
 will not be able to find the new location of daos and dependencies. All other
 libraries and binaries should work without any change due to relative
-paths.  Editing the .build-vars.sh file to replace the old with the new can
+paths.  Editing the `.build-vars.sh` file to replace the old with the new can
 restore the capability of setup_local.sh to automate path setup.
 
 To run daos_server, either the rpath in daos_admin needs to be patched to
-the new installation location of spdk and isal or LD_LIBRARY_PATH needs to
-be set.  This can be done using SL_SPDK_PREFIX and SL_ISAL_PREFIX set when
-sourcing setup_local.sh.   This can also be done with the following commands
+the new installation location of `spdk` and `isal` or `LD_LIBRARY_PATH` needs to
+be set.  This can be done using `SL_SPDK_PREFIX` and `SL_ISAL_PREFIX` set when
+sourcing `setup_local.sh`.   This can also be done with the following
+commands:
 
 ```
 source utils/sl/setup_local.sh
 sudo -E utils/setup_daos_admin.sh [path to new location of daos]
 ```
 
-This script is intended only for developer setup of daos_admin.
+This script is intended only for developer setup of `daos_admin`.
 
 With this approach, DAOS gets built using the prebuilt dependencies in
-${daos_prefix_path}/prereq, and required options are saved for future compilations.
-So, after the first time, during development, only "scons --config=force" and
-"scons --config=force install" would suffice for compiling changes to DAOS
+`${daos_prefix_path}/prereq`, and required options are saved for future compilations.
+So, after the first time, during development, only "`scons --config=force`" and
+"`scons --config=force install`" would suffice for compiling changes to DAOS
 source code.
 
-If you wish to compile DAOS with clang rather than gcc, set COMPILER=clang on
+If you wish to compile DAOS with clang rather than `gcc`, set `COMPILER=clang` on
 the scons command line.   This option is also saved for future compilations.
 
-Additionally, users can specify BUILD_TYPE=[dev|release|debug] and scons will
-save the intermediate build for the various BUILD_TYPE, COMPILER, and TARGET_TYPE
+Additionally, users can specify `BUILD_TYPE=[dev|release|debug]` and scons will
+save the intermediate build for the various `BUILD_TYPE`, `COMPILER`, and `TARGET_TYPE`
 options so a user can switch between options without a full rebuild and thus
-with minimal cost.   By default, TARGET_TYPE is set to 'default' which means
-it uses the BUILD_TYPE setting.  To avoid rebuilding prerequisites for every
-BUILD_TYPE setting, TARGET_TYPE can be explicitly set to a BUILD_TYPE setting
+with minimal cost.   By default, `TARGET_TYPE` is set to `'default'` which means
+it uses the `BUILD_TYPE` setting.  To avoid rebuilding prerequisites for every
+`BUILD_TYPE` setting, `TARGET_TYPE` can be explicitly set to a `BUILD_TYPE` setting
 to always use that set of prerequisites.  These settings are stored in daos.conf
 so setting the values on subsequent builds is not necessary.
 
-If needed, ALT_PREFIX can be set to a colon separated prefix path where to
+If needed, `ALT_PREFIX` can be set to a colon separated prefix path where to
 look for already built components.  If set, the build will check these
 paths for components before proceeding to build.
+
+### Custom build targets
+
+The DAOS build also supports build targets to customize what parts of DAOS are
+built.  At present, just three such targets are defined, `client`, `server`, and
+`test`.
+
+To build only client libraries and tools, use the following command:
+
+```bash
+$ scons [args] client install
+```
+
+To build the server instead, substitute `server` for `client` in the above
+command.
+
+Note that such targets need to be specified each time you build as the default
+is equivalent to specifying `client server test` on the command line.  The
+`test` target is, at present, dependent on `client` and `server` as well.
+
+### Building Optional Components
+
+There are a few optional components that can be included into the DAOS build.
+For instance, to include the `psm2` provider. Run the following `scons`
+command:
+
+```bash
+$ scons PREFIX=${daos_prefix_path}
+      INCLUDE=psm2
+      install
+      --build-deps=yes
+      --config=force
+```
+
+Refer to the built-in `scons` help command to get a full list of all the
+optional components under the `INCLUDE` optional parameter.
+
+```bash
+$ scons -h
+scons: Reading SConscript files ...
+
+INCLUDE: Optional components to build
+    (all|none|comma-separated list of names)
+    allowed names: psm2 psm3
+    default: none
+    actual:
+```
+
+The version of the components can be changed by editing the
+[utils/build.config][1] file.
+
+>**_NOTE_**
+>
+>The support of the optional components is not guarantee and can be removed
+>without further notification.
 
 ## Go dependencies
 
 Developers contributing Go code may need to change the external dependencies
-located in the src/control/vendor directory. The DAOS codebase uses
+located in the `src/control/vendor` directory. The DAOS codebase uses
 [Go Modules](https://github.com/golang/go/wiki/Modules) to manage these
 dependencies. As this feature is built in to Go distributions starting with
 version 1.11, no additional tools are needed to manage dependencies.
 
 Among other benefits, one of the major advantages of using Go Modules is that it
-removes the requirement for builds to be done within the $GOPATH, which
+removes the requirement for builds to be done within the `$GOPATH`, which
 simplifies our build system and other internal tooling.
 
 While it is possible to use Go Modules without checking a vendor directory into
@@ -143,7 +210,7 @@ $ ls ~/go/pkg/mod # ~/go/pkg/mod should either not exist or be empty
 
 The DAOS control plane infrastructure uses [Protocol Buffers](https://github.com/protocolbuffers/protobuf)
 as the data serialization format for its RPC requests. Not all developers will
-need to compile the \*.proto files, but if Protobuf changes are needed, the
+need to compile the `\*.proto` files, but if Protobuf changes are needed, the
 developer must regenerate the corresponding C and Go source files using a
 Protobuf compiler compatible with proto3 syntax.
 
@@ -153,7 +220,7 @@ The recommended installation method is to clone the git repositories, check out
 the tagged releases noted below, and install from source. Later versions may
 work, but are not guaranteed.  You may encounter installation errors when
 building from source relating to insufficient permissions.  If that occurs,
-you may try relocating the repo to /var/tmp/ in order to build and install from there.
+you may try relocating the repo to `/var/tmp/` in order to build and install from there.
 
 - [Protocol Buffers](https://github.com/protocolbuffers/protobuf) v3.11.4. [Installation instructions](https://github.com/protocolbuffers/protobuf/blob/master/src/README.md).
 - [Protobuf-C](https://github.com/protobuf-c/protobuf-c) v1.3.3. [Installation instructions](https://github.com/protobuf-c/protobuf-c/blob/master/README.md).
@@ -161,7 +228,7 @@ you may try relocating the repo to /var/tmp/ in order to build and install from 
 
 ### Compiling Protobuf Files
 
-The source (.proto) files live under $DAOSREPO/src/proto. The preferred
+The source (`.proto`) files live under `$DAOSREPO/src/proto`. The preferred
 mechanism for generating compiled C/Go protobuf definitions is to use the
 Makefile in this directory. Care should be taken to keep the Makefile updated
 when source files are added or removed, or generated file destinations are
@@ -186,3 +253,5 @@ $ git status
 
 After verifying that the generated C/Go files are correct, add and commit them
 as you would any other file.
+
+[1]: <../../utils/build.config> (build.config)

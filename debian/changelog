@@ -1,0 +1,212 @@
+daos (1.3.102-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Update raft to pick Pre-Vote
+
+ -- Li Wei <wei.g.li@intel.com>  Mon, 23 Jun 2021 14:46:00 +0800
+
+daos (1.3.102-1) unstable; urgency=medium
+  [ Johann Lombardi]
+  * Version bump to 1.3.102 for 2.0 test build 2
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Fri, 11 Jun 2021 010:00:00 -0100
+
+daos (1.3.101-3) unstable; urgency=medium
+  [ Johann Lombardi]
+  * Bump version to match the RPM's one
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 02 Jun 2021 08:00:30 -0100
+
+daos (1.3.101-2) unstable; urgency=medium
+  [ Jeff Olivier]
+  * Remove client and server libs from common package
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Thu, 20 May 2021 11:17:30 -0100
+
+daos (1.3.101-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump to 1.3.101 for 2.0 test build 1
+
+ -- Johann Lombardi <johann.lombardi@intel.com> Wed, 19 May 2021 20:52:00 -0000
+
+daos (1.3.0-16) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Enable debuginfo package building on SUSE platforms
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Fri, 07 May 2021 13:37:45 -0400
+
+daos (1.3.0-15) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update to build on EL8
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 06 May 2021 15:31:50 -0400
+
+daos (1.3.0-14) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Package /etc/daos/certs in main/common package so that both server
+    and client get it created
+  * Catch up the release to be in sync with the RPM build
+    - hence the missing (10-13 releases)
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 05 May 2021 14:10:50 -0400
+
+daos (1.3.0-9) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Remove dfuse_hl
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>  Wed, 16 Apr 2021 17:57:00 -0400
+
+daos (1.3.0-8) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Remove client dependencies on PMDK, SPDK, and argobots
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Wed, 14 Apr 2021 13:27:00 -0400
+
+daos (1.3.0-7) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update Argobots to 1.1
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Thu, 01 Apr 2021 11:39:10 -0400
+
+daos (1.3.0-6) unstable; urgency=medium
+  [ Maureen Jean ]
+  * Change pydaos_shim_3 to pydaos_shim
+
+ -- Maureen Jean <maureen.jean@intel.com>  Tue, 30 Mar 2021 12:00:00 -0400
+
+daos (1.3.0-5) unstable; urgency=medium
+  * Move libdts.so to the daos-tests subpackage
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 29 Mar 2021 10:57:14 -0400
+
+daos (1.3.0-4) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to ofi v1.12.0 release
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com> Tue, 23 Mar 2021 05:00:01 -0000
+
+daos (1.3.0-2) unstable; urgency=medium
+  [ Li Wei ]
+  * Require raft-devel 0.7.3 that fixes an unstable leadership problem caused
+    by removed replicas as well as some Coverity issues
+
+ -- Li Wei <wei.g.li@intel.com> Thu, 25 Feb 2021 09:55:00 +0800
+
+daos (1.3.0-1) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Version bump up to 1.3.0
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 24 Feb 2021 08:54:32 -0500
+
+daos (1.1.3-3) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * NOOP bump just to keep in parity with RPM changes
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 22 Feb 2021 13:08:22 -0500
+
+daos (1.1.3-2) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update OFI to v1.12.0rc1
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com> Tue, 16 Feb 2021 05:00:00 -0000
+
+daos (1.1.3-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump to 1.1.3
+
+ -- Johann Lombardi <johann.lombardi@intel.com> Wed, 10 Feb 2021 05:00:00 -0000
+
+daos (1.1.2.1-11) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Update minimum required libfabric to 1.11.1
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Wed, 10 Feb 2021 00:10:38 -0400
+
+daos (1.1.2.1-9) unstable; urgency=medium
+  [ Vishwanath Venkatesan ]
+  * Add new pmem specific version of DAOS common library
+
+ -- Vishwanath Venkatesan <vishwanath.venkatesan@intel.com> Thu, 4 Feb 2021 12:48:18 -0000
+
+daos (1.1.2.1-8) unstable; urgency=medium
+  [ Hua Kuang ]
+  * Changed License to BSD-2-Clause-Patent
+
+ -- Hua Kuang <hua.kuang@intel.com> Wed, 3 Feb 2021 16:59:34 -0000
+
+daos (1.1.2.1-7) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Fix debian packages to update to mercury v2.0.1rc1
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Fri, 29 Jan 2021 13:40:00 -0500
+
+daos (1.1.2.1-6) unstable; urgency=medium
+  [ Alexander Oganezov ]
+  * Update to mercury v2.0.1rc1
+
+ -- Alexander Oganezov <alexander.a.oganezov@intel.com>  Sat, 23 Jan 2021 13:40:00 -0500
+
+daos (1.1.2.1-5) unstable; urgency=medium
+  [ Michael MacDonald ]
+  * Install daos_metrics to bin
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Fri, 22 Jan 2021 17:58:03 -0000
+
+daos (1.1.2.1-4) unstable; urgency=medium
+  [ Kenneth Cain ]
+  * Version bump for API major version libdaos.so.1 (1.0.0)
+
+ -- Kenneth Cain <kenneth.c.cain@intel.com>  Tue, 05 Jan 2021 13:40:00 -0500
+
+daos (1.1.2.1-3) unstable; urgency=medium
+  [ Michael Hennecke ]
+  * Harmonize daos_server and daos_agent groups
+
+ -- Michael Hennecke <mhennecke@lenovo.com> Fri, 15 Jan 2021 16:22:18 -0000
+
+daos (1.1.2.1-2) unstable; urgency=medium
+  [ Ashley Pittman ]
+  * Combine memcheck suppressions files
+
+ -- Ashley Pittman <ashley.m.pittman@intel.com>  Tue, 15 Dec 2020 13:33:21 -0000
+
+daos (1.1.2.1-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump up to 1.1.2.1
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Wed, 09 Dec 2020 19:30:00 +0100
+
+daos (1.1.2-3) unstable; urgency=medium
+  [ Li Wei ]
+  * Require raft-devel 0.7.1 that fixes recent Coverity issues
+
+ -- Li Wei <wei.g.li@intel.com>  Fri, 04 Dec 2020 14:30:00 +0800
+
+daos (1.1.2-1) unstable; urgency=medium
+  [ Brian J. Murrell ]
+  * Version bump up to 1.1.2
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Tue, 01 Dec 2020 07:41:30 -0400
+
+daos (1.1.1-8) unstable; urgency=medium
+  [ Li Wei ]
+  * Require raft-devel 0.7.0 that changes log indices and terms to 63-bit
+
+ -- Li Wei <wei.g.li@intel.com>  Tue, 17 Nov 2020 09:44:00 +0800
+
+daos (1.1.1-6) unstable; urgency=medium
+  [ Mohamad Chaarawi ]
+  * Add dfs_test
+
+ -- Mohamad Chaarawi <mohamad.chaarawi@intel.com>  Mon, 16 Nov 2020 13:29:11 -0400
+
+daos (1.1.1-5) unstable; urgency=medium
+  [ Jonathan Martinez Montes ]
+  * Restore obj_ctl utility
+
+ -- Jonathan Martinez Montes <jonathan.martinez.montes@intel.com>  Fri, 30 Oct 2020 08:44:57 -0600
+
+daos (1.1.1-4) unstable; urgency=medium
+  [ Brian J. Murrell ]
+   * 1.1.1-4 version of DAOS
+
+ -- Brian J. Murrell <brian.murrell@intel.com>  Mon, 26 Oct 2020 12:43:49 -0400

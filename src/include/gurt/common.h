@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -45,6 +28,12 @@
 #include <pthread.h>
 #include <byteswap.h>
 #include <daos_errno.h>
+#ifdef D_HAS_VALGRIND
+#include <valgrind/valgrind.h>
+#define D_ON_VALGRIND RUNNING_ON_VALGRIND
+#else
+#define D_ON_VALGRIND 0
+#endif
 
 #include <gurt/types.h>
 #include <gurt/debug.h>
@@ -58,12 +47,15 @@
 extern "C" {
 #endif
 
-#define likely(x)       __builtin_expect((x), 1)
-#define unlikely(x)     __builtin_expect((x), 0)
+#ifndef likely
+#define likely(x)	__builtin_expect((x), 1)
+#endif
+#ifndef unlikely
+#define unlikely(x)	__builtin_expect((x), 0)
+#endif
 
 /* Check if bit is set in passed val */
 #define D_BIT_IS_SET(val, bit) (((val) & bit) ? 1 : 0)
-
 
 /**
  * Get the current time using a monotonic timer
@@ -72,55 +64,88 @@ extern "C" {
 #define _gurt_gettime(ts) clock_gettime(CLOCK_MONOTONIC, ts)
 
 /* memory allocating macros */
+void  d_free(void *);
+void *d_calloc(size_t, size_t);
+void *d_malloc(size_t);
+void *d_realloc(void *, size_t);
+char *d_strndup(const char *s, size_t n);
+int d_asprintf(char **strp, const char *fmt, ...);
+void *d_aligned_alloc(size_t alignment, size_t size);
+char *d_realpath(const char *path, char *resolved_path);
 
 #define D_CHECK_ALLOC(func, cond, ptr, name, size, count, cname,	\
 			on_error)					\
 	do {								\
 		if (D_SHOULD_FAIL(d_fault_attr_mem)) {			\
-			free(ptr);					\
-			ptr = NULL;					\
+			d_free(ptr);					\
+			(ptr) = NULL;					\
 		}							\
 		if ((cond) && (ptr) != NULL) {				\
-			if (count <= 1)					\
+			if ((count) <= 1)				\
 				D_DEBUG(DB_MEM,				\
-					"alloc(" #func ") '" name "': %i at %p.\n", \
+					"alloc(" #func ") '" name	\
+					"':%i at %p.\n",		\
 					(int)(size), (ptr));		\
 			else						\
 				D_DEBUG(DB_MEM,				\
-					"alloc(" #func ") '" name "': %i * '" cname "':%i at %p.\n", \
+					"alloc(" #func ") '" name	\
+					"':%i * '" cname "':%i at %p.\n", \
 					(int)(size), (int)(count), (ptr)); \
 			break;						\
 		}							\
 		(void)(on_error);					\
-		if (count >= 1)						\
+		if ((count) >= 1)					\
 			D_ERROR("out of memory (tried to "		\
-				#func " '" name "': %i)\n",		\
+				#func " '" name "':%i)\n",		\
 				(int)((size) * (count)));		\
 		else							\
 			D_ERROR("out of memory (tried to "		\
-				#func " '" name "': %i)\n",		\
+				#func " '" name "':%i)\n",		\
 				(int)(size));				\
 	} while (0)
 
-
 #define D_ALLOC_CORE(ptr, size, count)					\
 	do {								\
-		(ptr) = (__typeof__(ptr))calloc(count, (size));		\
+		(ptr) = (__typeof__(ptr))d_calloc((count), (size));	\
 		D_CHECK_ALLOC(calloc, true, ptr, #ptr, size,		\
+			      count, #count, 0);			\
+	} while (0)
+
+#define D_ALLOC_CORE_NZ(ptr, size, count)				\
+	do {								\
+		(ptr) = (__typeof__(ptr))d_malloc((count) * (size));	\
+		D_CHECK_ALLOC(malloc, true, ptr, #ptr, size,		\
 			      count, #count, 0);			\
 	} while (0)
 
 #define D_STRNDUP(ptr, s, n)						\
 	do {								\
-		(ptr) = strndup(s, n);					\
+		(ptr) = d_strndup(s, n);				\
 		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
-			      strnlen(s, n + 1) + 1, 0, #ptr, 0);	\
+			      strnlen(s, n) + 1, 0, #ptr, 0);		\
+	} while (0)
+
+/* This can be used for duplicating static strings, it will work for strings
+ * which are defined in-place or through #define but it will not work with
+ * strings which are defined as a char * variable as in that case it'll copy
+ * the first 8 bytes.  To avoid this case add a static assert on the size,
+ * so code that tries to mis-use this macro will fail at compile time.
+ */
+
+#define D_STRNDUP_S(ptr, s)						\
+	do {								\
+		_Static_assert(sizeof(s) != sizeof(void *) ||		\
+			__builtin_types_compatible_p(typeof(s), typeof("1234567")), \
+	"D_STRNDUP_S cannot be used with this type");			\
+		(ptr) = d_strndup(s, sizeof(s));			\
+		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
+			sizeof(s), 0, #ptr, 0);				\
 	} while (0)
 
 #define D_ASPRINTF(ptr, ...)						\
 	do {								\
 		int _rc;						\
-		_rc = asprintf(&(ptr), __VA_ARGS__);			\
+		_rc = d_asprintf(&(ptr), __VA_ARGS__);			\
 		D_CHECK_ALLOC(asprintf, _rc != -1,			\
 			      ptr, #ptr, _rc + 1, 0, #ptr,		\
 			      (ptr) = NULL);				\
@@ -129,21 +154,30 @@ extern "C" {
 #define D_REALPATH(ptr, path)						\
 	do {								\
 		int _size;						\
-		(ptr) = realpath((path), NULL);				\
+		(ptr) = d_realpath((path), NULL);			\
 		_size = (ptr) != NULL ?					\
 			strnlen((ptr), PATH_MAX + 1) + 1 : 0;		\
 		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,		\
 			      0, #ptr, 0);				\
 	} while (0)
 
+#define D_ALIGNED_ALLOC(ptr, alignment, size)				\
+	do {								\
+		(ptr) = (__typeof__(ptr))d_aligned_alloc(alignment,	\
+							 size);		\
+		D_CHECK_ALLOC(aligned_alloc, true, ptr, #ptr,		\
+			      size, 0, #ptr, 0);			\
+	} while (0)
+
 /* Requires newptr and oldptr to be different variables.  Otherwise
  * there is no way to tell the difference between successful and
  * failed realloc.
  */
-#define D_REALLOC_COMMON(newptr, oldptr, size, cnt)			\
+#define D_REALLOC_COMMON(newptr, oldptr, oldsize, size, cnt)		\
 	do {								\
 		size_t _esz = (size_t)(size);				\
 		size_t _sz = (size_t)(size) * (cnt);			\
+		size_t _oldsz = (size_t)(oldsize);			\
 		size_t _cnt = (size_t)(cnt);				\
 		/* Compiler check to ensure type match */		\
 		__typeof__(newptr) optr = oldptr;			\
@@ -159,57 +193,106 @@ extern "C" {
 		if (_sz == 0)						\
 			_sz = 1;					\
 		if (D_SHOULD_FAIL(d_fault_attr_mem))			\
-			newptr = NULL;					\
+			(newptr) = NULL;				\
 		else							\
-			(newptr) = realloc(optr, _sz);			\
+			(newptr) = d_realloc(optr, _sz);		\
 		if ((newptr) != NULL) {					\
-			if ((_cnt) <= 1)				\
+			if (_cnt <= 1)					\
 				D_DEBUG(DB_MEM,				\
-					"realloc '" #newptr "': %zu at %p (old '" #oldptr "':%p).\n", \
-					_esz, (newptr), (oldptr));	\
+					"realloc '" #newptr		\
+					"':%zu at %p old '" #oldptr	\
+					"':%zu at %p.\n",		\
+					_esz, (newptr), _oldsz,		\
+					(oldptr));			\
 			else						\
 				D_DEBUG(DB_MEM,				\
-					"realloc '" #newptr "': %zu * '" #cnt "':%zu at %p (old '" #oldptr "':%p).\n", \
-					_esz, (_cnt), (newptr), (oldptr));	\
+					"realloc '" #newptr		\
+					"':%zu * '" #cnt		\
+					"':%zu at %p old '" #oldptr	\
+					"':%zu at %p.\n",		\
+					_esz, _cnt, (newptr), _oldsz,	\
+					(oldptr));			\
 			(oldptr) = NULL;				\
+			if (_oldsz < _sz)				\
+				memset((char *)(newptr) + _oldsz, 0,	\
+				       _sz - _oldsz);			\
 			break;						\
 		}							\
-		if ((_cnt) <= 1)					\
+		if (_cnt <= 1)						\
 			D_ERROR("out of memory (tried to realloc "	\
 				"'" #newptr "': size=%zu)\n",		\
 				_esz);					\
 		else							\
 			D_ERROR("out of memory (tried to realloc "	\
 				"'" #newptr "': size=%zu count=%zu)\n",	\
-				_esz, (_cnt));				\
+				_esz, _cnt);				\
 	} while (0)
 
+#define D_REALLOC(newptr, oldptr, oldsize, size)			\
+	D_REALLOC_COMMON(newptr, oldptr, oldsize, size, 1)
 
-#define D_REALLOC(newptr, oldptr, size)	\
-	D_REALLOC_COMMON(newptr, oldptr, size, 1)
+#define D_REALLOC_ARRAY(newptr, oldptr, oldcount, count)		\
+	D_REALLOC_COMMON(newptr, oldptr,				\
+			 (oldcount) * sizeof(*(oldptr)),		\
+					     sizeof(*(oldptr)), count)
 
-#define D_REALLOC_ARRAY(newptr, oldptr, count) \
-	D_REALLOC_COMMON(newptr, oldptr, sizeof(*(oldptr)), count)
+#define D_REALLOC_NZ(newptr, oldptr, size)				\
+	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
 
+#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
+	D_REALLOC_COMMON(newptr, oldptr,				\
+			 (count) * sizeof(*(oldptr)),			\
+			 sizeof(*(oldptr)), count)
+
+/** realloc macros that do not clear the new memory */
+#define D_REALLOC_NZ(newptr, oldptr, size)				\
+	D_REALLOC_COMMON(newptr, oldptr, size, size, 1)
+
+#define D_REALLOC_ARRAY_NZ(newptr, oldptr, count)			\
+	D_REALLOC_COMMON(newptr, oldptr,				\
+			 (count) * sizeof(*(oldptr)),			\
+			 sizeof(*(oldptr)), count)
+
+/** realloc macros that clear the whole allocation */
+#define D_REALLOC_Z(newptr, oldptr, size)				\
+	D_REALLOC_COMMON(newptr, oldptr, 0, size, 1)
+
+#define D_REALLOC_ARRAY_Z(newptr, oldptr, count)			\
+	D_REALLOC_COMMON(newptr, oldptr, 0, sizeof(*(oldptr)), count)
 
 #define D_FREE(ptr)							\
 	do {								\
 		D_DEBUG(DB_MEM, "free '" #ptr "' at %p.\n", (ptr));	\
-		free(ptr);						\
+		d_free(ptr);						\
 		(ptr) = NULL;						\
 	} while (0)
 
 #define D_ALLOC(ptr, size)	D_ALLOC_CORE(ptr, size, 1)
 #define D_ALLOC_PTR(ptr)	D_ALLOC(ptr, sizeof(*ptr))
 #define D_ALLOC_ARRAY(ptr, count) D_ALLOC_CORE(ptr, sizeof(*ptr), count)
+#define D_ALLOC_NZ(ptr, size)	D_ALLOC_CORE_NZ(ptr, size, 1)
+#define D_ALLOC_PTR_NZ(ptr)	D_ALLOC_NZ(ptr, sizeof(*ptr))
+#define D_ALLOC_ARRAY_NZ(ptr, count) D_ALLOC_CORE_NZ(ptr, sizeof(*ptr), count)
 #define D_FREE_PTR(ptr)		D_FREE(ptr)
 
 #define D_GOTO(label, rc)			\
 	do {					\
-		__typeof__(rc) __rc = (rc);		\
+		__typeof__(rc) __rc = (rc);	\
 		(void)(__rc);			\
 		goto label;			\
 	} while (0)
+
+#define D_FPRINTF(...)							\
+	({								\
+		int	printed = fprintf(__VA_ARGS__);			\
+		int	_rc = 0;					\
+									\
+		if (printed < 0) {					\
+			D_ERROR("failed to print to stream\n");		\
+			_rc = -DER_IO;					\
+		}							\
+		_rc;							\
+	})
 
 /* Internal helper macros, not to be called directly by the outside caller */
 #define __D_PTHREAD(fn, x)						\
@@ -232,7 +315,6 @@ extern "C" {
 		d_errno2der(_rc);					\
 	})
 
-
 #define D_SPIN_LOCK(x)		__D_PTHREAD(pthread_spin_lock, x)
 #define D_SPIN_UNLOCK(x)	__D_PTHREAD(pthread_spin_unlock, x)
 #define D_MUTEX_LOCK(x)		__D_PTHREAD(pthread_mutex_lock, x)
@@ -246,7 +328,6 @@ extern "C" {
 #define D_MUTEX_INIT(x, y)	__D_PTHREAD_INIT(pthread_mutex_init, x, y)
 #define D_SPIN_INIT(x, y)	__D_PTHREAD_INIT(pthread_spin_init, x, y)
 #define D_RWLOCK_INIT(x, y)	__D_PTHREAD_INIT(pthread_rwlock_init, x, y)
-
 
 #define DGOLDEN_RATIO_PRIME_64	0xcbf29ce484222325ULL
 #define DGOLDEN_RATIO_PRIME_32	0x9e370001UL
@@ -278,6 +359,7 @@ uint32_t d_hash_string_u32(const char *string, unsigned int len);
 /** murmur hash (64 bits) */
 uint64_t d_hash_murmur64(const unsigned char *key, unsigned int key_len,
 			    unsigned int seed);
+uint32_t d_hash_jump(uint64_t key, uint32_t num_buckets);
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
@@ -308,20 +390,53 @@ bool d_rank_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank);
 int d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx);
 int d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank);
 int d_rank_list_dump(d_rank_list_t *rank_list, d_string_t name, int name_len);
-int d_sgl_init(d_sg_list_t *sgl, unsigned int nr);
-void d_sgl_fini(d_sg_list_t *sgl, bool free_iovs);
+d_rank_list_t *uint32_array_to_rank_list(uint32_t *ints, size_t len);
+int rank_list_to_uint32_array(d_rank_list_t *rl, uint32_t **ints, size_t *len);
+
+static inline int
+d_sgl_init(d_sg_list_t *sgl, unsigned int nr)
+{
+	sgl->sg_nr_out = 0;
+	sgl->sg_nr = nr;
+
+	if (unlikely(nr == 0)) {
+		sgl->sg_iovs = NULL;
+		return 0;
+	}
+
+	D_ALLOC_ARRAY(sgl->sg_iovs, nr);
+
+	return sgl->sg_iovs == NULL ? -DER_NOMEM : 0;
+}
+
+static inline void
+d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
+{
+	uint32_t i;
+
+	if (unlikely(sgl == NULL || sgl->sg_iovs == NULL))
+		return;
+
+	if (free_iovs)
+		for (i = 0; i < sgl->sg_nr; i++)
+			D_FREE(sgl->sg_iovs[i].iov_buf);
+
+	D_FREE(sgl->sg_iovs);
+	sgl->sg_nr_out = 0;
+	sgl->sg_nr = 0;
+}
+
 void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
-int d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
+int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void d_free_string(struct d_string_buffer_t *buf);
-
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
  * struct) @type, return pointer to the embedding instance of @type.
  */
 # define container_of(ptr, type, member)		\
-	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
+	((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
 
 #ifndef offsetof
@@ -454,7 +569,6 @@ d_timediff(struct timespec start, struct timespec end)
 		temp.tv_nsec = end.tv_nsec - start.tv_nsec;
 	}
 
-
 	return temp;
 }
 
@@ -510,20 +624,40 @@ d_timeinc(struct timespec *now, uint64_t ns)
 static inline double
 d_time2ms(struct timespec t)
 {
-	return (double) t.tv_sec * 1e3 + (double) t.tv_nsec / 1e6;
+	return (double)t.tv_sec * 1e3 + (double)t.tv_nsec / 1e6;
 }
 
 static inline double
 d_time2us(struct timespec t)
 {
-	return (double) t.tv_sec * 1e6 + (double) t.tv_nsec / 1e3;
+	return (double)t.tv_sec * 1e6 + (double)t.tv_nsec / 1e3;
 }
 
 static inline double
 d_time2s(struct timespec t)
 {
-	return (double) t.tv_sec + (double) t.tv_nsec / 1e9;
+	return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
 }
+
+/**
+ * Backoff sequence (opaque)
+ *
+ * Used to generate a sequence of uint32_t backoffs with user-defined semantics
+ * (e.g., numbers of microseconds for delaying RPC retries). See
+ * d_backoff_seq_init and d_backoff_seq_next for the algorithm.
+ */
+struct d_backoff_seq {
+	uint8_t		bos_flags;	/* unused */
+	uint8_t		bos_nzeros;
+	uint16_t	bos_factor;
+	uint32_t	bos_max;
+	uint32_t	bos_next;
+};
+
+int d_backoff_seq_init(struct d_backoff_seq *seq, uint8_t nzeros,
+		       uint16_t factor, uint32_t next, uint32_t max);
+void d_backoff_seq_fini(struct d_backoff_seq *seq);
+uint32_t d_backoff_seq_next(struct d_backoff_seq *seq);
 
 static inline bool
 is_on_stack(void *ptr)
@@ -536,7 +670,6 @@ is_on_stack(void *ptr)
 	return false;
 }
 
-
 static inline void
 d_iov_set_safe(d_iov_t *iov, void *buf, size_t size)
 {
@@ -546,6 +679,7 @@ d_iov_set_safe(d_iov_t *iov, void *buf, size_t size)
 	iov->iov_len = iov->iov_buf_len = size;
 }
 
+double d_stand_div(double *array, int nr);
 
 #if defined(__cplusplus)
 }

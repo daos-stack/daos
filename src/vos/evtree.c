@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017-2020 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 #define D_LOGFAC	DD_FAC(vos)
 
@@ -31,11 +14,27 @@
 #define V_TRACE(...) D_DEBUG(__VA_ARGS__)
 #endif
 
+/** Get the length of the extent from durable format */
+static inline uint64_t
+evt_len_read(const struct evt_rect_df *rin)
+{
+	return ((uint64_t)rin->rd_len_hi << 16) + rin->rd_len_lo;
+}
+
+/** Store length into durable format */
+static inline void
+evt_len_write(struct evt_rect_df *rout, uint64_t len)
+{
+	rout->rd_len_hi = len >> 16;
+	rout->rd_len_lo = len & 0xffff;
+}
+
+/** Convert rect_df to an extent */
 static inline void
 evt_ext_read(struct evt_extent *ext, const struct evt_rect_df *rin)
 {
 	ext->ex_lo = rin->rd_lo;
-	ext->ex_hi = rin->rd_lo + rin->rd_len - 1;
+	ext->ex_hi = rin->rd_lo + evt_len_read(rin)  - 1;
 }
 
 /** Read and translate the rectangle in durable format to in-memory format */
@@ -51,7 +50,7 @@ evt_rect_read(struct evt_rect *rout, const struct evt_rect_df *rin)
 static inline void
 evt_rect_write(struct evt_rect_df *rout, const struct evt_rect *rin)
 {
-	rout->rd_len = rin->rc_ex.ex_hi - rin->rc_ex.ex_lo + 1;
+	evt_len_write(rout, evt_rect_width(rin));
 	rout->rd_epc = rin->rc_epc;
 	rout->rd_minor_epc = rin->rc_minor_epc;
 	rout->rd_lo = rin->rc_ex.ex_lo;
@@ -275,31 +274,21 @@ evt_weight_diff(struct evt_weight *wt1, struct evt_weight *wt2,
 	wt_diff->wt_minor = wt1->wt_minor - wt2->wt_minor;
 }
 
-/** Internal function for initializing an array.   Using 0 for max
- *  ultimately cause it to be set to maximum size needed by
- *  evt_find_visible.
- */
-static inline void
-evt_ent_array_init_internal(struct evt_entry_array *ent_array, int max)
-{
-	memset(ent_array, 0, sizeof(*ent_array));
-	ent_array->ea_ents = ent_array->ea_embedded_ents;
-	ent_array->ea_size = EVT_EMBEDDED_NR;
-	ent_array->ea_max = max;
-}
-
 /** Initialize an entry list */
 void
-evt_ent_array_init(struct evt_entry_array *ent_array)
+evt_ent_array_init_(struct evt_entry_array *ent_array, int embedded, int max)
 {
-	evt_ent_array_init_internal(ent_array, 0);
+	memset(ent_array, 0, sizeof(*ent_array));
+	ent_array->ea_ents = &ent_array->ea_embedded_ents[0];
+	ent_array->ea_size = embedded;
+	ent_array->ea_max = max;
 }
 
 /** Finalize an entry list */
 void
-evt_ent_array_fini(struct evt_entry_array *ent_array)
+evt_ent_array_fini_(struct evt_entry_array *ent_array, int embedded)
 {
-	if (ent_array->ea_size > EVT_EMBEDDED_NR)
+	if (ent_array->ea_size > embedded)
 		D_FREE(ent_array->ea_ents);
 
 	ent_array->ea_size = ent_array->ea_ent_nr = 0;
@@ -1022,15 +1011,15 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 		tcx->tc_ops = evt_policies[2];
 		break;
 	default:
-		D_ERROR("Bad sort policy specified: 0x%x\n", policy);
+		D_ERROR("Bad sort policy specified: %#x\n", policy);
 		D_GOTO(failed, rc = -DER_INVAL);
 	}
-	D_DEBUG(DB_TRACE, "EVTree sort policy is 0x%x\n", policy);
+	D_DEBUG(DB_TRACE, "EVTree sort policy is %#x\n", policy);
 
 	/* Initialize the embedded iterator entry array.  This is a minor
 	 * optimization if the iterator is used more than once
 	 */
-	evt_ent_array_init(&tcx->tc_iter.it_entries);
+	evt_ent_array_init(tcx->tc_iter.it_entries, 0);
 	evt_tcx_set_dep(tcx, depth);
 	*tcx_pp = tcx;
 	return 0;
@@ -1433,8 +1422,10 @@ evt_node_weight_diff(struct evt_context *tcx, struct evt_node *nd,
 	struct evt_weight  wt_org;
 	struct evt_weight  wt_new;
 
-	memset(&wt_org, 0, sizeof(wt_org));
-	memset(&wt_new, 0, sizeof(wt_new));
+	wt_org.wt_major = 0;
+	wt_org.wt_minor = 0;
+	wt_new.wt_major = 0;
+	wt_new.wt_minor = 0;
 
 	evt_mbr_read(&rtmp, nd);
 	tcx->tc_ops->po_rect_weight(tcx, &rtmp, &wt_org);
@@ -1884,7 +1875,7 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
 	struct evt_desc		*dst_desc;
 	struct evt_trace	*trace;
 	struct evt_node		*node;
-	daos_size_t		 csum_buf_len;
+	daos_size_t		 csum_buf_len = 0;
 	daos_size_t		 size;
 	int			 rc;
 
@@ -1899,7 +1890,9 @@ evt_desc_copy(struct evt_context *tcx, const struct evt_entry_in *ent,
 	if (rc != 0)
 		return rc;
 
-	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+	if (ci_is_valid(&ent->ei_csum))
+		csum_buf_len = ci_csums_len(ent->ei_csum);
+
 	rc = umem_tx_add_ptr(evt_umm(tcx), dst_desc,
 			     sizeof(*dst_desc) + csum_buf_len);
 	if (rc != 0)
@@ -1921,18 +1914,19 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	struct evt_entry	*ent;
 	struct evt_entry_in	 hole;
 	struct evt_filter	 filter = {0};
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	int			 rc = 0;
 
-	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
+	filter.fr_epr.epr_hi = entry->ei_bound;
+	filter.fr_epoch = entry->ei_rect.rc_epc;
 	filter.fr_ex = entry->ei_rect.rc_ex;
 
-	evt_ent_array_init(&ent_array);
-	rc = evt_find(toh, &filter, &ent_array);
+	evt_ent_array_init(ent_array, 0);
+	rc = evt_find(toh, &filter, ent_array);
 	if (rc != 0)
 		goto done;
 
-	evt_ent_array_for_each(ent, &ent_array) {
+	evt_ent_array_for_each(ent, ent_array) {
 		if (bio_addr_is_hole(&ent->en_addr))
 			continue; /* Skip holes */
 		/** Insert a hole to cover the record */
@@ -1943,7 +1937,7 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 			break;
 	}
 done:
-	evt_ent_array_fini(&ent_array);
+	evt_ent_array_fini(ent_array);
 
 	return rc;
 }
@@ -1958,7 +1952,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	   uint8_t **csum_bufp)
 {
 	struct evt_context	*tcx;
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	struct evt_filter	 filter;
 	int			 rc;
 
@@ -1972,6 +1966,10 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		return -DER_INVAL;
 	}
 
+	D_ASSERT(evt_rect_width(&entry->ei_rect) != 0);
+	D_ASSERT(entry->ei_inob != 0 || bio_addr_is_hole(&entry->ei_addr));
+	D_ASSERT(bio_addr_is_hole(&entry->ei_addr) ||
+		 entry->ei_addr.ba_off != 0);
 	if (evt_rect_width(&entry->ei_rect) > MAX_RECT_WIDTH) {
 		if (bio_addr_is_hole(&entry->ei_addr)) {
 			/** csum_bufp is specific to aggregation case and we
@@ -1981,22 +1979,21 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 			return evt_large_hole_insert(toh, entry);
 		}
 		D_ERROR("Extent is too large\n");
-		/** If it's a punch, we can do a find on the rectangle and
-		 *  punch visible extents but for now, just reject the update
-		 */
+		/** The update isn't a punch, just reject it as too large */
 		return -DER_NO_PERM;
 	}
 
-	evt_ent_array_init_internal(&ent_array, 1);
+	evt_ent_array_init(ent_array, 1);
 
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
-	filter.fr_epr.epr_hi = entry->ei_rect.rc_epc;
+	filter.fr_epr.epr_hi = entry->ei_bound;
+	filter.fr_epoch = entry->ei_rect.rc_epc;
 	filter.fr_punch_epc = 0;
 	filter.fr_punch_minor_epc = 0;
-	/* Phase-1: Check for overwrite */
+	/* Phase-1: Check for overwrite and uncertainty */
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
-				&filter, &entry->ei_rect, &ent_array);
+				&filter, &entry->ei_rect, ent_array);
 	if (rc != 0)
 		return rc;
 
@@ -2016,8 +2013,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	}
 
 
-	D_ASSERT(ent_array.ea_ent_nr <= 1);
-	if (ent_array.ea_ent_nr == 1) {
+	D_ASSERT(ent_array->ea_ent_nr <= 1);
+	if (ent_array->ea_ent_nr == 1) {
 		/*
 		 * NB: This is part of the current hack to keep "supporting"
 		 * overwrite for same epoch, full overwrite.
@@ -2031,7 +2028,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, entry, csum_bufp);
 
-	/* No need for evt_ent_array_fill as there will be no allocations
+	/* No need for evt_ent_array_fini as there will be no allocations
 	 * with 1 entry in the list
 	 */
 out:
@@ -2092,6 +2089,128 @@ evt_entry_fill(struct evt_context *tcx, struct evt_node *node, unsigned int at,
 	}
 }
 
+struct evt_data_loss_item {
+	d_list_t		edli_link;
+	struct evt_rect		edli_rect;
+};
+
+static struct evt_data_loss_item *
+evt_data_loss_add(d_list_t *head, struct evt_rect *rect)
+{
+	struct evt_data_loss_item	*edli;
+
+	D_ALLOC_PTR(edli);
+	if (edli != NULL) {
+		edli->edli_rect = *rect;
+		d_list_add(&edli->edli_link, head);
+	}
+
+	return edli;
+}
+
+static int
+evt_data_loss_check(d_list_t *head, struct evt_entry_array *ent_array)
+{
+	struct evt_data_loss_item	*edli;
+	struct evt_data_loss_item	*tmp;
+	struct evt_list_entry		*entry;
+	int				 i;
+
+	d_list_for_each_entry_safe(edli, tmp, head, edli_link) {
+		bool	visible = true;
+
+		d_list_del(&edli->edli_link);
+
+		for (i = 0; i < ent_array->ea_ent_nr; i++) {
+			entry = &ent_array->ea_ents[i];
+
+			/* edli is newer */
+			if (edli->edli_rect.rc_epc > entry->le_ent.en_epoch)
+				continue;
+
+			/* non-overlap */
+			if (edli->edli_rect.rc_ex.ex_lo >
+			    entry->le_ent.en_ext.ex_hi ||
+			    edli->edli_rect.rc_ex.ex_hi <
+			    entry->le_ent.en_ext.ex_lo)
+				continue;
+
+			/* edli is totally covered by entry */
+			if (edli->edli_rect.rc_ex.ex_lo >=
+			    entry->le_ent.en_ext.ex_lo &&
+			    edli->edli_rect.rc_ex.ex_hi <=
+			    entry->le_ent.en_ext.ex_lo) {
+				visible = false;
+				break;
+			}
+
+			/* edli totally covers entry */
+			if (edli->edli_rect.rc_ex.ex_lo <=
+			    entry->le_ent.en_ext.ex_lo &&
+			    edli->edli_rect.rc_ex.ex_hi >=
+			    entry->le_ent.en_ext.ex_lo) {
+				/* cur low part */
+				if (edli->edli_rect.rc_ex.ex_lo ==
+				    entry->le_ent.en_ext.ex_lo) {
+					edli->edli_rect.rc_ex.ex_lo =
+						entry->le_ent.en_ext.ex_hi + 1;
+					continue;
+				}
+
+				/* cut high part */
+				if (edli->edli_rect.rc_ex.ex_hi ==
+				    entry->le_ent.en_ext.ex_hi) {
+					edli->edli_rect.rc_ex.ex_hi =
+						entry->le_ent.en_ext.ex_lo - 1;
+					continue;
+				}
+
+				tmp = evt_data_loss_add(head, &edli->edli_rect);
+				if (tmp == NULL) {
+					D_FREE(edli);
+					return -DER_NOMEM;
+				}
+
+				/* split edli */
+				tmp->edli_rect.rc_ex.ex_lo =
+					entry->le_ent.en_ext.ex_hi + 1;
+				tmp->edli_rect.rc_ex.ex_hi =
+					edli->edli_rect.rc_ex.ex_hi;
+				edli->edli_rect.rc_ex.ex_hi =
+					entry->le_ent.en_ext.ex_lo - 1;
+				continue;
+			}
+
+			/* edli low part overlap with entry */
+			if (edli->edli_rect.rc_ex.ex_lo <=
+			    entry->le_ent.en_ext.ex_hi &&
+			    edli->edli_rect.rc_ex.ex_hi >
+			    entry->le_ent.en_ext.ex_hi) {
+				edli->edli_rect.rc_ex.ex_lo =
+					entry->le_ent.en_ext.ex_hi + 1;
+				continue;
+			}
+
+			/* edli high part overlap with entry */
+			if (edli->edli_rect.rc_ex.ex_hi >=
+			    entry->le_ent.en_ext.ex_lo &&
+			    edli->edli_rect.rc_ex.ex_lo <
+			    entry->le_ent.en_ext.ex_lo) {
+				edli->edli_rect.rc_ex.ex_hi =
+					entry->le_ent.en_ext.ex_lo - 1;
+				continue;
+			}
+		}
+
+		D_FREE(edli);
+
+		if (visible)
+			return -DER_DATA_LOSS;
+	}
+
+	return 0;
+}
+
 /**
  * See the description in evt_priv.h
  */
@@ -2101,16 +2220,20 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		   const struct evt_rect *rect,
 		   struct evt_entry_array *ent_array)
 {
-	umem_off_t	nd_off;
-	int		level;
-	int		at;
-	int		i;
-	int		rc = 0;
+	struct evt_data_loss_item	*edli;
+	d_list_t			 data_loss_list;
+	umem_off_t			 nd_off;
+	int				 level;
+	int				 at;
+	int				 i;
+	int				 rc = 0;
 
 	V_TRACE(DB_TRACE, "Searching rectangle "DF_RECT" opc=%d\n",
 		DP_RECT(rect), find_opc);
 	if (tcx->tc_root->tr_depth == 0)
 		return 0; /* empty tree */
+
+	D_INIT_LIST_HEAD(&data_loss_list);
 
 	evt_tcx_reset_trace(tcx);
 	ent_array->ea_inob = tcx->tc_inob;
@@ -2158,6 +2281,13 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			case RT_OVERLAP_INCLUDES:
 			case RT_OVERLAP_PARTIAL:
 				break; /* overlapped */
+			}
+
+			if (evt_epoch_uncertain(filter, &rtmp, leaf)) {
+				V_TRACE(DB_TRACE, "Epoch uncertainty found for "
+					DF_RECT" filter="DF_FILTER"\n",
+					DP_RECT(&rtmp), DP_FILTER(filter));
+				D_GOTO(out, rc = -DER_TX_RESTART);
 			}
 
 			switch (time_overlap) {
@@ -2237,6 +2367,19 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 				if (rc < 0)
 					D_GOTO(out, rc);
 			case EVT_FIND_ALL:
+				if (rc == -DER_DATA_LOSS) {
+					if (evt_data_loss_add(&data_loss_list,
+							      &rtmp) == NULL)
+						D_GOTO(out, rc = -DER_NOMEM);
+
+					continue;
+				}
+
+				/* Stop when read hit -DER_INPROGRESS. */
+				if (rc == -DER_INPROGRESS &&
+				    intent == DAOS_INTENT_DEFAULT)
+					goto out;
+
 				break;
 			}
 
@@ -2289,8 +2432,16 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		}
 	}
 out:
+	if (rc == 0 && !d_list_empty(&data_loss_list))
+		rc = evt_data_loss_check(&data_loss_list, ent_array);
+
 	if (rc != 0)
-		evt_ent_array_fini(ent_array);
+		ent_array->ea_ent_nr = 0;
+
+	while ((edli = d_list_pop_entry(&data_loss_list,
+					struct evt_data_loss_item,
+					edli_link)) != NULL)
+		D_FREE(edli);
 
 	return rc;
 }
@@ -2316,22 +2467,21 @@ evt_find(daos_handle_t toh, const struct evt_filter *filter,
 	int			 rc;
 
 	D_ASSERT(filter != NULL);
+	D_ASSERT(filter->fr_epoch != 0);
 
 	tcx = evt_hdl2tcx(toh);
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	evt_ent_array_init(ent_array);
 	rect.rc_ex = filter->fr_ex;
-	rect.rc_epc = filter->fr_epr.epr_hi;
+	rect.rc_epc = filter->fr_epoch;
 	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
 
 	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_DEFAULT,
 				filter, &rect, ent_array);
 	if (rc == 0)
 		rc = evt_ent_array_sort(tcx, ent_array, filter, EVT_VISIBLE);
-	if (rc != 0)
-		evt_ent_array_fini(ent_array);
+
 	return rc;
 }
 
@@ -2677,8 +2827,10 @@ evt_common_insert(struct evt_context *tcx, struct evt_node *nd,
 
 	if (leaf) {
 		umem_off_t desc_off;
-		uint32_t   csum_buf_size =
-				evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+		uint32_t   csum_buf_size = 0;
+
+		if (ci_is_valid(&ent->ei_csum))
+			csum_buf_size = ci_csums_len(ent->ei_csum);
 		size_t     desc_size = sizeof(struct evt_desc) + csum_buf_size;
 		ne = evt_node_entry_at(tcx, nd, i);
 
@@ -2723,7 +2875,6 @@ static int
 evt_common_rect_weight(struct evt_context *tcx, const struct evt_rect *rect,
 		       struct evt_weight *weight)
 {
-	memset(weight, 0, sizeof(*weight));
 	weight->wt_major = rect->rc_ex.ex_hi - rect->rc_ex.ex_lo;
 	weight->wt_minor = 0; /* Disable minor weight in favor of distance */
 
@@ -3172,27 +3323,28 @@ int
 evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 		    struct evt_entry *ent, bool in_tx)
 {
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	struct evt_filter	 filter = {0};
 	int			 rc;
 
 	/* NB: This function presently only supports exact match on extent. */
-	evt_ent_array_init_internal(&ent_array, 1);
+	evt_ent_array_init(ent_array, 1);
 
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
+	filter.fr_epoch = rect->rc_epc;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
-				&filter, rect, &ent_array);
+				&filter, rect, ent_array);
 	if (rc != 0)
 		return rc;
 
-	if (ent_array.ea_ent_nr == 0)
+	if (ent_array->ea_ent_nr == 0)
 		return -DER_ENOENT;
 
-	D_ASSERT(ent_array.ea_ent_nr == 1);
+	D_ASSERT(ent_array->ea_ent_nr == 1);
 	if (ent != NULL)
-		*ent = *evt_ent_array_get(&ent_array, 0);
+		*ent = *evt_ent_array_get(ent_array, 0);
 
 	if (!in_tx) {
 		rc = evt_tx_begin(tcx);
@@ -3209,7 +3361,7 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 
-	/* No need for evt_ent_array_fill as there will be no allocations
+	/* No need for evt_ent_array_fini as there will be no allocations
 	 * with 1 entry in the list
 	 */
 	return in_tx ? rc : evt_tx_end(tcx, rc);
@@ -3231,70 +3383,14 @@ int
 evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 	       const daos_epoch_range_t *epr)
 {
-	struct evt_context	*tcx;
-	struct evt_entry	*entry;
-	struct evt_entry_array	 ent_array;
-	struct evt_filter	 filter = {0};
-	int			 rc;
-	struct evt_rect		 rect;
+	struct evt_entry_in	entry = {0};
 
-	tcx = evt_hdl2tcx(toh);
-	if (tcx == NULL)
-		return -DER_NO_HDL;
+	entry.ei_rect.rc_ex = *ext;
+	entry.ei_bound = entry.ei_rect.rc_epc = epr->epr_hi;
+	entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+	BIO_ADDR_SET_HOLE(&entry.ei_addr);
 
-	rect.rc_ex = *ext;
-	rect.rc_epc = epr->epr_hi;
-	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
-
-	evt_ent_array_init(&ent_array);
-
-	filter.fr_ex = rect.rc_ex;
-	filter.fr_epr = *epr;
-	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, DAOS_INTENT_PURGE,
-				&filter, &rect, &ent_array);
-	if (rc != 0) {
-		D_ERROR("ent_array_fill failed: "DF_RC"\n", DP_RC(rc));
-		evt_ent_array_fini(&ent_array);
-		return rc;
-	}
-
-	if (ent_array.ea_ent_nr == 0)
-		return 0;
-
-	evt_ent_array_for_each(entry, &ent_array) {
-		if (entry->en_visibility & EVT_PARTIAL) {
-			D_ERROR("Removing partial extents not allowed:"
-				" Specified rect "DF_RECT" overlaps "DF_EXT"\n",
-				DP_RECT(&rect), DP_EXT(&entry->en_ext));
-			rc = -DER_NO_PERM;
-			goto done;
-		}
-	}
-
-	rc = evt_tx_begin(tcx);
-	if (rc != 0)
-		return rc;
-
-	evt_ent_array_for_each(entry, &ent_array) {
-		struct evt_rect	to_delete;
-
-		to_delete.rc_ex = entry->en_ext;
-		to_delete.rc_epc = entry->en_epoch;
-		to_delete.rc_minor_epc = entry->en_minor_epc;
-		rc = evt_delete_internal(tcx, &to_delete, NULL, true);
-		if (rc != 0) {
-			D_ERROR("Failed to delete "DF_RECT"\n",
-				DP_RECT(&to_delete));
-			break;
-		}
-	}
-
-	rc = evt_tx_end(tcx, rc);
-
-done:
-	evt_ent_array_fini(&ent_array);
-
-	return rc;
+	return evt_insert(toh, &entry, NULL);
 }
 
 daos_size_t
@@ -3320,17 +3416,28 @@ evt_desc_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 		   const struct evt_entry_in *ent, uint8_t **csum_bufp)
 {
 	const struct dcs_csum_info	*csum = &ent->ei_csum;
-	daos_size_t			 csum_buf_len;
+	daos_size_t			 csum_buf_len = 0;
 
 	if (!ci_is_valid(csum))
 		return;
 
-	csum_buf_len = evt_csum_buf_len(tcx, &ent->ei_rect.rc_ex);
+	/**
+	 * If a punch was inserted first (rec_len = 0), then the csum info
+	 * won't have been set in evt_root_activate.
+	 */
+	if (tcx->tc_root->tr_csum_len == 0 && csum->cs_len > 0) {
+		tcx->tc_root->tr_csum_len = csum->cs_len;
+		tcx->tc_root->tr_csum_type = csum->cs_type;
+		tcx->tc_root->tr_csum_chunk_size = csum->cs_chunksize;
+	}
+
+	csum_buf_len = ci_csums_len(ent->ei_csum);
+
 	if (csum->cs_buf_len < csum_buf_len) {
 		D_ERROR("Issue copying checksum. Source (%d) is "
 			"larger than destination (%"PRIu64")",
 			csum->cs_buf_len, csum_buf_len);
-	} else {
+	} else if (csum_buf_len > 0) {
 		memcpy(desc->pt_csum, csum->cs_csum, csum_buf_len);
 		if (csum_bufp != NULL)
 			*csum_bufp = desc->pt_csum;
@@ -3343,17 +3450,28 @@ evt_entry_csum_fill(struct evt_context *tcx, struct evt_desc *desc,
 {
 	uint32_t csum_count;
 
-	if (tcx->tc_root->tr_csum_len <= 0 || !tcx->tc_root->tr_csum_chunk_size)
+	if (tcx->tc_root->tr_csum_len == 0)
 		return;
+
+	/**
+	 * Fill these in even if is a hole. Aggregation depends on these
+	 * being set to always know checksums is enabled
+	 */
+	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
+	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
+	entry->en_csum.cs_chunksize = tcx->tc_root->tr_csum_chunk_size;
+
+	if (bio_addr_is_hole(&desc->dc_ex_addr)) {
+		entry->en_csum.cs_nr = 0;
+		entry->en_csum.cs_buf_len = 0;
+		entry->en_csum.cs_csum = NULL;
+		return;
+	}
 
 	D_DEBUG(DB_TRACE, "Filling entry csum from evt_desc");
 	csum_count = evt_csum_count(tcx, &entry->en_ext);
-
-	entry->en_csum.cs_type = tcx->tc_root->tr_csum_type;
 	entry->en_csum.cs_nr = csum_count;
 	entry->en_csum.cs_buf_len = csum_count * tcx->tc_root->tr_csum_len;
-	entry->en_csum.cs_len = tcx->tc_root->tr_csum_len;
-	entry->en_csum.cs_chunksize = tcx->tc_root->tr_csum_chunk_size;
 	entry->en_csum.cs_csum = &desc->pt_csum[0];
 }
 

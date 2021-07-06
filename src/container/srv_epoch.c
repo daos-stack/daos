@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * ds_cont: Epoch Operations
@@ -62,9 +45,9 @@ snap_list_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val,
 			if (i_args->sla_index < i_args->sla_count) {
 				void *ptr;
 
-				D_REALLOC(ptr, i_args->sla_buf,
-					  i_args->sla_count *
-					  sizeof(daos_epoch_t));
+				D_REALLOC_ARRAY(ptr, i_args->sla_buf,
+						i_args->sla_index,
+						i_args->sla_count);
 				if (ptr == NULL)
 					return -DER_NOMEM;
 				i_args->sla_buf = ptr;
@@ -159,8 +142,8 @@ out:
 }
 
 static int
-snap_create_bcast(struct rdb_tx *tx, struct cont *cont, crt_context_t *ctx,
-		  daos_epoch_t *epoch)
+snap_create_bcast(struct rdb_tx *tx, struct cont *cont, uuid_t coh_uuid,
+		  uint64_t opts, crt_context_t *ctx, daos_epoch_t *epoch)
 {
 	struct cont_tgt_snapshot_notify_in	*in;
 	struct cont_tgt_snapshot_notify_out	*out;
@@ -178,6 +161,10 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, crt_context_t *ctx,
 	in = crt_req_get(rpc);
 	uuid_copy(in->tsi_pool_uuid, cont->c_svc->cs_pool_uuid);
 	uuid_copy(in->tsi_cont_uuid, cont->c_uuid);
+	uuid_copy(in->tsi_coh_uuid, coh_uuid);
+	in->tsi_epoch = crt_hlc_get();
+	in->tsi_opts = opts;
+
 	rc = dss_rpc_send(rpc);
 	if (rc != 0)
 		goto out_rpc;
@@ -191,7 +178,7 @@ snap_create_bcast(struct rdb_tx *tx, struct cont *cont, crt_context_t *ctx,
 		goto out_rpc;
 	}
 
-	*epoch = crt_hlc_get();
+	*epoch = in->tsi_epoch;
 	d_iov_set(&key, epoch, sizeof(*epoch));
 	d_iov_set(&value, &zero, sizeof(zero));
 	rc = rdb_tx_update(tx, &cont->c_snaps, &key, &value);
@@ -218,9 +205,8 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	daos_epoch_t			snap_eph;
 	int				rc;
 
-	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: epoch="DF_U64"\n",
-		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc,
-		in->cei_epoch);
+	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cei_op.ci_uuid), rpc);
 
 	/* Verify handle has write access */
 	if (!ds_sec_cont_can_write_data(hdl->ch_sec_capas)) {
@@ -230,12 +216,8 @@ ds_cont_snap_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		goto out;
 	}
 
-	if (in->cei_epoch >= DAOS_EPOCH_MAX) {
-		rc = -DER_OVERFLOW;
-		goto out;
-	}
-
-	rc = snap_create_bcast(tx, cont, rpc->cr_ctx, &snap_eph);
+	rc = snap_create_bcast(tx, cont, in->cei_op.ci_hdl, in->cei_opts,
+			       rpc->cr_ctx, &snap_eph);
 	if (rc == 0)
 		out->ceo_epoch = snap_eph;
 out:

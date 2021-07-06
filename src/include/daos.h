@@ -1,17 +1,7 @@
 /*
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -22,6 +12,7 @@
 #ifndef __DAOS_H__
 #define __DAOS_H__
 
+#include <daos_version.h>
 #include <daos_types.h>
 #include <daos_event.h>
 
@@ -41,12 +32,16 @@ extern "C" {
 
 /**
  * Initialize the DAOS library.
+ * Should be invoked prior to any DAOS calls. Can be called multiple times.
  */
 int
 daos_init(void);
 
 /**
  * Finalize the DAOS library.
+ * Should be invoked only when daos_init() was previously successfully executed.
+ * An internal reference count is maintained by the library that will tear down
+ * the DAOS stack on the last call to daos_fini()
  */
 int
 daos_fini(void);

@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package scm
 
@@ -44,7 +27,7 @@ var (
 	defaultNamespace = &storage.ScmNamespace{}
 )
 
-func TestProviderScan(t *testing.T) {
+func TestProvider_Scan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rescan          bool
 		discoverErr     error
@@ -91,7 +74,7 @@ func TestProviderScan(t *testing.T) {
 		"Discover fails": {
 			discoverErr: FaultDiscoveryFailed,
 		},
-		"GetState fails": {
+		"GetPmemState fails": {
 			getStateErr: errors.New("getstate failed"),
 		},
 	} {
@@ -106,11 +89,11 @@ func TestProviderScan(t *testing.T) {
 				tc.getNamespaceRes = storage.ScmNamespaces{defaultNamespace}
 			}
 			mbc := &MockBackendConfig{
-				DiscoverRes:     tc.discoverRes,
-				DiscoverErr:     tc.discoverErr,
-				GetNamespaceRes: tc.getNamespaceRes,
-				GetNamespaceErr: tc.getNamespaceErr,
-				GetStateErr:     tc.getStateErr,
+				DiscoverRes:         tc.discoverRes,
+				DiscoverErr:         tc.discoverErr,
+				GetPmemNamespaceRes: tc.getNamespaceRes,
+				GetPmemNamespaceErr: tc.getNamespaceErr,
+				GetPmemStateErr:     tc.getStateErr,
 			}
 			p := NewMockProvider(log, mbc, nil)
 			cmpRes := func(t *testing.T, want, got *ScanResponse) {
@@ -145,7 +128,7 @@ func TestProviderScan(t *testing.T) {
 	}
 }
 
-func TestProviderPrepare(t *testing.T) {
+func TestProvider_Prepare(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startInitialized bool
 		reset            bool
@@ -226,15 +209,15 @@ func TestProviderPrepare(t *testing.T) {
 				tc.getNamespaceRes = storage.ScmNamespaces{defaultNamespace}
 			}
 			mbc := &MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{defaultModule},
-				GetNamespaceRes: tc.getNamespaceRes,
-				GetNamespaceErr: tc.getNamespaceErr,
-				GetStateErr:     tc.getStateErr,
-				StartingState:   tc.startState,
-				NextState:       tc.expEndState,
-				PrepNeedsReboot: tc.shouldReboot,
-				PrepErr:         tc.prepErr,
+				DiscoverErr:         tc.discoverErr,
+				DiscoverRes:         storage.ScmModules{defaultModule},
+				GetPmemNamespaceRes: tc.getNamespaceRes,
+				GetPmemNamespaceErr: tc.getNamespaceErr,
+				GetPmemStateErr:     tc.getStateErr,
+				StartingState:       tc.startState,
+				NextState:           tc.expEndState,
+				PrepNeedsReboot:     tc.shouldReboot,
+				PrepErr:             tc.prepErr,
 			}
 			p := NewMockProvider(log, mbc, nil)
 
@@ -267,7 +250,7 @@ func TestProviderPrepare(t *testing.T) {
 	}
 }
 
-func TestProviderGetState(t *testing.T) {
+func TestProvider_GetPmemState(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startInitialized bool
 		discoverErr      error
@@ -291,11 +274,11 @@ func TestProviderGetState(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			mbc := &MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{defaultModule},
-				GetNamespaceErr: tc.getNamespaceErr,
-				StartingState:   tc.startState,
-				NextState:       tc.expEndState,
+				DiscoverErr:         tc.discoverErr,
+				DiscoverRes:         storage.ScmModules{defaultModule},
+				GetPmemNamespaceErr: tc.getNamespaceErr,
+				StartingState:       tc.startState,
+				NextState:           tc.expEndState,
 			}
 			p := NewMockProvider(log, mbc, nil)
 			p.scanCompleted = tc.startInitialized
@@ -306,7 +289,7 @@ func TestProviderGetState(t *testing.T) {
 				}
 			}
 
-			res, err := p.GetState()
+			res, err := p.GetPmemState()
 			if err != nil {
 				switch err {
 				case tc.discoverErr, tc.getNamespaceErr:
@@ -320,7 +303,7 @@ func TestProviderGetState(t *testing.T) {
 	}
 }
 
-func TestProviderCheckFormat(t *testing.T) {
+func TestProvider_CheckFormat(t *testing.T) {
 	const (
 		goodMountPoint = "/mnt/daos"
 		goodDevice     = "/dev/pmem0"
@@ -449,9 +432,9 @@ func TestProviderCheckFormat(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			mbc := &MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{defaultModule},
-				GetNamespaceErr: tc.getNamespaceErr,
+				DiscoverErr:         tc.discoverErr,
+				DiscoverRes:         storage.ScmModules{defaultModule},
+				GetPmemNamespaceErr: tc.getNamespaceErr,
 			}
 			msc := &MockSysConfig{
 				IsMountedBool: tc.alreadyMounted,
@@ -491,11 +474,120 @@ func TestProviderCheckFormat(t *testing.T) {
 	}
 }
 
-func TestProviderFormat(t *testing.T) {
+func TestProvider_makeMountPath(t *testing.T) {
+	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(testDir)
+
+	dir1 := "/fake"
+	dir2 := "/nested"
+	dir3 := "/mountpoint"
+	nestedMount := dir1 + dir2 + dir3
+
+	for name, tc := range map[string]struct {
+		mntpt     string
+		existPath string
+		statErrs  map[string]error
+		expCreate bool
+		expErr    error
+	}{
+		"existing nested": {
+			mntpt: nestedMount,
+		},
+		"existing nested; bad perms": {
+			mntpt: nestedMount,
+			statErrs: map[string]error{
+				nestedMount: os.ErrPermission,
+			},
+			expErr: os.ErrPermission,
+		},
+		"new nested": {
+			mntpt: nestedMount,
+			statErrs: map[string]error{
+				dir1:        os.ErrNotExist,
+				dir1 + dir2: os.ErrNotExist,
+				nestedMount: os.ErrNotExist,
+			},
+			expCreate: true,
+		},
+		"partial existing nested": {
+			mntpt:     nestedMount,
+			existPath: dir1,
+			statErrs: map[string]error{
+				dir1 + dir2: os.ErrNotExist,
+				nestedMount: os.ErrNotExist,
+			},
+			expCreate: true,
+		},
+		// similate situation where mount ancestor dir exists with
+		// incompatible permissions
+		"partial existing nested; bad perms": {
+			mntpt:     nestedMount,
+			existPath: dir1 + dir2,
+			statErrs: map[string]error{
+				dir1 + dir2: os.ErrPermission,
+				nestedMount: os.ErrNotExist,
+			},
+			expErr: os.ErrPermission,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			testCaseDir := filepath.Join(testDir, "tc")
+			if err := os.Mkdir(testCaseDir, defaultMountPointPerms); err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(testCaseDir)
+
+			if tc.existPath != "" {
+				// when simulating full or partial mountpoint
+				// path, create the existing directory structure
+				// in the test case temporary directory
+				ep := filepath.Join(testCaseDir, tc.existPath)
+				if err := os.MkdirAll(ep, defaultMountPointPerms); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			msc := MockSysConfig{
+				statErrors: make(map[string]error),
+			}
+			for mp, err := range tc.statErrs {
+				// mocked stat return errors updated for paths
+				// relative to the test case temporary directory
+				k := filepath.Join(testCaseDir, mp)
+				msc.statErrors[k] = err
+			}
+			p := NewMockProvider(log, nil, &msc)
+
+			tMntpt := filepath.Join(testCaseDir, tc.mntpt)
+
+			gotErr := p.makeMountPath(tMntpt, os.Getuid(), os.Getgid())
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil || tc.expCreate == false {
+				return
+			}
+
+			// verify that the expected directory structure has been
+			// created within the test case temporary directory
+			if _, err := os.Stat(tMntpt); err != nil {
+				t.Fatalf("Mount point not accessible: %s", err)
+			}
+		})
+	}
+}
+
+func TestProvider_Format(t *testing.T) {
 	const (
-		goodMountPoint = "/mnt/daos"
-		badMountPoint  = "/this/should/not/work"
-		goodDevice     = "/dev/pmem0"
+		goodMountPoint     = "/mnt/daos"
+		nestedMountPoint   = "/mnt/daos/0"
+		relativeMountPoint = "mnt/daos/0"
+		badMountPoint      = "/this/should/not/work"
+		goodDevice         = "/dev/pmem0"
 	)
 
 	// NB: Some overlap here between this and CheckFormat tests,
@@ -563,6 +655,16 @@ func TestProviderFormat(t *testing.T) {
 				Mounted:    true,
 			},
 		},
+		"ramdisk: mountpoint not accessible": {
+			mountPoint:   nestedMountPoint,
+			isMountedErr: os.ErrPermission,
+			expResponse: &FormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+			expErr: FaultPathAccessDenied(nestedMountPoint),
+		},
 		"ramdisk: already mounted, no reformat": {
 			mountPoint:     goodMountPoint,
 			alreadyMounted: true,
@@ -628,6 +730,15 @@ func TestProviderFormat(t *testing.T) {
 			alreadyMounted: true,
 			mountErr:       errors.New("mount failed"),
 		},
+		"ramdisk: mountpoint doesn't exist; nested mountpoint": {
+			mountPoint:   nestedMountPoint,
+			isMountedErr: os.ErrNotExist,
+			expResponse: &FormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+		},
 		"dcpm: getFs fails": {
 			request: &FormatRequest{
 				Mountpoint: goodMountPoint,
@@ -647,6 +758,17 @@ func TestProviderFormat(t *testing.T) {
 			},
 			getFsStr: "reiserfs",
 			expErr:   FaultFormatNoReformat,
+		},
+		"dcpm: mountpoint not accessible": {
+			isMountedErr: os.ErrPermission,
+			request: &FormatRequest{
+				Mountpoint: nestedMountPoint,
+				Dcpm: &DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: "reiserfs",
+			expErr:   FaultPathAccessDenied(nestedMountPoint),
 		},
 		"dcpm: not mounted; already formatted; no reformat": {
 			request: &FormatRequest{
@@ -767,17 +889,56 @@ func TestProviderFormat(t *testing.T) {
 			},
 			expErr: FaultFormatMissingDevice("/bad/device"),
 		},
+		"dcpm: mountpoint doesn't exist; not formatted; nested mountpoint": {
+			isMountedErr: os.ErrNotExist,
+			request: &FormatRequest{
+				Mountpoint: nestedMountPoint,
+				Dcpm: &DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeNone,
+			expResponse: &FormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+		},
+		"dcpm: not mounted; not formatted; nested mountpoint": {
+			request: &FormatRequest{
+				Mountpoint: nestedMountPoint,
+				Dcpm: &DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeNone,
+			expResponse: &FormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			mbc := &MockBackendConfig{
-				DiscoverErr:     tc.discoverErr,
-				DiscoverRes:     storage.ScmModules{defaultModule},
-				GetNamespaceErr: tc.getNamespaceErr,
+			cmpRes := func(t *testing.T, want, got *FormatResponse) {
+				t.Helper()
+				if diff := cmp.Diff(want, got); diff != "" {
+					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+				}
 			}
-			msc := &MockSysConfig{
+
+			testDir, clean := common.CreateTestDir(t)
+			defer clean()
+
+			mbc := MockBackendConfig{
+				DiscoverErr:         tc.discoverErr,
+				DiscoverRes:         storage.ScmModules{defaultModule},
+				GetPmemNamespaceErr: tc.getNamespaceErr,
+			}
+			msc := MockSysConfig{
 				IsMountedBool: tc.alreadyMounted,
 				IsMountedErr:  tc.isMountedErr,
 				GetfsStr:      tc.getFsStr,
@@ -786,19 +947,7 @@ func TestProviderFormat(t *testing.T) {
 				MountErr:      tc.mountErr,
 				UnmountErr:    tc.unmountErr,
 			}
-			p := NewMockProvider(log, mbc, msc)
-			cmpRes := func(t *testing.T, want, got *FormatResponse) {
-				t.Helper()
-				if diff := cmp.Diff(want, got); diff != "" {
-					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-				}
-			}
-
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(testDir)
+			p := NewMockProvider(log, &mbc, &msc)
 
 			req := tc.request
 			if req == nil {
@@ -834,10 +983,18 @@ func TestProviderFormat(t *testing.T) {
 					}
 					t.Fatalf("%s leaked from IsMounted() check", err)
 				default:
-					if tc.expErr != nil && tc.expErr.Error() == errors.Cause(err).Error() {
-						return
+					if tc.expErr == nil {
+						t.Fatal(err)
 					}
-					t.Fatal(err)
+
+					// expErr will contain the original mountpoint
+					errStr := errors.Cause(err).Error()
+					errStr = strings.Replace(errStr, testDir, "", 1)
+					if diff := cmp.Diff(tc.expErr.Error(), errStr); diff != "" {
+						t.Fatalf("unexpected error (-want, +got):\n%s\n", diff)
+					}
+
+					return
 				}
 			}
 			cmpRes(t, tc.expResponse, res)

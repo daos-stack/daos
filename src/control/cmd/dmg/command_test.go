@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -34,10 +17,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"github.com/daos-stack/daos/src/control/common"
-	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 type dmgTestErr string
@@ -118,9 +101,11 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 	// that interact with the MS will need a valid-ish MS response
 	// in order to avoid failing response validation.
 	resp := &control.UnaryResponse{}
-	switch uReq.(type) {
+	switch req := uReq.(type) {
 	case *control.PoolCreateReq:
-		resp = control.MockMSResponse("", nil, &mgmtpb.PoolCreateResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolCreateResp{
+			TgtRanks: []uint32{0},
+		})
 	case *control.PoolDestroyReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolDestroyResp{})
 	case *control.PoolEvictReq:
@@ -131,19 +116,27 @@ func (bci *bridgeConnInvoker) InvokeUnaryRPC(ctx context.Context, uReq control.U
 			Value:    &mgmtpb.PoolSetPropResp_Numval{},
 		})
 	case *control.SystemStopReq:
-		resp = control.MockMSResponse("", nil, &ctlpb.SystemStopResp{})
-	case *control.SystemResetFormatReq:
-		resp = control.MockMSResponse("", nil, &ctlpb.SystemResetFormatResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStopResp{})
+	case *control.SystemEraseReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemEraseResp{})
 	case *control.SystemStartReq:
-		resp = control.MockMSResponse("", nil, &ctlpb.SystemStartResp{})
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemStartResp{})
 	case *control.SystemQueryReq:
-		resp = control.MockMSResponse("", nil, &ctlpb.SystemQueryResp{})
+		if req.FailOnUnavailable {
+			resp = control.MockMSResponse("", system.ErrRaftUnavail, nil)
+			break
+		}
+		resp = control.MockMSResponse("", nil, &mgmtpb.SystemQueryResp{})
 	case *control.LeaderQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.LeaderQueryResp{})
 	case *control.ListPoolsReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ListPoolsResp{})
 	case *control.ContSetOwnerReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.ContSetOwnerResp{})
+	case *control.PoolResolveIDReq:
+		resp = control.MockMSResponse("", nil, &mgmtpb.PoolResolveIDResp{
+			Uuid: defaultPoolUUID,
+		})
 	case *control.PoolQueryReq:
 		resp = control.MockMSResponse("", nil, &mgmtpb.PoolQueryResp{})
 	case *control.PoolGetACLReq, *control.PoolOverwriteACLReq,

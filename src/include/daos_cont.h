@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2020 Intel Corporation.
+ * (C) Copyright 2020-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -48,10 +31,10 @@ extern "C" {
  * DAOS_COO_FORCE skips the check to see if the pool meets the redundancy
  * factor/level requirements of the container.
  */
-#define DAOS_COO_RO	(1U << 0)
-#define DAOS_COO_RW	(1U << 1)
-#define DAOS_COO_NOSLIP	(1U << 2)
-#define DAOS_COO_FORCE	(1U << 3)
+#define DAOS_COO_RO		(1U << 0)
+#define DAOS_COO_RW		(1U << 1)
+#define DAOS_COO_NOSLIP		(1U << 2)
+#define DAOS_COO_FORCE		(1U << 3)
 
 #define DAOS_COO_NBITS	(4)
 #define DAOS_COO_MASK	((1U << DAOS_COO_NBITS) - 1)
@@ -62,6 +45,8 @@ typedef struct {
 	uuid_t			ci_uuid;
 	/** Epoch of latest persistent snapshot */
 	daos_epoch_t		ci_lsnapshot;
+	/** Redundancy factor */
+	uint32_t		ci_redun_fac;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
 	/** Epochs of returns snapshots */
@@ -154,6 +139,35 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 		 daos_event_t *ev);
 
 /**
+ * Create a new container with label \a label on the storage pool connected
+ * by \a poh.
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	label	Required, label property of the new container.
+ *			Supersedes any label specified in \a cont_prop.
+ * \param[in]	cont_prop
+ *			Optional, container properties pointer
+ *			that if specified must not include an entry
+ *			with type DAOS_PROP_CO_LABEL.
+ * \param[out]	uuid	Optional, pointer to uuid_t to hold the
+ *		        implementation-generated container UUID.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_HDL	Invalid pool handle
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	network is unreachable
+ */
+int
+daos_cont_create_by_label(daos_handle_t poh, const char *label,
+			  daos_prop_t *cont_prop, uuid_t *uuid,
+			  daos_event_t *ev);
+
+/**
  * Open an existing container identified by UUID \a uuid. Upon successful
  * completion, \a coh and \a info, both of which shall be allocated by the
  * caller, return the container handle and the latest container information
@@ -175,10 +189,39 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
  *			-DER_UNREACH	Network is unreachable
  *			-DER_NO_PERM	Permission denied
  *			-DER_NONEXIST	Container is nonexistent
+ *			-DER_RF		#failures exceed RF, data possibly lost
  */
 int
 daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
+
+/**
+ * Open an existing container identified by label property \a label.
+ * Upon successful completion, \a coh and \a info, both of which shall be
+ * allocated by the caller, return the container handle and the latest
+ * container information respectively.
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	label	Label property to identify the container.
+ * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
+ * \param[out]	coh	Returned open handle.
+ * \param[out]	info	Optional, return container information
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_NONEXIST	Container is nonexistent
+ *			-DER_RF		#failures exceed RF, data possibly lost
+ */
+int
+daos_cont_open_by_label(daos_handle_t poh, const char *label,
+			unsigned int flags, daos_handle_t *coh,
+			daos_cont_info_t *info, daos_event_t *ev);
 
 /**
  * Close a container handle. Upon successful completion, the container handle's
@@ -225,6 +268,34 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
 int
 daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 		  daos_event_t *ev);
+
+/**
+ * Destroy a container identified by \a label, all objects within this
+ * container will be destroyed as well.
+ * If there is at least one container opener, and \a force is set to zero, then
+ * the operation completes with DER_BUSY. Otherwise, the container is destroyed
+ * when the operation completes.
+ *
+ * \param[in]	poh	Pool connection handle.
+ * \param[in]	label	Container label property.
+ * \param[in]	force	Container destroy will return failure if the container
+ *			is still busy (outstanding open handles). This parameter
+ *			will force the destroy to proceed even if there is an
+ *			outstanding open handle.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			Function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NONEXIST	Container is nonexistent
+ *			-DER_BUSY	Pool is busy
+ */
+int
+daos_cont_destroy_by_label(daos_handle_t poh, const char *label, int force,
+			   daos_event_t *ev);
 
 /**
  * Query container information.
@@ -303,6 +374,25 @@ daos_cont_get_acl(daos_handle_t container, daos_prop_t **acl_prop,
  */
 int
 daos_cont_set_prop(daos_handle_t coh, daos_prop_t *prop, daos_event_t *ev);
+
+
+/**
+ * Clear container status, to clear container's DAOS_PROP_CO_STATUS property
+ * from DAOS_PROP_CO_UNCLEAN status to DAOS_PROP_CO_HEALTHY (with same purpose
+ * with "daos cont set-prop --properties=status:healthy --pool= --cont= ".
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ */
+int
+daos_cont_status_clear(daos_handle_t coh, daos_event_t *ev);
 
 /**
  * Overwrites the container ACL with a new one.
@@ -453,6 +543,28 @@ daos_cont_set_attr(daos_handle_t coh, int n, char const *const names[],
 		   daos_event_t *ev);
 
 /**
+ * Delete a list of user-defined container attributes.
+ *
+ * \param[in]	coh	Container handle
+ * \param[in]	n	Number of attributes
+ * \param[in]	names	Array of \a n null-terminated attribute names.
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ *
+ * \return		These values will be returned by \a ev::ev_error in
+ *			non-blocking mode:
+ *			0		Success
+ *			-DER_INVAL	Invalid parameter
+ *			-DER_NO_PERM	Permission denied
+ *			-DER_UNREACH	Network is unreachable
+ *			-DER_NO_HDL	Invalid container handle
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_cont_del_attr(daos_handle_t coh, int n, char const *const names[],
+		   daos_event_t *ev);
+
+/**
  * Allocate a unique set of 64 bit unsigned integers to be used for object ID
  * generation for that container. This is an optional helper function for
  * applications to use to guarantee unique object IDs on the container when more
@@ -538,6 +650,32 @@ daos_cont_subscribe(daos_handle_t coh, daos_epoch_t *epoch, daos_event_t *ev);
 int
 daos_cont_create_snap(daos_handle_t coh, daos_epoch_t *epoch, char *name,
 		      daos_event_t *ev);
+
+enum daos_snapshot_opts {
+	/** create snapshot */
+	DAOS_SNAP_OPT_CR	= (1 << 0),
+	/** create OI table for a snapshot */
+	DAOS_SNAP_OPT_OIT	= (1 << 1),
+};
+
+/**
+ * Advanced snapshot function, it can do different things based bits set
+ * in \a opts:
+ * - DAOS_SNAP_OPT_CR
+ *   create a snapshot at the current epoch and return it.
+ * - DAOS_SNAP_OPT_OIT
+ *   create object ID table (OIT) for the snapshot
+ *
+ * \param[in]	coh	Container handle
+ * \param[out]	epoch	returned epoch of persistent snapshot taken.
+ * \param[in]	name	Optional null terminated name for snapshot.
+ * \param[in]	opts	Bit flags, see daos_snapshot_opts
+ * \param[in]	ev	Completion event, it is optional and can be NULL.
+ *			The function will run in blocking mode if \a ev is NULL.
+ */
+int
+daos_cont_create_snap_opt(daos_handle_t coh, daos_epoch_t *epoch, char *name,
+			  enum daos_snapshot_opts opts, daos_event_t *ev);
 
 /**
  * List all the snapshots of a container and optionally retrieve the snapshot

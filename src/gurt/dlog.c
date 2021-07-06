@@ -1,51 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
- *
- * Portions of this file are based on The Self-* Storage System Project
- * Copyright (c) 2004-2011, Carnegie Mellon University.
- * All rights reserved.
- * http://www.pdl.cmu.edu/  (Parallel Data Lab at Carnegie Mellon)
- *
- * This software is being provided by the copyright holders under the
- * following license. By obtaining, using and/or copying this software,
- * you agree that you have read, understood, and will comply with the
- * following terms and conditions:
- *
- * Permission to reproduce, use, and prepare derivative works of this
- * software is granted provided the copyright and "No Warranty" statements
- * are included with all reproductions and derivative works and associated
- * documentation. This software may also be redistributed without charge
- * provided that the copyright and "No Warranty" statements are included
- * in all redistributions.
- *
- * NO WARRANTY. THIS SOFTWARE IS FURNISHED ON AN "AS IS" BASIS.
- * CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY KIND, EITHER
- * EXPRESSED OR IMPLIED AS TO THE MATTER INCLUDING, BUT NOT LIMITED
- * TO: WARRANTY OF FITNESS FOR PURPOSE OR MERCHANTABILITY, EXCLUSIVITY
- * OF RESULTS OR RESULTS OBTAINED FROM USE OF THIS SOFTWARE. CARNEGIE
- * MELLON UNIVERSITY DOES NOT MAKE ANY WARRANTY OF ANY KIND WITH RESPECT
- * TO FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
- * COPYRIGHT HOLDERS WILL BEAR NO LIABILITY FOR ANY USE OF THIS SOFTWARE
- * OR DOCUMENTATION.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It implements message logging system.
@@ -74,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/utsname.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
 
 #include <netdb.h>
 #include <arpa/inet.h>
@@ -86,20 +43,44 @@
 /* extra tag bytes to alloc for a pid */
 #define DLOG_TAGPAD 16
 
+enum {
+	/** minimum log file size is 1MB */
+	LOG_SIZE_MIN	= (1ULL << 20),
+	/** default log file size is 2GB */
+	LOG_SIZE_DEF	= (1ULL << 31),
+};
+
 /**
  * internal global state
  */
-struct clog_state {
+struct d_log_state {
+	/** logfile name [malloced] */
+	char		*log_file;
+	/** backup file name */
+	char		*log_old;
+	/** buffer to cache log messages */
+	char		*log_buf;
+	/** Number Of Bytes in the buffer */
+	off_t		 log_buf_nob;
+	/** fd of the open logfile */
+	int		 log_fd;
+	/** fd of the backup logfile, only for log_sync on assertion failure */
+	int		 log_old_fd;
+	/** current size of log file */
+	uint64_t	 log_size;
+	/** max size of log file */
+	uint64_t	 log_size_max;
+	/** Callback to get thread id and ULT id */
+	d_log_id_cb_t	 log_id_cb;
 	/* note: tag, dlog_facs, and fac_cnt are in xstate now */
 	int def_mask;		/* default facility mask value */
 	int stderr_mask;	/* mask above which we send to stderr  */
-	char *logfile;		/* logfile name [malloced] */
-	int logfd;		/* fd of the open logfile */
 	int oflags;		/* open flags */
 	int fac_alloc;		/* # of slots in facs[] (>=fac_cnt) */
 	struct utsname uts;	/* for hostname, from uname(3) */
 	int stdout_isatty;	/* non-zero if stdout is a tty */
 	int stderr_isatty;	/* non-zero if stderr is a tty */
+	int flush_pri;		/* flush priority */
 #ifdef DLOG_MUTEX
 	pthread_mutex_t clogmux;	/* protect clog in threaded env */
 #endif
@@ -117,9 +98,8 @@ struct cache_entry {
  */
 struct d_log_xstate d_log_xst;
 
-static struct clog_state mst;
+static struct d_log_state mst;
 static d_list_t	d_log_caches;
-
 
 /* default name for facility 0 */
 static const char *default_fac0name = "CLOG";
@@ -132,12 +112,13 @@ static const char *default_fac0name = "CLOG";
 #define clog_unlock()
 #endif
 
+static int d_log_write(char *buf, int len, bool flush);
 static const char *clog_pristr(int);
 static int clog_setnfac(int);
 
 /* static arrays for converting between pri's and strings */
 static const char * const norm[] = { "DBUG", "INFO", "NOTE", "WARN", "ERR ",
-				     "CRIT", "ALRT", "EMRG"};
+				     "CRIT", "ALRT", "EMRG", "EMIT"};
 /**
  * clog_pristr: convert priority to 4 byte symbolic name.
  *
@@ -149,8 +130,11 @@ static const char *clog_pristr(int pri)
 {
 	int s;
 
-	pri = pri & DLOG_PRIMASK;
-	s = (pri >> DLOG_PRISHIFT) & 7;
+	s = DLOG_PRI(pri);
+	if (s >= (sizeof(norm) / sizeof(char *))) {
+		/* prevent checksum warning */
+		s = 0;
+	}
 	return norm[s];
 }
 
@@ -198,7 +182,7 @@ static int clog_setnfac(int n)
 	for (/*null */ ; lcv < try; lcv++) {	/* init the new */
 		nfacs[lcv].fac_mask = mst.def_mask;
 		nfacs[lcv].fac_aname =
-		    (lcv == 0) ? (char *) default_fac0name : NULL;
+		    (lcv == 0) ? (char *)default_fac0name : NULL;
 		nfacs[lcv].fac_lname = NULL;
 		nfacs[lcv].is_enabled = true; /* enable all facs by default */
 	}
@@ -279,7 +263,6 @@ d_log_add_cache(int *cache, int nr)
 	clog_unlock();
 }
 
-
 /**
  * dlog_cleanout: release previously allocated resources (e.g. from a
  * close or during a failed open).  this function assumes the clogmux
@@ -296,13 +279,30 @@ static void dlog_cleanout(void)
 	int			 lcv;
 
 	clog_lock();
-	if (mst.logfile) {
-		if (mst.logfd >= 0)
-			close(mst.logfd);
-		mst.logfd = -1;
-		free(mst.logfile);
-		mst.logfile = NULL;
+	if (mst.log_file) {
+		if (mst.log_fd >= 0) {
+			d_log_write(NULL, 0, true);
+			close(mst.log_fd);
+		}
+		mst.log_fd = -1;
+		free(mst.log_file);
+		mst.log_file = NULL;
 	}
+
+	if (mst.log_old) {
+		if (mst.log_old_fd >= 0)
+			close(mst.log_old_fd);
+		mst.log_old_fd = -1;
+		free(mst.log_old);
+		mst.log_old = NULL;
+	}
+
+	if (mst.log_buf) {
+		free(mst.log_buf);
+		mst.log_buf = NULL;
+		mst.log_buf_nob = 0;
+	}
+
 	if (d_log_xst.dlog_facs) {
 		/*
 		 * free malloced facility names, being careful not to free
@@ -318,7 +318,8 @@ static void dlog_cleanout(void)
 		}
 		free(d_log_xst.dlog_facs);
 		d_log_xst.dlog_facs = NULL;
-		d_log_xst.fac_cnt = mst.fac_alloc = 0;
+		d_log_xst.fac_cnt = 0;
+		mst.fac_alloc = 0;
 	}
 
 	reset_caches(true); /* Log is going away, reset cached masks */
@@ -327,7 +328,11 @@ static void dlog_cleanout(void)
 		free(ce);
 	clog_unlock();
 #ifdef DLOG_MUTEX
-	D_MUTEX_DESTROY(&mst.clogmux);
+	/* XXX
+	 * do not destroy mutex to allow correct execution of dlog_sync()
+	 * which as been registered using atexit() and to be run upon exit()
+	 */
+	 /* D_MUTEX_DESTROY(&mst.clogmux); */
 #endif
 }
 
@@ -350,6 +355,136 @@ do {								\
 		__func__, __LINE__, err,  ## __VA_ARGS__);	\
 } while (0)
 
+#define LOG_BUF_SIZE	(16 << 10)
+
+/**
+ * This function can do a few things:
+ * - copy log message @msg to log buffer
+ * - if the log buffer is full, write it to log file
+ * - if the log file is too large (exceeds to threshold), rename it to
+ *   original_name.old, and create a new log file.
+ *
+ * If @flush is true, it writes log buffer to log file immediately.
+ */
+static int
+d_log_write(char *msg, int len, bool flush)
+{
+	int	 rc;
+
+	if (mst.log_fd < 0)
+		return 0;
+
+	if (len >= LOG_BUF_SIZE) {
+		dlog_print_err(0, "message='%.64s' is too long, len=%d\n",
+			       msg, len);
+		return 0;
+	}
+
+	if (!mst.log_buf) {
+		mst.log_buf = malloc(LOG_BUF_SIZE);
+		if (!mst.log_buf) {
+			dlog_print_err(ENOMEM, "failed to alloc log buffer\n");
+			return -1;
+		}
+	}
+	D_ASSERT(!msg || len);
+ again:
+	if (msg && (len <= LOG_BUF_SIZE - mst.log_buf_nob)) {
+		/* the current buffer is not full */
+		strncpy(&mst.log_buf[mst.log_buf_nob], msg, len);
+		mst.log_buf_nob += len;
+		if (!flush)
+			return 0; /* short path done */
+
+		msg = NULL; /* already copied into log buffer */
+		len = 0;
+	}
+	/* write log buffer to log file */
+
+	if (mst.log_buf_nob == 0)
+		return 0; /* nothing to write */
+
+	if (mst.log_size + mst.log_buf_nob >= mst.log_size_max) {
+		/* exceeds the size threshold, rename the current log file
+		 * as backup, create a new log file.
+		 */
+		if (!mst.log_old) {
+			rc = asprintf(&mst.log_old, "%s.old", mst.log_file);
+			if (rc < 0) {
+				dlog_print_err(errno, "failed to alloc name\n");
+				return -1;
+			}
+		}
+
+		if (mst.log_old_fd >= 0) {
+			close(mst.log_old_fd);
+			mst.log_old_fd = -1;
+		}
+
+		/* remove the backup log file */
+		rc = unlink(mst.log_old);
+		if (rc && errno != ENOENT) {
+			dlog_print_err(errno, "failed to unlink old file\n");
+			return -1;
+		}
+
+		/* rename the current log file as a backup */
+		rc = rename(mst.log_file, mst.log_old);
+		if (rc) {
+			dlog_print_err(errno, "failed to rename log file\n");
+			return -1;
+		}
+		mst.log_old_fd = mst.log_fd;
+
+		/* create a new log file */
+		mst.log_fd = open(mst.log_file,  O_RDWR | O_CREAT, 0666);
+		if (mst.log_fd < 0) {
+			dlog_print_err(errno, "failed to recreate log file\n");
+			return -1;
+		}
+		mst.log_size = 0;
+	}
+
+	/* flush the cached log messages */
+	rc = write(mst.log_fd, mst.log_buf, mst.log_buf_nob);
+	if (rc < 0) {
+		dlog_print_err(errno, "failed to write log\n");
+		return -1;
+	}
+	mst.log_size += mst.log_buf_nob;
+	mst.log_buf_nob = 0;
+	if (msg) /* the current message is not processed yet */
+		goto again;
+
+	return 0;
+}
+
+void
+d_log_sync(void)
+{
+	int	rc;
+
+	clog_lock();
+	if (mst.log_buf_nob > 0) /* write back the inflight buffer */
+		d_log_write(NULL, 0, true);
+
+	if (mst.log_fd >= 0) {
+		rc = fsync(mst.log_fd);
+		if (rc < 0)
+			dlog_print_err(errno, "failed to sync log file\n");
+	}
+
+	if (mst.log_old_fd >= 0) {
+		rc = fsync(mst.log_old_fd);
+		if (rc < 0)
+			dlog_print_err(errno, "failed to sync log backup\n");
+
+		close(mst.log_old_fd);
+		mst.log_old_fd = -1; /* nobody is going to write it again */
+	}
+	clog_unlock();
+}
+
 /**
  * d_vlog: core log function, front-ended by d_log
  * we vsnprintf the message into a holding buffer to format it.  then we
@@ -364,8 +499,11 @@ do {								\
 void d_vlog(int flags, const char *fmt, va_list ap)
 {
 #define DLOG_TBSIZ    1024	/* bigger than any line should be */
-	int fac, lvl;
 	static __thread char b[DLOG_TBSIZ];
+	static uint64_t	last_flush;
+
+	int fac, lvl, pri;
+	bool flush;
 	char *b_nopt1hdr;
 	char facstore[16], *facstr;
 	struct timeval tv;
@@ -376,12 +514,14 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * errno to its original value
 	 */
 	int save_errno = errno;
+	int rc;
 
 	if (flags == 0)
 		return;
 
 	fac = flags & DLOG_FACMASK;
 	lvl = flags & DLOG_PRIMASK;
+	pri = flags & DLOG_PRINDMASK;
 
 	/* Check the facility so we don't crash.   We will just log the message
 	 * in this case but it really is indicative of a usage error as user
@@ -404,7 +544,7 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 		snprintf(facstore, sizeof(facstore), "%d", fac);
 		facstr = facstore;
 	}
-	(void) gettimeofday(&tv, 0);
+	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
 	if (tm == NULL) {
 		dlog_print_err(errno, "localtime returned NULL\n");
@@ -423,17 +563,30 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 			 "%02d/%02d-%02d:%02d:%02d.%02ld %s ",
 			 tm->tm_mon + 1, tm->tm_mday,
 			 tm->tm_hour, tm->tm_min, tm->tm_sec,
-			 (long int) tv.tv_usec / 10000, mst.uts.nodename);
+			 (long int)tv.tv_usec / 10000, mst.uts.nodename);
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
-			static __thread pid_t tid = -1;
+			static __thread uint32_t tid = -1;
+			static __thread uint32_t pid = -1;
+			uint64_t uid = 0;
 
-			if (tid == -1)
-				tid = (pid_t)syscall(SYS_gettid);
+			if (pid == (uint32_t)(-1))
+				pid = (uint32_t)getpid();
 
-			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s/%d] ",
-					 d_log_xst.tag, tid);
+			if (tid == (uint32_t)(-1)) {
+				if (mst.log_id_cb)
+					mst.log_id_cb(&tid, NULL);
+				else
+					tid = (uint32_t)syscall(SYS_gettid);
+			}
+
+			if (mst.log_id_cb)
+				mst.log_id_cb(NULL, &uid);
+
+			hlen += snprintf(b + hlen, sizeof(b) - hlen,
+					 "%s%d/%d/"DF_U64"] ", d_log_xst.tag,
+					 pid, tid, uid);
 		} else {
 			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
 					 d_log_xst.tag);
@@ -471,63 +624,59 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * ends in a newline.
 	 */
 	tlen = hlen + mlen;
-	/* if overflow or totally full without newline at end ... */
-	if (tlen >= sizeof(b) ||
-	    (tlen == sizeof(b) - 1 && b[sizeof(b) - 2] != '\n')) {
-		tlen = sizeof(b) - 1;	/* truncate, counting final null */
-		/*
-		 * could overwrite the end of b with "[truncated...]" or
-		 * something like that if we wanted to note the problem.
-		 */
-		b[sizeof(b) - 2] = '\n';	/* jam a \n at the end */
+	/* after condition, tlen will point at index of null byte */
+	if (unlikely(tlen >= (sizeof(b) - 1))) {
+		/* Either the string was truncated or the buffer is full. */
+		tlen = sizeof(b) - 1;
 	} else {
-		/* it fit, make sure it ends in newline */
-		if (b[tlen - 1] != '\n') {
-			D_ASSERT(tlen < DLOG_TBSIZ-1);
-			b[tlen++] = '\n';
-			b[tlen] = 0;
-		}
+		/* it fits with a byte to spare, make sure it ends in newline */
+		if (unlikely(b[tlen - 1] != '\n'))
+			tlen++;
 	}
+	/* Ensure it ends with '\n' and '\0' */
+	b[tlen - 1] = '\n';
+	b[tlen] = '\0';
 	b_nopt1hdr = b + hlen_pt1;
-	/*
-	 * clog message is now ready to be dispatched.
-	 */
-	/*
-	 * log it to the log file
-	 */
-	if (mst.logfd >= 0)
-		if (write(mst.logfd, b, tlen) < 0) {
-			dlog_print_err(errno, "write log failed\n");
-			errno = save_errno;
-		}
-
 	if (mst.oflags & DLOG_FLV_STDOUT)
 		flags |= DLOG_STDOUT;
 
 	if (mst.oflags & DLOG_FLV_STDERR)
 		flags |= DLOG_STDERR;
 
+	/* log message is ready to be dispatched, write to log file.
+	 * NB: flush to logfile if the message is important (warning/error...)
+	 * or the last flush was 1+ second ago.
+	 */
+	if (mst.flush_pri == DLOG_DBG)
+		flush = true;
+	else
+		flush = (lvl >= mst.flush_pri) || (tv.tv_sec > last_flush);
+	if (flush)
+		last_flush = tv.tv_sec;
+
+	rc = d_log_write(b, tlen, flush);
+	if (rc < 0)
+		errno = save_errno;
+
 	clog_unlock();		/* drop lock here */
 	/*
 	 * log it to stderr and/or stdout.  skip part one of the header
 	 * if the output channel is a tty
 	 */
-	if (flags & DLOG_STDERR) {
+	if ((flags & DLOG_STDERR) && (pri != DLOG_EMIT)) {
 		if (mst.stderr_isatty)
 			fprintf(stderr, "%s", b_nopt1hdr);
 		else
 			fprintf(stderr, "%s", b);
 	}
-	if (flags & DLOG_STDOUT) {
+	if ((flags & DLOG_STDOUT) &&  (pri != DLOG_EMIT)) {
 		if (mst.stderr_isatty)
 			printf("%s", b_nopt1hdr);
 		else
 			printf("%s", b);
 		fflush(stdout);
 	}
-	/*
-	 * done!
-	 */
+	/* done! */
 	errno = save_errno;
 }
 
@@ -542,9 +691,11 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 static int d_log_str2pri(const char *pstr, size_t len)
 {
 	int lcv;
+	int size;
 
 	/* make sure we have a valid input */
 	if (len == 0 || len > 7) {
+		/* prevent checksum warning */
 		return -1;
 	}
 
@@ -555,8 +706,8 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	if (strncasecmp(pstr, "ERR", len) == 0)
 		/* has trailing space in the array */
 		return DLOG_ERR;
-	if (strncasecmp(pstr, "DEBUG", len) == 0 || \
-		strncasecmp(pstr, "DBUG", len) == 0) {
+	if (((strncasecmp(pstr, "DEBUG", len) == 0) ||
+	     (strncasecmp(pstr, "DBUG", len) == 0))) {
 		/* check to see is debug mask bits are set */
 		return d_dbglog_data.dd_mask != 0 ?
 		       d_dbglog_data.dd_mask : DLOG_DBG;
@@ -565,11 +716,50 @@ static int d_log_str2pri(const char *pstr, size_t len)
 	/*
 	 * handle non-debug case
 	 */
-	for (lcv = 1; lcv <= 7; lcv++)
+	size = sizeof(norm) / sizeof(char *);
+	for (lcv = 1; lcv < size; lcv++)
 		if (strncasecmp(pstr, norm[lcv], len) == 0)
 			return lcv << DLOG_PRISHIFT;
 	/* bogus! */
 	return -1;
+}
+
+/*
+ * d_getenv_size: interpret a string as a size which can
+ * contain a unit symbol.
+ */
+static uint64_t
+d_getenv_size(char *env)
+{
+	char *end;
+	uint64_t size;
+
+	size = strtoull(env, &end, 0);
+
+	switch (*end) {
+	default:
+		break;
+	case 'k':
+		size *= 1000;
+		break;
+	case 'm':
+		size *= 1000 * 1000;
+		break;
+	case 'g':
+		size *= 1000 * 1000 * 1000;
+		break;
+	case 'K':
+		size *= 1024;
+		break;
+	case 'M':
+		size *= 1024 * 1024;
+		break;
+	case 'G':
+		size *= 1024 * 1024 * 1024;
+		break;
+	}
+
+	return size;
 }
 
 /*
@@ -584,17 +774,38 @@ static int d_log_str2pri(const char *pstr, size_t len)
  */
 int
 d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
-	      char *logfile, int flags)
+	   char *logfile, int flags, d_log_id_cb_t log_id_cb)
 {
-	int	tagblen;
-	char	*newtag = NULL, *cp;
-	int	truncate = 0, rc;
-	char	*env;
-	char	*buffer = NULL;
+	int		tagblen;
+	char		*newtag = NULL, *cp;
+	int		truncate = 0, rc;
+	char		*env;
+	char		*buffer = NULL;
+	uint64_t	log_size = LOG_SIZE_DEF;
+	int		pri;
+
+	memset(&mst, 0, sizeof(mst));
+	mst.flush_pri = DLOG_WARN;
+	mst.log_id_cb = log_id_cb;
+
+	env = getenv(D_LOG_FLUSH_ENV);
+	if (env) {
+		pri = d_log_str2pri(env, strlen(env) + 1);
+
+		if (pri != -1)
+			mst.flush_pri = pri;
+	}
 
 	env = getenv(D_LOG_TRUNCATE_ENV);
 	if (env != NULL && atoi(env) > 0)
 		truncate = 1;
+
+	env = getenv(D_LOG_SIZE_ENV);
+	if (env != NULL) {
+		log_size = d_getenv_size(env);
+		if (log_size < LOG_SIZE_MIN)
+			log_size = LOG_SIZE_MIN;
+	}
 
 	env = getenv(D_LOG_FILE_APPEND_PID_ENV);
 	if (logfile != NULL && env != NULL) {
@@ -604,7 +815,9 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 			if (buffer != NULL && rc != -1)
 				logfile = buffer;
 			else
-				D_PRINT_ERR("Failed to append pid to DAOS debug log name, continuing.\n");
+				D_PRINT_ERR("Failed to append pid to "
+					    "DAOS debug log name, "
+					    "continuing.\n");
 		}
 	}
 
@@ -616,8 +829,8 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		goto early_error;
 	}
 	/* init working area so we can use dlog_cleanout to bail out */
-	memset(&mst, 0, sizeof(mst));
-	mst.logfd = -1;
+	mst.log_fd = -1;
+	mst.log_old_fd = -1;
 	/* start filling it in */
 	tagblen = strlen(tag) + DLOG_TAGPAD;	/* add a bit for pid */
 	newtag = calloc(1, tagblen);
@@ -639,7 +852,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	D_INIT_LIST_HEAD(&d_log_caches);
 
 	if (flags & DLOG_FLV_LOGPID)
-		snprintf(newtag, tagblen, "%s[%d", tag, getpid());
+		snprintf(newtag, tagblen, "%s[", tag);
 	else
 		snprintf(newtag, tagblen, "%s", tag);
 	mst.def_mask = default_mask;
@@ -647,6 +860,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	if (logfile) {
 		int log_flags = O_RDWR | O_CREAT;
 		bool	merge = false;
+		struct stat st;
 
 		env = getenv(D_LOG_STDERR_IN_LOG_ENV);
 		if (env != NULL && atoi(env) > 0)
@@ -655,40 +869,52 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 		if (!truncate)
 			log_flags |= O_APPEND;
 
-		mst.logfile = strdup(logfile);
-		if (!mst.logfile) {
+		mst.log_file = strdup(logfile);
+		if (!mst.log_file) {
 			fprintf(stderr, "strdup failed.\n");
 			goto error;
 		}
+		mst.log_fd = open(mst.log_file, log_flags, 0666);
 		/* merge stderr into log file, to aggregate and order with
 		 * messages from Mercury/libfabric
 		 */
 		if (merge) {
-			if (freopen(mst.logfile, truncate ? "w" : "a",
+			if (freopen(mst.log_file, truncate ? "w" : "a",
 				    stderr) == NULL) {
-				fprintf(stderr, "d_log_open: cannot open %s: %s\n",
-					mst.logfile, strerror(errno));
+				fprintf(stderr, "d_log_open: cannot "
+					"open %s: %s\n",
+					mst.log_file, strerror(errno));
 				goto error;
 			}
 			/* set per-line buffering to limit jumbling */
 			setlinebuf(stderr);
-			mst.logfd = fileno(stderr);
+			mst.log_fd = fileno(stderr);
 		} else {
-			mst.logfd = open(mst.logfile, log_flags, 0666);
+			mst.log_fd = open(mst.log_file, log_flags, 0644);
 		}
-		if (mst.logfd < 0) {
+
+		if (mst.log_fd < 0) {
 			fprintf(stderr, "d_log_open: cannot open %s: %s\n",
-				mst.logfile, strerror(errno));
+				mst.log_file, strerror(errno));
 			goto error;
 		}
+		if (!truncate) {
+			rc = fstat(mst.log_fd, &st);
+			if (rc)
+				goto error;
+
+			mst.log_size = st.st_size;
+		}
+		mst.log_size_max = log_size;
 	}
 	mst.oflags = flags;
+
 	/* maxfac_hint should include default fac. */
 	if (clog_setnfac((maxfac_hint < 1) ? 1 : maxfac_hint) < 0) {
 		fprintf(stderr, "clog_setnfac failed.\n");
 		goto error;
 	}
-	(void) uname(&mst.uts);
+	(void)uname(&mst.uts);
 	d_log_xst.nodename = mst.uts.nodename;	/* expose this */
 	/* chop off the domainname */
 	if ((flags & DLOG_FLV_FQDN) == 0) {
@@ -701,6 +927,16 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	mst.stderr_isatty = isatty(fileno(stderr));
 	d_log_xst.tag = newtag;
 	clog_unlock();
+
+	/* ensure buffer+log flush upon exit in case fini routine not
+	 * being called
+	 */
+	rc = atexit(d_log_sync);
+	if (rc != 0)
+		fprintf(stderr, "unable to register flush of log,\n"
+			"potential risk to miss last lines if fini method "
+			"not invoked upon exit\n");
+
 	if (buffer)
 		free(buffer);
 	return 0;
@@ -783,20 +1019,18 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 	if (facility >= d_log_xst.fac_cnt)
 		if (clog_setnfac(facility + 1) < 0)
 			goto done;
-	n = 0;
-	nl = 0;
-	if (aname) {
-		n = strdup(aname);
-		if (!n)
-			goto done;
-		if (lname) {
-			nl = strdup(lname);
-			if (nl == NULL) {
-				free(n);
-				goto done;
-			}
-		}
+	if (aname == NULL || lname == NULL)
+		goto done;
+
+	n = strdup(aname);
+	if (!n)
+		goto done;
+	nl = strdup(lname);
+	if (nl == NULL) {
+		free(n);
+		goto done;
 	}
+
 	if (d_log_xst.dlog_facs[facility].fac_aname &&
 	    d_log_xst.dlog_facs[facility].fac_aname != default_fac0name)
 		free(d_log_xst.dlog_facs[facility].fac_aname);
@@ -809,7 +1043,6 @@ int d_log_namefacility(int facility, const char *aname, const char *lname)
 		d_log_xst.dlog_facs[facility].is_enabled = false;
 	else
 		d_log_xst.dlog_facs[facility].is_enabled = true;
-
 
 	rv = 0;		/* now we have success */
 done:
@@ -944,21 +1177,22 @@ int d_log_setmasks(char *mstr, int mlen0)
 		/* process facility */
 		if (fac) {
 			clog_lock();
+			/* Search structure to see if it already exists */
 			for (facno = 0; facno < d_log_xst.fac_cnt; facno++) {
 				if (d_log_xst.dlog_facs[facno].fac_aname &&
 				    strlen(d_log_xst.dlog_facs[facno].
-					   fac_aname) == faclen
-				    && strncasecmp(d_log_xst.dlog_facs[facno].
-						   fac_aname, fac,
-						   faclen) == 0) {
+					   fac_aname) == faclen &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].
+						fac_aname, fac,
+						faclen) == 0) {
 					break;
 				}
 				if (d_log_xst.dlog_facs[facno].fac_lname &&
 				    strlen(d_log_xst.dlog_facs[facno].
-					   fac_lname) == faclen
-				    && strncasecmp(d_log_xst.dlog_facs[facno].
-						   fac_lname, fac,
-						   faclen) == 0) {
+					   fac_lname) == faclen &&
+				    strncasecmp(d_log_xst.dlog_facs[facno].
+						fac_lname, fac,
+						faclen) == 0) {
 					break;
 				}
 			}
@@ -992,7 +1226,6 @@ int d_log_setmasks(char *mstr, int mlen0)
 				tmp = d_log_setlogmask(facno, prino);
 				if (rv != -1)
 					rv = tmp;
-
 			}
 		}
 	}

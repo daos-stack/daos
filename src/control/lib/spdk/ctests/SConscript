@@ -5,10 +5,12 @@ import os
 
 def scons():
     """Execute build"""
-    Import('senv', 'prereqs')
+    Import('senv', 'prereqs', 'control_tgts')
 
     unit_env = senv.Clone()
     prereqs.require(unit_env, 'pmdk', 'spdk', 'isal', 'hwloc', 'cmocka')
+
+    unit_env.AppendUnique(OBJPREFIX='c_')
 
     spdk_src = prereqs.get_src_path("spdk")
     nvme_lib_src = os.path.join(spdk_src, 'lib', 'nvme')
@@ -17,15 +19,9 @@ def scons():
     # spdk/lib/nvme to expose normally opaque types during tests
     unit_env.AppendUnique(CPPPATH=[nvme_lib_src, spdk_incl_src])
 
-    # SPDK related libs
-    libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
-    libs += ['rte_mempool', 'rte_mempool_ring', 'rte_bus_pci']
-    libs += ['rte_pci', 'rte_ring', 'rte_mbuf', 'rte_eal', 'rte_kvargs']
-    libs += ['spdk_bdev_aio', 'spdk_bdev_nvme', 'spdk_bdev_malloc']
-    libs += ['spdk_conf', 'spdk_blob', 'spdk_nvme', 'spdk_util']
-    libs += ['spdk_json', 'spdk_jsonrpc', 'spdk_rpc', 'spdk_trace']
-    libs += ['spdk_sock', 'spdk_log', 'spdk_notify', 'spdk_blob_bdev']
-    libs += ['spdk_vmd']
+    # Explicitly link RTE & SPDK libs for CGO access
+    libs = ['spdk_env_dpdk', 'spdk_nvme', 'spdk_vmd', 'rte_mempool']
+    libs += ['rte_mempool_ring', 'rte_bus_pci', 'nvme_control']
 
     # Other libs
     libs += ['numa', 'dl', 'isal', 'cmocka', 'pthread']
@@ -38,7 +34,8 @@ def scons():
     if os.path.isfile(look_path):
         testbin = daos_build.test(unit_env, 'nvme_control_ctests',
                                   ['nvme_control_ut.c', unit_env.ncc,
-                                   unit_env.nc], LIBS=libs)
+                                   unit_env.nc] + control_tgts,
+                                  LIBS=libs)
         unit_env.Install("$PREFIX/bin", testbin)
     else:
         print(look_path, " missing, skipping nvme_control_ut build")

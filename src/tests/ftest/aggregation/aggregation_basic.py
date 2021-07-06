@@ -1,29 +1,13 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import time
 from ior_test_base import IorTestBase
+
 
 class DaosAggregationBasic(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -36,6 +20,19 @@ class DaosAggregationBasic(IorTestBase):
 
     :avocado: recursive
     """
+
+    def get_free_space(self, storage_index):
+        """Get the pool information free space from the specified storage index.
+
+        Args:
+            storage_index (int): index of the pool free space to obtain
+
+        Returns:
+            int: pool free space for the specified storage index
+
+        """
+        self.pool.get_info()
+        return self.pool.info.pi_space.ps_space.s_free[storage_index]
 
     def test_basic_aggregation(self):
         """Jira ID: DAOS-3451
@@ -56,7 +53,11 @@ class DaosAggregationBasic(IorTestBase):
             roughly the same as after the initial run since aggregation has
             reclaimed the overwritten capacity.
 
-        :avocado: tags=all,pr,hw,large,aggregate,daosio,aggregatebasic
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=aggregate,daosio,ior
+        :avocado: tags=aggregatebasic
+        :avocado: tags=DAOS_5610
         """
 
         # Create pool and container
@@ -66,37 +67,30 @@ class DaosAggregationBasic(IorTestBase):
         # directly into NVMe and hence storage_index = 1
         storage_index = 1
 
-        pool_info = self.pool.pool.pool_query()
-        initial_free_space =\
-            pool_info.pi_space.ps_space.s_free[storage_index]
+        initial_free_space = self.get_free_space(storage_index)
 
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
 
         # Run ior with -k option to retain the file and not delete it
         self.run_ior_with_pool()
-        pool_info = self.pool.pool.pool_query()
-        free_space_after_first_ior =\
-            pool_info.pi_space.ps_space.s_free[storage_index]
+        free_space_after_first_ior = self.get_free_space(storage_index)
 
         space_used_by_ior = initial_free_space - free_space_after_first_ior
 
-        self.log.info("Space used by first ior = {}".format(
-            space_used_by_ior))
-        self.log.info("Free space after first ior = {}".format(
-            free_space_after_first_ior))
+        self.log.info("Space used by first ior = %s", space_used_by_ior)
+        self.log.info(
+            "Free space after first ior = %s", free_space_after_first_ior)
         self.assertTrue(free_space_after_first_ior < initial_free_space,
                         "IOR run was not successful.")
 
         # Run ior the second time on the same pool and container, so another
         # copy of the file is inserted in DAOS.
         self.run_ior_with_pool(create_pool=False)
-        pool_info = self.pool.pool.pool_query()
-        free_space_after_second_ior =\
-            pool_info.pi_space.ps_space.s_free[storage_index]
+        free_space_after_second_ior = self.get_free_space(storage_index)
 
-        self.log.info("Free space after second ior = {}".format(
-            free_space_after_second_ior))
+        self.log.info(
+            "Free space after second ior = %s", free_space_after_second_ior)
 
         # Verify the free space after second ior is less at least twice the
         # size of space_used_by_ior from initial_free_space
@@ -112,11 +106,9 @@ class DaosAggregationBasic(IorTestBase):
         self.log.info("Waiting for 120 seconds for aggregation to start \
             and finish")
         time.sleep(120)
-        pool_info = self.pool.pool.pool_query()
-        free_space_after_aggregate =\
-             pool_info.pi_space.ps_space.s_free[storage_index]
-        self.log.info("Free space after aggregation = {}".format(
-            free_space_after_aggregate))
+        free_space_after_aggregate = self.get_free_space(storage_index)
+        self.log.info(
+            "Free space after aggregation = %s", free_space_after_aggregate)
 
         # Verify the space taken by second ior is reclaimed after aggregation
         # (logical locations will be overwritten as part of aggregation)

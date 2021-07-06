@@ -1,33 +1,17 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
 
 package drpc
 
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -56,10 +40,7 @@ func TestService_RegisterModule_Single_Success(t *testing.T) {
 	expectedID := defaultTestModID
 	testMod := newTestModule(expectedID)
 
-	if err := service.RegisterModule(testMod); err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-
+	service.RegisterModule(testMod)
 	mod, ok := service.GetModule(expectedID)
 
 	if !ok {
@@ -83,9 +64,7 @@ func TestService_RegisterModule_Multiple_Success(t *testing.T) {
 		mod := newTestModule(id)
 		testMods = append(testMods, mod)
 
-		if err := service.RegisterModule(mod); err != nil {
-			t.Fatalf("expected no error, got: %v", err)
-		}
+		service.RegisterModule(mod)
 	}
 
 	for i, id := range expectedIDs {
@@ -109,13 +88,14 @@ func TestService_RegisterModule_DuplicateID(t *testing.T) {
 	testMod := newTestModule(ModuleMgmt)
 	dupMod := newTestModule(testMod.IDValue)
 
-	if err := service.RegisterModule(testMod); err != nil {
-		t.Fatalf("expected no error for initial registration, got: %v", err)
-	}
+	service.RegisterModule(testMod)
 
-	err := service.RegisterModule(dupMod)
-
-	common.CmpErr(t, errors.New("already exists"), err)
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected duplicate registration to panic")
+		}
+	}()
+	service.RegisterModule(dupMod)
 }
 
 func TestService_GetModule_NotFound(t *testing.T) {
@@ -123,9 +103,7 @@ func TestService_GetModule_NotFound(t *testing.T) {
 	defer common.ShowBufferOnFailure(t, buf)
 
 	service := NewModuleService(log)
-	if err := service.RegisterModule(newTestModule(defaultTestModID)); err != nil {
-		t.Fatalf("couldn't register module: %v", err)
-	}
+	service.RegisterModule(newTestModule(defaultTestModID))
 
 	_, ok := service.GetModule(defaultTestModID + 1)
 

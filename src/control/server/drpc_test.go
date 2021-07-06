@@ -1,38 +1,25 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 func TestCheckDrpcClientSocketPath_Empty(t *testing.T) {
@@ -73,15 +60,9 @@ func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
 	tmpDir, tmpCleanup := common.CreateTestDir(t)
 	defer tmpCleanup()
 
-	path := filepath.Join(tmpDir, "drpc_test.sock")
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	f.Close()
-	defer os.Remove(path)
+	path := common.CreateTestFile(t, tmpDir, "")
 
-	err = checkDrpcClientSocketPath(path)
+	err := checkDrpcClientSocketPath(path)
 
 	if err == nil {
 		t.Fatal("Expected an error, got nil")
@@ -158,9 +139,9 @@ func TestDrpcCleanup_Single(t *testing.T) {
 
 	for _, sockName := range []string{
 		"daos_server.sock",
-		"daos_io_server.sock",
-		"daos_io_server0.sock",
-		"daos_io_server_2345.sock",
+		"daos_engine.sock",
+		"daos_engine0.sock",
+		"daos_engine_2345.sock",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
 		_, cleanup := common.CreateTestSocket(t, sockPath)
@@ -185,7 +166,7 @@ func TestDrpcCleanup_DoesNotDeleteNonDaosSocketFiles(t *testing.T) {
 		"12345.sock",
 		"myfile",
 		"daos_server",
-		"daos_io_server",
+		"daos_engine",
 	} {
 		sockPath := filepath.Join(tmpDir, sockName)
 		_, cleanup := common.CreateTestSocket(t, sockPath)
@@ -210,12 +191,12 @@ func TestDrpcCleanup_Multiple(t *testing.T) {
 
 	sockNames := []string{
 		"daos_server.sock",
-		"daos_io_server.sock",
-		"daos_io_server12.sock",
-		"daos_io_serverF.sock",
-		"daos_io_server_5678.sock",
-		"daos_io_server_256.sock",
-		"daos_io_server_abc.sock",
+		"daos_engine.sock",
+		"daos_engine12.sock",
+		"daos_engineF.sock",
+		"daos_engine_5678.sock",
+		"daos_engine_256.sock",
+		"daos_engine_abc.sock",
 	}
 
 	var sockPaths []string
@@ -269,6 +250,9 @@ func TestDrpc_Errors(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
 			cfg := &mockDrpcClientConfig{
 				SendMsgError:    tc.sendError,
 				SendMsgResponse: tc.resp,
@@ -276,8 +260,77 @@ func TestDrpc_Errors(t *testing.T) {
 			}
 			mc := newMockDrpcClient(cfg)
 
-			_, err := makeDrpcCall(mc, drpc.MethodPoolCreate,
+			_, err := makeDrpcCall(context.TODO(), log,
+				mc, drpc.MethodPoolCreate,
 				&mgmtpb.PoolCreateReq{})
+			common.CmpErr(t, tc.expErr, err)
+		})
+	}
+}
+
+func TestServer_DrpcRetryCancel(t *testing.T) {
+	for name, tc := range map[string]struct {
+		req          proto.Message
+		resp         proto.Message
+		method       drpc.Method
+		timeout      time.Duration
+		shouldCancel bool
+		expErr       error
+	}{
+		"retries exceed deadline": {
+			req: &retryableDrpcReq{
+				Message:    &mgmtpb.PoolDestroyReq{},
+				RetryAfter: 1 * time.Microsecond,
+				RetryableStatuses: []drpc.DaosStatus{
+					drpc.DaosBusy,
+				},
+			},
+			resp: &mgmtpb.PoolDestroyResp{
+				Status: int32(drpc.DaosBusy),
+			},
+			method:  drpc.MethodPoolDestroy,
+			timeout: 10 * time.Microsecond,
+			expErr:  context.DeadlineExceeded,
+		},
+		"canceled request": {
+			req: &retryableDrpcReq{
+				Message:    &mgmtpb.PoolDestroyReq{},
+				RetryAfter: 1 * time.Microsecond,
+				RetryableStatuses: []drpc.DaosStatus{
+					drpc.DaosBusy,
+				},
+			},
+			resp: &mgmtpb.PoolDestroyResp{
+				Status: int32(drpc.DaosBusy),
+			},
+			method:       drpc.MethodPoolDestroy,
+			timeout:      1 * time.Second,
+			shouldCancel: true,
+			expErr:       context.Canceled,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			body, err := proto.Marshal(tc.resp)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg := &mockDrpcClientConfig{
+				SendMsgResponse: &drpc.Response{
+					Body: body,
+				},
+			}
+			mc := newMockDrpcClient(cfg)
+
+			ctx, cancel := context.WithTimeout(context.Background(), tc.timeout)
+			defer cancel()
+			if tc.shouldCancel {
+				cancel()
+			}
+
+			_, err = makeDrpcCall(ctx, log, mc, tc.method, tc.req)
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}

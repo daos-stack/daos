@@ -20,24 +20,22 @@ def configure_lustre(denv):
             gotversion = True
     if gotversion is True:
         print("Building with Lustre bindings.")
-        conf.env.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
+        denv.AppendUnique(CCFLAGS=['-DLUSTRE_INCLUDE'])
     else:
         print("Not building with Lustre bindings.")
     return conf.Finish()
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env')
 
     denv = env.Clone()
 
-    denv = configure_lustre(denv)
+    configure_lustre(denv)
 
-    denv.AppendUnique(CPPDEFINES=['-DFUSE_USE_VERSION=35'])
+    libraries = ['daos_common', 'daos', 'uuid', 'gurt']
 
-    libraries = ['$LIBS', 'daos_common', 'daos', 'uuid', 'gurt']
-
-    dfs_src = ['dfs.c']
+    dfs_src = ['dfs.c', 'dfs_sys.c']
     dfs = daos_build.library(denv, 'dfs', dfs_src, LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dfs)
 
@@ -48,15 +46,7 @@ def scons():
     dfs_internal_src = ['dfs_internal.c']
     dfs_internal = daos_build.library(denv, 'dfs_internal',
                                       dfs_internal_src, LIBS=libraries)
-
     denv.Install('$PREFIX/lib64/', dfs_internal)
-
-    fenv = denv.Clone()
-    prereqs.require(fenv, 'fuse')
-    dfuse_hl_src = ['dfuse_hl.c']
-    dfuse_hl = daos_build.program(fenv, 'dfuse_hl', dfuse_hl_src,
-                                  LIBS=libraries)
-    fenv.Install('$PREFIX/bin/', dfuse_hl)
 
     duns = daos_build.library(denv, 'duns', 'duns.c', LIBS=libraries)
     denv.Install('$PREFIX/lib64/', duns)

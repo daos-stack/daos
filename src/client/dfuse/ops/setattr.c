@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include "dfuse_common.h"
@@ -33,8 +16,13 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
+	if (to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) {
+		DFUSE_TRA_INFO(ie, "File uid/gid support not enabled");
+		D_GOTO(err, rc = ENOTSUP);
+	}
+
 	if (to_set & FUSE_SET_ATTR_MODE) {
-		DFUSE_TRA_DEBUG(ie, "mode %#x %#x",
+		DFUSE_TRA_DEBUG(ie, "mode %#o %#o",
 				attr->st_mode, ie->ie_stat.st_mode);
 
 		to_set &= ~FUSE_SET_ATTR_MODE;
@@ -55,12 +43,32 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		dfs_flags |= DFS_SET_ATTR_MTIME;
 	}
 
+	/* Only set this when caching is enabled as dfs doesn't fully support
+	 * ctime, but rather uses mtime instead.  In practice this is only
+	 * seen when using writeback cache.
+	 *
+	 * This is only seen of entries where caching is enabled, however
+	 * if a file is opened with caching then the operation might then
+	 * happen on the inode, not the file handle so simply check if
+	 * caching might be enabled for the container.
+	 */
+	if (to_set & FUSE_SET_ATTR_CTIME) {
+		if (!ie->ie_dfs->dfc_data_caching) {
+			DFUSE_TRA_INFO(ie, "CTIME set without data caching");
+			D_GOTO(err, rc = ENOTSUP);
+		}
+		DFUSE_TRA_DEBUG(ie, "ctime %#lx", attr->st_ctime);
+		to_set &= ~FUSE_SET_ATTR_CTIME;
+		attr->st_mtime = attr->st_ctime;
+		dfs_flags |= DFS_SET_ATTR_MTIME;
+	}
+
 	if (to_set & FUSE_SET_ATTR_SIZE) {
 		DFUSE_TRA_DEBUG(ie, "size %#lx",
 				attr->st_size);
-		to_set &= ~(FUSE_SET_ATTR_SIZE);
+		to_set &= ~FUSE_SET_ATTR_SIZE;
 		dfs_flags |= DFS_SET_ATTR_SIZE;
-		if (ie->ie_dfs->dfs_attr_timeout > 0 &&
+		if (ie->ie_dfs->dfc_data_caching &&
 		    ie->ie_stat.st_size == 0 && attr->st_size > 0) {
 			DFUSE_TRA_DEBUG(ie, "truncating 0-size file");
 			ie->ie_truncated = true;
@@ -74,15 +82,17 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	if (to_set) {
 		DFUSE_TRA_WARNING(ie, "Unknown flags %#x", to_set);
-		DFUSE_REPLY_ERR_RAW(ie, req, ENOTSUP);
-		return;
+		D_GOTO(err, rc = ENOTSUP);
 	}
 
 	rc = dfs_osetattr(ie->ie_dfs->dfs_ns, ie->ie_obj, attr, dfs_flags);
-	if (rc) {
-		DFUSE_REPLY_ERR_RAW(ie, req, rc);
-		return;
-	}
+	if (rc)
+		D_GOTO(err, rc);
+
+	attr->st_ino = ie->ie_stat.st_ino;
 
 	DFUSE_REPLY_ATTR(ie, req, attr);
+	return;
+err:
+	DFUSE_REPLY_ERR_RAW(ie, req, rc);
 }

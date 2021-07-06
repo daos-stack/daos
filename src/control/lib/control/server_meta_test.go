@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -31,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
@@ -89,7 +72,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				},
 			},
 			expResp: &SmdQueryResp{
-				HostErrorsResp: mockHostErrorsResp(t, &mockHostError{"host1", "remote failed"}),
+				HostErrorsResp: MockHostErrorsResp(t, &MockHostError{"host1", "remote failed"}),
 			},
 		},
 		"nil request": {
@@ -119,11 +102,11 @@ func TestControl_SmdQuery(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr: "host-0",
-							Message: &mgmtpb.SmdQueryResp{
-								Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+							Message: &ctlpb.SmdQueryResp{
+								Ranks: []*ctlpb.SmdQueryResp_RankResp{
 									{
 										Rank: 0,
-										Pools: []*mgmtpb.SmdQueryResp_Pool{
+										Pools: []*ctlpb.SmdQueryResp_Pool{
 											{
 												Uuid:   common.MockUUID(0),
 												TgtIds: []int32{0, 1},
@@ -133,7 +116,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									},
 									{
 										Rank: 1,
-										Pools: []*mgmtpb.SmdQueryResp_Pool{
+										Pools: []*ctlpb.SmdQueryResp_Pool{
 											{
 												Uuid:   common.MockUUID(0),
 												TgtIds: []int32{0, 1},
@@ -178,11 +161,11 @@ func TestControl_SmdQuery(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr: "host-0",
-							Message: &mgmtpb.SmdQueryResp{
-								Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+							Message: &ctlpb.SmdQueryResp{
+								Ranks: []*ctlpb.SmdQueryResp_RankResp{
 									{
 										Rank: 0,
-										Devices: []*mgmtpb.SmdQueryResp_Device{
+										Devices: []*ctlpb.SmdQueryResp_Device{
 											{
 												Uuid:   common.MockUUID(0),
 												TgtIds: []int32{0},
@@ -191,7 +174,7 @@ func TestControl_SmdQuery(t *testing.T) {
 									},
 									{
 										Rank: 1,
-										Devices: []*mgmtpb.SmdQueryResp_Device{
+										Devices: []*ctlpb.SmdQueryResp_Device{
 											{
 												Uuid:   common.MockUUID(1),
 												TgtIds: []int32{0},
@@ -209,7 +192,7 @@ func TestControl_SmdQuery(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
 					Hosts: "host-0",
 					SmdInfo: &SmdInfo{
-						Devices: []*SmdDevice{
+						Devices: []*storage.SmdDevice{
 							{
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
@@ -232,28 +215,27 @@ func TestControl_SmdQuery(t *testing.T) {
 					Responses: []*HostResponse{
 						{
 							Addr: "host-0",
-							Message: &mgmtpb.SmdQueryResp{
-								Ranks: []*mgmtpb.SmdQueryResp_RankResp{
+							Message: &ctlpb.SmdQueryResp{
+								Ranks: []*ctlpb.SmdQueryResp_RankResp{
 									{
 										Rank: 0,
-										Devices: []*mgmtpb.SmdQueryResp_Device{
+										Devices: []*ctlpb.SmdQueryResp_Device{
 											{
 												Uuid:   common.MockUUID(0),
 												TgtIds: []int32{0},
-												Health: &mgmtpb.BioHealthResp{
-													DevUuid:               common.MockUUID(0),
-													ErrorCount:            1,
-													Temperature:           2,
-													MediaErrors:           3,
-													ReadErrors:            4,
-													WriteErrors:           5,
-													UnmapErrors:           6,
-													ChecksumErrors:        7,
-													TempWarn:              true,
-													SpareWarn:             true,
-													ReadonlyWarn:          true,
-													DeviceReliabilityWarn: true,
-													VolatileMemoryWarn:    true,
+												Health: &ctlpb.BioHealthResp{
+													DevUuid:            common.MockUUID(0),
+													Temperature:        2,
+													MediaErrs:          3,
+													BioReadErrs:        4,
+													BioWriteErrs:       5,
+													BioUnmapErrs:       6,
+													ChecksumErrs:       7,
+													TempWarn:           true,
+													AvailSpareWarn:     true,
+													ReadOnlyWarn:       true,
+													DevReliabilityWarn: true,
+													VolatileMemWarn:    true,
 												},
 											},
 										},
@@ -269,13 +251,12 @@ func TestControl_SmdQuery(t *testing.T) {
 				HostStorage: mockSmdQueryMap(t, &mockSmdQueryResp{
 					Hosts: "host-0",
 					SmdInfo: &SmdInfo{
-						Devices: []*SmdDevice{
+						Devices: []*storage.SmdDevice{
 							{
 								UUID:      common.MockUUID(0),
 								Rank:      system.Rank(0),
 								TargetIDs: []int32{0},
-								Health: &storage.NvmeDeviceHealth{
-									ErrorLogEntries: 1,
+								Health: &storage.NvmeHealth{
 									Temperature:     2,
 									MediaErrors:     3,
 									ReadErrors:      4,

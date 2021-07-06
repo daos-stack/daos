@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -39,6 +22,7 @@ static pthread_mutex_t dd_lock = PTHREAD_MUTEX_INITIALIZER;
 DAOS_FOREACH_DB(D_LOG_INSTANTIATE_DB, DAOS_FOREACH_DB)
 DAOS_FOREACH_LOG_FAC(D_LOG_INSTANTIATE_FAC, DAOS_FOREACH_DB)
 
+static d_log_id_cb_t	log_id_cb;
 /* debug bit groups */
 #define DB_GRP1 (DB_IO | DB_MD | DB_PL | DB_REBUILD | DB_SEC | DB_CSUM)
 
@@ -85,12 +69,8 @@ struct io_bypass io_bypass_dict[] = {
 		.iob_str	= IOBP_ENV_NVME,
 	},
 	{
-		.iob_bit	= IOBP_PM,
-		.iob_str	= IOBP_ENV_PM,
-	},
-	{
-		.iob_bit	= IOBP_PM_SNAP,
-		.iob_str	= IOBP_ENV_PM_SNAP,
+		.iob_bit	= IOBP_SRV_BULK_CACHE,
+		.iob_str	= IOBP_ENV_SRV_BULK_CACHE,
 	},
 	{
 		.iob_bit	= IOBP_OFF,
@@ -139,6 +119,12 @@ daos_debug_fini(void)
 	D_MUTEX_UNLOCK(&dd_lock);
 }
 
+void
+daos_debug_set_id_cb(d_log_id_cb_t cb)
+{
+	log_id_cb = cb;
+}
+
 /** Initialize debug system */
 int
 daos_debug_init(char *logfile)
@@ -160,8 +146,8 @@ daos_debug_init(char *logfile)
 		logfile = NULL;
 	}
 
-
-	rc = d_log_init_adv("DAOS", logfile, flags, DLOG_INFO, DLOG_CRIT);
+	rc = d_log_init_adv("DAOS", logfile, flags, DLOG_ERR, DLOG_CRIT,
+			    log_id_cb);
 	if (rc != 0) {
 		D_PRINT_ERR("Failed to init DAOS debug log: "DF_RC"\n",
 			DP_RC(rc));

@@ -1,0 +1,23 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+timeout: 100
+server_config:
+  name: daos_server
+pool:
+  control_method: dmg
+  mode: 511
+  scm_size: 2G
+  name: daos_server
+container:
+  control_method: daos
+  type: POSIX
+
+invalid_principals:
+  - 123456789
+  - NoT_vAliD
+  - 1ab2@3c4$%(

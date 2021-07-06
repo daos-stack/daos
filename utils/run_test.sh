@@ -21,28 +21,13 @@ failed=0
 failures=()
 log_num=0
 
-# this can be removed once we are no longer using the old CI system
-if ${OLD_CI:-true}; then
-lock_test()
-{
-    (
-        # clean up all files except the lock
-        flock 9
-        find /mnt/daos -maxdepth 1 -mindepth 1 \! -name jenkins.lock -print0 | \
-             xargs -0r rm -vrf
-        eval "${VALGRIND_CMD}" "$@" 2>&1 | grep -v "SUCCESS! NO TEST FAILURE"
-        exit "${PIPESTATUS[0]}"
-    ) 9>/mnt/daos/jenkins.lock
-}
-
-lock_test="lock_test"
-fi
-
 run_test()
 {
     local in="$*"
     local a="${in// /-}"
     local b="${a////-}"
+    b="${b//;/-}"
+    b="${b//\"/-}"
 
     if [ -n "${RUN_TEST_FILTER}" ]; then
         if ! [[ "$*" =~ ${RUN_TEST_FILTER} ]]; then
@@ -53,21 +38,30 @@ run_test()
     export D_LOG_FILE="/tmp/daos_${b}-${log_num}.log"
     echo "Running $* with log file: ${D_LOG_FILE}"
 
-    # We use flock as a way of locking /mnt/daos so multiple runs can't hit it
-    #     at the same time.
+    export TNAME="${b}-${log_num}"
+
     # We use grep to filter out any potential "SUCCESS! NO TEST FAILURES"
     #    messages as daos_post_build.sh will look for this and mark the tests
     #    as passed, which we don't want as we need to check all of the tests
     #    before deciding this. Also, we intentionally leave off the last 'S'
     #    in that error message so that we don't guarantee printing that in
     #    every run's output, thereby making all tests here always pass.
-    if ! time $lock_test "$@"; then
-        echo "Test $* failed with exit status ${PIPESTATUS[0]}."
+    if ! time eval "${VALGRIND_CMD}" "$@"; then
+        retcode=${PIPESTATUS[0]}
+        echo "Test $* failed with exit status ${retcode}."
         ((failed = failed + 1))
         failures+=("$*")
     fi
 
     ((log_num += 1))
+
+    FILES=("${DAOS_BASE}"/test_results/*.xml)
+
+    "${SL_PREFIX}"/lib/daos/TESTING/ftest/scripts/post_process_xml.sh \
+                                                                  "${COMP}" \
+                                                                  "${FILES[@]}"
+
+    mv "${DAOS_BASE}"/test_results/*.xml "${DAOS_BASE}"/test_results/xml
 }
 
 if [ -d "/mnt/daos" ]; then
@@ -80,83 +74,135 @@ if [ -d "/mnt/daos" ]; then
     fi
 
     echo "Running Cmocka tests"
+    mkdir -p "${DAOS_BASE}"/test_results/xml
+
+    VALGRIND_CMD=""
     if [ -z "$RUN_TEST_VALGRIND" ]; then
         # Tests that do not run valgrind
+        COMP="UTEST_client"
+        run_test src/vos/storage_estimator/common/tests/storage_estimator.sh
+        COMP="UTEST_rdb"
         run_test src/rdb/raft_tests/raft_tests.py
         go_spdk_ctests="${SL_PREFIX}/bin/nvme_control_ctests"
         if test -f "$go_spdk_ctests"; then
+            COMP="UTEST_control"
             run_test "$go_spdk_ctests"
         else
             echo "$go_spdk_ctests missing, SPDK_SRC not available when built?"
         fi
+        COMP="UTEST_control"
         run_test src/control/run_go_tests.sh
+        COMP="UTEST_common"
+        run_test src/common/tests/btree.sh perf -s 20000
+        run_test src/common/tests/btree.sh perf direct -s 20000
+        run_test src/common/tests/btree.sh perf ukey -s 20000
+        run_test src/common/tests/btree.sh dyn perf -s 20000
+        run_test src/common/tests/btree.sh dyn perf ukey -s 20000
+        BTREE_SIZE=20000
     else
         if [ "$RUN_TEST_VALGRIND" = "memcheck" ]; then
             [ -z "$VALGRIND_SUPP" ] &&
                 VALGRIND_SUPP="$(pwd)/utils/test_memcheck.supp"
-            VALGRIND_CMD="valgrind --leak-check=full --show-reachable=yes \
-                          --error-limit=no --suppressions=${VALGRIND_SUPP} \
-                          --xml=yes \
-                          --xml-file=memcheck-results-%p.xml"
+            VALGRIND_XML_PATH="unit-test-%q{TNAME}.memcheck.xml"
+            export VALGRIND_CMD="valgrind --leak-check=full \
+                                          --show-reachable=yes \
+                                          --num-callers=20 \
+                                          --error-limit=no \
+                                          --suppressions=${VALGRIND_SUPP} \
+                                          --error-exitcode=42 \
+                                          --xml=yes \
+                                          --xml-file=${VALGRIND_XML_PATH}"
         else
             VALGRIND_SUPP=""
-            VALGRIND_CMD=""
         fi
+        BTREE_SIZE=200
     fi
 
     # Tests
-    run_test "${SL_BUILD_DIR}/src/cart/test/utest/test_linkage"
+    COMP="UTEST_cart"
+    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/test_linkage"
+    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_hlc"
+    run_test "${SL_BUILD_DIR}/src/tests/ftest/cart/utest/utest_swim"
+
+    COMP="UTEST_gurt"
     run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt"
-    run_test "${SL_BUILD_DIR}/src/cart/test/utest/utest_hlc"
-    run_test "${SL_BUILD_DIR}/src/cart/test/utest/utest_swim"
+    run_test "${SL_BUILD_DIR}/src/gurt/tests/test_gurt_telem_producer"
+
+    COMP="UTEST_vos"
     run_test "${SL_PREFIX}/bin/vos_tests" -A 500
     run_test "${SL_PREFIX}/bin/vos_tests" -n -A 500
-    export DAOS_IO_BYPASS=pm
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
-    export DAOS_IO_BYPASS=pm_snap
-    run_test "${SL_PREFIX}/bin/vos_tests" -A 50
-    unset DAOS_IO_BYPASS
+
+    COMP="UTEST_vea"
+    run_test "${SL_PREFIX}/bin/vea_ut"
+
+    COMP="UTEST_bio"
+    run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
+
+    COMP="UTEST_common"
     run_test "${SL_BUILD_DIR}/src/common/tests/umem_test"
     run_test "${SL_BUILD_DIR}/src/common/tests/sched"
     run_test "${SL_BUILD_DIR}/src/common/tests/drpc_tests"
-    run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
-    run_test "${SL_BUILD_DIR}/src/bio/smd/tests/smd_ut"
-    run_test "${SL_PREFIX}/bin/vea_ut"
-    run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
-    run_test "${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_api_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_valid_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_util_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_principal_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/acl_real_tests"
     run_test "${SL_BUILD_DIR}/src/common/tests/prop_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_progress_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_handler_tests"
-    run_test "${SL_BUILD_DIR}/src/iosrv/tests/drpc_listener_tests"
-    run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
+    run_test "${SL_BUILD_DIR}/src/common/tests/fault_domain_tests"
 
-    # Scripts launching tests
-    run_test src/client/storage_estimator/common/tests/storage_estimator.sh
+    COMP="UTEST_client"
+    run_test "${SL_BUILD_DIR}/src/client/api/tests/eq_tests"
+
+    COMP="UTEST_security"
+    run_test "${SL_BUILD_DIR}/src/security/tests/cli_security_tests"
+    run_test "${SL_BUILD_DIR}/src/security/tests/srv_acl_tests"
+
+    COMP="UTEST_engine"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_client_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_progress_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_handler_tests"
+    run_test "${SL_BUILD_DIR}/src/engine/tests/drpc_listener_tests"
+
+    COMP="UTEST_mgmt"
+    run_test "${SL_BUILD_DIR}/src/mgmt/tests/srv_drpc_tests"
+    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
+             -a 5 -n 10
+    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U;p F;p V"' -o 5 -d 5 \
+             -a 5 -n 10 -A
+    run_test "${SL_PREFIX}/bin/daos_perf" -T vos -R '"U Q;p V"' -o 5 -d 5 \
+             -n 10 -A -i -I
+    run_test "${SL_PREFIX}/bin/jump_pl_map"
+
+    # Tests launched by scripts
     export USE_VALGRIND=${RUN_TEST_VALGRIND}
     export VALGRIND_SUPP=${VALGRIND_SUPP}
     unset VALGRIND_CMD
-    run_test src/common/tests/btree.sh ukey -s 20000
-    run_test src/common/tests/btree.sh direct -s 20000
-    run_test src/common/tests/btree.sh -s 20000
-    run_test src/common/tests/btree.sh perf -s 20000
-    run_test src/common/tests/btree.sh perf direct -s 20000
-    run_test src/common/tests/btree.sh perf ukey -s 20000
-    run_test src/common/tests/btree.sh dyn ukey -s 20000
-    run_test src/common/tests/btree.sh dyn -s 20000
-    run_test src/common/tests/btree.sh dyn perf -s 20000
-    run_test src/common/tests/btree.sh dyn perf ukey -s 20000
+    COMP="UTEST_common"
+    run_test src/common/tests/btree.sh ukey -s ${BTREE_SIZE}
+    run_test src/common/tests/btree.sh direct -s ${BTREE_SIZE}
+    run_test src/common/tests/btree.sh -s ${BTREE_SIZE}
+    run_test src/common/tests/btree.sh dyn ukey -s ${BTREE_SIZE}
+    run_test src/common/tests/btree.sh dyn -s ${BTREE_SIZE}
+
+    COMP="UTEST_vos"
     run_test src/vos/tests/evt_ctl.sh
     run_test src/vos/tests/evt_ctl.sh pmem
     unset USE_VALGRIND
     unset VALGRIND_SUPP
 
+    mv "${DAOS_BASE}"/test_results/xml/*.xml "${DAOS_BASE}"/test_results
+    rm -rf "${DAOS_BASE}"/test_results/xml
+
+    if [ -f "/tmp/test.cov" ]; then
+        rm /tmp/test.cov
+    fi
+
+    if [ -f "${DAOS_BASE}/test.cov" ]; then
+        cp "${DAOS_BASE}"/test.cov /tmp/
+    fi
+
     # Reporting
-    if [ $failed -eq 0 ]; then
+    if [ "$failed" -eq 0 ]; then
         # spit out the magic string that the post build script looks for
         echo "SUCCESS! NO TEST FAILURES"
     else

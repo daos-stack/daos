@@ -1,30 +1,14 @@
 //
-// (C) Copyright 2018-2019 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
 
 package drpc
 
 import (
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -55,13 +39,14 @@ func NewModuleService(log logging.Logger) *ModuleService {
 // RegisterModule will take in a type that implements the Module interface
 // and ensure that no other module is already registered with that module
 // identifier.
-func (r *ModuleService) RegisterModule(mod Module) error {
-	_, ok := r.GetModule(mod.ID())
-	if ok {
-		return errors.Errorf("module with ID %d already exists", mod.ID())
+func (r *ModuleService) RegisterModule(mod Module) {
+	_, found := r.GetModule(mod.ID())
+	if found {
+		// Not really an error that can be handled. It's a programming
+		// error that should manifest very quickly in test.
+		panic(errors.Errorf("module with ID %d already exists", mod.ID()))
 	}
 	r.modules[mod.ID()] = mod
-	return nil
 }
 
 // GetModule fetches the module for the given ID. Returns true if found, false
@@ -116,7 +101,7 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 	}
 	module, ok := r.GetModule(ModuleID(msg.GetModule()))
 	if !ok {
-		err = errors.Errorf("Attempted to call unregistered module")
+		r.log.Errorf("Attempted to call unregistered module %d", msg.GetModule())
 		return marshalResponse(msg.GetSequence(), Status_UNKNOWN_MODULE, nil)
 	}
 	var method Method
@@ -126,7 +111,7 @@ func (r *ModuleService) ProcessMessage(session *Session, msgBytes []byte) ([]byt
 	}
 	respBody, err := module.HandleCall(session, method, msg.GetBody())
 	if err != nil {
-		r.log.Errorf("HandleCall for %d:%s failed: %s\n", method.String(), method, err)
+		r.log.Errorf("HandleCall for %s:%s failed: %s\n", module.ID().String(), method.String(), err)
 		return marshalResponse(msg.GetSequence(), ErrorToStatus(err), nil)
 	}
 

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DFUSE_LOG_H__
@@ -30,7 +13,6 @@
 #include <inttypes.h>
 
 #include <daos/common.h>
-
 #include <gurt/debug.h>
 
 /* Allow changing the default so these macros can be
@@ -85,16 +67,15 @@
 	DFUSE_TRA_HELPER(D_TRACE_INFO, ptr, "" __VA_ARGS__)
 
 /* Register a descriptor with a parent and a type */
-#define DFUSE_TRA_UP(ptr, parent, type)					\
-	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' from %p\n",	\
-		      type, parent)
+#define DFUSE_TRA_UP(ptr, parent, type)				\
+	D_TRACE_UP(DB_ANY, ptr, parent, type)
 
 /* De-register a descriptor, including all aliases */
 #define DFUSE_TRA_DOWN(ptr)					\
-	D_TRACE_DEBUG(DB_ANY, ptr, "Deregistered\n")
+	D_TRACE_DOWN(DB_ANY, ptr)
 
 /* Register as root of hierarchy, used in place of DFUSE_TRA_UP */
 #define DFUSE_TRA_ROOT(ptr, type)				\
-	D_TRACE_DEBUG(DB_ANY, ptr, "Registered new '%s' as root\n", type)
+	D_TRACE_ROOT(DB_ANY, ptr, type)
 
 #endif /* __DFUSE_LOG_H__ */

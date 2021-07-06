@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2017 Intel Corporation.
+ * (C) Copyright 2017-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /*
  * This file is part of client DAOS library.
@@ -136,7 +119,11 @@ dc_task_schedule(tse_task_t *task, bool instant)
 
 out:
 	if (daos_event_is_priv(ev)) {
-		daos_event_priv_wait();
+		int rc2;
+
+		rc2 = daos_event_priv_wait();
+		if (rc2)
+			return rc2;
 		rc = ev->ev_error;
 	}
 	return rc;
@@ -215,6 +202,26 @@ failed:
 	return rc;
 }
 
+int
+daos_task_reset(tse_task_t *task, daos_opc_t opc)
+{
+	struct daos_task_args	*args;
+	int			rc;
+
+	if (DAOS_OPC_INVALID >= opc || DAOS_OPC_MAX <= opc)
+		return -DER_NOSYS;
+
+	D_ASSERT(dc_funcs[opc].task_func);
+	rc = tse_task_reset(task, dc_funcs[opc].task_func, NULL);
+	if (rc)
+		return rc;
+
+	args = task_ptr2args(task);
+	args->ta_magic = DAOS_TASK_MAGIC;
+
+	return 0;
+}
+
 void *
 daos_task_get_args(tse_task_t *task)
 {
@@ -265,8 +272,10 @@ daos_progress(tse_sched_t *sched, int64_t timeout, bool *is_empty)
 	args.sched = sched;
 	args.is_empty = is_empty;
 
-	rc = crt_progress_cond((crt_context_t *)sched->ds_udata, timeout,
-			       sched_progress_cb, &args);
+	rc = crt_progress_cond(sched->ds_udata ?
+			       (crt_context_t *)sched->ds_udata :
+			       daos_get_crt_ctx(), timeout, sched_progress_cb,
+			       &args);
 	if (rc != 0 && rc != -DER_TIMEDOUT)
 		D_ERROR("crt progress failed with "DF_RC"\n", DP_RC(rc));
 
@@ -279,6 +288,7 @@ daos_task2ctx(tse_task_t *task)
 {
 	tse_sched_t *sched = tse_task2sched(task);
 
-	D_ASSERT(sched->ds_udata != NULL);
+	if (sched->ds_udata == NULL)
+		return daos_get_crt_ctx();
 	return (crt_context_t *)sched->ds_udata;
 }

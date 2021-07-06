@@ -1,19 +1,30 @@
 """Build DAOS"""
-import sys
 import os
+import sys
 import platform
 import subprocess
 import time
 import errno
+import SCons.Warnings
 from SCons.Script import BUILD_TARGETS
+
+if sys.version_info.major < 3:
+    print(""""Python 2.7 is no longer supported in the DAOS build.
+Install python3 version of SCons.   On some platforms this package does not
+install the scons binary so your command may need to use scons-3 instead of
+scons or you will need to create an alias or script by the same name to
+wrap scons-3.""")
+    Exit(1)
+
+SCons.Warnings.warningAsException()
 
 try:
     input = raw_input # pylint: disable=redefined-builtin
 except NameError:
     pass
 
-sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils'))
 import daos_build
+from prereq_tools import PreReqComponent
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-missing-braces',
@@ -21,8 +32,8 @@ DESIRED_FLAGS = ['-Wno-gnu-designator',
                  '-Wno-gnu-zero-variadic-macro-arguments',
                  '-Wno-tautological-constant-out-of-range-compare',
                  '-Wno-unused-command-line-argument',
-                 '-Wframe-larger-than=4096',
-                 ' -mavx2']
+                 '-Wframe-larger-than=4096']
+#                 '-mavx2']
 
 # Compiler flags to prevent optimizing out security checks
 DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
@@ -34,28 +45,35 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
-def run_checks(env):
+def run_checks(env, p):
     """Run all configure time checks"""
     if GetOption('help') or GetOption('clean'):
         return
     cenv = env.Clone()
     cenv.Append(CFLAGS='-Werror')
+    daos_build.clear_icc_env(cenv)
     if cenv.get("COMPILER") == 'icc':
         cenv.Replace(CC='gcc', CXX='g++')
     config = Configure(cenv)
 
     if config.CheckHeader('stdatomic.h'):
+        config.Finish()
         env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
+    else:
+        config.Finish()
+        p.require(env, 'openpa', headers_only=True)
 
-    config.Finish()
 
 def get_version():
     """ Read version from VERSION file """
     with open("VERSION", "r") as version_file:
         return version_file.read().rstrip()
 
-DAOS_VERSION = get_version()
-API_VERSION = "0.9.0"
+API_VERSION_MAJOR = "1"
+API_VERSION_MINOR = "3"
+API_VERSION_FIX = "0"
+API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
+                                API_VERSION_FIX)
 
 def update_rpm_version(version, tag):
     """ Update the version (and release) in the RPM specfile """
@@ -81,10 +99,10 @@ def update_rpm_version(version, tag):
             spec[line_num] = "Release:       {}%{{?relval}}%{{?dist}}\n".\
                              format(release)
         if line == "%changelog\n":
+            cmd = 'rpmdev-packager'
             try:
-                packager = subprocess.Popen(
-                    'rpmdev-packager', stdout=subprocess.PIPE).communicate(
-                    )[0].strip().decode('UTF-8')
+                pkg_st = subprocess.Popen(cmd, stdout=subprocess.PIPE) # nosec
+                packager = pkg_st.communicate()[0].strip().decode('UTF-8')
             except OSError:
                 print("You need to have the rpmdev-packager tool (from the "
                       "rpmdevtools RPM on EL7) in order to make releases.\n\n"
@@ -115,7 +133,7 @@ def is_platform_arm():
         return True
     return False
 
-def set_defaults(env):
+def set_defaults(env, daos_version):
     """set compiler defaults"""
     AddOption('--preprocess',
               dest='preprocess',
@@ -128,9 +146,13 @@ def set_defaults(env):
               default=False,
               help='Disable rpath')
 
+    env.Append(API_VERSION_MAJOR=API_VERSION_MAJOR)
+    env.Append(API_VERSION_MINOR=API_VERSION_MINOR)
+    env.Append(API_VERSION_FIX=API_VERSION_FIX)
+
     env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
                         '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
-    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + DAOS_VERSION + '\\"'])
+    env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + daos_version + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
     env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
     if env.get('BUILD_TYPE') == 'debug':
@@ -149,29 +171,43 @@ def set_defaults(env):
         #could refine this but for now, just assume these warnings are ok
         env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
 
-def preload_prereqs(prereqs):
-    """Preload prereqs specific to platform"""
+    if env.get('BUILD_TYPE') != 'release':
+        env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
 
-    prereqs.define('cmocka', libs=['cmocka'], package='libcmocka-devel')
-    prereqs.define('readline', libs=['readline', 'history'],
-                   package='readline')
-    reqs = ['argobots', 'pmdk', 'cmocka', 'ofi', 'hwloc', 'mercury', 'boost',
-            'uuid', 'crypto', 'fuse', 'protobufc', 'json-c']
-    if not is_platform_arm():
-        reqs.extend(['spdk', 'isal', 'isal_crypto'])
-    prereqs.load_definitions(prebuild=reqs)
+    if env['CC'] == 'icx' and not GetOption('no_rpath'):
+        #Hack to add rpaths
+        for path in env["ENV"]["LD_LIBRARY_PATH"].split(":"):
+            if "oneapi" in path:
+                env.AppendUnique(RPATH_FULL=[path])
+
+
+def build_misc():
+    """Build miscellaneous items"""
+    # install the configuration files
+    SConscript('utils/config/SConscript')
+
+    # install certificate generation files
+    SConscript('utils/certs/SConscript')
+
+    # install man pages
+    try:
+        SConscript('doc/man/SConscript', must_exist=0)
+    except SCons.Warnings.MissingSConscriptWarning as _warn:
+        print("Missing doc/man/SConscript...")
 
 def scons(): # pylint: disable=too-many-locals
     """Execute build"""
     if COMMAND_LINE_TARGETS == ['release']:
         try:
+            # pylint: disable=import-outside-toplevel
             import pygit2
             import github
             import yaml
+            # pylint: enable=import-outside-toplevel
         except ImportError:
             print("You need yaml, pygit2 and pygithub python modules to "
                   "create releases")
-            exit(1)
+            Exit(1)
 
         variables = Variables()
 
@@ -192,7 +228,7 @@ def scons(): # pylint: disable=too-many-locals
             tag = env['RELEASE']
         except KeyError:
             print("Usage: scons RELEASE=x.y.z release")
-            exit(1)
+            Exit(1)
 
         dash = tag.find('-')    # pylint: disable=no-member
         if dash > 0:
@@ -205,7 +241,7 @@ def scons(): # pylint: disable=too-many-locals
             while answer not in ["y", "n", ""]:
                 answer = input(question).lower().strip()
             if answer != 'y':
-                exit(1)
+                Exit(1)
 
             version = tag
 
@@ -218,7 +254,7 @@ def scons(): # pylint: disable=too-many-locals
                 print("You need to install hub (from the hub RPM on EL7) to "
                       "and run it at least once to create an authorization "
                       "token in order to create releases")
-                exit(1)
+                Exit(1)
             raise
 
         # create a branch for the PR
@@ -232,7 +268,7 @@ def scons(): # pylint: disable=too-many-locals
             print("Branch {}/{} is not a valid branch\n"
                   "See https://github.com/{}/daos/branches".format(
                       remote_name, base_branch, org_name))
-            exit(1)
+            Exit(1)
 
         # older pygit2 didn't have AlreadyExistsError
         try:
@@ -246,7 +282,7 @@ def scons(): # pylint: disable=too-many-locals
             print("Branch {} exists locally already.\n"
                   "You need to delete it or rename it to try again.".format(
                       branch))
-            exit(1)
+            Exit(1)
 
         # and check it out
         print("Checking out branch for the PR...")
@@ -256,11 +292,9 @@ def scons(): # pylint: disable=too-many-locals
         if not update_rpm_version(version, tag):
             print("Branch has been left in the created state.  You will have "
                   "to clean it up manually.")
-            exit(1)
+            Exit(1)
 
-        print("Updating the API_VERSION, VERSION and TAG files...")
-        with open("API_VERSION", "w") as version_file:
-            version_file.write(API_VERSION + '\n')
+        print("Updating the VERSION and TAG files...")
         with open("VERSION", "w") as version_file:
             version_file.write(version + '\n')
         with open("TAG", "w") as version_file:
@@ -280,7 +314,6 @@ def scons(): # pylint: disable=too-many-locals
                                                   repo.default_signature.email)
         # pylint: enable=no-member
         index.add("utils/rpms/daos.spec")
-        index.add("API_VERSION")
         index.add("VERSION")
         index.add("TAG")
         index.write()
@@ -320,12 +353,14 @@ def scons(): # pylint: disable=too-many-locals
         # and push it
         print("Pushing the changes to GitHub...")
         remote = repo.remotes[remote_name]
+        # pylint: disable=no-member
         try:
             remote.push(['refs/heads/{}'.format(branch)],
                         callbacks=MyCallbacks())
         except pygit2.GitError as excpt:
             print("Error pushing branch: {}".format(excpt))
-            exit(1)
+            Exit(1)
+        # pylint: enable=no-member
 
         print("Creating the PR...")
         # now create a PR for it
@@ -351,15 +386,9 @@ def scons(): # pylint: disable=too-many-locals
 
         print("Done.")
 
-        exit(0)
+        Exit(0)
 
-    sys.path.insert(0, os.path.join(Dir('#').abspath, 'utils/sl'))
-    from prereq_tools import PreReqComponent
-
-    env = Environment(TOOLS=['extra', 'default'])
-
-    if os.path.exists("daos_m.conf"):
-        os.rename("daos_m.conf", "daos.conf")
+    env = Environment(TOOLS=['extra', 'default', 'textfile'])
 
     opts_file = os.path.join(Dir('#').abspath, 'daos.conf')
     opts = Variables(opts_file)
@@ -368,33 +397,53 @@ def scons(): # pylint: disable=too-many-locals
     if not os.path.exists(commits_file):
         commits_file = None
 
+    platform_arm = is_platform_arm()
+
     prereqs = PreReqComponent(env, opts, commits_file)
     if not GetOption('help') and not GetOption('clean'):
         daos_build.load_mpi_path(env)
-    preload_prereqs(prereqs)
+    build_prefix = prereqs.get_src_build_dir()
+    prereqs.init_build_targets(build_prefix)
+    prereqs.load_defaults(platform_arm)
     if prereqs.check_component('valgrind_devel'):
-        env.AppendUnique(CPPDEFINES=["DAOS_HAS_VALGRIND"])
+        env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
 
-    run_checks(env)
+    AddOption('--deps-only',
+              dest='deps_only',
+              action='store_true',
+              default=False,
+              help='Download and build dependencies only, do not build daos')
+
+    if env['CC'] == 'clang' or env['CC'] == 'icx':
+        il_env = env.Clone()
+        il_env['CC'] = 'gcc'
+        run_checks(env, prereqs)
+        run_checks(il_env, prereqs)
+    else:
+        run_checks(env, prereqs)
+        il_env = env.Clone()
 
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
-    CONF_DIR = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
+    res = GetOption('deps_only')
+    if res:
+        print('Exiting because deps-only was set')
+        Exit(0)
+
+    conf_dir = ARGUMENTS.get('CONF_DIR', '$PREFIX/etc')
 
     env.Alias('install', '$PREFIX')
-    platform_arm = is_platform_arm()
-    Export('DAOS_VERSION', 'API_VERSION',
-           'env', 'prereqs', 'platform_arm',
-           'CONF_DIR')
+    daos_version = get_version()
+    # Export() is handled specially by pylint so do not merge these two lines.
+    Export('daos_version', 'API_VERSION', 'env', 'il_env', 'prereqs')
+    Export('platform_arm', 'conf_dir')
 
     if env['PLATFORM'] == 'darwin':
         # generate .so on OSX instead of .dylib
         env.Replace(SHLIBSUFFIX='.so')
 
-    set_defaults(env)
-
-    build_prefix = prereqs.get_src_build_dir()
+    set_defaults(env, daos_version)
 
     # generate targets in specific build dir to avoid polluting the source code
     VariantDir(build_prefix, '.', duplicate=0)
@@ -404,28 +453,26 @@ def scons(): # pylint: disable=too-many-locals
     buildinfo.gen_script('.build_vars.sh')
     buildinfo.save('.build_vars.json')
     # also install to $PREFIX/lib to work with existing avocado test code
-    daos_build.install(env, "lib/daos/", ['.build_vars.sh', '.build_vars.json'])
+    if prereqs.test_requested():
+        daos_build.install(env, "lib/daos/",
+                           ['.build_vars.sh', '.build_vars.json'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
+                    ['site_scons/env_modules.py'])
+        env.Install('$PREFIX/lib/daos/TESTING/ftest/',
+                    ['ftest.sh'])
+
     env.Install("$PREFIX/lib64/daos", "VERSION")
-    env.Install("$PREFIX/lib64/daos", "API_VERSION")
 
-    env.Install('$PREFIX/etc/bash_completion.d', ['utils/completion/daos.bash'])
-    env.Install('$PREFIX/etc', ['utils/memcheck-daos-client.supp'])
-    env.Install('$PREFIX/lib/daos/TESTING/ftest/util',
-                ['utils/sl/env_modules.py'])
-    env.Install('$PREFIX/lib/daos/TESTING/ftest/',
-                ['ftest.sh'])
+    if prereqs.client_requested():
+        api_version = env.Command("%s/API_VERSION" % build_prefix,
+                                  "%s/SConstruct" % build_prefix,
+                                  "echo %s > $TARGET" % (API_VERSION))
+        env.Install("$PREFIX/lib64/daos", api_version)
+    env.Install(conf_dir + '/bash_completion.d', ['utils/completion/daos.bash'])
 
-    # install the configuration files
-    SConscript('utils/config/SConscript')
-
-    # install certificate generation files
-    SConscript('utils/certs/SConscript')
-
-    # install man pages
-    SConscript('doc/man/SConscript')
+    build_misc()
 
     Default(build_prefix)
-    Depends('install', build_prefix)
 
     # an "rpms" target
     env.Command('rpms', '', 'make -C utils/rpms rpms')

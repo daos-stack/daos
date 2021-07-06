@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -116,8 +99,8 @@ daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr,
  * The metadata of the array is stored under a special AKEY in DKEY 0. This
  * means that this is a generic array object with it's metadata tracked in the
  * DAOS object. The feat bits in the oid must set DAOS_OF_DKEY_UINT64 |
- * DAOS_OF_ARRAY.  If the feat bits does not set DAOS_OF_ARRAY but sets
- * DAOS_OF_KV_FLAT, the user would be responsible in remembering the array
+ * DAOS_OF_KV_FLAT | DAOS_OF_ARRAY.  If the feat bits does not set
+ * DAOS_OF_ARRAY, the user would be responsible for remembering the array
  * metadata since DAOS will not store those, and should not call this API since
  * nothing will be written to the array object. daos_array_open_with_attrs() can
  * be used to get an array OH in that case to access with the Array APIs.
@@ -131,7 +114,8 @@ daos_array_generate_id(daos_obj_id_t *oid, daos_oclass_id_t cid, bool add_attr,
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_DKEY_UINT64 | DAOS_OF_ARRAY.
+ *			be set to DAOS_OF_KV_FLAT | DAOS_OF_DKEY_UINT64 |
+ *			DAOS_OF_ARRAY.
  * \param[in]	th	Transaction handle.
  * \param[in]	cell_size
  *			Record size of the array.
@@ -161,7 +145,8 @@ daos_array_create(daos_handle_t coh, daos_obj_id_t oid, daos_handle_t th,
  *
  * \param[in]	coh	Container open handle.
  * \param[in]	oid	Object ID. It is required that the feat for dkey type
- *			be set to DAOS_OF_DKEY_UINT64 | DAOS_OF_ARRAY.
+ *			be set to DAOS_OF_KV_FLAT | DAOS_OF_DKEY_UINT64 |
+ *			DAOS_OF_ARRAY.
  * \param[in]	th	Transaction handle.
  * \param[in]	mode	Open mode: DAOS_OO_RO/RW
  * \param[out]	cell_size

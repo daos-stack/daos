@@ -1,29 +1,15 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package common
 
-import "fmt"
+import (
+	"fmt"
+	"reflect"
+)
 
 // AccessControlList is a structure for the access control list.
 type AccessControlList struct {
@@ -74,6 +60,45 @@ func (acl *AccessControlList) String() string {
 
 // PoolDiscovery represents the basic discovery information for a pool.
 type PoolDiscovery struct {
-	UUID        string   // Unique identifier
-	SvcReplicas []uint32 `json:"Svcreps"` // Ranks of pool service replicas
+	UUID        string   `json:"uuid"`            // Unique identifier
+	Label       string   `json:"label,omitempty"` // optional human-friendly id
+	SvcReplicas []uint32 `json:"svc_reps"`        // Ranks of pool service replicas
+}
+
+// InterfaceIsNil returns true if the interface itself or its underlying value
+// is nil.
+func InterfaceIsNil(i interface{}) bool {
+	// NB: The unsafe version of this, which makes assumptions
+	// about the memory layout of interfaces, is a constant
+	// 2.54 ns/op.
+	// return (*[2]uintptr)(unsafe.Pointer(&i))[1] == 0
+
+	// This version is only slightly slower in the grand scheme
+	// of things. 3.96 ns/op for a nil type/value, and 7.98 ns/op
+	// for a non-nil value.
+	if i == nil {
+		return true
+	}
+	return reflect.ValueOf(i).IsNil()
+}
+
+// NormalExit indicates that the process exited without error.
+const NormalExit ExitStatus = "process exited with 0"
+
+// ExitStatus implements the error interface and is used to indicate external
+// process exit conditions.
+type ExitStatus string
+
+func (es ExitStatus) Error() string {
+	return string(es)
+}
+
+// GetExitStatus ensures that a monitored process always returns an error of
+// some sort when it exits so that we can respond appropriately.
+func GetExitStatus(err error) error {
+	if err != nil {
+		return err
+	}
+
+	return NormalExit
 }

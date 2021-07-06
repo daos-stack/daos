@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #ifndef __DAOS_DRPC_MODULES_H__
@@ -70,16 +53,22 @@ enum drpc_mgmt_method {
 	DRPC_METHOD_MGMT_PREP_SHUTDOWN		= 218,
 	DRPC_METHOD_MGMT_DEV_STATE_QUERY	= 219,
 	DRPC_METHOD_MGMT_DEV_SET_FAULTY		= 220,
-	DRPC_METHOD_MGMT_LIST_CONTAINERS	= 221,
-	DRPC_METHOD_MGMT_POOL_QUERY		= 222,
-	DRPC_METHOD_MGMT_POOL_SET_PROP		= 223,
-	DRPC_METHOD_MGMT_PING_RANK		= 224,
-	DRPC_METHOD_MGMT_REINTEGRATE		= 225,
-	DRPC_METHOD_MGMT_CONT_SET_OWNER		= 226,
-	DRPC_METHOD_MGMT_EXCLUDE		= 227,
-	DRPC_METHOD_MGMT_EXTEND			= 228,
-	DRPC_METHOD_MGMT_POOL_EVICT		= 229,
-	DRPC_METHOD_MGMT_DRAIN			= 230,
+	DRPC_METHOD_MGMT_DEV_REPLACE		= 221,
+	DRPC_METHOD_MGMT_LIST_CONTAINERS	= 222,
+	DRPC_METHOD_MGMT_POOL_QUERY		= 223,
+	DRPC_METHOD_MGMT_POOL_SET_PROP		= 224,
+	DRPC_METHOD_MGMT_PING_RANK		= 225,
+	DRPC_METHOD_MGMT_REINTEGRATE		= 226,
+	DRPC_METHOD_MGMT_CONT_SET_OWNER		= 227,
+	DRPC_METHOD_MGMT_EXCLUDE		= 228,
+	DRPC_METHOD_MGMT_EXTEND			= 229,
+	DRPC_METHOD_MGMT_POOL_EVICT		= 230,
+	DRPC_METHOD_MGMT_DRAIN			= 231,
+	DRPC_METHOD_MGMT_GROUP_UPDATE		= 232,
+	DRPC_METHOD_MGMT_NOTIFY_EXIT		= 233,
+	DRPC_METHOD_MGMT_DEV_IDENTIFY		= 234,
+	DRPC_METHOD_MGMT_NOTIFY_POOL_CONNECT	= 235,
+	DRPC_METHOD_MGMT_NOTIFY_POOL_DISCONNECT	= 236,
 
 	NUM_DRPC_MGMT_METHODS			/* Must be last */
 };
@@ -87,6 +76,9 @@ enum drpc_mgmt_method {
 enum drpc_srv_method {
 	DRPC_METHOD_SRV_NOTIFY_READY		= 301,
 	DRPC_METHOD_SRV_BIO_ERR			= 302,
+	DRPC_METHOD_SRV_GET_POOL_SVC		= 303,
+	DRPC_METHOD_SRV_CLUSTER_EVENT		= 304,
+	DRPC_METHOD_SRV_POOL_FIND_BYLABEL	= 305,
 
 	NUM_DRPC_SRV_METHODS			/* Must be last */
 };

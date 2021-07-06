@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2018 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos, to generate the epoch io test.
@@ -34,6 +17,7 @@ static struct option long_ops[] = {
 
 void print_usage(void)
 {
+	fprintf(stdout, "-n|--dmg_config\n");
 	fprintf(stdout, "daos_run_io_conf <io_conf_file>\n");
 }
 
@@ -54,11 +38,15 @@ main(int argc, char **argv)
 		goto out_fini;
 	}
 
-	while ((rc = getopt_long(argc, argv, "h", long_ops, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, "h:n:", long_ops, NULL)) != -1) {
 		switch (rc) {
 		case 'h':
 			print_usage();
 			goto out_fini;
+		case 'n':
+			dmg_config_file = optarg;
+			printf("dmg_config_file = %s\n", dmg_config_file);
+			break;
 		default:
 			fprintf(stderr, "Unknown option %c\n", rc);
 			print_usage();
@@ -83,11 +71,13 @@ main(int argc, char **argv)
 	}
 
 	arg = state;
+	arg->dmg_config = dmg_config_file;
 	eio_arg = &arg->eio_args;
 	D_INIT_LIST_HEAD(&eio_arg->op_list);
 	eio_arg->op_lvl = TEST_LVL_DAOS;
 	eio_arg->op_iod_size = 1;
-	eio_arg->op_oid = dts_oid_gen(dts_obj_class, 0, arg->myrank);
+	eio_arg->op_oid = dts_oid_gen(arg->myrank);
+	daos_obj_set_oid(&eio_arg->op_oid, 0, dts_obj_class, 0);
 	arg->eio_args.op_no_verify = 1;	/* No verification for now */
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -100,6 +90,7 @@ main(int argc, char **argv)
 
 	daos_fini();
 	MPI_Barrier(MPI_COMM_WORLD);
+	fprintf(stdout, "daos_run_io_conf completed successfully\n");
 out_fini:
 	MPI_Finalize();
 	return rc;

@@ -18,7 +18,6 @@ server_config:
 pool:
  mode: 511
  name: daos_server
- svcn: 1
  control_method: dmg
 container:
  type: POSIX
@@ -34,6 +33,7 @@ ior:
  api: DFS
  object_type: 'SX'
  dfs_destroy: False
+ test_file: /testFile
  transfersize: !mux
    case1:
      block_size: 30000000

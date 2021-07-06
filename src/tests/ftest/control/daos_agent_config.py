@@ -1,27 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from apricot import TestWithServers
 from agent_utils import include_local_host
@@ -37,7 +20,9 @@ class DaosAgentConfigTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DaosAgentConfigTest object."""
-        super(DaosAgentConfigTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
+        self.start_agents_once = False
+        self.start_servers_once = False
         self.setup_start_agents = False
         self.setup_start_servers = False
 
@@ -48,7 +33,10 @@ class DaosAgentConfigTest(TestWithServers):
         Test Description: Test daos_agent start/stops properly.
         on the system.
 
-        :avocado: tags=all,small,control,pr,agent_start,basic
+        :avocado: tags=all,daily_regression
+        :avocado: tags=small,agent_start,basic
+        :avocado: tags=control,daos_agent_config_test
+        :avocado: tags=test_daos_agent_config_basic
         """
         # Setup the agents
         self.add_agent_manager()
@@ -68,7 +56,9 @@ class DaosAgentConfigTest(TestWithServers):
                 c_val[0], c_val[1]))
 
         # Setup the access points with the server hosts
-        self.log.info("Starting agent with %s = %s", c_val[0], c_val[1])
+        self.log.info(
+            "Starting agent with %s = %s, expecting it to %s",
+            c_val[0], c_val[1], c_val[2])
 
         try:
             self.agent_managers[-1].start()
@@ -79,7 +69,16 @@ class DaosAgentConfigTest(TestWithServers):
         # Verify
         if c_val[2] == "FAIL" and exception is None:
             self.log.error("Agent was expected to fail")
-            self.fail("{}".format(exception))
+            self.fail(
+                "Starting agent completed successfully when it was expected to "
+                "fail with {} = {}".format(c_val[0], c_val[1]))
         elif c_val[2] == "PASS" and exception is not None:
             self.log.error("Agent was expected to start")
-            self.fail("{}".format(exception))
+            self.fail(
+                "Starting agent failed when it was expected to complete "
+                "successfully with {} = {}: {}".format(
+                    c_val[0], c_val[1], exception))
+
+        self.log.info(
+            "Test passed - starting the agent with %s = %s %sed",
+            c_val[0], c_val[1], c_val[2].lower())

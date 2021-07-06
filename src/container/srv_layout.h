@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * \file
@@ -39,6 +22,8 @@
  *         Handle index KVS (GENERIC)
  *       ... (more container property KVSs)
  *     Container handle KVS (GENERIC)
+ *
+ * The version of the whole layout is stored in ds_cont_prop_version.
  */
 
 #ifndef __CONTAINER_SRV_LAYOUT_H__
@@ -46,13 +31,30 @@
 
 #include <daos_types.h>
 
+/* Default layout version */
+#define DS_CONT_MD_VERSION 3
+
+/* Lowest compatible layout version */
+#define DS_CONT_MD_VERSION_LOW 2
+
 /*
  * Root KVS (RDB_KVS_GENERIC)
  *
  * All keys are strings. Value types are specified for each key below.
+ *
+ * ds_cont_prop_version stores the version of the whole layout.
  */
+extern d_iov_t ds_cont_prop_version;		/* uint32_t */
+extern d_iov_t ds_cont_prop_cuuids;		/* container UUIDs KVS */
 extern d_iov_t ds_cont_prop_conts;		/* container KVS */
 extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
+
+/*
+ * Container UUIDs KVS (RDB_KVS_GENERIC)
+ *
+ * This maps container labels (string, without '\0') to container UUID (uuid_t).
+ * Used to get UUID key for lookup in container KVS.
+ */
 
 /*
  * Container KVS (RDB_KVS_GENERIC)
@@ -66,7 +68,7 @@ extern d_iov_t ds_cont_prop_cont_handles;	/* container handle KVS */
  * All keys are strings. Value types are specified for each key below.
  */
 extern d_iov_t ds_cont_prop_ghce;		/* uint64_t */
-extern d_iov_t ds_cont_prop_max_oid;		/* uint64_t */
+extern d_iov_t ds_cont_prop_alloced_oid;	/* uint64_t */
 extern d_iov_t ds_cont_prop_label;		/* string */
 extern d_iov_t ds_cont_prop_layout_type;	/* uint64_t */
 extern d_iov_t ds_cont_prop_layout_ver;		/* uint64_t */
@@ -84,8 +86,11 @@ extern d_iov_t ds_cont_prop_acl;		/* struct daos_acl */
 extern d_iov_t ds_cont_prop_owner;		/* string */
 extern d_iov_t ds_cont_prop_owner_group;	/* string */
 extern d_iov_t ds_cont_prop_snapshots;		/* snapshot KVS */
+extern d_iov_t ds_cont_prop_co_status;		/* uint64_t */
 extern d_iov_t ds_cont_attr_user;		/* user attribute KVS */
 extern d_iov_t ds_cont_prop_handles;		/* handle index KVS */
+extern d_iov_t ds_cont_prop_roots;		/* container first citizens */
+extern d_iov_t ds_cont_prop_ec_cell_sz;		/* cell size of EC */
 
 /*
  * Snapshot KVS (RDB_KVS_INTEGER)
@@ -97,8 +102,8 @@ extern d_iov_t ds_cont_prop_handles;		/* handle index KVS */
 /*
  * User attribute KVS (RDB_KVS_GENERIC)
  *
- * A key is a user-specified byte array. A value is also a user-specified byte
- * array.
+ * A key is a (null-terminated) string. A value is a user-defined byte array.
+ * Sizes of keys (or values) may vary.
  */
 
 /*

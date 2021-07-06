@@ -1,43 +1,41 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/lib/hostlist"
 	"github.com/daos-stack/daos/src/control/security"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 const (
 	// Start with this value... If anything takes longer than this,
 	// it almost certainly needs to be fixed.
 	defaultRequestTimeout = 5 * time.Minute
+
+	baseMSBackoff      = 250 * time.Millisecond
+	maxMSBackoffFactor = 7 // 8s
+	maxMSCandidates    = 5
+)
+
+var (
+	msCandidateRandSource = rand.NewSource(time.Now().UnixNano())
 )
 
 type (
@@ -45,15 +43,22 @@ type (
 	// a gRPC method and returns a protobuf response or error.
 	unaryRPC func(context.Context, *grpc.ClientConn) (proto.Message, error)
 
-	// unaryRPCGetter defines the interface to be implemented by
-	// requests that can invoke a gRPC method.
+	// unaryRPCGetter defines the interface to be implemented by requests
+	// that can invoke a gRPC method.
 	unaryRPCGetter interface {
 		getRPC() unaryRPC
+	}
+
+	// sysGetter defines an interface to be implemented by clients that can
+	// retrieve the system name field.
+	sysGetter interface {
+		GetSystem() string
 	}
 
 	// UnaryInvoker defines an interface to be implemented by clients
 	// capable of invoking a unary RPC (1 response for 1 request).
 	UnaryInvoker interface {
+		sysGetter
 		debugLogger
 		InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error)
 		InvokeUnaryRPCAsync(ctx context.Context, req UnaryRequest) (HostResponseChan, error)
@@ -144,6 +149,12 @@ func (c *Client) SetConfig(cfg *Config) {
 	c.config = cfg
 }
 
+// GetConfig retrieves the system name from the client configuration and
+// implements the sysGetter interface.
+func (c *Client) GetSystem() string {
+	return c.config.SystemName
+}
+
 func (c *Client) Debug(msg string) {
 	c.log.Debug(msg)
 }
@@ -170,8 +181,23 @@ func (c *Client) dialOptions() ([]grpc.DialOption, error) {
 	return opts, nil
 }
 
+// setDeadlineIfUnset sets a deadline on the context unless there is already
+// one set. If the request does not define a specific deadline, then the
+// default timeout is used.
+func setDeadlineIfUnset(parent context.Context, req UnaryRequest) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := parent.Deadline(); hasDeadline {
+		return parent, func() {}
+	}
+
+	rd := req.getDeadline()
+	if rd.IsZero() {
+		rd = time.Now().Add(defaultRequestTimeout)
+	}
+	return context.WithDeadline(parent, rd)
+}
+
 // InvokeUnaryRPCAsync performs an asynchronous invocation of the given RPC
-// across all hosts in the provided host list. The returned HostResponseChan
+// across all hosts in the request's host list. The returned HostResponseChan
 // provides access to a stream of HostResponse items as they are received, and
 // is closed when no more responses are expected.
 func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (HostResponseChan, error) {
@@ -186,14 +212,8 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 	// in order to perform adequately at scale.
 	respChan := make(HostResponseChan, len(hosts))
 	go func() {
-		// Set a timeout for the entire request across all hosts.
-		reqTimeout := defaultRequestTimeout
-		if tg, ok := req.(timeoutGetter); ok {
-			if tg.getTimeout() > 0 {
-				reqTimeout = tg.getTimeout()
-			}
-		}
-		ctx, cancel := context.WithTimeout(parent, reqTimeout)
+		// Set a deadline for all requests to fan out/in.
+		ctx, cancel := setDeadlineIfUnset(parent, req)
 		defer cancel()
 
 		var wg sync.WaitGroup
@@ -226,28 +246,176 @@ func (c *Client) InvokeUnaryRPCAsync(parent context.Context, req UnaryRequest) (
 	return respChan, nil
 }
 
+// invokeUnaryRPC is the actual implementation which is called by the
+// real Client as well as the MockInvoker. This allows us to ensure that
+// the retry logic here gets adequate test coverage.
+func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, req UnaryRequest, defaultHosts []string) (*UnaryResponse, error) {
+	gatherResponses := func(ctx context.Context, respChan chan *HostResponse, ur *UnaryResponse) error {
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case hr := <-respChan:
+				if hr == nil {
+					return nil
+				}
+				ur.Responses = append(ur.Responses, hr)
+			}
+		}
+	}
+
+	// Set a deadline for the request across all retries.
+	reqCtx, cancel := setDeadlineIfUnset(parentCtx, req)
+	defer cancel()
+
+	// For non-MS requests, just keep things simple. Fan-out, fan-in,
+	// no retries possible.
+	if !req.isMSRequest() {
+		respChan, err := c.InvokeUnaryRPCAsync(reqCtx, req)
+		if err != nil {
+			return nil, err
+		}
+
+		ur := new(UnaryResponse)
+		if err := gatherResponses(reqCtx, respChan, ur); err != nil {
+			return nil, err
+		}
+		return ur, nil
+	}
+
+	if len(req.getHostList()) == 0 {
+		// For a MS request with no specific hostlist, choose a random subset
+		// of the default hostlist, with the idea that at least one of them
+		// will be up and running enough to return ErrNotReplica in order to
+		// learn the actual list of MS replicas. We may also get lucky and
+		// send the request to a server that can handle the request directly.
+		rnd := rand.New(msCandidateRandSource)
+		msCandidates := hostlist.MustCreateSet("")
+		for i := 0; i < len(defaultHosts) && msCandidates.Count() < maxMSCandidates; i++ {
+			if _, err := msCandidates.Insert(defaultHosts[rnd.Intn(len(defaultHosts))]); err != nil {
+				return nil, errors.Wrap(err, "failed to build MS candidates set")
+			}
+		}
+		req.SetHostList(msCandidates.Slice())
+		if len(req.getHostList()) == 0 {
+			return nil, errors.New("unable to select MS candidates")
+		}
+	}
+
+	isHardFailure := func(err error, reqCtx context.Context) bool {
+		if err == nil {
+			return false
+		}
+
+		// If the error is something other than a context error,
+		// then it's considered a hard failure and not retryable.
+		code := status.Code(errors.Cause(err))
+		if code != codes.Canceled && code != codes.DeadlineExceeded {
+			return true
+		}
+
+		// If the context error is from the overall request context,
+		// then it's a hard failure. Otherwise, it's a soft failure
+		// and can be retried.
+		return errors.Cause(err) == reqCtx.Err()
+	}
+
+	// MS requests are a little more complicated. The general idea here is that
+	// we want to discover the current MS leader for requests that must be
+	// handled by the leader; otherwise we want to find at least one MS replica
+	// to service the request. In this case we may get multiple responses, and
+	// we just return the first successful response as we assume that every
+	// replica is returning the same answer.
+	var try uint = 0
+	for {
+		tryCtx := reqCtx
+		if tryTimeout := req.getRetryTimeout(); tryTimeout > 0 {
+			var tryCancel context.CancelFunc
+			tryCtx, tryCancel = context.WithTimeout(reqCtx, tryTimeout)
+			defer tryCancel()
+		}
+		respChan, err := c.InvokeUnaryRPCAsync(tryCtx, req)
+		if isHardFailure(err, reqCtx) {
+			return nil, err
+		}
+
+		ur := &UnaryResponse{fromMS: true}
+		err = gatherResponses(tryCtx, respChan, ur)
+		if isHardFailure(err, reqCtx) {
+			return nil, err
+		}
+
+		_, err = ur.getMSResponse()
+		// If the request specifies that the error is retryable,
+		// check to see if it also defines its own retry logic
+		// and run that if so. Otherwise, let the usual retry
+		// logic below handle the error.
+		if req.canRetry(err, try) {
+			err := req.onRetry(tryCtx, try)
+			if err == nil {
+				return ur, nil
+			}
+			if err != errNoRetryHandler {
+				return nil, err
+			}
+		}
+
+		switch e := err.(type) {
+		case *system.ErrNotLeader:
+			// If we sent the request to a non-leader MS replica,
+			// then the error should give us a hint for where to
+			// send the retry. In the event that the hint was
+			// empty (as can happen during an election), just send
+			// the retry to all of the replicas.
+			if e.LeaderHint == "" {
+				if len(e.Replicas) > 0 {
+					req.SetHostList(e.Replicas)
+				}
+				break
+			}
+			req.SetHostList([]string{e.LeaderHint})
+		case *system.ErrNotReplica:
+			// If we went the request to a non-replica host, then
+			// the error should give us the list of replicas to try.
+			// One of them should be the current leader and will
+			// service the request.
+			if len(e.Replicas) > 0 {
+				req.SetHostList(e.Replicas)
+			}
+		default:
+			// In the case that the request specifies that the error
+			// is retryable, but doesn't define its own retry logic,
+			// just break out so it can be tried again as usual.
+			if req.canRetry(err, try) {
+				break
+			}
+
+			// One special case here for system startup. If the
+			// request was sent to a MS replica but the DB wasn't
+			// started yet, it's always valid to retry.
+			if system.IsUnavailable(err) {
+				break
+			}
+
+			// Otherwise, we're finished trying.
+			return ur, nil
+		}
+
+		backoff := common.ExpBackoff(req.retryAfter(baseMSBackoff), uint64(try), maxMSBackoffFactor)
+		log.Debugf("MS request error: %v; retrying after %s", err, backoff)
+		select {
+		case <-reqCtx.Done():
+			return nil, reqCtx.Err()
+		case <-time.After(backoff):
+		}
+		try++
+	}
+}
+
 // InvokeUnaryRPC performs a synchronous (blocking) invocation of the request's
 // RPC across all hosts in the request. The response contains a slice of HostResponse
 // items which represent the success or failure of the RPC invocation for each host
 // in the request.
 func (c *Client) InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error) {
-	respChan, err := c.InvokeUnaryRPCAsync(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	ur := &UnaryResponse{
-		fromMS: req.isMSRequest(),
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case hr := <-respChan:
-			if hr == nil {
-				return ur, nil
-			}
-			ur.Responses = append(ur.Responses, hr)
-		}
-	}
+	return invokeUnaryRPC(ctx, c.log, c, req, c.config.HostList)
 }

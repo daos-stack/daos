@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This is a common file for IV client and IV server
@@ -36,7 +19,6 @@
 
 #define TEST_IV_BASE 0x010000000
 #define TEST_IV_VER  0
-
 
 /* Describes internal structure of a key */
 struct iv_key_struct {
@@ -58,26 +40,41 @@ struct iv_key_struct {
 	((d_iov_t)		(iov_sync)		CRT_VAR) \
 	((d_iov_t)		(iov_value)		CRT_VAR)
 
-#define CRT_OSEQ_RPC_TEST_UPDATE_IV /* output fields */		 \
+#define CRT_OSEQ_RPC_TEST_UPDATE_IV /* output fields */		\
 	((int64_t)		(rc)			CRT_VAR)
 
 #define CRT_ISEQ_RPC_TEST_INVALIDATE_IV /* input fields */	 \
-	((d_iov_t)		(iov_key)		CRT_VAR)
+	((d_iov_t)		(iov_key)		CRT_VAR) \
+	((d_iov_t)		(iov_sync)		CRT_VAR)
 
 #define CRT_OSEQ_RPC_TEST_INVALIDATE_IV /* output fields */	 \
-	((int64_t)		(rc)			CRT_VAR)
+	((int32_t)		(rc)			CRT_VAR)
 
-#define CRT_ISEQ_RPC_SET_IVNS	/* input fields */		 \
+#define CRT_ISEQ_RPC_SET_IVNS		/* input fields */	 \
 	((uint32_t)		(unused)		CRT_VAR)
 
-#define CRT_OSEQ_RPC_SET_IVNS	/* output fields */		 \
+#define CRT_OSEQ_RPC_SET_IVNS		/* output fields */	 \
 	((uint32_t)		(rc)			CRT_VAR)
 
-#define CRT_ISEQ_RPC_SHUTDOWN	/* input fields */		 \
+#define CRT_ISEQ_RPC_SHUTDOWN		/* input fields */	 \
 	((uint32_t)		(unused)		CRT_VAR)
 
-#define CRT_OSEQ_RPC_SHUTDOWN	/* output fields */		 \
+#define CRT_OSEQ_RPC_SHUTDOWN		/* output fields */	 \
 	((uint32_t)		(rc)			CRT_VAR)
+
+#define CRT_ISEQ_RPC_SET_GRP_VERSION	/* input fields */	 \
+	((uint32_t)		(version)		CRT_VAR) \
+	((uint32_t)		(timing)		CRT_VAR)
+
+#define CRT_OSEQ_RPC_SET_GRP_VERSION	/* output fields */	\
+	((int32_t)		(rc)			CRT_VAR)
+
+#define CRT_ISEQ_RPC_GET_GRP_VERSION	/* input fields */	 \
+	((uint32_t)		(unused)		CRT_VAR)
+
+#define CRT_OSEQ_RPC_GET_GRP_VERSION	/* output fields */	 \
+	((uint32_t)		(version)		CRT_VAR) \
+	((int32_t)		(rc)			CRT_VAR)
 
 #ifdef _SERVER
 #define RPC_REGISTER(name) \
@@ -98,11 +95,16 @@ enum {
 	RPC_TEST_UPDATE_IV = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 1),
 	/* Client issues invalidate call */
 	RPC_TEST_INVALIDATE_IV = CRT_PROTO_OPC(TEST_IV_BASE,
-							TEST_IV_VER, 2),
-	/* send global ivns */
+					       TEST_IV_VER, 2),
+	/* Send global ivns */
 	RPC_SET_IVNS = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 3),
 	/* Request server shutdown */
 	RPC_SHUTDOWN = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 4),
+	/* Change group version */
+	RPC_SET_GRP_VERSION = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 5),
+	/* Get group version */
+	RPC_GET_GRP_VERSION = CRT_PROTO_OPC(TEST_IV_BASE, TEST_IV_VER, 6),
+
 } rpc_id_t;
 
 int iv_test_fetch_iv(crt_rpc_t *rpc);
@@ -111,12 +113,16 @@ int iv_test_invalidate_iv(crt_rpc_t *rpc);
 
 int iv_set_ivns(crt_rpc_t *rpc);
 int iv_shutdown(crt_rpc_t *rpc);
+int iv_set_grp_version(crt_rpc_t *rpc);
+int iv_get_grp_version(crt_rpc_t *rpc);
 
 RPC_DECLARE(RPC_TEST_FETCH_IV, iv_test_fetch_iv);
 RPC_DECLARE(RPC_TEST_UPDATE_IV, iv_test_update_iv);
 RPC_DECLARE(RPC_TEST_INVALIDATE_IV, iv_test_invalidate_iv);
 RPC_DECLARE(RPC_SET_IVNS, iv_set_ivns);
 RPC_DECLARE(RPC_SHUTDOWN, iv_shutdown);
+RPC_DECLARE(RPC_SET_GRP_VERSION, iv_set_grp_version);
+RPC_DECLARE(RPC_GET_GRP_VERSION, iv_get_grp_version);
 
 #ifdef _SERVER
 #define PRF_ENTRY(x, y)			\
@@ -143,6 +149,8 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_iv[] = {
 	PRF_ENTRY(CQF_RPC_TEST_INVALIDATE_IV, iv_test_invalidate_iv),
 	PRF_ENTRY(CQF_RPC_SET_IVNS, iv_set_ivns),
 	PRF_ENTRY(CQF_RPC_SHUTDOWN, iv_shutdown),
+	PRF_ENTRY(CQF_RPC_SET_GRP_VERSION, iv_set_grp_version),
+	PRF_ENTRY(CQF_RPC_GET_GRP_VERSION, iv_get_grp_version),
 };
 
 static struct crt_proto_format my_proto_fmt_iv = {
@@ -186,7 +194,6 @@ int prepare_rpc_request(crt_context_t crt_ctx, int rpc_id,
 
 	return rc;
 }
-
 
 int send_rpc_request(crt_context_t crt_ctx, crt_rpc_t *rpc_req, void **output)
 {

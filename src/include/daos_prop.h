@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2015-2020 Intel Corporation.
+ * (C) Copyright 2015-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS pool/container initialization properties
@@ -31,6 +14,7 @@
 extern "C" {
 #endif
 
+#include <ctype.h>
 #include <daos_types.h>
 
 /**
@@ -83,6 +67,7 @@ enum daos_pool_props {
 	 * The pool svc rank list.
 	 */
 	DAOS_PROP_PO_SVC_LIST,
+	DAOS_PROP_PO_EC_CELL_SZ,
 	DAOS_PROP_PO_MAX,
 };
 
@@ -143,12 +128,12 @@ enum daos_cont_props {
 	/**
 	 * Redundancy factor:
 	 * RF(n): Container I/O restricted after n faults.
-	 * default = RF1 (DAOS_PROP_CO_REDUN_RF1)
+	 * default = RF0 (DAOS_PROP_CO_REDUN_RF0)
 	 */
 	DAOS_PROP_CO_REDUN_FAC,
 	/**
 	 * Redundancy level: default fault domain level for placement.
-	 * default = rack (DAOS_PROP_CO_REDUN_RACK)
+	 * default = 1 (rank level)
 	 */
 	DAOS_PROP_CO_REDUN_LVL,
 	/**
@@ -162,9 +147,21 @@ enum daos_cont_props {
 	 * Expected to be in the order: Owner, User(s), Group(s), Everyone
 	 */
 	DAOS_PROP_CO_ACL,
-	/** Compression on/off + compression type */
+	/**
+	 * Determine whether inline compression is enabled
+	 * Value: DAOS_PROP_CO_COMPRESS_OFF/LZ4/DEFLATE[1-4]
+	 * Default: DAOS_PROP_CO_COMPRESS_OFF
+	 */
 	DAOS_PROP_CO_COMPRESS,
-	/** Encryption on/off + encryption type */
+	/**
+	 * Determine whether encryption is enabled
+	 * Value:
+	 * DAOS_PROP_CO_ENCRYPT_OFF,
+	 * DAOS_PROP_CO_ENCRYPT_AES_XTS{128,256},
+	 * DAOS_PROP_CO_ENCRYPT_AES_CBC{128,192,256},
+	 * DAOS_PROP_CO_ENCRYPT_AES_GCM{128,256}
+	 * Default: DAOS_PROP_CO_ENCRYPT_OFF
+	 */
 	DAOS_PROP_CO_ENCRYPT,
 	/**
 	 * The user who acts as the owner of the container.
@@ -188,7 +185,23 @@ enum daos_cont_props {
 	 * Default: 4K
 	 */
 	DAOS_PROP_CO_DEDUP_THRESHOLD,
+	/** First citizen objects of container, see \a daos_cont_root_oids */
+	DAOS_PROP_CO_ROOTS,
+	/**
+	 * Container status
+	 * Value "struct daos_co_status".
+	 */
+	DAOS_PROP_CO_STATUS,
+	/** OID value to start allocation from */
+	DAOS_PROP_CO_ALLOCED_OID,
+	/** EC cell size, it can overwrite DAOS_PROP_EC_CELL_SZ of pool */
+	DAOS_PROP_CO_EC_CELL_SZ,
 	DAOS_PROP_CO_MAX,
+};
+
+/** first citizen objects of a container, stored as container property */
+struct daos_prop_co_roots {
+	daos_obj_id_t	cr_oids[4];
 };
 
 /**
@@ -213,7 +226,8 @@ enum {
 	DAOS_PROP_CO_CSUM_CRC64,
 	DAOS_PROP_CO_CSUM_SHA1,
 	DAOS_PROP_CO_CSUM_SHA256,
-	DAOS_PROP_CO_CSUM_SHA512
+	DAOS_PROP_CO_CSUM_SHA512,
+	DAOS_PROP_CO_CSUM_ADLER32
 };
 
 /** container checksum server verify */
@@ -229,14 +243,27 @@ enum {
 	DAOS_PROP_CO_DEDUP_HASH
 };
 
-/** container compress type */
+/** container compression type */
 enum {
 	DAOS_PROP_CO_COMPRESS_OFF,
+	DAOS_PROP_CO_COMPRESS_LZ4,
+	DAOS_PROP_CO_COMPRESS_DEFLATE, /** deflate default */
+	DAOS_PROP_CO_COMPRESS_DEFLATE1,
+	DAOS_PROP_CO_COMPRESS_DEFLATE2,
+	DAOS_PROP_CO_COMPRESS_DEFLATE3,
+	DAOS_PROP_CO_COMPRESS_DEFLATE4,
 };
 
 /** container encryption type */
 enum {
 	DAOS_PROP_CO_ENCRYPT_OFF,
+	DAOS_PROP_CO_ENCRYPT_AES_XTS128,
+	DAOS_PROP_CO_ENCRYPT_AES_XTS256,
+	DAOS_PROP_CO_ENCRYPT_AES_CBC128,
+	DAOS_PROP_CO_ENCRYPT_AES_CBC192,
+	DAOS_PROP_CO_ENCRYPT_AES_CBC256,
+	DAOS_PROP_CO_ENCRYPT_AES_GCM128,
+	DAOS_PROP_CO_ENCRYPT_AES_GCM256
 };
 
 /** container redundancy factor */
@@ -248,10 +275,59 @@ enum {
 	DAOS_PROP_CO_REDUN_RF4,
 };
 
+/**
+ * Level of fault-domain to use for object allocation
+ * rank is hardcoded to 1, [2-254] are defined by the admin
+ */
 enum {
-	DAOS_PROP_CO_REDUN_RACK,
-	DAOS_PROP_CO_REDUN_NODE,
+	DAOS_PROP_CO_REDUN_MIN	= 1,
+	DAOS_PROP_CO_REDUN_RANK	= 1, /** hard-coded */
+	DAOS_PROP_CO_REDUN_MAX	= 254,
 };
+
+/** container status flag */
+enum {
+	/* in healthy status, data protection work as expected */
+	DAOS_PROP_CO_HEALTHY,
+	/* in unclean status, data protection possibly cannot work.
+	 * typical scenario - cascading failed targets exceed the container
+	 * redundancy factor, that possibly cause lost data cannot be detected
+	 * or rebuilt.
+	 */
+	DAOS_PROP_CO_UNCLEAN,
+};
+
+/** clear the UNCLEAN status */
+#define DAOS_PROP_CO_CLEAR	(0x1)
+struct daos_co_status {
+	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
+	uint16_t	dcs_status;
+	/** flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
+	uint16_t	dcs_flags;
+	/** pool map version when setting the dcs_status */
+	uint32_t	dcs_pm_ver;
+};
+
+#define DAOS_PROP_CO_STATUS_VAL(status, flag, pm_ver)			\
+	((((uint64_t)(flag)) << 48)		|			\
+	 (((uint64_t)(status) & 0xFFFF) << 32)	|			\
+	 ((uint64_t)(pm_ver)))
+
+static inline uint64_t
+daos_prop_co_status_2_val(struct daos_co_status *co_status)
+{
+	return DAOS_PROP_CO_STATUS_VAL(co_status->dcs_status,
+				       co_status->dcs_flags,
+				       co_status->dcs_pm_ver);
+}
+
+static inline void
+daos_prop_val_2_co_status(uint64_t val, struct daos_co_status *co_status)
+{
+	co_status->dcs_flags = (uint16_t)(val >> 48);
+	co_status->dcs_status = (uint16_t)((val >> 32) & 0xFFFF);
+	co_status->dcs_pm_ver = (uint32_t)(val & 0xFFFFFFFF);
+}
 
 struct daos_prop_entry {
 	/** property type, see enum daos_pool_props/daos_cont_props */
@@ -271,8 +347,48 @@ struct daos_prop_entry {
 
 /** Allowed max number of property entries in daos_prop_t */
 #define DAOS_PROP_ENTRIES_MAX_NR	(128)
-/** max length for pool/container label */
-#define DAOS_PROP_LABEL_MAX_LEN		(256)
+
+/** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
+#define DAOS_PROP_LABEL_MAX_LEN		(127)
+
+/**
+ * Check if DAOS (pool or container property) label string is valid.
+ * DAOS labels must consist only of alphanumeric characters, colon ':',
+ * period '.' or underscore '_', and must be of length
+ * [1 - DAOS_PROP_LABEL_MAX_LEN].
+ *
+ * \param[in]	label	Label string
+ *
+ * \return		true		Label meets length/format requirements
+ *			false		Label is not valid length or format
+ */
+static inline bool
+daos_label_is_valid(const char *label)
+{
+	size_t	len;
+	int	i;
+
+	/** Label cannot be NULL */
+	if (label == NULL)
+		return false;
+
+	/** Check the length */
+	len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN + 1);
+	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN)
+		return false;
+
+	/** Verify that it contains only alphanumeric characters or :._ */
+	for (i = 0; i < len; i++) {
+		char c = label[i];
+
+		if (isalnum(c) || c == '.' || c == '_' || c == ':')
+			continue;
+
+		return false;
+	}
+
+	return true;
+}
 
 /** daos properties, for pool or container */
 typedef struct {
@@ -300,11 +416,10 @@ daos_prop_alloc(uint32_t entries_nr);
  * \param[in]	prop	property entries to be freed.
  */
 void
-daos_prop_entries_free(daos_prop_t *prop);
-
+daos_prop_fini(daos_prop_t *prop);
 
 /**
- * Free the DAOS properties.
+ * Free the DAOS properties and the \a prop.
  *
  * \param[in]	prop	properties to be freed.
  */
@@ -326,7 +441,7 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
  * Duplicate a generic pointer value from one DAOS prop entry to another.
  * Convenience function.
  *
- * \param[in][out]	entry_dst	Destination entry
+ * \param[in,out]	entry_dst	Destination entry
  * \param[in]		entry_src	Entry to be copied
  * \param[in]		len		Length of the memory to be copied
  *
@@ -349,6 +464,20 @@ daos_prop_entry_dup_ptr(struct daos_prop_entry *entry_dst,
 int
 daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 			struct daos_prop_entry *entry2);
+
+/**
+ * Duplicate container roots from one DAOS prop entry to another.
+ * Convenience function.
+ *
+ * \param[in,out]	dst		Destination entry
+ * \param[in]		src		Entry to be copied
+ *
+ * \return		0		Success
+ *			-DER_NOMEM	Out of memory
+ */
+int
+daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
+			     struct daos_prop_entry *src);
 
 #if defined(__cplusplus)
 }

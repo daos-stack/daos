@@ -40,7 +40,7 @@ function kill_servers2 {
     do
 	tokens=( $hostline )
 	echo "killing " ${tokens[0]}
-	ssh -n ${tokens[0]} "pkill daos_io_server && pkill daos_server"
+	ssh -n "${tokens[0]}" "pkill daos_engine && pkill daos_server"
     done
 }
 

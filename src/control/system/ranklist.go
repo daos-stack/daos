@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -57,28 +40,61 @@ func fixBrackets(stringRanks string, remove bool) string {
 	return stringRanks
 }
 
+// MustCreateRankSet is like CreateRankSet but will panic on error.
+func MustCreateRankSet(stringRanks string) *RankSet {
+	rs, err := CreateRankSet(stringRanks)
+	if err != nil {
+		panic(err)
+	}
+	return rs
+}
+
 // CreateRankSet creates a new HostList with ranks rather than hostnames from the
 // supplied string representation.
 func CreateRankSet(stringRanks string) (*RankSet, error) {
-	rs := RankSet{}
-
-	if len(stringRanks) > 0 {
-		stringRanks = fixBrackets(stringRanks, false)
-
-		// add enclosing brackets to input so CreateSet works without hostnames
-		hs, err := hostlist.CreateNumericSet(stringRanks)
-		if err != nil {
-			return nil, err
-		}
-		// copying locks ok because original hs is discarded
-		rs.HostSet = *hs
+	rs := &RankSet{
+		HostSet: *hostlist.MustCreateSet(""),
 	}
 
-	return &rs, nil
+	if len(stringRanks) < 1 {
+		return rs, nil
+	}
+
+	stringRanks = fixBrackets(stringRanks, false)
+
+	// add enclosing brackets to input so CreateSet works without hostnames
+	hs, err := hostlist.CreateNumericSet(stringRanks)
+	if err != nil {
+		return nil, err
+	}
+	rs.HostSet.ReplaceSet(hs)
+
+	return rs, nil
+}
+
+// RankSetFromRanks returns a RankSet created from the supplied Rank slice.
+func RankSetFromRanks(ranks RankList) *RankSet {
+	rs := &RankSet{
+		HostSet: *hostlist.MustCreateSet(""),
+	}
+
+	if len(ranks) < 1 {
+		return rs
+	}
+
+	sr := fixBrackets(ranks.String(), false)
+	hs, err := hostlist.CreateNumericSet(sr)
+	if err != nil {
+		// Any error with numeric ranks is going to be something bad.
+		panic(err)
+	}
+	rs.HostSet.ReplaceSet(hs)
+
+	return rs
 }
 
 // Add adds rank to an existing RankSet.
-func (rs *RankSet) Add(rank Rank) error {
+func (rs *RankSet) Add(rank Rank) {
 	rs.RLock()
 	defer rs.RUnlock()
 
@@ -91,12 +107,20 @@ func (rs *RankSet) Add(rank Rank) error {
 
 	newHS, err := hostlist.CreateNumericSet(fixBrackets(stringRanks, false))
 	if err != nil {
-		return err
+		// if we trip this, something is seriously wrong
+		panic(fmt.Sprintf("internal error: %s", err))
 	}
 
-	rs.HostSet = *newHS
+	rs.HostSet.ReplaceSet(newHS)
+}
 
-	return nil
+// ReplaceSet replaces the contents of this set with the supplied RankSet.
+func (rs *RankSet) ReplaceSet(other *RankSet) {
+	if other == nil {
+		return
+	}
+
+	rs.HostSet.ReplaceSet(&other.HostSet)
 }
 
 func (rs *RankSet) String() string {
@@ -106,17 +130,18 @@ func (rs *RankSet) String() string {
 // Ranks returns a slice of Rank from a RankSet.
 func (rs *RankSet) Ranks() []Rank {
 	var ranks []uint32
-	// error can be safely ignored because DerangedString format is
-	// deterministic
-	common.ParseNumberList(
+	if err := common.ParseNumberList(
 		fixBrackets(rs.HostSet.DerangedString(), true),
-		&ranks)
+		&ranks); err != nil {
+		// if we trip this, something is seriously wrong
+		panic(fmt.Sprintf("internal error: %s", err))
+	}
 
 	return RanksFromUint32(ranks)
 }
 
 // ParseRanks takes a string representation of a list of ranks e.g. 1-4,6 and
-// returns a slice of system.Rank type or error.
+// returns a slice of Rank type or error.
 func ParseRanks(stringRanks string) ([]Rank, error) {
 	rs, err := CreateRankSet(stringRanks)
 	if err != nil {
@@ -133,15 +158,15 @@ type RankGroups map[string]*RankSet
 //
 // Sort first by number of ranks in grouping then by alphabetical order of
 // group name.
-func (rsg RankGroups) Keys() []string {
-	keys := make([]string, 0, len(rsg))
+func (rgs RankGroups) Keys() []string {
+	keys := make([]string, 0, len(rgs))
 
-	for key := range rsg {
+	for key := range rgs {
 		keys = append(keys, key)
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		ci := rsg[keys[i]].Count()
-		cj := rsg[keys[j]].Count()
+		ci := rgs[keys[i]].Count()
+		cj := rgs[keys[j]].Count()
 		if ci == cj {
 			return keys[i] < keys[j]
 		}
@@ -152,21 +177,105 @@ func (rsg RankGroups) Keys() []string {
 	return keys
 }
 
-func (rsg RankGroups) String() string {
+func (rgs RankGroups) String() string {
 	var buf bytes.Buffer
 
 	padding := 0
-	keys := rsg.Keys()
+	keys := rgs.Keys()
 	for _, key := range keys {
-		valStr := rsg[key].String()
+		valStr := rgs[key].String()
 		if len(valStr) > padding {
 			padding = len(valStr)
 		}
 	}
 
-	for _, key := range rsg.Keys() {
-		fmt.Fprintf(&buf, "%*s: %s\n", padding, rsg[key], key)
+	for _, key := range rgs.Keys() {
+		fmt.Fprintf(&buf, "%*s: %s\n", padding, rgs[key], key)
 	}
 
 	return buf.String()
+}
+
+// FromMembers initializes groupings of ranks that are at a particular state
+// from a slice of system members.
+func (rgs RankGroups) FromMembers(members Members) error {
+	if rgs == nil || len(rgs) > 0 {
+		return errors.New("expecting non-nil empty rank groups")
+	}
+
+	ranksInState := make(map[MemberState]*bytes.Buffer)
+	ranksSeen := make(map[Rank]struct{})
+
+	for _, m := range members {
+		if _, exists := ranksSeen[m.Rank]; exists {
+			return &ErrMemberExists{Rank: &m.Rank}
+		}
+		ranksSeen[m.Rank] = struct{}{}
+
+		if _, exists := ranksInState[m.State()]; !exists {
+			ranksInState[m.State()] = new(bytes.Buffer)
+		}
+		fmt.Fprintf(ranksInState[m.State()], "%d,", m.Rank)
+	}
+
+	for state, ranksStrBuf := range ranksInState {
+		rankSet, err := CreateRankSet(
+			strings.TrimSuffix(ranksStrBuf.String(), ","))
+		if err != nil {
+			return errors.WithMessage(err,
+				"generating groups of ranks at state")
+		}
+		rgs[state.String()] = rankSet
+	}
+
+	return nil
+}
+
+// FromMemberResults initializes groupings of ranks that had a particular result
+// from a requested action, populated from a slice of system member results.
+//
+// Supplied rowFieldsep parameter is used to separate row field elements in
+// the string that is used as the key for the rank groups.
+func (rgs RankGroups) FromMemberResults(results MemberResults, rowFieldSep string) error {
+	if rgs == nil || len(rgs) > 0 {
+		return errors.New("expecting non-nil empty rank groups")
+	}
+
+	ranksWithResult := make(map[string]*bytes.Buffer)
+	ranksSeen := make(map[Rank]struct{})
+
+	for _, r := range results {
+		if _, exists := ranksSeen[r.Rank]; exists {
+			return errors.Wrap(&ErrMemberExists{Rank: &r.Rank},
+				"duplicate result for rank")
+		}
+		ranksSeen[r.Rank] = struct{}{}
+
+		msg := "OK"
+		if r.Errored {
+			msg = r.Msg
+		}
+		if r.Action == "" {
+			return errors.Errorf(
+				"action field empty for rank %d result", r.Rank)
+		}
+
+		resStr := fmt.Sprintf("%s%s%s", r.Action, rowFieldSep, msg)
+		if _, exists := ranksWithResult[resStr]; !exists {
+			ranksWithResult[resStr] = new(bytes.Buffer)
+		}
+		fmt.Fprintf(ranksWithResult[resStr], "%d,", r.Rank)
+	}
+
+	for strResult, ranksStrBuf := range ranksWithResult {
+		rankSet, err := CreateRankSet(
+			strings.TrimSuffix(ranksStrBuf.String(), ","))
+		if err != nil {
+			return errors.WithMessage(err,
+				"generating groups of ranks with same result")
+		}
+		rgs[strResult] = rankSet
+	}
+
+	return nil
 }

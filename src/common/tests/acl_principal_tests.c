@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -30,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <daos_security.h>
 #include <daos_errno.h>
 #include <gurt/common.h>
@@ -265,7 +249,7 @@ free_test_group(struct group *grp)
 static void
 test_acl_uid_to_principal_null(void **state)
 {
-	assert_int_equal(daos_acl_uid_to_principal(2, NULL), -DER_INVAL);
+	assert_rc_equal(daos_acl_uid_to_principal(2, NULL), -DER_INVAL);
 }
 
 static void
@@ -275,7 +259,7 @@ test_acl_uid_to_principal_bad_uid(void **state)
 
 	getpwuid_setup(NULL, 0);
 
-	assert_int_equal(daos_acl_uid_to_principal(2, &name),
+	assert_rc_equal(daos_acl_uid_to_principal(2, &name),
 			 -DER_NONEXIST);
 
 	assert_null(name);
@@ -289,7 +273,7 @@ test_acl_uid_to_principal_getpwuid_err(void **state)
 
 	getpwuid_setup(NULL, ENOMEM);
 
-	assert_int_equal(daos_acl_uid_to_principal(2, &name),
+	assert_rc_equal(daos_acl_uid_to_principal(2, &name),
 			 -DER_NOMEM);
 
 	assert_null(name);
@@ -307,7 +291,7 @@ test_acl_uid_to_principal_success(void **state)
 	passwd = get_test_passwd(expected_name, uid);
 	getpwuid_setup(passwd, 0);
 
-	assert_int_equal(daos_acl_uid_to_principal(uid, &name),
+	assert_rc_equal(daos_acl_uid_to_principal(uid, &name),
 			 0);
 
 	assert_int_equal(getpwuid_r_call_count, 1);
@@ -337,7 +321,7 @@ test_acl_uid_to_principal_getpwuid_buf_too_small(void **state)
 
 	getpwuid_r_num_erange_failures = 1;
 
-	assert_int_equal(daos_acl_uid_to_principal(uid, &name), 0);
+	assert_rc_equal(daos_acl_uid_to_principal(uid, &name), 0);
 
 	assert_non_null(name);
 	assert_string_equal(name, expected_name);
@@ -358,7 +342,7 @@ test_acl_uid_to_principal_getpwuid_buf_too_small(void **state)
 static void
 test_acl_gid_to_principal_null(void **state)
 {
-	assert_int_equal(daos_acl_gid_to_principal(1, NULL), -DER_INVAL);
+	assert_rc_equal(daos_acl_gid_to_principal(1, NULL), -DER_INVAL);
 }
 
 static void
@@ -369,7 +353,7 @@ test_acl_gid_to_principal_bad_gid(void **state)
 
 	getgrgid_setup(NULL, 0);
 
-	assert_int_equal(daos_acl_gid_to_principal(gid, &name),
+	assert_rc_equal(daos_acl_gid_to_principal(gid, &name),
 			 -DER_NONEXIST);
 
 	assert_null(name);
@@ -383,7 +367,7 @@ test_acl_gid_to_principal_getgrgid_err(void **state)
 
 	getgrgid_setup(NULL, ENOMEM);
 
-	assert_int_equal(daos_acl_gid_to_principal(gid, &name),
+	assert_rc_equal(daos_acl_gid_to_principal(gid, &name),
 			 -DER_NOMEM);
 
 	assert_null(name);
@@ -400,7 +384,7 @@ test_acl_gid_to_principal_success(void **state)
 	grp = get_test_group(expected_name, gid);
 	getgrgid_setup(grp, 0);
 
-	assert_int_equal(daos_acl_gid_to_principal(gid, &name),
+	assert_rc_equal(daos_acl_gid_to_principal(gid, &name),
 			 0);
 
 	/* Verify params passed into getgrgid_r */
@@ -428,7 +412,7 @@ test_acl_gid_to_principal_getgrgid_buf_too_small(void **state)
 
 	getgrgid_r_num_erange_failures = 1;
 
-	assert_int_equal(daos_acl_gid_to_principal(gid, &name), 0);
+	assert_rc_equal(daos_acl_gid_to_principal(gid, &name), 0);
 
 	assert_non_null(name);
 	assert_string_equal(name, expected_name);
@@ -504,13 +488,13 @@ test_acl_principal_to_uid_null_name(void **state)
 {
 	uid_t uid;
 
-	assert_int_equal(daos_acl_principal_to_uid(NULL, &uid), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_uid(NULL, &uid), -DER_INVAL);
 }
 
 static void
 test_acl_principal_to_uid_null_uid(void **state)
 {
-	assert_int_equal(daos_acl_principal_to_uid("name@", NULL), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_uid("name@", NULL), -DER_INVAL);
 }
 
 static void
@@ -518,9 +502,9 @@ test_acl_principal_to_uid_invalid_name(void **state)
 {
 	uid_t uid = 0;
 
-	assert_int_equal(daos_acl_principal_to_uid("", &uid), -DER_INVAL);
-	assert_int_equal(daos_acl_principal_to_uid("@", &uid), -DER_INVAL);
-	assert_int_equal(daos_acl_principal_to_uid("12345", &uid), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_uid("", &uid), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_uid("@", &uid), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_uid("12345", &uid), -DER_INVAL);
 }
 
 static void
@@ -534,7 +518,7 @@ test_acl_principal_to_uid_success(void **state)
 	passwd = get_test_passwd(name, expected_uid);
 	getpwnam_setup(passwd, 0);
 
-	assert_int_equal(daos_acl_principal_to_uid(name, &uid), 0);
+	assert_rc_equal(daos_acl_principal_to_uid(name, &uid), 0);
 
 	assert_int_equal(uid, expected_uid);
 
@@ -557,7 +541,7 @@ test_acl_principal_to_uid_success_domain(void **state)
 	passwd = get_test_passwd("user@", expected_uid);
 	getpwnam_setup(passwd, 0);
 
-	assert_int_equal(daos_acl_principal_to_uid(name, &uid), 0);
+	assert_rc_equal(daos_acl_principal_to_uid(name, &uid), 0);
 
 	assert_int_equal(uid, expected_uid);
 
@@ -575,7 +559,7 @@ test_acl_principal_to_uid_not_found(void **state)
 
 	getpwnam_setup(NULL, 0);
 
-	assert_int_equal(daos_acl_principal_to_uid("user@", &uid),
+	assert_rc_equal(daos_acl_principal_to_uid("user@", &uid),
 			 -DER_NONEXIST);
 
 	assert_int_equal(getpwnam_r_call_count, 1);
@@ -588,7 +572,7 @@ test_acl_principal_to_uid_getpwnam_err(void **state)
 
 	getpwnam_setup(NULL, ENOMEM);
 
-	assert_int_equal(daos_acl_principal_to_uid("user@", &uid),
+	assert_rc_equal(daos_acl_principal_to_uid("user@", &uid),
 			 -DER_NOMEM);
 
 	assert_int_equal(getpwnam_r_call_count, 1);
@@ -610,7 +594,7 @@ test_acl_principal_to_uid_getpwnam_buf_too_small(void **state)
 	getpwnam_r_num_erange_failures = 1;
 
 	/* should recover from the failure and retry */
-	assert_int_equal(daos_acl_principal_to_uid(name, &uid), 0);
+	assert_rc_equal(daos_acl_principal_to_uid(name, &uid), 0);
 
 	assert_int_equal(uid, expected_uid);
 
@@ -630,13 +614,13 @@ test_acl_principal_to_gid_null_name(void **state)
 {
 	gid_t gid;
 
-	assert_int_equal(daos_acl_principal_to_gid(NULL, &gid), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_gid(NULL, &gid), -DER_INVAL);
 }
 
 static void
 test_acl_principal_to_gid_null_gid(void **state)
 {
-	assert_int_equal(daos_acl_principal_to_gid("grp@", NULL), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_gid("grp@", NULL), -DER_INVAL);
 }
 
 static void
@@ -644,9 +628,9 @@ test_acl_principal_to_gid_invalid_name(void **state)
 {
 	gid_t gid = 0;
 
-	assert_int_equal(daos_acl_principal_to_gid("", &gid), -DER_INVAL);
-	assert_int_equal(daos_acl_principal_to_gid("@@", &gid), -DER_INVAL);
-	assert_int_equal(daos_acl_principal_to_gid("grp", &gid), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_gid("", &gid), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_gid("@@", &gid), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_to_gid("grp", &gid), -DER_INVAL);
 }
 
 static void
@@ -660,7 +644,7 @@ test_acl_principal_to_gid_success(void **state)
 	grp = get_test_group(name, expected_gid);
 	getgrnam_setup(grp, 0);
 
-	assert_int_equal(daos_acl_principal_to_gid(name, &gid), 0);
+	assert_rc_equal(daos_acl_principal_to_gid(name, &gid), 0);
 
 	assert_int_equal(gid, expected_gid);
 
@@ -683,7 +667,7 @@ test_acl_principal_to_gid_success_domain(void **state)
 	grp = get_test_group("grp@", expected_gid);
 	getgrnam_setup(grp, 0);
 
-	assert_int_equal(daos_acl_principal_to_gid(name, &gid), 0);
+	assert_rc_equal(daos_acl_principal_to_gid(name, &gid), 0);
 
 	assert_int_equal(gid, expected_gid);
 
@@ -701,7 +685,7 @@ test_acl_principal_to_gid_not_found(void **state)
 
 	getgrnam_setup(NULL, 0);
 
-	assert_int_equal(daos_acl_principal_to_gid("group@", &gid),
+	assert_rc_equal(daos_acl_principal_to_gid("group@", &gid),
 			 -DER_NONEXIST);
 
 	assert_int_equal(getgrnam_r_call_count, 1);
@@ -714,7 +698,7 @@ test_acl_principal_to_gid_getgrnam_err(void **state)
 
 	getgrnam_setup(NULL, ENOMEM);
 
-	assert_int_equal(daos_acl_principal_to_gid("group@", &gid),
+	assert_rc_equal(daos_acl_principal_to_gid("group@", &gid),
 			 -DER_NOMEM);
 
 	assert_int_equal(getgrnam_r_call_count, 1);
@@ -736,7 +720,7 @@ test_acl_principal_to_gid_getgrnam_buf_too_small(void **state)
 	getgrnam_r_num_erange_failures = 1;
 
 	/* should recover from the failure and retry */
-	assert_int_equal(daos_acl_principal_to_gid(name, &gid), 0);
+	assert_rc_equal(daos_acl_principal_to_gid(name, &gid), 0);
 
 	assert_int_equal(gid, expected_gid);
 
@@ -757,12 +741,12 @@ test_acl_principal_from_str_null_params(void **state)
 	enum daos_acl_principal_type	type;
 	char				*name;
 
-	assert_int_equal(daos_acl_principal_from_str(NULL, &type, &name),
-			 -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("OWNER@", NULL, &name),
-			 -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("OWNER@", &type, NULL),
-			 -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str(NULL, &type, &name),
+			-DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("OWNER@", NULL, &name),
+			-DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("OWNER@", &type, NULL),
+			-DER_INVAL);
 }
 
 static void
@@ -772,7 +756,7 @@ expect_principal_str_is_special_type(const char *str,
 	enum daos_acl_principal_type	type;
 	char				*name;
 
-	assert_int_equal(daos_acl_principal_from_str(str, &type, &name),
+	assert_rc_equal(daos_acl_principal_from_str(str, &type, &name),
 			 0);
 
 	assert_int_equal(type, exp_type);
@@ -795,7 +779,7 @@ expect_principal_str_is_named_type(const char *str,
 	enum daos_acl_principal_type	type;
 	char				*name;
 
-	assert_int_equal(daos_acl_principal_from_str(str, &type, &name),
+	assert_rc_equal(daos_acl_principal_from_str(str, &type, &name),
 			 0);
 
 	assert_int_equal(type, exp_type);
@@ -825,22 +809,22 @@ test_acl_principal_from_str_bad_format(void **state)
 	enum daos_acl_principal_type	type;
 	char				*name;
 
-	assert_int_equal(daos_acl_principal_from_str("", &type, &name),
-			 -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("USER@", &type, &name),
-			 -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("U:name@", &type, &name),
-			 -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("G:name@", &type, &name),
-			 -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("user:name@", &type,
-			 &name), -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("group:name@", &type,
-			 &name), -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("x:name@", &type, &name),
-			 -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("name@", &type, &name),
-			 -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("", &type, &name),
+			-DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("USER@", &type, &name),
+			-DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("U:name@", &type, &name),
+			-DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("G:name@", &type, &name),
+			-DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("user:name@", &type,
+						    &name), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("group:name@", &type,
+						    &name), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("x:name@", &type, &name),
+			-DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("name@", &type, &name),
+			-DER_INVAL);
 }
 
 static void
@@ -849,14 +833,14 @@ test_acl_principal_from_str_invalid_name(void **state)
 	enum daos_acl_principal_type	type;
 	char				*name;
 
-	assert_int_equal(daos_acl_principal_from_str("u:", &type, &name),
-			 -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("g:", &type, &name),
-			 -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("u:name@name@", &type,
-			 &name), -DER_INVAL);
-	assert_int_equal(daos_acl_principal_from_str("u:name", &type,
-			 &name), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("u:", &type, &name),
+			-DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("g:", &type, &name),
+			-DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("u:name@name@", &type,
+						    &name), -DER_INVAL);
+	assert_rc_equal(daos_acl_principal_from_str("u:name", &type,
+						    &name), -DER_INVAL);
 }
 
 int
@@ -905,5 +889,6 @@ main(void)
 		cmocka_unit_test(test_acl_principal_from_str_invalid_name),
 	};
 
-	return cmocka_run_group_tests(tests, NULL, NULL);
+	return cmocka_run_group_tests_name("common_acl_principal",
+					   tests, NULL, NULL);
 }

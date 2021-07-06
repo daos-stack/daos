@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of the DAOS server. It implements the DAOS storage
@@ -34,7 +17,7 @@
 #define D_LOGFAC	DD_FAC(mgmt)
 
 #include <signal.h>
-#include <daos_srv/daos_server.h>
+#include <daos_srv/daos_engine.h>
 #include <daos_srv/rsvc.h>
 #include <daos/drpc_modules.h>
 #include <daos_mgmt.h>
@@ -47,6 +30,7 @@ const int max_svc_nreplicas = 13;
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply = ds_mgmt_tgt_create_post_reply,
 };
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
@@ -88,18 +72,6 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_SET_RANK:
 		ds_mgmt_drpc_set_rank(drpc_req, drpc_resp);
 		break;
-	case DRPC_METHOD_MGMT_CREATE_MS:
-		ds_mgmt_drpc_create_mgmt_svc(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_START_MS:
-		ds_mgmt_drpc_start_mgmt_svc(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_GET_ATTACH_INFO:
-		ds_mgmt_drpc_get_attach_info(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_JOIN:
-		ds_mgmt_drpc_join(drpc_req, drpc_resp);
-		break;
 	case DRPC_METHOD_MGMT_POOL_CREATE:
 		ds_mgmt_drpc_pool_create(drpc_req, drpc_resp);
 		break;
@@ -139,11 +111,14 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_DEV_SET_FAULTY:
 		ds_mgmt_drpc_dev_set_faulty(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_DEV_REPLACE:
+		ds_mgmt_drpc_dev_replace(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_DEV_IDENTIFY:
+		ds_mgmt_drpc_dev_identify(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_POOL_GET_ACL:
 		ds_mgmt_drpc_pool_get_acl(drpc_req, drpc_resp);
-		break;
-	case DRPC_METHOD_MGMT_LIST_POOLS:
-		ds_mgmt_drpc_list_pools(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_POOL_OVERWRITE_ACL:
 		ds_mgmt_drpc_pool_overwrite_acl(drpc_req, drpc_resp);
@@ -165,6 +140,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_CONT_SET_OWNER:
 		ds_mgmt_drpc_cont_set_owner(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_GROUP_UPDATE:
+		ds_mgmt_drpc_group_update(drpc_req, drpc_resp);
 		break;
 	default:
 		drpc_resp->status = DRPC__STATUS__UNKNOWN_METHOD;
@@ -290,8 +268,8 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 out:
-	out = crt_reply_get(rpc);
 	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
+	out = crt_reply_get(rpc);
 	out->p_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -338,8 +316,8 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 		D_GOTO(out, rc);
 	}
 out:
-	out = crt_reply_get(rpc);
 	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
+	out = crt_reply_get(rpc);
 	out->m_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -363,6 +341,7 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	 * fi_cq_readerr got err: 5(Input/output error) ..
 	 */
 	int i;
+
 	for (i = 0; i < 200; i++) {
 		ABT_thread_yield();
 		usleep(10);
@@ -377,6 +356,75 @@ ds_mgmt_hdlr_svc_rip(crt_rpc_t *rpc)
 	D_PRINT("Service rank %d is being killed by signal %d... farewell\n",
 		rank, sig);
 	kill(getpid(), sig);
+}
+
+void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_pool_get_svcranks_in	*in;
+	struct mgmt_pool_get_svcranks_out	*out;
+	int					 rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	D_DEBUG(DB_MGMT, "get svcranks for pool "DF_UUIDF"\n",
+		DP_UUID(in->gsr_puuid));
+
+	out = crt_reply_get(rpc);
+
+	rc =  ds_get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
+	if (rc == -DER_NONEXIST) /* not an error */
+		D_DEBUG(DB_MGMT, DF_UUID": get_pool_svc_ranks() upcall failed, "
+			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	else if (rc != 0)
+		D_ERROR(DF_UUID": get_pool_svc_ranks() upcall failed, "
+			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	out->gsr_rc = rc;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID": crt_reply_send() failed, "DF_RC"\n",
+			DP_UUID(in->gsr_puuid), DP_RC(rc));
+
+	d_rank_list_free(out->gsr_ranks);
+}
+
+void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_pool_find_in	*in;
+	struct mgmt_pool_find_out	*out;
+	int					 rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	D_DEBUG(DB_MGMT, "find pool uuid:"DF_UUID", lbl %s\n",
+		DP_UUID(in->pfi_puuid), in->pfi_label);
+
+	out = crt_reply_get(rpc);
+
+	if (in->pfi_bylabel) {
+		rc = ds_pool_find_bylabel(in->pfi_label, out->pfo_puuid,
+					  &out->pfo_ranks);
+	} else {
+		rc = ds_get_pool_svc_ranks(in->pfi_puuid, &out->pfo_ranks);
+	}
+	if (rc == -DER_NONEXIST) /* not an error */
+		D_DEBUG(DB_MGMT, DF_UUID": %s: ds_pool_find() not found, "
+			DF_RC"\n", DP_UUID(in->pfi_puuid), in->pfi_label,
+			DP_RC(rc));
+	else if (rc != 0)
+		D_ERROR(DF_UUID": %s: ds_pool_find_bylabel() upcall failed, "
+			DF_RC"\n", DP_UUID(in->pfi_puuid), in->pfi_label,
+			DP_RC(rc));
+	out->pfo_rc = rc;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID": %s: crt_reply_send() failed, "DF_RC"\n",
+			DP_UUID(in->pfi_puuid), in->pfi_label, DP_RC(rc));
+
+	d_rank_list_free(out->pfo_ranks);
 }
 
 static int

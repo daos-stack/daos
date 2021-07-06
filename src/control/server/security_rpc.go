@@ -1,35 +1,17 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
 
 import (
 	"crypto"
-	"encoding/hex"
 	"fmt"
 	"path/filepath"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -45,11 +27,10 @@ type SecurityModule struct {
 
 // NewSecurityModule creates a new security module with a transport config
 func NewSecurityModule(log logging.Logger, tc *security.TransportConfig) *SecurityModule {
-	mod := &SecurityModule{
+	return &SecurityModule{
 		log:    log,
 		config: tc,
 	}
-	return mod
 }
 
 func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error) {
@@ -61,7 +42,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 
 	cred := req.Cred
 	if cred == nil || cred.GetToken() == nil || cred.GetVerifier() == nil {
-		m.log.Errorf("Invalid credential: %+v", cred)
+		m.log.Error("malformed credential")
 		return m.validateRespWithStatus(drpc.DaosInvalidInput)
 	}
 
@@ -82,7 +63,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 	// Check our verifier
 	err = auth.VerifyToken(key, cred.GetToken(), cred.GetVerifier().GetData())
 	if err != nil {
-		m.log.Errorf("cred verification failed: %v for verifier %s", err, hex.Dump(cred.GetVerifier().GetData()))
+		m.log.Errorf("cred verification failed: %v", err)
 		return m.validateRespWithStatus(drpc.DaosNoPermission)
 	}
 
@@ -95,8 +76,7 @@ func (m *SecurityModule) processValidateCredentials(body []byte) ([]byte, error)
 }
 
 func (m *SecurityModule) validateRespWithStatus(status drpc.DaosStatus) ([]byte, error) {
-	resp := &auth.ValidateCredResp{Status: int32(status)}
-	return drpc.Marshal(resp)
+	return drpc.Marshal(&auth.ValidateCredResp{Status: int32(status)})
 }
 
 // HandleCall is the handler for calls to the SecurityModule

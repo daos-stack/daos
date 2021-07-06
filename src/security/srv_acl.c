@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #include <unistd.h>
@@ -788,6 +771,18 @@ ds_sec_cont_can_write_data(uint64_t cont_capas)
 	return (cont_capas & CONT_CAPA_WRITE_DATA) != 0;
 }
 
+uint64_t
+ds_sec_cont_capa_write_data_enable(uint64_t cont_capas)
+{
+	return cont_capas | ((uint64_t)CONT_CAPA_WRITE_DATA);
+}
+
+uint64_t
+ds_sec_cont_capa_write_data_disable(uint64_t cont_capas)
+{
+	return cont_capas & (~(uint64_t)CONT_CAPA_WRITE_DATA);
+}
+
 bool
 ds_sec_cont_can_read_data(uint64_t cont_capas)
 {
@@ -798,9 +793,10 @@ uint64_t
 ds_sec_get_rebuild_cont_capabilities(void)
 {
 	/*
-	 * Internally generated rebuild container handles can read data
+	 * Internally generated rebuild container handles can read data or write
+	 * data.
 	 */
-	return CONT_CAPA_READ_DATA;
+	return CONT_CAPA_READ_DATA | CONT_CAPA_WRITE_DATA;
 }
 
 uint64_t

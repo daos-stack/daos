@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
@@ -26,103 +9,142 @@ package server
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// IOServerInstance encapsulates control-plane specific configuration
-// and functionality for managed I/O server instances. The distinction
-// between this structure and what's in the ioserver package is that the
-// ioserver package is only concerned with configuring and executing
-// a single daos_io_server instance. IOServerInstance is intended to
-// be used with IOServerHarness to manage and monitor multiple instances
+type (
+	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
+	onAwaitFormatFn  func(context.Context, uint32, string) error
+	onStorageReadyFn func(context.Context) error
+	onReadyFn        func(context.Context) error
+	onInstanceExitFn func(context.Context, uint32, system.Rank, error, uint64) error
+)
+
+// EngineInstance encapsulates control-plane specific configuration
+// and functionality for managed I/O Engine instances. The distinction
+// between this structure and what's in the engine package is that the
+// engine package is only concerned with configuring and executing
+// a single daos_engine instance. EngineInstance is intended to
+// be used with EngineHarness to manage and monitor multiple instances
 // per node.
-type IOServerInstance struct {
-	log               logging.Logger
-	runner            IOServerRunner
-	bdevClassProvider *bdev.ClassProvider
-	scmProvider       *scm.Provider
-	msClient          *mgmtSvcClient
-	waitFormat        atm.Bool
-	storageReady      chan bool
-	waitDrpc          atm.Bool
-	drpcReady         chan *srvpb.NotifyReadyReq
-	ready             atm.Bool
-	startLoop         chan bool // restart loop
-	fsRoot            string
+type EngineInstance struct {
+	log             logging.Logger
+	runner          EngineRunner
+	bdevProvider    *bdev.Provider
+	scmProvider     *scm.Provider
+	waitFormat      atm.Bool
+	storageReady    chan bool
+	waitDrpc        atm.Bool
+	drpcReady       chan *srvpb.NotifyReadyReq
+	ready           atm.Bool
+	startRequested  chan bool
+	fsRoot          string
+	hostFaultDomain *system.FaultDomain
+	joinSystem      systemJoinFn
+	onAwaitFormat   []onAwaitFormatFn
+	onStorageReady  []onStorageReadyFn
+	onReady         []onReadyFn
+	onInstanceExit  []onInstanceExitFn
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
+	_cancelCtx  context.CancelFunc
 	_drpcClient drpc.DomainSocketClient
 	_superblock *Superblock
 	_lastErr    error // populated when harness receives signal
 }
 
-// NewIOServerInstance returns an *IOServerInstance initialized with
+// NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
-func NewIOServerInstance(log logging.Logger,
-	bcp *bdev.ClassProvider, sp *scm.Provider,
-	msc *mgmtSvcClient, r IOServerRunner) *IOServerInstance {
+func NewEngineInstance(log logging.Logger, bp *bdev.Provider, sp *scm.Provider,
+	joinFn systemJoinFn, r EngineRunner) *EngineInstance {
 
-	return &IOServerInstance{
-		log:               log,
-		runner:            r,
-		bdevClassProvider: bcp,
-		scmProvider:       sp,
-		msClient:          msc,
-		drpcReady:         make(chan *srvpb.NotifyReadyReq),
-		storageReady:      make(chan bool),
-		startLoop:         make(chan bool),
+	return &EngineInstance{
+		log:            log,
+		runner:         r,
+		bdevProvider:   bp,
+		scmProvider:    sp,
+		joinSystem:     joinFn,
+		drpcReady:      make(chan *srvpb.NotifyReadyReq),
+		storageReady:   make(chan bool),
+		startRequested: make(chan bool),
 	}
 }
 
-// isAwaitingFormat indicates whether IOServerInstance is waiting
+// WithHostFaultDomain adds a fault domain for the host this instance is running
+// on.
+func (ei *EngineInstance) WithHostFaultDomain(fd *system.FaultDomain) *EngineInstance {
+	ei.hostFaultDomain = fd
+	return ei
+}
+
+// isAwaitingFormat indicates whether EngineInstance is waiting
 // for an administrator action to trigger a format.
-func (srv *IOServerInstance) isAwaitingFormat() bool {
-	return srv.waitFormat.Load()
+func (ei *EngineInstance) isAwaitingFormat() bool {
+	return ei.waitFormat.Load()
 }
 
-// isStarted indicates whether IOServerInstance is in a running state.
-func (srv *IOServerInstance) isStarted() bool {
-	return srv.runner.IsRunning()
+// isStarted indicates whether EngineInstance is in a running state.
+func (ei *EngineInstance) isStarted() bool {
+	return ei.runner.IsRunning()
 }
 
-// isReady indicates whether the IOServerInstance is in a ready state.
+// isReady indicates whether the EngineInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
-func (srv *IOServerInstance) isReady() bool {
-	return srv.ready.Load() && srv.isStarted()
+func (ei *EngineInstance) isReady() bool {
+	return ei.ready.Load() && ei.isStarted()
 }
 
-// isMSReplica indicates whether or not this instance is a management service replica.
-func (srv *IOServerInstance) isMSReplica() bool {
-	return srv.hasSuperblock() && srv.getSuperblock().MS
+// OnAwaitFormat adds a list of callbacks to invoke when the instance
+// requires formatting.
+func (ei *EngineInstance) OnAwaitFormat(fns ...onAwaitFormatFn) {
+	ei.onAwaitFormat = append(ei.onAwaitFormat, fns...)
+}
+
+// OnStorageReady adds a list of callbacks to invoke when the instance
+// storage becomes ready.
+func (ei *EngineInstance) OnStorageReady(fns ...onStorageReadyFn) {
+	ei.onStorageReady = append(ei.onStorageReady, fns...)
+}
+
+// OnReady adds a list of callbacks to invoke when the instance
+// becomes ready.
+func (ei *EngineInstance) OnReady(fns ...onReadyFn) {
+	ei.onReady = append(ei.onReady, fns...)
+}
+
+// OnInstanceExit adds a list of callbacks to invoke when the instance
+// runner (process) terminates.
+func (ei *EngineInstance) OnInstanceExit(fns ...onInstanceExitFn) {
+	ei.onInstanceExit = append(ei.onInstanceExit, fns...)
 }
 
 // LocalState returns local perspective of the current instance state
 // (doesn't consider state info held by the global system membership).
-func (srv *IOServerInstance) LocalState() system.MemberState {
+func (ei *EngineInstance) LocalState() system.MemberState {
 	switch {
-	case srv.isReady():
+	case ei.isReady():
 		return system.MemberStateReady
-	case srv.isStarted():
+	case ei.isStarted():
 		return system.MemberStateStarting
-	case srv.isAwaitingFormat():
+	case ei.isAwaitingFormat():
 		return system.MemberStateAwaitFormat
 	default:
 		return system.MemberStateStopped
@@ -130,42 +152,40 @@ func (srv *IOServerInstance) LocalState() system.MemberState {
 }
 
 // setIndex sets the server index assigned by the harness.
-func (srv *IOServerInstance) setIndex(idx uint32) {
-	srv.runner.GetConfig().Index = idx
+func (ei *EngineInstance) setIndex(idx uint32) {
+	ei.runner.GetConfig().Index = idx
 }
 
 // Index returns the server index assigned by the harness.
-func (srv *IOServerInstance) Index() uint32 {
-	return srv.runner.GetConfig().Index
+func (ei *EngineInstance) Index() uint32 {
+	return ei.runner.GetConfig().Index
 }
 
 // removeSocket removes the socket file used for dRPC communication with
 // harness and updates relevant ready states.
-func (srv *IOServerInstance) removeSocket() error {
-	fMsg := fmt.Sprintf("removing instance %d socket file", srv.Index())
+func (ei *EngineInstance) removeSocket() error {
+	fMsg := fmt.Sprintf("removing instance %d socket file", ei.Index())
 
-	dc, err := srv.getDrpcClient()
+	dc, err := ei.getDrpcClient()
 	if err != nil {
 		return errors.Wrap(err, fMsg)
 	}
-	srvSock := dc.GetSocketPath()
+	engineSock := dc.GetSocketPath()
 
-	if err := checkDrpcClientSocketPath(srvSock); err != nil {
+	if err := checkDrpcClientSocketPath(engineSock); err != nil {
 		return errors.Wrap(err, fMsg)
 	}
-	os.Remove(srvSock)
+	os.Remove(engineSock)
 
-	srv.ready.SetFalse()
+	ei.ready.SetFalse()
 
 	return nil
 }
 
-// setRank determines the instance rank and sends a SetRank dRPC request
-// to the IOServer.
-func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
-	superblock := srv.getSuperblock()
+func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.NotifyReadyReq) (system.Rank, bool, error) {
+	superblock := ei.getSuperblock()
 	if superblock == nil {
-		return errors.New("nil superblock in setRank()")
+		return system.NilRank, false, errors.New("nil superblock while determining rank")
 	}
 
 	r := system.NilRank
@@ -173,48 +193,103 @@ func (srv *IOServerInstance) setRank(ctx context.Context, ready *srvpb.NotifyRea
 		r = *superblock.Rank
 	}
 
-	if !superblock.ValidRank || !superblock.MS {
-		resp, err := srv.msClient.Join(ctx, &mgmtpb.JoinReq{
-			Uuid:  superblock.UUID,
-			Rank:  r.Uint32(),
-			Uri:   ready.Uri,
-			Nctxs: ready.Nctxs,
-			// Addr member populated in msClient
-		})
-		if err != nil {
-			return err
-		} else if resp.State == mgmtpb.JoinResp_OUT {
-			return errors.Errorf("rank %d excluded", resp.Rank)
-		}
-		r = system.Rank(resp.Rank)
+	resp, err := ei.joinSystem(ctx, &control.SystemJoinReq{
+		UUID:        superblock.UUID,
+		Rank:        r,
+		URI:         ready.GetUri(),
+		NumContexts: ready.GetNctxs(),
+		FaultDomain: ei.hostFaultDomain,
+		InstanceIdx: ei.Index(),
+	})
+	if err != nil {
+		return system.NilRank, false, err
+	} else if resp.State == system.MemberStateExcluded {
+		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
+	}
+	r = system.Rank(resp.Rank)
 
-		if !superblock.ValidRank {
-			superblock.Rank = new(system.Rank)
-			*superblock.Rank = r
-			superblock.ValidRank = true
-			srv.setSuperblock(superblock)
-			if err := srv.WriteSuperblock(); err != nil {
-				return err
-			}
+	// TODO: Check to see if ready.Uri != superblock.URI, which might
+	// need to trigger some kind of update?
+
+	if !superblock.ValidRank {
+		superblock.Rank = new(system.Rank)
+		*superblock.Rank = r
+		superblock.ValidRank = true
+		superblock.URI = ready.GetUri()
+		ei.setSuperblock(superblock)
+		if err := ei.WriteSuperblock(); err != nil {
+			return system.NilRank, resp.LocalJoin, err
 		}
 	}
 
-	if err := srv.callSetRank(r); err != nil {
+	return r, resp.LocalJoin, nil
+}
+
+func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
+	if ei.hostFaultDomain == nil {
+		return errors.New("engine instance has a nil fault domain")
+	}
+
+	superblock := ei.getSuperblock()
+	if superblock == nil {
+		return errors.New("nil superblock while updating fault domain")
+	}
+
+	newDomainStr := ei.hostFaultDomain.String()
+	if newDomainStr == superblock.HostFaultDomain {
+		// No change
+		return nil
+	}
+
+	ei.log.Infof("instance %d setting host fault domain to %q (previously %q)",
+		ei.Index(), ei.hostFaultDomain, superblock.HostFaultDomain)
+	superblock.HostFaultDomain = newDomainStr
+
+	ei.setSuperblock(superblock)
+	if err := ei.WriteSuperblock(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// handleReady determines the instance rank and sends a SetRank dRPC request
+// to the Engine.
+func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	if err := ei.updateFaultDomainInSuperblock(); err != nil {
+		ei.log.Error(err.Error()) // nonfatal
+	}
+
+	r, localJoin, err := ei.determineRank(ctx, ready)
+	if err != nil {
+		return err
+	}
+
+	// If the join was already processed because it ran on the same server,
+	// skip the rest of these steps.
+	if localJoin {
+		return nil
+	}
+
+	if err := ei.callSetRank(ctx, r); err != nil {
+		return err
+	}
+
+	if err := ei.callSetUp(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
-	dresp, err := srv.CallDrpc(drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
+func (ei *EngineInstance) callSetRank(ctx context.Context, rank system.Rank) error {
+	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetRank, &mgmtpb.SetRankReq{Rank: rank.Uint32()})
 	if err != nil {
 		return err
 	}
 
 	resp := &mgmtpb.DaosResp{}
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshall SetRank response")
+		return errors.Wrap(err, "unmarshal SetRank response")
 	}
 	if resp.Status != 0 {
 		return errors.Errorf("SetRank: %d\n", resp.Status)
@@ -224,9 +299,9 @@ func (srv *IOServerInstance) callSetRank(rank system.Rank) error {
 }
 
 // GetRank returns a valid instance rank or error.
-func (srv *IOServerInstance) GetRank() (system.Rank, error) {
+func (ei *EngineInstance) GetRank() (system.Rank, error) {
 	var err error
-	sb := srv.getSuperblock()
+	sb := ei.getSuperblock()
 
 	switch {
 	case sb == nil:
@@ -242,109 +317,24 @@ func (srv *IOServerInstance) GetRank() (system.Rank, error) {
 	return *sb.Rank, nil
 }
 
-// setTargetCount updates target count in ioserver config.
-func (srv *IOServerInstance) setTargetCount(numTargets int) {
-	srv.runner.GetConfig().TargetCount = numTargets
+// setTargetCount updates target count in engine config.
+func (ei *EngineInstance) setTargetCount(numTargets int) {
+	ei.Lock()
+	defer ei.Unlock()
+
+	ei.runner.GetConfig().TargetCount = numTargets
 }
 
-// startMgmtSvc starts the DAOS management service replica associated
-// with this instance. If no replica is associated with this instance, this
-// function is a no-op.
-func (srv *IOServerInstance) startMgmtSvc() error {
-	superblock := srv.getSuperblock()
+// GetTargetCount returns the target count set for this instance.
+func (ei *EngineInstance) GetTargetCount() int {
+	ei.RLock()
+	defer ei.RUnlock()
 
-	// should have been loaded by now
-	if superblock == nil {
-		return errors.Errorf("%s instance %d: nil superblock", DataPlaneName, srv.Index())
-	}
-
-	if superblock.CreateMS {
-		srv.log.Debugf("create MS (bootstrap=%t)", superblock.BootstrapMS)
-		if err := srv.callCreateMS(superblock); err != nil {
-			return err
-		}
-		superblock.CreateMS = false
-		superblock.BootstrapMS = false
-		srv.setSuperblock(superblock)
-		if err := srv.WriteSuperblock(); err != nil {
-			return err
-		}
-	}
-
-	if superblock.MS {
-		srv.log.Debug("start MS")
-		if err := srv.callStartMS(); err != nil {
-			return err
-		}
-
-		msInfo, err := getMgmtInfo(srv)
-		if err != nil {
-			return err
-		}
-		if msInfo.isReplica {
-			msg := "Management Service access point started"
-			if msInfo.shouldBootstrap {
-				msg += " (bootstrapped)"
-			}
-			srv.log.Info(msg)
-		}
-	}
-
-	return nil
+	return ei.runner.GetConfig().TargetCount
 }
 
-// loadModules initiates the I/O server startup sequence.
-func (srv *IOServerInstance) loadModules() error {
-	return srv.callSetUp()
-}
-
-func (srv *IOServerInstance) callCreateMS(superblock *Superblock) error {
-	msAddr, err := srv.msClient.LeaderAddress()
-	if err != nil {
-		return err
-	}
-	req := &mgmtpb.CreateMsReq{}
-	if superblock.BootstrapMS {
-		req.Bootstrap = true
-		req.Uuid = superblock.UUID
-		req.Addr = msAddr
-	}
-
-	dresp, err := srv.CallDrpc(drpc.MethodCreateMS, req)
-	if err != nil {
-		return err
-	}
-
-	resp := &mgmtpb.DaosResp{}
-	if err := proto.Unmarshal(dresp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal CreateMS response")
-	}
-	if resp.Status != 0 {
-		return errors.Errorf("CreateMS: %d\n", resp.Status)
-	}
-
-	return nil
-}
-
-func (srv *IOServerInstance) callStartMS() error {
-	dresp, err := srv.CallDrpc(drpc.MethodStartMS, nil)
-	if err != nil {
-		return err
-	}
-
-	resp := &mgmtpb.DaosResp{}
-	if err := proto.Unmarshal(dresp.Body, resp); err != nil {
-		return errors.Wrap(err, "unmarshal StartMS response")
-	}
-	if resp.Status != 0 {
-		return errors.Errorf("StartMS: %d\n", resp.Status)
-	}
-
-	return nil
-}
-
-func (srv *IOServerInstance) callSetUp() error {
-	dresp, err := srv.CallDrpc(drpc.MethodSetUp, nil)
+func (ei *EngineInstance) callSetUp(ctx context.Context) error {
+	dresp, err := ei.CallDrpc(ctx, drpc.MethodSetUp, nil)
 	if err != nil {
 		return err
 	}
@@ -361,49 +351,8 @@ func (srv *IOServerInstance) callSetUp() error {
 }
 
 // BioErrorNotify logs a blob I/O error.
-func (srv *IOServerInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
+func (ei *EngineInstance) BioErrorNotify(bio *srvpb.BioErrorReq) {
 
-	srv.log.Errorf("I/O server instance %d (target %d) has detected blob I/O error! %v",
-		srv.Index(), bio.TgtId, bio)
-}
-
-// newMember returns reference to a new member struct if one can be retrieved
-// from superblock, error otherwise. Member populated with local reply address.
-func (srv *IOServerInstance) newMember() (*system.Member, error) {
-	if !srv.hasSuperblock() {
-		return nil, errors.New("missing superblock")
-	}
-	sb := srv.getSuperblock()
-
-	msAddr, err := srv.msClient.LeaderAddress()
-	if err != nil {
-		return nil, err
-	}
-
-	addr, err := net.ResolveTCPAddr("tcp", msAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	rank, err := srv.GetRank()
-	if err != nil {
-		return nil, err
-	}
-
-	return system.NewMember(rank, sb.UUID, addr, system.MemberStateJoined), nil
-}
-
-// registerMember creates a new system.Member for given instance and adds it
-// to the system membership.
-func (srv *IOServerInstance) registerMember(membership *system.Membership) error {
-	idx := srv.Index()
-
-	m, err := srv.newMember()
-	if err != nil {
-		return errors.Wrapf(err, "instance %d: failed to extract member details", idx)
-	}
-
-	membership.AddOrReplace(m)
-
-	return nil
+	ei.log.Errorf("I/O Engine instance %d (target %d) has detected blob I/O error! %v",
+		ei.Index(), bio.TgtId, bio)
 }

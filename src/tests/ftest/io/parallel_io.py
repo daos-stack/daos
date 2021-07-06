@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import threading
@@ -30,10 +13,6 @@ import general_utils
 
 from ClusterShell.NodeSet import NodeSet
 from command_utils import CommandFailure
-from daos_utils import DaosCommand
-from test_utils_pool import TestPool
-from test_utils_container import TestContainer
-from dfuse_utils import Dfuse
 from fio_test_base import FioBase
 from ior_test_base import IorTestBase
 
@@ -47,7 +26,7 @@ class ParallelIo(FioBase, IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ParallelIo object."""
-        super(ParallelIo, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dfuse = None
         self.cont_count = None
         self.pool_count = None
@@ -57,82 +36,29 @@ class ParallelIo(FioBase, IorTestBase):
         self.pool = []
         self.container = []
 
-    def setUp(self):
-        """Set up each test case."""
-        # Start the servers and agents
-        super(ParallelIo, self).setUp()
-
-    def tearDown(self):
-        """Tear down each test case."""
-        try:
-            if self.dfuse:
-                self.dfuse.stop()
-        finally:
-            # Stop the servers and agents
-            super(ParallelIo, self).tearDown()
-
     def create_pool(self):
         """Create a TestPool object to use with ior."""
-        # Get the pool params
-        pool = TestPool(
-            self.context, dmg_command=self.get_dmg_command())
-        pool.get_params(self)
-
-        # Create a pool
-        pool.create()
-        self.pool.append(pool)
+        self.pool.append(self.get_pool(connect=False))
 
     # pylint: disable=arguments-differ
     def create_cont(self, pool):
         """Create a TestContainer object to be used to create container.
 
-          Args:
+        Args:
             pool (TestPool): TestPool object type for which container
                              needs to be created
         """
-        # Get container params
-        container = TestContainer(
-            pool, daos_command=DaosCommand(self.bin))
-        container.get_params(self)
-
-        # create container
-        container.create()
-        self.container.append(container)
-
-    def start_dfuse(self, pool=None):
-        """Create a DfuseCommand object to start dfuse.
-
-          Args:
-            pool (TestPool): Test pool object if dfuse is intended to be
-                             started using pool uuid option.
-        """
-
-        # Get Dfuse params
-        self.dfuse = Dfuse(self.hostlist_clients, self.tmp)
-        self.dfuse.get_params(self)
-
-        # update dfuse params
-        if pool:
-            self.dfuse.set_dfuse_params(pool)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
-        try:
-            # start dfuse
-            self.dfuse.run()
-        except CommandFailure as error:
-            self.log.error("Dfuse command %s failed on hosts %s",
-                           str(self.dfuse),
-                           self.dfuse.hosts,
-                           exc_info=error)
-            self.fail("Test was expected to pass but it failed.\n")
+        self.container.append(self.get_container(pool))
 
     def stat_bfree(self, path):
-        """Get stat bfree
+        """Get stat bfree.
 
-          Args:
+        Args:
             path (str): path to get free block size of.
-          Returns:
-            integer value of stat free blocks
+
+        Returns:
+            int: value of stat free blocks
+
         """
         cmd = ["ssh", "{}@{}".format(getuser(), self.hostlist_clients[0]),
                "stat -c%a -f {}".format(path)]
@@ -144,13 +70,14 @@ class ParallelIo(FioBase, IorTestBase):
         return int(result)
 
     def statvfs_pool(self, path):
-        """Method to obtain free space using statvfs
+        """Obtain the free space for the pool using statvfs.
 
-          Args:
+        Args:
             path (str): path for which free space needs to be obtained for.
 
-          Returns:
-            List containing free space info for each pool supplied in pool_obj.
+        Returns:
+            list: list of free space info for each pool supplied in pool_obj.
+
         """
         statvfs_list = []
         for _, pool in enumerate(self.pool):
@@ -162,12 +89,15 @@ class ParallelIo(FioBase, IorTestBase):
         return statvfs_list
 
     def verify_aggregation(self, reduced_space, count):
-        """Verify if expected space is returned for each pool after containers
-           were destroyed. If not, wait for 60 secs and check again. Wait 4
-           times, otherwise exit the test with a failure.
+        """Verify aggregation.
 
-          Args:
-            reduced_space: expected space to be returned
+        Verify if expected space is returned for each pool after containers
+        were destroyed. If not, wait for 60 secs and check again. Wait 4 times,
+        otherwise exit the test with a failure.
+
+        Args:
+            reduced_space (int): expected space to be returned
+            count (int): aggregation index
         """
         counter = 1
         while (self.statvfs_after_cont_destroy[count] <
@@ -203,7 +133,9 @@ class ParallelIo(FioBase, IorTestBase):
             Otherwise, try accessing the deleted container.
             This should fail.
             Check dfuse again.
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,parallelio
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=daosio,parallelio,tx
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -212,7 +144,7 @@ class ParallelIo(FioBase, IorTestBase):
 
         # Create a pool and start dfuse.
         self.create_pool()
-        self.start_dfuse(self.pool[0])
+        self.start_dfuse(self.hostlist_clients, self.pool[0], None)
         # create multiple containers
         for _ in range(self.cont_count):
             self.create_cont(self.pool[0])
@@ -221,7 +153,7 @@ class ParallelIo(FioBase, IorTestBase):
         # io on each container using fio in parallel
         for _, cont in enumerate(self.container):
             dfuse_cont_dir = self.dfuse.mount_dir.value + "/" + cont.uuid
-            cmd = u"ls -a {}".format(dfuse_cont_dir)
+            cmd = "ls -a {}".format(dfuse_cont_dir)
             try:
                 # execute bash cmds
                 ret_code = general_utils.pcmd(
@@ -230,7 +162,7 @@ class ParallelIo(FioBase, IorTestBase):
                     error_hosts = NodeSet(
                         ",".join(
                             [str(node_set) for code, node_set in
-                             ret_code.items() if code != 0]))
+                             list(ret_code.items()) if code != 0]))
                     raise CommandFailure(
                         "Error running '{}' on the following "
                         "hosts: {}".format(cmd, error_hosts))
@@ -259,10 +191,11 @@ class ParallelIo(FioBase, IorTestBase):
 
         # try accessing destroyed container, it should fail
         try:
-            self.execute_fio(self.dfuse.mount_dir.value + "/" + \
-                container_to_destroy, False)
-            self.fail("Fio was able to access destroyed container: {}".\
-                format(self.container[0].uuid))
+            self.execute_fio(
+                self.dfuse.mount_dir.value + "/" + container_to_destroy, False)
+            self.fail(
+                "Fio was able to access destroyed container: {}".format(
+                    self.container[0].uuid))
         except CommandFailure as error:
             self.log.info("This run is expected to fail")
 
@@ -311,8 +244,8 @@ class ParallelIo(FioBase, IorTestBase):
         for pool_job in pool_threads:
             pool_job.join()
 
-        # start dfuse using --svc option only.
-        self.start_dfuse()
+        # start dfuse.
+        self.start_dfuse(self.hostlist_clients, None, None)
 
         # record free space using statvfs before any data is written.
         self.statvfs_info_initial = self.statvfs_pool(
@@ -336,7 +269,7 @@ class ParallelIo(FioBase, IorTestBase):
                 cont_num = (pool_count * self.cont_count) + counter
                 dfuse_cont_dir = str(dfuse_pool_dir + "/" +
                                      self.container[cont_num].uuid)
-                cmd = u"###ls -a {}".format(dfuse_cont_dir)
+                cmd = "###ls -a {}".format(dfuse_cont_dir)
                 self.execute_cmd(cmd)
 
                 # run ior on all containers

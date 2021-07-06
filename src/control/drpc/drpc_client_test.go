@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package drpc
@@ -28,8 +11,8 @@ import (
 	"net"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 )
@@ -82,7 +65,10 @@ func newTestClientConnection(dialer *mockDialer, conn *mockConn) *ClientConnecti
 func TestNewClientConnection(t *testing.T) {
 	client := NewClientConnection(testSockPath)
 
-	common.AssertTrue(t, client != nil, "Expected a real client")
+	if client == nil {
+		t.Fatal("Expected a real client")
+		return
+	}
 	common.AssertEqual(t, client.socketPath, testSockPath,
 		"Should match the path we passed in")
 	common.AssertFalse(t, client.IsConnected(), "Shouldn't be connected yet")
@@ -224,7 +210,10 @@ func TestClient_SendMsg_Success(t *testing.T) {
 	response, err := client.SendMsg(call)
 
 	common.AssertTrue(t, err == nil, "Expected no error")
-	common.AssertTrue(t, response != nil, "Expected a real response")
+	if response == nil {
+		t.Fatal("Expected a real response")
+		return
+	}
 	common.AssertEqual(t, response.Sequence, expectedResp.Sequence,
 		"Response should match expected")
 	common.AssertEqual(t, response.Status, expectedResp.Status,
@@ -294,7 +283,7 @@ func TestClient_SendMsg_UnmarshalResponseFailure(t *testing.T) {
 
 	response, err := client.SendMsg(call)
 
-	expectedErr := "failed to unmarshal dRPC response: unexpected EOF"
+	expectedErr := errors.New("failed to unmarshal dRPC response")
 	common.AssertTrue(t, response == nil, "Expected no response")
-	common.ExpectError(t, err, expectedErr, "Expected protobuf error")
+	common.CmpErr(t, expectedErr, err)
 }

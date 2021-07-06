@@ -1,11 +1,9 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
   test_clients:
     - client-B
-timeout: 200
+timeout: 80
 server_config:
   name: daos_server
   port: 10001
@@ -26,8 +24,8 @@ dmg:
 pool:
   control_method: dmg
   mode: 146
-  scm_size: "16GB"
-  nvme_size: "32GB"
+  scm_size: 16GB
+  nvme_size: 32GB
   name: daos_server
 container:
     type: POSIX
@@ -39,16 +37,27 @@ ior:
   dfs_destroy: False
 
 exp_vals:
-  pool_info: ['8', '0', '0', '1']
-  target_cnt: ['8']
-  scm_info: ['16 GB', '16 GB', '2.0 GB', '2.0 GB', '2.0 GB']
-  nvme_info: ['32 GB', '32 GB', '4.0 GB', '4.0 GB', '4.0 GB']
-  rebuild_info: ['0', '0']
+  pool_status: 0
+  total_targets: 8
+  active_targets: 8
+  total_nodes: 1
+  disabled_targets: 0
+  version: 1
+  leader: 0
+  scm:
+    total: 16000000000
+  nvme:
+    total: 32000000000
+  rebuild:
+    rebuild_status: 0
+    state: "idle"
+    objects: 0
+    records: 0
 
 pool_uuids:
   uuids:
     -
-      #alpha_upper
+      # alpha_upper
       - "WWWWWWWW-YYYY-ZZZZ-VVVV-AAAAABBCCDDE"
       - "FAIL"
     -
@@ -76,6 +85,6 @@ pool_uuids:
       - "! @#$%^&*()_+{}|:<>?-=[];,./"
       - "FAIL"
     -
-      # special_aplanumeric_chars
+      # special_alphanumeric_chars
       - "abc-=*12----1@3c-4%DE-&5_,0+.k"
       - "FAIL"

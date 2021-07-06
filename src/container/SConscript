@@ -11,17 +11,26 @@ def scons():
     prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
 
     common = denv.SharedObject(['rpc.c'])
-    # ds_cont: Container Server
-    ds_cont = daos_build.library(denv, 'cont',
-                                 ['srv.c', 'srv_container.c', 'srv_epoch.c',
-                                  'srv_target.c', 'srv_layout.c', 'oid_iv.c',
-                                  'container_iv.c', 'srv_csum_recalc.c',
-                                  'srv_cli.c', common], install_off="../..")
-    denv.Install('$PREFIX/lib64/daos_srv', ds_cont)
 
     # dc_cont: Container Client
     dc_co_tgts = denv.SharedObject(['cli.c']) + common
     Export('dc_co_tgts')
+
+    if not prereqs.server_requested():
+        return
+
+    # ds_cont: Container Server
+    senv = denv.Clone()
+    prereqs.require(senv, 'pmdk', headers_only=True)
+    senv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    ds_cont = daos_build.library(senv, 'cont',
+                                 ['srv.c', 'srv_container.c', 'srv_epoch.c',
+                                  'srv_target.c', 'srv_layout.c', 'oid_iv.c',
+                                  'container_iv.c', 'srv_csum_recalc.c',
+                                  'srv_cli.c', 'srv_oi_table.c',
+                                  'srv_metrics.c', common],
+                                 install_off="../..")
+    senv.Install('$PREFIX/lib64/daos_srv', ds_cont)
 
 if __name__ == "SCons.Script":
     scons()

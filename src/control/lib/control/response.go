@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -26,14 +9,19 @@ package control
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 
 	"github.com/dustin/go-humanize/english"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+)
+
+var (
+	errNoMsResponse = errors.New("response did not contain a management service response")
 )
 
 type (
@@ -48,14 +36,9 @@ type (
 	// HostResponseChan defines a channel of *HostResponse items returned
 	// from asynchronous unary RPC invokers.
 	HostResponseChan chan *HostResponse
-
-	// hostErrorsGetter define an interface for responses which return
-	// a HostErrorsMap.
-	hostErrorsGetter interface {
-		getHostErrors() HostErrorsMap
-	}
 )
 
+// HostErrorsResp is a response type containing a HostErrorsMap.
 type HostErrorsResp struct {
 	HostErrors HostErrorsMap `json:"host_errors"`
 }
@@ -67,19 +50,26 @@ func (her *HostErrorsResp) addHostError(hostAddr string, hostErr error) error {
 	return her.HostErrors.Add(hostAddr, hostErr)
 }
 
-func (her *HostErrorsResp) getHostErrors() HostErrorsMap {
+// GetHostErrors retrieves a HostErrorsMap from a response type.
+func (her *HostErrorsResp) GetHostErrors() HostErrorsMap {
 	return her.HostErrors
 }
 
+// Errors returns an error containing brief description of errors in map.
 func (her *HostErrorsResp) Errors() error {
 	if len(her.HostErrors) > 0 {
-		errCount := 0
+		erroredHosts := make(map[string]bool)
 		for _, hes := range her.HostErrors {
-			errCount += hes.HostSet.Count()
+			hostsInSet := strings.Split(hes.HostSet.DerangedString(), ",")
+			for _, host := range hostsInSet {
+				if _, exists := erroredHosts[host]; !exists {
+					erroredHosts[host] = true
+				}
+			}
 		}
 
 		return errors.Errorf("%s had errors",
-			english.Plural(errCount, "host", "hosts"))
+			english.Plural(len(erroredHosts), "host", "hosts"))
 	}
 	return nil
 }
@@ -178,10 +168,25 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 	}
 
 	if len(ur.Responses) == 0 {
-		return nil, errors.New("response did not contain a management service response")
+		return nil, errNoMsResponse
 	}
 
-	msResp := ur.Responses[0]
+	// As we may have sent the request to multiple MS replicas, just pick
+	// through the responses to find the one that succeeded. If none succeeded,
+	// return the error from the last response.
+	var msResp *HostResponse
+	for _, msResp = range ur.Responses {
+		if msResp.Error != nil || msResp.Message == nil {
+			continue
+		}
+
+		break
+	}
+
+	if msResp == nil {
+		return nil, errNoMsResponse
+	}
+
 	if msResp.Error != nil {
 		return nil, msResp.Error
 	}
@@ -199,7 +204,10 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
-		return errors.Wrap(err, "failed to get MS response")
+		if IsConnectionError(err) {
+			return errMSConnectionFailure
+		}
+		return err
 	}
 
 	return convert.Types(msResp, out)

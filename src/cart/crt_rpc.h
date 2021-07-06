@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of CaRT. It gives out the data types internally used by
@@ -40,7 +23,7 @@
 
 extern struct d_binheap_ops crt_timeout_bh_ops;
 void crt_hdlr_rank_evict(crt_rpc_t *rpc_req);
-extern void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
+void crt_hdlr_memb_sample(crt_rpc_t *rpc_req);
 
 /* RPC flags, these are sent over the wire as part of the protocol so can
  * be set at the origin and read by the target
@@ -76,14 +59,14 @@ struct crt_common_hdr {
 	uint32_t	cch_flags;
 	/* HLC timestamp */
 	uint64_t	cch_hlc;
+	/* RPC id */
+	uint64_t	cch_rpcid;
 	/* destination rank in default primary group */
 	d_rank_t	cch_dst_rank;
 	/* originator rank in default primary group */
 	d_rank_t	cch_src_rank;
 	/* tag to which rpc request was sent to */
 	uint32_t	cch_dst_tag;
-	/* RPC id */
-	uint64_t	cch_rpcid;
 	/* used in crp_reply_hdr to propagate rpc failure back to sender */
 	uint32_t	cch_rc;
 };
@@ -160,7 +143,10 @@ struct crt_rpc_priv {
 	struct crt_hg_hdl	*crp_hdl_reuse; /* reused hg_hdl */
 	crt_phy_addr_t		crp_tgt_uri; /* target uri address */
 	crt_rpc_t		*crp_ul_req; /* uri lookup request */
+
 	uint32_t		crp_ul_retry; /* uri lookup retry counter */
+
+	int			crp_ul_idx; /* index last tried */
 
 	struct crt_grp_priv	*crp_grp_priv; /* group private pointer */
 	/*
@@ -186,7 +172,9 @@ struct crt_rpc_priv {
 				/* RPC is tracked by the context */
 				crp_ctx_tracked:1,
 				/* 1 if RPC is successfully put on the wire */
-				crp_on_wire:1;
+				crp_on_wire:1,
+				/* 1 if RPC fails HLC epsilon check */
+				crp_fail_hlc:1;
 	uint32_t		crp_refcount;
 	struct crt_opc_info	*crp_opc_info;
 	/* corpc info, only valid when (crp_coll == 1) */
@@ -197,16 +185,38 @@ struct crt_rpc_priv {
 	struct crt_corpc_hdr	crp_coreq_hdr; /* collective request header */
 };
 
-#define CRT_PROTO_INTERNAL_VERSION 2
-#define CRT_PROTO_FI_VERSION 0
+#define CRT_PROTO_INTERNAL_VERSION 4
+#define CRT_PROTO_FI_VERSION 3
+#define CRT_PROTO_ST_VERSION 1
+#define CRT_PROTO_CTL_VERSION 1
+#define CRT_PROTO_IV_VERSION 1
 
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
+ * TODO: CRT_OPC_CTL_LS should be in the ctl protocol however cart_ctl uses
+ * this to ping the server waiting for start so needs to work before
+ * proto_query() can be called.
  */
 #define CRT_INTERNAL_RPCS_LIST						\
 	X(CRT_OPC_URI_LOOKUP,						\
 		0, &CQF_crt_uri_lookup,					\
 		crt_hdlr_uri_lookup, NULL)				\
+	X(CRT_OPC_PROTO_QUERY,						\
+		0, &CQF_crt_proto_query,				\
+		crt_hdlr_proto_query, NULL)				\
+	X(CRT_OPC_CTL_LS,						\
+		0, &CQF_crt_ctl_ep_ls,					\
+		crt_hdlr_ctl_ls, NULL)					\
+
+#define CRT_FI_RPCS_LIST						\
+	X(CRT_OPC_CTL_FI_TOGGLE,					\
+		0, &CQF_crt_ctl_fi_toggle,				\
+		crt_hdlr_ctl_fi_toggle, NULL)				\
+	X(CRT_OPC_CTL_FI_SET_ATTR,					\
+		0, &CQF_crt_ctl_fi_attr_set,				\
+		crt_hdlr_ctl_fi_attr_set, NULL)				\
+
+#define CRT_ST_RPCS_LIST						\
 	X(CRT_OPC_SELF_TEST_BOTH_EMPTY,					\
 		0, NULL,						\
 		crt_self_test_msg_handler, NULL)			\
@@ -240,6 +250,25 @@ struct crt_rpc_priv {
 	X(CRT_OPC_SELF_TEST_STATUS_REQ,					\
 		0, &CQF_crt_st_status_req,				\
 		crt_self_test_status_req_handler, NULL)			\
+
+#define CRT_CTL_RPCS_LIST						\
+	X(CRT_OPC_CTL_LOG_SET,						\
+		0, &CQF_crt_ctl_log_set,				\
+		crt_hdlr_ctl_log_set, NULL)				\
+	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
+		0, &CQF_crt_ctl_log_add_msg,				\
+		crt_hdlr_ctl_log_add_msg, NULL)				\
+	X(CRT_OPC_CTL_GET_URI_CACHE,					\
+		0, &CQF_crt_ctl_get_uri_cache,				\
+		crt_hdlr_ctl_get_uri_cache, NULL)			\
+	X(CRT_OPC_CTL_GET_HOSTNAME,					\
+		0, &CQF_crt_ctl_get_host,				\
+		crt_hdlr_ctl_get_hostname, NULL)			\
+	X(CRT_OPC_CTL_GET_PID,						\
+		0, &CQF_crt_ctl_get_pid,				\
+		crt_hdlr_ctl_get_pid, NULL)				\
+
+#define CRT_IV_RPCS_LIST						\
 	X(CRT_OPC_IV_FETCH,						\
 		0, &CQF_crt_iv_fetch,					\
 		crt_hdlr_iv_fetch, NULL)				\
@@ -249,56 +278,59 @@ struct crt_rpc_priv {
 	X(CRT_OPC_IV_SYNC,						\
 		0, &CQF_crt_iv_sync,					\
 		crt_hdlr_iv_sync, &crt_iv_sync_co_ops)			\
-	X(CRT_OPC_CTL_GET_URI_CACHE,					\
-		0, &CQF_crt_ctl_get_uri_cache,				\
-		crt_hdlr_ctl_get_uri_cache, NULL)			\
-	X(CRT_OPC_CTL_LS,						\
-		0, &CQF_crt_ctl_ep_ls,					\
-		crt_hdlr_ctl_ls, NULL)					\
-	X(CRT_OPC_CTL_GET_HOSTNAME,					\
-		0, &CQF_crt_ctl_get_host,				\
-		crt_hdlr_ctl_get_hostname, NULL)			\
-	X(CRT_OPC_CTL_GET_PID,						\
-		0, &CQF_crt_ctl_get_pid,				\
-		crt_hdlr_ctl_get_pid, NULL)				\
-	X(CRT_OPC_PROTO_QUERY,						\
-		0, &CQF_crt_proto_query,				\
-		crt_hdlr_proto_query, NULL)
-
-#define CRT_FI_RPCS_LIST						\
-	X(CRT_OPC_CTL_FI_TOGGLE,					\
-		0, &CQF_crt_ctl_fi_toggle,				\
-		crt_hdlr_ctl_fi_toggle, NULL)				\
-	X(CRT_OPC_CTL_FI_SET_ATTR,					\
-		0, &CQF_crt_ctl_fi_attr_set,				\
-		crt_hdlr_ctl_fi_attr_set, NULL)				\
-	X(CRT_OPC_CTL_LOG_SET,						\
-		0, &CQF_crt_ctl_log_set,				\
-		crt_hdlr_ctl_log_set, NULL)				\
-	X(CRT_OPC_CTL_LOG_ADD_MSG,					\
-		0, &CQF_crt_ctl_log_add_msg,				\
-		crt_hdlr_ctl_log_add_msg, NULL)
 
 /* Define for RPC enum population below */
 #define X(a, b, c, d, e) a,
 
 /* CRT internal opcode definitions, must be 0xFF00xxxx.*/
+#define CRT_OPC_INTERNAL_BASE	0xFF000000UL
 enum {
 	__FIRST_INTERNAL  = CRT_PROTO_OPC(CRT_OPC_INTERNAL_BASE,
-					CRT_PROTO_INTERNAL_VERSION, 0) - 1,
+					  CRT_PROTO_INTERNAL_VERSION, 0) - 1,
 	CRT_INTERNAL_RPCS_LIST
 };
 
+/* CRT fault injection opcode definitions, must be 0xFF00xxxx.*/
 #define CRT_OPC_FI_BASE		0xF1000000UL
-
-/* CRT internal opcode definitions, must be 0xFF00xxxx.*/
 enum {
 	__FIRST_FI  = CRT_PROTO_OPC(CRT_OPC_FI_BASE,
-				CRT_PROTO_FI_VERSION, 0) - 1,
+				    CRT_PROTO_FI_VERSION, 0) - 1,
 	CRT_FI_RPCS_LIST
 };
 
+/* CRT self-test opcode definitions, must be 0xFF00xxxx.*/
+#define CRT_OPC_ST_BASE		0xF2000000UL
+enum {
+	__FIRST_ST  = CRT_PROTO_OPC(CRT_OPC_ST_BASE,
+				    CRT_PROTO_ST_VERSION, 0) - 1,
+	CRT_ST_RPCS_LIST
+};
+
+/* CRT ctl opcode definitions, must be 0xFF00xxxx.*/
+#define CRT_OPC_CTL_BASE		0xF3000000UL
+enum {
+	__FIRST_CTL  = CRT_PROTO_OPC(CRT_OPC_CTL_BASE,
+				     CRT_PROTO_CTL_VERSION, 0) - 1,
+	CRT_CTL_RPCS_LIST
+};
+
+/* CRT IV opcode definitions, must be 0xFF00xxxx.*/
+#define CRT_OPC_IV_BASE		0xF4000000UL
+enum {
+	__FIRST_IV  = CRT_PROTO_OPC(CRT_OPC_IV_BASE,
+				    CRT_PROTO_IV_VERSION, 0) - 1,
+	CRT_IV_RPCS_LIST
+};
+
+#define CRT_OPC_SWIM_BASE	0xFE000000UL
+
 #undef X
+
+static inline bool
+crt_opc_is_swim(crt_opcode_t opc)
+{
+	return ((opc & CRT_PROTO_BASEOPC_MASK) == CRT_OPC_SWIM_BASE);
+}
 
 #define CRT_SEQ_GRP_CACHE					 \
 	((d_rank_t)		(gc_rank)		CRT_VAR) \
@@ -401,7 +433,7 @@ CRT_RPC_DECLARE(crt_st_status_req,
 #define CRT_ISEQ_IV_FETCH	/* input fields */		 \
 	/* Namespace ID */					 \
 	((uint32_t)		(ifi_ivns_id)		CRT_VAR) \
-	((uint32_t)		(pad1)			CRT_VAR) \
+	((uint32_t)		(ifi_grp_ver)		CRT_VAR) \
 	((crt_group_id_t)	(ifi_ivns_group)	CRT_VAR) \
 	/* IV Key */						 \
 	((d_iov_t)		(ifi_key)		CRT_VAR) \
@@ -420,7 +452,7 @@ CRT_RPC_DECLARE(crt_iv_fetch, CRT_ISEQ_IV_FETCH, CRT_OSEQ_IV_FETCH)
 #define CRT_ISEQ_IV_UPDATE	/* input fields */		 \
 	/* IV namespace ID */					 \
 	((uint32_t)		(ivu_ivns_id)		CRT_VAR) \
-	((uint32_t)		(pad1)			CRT_VAR) \
+	((uint32_t)		(ivu_grp_ver)		CRT_VAR) \
 	((crt_group_id_t)	(ivu_ivns_group)	CRT_VAR) \
 	/* IOV for key */					 \
 	((d_iov_t)		(ivu_key)		CRT_VAR) \
@@ -444,7 +476,7 @@ CRT_RPC_DECLARE(crt_iv_update, CRT_ISEQ_IV_UPDATE, CRT_OSEQ_IV_UPDATE)
 #define CRT_ISEQ_IV_SYNC	/* input fields */		 \
 	/* IV Namespace ID */					 \
 	((uint32_t)		(ivs_ivns_id)		CRT_VAR) \
-	((uint32_t)		(pad1)			CRT_VAR) \
+	((uint32_t)		(ivs_grp_ver)		CRT_VAR) \
 	((crt_group_id_t)	(ivs_ivns_group)	CRT_VAR) \
 	/* IOV for key */					 \
 	((d_iov_t)		(ivs_key)		CRT_VAR) \
@@ -504,8 +536,8 @@ CRT_RPC_DECLARE(crt_proto_query, CRT_ISEQ_PROTO_QUERY, CRT_OSEQ_PROTO_QUERY)
 	((uint64_t)		(fa_max_faults)		CRT_VAR) \
 	((uint32_t)		(fa_err_code)		CRT_VAR) \
 	((uint32_t)		(fa_probability_x)	CRT_VAR) \
-	((uint32_t)		(fa_probability_y)	CRT_VAR) \
-	((d_string_t)		(fa_argument)		CRT_VAR)
+	((d_string_t)		(fa_argument)		CRT_VAR) \
+	((uint32_t)		(fa_probability_y)	CRT_VAR)
 
 #define CRT_OSEQ_CTL_FI_ATTR_SET	/* output fields */	 \
 	((int32_t)		(fa_ret)		CRT_VAR)
@@ -559,8 +591,8 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 		D_ASSERTF((RPC)->crp_refcount != 0,			\
 			  "%p decref from zero\n", (RPC));		\
 		__ref = --(RPC)->crp_refcount;				\
-		RPC_TRACE(DB_NET, RPC, "decref to %d.\n", __ref);	\
 		D_SPIN_UNLOCK(&(RPC)->crp_lock);			\
+		RPC_TRACE(DB_NET, RPC, "decref to %d.\n", __ref);	\
 		if (__ref == 0)						\
 			crt_req_destroy(RPC);				\
 	} while (0)
@@ -581,7 +613,6 @@ CRT_RPC_DECLARE(crt_ctl_log_add_msg, CRT_ISEQ_CTL_LOG_ADD_MSG,
 
 void crt_req_destroy(struct crt_rpc_priv *rpc_priv);
 
-
 static inline bool
 crt_rpc_cb_customized(struct crt_context *crt_ctx,
 		      crt_rpc_t *rpc_pub)
@@ -598,7 +629,7 @@ int crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 void crt_rpc_priv_fini(struct crt_rpc_priv *rpc_priv);
 int crt_req_create_internal(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep,
 			    crt_opcode_t opc, bool forward, crt_rpc_t **req);
-int crt_internal_rpc_register(void);
+int crt_internal_rpc_register(bool server);
 int crt_rpc_common_hdlr(struct crt_rpc_priv *rpc_priv);
 int crt_req_send_internal(struct crt_rpc_priv *rpc_priv);
 
@@ -616,20 +647,21 @@ crt_req_timedout(struct crt_rpc_priv *rpc_priv)
 static inline uint64_t
 crt_set_timeout(struct crt_rpc_priv *rpc_priv)
 {
-	uint32_t	timeout_sec;
 	uint64_t	sec_diff;
 
 	D_ASSERT(rpc_priv != NULL);
 
-	timeout_sec = rpc_priv->crp_timeout_sec > 0 ?
-		      rpc_priv->crp_timeout_sec : crt_gdata.cg_timeout;
+	if (rpc_priv->crp_timeout_sec == 0)
+		rpc_priv->crp_timeout_sec = crt_gdata.cg_timeout;
 
-	sec_diff = d_timeus_secdiff(timeout_sec);
+	sec_diff = d_timeus_secdiff(rpc_priv->crp_timeout_sec);
 	rpc_priv->crp_timeout_ts = sec_diff;
 
 	return sec_diff;
 }
 
+/* Convert opcode to string. Only returns string for internal RPCs */
+char *crt_opc_to_str(crt_opcode_t opc);
 
 /* crt_corpc.c */
 int crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv);

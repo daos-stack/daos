@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * dc_pool: Pool Client API
@@ -49,12 +32,14 @@
 #define DAOS_PO_QUERY_PROP_OWNER	(1ULL << 21)
 #define DAOS_PO_QUERY_PROP_OWNER_GROUP	(1ULL << 22)
 #define DAOS_PO_QUERY_PROP_SVC_LIST	(1ULL << 23)
+#define DAOS_PO_QUERY_PROP_EC_CELL_SZ	(1ULL << 24)
 
 #define DAOS_PO_QUERY_PROP_ALL						\
 	(DAOS_PO_QUERY_PROP_LABEL | DAOS_PO_QUERY_PROP_SPACE_RB |	\
 	 DAOS_PO_QUERY_PROP_SELF_HEAL | DAOS_PO_QUERY_PROP_RECLAIM |	\
 	 DAOS_PO_QUERY_PROP_ACL | DAOS_PO_QUERY_PROP_OWNER |		\
-	 DAOS_PO_QUERY_PROP_OWNER_GROUP | DAOS_PO_QUERY_PROP_SVC_LIST)
+	 DAOS_PO_QUERY_PROP_OWNER_GROUP | DAOS_PO_QUERY_PROP_SVC_LIST |	\
+	 DAOS_PO_QUERY_PROP_EC_CELL_SZ)
 
 
 int dc_pool_init(void);
@@ -103,24 +88,26 @@ void dc_pool_put(struct dc_pool *pool);
 int dc_pool_local2global(daos_handle_t poh, d_iov_t *glob);
 int dc_pool_global2local(d_iov_t glob, daos_handle_t *poh);
 int dc_pool_connect(tse_task_t *task);
+int dc_pool_connect_lbl(tse_task_t *task);
 int dc_pool_disconnect(tse_task_t *task);
 int dc_pool_query(tse_task_t *task);
 int dc_pool_query_target(tse_task_t *task);
 int dc_pool_list_attr(tse_task_t *task);
 int dc_pool_get_attr(tse_task_t *task);
 int dc_pool_set_attr(tse_task_t *task);
+int dc_pool_del_attr(tse_task_t *task);
 int dc_pool_exclude(tse_task_t *task);
 int dc_pool_exclude_out(tse_task_t *task);
-int dc_pool_add(tse_task_t *task);
+int dc_pool_reint(tse_task_t *task);
 int dc_pool_drain(tse_task_t *task);
-int dc_pool_evict(tse_task_t *task);
 int dc_pool_stop_svc(tse_task_t *task);
 int dc_pool_list_cont(tse_task_t *task);
 
-int dc_pool_add_replicas(tse_task_t *task);
-int dc_pool_remove_replicas(tse_task_t *task);
-
 int dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
 int dc_pool_update_map(daos_handle_t ph, struct pool_map *map);
+int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
+			    struct rsvc_client *cli, pthread_mutex_t *cli_lock,
+			    struct dc_mgmt_sys *sys,
+			    crt_endpoint_t *ep);
 
 #endif /* __DD_POOL_H__ */

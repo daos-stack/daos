@@ -2,7 +2,8 @@
 
 ## Python API Usage in Tests
 
-The following example demonstrates a simple use case for the Python API for DAOS, creating and connecting to a pool, creating a container within the pool, and inserting a single value:
+The following example demonstrates a simple use case for the Python API for DAOS, connecting to a pool,
+creating a container within the pool, and inserting a single value:
 
 ```python
 
@@ -13,12 +14,10 @@ with open('../../../.build_vars.json') as f:
 context = DaosContext(data['PREFIX'] + '/lib/')
 print("Initialized!")
 
-# create a DAOS pool
+# connect to a DAOS pool
 pool = DaosPool(context)
-pool.create(448, os.getuid(), os.getgid(), 1024 * 1024 * 1024, b'daos_server')
-print("Pool UUID is {0}".format(pool.get_uuid_str()))
-
-# connect to it
+pool.set_uuid_str(os.environ['DAOS_POOL_UUID'])
+pool.set_group('daos_server')
 pool.connect(1 << 1)
 
 # query the pool
@@ -62,7 +61,7 @@ class DaosContext(object):
 
         # table defining relationship between Python and C function calls
         self.ftable = {
-            'create-pool'    : self.libdaos.daos_pool_create,
+            'connect-pool'   : self.libdaos.daos_pool_connect,
             'hello-world'    : self.libdaos.daos_hello_world # this is the new function
         }
 ```

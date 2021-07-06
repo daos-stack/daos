@@ -1,25 +1,8 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import time
 import threading
@@ -33,13 +16,8 @@ from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
 from command_utils_base import CommandFailure
 from general_utils import error_count
+import queue
 
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 class NvmeEnospace(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -50,11 +28,11 @@ class NvmeEnospace(ServerFillUp):
 
     def __init__(self, *args, **kwargs):
         """Initialize a NvmeEnospace object."""
-        super(NvmeEnospace, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
     def setUp(self):
-        super(NvmeEnospace, self).setUp()
+        super().setUp()
 
         # initialize daos command
         self.daos_cmd = DaosCommand(self.bin)
@@ -88,11 +66,12 @@ class NvmeEnospace(ServerFillUp):
         Delete all the containers.
         """
         #List all the container
-        kwargs = {"pool": self.pool.uuid, "svc": self.pool.svc_ranks}
-        continers = (self.daos_cmd.get_output("pool_list_cont", **kwargs))
+        kwargs = {"pool": self.pool.uuid}
+        data = self.daos_cmd.pool_list_cont(**kwargs)
+        containers = data["uuids"]
 
         #Destroy all the containers
-        for _cont in continers:
+        for _cont in containers:
             kwargs["cont"] = _cont
             self.daos_cmd.container_destroy(**kwargs)
 
@@ -119,17 +98,17 @@ class NvmeEnospace(ServerFillUp):
         ior_bg_cmd.test_file.update('/testfile_background')
 
         # Define the job manager for the IOR command
-        manager = Mpirun(ior_bg_cmd, mpitype="mpich")
+        self.job_manager = Mpirun(ior_bg_cmd, mpitype="mpich")
         self.create_cont()
-        manager.job.dfs_cont.update(self.container.uuid)
-        env = ior_bg_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(1)
-        manager.assign_environment(env, True)
+        self.job_manager.job.dfs_cont.update(self.container.uuid)
+        env = ior_bg_cmd.get_default_env(str(self.job_manager))
+        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        self.job_manager.assign_processes(1)
+        self.job_manager.assign_environment(env, True)
         print('----Run IOR in Background-------')
         # run IOR Write Command
         try:
-            manager.run()
+            self.job_manager.run()
         except (CommandFailure, TestFail) as _error:
             results.put("FAIL")
             return
@@ -138,7 +117,7 @@ class NvmeEnospace(ServerFillUp):
         ior_bg_cmd.flags.update(self.ior_read_flags)
         while True:
             try:
-                manager.run()
+                self.job_manager.run()
             except (CommandFailure, TestFail) as _error:
                 results.put("FAIL")
                 break
@@ -150,19 +129,19 @@ class NvmeEnospace(ServerFillUp):
         #Fill 75% more of SCM pool,Aggregation is Enabled so NVMe space will be
         #start filling
         print('Starting main IOR load')
-        self.start_ior_load(storage='SCM', precent=75)
+        self.start_ior_load(storage='SCM', percent=75)
         print(self.pool.pool_percentage_used())
 
         #Fill 50% more of SCM pool,Aggregation is Enabled so NVMe space will be
         #filled
-        self.start_ior_load(storage='SCM', precent=50)
+        self.start_ior_load(storage='SCM', percent=50)
         print(self.pool.pool_percentage_used())
 
         #Fill 60% more of SCM pool, now NVMe will be Full so data will not be
         #moved to NVMe but it will start filling SCM. SCM size will be going to
         #full and this command expected to fail with DER_NOSPACE
         try:
-            self.start_ior_load(storage='SCM', precent=60)
+            self.start_ior_load(storage='SCM', percent=60)
             self.fail('This test suppose to FAIL because of DER_NOSPACE'
                       'but it got Passed')
         except TestFail as _error:
@@ -181,7 +160,7 @@ class NvmeEnospace(ServerFillUp):
         if pool_usage['nvme'] > 8:
             self.fail('Pool NVMe used percentage should be < 8%, instead {}'.
                       format(pool_usage['nvme']))
-        #For SCM some % space used for system so it wont be 100% full.
+        #For SCM some % space used for system so it won't be 100% full.
         if pool_usage['scm'] > 50:
             self.fail('Pool SCM used percentage should be < 50%, instead {}'.
                       format(pool_usage['scm']))
@@ -232,6 +211,7 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -263,7 +243,7 @@ class NvmeEnospace(ServerFillUp):
             time.sleep(60)
 
         #Run last IO
-        self.start_ior_load(storage='SCM', precent=1)
+        self.start_ior_load(storage='SCM', percent=1)
 
     def test_enospace_time_with_bg(self):
         """Jira ID: DAOS-4756.
@@ -291,6 +271,7 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -325,7 +306,7 @@ class NvmeEnospace(ServerFillUp):
             time.sleep(60)
 
         #Run last IO
-        self.start_ior_load(storage='SCM', precent=1)
+        self.start_ior_load(storage='SCM', percent=1)
 
     @skipForTicket("DAOS-5403")
     def test_performance_storage_full(self):
@@ -345,9 +326,9 @@ class NvmeEnospace(ServerFillUp):
         #Write the IOR Baseline and get the Read BW for later comparison.
         print(self.pool.pool_percentage_used())
         #Write First
-        self.start_ior_load(storage='SCM', precent=1)
+        self.start_ior_load(storage='SCM', percent=1)
         #Read the baseline data set
-        self.start_ior_load(storage='SCM', operation='Read', precent=1)
+        self.start_ior_load(storage='SCM', operation='Read', percent=1)
         max_mib_baseline = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
         baseline_cont_uuid = self.ior_cmd.dfs_cont.value
         print("IOR Baseline Read MiB {}".format(max_mib_baseline))
@@ -357,7 +338,7 @@ class NvmeEnospace(ServerFillUp):
 
         #Read the same container which was written at the beginning.
         self.container.uuid = baseline_cont_uuid
-        self.start_ior_load(storage='SCM', operation='Read', precent=1)
+        self.start_ior_load(storage='SCM', operation='Read', percent=1)
         max_mib_latest = float(self.ior_matrix[0][int(IorMetrics.Max_MiB)])
         print("IOR Latest Read MiB {}".format(max_mib_latest))
 
@@ -368,6 +349,7 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 
@@ -400,13 +382,13 @@ class NvmeEnospace(ServerFillUp):
         for _loop in range(10):
             print("-------enospc_no_aggregation Loop--------- {}".format(_loop))
             #Fill 75% of SCM pool
-            self.start_ior_load(storage='SCM', precent=40)
+            self.start_ior_load(storage='SCM', percent=40)
 
             print(self.pool.pool_percentage_used())
 
             try:
                 #Fill 10% more to SCM ,which should Fail because no SCM space
-                self.start_ior_load(storage='SCM', precent=40)
+                self.start_ior_load(storage='SCM', percent=40)
                 self.fail('This test suppose to fail because of DER_NOSPACE'
                           'but it got Passed')
             except TestFail as _error:
@@ -431,4 +413,4 @@ class NvmeEnospace(ServerFillUp):
                           format(pool_usage['scm']))
 
         #Run last IO
-        self.start_ior_load(storage='SCM', precent=1)
+        self.start_ior_load(storage='SCM', percent=1)

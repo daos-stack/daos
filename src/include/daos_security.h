@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 /**
@@ -34,6 +17,7 @@
 extern "C" {
 #endif
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <sys/types.h>
@@ -288,7 +272,7 @@ daos_acl_get_ace_for_principal(struct daos_acl *acl,
 
 /**
  * Insert an Access Control Entry in the appropriate location in the ACE
- * list. The expected order is: Owner, Users, Assigned Group, Groups, Everyone.
+ * list. The expected order is: Owner, Users, Owner-Group, Groups, Everyone.
  *
  * The ACL structure may be reallocated to make room for the new ACE. If so the
  * old structure will be freed.
@@ -328,7 +312,8 @@ daos_acl_remove_ace(struct daos_acl **acl,
 		    const char *principal_name);
 
 /**
- * Print the Access Control List to stdout in a human-readable format.
+ * Print the Access Control List to stdout in a detailed human-readable format,
+ * for debug purposes.
  *
  * \param	acl	Access Control List to print
  */
@@ -414,7 +399,7 @@ ssize_t
 daos_ace_get_size(struct daos_ace *ace);
 
 /**
- * Print the Access Control Entry to stdout in a human-readable format.
+ * Print the Access Control Entry to stdout in a verbose human-readable format.
  *
  * \param	ace	Access Control Entry to print
  * \param	tabs	Number of tabs to indent at top level
@@ -624,6 +609,21 @@ int
 daos_acl_principal_from_str(const char *principal_str,
 			    enum daos_acl_principal_type *type,
 			    char **name);
+
+/**
+ * Print the Access Control List to a stream in the ACL file format.
+ *
+ * \param[in]	stream	Open stream to which the ACL should be printed
+ * \param[in]	acl	Access Control List to print
+ * \param[in]	verbose	Include verbose comment for each ACE in output
+ *
+ * \return	0		Success
+ *		-DER_INVAL	Invalid input
+ *		-DER_NOMEM	Could not allocate memory
+ *		-DER_IO		Failed to write to stream
+ */
+int
+daos_acl_to_stream(FILE *stream, struct daos_acl *acl, bool verbose);
 
 #if defined(__cplusplus)
 }

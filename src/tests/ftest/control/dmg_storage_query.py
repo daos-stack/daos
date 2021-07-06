@@ -1,27 +1,10 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import avocado
 import re
@@ -34,7 +17,7 @@ class DmgStorageQuery(ControlTestBase):
     """Test Class Description:
 
     Test to verify dmg storage health query commands and device state commands.
-    Including: storage query, storage blobstore-health, storage nvme-health,
+    Including: storage query, storage blobstore-health,
     storage query device-state.
 
     :avocado: recursive
@@ -42,7 +25,7 @@ class DmgStorageQuery(ControlTestBase):
 
     def setUp(self):
         "Set up for dmg storage query."
-        super(DmgStorageQuery, self).setUp()
+        super().setUp()
         self.bdev_list = self.server_managers[-1].get_config_value("bdev_list")
         self.targets = self.server_managers[-1].get_config_value("targets")
 
@@ -54,8 +37,8 @@ class DmgStorageQuery(ControlTestBase):
             state (str): device state to verify.
         """
         err = []
-        for dev in devs_info.values()[0]:
-            if dev[3] != state:
+        for dev in list(devs_info.values())[0]:
+            if dev[4] != state:
                 err.append(dev)
         if err:
             self.fail("Found device(s) in bad state: {}".format(err))
@@ -66,19 +49,21 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices' command.
 
-        :avocado: tags=all,pr,hw,small,storage_query_devs,basic,dmg
+        :avocado: tags=all,daily_regression,hw,small,storage_query_devs,basic
+        :avocado: tags=dmg
         """
         # Get the storage device information, parse and check devices info
         devs_info = self.get_device_info()
 
         # Check if the number of devices match the config
         msg = "Number of devs do not match cfg: {}".format(len(self.bdev_list))
-        self.assertEqual(len(self.bdev_list), len(devs_info.values()[0]), msg)
+        self.assertEqual(
+            len(self.bdev_list), len(list(devs_info.values())[0]), msg)
 
         # Check that number of targets match the config
         targets = 0
-        for devs in devs_info.values()[0]:
-            targets += len(devs[1].split(" "))
+        for devs in list(devs_info.values())[0]:
+            targets += len(devs[2].split(" "))
         if self.targets != targets:
             self.fail("Wrong number of targets found: {}".format(targets))
 
@@ -89,20 +74,21 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-pools' command.
 
-        :avocado: tags=all,pr,hw,small,storage_query_pools,basic,dmg
+        :avocado: tags=all,daily_regression,hw,small,storage_query_pools,basic
+        :avocado: tags=dmg
         """
-        # Create pool and get the storage smd information, then verfify info
+        # Create pool and get the storage smd information, then verify info
         self.prepare_pool()
         pools_info = self.get_pool_info(verbose=True)
 
         # Check pool uuid
-        for pool in pools_info.values()[0]:
+        for pool in list(pools_info.values())[0]:
             self.assertEqual(self.pool.pool.get_uuid_str(), pool[0].upper())
 
         # Check that number of pool blobs match the number of targets
         t_err = []
         b_err = []
-        for pool in pools_info.values()[0]:
+        for pool in list(pools_info.values())[0]:
             vos_targets = pool[2].split()
             blobs = pool[3].split()
             if self.targets != len(vos_targets):
@@ -125,7 +111,7 @@ class DmgStorageQuery(ControlTestBase):
 
         Test Description: Test 'dmg storage query list-devices --health' cmd.
 
-        :avocado: tags=all,pr,hw,small,storage_query_health,basic
+        :avocado: tags=all,daily_regression,hw,small,storage_query_health,basic
         """
         dmg_info = self.get_device_info(health=True)
 
@@ -133,7 +119,7 @@ class DmgStorageQuery(ControlTestBase):
         if dmg_info:
             for idx, info in enumerate(dmg_info):
                 dmg_info[idx] = [i for i in info if i]
-        parsed = [dmg_info[i:(i + 17)] for i in range(0, len(dmg_info), 17)]
+        parsed = [dmg_info[i:(i + 19)] for i in range(0, len(dmg_info), 19)]
         _ = parsed[0].pop(0)
 
         # Convert from list of lists to list of strings
@@ -144,30 +130,14 @@ class DmgStorageQuery(ControlTestBase):
 
         self.log.info("Found health info: %s", str(health_info))
 
-        # Get the health info from yaml
-        e_health_info = self.params.get("health_info", "/run/*")
-
-        # Check that we have expected number of devices
-        msg = "Found wrong number of devices in health info"
-        self.assertEqual(len(e_health_info), len(health_info), msg)
-
         # Verify temperature, convert from Kelvins to Celsius
         temp_err = []
         for info in health_info:
-            cels_temp = int("".join(re.findall(r"\d+", info[0]))) - 273.15
+            cels_temp = int("".join(re.findall(r"\d+", info[2]))) - 273.15
             if not 0.00 <= cels_temp <= 71.00:
                 temp_err.append("{}".format(cels_temp))
         if temp_err:
             self.fail("Bad temperature on SSDs: {}".format(",".join(temp_err)))
-
-        # Compare the rest of the values in health info
-        err = []
-        for dmg_info, exp_info in zip(health_info, e_health_info):
-            if dmg_info[1:] != exp_info:
-                err.append("dmg info :{} != expected info:{}".format(
-                    dmg_info[1:], exp_info))
-        if err:
-            self.fail("Health info not as expected: {}".format(err))
 
     @avocado.fail_on(CommandFailure)
     def test_dmg_storage_query_device_state(self):
@@ -178,15 +148,15 @@ class DmgStorageQuery(ControlTestBase):
         In addition this test also does a basic test of nvme-faulty cmd:
         'dmg storage set nvme-faulty'
 
-        :avocado: tags=all,pr,hw,small,storage_query_faulty,basic
+        :avocado: tags=all,daily_regression,hw,small,storage_query_faulty,basic
         """
         # Get device info and check state is NORMAL
         devs_info = self.get_device_info()
         self.check_dev_state(devs_info, "NORMAL")
 
         # Set device to faulty state and check that it's in FAULTY state
-        for dev in devs_info.values()[0]:
+        for dev in list(devs_info.values())[0]:
             self.get_dmg_output("storage_set_faulty", uuid=dev[0])
 
         # Check that devices are in FAULTY state
-        self.check_dev_state(self.get_device_info(), "FAULTY")
+        self.check_dev_state(self.get_device_info(), "EVICTED")

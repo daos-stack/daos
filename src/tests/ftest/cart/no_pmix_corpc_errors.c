@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Dynamic group testing for primary and secondary groups
@@ -52,7 +35,6 @@ enum {
 	RPC_SHUTDOWN
 } rpc_id_t;
 
-
 #define CRT_ISEQ_RPC_SET_ERR_CODE/* input fields */		\
 	((int)			(err_code)	CRT_VAR)	\
 	((uint32_t)		(pad1)		CRT_VAR)
@@ -71,7 +53,6 @@ enum {
 
 #define CRT_OSEQ_CORPC_TEST \
 	((uint64_t)		(field)			CRT_VAR)
-
 
 RPC_DECLARE(RPC_SET_ERR_CODE);
 RPC_DECLARE(RPC_SHUTDOWN);
@@ -112,7 +93,6 @@ corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
 	struct CORPC_TEST_out	*output_src;
 	struct CORPC_TEST_out	*output_result;
 
-
 	output_src = crt_reply_get(src);
 	output_result = crt_reply_get(result);
 
@@ -151,7 +131,6 @@ struct crt_proto_format my_proto_fmt = {
 	.cpf_prf = &my_proto_rpc_fmt[0],
 	.cpf_base = MY_BASE,
 };
-
 
 struct corpc_wait_info {
 	sem_t	sem;
@@ -264,7 +243,6 @@ set_error(crt_context_t ctx, crt_group_t *grp,
 
 	tc_sem_timedwait(&wait_info.sem, 10, __LINE__);
 }
-
 
 int main(int argc, char **argv)
 {

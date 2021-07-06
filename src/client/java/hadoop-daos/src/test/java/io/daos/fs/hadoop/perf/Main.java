@@ -1,19 +1,5 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 package io.daos.fs.hadoop.perf;
@@ -28,10 +14,12 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.*;
 
+import io.daos.BufferAllocator;
 import io.daos.dfs.DaosFile;
 import io.daos.dfs.DaosFsClient;
 import io.daos.fs.hadoop.Constants;
 import io.daos.fs.hadoop.DaosConfigFile;
+import io.netty.buffer.ByteBuf;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -54,11 +42,11 @@ public class Main {
     if (uid != null) {
       conf.set(Constants.DAOS_CONTAINER_UUID, uid);
     }
-    String svc = System.getProperty("svc");
-    if (svc != null) {
-      conf.set(Constants.DAOS_POOL_SVC, svc);
+    String async = System.getProperty(Constants.DAOS_IO_ASYNC);
+    if (async != null) {
+      conf.set(Constants.DAOS_IO_ASYNC, async);
     }
-    String defaultURI = System.getProperty("uri", "daos://default:1");
+    String defaultURI = System.getProperty("uri", "daos:///");
     if (defaultURI != null) {
       conf.set("fs.defaultFS", defaultURI);
     }
@@ -98,13 +86,14 @@ public class Main {
 
     if (jvms != null) {
       System.out.println("in jvms mode");
+      String async = System.getProperty(Constants.DAOS_IO_ASYNC, "true");
       if ("write".equalsIgnoreCase(args[0]) || "both".equalsIgnoreCase(args[0])) {
-        Runner runner = new JvmsWriteRunner();
+        Runner runner = new JvmsWriteRunner(async);
         runner.run();
       }
 
       if ("read".equalsIgnoreCase(args[0]) || "both".equalsIgnoreCase(args[0])) {
-        Runner runner = new JvmsReadRunner();
+        Runner runner = new JvmsReadRunner(async);
         runner.run();
       }
     }
@@ -193,9 +182,11 @@ public class Main {
   }
 
   static class JvmsWriteRunner extends WriteRunner {
+    private String async;
 
-    protected JvmsWriteRunner() {
+    protected JvmsWriteRunner(String async) {
       super(null);
+      this.async = async;
     }
 
     @Override
@@ -231,6 +222,8 @@ public class Main {
         list.add("-DfileSize=" + fileSize);
         list.add("-Dseq=" + i);
         list.add("-Dapi=" + api);
+	list.add("-DscriptPath=" + scriptPath);
+        list.add("-D" + Constants.DAOS_IO_ASYNC + "=" + async);
         executors.add(new ShellExecutor(i, list, out, err, WRITE_PERF_PREFIX, FINAL_WRITE_PERF_PREFIX));
       }
       for (ShellExecutor executor : executors) {
@@ -361,9 +354,10 @@ public class Main {
   }
 
   static class JvmsReadRunner extends ReadRunner {
-
-    protected JvmsReadRunner() {
+    private String async;
+    protected JvmsReadRunner(String async) {
       super(null);
+      this.async = async;
     }
 
     @Override
@@ -398,6 +392,8 @@ public class Main {
         list.add("-Dseq=" + i);
         list.add("-Drandom=" + (random ? "true" : "false"));
         list.add("-Dapi=" + api);
+	list.add("-DscriptPath=" + scriptPath);
+        list.add("-D" + Constants.DAOS_IO_ASYNC + "=" + async);
         executors.add(new ShellExecutor(i, list, out, err, READ_PERF_PREFIX, FINAL_READ_PERF_PREFIX));
       }
       for (ShellExecutor executor : executors) {
@@ -507,7 +503,7 @@ public class Main {
 
         DaosFile file = client.getFile(readPath);
         long size;
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(readSize);
+        ByteBuf byteBuffer = BufferAllocator.directNettyBuf(readSize);
         if (random) {
           Random rd = new Random();
 

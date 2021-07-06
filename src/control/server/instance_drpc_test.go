@@ -1,36 +1,20 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package server
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -47,20 +31,20 @@ func getTestNotifyReadyReq(t *testing.T, sockPath string, idx uint32) *srvpb.Not
 	}
 }
 
-func waitForIosrvReady(t *testing.T, instance *IOServerInstance) {
+func waitForEngineReady(t *testing.T, instance *EngineInstance) {
 	select {
 	case <-time.After(100 * time.Millisecond):
-		t.Fatal("IO server never became ready!")
+		t.Fatal("IO engine never became ready!")
 	case <-instance.awaitDrpcReady():
 		return
 	}
 }
 
-func TestIOServerInstance_NotifyDrpcReady(t *testing.T) {
+func TestEngineInstance_NotifyDrpcReady(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	instance := getTestIOServerInstance(log)
+	instance := getTestEngineInstance(log)
 
 	req := getTestNotifyReadyReq(t, "/tmp/instance_test.sock", 0)
 
@@ -71,10 +55,10 @@ func TestIOServerInstance_NotifyDrpcReady(t *testing.T) {
 		t.Fatal("Expected a dRPC client connection")
 	}
 
-	waitForIosrvReady(t, instance)
+	waitForEngineReady(t, instance)
 }
 
-func TestIOServerInstance_CallDrpc(t *testing.T) {
+func TestEngineInstance_CallDrpc(t *testing.T) {
 	for name, tc := range map[string]struct {
 		notReady bool
 		resp     *drpc.Response
@@ -91,7 +75,7 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
-			instance := getTestIOServerInstance(log)
+			instance := getTestEngineInstance(log)
 			if !tc.notReady {
 				cfg := &mockDrpcClientConfig{
 					SendMsgResponse: tc.resp,
@@ -99,13 +83,14 @@ func TestIOServerInstance_CallDrpc(t *testing.T) {
 				instance.setDrpcClient(newMockDrpcClient(cfg))
 			}
 
-			_, err := instance.CallDrpc(drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
+			_, err := instance.CallDrpc(context.TODO(),
+				drpc.MethodPoolCreate, &mgmtpb.PoolCreateReq{})
 			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }
 
-func TestIOServerInstance_DrespToRankResult(t *testing.T) {
+func TestEngineInstance_DrespToRankResult(t *testing.T) {
 	dRank := Rank(1)
 
 	for name, tc := range map[string]struct {
@@ -136,7 +121,7 @@ func TestIOServerInstance_DrespToRankResult(t *testing.T) {
 			junkRPC: true,
 			expResult: &MemberResult{
 				Rank: dRank, State: MemberStateErrored, Errored: true,
-				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed: proto: mgmt.DaosResp: illegal tag 0 (wire type 0)", dRank),
+				Msg: fmt.Sprintf("rank %d dRPC unmarshal failed", dRank),
 			},
 		},
 	} {

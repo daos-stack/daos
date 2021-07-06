@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2019 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos_sr
@@ -154,7 +137,6 @@ pl_obj_place(struct pl_map *map, struct daos_obj_md *md,
  * \param  tgt_rank [OUT]       spare target ranks
  * \param  shard_id [OUT]       shard ids to be rebuilt
  * \param  array_size [IN]      array size of tgt_rank & shard_id
- * \prarm  myrank [IN]          rank of current server in communication group
 
  * \return      > 0     the array size of tgt_rank & shard_id, so it means
  *                      getting the spare targets for the failure shards.
@@ -165,7 +147,28 @@ int
 pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
 		    uint32_t rebuild_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id, unsigned int array_size, int myrank)
+		    uint32_t *shard_id, unsigned int array_size)
+{
+	struct daos_oclass_attr *oc_attr;
+
+	D_ASSERT(map->pl_ops != NULL);
+
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
+	if (daos_oclass_grp_size(oc_attr) == 1)
+		return 0;
+
+	if (!map->pl_ops->o_obj_find_rebuild)
+		return -DER_NOSYS;
+
+	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
+					       tgt_rank, shard_id, array_size);
+}
+
+int
+pl_obj_find_drain(struct pl_map *map, struct daos_obj_md *md,
+		  struct daos_obj_shard_md *shard_md,
+		  uint32_t rebuild_ver, uint32_t *tgt_rank,
+		  uint32_t *shard_id, unsigned int array_size)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -173,31 +176,35 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_rebuild(map, md, shard_md, rebuild_ver,
-					       tgt_rank, shard_id, array_size,
-					       myrank);
+					       tgt_rank, shard_id, array_size);
 }
 
 int
 pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 		    struct daos_obj_shard_md *shard_md,
 		    uint32_t reint_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id, unsigned int array_size, int myrank)
+		    uint32_t *shard_id, unsigned int array_size)
 {
+	struct daos_oclass_attr *oc_attr;
+
 	D_ASSERT(map->pl_ops != NULL);
+
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
+	if (daos_oclass_grp_size(oc_attr) == 1)
+		return 0;
 
 	if (!map->pl_ops->o_obj_find_reint)
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_reint(map, md, shard_md, reint_ver,
-					       tgt_rank, shard_id, array_size,
-					       myrank);
+					     tgt_rank, shard_id, array_size);
 }
 
 int
 pl_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 		     struct daos_obj_shard_md *shard_md,
 		    uint32_t reint_ver, uint32_t *tgt_rank,
-		    uint32_t *shard_id, unsigned int array_size, int myrank)
+		    uint32_t *shard_id, unsigned int array_size)
 {
 	D_ASSERT(map->pl_ops != NULL);
 
@@ -205,8 +212,7 @@ pl_obj_find_addition(struct pl_map *map, struct daos_obj_md *md,
 		return -DER_NOSYS;
 
 	return map->pl_ops->o_obj_find_addition(map, md, shard_md, reint_ver,
-					       tgt_rank, shard_id, array_size,
-					       myrank);
+					       tgt_rank, shard_id, array_size);
 }
 
 void
@@ -215,6 +221,29 @@ pl_obj_layout_free(struct pl_obj_layout *layout)
 	if (layout->ol_shards != NULL)
 		D_FREE(layout->ol_shards);
 	D_FREE(layout);
+}
+
+/* Returns whether or not a given layout contains the specified rank */
+bool
+pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
+		       uint32_t rank, uint32_t target_index, uint32_t id_shard)
+{
+	struct pool_target *target;
+	int i;
+	int rc;
+
+	D_ASSERT(layout != NULL);
+
+	for (i = 0; i < layout->ol_nr; i++) {
+		rc = pool_map_find_target(map, layout->ol_shards[i].po_target,
+					  &target);
+		if (rc != 0 && target->ta_comp.co_rank == rank &&
+		    target->ta_comp.co_index == target_index && i == id_shard)
+			return true; /* Found a target and rank matches */
+	}
+
+	/* No match found */
+	return false;
 }
 
 int
@@ -312,30 +341,27 @@ static pthread_rwlock_t		pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 /** hash table for placement maps */
 static struct d_hash_table	pl_htable;
 
-#define DSR_RING_DOMAIN         PO_COMP_TP_RACK
-#define DSR_JUMP_MAP_DOMAIN      PO_COMP_TP_RACK
+/** XXX should be fetched from property */
+#define PL_DEFAULT_DOMAIN	PO_COMP_TP_RANK
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 		 struct pl_map_init_attr *mia)
 {
-	memset(mia, 0, sizeof(*mia));
-
 	switch (type) {
 	default:
-		D_ASSERTF(0, "Unknown placemet map type: %d.\n", type);
+		D_ASSERTF(0, "Unknown placement map type: %d.\n", type);
 		break;
 
 	case PL_TYPE_RING:
 		mia->ia_type         = PL_TYPE_RING;
-		mia->ia_ring.domain  = DSR_RING_DOMAIN;
+		mia->ia_ring.domain  = PL_DEFAULT_DOMAIN;
 		mia->ia_ring.ring_nr = 1;
 		break;
 	case PL_TYPE_JUMP_MAP:
 		mia->ia_type            = PL_TYPE_JUMP_MAP;
-		mia->ia_jump_map.domain  = DSR_JUMP_MAP_DOMAIN;
+		mia->ia_jump_map.domain = PL_DEFAULT_DOMAIN;
 	}
-
 }
 
 struct pl_map *
@@ -349,7 +375,7 @@ pl_hop_key_hash(struct d_hash_table *htab, const void *key,
 		unsigned int ksize)
 {
 	D_ASSERT(ksize == sizeof(uuid_t));
-	return d_hash_string_u32((const char *)key, ksize);
+	return *((const uint32_t *)key);
 }
 
 static bool
@@ -487,7 +513,14 @@ out:
 void
 pl_map_disconnect(uuid_t uuid)
 {
-	d_list_t        *link;
+	d_list_t *link;
+
+	/*
+	 * FIXME: DAOS-6763 Check if pl_htable is already finalized.
+	 * It can be called from ds_pool_hdl_hash_fini() after pl_fini().
+	 */
+	if (pl_htable.ht_ops == NULL)
+		return;
 
 	D_RWLOCK_WRLOCK(&pl_rwlock);
 	link = d_hash_rec_find(&pl_htable, uuid, sizeof(uuid_t));
@@ -539,72 +572,107 @@ pl_map_version(struct pl_map *map)
 	return map->pl_poolmap ? pool_map_get_version(map->pl_poolmap) : 0;
 }
 
+int
+pl_map_query(uuid_t po_uuid, struct pl_map_attr *attr)
+{
+	struct pl_map   *map;
+	int		 rc;
+
+	map = pl_map_find(po_uuid, DAOS_OBJ_NIL);
+	if (!map)
+		return -DER_ENOENT;
+
+	memset(attr, 0, sizeof(*attr));
+	if (map->pl_ops->o_query != NULL)
+		rc = map->pl_ops->o_query(map, attr);
+	else
+		rc = -DER_NOSYS;
+
+	pl_map_decref(map); /* hash table has held the refcount */
+	return rc;
+}
+
 /**
  * Select leader replica for the given object's shard.
  *
  * \param [IN]  oid             The object identifier.
- * \param [IN]  shard_idx       The shard index.
+ * \param [IN]  grp_idx         The group index.
  * \param [IN]  grp_size        Group size of obj layout.
- * \param [IN]  for_tgt_id      Require leader target id or leader shard index.
+ * \param [OUT] tgt_id          If non-NULL, Require leader target id.
  * \param [IN]  pl_get_shard    The callback function to parse out pl_obj_shard
  *                              from the given @data.
  * \param [IN]  data            The parameter used by the @pl_get_shard.
  *
- * \return                      The selected leader on success: its tgt_id or
- *                              shard index. Negative value if error.
+ * \return                      The selected leader shard on success
+ *                              Negative value if error.
  */
 int
-pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
-		 bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data)
+pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
+		 int *tgt_id, pl_get_shard_t pl_get_shard, void *data)
 {
 	struct pl_obj_shard             *shard;
 	struct daos_oclass_attr         *oc_attr;
 	uint32_t                         replicas;
-	int                              preferred;
-	int                              rdg_idx;
 	int                              start;
 	int                              pos;
-	int                              off;
 	int                              replica_idx;
 	int                              i;
 
-	oc_attr = daos_oclass_attr_find(oid);
+	oc_attr = daos_oclass_attr_find(oid, NULL);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
+		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
+		int fail_cnt = 0;
+		int idx = grp_idx * tgt_nr + tgt_nr - 1;
+
 		/* For EC object, elect last shard in the group (must to be
 		 * a parity node) as leader.
 		 */
-		shard = pl_get_shard(data,
-				rounddown(shard_idx, grp_size) + grp_size - 1);
-		if (for_tgt_id)
-			return shard->po_target;
+		shard = pl_get_shard(data, idx);
+		while (shard->po_rebuilding || shard->po_shard == -1 ||
+		       shard->po_target == -1) {
+			idx--;
+			if (++fail_cnt >= oc_attr->u.ec.e_p)
+				return -DER_IO;
+			shard = pl_get_shard(data, idx);
+		}
 
-		return shard->po_shard;
+		if (tgt_id != NULL) {
+			if (shard->po_target == -1)
+				return -DER_IO;
+
+			*tgt_id = shard->po_target;
+		}
+
+		return shard->po_shard == -1 ? -DER_IO : shard->po_shard;
 	}
 
 	replicas = oc_attr->u.rp.r_num;
-	if (replicas == DAOS_OBJ_REPL_MAX)
-		replicas = grp_size;
+	if (replicas == DAOS_OBJ_REPL_MAX) {
+		D_ASSERT(grp_idx == 0);
 
-	if (replicas < 1)
+		replicas = grp_size;
+	}
+
+	if (replicas < 1 || replicas > grp_size)
 		return -DER_INVAL;
 
 	if (replicas == 1) {
-		shard = pl_get_shard(data, shard_idx);
+		pos = grp_idx * grp_size;
+		shard = pl_get_shard(data, pos);
 		if (shard->po_target == -1)
 			return -DER_IO;
 
-		/* Single replicated object will not rebuild. */
-		D_ASSERT(!shard->po_rebuilding);
-		/* During target adding, it will add some -1 targets
-		 * into the object layout, so this assert is not right
-		 * anymore. see pl_map_extend().
+		/*
+		 * Note that even though there's only one replica here, this
+		 * object can still be rebuilt during addition or drain as
+		 * it moves between ranks
 		 */
-		/*D_ASSERT(shard->po_shard == shard_idx);*/
 
-		if (for_tgt_id)
-			return shard->po_target;
+		if (tgt_id != NULL)
+			*tgt_id = shard->po_target;
 
-		return shard->po_shard;
+		/* return pos rather than shard->po_shard for pool extending */
+		return pos;
 	}
 
 	/* XXX: The shards within [start, start + replicas) will search from
@@ -615,34 +683,33 @@ pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
 	 *      The one with the lowest f_seq will be elected as the leader
 	 *      to avoid leader switch.
 	 */
-	rdg_idx = shard_idx / replicas;
-	start = rdg_idx * replicas;
-	replica_idx = (oid.lo + rdg_idx) % replicas;
-	preferred = start + replica_idx;
+	start = grp_idx * grp_size;
+	replica_idx = (oid.lo + grp_idx) % replicas;
+	for (i = 0, pos = -1; i < replicas;
+	     i++, replica_idx = (replica_idx + 1) % replicas) {
+		int off = start + replica_idx;
 
-	for (i = 0, off = preferred, pos = -1; i < replicas;
-	     i++, replica_idx = (replica_idx + 1) % replicas,
-	     off = start + replica_idx) {
 		shard = pl_get_shard(data, off);
 		/*
-		 * shard->po_shard != off is necessary because during
-		 * reintegration we may have an extended layout and we don't
-		 * want the extended target to be the leader.
+		 * Cannot select in-rebuilding shard as leader (including the
+		 * case that during reintegration we may have an extended
+		 * layout that with in-adding shards with po_rebuilding set).
 		 */
-		if (shard->po_target == -1 || shard->po_rebuilding
-		    || shard->po_shard != off)
+		if (shard->po_target == -1 || shard->po_rebuilding)
 			continue;
 		if (pos == -1 ||
 		    pl_get_shard(data, pos)->po_fseq > shard->po_fseq)
 			pos = off;
 	}
 	if (pos != -1) {
-		D_ASSERT(pl_get_shard(data, pos)->po_shard == pos);
+		if (tgt_id != NULL)
+			*tgt_id = pl_get_shard(data, pos)->po_target;
 
-		if (for_tgt_id)
-			return pl_get_shard(data, pos)->po_target;
-
-		return pl_get_shard(data, pos)->po_shard;
+		/*
+		 * Here should not return "pl_get_shard(data, pos)->po_shard",
+		 * because it possibly not equal to "pos" in pool extending.
+		 */
+		return pos;
 	}
 
 	/* If all the replicas are failed or in-rebuilding, then EIO. */

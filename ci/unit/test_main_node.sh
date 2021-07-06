@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# This is a script to be run by the unit/test_main.sh to run a test
+# This is a script to be run by the ci/unit/test_main.sh to run a test
 # on a CI node.
 
-set -x
+set -uex
 
 sudo bash -c 'echo 1 > /proc/sys/kernel/sysrq'
 if grep /mnt/daos\  /proc/mounts; then
@@ -11,15 +11,17 @@ if grep /mnt/daos\  /proc/mounts; then
 fi
 sudo mkdir -p /mnt/daos
 
-sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
 sudo mkdir -p "$DAOS_BASE"
 sudo mount -t nfs "$HOSTNAME":"$HOSTPWD" "$DAOS_BASE"
 sudo cp "$DAOS_BASE/install/bin/daos_admin" /usr/bin/daos_admin
-set +x
 if [ -n "$BULLSEYE" ]; then
   pushd "$DAOS_BASE/bullseye"
+set +x
+    echo + sudo ./install --quiet --key "**********" \
+                   --prefix /opt/BullseyeCoverage
     sudo ./install --quiet --key "${BULLSEYE}" \
                    --prefix /opt/BullseyeCoverage
+set -x
   popd
   rm -rf bullseye
   export COVFILE="$DAOS_BASE/test.cov"
@@ -34,8 +36,13 @@ sudo ln -s "$SL_PREFIX/include"  /usr/share/spdk/include
 
 # set CMOCKA envs here
 export CMOCKA_MESSAGE_OUTPUT=xml
-export CMOCKA_XML_FILE="$DAOS_BASE"/test_results/%g.xml
+if [[ -z ${WITH_VALGRIND} ]]; then
+    export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g.xml"
+else
+    export CMOCKA_XML_FILE="${DAOS_BASE}/test_results/%g_${WITH_VALGRIND}.xml"
+fi
+
 cd "$DAOS_BASE"
-IS_CI=true OLD_CI=false utils/run_test.sh
-mkdir -p vm_test
-./utils/node_local_test.py --output-file=vm_test/nlt-errors.json all
+sudo mount -t tmpfs -o size=16G tmpfs /mnt/daos
+IS_CI=true OLD_CI=false RUN_TEST_VALGRIND="$WITH_VALGRIND" \
+    DAOS_BASE="$DAOS_BASE" utils/run_test.sh

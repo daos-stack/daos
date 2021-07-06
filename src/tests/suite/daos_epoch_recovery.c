@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -77,7 +60,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 		}
 
 		insert(dkey, nakeys, (const char **)akey, /*iod_size*/ rec_size,
-		       rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req);
+		       rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req, 0);
 	} else {	/* op == VERIFY */
 		char *rec_verify;
 
@@ -102,8 +85,7 @@ io(enum io_op op, test_arg_t *arg, daos_handle_t coh, daos_obj_id_t oid,
 
 enum epoch_recovery_op {
 	CONT_CLOSE,
-	POOL_DISCONNECT,
-	POOL_EVICT
+	POOL_DISCONNECT
 };
 
 static void
@@ -122,52 +104,42 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 		      DP_UUID(uuid));
 	rc = daos_cont_create(arg->pool.poh, uuid, NULL /* properties */,
 			      NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh,
 			    NULL /* info */, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
-	oid = dts_oid_gen(OC_RP_XSF, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 
 	/* Every rank updates timestep 1. */
 	io(UPDATE, arg, coh, oid, "timestamp 1");
 
 	/** Take a snapshot at this point to rollback to. */
 	rc = daos_cont_create_snap(coh, &snap, NULL, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/* Every rank updates timestep 2. */
 	io(UPDATE, arg, coh, oid, "timestamp 2");
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	if (op == POOL_EVICT) {
-		if (arg->myrank == 0) {
-			print_message("evicting pool connections\n");
-			rc = daos_pool_evict(arg->pool.pool_uuid, arg->group,
-					     arg->pool.svc, NULL /* ev */);
-			assert_int_equal(rc, 0);
-		}
-		MPI_Barrier(MPI_COMM_WORLD);
-	}
-
 	print_message("closing container\n");
 	rc = daos_cont_close(coh, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	if (op == POOL_DISCONNECT || op == POOL_EVICT) {
+	if (op == POOL_DISCONNECT) {
 		print_message("disconnecting from pool\n");
 		rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		print_message("reconnecting to pool\n");
 		if (arg->myrank == 0) {
 			rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-					       arg->pool.svc, DAOS_PC_RW,
+					       DAOS_PC_RW,
 					       &arg->pool.poh, NULL /* info */,
 					       NULL /* ev */);
-			assert_int_equal(rc, 0);
+			assert_rc_equal(rc, 0);
 		}
 		handle_share(&arg->pool.poh, HANDLE_POOL, arg->myrank,
 			     arg->pool.poh, 1);
@@ -176,7 +148,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	print_message("reopening container\n");
 	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RO, &coh,
 			    &arg->co_info, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	/** TODO - query last snapshot taken and rollback to that */
 
@@ -185,7 +157,7 @@ epoch_recovery(test_arg_t *arg, enum epoch_recovery_op op)
 	io(VERIFY, arg, coh, oid, "timestamp 2");
 
 	rc = daos_cont_close(coh, NULL /* ev */);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
@@ -201,26 +173,18 @@ pool_disconnect_discard(void **state)
 	epoch_recovery(*state, POOL_DISCONNECT);
 }
 
-static void
-pool_evict_discard(void **state)
-{
-	epoch_recovery(*state, POOL_EVICT);
-}
-
 static const struct CMUnitTest epoch_recovery_tests[] = {
 	{"ERECOV1: container close discards uncommitted data",
 	 cont_close_discard, NULL, test_case_teardown},
 	{"ERECOV2: pool disconnect discards uncommitted data",
-	 pool_disconnect_discard, NULL, test_case_teardown},
-	{"ERECOV3: pool evict discards uncommitted data",
-	 pool_evict_discard, NULL, test_case_teardown}
+	 pool_disconnect_discard, NULL, test_case_teardown}
 };
 
 static int
 setup(void **state)
 {
 	return test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			  NULL);
+			  0, NULL);
 }
 
 int
@@ -228,7 +192,7 @@ run_daos_epoch_recovery_test(int rank, int size)
 {
 	int rc = 0;
 
-	rc = cmocka_run_group_tests_name("Epoch recovery tests",
+	rc = cmocka_run_group_tests_name("DAOS_Epoch_Recovery",
 					 epoch_recovery_tests, setup,
 					 test_teardown);
 	MPI_Barrier(MPI_COMM_WORLD);

@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-      http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
 from time import sleep
@@ -28,7 +11,7 @@ from command_utils_base import ObjectWithParameters, BasicParameter
 from pydaos.raw import DaosApiError
 
 
-class CallbackHandler(object):
+class CallbackHandler():
     """Defines a callback method to use with DaosApi class methods."""
 
     def __init__(self, delay=1):
@@ -91,12 +74,12 @@ class TestDaosApiBase(ObjectWithParameters):
             cb_handler (CallbackHandler, optional): callback object to use with
                 the API methods. Defaults to None.
         """
-        super(TestDaosApiBase, self).__init__(namespace)
+        super().__init__(namespace)
         self.cb_handler = cb_handler
         self.debug = BasicParameter(None, False)
 
         # Test yaml parameter used to define the control method:
-        #   USE_API    - use the API methods to create/destroy pools/containers
+        #   USE_API    - use the API methods to create/destroy containers
         #   USE_DMG    - use the dmg command to create/destroy pools/containers
         #   USE_DAOS   - use the daos command to create/destroy pools/containers
         self.control_method = BasicParameter(self.USE_API, self.USE_API)
@@ -125,7 +108,8 @@ class TestDaosApiBase(ObjectWithParameters):
 
         # Optionally log the method call with its arguments if debug is set
         self._log_method(
-            "{}.{}".format(method.im_class.__name__, method.__name__), kwargs)
+            "{}.{}".format(
+                method.__self__.__class__.__name__, method.__name__), kwargs)
 
         try:
             method(**kwargs)
@@ -135,7 +119,8 @@ class TestDaosApiBase(ObjectWithParameters):
                 "Exception raised by %s.%s(%s)",
                 method.__module__, method.__name__,
                 ", ".join(
-                    ["{}={}".format(key, val) for key, val in kwargs.items()]),
+                    ["{}={}".format(key, val) for key, val in list(
+                        kwargs.items())]),
                 exc_info=error)
             # Raise the exception so it can be handled by the caller
             raise error
@@ -173,7 +158,7 @@ class TestDaosApiBase(ObjectWithParameters):
                     ">=": (
                         lambda x, y: x >= y, "is too small or does not match"),
                 }
-                for key, val in comparisons.items():
+                for key, val in list(comparisons.items()):
                     # If the expected value is preceded by one of the known
                     # comparison keys, use the comparison and remove the key
                     # from the expected value

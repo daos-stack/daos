@@ -1,0 +1,46 @@
+# change host names to your reserved nodes, the
+# required quantity is indicated by the placeholders
+hosts:
+ test_servers:
+  - server-A
+ test_clients:
+  - client-B
+timeout: 60
+server_config:
+ name: daos_server
+pool:
+    createmode:
+        mode_RW:
+             mode: 511
+    createset:
+        group: daos_server
+    createsize:
+        scm_size: 3000000000
+    createsvc:
+        svcn: 1
+    control_method: dmg
+container: !mux
+   properties:
+       enable_checksum: True
+dkeys: !mux
+  single:
+    no_of_dkeys:
+    - 50
+akeys: !mux
+  single:
+    no_of_akeys:
+    - 10
+record: !mux
+  1Byte:
+    length:
+      - 1
+  1KB:
+    length:
+      - 1024
+  Mixed:
+    length:
+      - 1
+      - 8
+      - 32
+      - 512
+      - 1024

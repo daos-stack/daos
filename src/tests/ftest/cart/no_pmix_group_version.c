@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * Dynamic group testing for primary and secondary groups
@@ -35,7 +18,6 @@
 
 #include "tests_common.h"
 
-
 #define MY_BASE 0x010000000
 #define MY_VER  0
 
@@ -50,7 +32,6 @@ enum {
 	CORPC_TEST,
 	RPC_SHUTDOWN
 } rpc_id_t;
-
 
 #define CRT_ISEQ_RPC_SET_VERSION	/* input fields */	\
 	((d_string_t)		(grp)		CRT_VAR)	\
@@ -71,7 +52,6 @@ enum {
 
 #define CRT_OSEQ_CORPC_TEST \
 	((uint64_t)		(field)			CRT_VAR)
-
 
 RPC_DECLARE(RPC_SET_VERSION);
 RPC_DECLARE(RPC_SHUTDOWN);
@@ -126,7 +106,6 @@ corpc_aggregate(crt_rpc_t *src, crt_rpc_t *result, void *priv)
 {
 	struct CORPC_TEST_out	*output_src;
 	struct CORPC_TEST_out	*output_result;
-
 
 	output_src = crt_reply_get(src);
 	output_result = crt_reply_get(result);
@@ -260,7 +239,6 @@ set_group_version(crt_context_t ctx, crt_group_t *grp,
 
 	tc_sem_timedwait(&wait_info.sem, 10, __LINE__);
 }
-
 
 int main(int argc, char **argv)
 {
@@ -477,7 +455,6 @@ int main(int argc, char **argv)
 	}
 	set_group_version(crt_ctx[1], grp, p_list->rl_ranks[7], 0x3);
 	verify_corpc(crt_ctx[1], grp, -DER_GRPVER);
-
 
 	/* Send shutdown RPC to all nodes except for self */
 	DBG_PRINT("Senidng shutdown to all nodes\n");

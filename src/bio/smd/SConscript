@@ -3,15 +3,15 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
-    env.AppendUnique(LIBPATH=[Dir('.')])
-
     denv = env.Clone()
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    prereqs.require(denv, 'pmdk', 'argobots', 'protobufc')
 
-    prereqs.require(denv, 'argobots')
+    denv.Library('smd', Glob('*.c'),
+                 LIBS=[])
 
-    denv.Library('smd', Glob('*.c'), LIBS=['daos_common', 'gurt', 'pmemobj'])
-
-    SConscript('tests/SConscript', exports='denv')
+    if prereqs.test_requested():
+        SConscript('tests/SConscript', exports='denv')
 
 if __name__ == "SCons.Script":
     scons()

@@ -1,31 +1,13 @@
 #!/usr/bin/python
 '''
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import os
 from nvme_utils import ServerFillUp
 from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
-from apricot import skipForTicket
 
 class NvmeFault(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -36,7 +18,7 @@ class NvmeFault(ServerFillUp):
     """
     def setUp(self):
         """Set up for test case."""
-        super(NvmeFault, self).setUp()
+        super().setUp()
         self.no_of_pools = self.params.get("number_of_pools", '/run/pool/*', 1)
         self.capacity = self.params.get("percentage",
                                         '/run/faulttests/pool_capacity/*')
@@ -52,7 +34,6 @@ class NvmeFault(ServerFillUp):
         #Set to True to generate the NVMe fault during IO
         self.set_faulty_device = True
 
-    @skipForTicket("DAOS-5497")
     def test_nvme_fault(self):
         """Jira ID: DAOS-4722.
 
@@ -67,14 +48,15 @@ class NvmeFault(ServerFillUp):
         self.create_pool_max_size(nvme=True)
 
         #Start the IOR Command and generate the NVMe fault.
-        self.start_ior_load(precent=self.capacity)
+        self.start_ior_load(percent=self.capacity)
 
-        print("pool_percentage_used -- After -- {}"
-              .format(self.pool.pool_percentage_used()))
+        print(
+            "pool_percentage_used -- After -- {}".format(
+                self.pool.pool_percentage_used()))
 
         #Check nvme-health command works
         try:
             self.dmg.hostlist = self.hostlist_servers
-            self.dmg.storage_query_nvme_health()
+            self.dmg.storage_scan_nvme_health()
         except CommandFailure as _error:
-            self.fail("dmg nvme-health failed")
+            self.fail("dmg storage scan --nvme-health failed")

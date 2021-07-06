@@ -3,3 +3,4 @@
 hosts:
   test_servers:
     - server-A
+timeout: 60

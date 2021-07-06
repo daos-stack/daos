@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package system
@@ -26,13 +9,18 @@ package system
 import (
 	"math"
 	"strconv"
+	"strings"
 
-	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	"github.com/pkg/errors"
 )
 
-// Rank is used to uniquely identify a server within a cluster
-type Rank uint32
+type (
+	// Rank is used to uniquely identify a server within a cluster.
+	Rank uint32
+
+	// RankList provides convenience methods for working with Rank slices.
+	RankList []Rank
+)
 
 const (
 	// MaxRank is the largest valid Rank value.
@@ -122,27 +110,49 @@ func (r *Rank) RemoveFromList(ranks []Rank) []Rank {
 	return rankList
 }
 
+func (rl RankList) String() string {
+	rs := make([]string, len(rl))
+	for i, r := range rl {
+		rs[i] = r.String()
+	}
+	return strings.Join(rs, ",")
+}
+
 // RanksToUint32 is a convenience method to convert this
 // slice of system ranks to a slice of uint32 ranks.
-func RanksToUint32(ranks []Rank) (uint32Ranks []uint32) {
-	if ranks == nil {
-		ranks = []Rank{}
-	}
-	if err := convert.Types(ranks, &uint32Ranks); err != nil {
-		return nil
+func RanksToUint32(in []Rank) []uint32 {
+	out := make([]uint32, len(in))
+	for i := range in {
+		out[i] = in[i].Uint32()
 	}
 
-	return
+	return out
 }
 
 // RanksFromUint32 is a convenience method to convert this
 // slice of uint32 ranks to a slice of system ranks.
-func RanksFromUint32(ranks []uint32) (sysRanks []Rank) {
-	if ranks == nil {
-		ranks = []uint32{}
+func RanksFromUint32(in []uint32) []Rank {
+	out := make([]Rank, len(in))
+	for i := range in {
+		out[i] = Rank(in[i])
 	}
-	if err := convert.Types(ranks, &sysRanks); err != nil {
-		return nil
+
+	return out
+}
+
+// CheckRankMembership compares two Rank slices and returns a
+// Rank slice with any ranks found in the second slice that do
+// not exist in the first slice.
+func CheckRankMembership(members, toTest []Rank) (missing []Rank) {
+	mm := make(map[Rank]struct{})
+	for _, m := range members {
+		mm[m] = struct{}{}
+	}
+
+	for _, m := range toTest {
+		if _, found := mm[m]; !found {
+			missing = append(missing, m)
+		}
 	}
 
 	return

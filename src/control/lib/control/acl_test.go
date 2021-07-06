@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package control
@@ -27,8 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -82,23 +63,10 @@ func TestControl_ReadACLFile_FileOpenFailed(t *testing.T) {
 	}
 }
 
-func createTestFile(t *testing.T, filePath string, content string) {
-	file, err := os.Create(filePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestControl_ReadACLFile_Success(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "testACLFile.txt")
-	createTestFile(t, path, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
-	defer os.Remove(path)
+	dir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+	path := common.CreateTestFile(t, dir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
 
 	expectedNumACEs := 3
 
@@ -119,9 +87,9 @@ func TestControl_ReadACLFile_Success(t *testing.T) {
 }
 
 func TestReadACLFile_Empty(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "empty.txt")
-	createTestFile(t, path, "")
-	defer os.Remove(path)
+	dir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+	path := common.CreateTestFile(t, dir, "")
 
 	result, err := ReadACLFile(path)
 
@@ -143,6 +111,7 @@ func TestControl_ParseACL_EmptyFile(t *testing.T) {
 
 	if result == nil {
 		t.Error("Expected result, got nil")
+		return
 	}
 
 	if len(result.Entries) != 0 {

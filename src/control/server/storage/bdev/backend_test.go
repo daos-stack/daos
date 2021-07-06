@@ -1,31 +1,19 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 package bdev
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -53,108 +41,15 @@ func convertTypes(in interface{}, out interface{}) error {
 	return json.Unmarshal(data, out)
 }
 
-func mockSpdkController(varIdx ...int32) spdk.Controller {
+func mockSpdkController(varIdx ...int32) storage.NvmeController {
 	native := storage.MockNvmeController(varIdx...)
 
-	s := new(spdk.Controller)
+	s := new(storage.NvmeController)
 	if err := convertTypes(native, s); err != nil {
 		panic(err)
 	}
 
 	return *s
-}
-
-func mockSpdkNamespace(varIdx ...int32) spdk.Namespace {
-	native := storage.MockNvmeNamespace(varIdx...)
-
-	s := new(spdk.Namespace)
-	if err := convertTypes(native, s); err != nil {
-		panic(err)
-	}
-
-	return *s
-}
-
-func mockSpdkDeviceHealth(varIdx ...int32) spdk.DeviceHealth {
-	native := storage.MockNvmeDeviceHealth(varIdx...)
-
-	s := new(spdk.DeviceHealth)
-	if err := convertTypes(native, s); err != nil {
-		panic(err)
-	}
-
-	return *s
-}
-
-func TestBdevBackendGetController(t *testing.T) {
-	type input struct {
-		pciAddr         string
-		spdkControllers []spdk.Controller
-	}
-
-	spdkNormalNoHealth := mockSpdkController()
-	spdkNormalNoHealth.HealthStats = nil
-	scNormalNoHealth := storage.MockNvmeController()
-	scNormalNoHealth.HealthStats = nil
-
-	for name, tc := range map[string]struct {
-		input  input
-		expSc  *storage.NvmeController
-		expErr error
-	}{
-		"empty input": {
-			input:  input{},
-			expErr: FaultBadPCIAddr(""),
-		},
-		"wrong pciAddr": {
-			input: input{
-				pciAddr:         "abc123",
-				spdkControllers: []spdk.Controller{mockSpdkController()},
-			},
-			expErr: FaultPCIAddrNotFound("abc123"),
-		},
-		"correct pciAddr": {
-			input: input{
-				pciAddr:         mockSpdkController().PCIAddr,
-				spdkControllers: []spdk.Controller{mockSpdkController()},
-			},
-			expSc: storage.MockNvmeController(),
-		},
-		"missing health stats": {
-			input: input{
-				pciAddr:         spdkNormalNoHealth.PCIAddr,
-				spdkControllers: []spdk.Controller{spdkNormalNoHealth},
-			},
-			expSc: scNormalNoHealth,
-		},
-		"two controllers select first": {
-			input: input{
-				pciAddr:         mockSpdkController(1).PCIAddr,
-				spdkControllers: []spdk.Controller{mockSpdkController(1), mockSpdkController(2)},
-			},
-			expSc: storage.MockNvmeController(1),
-		},
-		"two controllers select second": {
-			input: input{
-				pciAddr:         mockSpdkController(2).PCIAddr,
-				spdkControllers: []spdk.Controller{mockSpdkController(1), mockSpdkController(2)},
-			},
-			expSc: storage.MockNvmeController(2),
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			gotSc, gotErr := getController(tc.input.pciAddr, tc.input.spdkControllers)
-
-			common.CmpErr(t, tc.expErr, gotErr)
-			if gotErr != nil {
-				return
-			}
-
-			if diff := cmp.Diff(tc.expSc, gotSc, defCmpOpts()...); diff != "" {
-				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
 }
 
 func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.MockNvmeCfg) *spdkBackend {
@@ -167,12 +62,8 @@ func backendWithMockBinding(log logging.Logger, mec spdk.MockEnvCfg, mnc spdk.Mo
 	}
 }
 
-func TestBdevBackendScan(t *testing.T) {
+func TestBackend_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
-	nativeCtrlr1 := new(spdk.Controller)
-	if err := convert(ctrlr1, nativeCtrlr1); err != nil {
-		t.Fatal(err)
-	}
 
 	for name, tc := range map[string]struct {
 		req     ScanRequest
@@ -189,36 +80,16 @@ func TestBdevBackendScan(t *testing.T) {
 		},
 		"empty results from binding": {
 			req:     ScanRequest{},
-			expResp: &ScanResponse{Controllers: storage.NvmeControllers{}},
+			expResp: &ScanResponse{},
 		},
 		"binding scan success": {
 			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: []spdk.Controller{*nativeCtrlr1},
+				DiscoverCtrlrs: storage.NvmeControllers{ctrlr1},
 			},
 			req: ScanRequest{},
 			expResp: &ScanResponse{
-				Controllers: storage.NvmeControllers{
-					ctrlr1,
-				},
+				Controllers: storage.NvmeControllers{ctrlr1},
 			},
-		},
-		"binding scan filtered in": {
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: []spdk.Controller{*nativeCtrlr1},
-			},
-			req: ScanRequest{DeviceList: []string{ctrlr1.PciAddr}},
-			expResp: &ScanResponse{
-				Controllers: storage.NvmeControllers{
-					ctrlr1,
-				},
-			},
-		},
-		"binding scan filtered out": {
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: []spdk.Controller{*nativeCtrlr1},
-			},
-			req:     ScanRequest{DeviceList: []string{"0000:ff:ff.f"}},
-			expResp: &ScanResponse{Controllers: storage.NvmeControllers{}},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -240,10 +111,13 @@ func TestBdevBackendScan(t *testing.T) {
 	}
 }
 
-func TestBdevBackendFormat(t *testing.T) {
+func TestBackend_Format(t *testing.T) {
 	pci1 := storage.MockNvmeController(1).PciAddr
 	pci2 := storage.MockNvmeController(2).PciAddr
 	pci3 := storage.MockNvmeController(3).PciAddr
+
+	testDir, clean := common.CreateTestDir(t)
+	defer clean()
 
 	for name, tc := range map[string]struct {
 		req     FormatRequest
@@ -252,18 +126,48 @@ func TestBdevBackendFormat(t *testing.T) {
 		expResp *FormatResponse
 		expErr  error
 	}{
-		"empty device list": {
-			req: FormatRequest{
-				Class: storage.BdevClassNvme,
-			},
-			expErr: errors.New("empty pci address list in format request"),
-		},
 		"unknown device class": {
 			req: FormatRequest{
 				Class:      storage.BdevClass("whoops"),
 				DeviceList: []string{pci1},
 			},
 			expErr: FaultFormatUnknownClass("whoops"),
+		},
+		"aio file device class": {
+			mec: spdk.MockEnvCfg{
+				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),
+			},
+			mnc: spdk.MockNvmeCfg{
+				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
+			},
+			req: FormatRequest{
+				Class:          storage.BdevClassFile,
+				DeviceList:     []string{filepath.Join(testDir, "daos-bdev")},
+				DeviceFileSize: humanize.MiByte,
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					filepath.Join(testDir, "daos-bdev"): new(DeviceFormatResponse),
+				},
+			},
+		},
+		"aio kdev device class": {
+			mec: spdk.MockEnvCfg{
+				InitErr: errors.New("spdk backend init should not be called for non-nvme class"),
+			},
+			mnc: spdk.MockNvmeCfg{
+				FormatErr: errors.New("spdk backend format should not be called for non-nvme class"),
+			},
+			req: FormatRequest{
+				Class:      storage.BdevClassKdev,
+				DeviceList: []string{"/dev/sdc", "/dev/sdd"},
+			},
+			expResp: &FormatResponse{
+				DeviceResponses: map[string]*DeviceFormatResponse{
+					"/dev/sdc": new(DeviceFormatResponse),
+					"/dev/sdd": new(DeviceFormatResponse),
+				},
+			},
 		},
 		"binding format fail": {
 			mnc: spdk.MockNvmeCfg{
@@ -294,7 +198,7 @@ func TestBdevBackendFormat(t *testing.T) {
 			},
 			expResp: &FormatResponse{
 				DeviceResponses: map[string]*DeviceFormatResponse{
-					pci1: &DeviceFormatResponse{
+					pci1: {
 						Formatted: true,
 					},
 				},
@@ -423,51 +327,18 @@ func TestBdevBackendFormat(t *testing.T) {
 				},
 			},
 		},
-		"kdev": {
-			req: FormatRequest{
-				Class:      storage.BdevClassKdev,
-				DeviceList: []string{"foo"},
-			},
-			expResp: &FormatResponse{
-				DeviceResponses: map[string]*DeviceFormatResponse{
-					"foo": &DeviceFormatResponse{
-						Formatted: true,
-					},
-				},
-			},
-		},
-		"file": {
-			req: FormatRequest{
-				Class:      storage.BdevClassFile,
-				DeviceList: []string{"foo"},
-			},
-			expResp: &FormatResponse{
-				DeviceResponses: map[string]*DeviceFormatResponse{
-					"foo": &DeviceFormatResponse{
-						Formatted: true,
-					},
-				},
-			},
-		},
-		"malloc": {
-			req: FormatRequest{
-				Class:      storage.BdevClassMalloc,
-				DeviceList: []string{"foo"},
-			},
-			expResp: &FormatResponse{
-				DeviceResponses: map[string]*DeviceFormatResponse{
-					"foo": &DeviceFormatResponse{
-						Formatted: true,
-					},
-				},
-			},
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
 			b := backendWithMockBinding(log, tc.mec, tc.mnc)
+			b.script = mockScriptRunner(log)
+
+			// output path would be set during config validate
+			tc.req.ConfigPath = filepath.Join(testDir, storage.BdevOutConfName)
+			tc.req.OwnerUID = os.Geteuid()
+			tc.req.OwnerGID = os.Getegid()
 
 			gotResp, gotErr := b.Format(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -478,16 +349,27 @@ func TestBdevBackendFormat(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected output (-want, +got):\n%s\n", diff)
 			}
+
+			if tc.req.Class != storage.BdevClassFile {
+				return
+			}
+
+			// verify empty files created for AIO class
+			for _, testFile := range tc.req.DeviceList {
+				if _, err := os.Stat(testFile); err != nil {
+					t.Fatal(err)
+				}
+			}
 		})
 	}
 }
 
-func TestBdevBackendUpdate(t *testing.T) {
+func TestBackend_Update(t *testing.T) {
 	numCtrlrs := 4
-	controllers := make([]spdk.Controller, 0, numCtrlrs)
+	controllers := make(storage.NvmeControllers, 0, numCtrlrs)
 	for i := 0; i < numCtrlrs; i++ {
 		c := mockSpdkController(int32(i))
-		controllers = append(controllers, c)
+		controllers = append(controllers, &c)
 	}
 
 	for name, tc := range map[string]struct {
@@ -496,37 +378,19 @@ func TestBdevBackendUpdate(t *testing.T) {
 		mnc     spdk.MockNvmeCfg
 		expErr  error
 	}{
-		"init failed": {
-			pciAddr: controllers[0].PCIAddr,
-			mec: spdk.MockEnvCfg{
-				InitErr: errors.New("spdk init says no"),
-			},
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: controllers,
-			},
-			expErr: errors.New("spdk init says no"),
-		},
-		"not found": {
-			pciAddr: "NotReal",
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: controllers,
-			},
-			expErr: FaultPCIAddrNotFound("NotReal"),
+		"no PCI addr": {
+			expErr: FaultBadPCIAddr(""),
 		},
 		"binding update fail": {
-			pciAddr: controllers[0].PCIAddr,
+			pciAddr: controllers[0].PciAddr,
 			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: controllers,
-				UpdateErr:      errors.New("spdk says no"),
+				UpdateErr: errors.New("spdk says no"),
 			},
 			expErr: errors.New("spdk says no"),
 		},
 		"binding update success": {
-			pciAddr: controllers[0].PCIAddr,
-			mnc: spdk.MockNvmeCfg{
-				DiscoverCtrlrs: controllers,
-			},
-			expErr: nil,
+			pciAddr: controllers[0].PciAddr,
+			expErr:  nil,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -537,6 +401,169 @@ func TestBdevBackendUpdate(t *testing.T) {
 
 			gotErr := b.UpdateFirmware(tc.pciAddr, "/some/path", 0)
 			common.CmpErr(t, tc.expErr, gotErr)
+		})
+	}
+}
+
+type mockFileInfo struct {
+	name    string
+	size    int64
+	mode    os.FileMode
+	modTime time.Time
+	isDir   bool
+	stat    *syscall.Stat_t
+}
+
+func (mfi *mockFileInfo) Name() string       { return mfi.name }
+func (mfi *mockFileInfo) Size() int64        { return mfi.size }
+func (mfi *mockFileInfo) Mode() os.FileMode  { return mfi.mode }
+func (mfi *mockFileInfo) ModTime() time.Time { return mfi.modTime }
+func (mfi *mockFileInfo) IsDir() bool        { return mfi.isDir }
+func (mfi *mockFileInfo) Sys() interface{}   { return mfi.stat }
+
+func testFileInfo(t *testing.T, name string, uid uint32) os.FileInfo {
+	t.Helper()
+
+	return &mockFileInfo{
+		name: name,
+		stat: &syscall.Stat_t{
+			Uid: uid,
+		},
+	}
+}
+
+type testWalkInput struct {
+	path   string
+	info   os.FileInfo
+	err    error
+	expErr error
+}
+
+func TestBackend_cleanHugePagesFn(t *testing.T) {
+	testDir := "/wherever"
+
+	for name, tc := range map[string]struct {
+		prefix     string
+		tgtUID     string
+		testInputs []*testWalkInput
+		removeErr  error
+		expRemoved []string
+	}{
+		"ignore subdirectory": {
+			prefix: "prefix1",
+			tgtUID: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: &mockFileInfo{
+						name: "prefix1_foo",
+						stat: &syscall.Stat_t{
+							Uid: 42,
+						},
+						isDir: true,
+					},
+					expErr: errors.New("skip this directory"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"input error propagated": {
+			testInputs: []*testWalkInput{
+				{
+					path:   filepath.Join(testDir, "prefix1_foo"),
+					info:   testFileInfo(t, "prefix1_foo", 42),
+					err:    errors.New("walk failed"),
+					expErr: errors.New("walk failed"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"nil fileinfo": {
+			testInputs: []*testWalkInput{
+				{
+					path:   filepath.Join(testDir, "prefix1_foo"),
+					info:   nil,
+					expErr: errors.New("nil fileinfo"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"nil file stat": {
+			prefix: "prefix1",
+			tgtUID: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: &mockFileInfo{
+						name: "prefix1_foo",
+						stat: nil,
+					},
+					expErr: errors.New("stat missing for file"),
+				},
+			},
+			expRemoved: []string{},
+		},
+		"prefix matching": {
+			prefix: "prefix1",
+			tgtUID: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix2_foo"),
+					info: testFileInfo(t, "prefix2_foo", 42),
+				},
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: testFileInfo(t, "prefix1_foo", 42),
+				},
+			},
+			expRemoved: []string{filepath.Join(testDir, "prefix1_foo")},
+		},
+		"uid matching": {
+			prefix: "prefix1",
+			tgtUID: "42",
+			testInputs: []*testWalkInput{
+				{
+					path: filepath.Join(testDir, "prefix1_foo"),
+					info: testFileInfo(t, "prefix1_foo", 41),
+				},
+				{
+					path: filepath.Join(testDir, "prefix1_bar"),
+					info: testFileInfo(t, "prefix1_bar", 42),
+				},
+			},
+			expRemoved: []string{filepath.Join(testDir, "prefix1_bar")},
+		},
+		"remove fails": {
+			prefix: "prefix1",
+			tgtUID: "42",
+			testInputs: []*testWalkInput{
+				{
+					path:   filepath.Join(testDir, "prefix1_foo"),
+					info:   testFileInfo(t, "prefix1_foo", 42),
+					expErr: errors.New("could not remove"),
+				},
+			},
+			expRemoved: []string{},
+			removeErr:  errors.New("could not remove"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			removedFiles := make([]string, 0)
+			removeFn := func(path string) error {
+				if tc.removeErr == nil {
+					removedFiles = append(removedFiles, path)
+				}
+				return tc.removeErr
+			}
+
+			testFn := hugePageWalkFunc(testDir, tc.prefix, tc.tgtUID, removeFn)
+			for _, ti := range tc.testInputs {
+				gotErr := testFn(ti.path, ti.info, ti.err)
+				common.CmpErr(t, ti.expErr, gotErr)
+			}
+			if diff := cmp.Diff(tc.expRemoved, removedFiles); diff != "" {
+				t.Fatalf("unexpected remove result (-want, +got):\n%s\n", diff)
+			}
 		})
 	}
 }

@@ -6,19 +6,18 @@ hosts:
         - boro-C
         - boro-D
         - boro-E
-timeout: 300
+timeout: 180
 server_config:
     name: daos_server
 pool:
     mode: 146
     name: daos_server
     scm_size: 1000000000
-    svcn: 1
     control_method: dmg
 container:
     type: POSIX
 client_processes:
     np: 8
 test_repo:
-    llnl: "/usr/lib64/testmpio"
-    mpi4py: "/usr/lib64/python2.7/site-packages/mpi4py/tests"
+    llnl: "testmpio"
+    mpi4py: "/usr/lib64/python3.6/site-packages/mpi4py/tests"

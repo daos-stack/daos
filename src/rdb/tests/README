@@ -1,7 +1,3 @@
-The rdb_test_runner.py script is now out of date and will be
-removed at a future time when this rdbt test will be converted
-to an automated unit test.
-
 Manual execution instructions:
 
 From the command line the tests are run with:
@@ -27,13 +23,13 @@ rdbt init --group=daos_server --uuid <uuid> --replicas=<N>
 
 # wait a short number of seconds for RDB initialization, then:
 # create KV stores in the initialized RDB on N replicas
-rdbt create --group=daos_server -replicas=<N> --ranks=<S>
+rdbt create --group=daos_server -replicas=<N> --nranks=<S>
 
 # run multi-replica tests
 rdbt test-multi --group=daos_server --replicas=<N> --nranks=<S>
 
 # destroy the KV stores
-rdbt destroy --group=daos_server -replicas=<N> --ranks=<S>
+rdbt destroy --group=daos_server -replicas=<N> --nranks=<S>
 
 # finalize the replicated database
 rdbt fini --group=daos-server

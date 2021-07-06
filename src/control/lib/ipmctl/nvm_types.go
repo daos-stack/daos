@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package ipmctl
@@ -30,8 +13,12 @@ type DeviceUID [22]byte
 
 // String converts the DeviceUID bytes to a string
 func (d DeviceUID) String() string {
-	n := bytes.IndexByte(d[:], 0)
-	return string(d[:n])
+	return bytes2String(d[:])
+}
+
+func bytes2String(b []byte) string {
+	n := bytes.IndexByte(b, 0)
+	return string(b[:n])
 }
 
 // Version represents the Go equivalent of an NVM_VERSION string buffer
@@ -39,8 +26,15 @@ type Version [25]byte
 
 // String converts the Version bytes to a string
 func (v Version) String() string {
-	n := bytes.IndexByte(v[:], 0)
-	return string(v[:n])
+	return bytes2String(v[:])
+}
+
+// PartNumber represents the part number string for an NVM device.
+type PartNumber [21]byte
+
+// String converts the PartNumber bytes to a string
+func (p PartNumber) String() string {
+	return bytes2String(p[:])
 }
 
 // DeviceDiscovery struct represents Go equivalent of C.struct_device_discovery
@@ -69,7 +63,7 @@ type DeviceDiscovery struct {
 	Manufacturing_info_valid uint8
 	Manufacturing_location   uint8
 	Manufacturing_date       uint16
-	Part_number              [21]int8
+	Part_number              PartNumber
 	Fw_revision              Version
 	Fw_api_version           Version
 	Pad_cgo_2                [5]byte

@@ -1,24 +1,7 @@
 /*
- * (C) Copyright 2018-2020 Intel Corporation.
+ * (C) Copyright 2018-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. 8F-30005.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This is a simple example of SWIM implementation on top of CaRT APIs.
@@ -75,13 +58,14 @@ static struct global {
 	int shutdown;
 } g;
 
-static int test_send_message(struct swim_context *ctx, swim_id_t to,
-			     struct swim_member_update *upds,
+static int test_send_message(struct swim_context *ctx, swim_id_t id,
+			     swim_id_t to, struct swim_member_update *upds,
 			     size_t nupds)
 {
 	struct network_pkt *item;
 	int rc = 0;
 
+	/* FIXME: not adopted yet to new two-ways RPC */
 	item = malloc(sizeof(*item));
 	if (item != NULL) {
 		item->np_from  = swim_self_get(ctx);
@@ -89,12 +73,21 @@ static int test_send_message(struct swim_context *ctx, swim_id_t to,
 		item->np_upds  = upds;
 		item->np_nupds = nupds;
 
-		pthread_mutex_lock(&g.mutex);
+		rc = pthread_mutex_lock(&g.mutex);
+		D_ASSERT(rc == 0);
 		TAILQ_INSERT_TAIL(&g.pkts, item, np_link);
-		pthread_mutex_unlock(&g.mutex);
+		rc = pthread_mutex_unlock(&g.mutex);
+		D_ASSERT(rc == 0);
 	}
 
 	return rc;
+}
+
+static int test_send_reply(struct swim_context *ctx, swim_id_t from,
+			      swim_id_t to, int ret_rc, void *args)
+{
+	/* FIXME: not adopted yet to new two-ways RPC */
+	return 0;
 }
 
 static swim_id_t test_get_dping_target(struct swim_context *ctx)
@@ -255,11 +248,13 @@ static void *network_thread(void *arg)
 	fprintf(stderr, "network  thread running on core %d\n", sched_getcpu());
 
 	do {
-		pthread_mutex_lock(&g.mutex);
+		rc = pthread_mutex_lock(&g.mutex);
+		D_ASSERT(rc == 0);
 		item = TAILQ_FIRST(&g.pkts);
 		if (item != NULL) {
 			TAILQ_REMOVE(&g.pkts, item, np_link);
-			pthread_mutex_unlock(&g.mutex);
+			rc = pthread_mutex_unlock(&g.mutex);
+			D_ASSERT(rc == 0);
 
 			pkt_total++;
 			if (!(rand() % failures)) {
@@ -270,7 +265,7 @@ static void *network_thread(void *arg)
 			} else if (failed_member != item->np_from &&
 				   failed_member != item->np_to) {
 				/* emulate RPC receive by target */
-				rc = swim_parse_message(g.swim_ctx[item->np_to],
+				rc = swim_updates_parse(g.swim_ctx[item->np_to],
 						   item->np_from, item->np_upds,
 						   item->np_nupds);
 				if (rc) {
@@ -282,7 +277,8 @@ static void *network_thread(void *arg)
 			D_FREE(item->np_upds);
 			free(item);
 		} else {
-			pthread_mutex_unlock(&g.mutex);
+			rc = pthread_mutex_unlock(&g.mutex);
+			D_ASSERT(rc == 0);
 		}
 
 		if (pkt_last != pkt_total && !(pkt_total % members_count)) {
@@ -325,7 +321,8 @@ static void *progress_thread(void *arg)
 }
 
 static struct swim_ops swim_ops = {
-	.send_message     = &test_send_message,
+	.send_request     = &test_send_message,
+	.send_reply       = &test_send_reply,
 	.get_dping_target = &test_get_dping_target,
 	.get_iping_target = &test_get_iping_target,
 	.get_member_state = &test_get_member_state,
@@ -351,7 +348,8 @@ int test_fini(void)
 			fprintf(stderr, "pthread_join() failed rc=%d\n", rc);
 	}
 
-	pthread_mutex_destroy(&g.mutex);
+	rc = pthread_mutex_destroy(&g.mutex);
+	D_ASSERT(rc == 0);
 
 	for (i = 0; i < members_count; i++) {
 		swim_fini(g.swim_ctx[i]);

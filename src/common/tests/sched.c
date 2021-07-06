@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2018 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is for testing task / scheduler
@@ -34,7 +17,7 @@
 #include <daos/common.h>
 #include <daos/tse.h>
 
-#define TASK_COUNT		1000
+#define TASK_COUNT		(D_ON_VALGRIND ? 10 : 1000)
 #define SCHED_COUNT		5
 
 #define TSE_TEST_FMT	"-------- %s test_%s: %s\n"
@@ -338,7 +321,7 @@ out:
 	return rc;
 }
 
-#define REINITS 3000000
+#define REINITS (D_ON_VALGRIND ? 3000 : 3000000)
 
 static int
 comp_reinit_cb(tse_task_t *task, void *data)
@@ -692,7 +675,7 @@ sched_test_6()
 	bool		flag;
 	int		i, rc;
 
-	TSE_TEST_ENTRY("5", "Task Dependencies");
+	TSE_TEST_ENTRY("6", "Task Dependencies");
 
 	print_message("Init Scheduler\n");
 	rc = tse_sched_init(&sched, NULL, 0);
@@ -820,6 +803,200 @@ out:
 }
 
 int
+inc_func1(tse_task_t *task)
+{
+	int *counter = tse_task_get_priv(task);
+
+	*counter = *counter + 1;
+	return 0;
+}
+
+int
+inc_func2(tse_task_t *task)
+{
+	int *counter = tse_task_get_priv(task);
+
+	*counter = *counter + 2;
+	return 0;
+}
+
+int
+inc_func3(tse_task_t *task)
+{
+	int *counter = tse_task_get_priv(task);
+
+	*counter = *counter + 3;
+	return 0;
+}
+
+static int
+sched_test_7()
+{
+	tse_sched_t	sched;
+	tse_task_t	*task = NULL;
+	int		*counter = NULL;
+	bool		flag;
+	int		rc;
+
+	TSE_TEST_ENTRY("7", "Task Reset");
+
+	print_message("Init Scheduler\n");
+	rc = tse_sched_init(&sched, NULL, 0);
+	if (rc != 0) {
+		print_error("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	D_ALLOC_PTR(counter);
+	*counter = 0;
+
+	rc = tse_task_create(inc_func1, &sched, counter, &task);
+	if (rc != 0) {
+		print_error("Failed to create task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = tse_task_schedule(task, false);
+	if (rc != 0) {
+		print_error("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	tse_sched_progress(&sched);
+	tse_task_addref(task); /* take extra ref count on task */
+	tse_task_complete(task, 0);
+
+	D_ASSERT(*counter == 1);
+
+	rc = tse_task_reset(task, inc_func2, counter);
+	if (rc != 0) {
+		print_error("Failed to reset task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = tse_task_schedule(task, false);
+	if (rc != 0) {
+		print_error("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	tse_sched_progress(&sched);
+	tse_task_addref(task); /* take extra ref count on task */
+	tse_task_complete(task, 0);
+	D_ASSERT(*counter == 3);
+
+	rc = tse_task_reset(task, inc_func3, counter);
+	if (rc != 0) {
+		print_error("Failed to reset task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = tse_task_schedule(task, false);
+	if (rc != 0) {
+		print_error("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	tse_sched_progress(&sched);
+	tse_task_complete(task, 0);
+	task = NULL; /* lost my refcount */
+	D_ASSERT(*counter == 6);
+
+	print_message("Check scheduler is empty\n");
+	flag = tse_sched_check_complete(&sched);
+	if (!flag) {
+		print_error("Scheduler should not have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+out:
+	if (task)
+		tse_task_decref(task);
+	if (counter)
+		D_FREE(counter);
+	TSE_TEST_EXIT(rc);
+	return rc;
+}
+
+static int
+just_complete_body_fn(tse_task_t *task)
+{
+	D_ASSERT(task != NULL);
+	tse_task_complete(task, 0);
+	return 0;
+}
+
+static int
+sched_test_8()
+{
+	tse_sched_t	sched;
+	tse_task_t	*task;
+	uint64_t	delay = 5 * 1e6 /* 5 s */;
+	uint64_t	scheduled_pre;
+	uint64_t	scheduled_post;
+	bool		completed;
+	int		rc;
+
+	TSE_TEST_ENTRY("8", "Delayed scheduling");
+
+	print_message("Init scheduler\n");
+	rc = tse_sched_init(&sched, NULL, 0);
+	if (rc != 0) {
+		print_error("Failed to init scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("Create task\n");
+	rc = tse_task_create(just_complete_body_fn, &sched, NULL, &task);
+	if (rc != 0) {
+		print_error("Failed to init task: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("Schedule task with a delay\n");
+	scheduled_pre = daos_getutime();
+	rc = tse_task_schedule_with_delay(task, false, delay);
+	scheduled_post = daos_getutime();
+	if (rc != 0) {
+		print_error("Failed to insert task in scheduler: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	print_message("Progress scheduler immediately\n");
+	tse_sched_progress(&sched);
+
+	print_message("Check that task has not been executed yet\n");
+	completed = tse_sched_check_complete(&sched);
+	if (daos_getutime() - scheduled_pre >= delay) {
+		print_message("Test unexpectedly slow; skip this check\n");
+	} else if (completed) {
+		print_error("Scheduler should have in-flight tasks\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	print_message("Wait out the delay\n");
+	while (daos_getutime() - scheduled_post < delay)
+		sleep(1);
+
+	print_message("Progress scheduler again\n");
+	tse_sched_progress(&sched);
+
+	print_message("Check that task has been executed\n");
+	completed = tse_sched_check_complete(&sched);
+	if (!completed) {
+		print_error("Scheduler should have completed task\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	print_message("Complete scheduler\n");
+	tse_sched_complete(&sched, 0, false);
+
+out:
+	TSE_TEST_EXIT(rc);
+	return rc;
+}
+
+int
 main(int argc, char **argv)
 {
 	int		test_fail = 0;
@@ -862,6 +1039,18 @@ main(int argc, char **argv)
 	rc = sched_test_6();
 	if (rc != 0) {
 		print_error("SCHED TEST 6 failed: %d\n", rc);
+		test_fail++;
+	}
+
+	rc = sched_test_7();
+	if (rc != 0) {
+		print_error("SCHED TEST 7 failed: %d\n", rc);
+		test_fail++;
+	}
+
+	rc = sched_test_8();
+	if (rc != 0) {
+		print_error("SCHED TEST 8 failed: %d\n", rc);
 		test_fail++;
 	}
 

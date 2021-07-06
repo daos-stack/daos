@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -61,17 +44,17 @@ vc_set_fail_loc(test_arg_t *arg, uint64_t fail_loc, int total, int cur)
 	if (fail_loc == 0 || cur > total || cur < total - 1)
 		return;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	if (cur == total) {
-		MPI_Barrier(MPI_COMM_WORLD);
 		if (arg->myrank == 0)
-			daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-					     0, 0, NULL);
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					      0, 0, NULL);
 	} else {
 		if (arg->myrank == 0)
-			daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-					     fail_loc, 0, NULL);
-		MPI_Barrier(MPI_COMM_WORLD);
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					      fail_loc, 0, NULL);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 static void
@@ -158,13 +141,13 @@ vc_without_inconsistency(void **state, daos_iod_type_t iod_type)
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, iod_type, arg);
 
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ioreq_fini(&req);
 }
@@ -196,7 +179,7 @@ vc_3(void **state)
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
@@ -206,7 +189,7 @@ vc_3(void **state)
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	ioreq_fini(&req);
 }
@@ -219,18 +202,21 @@ vc_4(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with different rec\n");
 
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
 
-	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, DAOS_VC_DIFF_REC);
+	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0,
+			     DAOS_VC_DIFF_REC | DAOS_FAIL_ALWAYS);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, -DER_MISMATCH);
+	assert_rc_equal(rc, -DER_MISMATCH);
 
 	ioreq_fini(&req);
 }
@@ -252,7 +238,7 @@ vc_test_lost_data(void **state, int type)
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	switch (type) {
@@ -274,7 +260,7 @@ vc_test_lost_data(void **state, int type)
 	}
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, -DER_MISMATCH);
+	assert_rc_equal(rc, -DER_MISMATCH);
 
 	ioreq_fini(&req);
 }
@@ -282,6 +268,9 @@ vc_test_lost_data(void **state, int type)
 static void
 vc_5(void **state)
 {
+
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost rec\n");
 	vc_test_lost_data(state, VTLT_REC);
 }
@@ -289,6 +278,9 @@ vc_5(void **state)
 static void
 vc_6(void **state)
 {
+
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost akey\n");
 	vc_test_lost_data(state, VTLT_AKEY);
 }
@@ -296,6 +288,9 @@ vc_6(void **state)
 static void
 vc_7(void **state)
 {
+
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost dkey\n");
 	vc_test_lost_data(state, VTLT_DKEY);
 }
@@ -308,28 +303,33 @@ vc_8(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with lost replica\n");
 
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				     DAOS_VC_LOST_REPLICA, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_VC_LOST_REPLICA | DAOS_FAIL_ALWAYS,
+				      0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, -DER_MISMATCH);
+	assert_rc_equal(rc, -DER_MISMATCH);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
-		daos_mgmt_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				     0, 0, NULL);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	ioreq_fini(&req);
 }
@@ -342,19 +342,21 @@ vc_9(void **state)
 	struct ioreq	 req;
 	int		 rc;
 
+	FAULT_INJECTION_REQUIRED();
+
 	print_message("verify with different dkey\n");
 
 	if (!test_runable(arg, dts_vc_replica_cnt))
 		return;
 
-	oid = dts_oid_gen(dts_vc_class, 0, arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_vc_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7,
 			     DAOS_VC_DIFF_DKEY, 0, 0);
 
 	rc = vc_obj_verify(arg, oid);
-	assert_int_equal(rc, -DER_MISMATCH);
+	assert_rc_equal(rc, -DER_MISMATCH);
 
 	ioreq_fini(&req);
 }
@@ -386,7 +388,7 @@ vc_test_setup(void **state)
 	int     rc;
 
 	rc = test_setup(state, SETUP_CONT_CONNECT, true, DEFAULT_POOL_SIZE,
-			NULL);
+			0, NULL);
 
 	return rc;
 }
@@ -402,7 +404,7 @@ run_daos_vc_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("DAOS vc tests", vc_tests, ARRAY_SIZE(vc_tests),
+	rc = run_daos_sub_tests("DAOS_VC", vc_tests, ARRAY_SIZE(vc_tests),
 				sub_tests, sub_tests_size, vc_test_setup,
 				test_teardown);
 

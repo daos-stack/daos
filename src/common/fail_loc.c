@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * This file is part of daos
@@ -89,7 +72,8 @@ daos_fail_check(uint64_t fail_loc)
 void
 daos_fail_loc_set(uint64_t fail_loc)
 {
-	struct d_fault_attr_t attr_in = { 0 };
+	struct d_fault_attr_t	attr_in = { 0 };
+	bool			attr_set = false;
 
 	/* If fail_loc is 0, let's assume it will reset unit test fail loc */
 	if (fail_loc == 0)
@@ -104,14 +88,19 @@ daos_fail_loc_set(uint64_t fail_loc)
 	attr_in.fa_probability_y = 1;
 	if (fail_loc & DAOS_FAIL_ONCE) {
 		attr_in.fa_max_faults = 1;
+		attr_set = true;
 	} else if (fail_loc & DAOS_FAIL_SOME) {
 		D_ASSERT(daos_fail_num > 0);
 		attr_in.fa_max_faults = daos_fail_num;
+		attr_set = true;
 	} else if (fail_loc & DAOS_FAIL_ALWAYS) {
 		attr_in.fa_max_faults = 0;
+		attr_set = true;
 	}
 
-	d_fault_attr_set(attr_in.fa_id, attr_in);
+	if (attr_set)
+		d_fault_attr_set(attr_in.fa_id, attr_in);
+
 	daos_fail_loc = fail_loc;
 	D_DEBUG(DB_ANY, "*** fail_loc="DF_X64"\n", daos_fail_loc);
 }
@@ -172,12 +161,19 @@ daos_fail_init(void)
 	int rc;
 
 	rc = d_fault_inject_init();
-	if (rc)
+	if (rc != 0 && rc != -DER_NOSYS)
 		return rc;
 
+	/* Log, but no not propagate error on registering the fault as this
+	 * leads to deadlocks.
+	 */
 	rc = d_fault_attr_set(DAOS_FAIL_UNIT_TEST_GROUP, attr);
-	if (rc)
+	if (rc != 0) {
+		D_ERROR("Failed to set fault attr, "DF_RC"\n",
+			DP_RC(rc));
 		d_fault_inject_fini();
+	}
+	rc = 0;
 
 	return rc;
 }

@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2019-2020 Intel Corporation.
+ * (C) Copyright 2019-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
 #define D_LOGFAC	DD_FAC(csum)
@@ -320,12 +303,6 @@ cc_biovcsum_incr(struct csum_context *ctx, uint32_t nr)
 	ctx->cc_biov_csum_idx += nr;
 }
 
-static uint64_t
-cc2biov_csums_nr(struct csum_context *ctx)
-{
-	return ctx->cc_biov_csum_idx + 1;
-}
-
 /**
  * determine if a new checksum is needed for the chunk given a record index.
  * A biov will have a prefix or suffix if the raw extent is partly covered by
@@ -609,26 +586,14 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 	if (biov_csums_used != NULL)
 		*biov_csums_used = 0;
 
-	if (!daos_csummer_initialized(csummer) || !bsgl)
-		return 0;
-
-	if (!csum_iod_is_supported(iod))
-		return 0;
-
-	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		ci_insert(&iod_csums->ic_data[0], 0,
-			   biov_csums[0].cs_csum, biov_csums[0].cs_len);
-		if (biov_csums_used != NULL)
-			(*biov_csums_used) = 1;
-		return 0;
-	}
-
 	/** Verify have correct csums for extents returned.
 	 * Should be 1 biov_csums for each non-hole biov in bsgl
 	 */
 	for (i = 0, j = 0; i < bsgl->bs_nr_out; i++) {
-		if (bio_addr_is_hole(&(bio_sgl_iov(bsgl, i)->bi_addr)))
+		if (bio_addr_is_hole(&(bio_sgl_iov(bsgl, i)->bi_addr))) {
+			D_DEBUG(DB_CSUM, "biov is a hole. skipping\n");
 			continue;
+		}
 		if (!ci_is_valid(&biov_csums[j++])) {
 			D_ERROR("Invalid csum for biov %d.\n", i);
 			return -DER_CSUM;
@@ -646,6 +611,7 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 		struct dcs_csum_info	*info = &iod_csums->ic_data[i];
 
 		if (ctx.cc_rec_len > 0 && ci_is_valid(info)) {
+			D_DEBUG(DB_CSUM, "Adding csums for recx %d\n", i);
 			rc = cc_add_csums_for_recx(&ctx, recx, info);
 			if (rc != 0)
 				D_ERROR("Failed to add csum for "
@@ -658,7 +624,11 @@ ds_csum_add2iod_array(daos_iod_t *iod, struct daos_csummer *csummer,
 
 	/** return the count of biov csums used. */
 	if (biov_csums_used != NULL)
-		*biov_csums_used = cc2biov_csums_nr(&ctx);
+		/**
+		 * ctx.cc_biov_csums_idx will have the number of
+		 * csums processed
+		 */
+		*biov_csums_used = ctx.cc_biov_csums_idx;
 	return rc;
 }
 
@@ -677,6 +647,8 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 		return 0;
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
+	D_DEBUG(DB_CSUM, "Adding fetched to IOD: "DF_C_IOD", csum: "DF_CI"\n",
+		DP_C_IOD(iod), DP_CI(biov_csums[0]));
 		ci_insert(&iod_csums->ic_data[0], 0,
 			  biov_csums[0].cs_csum, biov_csums[0].cs_len);
 		if (biov_csums_used != NULL)

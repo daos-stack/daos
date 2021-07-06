@@ -1,25 +1,8 @@
 #!/usr/bin/python
 """
-  (C) Copyright 2020 Intel Corporation.
+  (C) Copyright 2020-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. 8F-30005.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
 import os
@@ -29,7 +12,8 @@ from general_utils import pcmd
 class DaosTestError(Exception):
     """DAOS API exception class."""
 
-def acl_entry(usergroup, name, perm, permissions):
+
+def acl_entry(usergroup, name, perm, permissions=None):
     """Create a daos acl entry for the specified user or group and permission
 
     Args:
@@ -69,6 +53,20 @@ def acl_principal(usergroup, name):
         entry = "u:" + name + "@"
     return entry
 
+def get_user_type(test_user):
+    """Get test user's user type for ACE access control entry.
+
+    Args:
+        test_user (str): test user name.
+
+    Return:
+        str: test user type user/group for ACE.
+
+    """
+    user_type = "user"
+    if "group" in test_user.lower():
+        user_type = "group"
+    return user_type
 
 def add_del_user(hosts, bash_cmd, user):
     """Add or delete the daos user and group on host by sudo command.
@@ -96,10 +94,32 @@ def create_acl_file(file_name, permissions):
         permissions (str): daos acl permission list.
 
     """
-    acl_file = open(file_name, "w")
+    acl_file = open(file_name, "w+")
     acl_file.write("\n".join(permissions))
     acl_file.close()
 
+
+def read_acl_file(filename):
+    """Read contents of given acl file.
+
+    Args:
+        filename: name of file to be read for acl information
+
+    Returns:
+        list: list containing ACL entries
+
+    """
+    f = open(filename, 'r')
+    content = f.readlines()
+    f.close()
+
+    # Parse
+    acl = []
+    for entry in content:
+        if not entry.startswith("#"):
+            acl.append(entry.strip())
+
+    return acl
 
 def generate_acl_file(acl_type, acl_args):
     """Creates an acl file for the specified type.

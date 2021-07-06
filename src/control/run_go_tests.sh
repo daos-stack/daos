@@ -2,6 +2,57 @@
 ## Run linters across control plane code and execute Go tests
 set -eu
 
+function get_cpu_perf()
+{
+	test_file=$(mktemp primebenchXXX.go)
+
+	cat <<EndOfScript>"$test_file"
+package main
+
+import (
+	"fmt"
+	"math"
+	"time"
+)
+
+func main() {
+	primeCh := make(chan int)
+	primes := 0
+
+	go func() {
+		isPrime := func(v int) bool {
+			for i := 2; i <= int(math.Floor(math.Sqrt(float64(v)))); i++ {
+				if v%i == 0 {
+					return false
+				}
+			}
+			return v > 1
+		}
+		for i := 2; ; i++ {
+			if isPrime(i) {
+				primeCh <- i
+			}
+		}
+	}()
+
+	timeout := 1 * time.Second
+	timer := time.NewTimer(timeout)
+	for {
+		select {
+		case <-timer.C:
+			fmt.Printf("%d primes in %s", primes, timeout)
+			return
+		case <-primeCh:
+			primes++
+		}
+	}
+}
+EndOfScript
+
+	go run "$test_file"
+	rm -f "$test_file"
+}
+
 function find_build_source()
 {
 	BASE=$PWD
@@ -45,19 +96,20 @@ function setup_environment()
 	source "${build_source}"
 
 	# allow cgo to find and link to third-party libs
-	LD_LIBRARY_PATH=${SL_PREFIX+${SL_PREFIX}/lib64}
+	LD_LIBRARY_PATH=${SL_PREFIX+${SL_PREFIX}/lib}
+	LD_LIBRARY_PATH+="${SL_PREFIX+:${SL_PREFIX}/lib64}"
 	LD_LIBRARY_PATH+="${SL_SPDK_PREFIX+:${SL_SPDK_PREFIX}/lib}"
-	LD_LIBRARY_PATH+="${SL_OFI_PREFIX+:${SL_OFI_PREFIX}/lib}"
-	LD_LIBRARY_PATH+="${SL_ISAL_PREFIX+:${SL_ISAL_PREFIX}/lib}"
-	CGO_LDFLAGS=${SL_PREFIX+-L${SL_PREFIX}/lib64}
+	CGO_LDFLAGS=${SL_PREFIX+-L${SL_PREFIX}/lib}
+	CGO_LDFLAGS+="${SL_PREFIX+ -L${SL_PREFIX}/lib64}"
 	CGO_LDFLAGS+="${SL_SPDK_PREFIX+ -L${SL_SPDK_PREFIX}/lib}"
-	CGO_LDFLAGS+="${SL_OFI_PREFIX+ -L${SL_OFI_PREFIX}/lib}"
-	CGO_LDFLAGS+="${SL_ISAL_PREFIX+ -L${SL_ISAL_PREFIX}/lib}"
-	CGO_LDFLAGS+=" -lisal"
 	CGO_CFLAGS=${SL_PREFIX+-I${SL_PREFIX}/include}
 	CGO_CFLAGS+="${SL_SPDK_PREFIX+ -I${SL_SPDK_PREFIX}/include}"
-	CGO_CFLAGS+="${SL_OFI_PREFIX+ -I${SL_OFI_PREFIX}/include}"
-	CGO_CFLAGS+="${SL_ISAL_PREFIX+ -I${SL_ISAL_PREFIX}/include}"
+
+	src_include="$(dirname "$build_source")/src/include"
+	if [ -d "$src_include" ]; then
+		echo "including path \"${src_include}\" in CGO_CFLAGS"
+		CGO_CFLAGS+=" -I${src_include}"
+	fi
 }
 
 function check_formatting()
@@ -115,7 +167,7 @@ echo "  GO VERSION: $(go version | awk '{print $3" "$4}')"
 echo "  LD_LIBRARY_PATH: $LD_LIBRARY_PATH"
 echo "  CGO_LDFLAGS: $CGO_LDFLAGS"
 echo "  CGO_CFLAGS: $CGO_CFLAGS"
-
+echo "  CPU Perf: $(get_cpu_perf)"
 echo
 
 echo "Running all tests under $controldir..."

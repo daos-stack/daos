@@ -1,24 +1,8 @@
 //
-// (C) Copyright 2020 Intel Corporation.
+// (C) Copyright 2020-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
 
 package main
 
@@ -27,7 +11,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -74,15 +57,17 @@ func TestDmg_JsonOutput(t *testing.T) {
 		cmdArgs = append(cmdArgs, cmd)
 	})
 
-	aclPath := filepath.Join(os.TempDir(), "testACLFile.txt")
-	createTestFile(t, aclPath, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
-	defer os.Remove(aclPath)
+	testDir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+	aclContent := "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n"
+	aclPath := common.CreateTestFile(t, testDir, aclContent)
 
 	for _, args := range cmdArgs {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
-			case "version":
+			case "version", "telemetry config", "telemetry run", "config generate",
+				"manpage":
 				return
 			case "storage prepare":
 				testArgs = append(testArgs, "--force")
@@ -92,6 +77,10 @@ func TestDmg_JsonOutput(t *testing.T) {
 				testArgs = append(testArgs, []string{"-u", common.MockUUID()}...)
 			case "storage set nvme-faulty":
 				testArgs = append(testArgs, []string{"--force", "-u", common.MockUUID()}...)
+			case "storage replace nvme":
+				testArgs = append(testArgs, []string{"--old-uuid", common.MockUUID(), "--new-uuid", common.MockUUID()}...)
+			case "storage identify vmd":
+				testArgs = append(testArgs, []string{"--uuid", common.MockUUID()}...)
 			case "pool create":
 				testArgs = append(testArgs, []string{"-s", "1TB"}...)
 			case "pool destroy", "pool evict", "pool query", "pool get-acl":
@@ -103,11 +92,13 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool set-prop":
 				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "-n", "foo", "-v", "bar"}...)
 			case "pool extend":
-				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--ranks", "0", "-s", "1TB"}...)
+				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--ranks", "0"}...)
 			case "pool exclude", "pool drain", "pool reintegrate":
 				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--rank", "0"}...)
 			case "cont set-owner":
 				testArgs = append(testArgs, []string{"--user", "foo", "--pool", common.MockUUID(), "--cont", common.MockUUID()}...)
+			case "telemetry metrics list", "telemetry metrics query":
+				return // These commands query via http directly
 			}
 
 			// replace os.Stdout so that we can verify the generated output
@@ -115,7 +106,7 @@ func TestDmg_JsonOutput(t *testing.T) {
 			r, w, _ := os.Pipe()
 			done := make(chan struct{})
 			go func() {
-				io.Copy(&result, r)
+				_, _ = io.Copy(&result, r)
 				close(done)
 			}()
 			stdout := os.Stdout

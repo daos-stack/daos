@@ -1,24 +1,7 @@
 /**
- * (C) Copyright 2016-2020 Intel Corporation.
+ * (C) Copyright 2016-2021 Intel Corporation.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
- * The Government's rights to use, modify, reproduce, release, perform, display,
- * or disclose this software are subject to the terms of the Apache License as
- * provided in Contract No. B609815.
- * Any reproduction of computer software, computer software documentation, or
- * portions thereof marked with this legend must also reproduce the markings.
+ * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
  * DAOS Client initialization/shutdown routines
@@ -29,6 +12,7 @@
 #include <daos/common.h>
 #include <daos/event.h>
 #include <daos/mgmt.h>
+#include <daos/sys_debug.h>
 #include <daos/pool.h>
 #include <daos/container.h>
 #include <daos/object.h>
@@ -38,35 +22,36 @@
 #include <daos/btree.h>
 #include <daos/btree_class.h>
 #include <daos/placement.h>
+#include <daos/job.h>
 #include "task_internal.h"
 #include <pthread.h>
 
+/** protect against concurrent daos_init/fini calls */
 static pthread_mutex_t	module_lock = PTHREAD_MUTEX_INITIALIZER;
-static bool		module_initialized;
+
+/** refcount on how many times daos_init has been called */
+static int		module_initialized;
 
 const struct daos_task_api dc_funcs[] = {
 	/** Management */
-	{dc_mgmt_svc_rip, sizeof(daos_svc_rip_t)},
-	{dc_pool_create, sizeof(daos_pool_create_t)},
-	{dc_pool_destroy, sizeof(daos_pool_destroy_t)},
-	{dc_pool_extend, sizeof(daos_pool_extend_t)},
-	{dc_pool_evict, sizeof(daos_pool_evict_t)},
-	{dc_mgmt_set_params, sizeof(daos_set_params_t)},
-	{dc_pool_add_replicas, sizeof(daos_pool_replicas_t)},
-	{dc_pool_remove_replicas, sizeof(daos_pool_replicas_t)},
-	{dc_mgmt_list_pools, sizeof(daos_mgmt_list_pools_t)},
+	{dc_deprecated, 0},
+	{dc_deprecated, 0},
+	{dc_deprecated, 0},
+	{dc_debug_set_params, sizeof(daos_set_params_t)},
+	{dc_mgmt_get_bs_state, sizeof(daos_mgmt_get_bs_state_t)},
 
 	/** Pool */
 	{dc_pool_connect, sizeof(daos_pool_connect_t)},
 	{dc_pool_disconnect, sizeof(daos_pool_disconnect_t)},
 	{dc_pool_exclude, sizeof(daos_pool_update_t)},
 	{dc_pool_exclude_out, sizeof(daos_pool_update_t)},
-	{dc_pool_add, sizeof(daos_pool_update_t)},
+	{dc_pool_reint, sizeof(daos_pool_update_t)},
 	{dc_pool_query, sizeof(daos_pool_query_t)},
 	{dc_pool_query_target, sizeof(daos_pool_query_target_t)},
 	{dc_pool_list_attr, sizeof(daos_pool_list_attr_t)},
 	{dc_pool_get_attr, sizeof(daos_pool_get_attr_t)},
 	{dc_pool_set_attr, sizeof(daos_pool_set_attr_t)},
+	{dc_pool_del_attr, sizeof(daos_pool_del_attr_t)},
 	{dc_pool_stop_svc, sizeof(daos_pool_stop_svc_t)},
 	{dc_pool_list_cont, sizeof(daos_pool_list_cont_t)},
 
@@ -85,6 +70,7 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_cont_list_attr, sizeof(daos_cont_list_attr_t)},
 	{dc_cont_get_attr, sizeof(daos_cont_get_attr_t)},
 	{dc_cont_set_attr, sizeof(daos_cont_set_attr_t)},
+	{dc_cont_del_attr, sizeof(daos_cont_del_attr_t)},
 	{dc_cont_alloc_oids, sizeof(daos_cont_alloc_oids_t)},
 	{dc_cont_list_snap, sizeof(daos_cont_list_snap_t)},
 	{dc_cont_create_snap, sizeof(daos_cont_create_snap_t)},
@@ -128,7 +114,10 @@ const struct daos_task_api dc_funcs[] = {
 	{dc_array_get_size, sizeof(daos_array_get_size_t)},
 	{dc_array_set_size, sizeof(daos_array_set_size_t)},
 
-	/** HL */
+	/** Key-Value Store */
+	{dc_kv_open, sizeof(daos_kv_open_t)},
+	{dc_kv_close, sizeof(daos_kv_close_t)},
+	{dc_kv_destroy, sizeof(daos_kv_destroy_t)},
 	{dc_kv_get, sizeof(daos_kv_get_t)},
 	{dc_kv_put, sizeof(daos_kv_put_t)},
 	{dc_kv_remove, sizeof(daos_kv_remove_t)},
@@ -144,8 +133,11 @@ daos_init(void)
 	int rc;
 
 	D_MUTEX_LOCK(&module_lock);
-	if (module_initialized)
-		D_GOTO(unlock, rc = -DER_ALREADY);
+	if (module_initialized > 0) {
+		/** already initialized, report success */
+		module_initialized++;
+		D_GOTO(unlock, rc = 0);
+	}
 
 	rc = daos_debug_init(NULL);
 	if (rc != 0)
@@ -161,16 +153,24 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_hhash, rc);
 
-	/** get CaRT configuration */
-	rc = dc_mgmt_net_cfg(NULL);
+	/** set up job info */
+	rc = dc_job_init();
 	if (rc != 0)
 		D_GOTO(out_agent, rc);
+
+	/**
+	 * get CaRT configuration (see mgmtModule.handleGetAttachInfo for the
+	 * handling of NULL system names)
+	 */
+	rc = dc_mgmt_net_cfg(NULL);
+	if (rc != 0)
+		D_GOTO(out_job, rc);
 
 	/** set up event queue */
 	rc = daos_eq_lib_init();
 	if (rc != 0) {
 		D_ERROR("failed to initialize eq_lib: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(out_agent, rc);
+		D_GOTO(out_job, rc);
 	}
 
 	/** set up placement */
@@ -198,7 +198,7 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
-	module_initialized = true;
+	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
 out_co:
@@ -211,6 +211,8 @@ out_pl:
 	pl_fini();
 out_eq:
 	daos_eq_lib_fini();
+out_job:
+	dc_job_fini();
 out_agent:
 	dc_agent_fini();
 out_hhash:
@@ -231,8 +233,17 @@ daos_fini(void)
 	int	rc;
 
 	D_MUTEX_LOCK(&module_lock);
-	if (!module_initialized)
+	if (module_initialized == 0) {
+		/** calling fini without init, report an error */
 		D_GOTO(unlock, rc = -DER_UNINIT);
+	} else if (module_initialized > 1) {
+		/**
+		 * DAOS was initialized multiple times.
+		 * Can happen when using multiple DAOS-aware middleware.
+		 */
+		module_initialized--;
+		D_GOTO(unlock, rc = 0);
+	}
 
 	rc = daos_eq_lib_fini();
 	if (rc != 0) {
@@ -244,12 +255,19 @@ daos_fini(void)
 	dc_cont_fini();
 	dc_pool_fini();
 	dc_mgmt_fini();
+
+	rc = dc_mgmt_notify_exit();
+	if (rc != 0)
+		D_ERROR("failed to disconnect some resources may leak, "
+			DF_RC"\n", DP_RC(rc));
+
 	dc_agent_fini();
+	dc_job_fini();
 
 	pl_fini();
 	daos_hhash_fini();
 	daos_debug_fini();
-	module_initialized = false;
+	module_initialized = 0;
 unlock:
 	D_MUTEX_UNLOCK(&module_lock);
 	return rc;

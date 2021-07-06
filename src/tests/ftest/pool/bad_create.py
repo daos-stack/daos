@@ -1,25 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
-  (C) Copyright 2018-2020 Intel Corporation.
+  (C) Copyright 2018-2021 Intel Corporation.
 
-  Licensed under the Apache License, Version 2.0 (the "License");
-  you may not use this file except in compliance with the License.
-  You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
-
-  GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-  The Government's rights to use, modify, reproduce, release, perform, display,
-  or disclose this software are subject to the terms of the Apache License as
-  provided in Contract No. B609815.
-  Any reproduction of computer software, computer software documentation, or
-  portions thereof marked with this legend must also reproduce the markings.
+  SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 import os
 import traceback
@@ -45,7 +28,9 @@ class BadCreateTest(TestWithServers):
         Test Description:
             Pass bad parameters to pool create.
 
-        :avocado: tags=all,pool,full_regression,tiny,badcreate
+        :avocado: tags=all,full_regression
+        :avocado: tags=tiny
+        :avocado: tags=pool,badcreate
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -71,7 +56,6 @@ class BadCreateTest(TestWithServers):
         setidlist = self.params.get("setname", '/run/createtests/setnames/*')
         if setidlist[0] == 'NULLPTR':
             group = None
-            self.cancel("skipping this test until DAOS-1991 is fixed")
         else:
             group = setidlist[0]
         expected_for_param.append(setidlist[1])
@@ -114,15 +98,13 @@ class BadCreateTest(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context,
-                             dmg_command=self.get_dmg_command())
+        self.pool = TestPool(self.context, self.get_dmg_command())
         self.pool.get_params(self)
         # Manually set TestPool members before calling create
         self.pool.mode.value = mode
         self.pool.uid = uid
         self.pool.gid = gid
         self.pool.scm_size.value = size
-        self.pool.name.value = group
 
         try:
             self.pool.create()

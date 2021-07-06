@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2019-2020 Intel Corporation.
+// (C) Copyright 2019-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 package main
@@ -27,14 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
-	. "github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/common"
 )
 
 // mockReader is a mock used to represent a successful read of some text
@@ -82,23 +63,10 @@ func TestReadACLFile_FileOpenFailed(t *testing.T) {
 	}
 }
 
-func createTestFile(t *testing.T, filePath string, content string) {
-	file, err := os.Create(filePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestReadACLFile_Success(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "testACLFile.txt")
-	createTestFile(t, path, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
-	defer os.Remove(path)
+	dir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+	path := common.CreateTestFile(t, dir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
 
 	expectedNumACEs := 3
 
@@ -119,9 +87,9 @@ func TestReadACLFile_Success(t *testing.T) {
 }
 
 func TestReadACLFile_Empty(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "empty.txt")
-	createTestFile(t, path, "")
-	defer os.Remove(path)
+	dir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+	path := common.CreateTestFile(t, dir, "")
 
 	result, err := readACLFile(path)
 
@@ -129,7 +97,7 @@ func TestReadACLFile_Empty(t *testing.T) {
 		t.Errorf("expected no result, got: %+v", result)
 	}
 
-	ExpectError(t, err, fmt.Sprintf("ACL file '%s' contains no entries", path), "unexpected error")
+	common.ExpectError(t, err, fmt.Sprintf("ACL file '%s' contains no entries", path), "unexpected error")
 }
 
 func TestParseACL_EmptyFile(t *testing.T) {
@@ -143,6 +111,7 @@ func TestParseACL_EmptyFile(t *testing.T) {
 
 	if result == nil {
 		t.Error("Expected result, got nil")
+		return
 	}
 
 	if len(result.Entries) != 0 {
@@ -152,7 +121,7 @@ func TestParseACL_EmptyFile(t *testing.T) {
 
 func TestParseACL_OneValidACE(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
-	expectedACL := &AccessControlList{Entries: []string{expectedACE}}
+	expectedACL := &common.AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
 		text: expectedACE + "\n",
 	}
@@ -174,7 +143,7 @@ func TestParseACL_OneValidACE(t *testing.T) {
 
 func TestParseACL_WhitespaceExcluded(t *testing.T) {
 	expectedACE := "A::OWNER@:rw"
-	expectedACL := &AccessControlList{Entries: []string{expectedACE}}
+	expectedACL := &common.AccessControlList{Entries: []string{expectedACE}}
 	mockFile := &mockReader{
 		text: expectedACE + " \n\n",
 	}
@@ -202,7 +171,7 @@ func TestParseACL_MultiValidACE(t *testing.T) {
 		"L:f:baduser@:rw",
 		"U:f:EVERYONE@:rw",
 	}
-	expectedACL := &AccessControlList{
+	expectedACL := &common.AccessControlList{
 		Entries: expectedACEs,
 	}
 
@@ -253,7 +222,7 @@ func TestParseACL_MultiValidACEWithComment(t *testing.T) {
 		"L:f:baduser@:rw",
 		"U:f:EVERYONE@:rw",
 	}
-	expectedACL := &AccessControlList{
+	expectedACL := &common.AccessControlList{
 		Entries: expectedACEs,
 	}
 
@@ -284,7 +253,7 @@ func TestParseACL_MultiValidACEWithComment(t *testing.T) {
 
 func TestFormatACL(t *testing.T) {
 	for name, tc := range map[string]struct {
-		acl     *AccessControlList
+		acl     *common.AccessControlList
 		verbose bool
 		expStr  string
 	}{
@@ -292,16 +261,16 @@ func TestFormatACL(t *testing.T) {
 			expStr: "# Entries:\n#   None\n",
 		},
 		"empty": {
-			acl:    &AccessControlList{},
+			acl:    &common.AccessControlList{},
 			expStr: "# Entries:\n#   None\n",
 		},
 		"empty verbose": {
-			acl:     &AccessControlList{},
+			acl:     &common.AccessControlList{},
 			expStr:  "# Entries:\n#   None\n",
 			verbose: true,
 		},
 		"single": {
-			acl: &AccessControlList{
+			acl: &common.AccessControlList{
 				Entries: []string{
 					"A::user@:rw",
 				},
@@ -309,7 +278,7 @@ func TestFormatACL(t *testing.T) {
 			expStr: "# Entries:\nA::user@:rw\n",
 		},
 		"single verbose": {
-			acl: &AccessControlList{
+			acl: &common.AccessControlList{
 				Entries: []string{
 					"A::user@:rw",
 				},
@@ -318,7 +287,7 @@ func TestFormatACL(t *testing.T) {
 			verbose: true,
 		},
 		"multiple": {
-			acl: &AccessControlList{
+			acl: &common.AccessControlList{
 				Entries: []string{
 					"A::OWNER@:rw",
 					"A:G:GROUP@:rw",
@@ -328,7 +297,7 @@ func TestFormatACL(t *testing.T) {
 			expStr: "# Entries:\nA::OWNER@:rw\nA:G:GROUP@:rw\nA:G:readers@:r\n",
 		},
 		"multiple verbose": {
-			acl: &AccessControlList{
+			acl: &common.AccessControlList{
 				Entries: []string{
 					"A::OWNER@:rw",
 					"A:G:GROUP@:rw",
@@ -341,7 +310,7 @@ func TestFormatACL(t *testing.T) {
 			verbose: true,
 		},
 		"with owner user": {
-			acl: &AccessControlList{
+			acl: &common.AccessControlList{
 				Entries: []string{
 					"A::OWNER@:rw",
 				},
@@ -350,7 +319,7 @@ func TestFormatACL(t *testing.T) {
 			expStr: "# Owner: bob@\n# Entries:\nA::OWNER@:rw\n",
 		},
 		"with owner group": {
-			acl: &AccessControlList{
+			acl: &common.AccessControlList{
 				Entries: []string{
 					"A:G:GROUP@:rw",
 				},
@@ -360,13 +329,13 @@ func TestFormatACL(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			AssertEqual(t, formatACL(tc.acl, tc.verbose), tc.expStr, "string output didn't match")
+			common.AssertEqual(t, formatACL(tc.acl, tc.verbose), tc.expStr, "string output didn't match")
 		})
 	}
 }
 
 func TestFormatACLDefault(t *testing.T) {
-	acl := &AccessControlList{
+	acl := &common.AccessControlList{
 		Entries: []string{
 			"A::OWNER@:rw",
 			"A::someuser@:rw",
@@ -379,7 +348,7 @@ func TestFormatACLDefault(t *testing.T) {
 	// Just need to make sure it doesn't use verbose mode
 	expStr := formatACL(acl, false)
 
-	AssertEqual(t, formatACLDefault(acl), expStr, "output didn't match non-verbose mode")
+	common.AssertEqual(t, formatACLDefault(acl), expStr, "output didn't match non-verbose mode")
 }
 
 func TestGetVerboseACE(t *testing.T) {
@@ -460,7 +429,7 @@ func TestGetVerboseACE(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			AssertEqual(t, getVerboseACE(tc.shortACE), tc.expStr, "incorrect output")
+			common.AssertEqual(t, getVerboseACE(tc.shortACE), tc.expStr, "incorrect output")
 		})
 	}
 }

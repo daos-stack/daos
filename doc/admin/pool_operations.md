@@ -7,24 +7,23 @@ management interface.
 
 ## Pool Creation/Destroy
 
-A DAOS pool can be created and destroyed through the DAOS management API
-(see daos_mgmt.h). DAOS also provides a utility called dmg to manage
-storage pools from the command line.
+A DAOS pool can be created and destroyed through a utility called dmg to
+manage storage pools from the command line.
 
 **To create a pool:**
 ```bash
-$ dmg pool create --scm-size=xxG --nvme-size=yyT
+$ dmg pool create --size=NTB
 ```
 
 This command creates a pool distributed across the DAOS servers with a
-target size on each server with xxGB of SCM and yyTB of NVMe storage.
-The actual space allocated will be a base-2 representation for SCM
-(i.e., 20GB will be interpreted as 20GiB == `20*2^30` bytes) and base-10
-representation for NVMe (i.e. 20GB will be interpreted as `20*10^9`
-bytes) following the convention of units for memory and storage capacity.
+target size on each server that is comprised of N TB of NVMe storage
+and N * 0.06 (i.e. 6% of NVMe) of SCM storage. The default SCM:NVMe ratio
+may be adjusted at pool creation time as described below.
 The UUID allocated to the newly created pool is printed to stdout
-(referred to as ${puuid}) as well as the rank where the pool service is
-located (referred to as ${svcl}).
+(referred to as ${puuid}) as well as the pool service replica ranks.
+
+NB: The --scm-size and --nvme-size options still exist, but should be
+considered deprecated and will likely be removed in a future release.
 
 ```bash
 $ dmg pool create --help
@@ -32,26 +31,38 @@ $ dmg pool create --help
 [create command options]
       -g, --group=     DAOS pool to be owned by given group, format name@domain
       -u, --user=      DAOS pool to be owned by given user, format name@domain
+      -p, --name=      Unique name for pool (set as label)
       -a, --acl-file=  Access Control List file path for DAOS pool
-      -s, --scm-size=  Size of SCM component of DAOS pool
-      -n, --nvme-size= Size of NVMe component of DAOS pool
+      -z, --size=      Total size of DAOS pool (auto)
+      -t, --scm-ratio= Percentage of SCM:NVMe for pool storage (auto) (default: 6)
+      -k, --nranks=    Number of ranks to use (auto) (default: all)
+      -v, --nsvc=      Number of pool service replicas (default: 3)
+      -s, --scm-size=  Per-server SCM allocation for DAOS pool (manual)
+      -n, --nvme-size= Per-server NVMe allocation for DAOS pool (manual)
       -r, --ranks=     Storage server unique identifiers (ranks) for DAOS pool
-      -v, --nsvc=      Number of pool service replicas (default: 1)
       -S, --sys=       DAOS system that pool is to be a part of (default: daos_server)
 ```
 
 The typical output of this command is as follows:
 
 ```bash
-$ dmg -i pool create -s 1G -n 10G -g root -u root -S daos
-Active connections: [localhost:10001]
-Creating DAOS pool with 1GB SCM and 10GB NvMe storage (0.100 ratio)
-Pool-create command SUCCEEDED: UUID: 5d6fa7bf-637f-4dba-bcd2-480ad251cdc7,
-Service replicas: 0,1
+$ dmg pool create --size 50GB
+Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
+Pool created with 6.00% SCM/NVMe ratio
+-----------------------------------------
+  UUID          : 8a05bf3a-a088-4a77-bb9f-df989fce7cc8
+  Replica Ranks : [1-3]
+  Target Ranks  : [0-15]
+  Size          : 50 GB
+  SCM           : 3.0 GB (188 MB / rank)
+  NVMe          : 50 GB (3.2 GB / rank)
 ```
 
-This created a pool with UUID 5d6fa7bf-637f-4dba-bcd2-480ad251cdc7,
-two pool service replica on rank 0 and 1.
+This created a pool with UUID 8a05bf3a-a088-4a77-bb9f-df989fce7cc8,
+with redundancy enabled by default (pool service replicas on ranks 1-3).
+
+If no redundancy is desired, use --nsvc=1 in order to specify that only
+a single pool service replica should be created.
 
 **To destroy a pool:**
 
@@ -85,21 +96,60 @@ a106d667-5c5d-4d6f-ac3a-89099196c41a	0
 
 ## Pool Properties
 
-At creation time, a list of pool properties can be specified through the
-API (not supported by the tool yet):
-
 | **Pool Property**        | **Description** |
 | ------------------------ | --------------- |
 | `DAOS_PROP_PO_LABEL`<img width=80/>| A string that the administrator can associate with a pool.  e.g., project A, project B, IO500 test pool|
 | `DAOS_PROP_PO_ACL`       | Access control list (ACL) associated with the pool|
 | `DAOS_PROP_PO_SPACE_RB`  | Space reserved on each target for rebuild purpose|
 | `DAOS_PROP_PO_SELF_HEAL` | Define whether the pool wants automatically-trigger or manually-triggered self-healing|
-| `DAOS_PROP_PO_RECLAIM`   | Tune space reclaim strategy based on time interval, batched commits or snapshot creation|
+| `DAOS_PROP_PO_RECLAIM`   | Tune space reclaim strategy based on time interval, io activities|
+
+At creation time, currently only ACL may be specified via dmg pool create.
 
 While those pool properties are currently stored persistently with pool
 metadata, many of them are still under development. Moreover, the
 ability to modify some of those properties on an existing pool will
 be provided in a future release.
+
+### Modifying DAOS_PROP_PO_RECLAIM property
+
+To modify a pool's DAOS_PO_RECLAIM property:
+
+```bash
+$ dmg pool set-prop --pool=<UUID> --name=reclaim --value=${strategy}
+```
+
+Three reclaim strategies are supported:
+
+* "disabled" : Never trigger aggregation.
+* "lazy"     : Trigger aggregation only when there is no IO activities or SCM free space is under pressure (default strategy)
+* "time"     : Trigger aggregation regularly despite of IO activities.
+
+### Querying a pool's properties
+
+The user-level administration `daos` utility may be used to query a pool's
+properties. Refer to the manual page for full `daos` usage details.
+
+```bash
+$ daos pool get-prop --pool=b1e9f5c0-ce10-42ab-b19e-081032400611
+Pool properties for b1e9f5c0-ce10-42ab-b19e-081032400611 :
+label:                  pool_label_not_set
+rebuild space ratio:    0%
+self-healing:           auto-exclude,auto-rebuild
+reclaim strategy:       lazy
+owner:                  username@
+owner-group:            username@
+Access Control List:
+#
+# (remainder of output not shown)
+#
+```
+
+Additionally, a pool's properties may be retrieved using the libdaos API
+daos_pool_query() function. Refer to the file src/include/daos_pool.h
+Doxygen comments and the online documentation available
+[here](https://daos-stack.github.io/html/).
+
 
 ## Access Control Lists
 
@@ -125,12 +175,18 @@ This is reflected in the set of supported
 A user must be able to connect to the pool in order to access any containers
 inside, regardless of their permissions on those containers.
 
+### Ownership
+
+Pool ownership conveys no special privileges for access control decisions. All
+desired privileges of the owner-user (`OWNER@`) and owner-group (`GROUP@`) must
+be explicitly defined by an administrator in the pool ACL.
+
 ### Creating a pool with a custom ACL
 
 To create a pool with a custom ACL:
 
 ```bash
-$ dmg pool create --scm-size <size> --acl-file <path>
+$ dmg pool create --size <size> --acl-file <path>
 ```
 
 The ACL file format is detailed in the [here](https://daos-stack.github.io/overview/security/#acl-file).
@@ -228,6 +284,13 @@ The total and free sizes are the sum across all the targets whereas
 min/max/mean gives information about individual targets. A min value
 close to 0 means that one target is running out of space.
 
+NB: the Versioning Object Store (VOS) may reserve a portion of the
+SCM and NVMe allocations to mitigate fragmentation and for background
+operations (e.g., aggregation, garbage collection). The amount of storage
+set aside depends on the size of the target, and may take up 2+ GB.
+Therefore, out of space conditions may occur even while pool query may not
+reveal min approaching zero.
+
 The example below shows a rebuild in progress and NVMe space allocated.
 
 ```bash
@@ -245,7 +308,7 @@ The example below shows a rebuild in progress and NVMe space allocated.
 ```
 
 Additional status and telemetry data are planned to be exported through
-the management API and tool and will be documented here once available.
+management tools and will be documented here once available.
 
 ## Pool Modifications
 
@@ -331,7 +394,7 @@ $ dmg pool reintegrate --pool=${puuid} --rank=5 --target-idx=0,1
 #### Target Addition & Space Rebalancing
 
 Full Support for online target addition and automatic space rebalancing is
-planned for DAOS v1.4 and will be documented here once available.
+planned for a future release and will be documented here once available.
 
 Until then the following command(s) are placeholders and offer limited
 functionality related to Online Server Addition/Rebalancing operations.
@@ -368,3 +431,27 @@ Meanwhile, PMDK provides a recovery tool (i.e., pmempool check) to verify
 and possibly repair a pmemobj file. As discussed in the previous section, the
 rebuild status can be consulted via the pool query and will be expanded
 with more information.
+
+## Recovering Ownership of a Pool's Container
+
+Typically users are expected to manage their containers. However, in the event
+that a container is orphaned and no users have the privileges to change the
+ownership, an administrator can transfer ownership of the container to a new
+user and/or group.
+
+To change the owner user:
+
+```bash
+$ dmg cont set-owner --pool <UUID> --cont <UUID> --user <owner-user>
+```
+To change the owner group:
+
+```bash
+$ dmg cont set-owner --pool <UUID> --cont <UUID> --group <owner-group>
+```
+
+The user and group names are case sensitive and must be formatted as
+[DAOS ACL user/group principals](https://daos-stack.github.io/overview/security/#principal).
+
+Because this is an administrative action, it does not require the administrator
+to have any privileges assigned in the container ACL.

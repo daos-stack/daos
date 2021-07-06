@@ -1,24 +1,7 @@
 //
-// (C) Copyright 2018-2020 Intel Corporation.
+// (C) Copyright 2018-2021 Intel Corporation.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-// GOVERNMENT LICENSE RIGHTS-OPEN SOURCE SOFTWARE
-// The Government's rights to use, modify, reproduce, release, perform, display,
-// or disclose this software are subject to the terms of the Apache License as
-// provided in Contract No. 8F-30005.
-// Any reproduction of computer software, computer software documentation, or
-// portions thereof marked with this legend must also reproduce the markings.
+// SPDX-License-Identifier: BSD-2-Clause-Patent
 //
 
 // Package spdk provides Go bindings for SPDK
@@ -28,14 +11,35 @@ package spdk
 // to specify additional dirs.
 
 /*
-#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_vmd  -lrte_mempool -lrte_mempool_ring -lrte_bus_pci
-#cgo LDFLAGS: -lrte_pci -lrte_ring -lrte_mbuf -lrte_eal -lrte_kvargs -ldl -lnuma
+#cgo CFLAGS: -I .
+#cgo LDFLAGS: -L . -lnvme_control
+#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
+#cgo LDFLAGS: -lrte_mempool_ring -lrte_bus_pci
 
-#include <stdlib.h>
-#include <spdk/stdinc.h>
-#include <spdk/string.h>
-#include <spdk/env.h>
-#include <spdk/vmd.h>
+#include "stdlib.h"
+#include "daos_srv/control.h"
+#include "spdk/stdinc.h"
+#include "spdk/string.h"
+#include "spdk/env.h"
+#include "spdk/nvme.h"
+#include "spdk/vmd.h"
+#include "include/nvme_control.h"
+#include "include/nvme_control_common.h"
+
+static char **makeCStringArray(int size) {
+        return calloc(sizeof(char*), size);
+}
+
+static void setArrayString(char **a, char *s, int n) {
+        a[n] = s;
+}
+
+static void freeCStringArray(char **a, int size) {
+        int i;
+        for (i = 0; i < size; i++)
+                free(a[i]);
+        free(a);
+}
 */
 import "C"
 
@@ -43,14 +47,16 @@ import (
 	"fmt"
 	"unsafe"
 
-	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
 )
 
 // Env is the interface that provides SPDK environment management.
 type Env interface {
-	InitSPDKEnv(logging.Logger, EnvOptions) error
-	FiniSPDKEnv(logging.Logger, EnvOptions)
+	InitSPDKEnv(logging.Logger, *EnvOptions) error
+	FiniSPDKEnv(logging.Logger, *EnvOptions)
 }
 
 // EnvImpl is a an implementation of the Env interface.
@@ -61,55 +67,60 @@ func Rc2err(label string, rc C.int) error {
 	return fmt.Errorf("%s: %d", label, rc)
 }
 
-// EnvOptions describe parameters to be used when initializing a process'
+// EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	MemSize      int      // size in MiB to be allocated to SPDK proc
-	PciWhiteList []string // restrict SPDK device access
+	PciAllowList []string // restrict SPDK device access
 	DisableVMD   bool     // flag if VMD devices should not be included
 }
 
-func (o EnvOptions) toC() (opts *C.struct_spdk_env_opts, cWhiteListPtr *unsafe.Pointer, err error) {
-	opts = new(C.struct_spdk_env_opts)
-
-	C.spdk_env_opts_init(opts)
-
-	if o.MemSize > 0 {
-		opts.mem_size = C.int(o.MemSize)
-	}
-
-	// quiet DPDK EAL logging by setting log level to ERROR
-	opts.env_context = unsafe.Pointer(C.CString("--log-level=lib.eal:4"))
-
-	if len(o.PciWhiteList) > 0 {
-		cWhiteListPtr, err = pciListToC(o.PciWhiteList)
+func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
+	if !o.DisableVMD {
+		// DPDK will not accept VMD backing device addresses
+		// so convert to VMD address
+		newAllowList, err := revertBackingToVmd(log, o.PciAllowList)
 		if err != nil {
-			return
+			return err
 		}
-		opts.pci_whitelist = (*C.struct_spdk_pci_addr)(*cWhiteListPtr)
-		opts.num_pci_addr = C.ulong(len(o.PciWhiteList))
+		o.PciAllowList = newAllowList
 	}
 
-	return
+	return nil
 }
 
-func pciListToC(inAddrs []string) (*unsafe.Pointer, error) {
-	var tmpAddr *C.struct_spdk_pci_addr
-	structSize := unsafe.Sizeof(*tmpAddr)
+// revertBackingToVmd converts VMD backing device PCI addresses (with the VMD
+// address encoded in the domain component of the PCI address) back to the PCI
+// address of the VMD e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
+//
+// Many assumptions are made as to the input and output PCI address structure in
+// the conversion.
+func revertBackingToVmd(log logging.Logger, pciAddrs []string) ([]string, error) {
+	var outAddrs []string
 
-	outAddrs := C.calloc(C.ulong(len(inAddrs)), C.ulong(structSize))
+	for _, inAddr := range pciAddrs {
+		domain, _, _, _, err := common.ParsePCIAddress(inAddr)
+		if err != nil {
+			return nil, err
+		}
+		if domain == 0 {
+			outAddrs = append(outAddrs, inAddr)
+			continue
+		}
 
-	for i, inAddr := range inAddrs {
-		offset := uintptr(i) * structSize
-		tmpAddr = (*C.struct_spdk_pci_addr)(unsafe.Pointer(uintptr(outAddrs) + offset))
+		domainStr := fmt.Sprintf("%x", domain)
+		if len(domainStr) != 6 {
+			return nil, errors.New("unexpected length of domain")
+		}
 
-		if rc := C.spdk_pci_addr_parse(tmpAddr, C.CString(inAddr)); rc != 0 {
-			C.free(unsafe.Pointer(outAddrs))
-			return nil, Rc2err("spdk_pci_addr_parse()", rc)
+		outAddr := fmt.Sprintf("0000:%s:%s.%s",
+			domainStr[:2], domainStr[2:4], domainStr[5:])
+		if !common.Includes(outAddrs, outAddr) {
+			log.Debugf("replacing backing device %s with vmd %s", inAddr, outAddr)
+			outAddrs = append(outAddrs, outAddr)
 		}
 	}
 
-	return &outAddrs, nil
+	return outAddrs, nil
 }
 
 // InitSPDKEnv initializes the SPDK environment.
@@ -117,22 +128,30 @@ func pciListToC(inAddrs []string) (*unsafe.Pointer, error) {
 // SPDK relies on an abstraction around the local environment
 // named env that handles memory allocation and PCI device operations.
 // The library must be initialized first.
-func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
+func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	log.Debugf("spdk init go opts: %+v", opts)
 
-	cOpts, toFree, err := opts.toC()
-	if err != nil {
-		return errors.Wrap(err, "convert spdk env opts to C")
-	}
-	if toFree != nil {
-		defer C.free(unsafe.Pointer(*toFree))
+	if err := opts.sanitizeAllowList(log); err != nil {
+		return errors.Wrap(err, "sanitizing PCI include list")
 	}
 
-	if rc := C.spdk_env_init(cOpts); rc != 0 {
-		return Rc2err("spdk_env_init()", rc)
+	// Build C array in Go from opts.PciAllowList []string
+	cAllowList := C.makeCStringArray(C.int(len(opts.PciAllowList)))
+	defer C.freeCStringArray(cAllowList, C.int(len(opts.PciAllowList)))
+
+	for i, s := range opts.PciAllowList {
+		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
 
-	log.Debugf("spdk init c opts: %+v", cOpts)
+	envCtx := C.CString("--log-level=lib.eal:4")
+	defer C.free(unsafe.Pointer(envCtx))
+
+	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(len(opts.PciAllowList)),
+		cAllowList)
+	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
+		return err
+	}
+	clean(retPtr)
 
 	if opts.DisableVMD {
 		return nil
@@ -146,7 +165,7 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts EnvOptions) error {
 }
 
 // FiniSPDKEnv initializes the SPDK environment.
-func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts EnvOptions) {
+func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 	log.Debugf("spdk fini go opts: %+v", opts)
 
 	C.spdk_env_fini()
