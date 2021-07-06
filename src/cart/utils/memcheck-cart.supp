@@ -222,3 +222,23 @@
    Memcheck:Cond
    fun:runtime.(*mspan).sweep
 }
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   fun:runtime.(*mcentral).cacheSpan
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   fun:runtime.(*mcache).*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   fun:runtime.mallocgc
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Cond
+   fun:runtime.deductSweepCredit
+}
