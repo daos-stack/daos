@@ -111,7 +111,7 @@ func (c *logCmd) setLog(log *logging.LeveledLogger) {
 type cliOptions struct {
 	Debug      bool          `long:"debug" description:"enable debug output"`
 	Verbose    bool          `long:"verbose" description:"enable verbose output (when applicable)"`
-	JSON       bool          `long:"json" description:"enable JSON output"`
+	JSON       bool          `long:"json" short:"j" description:"enable JSON output"`
 	Container  containerCmd  `command:"container" alias:"cont" description:"perform tasks related to DAOS containers"`
 	Pool       poolCmd       `command:"pool" description:"perform tasks related to DAOS pools"`
 	Filesystem fsCmd         `command:"filesystem" alias:"fs" description:"POSIX filesystem operations"`
@@ -160,6 +160,9 @@ or query/manage an object inside a container.`
 
 		if opts.Debug {
 			log.WithLogLevel(logging.LogLevelDebug)
+			if os.Getenv("D_LOG_MASK") == "" {
+				os.Setenv("D_LOG_MASK", "DEBUG,OBJECT=ERR,PLACEMENT=ERR")
+			}
 			log.Debug("debug output enabled")
 		}
 
@@ -193,15 +196,13 @@ or query/manage an object inside a container.`
 	// Initialize the daos debug system first so that
 	// any allocations made as part of argument parsing
 	// are logged when running under NLT.
-	if os.Getenv("D_LOG_MASK") != "" {
-		debugFini, err := initDaosDebug()
-		if err != nil {
-			exitWithError(log, err)
-		}
-		defer debugFini()
+	debugFini, err := initDaosDebug()
+	if err != nil {
+		exitWithError(log, err)
 	}
+	defer debugFini()
 
-	_, err := p.ParseArgs(args)
+	_, err = p.ParseArgs(args)
 	if opts.JSON && wroteJSON.IsFalse() {
 		return errorJSON(err)
 	}

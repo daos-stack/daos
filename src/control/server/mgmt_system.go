@@ -42,8 +42,8 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	if svc.clientNetworkCfg == nil {
-		return nil, errors.New("clientNetworkCfg is missing")
+	if svc.clientNetworkHint == nil {
+		return nil, errors.New("clientNetworkHint is missing")
 	}
 	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
 
@@ -71,10 +71,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 			})
 		}
 	}
-	resp.Provider = svc.clientNetworkCfg.Provider
-	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
-	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
-	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
+	resp.ClientNetHint = svc.clientNetworkHint
 	resp.MsRanks = system.RanksToUint32(groupMap.MSRanks)
 
 	// For resp.RankUris may be large, we make a resp copy with a limited

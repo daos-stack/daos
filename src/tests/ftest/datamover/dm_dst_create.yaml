@@ -14,7 +14,7 @@ pool:
 container:
     control_method: daos
     properties:
-        - label:"test container"
+        - compression:lz4
 ior:
     client_processes:
         np: 1
@@ -26,14 +26,5 @@ ior:
     transfer_size: '1K'
     signature: 5
 dcp:
-    type_mux: !mux
-        type_posix_dfs:
-            cont_type: POSIX
-            daos_api: DFS
-        type_posix_obj:
-            cont_type: POSIX
-            daos_api: DAOS
-        type_unknown_obj:
-            daos_api: DAOS
     client_processes:
         np: 3
