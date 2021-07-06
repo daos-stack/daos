@@ -287,16 +287,10 @@ ec_rec_list_punch(void **state)
 
 void
 trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
-			       int oids_nr, bool fail_agg)
+			       int oids_nr, uint64_t fail_loc)
 {
-	uint64_t  fail_loc;
 	d_rank_t  ec_agg_ranks[10];
 	int i;
-
-	if (fail_agg)
-		fail_loc = DAOS_FORCE_FAIL_EC_AGG;
-	else
-		fail_loc = DAOS_FORCE_EC_AGG;
 
 	for (i = 0; i < oids_nr; i++) {
 		struct daos_oclass_attr *oca;
@@ -391,7 +385,7 @@ ec_partial_update_agg(void **state)
 			     data, EC_CELL_SIZE, &req);
 	}
 
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, false);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 
 	for (i = 0; i < 10; i++) {
 		daos_off_t offset = i * EC_CELL_SIZE;
@@ -438,7 +432,7 @@ ec_cross_cell_partial_update_agg(void **state)
 			     data, update_size, &req);
 	}
 
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, false);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 
 	for (i = 0; i < 20; i++) {
 		char		c = 'a' + i;
@@ -506,7 +500,7 @@ ec_full_partial_update_agg(void **state)
 			     buffer, partial_update_size, &req);
 	}
 
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, false);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 
 	ec_verify_parity_data(&req, "d_key", "a_key", (daos_size_t)0,
 			      full_update_size, verify_data);
@@ -568,7 +562,7 @@ ec_partial_full_update_agg(void **state)
 	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
 		     data, full_update_size, &req);
 
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, false);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 
 	ec_verify_parity_data(&req, "d_key", "a_key", (daos_size_t)0,
 			      full_update_size, verify_data);
@@ -701,7 +695,7 @@ dfs_ec_check_size_nonparity(void **state)
 }
 
 static void
-ec_fail_agg(void **state)
+ec_fail_agg_internal(void **state, unsigned fail_loc)
 {
 	test_arg_t	*arg = *state;
 	struct ioreq	req;
@@ -732,10 +726,10 @@ ec_fail_agg(void **state)
 	}
 
 	/* fail the aggregation */
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, true);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, fail_loc);
 
 	/* re_enable aggregation */
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, false);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 	for (i = 0; i < 10; i++) {
 		daos_off_t offset = i * EC_CELL_SIZE;
 
@@ -745,6 +739,18 @@ ec_fail_agg(void **state)
 	}
 	free(data);
 	free(verify_data);
+}
+
+static void
+ec_agg_fail(void **state)
+{
+	ec_fail_agg_internal(state, DAOS_FORCE_EC_AGG_FAIL);
+}
+
+static void
+ec_agg_peer_fail(void **state)
+{
+	ec_fail_agg_internal(state, DAOS_FORCE_EC_AGG_PEER_FAIL);
 }
 
 static int
@@ -789,7 +795,9 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC8: ec file size check on non-parity",
 	 dfs_ec_check_size_nonparity, async_disable, test_case_teardown},
 	{"EC9: ec aggregation failed",
-	 ec_fail_agg, async_disable, test_case_teardown},
+	 ec_agg_fail, async_disable, test_case_teardown},
+	{"EC10: ec aggregation peer update failed",
+	 ec_agg_peer_fail, async_disable, test_case_teardown},
 };
 
 int

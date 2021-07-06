@@ -274,31 +274,21 @@ evt_weight_diff(struct evt_weight *wt1, struct evt_weight *wt2,
 	wt_diff->wt_minor = wt1->wt_minor - wt2->wt_minor;
 }
 
-/** Internal function for initializing an array.   Using 0 for max
- *  ultimately cause it to be set to maximum size needed by
- *  evt_find_visible.
- */
-static inline void
-evt_ent_array_init_internal(struct evt_entry_array *ent_array, int max)
-{
-	memset(ent_array, 0, sizeof(*ent_array));
-	ent_array->ea_ents = ent_array->ea_embedded_ents;
-	ent_array->ea_size = EVT_EMBEDDED_NR;
-	ent_array->ea_max = max;
-}
-
 /** Initialize an entry list */
 void
-evt_ent_array_init(struct evt_entry_array *ent_array)
+evt_ent_array_init_(struct evt_entry_array *ent_array, int embedded, int max)
 {
-	evt_ent_array_init_internal(ent_array, 0);
+	memset(ent_array, 0, sizeof(*ent_array));
+	ent_array->ea_ents = &ent_array->ea_embedded_ents[0];
+	ent_array->ea_size = embedded;
+	ent_array->ea_max = max;
 }
 
 /** Finalize an entry list */
 void
-evt_ent_array_fini(struct evt_entry_array *ent_array)
+evt_ent_array_fini_(struct evt_entry_array *ent_array, int embedded)
 {
-	if (ent_array->ea_size > EVT_EMBEDDED_NR)
+	if (ent_array->ea_size > embedded)
 		D_FREE(ent_array->ea_ents);
 
 	ent_array->ea_size = ent_array->ea_ent_nr = 0;
@@ -1029,7 +1019,7 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	/* Initialize the embedded iterator entry array.  This is a minor
 	 * optimization if the iterator is used more than once
 	 */
-	evt_ent_array_init(&tcx->tc_iter.it_entries);
+	evt_ent_array_init(tcx->tc_iter.it_entries, 0);
 	evt_tcx_set_dep(tcx, depth);
 	*tcx_pp = tcx;
 	return 0;
@@ -1924,19 +1914,19 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 	struct evt_entry	*ent;
 	struct evt_entry_in	 hole;
 	struct evt_filter	 filter = {0};
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	int			 rc = 0;
 
 	filter.fr_epr.epr_hi = entry->ei_bound;
 	filter.fr_epoch = entry->ei_rect.rc_epc;
 	filter.fr_ex = entry->ei_rect.rc_ex;
 
-	evt_ent_array_init(&ent_array);
-	rc = evt_find(toh, &filter, &ent_array);
+	evt_ent_array_init(ent_array, 0);
+	rc = evt_find(toh, &filter, ent_array);
 	if (rc != 0)
 		goto done;
 
-	evt_ent_array_for_each(ent, &ent_array) {
+	evt_ent_array_for_each(ent, ent_array) {
 		if (bio_addr_is_hole(&ent->en_addr))
 			continue; /* Skip holes */
 		/** Insert a hole to cover the record */
@@ -1947,7 +1937,7 @@ evt_large_hole_insert(daos_handle_t toh, const struct evt_entry_in *entry)
 			break;
 	}
 done:
-	evt_ent_array_fini(&ent_array);
+	evt_ent_array_fini(ent_array);
 
 	return rc;
 }
@@ -1962,7 +1952,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	   uint8_t **csum_bufp)
 {
 	struct evt_context	*tcx;
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	struct evt_filter	 filter;
 	int			 rc;
 
@@ -1993,7 +1983,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		return -DER_NO_PERM;
 	}
 
-	evt_ent_array_init_internal(&ent_array, 1);
+	evt_ent_array_init(ent_array, 1);
 
 	filter.fr_ex = entry->ei_rect.rc_ex;
 	filter.fr_epr.epr_lo = entry->ei_rect.rc_epc;
@@ -2003,7 +1993,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	filter.fr_punch_minor_epc = 0;
 	/* Phase-1: Check for overwrite and uncertainty */
 	rc = evt_ent_array_fill(tcx, EVT_FIND_OVERWRITE, DAOS_INTENT_UPDATE,
-				&filter, &entry->ei_rect, &ent_array);
+				&filter, &entry->ei_rect, ent_array);
 	if (rc != 0)
 		return rc;
 
@@ -2023,8 +2013,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	}
 
 
-	D_ASSERT(ent_array.ea_ent_nr <= 1);
-	if (ent_array.ea_ent_nr == 1) {
+	D_ASSERT(ent_array->ea_ent_nr <= 1);
+	if (ent_array->ea_ent_nr == 1) {
 		/*
 		 * NB: This is part of the current hack to keep "supporting"
 		 * overwrite for same epoch, full overwrite.
@@ -2038,7 +2028,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 	/* Phase-2: Inserting */
 	rc = evt_insert_entry(tcx, entry, csum_bufp);
 
-	/* No need for evt_ent_array_fill as there will be no allocations
+	/* No need for evt_ent_array_fini as there will be no allocations
 	 * with 1 entry in the list
 	 */
 out:
@@ -2446,7 +2436,7 @@ out:
 		rc = evt_data_loss_check(&data_loss_list, ent_array);
 
 	if (rc != 0)
-		evt_ent_array_fini(ent_array);
+		ent_array->ea_ent_nr = 0;
 
 	while ((edli = d_list_pop_entry(&data_loss_list,
 					struct evt_data_loss_item,
@@ -2483,7 +2473,6 @@ evt_find(daos_handle_t toh, const struct evt_filter *filter,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	evt_ent_array_init(ent_array);
 	rect.rc_ex = filter->fr_ex;
 	rect.rc_epc = filter->fr_epoch;
 	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
@@ -2492,8 +2481,7 @@ evt_find(daos_handle_t toh, const struct evt_filter *filter,
 				filter, &rect, ent_array);
 	if (rc == 0)
 		rc = evt_ent_array_sort(tcx, ent_array, filter, EVT_VISIBLE);
-	if (rc != 0)
-		evt_ent_array_fini(ent_array);
+
 	return rc;
 }
 
@@ -3335,28 +3323,28 @@ int
 evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 		    struct evt_entry *ent, bool in_tx)
 {
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_SM_PTR(ent_array);
 	struct evt_filter	 filter = {0};
 	int			 rc;
 
 	/* NB: This function presently only supports exact match on extent. */
-	evt_ent_array_init_internal(&ent_array, 1);
+	evt_ent_array_init(ent_array, 1);
 
 	filter.fr_ex = rect->rc_ex;
 	filter.fr_epr.epr_lo = rect->rc_epc;
 	filter.fr_epr.epr_hi = rect->rc_epc;
 	filter.fr_epoch = rect->rc_epc;
 	rc = evt_ent_array_fill(tcx, EVT_FIND_SAME, DAOS_INTENT_PURGE,
-				&filter, rect, &ent_array);
+				&filter, rect, ent_array);
 	if (rc != 0)
 		return rc;
 
-	if (ent_array.ea_ent_nr == 0)
+	if (ent_array->ea_ent_nr == 0)
 		return -DER_ENOENT;
 
-	D_ASSERT(ent_array.ea_ent_nr == 1);
+	D_ASSERT(ent_array->ea_ent_nr == 1);
 	if (ent != NULL)
-		*ent = *evt_ent_array_get(&ent_array, 0);
+		*ent = *evt_ent_array_get(ent_array, 0);
 
 	if (!in_tx) {
 		rc = evt_tx_begin(tcx);
@@ -3373,7 +3361,7 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 
-	/* No need for evt_ent_array_fill as there will be no allocations
+	/* No need for evt_ent_array_fini as there will be no allocations
 	 * with 1 entry in the list
 	 */
 	return in_tx ? rc : evt_tx_end(tcx, rc);

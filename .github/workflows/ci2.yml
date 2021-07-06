@@ -73,14 +73,16 @@ jobs:
                           --build-arg DAOS_BUILD=no
                           --build-arg DEPS_JOBS=10
                           --tag build-image
-    - name: Run
+    - name: Build and Test
       run: ./utils/run_in_ga_wrapper.sh
     - name: Publish NLT test results
       if: always()
-      uses: EnricoMi/publish-unit-test-result-action@v1.7
+      uses: EnricoMi/publish-unit-test-result-action@v1.17
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         files: nlt-junit.xml
+        comment_mode: off
+        fail_on: nothing
 
   Build:
     name: Build DAOS
@@ -116,4 +118,16 @@ jobs:
     - name: Build Java in docker.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg DEPS_JOBS=10
+                          --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build debug in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg DAOS_BUILD_TYPE=debug
+                          --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build devel in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg DAOS_BUILD_TYPE=dev
                           --build-arg COMPILER=${{ matrix.compiler }}
