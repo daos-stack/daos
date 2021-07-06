@@ -291,6 +291,26 @@ ioil_init(void)
 	ioil_iog.iog_initialized = true;
 }
 
+static void
+ioil_show_summary()
+{
+	char *summary;
+
+	D_INFO("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+
+	if (ioil_iog.iog_file_count == 0)
+		return;
+
+	summary = getenv("D_IL_REPORT");
+
+	if (summary == NULL)
+		return;
+
+	fprintf(stderr, "Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+		ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+}
+
 static __attribute__((destructor)) void
 ioil_fini(void)
 {
@@ -302,11 +322,7 @@ ioil_fini(void)
 	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
 
-	if (ioil_iog.iog_file_count)
-		printf("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
-			ioil_iog.iog_read_count,
-			ioil_iog.iog_write_count,
-			ioil_iog.iog_file_count);
+	ioil_show_summary();
 
 	/* Tidy up any remaining open connections */
 	d_list_for_each_entry_safe(pool, pnext,

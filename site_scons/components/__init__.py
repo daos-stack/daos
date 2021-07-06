@@ -285,13 +285,6 @@ def define_components(reqs):
                 commands=pmdk_build,
                 libs=["pmemobj"])
 
-    if reqs.target_type == 'debug':
-        ABT_DEBUG = ' --enable-debug=most'
-    else:
-        ABT_DEBUG = ' --disable-debug'
-
-    ABT_DEBUG = ' --enable-debug=most'
-
     retriever = GitRepoRetriever("https://github.com/pmodels/argobots.git",
                                  True)
     reqs.define('argobots',
@@ -299,8 +292,7 @@ def define_components(reqs):
                 commands=['git clean -dxf',
                           './autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
-                          ' --enable-valgrind' +
-                          ABT_DEBUG +
+                          ' --enable-valgrind'
                           ' --enable-stack-unwind',
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],

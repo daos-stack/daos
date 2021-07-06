@@ -2487,10 +2487,7 @@ def run_in_fg(server, conf):
 
     pool = server.get_test_pool()
 
-    dfuse = DFuse(server,
-                  conf,
-                  pool=pool,
-                  caching=False)
+    dfuse = DFuse(server, conf, pool=pool)
     dfuse.start()
 
     container = create_cont(conf, pool, posix=True)
@@ -2504,7 +2501,6 @@ def run_in_fg(server, conf):
     t_dir = os.path.join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
-    print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
     print('daos container create --type POSIX ' \
           '{} --path {}/uns-link'.format(
               pool, t_dir))

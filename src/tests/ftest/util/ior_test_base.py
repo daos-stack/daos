@@ -242,6 +242,7 @@ class IorTestBase(DfuseTestBase):
             env["D_LOG_MASK"] = "INFO,IL=DEBUG"
             env['DD_MASK'] = 'all'
             env['DD_SUBSYS'] = 'all'
+            env['D_IL_REPORT'] = '1'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
