@@ -246,7 +246,7 @@ class DaosAgentManager(SubprocessManager):
                                    str(self.manager.job))[0]["stdout"]
         self.log.info("Agent attachinfo: %s", self.attachinfo)
 
-        server_name = "daos_server"
+        server_name = self.get_config_value("name")
 
         self.dump_attachinfo()
         self.log.info("Agent attachinfo: %s",
