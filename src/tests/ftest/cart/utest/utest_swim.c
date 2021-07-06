@@ -24,7 +24,11 @@ test_swim(void **state)
 {
 	int rc;
 
-	rc = crt_init_opt("utest_swim", CRT_FLAG_BIT_SERVER, NULL);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
+			    CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	assert_int_equal(rc, 0);
+
+	rc = crt_swim_init(0);
 	assert_int_equal(rc, 0);
 
 	rc = crt_rank_self_set(0);
@@ -42,6 +46,7 @@ test_swim(void **state)
 	rc = crt_swim_rank_add(crt_grp_pub2priv(NULL), 0);
 	assert_int_equal(rc, -DER_ALREADY);
 
+	crt_swim_fini();
 	rc = crt_finalize();
 	assert_int_equal(rc, 0);
 }

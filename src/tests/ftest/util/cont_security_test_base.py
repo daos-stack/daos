@@ -179,7 +179,7 @@ class ContSecurityTestBase(TestWithServers):
             self.pool_uuid, self.container_uuid, entry=entry)
         return result
 
-    def test_container_destroy(self, pool_uuid, container_uuid):
+    def destroy_test_container(self, pool_uuid, container_uuid):
         """Test container destroy/delete.
 
         Args:

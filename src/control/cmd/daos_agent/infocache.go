@@ -60,17 +60,53 @@ func (aic *attachInfoCache) loadBalance(numaNode int) int {
 	return deviceIndex
 }
 
+// selectRemote is called when no local network adapters
+// was detected on the local NUMA node and we need to pick
+// one attached to a remote NUMA node. Some balancing is
+// still required here to avoid overloading a specific interface
+func (aic *attachInfoCache) selectRemote() (int, int) {
+	aic.mutex.Lock()
+	defer aic.mutex.Unlock()
+
+	deviceIndex := invalidIndex
+	// restart from previous NUMA node
+	numaNode := aic.defaultNumaNode
+
+	if len(aic.numaDeviceMarshResp) == 0 {
+		aic.log.Infof("No network device available")
+		return numaNode, deviceIndex
+	}
+
+	for i := 1; i <= len(aic.numaDeviceMarshResp); i++ {
+		node := (numaNode + i) % len(aic.numaDeviceMarshResp)
+		numDevs := len(aic.numaDeviceMarshResp[node])
+		if numDevs > 0 {
+			numaNode = node
+			deviceIndex = aic.currentNumaDevIdx[numaNode]
+			aic.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
+			break
+		}
+	}
+
+	// update the default with the one we finally picked
+	aic.defaultNumaNode = numaNode
+
+	return numaNode, deviceIndex
+}
+
 func (aic *attachInfoCache) getResponse(numaNode int) ([]byte, error) {
 	deviceIndex := aic.loadBalance(numaNode)
 	// If there is no response available for the client's actual NUMA node,
 	// use the default NUMA node
 	if deviceIndex == invalidIndex {
-		deviceIndex = aic.loadBalance(aic.defaultNumaNode)
+		var numaSel int
+
+		numaSel, deviceIndex = aic.selectRemote()
 		if deviceIndex == invalidIndex {
-			return nil, errors.Errorf("No default response found for the default NUMA node %d", aic.defaultNumaNode)
+			return nil, errors.Errorf("No fallback network device found")
 		}
-		aic.log.Infof("No network devices bound to client NUMA node %d.  Using response from NUMA %d", numaNode, aic.defaultNumaNode)
-		numaNode = aic.defaultNumaNode
+		aic.log.Infof("No network devices bound to client NUMA node %d.  Using response from NUMA %d", numaNode, numaSel)
+		numaNode = numaSel
 	}
 
 	aic.mutex.Lock()
@@ -105,27 +141,31 @@ func (aic *attachInfoCache) initResponseCache(ctx context.Context, resp *mgmtpb.
 
 	var haveDefaultNuma bool
 
+	hint := resp.ClientNetHint
+	if hint == nil {
+		return errors.New("no client networking hint in response")
+	}
 	for _, fs := range scanResults {
 		if fs.DeviceName == "lo" {
 			continue
 		}
 
-		if fs.NetDevClass != resp.NetDevClass {
+		if fs.NetDevClass != hint.NetDevClass {
 			aic.log.Debugf("Excluding device: %s, network device class: %s from attachInfoCache.  Does not match server network device class: %s\n",
-				fs.DeviceName, netdetect.DevClassName(fs.NetDevClass), netdetect.DevClassName(resp.NetDevClass))
+				fs.DeviceName, netdetect.DevClassName(fs.NetDevClass), netdetect.DevClassName(hint.NetDevClass))
 			continue
 		}
 
-		resp.Interface = fs.DeviceName
+		hint.Interface = fs.DeviceName
 		// by default, the domain is the deviceName
-		resp.Domain = fs.DeviceName
-		if strings.HasPrefix(resp.Provider, verbsProvider) {
-			deviceAlias, err := netdetect.GetDeviceAlias(ctx, resp.Interface)
+		hint.Domain = fs.DeviceName
+		if strings.HasPrefix(hint.Provider, verbsProvider) {
+			deviceAlias, err := netdetect.GetDeviceAlias(ctx, hint.Interface)
 			if err != nil {
-				aic.log.Debugf("non-fatal error: %v. unable to determine OFI_DOMAIN for %s", err, resp.Interface)
+				aic.log.Debugf("non-fatal error: %v. unable to determine OFI_DOMAIN for %s", err, hint.Interface)
 			} else {
-				resp.Domain = deviceAlias
-				aic.log.Debugf("OFI_DOMAIN has been detected as: %s", resp.Domain)
+				hint.Domain = deviceAlias
+				aic.log.Debugf("OFI_DOMAIN has been detected as: %s", hint.Domain)
 			}
 		}
 
@@ -151,15 +191,15 @@ func (aic *attachInfoCache) initResponseCache(ctx context.Context, resp *mgmtpb.
 			aic.log.Debugf("The default NUMA node is: %d", aic.defaultNumaNode)
 		}
 
-		aic.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", resp.Interface, resp.Domain, numa, len(aic.numaDeviceMarshResp[numa])-1)
+		aic.log.Debugf("Added device %s, domain %s for NUMA %d, device number %d\n", hint.Interface, hint.Domain, numa, len(aic.numaDeviceMarshResp[numa])-1)
 	}
 
 	// If there were no network devices found, then add a default response to the default NUMA node entry
 	if _, ok := aic.numaDeviceMarshResp[aic.defaultNumaNode]; !ok {
 		aic.log.Info("No network devices detected in fabric scan; default AttachInfo response may be incorrect\n")
 		aic.numaDeviceMarshResp[aic.defaultNumaNode] = make(map[int][]byte)
-		resp.Interface = defaultNetworkDevice
-		resp.Domain = defaultDomain
+		hint.Interface = defaultNetworkDevice
+		hint.Domain = defaultDomain
 		numaDeviceMarshResp, err := proto.Marshal(resp)
 		if err != nil {
 			return drpc.MarshalingFailure()

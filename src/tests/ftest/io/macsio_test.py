@@ -29,7 +29,10 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         Use case:
             Six clients and two servers.
 
-        :avocado: tags=all,daily_regression,hw,large,io,macsio,DAOS_5610
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=io,macsio
+        :avocado: tags=DAOS_5610
         """
         # Create a pool
         self.add_pool()

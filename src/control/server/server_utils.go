@@ -12,12 +12,14 @@ import (
 	"io/ioutil"
 	"net"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -154,7 +156,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
 	// Perform an automatic prepare based on the values in the config file.
 	prepReq := bdev.PrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
@@ -207,10 +209,12 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter getHugePageInfoFn
 
 	for _, engineCfg := range srv.cfg.Engines {
 		// Calculate mem_size per I/O engine (in MB)
+		PageSizeMb := hugePages.PageSizeKb >> 10
 		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
-		engineCfg.MemSize *= (hugePages.PageSizeKb >> 10)
+		engineCfg.MemSize *= PageSizeMb
 		// Pass hugepage size, do not assume 2MB is used
-		engineCfg.HugePageSz = (hugePages.PageSizeKb >> 10)
+		engineCfg.HugePageSz = PageSizeMb
+		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
 		// Warn if hugepages are not enough to sustain average
 		// I/O workload (~1GB)
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
@@ -382,6 +386,63 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 
 type netInterface interface {
 	Addrs() ([]net.Addr, error)
+}
+
+func getSrxSetting(cfg *config.Server) (int32, error) {
+	srxVarName := "FI_OFI_RXM_USE_SRX"
+	cliSrx := int32(-1) // default to unset
+	srxMismatchErr := errors.Errorf("%s must match in all engine configs", srxVarName)
+
+	getSetting := func(ev string) (bool, int32) {
+		kv := strings.Split(ev, "=")
+		if len(kv) != 2 {
+			return false, -1
+		}
+		if kv[0] != srxVarName {
+			return false, -1
+		}
+		v, err := strconv.ParseInt(kv[1], 10, 32)
+		if err != nil {
+			return true, -1
+		}
+		return true, int32(v)
+	}
+
+	for idx, ec := range cfg.Engines {
+		if cliSrx != -1 && len(ec.EnvVars) == 0 {
+			return -1, srxMismatchErr
+		}
+
+		for _, ev := range ec.EnvVars {
+			if match, engSrx := getSetting(ev); match {
+				if engSrx == -1 {
+					if cliSrx == -1 {
+						continue
+					}
+					return -1, srxMismatchErr
+				} else {
+					if cliSrx == engSrx {
+						continue
+					}
+					// no engine srx, or client srx is set but not equal
+					if engSrx == -1 || cliSrx != -1 || idx > 0 {
+						return -1, srxMismatchErr
+					}
+					cliSrx = engSrx
+				}
+			} else if cliSrx != -1 {
+				return -1, srxMismatchErr
+			}
+		}
+
+		for _, pte := range ec.EnvPassThrough {
+			if pte == srxVarName {
+				return -1, errors.Errorf("%s may not be set as a pass-through env var", srxVarName)
+			}
+		}
+	}
+
+	return cliSrx, nil
 }
 
 func checkFabricInterface(name string, lookup func(string) (netInterface, error)) error {
