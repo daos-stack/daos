@@ -66,9 +66,6 @@ set_dpe_dupe_str(struct daos_prop_entry *dpe, d_string_t str, int strlen)
 	 * by cgo's CString() is used.
 	 */
 	D_STRNDUP(dpe->dpe_str, str, strlen);
-
-	if (dpe->dpe_str == NULL)
-		D_ERROR("failed to duplicate %s\n", str);
 }
 
 static inline void

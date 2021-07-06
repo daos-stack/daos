@@ -70,13 +70,14 @@ static struct global {
 	unsigned int			 shutdown:1;
 } g;
 
-static int test_send_message(struct swim_context *ctx, swim_id_t to,
-			     struct swim_member_update *upds,
+static int test_send_message(struct swim_context *ctx, swim_id_t id,
+			     swim_id_t to, struct swim_member_update *upds,
 			     size_t nupds)
 {
 	struct network_pkt *item;
 	int rc = -DER_NOMEM;
 
+	/* FIXME: not adopted yet to new two-ways RPC */
 	item = malloc(sizeof(*item));
 	if (item != NULL) {
 		item->np_from  = swim_self_get(ctx);
@@ -94,6 +95,13 @@ static int test_send_message(struct swim_context *ctx, swim_id_t to,
 	}
 
 	return rc;
+}
+
+static int test_send_reply(struct swim_context *ctx, swim_id_t from,
+			      swim_id_t to, int ret_rc, void *args)
+{
+	/* FIXME: not adopted yet to new two-ways RPC */
+	return 0;
 }
 
 static swim_id_t test_get_dping_target(struct swim_context *ctx)
@@ -137,7 +145,7 @@ static int test_get_member_state(struct swim_context *ctx,
 	int rc = 0;
 
 	if (self == SWIM_ID_INVALID)
-		return -EINVAL;
+		return -DER_INVAL;
 
 	*state = g.swim_state[self][id];
 	return rc;
@@ -153,7 +161,7 @@ static int test_set_member_state(struct swim_context *ctx,
 	int i, cnt, rc = 0;
 
 	if (self_id == SWIM_ID_INVALID)
-		return -EINVAL;
+		return -DER_INVAL;
 
 	switch (state->sms_status) {
 	case SWIM_MEMBER_INACTIVE:
@@ -328,12 +336,12 @@ static void deliver_pkt(struct network_pkt *item)
 
 	if (rcv_delay > max_delay)
 		swim_net_glitch_update(ctx, self_id, rcv_delay - max_delay);
-	else if (snd_delay > max_delay)
+	if (snd_delay > max_delay)
 		swim_net_glitch_update(ctx, from_id, snd_delay - max_delay);
 
 	/* emulate RPC receive by target */
-	rc = swim_parse_message(ctx, from_id, item->np_upds, item->np_nupds);
-	if (rc == -ESHUTDOWN)
+	rc = swim_updates_parse(ctx, from_id, item->np_upds, item->np_nupds);
+	if (rc == -DER_SHUTDOWN)
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	else if (rc)
 		fprintf(stderr, "swim_parse_message() rc=%d\n", rc);
@@ -406,9 +414,9 @@ static void *progress_thread(void *arg)
 	do {
 		for (i = 0; i < members_count; i++) {
 			rc = swim_progress(g.swim_ctx[i], timeout);
-			if (rc == -ESHUTDOWN)
+			if (rc == -DER_SHUTDOWN)
 				swim_self_set(g.swim_ctx[i], SWIM_ID_INVALID);
-			else if (rc && rc != -ETIMEDOUT)
+			else if (rc && rc != -DER_TIMEDOUT)
 				fprintf(stderr, "swim_progress() rc=%d\n", rc);
 		}
 		usleep(100);
@@ -420,7 +428,8 @@ static void *progress_thread(void *arg)
 }
 
 static struct swim_ops swim_ops = {
-	.send_message     = &test_send_message,
+	.send_request     = &test_send_message,
+	.send_reply       = &test_send_reply,
 	.get_dping_target = &test_get_dping_target,
 	.get_iping_target = &test_get_iping_target,
 	.get_member_state = &test_get_member_state,

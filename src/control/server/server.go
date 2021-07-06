@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/daos-stack/daos/src/control/build"
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
@@ -219,7 +220,7 @@ func (srv *server) initNetwork(ctx context.Context) error {
 func (srv *server) initStorage() error {
 	defer srv.logDuration(track("time to init storage"))
 
-	if err := prepBdevStorage(srv, iommuDetected(), getHugePageInfo); err != nil {
+	if err := prepBdevStorage(srv, iommuDetected(), common.GetHugePageInfo); err != nil {
 		return err
 	}
 
@@ -297,11 +298,16 @@ func (srv *server) setupGrpc() error {
 	srv.grpcServer = grpc.NewServer(srvOpts...)
 	ctlpb.RegisterCtlSvcServer(srv.grpcServer, srv.ctlSvc)
 
-	srv.mgmtSvc.clientNetworkCfg = &config.ClientNetworkCfg{
+	srxSetting, err := getSrxSetting(srv.cfg)
+	if err != nil {
+		return err
+	}
+	srv.mgmtSvc.clientNetworkHint = &mgmtpb.ClientNetHint{
 		Provider:        srv.cfg.Fabric.Provider,
 		CrtCtxShareAddr: srv.cfg.Fabric.CrtCtxShareAddr,
 		CrtTimeout:      srv.cfg.Fabric.CrtTimeout,
 		NetDevClass:     srv.netDevClass,
+		SrvSrxSet:       srxSetting,
 	}
 	mgmtpb.RegisterMgmtSvcServer(srv.grpcServer, srv.mgmtSvc)
 

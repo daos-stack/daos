@@ -44,7 +44,7 @@ fs_dfs_hdlr(struct cmd_args_s *ap)
 		fprintf(ap->errstream,
 			"failed to mount container "DF_UUIDF": %s (%d)\n",
 			DP_UUID(ap->c_uuid), strerror(rc), rc);
-		D_GOTO(out_close, rc = daos_errno2der(rc));
+		return rc;
 	}
 
 	if (ap->dfs_prefix) {
@@ -185,14 +185,6 @@ out_umount:
 	rc2 = dfs_umount(dfs);
 	if (rc2 != 0)
 		fprintf(ap->errstream, "failed to umount DFS container\n");
-	if (rc == 0)
-		rc = rc2;
-out_close:
-	rc2 = daos_cont_close(ap->cont, NULL);
-	if (rc2 != 0)
-		fprintf(ap->errstream,
-			"failed to close container "DF_UUIDF ": %s (%d)\n",
-			DP_UUID(ap->c_uuid), d_errdesc(rc2), rc2);
 	if (rc == 0)
 		rc = rc2;
 	return rc;
