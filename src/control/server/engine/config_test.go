@@ -81,7 +81,7 @@ func TestConfig_MergeEnvVars(t *testing.T) {
 	}
 }
 
-func TestConfigHasEnvVar(t *testing.T) {
+func TestConfig_HasEnvVar(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startVars []string
 		addVar    string

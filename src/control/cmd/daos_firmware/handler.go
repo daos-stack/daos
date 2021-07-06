@@ -97,12 +97,12 @@ func (h *bdevHandler) setupProvider(log logging.Logger) {
 	}
 }
 
-// nvmeQueryHandler handles a request to update the NVMe device firmware from a file.
+// nvmeQueryHandler handles a request to query the NVMe device firmware from a file.
 type nvmeQueryHandler struct {
 	bdevHandler
 }
 
-// Handle updates the NVMe device firmware and returns the result as a pbin.Response.
+// Handle queries the NVMe device firmware and returns the result as a pbin.Response.
 func (h *nvmeQueryHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
 	if req == nil {
 		return getNilRequestResp()

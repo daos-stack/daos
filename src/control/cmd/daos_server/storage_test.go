@@ -126,12 +126,15 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				logCmd: logCmd{
 					log: log,
 				},
-				scs: server.NewStorageControlService(log, nil),
+				scs: server.NewMockStorageControlService(log, nil,
+					nil,
+					scm.NewMockProvider(log, tc.smbc, nil),
+					bdev.NewMockProvider(log, tc.bmbc)),
 			}
 
 			gotErr := cmd.Execute(nil)
 			_ = gotErr
-			/*common.CmpErr(t, tc.expErr, gotErr)
+			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
@@ -141,7 +144,7 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 					t.Fatalf("expected to see %q in log, got %q",
 						tc.expLogMsg, buf.String())
 				}
-			}*/
+			}
 		})
 	}
 }
