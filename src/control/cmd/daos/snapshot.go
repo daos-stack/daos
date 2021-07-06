@@ -11,9 +11,7 @@ import (
 )
 
 /*
-#include <daos.h>
-
-#include "daos_hdlr.h"
+#include "util.h"
 */
 import "C"
 
@@ -58,7 +56,7 @@ type containerSnapshotDestroyCmd struct {
 	existingContainerCmd
 
 	Epoch      uint64         `long:"epc" short:"e" description:"snapshot epoch to delete"`
-	EpochRange epochRangeFlag `long:"epcrange" short:"r" description:"range of snapshot epochs to delete"`
+	EpochRange EpochRangeFlag `long:"epcrange" short:"r" description:"range of snapshot epochs to delete"`
 }
 
 func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
@@ -77,9 +75,9 @@ func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
 	if cmd.Epoch > 0 {
 		ap.epc = C.uint64_t(cmd.Epoch)
 	}
-	if cmd.EpochRange.set {
-		ap.epcrange_begin = C.uint64_t(cmd.EpochRange.begin)
-		ap.epcrange_end = C.uint64_t(cmd.EpochRange.end)
+	if cmd.EpochRange.Set {
+		ap.epcrange_begin = cmd.EpochRange.Begin
+		ap.epcrange_end = cmd.EpochRange.End
 	}
 
 	rc := C.cont_destroy_snap_hdlr(ap)

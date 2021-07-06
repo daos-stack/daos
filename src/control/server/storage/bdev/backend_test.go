@@ -333,6 +333,7 @@ func TestBackend_Format(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			b := backendWithMockBinding(log, tc.mec, tc.mnc)
+			b.script = mockScriptRunner(log)
 
 			// output path would be set during config validate
 			tc.req.ConfigPath = filepath.Join(testDir, storage.BdevOutConfName)
