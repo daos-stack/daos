@@ -939,7 +939,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_managers.append(
             DaosAgentManager(
                 group, self.bin, cert_dir, config_file, config_temp,
-                self.agent_manager_class)
+                self.agent_manager_class, outputdir=self.outputdir)
         )
 
     def add_server_manager(self, group=None, svr_config_file=None,

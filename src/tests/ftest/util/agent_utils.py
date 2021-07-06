@@ -165,7 +165,7 @@ class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
 
     def __init__(self, group, bin_dir, cert_dir, config_file, config_temp=None,
-                 manager="Orterun"):
+                 manager="Orterun", outputdir=None):
         """Initialize a DaosAgentManager object.
 
         Args:
@@ -179,6 +179,8 @@ class DaosAgentManager(SubprocessManager):
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
+            outputdir (str, optional): path to avocado test outputdir. Defaults 
+                to None.
         """
         agent_command = get_agent_command(
             group, cert_dir, bin_dir, config_file, config_temp)
@@ -196,6 +198,7 @@ class DaosAgentManager(SubprocessManager):
         }
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
         self.attachinfo = None
+        self.outputdir = outputdir
 
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
@@ -256,7 +259,8 @@ class DaosAgentManager(SubprocessManager):
             return None
 
         # Write an attach_info_tmp file in this directory for cart_ctl to use
-        attachinfo_file_path = os.path.join(self.outputdir, attach_info_filename)
+        attachinfo_file_path = os.path.join(self.outputdir,
+                                            attach_info_filename)
 
         with open(attachinfo_file_path, 'w') as file_handle:
             file_handle.write(attach_info_contents)
