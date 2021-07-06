@@ -68,7 +68,8 @@ class NvmePoolExtend(OSAUtils):
             threads.append(threading.Thread(target=self.run_ior_thread,
                                             kwargs={"action": "Write",
                                                     "oclass": oclass,
-                                                    "test": test}))
+                                                    "test": test,
+                                                    "pool": self.pool[val]}))
             # Launch the IOR threads
             for thrd in threads:
                 self.log.info("Thread : %s", thrd)

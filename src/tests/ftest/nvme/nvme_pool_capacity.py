@@ -131,14 +131,16 @@ class NvmePoolCapacity(TestWithServers):
                     cont[cont_val] = TestContainer(self.pool[-1])
 
             m_leak = 0
-            while self.pool:
-                display_string = "Pool {} space at the End".format(
-                    self.pool[-1].uuid)
-                self.pool[-1].display_pool_daos_space(display_string)
 
-                nvme_size_end = self.pool[-1].get_pool_free_space("NVME")
-                self.pool[-1].destroy()
-                self.pool.pop()
+            # Destroy the last num_pool pools created
+            offset = loop_count * num_pool
+            for index in range(offset, offset + num_pool):
+                display_string = "Pool {} space at the End".format(
+                    self.pool[index].uuid)
+                self.pool[index].display_pool_daos_space(display_string)
+                nvme_size_end = self.pool[index].get_pool_free_space("NVME")
+                self.pool[index].destroy()
+
                 if (nvme_size_begin != nvme_size_end) and (m_leak == 0):
                     m_leak = val + 1
 
@@ -202,12 +204,13 @@ class NvmePoolCapacity(TestWithServers):
                      or (self.out_queue.get() != "FAIL" and test[4] == "FAIL"):
                     self.fail("FAIL")
 
-            while self.pool:
+            # Destroy the last num_pool pools created
+            offset = loop_count * num_pool
+            for index in range(offset, offset + num_pool):
                 display_string = "Pool {} space at the End".format(
-                    self.pool[-1].uuid)
-                self.pool[-1].display_pool_daos_space(display_string)
-                self.pool[-1].destroy()
-                self.pool.pop()
+                    self.pool[index].uuid)
+                self.pool[index].display_pool_daos_space(display_string)
+                self.pool[index].destroy()
 
     def test_nvme_pool_capacity(self):
         """Jira ID: DAOS-2085.

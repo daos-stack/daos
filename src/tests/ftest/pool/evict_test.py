@@ -49,10 +49,11 @@ class EvictTests(TestWithServers):
         if not status:
             self.fail("Pool connect failed or already connected")
 
-    def pool_handle_exist(self, test_param):
+    def pool_handle_exist(self, pool, test_param):
         """Check if pool handle still exists.
 
         Args:
+            pool (TestPool): Pool to check the handle.
             test_param (str): invalid UUID
 
         Returns:
@@ -60,7 +61,7 @@ class EvictTests(TestWithServers):
 
         """
         status = True
-        if int(self.pool[0].pool.handle.value) == 0:
+        if int(pool.pool.handle.value) == 0:
             self.log.error(
                 "Pool handle was removed when doing an evict with %s",
                 test_param)
@@ -116,7 +117,7 @@ class EvictTests(TestWithServers):
 
             # verify that pool still exists and the handle is still valid.
             self.log.info("Check if pool handle still exist")
-            return self.pool_handle_exist(test_param)
+            return self.pool_handle_exist(self.pool[0], test_param)
 
         # if here then pool-evict did not raise an exception as expected
         # restore the valid server group name and check if valid pool
@@ -126,7 +127,7 @@ class EvictTests(TestWithServers):
             " - evict from pool with %s", test_param)
 
         # check if pool handle still exists
-        self.pool_handle_exist(test_param)
+        self.pool_handle_exist(self.pool[0], test_param)
 
         # Commented out due to DAOS-3836.
         # if self.pool.check_files(self.hostlist_servers):
