@@ -339,7 +339,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 		}
 	}
 
-	var err error = nil
+	var err error
 	// TODO: perform bdev format in parallel
 	for _, srv := range instances {
 		if instanceErrored[srv.Index()] {

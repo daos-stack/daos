@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package bdev
 
 import (
@@ -16,7 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func TestProvider_ScanResponse_filter(t *testing.T) {
+func Test_filterScanResp(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 	ctrlr2 := storage.MockNvmeController(2)
 	ctrlr3 := storage.MockNvmeController(3)
@@ -78,7 +79,7 @@ func TestProvider_ScanResponse_filter(t *testing.T) {
 	}
 }
 
-func TestBdev_forwardScan(t *testing.T) {
+func Test_forwardScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scanReq      storage.BdevScanRequest
 		cache        *storage.BdevScanResponse
@@ -357,7 +358,7 @@ func TestProvider_Prepare(t *testing.T) {
 	}
 }
 
-func TestBdevFormat(t *testing.T) {
+func TestProvider_Format(t *testing.T) {
 	mockSingle := storage.MockNvmeController()
 
 	for name, tc := range map[string]struct {

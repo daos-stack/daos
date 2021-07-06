@@ -109,7 +109,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 		}
 
 		req.TierRatio = make([]float64, len(tierRatio))
-		var totalRatios uint64 = 0
+		var totalRatios uint64
 		for tierIdx, ratio := range tierRatio {
 			if ratio > 100 {
 				return errors.New("Storage tier ratio must be a value between 0-100")
@@ -121,7 +121,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errors.New("Storage tier ratios must add up to 100")
 		}
 		cmd.log.Infof("Creating DAOS pool with automatic storage allocation: "+
-			"%d total, %s tier ratio", req.TotalBytes, cmd.TierRatio)
+			"%s total, %s tier ratio", humanize.Bytes(req.TotalBytes), cmd.TierRatio)
 	} else {
 		// manual selection of storage values
 		if cmd.NumRanks > 0 {
@@ -133,7 +133,7 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errors.Wrap(err, "failed to parse pool SCM size")
 		}
 
-		var NvmeBytes uint64 = 0
+		var NvmeBytes uint64
 		if cmd.NVMeSize != "" {
 			NvmeBytes, err = humanize.ParseBytes(cmd.NVMeSize)
 			if err != nil {

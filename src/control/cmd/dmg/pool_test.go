@@ -117,12 +117,10 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					TotalBytes: 0,
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []system.Rank{},
-					TierRatio:  nil,
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -148,12 +146,10 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					TotalBytes: 0,
 					NumSvcReps: 3,
 					User:       "foo@home",
 					UserGroup:  "bar@home",
 					Ranks:      []system.Rank{},
-					TierRatio:  nil,
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -164,12 +160,10 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					TotalBytes: 0,
 					NumSvcReps: 3,
 					User:       "foo@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []system.Rank{},
-					TierRatio:  nil,
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
@@ -180,12 +174,10 @@ func TestPoolCommands(t *testing.T) {
 			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					TotalBytes: 0,
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  "foo@",
 					Ranks:      []system.Rank{},
-					TierRatio:  nil,
 					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),

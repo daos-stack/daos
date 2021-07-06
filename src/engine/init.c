@@ -819,7 +819,7 @@ Options:\n\
       Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
       Allocates mem_size MB for SPDK when using primary process mode\n\
-  --hugepage_size = hugepage_size, -H hugepage_size\n\
+  --hugepage_size=hugepage_size, -H hugepage_size\n\
       Passes the configured hugepage size(2MB or 1GB)\n\
   --storage_tiers=ntiers, -T ntiers\n\
       Number of storage tiers\n\
@@ -849,7 +849,7 @@ parse(int argc, char **argv)
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
-		{ "storage_tiers", required_argument, NULL, 'T' },
+		{ "storage_tiers",	required_argument,	NULL,	'T' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;

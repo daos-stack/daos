@@ -46,21 +46,19 @@ engines:
   # - CRT_CTX_SHARE_ADDR=1
   # - CRT_CTX_NUM=8
 
+  # Storage definitions (one per tier)
   storage:
   -
-    # Storage definitions
+    # When class is set to dcpm, scm_list is the list of device paths for
+    # PMem namespaces (currently only one per engine supported).
+    class: dcpm
+    scm_list: [/dev/pmem0]
     scm_mount: /mnt/daos0
 
     # When class is set to ram, tmpfs will be used to emulate SCM.
     # The size of ram is specified by scm_size in GB units.
     # class: ram
     # scm_size: 6
-
-    # When class is set to dcpm, scm_list is the list of device paths for
-    # PMem namespaces (currently only one per engine supported).
-    class: dcpm
-    scm_list: [/dev/pmem0]
-
   -
     # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
     # engine with -n <path>).
@@ -99,10 +97,9 @@ engines:
 
   storage:
   -
-    scm_mount: /mnt/daos1
     class: dcpm
     scm_list: [/dev/pmem1]
-
+    scm_mount: /mnt/daos1
   -
     class: nvme
     bdev_list: ["0000:82:00.0"]  # generate regular nvme.conf

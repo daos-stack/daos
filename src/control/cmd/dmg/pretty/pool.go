@@ -68,7 +68,7 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 		return errors.New("create response had 0 storage tiers")
 	}
 
-	var totalSize uint64 = 0
+	var totalSize uint64
 	for _, tierBytes := range pcr.TierBytes {
 		totalSize += tierBytes
 	}

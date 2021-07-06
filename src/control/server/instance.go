@@ -69,15 +69,13 @@ type EngineInstance struct {
 
 // NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
-func NewEngineInstance(log logging.Logger,
-	provider *storage.Provider,
-	joinFn systemJoinFn, r EngineRunner) *EngineInstance {
+func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner) *EngineInstance {
 
 	return &EngineInstance{
-		log:            log,
+		log:            l,
 		runner:         r,
-		storage:        provider,
-		joinSystem:     joinFn,
+		storage:        p,
+		joinSystem:     jf,
 		drpcReady:      make(chan *srvpb.NotifyReadyReq),
 		storageReady:   make(chan bool),
 		startRequested: make(chan bool),

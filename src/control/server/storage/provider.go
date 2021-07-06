@@ -17,11 +17,13 @@ import (
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
 
+// SystemProvider provides operating system capabilities.
 type SystemProvider interface {
 	system.IsMountedProvider
 	GetfsUsage(string) (uint64, uint64, error)
 }
 
+// Provider provides storage specific capabilities.
 type Provider struct {
 	log           logging.Logger
 	engineIndex   int
@@ -31,6 +33,7 @@ type Provider struct {
 	Bdev          BdevProvider
 }
 
+// DefaultProvider returns a provider populated with default parameters.
 func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provider {
 	return &Provider{
 		log:           log,
@@ -42,6 +45,7 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 	}
 }
 
+// GetGetScmConfig returns the only SCM tier config.
 func (p *Provider) GetScmConfig() (*TierConfig, error) {
 	// NB: A bit wary of building in assumptions again about the number of
 	// SCM tiers, but for the sake of expediency we'll assume that there is
@@ -75,6 +79,7 @@ func (p *Provider) GetScmUsage() (*ScmMountPoint, error) {
 	}, nil
 }
 
+// ScmIsMounted returns true if SCM is mounted.
 func (p *Provider) ScmIsMounted() (bool, error) {
 	cfg, err := p.GetScmConfig()
 	if err != nil {
@@ -83,6 +88,7 @@ func (p *Provider) ScmIsMounted() (bool, error) {
 	return p.Sys.IsMounted(cfg.Scm.MountPoint)
 }
 
+// MountScm mounts SCM based on provider config.
 func (p *Provider) MountScm() error {
 	cfg, err := p.GetScmConfig()
 	if err != nil {
@@ -144,6 +150,7 @@ func createScmFormatRequest(class Class, scmCfg ScmConfig, force bool) (*ScmForm
 	return &req, nil
 }
 
+// ScmNeedsFormat returns true if SCM is found to require formatting.
 func (p *Provider) ScmNeedsFormat() (bool, error) {
 	cfg, err := p.GetScmConfig()
 	if err != nil {
@@ -167,6 +174,7 @@ func (p *Provider) ScmNeedsFormat() (bool, error) {
 	return needsFormat, nil
 }
 
+// FormatScm formats SCM based on provider config and force flag.
 func (p *Provider) FormatScm(force bool) error {
 	cfg, err := p.GetScmConfig()
 	if err != nil {
@@ -194,6 +202,8 @@ func (p *Provider) FormatScm(force bool) error {
 	return nil
 }
 
+// HasBlockDevices returns true if provider engine storage config has configured
+// block devices.
 func (p *Provider) HasBlockDevices() bool {
 	for _, cfg := range p.engineStorage.Tiers.BdevConfigs() {
 		if len(cfg.Bdev.DeviceList) > 0 {
@@ -203,6 +213,8 @@ func (p *Provider) HasBlockDevices() bool {
 	return false
 }
 
+// BdevTierPropertiesFromConfig returns BdevTierProperties struct from given
+// TierConfig.
 func BdevTierPropertiesFromConfig(cfg *TierConfig) BdevTierProperties {
 	return BdevTierProperties{
 		Class:      cfg.Class,
@@ -213,8 +225,8 @@ func BdevTierPropertiesFromConfig(cfg *TierConfig) BdevTierProperties {
 	}
 }
 
-// FormatRequestFromConfig returns a format request populated from a bdev
-// storage configuration.
+// BdevFormatRequestFromConfig returns a bdev format request populated from a
+// TierConfig.
 func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevFormatRequest, error) {
 	req := BdevFormatRequest{
 		Properties: BdevTierPropertiesFromConfig(cfg),
@@ -232,6 +244,8 @@ func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevForma
 	return req, nil
 }
 
+// BdevWriteNvmeConfigRequestFromConfig returns a config write request from
+// a storage config.
 func BdevWriteNvmeConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWriteNvmeConfigRequest, error) {
 	req := BdevWriteNvmeConfigRequest{
 		ConfigOutputPath: cfg.ConfigOutputPath,
@@ -256,12 +270,15 @@ func BdevWriteNvmeConfigRequestFromConfig(log logging.Logger, cfg *Config) (Bdev
 	return req, nil
 }
 
+// BdevTierFormatResult contains details of a format operation result.
 type BdevTierFormatResult struct {
 	Tier   int
 	Error  error
 	Result *BdevFormatResponse
 }
 
+// FormatBdevTiers formats all the Bdev tiers in the engine storage
+// configuration.
 func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierFormatResult, len(bdevCfgs))
@@ -297,6 +314,8 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 	return
 }
 
+// WriteNvmeConfig creates an NVMe config file which describes what devices
+// should be used by a DAOS engine process.
 func (p *Provider) WriteNvmeConfig() error {
 	req, err := BdevWriteNvmeConfigRequestFromConfig(p.log, p.engineStorage)
 	if err != nil {
@@ -307,11 +326,15 @@ func (p *Provider) WriteNvmeConfig() error {
 	return err
 }
 
+// BdevTierScanResult contains details of a scan operation result.
 type BdevTierScanResult struct {
 	Tier   int
 	Result *BdevScanResponse
 }
 
+// ScanBdevTiers scans all Bdev tiers in the provider's engine storage
+// configuration. If the direct flag is set, avoid retrieving cached
+// results.
 func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err error) {
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierScanResult, 0, len(bdevCfgs))
@@ -339,15 +362,6 @@ func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err
 		// assigned devices), bypass cache to get fresh health stats
 		if direct {
 			req.NoCache = true
-
-			bsr, err := p.Bdev.Scan(req)
-			if err != nil {
-				return nil, errors.Wrap(err, "nvme scan")
-			}
-			tsr.Result = bsr
-			results = append(results, tsr)
-
-			continue
 		}
 
 		bsr, err := p.Bdev.Scan(req)
@@ -361,6 +375,7 @@ func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err
 	return
 }
 
+// NewProvider returns an initialized storage provider.
 func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemProvider, scm ScmProvider, bdev BdevProvider) *Provider {
 	return &Provider{
 		log:           log,

@@ -378,7 +378,7 @@
 #
 #    # When class is set to dcpm, scm_list is the list of device paths for
 #    # PMem namespaces (currently only one per engine supported).
-#    scm_list: [/dev/pmem0]
+#    scm_list: [/dev/pmem1]
 #
 #  -
 #    # Backend block device type. Force a SPDK driver to be used by this engine
