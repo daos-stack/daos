@@ -31,14 +31,6 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
-  transport_config:
-    allow_insecure: False
-agent_config:
-  transport_config:
-    allow_insecure: False
-dmg:
-  transport_config:
-    allow_insecure: False
 pool:
   mode: 146
   name: daos_server
