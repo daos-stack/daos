@@ -265,8 +265,7 @@ class DaosAgentManager(SubprocessManager):
             return None
 
         # Write an attach_info_tmp file in this directory for cart_ctl to use
-        tmpdir = tempfile.gettempdir()
-        attachinfo_file_path = os.path.join(tmpdir, attach_info_filename)
+        attachinfo_file_path = os.path.join(self.outputdir, attach_info_filename)
 
         try:
             with open(attachinfo_file_path, 'w') as file_handle:
