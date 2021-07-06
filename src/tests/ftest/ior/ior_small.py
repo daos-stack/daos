@@ -36,7 +36,7 @@ class IorSmall(IorTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,checksum,iorsmall,mpich
+        :avocado: tags=daosio,checksum,iorsmall,ior
         :avocado: tags=DAOS_5610
         """
         results = []

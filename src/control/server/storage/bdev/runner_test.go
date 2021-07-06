@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -17,6 +18,22 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+func mockRun(log logging.Logger, env []string, cmdStr string, args ...string) (string, error) {
+	log.Debugf("running: %s", cmdStr+" "+strings.Join(args, " "))
+	return "", nil
+}
+
+func mockScriptRunner(log logging.Logger) *spdkSetupScript {
+	return &spdkSetupScript{
+		log:    log,
+		runCmd: mockRun,
+	}
+}
+
+func defaultBackendWithMockRunner(log logging.Logger) *spdkBackend {
+	return newBackend(log, mockScriptRunner(log))
+}
 
 func TestRunner_Prepare(t *testing.T) {
 	const (
