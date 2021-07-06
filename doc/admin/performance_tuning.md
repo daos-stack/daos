@@ -125,7 +125,7 @@ $ ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
 
 Note:
 Number of repetitions, max inflight rpcs, message sizes can be adjusted based on the
-particular test/expriment.
+particular test/experiment.
 
 
 ## Benchmarking DAOS
