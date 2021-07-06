@@ -700,9 +700,9 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	memset(&vma, 0, sizeof(vma));
 	vma.uma_id = UMEM_CLASS_VMEM;
 
-	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE, 0,
-				      DTX_BTREE_ORDER, &vma,
-				      &pool->vp_dtx_committed_btr,
+	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE,
+				      BTR_FEAT_SKIP_LEAF_REBAL, DTX_BTREE_ORDER,
+				      &vma, &pool->vp_dtx_committed_btr,
 				      DAOS_HDL_INVAL, pool,
 				      &pool->vp_dtx_committed_hdl);
 	if (rc != 0) {

@@ -2244,6 +2244,14 @@ btr_node_del_leaf(struct btr_context *tcx,
 		if (rc != 0)
 			return rc;
 
+		if (tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL) {
+			struct btr_node	*nd;
+
+			nd = btr_off2ptr(tcx, cur_tr->tr_node);
+			if (nd->tn_keyn == 0)
+				return 0;
+		}
+
 		return 1;
 	}
 
@@ -2563,7 +2571,8 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 		is_leaf ? "record" : "child", is_leaf ? "leaf" : "non-leaf",
 		cur_nd->tn_keyn);
 
-	if (cur_nd->tn_keyn > 1) {
+	if (cur_nd->tn_keyn > 1 ||
+	    (is_leaf && tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)) {
 		/* OK to delete record without doing any extra work */
 		D_DEBUG(DB_TRACE, "Straight away deletion, no rebalance.\n");
 		sib_off	= BTR_NODE_NULL;
@@ -3834,6 +3843,9 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 
 	if (tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
 		*tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
+
+	if (tc->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)
+		*tree_feats |= BTR_FEAT_SKIP_LEAF_REBAL;
 
 	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
 		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
