@@ -23,16 +23,12 @@ import (
 )
 
 /*
-#define D_LOGFAC	DD_FAC(client)
+#include "util.h"
 
-#include <daos.h>
-#include <daos/common.h>
 #include <daos/multihash.h>
 #include <daos/compression.h>
 #include <daos/cipher.h>
 #include <daos/object.h>
-
-#include "property.h"
 */
 import "C"
 
@@ -79,7 +75,7 @@ var propHdlrs = propHdlrMap{
 		"Label",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
 			cStr := C.CString(v)
-			C.set_dpe_dupe_str(e, cStr, C.int(len(v)+1))
+			C.set_dpe_dupe_str(e, cStr, C.size_t(len(v)+1))
 			freeString(cStr)
 			return nil
 		},
