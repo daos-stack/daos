@@ -22,17 +22,16 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
 /*
-#include <daos.h>
-
-#include "daos_hdlr.h"
+#include "util.h"
 */
 import "C"
 
 type PoolID struct {
-	labelOrUUIDFlag
+	ui.LabelOrUUIDFlag
 }
 
 type poolBaseCmd struct {
@@ -50,6 +49,10 @@ type poolBaseCmd struct {
 }
 
 func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
+	if cmd.poolUUID == uuid.Nil {
+		cmd.log.Errorf("poolUUIDPtr(): nil UUID")
+		return nil
+	}
 	return (*C.uchar)(unsafe.Pointer(&cmd.poolUUID[0]))
 }
 
@@ -60,44 +63,40 @@ func (cmd *poolBaseCmd) PoolID() PoolID {
 	return cmd.Args.Pool
 }
 
-func (cmd *poolBaseCmd) resolvePool(id PoolID) error {
-	// TODO: Resolve label.
-	if id.HasLabel() {
-		return errors.New("no support for pool labels yet")
-	}
-
-	if !id.HasUUID() {
-		return errors.New("no pool UUID provided")
-	}
-	cmd.poolUUID = id.UUID
-
-	return nil
-}
-
 func (cmd *poolBaseCmd) connectPool() error {
 	sysName := cmd.SysName
 	if sysName == "" {
 		sysName = build.DefaultSystemName
 	}
-
 	cSysName := C.CString(sysName)
 	defer freeString(cSysName)
 
-	if cmd.poolLabel != nil {
-		var pi C.daos_pool_info_t
+	var rc C.int
+	switch {
+	case cmd.PoolID().HasLabel():
+		var poolInfo C.daos_pool_info_t
+		cLabel := C.CString(cmd.PoolID().Label)
+		defer freeString(cLabel)
 
-		rc := C.daos_pool_connect_by_label(cmd.poolLabel, cSysName,
-			C.DAOS_PC_RW, &cmd.cPoolHandle, &pi, nil)
-		if err := daosError(rc); err != nil {
-			return err
+		cmd.log.Debugf("connecting to pool: %s", cmd.PoolID().Label)
+		rc = C.daos_pool_connect_by_label(cLabel, cSysName,
+			C.DAOS_PC_RW, &cmd.cPoolHandle, &poolInfo, nil)
+		if rc == 0 {
+			var err error
+			cmd.poolUUID, err = uuidFromC(poolInfo.pi_uuid)
+			if err != nil {
+				cmd.disconnectPool()
+				return err
+			}
 		}
-
-		cmd.poolUUID = uuid.Must(uuidFromC(pi.pi_uuid))
-		return daosError(rc)
+	case cmd.PoolID().HasUUID():
+		cmd.poolUUID = cmd.PoolID().UUID
+		cmd.log.Debugf("connecting to pool: %s", cmd.poolUUID)
+		rc = C.daos_pool_connect(cmd.poolUUIDPtr(), cSysName,
+			C.DAOS_PC_RW, &cmd.cPoolHandle, nil, nil)
+	default:
+		return errors.New("no pool UUID or label supplied")
 	}
-
-	rc := C.daos_pool_connect(cmd.poolUUIDPtr(), cSysName,
-		C.DAOS_PC_RW, &cmd.cPoolHandle, nil, nil)
 
 	return daosError(rc)
 }
@@ -118,13 +117,6 @@ func (cmd *poolBaseCmd) disconnectPool() {
 }
 
 func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), error) {
-	if cmd.poolUUID == uuid.Nil && cmd.poolLabel == nil {
-		if err := cmd.resolvePool(cmd.PoolID()); err != nil {
-			return nil, errors.Wrapf(err,
-				"failed to resolve pool ID %q", cmd.PoolID())
-		}
-	}
-
 	if err := cmd.connectPool(); err != nil {
 		return nil, errors.Wrapf(err,
 			"failed to connect to pool %s", cmd.PoolID())

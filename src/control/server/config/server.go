@@ -39,15 +39,6 @@ type networkProviderValidation func(context.Context, string, string) error
 type networkNUMAValidation func(context.Context, string, uint) error
 type networkDeviceClass func(string) (uint32, error)
 
-// ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
-// These settings bring coherence between the client and server network configuration.
-type ClientNetworkCfg struct {
-	Provider        string
-	CrtCtxShareAddr uint32
-	CrtTimeout      uint32
-	NetDevClass     uint32
-}
-
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {

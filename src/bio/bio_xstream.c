@@ -1197,7 +1197,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 			 * temporary workaround.
 			 */
 			rc = xs_poll_completion(ctxt, &cp_arg.cca_inflights,
-						3000 /*ms*/);
+						9000 /*ms*/);
 			D_CDEBUG(rc == 0, DB_MGMT, DLOG_ERR,
 				 "SPDK subsystems finalized. "DF_RC"\n",
 				 DP_RC(rc));
