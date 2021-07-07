@@ -263,7 +263,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 					storage.NewTierConfig().
 						WithScmMountPoint("/mnt/daos/2").
 						WithScmClass("dcpm").
-						WithScmDeviceList("/dev/pmem0"),
+						WithScmDeviceList("/dev/pmem1"),
 					storage.NewTierConfig().
 						WithBdevClass("file").
 						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
