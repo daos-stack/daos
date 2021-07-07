@@ -457,6 +457,25 @@ iod_dma_buf(struct bio_desc *biod)
 	return biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf;
 }
 
+static inline void
+dma_biov2pg(struct bio_iov *biov, uint64_t *off, uint64_t *end,
+	    unsigned int *pg_cnt, unsigned int *pg_off)
+{
+	*off = bio_iov2raw_off(biov);
+	*end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
+
+	if (bio_iov2media(biov) == DAOS_MEDIA_SCM) {
+		*pg_cnt = (*end - *off + BIO_DMA_PAGE_SZ - 1) >>
+				BIO_DMA_PAGE_SHIFT;
+		*pg_off = 0;
+	} else {
+		*pg_cnt = ((*end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
+				(*off >> BIO_DMA_PAGE_SHIFT);
+		*pg_off = *off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
+	}
+	D_ASSERT(*pg_cnt > 0);
+}
+
 /* bio_bulk.c */
 int bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data);
 void bulk_iod_release(struct bio_desc *biod);
