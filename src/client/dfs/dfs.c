@@ -2198,8 +2198,7 @@ out:
 }
 
 int
-dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
-	   daos_obj_id_t *oid)
+dfs_removeoi(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -2237,6 +2236,10 @@ restart:
 
 	if (!exists)
 		D_GOTO(out, rc = ENOENT);
+
+	/* Check if the file is the expected one */
+	if ((oid && (oid->lo || oid->hi)) && (oid->lo != entry.oid.lo || oid->hi != entry.oid.hi))
+		D_GOTO(out, rc = EBADF);
 
 	if (S_ISDIR(entry.mode)) {
 		uint32_t nr = 0;
@@ -2290,6 +2293,15 @@ out:
 	if (rc == ERESTART)
 		goto restart;
 	return rc;
+}
+
+int
+dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid)
+{
+	if (oid && (oid->lo || oid->hi))
+		return EINVAL;
+
+	return dfs_removeoi(dfs, parent, name, force, oid);
 }
 
 static int
@@ -2952,7 +2964,6 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	daos_size_t		file_size = 0;
 	int			rc;
 
-
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if ((dfs->amode != O_RDWR) && (flags & O_CREAT))
@@ -3575,6 +3586,15 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name)
 	return 0;
 }
 
+void
+dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name)
+{
+	oid_cp(&obj->parent_oid, src_obj->oid);
+
+	strncpy(obj->name, name, DFS_MAX_NAME);
+	obj->name[DFS_MAX_NAME] = '\0';
+}
+
 int
 dfs_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, struct stat *stbuf)
 {
@@ -4164,9 +4184,10 @@ out:
 	return rc;
 }
 
+/* Accepts oid as input or output parameter */
 int
-dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name, daos_obj_id_t *oid)
+dfs_moveoi(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
+	   char *new_name, daos_obj_id_t *moid, daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -4188,6 +4209,8 @@ dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		new_parent = &dfs->root;
 	else if (!S_ISDIR(new_parent->mode))
 		return ENOTDIR;
+	if (moid && (moid->lo || moid->hi))
+		return EINVAL;
 
 	rc = check_name(name, &len);
 	if (rc)
@@ -4218,6 +4241,9 @@ restart:
 	}
 	if (exists == false)
 		D_GOTO(out, rc = ENOENT);
+
+	if (moid)
+		oid_cp(moid, entry.oid);
 
 	rc = fetch_entry(new_parent->oh, th, new_name, new_len, true, &exists,
 			 &new_entry, 0, NULL, NULL, NULL);
@@ -4273,8 +4299,13 @@ restart:
 			D_GOTO(out, rc);
 		}
 
-		if (oid)
+		if (oid) {
+			if ((oid->lo || oid->hi) &&
+				(oid->lo != new_entry.oid.lo || oid->hi != new_entry.oid.hi))
+				D_GOTO(out, rc = EBADF);
+
 			oid_cp(oid, new_entry.oid);
+		}
 	}
 
 	/** rename symlink */
@@ -4344,6 +4375,17 @@ out:
 		D_FREE(new_entry.value);
 	}
 	return rc;
+}
+
+/* Wrapper function, only permit oid as a input parameter and return if it has data */
+int
+dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
+	 char *new_name, daos_obj_id_t *oid)
+{
+	if (oid && (oid->lo || oid->hi))
+		return EINVAL;
+
+	return dfs_moveoi(dfs, parent, name, new_parent, new_name, NULL, oid);
 }
 
 int
