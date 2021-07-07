@@ -1252,12 +1252,12 @@ process_removals(struct agg_merge_window *mw, struct vos_obj_iter *oiter, d_list
 			continue;
 
 		if (d_list_empty(&rm_ent->re_contained)) {
-			D_DEBUG(DB_IO, "Removing physical removal record: "DF_RECT"\n",
+			D_DEBUG(DB_EPC, "Removing physical removal record: "DF_RECT"\n",
 				DP_RECT(&rm_ent->re_rect));
 			rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		} else {
 			D_ASSERT(top);
-			D_DEBUG(DB_IO, "Removing logical removal record: "DF_RECT"\n",
+			D_DEBUG(DB_EPC, "Removing logical removal record: "DF_RECT"\n",
 				DP_RECT(&rm_ent->re_rect));
 			rc = process_removals(mw, oiter, &rm_ent->re_contained, last, false);
 		}
@@ -1533,7 +1533,6 @@ flush_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	if (!need_flush(mw, last))
 		return 0;
 
-	D_INFO("PREPARE SEGMENTS\n");
 	/* Prepare the new segments to be inserted */
 	rc = prepare_segments(mw);
 	if (rc) {
