@@ -13,15 +13,13 @@
 static int
 evt_validate_options(unsigned int options)
 {
-	if ((options & (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_REMOVED)) == 0)
+	if ((options & EVT_ITER_SKIP_HOLES) == 0)
 		return 0;
-	if (options & EVT_ITER_COVERED)
-		goto error;
-	if (options & EVT_ITER_VISIBLE)
+	if ((options & EVT_ITER_COVERED) == EVT_ITER_VISIBLE)
 		return 0;
-error:
+
 	/* EVT_ITER_SKIP* should be used only with EVT_ITER_VISIBLE */
-	D_ERROR("Misuse of EVT_ITER_SKIP_{HOLES,REMOVED}\n");
+	D_ERROR("Misuse of EVT_ITER_SKIP_HOLES\n");
 	return -DER_INVAL;
 }
 
@@ -201,8 +199,7 @@ evt_iter_intent(struct evt_iterator *iter)
 static inline bool
 should_skip(struct evt_entry *entry, struct evt_iterator *iter)
 {
-	if ((iter->it_options &
-	    (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_REMOVED)) == 0)
+	if ((iter->it_options & EVT_ITER_SKIP_HOLES) == 0)
 		return false;
 
 	if (bio_addr_is_hole(&entry->en_addr)) {
@@ -296,7 +293,7 @@ evt_iter_skip_holes(struct evt_context *tcx, struct evt_iterator *iter)
 	struct evt_entry_array	*enta;
 	struct evt_entry	*entry;
 
-	if (iter->it_options & (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_REMOVED)) {
+	if (iter->it_options & EVT_ITER_SKIP_HOLES) {
 		enta = iter->it_entries;
 		entry = evt_ent_array_get(enta, iter->it_index);
 
@@ -319,10 +316,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	int			 rc = 0;
 	int			 index;
 
-	if (iter->it_options & EVT_ITER_VISIBLE)
-		flags = EVT_VISIBLE;
-	if (iter->it_options & EVT_ITER_COVERED)
-		flags |= EVT_COVERED;
+	flags = iter->it_options & EVT_VIS_MASK;
 
 	rtmp.rc_ex.ex_lo = iter->it_filter.fr_ex.ex_lo;
 	rtmp.rc_ex.ex_hi = iter->it_filter.fr_ex.ex_hi;
