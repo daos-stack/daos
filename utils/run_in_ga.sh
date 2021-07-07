@@ -14,10 +14,6 @@ rm -rf /opt/daos/prereq/release/spdk
 $SCONS PREFIX=/opt/daos --build-deps=yes --deps-only
 echo ::endgroup::
 
-echo ::group::Stack analyzer output
-$SCONS --jobs 10 --analyze-stack="-x tests -c 128"
-echo ::endgroup::
-
 echo ::group::Test client only debug build
 $SCONS --jobs 10 PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug \
        TARGET_TYPE=release -c install
@@ -50,6 +46,10 @@ $SCONS install
 utils/check.sh /opt/daos/bin/daos_engine
 utils/check.sh /opt/daos/bin/vos_tests
 utils/check.sh /opt/daos/bin/dmg
+echo ::endgroup::
+
+echo ::group::Stack analyzer output
+$SCONS --jobs 10 --analyze-stack="-x tests -c 128"
 echo ::endgroup::
 
 echo ::group::Setting up daos_admin
