@@ -673,6 +673,15 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 	return rc;
 }
 
+static void crt_swim_new_incarnation(struct swim_context *ctx,
+				     swim_id_t id,
+				     struct swim_member_state *state)
+{
+	D_ASSERTF(id == swim_self_get(ctx), DF_U64" == "DF_U64"\n",
+		  id, swim_self_get(ctx));
+	state->sms_incarnation = crt_hlc_get();
+}
+
 static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
@@ -729,6 +738,7 @@ static struct swim_ops crt_swim_ops = {
 	.get_iping_target = &crt_swim_get_iping_target,
 	.get_member_state = &crt_swim_get_member_state,
 	.set_member_state = &crt_swim_set_member_state,
+	.new_incarnation  = &crt_swim_new_incarnation,
 };
 
 int crt_swim_init(int crt_ctx_idx)
@@ -1022,7 +1032,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	crt_swim_csm_lock(csm);
 	if (D_CIRCLEQ_EMPTY(&csm->csm_head)) {
 		cst->cst_id = (swim_id_t)self;
-		cst->cst_state.sms_incarnation = 0;
+		cst->cst_state.sms_incarnation = crt_hlc_get();
 		cst->cst_state.sms_status = SWIM_MEMBER_ALIVE;
 		D_CIRCLEQ_INSERT_HEAD(&csm->csm_head, cst, cst_link);
 		self_in_list = true;
