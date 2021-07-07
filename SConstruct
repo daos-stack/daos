@@ -97,7 +97,7 @@ def is_platform_arm():
         return True
     return False
 
-def set_defaults(env, build_prefix, daos_version):
+def set_defaults(env, daos_version):
     """set compiler defaults"""
     AddOption('--preprocess',
               dest='preprocess',
@@ -121,11 +121,6 @@ def set_defaults(env, build_prefix, daos_version):
 
     env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + daos_version + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
-
-    args = GetOption('analyze_stack')
-    if args is not None:
-        sa = stack_analyzer.analyzer(env, build_prefix, args)
-        sa.analyze_on_exit()
 
 def build_misc():
     """Build miscellaneous items"""
@@ -373,11 +368,16 @@ def scons(): # pylint: disable=too-many-locals
     env.Alias('install', '$PREFIX')
     daos_version = get_version()
 
-    set_defaults(env, build_prefix, daos_version)
+    set_defaults(env, daos_version)
 
     base_env = env.Clone()
 
     compiler_setup.base_setup(env, prereqs=prereqs)
+
+    args = GetOption('analyze_stack')
+    if args is not None:
+        analyzer = stack_analyzer.analyzer(env, build_prefix, args)
+        analyzer.analyze_on_exit()
 
     # Export() is handled specially by pylint so do not merge these two lines.
     Export('daos_version', 'API_VERSION', 'env', 'base_env', 'prereqs')
