@@ -385,7 +385,7 @@ obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
   includes a CORRUPTED bit.
 - The vos update api already accepts a flag, so a CORRUPTED flag is added and
   handled during an update so that, if set, the bio address will be updated to
-  be corrupted.
+  be corrupted. (Documented in src/vos/README.md)
 - On fetch, if a value is already marked corrupted, return -DER_CSUM
 
 ### Object Layer
