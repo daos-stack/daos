@@ -1857,9 +1857,7 @@ out:
 	if (buf != NULL) {
 		free(buf);
 	}
-	if (attr.da_rel_path) {
-		free(attr.da_rel_path);
-	}
+	duns_destroy_attr(&attr);
 	return barray;
 }
 

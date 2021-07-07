@@ -140,6 +140,7 @@ struct cont_iv_prop {
 	uint64_t	cip_snap_max;
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
+	uint64_t	cip_ec_cell_sz;
 	struct daos_prop_co_roots	cip_roots;
 	struct daos_co_status		cip_co_status;
 	/* MUST be the last member */

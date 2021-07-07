@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.101
-Release:       2%{?relval}%{?dist}
+Version:       1.3.102
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -59,7 +59,7 @@ BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
+BuildRequires: libpmemobj-devel >= 1.11
 %if (0%{?rhel} >= 8)
 BuildRequires: fuse3-devel >= 3
 %else
@@ -76,7 +76,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 20, spdk-devel < 21
+BuildRequires: spdk-devel >= 21.04
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -84,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel >= 0.7.3
+BuildRequires: daos-raft-devel = 0.8.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -153,15 +153,15 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools
+Requires: spdk-tools >= 21.04
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
 Requires: ipmctl >= 02.00.00.3733
-Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
+Requires: libpmemobj1 >= 1.11
 %else
 Requires: ipmctl > 02.00.00.3816
-Requires: libpmem >= 1.8, libpmemobj >= 1.8
+Requires: libpmemobj >= 1.11
 %endif
 Requires: hwloc
 Requires: mercury = %{mercury_version}
@@ -234,6 +234,7 @@ This is the package needed to run the DAOS test suite
 %if (0%{?suse_version} >= 1500)
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
 %endif
+Requires: libuuid-devel
 Summary: The DAOS development libraries and headers
 
 %description devel
@@ -393,6 +394,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
+%{_bindir}/daos_old
+%{_libdir}/libdaos_cmd_hdlrs.so
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
@@ -456,13 +459,31 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libgurt.so
 %{_libdir}/libcart.so
 %{_libdir}/*.a
-%{_libdir}/*.so
 
 %files firmware
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Wed Jun 30 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.102-5
+- Update to spdk 21.04 and (indirectly) dpdk 21.05
+
+* Fri Jun 25 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.102-4
+- Add libuuid-devel back as a requirement of daos-devel
+
+* Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+- Update raft to pick up Pre-Vote
+
+* Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
+- Update to pmdk 1.11.0-rc1
+- Remove dependence on libpmem since we use libpmemobj directly
+
+* Fri Jun 11 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.102-1
+- Version bump to 1.3.102 for 2.0 test build 2
+
+* Wed Jun 02 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-3
+- Remove libs from devel package
+
 * Thu May 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-101-2
 - Remove client libs from common package
 

@@ -567,7 +567,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	assert_true(iod->iod_size > 0);
 
 	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, flags, dkey,
-			      1, iod, iod_csums, false, 0, &ioh, dth);
+			      1, iod, iod_csums, 0, &ioh, dth);
 	if (rc != 0) {
 		if (verbose && rc != -DER_INPROGRESS)
 			print_error("Failed to prepare ZC update: "DF_RC"\n",
@@ -2281,9 +2281,6 @@ io_query_key(void **state)
 			       NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, KEY_INC * 2);
-
-	if (getenv("DAOS_IO_BYPASS"))
-		return;
 
 	/* Only execute the transactional tests when rollback is available */
 

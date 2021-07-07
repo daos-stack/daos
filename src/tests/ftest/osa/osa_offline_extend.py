@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import time
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
@@ -66,7 +65,7 @@ class OSAOfflineExtend(OSAUtils):
             self.pool.set_property("reclaim", "disabled")
             if data:
                 self.run_ior_thread("Write", oclass[index], test_seq)
-                self.run_mdtest_thread()
+                self.run_mdtest_thread(oclass[index])
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass[index], test_seq)
         # Start the additional servers and extend the pool
@@ -115,7 +114,7 @@ class OSAOfflineExtend(OSAUtils):
                 else:
                     index = 0
                 self.run_ior_thread("Read", oclass[index], test_seq)
-                self.run_mdtest_thread()
+                self.run_mdtest_thread(oclass[index])
                 self.container = self.pool_cont_dict[self.pool][0]
                 kwargs = {"pool": self.pool.uuid,
                           "cont": self.container.uuid}

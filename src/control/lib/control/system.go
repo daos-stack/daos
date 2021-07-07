@@ -585,7 +585,7 @@ type ListPoolsReq struct {
 // ListPoolsResp contains the status of the request and, if successful, the list
 // of pools in the system.
 type ListPoolsResp struct {
-	Status int32
+	Status int32                   `json:"status"`
 	Pools  []*common.PoolDiscovery `json:"pools"`
 }
 

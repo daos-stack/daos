@@ -62,7 +62,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  *	it cannot be too small; otherwise, handing resent RPC
  *	make hit uncertain case and got failure -DER_EP_OLD.
  */
-#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 24)
+#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 20)
 
 /* The count threshold for triggerring DTX aggregation. */
 #define DTX_AGG_THRESHOLD_CNT_UPPER	((DTX_AGG_THRESHOLD_CNT_LOWER >> 1) * 3)
@@ -71,7 +71,7 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * DTX in the DTX table exceeds such threshold, it will trigger DTX
  * aggregation locally.
  */
-#define DTX_AGG_THRESHOLD_AGE_UPPER	1200
+#define DTX_AGG_THRESHOLD_AGE_UPPER	120
 
 /* If DTX aggregation is triggered, then the DTXs with older ages than
  * this threshold will be aggregated.
@@ -79,18 +79,18 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * XXX: It cannot be too small; otherwise, handing resent RPC
  *	make hit uncertain case and got failure -DER_EP_OLD.
  */
-#define DTX_AGG_THRESHOLD_AGE_LOWER	900
+#define DTX_AGG_THRESHOLD_AGE_LOWER	90
 
 /* The time threshold for triggerring DTX cleanup of stale entries.
  * If the oldest active DTX exceeds such threshold, it will trigger
  * DTX cleanup locally.
  */
-#define DTX_CLEANUP_THRESHOLD_AGE_UPPER	240
+#define DTX_CLEANUP_THRESHOLD_AGE_UPPER	60
 
 /* If DTX cleanup for stale entries is triggered, then the DTXs with
  * older ages than this threshold will be cleanup.
  */
-#define DTX_CLEANUP_THRESHOLD_AGE_LOWER	180
+#define DTX_CLEANUP_THRESHOLD_AGE_LOWER	45
 
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
@@ -103,7 +103,7 @@ void dtx_batched_commit(void *arg);
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			  daos_unit_oid_t *oid, daos_epoch_t epoch,
-			  struct dtx_entry ***dtes);
+			  struct dtx_entry ***dtes, struct dtx_cos_key **dcks);
 int dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 		daos_unit_oid_t *oid, uint64_t dkey_hash,
 		daos_epoch_t epoch, uint32_t flags);
@@ -113,7 +113,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       int count, bool drop_cos);
+	       struct dtx_cos_key *dcks, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 

@@ -747,6 +747,9 @@ dc_pool_disconnect(tse_task_t *task)
 	D_RWLOCK_RDLOCK(&pool->dp_co_list_lock);
 	if (!d_list_empty(&pool->dp_co_list)) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
+		D_ERROR("cannot disconnect pool "DF_UUID
+			", container not closed. %d\n",
+			DP_UUID(pool->dp_pool), -DER_BUSY);
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
 	pool->dp_disconnecting = 1;
@@ -851,8 +854,9 @@ swap_pool_buf(struct pool_buf *pb)
 
 	for (i = 0; i < pb->pb_nr; i++) {
 		pool_comp = &pb->pb_comps[i];
-		D_SWAP16S(&pool_comp->co_type);
+		/* skip pool_comp->co_type (uint8_t) */
 		/* skip pool_comp->co_status (uint8_t) */
+		/* skip pool_comp->co_index (uint8_t) */
 		/* skip pool_comp->co_padding (uint8_t) */
 		D_SWAP32S(&pool_comp->co_id);
 		D_SWAP32S(&pool_comp->co_rank);

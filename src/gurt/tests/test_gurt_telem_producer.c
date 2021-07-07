@@ -636,6 +636,7 @@ static void
 verify_ephemeral_gone(char *path, key_t key)
 {
 	struct d_tm_node_t	*node;
+	int			 got_errno;
 	int			 rc;
 
 	D_PRINT("Verifying path [%s] (key=0x%x) is gone\n", path, key);
@@ -643,7 +644,9 @@ verify_ephemeral_gone(char *path, key_t key)
 	node = d_tm_find_metric(cli_ctx, path);
 	assert_null(node);
 	rc = shmget(key, 0, 0);
+	got_errno = errno;
 	assert_true(rc < 0);
+	assert_int_equal(got_errno, ENOENT);
 }
 
 static void
@@ -895,6 +898,106 @@ test_ephemeral_nested(void **state)
 }
 
 static void
+test_ephemeral_cleared_sibling(void **state)
+{
+	char			*path1 = "gurt/tests/cleared_link/1";
+	char			*path2 = "gurt/tests/cleared_link/2";
+	struct d_tm_node_t	*node1 = NULL;
+	struct d_tm_node_t	*node2 = NULL;
+	key_t			 key1;
+	key_t			 key2;
+	size_t			 test_mem_size = 1024;
+	int			 rc;
+
+	rc = d_tm_add_ephemeral_dir(&node1, test_mem_size, path1);
+	assert_rc_equal(rc, 0);
+	assert_non_null(node1);
+	key1 = node1->dtn_shmem_key;
+
+	rc = d_tm_add_ephemeral_dir(&node2, test_mem_size, path2);
+	assert_rc_equal(rc, 0);
+	assert_non_null(node2);
+	key2 = node2->dtn_shmem_key;
+
+	rc = d_tm_del_ephemeral_dir(path1);
+	assert_rc_equal(rc, 0);
+	verify_ephemeral_gone(path1, key1);
+
+	rc = d_tm_del_ephemeral_dir(path2);
+	assert_rc_equal(rc, 0);
+	verify_ephemeral_gone(path2, key2);
+}
+
+static void
+expect_num_attached(int shmid, int expected)
+{
+	struct shmid_ds	shm_info = {0};
+	int		rc;
+
+	D_PRINT("expecting %d attached to shmid 0x%x\n", expected, shmid);
+
+	rc = shmctl(shmid, IPC_STAT, &shm_info);
+	assert_true(rc >= 0);
+	assert_int_equal(shm_info.shm_nattch, expected);
+}
+
+static void
+expect_shm_released(int shmid)
+{
+	struct shmid_ds	shm_info = {0};
+	int		rc;
+	int		got_errno;
+
+	rc = shmctl(shmid, IPC_STAT, &shm_info);
+	got_errno = errno;
+
+	assert_true(rc < 0);
+	assert_int_equal(got_errno, EINVAL);
+}
+
+static void
+test_gc_ctx(void **state)
+{
+	struct d_tm_node_t	*node = NULL;
+	char			*path = "gurt/tmp/gc";
+	key_t			 key;
+	int			 shmid;
+	int			 rc;
+
+	/* shouldn't crash with NULL */
+	d_tm_gc_ctx(NULL);
+
+	/* add an ephemeral path */
+	rc = d_tm_add_ephemeral_dir(&node, 1024, path);
+	assert_rc_equal(rc, 0);
+	assert_non_null(node);
+
+	/* Verify producer attached to new shmem */
+	key = node->dtn_shmem_key;
+	shmid = shmget(key, 0, 0);
+	assert_true(shmid > 0);
+	expect_num_attached(shmid, 1);
+
+	/* fetching from the client side attaches again */
+	node = d_tm_find_metric(cli_ctx, path);
+	assert_non_null(node);
+	expect_num_attached(shmid, 2);
+
+	/* garbage collection shouldn't change anything at this point */
+	d_tm_gc_ctx(cli_ctx);
+	expect_num_attached(shmid, 2);
+
+	/* When the ephemeral dir is removed, client ctx is still attached */
+	rc = d_tm_del_ephemeral_dir(path);
+	assert_rc_equal(rc, 0);
+	expect_num_attached(shmid, 1);
+
+	/* after cleaning up the client ctx, should be released */
+	d_tm_gc_ctx(cli_ctx);
+	expect_shm_released(shmid);
+}
+
+static void
 expect_list_has_num_of_type(struct d_tm_node_t *dir, int type, int expected)
 {
 	struct d_tm_nodeList_t	*list = NULL;
@@ -1140,6 +1243,8 @@ main(int argc, char **argv)
 		cmocka_unit_test(test_units),
 		cmocka_unit_test(test_ephemeral_simple),
 		cmocka_unit_test(test_ephemeral_nested),
+		cmocka_unit_test(test_ephemeral_cleared_sibling),
+		cmocka_unit_test(test_gc_ctx),
 		/* Run after the tests that populate the metrics */
 		cmocka_unit_test(test_list_ephemeral),
 		cmocka_unit_test(test_follow_link),

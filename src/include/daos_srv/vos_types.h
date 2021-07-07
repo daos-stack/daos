@@ -15,6 +15,8 @@
 #include <daos/dtx.h>
 #include <daos/checksum.h>
 
+#define VOS_SUB_OP_MAX	((uint16_t)-2)
+
 struct dtx_rsrvd_uint {
 	void			*dru_scm;
 	d_list_t		dru_nvme;
@@ -243,6 +245,10 @@ enum {
 	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC		= (1 << 15),
+	/** Dedup update mode */
+	VOS_OF_DEDUP			= (1 << 16),
+	/** Dedup update with memcmp verify mode */
+	VOS_OF_DEDUP_VERIFY		= (1 << 17),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -315,8 +321,10 @@ enum {
 	VOS_IT_PUNCHED		= (1 << 6),
 	/** Cleanup stale DTX entry. */
 	VOS_IT_CLEANUP_DTX	= (1 << 7),
+	/** Skip extents removed by vos_obj_array_remove */
+	VOS_IT_SKIP_REMOVED	= (1 << 8),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 8) - 1,
+	VOS_IT_MASK		= (1 << 9) - 1,
 };
 
 /**
@@ -425,6 +433,8 @@ typedef struct {
 			uint32_t		ie_dtx_mbs_dsize;
 			/* The time when create the DTX entry. */
 			uint64_t		ie_dtx_start_time;
+			/* The hashed dkey if applicable. */
+			uint64_t		ie_dkey_hash;
 			/** DTX participants information. */
 			void			*ie_dtx_mbs;
 		};

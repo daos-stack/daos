@@ -38,30 +38,20 @@ type networkProviderValidation func(context.Context, string, string) error
 type networkNUMAValidation func(context.Context, string, uint) error
 type networkDeviceClass func(string) (uint32, error)
 
-// ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
-// These settings bring coherence between the client and server network configuration.
-type ClientNetworkCfg struct {
-	Provider        string
-	CrtCtxShareAddr uint32
-	CrtTimeout      uint32
-	NetDevClass     uint32
-}
-
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
 	// control-specific
 	ControlPort     int                       `yaml:"port"`
 	TransportConfig *security.TransportConfig `yaml:"transport_config"`
-	// support both "engines:" and "servers:" for backward compatibility
-	Servers             []*engine.Config `yaml:"servers"`
+	// Detect outdated "servers" config, to direct users to change their config file
+	Servers             []*engine.Config `yaml:"servers,omitempty"`
 	Engines             []*engine.Config `yaml:"engines"`
 	BdevInclude         []string         `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool             `yaml:"disable_vfio"`
 	DisableVMD          bool             `yaml:"disable_vmd"`
 	NrHugepages         int              `yaml:"nr_hugepages"`
-	SetHugepages        bool             `yaml:"set_hugepages"`
 	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
 	ControlLogFile      string           `yaml:"control_log_file"`
 	ControlLogJSON      bool             `yaml:"control_log_json,omitempty"`
@@ -452,17 +442,10 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		}
 	}()
 
-	// For backwards compatibility, allow specifying "servers" rather than
-	// "engines" in the server config file.
+	// The config file format no longer supports "servers"
 	if len(cfg.Servers) > 0 {
-		log.Info("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
-		if len(cfg.Engines) > 0 {
-			return errors.New("cannot specify both servers and engines")
-		}
-		// replace and update engine configs
-		cfg = cfg.WithEngines(cfg.Servers...)
+		return errors.New("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
 	}
-	cfg.Servers = nil
 
 	// A config without engines is valid when initially discovering hardware
 	// prior to adding per-engine sections with device allocations.
