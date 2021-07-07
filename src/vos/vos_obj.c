@@ -355,6 +355,14 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	if (rc != 0)
 		goto reset;
 
+	if (vos_discard_ref_get() != 0) {
+		/* Wait for discard to complete.  We could do this per object but keep it simple
+		 * for now.
+		 */
+		rc = -DER_BUSY;
+		goto reset;
+	}
+
 	rc = vos_tx_begin(dth, vos_cont2umm(cont));
 	if (rc != 0)
 		goto reset;

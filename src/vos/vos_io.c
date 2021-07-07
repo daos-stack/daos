@@ -2222,6 +2222,14 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 	umem = vos_ioc2umm(ioc);
 
+	if (vos_discard_ref_get() != 0) {
+		/* Wait for discard to complete.  We could do this per object but keep it simple
+		 * for now.
+		 */
+		err = -DER_BUSY;
+		goto abort;
+	}
+
 	err = vos_tx_begin(dth, umem);
 	if (err != 0)
 		goto abort;

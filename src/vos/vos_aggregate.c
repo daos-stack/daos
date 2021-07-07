@@ -2523,6 +2523,7 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 	ad->ad_agg_param.ap_discard_hi = epr->epr_hi;
 
 	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
+	vos_discard_ref_add();
 	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);
@@ -2530,6 +2531,7 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 	if (rc == 0 && oid != NULL)
 		rc = vos_obj_discard(coh, oid, epr, &ad->ad_agg_param,
 				     &ad->ad_agg_param.ap_dkey_min);
+	vos_discard_ref_dec();
 
 	aggregate_exit(cont, true);
 
