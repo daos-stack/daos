@@ -2547,6 +2547,7 @@ dc_cont_get_attr(tse_task_t *task)
 
 	in = crt_req_get(cb_args.cra_rpc);
 	in->cagi_count = args->n;
+	in->cagi_key_length = 0;
 	for (i = 0, in->cagi_key_length = 0; i < args->n; i++)
 		in->cagi_key_length += strlen(args->names[i]) + 1;
 
@@ -2557,20 +2558,28 @@ dc_cont_get_attr(tse_task_t *task)
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
 		D_GOTO(out, rc = -DER_NOMEM);
+	rc = tse_task_register_comp_cb(task, free_name, &new_names,
+				       sizeof(char *));
+	if (rc) {
+		D_FREE(new_names);
+		D_GOTO(out, rc);
+	}
+
 	for (i = 0 ; i < args->n ; i++) {
-		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
+		uint64_t len;
+
+		len = strnlen(args->names[i], DAOS_ATTR_NAME_MAX);
+		in->cagi_key_length += len + 1;
+		D_STRNDUP(new_names[i], args->names[i], len);
 		if (new_names[i] == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
 					       sizeof(char *));
-		if (rc)
+		if (rc) {
+			D_FREE(new_names[i]);
 			D_GOTO(out, rc);
+		}
 	}
-
-	rc = tse_task_register_comp_cb(task, free_name, &new_names,
-				       sizeof(char *));
-	if (rc)
-		D_GOTO(out, rc);
 
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
@@ -2593,8 +2602,6 @@ dc_cont_get_attr(tse_task_t *task)
 
 out:
 	tse_task_complete(task, rc);
-	if (new_names != NULL)
-		D_FREE(new_names);
 	D_DEBUG(DF_DSMC, "Failed to get container attributes: "DF_RC"\n",
 		DP_RC(rc));
 	return rc;
@@ -2638,20 +2645,24 @@ dc_cont_set_attr(tse_task_t *task)
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
 		D_GOTO(out, rc = -DER_NOMEM);
+	rc = tse_task_register_comp_cb(task, free_name, &new_names,
+				       sizeof(char *));
+	if (rc) {
+		D_FREE(new_names);
+		D_GOTO(out, rc);
+	}
+
 	for (i = 0 ; i < args->n ; i++) {
 		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
 		if (new_names[i] == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
 					       sizeof(char *));
-		if (rc)
+		if (rc) {
+			D_FREE(new_names[i]);
 			D_GOTO(out, rc);
+		}
 	}
-
-	rc = tse_task_register_comp_cb(task, free_name, &new_names,
-				       sizeof(char *));
-	if (rc)
-		D_GOTO(out, rc);
 
 	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
@@ -2674,8 +2685,6 @@ dc_cont_set_attr(tse_task_t *task)
 
 out:
 	tse_task_complete(task, rc);
-	if (new_names != NULL)
-		D_FREE(new_names);
 	D_DEBUG(DF_DSMC, "Failed to set container attributes: "DF_RC"\n",
 		DP_RC(rc));
 	return rc;
