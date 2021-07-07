@@ -21,6 +21,7 @@ struct dtx_share_peer {
 	struct dtx_id		dsp_xid;
 	daos_unit_oid_t		dsp_oid;
 	daos_epoch_t		dsp_epoch;
+	uint64_t		dsp_dkey_hash;
 	struct dtx_memberships	dsp_mbs;
 };
 
