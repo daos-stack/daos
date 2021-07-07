@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-# pylint: disable=too-many-lines
 from getpass import getuser
+import math
 import os
 import socket
 import time
@@ -13,14 +13,17 @@ import yaml
 
 from avocado import fail_on
 
-from command_utils_base import \
-    CommandFailure, FormattedParameter, CommandWithParameters, CommonConfig
-from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
+from command_utils_base import CommandFailure, CommonConfig
+from command_utils import SubprocessManager
 from general_utils import pcmd, get_log_file, human_to_bytes, bytes_to_human, \
-    convert_list, get_default_config_file, distribute_files, DaosTestError
+    convert_list, get_default_config_file, distribute_files, DaosTestError, \
+    stop_processes, get_display_size, run_pcmd
 from dmg_utils import get_dmg_command
+from server_utils_base import \
+    ServerFailed, DaosServerCommand, DaosServerInformation, AutosizeCancel
 from server_utils_params import \
     DaosServerTransportCredentials, DaosServerYamlParameters
+from ClusterShell.NodeSet import NodeSet
 
 
 def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -50,271 +53,6 @@ def get_server_command(group, cert_dir, bin_dir, config_file, config_temp=None):
         # assigned filename
         command.temporary_file = config_temp
     return command
-
-
-class ServerFailed(Exception):
-    """Server didn't start/stop properly."""
-
-
-class DaosServerCommand(YamlCommand):
-    """Defines an object representing the daos_server command."""
-
-    NORMAL_PATTERN = "DAOS I/O Engine.*started"
-    FORMAT_PATTERN = "(SCM format required)(?!;)"
-    REFORMAT_PATTERN = "Metadata format required"
-
-    DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
-
-    def __init__(self, path="", yaml_cfg=None, timeout=30):
-        """Create a daos_server command object.
-
-        Args:
-            path (str): path to location of daos_server binary.
-            yaml_cfg (YamlParameters, optional): yaml configuration parameters.
-                Defaults to None.
-            timeout (int, optional): number of seconds to wait for patterns to
-                appear in the subprocess output. Defaults to 30 seconds.
-        """
-        super().__init__(
-            "/run/daos_server/*", "daos_server", path, yaml_cfg, timeout)
-        self.pattern = self.NORMAL_PATTERN
-
-        # If specified use the configuration file from the YamlParameters object
-        default_yaml_file = None
-        if self.yaml is not None and hasattr(self.yaml, "filename"):
-            default_yaml_file = self.yaml.filename
-
-        # Command line parameters:
-        # -d, --debug        Enable debug output
-        # -J, --json-logging Enable JSON logging
-        # -o, --config-path= Path to agent configuration file
-        self.debug = FormattedParameter("--debug", True)
-        self.json_logs = FormattedParameter("--json-logging", False)
-        self.config = FormattedParameter("--config={}", default_yaml_file)
-
-        # Additional daos_server command line parameters:
-        #     --allow-proxy  Allow proxy configuration via environment
-        self.allow_proxy = FormattedParameter("--allow-proxy", False)
-
-        # Used to override the sub_command.value parameter value
-        self.sub_command_override = None
-
-        # Include the daos_engine command launched by the daos_server
-        # command.
-        self._exe_names.append("daos_engine")
-
-    def get_sub_command_class(self):
-        # pylint: disable=redefined-variable-type
-        """Get the daos_server sub command object based upon the sub-command."""
-        if self.sub_command_override is not None:
-            # Override the sub_command parameter
-            sub_command = self.sub_command_override
-        else:
-            # Use the sub_command parameter from the test's yaml
-            sub_command = self.sub_command.value
-
-        # Available daos_server sub-commands:
-        #   network  Perform network device scan based on fabric provider
-        #   start    Start daos_server
-        #   storage  Perform tasks related to locally-attached storage
-        if sub_command == "network":
-            self.sub_command_class = self.StartSubCommand()
-        elif sub_command == "start":
-            self.sub_command_class = self.StartSubCommand()
-        elif sub_command == "storage":
-            self.sub_command_class = self.StorageSubCommand()
-        else:
-            self.sub_command_class = None
-
-    def get_params(self, test):
-        """Get values for the daos command and its yaml config file.
-
-        Args:
-            test (Test): avocado Test object
-        """
-        super().get_params(test)
-
-        # Run daos_server with test variant specific log file names if specified
-        self.yaml.update_log_files(
-            getattr(test, "control_log"),
-            getattr(test, "helper_log"),
-            getattr(test, "server_log")
-        )
-
-    def update_pattern(self, mode, host_qty):
-        """Update the pattern used to determine if the daos_server started.
-
-        Args:
-            mode (str): operation mode for the 'daos_server start' command
-            host_qty (int): number of hosts issuing 'daos_server start'
-        """
-        if mode == "format":
-            self.pattern = self.FORMAT_PATTERN
-        elif mode == "reformat":
-            self.pattern = self.REFORMAT_PATTERN
-        else:
-            self.pattern = self.NORMAL_PATTERN
-        self.pattern_count = host_qty * len(self.yaml.engine_params)
-
-    @property
-    def using_nvme(self):
-        """Is the daos command setup to use NVMe devices.
-
-        Returns:
-            bool: True if NVMe devices are configured; False otherwise
-
-        """
-        value = False
-        if self.yaml is not None and hasattr(self.yaml, "using_nvme"):
-            value = self.yaml.using_nvme
-        return value
-
-    @property
-    def using_dcpm(self):
-        """Is the daos command setup to use SCM devices.
-
-        Returns:
-            bool: True if SCM devices are configured; False otherwise
-
-        """
-        value = False
-        if self.yaml is not None and hasattr(self.yaml, "using_dcpm"):
-            value = self.yaml.using_dcpm
-        return value
-
-    def get_engine_values(self, name):
-        """Get the value of the specified attribute name for each engine.
-
-        Args:
-            name (str): name of the attribute from which to get the value
-
-        Returns:
-            list: a list of the value of each matching configuration attribute
-                name per engine
-
-        """
-        engine_values = []
-        if self.yaml is not None and hasattr(self.yaml, "get_engine_values"):
-            engine_values = self.yaml.get_engine_values(name)
-        return engine_values
-
-    class NetworkSubCommand(CommandWithSubCommand):
-        """Defines an object for the daos_server network sub command."""
-
-        def __init__(self):
-            """Create a network subcommand object."""
-            super().__init__(
-                "/run/daos_server/network/*", "network")
-
-        def get_sub_command_class(self):
-            """Get the daos_server network sub command object."""
-            # Available daos_server network sub-commands:
-            #   list  List all known OFI providers that are understood by 'scan'
-            #   scan  Scan for network interface devices on local server
-            if self.sub_command.value == "scan":
-                self.sub_command_class = self.ScanSubCommand()
-            else:
-                self.sub_command_class = None
-
-        class ScanSubCommand(CommandWithSubCommand):
-            """Defines an object for the daos_server network scan command."""
-
-            def __init__(self):
-                """Create a network scan subcommand object."""
-                super().__init__("/run/daos_server/network/scan/*", "scan")
-
-                # daos_server network scan command options:
-                #   --provider=     Filter device list to those that support the
-                #                   given OFI provider (default is the provider
-                #                   specified in daos_server.yml)
-                #   --all           Specify 'all' to see all devices on all
-                #                   providers.  Overrides --provider
-                self.provider = FormattedParameter("--provider={}")
-                self.all = FormattedParameter("--all", False)
-
-    class StartSubCommand(CommandWithParameters):
-        """Defines an object representing a daos_server start sub command."""
-
-        def __init__(self):
-            """Create a start subcommand object."""
-            super().__init__("/run/daos_server/start/*", "start")
-
-            # daos_server start command options:
-            #   --port=                 Port for the gRPC management interface
-            #                           to listen on
-            #   --storage=              Storage path
-            #   --modules=              List of server modules to load
-            #   --targets=              number of targets to use (default use
-            #                           all cores)
-            #   --xshelpernr=           number of helper XS per VOS target
-            #   --firstcore=            index of first core for service thread
-            #                           (default: 0)
-            #   --group=                Server group name
-            #   --socket_dir=           Location for all daos_server and
-            #                           daos_engine sockets
-            #   --insecure              allow for insecure connections
-            #   --recreate-superblocks  recreate missing superblocks rather than
-            #                           failing
-            self.port = FormattedParameter("--port={}")
-            self.storage = FormattedParameter("--storage={}")
-            self.modules = FormattedParameter("--modules={}")
-            self.targets = FormattedParameter("--targets={}")
-            self.xshelpernr = FormattedParameter("--xshelpernr={}")
-            self.firstcore = FormattedParameter("--firstcore={}")
-            self.group = FormattedParameter("--group={}")
-            self.sock_dir = FormattedParameter("--socket_dir={}")
-            self.insecure = FormattedParameter("--insecure", False)
-            self.recreate = FormattedParameter("--recreate-superblocks", False)
-
-    class StorageSubCommand(CommandWithSubCommand):
-        """Defines an object for the daos_server storage sub command."""
-
-        def __init__(self):
-            """Create a storage subcommand object."""
-            super().__init__("/run/daos_server/storage/*", "storage")
-
-        def get_sub_command_class(self):
-            """Get the daos_server storage sub command object."""
-            # Available sub-commands:
-            #   prepare  Prepare SCM and NVMe storage attached to remote servers
-            #   scan     Scan SCM and NVMe storage attached to local server
-            if self.sub_command.value == "prepare":
-                self.sub_command_class = self.PrepareSubCommand()
-            else:
-                self.sub_command_class = None
-
-        class PrepareSubCommand(CommandWithSubCommand):
-            """Defines an object for the daos_server storage prepare command."""
-
-            def __init__(self):
-                """Create a storage subcommand object."""
-                super().__init__(
-                    "/run/daos_server/storage/prepare/*", "prepare")
-
-                # daos_server storage prepare command options:
-                #   --pci-whitelist=    Whitespace separated list of PCI
-                #                       devices (by address) to be unbound from
-                #                       Kernel driver and used with SPDK
-                #                       (default is all PCI devices).
-                #   --hugepages=        Number of hugepages to allocate (in MB)
-                #                       for use by SPDK (default 1024)
-                #   --target-user=      User that will own hugepage mountpoint
-                #                       directory and vfio groups.
-                #   --nvme-only         Only prepare NVMe storage.
-                #   --scm-only          Only prepare SCM.
-                #   --reset             Reset SCM modules to memory mode after
-                #                       removing namespaces. Reset SPDK
-                #                       returning NVMe device bindings back to
-                #                       kernel modules.
-                #   --force             Perform format without prompting for
-                #                       confirmation
-                self.pci_whitelist = FormattedParameter("--pci-whitelist={}")
-                self.hugepages = FormattedParameter("--hugepages={}")
-                self.target_user = FormattedParameter("--target-user={}")
-                self.nvme_only = FormattedParameter("--nvme-only", False)
-                self.scm_only = FormattedParameter("--scm-only", False)
-                self.reset = FormattedParameter("--reset", False)
-                self.force = FormattedParameter("--force", False)
 
 
 class DaosServerManager(SubprocessManager):
@@ -379,6 +117,9 @@ class DaosServerManager(SubprocessManager):
                 "unknown"],
             "errored": ["errored"],
         }
+
+        # Storage and network information
+        self.information = DaosServerInformation(self.dmg)
 
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
@@ -562,13 +303,27 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.hugepages.value = hugepages
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        result = pcmd(self._hosts, str(cmd), timeout=40)
-        if len(result) > 1 or 0 not in result:
+        results = run_pcmd(self._hosts, str(cmd), timeout=40)
+
+        # gratuitously lifted from pcmd() and get_current_state()
+        result = {}
+        stdouts = ""
+        for res in results:
+            stdouts += '\n'.join(res["stdout"] + [''])
+            if res["exit_status"] not in result:
+                result[res["exit_status"]] = NodeSet()
+            result[res["exit_status"]].add(res["hosts"])
+
+        if len(result) > 1 or 0 not in result or \
+            (using_dcpm and \
+             "No SCM modules detected; skipping operation" in stdouts):
             dev_type = "nvme"
             if using_dcpm and using_nvme:
                 dev_type = "dcpm & nvme"
             elif using_dcpm:
                 dev_type = "dcpm"
+            pcmd(self._hosts, "sudo -n ipmctl show -v -dimm")
+            pcmd(self._hosts, "ndctl list ")
             raise ServerFailed("Error preparing {} storage".format(dev_type))
 
     def detect_format_ready(self, reformat=False):
@@ -671,6 +426,10 @@ class DaosServerManager(SubprocessManager):
 
         # Start the servers and wait for them to be ready for storage format
         self.detect_format_ready()
+
+        # Collect storage and network information from the servers.
+        self.information.collect_storage_information()
+        self.information.collect_network_information()
 
         # Format storage and wait for server to change ownership
         self.log.info(
@@ -847,144 +606,6 @@ class DaosServerManager(SubprocessManager):
             raise ServerFailed(
                 "Error stopping DAOS:\n{}".format(self.dmg.result))
 
-    def get_available_storage(self):
-        """Get the available SCM and NVMe storage.
-
-        Raises:
-            ServerFailed: if there was an error stopping the servers
-
-        Returns:
-            list: a list of the maximum available SCM and NVMe sizes in bytes
-
-        """
-        def fill_host_capacity(capacity_type, device_names, storage_dict,
-                               host_hash, host_capacity):
-            """Get the total storage size in device_names per host rank.
-
-            Args:
-                capacity_type (str): the capacity type, e.g. "scm" or "nvme"
-                device_names (list): the device names we'll use to get the total
-                    storage size
-                storage_dict (dict): JSON output at "HostStorage"
-                host_hash (str): Hash under "HostStorage"
-                host_capacity (dict): Dictionary to store the sum
-
-            Returns:
-                dict: a dictionary of total storage size in device_names per
-                    host rank
-
-            """
-            # The hosts can be a single host such as wolf-1, or multiple
-            # hosts such as wolf-[1-7].
-            hosts = storage_dict[host_hash]["hosts"].split(":")[0]
-
-            if capacity_type == "nvme":
-                # Get nvme_devices list, iterate it, and sum the sizes.
-                nvme_devices = storage_dict[host_hash]["storage"][
-                    "nvme_devices"]
-                for nvme_device in nvme_devices:
-                    if nvme_device["pci_addr"] in device_names:
-                        for namespace in nvme_device["namespaces"]:
-                            size = namespace["size"]
-                            if hosts in host_capacity:
-                                host_capacity[hosts] += size
-                            else:
-                                host_capacity[hosts] = size
-
-            elif capacity_type == "scm":
-                # Get scm_namespaces list, iterate it, and sum the sizes.
-                scm_namespaces = storage_dict[host_hash]["storage"][
-                    "scm_namespaces"]
-                for scm_namespace in scm_namespaces:
-                    if scm_namespace["blockdev"] in device_names:
-                        size = scm_namespace["size"]
-                        if hosts in host_capacity:
-                            host_capacity[hosts] += size
-                        else:
-                            host_capacity[hosts] = size
-
-            return host_capacity
-
-        def get_host_capacity(capacity_type, device_names):
-            """Get the total storage size in device_names per host rank.
-
-            Args:
-                capacity_type (str): the capacity type, e.g. "scm" or "nvme"
-                device_names (list): the device names we'll use to get the total
-                    storage size
-
-            Returns:
-                dict: a dictionary of total storage size in device_names per
-                    host rank
-
-            """
-            host_capacity = {}
-
-            # Get nvme_devices and scm_namespaces list that are buried. There's
-            # a uint64 hash of the strcut under HostStorage.
-            storage_dict = data["response"]["HostStorage"]
-            struct_hashes = list(storage_dict.keys())
-
-            # Iterate the struct hashes, which corresponds to a set of hosts
-            # with the identical configuration.
-            for host_hash in struct_hashes:
-                host_capacity = fill_host_capacity(
-                    capacity_type, device_names, storage_dict, host_hash,
-                    host_capacity)
-
-            return host_capacity
-
-        # Default maximum bytes for SCM and NVMe
-        storage = [0, 0]
-
-        using_dcpm = self.manager.job.using_dcpm
-        using_nvme = self.manager.job.using_nvme
-
-        if using_dcpm or using_nvme:
-            # Stop the DAOS I/O Engines in order to be able to scan the storage
-            self.system_stop()
-
-            # Scan all of the hosts for their SCM and NVMe storage
-            self._prepare_dmg_hostlist(self._hosts)
-            data = self.dmg.storage_scan(verbose=True)
-            self._prepare_dmg_hostlist()
-            if self.dmg.result.exit_status != 0:
-                raise ServerFailed(
-                    "Error obtaining DAOS storage:\n{}".format(self.dmg.result))
-
-            # Restart the DAOS I/O Engines
-            self.system_start()
-
-        if using_dcpm:
-            # Find the sizes of the configured SCM storage
-            scm_devices = [
-                os.path.basename(path)
-                for path in self.get_config_value("scm_list") if path]
-            capacity = get_host_capacity("scm", scm_devices)
-            for host in sorted(capacity):
-                self.log.info("SCM capacity for %s: %s", host, capacity[host])
-            # Use the minimum SCM storage across all servers
-            storage[0] = capacity[min(capacity, key=capacity.get)]
-        else:
-            # Use the assigned scm_size
-            scm_size = self.get_config_value("scm_size")
-            storage[0] = human_to_bytes("{}GB".format(scm_size))
-
-        if using_nvme:
-            # Find the sizes of the configured NVMe storage
-            capacity = get_host_capacity(
-                "nvme", self.get_config_value("bdev_list"))
-            for host in sorted(capacity):
-                self.log.info("NVMe capacity for %s: %s", host, capacity[host])
-            # Use the minimum SCM storage across all servers
-            storage[1] = capacity[min(capacity, key=capacity.get)]
-
-        self.log.info(
-            "Total available storage:\n  SCM:  %s (%s)\n  NVMe: %s (%s)",
-            str(storage[0]), bytes_to_human(storage[0], binary=False),
-            str(storage[1]), bytes_to_human(storage[1], binary=False))
-        return storage
-
     def get_current_state(self):
         """Get the current state of the daos_server ranks.
 
@@ -1038,6 +659,23 @@ class DaosServerManager(SubprocessManager):
 
         # Update the expected status of the stopped/excluded ranks
         self.update_expected_states(ranks, ["stopped", "excluded"])
+
+    def kill(self):
+        """Forcibly terminate any server process running on hosts."""
+        regex = self.manager.job.command_regex
+        # Try to dump all server's ULTs stacks before kill.
+        result = stop_processes(self._hosts, regex, dump_ult_stacks=True)
+        if 0 in result and len(result) == 1:
+            print(
+                "No remote {} server processes killed (none found), "
+                "done.".format(regex))
+        else:
+            print(
+                "***At least one remote {} server process needed to be killed! "
+                "Please investigate/report.***".format(regex))
+        # set stopped servers state to make teardown happy
+        self.update_expected_states(
+            None, ["stopped", "excluded", "errored"])
 
     def get_host(self, rank):
         """Get the host name that matches the specified rank.
@@ -1113,3 +751,215 @@ class DaosServerManager(SubprocessManager):
 
             self.manager.job.yaml.engine_params.append(
                 per_engine_yaml_parameters)
+
+    def get_host_ranks(self, hosts):
+        """Get the list of ranks for the specified hosts.
+
+        Args:
+            hosts (list): a list of host names.
+
+        Returns:
+            list: a list of integer ranks matching the hosts provided
+
+        """
+        rank_list = []
+        for rank in self._expected_states:
+            if self._expected_states[rank]["host"] in hosts:
+                rank_list.append(rank)
+        return rank_list
+
+    def get_available_storage(self):
+        """Get the largest available SCM and NVMe storage common to all servers.
+
+        Raises:
+            ServerFailed: if output from the dmg storage scan is missing or
+                not in the expected format
+
+        Returns:
+            dict: a dictionary of the largest available storage common to all
+                engines per storage type, "scm"s and "nvme", in bytes
+
+        """
+        storage = {}
+        storage_capacity = self.information.get_storage_capacity(
+            self.manager.job.engine_params)
+
+        self.log.info("Largest storage size available per engine:")
+        for key in sorted(storage_capacity):
+            # Use the same storage size across all engines
+            storage[key] = min(storage_capacity[key])
+            self.log.info(
+                "  %-4s:  %s", key.upper(), get_display_size(storage[key]))
+        return storage
+
+    def autosize_pool_params(self, size, scm_ratio, scm_size, nvme_size,
+                             min_targets=1, quantity=1):
+        """Update any pool size parameter ending in a %.
+
+        Use the current NVMe and SCM storage sizes to assign values to the size,
+        scm_size, and or nvme_size dmg pool create arguments which end in "%".
+        The numerical part of these arguments will be used to assign a value
+        that is X% of the available storage capacity.  The updated size and
+        nvme_size arguments will be assigned values that are multiples of 1GiB
+        times the number of targets assigned to each server engine.  If needed
+        the number of targets will be reduced (to not exceed min_targets) in
+        order to support the requested size.  An optional number of expected
+        pools (quantity) can also be specified to divide the available storage
+        capacity.
+
+        Note: depending upon the inputs this method may return dmg pool create
+            parameter combinations that are not supported, e.g. scm_ratio +
+            nvme_size.  This is intended to allow testing of these combinations.
+
+        Args:
+            size (object): the str, int, or None value for the dmp pool create
+                size parameter.
+            scm_ratio (object): the int or None value for the dmp pool create
+                size parameter.
+            scm_size (object): the str, int, or None value for the dmp pool
+                create scm_size parameter.
+            nvme_size (object): the str, int, or None value for the dmp pool
+                create nvme_size parameter.
+            min_targets (int, optional): the minimum number of targets per
+                engine that can be configured. Defaults to 1.
+            quantity (int, optional): Number of pools to account for in the size
+                calculations. The pool size returned is only for a single pool.
+                Defaults to 1.
+
+        Raises:
+            ServerFailed: if there was a error obtaining auto-sized TestPool
+                parameters.
+            AutosizeCancel: if a valid pool parameter size could not be obtained
+
+        Returns:
+            dict: the parameters for a TestPool object.
+
+        """
+        # Adjust any pool size parameter by the requested percentage
+        params = {"scm_ratio": scm_ratio}
+        adjusted = {"size": size, "scm_size": scm_size, "nvme_size": nvme_size}
+        keys = [
+            key for key in ("size", "scm_size", "nvme_size")
+            if adjusted[key] is not None and str(adjusted[key]).endswith("%")]
+        if keys:
+            # Verify the minimum number of targets configured per engine
+            targets = min(self.manager.job.get_engine_values("targets"))
+            if targets < min_targets:
+                raise ServerFailed(
+                    "Minimum target quantity ({}) exceeds current target "
+                    "quantity ({})".format(min_targets, targets))
+
+            self.log.info("-" * 100)
+            pool_msg = "{} pool{}".format(quantity, "s" if quantity > 1 else "")
+            self.log.info(
+                "Autosizing TestPool parameters ending with a \"%%\" for %s:",
+                pool_msg)
+            for key in ("size", "scm_size", "nvme_size"):
+                self.log.info(
+                    "  - %-9s : %s (%s)", key, adjusted[key], key in keys)
+
+            # Determine the largest SCM and NVMe pool sizes can be used with
+            # this server configuration with an optionally applied ratio.
+            try:
+                available_storage = self.get_available_storage()
+            except ServerFailed as error:
+                raise ServerFailed(
+                    "Error obtaining available storage") from error
+
+            # Determine the SCM and NVMe size limits for the size and scm_ratio
+            # arguments for the total number of engines
+            if scm_ratio is None:
+                # Use the default value if not provided
+                scm_ratio = 6
+            engine_qty = len(self.manager.job.engine_params) * len(self._hosts)
+            available_storage["size"] = min(
+                engine_qty * available_storage["nvme"],
+                (engine_qty * available_storage["scm"]) / float(scm_ratio / 100)
+            )
+            available_storage["scm_ratio"] = \
+                available_storage["size"] * float(scm_ratio / 100)
+            self.log.info(
+                "Largest storage size available for %s engines with a %.2f%% "
+                "scm_ratio:", engine_qty, scm_ratio)
+            self.log.info(
+                "  - NVME     : %s",
+                get_display_size(available_storage["size"]))
+            self.log.info(
+                "  - SCM      : %s",
+                get_display_size(available_storage["scm_ratio"]))
+            self.log.info(
+                "  - COMBINED : %s",
+                get_display_size(
+                    available_storage["size"] + available_storage["scm_ratio"]))
+
+            # Apply any requested percentages to the pool parameters
+            available = {
+                "size": {"size": available_storage["size"], "type": "NVMe"},
+                "scm_size": {"size": available_storage["scm"], "type": "SCM"},
+                "nvme_size": {"size": available_storage["nvme"], "type": "NVMe"}
+            }
+            self.log.info("Adjusted pool sizes for %s:", pool_msg)
+            for key in keys:
+                try:
+                    ratio = int(str(adjusted[key]).replace("%", ""))
+                except NameError as error:
+                    raise ServerFailed(
+                        "Invalid '{}' format: {}".format(
+                            key, adjusted[key])) from error
+                adjusted[key] = \
+                    (available[key]["size"] * float(ratio / 100)) / quantity
+                self.log.info(
+                    "  - %-9s : %-4s storage adjusted by %.2f%%: %s",
+                    key, available[key]["type"], ratio,
+                    get_display_size(adjusted[key]))
+
+            # Display the pool size increment value for each size argument
+            increment = {
+                "size": human_to_bytes("1GiB"),
+                "scm_size": human_to_bytes("16MiB"),
+                "nvme_size": human_to_bytes("1GiB")}
+            self.log.info("Increment sizes per target:")
+            for key in keys:
+                self.log.info(
+                    "  - %-9s : %s", key, get_display_size(increment[key]))
+
+            # Adjust the size to use a SCM/NVMe target multiplier
+            self.log.info("Pool sizes adjusted to fit by increment sizes:")
+            adjusted_targets = targets
+            for key in keys:
+                multiplier = math.floor(adjusted[key] / increment[key])
+                params[key] = multiplier * increment[key]
+                self.log.info(
+                    "  - %-9s : %s * %s = %s",
+                    key, multiplier, increment[key],
+                    get_display_size(params[key]))
+                if multiplier < adjusted_targets:
+                    adjusted_targets = multiplier
+                    if adjusted_targets < min_targets:
+                        raise AutosizeCancel(
+                            "Unable to autosize the {} pool parameter due to "
+                            "exceeding the minimum of {} targets: {}".format(
+                                key, min_targets, adjusted_targets))
+                if key == "size":
+                    scm_ratio_size = params[key] * float(scm_ratio / 100)
+                    self.log.info(
+                        "  - %-9s : %.2f%% scm_ratio = %s",
+                        key, scm_ratio, get_display_size(scm_ratio_size))
+                    params[key] += scm_ratio_size
+                    self.log.info(
+                        "  - %-9s : NVMe + SCM = %s",
+                        key, get_display_size(params[key]))
+                params[key] = bytes_to_human(params[key], binary=True)
+
+            # Reboot the servers if a reduced number of targets is required
+            if adjusted_targets < targets:
+                self.log.info(
+                        "Updating targets per server engine: %s -> %s",
+                        targets, adjusted_targets)
+                self.set_config_value("targets", adjusted_targets)
+                self.stop()
+                self.start()
+
+            self.log.info("-" * 100)
+
+        return params

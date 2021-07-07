@@ -245,6 +245,10 @@ enum {
 	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
 	/** replay punch (underwrite) */
 	VOS_OF_REPLAY_PC		= (1 << 15),
+	/** Dedup update mode */
+	VOS_OF_DEDUP			= (1 << 16),
+	/** Dedup update with memcmp verify mode */
+	VOS_OF_DEDUP_VERIFY		= (1 << 17),
 };
 
 /** Mask for any conditionals passed to to the fetch */
@@ -300,11 +304,10 @@ enum {
 	VOS_IT_RECX_ALL		= 0,
 	/** Include visible extents in sorted iteration */
 	VOS_IT_RECX_VISIBLE	= (1 << 0),
-	/** Include covered extents in sorted iteration */
-	VOS_IT_RECX_COVERED	= (1 << 1),
+	/** Include covered extents, implies VOS_IT_RECX_VISIBLE */
+	VOS_IT_RECX_COVERED	= (1 << 1) | VOS_IT_RECX_VISIBLE,
 	/** Include hole extents in sorted iteration
-	 * Only applicable if VOS_IT_RECX_VISIBLE is set but
-	 * VOS_IT_RECX_COVERED is not set
+	 *  Only applicable if VOS_IT_RECX_COVERED is not set
 	 */
 	VOS_IT_RECX_SKIP_HOLES	= (1 << 2),
 	/** When sorted iteration is enabled, iterate in reverse */
@@ -317,10 +320,8 @@ enum {
 	VOS_IT_PUNCHED		= (1 << 6),
 	/** Cleanup stale DTX entry. */
 	VOS_IT_CLEANUP_DTX	= (1 << 7),
-	/** Skip extents removed by vos_obj_array_remove */
-	VOS_IT_SKIP_REMOVED	= (1 << 8),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 9) - 1,
+	VOS_IT_MASK		= (1 << 8) - 1,
 };
 
 /**
@@ -354,14 +355,16 @@ typedef struct {
 enum {
 	/** It is unknown if the extent is covered or visible */
 	VOS_VIS_FLAG_UNKNOWN = 0,
-	/** The extent is not visible at the requested epoch (epr_hi) */
-	VOS_VIS_FLAG_COVERED = (1 << 0),
 	/** The extent is visible at the requested epoch (epr_hi) */
-	VOS_VIS_FLAG_VISIBLE = (1 << 1),
+	VOS_VIS_FLAG_VISIBLE = (1 << 0),
+	/** The extent is not visible at the requested epoch (epr_hi) */
+	VOS_VIS_FLAG_COVERED = (1 << 1),
+	/** The extent a remove record (See vos_obj_array_remove) */
+	VOS_VIS_FLAG_REMOVE = (1 << 2),
 	/** The extent represents only a portion of the in-tree extent */
-	VOS_VIS_FLAG_PARTIAL = (1 << 2),
-	/** In sorted iterator, marks final entry */
-	VOS_VIS_FLAG_LAST    = (1 << 3),
+	VOS_VIS_FLAG_PARTIAL = (1 << 3),
+	/** Marks the final entry in sorted iterator */
+	VOS_VIS_FLAG_LAST    = (1 << 4),
 };
 
 /**
@@ -429,6 +432,8 @@ typedef struct {
 			uint32_t		ie_dtx_mbs_dsize;
 			/* The time when create the DTX entry. */
 			uint64_t		ie_dtx_start_time;
+			/* The hashed dkey if applicable. */
+			uint64_t		ie_dkey_hash;
 			/** DTX participants information. */
 			void			*ie_dtx_mbs;
 		};

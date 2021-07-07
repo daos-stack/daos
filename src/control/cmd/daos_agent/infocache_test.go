@@ -33,7 +33,10 @@ func initCache(t *testing.T, scanResults []*netdetect.FabricScan, aiCache *attac
 	if err != nil {
 		t.Fatalf("failed to init netdetect context: %v", err)
 	}
-	err = aiCache.initResponseCache(netCtx, &mgmtpb.GetAttachInfoResp{}, scanResults)
+	resp := &mgmtpb.GetAttachInfoResp{
+		ClientNetHint: &mgmtpb.ClientNetHint{},
+	}
+	err = aiCache.initResponseCache(netCtx, resp, scanResults)
 	if err != nil {
 		t.Fatalf("initResponseCache error: %v", err)
 	}
@@ -80,8 +83,9 @@ func TestInfoCacheInitNoScanResults(t *testing.T) {
 			if err = proto.Unmarshal(res, resp); err != nil {
 				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
 			}
-			common.AssertTrue(t, resp.GetInterface() == defaultNetworkDevice, fmt.Sprintf("Expected default interface: %s, got %s", defaultNetworkDevice, resp.GetInterface()))
-			common.AssertTrue(t, resp.GetDomain() == defaultDomain, fmt.Sprintf("Expected default domain: %s, got %s", defaultDomain, resp.GetDomain()))
+			hint := resp.GetClientNetHint()
+			common.AssertTrue(t, hint.GetInterface() == defaultNetworkDevice, fmt.Sprintf("Expected default interface: %s, got %s", defaultNetworkDevice, hint.GetInterface()))
+			common.AssertTrue(t, hint.GetDomain() == defaultDomain, fmt.Sprintf("Expected default domain: %s, got %s", defaultDomain, hint.GetDomain()))
 		})
 	}
 }
@@ -192,7 +196,11 @@ func TestInfoCacheInitWithDeviceFiltering(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			resp := &mgmtpb.GetAttachInfoResp{NetDevClass: tc.serverNetDevClass}
+			resp := &mgmtpb.GetAttachInfoResp{
+				ClientNetHint: &mgmtpb.ClientNetHint{
+					NetDevClass: tc.serverNetDevClass,
+				},
+			}
 			err := aiCache.initResponseCache(netCtx, resp, scanResults)
 			common.AssertEqual(t, err, nil, "initResponseCache error")
 
@@ -219,25 +227,37 @@ func TestInfoCacheGetResponse(t *testing.T) {
 	netCtx, cleanupFn := initCache(t, scanResults, &aiCache)
 	defer cleanupFn(netCtx)
 
+	devList := func(devs ...string) []string {
+		return devs
+	}
+
 	for name, tc := range map[string]struct {
-		numaNode   int
-		deviceName string
+		numaNode       int
+		allowedDevices []string
 	}{
 		"info cache response for numa 0": {
-			numaNode:   0,
-			deviceName: "eth0",
+			numaNode:       0,
+			allowedDevices: devList("eth0"),
 		},
 		"info cache response for numa 1": {
-			numaNode:   1,
-			deviceName: "eth1",
+			numaNode:       1,
+			allowedDevices: devList("eth1"),
 		},
 		"info cache response for numa 2": {
-			numaNode:   2,
-			deviceName: "eth2",
+			numaNode:       2,
+			allowedDevices: devList("eth2"),
 		},
-		"info cache response for numa 3 with no devices": {
-			numaNode:   3,
-			deviceName: "eth0",
+		"info cache response one for numa 3 with no devices": {
+			numaNode:       3,
+			allowedDevices: devList("eth0", "eth1", "eth2"),
+		},
+		"info cache response two for numa 3 with no devices": {
+			numaNode:       3,
+			allowedDevices: devList("eth0", "eth1", "eth2"),
+		},
+		"info cache response three for numa 3 with no devices": {
+			numaNode:       3,
+			allowedDevices: devList("eth0", "eth1", "eth2"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -248,7 +268,14 @@ func TestInfoCacheGetResponse(t *testing.T) {
 			if err = proto.Unmarshal(res, resp); err != nil {
 				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
 			}
-			common.AssertTrue(t, resp.GetInterface() == tc.deviceName, fmt.Sprintf("Expected: %s, got %s", tc.deviceName, resp.GetInterface()))
+			hint := resp.GetClientNetHint()
+
+			for _, dev := range tc.allowedDevices {
+				if hint.GetInterface() == dev {
+					return
+				}
+			}
+			t.Fatalf("response device %s was not in list of allowed devices (%+v)", hint.GetInterface(), tc.allowedDevices)
 		})
 	}
 }
@@ -297,7 +324,8 @@ func TestInfoCacheDefaultNumaNode(t *testing.T) {
 			if err = proto.Unmarshal(res, resp); err != nil {
 				t.Errorf("Expected error on proto.Unmarshal, got %+v", err)
 			}
-			common.AssertTrue(t, resp.GetInterface() == tc.deviceName, fmt.Sprintf("Expected: %s, got %s", tc.deviceName, resp.GetInterface()))
+			hint := resp.GetClientNetHint()
+			common.AssertTrue(t, hint.GetInterface() == tc.deviceName, fmt.Sprintf("Expected: %s, got %s", tc.deviceName, hint.GetInterface()))
 		})
 	}
 }
@@ -388,16 +416,16 @@ func TestInfoCacheLoadBalancer(t *testing.T) {
 			}
 
 			// verifies that the load balancer rolled back to the beginning of the list
-			common.AssertTrue(t, response[0].GetInterface() == response[tc.numDevices].GetInterface(),
-				fmt.Sprintf("expected: %s, got %s", response[0].GetInterface(), response[tc.numDevices].GetInterface()))
+			common.AssertTrue(t, response[0].GetClientNetHint().GetInterface() == response[tc.numDevices].GetClientNetHint().GetInterface(),
+				fmt.Sprintf("expected: %s, got %s", response[0].GetClientNetHint().GetInterface(), response[tc.numDevices].GetClientNetHint().GetInterface()))
 
 			// verifies that the device name is exactly the one expected
-			common.AssertTrue(t, response[0].GetInterface() == tc.deviceName,
-				fmt.Sprintf("expected: %s, got %s", tc.deviceName, response[0].GetInterface()))
+			common.AssertTrue(t, response[0].GetClientNetHint().GetInterface() == tc.deviceName,
+				fmt.Sprintf("expected: %s, got %s", tc.deviceName, response[0].GetClientNetHint().GetInterface()))
 
 			// verifies that the neighbor response is what was expected
-			common.AssertTrue(t, response[tc.numDevices+1].GetInterface() == tc.neighbor,
-				fmt.Sprintf("expected: %s, got %s", tc.neighbor, response[tc.numDevices+1].GetInterface()))
+			common.AssertTrue(t, response[tc.numDevices+1].GetClientNetHint().GetInterface() == tc.neighbor,
+				fmt.Sprintf("expected: %s, got %s", tc.neighbor, response[tc.numDevices+1].GetClientNetHint().GetInterface()))
 		})
 	}
 }
@@ -418,8 +446,9 @@ func getResponse(t *testing.T, aiCache *attachInfoCache, numaNode int, wg *sync.
 	}
 
 	deviceName := fmt.Sprintf("_node%d", numaNode)
-	if !strings.HasSuffix(resp.GetInterface(), deviceName) {
-		t.Errorf("TestInfoCacheConcurrentAccess response mismatch.  Devicename: %s, does not have suffix: %s", resp.GetInterface(), deviceName)
+	hint := resp.GetClientNetHint()
+	if !strings.HasSuffix(hint.GetInterface(), deviceName) {
+		t.Errorf("TestInfoCacheConcurrentAccess response mismatch.  Devicename: %s, does not have suffix: %s", hint.GetInterface(), deviceName)
 	}
 }
 
