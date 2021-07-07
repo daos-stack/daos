@@ -113,12 +113,12 @@ ioil_shrink(struct ioil_cont *cont)
 		return;
 
 	if (cont->ioc_dfs != NULL) {
+		DFUSE_TRA_DOWN(cont->ioc_dfs);
 		rc = dfs_umount(cont->ioc_dfs);
 		if (rc != 0) {
 			D_ERROR("dfs_umount() failed, %d\n", rc);
 			return;
 		}
-		DFUSE_TRA_DOWN(cont->ioc_dfs);
 		cont->ioc_dfs = NULL;
 	}
 

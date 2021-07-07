@@ -3,6 +3,7 @@ from SCons.Subst import Literal
 from SCons.Script import GetOption
 from env_modules import load_mpi
 from distutils.spawn import find_executable
+import compiler_setup
 import os
 
 # pylint: disable=too-few-public-methods
@@ -28,7 +29,7 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
         if rpath.startswith('/usr'):
             env.AppendUnique(RPATH=[rpath])
             continue
-        elif install_off is None:
+        if install_off is None:
             env.AppendUnique(RPATH=[os.path.join(prefix, rpath)])
             continue
         relpath = os.path.relpath(rpath, prefix)
@@ -84,7 +85,7 @@ def load_mpi_path(env):
     if mpicc:
         env.PrependENVPath("PATH", os.path.dirname(mpicc))
 
-def clear_icc_env(env):
+def _clear_icc_env(env):
     """Remove icc specific options from environment"""
     if env.subst("$COMPILER") == "icc":
         linkflags = str(env.get("LINKFLAGS")).split()
@@ -110,8 +111,10 @@ def _find_mpicc(env):
         env.Replace(CC="mpicc")
         env.Replace(LINK="mpicc")
         env.AppendUnique(CPPDEFINES=["-DDAOS_MPI_PATH=\"%s\"" % mpicc])
-        clear_icc_env(env)
+        _clear_icc_env(env)
         load_mpi_path(env)
+        compiler_setup.base_setup(env)
+
         return True
     return False
 
