@@ -410,9 +410,9 @@ vos_cont_open(daos_handle_t poh, uuid_t co_uuid, daos_handle_t *coh)
 		D_GOTO(exit, rc);
 	}
 
-	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE, 0,
-				      DTX_BTREE_ORDER, &uma,
-				      &cont->vc_dtx_committed_btr,
+	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE,
+				      BTR_FEAT_SKIP_LEAF_REBAL, DTX_BTREE_ORDER,
+				      &uma, &cont->vc_dtx_committed_btr,
 				      DAOS_HDL_INVAL, cont,
 				      &cont->vc_dtx_committed_hdl);
 	if (rc != 0) {
