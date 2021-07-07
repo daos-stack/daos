@@ -33,13 +33,15 @@ struct dtx_cleanup_stale_cb_args {
 };
 
 static inline void
-dtx_free_committable(struct dtx_entry **dtes, int count)
+dtx_free_committable(struct dtx_entry **dtes, struct dtx_cos_key *dcks,
+		     int count)
 {
 	int	i;
 
 	for (i = 0; i < count; i++)
 		dtx_entry_put(dtes[i]);
 	D_FREE(dtes);
+	D_FREE(dcks);
 }
 
 static inline void
@@ -268,17 +270,18 @@ dtx_batched_commit_one(void *arg)
 
 	while (!dss_ult_exiting(dbca->dbca_commit_req)) {
 		struct dtx_entry	**dtes = NULL;
+		struct dtx_cos_key	 *dcks = NULL;
 		struct dtx_stat		  stat = { 0 };
 		int			  cnt;
 		int			  rc;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, NULL,
-					    DAOS_EPOCH_MAX, &dtes);
+					    DAOS_EPOCH_MAX, &dtes, &dcks);
 		if (cnt <= 0)
 			break;
 
-		rc = dtx_commit(cont, dtes, cnt, true);
-		dtx_free_committable(dtes, cnt);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
+		dtx_free_committable(dtes, dcks, cnt);
 		if (rc != 0)
 			break;
 
@@ -932,7 +935,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	 */
 	if (dth->dth_ver < cont->sc_dtx_resync_ver) {
 		rc = vos_dtx_check(cont->sc_hdl, &dth->dth_xid,
-				   NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL, false);
 		/* Committed by race, do nothing. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE)
 			D_GOTO(abort, result = 0);
@@ -1030,7 +1033,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 sync:
 	if (dth->dth_sync) {
 		dte = &dth->dth_dte;
-		rc = dtx_commit(cont, &dte, 1, false);
+		rc = dtx_commit(cont, &dte, NULL, 1);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
 				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
@@ -1202,9 +1205,10 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 	/* gen != cont->sc_dtx_batched_gen means someone reopen the cont. */
 	while (gen == cont->sc_dtx_batched_gen && rc >= 0) {
 		struct dtx_entry	**dtes = NULL;
+		struct dtx_cos_key	 *dcks = NULL;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT,
-					    NULL, DAOS_EPOCH_MAX, &dtes);
+					    NULL, DAOS_EPOCH_MAX, &dtes, &dcks);
 		if (cnt <= 0) {
 			rc = cnt;
 			break;
@@ -1221,8 +1225,8 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 			  (unsigned long)total,
 			  (unsigned long)stat.dtx_committable_count);
 
-		rc = dtx_commit(cont, dtes, cnt, true);
-		dtx_free_committable(dtes, cnt);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
+		dtx_free_committable(dtes, dcks, cnt);
 	}
 
 	if (rc < 0)
@@ -1347,7 +1351,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		 */
 		return -DER_NONEXIST;
 
-	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, true);
+	rc = vos_dtx_check(coh, dti, epoch, pm_ver, NULL, NULL, true);
 	switch (rc) {
 	case DTX_ST_PREPARED:
 		return 0;
@@ -1526,9 +1530,10 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 
 	while (!cont->sc_closing) {
 		struct dtx_entry	**dtes = NULL;
+		struct dtx_cos_key	 *dcks = NULL;
 
 		cnt = dtx_fetch_committable(cont, DTX_THRESHOLD_COUNT, oid,
-					    epoch, &dtes);
+					    epoch, &dtes, &dcks);
 		if (cnt <= 0) {
 			rc = cnt;
 			if (rc < 0)
@@ -1537,8 +1542,8 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, cnt, true);
-		dtx_free_committable(dtes, cnt);
+		rc = dtx_commit(cont, dtes, dcks, cnt);
+		dtx_free_committable(dtes, dcks, cnt);
 		if (rc < 0) {
 			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));
 			break;
