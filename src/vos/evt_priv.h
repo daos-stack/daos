@@ -359,7 +359,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 		   const struct evt_rect *rect,
 		   struct evt_entry_array *ent_array);
 
-/** Compare two rectanglesConvert a context to a daos_handle
+/** Compare two rectangles
  * \param[IN]		rt1	The first rectangle
  * \param[IN]		rt2	The second rectangle
  *

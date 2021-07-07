@@ -320,8 +320,6 @@ struct vos_dtx_cmt_ent {
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_OID(dce)		((dce)->dce_base.dce_oid)
-#define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 
 extern int vos_evt_feats;
 
@@ -501,8 +499,7 @@ vos_dtx_prepared(struct dtx_handle *dth);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int counti, daos_epoch_t epoch,
-			struct dtx_cos_key *dcks,
+			int count, daos_epoch_t epoch, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces);
 void

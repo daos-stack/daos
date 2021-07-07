@@ -53,6 +53,7 @@ enum vts_test_flags {
 	IF_USE_ARRAY		= (1 << 6),
 	TF_USE_VAL		= (1 << 7),
 	TF_USE_CSUMS		= (1 << 8),
+	TF_DELETE		= (1 << 9),
 	IF_DISABLED		= (1 << 30),
 };
 
