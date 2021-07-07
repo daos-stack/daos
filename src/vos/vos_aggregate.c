@@ -709,7 +709,6 @@ prepare_segments(struct agg_merge_window *mw)
 
 		D_ASSERT(ext.ex_lo <= ext.ex_hi);
 		D_ASSERT(ext.ex_lo <= mw->mw_ext.ex_hi);
-		D_ASSERT(ext.ex_hi >= mw->mw_ext.ex_lo);
 
 		phy_ent->pe_remove = false;
 		if (ext.ex_hi > mw->mw_ext.ex_hi) {
@@ -748,6 +747,8 @@ prepare_segments(struct agg_merge_window *mw)
 		if (ext.ex_hi <= mw->mw_ext.ex_hi || phy_ent->pe_ref == 0 ||
 		    phy_ent->pe_remove)
 			continue;
+
+		D_ASSERT(ext.ex_hi >= mw->mw_ext.ex_lo);
 
 		lgc_seg->ls_phy_ent = phy_ent;
 		lgc_seg->ls_idx_start = 0;
@@ -1342,7 +1343,6 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 
 		D_ASSERT(rect.rc_ex.ex_lo <= rect.rc_ex.ex_hi);
 		D_ASSERT(rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi);
-		D_ASSERT(rect.rc_ex.ex_hi >= mw->mw_ext.ex_lo);
 
 		/*
 		 * The physical entry spans window end, but is fully covered

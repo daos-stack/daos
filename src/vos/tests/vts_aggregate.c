@@ -2247,7 +2247,7 @@ aggregate_26(void **state)
 	recx_arr[3].rx_nr = end_idx;
 	recx_arr[4].rx_idx = end_idx * 3;
 	recx_arr[4].rx_nr = end_idx;
-	recx_arr[5].rx_idx = end_idx * 4 - end_idx / 2;
+	recx_arr[5].rx_idx = end_idx * 12;
 	recx_arr[5].rx_nr = end_idx;
 
 	ds.td_type = DAOS_IOD_ARRAY;
