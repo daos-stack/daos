@@ -18,6 +18,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/lib/telemetry/promexp"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*EngineInstance) ([]func(), error) {
@@ -48,6 +49,18 @@ func regPromEngineSources(ctx context.Context, log logging.Logger, engines []*En
 		}
 		sources[i] = es
 		cleanupFns = append(cleanupFns, cleanup)
+
+		engines[i].OnInstanceExit(func(_ context.Context, _ uint32, rank system.Rank, _ error, _ uint64) error {
+			log.Debugf("Disabling metrics collection for rank %s", rank.String())
+			es.Disable()
+			return nil
+		})
+
+		engines[i].OnReady(func(context.Context) error {
+			log.Debugf("Enabling metrics collection for ready engine")
+			es.Enable()
+			return nil
+		})
 	}
 
 	opts := &promexp.CollectorOpts{
