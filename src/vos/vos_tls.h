@@ -175,26 +175,4 @@ vos_hash_get(const void *buf, uint64_t len)
 
 	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
 }
-
-static inline int
-vos_discard_ref_get(void)
-{
-	return vos_tls_get()->vtl_discard_ref;
-}
-
-static inline void
-vos_discard_ref_add(void)
-{
-	vos_tls_get()->vtl_discard_ref++;
-}
-
-static inline void
-vos_discard_ref_dec(void)
-{
-	struct vos_tls	*tls = vos_tls_get();
-
-	D_ASSERT(tls->vtl_discard_ref > 0);
-	vos_tls_get()->vtl_discard_ref--;
-}
-
 #endif /* __VOS_TLS_H__ */

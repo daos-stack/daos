@@ -143,7 +143,6 @@ struct vos_agg_param {
 	struct ilog_time_rec	ap_dkey_min;	/* min update to dkey */
 	struct ilog_time_rec	ap_akey_min;	/* min update to dkey */
 	struct ilog_time_rec	ap_value_min;	/* min update to dkey */
-	struct vos_ilog_info	ap_info;	/* for object discard */
 	daos_epoch_t		ap_discard_hi;	/* Actual high epoch */
 	daos_key_t		ap_dkey;	/* current dkey */
 	daos_key_t		ap_akey;	/* current akey */
@@ -2442,14 +2441,12 @@ vos_obj_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_
 	int			 rc;
 
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), *oid, epr,
-			  DAOS_EPOCH_MAX, VOS_OBJ_VISIBLE, DAOS_INTENT_PUNCH, &obj, NULL);
+			  epr->epr_hi, VOS_OBJ_VISIBLE, DAOS_INTENT_PUNCH, &obj, NULL);
 	if (rc != 0)
 		return rc;
 
-	vos_ilog_fetch_init(&ap->ap_info);
-
 	obj_df = obj->obj_df;
-	rc = vos_ilog_aggregate(coh, &obj_df->vo_ilog, epr, true, NULL, &ap->ap_info,
+	rc = vos_ilog_aggregate(coh, &obj_df->vo_ilog, epr, true, NULL, &obj->obj_ilog_info,
 				update);
 	if (rc == 1) {
 		/** The log is empty, object can be removed */
@@ -2458,8 +2455,6 @@ vos_obj_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_
 		rc = 0;
 	}
 	vos_obj_release(vos_obj_cache_current(), obj, rc != 0);
-
-	vos_ilog_fetch_finish(&ap->ap_info);
 
 	if (delete)
 		rc = vos_obj_delete_internal(coh, *oid, false);
@@ -2523,7 +2518,6 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 	ad->ad_agg_param.ap_discard_hi = epr->epr_hi;
 
 	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
-	vos_discard_ref_add();
 	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);
@@ -2531,8 +2525,6 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 	if (rc == 0 && oid != NULL)
 		rc = vos_obj_discard(coh, oid, epr, &ad->ad_agg_param,
 				     &ad->ad_agg_param.ap_dkey_min);
-	vos_discard_ref_dec();
-
 	aggregate_exit(cont, true);
 
 free_agg_data:

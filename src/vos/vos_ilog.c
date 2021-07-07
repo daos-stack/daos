@@ -319,10 +319,13 @@ vos_ilog_check_(struct vos_ilog_info *info, const daos_epoch_range_t *epr_in,
 }
 
 static inline int
-vos_ilog_update_check(struct vos_ilog_info *info, const daos_epoch_range_t *epr)
+vos_ilog_update_check(daos_epoch_t lo, struct vos_ilog_info *info)
 {
 	if (info->ii_create <= info->ii_prior_any_punch.tr_epc)
 		return -DER_NONEXIST;
+
+	if (info->ii_create < lo)
+		return 1; /* Need to update */
 
 	return 0;
 }
@@ -349,6 +352,11 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	D_DEBUG(DB_TRACE, "Checking and updating incarnation log in range "
 		DF_X64"-"DF_X64"\n", max_epr.epr_lo, max_epr.epr_hi);
 
+	if (cont->vc_epr_discard.epr_hi != 0 && max_epr.epr_lo < cont->vc_epr_discard.epr_hi + 1) {
+		/** Assume the epoch is being discarded so set the low higher */
+		max_epr.epr_lo = cont->vc_epr_discard.epr_hi + 1;
+	}
+
 	/** Do a fetch first.  The log may already exist */
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 			    DAOS_INTENT_UPDATE, ilog, epr->epr_hi, bound,
@@ -367,16 +375,13 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		goto done;
 	}
 
-	rc = vos_ilog_update_check(info, &max_epr);
+	rc = vos_ilog_update_check(max_epr.epr_lo, info);
 	if (rc == 0) {
 		if (cond == VOS_ILOG_COND_INSERT)
 			return -DER_EXIST;
 		return rc;
 	}
-	if (rc != -DER_NONEXIST) {
-		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
+	D_ASSERT(rc == -DER_NONEXIST || rc == 1);
 update:
 	if (rc == -DER_NONEXIST && cond == VOS_ILOG_COND_UPDATE) {
 		if (info->ii_uncertain_create)
@@ -466,16 +471,12 @@ vos_ilog_punch_(struct vos_container *cont, struct ilog_df *ilog,
 		return rc;
 	}
 
-	rc = vos_ilog_update_check(info, &max_epr);
+	rc = vos_ilog_update_check(max_epr.epr_lo, info);
 	if (rc == -DER_NONEXIST)
 		return -DER_NONEXIST;
-	if (rc != 0) {
-		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
+	D_ASSERT(rc == 0);
 	if (!leaf)
 		return 0;
-
 punch_log:
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
 	rc = ilog_open(vos_cont2umm(cont), ilog, &cbs, &loh);
@@ -492,6 +493,7 @@ punch_log:
 		 */
 		minor_epc--;
 	}
+
 	rc = ilog_update(loh, NULL, epr->epr_hi, minor_epc, true);
 
 	ilog_close(loh);
