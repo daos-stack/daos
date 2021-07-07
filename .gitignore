@@ -9,7 +9,6 @@ tags
 daos.conf
 config.log
 /install/
-utils/daos_build.pyc
 *.tar.gz
 *.tgz
 *.pyc

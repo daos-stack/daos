@@ -431,7 +431,7 @@ co_properties(void **state)
 			      "(will fail)\n");
 		uuid_generate(cuuid2);
 		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
-		assert_rc_equal(rc, -DER_INVAL);
+		assert_rc_equal(rc, -DER_EXIST);
 
 		/* Create container: same UUID, different label - fail */
 		print_message("Checking create: same UUID, different label "
@@ -496,7 +496,7 @@ co_properties(void **state)
 		print_message("step3: create cont with label: %s (will fail)\n",
 			      prop->dpp_entries[0].dpe_str);
 		rc = daos_cont_create(arg->pool.poh, cuuid4, prop, NULL);
-		assert_rc_equal(rc, -DER_INVAL);
+		assert_rc_equal(rc, -DER_EXIST);
 
 		/* Container 3 set-prop label2_v2,
 		 * container 1 set-prop label2 - pass
