@@ -20,6 +20,7 @@ import (
 var (
 	ErrEmptyGroupMap = errors.New("empty group map (all ranks excluded?)")
 	ErrRaftUnavail   = errors.New("raft service unavailable (not started yet?)")
+	ErrUninitialized = errors.New("system is uninitialized (storage format required?)")
 )
 
 // IsUnavailable returns a boolean indicating whether or not the
@@ -38,6 +39,15 @@ func IsEmptyGroupMap(err error) bool {
 		return false
 	}
 	return strings.Contains(errors.Cause(err).Error(), ErrEmptyGroupMap.Error())
+}
+
+// IsUninitialized returns a boolean indicating whether or not the
+// supplied error corresponds to an uninitialized system.
+func IsUninitialized(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(errors.Cause(err).Error(), ErrUninitialized.Error())
 }
 
 // ErrNotReplica indicates that a request was made to a control plane
