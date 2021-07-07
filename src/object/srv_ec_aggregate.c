@@ -1226,7 +1226,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_process_partial_stripe_ult, &stripe_ud,
-			    DSS_XS_OFFLOAD, tid, 0, NULL);
+			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1455,7 +1455,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_peer_update_ult, &stripe_ud,
-			    DSS_XS_OFFLOAD, tid, 0, NULL);
+			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1737,7 +1737,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_process_holes_ult, &stripe_ud,
-			    DSS_XS_OFFLOAD, tid, 0, NULL);
+			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);

@@ -432,6 +432,8 @@ typedef struct {
 			uint32_t		ie_dtx_mbs_dsize;
 			/* The time when create the DTX entry. */
 			uint64_t		ie_dtx_start_time;
+			/* The hashed dkey if applicable. */
+			uint64_t		ie_dkey_hash;
 			/** DTX participants information. */
 			void			*ie_dtx_mbs;
 		};
