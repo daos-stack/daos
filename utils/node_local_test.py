@@ -1121,11 +1121,7 @@ def assert_file_size(ofd, size):
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
 
-    if sys.version_info.major < 3:
-        pydir = 'python{}.{}'.format(sys.version_info.major,
-                                     sys.version_info.minor)
-    else:
-        pydir = 'python{}'.format(sys.version_info.major)
+    pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
 
     sys.path.append(os.path.join(conf['PREFIX'],
                                  'lib64',
