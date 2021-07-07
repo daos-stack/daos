@@ -85,6 +85,23 @@ func (svc *mgmtSvc) getPoolServiceStorage(uuidStr string) ([]uint64, error) {
 	return []uint64{ps.Storage.ScmPerRank, ps.Storage.NVMePerRank}, nil
 }
 
+type rankStateMap map[string]*system.RankSet
+
+func (m rankStateMap) add(state string, rank system.Rank) {
+	if _, found := m[state]; !found {
+		m[state] = system.MustCreateRankSet("")
+	}
+	m[state].Add(rank)
+}
+
+func (m rankStateMap) String() string {
+	states := make([]string, 0, len(m))
+	for state, rs := range m {
+		states = append(states, rs.String()+":"+state)
+	}
+	return strings.Join(states, ", ")
+}
+
 // getPoolServiceRanks returns a slice of ranks designated as the
 // pool service hosts.
 func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
@@ -93,20 +110,24 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 		return nil, err
 	}
 
+	rankStates := make(rankStateMap)
 	readyRanks := make([]system.Rank, 0, len(ps.Replicas))
 	for _, r := range ps.Replicas {
 		m, err := svc.sysdb.FindMemberByRank(r)
 		if err != nil {
 			return nil, err
 		}
+		rankStates.add(m.State().String(), m.Rank)
+
 		if m.State()&system.AvailableMemberFilter == 0 {
 			continue
 		}
 		readyRanks = append(readyRanks, r)
 	}
+	svc.log.Debugf("pool %s svc ranks: %s", uuidStr, rankStates)
 
 	if len(readyRanks) == 0 {
-		return nil, errors.Errorf("unable to find any available service ranks for pool %s", uuidStr)
+		return nil, errors.Errorf("pool %s: no available service ranks (%s)", uuidStr, rankStates)
 	}
 
 	return system.RanksToUint32(readyRanks), nil

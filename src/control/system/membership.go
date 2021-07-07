@@ -471,6 +471,9 @@ func (m *Membership) CheckHosts(hosts string, ctlPort int) (*RankSet, *hostlist.
 // MarkRankDead is a helper method to mark a rank as dead in response to a
 // swim_rank_dead event.
 func (m *Membership) MarkRankDead(rank Rank) error {
+	m.Lock()
+	defer m.Unlock()
+
 	member, err := m.db.FindMemberByRank(rank)
 	if err != nil {
 		return err
@@ -488,11 +491,15 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 		return errors.New(msg)
 	}
 
+	m.log.Infof("marking rank %d as %s in response to rank dead event", rank, ns)
 	member.state = ns
 	return m.db.UpdateMember(member)
 }
 
 func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
+	m.Lock()
+	defer m.Unlock()
+
 	ei := evt.GetEngineStateInfo()
 	if ei == nil {
 		m.log.Error("no extended info in EngineDied event received")
@@ -531,8 +538,6 @@ func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
 	case events.RASEngineDied:
 		m.handleEngineFailure(evt)
-	default:
-		m.log.Debugf("no handler registered for event: %v", evt)
 	}
 }
 
