@@ -159,11 +159,11 @@ struct dtx_leader_handle {
 };
 
 struct dtx_stat {
-	uint64_t	dtx_committable_count;
-	uint64_t	dtx_oldest_committable_time;
-	uint64_t	dtx_committed_count;
-	uint64_t	dtx_oldest_committed_time;
-	uint64_t	dtx_oldest_active_time;
+	uint64_t	dtx_committable_count; /* container based. */
+	uint64_t	dtx_oldest_committable_time; /* container based. */
+	uint64_t	dtx_committed_count; /* pool based */
+	uint64_t	dtx_oldest_committed_time; /* container based. */
+	uint64_t	dtx_oldest_active_time; /* container based. */
 };
 
 enum dtx_flags {

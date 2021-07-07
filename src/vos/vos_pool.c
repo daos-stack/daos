@@ -102,6 +102,11 @@ pool_hop_free(struct d_ulink *hlink)
 	D_ASSERT(pool->vp_opened == 0);
 	D_ASSERT(!gc_have_pool(pool));
 
+	if (daos_handle_is_valid(pool->vp_dtx_committed_hdl))
+		dbtree_destroy(pool->vp_dtx_committed_hdl, NULL);
+
+	D_ASSERT(pool->vp_dtx_committed_count == 0);
+
 	if (pool->vp_io_ctxt != NULL) {
 		rc = bio_ioctxt_close(pool->vp_io_ctxt,
 				      pool->vp_pool_df->pd_nvme_sz == 0);
@@ -147,6 +152,9 @@ pool_alloc(uuid_t uuid, struct vos_pool **pool_p)
 	D_INIT_LIST_HEAD(&pool->vp_gc_link);
 	D_INIT_LIST_HEAD(&pool->vp_gc_cont);
 	uuid_copy(pool->vp_id, uuid);
+
+	pool->vp_dtx_committed_hdl = DAOS_HDL_INVAL;
+	pool->vp_dtx_committed_count = 0;
 
 	*pool_p = pool;
 	return 0;
@@ -621,6 +629,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	struct bio_xs_context	*xs_ctxt;
 	struct vos_pool		*pool = NULL;
 	struct umem_attr	*uma;
+	struct umem_attr	 vma;
 	struct d_uuid		 ukey;
 	int			 rc;
 
@@ -687,6 +696,20 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	rc = vos_dedup_init(pool);
 	if (rc)
 		goto failed;
+
+	memset(&vma, 0, sizeof(vma));
+	vma.uma_id = UMEM_CLASS_VMEM;
+
+	rc = dbtree_create_inplace_ex(VOS_BTR_DTX_CMT_TABLE, 0,
+				      DTX_BTREE_ORDER, &vma,
+				      &pool->vp_dtx_committed_btr,
+				      DAOS_HDL_INVAL, pool,
+				      &pool->vp_dtx_committed_hdl);
+	if (rc != 0) {
+		D_ERROR("Failed to create DTX committed table: rc = "DF_RC"\n",
+			DP_RC(rc));
+		goto failed;
+	}
 
 	/* Insert the opened pool to the uuid hash table */
 	uuid_copy(ukey.uuid, uuid);
