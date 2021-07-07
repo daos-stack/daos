@@ -103,7 +103,7 @@ void dtx_batched_commit(void *arg);
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			  daos_unit_oid_t *oid, daos_epoch_t epoch,
-			  struct dtx_entry ***dtes);
+			  struct dtx_entry ***dtes, struct dtx_cos_key **dcks);
 int dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 		daos_unit_oid_t *oid, uint64_t dkey_hash,
 		daos_epoch_t epoch, uint32_t flags);
@@ -113,7 +113,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       int count, bool drop_cos);
+	       struct dtx_cos_key *dcks, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 
