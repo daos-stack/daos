@@ -160,6 +160,7 @@ class NvmePoolCapacity(TestWithServers):
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
         self.pool = []
+        loop_count = 0
 
         # Iterate through IOR different ior test sequence
         for oclass, api, test, flags in product(self.ior_dfs_oclass,
@@ -211,6 +212,8 @@ class NvmePoolCapacity(TestWithServers):
                     self.pool[index].uuid)
                 self.pool[index].display_pool_daos_space(display_string)
                 self.pool[index].destroy()
+
+            loop_count += 1
 
     def test_nvme_pool_capacity(self):
         """Jira ID: DAOS-2085.
