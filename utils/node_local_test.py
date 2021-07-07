@@ -77,6 +77,7 @@ class NLTConf():
         self.args = None
         self.max_log_size = None
         self.valgrind_errors = False
+        self.lt = CulmTimer()
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
         self.tmp_dir = None
@@ -112,6 +113,21 @@ class NLTConf():
 
     def __getitem__(self, key):
         return self.bc[key]
+
+class CulmTimer():
+    """Class to keep track of elapsed time so we know where to focus performance tuning"""
+
+    def __init__(self):
+        self.total = 0
+        self._start = None
+
+    def start(self):
+        """Start the timer"""
+        self._start = time.time()
+
+    def stop(self):
+        """Stop the timer, and add elapsed to total"""
+        self.total += time.time() - self._start
 
 class BoolRatchet():
     """Used for saving test results"""
@@ -1246,7 +1262,8 @@ def create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valgr
 
     rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
 
-    if rc.returncode == 1 and rc.json['error'] == 'DER_EXIST(-1004): Entity already exists':
+    if rc.returncode == 1 and \
+       rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
         destroy_container(conf, pool, label)
         rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
 
@@ -2174,6 +2191,24 @@ def sizeof_fmt(num, suffix='B'):
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
+def log_timer(func):
+    """Wrapper around the log_test function to measure how long it takes"""
+
+    def log_timer_wrapper(*args, **kwargs):
+        """Do the actual wrapping"""
+
+        conf = args[0]
+        conf.lt.start()
+        try:
+            func(*args, **kwargs)
+        except NLTestFail:
+            conf.lt.stop()
+            raise
+        conf.lt.stop()
+
+    return log_timer_wrapper
+
+@log_timer
 def log_test(conf,
              filename,
              show_memleaks=True,
@@ -3005,17 +3040,25 @@ class AllocFailTest():
 
         fatal_errors = False
 
+        # Now run all iterations in parallel up to max_child.  Iterations will be launched
+        # in order but may not finish in order, rather they are processed in the order they
+        # finish.  After each repetition completes then check for re-launch new processes
+        # to keep the pipeline full.
         while not finished or active:
-            if len(active) < max_child and not finished:
-                active.append(self._run_cmd(fid))
-                fid += 1
 
-                if len(active) > max_count:
-                    max_count = len(active)
+            if not finished:
+                while len(active) < max_child:
+                    active.append(self._run_cmd(fid))
+                    fid += 1
+
+                    if len(active) > max_count:
+                        max_count = len(active)
 
             # Now complete as many as have finished.
-            while active and active[0].has_finished():
-                ret = active.pop(0)
+            for ret in active:
+                if not ret.has_finished():
+                    continue
+                active.remove(ret)
                 print(ret)
                 if ret.returncode < 0:
                     fatal_errors = True
@@ -3024,6 +3067,7 @@ class AllocFailTest():
                 if not ret.fault_injected:
                     print('Fault injection did not trigger, stopping')
                     finished = True
+                break
 
         print('Completed, fid {}'.format(fid))
         print('Max in flight {}'.format(max_count))
@@ -3042,6 +3086,12 @@ class AllocFailTest():
         """
 
         cmd_env = get_base_env()
+
+        # Debug flags to enable all memory allocation logging, but as little
+        # else as possible.
+        cmd_env['D_LOG_MASK'] = 'DEBUG'
+        cmd_env['DD_MASK'] = 'mem'
+        del cmd_env['DD_SUBSYS']
 
         if self.use_il:
             cmd_env['LD_PRELOAD'] = os.path.join(self.conf['PREFIX'],
@@ -3135,6 +3185,64 @@ def test_alloc_fail_cat(server, conf, wf):
 
     rc = test_cmd.launch()
     dfuse.stop()
+    return rc
+
+def test_fi_list_attr(server, conf, wf):
+    """Run daos cont get-attr with fi"""
+
+    pool = server.get_test_pool()
+
+    container = create_cont(conf, pool)
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool, container,
+                  '--attr', 'my-test-attr-1', '--value', 'some-value'])
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool, container,
+                  '--attr', 'my-test-attr-2', '--value', 'some-other-value'])
+
+    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'list-attrs',
+           pool,
+           container]
+
+    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd.wf = wf
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
+    return rc
+
+def test_fi_get_attr(server, conf, wf):
+    """Run daos cont get-attr with fi"""
+
+    pool = server.get_test_pool()
+
+    container = create_cont(conf, pool)
+
+    attr_name = 'my-test-attr'
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool, container,
+                  '--attr', attr_name, '--value', 'value'])
+
+    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'get-attr',
+           pool,
+           container,
+           attr_name]
+
+    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd.wf = wf
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
     return rc
 
 def test_alloc_fail(server, conf):
@@ -3276,11 +3384,18 @@ def main():
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
-#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
-#                                                         wf_client))
-            fatal_errors.add_result(test_alloc_fail_cat(server,
-                                                        conf, wf_client))
+            # list-container test.
             fatal_errors.add_result(test_alloc_fail(server, conf))
+
+            # Read-via-IL test, requires dfuse.
+            fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
+
+            # Container attribute tests, work but disabled because of runtime concerns.
+            # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+            # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+
+            # filesystem copy test - not complete.
+            # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
         if args.perf_check:
             check_readdir_perf(server, conf)
         if server.stop(wf_server) != 0:
@@ -3298,6 +3413,8 @@ def main():
     wf.close()
     wf_server.close()
     wf_client.close()
+
+    print('Total time in log analysis: {:.2f} seconds'.format(conf.lt.total))
     if fatal_errors.errors:
         print("Significant errors encountered")
         sys.exit(1)
