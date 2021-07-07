@@ -466,8 +466,8 @@ chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_dma_chunk **chk_ptr)
 		/* Try grow buffer first */
 		if (bdb->bdb_tot_cnt < bio_chk_cnt_max) {
 			rc = dma_buffer_grow(bdb, 1);
-			if (rc != 0)
-				return rc;
+			if (rc == 0)
+				goto done;
 		}
 
 		/* Try to reclaim an unused chunk from bulk groups */
@@ -475,7 +475,7 @@ chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_dma_chunk **chk_ptr)
 		if (rc)
 			return rc;
 	}
-
+done:
 	D_ASSERT(!d_list_empty(&bdb->bdb_idle_list));
 	chk = d_list_entry(bdb->bdb_idle_list.next, struct bio_dma_chunk,
 			   bdc_link);

@@ -37,8 +37,6 @@
 /* Schedule a NVMe poll when so many blob IOs queued for an io channel */
 #define BIO_BS_POLL_WATERMARK	(2048)
 
-#define DAOS_HUGEPAGE_SIZE_2MB	2	/* 2MB */
-
 /* Chunk size of DMA buffer in pages */
 unsigned int bio_chk_sz;
 /* Per-xstream maximum DMA buffer size (in chunk count) */
@@ -128,7 +126,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 {
 	char		*env;
 	int		 rc, fd;
-	uint64_t	 size_mb = DAOS_DMA_CHUNK_MB;
+	unsigned int	 size_mb = DAOS_DMA_CHUNK_MB;
 
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
@@ -148,7 +146,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 
 	bio_chk_cnt_init = DAOS_DMA_CHUNK_CNT_INIT;
 	bio_chk_cnt_max = DAOS_DMA_CHUNK_CNT_MAX;
-	bio_chk_sz = (size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
+	bio_chk_sz = ((uint64_t)size_mb << 20) >> BIO_DMA_PAGE_SHIFT;
 
 	d_getenv_bool("DAOS_SCM_RDMA_ENABLED", &bio_scm_rdma);
 	D_INFO("RDMA to SCM is %s\n", bio_scm_rdma ? "enabled" : "disabled");
@@ -181,15 +179,8 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	}
 
 	bio_chk_cnt_max = (mem_size / tgt_nr) / size_mb;
-	/*
-	 * Leave a hugepage overhead buffer for DPDK memory management. Reduce
-	 * the DMA upper bound by 200 hugepages per target to account for this.
-	 * Only necessary for 2MB hugepage size.
-	 */
-	if (hugepage_size <= DAOS_HUGEPAGE_SIZE_2MB) {
-		D_ASSERT(bio_chk_cnt_max > ((200 * hugepage_size) / size_mb));
-		bio_chk_cnt_max -= (200 * hugepage_size) / size_mb;
-	}
+	D_INFO("Set per-xstream DMA buffer upper bound to %u %uMB chunks\n",
+	       bio_chk_cnt_max, size_mb);
 
 	rc = smd_init(db);
 	if (rc != 0) {
