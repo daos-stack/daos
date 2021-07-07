@@ -1250,12 +1250,12 @@ process_removals(struct agg_merge_window *mw, struct vos_obj_iter *oiter, d_list
 		if (!last && rect.rc_ex.ex_hi > mw->mw_ext.ex_hi)
 			continue;
 
-		D_ASSERT(top || d_list_empty(&rm_ent->re_contained));
 		if (d_list_empty(&rm_ent->re_contained)) {
 			D_DEBUG(DB_IO, "Removing physical removal record: "DF_RECT"\n",
 				DP_RECT(&rm_ent->re_rect));
 			rc = evt_delete(oiter->it_hdl, &rect, NULL);
 		} else {
+			D_ASSERT(top);
 			D_DEBUG(DB_IO, "Removing logical removal record: "DF_RECT"\n",
 				DP_RECT(&rm_ent->re_rect));
 			rc = process_removals(mw, oiter, &rm_ent->re_contained, last, false);
@@ -1458,15 +1458,20 @@ clear_merge_window(struct agg_merge_window *mw)
 }
 
 static void
-free_removal_records(struct agg_merge_window *mw)
+free_removal_records(struct agg_merge_window *mw, d_list_t *head, bool top)
 {
 	struct agg_rmv_ent *rm_ent, *tmp;
 
-	d_list_for_each_entry_safe(rm_ent, tmp, &mw->mw_rmv_ents, re_link) {
+	d_list_for_each_entry_safe(rm_ent, tmp, head, re_link) {
 		d_list_del(&rm_ent->re_link);
+		if (!d_list_empty(&rm_ent->re_contained)) {
+			D_ASSERT(top);
+			free_removal_records(mw, &rm_ent->re_contained, false);
+		}
 		D_FREE(rm_ent);
 	}
-	mw->mw_rmv_cnt = 0;
+	if (top)
+		mw->mw_rmv_cnt = 0;
 }
 
 static bool
@@ -1698,7 +1703,7 @@ close_merge_window(struct agg_merge_window *mw, int rc)
 
 	if (rc) {
 		clear_merge_window(mw);
-		free_removal_records(mw);
+		free_removal_records(mw, &mw->mw_rmv_ents, true);
 	}
 
 	D_ASSERT(mw->mw_rmv_cnt == 0);
