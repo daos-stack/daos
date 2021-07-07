@@ -111,6 +111,23 @@ func MockNvmeControllers(length int) NvmeControllers {
 	return result
 }
 
+// MockVmdController returns struct with examples values.
+func MockVmdController(varIdx ...int32) *NvmeController {
+	idx := common.GetIndex(varIdx...)
+	pciAddr := fmt.Sprintf("5d0505:0%d:00.0", idx)
+
+	return &NvmeController{
+		Model:       concat("model", idx),
+		Serial:      concat("serial", getRandIdx()),
+		PciAddr:     pciAddr,
+		FwRev:       concat("fwRev", idx),
+		SocketID:    idx % 2,
+		HealthStats: MockNvmeHealth(idx),
+		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(1)},
+		SmdDevices:  []*SmdDevice{MockSmdDevice(pciAddr, idx)},
+	}
+}
+
 // MockScmModule returns struct with examples values.
 func MockScmModule(varIdx ...int32) *ScmModule {
 	idx := uint32(common.GetIndex(varIdx...))

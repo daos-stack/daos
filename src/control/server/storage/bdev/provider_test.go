@@ -213,6 +213,8 @@ func TestProvider_Scan(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 	ctrlr2 := storage.MockNvmeController(2)
 	ctrlr3 := storage.MockNvmeController(3)
+	vmdctrlr1 := storage.MockVmdController(1)
+	vmdctrlr2 := storage.MockVmdController(3)
 
 	for name, tc := range map[string]struct {
 		req            ScanRequest
@@ -255,8 +257,8 @@ func TestProvider_Scan(t *testing.T) {
 			},
 			expVMDDisabled: true,
 		},
-		"multiple devices with vmd disabled": {
-			req:       ScanRequest{DisableVMD: true},
+		"multiple devices with vmd enabled and no vmd devices": {
+			req:       ScanRequest{DisableVMD: false},
 			forwarded: true,
 			mbc: &MockBackendConfig{
 				ScanRes: &ScanResponse{
@@ -264,13 +266,32 @@ func TestProvider_Scan(t *testing.T) {
 						ctrlr1, ctrlr2, ctrlr3,
 					},
 				},
+				VmdEnabled: true,
 			},
 			expRes: &ScanResponse{
 				Controllers: storage.NvmeControllers{
 					ctrlr1, ctrlr2, ctrlr3,
 				},
 			},
-			expVMDDisabled: true,
+			expVMDDisabled: false,
+		},
+		"multiple devices with vmd enabled": {
+			req:       ScanRequest{DisableVMD: false},
+			forwarded: true,
+			mbc: &MockBackendConfig{
+				ScanRes: &ScanResponse{
+					Controllers: storage.NvmeControllers{
+						ctrlr1, ctrlr2, vmdctrlr1, vmdctrlr2,
+					},
+				},
+				VmdEnabled: true,
+			},
+			expRes: &ScanResponse{
+				Controllers: storage.NvmeControllers{
+					ctrlr1, ctrlr2, vmdctrlr1, vmdctrlr2,
+				},
+			},
+			expVMDDisabled: false,
 		},
 		"failure": {
 			req: ScanRequest{},
