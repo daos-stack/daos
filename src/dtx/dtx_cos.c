@@ -20,6 +20,7 @@
  */
 struct dtx_cos_rec {
 	daos_unit_oid_t		 dcr_oid;
+	uint64_t		 dcr_dkey_hash;
 	/* The DTXs in the list only modify some SVT value or EVT value
 	 * (neither obj nor dkey/akey) that will not be shared by other
 	 * modifications.
@@ -113,6 +114,7 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 		return -DER_NOMEM;
 
 	dcr->dcr_oid = key->oid;
+	dcr->dcr_dkey_hash = key->dkey_hash;
 	D_INIT_LIST_HEAD(&dcr->dcr_reg_list);
 	D_INIT_LIST_HEAD(&dcr->dcr_prio_list);
 	D_INIT_LIST_HEAD(&dcr->dcr_expcmt_list);
@@ -254,9 +256,10 @@ btr_ops_t dtx_btr_cos_ops = {
 int
 dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 		      daos_unit_oid_t *oid, daos_epoch_t epoch,
-		      struct dtx_entry ***dtes)
+		      struct dtx_entry ***dtes, struct dtx_cos_key **dcks)
 {
 	struct dtx_entry		**dte_buf = NULL;
+	struct dtx_cos_key		 *dck_buf = NULL;
 	struct dtx_cos_rec_child	 *dcrc;
 	uint32_t			  count;
 	uint32_t			  i = 0;
@@ -271,6 +274,12 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 	if (dte_buf == NULL)
 		return -DER_NOMEM;
 
+	D_ALLOC_ARRAY(dck_buf, count);
+	if (dck_buf == NULL) {
+		D_FREE(dte_buf);
+		return -DER_NOMEM;
+	}
+
 	d_list_for_each_entry(dcrc, &cont->sc_dtx_cos_list,
 			      dcrc_gl_committable) {
 		if (oid != NULL &&
@@ -281,15 +290,19 @@ dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			continue;
 
 		dte_buf[i] = dtx_entry_get(dcrc->dcrc_dte);
+		dck_buf[i].oid = dcrc->dcrc_ptr->dcr_oid;
+		dck_buf[i].dkey_hash = dcrc->dcrc_ptr->dcr_dkey_hash;
 		if (++i >= count)
 			break;
 	}
 
 	if (i == 0) {
 		D_FREE(dte_buf);
+		D_FREE(dck_buf);
 		*dtes = NULL;
 	} else {
 		*dtes = dte_buf;
+		*dcks = dck_buf;
 	}
 
 	return i;
