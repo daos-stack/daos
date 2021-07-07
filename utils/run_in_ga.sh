@@ -14,6 +14,11 @@ rm -rf /opt/daos/prereq/debug/spdk
 $SCONS PREFIX=/opt/daos TARGET_TYPE=debug --build-deps=yes --deps-only
 echo ::endgroup::
 
+echo ::group::Patch source
+# Change the number of contexts to make testing faster.
+patch p1 < ci/16-contexts.patch
+echo ::endgroup::
+
 echo ::group::Test client only debug build
 $SCONS --jobs 10 PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug \
        TARGET_TYPE=debug -c install
@@ -59,5 +64,5 @@ export LD_LIBRARY_PATH=/opt/daos/prereq/debug/spdk/lib/
 echo ::endgroup::
 
 echo ::group::Fi test
-./utils/node_local_test.py --no-root fi
+./utils/node_local_test.py --no-root fi-core
 echo ::endgroup::

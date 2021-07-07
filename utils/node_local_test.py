@@ -3226,6 +3226,8 @@ def main():
         fatal_errors.add_result(set_server_fi(server))
     elif args.mode == 'fi':
         fi_test = True
+    elif args.mode == 'fi-core':
+        fi_test = True
     elif args.mode == 'all':
         fi_test = True
         fatal_errors.add_result(run_posix_tests(server, conf))
@@ -3276,11 +3278,16 @@ def main():
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
-#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
-#                                                         wf_client))
-#            fatal_errors.add_result(test_alloc_fail_cat(server,
-#                                                        conf, wf_client))
+            # Daos pool list-containers, works everywhere.
             fatal_errors.add_result(test_alloc_fail(server, conf))
+
+            # 'cat' via IL, requires dfuse.
+            if args.mode != 'fi-core':
+                fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
+
+            # daos filesystem copy, works but is not complete.
+            # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+
         if args.perf_check:
             check_readdir_perf(server, conf)
         if server.stop(wf_server) != 0:
