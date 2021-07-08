@@ -123,6 +123,7 @@ type RASEvent struct {
 	Msg          string          `json:"msg"`
 	Hostname     string          `json:"hostname"`
 	Rank         uint32          `json:"rank"`
+	RankInc      uint64          `json:"rank_inc"`
 	HWID         string          `json:"hw_id"`
 	ProcID       uint64          `json:"proc_id"`
 	ThreadID     uint64          `json:"thread_id"`
