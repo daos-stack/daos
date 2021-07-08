@@ -73,6 +73,8 @@ type Engine interface {
 	Run(context.Context, bool)
 	SetupRank(context.Context, system.Rank) error
 	Stop(os.Signal) error
+	OnInstanceExit(...onInstanceExitFn)
+	OnReady(...onReadyFn)
 }
 
 // EngineHarness is responsible for managing Engine instances.
