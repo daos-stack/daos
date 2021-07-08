@@ -1968,7 +1968,6 @@ err_query_task:
 	tse_task_complete(query_task, rc);
 err_task:
 	D_FREE(kqp);
-	D_FREE(query_task);
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);

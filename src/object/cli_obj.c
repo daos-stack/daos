@@ -2411,8 +2411,6 @@ shard_task_abort(tse_task_t *task, void *arg)
 	int	rc = *((int *)arg);
 
 	tse_task_complete(task, rc);
-	tse_task_list_del(task);
-	tse_task_decref(task);
 	return 0;
 }
 

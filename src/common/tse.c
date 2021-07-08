@@ -370,8 +370,14 @@ tse_task_complete_locked(struct tse_task_private *dtp,
 	if (dtp->dtp_completed)
 		return;
 
-	if (!dtp->dtp_running)
-		return;
+	/*
+	 * if completing a task that never started, we need to bump inflight tasks in scheduler
+	 * before adding it to tail of completed list.
+	 */
+	if (!dtp->dtp_running) {
+		tse_sched_priv_addref_locked(dsp);
+		dsp->dsp_inflight++;
+	}
 
 	dtp->dtp_running = 0;
 	dtp->dtp_completing = 0;
@@ -591,9 +597,8 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 }
 
 /**
- * Check the task in the complete list, dependent task
- * status check, schedule status update etc. The task
- * will be moved to fini list after this
+ * Check the task in the complete list, dependent task status check, schedule status update etc. The
+ * task will be moved to fini list after this.
  **/
 static int
 tse_task_post_process(tse_task_t *task)
