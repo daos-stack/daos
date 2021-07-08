@@ -30,8 +30,6 @@ struct dtx_handle;
 struct vos_tls {
 	/** pools registered for GC */
 	d_list_t			 vtl_gc_pools;
-	/** Discard refcount */
-	int				 vtl_discard_ref;
 	/** tracking GC running status */
 	int				 vtl_gc_running;
 	/* PMDK transaction stage callback data */
@@ -175,4 +173,5 @@ vos_hash_get(const void *buf, uint64_t len)
 
 	return d_hash_murmur64(buf, len, VOS_BTR_MUR_SEED);
 }
+
 #endif /* __VOS_TLS_H__ */
