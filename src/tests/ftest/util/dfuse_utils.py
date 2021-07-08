@@ -78,19 +78,29 @@ class DfuseCommand(ExecutableCommand):
 class Dfuse(DfuseCommand):
     """Class defining an object of type DfuseCommand."""
 
-    def __init__(self, hosts, tmp):
+    def __init__(self, hosts):
         """Create a dfuse object."""
         super().__init__("/run/dfuse/*", "dfuse")
 
         # set params
         self.hosts = hosts
-        self.tmp = tmp
         self.running_hosts = NodeSet()
+        self._started = False
 
     def __del__(self):
         """Destruct the object."""
         if self.running_hosts:
             self.log.error('Dfuse object deleted without shutting down')
+
+    @property
+    def started(self):
+        """Get whether or not dfuse has been started.
+
+        Returns:
+            bool: whether or not dfuse has been started
+
+        """
+        return self._started
 
     def check_mount_state(self, nodes=None):
         """Check the dfuse mount point mounted state on the hosts.
@@ -323,6 +333,41 @@ class Dfuse(DfuseCommand):
                 raise CommandFailure("dfuse not running")
         return status
 
+    def start(self, server_manager, log_file, pool=None, container=None):
+        """Start dfuse in a test.
+
+        Be sure to call Dfuse.get_params(test) before this method.
+
+        Args:
+            server_manager (DaosServerManager): server manager object to use to
+                obtain the ofi and cart environmental variable settings from the
+                server yaml file
+            log_file (str): name of the log file to combine with the
+                DAOS_TEST_LOG_DIR path with which to assign D_LOG_FILE
+            pool (TestPool, optional): pool to use with Dfuse. Defaults to None.
+            container (TestContainer, optional): container to use with Dfuse.
+                Defaults to None.
+
+        Raises:
+            CommandFailure: if there was a failure starting dfuse.
+
+        """
+        # Update dfuse params
+        if pool:
+            self.set_dfuse_params(pool)
+        if container:
+            self.set_dfuse_cont_param(container)
+        self.set_dfuse_exports(server_manager, log_file)
+
+        try:
+            # Start dfuse
+            self.run()
+        except CommandFailure as error:
+            raise CommandFailure(
+                "Dfuse command failed on {}".format(self.hosts)) from error
+
+        self._started = True
+
     def stop(self):
         """Stop dfuse.
 
@@ -391,3 +436,5 @@ class Dfuse(DfuseCommand):
 
         else:
             self.log.info("No hosts running dfuse - nothing to stop")
+
+        self._started = False

@@ -37,7 +37,7 @@ class DfuseTestBase(TestWithServers):
         return error_list
 
     def start_dfuse(self, hosts, pool=None, container=None, mount_dir=None):
-        """Create a DfuseCommand object and use it to start Dfuse.
+        """Create a Dfuse object and use it to start Dfuse.
 
         Args:
             hosts (list): list of hosts on which to start Dfuse
@@ -45,21 +45,12 @@ class DfuseTestBase(TestWithServers):
             container (TestContainer, optional): container to use with Dfuse
             mount_dir (str, optional): updated mount dir name. Defaults to None.
         """
-        self.dfuse = Dfuse(hosts, self.tmp)
+        self.dfuse = Dfuse(hosts)
         self.dfuse.get_params(self)
-
-        # Update dfuse params
-        if mount_dir:
-            self.dfuse.mount_dir.update(mount_dir)
-        if pool:
-            self.dfuse.set_dfuse_params(pool)
-        if container:
-            self.dfuse.set_dfuse_cont_param(container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
         try:
-            # Start dfuse
-            self.dfuse.run()
+            self.dfuse.start(
+                self.server_managers[0], self.client_log, pool, container,
+                mount_dir)
         except CommandFailure as error:
             self.log.error(
                 "Dfuse command %s failed on hosts %s", str(self.dfuse),

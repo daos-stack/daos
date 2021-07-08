@@ -35,7 +35,7 @@ class DaosVol(VolTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=hdf5,vol,volunit,volmpich
+        :avocado: tags=hdf5,vol,volunit,volmpich,dfuse
         :avocado: tags=DAOS_5610
         """
         self.job_manager = get_job_manager_class("Mpirun", None, False, "mpich")
@@ -63,7 +63,7 @@ class DaosVol(VolTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=hdf5,vol,volunit,volopenmpi
+        :avocado: tags=hdf5,vol,volunit,volopenmpi,dfuse
         :avocado: tags=DAOS_5610
         """
         self.job_manager = get_job_manager_class(

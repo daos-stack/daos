@@ -117,12 +117,13 @@ class ParallelIo(FioBase, IorTestBase):
                 self.dfuse.mount_dir.value)
             counter += 1
 
-    def test_parallelio(self):
+    def test_parallel_io(self):
         """Jira ID: DAOS-3775.
 
         Test Description:
             Purpose of this test is to mount dfuse and verify multiple
             containers using fio.
+
         Use cases:
             Mount dfuse using pool uuid.
             Create multiple containers under that dfuse mount point.
@@ -133,9 +134,10 @@ class ParallelIo(FioBase, IorTestBase):
             Otherwise, try accessing the deleted container.
             This should fail.
             Check dfuse again.
+
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=daosio,parallelio,tx
+        :avocado: tags=io,parallelio,tx,dfuse
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -144,7 +146,7 @@ class ParallelIo(FioBase, IorTestBase):
 
         # Create a pool and start dfuse.
         self.create_pool()
-        self.start_dfuse(self.hostlist_clients, self.pool[0], None)
+        self.start_dfuse(self.pool[0])
         # create multiple containers
         for _ in range(self.cont_count):
             self.create_cont(self.pool[0])
@@ -203,7 +205,7 @@ class ParallelIo(FioBase, IorTestBase):
         # container.
             self.dfuse.check_running()
 
-    def test_multipool_parallelio(self):
+    def test_multipool_parallel_io(self):
         """Jira ID: DAOS-3775.
 
         Test Description:
@@ -224,8 +226,9 @@ class ParallelIo(FioBase, IorTestBase):
             completion or exit the loop after trying for 240 secs of wait and
             fail the test.
 
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression
-        :avocado: tags=multipoolparallelio
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=io,multipool_parallel_io,dfuse
         """
         # test params
         threads = []
@@ -245,7 +248,7 @@ class ParallelIo(FioBase, IorTestBase):
             pool_job.join()
 
         # start dfuse.
-        self.start_dfuse(self.hostlist_clients, None, None)
+        self.start_dfuse()
 
         # record free space using statvfs before any data is written.
         self.statvfs_info_initial = self.statvfs_pool(

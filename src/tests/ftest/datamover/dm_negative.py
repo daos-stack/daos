@@ -41,6 +41,7 @@ class DmvrNegativeTest(DataMoverTestBase):
     def test_dm_bad_params_dcp(self):
         """Jira ID: DAOS-5515 - Initial test case.
            Jira ID: DAOS-6355 - Test case reworked.
+
         Test Description:
             Test POSIX copy with invalid parameters.
             This uses the dcp tool.
@@ -48,14 +49,16 @@ class DmvrNegativeTest(DataMoverTestBase):
             (2) Bad parameter: source is destination.
             (3) Bad parameter: daos-prefix is invalid.
             (4) Bad parameter: UUID, UNS, or POSIX path is invalid.
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_negative,dm_bad_params_dcp
         """
         self.set_tool("DCP")
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        self.start_dfuse()
 
         # Create a test pool
         pool1 = self.create_pool()
@@ -244,11 +247,14 @@ class DmvrNegativeTest(DataMoverTestBase):
 
     @skipForTicket("DAOS-6871")
     def test_dm_negative_space_dcp(self):
-        """Jira ID: DAOS-5515
+        """Jira ID: DAOS-5515.
+
         Test Description:
             DAOS-5515: destination pool does not have enough space.
             DAOS-6387: posix filesystem does not have enough space.
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_negative,dm_negative_space_dcp
         """
@@ -277,7 +283,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         cont2 = self.create_cont(pool2)
 
         # Start dfuse on pool2/cont2
-        self.start_dfuse(self.dfuse_hosts, pool2, cont2)
+        self.start_dfuse(pool2, cont2)
 
         # Try to copy. For now, we expect this to just abort.
         self.run_datamover(
@@ -289,11 +295,14 @@ class DmvrNegativeTest(DataMoverTestBase):
 
     def test_dm_negative_error_check_dcp(self):
         """Jira ID: DAOS-5515
+
         Test Description:
             Tests POSIX copy error checking for dcp.
             Tests the following cases:
                 destination filename is invalid.
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,dcp
         :avocado: tags=dm_negative,dm_negative_error_check_dcp
         """

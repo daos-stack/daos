@@ -573,7 +573,7 @@ def start_dfuse(self, pool, container, nodesperjob, resource_mgr=None,
             cmd(list):          list of dfuse commands to add to jobscript
     """
     # Get Dfuse params
-    dfuse = Dfuse(self.hostlist_clients, self.tmp)
+    dfuse = Dfuse(self.hostlist_clients)
     dfuse.namespace = os.path.join(os.sep, "run", job_spec, "dfuse", "*")
     dfuse.get_params(self)
     # update dfuse params; mountpoint for each container

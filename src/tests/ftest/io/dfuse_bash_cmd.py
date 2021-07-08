@@ -46,7 +46,9 @@ class BashCmd(DfuseTestBase):
               Verify renamed file exist using list.
               Remove a directory
 
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,bashcmd
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=io,bash_cmd,dfuse
         """
         dir_name = self.params.get("dirname", '/run/bashcmd/*')
         file_name1 = self.params.get("filename1", '/run/bashcmd/*')
@@ -62,9 +64,9 @@ class BashCmd(DfuseTestBase):
             # perform test for multiple containers.
             for count in range(cont_count):
                 self.add_container(self.pool)
-                mount_dir = "/tmp/{}_daos_dfuse{}".format(self.pool.uuid, count)
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container, mount_dir)
+                self.dfuse.mount_dir.update(
+                    "/tmp/{}_daos_dfuse{}".format(self.pool.uuid, count))
+                self.start_dfuse(self.pool, self.container)
                 abs_dir_path = os.path.join(
                     self.dfuse.mount_dir.value, dir_name)
                 abs_file_path1 = os.path.join(abs_dir_path, file_name1)

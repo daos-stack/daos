@@ -28,7 +28,10 @@ class DfuseContainerCheck(DfuseTestBase):
             Try to mount to dfuse and check the behavior.
             Create container of type POSIX.
             Try to mount to dfuse and check the behavior.
-        :avocado: tags=all,small,full_regression,dfusecontainercheck
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm,small
+        :avocado: tags=container,dfuse_container_check,dfuse
         """
         # get test params for cont and pool count
         cont_types = self.params.get("cont_types", '/run/container/*')
@@ -47,8 +50,7 @@ class DfuseContainerCheck(DfuseTestBase):
             # Attempt to mount the dfuse mount point - this should only succeed
             # with a POSIX container
             try:
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container)
+                self.start_dfuse(self.pool, self.container)
                 if cont_type != "POSIX":
                     self.fail("Non-POSIX type container mounted over dfuse")
 

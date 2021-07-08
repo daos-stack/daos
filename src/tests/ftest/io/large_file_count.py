@@ -42,14 +42,17 @@ class LargeFileCount(MdtestBase, IorTestBase):
 
     def test_largefilecount(self):
         """Jira ID: DAOS-3845.
+
         Test Description:
             Run IOR and MDTEST with 48 clients.
+
         Use Cases:
             Run IOR for 5 mints with DFS and POSIX
             Run MDTEST to create 25K files with DFS and POSIX
-        :avocado: tags=all,daosio,full_regression
+
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=largefilecount
+        :avocado: tags=io,largefilecount,dfuse
         """
         apis = self.params.get("api", "/run/largefilecount/*")
         object_class = self.params.get("object_class", '/run/largefilecount/*')
@@ -84,17 +87,19 @@ class LargeFileCount(MdtestBase, IorTestBase):
     @skipForTicket("DAOS-7287")
     def test_largefilecount_rc(self):
         """Jira ID: DAOS-3845.
+
         Test Description:
             Run IOR and MDTEST with 48 clients with very large file counts.
             This test is not supposed to run as part of pr or weekly runs.
             This should only be run before release as desired.
+
         Use Cases:
             Run IOR for 5 mints with DFS and POSIX
             Run MDTEST to create 25K files with DFS and POSIX
+
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio
-        :avocado: tags=rc,largefilecount_rc
+        :avocado: tags=io,largefilecount_rc,rc,dfuse
         """
         apis = self.params.get("api", "/run/largefilecount/*")
         num_of_files_dirs_rc = self.params.get("num_of_files_dirs_rc",

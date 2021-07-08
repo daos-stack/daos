@@ -42,12 +42,15 @@ class DfuseSparseFile(IorTestBase):
             Verify, the bytes between 1st byte and 1024th byte are empty.
             Now try to read the file from it's last 512 bytes till EOF.
             This should return EOF, otherwise fail the test.
-        :avocado: tags=all,hw,daosio,small,full_regression,dfusesparsefile
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=io,dfuse_sparse_file,dfuse
         """
         # Create a pool, container and start dfuse.
         self.create_pool()
         self.create_cont()
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.start_dfuse(self.pool, self.container)
 
         # get scm space before write
         self.space_before = self.pool.get_pool_free_space("nvme")

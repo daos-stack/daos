@@ -26,7 +26,7 @@ class IorInterceptMultiClient(IorTestBase):
         Test Description:
             Purpose of this test is to run ior through dfuse in multiple
             clients for 5 minutes and capture the metrics and use the
-            intercepiton library by exporting LD_PRELOAD to the libioil.so
+            interception library by exporting LD_PRELOAD to the libioil.so
             path and rerun the above ior and capture the metrics and
             compare the performance difference and check using interception
             library make significant performance improvement.
@@ -37,8 +37,9 @@ class IorInterceptMultiClient(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,full_regression,hw,large
-        :avocado: tags=daosio,iorinterceptmulticlient
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio,ior,ior_intercept_multi_client,dfuse
         """
         suffix = self.ior_cmd.transfer_size.value
         out = self.run_ior_with_pool(test_file_suffix=suffix)

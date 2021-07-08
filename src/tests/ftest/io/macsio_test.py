@@ -63,7 +63,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=io,macsio_daos_vol
+        :avocado: tags=io,macsio_daos_vol,dfuse
         :avocado: tags=DAOS_5610
         """
         plugin_path = self.params.get("plugin_path")
@@ -76,7 +76,7 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         self.add_container(self.pool)
 
         # Create dfuse mount point
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.start_dfuse(self.pool, self.container)
 
         # VOL needs to run from a file system that supports xattr.  Currently
         # nfs does not have this attribute so it was recommended to create and

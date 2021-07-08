@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
 from mdtest_test_base import MdtestBase
+
 
 class MdtestLarge(MdtestBase):
     # pylint: disable=too-many-ancestors
@@ -15,10 +15,11 @@ class MdtestLarge(MdtestBase):
     """
 
     def test_mdtest_large(self):
-        """
-        Jira ID: DAOS-2494
+        """Jira ID: DAOS-2494.
+
         Test Description:
             Test Mdtest for large config.
+
         Use Cases:
             Aim of this test is to test different combinations
             of following configs for performance purpose:
@@ -30,10 +31,11 @@ class MdtestLarge(MdtestBase):
             write bytes: 0 | 1K | 32K
             read bytes: 0 | 1K | 32K
             depth of hierarchical directory structure: 0 | 100
+
         :avocado: tags=all
-        :avocado: tags=hw
+        :avocado: tags=hw,extra_large
         :avocado: tags=perf,nvme,mdtest,checksum
-        :avocado: tags=mdtestlarge
+        :avocado: tags=mdtestlarge,dfuse
         """
         mdtest_flags = self.params.get("flags", "/run/mdtest/*")
         self.mdtest_cmd.flags.update(mdtest_flags)

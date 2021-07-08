@@ -36,7 +36,9 @@ class FindCmd(DfuseTestBase):
             The test will fail if find(1) command crashes or if the number of
             files found is not equal to the number of files created.
 
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,findcmd
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=io,find_cmd,dfuse
         """
         self._test_findcmd()
 
@@ -52,7 +54,9 @@ class FindCmd(DfuseTestBase):
             The test will fail if DAOS performance is lower than the
             challenger performance.
 
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,findcmd_perf
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=io,find_cmd_perf,dfuse
         """
         # Number of repetitions each test will run.
         samples = self.params.get("samples", '/run/perf/*')
@@ -219,12 +223,11 @@ class FindCmd(DfuseTestBase):
         for count in range(cont_count):
             self.add_container(self.pool)
             cont_dir = "{}_daos_dfuse_{}".format(self.pool.uuid, count)
-            mount_dir = os.path.join(dfs_path, cont_dir)
+            self.dfuse.mount_dir.update(os.path.join(dfs_path, cont_dir))
             self.log.info(
                 "Creating container Pool UUID: %s Con UUID: %s",
                 self.pool, self.container)
-            self.start_dfuse(
-                self.hostlist_clients, self.pool, self.container, mount_dir)
+            self.start_dfuse(self.pool, self.container)
             dfuses.append(self.dfuse)
             containers.append(self.container)
             mount_dirs.append(self.dfuse.mount_dir.value)

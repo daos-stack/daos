@@ -132,9 +132,10 @@ class IorTestBase(DfuseTestBase):
         # start dfuse if api is POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
             # Connect to the pool, create container and then start dfuse
-            if not self.dfuse:
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container, mount_dir)
+            if not self.dfuse.started:
+                if mount_dir:
+                    self.dfuse.mount_dir.update(mount_dir)
+                self.start_dfuse(self.pool, self.container)
 
         # setup test file for POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
@@ -325,7 +326,7 @@ class IorTestBase(DfuseTestBase):
 
         # start dfuse for POSIX api. This is specific to interception library
         # test requirements.
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.start_dfuse(self.pool, self.container)
 
         # Create two threads and run in parallel.
         thread1 = self.create_ior_thread(

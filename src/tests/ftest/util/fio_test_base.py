@@ -8,6 +8,7 @@ from dfuse_test_base import DfuseTestBase
 from fio_utils import FioCommand
 from daos_utils import DaosCommand
 
+
 class FioBase(DfuseTestBase):
     # pylint: disable=too-many-ancestors
     """Base fio class.
@@ -65,8 +66,7 @@ class FioBase(DfuseTestBase):
                                             attr='dfuse-direct-io-disable',
                                             val='on')
 
-                self.start_dfuse(
-                    self.hostlist_clients, self.pool, self.container)
+                self.start_dfuse(self.pool, self.container)
                 self.fio_cmd.update(
                     "global", "directory", self.dfuse.mount_dir.value,
                     "fio --name=global --directory")

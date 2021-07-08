@@ -59,7 +59,7 @@ class MdtestBase(DfuseTestBase):
 
         # start dfuse if api is POSIX
         if self.mdtest_cmd.api.value == "POSIX":
-            self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+            self.start_dfuse(self.pool, self.container)
             self.mdtest_cmd.test_dir.update(self.dfuse.mount_dir.value)
 
         # Run Mdtest

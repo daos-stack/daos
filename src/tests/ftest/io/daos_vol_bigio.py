@@ -33,7 +33,7 @@ class DaosVol(VolTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=hdf5,vol,volbigio
+        :avocado: tags=hdf5,vol,volbigio,dfuse
         :avocado: tags=DAOS_5610
         """
         self.job_manager = get_job_manager_class("Mpirun", None, False, "mpich")
