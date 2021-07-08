@@ -14,12 +14,12 @@ rm -rf /opt/daos/prereq/release/spdk
 $SCONS PREFIX=/opt/daos --build-deps=yes --deps-only
 echo ::endgroup::
 
-echo ::group::Prepare stack analyzer
-$SCONS --jobs 10 server
+echo ::group::Stack analyzer output (post build)
+$SCONS --jobs 10 --analyze-stack="-x tests -c 128" server
 echo ::endgroup::
 
-echo ::group::Stack analyzer output
-$SCONS --jobs 10 --analyze-stack="-x tests -c 128" server
+echo ::group::Stack analyzer output (immediate)
+$SCONS --jobs 10 --analyze-stack="-x tests -c 128 -e" server
 echo ::endgroup::
 
 

@@ -95,6 +95,24 @@ Note that such targets need to be specified each time you build as the default
 is equivalent to specifying `client server test` on the command line.  The
 `test` target is, at present, dependent on `client` and `server` as well.
 
+### Stack analyzer
+
+When using gcc compiler, the DAOS build contains a tool to generate a stack usage
+report for each function.  It reports the size, in bytes, of the stack frame added by each
+function in DAOS.
+
+The report is enabled using the `--analyze-stack="[arg] ..."` option.
+
+To get usage information for this option, run
+
+```bash
+$ scons COMPILER=gcc --analyze-stack="-h"
+```
+
+The tool normally runs post build but the `-e` option can be added to run it immediately and exit.
+One should only use this option if a prior build with gcc has been executed.  Additionally, the tool
+supports options to filter by directory and file names and specify a lower bound value to report.
+
 ### Building Optional Components
 
 There are a few optional components that can be included into the DAOS build.
