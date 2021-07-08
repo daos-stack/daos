@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [ubuntu.20.04, centos.8]
+        distro: [ubuntu.20.04, centos.8, leap.15]
     steps:
     - uses: actions/checkout@v2
     - uses: satackey/action-docker-layer-caching@v0.0.11
@@ -73,14 +73,16 @@ jobs:
                           --build-arg DAOS_BUILD=no
                           --build-arg DEPS_JOBS=10
                           --tag build-image
-    - name: Run
+    - name: Build and Test
       run: ./utils/run_in_ga_wrapper.sh
     - name: Publish NLT test results
       if: always()
-      uses: EnricoMi/publish-unit-test-result-action@v1.7
+      uses: EnricoMi/publish-unit-test-result-action@v1.17
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         files: nlt-junit.xml
+        comment_mode: off
+        fail_on: nothing
 
   Build:
     name: Build DAOS
@@ -90,7 +92,7 @@ jobs:
       fail-fast: false
       matrix:
         # Run this on distros where we don't run the ci1 Workflow.
-        distro: [ubuntu.20.04, centos.8]
+        distro: [ubuntu.20.04, centos.8, leap.15]
         compiler: [clang, gcc]
     steps:
     - name: Checkout code
@@ -116,4 +118,16 @@ jobs:
     - name: Build Java in docker.
       run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
                           --build-arg DEPS_JOBS=10
+                          --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build debug in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg DAOS_BUILD_TYPE=debug
+                          --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build devel in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg DAOS_BUILD_TYPE=dev
                           --build-arg COMPILER=${{ matrix.compiler }}

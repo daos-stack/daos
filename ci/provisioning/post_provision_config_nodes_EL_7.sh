@@ -94,6 +94,10 @@ setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.0rc5
 EOF
     fi
 
+    # CORCI-1096
+    echo 'relayhost = [mail.wolf.hpdd.intel.com]' >> /etc/postfix/main.cf
+    postfix reload
+
 }
 
 post_provision_config_nodes() {
