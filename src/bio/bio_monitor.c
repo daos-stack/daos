@@ -289,7 +289,7 @@ extend_to_uint64(uint8_t *array, unsigned int len)
 	uint64_t value = 0;
 	int i = len;
 
-	while (i > 0) {
+	while (i > 0 && len <= 8) {
 		value += (uint64_t)array[i - 1] << (8 * (i - 1));
 		i--;
 	}
@@ -532,12 +532,9 @@ get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 
 	/* Store Intel SMART stats in in-memory health state log. */
-	if (dev_health->bdh_vendor_id != SPDK_PCI_VID_INTEL)
-		goto ctrl_cmd;
 	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
 	populate_intel_smart_stats(dev_health);
 
-ctrl_cmd:
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
 	memset(&cmd, 0, sizeof(cmd));
@@ -724,9 +721,10 @@ collect_raw_health_data(struct bio_xs_context *ctxt)
 					   page_sz,
 					   get_spdk_health_info_completion,
 					   ctxt);
-	if (rc)
+	if (rc) {
 		D_ERROR("NVMe admin passthru (health log), rc:%d\n", rc);
-
+		dev_health->bdh_inflights--;
+	}
 }
 
 void
@@ -868,6 +866,12 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 	channel = spdk_bdev_get_io_channel(bb->bb_dev_health.bdh_desc);
 	D_ASSERT(channel != NULL);
 	bb->bb_dev_health.bdh_io_channel = channel;
+
+	/* Set the NVMe SSD PCI Vendor ID */
+	bio_set_vendor_id(bb, bdev_name);
+	/* Register DAOS metrics to export NVMe SSD health stats */
+	bio_export_health_stats(bb, bdev_name);
+	bio_export_vendor_health_stats(bb, bdev_name);
 
 	return 0;
 
