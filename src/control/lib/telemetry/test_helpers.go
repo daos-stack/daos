@@ -10,6 +10,7 @@ package telemetry
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"testing"
 	"time"
@@ -129,7 +130,7 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 			sum:    107,
 			mean:   35.666666666666664,
 			stddev: 31.973947728319903,
-			str:    "test_gauge: 42 rpc/s [min: 1, max: 64, avg: 36, stddev: 32, samples: 3]",
+			str:    `test_gauge: 42 rpc/s \p{Ps}min: 1, max: 64, avg: 36, stddev: 32, samples: 3\p{Pe}`,
 		},
 		MetricTypeCounter: {
 			Name:  "test_counter",
@@ -143,7 +144,7 @@ func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 			desc:  "some duration",
 			units: "us", // TODO: fix at library level, should be ns
 			Cur:   float64(10 * time.Millisecond),
-			str:   `test_duration: [0-9]+ us, min: [0-9]+, max: [0-9]+, mean: [0-9]+\.[0-9]+, sample size: [0-9]+`,
+			str:   `test_duration: [0-9]+ us \p{Ps}min: [0-9]+, max: [0-9]+, avg: [0-9]+, samples: [0-9]+\p{Pe}`,
 		},
 		MetricTypeTimestamp: {
 			Name: "test_timestamp",
@@ -186,5 +187,5 @@ func testMetricBasics(t *testing.T, tm *TestMetric, m Metric) {
 	if err != nil {
 		t.Fatalf("invalid regex %q", tm.str)
 	}
-	common.AssertTrue(t, strRE.Match([]byte(m.String())), "String() failed")
+	common.AssertTrue(t, strRE.Match([]byte(m.String())), fmt.Sprintf("String() failed: %q", m.String()))
 }
