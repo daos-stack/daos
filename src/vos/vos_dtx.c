@@ -180,6 +180,7 @@ dtx_inprogress(struct vos_dtx_act_ent *dae, struct dtx_handle *dth,
 	dsp->dsp_xid = DAE_XID(dae);
 	dsp->dsp_oid = DAE_OID(dae);
 	dsp->dsp_epoch = DAE_EPOCH(dae);
+	dsp->dsp_dkey_hash = DAE_DKEY_HASH(dae);
 
 	mbs = &dsp->dsp_mbs;
 	mbs->dm_tgt_cnt = DAE_TGT_CNT(dae);
@@ -784,8 +785,7 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 static int
 vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		   daos_epoch_t epoch, struct vos_dtx_cmt_ent **dce_p,
-		   struct dtx_cos_key *dck, struct vos_dtx_act_ent **dae_p,
-		   bool *fatal)
+		   struct vos_dtx_act_ent **dae_p, bool *rm_cos, bool *fatal)
 {
 	struct vos_dtx_act_ent		*dae = NULL;
 	struct vos_dtx_cmt_ent		*dce = NULL;
@@ -813,11 +813,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 					D_GOTO(out, rc = -DER_NONEXIST);
 				}
 
-				if (dck != NULL) {
-					dck->oid = DCE_OID(dce);
-					dck->dkey_hash = DCE_DKEY_HASH(dce);
-					dce = NULL;
-				}
+				dce = NULL;
 			}
 
 			goto out;
@@ -837,11 +833,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		 * from the active table, just remove it again.
 		 */
 		if (dae->dae_committed) {
-			if (dck != NULL) {
-				dck->oid = DAE_OID(dae);
-				dck->dkey_hash = DAE_DKEY_HASH(dae);
-			}
-
 			rc = dbtree_delete(cont->vc_dtx_active_hdl,
 					   BTR_PROBE_BYPASS, &kiov, &dae);
 			if (rc == 0) {
@@ -858,8 +849,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	if (dae != NULL) {
-		memcpy(&dce->dce_base.dce_common, &dae->dae_base.dae_common,
-		       sizeof(dce->dce_base.dce_common));
+		DCE_XID(dce) = DAE_XID(dae);
 		DCE_EPOCH(dce) = dae->dae_start_time;
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
@@ -868,8 +858,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 		DCE_XID(dce) = *dti;
 		DCE_EPOCH(dce) = crt_hlc_get();
-		DCE_OID(dce) = dth->dth_leader_oid;
-		DCE_DKEY_HASH(dce) = dth->dth_dkey_hash;
 	}
 
 	d_iov_set(&riov, dce, sizeof(*dce));
@@ -890,11 +878,6 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		goto out;
 	}
 
-	if (dck != NULL) {
-		dck->oid = DAE_OID(dae);
-		dck->dkey_hash = DAE_DKEY_HASH(dae);
-	}
-
 	D_ASSERT(dae_p != NULL);
 	*dae_p = dae;
 
@@ -904,6 +887,9 @@ out:
 		 DP_DTI(dti), DP_RC(rc));
 	if (rc != 0)
 		D_FREE(dce);
+
+	if (rm_cos != NULL && (rc == 0 || rc == -DER_NONEXIST))
+		*rm_cos = true;
 
 	return rc;
 }
@@ -1817,7 +1803,8 @@ vos_dtx_pack_mbs(struct umem_instance *umm, struct vos_dtx_act_ent *dae)
 
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, bool for_resent)
+	      uint32_t *pm_ver, struct dtx_memberships **mbs,
+	      struct dtx_cos_key *dck, bool for_resent)
 {
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae;
@@ -1839,6 +1826,11 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 
 		if (pm_ver != NULL)
 			*pm_ver = DAE_VER(dae);
+
+		if (dck != NULL) {
+			dck->oid = DAE_OID(dae);
+			dck->dkey_hash = DAE_DKEY_HASH(dae);
+		}
 
 		if (dae->dae_committed)
 			return DTX_ST_COMMITTED;
@@ -1895,7 +1887,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count, daos_epoch_t epoch, struct dtx_cos_key *dcks,
+			int count, daos_epoch_t epoch, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces)
 {
@@ -1933,8 +1925,8 @@ again:
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
 		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce,
-					dcks != NULL ? &dcks[cur] : NULL,
 					daes != NULL ? &daes[cur] : NULL,
+					rm_cos != NULL ? &rm_cos[cur] : NULL,
 					&fatal);
 		if (dces != NULL)
 			dces[cur] = dce;
@@ -2081,8 +2073,7 @@ vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
 }
 
 int
-vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
-	       struct dtx_cos_key *dcks)
+vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count, bool *rm_cos)
 {
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
@@ -2107,7 +2098,7 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
 		committed = vos_dtx_commit_internal(cont, dtis, count,
-						    0, dcks, daes, dces);
+						    0, rm_cos, daes, dces);
 		rc = umem_tx_end(vos_cont2umm(cont),
 				 committed > 0 ? 0 : committed);
 		if (rc == 0)

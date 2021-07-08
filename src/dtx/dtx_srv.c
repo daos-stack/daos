@@ -114,6 +114,7 @@ dtx_handler(crt_rpc_t *rpc)
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dtis;
 	struct dtx_memberships	*mbs[DTX_REFRESH_MAX] = { 0 };
+	struct dtx_cos_key	 dcks[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	int			 count = DTX_YIELD_CYCLE;
@@ -170,7 +171,7 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL, false);
 		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
 			rc = -DER_INPROGRESS;
 
@@ -194,7 +195,7 @@ dtx_handler(crt_rpc_t *rpc)
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
-					     &mbs[i], false);
+					     &mbs[i], &dcks[i], false);
 			/* The DTX status may be changes by DTX resync soon. */
 			if ((*ptr == DTX_ST_PREPARED &&
 			     cont->sc_dtx_resyncing) ||
@@ -241,6 +242,7 @@ out:
 			dtes[j].dte_mbs = mbs[i];
 
 			pdte[j] = &dtes[j];
+			dcks[j] = dcks[i];
 			j++;
 		}
 
@@ -249,7 +251,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, j, true);
+		rc = dtx_commit(cont, pdte, dcks, j);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
