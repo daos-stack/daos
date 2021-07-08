@@ -911,9 +911,9 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 
 func TestSystem_Membership_MarkDead(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rank      Rank
-		timestamp time.Time
-		expErr    error
+		rank        Rank
+		incarnation uint64
+		expErr      error
 	}{
 		"unknown member": {
 			rank:   42,
@@ -924,17 +924,17 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			expErr: errors.New("illegal member state update"),
 		},
 		"stale event for joined member": {
-			rank:      0,
-			timestamp: time.Now().Add(-5 * time.Second),
-			expErr:    errors.New("before member"),
+			rank:        3,
+			incarnation: 1,
+			expErr:      errors.New("stale event"),
 		},
 		"new event for joined member": {
-			rank:      3,
-			timestamp: time.Now().Add(time.Second),
+			rank:        3,
+			incarnation: 2,
 		},
 		"event for stopped member": {
-			rank:      1,
-			timestamp: time.Now().Add(-5 * time.Second),
+			rank:        1,
+			incarnation: 2,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -942,7 +942,7 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			defer ShowBufferOnFailure(t, buf)
 
 			joinedBefore := MockMember(t, 3, MemberStateJoined)
-			joinedBefore.LastUpdate = tc.timestamp.Add(-1 * time.Second)
+			joinedBefore.Incarnation = 2
 			ms := populateMembership(t, log,
 				MockMember(t, 0, MemberStateJoined),
 				MockMember(t, 1, MemberStateStopped),
@@ -950,7 +950,7 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 				joinedBefore,
 			)
 
-			gotErr := ms.MarkRankDead(tc.rank, tc.timestamp)
+			gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
 			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}
