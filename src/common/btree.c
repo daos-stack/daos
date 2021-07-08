@@ -1336,8 +1336,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	bool			 next_level;
 	struct btr_node		*nd;
 	struct btr_check_alb	 alb;
-	struct btr_trace	 traces[BTR_TRACE_MAX];
-	struct btr_trace	*trace = NULL;
 	umem_off_t		 nd_off;
 
 	if (!btr_probe_valid(probe_opc)) {
@@ -1525,13 +1523,7 @@ again:
 				saved = at + 1;
 		}
 
-		/* backup the probe trace because probe_next will change it */
-		if (trace == NULL)
-			memcpy(traces, tcx->tc_trace,
-			       sizeof(*trace) * tcx->tc_depth);
-
 		if (btr_probe_next(tcx)) {
-			trace = traces;
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}

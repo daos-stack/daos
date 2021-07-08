@@ -24,45 +24,8 @@ except NameError:
     pass
 
 import daos_build
+import compiler_setup
 from prereq_tools import PreReqComponent
-
-DESIRED_FLAGS = ['-Wno-gnu-designator',
-                 '-Wno-missing-braces',
-                 '-Wno-ignored-attributes',
-                 '-Wno-gnu-zero-variadic-macro-arguments',
-                 '-Wno-tautological-constant-out-of-range-compare',
-                 '-Wno-unused-command-line-argument',
-                 '-Wframe-larger-than=4096']
-#                 '-mavx2']
-
-# Compiler flags to prevent optimizing out security checks
-DESIRED_FLAGS.extend(['-fno-strict-overflow', '-fno-delete-null-pointer-checks',
-                      '-fwrapv'])
-
-# Compiler flags for stack hardening
-DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
-
-PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
-                 '-Wno-unused-function']
-
-def run_checks(env, p):
-    """Run all configure time checks"""
-    if GetOption('help') or GetOption('clean'):
-        return
-    cenv = env.Clone()
-    cenv.Append(CFLAGS='-Werror')
-    daos_build.clear_icc_env(cenv)
-    if cenv.get("COMPILER") == 'icc':
-        cenv.Replace(CC='gcc', CXX='g++')
-    config = Configure(cenv)
-
-    if config.CheckHeader('stdatomic.h'):
-        config.Finish()
-        env.AppendUnique(CPPDEFINES=['HAVE_STDATOMIC=1'])
-    else:
-        config.Finish()
-        p.require(env, 'openpa', headers_only=True)
-
 
 def get_version():
     """ Read version from VERSION file """
@@ -70,8 +33,8 @@ def get_version():
         return version_file.read().rstrip()
 
 API_VERSION_MAJOR = "1"
-API_VERSION_MINOR = "2"
-API_VERSION_FIX = "4"
+API_VERSION_MINOR = "3"
+API_VERSION_FIX = "0"
 API_VERSION = "{}.{}.{}".format(API_VERSION_MAJOR, API_VERSION_MINOR,
                                 API_VERSION_FIX)
 
@@ -150,36 +113,8 @@ def set_defaults(env, daos_version):
     env.Append(API_VERSION_MINOR=API_VERSION_MINOR)
     env.Append(API_VERSION_FIX=API_VERSION_FIX)
 
-    env.Append(CCFLAGS=['-g', '-Wshadow', '-Wall', '-Wno-missing-braces',
-                        '-fpic', '-D_GNU_SOURCE', '-DD_LOG_V2'])
     env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + daos_version + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
-    env.Append(CCFLAGS=['-DCMOCKA_FILTER_SUPPORTED=0'])
-    if env.get('BUILD_TYPE') == 'debug':
-        if env.get("COMPILER") == 'gcc':
-            env.AppendUnique(CCFLAGS=['-Og'])
-        else:
-            env.AppendUnique(CCFLAGS=['-O0'])
-    else:
-        if env.get('BUILD_TYPE') == 'release':
-            env.Append(CCFLAGS=['-DDAOS_BUILD_RELEASE'])
-        env.AppendUnique(CCFLAGS=['-O2', '-D_FORTIFY_SOURCE=2'])
-
-    env.AppendIfSupported(CCFLAGS=DESIRED_FLAGS)
-
-    if GetOption("preprocess"):
-        #could refine this but for now, just assume these warnings are ok
-        env.AppendIfSupported(CCFLAGS=PP_ONLY_FLAGS)
-
-    if env.get('BUILD_TYPE') != 'release':
-        env.Append(CCFLAGS=['-DFAULT_INJECTION=1'])
-
-    if env['CC'] == 'icx' and not GetOption('no_rpath'):
-        #Hack to add rpaths
-        for path in env["ENV"]["LD_LIBRARY_PATH"].split(":"):
-            if "oneapi" in path:
-                env.AppendUnique(RPATH_FULL=[path])
-
 
 def build_misc():
     """Build miscellaneous items"""
@@ -414,15 +349,6 @@ def scons(): # pylint: disable=too-many-locals
               default=False,
               help='Download and build dependencies only, do not build daos')
 
-    if env['CC'] == 'clang' or env['CC'] == 'icx':
-        il_env = env.Clone()
-        il_env['CC'] = 'gcc'
-        run_checks(env, prereqs)
-        run_checks(il_env, prereqs)
-    else:
-        run_checks(env, prereqs)
-        il_env = env.Clone()
-
     prereqs.add_opts(('GO_BIN', 'Full path to go binary', None))
     opts.Save(opts_file, env)
 
@@ -435,15 +361,16 @@ def scons(): # pylint: disable=too-many-locals
 
     env.Alias('install', '$PREFIX')
     daos_version = get_version()
-    # Export() is handled specially by pylint so do not merge these two lines.
-    Export('daos_version', 'API_VERSION', 'env', 'il_env', 'prereqs')
-    Export('platform_arm', 'conf_dir')
-
-    if env['PLATFORM'] == 'darwin':
-        # generate .so on OSX instead of .dylib
-        env.Replace(SHLIBSUFFIX='.so')
 
     set_defaults(env, daos_version)
+
+    base_env = env.Clone()
+
+    compiler_setup.base_setup(env, prereqs=prereqs)
+
+    # Export() is handled specially by pylint so do not merge these two lines.
+    Export('daos_version', 'API_VERSION', 'env', 'base_env', 'prereqs')
+    Export('platform_arm', 'conf_dir')
 
     # generate targets in specific build dir to avoid polluting the source code
     VariantDir(build_prefix, '.', duplicate=0)

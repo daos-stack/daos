@@ -58,16 +58,31 @@ struct swim_context;
 /** SWIM callbacks for integrating with an overlying group management layer */
 struct swim_ops {
 	/**
-	 * Send a SWIM message to other group member.
+	 * Send a SWIM request to other group member.
 	 *
-	 * @param[in]  ctx    SWIM context pointer from swim_init()
-	 * @param[in]  to     IDs of selected target for message
-	 * @param[in]  upds   SWIM updates to other group member
-	 * @param[in]  nupds  the count of SWIM updates
-	 * @returns           0 on success, negative error ID otherwise
+	 * @param[in]  ctx	SWIM context pointer from swim_init()
+	 * @param[in]  id	IDs of selected target for message
+	 * @param[in]  to	IDs of target to message send to
+	 * @param[in]  upds	SWIM updates to other group member
+	 * @param[in]  nupds	the count of SWIM updates
+	 * @returns		0 on success, negative error ID otherwise
 	 */
-	int (*send_message)(struct swim_context *ctx, swim_id_t to,
-			    struct swim_member_update *upds, size_t nupds);
+	int (*send_request)(struct swim_context *ctx, swim_id_t id,
+			    swim_id_t to, struct swim_member_update *upds,
+			    size_t nupds);
+
+	/**
+	 * Send a SWIM reply to other group member.
+	 *
+	 * @param[in]  ctx	SWIM context pointer from swim_init()
+	 * @param[in]  from	IDs of target from IREQ received
+	 * @param[in]  to	IDs of suspected target to message send to
+	 * @param[in]  rc	Error code to reply
+	 * @param[in]  args	Additional arguments
+	 * @returns		0 on success, negative error ID otherwise
+	 */
+	int (*send_reply)(struct swim_context *ctx, swim_id_t from,
+			  swim_id_t to, int rc, void *args);
 
 	/**
 	 * Retrieve a (non-dead) random group member from the group
@@ -163,14 +178,42 @@ void swim_self_set(struct swim_context *ctx, swim_id_t self_id);
 /**
  * Parse a SWIM message from other group member.
  *
- * @param[in]  ctx   SWIM context pointer from swim_init()
- * @param[in]  from  IDs of selected target for message
- * @param[in]  upds  SWIM updates from other group member
- * @param[in]  nupds the count of SWIM updates
- * @returns         0 on success, negative error ID otherwise
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  from	IDs of selected target for message
+ * @param[in]  upds	SWIM updates from other group member
+ * @param[in]  nupds	the count of SWIM updates
+ * @returns		0 on success, negative error ID otherwise
  */
-int swim_parse_message(struct swim_context *ctx, swim_id_t from,
+int swim_updates_parse(struct swim_context *ctx, swim_id_t from,
 			struct swim_member_update *upds, size_t nupds);
+
+/**
+ * Prepare a SWIM message for other group member.
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  id	IDs of selected target for message
+ * @param[in]  to	IDs of message to send to
+ * @param[in]  upds	SWIM updates from other group member
+ * @param[in]  nupds	the count of SWIM updates
+ * @returns		0 on success, negative error ID otherwise
+ */
+int swim_updates_prepare(struct swim_context *ctx, swim_id_t id, swim_id_t to,
+			 struct swim_member_update **pupds, size_t *pnupds);
+
+/**
+ * Send a SWIM message for other group member.
+ *
+ * @param[in]  ctx	SWIM context pointer from swim_init()
+ * @param[in]  id	IDs of selected target for message
+ * @param[in]  to	IDs of message to send to
+ * @returns		0 on success, negative error ID otherwise
+ */
+int swim_updates_send(struct swim_context *ctx, swim_id_t id, swim_id_t to);
+
+int swim_ipings_suspend(struct swim_context *ctx, swim_id_t from_id,
+			swim_id_t to_id, void *args);
+
+int swim_ipings_reply(struct swim_context *ctx, swim_id_t from_id, int ret_rc);
 
 /**
  * Progress the state machine of SWIM protocol.
