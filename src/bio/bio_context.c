@@ -359,7 +359,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 		return -DER_INVAL;
 	}
 
-	spdk_blob_opts_init(&bma.bma_opts);
+	spdk_blob_opts_init(&bma.bma_opts, sizeof(bma.bma_opts));
 	bma.bma_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
 	/**
@@ -714,7 +714,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	struct smd_dev_info	*dev_info;
 	spdk_blob_id		 blob_id;
 	d_iov_t			 iov;
-	bio_addr_t		 addr;
+	bio_addr_t		 addr = { 0 };
 	uint64_t		 off = 0; /* byte offset in SPDK blob */
 	uint16_t		 dev_type = DAOS_MEDIA_NVME;
 	int			 rc = 0;

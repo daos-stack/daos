@@ -213,6 +213,7 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	it_entry->ie_dtx_grp_cnt = DAE_GRP_CNT(dae);
 	it_entry->ie_dtx_mbs_dsize = DAE_MBS_DSIZE(dae);
 	it_entry->ie_dtx_start_time = dae->dae_start_time;
+	it_entry->ie_dkey_hash = DAE_DKEY_HASH(dae);
 	if (DAE_MBS_DSIZE(dae) <= sizeof(DAE_MBS_INLINE(dae)))
 		it_entry->ie_dtx_mbs = DAE_MBS_INLINE(dae);
 	else

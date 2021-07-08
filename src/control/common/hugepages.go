@@ -3,7 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
-package server
+package common
 
 import (
 	"bufio"
@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-type getHugePageInfoFn func() (*hugePageInfo, error)
+type GetHugePageInfoFn func() (*hugePageInfo, error)
 
 type hugePageInfo struct {
 	Total      int
@@ -79,7 +79,7 @@ func parseHugePageInfo(input io.Reader) (*hugePageInfo, error) {
 	return hpi, scn.Err()
 }
 
-func getHugePageInfo() (*hugePageInfo, error) {
+func GetHugePageInfo() (*hugePageInfo, error) {
 	f, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return nil, err

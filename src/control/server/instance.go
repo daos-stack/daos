@@ -99,17 +99,17 @@ func (ei *EngineInstance) isAwaitingFormat() bool {
 	return ei.waitFormat.Load()
 }
 
-// isStarted indicates whether EngineInstance is in a running state.
-func (ei *EngineInstance) isStarted() bool {
+// IsStarted indicates whether EngineInstance is in a running state.
+func (ei *EngineInstance) IsStarted() bool {
 	return ei.runner.IsRunning()
 }
 
-// isReady indicates whether the EngineInstance is in a ready state.
+// IsReady indicates whether the EngineInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
-func (ei *EngineInstance) isReady() bool {
-	return ei.ready.Load() && ei.isStarted()
+func (ei *EngineInstance) IsReady() bool {
+	return ei.ready.Load() && ei.IsStarted()
 }
 
 // OnAwaitFormat adds a list of callbacks to invoke when the instance
@@ -140,9 +140,9 @@ func (ei *EngineInstance) OnInstanceExit(fns ...onInstanceExitFn) {
 // (doesn't consider state info held by the global system membership).
 func (ei *EngineInstance) LocalState() system.MemberState {
 	switch {
-	case ei.isReady():
+	case ei.IsReady():
 		return system.MemberStateReady
-	case ei.isStarted():
+	case ei.IsStarted():
 		return system.MemberStateStarting
 	case ei.isAwaitingFormat():
 		return system.MemberStateAwaitFormat
@@ -270,14 +270,19 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		return nil
 	}
 
-	if err := ei.callSetRank(ctx, r); err != nil {
-		return err
+	return ei.SetupRank(ctx, r)
+}
+
+func (ei *EngineInstance) SetupRank(ctx context.Context, rank system.Rank) error {
+	if err := ei.callSetRank(ctx, rank); err != nil {
+		return errors.Wrap(err, "SetRank failed")
 	}
 
 	if err := ei.callSetUp(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "SetUp failed")
 	}
 
+	ei.ready.SetTrue()
 	return nil
 }
 

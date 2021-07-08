@@ -423,6 +423,9 @@ do_init:
 				set_sep = true;
 			max_num_ctx = opt->cio_ctx_max_num;
 		} else {
+			share_addr = false;
+			ctx_num = 0;
+
 			d_getenv_bool("CRT_CTX_SHARE_ADDR",
 				      &share_addr);
 			if (share_addr)
@@ -464,7 +467,9 @@ do_init:
 			}
 		}
 
+		/* Print notice that "ofi+psm2" will be deprecated*/
 		if (prov == CRT_NA_OFI_PSM2) {
+			D_WARN("\"ofi+psm2\" will be deprecated soon.\n");
 			setenv("FI_PSM2_NAME_SERVER", "1", true);
 			D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
 		}
