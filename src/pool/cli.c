@@ -583,72 +583,48 @@ dc_pool_connect(tse_task_t *task)
 {
 	daos_pool_connect_t	*args;
 	struct dc_pool		*pool = NULL;
+	const char		*label;
+	uuid_t			 uuid;
 	int			 rc;
 
 	args = dc_task_get_args(task);
 	pool = dc_task_get_priv(task);
 
-	if (pool == NULL) {
-		if (!daos_uuid_valid(args->uuid))
-			D_GOTO(out_task, rc = -DER_INVAL);
-		if (!flags_are_valid(args->flags) || args->poh == NULL)
-			D_GOTO(out_task, rc = -DER_INVAL);
-
-		/** allocate and fill in pool connection */
-		rc = init_pool(NULL /* label */, args->uuid, args->flags,
-			       args->grp, &pool);
-		if (rc)
-			goto out_task;
-
-		daos_task_set_priv(task, pool);
-		D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF
-			" flags=%x\n", DP_UUID(args->uuid),
-			DP_UUID(pool->dp_pool_hdl), args->flags);
+	if (daos_uuid_valid(args->uuid)) {
+		/** Backward compatibility, we are provided a UUID */
+		label = NULL;
+		uuid_copy(uuid, args->uuid);
+	} else if (daos_label_is_valid(args->pool)) {
+		/** The provided string is a valid label */
+		uuid_clear(uuid);
+		label = args->pool;
+	} else if (uuid_parse(args->pool, uuid) == 0) {
+		/**
+		 * The provided string was successfully parsed as a
+		 * UUID
+		 */
+		label = NULL;
+	} else {
+		/** neither a label nor a UUID ... try again */
+		D_GOTO(out_task, rc = -DER_INVAL);
 	}
 
-	rc = dc_pool_connect_internal(task, args->info, NULL, args->poh);
-	if (rc)
-		goto out_pool;
-
-	return rc;
-
-out_pool:
-	dc_pool_put(pool);
-out_task:
-	tse_task_complete(task, rc);
-	return rc;
-}
-
-int
-dc_pool_connect_lbl(tse_task_t *task)
-{
-	daos_pool_connect_t	*args;
-	struct dc_pool		*pool = NULL;
-	uuid_t			 null_uuid;
-	int			 rc;
-
-	args = dc_task_get_args(task);
-	pool = dc_task_get_priv(task);
-	uuid_clear(null_uuid);
-
 	if (pool == NULL) {
-		if (args->label == NULL)
-			D_GOTO(out_task, rc = -DER_INVAL);
 		if (!flags_are_valid(args->flags) || args->poh == NULL)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		/** allocate and fill in pool connection */
-		rc = init_pool(args->label, null_uuid, args->flags, args->grp,
-			       &pool);
+		rc = init_pool(label, uuid, args->flags, args->grp, &pool);
 		if (rc)
 			goto out_task;
 
 		daos_task_set_priv(task, pool);
 		D_DEBUG(DF_DSMC, "%s: connecting: hdl="DF_UUIDF" flags=%x\n",
-			args->label,  DP_UUID(pool->dp_pool_hdl), args->flags);
+				args->pool ? : "<compat>",
+				DP_UUID(pool->dp_pool_hdl), args->flags);
 	}
 
-	rc = dc_pool_connect_internal(task, args->info, args->label, args->poh);
+	rc = dc_pool_connect_internal(task, args->info, label, args->poh);
 	if (rc)
 		goto out_pool;
 

@@ -79,8 +79,8 @@ func (cmd *poolBaseCmd) connectPool() error {
 		defer freeString(cLabel)
 
 		cmd.log.Debugf("connecting to pool: %s", cmd.PoolID().Label)
-		rc = C.daos_pool_connect_by_label(cLabel, cSysName,
-			C.DAOS_PC_RW, &cmd.cPoolHandle, &poolInfo, nil)
+		rc = C.daos_pool_connect(cLabel, cSysName, C.DAOS_PC_RW,
+					 &cmd.cPoolHandle, &poolInfo, nil)
 		if rc == 0 {
 			var err error
 			cmd.poolUUID, err = uuidFromC(poolInfo.pi_uuid)
@@ -92,7 +92,9 @@ func (cmd *poolBaseCmd) connectPool() error {
 	case cmd.PoolID().HasUUID():
 		cmd.poolUUID = cmd.PoolID().UUID
 		cmd.log.Debugf("connecting to pool: %s", cmd.poolUUID)
-		rc = C.daos_pool_connect(cmd.poolUUIDPtr(), cSysName,
+		cUUIDstr := C.CString(cmd.poolUUID.String())
+		defer freeString(cUUIDstr)
+		rc = C.daos_pool_connect(cUUIDstr, cSysName,
 			C.DAOS_PC_RW, &cmd.cPoolHandle, nil, nil)
 	default:
 		return errors.New("no pool UUID or label supplied")
