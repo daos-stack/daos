@@ -164,6 +164,12 @@ struct vos_agg_param {
 static inline void
 set_update_min(const vos_iter_entry_t *entry, struct ilog_time_rec *trec)
 {
+	if (trec->tr_epc == 0) {
+		trec->tr_epc = entry->ie_epoch;
+		trec->tr_minor_epc = entry->ie_minor_epc;
+		return;
+	}
+
 	if (trec->tr_epc < entry->ie_epoch)
 		return;
 
@@ -2207,8 +2213,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_obj = false;
 			break;
 		}
-		rc = oi_iter_aggregate(ih, agg_param->ap_discard, agg_param->ap_discard_hi,
-				       &agg_param->ap_dkey_min);
+		rc = oi_iter_aggregate(ih, agg_param->ap_discard, &agg_param->ap_dkey_min);
 		break;
 	case VOS_ITER_DKEY:
 		if (agg_param->ap_skip_dkey) {
@@ -2221,8 +2226,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_akey = false;
 			break;
 		}
-		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard, agg_param->ap_discard_hi,
-					    min);
+		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard_hi, min);
 		break;
 	case VOS_ITER_SINGLE:
 		return 0;
@@ -2494,16 +2498,9 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 		type = VOS_ITER_DKEY;
 		ad->ad_iter_param.ip_oid = *oid;
 	}
-	/* We need to track the minimum update after the discard range so we
-	 * can ensure the ilog is correct
-	 */
-	ad->ad_iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	if (epr->epr_lo == epr->epr_hi)
-		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_EQ;
-	else if (epr->epr_hi != DAOS_EPOCH_MAX)
-		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_RR;
-	else
-		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_GE;
+
+	/** Return every single value above epr_lo */
+	ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_GE;
 	/* EV tree iterator returns all sorted logical rectangles */
 	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_COVERED;
 
@@ -2515,9 +2512,10 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 	ad->ad_agg_param.ap_discard = true;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
+	/* Keep the hi epoch handy so we can track the minimum later epoch */
 	ad->ad_agg_param.ap_discard_hi = epr->epr_hi;
 
-	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
+	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE | VOS_IT_RECX_FUTURE;
 	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);

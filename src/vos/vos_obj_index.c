@@ -647,10 +647,8 @@ exit:
 }
 
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
-		  const struct ilog_time_rec *update)
+oi_iter_aggregate(daos_handle_t ih, bool discard, const struct ilog_time_rec *update)
 {
-	daos_epoch_range_t		 epr;
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
 	struct vos_obj_df	*obj;
@@ -675,10 +673,8 @@ oi_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
 	if (rc != 0)
 		goto exit;
 
-	epr.epr_hi = hi;
-	epr.epr_lo = oiter->oit_epr.epr_lo;
 	rc = vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog,
-				&epr, discard, NULL,
+				&oiter->oit_epr, discard, NULL,
 				&oiter->oit_ilog_info, update);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */

@@ -1098,7 +1098,6 @@ gc_reserve_space(daos_size_t *rsrvd);
  *
  * \param ih[IN]	Iterator handle
  * \param discard[IN]	Discard all entries (within the iterator epoch range)
- * \param hi[IN]	Actual high epoch
  * \param update[IN]	Optional epoch of lowest update after the epoch range
  *
  * \return		Zero on Success
@@ -1107,8 +1106,7 @@ gc_reserve_space(daos_size_t *rsrvd);
  *			negative value otherwise
  */
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
-		  const struct ilog_time_rec *update);
+oi_iter_aggregate(daos_handle_t ih, bool discard, const struct ilog_time_rec *update);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
@@ -1116,7 +1114,6 @@ oi_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
  *
  * \param ih[IN]	Iterator handle
  * \param discard[IN]	Discard all entries (within the iterator epoch range)
- * \param hi[IN]	Actual high epoch
  * \param update[IN]	Optional epoch of lowest update after the range
  *
  * \return		Zero on Success
@@ -1125,8 +1122,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
  *			negative value otherwise
  */
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
-		       const struct ilog_time_rec *update);
+vos_obj_iter_aggregate(daos_handle_t ih, bool discard, const struct ilog_time_rec *update);
 
 /** Internal bit for initializing iterator from open tree handle */
 #define VOS_IT_KEY_TREE	(1 << 31)

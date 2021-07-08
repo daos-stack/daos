@@ -1622,11 +1622,11 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 
 	D_ASSERT(epr != NULL);
-	D_ASSERT(punched_major <= epr->epr_hi);
-
 	D_DEBUG(DB_TRACE, "%s incarnation log: epr: "DF_X64"-"DF_X64" punched="
 		DF_X64".%d\n", discard ? "Discard" : "Aggregate", epr->epr_lo,
 		epr->epr_hi, punched_major, punched_minor);
+
+	D_ASSERT(punched_major <= epr->epr_hi);
 
 	lctx = &priv->ip_lctx;
 

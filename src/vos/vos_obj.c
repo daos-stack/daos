@@ -1627,6 +1627,10 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		break;
 
 	case VOS_ITER_RECX:
+		if (info->ii_flags & VOS_IT_RECX_FUTURE) {
+			oiter->it_epr.epr_hi = DAOS_EPOCH_MAX;
+			oiter->it_iter.it_bound = DAOS_EPOCH_MAX;
+		}
 		vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj),
 				      vos_cont2hdl(obj->obj_cont));
 		rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);
@@ -1811,10 +1815,8 @@ exit:
 }
 
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
-		       const struct ilog_time_rec *update)
+vos_obj_iter_aggregate(daos_handle_t ih, bool discard, const struct ilog_time_rec *update)
 {
-	daos_epoch_range_t	 epr;
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
 	struct umem_instance	*umm;
@@ -1843,11 +1845,8 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard, daos_epoch_t hi,
 	if (rc != 0)
 		goto exit;
 
-	epr.epr_hi = hi;
-	epr.epr_lo = oiter->it_epr.epr_lo;
-
 	rc = vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog,
-				&epr, discard,
+				&oiter->it_epr, discard,
 				&oiter->it_punched, &oiter->it_ilog_info,
 				update);
 
