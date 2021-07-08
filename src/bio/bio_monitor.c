@@ -8,7 +8,7 @@
 #include <spdk/nvme.h>
 #include <spdk/bdev.h>
 #include <spdk/blob.h>
-#include <spdk/io_channel.h>
+#include <spdk/thread.h>
 #include <spdk/nvme_intel.h>
 #include <spdk/pci_ids.h>
 #include "bio_internal.h"

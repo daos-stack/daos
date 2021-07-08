@@ -1,31 +1,44 @@
-#!/bin/sh
+#!/bin/bash
 
-# Prepare the source tree for Doxygen, see .github/workflows/doxygen.yml
+# Script to run doxygen against modified headers and report results.
+# see .github/workflows/doxygen.yml
 
-set -ex
+set -e
+
+echo ::group::Setting up src
 
 # Load the list of modified files.
 git fetch
-git branch -lr
-FILES=$(git diff --name-only origin/master... src/include)
+mapfile -t FILES < <(git diff --name-only origin/master... src/include/*.h)
 
-# Create a new temp directory.
+# Ensure there is at least one file present in new dir.
+if [ ${#FILES[@]} -eq 0 ];
+then
+    echo No headers modified, exiting.
+    echo ::endgroup::
+    exit 0
+fi
+
+# Make a new directory.
 mkdir src/include2
 
-# Copy modified files into it.
-for FILE in $FILES
-do
-    cp "$FILE" ./src/include2
-done
+# Copy the files to new dir.
+cp "${FILES[@]}" ./src/include2
 
-# Move real path aside.
+# Move the real files aside
 mv src/include src/include.old
 
-# And place the modified ones back in place.
+# Move in the ones to test.
 mv src/include2 src/include
 
-# Ensure there is at least one file present.
-if [ -f src/include.old/daos.h ]
-then
-    mv src/include.old/daos.h src/include
-fi
+echo ::endgroup::
+
+echo ::group::Installing doxygen
+sudo apt-get install doxygen
+echo ::endgroup::
+
+echo ::group::Running check
+echo ::add-matcher::ci/daos-doxygen-matcher.json
+doxygen Doxyfile
+echo ::remove-matcher owner=daos-doxygen::
+echo ::endgroup::
