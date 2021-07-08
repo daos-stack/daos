@@ -94,13 +94,6 @@ struct pf_param {
 	/* output parameter */
 	double		pa_duration;
 	union {
-		/* private parameter for rebuild */
-		struct {
-			/* only run rebuild scan */
-			bool	scan;
-			/* run scan + pull, no local write */
-			bool	pull;
-		} pa_rebuild;
 		/* private parameter for iteration */
 		struct {
 			/* nested iterator */
@@ -1000,84 +993,6 @@ pf_oit(struct pf_test *pf, struct pf_param *param)
 }
 
 static int
-exclude_server(d_rank_t rank)
-{
-	/** TODO: support exclude */
-	D_ASSERT(0);
-	return 0;
-}
-
-static int
-reint_server(d_rank_t rank)
-{
-	/** TODO: support reintegrate */
-	D_ASSERT(0);
-	return 0;
-}
-
-static void
-wait_rebuild(double *duration)
-{
-	daos_pool_info_t	   pinfo;
-	struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
-	int			   rc = 0;
-	uint64_t		   start = 0;
-
-	TS_TIME_START(duration, start);
-	while (1) {
-		memset(&pinfo, 0, sizeof(pinfo));
-		pinfo.pi_bits = DPI_REBUILD_STATUS;
-		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL, NULL);
-		if (rst->rs_done || rc != 0) {
-			fprintf(stderr, "Rebuild (ver=%d) is done %d/%d\n",
-				rst->rs_version, rc, rst->rs_errno);
-			break;
-		}
-		sleep(2);
-	}
-	TS_TIME_END(duration, start);
-}
-
-static int
-pf_rebuild(struct pf_test *ts, struct pf_param *param)
-{
-	int rc;
-
-	if (ts_mode != TS_MODE_DAOS) {
-		fprintf(stderr, "Can only run in DAOS full stack mode\n");
-		return -1;
-	}
-
-	if (ts_class != DAOS_OC_R2S_SPEC_RANK) {
-		fprintf(stderr, "Please choose R2S_SPEC_RANK\n");
-		return -1;
-	}
-
-	if (param->pa_rebuild.scan) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_REBUILD,
-				     0, NULL);
-	} else if (param->pa_rebuild.pull) {
-		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				     DAOS_REBUILD_NO_UPDATE,
-				     0, NULL);
-	}
-
-	rc = exclude_server(RANK_ZERO);
-	if (rc)
-		return rc;
-
-	wait_rebuild(&param->pa_duration);
-
-	rc = reint_server(RANK_ZERO);
-	if (rc)
-		return rc;
-
-	daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
-	return rc;
-}
-
-static int
 pf_query(struct pf_test *ts, struct pf_param *param)
 {
 	int rc;
@@ -1232,48 +1147,6 @@ pf_parse_rw(char *str, struct pf_param *param, char **strp)
 	return 0;
 }
 
-/**
- * Example: "U;p R;p;o=p"
- * 'U' is update test
- *	'p': parameter of update and it means outputting performance result
- *
- * 'R' is rebuild test
- *	'p' is parameter of rebuild and it means outputting performance result
- *	'o=p' means only run pull (no write) for rebuild.
- */
-static int
-pf_parse_rebuild_cb(char *str, struct pf_param *param, char **strp)
-{
-	switch (*str) {
-	default:
-		str++;
-		break;
-	case 'o':
-		str++;
-		if (*str != PARAM_ASSIGN)
-			return -1;
-
-		str++;
-		if (*str == 's') {
-			/* scan objects only */
-			param->pa_rebuild.scan = true;
-		} else if (*str == 'p') {
-			/* scan objects, read data but no write */
-			param->pa_rebuild.pull = true;
-		}
-		str++;
-		break;
-	}
-	*strp = str;
-	return 0;
-}
-
-static int
-pf_parse_rebuild(char *str, struct pf_param *pa, char **strp)
-{
-	return pf_parse_common(str, pa, pf_parse_rebuild_cb, strp);
-}
-
 static int
 pf_parse_query_cb(char *str, struct pf_param *pa, char **strp)
 {
@@ -1374,12 +1247,6 @@ struct pf_test pf_tests[] = {
 		.ts_name	= "ITERATE",
 		.ts_parse	= pf_parse_iterate,
 		.ts_func	= pf_iterate,
-	},
-	{
-		.ts_code	= 'R',
-		.ts_name	= "REBUILD",
-		.ts_parse	= pf_parse_rebuild,
-		.ts_func	= pf_rebuild,
 	},
 	{
 		.ts_code	= 'Q',
