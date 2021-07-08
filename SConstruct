@@ -26,6 +26,7 @@ except NameError:
 import daos_build
 import compiler_setup
 from prereq_tools import PreReqComponent
+import stack_analyzer
 
 def get_version():
     """ Read version from VERSION file """
@@ -108,6 +109,11 @@ def set_defaults(env, daos_version):
               action='store_true',
               default=False,
               help='Disable rpath')
+    AddOption('--analyze-stack',
+              dest='analyze_stack',
+              metavar='ARGSTRING',
+              default=None,
+              help='Gather stack usage statistics after build')
 
     env.Append(API_VERSION_MAJOR=API_VERSION_MAJOR)
     env.Append(API_VERSION_MINOR=API_VERSION_MINOR)
@@ -367,6 +373,11 @@ def scons(): # pylint: disable=too-many-locals
     base_env = env.Clone()
 
     compiler_setup.base_setup(env, prereqs=prereqs)
+
+    args = GetOption('analyze_stack')
+    if args is not None:
+        analyzer = stack_analyzer.analyzer(env, build_prefix, args)
+        analyzer.analyze_on_exit()
 
     # Export() is handled specially by pylint so do not merge these two lines.
     Export('daos_version', 'API_VERSION', 'env', 'base_env', 'prereqs')
