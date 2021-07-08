@@ -300,8 +300,8 @@ btr_context_create(umem_off_t root_off, struct btr_root *root,
 	rc = btr_class_init(root_off, root, tree_class, &tree_feats, uma,
 			    coh, priv, &tcx->tc_tins);
 	if (rc != 0) {
-		D_ERROR("Failed to setup mem class %d: "DF_RC"\n", uma->uma_id,
-			DP_RC(rc));
+		D_ERROR("Failed to setup mem class %d or tree class %d: "
+			DF_RC"\n", uma->uma_id, tree_class, DP_RC(rc));
 		D_GOTO(failed, rc);
 	}
 
