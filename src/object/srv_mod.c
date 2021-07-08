@@ -93,7 +93,7 @@ obj_tls_init(int xs_id, int tgt_id)
 	/** register different per-opcode sensors */
 	for (opc = 0; opc < OBJ_PROTO_CLI_COUNT; opc++) {
 		/** Start with number of active requests, of type gauge */
-		rc = d_tm_add_metric(&tls->ot_op_active[opc], D_TM_GAUGE,
+		rc = d_tm_add_metric(&tls->ot_op_active[opc], D_TM_STATS_GAUGE,
 				     "number of active object RPCs", "ops",
 				     "io/ops/%s/active/tgt_%u",
 				     obj_opc_to_str(opc), tgt_id);
@@ -108,7 +108,7 @@ obj_tls_init(int xs_id, int tgt_id)
 			continue;
 
 		/** And finally the per-opcode latency, of type gauge */
-		rc = d_tm_add_metric(&tls->ot_op_lat[opc], D_TM_GAUGE,
+		rc = d_tm_add_metric(&tls->ot_op_lat[opc], D_TM_STATS_GAUGE,
 				     "object RPC processing time", "us",
 				     "io/ops/%s/latency/tgt_%u",
 				     obj_opc_to_str(opc), tgt_id);
@@ -146,7 +146,7 @@ obj_tls_init(int xs_id, int tgt_id)
 				D_ASPRINTF(path, "io/latency/%s/GT4MB/tgt_%u",
 					   opc ? "fetch" : "update", tgt_id);
 
-			rc = d_tm_add_metric(&tm[opc][i], D_TM_GAUGE,
+			rc = d_tm_add_metric(&tm[opc][i], D_TM_STATS_GAUGE,
 					     "I/O RPC processing time", "us",
 					     path);
 			if (rc)

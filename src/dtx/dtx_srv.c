@@ -32,7 +32,7 @@ dtx_tls_init(int xs_id, int tgt_id)
 	if (tgt_id < 0)
 		return tls;
 
-	rc = d_tm_add_metric(&tls->dt_committable, D_TM_GAUGE,
+	rc = d_tm_add_metric(&tls->dt_committable, D_TM_STATS_GAUGE,
 			     "total number of committable DTX entries",
 			     "entries", "io/dtx/committable/tgt_%u", tgt_id);
 	if (rc != DER_SUCCESS)

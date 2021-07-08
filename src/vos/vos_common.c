@@ -404,7 +404,7 @@ vos_tls_init(int xs_id, int tgt_id)
 		/** skip sensor setup on standalone vos & sys xstream */
 		return tls;
 
-	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_GAUGE,
+	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
 			     "Number of committed entries kept around for reply"
 			     " reconstruction", "entries",
 			     "io/dtx/committed/tgt_%u", tgt_id);
