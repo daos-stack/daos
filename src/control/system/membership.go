@@ -87,6 +87,7 @@ type JoinRequest struct {
 	FabricURI      string
 	FabricContexts uint32
 	FaultDomain    *FaultDomain
+	RankInc        uint64
 }
 
 // JoinResponse contains information returned from join membership update.
@@ -130,6 +131,9 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		if curMember.UUID != req.UUID {
 			return nil, errUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
 		}
+		if curMember.Incarnation > req.RankInc {
+			return nil, errStaleIncarn(req.RankInc, curMember.Incarnation, curMember.Rank)
+		}
 
 		if !curMember.FaultDomain.Equals(req.FaultDomain) {
 			m.log.Infof("fault domain for rank %d changed from %q to %q",
@@ -145,6 +149,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		curMember.FabricURI = req.FabricURI
 		curMember.FabricContexts = req.FabricContexts
 		curMember.FaultDomain = req.FaultDomain
+		curMember.Incarnation = req.RankInc
 		if err := m.db.UpdateMember(curMember); err != nil {
 			return nil, err
 		}
@@ -174,6 +179,7 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		FabricContexts: req.FabricContexts,
 		FaultDomain:    req.FaultDomain,
 		state:          MemberStateJoined,
+		Incarnation:    req.RankInc,
 	}
 	if err := m.db.AddMember(newMember); err != nil {
 		return nil, errors.Wrap(err, "failed to add new member")

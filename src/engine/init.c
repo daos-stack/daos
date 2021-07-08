@@ -89,6 +89,9 @@ static uint64_t		dss_mod_facs;
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
 
+/* rank incarnation number, to be set at engine start */
+uint64_t		dss_rank_inc;
+
 d_rank_t
 dss_self_rank(void)
 {
@@ -522,11 +525,19 @@ server_init(int argc, char *argv[])
 	int64_t			 diff;
 	unsigned int		 ctx_nr;
 	int			 rc;
+	struct timeval		 tv;
 	struct engine_metrics	*metrics;
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
+
+	rc = gettimeofday(&tv, 0);
+	if (rc != 0) {
+		D_ERROR("gettimeofday() failed: %d\n", rc);
+		return rc;
+	}
+	dss_rank_inc = (uint64_t)tv.tv_sec;
 
 	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
@@ -655,10 +666,10 @@ server_init(int argc, char *argv[])
 
 	diff = bound - crt_hlc_get();
 	if (diff > 0) {
-		struct timespec		tv;
+		struct timespec		ts;
 
-		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
-		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
+		ts.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
+		ts.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
 
 		/* XXX: If the server restart so quickly as to all related
 		 *	things are handled within HLC epsilon, then it is
@@ -671,8 +682,8 @@ server_init(int argc, char *argv[])
 		 *	generated after server restart will not rollback.
 		 */
 		D_INFO("nanosleep %lu:%lu before open external service.\n",
-		       tv.tv_sec, tv.tv_nsec);
-		nanosleep(&tv, NULL);
+		       ts.tv_sec, ts.tv_nsec);
+		nanosleep(&ts, NULL);
 	}
 
 	dss_set_start_epoch();

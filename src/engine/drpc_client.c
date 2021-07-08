@@ -171,6 +171,7 @@ drpc_notify_ready(void)
 	req.drpclistenersock = drpc_listener_socket_path;
 	req.instanceidx = dss_instance_idx;
 	req.ntgts = dss_tgt_nr;
+	req.rank_inc = dss_rank_inc;
 
 	reqb_size = srv__notify_ready_req__get_packed_size(&req);
 	D_ALLOC(reqb, reqb_size);

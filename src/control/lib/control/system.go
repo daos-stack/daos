@@ -97,6 +97,7 @@ type SystemJoinReq struct {
 	NumContexts uint32              `json:"Nctxs"`
 	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
 	InstanceIdx uint32              `json:"Idx"`
+	RankInc     uint64              `json:"rank_inc"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.

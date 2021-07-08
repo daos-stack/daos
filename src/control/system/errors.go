@@ -126,10 +126,13 @@ type ErrJoinFailure struct {
 	rankChanged bool
 	uuidChanged bool
 	isExcluded  bool
+	staleIncarn bool
 	newUUID     *uuid.UUID
 	curUUID     *uuid.UUID
 	newRank     *Rank
 	curRank     *Rank
+	newIncarn   *uint64
+	curIncarn   *uint64
 }
 
 func (err *ErrJoinFailure) Error() string {
@@ -138,6 +141,8 @@ func (err *ErrJoinFailure) Error() string {
 		return fmt.Sprintf("can't rejoin member with uuid %s: rank changed from %d -> %d", *err.curUUID, *err.curRank, *err.newRank)
 	case err.uuidChanged:
 		return fmt.Sprintf("can't rejoin member with rank %d: uuid changed from %s -> %s", *err.curRank, *err.curUUID, *err.newUUID)
+	case err.staleIncarn:
+		return fmt.Sprintf("can't rejoin member with rank %d: join inc %d < cur inc %d", *err.curRank, *err.newIncarn, *err.curIncarn)
 	case err.isExcluded:
 		return fmt.Sprintf("member %s (rank %d) has been administratively excluded", err.curUUID, *err.curRank)
 	default:
@@ -159,6 +164,15 @@ func errUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
 		uuidChanged: true,
 		newUUID:     &new,
 		curUUID:     &cur,
+		curRank:     &rank,
+	}
+}
+
+func errStaleIncarn(new, cur uint64, rank Rank) *ErrJoinFailure {
+	return &ErrJoinFailure{
+		staleIncarn: true,
+		newIncarn:   &new,
+		curIncarn:   &cur,
 		curRank:     &rank,
 	}
 }

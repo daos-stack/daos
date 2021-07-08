@@ -200,6 +200,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		NumContexts: ready.GetNctxs(),
 		FaultDomain: ei.hostFaultDomain,
 		InstanceIdx: ei.Index(),
+		RankInc:     ready.GetRankInc(),
 	})
 	if err != nil {
 		return system.NilRank, false, err

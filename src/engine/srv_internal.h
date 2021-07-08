@@ -114,6 +114,8 @@ extern unsigned int	dss_sys_xs_nr;
 extern bool		dss_helper_pool;
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);
+/** rank incaration number */
+extern uint64_t		dss_rank_inc;
 
 /* init.c */
 d_rank_t dss_self_rank(void);
