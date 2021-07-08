@@ -1226,7 +1226,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_process_partial_stripe_ult, &stripe_ud,
-			    DSS_XS_OFFLOAD, tid, 0, NULL);
+			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1455,7 +1455,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_peer_update_ult, &stripe_ud,
-			    DSS_XS_OFFLOAD, tid, 0, NULL);
+			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1737,7 +1737,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_process_holes_ult, &stripe_ud,
-			    DSS_XS_OFFLOAD, tid, 0, NULL);
+			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1810,8 +1810,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	 */
 	iter_param.ip_hdl		= DAOS_HDL_INVAL;
 	iter_param.ip_ih		= entry->ae_thdl;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE |
-					  VOS_IT_SKIP_REMOVED;
+	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_nr	= ec_age2cs(entry);
 	iter_param.ip_recx.rx_idx	= PARITY_INDICATOR |
 					  (entry->ae_cur_stripe.as_stripenum *
@@ -2447,8 +2446,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE |
-					  VOS_IT_SKIP_REMOVED;
+	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
 

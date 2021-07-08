@@ -236,7 +236,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 func TestServer_MgmtSvc_PoolCreate(t *testing.T) {
 	testLog, _ := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, testLog)
-	missingSB.harness.instances[0]._superblock = nil
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 	notAP := newTestMgmtSvc(t, testLog)
 
 	for name, tc := range map[string]struct {
@@ -464,7 +464,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 
 	dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})
 	dc.cfg.setSendMsgResponse(drpc.Status_SUCCESS, nil, nil)
-	mgmtSvc.harness.instances[0]._drpcClient = dc
+	mgmtSvc.harness.instances[0].(*EngineInstance)._drpcClient = dc
 
 	for _, m := range []*system.Member{
 		system.MockMember(t, 0, system.MemberStateJoined),
@@ -513,7 +513,7 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 	testLog, _ := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, testLog)
-	missingSB.harness.instances[0]._superblock = nil
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 	notAP := newTestMgmtSvc(t, testLog)
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
@@ -763,7 +763,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 	testLog, _ := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, testLog)
-	missingSB.harness.instances[0]._superblock = nil
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 	notAP := newTestMgmtSvc(t, testLog)
 	scmAllocation := uint64(1)
 	nvmeAllocation := uint64(2)
@@ -871,7 +871,7 @@ func TestServer_MgmtSvc_PoolExtend(t *testing.T) {
 func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 	testLog, _ := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, testLog)
-	missingSB.harness.instances[0]._superblock = nil
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 	notAP := newTestMgmtSvc(t, testLog)
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
@@ -968,7 +968,7 @@ func TestServer_MgmtSvc_PoolDrain(t *testing.T) {
 func TestServer_MgmtSvc_PoolEvict(t *testing.T) {
 	testLog, _ := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, testLog)
-	missingSB.harness.instances[0]._superblock = nil
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 	notAP := newTestMgmtSvc(t, testLog)
 	testPoolService := &system.PoolService{
 		PoolUUID: uuid.MustParse(mockUUID),
@@ -1470,7 +1470,7 @@ func TestPoolDeleteACL_Success(t *testing.T) {
 func TestServer_MgmtSvc_PoolQuery(t *testing.T) {
 	testLog, _ := logging.NewTestLogger(t.Name())
 	missingSB := newTestMgmtSvc(t, testLog)
-	missingSB.harness.instances[0]._superblock = nil
+	missingSB.harness.instances[0].(*EngineInstance)._superblock = nil
 
 	allRanksDown := newTestMgmtSvc(t, testLog)
 	downRanksPool := common.MockUUID(9)
@@ -1733,7 +1733,7 @@ func TestServer_MgmtSvc_PoolSetProp_Label(t *testing.T) {
 }
 
 func getLastMockCall(svc *mgmtSvc) *drpc.Call {
-	mi := svc.harness.instances[0]
+	mi := svc.harness.instances[0].(*EngineInstance)
 	if mi == nil || mi._drpcClient == nil {
 		return nil
 	}

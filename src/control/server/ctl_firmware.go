@@ -109,7 +109,7 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 
 	instances := svc.harness.Instances()
 	for _, srv := range instances {
-		if srv.isStarted() {
+		if srv.IsStarted() {
 			rank, err := srv.GetRank()
 			if err != nil {
 				return nil, errors.New("unidentified server rank is running")
