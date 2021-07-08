@@ -31,7 +31,7 @@ const (
 // Returns true if all instances return true from the validate function within
 // the given timeout, false otherwise. Error is returned if parent context is
 // cancelled or times out.
-func pollInstanceState(ctx context.Context, instances []*EngineInstance, validate func(*EngineInstance) bool, timeout time.Duration) (bool, error) {
+func pollInstanceState(ctx context.Context, instances []Engine, validate func(Engine) bool, timeout time.Duration) (bool, error) {
 	ready := make(chan struct{})
 	go func() {
 		for {
@@ -80,8 +80,8 @@ func (svc *ControlService) drpcOnLocalRanks(parent context.Context, req *ctlpb.R
 	ch := make(chan *system.MemberResult)
 	for _, srv := range instances {
 		inflight++
-		go func(s *EngineInstance) {
-			ch <- s.TryDrpc(ctx, method)
+		go func(e Engine) {
+			ch <- e.tryDrpc(ctx, method)
 		}(srv)
 	}
 
@@ -130,7 +130,7 @@ func (svc *ControlService) PrepShutdownRanks(ctx context.Context, req *ctlpb.Ran
 
 // memberStateResults returns system member results reflecting whether the state
 // of the given member is equivalent to the supplied desired state value.
-func (svc *ControlService) memberStateResults(instances []*EngineInstance, tgtState system.MemberState, okMsg, failMsg string) (system.MemberResults, error) {
+func (svc *ControlService) memberStateResults(instances []Engine, tgtState system.MemberState, okMsg, failMsg string) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
 		rank, err := srv.GetRank()
@@ -184,7 +184,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	defer svc.events.EnableEventIDs(events.RASEngineDied)
 
 	for _, srv := range instances {
-		if !srv.isStarted() {
+		if !srv.IsStarted() {
 			continue
 		}
 		if err := srv.Stop(signal); err != nil {
@@ -194,7 +194,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 
 	// ignore poll results as we gather state immediately after
 	if _, err = pollInstanceState(ctx, instances,
-		func(s *EngineInstance) bool { return !s.isStarted() },
+		func(s Engine) bool { return !s.IsStarted() },
 		svc.harness.rankReqTimeout); err != nil {
 
 		return nil, err
@@ -305,7 +305,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		}
 		savedRanks[srv.Index()] = rank
 
-		if srv.isStarted() {
+		if srv.IsStarted() {
 			return nil, FaultInstancesNotStopped("reset format", rank)
 		}
 		if err := srv.RemoveSuperblock(); err != nil {
@@ -315,7 +315,9 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances, (*EngineInstance).isAwaitingFormat,
+	if _, err = pollInstanceState(ctx, instances, func(e Engine) bool {
+		return e.isAwaitingFormat()
+	},
 		svc.harness.rankStartTimeout); err != nil {
 
 		return nil, err
@@ -363,14 +365,16 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		return nil, err
 	}
 	for _, srv := range instances {
-		if srv.isStarted() {
+		if srv.IsStarted() {
 			continue
 		}
 		srv.requestStart(ctx)
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances, (*EngineInstance).isReady,
+	if _, err = pollInstanceState(ctx, instances, func(e Engine) bool {
+		return e.IsReady()
+	},
 		svc.harness.rankStartTimeout); err != nil {
 
 		return nil, err

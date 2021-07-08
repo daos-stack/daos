@@ -42,8 +42,8 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 	if err := svc.checkReplicaRequest(req); err != nil {
 		return nil, err
 	}
-	if svc.clientNetworkCfg == nil {
-		return nil, errors.New("clientNetworkCfg is missing")
+	if svc.clientNetworkHint == nil {
+		return nil, errors.New("clientNetworkHint is missing")
 	}
 	svc.log.Debugf("MgmtSvc.GetAttachInfo dispatch, req:%+v\n", *req)
 
@@ -71,10 +71,7 @@ func (svc *mgmtSvc) GetAttachInfo(ctx context.Context, req *mgmtpb.GetAttachInfo
 			})
 		}
 	}
-	resp.Provider = svc.clientNetworkCfg.Provider
-	resp.CrtCtxShareAddr = svc.clientNetworkCfg.CrtCtxShareAddr
-	resp.CrtTimeout = svc.clientNetworkCfg.CrtTimeout
-	resp.NetDevClass = svc.clientNetworkCfg.NetDevClass
+	resp.ClientNetHint = svc.clientNetworkHint
 	resp.MsRanks = system.RanksToUint32(groupMap.MSRanks)
 
 	// For resp.RankUris may be large, we make a resp copy with a limited
@@ -295,20 +292,11 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 		}
 		srv := srvs[0]
 
-		if err := srv.callSetRank(ctx, joinResponse.Member.Rank); err != nil {
+		if err := srv.SetupRank(ctx, joinResponse.Member.Rank); err != nil {
 			return &batchJoinResponse{
-				joinErr: errors.Wrap(err, "failed to set rank on local instance"),
+				joinErr: errors.Wrap(err, "SetupRank on local instance failed"),
 			}
 		}
-
-		if err := srv.callSetUp(ctx); err != nil {
-			return &batchJoinResponse{
-				joinErr: errors.Wrap(err, "failed to load local instance modules"),
-			}
-		}
-
-		// mark the engine as ready to handle dRPC requests
-		srv.ready.SetTrue()
 	}
 
 	return resp
