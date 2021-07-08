@@ -331,23 +331,34 @@ dc_cont_destroy(tse_task_t *task)
 	struct dc_pool		*pool;
 	crt_endpoint_t		 ep;
 	crt_rpc_t		*rpc;
+	crt_opcode_t		 opc;
 	struct cont_args	 arg;
+	bool			 by_label;
+	bool			 by_uuid;
 	int			 rc;
 
 	args = dc_task_get_args(task);
 
-	if (uuid_is_null(args->uuid))
+	/* destroy by one: UUID or label */
+	by_uuid = daos_uuid_valid(args->uuid);
+	by_label = (bool)(args->label != NULL);
+	if (by_uuid == by_label)
 		D_GOTO(err, rc = -DER_INVAL);
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
-	D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
-		DP_UUID(pool->dp_pool), DP_UUID(args->uuid), args->force);
+	if (by_uuid)
+		D_DEBUG(DF_DSMC, DF_UUID": destroying "DF_UUID": force=%d\n",
+			DP_UUID(pool->dp_pool), DP_UUID(args->uuid),
+			args->force);
+	else
+		D_DEBUG(DF_DSMC, DF_UUID": destroying %s: force=%d\n",
+			DP_UUID(pool->dp_pool), args->label, args->force);
 
 	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
+	rc = dc_pool_choose_svc_rank(NULL /* pool label */, pool->dp_pool,
 				     &pool->dp_client, &pool->dp_client_lock,
 				     pool->dp_sys, &ep);
 	if (rc != 0) {
@@ -355,7 +366,9 @@ dc_cont_destroy(tse_task_t *task)
 			DP_CONT(pool->dp_pool, args->uuid), DP_RC(rc));
 		goto err_pool;
 	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_DESTROY, &rpc);
+
+	opc = by_uuid ? CONT_DESTROY : CONT_DESTROY_BYLABEL;
+	rc = cont_req_create(daos_task2ctx(task), &ep, opc, &rpc);
 	if (rc != 0) {
 		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_pool, rc);
@@ -363,78 +376,17 @@ dc_cont_destroy(tse_task_t *task)
 
 	in = crt_req_get(rpc);
 	uuid_copy(in->cdi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cdi_op.ci_uuid, args->uuid);
-	in->cdi_force = args->force;
-
-	arg.pool = pool;
-	arg.rpc = rpc;
-	crt_req_addref(rpc);
-
-	rc = tse_task_register_comp_cb(task, cont_destroy_complete, &arg,
-				       sizeof(arg));
-	if (rc != 0)
-		D_GOTO(err_rpc, rc);
-
-	return daos_rpc_send(rpc, task);
-
-err_rpc:
-	crt_req_decref(rpc);
-	crt_req_decref(rpc);
-err_pool:
-	dc_pool_put(pool);
-err:
-	tse_task_complete(task, rc);
-	return rc;
-}
-
-int
-dc_cont_destroy_lbl(tse_task_t *task)
-{
-	daos_cont_destroy_t	*args;
-	struct cont_destroy_in	*in;
-	struct dc_pool		*pool;
-	crt_endpoint_t		 ep;
-	crt_rpc_t		*rpc;
-	struct cont_args	 arg;
-	int			 rc;
-
-	args = dc_task_get_args(task);
-
-	if (args->label == NULL)
-		D_GOTO(err, rc = -DER_INVAL);
-
-	pool = dc_hdl2pool(args->poh);
-	if (pool == NULL)
-		D_GOTO(err, rc = -DER_NO_HDL);
-
-	D_DEBUG(DF_DSMC, DF_UUID": destroying %s: force=%d\n",
-		DP_UUID(pool->dp_pool), args->label, args->force);
-
-	ep.ep_grp = pool->dp_sys->sy_group;
-	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
-				     &pool->dp_client, &pool->dp_client_lock,
-				     pool->dp_sys, &ep);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": %s: cannot find container service: "DF_RC"\n",
-			DP_UUID(pool->dp_pool), args->label, DP_RC(rc));
-		goto err_pool;
-	}
-	rc = cont_req_create(daos_task2ctx(task), &ep, CONT_DESTROY_BYLABEL,
-			     &rpc);
-	if (rc != 0) {
-		D_ERROR("failed to create rpc: "DF_RC"\n", DP_RC(rc));
-		D_GOTO(err_pool, rc);
-	}
-
-	in = crt_req_get(rpc);
-	uuid_copy(in->cdi_op.ci_pool_hdl, pool->dp_pool_hdl);
-	uuid_copy(in->cdi_op.ci_uuid, args->uuid);
-	in->cdi_force = args->force;
-	if (args->label) {
+	if (by_uuid) {
+		uuid_copy(in->cdi_op.ci_uuid, args->uuid);
+	} else {
 		struct cont_destroy_bylabel_in *lbl_in = crt_req_get(rpc);
+		uuid_t null_uuid;
 
 		lbl_in->cdli_label = args->label;
+		uuid_clear(null_uuid);
+		uuid_copy(in->cdi_op.ci_uuid, null_uuid);
 	}
+	in->cdi_force = args->force;
 
 	arg.pool = pool;
 	arg.rpc = rpc;
@@ -871,12 +823,20 @@ dc_cont_open(tse_task_t *task)
 	daos_cont_open_t	*args;
 	struct dc_pool		*pool;
 	struct dc_cont		*cont;
+	bool			 by_label;
+	bool			 by_uuid;
 	int			 rc;
 
 	args = dc_task_get_args(task);
 	cont = dc_task_get_priv(task);
 
-	if (uuid_is_null(args->uuid) || args->coh == NULL)
+	/* open by one: UUID or label */
+	by_uuid = daos_uuid_valid(args->uuid);
+	by_label = (bool)(args->label != NULL);
+	if (by_uuid == by_label)
+		D_GOTO(err, rc = -DER_INVAL);
+
+	if (args->coh == NULL)
 		D_GOTO(err, rc = -DER_INVAL);
 
 	pool = dc_hdl2pool(args->poh);
@@ -884,7 +844,14 @@ dc_cont_open(tse_task_t *task)
 		D_GOTO(err, rc = -DER_NO_HDL);
 
 	if (cont == NULL) {
-		cont = dc_cont_alloc(args->uuid);
+		if (by_uuid) {
+			cont = dc_cont_alloc(args->uuid);
+		} else {
+			uuid_t null_uuid;
+
+			uuid_clear(null_uuid);
+			cont = dc_cont_alloc(null_uuid);
+		}
 		if (cont == NULL)
 			D_GOTO(err_pool, rc = -DER_NOMEM);
 		uuid_generate(cont->dc_cont_hdl);
@@ -892,59 +859,14 @@ dc_cont_open(tse_task_t *task)
 		dc_task_set_priv(task, cont);
 	}
 
-	D_DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
-		DP_CONT(pool->dp_pool, args->uuid), DP_UUID(cont->dc_cont_hdl),
-		args->flags);
-
-	rc = dc_cont_open_internal(task, pool);
-	if (rc)
-		goto err_cont;
-
-	return rc;
-
-err_cont:
-	dc_cont_put(cont);
-err_pool:
-	dc_pool_put(pool);
-err:
-	tse_task_complete(task, rc);
-	D_DEBUG(DF_DSMC, "failed to open container: "DF_RC"\n", DP_RC(rc));
-	return rc;
-}
-
-int
-dc_cont_open_lbl(tse_task_t *task)
-{
-	daos_cont_open_t		*args;
-	struct dc_pool			*pool;
-	struct dc_cont			*cont;
-	uuid_t				 null_uuid;
-	int				 rc;
-
-	args = dc_task_get_args(task);
-	cont = dc_task_get_priv(task);
-	/* open bylabel, uuid will be in reply */
-	uuid_clear(null_uuid);
-
-	if ((args->label == NULL) || args->coh == NULL)
-		D_GOTO(err, rc = -DER_INVAL);
-
-	pool = dc_hdl2pool(args->poh);
-	if (pool == NULL)
-		D_GOTO(err, rc = -DER_NO_HDL);
-
-	if (cont == NULL) {
-		cont = dc_cont_alloc(null_uuid);
-		if (cont == NULL)
-			D_GOTO(err_pool, rc = -DER_NOMEM);
-		uuid_generate(cont->dc_cont_hdl);
-		cont->dc_capas = args->flags;
-		dc_task_set_priv(task, cont);
-	}
-
-	D_DEBUG(DF_DSMC, DF_UUID":%s: opening: hdl="DF_UUIDF" flags=%x\n",
-		DP_UUID(pool->dp_pool), args->label, DP_UUID(cont->dc_cont_hdl),
-		args->flags);
+	if (by_uuid)
+		D_DEBUG(DF_DSMC, DF_CONT": opening: hdl="DF_UUIDF" flags=%x\n",
+			DP_CONT(pool->dp_pool, args->uuid),
+			DP_UUID(cont->dc_cont_hdl), args->flags);
+	else
+		D_DEBUG(DF_DSMC, DF_UUID":%s: opening: hdl="DF_UUIDF
+			" flags=%x\n", DP_UUID(pool->dp_pool), args->label,
+			DP_UUID(cont->dc_cont_hdl), args->flags);
 
 	rc = dc_cont_open_internal(task, pool);
 	if (rc)

@@ -149,7 +149,7 @@ daos_cont_open_by_label(daos_handle_t poh, const char *label,
 	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
 		return -DER_INVAL;
 
-	rc = dc_task_create(dc_cont_open_lbl, NULL, ev, &task);
+	rc = dc_task_create(dc_cont_open, NULL, ev, &task);
 	if (rc)
 		return rc;
 
@@ -222,7 +222,7 @@ daos_cont_destroy_by_label(daos_handle_t poh, const char *label, int force,
 	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
 		return -DER_INVAL;
 
-	rc = dc_task_create(dc_cont_destroy_lbl, NULL, ev, &task);
+	rc = dc_task_create(dc_cont_destroy, NULL, ev, &task);
 	if (rc)
 		return rc;
 

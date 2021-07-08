@@ -58,7 +58,7 @@ daos_pool_connect_by_label(const char *label, const char *grp,
 		return -DER_INVAL;
 	}
 
-	rc = dc_task_create(dc_pool_connect_lbl, NULL, ev, &task);
+	rc = dc_task_create(dc_pool_connect, NULL, ev, &task);
 	if (rc)
 		return rc;
 

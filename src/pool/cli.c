@@ -589,63 +589,30 @@ dc_pool_connect(tse_task_t *task)
 	pool = dc_task_get_priv(task);
 
 	if (pool == NULL) {
-		if (!daos_uuid_valid(args->uuid))
+		bool by_uuid = daos_uuid_valid(args->uuid);
+		bool by_label = (bool)(args->label != NULL);
+
+		/* connect by one: UUID or label */
+		if (by_uuid == by_label)
 			D_GOTO(out_task, rc = -DER_INVAL);
 		if (!flags_are_valid(args->flags) || args->poh == NULL)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		/** allocate and fill in pool connection */
-		rc = init_pool(NULL /* label */, args->uuid, args->flags,
+		rc = init_pool(args->label, args->uuid, args->flags,
 			       args->grp, &pool);
 		if (rc)
 			goto out_task;
 
 		daos_task_set_priv(task, pool);
-		D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF
-			" flags=%x\n", DP_UUID(args->uuid),
-			DP_UUID(pool->dp_pool_hdl), args->flags);
-	}
-
-	rc = dc_pool_connect_internal(task, args->info, NULL, args->poh);
-	if (rc)
-		goto out_pool;
-
-	return rc;
-
-out_pool:
-	dc_pool_put(pool);
-out_task:
-	tse_task_complete(task, rc);
-	return rc;
-}
-
-int
-dc_pool_connect_lbl(tse_task_t *task)
-{
-	daos_pool_connect_t	*args;
-	struct dc_pool		*pool = NULL;
-	uuid_t			 null_uuid;
-	int			 rc;
-
-	args = dc_task_get_args(task);
-	pool = dc_task_get_priv(task);
-	uuid_clear(null_uuid);
-
-	if (pool == NULL) {
-		if (args->label == NULL)
-			D_GOTO(out_task, rc = -DER_INVAL);
-		if (!flags_are_valid(args->flags) || args->poh == NULL)
-			D_GOTO(out_task, rc = -DER_INVAL);
-
-		/** allocate and fill in pool connection */
-		rc = init_pool(args->label, null_uuid, args->flags, args->grp,
-			       &pool);
-		if (rc)
-			goto out_task;
-
-		daos_task_set_priv(task, pool);
-		D_DEBUG(DF_DSMC, "%s: connecting: hdl="DF_UUIDF" flags=%x\n",
-			args->label,  DP_UUID(pool->dp_pool_hdl), args->flags);
+		if (by_uuid)
+			D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF
+				" flags=%x\n", DP_UUID(args->uuid),
+				DP_UUID(pool->dp_pool_hdl), args->flags);
+		else
+			D_DEBUG(DF_DSMC, "%s: connecting: hdl="DF_UUIDF
+				" flags=%x\n", args->label,
+				DP_UUID(pool->dp_pool_hdl), args->flags);
 	}
 
 	rc = dc_pool_connect_internal(task, args->info, args->label, args->poh);
