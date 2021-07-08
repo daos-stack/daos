@@ -104,6 +104,14 @@ struct dc_object {
 	struct dc_obj_layout	*cob_shards;
 };
 
+enum {
+	CLI_DK_UNKNOWN,
+	CLI_DK_NOHASH,
+	CLI_DK_JUMP,
+};
+
+extern int cli_dkey_hash;
+
 /**
  * Reassembled obj request.
  * User input iod/sgl possibly need to be reassembled at client before sending

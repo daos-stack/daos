@@ -15,6 +15,30 @@
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
+#define DKEY_HASH_ENV	"DKEY_HASH"
+
+int cli_dkey_hash = CLI_DK_JUMP;
+
+struct dkey_hash_dict {
+	int	 dh_type;
+	char	*dh_name;
+};
+
+static struct dkey_hash_dict dkey_hash_dicts[] = {
+	{
+		.dh_type = CLI_DK_NOHASH,
+		.dh_name = "off",
+	},
+	{
+		.dh_type = CLI_DK_JUMP,
+		.dh_name = "jump",
+	},
+	{
+		.dh_type = CLI_DK_UNKNOWN,
+		.dh_name = NULL,
+	},
+};
+
 unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
 
 /**
@@ -23,7 +47,23 @@ unsigned int	srv_io_mode = DIM_DTX_FULL_ENABLED;
 int
 dc_obj_init(void)
 {
-	int rc;
+	char	*hash;
+	int	 rc;
+
+	hash = getenv(DKEY_HASH_ENV);
+	if (hash) {
+		struct dkey_hash_dict *dh = &dkey_hash_dicts[0];
+
+		for (; dh->dh_type != CLI_DK_UNKNOWN; dh++) {
+			if (strcasecmp(hash, dh->dh_name) == 0) {
+				cli_dkey_hash = dh->dh_type;
+				break;
+			}
+		}
+		D_PRINT("Client dkey hash is  %s\n", dh->dh_name);
+	} else {
+		D_PRINT("Client dkey hash is turned off\n");
+	}
 
 	d_getenv_int("DAOS_IO_MODE", &srv_io_mode);
 	if (srv_io_mode == DIM_CLIENT_DISPATCH) {
