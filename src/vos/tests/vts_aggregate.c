@@ -2322,7 +2322,7 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_15, NULL, agg_tst_teardown },
 	{ "VOS466: Discard single object sv",
 	  discard_16, NULL, agg_tst_teardown },
-	{ "VOS466: Discard single object array",
+	{ "VOS467: Discard single object array",
 	  discard_17, NULL, agg_tst_teardown },
 };
 
