@@ -2065,8 +2065,6 @@ dc_pool_get_attr(tse_task_t *task)
 	in = crt_req_get(cb_args.pra_rpc);
 	in->pagi_count = args->n;
 	in->pagi_key_length = 0;
-	for (i = 0, in->pagi_key_length = 0; i < args->n; i++)
-		in->pagi_key_length += strlen(args->names[i]) + 1;
 
 	/* no easy way to determine if a name storage address is likely
 	 * to cause an EFAULT during memory registration, so duplicate
@@ -2179,9 +2177,9 @@ dc_pool_set_attr(tse_task_t *task)
 		}
 	}
 
-	rc = attr_bulk_create(args->n, (char **)args->names,
-			      (void **)args->values, (size_t *)args->sizes,
-			      daos_task2ctx(task), CRT_BULK_RO, &in->pasi_bulk);
+	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
+			      (size_t *)args->sizes, daos_task2ctx(task),
+			       CRT_BULK_RO, &in->pasi_bulk);
 	if (rc != 0) {
 		pool_req_cleanup(CLEANUP_RPC, &cb_args);
 		D_GOTO(out, rc);

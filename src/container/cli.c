@@ -2548,8 +2548,6 @@ dc_cont_get_attr(tse_task_t *task)
 	in = crt_req_get(cb_args.cra_rpc);
 	in->cagi_count = args->n;
 	in->cagi_key_length = 0;
-	for (i = 0, in->cagi_key_length = 0; i < args->n; i++)
-		in->cagi_key_length += strlen(args->names[i]) + 1;
 
 	/* no easy way to determine if a name storage address is likely
 	 * to cause an EFAULT during memory registration, so duplicate
