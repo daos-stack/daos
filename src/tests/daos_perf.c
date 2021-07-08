@@ -94,6 +94,13 @@ struct pf_param {
 	/* output parameter */
 	double		pa_duration;
 	union {
+		/* private parameter for rebuild */
+		struct {
+			/* only run rebuild scan */
+			bool	scan;
+			/* run scan + pull, no local write */
+			bool	pull;
+		} pa_rebuild;
 		/* private parameter for iteration */
 		struct {
 			/* nested iterator */
@@ -714,6 +721,51 @@ objects_fetch(struct pf_param *param)
 	return rc;
 }
 
+static int
+objects_query(struct pf_param *param)
+{
+	daos_epoch_t epoch = crt_hlc_get();
+	char		*akey = "0";
+	d_iov_t		dkey_iov;
+	d_iov_t		akey_iov;
+	daos_recx_t	recx;
+	int		i;
+	int		rc = 0;
+	uint64_t	start = 0;
+
+
+	d_iov_set(&akey_iov, akey, 1);
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	for (i = 0; i < ts_obj_p_cont; i++) {
+		d_iov_set(&dkey_iov, NULL, 0);
+		rc = vos_obj_query_key(ts_ctx.tsc_coh, ts_uoids[i],
+				       DAOS_GET_MAX | DAOS_GET_DKEY |
+				       DAOS_GET_RECX, epoch, &dkey_iov,
+				       &akey_iov, &recx, NULL);
+		if (rc != 0 && rc != -DER_NONEXIST)
+			break;
+		if (param->pa_query.verbose) {
+			if (rc == -DER_NONEXIST) {
+				printf("query_key "DF_UOID ": -DER_NONEXIST\n",
+				       DP_UOID(ts_uoids[i]));
+			} else {
+				printf("query_key "DF_UOID ": dkey="DF_U64
+				       " recx="DF_RECX"\n",
+				       DP_UOID(ts_uoids[i]),
+				       *(uint64_t *)dkey_iov.iov_buf,
+				       DP_RECX(recx));
+			}
+		}
+		rc = 0;
+	}
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return rc;
+}
+
 typedef int (*iterate_cb_t)(daos_handle_t ih, vos_iter_entry_t *key_ent,
 			    vos_iter_param_t *param);
 
@@ -947,6 +999,121 @@ pf_oit(struct pf_test *pf, struct pf_param *param)
 	return rc;
 }
 
+static int
+exclude_server(d_rank_t rank)
+{
+	/** TODO: support exclude */
+	D_ASSERT(0);
+	return 0;
+}
+
+static int
+reint_server(d_rank_t rank)
+{
+	/** TODO: support reintegrate */
+	D_ASSERT(0);
+	return 0;
+}
+
+static void
+wait_rebuild(double *duration)
+{
+	daos_pool_info_t	   pinfo;
+	struct daos_rebuild_status *rst = &pinfo.pi_rebuild_st;
+	int			   rc = 0;
+	uint64_t		   start = 0;
+
+	TS_TIME_START(duration, start);
+	while (1) {
+		memset(&pinfo, 0, sizeof(pinfo));
+		pinfo.pi_bits = DPI_REBUILD_STATUS;
+		rc = daos_pool_query(ts_ctx.tsc_poh, NULL, &pinfo, NULL, NULL);
+		if (rst->rs_done || rc != 0) {
+			fprintf(stderr, "Rebuild (ver=%d) is done %d/%d\n",
+				rst->rs_version, rc, rst->rs_errno);
+			break;
+		}
+		sleep(2);
+	}
+	TS_TIME_END(duration, start);
+}
+
+static int
+pf_rebuild(struct pf_test *ts, struct pf_param *param)
+{
+	int rc;
+
+	if (ts_mode != TS_MODE_DAOS) {
+		fprintf(stderr, "Can only run in DAOS full stack mode\n");
+		return -1;
+	}
+
+	if (ts_class != DAOS_OC_R2S_SPEC_RANK) {
+		fprintf(stderr, "Please choose R2S_SPEC_RANK\n");
+		return -1;
+	}
+
+	if (param->pa_rebuild.scan) {
+		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_REBUILD_NO_REBUILD,
+				     0, NULL);
+	} else if (param->pa_rebuild.pull) {
+		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
+				     DAOS_REBUILD_NO_UPDATE,
+				     0, NULL);
+	}
+
+	rc = exclude_server(RANK_ZERO);
+	if (rc)
+		return rc;
+
+	wait_rebuild(&param->pa_duration);
+
+	rc = reint_server(RANK_ZERO);
+	if (rc)
+		return rc;
+
+	daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC, 0, 0, NULL);
+	return rc;
+}
+
+static int
+pf_query(struct pf_test *ts, struct pf_param *param)
+{
+	int rc;
+
+	if (ts_mode != TS_MODE_VOS) {
+		fprintf(stderr, "Query test can only run in VOS mode\n");
+		return -1;
+	}
+
+	if ((ts_flags & DAOS_OF_DKEY_UINT64) == 0) {
+		fprintf(stderr, "Integer dkeys required for query test (-i)\n");
+		return -1;
+	}
+
+	if (ts_single) {
+		fprintf(stderr, "Array values required for query test (-A)\n");
+		return -1;
+	}
+
+	if (!ts_const_akey) {
+		fprintf(stderr, "Const akey required for query test (-I)\n");
+		return -1;
+	}
+
+	rc = objects_open();
+	if (rc)
+		return rc;
+
+	rc = objects_query(param);
+	if (rc)
+		return rc;
+
+	rc = objects_close();
+	return rc;
+}
+
 /* Test command Format: "C;p=x;q D;a;b"
  *
  * The upper-case character is command, e.g. U=update, F=fetch, anything after
@@ -1065,6 +1232,79 @@ pf_parse_rw(char *str, struct pf_param *param, char **strp)
 	return 0;
 }
 
+/**
+ * Example: "U;p R;p;o=p"
+ * 'U' is update test
+ *	'p': parameter of update and it means outputting performance result
+ *
+ * 'R' is rebuild test
+ *	'p' is parameter of rebuild and it means outputting performance result
+ *	'o=p' means only run pull (no write) for rebuild.
+ */
+static int
+pf_parse_rebuild_cb(char *str, struct pf_param *param, char **strp)
+{
+	switch (*str) {
+	default:
+		str++;
+		break;
+	case 'o':
+		str++;
+		if (*str != PARAM_ASSIGN)
+			return -1;
+
+		str++;
+		if (*str == 's') {
+			/* scan objects only */
+			param->pa_rebuild.scan = true;
+		} else if (*str == 'p') {
+			/* scan objects, read data but no write */
+			param->pa_rebuild.pull = true;
+		}
+		str++;
+		break;
+	}
+	*strp = str;
+	return 0;
+}
+
+static int
+pf_parse_rebuild(char *str, struct pf_param *pa, char **strp)
+{
+	return pf_parse_common(str, pa, pf_parse_rebuild_cb, strp);
+}
+
+static int
+pf_parse_query_cb(char *str, struct pf_param *pa, char **strp)
+{
+	switch (*str) {
+	default:
+		str++;
+		break;
+	case 'v':
+		pa->pa_query.verbose = true;
+		str++;
+		break;
+	}
+	*strp = str;
+	return 0;
+}
+
+/**
+ * Example: "U;p Q;p;"
+ * 'U' is update test.  Integer dkey required
+ *	'p': parameter of update and it means outputting performance result
+ *
+ * 'Q' is query test
+ *	'p': parameter of query and it means outputting performance result
+ *	'v' enables verbosity
+ */
+static int
+pf_parse_query(char *str, struct pf_param *pa, char **strp)
+{
+	return pf_parse_common(str, pa, pf_parse_query_cb, strp);
+}
+
 static int
 pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 {
@@ -1134,6 +1374,18 @@ struct pf_test pf_tests[] = {
 		.ts_name	= "ITERATE",
 		.ts_parse	= pf_parse_iterate,
 		.ts_func	= pf_iterate,
+	},
+	{
+		.ts_code	= 'R',
+		.ts_name	= "REBUILD",
+		.ts_parse	= pf_parse_rebuild,
+		.ts_func	= pf_rebuild,
+	},
+	{
+		.ts_code	= 'Q',
+		.ts_name	= "QUERY",
+		.ts_parse	= pf_parse_query,
+		.ts_func	= pf_query,
 	},
 	{
 		.ts_code	= 'O',
