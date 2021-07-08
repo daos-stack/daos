@@ -43,13 +43,13 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 type srvModule struct {
 	log     logging.Logger
 	sysdb   *system.Database
-	engines []*EngineInstance
+	engines []Engine
 	events  *events.PubSub
 }
 
 // newSrvModule creates a new srv module references to the system database,
 // resident EngineInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, sysdb *system.Database, engines []*EngineInstance, events *events.PubSub) *srvModule {
+func newSrvModule(log logging.Logger, sysdb *system.Database, engines []Engine, events *events.PubSub) *srvModule {
 	return &srvModule{
 		log:     log,
 		sysdb:   sysdb,
