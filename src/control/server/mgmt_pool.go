@@ -26,7 +26,9 @@ import (
 const (
 	// DefaultPoolScmRatio defines the default SCM:NVMe ratio for
 	// requests that do not specify one.
-	DefaultPoolScmRatio  = 0.06
+	DefaultPoolScmRatio = 0.06
+	// DefaultPoolNvmeRatio defines the default NVMe:SCM ratio for
+	// requests that do not specify one.
 	DefaultPoolNvmeRatio = 0.94
 	// DefaultPoolServiceReps defines a default value for pool create
 	// requests that do not specify a value. If there are fewer than this
@@ -144,9 +146,9 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	}
 
 	switch {
-	case !instances[0].storage.HasBlockDevices():
+	case !instances[0].HasBlockDevices():
 		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
-		for tierIdx, _ := range req.Tierbytes {
+		for tierIdx := range req.Tierbytes {
 			if tierIdx > 0 {
 				req.Tierbytes[tierIdx] = 0
 			} else if req.Tierbytes[0] == 0 {
@@ -154,14 +156,14 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 			}
 		}
 	case req.GetTotalbytes() > 0:
-		for tierIdx, _ := range req.Tierbytes {
+		for tierIdx := range req.Tierbytes {
 			req.Tierbytes[tierIdx] = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.Tierratio[tierIdx]))
 		}
 	}
 
 	// zero these out as they're not needed anymore
 	req.Totalbytes = 0
-	for tierIdx, _ := range req.Tierratio {
+	for tierIdx := range req.Tierratio {
 		req.Tierratio[tierIdx] = 0
 	}
 

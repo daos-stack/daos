@@ -83,7 +83,7 @@ func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
 	return
 }
 
-func (ei *EngineInstance) bdevWriteNvmeConfig() error {
+func (ei *EngineInstance) bdevWriteConfig() error {
 	return ei.storage.WriteNvmeConfig()
 }
 
@@ -110,7 +110,7 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 		}
 	}()
 
-	if ei.isStarted() {
+	if ei.IsStarted() {
 		if !force {
 			scmErr = errors.Errorf("instance %d: can't format storage of running instance",
 				engineIdx)
@@ -152,5 +152,5 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 
 func (ei *EngineInstance) StorageWriteNvmeConfig() error {
 	ei.log.Infof("Writing nvme config file for %s instance %d", build.DataPlaneName, ei.Index())
-	return ei.bdevWriteNvmeConfig()
+	return ei.bdevWriteConfig()
 }

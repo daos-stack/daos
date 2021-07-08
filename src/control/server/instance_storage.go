@@ -16,11 +16,24 @@ import (
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
-// MountScm mounts the configured SCM (DCPM or ramdisk emulation)
-// at the mountpoint specified in the configuration. If the SCM is already
+// GetScmConfig calls in to the private engine storage provider to retrieve the
+// SCM config.
+func (ei *EngineInstance) GetScmConfig() (*storage.TierConfig, error) {
+	return ei.storage.GetScmConfig()
+}
+
+// GetScmUsage calls in to the private engine storage provider to retrieve the
+// SCM usage.
+func (ei *EngineInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
+	return ei.storage.GetScmUsage()
+}
+
+// MountScm mounts the configured SCM device (DCPM or ramdisk emulation)
+// at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
 func (ei *EngineInstance) MountScm() error {
 	isMount, err := ei.storage.ScmIsMounted()
@@ -64,7 +77,7 @@ func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string) 
 func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
 	idx := ei.Index()
 
-	if ei.isStarted() {
+	if ei.IsStarted() {
 		return errors.Errorf("can't wait for storage: instance %d already started", idx)
 	}
 
@@ -147,4 +160,16 @@ func (ei *EngineInstance) logScmStorage() error {
 		humanize.Bytes(mp.TotalBytes), humanize.Bytes(mp.AvailBytes))
 
 	return nil
+}
+
+// HasBlockDevices calls in to the private engine storage provider to check if
+// block devices exist in the storage configurations of the engine.
+func (ei *EngineInstance) HasBlockDevices() bool {
+	return ei.storage.HasBlockDevices()
+}
+
+// ScanBdevTiers calls in to the private engine storage provider to scan bdev
+// tiers. Scan will avoid using any cached results if direct is set to true.
+func (ei *EngineInstance) ScanBdevTiers(direct bool) ([]storage.BdevTierScanResult, error) {
+	return ei.storage.ScanBdevTiers(direct)
 }

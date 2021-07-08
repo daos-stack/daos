@@ -64,12 +64,12 @@ func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*storage.BdevSc
 	instances := c.harness.Instances()
 
 	for _, srv := range instances {
-		if !srv.storage.HasBlockDevices() {
+		if !srv.HasBlockDevices() {
 			continue
 		}
-		direct := !srv.isReady()
+		direct := !srv.IsReady()
 
-		tsrs, err := srv.storage.ScanBdevTiers(direct)
+		tsrs, err := srv.ScanBdevTiers(direct)
 		if err != nil {
 			return nil, err
 		}
@@ -215,16 +215,16 @@ func (c *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.Scm
 
 	nss := make(storage.ScmNamespaces, len(instances))
 	for idx, srv := range instances {
-		if !srv.isReady() {
+		if !srv.IsReady() {
 			continue // skip if not running
 		}
 
-		cfg, err := srv.storage.GetScmConfig()
+		cfg, err := srv.GetScmConfig()
 		if err != nil {
 			return nil, err
 		}
 
-		mount, err := srv.storage.GetScmUsage()
+		mount, err := srv.GetScmUsage()
 		if err != nil {
 			return nil, err
 		}
@@ -320,7 +320,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	formatting := 0
 	for _, srv := range instances {
 		formatting++
-		go func(s *EngineInstance) {
+		go func(s Engine) {
 			scmChan <- s.StorageFormatSCM(ctx, req.Reformat)
 		}(srv)
 	}
@@ -366,7 +366,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// TODO: supply whitelist of instance.Devs to init() on format.
 	for _, srv := range instances {
 		if instanceErrored[srv.Index()] {
-			srv.log.Errorf(msgFormatErr, srv.Index())
+			c.log.Errorf(msgFormatErr, srv.Index())
 			continue
 		}
 		srv.NotifyStorageReady()

@@ -55,14 +55,14 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		}
 	}
 
-	for _, instance := range h.Instances() {
-		if err := instance.createSuperblock(false); err != nil {
+	for _, e := range h.Instances() {
+		if err := e.(*EngineInstance).createSuperblock(false); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	h.started.SetTrue()
-	mi := h.instances[0]
+	mi := h.instances[0].(*EngineInstance)
 	if mi._superblock == nil {
 		t.Fatal("instance superblock is nil after createSuperblock()")
 	}
@@ -70,7 +70,8 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		t.Fatalf("expected superblock system name to be %q, got %q", t.Name(), mi._superblock.System)
 	}
 
-	for idx, i := range h.Instances() {
+	for idx, e := range h.Instances() {
+		i := e.(*EngineInstance)
 		if i._superblock.Rank.Uint32() != uint32(idx) {
 			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}

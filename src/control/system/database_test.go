@@ -141,9 +141,9 @@ func TestSystem_Database_Cancel(t *testing.T) {
 		return nil
 	})
 
-	waitForLeadership(ctx, t, db, true, 10*time.Second)
+	waitForLeadership(ctx, t, db, true, 15*time.Second)
 	dbCancel()
-	waitForLeadership(ctx, t, db, false, 10*time.Second)
+	waitForLeadership(ctx, t, db, false, 15*time.Second)
 
 	if atomic.LoadUint32(&onGainedCalled) != 1 {
 		t.Fatal("OnLeadershipGained callbacks didn't execute")

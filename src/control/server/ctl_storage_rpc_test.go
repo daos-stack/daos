@@ -281,7 +281,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			for _, config := range []*config.Server{defaultWithNvme, emptyCfg} {
 				cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
 				for _, srv := range cs.harness.instances {
-					srv.ready.SetFalse()
+					srv.(*EngineInstance).ready.SetFalse()
 				}
 
 				// todo_tiering: t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
@@ -1365,7 +1365,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				t.Fatal(err.Error() + name)
 			}
 
-			for i, srv := range instances {
+			for i, e := range instances {
+				srv := e.(*EngineInstance)
 				root := filepath.Dir(tc.sMounts[i])
 				if tc.scmMounted {
 					root = tc.sMounts[i]
@@ -1401,7 +1402,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				inflight++
 				go func(s *EngineInstance) {
 					awaitCh <- s.awaitStorageReady(ctx, tc.recreateSBs)
-				}(srv)
+				}(srv.(*EngineInstance))
 			}
 
 			awaitingFormat := make(chan struct{})
@@ -1410,7 +1411,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				for {
 					ready := true
 					for _, srv := range instances {
-						if !srv.isAwaitingFormat() {
+						if !srv.(*EngineInstance).isAwaitingFormat() {
 							ready = false
 						}
 					}

@@ -66,7 +66,8 @@ func mockControlServiceNoSB(t *testing.T, log logging.Logger, cfg *config.Server
 	cs := mockControlService(t, log, cfg, bmbc, smbc, smsc)
 
 	// don't set a superblock and init with a stopped test runner
-	for i, srv := range cs.harness.instances {
+	for i, e := range cs.harness.instances {
+		srv := e.(*EngineInstance)
 		srv.setSuperblock(nil)
 		srv.runner = engine.NewTestRunner(nil, cfg.Engines[i])
 	}

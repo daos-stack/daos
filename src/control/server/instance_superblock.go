@@ -105,7 +105,7 @@ func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
 
 // createSuperblock creates instance superblock if needed.
 func (ei *EngineInstance) createSuperblock(recreate bool) error {
-	if ei.isStarted() {
+	if ei.IsStarted() {
 		return errors.Errorf("can't create superblock: instance %d already started", ei.Index())
 	}
 
