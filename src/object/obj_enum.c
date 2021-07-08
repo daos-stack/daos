@@ -1219,16 +1219,11 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 	else
 		type = DAOS_IOD_ARRAY;
 
-	if (io->ui_type == 0)
-		io->ui_type = type;
-
-	if (io->ui_version == 0)
-		io->ui_version = rec->rec_version;
-
 	/* Check version/type first to see if the current IO should be complete.
 	 * Only one version/type per VOS update.
 	 */
-	if (io->ui_version != rec->rec_version || io->ui_type != type) {
+	if ((io->ui_version != 0 && io->ui_version != rec->rec_version) ||
+	    (io->ui_type != 0 && io->ui_type != type)) {
 		D_DEBUG(DB_IO, "different version %u != %u or type %u != %u\n",
 			io->ui_version, rec->rec_version, io->ui_type, type);
 
@@ -1248,6 +1243,12 @@ enum_unpack_recxs(daos_key_desc_t *kds, void *data,
 		if (rc)
 			D_GOTO(free, rc);
 	}
+
+	if (io->ui_type == 0)
+		io->ui_type = type;
+
+	if (io->ui_version == 0)
+		io->ui_version = rec->rec_version;
 
 	top = io->ui_iods_top;
 	rc = unpack_recxs(&io->ui_iods[top], &io->ui_recxs_caps[top],

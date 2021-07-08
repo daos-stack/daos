@@ -33,7 +33,6 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
         :avocado: tags=hw,large
         :avocado: tags=io,DAOS_5610,dfuse
         :avocado: tags=macsio
-
         """
         # Create a pool
         self.add_pool()
