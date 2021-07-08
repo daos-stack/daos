@@ -9,7 +9,7 @@
 #include <spdk/env.h>
 #include <spdk/vmd.h>
 #include <spdk/nvme_intel.h>
-#include <spdk/pci_ids.h>
+#include <spdk/util.h>
 #include <daos_srv/control.h>
 
 #include "nvme_control_common.h"
