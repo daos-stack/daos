@@ -390,9 +390,8 @@ static int
 dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 		 void *args)
 {
-	struct vos_dtx_cmt_bundle	*vdcb = args;
-	struct vos_container		*cont;
-	struct vos_dtx_cmt_ent		*dce;
+	struct btr_leaf_rebal	*blr = args;
+	struct vos_dtx_cmt_ent	*dce;
 
 	dce = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	D_ASSERT(dce != NULL);
@@ -401,8 +400,10 @@ dtx_cmt_ent_free(struct btr_instance *tins, struct btr_record *rec,
 	if (!d_list_empty(&dce->dce_committed_link)) {
 		d_list_del(&dce->dce_committed_link);
 
-		if (vdcb != NULL) {
-			cont = vdcb->vdcb_cont;
+		if (blr != NULL && blr->blr_args != NULL) {
+			struct vos_dtx_cmt_bundle	*vdcb = blr->blr_args;
+			struct vos_container		*cont = vdcb->vdcb_cont;
+
 			if (!cont->vc_reindex_cmt_dtx || dce->dce_reindex)
 				cont->vc_pool->vp_dtx_committed_count--;
 			else
@@ -491,7 +492,8 @@ vos_dtx_table_register(void)
 		return rc;
 	}
 
-	rc = dbtree_class_register(VOS_BTR_DTX_CMT_TABLE, 0,
+	rc = dbtree_class_register(VOS_BTR_DTX_CMT_TABLE,
+				   BTR_FEAT_LAZY_LEAF_REBAL,
 				   &dtx_committed_btr_ops);
 	if (rc != 0)
 		D_ERROR("Failed to register DTX committed dbtree: %d\n", rc);
@@ -2066,8 +2068,12 @@ vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
 		    struct vos_dtx_cmt_ent **dces, int count, bool abort)
 {
 	struct vos_dtx_cmt_bundle	vdcb = { .vdcb_cont = cont };
+	struct btr_leaf_rebal		blr;
 	int				rc;
 	int				i;
+
+	blr.blr_args = &vdcb;
+	blr.blr_lazy_rebal = 0;
 
 	for (i = 0; i < count; i++) {
 		d_iov_t		kiov;
@@ -2084,7 +2090,7 @@ vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
 			d_iov_set(&kiov, &DCE_XID(dces[i]),
 				  sizeof(DCE_XID(dces[i])));
 			rc = dbtree_delete(cont->vc_pool->vp_dtx_committed_hdl,
-					   BTR_PROBE_EQ, &kiov, &vdcb);
+					   BTR_PROBE_EQ, &kiov, &blr);
 			if (rc != 0 && rc != -DER_NONEXIST) {
 				D_WARN("Failed to rollback cmt DTX entry "
 				       DF_DTI": "DF_RC"\n",
@@ -2211,7 +2217,9 @@ vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 int
 vos_dtx_aggregate(daos_handle_t coh)
 {
-	struct vos_dtx_cmt_bundle	 vdcb;
+	struct vos_dtx_cmt_bundle	 vdcb = { 0 };
+	struct btr_leaf_rebal		 blr = { 0 };
+	struct vos_pool			*pool;
 	struct vos_container		*cont;
 	struct vos_cont_df		*cont_df;
 	struct umem_instance		*umm;
@@ -2224,6 +2232,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 	cont = vos_hdl2cont(coh);
 	D_ASSERT(cont != NULL);
 
+	pool = cont->vc_pool;
 	cont_df = cont->vc_cont_df;
 	dbd_off = cont_df->cd_dtx_committed_head;
 	umm = vos_cont2umm(cont);
@@ -2243,14 +2252,17 @@ vos_dtx_aggregate(daos_handle_t coh)
 	}
 
 	vdcb.vdcb_cont = cont;
+	blr.blr_args = &vdcb;
+	blr.blr_lazy_rebal = 1;
+
 	for (i = 0; i < dbd->dbd_count; i++) {
 		struct vos_dtx_cmt_ent_df	*dce_df;
 		d_iov_t				 kiov;
 
 		dce_df = &dbd->dbd_committed_data[i];
 		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
-		rc = dbtree_delete(cont->vc_pool->vp_dtx_committed_hdl,
-				   BTR_PROBE_EQ, &kiov, &vdcb);
+		rc = dbtree_delete(pool->vp_dtx_committed_hdl,
+				   BTR_PROBE_EQ, &kiov, &blr);
 		if (rc != 0 && rc != -DER_NONEXIST) {
 			D_ERROR("Failed to remove entry for DTX aggregation "
 				UMOFF_PF": "DF_RC"\n",
@@ -2302,6 +2314,21 @@ vos_dtx_aggregate(daos_handle_t coh)
 	rc = umem_free(umm, dbd_off);
 
 out:
+	/* Process the in-DRAM leaf nodes in the list in spite of whether
+	 * DTX aggregation is successful or not, because related in-DRAM
+	 * btree has been changed already, will not rollback.
+	 */
+	while (blr.blr_head != NULL) {
+		struct btr_node	*nd = blr.blr_head;
+		int		 rc1;
+
+		blr.blr_head = nd->tn_next;
+		rc1 = dbtree_lazy_leaf_rebal(pool->vp_dtx_committed_hdl, nd);
+		if (rc1 != 0 && rc1 != -DER_NONEXIST)
+			D_WARN("Failed to lazy rebalance DTX table "DF_RC"\n",
+			       DP_RC(rc1));
+	}
+
 	rc = umem_tx_end(umm, rc);
 	if (rc != 0)
 		D_ERROR("Failed to aggregate DTX blob "UMOFF_PF": "

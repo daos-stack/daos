@@ -63,10 +63,24 @@ struct btr_node {
 	uint32_t			tn_pad_32;
 	/** generation, reserved for COW */
 	uint64_t			tn_gen;
-	/** the first child, it is unused on leaf node */
-	umem_off_t			tn_child;
+	union {
+		/** the first child, it is unused on leaf node */
+		umem_off_t		tn_child;
+		/** Pointer to the next leaf node in DRAM. */
+		void			*tn_next;
+	};
 	/** records in this node */
 	struct btr_record		tn_recs[0];
+};
+
+/**
+ * Trace the leaf nodes that may need to be lazy rebalanced.
+ */
+struct btr_leaf_rebal {
+	struct btr_node			*blr_head;
+	struct btr_node			*blr_tail;
+	void				*blr_args;
+	uint32_t			 blr_lazy_rebal:1;
 };
 
 enum {
@@ -482,6 +496,8 @@ enum btr_feats {
 	 *  tree class
 	 */
 	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
+	/** Lazy leaf node rebalance when delete some record from the leaf. */
+	BTR_FEAT_LAZY_LEAF_REBAL	= (1 << 3),
 };
 
 /**
@@ -537,6 +553,7 @@ int  dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc,
 		   d_iov_t *key, void *args);
 int  dbtree_query(daos_handle_t toh, struct btr_attr *attr,
 		  struct btr_stat *stat);
+int  dbtree_lazy_leaf_rebal(daos_handle_t toh, struct btr_node *nd);
 int  dbtree_is_empty(daos_handle_t toh);
 struct umem_instance *btr_hdl2umm(daos_handle_t toh);
 
