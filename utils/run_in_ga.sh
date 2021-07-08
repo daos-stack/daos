@@ -16,7 +16,7 @@ echo ::endgroup::
 
 echo ::group::Patch source
 # Change the number of contexts to make fault injection testing faster.
-patch -p1 utils/16-contexts.patch
+patch -p1 < utils/16-contexts.patch
 echo ::endgroup::
 
 echo ::group::Test client only debug build
