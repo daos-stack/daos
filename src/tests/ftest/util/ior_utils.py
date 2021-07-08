@@ -4,7 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import re
 import uuid
@@ -13,6 +13,7 @@ from enum import IntEnum
 
 from command_utils_base import CommandFailure, FormattedParameter
 from command_utils import ExecutableCommand
+from general_utils import get_subprocess_stdout
 
 
 class IorCommand(ExecutableCommand):
@@ -35,7 +36,7 @@ class IorCommand(ExecutableCommand):
 
     def __init__(self):
         """Create an IorCommand object."""
-        super(IorCommand, self).__init__("/run/ior/*", "ior")
+        super().__init__("/run/ior/*", "ior")
 
         # Flags
         self.flags = FormattedParameter("{}")
@@ -109,7 +110,7 @@ class IorCommand(ExecutableCommand):
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
         # Sort the IOR parameter names to generate consistent ior commands
-        all_param_names = super(IorCommand, self).get_param_names()
+        all_param_names = super().get_param_names()
 
         # List all of the common ior params first followed by any daos-specific
         # and dfs-specific params (except when using MPIIO).
@@ -169,7 +170,7 @@ class IorCommand(ExecutableCommand):
             item = getattr(self, name).value
             if item:
                 sub_item = re.split(r"([^\d])", str(item))
-                if sub_item > 0:
+                if int(sub_item[0]) > 0:
                     total *= int(sub_item[0])
                     if len(sub_item) > 1:
                         key = sub_item[1].lower()
@@ -225,16 +226,17 @@ class IorCommand(ExecutableCommand):
                 env["DAOS_POOL"] = self.dfs_pool.value
                 env["DAOS_CONT"] = self.dfs_cont.value
                 env["DAOS_BYPASS_DUNS"] = "1"
-                env["IOR_HINT__MPI__romio_daos_obj_class"] = \
-                    self.dfs_oclass.value
+                if self.dfs_oclass.value is not None:
+                    env["IOR_HINT__MPI__romio_daos_obj_class"] = \
+                        self.dfs_oclass.value
         return env
 
     @staticmethod
     def get_ior_metrics(cmdresult):
         """Get the ior command read and write metrics.
 
-        Parse the CmdResult (output of the test) and look for the ior stdout and
-        get the read and write metrics.
+        Parse the CmdResult (output of the test) and look for the ior stdout
+        and get the read and write metrics.
 
         Args:
             cmdresult (CmdResult): output of job manager
@@ -244,7 +246,7 @@ class IorCommand(ExecutableCommand):
 
         """
         ior_metric_summary = "Summary of all tests:"
-        messages = cmdresult.stdout.splitlines()
+        messages = cmdresult.stdout_text.splitlines()
         # Get the index whre the summary starts and add one to
         # get to the header.
         idx = messages.index(ior_metric_summary)
@@ -304,7 +306,7 @@ class IorCommand(ExecutableCommand):
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                output = sub_process.get_stdout()
+                output = get_subprocess_stdout(sub_process)
                 detected = len(re.findall(self.pattern, output))
                 complete = detected == self.pattern_count
                 timed_out = time.time() - start > pattern_timeout
@@ -320,7 +322,7 @@ class IorCommand(ExecutableCommand):
                     "%s detected - %s:\n%s",
                     "Time out" if timed_out else "Error",
                     msg,
-                    sub_process.get_stdout())
+                    get_subprocess_stdout(sub_process))
 
                 # Stop the timed out process
                 if timed_out:
@@ -344,11 +346,11 @@ class IorMetrics(IntEnum):
     Max_MiB = 1
     Min_MiB = 2
     Mean_MiB = 3
-    StdDev = 4
+    StdDev_MiB = 4
     Max_OPs = 5
     Min_OPs = 6
     Mean_OPs = 7
-    StdDev = 8
+    StdDev_OPs = 8
     Mean_seconds = 9
     Stonewall_seconds = 10
     Stonewall_MiB = 11

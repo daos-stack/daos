@@ -8,12 +8,6 @@ Containers can be created and destroyed through the daos_cont_create/destroy()
 functions exported by the DAOS API. A user tool called `daos` is also
 provided to manage containers.
 
-!!! note
-    In DAOS 1.0, in order to use the `daos` command the following environment
-    variables need to be set (this is no longer needed in later versions of DAOS):
-     * For Omni-Path: `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+psm2"`
-     * For InfiniBand: `export OFI_INTERFACE="ib0"; export CRT_PHY_ADDR_STR="ofi+verbs;ofi_rxm"; export OFI_DOMAIN="mlx5_0"`
-
 To create a container:
 ```bash
 $ daos cont create --pool=a171434a-05a5-4671-8fe2-615aa0d05094
@@ -84,7 +78,7 @@ container's properties. Refer to the manual page for full usage details.
 
 $ daos cont get-prop --path=/tmp/mycontainer
 Container properties for 419b7562-5bb8-453f-bd52-917c8f5d80d1 :
-label:                  container label not set
+label:                  container_label_not_set
 layout type:            POSIX (1)
 layout version:         1
 checksum type:          off
@@ -156,9 +150,6 @@ during container create.
     Note that currently, once a container is created, its checksum configuration
     cannot be changed.
 
-!!! warning
-    The checksum feature is only supported in DAOS 1.2 and later.
-
 ## Inline Deduplication (Preview)
 
 Data deduplication (dedup) is a process that allows to eliminate duplicated
@@ -194,11 +185,13 @@ configure dedup, the following container properties are used:
   the I/O for dedup (default is 4K).
 
 !!! warning
-    Dedup is a feature preview in 1.2 and has some known
+    Dedup is a feature preview in 2.0 and has some known
     limitations. Aggregation of deduplicated extents isn't supported and the
     checksum tree isn't persistent yet. This means that aggregation is disabled
     for a container with dedplication enabled and duplicated extents won't be
     matched after a server restart.
+    NVMe isn't supported for dedup enabled container, so please make sure not
+    using dedup on the pool with NVMe enabled.
 
 ## Compression & Encryption
 
@@ -284,11 +277,6 @@ If the user does not have Delete permission on the pool, they will only be able
 to delete containers for which they have been explicitly granted Delete
 permission in the container's ACL.
 
-!!! note
-    In DAOS version 1.0, permissions are set on the _pool_ level and all containers
-    in the pool inherit the permissions of the pool. Starting with DAOS version 1.2,
-    pool and container permissions are controlled individually.
-
 ### Creating Containers with Custom ACL
 
 To create a container with a custom ACL:
@@ -297,7 +285,8 @@ To create a container with a custom ACL:
 $ daos cont create --pool=<UUID> --acl-file=<path>
 ```
 
-The ACL file format is detailed in the [ACL section](https://daos-stack.github.io/overview/security/#acl-file).
+The ACL file format is detailed in the
+[security overview](https://daos-stack.github.io/overview/security/#acl-file).
 
 ### Displaying a Container's ACL
 
@@ -352,9 +341,11 @@ $ daos cont delete-acl --pool=<UUID> --cont=<UUID> \
       --principal=<principal>
 ```
 
-The principal corresponds to the principal portion of an ACE that was
-set during container creation or a previous container ACL operation. For the
-delete operation, the principal argument must be formatted as follows:
+The `principal` argument refers to the
+[principal](https://daos-stack.github.io/overview/security/#principal), or
+identity, of the entry to be removed.
+
+For the delete operation, the `principal` argument must be formatted as follows:
 
 * Named user: `u:username@`
 * Named group: `g:groupname@`
@@ -375,17 +366,26 @@ They may be set on container creation and changed later.
 
 #### Privileges
 
-The owner-user (`OWNER@`) has implicit privileges on their container. The
-owner-user can always open the container, and has set-ACL (A) and get-ACL (a)
-permissions. These permissions are included alongside any permissions that the
+The owner-user (`OWNER@`) has some implicit privileges on their container.
+These permissions are silently included alongside any permissions that the
 user was explicitly granted by entries in the ACL.
 
-Because the owner's special permissions are implicit, they apply to access
-control decisions even if they do not appear in the `OWNER@` entry, and even if
-the `OWNER@` entry is deleted.
+The owner-user will always have the following implicit capabilities:
 
-The owner-group (`GROUP@`) has no special permissions outside what they are
-granted by the ACL.
+* Open container
+* Set ACL (A)
+* Get ACL (a)
+
+Because the owner's special permissions are implicit, they do not need to be
+specified in the `OWNER@` entry. After
+[determining](https://daos-stack.github.io/overview/security/#enforcement)
+the user's privileges from the container ACL, DAOS checks whether the user
+requesting access is the owner-user. If so, DAOS grants the owner's
+implicit permissions to that user, in addition to any permissions granted by
+the ACL.
+
+In contrast, the owner-group (`GROUP@`) has no special permissions beyond those
+explicitly granted by the `GROUP@` entry in the ACL.
 
 #### Creating Containers with Specific Ownership
 

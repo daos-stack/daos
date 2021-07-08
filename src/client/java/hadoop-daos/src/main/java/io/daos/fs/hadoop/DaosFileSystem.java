@@ -19,8 +19,6 @@ import com.google.common.collect.Lists;
 import io.daos.*;
 import io.daos.dfs.*;
 
-import org.apache.commons.lang.StringEscapeUtils;
-import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsPermission;
@@ -152,6 +150,8 @@ public class DaosFileSystem extends FileSystem {
   private String qualifiedUnsWorkPath;
   private String workPath;
 
+  private boolean async = Constants.DEFAULT_DAOS_IO_ASYNC;
+
   static {
     if (ShutdownHookManager.removeHook(DaosClient.FINALIZER)) {
       org.apache.hadoop.util.ShutdownHookManager.get().addShutdownHook(DaosClient.FINALIZER, 0);
@@ -172,17 +172,19 @@ public class DaosFileSystem extends FileSystem {
     if (!getScheme().equals(name.getScheme())) {
       throw new IllegalArgumentException("schema should be " + getScheme());
     }
-    DunsInfo info = searchUnsPath(name.getPath());
+    DunsInfo info = searchUnsPath(name.getPath(),
+        conf.getBoolean(Constants.UNS_PATH_SEARCH_RECURSIVE, Constants.DEFAULT_UNS_PATH_SEARCH_RECURSIVE));
     if (info != null) {
       LOG.info("initializing from uns path, " + name);
       uns = true;
       unsPrefix = info.getPrefix();
       initializeFromUns(name, conf, info);
     } else {
-      LOG.info("initializing from config file, " + name);
+      LOG.info("initializing from config file");
       uns = false;
       initializeFromConfigFile(name, conf);
     }
+    async = conf.getBoolean(Constants.DAOS_IO_ASYNC, Constants.DEFAULT_DAOS_IO_ASYNC);
   }
 
   /**
@@ -218,11 +220,13 @@ public class DaosFileSystem extends FileSystem {
    *
    * @param path
    * path of URI
+   * @param recursive
+   * search UNS path recursively?
    * @return DunsInfo
    * @throws IOException
    * {@link DaosIOException}
    */
-  private DunsInfo searchUnsPath(String path) throws IOException {
+  private DunsInfo searchUnsPath(String path, boolean recursive) throws IOException {
     if ("/".equals(path) || !path.startsWith("/")) {
       return null;
     }
@@ -232,7 +236,7 @@ public class DaosFileSystem extends FileSystem {
       try {
         info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
           io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
-        if (info != null) {
+        if (info != null || !recursive) {
           break;
         }
       } catch (DaosIOException e) {
@@ -243,7 +247,7 @@ public class DaosFileSystem extends FileSystem {
     return info;
   }
 
-  private void parseUnsConfig(Configuration conf, DunsInfo info) throws IOException {
+  private void parseUnsConfig(Configuration conf, DunsInfo info) {
     if (!"POSIX".equalsIgnoreCase(info.getLayout())) {
       throw new IllegalArgumentException("expect POSIX file system, but " + info.getLayout());
     }
@@ -253,37 +257,37 @@ public class DaosFileSystem extends FileSystem {
     if (appInfo != null) {
       String[] pairs = appInfo.split(":");
       for (String pair : pairs) {
-        if (StringUtils.isBlank(pair)) {
+        if (DaosUtils.isBlankStr(pair)) {
           continue;
         }
         String[] kv = pair.split("=");
         try {
           switch (kv[0]) {
             case Constants.DAOS_SERVER_GROUP:
-              if (StringUtils.isBlank(conf.get(Constants.DAOS_SERVER_GROUP))) {
-                conf.set(Constants.DAOS_SERVER_GROUP, StringEscapeUtils.unescapeJava(kv[1]));
+              if (DaosUtils.isBlankStr(conf.get(Constants.DAOS_SERVER_GROUP))) {
+                conf.set(Constants.DAOS_SERVER_GROUP, DaosUtils.unEscapeUnsValue(kv[1]));
               }
               break;
             case Constants.DAOS_POOL_UUID:
-              if (StringUtils.isBlank(poolId)) {
-                poolId = StringEscapeUtils.unescapeJava(kv[1]);
+              if (DaosUtils.isBlankStr(poolId)) {
+                poolId = DaosUtils.unEscapeUnsValue(kv[1]);
               } else {
                 LOG.warn("ignoring pool id {} from app info", kv[1]);
               }
               break;
             case Constants.DAOS_POOL_SVC:
-              if (StringUtils.isBlank(conf.get(Constants.DAOS_POOL_SVC))) {
-                conf.set(Constants.DAOS_POOL_SVC, StringEscapeUtils.unescapeJava(kv[1]));
+              if (DaosUtils.isBlankStr(conf.get(Constants.DAOS_POOL_SVC))) {
+                conf.set(Constants.DAOS_POOL_SVC, DaosUtils.unEscapeUnsValue(kv[1]));
               }
               break;
             case Constants.DAOS_POOL_FLAGS:
-              if (StringUtils.isBlank(conf.get(Constants.DAOS_POOL_FLAGS))) {
-                conf.set(Constants.DAOS_POOL_FLAGS, StringEscapeUtils.unescapeJava(kv[1]));
+              if (DaosUtils.isBlankStr(conf.get(Constants.DAOS_POOL_FLAGS))) {
+                conf.set(Constants.DAOS_POOL_FLAGS, DaosUtils.unEscapeUnsValue(kv[1]));
               }
               break;
             case Constants.DAOS_CONTAINER_UUID:
-              if (StringUtils.isBlank(contId)) {
-                contId = StringEscapeUtils.unescapeJava(kv[1]);
+              if (DaosUtils.isBlankStr(contId)) {
+                contId = DaosUtils.unEscapeUnsValue(kv[1]);
               } else {
                 LOG.warn("ignoring container id {} from app info", kv[1]);
               }
@@ -293,9 +297,16 @@ public class DaosFileSystem extends FileSystem {
             case Constants.DAOS_BLOCK_SIZE:
             case Constants.DAOS_CHUNK_SIZE:
             case Constants.DAOS_READ_MINIMUM_SIZE:
-              if (StringUtils.isBlank(conf.get(kv[0]))) {
+              if (DaosUtils.isBlankStr(conf.get(kv[0]))) {
                 conf.setInt(kv[0], Integer.valueOf(kv[1]));
               }
+              break;
+            case Constants.DAOS_IO_ASYNC:
+              if (!("true".equalsIgnoreCase(kv[1]) || "false".equalsIgnoreCase(kv[1]))) {
+                throw new IllegalArgumentException("value need to be true or false for " +
+                        Constants.DAOS_IO_ASYNC);
+              }
+              conf.set(Constants.DAOS_IO_ASYNC, kv[1]);
               break;
             default:
               throw new IllegalArgumentException("unknown daos config, " + kv[0]);
@@ -361,27 +372,27 @@ public class DaosFileSystem extends FileSystem {
       String svc = conf.get(Constants.DAOS_POOL_SVC);
 
       String poolUuid = conf.get(Constants.DAOS_POOL_UUID);
-      if (StringUtils.isEmpty(poolUuid)) {
+      if (DaosUtils.isEmptyStr(poolUuid)) {
         throw new IllegalArgumentException(Constants.DAOS_POOL_UUID +
                 " is null , need to set " + Constants.DAOS_POOL_UUID);
       }
       String contUuid = conf.get(Constants.DAOS_CONTAINER_UUID);
-      if (StringUtils.isEmpty(contUuid)) {
+      if (DaosUtils.isEmptyStr(contUuid)) {
         throw new IllegalArgumentException(Constants.DAOS_CONTAINER_UUID +
                 " is null, need to set " + Constants.DAOS_CONTAINER_UUID);
       }
 
       if (LOG.isDebugEnabled()) {
         LOG.debug(name + " configs:");
-        if (!StringUtils.isBlank(svrGrp)) {
+        if (!DaosUtils.isBlankStr(svrGrp)) {
           LOG.debug("daos server group: " + svrGrp);
         }
         LOG.debug("pool uuid: " + poolUuid);
-        if (!StringUtils.isBlank(poolFlags)) {
+        if (!DaosUtils.isBlankStr(poolFlags)) {
           LOG.debug("pool flags: " + poolFlags);
         }
         LOG.debug("container uuid: " + contUuid);
-        if (!StringUtils.isBlank(svc)) {
+        if (!DaosUtils.isBlankStr(svc)) {
           LOG.debug("pool svc: " + svc);
         }
         LOG.debug("read buffer size " + readBufferSize);
@@ -394,13 +405,13 @@ public class DaosFileSystem extends FileSystem {
       // daosFSclient build
       DaosFsClient.DaosFsClientBuilder builder = new DaosFsClient.DaosFsClientBuilder().poolId(poolUuid)
               .containerId(contUuid);
-      if (!StringUtils.isBlank(svrGrp)) {
+      if (!DaosUtils.isBlankStr(svrGrp)) {
         builder.serverGroup(svrGrp);
       }
-      if (!StringUtils.isBlank(poolFlags)) {
+      if (!DaosUtils.isBlankStr(poolFlags)) {
         builder.poolFlags(Integer.valueOf(poolFlags));
       }
-      if (!StringUtils.isBlank(svc)) {
+      if (!DaosUtils.isBlankStr(svc)) {
         builder.ranks(svc);
       }
       this.daos = builder.build();
@@ -530,7 +541,8 @@ public class DaosFileSystem extends FileSystem {
     }
 
     return new FSDataInputStream(new DaosInputStream(
-            file, statistics, readBufferSize, bufferSize < minReadSize ? minReadSize : bufferSize));
+            file, statistics, readBufferSize,
+            bufferSize < minReadSize ? minReadSize : bufferSize, async));
   }
 
   @Override
@@ -572,7 +584,8 @@ public class DaosFileSystem extends FileSystem {
             this.chunkSize,
             true);
 
-    return new FSDataOutputStream(new DaosOutputStream(daosFile, key, writeBufferSize, statistics), statistics);
+    return new FSDataOutputStream(new DaosOutputStream(daosFile, writeBufferSize, statistics, async),
+        statistics);
   }
 
   @Override

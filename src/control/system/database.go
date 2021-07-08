@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -32,6 +33,7 @@ const (
 type (
 	onLeadershipGainedFn func(context.Context) error
 	onLeadershipLostFn   func() error
+	onRaftShutdownFn     func() error
 
 	raftService interface {
 		Apply([]byte, time.Duration) raft.ApplyFuture
@@ -81,12 +83,14 @@ type (
 		sync.Mutex
 		log                logging.Logger
 		cfg                *DatabaseConfig
+		initialized        atm.Bool
 		replicaAddr        *syncTCPAddr
 		raft               syncRaft
 		raftTransport      raft.Transport
 		raftLeaderNotifyCh chan bool
 		onLeadershipGained []onLeadershipGainedFn
 		onLeadershipLost   []onLeadershipLostFn
+		onRaftShutdown     []onRaftShutdownFn
 		shutdownCb         context.CancelFunc
 		shutdownErrCh      chan error
 
@@ -115,15 +119,28 @@ func (sr *syncRaft) setSvc(svc raftService) {
 	sr.svc = svc
 }
 
-// withReadLock executes the supplied closure under a read lock
-func (sr *syncRaft) withReadLock(fn func(raftService) error) error {
+// getSvc returns the raft service implementation with a closure
+// to unlock it, or an error
+func (sr *syncRaft) getSvc() (raftService, func(), error) {
 	sr.RLock()
-	defer sr.RUnlock()
 
 	if sr.svc == nil {
-		return ErrRaftUnavail
+		sr.RUnlock()
+		return nil, func() {}, ErrRaftUnavail
 	}
-	return fn(sr.svc)
+
+	return sr.svc, sr.RUnlock, nil
+}
+
+// withReadLock executes the supplied closure under a read lock
+func (sr *syncRaft) withReadLock(fn func(raftService) error) error {
+	svc, unlock, err := sr.getSvc()
+	defer unlock()
+
+	if err != nil {
+		return err
+	}
+	return fn(svc)
 }
 
 func (cfg *DatabaseConfig) stringReplicas(excludeAddr *net.TCPAddr) (replicas []string) {
@@ -235,6 +252,22 @@ func (db *Database) ReplicaAddr() (*net.TCPAddr, error) {
 	return db.getReplica(), nil
 }
 
+// PeerAddrs returns the addresses of this system's replication peers.
+func (db *Database) PeerAddrs() ([]*net.TCPAddr, error) {
+	myAddr, err := db.ReplicaAddr()
+	if err != nil {
+		return nil, err
+	}
+
+	var peers []*net.TCPAddr
+	for _, rep := range db.cfg.Replicas {
+		if !common.CmpTCPAddr(myAddr, rep) {
+			peers = append(peers, rep)
+		}
+	}
+	return peers, nil
+}
+
 // getReplica safely returns the current local replica address.
 func (db *Database) getReplica() *net.TCPAddr {
 	return db.replicaAddr.get()
@@ -246,7 +279,7 @@ func (db *Database) setReplica(addr *net.TCPAddr) {
 	db.log.Debugf("set db replica addr: %s", addr)
 }
 
-// IsReplica returns true if the system is started and is a replica.
+// IsReplica returns true if the system is configured as a replica.
 func (db *Database) IsReplica() bool {
 	return db != nil && db.getReplica() != nil
 }
@@ -263,13 +296,18 @@ func (db *Database) IsBootstrap() bool {
 	return common.CmpTCPAddr(db.cfg.Replicas[0], db.getReplica())
 }
 
-// CheckReplica returns an error if the node is not a replica.
+// CheckReplica returns an error if the node is not configured as a
+// replica or the service is not running.
 func (db *Database) CheckReplica() error {
 	if !db.IsReplica() {
 		return &ErrNotReplica{db.cfg.stringReplicas(nil)}
 	}
 
-	return nil
+	if db.initialized.IsFalse() {
+		return ErrUninitialized
+	}
+
+	return db.raft.withReadLock(func(_ raftService) error { return nil })
 }
 
 // CheckLeader returns an error if the node is not a replica
@@ -322,6 +360,12 @@ func (db *Database) OnLeadershipLost(fns ...onLeadershipLostFn) {
 	db.onLeadershipLost = append(db.onLeadershipLost, fns...)
 }
 
+// OnRaftShutdown registers callbacks to be run when this instance
+// shuts down.
+func (db *Database) OnRaftShutdown(fns ...onRaftShutdownFn) {
+	db.onRaftShutdown = append(db.onRaftShutdown, fns...)
+}
+
 // Start checks to see if the system is configured as a MS replica. If
 // not, it returns early without an error. If it is, the persistent storage
 // is initialized if necessary, and the replica is started to begin the
@@ -349,6 +393,10 @@ func (db *Database) Start(parent context.Context) error {
 		return errors.Wrap(err, "unable to configure raft service")
 	}
 
+	// Set this before starting raft so that we can distinguish between
+	// an unformatted system and one where raft isn't started.
+	db.initialized.SetTrue()
+
 	if err := db.startRaft(newDB); err != nil {
 		return errors.Wrap(err, "unable to start raft service")
 	}
@@ -362,6 +410,12 @@ func (db *Database) Start(parent context.Context) error {
 	go db.monitorLeadershipState(ctx)
 
 	return nil
+}
+
+// RemoveFiles destructively removes files associated with the system
+// database.
+func (db *Database) RemoveFiles() error {
+	return os.RemoveAll(db.cfg.RaftDir)
 }
 
 // Stop signals to the database that it should shutdown all background
@@ -444,7 +498,17 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
-		if srv.state&AvailableMemberFilter == 0 {
+		// Only members that have been auto-excluded or administratively
+		// excluded should be omitted from the group map. If a member
+		// is actually down, it will be marked dead by swim and moved
+		// into the excluded state eventually.
+		if srv.state&ExcludedMemberFilter != 0 {
+			continue
+		}
+		// Quick sanity-check: Don't include members that somehow have
+		// a nil rank or fabric URI, either.
+		if srv.Rank.Equals(NilRank) || srv.FabricURI == "" {
+			db.log.Errorf("member has invalid rank (%d) or URI (%s)", srv.Rank, srv.FabricURI)
 			continue
 		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI

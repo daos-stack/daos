@@ -1,51 +1,26 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+from cart_utils import CartTest
 
-from __future__ import print_function
 
-import sys
-
-from apricot import TestWithoutServers
-
-sys.path.append('./util')
-
-# Can't all this import before setting sys.path
-# pylint: disable=wrong-import-position
-from cart_utils import CartUtils
-
-class CartRpcOneNodeTest(TestWithoutServers):
-    """
-    Runs basic CaRT RPC tests
+class CartRpcOneNodeTest(CartTest):
+    # pylint: disable=too-few-public-methods
+    """Run basic CaRT RPC tests.
 
     :avocado: recursive
     """
-    def setUp(self):
-        """ Test setup """
-        print("Running setup\n")
-        self.utils = CartUtils()
-        self.env = self.utils.get_env(self)
-
-    def tearDown(self):
-        """ Tear down """
-        self.report_timeout()
-        self._teardown_errors.extend(self.utils.cleanup_processes())
-        super(CartRpcOneNodeTest, self).tearDown()
 
     def test_cart_rpc(self):
-        """
-        Test CaRT RPC
+        """Test CaRT RPC.
 
         :avocado: tags=all,cart,pr,daily_regression,rpc,one_node
         """
-        srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
-        clicmd = self.utils.build_cmd(self, self.env, "test_clients")
+        srvcmd = self.build_cmd(self.env, "test_servers")
+        clicmd = self.build_cmd(self.env, "test_clients")
 
-        self.utils.launch_srv_cli_test(self, srvcmd, clicmd)
-        self.utils.log_check(self)
-
-if __name__ == "__main__":
-    main()
+        self.launch_srv_cli_test(srvcmd, clicmd)
+        self.log_check()

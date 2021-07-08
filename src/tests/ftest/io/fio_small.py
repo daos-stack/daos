@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2019-2021 Intel Corporation.
 
@@ -34,6 +34,9 @@ class FioSmall(FioBase):
             read_write: rw|randrw
             numjobs: 1
 
-        :avocado: tags=all,daily_regression,hw,medium,ib2,fio,fiosmall
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=fio,checksum,tx
+        :avocado: tags=fiosmall
         """
         self.execute_fio()

@@ -35,6 +35,8 @@
  */
 #define IO_BYPASS_ENV	"DAOS_IO_BYPASS"
 
+struct obj_io_context;
+
 /**
  * Bypass client I/O RPC, it means the client stack will complete the
  * fetch/update RPC immediately, nothing will be submitted to remote server.
@@ -82,17 +84,17 @@ struct dc_object {
 	 */
 	struct daos_obj_md	 cob_md;
 	/** object class attribute */
-	struct daos_oclass_attr	*cob_oca;
+	struct daos_oclass_attr	 cob_oca;
 	/** container open handle */
 	daos_handle_t		 cob_coh;
-	/** object open mode */
-	unsigned int		 cob_mode;
 	/** cob_spin protects obj_shards' do_ref */
 	pthread_spinlock_t	 cob_spin;
 
 	/* cob_lock protects layout and shard objects ptrs */
 	pthread_rwlock_t	 cob_lock;
 
+	/** object open mode */
+	unsigned int		 cob_mode;
 	unsigned int		 cob_version;
 	unsigned int		 cob_shards_nr;
 	unsigned int		 cob_grp_size;
@@ -228,6 +230,15 @@ struct migrate_pool_tls {
 
 	/* reference count for the structure */
 	uint64_t		mpt_refcount;
+
+	/* The current inflight iod, mainly used for controlling
+	 * rebuild inflight rate to avoid the DMA buffer overflow.
+	 */
+	uint64_t		mpt_inflight_size;
+	uint64_t		mpt_inflight_max_size;
+	ABT_cond		mpt_inflight_cond;
+	ABT_mutex		mpt_inflight_mutex;
+	int			mpt_inflight_max_ult;
 	/* migrate leader ULT */
 	unsigned int		mpt_ult_running:1,
 	/* Indicates whether objects on the migration destination should be
@@ -441,6 +452,11 @@ struct dc_obj_verify_args {
 	struct dc_obj_verify_cursor	 cursor;
 };
 
+int
+dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
+	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
+	      daos_oclass_id_t *oc_id_);
+
 int dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t id,
 		      unsigned int mode, struct dc_obj_shard *shard);
 void dc_obj_shard_close(struct dc_obj_shard *shard);
@@ -492,18 +508,20 @@ int obj_shard_open(struct dc_object *obj, unsigned int shard,
 int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
 int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
 			tse_task_t **taskp);
+bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
+			      uint32_t iod_nr);
 
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
 int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 			   daos_recx_t **recxs_p, unsigned int *iod_nr);
-int obj_ec_singv_encode_buf(daos_obj_id_t oid, int shard, daos_iod_t *iod,
-			    struct daos_oclass_attr *oca,
-			    d_sg_list_t *sgl, d_iov_t *e_iov);
-int obj_ec_singv_split(daos_obj_id_t oid, uint32_t shard, daos_size_t iod_size,
-		       struct daos_oclass_attr *oca, d_sg_list_t *sgl);
+int obj_ec_singv_encode_buf(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+			    daos_iod_t *iod, d_sg_list_t *sgl, d_iov_t *e_iov);
+int obj_ec_singv_split(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+		       daos_size_t iod_size, d_sg_list_t *sgl);
 int
-obj_singv_ec_rw_filter(daos_unit_oid_t *oid, daos_iod_t *iods, uint64_t *offs,
-		       daos_epoch_t epoch, uint32_t flags, uint32_t start_shard,
+obj_singv_ec_rw_filter(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
+		       daos_iod_t *iods, uint64_t *offs, daos_epoch_t epoch,
+		       uint32_t flags, uint32_t start_shard,
 		       uint32_t nr, bool for_update, bool deg_fetch,
 		       struct daos_recx_ep_list **recov_lists_ptr);
 
@@ -520,7 +538,8 @@ obj_retry_error(int err)
 {
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
-	       err == -DER_EVICTED || err == -DER_CSUM || err == -DER_TX_BUSY ||
+	       err == -DER_EXCLUDED || err == -DER_CSUM ||
+	       err == -DER_TX_BUSY ||
 	       daos_crt_network_error(err);
 }
 
@@ -587,6 +606,7 @@ struct dc_object *obj_hdl2ptr(daos_handle_t oh);
 struct obj_io_context {
 	struct ds_cont_hdl	*ioc_coh;
 	struct ds_cont_child	*ioc_coc;
+	struct daos_oclass_attr	 ioc_oca;
 	daos_handle_t		 ioc_vos_coh;
 	uint32_t		 ioc_map_ver;
 	uint32_t		 ioc_opc;
@@ -833,10 +853,11 @@ int
 dc_tx_get_dti(daos_handle_t th, struct dtx_id *dti);
 
 int
-dc_tx_attach(daos_handle_t th, enum obj_rpc_opc opc, tse_task_t *task);
+dc_tx_attach(daos_handle_t th, struct dc_object *obj, enum obj_rpc_opc opc,
+	     tse_task_t *task);
 
 int
-dc_tx_convert(enum obj_rpc_opc opc, tse_task_t *task);
+dc_tx_convert(struct dc_object *obj, enum obj_rpc_opc opc, tse_task_t *task);
 
 /* obj_enum.c */
 int

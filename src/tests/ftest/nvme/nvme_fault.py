@@ -18,7 +18,7 @@ class NvmeFault(ServerFillUp):
     """
     def setUp(self):
         """Set up for test case."""
-        super(NvmeFault, self).setUp()
+        super().setUp()
         self.no_of_pools = self.params.get("number_of_pools", '/run/pool/*', 1)
         self.capacity = self.params.get("percentage",
                                         '/run/faulttests/pool_capacity/*')
@@ -50,8 +50,9 @@ class NvmeFault(ServerFillUp):
         #Start the IOR Command and generate the NVMe fault.
         self.start_ior_load(percent=self.capacity)
 
-        print("pool_percentage_used -- After -- {}"
-              .format(self.pool.pool_percentage_used()))
+        print(
+            "pool_percentage_used -- After -- {}".format(
+                self.pool.pool_percentage_used()))
 
         #Check nvme-health command works
         try:

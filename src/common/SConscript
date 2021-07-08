@@ -51,14 +51,20 @@ def build_dts_library(env):
 
     denv.AppendUnique(CPPPATH=["../tests/suite"])
 
-    dts_lib = daos_build.library(denv, 'libdts', ['dts.c'], LIBS=libraries)
+    denv.Replace(SHOBJPREFIX='mpi_')
+    mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    Export('mpi_cmd_parser')
+
+    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'],
+                                 LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'base_env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
@@ -73,13 +79,20 @@ def scons():
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
     build_daos_common(denv, True, prereqs)
-    build_daos_common(denv, False, prereqs)
 
-
-    prereqs.require(env, 'pmdk')
     control_tgts = [File('control.c')]
     Export('control_tgts')
 
+    cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    Export('cmd_parser')
+    dc_credit = denv.SharedObject(['credit.c'])
+    Export('dc_credit')
+
+    if prereqs.server_requested():
+        build_daos_common(denv, False, prereqs)
+
+    if not prereqs.test_requested():
+        return
     tlib_env = denv.Clone()
     tlib_env.AppendUnique(LIBS=['json-c'])
 
@@ -93,7 +106,7 @@ def scons():
     prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    build_dts_library(denv)
+    build_dts_library(base_env)
 
 if __name__ == "SCons.Script":
     scons()

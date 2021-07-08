@@ -221,6 +221,7 @@ struct agg_tst_dataset {
 	char				*td_expected_view;
 	int				 td_expected_recs;
 	bool				 td_discard;
+	bool				 td_delete;
 };
 
 static daos_size_t
@@ -365,6 +366,10 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	daos_recx_t		 recx = { 0 }, *recx_p;
 	daos_size_t		 view_len;
 	int			 punch_idx = 0, recx_idx = 0, rc;
+	int			 punch_or_delete = TF_PUNCH;
+
+	if (ds->td_delete)
+		punch_or_delete = TF_DELETE;
 
 	if (daos_unit_oid_is_null(ds->td_oid))
 		oid = dts_unit_oid_gen(0, 0, 0);
@@ -384,11 +389,11 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 
 	for (epoch = epr_u->epr_lo; epoch <= epr_u->epr_hi; epoch++) {
 		if (punch_idx < punch_nr && punch_epoch[punch_idx] == epoch) {
-			arg->ta_flags |= TF_PUNCH;
+			arg->ta_flags |= punch_or_delete;
 			punch_idx++;
 		} else if (punch_nr < 0 && (rand() % 2) &&
 			   epoch != epr_u->epr_lo) {
-			arg->ta_flags |= TF_PUNCH;
+			arg->ta_flags |= punch_or_delete;
 		}
 
 		if (ds->td_type == DAOS_IOD_SINGLE) {
@@ -401,7 +406,7 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 
 		update_value(arg, oid, epoch, 0, dkey, akey, ds->td_type,
 			     ds->td_iod_size, recx_p, buf_u);
-		arg->ta_flags &= ~TF_PUNCH;
+		arg->ta_flags &= ~punch_or_delete;
 	}
 	D_FREE(buf_u);
 
@@ -414,10 +419,17 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
-				   ds_csum_agg_recalc, NULL, NULL);
+				   ds_csum_agg_recalc, NULL, NULL, false);
 	if (rc != -DER_CSUM) {
+		/* Skip delete verification for now */
 		assert_rc_equal(rc, 0);
 		verify_view(arg, oid, dkey, akey, ds);
+	} else {
+		/*
+		 * not calling verify_view so must free ds->td_expected_view
+		 * here
+		 */
+		D_FREE(ds->td_expected_view);
 	}
 }
 
@@ -585,7 +597,8 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL,
+				   false);
 	assert_rc_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
@@ -1137,7 +1150,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 			rc = vos_discard(arg->ctx.tc_co_hdl, &epr, NULL, NULL);
 		else
 			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
-					   NULL, NULL);
+					   NULL, NULL, false);
 
 		assert_rc_equal(rc, 0);
 
@@ -1844,7 +1857,8 @@ aggregate_14(void **state)
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL,
+				   false);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
@@ -2034,7 +2048,7 @@ aggregate_22(void **state)
 
 	epr.epr_hi = epoch++;
 
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL, false);
 	assert_rc_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,
@@ -2070,6 +2084,188 @@ aggregate_22(void **state)
 	cleanup();
 }
 
+static void
+aggregate_23(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[8];
+	daos_epoch_t		 punch_epoch[3];
+	int			 iod_size = 1024, punch_nr = 3, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* record in first window */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = 1;
+	/* delete record spans window, fully covered in first window */
+	recx_arr[1].rx_idx = end_idx - 3;
+	recx_arr[1].rx_nr = 5;
+	/* record spans window, fully covered in first window */
+	recx_arr[2].rx_idx = end_idx - 4;
+	recx_arr[2].rx_nr = 6;
+	/* delete record to fill up first window */
+	recx_arr[3].rx_idx = 1;
+	recx_arr[3].rx_nr = end_idx + 1;
+	/* delete record spans window, partial covered in first window */
+	recx_arr[4].rx_idx = end_idx - 5;
+	recx_arr[4].rx_nr = 10;
+	/* delete spans window, partial covered in first window */
+	recx_arr[5].rx_idx = end_idx - 4;
+	recx_arr[5].rx_nr = 10;
+	/* delete in first window */
+	recx_arr[6].rx_idx = end_idx - 3;
+	recx_arr[6].rx_nr = 1;
+	/* delete in the next window */
+	recx_arr[7].rx_idx = end_idx + 3;
+	recx_arr[7].rx_nr = 1;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = 8;
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 4;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 8;
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = 9;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	punch_epoch[0] = 3;
+	punch_epoch[1] = 4;
+	punch_epoch[2] = 6;
+
+	VERBOSE_MSG("Aggregate deleted records spanning window end.\n");
+	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
+}
+
+static void
+aggregate_24(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[4];
+	daos_epoch_t		 punch_epochs[] = {2, 3, 4};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = end_idx - 5;
+	recx_arr[0].rx_nr = 25;
+	recx_arr[1].rx_idx = end_idx - 2;
+	recx_arr[1].rx_nr = 4;
+	recx_arr[2].rx_idx = end_idx + 4;
+	recx_arr[2].rx_nr = 4;
+	recx_arr[3].rx_idx = end_idx + 2;
+	recx_arr[3].rx_nr = 2;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 2;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 4;
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = 5;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Aggregate extents not fully covered by delete record\n");
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_25(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[6];
+	daos_epoch_t		 punch_epochs[] = {2, 5};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = end_idx - 5;
+	recx_arr[0].rx_nr = end_idx + 5;
+	recx_arr[1].rx_idx = end_idx - 2;
+	recx_arr[1].rx_nr = end_idx + 2;
+	recx_arr[2].rx_idx = end_idx - 2;
+	recx_arr[2].rx_nr = 4;
+	recx_arr[3].rx_idx = (end_idx * 5) + end_idx - 5;
+	recx_arr[3].rx_nr = end_idx + 5;
+	recx_arr[4].rx_idx = (end_idx * 5) + end_idx - 2;
+	recx_arr[4].rx_nr = end_idx + 2;
+	recx_arr[5].rx_idx = (end_idx * 5) + end_idx - 2;
+	recx_arr[5].rx_nr = 4;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 2;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Aggregate delete of end of merge window\n")
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_26(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[6];
+	daos_epoch_t		 punch_epochs[] = {2, 3, 4, 5};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = end_idx * 4;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = end_idx;
+	recx_arr[2].rx_idx = end_idx;
+	recx_arr[2].rx_nr = end_idx;
+	recx_arr[3].rx_idx = end_idx * 2;
+	recx_arr[3].rx_nr = end_idx;
+	recx_arr[4].rx_idx = end_idx * 3;
+	recx_arr[4].rx_nr = end_idx;
+	recx_arr[5].rx_idx = end_idx * 12;
+	recx_arr[5].rx_nr = end_idx;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 1;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Consecutive removed extents\n");
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
 
 static int
 agg_tst_teardown(void **state)
@@ -2157,6 +2353,14 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_21, NULL, agg_tst_teardown },
 	{ "VOS422: Conditional fetch before and after aggregation is same",
 	  aggregate_22, NULL, agg_tst_teardown },
+	{ "VOS423: Aggregate deleted records spanning window end",
+	  aggregate_23, NULL, agg_tst_teardown },
+	{ "VOS424: Aggregate extents not fully covered by delete record",
+	  aggregate_24, NULL, agg_tst_teardown },
+	{ "VOS425: Aggregate delete of end of merge window",
+	  aggregate_25, NULL, agg_tst_teardown },
+	{ "VOS426: Consecutive removed extents",
+	  aggregate_26, NULL, agg_tst_teardown },
 };
 
 int

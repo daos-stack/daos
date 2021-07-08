@@ -25,7 +25,7 @@ enum {
 };
 
 struct gc_test_args {
-	struct dts_context	 gc_ctx;
+	struct credit_context	 gc_ctx;
 	bool			 gc_array;
 };
 
@@ -78,7 +78,7 @@ gc_print_stat(void)
 
 int
 gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
-	      daos_epoch_t epoch, struct dts_io_credit *cred)
+	      daos_epoch_t epoch, struct io_credit *cred)
 {
 	daos_iod_t	*iod = &cred->tc_iod;
 	d_sg_list_t	*sgl = &cred->tc_sgl;
@@ -112,14 +112,13 @@ gc_obj_update(struct gc_test_args *args, daos_handle_t coh, daos_unit_oid_t oid,
 
 		gc_add_stat(STAT_RECX);
 		rc = vos_update_begin(coh, oid, epoch, 0, &cred->tc_dkey, 1,
-				      &cred->tc_iod, NULL, false, 0, &ioh,
-				      NULL);
+				      &cred->tc_iod, NULL, 0, &ioh, NULL);
 		if (rc != 0) {
 			print_error("Failed to prepare ZC update\n");
 			return rc;
 		}
 
-		rc = bio_iod_prep(vos_ioh2desc(ioh));
+		rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
 		if (rc) {
 			print_error("Failed to prepare bio desc\n");
 			return rc;
@@ -145,7 +144,7 @@ static int
 gc_obj_prepare(struct gc_test_args *args, daos_handle_t coh,
 	       daos_unit_oid_t *oids)
 {
-	struct dts_io_credit	*cred;
+	struct io_credit	*cred;
 	daos_iod_t		*iod;
 	int		         i;
 	int			 j;
@@ -198,7 +197,7 @@ gc_wait_check(struct gc_test_args *args, bool cont_delete)
 	while (1) {
 		int	creds = 64;
 
-		rc = vos_gc_pool(args->gc_ctx.tsc_poh, &creds);
+		rc = vos_gc_pool_tight(args->gc_ctx.tsc_poh, &creds);
 		if (rc) {
 			print_error("gc pool failed: %s\n", d_errstr(rc));
 			return rc;
@@ -241,8 +240,8 @@ gc_wait_check(struct gc_test_args *args, bool cont_delete)
 int
 gc_key_run(struct gc_test_args *args)
 {
-	struct dts_io_credit *creds[CREDS_MAX] = {NULL};
-	struct dts_io_credit *cred;
+	struct io_credit *creds[CREDS_MAX] = {NULL};
+	struct io_credit *cred;
 	daos_unit_oid_t	      oid;
 	int		      i;
 	int		      rc;
@@ -555,7 +554,7 @@ gc_cont_test(void **state)
 static int
 gc_setup(void **state)
 {
-	struct dts_context	*tc = &gc_args.gc_ctx;
+	struct credit_context	*tc = &gc_args.gc_ctx;
 
 	memset(&gc_stat, 0, sizeof(gc_stat));
 	memset(&gc_args, 0, sizeof(gc_args));

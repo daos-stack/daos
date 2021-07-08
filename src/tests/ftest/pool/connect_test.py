@@ -1,10 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import traceback
 
@@ -48,7 +48,7 @@ class ConnectTest(TestWithServers):
         scm_size = self.params.get("scm_size", "/run/pool*")
 
         try:
-            data = dmg.pool_create(scm_size=scm_size, group=set_id)
+            data = dmg.pool_create(scm_size=scm_size)
             if dmg.result.exit_status != 0:
                 self.fail("    Unable to parse the Pool's UUID and SVC.")
 

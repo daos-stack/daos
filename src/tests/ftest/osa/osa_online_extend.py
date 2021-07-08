@@ -13,13 +13,7 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
+import queue
 
 
 class OSAOnlineExtend(OSAUtils):
@@ -32,7 +26,7 @@ class OSAOnlineExtend(OSAUtils):
     """
     def setUp(self):
         """Set up for test case."""
-        super(OSAOnlineExtend, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
         self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
@@ -115,8 +109,6 @@ class OSAOnlineExtend(OSAUtils):
                     thrd.start()
                     time.sleep(1)
             self.pool = pool[val]
-            scm_size = self.pool.scm_size
-            nvme_size = self.pool.nvme_size
             self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
 
@@ -126,9 +118,7 @@ class OSAOnlineExtend(OSAUtils):
             # Give sometime for the additional server to come up.
             time.sleep(25)
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                  rank, scm_size,
-                                                  nvme_size)
+            output = self.dmg_command.pool_extend(self.pool.uuid, rank)
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
@@ -160,8 +150,10 @@ class OSAOnlineExtend(OSAUtils):
         """Test ID: DAOS-4751
         Test Description: Validate Online extend
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_extend,online_extend
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_extend,online_extend
         """
         # Perform extend testing with 1 to 2 pools
         self.run_online_extend_test(1)

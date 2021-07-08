@@ -59,10 +59,10 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	D_INFO("Received request to prep shutdown %u\n", req->rank);
 
 #ifndef DRPC_TEST
-	ds_pool_disable_evict();
+	ds_pool_disable_exclude();
 #endif
 
-	/* TODO: disable auto evict and pool rebuild here */
+	/* TODO: disable auto exclude and pool rebuild here */
 	D_INFO("Service rank %d is being prepared for controlled shutdown\n",
 		req->rank);
 
@@ -311,7 +311,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&prop, req->user, req->usergroup, req->name,
+	rc = create_pool_props(&prop, req->user, req->usergroup, req->label,
 			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
@@ -321,8 +321,6 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 				 req->scmbytes, req->nvmebytes,
 				 prop, req->numsvcreps, &svc,
 				 req->n_faultdomains, req->faultdomains);
-	if (targets != NULL)
-		d_rank_list_free(targets);
 	if (rc != 0) {
 		D_ERROR("failed to create pool: "DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -354,6 +352,8 @@ out:
 	mgmt__pool_create_req__free_unpacked(req, &alloc.alloc);
 
 	daos_prop_free(prop);
+	if (targets != NULL)
+		d_rank_list_free(targets);
 
 	D_FREE(resp.svc_reps);
 }
@@ -696,6 +696,13 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	d_rank_list_free(svc_ranks);
 
+	/* For the moment, just echo back the allocations from the request.
+	 * In the future, we may need to adjust the allocations somehow and
+	 * this is how we would let the caller know.
+	 */
+	resp.scm_bytes = req->scmbytes;
+	resp.nvme_bytes = req->nvmebytes;
+
 out_list:
 	d_rank_list_free(rank_list);
 out:
@@ -923,6 +930,10 @@ free_ace_list(char **list, size_t len)
 static void
 free_resp_acl(Mgmt__ACLResp *resp)
 {
+	if (resp->owneruser && resp->owneruser[0] != '\0')
+		D_FREE(resp->owneruser);
+	if (resp->ownergroup && resp->ownergroup[0] != '\0')
+		D_FREE(resp->ownergroup);
 	free_ace_list(resp->acl, resp->n_acl);
 }
 
@@ -964,12 +975,14 @@ prop_to_acl_response(daos_prop_t *prop, Mgmt__ACLResp *resp)
 	}
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER);
-	if (entry != NULL && entry->dpe_str != NULL)
+	if (entry != NULL && entry->dpe_str != NULL &&
+	    entry->dpe_str[0] != '\0')
 		D_STRNDUP(resp->owneruser, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 
 	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_OWNER_GROUP);
-	if (entry != NULL && entry->dpe_str != NULL)
+	if (entry != NULL && entry->dpe_str != NULL &&
+	    entry->dpe_str[0] != '\0')
 		D_STRNDUP(resp->ownergroup, entry->dpe_str,
 			  DAOS_ACL_MAX_PRINCIPAL_LEN);
 

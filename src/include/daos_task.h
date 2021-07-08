@@ -171,18 +171,20 @@ typedef struct {
 	int			force;
 } daos_pool_destroy_t;
 
-/** pool connect args */
+/** pool connect by UUID args */
 typedef struct {
 	/** UUID of the pool. */
-	uuid_t			uuid;
+	uuid_t			 uuid;
 	/** Process set name of the DAOS servers managing the pool. */
 	const char		*grp;
 	/** Connect mode represented by the DAOS_PC_ bits. */
-	unsigned int		flags;
+	unsigned int		 flags;
 	/** Returned open handle. */
 	daos_handle_t		*poh;
 	/** Optional, returned pool information. */
 	daos_pool_info_t	*info;
+	/** Pool label, API v1.2.2 (placed at end for ABI compatibility) */
+	const char		*label;
 } daos_pool_connect_t;
 
 /** pool disconnect args */
@@ -330,7 +332,7 @@ typedef struct {
 	daos_prop_t		*prop;
 } daos_cont_create_t;
 
-/** Container open args */
+/** Container open by UUID args */
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
@@ -342,6 +344,8 @@ typedef struct {
 	daos_handle_t		*coh;
 	/** Optional, return container information. */
 	daos_cont_info_t	*info;
+	/** Container label, API v1.2.2 (placed at end for ABI compatibility) */
+	const char		*label;
 } daos_cont_open_t;
 
 /** Container close args */
@@ -358,6 +362,8 @@ typedef struct {
 	uuid_t			uuid;
 	/** Force destroy even if there is outstanding open handles. */
 	int			force;
+	/* label, API v1.2.4 (placed at end for ABI compatibility) */
+	const char	       *label;
 } daos_cont_destroy_t;
 
 /** Container query args */

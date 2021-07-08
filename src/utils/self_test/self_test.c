@@ -55,8 +55,8 @@ static const char * const crt_st_msg_type_str[] = { "EMPTY",
 
 /* Global shutdown flag, used to terminate the progress thread */
 static int g_shutdown_flag;
-
 static bool g_randomize_endpoints;
+static bool g_group_inited;
 
 static void *progress_fn(void *arg)
 {
@@ -124,6 +124,9 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		D_ERROR("crt_group_attach failed; ret = %d\n", ret);
 		return ret;
 	}
+
+	g_group_inited = true;
+
 	D_ASSERTF(*srv_grp != NULL,
 		  "crt_group_attach succeeded but returned group is NULL\n");
 
@@ -895,8 +898,8 @@ static int run_self_test(struct st_size_params all_params[],
 		if (num_ms_endpts != num_ms_endpts_in) {
 			struct st_master_endpt *realloc_ptr;
 
-			D_REALLOC(realloc_ptr, ms_endpts,
-				  num_ms_endpts * sizeof(*ms_endpts));
+			D_REALLOC_ARRAY(realloc_ptr, ms_endpts,
+					num_ms_endpts_in, num_ms_endpts);
 			if (realloc_ptr == NULL)
 				D_GOTO(cleanup, ret = -DER_NOMEM);
 			ms_endpts = realloc_ptr;
@@ -1005,7 +1008,7 @@ cleanup_nothread:
 		D_FREE(latencies);
 	}
 
-	if (srv_grp != NULL) {
+	if (srv_grp != NULL && g_group_inited) {
 		cleanup_ret = crt_group_detach(srv_grp);
 		if (cleanup_ret != 0)
 			D_ERROR("crt_group_detach failed; ret = %d\n",
@@ -1187,9 +1190,6 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Short version: -b\n"
 	       "      By default, self-test outputs performance results in MB (#Bytes/1024^2)\n"
 	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n"
-	       "  --singleton\n"
-	       "      Short version: -t\n"
-	       "      If specified, self_test will launch as a singleton process (with no orterun).\n"
 	       "  --path  /path/to/attach_info_file/directory/n"
 	       "      Short version: -p  prefix\n"
 	       "      This option implies --singleton is set.\n"
@@ -1317,7 +1317,7 @@ int parse_endpoint_string(char *const opt_arg,
 	uint32_t		 num_ranks = 0;
 	char			*tag_valid_str = NULL;
 	uint32_t		 num_tags = 0;
-	void			*realloced_mem;
+	struct st_endpoint	*realloced_mem;
 	struct st_endpoint	*next_endpoint;
 
 	/*
@@ -1398,11 +1398,11 @@ int parse_endpoint_string(char *const opt_arg,
 	printf("  tags: %s (# tags = %u)\n", tag_valid_str, num_tags);
 
 	/* Reallocate/expand the endpoints array */
-	*num_endpts += num_ranks * num_tags;
-	D_REALLOC(realloced_mem, *endpts,
-		  sizeof(struct st_endpoint) * (*num_endpts));
+	D_REALLOC_ARRAY(realloced_mem, *endpts, *num_endpts,
+			*num_endpts + num_ranks * num_tags);
 	if (realloced_mem == NULL)
 		D_GOTO(cleanup, ret = -DER_NOMEM);
+	*num_endpts += num_ranks * num_tags;
 	*endpts = (struct st_endpoint *)realloced_mem;
 
 	/* Populate the newly expanded values in the endpoints array */
@@ -1740,15 +1740,19 @@ int main(int argc, char *argv[])
 		case 'b':
 			output_megabits = 1;
 			break;
-		case 't':
-			break;
 		case 'p':
 			attach_info_path = optarg;
 			break;
 		case 'q':
 			g_randomize_endpoints = true;
 			break;
+
+		/* 't' and 'n' options are deprecated */
+		case 't':
+			printf("Warning: 't' argument is deprecated\n");
+			break;
 		case 'n':
+			printf("Warning: 'n' argument is deprecated\n");
 			break;
 		case '?':
 		default:
@@ -1822,11 +1826,11 @@ int main(int argc, char *argv[])
 
 	/* Shrink the buffer if some of the user's tokens weren't kept */
 	if (num_msg_sizes < num_tokens + 1) {
-		void *realloced_mem;
+		struct st_size_params *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		D_REALLOC(realloced_mem, all_params,
-			  num_msg_sizes * sizeof(all_params[0]));
+		D_REALLOC_ARRAY(realloced_mem, all_params, num_tokens + 1,
+				num_msg_sizes);
 		if (realloced_mem == NULL)
 			D_GOTO(cleanup, ret = -DER_NOMEM);
 		all_params = (struct st_size_params *)realloced_mem;
@@ -1893,6 +1897,14 @@ int main(int argc, char *argv[])
 
 	/********************* Clean up *********************/
 cleanup:
+	if (ms_endpts != NULL) {
+		D_FREE(ms_endpts);
+		ms_endpts = NULL;
+	}
+	if (endpts != NULL) {
+		D_FREE(endpts);
+		endpts = NULL;
+	}
 	if (all_params != NULL)
 		D_FREE(all_params);
 	d_log_fini();

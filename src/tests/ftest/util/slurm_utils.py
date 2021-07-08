@@ -5,7 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from __future__ import print_function
+
 import os
 import random
 import time
@@ -97,7 +97,7 @@ def get_reserved_nodes(reservation, partition):
 
     if partition_result:
         # Get the list of hosts from the reservation information
-        output = partition_result.stdout
+        output = partition_result.stdout_text
         match = re.search(r"\sNodes=(\S+)", str(output))
         if match is not None:
             partition_hosts = list(NodeSet(match.group(1)))
@@ -107,7 +107,7 @@ def get_reserved_nodes(reservation, partition):
             reservation_result = run_command(cmd, raise_exception=False)
             if reservation_result:
                 # Get the list of hosts from the reservation information
-                output = reservation_result.stdout
+                output = reservation_result.stdout_text
                 match = re.search(r"\sNodes=(\S+)", str(output))
                 if match is not None:
                     reservation_hosts = list(NodeSet(match.group(1)))
@@ -150,7 +150,7 @@ def write_slurm_script(path, name, output, nodecount, cmds, uniq, sbatch=None):
             output = output + str(uniq)
             script_file.write("#SBATCH --output={}\n".format(output))
         if sbatch:
-            for key, value in sbatch.items():
+            for key, value in list(sbatch.items()):
                 if key == "error":
                     value = value + str(uniq)
                 script_file.write("#SBATCH --{}={}\n".format(key, value))
@@ -187,9 +187,9 @@ def run_slurm_script(script, logfile=None):
     try:
         result = run_command(cmd, timeout=10)
     except DaosTestError as error:
-        raise SlurmFailed("job failed : {}".format(error))
+        raise SlurmFailed("job failed : {}".format(error)) from error
     if result:
-        output = result.stdout
+        output = result.stdout_text
         match = re.search(r"Submitted\s+batch\s+job\s+(\d+)", str(output))
         if match is not None:
             job_id = match.group(1)
@@ -209,7 +209,7 @@ def check_slurm_job(handle):
     """
     command = "scontrol show job {}".format(handle)
     result = run_command(command, raise_exception=False, verbose=False)
-    match = re.search(r"JobState=([a-zA-Z]+)", result.stdout)
+    match = re.search(r"JobState=([a-zA-Z]+)", result.stdout_text)
     if match is not None:
         state = match.group(1)
     else:
@@ -251,9 +251,8 @@ def watch_job(handle, maxwait, test_obj):
                 print("Job {} has timedout after {} secs".format(handle,
                                                                  maxwait))
                 break
-            else:
-                wait_time += 5
-                time.sleep(5)
+            wait_time += 5
+            time.sleep(5)
         else:
             break
 
@@ -281,7 +280,7 @@ def srun_str(hosts, cmd, srun_params=None):
     if hosts is not None:
         params_list.append("--nodelist {}".format(hosts))
     if srun_params is not None:
-        for key, value in srun_params.items():
+        for key, value in list(srun_params.items()):
             params_list.extend(["--{}={}".format(key, value)])
             params = " ".join(params_list)
     cmd = "srun {} {}".format(params, cmd)
@@ -306,5 +305,5 @@ def srun(hosts, cmd, srun_params=None):
         result = run_command(cmd, timeout=30)
     except DaosTestError as error:
         result = None
-        raise SlurmFailed("srun failed : {}".format(error))
+        raise SlurmFailed("srun failed : {}".format(error)) from error
     return result

@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from apricot import TestWithServers
 from agent_utils import include_local_host
@@ -20,7 +20,7 @@ class DaosAgentConfigTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DaosAgentConfigTest object."""
-        super(DaosAgentConfigTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.start_agents_once = False
         self.start_servers_once = False
         self.setup_start_agents = False

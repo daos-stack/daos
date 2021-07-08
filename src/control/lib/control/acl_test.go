@@ -10,8 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -65,23 +63,10 @@ func TestControl_ReadACLFile_FileOpenFailed(t *testing.T) {
 	}
 }
 
-func createTestFile(t *testing.T, filePath string, content string) {
-	file, err := os.Create(filePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer file.Close()
-
-	_, err = file.WriteString(content)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestControl_ReadACLFile_Success(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "testACLFile.txt")
-	createTestFile(t, path, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
-	defer os.Remove(path)
+	dir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+	path := common.CreateTestFile(t, dir, "A::OWNER@:rw\nA::user1@:rw\nA:g:group1@:r\n")
 
 	expectedNumACEs := 3
 
@@ -102,9 +87,9 @@ func TestControl_ReadACLFile_Success(t *testing.T) {
 }
 
 func TestReadACLFile_Empty(t *testing.T) {
-	path := filepath.Join(os.TempDir(), "empty.txt")
-	createTestFile(t, path, "")
-	defer os.Remove(path)
+	dir, cleanup := common.CreateTestDir(t)
+	defer cleanup()
+	path := common.CreateTestFile(t, dir, "")
 
 	result, err := ReadACLFile(path)
 

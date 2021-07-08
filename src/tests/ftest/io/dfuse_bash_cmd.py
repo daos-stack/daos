@@ -70,26 +70,26 @@ class BashCmd(DfuseTestBase):
                 abs_file_path1 = os.path.join(abs_dir_path, file_name1)
                 abs_file_path2 = os.path.join(abs_dir_path, file_name2)
                 # list of commands to be executed.
-                commands = [u"mkdir -p {}".format(abs_dir_path),
-                            u"touch {}".format(abs_file_path1),
-                            u"ls -a {}".format(abs_file_path1),
-                            u"rm {}".format(abs_file_path1),
-                            u"dd if=/dev/zero of={} count={} bs={}".format(
+                commands = ["mkdir -p {}".format(abs_dir_path),
+                            "touch {}".format(abs_file_path1),
+                            "ls -a {}".format(abs_file_path1),
+                            "rm {}".format(abs_file_path1),
+                            "dd if=/dev/zero of={} count={} bs={}".format(
                                 abs_file_path1, dd_count, dd_blocksize),
-                            u"ls -al {}".format(abs_file_path1),
-                            u"filesize=$(stat -c%s '{}');\
+                            "ls -al {}".format(abs_file_path1),
+                            "filesize=$(stat -c%s '{}');\
                             if (( filesize != {}*{} )); then exit 1;\
                             fi".format(abs_file_path1, dd_count, dd_blocksize),
-                            u"cp -r {} {}".format(abs_file_path1,
+                            "cp -r {} {}".format(abs_file_path1,
                                                   abs_file_path2),
-                            u"cmp --silent {} {}".format(abs_file_path1,
+                            "cmp --silent {} {}".format(abs_file_path1,
                                                          abs_file_path2),
-                            u"rm {}".format(abs_file_path2),
-                            u"mv {} {}".format(abs_file_path1,
+                            "rm {}".format(abs_file_path2),
+                            "mv {} {}".format(abs_file_path1,
                                                abs_file_path2),
-                            u"ls -al {}".format(abs_file_path2),
-                            u"rm {}".format(abs_file_path2),
-                            u"rmdir {}".format(abs_dir_path)]
+                            "ls -al {}".format(abs_file_path2),
+                            "rm {}".format(abs_file_path2),
+                            "rmdir {}".format(abs_dir_path)]
                 for cmd in commands:
                     try:
                         # execute bash cmds
@@ -99,7 +99,7 @@ class BashCmd(DfuseTestBase):
                             error_hosts = NodeSet(
                                 ",".join(
                                     [str(node_set) for code, node_set in
-                                     ret_code.items() if code != 0]))
+                                     list(ret_code.items()) if code != 0]))
                             raise CommandFailure(
                                 "Error running '{}' on the following "
                                 "hosts: {}".format(cmd, error_hosts))

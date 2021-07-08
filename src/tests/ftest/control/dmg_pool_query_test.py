@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from ior_test_base import IorTestBase
 from test_utils_pool import TestPool
@@ -12,14 +12,18 @@ from control_test_base import ControlTestBase
 
 
 class DmgPoolQueryTest(ControlTestBase, IorTestBase):
-    """Test Class Description:
-    Simple test to verify the pool query command of dmg tool.
+    # pylint: disable=too-many-ancestors
+    """Test dmg query command.
+
+    Test Class Description:
+        Simple test to verify the pool query command of dmg tool.
+
     :avocado: recursive
     """
-    # pylint: disable=too-many-ancestors
+
     def setUp(self):
         """Set up for dmg pool query."""
-        super(DmgPoolQueryTest, self).setUp()
+        super().setUp()
 
         # Init the pool
         self.pool = TestPool(self.context, self.dmg)
@@ -75,7 +79,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # defined manually:
         exp_info = {
             "status": self.params.get("pool_status", path="/run/exp_vals/*"),
-            "uuid": self.uuid.upper(),
+            "uuid": self.uuid.lower(),
             "total_targets": self.params.get(
                 "total_targets", path="/run/exp_vals/*"),
             "active_targets": self.params.get(
@@ -127,22 +131,27 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         errors_list = []
         uuids = self.params.get("uuids", '/run/pool_uuids/*')
 
+        # Add a pass case to verify test is working
+        uuids.append([self.uuid, "PASS"])
+
         # Disable raising an exception if the dmg command fails
         self.dmg.exit_status_exception = False
 
         for uuid in uuids:
-            self.log.info("\n==>   Using test UUID: %s", uuid[0])
-            self.log.info("==>   Test is expected to finish with: %s", uuid[1])
+            # Verify pool query status
+            data = self.get_pool_query_info(uuid[0])
+            error = data["error"] if "error" in data else None
 
-            # Verify
-            out = self.get_pool_query_info(uuid[0])
-            if out:
-                exception = None
-            elif not out:
-                exception = 1
+            self.log.info("")
+            self.log.info("==>  Using test UUID:                   %s", uuid[0])
+            self.log.info("==>  Pool query command is expected to: %s", uuid[1])
+            self.log.info("==>  Error from dmp pool query:         %s", error)
+            self.log.info("")
 
-            if uuid[1] == "FAIL" and exception is None:
+            if uuid[1] == "FAIL" and error is None:
                 errors_list.append("==>   Test expected to fail:" + uuid[0])
+            elif uuid[1] == "PASS" and error is not None:
+                errors_list.append("==>   Test expected to pass:" + uuid[0])
 
         # Enable exceptions again for dmg.
         self.dmg.exit_status_exception = True

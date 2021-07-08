@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -24,7 +24,7 @@ class ListContainerTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ListContainerTest object."""
-        super(ListContainerTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
     def create_list(self, count, pool_uuid, expected_uuids):

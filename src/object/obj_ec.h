@@ -16,7 +16,7 @@
 /** MAX number of data cells */
 #define OBJ_EC_MAX_K		(64)
 /** MAX number of parity cells */
-#define OBJ_EC_MAX_P		(16)
+#define OBJ_EC_MAX_P		(8)
 #define OBJ_EC_MAX_M		(OBJ_EC_MAX_K + OBJ_EC_MAX_P)
 /** Length of target bitmap */
 #define OBJ_TGT_BITMAP_LEN						\
@@ -219,6 +219,10 @@ struct obj_ec_recov_codec {
 /* EC recovery task */
 struct obj_ec_recov_task {
 	daos_iod_t		ert_iod;
+	/* the original user iod pointer, used for the case that in singv
+	 * degraded fetch, set the iod_size.
+	 */
+	daos_iod_t		*ert_oiod;
 	d_sg_list_t		ert_sgl;
 	daos_epoch_t		ert_epoch;
 	daos_handle_t		ert_th; /* read-only tx handle */
@@ -226,10 +230,6 @@ struct obj_ec_recov_task {
 
 /** EC obj IO failure information */
 struct obj_ec_fail_info {
-	/* the original user iods pointer, used for the case that in singv
-	 * degraded fetch, set the iod_size.
-	 */
-	daos_iod_t			*efi_uiods;
 	/* missed (to be recovered) recx list */
 	struct daos_recx_ep_list	*efi_recx_lists;
 	/* list of error targets */
@@ -512,10 +512,36 @@ obj_iod_break(daos_iod_t *iod, struct daos_oclass_attr *oca)
 	return 0;
 }
 
+/* translate iod's recxs from unmapped daos extend to mapped vos extents */
+static inline void
+obj_iod_recx_daos2vos(uint32_t iod_nr, daos_iod_t *iods,
+		      struct daos_oclass_attr *oca)
+{
+	daos_iod_t	*iod;
+	daos_recx_t	*recx;
+	uint64_t	 stripe_rec_nr = obj_ec_stripe_rec_nr(oca);
+	uint64_t	 cell_rec_nr = obj_ec_cell_rec_nr(oca);
+	uint32_t	 i, j;
+
+	for (i = 0; i < iod_nr; i++) {
+		iod = &iods[i];
+		if (iod->iod_type == DAOS_IOD_SINGLE)
+			continue;
+
+		for (j = 0; j < iod->iod_nr; j++) {
+			recx = &iod->iod_recxs[j];
+			D_ASSERT((recx->rx_idx & PARITY_INDICATOR) == 0);
+			recx->rx_idx = obj_ec_idx_daos2vos(recx->rx_idx,
+							   stripe_rec_nr,
+							   cell_rec_nr);
+		}
+	}
+}
+
 /* translate iod's recxs from mapped VOS extend to unmapped daos extents */
 static inline int
 obj_iod_recx_vos2daos(uint32_t iod_nr, daos_iod_t *iods, uint32_t tgt_idx,
-		     struct daos_oclass_attr *oca)
+		      struct daos_oclass_attr *oca)
 {
 	daos_iod_t	*iod;
 	daos_recx_t	*recx;
@@ -597,15 +623,9 @@ obj_ec_tgt_in_err(uint32_t *err_list, uint32_t nerrs, uint16_t tgt_idx)
 }
 
 static inline bool
-obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr **p_attr)
+obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr *attr)
 {
-	struct daos_oclass_attr *attr;
-	bool is_ec;
-
-	is_ec = daos_oclass_is_ec(oid.id_pub, &attr);
-	if (p_attr != NULL)
-		*p_attr = attr;
-	if (!is_ec)
+	if (!daos_oclass_is_ec(attr))
 		return false;
 
 	if ((oid.id_shard % obj_ec_tgt_nr(attr)) < obj_ec_data_tgt_nr(attr))
@@ -657,7 +677,8 @@ int obj_ec_get_degrade(struct obj_reasb_req *reasb_req, uint16_t fail_tgt_idx,
 struct obj_rw_in;
 int obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			uint32_t iod_nr, uint32_t start_shard,
-			uint32_t max_shard, void *tgt_map, uint32_t map_size,
+			uint32_t max_shard, uint32_t leader_id,
+			void *tgt_map, uint32_t map_size,
 			uint32_t tgt_nr, struct daos_shard_tgt *tgts,
 			struct obj_ec_split_req **split_req);
 void obj_ec_split_req_fini(struct obj_ec_split_req *req);

@@ -47,6 +47,16 @@ int
 vos_dtx_pin(struct dtx_handle *dth, bool persistent);
 
 /**
+ * Check whether DTX entry attached to the DTX handle is still valid or not.
+ *
+ * \param dth		[IN]	The dtx handle
+ *
+ * \return		The DTX entry status.
+ */
+int
+vos_dtx_validation(struct dtx_handle *dth);
+
+/**
  * Check the specified DTX's status, and related epoch, pool map version
  * information if required.
  *
@@ -56,7 +66,8 @@ vos_dtx_pin(struct dtx_handle *dth, bool persistent);
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
- * \param mbs		[OUT	Pointer to the DTX participants information.]
+ * \param mbs		[OUT]	Pointer to the DTX participants information.
+ * \param dck		[OUT]	Pointer to the key for CoS cache.
  * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
@@ -75,7 +86,8 @@ vos_dtx_pin(struct dtx_handle *dth, bool persistent);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs,
+	      struct dtx_cos_key *dck, bool for_resent);
 
 /**
  * Commit the specified DTXs.
@@ -83,15 +95,14 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  * \param coh	[IN]	Container open handle.
  * \param dtis	[IN]	The array for DTX identifiers to be committed.
  * \param count [IN]	The count of DTXs to be committed.
- * \param dcks	[OUT]	The array to hold the OID and dkey hash corresponding to
- *			the committed DTXs array for subsequent CoS handling.
+ * \param rm_cos [OUT]	The array for whether remove entry from CoS cache.
  *
  * \return		Negative value if error.
  * \return		Others are for the count of committed DTXs.
  */
 int
 vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
-	       struct dtx_cos_key *dcks);
+	       bool *rm_cos);
 
 /**
  * Abort the specified DTXs.
@@ -123,9 +134,10 @@ vos_dtx_aggregate(daos_handle_t coh);
  *
  * \param coh	[IN]	Container open handle.
  * \param stat	[OUT]	The structure to hold the DTXs information.
+ * \param flags	[IN]	The flags for stat operation.
  */
 void
-vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat);
+vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags);
 
 /**
  * Set the DTX committable as committable.
@@ -209,18 +221,21 @@ vos_self_fini(void);
  */
 
 /**
- * Create a Versioning Object Storage Pool (VOSP) and its root object.
+ * Create a Versioning Object Storage Pool (VOSP), and open it if \a poh is not
+ * NULL
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
  * \param scm_sz [IN]	Size of SCM for the pool
  * \param blob_sz[IN]	Size of blob for the pool
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param poh	[OUT]	Returned pool handle if not NULL
  *
  * \return              Zero on success, negative value if error
  */
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
-		daos_size_t blob_sz);
+		daos_size_t blob_sz, unsigned int flags, daos_handle_t *poh);
 
 /**
  * Kill a VOS pool before destroy
@@ -246,19 +261,18 @@ int
 vos_pool_destroy(const char *path, uuid_t uuid);
 
 /**
- * Open a Versioning Object Storage Pool (VOSP), load its root object
- * and other internal data structures.
+ * Open a Versioning Object Storage Pool (VOSP)
  *
  * \param path	[IN]	Path of the memory pool
  * \param uuid	[IN]    Pool UUID
- * \param small	[IN]	Pool is small
- *			(system memory reservation shall be small, to fit)
+ * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
  * \param poh	[OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
 int
-vos_pool_open(const char *path, uuid_t uuid, bool small, daos_handle_t *poh);
+vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
+	      daos_handle_t *poh);
 
 /**
  * Close a VOSP, all opened containers sharing this pool handle
@@ -380,13 +394,14 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  * \param csum_func  [IN]	Pointer to csum recalculation function
  * \param yield_func [IN]	Pointer to customized yield function
  * \param yield_arg  [IN]	Argument of yield function
+ * \param full_scan  [IN]	Full scan for snapshot deletion
  *
  * \return			Zero on success, negative value if error
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
-	      void *yield_arg);
+	      void *yield_arg, bool full_scan);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr
@@ -689,7 +704,6 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
- * \param dedup [IN]	Whether deduplication is enabled for this I/O
  * \param dedup_th [IN]	Deduplication threshold size
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
@@ -700,8 +714,7 @@ int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
-		 struct dtx_handle *dth);
+		 uint32_t dedup_th, daos_handle_t *ioh, struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -758,6 +771,20 @@ vos_ioh2ci_nr(daos_handle_t ioh);
  */
 struct bio_sglist *
 vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
+
+/**
+ * Get the bulk handle associated with a given I/O descriptor.
+ *
+ * \param ioh		[IN]	The I/O handle
+ * \param sgl_idx	[IN]	SGL index
+ * \param iov_idx	[IN]	IOV index within the SGL
+ * \param bulk_off	[OUT]	Bulk offset
+ *
+ * \return			Bulk handle
+ */
+void *
+vos_iod_bulk_at(daos_handle_t ioh, unsigned int sgl_idx, unsigned int iov_idx,
+		unsigned int *bulk_off);
 
 void
 vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums);
@@ -1048,8 +1075,8 @@ int
 vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
 
 int
-vos_gc_pool_run(daos_handle_t poh, int credits,
-		bool (*yield_func)(void *arg), void *yield_arg);
+vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
+	    void *yield_arg);
 bool
 vos_gc_pool_idle(daos_handle_t poh);
 
@@ -1073,13 +1100,13 @@ void
 vos_profile_stop(void);
 
 /**
- * Helper functions to create/free duplicated bsgl for dedup verify.
+ * Helper functions for dedup verify.
  */
 int
-vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
-		   struct bio_sglist *bsgl_dup);
-void
-vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
+		      unsigned int bulk_perm);
+int
+vos_dedup_verify(daos_handle_t ioh);
 
 /** Raise a RAS event on incompatible durable format
  *

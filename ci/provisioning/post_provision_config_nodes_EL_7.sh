@@ -3,7 +3,7 @@
 REPOS_DIR=/etc/yum.repos.d
 DISTRO_NAME=centos7
 LSB_RELEASE=redhat-lsb-core
-PYTHON_MACROS_RPM=("python2-rpm-macros" "python3-rpm-macros")
+EXCLUDE_UPGRADE=fuse,mercury,daos,daos-\*
 
 timeout_yum() {
     local timeout="$1"
@@ -33,8 +33,71 @@ bootstrap_dnf() {
 }
 
 group_repo_post() {
-    # nothing for EL7
+    # Nothing to do for EL
     :
+}
+
+distro_custom() {
+    if [ ! -e /usr/bin/pip3 ] &&
+       [ -e /usr/bin/pip3.6 ]; then
+        ln -s pip3.6 /usr/bin/pip3
+    fi
+    if [ ! -e /usr/bin/python3 ] &&
+       [ -e /usr/bin/python3.6 ]; then
+        ln -s python3.6 /usr/bin/python3
+    fi
+
+    # install the debuginfo repo in case we get segfaults
+    cat <<"EOF" > $REPOS_DIR/CentOS-Debuginfo.repo
+[core-0-debuginfo]
+name=CentOS-7 - Debuginfo
+baseurl=http://debuginfo.centos.org/7/$basearch/
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
+enabled=0
+EOF
+
+    # force install of avocado 69.x
+    dnf -y erase avocado{,-common}                                              \
+                 python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
+                 python36-PyYAML
+    pip3 install --upgrade pip
+    pip3 install "avocado-framework<70.0"
+    pip3 install "avocado-framework-plugin-result-html<70.0"
+    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
+    pip3 install clustershell
+
+    # Mellanox OFED hack
+    if ls -d /usr/mpi/gcc/openmpi-*; then
+        cat <<EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
+#%Module 1.0
+#
+#  OpenMPI module for use with 'environment-modules' package:
+#
+conflict		mpi
+prepend-path 		PATH 		/usr/mpi/gcc/openmpi-4.1.0rc5/bin
+prepend-path 		LD_LIBRARY_PATH /usr/mpi/gcc/openmpi-4.1.0rc5/lib64
+prepend-path 		PKG_CONFIG_PATH	/usr/mpi/gcc/openmpi-4.1.0rc5/lib64/pkgconfig
+prepend-path		PYTHONPATH	/usr/lib64/python2.7/site-packages/openmpi
+prepend-path		MANPATH		/usr/mpi/gcc/openmpi-4.1.0rc5/share/man
+setenv 			MPI_BIN		/usr/mpi/gcc/openmpi-4.1.0rc5/bin
+setenv			MPI_SYSCONFIG	/usr/mpi/gcc/openmpi-4.1.0rc5/etc
+setenv			MPI_FORTRAN_MOD_DIR	/usr/mpi/gcc/openmpi-4.1.0rc5/lib64
+setenv			MPI_INCLUDE	/usr/mpi/gcc/openmpi-4.1.0rc5/include
+setenv	 		MPI_LIB		/usr/mpi/gcc/openmpi-4.1.0rc5/lib64
+setenv			MPI_MAN			/usr/mpi/gcc/openmpi-4.1.0rc5/share/man
+setenv			MPI_PYTHON_SITEARCH	/usr/lib64/python2.7/site-packages/openmpi
+setenv			MPI_PYTHON2_SITEARCH	/usr/lib64/python2.7/site-packages/openmpi
+setenv			MPI_COMPILER	openmpi-x86_64
+setenv			MPI_SUFFIX	_openmpi
+setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.0rc5
+EOF
+    fi
+
+    # CORCI-1096
+    echo 'relayhost = [mail.wolf.hpdd.intel.com]' >> /etc/postfix/main.cf
+    postfix reload
+
 }
 
 post_provision_config_nodes() {
@@ -45,7 +108,7 @@ post_provision_config_nodes() {
 
     if $CONFIG_POWER_ONLY; then
         rm -f $REPOS_DIR/*.hpdd.intel.com_job_daos-stack_job_*_job_*.repo
-        dnf -y erase fio fuse ior-hpc mpich-autoload               \
+        time dnf -y erase fio fuse ior-hpc mpich-autoload               \
                      ompi argobots cart daos daos-client dpdk      \
                      fuse-libs libisa-l libpmemobj mercury mpich   \
                      openpa pmix protobuf-c spdk libfabric libpmem \
@@ -53,15 +116,11 @@ post_provision_config_nodes() {
                      slurm-example-configs slurmctld slurm-slurmmd
     fi
 
-    local dnf_repo_args="--disablerepo=*"
-
-    add_repo "$DAOS_STACK_GROUP_REPO"
-    group_repo_post
-
-    add_repo "${DAOS_STACK_LOCAL_REPO}" false
-
-    # TODO: this should be per repo for the above two repos
-    dnf_repo_args+=" --enablerepo=repo.dc.hpdd.intel.com_repository_*"
+    time dnf repolist
+    # the group repo is always on the test image
+    #add_group_repo
+    add_local_repo
+    time dnf repolist
 
     if [ -n "$INST_REPOS" ]; then
         local repo
@@ -79,57 +138,36 @@ post_provision_config_nodes() {
             local repo_url="${JENKINS_URL}"job/daos-stack/job/"${repo}"/job/"${branch//\//%252F}"/"${build_number}"/artifact/artifacts/$DISTRO_NAME/
             dnf config-manager --add-repo="${repo_url}"
             disable_gpg_check "$repo_url"
-            # TODO: this should be per repo in the above loop
-            if [ -n "$INST_REPOS" ]; then
-                dnf_repo_args+=",build.hpdd.intel.com_job_daos-stack*"
-            fi
         done
     fi
     if [ -n "$INST_RPMS" ]; then
         # shellcheck disable=SC2086
-        dnf -y erase $INST_RPMS
+        time dnf -y erase $INST_RPMS
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    dnf -y install $LSB_RELEASE
+    time dnf -y install $LSB_RELEASE
+
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! dnf -y $dnf_repo_args install $INST_RPMS; then
+       ! time dnf -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
     fi
-    if [ ! -e /usr/bin/pip3 ] &&
-       [ -e /usr/bin/pip3.6 ]; then
-        ln -s pip3.6 /usr/bin/pip3
-    fi
-    if [ ! -e /usr/bin/python3 ] &&
-       [ -e /usr/bin/python3.6 ]; then
-        ln -s python3.6 /usr/bin/python3
-    fi
-    # install the debuginfo repo in case we get segfaults
-    cat <<"EOF" > $REPOS_DIR/CentOS-Debuginfo.repo
-[core-0-debuginfo]
-name=CentOS-7 - Debuginfo
-baseurl=http://debuginfo.centos.org/7/$basearch/
-gpgcheck=1
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-Debug-7
-enabled=0
-EOF
+
+    distro_custom
 
     # now make sure everything is fully up-to-date
     if ! time dnf -y upgrade \
-                  --exclude fuse,mercury,daos,daos-\*; then
+                  --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
     fi
 
-    if ! time dnf -y install "${PYTHON_MACROS_RPM[@]}" ; then
-        dump_repos
-        exit 1
+    if [ -f /etc/do-release ]; then
+        cat /etc/do-release
     fi
-
-    cat /etc/do-release
     cat /etc/os-release
 
     exit 0

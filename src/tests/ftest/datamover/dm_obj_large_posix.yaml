@@ -1,0 +1,51 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+  test_clients:
+    - client-F
+    - client-G
+    - client-H
+timeouts:
+    test_dm_obj_large_posix_dcp: 180
+    test_dm_obj_large_posix_cont_clone: 420
+server_config:
+  name: daos_server
+  servers:
+    log_mask: ERR
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+pool:
+  mode: 146
+  name: daos_server
+  scm_size: 1G
+  nvme_size: 10G
+  svcn: 1
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+mdtest:
+  client_processes:
+    np: 30
+  api: DFS
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: False
+  manager: "MPICH"
+  num_of_files_dirs: 1667  # total 50K files and 50K dirs
+  mdtest_flags:
+    - "-C"
+    - "-E -X"
+  depth: 2
+  branching_factor: 2
+  bytes: 4096
+dcp:
+  client_processes:
+    np: 16
+  daos_api: DAOS

@@ -40,17 +40,14 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 			log: log,
 		},
 		events: events.NewPubSub(context.TODO(), log),
+		srvCfg: cfg,
 	}
 
 	for _, engineCfg := range cfg.Engines {
-		bp, err := bdev.NewClassProvider(log, "", &engineCfg.Storage.Bdev)
-		if err != nil {
-			t.Fatal(err)
-		}
 		rCfg := new(engine.TestRunnerConfig)
 		rCfg.Running.SetTrue()
 		runner := engine.NewTestRunner(rCfg, engineCfg)
-		instance := NewEngineInstance(log, bp, cs.scm, nil, runner)
+		instance := NewEngineInstance(log, cs.bdev, cs.scm, nil, runner)
 		instance.setSuperblock(&Superblock{
 			Rank: system.NewRankPtr(engineCfg.Rank.Uint32()),
 		})
@@ -66,7 +63,8 @@ func mockControlServiceNoSB(t *testing.T, log logging.Logger, cfg *config.Server
 	cs := mockControlService(t, log, cfg, bmbc, smbc, smsc)
 
 	// don't set a superblock and init with a stopped test runner
-	for i, srv := range cs.harness.instances {
+	for i, e := range cs.harness.instances {
+		srv := e.(*EngineInstance)
 		srv.setSuperblock(nil)
 		srv.runner = engine.NewTestRunner(nil, cfg.Engines[i])
 	}

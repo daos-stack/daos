@@ -206,6 +206,7 @@ obj_layout_free(struct dc_object *obj)
 	if (obj->cob_shards->do_open_count == 0)
 		layout = obj->cob_shards;
 	obj->cob_shards = NULL;
+	obj->cob_shards_nr = 0;
 	D_SPIN_UNLOCK(&obj->cob_spin);
 
 	if (layout != NULL)
@@ -417,7 +418,8 @@ obj_auxi_add_failed_tgt(struct obj_auxi_args *obj_auxi, uint32_t tgt)
 		}
 	}
 
-	D_REALLOC_ARRAY(tgts, tgt_list->tl_tgts, tgt_list->tl_nr + 1);
+	D_REALLOC_ARRAY(tgts, tgt_list->tl_tgts, tgt_list->tl_nr,
+			tgt_list->tl_nr + 1);
 	if (tgts == NULL) {
 		if (allocated)
 			D_FREE(tgt_list);
@@ -443,27 +445,49 @@ obj_auxi_free_failed_tgt_list(struct obj_auxi_args *obj_auxi)
 	obj_auxi->failed_tgt_list = NULL;
 }
 
+static int
+obj_init_oca(struct dc_object *obj)
+{
+	struct daos_oclass_attr *oca;
+	bool			 priv;
+
+	oca = daos_oclass_attr_find(obj->cob_md.omd_id, &priv);
+	if (!oca)
+		return -DER_INVAL;
+
+	obj->cob_oca = *oca;
+	if (daos_oclass_is_ec(oca) && !priv) {
+		struct cont_props	props;
+
+		/* Use the cell size from container property to overwrite
+		 * the default value.
+		 * NB: don't ovewrite cell size of private class.
+		 */
+		props = dc_cont_hdl2props(obj->cob_coh);
+		if (props.dcp_ec_cell_sz != 0)
+			obj->cob_oca.u.ec.e_len = props.dcp_ec_cell_sz;
+	}
+	return 0;
+}
+
 struct daos_oclass_attr *
 obj_get_oca(struct dc_object *obj)
 {
-	if (obj->cob_oca == NULL)
-		obj->cob_oca = daos_oclass_attr_find(obj->cob_md.omd_id);
-
-	return obj->cob_oca;
+	return &obj->cob_oca;
 }
 
 bool
 obj_is_ec(struct dc_object *obj)
 {
-	return DAOS_OC_IS_EC(obj_get_oca(obj));
+	return daos_oclass_is_ec(obj_get_oca(obj));
 }
 
 int
 obj_get_replicas(struct dc_object *obj)
 {
 	struct daos_oclass_attr *oc_attr = obj_get_oca(obj);
-	D_ASSERT(oc_attr != NULL);
-	if (DAOS_OC_IS_EC(oc_attr))
+
+	if (daos_oclass_is_ec(oc_attr))
 		return obj_ec_tgt_nr(oc_attr);
 
 	D_ASSERT(oc_attr->ca_resil == DAOS_RES_REPL);
@@ -579,7 +603,7 @@ obj_grp_leader_get(struct dc_object *obj, int idx, unsigned int map_ver)
 	if (obj->cob_version == map_ver)
 		rc = pl_select_leader(obj->cob_md.omd_id,
 				      idx / obj->cob_grp_size,
-				      obj->cob_grp_size, false,
+				      obj->cob_grp_size, NULL,
 				      obj_get_shard, obj);
 	D_RWLOCK_UNLOCK(&obj->cob_lock);
 
@@ -790,14 +814,14 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 		    struct dtx_epoch *epoch, struct obj_auxi_args *obj_auxi)
 {
 	struct obj_reasb_req	*reasb_req = &obj_auxi->reasb_req;
+	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	daos_obj_id_t		 oid = obj->cob_md.omd_id;
-	struct daos_oclass_attr	*oca;
 	int			 rc = 0;
 
-	if (epoch != NULL)
+	if (epoch != NULL && !obj_auxi->req_reasbed)
 		reasb_req->orr_epoch = *epoch;
 	reasb_req->orr_size_set = 0;
-	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetch) {
+	if (obj_auxi->req_reasbed && !reasb_req->orr_size_fetched) {
 		D_DEBUG(DB_TRACE, DF_OID" req reassembled (retry case).\n",
 			DP_OID(oid));
 		return 0;
@@ -805,10 +829,8 @@ obj_rw_req_reassemb(struct dc_object *obj, daos_obj_rw_t *args,
 	obj_auxi->iod_nr = args->nr;
 
 	/** XXX possible re-order/merge for both replica and EC */
-	oca = obj_get_oca(obj);
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE ||
-	    args->extra_flags & DIOF_TO_SPEC_SHARD ||
-	    !DAOS_OC_IS_EC(oca))
+	    args->extra_flags & DIOF_TO_SPEC_SHARD || !obj_is_ec(obj))
 		return 0;
 
 	if (!obj_auxi->req_reasbed) {
@@ -865,9 +887,13 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	shard_tgt->st_ec_tgt = ec_tgt_idx;
 	start_shard = shard - ec_tgt_idx;
 
-	if (obj_auxi->is_ec_obj && obj_auxi->csum_retry) {
-		obj_auxi->csum_retry = 0;
-		csum_err = true;
+	if (obj_auxi->is_ec_obj &&
+	    (obj_auxi->csum_retry ||
+	     DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))) {
+		if (obj_auxi->csum_retry) {
+			csum_err = true;
+			obj_auxi->csum_retry = 0;
+		}
 		ec_degrade = true;
 		goto ec_deg_get;
 	}
@@ -1222,18 +1248,12 @@ dc_obj_list_class(tse_task_t *task)
 static int
 dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 {
-	struct daos_oclass_attr	*oca;
+	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	int			 obj_tf;	/* obj #tolerate failures */
 	int			 cont_rf;	/* cont redun_fac */
 	int			 cont_tf;	/* cont #tolerate failures */
 	int			 rc;
 
-	oca = obj_get_oca(obj);
-	if (oca == NULL) {
-		D_ERROR(DF_OID" obj_get_oca failed.\n",
-			DP_OID(obj->cob_md.omd_id));
-		return -DER_INVAL;
-	}
 
 	cont_rf = dc_cont_hdl2redunfac(coh);
 	if (cont_rf < 0) {
@@ -1242,7 +1262,7 @@ dc_obj_redun_check(struct dc_object *obj, daos_handle_t coh)
 		return cont_rf;
 	}
 
-	if (DAOS_OC_IS_EC(oca)) {
+	if (obj_is_ec(obj)) {
 		obj_tf = obj_ec_parity_tgt_nr(oca);
 	} else {
 		D_ASSERT(oca->ca_resil == DAOS_RES_REPL);
@@ -1292,6 +1312,10 @@ dc_obj_open(tse_task_t *task)
 
 	/* it is a local operation for now, does not require event */
 	rc = dc_obj_fetch_md(args->oid, &obj->cob_md);
+	if (rc != 0)
+		D_GOTO(fail_rwlock_created, rc);
+
+	rc = obj_init_oca(obj);
 	if (rc != 0)
 		D_GOTO(fail_rwlock_created, rc);
 
@@ -1429,7 +1453,6 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 		return -DER_NO_HDL;
 
 	oc_attr = obj_get_oca(obj);
-	D_ASSERT(oc_attr != NULL);
 	grp_size = daos_oclass_grp_size(oc_attr);
 	grp_nr = daos_oclass_grp_nr(oc_attr, &obj->cob_md);
 	if (grp_nr == DAOS_OBJ_GRP_MAX)
@@ -1573,7 +1596,7 @@ recov_task_abort(tse_task_t *task, void *arg)
 
 static void
 obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
-		struct obj_auxi_args *obj_auxi)
+		struct obj_auxi_args *obj_auxi, d_iov_t *csum_iov)
 {
 	struct obj_reasb_req		*reasb_req = &obj_auxi->reasb_req;
 	struct obj_ec_fail_info		*fail_info = reasb_req->orr_fail;
@@ -1600,6 +1623,12 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 	D_INIT_LIST_HEAD(&task_list);
 	for (i = 0; i < fail_info->efi_recov_ntasks; i++) {
 		recov_task = &fail_info->efi_recov_tasks[i];
+		/* Set client hlc as recovery epoch only for the case that
+		 * singv recovery without fetch from server ahead - when
+		 * some targets un-available.
+		 */
+		if (recov_task->ert_epoch == DAOS_EPOCH_MAX)
+			recov_task->ert_epoch = crt_hlc_get();
 		rc = dc_tx_local_open(coh, recov_task->ert_epoch, 0, &th);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_tx_local_open failed "
@@ -1608,12 +1637,13 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 			goto out;
 		}
 		recov_task->ert_th = th;
-
+		D_DEBUG(DB_REBUILD, DF_C_OID_DKEY" Fetching to recover\n",
+			DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey));
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
 					      DIOF_EC_RECOV,
 					      &recov_task->ert_iod,
 					      &recov_task->ert_sgl, NULL,
-					      fail_info, NULL,
+					      fail_info, csum_iov,
 					      NULL, sched, &sub_task);
 		if (rc) {
 			D_ERROR("task %p "DF_OID" dc_obj_fetch_task_create "
@@ -1753,7 +1783,7 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 {
 	struct umem_attr	uma;
 	daos_handle_t		bth;
-	d_iov_t		key;
+	d_iov_t			key;
 	int			idx;
 	bool			overlapped;
 	struct btr_root		broot = { 0 };
@@ -1761,8 +1791,11 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 
 	if (nr == 0 || recxs == NULL)
 		return false;
-	if (nr == 1)
+	if (nr == 1) {
+		if (recxs[0].rx_nr == 0)
+			return false;
 		return true;
+	}
 
 	switch (nr) {
 	case 2:
@@ -1790,6 +1823,10 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 
 		overlapped = false;
 		for (idx = 0; idx < nr; idx++) {
+			if (recxs[idx].rx_nr == 0) {
+				overlapped = true;
+				break;
+			}
 			d_iov_set(&key, &recxs[idx], sizeof(daos_recx_t));
 			rc = dbtree_update(bth, &key, NULL);
 			if (rc != 0) {
@@ -1816,11 +1853,13 @@ obj_req_size_valid(daos_size_t iod_size, daos_size_t sgl_size)
 }
 
 static int
-obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
-		  bool update, bool size_fetch, bool spec_shard)
+obj_iod_sgl_valid(daos_obj_id_t oid, unsigned int nr, daos_iod_t *iods,
+		  d_sg_list_t *sgls, bool update, bool size_fetch,
+		  bool spec_shard)
 {
-	int	i, j;
-	int	rc;
+	int		i, j;
+	daos_ofeat_t	ofeat = daos_obj_id2feat(oid);
+	int		rc;
 
 	if (iods == NULL) {
 		if (nr == 0)
@@ -1834,6 +1873,9 @@ obj_iod_sgl_valid(unsigned int nr, daos_iod_t *iods, d_sg_list_t *sgls,
 			D_ERROR("Invalid argument of NULL akey\n");
 			return -DER_INVAL;
 		}
+		if (ofeat & DAOS_OF_AKEY_UINT64 &&
+		    iods[i].iod_name.iov_len > sizeof(uint64_t))
+			return -DER_INVAL;
 		for (j = 0; j < iods[i].iod_nr; j++) {
 			if (iods[i].iod_recxs != NULL && (!spec_shard &&
 			   (iods[i].iod_recxs[j].rx_idx & PARITY_INDICATOR)
@@ -1968,6 +2010,24 @@ check_query_flags(daos_obj_id_t oid, uint32_t flags, daos_key_t *dkey,
 	return 0;
 }
 
+static inline bool
+obj_key_valid(daos_obj_id_t oid, daos_key_t *key, bool check_dkey)
+{
+	daos_ofeat_t ofeat = daos_obj_id2feat(oid);
+
+	if (check_dkey) {
+		if (ofeat & DAOS_OF_DKEY_UINT64 &&
+		    key->iov_len > sizeof(uint64_t))
+			return false;
+	} else {
+		if (ofeat & DAOS_OF_AKEY_UINT64 &&
+		    key->iov_len > sizeof(uint64_t))
+			return false;
+	}
+
+	return key != NULL && key->iov_buf != NULL && key->iov_len != 0;
+}
+
 /* check if the obj request is valid */
 static int
 obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
@@ -1981,6 +2041,7 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 	int			rc = 0;
 
 	obj_auxi = tse_task_stack_push(task, sizeof(*obj_auxi));
+
 	switch (opc) {
 	case DAOS_OBJ_RPC_FETCH: {
 		daos_obj_fetch_t	*f_args = args;
@@ -1989,18 +2050,23 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 		spec_shard  = f_args->extra_flags & DIOF_TO_SPEC_SHARD;
 		check_exist = f_args->extra_flags & DIOF_CHECK_EXISTENCE;
 		size_fetch  = obj_auxi->reasb_req.orr_size_fetch;
+
+		obj = obj_hdl2ptr(f_args->oh);
+		if (obj == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+
 		if ((!obj_auxi->io_retry && !obj_auxi->req_reasbed) ||
 		    size_fetch) {
-			if (f_args->dkey == NULL ||
-			    f_args->dkey->iov_buf == NULL ||
+			if (!obj_key_valid(obj->cob_md.omd_id, f_args->dkey,
+					   true) ||
 			    (f_args->nr == 0 && !check_exist)) {
 				D_ERROR("Invalid fetch parameter.\n");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 
-			rc = obj_iod_sgl_valid(f_args->nr, f_args->iods,
-					       f_args->sgls, false, size_fetch,
-					       spec_shard);
+			rc = obj_iod_sgl_valid(obj->cob_md.omd_id, f_args->nr,
+					       f_args->iods, f_args->sgls,
+					       false, size_fetch, spec_shard);
 			if (rc)
 				goto out;
 		}
@@ -2011,19 +2077,26 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 	case DAOS_OBJ_RPC_UPDATE: {
 		daos_obj_update_t	*u_args = args;
 
+		obj = obj_hdl2ptr(u_args->oh);
+		if (obj == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+
 		if (!obj_auxi->io_retry && !obj_auxi->req_reasbed) {
-			if (u_args->dkey == NULL ||
-			    u_args->dkey->iov_buf == NULL || u_args->nr == 0) {
+			if (!obj_key_valid(obj->cob_md.omd_id, u_args->dkey,
+					   true) || u_args->nr == 0) {
 				D_ERROR("Invalid update parameter.\n");
 				D_GOTO(out, rc = -DER_INVAL);
 			}
 
-			rc = obj_iod_sgl_valid(u_args->nr, u_args->iods,
-					       u_args->sgls, true, false,
-					       false);
+			rc = obj_iod_sgl_valid(obj->cob_md.omd_id, u_args->nr,
+					       u_args->iods, u_args->sgls, true,
+					       false, false);
 			if (rc)
 				D_GOTO(out, rc);
 		}
+
+		if (daos_handle_is_valid(u_args->th))
+			D_GOTO(out_tx, rc = 0);
 
 		oh = u_args->oh;
 		th = u_args->th;
@@ -2032,6 +2105,13 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 	case DAOS_OBJ_RPC_PUNCH: {
 		daos_obj_punch_t *p_args = args;
 
+		obj = obj_hdl2ptr(p_args->oh);
+		if (obj == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+
+		if (daos_handle_is_valid(p_args->th))
+			D_GOTO(out_tx, rc = 0);
+
 		oh = p_args->oh;
 		th = p_args->th;
 		break;
@@ -2039,14 +2119,17 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 	case DAOS_OBJ_RPC_PUNCH_DKEYS: {
 		daos_obj_punch_t *p_args = args;
 
-		if (p_args->dkey == NULL) {
-			D_ERROR("NULL dkeys\n");
-			D_GOTO(out, rc = -DER_INVAL);
-		} else if (p_args->dkey[0].iov_buf == NULL ||
-			   p_args->dkey[0].iov_len == 0) {
-			D_ERROR("invalid dkey (NULL iov_buf or iov_len.\n");
+		obj = obj_hdl2ptr(p_args->oh);
+		if (obj == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+
+		if (!obj_key_valid(obj->cob_md.omd_id, p_args->dkey, true)) {
+			D_ERROR("invalid punch dkey parameter.\n");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
+
+		if (daos_handle_is_valid(p_args->th))
+			D_GOTO(out_tx, rc = 0);
 
 		oh = p_args->oh;
 		th = p_args->th;
@@ -2055,12 +2138,29 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 
 	case DAOS_OBJ_RPC_PUNCH_AKEYS: {
 		daos_obj_punch_t *p_args = args;
+		int		  i;
 
-		if (p_args->dkey == NULL || p_args->dkey->iov_buf == NULL ||
-		    p_args->dkey->iov_len == 0) {
-			D_ERROR("NULL or invalid dkey\n");
+		obj = obj_hdl2ptr(p_args->oh);
+		if (obj == NULL)
+			D_GOTO(out, rc = -DER_NO_HDL);
+
+		if (!obj_key_valid(obj->cob_md.omd_id, p_args->dkey, true) ||
+		    p_args->akey_nr == 0) {
+			D_ERROR("invalid punch akey parameter.\n");
 			D_GOTO(out, rc = -DER_INVAL);
 		}
+
+		for (i = 0; i < p_args->akey_nr; i++) {
+			if (!obj_key_valid(obj->cob_md.omd_id,
+					   &p_args->akeys[i], false)) {
+				D_ERROR("invalid punch akeys parameter.\n");
+				D_GOTO(out, rc = -DER_INVAL);
+			}
+		}
+
+		if (daos_handle_is_valid(p_args->th))
+			D_GOTO(out_tx, rc = 0);
+
 		oh = p_args->oh;
 		th = p_args->th;
 		break;
@@ -2155,11 +2255,16 @@ obj_req_valid(tse_task_t *task, void *args, int opc, struct dtx_epoch *epoch,
 			D_GOTO(out, rc);
 	}
 
+	*pm_ver = map_ver;
+
+out_tx:
+	D_ASSERT(rc == 0);
+
 	if (p_obj != NULL)
 		*p_obj = obj;
 	else
 		obj_decref(obj);
-	*pm_ver = map_ver;
+
 out:
 	if (rc && obj)
 		obj_decref(obj);
@@ -2256,7 +2361,6 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 			struct daos_oclass_attr	*oca;
 
 			oca = obj_get_oca(obj);
-			D_ASSERT(oca != NULL);
 			if (shard_idx % obj_ec_tgt_nr(oca) <
 			    obj_ec_data_tgt_nr(oca)) {
 				/* Client dispatch for EC recx enumeration */
@@ -2287,10 +2391,16 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 
 	rc = obj_shards_2_fwtgts(obj, map_ver, bit_map, shard_idx,
 				 shard_cnt, grp_nr, flags, obj_auxi);
-	if (rc != 0 && rc != -DER_SHARDS_OVERLAP)
-		D_ERROR("opc %d "DF_OID", obj_shards_2_fwtgts failed "
-			""DF_RC"\n", opc, DP_OID(obj->cob_md.omd_id),
-			DP_RC(rc));
+	if (rc != 0) {
+		if (rc != -DER_SHARDS_OVERLAP && rc != -DER_BAD_TARGET)
+			D_ERROR("opc %d "DF_OID", obj_shards_2_fwtgts failed "
+				DF_RC"\n", opc, DP_OID(obj->cob_md.omd_id),
+				DP_RC(rc));
+		else
+			D_DEBUG(DB_IO, "opc %d "DF_OID", obj_shards_2_fwtgts "
+				DF_RC"\n", opc, DP_OID(obj->cob_md.omd_id),
+				DP_RC(rc));
+	}
 out:
 	return rc;
 }
@@ -2882,7 +2992,6 @@ obj_ec_recxs_convert(d_list_t *merge_list, daos_recx_t *recx,
 	int			stripe_nr;
 
 	oca = obj_get_oca(shard_auxi->obj);
-	D_ASSERT(oca != NULL);
 	/* Normally the enumeration is sent to the parity node */
 	/* convert the parity off to daos off */
 	if (recx->rx_idx & PARITY_INDICATOR) {
@@ -3025,7 +3134,7 @@ merge_key(d_list_t *head, char *key, int key_size)
 	key_one->key.iov_buf_len = key_size;
 	key_one->key.iov_len = key_size;
 	D_INIT_LIST_HEAD(&key_one->key_list);
-	d_list_add_tail(head, &key_one->key_list);
+	d_list_add_tail(&key_one->key_list, head);
 	return 0;
 }
 
@@ -3033,7 +3142,6 @@ static int
 obj_shard_list_key_cb(struct shard_auxi_args *shard_auxi,
 		      struct obj_auxi_args *obj_auxi, void *arg)
 {
-	daos_obj_list_t		*obj_args;
 	struct shard_list_args  *shard_arg;
 	struct comp_iter_arg	*iter_arg = arg;
 	d_sg_list_t		*sgl;
@@ -3047,11 +3155,10 @@ obj_shard_list_key_cb(struct shard_auxi_args *shard_auxi,
 	 * let's merge the key to get rid of duplicate keys from different
 	 * shards.
 	 */
-	obj_args = dc_task_get_args(obj_auxi->obj_task);
 	sgl = shard_arg->la_sgl;
 	iov = &sgl->sg_iovs[sgl_off];
 	for (i = 0; i < shard_arg->la_nr; i++) {
-		int key_size = obj_args->kds[i].kd_key_len;
+		int key_size = shard_arg->la_kds[i].kd_key_len;
 		bool alloc_key = false;
 		char *key = NULL;
 		int rc;
@@ -3248,34 +3355,6 @@ obj_auxi_shards_iterate(struct obj_auxi_args *obj_auxi, shard_comp_cb_t cb,
 	return tse_task_list_traverse(head, shard_auxi_task_cb, &arg);
 }
 
-static int
-obj_list_recxs_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
-		  struct comp_iter_arg *arg)
-{
-	struct obj_auxi_list_recx *recx;
-	struct obj_auxi_list_recx *tmp;
-	daos_obj_list_t		  *obj_args;
-	int			  idx = 0;
-
-	obj_args = dc_task_get_args(obj_auxi->obj_task);
-	if (d_list_empty(&arg->merge_list)) {
-		*obj_args->nr = arg->merge_nr;
-		return 0;
-	}
-
-	D_ASSERT(obj_is_ec(obj_auxi->obj));
-	d_list_for_each_entry_safe(recx, tmp, &arg->merge_list,
-				   recx_list) {
-		D_ASSERTF(idx <= *obj_args->nr, "more recx %d max_num %d\n",
-			  idx, *obj_args->nr);
-		obj_args->recxs[idx++] = recx->recx;
-		d_list_del(&recx->recx_list);
-		D_FREE(recx);
-	}
-	*obj_args->nr = idx;
-	return 0;
-}
-
 /* Check anchor eof by sub anchors */
 static void
 anchor_check_eof(struct dc_object *obj, daos_anchor_t *anchor)
@@ -3283,7 +3362,7 @@ anchor_check_eof(struct dc_object *obj, daos_anchor_t *anchor)
 	struct daos_oclass_attr	*oca = obj_get_oca(obj);
 	int i;
 
-	if (!anchor->da_sub_anchors || !DAOS_OC_IS_EC(oca))
+	if (!anchor->da_sub_anchors || !obj_is_ec(obj))
 		return;
 
 	for (i = 0; i < obj_ec_data_tgt_nr(oca); i++) {
@@ -3405,6 +3484,35 @@ obj_list_dkey_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 	}
 }
 
+static int
+obj_list_recxs_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
+		  struct comp_iter_arg *arg)
+{
+	struct obj_auxi_list_recx *recx;
+	struct obj_auxi_list_recx *tmp;
+	daos_obj_list_t		  *obj_args;
+	int			  idx = 0;
+
+	obj_args = dc_task_get_args(obj_auxi->obj_task);
+	anchor_check_eof(obj_auxi->obj, obj_args->anchor);
+	if (d_list_empty(&arg->merge_list)) {
+		*obj_args->nr = arg->merge_nr;
+		return 0;
+	}
+
+	D_ASSERT(obj_is_ec(obj_auxi->obj));
+	d_list_for_each_entry_safe(recx, tmp, &arg->merge_list,
+				   recx_list) {
+		D_ASSERTF(idx <= *obj_args->nr, "more recx %d max_num %d\n",
+			  idx, *obj_args->nr);
+		obj_args->recxs[idx++] = recx->recx;
+		d_list_del(&recx->recx_list);
+		D_FREE(recx);
+	}
+	*obj_args->nr = idx;
+	return 0;
+}
+
 static void
 obj_list_obj_cb(tse_task_t *task, struct obj_auxi_args *obj_auxi,
 		struct comp_iter_arg *arg)
@@ -3516,8 +3624,12 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 		}
 	}
 
+	obj_auxi->reasb_req.orr_size_fetched = 1;
+	usgls = obj_auxi->reasb_req.orr_usgls;
+	if (usgls == NULL)
+		return;
+
 	if (size_all_zero) {
-		usgls = obj_auxi->reasb_req.orr_usgls;
 		for (i = 0; i < iod_nr; i++)
 			usgls[i].sg_nr_out = 0;
 	} else {
@@ -3572,7 +3684,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	if (obj_auxi->map_ver_reply > obj_auxi->map_ver_req ||
 	    daos_crt_network_error(task->dt_result) ||
 	    task->dt_result == -DER_STALE || task->dt_result == -DER_TIMEDOUT ||
-	    task->dt_result == -DER_EVICTED) {
+	    task->dt_result == -DER_EXCLUDED) {
 		D_DEBUG(DB_IO, "map_ver stale (req %d, reply %d). result %d\n",
 			obj_auxi->map_ver_req, obj_auxi->map_ver_reply,
 			task->dt_result);
@@ -3618,7 +3730,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 	    DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		obj_auxi->io_retry = 0;
 
-	if (pm_stale || obj_auxi->io_retry)
+	if (!obj_auxi->no_retry && (pm_stale || obj_auxi->io_retry))
 		obj_retry_cb(task, obj, obj_auxi, pm_stale);
 
 	if (!obj_auxi->io_retry) {
@@ -3655,10 +3767,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 			if (daos_handle_is_valid(obj_auxi->th) &&
 			    !(args->extra_flags & DIOF_CHECK_EXISTENCE) &&
 				 (task->dt_result == 0 ||
-				  task->dt_result == -DER_NONEXIST))
+				  task->dt_result == -DER_NONEXIST)) {
+				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th, DAOS_OBJ_RPC_FETCH,
-					     task);
+				dc_tx_attach(obj_auxi->th, obj,
+					     DAOS_OBJ_RPC_FETCH, task);
+			}
 			break;
 		}
 		case DAOS_OBJ_RPC_PUNCH:
@@ -3672,10 +3786,13 @@ obj_comp_cb(tse_task_t *task, void *data)
 		case DAOS_OBJ_DKEY_RPC_ENUMERATE:
 			if (daos_handle_is_valid(obj_auxi->th) &&
 			    (task->dt_result == 0 ||
-			     task->dt_result == -DER_NONEXIST))
+			     task->dt_result == -DER_NONEXIST)) {
+				D_ASSERT(obj != NULL);
+				obj_addref(obj);
 				/* Cache transactional read if exist or not. */
-				dc_tx_attach(obj_auxi->th,
+				dc_tx_attach(obj_auxi->th, obj,
 					     obj_auxi->opc, task);
+			}
 			break;
 		case DAOS_OBJ_RPC_ENUMERATE:
 			/* XXX: For list dkey recursively, that is mainly used
@@ -3723,19 +3840,24 @@ obj_comp_cb(tse_task_t *task, void *data)
 						   obj_auxi->iod_nr);
 				memset(obj_auxi, 0, sizeof(*obj_auxi));
 			} else {
+				daos_obj_fetch_t *args = dc_task_get_args(task);
+
 				task->dt_result = 0;
-				obj_ec_recov_cb(task, obj, obj_auxi);
+				obj_ec_recov_cb(task, obj, obj_auxi,
+						args->csum_iov);
 			}
 		} else {
-			if (obj_auxi->is_ec_obj && task->dt_result == 0 &&
+			if (obj_auxi->is_ec_obj &&
+			    (task->dt_result == 0 ||
+			     task->dt_result == -DER_REC2BIG) &&
 			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
 
+				obj_ec_update_iod_size(&obj_auxi->reasb_req,
+						       args->nr);
 				if (obj_auxi->bulks != NULL)
 					obj_ec_fetch_set_sgl(
 						&obj_auxi->reasb_req, args->nr);
-				obj_ec_update_iod_size(&obj_auxi->reasb_req,
-						       args->nr);
 			}
 
 			obj_bulk_fini(obj_auxi);
@@ -3854,6 +3976,44 @@ shard_rw_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	return 0;
 }
 
+bool
+obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
+			 uint32_t iod_nr)
+{
+	if (!props->dcp_csum_enabled && props->dcp_dedup_enabled) {
+		uint32_t	dedup_th = props->dcp_dedup_size;
+		int		i;
+		bool		candidate = false;
+
+		/**
+		 * Checksums are only enabled for dedup purpose.
+		 * Verify whether the I/O is a candidate for dedup.
+		 * If not, then no need to provide a checksum to the server
+		 */
+
+		for (i = 0; i < iod_nr; i++) {
+			daos_iod_t	*iod = &iods[i];
+			int		 j = 0;
+
+			if (iod->iod_type == DAOS_IOD_SINGLE)
+				/** dedup does not support single value yet */
+				return false;
+
+			for (j = 0; j < iod->iod_nr; j++) {
+				daos_recx_t	*recx = &iod->iod_recxs[j];
+
+				if (recx->rx_nr * iod->iod_size >= dedup_th)
+					candidate = true;
+			}
+		}
+		if (!candidate)
+			/** not a candidate for dedup, don't compute checksum */
+			return false;
+	}
+
+	return true;
+}
+
 static int
 obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 		struct obj_auxi_args *obj_auxi)
@@ -3865,39 +4025,17 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	int			 rc;
 
+	D_DEBUG(DB_CSUM, DF_C_OID_DKEY " UPDATE - csummer: %p, "
+			 "csum_type: %d, csum_enabled: %s\n",
+		DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey),
+		csummer, cont_props.dcp_csum_type,
+		DP_BOOL(cont_props.dcp_csum_enabled));
+
 	if (!daos_csummer_initialized(csummer)) /** Not configured */
 		return 0;
 
-	if (!cont_props.dcp_csum_enabled && cont_props.dcp_dedup_enabled) {
-		uint32_t	dedup_th = cont_props.dcp_dedup_size;
-		int		i;
-		bool		candidate = false;
-
-		/**
-		 * Checksums are only enabled for dedup purpose.
-		 * Verify whether the I/O is a candidate for dedup.
-		 * If not, then no need to provide a checksum to the server
-		 */
-
-		for (i = 0; i < args->nr; i++) {
-			daos_iod_t	*iod = &args->iods[i];
-			int		 j = 0;
-
-			if (iod->iod_type == DAOS_IOD_SINGLE)
-				/** dedup does not support single value yet */
-				return 0;
-
-			for (j = 0; j < iod->iod_nr; j++) {
-				daos_recx_t	*recx = &iod->iod_recxs[j];
-
-				if (recx->rx_nr * iod->iod_size >= dedup_th)
-					candidate = true;
-			}
-		}
-		if (!candidate)
-			/** not a candidate for dedup, don't compute checksum */
-			return 0;
-	}
+	if (!obj_csum_dedup_candidate(&cont_props, args->iods, args->nr))
+		return 0;
 
 	/** Used to do actual checksum calculations. This prevents conflicts
 	 * between tasks
@@ -4073,8 +4211,12 @@ dc_obj_fetch_task(tse_task_t *task)
 	if (obj_auxi->ec_wait_recov)
 		goto out_task;
 
-	if (args->extra_flags & DIOF_FOR_MIGRATION)
+	if (args->extra_flags & DIOF_FOR_MIGRATION) {
 		obj_auxi->flags |= ORF_FOR_MIGRATION;
+		obj_auxi->no_retry = 1;
+	}
+	if (args->extra_flags & DIOF_FOR_EC_AGG)
+		obj_auxi->flags |= ORF_FOR_EC_AGG;
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
 		obj_auxi->flags |= ORF_CHECK_EXISTENCE;
@@ -4158,17 +4300,11 @@ out_task:
 
 static int
 dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
-	      daos_obj_update_t *args)
+	      daos_obj_update_t *args, struct dc_object *obj)
 {
 	struct obj_auxi_args	*obj_auxi;
-	struct dc_object	*obj;
 	uint64_t		 dkey_hash;
 	int			 rc;
-
-	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_UPDATE, epoch, &map_ver,
-			   &obj);
-	if (rc != 0)
-		goto out_task; /* invalid parameter */
 
 	obj_task_init_common(task, DAOS_OBJ_RPC_UPDATE, map_ver, args->th,
 			     &obj_auxi, obj);
@@ -4185,6 +4321,8 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 			      obj_auxi->reasb_req.tgt_bitmap, map_ver, false,
 			      false, obj_auxi);
 	if (rc != 0) {
+		if (rc == -DER_SHARDS_OVERLAP)
+			obj_addref(obj);
 		obj_comp_cb(task, NULL);
 		if (rc != -DER_SHARDS_OVERLAP)
 			goto out_task;
@@ -4193,7 +4331,7 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		 * VOS target. We will handle such case via internal
 		 * transaction.
 		 */
-		return dc_tx_convert(DAOS_OBJ_RPC_UPDATE, task);
+		return dc_tx_convert(obj, DAOS_OBJ_RPC_UPDATE, task);
 	}
 
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
@@ -4236,18 +4374,24 @@ int
 dc_obj_update_task(tse_task_t *task)
 {
 	daos_obj_update_t	*args = dc_task_get_args(task);
+	struct dc_object	*obj = NULL;
 	struct dtx_epoch	 epoch = {0};
 	unsigned int		 map_ver = 0;
 	int			 rc;
 
+	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_UPDATE, &epoch, &map_ver,
+			   &obj);
+	if (rc != 0)
+		goto comp;
+
 	if (daos_handle_is_valid(args->th)) {
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, DAOS_OBJ_RPC_UPDATE, task);
+		rc = dc_tx_attach(args->th, obj, DAOS_OBJ_RPC_UPDATE, task);
 		goto comp;
 	}
 
 	/* submit the update */
-	return dc_obj_update(task, &epoch, map_ver, args);
+	return dc_obj_update(task, &epoch, map_ver, args, obj);
 comp:
 	if (rc <= 0)
 		tse_task_complete(task, rc);
@@ -4348,7 +4492,13 @@ obj_shard_list_prep(daos_obj_list_t *obj_args,
 	int idx;
 	int rc = 0;
 
-	shard_arg->la_nr = (*obj_args->nr + shard_nr - 1) / shard_nr;
+	if (*obj_args->nr < shard_nr) {
+		D_ERROR("Degraded enumeration nr %d > shards %d\n",
+			*obj_args->nr, shard_nr);
+		return -DER_INVAL;
+	}
+
+	shard_arg->la_nr = *obj_args->nr / shard_nr;
 	idx = shard_arg->la_auxi.shard;
 	if (shard_arg->la_kds == NULL && obj_args->kds != NULL)
 		shard_arg->la_kds = &obj_args->kds[idx * shard_arg->la_nr];
@@ -4397,7 +4547,6 @@ shard_list_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg = container_of(shard_auxi, struct shard_list_args, la_auxi);
 	shard_arg->la_api_args = obj_args;
 	oca = obj_get_oca(obj);
-	D_ASSERT(oca != NULL);
 	if (obj_auxi->is_ec_obj &&
 	    shard_auxi->shard < obj_ec_data_tgt_nr(oca)) {
 		uint32_t		idx = shard_auxi->shard;
@@ -4405,7 +4554,7 @@ shard_list_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 		int			shard_nr;
 		int			rc;
 
-		D_ASSERT(DAOS_OC_IS_EC(oca));
+		D_ASSERT(obj_is_ec(obj));
 		shard_nr = obj_ec_data_tgt_nr(oca);
 
 		/* check and allocate the sub_anchors */
@@ -4486,31 +4635,34 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 	int			i;
 
 	oca = obj_get_oca(obj);
-	D_ASSERT(oca != NULL);
 	obj_ec_get_parity_shards(obj, grp_idx, obj_ec_parity_tgt_nr(oca),
 				 obj_ec_data_tgt_nr(oca), parities);
-	if (obj_auxi->to_leader) {
-		/* proper way to choose leader ? XXX */
-		shard = parities[0];
-		D_GOTO(out, shard);
+	if (unlikely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
+		if (obj_auxi->to_leader) {
+			/* proper way to choose leader ? XXX */
+			shard = parities[0];
+			D_GOTO(out, shard);
+		}
+
+		/* choose one randomly from the parities */
+		p_size = obj_ec_parity_tgt_nr(oca);
+		idx = random() % p_size;
+		for (i = 0; i < p_size; i++, idx = (idx + 1) % p_size) {
+			/* let's skip the rebuild shard for non-update op */
+			shard = parities[idx];
+
+			if (obj->cob_shards->do_shards[shard].do_rebuilding)
+				continue;
+
+			if (obj->cob_shards->do_shards[shard].do_target_id !=
+									-1)
+				break;
+		}
+
+		D_DEBUG(DB_IO, "choose parity shard %d\n", shard);
+		if (i < p_size)
+			D_GOTO(out, shard);
 	}
-
-	/* choose one randomly from the parities */
-	p_size = obj_ec_parity_tgt_nr(oca);
-	idx = random() % p_size;
-	for (i = 0; i < p_size; i++, idx = (idx + 1) % p_size) {
-		/* let's skip the rebuild shard for non-update op */
-		shard = parities[idx];
-
-		if (obj->cob_shards->do_shards[shard].do_rebuilding)
-			continue;
-
-		if (obj->cob_shards->do_shards[shard].do_target_id != -1)
-			break;
-	}
-
-	if (i < p_size)
-		D_GOTO(out, shard);
 
 	D_DEBUG(DB_IO, "let's choose from the data shard 0 for "DF_OID"\n",
 		DP_OID(obj->cob_md.omd_id));
@@ -4530,7 +4682,7 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 		shard = first;
 	}
 out:
-	D_DEBUG(DB_IO, "get shard %d on "DF_OID"\n", shard,
+	D_DEBUG(DB_IO, "grp_idx %d, get shard %d on "DF_OID"\n", grp_idx, shard,
 		DP_OID(obj->cob_md.omd_id));
 	return shard;
 }
@@ -4593,7 +4745,8 @@ obj_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 			grp_idx = obj_dkey2grpidx(obj, dkey_hash, map_ver);
 		} else {
 			D_ASSERT(args->dkey_anchor != NULL);
-			grp_idx = dc_obj_anchor2shard(args->dkey_anchor);
+			grp_idx = dc_obj_anchor2shard(args->dkey_anchor) /
+				  obj_get_replicas(obj);
 		}
 
 		if (grp_idx < 0) {
@@ -4663,6 +4816,10 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 		obj_decref(obj);
 		D_GOTO(out_task, rc);
 	}
+
+	if (args->dkey_anchor != NULL &&
+	    daos_anchor_get_flags(args->dkey_anchor) & DIOF_FOR_MIGRATION)
+		obj_auxi->no_retry = 1;
 
 	if (obj_is_ec(obj))
 		obj_auxi->is_ec_obj = 1;
@@ -4783,26 +4940,19 @@ shard_punch_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 }
 
 static int
-dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
-	     enum obj_rpc_opc opc, daos_obj_punch_t *api_args)
+dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
+	     uint32_t map_ver, enum obj_rpc_opc opc, daos_obj_punch_t *api_args)
 {
 	struct obj_auxi_args	*obj_auxi;
-	struct dc_object	*obj;
 	uint64_t		 dkey_hash;
 	int			 rc;
 
-	obj = obj_hdl2ptr(api_args->oh);
-	D_ASSERT(obj != NULL);
-
-	if (opc == DAOS_OBJ_RPC_PUNCH && obj->cob_grp_nr > 1) {
-		obj_decref(obj);
-
+	if (opc == DAOS_OBJ_RPC_PUNCH && obj->cob_grp_nr > 1)
 		/* The object have multiple redundancy groups, use DAOS
 		 * internal transaction to handle that to guarantee the
 		 * atomicity of punch object.
 		 */
-		return dc_tx_convert(opc, task);
-	}
+		return dc_tx_convert(obj, opc, task);
 
 	obj_task_init_common(task, opc, map_ver, api_args->th, &obj_auxi, obj);
 
@@ -4810,6 +4960,8 @@ dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 	rc = obj_req_get_tgts(obj, NULL, api_args->dkey, dkey_hash, NIL_BITMAP,
 			      map_ver, false, false, obj_auxi);
 	if (rc != 0) {
+		if (rc == -DER_SHARDS_OVERLAP)
+			obj_addref(obj);
 		obj_comp_cb(task, NULL);
 		if (rc != -DER_SHARDS_OVERLAP)
 			goto out_task;
@@ -4818,7 +4970,7 @@ dc_obj_punch(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		 * VOS target. We will handle such case via internal
 		 * transaction.
 		 */
-		return dc_tx_convert(opc, task);
+		return dc_tx_convert(obj, opc, task);
 	}
 
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
@@ -4851,20 +5003,21 @@ obj_punch_common(tse_task_t *task, enum obj_rpc_opc opc, daos_obj_punch_t *args)
 {
 	struct dtx_epoch	 epoch = {0};
 	unsigned int		 map_ver = 0;
+	struct dc_object	*obj = NULL;
 	int			 rc;
 
-	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, NULL);
+	rc = obj_req_valid(task, args, opc, &epoch, &map_ver, &obj);
 	if (rc != 0)
 		goto comp; /* invalid parameters */
 
 	if (daos_handle_is_valid(args->th)) {
 
 		/* add the operation to DTX and complete immediately */
-		rc = dc_tx_attach(args->th, opc, task);
+		rc = dc_tx_attach(args->th, obj, opc, task);
 		goto comp;
 	}
 	/* submit the punch */
-	return dc_obj_punch(task, &epoch, map_ver, opc, args);
+	return dc_obj_punch(task, obj, &epoch, map_ver, opc, args);
 comp:
 	if (rc <= 0)
 		tse_task_complete(task, rc);
@@ -5143,7 +5296,8 @@ dc_obj_query_key(tse_task_t *api_task)
 			 * retry because some potential 'prepared' DTX.
 			 */
 			shard = obj_grp_leader_get(obj, i, map_ver);
-			if (shard < 0) {
+			if (shard < 0 ||
+			    unlikely(DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
 				if (!is_ec_obj) {
 					rc = shard;
 					D_ERROR(DF_OID" no valid shard, rc "
@@ -5153,7 +5307,6 @@ dc_obj_query_key(tse_task_t *api_task)
 					D_GOTO(out_task, rc);
 				}
 				oca = obj_get_oca(obj);
-				D_ASSERT(oca != NULL);
 				D_ASSERT(shard_first == 0 &&
 					 (i % replicas == 0));
 				shard = i;
@@ -5322,7 +5475,6 @@ dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 		return -DER_NO_HDL;
 
 	oc_attr = obj_get_oca(obj);
-	D_ASSERT(oc_attr != NULL);
 
 	/* XXX: Currently, only support to verify replicated object.
 	 *	Need more work for EC object in the future.
@@ -5404,10 +5556,6 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	struct pl_map_attr	attr;
 	int			rc;
 
-	/** TODO - unsupported for now */
-	if (cid == OC_UNKNOWN)
-		return -DER_INVAL;
-
 	/** select the oclass */
 	poh = dc_cont_hdl2pool_hdl(coh);
 	if (daos_handle_is_inval(poh))
@@ -5423,12 +5571,84 @@ daos_obj_generate_oid(daos_handle_t coh, daos_obj_id_t *oid,
 	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
 		attr.pa_domain_nr, attr.pa_target_nr);
 
-	rc = daos_oclass_fit_max(cid, attr.pa_domain_nr, attr.pa_target_nr,
-				 &cid);
+	if (cid == OC_UNKNOWN) {
+		uint64_t rf_factor;
+
+		rf_factor = dc_cont_hdl2redunfac(coh);
+		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+				   attr.pa_target_nr, ofeats, hints, &cid);
+	} else {
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
+					 attr.pa_target_nr, &cid);
+	}
+
 	if (rc)
 		return rc;
 
 	daos_obj_set_oid(oid, ofeats, cid, args);
 
 	return rc;
+}
+
+int
+daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
+			    daos_obj_id_t *oid, daos_ofeat_t ofeats,
+			    daos_oclass_id_t cid, daos_oclass_hints_t hints,
+			    uint32_t args)
+{
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	int			rc;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
+	if (cid == OC_UNKNOWN)
+		rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+				   attr.pa_target_nr, ofeats, hints, &cid);
+	else
+		rc = daos_oclass_fit_max(cid, attr.pa_domain_nr,
+					 attr.pa_target_nr, &cid);
+	if (rc)
+		return rc;
+
+	daos_obj_set_oid(oid, ofeats, cid, args);
+
+	return rc;
+}
+
+daos_oclass_id_t
+daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+		  daos_oclass_hints_t hints, uint32_t args)
+{
+	daos_handle_t		poh;
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+	uint64_t		rf_factor;
+	daos_oclass_id_t	cid;
+	int			rc;
+
+	/** select the oclass */
+	poh = dc_cont_hdl2pool_hdl(coh);
+	if (daos_handle_is_inval(poh))
+		return -DER_NO_HDL;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+
+	rf_factor = dc_cont_hdl2redunfac(coh);
+	rc = dc_set_oclass(rf_factor, attr.pa_domain_nr,
+			   attr.pa_target_nr, ofeats, hints, &cid);
+	if (rc)
+		return 0;
+
+	return cid;
 }

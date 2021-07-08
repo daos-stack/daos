@@ -24,6 +24,11 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+func mockEvtEngineDied(t *testing.T, r uint32) *events.RASEvent {
+	t.Helper()
+	return events.NewEngineDiedEvent("foo", 0, r, common.NormalExit, 1234)
+}
+
 func populateMembership(t *testing.T, log logging.Logger, members ...*Member) *Membership {
 	t.Helper()
 
@@ -236,7 +241,7 @@ func TestSystem_Membership_HostRanks(t *testing.T) {
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 3, MemberStateExcluded),
 		NewMember(Rank(4), MockUUID(4), addr1.String(), addr1, MemberStateStopped), // second host rank
 	}
 
@@ -326,7 +331,7 @@ func TestSystem_Membership_CheckRanklist(t *testing.T) {
 		MockMember(t, 0, MemberStateJoined),
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 3, MemberStateExcluded),
 		NewMember(Rank(4), common.MockUUID(4), "", addr1, MemberStateStopped), // second host rank
 	}
 
@@ -414,7 +419,7 @@ func TestSystem_Membership_CheckHostlist(t *testing.T) {
 	members := Members{
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 3, MemberStateExcluded),
 		MockMember(t, 4, MemberStateJoined),
 		MockMember(t, 5, MemberStateJoined),
 		NewMember(Rank(6), common.MockUUID(6), "", addr1, MemberStateStopped), // second host rank
@@ -570,7 +575,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			members: Members{
 				MockMember(t, 1, MemberStateJoined),
 				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 				MockMember(t, 4, MemberStateStopped),
 				MockMember(t, 5, MemberStateJoined),
 				MockMember(t, 6, MemberStateJoined),
@@ -585,7 +590,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			expMembers: Members{
 				MockMember(t, 1, MemberStateStopped),
 				MockMember(t, 2, MemberStateStopped), // errored results don't change member state
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 				MockMember(t, 4, MemberStateReady),
 				MockMember(t, 5, MemberStateJoined), // "Joined" will not be updated to "Ready"
 				MockMember(t, 6, MemberStateStopped, "exit 1"),
@@ -595,7 +600,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			members: Members{
 				MockMember(t, 1, MemberStateJoined),
 				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 				MockMember(t, 4, MemberStateStopped),
 				MockMember(t, 5, MemberStateJoined),
 				MockMember(t, 6, MemberStateStopped),
@@ -610,7 +615,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			expMembers: Members{
 				MockMember(t, 1, MemberStateStopped),
 				MockMember(t, 2, MemberStateErrored, "can't stop"),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 				MockMember(t, 4, MemberStateReady),
 				MockMember(t, 5, MemberStateJoined),
 				MockMember(t, 6, MemberStateStopped),
@@ -620,7 +625,7 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 			members: Members{
 				MockMember(t, 1, MemberStateJoined),
 				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 			},
 			results: MemberResults{
 				NewMemberResult(1, nil, MemberStateStopped),
@@ -662,21 +667,32 @@ func TestSystem_Membership_UpdateMemberStates(t *testing.T) {
 func TestSystem_Membership_Join(t *testing.T) {
 	fd1 := MustCreateFaultDomainFromString("/dc1/rack8/pdu5/host1")
 	fd2 := MustCreateFaultDomainFromString("/dc1/rack9/pdu0/host2")
+	shallowFD := MustCreateFaultDomainFromString("/host3")
 
-	curMember := MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd1)
+	defaultCurMembers := make([]*Member, 2)
+	for i := range defaultCurMembers {
+		defaultCurMembers[i] = MockMember(t, uint32(i), MemberStateJoined).WithFaultDomain(fd1)
+	}
+	curMember := defaultCurMembers[0]
 	newUUID := uuid.New()
-	newMember := MockMember(t, 1, MemberStateJoined).WithFaultDomain(fd2)
+	newMember := MockMember(t, 2, MemberStateJoined).WithFaultDomain(fd2)
+	newMemberShallowFD := MockMember(t, 3, MemberStateJoined).WithFaultDomain(shallowFD)
+
+	expMapVer := uint32(len(defaultCurMembers) + 1)
 
 	for name, tc := range map[string]struct {
-		notLeader bool
-		req       *JoinRequest
-		expResp   *JoinResponse
-		expErr    error
+		notLeader  bool
+		curMembers []*Member
+		req        *JoinRequest
+		expResp    *JoinResponse
+		expErr     error
 	}{
 		"not leader": {
 			notLeader: true,
-			req:       &JoinRequest{},
-			expErr:    errors.New("leader"),
+			req: &JoinRequest{
+				FaultDomain: fd1,
+			},
+			expErr: errors.New("leader"),
 		},
 		"successful rejoin": {
 			req: &JoinRequest{
@@ -689,7 +705,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 			expResp: &JoinResponse{
 				Member:     curMember,
 				PrevState:  curMember.state,
-				MapVersion: 2,
+				MapVersion: expMapVer,
 			},
 		},
 		"successful rejoin with different fault domain": {
@@ -703,7 +719,7 @@ func TestSystem_Membership_Join(t *testing.T) {
 			expResp: &JoinResponse{
 				Member:     MockMember(t, 0, MemberStateJoined).WithFaultDomain(fd2),
 				PrevState:  curMember.state,
-				MapVersion: 2,
+				MapVersion: expMapVer,
 			},
 		},
 		"rejoin with existing UUID and unknown rank": {
@@ -749,6 +765,45 @@ func TestSystem_Membership_Join(t *testing.T) {
 				Created:    true,
 				Member:     newMember,
 				PrevState:  MemberStateUnknown,
+				MapVersion: expMapVer,
+			},
+		},
+		"new member with bad fault domain depth": {
+			req: &JoinRequest{
+				Rank:           NilRank,
+				UUID:           newMemberShallowFD.UUID,
+				ControlAddr:    newMemberShallowFD.Addr,
+				FabricURI:      newMemberShallowFD.FabricURI,
+				FabricContexts: newMemberShallowFD.FabricContexts,
+				FaultDomain:    newMemberShallowFD.FaultDomain,
+			},
+			expErr: FaultBadFaultDomainDepth(newMemberShallowFD.FaultDomain, curMember.FaultDomain.NumLevels()),
+		},
+		"update existing member with bad fault domain depth": {
+			req: &JoinRequest{
+				Rank:           curMember.Rank,
+				UUID:           curMember.UUID,
+				ControlAddr:    curMember.Addr,
+				FabricURI:      curMember.FabricURI,
+				FabricContexts: curMember.FabricContexts,
+				FaultDomain:    shallowFD,
+			},
+			expErr: FaultBadFaultDomainDepth(newMemberShallowFD.FaultDomain, curMember.FaultDomain.NumLevels()),
+		},
+		"change fault domain depth for only member": {
+			curMembers: []*Member{
+				curMember,
+			},
+			req: &JoinRequest{
+				Rank:        curMember.Rank,
+				UUID:        curMember.UUID,
+				ControlAddr: curMember.Addr,
+				FabricURI:   curMember.Addr.String(),
+				FaultDomain: shallowFD,
+			},
+			expResp: &JoinResponse{
+				Member:     MockMember(t, 0, MemberStateJoined).WithFaultDomain(shallowFD),
+				PrevState:  curMember.state,
 				MapVersion: 2,
 			},
 		},
@@ -758,9 +813,15 @@ func TestSystem_Membership_Join(t *testing.T) {
 			defer ShowBufferOnFailure(t, buf)
 
 			ms, _ := MockMembership(t, log, mockResolveFn)
-			curMember.Rank = NilRank
-			if err := ms.addMember(curMember); err != nil {
-				t.Fatal(err)
+
+			if tc.curMembers == nil {
+				tc.curMembers = defaultCurMembers
+			}
+			for _, curM := range tc.curMembers {
+				curM.Rank = NilRank
+				if err := ms.addMember(curM); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if tc.notLeader {
 				_ = ms.db.ShutdownRaft()
@@ -787,7 +848,7 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 		MockMember(t, 0, MemberStateJoined),
 		MockMember(t, 1, MemberStateJoined),
 		MockMember(t, 2, MemberStateStopped),
-		MockMember(t, 3, MemberStateEvicted),
+		MockMember(t, 3, MemberStateExcluded),
 	}
 
 	for name, tc := range map[string]struct {
@@ -802,18 +863,19 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 		},
 		"event on unrecognized rank": {
 			members:    members,
-			event:      events.NewRankDownEvent("foo", 0, 4, common.NormalExit),
+			event:      mockEvtEngineDied(t, 4),
 			expMembers: members,
 		},
 		"state updated on unscheduled exit": {
 			members: members,
-			event:   events.NewRankDownEvent("foo", 0, 1, common.NormalExit),
+			event:   mockEvtEngineDied(t, 1),
 			expMembers: Members{
 				MockMember(t, 0, MemberStateJoined),
 				MockMember(t, 1, MemberStateErrored).WithInfo(
-					errors.Wrap(common.NormalExit, "DAOS rank exited unexpectedly").Error()),
+					errors.Wrap(common.NormalExit,
+						"DAOS engine 0 exited unexpectedly").Error()),
 				MockMember(t, 2, MemberStateStopped),
-				MockMember(t, 3, MemberStateEvicted),
+				MockMember(t, 3, MemberStateExcluded),
 			},
 		},
 	} {

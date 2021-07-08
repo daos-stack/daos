@@ -4,9 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
+import sys
 from env_modules import load_mpi
 from command_utils_base import EnvironmentVariables
 from general_utils import run_command, DaosTestError
@@ -38,20 +39,22 @@ class MpioUtils():
             return False
 
         # checking mpich install
-        cmd = "set -e; "                                                \
-              "export MODULEPATH=/usr/share/modules:/etc/modulefiles; " \
-              "for mod in mpi/mpich-x86_64 gnu-mpich; do "              \
-                  "if module is-avail $mod >/dev/null 2>&1; then "      \
-                      "module load $mod >/dev/null 2>&1; "              \
-                      "break; "                                         \
-                  "fi; "                                                \
-              "done; "                                                  \
+        cmd = "set -e; "                                           \
+              "export MODULEPATH=/usr/share/modulefiles:"          \
+                                 "/usr/share/modules:"             \
+                                 "/etc/modulefiles; "              \
+              "for mod in mpi/mpich-x86_64 gnu-mpich; do "         \
+                  "if module is-avail $mod >/dev/null 2>&1; then " \
+                      "module load $mod >/dev/null 2>&1; "         \
+                      "break; "                                    \
+                  "fi; "                                           \
+              "done; "                                             \
               "command -v mpichversion"
         cmd = '/usr/bin/ssh {} {}'.format(hostlist[0], cmd)
         try:
             result = run_command(cmd)
             self.mpichinstall = \
-                result.stdout.rstrip()[:-len('bin/mpichversion')]
+                result.stdout_text.rstrip()[:-len('bin/mpichversion')]
             return True
 
         except DaosTestError as excep:
@@ -125,8 +128,9 @@ class MpioUtils():
         elif test_name == "mpi4py":
             for exe in executables[test_name]:
                 commands.append(
-                    "{} -np {} --hostfile {} python {}".format(
-                        mpirun, client_processes, hostfile, exe))
+                    "{} -np {} --hostfile {} python{} {}".format(
+                        mpirun, client_processes, hostfile,
+                        sys.version_info.major, exe))
         elif test_name == "hdf5":
             env["HDF5_PARAPREFIX"] = "daos:"
             for exe in executables[test_name]:
@@ -142,6 +146,7 @@ class MpioUtils():
 
             except DaosTestError as excep:
                 raise MpioFailed(
-                    "<Test FAILED> \nException occurred: {}".format(str(excep)))
+                    "<Test FAILED> \nException occurred: {}".format(
+                        str(excep))) from excep
 
         return result

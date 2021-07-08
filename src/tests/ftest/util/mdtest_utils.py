@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from __future__ import print_function
+
 
 import uuid
 
@@ -18,7 +18,7 @@ class MdtestCommand(ExecutableCommand):
 
     def __init__(self):
         """Create an MdtestCommand object."""
-        super(MdtestCommand, self).__init__("/run/mdtest/*", "mdtest")
+        super().__init__("/run/mdtest/*", "mdtest")
         self.flags = FormattedParameter("{}")   # mdtest flags
         # Optional arguments
         #  -a=STRING             API for I/O [POSIX|DUMMY]
@@ -97,7 +97,7 @@ class MdtestCommand(ExecutableCommand):
     def get_param_names(self):
         """Get a sorted list of the defined MdtestCommand parameters."""
         # Sort the Mdtest parameter names to generate consistent ior commands
-        all_param_names = super(MdtestCommand, self).get_param_names()
+        all_param_names = super().get_param_names()
 
         # List all of the common ior params first followed by any dfs-specific
         # params (except when using POSIX).

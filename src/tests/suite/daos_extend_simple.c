@@ -45,7 +45,7 @@ extend_dkeys(void **state)
 		print_message("Insert %d kv record in object "DF_OID"\n",
 			      KEY_NR, DP_OID(oids[i]));
 		for (j = 0; j < KEY_NR; j++) {
-			char	key[16];
+			char	key[32] = {0};
 
 			sprintf(key, "dkey_0_%d", j);
 			insert_single(key, "a_key", 0, "data",
@@ -126,7 +126,7 @@ extend_indexes(void **state)
 			      KEY_NR, DP_OID(oids[i]));
 
 		for (j = 0; j < KEY_NR; j++) {
-			char	key[16];
+			char	key[32] = {0};
 
 			sprintf(key, "dkey_2_%d", j);
 			for (k = 0; k < 20; k++)
@@ -168,7 +168,7 @@ extend_large_rec(void **state)
 		print_message("Insert %d kv record in object "DF_OID"\n",
 			      KEY_NR, DP_OID(oids[i]));
 		for (j = 0; j < KEY_NR; j++) {
-			char	key[16];
+			char	key[32] = {0};
 
 			sprintf(key, "dkey_3_%d", j);
 			insert_single(key, "a_key", 0, buffer, 5000,
@@ -229,6 +229,12 @@ extend_small_sub_setup(void **state)
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			EXTEND_SMALL_POOL_SIZE, 3, NULL);
+	if (rc) {
+		print_message("It can not create the pool with 4 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+		return 0;
+	}
+
 	return rc;
 }
 

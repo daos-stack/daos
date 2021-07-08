@@ -8,7 +8,7 @@ from logging import DEBUG, INFO, WARNING, ERROR
 import sys
 
 
-class TestLogger(object):
+class TestLogger():
     """Defines a Logger that also logs messages to DaosLog."""
 
     _LEVELS = {

@@ -173,7 +173,8 @@ blob_wait_completion(struct bio_xs_context *xs_ctxt, struct blob_cp_arg *ba)
 	D_ASSERT(xs_ctxt != NULL);
 	if (xs_ctxt->bxc_tgt_id == -1) {
 		D_DEBUG(DB_IO, "Self poll xs_ctxt:%p\n", xs_ctxt);
-		xs_poll_completion(xs_ctxt, &ba->bca_inflights);
+		rc = xs_poll_completion(xs_ctxt, &ba->bca_inflights, 0);
+		D_ASSERT(rc == 0);
 	} else {
 		rc = ABT_eventual_wait(ba->bca_eventual, NULL);
 		if (rc != ABT_SUCCESS)
@@ -241,8 +242,8 @@ bio_bs_hold(struct bio_blobstore *bbs)
 	if (bbs->bb_state == BIO_BS_STATE_TEARDOWN ||
 	    bbs->bb_state == BIO_BS_STATE_OUT ||
 	    bbs->bb_state == BIO_BS_STATE_SETUP) {
-		D_ERROR("Blobstore %p is in %d state, reject request.\n",
-			bbs, bbs->bb_state);
+		D_ERROR("Blobstore %p is in %s state, reject request.\n",
+			bbs, bio_state_enum_to_str(bbs->bb_state));
 		rc = -DER_DOS;
 		goto out;
 	}
@@ -358,7 +359,7 @@ bio_blob_create(uuid_t uuid, struct bio_xs_context *xs_ctxt, uint64_t blob_sz)
 		return -DER_INVAL;
 	}
 
-	spdk_blob_opts_init(&bma.bma_opts);
+	spdk_blob_opts_init(&bma.bma_opts, sizeof(bma.bma_opts));
 	bma.bma_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
 	/**
@@ -500,7 +501,7 @@ bio_blob_open(struct bio_io_context *ctxt, bool async)
 
 int
 bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
-		struct umem_instance *umem, uuid_t uuid)
+		struct umem_instance *umem, uuid_t uuid, bool skip_blob)
 {
 	struct bio_io_context	*ctxt;
 	int			 rc;
@@ -515,8 +516,8 @@ bio_ioctxt_open(struct bio_io_context **pctxt, struct bio_xs_context *xs_ctxt,
 	ctxt->bic_xs_ctxt = xs_ctxt;
 	uuid_copy(ctxt->bic_pool_id, uuid);
 
-	/* NVMe isn't configured */
-	if (xs_ctxt == NULL) {
+	/* NVMe isn't configured or pool doesn't have NVMe partition */
+	if (!bio_nvme_configured() || skip_blob) {
 		*pctxt = ctxt;
 		return 0;
 	}
@@ -599,14 +600,14 @@ bio_blob_close(struct bio_io_context *ctxt, bool async)
 }
 
 int
-bio_ioctxt_close(struct bio_io_context *ctxt)
+bio_ioctxt_close(struct bio_io_context *ctxt, bool skip_blob)
 {
 	struct bio_xs_context	*xs_ctxt;
 	int			 rc;
 
 	xs_ctxt = ctxt->bic_xs_ctxt;
-	/* NVMe isn't configured */
-	if (xs_ctxt == NULL) {
+	/* NVMe isn't configured or pool doesn't have NVMe partition */
+	if (!bio_nvme_configured() || skip_blob) {
 		d_list_del_init(&ctxt->bic_link);
 		D_FREE(ctxt);
 		return 0;
@@ -713,7 +714,7 @@ bio_write_blob_hdr(struct bio_io_context *ioctxt, struct bio_blob_hdr *bio_bh)
 	struct smd_dev_info	*dev_info;
 	spdk_blob_id		 blob_id;
 	d_iov_t			 iov;
-	bio_addr_t		 addr;
+	bio_addr_t		 addr = { 0 };
 	uint64_t		 off = 0; /* byte offset in SPDK blob */
 	uint16_t		 dev_type = DAOS_MEDIA_NVME;
 	int			 rc = 0;

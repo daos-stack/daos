@@ -3,15 +3,34 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#define D_LOGFAC	DD_FAC(common)
 
 #include <daos/cont_props.h>
-#include <common.h>
+#include <daos/common.h>
 
 void
 daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 {
-	if (props == NULL || cont_prop == NULL)
+	if (props == NULL || cont_prop == NULL) {
+		D_DEBUG(DB_TRACE, "No props to set, props=%p, cont_prop=%p\n",
+			props, cont_prop);
 		return;
+	}
+
+	/* input props should cover needed entries, see ds_get_cont_props() */
+	if (daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP) == NULL	     ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_DEDUP_THRESHOLD) == NULL ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_SERVER_VERIFY)
+	    == NULL							     ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_CSUM) == NULL	     ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_CSUM_CHUNK_SIZE) == NULL ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_COMPRESS) == NULL	     ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_ENCRYPT) == NULL	     ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_FAC) == NULL	     ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_ALLOCED_OID) == NULL     ||
+	    daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ) == NULL)
+		D_DEBUG(DB_TRACE, "some prop entry type not found, "
+			"use default value.\n");
 
 	/** deduplication */
 	cont_prop->dcp_dedup_enabled	= daos_cont_prop2dedup(props);
@@ -37,6 +56,8 @@ daos_props_2cont_props(daos_prop_t *props, struct cont_props *cont_prop)
 
 	/** redundancy */
 	cont_prop->dcp_redun_fac	= daos_cont_prop2redunfac(props);
+	/** EC cell size */
+	cont_prop->dcp_ec_cell_sz	= daos_cont_prop2ec_cell_sz(props);
 
 	/** alloc'ed oid */
 	cont_prop->dcp_alloced_oid	= daos_cont_prop2allocedoid(props);
@@ -191,7 +212,17 @@ daos_cont_prop2redunlvl(daos_prop_t *props)
 	struct daos_prop_entry *prop =
 		daos_prop_entry_get(props, DAOS_PROP_CO_REDUN_LVL);
 
-	return prop == NULL ? DAOS_PROP_CO_REDUN_NODE : (uint32_t)prop->dpe_val;
+	return prop == NULL ? DAOS_PROP_CO_REDUN_RANK : (uint32_t)prop->dpe_val;
+}
+
+/** Get the EC cell size from a containers properites. */
+uint32_t
+daos_cont_prop2ec_cell_sz(daos_prop_t *props)
+{
+	struct daos_prop_entry *prop =
+		daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ);
+
+	return prop == NULL ? 0 : (uint32_t)prop->dpe_val;
 }
 
 /** Convert the redun_fac to number of allowed failures */

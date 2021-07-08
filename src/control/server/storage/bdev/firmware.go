@@ -2,7 +2,7 @@
 // (C) Copyright 2020-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// +build firmware
+//
 
 package bdev
 
@@ -111,7 +111,7 @@ func (p *Provider) getRequestedControllers(requestedPCIAddrs []string, modelID s
 }
 
 func (p *Provider) getRequestedControllersByAddr(requestedPCIAddrs []string, ignoreMissing bool) (storage.NvmeControllers, error) {
-	resp, err := p.backend.Scan(ScanRequest{})
+	resp, err := p.Scan(ScanRequest{})
 	if err != nil {
 		return nil, err
 	}

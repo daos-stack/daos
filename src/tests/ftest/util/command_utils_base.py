@@ -13,7 +13,7 @@ class CommandFailure(Exception):
     """Base exception for this module."""
 
 
-class BasicParameter(object):
+class BasicParameter():
     """A class for parameters whose values are read from a yaml file."""
 
     def __init__(self, value, default=None, yaml_key=None):
@@ -145,7 +145,7 @@ class FormattedParameter(BasicParameter):
                 assigning the value from a yaml file. Default is None which
                 will use the object's variable name as the yaml key.
         """
-        super(FormattedParameter, self).__init__(default, default)
+        super().__init__(default, default)
         self._str_format = str_format
         self._yaml_key = yaml_key
 
@@ -184,7 +184,7 @@ class FormattedParameter(BasicParameter):
         if self._yaml_key is not None:
             # Use the yaml key name instead of the variable name
             name = self._yaml_key
-        return super(FormattedParameter, self).get_yaml_value(name, test, path)
+        return super().get_yaml_value(name, test, path)
 
 
 class LogParameter(FormattedParameter):
@@ -200,7 +200,7 @@ class LogParameter(FormattedParameter):
                 command line argument string
             default (object): default value for the param
         """
-        super(LogParameter, self).__init__(str_format, default)
+        super().__init__(str_format, default)
         self._directory = directory
         self._add_directory()
 
@@ -228,7 +228,7 @@ class LogParameter(FormattedParameter):
             test (Test): avocado Test object to use to read the yaml file
             path (str): yaml path where the name is to be found
         """
-        super(LogParameter, self).get_yaml_value(name, test, path)
+        super().get_yaml_value(name, test, path)
         self._add_directory()
         self.log.debug("  Added the directory: %s => %s", name, self.value)
 
@@ -243,12 +243,12 @@ class LogParameter(FormattedParameter):
                 with the provided value.  Defaults to False - override the
                 current value.
         """
-        super(LogParameter, self).update(value, name, append)
+        super().update(value, name, append)
         self._add_directory()
         self.log.debug("  Added the directory: %s => %s", name, self.value)
 
 
-class ObjectWithParameters(object):
+class ObjectWithParameters():
     """A class for an object with parameters."""
 
     def __init__(self, namespace):
@@ -320,7 +320,7 @@ class CommandWithParameters(ObjectWithParameters):
             path (str, optional): path to location of command binary file.
                 Defaults to "".
         """
-        super(CommandWithParameters, self).__init__(namespace)
+        super().__init__(namespace)
         self._command = command
         self._path = path
         self._pre_command = None
@@ -383,7 +383,7 @@ class YamlParameters(ObjectWithParameters):
             other_params (YamlParameters, optional): yaml parameters to
                 include with these yaml parameters. Defaults to None.
         """
-        super(YamlParameters, self).__init__(namespace)
+        super().__init__(namespace)
         self.filename = filename
         self.title = title
         self.other_params = other_params
@@ -395,7 +395,7 @@ class YamlParameters(ObjectWithParameters):
             test (Test): avocado Test object
         """
         # Get the values for the yaml parameters defined by this class
-        super(YamlParameters, self).get_params(test)
+        super().get_params(test)
 
         # Get the values for the yaml parameters defined by the other class
         if self.other_params is not None:
@@ -408,7 +408,8 @@ class YamlParameters(ObjectWithParameters):
             dict: a dictionary of parameter name keys and values
 
         """
-        if isinstance(self.other_params, YamlParameters):
+        if (self.other_params is not None and
+                hasattr(self.other_params, "get_yaml_data")):
             yaml_data = self.other_params.get_yaml_data()
         else:
             yaml_data = {}
@@ -427,7 +428,8 @@ class YamlParameters(ObjectWithParameters):
 
         """
         yaml_data_updated = False
-        if isinstance(self.other_params, YamlParameters):
+        if (self.other_params is not None and
+                hasattr(self.other_params, "is_yaml_data_updated")):
             yaml_data_updated = self.other_params.is_yaml_data_updated()
         if not yaml_data_updated:
             for name in self.get_param_names():
@@ -438,7 +440,8 @@ class YamlParameters(ObjectWithParameters):
 
     def reset_yaml_data_updated(self):
         """Reset each yaml file parameter updated state to False."""
-        if isinstance(self.other_params, YamlParameters):
+        if (self.other_params is not None and
+                hasattr(self.other_params, "reset_yaml_data_updated")):
             self.other_params.reset_yaml_data_updated()
         for name in self.get_param_names():
             getattr(self, name).updated = False
@@ -473,7 +476,7 @@ class YamlParameters(ObjectWithParameters):
             except Exception as error:
                 raise CommandFailure(
                     "Error writing the yaml file {}: {}".format(
-                        filename, error))
+                        filename, error)) from error
             self.reset_yaml_data_updated()
         return create_yaml
 
@@ -490,7 +493,7 @@ class YamlParameters(ObjectWithParameters):
         """
         status = False
         setting = getattr(self, name, None)
-        if isinstance(setting, BasicParameter):
+        if setting is not None and hasattr(setting, "update"):
             setting.update(value, name)
             status = True
         elif setting is not None:
@@ -512,7 +515,7 @@ class YamlParameters(ObjectWithParameters):
 
         """
         setting = getattr(self, name, None)
-        if isinstance(setting, BasicParameter):
+        if setting is not None and hasattr(setting, "value"):
             value = setting.value
         elif setting is not None:
             value = setting
@@ -534,7 +537,7 @@ class TransportCredentials(YamlParameters):
             title (str, optional): namespace under which to place the
                 parameters when creating the yaml file. Defaults to None.
         """
-        super(TransportCredentials, self).__init__(namespace, None, title)
+        super().__init__(namespace, None, title)
         default_insecure = str(os.environ.get("DAOS_INSECURE_MODE", True))
         default_insecure = default_insecure.lower() == "true"
         self.ca_cert = LogParameter(log_dir, None, "daosCA.crt")
@@ -547,7 +550,7 @@ class TransportCredentials(YamlParameters):
             dict: a dictionary of parameter name keys and values
 
         """
-        yaml_data = super(TransportCredentials, self).get_yaml_data()
+        yaml_data = super().get_yaml_data()
 
         # Convert the boolean value into a string
         if self.title is not None:
@@ -598,7 +601,7 @@ class CommonConfig(YamlParameters):
             name (str): default value for the name configuration parameter
             transport (TransportCredentials): transport credentails
         """
-        super(CommonConfig, self).__init__(
+        super().__init__(
             "/run/common_config/*", None, None, transport)
 
         # Common configuration parameters
@@ -641,7 +644,7 @@ class EnvironmentVariables(dict):
         """
         return [
             key if value is None else "{}={}".format(key, value)
-            for key, value in self.items()
+            for key, value in list(self.items())
         ]
 
     def get_export_str(self, separator=";"):

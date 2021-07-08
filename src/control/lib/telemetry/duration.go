@@ -18,11 +18,16 @@ import "C"
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
 type Duration struct {
 	statsMetric
+}
+
+func (d *Duration) Type() MetricType {
+	return MetricTypeDuration
 }
 
 func (d *Duration) Value() time.Duration {
@@ -32,16 +37,20 @@ func (d *Duration) Value() time.Duration {
 
 	var tms C.struct_timespec
 
-	res := C.d_tm_get_duration(&tms, &d.stats, d.handle.shmem, d.node, nil)
+	res := C.d_tm_get_duration(d.handle.ctx, &tms, &d.stats, d.node)
 	if res == C.DER_SUCCESS {
-		return time.Duration(tms.tv_sec)*time.Second + time.Duration(tms.tv_nsec)
+		return time.Duration(tms.tv_sec)*time.Second + time.Duration(tms.tv_nsec)*time.Nanosecond
 	}
 
 	return BadDuration
 }
 
+func (d *Duration) FloatValue() float64 {
+	return float64(d.Value())
+}
+
 func newDuration(hdl *handle, path string, name *string, node *C.struct_d_tm_node_t) *Duration {
-	return &Duration{
+	d := &Duration{
 		statsMetric: statsMetric{
 			metricBase: metricBase{
 				handle: hdl,
@@ -51,6 +60,11 @@ func newDuration(hdl *handle, path string, name *string, node *C.struct_d_tm_nod
 			},
 		},
 	}
+
+	// Load up statistics
+	_ = d.Value()
+
+	return d
 }
 
 func GetDuration(ctx context.Context, name string) (*Duration, error) {
@@ -64,5 +78,9 @@ func GetDuration(ctx context.Context, name string) (*Duration, error) {
 		return nil, err
 	}
 
-	return newDuration(hdl, "", &name, node), nil
+	if (node.dtn_type & C.D_TM_DURATION) == 0 {
+		return nil, fmt.Errorf("metric %q is not a duration", name)
+	}
+
+	return newDuration(hdl, name, &name, node), nil
 }

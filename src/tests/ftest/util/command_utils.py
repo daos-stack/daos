@@ -21,7 +21,8 @@ from command_utils_base import \
     CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files, change_file_owner, get_file_listing, run_task
+    distribute_files, change_file_owner, get_file_listing, run_pcmd, \
+    get_subprocess_stdout
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -45,7 +46,7 @@ class ExecutableCommand(CommandWithParameters):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(ExecutableCommand, self).__init__(namespace, command, path)
+        super().__init__(namespace, command, path)
         self._process = None
         self.run_as_subprocess = subprocess
         self.timeout = None
@@ -73,7 +74,7 @@ class ExecutableCommand(CommandWithParameters):
             str: the command with all the defined parameters
 
         """
-        value = super(ExecutableCommand, self).__str__()
+        value = super().__str__()
         if self.sudo:
             value = " ".join(["sudo -n", value])
         return value
@@ -124,7 +125,7 @@ class ExecutableCommand(CommandWithParameters):
 
         except DaosTestError as error:
             # Command failed or possibly timed out
-            raise CommandFailure(error)
+            raise CommandFailure from error
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -262,7 +263,7 @@ class ExecutableCommand(CommandWithParameters):
 
             # Get the state of the process from the output
             state = re.findall(
-                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout)
+                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout_text)
         return state
 
     def get_output(self, method_name, regex_method=None, **kwargs):
@@ -299,7 +300,7 @@ class ExecutableCommand(CommandWithParameters):
         # Parse the output and return
         if not regex_method:
             regex_method = method_name
-        return self.parse_output(result.stdout, regex_method)
+        return self.parse_output(result.stdout_text, regex_method)
 
     def parse_output(self, stdout, regex_method):
         """Parse output using findall() with supplied 'regex_method' as pattern.
@@ -382,7 +383,7 @@ class CommandWithSubCommand(ExecutableCommand):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(CommandWithSubCommand, self).__init__(namespace, command, path)
+        super().__init__(namespace, command, path)
 
         # Define the sub-command parameter whose value is used to assign the
         # sub-command's CommandWithParameters-based class.  Use the command to
@@ -444,9 +445,10 @@ class CommandWithSubCommand(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(CommandWithSubCommand, self).get_params(test)
+        super().get_params(test)
         self.get_sub_command_class()
-        if isinstance(self.sub_command_class, ObjectWithParameters):
+        if (self.sub_command_class is not None and
+                hasattr(self.sub_command_class, "get_params")):
             self.sub_command_class.get_params(test)
 
     def get_sub_command_class(self):
@@ -501,10 +503,11 @@ class CommandWithSubCommand(ExecutableCommand):
 
         """
         try:
-            self.result = super(CommandWithSubCommand, self).run()
+            self.result = super().run()
         except CommandFailure as error:
             raise CommandFailure(
-                "<{}> command failed: {}".format(self.command, error))
+                "<{}> command failed: {}".format(
+                    self.command, error)) from error
         return self.result
 
     def _get_result(self, sub_command_list=None, **kwargs):
@@ -540,7 +543,7 @@ class CommandWithSubCommand(ExecutableCommand):
                 this_command = this_command.sub_command_class
 
         # Set the sub-command arguments
-        for name, value in kwargs.items():
+        for name, value in list(kwargs.items()):
             getattr(this_command, name).value = value
 
         # Issue the command and store the command result
@@ -564,7 +567,7 @@ class SubProcessCommand(CommandWithSubCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
         """
-        super(SubProcessCommand, self).__init__(namespace, command, path, True)
+        super().__init__(namespace, command, path, True)
 
         # Attributes used to determine command success when run as a subprocess
         # See self.check_subprocess_status() for details.
@@ -621,7 +624,7 @@ class SubProcessCommand(CommandWithSubCommand):
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                output = sub_process.get_stdout()
+                output = get_subprocess_stdout(sub_process)
                 detected = len(re.findall(self.pattern, output))
                 complete = detected == self.pattern_count
                 timed_out = time.time() - start > self.pattern_timeout.value
@@ -642,7 +645,7 @@ class SubProcessCommand(CommandWithSubCommand):
                     runtime = "{} seconds".format(time.time() - start)
                 if not self.verbose:
                     # Include the stdout if verbose is not enabled
-                    details = ":\n{}".format(sub_process.get_stdout())
+                    details = ":\n{}".format(get_subprocess_stdout(sub_process))
                 self.log.info("%s - %s %s%s", reason, msg, runtime, details)
                 if timed_out:
                     self.log.debug(
@@ -681,7 +684,7 @@ class YamlCommand(SubProcessCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
         """
-        super(YamlCommand, self).__init__(namespace, command, path, timeout)
+        super().__init__(namespace, command, path, timeout)
 
         # Command configuration yaml file
         self.yaml = yaml_cfg
@@ -711,8 +714,8 @@ class YamlCommand(SubProcessCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(YamlCommand, self).get_params(test)
-        if isinstance(self.yaml, YamlParameters):
+        super().get_params(test)
+        if self.yaml is not None and hasattr(self.yaml, "get_params"):
             self.yaml.get_params(test)
 
     def create_yaml_file(self):
@@ -729,7 +732,7 @@ class YamlCommand(SubProcessCommand):
                 self.temporary_file_hosts attributes are defined.
 
         """
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "create_yaml"):
             if self.yaml.create_yaml(self.temporary_file):
                 self.copy_configuration(self.temporary_file_hosts)
 
@@ -745,7 +748,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         status = False
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "set_value"):
             status = self.yaml.set_value(name, value)
         return status
 
@@ -761,7 +764,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         value = None
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "get_value"):
             value = self.yaml.get_value(name)
 
         return value
@@ -784,7 +787,7 @@ class YamlCommand(SubProcessCommand):
         """
         if self.yaml:
             self.create_yaml_file()
-        return super(YamlCommand, self).run()
+        return super().run()
 
     def copy_certificates(self, source, hosts):
         """Copy certificates files from the source to the destination hosts.
@@ -795,7 +798,7 @@ class YamlCommand(SubProcessCommand):
         """
         names = set()
         yaml = self.yaml
-        while isinstance(yaml, YamlParameters):
+        while yaml is not None and hasattr(yaml, "other_params"):
             if hasattr(yaml, "get_certificate_data"):
                 self.log.debug("Copying certificates for %s:", self._command)
                 data = yaml.get_certificate_data(
@@ -823,7 +826,7 @@ class YamlCommand(SubProcessCommand):
             self.log.debug(
                 "Copied certificates for %s (in %s):",
                 self._command, ", ".join(names))
-            for line in get_file_listing(hosts, names).stdout.splitlines():
+            for line in get_file_listing(hosts, names).stdout_text.splitlines():
                 self.log.debug("  %s", line)
 
     def copy_configuration(self, hosts):
@@ -839,7 +842,7 @@ class YamlCommand(SubProcessCommand):
             CommandFailure: if there is an error copying the configuration file
 
         """
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "filename"):
             if self.temporary_file and hosts:
                 self.log.info(
                     "Copying %s yaml configuration file to %s on %s",
@@ -851,7 +854,7 @@ class YamlCommand(SubProcessCommand):
                 except DaosTestError as error:
                     raise CommandFailure(
                         "ERROR: Copying yaml configuration file to {}: "
-                        "{}".format(hosts, error))
+                        "{}".format(hosts, error)) from error
 
     def verify_socket_directory(self, user, hosts):
         """Verify the domain socket directory is present and owned by this user.
@@ -865,7 +868,7 @@ class YamlCommand(SubProcessCommand):
                 owned by the user and could not be created
 
         """
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None:
             directory = self.get_user_file()
             self.log.info(
                 "Verifying %s socket directory: %s", self.command, directory)
@@ -881,7 +884,8 @@ class YamlCommand(SubProcessCommand):
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
                         "user {} on {}:\n{}".format(
-                            self.command, directory, user, nodes, error))
+                            self.command, directory, user, nodes,
+                            error)) from error
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.
@@ -893,7 +897,7 @@ class YamlCommand(SubProcessCommand):
         return self.get_config_value("socket_dir")
 
 
-class SubprocessManager(object):
+class SubprocessManager():
     """Defines an object that manages a sub process launched with orterun."""
 
     def __init__(self, command, manager="Orterun"):
@@ -973,7 +977,7 @@ class SubprocessManager(object):
             path (str): path in which to create the hostfile
             slots (int): number of slots per host to specify in the hostfile
         """
-        self._hosts = hosts
+        self._hosts = list(hosts)
         self.manager.assign_hosts(self._hosts, path, slots)
         self.manager.assign_processes(len(self._hosts))
 
@@ -1006,11 +1010,11 @@ class SubprocessManager(object):
         # Start the daos command
         try:
             self.manager.run()
-        except CommandFailure:
+        except CommandFailure as error:
             # Kill the subprocess, anything that might have started
             self.manager.kill()
             raise CommandFailure(
-                "Failed to start {}.".format(str(self.manager.job)))
+                "Failed to start {}.".format(str(self.manager.job))) from error
         finally:
             # Define the expected states for each rank
             self._expected_states = self.get_current_state()
@@ -1082,12 +1086,13 @@ class SubprocessManager(object):
             command = "systemctl is-active {}".format(
                 self.manager.job.service_name)
         else:
-            command = "prep {}".format(self.manager.job.command)
-        task = run_task(self._hosts, command, 30)
-        for output, nodelist in task.iter_buffers():
-            for node in nodelist:
-                data[ranks[node]] = {
-                    "host": node, "uuid": "-", "state": str(output)}
+            command = "pgrep {}".format(self.manager.job.command)
+        results = run_pcmd(self._hosts, command, 30)
+        for result in results:
+            for node in result["hosts"]:
+                # expecting single line output from run_pcmd
+                stdout = result["stdout"][-1] if result["stdout"] else "unknown"
+                data[ranks[node]] = {"host": node, "uuid": "-", "state": stdout}
         return data
 
     def update_expected_states(self, ranks, state):
@@ -1246,7 +1251,7 @@ class SystemctlCommand(ExecutableCommand):
 
     def __init__(self):
         """Create a SystemctlCommand object."""
-        super(SystemctlCommand, self).__init__(
+        super().__init__(
             "/run/systemctl/*", "systemctl", subprocess=False)
         self.sudo = True
 
@@ -1266,4 +1271,4 @@ class SystemctlCommand(ExecutableCommand):
 
         """
         return list(
-            reversed(super(SystemctlCommand, self).get_str_param_names()))
+            reversed(super().get_str_param_names()))

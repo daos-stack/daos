@@ -10,91 +10,21 @@ import (
 	"context"
 	"strings"
 
-	"github.com/dustin/go-humanize/english"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Prepare  storagePrepareCmd  `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
 	Scan     storageScanCmd     `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
 	Format   storageFormatCmd   `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 	Query    storageQueryCmd    `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
 	Set      setFaultyCmd       `command:"set" alias:"s" description:"Manually set the device state."`
 	Replace  storageReplaceCmd  `command:"replace" alias:"r" description:"Replace a storage device that has been hot-removed with a new device."`
 	Identify storageIdentifyCmd `command:"identify" alias:"i" description:"Blink the status LED on a given VMD device for visual SSD identification."`
-}
-
-// storagePrepareCmd is the struct representing the prep storage subcommand.
-type storagePrepareCmd struct {
-	logCmd
-	ctlInvokerCmd
-	hostListCmd
-	jsonOutputCmd
-	types.StoragePrepareCmd
-}
-
-// Execute is run when storagePrepareCmd activates
-func (cmd *storagePrepareCmd) Execute(args []string) error {
-	prepNvme, prepScm, err := cmd.Validate()
-	if err != nil {
-		return err
-	}
-
-	var nReq *control.NvmePrepareReq
-	var sReq *control.ScmPrepareReq
-	if prepNvme {
-		nReq = &control.NvmePrepareReq{
-			PCIWhiteList: cmd.PCIWhiteList,
-			NrHugePages:  int32(cmd.NrHugepages),
-			TargetUser:   cmd.TargetUser,
-			Reset:        cmd.Reset,
-		}
-	}
-
-	if prepScm {
-		if cmd.jsonOutputEnabled() && !cmd.Force {
-			return errors.New("Cannot use --json without --force")
-		}
-		if err := cmd.Warn(cmd.log); err != nil {
-			return err
-		}
-
-		sReq = &control.ScmPrepareReq{Reset: cmd.Reset}
-	}
-
-	ctx := context.Background()
-	req := &control.StoragePrepareReq{
-		NVMe: nReq,
-		SCM:  sReq,
-	}
-	req.SetHostList(cmd.hostlist)
-	resp, err := control.StoragePrepare(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	var bld strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
-		return err
-	}
-	if err := pretty.PrintStoragePrepareMap(resp.HostStorage, &bld); err != nil {
-		return err
-	}
-	cmd.log.Info(bld.String())
-
-	return resp.Errors()
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -113,57 +43,53 @@ type storageScanCmd struct {
 // Runs NVMe and SCM storage scan on all connected servers.
 func (cmd *storageScanCmd) Execute(_ []string) error {
 	if cmd.NvmeHealth && cmd.NvmeMeta {
-		return errors.New("Cannot use --nvme-health and --nvme-meta together")
+		return errors.New("cannot use --nvme-health and --nvme-meta together")
+	}
+	if cmd.Verbose && (cmd.NvmeHealth || cmd.NvmeMeta) {
+		return errors.New("cannot use --verbose with --nvme-health or --nvme-meta")
 	}
 
-	ctx := context.Background()
-	req := &control.StorageScanReq{NvmeHealth: cmd.NvmeHealth, NvmeMeta: cmd.NvmeMeta}
+	req := &control.StorageScanReq{
+		NvmeHealth: cmd.NvmeHealth,
+		NvmeMeta:   cmd.NvmeMeta,
+		// don't strip nvme details if verbose or health or meta set
+		NvmeBasic: !(cmd.Verbose || cmd.NvmeHealth || cmd.NvmeMeta),
+	}
 	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageScan(ctx, cmd.ctlInvoker, req)
-
-	if cmd.jsonOutputEnabled() {
-		if cmd.Verbose {
-			cmd.log.Error("--verbose flag ignored if --json specified")
-		}
-
-		return cmd.outputJSON(resp, err)
-	}
-
+	resp, err := control.StorageScan(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
 
-	var bld strings.Builder
-	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(resp, resp.Errors())
+	}
+
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
 		return err
 	}
-	if cmd.NvmeHealth {
-		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --nvme-health specified")
-		}
-		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &bld); err != nil {
+	if outErr.Len() > 0 {
+		cmd.log.Error(outErr.String())
+	}
+
+	var out strings.Builder
+	switch {
+	case cmd.NvmeHealth:
+		if err := pretty.PrintNvmeHealthMap(resp.HostStorage, &out); err != nil {
 			return err
 		}
-		cmd.log.Info(bld.String())
-
-		return resp.Errors()
-	}
-	if cmd.NvmeMeta {
-		if cmd.Verbose {
-			cmd.log.Info("--verbose flag ignored if --nvme-meta specified")
-		}
-		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &bld); err != nil {
+	case cmd.NvmeMeta:
+		if err := pretty.PrintNvmeMetaMap(resp.HostStorage, &out); err != nil {
 			return err
 		}
-		cmd.log.Info(bld.String())
-
-		return resp.Errors()
+	default:
+		verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
+		if err := pretty.PrintHostStorageMap(resp.HostStorage, &out, verbose); err != nil {
+			return err
+		}
 	}
-	if err := pretty.PrintHostStorageMap(resp.HostStorage, &bld, verbose); err != nil {
-		return err
-	}
-	cmd.log.Info(bld.String())
+	cmd.log.Info(out.String())
 
 	return resp.Errors()
 }
@@ -175,66 +101,8 @@ type storageFormatCmd struct {
 	hostListCmd
 	jsonOutputCmd
 	Verbose  bool `short:"v" long:"verbose" description:"Show results of each SCM & NVMe device format operation"`
-	Reformat bool `long:"reformat" description:"Reformat storage overwriting any existing filesystem (CAUTION: destructive operation)"`
-}
-
-// shouldReformatSystem queries system to interrogate membership before deciding
-// whether a system reformat is appropriate.
-//
-// Reformat system if membership is not empty and all member ranks are stopped.
-func (cmd *storageFormatCmd) shouldReformatSystem(ctx context.Context) (bool, error) {
-	if cmd.Reformat {
-		resp, err := control.SystemQuery(ctx, cmd.ctlInvoker, &control.SystemQueryReq{})
-		if err != nil {
-			// If the AP hasn't been started, it will respond as if it
-			// is not a replica.
-			if system.IsNotReplica(err) || system.IsUnavailable(err) {
-				return false, nil
-			}
-			return false, errors.Wrap(err, "System-Query command failed")
-		}
-
-		if len(resp.Members) == 0 {
-			cmd.log.Debug("no system members, reformat host list")
-
-			return false, nil
-		}
-
-		notStoppedRanks, err := system.CreateRankSet("")
-		if err != nil {
-			return false, err
-		}
-		for _, member := range resp.Members {
-			if member.State() != system.MemberStateStopped {
-				notStoppedRanks.Add(member.Rank)
-			}
-		}
-		if notStoppedRanks.Count() > 0 {
-			return false, errors.Errorf(
-				"system reformat requires the following %s to be stopped: %s",
-				english.Plural(notStoppedRanks.Count(), "rank", "ranks"),
-				notStoppedRanks.String())
-		}
-
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func (cmd *storageFormatCmd) systemReformat(ctx context.Context) error {
-	resp, err := control.SystemReformat(ctx, cmd.ctlInvoker,
-		new(control.SystemResetFormatReq))
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	return cmd.printFormatResp(resp)
+	Reformat bool `long:"reformat" description:"Alias for --force, will be removed in a future release"`
+	Force    bool `long:"force" description:"Force storage format on a host, stopping any running engines (CAUTION: destructive operation)"`
 }
 
 // Execute is run when storageFormatCmd activates.
@@ -243,39 +111,44 @@ func (cmd *storageFormatCmd) systemReformat(ctx context.Context) error {
 func (cmd *storageFormatCmd) Execute(args []string) (err error) {
 	ctx := context.Background()
 
-	sysReformat, err := cmd.shouldReformatSystem(ctx)
+	req := &control.StorageFormatReq{Reformat: cmd.Force}
+	req.SetHostList(cmd.hostlist)
+
+	// TODO (DAOS-7080): Deprecate this parameter in favor of wiping SCM
+	// during the erase operation. For the moment, though, the reworked
+	// logic will prevent format of a running system, so the main use case
+	// here is to enable backward-compatibility for existing scripts.
+	if cmd.Reformat {
+		req.Reformat = true
+	}
+
+	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 	if err != nil {
 		return err
 	}
-	if sysReformat {
-		return cmd.systemReformat(ctx)
-	}
-
-	req := &control.StorageFormatReq{Reformat: cmd.Reformat}
-	req.SetHostList(cmd.hostlist)
-	resp, err := control.StorageFormat(ctx, cmd.ctlInvoker, req)
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, err)
-	}
-
-	if err != nil {
-		return err
+		return cmd.outputJSON(resp, resp.Errors())
 	}
 
 	return cmd.printFormatResp(resp)
 }
 
 func (cmd *storageFormatCmd) printFormatResp(resp *control.StorageFormatResp) error {
-	var bld strings.Builder
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.log.Error(outErr.String())
+	}
+
+	var out strings.Builder
 	verbose := pretty.PrintWithVerboseOutput(cmd.Verbose)
-	if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &out, verbose); err != nil {
 		return err
 	}
-	if err := pretty.PrintStorageFormatMap(resp.HostStorage, &bld, verbose); err != nil {
-		return err
-	}
-	cmd.log.Info(bld.String())
+	cmd.log.Info(out.String())
 
 	return resp.Errors()
 }
@@ -305,12 +178,11 @@ func (cmd *nvmeSetFaultyCmd) Execute(_ []string) error {
 		}
 	}
 
-	ctx := context.Background()
 	req := &control.SmdQueryReq{
 		UUID:      cmd.UUID,
 		SetFaulty: true,
 	}
-	return cmd.makeRequest(ctx, req)
+	return cmd.makeRequest(context.Background(), req)
 }
 
 // storageReplaceCmd is the struct representing the replace storage subcommand
@@ -338,18 +210,17 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 		cmd.log.Info("NoReint is not currently implemented")
 	}
 
-	ctx := context.Background()
 	req := &control.SmdQueryReq{
 		UUID:        cmd.OldDevUUID,
 		ReplaceUUID: cmd.NewDevUUID,
 		NoReint:     cmd.NoReint,
 	}
-	return cmd.makeRequest(ctx, req)
+	return cmd.makeRequest(context.Background(), req)
 }
 
 // storageIdentifyCmd is the struct representing the identify storage subcommand.
 type storageIdentifyCmd struct {
-	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification."`
+	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds."`
 }
 
 // vmdIdentifyCmd is the struct representing the identify vmd storage subcommand.
@@ -362,10 +233,9 @@ type vmdIdentifyCmd struct {
 //
 // Runs SPDK VMD API commands to set the LED state on the VMD to "IDENTIFY"
 func (cmd *vmdIdentifyCmd) Execute(_ []string) error {
-	ctx := context.Background()
 	req := &control.SmdQueryReq{
 		UUID:     cmd.UUID,
 		Identify: true,
 	}
-	return cmd.makeRequest(ctx, req)
+	return cmd.makeRequest(context.Background(), req)
 }

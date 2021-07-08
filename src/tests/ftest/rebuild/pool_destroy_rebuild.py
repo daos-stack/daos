@@ -1,17 +1,16 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from ior_test_base import IorTestBase
 
-import time
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
-class PoolDestroyWithIO(IorTestBase):
+class RbldPoolDestroyWithIO(IorTestBase):
     """Rebuild test cases featuring IOR.
 
     This class contains tests for pool rebuild that feature I/O going on
@@ -34,7 +33,10 @@ class PoolDestroyWithIO(IorTestBase):
           Destroy Pool during rebuild.
           Re-create pool on reamining ranks.
 
-        :avocado: tags=all,pr,hw,medium,ib2,pool,rebuild,pooldestroywithio
+        :avocado: tags=all,pr,hw
+        :avocado: tags=medium,ib2
+        :avocado: tags=pool,rebuild,ior
+        :avocado: tags=pooldestroywithio
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*/0/*")
@@ -48,8 +50,8 @@ class PoolDestroyWithIO(IorTestBase):
         # make sure pool looks good before we start
         checks = {
             "pi_nnodes": len(self.hostlist_servers) * engines_per_host,
-            "pi_ntargets": len(self.hostlist_servers) * targets * \
-                engines_per_host,
+            "pi_ntargets": len(
+                self.hostlist_servers) * targets * engines_per_host,
             "pi_ndisabled": 0,
         }
         self.assertTrue(
@@ -63,10 +65,10 @@ class PoolDestroyWithIO(IorTestBase):
 
         # perform first set of io using IOR
         for run in range(4):
-            self.log.info("Starting ior run number {}".format(run))
+            self.log.info("Starting ior run number %s", run)
             self.run_ior_with_pool()
 
-        self.log.info("Starting rebuild by killing rank {}".format(rank))
+        self.log.info("Starting rebuild by killing rank %s", rank)
         # Kill the server and trigger rebuild
         self.server_managers[0].stop_ranks([rank], self.d_log, force=True)
 
@@ -75,8 +77,8 @@ class PoolDestroyWithIO(IorTestBase):
         self.log.info("Wait for rebuild to start")
         self.pool.wait_for_rebuild(True, interval=1)
 
-        #self.log.info("Wait for rebuild to finish")
-        #self.pool.wait_for_rebuild(False, interval=1)
+        # self.log.info("Wait for rebuild to finish")
+        # self.pool.wait_for_rebuild(False, interval=1)
 
         self.pool.set_query_data()
         rebuild_status = self.pool.query_data["response"]["rebuild"]["state"]

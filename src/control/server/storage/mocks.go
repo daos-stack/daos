@@ -67,7 +67,7 @@ func MockNvmeNamespace(varIdx ...int32) *NvmeNamespace {
 	idx := common.GetIndex(varIdx...)
 	return &NvmeNamespace{
 		ID:   uint32(idx),
-		Size: uint64(idx),
+		Size: uint64(humanize.TByte) * uint64(idx+1),
 	}
 }
 
@@ -93,7 +93,7 @@ func MockNvmeController(varIdx ...int32) *NvmeController {
 		Serial:      concat("serial", getRandIdx()),
 		PciAddr:     pciAddr,
 		FwRev:       concat("fwRev", idx),
-		SocketID:    idx,
+		SocketID:    idx % 2,
 		HealthStats: MockNvmeHealth(idx),
 		Namespaces:  []*NvmeNamespace{MockNvmeNamespace(1)},
 		SmdDevices:  []*SmdDevice{MockSmdDevice(pciAddr, idx)},
@@ -121,7 +121,7 @@ func MockScmModule(varIdx ...int32) *ScmModule {
 		ControllerID:     idx,
 		SocketID:         idx,
 		PhysicalID:       idx,
-		Capacity:         uint64(idx),
+		Capacity:         uint64(humanize.GByte),
 		UID:              fmt.Sprintf("Device%d", idx),
 		PartNumber:       fmt.Sprintf("PartNumber%d", idx),
 		FirmwareRevision: fmt.Sprintf("FWRev%d", idx),
@@ -161,6 +161,6 @@ func MockScmNamespace(varIdx ...int32) *ScmNamespace {
 		BlockDevice: fmt.Sprintf("pmem%d", idx),
 		Name:        fmt.Sprintf("namespace%d.0", idx),
 		NumaNode:    uint32(idx),
-		Size:        uint64(idx + 1),
+		Size:        uint64(humanize.TByte) * uint64(idx+1),
 	}
 }

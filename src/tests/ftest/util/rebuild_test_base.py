@@ -6,14 +6,15 @@
 """
 from apricot import TestWithServers
 from command_utils_base import ObjectWithParameters, BasicParameter
-
+from daos_utils import DaosCommand
 
 class RebuildTestParams(ObjectWithParameters):
+    # pylint: disable=too-few-public-methods
     """Class for gathering test parameters."""
 
     def __init__(self):
         """Initialize a RebuildTestParams object."""
-        super(RebuildTestParams, self).__init__("/run/rebuild/*")
+        super().__init__("/run/rebuild/*")
         self.object_class = BasicParameter(None)
         self.rank = BasicParameter(None)
 
@@ -26,17 +27,18 @@ class RebuildTestBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildTestBase object."""
-        super(RebuildTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.inputs = RebuildTestParams()
         self.targets = None
         self.server_count = 0
         self.info_checks = None
         self.rebuild_checks = None
+        self.daos_cmd = None
 
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(RebuildTestBase, self).setUp()
+        super().setUp()
 
         # Get the test parameters
         self.inputs.get_params(self)
@@ -137,7 +139,6 @@ class RebuildTestBase(TestWithServers):
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
-        pass
 
     def verify_container_data(self, txn=None):
         """Verify the container data.
@@ -160,6 +161,7 @@ class RebuildTestBase(TestWithServers):
         """
         # Get the test params
         self.setup_test_pool()
+        self.daos_cmd = DaosCommand(self.bin)
         if create_container:
             self.setup_test_container()
 
@@ -180,6 +182,17 @@ class RebuildTestBase(TestWithServers):
 
         # Confirm rebuild completes
         self.pool.wait_for_rebuild(False, 1)
+
+        # clear container status for the RF issue
+        self.daos_cmd.container_set_prop(
+                      pool=self.pool.uuid,
+                      cont=self.container.uuid,
+                      prop="status",
+                      value="healthy")
+
+        # Refresh local pool and container
+        self.pool.check_pool_info()
+        self.container.check_container_info()
 
         # Verify the excluded rank is no longer used with the objects
         self.verify_rank_has_no_objects()

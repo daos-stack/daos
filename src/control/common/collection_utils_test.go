@@ -228,3 +228,36 @@ func TestCommon_PercentageString(t *testing.T) {
 		})
 	}
 }
+
+func TestCommon_TokenizeCommaSeparatedString(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     string
+		expResult []string
+	}{
+		"empty": {
+			expResult: []string{},
+		},
+		"well-formed": {
+			input:     "one,two,three",
+			expResult: []string{"one", "two", "three"},
+		},
+		"trim spaces": {
+			input:     "one, two, three\t\n",
+			expResult: []string{"one", "two", "three"},
+		},
+		"just commas": {
+			input:     ",,",
+			expResult: []string{},
+		},
+		"remove empty strings": {
+			input:     ",one, ,,two,three,",
+			expResult: []string{"one", "two", "three"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result := TokenizeCommaSeparatedString(tc.input)
+
+			AssertEqual(t, tc.expResult, result, "")
+		})
+	}
+}

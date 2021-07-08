@@ -1,10 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2017-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
+
 
 import os
 import traceback
@@ -61,7 +61,6 @@ class SimpleCreateDeleteTest(TestWithServers):
             self.pool.get_params(self)
             self.pool.uid = uid
             self.pool.gid = gid
-            self.pool.name.update(setid)
             self.pool.create()
             if expected_result == 'FAIL':
                 self.fail("Test was expected to fail but it passed.\n")

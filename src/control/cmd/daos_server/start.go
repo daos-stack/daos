@@ -57,14 +57,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 	}
 	cmd.config.RecreateSuperblocks = cmd.RecreateSuperblocks
 
-	host, err := os.Hostname()
-	if err != nil {
-		return err
-	}
-
 	for _, srv := range cmd.config.Engines {
-		srv.WithHostname(host)
-
 		if cmd.Targets > 0 {
 			srv.WithTargetCount(int(cmd.Targets))
 		}
@@ -76,7 +69,7 @@ func (cmd *startCmd) setCLIOverrides() error {
 		}
 	}
 
-	return cmd.config.Validate(cmd.log)
+	return nil
 }
 
 func (cmd *startCmd) configureLogging() error {

@@ -2,7 +2,7 @@
 // (C) Copyright 2020-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// +build firmware
+//
 
 package bdev
 
@@ -17,7 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func TestBdevProvider_QueryFirmware(t *testing.T) {
+func TestProvider_QueryFirmware(t *testing.T) {
 	defaultDevs := storage.MockNvmeControllers(3)
 
 	for name, tc := range map[string]struct {
@@ -200,7 +200,7 @@ func TestBdevProvider_QueryFirmware(t *testing.T) {
 	}
 }
 
-func TestBdevProvider_UpdateFirmware(t *testing.T) {
+func TestProvider_UpdateFirmware(t *testing.T) {
 	defaultDevs := storage.MockNvmeControllers(3)
 
 	testErr := errors.New("test error")
@@ -406,7 +406,7 @@ func TestBdevProvider_UpdateFirmware(t *testing.T) {
 	}
 }
 
-func TestBdevProvider_WithFirmwareForwarder(t *testing.T) {
+func TestProvider_WithFirmwareForwarder(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 

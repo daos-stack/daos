@@ -16,6 +16,7 @@
 #include <daos_srv/rdb.h>
 #include <daos_srv/rsvc.h>
 #include <daos_srv/container.h>
+#include <gurt/telemetry_common.h>
 
 #include "srv_layout.h"
 
@@ -25,6 +26,16 @@ struct container_hdl;
 /* To avoid including daos_srv/pool.h for everybody. */
 struct ds_pool;
 struct ds_pool_hdl;
+
+/* Container metrics */
+struct cont_metrics {
+	struct d_tm_node_t	*op_open_ctr;
+	struct d_tm_node_t	*op_close_ctr;
+	struct d_tm_node_t	*op_destroy_ctr;
+	struct d_tm_node_t	*open_cont_gauge;
+};
+
+extern struct cont_metrics ds_cont_metrics;
 
 /* ds_cont thread local storage structure */
 struct dsm_tls {
@@ -45,6 +56,7 @@ dsm_tls_get()
 	return tls;
 }
 
+extern bool ec_agg_disabled;
 /*
  * Container service
  *
@@ -71,6 +83,7 @@ struct cont_svc {
 	struct ds_rsvc	       *cs_rsvc;
 	ABT_rwlock		cs_lock;
 	rdb_path_t		cs_root;	/* root KVS */
+	rdb_path_t		cs_uuids;	/* container UUIDs KVS */
 	rdb_path_t		cs_conts;	/* container KVS */
 	rdb_path_t		cs_hdls;	/* container handle KVS */
 	struct ds_pool	       *cs_pool;
@@ -105,6 +118,8 @@ struct cont_iv_snapshot {
 struct cont_iv_capa {
 	uint64_t	flags;
 	uint64_t	sec_capas;
+	/* the pool map_ver of updating DAOS_PROP_CO_STATUS property */
+	uint32_t	status_pm_ver;
 };
 
 /* flattened container properties */
@@ -125,6 +140,7 @@ struct cont_iv_prop {
 	uint64_t	cip_snap_max;
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
+	uint64_t	cip_ec_cell_sz;
 	struct daos_prop_co_roots	cip_roots;
 	struct daos_co_status		cip_co_status;
 	/* MUST be the last member */
@@ -239,13 +255,16 @@ void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
 
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas);
+		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
+		     uint32_t status_pm_ver);
 int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_close(uuid_t cont_hdl_uuid);
 int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				daos_epoch_t eph);
+int ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
+				 uint32_t pm_ver);
 /**
  * oid_iv.c
  */
@@ -258,10 +277,11 @@ int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
 int cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-			      uint64_t flags, uint64_t sec_capas);
+			      uint64_t flags, uint64_t sec_capas,
+			      uint32_t pm_ver);
 int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid,
 				  int sync_mode);
-int cont_iv_prop_fetch(struct ds_iv_ns *ns, uuid_t cont_uuid,
+int cont_iv_prop_fetch(uuid_t pool_uuid, uuid_t cont_uuid,
 		       daos_prop_t *cont_prop);
 int cont_iv_prop_update(void *ns, uuid_t cont_uuid, daos_prop_t *prop);
 int cont_iv_snapshots_refresh(void *ns, uuid_t cont_uuid);
@@ -273,4 +293,9 @@ int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
 
 int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
+
+/* srv_metrics.c */
+int ds_cont_metrics_init(void);
+int ds_cont_metrics_fini(void);
+
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

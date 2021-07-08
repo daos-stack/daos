@@ -12,8 +12,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
@@ -28,9 +28,10 @@ import (
 
 type (
 	systemJoinFn     func(context.Context, *control.SystemJoinReq) (*control.SystemJoinResp, error)
+	onAwaitFormatFn  func(context.Context, uint32, string) error
 	onStorageReadyFn func(context.Context) error
 	onReadyFn        func(context.Context) error
-	onInstanceExitFn func(context.Context, system.Rank, error) error
+	onInstanceExitFn func(context.Context, uint32, system.Rank, error, uint64) error
 )
 
 // EngineInstance encapsulates control-plane specific configuration
@@ -41,26 +42,28 @@ type (
 // be used with EngineHarness to manage and monitor multiple instances
 // per node.
 type EngineInstance struct {
-	log               logging.Logger
-	runner            EngineRunner
-	bdevClassProvider *bdev.ClassProvider
-	scmProvider       *scm.Provider
-	waitFormat        atm.Bool
-	storageReady      chan bool
-	waitDrpc          atm.Bool
-	drpcReady         chan *srvpb.NotifyReadyReq
-	ready             atm.Bool
-	startLoop         chan bool // restart loop
-	fsRoot            string
-	hostFaultDomain   *system.FaultDomain
-	joinSystem        systemJoinFn
-	onStorageReady    []onStorageReadyFn
-	onReady           []onReadyFn
-	onInstanceExit    []onInstanceExitFn
+	log             logging.Logger
+	runner          EngineRunner
+	bdevProvider    *bdev.Provider
+	scmProvider     *scm.Provider
+	waitFormat      atm.Bool
+	storageReady    chan bool
+	waitDrpc        atm.Bool
+	drpcReady       chan *srvpb.NotifyReadyReq
+	ready           atm.Bool
+	startRequested  chan bool
+	fsRoot          string
+	hostFaultDomain *system.FaultDomain
+	joinSystem      systemJoinFn
+	onAwaitFormat   []onAwaitFormatFn
+	onStorageReady  []onStorageReadyFn
+	onReady         []onReadyFn
+	onInstanceExit  []onInstanceExitFn
 
 	sync.RWMutex
 	// these must be protected by a mutex in order to
 	// avoid racy access.
+	_cancelCtx  context.CancelFunc
 	_drpcClient drpc.DomainSocketClient
 	_superblock *Superblock
 	_lastErr    error // populated when harness receives signal
@@ -68,19 +71,18 @@ type EngineInstance struct {
 
 // NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
-func NewEngineInstance(log logging.Logger,
-	bcp *bdev.ClassProvider, sp *scm.Provider,
+func NewEngineInstance(log logging.Logger, bp *bdev.Provider, sp *scm.Provider,
 	joinFn systemJoinFn, r EngineRunner) *EngineInstance {
 
 	return &EngineInstance{
-		log:               log,
-		runner:            r,
-		bdevClassProvider: bcp,
-		scmProvider:       sp,
-		joinSystem:        joinFn,
-		drpcReady:         make(chan *srvpb.NotifyReadyReq),
-		storageReady:      make(chan bool),
-		startLoop:         make(chan bool),
+		log:            log,
+		runner:         r,
+		bdevProvider:   bp,
+		scmProvider:    sp,
+		joinSystem:     joinFn,
+		drpcReady:      make(chan *srvpb.NotifyReadyReq),
+		storageReady:   make(chan bool),
+		startRequested: make(chan bool),
 	}
 }
 
@@ -97,17 +99,23 @@ func (ei *EngineInstance) isAwaitingFormat() bool {
 	return ei.waitFormat.Load()
 }
 
-// isStarted indicates whether EngineInstance is in a running state.
-func (ei *EngineInstance) isStarted() bool {
+// IsStarted indicates whether EngineInstance is in a running state.
+func (ei *EngineInstance) IsStarted() bool {
 	return ei.runner.IsRunning()
 }
 
-// isReady indicates whether the EngineInstance is in a ready state.
+// IsReady indicates whether the EngineInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
-func (ei *EngineInstance) isReady() bool {
-	return ei.ready.Load() && ei.isStarted()
+func (ei *EngineInstance) IsReady() bool {
+	return ei.ready.Load() && ei.IsStarted()
+}
+
+// OnAwaitFormat adds a list of callbacks to invoke when the instance
+// requires formatting.
+func (ei *EngineInstance) OnAwaitFormat(fns ...onAwaitFormatFn) {
+	ei.onAwaitFormat = append(ei.onAwaitFormat, fns...)
 }
 
 // OnStorageReady adds a list of callbacks to invoke when the instance
@@ -132,9 +140,9 @@ func (ei *EngineInstance) OnInstanceExit(fns ...onInstanceExitFn) {
 // (doesn't consider state info held by the global system membership).
 func (ei *EngineInstance) LocalState() system.MemberState {
 	switch {
-	case ei.isReady():
+	case ei.IsReady():
 		return system.MemberStateReady
-	case ei.isStarted():
+	case ei.IsStarted():
 		return system.MemberStateStarting
 	case ei.isAwaitingFormat():
 		return system.MemberStateAwaitFormat
@@ -195,7 +203,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	})
 	if err != nil {
 		return system.NilRank, false, err
-	} else if resp.State == system.MemberStateEvicted {
+	} else if resp.State == system.MemberStateExcluded {
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
 	}
 	r = system.Rank(resp.Rank)
@@ -217,9 +225,40 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 	return r, resp.LocalJoin, nil
 }
 
+func (ei *EngineInstance) updateFaultDomainInSuperblock() error {
+	if ei.hostFaultDomain == nil {
+		return errors.New("engine instance has a nil fault domain")
+	}
+
+	superblock := ei.getSuperblock()
+	if superblock == nil {
+		return errors.New("nil superblock while updating fault domain")
+	}
+
+	newDomainStr := ei.hostFaultDomain.String()
+	if newDomainStr == superblock.HostFaultDomain {
+		// No change
+		return nil
+	}
+
+	ei.log.Infof("instance %d setting host fault domain to %q (previously %q)",
+		ei.Index(), ei.hostFaultDomain, superblock.HostFaultDomain)
+	superblock.HostFaultDomain = newDomainStr
+
+	ei.setSuperblock(superblock)
+	if err := ei.WriteSuperblock(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // handleReady determines the instance rank and sends a SetRank dRPC request
 // to the Engine.
 func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyReadyReq) error {
+	if err := ei.updateFaultDomainInSuperblock(); err != nil {
+		ei.log.Error(err.Error()) // nonfatal
+	}
+
 	r, localJoin, err := ei.determineRank(ctx, ready)
 	if err != nil {
 		return err
@@ -231,14 +270,19 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		return nil
 	}
 
-	if err := ei.callSetRank(ctx, r); err != nil {
-		return err
+	return ei.SetupRank(ctx, r)
+}
+
+func (ei *EngineInstance) SetupRank(ctx context.Context, rank system.Rank) error {
+	if err := ei.callSetRank(ctx, rank); err != nil {
+		return errors.Wrap(err, "SetRank failed")
 	}
 
 	if err := ei.callSetUp(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "SetUp failed")
 	}
 
+	ei.ready.SetTrue()
 	return nil
 }
 

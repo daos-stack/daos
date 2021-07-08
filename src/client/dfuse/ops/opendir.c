@@ -11,8 +11,9 @@ void
 dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 		 struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl		*oh = NULL;
-	int				rc;
+	struct dfuse_obj_hdl	*oh = NULL;
+	struct fuse_file_info	fi_out = {0};
+	int			rc;
 
 	D_ALLOC_PTR(oh);
 	if (!oh)
@@ -29,9 +30,14 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 	oh->doh_dfs = ie->ie_dfs->dfs_ns;
 	oh->doh_ie = ie;
 
-	fi->fh = (uint64_t)oh;
+	fi_out.fh = (uint64_t)oh;
 
-	DFUSE_REPLY_OPEN(oh, req, fi);
+#if HAVE_CACHE_READDIR
+	if (ie->ie_dfs->dfc_dentry_timeout > 0)
+		fi_out.cache_readdir = 1;
+#endif
+
+	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 	return;
 err:
 	D_FREE(oh);

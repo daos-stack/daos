@@ -1,23 +1,16 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2019-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import traceback
 import uuid
 import threading
 import avocado
-
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
-
+import queue
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
@@ -70,13 +63,13 @@ class ObjectMetadata(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ObjectMetadata object."""
-        super(ObjectMetadata, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.out_queue = None
 
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(ObjectMetadata, self).setUp()
+        super().setUp()
 
         # Create a pool
         self.pool = TestPool(self.context, self.get_dmg_command())

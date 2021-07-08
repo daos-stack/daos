@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
@@ -43,15 +43,22 @@ type (
 	// a gRPC method and returns a protobuf response or error.
 	unaryRPC func(context.Context, *grpc.ClientConn) (proto.Message, error)
 
-	// unaryRPCGetter defines the interface to be implemented by
-	// requests that can invoke a gRPC method.
+	// unaryRPCGetter defines the interface to be implemented by requests
+	// that can invoke a gRPC method.
 	unaryRPCGetter interface {
 		getRPC() unaryRPC
+	}
+
+	// sysGetter defines an interface to be implemented by clients that can
+	// retrieve the system name field.
+	sysGetter interface {
+		GetSystem() string
 	}
 
 	// UnaryInvoker defines an interface to be implemented by clients
 	// capable of invoking a unary RPC (1 response for 1 request).
 	UnaryInvoker interface {
+		sysGetter
 		debugLogger
 		InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error)
 		InvokeUnaryRPCAsync(ctx context.Context, req UnaryRequest) (HostResponseChan, error)
@@ -140,6 +147,12 @@ func DefaultClient() *Client {
 // existing Client.
 func (c *Client) SetConfig(cfg *Config) {
 	c.config = cfg
+}
+
+// GetConfig retrieves the system name from the client configuration and
+// implements the sysGetter interface.
+func (c *Client) GetSystem() string {
+	return c.config.SystemName
 }
 
 func (c *Client) Debug(msg string) {
@@ -333,6 +346,20 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 
 		_, err = ur.getMSResponse()
+		// If the request specifies that the error is retryable,
+		// check to see if it also defines its own retry logic
+		// and run that if so. Otherwise, let the usual retry
+		// logic below handle the error.
+		if req.canRetry(err, try) {
+			err := req.onRetry(tryCtx, try)
+			if err == nil {
+				return ur, nil
+			}
+			if err != errNoRetryHandler {
+				return nil, err
+			}
+		}
+
 		switch e := err.(type) {
 		case *system.ErrNotLeader:
 			// If we sent the request to a non-leader MS replica,
@@ -356,12 +383,10 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 				req.SetHostList(e.Replicas)
 			}
 		default:
-			// If the request defines its own retry logic for the error, run
-			// that logic and break out early.
+			// In the case that the request specifies that the error
+			// is retryable, but doesn't define its own retry logic,
+			// just break out so it can be tried again as usual.
 			if req.canRetry(err, try) {
-				if err := req.onRetry(tryCtx, try); err != nil {
-					return ur, nil
-				}
 				break
 			}
 

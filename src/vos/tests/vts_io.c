@@ -547,8 +547,16 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	struct dcs_iod_csums	*iod_csums = NULL;
 	struct daos_csummer	*csummer = NULL;
 	d_iov_t			*srv_iov;
-	daos_handle_t		ioh;
-	int			rc = 0;
+	daos_epoch_range_t	 epr = {0, epoch};
+	daos_handle_t		 ioh;
+	int			 rc = 0;
+
+	if (arg->ta_flags & TF_DELETE) {
+		rc = vos_obj_array_remove(arg->ctx.tc_co_hdl, arg->oid, &epr,
+					  dkey, &iod->iod_name,
+					  &iod->iod_recxs[0]);
+		return rc;
+	}
 
 	if ((arg->ta_flags & TF_USE_CSUMS) && iod->iod_size > 0) {
 		rc = io_test_add_csums(iod, sgl, &csummer, &iod_csums);
@@ -567,7 +575,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	assert_true(iod->iod_size > 0);
 
 	rc = vos_update_begin(arg->ctx.tc_co_hdl, arg->oid, epoch, flags, dkey,
-			      1, iod, iod_csums, false, 0, &ioh, dth);
+			      1, iod, iod_csums, 0, &ioh, dth);
 	if (rc != 0) {
 		if (verbose && rc != -DER_INPROGRESS)
 			print_error("Failed to prepare ZC update: "DF_RC"\n",
@@ -576,7 +584,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	srv_iov = &sgl->sg_iovs[0];
-	rc = bio_iod_prep(vos_ioh2desc(ioh));
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		goto end;
 
@@ -643,7 +651,7 @@ io_test_obj_fetch(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	}
 
 	dst_iov = &sgl->sg_iovs[0];
-	rc = bio_iod_prep(vos_ioh2desc(ioh));
+	rc = bio_iod_prep(vos_ioh2desc(ioh), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc)
 		goto end;
 
@@ -841,10 +849,7 @@ io_obj_cache_test(void **state)
 	assert_int_equal(rc, 0);
 
 	uuid_generate_time_safe(pool_uuid);
-	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M, 0);
-	assert_rc_equal(rc, 0);
-
-	rc = vos_pool_open(po_name, pool_uuid, false /* small */, &l_poh);
+	rc = vos_pool_create(po_name, pool_uuid, VPOOL_16M, 0, 0, &l_poh);
 	assert_rc_equal(rc, 0);
 
 	rc = vos_cont_create(l_poh, ctx->tc_co_uuid);
@@ -1396,10 +1401,7 @@ pool_cont_same_uuid(void **state)
 	uuid_generate(pool_uuid);
 	uuid_copy(co_uuid, pool_uuid);
 
-	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M, 0);
-	assert_rc_equal(ret, 0);
-
-	ret = vos_pool_open(arg->fname, pool_uuid, false /* small */, &poh);
+	ret = vos_pool_create(arg->fname, pool_uuid, VPOOL_16M, 0, 0, &poh);
 	assert_rc_equal(ret, 0);
 
 	ret = vos_cont_create(poh, co_uuid);
@@ -1409,7 +1411,7 @@ pool_cont_same_uuid(void **state)
 	assert_rc_equal(ret, 0);
 
 	poh = DAOS_HDL_INVAL;
-	ret = vos_pool_open(arg->fname, pool_uuid, false /* small */, &poh);
+	ret = vos_pool_open(arg->fname, pool_uuid, 0, &poh);
 	assert_rc_equal(ret, 0);
 
 	ret = vos_cont_open(poh, co_uuid, &coh);
@@ -2287,9 +2289,6 @@ io_query_key(void **state)
 			       NULL);
 	assert_rc_equal(rc, 0);
 	assert_int_equal(*(uint64_t *)dkey_read.iov_buf, KEY_INC * 2);
-
-	if (getenv("DAOS_IO_BYPASS"))
-		return;
 
 	/* Only execute the transactional tests when rollback is available */
 

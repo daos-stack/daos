@@ -1,71 +1,43 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+from cart_utils import CartTest
 
-from __future__ import print_function
 
-import sys
-
-from apricot  import TestWithoutServers
-
-sys.path.append('./util')
-
-# Can't all this import before setting sys.path
-# pylint: disable=wrong-import-position
-from cart_utils import CartUtils
-
-class CartSelfThreeNodeTest(TestWithoutServers):
-    """
-    Runs basic CaRT self test
+class CartSelfThreeNodeTest(CartTest):
+    # pylint: disable=too-few-public-methods
+    """Runs basic CaRT self test.
 
     :avocado: recursive
     """
-    def setUp(self):
-        """ Test setup """
-        print("Running setup\n")
-        self.utils = CartUtils()
-        self.env = self.utils.get_env(self)
-
-    def tearDown(self):
-        """ Tear down """
-        self.report_timeout()
-        self._teardown_errors.extend(self.utils.cleanup_processes())
-        super(CartSelfThreeNodeTest, self).tearDown()
 
     def test_cart_selftest(self):
-        """
-        Test CaRT Self Test
+        """Test CaRT Self Test.
 
         :avocado: tags=all,cart,pr,daily_regression,selftest,three_node
         """
-
-        srvcmd = self.utils.build_cmd(self, self.env, "test_servers")
+        srvcmd = self.build_cmd(self.env, "test_servers")
 
         try:
-            srv_rtn = self.utils.launch_cmd_bg(self, srvcmd)
+            srv_rtn = self.launch_cmd_bg(srvcmd)
         # pylint: disable=broad-except
         except Exception as e:
-            self.utils.print("Exception in launching server : {}".format(e))
+            self.print("Exception in launching server : {}".format(e))
             self.fail("Test failed.\n")
 
         # Verify the server is still running.
-        if not self.utils.check_process(srv_rtn):
-            procrtn = self.utils.stop_process(srv_rtn)
-            self.fail("Server did not launch, return code %s" \
-                       % procrtn)
+        if not self.check_process(srv_rtn):
+            procrtn = self.stop_process(srv_rtn)
+            self.fail("Server did not launch, return code {}".format(procrtn))
 
         for index in range(3):
-            clicmd = self.utils.build_cmd(
-                self, self.env, "test_clients", index=index)
-            self.utils.launch_test(self, clicmd, srv_rtn)
+            clicmd = self.build_cmd(self.env, "test_clients", index=index)
+            self.launch_test(clicmd, srv_rtn)
 
         # Give few seconds for servers to fully shut down before exiting
         # from this test.
-        if not self.utils.wait_process(srv_rtn, 5):
-            self.utils.stop_process(srv_rtn)
-
-if __name__ == "__main__":
-    main()
+        if not self.wait_process(srv_rtn, 5):
+            self.stop_process(srv_rtn)

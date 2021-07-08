@@ -27,18 +27,6 @@
 #include "../auth.pb-c.h"
 #include "drpc_mocks.h"
 
-/*
- * Mocks
- */
-
-static char *getenv_return; /* value to be returned */
-static const char *getenv_name; /* saved input */
-char *getenv(const char *name)
-{
-	getenv_name = name;
-	return getenv_return;
-}
-
 /* unpacked content of response body */
 static Auth__Credential *drpc_call_resp_return_auth_cred;
 char *dc_agent_sockpath;
@@ -87,8 +75,6 @@ static int
 setup_security_mocks(void **state)
 {
 	/* Initialize mock values to something sane */
-	getenv_return = NULL;
-	getenv_name = NULL;
 	dc_agent_sockpath = DEFAULT_DAOS_AGENT_DRPC_SOCK;
 
 	mock_drpc_connect_setup();

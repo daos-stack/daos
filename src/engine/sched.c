@@ -6,6 +6,7 @@
 
 #define D_LOGFAC       DD_FAC(server)
 
+#include <execinfo.h>
 #include <abt.h>
 #include <daos/common.h>
 #include <daos_errno.h>
@@ -61,6 +62,7 @@ bool		sched_prio_disabled;
 unsigned int	sched_stats_intvl;
 unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 unsigned int	sched_relax_mode;
+unsigned int	sched_unit_runtime_max = 32; /* ms */
 
 enum {
 	/* All requests for various pools are processed in FIFO */
@@ -80,7 +82,16 @@ enum {
 
 static int	sched_policy;
 
-#define SCHED_DELAY_THRESH	20000	/* msecs */
+/*
+ * Time threshold for giving IO up throttling. If space pressure stays in the
+ * highest level for enough long time, we assume that no more space can be
+ * reclaimed and choose to give up IO throttling, so that ENOSPACE error could
+ * be returned to client earlier.
+ *
+ * To make time for aggregation reclaiming overwriteen space, this threshold
+ * should be longer than the DAOS_AGG_THRESHOLD.
+ */
+#define SCHED_DELAY_THRESH	40000	/* msecs */
 
 static unsigned int max_delay_msecs[SCHED_REQ_MAX] = {
 	20000,	/* SCHED_REQ_UPDATE */
@@ -415,11 +426,13 @@ sched_info_init(struct dss_xstream *dx)
 	struct sched_info	*info = &dx->dx_sched_info;
 	int			 rc;
 
-	info->si_cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	info->si_cur_ts = daos_getmtime_coarse();
 	info->si_stats.ss_tot_time = 0;
 	info->si_stats.ss_relax_time = 0;
 	info->si_stats.ss_busy_ts = info->si_cur_ts;
 	info->si_stats.ss_print_ts = 0;
+	info->si_stats.ss_watchdog_ts = 0;
+	info->si_stats.ss_last_unit = NULL;
 	D_INIT_LIST_HEAD(&info->si_idle_list);
 	D_INIT_LIST_HEAD(&info->si_sleep_list);
 	D_INIT_LIST_HEAD(&info->si_fifo_list);
@@ -588,7 +601,7 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	struct vos_pool_space	 vps = { 0 };
-	uint64_t		 scm_left;
+	uint64_t		 scm_left, nvme_left;
 	struct pressure_ratio	*pr;
 	int			 orig_pressure, rc;
 
@@ -621,9 +634,17 @@ check_space_pressure(struct dss_xstream *dx, struct sched_pool_info *spi)
 	else
 		scm_left = 0;
 
+	if (NVME_TOTAL(&vps) == 0)      /* NVMe not enabled */
+		nvme_left = UINT64_MAX;
+	else if (NVME_FREE(&vps) > NVME_SYS(&vps))
+		nvme_left = NVME_FREE(&vps) - NVME_SYS(&vps);
+	else
+		nvme_left = 0;
+
 	orig_pressure = spi->spi_space_pressure;
 	for (pr = &pressure_gauge[0]; pr->pr_free != 0; pr++) {
-		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100))
+		if (scm_left > (SCM_TOTAL(&vps) * pr->pr_free / 100) &&
+		    nvme_left > (NVME_TOTAL(&vps) * pr->pr_free / 100))
 			break;
 	}
 	spi->spi_space_pressure = pr->pr_pressure;
@@ -1091,7 +1112,7 @@ wakeup_all(struct dss_xstream *dx)
 	uint64_t		 cur_ts;
 
 	/* Update current ts stored in sched_info */
-	cur_ts = daos_getntime_coarse() / NSEC_PER_MSEC;
+	cur_ts = daos_getmtime_coarse();
 	D_ASSERT(cur_ts >= info->si_cur_ts);
 	info->si_stats.ss_tot_time += (cur_ts - info->si_cur_ts);
 	info->si_cur_ts = cur_ts;
@@ -1220,8 +1241,8 @@ sched_dump_data(struct sched_data *data)
 #endif
 }
 
-#define SCHED_AGE_NET_MAX		512
-#define SCHED_AGE_NVME_MAX		512
+#define SCHED_AGE_NET_MAX		32
+#define SCHED_AGE_NVME_MAX		64
 
 static int
 sched_init(ABT_sched sched, ABT_sched_config config)
@@ -1449,9 +1470,16 @@ sched_try_relax(struct dss_xstream *dx, ABT_pool *pools, uint32_t running)
 			dx->dx_xs_id, DSS_POOL_GENERIC, ret);
 		return;
 	}
-	D_ASSERTF(info->si_sleep_cnt + info->si_wait_cnt <= blocked,
-		  "sleep:%d + wait:%d > blocked:%zd\n",
-		  info->si_sleep_cnt, info->si_wait_cnt, blocked);
+
+	/*
+	 * Unlike sleeping ULTs, the ULTs blocked on sched_cond_wait() could
+	 * be woken up by other xstream (or even main thread), so that the
+	 * 'blocked' could have been decreased by waking up xstream, but the
+	 * 'si_wait_cnt' isn't decreased accordingly by current xstream yet.
+	 */
+	D_ASSERTF(info->si_sleep_cnt <= blocked,
+		  "sleep:%d > blocked:%zd, wait:%d\n",
+		  info->si_sleep_cnt, blocked, info->si_wait_cnt);
 
 	/*
 	 * Only start relaxing when all blocked ULTs are either sleeping
@@ -1544,6 +1572,72 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	}
 }
 
+struct sched_unit {
+	uint64_t	 su_start;
+	void		*su_func_addr;
+};
+
+static inline bool
+watchdog_enabled(struct dss_xstream *dx)
+{
+	/* Enable watchdog for sys xstream only */
+	return sched_unit_runtime_max != 0 && dx->dx_xs_id == 0;
+}
+
+static void
+sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit,
+		    struct sched_unit *su)
+{
+	ABT_thread	thread;
+	void		(*thread_func)(void *);
+	int		rc;
+
+	if (!watchdog_enabled(dx))
+		return;
+
+	su->su_start = daos_getmtime_coarse();
+	rc = ABT_unit_get_thread(unit, &thread);
+	D_ASSERT(rc == ABT_SUCCESS);
+	rc = ABT_thread_get_thread_func(thread, &thread_func);
+	D_ASSERT(rc == ABT_SUCCESS);
+	su->su_func_addr = thread_func;
+}
+
+static void
+sched_watchdog_post(struct dss_xstream *dx, struct sched_unit *su)
+{
+	struct sched_info	*info = &dx->dx_sched_info;
+	uint64_t		 cur;
+	unsigned int		 elapsed;
+	char			**strings;
+
+	if (!watchdog_enabled(dx))
+		return;
+
+	cur = daos_getmtime_coarse();
+	D_ASSERT(cur >= su->su_start);
+	elapsed = cur - su->su_start;
+
+	if (elapsed <= sched_unit_runtime_max)
+		return;
+
+	/* Throttle printing a bit */
+	D_ASSERT(cur >= info->si_stats.ss_watchdog_ts);
+	if (info->si_stats.ss_last_unit == su->su_func_addr &&
+	    (cur - info->si_stats.ss_watchdog_ts) <= 2000)
+		return;
+
+	info->si_stats.ss_last_unit = su->su_func_addr;
+	info->si_stats.ss_watchdog_ts = cur;
+
+	strings = backtrace_symbols(&su->su_func_addr, 1);
+	D_ERROR("WATCHDOG: XS(%d) Thread %p took %u ms. symbol:%s\n",
+		dx->dx_xs_id, su->su_func_addr, elapsed,
+		strings != NULL ? strings[0] : NULL);
+
+	free(strings);
+}
+
 static void
 sched_run(ABT_sched sched)
 {
@@ -1554,6 +1648,7 @@ sched_run(ABT_sched sched)
 	ABT_pool		 pool;
 	ABT_unit		 unit;
 	uint32_t		 work_count = 0;
+	struct sched_unit	 su = { 0 };
 	int			 ret;
 
 	ABT_sched_get_data(sched, (void **)&data);
@@ -1596,7 +1691,11 @@ sched_run(ABT_sched sched)
 		goto check_event;
 execute:
 		D_ASSERT(pool != ABT_POOL_NULL);
+		sched_watchdog_prep(dx, unit, &su);
+
 		ABT_xstream_run_unit(unit, pool);
+
+		sched_watchdog_post(dx, &su);
 start_cycle:
 		if (cycle->sc_new_cycle) {
 			sched_start_cycle(data, pools);

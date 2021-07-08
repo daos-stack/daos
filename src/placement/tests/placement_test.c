@@ -96,6 +96,7 @@ int main(int argc, char *argv[])
 			cmocka_set_test_filter(filter);
 		}
 #else
+			sprintf(filter, "*%s*", optarg);
 			D_PRINT("filter not enabled. %s not applied", filter);
 #endif
 			break;

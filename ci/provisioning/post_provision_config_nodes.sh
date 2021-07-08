@@ -14,18 +14,42 @@ url_to_repo() {
 }
 
 add_repo() {
-    local repo="$1"
-    local gpg_check="${2:-true}"
+    local match="$1"
+    local add_repo="$2"
+    local gpg_check="${3:-true}"
 
-    if [ -n "$repo" ]; then
-        repo="${REPOSITORY_URL}${repo}"
-        if ! dnf repolist | grep "$(url_to_repo "$repo")"; then
-            dnf config-manager --add-repo="${repo}"
+    if [ -z "$match" ]; then
+        # we cannot try to add a repo that has no match
+        return
+    fi
+
+    local repo
+    # see if a package we know is in the repo is present
+    if repo=$(dnf repoquery --qf "%{repoid}" "$1" 2>/dev/null | grep ..\*); then
+        DNF_REPO_ARGS+=" --enablerepo=$repo"
+    else
+        local repo_url="${REPOSITORY_URL}${add_repo}"
+        local repo_name
+        repo_name=$(url_to_repo "$repo_url")
+        if ! dnf repolist | grep "$repo_name"; then
+            dnf config-manager --add-repo="${repo_url}" >&2
             if ! $gpg_check; then
-                disable_gpg_check "$repo"
+                disable_gpg_check "$add_repo" >&2
             fi
         fi
+        DNF_REPO_ARGS+=" --enablerepo=$repo_name"
     fi
+}
+
+add_group_repo() {
+    local match="$1"
+
+    add_repo "$match" "$DAOS_STACK_GROUP_REPO"
+    group_repo_post
+}
+
+add_local_repo() {
+    add_repo 'argobots' "$DAOS_STACK_LOCAL_REPO" false
 }
 
 disable_gpg_check() {

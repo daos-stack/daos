@@ -71,7 +71,7 @@ enum {
 	DAOS_OC_R4_RW,		/* class for testing */
 	DAOS_OC_R4_MAX_RW,	/* class for testing */
 	DAOS_OC_REPL_MAX_RW,
-	DAOS_OC_ECHO_TINY_RW,	/* Echo class, tiny */
+	DAOS_OC_ECHO_R1S_RW,	/* Echo class, 1 replica single stripe */
 	DAOS_OC_ECHO_R2S_RW,	/* Echo class, 2 replica single stripe */
 	DAOS_OC_ECHO_R3S_RW,	/* Echo class, 3 replica single stripe */
 	DAOS_OC_ECHO_R4S_RW,	/* Echo class, 4 replica single stripe */
@@ -110,6 +110,9 @@ enum {
 	DAOS_OC_OIT_RF4	= 49,
 };
 
+/* Temporarily keep it to minimize change, remove it in the future */
+#define DAOS_OC_ECHO_TINY_RW	DAOS_OC_ECHO_R1S_RW
+
 static inline bool
 daos_obj_is_echo(daos_obj_id_t oid)
 {
@@ -132,6 +135,28 @@ daos_obj_is_srank(daos_obj_id_t oid)
 	       oc == DAOS_OC_R2S_SPEC_RANK ||
 	       oc == DAOS_OC_EC_K2P1_SPEC_RANK_L32K ||
 	       oc == DAOS_OC_EC_K4P1_SPEC_RANK_L32K;
+}
+
+enum {
+	/* smallest cell size */
+	DAOS_EC_CELL_MIN	= (4 << 10),
+	/* default cell size */
+	DAOS_EC_CELL_DEF	= (128 << 10),
+	/* largest cell size */
+	DAOS_EC_CELL_MAX	= (1024 << 10),
+};
+
+static inline bool
+daos_ec_cs_valid(uint32_t cell_sz)
+{
+	if (cell_sz < DAOS_EC_CELL_MIN || cell_sz > DAOS_EC_CELL_MAX)
+		return false;
+
+	/* should be multiplier of the min size */
+	if (cell_sz % DAOS_EC_CELL_MIN != 0)
+		return false;
+
+	return true;
 }
 
 enum daos_io_mode {
@@ -244,14 +269,18 @@ daos_unit_obj_id_equal(daos_unit_oid_t oid1, daos_unit_oid_t oid2)
 
 struct pl_obj_layout;
 
-int  obj_class_init(void);
+int obj_class_init(void);
 void obj_class_fini(void);
-struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid);
+struct daos_oclass_attr *daos_oclass_attr_find(daos_obj_id_t oid,
+					       bool *is_priv);
 unsigned int daos_oclass_grp_size(struct daos_oclass_attr *oc_attr);
 unsigned int daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr,
 				struct daos_obj_md *md);
 int daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 			daos_oclass_id_t *oc_id_p);
+bool daos_oclass_is_valid(daos_oclass_id_t oc_id);
+daos_oclass_id_t daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
+				   daos_oclass_hints_t hints, uint32_t args);
 
 /** bits for the specified rank */
 #define DAOS_OC_SR_SHIFT	24
@@ -305,21 +334,10 @@ daos_oclass_st_set_tgt(daos_obj_id_t oid, int tgt)
 	return oid;
 }
 
-#define DAOS_OC_IS_EC(oca)	((oca)->ca_resil == DAOS_RES_EC)
-
-/* check if an oid is EC obj class, and return its daos_oclass_attr */
 static inline bool
-daos_oclass_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
+daos_oclass_is_ec(struct daos_oclass_attr *oca)
 {
-	struct daos_oclass_attr	*oca;
-
-	oca = daos_oclass_attr_find(oid);
-	if (attr != NULL)
-		*attr = oca;
-	if (oca == NULL)
-		return false;
-
-	return DAOS_OC_IS_EC(oca);
+	return oca->ca_resil == DAOS_RES_EC;
 }
 
 static inline void
@@ -426,6 +444,11 @@ int daos_iod_copy(daos_iod_t *dst, daos_iod_t *src);
 void daos_iods_free(daos_iod_t *iods, int nr, bool free);
 daos_size_t daos_iods_len(daos_iod_t *iods, int nr);
 
+int daos_obj_generate_oid_by_rf(daos_handle_t poh, uint64_t rf_factor,
+				daos_obj_id_t *oid, daos_ofeat_t ofeats,
+				daos_oclass_id_t cid, daos_oclass_hints_t hints,
+				uint32_t args);
+
 int dc_obj_init(void);
 void dc_obj_fini(void);
 
@@ -492,6 +515,8 @@ enum daos_io_flags {
 	DIOF_TO_SPEC_GROUP	= 0x20,
 	/* For data migration. */
 	DIOF_FOR_MIGRATION	= 0x40,
+	/* For EC aggregation. */
+	DIOF_FOR_EC_AGG		= 0x80,
 };
 
 /**
@@ -580,7 +605,8 @@ daos_recx_ep_add(struct daos_recx_ep_list *list, struct daos_recx_ep *recx)
 		if (list->re_total == 0)
 			D_ALLOC_ARRAY(new_items, nr);
 		else
-			D_REALLOC_ARRAY(new_items, list->re_items, nr);
+			D_REALLOC_ARRAY(new_items, list->re_items,
+					list->re_total, nr);
 		if (new_items == NULL)
 			return -DER_NOMEM;
 		list->re_items = new_items;

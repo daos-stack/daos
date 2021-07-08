@@ -1,33 +1,19 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import time
-import uuid
 import random
 import threading
 
-from itertools import product
-from avocado import fail_on
-from apricot import TestWithServers, skipForTicket
 from test_utils_pool import TestPool
-from ior_utils import IorCommand
-from job_manager_utils import Mpirun
+from osa_utils import OSAUtils
 from write_host_file import write_host_file
-from command_utils import CommandFailure
-from mpio_utils import MpioUtils
-
-try:
-    # python 3.x
-    import queue as queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 
-class NvmePoolExclude(TestWithServers):
+class NvmePoolExclude(OSAUtils):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: This test runs
@@ -37,123 +23,19 @@ class NvmePoolExclude(TestWithServers):
     """
     def setUp(self):
         """Set up for test case."""
-        super(NvmePoolExclude, self).setUp()
+        super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.ior_w_flags = self.params.get("write_flags", '/run/ior/iorflags/*')
-        self.ior_r_flags = self.params.get("read_flags", '/run/ior/iorflags/*')
-        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
+        self.daos_command = self.get_daos_command()
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
-        self.ior_daos_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get(
-            "obj_class", '/run/ior/iorflags/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
         self.pool = None
-        self.out_queue = queue.Queue()
-        self.container_info = {}
+        self.cont_list = []
+        self.dmg_command.exit_status_exception = True
 
-    @fail_on(CommandFailure)
-    def get_rebuild_status(self):
-        """Get the rebuild status.
-
-        Returns:
-            str: reuild status
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return data["response"]["rebuild"]["status"]
-
-    @fail_on(CommandFailure)
-    def get_pool_version(self):
-        """Get the pool version.
-
-        Returns:
-            int: pool_version_value
-
-        """
-        data = self.dmg_command.pool_query(self.pool.uuid)
-        return int(data["response"]["version"])
-
-    def ior_thread(self, pool, oclass, api, test, flags, results):
-        """This method calls job manager for IOR command
-        invocation.
-        Args:
-            pool (object): pool handle
-            oclass (str): IOR object class
-            API (str): IOR API
-            test (list): IOR test sequence
-            flags (str): IOR flags
-            results (queue): queue for returning thread results
-        """
-        processes = self.params.get("slots", "/run/ior/clientslots/*")
-        mpio_util = MpioUtils()
-        if mpio_util.mpich_installed(self.hostlist_clients) is False:
-            self.fail("Exiting Test: Mpich not installed")
-        self.pool = pool
-        # Define the arguments for the ior_runner_thread method
-        ior_cmd = IorCommand()
-        ior_cmd.get_params(self)
-        ior_cmd.set_daos_params(self.server_group, self.pool)
-        ior_cmd.dfs_oclass.update(oclass)
-        ior_cmd.api.update(api)
-        ior_cmd.transfer_size.update(test[0])
-        ior_cmd.block_size.update(test[1])
-        ior_cmd.flags.update(flags)
-        if "-w" in flags:
-            self.container_info["{}{}{}"
-                                .format(oclass,
-                                        api,
-                                        test[0])] = str(uuid.uuid4())
-
-        # Define the job manager for the IOR command
-        manager = Mpirun(ior_cmd, mpitype="mpich")
-        key = "".join([oclass, api, str(test[0])])
-        manager.job.dfs_cont.update(self.container_info[key])
-        env = ior_cmd.get_default_env(str(manager))
-        manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-        manager.assign_processes(processes)
-        manager.assign_environment(env, True)
-
-        # run IOR Command
-        try:
-            manager.run()
-        except CommandFailure as _error:
-            results.put("FAIL")
-
-    def run_ior_thread(self, action, oclass, api, test):
-        """ This method calls ior_thread method to generate
-        IOR command and starts the thread.
-        Args:
-            action (str): Start the IOR thread with Read or
-                          Write
-            oclass (str): IOR object class
-            API (str): IOR API
-            test (list): IOR test sequence
-            flags (str): IOR flags
-        """
-        if action == "Write":
-            flags = self.ior_w_flags
-        else:
-            flags = self.ior_r_flags
-
-        # Add a thread for these IOR arguments
-        process = threading.Thread(target=self.ior_thread,
-                                   kwargs={"pool": self.pool,
-                                           "oclass": oclass,
-                                           "api": api,
-                                           "test": test,
-                                           "flags": flags,
-                                           "results":
-                                           self.out_queue})
-        # Launch the IOR thread
-        process.start()
-        # Wait for the thread to finish
-        process.join()
-
-    def run_nvme_pool_exclude(self, num_pool):
+    def run_nvme_pool_exclude(self, num_pool, oclass=None):
         """This is the main method which performs the actual
         testing. It does the following jobs:
         - Create number of TestPools
@@ -163,7 +45,9 @@ class NvmePoolExclude(TestWithServers):
             - Exclude a daos_server
             - Perform an IOR read/verify (same container used for write)
         Args:
-            int : total pools to create for testing purposes.
+            num_pool (int) : total pools to create for testing purposes.
+            oclass (str) : object class (eg: RP_2G8, S1,etc).
+                           Defaults to None
         """
         # Create a pool
         pool = {}
@@ -174,6 +58,8 @@ class NvmePoolExclude(TestWithServers):
         target_list.append(n)
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
+        if oclass is None:
+            oclass = self.ior_cmd.dfs_oclass.value
 
         # Exclude rank :  ranks other than rank 0.
         exclude_servers = len(self.hostlist_servers) * 2
@@ -182,19 +68,24 @@ class NvmePoolExclude(TestWithServers):
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
             pool[val].get_params(self)
-            # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
             pool[val].create()
+            pool[val].set_property("reclaim", "disabled")
 
         for val in range(0, num_pool):
             self.pool = pool[val]
-            for oclass, api, test in product(self.ior_dfs_oclass,
-                                             self.ior_apis,
-                                             self.ior_test_sequence):
-                self.run_ior_thread("Write", oclass, api, test)
+            self.add_container(self.pool)
+            self.cont_list.append(self.container)
+            for test in self.ior_test_sequence:
+                threads = []
+                threads.append(threading.Thread(target=self.run_ior_thread,
+                                                kwargs={"action": "Write",
+                                                        "oclass": oclass,
+                                                        "test": test}))
+                # Launch the IOR threads
+                for thrd in threads:
+                    self.log.info("Thread : %s", thrd)
+                    thrd.start()
+                    time.sleep(1)
 
                 self.pool.display_pool_daos_space("Pool space: Before Exclude")
                 pver_begin = self.get_pool_version()
@@ -203,44 +94,39 @@ class NvmePoolExclude(TestWithServers):
                 rank = rank_list.pop(index-1)
                 self.log.info("Removing rank %d", rank)
 
-                time.sleep(5)
                 self.log.info("Pool Version at the beginning %s", pver_begin)
                 output = self.dmg_command.pool_exclude(self.pool.uuid,
                                                        rank, t_string)
-                self.log.info(output)
-                fail_count = 0
-                while fail_count <= 20:
-                    rebuild_status = self.get_rebuild_status()
-                    time.sleep(15)
-                    fail_count += 1
-                    if rebuild_status == "done":
-                        break
+                self.print_and_assert_on_rebuild_failure(output)
 
-                self.assertTrue(fail_count <= 20, "Rebuild Not Completed")
                 pver_exclude = self.get_pool_version()
                 self.log.info("Pool Version after exclude %s", pver_exclude)
                 # Check pool version incremented after pool exclude
                 self.assertTrue(pver_exclude > pver_begin,
                                 "Pool Version Error:  After exclude")
-
+                # Wait to finish the threads
+                for thrd in threads:
+                    thrd.join()
+                    if not self.out_queue.empty():
+                        self.assert_on_exception()
                 # Verify the data after pool exclude
-                self.run_ior_thread("Read", oclass, api, test)
+                self.run_ior_thread("Read", oclass, test)
+                display_string = "Pool{} space at the End".format(val)
+                self.pool.display_pool_daos_space(display_string)
+                kwargs = {"pool": self.pool.uuid,
+                          "cont": self.container.uuid}
+                output = self.daos_command.container_check(**kwargs)
+                self.log.info(output)
 
-        for val in range(0, num_pool):
-            display_string = "Pool{} space at the End".format(val)
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space(display_string)
-            pool[val].destroy()
-
-    @skipForTicket("DAOS-6108")
     def test_nvme_pool_excluded(self):
         """Test ID: DAOS-2086
         Test Description: This method is called from
         the avocado test infrastructure. This method invokes
         NVME pool exclude testing on multiple pools.
 
-        :avocado: tags=all,full_regression,hw,large,nvme
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,checksum,nvme_osa
         :avocado: tags=nvme_pool_exclude
         """
-        for num_pool in range(1, 4):
-            self.run_nvme_pool_exclude(num_pool)
+        self.run_nvme_pool_exclude(1)

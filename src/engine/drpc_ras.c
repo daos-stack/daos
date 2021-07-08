@@ -20,16 +20,26 @@
 static void
 free_event(Shared__RASEvent *evt)
 {
-	if (evt->obj_id != NULL)
-		D_FREE(evt->obj_id);
-	if (evt->pool_uuid != NULL)
-		D_FREE(evt->pool_uuid);
-	if (evt->cont_uuid != NULL)
-		D_FREE(evt->cont_uuid);
-	if (evt->hostname != NULL)
-		D_FREE(evt->hostname);
-	if (evt->timestamp != NULL)
-		D_FREE(evt->timestamp);
+	D_FREE(evt->obj_id);
+	D_FREE(evt->pool_uuid);
+	D_FREE(evt->cont_uuid);
+	D_FREE(evt->hostname);
+	D_FREE(evt->timestamp);
+}
+
+static d_rank_t
+safe_self_rank(void)
+{
+	d_rank_t	rank;
+	int		rc;
+
+	rc = crt_group_rank(NULL /* grp */, &rank);
+	if (rc != 0) {
+		D_ERROR("failed to get self rank: "DF_RC"\n", DP_RC(rc));
+		rank = CRT_NO_RANK;
+	}
+
+	return rank;
 }
 
 static int
@@ -41,6 +51,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	struct dss_module_info	*dmi = get_module_info();
 	struct timeval		 tv;
 	struct tm		*tm;
+	char			 zone[6]; /* ±0000\0 */
 	int			 rc;
 
 	/* Populate mandatory RAS fields. */
@@ -48,12 +59,18 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	(void)gettimeofday(&tv, 0);
 	tm = localtime(&tv.tv_sec);
 	if (tm == NULL) {
-		D_ERROR("unable to generate timestamp\n");
+		D_ERROR("localtime() failed\n");
 		D_GOTO(out, rc = -DER_UNINIT);
 	}
-	D_ASPRINTF(evt->timestamp, "%04d/%02d/%02d-%02d:%02d:%02d.%02ld",
+	strftime(zone, 6, "%z", tm);
+	/* NB: Timestamp should be in ISO8601 format. */
+	D_ASPRINTF(evt->timestamp, "%04d-%02d-%02dT%02d:%02d:%02d.%03ld%s",
 		   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour,
-		   tm->tm_min, tm->tm_sec, (long)tv.tv_usec / 10000);
+		   tm->tm_min, tm->tm_sec, (long)tv.tv_usec / 10000, zone);
+	if (evt->timestamp == NULL) {
+		D_ERROR("failed to generate timestamp string\n");
+		D_GOTO(out, rc = -DER_NOMEM);
+	}
 
 	evt->id = (uint32_t)id;
 	evt->type = (uint32_t)type;
@@ -104,11 +121,9 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	return 0;
 
 out_hn:
-	if (evt->hostname != NULL)
-		D_FREE(evt->hostname);
+	D_FREE(evt->hostname);
 out_ts:
-	if (evt->timestamp != NULL)
-		D_FREE(evt->timestamp);
+	D_FREE(evt->timestamp);
 out:
 	return rc;
 }
@@ -164,7 +179,7 @@ log_event(Shared__RASEvent *evt)
 
 out:
 	fclose(stream);
-	D_DEBUG(DB_MGMT, "&&& RAS EVENT%s", buf);
+	D_INFO("&&& RAS EVENT%s\n", buf);
 	D_FREE(buf);
 }
 
@@ -250,7 +265,7 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 
 	/* populate rank param if empty */
 	if (rank == NULL) {
-		this_rank = dss_self_rank();
+		this_rank = safe_self_rank();
 		rank = &this_rank;
 	}
 
@@ -286,7 +301,7 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 	Shared__RASEvent			evt = SHARED__RASEVENT__INIT;
 	Shared__RASEvent__PoolSvcEventInfo	info = \
 		SHARED__RASEVENT__POOL_SVC_EVENT_INFO__INIT;
-	d_rank_t				rank = dss_self_rank();
+	d_rank_t				rank = safe_self_rank();
 	int					rc;
 
 	if ((pool == NULL) || uuid_is_null(*pool)) {
@@ -309,7 +324,7 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 
 	rc = raise_ras(RAS_POOL_REPS_UPDATE,
 		       "List of pool service replica ranks has been updated.",
-		       RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+		       RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
 		       &rank /* rank */, NULL /* jobid */, pool,
 		       NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
 		       &evt, true /* wait_for_resp */);
@@ -324,9 +339,8 @@ ds_notify_swim_rank_dead(d_rank_t rank)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
 
-	return raise_ras(RAS_SWIM_RANK_DEAD,
-			 "SWIM marked rank as dead.",
-			 RAS_TYPE_STATE_CHANGE, RAS_SEV_INFO, NULL /* hwid */,
+	return raise_ras(RAS_SWIM_RANK_DEAD, "SWIM marked rank as dead.",
+			 RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
 			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
 			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
 			 &evt, false /* wait_for_resp */);

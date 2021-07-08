@@ -45,8 +45,6 @@ engines:
   # - CRT_CREDIT_EP_CTX=0
   # - CRT_CTX_SHARE_ADDR=1
   # - CRT_CTX_NUM=8
-  # nvme options
-  # - IO_STAT_PERIOD=10
 
   # Storage definitions
   scm_mount: /mnt/daos0
@@ -65,14 +63,6 @@ engines:
   # engine with -n <path>).
   bdev_class: nvme
   bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
-
-  # If emulating NVMe SSD with malloc devices.
-  # bdev_class: malloc          # map to VOS_BDEV_CLASS=MALLOC
-  # bdev_size: 4                # malloc size of each device in GB.
-  # bdev_number: 1              # generate nvme.conf as follows:
-              # [Malloc]
-              #   NumberOfLuns 1
-              #   LunSizeInMB 4000
 
   # If emulating NVMe SSD over kernel block device.
   # bdev_class: kdev            # map to VOS_BDEV_CLASS=AIO

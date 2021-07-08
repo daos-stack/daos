@@ -27,12 +27,13 @@ const (
 
 // Superblock is the per-Instance superblock
 type Superblock struct {
-	Version   uint8
-	UUID      string
-	System    string
-	Rank      *system.Rank
-	URI       string
-	ValidRank bool
+	Version         uint8
+	UUID            string
+	System          string
+	Rank            *system.Rank
+	URI             string
+	ValidRank       bool
+	HostFaultDomain string
 }
 
 // TODO: Marshal/Unmarshal using a binary representation?
@@ -104,7 +105,7 @@ func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
 
 // createSuperblock creates instance superblock if needed.
 func (ei *EngineInstance) createSuperblock(recreate bool) error {
-	if ei.isStarted() {
+	if ei.IsStarted() {
 		return errors.Errorf("can't create superblock: instance %d already started", ei.Index())
 	}
 
@@ -137,6 +138,10 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 		Version: superblockVersion,
 		UUID:    u.String(),
 		System:  systemName,
+	}
+
+	if ei.hostFaultDomain != nil {
+		superblock.HostFaultDomain = ei.hostFaultDomain.String()
 	}
 
 	if cfg.Rank != nil {

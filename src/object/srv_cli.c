@@ -19,45 +19,6 @@
 #include <daos_task.h>
 #include <daos_srv/daos_engine.h>
 
-static int
-dsc_obj_retry_cb(tse_task_t *task, void *arg)
-{
-	daos_handle_t *oh = arg;
-	int rc;
-
-	if (task->dt_result != -DER_NO_HDL || oh == NULL)
-		return 0;
-
-	/* If the remote rebuild pool/container is not ready,
-	 * or the remote target has been evicted from pool.
-	 * Note: the pool map will redistributed by IV
-	 * automatically, so let's just keep refreshing the
-	 * layout.
-	 */
-	rc = dc_obj_layout_refresh(*oh);
-	if (rc) {
-		D_ERROR("task %p, dc_obj_layout_refresh failed rc %d\n",
-			task, rc);
-		task->dt_result = rc;
-		return rc;
-	}
-
-	D_DEBUG(DB_REBUILD, "retry task %p\n", task);
-	rc = dc_task_resched(task);
-	if (rc != 0) {
-		D_ERROR("Failed to re-init task (%p)\n", task);
-		return rc;
-	}
-
-	/*
-	 * Register the retry callback again, because it has been removed
-	 * from the completion callback list. If this registration failed,
-	 * the task will just stop retry on next run.
-	 */
-	rc = dc_task_reg_comp_cb(task, dsc_obj_retry_cb, oh, sizeof(*oh));
-	return rc;
-}
-
 int
 dsc_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
 	     daos_handle_t *oh)
@@ -70,7 +31,7 @@ dsc_obj_open(daos_handle_t coh, daos_obj_id_t oid, unsigned int mode,
 	if (rc)
 		return rc;
 
-	return dsc_task_run(task, dsc_obj_retry_cb, NULL, 0, true);
+	return dsc_task_run(task, NULL, NULL, 0, true);
 }
 
 int
@@ -83,7 +44,7 @@ dsc_obj_close(daos_handle_t oh)
 	if (rc)
 		return rc;
 
-	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
 }
 
 static int
@@ -105,7 +66,7 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
+	rc = dc_tx_local_open(coh, epoch, 0, &th);
 	if (rc)
 		return rc;
 
@@ -121,7 +82,7 @@ dsc_obj_list_akey(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		return rc;
 	}
 
-	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
 }
 
 int
@@ -135,7 +96,7 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 	int		rc;
 
 	coh = dc_obj_hdl2cont_hdl(oh);
-	rc = dc_tx_local_open(coh, epoch, DAOS_TF_RDONLY, &th);
+	rc = dc_tx_local_open(coh, epoch, 0, &th);
 	if (rc)
 		return rc;
 
@@ -152,7 +113,7 @@ dsc_obj_fetch(daos_handle_t oh, daos_epoch_t epoch, daos_key_t *dkey,
 		return rc;
 	}
 
-	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
 }
 
 int
@@ -167,7 +128,7 @@ dsc_obj_update(daos_handle_t oh, uint64_t flags, daos_key_t *dkey,
 	if (rc)
 		return rc;
 
-	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
 }
 
 int
@@ -187,5 +148,25 @@ dsc_obj_list_obj(daos_handle_t oh, daos_epoch_range_t *epr, daos_key_t *dkey,
 	if (rc)
 		return rc;
 
-	return dsc_task_run(task, dsc_obj_retry_cb, &oh, sizeof(oh), true);
+	return dsc_task_run(task, NULL, &oh, sizeof(oh), true);
+}
+
+int
+dsc_obj_id2oc_attr(daos_obj_id_t oid, struct cont_props *prop,
+		   struct daos_oclass_attr *oca)
+{
+	struct daos_oclass_attr *tmp;
+	bool			 priv;
+
+	tmp = daos_oclass_attr_find(oid, &priv);
+	if (!tmp)
+		return -DER_NOSCHEMA;
+
+	*oca = *tmp;
+	if (daos_oclass_is_ec(oca) && !priv) {
+		/* don't ovewrite cell size of private class */
+		D_ASSERT(prop->dcp_ec_cell_sz > 0);
+		oca->u.ec.e_len = prop->dcp_ec_cell_sz;
+	}
+	return 0;
 }

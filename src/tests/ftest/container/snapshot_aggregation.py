@@ -22,7 +22,7 @@ class SnapshotAggregation(IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a SnapshotAggregation object."""
-        super(SnapshotAggregation, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dmg = None
         self.free_space = {"scm": [], "nvme": []}
 
@@ -43,7 +43,9 @@ class SnapshotAggregation(IorTestBase):
             the writes and confirm that deleting the snapshot reduces the pool
             capacity by half.
 
-        :avocado: tags=all,pr,daily_regression,hw,large,container,snapshot
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=container,snapshot,snap
         :avocado: tags=snapshot_aggregation
         """
         self.dmg = self.get_dmg_command()

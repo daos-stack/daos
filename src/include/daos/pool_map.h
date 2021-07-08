@@ -15,7 +15,8 @@
 #include <daos/common.h>
 
 #define POOL_MAP_VER_1		(1)
-#define POOL_MAP_VERSION	POOL_MAP_VER_1
+#define POOL_MAP_VER_2		(2)
+#define POOL_MAP_VERSION	POOL_MAP_VER_2
 
 #define DF_TARGET "Target[%d] (rank %u idx %u status %u)"
 #define DP_TARGET(t) t->ta_comp.co_id, t->ta_comp.co_rank, t->ta_comp.co_index,\
@@ -23,14 +24,18 @@
 
 /**
  * pool component types
+ * target and node are pre-registered and managed by DAOS.
+ * Level 2 to 254 are allocated by control plane based on input from
+ * yaml file.
  */
 typedef enum pool_comp_type {
-	PO_COMP_TP_UNKNOWN	= 0,
-	PO_COMP_TP_ROOT		= 1,
-	PO_COMP_TP_RACK		= 10,
-	PO_COMP_TP_NODE		= 40,
-	PO_COMP_TP_TARGET	= 50,
-	/* TODO: more types */
+	PO_COMP_TP_TARGET	= 0, /** reserved, hard-coded */
+	PO_COMP_TP_RANK		= 1, /** reserved, hard-coded */
+	PO_COMP_TP_MIN		= 2, /** first user-defined domain */
+	PO_COMP_TP_NODE		= 2, /** for test only */
+	PO_COMP_TP_MAX		= 254, /** last user-defined domain */
+	PO_COMP_TP_ROOT		= 255,
+	PO_COMP_TP_END		= 256,
 } pool_comp_type_t;
 
 /** pool component states */
@@ -59,34 +64,42 @@ enum pool_component_flags {
 	PO_COMPF_DOWN2OUT	= 1,
 };
 
+#define co_in_ver	co_out_ver
 /** parent class of all all pool components: target, domain */
 struct pool_component {
 	/** pool_comp_type_t */
-	uint16_t		co_type;
+	uint8_t		co_type;
 	/** pool_comp_state_t */
-	uint8_t			co_status;
+	uint8_t		co_status;
 	/** target index inside the node */
-	uint8_t			co_index;
+	uint8_t		co_index;
+	/** padding for 64-bit alignment */
+	uint8_t		co_padding;
 	/** Immutable component ID. */
-	uint32_t		co_id;
+	uint32_t	co_id;
 	/**
 	 * e.g. rank in the communication group, only used by PO_COMP_TARGET
 	 * for the time being.
 	 */
-	uint32_t		co_rank;
+	uint32_t	co_rank;
 	/** version it's been added */
-	uint32_t		co_ver;
+	uint32_t	co_ver;
 	/** failure sequence */
 	uint32_t		co_fseq;
+
 	/**
-	 * version it's been EXCLUDE_OUT (when status set to
-	 * PO_COMP_ST_DOWNOUT).
+	 * co_in_ver and co_out_ver are shared the same item here.
+	 * If the target status(co_status) is PO_COMP_ST_DOWNOUT.
+	 * it means the map version when the target is excluded.
+	 * Otherwise, it is the map version when the target is
+	 * extended or reintegrated.
 	 */
-	uint32_t		co_out_ver;
+	uint32_t		co_out_ver; /* co_in_ver */
+
 	/** flags, see enum pool_component_flags */
 	uint32_t		co_flags;
 	/** number of children or storage partitions */
-	uint32_t		co_nr;
+	uint32_t	co_nr;
 };
 
 /** a leaf of pool map */
@@ -154,13 +167,14 @@ struct pool_buf {
 	/** reserved, for alignment now */
 	uint32_t		pb_reserved;
 	/** checksum of components */
-	uint32_t		pb_csum;
+	uint32_t	pb_csum;
 	/** summary of domain_nr, node_nr, target_nr, buffer size */
-	uint32_t		pb_nr;
-	uint32_t		pb_domain_nr;
-	uint32_t		pb_node_nr;
-	uint32_t		pb_target_nr;
-	uint32_t		pb_padding;
+	uint32_t	pb_nr;
+	uint32_t	pb_domain_nr;
+	uint32_t	pb_node_nr;
+	uint32_t	pb_target_nr;
+	uint32_t	pb_padding;
+
 	/** buffer body */
 	struct pool_component	pb_comps[0];
 };
@@ -203,7 +217,7 @@ void pool_map_print(struct pool_map *map);
 int  pool_map_set_version(struct pool_map *map, uint32_t version);
 uint32_t pool_map_get_version(struct pool_map *map);
 
-int pool_map_get_failed_cnt(struct pool_map *map, pool_comp_type_t type);
+int pool_map_get_failed_cnt(struct pool_map *map, uint32_t domain);
 
 #define PO_COMP_ID_ALL		(-1)
 
@@ -311,6 +325,12 @@ static inline bool
 pool_target_unavail(struct pool_target *tgt, bool for_reint)
 {
 	return pool_component_unavail(&tgt->ta_comp, for_reint);
+}
+
+static inline bool
+pool_target_avail(struct pool_target *tgt, uint32_t allow_status)
+{
+	return tgt->ta_comp.co_status & allow_status;
 }
 
 /** Check if the target is in PO_COMP_ST_DOWN status */

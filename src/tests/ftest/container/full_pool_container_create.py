@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -5,7 +6,7 @@
 """
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
-from general_utils import get_random_string
+from general_utils import get_random_bytes
 
 
 class FullPoolContainerCreate(TestWithServers):
@@ -53,10 +54,10 @@ class FullPoolContainerCreate(TestWithServers):
             while True:
                 self.d_log.debug("writing obj {0} sz {1} to "
                                  "container".format(write_count, obj_sz))
-                my_str = "a" * obj_sz
+                my_str = b"a" * obj_sz
                 my_str_sz = obj_sz
-                dkey = (get_random_string(5))
-                akey = (get_random_string(5))
+                dkey = get_random_bytes(5)
+                akey = get_random_bytes(5)
                 try:
                     dummy_oid = cont.write_an_obj(
                         my_str, my_str_sz, dkey, akey, obj_cls="OC_SX")

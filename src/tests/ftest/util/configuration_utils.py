@@ -14,7 +14,7 @@ from general_utils import get_host_data
 DATA_ERROR = "[ERROR]"
 
 
-class ConfigurationData(object):
+class ConfigurationData():
     """Defines requirement data for a set of hosts."""
 
     def __init__(self, hosts, timeout=120):
@@ -44,7 +44,7 @@ class ConfigurationData(object):
         """Get the total non-swap memory in bytes for each host.
 
         Returns:
-            dict: a dictionary of data values for each NodeSet key
+            list: a list of dictionaries with data values for each NodeSet
 
         """
         cmd = r"free -b | sed -En 's/Mem:\s+([0-9]+).*/\1/p'"
@@ -56,7 +56,7 @@ class ConfigurationData(object):
         """Get the largest NVMe capacity in bytes for each host.
 
         Returns:
-            dict: a dictionary of data values for each NodeSet key
+            list: a list of dictionaries with data values for each NodeSet
 
         """
         cmd = "lsblk -b -o SIZE,NAME | grep nvme"
@@ -68,7 +68,7 @@ class ConfigurationData(object):
         """Get the total SCM capacity in bytes for each host.
 
         Returns:
-            dict: a dictionary of data values for each NodeSet key
+            list: a list of dictionaries with data values for each NodeSet
 
         """
         cmd_list = [
@@ -80,35 +80,38 @@ class ConfigurationData(object):
         error = "No SCM devices detected"
         return get_host_data(self.hosts, cmd, text, error, self.timeout)
 
-    def get_data(self, requirememt):
+    def get_data(self, requirement):
         """Get the specified requirement data.
 
         Args:
-            requirememt (str): requirememt name
+            requirement (str): requirement name
 
         Raises:
             AttributeError: if the requirement key is invalid
 
         Returns:
-            dict: a dictionary of the requested data keyed by the NodeSet of
+            list: a list of dictionaries with the requested data and NodeSet of
                 hosts with the same data value
 
         """
-        if requirememt in self._data:
+        data = None
+        if requirement in self._data:
             # Return the previously stored requested data
-            return self._data[requirememt]
-        elif requirememt in self._data_key_map:
+            data = self._data[requirement]
+        elif requirement in self._data_key_map:
             # Obtain, store (for future requests), and return the data
-            self._data[requirememt] = self._data_key_map[requirememt]()
-            return self._data[requirememt]
+            self._data[requirement] = self._data_key_map[requirement]()
+            data = self._data[requirement]
         else:
             # No known method for obtaining this data
             raise AttributeError(
-                "Unknown data requirememt for ConfigurationData object: "
-                "{}".format(requirememt))
+                "Unknown data requirement for ConfigurationData object: "
+                "{}".format(requirement))
+        return data
 
 
 class ConfigurationParameters(ObjectWithParameters):
+    # pylint: disable=too-few-public-methods
     """Defines a configuration with a set of requirement parameters."""
 
     def __init__(self, namespace, name, data):
@@ -119,7 +122,7 @@ class ConfigurationParameters(ObjectWithParameters):
             data (ConfigurationData): object retaining the host data needed to
                 verify the configuration requirement
         """
-        super(ConfigurationParameters, self).__init__(namespace + name + "/*")
+        super().__init__(namespace + name + "/*")
         self.name = name
         self._config_data = data
 
@@ -148,22 +151,23 @@ class ConfigurationParameters(ObjectWithParameters):
             value = getattr(self, requirement).value
             try:
                 value = int(value)
-            except ValueError:
+            except ValueError as error:
                 raise AttributeError(
                     "Invalid '{}' attribute - must be an int: {}".format(
-                        requirement, value))
+                        requirement, value)) from error
 
             # Only verify requirements with a minimum
             if value != 0:
                 # Retrieve the data for all of the hosts which is grouped by
                 # hosts with the same values
-                requirement_data = self._config_data.get_data(requirement)
-                for group, data in requirement_data.items():
-                    status = data != DATA_ERROR and data >= value
+                for info in self._config_data.get_data(requirement):
+                    status = \
+                        info["data"] != DATA_ERROR and info["data"] >= value
                     self.log.debug(
-                        "  %s: Verifying the maximum %s meets the requirememt: "
+                        "  %s: Verifying the maximum %s meets the requirement: "
                         "%s >= %s: %s",
-                        group, requirement.replace("_", " "), data, value,
+                        str(info["hosts"]), requirement.replace("_", " "),
+                        info["data"], value,
                         str(status))
                     if not status:
                         break
@@ -171,7 +175,7 @@ class ConfigurationParameters(ObjectWithParameters):
         return status
 
 
-class Configuration(object):
+class Configuration():
     """Defines a means of obtaining configuration-specific test parameters."""
 
     def __init__(self, test_params, hosts, timeout=120, debug=True):
@@ -244,7 +248,7 @@ class Configuration(object):
         else:
             # Default to no active configuration
             self._active_name = None
-            self._inactive_names = [name for name in self._all_names]
+            self._inactive_names = list(self._all_names)
 
             # Report errors for invalid configutaion names
             if value is not None:
@@ -264,7 +268,7 @@ class Configuration(object):
         self._all_names = []
         self._all_params.clear()
 
-        for path, key, value in test_params.iteritems():
+        for path, key, value in test_params.items():
             # Store all the non-configuration-definition parameters
             if path in self._all_params:
                 self._all_params[path].append((key, value))
@@ -284,7 +288,7 @@ class Configuration(object):
         """
         self._available_params = {
             path: data
-            for path, data in self._all_params.items()
+            for path, data in list(self._all_params.items())
             if self._valid_path(path)
         }
 
@@ -306,10 +310,9 @@ class Configuration(object):
             # Always include configuration definition paths in order to be able
             # to find the requirements for each configuration
             return True
-        else:
             # Otherwise only include paths that are not configuration-specific
             # or are specific to the active configuration
-            return path.split("/")[-1] not in self._inactive_names
+        return path.split("/")[-1] not in self._inactive_names
 
     def _set_available_names(self, test):
         """Set the list of available configuration names.
@@ -359,7 +362,7 @@ class Configuration(object):
             "ALL_PARAMS:\n - %s",
             "\n - ".join(
                 ["{}: {}".format(path, data)
-                 for path, data in self._all_params.items()])
+                 for path, data in list(self._all_params.items())])
         )
 
         # Reset the available, active, and inactive configuration names
@@ -379,7 +382,7 @@ class Configuration(object):
             "AVAILABLE_PARAMS:\n - %s",
             "\n - ".join(
                 ["{}: {}".format(key, paths)
-                 for key, paths in self._available_params.items()])
+                 for key, paths in list(self._available_params.items())])
         )
 
         return status
@@ -415,7 +418,7 @@ class Configuration(object):
         # Find each available path that matches the specified path and includes
         # the requested key
         matches = {}
-        for apath, adata in self._available_params.items():
+        for apath, adata in list(self._available_params.items()):
             if search_path.search(apath) is not None:
                 self._log_debug(
                     " - Available path match:                  %s", apath)
@@ -441,7 +444,7 @@ class Configuration(object):
             # Multiple matching paths with an active configuration
             # Search for a single configuration-specific path to use
             specific_paths = [
-                path for path in matches.keys()
+                path for path in list(matches.keys())
                 if path.endswith(self.active_name)]
             if len(specific_paths) == 1:
                 # A single configuration-specific matching path for the key
@@ -462,7 +465,7 @@ class Configuration(object):
                 "Multiple {} leaves contain the key '{}'; {}".format(
                     search_path.pattern, key,
                     ["{}=>{}".format(path, value)
-                     for path, value in matches.items()]))
+                     for path, value in list(matches.items())]))
 
         # Display a AvocadoParams-style logging message for the returned value
         self.log.debug(

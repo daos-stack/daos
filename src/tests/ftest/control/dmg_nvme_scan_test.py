@@ -1,10 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
 
@@ -21,7 +21,7 @@ class DmgNvmeScanTest(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize a DmgNvmeScanTest object."""
-        super(DmgNvmeScanTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.start_agents_once = False
         self.start_servers_once = False
         self.setup_start_agents = False

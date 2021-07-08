@@ -23,7 +23,7 @@ class GetContainerACLTest(ContSecurityTestBase):
     """
     def setUp(self):
         """Set up each test case."""
-        super(GetContainerACLTest, self).setUp()
+        super().setUp()
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()
         self.add_container(self.pool)
@@ -68,7 +68,7 @@ class GetContainerACLTest(ContSecurityTestBase):
                     outfile=path_to_file)
                 test_errs.extend(
                     self.error_handling(
-                        self.daos_cmd.result, "File exists"))
+                        self.daos_cmd.result, "ile exists"))
 
         if test_errs:
             self.fail("container get-acl command expected to fail: \

@@ -53,6 +53,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_epoch = epoch;
 	dth->dth_leader_oid = *oid;
 
+	dth->dth_pinned = 0;
 	dth->dth_sync = 0;
 	dth->dth_cos_done = 0;
 	dth->dth_resent = 0;
@@ -81,6 +82,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_dkey_hash = dkey_hash;
 
 	D_INIT_LIST_HEAD(&dth->dth_share_cmt_list);
+	D_INIT_LIST_HEAD(&dth->dth_share_abt_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_act_list);
 	D_INIT_LIST_HEAD(&dth->dth_share_tbd_list);
 	dth->dth_share_tbd_count = 0;
@@ -98,6 +100,11 @@ vts_dtx_end(struct dtx_handle *dth)
 
 	if (dth->dth_shares_inited) {
 		while ((dsp = d_list_pop_entry(&dth->dth_share_cmt_list,
+					       struct dtx_share_peer,
+					       dsp_link)) != NULL)
+			D_FREE(dsp);
+
+		while ((dsp = d_list_pop_entry(&dth->dth_share_abt_list,
 					       struct dtx_share_peer,
 					       dsp_link)) != NULL)
 			D_FREE(dsp);
@@ -819,7 +826,7 @@ dtx_18(void **state)
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
-				   NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -831,7 +838,7 @@ dtx_18(void **state)
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
-				   NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 

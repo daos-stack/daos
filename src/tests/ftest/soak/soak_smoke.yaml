@@ -34,7 +34,7 @@ server_config:
         scm_class: dcpm
         scm_list: [/dev/pmem0]
         bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
+        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     transport_config:
       allow_insecure: True
 agent_config:
@@ -60,19 +60,13 @@ pool_reserved:
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    oclass: SX
     control_method: daos
 container_reserved:
-    oclass: OC_RP_2G1
-    akey_size: 5
-    dkey_size: 5
-    data_size: 4096
-    object_qty: 20
-    record_qty: 1
-    record_size: 100
-    array_size: 1
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: API
+    oclass: SX
+    control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -90,21 +84,22 @@ smoke:
     name: soak_smoke
     # smoke test timeout in hours
     test_timeout: 0.4
+    joblist:
+        - ior_smoke
+        - fio_smoke
+        - daos_racer
+        - mdtest_smoke
+# Commandline parameters
+# Benchmark and application params
+# IOR params -a DFS and -a MPIIO
+# sequential
+ior_smoke:
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
     nodesperjob:
         - 1
     taskspernode:
         - 1
-    joblist:
-        - ior_smoke
-        - fio_smoke
-        - daos_racer
-# Commandline parameters
-# Benchmark and application params
-# IOR params -a DFS and -a MPIIO
-# sequential
-ior_smoke:
     api:
         - DFS
         - MPIIO
@@ -123,41 +118,72 @@ ior_smoke:
     segment_count: 1
     dfs_oclass:
         - 'SX'
-        - 'RP_2G1'
-fio_smoke:
-  names:
-      - global
-      - test
-  global:
-    directory: "/tmp/daos_dfuse/"
-    ioengine: 'libaio'
-    thread: 1
-    group_reporting: 1
-    direct: 1
-    verify: 'crc64'
-    iodepth: 16
-  test:
-    numjobs: 1
-  soak:
-    blocksize:
-        - '1M'
-    size:
-        - '1G'
-    rw:
-        - 'rw'
-        - 'randrw'
-    oclass:
+    dfs_dir_oclass:
         - 'SX'
-        - 'RP_2G1'
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/ior/"
+        disable_caching: True
+fio_smoke:
+    # maximum timeout for a single job in test in minutes
+    names:
+        - global
+        - test
+    global:
+        directory: "/tmp/daos_dfuse/fio/"
+        ioengine: 'libaio'
+        thread: 1
+        group_reporting: 1
+        direct: 1
+        verify: 'crc64'
+        iodepth: 16
+    test:
+    numjobs: 1
+    soak:
+        blocksize:
+            - '1M'
+        size:
+            - '1G'
+        rw:
+            - 'rw'
+            - 'randrw'
+        oclass:
+            - 'SX'
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/fio/"
+        disable_wb_caching: True
 daos_racer:
-  runtime: 120
-  container:
-      type: POSIX
-      control_method: daos
-      oclass: 'SX'
-dfuse:
-    mount_dir: "/tmp/daos_dfuse/"
-    disable_direct_io: True
+    runtime: 120
+    container:
+        type: POSIX
+        control_method: daos
+        oclass: 'SX'
+mdtest_smoke:
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 10
+    nodesperjob:
+        - 1
+    taskspernode:
+        - 1
+    test_dir: "/"
+    api:
+        - 'DFS'
+        - 'POSIX'
+    iteration: 1
+    num_of_files_dirs: 100
+    pre_iter: 10
+    flags: '-v'
+    write_bytes:
+        - 4096
+    read_bytes:
+        - 4096
+    depth:
+        - 0
+    dfs_oclass: 'SX'
+    dfs_dir_oclass: 'S1'
+    dfs_destroy: False
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/mdtest/"
+        disable_caching: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 events:
@@ -166,3 +192,4 @@ events:
 monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
+    - "ps -C daos_engine -o %mem,%cpu,cmd"

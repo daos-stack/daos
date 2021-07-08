@@ -27,6 +27,81 @@
 #define REBUILD_POOL_SIZE	(4ULL << 30)
 
 #define DATA_SIZE	(1048576 * 2 + 512)
+
+static int
+reintegrate_inflight_io(void *data)
+{
+	test_arg_t	*arg = data;
+	daos_obj_id_t	oid = *(daos_obj_id_t *)arg->rebuild_cb_arg;
+	struct ioreq	req;
+	int		i;
+
+	rebuild_pool_connect_internal(arg);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 5; i++) {
+		char	key[32];
+		daos_recx_t recx;
+		char	buf[DATA_SIZE];
+
+		sprintf(key, "d_inflight_%d", i);
+		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+
+		sprintf(key, "d_inflight_1M_%d", i);
+		recx.rx_idx = 0;
+		recx.rx_nr = DATA_SIZE;
+		memset(buf, 'a', DATA_SIZE);
+		insert_recxs(key, "a_key_1M", 1, DAOS_TX_NONE, &recx, 1,
+			     buf, DATA_SIZE, &req);
+	}
+	ioreq_fini(&req);
+	rebuild_pool_disconnect_internal(arg);
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0, 0,
+				      NULL);
+	return 0;
+}
+
+static void
+reintegrate_with_inflight_io(test_arg_t *arg, daos_obj_id_t *oid,
+			     d_rank_t rank, int tgt)
+{
+	daos_obj_id_t inflight_oid;
+
+#if 0
+	/* Disable it due to DAOS-7420 */
+	if (oid != NULL) {
+		inflight_oid = *oid;
+	} else {
+#endif
+	inflight_oid = daos_test_oid_gen(arg->coh,
+					 DAOS_OC_R3S_SPEC_RANK, 0,
+					 0, arg->myrank);
+	inflight_oid = dts_oid_set_rank(inflight_oid, rank);
+
+	arg->rebuild_cb = reintegrate_inflight_io;
+	arg->rebuild_cb_arg = &inflight_oid;
+
+	/* To make sure the IO will be done before reintegration is done */
+	if (arg->myrank == 0)
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_REBUILD_TGT_REBUILD_HANG, 0, NULL);
+	reintegrate_single_pool_target(arg, rank, tgt);
+	arg->rebuild_cb = NULL;
+	arg->rebuild_cb_arg = NULL;
+
+#if 0
+	/* Disable it due to DAOS-7420 */
+	if (oid == NULL) {
+		int rc;
+
+		rc = daos_obj_verify(arg->coh, inflight_oid, DAOS_EPOCH_MAX);
+		if (rc != 0)
+			assert_rc_equal(rc, -DER_NOSYS);
+	}
+#endif
+}
+
 static void
 rebuild_dkeys(void **state)
 {
@@ -48,7 +123,7 @@ rebuild_dkeys(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      KEY_NR, DP_OID(oid));
 	for (i = 0; i < 5; i++) {
-		char	key[16];
+		char	key[32] = {0};
 		daos_recx_t recx;
 		char	data[DATA_SIZE];
 
@@ -73,7 +148,8 @@ rebuild_dkeys(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, kill_rank, -1);
+	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
+
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -101,7 +177,7 @@ rebuild_akeys(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      KEY_NR, DP_OID(oid));
 	for (i = 0; i < KEY_NR; i++) {
-		char		key[16];
+		char		key[32] = {0};
 		daos_recx_t	recx;
 		char		data[DATA_SIZE];
 
@@ -127,8 +203,7 @@ rebuild_akeys(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-
-	reintegrate_single_pool_target(arg, kill_rank, tgt);
+	reintegrate_with_inflight_io(arg, &oid, kill_rank, tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -157,7 +232,7 @@ rebuild_indexes(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      2000, DP_OID(oid));
 	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		char	key[32] = {0};
 
 		sprintf(key, "dkey_2_%d", i);
 		for (j = 0; j < 20; j++)
@@ -172,7 +247,7 @@ rebuild_indexes(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -231,7 +306,7 @@ rebuild_snap_update_recs(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
 		if (rc != 0)
@@ -290,7 +365,7 @@ rebuild_snap_punch_recs(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	for (i = 0; i < SNAP_CNT; i++) {
 		rc = daos_obj_verify(arg->coh, oid, snap_epoch[i]);
 		if (rc != 0)
@@ -377,7 +452,7 @@ rebuild_snap_update_keys(void **state)
 		assert_int_equal(number, SNAP_CNT);
 	}
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -479,7 +554,7 @@ rebuild_snap_punch_keys(void **state)
 		assert_int_equal(number, SNAP_CNT);
 	}
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -584,11 +659,11 @@ rebuild_multiple(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      1000, DP_OID(oid));
 	for (i = 0; i < 10; i++) {
-		char	dkey[16];
+		char	dkey[32] = {0};
 
 		sprintf(dkey, "dkey_3_%d", i);
 		for (j = 0; j < 10; j++) {
-			char	akey[16];
+			char	akey[32] = {0};
 
 			sprintf(akey, "akey_%d", j);
 			for (k = 0; k < 10; k++)
@@ -630,7 +705,7 @@ rebuild_large_rec(void **state)
 		      KEY_NR, DP_OID(oid));
 	memset(buffer, 'a', LARGE_BUFFER_SIZE);
 	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		char	key[32] = {0};
 		const char *lakey = "a_key_L";
 		daos_size_t iod_size = 1;
 		int	rx_nr = LARGE_BUFFER_SIZE;
@@ -653,7 +728,7 @@ rebuild_large_rec(void **state)
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, &oid, ranks_to_kill[0], tgt);
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	if (rc != 0)
 		assert_rc_equal(rc, -DER_NOSYS);
@@ -688,7 +763,7 @@ rebuild_objects(void **state)
 			assert_rc_equal(rc, -DER_NOSYS);
 	}
 
-	reintegrate_single_pool_target(arg, ranks_to_kill[0], tgt);
+	reintegrate_with_inflight_io(arg, NULL, ranks_to_kill[0], tgt);
 	for (i = 0; i < OBJ_NR; i++) {
 		rc = daos_obj_verify(arg->coh, oids[i], DAOS_EPOCH_MAX);
 		if (rc != 0)
@@ -735,6 +810,16 @@ rebuild_sx_object_internal(void **state, uint16_t oclass)
 
 	/* wait until reintegration is done */
 	test_rebuild_wait(&arg, 1);
+
+	print_message("lookup 100 dkeys\n");
+	for (i = 0; i < 100; i++) {
+		char buffer[32];
+
+		memset(buffer, 0, 32);
+		sprintf(dkey, "dkey_%d\n", i);
+		lookup_single(dkey, akey, 0, buffer, 32, DAOS_TX_NONE, &req);
+		assert_string_equal(buffer, rec);
+	}
 	ioreq_fini(&req);
 }
 
@@ -801,8 +886,14 @@ rebuild_small_pool_n4_setup(void **state)
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
 			REBUILD_SMALL_POOL_SIZE, 4, NULL);
-	if (rc)
-		return rc;
+	if (rc) {
+		/* Let's skip for this case, since it is possible there
+		 * is not enough ranks here.
+		 */
+		print_message("It can not create the pool with 4 ranks"
+			      " probably due to not enough ranks %d\n", rc);
+		return 0;
+	}
 
 	arg = *state;
 	if (dt_obj_class != DAOS_OC_UNKNOWN)
@@ -822,6 +913,9 @@ rebuild_large_snap(void **state)
 	int		tgt = DEFAULT_FAIL_TGT;
 	daos_epoch_t	snap_epoch[100];
 	int		i;
+
+	if (!test_runable(arg, 4))
+		return;
 
 	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
 	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
@@ -853,8 +947,6 @@ rebuild_full_shards(void **state)
 	struct ioreq	req;
 	int		i;
 
-	skip(); /** DAOS-5758 */
-
 	if (!test_runable(arg, 4))
 		return;
 
@@ -884,6 +976,146 @@ rebuild_full_shards(void **state)
 	rebuild_single_pool_target(arg, 3, -1, false);
 	reintegrate_single_pool_target(arg, 0, -1);
 	reintegrate_single_pool_target(arg, 3, -1);
+}
+
+static void
+rebuild_punch_recs(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_recx_t	recx;
+	char		buffer[1001] = { 0 };
+	int		i;
+	int		rc;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
+	oid = dts_oid_set_rank(oid, ranks_to_kill[0]);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	memset(buffer, 'a', 1000);
+	recx.rx_idx = 0;
+	recx.rx_nr = 1000;
+	insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1, buffer,
+		     1000, &req);
+
+	for (i = 0; i < 5; i++) {
+		/* punch string */
+		recx.rx_idx = i * 100;
+		recx.rx_nr = 50;
+		punch_recxs("d_key", "a_key", &recx, 1, DAOS_TX_NONE, &req);
+	}
+	ioreq_fini(&req);
+
+	rebuild_single_pool_target(arg, ranks_to_kill[0], -1, false);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+}
+
+static void
+rebuild_multiple_group(void **state)
+{
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	struct ioreq		req;
+	d_rank_t		kill_rank = 0;
+	int			kill_rank_nr;
+	int			i;
+	int			rc;
+
+	if (!test_runable(arg, 7))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_RP_2G3, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	print_message("Insert %d kv record in object "DF_OID"\n",
+		      KEY_NR, DP_OID(oid));
+	for (i = 0; i < 50; i++) {
+		char	key[32] = {0};
+		daos_recx_t recx;
+		char	data[10];
+		char	akey[32] = {0};
+		int	j;
+
+		sprintf(key, "dkey_0_%d", i);
+		recx.rx_idx = 0;
+		recx.rx_nr = 10;
+		memset(data, 'a', 10);
+		for (j = 0; j < 10; j++) {
+			sprintf(akey, "a_key_s_%d", j);
+			insert_single(key, akey, 0, "data", strlen("data") + 1,
+				      DAOS_TX_NONE, &req);
+			sprintf(akey, "a_key_a_%d", j);
+			insert_recxs(key, akey, 1, DAOS_TX_NONE, &recx, 1,
+				     data, 10, &req);
+		}
+	}
+
+	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
+	ioreq_fini(&req);
+
+	rebuild_single_pool_target(arg, kill_rank, -1, false);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+
+	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+}
+
+/** i/o to variable idx offset */
+static void
+rebuild_with_large_offset(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_off_t	offset;
+	d_rank_t	kill_rank = 0;
+	int		kill_rank_nr;
+	daos_recx_t	recxs[IOREQ_IOD_NR] = { 0 };
+	char		data[128];
+	int		i;
+	int		rc;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	memset(data, 'a', 128);
+	for (offset = (UINT64_MAX >> 1), i = 0;
+	     offset > 0 && i < IOREQ_IOD_NR;
+	     offset >>= 16, i++) {
+		recxs[i].rx_idx = offset;
+		recxs[i].rx_nr = 5;
+	}
+
+	insert_recxs("large_idx_dkey", "large_idx_akey", 1, DAOS_TX_NONE,
+		     recxs, i, data, i * 5, &req);
+
+	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
+	ioreq_fini(&req);
+
+	rebuild_single_pool_target(arg, kill_rank, -1, false);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+
+	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
 }
 
 /** create a new pool/container for each test */
@@ -920,6 +1152,12 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_large_snap, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD16: rebuild with full stripe",
 	 rebuild_full_shards, rebuild_small_pool_n4_setup, test_teardown},
+	{"REBUILD17: rebuild with punch recxs",
+	 rebuild_punch_recs, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD18: rebuild with multiple group",
+	 rebuild_multiple_group, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD19: rebuild with large offset",
+	 rebuild_with_large_offset, rebuild_small_sub_setup, test_teardown},
 };
 
 int

@@ -475,8 +475,10 @@ d_hash_rec_insert(struct d_hash_table *htable, const void *key,
 
 	if (exclusive) {
 		tmp = ch_rec_find(htable, bucket, key, ksize, D_HASH_LRU_NONE);
-		if (tmp)
+		if (tmp) {
+			D_DEBUG(DB_TRACE, "Dup key detected\n");
 			D_GOTO(out_unlock, rc = -DER_EXIST);
+		}
 	}
 	ch_rec_insert_addref(htable, bucket, link);
 
@@ -1265,6 +1267,10 @@ d_hhash_link_lookup(struct d_hhash *hhash, uint64_t key)
 	if (d_hhash_key_isptr(key)) {
 		struct d_hlink *hlink = (struct d_hlink *)key;
 
+		if (hlink == NULL) {
+			D_ERROR("NULL PTR type key.\n");
+			return NULL;
+		}
 		if (!d_hhash_is_ptrtype(hhash)) {
 			D_ERROR("invalid PTR type key being lookup in a "
 				"non ptr-based htable.\n");

@@ -3,7 +3,7 @@
 This section covers the preliminary setup required on the compute and
 storage nodes before deploying DAOS.
 
-## Enable IOMMU (Optional)
+## Enable IOMMU
 
 In order to run the DAOS server as a non-root user with NVMe devices, the hardware
 must support virtualized device access, and it must be enabled in the system BIOS.
@@ -28,13 +28,10 @@ $ sudo grub2-mkconfig --output=/boot/grub2/grub.cfg
 $ sudo reboot
 ```
 
-!!! warning
-    VFIO support is a new feature for DAOS 1.2 and has been tested on CentOS 7.7
-
-To force SPDK to use UIO rather than VFIO at daos_server runtime, set
-'disable_vfio' in the
-[server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
-but note that this will require running daos_server as root.
+!!! note
+    To force SPDK to use UIO rather than VFIO at daos_server runtime, set
+    'disable_vfio' in the [server config file](https://github.com/daos-stack/daos/blob/master/utils/config/daos_server.yml#L109),
+    but note that this will require running daos_server as root.
 
 ## Time Synchronization
 
@@ -55,18 +52,11 @@ the DAOS storage nodes.
 Storage nodes can be configured with multiple network interfaces to run
 multiple engine instances.
 
-### Subnet
-
-Since all DAOS engines need to be able to communicate, the different network
-interfaces need to be on the same subnet or routing capabilities across the
-different subnet might be configured.
-
-### Infiniband/RoCE
 
 Some special configuration is required to use librdmacm with multiple
 interfaces.
 
-Firstly, the accept_local feature must be enabled on the network interfaces
+First, the accept_local feature must be enabled on the network interfaces
 to be used by DAOS. This can be done using the following command (<ifaces> must
 be replaced with the interface names):
 
@@ -74,7 +64,7 @@ be replaced with the interface names):
 $ sudo sysctl -w net.ipv4.conf.all.accept_local=1
 ```
 
-Secondly, Linux must be configured to only send ARP replies on the interface
+Second, Linux must be configured to only send ARP replies on the interface
 targeted in the ARP request. This is configured via the arp_ignore parameter.
 This should be set to 2 if all the IPoIB interfaces on the client and storage
 nodes are in the same logical subnet (e.g. ib0 == 10.0.0.27, ib1 == 10.0.1.27,
@@ -105,6 +95,14 @@ the relevant settings.
 
 For more information, please refer to the [librdmacm documentation](https://github.com/linux-rdma/rdma-core/blob/master/Documentation/librdmacm.md)
 
+### Subnet
+
+Since all engines need to be able to communicate, the different network
+interfaces need to be on the same subnet or routing capabilities across the
+different subnet must be configured.
+
+
+
 ## Runtime Directory Setup
 
 DAOS uses a series of Unix Domain Sockets to communicate between its
@@ -126,13 +124,14 @@ By default, daos_server and daos_agent will use the directories
 the default location that daos_server uses for its runtime directory,
 either uncomment and set the socket_dir configuration value in
 install/etc/daos_server.yml, or pass the location to daos_server on
-the command line using the -d flag. For the daos_agent, an alternate
-location can be passed on the command line using the --runtime_dir flag.
+the command line using the -d flag (`daos_server start -d /tmp/daos_server`). For the daos_agent, an alternate
+location can be passed on the command line using the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
 
 ### Default Directory (non-persistent)
 
 Files and directories created in /run and /var/run only survive until
-the next reboot. However, if reboots are infrequent, an easy solution
+the next reboot. These directories are required for subsequent runs;
+therefore, if reboots are infrequent, an easy solution
 while still utilizing the default locations is to create the
 required directories manually. To do this execute the following commands.
 

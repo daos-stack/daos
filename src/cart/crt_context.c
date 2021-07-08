@@ -173,21 +173,29 @@ out:
 }
 
 int
-crt_context_create(crt_context_t *crt_ctx)
+crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 {
 	struct crt_context	*ctx = NULL;
 	int			rc = 0;
 	na_size_t		uri_len = CRT_ADDR_STR_MAX_LEN;
+	bool			sep_mode;
+	int			cur_ctx_num;
+	int			max_ctx_num;
+	d_list_t		*ctx_list;
 
 	if (crt_ctx == NULL) {
 		D_ERROR("invalid parameter of NULL crt_ctx.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	if (crt_gdata.cg_sep_mode &&
-	    crt_gdata.cg_ctx_num >= crt_gdata.cg_ctx_max_num) {
+	sep_mode = crt_provider_is_sep(provider);
+	cur_ctx_num = crt_provider_get_cur_ctx_num(provider);
+	max_ctx_num = crt_provider_get_max_ctx_num(provider);
+
+	if (sep_mode &&
+	    cur_ctx_num >= max_ctx_num) {
 		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
-			crt_gdata.cg_ctx_num, crt_gdata.cg_ctx_max_num);
+			cur_ctx_num, max_ctx_num);
 		D_GOTO(out, -DER_AGAIN);
 	}
 
@@ -204,9 +212,8 @@ crt_context_create(crt_context_t *crt_ctx)
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
-	ctx->cc_provider = crt_gdata.cg_na_plugin;
-	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, ctx->cc_provider,
-			     crt_gdata.cg_ctx_num);
+	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
+
 	if (rc != 0) {
 		D_ERROR("crt_hg_ctx_init() failed, " DF_RC "\n", DP_RC(rc));
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
@@ -223,9 +230,12 @@ crt_context_create(crt_context_t *crt_ctx)
 		D_GOTO(out, rc);
 	}
 
-	ctx->cc_idx = crt_gdata.cg_ctx_num;
-	d_list_add_tail(&ctx->cc_link, &crt_gdata.cg_ctx_list);
-	crt_gdata.cg_ctx_num++;
+	ctx->cc_idx = cur_ctx_num;
+
+	ctx_list = crt_provider_get_ctx_list(provider);
+
+	d_list_add_tail(&ctx->cc_link, ctx_list);
+	crt_provider_inc_cur_ctx_num(provider);
 
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
@@ -236,7 +246,7 @@ crt_context_create(crt_context_t *crt_ctx)
 		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
 				      "Total number of timed out RPC requests",
 				      "", "net/%d/%u/req_timeout",
-				      ctx->cc_provider, ctx->cc_idx);
+				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create timed out req counter: "DF_RC
 			       "\n", DP_RC(ret));
@@ -245,7 +255,7 @@ crt_context_create(crt_context_t *crt_ctx)
 				      "Total number of timed out URI lookup "
 				      "requests", "",
 				      "net/%d/%u/uri_lookup_timeout",
-				      ctx->cc_provider, ctx->cc_idx);
+				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create timed out uri req counter: "
 			       DF_RC"\n", DP_RC(ret));
@@ -254,7 +264,7 @@ crt_context_create(crt_context_t *crt_ctx)
 				      "Total number of failed address "
 				      "resolution attempts", "",
 				      "net/%d/%u/failed_addr",
-				      ctx->cc_provider, ctx->cc_idx);
+				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create failed addr counter: "DF_RC
 			       "\n", DP_RC(ret));
@@ -276,6 +286,12 @@ crt_context_create(crt_context_t *crt_ctx)
 
 out:
 	return rc;
+}
+
+int
+crt_context_create(crt_context_t *crt_ctx)
+{
+	return crt_context_provider_create(crt_ctx, crt_gdata.cg_init_prov);
 }
 
 int
@@ -452,6 +468,7 @@ int
 crt_context_destroy(crt_context_t crt_ctx, int force)
 {
 	struct crt_context	*ctx;
+	uint32_t		 timeout_sec;
 	int			 flags;
 	int			 rc = 0;
 	int			 i;
@@ -473,6 +490,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			D_GOTO(out, rc);
 	}
 
+	timeout_sec = crt_swim_rpc_timeout();
 	flags = force ? (CRT_EPI_ABORT_FORCE | CRT_EPI_ABORT_WAIT) : 0;
 	D_MUTEX_LOCK(&ctx->cc_mutex);
 	for (i = 0; i < CRT_SWIM_FLUSH_ATTEMPTS; i++) {
@@ -486,7 +504,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 			"d_hash_table_traverse failed rc: %d.\n",
 			ctx->cc_idx, force, rc);
 		/* Flush SWIM RPC already sent */
-		rc = crt_context_flush(crt_ctx, crt_swim_rpc_timeout);
+		rc = crt_context_flush(crt_ctx, timeout_sec);
 		if (rc)
 			/* give a chance to other threads to complete */
 			usleep(1000); /* 1ms */
@@ -509,6 +527,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 
 	D_MUTEX_UNLOCK(&ctx->cc_mutex);
 
+	int provider = ctx->cc_hg_ctx.chc_provider;
 	rc = crt_hg_ctx_fini(&ctx->cc_hg_ctx);
 	if (rc) {
 		D_ERROR("crt_hg_ctx_fini failed rc: %d.\n", rc);
@@ -516,7 +535,7 @@ crt_context_destroy(crt_context_t crt_ctx, int force)
 	}
 
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
-	crt_gdata.cg_ctx_num--;
+	crt_provider_dec_cur_ctx_num(provider);
 	d_list_del(&ctx->cc_link);
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
@@ -565,21 +584,22 @@ crt_context_flush(crt_context_t crt_ctx, uint64_t timeout)
 }
 
 int
-crt_ep_abort(crt_endpoint_t *ep)
+crt_rank_abort(d_rank_t rank)
 {
 	struct crt_context	*ctx = NULL;
 	d_list_t		*rlink;
 	int			 flags;
 	int			 rc = 0;
+	d_list_t		*ctx_list;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		rc = 0;
 		D_MUTEX_LOCK(&ctx->cc_mutex);
 		rlink = d_hash_rec_find(&ctx->cc_epi_table,
-					(void *)&ep->ep_rank,
-					sizeof(ep->ep_rank));
+					(void *)&rank, sizeof(rank));
 		if (rlink != NULL) {
 			flags = CRT_EPI_ABORT_FORCE;
 			rc = crt_ctx_epi_abort(rlink, &flags);
@@ -589,7 +609,7 @@ crt_ep_abort(crt_endpoint_t *ep)
 		if (rc != 0) {
 			D_ERROR("context (idx %d), ep_abort (rank %d), "
 				"failed rc: %d.\n",
-				ctx->cc_idx, ep->ep_rank, rc);
+				ctx->cc_idx, rank, rc);
 			break;
 		}
 	}
@@ -597,6 +617,46 @@ crt_ep_abort(crt_endpoint_t *ep)
 	D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
 
 	return rc;
+}
+
+int
+crt_ep_abort(crt_endpoint_t *ep) {
+	return crt_rank_abort(ep->ep_rank);
+}
+
+int
+crt_rank_abort_all(crt_group_t *grp)
+{
+	struct crt_grp_priv	*grp_priv;
+	d_rank_list_t		*grp_membs;
+	int			i;
+	int			rc, rc2;
+
+	grp_priv = crt_grp_pub2priv(grp);
+	grp_membs = grp_priv_get_membs(grp_priv);
+	rc2 = 0;
+
+	if (grp_membs == NULL) {
+		D_ERROR("No members in the group\n");
+		D_GOTO(out, rc2 = -DER_INVAL);
+	}
+
+	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
+	for (i = 0; i < grp_membs->rl_nr; i++) {
+		D_DEBUG(DB_ALL, "Aborting RPCs to rank=%d\n",
+			grp_membs->rl_ranks[i]);
+
+		rc = crt_rank_abort(grp_membs->rl_ranks[i]);
+		if (rc != DER_SUCCESS) {
+			D_WARN("Abort to rank=%d failed with rc=%d\n",
+			       grp_membs->rl_ranks[i], rc);
+			rc2 = rc;
+		}
+	}
+	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
+
+out:
+	return rc2;
 }
 
 /* caller should already hold crt_ctx->cc_mutex */
@@ -740,7 +800,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 	crt_ctx = rpc_priv->crp_pub.cr_ctx;
 
 	if (crt_gdata.cg_use_sensors)
-		(void)d_tm_increment_counter(&crt_ctx->cc_timedout, 1, NULL);
+		d_tm_inc_counter(crt_ctx->cc_timedout, 1);
 
 	switch (rpc_priv->crp_state) {
 	case RPC_STATE_URI_LOOKUP:
@@ -756,8 +816,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  ul_req->cr_ep.ep_rank);
 
 		if (crt_gdata.cg_use_sensors)
-			(void)d_tm_increment_counter(&crt_ctx->cc_timedout_uri,
-						     1, NULL);
+			d_tm_inc_counter(crt_ctx->cc_timedout_uri, 1);
 		crt_req_abort(ul_req);
 		/*
 		 * don't crt_rpc_complete rpc_priv here, because crt_req_abort
@@ -774,8 +833,7 @@ crt_req_timeout_hdlr(struct crt_rpc_priv *rpc_priv)
 			  tgt_ep->ep_rank,
 			  rpc_priv->crp_tgt_uri);
 		if (crt_gdata.cg_use_sensors)
-			(void)d_tm_increment_counter(&crt_ctx->cc_failed_addr,
-						     1, NULL);
+			d_tm_inc_counter(crt_ctx->cc_failed_addr, 1);
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, -DER_UNREACH);
 		break;
@@ -812,9 +870,40 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 	struct d_binheap_node		*bh_node;
 	d_list_t			 timeout_list;
 	uint64_t			 ts_now;
-	int				 count = 0;
 
 	D_ASSERT(crt_ctx != NULL);
+
+	if (crt_gdata.cg_swim_inited) {
+		struct crt_grp_priv	*gp = crt_gdata.cg_grp->gg_primary_grp;
+		struct crt_swim_membs	*csm = &gp->gp_membs_swim;
+		swim_id_t		 self_id = swim_self_get(csm->csm_ctx);
+
+		/*
+		 * Check for network idle in SWIM context.
+		 * If the time passed from last received RPC till now is more
+		 * than 2/3 of suspicion timeout suspends eviction.
+		 * The max_delay should be less suspicion timeout to guarantee
+		 * the already suspected members will not be expired.
+		 */
+		if (crt_ctx->cc_idx == csm->csm_crt_ctx_idx &&
+		    crt_ctx->cc_last_unpack_hlc != 0 &&
+		    self_id != SWIM_ID_INVALID) {
+			uint64_t delay = crt_hlc2msec(crt_hlc_get() -
+						   crt_ctx->cc_last_unpack_hlc);
+			uint64_t max_delay = swim_suspect_timeout_get() * 2 / 3;
+
+			if (delay > max_delay) {
+				D_ERROR("Network outage detected (idle during "
+					"%lu.%lu sec >  maximum allowed "
+					"%lu.%lu sec). Suspend SWIM eviction "
+					"until network stabilized.\n",
+					delay / 1000, delay % 1000,
+					max_delay / 1000, max_delay % 1000);
+				crt_swim_suspend_all();
+				crt_ctx->cc_last_unpack_hlc = 0;
+			}
+		}
+	}
 
 	D_INIT_LIST_HEAD(&timeout_list);
 	ts_now = d_timeus_secdiff(0);
@@ -831,7 +920,6 @@ crt_context_timeout_check(struct crt_context *crt_ctx)
 
 		/* +1 to prevent it from being released in timeout_untrack */
 		RPC_ADDREF(rpc_priv);
-		count++;
 		crt_req_timeout_untrack(rpc_priv);
 
 		d_list_add_tail(&rpc_priv->crp_tmp_link, &timeout_list);
@@ -1102,12 +1190,16 @@ crt_context_req_untrack(struct crt_rpc_priv *rpc_priv)
 	}
 }
 
+/* TODO: Need per-provider call */
 crt_context_t
 crt_context_lookup_locked(int ctx_idx)
 {
 	struct crt_context	*ctx;
+	d_list_t		*ctx_list;
 
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx)
 			return ctx;
 	}
@@ -1115,14 +1207,19 @@ crt_context_lookup_locked(int ctx_idx)
 	return NULL;
 }
 
+/* TODO: Need per-provider call */
 crt_context_t
 crt_context_lookup(int ctx_idx)
 {
 	struct crt_context	*ctx;
 	bool			found = false;
+	d_list_t		*ctx_list;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+
+	ctx_list = crt_provider_get_ctx_list(crt_gdata.cg_init_prov);
+
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		if (ctx->cc_idx == ctx_idx) {
 			found = true;
 			break;
@@ -1186,19 +1283,19 @@ crt_context_num(int *ctx_num)
 		return -DER_INVAL;
 	}
 
-	*ctx_num = crt_gdata.cg_ctx_num;
+	*ctx_num = crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov].cpg_ctx_num;
 	return 0;
 }
 
 bool
-crt_context_empty(int locked)
+crt_context_empty(int provider, int locked)
 {
 	bool rc = false;
 
 	if (locked == 0)
 		D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
 
-	rc = d_list_empty(&crt_gdata.cg_ctx_list);
+	rc = d_list_empty(&crt_gdata.cg_prov_gdata[provider].cpg_ctx_list);
 
 	if (locked == 0)
 		D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);

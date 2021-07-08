@@ -47,6 +47,7 @@ ior:
       dfs_oclass: "SX"
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
+  disable_caching: True
 dcp:
   bufsize: "64MB"
   chunksize: "128MB"

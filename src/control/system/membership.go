@@ -111,9 +111,21 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		curMember, err = m.db.FindMemberByUUID(req.UUID)
 	}
 	if err == nil {
+		// Fault domain check only matters if there are other members
+		// besides the one being updated.
+		if count, err := m.db.MemberCount(); err != nil {
+			return nil, err
+		} else if count != 1 {
+			if err := m.checkReqFaultDomain(req); err != nil {
+				return nil, err
+			}
+		}
+
+		if curMember.state == MemberStateAdminExcluded {
+			return nil, errAdminExcluded(curMember.UUID, curMember.Rank)
+		}
 		if !curMember.Rank.Equals(req.Rank) {
 			return nil, errRankChanged(req.Rank, curMember.Rank, curMember.UUID)
-
 		}
 		if curMember.UUID != req.UUID {
 			return nil, errUuidChanged(req.UUID, curMember.UUID, curMember.Rank)
@@ -150,6 +162,10 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 		return nil, err
 	}
 
+	if err := m.checkReqFaultDomain(req); err != nil {
+		return nil, err
+	}
+
 	newMember := &Member{
 		Rank:           req.Rank,
 		UUID:           req.UUID,
@@ -170,6 +186,16 @@ func (m *Membership) Join(req *JoinRequest) (resp *JoinResponse, err error) {
 	}
 
 	return resp, nil
+}
+
+func (m *Membership) checkReqFaultDomain(req *JoinRequest) error {
+	currentDepth := m.db.FaultDomainTree().Depth()
+	newDepth := req.FaultDomain.NumLevels()
+	// currentDepth includes the rank layer, which is not included in the req
+	if currentDepth > 0 && newDepth != currentDepth-1 {
+		return FaultBadFaultDomainDepth(req.FaultDomain, currentDepth-1)
+	}
+	return nil
 }
 
 // AddOrReplace adds member to membership or replaces member if it exists.
@@ -306,6 +332,10 @@ func (m *Membership) Members(rankSet *RankSet) (members Members) {
 	return
 }
 
+func msgBadStateTransition(m *Member, ts MemberState) string {
+	return fmt.Sprintf("illegal member state update for rank %d: %s->%s", m.Rank, m.state, ts)
+}
+
 // UpdateMemberStates updates member's state according to result state.
 //
 // If updateOnFail is false, only update member state and info if result is a
@@ -325,23 +355,25 @@ func (m *Membership) UpdateMemberStates(results MemberResults, updateOnFail bool
 			result.Addr = member.Addr.String()
 		}
 
-		// don't update members if:
-		// - result reports an error and updateOnFail is false or
+		// don't update members if any of the following is true:
+		// - result reports an error and state != errored
+		// - result reports an error and updateOnFail is false
 		// - if transition from current to result state is illegal
+
 		if result.Errored {
-			if !updateOnFail {
-				continue
-			}
 			if result.State != MemberStateErrored {
+				// result content mismatch (programming error)
 				return errors.Errorf(
 					"errored result for rank %d has conflicting state '%s'",
 					result.Rank, result.State)
 			}
+			if !updateOnFail {
+				continue
+			}
 		}
 
 		if member.State().isTransitionIllegal(result.State) {
-			m.log.Debugf("skipping illegal member state update for rank %d: %s->%s",
-				member.Rank, member.state, result.State)
+			m.log.Debugf("skipping %s", msgBadStateTransition(member, result.State))
 			continue
 		}
 		member.state = result.State
@@ -444,25 +476,28 @@ func (m *Membership) MarkRankDead(rank Rank) error {
 		return err
 	}
 
-	if member.State().isTransitionIllegal(MemberStateEvicted) {
-		return errors.Errorf("llegal member state update for rank %d: %s->%s",
-			member.Rank, member.state, MemberStateEvicted)
+	ns := MemberStateExcluded
+	if member.State().isTransitionIllegal(ns) {
+		msg := msgBadStateTransition(member, ns)
+		// excluded->excluded transitions expected for multiple swim
+		// notifications, if so return error to skip group update
+		if member.State() != ns {
+			m.log.Error(msg)
+		}
+
+		return errors.New(msg)
 	}
 
-	member.state = MemberStateEvicted
+	member.state = ns
 	return m.db.UpdateMember(member)
 }
 
-func (m *Membership) handleRankDown(evt *events.RASEvent) {
-	ei := evt.GetRankStateInfo()
+func (m *Membership) handleEngineFailure(evt *events.RASEvent) {
+	ei := evt.GetEngineStateInfo()
 	if ei == nil {
-		m.log.Error("no extended info in RankDown event received")
+		m.log.Error("no extended info in EngineDied event received")
 		return
 	}
-
-	// TODO: sanity check that the correct member is being updated by
-	// performing lookup on provided hostname and matching returned
-	// addresses with the member address with matching rank.
 
 	member, err := m.db.FindMemberByRank(Rank(evt.Rank))
 	if err != nil {
@@ -470,14 +505,21 @@ func (m *Membership) handleRankDown(evt *events.RASEvent) {
 		return
 	}
 
-	if member.State().isTransitionIllegal(MemberStateErrored) {
-		m.log.Debugf("skipping illegal member state update for rank %d: %s->%s",
-			member.Rank, member.state, MemberStateErrored)
+	// TODO DAOS-7261: sanity check that the correct member is being
+	//                 updated by performing lookup on provided hostname
+	//                 and matching returned addresses with the address
+	//                 of the member with the matching rank.
+	//
+	// e.g. if member.Addr.IP.Equal(net.ResolveIPAddr(evt.Hostname))
+
+	ns := MemberStateErrored
+	if member.State().isTransitionIllegal(ns) {
+		m.log.Debugf("skipping %s", msgBadStateTransition(member, ns))
 		return
 	}
 
-	member.state = MemberStateErrored
-	member.Info = errors.Wrap(ei.ExitErr, evt.Msg).Error()
+	member.state = ns
+	member.Info = evt.Msg
 
 	if err := m.db.UpdateMember(member); err != nil {
 		m.log.Errorf("updating member with rank %d: %s", member.Rank, err)
@@ -487,8 +529,10 @@ func (m *Membership) handleRankDown(evt *events.RASEvent) {
 // OnEvent handles events on channel and updates member states accordingly.
 func (m *Membership) OnEvent(_ context.Context, evt *events.RASEvent) {
 	switch evt.ID {
-	case events.RASRankDown:
-		m.handleRankDown(evt)
+	case events.RASEngineDied:
+		m.handleEngineFailure(evt)
+	default:
+		m.log.Debugf("no handler registered for event: %v", evt)
 	}
 }
 

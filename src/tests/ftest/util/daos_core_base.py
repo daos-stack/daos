@@ -25,7 +25,7 @@ class DaosCoreBase(TestWithServers):
 
     def __init__(self, *args, **kwargs):
         """Initialize the DaosCoreBase object."""
-        super(DaosCoreBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.subtest_name = None
 
     def setUp(self):
@@ -36,7 +36,7 @@ class DaosCoreBase(TestWithServers):
         # obtain separate logs
         self.update_log_file_names(self.subtest_name)
 
-        super(DaosCoreBase, self).setUp()
+        super().setUp()
 
         # if no client specified update self.hostlist_clients to local host
         # and create a new self.hostfile_clients.
@@ -60,11 +60,19 @@ class DaosCoreBase(TestWithServers):
         return self.params.get(self.get_test_name(), path, default)
 
     @fail_on(CommandFailure)
-    def start_server_managers(self):
+    def start_server_managers(self, force=False):
         """Start the daos_server processes on each specified list of hosts.
 
         Enable scalable endpoint if requested with a test-specific
         'scalable_endpoint' yaml parameter.
+
+        Args:
+            force (bool, optional): whether or not to force starting the
+                servers. Defaults to False.
+
+        Returns:
+            bool: whether or not to force the starting of the agents
+
         """
         # Enable scalable endpoint (if requested) prior to starting the servers
         scalable_endpoint = self.get_test_param("scalable_endpoint")
@@ -82,17 +90,18 @@ class DaosCoreBase(TestWithServers):
                         item.split("=")[0]: item.split("=")[1]
                         for item in env_vars}
                     env_dict["CRT_CTX_SHARE_ADDR"] = "1"
+                    env_dict["COVFILE"] = "/tmp/test.cov"
                     if "CRT_CTX_NUM" not in env_dict or \
                             int(env_dict["CRT_CTX_NUM"]) < int(targets):
                         env_dict["CRT_CTX_NUM"] = str(targets)
                     engine_params.set_value("crt_ctx_share_addr", 1)
                     engine_params.set_value(
                         "env_vars",
-                        ["=".join(items) for items in env_dict.items()]
+                        ["=".join(items) for items in list(env_dict.items())]
                     )
 
         # Start the servers
-        super(DaosCoreBase, self).start_server_managers()
+        return super().start_server_managers(force=force)
 
     def run_subtest(self):
         """Run daos_test with a subtest argument."""
@@ -121,6 +130,7 @@ class DaosCoreBase(TestWithServers):
                 "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
                 "--map-by node", "-x", "D_LOG_MASK=DEBUG",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
+                "-x", "COVFILE=/tmp/test.cov",
                 self.daos_test,
                 "-n", dmg_config_file,
                 "".join(["-", subtest]),
@@ -146,12 +156,13 @@ class DaosCoreBase(TestWithServers):
             # Set each expected rank state to be either stopped or running
             for manager in self.server_managers:
                 manager.update_expected_states(
-                    None, ["Joined", "Stopped", "Evicted"])
+                    None, ["Joined", "Stopped", "Excluded"])
         else:
             # Set the specific expected rank state to stopped
             for rank in stopped_ranks:
                 for manager in self.server_managers:
-                    manager.update_expected_states(rank, ["Stopped", "Evicted"])
+                    manager.update_expected_states(
+                        rank, ["Stopped", "Excluded"])
 
         try:
             process.run(cmd, env=env)
@@ -185,6 +196,7 @@ class DaosCoreBase(TestWithServers):
 <![CDATA[{2}]]>
     </system-err>
   </testcase>
-</testsuite>'''.format(testname, result.result.stdout, result.result.stderr))
+</testsuite>'''.format(
+    testname, result.result.stdout_text, result.result.stderr_text))
         except IOError as error:
             self.log.error("Error creating %s: %s", filename, error)

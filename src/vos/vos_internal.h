@@ -25,7 +25,8 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
+#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
+D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -102,7 +103,7 @@ enum {
 #define VOS_MW_FLUSH_THRESH	(1UL << 23)	/* 8MB */
 
 /* Force aggregation/discard ULT yield on certain amount of tight loops */
-#define VOS_AGG_CREDITS_MAX	256
+#define VOS_AGG_CREDITS_MAX	32
 
 static inline uint32_t vos_byte2blkcnt(uint64_t bytes)
 {
@@ -136,6 +137,8 @@ struct vos_pool {
 	/** number of openers */
 	int			vp_opened:30;
 	int			vp_dying:1;
+	/** exclusive handle (see VOS_POF_EXCL) */
+	int			vp_excl:1;
 	/** caller specifies pool is small (for sys space reservation) */
 	bool			vp_small;
 	/** UUID of vos pool */
@@ -184,7 +187,7 @@ struct vos_container {
 	daos_handle_t		vc_dtx_active_hdl;
 	/* The handle for committed DTX table */
 	daos_handle_t		vc_dtx_committed_hdl;
-	/** The root of the B+ tree for ative DTXs. */
+	/** The root of the B+ tree for active DTXs. */
 	struct btr_root		vc_dtx_active_btr;
 	/** The root of the B+ tree for committed DTXs. */
 	struct btr_root		vc_dtx_committed_btr;
@@ -192,6 +195,8 @@ struct vos_container {
 	d_list_t		vc_dtx_committed_list;
 	/* The temporary list for committed DTXs during re-index. */
 	d_list_t		vc_dtx_committed_tmp_list;
+	/* The list for active DTXs, roughly ordered in time. */
+	d_list_t		vc_dtx_act_list;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
 	/* The items count in vc_dtx_committed_tmp_list. */
@@ -246,6 +251,10 @@ struct vos_dtx_act_ent {
 	 * it is not fatal.
 	 */
 	daos_unit_oid_t			*dae_oids;
+	/* The time (hlc) when the DTX entry is created. */
+	daos_epoch_t			 dae_start_time;
+	/* Link into container::vc_dtx_act_list. */
+	d_list_t			 dae_link;
 
 	unsigned int			 dae_committable:1,
 					 dae_committed:1,
@@ -304,17 +313,6 @@ struct vos_dtx_cmt_ent {
 	d_list_t			 dce_committed_link;
 	struct vos_dtx_cmt_ent_df	 dce_base;
 
-	/* The single object OID if it is different from 'dce_base::dce_oid'. */
-	daos_unit_oid_t			 dce_oid_inline;
-
-	/* Similar as dae_oids, it points to 'dce_base::dce_oid',
-	 * or 'dce_oid_inline' or new buffer to hold more OIDs.
-	 */
-	daos_unit_oid_t			*dce_oids;
-
-	/* The count objects modified by current DTX. */
-	int				 dce_oid_cnt;
-
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
 					 dce_invalid:1;
@@ -322,8 +320,6 @@ struct vos_dtx_cmt_ent {
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_OID(dce)		((dce)->dce_base.dce_oid)
-#define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 
 extern int vos_evt_feats;
 
@@ -503,8 +499,7 @@ vos_dtx_prepared(struct dtx_handle *dth);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int counti, daos_epoch_t epoch,
-			struct dtx_cos_key *dcks,
+			int count, daos_epoch_t epoch, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces);
 void
@@ -813,6 +808,7 @@ struct vos_iterator {
 	uint32_t		 it_from_parent:1,
 				 it_for_purge:1,
 				 it_for_migration:1,
+				 it_cleanup_stale_dtx:1,
 				 it_ignore_uncommitted:1;
 };
 
@@ -1091,7 +1087,7 @@ int
 gc_add_item(struct vos_pool *pool, daos_handle_t coh,
 	    enum vos_gc_type type, umem_off_t item_off, uint64_t args);
 int
-vos_gc_pool(daos_handle_t poh, int *credits);
+vos_gc_pool_tight(daos_handle_t poh, int *credits);
 void
 gc_reserve_space(daos_size_t *rsrvd);
 
@@ -1267,5 +1263,7 @@ void
 vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 		   struct vos_akey_data *ad);
 
+int
+vos_pool_settings_init(void);
 
 #endif /* __VOS_INTERNAL_H__ */

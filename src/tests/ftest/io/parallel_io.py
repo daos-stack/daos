@@ -26,7 +26,7 @@ class ParallelIo(FioBase, IorTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a ParallelIo object."""
-        super(ParallelIo, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.dfuse = None
         self.cont_count = None
         self.pool_count = None
@@ -133,7 +133,9 @@ class ParallelIo(FioBase, IorTestBase):
             Otherwise, try accessing the deleted container.
             This should fail.
             Check dfuse again.
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,parallelio
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=daosio,parallelio,tx
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -151,7 +153,7 @@ class ParallelIo(FioBase, IorTestBase):
         # io on each container using fio in parallel
         for _, cont in enumerate(self.container):
             dfuse_cont_dir = self.dfuse.mount_dir.value + "/" + cont.uuid
-            cmd = u"ls -a {}".format(dfuse_cont_dir)
+            cmd = "ls -a {}".format(dfuse_cont_dir)
             try:
                 # execute bash cmds
                 ret_code = general_utils.pcmd(
@@ -160,7 +162,7 @@ class ParallelIo(FioBase, IorTestBase):
                     error_hosts = NodeSet(
                         ",".join(
                             [str(node_set) for code, node_set in
-                             ret_code.items() if code != 0]))
+                             list(ret_code.items()) if code != 0]))
                     raise CommandFailure(
                         "Error running '{}' on the following "
                         "hosts: {}".format(cmd, error_hosts))
@@ -267,7 +269,7 @@ class ParallelIo(FioBase, IorTestBase):
                 cont_num = (pool_count * self.cont_count) + counter
                 dfuse_cont_dir = str(dfuse_pool_dir + "/" +
                                      self.container[cont_num].uuid)
-                cmd = u"###ls -a {}".format(dfuse_cont_dir)
+                cmd = "###ls -a {}".format(dfuse_cont_dir)
                 self.execute_cmd(cmd)
 
                 # run ior on all containers

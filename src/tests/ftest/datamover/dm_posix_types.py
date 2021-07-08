@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import basename, join
 
 
-class DmPosixTypesTest(DataMoverTestBase):
+class DmvrPosixTypesTest(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """POSIX Data Mover validation for varying source and destination types
        using "dcp", "dsync, and "daos filesystem copy" with POSIX containers.
@@ -23,7 +23,7 @@ class DmPosixTypesTest(DataMoverTestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(DmPosixTypesTest, self).setUp()
+        super().setUp()
 
         # Get the parameters
         self.ior_flags = self.params.get(
@@ -161,12 +161,10 @@ class DmPosixTypesTest(DataMoverTestBase):
             ["POSIX"] + posix1,
             ["DAOS_UNS"] + p1_c2])
 
-        # FS_COPY does not yet support this
-        if self.tool != "FS_COPY":
-            copy_list.append([
-                "POSIX -> POSIX",
-                ["POSIX"] + posix1,
-                ["POSIX"] + posix2])
+        copy_list.append([
+            "POSIX -> POSIX",
+            ["POSIX"] + posix1,
+            ["POSIX"] + posix2])
 
         # Run and verify each copy.
         # Each src or dst is a list of params:
@@ -188,11 +186,15 @@ class DmPosixTypesTest(DataMoverTestBase):
                 dst_path = join(dst[1], basename(src[1]))
             self.read_verify_location(dst[0], dst_path, dst[2], dst[3])
 
+            # The cases below use a UNS sub path, which is
+            # not supported by FS_COPY
+            if (self.tool == "FS_COPY" and
+                    src[0] == "DAOS_UNS" or dst[0] == "DAOS_UNS"):
+                continue
+
             # file -> file variation
             # A UNS subset is not supported for both src and dst.
-            # FS_COPY only supports directories.
-            if (not (src[0] == "DAOS_UNS" and dst[0] == "DAOS_UNS") and
-                    self.tool != "FS_COPY"):
+            if not (src[0] == "DAOS_UNS" and dst[0] == "DAOS_UNS"):
                 self.run_datamover(
                     test_desc + " (file->file)",
                     src[0], join(src[1], self.test_file), src[2], src[3],
@@ -201,9 +203,8 @@ class DmPosixTypesTest(DataMoverTestBase):
 
             # file -> dir variation
             # This works because the destination dir is already created above.
-            # FS_COPY only supports directories.
             # DSYNC overwrites existing directories with the source file.
-            if self.tool not in ("FS_COPY", "DSYNC"):
+            if self.tool != "DSYNC":
                 self.run_datamover(
                     test_desc + " (file->dir)",
                     src[0], join(src[1], self.test_file), src[2], src[3],
@@ -227,7 +228,7 @@ class DmPosixTypesTest(DataMoverTestBase):
             DAOS-5508: Verify copy between POSIX, UUIDs, and UNS paths.
             Daos-5511: Verify copy across pools.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_posix_types,dm_posix_types_dcp
         """
         self.run_dm_posix_types("DCP")
@@ -237,8 +238,8 @@ class DmPosixTypesTest(DataMoverTestBase):
         Test Description:
             Tests POSIX copies with dsync using different src and dst types.
             DAOS-6389: add basic tests for dsync posix
-        :avocado: tags=all,daily_regression
-        :avocado: tags=datamover,dsync
+        :avocado: tags=all,full_regression
+        :avocado: tags=datamover,dsync,dfuse
         :avocado: tags=dm_posix_types,dm_posix_types_dsync
         """
         self.run_dm_posix_types("DSYNC")
@@ -250,7 +251,7 @@ class DmPosixTypesTest(DataMoverTestBase):
             src and dst types.
             DAOS-6233: add tests for daos filesystem copy
         :avocado: tags=all,daily_regression
-        :avocado: tags=datamover,fs_copy
+        :avocado: tags=datamover,fs_copy,dfuse
         :avocado: tags=dm_posix_types,dm_posix_types_fs_copy
         """
         self.run_dm_posix_types("FS_COPY")

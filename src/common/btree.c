@@ -477,6 +477,12 @@ static int
 btr_rec_alloc(struct btr_context *tcx, d_iov_t *key, d_iov_t *val,
 	       struct btr_record *rec)
 {
+	if (btr_is_direct_key(tcx) && (key->iov_len > EMBEDDED_KEY_MAX)) {
+		D_ERROR("Key size (%zd) > Anchor size (%u)\n",
+			key->iov_len, EMBEDDED_KEY_MAX);
+		return -DER_KEY2BIG;
+	}
+
 	return btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec);
 }
 
@@ -1330,8 +1336,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	bool			 next_level;
 	struct btr_node		*nd;
 	struct btr_check_alb	 alb;
-	struct btr_trace	 traces[BTR_TRACE_MAX];
-	struct btr_trace	*trace = NULL;
 	umem_off_t		 nd_off;
 
 	if (!btr_probe_valid(probe_opc)) {
@@ -1519,13 +1523,7 @@ again:
 				saved = at + 1;
 		}
 
-		/* backup the probe trace because probe_next will change it */
-		if (trace == NULL)
-			memcpy(traces, tcx->tc_trace,
-			       sizeof(*trace) * tcx->tc_depth);
-
 		if (btr_probe_next(tcx)) {
-			trace = traces;
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}

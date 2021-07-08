@@ -1400,9 +1400,75 @@ multiple_oid_cond_test(void **state)
 	}
 }
 
-#define REM_VAL1 "xyz"
+#define REM_VAL1 "efg"
 #define REM_VAL2 "zyx"
 #define REM_VAL3 "abcd"
+
+enum {
+	/* Expect data.   Args: length, buffer */
+	FETCH_DATA,
+	/* Expect a hole. Args: length */
+	FETCH_HOLE,
+	/* No more data or holes */
+	FETCH_END
+};
+
+static void
+check_array(struct io_test_args *arg, daos_unit_oid_t oid, daos_key_t *dkey,
+	    daos_key_t *akey, daos_epoch_t epoch, ...)
+{
+	void		*buf;
+	char		*cursor;
+	char		 expected[SM_BUF_LEN];
+	char		 retrieved[SM_BUF_LEN];
+	daos_iod_t	 iod = {0};
+	d_iov_t		 sg_iov = {0};
+	d_sg_list_t	 sgl = {0};
+	daos_recx_t	 recx;
+	va_list		 ap;
+	int		 len = 0;
+	int		 buflen;
+	int		 type;
+	int		 rc;
+
+	memset(expected, '#', sizeof(expected));
+	memset(retrieved, '#', sizeof(retrieved));
+
+	cursor = expected;
+	va_start(ap, epoch);
+	for (;;) {
+		type = va_arg(ap, int);
+		if (type == FETCH_END)
+			break;
+		buflen = va_arg(ap, int);
+		assert(len + buflen <= SM_BUF_LEN);
+		cursor = &expected[len];
+		len += buflen;
+		if (type == FETCH_HOLE)
+			continue;
+		assert_int_equal(type, FETCH_DATA);
+
+		buf = va_arg(ap, void *);
+		assert_non_null(buf);
+		memcpy(cursor, buf, buflen);
+	}
+	va_end(ap);
+
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &sg_iov;
+	iod.iod_name = *akey;
+	iod.iod_nr = 1;
+	iod.iod_type = DAOS_IOD_ARRAY;
+	recx.rx_idx = 0;
+	recx.rx_nr = len;
+	iod.iod_recxs = &recx;
+	d_iov_set(&sg_iov, retrieved, len);
+	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, dkey, 1, &iod,
+			   &sgl);
+	assert_int_equal(rc, 0);
+	assert_memory_equal(expected, retrieved, sizeof(expected));
+}
 
 static void
 remove_test(void **state)
@@ -1414,7 +1480,6 @@ remove_test(void **state)
 	d_iov_t			 sg_iov[SM_BUF_LEN] = {0};
 	d_sg_list_t		 sgl;
 	daos_recx_t		 recx[SM_BUF_LEN];
-	char			 rbuf[SM_BUF_LEN];
 	daos_unit_oid_t		 oid;
 	daos_epoch_t		 epoch = start_epoch;
 	int			 rc = 0;
@@ -1450,14 +1515,25 @@ remove_test(void **state)
 			    0, &dkey, 1, &iod, NULL, &sgl);
 	assert_rc_equal(rc, 0);
 
+	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
+		    FETCH_DATA, sizeof(REM_VAL1) - 1, REM_VAL1,
+		    FETCH_DATA, sizeof(REM_VAL2) - 1, REM_VAL2,
+		    FETCH_DATA, sizeof(REM_VAL3) - 1, REM_VAL3,
+		    FETCH_END);
+
 	/* Try removing partial entries */
 	recx[3].rx_idx = 1;
-	recx[3].rx_nr = 10;
+	recx[3].rx_nr = 8;
 	epr.epr_lo = 0;
-	epr.epr_hi = epoch;
+	epr.epr_hi = epoch - 1;
 	rc = vos_obj_array_remove(arg->ctx.tc_co_hdl, oid, &epr, &dkey,
 				  &iod.iod_name, &recx[3]);
-	assert_rc_equal(rc, -DER_NO_PERM);
+	assert_rc_equal(rc, 0);
+
+	check_array(arg, oid, &dkey, &iod.iod_name, epoch++,
+		    FETCH_DATA, 1, &REM_VAL1[0], FETCH_HOLE,
+		    sizeof(REM_VAL1) + sizeof(REM_VAL2) + sizeof(REM_VAL3) - 5,
+		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
 	/* Swap 1 and 2 and write again */
 	d_iov_set(&sg_iov[1], REM_VAL1, sizeof(REM_VAL1) - 1);
@@ -1467,25 +1543,19 @@ remove_test(void **state)
 	recx[0].rx_idx = 0;
 	recx[0].rx_nr = sizeof(REM_VAL2) - 1;
 	recx[1].rx_idx = recx[0].rx_idx + recx[0].rx_nr;
-	recx[0].rx_nr = sizeof(REM_VAL1) - 1;
+	recx[1].rx_nr = sizeof(REM_VAL1) - 1;
+	sgl.sg_nr = 2;
+	sgl.sg_nr_out = 0;
 
 	rc = vos_obj_update(arg->ctx.tc_co_hdl, oid, epoch++, 0,
 			    0, &dkey, 1, &iod, NULL, &sgl);
 	assert_rc_equal(rc, 0);
 
-	recx[0].rx_idx = 0;
-	recx[0].rx_nr = sizeof(REM_VAL1) + sizeof(REM_VAL2) +
-		sizeof(REM_VAL3) - 3;
-	iod.iod_nr = 1;
-	d_iov_set(&sg_iov[0], rbuf, sizeof(rbuf));
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey, 1, &iod,
-			   &sgl);
-	assert_rc_equal(rc, 0);
-	assert_memory_equal(rbuf, REM_VAL2, sizeof(REM_VAL2) - 1);
-	assert_memory_equal(rbuf + sizeof(REM_VAL2) - 1, REM_VAL1,
-			    sizeof(REM_VAL1) - 1);
-	assert_memory_equal(rbuf + sizeof(REM_VAL2) + sizeof(REM_VAL1) - 2,
-			    REM_VAL3, sizeof(REM_VAL3) - 1);
+	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
+		    FETCH_DATA, sizeof(REM_VAL2) - 1, REM_VAL2,
+		    FETCH_DATA, sizeof(REM_VAL1) - 1, REM_VAL1,
+		    FETCH_HOLE, sizeof(REM_VAL3) - 2,
+		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
 	/* Now remove the last update only */
 	recx[3].rx_idx = 0;
@@ -1496,15 +1566,19 @@ remove_test(void **state)
 				  &iod.iod_name, &recx[3]);
 	assert_rc_equal(rc, 0);
 
-	/* Now fetch again, should see old value */
-	rc = vos_obj_fetch(arg->ctx.tc_co_hdl, oid, epoch, 0, &dkey, 1, &iod,
-			   &sgl);
-	assert_rc_equal(rc, 0);
-	assert_memory_equal(rbuf, REM_VAL1, sizeof(REM_VAL1) - 1);
-	assert_memory_equal(rbuf + sizeof(REM_VAL1) - 1, REM_VAL2,
-			    sizeof(REM_VAL2) - 1);
-	assert_memory_equal(rbuf + sizeof(REM_VAL2) + sizeof(REM_VAL1) - 2,
-			    REM_VAL3, sizeof(REM_VAL3) - 1);
+	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
+		    FETCH_DATA, 1, &REM_VAL1[0], FETCH_HOLE,
+		    sizeof(REM_VAL1) + sizeof(REM_VAL2) + sizeof(REM_VAL3) - 5,
+		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
+
+	epr.epr_lo = 0;
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL, true);
+
+	/* Should get same result after aggregation */
+	check_array(arg, oid, &dkey, &iod.iod_name, epoch,
+		    FETCH_DATA, 1, &REM_VAL1[0], FETCH_HOLE,
+		    sizeof(REM_VAL1) + sizeof(REM_VAL2) + sizeof(REM_VAL3) - 5,
+		    FETCH_DATA, 1, &REM_VAL3[sizeof(REM_VAL3) - 2], FETCH_END);
 
 	start_epoch = epoch + 1;
 }
@@ -2302,7 +2376,7 @@ start_over:
 		if ((epoch - 200) < epr.epr_lo)
 			continue;
 		epr.epr_hi = epoch - 200;
-		rc = vos_aggregate(coh, &epr, NULL, NULL, NULL);
+		rc = vos_aggregate(coh, &epr, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, 0);
 	}
 	for (i = 0; i < NR_TX - 1; i++) {
@@ -2727,9 +2801,6 @@ run_pm_tests(const char *cfg)
 
 	rc = cmocka_run_group_tests_name(test_name, punch_model_tests_all,
 					 setup_io, teardown_io);
-
-	if (getenv("DAOS_IO_BYPASS"))
-		return rc;
 
 	dts_create_config(test_name, "VOS PMDK only Punch Model tests %s", cfg);
 

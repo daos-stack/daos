@@ -7,9 +7,11 @@
 package server
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common/proto"
@@ -43,7 +45,7 @@ func (ei *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeContro
 		info = fault.ShowResolutionFor(inErr)
 	}
 	return &ctlpb.NvmeControllerResult{
-		Pciaddr: pciAddr,
+		PciAddr: pciAddr,
 		State:   newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_NVME, info),
 	}
 }
@@ -79,19 +81,10 @@ func (ei *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeContro
 	cfg := ei.bdevConfig()
 	results = make(proto.NvmeControllerResults, 0, len(cfg.DeviceList))
 
-	// A config with SCM and no block devices is valid.
-	if len(cfg.DeviceList) == 0 {
-		return
-	}
-
 	ei.log.Infof("Instance %d: starting format of %s block devices %v",
 		engineIdx, cfg.Class, cfg.DeviceList)
 
-	res, err := p.Format(bdev.FormatRequest{
-		Class:      cfg.Class,
-		DeviceList: cfg.DeviceList,
-		MemSize:    cfg.MemSize,
-	})
+	res, err := p.Format(bdev.FormatRequestFromConfig(ei.log, &cfg))
 	if err != nil {
 		results = append(results, ei.newCret("", err))
 		return
@@ -114,7 +107,7 @@ func (ei *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeContro
 
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
 // writing.
-func (ei *EngineInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMountResult) {
+func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, reformat bool) (mResult *ctlpb.ScmMountResult) {
 	engineIdx := ei.Index()
 	needsScmFormat := reformat
 
@@ -129,10 +122,19 @@ func (ei *EngineInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMou
 		}
 	}()
 
-	if ei.isStarted() {
-		scmErr = errors.Errorf("instance %d: can't format storage of running instance",
-			engineIdx)
-		return
+	if ei.IsStarted() {
+		if !reformat {
+			scmErr = errors.Errorf("instance %d: can't format storage of running instance",
+				engineIdx)
+			return
+		}
+
+		ei.log.Infof("forcibly stopping instance %d prior to reformat", ei.Index())
+		if scmErr = ei.Stop(unix.SIGKILL); scmErr != nil {
+			return
+		}
+
+		ei.requestStart(ctx)
 	}
 
 	// If not reformatting, check if SCM is already formatted.
@@ -155,8 +157,6 @@ func (ei *EngineInstance) StorageFormatSCM(reformat bool) (mResult *ctlpb.ScmMou
 
 // StorageFormatNVMe performs format on NVMe if superblock needs writing.
 func (ei *EngineInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
-	ei.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName, ei.Index())
-
 	// If no superblock exists, format NVMe and populate response with results.
 	needsSuperblock, err := ei.NeedsSuperblock()
 	if err != nil {
@@ -166,6 +166,8 @@ func (ei *EngineInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResul
 	}
 
 	if needsSuperblock {
+		ei.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName,
+			ei.Index())
 		cResults = ei.bdevFormat(bdevProvider)
 	}
 

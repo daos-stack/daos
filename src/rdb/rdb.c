@@ -17,17 +17,26 @@
 #include "rdb_internal.h"
 #include "rdb_layout.h"
 
+static int rdb_start_internal(daos_handle_t pool, daos_handle_t mc,
+			      const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
+			      struct rdb **dbp);
+
 /**
- * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas.
+ * Create an RDB replica at \a path with \a uuid, \a size, and \a replicas, and
+ * start it with \a cbs and \a arg.
  *
  * \param[in]	path		replica path
  * \param[in]	uuid		database UUID
  * \param[in]	size		replica size in bytes
  * \param[in]	replicas	list of replica ranks
+ * \param[in]	cbs		callbacks (not copied)
+ * \param[in]	arg		argument for cbs
+ * \param[out]	dbp		database
  */
 int
 rdb_create(const char *path, const uuid_t uuid, size_t size,
-	   const d_rank_list_t *replicas)
+	   const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	   struct rdb **dbp)
 {
 	daos_handle_t	pool;
 	daos_handle_t	mc;
@@ -38,14 +47,16 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	D_DEBUG(DB_MD, DF_UUID": creating db %s with %u replicas\n",
 		DP_UUID(uuid), path, replicas == NULL ? 0 : replicas->rl_nr);
 
-	/* Create and open a VOS pool. */
-	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0);
+	/*
+	 * Create and open a VOS pool. RDB pools specify VOS_POF_SMALL for
+	 * basic system memory reservation and VOS_POF_EXCL for concurrent
+	 * access protection.
+	 */
+	rc = vos_pool_create(path, (unsigned char *)uuid, size, 0 /* nvme_sz */,
+			     VOS_POF_SMALL | VOS_POF_EXCL, &pool);
 	if (rc != 0)
 		goto out;
-	/* RDB pools specify small=true for basic system memory reservation */
-	rc = vos_pool_open(path, (unsigned char *)uuid, true, &pool);
-	if (rc != 0)
-		goto out_pool;
+	ABT_thread_yield();
 
 	/* Create and open the metadata container. */
 	rc = vos_cont_create(pool, (unsigned char *)uuid);
@@ -73,15 +84,19 @@ rdb_create(const char *path, const uuid_t uuid, size_t size,
 	 */
 	d_iov_set(&value, (void *)uuid, sizeof(uuid_t));
 	rc = rdb_mc_update(mc, RDB_MC_ATTRS, 1 /* n */, &rdb_mc_uuid, &value);
+	if (rc != 0)
+		goto out_mc_hdl;
+
+	rc = rdb_start_internal(pool, mc, uuid, cbs, arg, dbp);
 
 out_mc_hdl:
-	vos_cont_close(mc);
+	if (rc != 0)
+		vos_cont_close(mc);
 out_pool_hdl:
-	vos_pool_close(pool);
-out_pool:
 	if (rc != 0) {
 		int rc_tmp;
 
+		vos_pool_close(pool);
 		rc_tmp = vos_pool_destroy(path, (unsigned char *)uuid);
 		if (rc_tmp != 0)
 			D_ERROR(DF_UUID": failed to destroy %s: %d\n",
@@ -202,29 +217,20 @@ rdb_lookup(const uuid_t uuid)
 	return rdb_obj(entry);
 }
 
-/**
- * Start an RDB replica at \a path.
- *
- * \param[in]	path	replica path
- * \param[in]	uuid	database UUID
- * \param[in]	cbs	callbacks (not copied)
- * \param[in]	arg	argument for cbs
- * \param[out]	dbp	database
+/*
+ * If created successfully, the new DB handle will consume pool and mc, which
+ * the caller shall not close in this case.
  */
-int
-rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
-	  struct rdb **dbp)
+static int
+rdb_start_internal(daos_handle_t pool, daos_handle_t mc, const uuid_t uuid,
+		   struct rdb_cbs *cbs, void *arg, struct rdb **dbp)
 {
 	struct rdb	       *db;
-	d_iov_t			value;
-	uuid_t			uuid_persist;
-	uint32_t		version;
 	int			rc;
 	struct vos_pool_space	vps;
 	uint64_t		rdb_extra_sys[DAOS_MEDIA_MAX];
 
 	D_ASSERT(cbs->dc_stop != NULL);
-	D_INFO(DF_UUID": starting RDB %s\n", DP_UUID(uuid), path);
 
 	D_ALLOC_PTR(db);
 	if (db == NULL) {
@@ -238,6 +244,8 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	db->d_ref = 1;
 	db->d_cbs = cbs;
 	db->d_arg = arg;
+	db->d_pool = pool;
+	db->d_mc = mc;
 
 	rc = ABT_mutex_create(&db->d_mutex);
 	if (rc != ABT_SUCCESS) {
@@ -265,14 +273,6 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	if (rc != 0)
 		goto err_ref_cv;
 
-	/* RDB pools specify small=true for basic system memory reservation */
-	rc = vos_pool_open(path, (unsigned char *)uuid, true, &db->d_pool);
-	if (rc != 0) {
-		D_ERROR(DF_DB": failed to open %s: "DF_RC"\n", DP_DB(db), path,
-			DP_RC(rc));
-		goto err_kvss;
-	}
-
 	/* metadata vos pool management: reserved memory:
 	 * vos sets aside a portion of a pool for system activity:
 	 *   fragmentation overhead (e.g., 5%), aggregation, GC
@@ -283,7 +283,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to query vos pool space: "DF_RC"\n",
 			DP_DB(db), DP_RC(rc));
-		goto err_pool;
+		goto err_kvss;
 	}
 	rdb_extra_sys[DAOS_MEDIA_SCM] = 0;
 	rdb_extra_sys[DAOS_MEDIA_NVME] = 0;
@@ -295,7 +295,7 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 			D_ERROR(DF_DB": failed to reserve more vos pool SCM "
 				DF_U64" : "DF_RC"\n", DP_DB(db),
 				rdb_extra_sys[DAOS_MEDIA_SCM], DP_RC(rc));
-			goto err_pool;
+			goto err_kvss;
 		}
 	} else {
 		D_WARN(DF_DB": vos pool SCM not reserved for SLC: "
@@ -307,63 +307,9 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 		SCM_TOTAL(&vps), SCM_FREE(&vps), SCM_SYS(&vps),
 		rdb_extra_sys[DAOS_MEDIA_SCM]);
 
-	rc = vos_cont_open(db->d_pool, (unsigned char *)uuid, &db->d_mc);
-	if (rc != 0) {
-		D_ERROR(DF_DB": failed to open metadata container: "DF_RC"\n",
-			DP_DB(db), DP_RC(rc));
-		goto err_pool;
-	}
-
-	/* Check if this replica is fully initialized. See rdb_create(). */
-	d_iov_set(&value, uuid_persist, sizeof(uuid_t));
-	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_uuid, &value);
-	if (rc == -DER_NONEXIST) {
-		D_ERROR(DF_DB": not fully initialized\n", DP_DB(db));
-		rc = -DER_DF_INVAL;
-		goto err_mc;
-	} else if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up UUID: "DF_RC"\n", DP_DB(db),
-			DP_RC(rc));
-		goto err_mc;
-	}
-
-	/* Check if the layout version is compatible. */
-	d_iov_set(&value, &version, sizeof(version));
-	rc = rdb_mc_lookup(db->d_mc, RDB_MC_ATTRS, &rdb_mc_version, &value);
-	if (rc == -DER_NONEXIST) {
-		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
-				     NULL /* pool */, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     DF_DB": %s: incompatible layout version",
-				     DP_DB(db), path);
-		rc = -DER_DF_INCOMPT;
-		goto err_mc;
-	} else if (rc != 0) {
-		D_ERROR(DF_DB": failed to look up layout version: "DF_RC"\n",
-			DP_DB(db), DP_RC(rc));
-		goto err_mc;
-	}
-	if (version < RDB_LAYOUT_VERSION_LOW || version > RDB_LAYOUT_VERSION) {
-		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
-				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
-				     NULL /* pool */, NULL /* cont */,
-				     NULL /* objid */, NULL /* ctlop */,
-				     NULL /* data */,
-				     DF_DB": %s: incompatible layout version: "
-				     "%u not in [%u, %u]", DP_DB(db), path,
-				     version, RDB_LAYOUT_VERSION_LOW,
-				     RDB_LAYOUT_VERSION);
-		rc = -DER_DF_INCOMPT;
-		goto err_mc;
-	}
-
 	rc = rdb_raft_start(db);
 	if (rc != 0)
-		goto err_mc;
+		goto err_kvss;
 
 	ABT_mutex_lock(rdb_hash_lock);
 	rc = d_hash_rec_insert(&rdb_hash, db->d_uuid, sizeof(uuid_t),
@@ -376,16 +322,10 @@ rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
 	}
 
 	*dbp = db;
-	D_DEBUG(DB_MD, DF_DB": started db %s %p with %u replicas\n", DP_DB(db),
-		path, db, db->d_replicas == NULL ? 0 : db->d_replicas->rl_nr);
 	return 0;
 
 err_raft:
 	rdb_raft_stop(db);
-err_mc:
-	vos_cont_close(db->d_mc);
-err_pool:
-	vos_pool_close(db->d_pool);
 err_kvss:
 	rdb_kvs_cache_destroy(db->d_kvss);
 err_ref_cv:
@@ -396,6 +336,112 @@ err_mutex:
 	ABT_mutex_free(&db->d_mutex);
 err_db:
 	D_FREE(db);
+err:
+	return rc;
+}
+
+/**
+ * Start an RDB replica at \a path.
+ *
+ * \param[in]	path	replica path
+ * \param[in]	uuid	database UUID
+ * \param[in]	cbs	callbacks (not copied)
+ * \param[in]	arg	argument for cbs
+ * \param[out]	dbp	database
+ */
+int
+rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs, void *arg,
+	  struct rdb **dbp)
+{
+	daos_handle_t		pool;
+	daos_handle_t		mc;
+	d_iov_t			value;
+	uuid_t			uuid_persist;
+	uint32_t		version;
+	int			rc;
+
+	D_INFO(DF_UUID": starting RDB %s\n", DP_UUID(uuid), path);
+
+	/*
+	 * RDB pools specify VOS_POF_SMALL for basic system memory reservation
+	 * and VOS_POF_EXCL for concurrent access protection.
+	 */
+	rc = vos_pool_open(path, (unsigned char *)uuid,
+			   VOS_POF_SMALL | VOS_POF_EXCL, &pool);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to open %s: "DF_RC"\n", DP_UUID(uuid),
+			path, DP_RC(rc));
+		goto err;
+	}
+	ABT_thread_yield();
+
+	rc = vos_cont_open(pool, (unsigned char *)uuid, &mc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to open metadata container: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto err_pool;
+	}
+
+	/* Check if this replica is fully initialized. See rdb_create(). */
+	d_iov_set(&value, uuid_persist, sizeof(uuid_t));
+	rc = rdb_mc_lookup(mc, RDB_MC_ATTRS, &rdb_mc_uuid, &value);
+	if (rc == -DER_NONEXIST) {
+		D_ERROR(DF_UUID": not fully initialized\n", DP_UUID(uuid));
+		rc = -DER_DF_INVAL;
+		goto err_mc;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID": failed to look up UUID: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto err_mc;
+	}
+
+	/* Check if the layout version is compatible. */
+	d_iov_set(&value, &version, sizeof(version));
+	rc = rdb_mc_lookup(mc, RDB_MC_ATTRS, &rdb_mc_version, &value);
+	if (rc == -DER_NONEXIST) {
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     DF_UUID": %s: incompatible layout version",
+				     DP_UUID(uuid), path);
+		rc = -DER_DF_INCOMPT;
+		goto err_mc;
+	} else if (rc != 0) {
+		D_ERROR(DF_UUID": failed to look up layout version: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto err_mc;
+	}
+	if (version < RDB_LAYOUT_VERSION_LOW || version > RDB_LAYOUT_VERSION) {
+		ds_notify_ras_eventf(RAS_RDB_DF_INCOMPAT, RAS_TYPE_INFO,
+				     RAS_SEV_ERROR, NULL /* hwid */,
+				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* pool */, NULL /* cont */,
+				     NULL /* objid */, NULL /* ctlop */,
+				     NULL /* data */,
+				     DF_UUID": %s: incompatible layout version:"
+				     " %u not in [%u, %u]", DP_UUID(uuid), path,
+				     version, RDB_LAYOUT_VERSION_LOW,
+				     RDB_LAYOUT_VERSION);
+		rc = -DER_DF_INCOMPT;
+		goto err_mc;
+	}
+
+	rc = rdb_start_internal(pool, mc, uuid, cbs, arg, dbp);
+	if (rc != 0)
+		goto err_mc;
+
+	D_DEBUG(DB_MD, DF_DB": started db %s %p with %u replicas\n",
+		DP_DB(*dbp), path, *dbp,
+		(*dbp)->d_replicas == NULL ? 0 : (*dbp)->d_replicas->rl_nr);
+	return 0;
+
+err_mc:
+	vos_cont_close(mc);
+err_pool:
+	vos_pool_close(pool);
 err:
 	return rc;
 }
