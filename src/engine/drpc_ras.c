@@ -64,9 +64,9 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	}
 	strftime(zone, 6, "%z", tm);
 	/* NB: Timestamp should be in ISO8601 format. */
-	D_ASPRINTF(evt->timestamp, "%04d-%02d-%02dT%02d:%02d:%02d.%03ld%s",
+	D_ASPRINTF(evt->timestamp, "%04d-%02d-%02dT%02d:%02d:%02d.%06ld%s",
 		   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour,
-		   tm->tm_min, tm->tm_sec, (long)tv.tv_usec / 10000, zone);
+		   tm->tm_min, tm->tm_sec, tv.tv_usec, zone);
 	if (evt->timestamp == NULL) {
 		D_ERROR("failed to generate timestamp string\n");
 		D_GOTO(out, rc = -DER_NOMEM);

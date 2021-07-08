@@ -7,7 +7,7 @@ hosts:
     - server-C
     - server-D
     - server-E
-timeout: 600
+timeout: 300
 daos_server:
   pattern_timeout: 60
 server_config:
