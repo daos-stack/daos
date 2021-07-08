@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [centos.7, leap.15]
+        distro: [centos.7]
         compiler: [gcc, clang]
     steps:
     - name: Checkout code
