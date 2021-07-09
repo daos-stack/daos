@@ -8,7 +8,6 @@ package control
 
 import (
 	"context"
-	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -278,6 +277,19 @@ func TestControl_PoolCreate(t *testing.T) {
 			req:    &PoolCreateReq{},
 			expErr: errors.New("0 SCM"),
 		},
+		"bad label": {
+			req: &PoolCreateReq{
+				TotalBytes: 10,
+				Properties: []*PoolProperty{
+					{
+						Name:   "label",
+						Number: drpc.PoolPropertyLabel,
+						Value:  PoolPropertyValue{"yikes!"},
+					},
+				},
+			},
+			expErr: errors.New("invalid label"),
+		},
 		"create -DER_TIMEDOUT is retried": {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
@@ -309,6 +321,30 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{},
 		},
 		"success": {
+			req: &PoolCreateReq{
+				TotalBytes: 10,
+				Properties: []*PoolProperty{
+					{
+						Name:   "label",
+						Number: drpc.PoolPropertyLabel,
+						Value:  PoolPropertyValue{"foo"},
+					},
+				},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolCreateResp{
+						SvcReps:  []uint32{0, 1, 2},
+						TgtRanks: []uint32{0, 1, 2},
+					},
+				),
+			},
+			expResp: &PoolCreateResp{
+				SvcReps:  []uint32{0, 1, 2},
+				TgtRanks: []uint32{0, 1, 2},
+			},
+		},
+		"success no props": {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
@@ -465,23 +501,27 @@ func TestControl_PoolQuery(t *testing.T) {
 	}
 }
 
+func propWithVal(key, val string) *PoolProperty {
+	hdlr := PoolProperties()[key]
+	prop := hdlr.GetProperty(key)
+	if val != "" {
+		if err := prop.SetValue(val); err != nil {
+			panic(err)
+		}
+	}
+	return prop
+}
+
 func TestPoolSetProp(t *testing.T) {
-	const (
-		testPropName          = "test-prop"
-		testPropValStr        = "test-val"
-		testPropValNum uint64 = 42
-	)
 	defaultReq := &PoolSetPropReq{
-		UUID:     common.MockUUID(),
-		Property: testPropName,
-		Value:    testPropValStr,
+		UUID:       common.MockUUID(),
+		Properties: []*PoolProperty{propWithVal("label", "foo")},
 	}
 
 	for name, tc := range map[string]struct {
-		mic     *MockInvokerConfig
-		req     *PoolSetPropReq
-		expResp *PoolSetPropResp
-		expErr  error
+		mic    *MockInvokerConfig
+		req    *PoolSetPropReq
+		expErr error
 	}{
 		"local failure": {
 			mic: &MockInvokerConfig{
@@ -501,96 +541,41 @@ func TestPoolSetProp(t *testing.T) {
 			},
 			expErr: errors.New("invalid UUID"),
 		},
-		"empty request property": {
+		"empty request properties": {
 			req: &PoolSetPropReq{
-				UUID:     common.MockUUID(),
-				Property: "",
+				UUID: common.MockUUID(),
 			},
-			expErr: errors.New("invalid property name"),
+			expErr: errors.New("empty properties list"),
 		},
-		"invalid request value": {
+		"unknown property": {
 			req: &PoolSetPropReq{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-			},
-			expErr: errors.New("unhandled property value"),
-		},
-		"wrong response message": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil, &MockMessage{}),
-			},
-			expErr: errors.New("unable to extract"),
-		},
-		"invalid response property": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolSetPropResp{
-						Property: nil,
-						Value:    nil,
+				UUID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					{
+						Name: "fido",
 					},
-				),
+				},
 			},
-			expErr: errors.New("unable to represent response value"),
+			expErr: errors.New("unknown property"),
 		},
-		"invalid response value": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolSetPropResp{
-						Property: &mgmtpb.PoolSetPropResp_Name{
-							Name: testPropName,
-						},
-						Value: nil,
-					},
-				),
-			},
-			expErr: errors.New("unable to represent response value"),
-		},
-		"successful string property": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolSetPropResp{
-						Property: &mgmtpb.PoolSetPropResp_Name{
-							Name: testPropName,
-						},
-						Value: &mgmtpb.PoolSetPropResp_Strval{
-							Strval: testPropValStr,
-						},
-					},
-				),
-			},
+		"bad property": {
 			req: &PoolSetPropReq{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-				Value:    testPropValStr,
-			},
-			expResp: &PoolSetPropResp{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-				Value:    testPropValStr,
-			},
-		},
-		"successful numeric property": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolSetPropResp{
-						Property: &mgmtpb.PoolSetPropResp_Name{
-							Name: testPropName,
-						},
-						Value: &mgmtpb.PoolSetPropResp_Numval{
-							Numval: testPropValNum,
-						},
+				UUID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					{
+						Name: "label",
 					},
-				),
+				},
 			},
+			expErr: errors.New("invalid label"),
+		},
+		"success": {
 			req: &PoolSetPropReq{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-				Value:    testPropValNum,
-			},
-			expResp: &PoolSetPropResp{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-				Value:    strconv.FormatUint(testPropValNum, 10),
+				UUID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", "ok"),
+					propWithVal("space_rb", "5"),
+				},
 			},
 		},
 	} {
@@ -610,14 +595,211 @@ func TestPoolSetProp(t *testing.T) {
 			ctx := context.TODO()
 			mi := NewMockInvoker(log, mic)
 
-			gotResp, gotErr := PoolSetProp(ctx, mi, req)
+			gotErr := PoolSetProp(ctx, mi, req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
+func TestPoolGetProp(t *testing.T) {
+	defaultReq := &PoolGetPropReq{
+		UUID:       common.MockUUID(),
+		Properties: []*PoolProperty{propWithVal("label", "")},
+	}
+
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolGetPropReq
+		expResp []*PoolProperty
+		expErr  error
+	}{
+		"local failure": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"invalid UUID": {
+			req: &PoolGetPropReq{
+				UUID: "bad",
+			},
+			expErr: errors.New("invalid UUID"),
+		},
+		"nil prop in request": {
+			req: &PoolGetPropReq{
+				UUID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", ""),
+					nil,
+					propWithVal("space_rb", ""),
+				},
+			},
+			expErr: errors.New("nil prop"),
+		},
+		"duplicate props in response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				UUID: common.MockUUID(),
+			},
+			expErr: errors.New("got > 1"),
+		},
+		"missing prop in response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				UUID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", ""),
+					propWithVal("space_rb", ""),
+				},
+			},
+			expErr: errors.New("unable to find prop"),
+		},
+		"nil prop value in response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  nil,
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				UUID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", ""),
+				},
+			},
+			expErr: errors.New("unable to represent"),
+		},
+		"all props requested": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+						{
+							Number: propWithVal("space_rb", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{42},
+						},
+						{
+							Number: propWithVal("reclaim", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
+						},
+						{
+							Number: propWithVal("self_heal", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSelfHealingAutoExclude},
+						},
+						{
+							Number: propWithVal("ec_cell_sz", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1024},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				UUID: common.MockUUID(),
+			},
+			expResp: []*PoolProperty{
+				propWithVal("ec_cell_sz", "1024"),
+				propWithVal("label", "foo"),
+				propWithVal("reclaim", "disabled"),
+				propWithVal("self_heal", "exclude"),
+				propWithVal("space_rb", "42"),
+			},
+		},
+		"specific props requested": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+						{
+							Number: propWithVal("space_rb", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{42},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				UUID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", ""),
+					propWithVal("space_rb", ""),
+				},
+			},
+			expResp: []*PoolProperty{
+				propWithVal("label", "foo"),
+				propWithVal("space_rb", "42"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			req := tc.req
+			if req == nil {
+				req = defaultReq
+			}
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotResp, gotErr := PoolGetProp(ctx, mi, req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
-				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(PoolProperty{}),
+				cmp.Comparer(func(a, b PoolPropertyValue) bool {
+					return a.String() == b.String()
+				}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

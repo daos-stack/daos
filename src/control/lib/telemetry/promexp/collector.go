@@ -358,6 +358,8 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 		switch rm.m.Type() {
 		case telemetry.MetricTypeGauge:
 			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
+		case telemetry.MetricTypeStatsGauge:
+			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
 			for _, ms := range getMetricStats(baseName, desc, rm.m) {
 				gauges.add(ms.name, ms.desc, ms.value, labels)
 			}
