@@ -7,6 +7,7 @@
 from ior_test_base import IorTestBase
 
 class IorHard(IorTestBase):
+    # pylint: disable=too-many-ancestors
     # pylint: disable=too-few-public-methods
     """Test class Description: Runs IOR Hard with different
                                EC OBject types.
