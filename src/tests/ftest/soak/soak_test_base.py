@@ -527,8 +527,7 @@ class SoakTestBase(TestWithServers):
             reserved_file_copy(self, initial_resv_file, self.pool[0], resv_cont,
                                num_bytes=500000000, cmd="write")
         except CommandFailure as error:
-            raise SoakTestError(
-                "<<FAILED: Soak reserved container write failed>>") from error
+            self.fail(error)
 
         # Create pool for jobs
         if single_test_pool:
@@ -618,8 +617,8 @@ class SoakTestBase(TestWithServers):
         try:
             reserved_file_copy(self, final_resv_file, self.pool[0], resv_cont)
         except CommandFailure as error:
-            raise SoakTestError(
-                "<<FAILED: Soak reserved container read failed>>") from error
+            self.soak_errors.append(
+                "<<FAILED: Soak reserved container read failed>>")
 
         if not cmp(initial_resv_file, final_resv_file):
             self.soak_errors.append("Data verification error on reserved pool"
