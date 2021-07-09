@@ -1247,7 +1247,8 @@ def create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valgr
 
     rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
 
-    if rc.returncode == 1 and rc.json['error'] == 'DER_EXIST(-1004): Entity already exists':
+    if rc.returncode == 1 and \
+       rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
         destroy_container(conf, pool, label)
         rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
 
@@ -1609,9 +1610,15 @@ class posix_tests():
         fname = os.path.join(self.dfuse.dir, 'file')
         ofd = open(fname, 'w')
         ofd.close()
+
+        check_fstat = True
+        if self.dfuse.caching:
+            check_fstat = False
+
         rc = il_cmd(self.dfuse,
                     ['cat', fname],
-                    check_write=False)
+                    check_write=False,
+                    check_fstat=check_fstat)
         assert rc.returncode == 0
 
     @needs_dfuse
