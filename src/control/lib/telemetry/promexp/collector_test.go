@@ -188,7 +188,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 			for {
 				done := false
 				select {
-				case <-time.After(50 * time.Millisecond):
+				case <-time.After(500 * time.Millisecond):
 					done = true
 				case m := <-tc.resultChan:
 					gotMetrics = append(gotMetrics, m)
@@ -350,6 +350,10 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				"engine_timer_stamp",
 				"engine_timer_snapshot",
 				"engine_timer_duration",
+				"engine_timer_duration_min",
+				"engine_timer_duration_max",
+				"engine_timer_duration_mean",
+				"engine_timer_duration_stddev",
 			},
 		},
 		"ignore some metrics": {
@@ -365,17 +369,13 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 			go tc.collector.Collect(tc.resultChan)
 
 			gotMetrics := []prometheus.Metric{}
-			for {
-				done := false
+			done := false
+			for !done {
 				select {
-				case <-time.After(50 * time.Millisecond):
+				case <-time.After(500 * time.Millisecond):
 					done = true
 				case m := <-tc.resultChan:
 					gotMetrics = append(gotMetrics, m)
-				}
-
-				if done {
-					break
 				}
 			}
 
@@ -416,47 +416,39 @@ func TestPromExp_extractLabels(t *testing.T) {
 			input:   "ID: 2_stat",
 			expName: "stat",
 		},
-		"io target": {
-			input:   "io_3_latency",
-			expName: "io_latency",
-			expLabels: labelMap{
-				"target": "3",
-			},
-		},
 		"io latency B": {
-			input:   "io_fetch_latency_16B",
-			expName: "io_fetch_latency",
+			input:   "io_latency_fetch_16B",
+			expName: "io_latency_fetch",
 			expLabels: labelMap{
 				"size": "16B",
 			},
 		},
 		"io latency KB": {
-			input:   "io_update_latency_128KB",
-			expName: "io_update_latency",
+			input:   "io_latency_update_128KB",
+			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "128KB",
 			},
 		},
 		"io latency MB": {
-			input:   "io_fetch_latency_256MB",
-			expName: "io_fetch_latency",
+			input:   "io_latency_update_256MB",
+			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "256MB",
 			},
 		},
 		"io latency >size": {
-			input:   "io_update_latency_GT4MB",
-			expName: "io_update_latency",
+			input:   "io_latency_update_GT4MB",
+			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "GT4MB",
 			},
 		},
-		"net rank and context": {
-			input:   "net_15_128_stat",
+		"net rank": {
+			input:   "net_15_stat",
 			expName: "net_stat",
 			expLabels: labelMap{
-				"rank":    "15",
-				"context": "128",
+				"rank": "15",
 			},
 		},
 		"pool current UUID": {
@@ -464,6 +456,20 @@ func TestPromExp_extractLabels(t *testing.T) {
 			expName: "pool_info",
 			expLabels: labelMap{
 				"pool": "11111111-2222-3333-4444-555555555555",
+			},
+		},
+		"target": {
+			input:   "io_update_latency_tgt_1",
+			expName: "io_update_latency",
+			expLabels: labelMap{
+				"target": "1",
+			},
+		},
+		"context": {
+			input:   "failed_addr_ctx_1",
+			expName: "failed_addr",
+			expLabels: labelMap{
+				"context": "1",
 			},
 		},
 	} {
