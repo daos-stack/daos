@@ -91,7 +91,7 @@ bio_spdk_env_init(void)
 	 * and DPDK will fail to initialize.
 	 */
 
-	if (nvme_glb.bd_shm_id == DAOS_NVME_SHMID_NONE)
+	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 		opts.shm_id = nvme_glb.bd_shm_id;
 
 	/*
