@@ -24,7 +24,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_CONT_VERSION 3
+#define DAOS_CONT_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -37,9 +37,6 @@
 		ds_cont_op_handler, NULL),				\
 	X(CONT_OPEN,							\
 		0, &CQF_cont_open,					\
-		ds_cont_op_handler, NULL),				\
-	X(CONT_OPEN_BYLABEL,						\
-		0, &CQF_cont_open_bylabel,				\
 		ds_cont_op_handler, NULL),				\
 	X(CONT_CLOSE,							\
 		0, &CQF_cont_close,					\
@@ -82,6 +79,12 @@
 		ds_cont_op_handler, NULL),				\
 	X(CONT_ACL_DELETE,						\
 		0, &CQF_cont_acl_delete,				\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_OPEN_BYLABEL,						\
+		0, &CQF_cont_open_bylabel,				\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_DESTROY_BYLABEL,						\
+		0, &CQF_cont_destroy_bylabel,				\
 		ds_cont_op_handler, NULL)
 
 #define CONT_PROTO_SRV_RPC_LIST						\
@@ -154,6 +157,19 @@ CRT_RPC_DECLARE(cont_create, DAOS_ISEQ_CONT_CREATE, DAOS_OSEQ_CONT_CREATE)
 	((struct cont_op_out)	(cdo_op)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
+
+/* Container destroy bylabel input
+ * Must begin with what DAOS_ISEQ_CONT_DESTROY has, for reusing cont_destroy_in
+ * in the common code. cdi_op.ci_uuid is ignored.
+ */
+#define DAOS_ISEQ_CONT_DESTROY_BYLABEL	/* input fields */	 \
+	DAOS_ISEQ_CONT_DESTROY					 \
+	((uint32_t)		(cdli_pad32)		CRT_VAR) \
+	((d_const_string_t)	(cdli_label)		CRT_VAR)
+
+/* Container destroy bylabel output same as destroy by uuid. */
+CRT_RPC_DECLARE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL,
+		DAOS_OSEQ_CONT_DESTROY)
 
 #define DAOS_ISEQ_CONT_OPEN	/* input fields */		 \
 	((struct cont_op_in)	(coi_op)		CRT_VAR) \

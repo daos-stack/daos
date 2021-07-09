@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"unsafe"
@@ -20,22 +21,23 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
+	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
 /*
-#include <daos.h>
-
-#include "daos_hdlr.h"
+#include "util.h"
 */
 import "C"
 
 type PoolID struct {
-	labelOrUUIDFlag
+	ui.LabelOrUUIDFlag
 }
 
 type poolBaseCmd struct {
 	daosCmd
-	poolUUID uuid.UUID
+	poolUUID  uuid.UUID
+	poolLabel *C.char
 
 	cPoolHandle C.daos_handle_t
 
@@ -47,6 +49,10 @@ type poolBaseCmd struct {
 }
 
 func (cmd *poolBaseCmd) poolUUIDPtr() *C.uchar {
+	if cmd.poolUUID == uuid.Nil {
+		cmd.log.Errorf("poolUUIDPtr(): nil UUID")
+		return nil
+	}
 	return (*C.uchar)(unsafe.Pointer(&cmd.poolUUID[0]))
 }
 
@@ -57,30 +63,41 @@ func (cmd *poolBaseCmd) PoolID() PoolID {
 	return cmd.Args.Pool
 }
 
-func (cmd *poolBaseCmd) resolvePool(id PoolID) error {
-	// TODO: Resolve label.
-	if id.HasLabel() {
-		return errors.New("no support for pool labels yet")
-	}
-
-	if !id.HasUUID() {
-		return errors.New("no pool UUID provided")
-	}
-	cmd.poolUUID = id.UUID
-
-	return nil
-}
-
 func (cmd *poolBaseCmd) connectPool() error {
 	sysName := cmd.SysName
 	if sysName == "" {
 		sysName = build.DefaultSystemName
 	}
-
 	cSysName := C.CString(sysName)
 	defer freeString(cSysName)
-	rc := C.daos_pool_connect(cmd.poolUUIDPtr(), cSysName,
-		C.DAOS_PC_RW, &cmd.cPoolHandle, nil, nil)
+
+	var rc C.int
+	switch {
+	case cmd.PoolID().HasLabel():
+		var poolInfo C.daos_pool_info_t
+		cLabel := C.CString(cmd.PoolID().Label)
+		defer freeString(cLabel)
+
+		cmd.log.Debugf("connecting to pool: %s", cmd.PoolID().Label)
+		rc = C.daos_pool_connect_by_label(cLabel, cSysName,
+			C.DAOS_PC_RW, &cmd.cPoolHandle, &poolInfo, nil)
+		if rc == 0 {
+			var err error
+			cmd.poolUUID, err = uuidFromC(poolInfo.pi_uuid)
+			if err != nil {
+				cmd.disconnectPool()
+				return err
+			}
+		}
+	case cmd.PoolID().HasUUID():
+		cmd.poolUUID = cmd.PoolID().UUID
+		cmd.log.Debugf("connecting to pool: %s", cmd.poolUUID)
+		rc = C.daos_pool_connect(cmd.poolUUIDPtr(), cSysName,
+			C.DAOS_PC_RW, &cmd.cPoolHandle, nil, nil)
+	default:
+		return errors.New("no pool UUID or label supplied")
+	}
+
 	return daosError(rc)
 }
 
@@ -100,13 +117,6 @@ func (cmd *poolBaseCmd) disconnectPool() {
 }
 
 func (cmd *poolBaseCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (func(), error) {
-	if cmd.poolUUID == uuid.Nil {
-		if err := cmd.resolvePool(cmd.PoolID()); err != nil {
-			return nil, errors.Wrapf(err,
-				"failed to resolve pool ID %q", cmd.PoolID())
-		}
-	}
-
 	if err := cmd.connectPool(); err != nil {
 		return nil, errors.Wrapf(err,
 			"failed to connect to pool %s", cmd.PoolID())
@@ -129,12 +139,12 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 }
 
 type poolCmd struct {
-	ListContainers poolContainersListCmd `command:"list-containers" alias:"list-cont" alias:"ls" description:"container operations for the specified pool"`
+	ListContainers poolContainersListCmd `command:"list-containers" alias:"list-cont" alias:"ls" description:"list all containers in pool"`
 	Query          poolQueryCmd          `command:"query" description:"query pool info"`
-	ListAttrs      poolListAttrsCmd      `command:"list-attributes" alias:"list-attrs" description:"list pool attributes"`
-	GetAttr        poolGetAttrCmd        `command:"get-attribute" alias:"get-attr" description:"get pool attribute"`
-	SetAttr        poolSetAttrCmd        `command:"set-attribute" alias:"set-attr" description:"set pool attribute"`
-	DelAttr        poolDelAttrCmd        `command:"delete-attribute" alias:"del-attr" description:"delete pool attribute"`
+	ListAttrs      poolListAttrsCmd      `command:"list-attributes" alias:"list-attrs" description:"list pool user-defined attributes"`
+	GetAttr        poolGetAttrCmd        `command:"get-attribute" alias:"get-attr" description:"get pool user-defined attribute"`
+	SetAttr        poolSetAttrCmd        `command:"set-attribute" alias:"set-attr" description:"set pool user-defined attribute"`
+	DelAttr        poolDelAttrCmd        `command:"delete-attribute" alias:"del-attr" description:"delete pool user-defined attribute"`
 	AutoTest       poolAutoTestCmd       `command:"autotest" description:"verify setup with smoke tests"`
 }
 
@@ -181,13 +191,29 @@ func poolListContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 	for i := range out {
 		out[i] = new(ContainerID)
 		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
-		// FIXME: The label should be returned as part of
-		// the list payload. The alternative is to open each
-		// container sequentially in order to query the label
-		// property, which would be terrible for performance.
+		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
 	}
 
 	return out, nil
+}
+
+func printContainerList(out io.Writer, contIDs []*ContainerID) {
+	uuidTitle := "UUID"
+	labelTitle := "Label"
+	titles := []string{uuidTitle, labelTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, id := range contIDs {
+		table = append(table,
+			txtfmt.TableRow{
+				uuidTitle:  id.UUID.String(),
+				labelTitle: id.Label,
+			})
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
 }
 
 func (cmd *poolContainersListCmd) Execute(_ []string) error {
@@ -207,13 +233,9 @@ func (cmd *poolContainersListCmd) Execute(_ []string) error {
 		return cmd.outputJSON(contIDs, nil)
 	}
 
-	for _, id := range contIDs {
-		if id.HasLabel() {
-			cmd.log.Info(id.Label)
-			continue
-		}
-		cmd.log.Infof("%s", id.UUID)
-	}
+	var bld strings.Builder
+	printContainerList(&bld, contIDs)
+	cmd.log.Info(bld.String())
 
 	return nil
 }

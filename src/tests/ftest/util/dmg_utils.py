@@ -6,7 +6,6 @@
 """
 # pylint: disable=too-many-lines
 
-from getpass import getuser
 from grp import getgrgid
 from pwd import getpwuid
 import re
@@ -249,7 +248,8 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, reformat=False, timeout=30, verbose=False):
+    def storage_format(self, reformat=False, timeout=30, verbose=False,
+                       force=False):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -261,6 +261,9 @@ class DmgCommand(DmgCommandBase):
                 times out.
             verbose (bool): show results of each SCM & NVMe device format
                 operation.
+            force (bool, optional): force storage format on a host, stopping any
+                running engines (CAUTION: destructive operation). Defaults to
+                False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -273,7 +276,8 @@ class DmgCommand(DmgCommandBase):
         saved_timeout = self.timeout
         self.timeout = timeout
         self._get_result(
-            ("storage", "format"), reformat=reformat, verbose=verbose)
+            ("storage", "format"), reformat=reformat, verbose=verbose,
+            force=force)
         self.timeout = saved_timeout
         return self.result
 
@@ -378,7 +382,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("storage", "scan"), nvme_health=True)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
-                    target_list=None, svcn=None, acl_file=None):
+                    target_list=None, svcn=None, acl_file=None, size=None,
+                    scm_ratio=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -395,6 +400,10 @@ class DmgCommand(DmgCommandBase):
             svcn (str, optional): Number of pool service replicas. Defaults to
                 None, in which case the default value is set by the server.
             acl_file (str, optional): ACL file. Defaults to None.
+            size (str, optional): NVMe pool size to create with scm_ratio.
+                Defaults to None.
+            scm_ratio (str, optional): SCM pool size to create as a ratio of
+                size. Defaults to None.
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -408,6 +417,8 @@ class DmgCommand(DmgCommandBase):
         kwargs = {
             "user": getpwuid(uid).pw_name if isinstance(uid, int) else uid,
             "group": getgrgid(gid).gr_name if isinstance(gid, int) else gid,
+            "size": size,
+            "scm_ratio": scm_ratio,
             "scm_size": scm_size,
             "nvme_size": nvme_size,
             "nsvc": svcn,
@@ -596,7 +607,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         # Sample JSON Output:
-        #{
+        # {
         #    "response": {
         #        "status": 0,
         #        "pools": [
@@ -624,11 +635,11 @@ class DmgCommand(DmgCommandBase):
         #    },
         #    "error": null,
         #    "status": 0
-        #}
+        # }
         output = self._get_json_result(("pool", "list"))
 
         data = {}
-        if output["response"] is None:
+        if output["response"] is None or output["response"]["pools"] is None:
             return data
 
         for pool in output["response"]["pools"]:
@@ -820,6 +831,18 @@ class DmgCommand(DmgCommandBase):
         #   "status": 0
         # }
         return self._get_json_result(("system", "leader-query"))
+
+    def system_erase(self):
+        """Erase system metadata prior to reformat.
+
+        Raises:
+            CommandFailure: if the dmg system erase command fails.
+
+        Returns:
+            dict: dictionary of output in JSON format.
+
+        """
+        return self._get_json_result(("system", "erase"))
 
     def system_start(self, ranks=None):
         """Start the system.

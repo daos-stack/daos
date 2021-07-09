@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -35,9 +36,10 @@ type (
 	}
 
 	EngineSource struct {
-		ctx   context.Context
-		Index uint32
-		Rank  uint32
+		ctx     context.Context
+		Index   uint32
+		Rank    uint32
+		enabled atm.Bool
 	}
 
 	labelMap map[string]string
@@ -54,9 +56,10 @@ func NewEngineSource(parent context.Context, idx uint32, rank uint32) (*EngineSo
 	}
 
 	return &EngineSource{
-		ctx:   ctx,
-		Index: idx,
-		Rank:  rank,
+		ctx:     ctx,
+		Index:   idx,
+		Rank:    rank,
+		enabled: atm.NewBool(true),
 	}, cleanupFn, nil
 }
 
@@ -131,7 +134,7 @@ func parseNameSubstr(labels labelMap, name string, matchRE string, replacement s
 	return name
 }
 
-func fixPath(in string) (labels labelMap, name string) {
+func extractLabels(in string) (labels labelMap, name string) {
 	name = sanitizeMetricName(in)
 
 	labels = make(labelMap)
@@ -144,6 +147,11 @@ func fixPath(in string) (labels labelMap, name string) {
 	name = parseNameSubstr(labels, name, `io_+(\d+)_?`, "io",
 		func(labels labelMap, matches []string) {
 			labels["target"] = matches[1]
+		})
+
+	name = parseNameSubstr(labels, name, `_latency_+((?:GT)?[0-9]+[A-Z]?B)`, "_latency",
+		func(labels labelMap, matches []string) {
+			labels["size"] = matches[1]
 		})
 
 	name = parseNameSubstr(labels, name, `net_+(\d+)_+(\d+)_?`, "net",
@@ -166,20 +174,45 @@ func fixPath(in string) (labels labelMap, name string) {
 }
 
 func (es *EngineSource) Collect(log logging.Logger, ch chan<- *rankMetric) {
+	if es == nil {
+		log.Error("nil engine source")
+		return
+	}
+	if ch == nil {
+		log.Error("nil channel")
+		return
+	}
 	metrics := make(chan telemetry.Metric)
 	go func() {
-		if err := telemetry.CollectMetrics(es.ctx, "", metrics); err != nil {
+		if err := telemetry.CollectMetrics(es.ctx, metrics); err != nil {
 			log.Errorf("failed to collect metrics for engine rank %d: %s", es.Rank, err)
 			return
 		}
 	}()
 
 	for metric := range metrics {
-		ch <- &rankMetric{
-			r: es.Rank,
-			m: metric,
+		if es.IsEnabled() {
+			ch <- &rankMetric{
+				r: es.Rank,
+				m: metric,
+			}
 		}
 	}
+}
+
+// IsEnabled checks if the engine source is enabled.
+func (es *EngineSource) IsEnabled() bool {
+	return es.enabled.IsTrue()
+}
+
+// Enable enables the engine source.
+func (es *EngineSource) Enable() {
+	es.enabled.SetTrue()
+}
+
+// Disable disables the engine source.
+func (es *EngineSource) Disable() {
+	es.enabled.SetFalse()
 }
 
 type rankMetric struct {
@@ -287,6 +320,14 @@ func getMetricStats(baseName, desc string, m telemetry.Metric) (stats []*metricS
 }
 
 func (c *Collector) Collect(ch chan<- prometheus.Metric) {
+	if c == nil {
+		return
+	}
+	if ch == nil {
+		c.log.Error("passed a nil channel")
+		return
+	}
+
 	rankMetrics := make(chan *rankMetric)
 	go func(sources []*EngineSource) {
 		for _, source := range c.sources {
@@ -299,34 +340,36 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	counters := make(cvMap)
 
 	for rm := range rankMetrics {
-		labels, path := fixPath(rm.m.Path())
+		labels, path := extractLabels(rm.m.Path())
 		labels["rank"] = fmt.Sprintf("%d", rm.r)
 
-		name := sanitizeMetricName(rm.m.Name())
+		nameLabels, name := extractLabels(rm.m.Name())
+		for k, v := range nameLabels {
+			labels[k] = v
+		}
 
 		baseName := prometheus.BuildFQName("engine", path, name)
 		desc := rm.m.Desc()
 
+		if c.isIgnored(baseName) {
+			continue
+		}
+
 		switch rm.m.Type() {
 		case telemetry.MetricTypeGauge:
-			if c.isIgnored(baseName) {
-				continue
-			}
-
+			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
+		case telemetry.MetricTypeStatsGauge:
 			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
 			for _, ms := range getMetricStats(baseName, desc, rm.m) {
 				gauges.add(ms.name, ms.desc, ms.value, labels)
 			}
 		case telemetry.MetricTypeCounter:
-			if c.isIgnored(baseName) {
-				break
-			}
-
 			counters.add(baseName, desc, rm.m.FloatValue(), labels)
 		case telemetry.MetricTypeTimestamp:
-			if c.isIgnored(baseName) {
-				break
-			}
+			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
+		case telemetry.MetricTypeSnapshot:
+			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
+		case telemetry.MetricTypeDuration:
 			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
 		default:
 			c.log.Errorf("[%s]: metric type %d not supported", name, rm.m.Type())
