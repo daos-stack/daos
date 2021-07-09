@@ -123,15 +123,15 @@ write_completion_file(void)
 	sprintf(pid, "%d", _pid);
 
 	dir = getenv("DAOS_TEST_SHARED_DIR");
+	D_ASSERTF(dir != NULL,
+        "DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
+        "option.\n");
 	tmp_str = strcat(dir, "/test-servers-completed.txt.");
 	completion_file = strcat(tmp_str, pid);
 
+	unlink(completion_file);
 	fptr = fopen(completion_file, "w");
-	DBG_PRINT("Opened completion file to write: %s.\n", completion_file);
-	if (fptr == NULL) {
-		D_ERROR("Error opening completion file for writing.\n");
-		return;
-	}
+	D_ASSERTF(fptr != NULL, "Error opening completion file for writing.\n");
 	DBG_PRINT("Wrote completion file: %s.\n", completion_file);
 	fclose(fptr);
 }
