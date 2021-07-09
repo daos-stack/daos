@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"runtime/debug"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -201,6 +202,10 @@ or query/manage an object inside a container.`
 		exitWithError(log, err)
 	}
 	defer debugFini()
+
+	// Set the traceback level such that a crash results in
+	// a coredump (when ulimit -c is set appropriately).
+	debug.SetTraceback("crash")
 
 	_, err = p.ParseArgs(args)
 	if opts.JSON && wroteJSON.IsFalse() {

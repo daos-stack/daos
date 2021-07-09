@@ -109,6 +109,10 @@ func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 			Name: "simple/gauge1",
 			Cur:  1,
 		},
+		telemetry.MetricTypeStatsGauge: &telemetry.TestMetric{
+			Name: "stats/gauge2",
+			Cur:  100.5,
+		},
 		telemetry.MetricTypeTimestamp: &telemetry.TestMetric{
 			Name: "timer/stamp",
 		},
@@ -311,6 +315,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	ignores := []string{
 		"engine_simple_counter1",
 		"engine_simple_gauge1",
+		"engine_stats_gauge2",
 		"engine_timer_duration",
 	}
 	ignoreCollector, err := NewCollector(log, &CollectorOpts{
@@ -337,10 +342,11 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 			expMetricNames: []string{
 				"engine_simple_counter1",
 				"engine_simple_gauge1",
-				"engine_simple_gauge1_min",
-				"engine_simple_gauge1_max",
-				"engine_simple_gauge1_mean",
-				"engine_simple_gauge1_stddev",
+				"engine_stats_gauge2",
+				"engine_stats_gauge2_min",
+				"engine_stats_gauge2_max",
+				"engine_stats_gauge2_mean",
+				"engine_stats_gauge2_stddev",
 				"engine_timer_stamp",
 				"engine_timer_snapshot",
 				"engine_timer_duration",

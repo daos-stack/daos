@@ -83,6 +83,7 @@ bio_spdk_env_init(void)
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";
+
 	/*
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size
 	 * Currently we can't guarantee clean shutdown (no hugepages leaked).
@@ -93,8 +94,16 @@ bio_spdk_env_init(void)
 	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 		opts.shm_id = nvme_glb.bd_shm_id;
 
-	/* quiet DPDK logging by setting level to ERROR */
-	opts.env_context = "--log-level=lib.eal:4";
+	/*
+	 * TODO: Find a way to set multiple overrides, currently only single
+	 * option can be overridden with opts.env_context.
+	 */
+
+	/*
+	 * Quiet DPDK logging by setting level to ERROR
+	 *  opts.env_context = "--log-level=lib.eal:4";
+	 */
+	opts.env_context = "--no-telemetry";
 
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {
