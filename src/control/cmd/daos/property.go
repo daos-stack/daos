@@ -19,7 +19,9 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
 /*
@@ -74,6 +76,9 @@ var propHdlrs = propHdlrMap{
 		C.DAOS_PROP_CO_LABEL,
 		"Label",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			if !drpc.LabelIsValid(v) {
+				return errors.Errorf("invalid label %q", v)
+			}
 			cStr := C.CString(v)
 			C.set_dpe_dupe_str(e, cStr, C.size_t(len(v)+1))
 			freeString(cStr)
@@ -696,59 +701,19 @@ func getContainerProperties(hdl C.daos_handle_t, names ...string) (out []*proper
 // properties on an existing container and the GetPropertiesFlag type
 // for getting properties on an existing container.
 type PropertiesFlag struct {
+	ui.SetPropertiesFlag
+
 	props *C.daos_prop_t
-
-	allowedProps map[string]struct{}
 }
 
-func (f *PropertiesFlag) setAllowedProps(props ...string) {
-	f.allowedProps = make(map[string]struct{})
-	for _, prop := range props {
-		f.allowedProps[prop] = struct{}{}
+func (f *PropertiesFlag) Complete(match string) []flags.Completion {
+	comps := make(ui.CompletionMap)
+	for key, hdlr := range propHdlrs {
+		comps[key] = hdlr.valHdlrs.keys()
 	}
-}
+	f.SetCompletions(comps)
 
-func (f *PropertiesFlag) isAllowedProp(prop string) bool {
-	// If the list of allowed props is not set, default
-	// to allowing all.
-	if len(f.allowedProps) == 0 {
-		return true
-	}
-
-	_, allowed := f.allowedProps[prop]
-	return allowed
-}
-
-func (f *PropertiesFlag) Complete(match string) (comps []flags.Completion) {
-	var prefix string
-	propPairs := strings.Split(match, ",")
-	if len(propPairs) > 1 {
-		match = propPairs[len(propPairs)-1:][0]
-		prefix = strings.Join(propPairs[0:len(propPairs)-1], ",")
-		prefix += ","
-	}
-
-	for propKey, hdlr := range propHdlrs {
-		if !f.isAllowedProp(propKey) {
-			continue
-		}
-
-		if len(hdlr.valHdlrs) == 0 || !strings.Contains(match, ":") {
-			if strings.HasPrefix(propKey, match) {
-				comps = append(comps, flags.Completion{Item: prefix + propKey + ":"})
-			}
-			continue
-		}
-
-		for valKey := range hdlr.valHdlrs {
-			propVal := propKey + ":" + valKey
-			if strings.HasPrefix(propVal, match) {
-				comps = append(comps, flags.Completion{Item: valKey})
-			}
-		}
-	}
-
-	return
+	return f.SetPropertiesFlag.Complete(match)
 }
 
 func (f *PropertiesFlag) UnmarshalFlag(fv string) (err error) {
@@ -763,41 +728,19 @@ func (f *PropertiesFlag) UnmarshalFlag(fv string) (err error) {
 		return
 	}
 
-	for _, propStr := range strings.Split(fv, ",") {
-		keyVal := strings.Split(propStr, ":")
-		if len(keyVal) != 2 {
-			return propError("invalid property %q (must be name:val)", propStr)
-		}
+	f.SettableKeys(propHdlrs.keys()...)
+	if err := f.SetPropertiesFlag.UnmarshalFlag(fv); err != nil {
+		return err
+	}
 
-		name := strings.TrimSpace(keyVal[0])
-		value := strings.TrimSpace(keyVal[1])
-		if len(name) == 0 {
-			return propError("name must not be empty")
-		}
-		if len(name) > maxNameLen {
-			return propError("name too long (%d > %d)",
-				len(name), maxNameLen)
-		}
-		if len(value) == 0 {
-			return propError("value must not be empty")
-		}
-		if len(value) > maxValueLen {
-			return propError("value too long (%d > %d)",
-				len(value), maxValueLen)
-		}
-
+	for key, val := range f.ParsedProps {
 		var hdlr *propHdlr
-		hdlr, err = propHdlrs.get(name)
+		hdlr, err = propHdlrs.get(key)
 		if err != nil {
 			return
 		}
 
-		if !f.isAllowedProp(name) {
-			return propError("prop %q is not allowed to be set",
-				name)
-		}
-
-		if err = hdlr.execute(&entries[f.props.dpp_nr], value); err != nil {
+		if err = hdlr.execute(&entries[f.props.dpp_nr], val); err != nil {
 			return
 		}
 		entries[f.props.dpp_nr].dpe_type = C.uint(hdlr.dpeType)
@@ -825,13 +768,13 @@ type SetPropertiesFlag struct {
 }
 
 func (f *SetPropertiesFlag) Complete(match string) []flags.Completion {
-	f.setAllowedProps("label", "status")
+	f.SettableKeys("label", "status")
 
 	return f.PropertiesFlag.Complete(match)
 }
 
 func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
-	f.setAllowedProps("label", "status")
+	f.SettableKeys("label", "status")
 
 	if err := f.PropertiesFlag.UnmarshalFlag(fv); err != nil {
 		return err
@@ -878,7 +821,7 @@ func (f *GetPropertiesFlag) Complete(match string) (comps []flags.Completion) {
 	}
 
 	for propKey := range propHdlrs {
-		if !f.isAllowedProp(propKey) {
+		if !f.IsSettable(propKey) {
 			continue
 		}
 
