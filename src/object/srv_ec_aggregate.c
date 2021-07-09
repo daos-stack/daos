@@ -983,7 +983,7 @@ agg_diff_preprocess(struct ec_agg_entry *entry, unsigned char *diff,
 	uint64_t		 hole_off, hole_end;
 
 	ss = k * len * entry->ae_cur_stripe.as_stripenum;
-	cell_start = cell_idx * len;
+	cell_start = (uint64_t)cell_idx * len;
 	cell_end = cell_start + len;
 	hole_off = 0;
 	d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
@@ -1522,7 +1522,7 @@ agg_process_holes_ult(void *arg)
 		}
 		last_ext_end = agg_extent->ae_recx.rx_idx +
 			agg_extent->ae_recx.rx_nr - ss;
-		if (last_ext_end >= k * len)
+		if (last_ext_end >= (uint64_t)k * len)
 			break;
 	}
 
