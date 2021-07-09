@@ -565,8 +565,9 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
-				err, strerror(err));
+		if (rc != ENOTTY)
+			DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
+					err, strerror(err));
 		return false;
 	}
 
@@ -652,9 +653,12 @@ get_file:
 	entry->fd_flags = flags;
 	entry->fd_status = DFUSE_IO_BYPASS;
 	entry->fd_cont = cont;
+
 	/* Only intercept fstat if caching is not on for this file */
 	if ((il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE) == 0)
 		entry->fd_fstat = true;
+
+	DFUSE_LOG_INFO("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
 
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
@@ -740,12 +744,13 @@ dfuse_open(const char *pathname, int flags, ...)
 
 	if (flags & O_CREAT)
 		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o, mode=0%o) = "
-				"%d. intercepted, bypass=%s",
-				pathname, flags, mode, fd,
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, mode, fd, entry.fd_fstat,
 				bypass_status[entry.fd_status]);
 	else
-		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o) = %d. intercepted, bypass=%s",
-				pathname, flags, fd,
+		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o) = "
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, fd, entry.fd_fstat,
 				bypass_status[entry.fd_status]);
 
 finish:

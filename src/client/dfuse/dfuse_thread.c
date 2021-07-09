@@ -50,8 +50,6 @@ static void
 			break;
 		}
 
-		DFUSE_TRA_DEBUG(dt, "Received %d bytes", rc);
-
 		D_MUTEX_LOCK(&dtm->tm_lock);
 		if (dtm->tm_exit) {
 			D_MUTEX_UNLOCK(&dtm->tm_lock);
