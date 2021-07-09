@@ -19,7 +19,7 @@ $SCONS --jobs 10 --analyze-stack="-x tests -c 128" server
 echo ::endgroup::
 
 echo ::group::Stack analyzer output (immediate)
-$SCONS --jobs 10 --analyze-stack="-x tests -c 128 -e" server
+$SCONS -Q --jobs 10 --analyze-stack="-x tests -c 128 -e" server
 echo ::endgroup::
 
 

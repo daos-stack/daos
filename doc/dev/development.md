@@ -109,9 +109,18 @@ To get usage information for this option, run
 $ scons COMPILER=gcc --analyze-stack="-h"
 ```
 
-The tool normally runs post build but the `-e` option can be added to run it immediately and exit.
-One should only use this option if a prior build with gcc has been executed.  Additionally, the tool
-supports options to filter by directory and file names and specify a lower bound value to report.
+The tool normally runs post build but the `-e` option can be added to run it immediately and exit
+as in the following example:
+
+```bash
+$ scons COMPILER=gcc --analyze-stack="-e -c 1024 -x tests" -Q
+```
+
+One should only use this option if a prior build with gcc has been executed.  The `-Q` option to
+scons reduces the clutter from compiler setup.
+
+Additionally, the tool supports options to filter by directory and file names and specify a lower
+bound value to report.
 
 ### Building Optional Components
 
