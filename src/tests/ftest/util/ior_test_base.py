@@ -233,7 +233,12 @@ class IorTestBase(DfuseTestBase):
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
-            env["LD_PRELOAD"] = intercept
+            env['LD_PRELOAD'] = intercept
+            env['D_LOG_MASK'] = 'INFO'
+            env['D_IL_REPORT'] = '1'
+            #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+            #env['DD_MASK'] = 'all'
+            #env['DD_SUBSYS'] = 'all'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
