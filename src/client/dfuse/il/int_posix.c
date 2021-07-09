@@ -300,7 +300,6 @@ ioil_init(void)
 
 	d_getenv_int("D_IL_REPORT", &report_count);
 	if (report_count != -1) {
-		printf("Will report %d\n", report_count);
 		ioil_iog.iog_show_summary = true;
 		ioil_iog.iog_report_count = report_count;
 	}
