@@ -234,7 +234,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool exclude command object."""
                 super().__init__("/run/dmg/pool/exclude/*", "exclude")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
@@ -244,7 +244,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool extend command object."""
                 super().__init__("/run/dmg/pool/extend/*", "extend")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.ranks = FormattedParameter("--ranks={}", None)
 
         class DrainSubCommand(CommandWithParameters):
@@ -253,7 +253,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool drain command object."""
                 super().__init__("/run/dmg/pool/drain/*", "drain")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
@@ -263,7 +263,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool reintegrate command object."""
                 super().__init__("/run/dmg/pool/reintegrate/*", "reintegrate")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.rank = FormattedParameter("--rank={}", None)
                 self.tgt_idx = FormattedParameter("--target-idx={}", None)
 
@@ -273,7 +273,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool delete-acl command object."""
                 super().__init__("/run/dmg/pool/delete-acl/*", "delete-acl")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.principal = FormattedParameter("-p {}", None)
 
         class DestroySubCommand(CommandWithParameters):
@@ -282,7 +282,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool destroy command object."""
                 super().__init__("/run/dmg/pool/destroy/*", "destroy")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.sys_name = FormattedParameter("--sys-name={}", None)
                 self.force = FormattedParameter("--force", False)
 
@@ -292,7 +292,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool get-acl command object."""
                 super().__init__("/run/dmg/pool/get-acl/*", "get-acl")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
 
         class ListSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool list command."""
@@ -308,7 +308,7 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool overwrite-acl command object."""
                 super().__init__(
                     "/run/dmg/pool/overwrite-acl/*", "overwrite-acl")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.acl_file = FormattedParameter("-a {}", None)
 
         class QuerySubCommand(CommandWithParameters):
@@ -317,7 +317,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool query command object."""
                 super().__init__("/run/dmg/pool/query/*", "query")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
 
         class SetPropSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool set-prop command."""
@@ -325,7 +325,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool set-prop command object."""
                 super().__init__("/run/dmg/pool/set-prop/*", "set-prop")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.name = FormattedParameter("--name={}", None)
                 self.value = FormattedParameter("--value={}", None)
 
@@ -335,7 +335,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool update-acl command object."""
                 super().__init__("/run/dmg/pool/update-acl/*", "update-acl")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.acl_file = FormattedParameter("-a {}", None)
                 self.entry = FormattedParameter("-e {}", None)
 
@@ -345,7 +345,7 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool evict command object."""
                 super().__init__("/run/dmg/pool/evict/*", "evict")
-                self.pool = FormattedParameter("--pool={}", None)
+                self.pool = FormattedParameter("{}", None)
                 self.sys = FormattedParameter("--sys={}", None)
 
     class StorageSubCommand(CommandWithSubCommand):
