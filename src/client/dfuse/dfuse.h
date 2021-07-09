@@ -670,7 +670,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 /* Mark object as removed and invalidate any kernel data for it */
 void
-dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
+dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos_obj_id_t *oid,
 		   struct dfuse_inode_entry *parent, const char *name);
 
 /* dfuse_cont.c */

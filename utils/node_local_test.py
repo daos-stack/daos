@@ -1510,12 +1510,7 @@ class posix_tests():
         nfd.close()
         print(os.fstat(ofd.fileno()))
         os.rename(newfile, fname)
-        # This should fail, because the file has been deleted.
-        try:
-            print(os.fstat(ofd.fileno()))
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() replaced file')
+        print(os.fstat(ofd.fileno()))
         ofd.close()
 
     @needs_dfuse
@@ -1527,12 +1522,7 @@ class posix_tests():
         pre = os.fstat(ofd.fileno())
         print(pre)
         os.rename(fname, newfile)
-        try:
-            post = os.fstat(ofd.fileno())
-            print(post)
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() renamed file')
+        print(os.fstat(ofd.fileno()))
         os.stat(newfile)
         post = os.fstat(ofd.fileno())
         print(post)
@@ -1546,20 +1536,8 @@ class posix_tests():
         ofd = open(fname, 'w')
         print(os.fstat(ofd.fileno()))
         os.unlink(fname)
-        try:
-            print(os.fstat(ofd.fileno()))
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() unlinked file')
-        # With wb caching enabled the kernel will do a setattr to set the times
-        # on close, so with caching enabled catch that and ignore it.
-        if self.dfuse.caching:
-            try:
-                ofd.close()
-            except FileNotFoundError:
-                pass
-        else:
-            ofd.close()
+        print(os.fstat(ofd.fileno()))
+        ofd.close()
 
     @needs_dfuse
     def test_symlink_broken(self):

@@ -81,17 +81,17 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (rc)
 		D_GOTO(out, rc);
 
-	DFUSE_TRA_INFO(parent, "Renamed '%s' to '%s' in %p",
+	DFUSE_TRA_INFO(newparent, "Renamed '%s' to '%s' in %p",
 		       name, newname, newparent);
 
 	/* update moid */
 	dfuse_oid_moved(fs_handle, &moid, parent, name, newparent, newname);
 
-	DFUSE_REPLY_ZERO(parent, req);
-
 	/* Check if a file was unlinked and see if anything needs updating */
 	if (oid.lo || oid.hi)
-		dfuse_oid_unlinked(fs_handle, &oid, newparent, newname);
+		dfuse_oid_unlinked(fs_handle, req, &oid, newparent, newname);
+	else
+		DFUSE_REPLY_ZERO(newparent, req);
 
 	return;
 
