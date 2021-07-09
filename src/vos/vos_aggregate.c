@@ -2445,7 +2445,7 @@ vos_obj_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_
 	int			 rc;
 
 	rc = vos_obj_hold(vos_obj_cache_current(), vos_hdl2cont(coh), *oid, epr,
-			  epr->epr_hi, VOS_OBJ_VISIBLE, DAOS_INTENT_PUNCH, &obj, NULL);
+			  epr->epr_hi, 0, DAOS_INTENT_PURGE, &obj, NULL);
 	if (rc != 0)
 		return rc;
 
