@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.102
-Release:       6%{?relval}%{?dist}
+Release:       7%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -228,14 +228,9 @@ Requires: libpsm_infinipath1
 This is the package needed to run the DAOS test suite
 
 %package devel
-# Leap 15 doesn't seem to be creating dependencies as richly as EL7
-# for example, EL7 automatically adds:
-# Requires: libdaos.so.0()(64bit)
-%if (0%{?suse_version} >= 1500)
-Requires: %{name}-client%{?_isa} = %{version}-%{release}
-%endif
-Requires: libuuid-devel
 Summary: The DAOS development libraries and headers
+Requires: %{name}-client%{?_isa} = %{version}-%{release}
+Requires: libuuid-devel
 
 %description devel
 This is the package needed to build software with the DAOS library.
@@ -465,8 +460,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Sat Jul 03 2021  Maureen Jean <maureen.jean@intel.com> 1.3.102-6
+* Fri Jul 09 2021  Maureen Jean <maureen.jean@intel.com> 1.3.102-7
 - Add python modules to python3.6 site-packages
+
+* Wed Jul 7 2021 Phillip Henderson <phillip.henderson@intel.com> 1.3.102-6
+- Update daos-devel to always require the same version daos-client
 
 * Wed Jun 30 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.102-5
 - Update to spdk 21.04 and (indirectly) dpdk 21.05
