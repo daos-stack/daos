@@ -3189,7 +3189,7 @@ def test_alloc_fail_cat(server, conf, wf):
     return rc
 
 def test_fi_list_attr(server, conf, wf):
-    """Run daos cont get-attr with fi"""
+    """Run daos cont list-attr with fi"""
 
     pool = server.get_test_pool()
 
@@ -3392,8 +3392,8 @@ def main():
             fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
 
             # Container attribute tests, work but disabled because of runtime concerns.
-            # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-            # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+            fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+            fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
             # filesystem copy test - not complete.
             # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
