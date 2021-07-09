@@ -652,6 +652,7 @@ get_file:
 	entry->fd_flags = flags;
 	entry->fd_status = DFUSE_IO_BYPASS;
 	entry->fd_cont = cont;
+	entry->fd_fstat = ~(il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE);
 
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
@@ -1409,6 +1410,12 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
+		goto do_real_fstat;
+
+	/* Turn of this feature if the kernel is doing metadata caching, in this case it's btter
+	 * to use the kernel cache and keep it up-to-date than query the severs each time.
+	 */
+	if (entry->fd_fstat)
 		goto do_real_fstat;
 
 	DFUSE_TRA_INFO(entry->fd_dfsoh, "fstat() %d", fd);

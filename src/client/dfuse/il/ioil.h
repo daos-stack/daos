@@ -36,6 +36,7 @@ struct fd_entry {
 	int			fd_status;
 	int			fd_ino;
 	int			fd_dev;
+	bool			fd_fstat;
 };
 
 ssize_t
