@@ -9,7 +9,6 @@ package server
 import (
 	"math/rand"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -194,8 +193,20 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	if _, err := svc.sysdb.FindPoolServiceByLabel(req.GetLabel()); err == nil {
-		return nil, FaultPoolDuplicateLabel(req.GetLabel())
+	var poolLabel string
+	for _, prop := range req.GetProperties() {
+		if prop.Number != drpc.PoolPropertyLabel {
+			continue
+		}
+
+		poolLabel = prop.GetStrval()
+		if poolLabel == "" {
+			break
+		}
+
+		if _, err := svc.sysdb.FindPoolServiceByLabel(poolLabel); err == nil {
+			return nil, FaultPoolDuplicateLabel(poolLabel)
+		}
 	}
 
 	allRanks, err := svc.sysdb.MemberRanks(system.AvailableMemberFilter)
@@ -278,7 +289,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	}
 
 	ps = system.NewPoolService(uuid, req.GetScmbytes(), req.GetNvmebytes(), system.RanksFromUint32(req.GetRanks()))
-	ps.PoolLabel = req.GetLabel()
+	ps.PoolLabel = poolLabel
 	if err := svc.sysdb.AddPoolService(ps); err != nil {
 		return nil, err
 	}
@@ -602,154 +613,143 @@ func (svc *mgmtSvc) PoolQuery(ctx context.Context, req *mgmtpb.PoolQueryReq) (*m
 	return resp, nil
 }
 
-// resolvePoolPropVal resolves string-based property names and values to their C equivalents.
-func resolvePoolPropVal(req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropReq, error) {
-	newReq := &mgmtpb.PoolSetPropReq{
-		Uuid: req.Uuid,
+func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.UUID, prop *mgmtpb.PoolProperty) error {
+	if prop.GetNumber() != drpc.PoolPropertyLabel {
+		return errors.New("updatePoolLabel() called with non-label prop")
+	}
+	label := prop.GetStrval()
+
+	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
+	if err != nil {
+		return err
 	}
 
-	propName := strings.TrimSpace(req.GetName())
-	switch strings.ToLower(propName) {
-	case "reclaim":
-		newReq.SetPropertyNumber(drpc.PoolPropertySpaceReclaim)
-
-		recType := strings.TrimSpace(req.GetStrval())
-		switch strings.ToLower(recType) {
-		case "disabled":
-			newReq.SetValueNumber(drpc.PoolSpaceReclaimDisabled)
-		case "lazy":
-			newReq.SetValueNumber(drpc.PoolSpaceReclaimLazy)
-		case "time":
-			newReq.SetValueNumber(drpc.PoolSpaceReclaimTime)
-		default:
-			return nil, errors.Errorf("unhandled reclaim type %q", recType)
+	if label != "" {
+		// If we're setting a label, first check to see
+		// if a pool has already had the label applied.
+		found, err := svc.sysdb.FindPoolServiceByLabel(label)
+		if found != nil && found.PoolUUID != ps.PoolUUID {
+			// If we find a pool with this label but the
+			// UUID differs, then we should fail the request.
+			return FaultPoolDuplicateLabel(label)
 		}
-	case "label":
-		newReq.SetPropertyNumber(drpc.PoolPropertyLabel)
-		newReq.SetValueString(req.GetStrval())
-	case "space_rb":
-		newReq.SetPropertyNumber(drpc.PoolPropertyReservedSpace)
-
-		if strVal := req.GetStrval(); strVal != "" {
-			return nil, errors.Errorf("invalid space_rb value %q (valid values: 0-100)", strVal)
+		if err != nil && !system.IsPoolNotFound(err) {
+			// If the query failed, then we should fail
+			// the request.
+			return err
 		}
-
-		rsPct := req.GetNumval()
-		if rsPct > 100 {
-			return nil, errors.Errorf("invalid space_rb value %d (valid values: 0-100)", rsPct)
-		}
-		newReq.SetValueNumber(rsPct)
-	case "self_heal":
-		newReq.SetPropertyNumber(drpc.PoolPropertySelfHealing)
-
-		healType := strings.TrimSpace(req.GetStrval())
-		switch strings.ToLower(healType) {
-		case "exclude":
-			newReq.SetValueNumber(drpc.PoolSelfHealingAutoExclude)
-		case "rebuild":
-			newReq.SetValueNumber(drpc.PoolSelfHealingAutoRebuild)
-		default:
-			return nil, errors.Errorf("unhandled self_heal type %q", healType)
-		}
-	default:
-		return nil, errors.Errorf("unhandled pool property %q", propName)
+		// Otherwise, allow the label to be set again on the same
+		// pool for idempotency.
 	}
 
-	return newReq, nil
+	req := &mgmtpb.PoolSetPropReq{
+		Sys:        sys,
+		Uuid:       uuid.String(),
+		Properties: []*mgmtpb.PoolProperty{prop},
+	}
+
+	var dresp *drpc.Response
+	dresp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
+	if err != nil {
+		return err
+	}
+
+	resp := new(mgmtpb.PoolSetPropResp)
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return errors.Wrap(err, "unmarshal PoolSetProp response")
+	}
+
+	if resp.GetStatus() != 0 {
+		return errors.Errorf("label update failed: %s", drpc.Status(resp.Status))
+	}
+
+	// Persist the label update in the MS DB if the
+	// dRPC call succeeded.
+	ps.PoolLabel = label
+	return svc.sysdb.UpdatePoolService(ps)
 }
 
-// PoolSetProp forwards a request to the I/O Engine to set a pool property.
+// PoolSetProp forwards a request to the I/O Engine to set pool properties.
 func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq) (*mgmtpb.PoolSetPropResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req:%+v", req)
 
-	newReq, err := resolvePoolPropVal(req)
+	uuid, err := uuid.Parse(req.GetUuid())
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to parse request uuid %q", req.GetUuid())
 	}
 
-	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req (converted):%+v", newReq)
+	if len(req.GetProperties()) == 0 {
+		return nil, errors.New("PoolSetProp() request with 0 properties")
+	}
 
-	// Label is a special case, in that we need to ensure that it's unique
-	// and also to update the pool service entry.
-	if newReq.GetNumber() == drpc.PoolPropertyLabel {
-		uuidStr := newReq.GetUuid()
-		label := newReq.GetStrval()
-
-		uuid, err := uuid.Parse(uuidStr)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse request uuid %q", uuidStr)
-		}
-		ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
-		if err != nil {
-			return nil, err
-		}
-
-		if label != "" {
-			// If we're setting a label, first check to see
-			// if a pool has already had the label applied.
-			found, err := svc.sysdb.FindPoolServiceByLabel(label)
-			if found != nil && found.PoolUUID != ps.PoolUUID {
-				// If we find a pool with this label but the
-				// UUID differs, then we should fail the request.
-				return nil, FaultPoolDuplicateLabel(label)
-			}
-			if err != nil && !system.IsPoolNotFound(err) {
-				// If the query failed, then we should fail
-				// the request.
+	miscProps := make([]*mgmtpb.PoolProperty, 0, len(req.GetProperties()))
+	for _, prop := range req.GetProperties() {
+		// Label is a special case, in that we need to ensure that it's unique
+		// and also to update the pool service entry. Handle it first and separately
+		// so that if it fails, none of the other props are changed.
+		if prop.GetNumber() == drpc.PoolPropertyLabel {
+			if err := svc.updatePoolLabel(ctx, req.GetSys(), uuid, prop); err != nil {
 				return nil, err
 			}
-			// Otherwise, allow the label to be set again on the same
-			// pool for idempotency.
+			continue
 		}
 
-		defer func() {
-			if ps == nil || err != nil {
-				return
-			}
-
-			// Persist the label update in the MS DB if the
-			// dRPC call succeeded.
-			ps.PoolLabel = label
-			err = svc.sysdb.UpdatePoolService(ps)
-		}()
-	}
-
-	var dresp *drpc.Response
-	dresp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, newReq)
-	if err != nil {
-		return nil, err
+		miscProps = append(miscProps, prop)
 	}
 
 	resp := new(mgmtpb.PoolSetPropResp)
+	if len(miscProps) == 0 {
+		return resp, nil
+	}
+
+	req.Properties = miscProps
+
+	var dresp *drpc.Response
+	dresp, err = svc.makePoolServiceCall(ctx, drpc.MethodPoolSetProp, req)
+	if err != nil {
+		return nil, err
+	}
+
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
 		return nil, errors.Wrap(err, "unmarshal PoolSetProp response")
 	}
 
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, resp:%+v", resp)
 
-	if resp.GetStatus() != 0 {
-		return resp, nil
+	return resp, nil
+}
+
+// PoolGetProp forwards a request to the I/O Engine to get pool properties.
+func (svc *mgmtSvc) PoolGetProp(ctx context.Context, req *mgmtpb.PoolGetPropReq) (*mgmtpb.PoolGetPropResp, error) {
+	if err := svc.checkReplicaRequest(req); err != nil {
+		return nil, err
+	}
+	svc.log.Debugf("MgmtSvc.PoolGetProp dispatch, req:%+v", req)
+
+	// The request must contain a list of expected properties. We don't want
+	// to just let the engine return all properties because not all properties
+	// are valid to retrieve this way (e.g. ACL, etc).
+	if len(req.GetProperties()) == 0 {
+		return nil, errors.Errorf("PoolGetProp() request with 0 properties")
 	}
 
-	if resp.GetNumber() != newReq.GetNumber() {
-		return nil, errors.Errorf("Response number doesn't match request (%d != %d)",
-			resp.GetNumber(), newReq.GetNumber())
+	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolGetProp, req)
+	if err != nil {
+		return nil, err
 	}
-	// Restore the string versions of the property/value
-	resp.Property = &mgmtpb.PoolSetPropResp_Name{
-		Name: req.GetName(),
+
+	resp := new(mgmtpb.PoolGetPropResp)
+	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal PoolGetProp response")
 	}
-	if req.GetStrval() != "" {
-		if resp.GetNumval() != newReq.GetNumval() {
-			return nil, errors.Errorf("Response value doesn't match request (%d != %d)",
-				resp.GetNumval(), newReq.GetNumval())
-		}
-		resp.Value = &mgmtpb.PoolSetPropResp_Strval{
-			Strval: req.GetStrval(),
-		}
+
+	svc.log.Debugf("MgmtSvc.PoolGetProp dispatch, resp: %+v", resp)
+
+	if resp.GetStatus() != 0 {
+		return resp, nil
 	}
 
 	return resp, nil

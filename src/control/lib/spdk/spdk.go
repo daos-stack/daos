@@ -143,7 +143,9 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
 
-	envCtx := C.CString("--log-level=lib.eal:4")
+	// TODO: find a way of passing multiple dpdk commandline opts
+	// envCtx := C.CString("--log-level=lib.eal:4")
+	envCtx := C.CString("--no-telemetry")
 	defer C.free(unsafe.Pointer(envCtx))
 
 	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(len(opts.PciAllowList)),
