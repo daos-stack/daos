@@ -451,8 +451,8 @@ func TestPromExp_extractLabels(t *testing.T) {
 				"rank": "15",
 			},
 		},
-		"pool current UUID": {
-			input:   "pool_current_11111111_2222_3333_4444_555555555555_info",
+		"pool UUID": {
+			input:   "pool_11111111_2222_3333_4444_555555555555_info",
 			expName: "pool_info",
 			expLabels: labelMap{
 				"pool": "11111111-2222-3333-4444-555555555555",

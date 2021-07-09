@@ -165,7 +165,7 @@ func extractLabels(in string) (labels labelMap, name string) {
 	uuid_re := fmt.Sprintf("%s_%s_%s_%s_%s", getHexRE(8), getHexRE(4), getHexRE(4),
 		getHexRE(4), getHexRE(12))
 
-	name = parseNameSubstr(labels, name, `pool_current_+(`+uuid_re+`)`, "pool",
+	name = parseNameSubstr(labels, name, `pool_+(`+uuid_re+`)`, "pool",
 		func(labels labelMap, matches []string) {
 			labels["pool"] = strings.Replace(matches[1], "_", "-", -1)
 		})
