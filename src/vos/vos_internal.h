@@ -25,7 +25,8 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
+#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
+D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -319,8 +320,6 @@ struct vos_dtx_cmt_ent {
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_OID(dce)		((dce)->dce_base.dce_oid)
-#define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 
 extern int vos_evt_feats;
 
@@ -500,8 +499,7 @@ vos_dtx_prepared(struct dtx_handle *dth);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int counti, daos_epoch_t epoch,
-			struct dtx_cos_key *dcks,
+			int count, daos_epoch_t epoch, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces);
 void

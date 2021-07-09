@@ -8,17 +8,23 @@ package server
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
 
+	commonpb "github.com/daos-stack/daos/src/control/common/proto"
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -27,11 +33,55 @@ const (
 	rankStartTimeout = 2 * rankReqTimeout
 )
 
+// Engine defines an interface to be implemented by engine instances.
+//
+// NB: This interface is way too big right now; need to refactor in order
+// to limit scope.
+type Engine interface {
+	// These are definitely wrong... They indicate that too much internal
+	// information is being leaked outside of the implementation.
+	newCret(string, error) *ctlpb.NvmeControllerResult
+	bdevConfig() storage.BdevConfig
+	scmConfig() storage.ScmConfig
+	tryDrpc(context.Context, drpc.Method) *system.MemberResult
+	requestStart(context.Context)
+	updateInUseBdevs(context.Context, map[string]*storage.NvmeController) error
+	isAwaitingFormat() bool
+
+	// These methods should probably be replaced by callbacks.
+	NotifyDrpcReady(*srvpb.NotifyReadyReq)
+	NotifyStorageReady()
+	BioErrorNotify(*srvpb.BioErrorReq)
+
+	// These methods should probably be refactored out into functions that
+	// accept the engine instance as a parameter.
+	GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error)
+	GetScmUsage() (*storage.ScmMountPoint, error)
+	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
+	StorageFormatNVMe(*bdev.Provider) commonpb.NvmeControllerResults
+	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
+
+	// This is a more reasonable surface that will be easier to maintain and test.
+	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)
+	GetRank() (system.Rank, error)
+	GetTargetCount() int
+	Index() uint32
+	IsStarted() bool
+	IsReady() bool
+	LocalState() system.MemberState
+	RemoveSuperblock() error
+	Run(context.Context, bool)
+	SetupRank(context.Context, system.Rank) error
+	Stop(os.Signal) error
+	OnInstanceExit(...onInstanceExitFn)
+	OnReady(...onReadyFn)
+}
+
 // EngineHarness is responsible for managing Engine instances.
 type EngineHarness struct {
 	sync.RWMutex
 	log              logging.Logger
-	instances        []*EngineInstance
+	instances        []Engine
 	started          atm.Bool
 	rankReqTimeout   time.Duration
 	rankStartTimeout time.Duration
@@ -42,7 +92,7 @@ type EngineHarness struct {
 func NewEngineHarness(log logging.Logger) *EngineHarness {
 	return &EngineHarness{
 		log:              log,
-		instances:        make([]*EngineInstance, 0),
+		instances:        make([]Engine, 0),
 		rankReqTimeout:   rankReqTimeout,
 		rankStartTimeout: rankStartTimeout,
 	}
@@ -60,7 +110,7 @@ func (h *EngineHarness) isStarted() bool {
 }
 
 // Instances safely returns harness' EngineInstances.
-func (h *EngineHarness) Instances() []*EngineInstance {
+func (h *EngineHarness) Instances() []Engine {
 	h.RLock()
 	defer h.RUnlock()
 	return h.instances
@@ -68,7 +118,7 @@ func (h *EngineHarness) Instances() []*EngineInstance {
 
 // FilterInstancesByRankSet returns harness' EngineInstances that match any
 // of a list of ranks derived from provided rank set string.
-func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]*EngineInstance, error) {
+func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]Engine, error) {
 	h.RLock()
 	defer h.RUnlock()
 
@@ -76,7 +126,7 @@ func (h *EngineHarness) FilterInstancesByRankSet(ranks string) ([]*EngineInstanc
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*EngineInstance, 0)
+	out := make([]Engine, 0)
 
 	for _, i := range h.instances {
 		r, err := i.GetRank()
@@ -115,7 +165,7 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 	// the first one that is available to service the request.
 	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
-		if !i.isReady() {
+		if !i.IsReady() {
 			err = errInstanceNotReady
 			continue
 		}
@@ -188,9 +238,14 @@ func (h *EngineHarness) readyRanks() []system.Rank {
 	defer h.RUnlock()
 
 	ranks := make([]system.Rank, 0)
-	for _, ei := range h.instances {
-		if ei.hasSuperblock() && ei.isReady() {
-			ranks = append(ranks, *ei.getSuperblock().Rank)
+	for idx, ei := range h.instances {
+		if ei.IsReady() {
+			rank, err := ei.GetRank()
+			if err != nil {
+				h.log.Errorf("instance %d: no rank (%s)", idx, err)
+				continue
+			}
+			ranks = append(ranks, rank)
 		}
 	}
 

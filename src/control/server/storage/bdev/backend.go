@@ -122,8 +122,8 @@ func (sb *spdkBackend) IsVMDDisabled() bool {
 // Scan discovers NVMe controllers accessible by SPDK.
 func (sb *spdkBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 	restoreOutput, err := sb.binding.init(sb.log, &spdk.EnvOptions{
-		PciIncludeList: req.DeviceList,
-		DisableVMD:     sb.IsVMDDisabled(),
+		PciAllowList: req.DeviceList,
+		DisableVMD:   sb.IsVMDDisabled(),
 	})
 	if err != nil {
 		return nil, err
@@ -204,8 +204,8 @@ func (sb *spdkBackend) formatNvme(req *FormatRequest) (*FormatResponse, error) {
 	}
 
 	spdkOpts := &spdk.EnvOptions{
-		PciIncludeList: req.DeviceList,
-		DisableVMD:     sb.IsVMDDisabled(),
+		PciAllowList: req.DeviceList,
+		DisableVMD:   sb.IsVMDDisabled(),
 	}
 
 	restoreOutput, err := sb.binding.init(sb.log, spdkOpts)
@@ -460,31 +460,6 @@ func (sb *spdkBackend) PrepareReset() error {
 func (sb *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {
 	if pciAddr == "" {
 		return FaultBadPCIAddr("")
-	}
-
-	restoreOutput, err := sb.binding.init(sb.log, &spdk.EnvOptions{
-		DisableVMD: sb.IsVMDDisabled(),
-	})
-	if err != nil {
-		return err
-	}
-	defer restoreOutput()
-
-	cs, err := sb.binding.Discover(sb.log)
-	if err != nil {
-		return errors.Wrap(err, "failed to discover nvme")
-	}
-
-	var found bool
-	for _, c := range cs {
-		if c.PciAddr == pciAddr {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return FaultPCIAddrNotFound(pciAddr)
 	}
 
 	if err := sb.binding.Update(sb.log, pciAddr, path, slot); err != nil {
