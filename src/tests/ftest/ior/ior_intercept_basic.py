@@ -43,7 +43,8 @@ class IorIntercept(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=daosio,ior,ior_intercept_basic,dfuse
+        :avocado: tags=daosio,dfuse,il
+        :avocado: tags=ior,iorinterceptbasic
         """
         apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
         for api in apis:
