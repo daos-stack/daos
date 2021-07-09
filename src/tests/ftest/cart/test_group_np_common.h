@@ -291,7 +291,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 
 	struct crt_test_ping_delay_in	*ping_delay_rpc_req_input;
 	struct crt_test_ping_delay_out	*ping_delay_rpc_req_output;
-	
+
 	rpc_req = cb_info->cci_rpc;
 
 	if (cb_info->cci_arg != NULL) {
@@ -397,7 +397,8 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			break;
 		}
 		printf("%s ping result - ret: %d, room_no: %d.\n",
-		       ping_delay_rpc_req_input->name, ping_delay_rpc_req_output->ret,
+		       ping_delay_rpc_req_input->name,
+		       ping_delay_rpc_req_output->ret,
 		       ping_delay_rpc_req_output->room_no);
 		D_FREE(ping_delay_rpc_req_input->name);
 		sem_post(&test_g.t_token_to_proceed);
