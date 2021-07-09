@@ -162,7 +162,7 @@ class EvictTests(TestWithServers):
         :avocado: tags=pool,pool_evict
         :avocado: tags=DAOS_5610
         """
-        # Do not use self.pool. It'll cause -1002 error when disconnecting.
+        # Do not use self.pool. It will cause -1002 error when disconnecting.
         pool = []
         container = []
         # non_pool_servers = []
