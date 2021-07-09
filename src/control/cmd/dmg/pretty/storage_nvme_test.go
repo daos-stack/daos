@@ -82,22 +82,22 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Volatile Memory Backup: WARNING
   Intel Vendor SMART Attributes:
     Program Fail Count:
-       Normalized(%%):%d
+       Normalized(%s):%d
        Raw:%d
     Erase Fail Count:
-       Normalized(%%):%d
+       Normalized(%s):%d
        Raw:%d
     Wear Leveling Count:
-       Normalized(%%):%d
+       Normalized(%s):%d
        Min:%d
        Max:%d
        Avg:%d
     End-to-End Error Detection Count:%d
     CRC Error Count:%d
-    Timed Workload, Media Wear(%%):%d
+    Timed Workload, Media Wear(%s):%d
     Timed Workload, Host Reads:%d
     Timed Workload, Timer:%d
-    Thermal Throttle Status(%%):%d
+    Thermal Throttle Status(%s):%d
     Thermal Throttle Event Count:%d
     Retry Buffer Overflow Counter:%d
     PLL Lock Loss Count:%d
@@ -123,22 +123,22 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Volatile Memory Backup: WARNING
   Intel Vendor SMART Attributes:
     Program Fail Count:
-       Normalized(%%):%d
+       Normalized(%s):%d
        Raw:%d
     Erase Fail Count:
-       Normalized(%%):%d
+       Normalized(%s):%d
        Raw:%d
     Wear Leveling Count:
-       Normalized(%%):%d
+       Normalized(%s):%d
        Min:%d
        Max:%d
        Avg:%d
     End-to-End Error Detection Count:%d
     CRC Error Count:%d
-    Timed Workload, Media Wear(%%):%d
+    Timed Workload, Media Wear(%s):%d
     Timed Workload, Host Reads:%d
     Timed Workload, Timer:%d
-    Thermal Throttle Status(%%):%d
+    Thermal Throttle Status(%s):%d
     Thermal Throttle Event Count:%d
     Retry Buffer Overflow Counter:%d
     PLL Lock Loss Count:%d
@@ -154,14 +154,14 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				time.Duration(controllerA.HealthStats.PowerOnHours)*time.Hour,
 				controllerA.HealthStats.UnsafeShutdowns, controllerA.HealthStats.MediaErrors,
 				controllerA.HealthStats.ErrorLogEntries,
-				controllerA.HealthStats.ProgFailCntNorm, controllerA.HealthStats.ProgFailCntRaw,
-				controllerA.HealthStats.EraseFailCntNorm, controllerA.HealthStats.EraseFailCntRaw,
-				controllerA.HealthStats.WearLevelingCntNorm, controllerA.HealthStats.WearLevelingCntMin,
+				"%%", controllerA.HealthStats.ProgFailCntNorm, controllerA.HealthStats.ProgFailCntRaw,
+				"%%", controllerA.HealthStats.EraseFailCntNorm, controllerA.HealthStats.EraseFailCntRaw,
+				"%%", controllerA.HealthStats.WearLevelingCntNorm, controllerA.HealthStats.WearLevelingCntMin,
 				controllerA.HealthStats.WearLevelingCntMax, controllerA.HealthStats.WearLevelingCntAvg,
 				controllerA.HealthStats.EndtoendErrCntRaw, controllerA.HealthStats.CrcErrCntRaw,
-				controllerA.HealthStats.MediaWearRaw, controllerA.HealthStats.HostReadsRaw,
+				"%%", controllerA.HealthStats.MediaWearRaw, controllerA.HealthStats.HostReadsRaw,
 				controllerA.HealthStats.WorkloadTimerRaw,
-				controllerA.HealthStats.ThermalThrottleStatus, controllerA.HealthStats.ThermalThrottleEventCnt,
+				"%%", controllerA.HealthStats.ThermalThrottleStatus, controllerA.HealthStats.ThermalThrottleEventCnt,
 				controllerA.HealthStats.RetryBufferOverflowCnt,
 				controllerA.HealthStats.PllLockLossCnt,
 				controllerA.HealthStats.NandBytesWritten, controllerA.HealthStats.HostBytesWritten,
@@ -174,14 +174,14 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				time.Duration(controllerB.HealthStats.PowerOnHours)*time.Hour,
 				controllerB.HealthStats.UnsafeShutdowns, controllerB.HealthStats.MediaErrors,
 				controllerB.HealthStats.ErrorLogEntries,
-				controllerB.HealthStats.ProgFailCntNorm, controllerB.HealthStats.ProgFailCntRaw,
-				controllerB.HealthStats.EraseFailCntNorm, controllerB.HealthStats.EraseFailCntRaw,
-				controllerB.HealthStats.WearLevelingCntNorm, controllerB.HealthStats.WearLevelingCntMin,
+				"%%", controllerB.HealthStats.ProgFailCntNorm, controllerB.HealthStats.ProgFailCntRaw,
+				"%%", controllerB.HealthStats.EraseFailCntNorm, controllerB.HealthStats.EraseFailCntRaw,
+				"%%", controllerB.HealthStats.WearLevelingCntNorm, controllerB.HealthStats.WearLevelingCntMin,
 				controllerB.HealthStats.WearLevelingCntMax, controllerB.HealthStats.WearLevelingCntAvg,
 				controllerB.HealthStats.EndtoendErrCntRaw, controllerB.HealthStats.CrcErrCntRaw,
-				controllerB.HealthStats.MediaWearRaw, controllerB.HealthStats.HostReadsRaw,
+				"%%", controllerB.HealthStats.MediaWearRaw, controllerB.HealthStats.HostReadsRaw,
 				controllerB.HealthStats.WorkloadTimerRaw,
-				controllerB.HealthStats.ThermalThrottleStatus, controllerB.HealthStats.ThermalThrottleEventCnt,
+				"%%", controllerB.HealthStats.ThermalThrottleStatus, controllerB.HealthStats.ThermalThrottleEventCnt,
 				controllerB.HealthStats.RetryBufferOverflowCnt,
 				controllerB.HealthStats.PllLockLossCnt,
 				controllerB.HealthStats.NandBytesWritten, controllerB.HealthStats.HostBytesWritten,
@@ -226,22 +226,22 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
     Volatile Memory Backup: WARNING
   Intel Vendor SMART Attributes:
     Program Fail Count:
-       Normalized(%%):%d
+       Normalized(%s):%d
        Raw:%d
     Erase Fail Count:
-       Normalized(%%):%d
+       Normalized(%s):%d
        Raw:%d
     Wear Leveling Count:
-       Normalized(%%):%d
+       Normalized(%s):%d
        Min:%d
        Max:%d
        Avg:%d
     End-to-End Error Detection Count:%d
     CRC Error Count:%d
-    Timed Workload, Media Wear(%%):%d
+    Timed Workload, Media Wear(%s):%d
     Timed Workload, Host Reads:%d
     Timed Workload, Timer:%d
-    Thermal Throttle Status(%%):%d
+    Thermal Throttle Status(%s):%d
     Thermal Throttle Event Count:%d
     Retry Buffer Overflow Counter:%d
     PLL Lock Loss Count:%d
@@ -259,14 +259,14 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerAwTS.HealthStats.ReadErrors, controllerAwTS.HealthStats.WriteErrors,
 				controllerAwTS.HealthStats.UnmapErrors, controllerAwTS.HealthStats.ChecksumErrors,
 				controllerAwTS.HealthStats.ErrorLogEntries,
-				controllerAwTS.HealthStats.ProgFailCntNorm, controllerAwTS.HealthStats.ProgFailCntRaw,
-				controllerAwTS.HealthStats.EraseFailCntNorm, controllerAwTS.HealthStats.EraseFailCntRaw,
-				controllerAwTS.HealthStats.WearLevelingCntNorm, controllerAwTS.HealthStats.WearLevelingCntMin,
+				"%%", controllerAwTS.HealthStats.ProgFailCntNorm, controllerAwTS.HealthStats.ProgFailCntRaw,
+				"%%", controllerAwTS.HealthStats.EraseFailCntNorm, controllerAwTS.HealthStats.EraseFailCntRaw,
+				"%%", controllerAwTS.HealthStats.WearLevelingCntNorm, controllerAwTS.HealthStats.WearLevelingCntMin,
 				controllerAwTS.HealthStats.WearLevelingCntMax, controllerAwTS.HealthStats.WearLevelingCntAvg,
 				controllerAwTS.HealthStats.EndtoendErrCntRaw, controllerAwTS.HealthStats.CrcErrCntRaw,
-				controllerAwTS.HealthStats.MediaWearRaw, controllerAwTS.HealthStats.HostReadsRaw,
+				"%%", controllerAwTS.HealthStats.MediaWearRaw, controllerAwTS.HealthStats.HostReadsRaw,
 				controllerAwTS.HealthStats.WorkloadTimerRaw,
-				controllerAwTS.HealthStats.ThermalThrottleStatus, controllerAwTS.HealthStats.ThermalThrottleEventCnt,
+				"%%", controllerAwTS.HealthStats.ThermalThrottleStatus, controllerAwTS.HealthStats.ThermalThrottleEventCnt,
 				controllerAwTS.HealthStats.RetryBufferOverflowCnt,
 				controllerAwTS.HealthStats.PllLockLossCnt,
 				controllerAwTS.HealthStats.NandBytesWritten, controllerAwTS.HealthStats.HostBytesWritten,
