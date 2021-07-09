@@ -50,6 +50,8 @@ service MgmtSvc {
 	rpc PoolQuery(PoolQueryReq) returns (PoolQueryResp) {}
 	// Set a DAOS pool property.
 	rpc PoolSetProp(PoolSetPropReq) returns (PoolSetPropResp) {}
+	// Get a DAOS pool property list.
+	rpc PoolGetProp(PoolGetPropReq) returns (PoolGetPropResp) {}
 	// Fetch the Access Control List for a DAOS pool.
 	rpc PoolGetACL(GetACLReq) returns (ACLResp) {}
 	// Overwrite the Access Control List for a DAOS pool with a new one.
