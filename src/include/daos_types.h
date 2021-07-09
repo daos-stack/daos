@@ -200,6 +200,9 @@ typedef struct {
 	uint64_t	hi;
 } daos_obj_id_t;
 
+/** max pool/cont attr size */
+#define DAOS_ATTR_NAME_MAX 511
+
 #if defined(__cplusplus)
 }
 #endif
