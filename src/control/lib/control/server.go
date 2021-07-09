@@ -1,0 +1,56 @@
+//
+// (C) Copyright 2021 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+package control
+
+import (
+	"context"
+
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
+
+	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
+)
+
+// SetEngineLogMasksReq contains the inputs for the set engine log level
+// request.
+type SetEngineLogMasksReq struct {
+	unaryRequest
+	Masks string
+	Reset bool
+}
+
+// SetEngineLogMasksResp contains the results of a set engine log level
+// request.
+type SetEngineLogMasksResp struct {
+	HostErrorsResp
+}
+
+// SetEngineLogMasks will send RPC to MS to request changes to effective log
+// level of all DAOS engines in a system.
+func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngineLogMasksReq) (*SetEngineLogMasksResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return ctlpb.NewCtlSvcClient(conn).SetEngineLogMasks(ctx, &ctlpb.SetEngineLogMasksReq{
+			Masks: req.Masks, Reset_: req.Reset,
+		})
+	})
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	sellr := new(SetEngineLogMasksResp)
+	for _, hostResp := range ur.Responses {
+		if hostResp.Error != nil {
+			if err := sellr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return sellr, nil
+}

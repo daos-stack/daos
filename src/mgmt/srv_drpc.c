@@ -19,6 +19,7 @@
 #include "acl.pb-c.h"
 #include "pool.pb-c.h"
 #include "cont.pb-c.h"
+#include "server.pb-c.h"
 #include "srv_internal.h"
 #include "drpc_internal.h"
 
@@ -42,7 +43,7 @@ pack_daos_response(Mgmt__DaosResp *daos_resp, Drpc__Response *drpc_resp)
 void
 ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PrepShutdownReq	*req = NULL;
 	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
 
@@ -62,7 +63,6 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	ds_pool_disable_exclude();
 #endif
 
-	/* TODO: disable auto exclude and pool rebuild here */
 	D_INFO("Service rank %d is being prepared for controlled shutdown\n",
 		req->rank);
 
@@ -73,7 +73,7 @@ ds_mgmt_drpc_prep_shutdown(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 void
 ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PingRankReq	*req = NULL;
 	Mgmt__DaosResp		 resp = MGMT__DAOS_RESP__INIT;
 
@@ -93,6 +93,52 @@ ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	pack_daos_response(&resp, drpc_resp);
 	mgmt__ping_rank_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
+ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc		 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Ctl__SetEngineLogMasksReq	*req = NULL;
+	Ctl__SetEngineLogMasksResp	 resp;
+	uint8_t				*body;
+	size_t				 len;
+	int				 rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = ctl__set_engine_log_masks_req__unpack(&alloc.alloc,
+						    drpc_req->body.len,
+						    drpc_req->body.data);
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (set log masks)\n");
+		return;
+	}
+
+	D_INFO("Received request to set log masks to '%s'\n", req->masks);
+
+	/* Response status is populated with SUCCESS on init. */
+	ctl__set_engine_log_masks_resp__init(&resp);
+
+	rc = d_log_setmasks(req->masks, -1);
+	if (rc != 0) {
+		D_ERROR("Failed to set log masks to %s: "DF_RC"\n",
+			req->masks, DP_RC(rc));
+		resp.status = rc;
+	}
+
+	len = ctl__set_engine_log_masks_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+		D_ERROR("Failed to allocate drpc response body\n");
+	} else {
+		ctl__set_engine_log_masks_resp__pack(&resp, body);
+		drpc_resp->body.len = len;
+		drpc_resp->body.data = body;
+	}
+
+	ctl__set_engine_log_masks_req__free_unpacked(req, &alloc.alloc);
 }
 
 void

@@ -1,0 +1,25 @@
+//
+// (C) Copyright 2021 Intel Corporation.
+//
+// SPDX-License-Identifier: BSD-2-Clause-Patent
+//
+
+syntax = "proto3";
+package ctl;
+
+option go_package = "github.com/daos-stack/daos/src/control/common/proto/ctl";
+
+// Control Service Protobuf Definitions related to interactions between
+// DAOS control server and DAOS I/O Engine.
+
+// SetEngineLogMasksReq provides parameters to set system-wide log masks.
+message SetEngineLogMasksReq {
+	string sys = 1; // DAOS system name
+	string masks = 2; // set log masks for a set of facilities to a given level
+	bool reset = 3; // indicates level should be reset to default
+}
+
+// SetEngineLogMasksResp returns results of attempts to set engine log masks.
+message SetEngineLogMasksResp {
+	int32 status = 1; // DAOS error code
+}
