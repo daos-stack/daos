@@ -83,7 +83,6 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 int
 crt_context_create(crt_context_t *crt_ctx);
 
-
 /**
  * Set the timeout value for all RPC requests created on the specified context.
  * Setting the timeout after crt_req_create() call will not affect already
@@ -1012,11 +1011,6 @@ int
 crt_bulk_free(crt_bulk_t bulk_hdl);
 
 /**
- * Decrease reference of the bulk handle.
- */
-#define crt_bulk_decref(bulk_hdl)	crt_bulk_free(bulk_hdl)
-
-/**
  * Start a bulk transferring (inside an RPC handler).
  *
  * \param[in] bulk_desc        pointer to bulk transferring descriptor
@@ -1300,7 +1294,6 @@ crt_group_config_remove(crt_group_t *grp);
  */
 int
 crt_group_detach(crt_group_t *attached_grp);
-
 
 /**
  * Convert a primary group rank to a local subgroup rank. Given a primary group
@@ -1747,7 +1740,6 @@ crt_register_event_cb(crt_event_cb event_handler, void *arg);
 int
 crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
 
-
 typedef void
 (*crt_hlc_error_cb) (void *arg);
 
@@ -1762,7 +1754,6 @@ typedef void
  */
 int
 crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg);
-
 
 /**
  * A protocol is a set of RPCs. A protocol has a base opcode and a version,
@@ -1800,7 +1791,6 @@ crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg);
  * 3) The client registers MY_BASE_OPC with version number MY_VER, then starts
  *    sending RPCs using it's member opcodes.
  */
-
 
 /**
  * 1) define crf for each member RPC. my_rpc_crf_1, my_rpc_crf_2
@@ -1874,7 +1864,6 @@ int
 crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
 
-
 /**
  * Set self rank.
  *
@@ -1943,7 +1932,6 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  *                              on failure.
  */
 int crt_self_uri_get(int tag, char **uri);
-
 
 /**
  * Retrieve group information containing ranks and associated uris
@@ -2100,7 +2088,6 @@ int crt_group_auto_rank_remove(crt_group_t *grp, bool enable);
  *                               failure.
  */
 int crt_group_secondary_destroy(crt_group_t *grp);
-
 
 /**
  * Perform a primary group modification in an atomic fashion based on the
