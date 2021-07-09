@@ -50,6 +50,8 @@ type propHdlr struct {
 	// toString defines a closure for converting the
 	// entry's value into a string.
 	toString entryStringer
+	// readOnly indicates that the property may not be set.
+	readOnly bool
 }
 
 // propHdlrs defines a map of property names to handlers that
@@ -69,7 +71,8 @@ type propHdlr struct {
 //		map[string]valHdlr{	   // optional map of string value processors
 //			"key": closure of type valHdlr, // process set value
 //		},
-//		closure of type entryStringer // optional pretty-printer
+//		closure of type entryStringer, // optional pretty-printer
+//		bool,			   // if true, property may not be set
 // 	},
 var propHdlrs = propHdlrMap{
 	"label": {
@@ -94,6 +97,7 @@ var propHdlrs = propHdlrMap{
 			}
 			return strValStringer(e, name)
 		},
+		false,
 	},
 	"cksum": {
 		C.DAOS_PROP_CO_CSUM,
@@ -133,6 +137,7 @@ var propHdlrs = propHdlrMap{
 			}
 			return C.GoString(csum.cf_name)
 		},
+		false,
 	},
 	"cksum_size": {
 		C.DAOS_PROP_CO_CSUM_CHUNK_SIZE,
@@ -148,6 +153,7 @@ var propHdlrs = propHdlrMap{
 		},
 		nil,
 		humanSizeStringer,
+		false,
 	},
 	"srv_cksum": {
 		C.DAOS_PROP_CO_CSUM_SERVER_VERIFY,
@@ -177,6 +183,7 @@ var propHdlrs = propHdlrMap{
 				return propInvalidValue(e, name)
 			}
 		},
+		false,
 	},
 	"dedup": {
 		C.DAOS_PROP_CO_DEDUP,
@@ -209,6 +216,7 @@ var propHdlrs = propHdlrMap{
 				return propInvalidValue(e, name)
 			}
 		},
+		false,
 	},
 	"dedup_threshold": {
 		C.DAOS_PROP_CO_DEDUP_THRESHOLD,
@@ -224,6 +232,7 @@ var propHdlrs = propHdlrMap{
 		},
 		nil,
 		humanSizeStringer,
+		false,
 	},
 	"compression": {
 		C.DAOS_PROP_CO_COMPRESS,
@@ -263,6 +272,7 @@ var propHdlrs = propHdlrMap{
 			}
 			return C.GoString(algo.cf_name)
 		},
+		false,
 	},
 	"encryption": {
 		C.DAOS_PROP_CO_ENCRYPT,
@@ -302,6 +312,7 @@ var propHdlrs = propHdlrMap{
 			}
 			return C.GoString(algo.cf_name)
 		},
+		false,
 	},
 	"rf": {
 		C.DAOS_PROP_CO_REDUN_FAC,
@@ -340,6 +351,7 @@ var propHdlrs = propHdlrMap{
 				return propInvalidValue(e, name)
 			}
 		},
+		false,
 	},
 	"status": {
 		C.DAOS_PROP_CO_STATUS,
@@ -372,6 +384,7 @@ var propHdlrs = propHdlrMap{
 				return propInvalidValue(e, name)
 			}
 		},
+		false,
 	},
 	"ec_cell": {
 		C.DAOS_PROP_CO_EC_CELL_SZ,
@@ -402,6 +415,7 @@ var propHdlrs = propHdlrMap{
 			}
 			return humanSizeStringer(e, name)
 		},
+		false,
 	},
 	// Read-only properties here for use by get-property.
 	"layout_type": {
@@ -419,12 +433,14 @@ var propHdlrs = propHdlrMap{
 			return fmt.Sprintf("%s (%d)",
 				C.GoString((*C.char)(unsafe.Pointer(&loStr[0]))), loInt)
 		},
+		true,
 	},
 	"layout_version": {
 		C.DAOS_PROP_CO_LAYOUT_VER,
 		"Layout Version",
 		nil, nil,
 		uintStringer,
+		true,
 	},
 	"rf_lvl": {
 		C.DAOS_PROP_CO_REDUN_LVL,
@@ -443,30 +459,35 @@ var propHdlrs = propHdlrMap{
 				return fmt.Sprintf("(%d)", lvl)
 			}
 		},
+		true,
 	},
 	"max_snapshot": {
 		C.DAOS_PROP_CO_SNAPSHOT_MAX,
 		"Max Snapshot",
 		nil, nil,
 		uintStringer,
+		true,
 	},
 	"alloc_oid": {
 		C.DAOS_PROP_CO_ALLOCED_OID,
 		"Highest Allocated OID",
 		nil, nil,
 		uintStringer,
+		true,
 	},
 	"owner": {
 		C.DAOS_PROP_CO_OWNER,
 		"Owner",
 		nil, nil,
 		strValStringer,
+		true,
 	},
 	"group": {
 		C.DAOS_PROP_CO_OWNER_GROUP,
 		"Group",
 		nil, nil,
 		strValStringer,
+		true,
 	},
 }
 
@@ -709,11 +730,51 @@ type PropertiesFlag struct {
 func (f *PropertiesFlag) Complete(match string) []flags.Completion {
 	comps := make(ui.CompletionMap)
 	for key, hdlr := range propHdlrs {
+		if !f.IsSettable(key) {
+			continue
+		}
 		comps[key] = hdlr.valHdlrs.keys()
 	}
 	f.SetCompletions(comps)
 
 	return f.SetPropertiesFlag.Complete(match)
+}
+
+func (f *PropertiesFlag) AddPropVal(key, val string) error {
+	var entries propSlice
+	var err error
+	if f.props == nil {
+		f.props, entries, err = allocProps(len(propHdlrs))
+		if err != nil {
+			return err
+		}
+	} else {
+		entries = createPropSlice(f.props, len(propHdlrs))
+	}
+
+	hdlr, err := propHdlrs.get(key)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < int(f.props.dpp_nr); i++ {
+		if uint32(entries[i].dpe_type) == hdlr.dpeType {
+			return errors.Errorf("cannot update value for existing prop %s", hdlr.shortDesc)
+		}
+	}
+
+	if err := hdlr.execute(&entries[f.props.dpp_nr], val); err != nil {
+		return err
+	}
+	entries[f.props.dpp_nr].dpe_type = C.uint32_t(hdlr.dpeType)
+	f.props.dpp_nr++
+
+	if f.ParsedProps == nil {
+		f.ParsedProps = make(map[string]string)
+	}
+	f.ParsedProps[key] = val
+
+	return nil
 }
 
 func (f *PropertiesFlag) UnmarshalFlag(fv string) (err error) {
@@ -728,7 +789,6 @@ func (f *PropertiesFlag) UnmarshalFlag(fv string) (err error) {
 		return
 	}
 
-	f.SettableKeys(propHdlrs.keys()...)
 	if err := f.SetPropertiesFlag.UnmarshalFlag(fv); err != nil {
 		return err
 	}
@@ -757,6 +817,40 @@ func (f *PropertiesFlag) Cleanup() {
 	}
 
 	C.daos_prop_free(f.props)
+}
+
+// CreatePropertiesFlag embeds the base PropertiesFlag struct to
+// compose a flag that is used for setting properties on a
+// new container. It is intended to be used where only a subset of
+// properties are valid for setting on create.
+type CreatePropertiesFlag struct {
+	PropertiesFlag
+}
+
+func (f *CreatePropertiesFlag) setWritableKeys() {
+	keys := make([]string, 0, len(propHdlrs))
+	for key, hdlr := range propHdlrs {
+		if !hdlr.readOnly {
+			keys = append(keys, key)
+		}
+	}
+	f.SettableKeys(keys...)
+}
+
+func (f *CreatePropertiesFlag) Complete(match string) []flags.Completion {
+	f.setWritableKeys()
+
+	return f.PropertiesFlag.Complete(match)
+}
+
+func (f *CreatePropertiesFlag) UnmarshalFlag(fv string) error {
+	f.setWritableKeys()
+
+	if err := f.PropertiesFlag.UnmarshalFlag(fv); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // SetPropertiesFlag embeds the base PropertiesFlag struct to
