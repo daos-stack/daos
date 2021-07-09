@@ -110,9 +110,9 @@ func drespToMemberResult(rank system.Rank, dresp *drpc.Response, err error, tSta
 	return system.NewMemberResult(rank, nil, tState)
 }
 
-// TryDrpc attempts dRPC request to given rank managed by instance and return
+// tryDrpc attempts dRPC request to given rank managed by instance and return
 // success or error from call result or timeout encapsulated in result.
-func (ei *EngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
+func (ei *EngineInstance) tryDrpc(ctx context.Context, method drpc.Method) *system.MemberResult {
 	rank, err := ei.GetRank()
 	if err != nil {
 		return nil // no rank to return result for
@@ -162,7 +162,7 @@ func (ei *EngineInstance) TryDrpc(ctx context.Context, method drpc.Method) *syst
 	}
 }
 
-func (ei *EngineInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
+func (ei *EngineInstance) GetBioHealth(ctx context.Context, req *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error) {
 	dresp, err := ei.CallDrpc(ctx, drpc.MethodBioHealth, req)
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func (ei *EngineInstance) getBioHealth(ctx context.Context, req *ctlpb.BioHealth
 	return resp, nil
 }
 
-func (ei *EngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
+func (ei *EngineInstance) ListSmdDevices(ctx context.Context, req *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error) {
 	dresp, err := ei.CallDrpc(ctx, drpc.MethodSmdDevs, req)
 	if err != nil {
 		return nil, err
@@ -192,7 +192,7 @@ func (ei *EngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 	}
 
 	if resp.Status != 0 {
-		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "listSmdDevices failed")
+		return nil, errors.Wrap(drpc.DaosStatus(resp.Status), "ListSmdDevices failed")
 	}
 
 	return resp, nil
@@ -206,7 +206,7 @@ func (ei *EngineInstance) listSmdDevices(ctx context.Context, req *ctlpb.SmdDevR
 // retrieve metadata and health stats for each SMD device (blobstore) on
 // a given I/O Engine instance. Update input map with new stats/smd info.
 func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[string]*storage.NvmeController) error {
-	smdDevs, err := ei.listSmdDevices(ctx, new(ctlpb.SmdDevReq))
+	smdDevs, err := ei.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
 	if err != nil {
 		return errors.Wrapf(err, "instance %d listSmdDevices()", ei.Index())
 	}
@@ -221,7 +221,7 @@ func (ei *EngineInstance) updateInUseBdevs(ctx context.Context, ctrlrMap map[str
 			return errors.Errorf("%s: didn't match any known controllers", msg)
 		}
 
-		pbStats, err := ei.getBioHealth(ctx, &ctlpb.BioHealthReq{
+		pbStats, err := ei.GetBioHealth(ctx, &ctlpb.BioHealthReq{
 			DevUuid: dev.GetUuid(),
 		})
 		if err != nil {
