@@ -612,12 +612,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
 
 	bdb = iod_dma_buf(biod);
-	off = bio_iov2raw_off(biov);
-	end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
-	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
-			(off >> BIO_DMA_PAGE_SHIFT);
-	D_ASSERT(pg_cnt > 0);
-	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
+	dma_biov2pg(biov, &off, &end, &pg_cnt, &pg_off);
 
 	/*
 	 * For huge IOV, we'll bypass our per-xstream DMA buffer cache and
@@ -841,17 +836,14 @@ scm_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 {
 	struct umem_instance	*umem = biod->bd_ctxt->bic_umem;
 	void			*payload;
-	unsigned int		 pg_off;
 
 	D_ASSERT(biod->bd_rdma);
 	D_ASSERT(!bio_scm_rdma);
 
 	payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
-	pg_off = rg->brr_off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
-	payload += pg_off;
 
-	D_DEBUG(DB_IO, "SCM RDMA, type:%d payload:%p pg_off:%u\n",
-		biod->bd_type, payload, pg_off);
+	D_DEBUG(DB_IO, "SCM RDMA, type:%d payload:%p len:"DF_U64"\n",
+		biod->bd_type, payload, rg->brr_end - rg->brr_off);
 
 	bio_memcpy(biod, DAOS_MEDIA_SCM, umem_off2ptr(umem, rg->brr_off),
 		   payload, rg->brr_end - rg->brr_off);
