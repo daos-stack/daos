@@ -490,9 +490,9 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 	struct bio_bulk_group	*bbg;
 	int			 i, bulk_grps = 0, bulk_chunks = 0;
 
-	D_EMIT("chunk_size:%u, tot_chunk:%u, active_iods:%u, used:%u,%u,%u\n",
-		bio_chk_sz, bdb->bdb_tot_cnt, bdb->bdb_active_iods,
-		bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
+	D_EMIT("chk_size:%u, tot_chk:%u/%u, active_iods:%u, used:%u,%u,%u\n",
+		bio_chk_sz, bdb->bdb_tot_cnt, bio_chk_cnt_max,
+		bdb->bdb_active_iods, bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
 		bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
 		bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
 

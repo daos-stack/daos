@@ -372,8 +372,8 @@ bulk_grp_grow(struct bio_dma_buffer *bdb, struct bio_bulk_group *bbg,
 	/* Grow DMA buffer when not reaching DMA upper bound */
 	if (bdb->bdb_tot_cnt < bio_chk_cnt_max) {
 		rc = dma_buffer_grow(bdb, 1);
-		if (rc != 0)
-			return rc;
+		if (rc == 0)
+			goto populate;
 	}
 
 	/* Try to evict an unused chunk from other bulk group */
