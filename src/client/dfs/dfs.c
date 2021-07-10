@@ -3586,6 +3586,7 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name)
 	return 0;
 }
 
+/* Update a object to a new parent, taking the parent directly */
 void
 dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name)
 {
@@ -4184,7 +4185,7 @@ out:
 	return rc;
 }
 
-/* Accepts oid as input or output parameter */
+/* Returns but does not checked moved oid, will check and return oid for clobbered file */
 int
 dfs_moveoi(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	   char *new_name, daos_obj_id_t *moid, daos_obj_id_t *oid)
@@ -4199,6 +4200,8 @@ dfs_moveoi(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
+	if (moid && (moid->lo || moid->hi))
+		return EINVAL;
 	if (dfs->amode != O_RDWR)
 		return EPERM;
 	if (parent == NULL)
@@ -4209,8 +4212,6 @@ dfs_moveoi(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 		new_parent = &dfs->root;
 	else if (!S_ISDIR(new_parent->mode))
 		return ENOTDIR;
-	if (moid && (moid->lo || moid->hi))
-		return EINVAL;
 
 	rc = check_name(name, &len);
 	if (rc)
