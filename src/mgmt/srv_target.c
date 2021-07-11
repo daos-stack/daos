@@ -864,44 +864,91 @@ out_reply:
 	}
 }
 
-static int
-tgt_destroy(uuid_t pool_uuid, char *path)
-{
-	char		*zombie = NULL;
-	struct d_uuid	 id;
-	int		 rc;
+struct tgt_destroy_args {
+	struct d_uuid		 tda_id;
+	char			*tda_path;
+	char			*tda_zombie;
+	int			 tda_rc;
+};
 
-	/** XXX: many synchronous/blocking operations below */
+static void *
+tgt_destroy_cleanup(void *arg)
+{
+	struct tgt_destroy_args	*tda = arg;
+	int			 rc;
 
 	/** move target directory to ZOMBIES */
-	rc = path_gen(pool_uuid, zombies_path, NULL, NULL, &zombie);
-	if (rc)
-		return rc;
-
-	/* destroy blobIDs first */
-	uuid_copy(id.uuid, pool_uuid);
-	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
+	rc = path_gen(tda->tda_id.uuid, zombies_path, NULL, NULL,
+		      &tda->tda_zombie);
 	if (rc)
 		goto out;
 
-	rc = rename(path, zombie);
+	rc = rename(tda->tda_path, tda->tda_zombie);
 	if (rc < 0)
-		D_GOTO(out, rc = daos_errno2der(errno));
+		goto out;
 
 	/** make sure the rename is persistent */
-	rc = dir_fsync(zombie);
-	if (rc < 0)
-		goto out;
+	(void)dir_fsync(tda->tda_zombie);
 
 	/**
 	 * once successfully moved to the ZOMBIES directory, the target will
 	 * take care of retrying on failure and thus always report success to
 	 * the caller.
 	 */
-	(void)subtree_destroy(zombie);
-	(void)rmdir(zombie);
+	(void)subtree_destroy(tda->tda_zombie);
+	(void)rmdir(tda->tda_zombie);
 out:
-	D_FREE(zombie);
+	D_FREE(tda->tda_zombie);
+	tda->tda_rc = rc;
+	return NULL;
+}
+
+static int
+tgt_destroy(uuid_t pool_uuid, char *path)
+{
+	struct tgt_destroy_args	 tda = {0};
+	pthread_t		 thread;
+	int			 rc;
+
+	/* destroy blobIDs first */
+	uuid_copy(tda.tda_id.uuid, pool_uuid);
+	rc = dss_thread_collective(tgt_kill_pool, &tda.tda_id, 0);
+	if (rc)
+		goto out;
+
+	tda.tda_path   = path;
+	tda.tda_zombie = NULL;
+	rc = pthread_create(&thread, NULL, tgt_destroy_cleanup, &tda);
+	if (rc) {
+		rc = daos_errno2der(errno);
+		D_ERROR(DF_UUID": failed to create thread for target file "
+			"cleanup: "DF_RC"\n", DP_UUID(pool_uuid),
+			DP_RC(rc));
+		goto out;
+	}
+
+	for (;;) {
+		void *res;
+
+		/* Try to join with thread - either canceled or normal exit. */
+		rc = pthread_tryjoin_np(thread, &res);
+		if (rc == 0) {
+			if (res == PTHREAD_CANCELED) {
+				D_DEBUG(DB_MGMT,
+					DF_UUID": tgt_destroy_cleanup thread "
+					"canceled\n", DP_UUID(pool_uuid));
+				rc = -DER_CANCELED;
+			} else {
+				D_DEBUG(DB_MGMT,
+					DF_UUID": tgt_destroy_cleanup thread "
+					"finished\n", DP_UUID(pool_uuid));
+				rc = tda.tda_rc;
+			}
+			break;
+		}
+		ABT_thread_yield();
+	}
+out:
 	return rc;
 }
 
