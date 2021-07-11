@@ -55,7 +55,9 @@ class POSIXStatTest(IorTestBase):
             # is created.
             task = run_task(self.hostlist_clients, "date +%s")
             for output, _ in task.iter_buffers():
-                cmd_output = str(output)
+                cmd_output = "\n".join(
+                    [line.decode("utf-8") for line in output])
+            self.log.debug("## date cmd_output = {}".format(cmd_output))
             current_epoch = cmd_output.split()[-1]
 
             # Run ior command.
@@ -71,7 +73,10 @@ class POSIXStatTest(IorTestBase):
             task = run_task(
                 self.hostlist_clients, "stat -c%Z {}".format(testfile_path))
             for output, _ in task.iter_buffers():
-                cmd_output = str(output)
+                cmd_output = "\n".join(
+                    [line.decode("utf-8") for line in output])
+            self.log.debug("## stat cmd_output = {}".format(cmd_output))
+
             # The output may contain some warning messages, so use split to get
             # the value we want.
             creation_epoch = cmd_output.split()[-1]
@@ -105,4 +110,5 @@ class POSIXStatTest(IorTestBase):
         self.stop_dfuse()
 
         if error_list:
-            self.fail("\n".join(error_list))
+            self.fail("\n----- Errors detected! -----\n{}".format(
+                "\n".join(error_list)))
