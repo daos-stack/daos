@@ -214,20 +214,20 @@ func printListPoolsRespVerbose(out io.Writer, resp *control.ListPoolsResp) error
 // PrintListPoolsResponse generates a human-readable representation of the
 // supplied ListPoolsResp struct and writes it to the supplied io.Writer.
 // Additional columns for pool UUID and service replicas if verbose is set.
-func PrintListPoolsResponse(o, e io.Writer, r *control.ListPoolsResp, v bool) error {
-	warn, err := r.Validate()
+func PrintListPoolsResponse(out, outErr io.Writer, resp *control.ListPoolsResp, verbose bool) error {
+	warn, err := resp.Validate()
 	if err != nil {
 		return err
 	}
 	if warn != "" {
-		fmt.Fprintln(e, warn)
+		fmt.Fprintln(outErr, warn)
 	}
 
-	if v {
-		return printListPoolsRespVerbose(o, r)
+	if verbose {
+		return printListPoolsRespVerbose(out, resp)
 	}
 
-	return printListPoolsResp(o, r)
+	return printListPoolsResp(out, resp)
 }
 
 // PrintPoolProperties displays a two-column table of pool property names and values.
