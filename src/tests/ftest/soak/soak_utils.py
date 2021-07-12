@@ -63,7 +63,6 @@ def add_pools(self, pool_names):
         self.pool[-1].namespace = path
         self.pool[-1].get_params(self)
         self.pool[-1].create()
-        self.pool[-1].set_property("reclaim", "time")
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 
@@ -84,10 +83,11 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         self.container[-1].oclass.update(oclass)
     parity = get_ec_parity_number(oclass)
     if parity:
-        properties = 'rf:{}'.format(parity)
-        self.add_cancel_ticket(
-                "DAOS-7887", "dfuse fails with {} and checksum".format(oclass))
-        self.container[-1].properties.update(properties)
+        rf = 'rf:{}'.format(parity)
+        properties = self.container[-1].properties.value
+        cont_properties = (",").join(filter(None, [properties, rf]))
+        if cont_properties:
+            self.container[-1].properties.update(cont_properties)
     self.container[-1].create()
 
 
