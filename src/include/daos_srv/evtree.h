@@ -146,7 +146,7 @@ struct evt_filter {
 /** Expanded format of evtree entry */
 #define DP_ENT(ent)			\
 	DP_EXT(&(ent)->en_sel_ext), DP_EXT(&(ent)->en_ext), (ent)->en_epoch, \
-	(ent)->en_minor_epc, evt_debug_print_visibility(ent)
+	(ent)->en_minor_epc, evt_vis2dbg((ent)->en_visibility)
 
 /** Log format of evtree filter */
 #define DF_FILTER			\
@@ -293,14 +293,18 @@ struct evt_entry_in {
 enum evt_visibility {
 	/** It is unknown if entry is covered or visible */
 	EVT_UNKNOWN	= 0,
-	/** Entry is covered at specified epoch */
-	EVT_COVERED	= (1 << 0),
 	/** Entry is visible at specified epoch */
-	EVT_VISIBLE	= (1 << 1),
+	EVT_VISIBLE	= (1 << 0),
+	/** Entry is covered at specified epoch */
+	EVT_COVERED	= (1 << 1),
+	/** Entry is a remove record (See evt_remove_all */
+	EVT_REMOVE	= (1 << 2),
 	/** Entry is part of larger in-tree extent */
-	EVT_PARTIAL	= (1 << 2),
-	/** In sorted iterator, marks final entry */
-	EVT_LAST	= (1 << 3),
+	EVT_PARTIAL	= (1 << 3),
+	/** Visibility mask */
+	EVT_VIS_MASK	= (EVT_REMOVE | EVT_COVERED | EVT_VISIBLE),
+	/** Marks the final entry sorted iterator */
+	EVT_LAST	= (1 << 4),
 };
 
 /**
@@ -353,6 +357,10 @@ struct evt_entry_array {
 	uint32_t			 ea_max;
 	/** Number of bytes per index */
 	uint32_t			 ea_inob;
+	/** Index of first delete record, valid if ea_delete_nr != 0 */
+	uint32_t			 ea_first_delete;
+	/** Number of delete records */
+	uint32_t			 ea_delete_nr;
 	/* Small array of embedded entries */
 	struct evt_list_entry		 ea_embedded_ents[0];
 };
@@ -381,11 +389,11 @@ D_CASSERT(offsetof(struct evt_entry_array_sm, ea_embedded) ==
 	  offsetof(struct evt_entry_array, ea_embedded_ents));
 
 static inline char
-evt_debug_print_visibility(const struct evt_entry *ent)
+evt_vis2dbg(int flag)
 {
-	int	flags = EVT_VISIBLE | EVT_PARTIAL | EVT_COVERED;
+	int	flags = EVT_VISIBLE | EVT_PARTIAL | EVT_COVERED | EVT_REMOVE;
 
-	switch (ent->en_visibility & flags) {
+	switch (flag & flags) {
 	default:
 		D_ASSERT(0);
 	case 0:
@@ -400,6 +408,8 @@ evt_debug_print_visibility(const struct evt_entry *ent)
 		return 'C';
 	case EVT_COVERED | EVT_PARTIAL:
 		return 'c';
+	case EVT_REMOVE:
+		return 'R';
 	}
 
 	return 'U';
@@ -612,39 +622,38 @@ int evt_find(daos_handle_t toh, const struct evt_filter *filter,
 int evt_debug(daos_handle_t toh, int debug_level);
 
 enum {
+	/** Return extents visible in the search rectangle */
+	EVT_ITER_VISIBLE	= (1 << 0),
+	/** Add fully or partially covered extents to EVT_ITER_VISIBLE */
+	EVT_ITER_COVERED	= (1 << 1) | EVT_ITER_VISIBLE,
+	/** Skip visible holes (Only valid with EVT_ITER_VISIBLE) */
+	EVT_ITER_SKIP_HOLES	= (1 << 2),
 	/**
 	 * Use the embedded iterator of the open handle.
 	 * It can reduce memory consumption, but state of iterator can be
 	 * overwritten by other tree operation.
 	 */
-	EVT_ITER_EMBEDDED	= (1 << 0),
-	/** Return extents visible in the search rectangle */
-	EVT_ITER_VISIBLE	= (1 << 1),
-	/** Return extents fully or partially covered in the search rectangle */
-	EVT_ITER_COVERED	= (1 << 2),
-	/** Skip visible holes (Only valid with EVT_ITER_VISIBLE) */
-	EVT_ITER_SKIP_HOLES	= (1 << 3),
+	EVT_ITER_EMBEDDED	= (1 << 3),
 	/** Reverse iterator (ordered iterator only) */
 	EVT_ITER_REVERSE	= (1 << 4),
-	/* If either EVT_ITER_VISIBLE or EVT_ITER_COVERED are set,
-	 * evt_iter_probe will calculate and cache visible extents and iterate
-	 * through the cached extents.   Each rectangle will be marked as
-	 * visible or covered.  The partial bit will be set if the rectangle
-	 * returned differs from what is in the tree.  The state of this type
-	 * of iterator is unaffected by tree insertion or deletion so reprobe
-	 * isn't necessary.  One should probably not use the embedded iterator
-	 * when holding such across yield boundaries.
+	/* If EVT_ITER_VISIBLE is set, evt_iter_probe will calculate and cache
+	 * visible extents and iterate through the cached extents.   Each
+	 * rectangle will be marked as visible or covered.  The partial bit will
+	 * be set if the rectangle returned differs from what is in the tree.
+	 * The state of this type of iterator is unaffected by tree insertion or
+	 * deletion so reprobe isn't necessary.  One should probably not use the
+	 * embedded iterator when holding such across yield boundaries.
 	 * If neither flag is set, all rectangles in tree that intersect the
 	 * search rectangle, including punched extents, are returned.
 	 */
-
 	/** The iterator is for purge operation */
 	EVT_ITER_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
 	EVT_ITER_FOR_MIGRATION	= (1 << 6),
-	/** Skip extents removed by vos_obj_array_remove */
-	EVT_ITER_SKIP_REMOVED	= (1 << 7),
 };
+
+D_CASSERT((int)EVT_VISIBLE == (int)EVT_ITER_VISIBLE);
+D_CASSERT((int)EVT_COVERED == (int)(EVT_ITER_COVERED & ~EVT_ITER_VISIBLE));
 
 /**
  * Initialize an iterator.

@@ -12,4 +12,5 @@ PointerAlignment: Right
 AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
 AlignTrailingComments: true
+ColumnLimit: 100
 ...

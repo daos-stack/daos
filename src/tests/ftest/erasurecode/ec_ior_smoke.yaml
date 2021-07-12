@@ -52,7 +52,7 @@ ior:
     np: 48
   dfs_destroy: False
   iorflags:
-      flags: "-w -W -r -R -k -G 1 -vv"
+      flags: "-w -W -r -R -G 1 -vv"
   test_file: /testFile
   repetitions: 1
   transfersize_blocksize: !mux

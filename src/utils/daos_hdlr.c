@@ -705,7 +705,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 
 	begin = time(NULL);
 
-	D_PRINT("check container "DF_UUIDF" stated at: %s\n",
+	fprintf(ap->outstream, "check container "DF_UUIDF" started at: %s\n",
 		DP_UUID(ap->c_uuid), ctime(&begin));
 
 	while (!daos_anchor_is_eof(&anchor)) {
@@ -1663,6 +1663,8 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
 		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+		if (rc)
+			rc = daos_errno2der(rc);
 	} else {
 		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
 	}
