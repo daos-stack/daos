@@ -306,7 +306,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		shard_iod.iod_size = sizes[i];
 		if (iod->iod_type == DAOS_IOD_ARRAY && oiods != NULL) {
 			rc = dc_rw_cb_iod_sgl_copy(iod, &sgls[i], &shard_iod,
-					&shard_sgl, &oiods->oiod_siods[i],
+					&shard_sgl, oiods[i].oiod_siods,
 					rw_args->shard_args->offs[i]);
 			if (rc != 0) {
 				D_ERROR("dc_rw_cb_iod_sgl_copy failed (object: "
