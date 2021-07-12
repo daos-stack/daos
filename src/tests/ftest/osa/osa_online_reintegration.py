@@ -169,7 +169,7 @@ class OSAOnlineReintegration(OSAUtils):
 
         Test Description: Validate Online Reintegration
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=online_reintegration
@@ -181,7 +181,7 @@ class OSAOnlineReintegration(OSAUtils):
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
         Test Description: Validate Online Reintegration with server stop
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=online_reintegration,online_reintegration_srv_stop
@@ -195,7 +195,7 @@ class OSAOnlineReintegration(OSAUtils):
         Test Description: Validate Online Reintegration
         without checksum
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=online_reintegration,online_reintegration_without_csum
@@ -211,7 +211,7 @@ class OSAOnlineReintegration(OSAUtils):
         Test Description: Reintegrate rank while aggregation
         is happening in parallel
 
-        :avocado: tags=all,pr,full_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=online_reintegration,online_reintegration_aggregation
@@ -227,7 +227,7 @@ class OSAOnlineReintegration(OSAUtils):
         Test Description: Reintegrate rank with different
         object class
 
-        :avocado: tags=all,pr,full_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
         :avocado: tags=online_reintegration,online_reintegration_oclass
