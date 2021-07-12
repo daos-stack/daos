@@ -154,6 +154,8 @@ struct obj_reasb_req {
 	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */
 	uint32_t			 orr_recov:1,
+	/* for snapshot data recovery flag */
+					 orr_recov_snap:1,
 	/* for iod_size fetching flag */
 					 orr_size_fetch:1,
 	/* for iod_size fetched flag */
@@ -165,7 +167,9 @@ struct obj_reasb_req {
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
 					 orr_iom_realloc:1,
 	/* iod_size is set by IO reply */
-					 orr_size_set:1;
+					 orr_size_set:1,
+	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
+					 orr_fail_alloc:1;
 };
 
 static inline void
@@ -616,7 +620,8 @@ struct obj_io_context {
 	uint64_t		 ioc_io_size;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
-				 ioc_lost_reply:1;
+				 ioc_lost_reply:1,
+				 ioc_fetch_snap:1;
 };
 
 struct ds_obj_exec_arg {
@@ -824,6 +829,38 @@ obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
 	return rc == -DER_INPROGRESS && dth->dth_share_tbd_count > 0;
 }
 
+static inline void
+daos_recx_ep_list_set(struct daos_recx_ep_list *lists, unsigned int nr,
+		      daos_epoch_t epoch, bool snapshot)
+{
+	struct daos_recx_ep_list	*list;
+	struct daos_recx_ep		*recx_ep;
+	unsigned int			 i, j;
+
+	for (i = 0; i < nr; i++) {
+		list = &lists[i];
+		list->re_ep_valid = 1;
+		if (epoch == 0)
+			continue;
+		if (snapshot)
+			list->re_snapshot = 1;
+		for (j = 0; j < list->re_nr; j++) {
+			recx_ep = &list->re_items[j];
+			if (snapshot)
+				recx_ep->re_ep = epoch;
+			else
+				recx_ep->re_ep = max(recx_ep->re_ep, epoch);
+		}
+	}
+}
+
+static inline bool
+daos_recx_ep_list_ep_valid(struct daos_recx_ep_list *list)
+{
+	return (list->re_ep_valid == 1);
+}
+
+/** Query the highest and lowest recx in the recx_ep_list */
 int  obj_class_init(void);
 void obj_class_fini(void);
 int  obj_utils_init(void);
