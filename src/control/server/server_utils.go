@@ -221,7 +221,10 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		engineCfg.HugePageSz = PageSizeMb
 		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
 		// Warn if hugepages are not enough to sustain average
-		// I/O workload (~1GB)
+		// I/O workload (~1GB), ignore warning if only using SCM backend
+		if !hasBdevs {
+			continue
+		}
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
 			srv.log.Errorf("Not enough hugepages are allocated!")
 		}

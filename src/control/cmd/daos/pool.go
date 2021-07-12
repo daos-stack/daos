@@ -198,6 +198,11 @@ func poolListContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
 }
 
 func printContainerList(out io.Writer, contIDs []*ContainerID) {
+	if len(contIDs) == 0 {
+		fmt.Fprintf(out, "No containers.\n")
+		return
+	}
+
 	uuidTitle := "UUID"
 	labelTitle := "Label"
 	titles := []string{uuidTitle, labelTitle}
