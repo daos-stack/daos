@@ -10,7 +10,11 @@ done
 total_nodes=${total_nodes%?}
 echo $total_nodes
 
-/usr/mpi/gcc/openmpi-4.1.0rc5/bin/orterun \
+module load openmpi
+which orterun
+
+#/usr/mpi/gcc/openmpi-4.1.0rc5/bin/orterun \
+orterun \
     --mca btl self,tcp \
     -N 1 \
     -x D_LOG_FILE=/var/tmp/daos_testing/self_test_np_sep_cart_server.log \
@@ -30,7 +34,8 @@ echo $total_nodes
 
 sleep 5
 
-/usr/mpi/gcc/openmpi-4.1.0rc5/bin/orterun \
+#/usr/mpi/gcc/openmpi-4.1.0rc5/bin/orterun \
+orterun \
     --mca btl self,tcp \
     -N 1 \
     --host ${nodes_array[0]} \
