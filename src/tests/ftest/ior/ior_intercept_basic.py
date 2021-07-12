@@ -41,7 +41,6 @@ class IorIntercept(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse
         :avocado: tags=daosio,dfuse,il
         :avocado: tags=iorinterceptbasic
         """
