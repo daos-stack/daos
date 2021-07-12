@@ -63,20 +63,20 @@ server_config:
                 - FI_UNIVERSE_SIZE=2048
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-    mode: 146
     name: daos_server
-    scm_size: 160GB
-    nvme_size: 800GB
-    svcn: 1
+    scm_size: 200GB
+    nvme_size: 1TB
+    properties: reclaim:time,ec_cell_sz:64KiB
     control_method: dmg
     rebuild_timeout: 240
     pool_query_timeout: 120
 pool_reserved:
-    mode: 511
     name: daos_server
     scm_size: 3GB
     nvme_size: 50GB
     control_method: dmg
+    rebuild_timeout: 240
+    pool_query_timeout: 120
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
@@ -84,7 +84,8 @@ container:
     daos_timeout: 30
 container_reserved:
     type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+    oclass: EC_2P1GX
     control_method: daos
     daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs

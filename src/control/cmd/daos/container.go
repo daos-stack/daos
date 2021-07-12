@@ -38,6 +38,7 @@ type containerCmd struct {
 	Stat        containerStatCmd        `command:"stat" description:"get container statistics"`
 	Clone       containerCloneCmd       `command:"clone" description:"clone a container"`
 	Check       containerCheckCmd       `command:"check" description:"check objects' consistency in a container"`
+	List        poolContainersListCmd   `command:"list" description:"list all containers"`
 
 	ListAttributes  containerListAttributesCmd  `command:"list-attributes" alias:"list-attrs" description:"list container user-defined attributes"`
 	DeleteAttribute containerDeleteAttributeCmd `command:"delete-attribute" alias:"del-attr" description:"delete container user-defined attribute"`
@@ -178,16 +179,17 @@ func (cmd *containerBaseCmd) connectPool(ap *C.struct_cmd_args_s) (func(), error
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	Type        string         `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5"`
-	Path        string         `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   ChunkSizeFlag  `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass ObjClassFlag   `long:"oclass" short:"o" description:"default object class"`
-	Properties  PropertiesFlag `long:"properties" description:"container properties"`
-	Mode        ConsModeFlag   `long:"mode" short:"M" description:"DFS consistency mode"`
-	ACLFile     string         `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User        string         `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group       string         `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
-	ContFlag    ContainerID    `long:"cont" short:"c" description:"container UUID (optional)"`
+	Type        string               `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5"`
+	Path        string               `long:"path" short:"d" description:"container namespace path"`
+	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
+	Properties  CreatePropertiesFlag `long:"properties" description:"container properties"`
+	Label       string               `long:"label" short:"l" description:"container label"`
+	Mode        ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
+	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
+	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	ContFlag    ContainerID          `long:"cont" short:"c" description:"container UUID (optional)"`
 	Args        struct {
 		Container ContainerID `positional-arg-name:"<container UUID (optional)>"`
 	} `positional-args:"yes"`
@@ -238,6 +240,18 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		ap.aclfile = C.CString(cmd.ACLFile)
 		defer freeString(ap.aclfile)
 	}
+
+	if cmd.Label != "" {
+		for key := range cmd.Properties.ParsedProps {
+			if key == "label" {
+				return errors.New("can't use both --label and --properties label:")
+			}
+		}
+		if err := cmd.Properties.AddPropVal("label", cmd.Label); err != nil {
+			return err
+		}
+	}
+
 	if cmd.Properties.props != nil {
 		ap.props = cmd.Properties.props
 	}
@@ -284,13 +298,16 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 			"failed to query new container %s",
 			cmd.contUUID)
 	}
+	if label, set := cmd.Properties.ParsedProps["label"]; set {
+		ci.ContainerLabel = label
+	}
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(ci, nil)
 	}
 
 	var bld strings.Builder
-	if err := printContainerInfo(&bld, ci); err != nil {
+	if err := printContainerInfo(&bld, ci, false); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -428,6 +445,10 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 
 	var rc C.int
 	switch {
+	case cmd.Path != "":
+		cPath := C.CString(cmd.Path)
+		defer freeString(cPath)
+		rc = C.duns_destroy_path(cmd.cPoolHandle, cPath)
 	case cmd.ContainerID().HasUUID():
 		rc = C.daos_cont_destroy(cmd.cPoolHandle,
 			cmd.contUUIDPtr(), goBool2int(cmd.Force), nil)
@@ -437,7 +458,7 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 		rc = C.daos_cont_destroy_by_label(cmd.cPoolHandle,
 			cLabel, goBool2int(cmd.Force), nil)
 	default:
-		return errors.New("no UUID or label for container")
+		return errors.New("no UUID or label or path for container")
 	}
 
 	if err := daosError(rc); err != nil {
@@ -445,6 +466,8 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 			"failed to destroy container %s",
 			cmd.ContainerID())
 	}
+
+	cmd.log.Infof("Successfully destroyed container %s", cmd.ContainerID())
 
 	return nil
 }
@@ -490,7 +513,7 @@ func (cmd *containerStatCmd) Execute(_ []string) error {
 	return nil
 }
 
-func printContainerInfo(out io.Writer, ci *containerInfo) error {
+func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	epochs := ci.SnapshotEpochs()
 	epochStrs := make([]string, *ci.NumSnapshots)
 	for i := uint32(0); i < *ci.NumSnapshots; i++ {
@@ -498,23 +521,30 @@ func printContainerInfo(out io.Writer, ci *containerInfo) error {
 	}
 
 	rows := []txtfmt.TableRow{
-		{"Pool UUID": ci.PoolUUID.String()},
 		{"Container UUID": ci.ContainerUUID.String()},
-		{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
-		{"Latest Persistent Snapshot": fmt.Sprintf("%d", *ci.LatestSnapshot)},
-		{"Highest Aggregated Epoch": fmt.Sprintf("%d", *ci.HighestAggregatedEpoch)},
-		{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
-		{"Snapshot Epochs": strings.Join(epochStrs, ",")},
-		{"Container Type": ci.Type},
 	}
+	if ci.ContainerLabel != "" {
+		rows = append(rows, txtfmt.TableRow{"Container Label": ci.ContainerLabel})
+	}
+	rows = append(rows, txtfmt.TableRow{"Container Type": ci.Type})
 
-	if ci.ObjectClass != "" {
-		rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
-	}
-	if ci.ChunkSize > 0 {
-		rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
-	}
+	if verbose {
+		rows = append(rows, []txtfmt.TableRow{
+			{"Pool UUID": ci.PoolUUID.String()},
+			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
+			{"Latest Persistent Snapshot": fmt.Sprintf("%d", *ci.LatestSnapshot)},
+			{"Highest Aggregated Epoch": fmt.Sprintf("%d", *ci.HighestAggregatedEpoch)},
+			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
+			{"Snapshot Epochs": strings.Join(epochStrs, ",")},
+		}...)
 
+		if ci.ObjectClass != "" {
+			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
+		}
+		if ci.ChunkSize > 0 {
+			rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
+		}
+	}
 	_, err := fmt.Fprintln(out, txtfmt.FormatEntity("", rows))
 	return err
 }
@@ -523,6 +553,7 @@ type containerInfo struct {
 	dci                    C.daos_cont_info_t
 	PoolUUID               *uuid.UUID `json:"pool_uuid"`
 	ContainerUUID          *uuid.UUID `json:"container_uuid"`
+	ContainerLabel         string     `json:"container_label,omitempty"`
 	LatestSnapshot         *uint64    `json:"latest_snapshot"`
 	RedundancyFactor       *uint32    `json:"redundancy_factor"`
 	NumSnapshots           *uint32    `json:"num_snapshots"`
@@ -591,12 +622,16 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 			cmd.contUUID)
 	}
 
+	if cmd.contLabel != "" {
+		ci.ContainerLabel = cmd.contLabel
+	}
+
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(ci, nil)
 	}
 
 	var bld strings.Builder
-	if err := printContainerInfo(&bld, ci); err != nil {
+	if err := printContainerInfo(&bld, ci, true); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
