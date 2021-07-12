@@ -594,8 +594,7 @@ dc_pool_connect(tse_task_t *task)
 
 		/* connect by one: UUID or label */
 		if (by_uuid == by_label) {
-			D_ERROR("specify one: (label %sprovided and "
-				"UUID %sprovided)\n",
+			D_ERROR("specify one: (label %sprovided and UUID %sprovided)\n",
 				by_label ? "" : "not ", by_uuid ? "" : "not ");
 			D_GOTO(out_task, rc = -DER_INVAL);
 		}
