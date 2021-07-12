@@ -32,4 +32,5 @@ class IorHard(IorTestBase):
         ior_read_flags = self.params.get("read_flags", "/run/ior/*")
         self.run_ior_with_pool()
         self.ior_cmd.flags.update(ior_read_flags)
+        self.ior_cmd.sw_wearout.update(None)
         self.run_ior_with_pool(create_cont=False)

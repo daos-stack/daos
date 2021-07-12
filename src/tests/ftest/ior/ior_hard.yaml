@@ -47,7 +47,8 @@ ior:
   client_processes:
     np: 48
   flags: "-C -k -e -w -g -G 27 -D 300 -Q 1 -vv"
-  read_flags: "-C -k -e -r -R -g -G 27 -D 300 -Q 1 -vv"
+  read_flags: "-C -k -e -r -R -g -G 27 -Q 1 -vv"
+  dfs_chunk: 470080
   ior_api:
     daos:
       api: DFS
