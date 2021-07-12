@@ -593,8 +593,12 @@ dc_pool_connect(tse_task_t *task)
 		bool by_label = (bool)(args->label != NULL);
 
 		/* connect by one: UUID or label */
-		if (by_uuid == by_label)
+		if (by_uuid == by_label) {
+			D_ERROR("specify one: (label %sprovided and "
+				"UUID %sprovided)\n",
+				by_label ? "" : "not ", by_uuid ? "" : "not ");
 			D_GOTO(out_task, rc = -DER_INVAL);
+		}
 		if (!flags_are_valid(args->flags) || args->poh == NULL)
 			D_GOTO(out_task, rc = -DER_INVAL);
 

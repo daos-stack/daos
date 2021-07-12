@@ -342,8 +342,11 @@ dc_cont_destroy(tse_task_t *task)
 	/* destroy by one: UUID or label */
 	by_uuid = daos_uuid_valid(args->uuid);
 	by_label = (bool)(args->label != NULL);
-	if (by_uuid == by_label)
+	if (by_uuid == by_label) {
+		D_ERROR("specify one: (label %sprovided and UUID %sprovided)\n",
+			by_label ? "" : "not ", by_uuid ? "" : "not ");
 		D_GOTO(err, rc = -DER_INVAL);
+	}
 
 	pool = dc_hdl2pool(args->poh);
 	if (pool == NULL)
@@ -833,8 +836,11 @@ dc_cont_open(tse_task_t *task)
 	/* open by one: UUID or label */
 	by_uuid = daos_uuid_valid(args->uuid);
 	by_label = (bool)(args->label != NULL);
-	if (by_uuid == by_label)
+	if (by_uuid == by_label) {
+		D_ERROR("specify one: (label %sprovided and UUID %sprovided)\n",
+			by_label ? "" : "not ", by_uuid ? "" : "not ");
 		D_GOTO(err, rc = -DER_INVAL);
+	}
 
 	if (args->coh == NULL)
 		D_GOTO(err, rc = -DER_INVAL);
