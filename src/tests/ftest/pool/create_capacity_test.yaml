@@ -1,3 +1,4 @@
+timeout: 600
 hosts:
   test_servers:
     - server-A
