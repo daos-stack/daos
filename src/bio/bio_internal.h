@@ -457,6 +457,25 @@ iod_dma_buf(struct bio_desc *biod)
 	return biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf;
 }
 
+static inline void
+dma_biov2pg(struct bio_iov *biov, uint64_t *off, uint64_t *end,
+	    unsigned int *pg_cnt, unsigned int *pg_off)
+{
+	*off = bio_iov2raw_off(biov);
+	*end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
+
+	if (bio_iov2media(biov) == DAOS_MEDIA_SCM) {
+		*pg_cnt = (*end - *off + BIO_DMA_PAGE_SZ - 1) >>
+				BIO_DMA_PAGE_SHIFT;
+		*pg_off = 0;
+	} else {
+		*pg_cnt = ((*end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
+				(*off >> BIO_DMA_PAGE_SHIFT);
+		*pg_off = *off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
+	}
+	D_ASSERT(*pg_cnt > 0);
+}
+
 /* bio_bulk.c */
 int bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data);
 void bulk_iod_release(struct bio_desc *biod);
@@ -471,9 +490,9 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 	struct bio_bulk_group	*bbg;
 	int			 i, bulk_grps = 0, bulk_chunks = 0;
 
-	D_EMIT("chunk_size:%u, tot_chunk:%u, active_iods:%u, used:%u,%u,%u\n",
-		bio_chk_sz, bdb->bdb_tot_cnt, bdb->bdb_active_iods,
-		bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
+	D_EMIT("chk_size:%u, tot_chk:%u/%u, active_iods:%u, used:%u,%u,%u\n",
+		bio_chk_sz, bdb->bdb_tot_cnt, bio_chk_cnt_max,
+		bdb->bdb_active_iods, bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
 		bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
 		bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
 
@@ -510,13 +529,5 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 /* bio_device.c */
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
-
-/*
- * FIXME copied from spdk_internal/event.h, should be removed once they are
- * exported by SPDK.
- */
-typedef void (*spdk_subsystem_init_fn)(int rc, void *ctx);
-void spdk_subsystem_init(spdk_subsystem_init_fn cb_fn, void *cb_arg);
-void spdk_subsystem_fini(spdk_msg_fn cb_fn, void *cb_arg);
 
 #endif /* __BIO_INTERNAL_H__ */

@@ -112,7 +112,7 @@ create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz,
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	spdk_blob_opts_init(&blob_opts);
+	spdk_blob_opts_init(&blob_opts, sizeof(blob_opts));
 	blob_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
 	spdk_bs_create_blob_ext(bs, &blob_opts, blob_create_cp, &boa);

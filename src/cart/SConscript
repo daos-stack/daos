@@ -60,7 +60,9 @@ def scons():
     SConscript('swim/SConscript')
 
     Import('env', 'prereqs', 'swim_targets', 'CART_VERSION')
-    Import('conf_dir')
+    Import('conf_dir', 'base_env')
+
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     env.Alias('install', '$PREFIX')
 
