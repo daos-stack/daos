@@ -640,7 +640,7 @@ dfs_test_file_create_atomicity(void **state)
 	test_arg_t		*arg = *state;
 	dfs_obj_t		*file;
 	char			*filename = "testfile";
-	daos_obj_id_t		oid;
+	daos_obj_id_t		oid1, oid2;
 	uint64_t		*oids_hi = NULL, *oids_lo = NULL;
 	int			i;
 	int			rc;
@@ -655,7 +655,7 @@ dfs_test_file_create_atomicity(void **state)
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rc = dfs_obj2id(file, &oid);
+	rc = dfs_obj2id(file, &oid1);
 	assert_int_equal(rc, 0);
 
 	if (arg->myrank == 0) {
@@ -665,23 +665,24 @@ dfs_test_file_create_atomicity(void **state)
 		assert_non_null(oids_lo);
 	}
 
-	MPI_Gather(&oid.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	MPI_Gather(&oid.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&oid1.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&oid1.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
 	if (arg->myrank == 0) {
 		for (i = 0; i < arg->rank_size; i++) {
-			if (oid.hi != oids_hi[i])
+			if (oid1.hi != oids_hi[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid.hi, oids_hi[i]);
-			if (oid.lo != oids_lo[i])
+			assert_int_equal(oid1.hi, oids_hi[i]);
+			if (oid1.lo != oids_lo[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid.lo, oids_lo[i]);
+			assert_int_equal(oid1.lo, oids_lo[i]);
 		}
 	}
 
 	rc = dfs_release(file);
 	assert_int_equal(rc, 0);
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		print_message("remove the file\n");
 		rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
@@ -699,20 +700,25 @@ dfs_test_file_create_atomicity(void **state)
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
 
-	rc = dfs_obj2id(file, &oid);
+	rc = dfs_obj2id(file, &oid2);
 	assert_int_equal(rc, 0);
 
-	MPI_Gather(&oid.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-	MPI_Gather(&oid.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	if (oid2.hi == oid1.hi && oid2.lo == oid1.lo) {
+		print_error("%d: dfs_open returned an existing OID!\n", arg->myrank);
+		assert_false(oid2.hi == oid1.hi && oid2.lo == oid1.lo);
+	}
+
+	MPI_Gather(&oid2.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&oid2.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 
 	if (arg->myrank == 0) {
 		for (i = 0; i < arg->rank_size; i++) {
-			if (oid.hi != oids_hi[i])
+			if (oid2.hi != oids_hi[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid.hi, oids_hi[i]);
-			if (oid.lo != oids_lo[i])
+			assert_int_equal(oid2.hi, oids_hi[i]);
+			if (oid2.lo != oids_lo[i])
 				print_error("OID mismatch between ranks opening the same file");
-			assert_int_equal(oid.lo, oids_lo[i]);
+			assert_int_equal(oid2.lo, oids_lo[i]);
 		}
 	}
 
@@ -722,6 +728,14 @@ dfs_test_file_create_atomicity(void **state)
 		D_FREE(oids_hi);
 		D_FREE(oids_lo);
 	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		print_message("remove the file\n");
+		rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 static const struct CMUnitTest dfs_par_tests[] = {
@@ -752,8 +766,20 @@ dfs_setup(void **state)
 	arg = *state;
 
 	if (arg->myrank == 0) {
+		dfs_attr_t	attr = {};
+		bool		no_dtx;
+
+		d_getenv_bool("DFS_NO_DTX", &no_dtx);
+		if (no_dtx) {
+			print_message("Testing DFS in Relaxed mode\n");
+			attr.da_mode = DFS_RELAXED;
+		} else {
+			print_message("Testing DFS in Balanced mode\n");
+			attr.da_mode = DFS_BALANCED;
+		}
+
 		uuid_generate(co_uuid);
-		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+		rc = dfs_cont_create(arg->pool.poh, co_uuid, &attr, &co_hdl,
 				     &dfs_mt);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));

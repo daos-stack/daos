@@ -1402,7 +1402,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 
 	if (_dfs) {
 		/** Mount DFS on the container we just created */
-		rc = dfs_mount(poh, coh, O_RDWR, &dfs);
+		rc = dfs_mount(poh, coh, O_RDWR | dattr.da_mode, &dfs);
 		if (rc) {
 			D_ERROR("dfs_mount() failed (%d)\n", rc);
 			D_GOTO(err_close, rc);
@@ -1561,8 +1561,12 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	 * default input setting, only if container was created with relaxed
 	 * mode.
 	 */
-	if ((dfs->attr.da_mode & MODE_MASK) == DFS_RELAXED)
-		d_getenv_bool("DFS_USE_DTX", &dfs->use_dtx);
+	if ((dfs->attr.da_mode & MODE_MASK) == DFS_RELAXED) {
+		bool no_dtx;
+
+		d_getenv_bool("DFS_NO_DTX", &no_dtx);
+		dfs->use_dtx = !no_dtx;
+	}
 
 	/** Check if super object has the root entry */
 	strcpy(dfs->root.name, "/");
