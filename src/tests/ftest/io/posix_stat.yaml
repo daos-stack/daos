@@ -1,8 +1,8 @@
 hosts:
   test_servers:
     - server-A
-  test_clients:
-    - client-A
+  # test_clients:
+  #   - client-A
 timeout: 600
 pool:
   scm_size: 10G
