@@ -23,13 +23,16 @@ import os
 import sys
 import copy
 
+# pylint: disable=no-self-use
+# pylint: disable=too-many-public-methods
+# pylint: disable=too-few-public-methods
+# pylint: disable=unused-argument
 
 class SConscript():
     """Fake SConscript"""
 
     def __init__(self, *_args, **_kw):
         """init function"""
-
 
 class DefaultEnvironment():
     """Default environment"""
