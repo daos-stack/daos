@@ -3001,8 +3001,8 @@ dm_connect(struct cmd_args_s *ap,
 				D_GOTO(err_dst_root, rc);
 			}
 			fprintf(ap->outstream,
-				"Successfully created container: "
-				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
+				"Successfully created container "
+				DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			fprintf(ap->errstream, "failed to open container: "
 				"%d\n", rc);
