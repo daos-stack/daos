@@ -625,8 +625,9 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
-				err, strerror(err));
+		if (err != ENOTTY)
+			DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
+					err, strerror(err));
 		return false;
 	}
 
@@ -758,6 +759,20 @@ drop_reference_if_disabled(struct fd_entry *entry)
 	return true;
 }
 
+/* Whilst it's not impossible that dfuse is backing these paths it's very unlikely so
+ * simply skip them to avoid the extra ioctl cost.
+ */
+static bool
+dfuse_check_valid_path(const char *path)
+{
+	if ((strncmp(path, "/sys/", 5) == 0) ||
+		(strncmp(path, "/dev/", 5) == 0) ||
+		strncmp(path, "/proc/", 6) == 0) {
+		return false;
+	}
+	return true;
+}
+
 DFUSE_PUBLIC int
 dfuse_open(const char *pathname, int flags, ...)
 {
@@ -784,6 +799,12 @@ dfuse_open(const char *pathname, int flags, ...)
 	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
 
+	if (!dfuse_check_valid_path(pathname)) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by path",
+				pathname);
+		return fd;
+	}
+
 	status = DFUSE_IO_BYPASS;
 	/* Disable bypass for O_APPEND|O_PATH */
 	if ((flags & (O_PATH | O_APPEND)) != 0)
@@ -792,7 +813,7 @@ dfuse_open(const char *pathname, int flags, ...)
 	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
 		DFUSE_LOG_DEBUG("open(pathname=%s) interception not possible",
 				pathname);
-		goto finish;
+		return fd;
 	}
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
@@ -807,7 +828,6 @@ dfuse_open(const char *pathname, int flags, ...)
 				pathname, flags, fd,
 				bypass_status[entry.fd_status]);
 
-finish:
 	return fd;
 }
 
@@ -823,14 +843,21 @@ dfuse_creat(const char *pathname, mode_t mode)
 	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC,
-				 DFUSE_IO_BYPASS))
-		goto finish;
+	if (!dfuse_check_valid_path(pathname)) {
+		DFUSE_LOG_DEBUG("creat(pathname=%s) ignoring by path",
+				pathname);
+		return fd;
+	}
+
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_BYPASS)) {
+		DFUSE_LOG_DEBUG("creat(pathname=%s) interception not possible",
+				pathname);
+		return fd;
+	}
 
 	DFUSE_LOG_DEBUG("creat(pathname=%s, mode=0%o) = %d. intercepted, bypass=%s",
 			pathname, mode, fd, bypass_status[entry.fd_status]);
 
-finish:
 	return fd;
 }
 
@@ -1364,16 +1391,23 @@ dfuse_fopen(const char *path, const char *mode)
 	fd = fileno(fp);
 
 	if (fd == -1)
-		goto finish;
+		return fp;
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC,
-				 DFUSE_IO_DIS_STREAM))
-		goto finish;
+	if (!dfuse_check_valid_path(path)) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by path",
+				path);
+		return fp;
+	}
+
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_DIS_STREAM)) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) interception not possible",
+				path);
+		return fp;
+	}
 
 	DFUSE_LOG_DEBUG("fopen(path=%s, mode=%s) = %p(fd=%d) intercepted, bypass=%s",
 			path, mode, fp, fd, bypass_status[entry.fd_status]);
 
-finish:
 	return fp;
 }
 
