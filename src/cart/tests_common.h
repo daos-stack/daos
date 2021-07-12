@@ -490,7 +490,7 @@ tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	/* load group info from a config file and delete file upon return */
 	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx[0], *grp, my_rank,
-				     true);
+				     false);
 	D_ASSERTF(rc == 0, "tc_load_group_from_file() failed; rc=%d\n", rc);
 
 	D_FREE(my_uri);

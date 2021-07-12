@@ -52,6 +52,8 @@ struct test_t {
 	int			 t_roomno;
 	struct d_fault_attr_t	*t_fault_attr_1000;
 	struct d_fault_attr_t	*t_fault_attr_5000;
+	bool			 t_load_cfg;
+	char			*t_relaunch_file;
 };
 
 struct test_t test_g = { .t_hold_time = 0,
@@ -90,7 +92,14 @@ CRT_RPC_DECLARE(test_swim_status,
 CRT_RPC_DEFINE(test_swim_status,
 	       CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
 
-static void
+void
+ping_hanlder(crt_rpc_t *rpc_req)
+{
+	DBG_PRINT("Received rpc ping\n");
+	crt_reply_send(rpc_req);
+}
+
+void
 test_checkin_handler(crt_rpc_t *rpc_req)
 {
 	struct test_ping_check_in	*e_req;
@@ -240,6 +249,13 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 		   "room_no: %d.\n", p_reply->ret, p_reply->room_no);
 }
 
+void
+ping_cb_common(const struct crt_cb_info *cb_info)
+{
+	DBG_PRINT("RPC response received; rc=%d\n", cb_info->cci_rc);
+	sem_post(&test_g.t_token_to_proceed);
+}
+
 static void
 client_cb_common(const struct crt_cb_info *cb_info)
 {
@@ -329,7 +345,7 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 	{
 		.prf_flags	= 0,
 		.prf_req_fmt	= &CQF_test_ping_check,
-		.prf_hdlr	= test_checkin_handler,
+		.prf_hdlr	= ping_hanlder,
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
@@ -361,7 +377,7 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
 	{
 		.prf_flags	= 0,
 		.prf_req_fmt	= &CQF_test_ping_check,
-		.prf_hdlr	= test_checkin_handler,
+		.prf_hdlr	= ping_hanlder,
 		.prf_co_ops	= NULL,
 	}, {
 		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
@@ -625,6 +641,8 @@ test_parse_args(int argc, char **argv)
 		{"verify_swim_status", required_argument, 0, 'v'},
 		{"get_swim_status", no_argument, 0, 'g'},
 		{"shutdown_delay", required_argument, 0, 'd'},
+		{"load_cfg", required_argument, 0, 'l'},
+		{"relaunch_file", required_argument, 0, 'x'},
 		{0, 0, 0, 0}
 	};
 
@@ -641,8 +659,10 @@ test_parse_args(int argc, char **argv)
 
 	struct t_swim_status vss;
 
+	test_g.t_relaunch_file = "/tmp/relaunch.sh";
+
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:u:r:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:h:u:r:lx:", long_options,
 				 &option_index);
 
 		if (rc == -1)
@@ -651,6 +671,9 @@ test_parse_args(int argc, char **argv)
 		case 0:
 			if (long_options[option_index].flag != 0)
 				break;
+		case 'x':
+			test_g.t_relaunch_file = optarg;
+			break;
 		case 'n':
 			test_g.t_local_group_name = optarg;
 			break;
@@ -704,6 +727,9 @@ test_parse_args(int argc, char **argv)
 		case 'r':
 			parse_rank_string(optarg, test_g.cg_ranks,
 					  &test_g.cg_num_ranks);
+			break;
+		case 'l':
+			test_g.t_load_cfg = true;
 			break;
 		case '?':
 			return 1;

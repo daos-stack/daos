@@ -66,8 +66,67 @@ test_run(d_rank_t my_rank)
 	int			 i;
 	int			 rc = 0;
 
-	tc_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
-			   &test_g.t_tid[0], &grp, &grp_size, NULL);
+	if (test_g.t_load_cfg == false) {
+		tc_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
+				   &test_g.t_tid[0], &grp, &grp_size, NULL);
+	} else {
+		char *grp_cfg_file;
+
+		printf("ALEXMOD: Loading cfg by hand\n");
+		crt_context_t *crt_ctx;
+		pthread_t *progress_thread;
+
+		crt_ctx = &test_g.t_crt_ctx[0];
+		progress_thread = &test_g.t_tid[0];
+
+		rc = crt_init(test_g.t_local_group_name, CRT_FLAG_BIT_SERVER |
+				CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+
+		D_ASSERTF(rc == 0, "crt_init() failed\n");
+
+		grp = crt_group_lookup(NULL);
+
+
+		rc = crt_rank_self_set(my_rank);
+		D_ASSERTF(rc == 0, "crt_rank_self_set(%d) failed; rc=%d\n",
+			  my_rank, rc);
+
+		rc = crt_context_create(crt_ctx);
+		D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
+
+		rc = pthread_create(progress_thread, NULL, tc_progress_fn, crt_ctx);
+		D_ASSERTF(rc == 0, "pthread_create() failed; rc=%d\n", rc);
+
+		grp_cfg_file = getenv("CRT_L_GRP_CFG");
+
+		if (my_rank == 2) {
+			FILE *f;
+
+			f = fopen(test_g.t_relaunch_file, "w+");
+			if (!f) {
+				D_ERROR("Failed to open '%s' for writing\n", test_g.t_relaunch_file);
+				assert(0);
+			}
+
+			fprintf(f, "kill -9 %d\n", getpid());
+			fprintf(f, "kill -9 %d\n", getpid());
+			fprintf(f, "sleep 5\n");
+			fprintf(f, "export CRT_L_GRP_CFG=%s\n", grp_cfg_file);
+			fprintf(f, "export CRT_L_RANK=%d\n", my_rank);
+			fprintf(f, "export OFI_INTERFACE=%s\n", getenv("OFI_INTERFACE"));
+			fprintf(f, "export OFI_DOMAIN=%s\n", getenv("OFI_DOMAIN"));
+			fprintf(f, "export OFI_PORT=%s\n", getenv("OFI_PORT"));
+			fprintf(f, "export CRT_PHY_ADDR_STR=\"%s\"\n", getenv("CRT_PHY_ADDR_STR"));
+			fprintf(f, "install/lib/daos/TESTING/tests/test_group_np_srv --name selftest_srv_grp --cfg_path=. -l\n");
+			fclose(f);
+			DBG_PRINT("Run sh '%s' to kill and restart rank=2\n", test_g.t_relaunch_file);
+		}
+		rc = tc_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank, false);
+		D_ASSERTF(rc == 0, "tc_load_group_from_file failed\n");
+
+		rc = crt_group_size(NULL, &grp_size);
+		D_ASSERTF(rc == 0, "crt_group_size() failed; rc=%d\n", rc);
+	}
 
 	/* Register event callback after CaRT has initialized */
 	if (test_g.t_register_swim_callback) {
@@ -112,6 +171,30 @@ test_run(d_rank_t my_rank)
 	if (test_g.t_hold)
 		sleep(test_g.t_hold_time);
 
+	if (my_rank == 0) {
+		while (1) {
+			crt_rpc_t *rpc_req;
+			crt_endpoint_t server_ep;
+
+			server_ep.ep_rank = 2;
+			server_ep.ep_tag = 0;
+			server_ep.ep_grp = NULL;
+			DBG_PRINT("Sending PING rpc to rank 2\n");
+			rc = crt_req_create(test_g.t_crt_ctx[0], &server_ep,
+						CRT_PROTO_OPC(TEST_GROUP_BASE,
+								TEST_GROUP_VER, 0),
+						&rpc_req);
+
+
+			D_ASSERTF(rc == 0, "crt_req_create() failed\n");
+			rc = crt_req_send(rpc_req, ping_cb_common, NULL);
+
+			tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+			DBG_PRINT("(run sh %s to restart server)\n\n", test_g.t_relaunch_file);
+			sleep(1);
+		}
+	}
+
 	for (i = 0; i < test_g.t_srv_ctx_num; i++) {
 
 		rc = pthread_join(test_g.t_tid[i], NULL);
@@ -145,7 +228,6 @@ int main(int argc, char **argv)
 	int		 rc;
 
 	rc = test_parse_args(argc, argv);
-
 	if (rc != 0) {
 		fprintf(stderr, "test_parse_args() failed, rc: %d.\n", rc);
 		return rc;
