@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.102
-Release:       7%{?relval}%{?dist}
+Version:       1.3.103
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -460,8 +460,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
-* Fri Jul 09 2021  Maureen Jean <maureen.jean@intel.com> 1.3.102-7
+* Mon Jul 12 2021  Maureen Jean <maureen.jean@intel.com> 1.3.103-2
 - Add python modules to python3.6 site-packages
+
+* Mon Jul 12 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.103-1
+- Version bump to 1.3.103 for 2.0 test build 3
 
 * Wed Jul 7 2021 Phillip Henderson <phillip.henderson@intel.com> 1.3.102-6
 - Update daos-devel to always require the same version daos-client

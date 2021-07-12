@@ -1,8 +1,14 @@
-daos (1.3.102-7) unstable; urgency=medium
+daos (1.3.103-2) unstable; urgency=medium
   [ Maureen Jean ]
   * Add python modules to python3.8 site-packages
 
- -- Maureen Jean <maureen.jean@intel.com>  Fri, 09 Jul 2021 19:15:00 -0400
+ -- Maureen Jean <maureen.jean@intel.com>  Mon, 12 Jul 2021 14:50:00 -0400
+
+daos (1.3.103-1) unstable; urgency=medium
+  [ Johann Lombardi ]
+  * Version bump to 1.3.103 for 2.0 test build 3
+
+ -- Johann Lombardi <johann.lombardi@intel.com>  Mon, 12 Jul 2021 010:00:00 -0100
 
 daos (1.3.102-3) unstable; urgency=medium
   [ Li Wei ]
