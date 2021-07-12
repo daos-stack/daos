@@ -107,6 +107,7 @@ setup_iod_type(daos_iod_t *iod, int iod_type, daos_size_t data_len,
 struct sts_context {
 	char			 tsc_pmem_file[256];
 	struct ds_pool		 tsc_pool;
+	struct dss_module_info	 tsc_dmi;
 	uuid_t			 tsc_pool_uuid;
 	uuid_t			 tsc_cont_uuid;
 	uint64_t		 tsc_scm_size;
@@ -356,6 +357,7 @@ sts_ctx_do_scrub(struct sts_context *ctx)
 	s_ctx.sc_sched_arg = ctx->tsc_sched_arg;
 	s_ctx.sc_cont_lookup_fn = ctx->tsc_get_cont_fn;
 	s_ctx.sc_pool = &ctx->tsc_pool;
+	s_ctx.sc_dmi = &ctx->tsc_dmi;
 	assert_success(ds_scrub_pool(&s_ctx));
 }
 

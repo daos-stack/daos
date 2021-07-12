@@ -114,7 +114,7 @@ sc_set_schedule_off(struct scrub_ctx *ctx)
 }
 
 static int
-sc_get_schedule(struct scrub_ctx *ctx)
+sc_schedule(struct scrub_ctx *ctx)
 {
 	return ctx->sc_pool->sp_scrub_sched;
 }
@@ -139,6 +139,53 @@ cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	ds_cont_child_put(cont_child);
 
 	return 0;
+}
+
+static void
+sc_add_pool_metrics(struct scrub_ctx *ctx)
+{
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_start, D_TM_TIMESTAMP,
+			"Timestamp when the Scrubber ULT started on the "
+			"pool target",
+			NULL,  DF_POOL_DIR"/ult_start", DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_wait_time, D_TM_GAUGE,
+			"How long waiting between checksum calculations", "ms",
+			DF_POOL_DIR"/wait_gauge", DP_POOL_DIR(ctx));
+	d_tm_record_timestamp((ctx->sc_metrics.scm_pool_ult_start));
+
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_metrics.sm_last_duration,
+			D_TM_DURATION,
+			"How long the previous scrub took", "ms",
+			DF_POOL_DIR"/"M_LAST_DURATION, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_metrics.sm_start,
+			D_TM_TIMESTAMP,
+			"When the current scrubbing started", NULL,
+			DF_POOL_DIR"/"M_STARTED, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_metrics.sm_csum_calcs,
+			D_TM_COUNTER, "Number of checksums calculated for "
+				      "current scan",
+			NULL,
+			DF_POOL_DIR"/"M_CSUM_COUNTER, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_metrics.sm_last_csum_calcs,
+			D_TM_COUNTER, "Number of checksums calculated in last "
+				      "scan", NULL,
+			DF_POOL_DIR"/"M_CSUM_PREV_COUNTER,
+			DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_metrics.sm_total_csum_calcs,
+			D_TM_COUNTER, "Total number of checksums calculated",
+			NULL,
+			DF_POOL_DIR"/"M_CSUM_TOTAL_COUNTER, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_metrics.sm_corruption,
+			D_TM_COUNTER, "Number of silent data corruption "
+				      "detected during current scan",
+			NULL,
+			DF_POOL_DIR"/"M_CSUM_CORRUPTION, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_metrics.sm_total_corruption,
+			D_TM_COUNTER, "Total number of silent data corruption "
+				      "detected",
+			NULL,
+			DF_POOL_DIR"/"M_CSUM_TOTAL_CORRUPTION,
+			DP_POOL_DIR(ctx));
 }
 
 /** Setup scrubbing context and start scrubbing the pool */
@@ -170,12 +217,16 @@ scrubbing_ult(void *arg)
 	ctx.sc_cont_lookup_fn = cont_lookup_cb;
 	ctx.sc_status = SCRUB_STATUS_NOT_RUNNING;
 	ctx.sc_credits_left = ctx.sc_pool->sp_scrub_cred;
+	ctx.sc_dmi =  dss_get_module_info();
 
+	C_TRACE("Scrubbing ULT started for pool: "DF_UUID"[%d]\n",
+		DP_UUID(pool_uuid), ctx.sc_dmi->dmi_tgt_id);
+	sc_add_pool_metrics(&ctx);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
 		if (dss_ult_exiting(child->spc_scrubbing_req))
 			break;
 
-		schedule = sc_get_schedule(&ctx);
+		schedule = sc_schedule(&ctx);
 		if (schedule != DAOS_SCRUB_SCHED_OFF) {
 			C_TRACE(DF_PTGT": Pool Scrubbing started\n",
 				DP_PTGT(pool_uuid, tgt_id));

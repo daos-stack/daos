@@ -13,42 +13,115 @@
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 
 static void
-sc_pool_csum_calc_inc(struct scrub_ctx *ctx)
+sc_csum_calc_inc(struct scrub_ctx *ctx)
 {
 	ctx->sc_pool_csum_calcs++;
+	ctx->sc_cont_csum_calcs++;
 }
 
-static struct daos_csummer *
+/* Telemetry Metrics */
+static void
+sc_m_pool_start(struct scrub_ctx *ctx)
+{
+	d_tm_record_timestamp(ctx->sc_metrics.scm_pool_metrics.sm_start);
+	d_tm_mark_duration_start(
+		ctx->sc_metrics.scm_pool_metrics.sm_last_duration,
+		D_TM_CLOCK_REALTIME);
+}
+
+static void
+sc_m_pool_stop(struct scrub_ctx *ctx)
+{
+	d_tm_mark_duration_end(
+		ctx->sc_metrics.scm_pool_metrics.sm_last_duration);
+	d_tm_set_counter(ctx->sc_metrics.scm_pool_metrics.sm_last_csum_calcs,
+			 ctx->sc_pool_last_csum_calcs);
+
+}
+
+static void
+sc_m_cont_start(struct scrub_ctx *ctx)
+{
+	d_tm_record_timestamp(ctx->sc_metrics.scm_cont_metrics.sm_start);
+	d_tm_mark_duration_start(
+		ctx->sc_metrics.scm_cont_metrics.sm_last_duration,
+		D_TM_CLOCK_REALTIME);
+}
+
+static void
+sc_m_cont_stop(struct scrub_ctx *ctx)
+{
+	d_tm_mark_duration_end(
+		ctx->sc_metrics.scm_cont_metrics.sm_last_duration);
+	d_tm_set_counter(ctx->sc_metrics.scm_cont_metrics.sm_last_csum_calcs,
+			 ctx->sc_cont_csum_calcs);
+	ctx->sc_cont_csum_calcs = 0;
+}
+
+static void
+sc_m_pool_cont_csum_inc(struct scrub_ctx *ctx)
+{
+	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_csum_calcs);
+	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_total_csum_calcs);
+	m_inc_counter(ctx->sc_metrics.scm_cont_metrics.sm_csum_calcs);
+	m_inc_counter(ctx->sc_metrics.scm_cont_metrics.sm_total_csum_calcs);
+}
+
+static void
+sc_m_pool_cont_corr_inc(struct scrub_ctx *ctx)
+{
+	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_corruption);
+	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_total_corruption);
+	m_inc_counter(ctx->sc_metrics.scm_cont_metrics.sm_corruption);
+	m_inc_counter(ctx->sc_metrics.scm_cont_metrics.sm_total_corruption);
+}
+
+
+static void
+sc_m_pool_csum_reset(struct scrub_ctx *ctx)
+{
+	m_reset_counter(ctx->sc_metrics.scm_pool_metrics.sm_csum_calcs);
+	m_reset_counter(ctx->sc_metrics.scm_pool_metrics.sm_corruption);
+}
+
+static void
+sc_m_cont_csum_reset(struct scrub_ctx *ctx)
+{
+	m_reset_counter(ctx->sc_metrics.scm_cont_metrics.sm_csum_calcs);
+	m_reset_counter(ctx->sc_metrics.scm_pool_metrics.sm_corruption);
+}
+
+static inline struct daos_csummer *
 sc_csummer(const struct scrub_ctx *ctx)
 {
 	return ctx->sc_cont.scs_cont_csummer;
 }
 
-static uint32_t
+static inline uint32_t
 sc_chunksize(const struct scrub_ctx *ctx)
 {
 	return daos_csummer_get_rec_chunksize(sc_csummer(ctx),
 					      ctx->sc_iod.iod_size);
 }
 
-static void
-sc_yield(struct scrub_ctx *ctx)
+static inline int
+sc_schedule(const struct scrub_ctx *ctx)
+{
+	return ctx->sc_pool->sp_scrub_sched;
+}
+
+static inline void
+sc_yield(const struct scrub_ctx *ctx)
 {
 	if (ctx->sc_yield_fn)
 		ctx->sc_yield_fn(ctx->sc_sched_arg);
 }
 
-static void
-sc_sleep(struct scrub_ctx *ctx, uint32_t ms)
+static inline void
+sc_sleep(const struct scrub_ctx *ctx, uint32_t ms)
 {
 	if (ctx->sc_sleep_fn)
 		ctx->sc_sleep_fn(ctx->sc_sched_arg, ms);
-}
-
-static int
-sc_get_schedule(struct scrub_ctx *ctx)
-{
-	return ctx->sc_pool->sp_scrub_sched;
 }
 
 /**
@@ -69,6 +142,14 @@ sc_get_rec_in_chunk_at_idx(const struct scrub_ctx *ctx, uint32_t i)
 	range = csum_recx_chunkidx2range(recx, rec_len, chunksize, i);
 
 	return range.dcr_nr;
+}
+
+static void
+sc_verify_finish(struct scrub_ctx *ctx)
+{
+	sc_csum_calc_inc(ctx);
+	sc_m_pool_cont_csum_inc(ctx);
+	ds_scrub_sched_control(ctx);
 }
 
 /**
@@ -140,8 +221,8 @@ sc_verify_recx(struct scrub_ctx *ctx, d_sg_list_t *sgl)
 		}
 
 		processed_bytes += chunk_iov.iov_len;
-		sc_pool_csum_calc_inc(ctx);
-		ds_scrub_sched_control(ctx);
+
+		sc_verify_finish(ctx);
 	}
 
 done:
@@ -155,10 +236,10 @@ sc_verify_sv(struct scrub_ctx *ctx, d_sg_list_t *sgl)
 {
 	int rc;
 
-	sc_pool_csum_calc_inc(ctx);
 	rc = daos_csummer_verify_key(sc_csummer(ctx), &sgl->sg_iovs[0],
 				     ctx->sc_csum_to_verify);
-	ds_scrub_sched_control(ctx);
+	sc_verify_finish(ctx);
+
 	return rc;
 }
 
@@ -244,6 +325,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx)
 	if (rc == -DER_CSUM) {
 		D_WARN("Checksum scrubber found corruption");
 		sc_raise_ras(ctx);
+		sc_m_pool_cont_corr_inc(ctx);
 		rc = sc_mark_corrupt(ctx);
 	}
 
@@ -315,7 +397,7 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	case VOS_ITER_OBJ:
 		if (oids_are_same(ctx->sc_cur_oid, entry->ie_oid)) {
 			*acts |= VOS_ITER_CB_SKIP;
-			memset(&ctx->sc_iod, 0, sizeof(ctx->sc_iod));
+			memset(&ctx->sc_cur_oid, 0, sizeof(ctx->sc_cur_oid));
 		} else {
 			ctx->sc_cur_oid = entry->ie_oid;
 		}
@@ -377,6 +459,47 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	return 0;
+}
+
+static void
+sc_add_cont_metrics(struct scrub_ctx *ctx)
+{
+	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_last_duration,
+			D_TM_DURATION,
+			"How long the previous scrub took", "ms",
+			DF_CONT_DIR"/"M_LAST_DURATION,
+			DP_UUID((ctx)->sc_pool_uuid),
+			(ctx)->sc_dmi->dmi_tgt_id,
+			DP_UUID(ctx->sc_cont.scs_cont_uuid));
+	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_start,
+			D_TM_TIMESTAMP,
+			"When the current scrubbing started", NULL,
+			DF_CONT_DIR"/"M_STARTED, DP_CONT_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_csum_calcs,
+			D_TM_COUNTER, "Number of checksums calculated for "
+				      "current scan",
+			NULL,
+			DF_CONT_DIR"/"M_CSUM_COUNTER, DP_CONT_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_last_csum_calcs,
+			D_TM_COUNTER, "Number of checksums calculated in last "
+				      "scan", NULL,
+			DF_CONT_DIR"/"M_CSUM_PREV_COUNTER,
+			DP_CONT_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_total_csum_calcs,
+			D_TM_COUNTER, "Total number of checksums calculated",
+			NULL,
+			DF_CONT_DIR"/"M_CSUM_TOTAL_COUNTER, DP_CONT_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_corruption,
+			D_TM_COUNTER, "Number of silent data corruption "
+				      "detected during current scan",
+			NULL,
+			DF_CONT_DIR"/"M_CSUM_CORRUPTION, DP_CONT_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_total_corruption,
+			D_TM_COUNTER, "Total number of silent data corruption "
+				      "detected",
+			NULL,
+			DF_CONT_DIR"/"M_CSUM_TOTAL_CORRUPTION,
+			DP_CONT_DIR(ctx));
 }
 
 static int
@@ -452,8 +575,13 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_DEBUG(DB_CSUM, "Scrubbing container: "DF_UUID"\n",
 		DP_UUID(ctx->sc_cont.scs_cont_uuid));
 
+	sc_add_cont_metrics(ctx);
+	sc_m_cont_start(ctx);
+
 	rc = sc_scrub_cont(ctx);
 
+	sc_m_cont_stop(ctx);
+	sc_m_cont_csum_reset(ctx);
 	sc_cont_teardown(ctx);
 
 	return rc;
@@ -462,10 +590,14 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 static void
 sc_pool_start(struct scrub_ctx *ctx)
 {
+	/* remember previous checksum calculations */
 	ctx->sc_pool_last_csum_calcs = ctx->sc_pool_csum_calcs;
 	ctx->sc_pool_csum_calcs = 0;
 	d_gettime(&ctx->sc_pool_start_scrub);
 	ctx->sc_status = SCRUB_STATUS_RUNNING;
+
+	sc_m_pool_csum_reset(ctx);
+	sc_m_pool_start(ctx);
 }
 
 int
@@ -486,6 +618,7 @@ ds_scrub_pool(struct scrub_ctx *ctx)
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 NULL, cont_iter_scrub_cb, ctx, NULL);
+	sc_m_pool_stop(ctx);
 
 	return rc;
 }
@@ -539,7 +672,7 @@ sc_credit_reset(struct scrub_ctx *ctx)
 static bool
 sc_no_yield(struct scrub_ctx *ctx)
 {
-	return sc_get_schedule(ctx) == DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD;
+	return sc_schedule(ctx) == DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD;
 }
 
 static void
@@ -560,12 +693,14 @@ sc_control_in_between(struct scrub_ctx *ctx)
 
 	C_TRACE("Credits expired, will yield/sleep\n");
 
-	if (sc_get_schedule(ctx) == DAOS_SCRUB_SCHED_CONTINUOUS &&
+	if (sc_schedule(ctx) == DAOS_SCRUB_SCHED_CONTINUOUS &&
 	    ctx->sc_pool_last_csum_calcs > ctx->sc_pool_csum_calcs) {
 		msec_between = ds_scrub_wait_between_msec(
-			sc_get_schedule(ctx), ctx->sc_pool_start_scrub,
+			sc_schedule(ctx), ctx->sc_pool_start_scrub,
 			ctx->sc_pool_last_csum_calcs - ctx->sc_pool_csum_calcs,
 			ctx->sc_pool->sp_scrub_freq_sec);
+		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time,
+			       msec_between);
 	}
 
 	if (!sc_no_yield(ctx)) {
