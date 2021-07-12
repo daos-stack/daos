@@ -8,9 +8,11 @@ from avocado.core.exceptions import TestFail
 
 from ior_test_base import IorTestBase
 from general_utils import get_remote_file_size, run_task
+from apricot import TestWithServers
 
 
-class POSIXStatTest(IorTestBase):
+#class POSIXStatTest(IorTestBase):
+class POSIXStatTest(TestWithServers):
     # pylint: disable=too-many-ancestors
     """Test class description:
 
@@ -41,74 +43,74 @@ class POSIXStatTest(IorTestBase):
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)
 
-        for block_size in block_sizes:
-            self.log.info("Block Size = %s", block_size)
-            self.ior_cmd.block_size.update(block_size)
+        # for block_size in block_sizes:
+        #     self.log.info("Block Size = %s", block_size)
+        #     self.ior_cmd.block_size.update(block_size)
 
-            # 1. Verify creation time.
-            # Get current epoch before running ior. The timestamp of the file
-            # created by ior is near the time of the start of the ior command
-            # execution.
-            current_epoch = -1
-            cmd_output = ""
-            # Run date command in the client node because that's where the file
-            # is created.
-            task = run_task(self.hostlist_clients, "date +%s")
-            for output, _ in task.iter_buffers():
-                cmd_output = "\n".join(
-                    [line.decode("utf-8") for line in output])
-            self.log.debug("## date cmd_output = {}".format(cmd_output))
-            current_epoch = cmd_output.split()[-1]
+        #     # 1. Verify creation time.
+        #     # Get current epoch before running ior. The timestamp of the file
+        #     # created by ior is near the time of the start of the ior command
+        #     # execution.
+        #     current_epoch = -1
+        #     cmd_output = ""
+        #     # Run date command in the client node because that's where the file
+        #     # is created.
+        #     task = run_task(self.hostlist_clients, "date +%s")
+        #     for output, _ in task.iter_buffers():
+        #         cmd_output = "\n".join(
+        #             [line.decode("utf-8") for line in output])
+        #     self.log.debug("## date cmd_output = {}".format(cmd_output))
+        #     current_epoch = cmd_output.split()[-1]
 
-            # Run ior command.
-            try:
-                self.run_ior_with_pool(timeout=200, stop_dfuse=False)
-            except TestFail:
-                self.log.info("ior failed! " + str(self.ior_cmd))
+        #     # Run ior command.
+        #     try:
+        #         self.run_ior_with_pool(timeout=200, stop_dfuse=False)
+        #     except TestFail:
+        #         self.log.info("ior failed! " + str(self.ior_cmd))
 
-            # Get epoch of the created file.
-            creation_epoch = -1
-            cmd_output = ""
-            # As in date command, run stat command in the client node.
-            task = run_task(
-                self.hostlist_clients, "stat -c%Z {}".format(testfile_path))
-            for output, _ in task.iter_buffers():
-                cmd_output = "\n".join(
-                    [line.decode("utf-8") for line in output])
-            self.log.debug("## stat cmd_output = {}".format(cmd_output))
+        #     # Get epoch of the created file.
+        #     creation_epoch = -1
+        #     cmd_output = ""
+        #     # As in date command, run stat command in the client node.
+        #     task = run_task(
+        #         self.hostlist_clients, "stat -c%Z {}".format(testfile_path))
+        #     for output, _ in task.iter_buffers():
+        #         cmd_output = "\n".join(
+        #             [line.decode("utf-8") for line in output])
+        #     self.log.debug("## stat cmd_output = {}".format(cmd_output))
 
-            # The output may contain some warning messages, so use split to get
-            # the value we want.
-            creation_epoch = cmd_output.split()[-1]
+        #     # The output may contain some warning messages, so use split to get
+        #     # the value we want.
+        #     creation_epoch = cmd_output.split()[-1]
 
-            # Calculate the epoch difference between the creation time and the
-            # value in the file metadata. They're usually 5 to 10 sec apart.
-            creation_epoch_int = int(creation_epoch)
-            current_epoch_int = int(current_epoch)
-            diff_epoch = creation_epoch_int - current_epoch_int
-            if diff_epoch > 20:
-                msg = "Unexpected creation time! Expected = {}; Actual = {}"
-                error_list.append(
-                    msg.format(current_epoch_int, creation_epoch_int))
+        #     # Calculate the epoch difference between the creation time and the
+        #     # value in the file metadata. They're usually 5 to 10 sec apart.
+        #     creation_epoch_int = int(creation_epoch)
+        #     current_epoch_int = int(current_epoch)
+        #     diff_epoch = creation_epoch_int - current_epoch_int
+        #     if diff_epoch > 20:
+        #         msg = "Unexpected creation time! Expected = {}; Actual = {}"
+        #         error_list.append(
+        #             msg.format(current_epoch_int, creation_epoch_int))
 
-            # 2. Verify file size.
-            # Get file size.
-            file_size = get_remote_file_size(
-                self.hostlist_clients[0], testfile_path)
+        #     # 2. Verify file size.
+        #     # Get file size.
+        #     file_size = get_remote_file_size(
+        #         self.hostlist_clients[0], testfile_path)
 
-            # Adjust the file size and verify that it matches the expected size.
-            expected_size = block_size[:-1]
-            # Obtained size is in byte, so convert it to MB.
-            file_size_adjusted = file_size / 1024 / 1024
-            if int(expected_size) != file_size_adjusted:
-                msg = "Unexpected file size! Expected = {}; Actual = {}"
-                error_list.append(
-                    msg.format(int(expected_size), file_size_adjusted))
+        #     # Adjust the file size and verify that it matches the expected size.
+        #     expected_size = block_size[:-1]
+        #     # Obtained size is in byte, so convert it to MB.
+        #     file_size_adjusted = file_size / 1024 / 1024
+        #     if int(expected_size) != file_size_adjusted:
+        #         msg = "Unexpected file size! Expected = {}; Actual = {}"
+        #         error_list.append(
+        #             msg.format(int(expected_size), file_size_adjusted))
 
-        # Manually stop dfuse because we set stop_dfuse=False in
-        # run_ior_with_pool.
-        self.stop_dfuse()
+        # # Manually stop dfuse because we set stop_dfuse=False in
+        # # run_ior_with_pool.
+        # self.stop_dfuse()
 
-        if error_list:
-            self.fail("\n----- Errors detected! -----\n{}".format(
-                "\n".join(error_list)))
+        # if error_list:
+        #     self.fail("\n----- Errors detected! -----\n{}".format(
+        #         "\n".join(error_list)))
