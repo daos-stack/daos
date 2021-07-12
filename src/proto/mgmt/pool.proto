@@ -15,11 +15,11 @@ option go_package = "github.com/daos-stack/daos/src/control/common/proto/mgmt";
 // PoolCreateReq supplies new pool parameters.
 message PoolCreateReq {
 	string uuid = 1; // UUID for new pool, generated on the client
-	string label = 2; // Unique label for pool (optional)
-	string sys = 3; // DAOS system identifier
-	string user = 4; // formatted user e.g. "bob@"
-	string usergroup = 5; // formatted group e.g. "builders@"
-	repeated string acl = 6; // Access Control Entries in short string format
+	string sys = 2; // DAOS system identifier
+	string user = 3; // formatted user e.g. "bob@"
+	string usergroup = 4; // formatted group e.g. "builders@"
+	repeated string acl = 5; // Access Control Entries in short string format
+	repeated PoolProperty properties = 6; // Pool properties to be set
 
 	// The minimal fault domain tree format consists of a set of tuples
 	// representing members of the tree in a breadth-first traversal order.
@@ -220,31 +220,38 @@ message PoolQueryResp {
 	uint32 leader = 12; // current raft leader
 }
 
-// PoolSetPropReq represents a request to set a pool property.
+message PoolProperty {
+	uint32 number = 1; // pool property number
+	oneof value {
+		string strval = 2; // pool property string value
+		uint64 numval = 3; // pool property numeric value
+	}
+}
+
+// PoolSetPropReq represents a request to set pool properties.
 message PoolSetPropReq {
 	string sys = 1; // DAOS system identifier
 	string uuid = 2; // uuid of pool to modify
-	oneof property {
-		string name = 3;   // pool property name
-		uint32 number = 4; // pool property enum
-	}
-	oneof value {
-		string strval = 5; // pool property string value
-		uint64 numval = 6; // pool property numeric value
-	}
-	repeated uint32 svc_ranks = 7; // List of pool service ranks
+	repeated PoolProperty properties = 3;
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }
 
-// PoolSetPropResp represents the result of setting a property.
+// PoolSetPropResp represents the result of setting pool properties.
 message PoolSetPropResp {
 	int32 status = 1; // DAOS error code
-	oneof property {
-		string name = 2;   // pool property name
-		uint32 number = 3; // pool property enum
-	}
-	oneof value {
-		string strval = 4; // pool property string value
-		uint64 numval = 5; // pool property numeric value
-	}
+}
+
+// PoolGetPropReq represents a request to get pool properties.
+message PoolGetPropReq {
+	string sys = 1; // DAOS system identifier
+	string uuid = 2; // uuid of pool to query
+	repeated PoolProperty properties = 3;
+	repeated uint32 svc_ranks = 4; // List of pool service ranks
+}
+
+// PoolGetPropResp represents the result of getting pool properties.
+message PoolGetPropResp {
+	int32 status = 1; // DAOS error code
+	repeated PoolProperty properties = 2;
 }
 
