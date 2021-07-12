@@ -834,6 +834,16 @@ class DaosServer():
 
         return self.test_pool.uuid
 
+    def get_test_pool_id(self):
+        """Return a pool uuid to be used for testing
+
+        Create a pool as required"""
+
+        if self.test_pool is None:
+            self._make_pool()
+
+        return self.test_pool.id()
+
 def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     """Run a command under the interception library
 
@@ -2926,6 +2936,8 @@ class AllocFailTestRun():
         This is where all the checks are performed.
         """
 
+        # Put in a new-line.
+        print()
         self.returncode = rc
         self.stdout = self._sp.stdout.read()
         self.stderr = self._sp.stderr.read()
@@ -3090,11 +3102,11 @@ class AllocFailTest():
 
         cmd_env = get_base_env()
 
-        # Debug flags to enable all memory allocation logging, but as little
-        # else as possible.
-        cmd_env['D_LOG_MASK'] = 'DEBUG'
-        cmd_env['DD_MASK'] = 'mem'
-        del cmd_env['DD_SUBSYS']
+        # Debug flags to enable all memory allocation logging, but as little else as possible.
+        # This improves run-time but makes debugging any issues found harder.
+        # cmd_env['D_LOG_MASK'] = 'DEBUG'
+        # cmd_env['DD_MASK'] = 'mem'
+        # del cmd_env['DD_SUBSYS']
 
         if self.use_il:
             cmd_env['LD_PRELOAD'] = os.path.join(self.conf['PREFIX'],
@@ -3223,7 +3235,7 @@ def test_fi_list_attr(server, conf, wf):
 def test_fi_get_attr(server, conf, wf):
     """Run daos cont get-attr with fi"""
 
-    pool = server.get_test_pool()
+    pool = server.get_test_pool_id()
 
     container = create_cont(conf, pool)
 
