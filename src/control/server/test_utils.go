@@ -145,7 +145,7 @@ func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
 	mi := svc.harness.instances[0]
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
-	mi.setDrpcClient(newMockDrpcClient(cfg))
+	mi.(*EngineInstance).setDrpcClient(newMockDrpcClient(cfg))
 }
 
 // setupMockDrpcClient sets up the dRPC client for the mgmtSvc to return
