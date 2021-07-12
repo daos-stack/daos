@@ -4,10 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from avocado.core.exceptions import TestFail
+#from avocado.core.exceptions import TestFail
 
-from ior_test_base import IorTestBase
-from general_utils import get_remote_file_size, run_task
+#from ior_test_base import IorTestBase
+#from general_utils import get_remote_file_size, run_task
 from apricot import TestWithServers
 
 # Added
