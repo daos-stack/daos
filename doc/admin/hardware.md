@@ -32,36 +32,34 @@ on Intel x86_64 architecture. The DAOS software and the libraries it depends
 on (e.g., ISA-L, SPDK, PMDK, and DPDK) can take advantage of Intel SSE
 and AVX extensions.
 
-DAOS is also regularly tested on 64-bit ARM processors configured in
-Little Endian mode. The same build instructions that are used for x86_64
-are applicable for ARM builds as well. DAOS and its dependencies will
-make the necessary adjustments automatically in their respective build
-systems for ARM platforms.
+Some success was also reported by the community on running the DAOS client
+on 64-bit ARM processors configured in Little Endian mode. That being said,
+ARM testing is not part of the current DAOS CI pipeline and is thus not
+validated on a regular basis.
 
 ## Network Requirements
 
 The DAOS network layer relies on libfabrics and supports OFI providers
-for Ethernet/sockets, InfiniBand/verbs, RoCE, and Intel
-Omni-Path Architecture (OPA). An RDMA-capable fabric is preferred for better
-performance. DAOS can support multiple rails by binding different
-instances of the DAOS server to individual network cards.
+for Ethernet/sockets, InfiniBand/verbs and RoCE.
+An RDMA-capable fabric is preferred for better performance. DAOS can support
+multiple network interfaces by binding different engines and differnet client
+processes to individual network cards.
 
 The DAOS control plane provides methods for administering and managing
 the DAOS servers using a secure socket layer interface. An additional
-out-of-band network connecting the nodes in the DAOS
-service cluster is required for DAOS administration. Management traffic
-between clients and servers uses IP over Fabric.
+out-of-band network connecting the nodes in the DAOS service cluster is required
+for DAOS administration. Management traffic between clients and servers uses IP
+over Fabric.
 
 ## Storage Requirements
 
 DAOS requires each storage node to have direct access to storage-class
-memory (SCM). While DAOS is primarily tested and tuned for Optane DC
+memory (SCM). While DAOS is primarily tested and tuned for Optane
 Persistent Memory, the DAOS software stack is built over the Persistent
-Memory Development Kit (PMDK) and the DAX feature of the Linux and
-Windows operating systems as described in the SNIA NVM Programming
-Model[^1]. As a result, the open-source DAOS software stack should be
-able to run transparently over any storage-class memory
-supported by the PMDK.
+Memory Development Kit (PMDK) and the DAX feature of the Linux operating
+systems as described in the SNIA NVM Programming Model[^1]. As a result,
+the open-source DAOS software stack should be able to run transparently
+over any storage-class memory supported by the PMDK.
 
 The storage node can optionally be equipped with NVMe (non-volatile
 memory express) SSDs to provide capacity. HDDs, as well as SATA and SAS

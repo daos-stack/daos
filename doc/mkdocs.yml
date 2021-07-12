@@ -54,13 +54,14 @@ nav:
         - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
     - User Guide:
+        - 'Workflow': 'user/worflow.md'
         - 'Container Management': 'user/container.md'
-        - 'Native Programming Interface': 'user/interface.md'
-        - 'POSIX Namespace': 'user/posix.md'
+        - 'File System': 'user/filesystem.md'
         - 'MPI-IO Support': 'user/mpi-io.md'
         - 'HDF5 Support': 'user/hdf5.md'
         - 'Spark and Hadoop': 'user/spark.md'
         - 'Data Mover': 'user/datamover.md'
+        - 'Native Programming Interface': 'user/interface.md'
     - Releases:
         - 'Release Notes v2.0': 'release/release_notes_v2_0.md'
         - 'Support Matrix': 'release/support_matrix.md'

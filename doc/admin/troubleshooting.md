@@ -133,23 +133,6 @@ logging. By default all subsystems are enabled ("DD_SUBSYS=all").
 
 ### Priority Logging
 
-All macros that output logs have a priority level, shown in descending
-order below.
-
--   D_FATAL(fmt, ...) FATAL
-
--   D_CRIT(fmt, ...) CRIT
-
--   D_ERROR(fmt, ...) ERR
-
--   D_WARN(fmt, ...) WARN
-
--   D_NOTE(fmt, ...) NOTE
-
--   D_INFO(fmt, ...) INFO
-
--   D_DEBUG(mask, fmt, ...) DEBUG
-
 The priority level that outputs to stderr is set with DD_STDERR. By
 default in DAOS (specific to the project), this is set to CRIT
 ("DD_STDERR=CRIT") meaning that all CRIT and more severe log messages
