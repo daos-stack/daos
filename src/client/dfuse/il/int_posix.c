@@ -52,7 +52,7 @@ struct ioil_global {
 	uint64_t	iog_file_count;		/**< Number of file opens intercepted */
 	uint64_t	iog_read_count;		/**< Number of read operations intercepted */
 	uint64_t	iog_write_count;	/**< Number of write operations intercepted */
-
+	uint64_t	iog_fstat_count;	/**< Number of fstat operations intercepted */
 };
 
 static vector_t	fd_table;
@@ -1504,14 +1504,15 @@ do_real_fclose:
 DFUSE_PUBLIC int
 dfuse___fxstat(int ver, int fd, struct stat *buf)
 {
-	struct fd_entry *entry = NULL;
-	int rc;
+	struct fd_entry	*entry = NULL;
+	int		counter;
+	int		rc;
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_fstat;
 
-	/* Turn of this feature if the kernel is doing metadata caching, in this case it's btter
+	/* Turn off this feature if the kernel is doing metadata caching, in this case it's btter
 	 * to use the kernel cache and keep it up-to-date than query the severs each time.
 	 */
 	if (!entry->fd_fstat) {
@@ -1519,7 +1520,10 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 		goto do_real_fstat;
 	}
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "fstat() %d", fd);
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_fstat_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting fstat\n");
 
 	/* fstat needs to return both the device magic number and the inode
 	 * neither of which can change over time, but they're also not known
@@ -1540,7 +1544,7 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 
 	rc = dfs_ostat(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, buf);
 
-	DFUSE_TRA_INFO(entry->fd_dfsoh, "fstat() returned %d", rc);
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "dfs_ostat() returned %d", rc);
 
 	buf->st_ino = entry->fd_ino;
 	buf->st_dev = entry->fd_dev;
