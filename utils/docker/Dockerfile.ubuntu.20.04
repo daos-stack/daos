@@ -23,8 +23,6 @@ RUN apt-get -y update && \
         build-essential \
         clang \
         cmake \
-        curl \
-        doxygen \
         fuse3 \
         git \
         golang-go \
@@ -48,9 +46,10 @@ RUN apt-get -y update && \
         libyaml-dev \
         locales \
         maven \
+        meson \
         numactl \
+        ninja-build \
         openjdk-8-jdk \
-        pandoc \
         patchelf \
         pciutils \
         pkg-config \
@@ -58,6 +57,7 @@ RUN apt-get -y update && \
         python3-distro \
         python3-distutils \
         python3-junit.xml \
+        python3-pyelftools \
         python3-pyxattr \
         python3-tabulate \
         scons \
@@ -105,6 +105,8 @@ USER daos_server:daos_server
 # ease-of-use for users, however in CI everything is turned off and then
 # selectively enabled.  Turning off any step disables all future steps.
 ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_KEEP_BUILD=no
+ARG DAOS_TARGET_TYPE=release
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -117,8 +119,9 @@ USER daos_server:daos_server
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz; }
+    { scons --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
+      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
+    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
 USER root:root
 ARG CACHEBUST
@@ -135,18 +138,20 @@ COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
-RUN chown -R daos_server.daos_server /home/daos
+RUN chown -R daos_server.daos_server /home/daos/daos
 USER daos_server:daos_server
 
 # select compiler to use
 ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
-    /bin/rm -rf build && \
+    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+    /bin/rm -rf build && go clean -cache && \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
@@ -178,5 +183,6 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
+ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN rm -rf /home/daos/*
+RUN [ $"DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*

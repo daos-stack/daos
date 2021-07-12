@@ -21,6 +21,7 @@
 
 #include "dfuse_log.h"
 #include <gurt/list.h>
+#include <gurt/atomic.h>
 #include "intercept.h"
 #include "dfuse_ioctl.h"
 #include "dfuse_vector.h"
@@ -43,6 +44,15 @@ struct ioil_global {
 	bool		iog_initialized;
 	bool		iog_no_daos;
 	bool		iog_daos_init;
+
+	bool		iog_show_summary;	/**< Should a summary be shown at teardown */
+
+	unsigned	iog_report_count;	/**< Number of operations that should be logged */
+
+	uint64_t	iog_file_count;		/**< Number of file opens intercepted */
+	uint64_t	iog_read_count;		/**< Number of read operations intercepted */
+	uint64_t	iog_write_count;	/**< Number of write operations intercepted */
+
 };
 
 static vector_t	fd_table;
@@ -83,7 +93,6 @@ static const char * const bypass_status[] = {
 static void
 ioil_shrink_pool(struct ioil_pool *pool)
 {
-
 	if (daos_handle_is_valid(pool->iop_poh)) {
 		int rc;
 
@@ -109,6 +118,7 @@ ioil_shrink(struct ioil_cont *cont)
 		return;
 
 	if (cont->ioc_dfs != NULL) {
+		DFUSE_TRA_DOWN(cont->ioc_dfs);
 		rc = dfs_umount(cont->ioc_dfs);
 		if (rc != 0) {
 			D_ERROR("dfs_umount() failed, %d\n", rc);
@@ -144,7 +154,6 @@ entry_array_close(void *arg) {
 	DFUSE_LOG_DEBUG("entry %p closing array fd_count %d",
 			entry, entry->fd_cont->ioc_open_count);
 
-
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
 	dfs_release(entry->fd_dfsoh);
 
@@ -172,6 +181,12 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_read;
 	int errcode;
+	int counter;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting read\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_pread(buff, len, offset, entry, &errcode);
@@ -187,6 +202,12 @@ preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 {
 	ssize_t bytes_read;
 	int errcode;
+	int counter;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting read\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_preadv(iov, count, offset, entry,
@@ -201,6 +222,12 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_written;
 	int errcode;
+	int counter;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting write\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_writex(buff, len, offset, entry,
@@ -218,6 +245,12 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 {
 	ssize_t bytes_written;
 	int errcode;
+	int counter;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting write\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_pwritev(iov, count, offset, entry,
@@ -245,15 +278,15 @@ ioil_init(void)
 {
 	struct rlimit rlimit;
 	int rc;
+	unsigned report_count = -1;
 
 	pthread_once(&init_links_flag, init_links);
 
 	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc) {
+	if (rc)
 		ioil_iog.iog_no_daos = true;
-	}
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
@@ -263,6 +296,12 @@ ioil_init(void)
 		DFUSE_LOG_ERROR("Could not get process file descriptor limit"
 				", disabling kernel bypass");
 		return;
+	}
+
+	d_getenv_int("D_IL_REPORT", &report_count);
+	if (report_count != -1) {
+		ioil_iog.iog_show_summary = true;
+		ioil_iog.iog_report_count = report_count;
 	}
 
 	rc = ioil_initialize_fd_table(rlimit.rlim_max);
@@ -280,6 +319,19 @@ ioil_init(void)
 	ioil_iog.iog_initialized = true;
 }
 
+static void
+ioil_show_summary()
+{
+	D_INFO("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+
+	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
+		return;
+
+	fprintf(stderr, "[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+		ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+}
+
 static __attribute__((destructor)) void
 ioil_fini(void)
 {
@@ -290,6 +342,8 @@ ioil_fini(void)
 
 	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
+
+	ioil_show_summary();
 
 	/* Tidy up any remaining open connections */
 	d_list_for_each_entry_safe(pool, pnext,
@@ -737,6 +791,8 @@ dfuse_open(const char *pathname, int flags, ...)
 				pathname);
 		goto finish;
 	}
+
+	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
 	if (flags & O_CREAT)
 		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o, mode=0%o) = "

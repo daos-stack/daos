@@ -150,22 +150,23 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 }
 
 type cliOptions struct {
-	AllowProxy     bool       `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       string     `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname>"`
-	Insecure       bool       `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
-	Debug          bool       `short:"d" long:"debug" description:"enable debug output"`
-	JSON           bool       `short:"j" long:"json" description:"Enable JSON output"`
-	JSONLogs       bool       `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
-	ConfigPath     string     `short:"o" long:"config-path" description:"Client config file path"`
-	Storage        storageCmd `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
-	Config         configCmd  `command:"config" alias:"co" description:"Perform tasks related to configuration of hardware remote servers"`
-	System         SystemCmd  `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
-	Network        NetCmd     `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
-	Pool           PoolCmd    `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
-	Cont           ContCmd    `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
-	Version        versionCmd `command:"version" description:"Print dmg version"`
-	Telemetry      telemCmd   `command:"telemetry" description:"Perform telemetry operations"`
-	firmwareOption            // build with tag "firmware" to enable
+	AllowProxy     bool          `long:"allow-proxy" description:"Allow proxy configuration via environment"`
+	HostList       string        `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname>"`
+	Insecure       bool          `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
+	Debug          bool          `short:"d" long:"debug" description:"enable debug output"`
+	JSON           bool          `short:"j" long:"json" description:"Enable JSON output"`
+	JSONLogs       bool          `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
+	ConfigPath     string        `short:"o" long:"config-path" description:"Client config file path"`
+	Storage        storageCmd    `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
+	Config         configCmd     `command:"config" alias:"co" description:"Perform tasks related to configuration of hardware remote servers"`
+	System         SystemCmd     `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
+	Network        NetCmd        `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
+	Pool           PoolCmd       `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
+	Cont           ContCmd       `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
+	Version        versionCmd    `command:"version" description:"Print dmg version"`
+	Telemetry      telemCmd      `command:"telemetry" description:"Perform telemetry operations"`
+	firmwareOption               // build with tag "firmware" to enable
+	ManPage        common.ManCmd `command:"manpage" hidden:"true"`
 }
 
 type versionCmd struct{}
@@ -185,9 +186,9 @@ func exitWithError(log logging.Logger, err error) {
 	os.Exit(1)
 }
 
-func writeManPage(wr io.Writer) {
-	var opts cliOptions
-	p := flags.NewParser(&opts, flags.Default)
+func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
+	var wroteJSON atm.Bool
+	p := flags.NewParser(opts, flags.Default)
 	p.Name = "dmg"
 	p.ShortDescription = "Administrative tool for managing DAOS clusters"
 	p.Usage = "[OPTIONS] [COMMAND] [SUBCOMMAND]"
@@ -196,16 +197,16 @@ for the purpose of issuing administrative commands to the cluster. dmg is
 provided as a means for allowing administrators to securely discover and
 administer DAOS components such as storage allocations, network configuration,
 and access control settings, along with system wide operations.`
-	p.WriteManPage(wr)
-}
-
-func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *logging.LeveledLogger) error {
-	var wroteJSON atm.Bool
-	p := flags.NewParser(opts, flags.Default)
 	p.Options ^= flags.PrintErrors // Don't allow the library to print errors
 	p.CommandHandler = func(cmd flags.Commander, args []string) error {
 		if cmd == nil {
 			return nil
+		}
+
+		if manCmd, ok := cmd.(common.ManPageWriter); ok {
+			manCmd.SetWriteFunc(p.WriteManPage)
+			// Just execute now without any more setup.
+			return cmd.Execute(args)
 		}
 
 		if !opts.AllowProxy {
@@ -235,9 +236,10 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 
 		ctlCfg, err := control.LoadConfig(opts.ConfigPath)
 		if err != nil {
-			if opts.ConfigPath != "" {
-				return errors.WithMessage(err, "failed to load control configuration")
+			if errors.Cause(err) != control.ErrNoConfigFile {
+				return errors.Wrap(err, "failed to load control configuration")
 			}
+			// Use the default config if no config file was found.
 			ctlCfg = control.DefaultConfig()
 		}
 		if ctlCfg.Path != "" {

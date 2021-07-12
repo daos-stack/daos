@@ -53,8 +53,8 @@ print_usage(int rank)
 	print_message("daos_test -i|--io\n");
 	print_message("daos_test -I|--ec_io\n");
 	print_message("daos_test -x|--epoch_io\n");
-	print_message("daos_test -D|--array\n");
 	print_message("daos_test -A|--obj_array\n");
+	print_message("daos_test -D|--array\n");
 	print_message("daos_test -K|--daos_kv\n");
 	print_message("daos_test -d|--degraded\n");
 	print_message("daos_test -e|--epoch\n");

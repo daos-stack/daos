@@ -337,6 +337,12 @@ pool_prop_default_copy(daos_prop_t *prop_def, daos_prop_t *prop)
 		}
 	}
 
+	/* Validate the result */
+	if (!daos_prop_valid(prop_def, true /* pool */, true /* input */)) {
+		D_ERROR("properties validation check failed\n");
+		return -DER_INVAL;
+	}
+
 	return 0;
 }
 
@@ -1836,7 +1842,8 @@ ds_pool_create_handler(crt_rpc_t *rpc)
 	/* duplicate the default properties, overwrite it with pool create
 	 * parameter and then write to pool meta data.
 	 */
-	prop_dup = daos_prop_dup(&pool_prop_default, true);
+	prop_dup = daos_prop_dup(&pool_prop_default, true /* pool */,
+				 false /* input */);
 	if (prop_dup == NULL) {
 		D_ERROR("daos_prop_dup failed.\n");
 		D_GOTO(out_tx, rc = -DER_NOMEM);
@@ -3500,6 +3507,12 @@ ds_pool_prop_set_handler(crt_rpc_t *rpc)
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	if (!daos_prop_valid(in->psi_prop, true /* pool */, true /* input */)) {
+		D_ERROR(DF_UUID": invalid properties input\n",
+			DP_UUID(in->psi_op.pi_uuid));
+		D_GOTO(out_svc, rc = -DER_INVAL);
+	}
+
 	rc = rdb_tx_begin(svc->ps_rsvc.s_db, svc->ps_rsvc.s_term, &tx);
 	if (rc != 0)
 		D_GOTO(out_svc, rc);
@@ -3993,7 +4006,7 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	if (replacement.rl_nr > 0)
 		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replacement,
 				       ds_rsvc_get_md_cap());
-	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed);
+	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed, false /* stop */);
 	/** `replacement.rl_ranks` is not allocated and shouldn't be freed **/
 	D_FREE(failed.rl_ranks);
 
@@ -4472,6 +4485,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool				updated;
 	int				rc;
 	char				*env;
+	uint64_t			delay = 0;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, &target_list,
 					  list, hint, &updated, map_version,
@@ -4517,11 +4531,14 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
+	if (daos_fail_check(DAOS_REBUILD_DELAY))
+		delay = 5;
+
 	D_DEBUG(DF_DSMS, "map ver %u/%u\n", map_version ? *map_version : -1,
 		tgt_map_ver);
 	if (tgt_map_ver != 0) {
 		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver,
-					 &target_list, op, 0);
+					 &target_list, op, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -5619,7 +5636,7 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 
 	case POOL_REPLICAS_REMOVE:
 		rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_POOL, &id, ranks,
-					     &out->pmo_hint);
+					     true /* stop */, &out->pmo_hint);
 		break;
 
 	default:

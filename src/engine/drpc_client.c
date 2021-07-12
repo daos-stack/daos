@@ -260,10 +260,8 @@ ds_get_pool_svc_ranks(uuid_t pool_uuid, d_rank_list_t **svc_ranks)
 	int			 rc;
 
 	D_ALLOC(gps_req.uuid, DAOS_UUID_STR_SIZE);
-	if (gps_req.uuid == NULL) {
-		D_ERROR("failed to allocate pool uuid\n");
+	if (gps_req.uuid == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 	uuid_unparse_lower(pool_uuid, gps_req.uuid);
 
 	D_DEBUG(DB_MGMT, "fetching svc_ranks for "DF_UUID"\n",
@@ -342,10 +340,8 @@ ds_pool_find_bylabel(d_const_string_t label, uuid_t pool_uuid,
 	int				rc;
 
 	D_STRNDUP(frq.label, label, DAOS_PROP_LABEL_MAX_LEN);
-	if (frq.label == NULL) {
-		D_ERROR("failed to duplicate pool label string\n");
+	if (frq.label == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
 
 	D_DEBUG(DB_MGMT, "fetching svc_ranks for pool %s\n", label);
 
@@ -411,7 +407,6 @@ out_label:
 out:
 	return rc;
 }
-
 
 int
 drpc_init(void)
