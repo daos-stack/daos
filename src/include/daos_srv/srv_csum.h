@@ -10,6 +10,7 @@
 #include <daos_srv/bio.h>
 #include <daos_srv/pool.h>
 #include <daos/checksum.h>
+#include <gurt/telemetry_producer.h>
 
 /**
  * Process the bsgl and create new checksums or use the stored
@@ -63,7 +64,6 @@ typedef int (*ds_corruption_handler_t)(void *);
 typedef int (*ds_sleep_fn_t)(void *, uint32_t msec);
 typedef int (*ds_yield_fn_t)(void *);
 
-
 /* For the pool target to start and stop the scrubbing ult */
 int ds_start_scrubbing_ult(struct ds_pool_child *child);
 void ds_stop_scrubbing_ult(struct ds_pool_child *child);
@@ -74,8 +74,51 @@ enum scrub_status {
 	SCRUB_STATUS_NOT_RUNNING = 2,
 };
 
+/* telemetry metrics for the scrubber */
+#define DF_POOL_DIR "scrub/pool:"DF_UUID"[%d]"
+#define DP_POOL_DIR(ctx) DP_UUID((ctx)->sc_pool_uuid), \
+			(ctx)->sc_dmi->dmi_tgt_id
+
+#define DF_CONT_DIR DF_POOL_DIR "/cont:"DF_UUID
+#define DP_CONT_DIR(ctx) DP_POOL_DIR(ctx) , DP_UUID(ctx->sc_cont.scs_cont_uuid)
+
+#define M_CSUM_COUNTER "csums/current"
+#define M_CSUM_TOTAL_COUNTER "csums/total"
+#define M_CSUM_PREV_COUNTER "csums/prev"
+#define M_CSUM_CORRUPTION "corruption/current"
+#define M_CSUM_TOTAL_CORRUPTION "corruption/total"
+#define M_STARTED "scrubber_started"
+#define M_LAST_DURATION "last_duration"
+
+#define m_inc_counter(m) d_tm_inc_counter((m), 1)
+#define m_reset_counter(m) d_tm_set_counter((m), 0)
+
+struct scrub_metrics {
+	struct d_tm_node_t *sm_start;
+	struct d_tm_node_t *sm_last_duration;
+	struct d_tm_node_t *sm_csum_calcs;
+	struct d_tm_node_t *sm_total_csum_calcs;
+	struct d_tm_node_t *sm_last_csum_calcs;
+	struct d_tm_node_t *sm_corruption;
+	struct d_tm_node_t *sm_total_corruption;
+};
+
+struct scrub_ctx_metrics {
+	struct d_tm_node_t	*scm_pool_ult_start;
+	struct d_tm_node_t	*scm_pool_ult_wait_time;
+	struct scrub_metrics	 scm_pool_metrics;
+	struct scrub_metrics	 scm_cont_metrics;
+};
+
 /* Scrub the pool */
 struct scrub_ctx {
+	/**
+	 * Metrics gathered during scrubbing process
+	 */
+	struct scrub_ctx_metrics sc_metrics;
+
+	struct dss_module_info	*sc_dmi;
+
 	/**
 	 * Pool
 	 **/
@@ -92,6 +135,7 @@ struct scrub_ctx {
 	/* callback function that will provide the csummer for the container */
 	ds_get_cont_fn_t	 sc_cont_lookup_fn;
 	struct cont_scrub	 sc_cont;
+	int			 sc_cont_csum_calcs;
 
 	/** Number of msec between checksum calculations */
 	daos_size_t		 sc_msec_between_calcs;
