@@ -82,7 +82,6 @@ def scons():
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('.').path])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
-    env.AppendUnique(CPPPATH=[Dir('../gurt').srcnode()])
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include', 'cart'),
                     os.path.join('../include', 'cart', header))
