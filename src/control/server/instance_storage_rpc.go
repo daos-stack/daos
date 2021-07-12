@@ -122,7 +122,7 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, reformat bool) (
 		}
 	}()
 
-	if ei.isStarted() {
+	if ei.IsStarted() {
 		if !reformat {
 			scmErr = errors.Errorf("instance %d: can't format storage of running instance",
 				engineIdx)

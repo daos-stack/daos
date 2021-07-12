@@ -103,9 +103,18 @@ err_grp:
 static int
 fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 {
-	int i;
+	int			 i;
+	Mgmt__ClientNetHint	*hint = resp->client_net_hint;
 
-	if (strnlen(resp->provider, sizeof(info->provider)) == 0) {
+	if (hint == NULL) {
+		D_ERROR("GetAttachInfo failed: %d. "
+			"no client networking hint set. "
+			"libdaos.so is incompatible with DAOS Agent.\n",
+			resp->status);
+		return -DER_AGENT_INCOMPAT;
+	}
+
+	if (strnlen(hint->provider, sizeof(info->provider)) == 0) {
 		D_ERROR("GetAttachInfo failed: %d. "
 			"provider is undefined. "
 			"libdaos.so is incompatible with DAOS Agent.\n",
@@ -113,7 +122,7 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		return -DER_AGENT_INCOMPAT;
 	}
 
-	if (strnlen(resp->interface, sizeof(info->interface)) == 0) {
+	if (strnlen(hint->interface, sizeof(info->interface)) == 0) {
 		D_ERROR("GetAttachInfo failed: %d. "
 			"interface is undefined. "
 			"libdaos.so is incompatible with DAOS Agent.\n",
@@ -121,7 +130,7 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		return -DER_AGENT_INCOMPAT;
 	}
 
-	if (strnlen(resp->domain, sizeof(info->domain)) == 0) {
+	if (strnlen(hint->domain, sizeof(info->domain)) == 0) {
 		D_ERROR("GetAttachInfo failed: %d. "
 			"domain string is undefined. "
 			"libdaos.so is incompatible with DAOS Agent.\n",
@@ -129,7 +138,7 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		return -DER_AGENT_INCOMPAT;
 	}
 
-	if (copy_str(info->provider, resp->provider)) {
+	if (copy_str(info->provider, hint->provider)) {
 		D_ERROR("GetAttachInfo failed: %d. "
 			"provider string too long.\n",
 			resp->status);
@@ -137,22 +146,23 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 		return -DER_INVAL;
 	}
 
-	if (copy_str(info->interface, resp->interface)) {
+	if (copy_str(info->interface, hint->interface)) {
 		D_ERROR("GetAttachInfo failed: %d. "
 			"interface string too long\n",
 			resp->status);
 		return -DER_INVAL;
 	}
 
-	if (copy_str(info->domain, resp->domain)) {
+	if (copy_str(info->domain, hint->domain)) {
 		D_ERROR("GetAttachInfo failed: %d. "
 			"domain string too long\n",
 			resp->status);
 		return -DER_INVAL;
 	}
 
-	info->crt_ctx_share_addr = resp->crt_ctx_share_addr;
-	info->crt_timeout = resp->crt_timeout;
+	info->crt_ctx_share_addr = hint->crt_ctx_share_addr;
+	info->crt_timeout = hint->crt_timeout;
+	info->srv_srx_set = hint->srv_srx_set;
 
 	/* Fill info->ms_ranks. */
 	if (resp->n_ms_ranks == 0) {
@@ -170,9 +180,11 @@ fill_sys_info(Mgmt__GetAttachInfoResp *resp, struct dc_mgmt_sys_info *info)
 
 	D_DEBUG(DB_MGMT,
 		"GetAttachInfo Provider: %s, Interface: %s, Domain: %s,"
-		"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u\n",
+		"CRT_CTX_SHARE_ADDR: %u, CRT_TIMEOUT: %u, "
+		"FI_OFI_RXM_USE_SRX: %d\n",
 		info->provider, info->interface, info->domain,
-		info->crt_ctx_share_addr, info->crt_timeout);
+		info->crt_ctx_share_addr, info->crt_timeout,
+		info->srv_srx_set);
 
 	return 0;
 }
@@ -303,6 +315,7 @@ int dc_mgmt_net_cfg(const char *name)
 	char *crt_timeout;
 	char *ofi_interface;
 	char *ofi_domain;
+	char *cli_srx_set;
 	struct dc_mgmt_sys_info info;
 	Mgmt__GetAttachInfoResp *resp;
 
@@ -320,6 +333,24 @@ int dc_mgmt_net_cfg(const char *name)
 	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
 	if (rc != 0)
 		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	/* If the server has set this, the client must use the same value. */
+	if (info.srv_srx_set != -1) {
+		sprintf(buf, "%d", info.srv_srx_set);
+		rc = setenv("FI_OFI_RXM_USE_SRX", buf, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+		D_INFO("Using server's value for FI_OFI_RXM_USE_SRX: %s\n",
+		       buf);
+	} else {
+		/* Client may not set it if the server hasn't. */
+		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		if (cli_srx_set) {
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
+				"but server is unset!\n", cli_srx_set);
+			D_GOTO(cleanup, rc = -DER_INVAL);
+		}
+	}
 
 	/* Allow client env overrides for these three */
 	crt_timeout = getenv("CRT_TIMEOUT");

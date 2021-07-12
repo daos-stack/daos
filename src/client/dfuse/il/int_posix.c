@@ -21,6 +21,7 @@
 
 #include "dfuse_log.h"
 #include <gurt/list.h>
+#include <gurt/atomic.h>
 #include "intercept.h"
 #include "dfuse_ioctl.h"
 #include "dfuse_vector.h"
@@ -43,6 +44,15 @@ struct ioil_global {
 	bool		iog_initialized;
 	bool		iog_no_daos;
 	bool		iog_daos_init;
+
+	bool		iog_show_summary;	/**< Should a summary be shown at teardown */
+
+	unsigned	iog_report_count;	/**< Number of operations that should be logged */
+
+	uint64_t	iog_file_count;		/**< Number of file opens intercepted */
+	uint64_t	iog_read_count;		/**< Number of read operations intercepted */
+	uint64_t	iog_write_count;	/**< Number of write operations intercepted */
+
 };
 
 static vector_t	fd_table;
@@ -108,6 +118,7 @@ ioil_shrink(struct ioil_cont *cont)
 		return;
 
 	if (cont->ioc_dfs != NULL) {
+		DFUSE_TRA_DOWN(cont->ioc_dfs);
 		rc = dfs_umount(cont->ioc_dfs);
 		if (rc != 0) {
 			D_ERROR("dfs_umount() failed, %d\n", rc);
@@ -170,6 +181,12 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_read;
 	int errcode;
+	int counter;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting read\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_pread(buff, len, offset, entry, &errcode);
@@ -185,6 +202,12 @@ preadv_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 {
 	ssize_t bytes_read;
 	int errcode;
+	int counter;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting read\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_preadv(iov, count, offset, entry,
@@ -199,6 +222,12 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 {
 	ssize_t bytes_written;
 	int errcode;
+	int counter;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting write\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_writex(buff, len, offset, entry,
@@ -216,6 +245,12 @@ pwritev_rpc(struct fd_entry *entry, const struct iovec *iov, int count,
 {
 	ssize_t bytes_written;
 	int errcode;
+	int counter;
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting write\n");
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_pwritev(iov, count, offset, entry,
@@ -243,15 +278,15 @@ ioil_init(void)
 {
 	struct rlimit rlimit;
 	int rc;
+	unsigned report_count = -1;
 
 	pthread_once(&init_links_flag, init_links);
 
 	D_INIT_LIST_HEAD(&ioil_iog.iog_pools_head);
 
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
-	if (rc) {
+	if (rc)
 		ioil_iog.iog_no_daos = true;
-	}
 
 	DFUSE_TRA_ROOT(&ioil_iog, "il");
 
@@ -261,6 +296,12 @@ ioil_init(void)
 		DFUSE_LOG_ERROR("Could not get process file descriptor limit"
 				", disabling kernel bypass");
 		return;
+	}
+
+	d_getenv_int("D_IL_REPORT", &report_count);
+	if (report_count != -1) {
+		ioil_iog.iog_show_summary = true;
+		ioil_iog.iog_report_count = report_count;
 	}
 
 	rc = ioil_initialize_fd_table(rlimit.rlim_max);
@@ -278,6 +319,19 @@ ioil_init(void)
 	ioil_iog.iog_initialized = true;
 }
 
+static void
+ioil_show_summary()
+{
+	D_INFO("Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+	       ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+
+	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
+		return;
+
+	fprintf(stderr, "[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+		ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
+}
+
 static __attribute__((destructor)) void
 ioil_fini(void)
 {
@@ -288,6 +342,8 @@ ioil_fini(void)
 
 	DFUSE_TRA_DOWN(&ioil_iog);
 	vector_destroy(&fd_table);
+
+	ioil_show_summary();
 
 	/* Tidy up any remaining open connections */
 	d_list_for_each_entry_safe(pool, pnext,
@@ -566,8 +622,9 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
-				err, strerror(err));
+		if (err != ENOTTY)
+			DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
+					err, strerror(err));
 		return false;
 	}
 
@@ -699,6 +756,20 @@ drop_reference_if_disabled(struct fd_entry *entry)
 	return true;
 }
 
+/* Whilst it's not impossible that dfuse is backing these paths it's very unlikely so
+ * simply skip them to avoid the extra ioctl cost.
+ */
+static bool
+dfuse_check_valid_path(const char *path)
+{
+	if ((strncmp(path, "/sys/", 5) == 0) ||
+		(strncmp(path, "/dev/", 5) == 0) ||
+		strncmp(path, "/proc/", 6) == 0) {
+		return false;
+	}
+	return true;
+}
+
 DFUSE_PUBLIC int
 dfuse_open(const char *pathname, int flags, ...)
 {
@@ -725,6 +796,12 @@ dfuse_open(const char *pathname, int flags, ...)
 	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
 
+	if (!dfuse_check_valid_path(pathname)) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by path",
+				pathname);
+		return fd;
+	}
+
 	status = DFUSE_IO_BYPASS;
 	/* Disable bypass for O_APPEND|O_PATH */
 	if ((flags & (O_PATH | O_APPEND)) != 0)
@@ -733,8 +810,10 @@ dfuse_open(const char *pathname, int flags, ...)
 	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
 		DFUSE_LOG_DEBUG("open(pathname=%s) interception not possible",
 				pathname);
-		goto finish;
+		return fd;
 	}
+
+	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
 	if (flags & O_CREAT)
 		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o, mode=0%o) = "
@@ -746,7 +825,6 @@ dfuse_open(const char *pathname, int flags, ...)
 				pathname, flags, fd,
 				bypass_status[entry.fd_status]);
 
-finish:
 	return fd;
 }
 
@@ -762,14 +840,21 @@ dfuse_creat(const char *pathname, mode_t mode)
 	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC,
-				 DFUSE_IO_BYPASS))
-		goto finish;
+	if (!dfuse_check_valid_path(pathname)) {
+		DFUSE_LOG_DEBUG("creat(pathname=%s) ignoring by path",
+				pathname);
+		return fd;
+	}
+
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_BYPASS)) {
+		DFUSE_LOG_DEBUG("creat(pathname=%s) interception not possible",
+				pathname);
+		return fd;
+	}
 
 	DFUSE_LOG_DEBUG("creat(pathname=%s, mode=0%o) = %d. intercepted, bypass=%s",
 			pathname, mode, fd, bypass_status[entry.fd_status]);
 
-finish:
 	return fd;
 }
 
@@ -1303,16 +1388,23 @@ dfuse_fopen(const char *path, const char *mode)
 	fd = fileno(fp);
 
 	if (fd == -1)
-		goto finish;
+		return fp;
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC,
-				 DFUSE_IO_DIS_STREAM))
-		goto finish;
+	if (!dfuse_check_valid_path(path)) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by path",
+				path);
+		return fp;
+	}
+
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_DIS_STREAM)) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) interception not possible",
+				path);
+		return fp;
+	}
 
 	DFUSE_LOG_DEBUG("fopen(path=%s, mode=%s) = %p(fd=%d) intercepted, bypass=%s",
 			path, mode, fp, fd, bypass_status[entry.fd_status]);
 
-finish:
 	return fp;
 }
 

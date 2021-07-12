@@ -1,5 +1,6 @@
 """Build pydaos client"""
 import daos_build
+import compiler_setup
 
 def build_shim_module(env, lib_prefix, version):
     """Build PyDAOS shim module for the specified python version"""
@@ -20,11 +21,12 @@ def build_shim_module(env, lib_prefix, version):
     new_env.Replace(LIBS=['daos', 'duns'])
     new_env.AppendUnique(LIBPATH=["../dfs"])
 
-    daos_build.clear_icc_env(new_env)
-    daos_build.strip_defines(new_env)
+    new_env['CC'] = 'gcc'
+    new_env.AppendUnique(CCFLAGS='-pthread')
+
+    compiler_setup.base_setup(new_env)
 
     obj = new_env.SharedObject(tgt_name, 'pydaos_shim.c',
-                               CC='gcc -pthread',
                                SHLINKFLAGS=[],
                                SHLIBPREFIX="",
                                CPPFLAGS=extra_flags)
@@ -49,9 +51,9 @@ def build_shim_module(env, lib_prefix, version):
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('base_env')
 
-    build_shim_module(env, '$PREFIX/lib64/', "3")
+    build_shim_module(base_env, '$PREFIX/lib64/', "3")
 
 if __name__ == "SCons.Script":
     scons()

@@ -36,14 +36,12 @@ server_config:
         bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-    mode: 146
     name: daos_server
-    scm_size: 40GB
-    nvme_size: 100GB
-    svcn: 1
+    scm_size: 30GB
+    nvme_size: 500GB
+    properties: reclaim:time,ec_cell_sz:64KiB
     control_method: dmg
 pool_reserved:
-    mode: 511
     name: daos_server
     scm_size: 3GB
     nvme_size: 50GB
