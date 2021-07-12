@@ -118,7 +118,9 @@ func (sb *spdkBackend) writeNvmeConfig(req *storage.BdevWriteNvmeConfigRequest) 
 	for _, tierProp := range req.TierProps {
 		if tierProp.Class != storage.ClassNvme || len(tierProp.DeviceList) > 0 {
 			sb.log.Debugf("write nvme output json config: %+v", req)
-			return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
+			// TODO DAOS-8040: re-enable VMD
+			// return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
+			return writeJsonConfig(sb.log, false, req)
 		}
 	}
 

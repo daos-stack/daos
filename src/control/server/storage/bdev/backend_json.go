@@ -228,13 +228,12 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWrite
 func newSpdkConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteNvmeConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
-	// TODO DAOS-8040: re-enable VMD
-	// for _, tp := range req.TierProps {
-	// 	if enableVmd && tp.Class == storage.ClassNvme {
-	// 		sc.WithVmdEnabled()
-	// 		break
-	// 	}
-	// }
+	for _, tp := range req.TierProps {
+		if enableVmd && tp.Class == storage.ClassNvme {
+			sc.WithVmdEnabled()
+			break
+		}
+	}
 
 	return sc.WithBdevConfigs(log, req), nil
 }
