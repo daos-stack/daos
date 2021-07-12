@@ -301,8 +301,9 @@ class WarningsFactory():
         if cat:
             entry['category'] = cat
         entry['lineStart'] = line.lineno
+        # Jenkins no longer seems to display the description.
         entry['description'] = message
-        entry['message'] = line.get_anon_msg()
+        entry['message'] = '{}\n{}'.format(line.get_anon_msg(), message)
         entry['severity'] = sev
         self.issues.append(entry)
         if self.pending and self.pending[0][0].pid != line.pid:
@@ -2854,7 +2855,7 @@ class AllocFailTestRun():
         self.fault_injected = None
         self.loc = loc
 
-        prefix = 'dnt_fi_check_{}_'.format(get_inc_id())
+        prefix = 'dnt_fi_{}_{}_'.format(aft.description, loc)
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
                                                     delete=False).name
@@ -2996,9 +2997,10 @@ class AllocFailTestRun():
 class AllocFailTest():
     """Class to describe fault injection command"""
 
-    def __init__(self, conf, cmd):
+    def __init__(self, conf, desc, cmd):
         self.conf = conf
         self.cmd = cmd
+        self.description = desc
         self.prefix = True
         # Check stderr from commands where faults were injected.
         self.check_stderr = False
@@ -3147,7 +3149,7 @@ def test_alloc_fail_copy(server, conf, wf):
            '--dst',
            'daos://{}/{}'.format(pool, container)]
 
-    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd = AllocFailTest(conf, 'filesystem-copy', cmd)
     test_cmd.wf = wf
     # TODO: Remove this setting once test is updated to use new container for
     # each iteration.
@@ -3180,7 +3182,7 @@ def test_alloc_fail_cat(server, conf, wf):
 
     cmd = ['cat', target_file]
 
-    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd = AllocFailTest(conf, 'il-cat', cmd)
     test_cmd.use_il = True
     test_cmd.wf = wf
 
@@ -3211,7 +3213,7 @@ def test_fi_list_attr(server, conf, wf):
            pool,
            container]
 
-    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd = AllocFailTest(conf, 'cont-list-attr', cmd)
     test_cmd.wf = wf
 
     rc = test_cmd.launch()
@@ -3239,7 +3241,7 @@ def test_fi_get_attr(server, conf, wf):
            container,
            attr_name]
 
-    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd = AllocFailTest(conf, 'cont-get-attr', cmd)
     test_cmd.wf = wf
 
     rc = test_cmd.launch()
@@ -3255,7 +3257,7 @@ def test_alloc_fail(server, conf):
            'pool',
            'list-containers',
            pool]
-    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd = AllocFailTest(conf, 'pool-list-containers', cmd)
 
     # Create at least one container, and record what the output should be when
     # the command works.
