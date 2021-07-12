@@ -2868,6 +2868,7 @@ class AllocFailTestRun():
         prefix = 'dnt_fi_{}_{}_'.format(aft.description, loc)
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
+                                                    dir=self.aft.conf.tmp_dir,
                                                     delete=False).name
         self.env['D_LOG_FILE'] = self.log_file
 
@@ -3015,7 +3016,7 @@ class AllocFailTest():
         self.description = desc
         self.prefix = True
         # Check stderr from commands where faults were injected.
-        self.check_stderr = False
+        self.check_stderr = True
         # Check stdout/error from commands where faults were not injected
         self.check_post_stdout = True
         self.expected_stdout = None
@@ -3196,6 +3197,7 @@ def test_alloc_fail_cat(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, 'il-cat', cmd)
     test_cmd.use_il = True
+    test_cmd.check_stderr = False
     test_cmd.wf = wf
 
     rc = test_cmd.launch()
@@ -3274,7 +3276,6 @@ def test_alloc_fail(server, conf):
     # Create at least one container, and record what the output should be when
     # the command works.
     container = create_cont(conf, pool)
-    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)
