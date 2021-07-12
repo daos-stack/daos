@@ -186,7 +186,7 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting read\n");
+		fprintf(stderr, "[libioil] Intercepting read of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_pread(buff, len, offset, entry, &errcode);
@@ -227,7 +227,7 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting write\n");
+		fprintf(stderr, "[libioil] Intercepting write of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_writex(buff, len, offset, entry,
@@ -278,7 +278,7 @@ ioil_init(void)
 {
 	struct rlimit rlimit;
 	int rc;
-	unsigned report_count = -1;
+	uint64_t report_count = 0;
 
 	pthread_once(&init_links_flag, init_links);
 
@@ -298,8 +298,11 @@ ioil_init(void)
 		return;
 	}
 
-	d_getenv_int("D_IL_REPORT", &report_count);
-	if (report_count != -1) {
+	/* Check what progress to report on.  If the env is set but could not be
+	 * parsed then just show the summary (report_count will be 0).
+	 */
+	rc = d_getenv_uint64_t("D_IL_REPORT", &report_count);
+	if (rc != -DER_NONEXIST) {
 		ioil_iog.iog_show_summary = true;
 		ioil_iog.iog_report_count = report_count;
 	}
