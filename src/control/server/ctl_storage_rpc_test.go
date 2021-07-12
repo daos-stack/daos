@@ -284,7 +284,8 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 					srv.(*EngineInstance).ready.SetFalse()
 				}
 
-				// todo_tiering: t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+				// TODO DAOS-8040: re-enable VMD
+				// t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 				// runs discovery for nvme & scm
 				err := cs.Setup()
@@ -833,7 +834,8 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				newSrv._superblock.Rank = system.NewRankPtr(uint32(i + 1))
 			}
 
-			// todo_tiering: t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+			// TODO DAOS-8040: re-enable VMD
+			// t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {
@@ -1358,7 +1360,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			instances := cs.harness.Instances()
 			common.AssertEqual(t, len(tc.sMounts), len(instances), name)
 
-			// todo_tiering: t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+			// TODO DAOS-8040: re-enable VMD
+			// t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {

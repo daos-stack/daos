@@ -148,21 +148,22 @@ func (c *StorageControlService) checkCfgBdevs(scanResp *storage.BdevScanResponse
 			}
 			cfgBdevs := tierCfg.Bdev.DeviceList
 
-			/*if !c.bdev.IsVMDDisabled() {
-				c.log.Debug("VMD detected, processing PCI addresses")
-				newBdevs, err := substBdevVmdAddrs(cfgBdevs, scanResp)
-				if err != nil {
-					return err
-				}
-				if len(newBdevs) == 0 {
-					return errors.New("unexpected empty bdev list returned " +
-						"check vmd address has backing devices")
-				}
-				c.log.Debugf("instance %d: subst vmd addrs %v->%v",
-					idx, cfgBdevs, newBdevs)
-				cfgBdevs = newBdevs
-				c.instanceStorage[idx].Bdev.DeviceList = cfgBdevs
-			}*/
+			// TODO DAOS-8040: re-enable VMD
+			// if !c.bdev.IsVMDDisabled() {
+			// 	c.log.Debug("VMD detected, processing PCI addresses")
+			// 	newBdevs, err := substBdevVmdAddrs(cfgBdevs, scanResp)
+			// 	if err != nil {
+			// 		return err
+			// 	}
+			// 	if len(newBdevs) == 0 {
+			// 		return errors.New("unexpected empty bdev list returned " +
+			// 			"check vmd address has backing devices")
+			// 	}
+			// 	c.log.Debugf("instance %d: subst vmd addrs %v->%v",
+			// 		idx, cfgBdevs, newBdevs)
+			// 	cfgBdevs = newBdevs
+			// 	c.instanceStorage[idx].Bdev.DeviceList = cfgBdevs
+			// }
 
 			// fail if config specified nvme devices are inaccessible
 			missing, ok := canAccessBdevs(cfgBdevs, scanResp)

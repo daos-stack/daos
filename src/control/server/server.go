@@ -226,10 +226,11 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
-	// todo_tiering: Indicate whether VMD devices have been detected and can be used.
-	/*for _, bc := range cfg.Storage.BdevConfigs() {
-		bc.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
-	}*/
+	// TODO DAOS-8040: re-enable VMD
+	// Indicate whether VMD devices have been detected and can be used.
+	// for _, bc := range cfg.Storage.BdevConfigs() {
+	//	bc.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
+	// }
 
 	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
 		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
