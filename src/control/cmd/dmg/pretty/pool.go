@@ -85,3 +85,25 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 
 	return err
 }
+
+// PrintPoolProperties displays a two-column table of pool property names and values.
+func PrintPoolProperties(poolID string, out io.Writer, properties ...*control.PoolProperty) {
+	fmt.Fprintf(out, "Pool %s properties:\n", poolID)
+
+	nameTitle := "Name"
+	valueTitle := "Value"
+	table := []txtfmt.TableRow{}
+	for _, prop := range properties {
+		if prop == nil {
+			continue
+		}
+		row := txtfmt.TableRow{}
+		row[nameTitle] = fmt.Sprintf("%s (%s)", prop.Description, prop.Name)
+		row[valueTitle] = prop.StringValue()
+		table = append(table, row)
+	}
+
+	tf := txtfmt.NewTableFormatter(nameTitle, valueTitle)
+	tf.InitWriter(out)
+	tf.Format(table)
+}

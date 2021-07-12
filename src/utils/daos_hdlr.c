@@ -705,7 +705,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 
 	begin = time(NULL);
 
-	D_PRINT("check container "DF_UUIDF" stated at: %s\n",
+	fprintf(ap->outstream, "check container "DF_UUIDF" started at: %s\n",
 		DP_UUID(ap->c_uuid), ctime(&begin));
 
 	while (!daos_anchor_is_eof(&anchor)) {
@@ -1663,13 +1663,15 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
 		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+		if (rc)
+			rc = daos_errno2der(rc);
 	} else {
 		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
 	}
 
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to create container: %s (%d)\n",
-			d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to create container: "DF_RC"\n",
+			DP_RC(rc));
 		return rc;
 	}
 
@@ -1783,8 +1785,9 @@ cont_query_hdlr(struct cmd_args_s *ap)
 
 		dfs_query(dfs, &attr);
 		daos_oclass_id2name(attr.da_oclass_id, oclass);
-		printf("Object Class:\t%s\n", oclass);
-		printf("Chunk Size:\t%zu\n", attr.da_chunk_size);
+		fprintf(ap->outstream, "Object Class:\t%s\n", oclass);
+		fprintf(ap->outstream,
+			"Chunk Size:\t%zu\n", attr.da_chunk_size);
 
 		rc = dfs_umount(dfs);
 		if (rc) {
@@ -2706,7 +2709,8 @@ fs_copy(struct cmd_args_s *ap,
 		if (S_ISDIR(dst_stat.st_mode)) {
 			copy_into_dst = true;
 		} else if S_ISDIR(src_stat.st_mode) {
-			fprintf(stderr, "Destination is not a directory.\n");
+			fprintf(ap->errstream,
+				"Destination is not a directory.\n");
 			D_GOTO(out, rc = EINVAL);
 		}
 	}
@@ -2715,7 +2719,8 @@ fs_copy(struct cmd_args_s *ap,
 		/* Get the dirname and basename */
 		rc = parse_filename_dfs(src_path, &tmp_name, &tmp_dir);
 		if (rc != 0) {
-			printf("Failed to parse path %s\n", src_path);
+			fprintf(ap->errstream,
+				"Failed to parse path %s\n", src_path);
 			D_GOTO(out, rc);
 		}
 
@@ -2742,7 +2747,8 @@ fs_copy(struct cmd_args_s *ap,
 			(*num_dirs)++;
 		break;
 	default:
-		fprintf(stderr, "Only files and directories are supported\n");
+		fprintf(ap->errstream,
+			"Only files and directories are supported\n");
 		D_GOTO(out, rc = ENOTSUP);
 	}
 
@@ -2994,7 +3000,8 @@ dm_connect(struct cmd_args_s *ap,
 					"%d\n", rc);
 				D_GOTO(err_dst_root, rc);
 			}
-			fprintf(stdout, "Successfully created container "
+			fprintf(ap->outstream,
+				"Successfully created container: "
 				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			fprintf(ap->errstream, "failed to open container: "
@@ -3181,7 +3188,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 
 	src_str_len = strlen(ap->src);
 	if (src_str_len == 0) {
-		fprintf(stderr, "Source path required.\n");
+		fprintf(ap->errstream, "Source path required.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	D_STRNDUP(src_str, ap->src, src_str_len);
@@ -3199,7 +3206,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 
 	dst_str_len = strlen(ap->dst);
 	if (dst_str_len == 0) {
-		fprintf(stderr, "Destinaton path required.\n");
+		fprintf(ap->errstream, "Destinaton path required.\n");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 	D_STRNDUP(dst_str, ap->dst, dst_str_len);
@@ -3239,8 +3246,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		fprintf(ap->outstream, "Successfully copied to POSIX: %s\n",
 			dst_str);
 	}
-	fprintf(stdout, "    Directories: %lu\n", num_dirs);
-	fprintf(stdout, "    Files:       %lu\n", num_files);
+	fprintf(ap->outstream, "    Directories: %lu\n", num_dirs);
+	fprintf(ap->outstream, "    Files:       %lu\n", num_files);
 
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */
