@@ -853,6 +853,7 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
+    my_env['D_IL_REPORT'] = '2'
     ret = subprocess.run(cmd, env=my_env, check=False)
     print('Logged il to {}'.format(log_file.name))
     print(ret)

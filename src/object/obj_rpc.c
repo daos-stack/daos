@@ -327,6 +327,9 @@ crt_proc_struct_daos_recx_ep_list(crt_proc_t proc, crt_proc_op_t proc_op,
 	if (unlikely(rc))
 		return rc;
 
+	rc = crt_proc_bool(proc, proc_op, &list->re_snapshot);
+	if (unlikely(rc))
+		return rc;
 	rc = crt_proc_bool(proc, proc_op, &list->re_ep_valid);
 	if (unlikely(rc))
 		return rc;

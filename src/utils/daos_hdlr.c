@@ -705,7 +705,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 
 	begin = time(NULL);
 
-	D_PRINT("check container "DF_UUIDF" stated at: %s\n",
+	fprintf(ap->outstream, "check container "DF_UUIDF" started at: %s\n",
 		DP_UUID(ap->c_uuid), ctime(&begin));
 
 	while (!daos_anchor_is_eof(&anchor)) {
