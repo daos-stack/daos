@@ -124,8 +124,8 @@ write_completion_file(void)
 
 	dir = getenv("DAOS_TEST_SHARED_DIR");
 	D_ASSERTF(dir != NULL,
-        "DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
-        "option.\n");
+		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
+		"option.\n");
 	tmp_str = strcat(dir, "/test-servers-completed.txt.");
 	completion_file = strcat(tmp_str, pid);
 
