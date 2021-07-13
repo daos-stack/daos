@@ -144,7 +144,6 @@ class WarningsFactory():
     def __init__(self,
                  filename,
                  junit=False,
-                 class_id=None,
                  post=False,
                  post_error=False,
                  check=None):
@@ -154,7 +153,7 @@ class WarningsFactory():
         self.post_error = post_error
         self.check = check
         self.issues = []
-        self._class_id = class_id
+        self._class_id = None
         self.pending = []
         self._running = True
         # Save the filename of the object, as __file__ does not
@@ -167,16 +166,20 @@ class WarningsFactory():
             # and keep it there, until close() method is called, then remove
             # it and re-save.  This means any crash will result in there
             # being a results file with an error recorded.
-            tc = junit_xml.TestCase('Sanity',
-                                    classname=self._class_name('core'))
+            tc = junit_xml.TestCase('Sanity', classname=self._class_name('core'))
             tc.add_error_info('NLT exited abnormally')
-            test_case = junit_xml.TestCase('Startup',
-                                           classname=self._class_name('core'))
-            self.ts = junit_xml.TestSuite('Node Local Testing',
-                                          test_cases=[test_case, tc])
+            test_case = junit_xml.TestCase('Startup', classname=self._class_name('core'))
+            self.ts = junit_xml.TestSuite('Node Local Testing', test_cases=[test_case, tc])
             self._write_test_file()
         else:
             self.ts = None
+
+    def set_class_id(self, class_id):
+        self._class_id = class_id
+        assert(len(self.ts.test_cases) == 2)
+        for tc in self.ts.test_cases:
+            classname = tc.classname.split('.')[-1]
+            tc.classname = self._class_name(classname)
 
     def _class_name(self, class_name):
         """Return a formatted ID string for class"""
@@ -718,7 +721,7 @@ class DaosServer():
             msg = 'dmg system stop failed with {}'.format(rc.returncode)
             entry['message'] = msg
             self.conf.wf.issues.append(entry)
-        assert rc.returncode == 0
+        assert rc.returncode == 0, rc
 
         start = time.time()
         max_stop_time = 30
@@ -2829,11 +2832,17 @@ class AllocFailTestRun():
         res = "Fault injection test of '{}'\n".format(' '.join(self.cmd))
         res += 'Fault injection location {}\n'.format(self.loc)
         if self.vh:
-            res += 'Valgrind enabled for this test'
+            res += 'Valgrind enabled for this test\n'
         if self.returncode is None:
             res += 'Process not completed'
         else:
             res += 'Returncode was {}'.format(self.returncode)
+
+        if self.stdout:
+            res += '\nSTDOUT:{}'.format(self.stdout.decode('utf-8').strip())
+
+        if self.stderr:
+            res += '\nSTDERR:{}'.format(self.stderr.decode('utf-8').strip())
         return res
 
     def start(self):
@@ -2894,10 +2903,6 @@ class AllocFailTestRun():
         self.stdout = self._sp.stdout.read()
         self.stderr = self._sp.stderr.read()
 
-        if self.stderr != b'':
-            print('Stderr from command')
-            print(self.stderr.decode('utf-8').strip())
-
         show_memleaks = True
 
         fi_signal = None
@@ -2921,7 +2926,7 @@ class AllocFailTestRun():
             # If a fault wasn't injected then check output is as expected.
             # It's not possible to log these as warnings, because there is
             # no src line to log them against, so simply assert.
-            assert self.returncode == 0
+            assert self.returncode == 0, self
 
             if self.aft.check_post_stdout:
                 assert self.stderr == b''
@@ -3158,7 +3163,7 @@ def test_alloc_fail(server, conf):
     destroy_container(conf, pool, container)
     return rc
 
-def main():
+def main(wf):
     """Main entry point"""
 
     parser = argparse.ArgumentParser(
@@ -3195,11 +3200,7 @@ def main():
 
     conf = load_conf(args)
 
-    wf = WarningsFactory('nlt-errors.json',
-                         post_error=True,
-                         check='Log file errors',
-                         junit=True,
-                         class_id=args.class_name)
+    wf.set_class_id(args.class_name)
 
     wf_server = WarningsFactory('nlt-server-leaks.json',
                                 post=True, check='Server leak checking')
@@ -3296,12 +3297,32 @@ def main():
         print("Valgrind errors detected during execution")
         fatal_errors.add_result(True)
 
-    wf.close()
     wf_server.close()
     wf_client.close()
+    return fatal_errors
+
+def main_helper():
+    wf = WarningsFactory('nlt-errors.json',
+                         post_error=True,
+                         check='Log file errors',
+                         junit=True)
+
+    try:
+        fatal_errors = main(wf)
+        wf.add_test_case('exit_wrapper')
+        wf.close()
+    except Exception as error:
+        print(error)
+        print(str(error))
+        print(repr(error))
+        trace = ''.join(traceback.format_tb(error.__traceback__))
+        wf.add_test_case('exit_wrapper', str(error), output=trace)
+        wf.close()
+        raise
+
     if fatal_errors.errors:
         print("Significant errors encountered")
         sys.exit(1)
 
 if __name__ == '__main__':
-    main()
+    main_helper()
