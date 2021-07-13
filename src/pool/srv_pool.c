@@ -2761,7 +2761,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
 	struct pool_buf	       *map_buf;
-	uint32_t		map_version;
+	uint32_t		map_version = 0;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
 	d_iov_t			key;
@@ -2915,7 +2915,10 @@ out_lock:
 					    &out->pqo_space);
 
 out_svc:
-	out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
+	if (map_version == 0)
+		out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
+	else
+		out->pqo_op.po_map_version = map_version;
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
