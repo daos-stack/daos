@@ -257,6 +257,10 @@ class TestContainer(TestDaosApiBase):
         self.input_params = DaosInputParams()
 
         # Optional daos command object to use with the USE_DAOS control method
+        if daos_command:
+            self.log.debug("## TestContainer.__init__ daos_command is not None")
+        else:
+            self.log.debug("## TestContainer.__init__ daos_command is None!")
         self.daos = daos_command
 
         # Optional daos command argument values to use with the USE_DAOS control
@@ -314,6 +318,11 @@ class TestContainer(TestDaosApiBase):
             con_in (optional): to be defined. Defaults to None.
             acl_file (str, optional): path of the ACL file. Defaults to None.
         """
+        if self.daos:
+            self.log.debug("## create self.daos is not None")
+        else:
+            self.log.debug("## create self.daos is None!")
+
         self.destroy()
         self.log.info(
             "Creating a container with pool handle %s",

@@ -1488,7 +1488,15 @@ class TestWithServers(TestWithoutServers):
         container = TestContainer(pool, daos_command=self.get_daos_command())
         if namespace is not None:
             container.namespace = namespace
+        if container.daos:
+            self.log.debug("## get_container() daos_command is not None 1")
+        else:
+            self.log.debug("## get_container() daos_command is None! 1")
         container.get_params(self)
+        if container.daos:
+            self.log.debug("## get_container() daos_command is not None 2")
+        else:
+            self.log.debug("## get_container() daos_command is None! 2")
         if create:
             container.create()
         return container
