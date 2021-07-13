@@ -175,8 +175,10 @@ class WarningsFactory():
             self.ts = None
 
     def set_class_id(self, class_id):
+        """Set the class ID for any junit test cases"""
+
         self._class_id = class_id
-        assert(len(self.ts.test_cases) == 2)
+        assert len(self.ts.test_cases) == 2
         for tc in self.ts.test_cases:
             classname = tc.classname.split('.')[-1]
             tc.classname = self._class_name(classname)
@@ -3196,7 +3198,7 @@ def main(wf):
             if fn.startswith('test'):
                 tests.append(fn[5:])
         print('Tests are: {}'.format(','.join(sorted(tests))))
-        return
+        sys.exit(1)
 
     conf = load_conf(args)
 
@@ -3302,6 +3304,11 @@ def main(wf):
     return fatal_errors
 
 def main_helper():
+    """Wrap the main function, and catch/report any exceptions
+
+    This allows the junit results to show at least a stack trace and assertion message for
+    any failure, regardless of if it's from a test case or not.
+    """
     wf = WarningsFactory('nlt-errors.json',
                          post_error=True,
                          check='Log file errors',
