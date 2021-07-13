@@ -156,7 +156,26 @@ class TelemetryUtils():
         "engine_nvme_<id>_temp_warn",
         "engine_nvme_<id>_temp_warn_time",
         "engine_nvme_<id>_unsafe_shutdowns",
-        "engine_nvme_<id>_volatile_mem_warn"]
+        "engine_nvme_<id>_volatile_mem_warn",
+        "engine_nvme_<id>_vendor_program_fail_cnt_norm",
+        "engine_nvme_<id>_vendor_program_fail_cnt_raw",
+        "engine_nvme_<id>_vendor_erase_fail_cnt_norm",
+        "engine_nvme_<id>_vendor_erase_fail_cnt_raw",
+        "engine_nvme_<id>_vendor_wear_leveling_cnt_norm",
+        "engine_nvme_<id>_vendor_wear_leveling_cnt_min",
+        "engine_nvme_<id>_vendor_wear_leveling_cnt_max",
+        "engine_nvme_<id>_vendor_wear_leveling_cnt_avg",
+        "engine_nvme_<id>_vendor_endtoend_err_cnt_raw",
+        "engine_nvme_<id>_vendor_crc_err_cnt_raw",
+        "engine_nvme_<id>_vendor_media_wear_raw",
+        "engine_nvme_<id>_vendor_host_reads_raw",
+        "engine_nvme_<id>_vendor_crc_workload_timer_raw",
+        "engine_nvme_<id>_vendor_thermal_throttle_status_raw",
+        "engine_nvme_<id>_vendor_thermal_throttle_event_cnt",
+        "engine_nvme_<id>_vendor_retry_buffer_overflow_cnt",
+        "engine_nvme_<id>_vendor_pll_lock_loss_cnt",
+        "engine_nvme_<id>_vendor_nand_bytes_written",
+        "engine_nvme_<id>_vendor_host_bytes_written"]
 
     def __init__(self, dmg, servers):
         """Create a TelemetryUtils object.
