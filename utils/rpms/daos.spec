@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.1~rc1-1%{?dist}
+%global mercury_version 2.0.1-1%{?dist}
 %global libfabric_version 1.12.0
 %global __python %{__python3}
 
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.103
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -472,8 +472,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Mon Jul 12 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-2
+* Mon Jul 13 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-3
 - Add DAOS serialization library that requires hdf5
+
+* Mon Jul 12 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.103-2
+- Update to mercury release v2.0.1
 
 * Mon Jul 12 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.103-1
 - Version bump to 1.3.103 for 2.0 test build 3

@@ -285,7 +285,7 @@ class DaosCommand(DaosCommandBase):
 
         """
         self._get_result(
-            ("pool", "list-containers"), pool=pool, sys_name=sys_name)
+            ("cont", "list"), pool=pool, sys_name=sys_name)
         # Sample output.
         # c8bfc7c9-cb19-4574-bae2-af4046d24b58
         # 182347e4-08ce-4069-b5e2-0dd04406dffd
