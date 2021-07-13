@@ -917,7 +917,8 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	/* Need to refresh the local pool map. */
-	if (tx->tx_pm_ver < oco->oco_map_version || obj_retry_error(rc)) {
+	if (tx->tx_pm_ver < oco->oco_map_version || daos_crt_network_error(rc) ||
+	    rc == -DER_TIMEDOUT || rc == -DER_EXCLUDED || rc == -DER_STALE) {
 		struct daos_cpd_sub_req		*dcsr;
 
 		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
