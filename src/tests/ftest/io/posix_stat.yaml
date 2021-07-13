@@ -1,13 +1,12 @@
 hosts:
   test_servers:
     - server-A
-  # test_clients:
-  #   - client-A
+  test_clients:
+    - client-A
 timeout: 600
 pool:
   mode: 511
   name: daos_server
-  #scm_size: 10000000000 # 10 GB
   scm_size: 1073741824
   control_method: dmg
 container:
