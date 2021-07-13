@@ -7,7 +7,7 @@ hosts:
     - server-E
   test_clients:
     - client-H
-timeout: 6000
+timeout: 600
 server_config:
   name: daos_server
   servers:
@@ -26,7 +26,7 @@ container:
   data_array: 10
   control_method: daos
 object_class: OC_RP_3G1
-number_pools: 10
+number_pools: 5
 faults:
     fault_list:
       - DAOS_POOL_CREATE_FAIL_CORPC
