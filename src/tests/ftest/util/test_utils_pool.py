@@ -51,6 +51,7 @@ class TestPool(TestDaosApiBase):
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)       # name of property to be set
         self.prop_value = BasicParameter(None)      # value of property
+        self.properties = BasicParameter(None)      # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
 
@@ -150,6 +151,7 @@ class TestPool(TestDaosApiBase):
             "size": self.size.value,
             "scm_ratio": self.scm_ratio.value,
             "scm_size": self.scm_size.value,
+            "properties": self.properties.value,
         }
         for key in ("target_list", "svcn", "nvme_size"):
             value = getattr(self, key).value

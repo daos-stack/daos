@@ -479,7 +479,7 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 
 	svc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	svc.harness.started.SetTrue()
-	svc.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
+	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = system.NewRankPtr(0)
 	svc.membership, _ = system.MockMembership(t, l, mockResolver)
 	for _, m := range mbs {
 		if _, err := svc.membership.Add(m); err != nil {
