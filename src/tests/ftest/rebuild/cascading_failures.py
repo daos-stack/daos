@@ -76,6 +76,9 @@ class RbldCascadingFailures(RebuildTestBase):
             self.server_managers[0].stop_ranks(
                 [self.inputs.rank.value[1]], self.d_log)
 
+        #Wait for rebuild completion
+        self.pool.wait_for_rebuild(False, 1)
+
         self.daos_cmd.container_set_prop(
                       pool=self.pool.uuid,
                       cont=self.container.uuid,
