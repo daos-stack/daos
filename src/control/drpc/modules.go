@@ -227,6 +227,8 @@ const (
 	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
 	// MethodIdentifyStorage is a ModuleMgmt method
 	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
+	// MethodPoolGetProp defines a method for getting pool properties
+	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
 )
 
 type srvMethod int32

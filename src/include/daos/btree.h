@@ -482,6 +482,8 @@ enum btr_feats {
 	 *  tree class
 	 */
 	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
+	/** Skip rebalance leaf when delete some record from the leaf. */
+	BTR_FEAT_SKIP_LEAF_REBAL	= (1 << 3),
 };
 
 /**
