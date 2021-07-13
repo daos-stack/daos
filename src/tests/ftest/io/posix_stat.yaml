@@ -7,9 +7,8 @@ timeout: 600
 pool:
   mode: 511
   name: daos_server
-  #scm_size: 1073741824
+  scm_size: 10000000000 # 10 GB
   control_method: dmg
-  scm_size: 10G
 container:
   type: POSIX
   control_method: daos
