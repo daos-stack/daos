@@ -144,6 +144,7 @@ class WarningsFactory():
     def __init__(self,
                  filename,
                  junit=False,
+                 class_id=None,
                  post=False,
                  post_error=False,
                  check=None):
@@ -153,7 +154,7 @@ class WarningsFactory():
         self.post_error = post_error
         self.check = check
         self.issues = []
-        self._class_id = None
+        self._class_id = class_id
         self.pending = []
         self._running = True
         # Save the filename of the object, as __file__ does not
@@ -173,15 +174,6 @@ class WarningsFactory():
             self._write_test_file()
         else:
             self.ts = None
-
-    def set_class_id(self, class_id):
-        """Set the class ID for any junit test cases"""
-
-        self._class_id = class_id
-        assert len(self.ts.test_cases) == 2
-        for tc in self.ts.test_cases:
-            classname = tc.classname.split('.')[-1]
-            tc.classname = self._class_name(classname)
 
     def _class_name(self, class_name):
         """Return a formatted ID string for class"""
@@ -1341,6 +1333,8 @@ def needs_dfuse_with_cache(method):
         return rc
     return _helper
 
+# This is test code where methods are tests, so we want to have lots of them.
+# pylint: disable=too-many-public-methods
 class posix_tests():
     """Class for adding standalone unit tests"""
 
@@ -1981,6 +1975,7 @@ class posix_tests():
         print(rc)
         assert rc.returncode == 0
         destroy_container(self.conf, self.pool.id(), container)
+# pylint: enable=too-many-public-methods
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests
@@ -3165,47 +3160,12 @@ def test_alloc_fail(server, conf):
     destroy_container(conf, pool, container)
     return rc
 
-def main(wf):
+def run(wf, args):
     """Main entry point"""
-
-    parser = argparse.ArgumentParser(
-        description='Run DAOS client on local node')
-    parser.add_argument('--server-debug', default=None)
-    parser.add_argument('--dfuse-debug', default=None)
-    parser.add_argument('--class-name', default=None,
-                        help='class name to use for junit')
-    parser.add_argument('--memcheck', default='some',
-                        choices=['yes', 'no', 'some'])
-    parser.add_argument('--no-root', action='store_true')
-    parser.add_argument('--max-log-size', default=None)
-    parser.add_argument('--engine-count', type=int, default=1,
-                        help='Number of daos engines to run')
-    parser.add_argument('--dfuse-dir', default='/tmp',
-                        help='parent directory for all dfuse mounts')
-    parser.add_argument('--perf-check', action='store_true')
-    parser.add_argument('--dtx', action='store_true')
-    parser.add_argument('--test', help="Use '--test list' for list")
-    parser.add_argument('mode', nargs='?')
-    args = parser.parse_args()
-
-    if args.mode and args.test:
-        print('Cannot use mode and test')
-        sys.exit(1)
-
-    if args.test == 'list':
-        tests = []
-        for fn in dir(posix_tests):
-            if fn.startswith('test'):
-                tests.append(fn[5:])
-        print('Tests are: {}'.format(','.join(sorted(tests))))
-        sys.exit(1)
 
     conf = load_conf(args)
 
-    wf.set_class_id(args.class_name)
-
-    wf_server = WarningsFactory('nlt-server-leaks.json',
-                                post=True, check='Server leak checking')
+    wf_server = WarningsFactory('nlt-server-leaks.json', post=True, check='Server leak checking')
     wf_client = WarningsFactory('nlt-client-leaks.json')
 
     conf.set_wf(wf)
@@ -3303,19 +3263,48 @@ def main(wf):
     wf_client.close()
     return fatal_errors
 
-def main_helper():
-    """Wrap the main function, and catch/report any exceptions
+def main():
+    """Wrap the core function, and catch/report any exceptions
 
     This allows the junit results to show at least a stack trace and assertion message for
     any failure, regardless of if it's from a test case or not.
     """
+
+    parser = argparse.ArgumentParser(description='Run DAOS client on local node')
+    parser.add_argument('--server-debug', default=None)
+    parser.add_argument('--dfuse-debug', default=None)
+    parser.add_argument('--class-name', default=None, help='class name to use for junit')
+    parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
+    parser.add_argument('--no-root', action='store_true')
+    parser.add_argument('--max-log-size', default=None)
+    parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')
+    parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
+    parser.add_argument('--perf-check', action='store_true')
+    parser.add_argument('--dtx', action='store_true')
+    parser.add_argument('--test', help="Use '--test list' for list")
+    parser.add_argument('mode', nargs='?')
+    args = parser.parse_args()
+
+    if args.mode and args.test:
+        print('Cannot use mode and test')
+        sys.exit(1)
+
+    if args.test == 'list':
+        tests = []
+        for fn in dir(posix_tests):
+            if fn.startswith('test'):
+                tests.append(fn[5:])
+        print('Tests are: {}'.format(','.join(sorted(tests))))
+        sys.exit(1)
+
     wf = WarningsFactory('nlt-errors.json',
                          post_error=True,
                          check='Log file errors',
+                         class_id=args.class_name,
                          junit=True)
 
     try:
-        fatal_errors = main(wf)
+        fatal_errors = run(wf, args)
         wf.add_test_case('exit_wrapper')
         wf.close()
     except Exception as error:
@@ -3332,4 +3321,4 @@ def main_helper():
         sys.exit(1)
 
 if __name__ == '__main__':
-    main_helper()
+    main()
