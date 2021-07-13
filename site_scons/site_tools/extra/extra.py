@@ -21,20 +21,16 @@
 """SCons extra features"""
 from __future__ import print_function
 
+import subprocess
+import re
 import os
 
-# pylint: disable=no-name-in-module
-# pylint: disable=import-error
-from distutils.spawn import find_executable
 from SCons.Builder import Builder
 from SCons.Script import Dir
-# pylint: enable=no-name-in-module
-# pylint: enable=import-error
+from SCons.Script import WhereIs
 
 def supports_custom_format(clang_exe):
     """Get the version of clang-format"""
-    import subprocess
-    import re
 
     try:
         rawbytes = subprocess.check_output([clang_exe, "-version"])
@@ -53,7 +49,7 @@ def supports_custom_format(clang_exe):
 
 def find_indent():
     """find clang-format"""
-    indent = find_executable("clang-format")
+    indent = WhereIs("clang-format")
     if indent is not None:
         style = "Mozilla" # fallback
         root = Dir("#").abspath

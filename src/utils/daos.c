@@ -1118,10 +1118,10 @@ fs_op_hdlr(struct cmd_args_s *ap)
 		}
 
 		if (ap->pool_label) {
-			rc = daos_pool_connect_by_label(ap->pool_label,
-							ap->sysname,
-							DAOS_PC_RW, &ap->pool,
-							NULL, NULL);
+			rc = daos_pool_connect(ap->pool_label,
+					       ap->sysname,
+					       DAOS_PC_RW, &ap->pool,
+					       NULL, NULL);
 			if (rc != 0) {
 				fprintf(stderr,
 					"failed to connect to pool "
@@ -1286,9 +1286,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	}
 
 	if (ap->pool_label) {
-		rc = daos_pool_connect_by_label(ap->pool_label, ap->sysname,
-						DAOS_PC_RW, &ap->pool,
-						NULL, NULL);
+		rc = daos_pool_connect(ap->pool_label, ap->sysname,
+				       DAOS_PC_RW, &ap->pool,
+				       NULL, NULL);
 		if (rc != 0) {
 			fprintf(stderr, "failed to connect to "
 				"pool %s: %s (%d)\n",
