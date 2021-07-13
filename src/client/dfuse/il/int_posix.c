@@ -328,7 +328,8 @@ ioil_show_summary()
 	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
 		return;
 
-	fprintf(stderr, "[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+	fprintf(stderr,
+		"[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
 		ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
 }
 
@@ -1532,6 +1533,9 @@ dfuse___fxstat(int ver, int fd, struct stat *buf)
 	 */
 	if (entry->fd_dev == 0) {
 		rc =  __real___fxstat(ver, fd, buf);
+
+		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "initial fstat() returned %d", rc);
+
 		if (rc) {
 			vector_decref(&fd_table, entry);
 			return rc;
