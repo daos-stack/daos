@@ -13,12 +13,11 @@ echo $total_nodes
 module avail
 module load mpi
 module list
-which orterun
-which orted
+orterun=$(which orterun)
+echo ${orterun}
 
 #/usr/mpi/gcc/openmpi-4.1.0rc5/bin/orterun \
-orterun \
-    --enable-orterun-prefix-by-default \
+${orterun} \
     --mca btl self,tcp \
     -N 1 \
     -x D_LOG_FILE=/var/tmp/daos_testing/self_test_np_sep_cart_server.log \
@@ -39,8 +38,7 @@ orterun \
 sleep 5
 
 #/usr/mpi/gcc/openmpi-4.1.0rc5/bin/orterun \
-orterun \
-    --enable-orterun-prefix-by-default
+${orterun} \
     --mca btl self,tcp \
     -N 1 \
     --host ${nodes_array[0]} \
