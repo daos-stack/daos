@@ -31,6 +31,10 @@ func (ei *EngineInstance) bdevConfig() storage.BdevConfig {
 	return ei.runner.GetConfig().Storage.Bdev
 }
 
+func (ei *EngineInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
+	return ei.scmProvider.GetfsUsage(ei.scmConfig().MountPoint)
+}
+
 // MountScmDevice mounts the configured SCM device (DCPM or ramdisk emulation)
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
@@ -117,7 +121,7 @@ func publishFormatRequiredFn(publishFn func(*events.RASEvent), hostname string) 
 func (ei *EngineInstance) awaitStorageReady(ctx context.Context, skipMissingSuperblock bool) error {
 	idx := ei.Index()
 
-	if ei.isStarted() {
+	if ei.IsStarted() {
 		return errors.Errorf("can't wait for storage: instance %d already started", idx)
 	}
 

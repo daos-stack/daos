@@ -27,11 +27,6 @@ import (
 #cgo CFLAGS: -I${SRCDIR}/../../../utils
 #cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common -lduns -ldfs -luuid -ldaos_cmd_hdlrs
 
-#define D_LOGFAC	DD_FAC(client)
-
-#include <daos.h>
-#include <daos/common.h>
-
 #include "util.h"
 
 void

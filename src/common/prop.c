@@ -8,7 +8,6 @@
  * not belong to other parts.
  */
 #define D_LOGFAC	DD_FAC(common)
-#include <regex.h>
 
 #include <daos/common.h>
 #include <daos/dtx.h>
@@ -41,8 +40,8 @@ daos_prop_alloc(uint32_t entries_nr)
 	return prop;
 }
 
-static void
-daos_prop_entry_free_value(struct daos_prop_entry *entry)
+bool
+daos_prop_has_str(struct daos_prop_entry *entry)
 {
 	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_LABEL:
@@ -51,21 +50,40 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	case DAOS_PROP_CO_OWNER:
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
-		D_FREE(entry->dpe_str);
-		break;
+		return true;
+	}
+	return false;
+}
+
+bool
+daos_prop_has_ptr(struct daos_prop_entry *entry)
+{
+	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
+		return true;
+	}
+	return false;
+}
+
+static void
+daos_prop_entry_free_value(struct daos_prop_entry *entry)
+{
+	if (daos_prop_has_str(entry)) {
+		D_FREE(entry->dpe_str);
+		return;
+	}
+
+	if (daos_prop_has_ptr(entry)) {
 		D_FREE(entry->dpe_val_ptr);
-		break;
-	case DAOS_PROP_PO_SVC_LIST:
+		return;
+	}
+
+	if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST)
 		if (entry->dpe_val_ptr)
 			d_rank_list_free(
 				(d_rank_list_t *)entry->dpe_val_ptr);
-		break;
-	default:
-		break;
-	};
 }
 
 void
@@ -163,86 +181,37 @@ err:
 }
 
 static bool
-daos_prop_str_format_valid(const char *str, const char *regex)
-{
-	regex_t		regx;
-	int		rc;
-
-	/* All callers to this internal function shall provide non-NULL args */
-	D_ASSERT(str != NULL);
-	D_ASSERT(regex != NULL);
-
-	rc = regcomp(&regx, regex, REG_EXTENDED);
-	D_ASSERT(rc == 0);
-
-	rc = regexec(&regx, str, 0, NULL, 0);
-	regfree(&regx);
-	if (rc != 0) /* REG_NOMATCH */
-		return false;
-	return true;
-}
-
-static bool
-daos_prop_str_valid(const char *str, const char *prop_name,
-		    size_t max_len, const char *fmt_regex,
-		    bool do_log)
+str_valid(const char *str, const char *prop_name, size_t max_len)
 {
 	size_t len;
 
-	if (str == NULL) {
-		if (do_log)
-			D_ERROR("invalid NULL %s\n", prop_name);
+	if (unlikely(str == NULL)) {
+		D_ERROR("invalid NULL %s\n", prop_name);
 		return false;
 	}
 	/* Detect if it's longer than max_len */
 	len = strnlen(str, max_len + 1);
 	if (len == 0 || len > max_len) {
-		if (do_log)
-			D_ERROR("invalid %s len=%lu, max=%lu\n",
-				prop_name, len, max_len);
+		D_ERROR("invalid %s len=%lu, max=%lu\n", prop_name, len,
+			max_len);
 		return false;
 	}
 
-	if (fmt_regex) {
-		if (!daos_prop_str_format_valid(str, fmt_regex)) {
-			if (do_log)
-				D_ERROR("invalid %s prop \"%s\": does not "
-					"match regex: \"%s\"\n", prop_name,
-					str, fmt_regex);
-			return false;
-		}
-	}
 	return true;
-}
-
-
-bool
-daos_label_is_valid(const char *label) {
-	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN,
-				   DAOS_STANDALONE_LABEL_REGEX, false);
 }
 
 static bool
 daos_prop_owner_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
-	return daos_prop_str_valid(owner, "owner",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN, NULL, true);
+	return str_valid(owner, "owner", DAOS_ACL_MAX_PRINCIPAL_LEN);
 }
 
 static bool
 daos_prop_owner_group_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
-	return daos_prop_str_valid(owner, "owner-group",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN, NULL, true);
-}
-
-static bool
-daos_prop_label_valid(d_string_t label)
-{
-	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN,
-				   DAOS_STANDALONE_LABEL_REGEX, true);
+	return str_valid(owner, "owner-group", DAOS_ACL_MAX_PRINCIPAL_LEN);
 }
 
 /**
@@ -304,9 +273,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			if (!daos_prop_label_valid(
-				prop->dpp_entries[i].dpe_str))
+			if (!daos_label_is_valid(
+						prop->dpp_entries[i].dpe_str)) {
+				D_ERROR("invalid label \"%s\"\n",
+					prop->dpp_entries[i].dpe_str);
 				return false;
+			}
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:

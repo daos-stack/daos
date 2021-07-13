@@ -889,6 +889,7 @@ def error_count(error, hostlist, log_file):
 
     return requested_error_count, other_error_count
 
+
 def get_module_class(name, module):
     """Get the class object in the specified module by its name.
 
@@ -1223,3 +1224,18 @@ def create_string_buffer(value, size=None):
     if isinstance(value, str):
         value = value.encode("utf-8")
     return ctypes.create_string_buffer(value, size)
+
+
+def get_display_size(size):
+    """Get a string of the provided size in bytes and human-readable sizes.
+
+    Args:
+        size (int): size in bytes
+
+    Returns:
+        str: the size represented in bytes and human-readable sizes
+
+    """
+    return "{} ({}) ({})".format(
+        size, bytes_to_human(size, binary=True),
+        bytes_to_human(size, binary=False))

@@ -434,9 +434,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	rc = daos_pool_disconnect(poh, NULL);
-	if (rc)
-		print_message("pool disconnect failed: %d\n", rc);
+	daos_pool_disconnect(poh, NULL);
 
 	rc = dmg_pool_destroy(dmg_config_file,
 			      pool->pool_uuid, arg->group, 1);
@@ -828,11 +826,11 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 
 	/* build and invoke dmg cmd */
 	if (strncmp(sub_cmd, "extend", strlen("extend")) == 0)
-		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
+		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
 				  " --ranks=%d", sub_cmd,
 				  DP_UUID(pool_uuid), rank);
 	else
-		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
+		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
 				  " --rank=%d", sub_cmd, DP_UUID(pool_uuid),
 				  rank);
 

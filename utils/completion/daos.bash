@@ -54,9 +54,7 @@ _daos_control_comp()
 }
 
 # these commands take advantage of automatic completion
-complete -F _daos_control_comp dmg
-complete -F _daos_control_comp daos_new -o nospace
+complete -F _daos_control_comp dmg -o nospace
+complete -F _daos_control_comp daos -o nospace
 complete -F _daos_control_comp daos_agent
 complete -F _daos_control_comp daos_server
-
-# TODO: add completions for the daos tool

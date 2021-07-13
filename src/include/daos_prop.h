@@ -14,6 +14,7 @@
 extern "C" {
 #endif
 
+#include <ctype.h>
 #include <daos_types.h>
 
 /**
@@ -198,7 +199,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_MAX,
 };
 
-/* first citizen objects of a container, stored as container property */
+/** first citizen objects of a container, stored as container property */
 struct daos_prop_co_roots {
 	daos_obj_id_t	cr_oids[4];
 };
@@ -299,11 +300,11 @@ enum {
 /** clear the UNCLEAN status */
 #define DAOS_PROP_CO_CLEAR	(0x1)
 struct daos_co_status {
-	/* DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
+	/** DAOS_PROP_CO_HEALTHY/DAOS_PROP_CO_UNCLEAN */
 	uint16_t	dcs_status;
-	/* flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
+	/** flags for DAOS internal usage, DAOS_PROP_CO_CLEAR */
 	uint16_t	dcs_flags;
-	/* pool map version when setting the dcs_status */
+	/** pool map version when setting the dcs_status */
 	uint32_t	dcs_pm_ver;
 };
 
@@ -346,14 +347,48 @@ struct daos_prop_entry {
 
 /** Allowed max number of property entries in daos_prop_t */
 #define DAOS_PROP_ENTRIES_MAX_NR	(128)
+
 /** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
 #define DAOS_PROP_LABEL_MAX_LEN		(127)
-/* DAOS labels (pool/container properties) must consist only of alphanumeric
- * characters, colon ':', period '.' or underscore '_', and must be of length
- * 1 - DAOS_PROP_LABEL_MAX_LEN.
+
+/**
+ * Check if DAOS (pool or container property) label string is valid.
+ * DAOS labels must consist only of alphanumeric characters, colon ':',
+ * period '.' or underscore '_', and must be of length
+ * [1 - DAOS_PROP_LABEL_MAX_LEN].
+ *
+ * \param[in]	label	Label string
+ *
+ * \return		true		Label meets length/format requirements
+ *			false		Label is not valid length or format
  */
-#define DAOS_LABEL_REGEX "([a-zA-Z0-9._:]{1,127})"
-#define DAOS_STANDALONE_LABEL_REGEX "^"DAOS_LABEL_REGEX"$"
+static inline bool
+daos_label_is_valid(const char *label)
+{
+	size_t	len;
+	int	i;
+
+	/** Label cannot be NULL */
+	if (label == NULL)
+		return false;
+
+	/** Check the length */
+	len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN + 1);
+	if (len == 0 || len > DAOS_PROP_LABEL_MAX_LEN)
+		return false;
+
+	/** Verify that it contains only alphanumeric characters or :._ */
+	for (i = 0; i < len; i++) {
+		char c = label[i];
+
+		if (isalnum(c) || c == '.' || c == '_' || c == ':')
+			continue;
+
+		return false;
+	}
+
+	return true;
+}
 
 /** daos properties, for pool or container */
 typedef struct {
@@ -383,7 +418,6 @@ daos_prop_alloc(uint32_t entries_nr);
 void
 daos_prop_fini(daos_prop_t *prop);
 
-
 /**
  * Free the DAOS properties and the \a prop.
  *
@@ -407,7 +441,7 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
  * Duplicate a generic pointer value from one DAOS prop entry to another.
  * Convenience function.
  *
- * \param[in][out]	entry_dst	Destination entry
+ * \param[in,out]	entry_dst	Destination entry
  * \param[in]		entry_src	Entry to be copied
  * \param[in]		len		Length of the memory to be copied
  *
@@ -435,7 +469,7 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
  * Duplicate container roots from one DAOS prop entry to another.
  * Convenience function.
  *
- * \param[in][out]	dst		Destination entry
+ * \param[in,out]	dst		Destination entry
  * \param[in]		src		Entry to be copied
  *
  * \return		0		Success
@@ -446,17 +480,26 @@ daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
 			     struct daos_prop_entry *src);
 
 /**
- * Check if DAOS (pool or container property) label string is valid
- * (string length <= DAOS_PROP_LABEL_MAX_LEN, and conforms to
- *  allowed characters defined by DAOS_LABEL_REGEX).
+ * Check a DAOS prop entry for a string value.
  *
- * \param[in]	label	Label string
+ * \param[in]		entry		Entry to be checked.
  *
- * \return		true		Label meets length/format requirements
- *			false		Label is not valid length or format
+ * \return		true		Has a string value.
+ *			false		Does not have a string value.
  */
 bool
-daos_label_is_valid(const char *label);
+daos_prop_has_str(struct daos_prop_entry *entry);
+
+/**
+ * Check a DAOS prop entry for a pointer value.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Has a pointer value.
+ *			false		Does not have a pointer value.
+ */
+bool
+daos_prop_has_ptr(struct daos_prop_entry *entry);
 
 #if defined(__cplusplus)
 }

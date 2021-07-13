@@ -1,6 +1,7 @@
 """Build DFuse"""
 import os
 import daos_build
+import compiler_setup
 
 HEADERS = ['ioil_io.h', 'ioil_defines.h',
            'ioil_api.h', 'ioil_preload.h',
@@ -108,21 +109,21 @@ def build_client_libs_static(env, common):
 
     return il_lib + dfuse_lib
 
-def check_struct_member(env, text, struct, member):
+def check_struct_member(context, text, struct, member):
     """scons check for a struct member existing"""
 
-    env.Message('Checking for {} in {} '.format(member, struct))
+    context.Message('Checking for {} in {} '.format(member, struct))
 
     src = '{0}\n{1} val = {{.{2} = 0}};\nint main() {{}}'.format(text, struct,
                                                                  member)
-    rc = env.TryCompile(src, '.c')
-    env.Result(rc)
+    rc = context.TryCompile(src, '.c')
+    context.Result(rc)
     return rc
 
-def check_ioctl_def(env, ctype):
+def check_ioctl_def(context, ctype):
     """scons check for a struct member existing"""
 
-    env.Message('Checking if fuse ioctl is type {} '.format(ctype))
+    context.Message('Checking if fuse ioctl is type {} '.format(ctype))
 
     src = """#include <fuse3/fuse_lowlevel.h>
 
@@ -135,8 +136,8 @@ struct fuse_lowlevel_ops ops = {.ioctl = my_ioctl};
 
 """ % ctype
 
-    rc = env.TryCompile(src, '.c')
-    env.Result(rc)
+    rc = context.TryCompile(src, '.c')
+    context.Result(rc)
     return rc
 
 def configure_fuse(cenv):
@@ -151,12 +152,12 @@ def configure_fuse(cenv):
     if check.CheckStructMember('#include <fuse3/fuse.h>',
                                'struct fuse_file_info',
                                'cache_readdir'):
-        cenv.AppendUnique(CPPDEFINES=['-DHAVE_CACHE_READDIR=1'])
+        cenv.AppendUnique(CPPDEFINES={'HAVE_CACHE_READDIR':'1'})
 
     if check.CheckFuseIoctl('unsigned int'):
         pass
     elif check.CheckFuseIoctl('int'):
-        cenv.AppendUnique(CPPDEFINES=['-DFUSE_IOCTL_USE_INT=1'])
+        cenv.AppendUnique(CPPDEFINES={'FUSE_IOCTL_USE_INT':'1'})
     else:
         print('Could not determine type of fuse ioctl type')
         Exit(2)
@@ -166,28 +167,30 @@ def configure_fuse(cenv):
 def scons():
     """Scons function"""
 
-    Import('env', 'il_env', 'prereqs')
+    Import('env', 'prereqs')
+
+    if env['CC'] == 'gcc':
+        il_env = env.Clone()
+    else:
+        Import('base_env')
+        il_env = base_env.Clone()
+        il_env['CC'] = 'gcc'
+        compiler_setup.base_setup(il_env)
 
     # Set options which are used throughout the src.
     dfuse_env = env.Clone(LIBS=[])
     dfuse_env.AppendUnique(CPPPATH=['.'])
     dfuse_env.AppendUnique(CFLAGS=['-pthread'])
-    dfuse_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
     dfuse_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common', 'uuid'])
 
     gcc_env = il_env.Clone(LIBS=[])
     gcc_env.AppendUnique(CPPPATH=['.'])
     gcc_env.AppendUnique(CFLAGS=['-pthread', '-fvisibility=hidden'])
-    gcc_env.AppendUnique(CPPDEFINES=['_GNU_SOURCE'])
     gcc_env.AppendUnique(LIBS=['pthread', 'daos', 'daos_common'])
 
     libs = build_client_libs_shared(gcc_env, prereqs)
 
     static_env = gcc_env.Clone()
-
-    # Set this after cloning environment used for interception library.
-    # Otherwise, can't define open and open64 entry points
-    dfuse_env.AppendUnique(CPPDEFINES=['_FILE_OFFSET_BITS=64'])
 
     # Build a static library of the common parts.
     common = build_common(dfuse_env, COMMON_SRC, False)
