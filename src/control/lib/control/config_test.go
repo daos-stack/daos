@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -118,5 +119,53 @@ func TestControl_LoadSpecifiedConfig(t *testing.T) {
 
 	if diff := cmp.Diff(testCfg, gotCfg, defCfgCmpOpts...); diff != "" {
 		t.Fatalf("loaded cfg doesn't match (-want, +got):\n%s\n", diff)
+	}
+}
+
+func TestControl_LoadConfig_NoneFound(t *testing.T) {
+	restore := setDirs(t, "NONE", "NONE")
+	defer restore(t)
+
+	gotCfg, err := LoadConfig("")
+	common.CmpErr(t, err, ErrNoConfigFile)
+	if gotCfg != nil {
+		t.Fatalf("got non-nil cfg, want nil")
+	}
+}
+
+func TestControl_LoadConfig_BadInputs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input  string
+		expErr error
+	}{
+		"empty": {
+			input:  "",
+			expErr: errors.New("empty config file"),
+		},
+		"bad hostlist": {
+			input:  `hostlist: ['nvm0612-ib0:10001','nvm0611-ib0:10001,'nvm0610-ib0:10001']`,
+			expErr: errors.New("did not find expected"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			tmpDir, cleanup := common.CreateTestDir(t)
+			defer cleanup()
+			tmpPath := path.Join(tmpDir, defaultConfigFile)
+			f, err := os.Create(tmpPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = f.WriteString(tc.input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.Close()
+
+			cfg, err := LoadConfig(tmpPath)
+			common.CmpErr(t, tc.expErr, err)
+			if cfg != nil {
+				t.Fatalf("got non-nil cfg, want nil")
+			}
+		})
 	}
 }

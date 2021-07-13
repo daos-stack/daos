@@ -306,7 +306,7 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		shard_iod.iod_size = sizes[i];
 		if (iod->iod_type == DAOS_IOD_ARRAY && oiods != NULL) {
 			rc = dc_rw_cb_iod_sgl_copy(iod, &sgls[i], &shard_iod,
-					&shard_sgl, &oiods->oiod_siods[i],
+					&shard_sgl, oiods[i].oiod_siods,
 					rw_args->shard_args->offs[i]);
 			if (rc != 0) {
 				D_ERROR("dc_rw_cb_iod_sgl_copy failed (object: "
@@ -837,13 +837,25 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 
-		if (is_ec_obj) {
+		if (is_ec_obj && !reasb_req->orr_recov) {
 			rc = obj_ec_recov_add(reasb_req,
 					      orwo->orw_rels.ca_arrays,
 					      orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR("fail to add recov list for "DF_UOID
-					",rc %d.\n", DP_UOID(orw->orw_oid), rc);
+				D_ERROR(DF_UOID" obj_ec_recov_add failed, "
+					DF_RC".\n", DP_UOID(orw->orw_oid),
+					DP_RC(rc));
+				goto out;
+			}
+		} else if (is_ec_obj && reasb_req->orr_recov &&
+			   orwo->orw_rels.ca_arrays != NULL) {
+			rc = obj_ec_parity_check(reasb_req,
+						 orwo->orw_rels.ca_arrays,
+						 orwo->orw_rels.ca_count);
+			if (rc) {
+				D_ERROR(DF_UOID" obj_ec_parity_check failed, "
+					DF_RC".\n", DP_UOID(orw->orw_oid),
+					DP_RC(rc));
 				goto out;
 			}
 		}
@@ -927,6 +939,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			daos_iom_t			*reply_maps;
 			struct daos_recx_ep_list	*recov_list;
 
+			D_ASSERT(reasb_req == NULL || !reasb_req->orr_recov);
 			/** Should have 1 map per iod */
 			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
 			for (i = 0; i < orw->orw_nr; i++) {
@@ -1130,10 +1143,14 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.shard_args = args;
 	/* remember the sgl to copyout the data inline for fetch */
 	rw_args.rwaa_sgls = (opc == DAOS_OBJ_RPC_FETCH) ? sgls : NULL;
-	if (args->reasb_req && args->reasb_req->orr_recov)
+	if (args->reasb_req && args->reasb_req->orr_recov) {
 		rw_args.maps = NULL;
-	else
+		orw->orw_flags |= ORF_EC_RECOV;
+		if (args->reasb_req->orr_recov_snap)
+			orw->orw_flags |= ORF_EC_RECOV_SNAP;
+	} else {
 		rw_args.maps = args->api_args->ioms;
+	}
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		if (args->iod_csums != NULL) {
 			orw->orw_flags |= (ORF_CREATE_MAP |

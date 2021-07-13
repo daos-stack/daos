@@ -1190,9 +1190,6 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Short version: -b\n"
 	       "      By default, self-test outputs performance results in MB (#Bytes/1024^2)\n"
 	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n"
-	       "  --singleton\n"
-	       "      Short version: -t\n"
-	       "      If specified, self_test will launch as a singleton process (with no orterun).\n"
 	       "  --path  /path/to/attach_info_file/directory/n"
 	       "      Short version: -p  prefix\n"
 	       "      This option implies --singleton is set.\n"
@@ -1743,15 +1740,19 @@ int main(int argc, char *argv[])
 		case 'b':
 			output_megabits = 1;
 			break;
-		case 't':
-			break;
 		case 'p':
 			attach_info_path = optarg;
 			break;
 		case 'q':
 			g_randomize_endpoints = true;
 			break;
+
+		/* 't' and 'n' options are deprecated */
+		case 't':
+			printf("Warning: 't' argument is deprecated\n");
+			break;
 		case 'n':
+			printf("Warning: 'n' argument is deprecated\n");
 			break;
 		case '?':
 		default:

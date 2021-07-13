@@ -7,6 +7,8 @@
 #include <spdk/stdinc.h>
 #include <spdk/nvme.h>
 #include <spdk/env.h>
+#include <spdk/nvme_intel.h>
+#include <spdk/pci_ids.h>
 
 #include "nvme_control.h"
 #include "nvme_control_common.h"
@@ -29,7 +31,7 @@ get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 	struct health_entry *entry = cb_arg;
 
 	if (spdk_nvme_cpl_is_error(cpl))
-		fprintf(stderr, "Error with SPDK health log page\n");
+		fprintf(stderr, "Error with SPDK log page\n");
 
 	entry->inflight--;
 }
@@ -37,8 +39,12 @@ get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 static int
 get_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct health_entry *health)
 {
-	struct spdk_nvme_health_information_page hp;
-	int					 rc = 0;
+	struct spdk_nvme_health_information_page	hp;
+	struct spdk_nvme_intel_smart_information_page	isp;
+	const struct spdk_nvme_ctrlr_data		*cdata;
+	int						rc = 0;
+
+	cdata = spdk_nvme_ctrlr_get_data(ctrlr);
 
 	/** NVMe SSDs on GCP do not support this */
 	if (!spdk_nvme_ctrlr_is_log_page_supported(ctrlr,
@@ -61,6 +67,31 @@ get_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct health_entry *health)
 		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
 
 	health->page = hp;
+
+	/* Non-Intel SSDs do not support this */
+	if (cdata->vid != SPDK_PCI_VID_INTEL)
+		return 0;
+	if (!spdk_nvme_ctrlr_is_log_page_supported(ctrlr,
+					SPDK_NVME_INTEL_LOG_SMART))
+		/** not much we can do, just skip */
+		return 0;
+
+	health->inflight++;
+	rc = spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
+					      SPDK_NVME_INTEL_LOG_SMART,
+					      SPDK_NVME_GLOBAL_NS_TAG,
+					      &isp,
+					      sizeof(isp),
+					      0, get_spdk_log_page_completion,
+					      health);
+	if (rc != 0)
+		return rc;
+
+	while (health->inflight)
+		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
+
+	health->intel_smart_page = isp;
+
 	return rc;
 }
 
@@ -475,7 +506,6 @@ daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil)
 		opts.num_pci_addr = nr_pcil;
 	}
 	opts.name = "daos_admin";
-	opts.shm_id = getpid();
 
 	rc = spdk_env_init(&opts);
 	if (rc < 0) {

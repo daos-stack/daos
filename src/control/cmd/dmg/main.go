@@ -236,9 +236,10 @@ and access control settings, along with system wide operations.`
 
 		ctlCfg, err := control.LoadConfig(opts.ConfigPath)
 		if err != nil {
-			if opts.ConfigPath != "" {
-				return errors.WithMessage(err, "failed to load control configuration")
+			if errors.Cause(err) != control.ErrNoConfigFile {
+				return errors.Wrap(err, "failed to load control configuration")
 			}
+			// Use the default config if no config file was found.
 			ctlCfg = control.DefaultConfig()
 		}
 		if ctlCfg.Path != "" {

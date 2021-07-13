@@ -874,7 +874,7 @@ rdbt_replicas_remove_handler(crt_rpc_t *rpc)
 		goto out;
 
 	rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_TEST, &test_svc_id, ranks,
-				     &out->rtmo_hint);
+				     true /* stop */, &out->rtmo_hint);
 	out->rtmo_failed = ranks;
 
 out:
