@@ -728,9 +728,8 @@ func TestDmg_PoolListCmd_Errors(t *testing.T) {
 				},
 			},
 			queryResp: &mgmtpb.PoolQueryResp{
-				Uuid: common.MockUUID(1),
-				Scm:  &mgmtpb.StorageUsageStats{},
-				Nvme: &mgmtpb.StorageUsageStats{},
+				Uuid:      common.MockUUID(1),
+				TierStats: []*mgmtpb.StorageUsageStats{{}},
 			},
 		},
 		"list pools query failure": {

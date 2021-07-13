@@ -839,29 +839,24 @@ type (
 )
 
 func (p *Pool) setUsage(pqr *PoolQueryResp) {
-	nvmeTotal := pqr.Nvme.Total
-	scmTotal := pqr.Scm.Total
+	for idx, tu := range pqr.TierStats {
+		spread := tu.Max - tu.Min
+		imbalance := float64(spread) / (float64(tu.Total) / float64(pqr.ActiveTargets))
 
-	scmSpread := pqr.Scm.Max - pqr.Scm.Min
-	scmImbalance := float64(scmSpread) / (float64(scmTotal) / float64(pqr.ActiveTargets))
-	nvmeSpread := pqr.Nvme.Max - pqr.Nvme.Min
-	nvmeImbalance := float64(nvmeSpread) / (float64(nvmeTotal) / float64(pqr.ActiveTargets))
+		tn := "NVME"
+		if idx == 0 {
+			tn = "SCM"
+		}
 
-	p.Usage = append(p.Usage,
-		// scm is tier 0
-		&PoolTierUsage{
-			TierName:  "SCM",
-			Size:      scmTotal,
-			Free:      pqr.Scm.Free,
-			Imbalance: uint32(scmImbalance * 100),
-		},
-		// nvme is tier 1
-		&PoolTierUsage{
-			TierName:  "NVME",
-			Size:      nvmeTotal,
-			Free:      pqr.Nvme.Free,
-			Imbalance: uint32(nvmeImbalance * 100),
-		})
+		p.Usage = append(p.Usage,
+			&PoolTierUsage{
+				TierName:  tn,
+				Size:      tu.Total,
+				Free:      tu.Free,
+				Imbalance: uint32(imbalance * 100),
+			},
+		)
+	}
 }
 
 // HasErrors indicates whether a pool query operation failed on this pool.
@@ -975,12 +970,6 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 				p.QueryStatusMsg = "unknown error"
 			}
 			continue
-		}
-		if resp.Scm == nil {
-			return nil, errors.New("pool query response missing scm stats")
-		}
-		if resp.Nvme == nil {
-			return nil, errors.New("pool query response missing nvme stats")
 		}
 		if p.UUID != resp.UUID {
 			return nil, errors.New("pool query response uuid does not match request")
