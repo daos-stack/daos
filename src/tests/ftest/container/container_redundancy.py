@@ -51,13 +51,13 @@ class RbldContRedundancyFactor(RebuildTestBase):
                 "#Excluded rank {} still has objects".format(rank))
 
     def verify_cont_rf_healthstatus(self, expected_rf, expected_health):
+        """Verify the container redundancy factor and health status."""
         result = self.daos_cmd.container_get_prop(
                       pool=self.pool.uuid,
                       cont=self.container.uuid)
-        pat1 = 'Redundancy Factor\s*([A-Za-z0-9-]+)'
-        pat2 = 'Health\s*([A-Z]+)'
-        rf = re.search(pat1, str(result.stdout)).group(1)
-        health = re.search(pat2, str(result.stdout)).group(1)
+        rf = re.search(r"Redundancy Factor\s*([A-Za-z0-9-]+)",
+                       str(result.stdout)).group(1)
+        health = re.search(r"Health\s*([A-Z]+)", str(result.stdout)).group(1)
         self.assertEqual(
             rf, expected_rf,
             "#Container redundancy factor mismatch, actual: {},"
@@ -68,7 +68,7 @@ class RbldContRedundancyFactor(RebuildTestBase):
             " expected: {}.".format(health, expected_health))
 
     def start_rebuild(self):
-        """Start the rebuild process."""
+        """Start the rebuild process and check for container properties."""
         self.log.info(
             "==>(1)Check for container rf and health-status "
             "before rebuild: HEALTHY")
@@ -140,6 +140,7 @@ class RbldContRedundancyFactor(RebuildTestBase):
                    3rd rank rebuild.
                 (5)Check for container rf and health-status after the
                    rebuild completed.
+                (6)Verify container io object write.
         Use Cases:
             Verify container RF with rebuild with multiple server failures.
 
