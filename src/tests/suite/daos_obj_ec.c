@@ -753,6 +753,101 @@ ec_agg_peer_fail(void **state)
 	ec_fail_agg_internal(state, DAOS_FORCE_EC_AGG_PEER_FAIL);
 }
 
+static void
+ec_singv_array_mixed_io(void **state)
+{
+#define NUM_AKEYS 6
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl[NUM_AKEYS];
+	d_iov_t	 sg_iov[NUM_AKEYS];
+	daos_iod_t	 iod[NUM_AKEYS];
+	daos_recx_t	 recx[NUM_AKEYS];
+	char		*buf[NUM_AKEYS];
+	char		*akey[NUM_AKEYS];
+	const char	*akey_fmt = "akey%d";
+	int		 i, rc;
+	daos_size_t	 size = 131071;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	for (i = 0; i < NUM_AKEYS; i++) {
+		D_ALLOC(akey[i], strlen(akey_fmt) + 1);
+		sprintf(akey[i], akey_fmt, i);
+
+		D_ALLOC(buf[i], size * (i + 1));
+		assert_non_null(buf[i]);
+
+		dts_buf_render(buf[i], size * (i + 1));
+
+		/** init scatter/gather */
+		d_iov_set(&sg_iov[i], buf[i], size * (i + 1));
+		sgl[i].sg_nr		= 1;
+		sgl[i].sg_nr_out	= 0;
+		sgl[i].sg_iovs		= &sg_iov[i];
+
+		/** init I/O descriptor */
+		d_iov_set(&iod[i].iod_name, akey[i], strlen(akey[i]));
+		iod[i].iod_nr		= 1;
+		if (i % 2 == 0) {
+			iod[i].iod_size		= size * (i + 1);
+			iod[i].iod_recxs	= NULL;
+			iod[i].iod_type		= DAOS_IOD_SINGLE;
+		} else {
+			iod[i].iod_size		= 1;
+			recx[i].rx_idx		= 0;
+			recx[i].rx_nr		= size * (i + 1);
+			iod[i].iod_recxs	= &recx[i];
+			iod[i].iod_type		= DAOS_IOD_ARRAY;
+		}
+	}
+
+	/** update record */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
+	/** fetch record size */
+	for (i = 0; i < NUM_AKEYS; i++)
+		iod[i].iod_size	= DAOS_REC_ANY;
+
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
+			    NULL, NULL);
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < NUM_AKEYS; i++) {
+		if (i % 2 == 0)
+			assert_int_equal(iod[i].iod_size, size * (i + 1));
+		else
+			assert_int_equal(iod[i].iod_size, 1);
+	}
+
+	for (i = 0; i < NUM_AKEYS; i++)
+		d_iov_set(&sg_iov[i], buf[i], size * (i + 1));
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			    NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < NUM_AKEYS; i++) {
+		D_FREE(akey[i]);
+		D_FREE(buf[i]);
+	}
+}
+
 static int
 ec_setup(void  **state)
 {
@@ -798,6 +893,8 @@ static const struct CMUnitTest ec_tests[] = {
 	 ec_agg_fail, async_disable, test_case_teardown},
 	{"EC10: ec aggregation peer update failed",
 	 ec_agg_peer_fail, async_disable, test_case_teardown},
+	{"EC11: ec single-value array mixed IO",
+	 ec_singv_array_mixed_io, async_disable, test_case_teardown},
 };
 
 int
