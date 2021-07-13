@@ -137,12 +137,12 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 }
 
 type poolCmd struct {
-	Query          poolQueryCmd          `command:"query" description:"query pool info"`
-	ListAttrs      poolListAttrsCmd      `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
-	GetAttr        poolGetAttrCmd        `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
-	SetAttr        poolSetAttrCmd        `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
-	DelAttr        poolDelAttrCmd        `command:"del-attr" alias:"delattr" description:"delete pool user-defined attribute"`
-	AutoTest       poolAutoTestCmd       `command:"autotest" description:"verify setup with smoke tests"`
+	Query     poolQueryCmd     `command:"query" description:"query pool info"`
+	ListAttrs poolListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
+	GetAttr   poolGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
+	SetAttr   poolSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
+	DelAttr   poolDelAttrCmd   `command:"del-attr" alias:"delattr" description:"delete pool user-defined attribute"`
+	AutoTest  poolAutoTestCmd  `command:"autotest" description:"verify setup with smoke tests"`
 }
 
 type poolQueryCmd struct {
