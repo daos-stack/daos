@@ -113,8 +113,6 @@ struct daos_rebuild_status {
 	uint64_t		rs_obj_nr;
 	/** # rebuilt records, it's non-zero only if rs_running is 1 */
 	uint64_t		rs_rec_nr;
-	/** # progress of indicator for rebuild in percentage */
-	int32_t			rs_progress;
 
 	/** rebuild space cost */
 	uint64_t		rs_size;
