@@ -8,6 +8,8 @@
 #include <spdk/nvme.h>
 #include <spdk/env.h>
 #include <spdk/vmd.h>
+#include <spdk/nvme_intel.h>
+#include <spdk/util.h>
 #include <daos_srv/control.h>
 
 #include "nvme_control_common.h"
@@ -272,30 +274,138 @@ collect_namespaces(struct ns_entry *ns_entry, struct ctrlr_t *ctrlr)
 	return 0;
 }
 
+/* Return a uint64 raw value from a byte array */
+static uint64_t
+extend_to_uint64(uint8_t *array, unsigned int len)
+{
+	uint64_t value = 0;
+	int i = len;
+
+	while (i > 0) {
+		value += (uint64_t)array[i - 1] << (8 * (i - 1));
+		i--;
+	}
+
+	return value;
+}
+
 static void
-populate_dev_health(struct nvme_stats *dev_state,
-		    struct spdk_nvme_health_information_page *page,
+populate_dev_health(struct nvme_stats *stats,
+		    struct spdk_nvme_health_information_page *hp,
+		    struct spdk_nvme_intel_smart_information_page *isp,
 		    const struct spdk_nvme_ctrlr_data *cdata)
 {
-	union spdk_nvme_critical_warning_state	cw = page->critical_warning;
+	union spdk_nvme_critical_warning_state	cw = hp->critical_warning;
+	struct spdk_nvme_intel_smart_attribute  atb;
+	int i;
 
-	dev_state->warn_temp_time = page->warning_temp_time;
-	dev_state->crit_temp_time = page->critical_temp_time;
-	dev_state->ctrl_busy_time = page->controller_busy_time[0];
-	dev_state->power_cycles = page->power_cycles[0];
-	dev_state->power_on_hours = page->power_on_hours[0];
-	dev_state->unsafe_shutdowns = page->unsafe_shutdowns[0];
-	dev_state->media_errs = page->media_errors[0];
-	dev_state->err_log_entries = page->num_error_info_log_entries[0];
-	dev_state->temperature = page->temperature;
-	dev_state->temp_warn = cw.bits.temperature ? true : false;
-	dev_state->avail_spare_warn = cw.bits.available_spare ?
-		true : false;
-	dev_state->dev_reliability_warn = cw.bits.device_reliability ?
-		true : false;
-	dev_state->read_only_warn = cw.bits.read_only ? true : false;
-	dev_state->volatile_mem_warn = cw.bits.volatile_memory_backup ?
-		true : false;
+	stats->warn_temp_time = hp->warning_temp_time;
+	stats->crit_temp_time = hp->critical_temp_time;
+	stats->ctrl_busy_time = hp->controller_busy_time[0];
+	stats->power_cycles = hp->power_cycles[0];
+	stats->power_on_hours = hp->power_on_hours[0];
+	stats->unsafe_shutdowns = hp->unsafe_shutdowns[0];
+	stats->media_errs = hp->media_errors[0];
+	stats->err_log_entries = hp->num_error_info_log_entries[0];
+	stats->temperature = hp->temperature;
+	stats->temp_warn = cw.bits.temperature ? true : false;
+	stats->avail_spare_warn = cw.bits.available_spare ? true : false;
+	stats->dev_reliability_warn = cw.bits.device_reliability ? true : false;
+	stats->read_only_warn = cw.bits.read_only ? true : false;
+	stats->volatile_mem_warn = cw.bits.volatile_memory_backup ?
+				   true : false;
+
+	/* Intel Smart Information Attributes */
+	if (cdata->vid != SPDK_PCI_VID_INTEL)
+		return;
+	for (i = 0; i < SPDK_COUNTOF(isp->attributes); i++) {
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_PROGRAM_FAIL_COUNT) {
+			atb = isp->attributes[i];
+			stats->program_fail_cnt_norm = atb.normalized_value;
+			stats->program_fail_cnt_raw =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_ERASE_FAIL_COUNT) {
+			atb = isp->attributes[i];
+			stats->erase_fail_cnt_norm = atb.normalized_value;
+			stats->erase_fail_cnt_raw =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_WEAR_LEVELING_COUNT) {
+			atb = isp->attributes[i];
+			stats->wear_leveling_cnt_norm = atb.normalized_value;
+			stats->wear_leveling_cnt_min = atb.raw_value[0] |
+						       atb.raw_value[1] << 8;
+			stats->wear_leveling_cnt_max = atb.raw_value[2] |
+						       atb.raw_value[3] << 8;
+			stats->wear_leveling_cnt_avg = atb.raw_value[4] |
+						       atb.raw_value[5] << 8;
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_E2E_ERROR_COUNT) {
+			atb = isp->attributes[i];
+			stats->endtoend_err_cnt_raw =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_CRC_ERROR_COUNT) {
+			atb = isp->attributes[i];
+			stats->crc_err_cnt_raw =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_MEDIA_WEAR) {
+			atb = isp->attributes[i];
+			stats->media_wear_raw =
+				extend_to_uint64(atb.raw_value, 6) >> 10;
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_HOST_READ_PERCENTAGE) {
+			atb = isp->attributes[i];
+			stats->host_reads_raw =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_TIMER) {
+			atb = isp->attributes[i];
+			stats->workload_timer_raw =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_THERMAL_THROTTLE_STATUS) {
+			atb = isp->attributes[i];
+			stats->thermal_throttle_status = atb.raw_value[0];
+			stats->thermal_throttle_event_cnt =
+					extend_to_uint64(&atb.raw_value[1], 4);
+		}
+		if (isp->attributes[i].code ==
+			  SPDK_NVME_INTEL_SMART_RETRY_BUFFER_OVERFLOW_COUNTER) {
+			atb = isp->attributes[i];
+			stats->retry_buffer_overflow_cnt =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_PLL_LOCK_LOSS_COUNT) {
+			atb = isp->attributes[i];
+			stats->pll_lock_loss_cnt =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_NAND_BYTES_WRITTEN) {
+			atb = isp->attributes[i];
+			stats->nand_bytes_written =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+		if (isp->attributes[i].code ==
+				SPDK_NVME_INTEL_SMART_HOST_BYTES_WRITTEN) {
+			atb = isp->attributes[i];
+			stats->host_bytes_written =
+					extend_to_uint64(atb.raw_value, 6);
+		}
+	}
 }
 
 void
@@ -371,7 +481,7 @@ _collect(struct ret_t *ret, data_copier copy_data, pci_getter get_pci,
 
 			/* Store device health stats for export */
 			populate_dev_health(cstats, &ctrlr_entry->health->page,
-					    cdata);
+				&ctrlr_entry->health->intel_smart_page, cdata);
 			ctrlr_tmp->stats = cstats;
 		}
 

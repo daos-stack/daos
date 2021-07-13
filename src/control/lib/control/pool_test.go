@@ -10,6 +10,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -18,6 +19,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestControl_PoolDestroy(t *testing.T) {
@@ -802,7 +804,146 @@ func TestPoolGetProp(t *testing.T) {
 	}
 }
 
+func TestControl_Pool_setUsage(t *testing.T) {
+	for name, tc := range map[string]struct {
+		status        int32
+		scmStats      *StorageUsageStats
+		nvmeStats     *StorageUsageStats
+		totalTargets  uint32
+		activeTargets uint32
+		expPool       *Pool
+		expErr        error
+	}{
+		"successful query": {
+			scmStats: &StorageUsageStats{
+				Total: humanize.GByte * 30,
+				Free:  humanize.GByte * 15,
+				Min:   humanize.GByte * 1.6,
+				Max:   humanize.GByte * 2,
+			},
+			nvmeStats: &StorageUsageStats{
+				Total: humanize.GByte * 500,
+				Free:  humanize.GByte * 250,
+				Min:   humanize.GByte * 29.5,
+				Max:   humanize.GByte * 36,
+			},
+			totalTargets:  8,
+			activeTargets: 8,
+			expPool: &Pool{
+				Usage: []*PoolTierUsage{
+					{
+						TierName:  "SCM",
+						Size:      humanize.GByte * 30,
+						Free:      humanize.GByte * 15,
+						Imbalance: 10,
+					},
+					{
+						TierName:  "NVME",
+						Size:      humanize.GByte * 500,
+						Free:      humanize.GByte * 250,
+						Imbalance: 10,
+					},
+				},
+			},
+		},
+		"disabled targets": {
+			scmStats: &StorageUsageStats{
+				Total: humanize.GByte * 30,
+				Free:  humanize.GByte * 15,
+				Min:   humanize.GByte * 1.6,
+				Max:   humanize.GByte * 2,
+			},
+			nvmeStats: &StorageUsageStats{
+				Total: humanize.GByte * 500,
+				Free:  humanize.GByte * 250,
+				Min:   humanize.GByte * 29.5,
+				Max:   humanize.GByte * 36,
+			},
+			totalTargets:  8,
+			activeTargets: 4,
+			expPool: &Pool{
+				Usage: []*PoolTierUsage{
+					{
+						TierName:  "SCM",
+						Size:      humanize.GByte * 30,
+						Free:      humanize.GByte * 15,
+						Imbalance: 5,
+					},
+					{
+						TierName:  "NVME",
+						Size:      humanize.GByte * 500,
+						Free:      humanize.GByte * 250,
+						Imbalance: 5,
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := &PoolQueryResp{Status: tc.status}
+			resp.Scm = tc.scmStats
+			resp.Nvme = tc.nvmeStats
+			resp.TotalTargets = tc.totalTargets
+			resp.ActiveTargets = tc.activeTargets
+			resp.DisabledTargets = tc.activeTargets
+
+			pool := new(Pool)
+			pool.setUsage(resp)
+
+			if diff := cmp.Diff(tc.expPool, pool); diff != "" {
+				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestControl_ListPools(t *testing.T) {
+	queryResp := func(i int32) *mgmtpb.PoolQueryResp {
+		return &mgmtpb.PoolQueryResp{
+			Uuid:            common.MockUUID(i),
+			TotalTargets:    42,
+			ActiveTargets:   16,
+			DisabledTargets: 17,
+			Rebuild: &mgmtpb.PoolRebuildStatus{
+				State:   mgmtpb.PoolRebuildStatus_BUSY,
+				Objects: 1,
+				Records: 2,
+			},
+			Scm: &mgmtpb.StorageUsageStats{
+				Total: 123456,
+				Free:  0,
+				Min:   1000,
+				Max:   2000,
+				Mean:  1500,
+			},
+			Nvme: &mgmtpb.StorageUsageStats{
+				Total: 1234567,
+				Free:  600000,
+				Min:   1000,
+				Max:   2000,
+				Mean:  15000,
+			},
+		}
+	}
+	queryRespNilScm := queryResp(1)
+	queryRespNilScm.Scm = nil
+	queryRespNilNvme := queryResp(1)
+	queryRespNilNvme.Nvme = nil
+	expUsage := []*PoolTierUsage{
+		{
+			TierName:  "SCM",
+			Size:      123456,
+			Free:      0,
+			Imbalance: 12,
+		},
+		{
+			TierName:  "NVME",
+			Size:      1234567,
+			Free:      600000,
+			Imbalance: 1,
+		},
+	}
+
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *ListPoolsReq
@@ -833,22 +974,186 @@ func TestControl_ListPools(t *testing.T) {
 		},
 		"one pool": {
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.ListPoolsResp{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
 						Pools: []*mgmtpb.ListPoolsResp_Pool{
 							{
-								Uuid:    common.MockUUID(),
+								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
 							},
 						},
-					},
-				),
+					}),
+					MockMSResponse("host1", nil, queryResp(1)),
+				},
 			},
 			expResp: &ListPoolsResp{
-				Pools: []*common.PoolDiscovery{
+				Pools: []*Pool{
 					{
-						UUID:        common.MockUUID(),
-						SvcReplicas: []uint32{1, 3, 5, 8},
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+				},
+			},
+		},
+		"one pool; nil scm in query response": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryRespNilScm),
+				},
+			},
+			expErr: errors.New("missing scm"),
+		},
+		"one pool; nil nvme in query response": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryRespNilNvme),
+				},
+			},
+			expErr: errors.New("missing nvme"),
+		},
+		"one pool; uuid mismatch in query response": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expErr: errors.New("uuid does not match"),
+		},
+		"two pools": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+				},
+			},
+		},
+		"two pools; one query has error": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+							},
+						},
+					}),
+					MockMSResponse("host1", errors.New("remote failed"), nil),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						QueryErrorMsg:   "remote failed",
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+				},
+			},
+		},
+		"two pools; one query has bad status": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+						Status: int32(drpc.DaosNotInit),
+					}),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						QueryStatusMsg:  "DER_UNINIT(-1015): Device or resource not initialized",
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
 					},
 				},
 			},

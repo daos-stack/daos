@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -28,23 +29,6 @@ const (
 	// PoolCreateTimeout defines the amount of time a pool create
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
-)
-
-type (
-	// Pool contains a unified representation of a DAOS Storage Pool.
-	Pool struct {
-		// UUID uniquely identifies a pool within the system.
-		UUID string `json:"uuid"`
-		// Label is an optional human-friendly identifier for a pool.
-		Label string `json:"label,omitempty"`
-		// ServiceReplicas is the list of ranks on which this pool's
-		// service replicas are running.
-		ServiceReplicas []system.Rank `json:"svc_replicas"`
-
-		// Info contains information about the pool learned from a
-		// query operation.
-		Info PoolInfo `json:"info"`
-	}
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -811,4 +795,205 @@ func PoolReintegrate(ctx context.Context, rpcClient UnaryInvoker, req *PoolReint
 	rpcClient.Debugf("Reintegrate DAOS pool target response: %s\n", msResp)
 
 	return nil
+}
+
+type (
+	// PoolTierUsage describes usage of a single pool storage tier.
+	PoolTierUsage struct {
+		// TierName identifies a pool's storage tier.
+		TierName string `json:"tier_name"`
+		// Size is the total number of bytes in the pool tier.
+		Size uint64 `json:"size"`
+		// Free is the number of free bytes in the pool tier.
+		Free uint64 `json:"free"`
+		// Imbalance is the percentage imbalance of pool tier usage
+		// across all the targets.
+		Imbalance uint32 `json:"imbalance"`
+	}
+
+	// Pool contains a representation of a DAOS Storage Pool including usage
+	// statistics.
+	Pool struct {
+		// UUID uniquely identifies a pool within the system.
+		UUID string `json:"uuid"`
+		// Label is an optional human-friendly identifier for a pool.
+		Label string `json:"label,omitempty"`
+		// ServiceReplicas is the list of ranks on which this pool's
+		// service replicas are running.
+		ServiceReplicas []system.Rank `json:"svc_reps"`
+
+		// TargetsTotal is the total number of targets in pool.
+		TargetsTotal uint32 `json:"targets_total"`
+		// TargetsDisabled is the number of inactive targets in pool.
+		TargetsDisabled uint32 `json:"targets_disabled"`
+
+		// QueryErrorMsg reports an RPC error returned from a query.
+		QueryErrorMsg string `json:"query_error_msg"`
+		// QueryStatusMsg reports any DAOS error returned from a query
+		// operation converted into human readable message.
+		QueryStatusMsg string `json:"query_status_msg"`
+
+		// Usage contains pool usage statistics for each storage tier.
+		Usage []*PoolTierUsage `json:"usage"`
+	}
+)
+
+func (p *Pool) setUsage(pqr *PoolQueryResp) {
+	nvmeTotal := pqr.Nvme.Total
+	scmTotal := pqr.Scm.Total
+
+	scmSpread := pqr.Scm.Max - pqr.Scm.Min
+	scmImbalance := float64(scmSpread) / (float64(scmTotal) / float64(pqr.ActiveTargets))
+	nvmeSpread := pqr.Nvme.Max - pqr.Nvme.Min
+	nvmeImbalance := float64(nvmeSpread) / (float64(nvmeTotal) / float64(pqr.ActiveTargets))
+
+	p.Usage = append(p.Usage,
+		// scm is tier 0
+		&PoolTierUsage{
+			TierName:  "SCM",
+			Size:      scmTotal,
+			Free:      pqr.Scm.Free,
+			Imbalance: uint32(scmImbalance * 100),
+		},
+		// nvme is tier 1
+		&PoolTierUsage{
+			TierName:  "NVME",
+			Size:      nvmeTotal,
+			Free:      pqr.Nvme.Free,
+			Imbalance: uint32(nvmeImbalance * 100),
+		})
+}
+
+// HasErrors indicates whether a pool query operation failed on this pool.
+func (p *Pool) HasErrors() bool {
+	return p.QueryErrorMsg != "" || p.QueryStatusMsg != ""
+}
+
+// GetPool retrieves effective name for pool from either label or UUID.
+func (p *Pool) GetName() string {
+	name := p.Label
+	if name == "" {
+		// use short version of uuid if no label
+		name = strings.Split(p.UUID, "-")[0]
+	}
+	return name
+}
+
+// ListPoolsReq contains the inputs for the list pools command.
+type ListPoolsReq struct {
+	unaryRequest
+	msRequest
+}
+
+// ListPoolsResp contains the status of the request and, if successful, the list
+// of pools in the system.
+type ListPoolsResp struct {
+	Status int32   `json:"status"`
+	Pools  []*Pool `json:"pools"`
+}
+
+// Validate returns error if response contents are unexpected, string of
+// warnings if pool queries have failed or nil values if contents are expected.
+func (lpr *ListPoolsResp) Validate() (string, error) {
+	var numTiers int
+	out := new(strings.Builder)
+
+	for i, p := range lpr.Pools {
+		if p.UUID == "" {
+			return "", errors.Errorf("pool with index %d has no uuid", i)
+		}
+		if p.QueryErrorMsg != "" {
+			fmt.Fprintf(out, "Query on pool %q unsuccessful, error: %q\n",
+				p.GetName(), p.QueryErrorMsg)
+			continue // no usage stats expected
+		}
+		if p.QueryStatusMsg != "" {
+			fmt.Fprintf(out, "Query on pool %q unsuccessful, status: %q\n",
+				p.GetName(), p.QueryStatusMsg)
+			continue // no usage stats expected
+		}
+		if len(p.Usage) == 0 {
+			return "", errors.Errorf("pool %s has no usage info", p.UUID)
+		}
+		if numTiers != 0 && len(p.Usage) != numTiers {
+			return "", errors.Errorf("pool %s has %d storage tiers, want %d",
+				p.UUID, len(p.Usage), numTiers)
+		}
+		numTiers = len(p.Usage)
+	}
+
+	return out.String(), nil
+}
+
+// Errors returns summary of response errors including pool query failures.
+func (lpr *ListPoolsResp) Errors() error {
+	warn, err := lpr.Validate()
+	if err != nil {
+		return err
+	}
+	if warn != "" {
+		return errors.New(warn)
+	}
+	return nil
+}
+
+// ListPools fetches the list of all pools and their service replicas from the
+// system.
+func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (*ListPoolsResp, error) {
+	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
+		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, &mgmtpb.ListPoolsReq{
+			Sys: req.getSystem(rpcClient),
+		})
+	})
+	rpcClient.Debugf("DAOS system list-pools request: %+v", req)
+
+	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := new(ListPoolsResp)
+	if err := convertMSResponse(ur, resp); err != nil {
+		return nil, err
+	}
+
+	// issue query request and populate usage statistics for each pool
+	for _, p := range resp.Pools {
+		rpcClient.Debugf("Fetching details for discovered pool: %v", p)
+
+		resp, err := PoolQuery(ctx, rpcClient, &PoolQueryReq{UUID: p.UUID})
+		if err != nil {
+			p.QueryErrorMsg = err.Error()
+			if p.QueryErrorMsg == "" {
+				p.QueryErrorMsg = "unknown error"
+			}
+			continue
+		}
+		if resp.Status != 0 {
+			p.QueryStatusMsg = drpc.DaosStatus(resp.Status).Error()
+			if p.QueryStatusMsg == "" {
+				p.QueryStatusMsg = "unknown error"
+			}
+			continue
+		}
+		if resp.Scm == nil {
+			return nil, errors.New("pool query response missing scm stats")
+		}
+		if resp.Nvme == nil {
+			return nil, errors.New("pool query response missing nvme stats")
+		}
+		if p.UUID != resp.UUID {
+			return nil, errors.New("pool query response uuid does not match request")
+		}
+
+		p.TargetsTotal = resp.TotalTargets
+		p.TargetsDisabled = resp.DisabledTargets
+		p.setUsage(resp)
+	}
+
+	for _, p := range resp.Pools {
+		rpcClient.Debugf("DAOS system pool in list-pools response: %+v", p)
+	}
+
+	return resp, nil
 }
