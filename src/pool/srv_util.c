@@ -267,10 +267,7 @@ ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 		goto out_eventual;
 	}
 
-	if (*status != 0) {
-		rc = *status;
-		goto out_eventual;
-	}
+	rc = *status;
 
 out_eventual:
 	ABT_eventual_free(&eventual);

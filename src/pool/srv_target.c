@@ -1347,7 +1347,7 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 
 /**
  * Query the cached pool map. If the cached version is <= in->tmi_map_version,
- * reply -DER_ALREADY.
+ * the pool map will not be transferred to the client.
  */
 void
 ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
@@ -1372,11 +1372,13 @@ ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
 	/* Inefficient; better invent some zero-copy IV APIs. */
 	pool = hdl->sph_pool;
 	ABT_rwlock_rdlock(pool->sp_lock);
-	version = pool_map_get_version(pool->sp_map);
-	if (version > in->tmi_map_version)
-		rc = pool_buf_extract(pool->sp_map, &buf);
-	else
-		rc = -DER_ALREADY;
+	version = (pool->sp_map == NULL ? 0 : pool_map_get_version(pool->sp_map));
+	if (version <= in->tmi_map_version) {
+		rc = 0;
+		ABT_rwlock_unlock(pool->sp_lock);
+		goto out_hdl;
+	}
+	rc = pool_buf_extract(pool->sp_map, &buf);
 	ABT_rwlock_unlock(pool->sp_lock);
 	if (rc != 0)
 		goto out_hdl;
