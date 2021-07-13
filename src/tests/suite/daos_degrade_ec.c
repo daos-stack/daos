@@ -357,12 +357,15 @@ degrade_multi_conts_agg(void **state)
 	daos_obj_id_t	 oids[CONT_PER_POOL] = { 0 };
 	int		 fail_shards[2];
 	d_rank_t	 fail_ranks[4] = { -1 };
+	bool		 parity_checked = false;
 	int		 shards_nr = 2;
 	int		 i;
 	int		 rc;
 
 	if (!test_runable(arg, DEGRADE_RANK_SIZE))
 		return;
+
+	FAULT_INJECTION_REQUIRED();
 
 	fail_shards[0] = 0;
 	fail_shards[1] = 2;
@@ -402,14 +405,23 @@ degrade_multi_conts_agg(void **state)
 	}
 
 	/* sleep a while to make aggregation triggered */
-	trigger_and_wait_ec_aggreation(arg, oids, CONT_PER_POOL, false);
+	trigger_and_wait_ec_aggreation(arg, oids, CONT_PER_POOL,
+				       DAOS_FORCE_EC_AGG);
 
 	for (i = 0; i < shards_nr; i++)
 		fail_ranks[i] = get_rank_by_oid_shard(args[0], oids[0],
 						      fail_shards[i]);
 	rebuild_pools_ranks(&args[0], 1, fail_ranks, shards_nr, false);
 
+re_test:
+	if (!parity_checked)
+		daos_debug_set_params(args[0]->group, -1, DMG_KEY_FAIL_LOC,
+			DAOS_FAIL_AGG_BOUNDRY_MOVED | DAOS_FAIL_ONCE, 0, NULL);
+
 	for (i = 0; i < CONT_PER_POOL; i++) {
+		if (parity_checked)
+			args[i]->fail_loc = DAOS_FAIL_PARITY_EPOCH_DIFF |
+					    DAOS_FAIL_ONCE;
 		if ((i % 3) == 0)
 			degrade_ec_verify(args[i], oids[i],
 					  FULL_PARTIAL_UPDATE);
@@ -419,6 +431,14 @@ degrade_multi_conts_agg(void **state)
 			degrade_ec_verify(args[i], oids[i],
 					  PARTIAL_FULL_UPDATE);
 	}
+
+	if (!parity_checked) {
+		daos_debug_set_params(args[0]->group, -1, DMG_KEY_FAIL_LOC, 0,
+				      0, NULL);
+		parity_checked = true;
+		goto re_test;
+	}
+	daos_fail_loc_set(0);
 
 out:
 	for (i = CONT_PER_POOL - 1; i >= 0; i--)
@@ -465,7 +485,7 @@ degrade_ec_partial_update_agg(void **state)
 
 	/* Trigger aggregation */
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, false);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 
 	for (i = 0; i < 10; i++) {
 		daos_off_t offset = i * EC_CELL_SIZE;
@@ -520,9 +540,9 @@ degrade_ec_agg(void **state)
 			     data, EC_CELL_SIZE, &req);
 	}
 
-	/* Trigger aggregation */
+	/* Trigger EC aggregation */
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, false);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 
 	/* Kill one data shard to make sure the data is correct after
 	 * aggregation .
@@ -531,7 +551,8 @@ degrade_ec_agg(void **state)
 	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
 	print_message("sleep 30 seconds for VOS aggregation on each xstream");
 	sleep(30);
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, false);
+	/* Trigger VOS aggregation */
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 
 	for (i = 0; i < 8; i++) {
 		daos_off_t offset = i * EC_CELL_SIZE;

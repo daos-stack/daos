@@ -238,7 +238,12 @@ class IorTestBase(DfuseTestBase):
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
-            env["LD_PRELOAD"] = intercept
+            env['LD_PRELOAD'] = intercept
+            env['D_LOG_MASK'] = 'INFO'
+            env['D_IL_REPORT'] = '1'
+            #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+            #env['DD_MASK'] = 'all'
+            #env['DD_SUBSYS'] = 'all'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
@@ -272,7 +277,8 @@ class IorTestBase(DfuseTestBase):
             self.log.error("IOR Failed: %s", str(error))
             # Queue is used when we use a thread to call
             # ior thread (eg: thread1 --> thread2 --> ior)
-            out_queue.put("IOR Failed")
+            if out_queue is not None:
+                out_queue.put("IOR Failed")
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:

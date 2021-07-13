@@ -36,7 +36,7 @@ typedef enum {
 	DAOS_OPC_MGMT_GET_BS_STATE,
 
 	/** Pool APIs */
-	DAOS_OPC_POOL_CONNECT,
+	DAOS_OPC_POOL_CONNECT = 5,
 	DAOS_OPC_POOL_DISCONNECT,
 	DAOS_OPC_POOL_EXCLUDE,
 	DAOS_OPC_POOL_EXCLUDE_OUT,
@@ -51,7 +51,7 @@ typedef enum {
 	DAOS_OPC_POOL_LIST_CONT,
 
 	/** Container APIs */
-	DAOS_OPC_CONT_CREATE,
+	DAOS_OPC_CONT_CREATE = 18,
 	DAOS_OPC_CONT_OPEN,
 	DAOS_OPC_CONT_CLOSE,
 	DAOS_OPC_CONT_DESTROY,
@@ -72,7 +72,7 @@ typedef enum {
 	DAOS_OPC_CONT_DESTROY_SNAP,
 
 	/** Transaction APIs */
-	DAOS_OPC_TX_OPEN,
+	DAOS_OPC_TX_OPEN = 37,
 	DAOS_OPC_TX_COMMIT,
 	DAOS_OPC_TX_ABORT,
 	DAOS_OPC_TX_OPEN_SNAP,
@@ -80,7 +80,7 @@ typedef enum {
 	DAOS_OPC_TX_RESTART,
 
 	/** Object APIs */
-	DAOS_OPC_OBJ_REGISTER_CLASS,
+	DAOS_OPC_OBJ_REGISTER_CLASS = 43,
 	DAOS_OPC_OBJ_QUERY_CLASS,
 	DAOS_OPC_OBJ_LIST_CLASS,
 	DAOS_OPC_OBJ_OPEN,
@@ -99,7 +99,7 @@ typedef enum {
 	DAOS_OPC_OBJ_LIST_OBJ,
 
 	/** Array APIs */
-	DAOS_OPC_ARRAY_CREATE,
+	DAOS_OPC_ARRAY_CREATE = 60,
 	DAOS_OPC_ARRAY_OPEN,
 	DAOS_OPC_ARRAY_CLOSE,
 	DAOS_OPC_ARRAY_DESTROY,
@@ -110,7 +110,7 @@ typedef enum {
 	DAOS_OPC_ARRAY_SET_SIZE,
 
 	/** KV APIs */
-	DAOS_OPC_KV_OPEN,
+	DAOS_OPC_KV_OPEN = 69,
 	DAOS_OPC_KV_CLOSE,
 	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
@@ -173,7 +173,10 @@ typedef struct {
 
 /** pool connect by UUID args */
 typedef struct {
-	/** UUID of the pool. */
+	/**
+	 * Deprecated, please pass the Pool label or UUID string via the pool
+	 * arg at the end of this structure
+	 */
 	uuid_t			 uuid;
 	/** Process set name of the DAOS servers managing the pool. */
 	const char		*grp;
@@ -183,8 +186,8 @@ typedef struct {
 	daos_handle_t		*poh;
 	/** Optional, returned pool information. */
 	daos_pool_info_t	*info;
-	/** Pool label, API v1.2.2 (placed at end for ABI compatibility) */
-	const char		*label;
+	/** Pool's label or UUID string to connect to, API v1.3.0 */
+	const char		*pool;
 } daos_pool_connect_t;
 
 /** pool disconnect args */
@@ -362,6 +365,8 @@ typedef struct {
 	uuid_t			uuid;
 	/** Force destroy even if there is outstanding open handles. */
 	int			force;
+	/* label, API v1.2.4 (placed at end for ABI compatibility) */
+	const char	       *label;
 } daos_cont_destroy_t;
 
 /** Container query args */

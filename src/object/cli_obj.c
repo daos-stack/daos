@@ -1607,7 +1607,7 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 	daos_handle_t			 coh = obj->cob_coh;
 	daos_handle_t			 th = DAOS_HDL_INVAL;
 	d_list_t			 task_list;
-	uint32_t			 i;
+	uint32_t			 extra_flags, i;
 	int				 rc;
 
 	rc = obj_ec_recov_prep(&obj_auxi->reasb_req, obj->cob_md.omd_id,
@@ -1639,8 +1639,11 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		recov_task->ert_th = th;
 		D_DEBUG(DB_REBUILD, DF_C_OID_DKEY" Fetching to recover\n",
 			DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey));
+		extra_flags = DIOF_EC_RECOV;
+		if (recov_task->ert_snapshot)
+			extra_flags |= DIOF_EC_RECOV_SNAP;
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
-					      DIOF_EC_RECOV,
+					      extra_flags,
 					      &recov_task->ert_iod,
 					      &recov_task->ert_sgl, NULL,
 					      fail_info, csum_iov,
@@ -1791,8 +1794,11 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 
 	if (nr == 0 || recxs == NULL)
 		return false;
-	if (nr == 1)
+	if (nr == 1) {
+		if (recxs[0].rx_nr == 0)
+			return false;
 		return true;
+	}
 
 	switch (nr) {
 	case 2:
@@ -1820,6 +1826,10 @@ obj_recx_valid(unsigned int nr, daos_recx_t *recxs, bool update)
 
 		overlapped = false;
 		for (idx = 0; idx < nr; idx++) {
+			if (recxs[idx].rx_nr == 0) {
+				overlapped = true;
+				break;
+			}
 			d_iov_set(&key, &recxs[idx], sizeof(daos_recx_t));
 			rc = dbtree_update(bth, &key, NULL);
 			if (rc != 0) {
@@ -3713,6 +3723,18 @@ obj_comp_cb(tse_task_t *task, void *data)
 		if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
 		    task->dt_result == -DER_INPROGRESS)
 			obj_auxi->to_leader = 1;
+	} else if (obj_auxi->ec_wait_recov &&
+		   task->dt_result == -DER_FETCH_AGAIN) {
+		obj_auxi->new_shard_tasks = 1;
+		obj_auxi->io_retry = 1;
+		pm_stale = 1;
+		obj_auxi->ec_wait_recov = 0;
+		obj_auxi->ec_in_recov = 0;
+		obj_auxi->reasb_req.orr_recov = 0;
+		obj_auxi->reasb_req.orr_recov_snap = 0;
+		obj_ec_fail_info_free(&obj_auxi->reasb_req);
+		D_DEBUG(DB_IO, DF_OID" EC fetch again.\n",
+			DP_OID(obj->cob_md.omd_id));
 	}
 
 	if (!obj_auxi->io_retry && task->dt_result == 0 &&
@@ -4200,6 +4222,8 @@ dc_obj_fetch_task(tse_task_t *task)
 		obj_auxi->ec_in_recov = 1;
 		obj_auxi->reasb_req.orr_fail = args->extra_arg;
 		obj_auxi->reasb_req.orr_recov = 1;
+		if ((args->extra_flags & DIOF_EC_RECOV_SNAP) != 0)
+			obj_auxi->reasb_req.orr_recov_snap = 1;
 	}
 	if (obj_auxi->ec_wait_recov)
 		goto out_task;

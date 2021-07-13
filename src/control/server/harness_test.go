@@ -260,7 +260,8 @@ func TestServer_Harness_Start(t *testing.T) {
 			instances := harness.Instances()
 
 			// set mock dRPC client to record call details
-			for _, ei := range instances {
+			for _, e := range instances {
+				ei := e.(*EngineInstance)
 				ei.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
 					SendMsgResponse: &drpc.Response{},
 				}))
@@ -287,7 +288,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				for {
 					ready := true
 					for _, ei := range instances {
-						if ei.waitDrpc.IsFalse() {
+						if ei.(*EngineInstance).waitDrpc.IsFalse() {
 							ready = false
 						}
 					}
@@ -333,7 +334,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					case i.drpcReady <- req:
 					case <-ctxIn.Done():
 					}
-				}(ctx, ei)
+				}(ctx, ei.(*EngineInstance))
 				t.Logf("sent drpc ready to instance %d", ei.Index())
 			}
 
@@ -379,7 +380,8 @@ func TestServer_Harness_Start(t *testing.T) {
 			defer joinMu.Unlock()
 			// verify expected RPCs were made, ranks allocated and
 			// members added to membership
-			for _, ei := range instances {
+			for _, e := range instances {
+				ei := e.(*EngineInstance)
 				dc, err := ei.getDrpcClient()
 				if err != nil {
 					t.Fatal(err)

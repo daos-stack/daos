@@ -4,7 +4,7 @@ disable=locally-disabled,locally-enabled,star-args,wrong-import-order,
         wrong-import-position
 
 [FORMAT]
-max-line-length=80
+max-line-length=100
 max-locals=30
 max-args=10
 min-similarity-lines=10

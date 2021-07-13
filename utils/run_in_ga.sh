@@ -14,6 +14,14 @@ rm -rf /opt/daos/prereq/release/spdk
 $SCONS PREFIX=/opt/daos --build-deps=yes --deps-only
 echo ::endgroup::
 
+echo "::group::Stack analyzer output (post build)"
+$SCONS --jobs 10 --analyze-stack="-x tests -c 128" server
+echo ::endgroup::
+
+echo "::group::Stack analyzer output (immediate)"
+$SCONS -Q --jobs 10 --analyze-stack="-x tests -c 128 -e" server
+echo ::endgroup::
+
 echo ::group::Test client only debug build
 $SCONS --jobs 10 PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug \
        TARGET_TYPE=release -c install
@@ -54,5 +62,5 @@ echo ::group::Setting up daos_admin
 echo ::endgroup::
 
 echo ::group::Container copy test
-./utils/node_local_test.py --no-root --test cont_copy
+./utils/node_local_test.py --no-root --memcheck no --test cont_copy
 echo ::endgroup::

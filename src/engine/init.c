@@ -499,19 +499,25 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
+	if (server_init_state != DSS_INIT_STATE_SET_UP)
+		return;
+
 	if (uid != NULL)
 		ABT_self_get_thread_id(uid);
 
 	if (tid != NULL) {
 		struct dss_thread_local_storage *dtc;
 		struct dss_module_info *dmi;
+		int index = daos_srv_modkey.dmk_index;
 
+		/* Avoid assertion in dss_module_key_get() */
 		dtc = dss_tls_get();
-		if (dtc == NULL)
-			return;
-
-		dmi = dss_get_module_info();
-		*tid = dmi->dmi_xs_id;
+		if (dtc != NULL && index >= 0 && index < DAOS_MODULE_KEYS_NR &&
+		    dss_module_keys[index] == &daos_srv_modkey) {
+			dmi = dss_get_module_info();
+			if (dmi != NULL)
+				*tid = dmi->dmi_xs_id;
+		}
 	}
 }
 
@@ -1091,16 +1097,20 @@ main(int argc, char **argv)
 
 			 if (abt_infos == NULL) {
 				/* filename format is
-				 * "/tmp/daos_dump_YYYYMMDD_hh_mm.txt"
+				 * "/tmp/daos_dump_<PID>_YYYYMMDD_hh_mm.txt"
 				 */
-				char name[34] = "/tmp/daos_dump.txt";
+				char name[50];
 
 				if (rc != -1 && tm != NULL)
-					snprintf(name, 34,
-						 "/tmp/daos_dump_%04d%02d%02d_%02d_%02d.txt",
-						 tm->tm_year + 1900,
+					snprintf(name, 50,
+						 "/tmp/daos_dump_%d_%04d%02d%02d_%02d_%02d.txt",
+						 getpid(), tm->tm_year + 1900,
 						 tm->tm_mon + 1, tm->tm_mday,
 						 tm->tm_hour, tm->tm_min);
+				else
+					snprintf(name, 50,
+						 "/tmp/daos_dump_%d.txt",
+						 getpid());
 
 				abt_infos = fopen(name, "a");
 				if (abt_infos == NULL) {

@@ -7,11 +7,7 @@
 package main
 
 /*
-#include <daos.h>
-#include <gurt/common.h>
-
-#include "daos_hdlr.h"
-#include "property.h"
+#include "util.h"
 
 void
 free_strings(char **str, size_t str_count)
@@ -44,7 +40,7 @@ func getAclStrings(e *C.struct_daos_prop_entry) (out []string) {
 	var acesNr C.size_t
 
 	rc := C.daos_acl_to_strs(acl, &aces, &acesNr)
-	if err := daosError(rc); err != nil {
+	if err := daosError(rc); err != nil || aces == nil {
 		return
 	}
 	defer C.free_strings(aces, acesNr)
@@ -123,7 +119,7 @@ func (cmd *containerOverwriteACLCmd) Execute(args []string) error {
 
 	cleanup, err := cmd.resolveAndConnect(ap)
 	if err != nil {
-		return nil
+		return err
 	}
 	defer cleanup()
 
@@ -160,7 +156,7 @@ func (cmd *containerUpdateACLCmd) Execute(args []string) error {
 
 	cleanup, err := cmd.resolveAndConnect(ap)
 	if err != nil {
-		return nil
+		return err
 	}
 	defer cleanup()
 
@@ -198,7 +194,7 @@ func (cmd *containerDeleteACLCmd) Execute(args []string) error {
 
 	cleanup, err := cmd.resolveAndConnect(ap)
 	if err != nil {
-		return nil
+		return err
 	}
 	defer cleanup()
 
@@ -300,7 +296,7 @@ func (cmd *containerSetOwnerCmd) Execute(args []string) error {
 
 	cleanup, err := cmd.resolveAndConnect(ap)
 	if err != nil {
-		return nil
+		return err
 	}
 	defer cleanup()
 

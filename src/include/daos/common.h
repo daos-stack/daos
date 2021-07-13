@@ -675,9 +675,10 @@ enum {
 #define DAOS_REBUILD_NO_REBUILD (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x16)
 #define DAOS_REBUILD_NO_UPDATE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x17)
 #define DAOS_REBUILD_TGT_NOSPACE (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x18)
+#define DAOS_REBUILD_DELAY	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
 
-#define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x19)
-#define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
+#define DAOS_RDB_SKIP_APPENDENTRIES_FAIL (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1a)
+#define DAOS_FORCE_REFRESH_POOL_MAP	  (DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1b)
 
 #define DAOS_FORCE_CAPA_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1e)
 #define DAOS_FORCE_PROP_VERIFY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x1f)
@@ -699,6 +700,15 @@ enum {
  * fetch.
  */
 #define DAOS_FAIL_SHARD_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
+/**
+ * This fault simulates the EC aggregation boundary (agg_eph_boundry) moved
+ * ahead, in that case need to redo the degraded fetch.
+ */
+#define DAOS_FAIL_AGG_BOUNDRY_MOVED	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x28)
+/**
+ * This fault simulates the EC parity epoch difference in EC data recovery.
+ */
+#define DAOS_FAIL_PARITY_EPOCH_DIFF	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x29)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
@@ -762,7 +772,8 @@ enum {
 #define DAOS_OBJ_SKIP_PARITY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x96)
 #define DAOS_OBJ_FORCE_DEGRADE		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x97)
 #define DAOS_FORCE_EC_AGG		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x98)
-#define DAOS_FORCE_FAIL_EC_AGG		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
+#define DAOS_FORCE_EC_AGG_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x99)
+#define DAOS_FORCE_EC_AGG_PEER_FAIL	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x9a)
 
 #define DAOS_DTX_SKIP_PREPARE		DAOS_DTX_SPEC_LEADER
 
@@ -841,7 +852,7 @@ int crt_proc_struct_daos_acl(crt_proc_t proc, crt_proc_op_t proc_op,
 			     struct daos_acl **data);
 
 bool daos_prop_valid(daos_prop_t *prop, bool pool, bool input);
-daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool);
+daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool, bool input);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
 void daos_prop_fini(daos_prop_t *prop);
 
