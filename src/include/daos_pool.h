@@ -422,7 +422,7 @@ daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
 		   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
 /**
- * For backward compatility, support old API where a const uuid_t was used
+ * For backward compatibility, support old API where a const uuid_t was used
  * instead of a string to identify the pool.
  */
 #define daos_pool_connect(po, ...)					\

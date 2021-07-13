@@ -186,7 +186,7 @@ typedef struct {
 	daos_handle_t		*poh;
 	/** Optional, returned pool information. */
 	daos_pool_info_t	*info;
-	/** Pool's label or UUID string to connect to, API v1.2.2 */
+	/** Pool's label or UUID string to connect to, API v1.3.0 */
 	const char		*pool;
 } daos_pool_connect_t;
 
