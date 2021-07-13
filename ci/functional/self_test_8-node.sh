@@ -4,7 +4,7 @@ set -x
 #daospath=$1
 #nodes=$2
 IFS=', ' read -r -a nodes_array <<< "$nodes"
-for i in "${nodes_array[@]}"; do
+for i in "${nodes_array[@]:1}"; do
     total_nodes+="${i}:5,"
 done
 total_nodes=${total_nodes%?}
@@ -41,7 +41,7 @@ sleep 5
 ${orterun} \
     --mca btl self,tcp \
     -N 1 \
-    --host ${nodes_array[0]} \
+    --host ${nodes_array[1]} \
     -x D_LOG_FILE_APPEND_PID=1 \
     -x D_LOG_FILE=/var/tmp/daos_testing/self_test_np_sep_cart_client.log \
     -x PATH \
