@@ -62,7 +62,7 @@ FAULT_STATUS_TEST = 'fault_status.c'
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs', 'cart_lib', 'gurt_lib')
+    Import('env', 'prereqs')
     Import('cart_utils_objs')
 
     ##############################
