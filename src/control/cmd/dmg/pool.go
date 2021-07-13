@@ -177,6 +177,7 @@ type PoolListCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
+	Verbose bool `short:"v" long:"verbose" required:"0" description:"Add pool UUIDs and service replica lists to display."`
 }
 
 // Execute is run when PoolListCmd activates
@@ -200,13 +201,18 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return cmd.outputJSON(resp, nil)
 	}
 
-	var out strings.Builder
-	if err := pretty.PrintListPoolsResponse(&out, resp); err != nil {
+	var out, outErr strings.Builder
+	if err := pretty.PrintListPoolsResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
 		return err
 	}
-	cmd.log.Info(out.String())
+	if outErr.String() != "" {
+		cmd.log.Error(outErr.String())
+	}
+	// Infof prints raw string and doesn't try to expand "%"
+	// preserving column formatting in txtfmt table
+	cmd.log.Infof("%s", out.String())
 
-	return nil
+	return resp.Errors()
 }
 
 type PoolID struct {
