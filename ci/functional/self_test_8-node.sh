@@ -10,7 +10,8 @@ done
 total_nodes=${total_nodes%?}
 echo $total_nodes
 
-module load openmpi
+module avail
+module load mpi
 which orterun
 
 #/usr/mpi/gcc/openmpi-4.1.0rc5/bin/orterun \
