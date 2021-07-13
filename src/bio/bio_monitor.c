@@ -252,11 +252,6 @@ get_spdk_identify_ctrlr_completion(struct spdk_bdev_io *bdev_io, bool success,
 	cmd.cdw10 |= SPDK_NVME_LOG_ERROR;
 	cmd.cdw11 = numdu;
 	cdata = dev_health->bdh_ctrlr_buf;
-	if (cdata->elpe >= NVME_MAX_ERROR_LOG_PAGES) {
-		D_ERROR("Device error log page size exceeds buffer size\n");
-		dev_health->bdh_inflights--;
-		goto out;
-	}
 	ep_buf_sz = ep_sz * (cdata->elpe + 1);
 
 	/*
