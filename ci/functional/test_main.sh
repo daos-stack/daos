@@ -39,6 +39,9 @@ mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 
 # run network test
+# create log directory
+clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+    "mkdir -p /var/tmp/daos_testing"
 run_on_node=$(echo ${tnodes} | cut -d ',' -f 2)
 clush -B -S -o '-i ci_key' -l jenkins -w "${run_on_node}" \
     "daospath='/usr/'                                 \

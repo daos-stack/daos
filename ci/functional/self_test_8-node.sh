@@ -14,7 +14,6 @@ module avail
 module load mpi
 module list
 orterun=$(which orterun)
-mkdir -p /var/tmp/daos_testing
 
 #/usr/mpi/gcc/openmpi-4.1.0rc5/bin/orterun \
 ${orterun} \
