@@ -29,7 +29,7 @@ type PoolCmd struct {
 	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
 	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
 	Evict        PoolEvictCmd        `command:"evict" alias:"ev" description:"Evict all pool connections to a DAOS pool"`
-	List         PoolListCmd         `command:"list" alias:"l" description:"List DAOS pools"`
+	List         PoolListCmd         `command:"list" alias:"ls" description:"List DAOS pools"`
 	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
 	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
 	Drain        PoolDrainCmd        `command:"drain" alias:"d" description:"Drain targets from a rank"`
