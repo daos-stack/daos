@@ -22,6 +22,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -410,6 +411,14 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"List pools with verbose flag",
+			"pool list --verbose",
+			strings.Join([]string{
+				printRequest(t, &control.ListPoolsReq{}),
+			}, " "),
+			nil,
+		},
+		{
 			"Set pool properties",
 			"pool set-prop 031bcaf8-f0f5-42ef-b3c5-ee048676dceb label:foo,space_rb:42",
 			strings.Join([]string{
@@ -725,33 +734,72 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 
 func TestDmg_PoolListCmd_Errors(t *testing.T) {
 	for name, tc := range map[string]struct {
-		ctlCfg *control.Config
-		resp   *mgmtpb.ListPoolsResp
-		msErr  error
-		expErr error
+		ctlCfg    *control.Config
+		listResp  *mgmtpb.ListPoolsResp
+		queryResp *mgmtpb.PoolQueryResp
+		msErr     error
+		expErr    error
 	}{
 		"list pools no config": {
-			resp:   &mgmtpb.ListPoolsResp{},
-			expErr: errors.New("list pools failed: no configuration loaded"),
+			listResp: &mgmtpb.ListPoolsResp{},
+			expErr:   errors.New("list pools failed: no configuration loaded"),
 		},
-		"list pools success": {
-			ctlCfg: &control.Config{},
-			resp:   &mgmtpb.ListPoolsResp{},
+		"list pools no queries": {
+			ctlCfg:   &control.Config{},
+			listResp: &mgmtpb.ListPoolsResp{},
 		},
 		"list pools ms failures": {
+			ctlCfg:   &control.Config{},
+			listResp: &mgmtpb.ListPoolsResp{},
+			msErr:    errors.New("remote failed"),
+			expErr:   errors.New("remote failed"),
+		},
+		"list pools query success": {
 			ctlCfg: &control.Config{},
-			resp:   &mgmtpb.ListPoolsResp{},
-			msErr:  errors.New("remote failed"),
-			expErr: errors.New("remote failed"),
+			listResp: &mgmtpb.ListPoolsResp{
+				Pools: []*mgmtpb.ListPoolsResp_Pool{
+					{
+						Uuid:    common.MockUUID(1),
+						SvcReps: []uint32{1, 3, 5, 8},
+					},
+				},
+			},
+			queryResp: &mgmtpb.PoolQueryResp{
+				Uuid: common.MockUUID(1),
+				Scm:  &mgmtpb.StorageUsageStats{},
+				Nvme: &mgmtpb.StorageUsageStats{},
+			},
+		},
+		"list pools query failure": {
+			ctlCfg: &control.Config{},
+			listResp: &mgmtpb.ListPoolsResp{
+				Pools: []*mgmtpb.ListPoolsResp_Pool{
+					{
+						Uuid:    common.MockUUID(1),
+						SvcReps: []uint32{1, 3, 5, 8},
+					},
+				},
+			},
+			queryResp: &mgmtpb.PoolQueryResp{
+				Status: int32(drpc.DaosNotInit),
+			},
+			expErr: errors.New("Query on pool \"00000001\" unsuccessful, status: \"DER_UNINIT"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
+			responses := []*control.UnaryResponse{
+				control.MockMSResponse("10.0.0.1:10001", tc.msErr, tc.listResp),
+			}
+			if tc.queryResp != nil {
+				responses = append(responses,
+					control.MockMSResponse("10.0.0.1:10001", tc.msErr, tc.queryResp))
+			}
+
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
-					tc.msErr, tc.resp),
+				UnaryResponseSet: responses,
 			})
 
 			PoolListCmd := new(PoolListCmd)
