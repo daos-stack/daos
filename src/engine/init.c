@@ -503,6 +503,9 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
+	if (server_init_state != DSS_INIT_STATE_SET_UP)
+		return;
+
 	if (uid != NULL && d_abt_on) {
 		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
 		int rc;
@@ -516,13 +519,16 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 	if (tid != NULL) {
 		struct dss_thread_local_storage *dtc;
 		struct dss_module_info *dmi;
+		int index = daos_srv_modkey.dmk_index;
 
+		/* Avoid assertion in dss_module_key_get() */
 		dtc = dss_tls_get();
-		if (dtc == NULL)
-			return;
-
-		dmi = dss_get_module_info();
-		*tid = dmi->dmi_xs_id;
+		if (dtc != NULL && index >= 0 && index < DAOS_MODULE_KEYS_NR &&
+		    dss_module_keys[index] == &daos_srv_modkey) {
+			dmi = dss_get_module_info();
+			if (dmi != NULL)
+				*tid = dmi->dmi_xs_id;
+		}
 	}
 }
 
