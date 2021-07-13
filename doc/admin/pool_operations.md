@@ -27,7 +27,7 @@ as well as the pool service replica ranks.
     considered deprecated and will likely be removed in a future release.
 
 The label must consist of alphanumeric characters, colon (':'), period ('.')
-or underscore ('\_'). The maximum lengh is set to 127 characters.
+or underscore ('\_'). The maximum length is set to 127 characters.
 
 ```bash
 $ dmg pool create --help
@@ -102,7 +102,7 @@ Pool-destroy command succeeded
 Properties are predefined parameters that the administrator can tune to control
 the behavior of a pool.
 
-### Properties Mangement
+### Properties Management
 
 Current properties of an existing pool can be retrieved via the `dmg pool
 get-prop` command line.

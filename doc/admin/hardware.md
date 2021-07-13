@@ -28,7 +28,7 @@ conducted to efficiently support the hyper-converged model as well.
 ## Processor Requirements
 
 DAOS requires a 64-bit processor architecture and is primarily developed
-on Intel x86_64 architecture. The DAOS software and the libraries it depends
+on Intel x86\_64 architecture. The DAOS software and the libraries it depends
 on (e.g., ISA-L, SPDK, PMDK, and DPDK) can take advantage of Intel SSE
 and AVX extensions.
 
@@ -42,7 +42,7 @@ validated on a regular basis.
 The DAOS network layer relies on libfabrics and supports OFI providers
 for Ethernet/sockets, InfiniBand/verbs and RoCE.
 An RDMA-capable fabric is preferred for better performance. DAOS can support
-multiple network interfaces by binding different engines and differnet client
+multiple network interfaces by binding different engines and different client
 processes to individual network cards.
 
 The DAOS control plane provides methods for administering and managing

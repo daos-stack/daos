@@ -3,12 +3,12 @@
 # Use Cases
 
 A DAOS pool is a persistent storage reservation that is allocated to a
-project or specific job. Pools are allocated, shrunk, grew and destroyed by
+project or specific job. Pools are allocated, shrunk, grown and destroyed by
 the administrators.
 
 The typical workflow consists of:
 * New project members meet and define storage requirements including space,
-bandwith, IOPS & data protection needs.
+bandwidth, IOPS & data protection needs.
 * Administrators collect those requirements, create a pool for the new
 project and set relevant ACL to grant access to project members.
 * Administrators notify the project members that the pool has been created and

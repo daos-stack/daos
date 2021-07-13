@@ -129,7 +129,7 @@ available [here](https://daos-stack.github.io/html/).
 ### Changing Properties
 
 By default, a container will inherit a set of default value for each property.
-Those can be overriden at container creation time via the `--properties` option.
+Those can be overridden at container creation time via the `--properties` option.
 
 ```bash
 $ daos cont create tank --label mycont2 --properties cksum:sha1,dedup:hash,rf:1
@@ -212,28 +212,29 @@ The table below summarizes the different container properties available.
 | owner                   | Yes             | User acting as the owner of the container.|
 | group                   | Yes             | Group acting as the owner of the container|
 | layout\_type            | Yes             | The container type (POSIX, HDF5, ...)|
-| layout\_ver`            | Yes             | A version of the layout that can be used by I/O middleware to handle interoperability.|
+| layout\_ver             | Yes             | A version of the layout that can be used by I/O middleware to handle interoperability.|
 | rf                      | Yes             | The redundancy factor that drives the minimal data protection required for objects stored in the container. e.g., RF1 means no data protection, RF3 only allows 3-way replication or erasure code N+2.|
-| rf_lvl                  | Yes             | The fault domain level to use for data redundancy placement. This is used to determine object placement.|
-| ec_cell                 | Yes             | Erasure code cell size for erasure-coded objects.|
+| rf\_lvl                 | Yes             | The fault domain level to use for data redundancy placement. This is used to determine object placement.|
+| ec\_cell                | Yes             | Erasure code cell size for erasure-coded objects.|
 | cksum                   | Yes             | Checksum off, or algorithm to use (adler32, crc[16|32|64] or sha[1|256|512]).|
 | cksum\_size             | Yes             | Checksum chunk size.|
-| srv_cksum               | Yes             | Perform additional checksum verification on server (default: off).|
-| max_snapshot            | No              | Impose a upper limit on number of snapshots to retain (default: 0, no limitation).|
+| srv\_cksum              | Yes             | Perform additional checksum verification on server (default: off).|
+| max\_snapshot           | No              | Impose a upper limit on number of snapshots to retain (default: 0, no limitation).|
 | acl                     | No              | Container access control list.|
 | compression             | Yes             | Whether online compression is enabled (off, lz4, deflate[1-4])|
 | dedup                   | Yes             | Inline deduplication off, hash based (hash) or using memory compare (memcmp)|
-| dedup_threshold         | Yes             | Minimum I/O size to consider for deduplication|
+| dedup\_threshold        | Yes             | Minimum I/O size to consider for deduplication|
 | encryption              | Yes             | Inline encryption off, or algorithm
 to use (XTS[128|256], CBC[128|192|256] or GCM]129|256]|
 | status                  | No              | Current state of the container|
-| alloc_oid               | No              | Maximum allocated object ID by container allocator|
+| alloc\_oid               | No              | Maximum allocated object ID by container allocator|
 
-Refer to the Data Integrity and Access Control Lists sections for more
-details on the checksum and access-related properties.
+Refer to the [Data Integrity](#Data-Integrity) and [Access Control Lists](#Access_Control_Lists)
+sections for more details on the checksum and access-related properties.
 
-Refer to the Inline Deduplication section for details about additional
-properties for that preview feature that are not listed here.
+Refer to the [Inline Deduplication](#Inline_Deduplication_\(Preview\)) section
+for details about additional properties for that preview feature that are not
+listed here.
 
 While those properties are currently stored persistently with container
 metadata, many of them are still under development. The ability to modify some

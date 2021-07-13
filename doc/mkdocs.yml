@@ -54,7 +54,7 @@ nav:
         - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
     - User Guide:
-        - 'Workflow': 'user/worflow.md'
+        - 'Workflow': 'user/workflow.md'
         - 'Container Management': 'user/container.md'
         - 'File System': 'user/filesystem.md'
         - 'MPI-IO Support': 'user/mpi-io.md'

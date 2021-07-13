@@ -182,7 +182,7 @@ DFuse can operate in three modes.
 #### Single Container Mode
 
 That's the most common use case where a pool and a POSIX container are provided
-on the command line. The moun point will map to the root of the container
+on the command line. The mount point will map to the root of the container
 itself. Files can be accessed by simply concatenating the mount point and the
 name of the file, relative to the root of the container.
 
@@ -264,7 +264,7 @@ To create a new container and link it into the namespace of an existing one,
 use the following command.
 
 ```bash
-$ daos container create --type POSIX <pool_label> --path <path to entry point>
+$ daos container create <pool_label> --type POSIX --path <path_to_entry_point>
 ```
 
 The pool should already exist, and the path should specify a location
