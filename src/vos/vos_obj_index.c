@@ -191,14 +191,14 @@ vos_oi_find(struct vos_container *cont, daos_unit_oid_t oid,
 	d_iov_t			 val_iov;
 	int			 rc;
 	int			 tmprc;
-	D_DEBUG(DB_IO, "here");
+
 	*obj_p = NULL;
 	d_iov_set(&key_iov, &oid, sizeof(oid));
 	d_iov_set(&val_iov, NULL, 0);
 
 	rc = dbtree_fetch(cont->vc_btr_hdl, BTR_PROBE_EQ,
 			  DAOS_INTENT_DEFAULT, &key_iov, NULL, &val_iov);
-	D_DEBUG(DB_IO, "rc after dbtree fetch %d", rc);
+
 	if (rc == 0) {
 		struct vos_obj_df *obj = val_iov.iov_buf;
 

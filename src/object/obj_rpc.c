@@ -1143,13 +1143,12 @@ int
 obj_reply_get_status(crt_rpc_t *rpc)
 {
 	void *reply = crt_reply_get(rpc);
-	
+
 	switch (opc_get(rpc->cr_opc)) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_TGT_UPDATE:
 	case DAOS_OBJ_RPC_FETCH:
 		{
-			D_DEBUG(DB_IO,"crt_reply: %d, DAOS_OBJ_RPC_UPDATE %d", (int) opc_get(rpc->cr_opc), (int)DAOS_OBJ_RPC_UPDATE);
 			return ((struct obj_rw_out *)reply)->orw_ret;
 		}
 	case DAOS_OBJ_DKEY_RPC_ENUMERATE:

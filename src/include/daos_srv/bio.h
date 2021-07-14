@@ -144,7 +144,7 @@ static inline uint64_t
 bio_iov2len(const struct bio_iov *biov)
 {
 	/** Commenting it off for Block IO */
-	//D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0);
+	/** D_ASSERT(biov->bi_prefix_len == 0 && biov->bi_suffix_len == 0); */
 	return biov->bi_data_len;
 }
 
@@ -610,8 +610,6 @@ int bio_iod_post(struct bio_desc *biod);
 int bio_iod_copy(struct bio_desc *biod, bool zc_copy,
 		 d_sg_list_t *sgls, unsigned int nr_sgl);
 
-// int bio_iod_copy(biod, ioc->ioc_zc_fetch,
-// 				  orw->orw_sgls.ca_arrays, orw->orw_nr);
 /*
  * Helper function to flush memory vectors in SG lists of io descriptor
  *
@@ -702,8 +700,8 @@ int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
  * \param led_state	[IN]	State to set the LED to
  *				(ie identify, off, fault/on)
  * \param reset		[IN]	Reset flag indicates that the led_state
- * 				will be determined by the saved state in
- * 				bio_bdev (bb_led_state)
+ *				will be determined by the saved state in
+ *				bio_bdev (bb_led_state)
  *
  * \return                      Zero on success, negative value on error
  */

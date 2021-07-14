@@ -954,11 +954,9 @@ pf_oit(struct pf_test *pf, struct pf_param *param)
 		rc = daos_oit_list(toh, oids, &oids_nr, &anchor, NULL);
 		D_ASSERTF(rc == 0, "%d\n", rc);
 
-		// D_PRINT("returned %d oids\n", oids_nr);
 		for (i = 0; i < oids_nr; i++) {
 			if (param->pa_oit.verbose) {
-				// D_PRINT("oid[%d] ="DF_OID"\n",
-					// total, DP_OID(oids[i]));
+				;
 			}
 			total++;
 		}
@@ -1360,9 +1358,6 @@ run_one(struct pf_test *ts, struct pf_param *param)
 	if (param->pa_iteration == 0)
 		param->pa_iteration = 1;
 
-	// fprintf(stdout, "Running %s test (iteration=%d)\n",
-		// ts->ts_name, param->pa_iteration);
-
 	start = daos_get_ntime();
 
 	for (i = 0; i < param->pa_iteration; i++) {
@@ -1410,7 +1405,6 @@ run_commands(char *cmds)
 			if (ts_pause)
 				pause_test(ts->ts_name);
 			else
-				// D_PRINT("Running test=%s\n", ts->ts_name);
 				;
 
 			memset(&param, 0, sizeof(param));
@@ -1427,14 +1421,12 @@ run_commands(char *cmds)
 				D_PRINT("%s failed\n", ts->ts_name);
 				return rc;
 			}
-			// D_PRINT("Completed test=%s\n", ts->ts_name);
 			ts = NULL; /* reset */ 
 			continue;
 			D_PRINT("here \n");
 		}
 		code = *cmds;
 		cmds++;
-		// D_PRINT("code %d\n", (int)code);
 
 		if (code == 0) /* finished all the tests */
 			return 0;
