@@ -67,3 +67,56 @@ daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 
 	return dc_task_schedule(task, true);
 }
+
+int
+daos_mgmt_reset_led_state(const char *group, uuid_t devuuid, int rank,
+			  daos_event_t *ev)
+{
+	daos_mgmt_reset_led_state_t	*args;
+	tse_task_t			*task;
+	int				rc;
+
+	DAOS_API_ARG_ASSERT(*args, MGMT_RESET_LED_STATE);
+
+	if (uuid_is_null(devuuid)) {
+		D_ERROR("Device UUID must be non-NULL\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_mgmt_reset_led_state, NULL, ev, &task);
+	if (rc)
+		return rc;
+	args = dc_task_get_args(task);
+	args->grp = group;
+	args->rank = rank;
+	uuid_copy(args->uuid, devuuid);
+
+	return dc_task_schedule(task, true);
+}
+
+int
+daos_mgmt_get_led_state(const char *group, uuid_t devuuid, int rank,
+			int *led_state, daos_event_t *ev)
+{
+	daos_mgmt_get_led_state_t	*args;
+	tse_task_t			*task;
+	int				rc;
+
+	DAOS_API_ARG_ASSERT(*args, MGMT_GET_LED_STATE);
+
+	if (uuid_is_null(devuuid)) {
+		D_ERROR("Device UUID must be non-NULL\n");
+		return -DER_INVAL;
+	}
+
+	rc = dc_task_create(dc_mgmt_get_led_state, NULL, ev, &task);
+	if (rc)
+		return rc;
+	args = dc_task_get_args(task);
+	args->grp = group;
+	args->rank = rank;
+	args->state = led_state;
+	uuid_copy(args->uuid, devuuid);
+
+	return dc_task_schedule(task, true);
+}

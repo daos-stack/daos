@@ -34,9 +34,11 @@ typedef enum {
 	 * compatibility */
 	DAOS_OPC_SET_PARAMS = 3,
 	DAOS_OPC_MGMT_GET_BS_STATE,
+	DAOS_OPC_MGMT_RESET_LED_STATE,
+	DAOS_OPC_MGMT_GET_LED_STATE,
 
 	/** Pool APIs */
-	DAOS_OPC_POOL_CONNECT = 5,
+	DAOS_OPC_POOL_CONNECT = 7,
 	DAOS_OPC_POOL_DISCONNECT,
 	DAOS_OPC_POOL_EXCLUDE,
 	DAOS_OPC_POOL_EXCLUDE_OUT,
@@ -51,7 +53,7 @@ typedef enum {
 	DAOS_OPC_POOL_LIST_CONT,
 
 	/** Container APIs */
-	DAOS_OPC_CONT_CREATE = 18,
+	DAOS_OPC_CONT_CREATE = 20,
 	DAOS_OPC_CONT_OPEN,
 	DAOS_OPC_CONT_CLOSE,
 	DAOS_OPC_CONT_DESTROY,
@@ -72,7 +74,7 @@ typedef enum {
 	DAOS_OPC_CONT_DESTROY_SNAP,
 
 	/** Transaction APIs */
-	DAOS_OPC_TX_OPEN = 37,
+	DAOS_OPC_TX_OPEN = 39,
 	DAOS_OPC_TX_COMMIT,
 	DAOS_OPC_TX_ABORT,
 	DAOS_OPC_TX_OPEN_SNAP,
@@ -80,7 +82,7 @@ typedef enum {
 	DAOS_OPC_TX_RESTART,
 
 	/** Object APIs */
-	DAOS_OPC_OBJ_QUERY_CLASS = 44,
+	DAOS_OPC_OBJ_QUERY_CLASS = 45,
 	DAOS_OPC_OBJ_LIST_CLASS,
 	DAOS_OPC_OBJ_OPEN,
 	DAOS_OPC_OBJ_CLOSE,
@@ -98,7 +100,7 @@ typedef enum {
 	DAOS_OPC_OBJ_LIST_OBJ,
 
 	/** Array APIs */
-	DAOS_OPC_ARRAY_CREATE = 60,
+	DAOS_OPC_ARRAY_CREATE = 62,
 	DAOS_OPC_ARRAY_OPEN,
 	DAOS_OPC_ARRAY_CLOSE,
 	DAOS_OPC_ARRAY_DESTROY,
@@ -109,7 +111,7 @@ typedef enum {
 	DAOS_OPC_ARRAY_SET_SIZE,
 
 	/** KV APIs */
-	DAOS_OPC_KV_OPEN = 69,
+	DAOS_OPC_KV_OPEN = 71,
 	DAOS_OPC_KV_CLOSE,
 	DAOS_OPC_KV_DESTROY,
 	DAOS_OPC_KV_GET,
@@ -281,6 +283,21 @@ typedef struct {
 	uuid_t			uuid;
 	int			*state;
 } daos_mgmt_get_bs_state_t;
+
+/** Reset LED state query args */
+typedef struct {
+	const char		*grp;
+	uuid_t			uuid;
+	int			rank;
+} daos_mgmt_reset_led_state_t;
+
+/** Get LED state query args */
+typedef struct {
+	const char		*grp;
+	uuid_t			uuid;
+	int			rank;
+	int			*state;
+} daos_mgmt_get_led_state_t;
 
 /** pool service stop args */
 typedef struct {

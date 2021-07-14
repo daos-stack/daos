@@ -29,6 +29,8 @@ int dc_cp(tse_task_t *task, void *data);
 int dc_deprecated(tse_task_t *task);
 int dc_mgmt_profile(char *path, int avg, bool start);
 int dc_mgmt_get_bs_state(tse_task_t *task);
+int dc_mgmt_reset_led_state(tse_task_t *task);
+int dc_mgmt_get_led_state(tse_task_t *task);
 
 /** System info */
 struct dc_mgmt_sys_info {

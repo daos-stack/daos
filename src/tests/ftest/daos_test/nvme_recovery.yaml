@@ -60,6 +60,7 @@ daos_tests:
     test_daos_nvme_recovery_4: DAOS_Nvme_Recovery_4
     test_daos_nvme_recovery_5: DAOS_Nvme_Recovery_5
     test_daos_nvme_recovery_6: DAOS_Nvme_Recovery_6
+    test_daos_nvme_recovery_7: DAOS_Nvme_Recovery_7
   daos_test:
     test_daos_nvme_recovery_1: N
     test_daos_nvme_recovery_2: N
@@ -67,6 +68,7 @@ daos_tests:
     test_daos_nvme_recovery_4: N
     test_daos_nvme_recovery_5: N
     test_daos_nvme_recovery_6: N
+    test_daos_nvme_recovery_7: N
   args:
     test_daos_nvme_recovery_1: -u subtests="0"
     test_daos_nvme_recovery_2: -u subtests="1"
@@ -74,4 +76,5 @@ daos_tests:
     test_daos_nvme_recovery_4: -u subtests="3"
     test_daos_nvme_recovery_5: -u subtests="4"
     test_daos_nvme_recovery_6: -u subtests="5"
+    test_daos_nvme_recovery_7: -u subtests="6"
 

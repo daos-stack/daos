@@ -124,3 +124,213 @@ out:
 	tse_task_complete(task, rc);
 	return rc;
 }
+
+struct mgmt_reset_led_state_arg {
+	struct dc_mgmt_sys	*sys;
+	crt_rpc_t		*rpc;
+};
+
+static int
+mgmt_reset_led_state_cp(tse_task_t *task, void *data)
+{
+	struct mgmt_reset_led_state_arg	*arg;
+	struct mgmt_reset_led_state_out	*rl_out;
+	struct mgmt_reset_led_state_in	*rl_in;
+	int				 rc = task->dt_result;
+
+	arg = (struct mgmt_reset_led_state_arg *)data;
+
+	if (rc) {
+		D_ERROR("RPC error while resetting LED state: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	rl_out = crt_reply_get(arg->rpc);
+	D_ASSERT(rl_out != NULL);
+	rc = rl_out->rl_rc;
+	if (rc) {
+		D_ERROR("MGMT_RESET_LED_STATE replied failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+
+	rl_in = crt_req_get(arg->rpc);
+	D_ASSERT(rl_in != NULL);
+
+out:
+	dc_mgmt_sys_detach(arg->sys);
+	crt_req_decref(arg->rpc);
+
+	return rc;
+}
+
+int
+dc_mgmt_reset_led_state(tse_task_t *task)
+{
+	daos_mgmt_reset_led_state_t	*args;
+	crt_endpoint_t			 svr_ep;
+	crt_rpc_t			*rpc_req = NULL;
+	crt_opcode_t			 opc;
+	struct mgmt_reset_led_state_in	*rl_in;
+	struct mgmt_reset_led_state_arg	 cb_args;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+
+	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
+	if (rc != 0) {
+		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
+		D_GOTO(out, rc);
+	}
+
+	svr_ep.ep_grp = cb_args.sys->sy_group;
+	svr_ep.ep_rank = args->rank;
+	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_RESET_LED_STATE, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create(MGMT_RESET_LED_STATE failed, rc: %d.\n",
+			rc);
+		D_GOTO(out_grp, rc);
+	}
+
+	D_ASSERT(rpc_req != NULL);
+	rl_in = crt_req_get(rpc_req);
+	D_ASSERT(rl_in != NULL);
+
+	/** fill in request buffer */
+	uuid_copy(rl_in->rl_uuid, args->uuid);
+
+	crt_req_addref(rpc_req);
+	cb_args.rpc = rpc_req;
+
+	rc = tse_task_register_comp_cb(task, mgmt_reset_led_state_cp, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
+	D_DEBUG(DB_MGMT, "resetting VMD status LED in DAOS system:%s\n",
+		args->grp);
+
+	return daos_rpc_send(rpc_req, task);
+
+out_put_req:
+	crt_req_decref(rpc_req);
+	crt_req_decref(rpc_req);
+
+out_grp:
+	dc_mgmt_sys_detach(cb_args.sys);
+
+out:
+	tse_task_complete(task, rc);
+	return rc;
+}
+
+struct mgmt_get_led_state_arg {
+	struct dc_mgmt_sys	*sys;
+	crt_rpc_t		*rpc;
+	int			*state;
+};
+
+static int
+mgmt_get_led_state_cp(tse_task_t *task, void *data)
+{
+	struct mgmt_get_led_state_arg	*arg;
+	struct mgmt_get_led_state_out	*gl_out;
+	struct mgmt_get_led_state_in	*gl_in;
+	int				 rc = task->dt_result;
+
+	arg = (struct mgmt_get_led_state_arg *)data;
+
+	if (rc) {
+		D_ERROR("RPC error while getting LED state: "DF_RC"\n",
+			DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	gl_out = crt_reply_get(arg->rpc);
+	D_ASSERT(gl_out != NULL);
+	rc = gl_out->gl_rc;
+	if (rc) {
+		D_ERROR("MGMT_GET_LED_STATE replied failed, rc: %d\n", rc);
+		D_GOTO(out, rc);
+	}
+	*arg->state = gl_out->gl_state;
+
+	gl_in = crt_req_get(arg->rpc);
+	D_ASSERT(gl_in != NULL);
+
+out:
+	dc_mgmt_sys_detach(arg->sys);
+	crt_req_decref(arg->rpc);
+
+	return rc;
+}
+
+int
+dc_mgmt_get_led_state(tse_task_t *task)
+{
+	daos_mgmt_get_led_state_t	*args;
+	crt_endpoint_t			 svr_ep;
+	crt_rpc_t			*rpc_req = NULL;
+	crt_opcode_t			 opc;
+	struct mgmt_get_led_state_in	*gl_in;
+	struct mgmt_get_led_state_arg	 cb_args;
+	int				 rc;
+
+	args = dc_task_get_args(task);
+
+	rc = dc_mgmt_sys_attach(args->grp, &cb_args.sys);
+	if (rc != 0) {
+		D_ERROR("cannot attach to DAOS system: %s\n", args->grp);
+		D_GOTO(out, rc);
+	}
+
+	svr_ep.ep_grp = cb_args.sys->sy_group;
+	svr_ep.ep_rank = args->rank;
+	svr_ep.ep_tag = daos_rpc_tag(DAOS_REQ_MGMT, 0);
+	opc = DAOS_RPC_OPCODE(MGMT_GET_LED_STATE, DAOS_MGMT_MODULE,
+			      DAOS_MGMT_VERSION);
+
+	rc = crt_req_create(daos_task2ctx(task), &svr_ep, opc, &rpc_req);
+	if (rc != 0) {
+		D_ERROR("crt_req_create(MGMT_GET_LED_STATE failed, rc: %d.\n",
+			rc);
+		D_GOTO(out_grp, rc);
+	}
+
+	D_ASSERT(rpc_req != NULL);
+	gl_in = crt_req_get(rpc_req);
+	D_ASSERT(gl_in != NULL);
+
+	/** fill in request buffer */
+	uuid_copy(gl_in->gl_uuid, args->uuid);
+
+	crt_req_addref(rpc_req);
+	cb_args.rpc = rpc_req;
+	cb_args.state = args->state;
+
+	rc = tse_task_register_comp_cb(task, mgmt_get_led_state_cp, &cb_args,
+				       sizeof(cb_args));
+	if (rc != 0)
+		D_GOTO(out_put_req, rc);
+
+	D_DEBUG(DB_MGMT, "getting VMD status LED state in DAOS system:%s\n",
+		args->grp);
+
+	return daos_rpc_send(rpc_req, task);
+
+out_put_req:
+	crt_req_decref(rpc_req);
+	crt_req_decref(rpc_req);
+
+out_grp:
+	dc_mgmt_sys_detach(cb_args.sys);
+
+out:
+	tse_task_complete(task, rc);
+	return rc;
+}

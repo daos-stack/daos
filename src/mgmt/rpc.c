@@ -43,6 +43,10 @@ CRT_RPC_DEFINE(mgmt_tgt_map_update, DAOS_ISEQ_MGMT_TGT_MAP_UPDATE,
 
 CRT_RPC_DEFINE(mgmt_get_bs_state, DAOS_ISEQ_MGMT_GET_BS_STATE,
 	       DAOS_OSEQ_MGMT_GET_BS_STATE)
+CRT_RPC_DEFINE(mgmt_reset_led_state, DAOS_ISEQ_MGMT_RESET_LED_STATE,
+	       DAOS_OSEQ_MGMT_RESET_LED_STATE)
+CRT_RPC_DEFINE(mgmt_get_led_state, DAOS_ISEQ_MGMT_GET_LED_STATE,
+	       DAOS_OSEQ_MGMT_GET_LED_STATE)
 
 /* Define for cont_rpcs[] array population below.
  * See MGMT_PROTO_*_RPC_LIST macro definition

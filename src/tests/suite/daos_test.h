@@ -484,6 +484,7 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 				    const char *group);
 int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state);
+int verify_led_state(int state, const char *state_str);
 void save_group_state(void **state);
 
 void trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,

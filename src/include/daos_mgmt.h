@@ -109,6 +109,45 @@ int
 daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 		       int *blobstore_state, daos_event_t *ev);
 
+/**
+ * Reset VMD LED state to off.
+ *
+ * \param[in] group		Name of DAOS system managing the service.
+ * \param[in] devuuid		UUID of the device
+ * \param[in] rank		Rank of the device
+ * \param[in] ev		Completion event. Optional and can be NULL.
+ *				The function will run in blocking mode
+ *				if \a ev is NULL.
+ *
+ * \return			0		Success
+ *
+ */
+int
+daos_mgmt_reset_led_state(const char *group, uuid_t devuuid, int rank,
+			  daos_event_t *ev);
+
+/**
+ * Get VMD LED state.
+ *
+ * \param[in] group		Name of DAOS system managing the service.
+ * \param[in] devuuid		UUID of the device
+ * \param[in] rank		Rank of the device
+ * \param[out] led_state	Will return enum integer that will later be
+ *				converted to the current LED state:
+ *				OFF(0), IDENTIFY(1), FAULT(2), REBUILD(3),
+ *				UNKNOWN(4)
+ * \param[in] ev		Completion event. Optional and can be NULL.
+ *				The function will run in blocking mode
+ *				if \a ev is NULL.
+ *
+ * \return			0		Success
+ *
+ */
+int
+daos_mgmt_get_led_state(const char *group, uuid_t devuuid, int rank,
+			int *led_state, daos_event_t *ev);
+
+
 #if defined(__cplusplus)
 }
 #endif

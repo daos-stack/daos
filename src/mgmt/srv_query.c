@@ -13,6 +13,173 @@
 
 #include "srv_internal.h"
 
+struct led_state_info {
+	uuid_t		devid;
+	int		*state;
+};
+
+static void
+reset_led_state(void *arg)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc;
+	struct led_state_info	*led_state_info = arg;
+
+	D_ASSERT(info != NULL);
+	D_DEBUG(DB_MGMT, "BIO reset led state on xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	bio_set_led_state(bxc, led_state_info->devid, "off", false);
+}
+
+/*
+ * CaRT RPC handler for management service "reset LED state" (C API)
+ *
+ * Reset the VMD status LED for test validation only.
+ */
+int ds_mgmt_reset_led_state(uuid_t devid)
+{
+	struct led_state_info		 led_state_info = { 0 };
+	ABT_thread			 thread;
+	int				 rc;
+
+	if (uuid_is_null(devid)) {
+		D_ERROR("Device UUID is not provided for reset LED state\n");
+		return -DER_INVAL;
+	}
+
+	uuid_copy(led_state_info.devid, devid);
+	/* Create a ULT on the tgt 0 (init xstream) */
+	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:0\n");
+	rc = dss_ult_create(reset_led_state, &led_state_info, DSS_XS_VOS,
+			    0, 0, &thread);
+	if (rc != 0) {
+		D_ERROR("Unable to create a ULT on init xs\n");
+		goto out;
+	}
+
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+
+out:
+	return rc;
+}
+
+void
+ds_mgmt_hdlr_reset_led_state(crt_rpc_t *rpc_req)
+{
+	struct mgmt_reset_led_state_in	*rl_in;
+	struct mgmt_reset_led_state_out	*rl_out;
+	uuid_t				 devid;
+	int				 rc;
+
+
+	rl_in = crt_req_get(rpc_req);
+	D_ASSERT(rl_in != NULL);
+	rl_out = crt_reply_get(rpc_req);
+	D_ASSERT(rl_out != NULL);
+
+	uuid_copy(devid, rl_in->rl_uuid);
+
+	rc = ds_mgmt_reset_led_state(devid);
+
+	uuid_copy(rl_out->rl_uuid, devid);
+	rl_out->rl_rc = rc;
+
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
+}
+
+static void
+get_led_state(void *arg)
+{
+	struct dss_module_info	*info = dss_get_module_info();
+	struct bio_xs_context	*bxc;
+	struct led_state_info	*led_state_info = arg;
+
+	D_ASSERT(info != NULL);
+	D_DEBUG(DB_MGMT, "BIO get led state on xs:%d, tgt:%d\n",
+		info->dmi_xs_id, info->dmi_tgt_id);
+
+	bxc = info->dmi_nvme_ctxt;
+	if (bxc == NULL) {
+		D_ERROR("BIO NVMe context not initialized for xs:%d, tgt:%d\n",
+			info->dmi_xs_id, info->dmi_tgt_id);
+		return;
+	}
+
+	bio_get_led_state(bxc, led_state_info->devid, led_state_info->state);
+}
+
+/*
+ * CaRT RPC handler for management service "get LED state" (C API)
+ *
+ * Get the VMD status LED current state for test validation only.
+ */
+int ds_mgmt_get_led_state(uuid_t devid, int *led_state)
+{
+	struct led_state_info		 led_state_info = { 0 };
+	ABT_thread			 thread;
+	int				 rc;
+
+	if (uuid_is_null(devid)) {
+		D_ERROR("Device UUID is not provided for get LED state\n");
+		return -DER_INVAL;
+	}
+
+	uuid_copy(led_state_info.devid, devid);
+	led_state_info.state = led_state;
+	/* Create a ULT on the tgt 0 (init xstream) */
+	D_DEBUG(DB_MGMT, "Starting ULT on tgt_id:0\n");
+	rc = dss_ult_create(get_led_state, &led_state_info, DSS_XS_VOS,
+			    0, 0, &thread);
+	if (rc != 0) {
+		D_ERROR("Unable to create a ULT on init xs\n");
+		goto out;
+	}
+
+	ABT_thread_join(thread);
+	ABT_thread_free(&thread);
+
+out:
+	return rc;
+}
+
+void
+ds_mgmt_hdlr_get_led_state(crt_rpc_t *rpc_req)
+{
+	struct mgmt_get_led_state_in	*gl_in;
+	struct mgmt_get_led_state_out	*gl_out;
+	uuid_t				 devid;
+	int				 led_state;
+	int				 rc;
+
+
+	gl_in = crt_req_get(rpc_req);
+	D_ASSERT(gl_in != NULL);
+	gl_out = crt_reply_get(rpc_req);
+	D_ASSERT(gl_out != NULL);
+
+	uuid_copy(devid, gl_in->gl_uuid);
+
+	rc = ds_mgmt_get_led_state(devid, &led_state);
+
+	uuid_copy(gl_out->gl_uuid, devid);
+	gl_out->gl_rc = rc;
+	gl_out->gl_state = led_state;
+
+	rc = crt_reply_send(rpc_req);
+	if (rc != 0)
+		D_ERROR("crt_reply_send failed, rc: "DF_RC"\n", DP_RC(rc));
+}
 
 static void
 bs_state_query(void *arg)
@@ -739,7 +906,6 @@ bio_storage_dev_identify(void *arg)
 
 	return 0;
 }
-
 
 int
 ds_mgmt_dev_identify(uuid_t dev_uuid, Ctl__DevIdentifyResp *resp)

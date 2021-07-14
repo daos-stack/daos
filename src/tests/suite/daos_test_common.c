@@ -1085,12 +1085,10 @@ get_pid_of_process(char *host, char *dpid, char *proc)
 		 "ssh %s pgrep %s", host, proc);
 	FILE *fp1 = popen(command, "r");
 
-	print_message("Command= %s\n", command);
 	if (fp1 == NULL)
 		return -DER_INVAL;
 
 	while ((read = getline(&line, &len, fp1)) != -1) {
-		print_message("%s pid = %s", proc, line);
 		strcat(dpid, line);
 	}
 
@@ -1119,14 +1117,12 @@ get_server_config(char *host, char *server_config_file)
 		 "ssh %s ps ux -A | grep %s", host, dpid);
 	FILE *fp = popen(command, "r");
 
-	print_message("Command %s", command);
 	if (fp == NULL) {
 		D_FREE(dpid);
 		return -DER_INVAL;
 	}
 
 	while ((read = getline(&line, &len, fp)) != -1) {
-		print_message("line %s", line);
 		if (strstr(line, "--config") != NULL ||
 		    strstr(line, "-o") != NULL) {
 			conf = false;
@@ -1349,4 +1345,25 @@ int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 	};
 
 	return -DER_TIMEDOUT;
+}
+
+/* TODO Link SPDK vmd.h to verify VMD LED enum states */
+int verify_led_state(int state, const char *state_str)
+{
+	if (strcasecmp(state_str, "OFF") == 0) {
+		if (state == 0/*SPDK_VMD_LED_STATE_OFF*/)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "IDENTIFY") == 0) {
+		if (state == 1/*SPDK_VMD_LED_STATE_IDENTIFY*/)
+			return 0;
+	}
+
+	if (strcasecmp(state_str, "FAULT") == 0) {
+		if (state == 2/*SPDK_VMD_LED_STATE_FAULT*/)
+			return 0;
+	}
+
+	return 1;
 }

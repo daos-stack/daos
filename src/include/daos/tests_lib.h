@@ -99,6 +99,7 @@ typedef struct {
 	char		host[DSS_HOSTNAME_MAX_LEN];
 	int		tgtidx[MAX_TEST_TARGETS_PER_DEVICE];
 	int		n_tgtidx;
+	char		traddr[16];
 }  device_list;
 
 /** Initialize an SGL with a variable number of IOVs and set the IOV buffers
@@ -307,5 +308,28 @@ int dmg_storage_query_device_health(const char *dmg_config_file, char *host,
 int verify_blobstore_state(int state, const char *state_str);
 
 const char *daos_target_state_enum_to_str(int state);
+
+/**
+ * Replace an evicted NVMe SSD or hot-removed SSD with another device.
+ *
+ * \param dmg_config_file [IN]	DMG config file
+ * \param host		  [IN]	Nvme replace on host name provided.
+ * \param old_uuid	  [IN]	UUID of the evicted/hot-removed device.
+ * \param new_uuid	  [IN]	UUID of the new device.
+ */
+int dmg_storage_replace_device(const char *dmg_config_file, char *host,
+			       const uuid_t old_uuid, const uuid_t new_uuid);
+
+/**
+ * Set VMD device LED to identify state (quick blink).
+ *
+ * \param dmg_config_file
+ *		[IN]	DMG config file
+ * \param host	[IN]	Nvme set to faulty on host name provided. Only single
+					disk can be set to fault for now.
+ * \param uuid	[IN]	UUID of the device.
+ */
+int dmg_storage_identify_vmd(const char *dmg_config_file, char *host,
+			     const uuid_t uuid);
 
 #endif /* __DAOS_TESTS_LIB_H__ */
