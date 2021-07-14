@@ -357,12 +357,15 @@ degrade_multi_conts_agg(void **state)
 	daos_obj_id_t	 oids[CONT_PER_POOL] = { 0 };
 	int		 fail_shards[2];
 	d_rank_t	 fail_ranks[4] = { -1 };
+	bool		 parity_checked = false;
 	int		 shards_nr = 2;
 	int		 i;
 	int		 rc;
 
 	if (!test_runable(arg, DEGRADE_RANK_SIZE))
 		return;
+
+	FAULT_INJECTION_REQUIRED();
 
 	fail_shards[0] = 0;
 	fail_shards[1] = 2;
@@ -410,7 +413,15 @@ degrade_multi_conts_agg(void **state)
 						      fail_shards[i]);
 	rebuild_pools_ranks(&args[0], 1, fail_ranks, shards_nr, false);
 
+re_test:
+	if (!parity_checked)
+		daos_debug_set_params(args[0]->group, -1, DMG_KEY_FAIL_LOC,
+			DAOS_FAIL_AGG_BOUNDRY_MOVED | DAOS_FAIL_ONCE, 0, NULL);
+
 	for (i = 0; i < CONT_PER_POOL; i++) {
+		if (parity_checked)
+			args[i]->fail_loc = DAOS_FAIL_PARITY_EPOCH_DIFF |
+					    DAOS_FAIL_ONCE;
 		if ((i % 3) == 0)
 			degrade_ec_verify(args[i], oids[i],
 					  FULL_PARTIAL_UPDATE);
@@ -420,6 +431,14 @@ degrade_multi_conts_agg(void **state)
 			degrade_ec_verify(args[i], oids[i],
 					  PARTIAL_FULL_UPDATE);
 	}
+
+	if (!parity_checked) {
+		daos_debug_set_params(args[0]->group, -1, DMG_KEY_FAIL_LOC, 0,
+				      0, NULL);
+		parity_checked = true;
+		goto re_test;
+	}
+	daos_fail_loc_set(0);
 
 out:
 	for (i = CONT_PER_POOL - 1; i >= 0; i--)

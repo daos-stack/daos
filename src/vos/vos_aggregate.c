@@ -576,6 +576,9 @@ enqueue_rmv_ent(struct agg_merge_window *mw, const struct evt_extent *ext,
 		if ((ext->ex_lo) != rm_ent2->re_rect.rc_ex.ex_hi + 1)
 			continue;
 
+		D_DEBUG(DB_EPC, "Removal record "DF_RECT" is contiguous with "DF_RECT"\n",
+			DP_RECT(&rm_ent->re_rect), DP_RECT(&rm_ent2->re_rect));
+
 		if (d_list_empty(&rm_ent2->re_contained)) {
 			/* Duplicate the entry */
 			rm_ent3 = allocate_rmv_ent(&rm_ent2->re_rect.rc_ex, rm_ent2->re_rect.rc_epc,
@@ -584,6 +587,8 @@ enqueue_rmv_ent(struct agg_merge_window *mw, const struct evt_extent *ext,
 				D_FREE(rm_ent);
 				return NULL;
 			}
+			D_DEBUG(DB_EPC, "Removal record "DF_RECT" duplicated\n",
+				DP_RECT(&rm_ent2->re_rect));
 			d_list_add_tail(&rm_ent3->re_link, &rm_ent2->re_contained);
 		}
 
@@ -603,6 +608,7 @@ prepare_segments(struct agg_merge_window *mw)
 {
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
 	struct agg_phy_ent	*phy_ent = NULL;
+	struct agg_phy_ent	*first = NULL;
 	struct agg_phy_ent	*temp = NULL;
 	struct agg_lgc_ent	*lgc_ent;
 	struct agg_lgc_seg	*lgc_seg;
@@ -621,8 +627,12 @@ prepare_segments(struct agg_merge_window *mw)
 	 * segments (at most mw_lgc_cnt) and truncated segments (at most
 	 * mw_phy_cnt).
 	 */
-	D_ASSERT(mw->mw_lgc_cnt > 0);
+	D_ASSERT(mw->mw_lgc_cnt > 0 || mw->mw_rmv_cnt > 0);
 	D_ASSERT(mw->mw_phy_cnt > 0);
+	io->ic_seg_cnt = 0;
+	if (mw->mw_lgc_cnt == 0)
+		goto process_physical;
+
 	seg_max = MAX((mw->mw_lgc_cnt + mw->mw_phy_cnt), 200);
 	if (io->ic_seg_max < seg_max) {
 		D_REALLOC_ARRAY_NZ(lgc_seg, io->ic_segs, seg_max);
@@ -633,7 +643,6 @@ prepare_segments(struct agg_merge_window *mw)
 		io->ic_seg_max = seg_max;
 	}
 	memset(io->ic_segs, 0, io->ic_seg_max * sizeof(*lgc_seg));
-	io->ic_seg_cnt = 0;
 
 	/* Generate coalesced segments according to visible logical entries */
 	for (i = 0; i < mw->mw_lgc_cnt; i++) {
@@ -685,18 +694,16 @@ prepare_segments(struct agg_merge_window *mw)
 		ent_in->ei_rect.rc_minor_epc = VOS_SUB_OP_MAX;
 	}
 
-	if (mw->mw_csum_support) {
-		cs_len = phy_ent->pe_csum_info.cs_len;
-		cs_type = phy_ent->pe_csum_info.cs_type;
-		chunksize = phy_ent->pe_csum_info.cs_chunksize;
-	}
-
 	io->ic_seg_cnt++;
 	D_ASSERT(io->ic_seg_cnt < io->ic_seg_max);
 
+process_physical:
 	/* Generate truncated segments according to physical entries */
 	d_list_for_each_entry_safe(phy_ent, temp, &mw->mw_phy_ents, pe_link) {
 		struct agg_rmv_ent	*rm_ent;
+
+		if (first == NULL)
+			first = phy_ent; /* Save the first one */
 
 		lgc_seg = &io->ic_segs[io->ic_seg_cnt];
 		ent_in = &lgc_seg->ls_ent_in;
@@ -708,8 +715,6 @@ prepare_segments(struct agg_merge_window *mw)
 			ext.ex_lo += phy_ent->pe_off;
 
 		D_ASSERT(ext.ex_lo <= ext.ex_hi);
-		D_ASSERT(ext.ex_lo <= mw->mw_ext.ex_hi);
-
 		phy_ent->pe_remove = false;
 		if (ext.ex_hi > mw->mw_ext.ex_hi) {
 			/** If a record is covered by a removal record and is
@@ -748,6 +753,7 @@ prepare_segments(struct agg_merge_window *mw)
 		    phy_ent->pe_remove)
 			continue;
 
+		D_ASSERT(ext.ex_lo <= mw->mw_ext.ex_hi);
 		D_ASSERT(ext.ex_hi >= mw->mw_ext.ex_lo);
 
 		lgc_seg->ls_phy_ent = phy_ent;
@@ -772,6 +778,11 @@ prepare_segments(struct agg_merge_window *mw)
 		D_ASSERT(io->ic_seg_cnt <= io->ic_seg_max);
 	}
 	if (mw->mw_csum_support) {
+		D_ASSERT(first != NULL);
+		cs_len = first->pe_csum_info.cs_len;
+		cs_type = first->pe_csum_info.cs_type;
+		chunksize = first->pe_csum_info.cs_chunksize;
+
 		for (i = 0; i < io->ic_seg_cnt; i++) {
 			lgc_seg = &io->ic_segs[i];
 			ent_in = &lgc_seg->ls_ent_in;
@@ -1198,6 +1209,11 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	unsigned int		 i, scm_max;
 	int			 rc = 0;
 
+	if (io->ic_seg_cnt == 0) {
+		/** No logical extent or truncated physical extent (only removals) */
+		return 0;
+	}
+
 	scm_max = MAX(io->ic_seg_cnt, 200);
 	if (io->ic_rsrvd_scm == NULL ||
 	    io->ic_rsrvd_scm->rs_actv_cnt < scm_max) {
@@ -1342,14 +1358,14 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			rect.rc_ex.ex_lo += phy_ent->pe_off;
 
 		D_ASSERT(rect.rc_ex.ex_lo <= rect.rc_ex.ex_hi);
-		D_ASSERT(rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi);
+		D_ASSERT(phy_ent->pe_remove || rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi);
 
 		/*
 		 * The physical entry spans window end, but is fully covered
 		 * in current window, keep it intact.
 		 */
-		if (rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
-						!phy_ent->pe_trunc_head) {
+		if (!phy_ent->pe_remove && rect.rc_ex.ex_hi > mw->mw_ext.ex_hi &&
+		    !phy_ent->pe_trunc_head) {
 			leftovers++;
 			continue;
 		}
@@ -1372,6 +1388,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 			mw->mw_phy_cnt--;
 			continue;
 		}
+
 		/* Update extent start of truncated physical entry */
 		rect.rc_ex.ex_lo = mw->mw_ext.ex_hi + 1;
 		phy_ent->pe_off = rect.rc_ex.ex_lo -

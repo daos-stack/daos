@@ -523,8 +523,10 @@ write_md_cb(tse_task_t *task, void *data)
 
 	rc = tse_task_register_comp_cb(task, free_md_params_cb, &params,
 				       sizeof(params));
-	if (rc != 0)
+	if (rc != 0) {
+		D_FREE(params);
 		return rc;
+	}
 
 	return 0;
 }
@@ -822,6 +824,7 @@ dc_array_open(tse_task_t *task)
 				       sizeof(params));
 	if (rc != 0) {
 		D_ERROR("Failed to register completion cb\n");
+		D_FREE(params);
 		D_GOTO(err_put2, rc);
 	}
 

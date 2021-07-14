@@ -8,6 +8,7 @@
 #define NVMECONTROL_COMMON_H
 
 #include <stdbool.h>
+#include <spdk/nvme_intel.h>
 
 #define BUFLEN 1024
 
@@ -98,9 +99,10 @@ struct ns_entry {
 };
 
 struct health_entry {
-	struct spdk_nvme_health_information_page page;
-	struct spdk_nvme_error_information_entry error_page[256];
-	int					 inflight;
+	struct spdk_nvme_health_information_page	page;
+	struct spdk_nvme_error_information_entry	error_page[256];
+	int						inflight;
+	struct spdk_nvme_intel_smart_information_page	intel_smart_page;
 };
 
 extern struct ctrlr_entry	*g_controllers;

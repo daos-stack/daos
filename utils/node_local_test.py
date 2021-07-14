@@ -835,6 +835,7 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
+    my_env['D_IL_REPORT'] = '2'
     ret = subprocess.run(cmd, env=my_env, check=False)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
@@ -2522,7 +2523,7 @@ def run_in_fg(server, conf):
               pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers {}'.format(pool))
+    print('daos cont list {}'.format(pool))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
@@ -3143,8 +3144,8 @@ def test_alloc_fail(server, conf):
     pool = server.get_test_pool()
 
     cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
-           'pool',
-           'list-containers',
+           'cont',
+           'list',
            pool]
     test_cmd = AllocFailTest(conf, cmd)
 
@@ -3254,14 +3255,14 @@ def main():
             fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.
-    # This is really, really slow so just do list-containers, then
+    # This is really, really slow so just do cont list, then
     # exit again.
     if args.mode == 'server-valgrind':
         server = DaosServer(conf, valgrind=True, test_class='valgrind')
         server.start()
         pools = server.fetch_pools()
         for pool in pools:
-            cmd = ['pool', 'list-containers', pool.id()]
+            cmd = ['cont', 'list', pool.id()]
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)

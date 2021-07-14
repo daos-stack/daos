@@ -32,6 +32,7 @@ import "C"
 
 type containerCmd struct {
 	Create      containerCreateCmd      `command:"create" description:"create a container"`
+	List        containerListCmd        `command:"list" alias:"ls" description:"list all containers in pool"`
 	Destroy     containerDestroyCmd     `command:"destroy" description:"destroy a container"`
 	ListObjects containerListObjectsCmd `command:"list-objects" alias:"list-obj" description:"list all objects in container"`
 	Query       containerQueryCmd       `command:"query" description:"query a container"`
@@ -39,24 +40,24 @@ type containerCmd struct {
 	Clone       containerCloneCmd       `command:"clone" description:"clone a container"`
 	Check       containerCheckCmd       `command:"check" description:"check objects' consistency in a container"`
 
-	ListAttributes  containerListAttributesCmd  `command:"list-attributes" alias:"list-attrs" description:"list container user-defined attributes"`
-	DeleteAttribute containerDeleteAttributeCmd `command:"delete-attribute" alias:"del-attr" description:"delete container user-defined attribute"`
-	GetAttribute    containerGetAttributeCmd    `command:"get-attribute" alias:"get-attr" description:"get container user-defined attribute"`
-	SetAttribute    containerSetAttributeCmd    `command:"set-attribute" alias:"set-attr" description:"set container user-defined attribute"`
+	ListAttributes  containerListAttributesCmd  `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list container user-defined attributes"`
+	DeleteAttribute containerDeleteAttributeCmd `command:"del-attr" alias:"delattr" description:"delete container user-defined attribute"`
+	GetAttribute    containerGetAttributeCmd    `command:"get-attr" alias:"getattr" description:"get container user-defined attribute"`
+	SetAttribute    containerSetAttributeCmd    `command:"set-attr" alias:"setattr" description:"set container user-defined attribute"`
 
-	GetProperty containerGetPropertyCmd `command:"get-property" alias:"get-prop" description:"get container user-defined attribute"`
-	SetProperty containerSetPropertyCmd `command:"set-property" alias:"set-prop" description:"set container user-defined attribute"`
+	GetProperty containerGetPropertyCmd `command:"get-prop" alias:"getprop" description:"get container user-defined attribute"`
+	SetProperty containerSetPropertyCmd `command:"set-prop" alias:"setprop" description:"set container user-defined attribute"`
 
 	GetACL       containerGetACLCmd       `command:"get-acl" description:"get a container's ACL"`
 	OverwriteACL containerOverwriteACLCmd `command:"overwrite-acl" alias:"replace" description:"replace a container's ACL"`
 	UpdateACL    containerUpdateACLCmd    `command:"update-acl" description:"update a container's ACL"`
 	DeleteACL    containerDeleteACLCmd    `command:"delete-acl" description:"delete a container's ACL"`
-	SetOwner     containerSetOwnerCmd     `command:"set-owner" description:"change ownership for a container"`
+	SetOwner     containerSetOwnerCmd     `command:"set-owner" alias:"chown" description:"change ownership for a container"`
 
-	CreateSnapshot   containerSnapshotCreateCmd   `command:"create-snapshot" alias:"create-snap" description:"create container snapshot"`
-	DestroySnapshot  containerSnapshotDestroyCmd  `command:"destroy-snapshot" alias:"destroy-snap" description:"destroy container snapshot"`
-	ListSnapshots    containerSnapshotListCmd     `command:"list-snapshots" alias:"list-snaps" description:"list container snapshots"`
-	RollbackSnapshot containerSnapshotRollbackCmd `command:"rollback" alias:"rb" description:"roll back container to specified snapshot"`
+	CreateSnapshot   containerSnapshotCreateCmd   `command:"create-snap" alias:"snap" description:"create container snapshot"`
+	DestroySnapshot  containerSnapshotDestroyCmd  `command:"destroy-snap" description:"destroy container snapshot"`
+	ListSnapshots    containerSnapshotListCmd     `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
+	RollbackSnapshot containerSnapshotRollbackCmd `command:"rollback" description:"roll back container to specified snapshot"`
 }
 
 type containerBaseCmd struct {
@@ -178,16 +179,17 @@ func (cmd *containerBaseCmd) connectPool(ap *C.struct_cmd_args_s) (func(), error
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	Type        string         `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5"`
-	Path        string         `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   ChunkSizeFlag  `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass ObjClassFlag   `long:"oclass" short:"o" description:"default object class"`
-	Properties  PropertiesFlag `long:"properties" description:"container properties"`
-	Mode        ConsModeFlag   `long:"mode" short:"M" description:"DFS consistency mode"`
-	ACLFile     string         `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User        string         `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group       string         `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
-	ContFlag    ContainerID    `long:"cont" short:"c" description:"container UUID (optional)"`
+	Type        string               `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5"`
+	Path        string               `long:"path" short:"d" description:"container namespace path"`
+	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
+	Properties  CreatePropertiesFlag `long:"properties" description:"container properties"`
+	Label       string               `long:"label" short:"l" description:"container label"`
+	Mode        ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
+	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
+	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	ContFlag    ContainerID          `long:"cont" short:"c" description:"container UUID (optional)"`
 	Args        struct {
 		Container ContainerID `positional-arg-name:"<container UUID (optional)>"`
 	} `positional-args:"yes"`
@@ -238,6 +240,18 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		ap.aclfile = C.CString(cmd.ACLFile)
 		defer freeString(ap.aclfile)
 	}
+
+	if cmd.Label != "" {
+		for key := range cmd.Properties.ParsedProps {
+			if key == "label" {
+				return errors.New("can't use both --label and --properties label:")
+			}
+		}
+		if err := cmd.Properties.AddPropVal("label", cmd.Label); err != nil {
+			return err
+		}
+	}
+
 	if cmd.Properties.props != nil {
 		ap.props = cmd.Properties.props
 	}
@@ -284,13 +298,16 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 			"failed to query new container %s",
 			cmd.contUUID)
 	}
+	if label, set := cmd.Properties.ParsedProps["label"]; set {
+		ci.ContainerLabel = label
+	}
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(ci, nil)
 	}
 
 	var bld strings.Builder
-	if err := printContainerInfo(&bld, ci); err != nil {
+	if err := printContainerInfo(&bld, ci, false); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -400,6 +417,103 @@ func (cmd *existingContainerCmd) getAttr(name string) (*attribute, error) {
 	return getDaosAttribute(cmd.cContHandle, contAttr, name)
 }
 
+type containerListCmd struct {
+	poolBaseCmd
+}
+
+func listContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
+	extra_cont_margin := C.size_t(16)
+
+	// First call gets the current number of containers.
+	var ncont C.daos_size_t
+	rc := C.daos_pool_list_cont(hdl, &ncont, nil, nil)
+	if err := daosError(rc); err != nil {
+		return nil, errors.Wrap(err, "pool list containers failed")
+	}
+
+	// No containers.
+	if ncont == 0 {
+		return nil, nil
+	}
+
+	var cConts *C.struct_daos_pool_cont_info
+	// Extend ncont with a safety margin to account for containers
+	// that might have been created since the first API call.
+	ncont += extra_cont_margin
+	cConts = (*C.struct_daos_pool_cont_info)(C.calloc(C.sizeof_struct_daos_pool_cont_info, ncont))
+	if cConts == nil {
+		return nil, errors.New("calloc() for containers failed")
+	}
+	dpciSlice := (*[1 << 30]C.struct_daos_pool_cont_info)(
+		unsafe.Pointer(cConts))[:ncont:ncont]
+	cleanup := func() {
+		C.free(unsafe.Pointer(cConts))
+	}
+
+	rc = C.daos_pool_list_cont(hdl, &ncont, cConts, nil)
+	if err := daosError(rc); err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	out := make([]*ContainerID, ncont)
+	for i := range out {
+		out[i] = new(ContainerID)
+		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
+		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
+	}
+
+	return out, nil
+}
+
+func printContainers(out io.Writer, contIDs []*ContainerID) {
+	if len(contIDs) == 0 {
+		fmt.Fprintf(out, "No containers.\n")
+		return
+	}
+
+	uuidTitle := "UUID"
+	labelTitle := "Label"
+	titles := []string{uuidTitle, labelTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, id := range contIDs {
+		table = append(table,
+			txtfmt.TableRow{
+				uuidTitle:  id.UUID.String(),
+				labelTitle: id.Label,
+			})
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
+}
+
+func (cmd *containerListCmd) Execute(_ []string) error {
+	cleanup, err := cmd.resolveAndConnect(nil)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	contIDs, err := listContainers(cmd.cPoolHandle)
+	if err != nil {
+		return errors.Wrapf(err,
+			"unable to list containers for pool %s", cmd.PoolID())
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(contIDs, nil)
+	}
+
+	var bld strings.Builder
+	printContainers(&bld, contIDs)
+	cmd.log.Info(bld.String())
+
+	return nil
+}
+
 type containerDestroyCmd struct {
 	existingContainerCmd
 
@@ -428,6 +542,10 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 
 	var rc C.int
 	switch {
+	case cmd.Path != "":
+		cPath := C.CString(cmd.Path)
+		defer freeString(cPath)
+		rc = C.duns_destroy_path(cmd.cPoolHandle, cPath)
 	case cmd.ContainerID().HasUUID():
 		rc = C.daos_cont_destroy(cmd.cPoolHandle,
 			cmd.contUUIDPtr(), goBool2int(cmd.Force), nil)
@@ -437,7 +555,7 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 		rc = C.daos_cont_destroy_by_label(cmd.cPoolHandle,
 			cLabel, goBool2int(cmd.Force), nil)
 	default:
-		return errors.New("no UUID or label for container")
+		return errors.New("no UUID or label or path for container")
 	}
 
 	if err := daosError(rc); err != nil {
@@ -445,6 +563,8 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 			"failed to destroy container %s",
 			cmd.ContainerID())
 	}
+
+	cmd.log.Infof("Successfully destroyed container %s", cmd.ContainerID())
 
 	return nil
 }
@@ -490,7 +610,7 @@ func (cmd *containerStatCmd) Execute(_ []string) error {
 	return nil
 }
 
-func printContainerInfo(out io.Writer, ci *containerInfo) error {
+func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	epochs := ci.SnapshotEpochs()
 	epochStrs := make([]string, *ci.NumSnapshots)
 	for i := uint32(0); i < *ci.NumSnapshots; i++ {
@@ -498,23 +618,30 @@ func printContainerInfo(out io.Writer, ci *containerInfo) error {
 	}
 
 	rows := []txtfmt.TableRow{
-		{"Pool UUID": ci.PoolUUID.String()},
 		{"Container UUID": ci.ContainerUUID.String()},
-		{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
-		{"Latest Persistent Snapshot": fmt.Sprintf("%d", *ci.LatestSnapshot)},
-		{"Highest Aggregated Epoch": fmt.Sprintf("%d", *ci.HighestAggregatedEpoch)},
-		{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
-		{"Snapshot Epochs": strings.Join(epochStrs, ",")},
-		{"Container Type": ci.Type},
 	}
+	if ci.ContainerLabel != "" {
+		rows = append(rows, txtfmt.TableRow{"Container Label": ci.ContainerLabel})
+	}
+	rows = append(rows, txtfmt.TableRow{"Container Type": ci.Type})
 
-	if ci.ObjectClass != "" {
-		rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
-	}
-	if ci.ChunkSize > 0 {
-		rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
-	}
+	if verbose {
+		rows = append(rows, []txtfmt.TableRow{
+			{"Pool UUID": ci.PoolUUID.String()},
+			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
+			{"Latest Persistent Snapshot": fmt.Sprintf("%d", *ci.LatestSnapshot)},
+			{"Highest Aggregated Epoch": fmt.Sprintf("%d", *ci.HighestAggregatedEpoch)},
+			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
+			{"Snapshot Epochs": strings.Join(epochStrs, ",")},
+		}...)
 
+		if ci.ObjectClass != "" {
+			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
+		}
+		if ci.ChunkSize > 0 {
+			rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
+		}
+	}
 	_, err := fmt.Fprintln(out, txtfmt.FormatEntity("", rows))
 	return err
 }
@@ -523,6 +650,7 @@ type containerInfo struct {
 	dci                    C.daos_cont_info_t
 	PoolUUID               *uuid.UUID `json:"pool_uuid"`
 	ContainerUUID          *uuid.UUID `json:"container_uuid"`
+	ContainerLabel         string     `json:"container_label,omitempty"`
 	LatestSnapshot         *uint64    `json:"latest_snapshot"`
 	RedundancyFactor       *uint32    `json:"redundancy_factor"`
 	NumSnapshots           *uint32    `json:"num_snapshots"`
@@ -591,12 +719,16 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 			cmd.contUUID)
 	}
 
+	if cmd.contLabel != "" {
+		ci.ContainerLabel = cmd.contLabel
+	}
+
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(ci, nil)
 	}
 
 	var bld strings.Builder
-	if err := printContainerInfo(&bld, ci); err != nil {
+	if err := printContainerInfo(&bld, ci, true); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -972,7 +1104,7 @@ func (f *ContainerID) Complete(match string) (comps []flags.Completion) {
 	}
 	defer cleanup()
 
-	contIDs, err := poolListContainers(pf.cPoolHandle)
+	contIDs, err := listContainers(pf.cPoolHandle)
 	if err != nil {
 		return
 	}
