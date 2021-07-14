@@ -33,6 +33,7 @@ class POSIXStatTest(IorTestBase):
         time.
 
         :avocado: tags=all,full_regression
+        :avocado: tags=small
         :avocado: tags=stat_parameters
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
@@ -43,7 +44,6 @@ class POSIXStatTest(IorTestBase):
         self.add_container(pool=self.pool)
 
         i = 1
-
         for block_size in block_sizes:
             self.log.info("Block Size = %s", block_size)
             self.ior_cmd.block_size.update(block_size)
@@ -60,7 +60,6 @@ class POSIXStatTest(IorTestBase):
             for output, _ in task.iter_buffers():
                 cmd_output = "\n".join(
                     [line.decode("utf-8") for line in output])
-            self.log.debug("## date cmd_output = {}".format(cmd_output))
             current_epoch = cmd_output.split()[-1]
 
             test_file_suffix = "_{}".format(i)
@@ -68,10 +67,11 @@ class POSIXStatTest(IorTestBase):
 
             # Run ior command.
             try:
-                self.run_ior_with_pool(timeout=200, stop_dfuse=False,
-                test_file_suffix=test_file_suffix)
+                self.run_ior_with_pool(
+                    timeout=200, stop_dfuse=False, create_pool=False,
+                    create_cont=False, test_file_suffix=test_file_suffix)
             except TestFail:
-                self.log.info("ior failed! " + str(self.ior_cmd))
+                self.log.info("ior command failed!")
 
             # Get epoch of the created file.
             creation_epoch = -1
@@ -83,7 +83,6 @@ class POSIXStatTest(IorTestBase):
             for output, _ in task.iter_buffers():
                 cmd_output = "\n".join(
                     [line.decode("utf-8") for line in output])
-            self.log.debug("## stat cmd_output = {}".format(cmd_output))
 
             # The output may contain some warning messages, so use split to get
             # the value we want.
