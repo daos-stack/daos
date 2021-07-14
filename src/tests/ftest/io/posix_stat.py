@@ -40,11 +40,13 @@ class POSIXStatTest(IorTestBase):
         :avocado: tags=stat_parameters
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
-        testfile_path = "/tmp/daos_dfuse/testfile"
+        testfile_path_base = "/tmp/daos_dfuse/testfile"
         error_list = []
 
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)
+
+        i = 1
 
         for block_size in block_sizes:
             self.log.info("Block Size = %s", block_size)
@@ -65,9 +67,13 @@ class POSIXStatTest(IorTestBase):
             self.log.debug("## date cmd_output = {}".format(cmd_output))
             current_epoch = cmd_output.split()[-1]
 
+            test_file_suffix = "_{}".format(i)
+            i += 1
+
             # Run ior command.
             try:
-                self.run_ior_with_pool(timeout=200, stop_dfuse=False)
+                self.run_ior_with_pool(timeout=200, stop_dfuse=False,
+                test_file_suffix=test_file_suffix)
             except TestFail:
                 self.log.info("ior failed! " + str(self.ior_cmd))
 
@@ -75,6 +81,7 @@ class POSIXStatTest(IorTestBase):
             creation_epoch = -1
             cmd_output = ""
             # As in date command, run stat command in the client node.
+            testfile_path = testfile_path_base + test_file_suffix
             task = run_task(
                 self.hostlist_clients, "stat -c%Z {}".format(testfile_path))
             for output, _ in task.iter_buffers():
