@@ -168,10 +168,10 @@ daos_cont_create_by_label(daos_handle_t poh, const char *label,
 			  daos_event_t *ev);
 
 /**
- * Open an existing container identified by a label or UUID string. Upon successful
- * completion, \a coh and \a info, both of which shall be allocated by the
- * caller, return the container handle and the latest container information
- * respectively.
+ * Open an existing container identified by \a cont, a label or UUID string.
+ * Upon successful completion, \a coh and \a info, both of which shall be
+ * allocated by the caller, return the container handle and the latest
+ * container information respectively.
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in]	cont	Label or UUID string to identify the container.
@@ -213,7 +213,7 @@ int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev);
 
 /**
- * Destroy a container identified by \a cont, label or UUID string associated
+ * Destroy a container identified by \a cont, a label or UUID string associated
  * with the container. All objects within this container will be destroyed.
  * If there is at least one container opener, and \a force is set to zero, then
  * the operation completes with DER_BUSY. Otherwise, the container is destroyed
@@ -683,12 +683,12 @@ daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
 		if (__builtin_types_compatible_p(typeof(co), char *) ||	\
 		    __builtin_types_compatible_p(typeof(co),		\
 						 const char *)) {	\
-			__str = (const char *)co;			\
+			__str = (const char *)(co);			\
 		} else {						\
-			uuid_unparse((unsigned char *)co, _str);	\
+			uuid_unparse((unsigned char *)(co), _str);	\
 			__str = _str;					\
 		}							\
-		_ret = daos_cont_open2(poh, __str, __VA_ARGS__);	\
+		_ret = daos_cont_open2((poh), __str, __VA_ARGS__);	\
 		_ret;							\
 	})
 
@@ -703,12 +703,12 @@ daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
 		if (__builtin_types_compatible_p(typeof(co), char *) ||	\
 		    __builtin_types_compatible_p(typeof(co),		\
 						 const char *)) {	\
-			__str = (const char *)co;			\
+			__str = (const char *)(co);			\
 		} else {						\
-			uuid_unparse((unsigned char *)co, _str);	\
+			uuid_unparse((unsigned char *)(co), _str);	\
 			__str = _str;					\
 		}							\
-		_ret = daos_cont_destroy2(poh, __str, __VA_ARGS__);	\
+		_ret = daos_cont_destroy2((poh), __str, __VA_ARGS__);	\
 		_ret;							\
 	})
 
