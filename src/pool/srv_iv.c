@@ -34,14 +34,12 @@ pool_iv_prop_ent_size(int nr_aces, int nr_ranks)
 {
 	uint32_t acl_size;
 	uint32_t svc_size;
-	uint32_t pd_size;
 
 	/* Calculate pool_iv_buf size */
 	acl_size = roundup(offsetof(struct daos_acl, dal_ace[nr_aces]), 8);
 	svc_size = roundup(nr_ranks * sizeof(d_rank_t), 8);
-	pd_size = roundup(sizeof(struct policy_desc_t), 8);
 
-	return sizeof(struct pool_iv_entry) + acl_size + svc_size + pd_size;
+	return sizeof(struct pool_iv_entry) + acl_size + svc_size;
 }
 
 static int

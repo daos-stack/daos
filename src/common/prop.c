@@ -52,20 +52,41 @@ daos_prop_has_str(struct daos_prop_entry *entry)
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
 	case DAOS_PROP_PO_POLICY:
-		D_FREE(entry->dpe_str);
-		break;
+		return true;
+	}
+	return false;
+}
+
+bool
+daos_prop_has_ptr(struct daos_prop_entry *entry)
+{
+	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
-		if (entry->dpe_val_ptr)
-			D_FREE(entry->dpe_val_ptr);
-		break;
-	case DAOS_PROP_PO_SVC_LIST:
+		return true;
+	}
+	return false;
+}
+
+static void
+daos_prop_entry_free_value(struct daos_prop_entry *entry)
+{
+	if (daos_prop_has_str(entry)) {
+		D_FREE(entry->dpe_str);
+		return;
+	}
+
+	if (daos_prop_has_ptr(entry)) {
+		D_FREE(entry->dpe_val_ptr);
+		return;
+	}
+
+	if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST)
 		if (entry->dpe_val_ptr)
 			d_rank_list_free(
 				(d_rank_list_t *)entry->dpe_val_ptr);
 }
-
 void
 daos_prop_fini(daos_prop_t *prop)
 {
