@@ -517,6 +517,8 @@ enum daos_io_flags {
 	DIOF_FOR_MIGRATION	= 0x40,
 	/* For EC aggregation. */
 	DIOF_FOR_EC_AGG		= 0x80,
+	/* The operation is for EC snapshot recovering */
+	DIOF_EC_RECOV_SNAP	= 0x100,
 };
 
 /**
@@ -568,6 +570,8 @@ struct daos_recx_ep_list {
 	uint32_t		 re_nr;
 	/** #total items (capacity) in re_items array */
 	uint32_t		 re_total;
+	/** recovery from snapshot flag */
+	bool			 re_snapshot;
 	/** epoch valid flag, re_items' re_ep can be ignored when it is false */
 	bool			 re_ep_valid;
 	struct daos_recx_ep	*re_items;
@@ -576,7 +580,8 @@ struct daos_recx_ep_list {
 static inline void
 daos_recx_ep_free(struct daos_recx_ep_list *list)
 {
-	D_FREE(list->re_items);
+	if (list->re_items)
+		D_FREE(list->re_items);
 	list->re_nr = 0;
 	list->re_total = 0;
 }
@@ -618,22 +623,39 @@ daos_recx_ep_add(struct daos_recx_ep_list *list, struct daos_recx_ep *recx)
 	return 0;
 }
 
-static inline void
-daos_recx_ep_list_set_ep_valid(struct daos_recx_ep_list *lists, unsigned int nr)
+static inline struct daos_recx_ep_list *
+daos_recx_ep_lists_dup(struct daos_recx_ep_list *lists, unsigned int nr)
 {
-	unsigned int i;
+	struct daos_recx_ep_list	*dup_lists;
+	struct daos_recx_ep_list	*dup_list, *list;
+	unsigned int			 i;
 
-	for (i = 0; i < nr; i++)
-		lists[i].re_ep_valid = 1;
+	if (lists == NULL || nr == 0)
+		return NULL;
+
+	D_ALLOC_ARRAY(dup_lists, nr);
+	if (dup_lists == NULL)
+		return NULL;
+
+	for (i = 0; i < nr; i++) {
+		list = &lists[i];
+		dup_list = &dup_lists[i];
+		*dup_list = *list;
+		dup_list->re_items = NULL;
+		if (list->re_nr == 0)
+			continue;
+		D_ALLOC_ARRAY(dup_list->re_items, list->re_nr);
+		if (dup_list->re_items == NULL) {
+			daos_recx_ep_list_free(dup_lists, nr);
+			return NULL;
+		}
+		memcpy(dup_list->re_items, list->re_items,
+		       list->re_nr * sizeof(*list->re_items));
+	}
+
+	return dup_lists;
 }
 
-static inline bool
-daos_recx_ep_list_ep_valid(struct daos_recx_ep_list *list)
-{
-	return (list->re_ep_valid == 1);
-}
-
-/** Query the highest and lowest recx in the recx_ep_list */
 static inline void
 daos_recx_ep_list_hilo(struct daos_recx_ep_list *list, daos_recx_t *hi_ptr,
 		       daos_recx_t *lo_ptr)
@@ -678,20 +700,22 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	unsigned int			 i, j;
 
 	if (lists == NULL || nr == 0) {
-		D_PRINT("empty daos_recx_ep_list.\n");
+		D_ERROR("empty daos_recx_ep_list.\n");
 		return;
 	}
 	for (i = 0; i < nr; i++) {
 		list = &lists[i];
-		D_PRINT("daos_recx_ep_list[%d], nr %d,total %d,ep_valid %d:\n",
-			i, list->re_nr, list->re_total, list->re_ep_valid);
+		D_ERROR("daos_recx_ep_list[%d], nr %d, total %d, "
+			"re_ep_valid %d, re_snapshot %d:\n",
+			i, list->re_nr, list->re_total, list->re_ep_valid,
+			list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_PRINT("[["DF_U64","DF_U64"], "DF_X64"]  ",
+			D_ERROR("[["DF_X64","DF_X64"], "DF_X64"]  ",
 				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
 				recx_ep->re_ep);
 		}
-		D_PRINT("\n");
+		D_ERROR("\n");
 	}
 }
 
