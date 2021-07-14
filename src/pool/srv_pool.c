@@ -2671,7 +2671,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_query_in   *in = crt_req_get(rpc);
 	struct pool_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
-	struct pool_buf		*map_buf = NULL;
+	struct pool_buf	       *map_buf;
 	uint32_t		map_version;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
@@ -2720,7 +2720,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	/* read optional properties */
 	rc = pool_prop_read(&tx, svc, in->pqi_query_bits, &prop);
 	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+		D_GOTO(out_lock, rc);
 	out->pqo_prop = prop;
 
 	if (DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY) && prop != NULL) {
@@ -2730,14 +2730,14 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 		D_ALLOC_PTR(iv_prop);
 		if (iv_prop == NULL)
-			D_GOTO(out_map_version, rc = -DER_NOMEM);
+			D_GOTO(out_lock, rc = -DER_NOMEM);
 
 		rc = ds_pool_iv_prop_fetch(svc->ps_pool, iv_prop);
 		if (rc) {
 			D_ERROR("ds_pool_iv_prop_fetch failed "DF_RC"\n",
 				DP_RC(rc));
 			daos_prop_free(iv_prop);
-			D_GOTO(out_map_version, rc);
+			D_GOTO(out_lock, rc);
 		}
 
 		for (i = 0; i < prop->dpp_nr; i++) {
@@ -2798,36 +2798,36 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		daos_prop_free(iv_prop);
 		if (rc) {
 			D_ERROR("iv_prop verify failed "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out_map_version, rc);
+			D_GOTO(out_lock, rc);
 		}
 	}
 
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(out_map_version, rc);
-	}
 
-	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
-				      in->pqi_map_bulk, &out->pqo_map_buf_size);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
-out_map_version:
-	out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
-	if (map_buf)
-		D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-out_svc:
-	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
+				      in->pqi_map_bulk, &out->pqo_map_buf_size);
+	D_FREE(map_buf);
+	if (rc != 0)
+		goto out_svc;
+
 	/* See comment above, rebuild doesn't connect the pool */
-	if (rc == 0 && (in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
+	if ((in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
 	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
 					    &out->pqo_space);
+
+out_svc:
+	out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
 	out->pqo_op.po_rc = rc;
@@ -3917,7 +3917,7 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	if (replacement.rl_nr > 0)
 		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replacement,
 				       ds_rsvc_get_md_cap());
-	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed);
+	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed, false /* stop */);
 	/** `replacement.rl_ranks` is not allocated and shouldn't be freed **/
 	D_FREE(failed.rl_ranks);
 
@@ -4396,6 +4396,7 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 	bool				updated;
 	int				rc;
 	char				*env;
+	uint64_t			delay = 0;
 
 	rc = pool_svc_update_map_internal(svc, opc, exclude_rank, &target_list,
 					  list, hint, &updated, map_version,
@@ -4441,11 +4442,14 @@ pool_svc_update_map(struct pool_svc *svc, crt_opcode_t opc, bool exclude_rank,
 		D_GOTO(out, rc);
 	}
 
+	if (daos_fail_check(DAOS_REBUILD_DELAY))
+		delay = 5;
+
 	D_DEBUG(DF_DSMS, "map ver %u/%u\n", map_version ? *map_version : -1,
 		tgt_map_ver);
 	if (tgt_map_ver != 0) {
 		rc = ds_rebuild_schedule(svc->ps_pool, tgt_map_ver,
-					 &target_list, op, 0);
+					 &target_list, op, delay);
 		if (rc != 0) {
 			D_ERROR("rebuild fails rc: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
@@ -5543,7 +5547,7 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 
 	case POOL_REPLICAS_REMOVE:
 		rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_POOL, &id, ranks,
-					     &out->pmo_hint);
+					     true /* stop */, &out->pmo_hint);
 		break;
 
 	default:

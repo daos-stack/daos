@@ -191,7 +191,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				engine.NewConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
@@ -364,7 +365,8 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			dispatched := &eventsDispatched{cancel: cancel}
 			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
@@ -379,7 +381,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 					signalsSent.Store(idx, sig)
 					// simulate process exit which will call
 					// onInstanceExit handlers.
-					svc.harness.instances[idx].exit(context.TODO(),
+					svc.harness.instances[idx].(*EngineInstance).exit(context.TODO(),
 						common.NormalExit)
 				}
 				trc.SignalErr = tc.signalErr
@@ -578,7 +580,8 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
@@ -709,7 +712,8 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
@@ -846,7 +850,8 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
