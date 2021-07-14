@@ -2139,6 +2139,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	struct daos_shard_tgt		*tgts = NULL;
 	uint32_t			 tgt_cnt;
 	uint32_t			 opc = opc_get(rpc->cr_opc);
+	uint32_t			 dtx_flags = 0;
 	struct dtx_epoch		 epoch;
 	int				 rc;
 
@@ -2187,6 +2188,8 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
+
+		dtx_flags |= DTX_RESEND;
 	}
 
 	/* Inject failure for test to simulate the case of lost some
@@ -2215,12 +2218,13 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 	epoch.oe_first = orw->orw_epoch_first;
 	epoch.oe_flags = orf_to_dtx_epoch_flags(orw->orw_flags);
 
+	if (orw->orw_flags & ORF_DTX_SYNC)
+		dtx_flags |= DTX_SYNC;
+
 	rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
 		       orw->orw_map_ver, &orw->orw_oid,
 		       orw->orw_dti_cos.ca_arrays,
-		       orw->orw_dti_cos.ca_count,
-		       (orw->orw_flags & ORF_DTX_SYNC) ? DTX_SYNC : 0,
-		       mbs, &dth);
+		       orw->orw_dti_cos.ca_count, dtx_flags, mbs, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for update "DF_RC".\n",
 			DP_UOID(orw->orw_oid), DP_RC(rc));
@@ -2268,7 +2272,7 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 			D_GOTO(comp, rc = -DER_IO);
 
 		/* No need re-exec local update */
-		if (exec_arg->flags & ORF_RESEND)
+		if (dlh != NULL && dlh->dlh_handle.dth_prepared)
 			goto comp;
 
 		/* XXX: For non-solo DTX, leader and non-leader will make each
@@ -2485,15 +2489,17 @@ re_fetch:
 	if (orw->orw_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
-again:
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
-		daos_epoch_t		e = 0;
+		daos_epoch_t		 e;
 		struct obj_pool_metrics	*opm;
 
+		dtx_flags |= DTX_RESEND;
+
+again1:
 		opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
 		d_tm_inc_counter(opm->opm_update_resent, 1);
-
+		e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
 		switch (rc) {
@@ -2515,6 +2521,7 @@ again:
 		D_GOTO(out, rc);
 	}
 
+again2:
 	if (orw->orw_iod_array.oia_oiods != NULL && split_req == NULL) {
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
@@ -2559,7 +2566,9 @@ again:
 	 */
 
 	if (flags & ORF_RESEND)
-		dtx_flags |= DTX_RESEND;
+		dtx_flags |= DTX_PREPARED;
+	else
+		dtx_flags &= ~DTX_PREPARED;
 
 	rc = dtx_leader_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 1,
 			      version, &orw->orw_oid, dti_cos, dti_cos_cnt,
@@ -2601,7 +2610,7 @@ again:
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
 			d_tm_inc_counter(m->opm_update_restart, 1);
-			goto again;
+			goto again2;
 		}
 
 		/* Standalone fetches do not get -DER_TX_RESTART. */
@@ -2611,7 +2620,7 @@ again:
 	case -DER_AGAIN:
 		orw->orw_flags |= ORF_RESEND;
 		need_abort = true;
-		goto again;
+		goto again1;
 	default:
 		break;
 	}
@@ -3158,6 +3167,7 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	struct obj_punch_in		*opi;
 	struct dtx_memberships		*mbs = NULL;
 	struct daos_shard_tgt		*tgts = NULL;
+	uint32_t			 dtx_flags = 0;
 	uint32_t			 tgt_cnt;
 	struct dtx_epoch		 epoch;
 	int				 rc;
@@ -3192,6 +3202,8 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 
 		if (rc < 0 && rc != -DER_NONEXIST)
 			D_GOTO(out, rc);
+
+		dtx_flags |= DTX_RESEND;
 	}
 
 	tgts = opi->opi_shard_tgts.ca_arrays;
@@ -3208,13 +3220,14 @@ ds_obj_tgt_punch_handler(crt_rpc_t *rpc)
 	epoch.oe_first = epoch.oe_value; /* unused for TGT_PUNCH */
 	epoch.oe_flags = orf_to_dtx_epoch_flags(opi->opi_flags);
 
+	if (opi->opi_flags & ORF_DTX_SYNC)
+		dtx_flags |= DTX_SYNC;
+
 	/* Start the local transaction */
 	rc = dtx_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
 		       opi->opi_map_ver, &opi->opi_oid,
 		       opi->opi_dti_cos.ca_arrays,
-		       opi->opi_dti_cos.ca_count,
-		       (opi->opi_flags & ORF_DTX_SYNC) ? DTX_SYNC : 0,
-		       mbs, &dth);
+		       opi->opi_dti_cos.ca_count, dtx_flags, mbs, &dth);
 	if (rc != 0) {
 		D_ERROR(DF_UOID": Failed to start DTX for punch "DF_RC".\n",
 			DP_UOID(opi->opi_oid), DP_RC(rc));
@@ -3303,7 +3316,7 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 			D_GOTO(comp, rc = -DER_IO);
 
-		if (exec_arg->flags & ORF_RESEND)
+		if (dlh != NULL && dlh->dlh_handle.dth_prepared)
 			goto comp;
 
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc,
@@ -3392,11 +3405,14 @@ ds_obj_punch_handler(crt_rpc_t *rpc)
 	if (opi->opi_flags & ORF_DTX_SYNC)
 		dtx_flags |= DTX_SYNC;
 
-again:
 	/* Handle resend. */
 	if (opi->opi_flags & ORF_RESEND) {
-		daos_epoch_t	e = 0;
+		daos_epoch_t	e;
 
+		dtx_flags |= DTX_RESEND;
+
+again1:
+		e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &opi->opi_dti,
 				       &e, &version);
 		switch (rc) {
@@ -3418,6 +3434,7 @@ again:
 		goto cleanup;
 	}
 
+again2:
 	/* For leader case, we need to find out the potential conflict
 	 * (or share the same non-committed object/dkey) DTX(s) in the
 	 * CoS (committable) cache, piggyback them via the dispdatched
@@ -3448,7 +3465,9 @@ again:
 	 */
 
 	if (flags & ORF_RESEND)
-		dtx_flags |= DTX_RESEND;
+		dtx_flags |= DTX_PREPARED;
+	else
+		dtx_flags &= ~DTX_PREPARED;
 
 	rc = dtx_leader_begin(ioc.ioc_vos_coh, &opi->opi_dti, &epoch, 1,
 			      version, &opi->opi_oid, dti_cos, dti_cos_cnt,
@@ -3478,11 +3497,11 @@ again:
 		opi->opi_epoch = crt_hlc_get();
 		opi->opi_flags &= ~ORF_RESEND;
 		flags = 0;
-		goto again;
+		goto again2;
 	case -DER_AGAIN:
 		opi->opi_flags |= ORF_RESEND;
 		need_abort = true;
-		goto again;
+		goto again1;
 	default:
 		break;
 	}
@@ -4166,6 +4185,8 @@ ds_obj_dtx_follower(crt_rpc_t *rpc, struct obj_io_context *ioc)
 		/* Do nothing if 'prepared' or 'committed'. */
 		if (rc1 == -DER_ALREADY || rc1 == 0)
 			D_GOTO(out, rc = 0);
+
+		dtx_flags |= DTX_RESEND;
 	}
 
 	/* Refuse any modification with old epoch. */
@@ -4242,7 +4263,7 @@ obj_obj_dtx_leader(struct dtx_leader_handle *dlh, void *arg, int idx,
 
 	/* handle local operation */
 	if (idx == -1) {
-		if (!(exec_arg->flags & ORF_RESEND)) {
+		if (!dlh->dlh_handle.dth_prepared) {
 			struct obj_io_context		*ioc = dca->dca_ioc;
 			struct daos_cpd_disp_ent	*dcde;
 			struct daos_cpd_sub_head	*dcsh;
@@ -4384,8 +4405,10 @@ ds_obj_dtx_leader_ult(void *arg)
 	D_ASSERT(dcsh->dcsh_epoch.oe_value != 0);
 	D_ASSERT(dcsh->dcsh_epoch.oe_value != DAOS_EPOCH_MAX);
 
-again:
 	if (oci->oci_flags & ORF_RESEND) {
+		dtx_flags |= DTX_RESEND;
+
+again:
 		/* For distributed transaction, the 'ORF_RESEND' may means
 		 * that the DTX has been restarted with newer epoch.
 		 */
@@ -4457,7 +4480,9 @@ again:
 	if (tgt_cnt <= 1 && dcde->dcde_write_cnt <= 1)
 		dtx_flags |= DTX_SOLO;
 	if (flags & ORF_RESEND)
-		dtx_flags |= DTX_RESEND;
+		dtx_flags |= DTX_PREPARED;
+	else
+		dtx_flags &= ~DTX_PREPARED;
 
 	rc = dtx_leader_begin(dca->dca_ioc->ioc_vos_coh, &dcsh->dcsh_xid,
 			      &dcsh->dcsh_epoch, dcde->dcde_write_cnt,
