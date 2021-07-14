@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.103
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -379,11 +379,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_common_pmem.so
 %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
-%{_libdir}/python3/site-packages/storage_estimator/*.py
-%dir %{_libdir}/python3/site-packages/storage_estimator
-%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
-%dir %{_libdir}/python3/site-packages/storage_estimator/__pycache__
-%{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
+%{python3_sitearch}/storage_estimator/*.py
+%dir %{python3_sitearch}/storage_estimator
+%if (0%{?rhel} >= 7)
+%dir %{python3_sitearch}/storage_estimator/__pycache__
+%{python3_sitearch}/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
@@ -406,17 +406,17 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
-%dir %{_libdir}/python3/site-packages/pydaos
-%{_libdir}/python3/site-packages/pydaos/*.py
-%dir %{_libdir}/python3/site-packages/pydaos/raw
-%{_libdir}/python3/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
-%dir %{_libdir}/python3/site-packages/pydaos/__pycache__
-%{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
-%dir %{_libdir}/python3/site-packages/pydaos/raw/__pycache__
-%{_libdir}/python3/site-packages/pydaos/raw/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos
+%{python3_sitearch}/pydaos/*.py
+%dir %{python3_sitearch}/pydaos/raw
+%{python3_sitearch}/pydaos/raw/*.py
+%if (0%{?rhel} >= 7)
+%dir %{python3_sitearch}/pydaos/__pycache__
+%{python3_sitearch}/pydaos/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos/raw/__pycache__
+%{python3_sitearch}/pydaos/raw/__pycache__/*.pyc
 %endif
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim.so
+%{python3_sitearch}/pydaos/pydaos_shim.so
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos_control.yml
@@ -472,8 +472,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Mon Jul 13 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-3
+* Wed Jul 14 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-4
 - Add DAOS serialization library that requires hdf5
+
+* Tue Jul 13 2021  Maureen Jean <maureen.jean@intel.com> 1.3.103-3
+- Add python modules to python3.6 site-packages
 
 * Mon Jul 12 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.103-2
 - Update to mercury release v2.0.1
@@ -490,7 +493,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Fri Jun 25 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.102-4
 - Add libuuid-devel back as a requirement of daos-devel
 
-* Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+* Wed Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
 - Update raft to pick up Pre-Vote
 
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
