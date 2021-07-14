@@ -177,8 +177,7 @@ open_retry:
 		if (rc)
 			D_GOTO(unlock, rc);
 	}
-	// D_DEBUG(DB_IO, "oid: "DF_UOID"\n", DP_UOID(shard->do_id));
-	
+
 	if (rc == 0) {
 		/* hold the object shard */
 		obj_shard_addref(obj_shard);
@@ -2473,7 +2472,7 @@ shard_io(tse_task_t *task, struct shard_auxi_args *shard_auxi)
 	int				 rc;
 
 	D_ASSERT(obj != NULL);
-	D_DEBUG(DB_IO," object shard open %d", (int) shard_auxi->shard);
+	D_DEBUG(DB_IO, "object shard open %d", (int) shard_auxi->shard);
 	rc = obj_shard_open(obj, shard_auxi->shard, shard_auxi->map_ver,
 			    &obj_shard);
 	if (rc != 0) {
@@ -2525,7 +2524,7 @@ shard_io_task(tse_task_t *task)
 			return tse_task_reinit(task);
 	}
 
-	D_DEBUG(DB_IO,"Open object shard %d", (int)shard_auxi->shard);
+	D_DEBUG(DB_IO, "Open object shard %d", (int)shard_auxi->shard);
 	return shard_io(task, shard_auxi);
 }
 

@@ -182,8 +182,8 @@ obj_rw_reply(struct obj_io_context *ioc, crt_rpc_t *rpc, int status,
 	}
 
 	if (orwo->orw_iod_csums.ca_arrays != NULL) {
-			D_FREE(orwo->orw_iod_csums.ca_arrays);
-			orwo->orw_iod_csums.ca_count = 0;
+		D_FREE(orwo->orw_iod_csums.ca_arrays);
+		orwo->orw_iod_csums.ca_count = 0;
 	}
 
 }
@@ -553,8 +553,7 @@ obj_set_reply_nrs(struct obj_io_context *ioc, crt_rpc_t *rpc,
 			D_FREE(nrs);
 			return -DER_NOMEM;
 		}
-	}
-	else {
+	} else {
 		nrs = (void *)&ioc->ioc_nrs[0];
 		data_sizes = (void *)&ioc->ioc_data_sizes[0];
 	}
@@ -1289,8 +1288,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	rma = (orw->orw_bulks.ca_arrays != NULL ||
 	       orw->orw_bulks.ca_count != 0);
 	ioc->ioc_zc_fetch = !obj_rpc_is_update(rpc) && !rma;
+
 	/* Prepare IO descriptor */
-	D_DEBUG(DB_IO, "ioc->ioc_zc_fetch %d, obj_rpc_is_update %d, rma %d", ioc->ioc_zc_fetch, obj_rpc_is_update(rpc), rma);
 	if (!ioc->ioc_zc_fetch) {
 		obj_singv_ec_rw_filter(&orw->orw_oid, iods, offs,
 				       orw->orw_epoch, orw->orw_flags,
@@ -1336,7 +1335,6 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				ioc->ioc_coc->sc_props.dcp_dedup_enabled,
 				ioc->ioc_coc->sc_props.dcp_dedup_size,
 				&ioh, dth);
-				D_DEBUG(DB_IO, "after vos_update_begin rc %d", rc);
 
 		}
 		if (rc) {
@@ -1345,10 +1343,11 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto out;
 		}
 	} else {
-		uint64_t			 cond_flags;
-		uint32_t			 fetch_flags = 0;
-		bool				 ec_deg_fetch;
+		uint64_t					cond_flags;
+		uint32_t					fetch_flags = 0;
+		bool						ec_deg_fetch;
 		struct daos_recx_ep_list	*shadows = NULL;
+		
 		D_DEBUG(DB_IO,
 		"oid "DF_UOID" dkey "DF_KEY"\n",
 		DP_UOID(orw->orw_oid), DP_KEY(dkey));
@@ -1396,7 +1395,6 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				goto out;
 			}
 		}
-		D_DEBUG(DB_IO, "calling vos_fetch_begin  oid: "DF_UOID"\n", DP_UOID(orw->orw_oid));
 
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
 				     orw->orw_epoch, dkey, orw->orw_nr, iods,
@@ -1452,7 +1450,6 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	biod = vos_ioh2desc(ioh);
 
 	rc = bio_iod_prep(biod, BIO_CHK_TYPE_IO);
-	D_DEBUG(DB_IO, "rc %d after bio_iod_prep", rc);
 
 	if (rc) {
 		D_ERROR(DF_UOID" bio_iod_prep failed: "DF_RC".\n",
@@ -1504,7 +1501,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				rc = dss_sleep(3100);
 		}
 	} else if (orw->orw_sgls.ca_arrays != NULL) {
-		rc = bio_iod_copy(biod , ioc->ioc_zc_fetch,
+		rc = bio_iod_copy(biod, ioc->ioc_zc_fetch,
 				  orw->orw_sgls.ca_arrays, orw->orw_nr);
 	}
 
@@ -1548,6 +1545,7 @@ post:
 		ioc->ioc_biod = biod;
 	} else {
 		int err = bio_iod_post(biod);
+		
 		rc = rc ? : err;
 	}
 out:
@@ -2297,7 +2295,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			   &orw->orw_flags);
 	if (rc == PE_OK_LOCAL)
 		orw->orw_flags &= ~ORF_EPOCH_UNCERTAIN;
-	D_DEBUG(DB_IO, "obj_rpc_is_fetch(rpc) %d", obj_rpc_is_fetch(rpc));
+
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle dth = {0};
 		int		  retry = 0;

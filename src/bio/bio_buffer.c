@@ -854,7 +854,7 @@ copy_one(struct bio_desc *biod, struct bio_iov *biov,
 
 		nob = min(size, buf_len - arg->ca_iov_off);
 		if (addr != NULL) {
-			D_DEBUG(DB_IO,"bio copy %p size %zd\n",
+			D_DEBUG(DB_TRACE, "bio copy %p size %zd\n",
 				addr, nob);
 			if (arg->ca_zc_fetch) {
 				/* just use the DMA buffer */
@@ -986,10 +986,9 @@ bio_iod_post(struct bio_desc *biod)
 {
 	struct bio_dma_buffer *bdb;
 
-	if (!biod->bd_buffer_prep){
+	if (!biod->bd_buffer_prep)
 			return -DER_INVAL;
-	}
-
+	
 	/* No more actions for SCM IOVs */
 	if (biod->bd_rsrvd.brd_rg_cnt == 0) {
 		iod_release_buffer(biod);

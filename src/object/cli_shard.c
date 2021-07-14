@@ -684,7 +684,6 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	}
 
 	rc = obj_reply_get_status(rw_args->rpc);
-	D_DEBUG(DB_IO,"rc: %d after obj_reply_get_status", rc);
 	/*
 	 * orwo->orw_epoch may be set even when the status is nonzero (e.g.,
 	 * -DER_TX_RESTART and -DER_INPROGRESS).
@@ -692,7 +691,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 	th = rw_args->shard_args->api_args->th;
 	if (daos_handle_is_valid(th)) {
 		int rc_tmp;
- 
+
 		rc_tmp = dc_tx_op_end(task, th,
 				      &rw_args->shard_args->auxi.epoch, rc,
 				      orwo->orw_epoch);
@@ -702,7 +701,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 				orwo->orw_epoch, DP_RC(rc_tmp));
 			goto out;
 		}
-	} 
+	}
 
 	if (rc != 0) {
 		if (rc == -DER_INPROGRESS || rc == -DER_TX_BUSY) {

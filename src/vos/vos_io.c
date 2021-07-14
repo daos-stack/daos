@@ -1439,7 +1439,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	D_DEBUG(DB_IO, "Fetch "DF_UOID", desc_nr %d, epoch "DF_X64"\n",
 		DP_UOID(oid), iod_nr, epoch);
-	
+
 	rc = vos_ioc_create(coh, oid, true, epoch, iod_nr, iods,
 			    NULL, vos_flags, shadows, false, 0,
 			    dth, &ioc);
@@ -1451,8 +1451,9 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 	rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
 	struct vos_container *cont = ioc->ic_cont;
+
 	D_DEBUG(DB_IO, "Try to hold cont="DF_UUID", obj="DF_UOID
-		"\n",DP_UUID(cont->vc_id), DP_UOID(oid));
+		"\n", DP_UUID(cont->vc_id), DP_UOID(oid));
 
 	rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, oid,
 			  &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
