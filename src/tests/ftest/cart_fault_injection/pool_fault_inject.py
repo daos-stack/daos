@@ -20,6 +20,13 @@ class PoolServicesFaultInjection(TestWithServers):
         """Initialize a PoolServicesFaultInjection object."""
         super().__init__(*args, **kwargs)
         self.failed_requests = 0
+        self.object_class = None
+        self.container_namespace = None
+        self.number_servers = 0
+
+    def setUp(self):
+        super().setUp()
+        self.failed_requests = 0
         self.object_class = self.params.get("object_class", "/run/*")
         self.container_namespace = self.params.get("container", "/run/*")
         self.number_servers = len(self.hostlist_servers) - 1
