@@ -120,6 +120,13 @@ func (cmd *PoolCreateCmd) Execute(args []string) error {
 			return errors.Wrap(err, "failed to parse tier ratios")
 		}
 
+		// Handle single tier ratio as a special case and fill
+		// second tier with remainder (-t 6 will assign 6% of total
+		// storage to tier0 and 94% to tier1).
+		if len(tierRatio) == 1 && tierRatio[0] < 100 {
+			tierRatio = append(tierRatio, 100-tierRatio[0])
+		}
+
 		req.TierRatio = make([]float64, len(tierRatio))
 		var totalRatios uint64
 		for tierIdx, ratio := range tierRatio {

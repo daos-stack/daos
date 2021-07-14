@@ -119,6 +119,20 @@ func TestPoolCommands(t *testing.T) {
 			errors.New("0-100"),
 		},
 		{
+			"Create pool with single tier-ratio (auto)",
+			fmt.Sprintf("pool create --size %s --tier-ratio 10", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					TotalBytes: uint64(testSize),
+					TierRatio:  []float64{0.1, 0.9},
+					User:       eUsr.Username + "@",
+					UserGroup:  eGrp.Name + "@",
+					Ranks:      []system.Rank{},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Create pool with incompatible arguments (manual)",
 			fmt.Sprintf("pool create --scm-size %s --nranks 42", testSizeStr),
 			"",
