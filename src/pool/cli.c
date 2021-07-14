@@ -158,6 +158,7 @@ dc_pool_alloc(unsigned int nr)
 		goto failed;
 	}
 
+	/* Every pool map begins at version 1. */
 	pool->dp_map_version_known = 1;
 	pool->dp_map_sz = pool_buf_size(nr);
 
