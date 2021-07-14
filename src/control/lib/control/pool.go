@@ -37,23 +37,6 @@ var PolicyMap = map[string]string{
 	"write_intensivity": "wr_size,wr_int",
 }
 
-type (
-	// Pool contains a unified representation of a DAOS Storage Pool.
-	Pool struct {
-		// UUID uniquely identifies a pool within the system.
-		UUID string `json:"uuid"`
-		// Label is an optional human-friendly identifier for a pool.
-		Label string `json:"label,omitempty"`
-		// ServiceReplicas is the list of ranks on which this pool's
-		// service replicas are running.
-		ServiceReplicas []system.Rank `json:"svc_replicas"`
-
-		// Info contains information about the pool learned from a
-		// query operation.
-		Info PoolInfo `json:"info"`
-	}
-)
-
 // checkUUID is a helper function for validating that the supplied
 // UUID string parses as a valid UUID.
 func checkUUID(uuidStr string) error {
@@ -172,13 +155,6 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 	}
 
 	out.Uuid = uuid.New().String()
-	err = VerifyPolicyString(in.PolicyString)
-	if err != nil {
-		return nil, err
-	}
-
-	out.Policy = in.PolicyString
-
 	return
 }
 
@@ -261,7 +237,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 
 	pcr := new(PoolCreateResp)
 	pcr.UUID = pbReq.Uuid
-	pcr.Policy = pbReq.Policy
+
 	return pcr, convert.Types(pbPcr, pcr)
 }
 
@@ -613,7 +589,6 @@ func PoolGetProp(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetPropRe
 	if err != nil {
 		return nil, err
 	}
-
 	pbResp, ok := msResp.(*mgmtpb.PoolGetPropResp)
 	if !ok {
 		return nil, errors.New("unable to extract PoolGetPropResp from MS response")

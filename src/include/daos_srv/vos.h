@@ -266,7 +266,6 @@ vos_pool_destroy(const char *path, uuid_t uuid);
  * \param path	 [IN]	Path of the memory pool
  * \param uuid	 [IN]	Pool UUID
  * \param flags  [IN]	Pool open flags (see vos_pool_open_flags)
- * \param policy [IN]	Pool policy to pass to VOS layer
  * \param poh	 [OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
