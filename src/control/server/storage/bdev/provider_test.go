@@ -79,7 +79,7 @@ func Test_filterScanResp(t *testing.T) {
 	}
 }
 
-func Test_forwardScan(t *testing.T) {
+func Test_filterScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scanReq      storage.BdevScanRequest
 		cache        *storage.BdevScanResponse
@@ -192,7 +192,7 @@ func Test_forwardScan(t *testing.T) {
 				return tc.scanResp, tc.scanErr
 			}
 
-			gotMsg, gotResp, shouldUpdate, gotErr := forwardScan(tc.scanReq, tc.cache, scanFn)
+			gotMsg, gotResp, shouldUpdate, gotErr := filterScan(tc.scanReq, tc.cache, scanFn)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return

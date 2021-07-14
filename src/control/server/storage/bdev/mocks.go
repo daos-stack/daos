@@ -7,7 +7,6 @@
 package bdev
 
 import (
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -42,25 +41,6 @@ func NewMockBackend(cfg *MockBackendConfig) *MockBackend {
 
 func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
-}
-
-func filterScanResp(resp *storage.BdevScanResponse, pciFilter ...string) (int, *storage.BdevScanResponse) {
-	var skipped int
-	out := make(storage.NvmeControllers, 0)
-
-	if len(pciFilter) == 0 {
-		return skipped, &storage.BdevScanResponse{Controllers: resp.Controllers}
-	}
-
-	for _, c := range resp.Controllers {
-		if !common.Includes(pciFilter, c.PciAddr) {
-			skipped++
-			continue
-		}
-		out = append(out, c)
-	}
-
-	return skipped, &storage.BdevScanResponse{Controllers: out}
 }
 
 func (mb *MockBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {

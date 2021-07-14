@@ -12,6 +12,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -64,9 +65,28 @@ func (p *Provider) IsVMDDisabled() bool {
 	return p.backend.IsVMDDisabled()
 }
 
+func filterScanResp(resp *storage.BdevScanResponse, pciFilter ...string) (int, *storage.BdevScanResponse) {
+	var skipped int
+	out := make(storage.NvmeControllers, 0)
+
+	if len(pciFilter) == 0 {
+		return skipped, &storage.BdevScanResponse{Controllers: resp.Controllers}
+	}
+
+	for _, c := range resp.Controllers {
+		if !common.Includes(pciFilter, c.PciAddr) {
+			skipped++
+			continue
+		}
+		out = append(out, c)
+	}
+
+	return skipped, &storage.BdevScanResponse{Controllers: out}
+}
+
 type scanFwdFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 
-func forwardScan(req storage.BdevScanRequest, cache *storage.BdevScanResponse, scan scanFwdFn) (msg string, resp *storage.BdevScanResponse, update bool, err error) {
+func filterScan(req storage.BdevScanRequest, cache *storage.BdevScanResponse, scan scanFwdFn) (msg string, resp *storage.BdevScanResponse, update bool, err error) {
 	var action string
 	switch {
 	case req.NoCache:
@@ -108,7 +128,7 @@ func forwardScan(req storage.BdevScanRequest, cache *storage.BdevScanResponse, s
 	return
 }
 
-// storage.BdevScan attempts to perform a scan to discover NVMe components in the
+// Scan attempts to perform a scan to discover NVMe components in the
 // system. Results will be cached at the provider and returned if
 // "NoCache" is set to "false" in the request. Returned results will be
 // filtered by request "DeviceList" and empty filter implies allowing all.
@@ -118,7 +138,16 @@ func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResp
 		p.disableVMD()
 	}
 
-	return p.backend.Scan(req)
+	p.Lock()
+	defer p.Unlock()
+
+	msg, resp, update, err := filterScan(req, p.scanCache, p.backend.Scan)
+	p.log.Debug(msg)
+	if update {
+		p.scanCache = resp
+	}
+
+	return resp, err
 }
 
 // Prepare attempts to perform all actions necessary to make NVMe
