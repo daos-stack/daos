@@ -664,7 +664,7 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 
 /**
  * Backward compatibility code.
- * Please don't use direclty
+ * Please don't use directly
  */
 
 int
