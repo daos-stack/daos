@@ -1347,7 +1347,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		uint32_t					fetch_flags = 0;
 		bool						ec_deg_fetch;
 		struct daos_recx_ep_list	*shadows = NULL;
-		
+
 		D_DEBUG(DB_IO,
 		"oid "DF_UOID" dkey "DF_KEY"\n",
 		DP_UOID(orw->orw_oid), DP_KEY(dkey));
@@ -1545,7 +1545,7 @@ post:
 		ioc->ioc_biod = biod;
 	} else {
 		int err = bio_iod_post(biod);
-		
+
 		rc = rc ? : err;
 	}
 out:

@@ -1421,9 +1421,8 @@ run_commands(char *cmds)
 				D_PRINT("%s failed\n", ts->ts_name);
 				return rc;
 			}
-			ts = NULL; /* reset */ 
+			ts = NULL; /* reset */
 			continue;
-			D_PRINT("here \n");
 		}
 		code = *cmds;
 		cmds++;

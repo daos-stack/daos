@@ -988,7 +988,7 @@ bio_iod_post(struct bio_desc *biod)
 
 	if (!biod->bd_buffer_prep)
 			return -DER_INVAL;
-	
+
 	/* No more actions for SCM IOVs */
 	if (biod->bd_rsrvd.brd_rg_cnt == 0) {
 		iod_release_buffer(biod);
