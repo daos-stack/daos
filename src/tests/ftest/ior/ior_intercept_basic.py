@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+import re
 import os
 from apricot import skipForTicket
 from ior_test_base import IorTestBase
@@ -21,7 +22,6 @@ class IorIntercept(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5857")
     def test_ior_intercept(self):
         """Jira ID: DAOS-3498.
 
@@ -47,6 +47,11 @@ class IorIntercept(IorTestBase):
         :avocado: tags=iorinterceptbasic
         """
         apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
+        match_results = []
+        patterns = "^\[libioil\] Performed [0-9]+ reads and [0-9]+ " \
+                   "writes from [0-9]+ files*" \
+                   "|" \
+                   "^\[libioil\] Intercepting write*"
         for api in apis:
             self.ior_cmd.api.update(api)
             out = self.run_ior_with_pool(fail_on_warning=False)
@@ -54,6 +59,14 @@ class IorIntercept(IorTestBase):
             if api == "POSIX":
                 intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
                 out = self.run_ior_with_pool(intercept, fail_on_warning=False)
+
+                # Check for libioil messages within stderr
+                for line in out.stderr.decode("utf-8").splitlines():
+                    match = re.findall(patterns, line)
+                    if match:
+                        match_results.append(match)
+                self.assertTrue(match_results, "No libioil messages found.")
+
                 with_intercept = IorCommand.get_ior_metrics(out)
                 max_mib = int(IorMetrics.Max_MiB)
                 min_mib = int(IorMetrics.Min_MiB)
