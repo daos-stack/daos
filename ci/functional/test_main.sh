@@ -38,15 +38,20 @@ mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 #    "$(cat ci/functional/node_checkout.sh)"
 
 
+# check ssd smart
+clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+    $(cat ci/functional/smart_health.sh)"
+
+
 # run network test
 # create log directory
-clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
-    "mkdir -p /var/tmp/daos_testing && chown jenkins /var/tmp/daos_testing"
-run_on_node=$(echo ${tnodes} | cut -d ',' -f 2)
-clush -B -S -o '-i ci_key' -l jenkins -w "${run_on_node}" \
-    "daospath='/usr/'                                 \
-     nodes=${tnodes}                                  \
-     $(cat ci/functional/self_test_8-node.sh)"
+#clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+#    "mkdir -p /var/tmp/daos_testing && chown jenkins /var/tmp/daos_testing"
+#run_on_node=$(echo ${tnodes} | cut -d ',' -f 2)
+#clush -B -S -o '-i ci_key' -l jenkins -w "${run_on_node}" \
+#    "daospath='/usr/'                                 \
+#     nodes=${tnodes}                                  \
+#     $(cat ci/functional/self_test_8-node.sh)"
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
