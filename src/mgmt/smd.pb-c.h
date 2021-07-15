@@ -111,10 +111,38 @@ struct  _Ctl__BioHealthResp
    * free space in blobstore
    */
   uint64_t avail_bytes;
+  /*
+   * Intel vendor SMART attributes
+   */
+  /*
+   * percent remaining
+   */
+  uint32_t program_fail_cnt_norm;
+  /*
+   * current value
+   */
+  uint64_t program_fail_cnt_raw;
+  uint32_t erase_fail_cnt_norm;
+  uint64_t erase_fail_cnt_raw;
+  uint32_t wear_leveling_cnt_norm;
+  uint32_t wear_leveling_cnt_min;
+  uint32_t wear_leveling_cnt_max;
+  uint32_t wear_leveling_cnt_avg;
+  uint64_t endtoend_err_cnt_raw;
+  uint64_t crc_err_cnt_raw;
+  uint64_t media_wear_raw;
+  uint64_t host_reads_raw;
+  uint64_t workload_timer_raw;
+  uint32_t thermal_throttle_status;
+  uint64_t thermal_throttle_event_cnt;
+  uint64_t retry_buffer_overflow_cnt;
+  uint64_t pll_lock_loss_cnt;
+  uint64_t nand_bytes_written;
+  uint64_t host_bytes_written;
 };
 #define CTL__BIO_HEALTH_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&ctl__bio_health_resp__descriptor) \
-    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0 }
+    , 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, (char *)protobuf_c_empty_string, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 
 
 struct  _Ctl__SmdDevReq
