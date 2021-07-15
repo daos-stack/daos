@@ -62,7 +62,8 @@ fi
 
 # Override tnodes for debugging which node(s) is the culprit
 # wolf-[51,110-117]
-tnodes="wolf-51,wolf-110,wolf-111"
+#tnodes="wolf-51,wolf-110,wolf-111"
+tnodes="wolf-51,wolf-112,wolf-113"
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
