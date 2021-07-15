@@ -167,13 +167,10 @@ class WarningsFactory():
             # and keep it there, until close() method is called, then remove
             # it and re-save.  This means any crash will result in there
             # being a results file with an error recorded.
-            tc = junit_xml.TestCase('Sanity',
-                                    classname=self._class_name('core'))
+            tc = junit_xml.TestCase('Sanity', classname=self._class_name('core'))
             tc.add_error_info('NLT exited abnormally')
-            test_case = junit_xml.TestCase('Startup',
-                                           classname=self._class_name('core'))
-            self.ts = junit_xml.TestSuite('Node Local Testing',
-                                          test_cases=[test_case, tc])
+            test_case = junit_xml.TestCase('Startup', classname=self._class_name('core'))
+            self.ts = junit_xml.TestSuite('Node Local Testing', test_cases=[test_case, tc])
             self._write_test_file()
         else:
             self.ts = None
@@ -565,7 +562,8 @@ class DaosServer():
             scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
 
         ref_engine = copy.deepcopy(scyaml['engines'][0])
-        ref_engine['scm_size'] = int(ref_engine['scm_size'] / self.engines)
+        ref_engine['storage'][0]['scm_size'] = int(
+            ref_engine['storage'][0]['scm_size'] / self.engines)
         scyaml['engines'] = []
         server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
         for idx in range(self.engines):
@@ -573,7 +571,8 @@ class DaosServer():
             engine['log_file'] = self.server_logs[idx].name
             engine['first_core'] = ref_engine['targets'] * idx
             engine['fabric_iface_port'] += server_port_count * idx
-            engine['scm_mount'] = '{}_{}'.format(ref_engine['scm_mount'], idx)
+            engine['storage'][0]['scm_mount'] = '{}_{}'.format(
+                ref_engine['storage'][0]['scm_mount'], idx)
             scyaml['engines'].append(engine)
         self._yaml_file = tempfile.NamedTemporaryFile(
             prefix='nlt-server-config-',
@@ -718,7 +717,7 @@ class DaosServer():
             msg = 'dmg system stop failed with {}'.format(rc.returncode)
             entry['message'] = msg
             self.conf.wf.issues.append(entry)
-        assert rc.returncode == 0
+        assert rc.returncode == 0, rc
 
         start = time.time()
         max_stop_time = 30
@@ -817,7 +816,7 @@ class DaosServer():
 
         return self.test_pool.uuid
 
-def il_cmd(dfuse, cmd, check_read=True, check_write=True):
+def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """Run a command under the interception library
 
     Do not run valgrind here, not because it's not useful
@@ -835,6 +834,7 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
+    my_env['D_IL_REPORT'] = '2'
     ret = subprocess.run(cmd, env=my_env, check=False)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
@@ -843,7 +843,8 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
         log_test(dfuse.conf,
                  log_file.name,
                  check_read=check_read,
-                 check_write=check_write)
+                 check_write=check_write,
+                 check_fstat=check_fstat)
         assert ret.returncode == 0
     except NLTestNoFunction as error:
         print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
@@ -1121,11 +1122,7 @@ def assert_file_size(ofd, size):
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
 
-    if sys.version_info.major < 3:
-        pydir = 'python{}.{}'.format(sys.version_info.major,
-                                     sys.version_info.minor)
-    else:
-        pydir = 'python{}'.format(sys.version_info.major)
+    pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
 
     sys.path.append(os.path.join(conf['PREFIX'],
                                  'lib64',
@@ -1246,7 +1243,8 @@ def create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valgr
 
     rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
 
-    if rc.returncode == 1 and rc.json['error'] == 'DER_EXIST(-1004): Entity already exists':
+    if rc.returncode == 1 and \
+       rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
         destroy_container(conf, pool, label)
         rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
 
@@ -1335,6 +1333,8 @@ def needs_dfuse_with_cache(method):
         return rc
     return _helper
 
+# This is test code where methods are tests, so we want to have lots of them.
+# pylint: disable=too-many-public-methods
 class posix_tests():
     """Class for adding standalone unit tests"""
 
@@ -1600,6 +1600,24 @@ class posix_tests():
             assert False
         except FileNotFoundError:
             pass
+
+    @needs_dfuse
+    def test_il_cat(self):
+        """Quick check for the interception library"""
+
+        fname = os.path.join(self.dfuse.dir, 'file')
+        ofd = open(fname, 'w')
+        ofd.close()
+
+        check_fstat = True
+        if self.dfuse.caching:
+            check_fstat = False
+
+        rc = il_cmd(self.dfuse,
+                    ['cat', fname],
+                    check_write=False,
+                    check_fstat=check_fstat)
+        assert rc.returncode == 0
 
     @needs_dfuse
     def test_xattr(self):
@@ -1975,6 +1993,7 @@ class posix_tests():
         print(rc)
         assert rc.returncode == 0
         destroy_container(self.conf, self.pool.id(), container)
+# pylint: enable=too-many-public-methods
 
 def run_posix_tests(server, conf, test=None):
     """Run one or all posix tests
@@ -2182,7 +2201,8 @@ def log_test(conf,
              fi_signal=None,
              leak_wf=None,
              check_read=False,
-             check_write=False):
+             check_write=False,
+             check_fstat=False):
     """Run the log checker on filename, logging to stdout"""
 
     # Check if the log file has wrapped, if it has then log parsing checks do
@@ -2227,7 +2247,7 @@ def log_test(conf,
 
     functions = set()
 
-    if check_read or check_write:
+    if check_read or check_write or check_fstat:
         for line in log_iter.new_iter():
             functions.add(line.function)
 
@@ -2236,6 +2256,9 @@ def log_test(conf,
 
     if check_write and 'dfuse_write' not in functions:
         raise NLTestNoFunction('dfuse_write')
+
+    if check_fstat and 'dfuse___fxstat' not in functions:
+        raise NLTestNoFunction('dfuse___fxstat')
 
     compress_file(filename)
 
@@ -2478,14 +2501,15 @@ def run_il_test(server, conf):
     # intercepted.
     ret = il_cmd(dfuse,
                  ['md5sum', os.path.join(dirs[-1], 'bash')],
-                 check_read=False, check_write=False)
+                 check_read=False, check_write=False, check_fstat=False)
     assert ret.returncode == 0
     ret = il_cmd(dfuse, ['dd',
                          'if={}'.format(os.path.join(dirs[-1], 'bash')),
                          'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
                          'iflag=direct',
                          'oflag=direct',
-                         'bs=128k'])
+                         'bs=128k'],
+                 check_fstat=False)
 
     print(ret)
     assert ret.returncode == 0
@@ -2522,7 +2546,7 @@ def run_in_fg(server, conf):
               pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers {}'.format(pool))
+    print('daos cont list {}'.format(pool))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
@@ -2828,11 +2852,17 @@ class AllocFailTestRun():
         res = "Fault injection test of '{}'\n".format(' '.join(self.cmd))
         res += 'Fault injection location {}\n'.format(self.loc)
         if self.vh:
-            res += 'Valgrind enabled for this test'
+            res += 'Valgrind enabled for this test\n'
         if self.returncode is None:
             res += 'Process not completed'
         else:
             res += 'Returncode was {}'.format(self.returncode)
+
+        if self.stdout:
+            res += '\nSTDOUT:{}'.format(self.stdout.decode('utf-8').strip())
+
+        if self.stderr:
+            res += '\nSTDERR:{}'.format(self.stderr.decode('utf-8').strip())
         return res
 
     def start(self):
@@ -2893,10 +2923,6 @@ class AllocFailTestRun():
         self.stdout = self._sp.stdout.read()
         self.stderr = self._sp.stderr.read()
 
-        if self.stderr != b'':
-            print('Stderr from command')
-            print(self.stderr.decode('utf-8').strip())
-
         show_memleaks = True
 
         fi_signal = None
@@ -2920,7 +2946,7 @@ class AllocFailTestRun():
             # If a fault wasn't injected then check output is as expected.
             # It's not possible to log these as warnings, because there is
             # no src line to log them against, so simply assert.
-            assert self.returncode == 0
+            assert self.returncode == 0, self
 
             if self.aft.check_post_stdout:
                 assert self.stderr == b''
@@ -3143,8 +3169,8 @@ def test_alloc_fail(server, conf):
     pool = server.get_test_pool()
 
     cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
-           'pool',
-           'list-containers',
+           'cont',
+           'list',
            pool]
     test_cmd = AllocFailTest(conf, cmd)
 
@@ -3157,51 +3183,12 @@ def test_alloc_fail(server, conf):
     destroy_container(conf, pool, container)
     return rc
 
-def main():
+def run(wf, args):
     """Main entry point"""
-
-    parser = argparse.ArgumentParser(
-        description='Run DAOS client on local node')
-    parser.add_argument('--server-debug', default=None)
-    parser.add_argument('--dfuse-debug', default=None)
-    parser.add_argument('--class-name', default=None,
-                        help='class name to use for junit')
-    parser.add_argument('--memcheck', default='some',
-                        choices=['yes', 'no', 'some'])
-    parser.add_argument('--no-root', action='store_true')
-    parser.add_argument('--max-log-size', default=None)
-    parser.add_argument('--engine-count', type=int, default=1,
-                        help='Number of daos engines to run')
-    parser.add_argument('--dfuse-dir', default='/tmp',
-                        help='parent directory for all dfuse mounts')
-    parser.add_argument('--perf-check', action='store_true')
-    parser.add_argument('--dtx', action='store_true')
-    parser.add_argument('--test', help="Use '--test list' for list")
-    parser.add_argument('mode', nargs='?')
-    args = parser.parse_args()
-
-    if args.mode and args.test:
-        print('Cannot use mode and test')
-        sys.exit(1)
-
-    if args.test == 'list':
-        tests = []
-        for fn in dir(posix_tests):
-            if fn.startswith('test'):
-                tests.append(fn[5:])
-        print('Tests are: {}'.format(','.join(sorted(tests))))
-        return
 
     conf = load_conf(args)
 
-    wf = WarningsFactory('nlt-errors.json',
-                         post_error=True,
-                         check='Log file errors',
-                         junit=True,
-                         class_id=args.class_name)
-
-    wf_server = WarningsFactory('nlt-server-leaks.json',
-                                post=True, check='Server leak checking')
+    wf_server = WarningsFactory('nlt-server-leaks.json', post=True, check='Server leak checking')
     wf_client = WarningsFactory('nlt-client-leaks.json')
 
     conf.set_wf(wf)
@@ -3254,14 +3241,14 @@ def main():
             fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.
-    # This is really, really slow so just do list-containers, then
+    # This is really, really slow so just do cont list, then
     # exit again.
     if args.mode == 'server-valgrind':
         server = DaosServer(conf, valgrind=True, test_class='valgrind')
         server.start()
         pools = server.fetch_pools()
         for pool in pools:
-            cmd = ['pool', 'list-containers', pool.id()]
+            cmd = ['cont', 'list', pool.id()]
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)
@@ -3295,9 +3282,63 @@ def main():
         print("Valgrind errors detected during execution")
         fatal_errors.add_result(True)
 
-    wf.close()
     wf_server.close()
     wf_client.close()
+    return fatal_errors
+
+def main():
+    """Wrap the core function, and catch/report any exceptions
+
+    This allows the junit results to show at least a stack trace and assertion message for
+    any failure, regardless of if it's from a test case or not.
+    """
+
+    parser = argparse.ArgumentParser(description='Run DAOS client on local node')
+    parser.add_argument('--server-debug', default=None)
+    parser.add_argument('--dfuse-debug', default=None)
+    parser.add_argument('--class-name', default=None, help='class name to use for junit')
+    parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
+    parser.add_argument('--no-root', action='store_true')
+    parser.add_argument('--max-log-size', default=None)
+    parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')
+    parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
+    parser.add_argument('--perf-check', action='store_true')
+    parser.add_argument('--dtx', action='store_true')
+    parser.add_argument('--test', help="Use '--test list' for list")
+    parser.add_argument('mode', nargs='?')
+    args = parser.parse_args()
+
+    if args.mode and args.test:
+        print('Cannot use mode and test')
+        sys.exit(1)
+
+    if args.test == 'list':
+        tests = []
+        for fn in dir(posix_tests):
+            if fn.startswith('test'):
+                tests.append(fn[5:])
+        print('Tests are: {}'.format(','.join(sorted(tests))))
+        sys.exit(1)
+
+    wf = WarningsFactory('nlt-errors.json',
+                         post_error=True,
+                         check='Log file errors',
+                         class_id=args.class_name,
+                         junit=True)
+
+    try:
+        fatal_errors = run(wf, args)
+        wf.add_test_case('exit_wrapper')
+        wf.close()
+    except Exception as error:
+        print(error)
+        print(str(error))
+        print(repr(error))
+        trace = ''.join(traceback.format_tb(error.__traceback__))
+        wf.add_test_case('exit_wrapper', str(error), output=trace)
+        wf.close()
+        raise
+
     if fatal_errors.errors:
         print("Significant errors encountered")
         sys.exit(1)

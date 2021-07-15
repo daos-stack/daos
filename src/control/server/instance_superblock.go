@@ -53,8 +53,13 @@ func (sb *Superblock) Unmarshal(raw []byte) error {
 }
 
 func (ei *EngineInstance) superblockPath() string {
-	scmConfig := ei.scmConfig()
-	storagePath := scmConfig.MountPoint
+	cfg, err := ei.storage.GetScmConfig()
+	if err != nil {
+		ei.log.Errorf("unable to get SCM config: %s", err)
+		return defaultStoragePath
+	}
+
+	storagePath := cfg.Scm.MountPoint
 	if storagePath == "" {
 		storagePath = defaultStoragePath
 	}
@@ -86,13 +91,8 @@ func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
 		return false, nil
 	}
 
-	scmCfg := ei.scmConfig()
-
-	ei.log.Debugf("%s: checking superblock", scmCfg.MountPoint)
-
 	err := ei.ReadSuperblock()
 	if os.IsNotExist(errors.Cause(err)) {
-		ei.log.Debugf("%s: needs superblock (doesn't exist)", scmCfg.MountPoint)
 		return true, nil
 	}
 
@@ -105,7 +105,7 @@ func (ei *EngineInstance) NeedsSuperblock() (bool, error) {
 
 // createSuperblock creates instance superblock if needed.
 func (ei *EngineInstance) createSuperblock(recreate bool) error {
-	if ei.isStarted() {
+	if ei.IsStarted() {
 		return errors.Errorf("can't create superblock: instance %d already started", ei.Index())
 	}
 
@@ -119,7 +119,7 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 
 	ei.log.Debugf("idx %d createSuperblock()", ei.Index())
 
-	if err := ei.MountScmDevice(); err != nil {
+	if err := ei.MountScm(); err != nil {
 		return err
 	}
 
@@ -166,7 +166,7 @@ func (ei *EngineInstance) WriteSuperblock() error {
 // ReadSuperblock reads the instance's superblock
 // from storage.
 func (ei *EngineInstance) ReadSuperblock() error {
-	if err := ei.MountScmDevice(); err != nil {
+	if err := ei.MountScm(); err != nil {
 		return errors.Wrap(err, "failed to mount SCM device")
 	}
 

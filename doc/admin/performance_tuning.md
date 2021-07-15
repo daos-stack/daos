@@ -89,29 +89,42 @@ $ ./bin/self_test --help
 ```
 
 **To run self_test in client-to-servers mode:**
+(Assuming sockets provider over eth0)
 ```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile ${hostfile} --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
-  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 \
-  ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
+
+# Specify provider
+export CRT_PHY_ADDR_STR='ofi+sockets'
+
+# Specify interface
+export OFI_INTERFACE=eth0
+
+# Specify domain; usually only required when running over ofi+verbs;ofi_rxm
+# For example in such configuration OFI_DOMAIN might be set to mlx5_0
+# run fi_info --provider='verbs;ofi_rxm' in order to find an appropriate domain
+export OFI_DOMAIN=eth0
+
+# Export additional CART-level environment variables as described in README.env
+# if needed. For example export D_LOG_FILE=/path/to/log will allow dumping of the
+# log into the file instead of stdout/stderr
+
+$ ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
   --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
-  --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+  --max-inflight-rpcs 16 --repetitions 100 -p /path/to/attach_info
 ```
 
 **To run self_test in cross-servers mode:**
 ```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile ${hostfile} --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
-  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  \
-  ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
+
+$ ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
   --master-endpoint 0-<MAX_SERVER-1>:0 \
   --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
-  --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+  --max-inflight-rpcs 16 --repetitions 100 -p /path/to/attach_info
 ```
+
+Note:
+Number of repetitions, max inflight rpcs, message sizes can be adjusted based on the
+particular test/experiment.
+
 
 ## Benchmarking DAOS
 

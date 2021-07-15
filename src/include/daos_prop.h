@@ -479,6 +479,28 @@ int
 daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
 			     struct daos_prop_entry *src);
 
+/**
+ * Check a DAOS prop entry for a string value.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Has a string value.
+ *			false		Does not have a string value.
+ */
+bool
+daos_prop_has_str(struct daos_prop_entry *entry);
+
+/**
+ * Check a DAOS prop entry for a pointer value.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Has a pointer value.
+ *			false		Does not have a pointer value.
+ */
+bool
+daos_prop_has_ptr(struct daos_prop_entry *entry);
+
 #if defined(__cplusplus)
 }
 #endif

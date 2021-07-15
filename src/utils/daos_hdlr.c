@@ -705,7 +705,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 
 	begin = time(NULL);
 
-	D_PRINT("check container "DF_UUIDF" stated at: %s\n",
+	fprintf(ap->outstream, "check container "DF_UUIDF" started at: %s\n",
 		DP_UUID(ap->c_uuid), ctime(&begin));
 
 	while (!daos_anchor_is_eof(&anchor)) {
@@ -3001,7 +3001,7 @@ dm_connect(struct cmd_args_s *ap,
 				D_GOTO(err_dst_root, rc);
 			}
 			fprintf(ap->outstream,
-				"Successfully created container: "
+				"Successfully created container "
 				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			fprintf(ap->errstream, "failed to open container: "
