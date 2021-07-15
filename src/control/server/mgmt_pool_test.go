@@ -224,7 +224,8 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 					)
 			}
 			svc := newTestMgmtSvc(t, log)
-			svc.harness.instances[0] = newTestEngine(log, false, engineCfg)
+			sp := storage.MockProvider(log, 0, &engineCfg.Storage, nil, nil, nil)
+			svc.harness.instances[0] = newTestEngine(log, false, sp)
 
 			gotErr := svc.calculateCreateStorage(tc.in)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -455,18 +456,18 @@ func TestServer_MgmtSvc_PoolCreateDownRanks(t *testing.T) {
 	defer cancel()
 
 	mgmtSvc := newTestMgmtSvc(t, log)
-	mgmtSvc.harness.instances[0] = newTestEngine(log, false,
-		engine.NewConfig().
-			WithTargetCount(1).
-			WithStorage(
-				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmMountPoint("/foo/bar"),
-				storage.NewTierConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList("foo", "bar"),
-			),
-	)
+	ec := engine.NewConfig().
+		WithTargetCount(1).
+		WithStorage(
+			storage.NewTierConfig().
+				WithScmClass("ram").
+				WithScmMountPoint("/foo/bar"),
+			storage.NewTierConfig().
+				WithBdevClass("nvme").
+				WithBdevDeviceList("foo", "bar"),
+		)
+	sp := storage.NewProvider(log, 0, &ec.Storage, nil, nil, nil)
+	mgmtSvc.harness.instances[0] = newTestEngine(log, false, sp, ec)
 
 	dc := newMockDrpcClient(&mockDrpcClientConfig{IsConnectedBool: true})
 	dc.cfg.setSendMsgResponse(drpc.Status_SUCCESS, nil, nil)

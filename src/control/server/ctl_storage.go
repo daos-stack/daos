@@ -214,7 +214,7 @@ func (c *StorageControlService) defaultProvider() *storage.Provider {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	return c.storage.Bdev.Prepare(req)
+	return c.storage.PrepareBdevs(req)
 }
 
 // GetScmState performs required initialization and returns current state
@@ -234,7 +234,7 @@ func (c *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*stor
 
 // NvmeScan scans locally attached SSDs.
 func (c *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	return c.storage.Bdev.Scan(req)
+	return c.storage.ScanAllBdevs(req)
 }
 
 // ScmScan scans locally attached modules, namespaces and state of DCPM config.

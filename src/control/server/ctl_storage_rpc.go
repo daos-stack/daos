@@ -54,43 +54,45 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 	return ctrlrMap, nil
 }
 
-// scanInstanceBdevs retrieves up-to-date NVMe controller info including
+// scanAssignedBdevs retrieves up-to-date NVMe controller info including
 // health statistics and stored server meta-data. If I/O Engines are running
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
 // assigned to I/O Engines.
-func (c *ControlService) scanInstanceBdevs(ctx context.Context) (*storage.BdevScanResponse, error) {
+func (c *ControlService) scanAssignedBdevs(ctx context.Context) (*storage.BdevScanResponse, error) {
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
 
-	for _, srv := range instances {
-		if !srv.HasBlockDevices() {
+	for _, ei := range instances {
+		if !ei.HasBlockDevices() {
 			continue
 		}
-		direct := !srv.IsReady()
 
-		tsrs, err := srv.ScanBdevTiers(direct)
+		engineRunning := ei.IsReady()
+
+		tsrs, err := ei.ScanBdevTiers(engineRunning)
 		if err != nil {
 			return nil, err
 		}
 
-		if direct {
+		if !engineRunning {
 			for _, tsr := range tsrs {
 				ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
 			}
 			continue
 		}
 
+		// If engine is running and has claimed the assigned devices for
+		// each tier, iterate over scan results for each tier and send query
+		// over drpc to update controller details with current health stats
+		// and smd info.
 		for _, tsr := range tsrs {
 			ctrlrMap, err := mapCtrlrs(tsr.Result.Controllers)
 			if err != nil {
 				return nil, errors.Wrap(err, "create controller map")
 			}
 
-			// if io servers are active and have claimed the assigned devices,
-			// query over drpc to update controller details with current health
-			// stats and smd info
-			if err := srv.updateInUseBdevs(ctx, ctrlrMap); err != nil {
+			if err := ei.updateInUseBdevs(ctx, ctrlrMap); err != nil {
 				return nil, errors.Wrap(err, "updating bdev health and smd info")
 			}
 
@@ -150,15 +152,21 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 		return nil, errors.New("nil bdev request")
 	}
 
-	if req.Health || req.Meta {
-		// filter results based on config file bdev_list contents
-		resp, err := c.scanInstanceBdevs(ctx)
+	var bdevsInCfg bool
+	for _, ei := range c.harness.Instances() {
+		if ei.HasBlockDevices() {
+			bdevsInCfg = true
+		}
+	}
+
+	if !bdevsInCfg {
+		// return details of all bdevs if none assigned to engines
+		resp, err := c.NvmeScan(storage.BdevScanRequest{})
 
 		return newScanNvmeResp(req, resp, err)
 	}
 
-	// return cached results for all bdevs
-	resp, err := c.NvmeScan(storage.BdevScanRequest{})
+	resp, err := c.scanAssignedBdevs(ctx)
 
 	return newScanNvmeResp(req, resp, err)
 }

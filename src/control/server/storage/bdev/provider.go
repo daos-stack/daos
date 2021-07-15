@@ -89,7 +89,7 @@ type scanFwdFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 func filterScan(req storage.BdevScanRequest, cache *storage.BdevScanResponse, scan scanFwdFn) (msg string, resp *storage.BdevScanResponse, update bool, err error) {
 	var action string
 	switch {
-	case req.NoCache:
+	case req.FlushCache:
 		action = "bypass"
 		resp, err = scan(req)
 	case cache != nil && len(cache.Controllers) != 0:
@@ -130,7 +130,7 @@ func filterScan(req storage.BdevScanRequest, cache *storage.BdevScanResponse, sc
 
 // Scan attempts to perform a scan to discover NVMe components in the
 // system. Results will be cached at the provider and returned if
-// "NoCache" is set to "false" in the request. Returned results will be
+// "FlushCache" is set to "false" in the request. Returned results will be
 // filtered by request "DeviceList" and empty filter implies allowing all.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
 	// set vmd state on remote provider in forwarded request

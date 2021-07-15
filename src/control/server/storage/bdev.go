@@ -224,7 +224,7 @@ type (
 		pbin.ForwardableRequest
 		DeviceList []string
 		DisableVMD bool
-		NoCache    bool
+		FlushCache bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.

@@ -189,6 +189,6 @@ func MockProvider(log logging.Logger, idx int, engineStorage *Config, sys System
 	p := DefaultProvider(log, idx, engineStorage)
 	p.Sys = sys
 	p.Scm = scm
-	p.Bdev = bdev
+	p.bdev = bdev
 	return p
 }
