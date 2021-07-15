@@ -359,7 +359,7 @@ static void *
 vos_tls_init(int xs_id, int tgt_id)
 {
 	struct vos_tls *tls;
-	int rc;
+	int		rc;
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
@@ -399,6 +399,18 @@ vos_tls_init(int xs_id, int tgt_id)
 		D_ERROR("Error in creating timestamp table: %d\n", rc);
 		goto failed;
 	}
+
+	if (tgt_id < 0)
+		/** skip sensor setup on standalone vos & sys xstream */
+		return tls;
+
+	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
+			     "Number of committed entries kept around for reply"
+			     " reconstruction", "entries",
+			     "io/dtx/committed/tgt_%u", tgt_id);
+	if (rc)
+		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
+		       DP_RC(rc));
 
 	return tls;
 failed:
@@ -467,7 +479,7 @@ vos_mod_fini(void)
 struct dss_module vos_srv_module =  {
 	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
-	.sm_ver		= DAOS_VOS_VERSION,
+	.sm_ver		= 1,
 	.sm_init	= vos_mod_init,
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
@@ -490,7 +502,9 @@ vos_self_nvme_fini(void)
 #define VOS_STORAGE_PATH	"/mnt/daos"
 #define VOS_NVME_CONF		"/etc/daos_nvme.conf"
 #define VOS_NVME_SHM_ID		DAOS_NVME_SHMID_NONE
-#define VOS_NVME_MEM_SIZE	DAOS_NVME_MEM_PRIMARY
+#define VOS_NVME_MEM_SIZE	1024
+#define VOS_NVME_HUGEPAGE_SIZE	2	/* 2MB */
+#define VOS_NVME_NR_TARGET	1
 
 static int
 vos_self_nvme_init()
@@ -504,8 +518,9 @@ vos_self_nvme_init()
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID,
-			   VOS_NVME_MEM_SIZE, vos_db_get());
+	rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID, VOS_NVME_MEM_SIZE,
+			   VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET,
+			   vos_db_get());
 	if (rc)
 		return rc;
 
@@ -572,7 +587,7 @@ vos_self_init(const char *db_path)
 	vos_start_epoch = 0;
 
 #if VOS_STANDALONE
-	self_mode.self_tls = vos_tls_init(0, 0);
+	self_mode.self_tls = vos_tls_init(0, -1);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
 		D_MUTEX_UNLOCK(&self_mode.self_lock);

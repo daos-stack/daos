@@ -244,10 +244,13 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		epoch_min = param->ap_start_eph_get(cont);
 	}
 
-	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG)))
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG) ||
+		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL) ||
+		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		interval = 0;
 	else
 		interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
+
 	D_ASSERT(hlc > (interval * 2));
 	/*
 	 * Assume 'current hlc - interval' as the highest stable view (all
@@ -2515,7 +2518,7 @@ cont_rw_capa_set(void *data)
 
 	cont_child->sc_rw_disabled = arg->csa_rw_disable;
 	if (dss_get_module_info()->dmi_tgt_id == 0)
-		D_ERROR(DF_CONT" read/write permission %s.\n",
+		D_DEBUG(DB_IO, DF_CONT" read/write permission %s.\n",
 			DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
 			cont_child->sc_rw_disabled ? "disabled" : "enabled");
 

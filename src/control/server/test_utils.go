@@ -20,6 +20,7 @@ import (
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -145,7 +146,7 @@ func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
 	mi := svc.harness.instances[0]
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
-	mi.setDrpcClient(newMockDrpcClient(cfg))
+	mi.(*EngineInstance).setDrpcClient(newMockDrpcClient(cfg))
 }
 
 // setupMockDrpcClient sets up the dRPC client for the mgmtSvc to return
@@ -158,13 +159,24 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 // newTestEngine returns an EngineInstance configured for testing.
 func newTestEngine(log logging.Logger, isAP bool, engineCfg ...*engine.Config) *EngineInstance {
 	if len(engineCfg) == 0 {
-		engineCfg = append(engineCfg, engine.NewConfig().WithTargetCount(1))
+		engineCfg = append(engineCfg, engine.NewConfig().
+			WithTargetCount(1).
+			WithStorage(
+				storage.NewTierConfig().
+					WithBdevClass("nvme").
+					WithBdevDeviceList("foo", "bar"),
+			),
+		)
 	}
 	rCfg := new(engine.TestRunnerConfig)
 	rCfg.Running.SetTrue()
 	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
-	srv := NewEngineInstance(log, nil, nil, nil, r)
+	provider := storage.MockProvider(
+		log, 0, &engineCfg[0].Storage, nil, nil, nil,
+	)
+
+	srv := NewEngineInstance(log, provider, nil, r)
 	srv.setSuperblock(&Superblock{
 		Rank: system.NewRankPtr(0),
 	})

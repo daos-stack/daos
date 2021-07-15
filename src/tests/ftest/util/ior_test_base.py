@@ -93,7 +93,7 @@ class IorTestBase(DfuseTestBase):
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
-                          mount_dir=None):
+                          mount_dir=None, out_queue=None):
         # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -119,6 +119,8 @@ class IorTestBase(DfuseTestBase):
             fail_on_warning (bool, optional): Controls whether the test
                 should fail if a 'WARNING' is found. Default is False.
             mount_dir (str, optional): Create specific mount point
+            out_queue (queue, optional): Pass the exception to the queue.
+                Defaults to None
 
         Returns:
             CmdResult: result of the ior command execution
@@ -146,7 +148,8 @@ class IorTestBase(DfuseTestBase):
         try:
             out = self.run_ior(job_manager, self.processes,
                                intercept, plugin_path=plugin_path,
-                               fail_on_warning=fail_on_warning)
+                               fail_on_warning=fail_on_warning,
+                               out_queue=out_queue)
         finally:
             if stop_dfuse:
                 self.stop_dfuse()
@@ -213,7 +216,8 @@ class IorTestBase(DfuseTestBase):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
-                plugin_path=None, fail_on_warning=False, pool=None):
+                plugin_path=None, fail_on_warning=False, pool=None,
+                out_queue=None):
         """Run the IOR command.
 
         Args:
@@ -229,10 +233,17 @@ class IorTestBase(DfuseTestBase):
                 should fail if a 'WARNING' is found. Default is False.
             pool (TestPool, optional): The pool for which to display space.
                 Default is self.pool.
+            out_queue (queue, optional): Pass the exception to the queue.
+                Defaults to None.
         """
         env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
-            env["LD_PRELOAD"] = intercept
+            env['LD_PRELOAD'] = intercept
+            env['D_LOG_MASK'] = 'INFO'
+            env['D_IL_REPORT'] = '1'
+            #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+            #env['DD_MASK'] = 'all'
+            #env['DD_SUBSYS'] = 'all'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
@@ -264,6 +275,10 @@ class IorTestBase(DfuseTestBase):
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
+            # Queue is used when we use a thread to call
+            # ior thread (eg: thread1 --> thread2 --> ior)
+            if out_queue is not None:
+                out_queue.put("IOR Failed")
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:

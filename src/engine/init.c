@@ -62,6 +62,9 @@ int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
 int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
+/** NVMe hugepage_size for DPDK/SPDK memory allocation */
+int			dss_nvme_hugepage_size;
+
 /** I/O Engine instance index */
 unsigned int		dss_instance_idx;
 
@@ -82,6 +85,11 @@ hwloc_obj_t		numa_obj;
 int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
+/** Number of storage tiers: 2 for SCM and NVMe */
+int dss_storage_tiers = 2;
+
+/** Flag to indicate Arbogots is initialized */
+static bool dss_abt_init;
 
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
@@ -198,7 +206,6 @@ modules_load(void)
 	D_FREE(sep);
 	return rc;
 }
-
 
 /**
  * Get the appropriate number of main XS based on the number of cores and
@@ -447,12 +454,15 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 
+	dss_abt_init = true;
+
 	return 0;
 }
 
 static void
 abt_fini(void)
 {
+	dss_abt_init = false;
 	ABT_finalize();
 }
 
@@ -496,19 +506,33 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
-	if (uid != NULL)
-		ABT_self_get_thread_id(uid);
+
+	if (server_init_state != DSS_INIT_STATE_SET_UP)
+		return;
+
+	if (uid != NULL && dss_abt_init) {
+		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
+		int rc;
+
+		rc = ABT_self_get_type(&type);
+
+		if (rc == 0 && (type == ABT_UNIT_TYPE_THREAD || type == ABT_UNIT_TYPE_TASK))
+			ABT_self_get_thread_id(uid);
+	}
 
 	if (tid != NULL) {
 		struct dss_thread_local_storage *dtc;
 		struct dss_module_info *dmi;
+		int index = daos_srv_modkey.dmk_index;
 
+		/* Avoid assertion in dss_module_key_get() */
 		dtc = dss_tls_get();
-		if (dtc == NULL)
-			return;
-
-		dmi = dss_get_module_info();
-		*tid = dmi->dmi_xs_id;
+		if (dtc != NULL && index >= 0 && index < DAOS_MODULE_KEYS_NR &&
+		    dss_module_keys[index] == &daos_srv_modkey) {
+			dmi = dss_get_module_info();
+			if (dmi != NULL)
+				*tid = dmi->dmi_xs_id;
+		}
 	}
 }
 
@@ -814,6 +838,10 @@ Options:\n\
       Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
       Allocates mem_size MB for SPDK when using primary process mode\n\
+  --hugepage_size=hugepage_size, -H hugepage_size\n\
+      Passes the configured hugepage size(2MB or 1GB)\n\
+  --storage_tiers=ntiers, -T ntiers\n\
+      Number of storage tiers\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -834,11 +862,13 @@ parse(int argc, char **argv)
 		{ "nvme",		required_argument,	NULL,	'n' },
 		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
 		{ "mem_size",		required_argument,	NULL,	'r' },
+		{ "hugepage_size",	required_argument,	NULL,	'H' },
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
+		{ "storage_tiers",	required_argument,	NULL,	'T' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -846,7 +876,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:b",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -897,6 +927,9 @@ parse(int argc, char **argv)
 		case 'r':
 			dss_nvme_mem_size = atoi(optarg);
 			break;
+		case 'H':
+			dss_nvme_hugepage_size = atoi(optarg);
+			break;
 		case 'h':
 			usage(argv[0], stdout);
 			break;
@@ -905,6 +938,13 @@ parse(int argc, char **argv)
 			break;
 		case 'b':
 			dss_nvme_bypass_health_check = true;
+			break;
+		case 'T':
+			dss_storage_tiers = atoi(optarg);
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
+				printf("Requires 1 or 2 tiers\n");
+				rc = -DER_INVAL;
+			}
 			break;
 		default:
 			usage(argv[0], stderr);
@@ -1082,16 +1122,20 @@ main(int argc, char **argv)
 
 			 if (abt_infos == NULL) {
 				/* filename format is
-				 * "/tmp/daos_dump_YYYYMMDD_hh_mm.txt"
+				 * "/tmp/daos_dump_<PID>_YYYYMMDD_hh_mm.txt"
 				 */
-				char name[34] = "/tmp/daos_dump.txt";
+				char name[50];
 
 				if (rc != -1 && tm != NULL)
-					snprintf(name, 34,
-						 "/tmp/daos_dump_%04d%02d%02d_%02d_%02d.txt",
-						 tm->tm_year + 1900,
+					snprintf(name, 50,
+						 "/tmp/daos_dump_%d_%04d%02d%02d_%02d_%02d.txt",
+						 getpid(), tm->tm_year + 1900,
 						 tm->tm_mon + 1, tm->tm_mday,
 						 tm->tm_hour, tm->tm_min);
+				else
+					snprintf(name, 50,
+						 "/tmp/daos_dump_%d.txt",
+						 getpid());
 
 				abt_infos = fopen(name, "a");
 				if (abt_infos == NULL) {

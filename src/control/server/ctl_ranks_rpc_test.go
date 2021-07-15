@@ -28,6 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -191,7 +192,8 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 				engine.NewConfig().WithTargetCount(1),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
@@ -364,7 +366,8 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 			dispatched := &eventsDispatched{cancel: cancel}
 			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
@@ -379,7 +382,7 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 					signalsSent.Store(idx, sig)
 					// simulate process exit which will call
 					// onInstanceExit handlers.
-					svc.harness.instances[idx].exit(context.TODO(),
+					svc.harness.instances[idx].(*EngineInstance).exit(context.TODO(),
 						common.NormalExit)
 				}
 				trc.SignalErr = tc.signalErr
@@ -578,7 +581,8 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
@@ -704,20 +708,33 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			ctx := context.Background()
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.NewConfig().
+					WithTargetCount(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass("ram"),
+					),
+				engine.NewConfig().
+					WithTargetCount(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass("ram"),
+					),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue
 				}
 
+				engineCfg := cfg.Engines[i]
+
 				testDir, cleanup := common.CreateTestDir(t)
 				defer cleanup()
-				engineCfg := engine.NewConfig().WithScmMountPoint(testDir)
+				engineCfg.Storage.Tiers[0].Scm.MountPoint = testDir
 
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
@@ -727,7 +744,11 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				srv.runner = engine.NewTestRunner(trc, engineCfg)
 				srv.setIndex(uint32(i))
 
-				t.Logf("scm dir: %s", srv.scmConfig().MountPoint)
+				cfg, err := srv.storage.GetScmConfig()
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("scm dir: %s", cfg.Scm.MountPoint)
 				superblock := &Superblock{
 					Version: superblockVersion,
 					UUID:    common.MockUUID(),
@@ -846,7 +867,8 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				if tc.missingSB {
 					srv._superblock = nil
 					continue

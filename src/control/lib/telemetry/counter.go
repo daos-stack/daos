@@ -18,6 +18,7 @@ import "C"
 
 import (
 	"context"
+	"fmt"
 )
 
 type Counter struct {
@@ -69,5 +70,10 @@ func GetCounter(ctx context.Context, name string) (*Counter, error) {
 		return nil, err
 	}
 
-	return newCounter(hdl, "", &name, node), nil
+	if node.dtn_type != C.D_TM_COUNTER {
+		return nil, fmt.Errorf("metric %q is not a counter", name)
+	}
+
+	n, p := getPathAndName(name)
+	return newCounter(hdl, p, &n, node), nil
 }

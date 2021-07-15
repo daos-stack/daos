@@ -352,8 +352,8 @@ _vos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 		if (op_type == TS_DO_UPDATE)
 			rc = vos_update_begin(ts_ctx.tsc_coh, ts_uoids[obj_idx],
 					      epoch, 0, &cred->tc_dkey, 1,
-					      &cred->tc_iod, NULL, false, 0,
-					      &ioh, NULL);
+					      &cred->tc_iod, NULL, 0, &ioh,
+					      NULL);
 		else
 			rc = vos_fetch_begin(ts_ctx.tsc_coh, ts_uoids[obj_idx],
 					     epoch, &cred->tc_dkey, 1,
@@ -714,6 +714,51 @@ objects_fetch(struct pf_param *param)
 	return rc;
 }
 
+static int
+objects_query(struct pf_param *param)
+{
+	daos_epoch_t epoch = crt_hlc_get();
+	char		*akey = "0";
+	d_iov_t		dkey_iov;
+	d_iov_t		akey_iov;
+	daos_recx_t	recx;
+	int		i;
+	int		rc = 0;
+	uint64_t	start = 0;
+
+
+	d_iov_set(&akey_iov, akey, 1);
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	for (i = 0; i < ts_obj_p_cont; i++) {
+		d_iov_set(&dkey_iov, NULL, 0);
+		rc = vos_obj_query_key(ts_ctx.tsc_coh, ts_uoids[i],
+				       DAOS_GET_MAX | DAOS_GET_DKEY |
+				       DAOS_GET_RECX, epoch, &dkey_iov,
+				       &akey_iov, &recx, NULL);
+		if (rc != 0 && rc != -DER_NONEXIST)
+			break;
+		if (param->pa_query.verbose) {
+			if (rc == -DER_NONEXIST) {
+				printf("query_key "DF_UOID ": -DER_NONEXIST\n",
+				       DP_UOID(ts_uoids[i]));
+			} else {
+				printf("query_key "DF_UOID ": dkey="DF_U64
+				       " recx="DF_RECX"\n",
+				       DP_UOID(ts_uoids[i]),
+				       *(uint64_t *)dkey_iov.iov_buf,
+				       DP_RECX(recx));
+			}
+		}
+		rc = 0;
+	}
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return rc;
+}
+
 typedef int (*iterate_cb_t)(daos_handle_t ih, vos_iter_entry_t *key_ent,
 			    vos_iter_param_t *param);
 
@@ -947,6 +992,43 @@ pf_oit(struct pf_test *pf, struct pf_param *param)
 	return rc;
 }
 
+static int
+pf_query(struct pf_test *ts, struct pf_param *param)
+{
+	int rc;
+
+	if (ts_mode != TS_MODE_VOS) {
+		fprintf(stderr, "Query test can only run in VOS mode\n");
+		return -1;
+	}
+
+	if ((ts_flags & DAOS_OF_DKEY_UINT64) == 0) {
+		fprintf(stderr, "Integer dkeys required for query test (-i)\n");
+		return -1;
+	}
+
+	if (ts_single) {
+		fprintf(stderr, "Array values required for query test (-A)\n");
+		return -1;
+	}
+
+	if (!ts_const_akey) {
+		fprintf(stderr, "Const akey required for query test (-I)\n");
+		return -1;
+	}
+
+	rc = objects_open();
+	if (rc)
+		return rc;
+
+	rc = objects_query(param);
+	if (rc)
+		return rc;
+
+	rc = objects_close();
+	return rc;
+}
+
 /* Test command Format: "C;p=x;q D;a;b"
  *
  * The upper-case character is command, e.g. U=update, F=fetch, anything after
@@ -1066,6 +1148,37 @@ pf_parse_rw(char *str, struct pf_param *param, char **strp)
 }
 
 static int
+pf_parse_query_cb(char *str, struct pf_param *pa, char **strp)
+{
+	switch (*str) {
+	default:
+		str++;
+		break;
+	case 'v':
+		pa->pa_query.verbose = true;
+		str++;
+		break;
+	}
+	*strp = str;
+	return 0;
+}
+
+/**
+ * Example: "U;p Q;p;"
+ * 'U' is update test.  Integer dkey required
+ *	'p': parameter of update and it means outputting performance result
+ *
+ * 'Q' is query test
+ *	'p': parameter of query and it means outputting performance result
+ *	'v' enables verbosity
+ */
+static int
+pf_parse_query(char *str, struct pf_param *pa, char **strp)
+{
+	return pf_parse_common(str, pa, pf_parse_query_cb, strp);
+}
+
+static int
 pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 {
 	switch (*str) {
@@ -1134,6 +1247,12 @@ struct pf_test pf_tests[] = {
 		.ts_name	= "ITERATE",
 		.ts_parse	= pf_parse_iterate,
 		.ts_func	= pf_iterate,
+	},
+	{
+		.ts_code	= 'Q',
+		.ts_name	= "QUERY",
+		.ts_parse	= pf_parse_query,
+		.ts_func	= pf_query,
 	},
 	{
 		.ts_code	= 'O',

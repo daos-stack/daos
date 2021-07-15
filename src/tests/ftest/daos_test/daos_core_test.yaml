@@ -31,6 +31,7 @@ timeouts:
     test_daos_oid_allocator: 320
     test_daos_checksum: 500
     test_daos_rebuild_ec: 1800
+    test_daos_aggregate_ec: 200
     test_daos_degraded_ec_0to6: 900
     test_daos_degraded_ec_8to23: 950
     test_daos_dedup: 220
@@ -90,8 +91,8 @@ daos_tests:
     test_daos_distributed_tx: DAOS_Distributed_TX
     test_daos_verify_consistency: DAOS_Verify_Consistency
     test_daos_io: DAOS_IO
-    test_daos_ec_io: DAOS_EC_IO
-    test_daos_ec_obj: DAOS_EC_OBJ
+    test_daos_ec_io: DAOS_IO_EC_4P2G1
+    test_daos_ec_obj: DAOS_EC
     test_daos_object_array: DAOS_Object_Array
     test_daos_array: DAOS_Array
     test_daos_kv: DAOS_KV

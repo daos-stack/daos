@@ -25,7 +25,8 @@
 #include "vos_ilog.h"
 #include "vos_obj.h"
 
-#define VOS_MINOR_EPC_MAX EVT_MINOR_EPC_MAX
+#define VOS_MINOR_EPC_MAX (VOS_SUB_OP_MAX + 1)
+D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 
 #define VOS_TX_LOG_FAIL(rc, ...)			\
 	do {						\
@@ -70,8 +71,6 @@
 #define VOS_EVT_ORDER		23	/* evtree order */
 #define DTX_BTREE_ORDER	23	/* Order for DTX tree */
 #define VEA_TREE_ODR		20	/* Order of a VEA tree */
-
-#define DAOS_VOS_VERSION 1
 
 extern struct dss_module_key vos_module_key;
 
@@ -312,17 +311,6 @@ struct vos_dtx_cmt_ent {
 	d_list_t			 dce_committed_link;
 	struct vos_dtx_cmt_ent_df	 dce_base;
 
-	/* The single object OID if it is different from 'dce_base::dce_oid'. */
-	daos_unit_oid_t			 dce_oid_inline;
-
-	/* Similar as dae_oids, it points to 'dce_base::dce_oid',
-	 * or 'dce_oid_inline' or new buffer to hold more OIDs.
-	 */
-	daos_unit_oid_t			*dce_oids;
-
-	/* The count objects modified by current DTX. */
-	int				 dce_oid_cnt;
-
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
 					 dce_invalid:1;
@@ -330,8 +318,6 @@ struct vos_dtx_cmt_ent {
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_OID(dce)		((dce)->dce_base.dce_oid)
-#define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 
 extern int vos_evt_feats;
 
@@ -511,8 +497,7 @@ vos_dtx_prepared(struct dtx_handle *dth);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int counti, daos_epoch_t epoch,
-			struct dtx_cos_key *dcks,
+			int count, daos_epoch_t epoch, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces);
 void

@@ -22,7 +22,6 @@ func (c Component) String() string {
 
 // methodAuthorizations is the map for checking which components are authorized to make the specific method call.
 var methodAuthorizations = map[string][]Component{
-	"/ctl.CtlSvc/StoragePrepare":     {ComponentAdmin},
 	"/ctl.CtlSvc/StorageScan":        {ComponentAdmin},
 	"/ctl.CtlSvc/StorageFormat":      {ComponentAdmin},
 	"/ctl.CtlSvc/NetworkScan":        {ComponentAdmin},
@@ -46,6 +45,7 @@ var methodAuthorizations = map[string][]Component{
 	"/mgmt.MgmtSvc/PoolResolveID":    {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolQuery":        {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolSetProp":      {ComponentAdmin},
+	"/mgmt.MgmtSvc/PoolGetProp":      {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolGetACL":       {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolOverwriteACL": {ComponentAdmin},
 	"/mgmt.MgmtSvc/PoolUpdateACL":    {ComponentAdmin},

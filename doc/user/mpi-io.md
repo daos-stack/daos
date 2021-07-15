@@ -20,49 +20,38 @@ for details.
     [here](https://github.com/pmodels/mpich/commits/main?author=mchaarawi).
 
 
-## MPI Implementations that support DAOS
+## Supported MPI Version
 
 ### MPICH
 
 The DAOS ROMIO ADIO driver has been accepted into [MPICH](https://www.mpich.org/).
 It is included in [mpich-3.4.1 (released Jan 2021)](https://www.mpich.org/downloads/).
 
-### Building MPICH with DAOS Support
-
 To build MPICH, including ROMIO with the DAOS ADIO driver:
 
 ```bash
 export MPI_LIB=""
 
-git clone https://github.com/daos-stack/mpich
+git clone https://github.com/pmodels/mpich
 
 cd mpich
 
 ./autogen.sh
 
-mkdir build; cd build
-
-../configure --prefix=dir --enable-fortran=all --enable-romio \
-  --enable-cxx --enable-g=all --enable-debuginfo --with-device=ch3:sock \
-  --with-file-system=ufs+daos --with-daos=/usr --with-cart=/usr
+./configure --prefix=dir --enable-fortran=all --enable-romio \
+ --enable-cxx --enable-g=all --enable-debuginfo --with-device=ch3:nemesis \
+ --with-file-system=ufs+daos --with-daos=/usr
 
 make -j8; make install
 ```
 
-This assumes that DAOS is installed into the `/usr` tree, 
-which is the case for the DAOS RPM installation.
-
-!!! note
-    In DAOS 1.0, CART was packaged separately from DAOS, and the
-    `--with-cart` option was needed to allow separate installation locations. 
-    With DAOS 1.1 or higher, CART is included in the main DAOS packages 
-    and the `--with-cart` option is no longer needed. 
-    An MPICH pull request is in process to remove the option from the MPICH
-    `configure` step, but currently it is still required to build MPICH.
+This assumes that DAOS is installed into the `/usr` tree, which is the case for
+the DAOS RPM installation. Other configure options can be added, modified, or
+removed as needed, like the network communicatio device, fortran support,
+etc. For those, please consule the mpich user guide.
 
 Set the `PATH` and `LD_LIBRARY_PATH` to where you want to build your client
 apps or libs that use MPI to the path of the installed MPICH.
-
 
 ### Intel MPI
 
@@ -85,11 +74,12 @@ needs to be used by listing it first in the library search path:
 export LD_LIBRARY_PATH="/usr/lib64/:$LD_LIBRARY_PATH"
 ```
 
-The next Intel MPI release is expected to contain a version of `libfabric`
-that includes all patches to work with DAOS.
-It will then no longer be necessary to override the `libfabric` version that is
-shipped with Intel MPI by the version provided by DAOS.
-
+There are other environment variables that need to be set on the client side to
+ensure proper functionality with the DAOS MPIIO driver and those include:
+```bash
+export I_MPI_OFI_LIBRARY_INTERNAL=0
+export FI_OFI_RXM_USE_SRX=1
+```
 
 ### Open MPI
 
@@ -104,7 +94,7 @@ Since its MPI-IO implementation is based on ROMIO,
 it will likely pick up DAOS support in an upcoming release.
 
 
-## Testing MPI-IO with DAOS Support
+## Testing MPI-IO with DAOS
 
 Build any client (HDF5, ior, mpi test suites) normally with the mpicc command
 and mpich library installed above (see child pages).
@@ -114,10 +104,11 @@ To run an example with MPI-IO:
 1. Create a DAOS pool on the DAOS server(s).
    This will return a pool uuid "puuid".
 2. Create a POSIX type container:
-   `daos cont create --pool=puuid --type=POSIX`
+   `daos cont create <pool_label> --type=POSIX`
    This will return a container uuid "cuuid".
 3. At the client side, the following environment variables need to be set:
-   `export DAOS_POOL=puuid; export DAOS_CONT=cuuid`.
+   `export DAOS_POOL=puuid; export DAOS_CONT=cuuid; export DAOS_BYPASS_DUNS=1`.
+   The pool and container UUID can be retrieved via `daos pool/cont query`
    Alternatively, the unified namespace mode can be used instead.
 3. Run the client application or test.
    MPI-IO applications should work seamlessly by just prepending `daos:`

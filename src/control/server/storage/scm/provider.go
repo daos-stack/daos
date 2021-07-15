@@ -18,10 +18,11 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
+
+var _ storage.ScmProvider = &Provider{}
 
 const (
 	defaultUnmountFlags = 0
@@ -41,91 +42,7 @@ const (
 	ramFsType = fsTypeTmpfs
 )
 
-// User facing messages.
-const (
-	MsgRebootRequired     = "A reboot is required to process new SCM memory allocation goals."
-	MsgNoModules          = "no SCM modules to prepare"
-	MsgNotInited          = "SCM storage could not be accessed"
-	MsgClassNotSupported  = "operation unsupported on SCM class"
-	MsgIpmctlDiscoverFail = "ipmctl module discovery"
-)
-
 type (
-	// PrepareRequest defines the parameters for a Prepare operation.
-	PrepareRequest struct {
-		pbin.ForwardableRequest
-		// Reset indicates that the operation should reset (clear) DCPM namespaces.
-		Reset bool
-	}
-
-	// PrepareResponse contains the results of a successful Prepare operation.
-	PrepareResponse struct {
-		State          storage.ScmState
-		RebootRequired bool
-		Namespaces     storage.ScmNamespaces
-	}
-
-	// ScanRequest defines the parameters for a Scan operation.
-	ScanRequest struct {
-		pbin.ForwardableRequest
-		DeviceList []string
-		Rescan     bool
-	}
-
-	// ScanResponse contains information gleaned during a successful Scan operation.
-	ScanResponse struct {
-		State      storage.ScmState
-		Modules    storage.ScmModules
-		Namespaces storage.ScmNamespaces
-	}
-
-	// DcpmParams defines the sub-parameters of a Format operation that
-	// will use DCPM storage.
-	DcpmParams struct {
-		Device string
-	}
-
-	// RamdiskParams defines the sub-parameters of a Format operation that
-	// will use tmpfs-based ramdisk storage.
-	RamdiskParams struct {
-		Size uint
-	}
-
-	// FormatRequest defines the parameters for a Format operation or query.
-	FormatRequest struct {
-		pbin.ForwardableRequest
-		Reformat   bool
-		Mountpoint string
-		OwnerUID   int
-		OwnerGID   int
-		Ramdisk    *RamdiskParams
-		Dcpm       *DcpmParams
-	}
-
-	// FormatResponse contains the results of a successful Format operation or query.
-	FormatResponse struct {
-		Mountpoint string
-		Formatted  bool
-		Mounted    bool
-		Mountable  bool
-	}
-
-	// MountRequest defines the parameters for a Mount operation.
-	MountRequest struct {
-		pbin.ForwardableRequest
-		Source string
-		Target string
-		FsType string
-		Flags  uintptr
-		Data   string
-	}
-
-	// MountResponse contains the results of a successful Mount operation.
-	MountResponse struct {
-		Target  string
-		Mounted bool
-	}
-
 	// Backend defines a set of methods to be implemented by a SCM backend.
 	Backend interface {
 		Discover() (storage.ScmModules, error)
@@ -165,42 +82,10 @@ type (
 		log     logging.Logger
 		backend Backend
 		sys     SystemProvider
-		fwd     *AdminForwarder
-		firmwareProvider
 	}
 )
 
-// CreateFormatRequest populates and returns a FormatRequest reference.
-func CreateFormatRequest(scmCfg storage.ScmConfig, reformat bool) (*FormatRequest, error) {
-	req := FormatRequest{
-		Mountpoint: scmCfg.MountPoint,
-		Reformat:   reformat,
-		OwnerUID:   os.Geteuid(),
-		OwnerGID:   os.Getegid(),
-	}
-
-	switch scmCfg.Class {
-	case storage.ScmClassRAM:
-		req.Ramdisk = &RamdiskParams{
-			Size: uint(scmCfg.RamdiskSize),
-		}
-	case storage.ScmClassDCPM:
-		// FIXME (DAOS-3291): Clean up SCM configuration
-		if len(scmCfg.DeviceList) != 1 {
-			return nil, FaultFormatInvalidDeviceCount
-		}
-		req.Dcpm = &DcpmParams{
-			Device: scmCfg.DeviceList[0],
-		}
-	default:
-		return nil, errors.New(MsgClassNotSupported)
-	}
-
-	return &req, nil
-}
-
-// Validate checks the request for validity.
-func (r FormatRequest) Validate() error {
+func validateFormatRequest(r storage.ScmFormatRequest) error {
 	if r.Mountpoint == "" {
 		return FaultFormatMissingMountpoint
 	}
@@ -350,21 +235,8 @@ func NewProvider(log logging.Logger, backend Backend, sys SystemProvider) *Provi
 		log:     log,
 		backend: backend,
 		sys:     sys,
-		fwd:     NewAdminForwarder(log),
 	}
-	p.setupFirmwareProvider(log)
 	return p
-}
-
-// WithForwardingDisabled returns a reference to the given Provider with the
-// disabled property set on the Provider's forwarder.
-func (p *Provider) WithForwardingDisabled() *Provider {
-	p.fwd.Disabled = true
-	return p
-}
-
-func (p *Provider) shouldForward(req pbin.ForwardChecker) bool {
-	return !p.fwd.Disabled && !req.IsForwarded()
 }
 
 func (p *Provider) isInitialized() bool {
@@ -395,7 +267,7 @@ func (p *Provider) updateState() (state storage.ScmState, err error) {
 // GetPmemState returns the current state of DCPM namespaces, if available.
 func (p *Provider) GetPmemState() (storage.ScmState, error) {
 	if !p.isInitialized() {
-		if _, err := p.Scan(ScanRequest{}); err != nil {
+		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
 			return p.lastState, err
 		}
 	}
@@ -403,11 +275,11 @@ func (p *Provider) GetPmemState() (storage.ScmState, error) {
 	return p.currentState(), nil
 }
 
-func (p *Provider) createScanResponse() *ScanResponse {
+func (p *Provider) createScanResponse() *storage.ScmScanResponse {
 	p.RLock()
 	defer p.RUnlock()
 
-	return &ScanResponse{
+	return &storage.ScmScanResponse{
 		State:      p.lastState,
 		Modules:    p.modules,
 		Namespaces: p.namespaces,
@@ -415,24 +287,9 @@ func (p *Provider) createScanResponse() *ScanResponse {
 }
 
 // Scan attempts to scan the system for SCM storage components.
-func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
+func (p *Provider) Scan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
 	if p.isInitialized() && !req.Rescan {
 		return p.createScanResponse(), nil
-	}
-
-	if p.shouldForward(req) {
-		res, err := p.fwd.Scan(req)
-		if err != nil {
-			return nil, err
-		}
-		p.Lock()
-		p.scanCompleted = true
-		p.lastState = res.State
-		p.modules = res.Modules
-		p.namespaces = res.Namespaces
-		p.Unlock()
-
-		return res, nil
 	}
 
 	modules, err := p.backend.Discover()
@@ -469,23 +326,19 @@ func (p *Provider) Scan(req ScanRequest) (*ScanResponse, error) {
 }
 
 // Prepare attempts to fulfill a SCM Prepare request.
-func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error) {
+func (p *Provider) Prepare(req storage.ScmPrepareRequest) (res *storage.ScmPrepareResponse, err error) {
 	if !p.isInitialized() {
-		if _, err := p.Scan(ScanRequest{}); err != nil {
+		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
 			return nil, err
 		}
 	}
 
-	res = &PrepareResponse{}
+	res = &storage.ScmPrepareResponse{}
 	if sr := p.createScanResponse(); len(sr.Modules) == 0 {
 		p.log.Info("skipping SCM prepare; no modules detected")
 		res.State = sr.State
 
 		return res, nil
-	}
-
-	if p.shouldForward(req) {
-		return p.fwd.Prepare(req)
 	}
 
 	if req.Reset {
@@ -538,22 +391,12 @@ func (p *Provider) Prepare(req PrepareRequest) (res *PrepareResponse, err error)
 // request is already formatted. If it is mounted, it is assumed to be formatted.
 // In the case of DCPM, the device is checked directly for the presence of a
 // filesystem.
-func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
-	if !p.isInitialized() {
-		if _, err := p.Scan(ScanRequest{}); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := req.Validate(); err != nil {
+func (p *Provider) CheckFormat(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
+	if err := validateFormatRequest(req); err != nil {
 		return nil, err
 	}
 
-	if p.shouldForward(req) {
-		return p.fwd.CheckFormat(req)
-	}
-
-	res := &FormatResponse{
+	res := &storage.ScmFormatResponse{
 		Mountpoint: req.Mountpoint,
 		Formatted:  true,
 	}
@@ -571,6 +414,12 @@ func (p *Provider) CheckFormat(req FormatRequest) (*FormatResponse, error) {
 		// ramdisk
 		res.Formatted = false
 		return res, nil
+	}
+
+	if !p.isInitialized() {
+		if _, err := p.Scan(storage.ScmScanRequest{}); err != nil {
+			return nil, err
+		}
 	}
 
 	fsType, err := p.sys.Getfs(req.Dcpm.Device)
@@ -654,20 +503,16 @@ func (p *Provider) makeMountPath(path string, tgtUID, tgtGID int) error {
 	return nil
 }
 
-// Format attempts to fulfill the specified SCM format request.
-func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
+// storage.ScmFormat attempts to fulfill the specified SCM format request.
+func (p *Provider) Format(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
 	check, err := p.CheckFormat(req)
 	if err != nil {
 		return nil, err
 	}
 	if check.Formatted {
-		if !req.Reformat {
+		if !req.Force {
 			return nil, FaultFormatNoReformat
 		}
-	}
-
-	if p.shouldForward(req) {
-		return p.fwd.Format(req)
 	}
 
 	if err := p.clearMount(req.Mountpoint); err != nil {
@@ -688,7 +533,7 @@ func (p *Provider) Format(req FormatRequest) (*FormatResponse, error) {
 	}
 }
 
-func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
+func (p *Provider) formatRamdisk(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
 	if req.Ramdisk == nil {
 		return nil, FaultFormatMissingParam
 	}
@@ -707,7 +552,7 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 			req.Mountpoint, req.OwnerUID, req.OwnerGID)
 	}
 
-	return &FormatResponse{
+	return &storage.ScmFormatResponse{
 		Mountpoint: res.Target,
 		Formatted:  true,
 		Mounted:    true,
@@ -715,7 +560,7 @@ func (p *Provider) formatRamdisk(req FormatRequest) (*FormatResponse, error) {
 	}, nil
 }
 
-func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
+func (p *Provider) formatDcpm(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
 	if req.Dcpm == nil {
 		return nil, FaultFormatMissingParam
 	}
@@ -729,7 +574,7 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 	}
 
 	p.log.Debugf("running mkfs.%s %s", dcpmFsType, req.Dcpm.Device)
-	if err := p.sys.Mkfs(dcpmFsType, req.Dcpm.Device, req.Reformat); err != nil {
+	if err := p.sys.Mkfs(dcpmFsType, req.Dcpm.Device, req.Force); err != nil {
 		return nil, errors.Wrapf(err, "failed to format %s", req.Dcpm.Device)
 	}
 
@@ -747,7 +592,7 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 			req.Mountpoint, req.OwnerUID, req.OwnerGID)
 	}
 
-	return &FormatResponse{
+	return &storage.ScmFormatResponse{
 		Mountpoint: res.Target,
 		Formatted:  true,
 		Mounted:    true,
@@ -756,53 +601,43 @@ func (p *Provider) formatDcpm(req FormatRequest) (*FormatResponse, error) {
 }
 
 // MountDcpm attempts to mount a DCPM device at the specified mountpoint.
-func (p *Provider) MountDcpm(device, target string) (*MountResponse, error) {
+func (p *Provider) MountDcpm(device, target string) (*storage.ScmMountResponse, error) {
 	// make sure the source device is not already mounted somewhere else
-	devMounted, err := p.IsMounted(device)
+	devMounted, err := p.sys.IsMounted(device)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "unable to check if %s is mounted", device)
 	}
 	if devMounted {
 		return nil, errors.Wrap(FaultDeviceAlreadyMounted, device)
 	}
-	req := MountRequest{
-		Source: device,
-		Target: target,
-		FsType: dcpmFsType,
-		Flags:  defaultMountFlags,
-		Data:   dcpmMountOpts,
-	}
 
-	return p.Mount(req)
+	return p.mount(device, target, dcpmFsType, defaultMountFlags, dcpmMountOpts)
 }
 
 // MountRamdisk attempts to mount a tmpfs-based ramdisk of the specified size at
 // the specified mountpoint.
-func (p *Provider) MountRamdisk(target string, size uint) (*MountResponse, error) {
+func (p *Provider) MountRamdisk(target string, size uint) (*storage.ScmMountResponse, error) {
 	var opts string
 	if size > 0 {
 		opts = fmt.Sprintf("size=%dg", size)
 	}
-	req := MountRequest{
-		Source: ramFsType,
-		Target: target,
-		FsType: ramFsType,
-		Flags:  defaultMountFlags,
-		Data:   opts,
-	}
 
-	return p.Mount(req)
+	return p.mount(ramFsType, target, ramFsType, defaultMountFlags, opts)
 }
 
 // Mount attempts to mount the target specified in the supplied request.
-func (p *Provider) Mount(req MountRequest) (*MountResponse, error) {
-	if p.shouldForward(req) {
-		return p.fwd.Mount(req)
+func (p *Provider) Mount(req storage.ScmMountRequest) (*storage.ScmMountResponse, error) {
+	switch req.Class {
+	case storage.ClassDcpm:
+		return p.MountDcpm(req.Device, req.Target)
+	case storage.ClassRam:
+		return p.MountRamdisk(req.Target, req.Size)
+	default:
+		return nil, errors.New(storage.ScmMsgClassNotSupported)
 	}
-	return p.mount(req.Source, req.Target, req.FsType, req.Flags, req.Data)
 }
 
-func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string) (*MountResponse, error) {
+func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string) (*storage.ScmMountResponse, error) {
 	// make sure that we're not double-mounting over an existing mount
 	tgtMounted, err := p.IsMounted(target)
 	if err != nil && !os.IsNotExist(err) {
@@ -817,26 +652,23 @@ func (p *Provider) mount(src, target, fsType string, flags uintptr, opts string)
 		return nil, errors.Wrapf(err, "mount %s->%s failed", src, target)
 	}
 
-	return &MountResponse{
+	return &storage.ScmMountResponse{
 		Target:  target,
 		Mounted: true,
 	}, nil
 }
 
 // Unmount attempts to unmount the target specified in the supplied request.
-func (p *Provider) Unmount(req MountRequest) (*MountResponse, error) {
-	if p.shouldForward(req) {
-		return p.fwd.Unmount(req)
-	}
-	return p.unmount(req.Target, int(req.Flags))
+func (p *Provider) Unmount(req storage.ScmMountRequest) (*storage.ScmMountResponse, error) {
+	return p.unmount(req.Target, defaultUnmountFlags)
 }
 
-func (p *Provider) unmount(target string, flags int) (*MountResponse, error) {
+func (p *Provider) unmount(target string, flags int) (*storage.ScmMountResponse, error) {
 	if err := p.sys.Unmount(target, flags); err != nil {
 		return nil, errors.Wrapf(err, "failed to unmount %s", target)
 	}
 
-	return &MountResponse{
+	return &storage.ScmMountResponse{
 		Target:  target,
 		Mounted: false,
 	}, nil

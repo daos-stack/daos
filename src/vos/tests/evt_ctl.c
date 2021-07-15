@@ -196,10 +196,11 @@ ts_close_destroy(void)
 }
 
 static int
-ts_parse_rect(char *str, struct evt_rect *rect, daos_epoch_t *high,
+ts_parse_rect(char *str, struct evt_rect *rect, daos_epoch_range_t *epr_in,
 	      char **val_p, bool *should_pass)
 {
-	char	*tmp;
+	char			*tmp;
+	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
 
 	if (should_pass == NULL) {
 		if (str[0] == '-') {
@@ -231,7 +232,7 @@ parse_rect:
 	}
 
 	str = tmp + 1;
-	rect->rc_epc = strtoull(str, NULL, 10);
+	rect->rc_epc = epr.epr_lo = strtoull(str, NULL, 10);
 	tmp = strchr(str, EVT_SEP_MNR);
 	if (tmp == NULL) {
 		rect->rc_minor_epc = 1;
@@ -240,16 +241,15 @@ parse_rect:
 		rect->rc_minor_epc = atoi(str);
 	}
 
-	if (high) {
-		*high = DAOS_EPOCH_MAX;
-		tmp = strchr(str, EVT_SEP_EXT);
-		if (tmp == NULL)
-			goto parse_value;
+	tmp = strchr(str, EVT_SEP_EXT);
+	if (tmp != NULL) {
 		str = tmp + 1;
-		*high = strtoull(str, NULL, 10);
+		epr.epr_hi = strtoull(str, NULL, 10);
 	}
 
-parse_value:
+	if (epr_in != NULL)
+		*epr_in = epr;
+
 	if (val_p == NULL) /* called by evt_find */
 		return 0;
 
@@ -438,15 +438,14 @@ ts_remove_rect(void)
 	if (arg == NULL)
 		fail();
 
-	rc = ts_parse_rect(arg, &rect, NULL, NULL, &should_pass);
+	rc = ts_parse_rect(arg, &rect, &epr, NULL, &should_pass);
 	if (rc != 0)
 		fail();
 
-	D_PRINT("Remove all "DF_RECT" expect_pass=%s\n", DP_RECT(&rect),
+	D_PRINT("Remove all "DF_EXT"@"DF_X64"-"DF_X64" expect_pass=%s\n",
+		DP_EXT(&rect.rc_ex), epr.epr_lo, epr.epr_hi,
 		should_pass ? "true" : "false");
 
-	epr.epr_lo = 0;
-	epr.epr_hi = rect.rc_epc;
 	rc = evt_remove_all(ts_toh, &rect.rc_ex, &epr);
 
 	if (should_pass) {
@@ -470,7 +469,7 @@ ts_find_rect(void)
 	struct evt_filter	 filter = {0};
 	bio_addr_t		 addr;
 	struct evt_rect		 rect;
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	int			 rc;
 	bool			 should_pass;
 	char			*arg;
@@ -489,12 +488,12 @@ ts_find_rect(void)
 	filter.fr_epr.epr_hi = rect.rc_epc;
 	filter.fr_epoch = filter.fr_epr.epr_hi;
 	filter.fr_ex = rect.rc_ex;
-	evt_ent_array_init(&ent_array);
-	rc = evt_find(ts_toh, &filter, &ent_array);
+	evt_ent_array_init(ent_array, 0);
+	rc = evt_find(ts_toh, &filter, ent_array);
 	if (rc != 0)
 		D_FATAL("Add rect failed "DF_RC"\n", DP_RC(rc));
 
-	evt_ent_array_for_each(ent, &ent_array) {
+	evt_ent_array_for_each(ent, ent_array) {
 		bool punched;
 		addr = ent->en_addr;
 
@@ -507,7 +506,7 @@ ts_find_rect(void)
 								 addr.ba_off));
 	}
 
-	evt_ent_array_fini(&ent_array);
+	evt_ent_array_fini(ent_array);
 }
 
 static void
@@ -517,7 +516,7 @@ ts_list_rect(void)
 	daos_anchor_t		 anchor;
 	struct evt_filter	 filter = {0};
 	struct evt_rect		 rect;
-	daos_epoch_t		 high = DAOS_EPOCH_MAX;
+	daos_epoch_range_t	 epr;
 	daos_handle_t		 ih;
 	int			 i;
 	char			*arg;
@@ -535,12 +534,11 @@ ts_list_rect(void)
 		goto start;
 	}
 
-	rc = ts_parse_rect(arg, &rect, &high, &val, NULL);
+	rc = ts_parse_rect(arg, &rect, &epr, &val, NULL);
 	if (rc != 0)
 		fail();
 	filter.fr_ex = rect.rc_ex;
-	filter.fr_epr.epr_lo = rect.rc_epc;
-	filter.fr_epr.epr_hi = high;
+	filter.fr_epr = epr;
 	filter.fr_epoch = filter.fr_epr.epr_hi;
 	if (!val)
 		goto start;
@@ -571,12 +569,6 @@ ts_list_rect(void)
 	case 'c':
 		options |= EVT_ITER_COVERED;
 		probe = false;
-		break;
-	case 'B':
-		options |= EVT_ITER_EMBEDDED;
-	case 'b':
-		options |= (EVT_ITER_VISIBLE | EVT_ITER_COVERED);
-		/* Don't skip the probe in this case just to test that path */
 		break;
 	default:
 		D_PRINT("Unknown iterator type: %c\n", val[0]);
@@ -897,9 +889,6 @@ copy_exp_val_to_array(int flag, int **evtdata,
 	if (epoch < NUM_EPOCHS) {
 		switch (flag) {
 		case EVT_ITER_COVERED:
-			incr = 1;
-		break;
-		case EVT_ITER_VISIBLE | EVT_ITER_COVERED:
 			incr = 0;
 		break;
 		default:
@@ -909,7 +898,7 @@ copy_exp_val_to_array(int flag, int **evtdata,
 			val[epoch] = evtdata[epoch][epoch];
 			 count++;
 		} else if ((flag == EVT_ITER_COVERED) ||
-		(flag == (EVT_ITER_VISIBLE | EVT_ITER_COVERED))) {
+		(flag == (EVT_ITER_COVERED))) {
 			for (offset = epoch; offset >= 1; offset--) {
 				if (evtdata[offset][epoch+incr] != 0) {
 					val[count] =
@@ -930,20 +919,7 @@ copy_exp_val_to_array(int flag, int **evtdata,
 				val[offset] = evtdata[epoch][offset];
 				 count++;
 			}
-		} else if (flag == EVT_ITER_COVERED) {
-			for (loop_count = epoch+1;
-			loop_count < NUM_EXTENTS+epoch;
-			loop_count++) {
-				for (offset = epoch-1; offset >= 1;
-					offset--) {
-					if (evtdata[offset][loop_count] != 0) {
-						val[count] =
-						evtdata[offset][loop_count];
-						count++;
-				   }
-				}
-			}
-		} else if (flag == (EVT_ITER_VISIBLE | EVT_ITER_COVERED)) {
+		} else if (flag == (EVT_ITER_COVERED)) {
 			for (loop_count = epoch;
 				loop_count < NUM_EXTENTS+epoch; loop_count++) {
 				for (offset = epoch; offset >= 1 ; offset--) {
@@ -990,11 +966,6 @@ create_expected_data(int iter_flag, int **evt_data,
 		copy_exp_val_to_array(iter_flag, evt_data, expval, &count);
 	break;
 	case EVT_ITER_COVERED:
-		print_message("EVT_ITER_COVERED\n");
-		count = 1;
-		copy_exp_val_to_array(iter_flag, evt_data, expval, &count);
-	break;
-	case (EVT_ITER_VISIBLE | EVT_ITER_COVERED):
 		print_message("EVT_ITER_VISIBLE (COVERED)\n");
 		count = 1;
 		copy_exp_val_to_array(iter_flag, evt_data, expval, &count);
@@ -1008,9 +979,6 @@ create_expected_data(int iter_flag, int **evt_data,
 		print_message("EVT_ITER_REVERSE (SKIP_HOLES and VISIBLE)\n");
 	break;
 	case (EVT_ITER_REVERSE | EVT_ITER_COVERED):
-		 print_message("EVT_ITER_REVERSE (COVERED)\n");
-	break;
-	case (EVT_ITER_REVERSE | EVT_ITER_VISIBLE | EVT_ITER_COVERED):
 		print_message("EVT_ITER_REVERSE (VISIBLE and COVERED)\n");
 	break;
 	case (EVT_ITER_REVERSE | EVT_ITER_VISIBLE):
@@ -1033,15 +1001,13 @@ create_expected_data(int iter_flag, int **evt_data,
 /* test_evt_iter_flags :
 *
 * Validate the following conditions:
-*   10: EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
-*   26: EVT_ITER_REVERSE|EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
-*    2: EVT_ITER_VISIBLE
-*   18: EVT_ITER_REVERSE|EVT_ITER_VISIBLE
-*    4: EVT_ITER_COVERED
-*   20: EVT_ITER_REVERSE|EVT_ITER_COVERED
-*    6: EVT_ITER_COVERED|EVT_ITER_VISIBLE
-*   22: EVT_ITER_REVERSE|EVT_ITER_COVERED|EVT_ITER_VISIBLE
-*    1: EVT_ITER_EMBEDDED
+*   EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
+*   EVT_ITER_REVERSE|EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
+*   EVT_ITER_VISIBLE
+*   EVT_ITER_REVERSE|EVT_ITER_VISIBLE
+*   EVT_ITER_COVERED
+*   EVT_ITER_REVERSE|EVT_ITER_COVERED
+*   EVT_ITER_EMBEDDED
 */
 static void
 test_evt_iter_flags(void **state)
@@ -1064,7 +1030,14 @@ test_evt_iter_flags(void **state)
 	int		*actual_val;
 	int		*rev_exp_val;
 	int		hole_epoch;
-	int		val[] = {10, 26, 2, 18, 4, 20, 6, 22, 1};
+	int		val[] = {
+		EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES,
+		EVT_ITER_REVERSE | EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES,
+		EVT_ITER_VISIBLE,
+		EVT_ITER_REVERSE|EVT_ITER_VISIBLE,
+		EVT_ITER_COVERED,
+		EVT_ITER_REVERSE|EVT_ITER_COVERED,
+		EVT_ITER_EMBEDDED};
 	int		t_repeats;
 
 	/* Create a evtree */
@@ -1138,8 +1111,8 @@ test_evt_iter_flags(void **state)
 		memset(actual_val, 0,
 			(NUM_EPOCHS+1)*(NUM_EPOCHS+NUM_EXTENTS+1)*
 			sizeof(int));
-		create_expected_data(val[iter_count],
-			data, exp_val, rev_exp_val);
+		create_expected_data(val[iter_count], data, exp_val,
+				     rev_exp_val);
 		rc = evt_iter_prepare(toh, val[iter_count], NULL, &ih);
 		if (rc != 0)
 			goto finish;
@@ -1199,7 +1172,8 @@ test_evt_iter_flags(void **state)
 				sizeof(int));
 
 		}
-		print_message("RC: "DF_RC"\n", DP_RC(rc));
+		print_message("RC: %d\n", rc);
+		assert_int_equal(rc, 0);
 		if (rc != 0)
 			goto finish;
 		rc = evt_iter_finish(ih);
@@ -1368,7 +1342,7 @@ test_evt_find_internal(void **state)
 	struct evt_entry_in	 entry = {0};
 	struct evt_entry	 *ent;
 	struct evt_filter	 filter = {0};
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	bio_addr_t		 addr;
 	int			 rc;
 	int			 epoch;
@@ -1430,11 +1404,11 @@ test_evt_find_internal(void **state)
 		filter.fr_ex.ex_hi = epoch + 9;
 		filter.fr_epr.epr_hi = epoch;
 		filter.fr_epoch = filter.fr_epr.epr_hi;
-		evt_ent_array_init(&ent_array);
-		rc = evt_find(toh, &filter, &ent_array);
+		evt_ent_array_init(ent_array, 1);
+		rc = evt_find(toh, &filter, ent_array);
 		if (rc != 0)
 			D_FATAL("Find rect failed "DF_RC"\n", DP_RC(rc));
-		evt_ent_array_for_each(ent, &ent_array) {
+		evt_ent_array_for_each(ent, ent_array) {
 			bool punched;
 			static char buf[10];
 
@@ -1479,7 +1453,7 @@ test_evt_find_internal(void **state)
 		assert_int_equal(rc, 0);
 		rc = utest_sync_mem_status(arg->ta_utx);
 		assert_int_equal(rc, 0);
-		evt_ent_array_fini(&ent_array);
+		evt_ent_array_fini(ent_array);
 	}
 	rc = utest_check_mem_initial_status(arg->ta_utx);
 	assert_int_equal(rc, 0);
@@ -1488,14 +1462,15 @@ test_evt_find_internal(void **state)
 	assert_rc_equal(rc, 0);
 }
 /*
-*   10: EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
-*   26: EVT_ITER_REVERSE|EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
-*    2: EVT_ITER_VISIBLE
-*   18: EVT_ITER_REVERSE|EVT_ITER_VISIBLE
-*    4: EVT_ITER_COVERED
-*   20: EVT_ITER_REVERSE|EVT_ITER_COVERED
-*    6: EVT_ITER_COVERED|EVT_ITER_VISIBLE
-*   22: EVT_ITER_REVERSE|EVT_ITER_COVERED|EVT_ITER_VISIBLE
+* Validate the following conditions:
+*   EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
+*   EVT_ITER_REVERSE|EVT_ITER_VISIBLE|EVT_ITER_SKIP_HOLES
+*   EVT_ITER_VISIBLE
+*   EVT_ITER_COVERED|EVT_ITER_EMBEDDED
+*   EVT_ITER_REVERSE|EVT_ITER_VISIBLE
+*   EVT_ITER_COVERED
+*   EVT_ITER_REVERSE|EVT_ITER_COVERED
+*   EVT_ITER_EMBEDDED
 */
 static void
 test_evt_iter_delete_internal(void **state)
@@ -1507,7 +1482,15 @@ test_evt_iter_delete_internal(void **state)
 	int			 rc;
 	int			 epoch;
 	int			 offset;
-	int			 val[] = {10, 26, 2, 18, 4, 20, 6, 22, 0};
+	int		val[] = {
+		EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES,
+		EVT_ITER_REVERSE | EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES,
+		EVT_ITER_VISIBLE,
+		EVT_ITER_COVERED|EVT_ITER_EMBEDDED,
+		EVT_ITER_REVERSE|EVT_ITER_VISIBLE,
+		EVT_ITER_COVERED,
+		EVT_ITER_REVERSE|EVT_ITER_COVERED,
+		EVT_ITER_EMBEDDED};
 	int			 iter_count;
 
 	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
@@ -1546,7 +1529,7 @@ test_evt_iter_delete_internal(void **state)
 		/* Ok, delete the rest */
 		while (!evt_iter_empty(ih)) {
 			rc = evt_iter_delete(ih, &ent);
-			if (val[iter_count] == 0) {
+			if (val[iter_count] == EVT_ITER_EMBEDDED) {
 				assert_rc_equal(rc, 0);
 			} else {
 				assert_int_not_equal(rc, 0);
@@ -1624,7 +1607,7 @@ test_evt_various_data_size_internal(void **state)
 					D_256M_SIZE};
 	uint64_t		data_size;
 	char                     *data;
-	struct evt_entry_array	 ent_array;
+	EVT_ENT_ARRAY_LG_PTR(ent_array);
 	struct evt_entry	 *ent;
 	bio_addr_t		 addr;
 	struct evt_filter	 filter = {0};
@@ -1676,16 +1659,16 @@ test_evt_various_data_size_internal(void **state)
 			rc = utest_sync_mem_status(arg->ta_utx);
 			assert_int_equal(rc, 0);
 			if (epoch == 1) {
-				evt_ent_array_init(&ent_array);
+				evt_ent_array_init(ent_array, 0);
 				filter.fr_ex.ex_lo = epoch;
 				filter.fr_ex.ex_hi = epoch + data_size - 1;
 				filter.fr_epr.epr_hi = epoch;
 				filter.fr_epoch = filter.fr_epr.epr_hi;
-				rc = evt_find(toh, &filter, &ent_array);
+				rc = evt_find(toh, &filter, ent_array);
 				if (rc != 0)
 					D_FATAL("Find rect failed "DF_RC"\n",
 						DP_RC(rc));
-				evt_ent_array_for_each(ent, &ent_array) {
+				evt_ent_array_for_each(ent, ent_array) {
 					static char *actual;
 
 					D_ALLOC(actual, data_size);
@@ -1703,7 +1686,7 @@ test_evt_various_data_size_internal(void **state)
 					}
 					D_FREE(actual);
 				}
-				evt_ent_array_fini(&ent_array);
+				evt_ent_array_fini(ent_array);
 			}
 			/* Delete a record*/
 			if (epoch % 10 == 0) {

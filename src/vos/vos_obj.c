@@ -130,6 +130,12 @@ vos_propagate_check(struct vos_object *obj, daos_handle_t toh,
 	return rc;
 }
 
+struct key_ilog_info {
+	struct vos_ilog_info	ki_obj;
+	struct vos_ilog_info	ki_dkey;
+	struct vos_ilog_info	ki_akey;
+};
+
 /**
  * @} vos_tree_helper
  */
@@ -141,24 +147,26 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	struct vos_krec_df	*krec;
 	struct vos_rec_bundle	 rbund;
 	struct dcs_csum_info	 csum;
-	struct vos_ilog_info	 obj_info = {0};
-	struct vos_ilog_info	 dkey_info = {0};
-	struct vos_ilog_info	 akey_info = {0};
+	struct key_ilog_info	*info;
 	daos_epoch_range_t	 epr = {0, epoch};
 	d_iov_t			 riov;
 	daos_handle_t		 toh = DAOS_HDL_INVAL;
 	int			 i;
 	int			 rc;
 
-	vos_ilog_fetch_init(&obj_info);
-	vos_ilog_fetch_init(&dkey_info);
-	vos_ilog_fetch_init(&akey_info);
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		return -DER_NOMEM;
+
+	vos_ilog_fetch_init(&info->ki_obj);
+	vos_ilog_fetch_init(&info->ki_dkey);
+	vos_ilog_fetch_init(&info->ki_akey);
 	rc = obj_tree_init(obj);
 	if (rc)
 		D_GOTO(out, rc);
 
 	rc = vos_ilog_punch(obj->obj_cont, &obj->obj_df->vo_ilog, &epr, bound,
-			    NULL, &obj_info, ts_set, false, false);
+			    NULL, &info->ki_obj, ts_set, false, false);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -181,7 +189,7 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	}
 
 	rc = vos_ilog_punch(obj->obj_cont, &krec->kr_ilog, &epr, bound,
-			    &obj_info, &dkey_info, ts_set, false,
+			    &info->ki_obj, &info->ki_dkey, ts_set, false,
 			    false);
 	if (rc)
 		D_GOTO(out, rc);
@@ -195,8 +203,8 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	for (i = 0; i < akey_nr; i++) {
 		rbund.rb_iov = &akeys[i];
 		rc = key_tree_punch(obj, toh, epoch, bound, &akeys[i], &riov,
-				    flags, ts_set, &dkey_info,
-				    &akey_info);
+				    flags, ts_set, &info->ki_dkey,
+				    &info->ki_akey);
 		if (rc != 0) {
 			VOS_TX_LOG_FAIL(rc, "Failed to punch akey: rc="
 					DF_RC"\n", DP_RC(rc));
@@ -219,7 +227,7 @@ punch_dkey:
 	rbund.rb_tclass	= VOS_BTR_DKEY;
 
 	rc = key_tree_punch(obj, obj->obj_toh, epoch, bound, dkey, &riov,
-			    flags, ts_set, &obj_info, &dkey_info);
+			    flags, ts_set, &info->ki_obj, &info->ki_dkey);
 	if (rc != 0)
 		D_GOTO(out, rc);
 
@@ -229,12 +237,14 @@ punch_dkey:
 					 &epr, VOS_ITER_DKEY);
 	}
  out:
-	vos_ilog_fetch_finish(&obj_info);
-	vos_ilog_fetch_finish(&dkey_info);
-	vos_ilog_fetch_finish(&akey_info);
+	vos_ilog_fetch_finish(&info->ki_obj);
+	vos_ilog_fetch_finish(&info->ki_dkey);
+	vos_ilog_fetch_finish(&info->ki_akey);
 
 	if (daos_handle_is_valid(toh))
 		key_tree_release(toh, 0);
+
+	D_FREE(info);
 
 	return rc;
 }
@@ -245,13 +255,16 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 {
 	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont;
-	struct vos_ilog_info	 info;
+	struct vos_ilog_info	*info;
 	int			 rc;
 
-	vos_ilog_fetch_init(&info);
+	D_ALLOC_PTR(info);
+	if (info == NULL)
+		return -DER_NOMEM;
+	vos_ilog_fetch_init(info);
 	cont = vos_hdl2cont(coh);
 	rc = vos_oi_punch(cont, obj->obj_id, epoch, bound, flags, obj->obj_df,
-			  &info, ts_set);
+			  info, ts_set);
 	if (rc)
 		D_GOTO(failed, rc);
 
@@ -260,7 +273,8 @@ obj_punch(daos_handle_t coh, struct vos_object *obj, daos_epoch_t epoch,
 	 */
 	vos_obj_evict(occ, obj);
 failed:
-	vos_ilog_fetch_finish(&info);
+	vos_ilog_fetch_finish(info);
+	D_FREE(info);
 	return rc;
 }
 
@@ -810,7 +824,7 @@ key_iter_match_probe(struct vos_obj_iter *oiter)
 	int	rc;
 
 	while (1) {
-		vos_iter_entry_t	entry;
+		static __thread vos_iter_entry_t	entry;
 
 		rc = key_iter_match(oiter, &entry);
 		switch (rc) {
@@ -1151,12 +1165,13 @@ singv_iter_next(struct vos_obj_iter *oiter)
 	vos_iter_entry_t entry;
 	int		 rc;
 	int		 opc;
+	int		 vis_flag;
 
 	/* Only one SV rec is visible for the given @epoch,
 	 * so return -DER_NONEXIST directly for the next().
 	 */
-	if (oiter->it_flags & VOS_IT_RECX_VISIBLE &&
-	    !(oiter->it_flags & VOS_IT_RECX_COVERED)) {
+	vis_flag = oiter->it_flags & VOS_IT_RECX_COVERED;
+	if (vis_flag == VOS_IT_RECX_VISIBLE) {
 		D_ASSERT(oiter->it_epc_expr == VOS_IT_EPC_RR);
 		return -DER_NONEXIST;
 	}
@@ -1187,24 +1202,18 @@ singv_iter_next(struct vos_obj_iter *oiter)
 #define recx_flags_set(flags, setting)	\
 	(((flags) & (setting)) == (setting))
 
+D_CASSERT((int)VOS_IT_RECX_COVERED == (int)EVT_ITER_COVERED);
+D_CASSERT((int)VOS_IT_RECX_VISIBLE == (int)EVT_ITER_VISIBLE);
+D_CASSERT((int)VOS_IT_RECX_SKIP_HOLES == (int)EVT_ITER_SKIP_HOLES);
+
 static uint32_t
 recx_get_flags(struct vos_obj_iter *oiter)
 {
 	uint32_t options = EVT_ITER_EMBEDDED;
+	uint32_t vis_flags = oiter->it_flags & (VOS_IT_RECX_COVERED |
+						VOS_IT_RECX_SKIP_HOLES);
 
-	if (recx_flags_set(oiter->it_flags,
-			   VOS_IT_RECX_VISIBLE | VOS_IT_RECX_SKIP_HOLES)) {
-		options |= EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES;
-		D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_COVERED));
-		goto done;
-	}
-	D_ASSERT(!recx_flags_set(oiter->it_flags, VOS_IT_RECX_SKIP_HOLES));
-	if (oiter->it_flags & VOS_IT_RECX_VISIBLE)
-		options |= EVT_ITER_VISIBLE;
-	if (oiter->it_flags & VOS_IT_RECX_COVERED)
-		options |= EVT_ITER_COVERED;
-
-done:
+	options |= vis_flags;
 	if (oiter->it_flags & VOS_IT_RECX_REVERSE)
 		options |= EVT_ITER_REVERSE;
 	if (oiter->it_flags & VOS_IT_FOR_PURGE)
