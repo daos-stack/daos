@@ -1568,6 +1568,9 @@ map_refresh_cb(tse_task_t *task, void *varg)
 		goto out;
 	}
 
+	if (DAOS_FAIL_CHECK(DAOS_POOL_FAIL_MAP_REFRESH))
+		out->tmo_op.po_map_version = 0;
+
 	if (out->tmo_op.po_map_version <= in->tmi_map_version) {
 		/*
 		 * The server side does not have a version we requested for. If
