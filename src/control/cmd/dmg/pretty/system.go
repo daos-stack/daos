@@ -180,36 +180,3 @@ func PrintSystemStartResponse(out, outErr io.Writer, resp *control.SystemStartRe
 func PrintSystemStopResponse(out, outErr io.Writer, resp *control.SystemStopResp) error {
 	return printSystemResults(out, outErr, resp.Results, &resp.AbsentHosts, &resp.AbsentRanks)
 }
-
-// PrintListPoolsResponse generates a human-readable representation of the
-// supplied ListPoolsResp struct and writes it to the supplied io.Writer.
-func PrintListPoolsResponse(out io.Writer, resp *control.ListPoolsResp) error {
-	if len(resp.Pools) == 0 {
-		fmt.Fprintln(out, "no pools in system")
-		return nil
-	}
-
-	uuidTitle := "UUID"
-	labelTitle := "Label"
-	svcRepTitle := "Svc Replicas"
-
-	formatter := txtfmt.NewTableFormatter(uuidTitle, labelTitle, svcRepTitle)
-	var table []txtfmt.TableRow
-
-	for _, pool := range resp.Pools {
-		row := txtfmt.TableRow{uuidTitle: pool.UUID}
-
-		row[labelTitle] = "N/A"
-		if pool.Label != "" {
-			row[labelTitle] = pool.Label
-		}
-		if len(pool.SvcReplicas) != 0 {
-			row[svcRepTitle] = formatRanks(pool.SvcReplicas)
-		}
-
-		table = append(table, row)
-	}
-	fmt.Fprintln(out, formatter.Format(table))
-
-	return nil
-}

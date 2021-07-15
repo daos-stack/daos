@@ -56,9 +56,9 @@ class DefaultEnvironment():
         """Fake CFile"""
         return []
 
-    def WhereIs(self, *_args, **_kw):
+    def WhereIs(self, path):
         """Fake WhereIs"""
-        return []
+        return ''
 
     def Java(self, *_args, **_kw):
         """Fake Java"""
@@ -307,7 +307,6 @@ class Configure():
     def Finish(self):
         """Fake finish"""
 
-
 class Literal():
     """Fake Literal"""
 
@@ -326,32 +325,26 @@ class Dir():
 
 class File():
     """Fake File"""
-    pass
 
 def VariantDir(*_args, **_kw):
     """Fake VariantDir"""
-
 
 def AddOption(*_args, **_kw):
     """Fake AddOption"""
     return True
 
-
 def GetOption(*_args, **_kw):
     """Fake GetOption"""
     return []
-
 
 def SetOption(*_args, **_kw):
     """Fake SetOption"""
     return True
 
-
 class Help():
     """Fake Help"""
     def __init__(self, *_args, **_kw):
         """constructor"""
-
 
 def Glob(*_args):
     """Fake Glob"""
@@ -365,14 +358,11 @@ def Exit(status):
     """Fake Exit"""
     sys.exit(status)
 
-
 def Import(*_args):
     """Fake Import"""
 
-
 def Export(*_args):
     """Fake Export"""
-
 
 def Default(*_args):
     """Fake Default"""
@@ -392,20 +382,20 @@ def Command(*_args, **_kw):
     """Fake Command"""
     return ["fake"]
 
-
 def Builder(*_args, **_kw):
     """Fake Builder"""
     return ["fake"]
 
+def WhereIs(path):
+    """Fake WhereIs"""
+    return ''
 
 def Platform():
     """Fake Platform"""
     return ''
 
-
 def Depends(*_args, **_kw):
     """Fake Depends"""
-
 
 COMMAND_LINE_TARGETS = []
 BUILD_TARGETS = []

@@ -156,11 +156,11 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 		if (arg->pool_label) {
 			print_message("setup: connecting to pool by label %s\n",
 				      arg->pool_label);
-			rc = daos_pool_connect_by_label(arg->pool_label,
-							arg->group, flags,
-							&arg->pool.poh,
-							&arg->pool.pool_info,
-							NULL);
+			rc = daos_pool_connect(arg->pool_label,
+					       arg->group, flags,
+					       &arg->pool.poh,
+					       &arg->pool.pool_info,
+					       NULL);
 		} else {
 			print_message("setup: connecting to pool "DF_UUID"\n",
 				      DP_UUID(arg->pool.pool_uuid));
