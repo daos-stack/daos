@@ -211,7 +211,7 @@ pipeline {
                       stage('Build') {
                         agent {
                           dockerfile {
-                            filename 'utils/docker/Dockerfile.${DISTRO}'
+                            filename "utils/docker/Dockerfile.${DISTRO}"
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true)
