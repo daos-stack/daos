@@ -204,7 +204,11 @@ pipeline {
                       }
                       axis {
                         name 'DISTRO'
-                        values 'centos.7', 'ubuntu.20.04', 'leap.15'
+                        values 'ubuntu.20.04', 'leap.15'
+                      }
+                      axis {
+                        name 'TARGET_TYPE'
+                        values 'release', 'dev', 'debug'
                       }
                     }
                     stages {
@@ -221,7 +225,6 @@ pipeline {
                         }
                         steps {
                           sconsBuild parallel_build: true,
-                                   scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos COMPILER=${COMPILER} TARGET_TYPE=release",
                                    build_deps: "no"
                         }
