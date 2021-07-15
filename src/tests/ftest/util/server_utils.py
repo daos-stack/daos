@@ -792,7 +792,7 @@ class DaosServerManager(SubprocessManager):
                 "  %-4s:  %s", key.upper(), get_display_size(storage[key]))
         return storage
 
-    def autosize_pool_params(self, size, scm_ratio, scm_size, nvme_size,
+    def autosize_pool_params(self, size, tier_ratio, scm_size, nvme_size,
                              min_targets=1, quantity=1):
         """Update any pool size parameter ending in a %.
 
@@ -808,13 +808,13 @@ class DaosServerManager(SubprocessManager):
         capacity.
 
         Note: depending upon the inputs this method may return dmg pool create
-            parameter combinations that are not supported, e.g. scm_ratio +
+            parameter combinations that are not supported, e.g. tier_ratio +
             nvme_size.  This is intended to allow testing of these combinations.
 
         Args:
             size (object): the str, int, or None value for the dmp pool create
                 size parameter.
-            scm_ratio (object): the int or None value for the dmp pool create
+            tier_ratio (object): the int or None value for the dmp pool create
                 size parameter.
             scm_size (object): the str, int, or None value for the dmp pool
                 create scm_size parameter.
@@ -836,7 +836,7 @@ class DaosServerManager(SubprocessManager):
 
         """
         # Adjust any pool size parameter by the requested percentage
-        params = {"scm_ratio": scm_ratio}
+        params = {"tier_ratio": tier_ratio}
         adjusted = {"size": size, "scm_size": scm_size, "nvme_size": nvme_size}
         keys = [
             key for key in ("size", "scm_size", "nvme_size")
@@ -866,31 +866,31 @@ class DaosServerManager(SubprocessManager):
                 raise ServerFailed(
                     "Error obtaining available storage") from error
 
-            # Determine the SCM and NVMe size limits for the size and scm_ratio
+            # Determine the SCM and NVMe size limits for the size and tier_ratio
             # arguments for the total number of engines
-            if scm_ratio is None:
+            if tier_ratio is None:
                 # Use the default value if not provided
-                scm_ratio = 6
+                tier_ratio = 6
             engine_qty = len(self.manager.job.engine_params) * len(self._hosts)
             available_storage["size"] = min(
                 engine_qty * available_storage["nvme"],
-                (engine_qty * available_storage["scm"]) / float(scm_ratio / 100)
+                (engine_qty * available_storage["scm"]) / float(tier_ratio / 100)
             )
-            available_storage["scm_ratio"] = \
-                available_storage["size"] * float(scm_ratio / 100)
+            available_storage["tier_ratio"] = \
+                available_storage["size"] * float(tier_ratio / 100)
             self.log.info(
                 "Largest storage size available for %s engines with a %.2f%% "
-                "scm_ratio:", engine_qty, scm_ratio)
+                "tier_ratio:", engine_qty, tier_ratio)
             self.log.info(
                 "  - NVME     : %s",
                 get_display_size(available_storage["size"]))
             self.log.info(
                 "  - SCM      : %s",
-                get_display_size(available_storage["scm_ratio"]))
+                get_display_size(available_storage["tier_ratio"]))
             self.log.info(
                 "  - COMBINED : %s",
                 get_display_size(
-                    available_storage["size"] + available_storage["scm_ratio"]))
+                    available_storage["size"] + available_storage["tier_ratio"]))
 
             # Apply any requested percentages to the pool parameters
             available = {
@@ -941,11 +941,11 @@ class DaosServerManager(SubprocessManager):
                             "exceeding the minimum of {} targets: {}".format(
                                 key, min_targets, adjusted_targets))
                 if key == "size":
-                    scm_ratio_size = params[key] * float(scm_ratio / 100)
+                    tier_ratio_size = params[key] * float(tier_ratio / 100)
                     self.log.info(
-                        "  - %-9s : %.2f%% scm_ratio = %s",
-                        key, scm_ratio, get_display_size(scm_ratio_size))
-                    params[key] += scm_ratio_size
+                        "  - %-9s : %.2f%% tier_ratio = %s",
+                        key, tier_ratio, get_display_size(tier_ratio_size))
+                    params[key] += tier_ratio_size
                     self.log.info(
                         "  - %-9s : NVMe + SCM = %s",
                         key, get_display_size(params[key]))
