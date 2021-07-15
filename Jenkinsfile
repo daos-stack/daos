@@ -417,6 +417,45 @@ pipeline {
                         }
                     }
                 }
+                stage('Build full matrix') {
+                  matrix {
+                    axes {
+                      axis {
+                        name 'COMPILER'
+                        values 'gcc', 'clang'
+                      }
+                      axis {
+                        name 'DISTRO'
+                        values 'centos.7', 'centos.8', 'ubuntu.20.04', 'leap.15'
+                      }
+                      axis {
+                        name 'TARGET_TYPE'
+                        values 'release', 'dev', 'debug'
+                      }
+                    }
+                    stages {
+                      stage('Build') {
+                        when {
+                          beforeAgent true
+                        }
+                        agent {
+                          dockerfile {
+                            filename 'utils/docker/Dockerfile.${DISTRO}'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true)
+                          }
+                        }
+                        steps {
+                          sconsBuild parallel_build: true,
+                                   scons_exe: 'scons-3',
+                                   scons_args: "PREFIX=/opt/daos COMPILER=${COMPILER} TARGET_TYPE=${TARGET_TYPE}",
+                                   build_deps: "no"
+                        }
+                      }
+                    }
+                  }
+                }
                 stage('Build on CentOS 7 debug') {
                     when {
                         beforeAgent true
