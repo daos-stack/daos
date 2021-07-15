@@ -42,7 +42,8 @@ fi
 
 # check ssd smart
 if true; then
-    clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+    tnodes2="wolf-110,wolf-111"
+    clush -B -S -o '-i ci_key' -l root -w "${tnodes2}" \
         "$(cat ci/functional/smart_health.sh)"
 fi
 
