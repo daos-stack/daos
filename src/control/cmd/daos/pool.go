@@ -210,8 +210,10 @@ func convertPoolInfo(pinfo *C.daos_pool_info_t) (*control.PoolQueryResp, error) 
 	pqp.Leader = uint32(pinfo.pi_leader)
 	pqp.Version = uint32(pinfo.pi_map_ver)
 
-	pqp.Scm = convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM)
-	pqp.Nvme = convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME)
+	pqp.TierStats = []*mgmtpb.StorageUsageStats{
+		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_SCM),
+		convertPoolSpaceInfo(&pinfo.pi_space, C.DAOS_MEDIA_NVME),
+	}
 	pqp.Rebuild = convertPoolRebuildStatus(&pinfo.pi_rebuild_st)
 
 	pqr := new(control.PoolQueryResp)

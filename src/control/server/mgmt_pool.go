@@ -26,6 +26,9 @@ const (
 	// DefaultPoolScmRatio defines the default SCM:NVMe ratio for
 	// requests that do not specify one.
 	DefaultPoolScmRatio = 0.06
+	// DefaultPoolNvmeRatio defines the default NVMe:SCM ratio for
+	// requests that do not specify one.
+	DefaultPoolNvmeRatio = 0.94
 	// DefaultPoolServiceReps defines a default value for pool create
 	// requests that do not specify a value. If there are fewer than this
 	// number of ranks available, then the default falls back to 1.
@@ -81,7 +84,7 @@ func (svc *mgmtSvc) getPoolServiceStorage(uuidStr string) ([]uint64, error) {
 		return nil, err
 	}
 
-	return []uint64{ps.Storage.ScmPerRank, ps.Storage.NVMePerRank}, nil
+	return ps.Storage.PerRankTierStorage, nil
 }
 
 // getPoolServiceRanks returns a slice of ranks designated as the
@@ -123,29 +126,45 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if len(req.GetRanks()) == 0 {
 		return errors.New("zero ranks in calculateCreateStorage()")
 	}
-	if req.GetScmratio() == 0 {
-		req.Scmratio = DefaultPoolScmRatio
+
+	// the engine will accept only 2 tiers - add missing
+	if len(req.GetTierratio()) == 0 {
+		req.Tierratio = []float64{DefaultPoolScmRatio, DefaultPoolNvmeRatio}
+	} else if len(req.GetTierratio()) == 1 {
+		req.Tierratio = append(req.Tierratio, 0)
 	}
 
 	storagePerRank := func(total uint64) uint64 {
 		return total / uint64(len(req.GetRanks()))
 	}
 
+	if len(req.Tierbytes) == 0 {
+		req.Tierbytes = make([]uint64, len(req.Tierratio))
+	} else if len(req.Tierbytes) == 1 {
+		req.Tierbytes = append(req.Tierbytes, 0)
+	}
+
 	switch {
-	case len(instances[0].bdevConfig().DeviceList) == 0:
+	case !instances[0].HasBlockDevices():
 		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
-		if req.GetScmbytes() == 0 {
-			req.Scmbytes = storagePerRank(req.GetTotalbytes())
+		for tierIdx := range req.Tierbytes {
+			if tierIdx > 0 {
+				req.Tierbytes[tierIdx] = 0
+			} else if req.Tierbytes[0] == 0 {
+				req.Tierbytes[0] = storagePerRank(req.GetTotalbytes())
+			}
 		}
-		req.Nvmebytes = 0
 	case req.GetTotalbytes() > 0:
-		req.Nvmebytes = storagePerRank(req.GetTotalbytes())
-		req.Scmbytes = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.GetScmratio()))
+		for tierIdx := range req.Tierbytes {
+			req.Tierbytes[tierIdx] = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.Tierratio[tierIdx]))
+		}
 	}
 
 	// zero these out as they're not needed anymore
 	req.Totalbytes = 0
-	req.Scmratio = 0
+	for tierIdx := range req.Tierratio {
+		req.Tierratio[tierIdx] = 0
+	}
 
 	targetCount := instances[0].GetTargetCount()
 	if targetCount == 0 {
@@ -153,11 +172,11 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	}
 	minNvmeRequired := engine.NvmeMinBytesPerTarget * uint64(targetCount)
 
-	if req.Nvmebytes != 0 && req.Nvmebytes < minNvmeRequired {
-		return FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
+	if req.Tierbytes[1] != 0 && req.Tierbytes[1] < minNvmeRequired {
+		return FaultPoolNvmeTooSmall(req.Tierbytes[1], targetCount)
 	}
-	if req.Scmbytes < engine.ScmMinBytesPerTarget*uint64(targetCount) {
-		return FaultPoolScmTooSmall(req.Scmbytes, targetCount)
+	if req.Tierbytes[0] < engine.ScmMinBytesPerTarget*uint64(targetCount) {
+		return FaultPoolScmTooSmall(req.Tierbytes[0], targetCount)
 	}
 
 	return nil
@@ -288,7 +307,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	ps = system.NewPoolService(uuid, req.GetScmbytes(), req.GetNvmebytes(), system.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(uuid, req.Tierbytes, system.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = poolLabel
 	if err := svc.sysdb.AddPoolService(ps); err != nil {
 		return nil, err
@@ -349,8 +368,9 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	}
 	// let the caller know what was actually created
 	resp.TgtRanks = req.GetRanks()
-	resp.ScmBytes = req.Scmbytes
-	resp.NvmeBytes = req.Nvmebytes
+	resp.TierBytes = make([]uint64, 2)
+	resp.TierBytes[0] = req.Tierbytes[0]
+	resp.TierBytes[1] = req.Tierbytes[1]
 
 	ps.Replicas = system.RanksFromUint32(resp.GetSvcReps())
 	ps.State = system.PoolServiceStateReady
@@ -549,8 +569,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 	if err != nil {
 		return nil, err
 	}
-	req.Scmbytes = ps.Storage.ScmPerRank
-	req.Nvmebytes = ps.Storage.NVMePerRank
+	req.Tierbytes = ps.Storage.PerRankTierStorage
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
