@@ -52,7 +52,7 @@ struct ioil_global {
 	uint64_t	iog_file_count;		/**< Number of file opens intercepted */
 	uint64_t	iog_read_count;		/**< Number of read operations intercepted */
 	uint64_t	iog_write_count;	/**< Number of write operations intercepted */
-
+	uint64_t	iog_fstat_count;	/**< Number of fstat operations intercepted */
 };
 
 static vector_t	fd_table;
@@ -328,7 +328,8 @@ ioil_show_summary()
 	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
 		return;
 
-	fprintf(stderr, "[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+	fprintf(stderr,
+		"[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
 		ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
 }
 
@@ -622,8 +623,9 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (rc != 0) {
 		int err = errno;
 
-		DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
-				err, strerror(err));
+		if (err != ENOTTY)
+			DFUSE_LOG_DEBUG("ioctl call on %d failed %d %s", fd,
+					err, strerror(err));
 		return false;
 	}
 
@@ -710,6 +712,12 @@ get_file:
 	entry->fd_status = DFUSE_IO_BYPASS;
 	entry->fd_cont = cont;
 
+	/* Only intercept fstat if caching is not on for this file */
+	if ((il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE) == 0)
+		entry->fd_fstat = true;
+
+	DFUSE_LOG_INFO("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
+
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
 	if (rc)
@@ -755,6 +763,20 @@ drop_reference_if_disabled(struct fd_entry *entry)
 	return true;
 }
 
+/* Whilst it's not impossible that dfuse is backing these paths it's very unlikely so
+ * simply skip them to avoid the extra ioctl cost.
+ */
+static bool
+dfuse_check_valid_path(const char *path)
+{
+	if ((strncmp(path, "/sys/", 5) == 0) ||
+		(strncmp(path, "/dev/", 5) == 0) ||
+		strncmp(path, "/proc/", 6) == 0) {
+		return false;
+	}
+	return true;
+}
+
 DFUSE_PUBLIC int
 dfuse_open(const char *pathname, int flags, ...)
 {
@@ -781,6 +803,12 @@ dfuse_open(const char *pathname, int flags, ...)
 	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
 
+	if (!dfuse_check_valid_path(pathname)) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by path",
+				pathname);
+		return fd;
+	}
+
 	status = DFUSE_IO_BYPASS;
 	/* Disable bypass for O_APPEND|O_PATH */
 	if ((flags & (O_PATH | O_APPEND)) != 0)
@@ -789,22 +817,22 @@ dfuse_open(const char *pathname, int flags, ...)
 	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
 		DFUSE_LOG_DEBUG("open(pathname=%s) interception not possible",
 				pathname);
-		goto finish;
+		return fd;
 	}
 
 	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
 
 	if (flags & O_CREAT)
 		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o, mode=0%o) = "
-				"%d. intercepted, bypass=%s",
-				pathname, flags, mode, fd,
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, mode, fd, entry.fd_fstat,
 				bypass_status[entry.fd_status]);
 	else
-		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o) = %d. intercepted, bypass=%s",
-				pathname, flags, fd,
+		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o) = "
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, fd, entry.fd_fstat,
 				bypass_status[entry.fd_status]);
 
-finish:
 	return fd;
 }
 
@@ -820,14 +848,21 @@ dfuse_creat(const char *pathname, mode_t mode)
 	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC,
-				 DFUSE_IO_BYPASS))
-		goto finish;
+	if (!dfuse_check_valid_path(pathname)) {
+		DFUSE_LOG_DEBUG("creat(pathname=%s) ignoring by path",
+				pathname);
+		return fd;
+	}
+
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_BYPASS)) {
+		DFUSE_LOG_DEBUG("creat(pathname=%s) interception not possible",
+				pathname);
+		return fd;
+	}
 
 	DFUSE_LOG_DEBUG("creat(pathname=%s, mode=0%o) = %d. intercepted, bypass=%s",
 			pathname, mode, fd, bypass_status[entry.fd_status]);
 
-finish:
 	return fd;
 }
 
@@ -1361,16 +1396,23 @@ dfuse_fopen(const char *path, const char *mode)
 	fd = fileno(fp);
 
 	if (fd == -1)
-		goto finish;
+		return fp;
 
-	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC,
-				 DFUSE_IO_DIS_STREAM))
-		goto finish;
+	if (!dfuse_check_valid_path(path)) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) ignoring by path",
+				path);
+		return fp;
+	}
+
+	if (!check_ioctl_on_open(fd, &entry, O_CREAT | O_WRONLY | O_TRUNC, DFUSE_IO_DIS_STREAM)) {
+		DFUSE_LOG_DEBUG("fopen(pathname=%s) interception not possible",
+				path);
+		return fp;
+	}
 
 	DFUSE_LOG_DEBUG("fopen(path=%s, mode=%s) = %p(fd=%d) intercepted, bypass=%s",
 			path, mode, fp, fd, bypass_status[entry.fd_status]);
 
-finish:
 	return fp;
 }
 
@@ -1458,6 +1500,69 @@ dfuse_fclose(FILE *stream)
 
 do_real_fclose:
 	return __real_fclose(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse___fxstat(int ver, int fd, struct stat *buf)
+{
+	struct fd_entry	*entry = NULL;
+	int		counter;
+	int		rc;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fstat;
+
+	/* Turn off this feature if the kernel is doing metadata caching, in this case it's btter
+	 * to use the kernel cache and keep it up-to-date than query the severs each time.
+	 */
+	if (!entry->fd_fstat) {
+		vector_decref(&fd_table, entry);
+		goto do_real_fstat;
+	}
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_fstat_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting fstat\n");
+
+	/* fstat needs to return both the device magic number and the inode
+	 * neither of which can change over time, but they're also not known
+	 * at this point.  For the first call to fstat do the real call
+	 * through the kernel, then save these two entries for next time.
+	 */
+	if (entry->fd_dev == 0) {
+		rc =  __real___fxstat(ver, fd, buf);
+
+		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "initial fstat() returned %d", rc);
+
+		if (rc) {
+			vector_decref(&fd_table, entry);
+			return rc;
+		}
+		entry->fd_dev = buf->st_dev;
+		entry->fd_ino = buf->st_ino;
+		vector_decref(&fd_table, entry);
+		return 0;
+	}
+
+	rc = dfs_ostat(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, buf);
+
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "dfs_ostat() returned %d", rc);
+
+	buf->st_ino = entry->fd_ino;
+	buf->st_dev = entry->fd_dev;
+
+	vector_decref(&fd_table, entry);
+
+	if (rc) {
+		errno = rc;
+		return -1;
+	}
+
+	return 0;
+do_real_fstat:
+	return __real___fxstat(ver, fd, buf);
 }
 
 DFUSE_PUBLIC int

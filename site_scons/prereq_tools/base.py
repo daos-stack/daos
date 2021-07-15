@@ -46,6 +46,7 @@ from SCons.Script import GetOption
 from SCons.Script import SetOption
 from SCons.Script import Configure
 from SCons.Script import AddOption
+from SCons.Script import WhereIs
 from SCons.Script import SConscript
 from SCons.Script import BUILD_TARGETS
 from SCons.Errors import InternalError
@@ -62,7 +63,6 @@ except ImportError:
     DEVNULL = open(os.devnull, "wb")
 import tarfile
 import copy
-from distutils.spawn import find_executable
 if sys.version_info < (3, 0):
 # pylint: disable=import-error
     import ConfigParser
@@ -305,7 +305,7 @@ def default_libpath():
     """On debian systems, the default library path can be queried"""
     if not os.path.isfile('/etc/debian_version'):
         return []
-    dpkgarchitecture = find_executable('dpkg-architecture')
+    dpkgarchitecture = WhereIs('dpkg-architecture')
     if not dpkgarchitecture:
         print('No dpkg-architecture found in path.')
         return []
