@@ -723,9 +723,8 @@ dc_pool_disconnect(tse_task_t *task)
 	D_RWLOCK_RDLOCK(&pool->dp_co_list_lock);
 	if (!d_list_empty(&pool->dp_co_list)) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-		D_ERROR("cannot disconnect pool "DF_UUID
-			", container not closed. %d\n",
-			DP_UUID(pool->dp_pool), -DER_BUSY);
+		D_ERROR("cannot disconnect pool "DF_UUID", container not closed, "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(-DER_BUSY));
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
 	pool->dp_disconnecting = 1;
@@ -785,7 +784,6 @@ out_pool:
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
-
 }
 
 #define DC_POOL_GLOB_MAGIC	(0x16da0386)
@@ -1109,8 +1107,7 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
 		(int)out->pto_addr_list.ca_count);
 
-	if (in->pti_addr_list.ca_arrays)
-		D_FREE(in->pti_addr_list.ca_arrays);
+	D_FREE(in->pti_addr_list.ca_arrays);
 
 	if (out->pto_addr_list.ca_arrays != NULL &&
 	    out->pto_addr_list.ca_count > 0) {
@@ -1441,7 +1438,7 @@ struct pool_lc_arg {
 static int
 pool_list_cont_cb(tse_task_t *task, void *data)
 {
-	struct pool_lc_arg		*arg = (struct pool_lc_arg *) data;
+	struct pool_lc_arg		*arg = (struct pool_lc_arg *)data;
 	struct pool_list_cont_in	*in = crt_req_get(arg->rpc);
 	struct pool_list_cont_out	*out = crt_reply_get(arg->rpc);
 	int				 rc = task->dt_result;
@@ -1974,7 +1971,7 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 	}
 
 	for (i = 0; i < n; i++) {
-		if (names[i] == NULL || *(names[i]) == '\0') {
+		if (names[i] == NULL || *names[i] == '\0') {
 			D_ERROR("Invalid Arguments: names[%d] = %s",
 				i, names[i] == NULL ? "NULL" : "\'\\0\'");
 
@@ -2024,7 +2021,7 @@ dc_pool_get_attr(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	rc = attr_check_input(args->n, args->names,
-			      (const void *const*) args->values,
+			      (const void *const*)args->values,
 			      (size_t *)args->sizes, true);
 	if (rc != 0)
 		D_GOTO(out, rc);

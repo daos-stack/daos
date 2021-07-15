@@ -127,11 +127,15 @@ func genPoolCreateRequest(in *PoolCreateReq) (out *mgmtpb.PoolCreateReq, err err
 		return
 	}
 
-	if in.TotalBytes > 0 && (in.ScmBytes > 0 || in.NvmeBytes > 0) {
-		return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
-	}
-	if in.TotalBytes == 0 && in.ScmBytes == 0 {
-		return nil, errors.New("can't create pool with 0 SCM")
+	if len(in.TierBytes) > 0 {
+		if in.TotalBytes > 0 {
+			return nil, errors.New("can't mix TotalBytes and ScmBytes/NvmeBytes")
+		}
+		if in.TotalBytes == 0 && in.TierBytes[0] == 0 {
+			return nil, errors.New("can't create pool with 0 SCM")
+		}
+	} else if in.TotalBytes == 0 {
+		return nil, errors.New("can't create pool with size of 0")
 	}
 
 	out = new(mgmtpb.PoolCreateReq)
@@ -162,12 +166,11 @@ type (
 		Properties []*PoolProperty `json:"-"`
 		// auto-config params
 		TotalBytes uint64
-		ScmRatio   float64
+		TierRatio  []float64
 		NumRanks   uint32
 		// manual params
 		Ranks     []system.Rank
-		ScmBytes  uint64
-		NvmeBytes uint64
+		TierBytes []uint64
 	}
 
 	// PoolCreateResp contains the response from a pool create request.
@@ -175,8 +178,7 @@ type (
 		UUID      string   `json:"uuid"`
 		SvcReps   []uint32 `json:"svc_reps"`
 		TgtRanks  []uint32 `json:"tgt_ranks"`
-		ScmBytes  uint64   `json:"scm_bytes"`
-		NvmeBytes uint64   `json:"nvme_bytes"`
+		TierBytes []uint64 `json:"tier_bytes"`
 	}
 )
 
@@ -392,15 +394,14 @@ type (
 
 	// PoolInfo contains information about the pool.
 	PoolInfo struct {
-		TotalTargets    uint32             `json:"total_targets"`
-		ActiveTargets   uint32             `json:"active_targets"`
-		TotalNodes      uint32             `json:"total_nodes"`
-		DisabledTargets uint32             `json:"disabled_targets"`
-		Version         uint32             `json:"version"`
-		Leader          uint32             `json:"leader"`
-		Rebuild         *PoolRebuildStatus `json:"rebuild"`
-		Scm             *StorageUsageStats `json:"scm"`
-		Nvme            *StorageUsageStats `json:"nvme"`
+		TotalTargets    uint32               `json:"total_targets"`
+		ActiveTargets   uint32               `json:"active_targets"`
+		TotalNodes      uint32               `json:"total_nodes"`
+		DisabledTargets uint32               `json:"disabled_targets"`
+		Version         uint32               `json:"version"`
+		Leader          uint32               `json:"leader"`
+		Rebuild         *PoolRebuildStatus   `json:"rebuild"`
+		TierStats       []*StorageUsageStats `json:"tier_stats"`
 	}
 
 	// PoolQueryResp contains the pool query response.
@@ -838,29 +839,24 @@ type (
 )
 
 func (p *Pool) setUsage(pqr *PoolQueryResp) {
-	nvmeTotal := pqr.Nvme.Total
-	scmTotal := pqr.Scm.Total
+	for idx, tu := range pqr.TierStats {
+		spread := tu.Max - tu.Min
+		imbalance := float64(spread) / (float64(tu.Total) / float64(pqr.ActiveTargets))
 
-	scmSpread := pqr.Scm.Max - pqr.Scm.Min
-	scmImbalance := float64(scmSpread) / (float64(scmTotal) / float64(pqr.ActiveTargets))
-	nvmeSpread := pqr.Nvme.Max - pqr.Nvme.Min
-	nvmeImbalance := float64(nvmeSpread) / (float64(nvmeTotal) / float64(pqr.ActiveTargets))
+		tn := "NVME"
+		if idx == 0 {
+			tn = "SCM"
+		}
 
-	p.Usage = append(p.Usage,
-		// scm is tier 0
-		&PoolTierUsage{
-			TierName:  "SCM",
-			Size:      scmTotal,
-			Free:      pqr.Scm.Free,
-			Imbalance: uint32(scmImbalance * 100),
-		},
-		// nvme is tier 1
-		&PoolTierUsage{
-			TierName:  "NVME",
-			Size:      nvmeTotal,
-			Free:      pqr.Nvme.Free,
-			Imbalance: uint32(nvmeImbalance * 100),
-		})
+		p.Usage = append(p.Usage,
+			&PoolTierUsage{
+				TierName:  tn,
+				Size:      tu.Total,
+				Free:      tu.Free,
+				Imbalance: uint32(imbalance * 100),
+			},
+		)
+	}
 }
 
 // HasErrors indicates whether a pool query operation failed on this pool.
@@ -974,12 +970,6 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 				p.QueryStatusMsg = "unknown error"
 			}
 			continue
-		}
-		if resp.Scm == nil {
-			return nil, errors.New("pool query response missing scm stats")
-		}
-		if resp.Nvme == nil {
-			return nil, errors.New("pool query response missing nvme stats")
 		}
 		if p.UUID != resp.UUID {
 			return nil, errors.New("pool query response uuid does not match request")

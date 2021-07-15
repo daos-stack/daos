@@ -85,6 +85,11 @@ hwloc_obj_t		numa_obj;
 int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
+/** Number of storage tiers: 2 for SCM and NVMe */
+int dss_storage_tiers = 2;
+
+/** Flag to indicate Arbogots is initialized */
+static bool dss_abt_init;
 
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
@@ -201,7 +206,6 @@ modules_load(void)
 	D_FREE(sep);
 	return rc;
 }
-
 
 /**
  * Get the appropriate number of main XS based on the number of cores and
@@ -450,12 +454,15 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 
+	dss_abt_init = true;
+
 	return 0;
 }
 
 static void
 abt_fini(void)
 {
+	dss_abt_init = false;
 	ABT_finalize();
 }
 
@@ -499,11 +506,19 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
+
 	if (server_init_state != DSS_INIT_STATE_SET_UP)
 		return;
 
-	if (uid != NULL)
-		ABT_self_get_thread_id(uid);
+	if (uid != NULL && dss_abt_init) {
+		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
+		int rc;
+
+		rc = ABT_self_get_type(&type);
+
+		if (rc == 0 && (type == ABT_UNIT_TYPE_THREAD || type == ABT_UNIT_TYPE_TASK))
+			ABT_self_get_thread_id(uid);
+	}
 
 	if (tid != NULL) {
 		struct dss_thread_local_storage *dtc;
@@ -823,8 +838,10 @@ Options:\n\
       Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
       Allocates mem_size MB for SPDK when using primary process mode\n\
-  --hugepage_size = hugepage_size, -H hugepage_size\n\
+  --hugepage_size=hugepage_size, -H hugepage_size\n\
       Passes the configured hugepage size(2MB or 1GB)\n\
+  --storage_tiers=ntiers, -T ntiers\n\
+      Number of storage tiers\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -851,6 +868,7 @@ parse(int argc, char **argv)
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
+		{ "storage_tiers",	required_argument,	NULL,	'T' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -858,7 +876,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:b",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -920,6 +938,13 @@ parse(int argc, char **argv)
 			break;
 		case 'b':
 			dss_nvme_bypass_health_check = true;
+			break;
+		case 'T':
+			dss_storage_tiers = atoi(optarg);
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
+				printf("Requires 1 or 2 tiers\n");
+				rc = -DER_INVAL;
+			}
 			break;
 		default:
 			usage(argv[0], stderr);
