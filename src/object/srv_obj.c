@@ -1849,12 +1849,15 @@ static inline void
 obj_update_sensors(struct obj_io_context *ioc, int err)
 {
 	struct obj_tls		*tls = obj_tls_get();
+	struct obj_pool_metrics	*opm;
 	struct d_tm_node_t	*lat;
 	uint32_t		opc = ioc->ioc_opc;
 	uint64_t		time;
 
+	opm = ioc->ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+
 	d_tm_dec_gauge(tls->ot_op_active[opc], 1);
-	d_tm_inc_counter(tls->ot_op_total[opc], 1);
+	d_tm_inc_counter(opm->opm_total[opc], 1);
 
 	if (unlikely(err != 0))
 		return;
@@ -1869,11 +1872,11 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_TGT_UPDATE:
-		d_tm_inc_counter(tls->ot_update_bytes, ioc->ioc_io_size);
+		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
 		lat = tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
-		d_tm_inc_counter(tls->ot_fetch_bytes, ioc->ioc_io_size);
+		d_tm_inc_counter(opm->opm_fetch_bytes, ioc->ioc_io_size);
 		lat = tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	default:
@@ -2485,10 +2488,11 @@ re_fetch:
 again:
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
-		daos_epoch_t	e = 0;
-		struct obj_tls  *tls = obj_tls_get();
+		daos_epoch_t		e = 0;
+		struct obj_pool_metrics	*opm;
 
-		d_tm_inc_counter(tls->ot_update_resent, 1);
+		opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+		d_tm_inc_counter(opm->opm_update_resent, 1);
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2585,7 +2589,9 @@ again:
 		 * the restart to the RPC client.
 		 */
 		if (opc == DAOS_OBJ_RPC_UPDATE) {
-			struct obj_tls	*tls = obj_tls_get();
+			struct obj_pool_metrics	*m;
+
+			m = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
 
 			/*
 			 * Only standalone updates use this RPC. Retry with
@@ -2594,7 +2600,7 @@ again:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
-			d_tm_inc_counter(tls->ot_update_restart, 1);
+			d_tm_inc_counter(m->opm_update_restart, 1);
 			goto again;
 		}
 
