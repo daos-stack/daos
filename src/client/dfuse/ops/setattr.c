@@ -11,9 +11,8 @@ void
 dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		 struct stat *attr, int to_set)
 {
-	int dfs_flags = 0;
-	struct stat attr_in = *attr;
-	int rc;
+	int			dfs_flags = 0;
+	int			rc;
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
@@ -23,11 +22,11 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	 * attributes.
 	 */
 	if (to_set & (FUSE_SET_ATTR_GID | FUSE_SET_ATTR_UID)) {
-		struct uid_entry entry;
-		daos_size_t size = sizeof(entry);
-		bool set_uid = to_set & FUSE_SET_ATTR_UID;
-		bool set_gid = to_set & FUSE_SET_ATTR_GID;
-		bool set_both = set_gid && set_uid;
+		struct uid_entry	entry;
+		daos_size_t		size = sizeof(entry);
+		bool			set_uid = to_set & FUSE_SET_ATTR_UID;
+		bool			set_gid = to_set & FUSE_SET_ATTR_GID;
+		bool			set_both = set_gid && set_uid;
 
 		if (!ie->ie_dfs->dfs_multi_user) {
 			DFUSE_TRA_INFO(ie, "File uid/gid support not enabled");
@@ -138,8 +137,13 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	if (rc)
 		D_GOTO(err, rc);
 
-	attr->st_uid = attr_in.st_uid;
-	attr->st_gid = attr_in.st_uid;
+	if (ie->ie_dfs->dfs_multi_user) {
+		rc = dfuse_get_uid(ie);
+		if (rc)
+			D_GOTO(err, rc);
+		attr->st_uid = ie->ie_stat.st_uid;
+		attr->st_gid = ie->ie_stat.st_gid;
+	}
 
 reply:
 	attr->st_ino = ie->ie_stat.st_ino;

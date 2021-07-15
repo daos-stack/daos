@@ -1667,6 +1667,9 @@ class posix_tests():
                  stat.S_IRUSR]
 
         for mode in modes:
+            print(os.stat(fname))
+            print('Setting mode to 0{}'.format(oct(mode)))
+            print(os.stat(fname))
             os.chmod(fname, mode)
             attr = os.stat(fname)
             assert stat.S_IMODE(attr.st_mode) == mode

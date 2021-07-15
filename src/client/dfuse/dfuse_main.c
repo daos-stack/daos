@@ -304,7 +304,6 @@ main(int argc, char **argv)
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
 		{"sys-name",		required_argument, 0, 'G'},
-		{"mountpoint",		required_argument, 0, 'm'},
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"thread-count",	required_argument, 0, 't'},
 		{"foreground",		no_argument,	   0, 'f'},
