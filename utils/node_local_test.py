@@ -746,8 +746,6 @@ class DaosServer():
         for log in self.server_logs:
             log_test(self.conf, log.name, leak_wf=wf)
         self.running = False
-        if self.agent_dir != DEFAULT_AGENT_DIR:
-            os.rmdir(self.agent_dir)
         return ret
 
     def run_dmg(self, cmd):
