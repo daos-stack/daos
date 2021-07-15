@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-FROM centos:8
+FROM fedora:34
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
