@@ -74,7 +74,7 @@ class OSAOfflineReintegration(OSAUtils):
                                   self.container.epoch)
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
-    
+
         # Exclude all the ranks
         random_pool = random.randint(0, (num_pool-1))
         for _ in range(0, self.loop_test_cnt):
