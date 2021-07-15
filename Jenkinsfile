@@ -213,9 +213,6 @@ pipeline {
                     }
                     stages {
                       stage('Build') {
-                        when {
-                          beforeAgent true
-                        }
                         agent {
                           dockerfile {
                             filename 'utils/docker/Dockerfile.${DISTRO}'
