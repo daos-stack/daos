@@ -319,24 +319,24 @@ LD_PRELOAD=/path/to/daos/install/lib/libioil.so
 LD_PRELOAD=/usr/lib64/libioil.so # when installed from RPMs
 ```
 
-Alternatively it's possible to simply link the interception library into the application
+Alternatively, it's possible to simply link the interception library into the application
 at compile time with the `-lioil` flag.
 
 ### Monitoring usage
 
 The interception library is intended to be transparent to the user, and no other
-setup should be needed beyond the above however this can mean it's not easy to
+setup should be needed beyond the above.  However this can mean it's not easy to
 tell if it is linked correctly and working or not, to detect this you can turn
-on reporting of activity by the interception library via environment variable, which
-will case it so print reports to stderr.
+on reporting of activity by the interception library via environment variable, in which
+will case it will print reports to stderr.
 
-If the `D_IL_REPORT` environment variable is set the the interception library will
+If the `D_IL_REPORT` environment variable is set then the interception library will
 print a short summary in the shared library destructor, typically as a program
 exits, if you set this to a number then it will also log the first read and write
-calls as well.  For example if you set this to a value of 2 then the interception
-library will print to stderr on the first two intercepted read calls and the first
-two write calls.  To have all calls printed set the value to -1.  A value of 0
-means to print the summary at program exit only.
+calls as well.  For example, if you set this to a value of 2 then the interception
+library will print to stderr on the first two intercepted read calls, the first
+two write calls and the first two stat calls.  To have all calls printed set the
+value to -1.  A value of 0 means to print the summary at program exit only.
 
 ```
 D_IL_REPORT=2
