@@ -204,15 +204,15 @@ pipeline {
                       }
                       axis {
                         name 'DISTRO'
-                        values 'centos.7', 'ubuntu.20.04'
+                        values 'centos.7', 'ubuntu.20.04', 'leap.15', 'centos.8'
                       }
                       axis {
-                        name 'TARGET_TYPE'
+                        name 'BUILD_TYPE'
                         values 'release', 'dev', 'debug'
                       }
                     }
                     stages {
-                      stage('Build ${COMPILER} ${DISTRO} ${TARGET_TYPE}') {
+                      stage('Build') {
                         agent {
                           dockerfile {
                             filename "utils/docker/Dockerfile.${DISTRO}"
@@ -220,7 +220,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 add_repos: false,
                                                                 deps_build: true) +
-                                                                " --build-arg DEPS_JOBS=20 --build-arg DAOS_BUILD=yes --build-arg=TARGET_TYPE --build-arg DAOS_JAVA_BUILD=no"
+                                                                " --build-arg DEPS_JOBS=20 --build-arg DAOS_BUILD=yes --build-arg COMPILER --build-arg=DAOS_BUILD_TYPE=${BUILD_TYPE} --build-arg DAOS_JAVA_BUILD=no"
                           }
                         }
                         steps {
@@ -398,12 +398,6 @@ pipeline {
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-build.log',
-                                                    id: "analysis-gcc-centos7")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-gcc
@@ -438,57 +432,11 @@ pipeline {
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-covc-build.log',
-                                                    id: "analysis-covc-centos7")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-covc
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-covc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 debug') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild(),
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-debug-build.log',
-                                                    id: "analysis-gcc-centos7-debug")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-gcc-debug
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-gcc-debug',
                                              allowEmptyArchive: true
                         }
                     }
@@ -522,10 +470,6 @@ pipeline {
                     }
                     post {
                         always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-release-build.log',
-                                                    id: "analysis-gcc-centos7-release")
                             junit testResults: 'nlt-junit.xml'
                             archiveArtifacts artifacts: 'nlt_logs/centos7.release/',
                                              allowEmptyArchive: true
@@ -535,46 +479,6 @@ pipeline {
                                       mv config.log config.log-centos7-gcc-release
                                   fi"""
                             archiveArtifacts artifacts: 'config.log-centos7-gcc-release',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 7 with Clang debug') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild(),
-                                                                deps_build: true) +
-                                                " -t ${sanitized_JOB_NAME}-centos7 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quickBuildDeps('centos7') + '"' +
-                                                ' --build-arg REPOS="' + prRepos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallelBuild(),
-                                   scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
-                                   build_deps: "no"
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: clang(pattern: 'centos7-clang-debug-build.log',
-                                                     id: "analysis-centos7-debug-clang")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang-debug
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-clang-debug',
                                              allowEmptyArchive: true
                         }
                     }
@@ -600,12 +504,6 @@ pipeline {
                                    build_deps: "no"
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: intel(pattern: 'leap15-icc-build.log',
-                                                     id: "analysis-leap15-intelc")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-leap15-intelc
