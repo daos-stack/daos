@@ -212,7 +212,7 @@ pipeline {
                       }
                     }
                     stages {
-                      stage() {
+                      stage("Build $COMPILER $DISTRO $TARGET_TYPE") {
                         agent {
                           dockerfile {
                             filename "utils/docker/Dockerfile.${DISTRO}"
