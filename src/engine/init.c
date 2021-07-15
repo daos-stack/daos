@@ -86,6 +86,9 @@ int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
 
+/** Flag to indicate Arbogots is initialized */
+static bool dss_abt_init;
+
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
 
@@ -424,8 +427,6 @@ set_abt_max_num_xstreams(int n)
 	return 0;
 }
 
-static bool d_abt_on;
-
 static int
 abt_init(int argc, char *argv[])
 {
@@ -451,7 +452,7 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 
-	d_abt_on = true;
+	dss_abt_init = true;
 
 	return 0;
 }
@@ -459,7 +460,7 @@ abt_init(int argc, char *argv[])
 static void
 abt_fini(void)
 {
-	d_abt_on = false;
+	dss_abt_init = false;
 	ABT_finalize();
 }
 
@@ -503,10 +504,11 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
+
 	if (server_init_state != DSS_INIT_STATE_SET_UP)
 		return;
 
-	if (uid != NULL && d_abt_on) {
+	if (uid != NULL && dss_abt_init) {
 		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
 		int rc;
 

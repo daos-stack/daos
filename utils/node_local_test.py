@@ -817,7 +817,7 @@ class DaosServer():
 
         return self.test_pool.uuid
 
-def il_cmd(dfuse, cmd, check_read=True, check_write=True):
+def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """Run a command under the interception library
 
     Do not run valgrind here, not because it's not useful
@@ -844,7 +844,8 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
         log_test(dfuse.conf,
                  log_file.name,
                  check_read=check_read,
-                 check_write=check_write)
+                 check_write=check_write,
+                 check_fstat=check_fstat)
         assert ret.returncode == 0
     except NLTestNoFunction as error:
         print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
@@ -1122,11 +1123,7 @@ def assert_file_size(ofd, size):
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
 
-    if sys.version_info.major < 3:
-        pydir = 'python{}.{}'.format(sys.version_info.major,
-                                     sys.version_info.minor)
-    else:
-        pydir = 'python{}'.format(sys.version_info.major)
+    pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
 
     sys.path.append(os.path.join(conf['PREFIX'],
                                  'lib64',
@@ -1247,7 +1244,8 @@ def create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valgr
 
     rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
 
-    if rc.returncode == 1 and rc.json['error'] == 'DER_EXIST(-1004): Entity already exists':
+    if rc.returncode == 1 and \
+       rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
         destroy_container(conf, pool, label)
         rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
 
@@ -1601,6 +1599,24 @@ class posix_tests():
             assert False
         except FileNotFoundError:
             pass
+
+    @needs_dfuse
+    def test_il_cat(self):
+        """Quick check for the interception library"""
+
+        fname = os.path.join(self.dfuse.dir, 'file')
+        ofd = open(fname, 'w')
+        ofd.close()
+
+        check_fstat = True
+        if self.dfuse.caching:
+            check_fstat = False
+
+        rc = il_cmd(self.dfuse,
+                    ['cat', fname],
+                    check_write=False,
+                    check_fstat=check_fstat)
+        assert rc.returncode == 0
 
     @needs_dfuse
     def test_xattr(self):
@@ -2183,7 +2199,8 @@ def log_test(conf,
              fi_signal=None,
              leak_wf=None,
              check_read=False,
-             check_write=False):
+             check_write=False,
+             check_fstat=False):
     """Run the log checker on filename, logging to stdout"""
 
     # Check if the log file has wrapped, if it has then log parsing checks do
@@ -2228,7 +2245,7 @@ def log_test(conf,
 
     functions = set()
 
-    if check_read or check_write:
+    if check_read or check_write or check_fstat:
         for line in log_iter.new_iter():
             functions.add(line.function)
 
@@ -2237,6 +2254,9 @@ def log_test(conf,
 
     if check_write and 'dfuse_write' not in functions:
         raise NLTestNoFunction('dfuse_write')
+
+    if check_fstat and 'dfuse___fxstat' not in functions:
+        raise NLTestNoFunction('dfuse___fxstat')
 
     compress_file(filename)
 
@@ -2479,14 +2499,15 @@ def run_il_test(server, conf):
     # intercepted.
     ret = il_cmd(dfuse,
                  ['md5sum', os.path.join(dirs[-1], 'bash')],
-                 check_read=False, check_write=False)
+                 check_read=False, check_write=False, check_fstat=False)
     assert ret.returncode == 0
     ret = il_cmd(dfuse, ['dd',
                          'if={}'.format(os.path.join(dirs[-1], 'bash')),
                          'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
                          'iflag=direct',
                          'oflag=direct',
-                         'bs=128k'])
+                         'bs=128k'],
+                 check_fstat=False)
 
     print(ret)
     assert ret.returncode == 0
@@ -2523,7 +2544,7 @@ def run_in_fg(server, conf):
               pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers {}'.format(pool))
+    print('daos cont list {}'.format(pool))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
@@ -3144,8 +3165,8 @@ def test_alloc_fail(server, conf):
     pool = server.get_test_pool()
 
     cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
-           'pool',
-           'list-containers',
+           'cont',
+           'list',
            pool]
     test_cmd = AllocFailTest(conf, cmd)
 
@@ -3257,14 +3278,14 @@ def main():
             fatal_errors.fail()
 
     # If running all tests then restart the server under valgrind.
-    # This is really, really slow so just do list-containers, then
+    # This is really, really slow so just do cont list, then
     # exit again.
     if args.mode == 'server-valgrind':
         server = DaosServer(conf, valgrind=True, test_class='valgrind')
         server.start()
         pools = server.fetch_pools()
         for pool in pools:
-            cmd = ['pool', 'list-containers', pool.id()]
+            cmd = ['cont', 'list', pool.id()]
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)
