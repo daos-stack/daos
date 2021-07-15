@@ -204,7 +204,7 @@ pipeline {
                       }
                       axis {
                         name 'DISTRO'
-                        values 'centos.7', 'centos.8', 'ubuntu.20.04', 'leap.15'
+                        values 'centos.7', 'ubuntu.20.04', 'leap.15'
                       }
                     }
                     stages {
@@ -214,13 +214,21 @@ pipeline {
                             filename "utils/docker/Dockerfile.${DISTRO}"
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                deps_build: true)
+                                                                add_repos: false,
+                                                                deps_build: true) +
+                                                                " --build-arg DEPS_JOBS=20"
                           }
                         }
                         steps {
                           sconsBuild parallel_build: true,
                                    scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos COMPILER=${COMPILER} TARGET_TYPE=${TARGET_TYPE}",
+                                   scons_args: "PREFIX=/opt/daos COMPILER=${COMPILER} TARGET_TYPE=release",
+                                   build_deps: "no"
+                        }
+                        steps {
+                          sconsBuild parallel_build: true,
+                                   scons_exe: 'scons-3',
+                                   scons_args: "PREFIX=/opt/daos COMPILER=${COMPILER} TARGET_TYPE=debug",
                                    build_deps: "no"
                         }
                       }
