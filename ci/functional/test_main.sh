@@ -32,26 +32,32 @@ rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 # run node checkout
-#clush -B -S -o '-i ci_key' -l root -w "${tnodes}" -c ci/functional/fio_libpmem.fio --dest=/tmp/
+if true; then
+    clush -B -S -o '-i ci_key' -l root -w "${tnodes}" -c ci/functional/fio_libpmem.fio --dest=/tmp/
 
-#clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
-#    "$(cat ci/functional/node_checkout.sh)"
+    clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+        "$(cat ci/functional/node_checkout.sh)"
+fi
 
 
 # check ssd smart
-clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
-    $(cat ci/functional/smart_health.sh)"
+if true; then
+    clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+        "$(cat ci/functional/smart_health.sh)"
+fi
 
 
 # run network test
 # create log directory
-#clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
-#    "mkdir -p /var/tmp/daos_testing && chown jenkins /var/tmp/daos_testing"
-#run_on_node=$(echo ${tnodes} | cut -d ',' -f 2)
-#clush -B -S -o '-i ci_key' -l jenkins -w "${run_on_node}" \
-#    "daospath='/usr/'                                 \
-#     nodes=${tnodes}                                  \
-#     $(cat ci/functional/self_test_8-node.sh)"
+if true; then
+    clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+        "mkdir -p /var/tmp/daos_testing && chown jenkins /var/tmp/daos_testing"
+    run_on_node=$(echo ${tnodes} | cut -d ',' -f 2)
+    clush -B -S -o '-i ci_key' -l jenkins -w "${run_on_node}" \
+        "daospath='/usr/'                                 \
+         nodes=${tnodes}                                  \
+         $(cat ci/functional/self_test_8-node.sh)"
+fi
 
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
