@@ -2198,7 +2198,8 @@ out:
 }
 
 int
-dfs_removeoi(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid)
+dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force,
+	   daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -2236,10 +2237,6 @@ restart:
 
 	if (!exists)
 		D_GOTO(out, rc = ENOENT);
-
-	/* Check if the file is the expected one */
-	if ((oid && (oid->lo || oid->hi)) && (oid->lo != entry.oid.lo || oid->hi != entry.oid.hi))
-		D_GOTO(out, rc = EBADF);
 
 	if (S_ISDIR(entry.mode)) {
 		uint32_t nr = 0;
@@ -2293,15 +2290,6 @@ out:
 	if (rc == ERESTART)
 		goto restart;
 	return rc;
-}
-
-int
-dfs_remove(dfs_t *dfs, dfs_obj_t *parent, const char *name, bool force, daos_obj_id_t *oid)
-{
-	if (oid && (oid->lo || oid->hi))
-		return EINVAL;
-
-	return dfs_removeoi(dfs, parent, name, force, oid);
 }
 
 static int
@@ -3586,12 +3574,13 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name)
 	return 0;
 }
 
-/* Update a object to a new parent, taking the parent directly */
+/* Update a in-memory object to a new parent, taking the parent directly */
 void
-dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name)
+dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *new_parent, const char *name)
 {
-	oid_cp(&obj->parent_oid, src_obj->oid);
+	oid_cp(&obj->parent_oid, new_parent->oid);
 
+	D_ASSERT(name);
 	strncpy(obj->name, name, DFS_MAX_NAME);
 	obj->name[DFS_MAX_NAME] = '\0';
 }
@@ -4185,10 +4174,10 @@ out:
 	return rc;
 }
 
-/* Returns but does not checked moved oid, will check and return oid for clobbered file */
+/* Returns oids for both moved and clobbered files, but does not check either of them */
 int
-dfs_moveoi(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	   char *new_name, daos_obj_id_t *moid, daos_obj_id_t *oid)
+dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent, char *new_name,
+		  daos_obj_id_t *moid, daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -4199,8 +4188,6 @@ dfs_moveoi(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	int			rc;
 
 	if (dfs == NULL || !dfs->mounted)
-		return EINVAL;
-	if (moid && (moid->lo || moid->hi))
 		return EINVAL;
 	if (dfs->amode != O_RDWR)
 		return EPERM;
@@ -4300,13 +4287,8 @@ restart:
 			D_GOTO(out, rc);
 		}
 
-		if (oid) {
-			if ((oid->lo || oid->hi) &&
-				(oid->lo != new_entry.oid.lo || oid->hi != new_entry.oid.hi))
-				D_GOTO(out, rc = EBADF);
-
+		if (oid)
 			oid_cp(oid, new_entry.oid);
-		}
 	}
 
 	/** rename symlink */
@@ -4383,10 +4365,7 @@ int
 dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
 	 char *new_name, daos_obj_id_t *oid)
 {
-	if (oid && (oid->lo || oid->hi))
-		return EINVAL;
-
-	return dfs_moveoi(dfs, parent, name, new_parent, new_name, NULL, oid);
+	return dfs_move_internal(dfs, parent, name, new_parent, new_name, NULL, oid);
 }
 
 int

@@ -76,8 +76,8 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!newparent)
 		newparent = parent;
 
-	rc = dfs_moveoi(parent->ie_dfs->dfs_ns, parent->ie_obj, (char *)name,
-			newparent->ie_obj, (char *)newname, &moid, &oid);
+	rc = dfs_move_internal(parent->ie_dfs->dfs_ns, parent->ie_obj, (char *)name,
+			       newparent->ie_obj, (char *)newname, &moid, &oid);
 	if (rc)
 		D_GOTO(out, rc);
 
