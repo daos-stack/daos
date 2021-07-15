@@ -32,7 +32,7 @@ rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
 # run node checkout
-if true; then
+if false; then
     clush -B -S -o '-i ci_key' -l root -w "${tnodes}" -c ci/functional/fio_libpmem.fio --dest=/tmp/
 
     clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
@@ -49,7 +49,7 @@ fi
 
 # run network test
 # create log directory
-if true; then
+if false; then
     clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
         "mkdir -p /var/tmp/daos_testing && chown jenkins /var/tmp/daos_testing"
     run_on_node=$(echo ${tnodes} | cut -d ',' -f 2)
