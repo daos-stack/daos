@@ -212,7 +212,7 @@ pipeline {
                       }
                     }
                     stages {
-                      stage('Build') {
+                      stage() {
                         agent {
                           dockerfile {
                             filename "utils/docker/Dockerfile.${DISTRO}"
@@ -220,7 +220,7 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 add_repos: false,
                                                                 deps_build: true) +
-                                                                " --build-arg DEPS_JOBS=20 --build-arg DAOS_BUILD=yes --build-arg=TARGET_TYPE"
+                                                                " --build-arg DEPS_JOBS=20 --build-arg DAOS_BUILD=yes --build-arg=TARGET_TYPE --build-arg DAOS_JAVA_BUILD=no"
                           }
                         }
                         steps {
