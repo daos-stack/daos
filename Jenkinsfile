@@ -206,10 +206,6 @@ pipeline {
                         name 'DISTRO'
                         values 'centos.7', 'centos.8', 'ubuntu.20.04', 'leap.15'
                       }
-                      axis {
-                        name 'TARGET_TYPE'
-                        values 'release', 'dev', 'debug'
-                      }
                     }
                     stages {
                       stage('Build') {
