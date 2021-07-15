@@ -204,7 +204,7 @@ pipeline {
                       }
                       axis {
                         name 'DISTRO'
-                        values 'centos.7', 'ubuntu.20.04', 'leap.15', 'centos.8', 'fedora'
+                        values 'ubuntu.20.04', 'leap.15', 'centos.8', 'fedora'
                       }
                       axis {
                         name 'BUILD_TYPE'
