@@ -41,7 +41,7 @@ fi
 
 
 # check ssd smart
-if true; then
+if false; then
     tnodes2="wolf-110,wolf-111"
     clush -B -S -o '-i ci_key' -l root -w "${tnodes2}" \
         "$(cat ci/functional/smart_health.sh)"
@@ -60,17 +60,23 @@ if false; then
          $(cat ci/functional/self_test_8-node.sh)"
 fi
 
+# Override tnodes for debugging which node(s) is the culprit
+# wolf-[51,110-117]
+tnodes="wolf-51,wolf-110,wolf-111"
+
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
-#if $TEST_RPMS; then
-#    # shellcheck disable=SC2029
-#    ssh -i ci_key -l jenkins "${first_node}" \
-#      "TEST_TAG=\"$test_tag\"                        \
-#       TNODES=\"$tnodes\"                            \
-#       FTEST_ARG=\"$FTEST_ARG\"                      \
-#       $(cat ci/functional/test_main_node.sh)"
-#else
-#    ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
-#fi
+if true; then
+    if $TEST_RPMS; then
+        # shellcheck disable=SC2029
+        ssh -i ci_key -l jenkins "${first_node}" \
+          "TEST_TAG=\"$test_tag\"                        \
+           TNODES=\"$tnodes\"                            \
+           FTEST_ARG=\"$FTEST_ARG\"                      \
+           $(cat ci/functional/test_main_node.sh)"
+    else
+        ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
+    fi
+fi
