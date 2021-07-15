@@ -204,7 +204,7 @@ pipeline {
                       }
                       axis {
                         name 'DISTRO'
-                        values 'ubuntu.20.04', 'leap.15'
+                        values 'centos.7', 'ubuntu.20.04', 'leap.15'
                       }
                       axis {
                         name 'TARGET_TYPE'
@@ -220,13 +220,11 @@ pipeline {
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 add_repos: false,
                                                                 deps_build: true) +
-                                                                " --build-arg DEPS_JOBS=20"
+                                                                " --build-arg DEPS_JOBS=20 --build-arg DAOS_BUILD=yes --build-arg=TARGET_TYPE"
                           }
                         }
                         steps {
-                          sconsBuild parallel_build: true,
-                                   scons_args: "PREFIX=/opt/daos COMPILER=${COMPILER} TARGET_TYPE=release",
-                                   build_deps: "no"
+			  sh """ls"""
                         }
                       }
                     }
