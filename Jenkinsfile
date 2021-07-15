@@ -225,12 +225,6 @@ pipeline {
                                    scons_args: "PREFIX=/opt/daos COMPILER=${COMPILER} TARGET_TYPE=release",
                                    build_deps: "no"
                         }
-                        steps {
-                          sconsBuild parallel_build: true,
-                                   scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos COMPILER=${COMPILER} TARGET_TYPE=debug",
-                                   build_deps: "no"
-                        }
                       }
                     }
                   }
