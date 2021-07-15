@@ -28,7 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -45,8 +45,10 @@ const (
 
 func cfgHasBdevs(cfg *config.Server) bool {
 	for _, engineCfg := range cfg.Engines {
-		if len(engineCfg.Storage.Bdev.DeviceList) > 0 {
-			return true
+		for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
+			if len(bc.Bdev.DeviceList) > 0 {
+				return true
+			}
 		}
 	}
 
@@ -70,8 +72,11 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	if len(cfg.Engines) == 0 {
 		return "" // can't save to SCM
 	}
+	if len(cfg.Engines[0].Storage.Tiers.ScmConfigs()) == 0 {
+		return ""
+	}
 
-	return filepath.Join(cfg.Engines[0].Storage.SCM.MountPoint, "control_raft")
+	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, "control_raft")
 }
 
 func iommuDetected() bool {
@@ -158,7 +163,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 
 func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
 	// Perform an automatic prepare based on the values in the config file.
-	prepReq := bdev.PrepareRequest{
+	prepReq := storage.BdevPrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    srv.runningUser,
@@ -191,7 +196,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
 	srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
-	if _, err := srv.bdevProvider.Prepare(prepReq); err != nil {
+	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
 		srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
 	}
 

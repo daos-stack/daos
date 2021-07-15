@@ -1,14 +1,14 @@
-# POSIX Namespace
+# File System
 
-A regular POSIX namespace can be encapsulated into a DAOS container.  This
-capability is provided by the `libdfs` library that implements the file and
+A container can be mounted as shared POSIX namespace on multiple compute nodes.
+This capability is provided by the `libdfs` library that implements the file and
 directory abstractions over the native `libdaos` library. The POSIX emulation can
-be exposed directly to applications or I/O frameworks (e.g., for
-frameworks like Spark or TensorFlow, or benchmarks like IOR or mdtest that support
-different storage backend plugins). 
-It can also be exposed transparently via a FUSE daemon, combined
-optionally with an interception library to address some of the FUSE performance
-bottlenecks by delivering full OS bypass for POSIX read/write operations.
+be exposed directly to applications or I/O frameworks (e.g., for frameworks like
+Spark or TensorFlow, or benchmarks like IOR or mdtest that support different
+storage backend plugins).
+It can also be exposed transparently via a FUSE daemon, combined optionally with
+an interception library to address some of the FUSE performance bottlenecks by
+delivering full OS bypass for POSIX read/write operations.
 
 ![../graph/posix.png](../graph/posix.png "POSIX I/O Support")
 
@@ -21,11 +21,13 @@ fuse/kernel layer.
 
 ## libdfs
 
-The DAOS File System (DFS) is implemented in the `libdfs` library, 
+The DAOS File System (DFS) is implemented in the `libdfs` library,
 and allows a DAOS container to be accessed as a hierarchical POSIX namespace.
-`libdfs` supports files, directories, and symbolic links, but not hard links. 
-Access permissions are inherited from
-the parent pool and are not implemented on a per-file or per-directory basis.
+`libdfs` supports files, directories, and symbolic links, but not hard links.
+Access permissions are inherited from the parent pool and are not implemented on
+a per-file or per-directory basis.
+
+### Supported Operations
 
 The DFS API closely represents the POSIX API. The API includes operations to:
 * Mount: create/open superblock and root object
@@ -41,9 +43,11 @@ The DFS API closely represents the POSIX API. The API includes operations to:
 * Release: close an open handle of a file/dir
 * Extended Attributes: set, get, list, remove
 
+### POSIX Compliance
+
 The following features from POSIX will not be supported:
 * Hard links
-* mmap support with MAP_SHARED will be consistent from single client only. Note
+* mmap support with MAP\_SHARED will be consistent from single client only. Note
   that this is supported through DFUSE only (i.e. not through the DFS API).
 * Char devices, block devices, sockets and pipes
 * User/group quotas
@@ -56,7 +60,7 @@ The following features from POSIX will not be supported:
   free/available space
 * POSIX permissions inside an encapsulated namespace
   * Still enforced at the DAOS pool/container level
-  * Effectively means that all files belong to the same “project”
+  * Effectively means that all files belong to the same "project"
 
 
 It is possible to use `libdfs` in a parallel application from multiple nodes.
@@ -78,7 +82,7 @@ consistency semantic issue that is not properly handled:
 * Open-unlink semantics: This occurs when a client obtains an open handle on an
   object (file or directory), and accesses that object (reads/writes data or
   create other files), while another client removes that object that the other
-  client has opened from under it. In DAOS, we don’t track object open handles
+  client has opened from under it. In DAOS, we don't track object open handles
   as that would be very expensive, and so in such conflicting cases, the worst
   case scenario is the lost/leaked space that is written to those orphan objects
   that have been unlinked from the namespace.
@@ -97,7 +101,7 @@ Other consistency issues are handled differently between the two consistency mod
   should be visible to another client with a simple coordination between the
   clients.
 
-## DFuse
+## DFuse (DAOS FUSE)
 
 DFuse provides DAOS File System access through the standard libc/kernel/VFS
 POSIX infrastructure.  This allows existing applications to use DAOS without
@@ -114,33 +118,28 @@ vice versa.
 The `dfuse` daemon runs a single instance per node to provide a user POSIX access
 to DAOS. It should be run with the credentials of the user, and typically will
 be started and stopped on each compute node as part of the prolog and epilog
-scripts of any resource manager or scheduler in use.  One DFuse daemon per node
-can process requests for multiple clients.
-
-A single DFuse instance can provide access to multiple pools and containers
-concurrently, or can be limited to a single pool, or a single container.
+scripts of any resource manager or scheduler in use.
 
 ### Restrictions
 
 DFuse is limited to a single user. Access to the filesystem from other users,
 including root, will not be honored. As a consequence of this, the `chown`
-and `chgrp` calls are not supported.  Hard links and special device files, except
-symbolic links, are not supported, nor are any ACLs.
+and `chgrp` calls are not supported.  Hard links and special device files,
+except symbolic links, are not supported, nor are any ACLs.
 
 DFuse can run in the foreground, keeping the terminal window open, or it can
-daemonize to run like a system daemon. 
-However, to do this and still be
-able to access DAOS it needs to daemonize before calling `daos_init()`. 
-This in turns means it cannot report some kinds of startup errors either on
-stdout/stderr or via its return code.  
-When initially starting with DFuse it is recommended to run in foreground mode 
+daemonize to run like a system daemon.
+However, to do this and still be able to access DAOS it needs to daemonize
+before calling `daos_init()`. This in turns means it cannot report some kinds
+of startup errors either on stdout/stderr or via its return code.
+When initially starting with DFuse it is recommended to run in foreground mode
 (`--foreground`) to better observe any failures.
 
 Inodes are managed on the local node by DFuse. So while inode numbers
 will be consistent on a node for the duration of the session, they are not
 guaranteed to be consistent across restarts of DFuse or across nodes.
 
-It is not possible to see pool/container listings through DFuse. 
+It is not possible to see pool/container listings through DFuse.
 So if `readdir`, `ls` or others are used, DFuse will return `ENOTSUP`.
 
 ### Launching
@@ -169,20 +168,68 @@ Additionally, there are several optional command-line options:
 
 When DFuse starts, it will register a single mount with the kernel, at the
 location specified by the `--mountpoint` option. This mount will be
-visible in `/proc/mounts`, and possibly in the output of `df`.  
-The contents of multiple pools/containers will be accessible via this 
+visible in `/proc/mounts`, and possibly in the output of `df`.
+The contents of multiple pools/containers will be accessible via this
 single kernel mountpoint.
 
-### Pool/Container Paths
+### Operation Modes
 
 DFuse will only create one kernel level mount point regardless of how it is
-launched. How POSIX containers are represented within that mount point varies 
-depending on the DFuse command-line options:
+launched. How POSIX containers are represented within that mount point varies
+depending on the DFuse command-line options.
+DFuse can operate in three modes.
 
-If both a pool uuid and a container uuid are specified on the command line, then 
-the mount point will map to the root of the container itself. Files can be
-accessed by simply concatenating the mount point and the name of the file,
-relative to the root of the container.
+#### Single Container Mode
+
+That's the most common use case where a pool and a POSIX container are provided
+on the command line. The mount point will map to the root of the container
+itself. Files can be accessed by simply concatenating the mount point and the
+name of the file, relative to the root of the container.
+
+```bash
+$ daos cont create tank -l mycont -t POSIX
+  Container UUID : 8a8f08bb-5034-41e8-b7ae-0cdce347c558
+  Container Label: mycont
+  Container Type : POSIX
+
+Successfully created container 8a8f08bb-5034-41e8-b7ae-0cdce347c558
+$ mkdir /tmp/dfuse
+$ dfuse -m /tmp/dfuse --pool tank --cont mycont
+$ touch /tmp/dfuse/foo
+$ ls -l /tmp/dfuse/
+total 0
+-rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+$ df -h /tmp/dfuse/
+Filesystem      Size  Used Avail Use% Mounted on
+dfuse           9.4G  326K  9.4G   1% /tmp/dfuse
+$ fusermount3 -u /tmp/dfuse/
+```
+
+#### Pool Mode
+
+If a pool uuid is specified but not a container uuid, then the containers can be
+accessed by the path `<mount point>/<container uuid>`. The container uuid
+will have to be provided from an external source.
+
+```bash
+$ daos cont create tank -l mycont2 -t POSIX
+  Container UUID : 0db21789-5372-4f2a-b7bc-14c0a5e968df
+  Container Label: mycont2
+  Container Type : POSIX
+
+Successfully created container 0db21789-5372-4f2a-b7bc-14c0a5e968df
+$ dfuse -m /tmp/dfuse --pool tank
+$ ls -l /tmp/dfuse/
+ls: cannot open directory '/tmp/dfuse/': Operation not supported
+$ ls -l /tmp/dfuse/0db21789-5372-4f2a-b7bc-14c0a5e968df
+total 0
+$ ls -l /tmp/dfuse/8a8f08bb-5034-41e8-b7ae-0cdce347c558
+total 0
+-rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+$ fusermount3 -u /tmp/dfuse/
+```
+
+### System Mode
 
 If neither a pool or container is specified, then pools and container can be
 accessed by the path `<mount point>/<pool uuid>/<container uuid>`. However it
@@ -190,12 +237,22 @@ should be noted that `readdir()` and therefore `ls` do not work on either mount
 points or directories representing pools here. So the pool and container uuids
 will have to be provided from an external source.
 
-If a pool uuid is specified but not a container uuid, then the containers can be
-accessed by the path `<mount point>/<container uuid>`. The container uuid
-will have to be provided from an external source.
+```bash
+$ dfuse -m /tmp/dfuse
+$ df -h /tmp/dfuse
+Filesystem      Size  Used Avail Use% Mounted on
+dfuse              -     -     -    - /tmp/dfuse
+$ daos pool query tank | grep -- -.*-
+Pool 004abf7c-26c8-4cba-9059-8b3be39161fc, ntarget=32, disabled=0, leader=0, version=1
+$ ls -l /tmp/dfuse/004abf7c-26c8-4cba-9059-8b3be39161fc/0db21789-5372-4f2a-b7bc-14c0a5e968df
+total 0
+$ ls -l /tmp/dfuse/004abf7c-26c8-4cba-9059-8b3be39161fc/8a8f08bb-5034-41e8-b7ae-0cdce347c558
+total 0
+-rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+```
 
-It is anticipated that in most cases, both pool uuid and container uuid will be
-used, so the mount point itself will map directly onto a POSIX container.
+While this mode is not expected to be used directly by users, it is useful for
+the unified namespace integration.
 
 ### Links into other Containers
 
@@ -207,10 +264,10 @@ To create a new container and link it into the namespace of an existing one,
 use the following command.
 
 ```bash
-$ daos container create --type POSIX --pool <pool uuid> --path <path to entry point>
+$ daos container create <pool_label> --type POSIX --path <path_to_entry_point>
 ```
 
-The pool uuid should already exist, and the path should specify a location
+The pool should already exist, and the path should specify a location
 somewhere within a DFuse mount point that resolves to a POSIX container.
 Once a link is created, it can be accessed through the new path. Following
 the link is virtually transparent.  No container uuid is required. If one is
@@ -235,6 +292,30 @@ read with the following command.
 $ daos container info --path <path to entry point>
 ```
 
+Please find below an example.
+
+```bash
+$ dfuse -m /tmp/dfuse --pool tank --cont mycont
+$ cd /tmp/dfuse/
+$ ls
+foo
+$ daos cont create tank -l mycont3 --type POSIX --path ./link_to_externa_container
+  Container UUID : 933944a9-ddf2-491a-bdbf-4442f0437d56
+  Container Label: mycont3
+  Container Type : POSIX
+
+Successfully created container 933944a9-ddf2-491a-bdbf-4442f0437d56 type POSIX
+$ ls -lrt
+total 0
+-rw-rw-r-- 1 jlombard jlombard  0 Jul 10 20:23 foo
+drwxr-xr-x 1 jlombard jlombard 72 Jul 10 20:56 link_to_externa_container
+$ daos cont destroy --path ./link_to_externa_container/
+Successfully destroyed container 933944a9-ddf2-491a-bdbf-4442f0437d56
+jlombard@wolf-151:/tmp/dfuse$ ls -l
+total 0
+-rw-rw-r-- 1 jlombard jlombard 0 Jul 10 20:23 foo
+```
+
 ### Caching
 
 For performance reasons caching will be enabled by default in DFuse, including both
@@ -250,10 +331,10 @@ The following types of data will be cached by default.
 * Readahead in dfuse and inserting data into kernel cache
 * MMAP write optimization
 
-!note
-Caching is enabled by default in dfuse. This might cause some parallel
-applications to fail. Please disable caching if you experience this or want
-up to date data sharing between nodes.
+!!! note
+    Caching is enabled by default in dfuse. This might cause some parallel
+    applications to fail. Please disable caching if you experience this or want
+    up to date data sharing between nodes.
 
 To selectively control caching within a container the following container
 attributes should be used, if any attribute is set then the rest are assumed
@@ -272,22 +353,23 @@ For metadata caching attributes specify the duration that the cache should be
 valid for, specified in seconds, and allowing 'S' or 'M' suffix.
 
 dfuse-data-cache should be set to "on", or "off" if set, any other value will
-log an error, and result in the cache being off.  The O_DIRECT flag for open files will be
-honoured with this option enabled, files which do not set O_DIRECT will be cached.
+log an error, and result in the cache being off.  The O\_DIRECT flag for open
+files will be honoured with this option enabled, files which do not set
+O\_DIRECT will be cached.
 
 dfuse-direct-io-disable will enable data caching, similar to dfuse-data-cache,
-however if this is set to "on" then the O_DIRECT flag will be ignored, and all files
-will use the page cache.  This default value for this is "off".
+however if this is set to "on" then the O\_DIRECT flag will be ignored, and all
+files will use the page cache.  This default value for this is "off".
 
 With no options specified attr and dentry timeouts will be 1 second, dentry-dir
 and ndentry timeouts will be 5 seconds, and data caching will be enabled.
 
 These are two command line options to control the DFuse process itself.
 
-| **Command line option | **Description**           |
-| --------------------- | ------------------------- |
-| --disable-caching     | Disables all caching      |
-| --disable-wb-caching  | Disables write-back cache |
+| **Command line option** | **Description**           |
+| ----------------------- | ------------------------- |
+| --disable-caching       | Disables all caching      |
+| --disable-wb-caching    | Disables write-back cache |
 
 These will affect all containers accessed via DFuse, regardless of any
 container attributes.
