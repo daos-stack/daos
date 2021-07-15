@@ -246,21 +246,21 @@ func TestControl_PoolCreate(t *testing.T) {
 		expErr  error
 	}{
 		"local failure": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
 			},
 			expErr: errors.New("local failed"),
 		},
 		"remote failure": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},
 		"non-retryable failure": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosIOError, nil),
@@ -286,40 +286,34 @@ func TestControl_PoolCreate(t *testing.T) {
 			expErr: errors.New("invalid label"),
 		},
 		"create -DER_TIMEDOUT is retried": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosTimedOut, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
-			expResp: &PoolCreateResp{
-				Policy: "type=io_size",
-			},
+			expResp: &PoolCreateResp{},
 		},
 		"create -DER_GRPVER is retried": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosGroupVersionMismatch, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
-			expResp: &PoolCreateResp{
-				Policy: "type=io_size",
-			},
+			expResp: &PoolCreateResp{},
 		},
 		"create -DER_AGAIN is retried": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
 					MockMSResponse("host1", drpc.DaosTryAgain, nil),
 					MockMSResponse("host1", nil, &mgmtpb.PoolCreateResp{}),
 				},
 			},
-			expResp: &PoolCreateResp{
-				Policy: "type=io_size",
-			},
+			expResp: &PoolCreateResp{},
 		},
 		"success": {
 			req: &PoolCreateReq{
@@ -346,7 +340,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 		},
 		"success no props": {
-			req: &PoolCreateReq{TotalBytes: 10, PolicyString: "type=io_size"},
+			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
 					&mgmtpb.PoolCreateResp{
@@ -358,7 +352,6 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{
 				SvcReps:  []uint32{0, 1, 2},
 				TgtRanks: []uint32{0, 1, 2},
-				Policy:   "type=io_size",
 			},
 		},
 	} {
@@ -612,8 +605,9 @@ func TestPoolSetProp(t *testing.T) {
 
 func TestPoolGetProp(t *testing.T) {
 	defaultReq := &PoolGetPropReq{
-		UUID:       common.MockUUID(),
-		Properties: []*PoolProperty{propWithVal("label", "")},
+		UUID: common.MockUUID(),
+		Properties: []*PoolProperty{propWithVal("label", ""),
+			propWithVal("policy", "type=io_size")},
 	}
 
 	for name, tc := range map[string]struct {
@@ -734,6 +728,10 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("ec_cell_sz", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{1024},
 						},
+						{
+							Number: propWithVal("policy", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
+						},
 					},
 				}),
 			},
@@ -743,6 +741,7 @@ func TestPoolGetProp(t *testing.T) {
 			expResp: []*PoolProperty{
 				propWithVal("ec_cell_sz", "1024"),
 				propWithVal("label", "foo"),
+				propWithVal("policy", "type=io_size"),
 				propWithVal("reclaim", "disabled"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),
