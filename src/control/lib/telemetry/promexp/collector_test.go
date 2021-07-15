@@ -201,15 +201,15 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 
 			common.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "wrong number of metrics returned")
 			for _, got := range gotMetrics {
-				common.AssertEqual(t, testRank, got.r, "wrong rank")
-				expM, ok := tc.expMetrics[got.m.Type()]
+				common.AssertEqual(t, testRank, got.rank, "wrong rank")
+				expM, ok := tc.expMetrics[got.metric.Type()]
 				if !ok {
-					t.Fatalf("metric type %d not expected", got.m.Type())
+					t.Fatalf("metric type %d not expected", got.metric.Type())
 				}
 
 				tokens := strings.Split(expM.Name, "/")
 				expName := tokens[len(tokens)-1]
-				common.AssertEqual(t, expName, got.m.Name(), "unexpected name")
+				common.AssertEqual(t, expName, got.metric.Name(), "unexpected name")
 			}
 		})
 	}

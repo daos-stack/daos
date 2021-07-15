@@ -29,27 +29,27 @@ ds_cont_metrics_alloc(const char *path, int tgt_id)
 	if (metrics == NULL)
 		return NULL;
 
-	rc = d_tm_add_metric(&metrics->cpm_open, D_TM_COUNTER,
+	rc = d_tm_add_metric(&metrics->cpm_open_count, D_TM_COUNTER,
 			     "Number of times cont_open has been called",
 			     "ops", "%s/ops/cont_open", path);
 	if (rc != 0)
 		D_ERROR("failed to add open counter: " DF_RC "\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&metrics->cpm_open_cont, D_TM_GAUGE,
+	rc = d_tm_add_metric(&metrics->cpm_open_cont_gauge, D_TM_GAUGE,
 			     "Number of open container handles", "hdls",
 			     "%s/container_handles", path);
 	if (rc != 0)
 		D_ERROR("failed to add open cont gauge: " DF_RC "\n",
 			DP_RC(rc));
 
-	rc = d_tm_add_metric(&metrics->cpm_close, D_TM_COUNTER,
+	rc = d_tm_add_metric(&metrics->cpm_close_count, D_TM_COUNTER,
 			     "Number of times cont_close has been called",
 			     "ops", "%s/ops/cont_close", path);
 	if (rc != 0)
 		D_ERROR("failed to add close counter: "
 			DF_RC "\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&metrics->cpm_destroy, D_TM_COUNTER,
+	rc = d_tm_add_metric(&metrics->cpm_destroy_count, D_TM_COUNTER,
 			     "Number of times cont_destroy has been called",
 			     "ops", "%s/ops/cont_destroy", path);
 	if (rc != 0)
