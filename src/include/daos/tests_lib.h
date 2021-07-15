@@ -187,8 +187,7 @@ int dmg_pool_list(const char *dmg_config_file, const char *group,
 
 /**
  * Create a pool spanning \a tgts in \a grp. Upon successful completion, report
- * back the pool UUID in \a uuid and the pool service rank(s) in \a svc, which
- * are required by daos_pool_connect() to establish a pool connection.
+ * back the pool UUID in \a uuid and the pool service rank(s) in \a svc.
  *
  * Targets are assumed to share the same \a size.
  *

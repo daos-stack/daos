@@ -407,10 +407,8 @@ dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
 
 	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
 
-	rc = daos_pool_connect_by_label(label,
-				       fs_handle->dpi_info->di_group,
-				       DAOS_PC_RW,
-				       &dfp->dfp_poh, &p_info, NULL);
+	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group,
+			       DAOS_PC_RW, &dfp->dfp_poh, &p_info, NULL);
 	if (rc) {
 		if (rc == -DER_NO_PERM)
 			DFUSE_TRA_INFO(dfp,
