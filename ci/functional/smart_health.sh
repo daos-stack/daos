@@ -1,6 +1,8 @@
 #!/bin/sh
 set -x
 
+ls -l /sys/block
+
 dev_to_test="/dev/sda1"
 
 stat ${dev_to_test} &&
