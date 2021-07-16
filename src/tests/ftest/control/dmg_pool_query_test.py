@@ -8,6 +8,7 @@ from copy import deepcopy
 
 from ior_test_base import IorTestBase
 from control_test_base import ControlTestBase
+from avocado.core.exceptions import TestFail
 
 
 class DmgPoolQueryTest(ControlTestBase, IorTestBase):
@@ -122,27 +123,27 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # Add a pass case to verify test is working
         uuids.append([self.pool.uuid, "PASS"])
 
-        # Disable raising an exception if the dmg command fails
-        self.dmg.exit_status_exception = False
-
         for uuid in uuids:
-            # Verify pool query status
-            data = self.dmg.pool_query(uuid)
-            error = data["error"] if "error" in data else None
+            msg = "Call dmg pool query {} that's expected to {}".format(
+                uuid[0], uuid[1])
+            self.log.info(msg)
+            self.pool.uuid = uuid[0]
 
-            self.log.info("")
-            self.log.info("==>  Using test UUID:                   %s", uuid[0])
-            self.log.info("==>  Pool query command is expected to: %s", uuid[1])
-            self.log.info("==>  Error from dmp pool query:         %s", error)
-            self.log.info("")
+            try:
+                # Call dmg pool query.
+                self.pool.set_query_data()
+                if uuid[1] == "FAIL":
+                    msg = "Query expected to fail, but worked! {}".format(
+                        uuid[0])
+                    errors_list.append(msg)
+            except TestFail:
+                if uuid[1] == "PASS":
+                    msg = "Query expected to work, but failed! {}".format(
+                        uuid[0])
+                    errors_list.append(msg)
 
-            if uuid[1] == "FAIL" and error is None:
-                errors_list.append("==>   Test expected to fail:" + uuid[0])
-            elif uuid[1] == "PASS" and error is not None:
-                errors_list.append("==>   Test expected to pass:" + uuid[0])
-
-        # Enable exceptions again for dmg.
-        self.dmg.exit_status_exception = True
+        # Restore the original UUID.
+        self.pool.uuid = uuids[-1][0]
 
         # Report errors and fail test if needed.
         if errors_list:
