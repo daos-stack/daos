@@ -11,7 +11,6 @@ from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 
 
-@skipForTicket("DAOS-5857")
 class IorIntercept(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with and without interception.
@@ -22,6 +21,7 @@ class IorIntercept(IorTestBase):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-5857")
     def test_ior_intercept(self):
         """Jira ID: DAOS-3498.
 
