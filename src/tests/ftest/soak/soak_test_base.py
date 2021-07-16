@@ -498,9 +498,6 @@ class SoakTestBase(TestWithServers):
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get(
             "single_test_pool", test_param + "*", True)
-        # self.dmg_command.copy_certificates(
-        #     get_log_file("daosCA/certs"), self.hostlist_clients)
-        # self.dmg_command.copy_configuration(self.hostlist_clients)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         if harassers:

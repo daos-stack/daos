@@ -101,12 +101,15 @@ def get_rf(oclass):
     return:
         redundancy factor(int) from object type
     """
+    rf = 0
     if "EC" in oclass:
         tmp = re.findall(r'\d+', oclass)
-        rf = int(tmp[1])
+        if tmp:
+            rf = int(tmp[1])
     elif "RP" in oclass:
         tmp = re.findall(r'\d+', oclass)
-        rf = int(tmp[0]) - 1
+        if tmp:
+            rf = int(tmp[0]) - 1
     else:
         rf = 0
     return rf
