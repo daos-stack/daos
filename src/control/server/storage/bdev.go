@@ -222,9 +222,9 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList []string
-		DisableVMD bool
-		FlushCache bool
+		DeviceList  []string
+		DisableVMD  bool
+		BypassCache bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.

@@ -191,7 +191,9 @@ func (c *StorageControlService) Setup() error {
 		}
 	}
 
-	nvmeScanResp, err := c.NvmeScan(storage.BdevScanRequest{})
+	nvmeScanResp, err := c.storage.ScanBdevs(storage.BdevScanRequest{
+		BypassCache: true,
+	})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
 		return nil
@@ -201,7 +203,15 @@ func (c *StorageControlService) Setup() error {
 		return errors.Wrap(err, "validate server config bdevs")
 	}
 
+	c.storage.SetBdevCache(*nvmeScanResp)
 	return nil
+}
+
+// GetNvmeCache ...
+func (c *StorageControlService) GetNvmeCache() (*storage.BdevScanResponse, error) {
+	return c.storage.ScanBdevs(storage.BdevScanRequest{
+		BypassCache: false,
+	})
 }
 
 func (c *StorageControlService) defaultProvider() *storage.Provider {
@@ -232,9 +242,10 @@ func (c *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*stor
 	return c.storage.Scm.Prepare(req)
 }
 
-// NvmeScan scans locally attached SSDs.
+// NvmeScan scans locally attached SSDs and bypasses cache.
 func (c *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	return c.storage.ScanAllBdevs(req)
+	req.BypassCache = true
+	return c.storage.ScanBdevs(req)
 }
 
 // ScmScan scans locally attached modules, namespaces and state of DCPM config.

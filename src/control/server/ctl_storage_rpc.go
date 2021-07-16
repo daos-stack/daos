@@ -63,19 +63,21 @@ func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
 
-	for _, ei := range instances {
+	for idx, ei := range instances {
 		if !ei.HasBlockDevices() {
 			continue
 		}
 
 		engineRunning := ei.IsReady()
 
+		c.log.Debugf("&&& index %d: running: %v, calling ScanBdevTiers()", idx, engineRunning)
 		tsrs, err := ei.ScanBdevTiers(engineRunning)
 		if err != nil {
 			return nil, err
 		}
 
 		if !engineRunning || !statsReq {
+			c.log.Debugf("&&& index %d: running: %v, quit before update in use", idx, engineRunning)
 			for _, tsr := range tsrs {
 				ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
 			}
@@ -87,6 +89,7 @@ func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (
 		// over drpc to update controller details with current health stats
 		// and smd info.
 		for _, tsr := range tsrs {
+			c.log.Debugf("&&& index %d: running: %v, update in use", idx, engineRunning)
 			ctrlrMap, err := mapCtrlrs(tsr.Result.Controllers)
 			if err != nil {
 				return nil, errors.Wrap(err, "create controller map")
@@ -160,13 +163,14 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 	}
 	if !bdevsInCfg {
 		// return details of all bdevs if none are assigned to engines
-		resp, err := c.NvmeScan(storage.BdevScanRequest{})
+		resp, err := c.storage.ScanBdevs(storage.BdevScanRequest{})
 
 		return newScanNvmeResp(req, resp, err)
 	}
 
 	transientStatsRequested := req.GetHealth() || req.GetMeta()
 
+	c.log.Debugf("calling into scanAssignedBdevs() with tsr %v", transientStatsRequested)
 	resp, err := c.scanAssignedBdevs(ctx, transientStatsRequested)
 
 	return newScanNvmeResp(req, resp, err)

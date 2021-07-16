@@ -9,6 +9,7 @@ package storage
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -25,12 +26,14 @@ type SystemProvider interface {
 
 // Provider provides storage specific capabilities.
 type Provider struct {
+	sync.Mutex
 	log           logging.Logger
 	engineIndex   int
 	engineStorage *Config
 	Sys           SystemProvider
 	Scm           ScmProvider
 	bdev          BdevProvider
+	bdevCache     BdevScanResponse
 }
 
 // DefaultProvider returns a provider populated with default parameters.
@@ -338,9 +341,9 @@ type BdevTierScanResult struct {
 }
 
 // ScanBdevTiers scans all Bdev tiers in the provider's engine storage
-// configuration. If the engine is not running, flush cache to retrieve fresh
+// configuration. If the engine is not running, bypass cache to retrieve fresh
 // results as devices are accessible from the control plane.
-func (p *Provider) ScanBdevTiers(engineRunning bool) (results []BdevTierScanResult, err error) {
+func (p *Provider) ScanBdevTiers(isEngineRunning bool) (results []BdevTierScanResult, err error) {
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierScanResult, 0, len(bdevCfgs))
 
@@ -362,8 +365,10 @@ func (p *Provider) ScanBdevTiers(engineRunning bool) (results []BdevTierScanResu
 		p.log.Debugf("instance %d storage scan: tier %d bdev devices %v",
 			p.engineIndex, ti, req.DeviceList)
 
-		if !engineRunning {
-			req.FlushCache = true
+		if !isEngineRunning {
+			p.log.Debugf("instance %d storage scan: tier %d bypass cache",
+				p.engineIndex, ti, req.DeviceList)
+			req.BypassCache = true
 		}
 
 		bsr, err := p.bdev.Scan(req)
@@ -377,9 +382,31 @@ func (p *Provider) ScanBdevTiers(engineRunning bool) (results []BdevTierScanResu
 	return
 }
 
-func (p *Provider) ScanAllBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
+// ScanBdevs ...
+func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
+	p.Lock()
+	defer p.Unlock()
+
+	if !req.BypassCache {
+		p.log.Debugf("loading bdev scan cache: %v", p.bdevCache.Controllers)
+		return &p.bdevCache, nil
+	}
+
 	return p.bdev.Scan(req)
 }
+
+// SetBdevCache ...
+func (p *Provider) SetBdevCache(resp BdevScanResponse) {
+	p.bdevCache = resp
+	p.log.Debugf("storing bdev scan cache: %v", p.bdevCache.Controllers)
+}
+
+// GetBdevCache ...
+//func (p *Provider) GetBdevCache() *BdevScanResponse {
+//	// copy cache before returning
+//	p.log.Debugf("retrieving bdev scan cache: %v", p.bdevCache.Controllers)
+//	return &p.bdevCache
+//}
 
 // QueryBdevFirmware queries NVMe SSD firmware.
 func (p *Provider) QueryBdevFirmware(req NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {

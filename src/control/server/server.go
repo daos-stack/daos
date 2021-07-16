@@ -238,6 +238,15 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)
 	}
 
+	// Store cached NVMe device details retrieved on start-up (before
+	// engines are started) so static details can be recovered by the engine
+	// storage provider during scan.
+	bdevResp, err := srv.ctlSvc.GetNvmeCache()
+	if err != nil {
+		return nil, err
+	}
+	engine.SetBdevCache(*bdevResp)
+
 	return engine, nil
 }
 

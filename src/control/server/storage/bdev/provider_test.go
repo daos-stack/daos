@@ -155,7 +155,7 @@ func Test_filterScan(t *testing.T) {
 			},
 		},
 		"bypass cache": {
-			scanReq: storage.BdevScanRequest{FlushCache: true},
+			scanReq: storage.BdevScanRequest{BypassCache: true},
 			cache: &storage.BdevScanResponse{
 				Controllers: storage.MockNvmeControllers(2),
 			},
