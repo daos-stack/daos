@@ -5,13 +5,15 @@ is managed by the administrator. The amount of space allocated to a pool
 is decided at creation time and can eventually be expanded through the
 management interface or the `dmg` utility.
 
-## Pool Creation/Destroy
+## Basic Operations
+
+### Creating a Pool
 
 A DAOS pool can be created and destroyed through the `dmg` utility.
 
-**To create a pool labeled `tank`:**
+To create a pool labeled `tank`:
 ```bash
-$ dmg pool create --size=NTB tank
+$ dmg pool create --size=<N>TB tank
 ```
 
 This command creates a pool labeled `tank` distributed across the DAOS servers
@@ -34,18 +36,18 @@ $ dmg pool create --help
 ...
 
 [create command options]
-      -g, --group=     DAOS pool to be owned by given group, format name@domain
-      -u, --user=      DAOS pool to be owned by given user, format name@domain
-      -p, --label=     Unique label for pool
+      -g, --group=      DAOS pool to be owned by given group, format name@domain
+      -u, --user=       DAOS pool to be owned by given user, format name@domain
+      -p, --label=      Unique label for pool
       -P, --properties= Pool properties to be set
-      -a, --acl-file=  Access Control List file path for DAOS pool
-      -z, --size=      Total size of DAOS pool (auto)
+      -a, --acl-file=   Access Control List file path for DAOS pool
+      -z, --size=       Total size of DAOS pool (auto)
       -t, --tier-ratio= Distribution of pool storage allocation over storage tiers (auto) (default: 6)
-      -k, --nranks=    Number of ranks to use (auto)
-      -v, --nsvc=      Number of pool service replicas
-      -s, --scm-size=  Per-server SCM allocation for DAOS pool (manual)
-      -n, --nvme-size= Per-server NVMe allocation for DAOS pool (manual)
-      -r, --ranks=     Storage server unique identifiers (ranks) for DAOS pool
+      -k, --nranks=     Number of ranks to use (auto)
+      -v, --nsvc=       Number of pool service replicas
+      -s, --scm-size=   Per-server SCM allocation for DAOS pool (manual)
+      -n, --nvme-size=  Per-server NVMe allocation for DAOS pool (manual)
+      -r, --ranks=      Storage server unique identifiers (ranks) for DAOS pool
 ```
 
 The typical output of this command is as follows:
@@ -60,7 +62,7 @@ Pool created with 6.00% SCM/NVMe ratio
   Target Ranks  : [0-15]
   Size          : 50 GB
   SCM           : 3.0 GB (188 MB / rank)
-  NVMe          : 50 GB (3.2 GB / rank)
+  NVMe          : 47 GB (3.0 GB / rank)
 ```
 
 This created a pool with UUID 8a05bf3a-a088-4a77-bb9f-df989fce7cc8,
@@ -69,33 +71,125 @@ with redundancy enabled by default (pool service replicas on ranks 1-3).
 If no redundancy is desired, use --nsvc=1 in order to specify that only
 a single pool service replica should be created.
 
-**To evict handles/connections to a pool:**
+The -t option allows to define the ration between SCM and NVMe SSD space.
+The default value is 6% which means that the space provided after --size
+will be distributed as follows:
+- 6% is allocated on SCM (i.e. 3GB in the example above)
+- 94% is allocated on NVMe SSD (i.e. 47GB in the example above)
+
+### Listing Pools
+
+To see a list of the pools in your DAOS system:
+
+```bash
+$ dmg pool list
+Pool     Size   Used Imbalance Disabled
+----     ----   ---- --------- --------
+tank     47 GB  0%   0%        0/32
+```
+
+This returns a table of pool labels (or UUIDs if no label was specified)
+with the following information for each pool:
+- the total pool size
+- the percentage of used space (i.e. 100 * used space  / total space)
+- the imbalance percentage indicating whether data distribution across
+  the difference storage nodes is well balanced. 0% means that there is
+  no imbalance and 100% means that out-of-space errors might be returned
+  by some storage nodes while space is still available on others.
+- the number of disabled targets (0 here) and the number of targets that
+  the pool was originally configured with (total).
+
+The --verbose option provides more detailed information including the
+number of service replicate, the full UUIDs and space distribution
+between SCM and NVMe for each pool:
+
+```bash
+$ dmg pool list --verbose
+Label UUID                                 SvcReps SCM Size SCM Used SCM Imbalance NVME Size NVME Used NVME Imbalance Disabled
+----- ----                                 ------- -------- -------- ------------- --------- --------- -------------- --------
+tank  8a05bf3a-a088-4a77-bb9f-df989fce7cc8 1-3      3 GB    10 kB    0%            47 GB     0 B       0%             0/32
+```
+
+### Destroying a Pool
+
+To destroy a pool labeled `tank`:
+
+```bash
+$ dmg pool destroy tank
+Pool-destroy command succeeded
+```
+
+The label can be replaced with the pool UUID.
+
+### Querying a Pool
+
+The pool query operation retrieves information (i.e., the number of targets,
+space usage, rebuild status, property list, and more) about a created pool. It
+is integrated into the dmg utility.
+
+To query a pool labeled `tank`:
+
+```bash
+$ dmg pool query tank
+```
+
+The label can be replaced with the pool UUID.
+Below is the output for a pool created with SCM space only.
+
+```bash
+    pool=47293abe-aa6f-4147-97f6-42a9f796d64a
+    Pool 47293abe-aa6f-4147-97f6-42a9f796d64a, ntarget=64, disabled=8
+    Pool space info:
+    - Target(VOS) count:56
+    - SCM:
+        Total size: 28GB
+        Free: 28GB, min:505MB, max:512MB, mean:512MB
+    - NVMe:
+        Total size: 0
+        Free: 0, min:0, max:0, mean:0
+    Rebuild done, 10 objs, 1026 recs
+```
+
+The total and free sizes are the sum across all the targets whereas
+min/max/mean gives information about individual targets. A min value
+close to 0 means that one target is running out of space.
+
+NB: the Versioning Object Store (VOS) may reserve a portion of the
+SCM and NVMe allocations to mitigate against fragmentation and for background
+operations (e.g., aggregation, garbage collection). The amount of storage
+set aside depends on the size of the target and may take up 2+ GB.
+Therefore, Out of space conditions may occur even while pool query may not
+show min approaching zero.
+
+The example below shows a rebuild in progress and NVMe space allocated.
+
+```bash
+    pool=95886b8b-7eb8-454d-845c-fc0ae0ba5671
+    Pool 95886b8b-7eb8-454d-845c-fc0ae0ba5671, ntarget=64, disabled=8
+    Pool space info:
+    - Target(VOS) count:56
+    - SCM:
+        Total size: 28GB
+        Free: 28GB, min:470MB, max:512MB, mean:509MB
+    - NVMe:
+        Total size: 56GB
+        Free: 28GB, min:470MB, max:512MB, mean:509MB
+    Rebuild busy, 75 objs, 9722 recs
+```
+
+Additional status and telemetry data is planned to be exported through
+management tools and will be documented here once available.
+
+### Evicting Users
+
+To evict handles/connections to a pool labeled `tank`:
 
 ```bash
 $ dmg pool evict tank
 Pool-evict command succeeded
 ```
 
-**To see a list of the pools in your DAOS system:**
-
-```bash
-$ dmg pool list
-UUID                                 Label Svc Replicas
-----                                 ----- ------------
-a0d17ecc-50d4-4bef-9908-01911e56827e test  0
-93f63cea-98ca-4f8e-bdcf-2a9dde11c602 test1 0
-8a05bf3a-a088-4a77-bb9f-df989fce7cc8 tank  1-3
-```
-
-This returns a table of pool UUIDs, labels and the ranks of their pool service
-replicas.
-
-**To destroy a pool:**
-
-```bash
-$ dmg pool destroy tank
-Pool-destroy command succeeded
-```
+The label can be replaced with the pool UUID.
 
 ## Pool Properties
 
@@ -157,7 +251,7 @@ Name                       Value
 Reclaim strategy (reclaim) lazy
 ```
 
-# Reclaim Strategy (reclaim)
+### Reclaim Strategy (reclaim)
 
 DAOS is a versioned object store that tags every I/O with an epoch number.
 This versioning mechanism is the baseline for multi-version concurrency control and
@@ -172,19 +266,19 @@ Three options are supported:
 * "time"     : Trigger aggregation regularly despite of IO activities.
 * "disabled" : Never trigger aggregation. The system will eventually run out of space even if data is being deleted.
 
-# Self-healing Policy (self\_heal)
+### Self-healing Policy (self\_heal)
 
 This property defines whether a failing node is automatically evicted from the
 pool. Once excluded, the self-healing mechasnism will be triggered to restore
 the pool data redundancy on the surviving storage nodes.
 
-# Reserve Space (space\_rb)
+### Reserve Space (space\_rb)
 
 This property defines the percentage of total space reserved on each storage
 node for self-healing purpose. The reserved space cannot be consumed by the
 applications.
 
-# EC Cell Size (ec\_cell\_sz)
+### EC Cell Size (ec\_cell\_sz)
 
 This property defines the default erasure code cell size inherited to DAOS
 containers. The value is typically between 32K and 1MB.
@@ -316,63 +410,6 @@ operation, the principal argument must be formatted as follows:
 The entry for that principal will be completely removed. This does not always
 mean that the principal will have no access. Rather, their access to the pool
 will be decided based on the remaining ACL rules.
-
-## Pool Query
-The pool query operation retrieves information (i.e., the number of targets,
-space usage, rebuild status, property list, and more) about a created pool. It
-is integrated into the dmg utility.
-
-**To query a pool:**
-
-```bash
-$ dmg pool query tank
-```
-
-Below is the output for a pool created with SCM space only.
-
-```bash
-    pool=47293abe-aa6f-4147-97f6-42a9f796d64a
-    Pool 47293abe-aa6f-4147-97f6-42a9f796d64a, ntarget=64, disabled=8
-    Pool space info:
-    - Target(VOS) count:56
-    - SCM:
-        Total size: 28GB
-        Free: 28GB, min:505MB, max:512MB, mean:512MB
-    - NVMe:
-        Total size: 0
-        Free: 0, min:0, max:0, mean:0
-    Rebuild done, 10 objs, 1026 recs
-```
-
-The total and free sizes are the sum across all the targets whereas
-min/max/mean gives information about individual targets. A min value
-close to 0 means that one target is running out of space.
-
-NB: the Versioning Object Store (VOS) may reserve a portion of the
-SCM and NVMe allocations to mitigate fragmentation and for background
-operations (e.g., aggregation, garbage collection). The amount of storage
-set aside depends on the size of the target, and may take up 2+ GB.
-Therefore, out of space conditions may occur even while pool query may not
-reveal min approaching zero.
-
-The example below shows a rebuild in progress and NVMe space allocated.
-
-```bash
-    pool=95886b8b-7eb8-454d-845c-fc0ae0ba5671
-    Pool 95886b8b-7eb8-454d-845c-fc0ae0ba5671, ntarget=64, disabled=8
-    Pool space info:
-    - Target(VOS) count:56
-    - SCM:
-        Total size: 28GB
-        Free: 28GB, min:470MB, max:512MB, mean:509MB
-    - NVMe:
-        Total size: 56GB
-        Free: 28GB, min:470MB, max:512MB, mean:509MB
-    Rebuild busy, 75 objs, 9722 recs
-```
-
-Additional status and telemetry data are planned to be exported through
-management tools and will be documented here once available.
 
 ## Pool Modifications
 
