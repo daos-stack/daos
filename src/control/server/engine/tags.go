@@ -135,6 +135,12 @@ func parseCmdTags(in interface{}, tagFilter string, joiner joinFn, seenRefs refM
 				}
 				strVal := strconv.FormatUint(fVal.Uint(), 10)
 				out = append(out, joiner([]string{tag, strVal})...)
+			case reflect.Slice:
+				if fVal.Len() == 0 && opts.hasOpt(nonZero) {
+					continue
+				}
+				strVal := strconv.Itoa(fVal.Len())
+				out = append(out, joiner([]string{tag, strVal})...)
 			case reflect.Uintptr, reflect.Ptr:
 				if fVal.IsNil() {
 					continue

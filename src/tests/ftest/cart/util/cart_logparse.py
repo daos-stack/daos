@@ -112,7 +112,7 @@ class LogLine():
     re_pid = re.compile(r"pid=(\d+)")
 
     # Match a truncated uuid from DF_UUID
-    re_uuid = re.compile(r"[0-9a-f]{8}(:?)")
+    re_uuid = re.compile(r"[0-9a-f]{8}(:|\,?)")
     # Match a truncated uuid[rank] from DF_DB
     re_uuid_rank = re.compile(r"[0-9,a-f]{8}\[\d+\](:?)")
     # Match from DF_UIOD
