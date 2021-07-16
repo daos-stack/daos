@@ -171,21 +171,23 @@ func getAioKdevCreateMethod(name, path string) *SpdkSubsystemConfig {
 	}
 }
 
-func getSpdkConfigMethods(req *FormatRequest) (sscs []*SpdkSubsystemConfig) {
-	var f configMethodGetter
+func getSpdkConfigMethods(req *storage.BdevWriteNvmeConfigRequest) (sscs []*SpdkSubsystemConfig) {
+	for _, tier := range req.TierProps {
+		var f configMethodGetter
 
-	switch req.Class {
-	case storage.BdevClassNvme:
-		f = getNvmeAttachMethod
-	case storage.BdevClassFile:
-		f = getAioFileCreateMethod
-	case storage.BdevClassKdev:
-		f = getAioKdevCreateMethod
-	}
+		switch tier.Class {
+		case storage.ClassNvme:
+			f = getNvmeAttachMethod
+		case storage.ClassFile:
+			f = getAioFileCreateMethod
+		case storage.ClassKdev:
+			f = getAioKdevCreateMethod
+		}
 
-	for index, dev := range req.DeviceList {
-		name := fmt.Sprintf("%s_%d", req.Hostname, index)
-		sscs = append(sscs, f(name, dev))
+		for index, dev := range tier.DeviceList {
+			name := fmt.Sprintf("%s_%d_%d", req.Hostname, index, tier.Tier)
+			sscs = append(sscs, f(name, dev))
+		}
 	}
 
 	return
@@ -206,9 +208,9 @@ func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
 	return sc
 }
 
-// WithBdevConfigs adds config methods derived from the input FormatRequest to
-// the bdev subsystem of an SpdkConfig.
-func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *FormatRequest) *SpdkConfig {
+// WithBdevConfigs adds config methods derived from the input
+// BdevWriteNvmeConfigRequest to the bdev subsystem of an SpdkConfig.
+func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWriteNvmeConfigRequest) *SpdkConfig {
 	for _, ss := range sc.Subsystems {
 		if ss.Name != "bdev" {
 			continue
@@ -223,11 +225,14 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *FormatRequest) *S
 	return sc
 }
 
-func newSpdkConfig(log logging.Logger, enableVmd bool, req *FormatRequest) (*SpdkConfig, error) {
+func newSpdkConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteNvmeConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
-	if enableVmd && req.Class == storage.BdevClassNvme {
-		sc.WithVmdEnabled()
+	for _, tp := range req.TierProps {
+		if enableVmd && tp.Class == storage.ClassNvme {
+			sc.WithVmdEnabled()
+			break
+		}
 	}
 
 	return sc.WithBdevConfigs(log, req), nil

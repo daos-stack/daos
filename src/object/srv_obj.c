@@ -1237,6 +1237,26 @@ daos_iod_recx_dup(daos_iod_t *iods, uint32_t iod_nr, daos_iod_t **iods_dup_ptr)
 	return 0;
 }
 
+static bool
+obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_io_context *ioc)
+{
+	D_ASSERT(orw->orw_flags & ORF_EC_RECOV);
+
+	if (DAOS_FAIL_CHECK(DAOS_FAIL_AGG_BOUNDRY_MOVED))
+		return true;
+
+	/* agg_eph_boundry advanced, possibly cause epoch of EC data recovery
+	 * cannot get corresponding parity/data exts, need to retry the degraded
+	 * fetch from beginning. For ORF_EC_RECOV_SNAP case, need not retry as
+	 * that flag was only set when (snapshot_epoch < sc_ec_agg_eph_boundry).
+	 */
+	if ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0 &&
+	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundry)
+		return true;
+
+	return false;
+}
+
 static int
 obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		      daos_iod_t *split_iods, struct dcs_iod_csums *split_csums,
@@ -1260,6 +1280,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	uint64_t			*offs;
 	uint64_t			 cond_flags;
 	daos_iod_t			*iods_dup = NULL; /* for EC deg fetch */
+	bool				 get_parity_list = false;
+	struct daos_recx_ep_list	*parity_list = NULL;
 	int				err, rc = 0;
 
 	create_map = orw->orw_flags & ORF_CREATE_MAP;
@@ -1331,6 +1353,8 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	} else {
 		uint32_t			 fetch_flags = 0;
 		bool				 ec_deg_fetch;
+		bool				 ec_recov;
+		bool				 is_parity_shard;
 		struct daos_recx_ep_list	*shadows = NULL;
 
 		bulk_op = CRT_BULK_PUT;
@@ -1343,6 +1367,28 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		}
 
 		ec_deg_fetch = orw->orw_flags & ORF_EC_DEGRADED;
+		ec_recov = orw->orw_flags & ORF_EC_RECOV;
+		D_ASSERTF(ec_recov == false || ec_deg_fetch == false,
+			  "ec_recov %d, ec_deg_fetch %d.\n",
+			  ec_recov, ec_deg_fetch);
+		is_parity_shard = orw->orw_oid.id_shard >=
+				  obj_ec_data_tgt_nr(&ioc->ioc_oca);
+		get_parity_list = ec_recov && is_parity_shard &&
+				  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
+		if (get_parity_list) {
+			D_ASSERT(!ec_deg_fetch);
+			fetch_flags |= VOS_OF_FETCH_RECX_LIST;
+		}
+		if (unlikely(ec_recov &&
+			     obj_ec_recov_need_try_again(orw, ioc))) {
+			rc = -DER_FETCH_AGAIN;
+			D_DEBUG(DB_IO, DF_UOID" "DF_X64"<"DF_X64
+				" ec_recov needs redo, "DF_RC".\n",
+				DP_UOID(orw->orw_oid), orw->orw_epoch,
+				ioc->ioc_coc->sc_ec_agg_eph_boundry,
+				DP_RC(rc));
+			goto out;
+		}
 		if (ec_deg_fetch && !spec_fetch) {
 			if (orwo->orw_rels.ca_arrays != NULL) {
 				/* Re-entry case */
@@ -1390,6 +1436,14 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto out;
 		}
 
+		if (get_parity_list) {
+			parity_list = vos_ioh2recx_list(ioh);
+			if (parity_list != NULL) {
+				orwo->orw_rels.ca_arrays = parity_list;
+				orwo->orw_rels.ca_count = orw->orw_nr;
+			}
+		}
+
 		rc = obj_set_reply_sizes(rpc, iods, orw->orw_nr);
 		if (rc != 0)
 			goto out;
@@ -1406,7 +1460,10 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (rc)
 				goto out;
 		}
-		recov_lists = vos_ioh2recx_list(ioh);
+		if (ec_deg_fetch) {
+			D_ASSERT(!get_parity_list);
+			recov_lists = vos_ioh2recx_list(ioh);
+		}
 		rc = obj_singv_ec_rw_filter(orw->orw_oid, &ioc->ioc_oca,
 					    iods, offs, orw->orw_epoch,
 					    orw->orw_flags,
@@ -1419,8 +1476,25 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			goto out;
 		}
 		if (recov_lists != NULL) {
-			daos_recx_ep_list_set_ep_valid(recov_lists,
-						       orw->orw_nr);
+			daos_epoch_t	vos_agg_epoch;
+			daos_epoch_t	recov_epoch = 0;
+			bool		recov_snap = false;
+
+			/* If fetch from snapshot, and snapshot epoch lower than
+			 * vos agg epoch boundary, recovery from snapshot epoch.
+			 * Or, will recovery from max{parity_epoch, vos_epoch_
+			 * boundary}.
+			 */
+			vos_agg_epoch = ioc->ioc_coc->sc_ec_agg_eph_boundry;
+			if (ioc->ioc_fetch_snap &&
+			    orw->orw_epoch < vos_agg_epoch) {
+				recov_epoch = orw->orw_epoch;
+				recov_snap =  true;
+			} else {
+				recov_epoch = vos_agg_epoch;
+			}
+			daos_recx_ep_list_set(recov_lists, orw->orw_nr,
+					      recov_epoch, recov_snap);
 			orwo->orw_rels.ca_arrays = recov_lists;
 			orwo->orw_rels.ca_count = orw->orw_nr;
 		}
@@ -1775,12 +1849,15 @@ static inline void
 obj_update_sensors(struct obj_io_context *ioc, int err)
 {
 	struct obj_tls		*tls = obj_tls_get();
+	struct obj_pool_metrics	*opm;
 	struct d_tm_node_t	*lat;
 	uint32_t		opc = ioc->ioc_opc;
 	uint64_t		time;
 
+	opm = ioc->ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+
 	d_tm_dec_gauge(tls->ot_op_active[opc], 1);
-	d_tm_inc_counter(tls->ot_op_total[opc], 1);
+	d_tm_inc_counter(opm->opm_total[opc], 1);
 
 	if (unlikely(err != 0))
 		return;
@@ -1795,11 +1872,11 @@ obj_update_sensors(struct obj_io_context *ioc, int err)
 	switch (opc) {
 	case DAOS_OBJ_RPC_UPDATE:
 	case DAOS_OBJ_RPC_TGT_UPDATE:
-		d_tm_inc_counter(tls->ot_update_bytes, ioc->ioc_io_size);
+		d_tm_inc_counter(opm->opm_update_bytes, ioc->ioc_io_size);
 		lat = tls->ot_update_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	case DAOS_OBJ_RPC_FETCH:
-		d_tm_inc_counter(tls->ot_fetch_bytes, ioc->ioc_io_size);
+		d_tm_inc_counter(opm->opm_fetch_bytes, ioc->ioc_io_size);
 		lat = tls->ot_fetch_lat[lat_bucket(ioc->ioc_io_size)];
 		break;
 	default:
@@ -2035,40 +2112,15 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 			goto out;
 		}
 	}
-	if (oea->ea_remove_nr) {
-		daos_epoch_range_t	epr;
-		uint64_t		stripe_end;
-		int			i;
 
-		stripe_end = (oea->ea_stripenum + 1) * obj_ioc2ec_ss(&ioc);
-		for (i = 0; i < oea->ea_remove_nr; i++) {
-			daos_recx_t *ea_recx;
-
-			ea_recx = &oea->ea_remove_recxs.ca_arrays[i];
-			if (DAOS_RECX_END(*ea_recx) > stripe_end)
-				continue;
-
-			epr.epr_hi = epr.epr_lo =
-				oea->ea_remove_eps.ca_arrays[i];
-			rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl,
-						  oea->ea_oid, &epr, dkey,
-						  &iod->iod_name, ea_recx);
-			if (rc) {
-				D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-					DP_UOID(oea->ea_oid), DP_RC(rc));
-			}
-		}
-
-	} else {
-		recx.rx_idx = oea->ea_stripenum * obj_ioc2ec_ss(&ioc);
-		recx.rx_nr = obj_ioc2ec_ss(&ioc);
-		rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
-					  &oea->ea_epoch_range, dkey,
-					  &iod->iod_name, &recx);
-		if (rc) {
-			D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-				DP_UOID(oea->ea_oid), DP_RC(rc));
-		}
+	recx.rx_idx = oea->ea_stripenum * obj_ioc2ec_ss(&ioc);
+	recx.rx_nr = obj_ioc2ec_ss(&ioc);
+	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
+				  &oea->ea_epoch_range, dkey,
+				  &iod->iod_name, &recx);
+	if (rc) {
+		D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
+			DP_UOID(oea->ea_oid), DP_RC(rc));
 	}
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
@@ -2355,6 +2407,10 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		dss_get_module_info()->dmi_xs_id, orw->orw_epoch,
 		orw->orw_map_ver, ioc.ioc_map_ver, DP_DTI(&orw->orw_dti));
 
+	if (obj_rpc_is_fetch(rpc) && !(orw->orw_flags & ORF_EC_RECOV) &&
+	    (orw->orw_epoch != 0 && orw->orw_epoch != DAOS_EPOCH_MAX))
+		ioc.ioc_fetch_snap = 1;
+
 	rc = process_epoch(&orw->orw_epoch, &orw->orw_epoch_first,
 			   &orw->orw_flags);
 	if (rc == PE_OK_LOCAL)
@@ -2432,10 +2488,11 @@ re_fetch:
 again:
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
-		daos_epoch_t	e = 0;
-		struct obj_tls  *tls = obj_tls_get();
+		daos_epoch_t		e = 0;
+		struct obj_pool_metrics	*opm;
 
-		d_tm_inc_counter(tls->ot_update_resent, 1);
+		opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+		d_tm_inc_counter(opm->opm_update_resent, 1);
 
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2532,7 +2589,9 @@ again:
 		 * the restart to the RPC client.
 		 */
 		if (opc == DAOS_OBJ_RPC_UPDATE) {
-			struct obj_tls	*tls = obj_tls_get();
+			struct obj_pool_metrics	*m;
+
+			m = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
 
 			/*
 			 * Only standalone updates use this RPC. Retry with
@@ -2541,7 +2600,7 @@ again:
 			orw->orw_epoch = crt_hlc_get();
 			orw->orw_flags &= ~ORF_RESEND;
 			flags = 0;
-			d_tm_inc_counter(tls->ot_update_restart, 1);
+			d_tm_inc_counter(m->opm_update_restart, 1);
 			goto again;
 		}
 

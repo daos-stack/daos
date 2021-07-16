@@ -47,7 +47,7 @@ class TestPool(TestDaosApiBase):
         self.target_list = BasicParameter(None)
         self.nranks = BasicParameter(None)
         self.size = BasicParameter(None)
-        self.scm_ratio = BasicParameter(None)
+        self.tier_ratio = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)       # name of property to be set
@@ -95,7 +95,7 @@ class TestPool(TestDaosApiBase):
             try:
                 params = test.server_managers[index].autosize_pool_params(
                     size=self.size.value,
-                    scm_ratio=self.scm_ratio.value,
+                    tier_ratio=self.tier_ratio.value,
                     scm_size=self.scm_size.value,
                     nvme_size=self.nvme_size.value,
                     min_targets=self.min_targets.value,
@@ -150,7 +150,7 @@ class TestPool(TestDaosApiBase):
             "uid": self.uid,
             "gid": self.gid,
             "size": self.size.value,
-            "scm_ratio": self.scm_ratio.value,
+            "tier_ratio": self.tier_ratio.value,
             "scm_size": self.scm_size.value,
             "nranks": self.nranks.value,
             "properties": self.properties.value,

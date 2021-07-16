@@ -383,7 +383,7 @@ class DmgCommand(DmgCommandBase):
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
-                    scm_ratio=None, nranks=None, properties=None):
+                    tier_ratio=None, nranks=None, properties=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -400,9 +400,9 @@ class DmgCommand(DmgCommandBase):
             svcn (str, optional): Number of pool service replicas. Defaults to
                 None, in which case the default value is set by the server.
             acl_file (str, optional): ACL file. Defaults to None.
-            size (str, optional): NVMe pool size to create with scm_ratio.
+            size (str, optional): NVMe pool size to create with tier_ratio.
                 Defaults to None.
-            scm_ratio (str, optional): SCM pool size to create as a ratio of
+            tier_ratio (str, optional): SCM pool size to create as a ratio of
                 size. Defaults to None.
             nranks (str, optional): Number of ranks to use. Defaults to None
             properties (str, optional): Comma separated name:value string
@@ -421,7 +421,7 @@ class DmgCommand(DmgCommandBase):
             "user": getpwuid(uid).pw_name if isinstance(uid, int) else uid,
             "group": getgrgid(gid).gr_name if isinstance(gid, int) else gid,
             "size": size,
-            "scm_ratio": scm_ratio,
+            "tier_ratio": tier_ratio,
             "scm_size": scm_size,
             "nvme_size": nvme_size,
             "nsvc": svcn,
@@ -459,8 +459,8 @@ class DmgCommand(DmgCommandBase):
             [str(svc) for svc in output["response"]["svc_reps"]])
         data["ranks"] = ",".join(
             [str(r) for r in output["response"]["tgt_ranks"]])
-        data["scm_per_rank"] = output["response"]["scm_bytes"]
-        data["nvme_per_rank"] = output["response"]["nvme_bytes"]
+        data["scm_per_rank"] = output["response"]["tier_bytes"][0]
+        data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
 
         return data
 
