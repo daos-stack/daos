@@ -74,12 +74,16 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 "disabled_targets", path="/run/exp_vals/*"),
             "version": self.params.get("version", path="/run/exp_vals/*"),
             "leader": self.params.get("leader", path="/run/exp_vals/*"),
-            "scm": {
-                "total": self.params.get("total", path="/run/exp_vals/scm/*")
-            },
-            "nvme": {
-                "total": self.params.get("total", path="/run/exp_vals/nvme/*")
-            },
+            "tier_stats": [
+                {
+                    "total": self.params.get(
+                        "total", path="/run/exp_vals/scm/*")
+                },
+                {
+                    "total": self.params.get(
+                        "total", path="/run/exp_vals/nvme/*")
+                }
+            ],
             "rebuild": {
                 "status": self.params.get(
                     "rebuild_status", path="/run/exp_vals/rebuild/*"),
@@ -124,7 +128,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         for uuid in uuids:
             # Verify pool query status
             self.pool.set_query_data()
-            error = self.pool.query_data["error"] if "error" in data else None
+            error = None
+            if "error" in self.pool.query_data:
+                error = self.pool.query_data["error"]
 
             self.log.info("")
             self.log.info("==>  Using test UUID:                   %s", uuid[0])
