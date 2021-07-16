@@ -67,12 +67,6 @@ class SoakTestBase(TestWithServers):
         """Define test setup to be done."""
         self.log.info("<<setUp Started>> at %s", time.ctime())
         super().setUp()
-        # Log the version of rpms being used for this test
-        cmd = "sudo dnf list daos-client"
-        try:
-            _ = run_command(cmd, timeout=30)
-        except DaosTestError as error:
-            self.log.info("No daos rpm package info available %s", error)
         self.username = getuser()
         # Initialize loop param for all tests
         self.loop = 1
@@ -504,9 +498,9 @@ class SoakTestBase(TestWithServers):
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get(
             "single_test_pool", test_param + "*", True)
-        self.dmg_command.copy_certificates(
-            get_log_file("daosCA/certs"), self.hostlist_clients)
-        self.dmg_command.copy_configuration(self.hostlist_clients)
+        # self.dmg_command.copy_certificates(
+        #     get_log_file("daosCA/certs"), self.hostlist_clients)
+        # self.dmg_command.copy_configuration(self.hostlist_clients)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         if harassers:

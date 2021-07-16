@@ -73,37 +73,43 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         pool: pool to create container
         oclass: object class of container
 
+
     """
+    rf = None
     # Create a container and add it to the overall list of containers
     self.container.append(
         TestContainer(pool, daos_command=self.get_daos_command()))
     self.container[-1].namespace = path
     self.container[-1].get_params(self)
+    # don't include oclass in daos cont cmd; include rf based on the class
     if oclass:
-        self.container[-1].oclass.update(oclass)
-    parity = get_ec_parity_number(oclass)
-    if parity:
-        rf = 'rf:{}'.format(parity)
-        properties = self.container[-1].properties.value
-        cont_properties = (",").join(filter(None, [properties, rf]))
-        if cont_properties:
-            self.container[-1].properties.update(cont_properties)
+        self.container[-1].oclass.update(None)
+        redundancy_factor = get_rf(oclass)
+        rf = 'rf:{}'.format(str(redundancy_factor))
+    properties = self.container[-1].properties.value
+    cont_properties = (",").join(filter(None, [properties, rf]))
+    self.container[-1].properties.update(cont_properties)
     self.container[-1].create()
 
 
-def get_ec_parity_number(oclass):
-    """Return EC Object Parity count.
+def get_rf(oclass):
+    """Return redundancy factor based on the oclass.
+
     Args:
-        oclass(string): EC Object type.
+        oclass(string): object class.
 
     return:
-        Parity numbers from object type
+        redundancy factor(int) from object type
     """
-    if 'EC' not in oclass:
-        return 0
-
-    tmp = re.findall(r'\d+', oclass)
-    return tmp[1]
+    if "EC" in oclass:
+        tmp = re.findall(r'\d+', oclass)
+        rf = int(tmp[1])
+    elif "RP" in oclass:
+        tmp = re.findall(r'\d+', oclass)
+        rf = int(tmp[0]) - 1
+    else:
+        rf = 0
+    return rf
 
 
 def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
@@ -739,8 +745,12 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         ior_cmd.api.update(api)
                     ior_cmd.block_size.update(b_size)
                     ior_cmd.transfer_size.update(t_size)
-                    ior_cmd.dfs_oclass.update(o_type)
-                    ior_cmd.dfs_dir_oclass.update(o_type)
+                    if (api in ["HDF5-VOL", "POSIX"]):
+                        ior_cmd.dfs_oclass.update(None)
+                        ior_cmd.dfs_dir_oclass.update(None)
+                    else:
+                        ior_cmd.dfs_oclass.update(o_type)
+                        ior_cmd.dfs_dir_oclass.update(o_type)
                     if ior_cmd.api.value == "DFS":
                         ior_cmd.test_file.update(
                             os.path.join("/", "testfile"))
@@ -834,8 +844,20 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.set_daos_params(
                             self.server_group, pool,
                             self.container[-1].uuid)
-                        mdtest_cmd.dfs_oclass.update(oclass)
-                        mdtest_cmd.dfs_dir_oclass.update(oclass)
+                        if ("POSIX" in api and "EC" in oclass):
+                            mdtest_cmd.dfs_oclass.update(None)
+                        if "EC" in oclass:
+                            # oclass_dir can not be EC must be RP based on rf
+                            rf = get_rf(oclass)
+                            if rf >= 2:
+                                mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
+                            elif rf == 1:
+                                mdtest_cmd.dfs_dir_oclass.update("RP_2G1")
+                            else:
+                                mdtest_cmd.dfs_dir_oclass.update("SX")
+                        else:
+                            mdtest_cmd.dfs_oclass.update(oclass)
+                            mdtest_cmd.dfs_dir_oclass.update(oclass)
                         env = mdtest_cmd.get_default_env("srun")
                         sbatch_cmds = [
                             "module load -q {}".format(mpi_module)]

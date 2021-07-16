@@ -592,8 +592,12 @@ class TestWithServers(TestWithoutServers):
             host_list_name = "_".join(["hostlist", name])
             partition_name = "_".join([name[:-1], "partition"])
             reservation_name = "_".join([name[:-1], "reservation"])
+            reservation_env = "_".join(["DAOS", reservation_name.upper()])
             partition = self.params.get(partition_name, "/run/hosts/*")
-            reservation = self.params.get(reservation_name, "/run/hosts/*")
+            reservation = os.environ.get(reservation_env, None)
+            self.log.info("env %s = %s", reservation_env, reservation)
+            if reservation is None:
+                reservation = self.params.get(reservation_name, "/run/hosts/*")
             host_list = getattr(self, host_list_name)
             if partition is not None and host_list is None:
                 # If a partition is provided instead of a list of hosts use the
