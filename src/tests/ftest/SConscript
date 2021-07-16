@@ -13,7 +13,7 @@ def scons():
             'daos_perf', 'daos_racer', 'daos_vol',
             'ior', 'mdtest',
             'daos_test', 'data', 'io', 'network', 'nvme',
-            'object', 'osa', 'pool', 'rebuild', 'security',
+            'object', 'osa', 'pool', 'posix', 'rebuild', 'security',
             'server', 'soak', 'unittest', 'erasurecode',
             'datamover', 'scripts', 'dbench', 'harness']
 

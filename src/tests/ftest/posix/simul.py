@@ -4,16 +4,16 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from general_utils import DaosTestError
-from command_utils_base import CommandFailure
+from avocado.core.exceptions import TestFail
 from dfuse_test_base import DfuseTestBase
 from env_modules import load_mpi
+from general_utils import DaosTestError
 from general_utils import run_command
-from avocado.core.exceptions import TestFail
 
 
 class PosixSimul(DfuseTestBase):
     # pylint: disable=too-few-public-methods
+    # pylint: disable=too-many-ancestors
     """Tests a posix container with simul
 
     From : https://github.com/LLNL/simul
