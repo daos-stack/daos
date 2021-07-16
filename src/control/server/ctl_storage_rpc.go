@@ -59,7 +59,7 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
 // assigned to I/O Engines.
-func (c *ControlService) scanAssignedBdevs(ctx context.Context) (*storage.BdevScanResponse, error) {
+func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
 
@@ -75,7 +75,7 @@ func (c *ControlService) scanAssignedBdevs(ctx context.Context) (*storage.BdevSc
 			return nil, err
 		}
 
-		if !engineRunning {
+		if !engineRunning || !statsReq {
 			for _, tsr := range tsrs {
 				ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
 			}
@@ -158,15 +158,16 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 			bdevsInCfg = true
 		}
 	}
-
 	if !bdevsInCfg {
-		// return details of all bdevs if none assigned to engines
+		// return details of all bdevs if none are assigned to engines
 		resp, err := c.NvmeScan(storage.BdevScanRequest{})
 
 		return newScanNvmeResp(req, resp, err)
 	}
 
-	resp, err := c.scanAssignedBdevs(ctx)
+	transientStatsRequested := req.GetHealth() || req.GetMeta()
+
+	resp, err := c.scanAssignedBdevs(ctx, transientStatsRequested)
 
 	return newScanNvmeResp(req, resp, err)
 }
