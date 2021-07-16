@@ -14,7 +14,7 @@
  * - create and connect to pool based on the input pool uuid and size
  * - create and open container based on the input container uuid
  */
-int dts_ctx_init(struct credit_context *tsc);
+int dts_ctx_init(struct credit_context *tsc, struct io_engine *engine);
 
 /**
  * Check if the I/O test context is for asynchronous test.
