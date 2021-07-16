@@ -548,7 +548,7 @@ main(int argc, char **argv)
 			(unsigned int)(nvme_size >> 20));
 	}
 
-	rc = dts_ctx_init(&ts_ctx);
+	rc = dts_ctx_init(&ts_ctx, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
