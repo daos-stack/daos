@@ -2048,6 +2048,7 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	const char	*name = "AttrName";
 	size_t		 val_size = TEST_MAX_ATTR_LEN;
 	char		 value[val_size];
+	void		*valptr = &value;
 
 	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
 						       DAOS_PROP_CO_ACL);
@@ -2061,7 +2062,7 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	if (arg->myrank == 0) {
 		/* Trivial case - just to see if we have access */
 		rc = daos_cont_get_attr(arg->coh, 1, &name,
-					(void * const*)&value,
+					(void * const*)&valptr,
 					&val_size,
 					NULL);
 

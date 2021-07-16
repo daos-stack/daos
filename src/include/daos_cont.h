@@ -695,6 +695,7 @@ daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
 int
 daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
 		   daos_event_t *ev);
+
 #define daos_cont_destroy(poh, co, ...)					\
 	({								\
 		int _ret;						\
