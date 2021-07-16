@@ -344,10 +344,7 @@ CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 	((daos_epoch_range_t)	(ea_epoch_range)	CRT_VAR)	\
 	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
-	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
-	((uint32_t)		(ea_remove_nr)		CRT_VAR)	\
-	((daos_recx_t)		(ea_remove_recxs)	CRT_ARRAY)	\
-	((daos_epoch_t)		(ea_remove_eps)		CRT_ARRAY)
+	((uint32_t)		(ea_map_ver)		CRT_VAR)
 
 
 #define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \

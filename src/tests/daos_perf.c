@@ -1593,7 +1593,13 @@ The options are as follows:\n\
 \n\
 -I	Use constant akey.  Required for QUERY test.\n\
 \n\
--p	run vos perf with profile.\n");
+-p	run vos perf with profile.\n\
+\n\
+-u pool_uuid\n\
+	Specify an existing pool uuid\n\
+\n\
+-X cont_uuid\n\
+	Specify an existing cont uuid\n");
 }
 
 static struct option ts_ops[] = {
@@ -1617,6 +1623,9 @@ static struct option ts_ops[] = {
 	{ "wait",	no_argument,		NULL,	'w' },
 	{ "int_dkey",	no_argument,		NULL,	'i' },
 	{ "const_akey",	no_argument,		NULL,	'I' },
+	{ "profile",	no_argument,		NULL,	'p' },
+	{ "pool",	required_argument,	NULL,	'u' },
+	{ "cont",	required_argument,	NULL,	'X' },
 	{ NULL,		0,			NULL,	0   },
 };
 
@@ -1714,7 +1723,7 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:n:s:R:g:G:zf:hiIwxpA::",
+				 "P:N:T:C:c:X:u:o:d:a:n:s:R:g:G:zf:hiIwxpA::",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1819,12 +1828,25 @@ main(int argc, char **argv)
 		case 'p':
 			ts_profile_vos = true;
 			break;
+		case 'u':
+			rc = uuid_parse(optarg, ts_ctx.tsc_pool_uuid);
+			printf("Using pool: "DF_UUID"\n", DP_UUID(ts_ctx.tsc_pool_uuid));
+			if (rc)
+				return rc;
+			break;
+		case 'X':
+			rc = uuid_parse(optarg, ts_ctx.tsc_cont_uuid);
+			printf("Using cont: "DF_UUID"\n", DP_UUID(ts_ctx.tsc_cont_uuid));
+			if (rc)
+				return rc;
+			break;
 		case 'h':
 			if (ts_ctx.tsc_mpi_rank == 0)
 				ts_print_usage();
 			return 0;
 		}
 	}
+
 	if (ts_const_akey)
 		ts_akey_p_dkey = 1;
 
@@ -1923,9 +1945,23 @@ main(int argc, char **argv)
 	ts_ctx.tsc_nvme_size	= nvme_size;
 	ts_ctx.tsc_dmg_conf	= dmg_conf;
 
+	/*
+	 * For daos_perf, if pool/cont uuids are supplied as command line
+	 * arguments it's assumed that the pool/cont were created. If only a
+	 * cont uuid is supplied then a pool and container will be created and
+	 * the cont uuid will be used during creation
+	 */
+	if (!uuid_is_null(ts_ctx.tsc_pool_uuid)) {
+		ts_ctx.tsc_skip_pool_create = true;
+		if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
+			ts_ctx.tsc_skip_cont_create = true;
+	}
+
 	if (ts_ctx.tsc_mpi_rank == 0 || ts_mode == TS_MODE_VOS) {
-		uuid_generate(ts_ctx.tsc_cont_uuid);
-		uuid_generate(ts_ctx.tsc_pool_uuid);
+		if (!ts_ctx.tsc_skip_cont_create)
+			uuid_generate(ts_ctx.tsc_cont_uuid);
+		if (!ts_ctx.tsc_skip_pool_create)
+			uuid_generate(ts_ctx.tsc_pool_uuid);
 	}
 
 	rc = dts_ctx_init(&ts_ctx);
@@ -1938,8 +1974,10 @@ main(int argc, char **argv)
 	 * So uuid_unparse() the pool_uuid after dts_ctx_init.
 	 */
 	memset(uuid_buf, 0, sizeof(uuid_buf));
-	if (ts_ctx.tsc_mpi_rank == 0 || ts_mode == TS_MODE_VOS)
-		uuid_unparse(ts_ctx.tsc_pool_uuid, uuid_buf);
+	if (ts_ctx.tsc_mpi_rank == 0 || ts_mode == TS_MODE_VOS) {
+		if (!ts_ctx.tsc_skip_pool_create)
+			uuid_unparse(ts_ctx.tsc_pool_uuid, uuid_buf);
+	}
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		fprintf(stdout,

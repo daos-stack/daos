@@ -26,7 +26,7 @@ func TestTelemetry_GetSnapshot(t *testing.T) {
 	if !ok {
 		t.Fatal("real snapshot not in metrics set")
 	}
-	timeName := realTime.Name
+	timeName := realTime.FullPath()
 
 	for name, tc := range map[string]struct {
 		ctx        context.Context
@@ -46,7 +46,7 @@ func TestTelemetry_GetSnapshot(t *testing.T) {
 		},
 		"bad type": {
 			ctx:        testCtx,
-			metricName: testMetrics[MetricTypeGauge].Name,
+			metricName: testMetrics[MetricTypeGauge].FullPath(),
 			expErr:     errors.New("not a timer snapshot"),
 		},
 		"success": {
