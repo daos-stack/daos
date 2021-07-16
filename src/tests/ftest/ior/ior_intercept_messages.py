@@ -7,16 +7,14 @@
 
 import re
 import os
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
-from ior_utils import IorCommand, IorMetrics
 
 
 class IorInterceptMessages(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with interception.
 
-       Look for debug messages provided the the library
+       Look for messages provided the the library
 
     :avocado: recursive
     """
@@ -39,30 +37,61 @@ class IorInterceptMessages(IorTestBase):
         :avocado: tags=iorinterceptmessages
         """
         apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
+        d_il_report_value = self.params.get("value", "/run/tests/D_IL_REPORT/*")
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+
+        # Set the env locally for this test
+        # Avoiding any impact to the rest of IOR test cases
         job_manager = self.get_ior_job_manager_command()
         env = self.ior_cmd.get_default_env(str(job_manager), self.client_log)
-        env['D_LOG_MASK'] = 'DEBUG'
+        env['D_LOG_MASK'] = 'INFO'
         env['DD_MASK '] = 'all'
         env['DD_SUBSYS'] = 'all'
         env['LD_PRELOAD'] = intercept
-        env['D_IL_REPORT'] = '1'
+        #
+        # D_IL_REPORT VALUES
+        #     -1: All printed calls # This needs its own test case
+        #      0: Summary on exit
+        #      1: Print to stderr the first read call
+        #      2: Print to stderr the first 2 read calls
+        # If needed the test can mux the value of D_IL_REPORT
+        # an look only for a limited number of prints
+        #
+        env['D_IL_REPORT'] = d_il_report_value
 
-        match_results = []
-        patterns = "^\[libioil\] Performed [0-9]+ reads and [0-9]+ " \
-                   "writes from [0-9]+ files*" \
-                   "|" \
-                   "^\[libioil\] Intercepting write*"
+        # Summary
+        match_summary_results = []
+        # pylint: disable=anomalous-backslash-in-string
+        summary_pattern = "^\[libioil\] Performed [0-9]+ reads and [0-9]+ " \
+                          "writes from [0-9]+ files*"
+        compiled_sp = re.compile(summary_pattern)
+        expected_total_summaries = self.processes
+
+        # Intercept
+        match_intercept_results = []
+        # pylint: disable=anomalous-backslash-in-string
+        intercept_pattern = "^\[libioil\] Intercepting write*"
+        compiled_ip = re.compile(intercept_pattern)
+        expected_total_intercepts = self.processes * int(env['D_IL_REPORT'])
 
         for api in apis:
             self.ior_cmd.api.update(api)
             if api == "POSIX":
                 out = self.run_ior_with_pool(intercept, fail_on_warning=False,
                                              env=env)
-
                 # Check for libioil messages within stderr
                 for line in out.stderr.decode("utf-8").splitlines():
-                    match = re.findall(patterns, line)
+
+                    # Check for interception messages
+                    match = compiled_ip.match(line)
                     if match:
-                        match_results.append(match)
-                self.assertTrue(match_results, "No libioil messages found.")
+                        match_intercept_results.append(match)
+                    # Check for summary messages within stderr
+                    match = compiled_sp.search(line)
+                    if match:
+                        match_summary_results.append(match)
+
+                self.assertEqual(len(match_intercept_results),
+                                 expected_total_intercepts)
+                self.assertEqual(len(match_summary_results),
+                                 expected_total_summaries)
