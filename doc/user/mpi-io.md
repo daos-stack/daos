@@ -20,14 +20,12 @@ for details.
     [here](https://github.com/pmodels/mpich/commits/main?author=mchaarawi).
 
 
-## MPI Implementations that support DAOS
+## Supported MPI Version
 
 ### MPICH
 
 The DAOS ROMIO ADIO driver has been accepted into [MPICH](https://www.mpich.org/).
 It is included in [mpich-3.4.1 (released Jan 2021)](https://www.mpich.org/downloads/).
-
-### Building MPICH with DAOS Support
 
 To build MPICH, including ROMIO with the DAOS ADIO driver:
 
@@ -96,7 +94,7 @@ Since its MPI-IO implementation is based on ROMIO,
 it will likely pick up DAOS support in an upcoming release.
 
 
-## Testing MPI-IO with DAOS Support
+## Testing MPI-IO with DAOS
 
 Build any client (HDF5, ior, mpi test suites) normally with the mpicc command
 and mpich library installed above (see child pages).
@@ -106,10 +104,11 @@ To run an example with MPI-IO:
 1. Create a DAOS pool on the DAOS server(s).
    This will return a pool uuid "puuid".
 2. Create a POSIX type container:
-   `daos cont create --pool=puuid --type=POSIX`
+   `daos cont create <pool_label> --type=POSIX`
    This will return a container uuid "cuuid".
 3. At the client side, the following environment variables need to be set:
    `export DAOS_POOL=puuid; export DAOS_CONT=cuuid; export DAOS_BYPASS_DUNS=1`.
+   The pool and container UUID can be retrieved via `daos pool/cont query`
    Alternatively, the unified namespace mode can be used instead.
 3. Run the client application or test.
    MPI-IO applications should work seamlessly by just prepending `daos:`

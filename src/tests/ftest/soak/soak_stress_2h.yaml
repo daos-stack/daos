@@ -44,14 +44,12 @@ dmg:
       allow_insecure: True
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-    mode: 146
     name: daos_server
     scm_size: 40GB
     nvme_size: 200GB
-    svcn: 1
+    properties: reclaim:time,ec_cell_sz:64KiB
     control_method: dmg
 pool_reserved:
-    mode: 511
     name: daos_server
     scm_size: 3GB
     nvme_size: 50GB

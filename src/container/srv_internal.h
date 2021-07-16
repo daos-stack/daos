@@ -28,14 +28,12 @@ struct ds_pool;
 struct ds_pool_hdl;
 
 /* Container metrics */
-struct cont_metrics {
-	struct d_tm_node_t	*op_open_ctr;
-	struct d_tm_node_t	*op_close_ctr;
-	struct d_tm_node_t	*op_destroy_ctr;
-	struct d_tm_node_t	*open_cont_gauge;
+struct cont_pool_metrics {
+	struct d_tm_node_t	*cpm_open;
+	struct d_tm_node_t	*cpm_close;
+	struct d_tm_node_t	*cpm_destroy;
+	struct d_tm_node_t	*cpm_open_cont;
 };
-
-extern struct cont_metrics ds_cont_metrics;
 
 /* ds_cont thread local storage structure */
 struct dsm_tls {
@@ -294,8 +292,8 @@ int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
 int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 
-/* srv_metrics.c */
-int ds_cont_metrics_init(void);
-int ds_cont_metrics_fini(void);
+/** srv_metrics.c*/
+void *ds_cont_metrics_alloc(const char *path, int tgt_id);
+void ds_cont_metrics_free(void *data);
 
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

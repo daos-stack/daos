@@ -15,6 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -105,7 +106,7 @@ func (s *spdkSetupScript) Reset() error {
 // whitelist of PCI addresses.
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
-func (s *spdkSetupScript) Prepare(req PrepareRequest) error {
+func (s *spdkSetupScript) Prepare(req storage.BdevPrepareRequest) error {
 	nrHugepages := req.HugePageCount
 	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages

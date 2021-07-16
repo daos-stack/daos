@@ -220,12 +220,13 @@ class DmgCommandBase(YamlCommand):
                 self.user = FormattedParameter("--user={}", None)
                 self.acl_file = FormattedParameter("--acl-file={}", None)
                 self.size = FormattedParameter("--size={}", None)
-                self.scm_ratio = FormattedParameter("--scm-ratio={}", None)
+                self.tier_ratio = FormattedParameter("--tier-ratio={}", None)
                 self.scm_size = FormattedParameter("--scm-size={}", None)
                 self.nvme_size = FormattedParameter("--nvme-size={}", None)
                 self.ranks = FormattedParameter("--ranks={}", None)
                 self.nsvc = FormattedParameter("--nsvc={}", None)
                 self.sys = FormattedParameter("--sys={}", None)
+                self.properties = FormattedParameter("--properties={}", None)
 
         class ExcludeSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool exclude command."""
