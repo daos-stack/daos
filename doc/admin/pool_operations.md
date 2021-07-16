@@ -36,18 +36,18 @@ $ dmg pool create --help
 ...
 
 [create command options]
-      -g, --group=     DAOS pool to be owned by given group, format name@domain
-      -u, --user=      DAOS pool to be owned by given user, format name@domain
-      -p, --label=     Unique label for pool
+      -g, --group=      DAOS pool to be owned by given group, format name@domain
+      -u, --user=       DAOS pool to be owned by given user, format name@domain
+      -p, --label=      Unique label for pool
       -P, --properties= Pool properties to be set
-      -a, --acl-file=  Access Control List file path for DAOS pool
-      -z, --size=      Total size of DAOS pool (auto)
+      -a, --acl-file=   Access Control List file path for DAOS pool
+      -z, --size=       Total size of DAOS pool (auto)
       -t, --tier-ratio= Distribution of pool storage allocation over storage tiers (auto) (default: 6)
-      -k, --nranks=    Number of ranks to use (auto)
-      -v, --nsvc=      Number of pool service replicas
-      -s, --scm-size=  Per-server SCM allocation for DAOS pool (manual)
-      -n, --nvme-size= Per-server NVMe allocation for DAOS pool (manual)
-      -r, --ranks=     Storage server unique identifiers (ranks) for DAOS pool
+      -k, --nranks=     Number of ranks to use (auto)
+      -v, --nsvc=       Number of pool service replicas
+      -s, --scm-size=   Per-server SCM allocation for DAOS pool (manual)
+      -n, --nvme-size=  Per-server NVMe allocation for DAOS pool (manual)
+      -r, --ranks=      Storage server unique identifiers (ranks) for DAOS pool
 ```
 
 The typical output of this command is as follows:
@@ -93,14 +93,14 @@ with the following information for each pool:
 - the total pool size
 - the percentage of used space (i.e. 100 * used space  / total space)
 - the imbalance percentage indicating whether data distribution across
-  the difference storage nodes is well balance. 0% means that there is
+  the difference storage nodes is well balanced. 0% means that there is
   no imbalance and 100% means that out-of-space errors might be returned
-  by some storage nodes while space is still available on some others.
+  by some storage nodes while space is still available on others.
 - the number of disabled targets (0 here) and the number of targets that
-  the pool was originally configured with.
+  the pool was originally configured with (total).
 
 The --verbose option provides more detailed information including the
-number of service replicate, the actual UUIDs and space distribution
+number of service replicate, the full UUIDs and space distribution
 between SCM and NVMe for each pool:
 
 ```bash
@@ -155,11 +155,11 @@ min/max/mean gives information about individual targets. A min value
 close to 0 means that one target is running out of space.
 
 NB: the Versioning Object Store (VOS) may reserve a portion of the
-SCM and NVMe allocations to mitigate fragmentation and for background
+SCM and NVMe allocations to mitigate against fragmentation and for background
 operations (e.g., aggregation, garbage collection). The amount of storage
-set aside depends on the size of the target, and may take up 2+ GB.
-Therefore, out of space conditions may occur even while pool query may not
-reveal min approaching zero.
+set aside depends on the size of the target and may take up 2+ GB.
+Therefore, Out of space conditions may occur even while pool query may not
+show min approaching zero.
 
 The example below shows a rebuild in progress and NVMe space allocated.
 
@@ -177,7 +177,7 @@ The example below shows a rebuild in progress and NVMe space allocated.
     Rebuild busy, 75 objs, 9722 recs
 ```
 
-Additional status and telemetry data are planned to be exported through
+Additional status and telemetry data is planned to be exported through
 management tools and will be documented here once available.
 
 ### Evicting Users

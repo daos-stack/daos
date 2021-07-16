@@ -2,8 +2,8 @@
 
 DAOS containers (not to be confused with Linux containers) are datasets managed
 by the users. A container is the unit of snapshot and has a type. It can be a
-POSIX namespace, an HDF5 file or any other new application-specific data model.
-The chapter explains how to manager container, while the subsequent ones detail
+POSIX namespace, an HDF5 file or any other application-specific data model.
+The chapter explains how to manage a container, while the subsequent ones detail
 how to access a DAOS container from applications.
 
 ## Container Basic Operations
