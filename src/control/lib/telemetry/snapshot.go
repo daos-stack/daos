@@ -74,6 +74,6 @@ func GetSnapshot(ctx context.Context, name string) (*Snapshot, error) {
 	if (node.dtn_type & C.D_TM_TIMER_SNAPSHOT) == 0 {
 		return nil, fmt.Errorf("metric %q is not a timer snapshot", name)
 	}
-
-	return newSnapshot(hdl, name, &name, node), nil
+	n, p := getPathAndName(name)
+	return newSnapshot(hdl, p, &n, node), nil
 }
