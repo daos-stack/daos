@@ -171,6 +171,7 @@ func (ei *EngineInstance) HasBlockDevices() bool {
 // ScanBdevTiers calls in to the private engine storage provider to scan bdev
 // tiers. Scan will avoid using any cached results if direct is set to true.
 func (ei *EngineInstance) ScanBdevTiers(isEngineRunning bool) ([]storage.BdevTierScanResult, error) {
+	ei.log.Infof("%s instance %d storage ScanBdvTe, %v running", build.DataPlaneName, ei.Index())
 	return ei.storage.ScanBdevTiers(isEngineRunning)
 }
 

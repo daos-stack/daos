@@ -359,24 +359,24 @@ func (p *Provider) ScanBdevTiers(isEngineRunning bool) (results []BdevTierScanRe
 		if len(cfg.Bdev.DeviceList) == 0 {
 			continue
 		}
-		tsr := BdevTierScanResult{Tier: cfg.Tier}
 
-		req := BdevScanRequest{DeviceList: cfg.Bdev.DeviceList}
-		p.log.Debugf("instance %d storage scan: tier %d bdev devices %v",
-			p.engineIndex, ti, req.DeviceList)
-
-		if !isEngineRunning {
-			p.log.Debugf("instance %d storage scan: tier %d bypass cache",
-				p.engineIndex, ti, req.DeviceList)
-			req.BypassCache = true
+		req := BdevScanRequest{
+			DeviceList:  cfg.Bdev.DeviceList,
+			BypassCache: !isEngineRunning,
 		}
-
-		bsr, err := p.bdev.Scan(req)
+		bsr, err := p.ScanBdevs(req)
 		if err != nil {
 			return nil, errors.Wrap(err, "nvme scan")
 		}
-		tsr.Result = bsr
-		results = append(results, tsr)
+
+		p.log.Debugf("instance %d storage scan: tier %d bypass cache (%v), %v: %v",
+			p.engineIndex, ti, req.BypassCache, req.DeviceList, bsr.Controllers)
+
+		result := BdevTierScanResult{
+			Tier:   cfg.Tier,
+			Result: bsr,
+		}
+		results = append(results, result)
 	}
 
 	return
@@ -400,13 +400,6 @@ func (p *Provider) SetBdevCache(resp BdevScanResponse) {
 	p.bdevCache = resp
 	p.log.Debugf("storing bdev scan cache: %v", p.bdevCache.Controllers)
 }
-
-// GetBdevCache ...
-//func (p *Provider) GetBdevCache() *BdevScanResponse {
-//	// copy cache before returning
-//	p.log.Debugf("retrieving bdev scan cache: %v", p.bdevCache.Controllers)
-//	return &p.bdevCache
-//}
 
 // QueryBdevFirmware queries NVMe SSD firmware.
 func (p *Provider) QueryBdevFirmware(req NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
