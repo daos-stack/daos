@@ -1,11 +1,4 @@
-# Getting Started with the DAOS Hadoop Filesystem
-
-- Prerequisites
-- Download DAOS Hadoop Filesystem
-- Deploy DAOS Hadoop Filesystem
-- Configure Hadoop
-- Configure Spark
-- Appendix
+# DAOS Hadoop Filesystem
 
 Here, we describe the quick steps required to use the DAOS Hadoop filesystem
 to access DAOS from Hadoop and Spark.
@@ -17,11 +10,12 @@ to access DAOS from Hadoop and Spark.
 3. Hadoop 2.7 or later
 4. Spark 3.1 or later
 5. DAOS Readiness
+
 We assume that the DAOS servers and agents have already been deployed in the
 environment. Otherwise, they can be deployed by following the
 [DAOS Installation Guide](https://daos-stack.github.io/admin/installation/).
 
-## Download DAOS Hadoop Filesystem
+## Maven Download
 
 There are two artifacts to download, daos-java and hadoop-daos, from maven.
 Here are maven dependencies.
@@ -36,14 +30,15 @@ Or search these artifacts from maven central(https://search.maven.org) and
 download them manually.
 
 You can also build artifacts by yourself.
-see [Build Daos Hadoop Filesystem](#builddaos) for details.
+see [Build DAOS Hadoop Filesystem](#builddaos) for details.
 
 
-## Deploy DAOS Hadoop Filesystem
+## Deployment
 
-### `daos-java-<version>.jar` and `hadoop-daos-<version>.jar`
+### JAR Files
 
-They need to be deployed on every compute node that runs Spark or Hadoop.
+`daos-java-<version>.jar` and `hadoop-daos-<version>.jar` need to be deployed
+on every compute node that runs Spark or Hadoop.
 Place them in a directory, e.g., `$SPARK_HOME/jars` for Spark and
 `$HADOOP_HOME/share/hadoop/common/lib` for Hadoop, which is accessible to all
 the nodes or copy them to every node.<br/>
@@ -54,22 +49,22 @@ Extract from `hadoop-daos-<version>.jar` and rename to `daos-site.xml`. Then
 copy it to your application config directory, e.g., `$SPARK_HOME/conf` for
 Spark and `$HADOOP_HOME/etc/hadoop` for Hadoop.
 
-## Configure Hadoop
+## Configuring Hadoop
 
-### DAOS Environment Variable
+### Environment Variable
 
 Export all DAOS-specific env variables in your application, e.g.,
 `spark-env.sh` for Spark and `hadoop-env.sh` for Hadoop. Or you can simply put
 env variables in your `.bashrc`.
 
-Besides, you should have LD_LIBRARY_PATH include DAOS library path so that Java
+Besides, you should have LD\_LIBRARY\_PATH include DAOS library path so that Java
 can link to DAOS libs, like below.
 
 ```bash
 $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:<DAOS_INSTALL>/lib64:<DAOS_INSTALL>/lib
 ```
 
-### <a name="non-uns"></a>Set DAOS URI and Pool/Container
+### DAOS URI
 
 In `daos-site.xml`, we default the DAOS URI as simplest form, "daos:///". For
 other form of URIs, please check [DAOS More URIs](#uris).
@@ -104,7 +99,7 @@ After that, configure `daos-site.xml` with the pool and container created.
 Please put `daos-site.xml` in right place, e.g., Java classpath, and
 loadable by Hadoop DAOS FileSystem.
 
-### Validate Hadoop Access
+### Validating Hadoop Access
 
 If everything goes well, you should see `/user` directory being listed after
 issuing below command.
@@ -117,7 +112,7 @@ You can also play around with other Hadoop commands, like -copyFromLocal and
 -copyToLocal. You can also start Yarn and run some mapreduce jobs on Yarn.
 See [Run Map-Reduce in Hadoop](#mapreduce)
 
-## Configure Spark
+## Configuring Spark
 
 To access DAOS Hadoop filesystem in Spark, add the jar files to the classpath
 of the Spark executor and driver. This can be configured in Spark's
@@ -128,7 +123,7 @@ spark.executor.extraClassPath   /path/to/daos-java-<version>.jar:/path/to/hadoop
 spark.driver.extraClassPath     /path/to/daos-java-<version>.jar:/path/to/hadoop-daos-<version>.jar
 ```
 
-### Validate Spark Access
+### Validatng Spark Access
 
 All Spark APIs that work with the Hadoop filesystem will work with DAOS. We can
 use the `daos:///` URI to access files stored in DAOS. For example, to read the
@@ -141,7 +136,7 @@ df = spark.read.json("daos:///people.json")
 
 ## Appendix
 
-### <a name="builddaos"></a>Build DAOS Hadoop Filesystem
+### <a name="builddaos"></a>Building DAOS Hadoop Filesystem
 
 Below are the steps to build the Java jar files for the DAOS Java and DAOS
 Hadoop filesystem. Spark and Hadoop require these jars in their classpath.
