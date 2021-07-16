@@ -1858,7 +1858,7 @@ out:
 	if (process_holes && rc == 0) {
 		rc = agg_process_holes(entry);
 	} else if (update_vos && rc == 0) {
-		if (rc == 0 && ec_age2p(entry) > 1)  {
+		if (ec_age2p(entry) > 1)  {
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
 			if (rc)
@@ -2105,7 +2105,6 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	D_ASSERT(agg_param->ap_yield_func != NULL);
 
 	return agg_param->ap_yield_func(agg_param->ap_yield_arg);
-
 }
 
 /* Post iteration call back for outer iterator
@@ -2131,20 +2130,6 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	default:
 		break;
-	}
-
-	agg_param->ap_credits++;
-
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
-		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
-		if (!(*acts & VOS_ITER_CB_SKIP))
-			agg_reset_pos(type, agg_entry);
-		D_DEBUG(DB_EPC, "EC aggregation yield type %d.\n", type);
-		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
-		}
 	}
 
 	return rc;
@@ -2275,6 +2260,20 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc < 0) {
 		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
+
+	agg_param->ap_credits++;
+	if (agg_param->ap_credits > agg_param->ap_credits_max) {
+		agg_param->ap_credits = 0;
+		*acts |= VOS_ITER_CB_YIELD;
+		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
+			type, *acts);
+		if (!(*acts & VOS_ITER_CB_SKIP))
+			agg_reset_pos(type, agg_entry);
+		if (ec_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
+			rc = 1;
+		}
 	}
 
 	return rc;
