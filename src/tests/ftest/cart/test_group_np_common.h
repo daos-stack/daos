@@ -50,6 +50,7 @@ struct test_t {
 	int			 t_write_completion_file;
 	crt_context_t		 t_crt_ctx[TEST_CTX_MAX_NUM];
 	pthread_t		 t_tid[TEST_CTX_MAX_NUM];
+	int			 t_thread_id[TEST_CTX_MAX_NUM];
 	sem_t			 t_token_to_proceed;
 	int			 t_roomno;
 	struct d_fault_attr_t	*t_fault_attr_1000;

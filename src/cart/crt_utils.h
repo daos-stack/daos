@@ -53,6 +53,9 @@ crtu_set_shutdown_delay(int delay_sec);
 void
 crtu_progress_stop(void);
 
+void
+write_completion_file(void);
+
 void *
 crtu_progress_fn(void *data);
 
