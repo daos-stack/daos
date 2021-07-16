@@ -81,8 +81,11 @@ daos_fail_loc_set(uint64_t fail_loc)
 	else
 		attr_in.fa_id = DAOS_FAIL_GROUP_GET(fail_loc);
 
-	D_ASSERT(attr_in.fa_id > 0);
-	D_ASSERT(attr_in.fa_id < DAOS_FAIL_MAX_GROUP);
+	if (attr_in.fa_id >= DAOS_FAIL_MAX_GROUP) {
+		D_ERROR("invalid fail_loc "DF_X64" fa_id: %u\n", fail_loc,
+			attr_in.fa_id);
+		return;
+	}
 
 	attr_in.fa_probability_x = 1;
 	attr_in.fa_probability_y = 1;
