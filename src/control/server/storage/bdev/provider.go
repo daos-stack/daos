@@ -26,8 +26,8 @@ type (
 		Prepare(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
-		DisableVMD()
-		IsVMDDisabled() bool
+		//		DisableVMD()
+		//		IsVMDDisabled() bool
 		UpdateFirmware(pciAddr string, path string, slot int32) error
 		WriteNvmeConfig(storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error)
 	}
@@ -56,14 +56,14 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 	return p
 }
 
-func (p *Provider) disableVMD() {
-	p.backend.DisableVMD()
-}
+//func (p *Provider) disableVMD() {
+//	p.backend.DisableVMD()
+//}
 
 // IsVMDDisabled returns true if provider has disabled VMD device awareness.
-func (p *Provider) IsVMDDisabled() bool {
-	return p.backend.IsVMDDisabled()
-}
+//func (p *Provider) IsVMDDisabled() bool {
+//	return p.backend.IsVMDDisabled()
+//}
 
 func filterScanResp(resp *storage.BdevScanResponse, pciFilter ...string) (int, *storage.BdevScanResponse) {
 	var skipped int
@@ -134,9 +134,9 @@ func filterScan(req storage.BdevScanRequest, cache *storage.BdevScanResponse, sc
 // filtered by request "DeviceList" and empty filter implies allowing all.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.DisableVMD {
-		p.disableVMD()
-	}
+	//	if req.IsForwarded() && req.DisableVMD {
+	//		p.disableVMD()
+	//	}
 
 	p.Lock()
 	defer p.Unlock()
@@ -175,9 +175,9 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 	}
 
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.DisableVMD {
-		p.disableVMD()
-	}
+	//	if req.IsForwarded() && req.DisableVMD {
+	//		p.disableVMD()
+	//	}
 
 	return p.backend.Format(req)
 }

@@ -223,9 +223,9 @@ func TestProvider_Scan(t *testing.T) {
 		expVMDDisabled bool
 	}{
 		"no devices": {
-			req:            storage.BdevScanRequest{},
-			expRes:         &storage.BdevScanResponse{},
-			expVMDDisabled: true, // disabled in mock by default
+			req:    storage.BdevScanRequest{},
+			expRes: &storage.BdevScanResponse{},
+			// expVMDDisabled: true, // disabled in mock by default
 		},
 		"single device": {
 			req: storage.BdevScanRequest{},
@@ -233,7 +233,7 @@ func TestProvider_Scan(t *testing.T) {
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr1},
 				},
-				VmdEnabled: true,
+				// VmdEnabled: true,
 			},
 			expRes: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
@@ -270,7 +270,7 @@ func TestProvider_Scan(t *testing.T) {
 					ctrlr1, ctrlr2, ctrlr3,
 				},
 			},
-			expVMDDisabled: true,
+			// expVMDDisabled: true,
 		},
 		"failure": {
 			req: storage.BdevScanRequest{},
@@ -297,7 +297,7 @@ func TestProvider_Scan(t *testing.T) {
 			if diff := cmp.Diff(tc.expRes, gotRes, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}
-			common.AssertEqual(t, tc.expVMDDisabled, p.IsVMDDisabled(), "vmd disabled")
+			// common.AssertEqual(t, tc.expVMDDisabled, p.IsVMDDisabled(), "vmd disabled")
 		})
 	}
 }
