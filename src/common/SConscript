@@ -32,7 +32,7 @@ def build_dts_library(env):
 
     denv = env.Clone()
 
-    prereqs.require(denv, 'argobots', 'protobufc')
+    prereqs.require(denv, 'protobufc')
 
     if not GetOption('help') and not GetOption('clean'):
         mpi = daos_build.configure_mpi(denv, [])
@@ -41,14 +41,9 @@ def build_dts_library(env):
             print("Install and load mpich or openmpi\n")
             return
 
-    libraries = ['cmocka', 'daos_tests', 'vos', 'bio', 'abt']
+    libraries = ['cmocka', 'daos_tests']
 
     # Add runtime paths for daos libraries
-    denv.AppendUnique(LINKFLAGS=[r'-Wl,-rpath=\$$ORIGIN/daos_srv'])
-
-    denv.AppendUnique(LIBPATH=["../vos"])
-    denv.AppendUnique(LIBPATH=["../bio"])
-
     denv.AppendUnique(CPPPATH=["../tests/suite"])
 
     denv.Replace(SHOBJPREFIX='mpi_')
