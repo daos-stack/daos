@@ -888,7 +888,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		goto out;
 
 	*rsize = rbund.rb_gsize;
-	ioc->ic_io_size += rbund.rb_gsize;
+	ioc->ic_io_size += rbund.rb_rsize;
 out:
 	return rc;
 }
