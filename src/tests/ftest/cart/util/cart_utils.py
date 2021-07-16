@@ -13,6 +13,7 @@ import cart_logparse
 import cart_logtest
 import socket
 import re
+import glob
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
@@ -106,6 +107,36 @@ class CartTest(TestWithoutServers):
             time.sleep(1)
             i = i - 1
         return return_code
+
+    def check_files(self, glob_pattern, count=1, retries=10):
+        """Check for files."""
+
+        file_list = glob.glob(glob_pattern)
+        found_files = False
+
+        retry = 0
+        while retry < retries:
+            retry += 1
+            file_list = glob.glob(glob_pattern)
+
+            self.log.info("Found completion files: [%s]\n",
+                          ", ".join(file_list))
+
+            if len(file_list) == count:
+                found_files = True
+                break
+
+            time.sleep(1)
+
+        if not found_files:
+            self.log.info("Expected %d completion files, ", count)
+            self.log.info("but only found %d.\n", len(file_list))
+
+        # Clean up completion file(s) for next test for next runrun
+        for _file in file_list:
+            os.unlink(_file)
+
+        return found_files
 
     def cleanup_processes(self):
         """Clean up cart processes, in case avocado/apricot does not."""
@@ -223,6 +254,7 @@ class CartTest(TestWithoutServers):
             env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
+        env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
         env += " -x COVFILE=/tmp/test.cov"
 
         self.log_path = log_path

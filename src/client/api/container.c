@@ -106,12 +106,17 @@ out_prop:
 	return rc;
 }
 
+/** Disable backward compat code */
+#undef daos_cont_open
+
+/** Kept for backward ABI compatibility, but not advertised via header file */
 int
-daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
 	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 {
 	daos_cont_open_t	*args;
 	tse_task_t		*task;
+	const unsigned char	*uuid = (const unsigned char *) cont;
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_OPEN);
@@ -123,43 +128,41 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->poh		= poh;
-	args->flags		= flags;
-	args->coh		= coh;
-	args->info		= info;
+	args->poh	= poh;
+	args->flags	= flags;
+	args->coh	= coh;
+	args->info	= info;
 	uuid_copy((unsigned char *)args->uuid, uuid);
-	args->label		= NULL;
+	args->cont	= NULL;
 
 	return dc_task_schedule(task, true);
 }
 
+/**
+ * Real latest & greatest implementation of container open.
+ * Used by anyone including the daos_cont.h header file.
+ */
 int
-daos_cont_open_by_label(daos_handle_t poh, const char *label,
-			unsigned int flags, daos_handle_t *coh,
-			daos_cont_info_t *info, daos_event_t *ev)
+daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
+		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev)
 {
 	daos_cont_open_t	*args;
 	tse_task_t		*task;
-	size_t			 label_len = 0;
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_OPEN);
-	if (label)
-		label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
-	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
-		return -DER_INVAL;
 
-	rc = dc_task_create(dc_cont_open_lbl, NULL, ev, &task);
+	rc = dc_task_create(dc_cont_open, NULL, ev, &task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->poh		= poh;
-	args->flags		= flags;
-	args->coh		= coh;
-	args->info		= info;
+	args->poh	= poh;
+	args->flags	= flags;
+	args->coh	= coh;
+	args->info	= info;
 	uuid_clear(args->uuid);
-	args->label		= label;
+	args->cont	= cont;
 
 	return dc_task_schedule(task, true);
 }
@@ -183,12 +186,17 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev)
 	return dc_task_schedule(task, true);
 }
 
+/** Disable backward compat code */
+#undef daos_cont_destroy
+
+/** Kept for backward ABI compatibility, but not advertised via header file */
 int
-daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
 		  daos_event_t *ev)
 {
 	daos_cont_destroy_t	*args;
 	tse_task_t		*task;
+	const unsigned char	*uuid = (const unsigned char *) cont;
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_DESTROY);
@@ -202,39 +210,38 @@ daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
 	args = dc_task_get_args(task);
 	args->poh	= poh;
 	args->force	= force;
+	args->cont	= NULL;
 	uuid_copy((unsigned char *)args->uuid, uuid);
 
 	return dc_task_schedule(task, true);
 }
 
+/**
+ * Real latest & greatest implementation of container destroy.
+ * Used by anyone including the daos_cont.h header file.
+ */
 int
-daos_cont_destroy_by_label(daos_handle_t poh, const char *label, int force,
-			   daos_event_t *ev)
+daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
+		   daos_event_t *ev)
 {
-	size_t			 label_len = 0;
 	daos_cont_destroy_t	*args;
 	tse_task_t		*task;
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_DESTROY);
-	if (label)
-		label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
-	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
-		return -DER_INVAL;
 
-	rc = dc_task_create(dc_cont_destroy_lbl, NULL, ev, &task);
+	rc = dc_task_create(dc_cont_destroy, NULL, ev, &task);
 	if (rc)
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->poh		= poh;
-	args->force		= force;
+	args->poh	= poh;
+	args->force	= force;
 	uuid_clear(args->uuid);
-	args->label		= label;
+	args->cont	= cont;
 
 	return dc_task_schedule(task, true);
 }
-
 
 int
 daos_cont_query(daos_handle_t coh, daos_cont_info_t *info,

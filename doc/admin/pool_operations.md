@@ -40,7 +40,7 @@ $ dmg pool create --help
       -P, --properties= Pool properties to be set
       -a, --acl-file=  Access Control List file path for DAOS pool
       -z, --size=      Total size of DAOS pool (auto)
-      -t, --scm-ratio= Percentage of SCM:NVMe for pool storage (auto) (default: 6)
+      -t, --tier-ratio= Distribution of pool storage allocation over storage tiers (auto) (default: 6)
       -k, --nranks=    Number of ranks to use (auto)
       -v, --nsvc=      Number of pool service replicas
       -s, --scm-size=  Per-server SCM allocation for DAOS pool (manual)

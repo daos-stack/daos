@@ -1,11 +1,11 @@
 name: Build
 
 on:
-   push:
-     branches:
-       - master
-       - 'release/*'
    pull_request:
+
+concurrency:
+  group: ci2-${{ github.head_ref }}
+  cancel-in-progress: true
 
 jobs:
 

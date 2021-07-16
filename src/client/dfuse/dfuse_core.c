@@ -734,8 +734,8 @@ dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
 
 	DFUSE_TRA_UP(dfc, dfp, "dfc");
 
-	rc = daos_cont_open_by_label(dfp->dfp_poh, label, DAOS_COO_RW,
-				     &dfc->dfs_coh, &c_info, NULL);
+	rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh,
+			    &c_info, NULL);
 	if (rc == -DER_NONEXIST) {
 		DFUSE_TRA_INFO(dfc,
 			"daos_cont_open() failed: "
