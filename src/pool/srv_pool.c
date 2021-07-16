@@ -1994,9 +1994,9 @@ transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 	if (rc != 0)
 		D_GOTO(out, rc);
 	if (remote_bulk_size < map_buf_size) {
-		D_ERROR(DF_UUID": remote pool map buffer ("DF_U64") < required "
-			"(%lu)\n", DP_UUID(svc->ps_uuid), remote_bulk_size,
-			map_buf_size);
+		D_DEBUG(DF_DSMS, DF_UUID": remote pool map buffer ("DF_U64") "
+			"< required (%lu)\n", DP_UUID(svc->ps_uuid),
+			remote_bulk_size, map_buf_size);
 		*required_buf_size = map_buf_size;
 		D_GOTO(out, rc = -DER_TRUNC);
 	}
