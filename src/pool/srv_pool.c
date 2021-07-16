@@ -1994,9 +1994,9 @@ transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
 	if (rc != 0)
 		D_GOTO(out, rc);
 	if (remote_bulk_size < map_buf_size) {
-		D_ERROR(DF_UUID": remote pool map buffer ("DF_U64") < required "
-			"(%lu)\n", DP_UUID(svc->ps_uuid), remote_bulk_size,
-			map_buf_size);
+		D_DEBUG(DF_DSMS, DF_UUID": remote pool map buffer ("DF_U64") "
+			"< required (%lu)\n", DP_UUID(svc->ps_uuid),
+			remote_bulk_size, map_buf_size);
 		*required_buf_size = map_buf_size;
 		D_GOTO(out, rc = -DER_TRUNC);
 	}
@@ -2762,7 +2762,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
 	struct pool_buf	       *map_buf;
-	uint32_t		map_version;
+	uint32_t		map_version = 0;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
 	d_iov_t			key;
@@ -2916,7 +2916,10 @@ out_lock:
 					    &out->pqo_space);
 
 out_svc:
-	out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
+	if (map_version == 0)
+		out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
+	else
+		out->pqo_op.po_map_version = map_version;
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
