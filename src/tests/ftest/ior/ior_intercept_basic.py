@@ -6,10 +6,12 @@
 """
 
 import os
+from apricot import skipForTicket
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 
 
+@skipForTicket("DAOS-5857")
 class IorIntercept(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR with and without interception.
