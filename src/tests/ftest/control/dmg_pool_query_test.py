@@ -127,10 +127,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         for uuid in uuids:
             # Verify pool query status
-            self.pool.set_query_data()
-            error = None
-            if "error" in self.pool.query_data:
-                error = self.pool.query_data["error"]
+            data = self.dmg.pool_query(uuid)
+            error = data["error"] if "error" in data else None
 
             self.log.info("")
             self.log.info("==>  Using test UUID:                   %s", uuid[0])
