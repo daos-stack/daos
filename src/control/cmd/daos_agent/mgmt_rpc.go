@@ -203,7 +203,7 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 	if err != nil {
 		return nil, err
 	}
-	mod.fabricInfo.Cache(ctx, result)
+	mod.fabricInfo.CacheScan(ctx, result)
 
 	return mod.fabricInfo.GetDevice(numaNode, netDevClass)
 }

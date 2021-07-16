@@ -24,9 +24,9 @@ func FabricNotFoundErr(netDevClass uint32) error {
 
 // FabricInterface represents a generic fabric interface.
 type FabricInterface struct {
-	Name        string `yaml:"name"`
-	Domain      string `yaml:"domain"`
-	NetDevClass uint32 `yaml:"net_dev_class"`
+	Name        string
+	Domain      string
+	NetDevClass uint32
 }
 
 // DefaultFabricInterface is the one used if no devices are found on the system.
@@ -34,6 +34,10 @@ var DefaultFabricInterface = &FabricInterface{
 	Name:   "lo",
 	Domain: "lo",
 }
+
+// FabricDevClassManual is a wildcard netDevClass that indicates the device was
+// supplied by the user.
+const FabricDevClassManual = uint32(1 << 31)
 
 // NUMAFabric represents a set of fabric interfaces organized by NUMA node.
 type NUMAFabric struct {
@@ -105,7 +109,7 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32) (*Fabri
 			return nil, err
 		}
 
-		if fabricIF.NetDevClass != netDevClass {
+		if fabricIF.NetDevClass != netDevClass && fabricIF.NetDevClass != FabricDevClassManual {
 			n.log.Debugf("Excluding device: %s, network device class: %s from attachInfoCache. Does not match network device class: %s",
 				fabricIF.Name, netdetect.DevClassName(fabricIF.NetDevClass), netdetect.DevClassName(netDevClass))
 			continue
@@ -154,6 +158,14 @@ func (n *NUMAFabric) getNextDevIndex(numaNode int) (int, error) {
 	return 0, fmt.Errorf("no fabric interfaces on NUMA node %d", numaNode)
 }
 
+func (n *NUMAFabric) setDefaultNUMANode() {
+	for numa := range n.numaMap {
+		n.defaultNumaNode = numa
+		n.log.Debugf("The default NUMA node is: %d", numa)
+		break
+	}
+}
+
 func newNUMAFabric(log logging.Logger) *NUMAFabric {
 	return &NUMAFabric{
 		log:               log,
@@ -193,15 +205,31 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan []*netdete
 			newIF.Name, newIF.Domain, numa, fabric.NumDevices(numa)-1)
 	}
 
-	for numa := range fabric.numaMap {
-		fabric.defaultNumaNode = numa
-		log.Debugf("The default NUMA node is: %d", numa)
-		break
-	}
+	fabric.setDefaultNUMANode()
 
 	if fabric.NumNUMANodes() == 0 {
 		log.Info("No network devices detected in fabric scan\n")
 	}
+
+	return fabric
+}
+
+// NUMAFabricFromConfig generates a NUMAFabric layout based on a config.
+func NUMAFabricFromConfig(log logging.Logger, cfg []*NUMAFabricConfig) *NUMAFabric {
+	fabric := newNUMAFabric(log)
+
+	for _, fc := range cfg {
+		node := fc.NUMANode
+		for _, fi := range fc.Interfaces {
+			fabric.numaMap[node] = append(fabric.numaMap[node],
+				&FabricInterface{
+					Name:        fi.Interface,
+					Domain:      fi.Domain,
+					NetDevClass: FabricDevClassManual,
+				})
+		}
+	}
+	fabric.setDefaultNUMANode()
 
 	return fabric
 }
