@@ -3288,7 +3288,7 @@ dfs_release(dfs_obj_t *obj)
 	}
 
 	if (rc)
-		D_ERROR("daos_obj_close() failed, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to close DFS object, "DF_RC"\n", DP_RC(rc));
 
 	D_FREE(obj);
 	return daos_der2errno(rc);
