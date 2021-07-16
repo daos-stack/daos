@@ -14,6 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
@@ -31,11 +32,11 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 	}
 
 	cs := &ControlService{
-		StorageControlService: *NewStorageControlService(log,
-			bdev.NewMockProvider(log, bmbc),
-			scm.NewMockProvider(log, smbc, smsc),
+		StorageControlService: *NewMockStorageControlService(log,
 			cfg.Engines,
-		),
+			scm.NewMockSysProvider(smsc),
+			scm.NewMockProvider(log, smbc, smsc),
+			bdev.NewMockProvider(log, bmbc)),
 		harness: &EngineHarness{
 			log: log,
 		},
@@ -47,7 +48,9 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		rCfg := new(engine.TestRunnerConfig)
 		rCfg.Running.SetTrue()
 		runner := engine.NewTestRunner(rCfg, engineCfg)
-		instance := NewEngineInstance(log, cs.bdev, cs.scm, nil, runner)
+
+		storageProvider := storage.MockProvider(log, 0, &engineCfg.Storage, cs.storage.Sys, cs.storage.Scm, cs.storage.Bdev)
+		instance := NewEngineInstance(log, storageProvider, nil, runner)
 		instance.setSuperblock(&Superblock{
 			Rank: system.NewRankPtr(engineCfg.Rank.Uint32()),
 		})

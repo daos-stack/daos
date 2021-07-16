@@ -115,28 +115,28 @@ struct bio_dma_buffer {
 	  "data units", D_TM_COUNTER)					\
 	X(bdh_write_cmds, "commands/host_write_cmds",			\
 	  "number of write commands completed by to the controller",	\
-	  "commands", D_TM_COUNTER)					\
+	  "cmds", D_TM_COUNTER)						\
 	X(bdh_read_cmds, "commands/host_read_cmds",			\
 	  "number of read commands completed by to the controller",	\
-	  "commands", D_TM_COUNTER)					\
+	  "cmds", D_TM_COUNTER)						\
 	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",		\
 	  "Amount of time the controller is busy with I/O commands",	\
 	  "minutes", D_TM_COUNTER)					\
 	X(bdh_media_errs, "commands/media_errs",			\
 	  "Number of unrecovered data integrity error",			\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_read_errs, "commands/read_errs",				\
-	  "Number of errors reported to the engine on read commands",      \
-	  "errors", D_TM_COUNTER)					\
+	  "Number of errors reported to the engine on read commands",	\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_write_errs, "commands/write_errs",			\
-	  "Number of errors reported to the engine on write commands",     \
-	  "errors", D_TM_COUNTER)					\
+	  "Number of errors reported to the engine on write commands",	\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_unmap_errs, "commands/unmap_errs",			\
 	  "Number of errors reported to the engine on unmap/trim commands",\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
 	  "Number of checksum mismatch detected by the engine",		\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_power_cycles, "power_cycles",				\
 	  "Number of power cycles",					\
 	  "cycles", D_TM_COUNTER)					\
@@ -148,7 +148,7 @@ struct bio_dma_buffer {
 	  "shutdowns", D_TM_COUNTER)					\
 	X(bdh_temp, "temp/current",					\
 	  "Current SSD temperature",					\
-	  "kelvin", D_TM_GAUGE)						\
+	  "kelvins", D_TM_GAUGE)					\
 	X(bdh_temp_warn, "temp/warn",					\
 	  "Set to 1 if temperature is above threshold",			\
 	  "", D_TM_GAUGE)						\
