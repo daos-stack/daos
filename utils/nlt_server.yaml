@@ -1,4 +1,4 @@
-name: daos_server
+name: out_server
 port: 10001
 provider: ofi+sockets
 socket_dir: /tmp/dnt_sockets
