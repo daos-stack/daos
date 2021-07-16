@@ -13,8 +13,9 @@
 
 #include "crt_utils.h"
 #include "test_group_rpc.h"
+#include "test_group_np_common.h"
+#include "test_group_np_common_cli.h"
 
-#define TEST_CTX_MAX_NUM	72
 #define NUM_ATTACH_RETRIES	10
 #define TEST_NO_TIMEOUT_BASE    0x010000000
 #define TEST_NO_TIMEOUT_VER     0
@@ -201,7 +202,7 @@ test_run(void)
 	D_ASSERTF(rc == 0, "crt_group_rank() failed. rc: %d\n", rc);
 
 	/* register RPCs */
-	rc = crt_proto_register(&my_proto_fmt_test_no_timeout);
+	rc = crt_proto_register(&my_proto_fmt_test_group1);
 	D_ASSERTF(rc == 0, "crt_proto_register() failed. rc: %d\n", rc);
 
 	rc = crtu_wait_for_ranks(test_g.t_crt_ctx[0], grp, rank_list,
@@ -229,6 +230,8 @@ test_run(void)
 	if (test_g.t_my_rank == 0) {
 		/* client rank 0 tells all servers to shut down */
 		for (i = 0; i < rank_list->rl_nr; i++) {
+			DBG_PRINT("Shutting down rank %d.\n",
+				  rank_list->rl_ranks[i]);
 			rank = rank_list->rl_ranks[i];
 
 			server_ep.ep_grp = grp;
@@ -245,6 +248,7 @@ test_run(void)
 
 			crtu_sem_timedwait(&test_g.t_token_to_proceed, 61,
 					   __LINE__);
+			send_rpc_shutdown(server_ep, rpc_req);
 		}
 	}
 
@@ -275,74 +279,6 @@ test_run(void)
 
 	d_log_fini();
 	D_DEBUG(DB_TEST, "exiting.\n");
-}
-
-int
-test_parse_args(int argc, char **argv)
-{
-	int				option_index = 0;
-	int				rc = 0;
-	struct option			long_options[] = {
-		{"name", required_argument, 0, 'n'},
-		{"attach_to", required_argument, 0, 'a'},
-		{"srv_ctx_num", required_argument, 0, 'c'},
-		{"cfg_path", required_argument, 0, 's'},
-		{"use_cfg", required_argument, 0, 'u'},
-		{0, 0, 0, 0}
-	};
-
-	test_g.t_use_cfg = true;
-
-	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:u:h:", long_options,
-				 &option_index);
-		if (rc == -1)
-			break;
-		switch (rc) {
-		case 0:
-			if (long_options[option_index].flag != 0)
-				break;
-		case 'n':
-			test_g.t_local_group_name = optarg;
-			break;
-		case 'a':
-			test_g.t_remote_group_name = optarg;
-			break;
-		case 'c': {
-			unsigned int	nr;
-			char		*end;
-
-			nr = strtoul(optarg, &end, 10);
-			if (end == optarg || nr == 0 || nr > TEST_CTX_MAX_NUM) {
-				fprintf(stderr, "invalid ctx_num %d exceed "
-					"[%d, %d], using 1 for test.\n", nr,
-					1, TEST_CTX_MAX_NUM);
-			} else {
-				test_g.t_srv_ctx_num = nr;
-				fprintf(stderr, "will create %d contexts.\n",
-					nr);
-			}
-			break;
-		}
-		case 's':
-			test_g.t_save_cfg = 1;
-			test_g.t_cfg_path = optarg;
-			break;
-		case 'u':
-			test_g.t_use_cfg = atoi(optarg);
-			break;
-		case '?':
-			return 1;
-		default:
-			return 1;
-		}
-	}
-	if (optind < argc) {
-		fprintf(stderr, "non-option argv elements encountered");
-		return 1;
-	}
-
-	return 0;
 }
 
 int main(int argc, char **argv)
