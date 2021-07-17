@@ -134,8 +134,8 @@ func canAccessBdevs(cfgBdevs []string, scanResp *storage.BdevScanResponse) ([]st
 
 // checkCfgBdevs performs validation on NVMe returned from initial scan.
 func (c *StorageControlService) checkCfgBdevs(scanResp *storage.BdevScanResponse) error {
-	if scanResp == nil {
-		return errors.New("received nil scan response")
+	if scanResp == nil || scanResp.Controllers == nil {
+		return errors.New("received nil scan response or controllers")
 	}
 	if len(c.instanceStorage) == 0 {
 		return nil
@@ -183,8 +183,9 @@ func (c *StorageControlService) Setup() error {
 	}
 
 	// don't scan if using emulated NVMe
+	// TODO: this should probably be verified and scan per engine
 	for _, storageCfg := range c.instanceStorage {
-		for _, tierCfg := range storageCfg.Tiers {
+		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
 			if tierCfg.Class != storage.ClassNvme {
 				return nil
 			}
@@ -204,6 +205,9 @@ func (c *StorageControlService) Setup() error {
 	}
 
 	c.storage.SetBdevCache(*nvmeScanResp)
+	c.log.Debugf("set bdev cache after initial scan on start-up: %v",
+		nvmeScanResp.Controllers)
+
 	return nil
 }
 

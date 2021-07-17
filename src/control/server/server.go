@@ -213,6 +213,7 @@ func (srv *server) initStorage() error {
 		return err
 	}
 
+	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
 	return srv.ctlSvc.Setup()
 }
 
@@ -241,11 +242,13 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	// Store cached NVMe device details retrieved on start-up (before
 	// engines are started) so static details can be recovered by the engine
 	// storage provider during scan.
-	bdevResp, err := srv.ctlSvc.GetNvmeCache()
+	nvmeScanResp, err := srv.ctlSvc.GetNvmeCache()
 	if err != nil {
 		return nil, err
 	}
-	engine.SetBdevCache(*bdevResp)
+	engine.SetBdevCache(*nvmeScanResp)
+	srv.log.Debugf("set bdev cache when creating engine: %v",
+		nvmeScanResp.Controllers)
 
 	return engine, nil
 }
