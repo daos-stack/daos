@@ -164,7 +164,7 @@ struct daos_pool_cont_info {
 };
 
 /**
- * Connect to the DAOS pool identified by its label or UUID string.
+ * Connect to the DAOS pool identified by \a pool, a label or UUID string.
  * Upon a successful completion, \a poh returns the pool handle, and \a info
  * returns the latest pool information.
  *
@@ -433,9 +433,9 @@ daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
 		if (__builtin_types_compatible_p(typeof(po), char *) ||	\
 		    __builtin_types_compatible_p(typeof(po),		\
 						 const char *)) {	\
-			__str = (const char *)po;			\
+			__str = (const char *)(po);			\
 		} else {						\
-			uuid_unparse((unsigned char *)po, _str);	\
+			uuid_unparse((unsigned char *)(po), _str);	\
 			__str = _str;					\
 		}							\
 		_ret = daos_pool_connect2(__str, __VA_ARGS__);		\
