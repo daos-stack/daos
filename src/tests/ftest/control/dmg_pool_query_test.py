@@ -127,7 +127,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
             msg = "Call dmg pool query {} that's expected to {}".format(
                 uuid[0], uuid[1])
             self.log.info(msg)
-            self.pool.uuid = uuid[0]
+            self.pool.pool.set_uuid_str(uuid[0])
 
             try:
                 # Call dmg pool query.
@@ -143,7 +143,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                     errors_list.append(msg)
 
         # Restore the original UUID.
-        self.pool.uuid = uuids[-1][0]
+        self.pool.pool.set_uuid_str(uuids[-1][0])
 
         # Report errors and fail test if needed.
         if errors_list:
