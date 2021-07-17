@@ -124,26 +124,23 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         uuids.append([self.pool.uuid, "PASS"])
 
         for uuid in uuids:
-            msg = "Call dmg pool query {} that's expected to {}".format(
-                uuid[0], uuid[1])
-            self.log.info(msg)
-            self.pool.pool.set_uuid_str(uuid[0])
+            # Verify pool query status
+            data = self.dmg.pool_query(uuid[0])
+            error = data["error"] if "error" in data else None
 
-            try:
-                # Call dmg pool query.
-                self.pool.set_query_data()
-                if uuid[1] == "FAIL":
-                    msg = "Query expected to fail, but worked! {}".format(
-                        uuid[0])
-                    errors_list.append(msg)
-            except TestFail:
-                if uuid[1] == "PASS":
-                    msg = "Query expected to work, but failed! {}".format(
-                        uuid[0])
-                    errors_list.append(msg)
+            self.log.info("")
+            self.log.info("==>  Using test UUID:                   %s", uuid[0])
+            self.log.info("==>  Pool query command is expected to: %s", uuid[1])
+            self.log.info("==>  Error from dmp pool query:         %s", error)
+            self.log.info("")
 
-        # Restore the original UUID.
-        self.pool.pool.set_uuid_str(uuids[-1][0])
+            if uuid[1] == "FAIL" and error is None:
+                errors_list.append("==>   Test expected to fail:" + uuid[0])
+            elif uuid[1] == "PASS" and error is not None:
+                errors_list.append("==>   Test expected to pass:" + uuid[0])
+
+        # Enable exceptions again for dmg.
+        self.dmg.exit_status_exception = True
 
         # Report errors and fail test if needed.
         if errors_list:
