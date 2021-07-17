@@ -218,13 +218,49 @@ dc_cont_create(tse_task_t *task)
 	crt_rpc_t	       *rpc;
 	struct cont_args	arg;
 	int			rc;
+	uuid_t			uuid;
+	daos_prop_t	       *label_prop = NULL;
+	daos_prop_t	       *cont_props;
 	daos_prop_t	       *rpc_prop = NULL;
 
 	args = dc_task_get_args(task);
-	if (uuid_is_null(args->uuid))
-		D_GOTO(err_task, rc = -DER_INVAL);
 
-	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
+	if (daos_uuid_valid(args->uuid)) {
+		/** Backward compatibility, we are provided a UUID */
+		uuid_copy(uuid, args->uuid);
+		cont_props = args->prop;
+	} else if (daos_label_is_valid(args->label)) {
+		/** The provided string is a valid label */
+
+		/** generate a UUID for the new container */
+		uuid_generate(uuid);
+
+		label_prop = daos_prop_alloc(1);
+		if (label_prop == NULL) {
+			D_ERROR("failed to allocate label_prop\n");
+			D_GOTO(err_task, rc = -DER_NOMEM);
+		}
+		label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+		D_STRNDUP(label_prop->dpp_entries[0].dpe_str, args->label,
+			  DAOS_PROP_LABEL_MAX_LEN);
+		if (label_prop->dpp_entries[0].dpe_str == NULL)
+			D_GOTO(err_task, rc = -DER_NOMEM);
+
+		if (args->prop) {
+			cont_props = daos_prop_merge(args->prop, label_prop);
+			if (cont_props == NULL) {
+				D_ERROR("failed to merge label property\n");
+				D_GOTO(err_task, rc = -DER_NOMEM);
+			}
+		} else {
+			cont_props = label_prop;
+		}
+	} else {
+		/** neither a label nor a UUID ... try again */
+		D_GOTO(err_task, rc = -DER_INVAL);
+	}
+
+	entry = daos_prop_entry_get(cont_props, DAOS_PROP_CO_STATUS);
 	if (entry != NULL) {
 		rc = -DER_INVAL;
 		D_ERROR("cannot set DAOS_PROP_CO_STATUS prop for cont_create "
@@ -236,12 +272,13 @@ dc_cont_create(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
-	rc = dup_with_default_ownership_props(&rpc_prop, args->prop);
+	rc = dup_with_default_ownership_props(&rpc_prop, cont_props);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
 
-	D_DEBUG(DF_DSMC, DF_UUID": creating "DF_UUIDF"\n",
-		DP_UUID(pool->dp_pool), DP_UUID(args->uuid));
+	D_DEBUG(DF_DSMC, DF_UUID": creating %s "DF_UUIDF"\n",
+		DP_UUID(pool->dp_pool), args->label ? : "<compat>",
+		DP_UUID(args->uuid));
 
 	ep.ep_grp = pool->dp_sys->sy_group;
 	rc = dc_pool_choose_svc_rank(NULL /* label */, pool->dp_pool,
@@ -283,6 +320,8 @@ err_prop:
 err_pool:
 	dc_pool_put(pool);
 err_task:
+	if (label_prop)
+		daos_prop_free(label_prop);
 	tse_task_complete(task, rc);
 	return rc;
 }
