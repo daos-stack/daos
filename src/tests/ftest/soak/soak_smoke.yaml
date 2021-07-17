@@ -55,8 +55,8 @@ server_config:
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server
-    scm_size: 30GB
-    nvme_size: 500GB
+    scm_size: 12GB
+    nvme_size: 200GB
     properties: reclaim:time,ec_cell_sz:64KiB
     control_method: dmg
 pool_reserved:

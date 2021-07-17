@@ -676,7 +676,7 @@ def cleanup_dfuse(self):
         slurm_utils.srun(
             NodeSet.fromlist(
                 self.hostlist_clients), "{}".format(
-                    ";".join(cmd)), self.srun_params)
+                    ";".join(cmd)), self.srun_params, timeout=180)
     except slurm_utils.SlurmFailed as error:
         raise SoakTestError(
             "<<FAILED: Dfuse processes not stopped>>") from error
@@ -684,7 +684,7 @@ def cleanup_dfuse(self):
         slurm_utils.srun(
             NodeSet.fromlist(
                 self.hostlist_clients), "{}".format(
-                    ";".join(cmd2)), self.srun_params)
+                    ";".join(cmd2)), self.srun_params, timeout=180)
     except slurm_utils.SlurmFailed as error:
         raise SoakTestError(
             "<<FAILED: Dfuse mountpoints not deleted>>") from error
@@ -843,12 +843,12 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.flags.update(flag)
                         mdtest_cmd.num_of_files_dirs.update(
                             num_of_files_dirs)
-                        add_containers(self, pool, oclass)
-                        mdtest_cmd.set_daos_params(
-                            self.server_group, pool,
-                            self.container[-1].uuid)
-                        if ("POSIX" in api and "EC" in oclass):
+                        if ("POSIX" in api):
                             mdtest_cmd.dfs_oclass.update(None)
+                            mdtest_cmd.dfs_dir_oclass.update(None)
+                        else:
+                            mdtest_cmd.dfs_oclass.update(oclass)
+                            mdtest_cmd.dfs_dir_oclass.update(oclass)
                         if "EC" in oclass:
                             # oclass_dir can not be EC must be RP based on rf
                             rf = get_rf(oclass)
@@ -858,9 +858,10 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                                 mdtest_cmd.dfs_dir_oclass.update("RP_2G1")
                             else:
                                 mdtest_cmd.dfs_dir_oclass.update("SX")
-                        else:
-                            mdtest_cmd.dfs_oclass.update(oclass)
-                            mdtest_cmd.dfs_dir_oclass.update(oclass)
+                        add_containers(self, pool, oclass)
+                        mdtest_cmd.set_daos_params(
+                            self.server_group, pool,
+                            self.container[-1].uuid)
                         env = mdtest_cmd.get_default_env("srun")
                         sbatch_cmds = [
                             "module load -q {}".format(mpi_module)]
