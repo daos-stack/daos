@@ -8,7 +8,6 @@ from copy import deepcopy
 
 from ior_test_base import IorTestBase
 from control_test_base import ControlTestBase
-from avocado.core.exceptions import TestFail
 
 
 class DmgPoolQueryTest(ControlTestBase, IorTestBase):
@@ -122,6 +121,9 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         # Add a pass case to verify test is working
         uuids.append([self.pool.uuid, "PASS"])
+
+        # Disable raising an exception if the dmg command fails
+        self.dmg.exit_status_exception = False
 
         for uuid in uuids:
             # Verify pool query status
