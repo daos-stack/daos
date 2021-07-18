@@ -125,7 +125,7 @@ func findNode(hdl *handle, name string) (*C.struct_d_tm_node_t, error) {
 	return node, nil
 }
 
-func getPathAndName(fullName string) (string, string) {
+func splitFullName(fullName string) (string, string) {
 	tokens := strings.Split(fullName, "/")
 	if len(tokens) == 1 {
 		return "", tokens[0]
