@@ -678,16 +678,14 @@ def cleanup_dfuse(self):
                 self.hostlist_clients), "{}".format(
                     ";".join(cmd)), self.srun_params, timeout=180)
     except slurm_utils.SlurmFailed as error:
-        raise SoakTestError(
-            "<<FAILED: Dfuse processes not stopped>>") from error
+        self.log.info("Dfuse processes not stopped")
     try:
         slurm_utils.srun(
             NodeSet.fromlist(
                 self.hostlist_clients), "{}".format(
                     ";".join(cmd2)), self.srun_params, timeout=180)
     except slurm_utils.SlurmFailed as error:
-        raise SoakTestError(
-            "<<FAILED: Dfuse mountpoints not deleted>>") from error
+        self.log.info("Dfuse mountpoints not deleted")
 
 
 def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):

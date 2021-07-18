@@ -145,11 +145,7 @@ class SoakTestBase(TestWithServers):
         if self.check_errors:
             errors.extend(self.check_errors)
         # Check if any dfuse mount points need to be cleaned
-        try:
-            cleanup_dfuse(self)
-        except SoakTestError as error:
-            self.log.info("Dfuse cleanup failed with %s", error)
-
+        cleanup_dfuse(self)
         # daos_agent is always started on this node when start agent is false
         if not self.setup_start_agents:
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
