@@ -973,7 +973,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		D_ERROR("Failed to re-init task (%p): "DF_RC", original error: "
 			DF_RC"\n", task, DP_RC(rc1), DP_RC(rc));
 		if (pool_task != NULL)
-			dc_task_decref(pool_task);
+			dc_pool_abandon_map_refresh_task(pool_task);
 		tx->tx_status = TX_ABORTED;
 
 		D_GOTO(out, rc = rc1);
