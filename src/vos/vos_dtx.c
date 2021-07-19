@@ -484,7 +484,7 @@ vos_dtx_table_register(void)
 	}
 
 	rc = dbtree_class_register(VOS_BTR_DTX_CMT_TABLE,
-				   BTR_FEAT_SKIP_LEAF_REBAL,
+				   BTR_FEAT_LAZY_LEAF_REBAL,
 				   &dtx_committed_btr_ops);
 	if (rc != 0)
 		D_ERROR("Failed to register DTX committed dbtree: %d\n", rc);
@@ -2163,6 +2163,7 @@ vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 int
 vos_dtx_aggregate(daos_handle_t coh)
 {
+	struct btr_leaf_rebal		 blr = { 0 };
 	struct vos_container		*cont;
 	struct vos_cont_df		*cont_df;
 	struct umem_instance		*umm;
@@ -2185,7 +2186,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 
 	/** Take the opportunity to free some memory if we can */
 	lrua_array_aggregate(cont->vc_dtx_array);
-
+	blr.blr_lazy_rebal = 1;
 	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0) {
 		D_ERROR("Failed to TX begin for DTX aggregation "UMOFF_PF": "
@@ -2200,7 +2201,7 @@ vos_dtx_aggregate(daos_handle_t coh)
 		dce_df = &dbd->dbd_committed_data[i];
 		d_iov_set(&kiov, &dce_df->dce_xid, sizeof(dce_df->dce_xid));
 		rc = dbtree_delete(cont->vc_dtx_committed_hdl, BTR_PROBE_EQ,
-				   &kiov, NULL);
+				   &kiov, &blr);
 		if (rc != 0 && rc != -DER_NONEXIST) {
 			D_ERROR("Failed to remove entry for DTX aggregation "
 				UMOFF_PF": "DF_RC"\n",
@@ -2252,6 +2253,21 @@ vos_dtx_aggregate(daos_handle_t coh)
 	rc = umem_free(umm, dbd_off);
 
 out:
+	/* Process the in-DRAM leaf nodes in the list in spite of whether
+	 * DTX aggregation is successful or not, because related in-DRAM
+	 * btree has been changed already, will not rollback.
+	 */
+	while (blr.blr_head != NULL) {
+		struct btr_node	*nd = blr.blr_head;
+		int		 rc1;
+
+		blr.blr_head = nd->tn_next;
+		rc1 = dbtree_lazy_leaf_rebal(cont->vc_dtx_committed_hdl, nd);
+		if (rc1 != 0 && rc1 != -DER_NONEXIST)
+			D_WARN("Failed to lazy rebalance DTX table "DF_RC"\n",
+			       DP_RC(rc1));
+	}
+
 	rc = umem_tx_end(umm, rc);
 	if (rc != 0)
 		D_ERROR("Failed to aggregate DTX blob "UMOFF_PF": "

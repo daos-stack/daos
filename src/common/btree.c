@@ -20,9 +20,10 @@
  * Tree node types.
  * NB: a node can be both root and leaf.
  */
-enum btr_node_type {
+enum btr_node_flags {
 	BTR_NODE_LEAF		= (1 << 0),
 	BTR_NODE_ROOT		= (1 << 1),
+	BTR_NODE_LAZY_REBAL	= (1 << 2),
 };
 
 enum btr_probe_rc {
@@ -189,6 +190,9 @@ btr_has_collision(struct btr_context *tcx)
 
 #define btr_off2ptr(tcx, off)			\
 	umem_off2ptr(btr_umm(tcx), off)
+
+#define btr_ptr2off(tcx, ptr)			\
+	umem_ptr2off(btr_umm(tcx), ptr)
 
 #define BTR_NODE_NULL	UMOFF_NULL
 #define BTR_ROOT_NULL	UMOFF_NULL
@@ -633,14 +637,21 @@ btr_node_tx_add(struct btr_context *tcx, umem_off_t nd_off)
 
 /* helper functions */
 
+static inline struct btr_record *
+btr_node_rec_pos(struct btr_context *tcx, struct btr_node *nd, unsigned int at)
+{
+	char	*addr = (char *)&nd[1];
+
+	return (struct btr_record *)&addr[btr_rec_size(tcx) * at];
+}
+
 static struct btr_record *
 btr_node_rec_at(struct btr_context *tcx, umem_off_t nd_off,
 		unsigned int at)
 {
 	struct btr_node *nd = btr_off2ptr(tcx, nd_off);
-	char		*addr = (char *)&nd[1];
 
-	return (struct btr_record *)&addr[btr_rec_size(tcx) * at];
+	return btr_node_rec_pos(tcx, nd, at);
 }
 
 static umem_off_t
@@ -705,6 +716,12 @@ static inline bool
 btr_node_is_root(struct btr_context *tcx, umem_off_t nd_off)
 {
 	return btr_node_is_set(tcx, nd_off, BTR_NODE_ROOT);
+}
+
+static inline bool
+btr_node_is_lazy_rebal(struct btr_context *tcx, umem_off_t nd_off)
+{
+	return btr_node_is_set(tcx, nd_off, BTR_NODE_LAZY_REBAL);
 }
 
 static inline bool
@@ -1324,8 +1341,9 @@ btr_probe_valid(dbtree_probe_opc_t opc)
  */
 static enum btr_probe_rc
 btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	  uint32_t intent, d_iov_t *key, char hkey[DAOS_HKEY_MAX])
+	  uint32_t intent, d_iov_t *key, char hkey[DAOS_HKEY_MAX], void *args)
 {
+	struct btr_leaf_rebal	*blr = args;
 	int			 start;
 	int			 end;
 	int			 at;
@@ -1366,6 +1384,14 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			start	= 0;
 			nd	= btr_off2ptr(tcx, nd_off);
 			end	= nd->tn_keyn - 1;
+
+			/* There may be hold in the leaf node because of lazy
+			 * rebalance. So let's search from some larger range.
+			 */
+			if (tcx->tc_feats & BTR_FEAT_LAZY_LEAF_REBAL &&
+			    blr != NULL && blr->blr_lazy_rebal &&
+			    probe_opc == BTR_PROBE_EQ && nd->tn_last_key != 0)
+				end = nd->tn_last_key - 1;
 
 			D_DEBUG(DB_TRACE,
 				"Probe level %d, node "DF_X64" keyn %d\n",
@@ -1584,12 +1610,12 @@ again:
 
 static enum btr_probe_rc
 btr_probe_key(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
-	      uint32_t intent, d_iov_t *key)
+	      uint32_t intent, d_iov_t *key, void *args)
 {
 	char hkey[DAOS_HKEY_MAX];
 
 	btr_hkey_gen(tcx, key, hkey);
-	return btr_probe(tcx, probe_opc, intent, key, hkey);
+	return btr_probe(tcx, probe_opc, intent, key, hkey, args);
 }
 
 static bool
@@ -1741,7 +1767,7 @@ dbtree_fetch(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	if (tcx == NULL)
 		return -DER_NO_HDL;
 
-	rc = btr_probe_key(tcx, opc, intent, key);
+	rc = btr_probe_key(tcx, opc, intent, key, NULL);
 	switch (rc) {
 	case PROBE_RC_INPROGRESS:
 		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
@@ -1883,7 +1909,7 @@ btr_upsert(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	if (probe_opc == BTR_PROBE_BYPASS)
 		rc = tcx->tc_probe_rc; /* trust previous probe... */
 	else
-		rc = btr_probe_key(tcx, probe_opc, intent, key);
+		rc = btr_probe_key(tcx, probe_opc, intent, key, NULL);
 
 	switch (rc) {
 	default:
@@ -2009,6 +2035,28 @@ dbtree_upsert(daos_handle_t toh, dbtree_probe_opc_t opc, uint32_t intent,
 	return btr_tx_end(tcx, rc);
 }
 
+static void
+btr_add_leaf_lazy_rebal(struct btr_node *nd, struct btr_leaf_rebal *blr)
+{
+	if (!(nd->tn_flags & BTR_NODE_LAZY_REBAL)) {
+		D_ASSERT(nd->tn_next == NULL);
+
+		nd->tn_flags |= BTR_NODE_LAZY_REBAL;
+		nd->tn_last_key = nd->tn_keyn + 1;
+
+		if (blr->blr_tail == NULL) {
+			D_ASSERT(blr->blr_head == NULL);
+
+			blr->blr_head = blr->blr_tail = nd;
+		} else {
+			D_ASSERT(blr->blr_head != NULL);
+
+			blr->blr_tail->tn_next = nd;
+			blr->blr_tail = nd;
+		}
+	}
+}
+
 /**
  * Delete the leaf record pointed by @cur_tr from the current node, then fill
  * the deletion gap by shifting remainded records on the specified direction.
@@ -2020,19 +2068,25 @@ static int
 btr_node_del_leaf_only(struct btr_context *tcx, struct btr_trace *trace,
 		       bool shift_left, void *args)
 {
-	struct btr_record *rec;
-	struct btr_node   *nd;
-	int		   rc;
+	struct btr_leaf_rebal	*blr = args;
+	struct btr_record	*rec;
+	struct btr_node		*nd;
+	int			 rc;
 
 	nd = btr_off2ptr(tcx, trace->tr_node);
-	D_ASSERT(nd->tn_keyn > 0 && nd->tn_keyn > trace->tr_at);
-
 	rec = btr_node_rec_at(tcx, trace->tr_node, trace->tr_at);
+
 	rc = btr_rec_free(tcx, rec, args);
 	if (rc != 0)
 		return rc;
 
 	nd->tn_keyn--;
+	if (tcx->tc_feats & BTR_FEAT_LAZY_LEAF_REBAL &&
+	    blr != NULL && blr->blr_lazy_rebal) {
+		btr_add_leaf_lazy_rebal(nd, blr);
+		return 0;
+	}
+
 	if (shift_left && trace->tr_at != nd->tn_keyn) {
 		/* shift left records which are on the right side of the
 		 * deleted record.
@@ -2239,12 +2293,15 @@ btr_node_del_leaf(struct btr_context *tcx,
 	int		 rc;
 
 	if (UMOFF_IS_NULL(sib_off)) {
+		struct btr_leaf_rebal	*blr = args;
+
 		/* don't need to rebalance or merge */
 		rc = btr_node_del_leaf_only(tcx, cur_tr, true, args);
 		if (rc != 0)
 			return rc;
 
-		if (tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL) {
+		if (tcx->tc_feats & BTR_FEAT_LAZY_LEAF_REBAL &&
+		    blr != NULL && blr->blr_lazy_rebal) {
 			struct btr_node	*nd;
 
 			nd = btr_off2ptr(tcx, cur_tr->tr_node);
@@ -2288,8 +2345,9 @@ btr_node_del_leaf(struct btr_context *tcx,
  */
 static int
 btr_node_del_child_only(struct btr_context *tcx, struct btr_trace *trace,
-			bool shift_left)
+			bool shift_left, void *args)
 {
+	struct btr_leaf_rebal	*blr = args;
 	struct btr_node		*nd;
 	struct btr_record	*rec;
 	umem_off_t		 off;
@@ -2304,9 +2362,13 @@ btr_node_del_child_only(struct btr_context *tcx, struct btr_trace *trace,
 	/* NB: we always delete record/node from the bottom to top, so it is
 	 * unnecessary to do cascading free anymore (btr_node_destroy).
 	 */
-	rc = btr_node_free(tcx, off);
-	if (rc != 0)
-		return rc;
+	if (!(tcx->tc_feats & BTR_FEAT_LAZY_LEAF_REBAL) ||
+	    blr == NULL || !blr->blr_lazy_rebal ||
+	    !btr_node_is_lazy_rebal(tcx, off)) {
+		rc = btr_node_free(tcx, off);
+		if (rc != 0)
+			return rc;
+	}
 
 	nd->tn_keyn--;
 	if (shift_left) {
@@ -2370,7 +2432,7 @@ btr_node_del_child_rebal(struct btr_context *tcx,
 	sib_nd = btr_off2ptr(tcx, sib_off);
 	D_ASSERT(sib_nd->tn_keyn > 1);
 
-	rc = btr_node_del_child_only(tcx, cur_tr, sib_on_right);
+	rc = btr_node_del_child_only(tcx, cur_tr, sib_on_right, args);
 	if (rc != 0)
 		return rc;
 
@@ -2436,7 +2498,7 @@ btr_node_del_child_merge(struct btr_context *tcx,
 	/* NB: always left shift because it is easier for the following
 	 * operations.
 	 */
-	rc = btr_node_del_child_only(tcx, cur_tr, true);
+	rc = btr_node_del_child_only(tcx, cur_tr, true, args);
 	if (rc != 0)
 		return rc;
 
@@ -2516,7 +2578,7 @@ btr_node_del_child(struct btr_context *tcx,
 
 	if (UMOFF_IS_NULL(sib_off)) {
 		/* don't need to rebalance or merge */
-		rc = btr_node_del_child_only(tcx, cur_tr, true);
+		rc = btr_node_del_child_only(tcx, cur_tr, true, args);
 		if (rc != 0)
 			return rc;
 
@@ -2557,6 +2619,7 @@ static int
 btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 		 struct btr_trace *cur_tr, void *args)
 {
+	struct btr_leaf_rebal	*blr = args;
 	struct btr_node		*par_nd;
 	struct btr_node		*cur_nd;
 	struct btr_node		*sib_nd;
@@ -2575,7 +2638,8 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 		cur_nd->tn_keyn);
 
 	if (cur_nd->tn_keyn > 1 ||
-	    (is_leaf && tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)) {
+	    (is_leaf && tcx->tc_feats & BTR_FEAT_LAZY_LEAF_REBAL &&
+	     blr != NULL && blr->blr_lazy_rebal)) {
 		/* OK to delete record without doing any extra work */
 		D_DEBUG(DB_TRACE, "Straight away deletion, no rebalance.\n");
 		sib_off	= BTR_NODE_NULL;
@@ -2683,7 +2747,6 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 
 			rc = btr_node_del_leaf_only(tcx, trace, true, args);
 		} else {
-
 			rc = btr_node_destroy(tcx, trace->tr_node, args, NULL);
 			if (rc != 0)
 				return rc;
@@ -2711,7 +2774,7 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 				return rc;
 		}
 
-		rc = btr_node_del_child_only(tcx, trace, true);
+		rc = btr_node_del_child_only(tcx, trace, true, args);
 		if (rc != 0)
 			return rc;
 
@@ -2804,7 +2867,7 @@ dbtree_delete(daos_handle_t toh, dbtree_probe_opc_t opc, d_iov_t *key,
 	if (opc == BTR_PROBE_BYPASS)
 		goto delete;
 
-	rc = btr_probe_key(tcx, opc, DAOS_INTENT_PUNCH, key);
+	rc = btr_probe_key(tcx, opc, DAOS_INTENT_PUNCH, key, args);
 	if (rc == PROBE_RC_INPROGRESS) {
 		D_DEBUG(DB_TRACE, "Target is in some uncommitted DTX.\n");
 		return -DER_INPROGRESS;
@@ -3194,11 +3257,12 @@ static int
 btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		 void *args, bool *empty_rc)
 {
-	struct btr_node *nd	= btr_off2ptr(tcx, nd_off);
-	bool		 leaf	= btr_node_is_leaf(tcx, nd_off);
-	bool		 empty	= true;
-	int		 rc;
-	int		 i;
+	struct btr_leaf_rebal	*blr = args;
+	struct btr_node		*nd = btr_off2ptr(tcx, nd_off);
+	bool			 leaf = btr_node_is_leaf(tcx, nd_off);
+	bool			 empty = true;
+	int			 rc;
+	int			 i;
 
 	/* NB: don't need to call TX_ADD_RANGE(nd_off, ...) because I never
 	 * change it so nothing to undo on transaction failure, I may destroy
@@ -3208,10 +3272,20 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 		leaf ? "leaf" : "node", nd_off, nd->tn_keyn);
 
 	if (leaf) {
-		for (i = nd->tn_keyn - 1; i >= 0; i--) {
+		if (tcx->tc_feats & BTR_FEAT_LAZY_LEAF_REBAL &&
+		    nd->tn_flags & BTR_NODE_LAZY_REBAL &&
+		    blr != NULL && blr->blr_lazy_rebal)
+			i = nd->tn_last_key - 1;
+		else
+			i = nd->tn_keyn - 1;
+
+		for (; i >= 0; i--) {
 			struct btr_record *rec;
 
 			rec = btr_node_rec_at(tcx, nd_off, i);
+			if (UMOFF_IS_NULL(rec->rec_off))
+				continue;
+
 			rc = btr_rec_free(tcx, rec, args);
 			if (rc != 0)
 				return rc;
@@ -3252,9 +3326,15 @@ btr_node_destroy(struct btr_context *tcx, umem_off_t nd_off,
 	}
 
 	if (empty) {
-		rc = btr_node_free(tcx, nd_off);
-		if (rc != 0)
-			return rc;
+		if (tcx->tc_feats & BTR_FEAT_LAZY_LEAF_REBAL &&
+		    blr != NULL && blr->blr_lazy_rebal && leaf) {
+			nd->tn_keyn = 0;
+			btr_add_leaf_lazy_rebal(nd, blr);
+		} else {
+			rc = btr_node_free(tcx, nd_off);
+			if (rc != 0)
+				return rc;
+		}
 	} else {
 		if (btr_has_tx(tcx)) {
 			rc = btr_node_tx_add(tcx, nd_off);
@@ -3490,16 +3570,17 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 		return -DER_NO_HDL;
 
 	if (opc == BTR_PROBE_FIRST || opc == BTR_PROBE_LAST)
-		rc = btr_probe(tcx, opc, intent, NULL, NULL);
+		rc = btr_probe(tcx, opc, intent, NULL, NULL, NULL);
 	else if (btr_is_direct_key(tcx)) {
 		D_ASSERT(key != NULL || anchor != NULL);
 		if (key)
-			rc = btr_probe(tcx, opc, intent, key, NULL);
+			rc = btr_probe(tcx, opc, intent, key, NULL, NULL);
 		else {
 			d_iov_t direct_key;
 
 			btr_key_decode(tcx, &direct_key, anchor);
-			rc = btr_probe(tcx, opc, intent, &direct_key, NULL);
+			rc = btr_probe(tcx, opc, intent, &direct_key,
+				       NULL, NULL);
 		}
 	} else {
 		D_ASSERT(key != NULL || anchor != NULL);
@@ -3509,7 +3590,7 @@ dbtree_iter_probe(daos_handle_t ih, dbtree_probe_opc_t opc, uint32_t intent,
 			btr_hkey_gen(tcx, key, hkey);
 		else
 			btr_hkey_copy(tcx, hkey, (char *)&anchor->da_buf[0]);
-		rc = btr_probe(tcx, opc, intent, key, hkey);
+		rc = btr_probe(tcx, opc, intent, key, hkey, NULL);
 	}
 
 	switch (rc) {
@@ -3846,8 +3927,8 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 	if (tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
 		*tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
 
-	if (tc->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)
-		*tree_feats |= BTR_FEAT_SKIP_LEAF_REBAL;
+	if (tc->tc_feats & BTR_FEAT_LAZY_LEAF_REBAL)
+		*tree_feats |= BTR_FEAT_LAZY_LEAF_REBAL;
 
 	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
 		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",
@@ -3959,3 +4040,90 @@ done:
 	return 0;
 }
 
+static struct btr_record *
+dbtree_find_rec(struct btr_context *tcx, struct btr_node *nd, unsigned int at,
+		bool empty, unsigned int *pos, unsigned int *cnt)
+{
+	struct btr_record	*start = NULL;
+	struct btr_record	*rec;
+	int			 i;
+
+	for (i = at; i < tcx->tc_tins.ti_root->tr_node_size - 1; i++) {
+		rec = btr_node_rec_pos(tcx, nd, i);
+		if (UMOFF_IS_NULL(rec->rec_off)) {
+			if (empty) {
+				*pos = i;
+				return rec;
+			}
+
+			if (start != NULL)
+				return start;
+		} else if (!empty) {
+			(*cnt)++;
+			if (start == NULL) {
+				start = rec;
+				*pos = i;
+			}
+		}
+	}
+
+	return start;
+}
+
+int
+dbtree_lazy_leaf_rebal(daos_handle_t toh, struct btr_node *nd)
+{
+	struct btr_context	*tcx = btr_hdl2tcx(toh);
+	struct btr_record	*src_rec;
+	struct btr_record	*dst_rec;
+	umem_off_t		 off = btr_ptr2off(tcx, nd);
+	unsigned int		 src_pos;
+	unsigned int		 dst_pos;
+	unsigned int		 cnt = 0;
+	int			 rc;
+
+	D_ASSERT(nd->tn_flags & BTR_NODE_LEAF);
+	D_ASSERT(nd->tn_flags & BTR_NODE_LAZY_REBAL);
+
+	if (btr_has_tx(tcx)) {
+		/* The 'nd' may has been attached to the tx,
+		 * it is not a big problem if add it again.
+		 */
+		rc = btr_node_tx_add(tcx, off);
+		if (rc != 0)
+			return rc;
+	}
+
+	if (nd->tn_keyn == 0)
+		return btr_node_free(tcx, off);
+
+	nd->tn_flags &= ~BTR_NODE_LAZY_REBAL;
+	nd->tn_last_key = 0;
+	nd->tn_next = NULL;
+
+	/* Find the first empty slot. */
+	dst_rec = dbtree_find_rec(tcx, nd, 0, true, &dst_pos, NULL);
+	if (dst_rec == NULL)
+		return 0;
+
+	for (src_pos = dst_pos;
+	     src_pos < tcx->tc_tins.ti_root->tr_node_size - 1;
+	     src_pos += cnt, cnt = 0) {
+		/* Find the first non-empty slot after the empty slot. */
+		src_rec = dbtree_find_rec(tcx, nd, src_pos + 1, false,
+					  &src_pos, &cnt);
+		if (src_rec == NULL)
+			return 0;
+
+		btr_rec_move(tcx, dst_rec, src_rec, cnt);
+
+		dst_pos += cnt;
+		if (dst_pos >= nd->tn_keyn)
+			return 0;
+
+		/* The next empty slot. */
+		dst_rec = btr_node_rec_pos(tcx, nd, dst_pos);
+	}
+
+	return 0;
+}
