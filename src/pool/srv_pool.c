@@ -1978,8 +1978,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 
-	metrics = &ds_global_pool_metrics;
-
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
 
@@ -2083,8 +2081,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
-	d_tm_inc_gauge(metrics->open_hdl_gauge, 1);
-
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -2162,6 +2158,10 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	if (rc)
 		D_GOTO(out_map_version, rc);
 
+	/** update metric */
+	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
+	d_tm_inc_gauge(metrics->open_hdl_gauge, 1);
+
 	if (in->pci_query_bits & DAOS_PO_QUERY_SPACE)
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
 					    &out->pco_space);
@@ -2237,8 +2237,6 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
 
-	metrics = &ds_global_pool_metrics;
-
 	D_DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
 		"\n", DP_UUID(svc->ps_uuid), n_hdl_uuids,
 		DP_UUID(hdl_uuids[0]));
@@ -2256,6 +2254,8 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	/** update metric */
+	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 	d_tm_dec_gauge(metrics->open_hdl_gauge, n_hdl_uuids);
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
@@ -2672,7 +2672,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
 	struct pool_buf	       *map_buf;
-	uint32_t		map_version;
+	uint32_t		map_version = 0;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
 	d_iov_t			key;
@@ -2826,7 +2826,10 @@ out_lock:
 					    &out->pqo_space);
 
 out_svc:
-	out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
+	if (map_version == 0)
+		out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
+	else
+		out->pqo_op.po_map_version = map_version;
 	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
@@ -4167,12 +4170,12 @@ struct redist_open_hdls_arg {
 static int
 get_open_handles_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
-	struct redist_open_hdls_arg *arg = varg;
-	uuid_t *uuid = key->iov_buf;
-	struct pool_hdl *hdl = val->iov_buf;
-	struct ds_pool_hdl *lookup_hdl;
-	size_t size_needed;
-	int rc = DER_SUCCESS;
+	struct redist_open_hdls_arg	*arg = varg;
+	uuid_t				*uuid = key->iov_buf;
+	struct pool_hdl			*hdl = val->iov_buf;
+	struct ds_pool_hdl		*lookup_hdl;
+	size_t				size_needed;
+	int				rc = DER_SUCCESS;
 
 	if (key->iov_len != sizeof(uuid_t) ||
 	    val->iov_len != sizeof(struct pool_hdl)) {

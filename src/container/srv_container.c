@@ -3291,26 +3291,26 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	d_iov_t				 key;
 	d_iov_t				 value;
 	struct container_hdl		 hdl;
-	struct cont_metrics		*metrics;
+	struct cont_pool_metrics	*metrics;
 	int				 rc;
 
-	metrics = &ds_cont_metrics;
+	metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
 
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:
 	case CONT_OPEN_BYLABEL:
-		d_tm_inc_counter(metrics->op_open_ctr, 1);
-		d_tm_inc_gauge(metrics->open_cont_gauge, 1);
+		d_tm_inc_counter(metrics->cpm_open_count, 1);
+		d_tm_inc_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_open(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_CLOSE:
-		d_tm_inc_counter(metrics->op_close_ctr, 1);
-		d_tm_dec_gauge(metrics->open_cont_gauge, 1);
+		d_tm_inc_counter(metrics->cpm_close_count, 1);
+		d_tm_dec_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_close(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_DESTROY:
 	case CONT_DESTROY_BYLABEL:
-		d_tm_inc_counter(metrics->op_destroy_ctr, 1);
+		d_tm_inc_counter(metrics->cpm_destroy_count, 1);
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
 		break;
 	default:
