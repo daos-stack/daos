@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
 #define D_LOGFAC	DD_FAC(st)
 
 #include <stdio.h>
@@ -14,6 +15,9 @@
 
 #include "tests_common.h"
 #include "daos_errno.h"
+
+#include <daos/agent.h>
+#include <daos/mgmt.h>
 
 #define CRT_SELF_TEST_AUTO_BULK_THRESH		(1 << 20)
 #define CRT_SELF_TEST_GROUP_NAME		("crt_self_test")
@@ -80,7 +84,8 @@ static void *progress_fn(void *arg)
 
 static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 			  crt_group_t **srv_grp, pthread_t *tid,
-			  char *attach_info_path, bool listen)
+			  char *attach_info_path, bool listen,
+			  bool use_daos_agent_vars)
 {
 	uint32_t	 init_flags = 0;
 	uint32_t	 grp_size;
@@ -92,6 +97,19 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	tc_test_init(0, attach_retries, false, false);
+
+	if (use_daos_agent_vars) {
+		ret = dc_agent_init();
+		if (ret != 0) {
+			fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
+			return ret;
+		}
+		ret = dc_mgmt_net_cfg(NULL);
+		if (ret != 0) {
+			fprintf(stderr, "dc_mgmt_net_cfg() failed. ret: %d\n", ret);
+			return ret;
+		}
+	}
 
 	if (listen)
 		init_flags |= CRT_FLAG_BIT_SERVER;
@@ -773,7 +791,8 @@ static int run_self_test(struct st_size_params all_params[],
 			 uint32_t num_ms_endpts_in,
 			 struct st_endpoint *endpts, uint32_t num_endpts,
 			 int output_megabits, int16_t buf_alignment,
-			 char *attach_info_path)
+			 char *attach_info_path,
+			 bool use_daos_agent_vars)
 {
 	crt_context_t		  crt_ctx;
 	crt_group_t		 *srv_grp;
@@ -806,7 +825,8 @@ static int run_self_test(struct st_size_params all_params[],
 		listen = true;
 	/* Initialize CART */
 	ret = self_test_init(dest_name, &crt_ctx, &srv_grp, &tid,
-			     attach_info_path, listen /* run as server */);
+			     attach_info_path, listen /* run as server */,
+			     use_daos_agent_vars);
 	if (ret != 0) {
 		D_ERROR("self_test_init failed; ret = %d\n", ret);
 		D_GOTO(cleanup_nothread, ret);
@@ -1190,13 +1210,22 @@ static void print_usage(const char *prog_name, const char *msg_sizes_str,
 	       "      Short version: -b\n"
 	       "      By default, self-test outputs performance results in MB (#Bytes/1024^2)\n"
 	       "      Specifying --Mbits switches the output to megabits (#bits/1000000)\n"
-	       "  --path  /path/to/attach_info_file/directory/n"
+	       "  --path  /path/to/attach_info_file/directory/\n"
 	       "      Short version: -p  prefix\n"
 	       "      This option implies --singleton is set.\n"
 	       "        If specified, self_test will use the address information in:\n"
 	       "        /tmp/group_name.attach_info_tmp, if prefix is specified, self_test will use\n"
 	       "        the address information in: prefix/group_name.attach_info_tmp.\n"
-	       "        Note the = sign in the option.\n",
+	       "        Note the = sign in the option.\n"
+	       "\n"
+	       "  --use-daos-agent-env\n"
+	       "      Short version: -u\n"
+	       "      This option sets the following env vars through a running daos_agent.\n"
+	       "         - OFI_INTERFACE\n"
+	       "         - CRT_PHY_ADDR_STR\n"
+	       "         - CRT_CTX_SHARE_ADDR\n"
+	       "         - OFI_DOMAIN\n"
+	       "         - CRT_TIMEOUT\n",
 	       prog_name, UINT32_MAX,
 	       CRT_SELF_TEST_AUTO_BULK_THRESH, msg_sizes_str, rep_count,
 	       max_inflight, CRT_ST_BUF_ALIGN_MIN, CRT_ST_BUF_ALIGN_MIN);
@@ -1665,6 +1694,7 @@ int main(int argc, char *argv[])
 	int16_t				 buf_alignment =
 		CRT_ST_BUF_ALIGN_DEFAULT;
 	char				*attach_info_path = NULL;
+	bool				 use_daos_agent_vars = false;
 
 	ret = d_log_init();
 	if (ret != 0) {
@@ -1686,10 +1716,11 @@ int main(int argc, char *argv[])
 			{"randomize-endpoints", no_argument, 0, 'q'},
 			{"path", required_argument, 0, 'p'},
 			{"nopmix", no_argument, 0, 'n'},
+			{"use-daos-agent-env", no_argument, 0, 'u'},
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btnqp:",
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btnqp:u:",
 				long_options, NULL);
 		if (c == -1)
 			break;
@@ -1742,6 +1773,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'p':
 			attach_info_path = optarg;
+			break;
+		case 'u':
+			use_daos_agent_vars = true;
 			break;
 		case 'q':
 			g_randomize_endpoints = true;
@@ -1893,7 +1927,8 @@ int main(int argc, char *argv[])
 	ret = run_self_test(all_params, num_msg_sizes, rep_count,
 			    max_inflight, dest_name, ms_endpts,
 			    num_ms_endpts, endpts, num_endpts,
-			    output_megabits, buf_alignment, attach_info_path);
+			    output_megabits, buf_alignment, attach_info_path,
+			    use_daos_agent_vars);
 
 	/********************* Clean up *********************/
 cleanup:

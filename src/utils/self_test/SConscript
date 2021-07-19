@@ -13,11 +13,12 @@ SELF_TEST = 'self_test.c'
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs')
+    Import('env', 'prereqs', 'dc_mgmt_tgts')
 
     tenv = env.Clone(LIBS=[])
 
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
+    tenv.AppendUnique(CPPPATH=['#/src/cart', '#/src/tests/ftest/cart'])
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'daos'])
     prereqs.require(tenv, 'mercury')
     tenv.AppendUnique(FLAGS='-pthread')
 
