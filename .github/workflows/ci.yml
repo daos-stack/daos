@@ -69,7 +69,7 @@ jobs:
                           --build-arg DEPS_JOBS=8 --build-arg DAOS_BUILD=no
                           --build-arg BASE_DISTRO=fedora:34
     - name: Turn on log checking
-      run: echo ::add-matcher::ci/daos-doxygen-matcher.json
+      run: echo ::add-matcher::ci/daos-gcc-matcher.json
     - name: Build DAOS in Docker image
       run: docker build . -f utils/docker/Dockerfile.centos.8
                           --build-arg COMPILER=${{ matrix.compiler }}
