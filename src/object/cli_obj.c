@@ -1642,6 +1642,8 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		extra_flags = DIOF_EC_RECOV;
 		if (recov_task->ert_snapshot)
 			extra_flags |= DIOF_EC_RECOV_SNAP;
+		if ((obj_auxi->flags & ORF_FOR_MIGRATION) != 0)
+			extra_flags |= DIOF_FOR_MIGRATION;
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
 					      extra_flags,
 					      &recov_task->ert_iod,
