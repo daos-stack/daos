@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
-#include "tests_common.h"
+#include "crt_utils.h"
 
 static bool pre_forward_called;
 static bool hdlr_called;
@@ -68,7 +68,7 @@ test_basic_corpc_hdlr(crt_rpc_t *rpc)
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 }
 
 #define TEST_BASIC_CORPC 0xC1
@@ -88,7 +88,7 @@ CRT_RPC_DEFINE(basic_corpc, CRT_ISEQ_BASIC_CORPC, CRT_OSEQ_BASIC_CORPC)
 static void
 corpc_response_hdlr(const struct crt_cb_info *info)
 {
-	tc_progress_stop();
+	crtu_progress_stop();
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_basic_corpc[] = {
@@ -129,7 +129,7 @@ int main(void)
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(my_rank, 20, true, true);
+	crtu_test_init(my_rank, 20, true, true);
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -145,7 +145,7 @@ int main(void)
 	assert(rc == 0);
 
 	rc = pthread_create(&progress_thread, 0,
-			tc_progress_fn, &g_main_ctx);
+			    crtu_progress_fn, &g_main_ctx);
 	if (rc != 0) {
 		D_ERROR("pthread_create() failed; rc=%d\n", rc);
 		assert(0);
@@ -167,10 +167,10 @@ int main(void)
 	}
 
 	/* load group info from a config file and delete file upon return */
-	rc = tc_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
-					true);
+	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
+				       true);
 	if (rc != 0) {
-		D_ERROR("tc_load_group_from_file() failed; rc=%d\n", rc);
+		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
@@ -182,8 +182,8 @@ int main(void)
 		}
 
 		sleep(2);
-		rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list,
-				       0, 1, 10, 100.0);
+		rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list,
+					 0, 1, 10, 100.0);
 		if (rc != 0) {
 			D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 			assert(0);
