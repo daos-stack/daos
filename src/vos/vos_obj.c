@@ -417,13 +417,14 @@ reset:
 	if (rc == 0) {
 		vos_ts_set_upgrade(ts_set);
 		if (daes != NULL) {
-			vos_dtx_post_handle(cont, daes, NULL,
-					    dth->dth_dti_cos_count, false);
+			vos_dtx_post_handle(cont, daes, dces,
+					    dth->dth_dti_cos_count,
+					    false, false);
 			dth->dth_cos_done = 1;
 		}
 	} else if (daes != NULL) {
-		vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
-				    false);
+		vos_dtx_post_handle(cont, daes, dces,
+				    dth->dth_dti_cos_count, false, true);
 		dth->dth_cos_done = 1;
 	}
 

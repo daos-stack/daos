@@ -197,10 +197,12 @@ struct dss_module_info {
 	/* the cart context id */
 	int			dmi_ctx_id;
 	uint32_t		dmi_dtx_batched_started:1;
-	d_list_t		dmi_dtx_batched_list;
+	d_list_t		dmi_dtx_batched_cont_list;
+	d_list_t		dmi_dtx_batched_pool_list;
 	/* the profile information */
 	struct daos_profile	*dmi_dp;
-	struct sched_request	*dmi_dtx_req;
+	struct sched_request	*dmi_dtx_cmt_req;
+	struct sched_request	*dmi_dtx_agg_req;
 };
 
 extern struct dss_module_key	daos_srv_modkey;
