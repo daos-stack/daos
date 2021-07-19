@@ -901,7 +901,8 @@ pipeline {
                     }
                     agent {
                         // 8+ node cluster with 1 IB/node + 1 test control node
-                        label 'wolf-51_nvme9'
+                        // wolf-51_nvme9
+                        label 'ci_nvme9'
                     }
                     steps {
                         functionalTest target: hwDistroTarget(),
