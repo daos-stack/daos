@@ -134,8 +134,8 @@ func canAccessBdevs(cfgBdevs []string, scanResp *storage.BdevScanResponse) ([]st
 
 // checkCfgBdevs performs validation on NVMe returned from initial scan.
 func (c *StorageControlService) checkCfgBdevs(scanResp *storage.BdevScanResponse) error {
-	if scanResp == nil {
-		return errors.New("received nil scan response")
+	if scanResp == nil || scanResp.Controllers == nil {
+		return errors.New("received nil scan response or controllers")
 	}
 	if len(c.instanceStorage) == 0 {
 		return nil
@@ -183,15 +183,18 @@ func (c *StorageControlService) Setup() error {
 	}
 
 	// don't scan if using emulated NVMe
+	// TODO: this should probably be verified and scan per engine
 	for _, storageCfg := range c.instanceStorage {
-		for _, tierCfg := range storageCfg.Tiers {
+		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
 			if tierCfg.Class != storage.ClassNvme {
 				return nil
 			}
 		}
 	}
 
-	nvmeScanResp, err := c.NvmeScan(storage.BdevScanRequest{})
+	nvmeScanResp, err := c.storage.ScanBdevs(storage.BdevScanRequest{
+		BypassCache: true,
+	})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
 		return nil
@@ -201,7 +204,18 @@ func (c *StorageControlService) Setup() error {
 		return errors.Wrap(err, "validate server config bdevs")
 	}
 
+	c.storage.SetBdevCache(*nvmeScanResp)
+	c.log.Debugf("set bdev cache after initial scan on start-up: %v",
+		nvmeScanResp.Controllers)
+
 	return nil
+}
+
+// GetNvmeCache ...
+func (c *StorageControlService) GetNvmeCache() (*storage.BdevScanResponse, error) {
+	return c.storage.ScanBdevs(storage.BdevScanRequest{
+		BypassCache: false,
+	})
 }
 
 func (c *StorageControlService) defaultProvider() *storage.Provider {
@@ -214,7 +228,7 @@ func (c *StorageControlService) defaultProvider() *storage.Provider {
 //
 // Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	return c.storage.Bdev.Prepare(req)
+	return c.storage.PrepareBdevs(req)
 }
 
 // GetScmState performs required initialization and returns current state
@@ -232,9 +246,10 @@ func (c *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*stor
 	return c.storage.Scm.Prepare(req)
 }
 
-// NvmeScan scans locally attached SSDs.
+// NvmeScan scans locally attached SSDs and bypasses cache.
 func (c *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	return c.storage.Bdev.Scan(req)
+	req.BypassCache = true
+	return c.storage.ScanBdevs(req)
 }
 
 // ScmScan scans locally attached modules, namespaces and state of DCPM config.

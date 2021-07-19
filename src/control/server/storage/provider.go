@@ -9,6 +9,7 @@ package storage
 import (
 	"fmt"
 	"os"
+	"sync"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -25,12 +26,14 @@ type SystemProvider interface {
 
 // Provider provides storage specific capabilities.
 type Provider struct {
+	sync.Mutex
 	log           logging.Logger
 	engineIndex   int
 	engineStorage *Config
 	Sys           SystemProvider
 	Scm           ScmProvider
-	Bdev          BdevProvider
+	bdev          BdevProvider
+	bdevCache     BdevScanResponse
 }
 
 // DefaultProvider returns a provider populated with default parameters.
@@ -41,11 +44,11 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 		engineStorage: engineStorage,
 		Sys:           system.DefaultProvider(),
 		Scm:           NewScmForwarder(log),
-		Bdev:          NewBdevForwarder(log),
+		bdev:          NewBdevForwarder(log),
 	}
 }
 
-// GetGetScmConfig returns the only SCM tier config.
+// GetScmConfig returns the only SCM tier config.
 func (p *Provider) GetScmConfig() (*TierConfig, error) {
 	// NB: A bit wary of building in assumptions again about the number of
 	// SCM tiers, but for the sake of expediency we'll assume that there is
@@ -202,6 +205,11 @@ func (p *Provider) FormatScm(force bool) error {
 	return nil
 }
 
+// PrepareBdevs attempts to configure NVMe devices to be usable by DAOS.
+func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, error) {
+	return p.bdev.Prepare(req)
+}
+
 // HasBlockDevices returns true if provider engine storage config has configured
 // block devices.
 func (p *Provider) HasBlockDevices() bool {
@@ -300,7 +308,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 			continue
 		}
 
-		results[i].Result, results[i].Error = p.Bdev.Format(req)
+		results[i].Result, results[i].Error = p.bdev.Format(req)
 
 		if err := results[i].Error; err != nil {
 			p.log.Errorf("Instance %d: format failed (%s)", err)
@@ -322,7 +330,7 @@ func (p *Provider) WriteNvmeConfig() error {
 		return err
 	}
 
-	_, err = p.Bdev.WriteNvmeConfig(req)
+	_, err = p.bdev.WriteNvmeConfig(req)
 	return err
 }
 
@@ -333,9 +341,9 @@ type BdevTierScanResult struct {
 }
 
 // ScanBdevTiers scans all Bdev tiers in the provider's engine storage
-// configuration. If the direct flag is set, avoid retrieving cached
-// results.
-func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err error) {
+// configuration. If the engine is not running, bypass cache to retrieve fresh
+// results as devices are accessible from the control plane.
+func (p *Provider) ScanBdevTiers(isEngineRunning bool) (results []BdevTierScanResult, err error) {
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierScanResult, 0, len(bdevCfgs))
 
@@ -344,35 +352,63 @@ func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err
 		return
 	}
 
-	for _, cfg := range bdevCfgs {
+	for ti, cfg := range bdevCfgs {
 		if cfg.Class != ClassNvme {
 			continue
 		}
 		if len(cfg.Bdev.DeviceList) == 0 {
 			continue
 		}
-		tsr := BdevTierScanResult{Tier: cfg.Tier}
 
-		req := BdevScanRequest{DeviceList: cfg.Bdev.DeviceList}
-		p.log.Debugf("instance %d storage scan: only show bdev devices in config %v",
-			p.engineIndex, req.DeviceList)
-
-		// scan through control-plane to get up-to-date stats if io
-		// server is not active (and therefore has not claimed the
-		// assigned devices), bypass cache to get fresh health stats
-		if direct {
-			req.NoCache = true
+		req := BdevScanRequest{
+			DeviceList:  cfg.Bdev.DeviceList,
+			BypassCache: !isEngineRunning,
 		}
-
-		bsr, err := p.Bdev.Scan(req)
+		bsr, err := p.ScanBdevs(req)
 		if err != nil {
 			return nil, errors.Wrap(err, "nvme scan")
 		}
-		tsr.Result = bsr
-		results = append(results, tsr)
+
+		p.log.Debugf("instance %d storage scan: tier %d bypass cache (%v), %v: %v",
+			p.engineIndex, ti, req.BypassCache, req.DeviceList, bsr.Controllers)
+
+		result := BdevTierScanResult{
+			Tier:   cfg.Tier,
+			Result: bsr,
+		}
+		results = append(results, result)
 	}
 
 	return
+}
+
+// ScanBdevs ...
+func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
+	p.Lock()
+	defer p.Unlock()
+
+	if !req.BypassCache {
+		p.log.Debugf("loading bdev scan cache: %v", p.bdevCache.Controllers)
+		return &p.bdevCache, nil
+	}
+
+	return p.bdev.Scan(req)
+}
+
+// SetBdevCache ...
+func (p *Provider) SetBdevCache(resp BdevScanResponse) {
+	p.bdevCache = resp
+	p.log.Debugf("storing bdev scan cache: %v", p.bdevCache.Controllers)
+}
+
+// QueryBdevFirmware queries NVMe SSD firmware.
+func (p *Provider) QueryBdevFirmware(req NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error) {
+	return p.bdev.QueryFirmware(req)
+}
+
+// UpdateBdevFirmware queries NVMe SSD firmware.
+func (p *Provider) UpdateBdevFirmware(req NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error) {
+	return p.bdev.UpdateFirmware(req)
 }
 
 // NewProvider returns an initialized storage provider.
@@ -383,6 +419,6 @@ func NewProvider(log logging.Logger, idx int, engineStorage *Config, sys SystemP
 		engineStorage: engineStorage,
 		Sys:           sys,
 		Scm:           scm,
-		Bdev:          bdev,
+		bdev:          bdev,
 	}
 }

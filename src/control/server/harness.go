@@ -56,6 +56,7 @@ type Engine interface {
 	GetScmConfig() (*storage.TierConfig, error)
 	GetScmUsage() (*storage.ScmMountPoint, error)
 	HasBlockDevices() bool
+	SetBdevCache(storage.BdevScanResponse)
 	ScanBdevTiers(bool) ([]storage.BdevTierScanResult, error)
 	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult

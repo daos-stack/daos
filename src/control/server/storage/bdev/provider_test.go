@@ -79,7 +79,7 @@ func Test_filterScanResp(t *testing.T) {
 	}
 }
 
-func Test_forwardScan(t *testing.T) {
+func Test_filterScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		scanReq      storage.BdevScanRequest
 		cache        *storage.BdevScanResponse
@@ -155,7 +155,7 @@ func Test_forwardScan(t *testing.T) {
 			},
 		},
 		"bypass cache": {
-			scanReq: storage.BdevScanRequest{NoCache: true},
+			scanReq: storage.BdevScanRequest{BypassCache: true},
 			cache: &storage.BdevScanResponse{
 				Controllers: storage.MockNvmeControllers(2),
 			},
@@ -192,7 +192,7 @@ func Test_forwardScan(t *testing.T) {
 				return tc.scanResp, tc.scanErr
 			}
 
-			gotMsg, gotResp, shouldUpdate, gotErr := forwardScan(tc.scanReq, tc.cache, scanFn)
+			gotMsg, gotResp, shouldUpdate, gotErr := filterScan(tc.scanReq, tc.cache, scanFn)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
@@ -223,9 +223,9 @@ func TestProvider_Scan(t *testing.T) {
 		expVMDDisabled bool
 	}{
 		"no devices": {
-			req:            storage.BdevScanRequest{},
-			expRes:         &storage.BdevScanResponse{},
-			expVMDDisabled: true, // disabled in mock by default
+			req:    storage.BdevScanRequest{},
+			expRes: &storage.BdevScanResponse{},
+			// expVMDDisabled: true, // disabled in mock by default
 		},
 		"single device": {
 			req: storage.BdevScanRequest{},
@@ -233,7 +233,7 @@ func TestProvider_Scan(t *testing.T) {
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr1},
 				},
-				VmdEnabled: true,
+				// VmdEnabled: true,
 			},
 			expRes: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
@@ -270,7 +270,7 @@ func TestProvider_Scan(t *testing.T) {
 					ctrlr1, ctrlr2, ctrlr3,
 				},
 			},
-			expVMDDisabled: true,
+			// expVMDDisabled: true,
 		},
 		"failure": {
 			req: storage.BdevScanRequest{},
@@ -297,7 +297,7 @@ func TestProvider_Scan(t *testing.T) {
 			if diff := cmp.Diff(tc.expRes, gotRes, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}
-			common.AssertEqual(t, tc.expVMDDisabled, p.IsVMDDisabled(), "vmd disabled")
+			// common.AssertEqual(t, tc.expVMDDisabled, p.IsVMDDisabled(), "vmd disabled")
 		})
 	}
 }
