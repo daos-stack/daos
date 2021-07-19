@@ -115,28 +115,28 @@ struct bio_dma_buffer {
 	  "data units", D_TM_COUNTER)					\
 	X(bdh_write_cmds, "commands/host_write_cmds",			\
 	  "number of write commands completed by to the controller",	\
-	  "commands", D_TM_COUNTER)					\
+	  "cmds", D_TM_COUNTER)						\
 	X(bdh_read_cmds, "commands/host_read_cmds",			\
 	  "number of read commands completed by to the controller",	\
-	  "commands", D_TM_COUNTER)					\
+	  "cmds", D_TM_COUNTER)						\
 	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",		\
 	  "Amount of time the controller is busy with I/O commands",	\
 	  "minutes", D_TM_COUNTER)					\
 	X(bdh_media_errs, "commands/media_errs",			\
 	  "Number of unrecovered data integrity error",			\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_read_errs, "commands/read_errs",				\
-	  "Number of errors reported to the engine on read commands",      \
-	  "errors", D_TM_COUNTER)					\
+	  "Number of errors reported to the engine on read commands",	\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_write_errs, "commands/write_errs",			\
-	  "Number of errors reported to the engine on write commands",     \
-	  "errors", D_TM_COUNTER)					\
+	  "Number of errors reported to the engine on write commands",	\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_unmap_errs, "commands/unmap_errs",			\
 	  "Number of errors reported to the engine on unmap/trim commands",\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
 	  "Number of checksum mismatch detected by the engine",		\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_power_cycles, "power_cycles",				\
 	  "Number of power cycles",					\
 	  "cycles", D_TM_COUNTER)					\
@@ -148,7 +148,7 @@ struct bio_dma_buffer {
 	  "shutdowns", D_TM_COUNTER)					\
 	X(bdh_temp, "temp/current",					\
 	  "Current SSD temperature",					\
-	  "kelvin", D_TM_GAUGE)						\
+	  "kelvins", D_TM_GAUGE)					\
 	X(bdh_temp_warn, "temp/warn",					\
 	  "Set to 1 if temperature is above threshold",			\
 	  "", D_TM_GAUGE)						\
@@ -182,19 +182,80 @@ struct bio_dma_buffer {
 	  "Set to 1 when volatile memory backup device has failed",	\
 	  "", D_TM_GAUGE)
 
+#define BIO_PROTO_NVME_VENDOR_STATS_LIST				\
+	Y(bdh_prog_fail_cnt_norm, "vendor/program_fail_cnt_norm",	\
+	  "Percent remaining of allowable program fails",		\
+	  "%", D_TM_COUNTER)						\
+	Y(bdh_prog_fail_cnt_raw, "vendor/program_fail_cnt_raw",		\
+	  "Total count of current program fails",			\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_erase_fail_cnt_norm, "vendor/erase_fail_cnt_norm",	\
+	  "Percent remaining of allowable erase fails",			\
+	  "%", D_TM_COUNTER)						\
+	Y(bdh_erase_fail_cnt_raw, "vendor/erase_fail_cnt_raw",		\
+	  "Total count of current erase fails",				\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_wear_leveling_cnt_norm, "vendor/wear_leveling_cnt_norm",	\
+	  "Wear leveling count remaining, decrements from 100 to 0",	\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_wear_leveling_cnt_min, "vendor/wear_leveling_cnt_min",	\
+	  "Wear leveling minimum erase cycle",				\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_wear_leveling_cnt_max, "vendor/wear_leveling_cnt_max",    \
+	  "Wear leveling maximum erase cycle",                          \
+	  "", D_TM_COUNTER)                                             \
+	Y(bdh_wear_leveling_cnt_avg, "vendor/wear_leveling_cnt_avg",    \
+	  "Wear leveling average erase cycle",                          \
+	  "", D_TM_COUNTER)						\
+	Y(bdh_endtoend_err_cnt_raw, "vendor/endtoend_err_cnt_raw",	\
+	  "End-to-End detected and corrected errors by hardware",	\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_crc_err_cnt_raw, "vendor/crc_err_cnt_raw",		\
+	  "PCIe Interface CRC errors encountered",			\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_media_wear_raw, "vendor/media_wear_raw",			\
+	  "Wear seen by the SSD as a percentage of the maximum rated cycles", \
+	  "%", D_TM_COUNTER)						\
+	Y(bdh_host_reads_raw, "vendor/host_reads_raw",			\
+	  "Percentage of I/O operations that are a read operation",	\
+	  "%", D_TM_COUNTER)						\
+	Y(bdh_workload_timer_raw, "vendor/crc_workload_timer_raw",	\
+	  "The elapsed time since starting the workload timer",		\
+	  "minutes", D_TM_COUNTER)					\
+	Y(bdh_thermal_throttle_status, "vendor/thermal_throttle_status_raw", \
+	  "Thermal throttle status",					\
+	  "%", D_TM_COUNTER)						\
+	Y(bdh_thermal_throttle_event_cnt, "vendor/thermal_throttle_event_cnt", \
+	  "Thermal throttling event count",				\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_retry_buffer_overflow_cnt, "vendor/retry_buffer_overflow_cnt", \
+	  "Retry Buffer overflow count",				\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_pll_lock_loss_cnt, "vendor/pll_lock_loss_cnt",		\
+	  "PCIe Refclock PLL unlock count",				\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_nand_bytes_written, "vendor/nand_bytes_written",		\
+	  "NAND bytes written (1 count = 32 MiB)",			\
+	  "", D_TM_COUNTER)						\
+	Y(bdh_host_bytes_written, "vendor/host_bytes_written",		\
+	  "Host bytes written (1 count = 32 MiB)",			\
+	  "", D_TM_COUNTER)
+
 /*
  * SPDK device health monitoring.
  */
 struct bio_dev_health {
-	struct nvme_stats		 bdh_health_state;
+	struct nvme_stats	 bdh_health_state;
 	/* writable open descriptor for health info polling */
-	struct spdk_bdev_desc		*bdh_desc;
-	struct spdk_io_channel		*bdh_io_channel;
-	void				*bdh_health_buf; /* health info logs */
-	void				*bdh_ctrlr_buf; /* controller data */
-	void				*bdh_error_buf; /* device error logs */
-	uint64_t			 bdh_stat_age;
-	unsigned int			 bdh_inflights;
+	struct spdk_bdev_desc  *bdh_desc;
+	struct spdk_io_channel *bdh_io_channel;
+	void		       *bdh_health_buf; /* health info logs */
+	void		       *bdh_ctrlr_buf; /* controller data */
+	void		       *bdh_error_buf; /* device error logs */
+	void		       *bdh_intel_smart_buf; /*Intel SMART attributes*/
+	uint64_t		bdh_stat_age;
+	unsigned int		bdh_inflights;
+	uint16_t		bdh_vendor_id; /* PCI vendor ID */
 
 	/**
 	 * NVMe statistics exported via telemetry framework
@@ -202,6 +263,11 @@ struct bio_dev_health {
 #define	X(field, fname, desc, unit, type) struct d_tm_node_t *field;
 	 BIO_PROTO_NVME_STATS_LIST
 #undef X
+
+#define	Y(field, fname, desc, unit, type) struct d_tm_node_t *field;
+	 BIO_PROTO_NVME_VENDOR_STATS_LIST
+#undef Y
+
 };
 
 /*
@@ -457,6 +523,25 @@ iod_dma_buf(struct bio_desc *biod)
 	return biod->bd_ctxt->bic_xs_ctxt->bxc_dma_buf;
 }
 
+static inline void
+dma_biov2pg(struct bio_iov *biov, uint64_t *off, uint64_t *end,
+	    unsigned int *pg_cnt, unsigned int *pg_off)
+{
+	*off = bio_iov2raw_off(biov);
+	*end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
+
+	if (bio_iov2media(biov) == DAOS_MEDIA_SCM) {
+		*pg_cnt = (*end - *off + BIO_DMA_PAGE_SZ - 1) >>
+				BIO_DMA_PAGE_SHIFT;
+		*pg_off = 0;
+	} else {
+		*pg_cnt = ((*end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
+				(*off >> BIO_DMA_PAGE_SHIFT);
+		*pg_off = *off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
+	}
+	D_ASSERT(*pg_cnt > 0);
+}
+
 /* bio_bulk.c */
 int bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data);
 void bulk_iod_release(struct bio_desc *biod);
@@ -471,9 +556,9 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 	struct bio_bulk_group	*bbg;
 	int			 i, bulk_grps = 0, bulk_chunks = 0;
 
-	D_EMIT("chunk_size:%u, tot_chunk:%u, active_iods:%u, used:%u,%u,%u\n",
-		bio_chk_sz, bdb->bdb_tot_cnt, bdb->bdb_active_iods,
-		bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
+	D_EMIT("chk_size:%u, tot_chk:%u/%u, active_iods:%u, used:%u,%u,%u\n",
+		bio_chk_sz, bdb->bdb_tot_cnt, bio_chk_cnt_max,
+		bdb->bdb_active_iods, bdb->bdb_used_cnt[BIO_CHK_TYPE_IO],
 		bdb->bdb_used_cnt[BIO_CHK_TYPE_LOCAL],
 		bdb->bdb_used_cnt[BIO_CHK_TYPE_REBUILD]);
 
@@ -498,6 +583,9 @@ int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
 void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass);
 void bio_media_error(void *msg_arg);
+void bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name);
+void bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name);
+void bio_set_vendor_id(struct bio_blobstore *bb, char *bdev_name);
 
 /* bio_context.c */
 int bio_blob_close(struct bio_io_context *ctxt, bool async);

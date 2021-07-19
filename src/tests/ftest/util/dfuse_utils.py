@@ -32,7 +32,7 @@ class DfuseCommand(ExecutableCommand):
                                                      False)
 
         # Environment variable names to export when running dfuse
-        self._env_names = ["D_LOG_FILE"]
+        self.update_env_names(["D_LOG_FILE"])
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse params for the DAOS group, pool, and container uuid.

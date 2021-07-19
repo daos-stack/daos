@@ -19,7 +19,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -573,38 +572,6 @@ func LeaderQuery(ctx context.Context, rpcClient UnaryInvoker, req *LeaderQueryRe
 	}
 
 	resp := new(LeaderQueryResp)
-	return resp, convertMSResponse(ur, resp)
-}
-
-// ListPoolsReq contains the inputs for the list pools command.
-type ListPoolsReq struct {
-	unaryRequest
-	msRequest
-}
-
-// ListPoolsResp contains the status of the request and, if successful, the list
-// of pools in the system.
-type ListPoolsResp struct {
-	Status int32                   `json:"status"`
-	Pools  []*common.PoolDiscovery `json:"pools"`
-}
-
-// ListPools fetches the list of all pools and their service replicas from the
-// system.
-func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (*ListPoolsResp, error) {
-	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return mgmtpb.NewMgmtSvcClient(conn).ListPools(ctx, &mgmtpb.ListPoolsReq{
-			Sys: req.getSystem(rpcClient),
-		})
-	})
-	rpcClient.Debugf("DAOS system list-pools request: %s", req)
-
-	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	resp := new(ListPoolsResp)
 	return resp, convertMSResponse(ur, resp)
 }
 

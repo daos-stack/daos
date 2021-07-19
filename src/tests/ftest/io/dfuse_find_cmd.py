@@ -38,7 +38,8 @@ class FindCmd(DfuseTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=io,find_cmd,dfuse
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=findcmd
         """
         self._test_findcmd()
 
@@ -56,7 +57,8 @@ class FindCmd(DfuseTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=io,find_cmd_perf,dfuse
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=findcmd_perf
         """
         # Number of repetitions each test will run.
         samples = self.params.get("samples", '/run/perf/*')

@@ -73,6 +73,6 @@ func GetTimestamp(ctx context.Context, name string) (*Timestamp, error) {
 	if node.dtn_type != C.D_TM_TIMESTAMP {
 		return nil, fmt.Errorf("metric %q is not a timestamp", name)
 	}
-
-	return newTimestamp(hdl, name, &name, node), nil
+	n, p := splitFullName(name)
+	return newTimestamp(hdl, p, &n, node), nil
 }
