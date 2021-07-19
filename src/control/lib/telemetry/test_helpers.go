@@ -38,18 +38,28 @@ add_metric(struct d_tm_node_t **node, int metric_type, char *sh_desc,
 */
 import "C"
 
-var nextID int = 20
+var nextID int
 var nextIDMutex sync.Mutex
+
+const (
+	telemetryIDBase = 100
+	PromexpIDBase   = 200
+)
 
 // NextTestID gets the next available ID for a shmem segment. This helps avoid
 // conflicts amongst tests running concurrently.
-func NextTestID() int {
+// Different packages should use different bases.
+func NextTestID(base ...int) int {
 	nextIDMutex.Lock()
 	defer nextIDMutex.Unlock()
 
+	idBase := telemetryIDBase
+	if len(base) > 0 {
+		idBase = base[0]
+	}
 	id := nextID
 	nextID++
-	return id
+	return idBase + id
 }
 
 type (
