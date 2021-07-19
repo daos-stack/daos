@@ -308,6 +308,7 @@ main(int argc, char **argv)
 		{"thread-count",	required_argument, 0, 't'},
 		{"foreground",		no_argument,	   0, 'f'},
 		{"enable-caching",	no_argument,	   0, 'E'},
+		{"enable-wb-cache",	no_argument,	   0, 'F'},
 		{"disable-caching",	no_argument,	   0, 'A'},
 		{"disable-wb-cache",	no_argument,	   0, 'B'},
 		{"version",		no_argument,	   0, 'v'},
@@ -346,6 +347,9 @@ main(int argc, char **argv)
 			break;
 		case 'E':
 			dfuse_info->di_caching = true;
+			dfuse_info->di_wb_cache = true;
+			break;
+		case 'F':
 			dfuse_info->di_wb_cache = true;
 			break;
 		case 'A':
