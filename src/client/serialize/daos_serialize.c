@@ -652,9 +652,8 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		if (rc != 0) {
 			D_GOTO(out, rc);
 		}
-		rc = daos_cont_open_by_label(poh, label_entry->dpe_str,
-					     DAOS_COO_RW, &coh, &cont_info,
-					     NULL);
+		rc = daos_cont_open(poh, label_entry->dpe_str, DAOS_COO_RW,
+				    &coh, cont_info, NULL);
 		if (rc == -DER_NONEXIST) {
 			/* label doesn't already exist so deserialize */
 			deserialize_label = true;
