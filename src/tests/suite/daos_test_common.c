@@ -239,11 +239,10 @@ test_setup_cont_open(void **state)
 		if (arg->cont_label) {
 			print_message("setup: opening container by label %s\n",
 				      arg->cont_label);
-			rc = daos_cont_open_by_label(arg->pool.poh,
-						     arg->cont_label,
-						     arg->cont_open_flags,
-						     &arg->coh, &arg->co_info,
-						     NULL);
+			rc = daos_cont_open(arg->pool.poh, arg->cont_label,
+					    arg->cont_open_flags,
+					    &arg->coh, &arg->co_info,
+					    NULL);
 		} else {
 			print_message("setup: opening container "DF_UUID"\n",
 				      DP_UUID(arg->co_uuid));
