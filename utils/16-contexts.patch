@@ -1,0 +1,13 @@
+diff --git a/src/cart/crt_internal_types.h b/src/cart/crt_internal_types.h
+index ce1014d4a..a790438d9 100644
+--- a/src/cart/crt_internal_types.h
++++ b/src/cart/crt_internal_types.h
+@@ -128,7 +128,7 @@ struct crt_event_cb_priv {
+ 
+ /* TODO may use a RPC to query server-side context number */
+ #ifndef CRT_SRV_CONTEXT_NUM
+-# define CRT_SRV_CONTEXT_NUM		(256)
++# define CRT_SRV_CONTEXT_NUM		(16)
+ #endif
+ 
+ #ifndef CRT_PROGRESS_NUM

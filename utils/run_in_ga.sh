@@ -9,6 +9,16 @@ then
     SCONS=scons-3
 fi
 
+echo ::group::Rebuild spdk
+rm -rf /opt/daos/prereq/debug/spdk
+$SCONS PREFIX=/opt/daos TARGET_TYPE=debug --build-deps=yes --deps-only
+echo ::endgroup::
+
+echo ::group::Patch source
+# Change the number of contexts to make fault injection testing faster.
+patch -p1 < utils/16-contexts.patch
+echo ::endgroup::
+
 echo "::group::Stack analyzer output (post build)"
 $SCONS --jobs 10 PREFIX=/opt/daos --analyze-stack="-x tests -c 128" server
 echo ::endgroup::
@@ -19,7 +29,7 @@ echo ::endgroup::
 
 echo ::group::Test client only debug build
 $SCONS --jobs 10 PREFIX=/opt/daos COMPILER="$COMPILER" BUILD_TYPE=debug \
-       TARGET_TYPE=release -c install
+       TARGET_TYPE=debug -c install
 utils/check.sh -n /opt/daos/bin/dmg
 $SCONS --jobs 10 client install
 utils/check.sh -n /opt/daos/bin/daos_engine
@@ -57,5 +67,10 @@ echo ::group::Setting up daos_admin
 echo ::endgroup::
 
 echo ::group::Container copy test
+export LD_LIBRARY_PATH=/opt/daos/prereq/debug/spdk/lib/
 ./utils/node_local_test.py --no-root --memcheck no --test cont_copy
+echo ::endgroup::
+
+echo ::group::Fi test
+./utils/node_local_test.py --no-root fi-core
 echo ::endgroup::
