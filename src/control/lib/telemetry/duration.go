@@ -82,6 +82,6 @@ func GetDuration(ctx context.Context, name string) (*Duration, error) {
 		return nil, fmt.Errorf("metric %q is not a duration", name)
 	}
 
-	n, p := getPathAndName(name)
+	n, p := splitFullName(name)
 	return newDuration(hdl, p, &n, node), nil
 }

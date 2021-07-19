@@ -26,7 +26,7 @@ import (
 )
 
 func TestPromexp_NewEngineSource(t *testing.T) {
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID())
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
@@ -37,14 +37,14 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 		expResult *EngineSource
 	}{
 		"bad idx": {
-			idx:    testIdx + 1,
+			idx:    (1 << 31),
 			expErr: errors.New("failed to init"),
 		},
 		"success": {
 			idx:  testIdx,
 			rank: 123,
 			expResult: &EngineSource{
-				Index: testIdx,
+				Index: uint32(testIdx),
 				Rank:  123,
 			},
 		},
@@ -69,11 +69,11 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 }
 
 func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
-	testIdx := uint32(42)
-	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
+	testIdx := uint32(telemetry.NextTestID())
+	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
-	es, cleanup, err := NewEngineSource(context.Background(), testIdx, 2)
+	es, cleanup, err := NewEngineSource(context.Background(), uint32(testIdx), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 }
 
 func TestPromExp_EngineSource_Collect(t *testing.T) {
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID())
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -201,15 +201,15 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 
 			common.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "wrong number of metrics returned")
 			for _, got := range gotMetrics {
-				common.AssertEqual(t, testRank, got.r, "wrong rank")
-				expM, ok := tc.expMetrics[got.m.Type()]
+				common.AssertEqual(t, testRank, got.rank, "wrong rank")
+				expM, ok := tc.expMetrics[got.metric.Type()]
 				if !ok {
-					t.Fatalf("metric type %d not expected", got.m.Type())
+					t.Fatalf("metric type %d not expected", got.metric.Type())
 				}
 
 				tokens := strings.Split(expM.Name, "/")
 				expName := tokens[len(tokens)-1]
-				common.AssertEqual(t, expName, got.m.Name(), "unexpected name")
+				common.AssertEqual(t, expName, got.metric.Name(), "unexpected name")
 			}
 		})
 	}
@@ -293,7 +293,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID())
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 4096)
 	defer telemetry.CleanupTestMetricsProducer(t)
