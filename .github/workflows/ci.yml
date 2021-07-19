@@ -95,4 +95,4 @@ jobs:
                           --build-arg COMPILER=${{ matrix.compiler }}
                           --build-arg BASE_DISTRO=fedora:34
     - name: Turn off log checking
-      run: echo ::remove-matcher owner=daos-gcc::
+      run: echo "::remove-matcher owner=daos-gcc::"
