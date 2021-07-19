@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
@@ -45,8 +44,8 @@ func (cmd *startCmd) Execute(_ []string) error {
 		return err
 	}
 
-	enabled := atm.NewBool(os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
-	if enabled.IsFalse() {
+	enabled := (os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
+	if !enabled {
 		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
 	}
 
@@ -67,13 +66,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.log, cmd.cfg.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
-		log:        cmd.log,
-		sys:        cmd.cfg.SystemName,
-		ctlInvoker: cmd.ctlInvoker,
-		aiCache:    &attachInfoCache{log: cmd.log, enabled: enabled},
-		numaAware:  numaAware,
-		netCtx:     netCtx,
-		monitor:    procmon,
+		log:         cmd.log,
+		sys:         cmd.cfg.SystemName,
+		ctlInvoker:  cmd.ctlInvoker,
+		aiCache:     newAttachInfoCache(cmd.log, enabled),
+		fabricCache: newLocalFabricCache(cmd.log),
+		numaAware:   numaAware,
+		netCtx:      netCtx,
+		monitor:     procmon,
 	})
 
 	err = drpcServer.Start()
