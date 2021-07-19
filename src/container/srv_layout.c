@@ -28,6 +28,7 @@ RDB_STRING_KEY(ds_cont_prop_, layout_ver);
 RDB_STRING_KEY(ds_cont_prop_, csum);
 RDB_STRING_KEY(ds_cont_prop_, csum_chunk_size);
 RDB_STRING_KEY(ds_cont_prop_, csum_server_verify);
+RDB_STRING_KEY(ds_cont_prop_, scrubber_disabled);
 RDB_STRING_KEY(ds_cont_prop_, dedup);
 RDB_STRING_KEY(ds_cont_prop_, dedup_threshold);
 RDB_STRING_KEY(ds_cont_prop_, redun_fac);
@@ -70,6 +71,9 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 	}, {
 		.dpe_type	= DAOS_PROP_CO_CSUM_SERVER_VERIFY,
 		.dpe_val	= DAOS_PROP_CO_CSUM_SV_OFF,
+	}, {
+		.dpe_type	= DAOS_PROP_CO_SCRUBBER_DISABLED,
+		.dpe_val	= 0,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_REDUN_FAC,
 		.dpe_val	= DAOS_PROP_CO_REDUN_RF0,

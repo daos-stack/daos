@@ -1350,5 +1350,10 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
+	D_DEBUG(DB_CSUM, "Updating pool to sched: %lu\n",
+		iv_prop->pip_scrub_sched);
+	pool->sp_scrub_sched = iv_prop->pip_scrub_sched;
+	pool->sp_scrub_freq = iv_prop->pip_scrub_freq;
+	pool->sp_scrub_cred = iv_prop->pip_scrub_cred;
 	return 0;
 }

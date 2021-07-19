@@ -293,6 +293,12 @@ Server Checksumming   on
 !!! note
     Note that currently, once a container is created, its checksum configuration
     cannot be changed.
+    
+### Checksum Background Scrubbing
+A pool ULT can be configured to scan the VOS trees to discover silent data
+corruption proactively. (see data_integrity.md for more details). This can be
+disabled per container using the ```DAOS_PROP_CO_SCRUBBER_DISABLED``` container
+property.
 
 ### Inline Deduplication (Preview)
 

@@ -482,13 +482,16 @@ pool_properties(void **state)
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_rc_equal(rc, 0);
 
-	prop = daos_prop_alloc(1);
+	prop = daos_prop_alloc(2);
 	/* label - set arg->pool_label to use daos_pool_connect_by_label() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
 	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
 	D_STRNDUP(arg->pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
 	assert_ptr_not_equal(arg->pool_label, NULL);
+
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_SCRUB_SCHED;
+	prop->dpp_entries[0].dpe_val = DAOS_SCRUB_SCHED_CONTINUOUS;
 
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	/* change daos_prop_alloc() above, specify 2 entries not 1 */
@@ -567,6 +570,22 @@ pool_properties(void **state)
 	    strncmp(entry->dpe_str, expected_group,
 		    DAOS_ACL_MAX_PRINCIPAL_LEN)) {
 		print_message("Owner-group prop verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_SCHED);
+	if (entry == NULL || entry->dpe_val != DAOS_SCRUB_SCHED_RUN_WAIT)
+		fail_msg("scrubber sched verification failed.\n");
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_FREQ);
+	if (entry == NULL) {
+		print_message("scrubber frequency verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_CREDITS);
+	if (entry == NULL) {
+		print_message("scrubber credits verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 

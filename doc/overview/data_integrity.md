@@ -1,10 +1,10 @@
 # Data Integrity
 
 Arguably, one of the worst things a data storage system can do is to return
- incorrect data without the requester knowing. While each component in the
- system (network layer, storage devices) may offer protection against silent
- data corruption, DAOS provides end-to-end data integrity using checksums to
- better ensure that user data is not corrupted silently.
+incorrect data without the requester knowing. While each component in the
+system (network layer, storage devices) may offer protection against silent
+data corruption, DAOS provides end-to-end data integrity using checksums to
+better ensure that user data is not corrupted silently.
 
 For DAOS, end-to-end means that the client will calculate and verify checksums,
 providing protection for data through the entire I/O stack. During a write or
@@ -21,41 +21,41 @@ checksums on the data received and verify.
 
 There are two key requirements that DAOS will support.
 
- 1. Detect silent data corruption - Corruption will be detected on the
- distribution and attribute keys and records within a DAOS object. At a minimum,
- when corruption is detected, an error will be reported.
+1. Detect silent data corruption - Corruption will be detected on the
+   distribution and attribute keys and records within a DAOS object. At a minimum,
+   when corruption is detected, an error will be reported.
 1. Correct data corruption - When data corruption is detected, an attempt will
- be made to recover the data using data redundancy mechanisms.
+   be made to recover the data using data redundancy mechanisms.
 
 ### Supportive/Additional Requirements
 
 Additionally, DAOS will support:
 
- 1. End to End Data Integrity as a Quality of Service Attribute - Container
- properties are used to enable/disable the use of checksums for data integrity
- as well as define specific attributes of data integrity feature.  Refer to
-[Data Integrity Readme](https://daos-stack.github.io/user/container/#data-integrity)
-for details on configuring a container with checksums enabled.
+1. End to End Data Integrity as a Quality of Service Attribute - Container
+   properties are used to enable/disable the use of checksums for data integrity
+   as well as define specific attributes of data integrity feature.  Refer to
+   [Data Integrity Readme](https://daos-stack.github.io/user/container/#data-integrity)
+   for details on configuring a container with checksums enabled.
 
- 1. Minimize Performance Impact - When there is no data corruption, the End to
- End Data Integrity feature should have minimal performance impacted. If data
- corruption is detected, performance can be impacted to correct the data.
- Work is ongoing to minimize performance impact.
+1. Minimize Performance Impact - When there is no data corruption, the End to
+   End Data Integrity feature should have minimal performance impacted. If data
+   corruption is detected, performance can be impacted to correct the data.
+   Work is ongoing to minimize performance impact.
 1. Inject Errors - The ability to corrupt data within a specific record, key,
- or checksum will be necessary for testing purposes. Fault injection is used to
- simulate corruption over the network and on disk. The `DAOS_CSUM_CORRUPT_*`
- flags used for data corruption are defined in `src/include/daos/common.h`.
+   or checksum will be necessary for testing purposes. Fault injection is used to
+   simulate corruption over the network and on disk. The `DAOS_CSUM_CORRUPT_*`
+   flags used for data corruption are defined in `src/include/daos/common.h`.
 1. Logging - When data corruption is detected, error logs are captured in
- the client and server logs.
+   the client and server logs.
 
 Features not yet supported:
 
- 1. Event Logging - When silent data corruption is discovered, an event should
- be logged in such a way that it can be retrieved with other system health and
- diagnostic information.
+1. Event Logging - When silent data corruption is discovered, an event should
+   be logged in such a way that it can be retrieved with other system health and
+   diagnostic information.
 1. Proactive background service task - A background task on
- the server which scans for and detects (audits checksums) silent data
- corruption and corrects.
+   the server which scans for and detects (audits checksums) silent data
+   corruption and corrects.
 
 # Keys and Value Objects
 Because DAOS is a key/value store, the data for both keys and values is
@@ -72,11 +72,11 @@ pack within the RPC message to the client. The client will verify the keys
 received.
 
 !!! note
-    Checksums for keys are not stored on the server. A hash of the key is
-    calculated and used to index the key in the server tree of the keys
-    (see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores)).
-    It is also expected that keys are stored only in Storage Class Memory which
-    has reliable data integrity protection.
+Checksums for keys are not stored on the server. A hash of the key is
+calculated and used to index the key in the server tree of the keys
+(see [VOS Key Array Stores](https://github.com/daos-stack/daos/blob/master/src/vos/README.md#key-array-stores)).
+It is also expected that keys are stored only in Storage Class Memory which
+has reliable data integrity protection.
 
 ## Values
 On an update, the client will calculate a checksum for the data of the value and
@@ -96,8 +96,8 @@ an attempt to get uncorrupted data.
 
 There are some slight variations to this approach for the two different types
 of values. The following diagram illustrates a basic example.
- (See [Storage Model](storage.md) for more details about the single value
- and array value types)
+(See [Storage Model](storage.md) for more details about the single value
+and array value types)
 
 ![Basic Checksum Flow](../graph/data_integrity/basic_checksum_flow.png)
 
@@ -152,7 +152,7 @@ checksum process on object update and fetch)
 
 # Checksum calculations
 The actual checksum calculations are done by the
- [isa-l](https://github.com/intel/isa-l)
+[isa-l](https://github.com/intel/isa-l)
 and [isa-l_crypto](https://github.com/intel/isa-l_crypto) libraries. However,
 these libraries are abstracted away from much of DAOS and a common checksum
 library is used with appropriate adapters to the actual isa-l implementations.
@@ -160,9 +160,9 @@ library is used with appropriate adapters to the actual isa-l implementations.
 
 # Performance Impact
 Calculating checksums can be CPU intensive and will impact performance. To
- mitigate performance impact, checksum types with hardware acceleration should
- be chosen. For example, CRC32C is supported by recent Intel CPUs, and many are
- accelerated via SIMD.
+mitigate performance impact, checksum types with hardware acceleration should
+be chosen. For example, CRC32C is supported by recent Intel CPUs, and many are
+accelerated via SIMD.
 
 # Quality
 Unit and functional testing is performed at many layers.
@@ -277,7 +277,7 @@ performance impact) the Version Object Store (VOS) trees to verify the data
 integrity with the checksums. Corrective actions can be taken when corruption is
 detected. See [Corrective Actions](#corrective-actions)
 
-## Scanner
+## (Not Implemented) Scanner
 ### Goals/Requirements
 - **Detect Silent Data Corruption Proactively** - The whole point of the
   scrubber is to detect silent data corruption before it is fetched.
@@ -286,10 +286,6 @@ detected. See [Corrective Actions](#corrective-actions)
   fetch data (I/O to SSD) and calculate checksums (CPU intensive). To minimize
   both of these impacts, the server scheduler must be able to throttled the
   scrubber's I/O and CPU usage.
-- **Minimize Media Wear** - The background task will minimize media wear by
-  preventing objects from being scrubbed too frequently. A container
-  config/tunable will be used by an operator to define the minimum number of
-  days that should pass before an object is scanned again.
 - **Continuous** - The background task will be a continuous processes instead of
   running on a schedule. Once complete immediately start over. Throttling
   approaches should prevent from scrubbing same objects too frequently.
@@ -337,17 +333,79 @@ rebuild protocol will be invoked.
 Also, once the SSD Eviction Threshold is reached, the scanner should quit
 scanning anything on that SSD.
 
-## Additional Checksum Properties > doc/user/container.md / doc/user/pool.md?
-These properties are provided when a container or pool is created, but should
+## Additional Checksum Properties
+### Pool Properties (-> doc/admin/pool_operations.md, src/control/lib/control/pool_property.go)
+These properties are provided when a pool is created, but should
 also be able to update them. When updated, they should be active right away.
 
- - Scanner Interval - Minimum number of days scanning will take. Could take
-  longer, but if only a few records will pad so takes longer. (Pool property)
-- Disable scrubbing - at container level & pool level
-- Threshold for when to evict SSD (number of corruption events)
-- In Place Correction - If the number checksum errors is below the Eviction
+- **Pool Scrubber Schedule** - How the scrubber will run at the pool 
+  level. The  container configuration can disable scrubbing for the 
+  container, but it cannot alter the type of schedule.
+    - **OFF**
+    - **Run & Wait** - Will run the scrubber to completion, yielding 
+      after consuming configured "credits". Then, if completed before 
+      configured frequency, will sleep until it's time to start again.
+    - **Continuous** - Will run the scanner, sleeping in between 
+      object scrubs so that the duration of the scrubber takes whole 
+      frequency time and will start again as soon as it completes. Knowing 
+      how many objects are in the system is required for this approach to 
+      work. The scrubber will use the previous scrubber count of objects as 
+      best guess for current.      
+    - **Run Once** - Run the scrubber once then turn off. Useful for  better 
+      control by external scripts to control the schedule. Will still yield 
+      after consuming "credits".
+    - **Run Once Fast** - Run the scrubber once, without yielding, 
+      then turn off. Useful for better control by external scripts to 
+      control the schedule. Maybe want to get it done really fast and don't 
+      care about I/O at this time.
+- **Pool Scrubber Frequency** - How frequently the scrubber should run in 
+  number of seconds. If a scan takes longer than frequency, it would start 
+  again as soon as the previous scan completes.  
+- **Pool Credits** - Number of credits consumed before the scrubber yields. Each
+  time a checksum is calculated to verify object data, a credit is consumed.
+- **In Place Correction** - If the number checksum errors is below the Eviction
   Threshold, DAOS will attempt to repair the corrupted data using replicas if
   they exist.
+  
+The command to create a pool with scrubbing enabled might look like this:
+```bash
+dmg pool create --scm-size 1G --properties=scrub:continuous,scrub-freq:1,scrub-cred:10
+# or
+dmg pool create --scm-size 1G
+dmg pool set-prop ${POOL} --properties=scrub:run_wait
+```
+
+### Container Properties (-> doc/user/container.md)
+- **Container Disable Scrubbing** - If scrubbing is enabled for a pool, a
+  container can disable it for itself.
+  
+### Server Config (-> utils/config/daos_server.yml)
+- **Engine SSD Eviction Threshold** - number of distinct silent data corruption
+  events. When a target hits the threshold its corresponding NVMe storage device
+  will be evicted. (Note this is not a pool or container property. It will be
+  configured in the server.yaml configuration file. If this value is 0, then SSD
+  Auto Eviction will not occur. - Default: 10
+
+## Telemetry 
+The following telemetry metrics are gathered and can be reported for better
+understanding of how the scrubber is running. They will be gathered at both the
+pool and container level, with the exception of the Scrubber ULT Start.
+### Schedule
+- Scrubber ULT Start - datetime the scrubber service started
+- Scrubber Current Start - datetime the current scrubbing job started
+- Last Duration - how long the last scrubber took to run to completion.
+### Checksum Calculated Counts
+- Total Checksum Count - Total number of checksums calculated over the life
+  of the scrubber.
+- Last Checksum Count - number of checksums calculated during last scrubber job
+- Current Checksum Count - number of checksums calculated so far for the
+  current scrubber job
+### Silent Data Corruption Counts
+- Total Silent Data Corruption - Total number of silent data corruption
+  found while scrubbing object values.
+- Current Silent Data Corruption - number of silent data corruption found so far
+  for the current scrubber job
+
 
 ## Design Details & Implementation
 
@@ -377,7 +435,6 @@ obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
         // for recx
         for each chunk calc csum and compare
 }
-
 ```
 
 ### VOS Layer
@@ -397,7 +454,6 @@ obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
 
 ## Debugging
 - In the server.yml configuration file set the following env_vars
-
 ```
 - D_LOG_MASK=DEBUG
 - DD_SUBSYS=pool

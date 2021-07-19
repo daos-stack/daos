@@ -1157,6 +1157,9 @@ cont_query_bits(daos_prop_t *prop)
 		case DAOS_PROP_CO_CSUM_SERVER_VERIFY:
 			bits |= DAOS_CO_QUERY_PROP_CSUM_SERVER;
 			break;
+		case DAOS_PROP_CO_SCRUBBER_DISABLED:
+			bits |= DAOS_CO_QUERY_PROP_SCRUB_DIS;
+			break;
 		case DAOS_PROP_CO_DEDUP:
 			bits |= DAOS_CO_QUERY_PROP_DEDUP;
 			break;
