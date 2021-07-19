@@ -226,6 +226,8 @@ class DmgCommandBase(YamlCommand):
                 self.ranks = FormattedParameter("--ranks={}", None)
                 self.nsvc = FormattedParameter("--nsvc={}", None)
                 self.sys = FormattedParameter("--sys={}", None)
+                self.nranks = FormattedParameter("--nranks={}", None)
+                self.size = FormattedParameter("--size={}", None)
                 self.properties = FormattedParameter("--properties={}", None)
 
         class ExcludeSubCommand(CommandWithParameters):
