@@ -22,8 +22,6 @@ struct pool_metrics {
 	struct d_tm_node_t	*open_hdl_gauge;
 };
 
-extern struct pool_metrics ds_global_pool_metrics;
-
 /**
  * DSM server thread local storage structure
  */
@@ -187,9 +185,9 @@ void ds_stop_scrubbing_ult(struct ds_pool_child *child);
 /*
  * srv_metrics.c
  */
-int ds_pool_metrics_init(void);
-int ds_pool_metrics_fini(void);
-void ds_pool_metrics_start(const uuid_t pool_uuid);
-void ds_pool_metrics_stop(const uuid_t pool_uuid);
+void *ds_pool_metrics_alloc(const char *path, int tgt_id);
+void ds_pool_metrics_free(void *data);
+int ds_pool_metrics_start(struct ds_pool *pool);
+void ds_pool_metrics_stop(struct ds_pool *pool);
 
 #endif /* __POOL_SRV_INTERNAL_H__ */
