@@ -905,7 +905,7 @@ pipeline {
                         // wolf-25_nvme9
                         // wolf-54_nvme9
                         // ci_nvme9
-                        label 'wolf-25_nvme9'
+                        label 'wolf-54_nvme9'
                     }
                     steps {
                         functionalTest target: hwDistroTarget(),
