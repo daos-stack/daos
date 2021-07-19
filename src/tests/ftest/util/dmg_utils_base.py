@@ -227,6 +227,7 @@ class DmgCommandBase(YamlCommand):
                 self.nsvc = FormattedParameter("--nsvc={}", None)
                 self.sys = FormattedParameter("--sys={}", None)
                 self.properties = FormattedParameter("--properties={}", None)
+                self.label = FormattedParameter("--label={}", None)
 
         class ExcludeSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool exclude command."""

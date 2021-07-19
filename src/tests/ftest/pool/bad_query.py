@@ -8,7 +8,7 @@ import traceback
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from test_utils_pool import TestPool
+
 
 class BadQueryTest(TestWithServers):
     """Test pool query calls.
@@ -26,7 +26,9 @@ class BadQueryTest(TestWithServers):
         Test Description:
             Pass bad parameters to pool query
 
-        :avocado: tags=all,pool,full_regression,tiny,badquery
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool
+        :avocado: tags=tiny,bad_query
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -51,10 +53,7 @@ class BadQueryTest(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-        self.pool.connect()
+        self.add_pool()
 
         # trash the pool handle value
         if not handle == 'VALID':

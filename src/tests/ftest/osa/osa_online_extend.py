@@ -77,7 +77,9 @@ class OSAOnlineExtend(OSAUtils):
             time.sleep(30)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context, self.get_dmg_command())
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.get_dmg_command(),
+                label_generator=self.label_generator)
             pool[val].get_params(self)
             pool[val].create()
             pool[val].set_property("reclaim", "disabled")

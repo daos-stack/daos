@@ -10,7 +10,6 @@ import threading
 import copy
 
 from itertools import product
-from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
@@ -95,7 +94,7 @@ class OSAOnlineParallelTest(OSAUtils):
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
-        pool = {}
+        self.pool = []
         pool_uuid = []
         target_list = []
 
@@ -117,21 +116,18 @@ class OSAOnlineParallelTest(OSAUtils):
             time.sleep(30)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
-            pool[val].get_params(self)
+            self.pool.append(self.get_pool(create=False))
             # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
-            pool[val].create()
-            pool_uuid.append(pool[val].uuid)
+            self.pool[-1].scm_size.value = int(
+                self.pool[-1].scm_size.value / num_pool)
+            self.pool[-1].nvme_size.value = int(
+                self.pool[-1].nvme_size.value / num_pool)
+            self.pool[-1].create()
+            pool_uuid.append(self.pool[-1].uuid)
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for value in range(0, num_pool):
-            self.pool = pool[value]
-            self.pool.display_pool_daos_space("Pool space: Beginning")
+            self.pool[value].display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
             threads = []
@@ -141,23 +137,26 @@ class OSAOnlineParallelTest(OSAUtils):
                                                     self.ior_flags):
                 # Action dictionary with OSA dmg command parameters
                 action_args = {
-                    "drain": {"pool": self.pool.uuid, "rank": rank,
+                    "drain": {"pool": self.pool[value].uuid, "rank": rank,
                               "tgt_idx": None},
-                    "exclude": {"pool": self.pool.uuid, "rank": (rank + 1),
+                    "exclude": {"pool": self.pool[value].uuid,
+                                "rank": (rank + 1),
                                 "tgt_idx": t_string},
-                    "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1),
+                    "reintegrate": {"pool": self.pool[value].uuid,
+                                    "rank": (rank + 1),
                                     "tgt_idx": t_string}
                 }
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={"pool": pool[value],
-                                                            "oclass": oclass,
-                                                            "api": api,
-                                                            "test": test,
-                                                            "flags": flags,
-                                                            "results":
-                                                            self.out_queue}))
+                                                    kwargs={
+                                                        "pool": self.pool[value],
+                                                        "oclass": oclass,
+                                                        "api": api,
+                                                        "test": test,
+                                                        "flags": flags,
+                                                        "results":
+                                                        self.out_queue}))
                 for action in sorted(action_args):
                     # Add dmg threads
                     threads.append(threading.Thread(target=self.dmg_thread,
@@ -187,7 +186,7 @@ class OSAOnlineParallelTest(OSAUtils):
 
             for val in range(0, num_pool):
                 display_string = "Pool{} space at the End".format(val)
-                pool[val].display_pool_daos_space(display_string)
+                self.pool[val].display_pool_daos_space(display_string)
                 self.is_rebuild_done(3)
                 self.assert_on_rebuild_failure()
 
