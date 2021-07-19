@@ -192,9 +192,7 @@ func (c *StorageControlService) Setup() error {
 		}
 	}
 
-	nvmeScanResp, err := c.storage.ScanBdevs(storage.BdevScanRequest{
-		BypassCache: true,
-	})
+	nvmeScanResp, err := c.storage.ScanBdevs(storage.BdevScanRequest{})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
 		return nil
@@ -209,13 +207,6 @@ func (c *StorageControlService) Setup() error {
 		nvmeScanResp.Controllers)
 
 	return nil
-}
-
-// GetNvmeCache ...
-func (c *StorageControlService) GetNvmeCache() (*storage.BdevScanResponse, error) {
-	return c.storage.ScanBdevs(storage.BdevScanRequest{
-		BypassCache: false,
-	})
 }
 
 func (c *StorageControlService) defaultProvider() *storage.Provider {
@@ -246,9 +237,8 @@ func (c *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*stor
 	return c.storage.Scm.Prepare(req)
 }
 
-// NvmeScan scans locally attached SSDs and bypasses cache.
+// NvmeScan scans locally attached SSDs.
 func (c *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	req.BypassCache = true
 	return c.storage.ScanBdevs(req)
 }
 

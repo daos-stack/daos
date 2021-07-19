@@ -14,6 +14,7 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/provider/system"
 )
@@ -344,6 +345,10 @@ type BdevTierScanResult struct {
 // configuration. If the engine is not running, bypass cache to retrieve fresh
 // results as devices are accessible from the control plane.
 func (p *Provider) ScanBdevTiers(isEngineRunning bool) (results []BdevTierScanResult, err error) {
+	return p.scanBdevTiers(isEngineRunning, p.bdev.Scan)
+}
+
+func (p *Provider) scanBdevTiers(isEngineRunning bool, scan scanFn) (results []BdevTierScanResult, err error) {
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierScanResult, 0, len(bdevCfgs))
 
@@ -364,7 +369,10 @@ func (p *Provider) ScanBdevTiers(isEngineRunning bool) (results []BdevTierScanRe
 			DeviceList:  cfg.Bdev.DeviceList,
 			BypassCache: !isEngineRunning,
 		}
-		bsr, err := p.ScanBdevs(req)
+
+		p.Lock()
+		bsr, err := scanBdevs(p.log, req, &p.bdevCache, scan)
+		p.Unlock()
 		if err != nil {
 			return nil, errors.Wrap(err, "nvme scan")
 		}
@@ -382,23 +390,52 @@ func (p *Provider) ScanBdevTiers(isEngineRunning bool) (results []BdevTierScanRe
 	return
 }
 
-// ScanBdevs ...
+func filterScanResp(log logging.Logger, resp *BdevScanResponse, pciFilter ...string) *BdevScanResponse {
+	out := make(NvmeControllers, 0)
+
+	for _, c := range resp.Controllers {
+		if len(pciFilter) == 0 || !common.Includes(pciFilter, c.PciAddr) {
+			cn := *c
+			out = append(out, &cn)
+		}
+	}
+
+	if len(out) != len(resp.Controllers) {
+		log.Debugf("bdevs filtered (in/out) %v/%v (devlist %v)", resp.Controllers, out,
+			pciFilter)
+	}
+
+	return &BdevScanResponse{Controllers: out}
+}
+
+type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
+
+func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResponse, scan scanFn) (*BdevScanResponse, error) {
+	if !req.BypassCache && cachedResp != nil && len(cachedResp.Controllers) != 0 {
+		log.Debugf("loading bdev scan cache: %v", cachedResp.Controllers)
+		return filterScanResp(log, cachedResp, req.DeviceList...), nil
+	}
+
+	resp, err := scan(req)
+
+	return filterScanResp(log, resp, req.DeviceList...), err
+}
+
+// ScanBdevs either calls into backend bdev provider to scan SSDs or returns
+// cached results if BypassCache is set to false in the request.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	p.Lock()
 	defer p.Unlock()
 
-	if !req.BypassCache {
-		p.log.Debugf("loading bdev scan cache: %v", p.bdevCache.Controllers)
-		return &p.bdevCache, nil
-	}
-
-	return p.bdev.Scan(req)
+	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)
 }
 
-// SetBdevCache ...
+// SetBdevCache stores given scan response in provider bdev cache.
 func (p *Provider) SetBdevCache(resp BdevScanResponse) {
+	p.Lock()
+	defer p.Unlock()
+
 	p.bdevCache = resp
-	p.log.Debugf("storing bdev scan cache: %v", p.bdevCache.Controllers)
 }
 
 // QueryBdevFirmware queries NVMe SSD firmware.

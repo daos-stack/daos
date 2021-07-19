@@ -7,12 +7,8 @@
 package bdev
 
 import (
-	"fmt"
-	"sync"
-
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -35,10 +31,8 @@ type (
 	// Provider encapsulates configuration and logic for interacting with a Block
 	// Device Backend.
 	Provider struct {
-		sync.Mutex // ensure mutually exclusive access to scan cache
-		log        logging.Logger
-		backend    Backend
-		scanCache  *storage.BdevScanResponse
+		log     logging.Logger
+		backend Backend
 	}
 )
 
@@ -65,92 +59,16 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 //	return p.backend.IsVMDDisabled()
 //}
 
-func filterScanResp(resp *storage.BdevScanResponse, pciFilter ...string) (int, *storage.BdevScanResponse) {
-	var skipped int
-	out := make(storage.NvmeControllers, 0)
-
-	if len(pciFilter) == 0 {
-		return skipped, &storage.BdevScanResponse{Controllers: resp.Controllers}
-	}
-
-	for _, c := range resp.Controllers {
-		if !common.Includes(pciFilter, c.PciAddr) {
-			skipped++
-			continue
-		}
-		out = append(out, c)
-	}
-
-	return skipped, &storage.BdevScanResponse{Controllers: out}
-}
-
-type scanFwdFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
-
-func filterScan(req storage.BdevScanRequest, cache *storage.BdevScanResponse, scan scanFwdFn) (msg string, resp *storage.BdevScanResponse, err error) {
-	var action string
-	switch {
-	case req.BypassCache:
-		action = "bypass"
-		resp, err = scan(req)
-	case cache != nil && len(cache.Controllers) != 0:
-		action = "reuse"
-		resp = cache
-	default:
-		action = "direct"
-		resp, err = scan(req)
-	}
-
-	msg = fmt.Sprintf("bdev scan: %s cache", action)
-
-	if err != nil {
-		return
-	}
-
-	if resp == nil {
-		err = errors.New("unexpected nil response from bdev backend")
-		return
-	}
-
-	msg += fmt.Sprintf(" (%d", len(resp.Controllers))
-	if len(req.DeviceList) != 0 && len(resp.Controllers) != 0 {
-		var num int
-		num, resp = filterScanResp(resp, req.DeviceList...)
-		if num != 0 {
-			msg += fmt.Sprintf("-%d filtered", num)
-		}
-	}
-
-	msg += " devices)"
-
-	return
-}
-
-// Scan attempts to perform a scan to discover NVMe components in the
-// system. Results will be cached at the provider and returned if
-// "BypassCache" is set to "false" in the request. Returned results will be
-// filtered by request "DeviceList" and empty filter implies allowing all.
+// Scan calls into the backend to discover NVMe components in the
+// system.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
 	// set vmd state on remote provider in forwarded request
 	//	if req.IsForwarded() && req.DisableVMD {
 	//		p.disableVMD()
 	//	}
 
-	p.Lock()
-	defer p.Unlock()
-
-	msg, resp, err := filterScan(req, p.scanCache, p.backend.Scan)
-	p.log.Debug(msg)
-
-	return resp, err
+	return p.backend.Scan(req)
 }
-
-//func (p *Provider) Store(resp *storage.BdevScanResponse) {
-//	p.Lock()
-//	defer p.Unlock()
-//
-//	p.scanCache = filterScanResp(resp)
-//	p.log.Debugf("storing scan cache: %v", p.scanCache.Controller)
-//}
 
 // Prepare attempts to perform all actions necessary to make NVMe
 // components available for use by DAOS.
