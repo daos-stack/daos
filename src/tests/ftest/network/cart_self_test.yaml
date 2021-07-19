@@ -16,6 +16,7 @@ self_test:
   repetitions: 1000
   endpoint: 0:0
   max_inflight_rpcs: 16
+  use_daos_agent_env: ""
   message_sizes_mux: !mux
     small_io:
       message_sizes: "0"

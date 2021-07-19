@@ -46,6 +46,7 @@ class CartSelfTest(TestWithServers):
 
             self.repetitions = FormattedParameter("--repetitions {0}")
             self.attach_info = FormattedParameter("--path {0}")
+            self.use_daos_agent_env = FormattedParameter("--use-daos-agent-env {0}")
 
     def __init__(self, *args, **kwargs):
         """Initialize a CartSelfTest object."""
@@ -78,6 +79,14 @@ class CartSelfTest(TestWithServers):
             self.server_managers[0].get_config_value("provider")
         self.cart_env["OFI_INTERFACE"] = \
             self.server_managers[0].get_config_value("fabric_iface")
+
+        self.cart_env["DEFAULT_DAOS_AGENT_DRPC_SOCK"] = \
+            "/var/run/daos_agent/daos_agent.sock"
+        self.cart_env["DAOS_AGENT_DRPC_DIR"] = \
+            "/var/run/daos_agent/"
+        self.cart_env["DAOS_AGENT_DRPC_SOCK_NAME"] = \
+            "daos_agent.sock"
+
         self.server_managers[0].manager.assign_environment(self.cart_env, True)
 
         # Start the daos server
