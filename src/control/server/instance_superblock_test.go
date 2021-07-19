@@ -12,19 +12,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/daos-stack/daos/src/control/common"
+	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestServer_Instance_createSuperblock(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	defer ShowBufferOnFailure(t, buf)
 
-	testDir, cleanup := common.CreateTestDir(t)
+	testDir, cleanup := CreateTestDir(t)
 	defer cleanup()
 
 	h := NewEngineHarness(log)
@@ -35,19 +34,15 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 		cfg := engine.NewConfig().
 			WithRank(uint32(idx)).
 			WithSystemName(t.Name()).
-			WithStorage(
-				storage.NewTierConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint(mnt),
-			)
+			WithScmClass("ram").
+			WithScmRamdiskSize(1).
+			WithScmMountPoint(mnt)
 		r := engine.NewRunner(log, cfg)
 		msc := &scm.MockSysConfig{
 			IsMountedBool: true,
 		}
-		mbc := &scm.MockBackendConfig{}
-		mp := storage.NewProvider(log, 0, &cfg.Storage, scm.NewMockSysProvider(msc), scm.NewMockProvider(log, mbc, msc), nil)
-		ei := NewEngineInstance(log, mp, nil, r).
+		mp := scm.NewMockProvider(log, nil, msc)
+		ei := NewEngineInstance(log, nil, mp, nil, r).
 			WithHostFaultDomain(system.MustCreateFaultDomainFromString("/host1"))
 		ei.fsRoot = testDir
 		if err := h.AddInstance(ei); err != nil {
@@ -76,7 +71,7 @@ func TestServer_Instance_createSuperblock(t *testing.T) {
 			t.Fatalf("instance %d has rank %s (not %d)", idx, i._superblock.Rank, idx)
 		}
 
-		common.AssertEqual(t, i.hostFaultDomain.String(), i._superblock.HostFaultDomain, fmt.Sprintf("instance %d", idx))
+		AssertEqual(t, i.hostFaultDomain.String(), i._superblock.HostFaultDomain, fmt.Sprintf("instance %d", idx))
 
 		if i == mi {
 			continue

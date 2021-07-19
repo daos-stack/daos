@@ -24,7 +24,7 @@ func TestTelemetry_GetGauge(t *testing.T) {
 	if !ok {
 		t.Fatal("real gauge not in metrics set")
 	}
-	gaugeName := realGauge.FullPath()
+	gaugeName := realGauge.Name
 
 	for name, tc := range map[string]struct {
 		ctx        context.Context
@@ -44,7 +44,7 @@ func TestTelemetry_GetGauge(t *testing.T) {
 		},
 		"bad type": {
 			ctx:        testCtx,
-			metricName: testMetrics[MetricTypeCounter].FullPath(),
+			metricName: testMetrics[MetricTypeCounter].Name,
 			expErr:     errors.New("not a gauge"),
 		},
 		"success": {
@@ -82,7 +82,7 @@ func TestTelemetry_GetStatsGauge(t *testing.T) {
 	if !ok {
 		t.Fatal("real gauge not in metrics set")
 	}
-	gaugeName := realGauge.FullPath()
+	gaugeName := realGauge.Name
 
 	for name, tc := range map[string]struct {
 		ctx        context.Context
@@ -102,7 +102,7 @@ func TestTelemetry_GetStatsGauge(t *testing.T) {
 		},
 		"bad type": {
 			ctx:        testCtx,
-			metricName: testMetrics[MetricTypeCounter].FullPath(),
+			metricName: testMetrics[MetricTypeCounter].Name,
 			expErr:     errors.New("not a gauge"),
 		},
 		"success": {

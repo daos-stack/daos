@@ -13,7 +13,8 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // FirmwareQuery implements the method defined for the control service if
@@ -48,7 +49,7 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 }
 
 func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.ScmFirmwareQueryResp, error) {
-	queryResp, err := svc.storage.Scm.QueryFirmware(storage.ScmFirmwareQueryRequest{
+	queryResp, err := svc.scm.QueryFirmware(scm.FirmwareQueryRequest{
 		FirmwareRev: pbReq.FirmwareRev,
 		ModelID:     pbReq.ModelID,
 		DeviceUIDs:  pbReq.DeviceIDs,
@@ -77,7 +78,7 @@ func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*c
 }
 
 func (svc *ControlService) queryNVMeFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.NvmeFirmwareQueryResp, error) {
-	queryResp, err := svc.storage.Bdev.QueryFirmware(storage.NVMeFirmwareQueryRequest{
+	queryResp, err := svc.bdev.QueryFirmware(bdev.FirmwareQueryRequest{
 		FirmwareRev: pbReq.FirmwareRev,
 		ModelID:     pbReq.ModelID,
 		DeviceAddrs: pbReq.DeviceIDs,
@@ -137,7 +138,7 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 }
 
 func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
-	updateResp, err := svc.storage.Scm.UpdateFirmware(storage.ScmFirmwareUpdateRequest{
+	updateResp, err := svc.scm.UpdateFirmware(scm.FirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
 		FirmwareRev:  pbReq.FirmwareRev,
 		ModelID:      pbReq.ModelID,
@@ -160,7 +161,7 @@ func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctl
 }
 
 func (svc *ControlService) updateNVMe(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
-	updateResp, err := svc.storage.Bdev.UpdateFirmware(storage.NVMeFirmwareUpdateRequest{
+	updateResp, err := svc.bdev.UpdateFirmware(bdev.FirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
 		FirmwareRev:  pbReq.FirmwareRev,
 		ModelID:      pbReq.ModelID,

@@ -72,7 +72,7 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				StartingState:   storage.ScmStateNoRegions,
 				PrepNeedsReboot: true,
 			},
-			expLogMsg: storage.ScmMsgRebootRequired,
+			expLogMsg: scm.MsgRebootRequired,
 		},
 		"prepare scm; create namespaces": {
 			smbc: &scm.MockBackendConfig{
@@ -116,6 +116,8 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
+			bdevProvider := bdev.NewMockProvider(log, tc.bmbc)
+			scmProvider := scm.NewMockProvider(log, tc.smbc, nil)
 			cmd := &storagePrepareCmd{
 				StoragePrepareCmd: commands.StoragePrepareCmd{
 					NvmeOnly: tc.nvmeOnly,
@@ -126,14 +128,10 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				logCmd: logCmd{
 					log: log,
 				},
-				scs: server.NewMockStorageControlService(log, nil,
-					nil,
-					scm.NewMockProvider(log, tc.smbc, nil),
-					bdev.NewMockProvider(log, tc.bmbc)),
+				scs: server.NewStorageControlService(log, bdevProvider, scmProvider, nil),
 			}
 
 			gotErr := cmd.Execute(nil)
-			_ = gotErr
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

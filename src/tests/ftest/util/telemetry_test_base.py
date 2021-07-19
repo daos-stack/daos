@@ -63,11 +63,11 @@ class TestWithTelemetry(TestWithServers):
                     description, " on " + prefix if prefix else ""))
         return errors
 
-    def verify_telemetry_list(self, with_pools=False):
+    def verify_telemetry_list(self):
         """Verify the  dmg telemetry metrics list command output."""
         # Define a list of expected telemetry metrics names
         expected = self.telemetry.get_all_server_metrics_names(
-            self.server_managers[0], with_pools=with_pools)
+            self.server_managers[0])
 
         # List all of the telemetry metrics
         result = self.telemetry.list_metrics()

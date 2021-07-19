@@ -33,7 +33,8 @@ enum {
 
 /**
  * Generate a rank list from a string with a separator argument. This is a
- * convenience function to generate the rank list.
+ * convenience function to generate the rank list required by
+ * daos_pool_connect().
  *
  * \param[in]	str	string with the rank list
  * \param[in]	sep	separator of the ranks in \a str.

@@ -18,7 +18,8 @@ import (
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 type storageCmd struct {
@@ -43,7 +44,8 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// that we should have made these Execute() methods thin
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
-		cmd.scs = server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
+		cmd.scs = server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
+			scm.DefaultProvider(cmd.log), config.DefaultServer().Engines)
 	}
 
 	op := "Preparing"
@@ -65,7 +67,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 
 		// Prepare NVMe access through SPDK
-		if _, err := cmd.scs.NvmePrepare(storage.BdevPrepareRequest{
+		if _, err := cmd.scs.NvmePrepare(bdev.PrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
 			PCIAllowlist:  cmd.PCIAllowList,
@@ -75,7 +77,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 	}
 
-	scmScan, err := cmd.scs.ScmScan(storage.ScmScanRequest{})
+	scmScan, err := cmd.scs.ScmScan(scm.ScanRequest{})
 	if err != nil {
 		return common.ConcatErrors(scanErrors, err)
 	}
@@ -89,12 +91,12 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 		// Prepare SCM modules to be presented as pmem device files.
 		// Pass evaluated state to avoid running GetScmState() twice.
-		resp, err := cmd.scs.ScmPrepare(storage.ScmPrepareRequest{Reset: cmd.Reset})
+		resp, err := cmd.scs.ScmPrepare(scm.PrepareRequest{Reset: cmd.Reset})
 		if err != nil {
 			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
-			cmd.log.Info(storage.ScmMsgRebootRequired)
+			cmd.log.Info(scm.MsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
 			var bld strings.Builder
 			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
@@ -120,14 +122,15 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
+	svc := server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
+		scm.DefaultProvider(cmd.log), config.DefaultServer().Engines)
 
 	cmd.log.Info("Scanning locally-attached storage...")
 
 	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)
 
-	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
+	nvmeResp, err := svc.NvmeScan(bdev.ScanRequest{})
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
@@ -140,7 +143,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		}
 	}
 
-	scmResp, err := svc.ScmScan(storage.ScmScanRequest{})
+	scmResp, err := svc.ScmScan(scm.ScanRequest{})
 	switch {
 	case err != nil:
 		scanErrors = append(scanErrors, err)

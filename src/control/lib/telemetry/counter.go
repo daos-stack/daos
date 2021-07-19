@@ -74,6 +74,5 @@ func GetCounter(ctx context.Context, name string) (*Counter, error) {
 		return nil, fmt.Errorf("metric %q is not a counter", name)
 	}
 
-	n, p := splitFullName(name)
-	return newCounter(hdl, p, &n, node), nil
+	return newCounter(hdl, name, &name, node), nil
 }

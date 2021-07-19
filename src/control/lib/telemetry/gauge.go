@@ -79,8 +79,7 @@ func GetGauge(ctx context.Context, name string) (*Gauge, error) {
 		return nil, fmt.Errorf("metric %q is not a gauge", name)
 	}
 
-	n, p := splitFullName(name)
-	return newGauge(hdl, p, &n, node), nil
+	return newGauge(hdl, name, &name, node), nil
 }
 
 // StatsGauge is a gauge with statistics gathered.
@@ -147,6 +146,5 @@ func GetStatsGauge(ctx context.Context, name string) (*StatsGauge, error) {
 		return nil, fmt.Errorf("metric %q is not a gauge with stats", name)
 	}
 
-	n, p := splitFullName(name)
-	return newStatsGauge(hdl, p, &n, node), nil
+	return newStatsGauge(hdl, name, &name, node), nil
 }

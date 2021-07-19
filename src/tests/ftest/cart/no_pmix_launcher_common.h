@@ -139,7 +139,7 @@ int handler_shutdown(crt_rpc_t *rpc)
 	DBG_PRINT("Shutdown handler called!\n");
 	crt_reply_send(rpc);
 
-	crtu_progress_stop();
+	tc_progress_stop();
 	return 0;
 }
 #endif

@@ -28,11 +28,10 @@ import (
 // converted into nvme config files that can be consumed by spdk.
 func TestBackend_writeJsonConfig(t *testing.T) {
 	mockMntpt := "/mock/mnt/daos"
-	tierId := 84
 	host, _ := os.Hostname()
 
 	tests := map[string]struct {
-		class              storage.Class
+		class              storage.BdevClass
 		fileSizeGB         int
 		devList            []string
 		enableVmd          bool
@@ -43,19 +42,19 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 		expErr             error
 	}{
 		"config validation failure": {
-			class:          storage.ClassNvme,
+			class:          storage.BdevClassNvme,
 			devList:        []string{"not a pci address"},
 			expValidateErr: errors.New("unexpected pci address"),
 		},
 		"multiple controllers": {
-			class:   storage.ClassNvme,
+			class:   storage.BdevClassNvme,
 			devList: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
 			expExtraBdevCfgs: []*SpdkSubsystemConfig{
 				{
 					Method: SpdkBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierId),
+						DeviceName:       fmt.Sprintf("Nvme_%s_0", host),
 						TransportAddress: common.MockPCIAddr(1),
 					},
 				},
@@ -63,7 +62,7 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 					Method: SpdkBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierId),
+						DeviceName:       fmt.Sprintf("Nvme_%s_1", host),
 						TransportAddress: common.MockPCIAddr(2),
 					},
 				},
@@ -71,7 +70,7 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"multiple controllers; vmd enabled": {
-			class:     storage.ClassNvme,
+			class:     storage.BdevClassNvme,
 			enableVmd: true,
 			devList:   []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
 			expExtraBdevCfgs: []*SpdkSubsystemConfig{
@@ -79,7 +78,7 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 					Method: SpdkBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_0_%d", host, tierId),
+						DeviceName:       fmt.Sprintf("Nvme_%s_0", host),
 						TransportAddress: common.MockPCIAddr(1),
 					},
 				},
@@ -87,7 +86,7 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 					Method: SpdkBdevNvmeAttachController,
 					Params: NvmeAttachControllerParams{
 						TransportType:    "PCIe",
-						DeviceName:       fmt.Sprintf("Nvme_%s_1_%d", host, tierId),
+						DeviceName:       fmt.Sprintf("Nvme_%s_1", host),
 						TransportAddress: common.MockPCIAddr(2),
 					},
 				},
@@ -106,12 +105,12 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 			vosEnv: "NVME",
 		},
 		"AIO file class; multiple files; zero file size": {
-			class:          storage.ClassFile,
+			class:          storage.BdevClassFile,
 			devList:        []string{"/path/to/myfile", "/path/to/myotherfile"},
 			expValidateErr: errors.New("requires non-zero bdev_size"),
 		},
 		"AIO file class; multiple files; non-zero file size": {
-			class:      storage.ClassFile,
+			class:      storage.BdevClassFile,
 			fileSizeGB: 1,
 			devList:    []string{"/path/to/myfile", "/path/to/myotherfile"},
 			expExtraBdevCfgs: []*SpdkSubsystemConfig{
@@ -119,7 +118,7 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 					Method: SpdkBdevAioCreate,
 					Params: AioCreateParams{
 						BlockSize:  humanize.KiByte * 4,
-						DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierId),
+						DeviceName: fmt.Sprintf("AIO_%s_0", host),
 						Filename:   "/path/to/myfile",
 					},
 				},
@@ -127,7 +126,7 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 					Method: SpdkBdevAioCreate,
 					Params: AioCreateParams{
 						BlockSize:  humanize.KiByte * 4,
-						DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierId),
+						DeviceName: fmt.Sprintf("AIO_%s_1", host),
 						Filename:   "/path/to/myotherfile",
 					},
 				},
@@ -135,20 +134,20 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 			vosEnv: "AIO",
 		},
 		"AIO kdev class; multiple devices": {
-			class:   storage.ClassKdev,
+			class:   storage.BdevClassKdev,
 			devList: []string{"/dev/sdb", "/dev/sdc"},
 			expExtraBdevCfgs: []*SpdkSubsystemConfig{
 				{
 					Method: SpdkBdevAioCreate,
 					Params: AioCreateParams{
-						DeviceName: fmt.Sprintf("AIO_%s_0_%d", host, tierId),
+						DeviceName: fmt.Sprintf("AIO_%s_0", host),
 						Filename:   "/dev/sdb",
 					},
 				},
 				{
 					Method: SpdkBdevAioCreate,
 					Params: AioCreateParams{
-						DeviceName: fmt.Sprintf("AIO_%s_1_%d", host, tierId),
+						DeviceName: fmt.Sprintf("AIO_%s_1", host),
 						Filename:   "/dev/sdc",
 					},
 				},
@@ -162,13 +161,9 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			cfg := &storage.TierConfig{
-				Tier:  tierId,
-				Class: storage.ClassNvme,
-				Bdev: storage.BdevConfig{
-					DeviceList: tc.devList,
-					FileSize:   tc.fileSizeGB,
-				},
+			cfg := storage.BdevConfig{
+				DeviceList: tc.devList,
+				FileSize:   tc.fileSizeGB,
 			}
 			if tc.class != "" {
 				cfg.Class = tc.class
@@ -178,29 +173,27 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 				WithFabricProvider("test"). // valid enough to pass "not-blank" test
 				WithFabricInterface("test").
 				WithFabricInterfacePort(42).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmClass("dcpm").
-						WithScmDeviceList("foo").
-						WithScmMountPoint(mockMntpt),
-					cfg,
-				)
+				WithScmClass("dcpm").
+				WithScmDeviceList("foo").
+				WithScmMountPoint(mockMntpt)
+			engineConfig.Storage.Bdev = cfg
 
 			gotValidateErr := engineConfig.Validate() // populate output path
 			common.CmpErr(t, tc.expValidateErr, gotValidateErr)
 			if tc.expValidateErr != nil {
 				return
 			}
-			cfg = engineConfig.Storage.Tiers.BdevConfigs()[0] // refer to validated config
+			cfg = engineConfig.Storage.Bdev // refer to validated config
 
-			writeReq, _ := storage.BdevWriteNvmeConfigRequestFromConfig(log, &engineConfig.Storage)
+			req := FormatRequestFromConfig(log, &cfg)
 
-			gotCfg, gotErr := newSpdkConfig(log, tc.enableVmd, &writeReq)
+			gotCfg, gotErr := newSpdkConfig(log, tc.enableVmd, &req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
+			// currently we are only expecting nvme config with bdev subsystem
 			expCfg := defaultSpdkConfig()
 			for _, ec := range tc.expExtraBdevCfgs {
 				expCfg.Subsystems[0].Configs = append(expCfg.Subsystems[0].Configs, ec)
@@ -213,8 +206,8 @@ func TestBackend_writeJsonConfig(t *testing.T) {
 				t.Fatalf("(-want, +got):\n%s", diff)
 			}
 
-			if engineConfig.Storage.VosEnv != tc.vosEnv {
-				t.Fatalf("expected VosEnv to be %q, but it was %q", tc.vosEnv, engineConfig.Storage.VosEnv)
+			if cfg.VosEnv != tc.vosEnv {
+				t.Fatalf("expected VosEnv to be %q, but it was %q", tc.vosEnv, cfg.VosEnv)
 			}
 		})
 	}
@@ -282,22 +275,18 @@ func TestBackend_createEmptyFile(t *testing.T) {
 }
 
 func TestBackend_createJsonFile(t *testing.T) {
-	tierId := 84
 	host, _ := os.Hostname()
 
 	tests := map[string]struct {
-		confIn    storage.TierConfig
+		confIn    storage.BdevConfig
 		enableVmd bool
 		expErr    error
 		expOut    string
 	}{
 		"nvme; single ssds": {
-			confIn: storage.TierConfig{
-				Tier:  tierId,
-				Class: storage.ClassNvme,
-				Bdev: storage.BdevConfig{
-					DeviceList: common.MockPCIAddrs(1),
-				},
+			confIn: storage.BdevConfig{
+				Class:      storage.BdevClassNvme,
+				DeviceList: common.MockPCIAddrs(1),
 			},
 			expOut: `
 {
@@ -332,7 +321,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -344,12 +333,9 @@ func TestBackend_createJsonFile(t *testing.T) {
 `,
 		},
 		"nvme; multiple ssds": {
-			confIn: storage.TierConfig{
-				Tier:  tierId,
-				Class: storage.ClassNvme,
-				Bdev: storage.BdevConfig{
-					DeviceList: common.MockPCIAddrs(1, 2),
-				},
+			confIn: storage.BdevConfig{
+				Class:      storage.BdevClassNvme,
+				DeviceList: common.MockPCIAddrs(1, 2),
 			},
 			expOut: `
 {
@@ -384,7 +370,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -392,7 +378,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -404,12 +390,9 @@ func TestBackend_createJsonFile(t *testing.T) {
 `,
 		},
 		"nvme; multiple ssds; vmd enabled": {
-			confIn: storage.TierConfig{
-				Tier:  tierId,
-				Class: storage.ClassNvme,
-				Bdev: storage.BdevConfig{
-					DeviceList: common.MockPCIAddrs(1, 2),
-				},
+			confIn: storage.BdevConfig{
+				Class:      storage.BdevClassNvme,
+				DeviceList: common.MockPCIAddrs(1, 2),
 			},
 			enableVmd: true,
 			expOut: `
@@ -445,7 +428,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_0_84",
+            "name": "Nvme_hostfoo_0",
             "traddr": "0000:01:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -453,7 +436,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "trtype": "PCIe",
-            "name": "Nvme_hostfoo_1_84",
+            "name": "Nvme_hostfoo_1",
             "traddr": "0000:02:00.0"
           },
           "method": "bdev_nvme_attach_controller"
@@ -483,20 +466,8 @@ func TestBackend_createJsonFile(t *testing.T) {
 			testDir, clean := common.CreateTestDir(t)
 			defer clean()
 
-			cfgOutputPath := filepath.Join(testDir, "outfile")
-			engineConfig := engine.NewConfig().
-				WithFabricProvider("test"). // valid enough to pass "not-blank" test
-				WithFabricInterface("test").
-				WithFabricInterfacePort(42).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmClass("dcpm").
-						WithScmDeviceList("foo").
-						WithScmMountPoint("scmmnt"),
-					&tc.confIn,
-				).WithStorageConfigOutputPath(cfgOutputPath)
-
-			req, _ := storage.BdevWriteNvmeConfigRequestFromConfig(log, &engineConfig.Storage)
+			req := FormatRequestFromConfig(log, &tc.confIn)
+			req.ConfigPath = filepath.Join(testDir, "outfile")
 
 			gotErr := writeJsonConfig(log, tc.enableVmd, &req)
 			common.CmpErr(t, tc.expErr, gotErr)
@@ -504,7 +475,7 @@ func TestBackend_createJsonFile(t *testing.T) {
 				return
 			}
 
-			gotOut, err := ioutil.ReadFile(cfgOutputPath)
+			gotOut, err := ioutil.ReadFile(req.ConfigPath)
 			if err != nil {
 				t.Fatal(err)
 			}

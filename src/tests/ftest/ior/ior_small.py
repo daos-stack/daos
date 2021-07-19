@@ -80,19 +80,6 @@ class IorSmall(IorTestBase):
                     except TestFail:
                         results.append(["FAIL", str(self.ior_cmd)])
 
-        # Running a variant for ior fpp
-        self.ior_cmd.flags.update(flags[1])
-        self.ior_cmd.api.update(apis[0])
-        self.ior_cmd.block_size.update((transfer_block_size[1])[1])
-        self.ior_cmd.transfer_size.update((transfer_block_size[1])[0])
-        self.ior_cmd.dfs_oclass.update(obj_class[0])
-        # run ior
-        try:
-            self.run_ior_with_pool(plugin_path=None, timeout=ior_timeout)
-            results.append(["PASS", str(self.ior_cmd)])
-        except TestFail:
-            results.append(["FAIL", str(self.ior_cmd)])
-
         self.log.error("Summary of IOR small test results:")
         errors = False
         for item in results:

@@ -4,9 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import os
-
 from cart_utils import CartTest
+
 
 class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
     # pylint: disable=too-few-public-methods
@@ -34,22 +33,6 @@ class CartRpcOneNodeSwimNotificationOnRankEvictionTest(CartTest):
             procrtn = self.stop_process(srv_rtn)
             self.fail("Server did not launch, return code {}".format(procrtn))
 
-        test_clients_arg = self.params.get("test_clients_arg", "/run/tests/*/")
-        for index in range(len(test_clients_arg)):
+        for index in range(6):
             clicmd = self.build_cmd(self.env, "test_clients", index=index)
             self.launch_test(clicmd, srv_rtn)
-
-        daos_test_shared_dir = os.getenv("DAOS_TEST_SHARED_DIR",
-                                         os.getenv("HOME"))
-
-        # Each of the three servers should leave a completion file (with their
-        # pid appended)
-        glob_pat = daos_test_shared_dir + "/test-servers-completed.txt.*"
-
-        # Verify the server(s) exited gracefully
-        if not self.check_files(glob_pat, count=3, retries=4):
-            self.print("Didn't find completion file(s): '{}'. "
-                       "This indicates not all CaRT binaries exited "
-                       "gracefully. "
-                       "Marking test pass while DAOS-7892 remains "
-                       "unresolved.\n".format(glob_pat))

@@ -21,7 +21,8 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -43,7 +44,8 @@ type (
 type EngineInstance struct {
 	log             logging.Logger
 	runner          EngineRunner
-	storage         *storage.Provider
+	bdevProvider    *bdev.Provider
+	scmProvider     *scm.Provider
 	waitFormat      atm.Bool
 	storageReady    chan bool
 	waitDrpc        atm.Bool
@@ -69,13 +71,15 @@ type EngineInstance struct {
 
 // NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
-func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner) *EngineInstance {
+func NewEngineInstance(log logging.Logger, bp *bdev.Provider, sp *scm.Provider,
+	joinFn systemJoinFn, r EngineRunner) *EngineInstance {
 
 	return &EngineInstance{
-		log:            l,
+		log:            log,
 		runner:         r,
-		storage:        p,
-		joinSystem:     jf,
+		bdevProvider:   bp,
+		scmProvider:    sp,
+		joinSystem:     joinFn,
 		drpcReady:      make(chan *srvpb.NotifyReadyReq),
 		storageReady:   make(chan bool),
 		startRequested: make(chan bool),

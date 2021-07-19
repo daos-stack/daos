@@ -103,7 +103,6 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	struct dtx_cos_rec_bundle	*rbund;
 	struct dtx_cos_rec		*dcr;
 	struct dtx_cos_rec_child	*dcrc;
-	struct dtx_tls			*tls = dtx_tls_get();
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
@@ -133,7 +132,6 @@ dtx_cos_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	d_list_add_tail(&dcrc->dcrc_gl_committable,
 			&cont->sc_dtx_cos_list);
 	cont->sc_dtx_committable_count++;
-	d_tm_inc_gauge(tls->dt_committable, 1);
 
 	if (rbund->flags & DCF_EXP_CMT) {
 		d_list_add_tail(&dcrc->dcrc_lo_link, &dcr->dcr_expcmt_list);
@@ -158,8 +156,6 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 	struct dtx_cos_rec		*dcr;
 	struct dtx_cos_rec_child	*dcrc;
 	struct dtx_cos_rec_child	*next;
-	int				 dec = 0;
-	struct dtx_tls			*tls = dtx_tls_get();
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
@@ -170,7 +166,7 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		d_list_del(&dcrc->dcrc_gl_committable);
 		dtx_entry_put(dcrc->dcrc_dte);
 		D_FREE_PTR(dcrc);
-		dec++;
+		cont->sc_dtx_committable_count--;
 	}
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_prio_list,
 				   dcrc_lo_link) {
@@ -178,7 +174,7 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		d_list_del(&dcrc->dcrc_gl_committable);
 		dtx_entry_put(dcrc->dcrc_dte);
 		D_FREE_PTR(dcrc);
-		dec++;
+		cont->sc_dtx_committable_count--;
 	}
 	d_list_for_each_entry_safe(dcrc, next, &dcr->dcr_expcmt_list,
 				   dcrc_lo_link) {
@@ -186,14 +182,9 @@ dtx_cos_rec_free(struct btr_instance *tins, struct btr_record *rec, void *args)
 		d_list_del(&dcrc->dcrc_gl_committable);
 		dtx_entry_put(dcrc->dcrc_dte);
 		D_FREE_PTR(dcrc);
-		dec++;
+		cont->sc_dtx_committable_count--;
 	}
 	D_FREE_PTR(dcr);
-
-	cont->sc_dtx_committable_count -= dec;
-
-	/** adjust per-pool counter */
-	d_tm_dec_gauge(tls->dt_committable, dec);
 
 	return 0;
 }
@@ -220,7 +211,6 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	struct dtx_cos_rec_bundle	*rbund;
 	struct dtx_cos_rec		*dcr;
 	struct dtx_cos_rec_child	*dcrc;
-	struct dtx_tls			*tls = dtx_tls_get();
 
 	D_ASSERT(tins->ti_umm.umm_id == UMEM_CLASS_VMEM);
 
@@ -238,7 +228,6 @@ dtx_cos_rec_update(struct btr_instance *tins, struct btr_record *rec,
 	d_list_add_tail(&dcrc->dcrc_gl_committable,
 			&cont->sc_dtx_cos_list);
 	cont->sc_dtx_committable_count++;
-	d_tm_inc_gauge(tls->dt_committable, 1);
 
 	if (rbund->flags & DCF_EXP_CMT) {
 		d_list_add_tail(&dcrc->dcrc_lo_link, &dcr->dcr_expcmt_list);
@@ -410,7 +399,6 @@ int
 dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 	    daos_unit_oid_t *oid, uint64_t dkey_hash)
 {
-	struct dtx_tls			*tls = dtx_tls_get();
 	struct dtx_cos_key		 key;
 	d_iov_t				 kiov;
 	d_iov_t				 riov;
@@ -441,7 +429,6 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 
 		cont->sc_dtx_committable_count--;
 		dcr->dcr_prio_count--;
-		d_tm_dec_gauge(tls->dt_committable, 1);
 
 		D_GOTO(out, found = 1);
 	}
@@ -457,7 +444,6 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 
 		cont->sc_dtx_committable_count--;
 		dcr->dcr_reg_count--;
-		d_tm_dec_gauge(tls->dt_committable, 1);
 
 		D_GOTO(out, found = 2);
 	}
@@ -473,7 +459,6 @@ dtx_del_cos(struct ds_cont_child *cont, struct dtx_id *xid,
 
 		cont->sc_dtx_committable_count--;
 		dcr->dcr_expcmt_count--;
-		d_tm_dec_gauge(tls->dt_committable, 1);
 
 		D_GOTO(out, found = 3);
 	}

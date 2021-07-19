@@ -1,0 +1,45 @@
+#
+# run command for this workload:
+# numactl -N 0 fio LibpmemSeqR.fio  # it binds this FIO workload to CPU 0 only. It should be set according to /dev/pmem6 socket's number
+#
+[global]
+thread
+group_reporting
+norandommap
+overwrite=1
+thinktime=0
+sync=0
+direct=0
+
+ioengine=libpmem
+iodepth=1
+
+#
+# Preparing namespace with commands:
+# mkfs.ext4 /dev/pmem6
+# mount /dev/pmem6 /mnt/pmem6/ -o dax
+#
+directory=/mnt/pmem0  # I'm working on directory; each of 'numjobs' gets its own file to work with
+size=1GB  # Each file will have this size; so in summary they will fill the whole namespace
+unlink=0
+
+time_based
+runtime=120
+ramp_time=30
+
+[SeqRead]
+bs=1M
+numjobs=16  # depending on CPU core count more can be better, but also can be a bottleneck
+
+rw=randrw
+rwmixread=100
+percentage_random=0
+
+[SeqWrite]
+bs=1M
+numjobs=16  # depending on CPU core count more can be better, but also can be a bottleneck
+
+rw=randrw
+rwmixwrite=100
+percentage_random=0
+

@@ -57,7 +57,6 @@ class PoolCreateTests(PoolTestBase):
             duration, 120,
             "DAOS not ready to accept requests with in 2 minutes")
 
-        self.dmg.timeout = 360
         # Verify all the pools exists after the restart
         detected_pools = [uuid.lower() for uuid in self.dmg.pool_list()]
         missing_pools = []

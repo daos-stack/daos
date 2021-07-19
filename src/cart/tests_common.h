@@ -6,35 +6,43 @@
 /**
  * Common functions to be shared among tests
  */
+#ifndef __TESTS_COMMON_H__
+#define __TESTS_COMMON_H__
 #include <semaphore.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include <cart/api.h>
-#include <unistd.h>
 
 #include "crt_internal.h"
-#include "crt_utils.h"
 
-/* Global structures */
-struct test_options opts = { .is_initialized = false };
+#define DBG_PRINT(x...)							\
+	do {								\
+		D_INFO(x);						\
+		if (opts.is_server)					\
+			fprintf(stderr, "SRV [rank=%d pid=%d]\t",       \
+			opts.self_rank,					\
+			opts.mypid);					\
+		else							\
+			fprintf(stderr, "CLI [rank=%d pid=%d]\t",       \
+			opts.self_rank,					\
+			opts.mypid);					\
+		fprintf(stderr, x);					\
+	} while (0)
 
-/* Local structure definitions */
-struct wfr_status {
-	sem_t	sem;
-	int	rc;
-	int	num_ctx;
+struct test_options {
+	bool		is_initialized;
+	d_rank_t	self_rank;
+	int		mypid;
+	int		num_attach_retries;
+	bool		is_server;
+	bool		assert_on_error;
+	volatile int	shutdown;
+	int		delay_shutdown_sec;
+	bool		is_swim_enabled;
 };
 
-/* Functions */
-struct test_options *crtu_get_opts()
-{
-	return &opts;
-}
+static struct test_options opts = { .is_initialized = false };
 
 void
-crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
+tc_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	     bool assert_on_error)
 {
 	opts.is_initialized	= true;
@@ -50,8 +58,14 @@ crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.delay_shutdown_sec	= 2;
 }
 
+static inline void
+tc_test_swim_enable(bool is_swim_enabled)
+{
+	opts.is_swim_enabled	= is_swim_enabled;
+}
+
 static inline int
-crtu_drain_queue(crt_context_t ctx)
+tc_drain_queue(crt_context_t ctx)
 {
 	int	rc;
 	int	i;
@@ -79,54 +93,25 @@ crtu_drain_queue(crt_context_t ctx)
 }
 
 void
-crtu_set_shutdown_delay(int delay_sec)
+tc_set_shutdown_delay(int delay_sec)
 {
 	opts.delay_shutdown_sec = delay_sec;
 }
 
 void
-crtu_progress_stop(void)
+tc_progress_stop(void)
 {
 	opts.shutdown = 1;
 }
 
-/* Write a completion file to signal graceful server shutdown */
-void
-write_completion_file(void)
-{
-	FILE	*fptr;
-	char	*dir;
-	char	*completion_file;
-	char	*tmp_str;
-	char	pid[6];
-	pid_t	_pid;
-
-	_pid = getpid();
-	sprintf(pid, "%d", _pid);
-
-	dir = getenv("DAOS_TEST_SHARED_DIR");
-	D_ASSERTF(dir != NULL,
-		"DAOS_TEST_SHARED_DIR must be set for --write_completion_file "
-		"option.\n");
-	tmp_str = strcat(dir, "/test-servers-completed.txt.");
-	completion_file = strcat(tmp_str, pid);
-
-	unlink(completion_file);
-	fptr = fopen(completion_file, "w");
-	D_ASSERTF(fptr != NULL, "Error opening completion file for writing.\n");
-	DBG_PRINT("Wrote completion file: %s.\n", completion_file);
-	fclose(fptr);
-}
-
-
 void *
-crtu_progress_fn(void *data)
+tc_progress_fn(void *data)
 {
 	int		rc;
 	int		idx = -1;
 	crt_context_t	*p_ctx = (crt_context_t *)data;
 
-	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	rc = crt_context_idx(*p_ctx, &idx);
 	if (rc != 0) {
@@ -140,8 +125,8 @@ crtu_progress_fn(void *data)
 	if (opts.is_swim_enabled && idx == 0)
 		crt_swim_fini();
 
-	rc = crtu_drain_queue(*p_ctx);
-	D_ASSERTF(rc == 0, "crtu_drain_queue() failed with rc=%d\n", rc);
+	rc = tc_drain_queue(*p_ctx);
+	D_ASSERTF(rc == 0, "tc_drain_queue() failed with rc=%d\n", rc);
 
 	if (opts.delay_shutdown_sec > 0)
 		sleep(opts.delay_shutdown_sec);
@@ -153,6 +138,29 @@ crtu_progress_fn(void *data)
 	pthread_exit(rc ? *p_ctx : NULL);
 
 	return NULL;
+}
+
+struct wfr_status {
+	sem_t	sem;
+	int	rc;
+	int	num_ctx;
+};
+
+static inline void
+tc_sync_timedwait(struct wfr_status *wfrs, int sec, int line_number)
+{
+	struct timespec	deadline;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &deadline);
+	D_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
+		  line_number, rc);
+
+	deadline.tv_sec += sec;
+
+	rc = sem_timedwait(&wfrs->sem, &deadline);
+	D_ASSERTF(rc == 0, "Sync timed out at line %d rc: %d\n",
+		  line_number, rc);
 }
 
 static void
@@ -184,27 +192,10 @@ ctl_client_cb(const struct crt_cb_info *info)
 	sem_post(&wfrs->sem);
 }
 
-static inline void
-crtu_sync_timedwait(struct wfr_status *wfrs, int sec, int line_number)
-{
-	struct timespec	deadline;
-	int		rc;
-
-	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	D_ASSERTF(rc == 0, "clock_gettime() failed at line %d rc: %d\n",
-		  line_number, rc);
-
-	deadline.tv_sec += sec;
-
-	rc = sem_timedwait(&wfrs->sem, &deadline);
-	D_ASSERTF(rc == 0, "Sync timed out at line %d rc: %d\n",
-		  line_number, rc);
-}
-
 int
-crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
-		    d_rank_list_t *rank_list, int tag, int total_ctx,
-		    double ping_timeout, double total_timeout)
+tc_wait_for_ranks(crt_context_t ctx, crt_group_t *grp, d_rank_list_t *rank_list,
+		  int tag, int total_ctx, double ping_timeout,
+		  double total_timeout)
 {
 	struct wfr_status		ws;
 	struct timespec			t1, t2;
@@ -216,7 +207,7 @@ crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
 	int				i = 0;
 	int				rc = 0;
 
-	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	rc = d_gettime(&t1);
 	D_ASSERTF(rc == 0, "d_gettime() failed; rc=%d\n", rc);
@@ -247,7 +238,7 @@ crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
 		rc = crt_req_send(rpc, ctl_client_cb, &ws);
 
 		if (rc == 0)
-			crtu_sync_timedwait(&ws, 120, __LINE__);
+			tc_sync_timedwait(&ws, 120, __LINE__);
 		else
 			ws.rc = rc;
 
@@ -271,7 +262,7 @@ crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
 			rc = crt_req_send(rpc, ctl_client_cb, &ws);
 
 			if (rc == 0)
-				crtu_sync_timedwait(&ws, 120, __LINE__);
+				tc_sync_timedwait(&ws, 120, __LINE__);
 			else
 				ws.rc = rc;
 
@@ -297,16 +288,15 @@ crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
 }
 
 int
-crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
-			  crt_group_t *grp, d_rank_t my_rank,
-			  bool delete_file)
+tc_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
+			crt_group_t *grp, d_rank_t my_rank, bool delete_file)
 {
 	FILE		*f;
 	int		parsed_rank;
 	char		parsed_addr[255];
 	int		rc = 0;
 
-	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	f = fopen(grp_cfg_file, "r");
 	if (!f) {
@@ -343,19 +333,48 @@ out:
 	return rc;
 }
 
+static inline int
+tc_sem_timedwait(sem_t *sem, int sec, int line_number)
+{
+	struct timespec	deadline;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &deadline);
+	if (rc != 0) {
+		if (opts.assert_on_error)
+			D_ASSERTF(rc == 0, "clock_gettime() failed at "
+				  "line %d rc: %d\n", line_number, rc);
+		D_ERROR("clock_gettime() failed, rc = %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	deadline.tv_sec += sec;
+	rc = sem_timedwait(sem, &deadline);
+	if (rc != 0) {
+		if (opts.assert_on_error)
+			D_ASSERTF(rc == 0, "sem_timedwait() failed at "
+				  "line %d rc: %d\n", line_number, rc);
+		D_ERROR("sem_timedwait() failed, rc = %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+out:
+	return rc;
+}
+
 void
-crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
-		     crt_group_t **grp, d_rank_list_t **rank_list,
-		     crt_context_t *crt_ctx, pthread_t *progress_thread,
-		     unsigned int total_srv_ctx, bool use_cfg,
-		     crt_init_options_t *init_opt)
+tc_cli_start_basic(char *local_group_name, char *srv_group_name,
+		   crt_group_t **grp, d_rank_list_t **rank_list,
+		   crt_context_t *crt_ctx, pthread_t *progress_thread,
+		   unsigned int total_srv_ctx, bool use_cfg,
+		   crt_init_options_t *init_opt)
 {
 	char		*grp_cfg_file;
 	uint32_t	 grp_size;
 	int		 attach_retries = opts.num_attach_retries;
 	int		 rc = 0;
 
-	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	rc = d_log_init();
 	D_ASSERTF(rc == 0, "d_log_init failed, rc=%d\n", rc);
@@ -369,7 +388,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 	rc = crt_context_create(crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
 
-	rc = pthread_create(progress_thread, NULL, crtu_progress_fn, crt_ctx);
+	rc = pthread_create(progress_thread, NULL, tc_progress_fn, crt_ctx);
 	D_ASSERTF(rc == 0, "pthread_create() failed; rc=%d\n", rc);
 
 	if (use_cfg) {
@@ -393,10 +412,10 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		/* load group info from a config file and
 		 * delete file upon return
 		 */
-		rc = crtu_load_group_from_file(grp_cfg_file, *crt_ctx, *grp,
-					       -1, true);
-		D_ASSERTF(rc == 0, "crtu_load_group_from_file() failed;"
-			  "rc=%d\n", rc);
+		rc = tc_load_group_from_file(grp_cfg_file, *crt_ctx, *grp, -1,
+					     true);
+		D_ASSERTF(rc == 0, "tc_load_group_from_file() failed; rc=%d\n",
+			  rc);
 	}
 
 	rc = crt_group_size(*grp, &grp_size);
@@ -421,9 +440,9 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 }
 
 void
-crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
-		     pthread_t *progress_thread, crt_group_t **grp,
-		     uint32_t *grp_size, crt_init_options_t *init_opt)
+tc_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
+		   pthread_t *progress_thread, crt_group_t **grp,
+		   uint32_t *grp_size, crt_init_options_t *init_opt)
 {
 	char		*env_self_rank;
 	char		*grp_cfg_file;
@@ -431,7 +450,7 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	d_rank_t	 my_rank;
 	int		 rc = 0;
 
-	D_ASSERTF(opts.is_initialized == true, "crtu_test_init not called.\n");
+	D_ASSERTF(opts.is_initialized == true, "tc_test_init not called.\n");
 
 	env_self_rank = getenv("CRT_L_RANK");
 	my_rank = atoi(env_self_rank);
@@ -461,7 +480,7 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	rc = crt_context_create(crt_ctx);
 	D_ASSERTF(rc == 0, "crt_context_create() failed; rc=%d\n", rc);
 
-	rc = pthread_create(progress_thread, NULL, crtu_progress_fn, crt_ctx);
+	rc = pthread_create(progress_thread, NULL, tc_progress_fn, crt_ctx);
 	D_ASSERTF(rc == 0, "pthread_create() failed; rc=%d\n", rc);
 
 	grp_cfg_file = getenv("CRT_L_GRP_CFG");
@@ -470,9 +489,9 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	D_ASSERTF(rc == 0, "crt_rank_uri_get() failed; rc=%d\n", rc);
 
 	/* load group info from a config file and delete file upon return */
-	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], *grp, my_rank,
+	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx[0], *grp, my_rank,
 				     true);
-	D_ASSERTF(rc == 0, "crtu_load_group_from_file() failed; rc=%d\n", rc);
+	D_ASSERTF(rc == 0, "tc_load_group_from_file() failed; rc=%d\n", rc);
 
 	D_FREE(my_uri);
 
@@ -485,33 +504,33 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	D_ASSERTF(rc == 0, "crt_group_size() failed; rc=%d\n", rc);
 }
 
-struct crtu_log_msg_cb_resp {
+struct tc_log_msg_cb_resp {
 	sem_t	sem;
 };
 
 static void
-crtu_log_msg_cb(const struct crt_cb_info *info)
+tc_log_msg_cb(const struct crt_cb_info *info)
 {
-	struct crtu_log_msg_cb_resp	*resp;
+	struct tc_log_msg_cb_resp	*resp;
 
 	if (info->cci_rc != 0) {
 		D_WARN("Add Log message CB failed\n");
 		D_ASSERTF(info->cci_rc == 0,
 			  "Send Log RPC did not respond\n");
 	}
-	resp = (struct crtu_log_msg_cb_resp *)info->cci_arg;
+	resp = (struct tc_log_msg_cb_resp *)info->cci_arg;
 	sem_post(&resp->sem);
 }
 
 int
-crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg)
-{
+tc_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank,
+	   char *msg) {
 	int32_t				 rc = 0;
 	struct crt_ctl_log_add_msg_in	*send_args;
 	crt_rpc_t			*rpc_req = NULL;
 	crt_endpoint_t			 ep;
 	crt_opcode_t			 opcode = CRT_OPC_CTL_LOG_ADD_MSG;
-	struct crtu_log_msg_cb_resp	 resp;
+	struct tc_log_msg_cb_resp	 resp;
 
 	/* Initialize response structure */
 	rc = sem_init(&resp.sem, 0, 0);
@@ -533,14 +552,14 @@ crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg)
 	send_args->log_msg = msg;
 
 	/* send the request */
-	rc = crt_req_send(rpc_req, crtu_log_msg_cb, &resp);
+	rc = crt_req_send(rpc_req, tc_log_msg_cb, &resp);
 	if (rc < 0) {
 		D_WARN("rpc failed, message: \"%s \"not sent\n", msg);
 		goto cleanup;
 	}
 
 	/* Wait for response */
-	rc = crtu_sem_timedwait(&resp.sem, 30, __LINE__);
+	rc = tc_sem_timedwait(&resp.sem, 30, __LINE__);
 	if (rc < 0) {
 		D_WARN("Messaage logged timed out: %s\n", msg);
 		crt_req_abort(rpc_req);
@@ -551,41 +570,7 @@ crtu_log_msg(crt_context_t ctx, crt_group_t *grp, d_rank_t rank, char *msg)
 cleanup:
 	crt_req_decref(rpc_req);
 exit:
-	D_INFO("Return code %d\n", rc);
 	return rc;
 }
 
-void
-crtu_test_swim_enable(bool is_swim_enabled)
-{
-	opts.is_swim_enabled = is_swim_enabled;
-}
-
-int
-crtu_sem_timedwait(sem_t *sem, int sec, int line_number)
-{
-	struct timespec		deadline;
-	int			rc;
-
-	rc = clock_gettime(CLOCK_REALTIME, &deadline);
-	if (rc != 0) {
-		if (opts.assert_on_error)
-			D_ASSERTF(rc == 0, "clock_gettime() failed at "
-				  "line %d rc: %d\n", line_number, rc);
-		D_ERROR("clock_gettime() failed, rc = %d\n", rc);
-		D_GOTO(out, rc);
-	}
-
-	deadline.tv_sec += sec;
-	rc = sem_timedwait(sem, &deadline);
-	if (rc != 0) {
-		if (opts.assert_on_error)
-			D_ASSERTF(rc == 0, "sem_timedwait() failed at "
-				  "line %d rc: %d\n", line_number, rc);
-		D_ERROR("sem_timedwait() failed, rc = %d\n", rc);
-		D_GOTO(out, rc);
-	}
-out:
-	return rc;
-}
-
+#endif /* __TESTS_COMMON_H__ */

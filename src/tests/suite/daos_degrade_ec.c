@@ -405,8 +405,8 @@ degrade_multi_conts_agg(void **state)
 	}
 
 	/* sleep a while to make aggregation triggered */
-	trigger_and_wait_ec_aggreation(arg, oids, CONT_PER_POOL, NULL, NULL, 0,
-				       0, DAOS_FORCE_EC_AGG);
+	trigger_and_wait_ec_aggreation(arg, oids, CONT_PER_POOL,
+				       DAOS_FORCE_EC_AGG);
 
 	for (i = 0; i < shards_nr; i++)
 		fail_ranks[i] = get_rank_by_oid_shard(args[0], oids[0],
@@ -485,15 +485,14 @@ degrade_ec_partial_update_agg(void **state)
 
 	/* Trigger aggregation */
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
-				       8 * EC_CELL_SIZE, DAOS_FORCE_EC_AGG);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
+
 	for (i = 0; i < 10; i++) {
 		daos_off_t offset = i * EC_CELL_SIZE;
 
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
-				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      (daos_size_t)EC_CELL_SIZE, verify_data);
 	}
 	free(data);
 	free(verify_data);
@@ -541,25 +540,26 @@ degrade_ec_agg(void **state)
 			     data, EC_CELL_SIZE, &req);
 	}
 
+	/* Trigger EC aggregation */
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 
-	/* Degrade EC aggregation. */
+	/* Kill one data shard to make sure the data is correct after
+	 * aggregation .
+	 */
 	rank = get_rank_by_oid_shard(arg, oid, 2);
 	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
-	print_message("sleep 30 seconds");
+	print_message("sleep 30 seconds for VOS aggregation on each xstream");
 	sleep(30);
-
 	/* Trigger VOS aggregation */
-	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
-	trigger_and_wait_ec_aggreation(arg, &oid, 1, NULL, NULL, 0, 0,
-				       DAOS_FORCE_EC_AGG);
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, DAOS_FORCE_EC_AGG);
 
 	for (i = 0; i < 8; i++) {
 		daos_off_t offset = i * EC_CELL_SIZE;
 
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
-				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      (daos_size_t)EC_CELL_SIZE, verify_data);
 	}
 	free(data);
 	free(verify_data);

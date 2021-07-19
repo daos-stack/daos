@@ -10,17 +10,76 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
+	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
+	// FirmwareUpdateMethod is the name of the method used to forward the request to
+	// update NVMe device firmware.
+	FirmwareUpdateMethod = "NvmeFirmwareUpdate"
+
 	// defaultFirmwareSlot is the slot automatically chosen for the firmware
 	// update
 	defaultFirmwareSlot = 0
 )
 
+type (
+	// firmwareProvider is an embedded structure that enables a Provider to
+	// forward firmware requests to a privileged binary if firmware management
+	// is enabled in the build.
+	firmwareProvider struct {
+		fwFwd *FirmwareForwarder
+	}
+
+	// FirmwareQueryRequest defines the parameters for a firmware query.
+	FirmwareQueryRequest struct {
+		DeviceAddrs []string // requested device PCI addresses, empty for all
+		ModelID     string   // filter devices by model ID
+		FirmwareRev string   // filter devices by current FW revision
+	}
+
+	// DeviceFirmwareQueryResult represents the result of a firmware query for
+	// a specific NVMe controller.
+	DeviceFirmwareQueryResult struct {
+		Device storage.NvmeController
+	}
+
+	// FirmwareQueryResponse contains the results of the firmware query.
+	FirmwareQueryResponse struct {
+		Results []DeviceFirmwareQueryResult
+	}
+
+	// FirmwareUpdateRequest defines the parameters for a firmware update.
+	FirmwareUpdateRequest struct {
+		pbin.ForwardableRequest
+		DeviceAddrs  []string // requested device PCI addresses, empty for all
+		FirmwarePath string   // location of the firmware binary
+		ModelID      string   // filter devices by model ID
+		FirmwareRev  string   // filter devices by current FW revision
+	}
+
+	// DeviceFirmwareUpdateResult represents the result of a firmware update for
+	// a specific NVMe controller.
+	DeviceFirmwareUpdateResult struct {
+		Device storage.NvmeController
+		Error  string
+	}
+
+	// FirmwareUpdateResponse contains the results of the firmware update.
+	FirmwareUpdateResponse struct {
+		Results []DeviceFirmwareUpdateResult
+	}
+)
+
+// setupFirmwareProvider sets up the firmware provider.
+func (p *Provider) setupFirmwareProvider(log logging.Logger) {
+	p.fwFwd = NewFirmwareForwarder(log)
+}
+
 // QueryFirmware requests the firmware information for the NVMe device controller.
-func (p *Provider) QueryFirmware(req storage.NVMeFirmwareQueryRequest) (*storage.NVMeFirmwareQueryResponse, error) {
+func (p *Provider) QueryFirmware(req FirmwareQueryRequest) (*FirmwareQueryResponse, error) {
 	// For the time being this just scans and returns the devices, which include their
 	// firmware revision.
 	controllers, err := p.getRequestedControllers(req.DeviceAddrs, req.ModelID, req.FirmwareRev, true)
@@ -28,11 +87,11 @@ func (p *Provider) QueryFirmware(req storage.NVMeFirmwareQueryRequest) (*storage
 		return nil, err
 	}
 
-	results := make([]storage.NVMeDeviceFirmwareQueryResult, len(controllers))
+	results := make([]DeviceFirmwareQueryResult, len(controllers))
 	for i, dev := range controllers {
 		results[i].Device = *dev
 	}
-	resp := &storage.NVMeFirmwareQueryResponse{
+	resp := &FirmwareQueryResponse{
 		Results: results,
 	}
 
@@ -52,7 +111,7 @@ func (p *Provider) getRequestedControllers(requestedPCIAddrs []string, modelID s
 }
 
 func (p *Provider) getRequestedControllersByAddr(requestedPCIAddrs []string, ignoreMissing bool) (storage.NvmeControllers, error) {
-	resp, err := p.Scan(storage.BdevScanRequest{})
+	resp, err := p.Scan(ScanRequest{})
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +165,11 @@ func filterControllersByModelFirmware(controllers storage.NvmeControllers, model
 }
 
 // UpdateFirmware updates the NVMe device controller firmware.
-func (p *Provider) UpdateFirmware(req storage.NVMeFirmwareUpdateRequest) (*storage.NVMeFirmwareUpdateResponse, error) {
+func (p *Provider) UpdateFirmware(req FirmwareUpdateRequest) (*FirmwareUpdateResponse, error) {
+	if p.shouldForward(req) {
+		return p.fwFwd.Update(req)
+	}
+
 	if len(req.FirmwarePath) == 0 {
 		return nil, errors.New("missing path to firmware file")
 	}
@@ -120,8 +183,8 @@ func (p *Provider) UpdateFirmware(req storage.NVMeFirmwareUpdateRequest) (*stora
 		return nil, errors.New("no NVMe device controllers")
 	}
 
-	resp := &storage.NVMeFirmwareUpdateResponse{
-		Results: make([]storage.NVMeDeviceFirmwareUpdateResult, len(controllers)),
+	resp := &FirmwareUpdateResponse{
+		Results: make([]DeviceFirmwareUpdateResult, len(controllers)),
 	}
 	for i, con := range controllers {
 		err = p.backend.UpdateFirmware(con.PciAddr, req.FirmwarePath, defaultFirmwareSlot)
@@ -132,4 +195,42 @@ func (p *Provider) UpdateFirmware(req storage.NVMeFirmwareUpdateRequest) (*stora
 	}
 
 	return resp, nil
+}
+
+// FirmwareForwarder forwards firmware requests to a privileged binary.
+type FirmwareForwarder struct {
+	pbin.Forwarder
+}
+
+// NewFirmwareForwarder returns a new bdev FirmwareForwarder.
+func NewFirmwareForwarder(log logging.Logger) *FirmwareForwarder {
+	pf := pbin.NewForwarder(log, pbin.DaosFWName)
+
+	return &FirmwareForwarder{
+		Forwarder: *pf,
+	}
+}
+
+// checkSupport verifies that the firmware support binary is installed.
+func (f *FirmwareForwarder) checkSupport() error {
+	if f.CanForward() {
+		return nil
+	}
+
+	return errors.Errorf("NVMe firmware operations are not supported on this system")
+}
+
+// Update forwards a request to update firmware on the NVMe device.
+func (f *FirmwareForwarder) Update(req FirmwareUpdateRequest) (*FirmwareUpdateResponse, error) {
+	if err := f.checkSupport(); err != nil {
+		return nil, err
+	}
+	req.Forwarded = true
+
+	res := new(FirmwareUpdateResponse)
+	if err := f.SendReq(FirmwareUpdateMethod, req, res); err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }

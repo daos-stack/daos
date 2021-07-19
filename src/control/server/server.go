@@ -30,7 +30,8 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -83,6 +84,8 @@ type server struct {
 	evtLogger    *control.EventLogger
 	ctlSvc       *ControlService
 	mgmtSvc      *mgmtSvc
+	scmProvider  *scm.Provider
+	bdevProvider *bdev.Provider
 	grpcServer   *grpc.Server
 
 	cbLock           sync.Mutex
@@ -103,13 +106,19 @@ func newServer(ctx context.Context, log *logging.LeveledLogger, cfg *config.Serv
 
 	harness := NewEngineHarness(log).WithFaultDomain(faultDomain)
 
+	// Create storage subsystem providers.
+	scmProvider := scm.DefaultProvider(log)
+	bdevProvider := bdev.DefaultProvider(log)
+
 	return &server{
-		log:         log,
-		cfg:         cfg,
-		hostname:    hostname,
-		runningUser: cu.Username,
-		faultDomain: faultDomain,
-		harness:     harness,
+		log:          log,
+		cfg:          cfg,
+		hostname:     hostname,
+		runningUser:  cu.Username,
+		faultDomain:  faultDomain,
+		harness:      harness,
+		scmProvider:  scmProvider,
+		bdevProvider: bdevProvider,
 	}, nil
 }
 
@@ -154,7 +163,9 @@ func (srv *server) createServices(ctx context.Context) error {
 	srv.evtForwarder = control.NewEventForwarder(rpcClient, srv.cfg.AccessPoints)
 	srv.evtLogger = control.NewEventLogger(srv.log)
 
-	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.cfg, srv.pubSub)
+	srv.ctlSvc = NewControlService(srv.log, srv.harness, srv.bdevProvider, srv.scmProvider,
+		srv.cfg, srv.pubSub)
+
 	srv.mgmtSvc = newMgmtSvc(srv.harness, srv.membership, sysdb, rpcClient, srv.pubSub)
 
 	return nil
@@ -226,13 +237,10 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 		return control.SystemJoin(ctxIn, srv.mgmtSvc.rpcClient, req)
 	}
 
-	// TODO DAOS-8040: re-enable VMD
 	// Indicate whether VMD devices have been detected and can be used.
-	// for _, bc := range cfg.Storage.BdevConfigs() {
-	//	bc.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
-	// }
+	cfg.Storage.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
 
-	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,
+	engine := NewEngineInstance(srv.log, srv.bdevProvider, srv.scmProvider, joinFn,
 		engine.NewRunner(srv.log, cfg)).WithHostFaultDomain(srv.harness.faultDomain)
 	if idx == 0 {
 		configureFirstEngine(ctx, engine, srv.sysdb, joinFn)

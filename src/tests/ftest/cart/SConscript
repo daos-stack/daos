@@ -63,11 +63,7 @@ def scons():
     """scons function"""
 
     Import('env', 'prereqs')
-    Import('cart_utils_objs')
 
-    ##############################
-    # Create test programs
-    ##############################
     tenv = env.Clone()
 
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
@@ -76,28 +72,23 @@ def scons():
     tests_dir = os.path.join("$PREFIX", 'lib', 'daos', 'TESTING', 'tests')
     # Compile all of the tests
     for test in SIMPLE_TEST_SRC:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, test, install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in IV_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, test, install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in SWIM_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, test, install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in HLC_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, test, install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     for test in TEST_GROUP_NP_TESTS:
-        target = daos_build.test(tenv, [test, cart_utils_objs],
-                                 install_off='../../../../')
+        target = daos_build.test(tenv, test, install_off='../../../../')
         tenv.Install(tests_dir, target)
 
     # Build FAULT_STATUS_TEST separately and install it into bin/
@@ -107,8 +98,7 @@ def scons():
     benv = tenv.Clone()
 
     benv.AppendUnique(CFLAGS=['-std=gnu99', '-pedantic'])
-    basic_target = daos_build.test(tenv, BASIC_SRC)
-    benv.Requires(basic_target, [cart_utils_objs])
+    daos_build.test(tenv, BASIC_SRC)
 
     # Call scons on unit test directory
     SConscript('utest/SConscript')

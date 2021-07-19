@@ -40,5 +40,4 @@ func addMethodHandlers(app *pbin.App) {
 	app.AddHandler("BdevPrepare", &bdevPrepHandler{})
 	app.AddHandler("BdevScan", &bdevScanHandler{})
 	app.AddHandler("BdevFormat", &bdevFormatHandler{})
-	app.AddHandler("BdevWriteNvmeConfig", &bdevWriteNvmeConfigHandler{})
 }

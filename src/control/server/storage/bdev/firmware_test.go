@@ -21,30 +21,30 @@ func TestProvider_QueryFirmware(t *testing.T) {
 	defaultDevs := storage.MockNvmeControllers(3)
 
 	for name, tc := range map[string]struct {
-		input      storage.NVMeFirmwareQueryRequest
+		input      FirmwareQueryRequest
 		backendCfg *MockBackendConfig
 		expErr     error
-		expRes     *storage.NVMeFirmwareQueryResponse
+		expRes     *FirmwareQueryResponse
 	}{
 		"NVMe device scan failed": {
-			input:      storage.NVMeFirmwareQueryRequest{},
+			input:      FirmwareQueryRequest{},
 			backendCfg: &MockBackendConfig{ScanErr: errors.New("mock scan")},
 			expErr:     errors.New("mock scan"),
 		},
 		"no devices": {
-			input:      storage.NVMeFirmwareQueryRequest{},
+			input:      FirmwareQueryRequest{},
 			backendCfg: &MockBackendConfig{},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{},
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{},
 			},
 		},
 		"success": {
-			input: storage.NVMeFirmwareQueryRequest{},
+			input: FirmwareQueryRequest{},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{
 					{
 						Device: *defaultDevs[0],
 					},
@@ -58,14 +58,14 @@ func TestProvider_QueryFirmware(t *testing.T) {
 			},
 		},
 		"request device subset": {
-			input: storage.NVMeFirmwareQueryRequest{
+			input: FirmwareQueryRequest{
 				DeviceAddrs: []string{"0000:80:00.0", "0000:80:00.2"},
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{
 					{
 						Device: *defaultDevs[0],
 					},
@@ -76,14 +76,14 @@ func TestProvider_QueryFirmware(t *testing.T) {
 			},
 		},
 		"request nonexistent device - ignored": {
-			input: storage.NVMeFirmwareQueryRequest{
+			input: FirmwareQueryRequest{
 				DeviceAddrs: []string{"0000:80:00.0", "fake"},
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{
 					{
 						Device: *defaultDevs[0],
 					},
@@ -91,23 +91,23 @@ func TestProvider_QueryFirmware(t *testing.T) {
 			},
 		},
 		"request duplicates": {
-			input: storage.NVMeFirmwareQueryRequest{
+			input: FirmwareQueryRequest{
 				DeviceAddrs: []string{"0000:80:00.0", "0000:80:00.0"},
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expErr: FaultDuplicateDevices,
 		},
 		"filter by model ID": {
-			input: storage.NVMeFirmwareQueryRequest{
+			input: FirmwareQueryRequest{
 				ModelID: "model-1",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{
 					{
 						Device: *defaultDevs[1],
 					},
@@ -115,14 +115,14 @@ func TestProvider_QueryFirmware(t *testing.T) {
 			},
 		},
 		"filter by FW rev": {
-			input: storage.NVMeFirmwareQueryRequest{
+			input: FirmwareQueryRequest{
 				FirmwareRev: "fwRev-2",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{
 					{
 						Device: *defaultDevs[2],
 					},
@@ -130,39 +130,39 @@ func TestProvider_QueryFirmware(t *testing.T) {
 			},
 		},
 		"nothing in system matches filters": {
-			input: storage.NVMeFirmwareQueryRequest{
+			input: FirmwareQueryRequest{
 				ModelID:     "model-123",
 				FirmwareRev: "fwRev-123",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{},
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{},
 			},
 		},
 		"must match all requested filters": {
-			input: storage.NVMeFirmwareQueryRequest{
+			input: FirmwareQueryRequest{
 				ModelID:     "model-0",
 				FirmwareRev: "fwRev-1",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{},
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{},
 			},
 		},
 		"case insensitive filters": {
-			input: storage.NVMeFirmwareQueryRequest{
+			input: FirmwareQueryRequest{
 				ModelID:     "MODEL-0",
 				FirmwareRev: "FWREV-0",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{
 					{
 						Device: *defaultDevs[0],
 					},
@@ -170,16 +170,16 @@ func TestProvider_QueryFirmware(t *testing.T) {
 			},
 		},
 		"nothing in device list matches filters": {
-			input: storage.NVMeFirmwareQueryRequest{
+			input: FirmwareQueryRequest{
 				DeviceAddrs: []string{"0000:80:00.1", "0000:80:00.2"},
 				ModelID:     "model-0",
 				FirmwareRev: "fwRev-0",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareQueryResponse{
-				Results: []storage.NVMeDeviceFirmwareQueryResult{},
+			expRes: &FirmwareQueryResponse{
+				Results: []DeviceFirmwareQueryResult{},
 			},
 		},
 	} {
@@ -207,30 +207,30 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 	testPath := "/some/path/file.bin"
 
 	for name, tc := range map[string]struct {
-		input      storage.NVMeFirmwareUpdateRequest
+		input      FirmwareUpdateRequest
 		backendCfg *MockBackendConfig
 		expErr     error
-		expRes     *storage.NVMeFirmwareUpdateResponse
+		expRes     *FirmwareUpdateResponse
 	}{
 		"empty path": {
 			expErr: errors.New("missing path to firmware file"),
 		},
 		"NVMe device scan failed": {
-			input:      storage.NVMeFirmwareUpdateRequest{FirmwarePath: testPath},
+			input:      FirmwareUpdateRequest{FirmwarePath: testPath},
 			backendCfg: &MockBackendConfig{ScanErr: errors.New("mock scan")},
 			expErr:     errors.New("mock scan"),
 		},
 		"no devices": {
-			input:  storage.NVMeFirmwareUpdateRequest{FirmwarePath: testPath},
+			input:  FirmwareUpdateRequest{FirmwarePath: testPath},
 			expErr: errors.New("no NVMe device controllers"),
 		},
 		"success": {
-			input: storage.NVMeFirmwareUpdateRequest{FirmwarePath: testPath},
+			input: FirmwareUpdateRequest{FirmwarePath: testPath},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareUpdateResponse{
-				Results: []storage.NVMeDeviceFirmwareUpdateResult{
+			expRes: &FirmwareUpdateResponse{
+				Results: []DeviceFirmwareUpdateResult{
 					{
 						Device: *defaultDevs[0],
 					},
@@ -244,13 +244,13 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			},
 		},
 		"update failed": {
-			input: storage.NVMeFirmwareUpdateRequest{FirmwarePath: testPath},
+			input: FirmwareUpdateRequest{FirmwarePath: testPath},
 			backendCfg: &MockBackendConfig{
-				ScanRes:   &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes:   &ScanResponse{Controllers: defaultDevs},
 				UpdateErr: testErr,
 			},
-			expRes: &storage.NVMeFirmwareUpdateResponse{
-				Results: []storage.NVMeDeviceFirmwareUpdateResult{
+			expRes: &FirmwareUpdateResponse{
+				Results: []DeviceFirmwareUpdateResult{
 					{
 						Device: *defaultDevs[0],
 						Error:  testErr.Error(),
@@ -267,15 +267,15 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			},
 		},
 		"request device subset": {
-			input: storage.NVMeFirmwareUpdateRequest{
+			input: FirmwareUpdateRequest{
 				DeviceAddrs:  []string{"0000:80:00.0", "0000:80:00.2"},
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareUpdateResponse{
-				Results: []storage.NVMeDeviceFirmwareUpdateResult{
+			expRes: &FirmwareUpdateResponse{
+				Results: []DeviceFirmwareUpdateResult{
 					{
 						Device: *defaultDevs[0],
 					},
@@ -286,35 +286,35 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			},
 		},
 		"request nonexistent device": {
-			input: storage.NVMeFirmwareUpdateRequest{
+			input: FirmwareUpdateRequest{
 				DeviceAddrs:  []string{"0000:80:00.0", "fake"},
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expErr: FaultPCIAddrNotFound("fake"),
 		},
 		"request duplicates": {
-			input: storage.NVMeFirmwareUpdateRequest{
+			input: FirmwareUpdateRequest{
 				DeviceAddrs:  []string{"0000:80:00.0", "0000:80:00.0"},
 				FirmwarePath: testPath,
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expErr: FaultDuplicateDevices,
 		},
 		"filter by model ID": {
-			input: storage.NVMeFirmwareUpdateRequest{
+			input: FirmwareUpdateRequest{
 				FirmwarePath: testPath,
 				ModelID:      "model-1",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareUpdateResponse{
-				Results: []storage.NVMeDeviceFirmwareUpdateResult{
+			expRes: &FirmwareUpdateResponse{
+				Results: []DeviceFirmwareUpdateResult{
 					{
 						Device: *defaultDevs[1],
 					},
@@ -322,15 +322,15 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			},
 		},
 		"filter by FW rev": {
-			input: storage.NVMeFirmwareUpdateRequest{
+			input: FirmwareUpdateRequest{
 				FirmwarePath: testPath,
 				FirmwareRev:  "fwRev-2",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareUpdateResponse{
-				Results: []storage.NVMeDeviceFirmwareUpdateResult{
+			expRes: &FirmwareUpdateResponse{
+				Results: []DeviceFirmwareUpdateResult{
 					{
 						Device: *defaultDevs[2],
 					},
@@ -338,38 +338,38 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			},
 		},
 		"nothing in system matches filters": {
-			input: storage.NVMeFirmwareUpdateRequest{
+			input: FirmwareUpdateRequest{
 				FirmwarePath: testPath,
 				ModelID:      "model-123",
 				FirmwareRev:  "fwRev-123",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expErr: FaultNoFilterMatch,
 		},
 		"must match all requested filters": {
-			input: storage.NVMeFirmwareUpdateRequest{
+			input: FirmwareUpdateRequest{
 				FirmwarePath: testPath,
 				ModelID:      "model-0",
 				FirmwareRev:  "fwRev-1",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expErr: FaultNoFilterMatch,
 		},
 		"case insensitive filters": {
-			input: storage.NVMeFirmwareUpdateRequest{
+			input: FirmwareUpdateRequest{
 				FirmwarePath: testPath,
 				ModelID:      "MODEL-0",
 				FirmwareRev:  "FWREV-0",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
-			expRes: &storage.NVMeFirmwareUpdateResponse{
-				Results: []storage.NVMeDeviceFirmwareUpdateResult{
+			expRes: &FirmwareUpdateResponse{
+				Results: []DeviceFirmwareUpdateResult{
 					{
 						Device: *defaultDevs[0],
 					},
@@ -377,14 +377,14 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			},
 		},
 		"nothing in device list matches filters": {
-			input: storage.NVMeFirmwareUpdateRequest{
+			input: FirmwareUpdateRequest{
 				FirmwarePath: testPath,
 				DeviceAddrs:  []string{"0000:80:00.1", "0000:80:00.2"},
 				ModelID:      "model-0",
 				FirmwareRev:  "fwRev-0",
 			},
 			backendCfg: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
+				ScanRes: &ScanResponse{Controllers: defaultDevs},
 			},
 			expErr: FaultNoFilterMatch,
 		},
@@ -406,7 +406,6 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 	}
 }
 
-/* todo_tiering
 func TestProvider_WithFirmwareForwarder(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
@@ -417,4 +416,3 @@ func TestProvider_WithFirmwareForwarder(t *testing.T) {
 		t.Fatal("forwarder is nil")
 	}
 }
-todo_tiering */

@@ -18,7 +18,7 @@ import (
 )
 
 func TestTelemetry_Init(t *testing.T) {
-	producerID := NextTestID()
+	producerID := 123
 	InitTestMetricsProducer(t, producerID, 2048)
 	defer CleanupTestMetricsProducer(t)
 
@@ -63,7 +63,7 @@ func TestTelemetry_Init(t *testing.T) {
 }
 
 func TestTelemetry_Detach(t *testing.T) {
-	producerID := NextTestID()
+	producerID := 123
 	InitTestMetricsProducer(t, producerID, 2048)
 	defer CleanupTestMetricsProducer(t)
 
@@ -118,6 +118,8 @@ func teardownCtxReal(_ *testing.T, ctx context.Context) {
 }
 
 func TestTelemetry_GetRank(t *testing.T) {
+	producerID := 42
+
 	rankHdl := &handle{
 		rank: new(uint32),
 	}
@@ -158,7 +160,6 @@ func TestTelemetry_GetRank(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			producerID := NextTestID()
 			InitTestMetricsProducer(t, producerID, 2048)
 			defer CleanupTestMetricsProducer(t)
 
@@ -185,6 +186,8 @@ func TestTelemetry_GetRank(t *testing.T) {
 }
 
 func TestTelemetry_CollectMetrics(t *testing.T) {
+	producerID := 777
+
 	testMetrics := TestMetricsMap{
 		MetricTypeCounter: &TestMetric{
 			Name: "collect_test/my_counter",
@@ -248,7 +251,6 @@ func TestTelemetry_CollectMetrics(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			producerID := NextTestID()
 			InitTestMetricsProducer(t, producerID, 2048)
 			defer CleanupTestMetricsProducer(t)
 

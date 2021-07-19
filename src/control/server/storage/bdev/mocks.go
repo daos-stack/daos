@@ -7,19 +7,17 @@
 package bdev
 
 import (
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 type (
 	MockBackendConfig struct {
 		PrepareResetErr error
-		PrepareResp     *storage.BdevPrepareResponse
+		PrepareResp     *PrepareResponse
 		PrepareErr      error
-		FormatRes       *storage.BdevFormatResponse
+		FormatRes       *FormatResponse
 		FormatErr       error
-		ScanRes         *storage.BdevScanResponse
+		ScanRes         *ScanResponse
 		ScanErr         error
 		VmdEnabled      bool // set disabled by default
 		UpdateErr       error
@@ -44,40 +42,21 @@ func DefaultMockBackend() *MockBackend {
 	return NewMockBackend(nil)
 }
 
-func filterScanResp(resp *storage.BdevScanResponse, pciFilter ...string) (int, *storage.BdevScanResponse) {
-	var skipped int
-	out := make(storage.NvmeControllers, 0)
-
-	if len(pciFilter) == 0 {
-		return skipped, &storage.BdevScanResponse{Controllers: resp.Controllers}
-	}
-
-	for _, c := range resp.Controllers {
-		if !common.Includes(pciFilter, c.PciAddr) {
-			skipped++
-			continue
-		}
-		out = append(out, c)
-	}
-
-	return skipped, &storage.BdevScanResponse{Controllers: out}
-}
-
-func (mb *MockBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
+func (mb *MockBackend) Scan(req ScanRequest) (*ScanResponse, error) {
 	if mb.cfg.ScanRes == nil {
-		mb.cfg.ScanRes = new(storage.BdevScanResponse)
+		mb.cfg.ScanRes = new(ScanResponse)
 	}
 	// hack: filter based on request here because mock
 	// provider has forwarding disabled and filter is
 	// therefore skipped in test
-	_, resp := filterScanResp(mb.cfg.ScanRes, req.DeviceList...)
+	_, resp := mb.cfg.ScanRes.filter(req.DeviceList...)
 
 	return resp, mb.cfg.ScanErr
 }
 
-func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
+func (mb *MockBackend) Format(req FormatRequest) (*FormatResponse, error) {
 	if mb.cfg.FormatRes == nil {
-		mb.cfg.FormatRes = new(storage.BdevFormatResponse)
+		mb.cfg.FormatRes = new(FormatResponse)
 	}
 
 	return mb.cfg.FormatRes, mb.cfg.FormatErr
@@ -87,12 +66,12 @@ func (mb *MockBackend) PrepareReset() error {
 	return mb.cfg.PrepareResetErr
 }
 
-func (mb *MockBackend) Prepare(_ storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+func (mb *MockBackend) Prepare(_ PrepareRequest) (*PrepareResponse, error) {
 	if mb.cfg.PrepareErr != nil {
 		return nil, mb.cfg.PrepareErr
 	}
 	if mb.cfg.PrepareResp == nil {
-		return new(storage.BdevPrepareResponse), nil
+		return new(PrepareResponse), nil
 	}
 
 	return mb.cfg.PrepareResp, nil
@@ -110,14 +89,10 @@ func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {
 	return mb.cfg.UpdateErr
 }
 
-func (mb *MockBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error) {
-	return &storage.BdevWriteNvmeConfigResponse{}, nil
-}
-
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {
-	return NewProvider(log, NewMockBackend(mbc))
+	return NewProvider(log, NewMockBackend(mbc)).WithForwardingDisabled()
 }
 
 func DefaultMockProvider(log logging.Logger) *Provider {
-	return NewMockProvider(log, nil)
+	return NewMockProvider(log, nil).WithForwardingDisabled()
 }

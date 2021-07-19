@@ -17,7 +17,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-func Test_filterScanResp(t *testing.T) {
+func TestProvider_ScanResponse_filter(t *testing.T) {
 	ctrlr1 := storage.MockNvmeController(1)
 	ctrlr2 := storage.MockNvmeController(2)
 	ctrlr3 := storage.MockNvmeController(3)
@@ -25,51 +25,51 @@ func Test_filterScanResp(t *testing.T) {
 	ctrlr5 := storage.MockNvmeController(5)
 
 	for name, tc := range map[string]struct {
-		scanResp   *storage.BdevScanResponse
+		scanResp   *ScanResponse
 		deviceList []string
-		expResp    *storage.BdevScanResponse
+		expResp    *ScanResponse
 		expNum     int
 	}{
 		"scan response no filter": {
-			scanResp: &storage.BdevScanResponse{
+			scanResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
 			},
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
 			},
 		},
 		"scan response filtered": {
 			deviceList: []string{ctrlr1.PciAddr, ctrlr3.PciAddr},
-			scanResp: &storage.BdevScanResponse{
+			scanResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1, ctrlr2, ctrlr3},
 			},
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1, ctrlr3},
 			},
 			expNum: 1,
 		},
 		"scan response inclusive filter": {
 			deviceList: []string{ctrlr1.PciAddr, ctrlr2.PciAddr, ctrlr3.PciAddr},
-			scanResp: &storage.BdevScanResponse{
+			scanResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1, ctrlr3},
 			},
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1, ctrlr3},
 			},
 		},
 		"scan response exclusive filter": {
 			deviceList: []string{ctrlr1.PciAddr, ctrlr5.PciAddr, ctrlr3.PciAddr},
-			scanResp: &storage.BdevScanResponse{
+			scanResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr2, ctrlr4},
 			},
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{},
 			},
 			expNum: 2,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			gotNum, gotResp := filterScanResp(tc.scanResp, tc.deviceList...)
+			gotNum, gotResp := tc.scanResp.filter(tc.deviceList...)
 
 			common.AssertEqual(t, tc.expNum, gotNum, name+" expected number filtered")
 			if diff := cmp.Diff(tc.expResp, gotResp, defCmpOpts()...); diff != "" {
@@ -79,107 +79,107 @@ func Test_filterScanResp(t *testing.T) {
 	}
 }
 
-func Test_forwardScan(t *testing.T) {
+func TestProvider_forwardScan(t *testing.T) {
 	for name, tc := range map[string]struct {
-		scanReq      storage.BdevScanRequest
-		cache        *storage.BdevScanResponse
-		scanResp     *storage.BdevScanResponse
+		scanReq      ScanRequest
+		cache        *ScanResponse
+		scanResp     *ScanResponse
 		scanErr      error
 		shouldUpdate bool
 		expMsg       string
-		expResp      *storage.BdevScanResponse
+		expResp      *ScanResponse
 		expErr       error
 	}{
 		"scan error": {
-			scanReq: storage.BdevScanRequest{},
+			scanReq: ScanRequest{},
 			scanErr: errors.New("fail"),
 			expErr:  errors.New("fail"),
 		},
 		"nil scan response": {
-			scanReq:  storage.BdevScanRequest{},
+			scanReq:  ScanRequest{},
 			scanResp: nil,
 			expErr:   errors.New("unexpected nil response from bdev backend"),
 		},
 		"nil devices": {
-			scanReq:      storage.BdevScanRequest{},
-			scanResp:     new(storage.BdevScanResponse),
+			scanReq:      ScanRequest{},
+			scanResp:     new(ScanResponse),
 			shouldUpdate: true,
 			expMsg:       "bdev scan: update cache (0 devices)",
-			expResp:      new(storage.BdevScanResponse),
+			expResp:      new(ScanResponse),
 		},
 		"no devices": {
-			scanReq: storage.BdevScanRequest{},
-			scanResp: &storage.BdevScanResponse{
+			scanReq: ScanRequest{},
+			scanResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{},
 			},
 			shouldUpdate: true,
 			expMsg:       "bdev scan: update cache (0 devices)",
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.NvmeControllers{},
 			},
 		},
 		"update cache": {
-			scanReq: storage.BdevScanRequest{},
-			scanResp: &storage.BdevScanResponse{
+			scanReq: ScanRequest{},
+			scanResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
 			shouldUpdate: true,
 			expMsg:       "bdev scan: update cache (3 devices)",
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
 		},
 		"update empty cache": {
-			scanReq: storage.BdevScanRequest{},
-			cache:   &storage.BdevScanResponse{},
-			scanResp: &storage.BdevScanResponse{
+			scanReq: ScanRequest{},
+			cache:   &ScanResponse{},
+			scanResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
 			shouldUpdate: true,
 			expMsg:       "bdev scan: update cache (3 devices)",
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
 		},
 		"reuse cache": {
-			scanReq: storage.BdevScanRequest{},
-			cache: &storage.BdevScanResponse{
+			scanReq: ScanRequest{},
+			cache: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(2),
 			},
-			scanResp: &storage.BdevScanResponse{
+			scanResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
 			expMsg: "bdev scan: reuse cache (2 devices)",
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(2),
 			},
 		},
 		"bypass cache": {
-			scanReq: storage.BdevScanRequest{NoCache: true},
-			cache: &storage.BdevScanResponse{
+			scanReq: ScanRequest{NoCache: true},
+			cache: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(2),
 			},
-			scanResp: &storage.BdevScanResponse{
+			scanResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
 			expMsg: "bdev scan: bypass cache (3 devices)",
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
 		},
 		"filtered devices": {
-			scanReq: storage.BdevScanRequest{
+			scanReq: ScanRequest{
 				DeviceList: []string{
 					storage.MockNvmeController(0).PciAddr,
 					storage.MockNvmeController(1).PciAddr,
 				},
 			},
-			scanResp: &storage.BdevScanResponse{
+			scanResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(3),
 			},
 			shouldUpdate: true,
 			expMsg:       "bdev scan: update cache (3-1 filtered devices)",
-			expResp: &storage.BdevScanResponse{
+			expResp: &ScanResponse{
 				Controllers: storage.MockNvmeControllers(2),
 			},
 		},
@@ -188,7 +188,7 @@ func Test_forwardScan(t *testing.T) {
 			_, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
 
-			scanFn := func(r storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
+			scanFn := func(r ScanRequest) (*ScanResponse, error) {
 				return tc.scanResp, tc.scanErr
 			}
 
@@ -215,40 +215,40 @@ func TestProvider_Scan(t *testing.T) {
 	ctrlr3 := storage.MockNvmeController(3)
 
 	for name, tc := range map[string]struct {
-		req            storage.BdevScanRequest
+		req            ScanRequest
 		forwarded      bool
 		mbc            *MockBackendConfig
-		expRes         *storage.BdevScanResponse
+		expRes         *ScanResponse
 		expErr         error
 		expVMDDisabled bool
 	}{
 		"no devices": {
-			req:            storage.BdevScanRequest{},
-			expRes:         &storage.BdevScanResponse{},
+			req:            ScanRequest{},
+			expRes:         &ScanResponse{},
 			expVMDDisabled: true, // disabled in mock by default
 		},
 		"single device": {
-			req: storage.BdevScanRequest{},
+			req: ScanRequest{},
 			mbc: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
+				ScanRes: &ScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr1},
 				},
 				VmdEnabled: true,
 			},
-			expRes: &storage.BdevScanResponse{
+			expRes: &ScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
 			},
 		},
 		"multiple devices": {
-			req: storage.BdevScanRequest{},
+			req: ScanRequest{},
 			mbc: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
+				ScanRes: &ScanResponse{
 					Controllers: storage.NvmeControllers{
 						ctrlr1, ctrlr2, ctrlr3,
 					},
 				},
 			},
-			expRes: &storage.BdevScanResponse{
+			expRes: &ScanResponse{
 				Controllers: storage.NvmeControllers{
 					ctrlr1, ctrlr2, ctrlr3,
 				},
@@ -256,16 +256,16 @@ func TestProvider_Scan(t *testing.T) {
 			expVMDDisabled: true,
 		},
 		"multiple devices with vmd disabled": {
-			req:       storage.BdevScanRequest{DisableVMD: true},
+			req:       ScanRequest{DisableVMD: true},
 			forwarded: true,
 			mbc: &MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
+				ScanRes: &ScanResponse{
 					Controllers: storage.NvmeControllers{
 						ctrlr1, ctrlr2, ctrlr3,
 					},
 				},
 			},
-			expRes: &storage.BdevScanResponse{
+			expRes: &ScanResponse{
 				Controllers: storage.NvmeControllers{
 					ctrlr1, ctrlr2, ctrlr3,
 				},
@@ -273,7 +273,7 @@ func TestProvider_Scan(t *testing.T) {
 			expVMDDisabled: true,
 		},
 		"failure": {
-			req: storage.BdevScanRequest{},
+			req: ScanRequest{},
 			mbc: &MockBackendConfig{
 				ScanErr: errors.New("scan failed"),
 			},
@@ -304,39 +304,39 @@ func TestProvider_Scan(t *testing.T) {
 
 func TestProvider_Prepare(t *testing.T) {
 	for name, tc := range map[string]struct {
-		req           storage.BdevPrepareRequest
+		req           PrepareRequest
 		shouldForward bool
 		mbc           *MockBackendConfig
 		vmdDetectErr  error
-		expRes        *storage.BdevPrepareResponse
+		expRes        *PrepareResponse
 		expErr        error
 	}{
 		"reset fails": {
-			req: storage.BdevPrepareRequest{},
+			req: PrepareRequest{},
 			mbc: &MockBackendConfig{
 				PrepareResetErr: errors.New("reset failed"),
 			},
 			expErr: errors.New("reset failed"),
 		},
 		"reset-only": {
-			req: storage.BdevPrepareRequest{
+			req: PrepareRequest{
 				ResetOnly: true,
 			},
 			mbc: &MockBackendConfig{
 				PrepareErr: errors.New("should not get this far"),
 			},
-			expRes: &storage.BdevPrepareResponse{},
+			expRes: &PrepareResponse{},
 		},
 		"prepare fails": {
-			req: storage.BdevPrepareRequest{},
+			req: PrepareRequest{},
 			mbc: &MockBackendConfig{
 				PrepareErr: errors.New("prepare failed"),
 			},
 			expErr: errors.New("prepare failed"),
 		},
 		"prepare succeeds": {
-			req:    storage.BdevPrepareRequest{},
-			expRes: &storage.BdevPrepareResponse{},
+			req:    PrepareRequest{},
+			expRes: &PrepareResponse{},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -362,35 +362,29 @@ func TestProvider_Format(t *testing.T) {
 	mockSingle := storage.MockNvmeController()
 
 	for name, tc := range map[string]struct {
-		req    storage.BdevFormatRequest
+		req    FormatRequest
 		mbc    *MockBackendConfig
-		expRes *storage.BdevFormatResponse
+		expRes *FormatResponse
 		expErr error
 	}{
-		"empty input": {
-			req:    storage.BdevFormatRequest{},
-			expErr: errors.New("empty DeviceList"),
-		},
 		"NVMe failure": {
-			req: storage.BdevFormatRequest{
-				Properties: storage.BdevTierProperties{
-					Class:      storage.ClassNvme,
-					DeviceList: []string{mockSingle.PciAddr},
-				},
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{mockSingle.PciAddr},
 			},
 			mbc: &MockBackendConfig{
-				FormatRes: &storage.BdevFormatResponse{
-					DeviceResponses: storage.BdevDeviceFormatResponses{
-						mockSingle.PciAddr: &storage.BdevDeviceFormatResponse{
+				FormatRes: &FormatResponse{
+					DeviceResponses: DeviceFormatResponses{
+						mockSingle.PciAddr: &DeviceFormatResponse{
 							Error: FaultFormatError(mockSingle.PciAddr,
 								errors.New("foobared")),
 						},
 					},
 				},
 			},
-			expRes: &storage.BdevFormatResponse{
-				DeviceResponses: storage.BdevDeviceFormatResponses{
-					mockSingle.PciAddr: &storage.BdevDeviceFormatResponse{
+			expRes: &FormatResponse{
+				DeviceResponses: DeviceFormatResponses{
+					mockSingle.PciAddr: &DeviceFormatResponse{
 						Error: FaultFormatError(mockSingle.PciAddr,
 							errors.New("foobared")),
 					},
@@ -398,24 +392,22 @@ func TestProvider_Format(t *testing.T) {
 			},
 		},
 		"NVMe success": {
-			req: storage.BdevFormatRequest{
-				Properties: storage.BdevTierProperties{
-					Class:      storage.ClassNvme,
-					DeviceList: []string{mockSingle.PciAddr},
-				},
+			req: FormatRequest{
+				Class:      storage.BdevClassNvme,
+				DeviceList: []string{mockSingle.PciAddr},
 			},
 			mbc: &MockBackendConfig{
-				FormatRes: &storage.BdevFormatResponse{
-					DeviceResponses: storage.BdevDeviceFormatResponses{
-						mockSingle.PciAddr: &storage.BdevDeviceFormatResponse{
+				FormatRes: &FormatResponse{
+					DeviceResponses: DeviceFormatResponses{
+						mockSingle.PciAddr: &DeviceFormatResponse{
 							Formatted: true,
 						},
 					},
 				},
 			},
-			expRes: &storage.BdevFormatResponse{
-				DeviceResponses: storage.BdevDeviceFormatResponses{
-					mockSingle.PciAddr: &storage.BdevDeviceFormatResponse{
+			expRes: &FormatResponse{
+				DeviceResponses: DeviceFormatResponses{
+					mockSingle.PciAddr: &DeviceFormatResponse{
 						Formatted: true,
 					},
 				},

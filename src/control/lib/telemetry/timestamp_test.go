@@ -26,7 +26,7 @@ func TestTelemetry_GetTimestamp(t *testing.T) {
 	if !ok {
 		t.Fatal("real timestamp not in metrics set")
 	}
-	timeName := realTime.FullPath()
+	timeName := realTime.Name
 
 	for name, tc := range map[string]struct {
 		ctx        context.Context
@@ -46,7 +46,7 @@ func TestTelemetry_GetTimestamp(t *testing.T) {
 		},
 		"bad type": {
 			ctx:        testCtx,
-			metricName: testMetrics[MetricTypeGauge].FullPath(),
+			metricName: testMetrics[MetricTypeGauge].Name,
 			expErr:     errors.New("not a timestamp"),
 		},
 		"success": {

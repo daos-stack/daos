@@ -21,16 +21,15 @@ import (
 	"github.com/pkg/errors"
 
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
+
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
-
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -190,12 +189,9 @@ func TestServer_Harness_Start(t *testing.T) {
 			engineCfgs := make([]*engine.Config, maxEngines)
 			for i := 0; i < maxEngines; i++ {
 				engineCfgs[i] = engine.NewConfig().
-					WithStorage(
-						storage.NewTierConfig().
-							WithScmClass("ram").
-							WithScmRamdiskSize(1).
-							WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i))),
-					)
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
 			}
 			config := config.DefaultServer().
 				WithEngines(engineCfgs...).
@@ -207,7 +203,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			var instanceStarts uint32
 			harness := NewEngineHarness(log)
 			for i, engineCfg := range config.Engines {
-				if err := os.MkdirAll(engineCfg.Storage.Tiers[0].Scm.MountPoint, 0777); err != nil {
+				if err := os.MkdirAll(engineCfg.Storage.SCM.MountPoint, 0777); err != nil {
 					t.Fatal(err)
 				}
 
@@ -221,15 +217,8 @@ func TestServer_Harness_Start(t *testing.T) {
 					}
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
-
-				msc := scm.MockSysConfig{IsMountedBool: true}
-				sysp := scm.NewMockSysProvider(&msc)
-				provider := storage.MockProvider(
-					log, 0, &engineCfg.Storage,
-					sysp,
-					scm.NewMockProvider(log, nil, &msc),
-					bdev.NewMockProvider(log, &bdev.MockBackendConfig{}),
-				)
+				bdevProvider := bdev.NewMockProvider(log, &bdev.MockBackendConfig{})
+				scmProvider := scm.NewMockProvider(log, nil, &scm.MockSysConfig{IsMountedBool: true})
 
 				idx := uint32(i)
 				joinFn := func(_ context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
@@ -242,7 +231,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					}, nil
 				}
 
-				ei := NewEngineInstance(log, provider, joinFn, runner)
+				ei := NewEngineInstance(log, bdevProvider, scmProvider, joinFn, runner)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true

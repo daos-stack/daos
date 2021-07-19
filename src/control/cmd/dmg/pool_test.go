@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
-	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/system"
@@ -38,8 +38,10 @@ func createACLFile(t *testing.T, dir string, acl *control.AccessControlList) str
 }
 
 func TestPoolCommands(t *testing.T) {
-	testSizeStr := "512GiB"
-	testSize := 549755813888
+	testScmSizeStr := "512GiB"
+	testScmSize := 549755813888
+	testNvmeSizeStr := "512GB"
+	testNvmeSize := 512000000000
 	eUsr, err := user.Current()
 	if err != nil {
 		t.Fatal(err)
@@ -96,69 +98,55 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with incompatible arguments (auto nvme-size)",
-			fmt.Sprintf("pool create --size %s --nvme-size %s", testSizeStr, testSizeStr),
+			fmt.Sprintf("pool create --size %s --nvme-size %s", testScmSizeStr, testScmSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible arguments (auto scm-size)",
-			fmt.Sprintf("pool create --size %s --scm-size %s", testSizeStr, testSizeStr),
+			fmt.Sprintf("pool create --size %s --scm-size %s", testScmSizeStr, testScmSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with incompatible rank arguments (auto)",
-			fmt.Sprintf("pool create --size %s --nranks 16 --ranks 1,2,3", testSizeStr),
+			fmt.Sprintf("pool create --size %s --nranks 16 --ranks 1,2,3", testScmSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
-			"Create pool with invalid tier-ratio (auto)",
-			fmt.Sprintf("pool create --size %s --tier-ratio 200", testSizeStr),
+			"Create pool with invalid scm-ratio (auto)",
+			fmt.Sprintf("pool create --size %s --scm-ratio 200", testScmSizeStr),
 			"",
-			errors.New("0-100"),
-		},
-		{
-			"Create pool with single tier-ratio (auto)",
-			fmt.Sprintf("pool create --size %s --tier-ratio 10", testSizeStr),
-			strings.Join([]string{
-				printRequest(t, &control.PoolCreateReq{
-					TotalBytes: uint64(testSize),
-					TierRatio:  []float64{0.1, 0.9},
-					User:       eUsr.Username + "@",
-					UserGroup:  eGrp.Name + "@",
-					Ranks:      []system.Rank{},
-				}),
-			}, " "),
-			nil,
+			errors.New("1-100"),
 		},
 		{
 			"Create pool with incompatible arguments (manual)",
-			fmt.Sprintf("pool create --scm-size %s --nranks 42", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nranks 42", testScmSizeStr),
 			"",
 			errors.New("may not be mixed"),
 		},
 		{
 			"Create pool with minimal arguments",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3", testScmSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
+					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []system.Rank{},
-					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with auto storage parameters",
-			fmt.Sprintf("pool create --size %s --tier-ratio 2,98 --nranks 8", testSizeStr),
+			fmt.Sprintf("pool create --size %s --scm-ratio 2 --nranks 8", testScmSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					TotalBytes: uint64(testSize),
-					TierRatio:  []float64{0.02, 0.98},
+					TotalBytes: uint64(testScmSize),
+					ScmRatio:   0.02,
 					NumRanks:   8,
 					User:       eUsr.Username + "@",
 					UserGroup:  eGrp.Name + "@",
@@ -168,56 +156,90 @@ func TestPoolCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Create pool with user and group domains",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testSizeStr),
+			"Create pool with all arguments",
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --acl-file %s",
+				testScmSizeStr, testNvmeSizeStr, testACLFile),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
+					ScmBytes:   uint64(testScmSize),
+					NvmeBytes:  uint64(testNvmeSize),
+					NumSvcReps: 3,
+					User:       "foo@",
+					UserGroup:  "bar@",
+					Ranks:      []system.Rank{},
+					ACL:        testACL,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with raw byte count size args",
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo --group bar --nvme-size %s --acl-file %s",
+				strconv.Itoa(testScmSize), strconv.Itoa(testNvmeSize), testACLFile),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					ScmBytes:   uint64(testScmSize),
+					NvmeBytes:  uint64(testNvmeSize),
+					NumSvcReps: 3,
+					User:       "foo@",
+					UserGroup:  "bar@",
+					Ranks:      []system.Rank{},
+					ACL:        testACL,
+				}),
+			}, " "),
+			nil,
+		},
+		{
+			"Create pool with user and group domains",
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo@home --group bar@home", testScmSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					User:       "foo@home",
 					UserGroup:  "bar@home",
 					Ranks:      []system.Rank{},
-					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with user but no group",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --user foo", testScmSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
+					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					User:       "foo@",
 					UserGroup:  eGrp.Name + "@",
 					Ranks:      []system.Rank{},
-					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with group but no user",
-			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --nsvc 3 --group foo", testScmSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
+					ScmBytes:   uint64(testScmSize),
 					NumSvcReps: 3,
 					User:       eUsr.Username + "@",
 					UserGroup:  "foo@",
 					Ranks:      []system.Rank{},
-					TierBytes:  []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
 			nil,
 		},
 		{
 			"Create pool with invalid ACL file",
-			fmt.Sprintf("pool create --scm-size %s --acl-file /not/a/real/file", testSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --acl-file /not/a/real/file", testScmSizeStr),
 			"",
 			dmgTestErr("opening ACL file: open /not/a/real/file: no such file or directory"),
 		},
 		{
 			"Create pool with empty ACL file",
-			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testSizeStr, testEmptyFile),
+			fmt.Sprintf("pool create --scm-size %s --acl-file %s", testScmSizeStr, testEmptyFile),
 			"",
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
@@ -382,14 +404,6 @@ func TestPoolCommands(t *testing.T) {
 		{
 			"List pools",
 			"pool list",
-			strings.Join([]string{
-				printRequest(t, &control.ListPoolsReq{}),
-			}, " "),
-			nil,
-		},
-		{
-			"List pools with verbose flag",
-			"pool list --verbose",
 			strings.Join([]string{
 				printRequest(t, &control.ListPoolsReq{}),
 			}, " "),
@@ -711,71 +725,33 @@ func TestPoolGetACLToFile_Success(t *testing.T) {
 
 func TestDmg_PoolListCmd_Errors(t *testing.T) {
 	for name, tc := range map[string]struct {
-		ctlCfg    *control.Config
-		listResp  *mgmtpb.ListPoolsResp
-		queryResp *mgmtpb.PoolQueryResp
-		msErr     error
-		expErr    error
+		ctlCfg *control.Config
+		resp   *mgmtpb.ListPoolsResp
+		msErr  error
+		expErr error
 	}{
 		"list pools no config": {
-			listResp: &mgmtpb.ListPoolsResp{},
-			expErr:   errors.New("list pools failed: no configuration loaded"),
+			resp:   &mgmtpb.ListPoolsResp{},
+			expErr: errors.New("list pools failed: no configuration loaded"),
 		},
-		"list pools no queries": {
-			ctlCfg:   &control.Config{},
-			listResp: &mgmtpb.ListPoolsResp{},
+		"list pools success": {
+			ctlCfg: &control.Config{},
+			resp:   &mgmtpb.ListPoolsResp{},
 		},
 		"list pools ms failures": {
-			ctlCfg:   &control.Config{},
-			listResp: &mgmtpb.ListPoolsResp{},
-			msErr:    errors.New("remote failed"),
-			expErr:   errors.New("remote failed"),
-		},
-		"list pools query success": {
 			ctlCfg: &control.Config{},
-			listResp: &mgmtpb.ListPoolsResp{
-				Pools: []*mgmtpb.ListPoolsResp_Pool{
-					{
-						Uuid:    common.MockUUID(1),
-						SvcReps: []uint32{1, 3, 5, 8},
-					},
-				},
-			},
-			queryResp: &mgmtpb.PoolQueryResp{
-				Uuid:      common.MockUUID(1),
-				TierStats: []*mgmtpb.StorageUsageStats{{}},
-			},
-		},
-		"list pools query failure": {
-			ctlCfg: &control.Config{},
-			listResp: &mgmtpb.ListPoolsResp{
-				Pools: []*mgmtpb.ListPoolsResp_Pool{
-					{
-						Uuid:    common.MockUUID(1),
-						SvcReps: []uint32{1, 3, 5, 8},
-					},
-				},
-			},
-			queryResp: &mgmtpb.PoolQueryResp{
-				Status: int32(drpc.DaosNotInit),
-			},
-			expErr: errors.New("Query on pool \"00000001\" unsuccessful, status: \"DER_UNINIT"),
+			resp:   &mgmtpb.ListPoolsResp{},
+			msErr:  errors.New("remote failed"),
+			expErr: errors.New("remote failed"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			responses := []*control.UnaryResponse{
-				control.MockMSResponse("10.0.0.1:10001", tc.msErr, tc.listResp),
-			}
-			if tc.queryResp != nil {
-				responses = append(responses,
-					control.MockMSResponse("10.0.0.1:10001", tc.msErr, tc.queryResp))
-			}
-
 			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-				UnaryResponseSet: responses,
+				UnaryResponse: control.MockMSResponse("10.0.0.1:10001",
+					tc.msErr, tc.resp),
 			})
 
 			PoolListCmd := new(PoolListCmd)

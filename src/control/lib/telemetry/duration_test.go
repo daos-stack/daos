@@ -27,7 +27,7 @@ func TestTelemetry_GetDuration(t *testing.T) {
 	if !ok {
 		t.Fatal("real duration not in metrics set")
 	}
-	durName := realDur.FullPath()
+	durName := realDur.Name
 
 	for name, tc := range map[string]struct {
 		ctx        context.Context
@@ -47,7 +47,7 @@ func TestTelemetry_GetDuration(t *testing.T) {
 		},
 		"bad type": {
 			ctx:        testCtx,
-			metricName: testMetrics[MetricTypeGauge].FullPath(),
+			metricName: testMetrics[MetricTypeGauge].Name,
 			expErr:     errors.New("not a duration"),
 		},
 		"success": {

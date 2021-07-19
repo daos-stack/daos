@@ -15,49 +15,36 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
 
 // StorageControlService encapsulates the storage part of the control service
 type StorageControlService struct {
 	log             logging.Logger
-	storage         *storage.Provider
-	instanceStorage map[uint32]*storage.Config
+	bdev            *bdev.Provider
+	scm             *scm.Provider
+	instanceStorage []*engine.StorageConfig
 }
 
 // NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
-	instanceStorage := make(map[uint32]*storage.Config)
-	for i, cfg := range engineCfgs {
-		instanceStorage[uint32(i)] = &cfg.Storage
+func NewStorageControlService(log logging.Logger, bdev *bdev.Provider, scm *scm.Provider, engineCfgs []*engine.Config) *StorageControlService {
+	instanceStorage := []*engine.StorageConfig{}
+	for _, cfg := range engineCfgs {
+		instanceStorage = append(instanceStorage, &cfg.Storage)
 	}
 
 	return &StorageControlService{
-		log: log,
-		storage: storage.DefaultProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}),
-		instanceStorage: instanceStorage,
-	}
-}
-
-func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider) *StorageControlService {
-	instanceStorage := make(map[uint32]*storage.Config)
-	for i, cfg := range engineCfgs {
-		instanceStorage[uint32(i)] = &cfg.Storage
-	}
-
-	return &StorageControlService{
-		log: log,
-		storage: storage.MockProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}, sys, scm, bdev),
+		log:             log,
+		bdev:            bdev,
+		scm:             scm,
 		instanceStorage: instanceStorage,
 	}
 }
 
 // findBdevsWithDomain retrieves controllers in scan response that match the
 // input prefix in the domain component of their PCI address.
-func findBdevsWithDomain(scanResp *storage.BdevScanResponse, prefix string) ([]string, error) {
+func findBdevsWithDomain(scanResp *bdev.ScanResponse, prefix string) ([]string, error) {
 	var found []string
 
 	for _, ctrlr := range scanResp.Controllers {
@@ -80,7 +67,7 @@ func findBdevsWithDomain(scanResp *storage.BdevScanResponse, prefix string) ([]s
 // address domain.
 //
 // Return new device list with PCI addresses of devices behind the VMD.
-func substBdevVmdAddrs(cfgBdevs []string, scanResp *storage.BdevScanResponse) ([]string, error) {
+func substBdevVmdAddrs(cfgBdevs []string, scanResp *bdev.ScanResponse) ([]string, error) {
 	if len(scanResp.Controllers) == 0 {
 		return nil, nil
 	}
@@ -112,7 +99,7 @@ func substBdevVmdAddrs(cfgBdevs []string, scanResp *storage.BdevScanResponse) ([
 //
 // Return any device addresses missing from the scan response and ok set to true
 // if no devices are missing.
-func canAccessBdevs(cfgBdevs []string, scanResp *storage.BdevScanResponse) ([]string, bool) {
+func canAccessBdevs(cfgBdevs []string, scanResp *bdev.ScanResponse) ([]string, bool) {
 	var missing []string
 
 	for _, pciAddr := range cfgBdevs {
@@ -133,7 +120,7 @@ func canAccessBdevs(cfgBdevs []string, scanResp *storage.BdevScanResponse) ([]st
 }
 
 // checkCfgBdevs performs validation on NVMe returned from initial scan.
-func (c *StorageControlService) checkCfgBdevs(scanResp *storage.BdevScanResponse) error {
+func (c *StorageControlService) checkCfgBdevs(scanResp *bdev.ScanResponse) error {
 	if scanResp == nil {
 		return errors.New("received nil scan response")
 	}
@@ -141,35 +128,32 @@ func (c *StorageControlService) checkCfgBdevs(scanResp *storage.BdevScanResponse
 		return nil
 	}
 
-	for _, storageCfg := range c.instanceStorage {
-		for _, tierCfg := range storageCfg.Tiers {
-			if !tierCfg.IsBdev() || len(tierCfg.Bdev.DeviceList) == 0 {
-				continue
-			}
-			cfgBdevs := tierCfg.Bdev.DeviceList
+	for idx, storageCfg := range c.instanceStorage {
+		cfgBdevs := storageCfg.Bdev.GetNvmeDevs()
+		if len(cfgBdevs) == 0 {
+			continue
+		}
 
-			// TODO DAOS-8040: re-enable VMD
-			// if !c.bdev.IsVMDDisabled() {
-			// 	c.log.Debug("VMD detected, processing PCI addresses")
-			// 	newBdevs, err := substBdevVmdAddrs(cfgBdevs, scanResp)
-			// 	if err != nil {
-			// 		return err
-			// 	}
-			// 	if len(newBdevs) == 0 {
-			// 		return errors.New("unexpected empty bdev list returned " +
-			// 			"check vmd address has backing devices")
-			// 	}
-			// 	c.log.Debugf("instance %d: subst vmd addrs %v->%v",
-			// 		idx, cfgBdevs, newBdevs)
-			// 	cfgBdevs = newBdevs
-			// 	c.instanceStorage[idx].Bdev.DeviceList = cfgBdevs
-			// }
-
-			// fail if config specified nvme devices are inaccessible
-			missing, ok := canAccessBdevs(cfgBdevs, scanResp)
-			if !ok {
-				return FaultBdevNotFound(missing)
+		if !c.bdev.IsVMDDisabled() {
+			c.log.Debug("VMD detected, processing PCI addresses")
+			newBdevs, err := substBdevVmdAddrs(cfgBdevs, scanResp)
+			if err != nil {
+				return err
 			}
+			if len(newBdevs) == 0 {
+				return errors.New("unexpected empty bdev list returned " +
+					"check vmd address has backing devices")
+			}
+			c.log.Debugf("instance %d: subst vmd addrs %v->%v",
+				idx, cfgBdevs, newBdevs)
+			cfgBdevs = newBdevs
+			c.instanceStorage[idx].Bdev.DeviceList = cfgBdevs
+		}
+
+		// fail if config specified nvme devices are inaccessible
+		missing, ok := canAccessBdevs(cfgBdevs, scanResp)
+		if !ok {
+			return FaultBdevNotFound(missing)
 		}
 	}
 
@@ -178,20 +162,18 @@ func (c *StorageControlService) checkCfgBdevs(scanResp *storage.BdevScanResponse
 
 // Setup delegates to Storage implementation's Setup methods.
 func (c *StorageControlService) Setup() error {
-	if _, err := c.ScmScan(storage.ScmScanRequest{}); err != nil {
+	if _, err := c.ScmScan(scm.ScanRequest{}); err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
 	// don't scan if using emulated NVMe
 	for _, storageCfg := range c.instanceStorage {
-		for _, tierCfg := range storageCfg.Tiers {
-			if tierCfg.Class != storage.ClassNvme {
-				return nil
-			}
+		if storageCfg.Bdev.Class != storage.BdevClassNvme {
+			return nil
 		}
 	}
 
-	nvmeScanResp, err := c.NvmeScan(storage.BdevScanRequest{})
+	nvmeScanResp, err := c.NvmeScan(bdev.ScanRequest{})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
 		return nil
@@ -204,40 +186,34 @@ func (c *StorageControlService) Setup() error {
 	return nil
 }
 
-func (c *StorageControlService) defaultProvider() *storage.Provider {
-	return storage.DefaultProvider(c.log, 0, &storage.Config{
-		Tiers: nil,
-	})
-}
-
 // NvmePrepare preps locally attached SSDs and returns error.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	return c.storage.Bdev.Prepare(req)
+func (c *StorageControlService) NvmePrepare(req bdev.PrepareRequest) (*bdev.PrepareResponse, error) {
+	return c.bdev.Prepare(req)
 }
 
 // GetScmState performs required initialization and returns current state
 // of SCM module preparation.
 func (c *StorageControlService) GetScmState() (storage.ScmState, error) {
-	return c.storage.Scm.GetPmemState()
+	return c.scm.GetPmemState()
 }
 
 // ScmPrepare preps locally attached modules and returns need to reboot message,
 // list of pmem device files and error directly.
 //
 // Suitable for commands invoked directly on server, not over gRPC.
-func (c *StorageControlService) ScmPrepare(req storage.ScmPrepareRequest) (*storage.ScmPrepareResponse, error) {
+func (c *StorageControlService) ScmPrepare(req scm.PrepareRequest) (*scm.PrepareResponse, error) {
 	// transition to the next state in SCM preparation
-	return c.storage.Scm.Prepare(req)
+	return c.scm.Prepare(req)
 }
 
 // NvmeScan scans locally attached SSDs.
-func (c *StorageControlService) NvmeScan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
-	return c.storage.Bdev.Scan(req)
+func (c *StorageControlService) NvmeScan(req bdev.ScanRequest) (*bdev.ScanResponse, error) {
+	return c.bdev.Scan(req)
 }
 
 // ScmScan scans locally attached modules, namespaces and state of DCPM config.
-func (c *StorageControlService) ScmScan(req storage.ScmScanRequest) (*storage.ScmScanResponse, error) {
-	return c.storage.Scm.Scan(req)
+func (c *StorageControlService) ScmScan(req scm.ScanRequest) (*scm.ScanResponse, error) {
+	return c.scm.Scan(req)
 }

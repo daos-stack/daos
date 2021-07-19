@@ -11,7 +11,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -27,7 +26,7 @@ type scmHandler struct {
 
 func (h *scmHandler) setupProvider(log logging.Logger) {
 	if h.scmProvider == nil {
-		h.scmProvider = scm.DefaultProvider(log)
+		h.scmProvider = scm.DefaultProvider(log).WithForwardingDisabled()
 	}
 }
 
@@ -41,14 +40,14 @@ func (h *scmMountUnmountHandler) Handle(log logging.Logger, req *pbin.Request) *
 		return getNilRequestResp()
 	}
 
-	var mReq storage.ScmMountRequest
+	var mReq scm.MountRequest
 	if err := json.Unmarshal(req.Payload, &mReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}
 
 	h.setupProvider(log)
 
-	var mRes *storage.ScmMountResponse
+	var mRes *scm.MountResponse
 	var err error
 	switch req.Method {
 	case "ScmMount":
@@ -72,14 +71,14 @@ func (h *scmFormatCheckHandler) Handle(log logging.Logger, req *pbin.Request) *p
 		return getNilRequestResp()
 	}
 
-	var fReq storage.ScmFormatRequest
+	var fReq scm.FormatRequest
 	if err := json.Unmarshal(req.Payload, &fReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}
 
 	h.setupProvider(log)
 
-	var fRes *storage.ScmFormatResponse
+	var fRes *scm.FormatResponse
 	var err error
 	switch req.Method {
 	case "ScmFormat":
@@ -104,7 +103,7 @@ func (h *scmScanHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Res
 		return getNilRequestResp()
 	}
 
-	var sReq storage.ScmScanRequest
+	var sReq scm.ScanRequest
 	if err := json.Unmarshal(req.Payload, &sReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}
@@ -129,7 +128,7 @@ func (h *scmPrepHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Res
 		return getNilRequestResp()
 	}
 
-	var pReq storage.ScmPrepareRequest
+	var pReq scm.PrepareRequest
 	if err := json.Unmarshal(req.Payload, &pReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}
@@ -151,7 +150,7 @@ type bdevHandler struct {
 
 func (h *bdevHandler) setupProvider(log logging.Logger) {
 	if h.bdevProvider == nil {
-		h.bdevProvider = bdev.DefaultProvider(log)
+		h.bdevProvider = bdev.DefaultProvider(log).WithForwardingDisabled()
 	}
 }
 
@@ -165,7 +164,7 @@ func (h *bdevScanHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Re
 		return getNilRequestResp()
 	}
 
-	var sReq storage.BdevScanRequest
+	var sReq bdev.ScanRequest
 	if err := json.Unmarshal(req.Payload, &sReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}
@@ -190,7 +189,7 @@ func (h *bdevPrepHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Re
 		return getNilRequestResp()
 	}
 
-	var pReq storage.BdevPrepareRequest
+	var pReq bdev.PrepareRequest
 	if err := json.Unmarshal(req.Payload, &pReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}
@@ -215,7 +214,7 @@ func (h *bdevFormatHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.
 		return getNilRequestResp()
 	}
 
-	var fReq storage.BdevFormatRequest
+	var fReq bdev.FormatRequest
 	if err := json.Unmarshal(req.Payload, &fReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}
@@ -223,30 +222,6 @@ func (h *bdevFormatHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.
 	h.setupProvider(log)
 
 	fRes, err := h.bdevProvider.Format(fReq)
-	if err != nil {
-		return pbin.NewResponseWithError(err)
-	}
-
-	return pbin.NewResponseWithPayload(fRes)
-}
-
-type bdevWriteNvmeConfigHandler struct {
-	bdevHandler
-}
-
-func (h *bdevWriteNvmeConfigHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
-	if req == nil {
-		return getNilRequestResp()
-	}
-
-	var fReq storage.BdevWriteNvmeConfigRequest
-	if err := json.Unmarshal(req.Payload, &fReq); err != nil {
-		return pbin.NewResponseWithError(err)
-	}
-
-	h.setupProvider(log)
-
-	fRes, err := h.bdevProvider.WriteNvmeConfig(fReq)
 	if err != nil {
 		return pbin.NewResponseWithError(err)
 	}

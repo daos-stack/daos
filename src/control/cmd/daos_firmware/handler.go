@@ -14,7 +14,6 @@ import (
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 )
@@ -30,7 +29,7 @@ type scmHandler struct {
 
 func (h *scmHandler) setupProvider(log logging.Logger) {
 	if h.scmProvider == nil {
-		h.scmProvider = scm.DefaultProvider(log)
+		h.scmProvider = scm.DefaultProvider(log).WithForwardingDisabled()
 	}
 }
 
@@ -45,7 +44,7 @@ func (h *scmQueryHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Re
 		return getNilRequestResp()
 	}
 
-	var qReq storage.ScmFirmwareQueryRequest
+	var qReq scm.FirmwareQueryRequest
 	if err := json.Unmarshal(req.Payload, &qReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}
@@ -71,7 +70,7 @@ func (h *scmUpdateHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.R
 		return getNilRequestResp()
 	}
 
-	var uReq storage.ScmFirmwareUpdateRequest
+	var uReq scm.FirmwareUpdateRequest
 	if err := json.Unmarshal(req.Payload, &uReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}
@@ -93,31 +92,8 @@ type bdevHandler struct {
 
 func (h *bdevHandler) setupProvider(log logging.Logger) {
 	if h.bdevProvider == nil {
-		h.bdevProvider = bdev.DefaultProvider(log)
+		h.bdevProvider = bdev.DefaultProvider(log).WithForwardingDisabled()
 	}
-}
-
-// nvmeQueryHandler handles a request to query the NVMe device firmware from a file.
-type nvmeQueryHandler struct {
-	bdevHandler
-}
-
-// Handle queries the NVMe device firmware and returns the result as a pbin.Response.
-func (h *nvmeQueryHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
-	if req == nil {
-		return getNilRequestResp()
-	}
-
-	var uReq storage.NVMeFirmwareQueryRequest
-	if err := json.Unmarshal(req.Payload, &uReq); err != nil {
-		return pbin.NewResponseWithError(err)
-	}
-
-	h.setupProvider(log)
-
-	res, _ := h.bdevProvider.QueryFirmware(uReq)
-
-	return pbin.NewResponseWithPayload(res)
 }
 
 // nvmeUpdateHandler handles a request to update the NVMe device firmware from a file.
@@ -131,7 +107,7 @@ func (h *nvmeUpdateHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.
 		return getNilRequestResp()
 	}
 
-	var uReq storage.NVMeFirmwareUpdateRequest
+	var uReq bdev.FirmwareUpdateRequest
 	if err := json.Unmarshal(req.Payload, &uReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}

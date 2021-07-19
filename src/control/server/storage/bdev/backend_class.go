@@ -62,19 +62,19 @@ func createEmptyFile(log logging.Logger, path string, size uint64) error {
 	return nil
 }
 
-func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWriteNvmeConfigRequest) error {
+func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *FormatRequest) error {
 	if buf.Len() == 0 {
 		return errors.New("generated file is unexpectedly empty")
 	}
 
-	f, err := os.Create(req.ConfigOutputPath)
+	f, err := os.Create(req.ConfigPath)
 	if err != nil {
 		return errors.Wrap(err, "create")
 	}
 
 	defer func() {
 		if err := f.Close(); err != nil {
-			log.Errorf("closing %q: %s", req.ConfigOutputPath, err)
+			log.Errorf("closing %q: %s", req.ConfigPath, err)
 		}
 	}()
 
@@ -82,12 +82,12 @@ func writeConfFile(log logging.Logger, buf *bytes.Buffer, req *storage.BdevWrite
 		return errors.Wrap(err, "write")
 	}
 
-	return errors.Wrapf(os.Chown(req.ConfigOutputPath, req.OwnerUID, req.OwnerGID),
-		"failed to set ownership of %q to %d.%d", req.ConfigOutputPath,
+	return errors.Wrapf(os.Chown(req.ConfigPath, req.OwnerUID, req.OwnerGID),
+		"failed to set ownership of %q to %d.%d", req.ConfigPath,
 		req.OwnerUID, req.OwnerGID)
 }
 
-func writeJsonConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteNvmeConfigRequest) error {
+func writeJsonConfig(log logging.Logger, enableVmd bool, req *FormatRequest) error {
 	nsc, err := newSpdkConfig(log, enableVmd, req)
 	if err != nil {
 		return err
@@ -107,23 +107,16 @@ func writeJsonConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteN
 
 // writeNvmeConf generates nvme config file for given bdev type to be consumed
 // by spdk.
-func (sb *spdkBackend) writeNvmeConfig(req *storage.BdevWriteNvmeConfigRequest) error {
-	if len(req.TierProps) == 0 {
-		return nil
-	}
-	if req.ConfigOutputPath == "" {
+func (sb *spdkBackend) writeNvmeConfig(req *FormatRequest) error {
+	if req.ConfigPath == "" {
 		return errors.New("no output config directory set in request")
 	}
 
-	for _, tierProp := range req.TierProps {
-		if tierProp.Class != storage.ClassNvme || len(tierProp.DeviceList) > 0 {
-			sb.log.Debugf("write nvme output json config: %+v", req)
-			// TODO DAOS-8040: re-enable VMD
-			// return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
-			return writeJsonConfig(sb.log, false, req)
-		}
+	if req.Class == storage.BdevClassNvme && len(req.DeviceList) == 0 {
+		sb.log.Debug("skip write nvme conf for empty device list")
+		return nil
 	}
 
-	sb.log.Debug("skip write nvme conf for empty device list")
-	return nil
+	sb.log.Debugf("write nvme output json config: %+v", req)
+	return writeJsonConfig(sb.log, !sb.IsVMDDisabled(), req)
 }

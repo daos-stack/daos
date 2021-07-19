@@ -623,7 +623,7 @@ int main(int argc, char **argv)
 	}
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	crtu_test_init(0, 20, false, true);
+	tc_test_init(0, 20, false, true);
 
 	rc = crt_init(IV_GRP_NAME, 0);
 	assert(rc == 0);

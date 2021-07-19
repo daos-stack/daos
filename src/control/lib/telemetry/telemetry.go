@@ -50,7 +50,6 @@ type (
 	Metric interface {
 		Path() string
 		Name() string
-		FullPath() string
 		Type() MetricType
 		Desc() string
 		Units() string
@@ -125,17 +124,6 @@ func findNode(hdl *handle, name string) (*C.struct_d_tm_node_t, error) {
 	return node, nil
 }
 
-func splitFullName(fullName string) (string, string) {
-	tokens := strings.Split(fullName, "/")
-	if len(tokens) == 1 {
-		return "", tokens[0]
-	}
-
-	name := tokens[len(tokens)-1]
-	path := strings.Join(tokens[:len(tokens)-1], "/")
-	return name, path
-}
-
 func (mb *metricBase) Type() MetricType {
 	return MetricTypeUnknown
 }
@@ -158,14 +146,6 @@ func (mb *metricBase) Name() string {
 	}
 
 	return *mb.name
-}
-
-func (mb *metricBase) FullPath() string {
-	if mb == nil || mb.handle == nil || mb.node == nil {
-		return "<nil>"
-	}
-
-	return strings.Join([]string{mb.Path(), mb.Name()}, "/")
 }
 
 func (mb *metricBase) fillMetadata() {
