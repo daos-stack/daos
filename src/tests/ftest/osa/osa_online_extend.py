@@ -7,6 +7,7 @@
 import time
 import threading
 
+from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from dmg_utils import check_system_query_status
