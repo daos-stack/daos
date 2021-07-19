@@ -168,41 +168,13 @@ daos_cont_create_by_label(daos_handle_t poh, const char *label,
 			  daos_event_t *ev);
 
 /**
- * Open an existing container identified by UUID \a uuid. Upon successful
- * completion, \a coh and \a info, both of which shall be allocated by the
- * caller, return the container handle and the latest container information
- * respectively. The resulting container handle has an HCE equal to GHCE, an
- * LHE equal to DAOS_EPOCH_MAX, and an LRE equal to GHCE.
- *
- * \param[in]	poh	Pool connection handle.
- * \param[in]	uuid	UUID to identify container.
- * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
- * \param[out]	coh	Returned open handle.
- * \param[out]	info	Optional, return container information
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Container is nonexistent
- *			-DER_RF		#failures exceed RF, data possibly lost
- */
-int
-daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
-	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
-
-/**
- * Open an existing container identified by label property \a label.
+ * Open an existing container identified by \a cont, a label or UUID string.
  * Upon successful completion, \a coh and \a info, both of which shall be
  * allocated by the caller, return the container handle and the latest
  * container information respectively.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	label	Label property to identify the container.
+ * \param[in]	cont	Label or UUID string to identify the container.
  * \param[in]	flags	Open mode, represented by the DAOS_COO_ bits.
  * \param[out]	coh	Returned open handle.
  * \param[out]	info	Optional, return container information
@@ -219,9 +191,8 @@ daos_cont_open(daos_handle_t poh, const uuid_t uuid, unsigned int flags,
  *			-DER_RF		#failures exceed RF, data possibly lost
  */
 int
-daos_cont_open_by_label(daos_handle_t poh, const char *label,
-			unsigned int flags, daos_handle_t *coh,
-			daos_cont_info_t *info, daos_event_t *ev);
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
+	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
 
 /**
  * Close a container handle. Upon successful completion, the container handle's
@@ -242,14 +213,15 @@ int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev);
 
 /**
- * Destroy a container identified by \a uuid, all objects within this
- * container will be destroyed as well.
+ * Destroy a container identified by \a cont, a label or UUID string associated
+ * with the container. All objects within this container will be destroyed.
  * If there is at least one container opener, and \a force is set to zero, then
  * the operation completes with DER_BUSY. Otherwise, the container is destroyed
  * when the operation completes.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	uuid	Container UUID.
+ * \param[in]	cont	Label or UUID string to idenfity the container to
+ *			destroy
  * \param[in]	force	Container destroy will return failure if the container
  *			is still busy (outstanding open handles). This parameter
  *			will force the destroy to proceed even if there is an
@@ -266,36 +238,8 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
  *			-DER_BUSY	Pool is busy
  */
 int
-daos_cont_destroy(daos_handle_t poh, const uuid_t uuid, int force,
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
 		  daos_event_t *ev);
-
-/**
- * Destroy a container identified by \a label, all objects within this
- * container will be destroyed as well.
- * If there is at least one container opener, and \a force is set to zero, then
- * the operation completes with DER_BUSY. Otherwise, the container is destroyed
- * when the operation completes.
- *
- * \param[in]	poh	Pool connection handle.
- * \param[in]	label	Container label property.
- * \param[in]	force	Container destroy will return failure if the container
- *			is still busy (outstanding open handles). This parameter
- *			will force the destroy to proceed even if there is an
- *			outstanding open handle.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_NO_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NONEXIST	Container is nonexistent
- *			-DER_BUSY	Pool is busy
- */
-int
-daos_cont_destroy_by_label(daos_handle_t poh, const char *label, int force,
-			   daos_event_t *ev);
 
 /**
  * Query container information.
@@ -716,6 +660,58 @@ daos_cont_list_snap(daos_handle_t coh, int *nr, daos_epoch_t *epochs,
 int
 daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 		       daos_event_t *ev);
+
+
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
+
+int
+daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
+		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
+
+ /**
+  * for backward compatility, support old api where a const uuid_t was used
+  * instead of a string to identify the container.
+  */
+#define daos_cont_open(poh, co, ...)					\
+	({								\
+		int _ret;						\
+		char _str[37];						\
+		const char *__str;					\
+		if (__builtin_types_compatible_p(typeof(co), char *) ||	\
+		    __builtin_types_compatible_p(typeof(co),		\
+						 const char *)) {	\
+			__str = (const char *)(co);			\
+		} else {						\
+			uuid_unparse((unsigned char *)(co), _str);	\
+			__str = _str;					\
+		}							\
+		_ret = daos_cont_open2((poh), __str, __VA_ARGS__);	\
+		_ret;							\
+	})
+
+int
+daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
+		   daos_event_t *ev);
+
+#define daos_cont_destroy(poh, co, ...)					\
+	({								\
+		int _ret;						\
+		char _str[37];						\
+		const char *__str;					\
+		if (__builtin_types_compatible_p(typeof(co), char *) ||	\
+		    __builtin_types_compatible_p(typeof(co),		\
+						 const char *)) {	\
+			__str = (const char *)(co);			\
+		} else {						\
+			uuid_unparse((unsigned char *)(co), _str);	\
+			__str = _str;					\
+		}							\
+		_ret = daos_cont_destroy2((poh), __str, __VA_ARGS__);	\
+		_ret;							\
+	})
 
 #if defined(__cplusplus)
 }

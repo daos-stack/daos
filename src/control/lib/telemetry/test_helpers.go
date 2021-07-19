@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,6 +37,20 @@ add_metric(struct d_tm_node_t **node, int metric_type, char *sh_desc,
 }
 */
 import "C"
+
+var nextID int = 20
+var nextIDMutex sync.Mutex
+
+// NextTestID gets the next available ID for a shmem segment. This helps avoid
+// conflicts amongst tests running concurrently.
+func NextTestID() int {
+	nextIDMutex.Lock()
+	defer nextIDMutex.Unlock()
+
+	id := nextID
+	nextID++
+	return id
+}
 
 type (
 	TestMetric struct {
@@ -128,8 +143,8 @@ func AddTestMetrics(t *testing.T, testMetrics TestMetricsMap) {
 func setupTestMetrics(t *testing.T) (context.Context, TestMetricsMap) {
 	t.Helper()
 
-	id := 42
-	InitTestMetricsProducer(t, id, 4096)
+	id := NextTestID()
+	InitTestMetricsProducer(t, id, 2048)
 
 	ctx, err := Init(context.Background(), uint32(id))
 	if err != nil {
