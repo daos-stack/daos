@@ -1184,6 +1184,11 @@ pool_map_refreshes(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 
+	/*
+	 * Since the rebuild_single_pool_target call below refreshes the pool
+	 * map of arg->pool.poh, we must use a separate connection, which is
+	 * mostly clearly done with another client rank.
+	 */
 	if (arg->rank_size < 2) {
 		print_message("need at least two client ranks\n");
 		skip();
@@ -1192,10 +1197,6 @@ pool_map_refreshes(void **state)
 	if (!test_runable(arg, 2))
 		skip();
 
-	/*
-	 * Since the rebuild_single_pool_target call below refreshes the pool
-	 * map of arg->pool.poh, we must use a separate connection.
-	 */
 	rebuild_single_pool_target(arg, rank, tgt, false);
 
 	if (arg->myrank == 1) {
