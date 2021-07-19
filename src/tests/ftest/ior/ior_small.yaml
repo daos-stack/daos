@@ -28,8 +28,8 @@ dmg:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 3000000000
-    nvme_size: 9000000000
+    scm_size: 9000000000
+    nvme_size: 27000000000
     control_method: dmg
 container:
     type: POSIX
@@ -38,8 +38,8 @@ container:
 ior:
     ior_timeout: 30
     client_processes:
-        np_4:
-            np: 4
+        np_32:
+            np: 32
     test_file: daos:testFile
     repetitions: 1
     dfs_destroy: False
@@ -50,7 +50,7 @@ ior:
           ior_api:
             - DFS
           transfer_block_size:
-            - [1M, 32M]
+            - [1M, 64M]
           obj_class:
             - "SX"
 # Commenting it out until DAOS-3097/3143 is resolved.
