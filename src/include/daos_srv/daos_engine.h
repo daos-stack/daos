@@ -710,10 +710,6 @@ typedef int (*iter_copy_data_cb_t)(daos_handle_t ih,
 				   vos_iter_entry_t *it_entry,
 				   d_iov_t *iov_out);
 struct dss_enum_arg {
-	bool			fill_recxs;	/* type == S||R */
-	bool			chk_key2big;
-	bool			need_punch;	/* need to pack punch epoch */
-	bool			obj_punched;    /* object punch is packed   */
 	daos_epoch_range_t     *eprs;
 	struct daos_csummer    *csummer;
 	int			eprs_cap;
@@ -740,6 +736,11 @@ struct dss_enum_arg {
 	int			rnum;		/* records num (type == S||R) */
 	daos_size_t		rsize;		/* record size (type == S||R) */
 	daos_unit_oid_t		oid;		/* for unpack */
+	uint32_t		fill_recxs:1,	/* type == S||R */
+				chk_key2big:1,
+				need_punch:1,	/* need to pack punch epoch */
+				obj_punched:1,	/* object punch is packed   */
+				size_query:1;	/* Only query size */
 };
 
 struct dtx_handle;

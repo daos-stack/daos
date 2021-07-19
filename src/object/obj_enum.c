@@ -103,6 +103,14 @@ fill_oid(daos_unit_oid_t oid, struct dss_enum_arg *arg)
 {
 	d_iov_t *iov;
 
+	if (arg->size_query) {
+		arg->kds_len++;
+		arg->kds[0].kd_key_len += sizeof(oid);
+		if (arg->kds_len >= arg->kds_cap)
+			return 1;
+		return 0;
+	}
+
 	/* Check if sgl or kds is full */
 	if (is_sgl_full(arg, sizeof(oid)) || arg->kds_len >= arg->kds_cap)
 		return 1;
@@ -247,6 +255,14 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	if (type == OBJ_ITER_DKEY && arg->need_punch &&
 	    key_ent->ie_obj_punch != 0 && !arg->obj_punched)
 		kds_cap--;                  /* extra kds for obj punch eph */
+
+	if (arg->size_query) {
+		arg->kds_len++;
+		arg->kds[0].kd_key_len += total_size;
+		if (arg->kds_len >= kds_cap)
+			return 1;
+		return 0;
+	}
 
 	if (is_sgl_full(arg, total_size) || arg->kds_len >= kds_cap) {
 		/* NB: if it is rebuild object iteration, let's
@@ -565,6 +581,14 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		D_ASSERT(arg->kds_len > 0);
 		arg->kds_len--;
 		bump_kds_len = true;
+	}
+
+	if (arg->size_query) {
+		arg->kds_len++;
+		arg->kds[0].kd_key_len += size;
+		if (arg->kds_len >= arg->kds_cap)
+			return 1;
+		return 0;
 	}
 
 	if (is_sgl_full(arg, size) || arg->kds_len >= arg->kds_cap) {
