@@ -75,6 +75,9 @@ jobs:
                           --tag build-image
     - name: Build and Test
       run: ./utils/run_in_ga_wrapper.sh
+    - name: Check dmesg
+      if: always()
+      run: sudo dmesg
     - name: Publish NLT test results
       if: always()
       uses: EnricoMi/publish-unit-test-result-action@v1.17
