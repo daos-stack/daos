@@ -1,5 +1,6 @@
 [Unit]
 Description=DAOS Agent
+StartLimitIntervalSec=60
 Wants=network-online.target
 After=network-online.target
 
@@ -16,7 +17,6 @@ Restart=always
 RestartSec=10
 LimitMEMLOCK=infinity
 LimitCORE=infinity
-StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Install]
