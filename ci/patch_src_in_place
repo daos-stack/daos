@@ -12,6 +12,10 @@ codespell -w --ignore-words ci/codespell.ignores --builtin clear,rare,informal,n
 # CORCI-988 tracks this, with a view to improving reporting in this case.
 RC=$?
 
+./ci/check_d_macro_calls.py | patch -p1
+./ci/check_d_macro_calls.py | patch -p1
+./ci/check_d_macro_calls.py | patch -p1
+
 def_ignore="SPLIT_STRING,SSCANF_TO_KSTRTO,PREFER_KERNEL_TYPES"
 def_ignore+=",USE_NEGATIVE_ERRNO,CAMELCASE,STATIC_CONST_CHAR_ARRAY"
 def_ignore+=",COMPARISON_TO_NULL,COMPLEX_MACRO,BIT_MACRO"
