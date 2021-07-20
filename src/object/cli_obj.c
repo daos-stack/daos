@@ -1070,8 +1070,13 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		if (req_tgts->ort_srv_disp) {
 			rc = obj_grp_leader_get(obj, shard_idx, map_ver);
 			if (rc < 0) {
-				D_ERROR(DF_OID" no valid shard, rc "DF_RC"\n",
-					DP_OID(obj->cob_md.omd_id),
+				D_ERROR(DF_OID" no valid shard %u, grp size %u "
+					"grp nr %u, shards %u, reps %u, is %s: "
+					DF_RC"\n", DP_OID(obj->cob_md.omd_id),
+					shard_idx, obj->cob_grp_size,
+					obj->cob_grp_nr, obj->cob_shards_nr,
+					obj_get_replicas(obj),
+					obj_is_ec(obj) ? "EC-obj" : "REP-obj",
 					DP_RC(rc));
 				return rc;
 			}
@@ -2385,6 +2390,7 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 	case DAOS_OBJ_RPC_SYNC:
 		obj_ptr2shards(obj, &shard_idx, &shard_cnt, &grp_nr);
 		flags = OBJ_TGT_FLAG_LEADER_ONLY;
+		obj_auxi->to_leader = 1;
 		break;
 	default:
 		D_ERROR("bad opc %d.\n", opc);
