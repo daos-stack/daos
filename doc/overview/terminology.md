@@ -17,6 +17,7 @@
 |PMEM|Intel Optane Persistent Memory|
 |DPDK|Data Plane Development Kit|
 |dRPC|DAOS Remote Procedure Call|
+|EC|Error Correction|
 |[gRPC](https://grpc.io)|gRPC Remote Procedure Calls|
 |GURT|A common library of Gurt Useful Routines and Types|
 |[HLC](https://cse.buffalo.edu/tech-reports/2014-04.pdf)|Hybrid Logical Clock|
