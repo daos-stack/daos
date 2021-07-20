@@ -10,6 +10,7 @@ import os
 import threading
 import uuid
 from itertools import product
+import queue
 
 from apricot import TestWithServers
 from write_host_file import write_host_file
@@ -19,11 +20,11 @@ from daos_utils import DaosCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from mpio_utils import MpioUtils
-import queue
 
 
 class NvmeFragmentation(TestWithServers):
     # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-instance-attributes
     """NVMe drive fragmentation test cases.
 
     Test class Description:
@@ -85,15 +86,10 @@ class NvmeFragmentation(TestWithServers):
             ior_cmd.block_size.update(test[1])
             ior_cmd.flags.update(flags)
 
-            container_info["{}{}{}"
-                           .format(oclass,
-                                   api,
-                                   test[0])] = str(uuid.uuid4())
-
             # Define the job manager for the IOR command
             self.job_manager = Mpirun(ior_cmd, mpitype="mpich")
-            key = "{}{}{}".format(oclass, api, test[0])
-            self.job_manager.job.dfs_cont.update(container_info[key])
+            cont_uuid = str(uuid.uuid4())
+            self.job_manager.job.dfs_cont.update(cont_uuid)
             env = ior_cmd.get_default_env(str(self.job_manager))
             self.job_manager.assign_hosts(
                 self.hostlist_clients, self.workdir, None)
@@ -103,6 +99,10 @@ class NvmeFragmentation(TestWithServers):
             # run IOR Command
             try:
                 self.job_manager.run()
+                container_info["{}{}{}"
+                               .format(oclass,
+                                       api,
+                                       test[0])] = cont_uuid
             except CommandFailure as _error:
                 results.put("FAIL")
 

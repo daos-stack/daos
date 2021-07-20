@@ -11,6 +11,7 @@ from nvme_utils import ServerFillUp, get_device_ids
 from test_utils_pool import TestPool
 from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
+from apricot import skipForTicket
 
 class NvmeHealth(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -18,6 +19,7 @@ class NvmeHealth(ServerFillUp):
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive
     """
+    @skipForTicket("DAOS-8080")
     def test_monitor_for_large_pools(self):
         """Jira ID: DAOS-4722.
 
