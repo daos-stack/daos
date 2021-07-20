@@ -1018,13 +1018,13 @@ rebuild_master_failure(void **state)
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(pinfo.pi_rebuild_st.rs_done, 1);
+	assert_int_equal(pinfo.pi_rebuild_st.rs_running, 1);
 	rc = rebuild_change_leader_cb(arg);
 	assert_int_equal(rc, 0);
 	pinfo_new.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo_new);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(pinfo_new.pi_rebuild_st.rs_done, 1);
+	assert_int_equal(pinfo_new.pi_rebuild_st.rs_running, 1);
 	rc = memcmp(&pinfo.pi_rebuild_st, &pinfo_new.pi_rebuild_st,
 		    sizeof(pinfo.pi_rebuild_st));
 	if (rc != 0) {
@@ -1034,7 +1034,7 @@ rebuild_master_failure(void **state)
 			      pinfo.pi_rebuild_st.rs_version,
 			      pinfo.pi_rebuild_st.rs_seconds,
 			      pinfo.pi_rebuild_st.rs_errno,
-			      pinfo.pi_rebuild_st.rs_done,
+			      pinfo.pi_rebuild_st.rs_running,
 			      pinfo.pi_rebuild_st.rs_fail_rank,
 			      pinfo.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo.pi_rebuild_st.rs_obj_nr,
@@ -1046,7 +1046,7 @@ rebuild_master_failure(void **state)
 			      pinfo_new.pi_rebuild_st.rs_version,
 			      pinfo_new.pi_rebuild_st.rs_seconds,
 			      pinfo_new.pi_rebuild_st.rs_errno,
-			      pinfo_new.pi_rebuild_st.rs_done,
+			      pinfo_new.pi_rebuild_st.rs_running,
 			      pinfo_new.pi_rebuild_st.rs_fail_rank,
 			      pinfo_new.pi_rebuild_st.rs_toberb_obj_nr,
 			      pinfo_new.pi_rebuild_st.rs_obj_nr,

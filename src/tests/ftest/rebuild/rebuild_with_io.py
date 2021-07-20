@@ -47,7 +47,7 @@ class RbldWithIO(TestWithServers):
             pi_ndisabled=0,
         )
         status &= self.pool.check_rebuild_status(
-            rs_done=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
+            rs_running=1, rs_obj_nr=0, rs_rec_nr=0, rs_errno=0)
         self.assertTrue(status, "Error confirming pool info before rebuild")
 
         # Create and open the container
@@ -82,7 +82,7 @@ class RbldWithIO(TestWithServers):
             pi_ndisabled=targets,                  # DAOS-2799
         )
         status &= self.pool.check_rebuild_status(
-            rs_done=1, rs_obj_nr=">0", rs_rec_nr=">0", rs_errno=0)
+            rs_running=1, rs_obj_nr=">0", rs_rec_nr=">0", rs_errno=0)
         self.assertTrue(status, "Error confirming pool info after rebuild")
 
         # Verify the data after rebuild

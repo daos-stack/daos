@@ -646,7 +646,7 @@ pool_query_hdlr(struct cmd_args_s *ap)
 
 		if (rstat->rs_version == 0)
 			sstr = "idle";
-		else if (rstat->rs_done)
+		else if (rstat->rs_running)
 			sstr = "done";
 		else
 			sstr = "busy";
