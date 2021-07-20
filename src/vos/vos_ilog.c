@@ -131,14 +131,14 @@ vos_ilog_punch_covered(const struct ilog_entry *entry,
 static int
 vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 	       daos_epoch_t bound, const struct vos_punch_record *punch) {
-	struct ilog_entry	*entry;
+	struct ilog_entry	entry;
 	struct vos_punch_record	*any_punch = &info->ii_prior_any_punch;
 	daos_epoch_t		 entry_epc;
 
 	D_ASSERT(punch->pr_epc <= epoch);
 
-	ilog_foreach_entry_reverse(&info->ii_entries, entry) {
-		if (entry->ie_status == ILOG_REMOVED)
+	ilog_foreach_entry_reverse(&info->ii_entries, &entry) {
+		if (entry.ie_status == ILOG_REMOVED)
 			continue;
 
 		info->ii_empty = false;
@@ -146,7 +146,7 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 		/** If a punch epoch is passed in, and it is later than any
 		 * punch in this log, treat it as a prior punch
 		 */
-		if (vos_ilog_punched(entry, punch)) {
+		if (vos_ilog_punched(&entry, punch)) {
 			info->ii_prior_punch = *punch;
 			if (vos_epc_punched(any_punch->pr_epc,
 					    any_punch->pr_minor_epc, punch))
@@ -154,16 +154,16 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 			break;
 		}
 
-		entry_epc = entry->ie_id.id_epoch;
+		entry_epc = entry.ie_id.id_epoch;
 		if (entry_epc > epoch) {
-			if (ilog_has_punch(entry)) {
+			if (ilog_has_punch(&entry)) {
 				/** Entry is punched within uncertainty range,
 				 * so restart the transaction.
 				 */
 				if (entry_epc <= bound)
 					return -DER_TX_RESTART;
 
-				if (entry->ie_status == ILOG_COMMITTED)
+				if (entry.ie_status == ILOG_COMMITTED)
 					info->ii_next_punch = entry_epc;
 			} else if (entry_epc <= bound) {
 				info->ii_uncertain_create = entry_epc;
@@ -171,49 +171,49 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 			continue;
 		}
 
-		if (entry->ie_status == -DER_INPROGRESS)
+		if (entry.ie_status == -DER_INPROGRESS)
 			return -DER_INPROGRESS;
 
-		if (vos_ilog_punch_covered(entry, &info->ii_prior_any_punch)) {
-			info->ii_prior_any_punch.pr_epc = entry->ie_id.id_epoch;
+		if (vos_ilog_punch_covered(&entry, &info->ii_prior_any_punch)) {
+			info->ii_prior_any_punch.pr_epc = entry.ie_id.id_epoch;
 			info->ii_prior_any_punch.pr_minor_epc =
-				entry->ie_id.id_punch_minor_eph;
+				entry.ie_id.id_punch_minor_eph;
 		}
 
-		if (entry->ie_status == ILOG_UNCOMMITTED) {
-			daos_epoch_t	epc = entry->ie_id.id_epoch;
+		if (entry.ie_status == ILOG_UNCOMMITTED) {
+			daos_epoch_t	epc = entry.ie_id.id_epoch;
 			uint16_t	minor_epc =
-				entry->ie_id.id_punch_minor_eph;
+				entry.ie_id.id_punch_minor_eph;
 
 			/** Key is not visible at current entry but may be yet
 			 *  visible at prior entry
 			 */
-			if (info->ii_uncommitted < entry->ie_id.id_epoch &&
+			if (info->ii_uncommitted < entry.ie_id.id_epoch &&
 			    epc > info->ii_create &&
 			    !vos_epc_punched(epc, minor_epc,
 					     &info->ii_prior_punch))
-				info->ii_uncommitted = entry->ie_id.id_epoch;
+				info->ii_uncommitted = entry.ie_id.id_epoch;
 			continue;
 		}
 
 		/** We we have a committed entry that exceeds uncommitted
 		 *  epoch, clear the uncommitted epoch.
 		 */
-		if (entry->ie_id.id_epoch > info->ii_uncommitted)
+		if (entry.ie_id.id_epoch > info->ii_uncommitted)
 			info->ii_uncommitted = 0;
 
-		D_ASSERT(entry->ie_status == ILOG_COMMITTED);
+		D_ASSERT(entry.ie_status == ILOG_COMMITTED);
 
-		if (ilog_has_punch(entry)) {
-			info->ii_prior_punch.pr_epc = entry->ie_id.id_epoch;
+		if (ilog_has_punch(&entry)) {
+			info->ii_prior_punch.pr_epc = entry.ie_id.id_epoch;
 			info->ii_prior_punch.pr_minor_epc =
-				entry->ie_id.id_punch_minor_eph;
-			if (!ilog_is_punch(entry))
-				info->ii_create = entry->ie_id.id_epoch;
+				entry.ie_id.id_punch_minor_eph;
+			if (!ilog_is_punch(&entry))
+				info->ii_create = entry.ie_id.id_epoch;
 			break;
 		}
 
-		info->ii_create = entry->ie_id.id_epoch;
+		info->ii_create = entry.ie_id.id_epoch;
 	}
 
 	if (vos_epc_punched(info->ii_prior_punch.pr_epc,
