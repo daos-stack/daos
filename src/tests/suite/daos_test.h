@@ -420,7 +420,7 @@ get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
-		      char *verify_data);
+		      char *verify_data, daos_handle_t th);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,
@@ -477,8 +477,11 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state);
 void save_group_state(void **state);
+
 void trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
-				    int oids_nr, uint64_t fail_loc);
+				    int oids_nr, char *dkey, char *akey,
+				    daos_off_t start, daos_size_t size,
+				    uint64_t fail_loc);
 
 enum op_type {
 	PARTIAL_UPDATE	=	1,

@@ -111,9 +111,10 @@ struct  _Mgmt__PoolCreateReq
    */
   uint64_t totalbytes;
   /*
-   * Ratio of SCM:NVMe expressed as % (auto config)
+   * Ratio of storage tiers expressed as % of totalbytes (auto config)
    */
-  double scmratio;
+  size_t n_tierratio;
+  double *tierratio;
   /*
    * Number of target ranks to use (auto config)
    */
@@ -124,17 +125,14 @@ struct  _Mgmt__PoolCreateReq
   size_t n_ranks;
   uint32_t *ranks;
   /*
-   * SCM size in bytes (manual config)
+   * Size in bytes of storage tiers (manual config)
    */
-  uint64_t scmbytes;
-  /*
-   * NVMe size in bytes (manual config)
-   */
-  uint64_t nvmebytes;
+  size_t n_tierbytes;
+  uint64_t *tierbytes;
 };
 #define MGMT__POOL_CREATE_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0, 0, 0,NULL, 0, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0, 0, 0,NULL, 0, 0,NULL, 0,NULL }
 
 
 /*
@@ -158,17 +156,14 @@ struct  _Mgmt__PoolCreateResp
   size_t n_tgt_ranks;
   uint32_t *tgt_ranks;
   /*
-   * total SCM allocated to pool
+   * storage tiers allocated to pool
    */
-  uint64_t scm_bytes;
-  /*
-   * total NVMe allocated to pool
-   */
-  uint64_t nvme_bytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
 };
 #define MGMT__POOL_CREATE_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_create_resp__descriptor) \
-    , 0, 0,NULL, 0,NULL, 0, 0 }
+    , 0, 0,NULL, 0,NULL, 0,NULL }
 
 
 /*
@@ -387,13 +382,10 @@ struct  _Mgmt__PoolExtendReq
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
   /*
-   * SCM size in bytes
+   * Size in bytes of storage tiers
    */
-  uint64_t scmbytes;
-  /*
-   * NVMe size in bytes
-   */
-  uint64_t nvmebytes;
+  size_t n_tierbytes;
+  uint64_t *tierbytes;
   /*
    * fault domain tree, minimal format
    */
@@ -402,7 +394,7 @@ struct  _Mgmt__PoolExtendReq
 };
 #define MGMT__POOL_EXTEND_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0,NULL, 0,NULL }
 
 
 /*
@@ -416,17 +408,14 @@ struct  _Mgmt__PoolExtendResp
    */
   int32_t status;
   /*
-   * SCM allocated on rank(s)
+   * storage tiers allocated to pool
    */
-  uint64_t scm_bytes;
-  /*
-   * NVMe allocated on rank(s)
-   */
-  uint64_t nvme_bytes;
+  size_t n_tier_bytes;
+  uint64_t *tier_bytes;
 };
 #define MGMT__POOL_EXTEND_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_extend_resp__descriptor) \
-    , 0, 0, 0 }
+    , 0, 0,NULL }
 
 
 /*
@@ -726,13 +715,10 @@ struct  _Mgmt__PoolQueryResp
    */
   Mgmt__PoolRebuildStatus *rebuild;
   /*
-   * SCM storage usage stats
+   * storage tiers usage stats
    */
-  Mgmt__StorageUsageStats *scm;
-  /*
-   * NVMe storage usage stats
-   */
-  Mgmt__StorageUsageStats *nvme;
+  size_t n_tier_stats;
+  Mgmt__StorageUsageStats **tier_stats;
   /*
    * total nodes in pool
    */
@@ -748,7 +734,7 @@ struct  _Mgmt__PoolQueryResp
 };
 #define MGMT__POOL_QUERY_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_query_resp__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, NULL, NULL, 0, 0, 0 }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, NULL, 0,NULL, 0, 0, 0 }
 
 
 typedef enum {
