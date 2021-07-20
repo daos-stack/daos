@@ -871,6 +871,8 @@ daos_parse_ctype(const char *string, daos_cont_layout_t *type)
 		*type = DAOS_PROP_CO_LAYOUT_POSIX;
 	else if (strcasecmp(string, "PYTHON") == 0)
 		*type = DAOS_PROP_CO_LAYOUT_PYTHON;
+	else if (strcasecmp(string, "SPARK") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_SPARK;
 	else if (strcasecmp(string, "DATABASE") == 0 ||
 		 strcasecmp(string, "DB") == 0)
 		*type = DAOS_PROP_CO_LAYOUT_DATABASE;
@@ -899,6 +901,9 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		break;
 	case DAOS_PROP_CO_LAYOUT_PYTHON:
 		strcpy(string, "PYTHON");
+		break;
+	case DAOS_PROP_CO_LAYOUT_SPARK:
+		strcpy(string, "SPARK");
 		break;
 	case DAOS_PROP_CO_LAYOUT_DATABASE:
 		strcpy(string, "DATABASE");
