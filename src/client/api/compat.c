@@ -6,6 +6,7 @@
 #define D_LOGFAC       DD_FAC(client)
 
 #include <daos/task.h>
+#include <daos/container.h>
 #include "client_internal.h"
 #include "task_internal.h"
 

@@ -145,7 +145,7 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
  */
 int
 daos_cont_create(daos_handle_t poh, const char *label, daos_prop_t *cont_prop,
-		 uuid_t *cuuid, hdaos_event_t *ev);
+		 uuid_t *cuuid, daos_event_t *ev);
 
 /**
  * Open an existing container identified by \a cont, a label or UUID string.
