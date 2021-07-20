@@ -30,6 +30,7 @@ class CartTest(TestWithoutServers):
         self.module_init = False
         self.provider = None
         self.module = lambda *x: False
+        self.supp_file = "/etc/daos/memcheck-cart.supp"
 
     def setUp(self):
         """Set up the test case."""
@@ -53,6 +54,7 @@ class CartTest(TestWithoutServers):
                     self.print("\nAdding {} to PATH\n".format(added_path))
                     found_path = True
                 elif os.path.basename(path_dirname) == "install":
+                    self.supp_file = path_dirname + "/etc/memcheck-cart.supp"
                     added_path = os.path.join(path_dirname,
                                               test_dirs["install"])
                     if os.path.isdir(added_path):
@@ -196,9 +198,8 @@ class CartTest(TestWithoutServers):
 
         # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
         # (It can't be '.' or cwd(), it must be some place writable.)
-        daos_test_shared_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_file = os.path.join(log_path, log_dir,
@@ -307,12 +308,15 @@ class CartTest(TestWithoutServers):
 
         index = kwargs.get('index', None)
 
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
+
         tst_vgd = " valgrind --xml=yes " + \
-                  "--xml-file={}/".format(self.log_path) + \
+                  "--xml-file={}/".format(daos_test_shared_dir) + \
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
-                  "--fair-sched=try  --partial-loads-ok=yes " + \
+                  "--fair-sched=try --partial-loads-ok=yes " + \
                   "--leak-check=yes --gen-suppressions=all " + \
-                  "--suppressions=../etc/memcheck-cart.supp " + \
+                  "--suppressions=" + self.supp_file + " " + \
                   "--show-reachable=yes "
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
@@ -334,16 +338,14 @@ class CartTest(TestWithoutServers):
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
         logparse = self.params.get("logparse", "/run/tests/*/")
 
-        # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
-        # (It can't be '.' or cwd(), it must be some place writable.)
-        daos_test_shared_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
-
         if tst_slt is not None:
-            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_slt)
+            hostfile = write_host_file(tst_host,
+                                       daos_test_shared_dir,
+                                       tst_slt)
         else:
-            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_ppn)
+            hostfile = write_host_file(tst_host,
+                                       daos_test_shared_dir,
+                                       tst_ppn)
 
         mca_flags = "--mca btl self,tcp "
 
@@ -369,7 +371,8 @@ class CartTest(TestWithoutServers):
         if logparse:
             tst_cmd += " -x D_LOG_FILE_APPEND_PID=1"
 
-        tst_mod = os.getenv("CART_TEST_MODE", "native")
+        tst_mod = os.getenv("WITH_VALGRIND", "native")
+
         if tst_mod == "memcheck":
             tst_cmd += tst_vgd
 
@@ -380,6 +383,51 @@ class CartTest(TestWithoutServers):
             tst_cmd += " " + tst_arg
 
         return tst_cmd
+
+    def log_check_valgrind_memcheck(self):
+        """Check valgrind memcheck log files for errors."""
+
+        memcheck_errors = 0
+
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
+
+        self.log.info("Parsing log path %s", daos_test_shared_dir)
+        if not os.path.exists(daos_test_shared_dir):
+            self.log.info("Path does not exist")
+            return 1
+
+        xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
+        memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
+                                os.listdir(daos_test_shared_dir)))
+
+        for filename in memcheck_files:
+
+            log_file = os.path.join(daos_test_shared_dir, filename)
+
+            file1 = open(log_file, 'r')
+            lines = file1.readlines()
+
+            for line in lines:
+                if line.find('<error>') != -1:
+                    memcheck_errors += 1
+
+            try:
+                saved_cwd = os.getcwd()
+                os.chdir(daos_test_shared_dir)
+                os.rename(filename, filename + "-checked")
+                os.chdir(saved_cwd)
+            except OSError as e:
+                print("Problem with getcwd, chdir, rename, chdir: ", e)
+
+        if memcheck_errors > 0:
+            self.fail(
+                "Failed, found " + str(memcheck_errors) +
+                " <error> element(s) in the " +
+                " memcheck XML log file(s): [" +
+                ", ".join(memcheck_files) + "]")
+
+        return 0
 
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
@@ -398,6 +446,8 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
+        self.log_check_valgrind_memcheck()
+
         return 0
 
     def launch_test(self, cmd, srv1=None, srv2=None):
@@ -415,6 +465,8 @@ class CartTest(TestWithoutServers):
                 self.stop_process(srv2)
             self.fail("Failed, return codes {}".format(rtn))
 
+        self.log_check_valgrind_memcheck()
+
         return rtn
 
     def launch_cmd_bg(self, cmd):
@@ -427,6 +479,8 @@ class CartTest(TestWithoutServers):
         if rtn is None:
             self.fail("Failed to start command\n")
             return -1
+
+        self.log_check_valgrind_memcheck()
 
         return rtn
 

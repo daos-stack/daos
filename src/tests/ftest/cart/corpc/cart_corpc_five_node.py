@@ -17,7 +17,8 @@ class CartCoRpcFiveNodeTest(CartTest):
     def test_cart_corpc(self):
         """Test CaRT CoRPC.
 
-        :avocado: tags=all,cart,pr,daily_regression,corpc,five_node
+        :avocado: tags=all,pr,full_regression
+        :avocado: tags=cart,corpc,five_node,memcheck
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)
