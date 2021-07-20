@@ -31,17 +31,31 @@ trap 'clush -B -S -o "-i ci_key" -l root -w "${tnodes}" '\
 rm -rf "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 mkdir "${STAGE_NAME:?ERROR: STAGE_NAME is not defined}/"
 
+# run node checkout
+#clush -B -S -o '-i ci_key' -l root -w "${tnodes}" -c ci/functional/fio_libpmem.fio --dest=/tmp/
+
+#clush -B -S -o '-i ci_key' -l root -w "${tnodes}" \
+#    "$(cat ci/functional/node_checkout.sh)"
+
+
+# run network test
+run_on_node=$(echo ${tnodes} | cut -d ',' -f 2)
+clush -B -S -o '-i ci_key' -l root -w "${run_on_node}" \
+    "daospath='/usr/'                                 \
+     nodes=${tnodes}                                  \
+     $(cat ci/functional/self_test_8-node.sh)"
+
 # set DAOS_TARGET_OVERSUBSCRIBE env here
 export DAOS_TARGET_OVERSUBSCRIBE=1
 rm -rf install/lib/daos/TESTING/ftest/avocado ./*_results.xml
 mkdir -p install/lib/daos/TESTING/ftest/avocado/job-results
-if $TEST_RPMS; then
-    # shellcheck disable=SC2029
-    ssh -i ci_key -l jenkins "${first_node}" \
-      "TEST_TAG=\"$test_tag\"                        \
-       TNODES=\"$tnodes\"                            \
-       FTEST_ARG=\"$FTEST_ARG\"                      \
-       $(cat ci/functional/test_main_node.sh)"
-else
-    ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
-fi
+#if $TEST_RPMS; then
+#    # shellcheck disable=SC2029
+#    ssh -i ci_key -l jenkins "${first_node}" \
+#      "TEST_TAG=\"$test_tag\"                        \
+#       TNODES=\"$tnodes\"                            \
+#       FTEST_ARG=\"$FTEST_ARG\"                      \
+#       $(cat ci/functional/test_main_node.sh)"
+#else
+#    ./ftest.sh "$test_tag" "$tnodes" "$FTEST_ARG"
+#fi
