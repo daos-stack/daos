@@ -339,6 +339,8 @@ typedef struct {
 	daos_prop_t		*prop;
 	/** Label associated with the container to be created, API v1.3.0 */
 	const char		*label;
+	/** Optional, return UUID allocated to the the container by DAOS */
+	uuid_t			*cuuid;
 } daos_cont_create_t;
 
 /** Container open by cont arg (label or UUID string) */

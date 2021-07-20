@@ -117,15 +117,21 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
 
 /**
  * Create a new container with label \a label on the storage pool connected
- * by \a poh.
+ * by \a poh. UUID allocated to the container is returned in \a uuid argument.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	label	Required, label property of the new container.
+ * \param[in]	label	Optional, label property of the new container.
  *			Supersedes any label specified in \a cont_prop.
+ *			If not provided, the container will be created without
+ *			any label and it is recommended to pass a \a uuid
+ *			argument to be able to identify the container that was
+ *			created.
  * \param[in]	cont_prop
  *			Optional, container properties pointer
  *			that if specified must not include an entry
  *			with type DAOS_PROP_CO_LABEL.
+ * \param[out]	cuuid	Optional, returned the UUID allocated to the container.
+ *			Highly recommended if a \a label isn't specified.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
@@ -139,7 +145,7 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
  */
 int
 daos_cont_create(daos_handle_t poh, const char *label, daos_prop_t *cont_prop,
-		 daos_event_t *ev);
+		 uuid_t *cuuid, hdaos_event_t *ev);
 
 /**
  * Open an existing container identified by \a cont, a label or UUID string.
@@ -687,27 +693,31 @@ daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
 		_ret;							\
 	})
 
+
 int
 daos_cont_create2(daos_handle_t poh, const char *label, daos_prop_t *cont_prop,
-		  daos_event_t *ev);
+		  uuid_t *cuuid, daos_event_t *ev);
 
 #define daos_cont_create(poh, co, ...)					\
 	({								\
 		int _ret;						\
 		const char *_str;					\
-		if (__builtin_types_compatible_p(typeof(co), char *) ||	\
-		    __builtin_types_compatible_p(typeof(co),		\
-						 const char *)) {	\
-			_str = (const char *)(co);			\
-			_ret = daos_cont_create2((poh), _str,		\
-						 __VA_ARGS__);		\
-		} else {						\
+		if (D_ARGS_COUNT(__VA_ARGS__) == 2) {			\
 			_str = (const char *)(co);			\
 			_ret = daos_cont_create((poh), _str,		\
 						__VA_ARGS__);		\
+		} else {						\
+			_str = (const char *)(co);			\
+			_ret = daos_cont_create2((poh), _str,		\
+						 __VA_ARGS__);		\
 		}							\
 		_ret;							\
 	})
+
+/** Macros for counting the number of arguments in __VA_ARGS__ */
+#define D_ARGS_COUNT(...) \
+	_D_ARGS_COUNT(__VA_ARGS__, 5, 4, 3, 2, 1)
+#define _D_ARGS_COUNT(a, b, c, d, e, cnt, ...) (cnt)
 
 #if defined(__cplusplus)
 }

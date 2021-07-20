@@ -109,6 +109,9 @@ cont_create_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	if (args->cuuid != NULL)
+		/** return UUID allocated to the container */
+		uuid_copy(*args->cuuid, args->uuid);
 	D_DEBUG(DF_DSMC, "completed creating container\n");
 
 out:
@@ -218,7 +221,6 @@ dc_cont_create(tse_task_t *task)
 	crt_rpc_t	       *rpc;
 	struct cont_args	arg;
 	int			rc;
-	uuid_t			uuid;
 	daos_prop_t	       *label_prop = NULL;
 	daos_prop_t	       *cont_props;
 	daos_prop_t	       *rpc_prop = NULL;
@@ -227,13 +229,18 @@ dc_cont_create(tse_task_t *task)
 
 	if (daos_uuid_valid(args->uuid)) {
 		/** Backward compatibility, we are provided a UUID */
-		uuid_copy(uuid, args->uuid);
+		cont_props = args->prop;
+	} else if (args->label == NULL) {
+		/** No label specified */
+
+		/** generate a UUID for the new container */
+		uuid_generate(args->uuid);
 		cont_props = args->prop;
 	} else if (daos_label_is_valid(args->label)) {
 		/** The provided string is a valid label */
 
 		/** generate a UUID for the new container */
-		uuid_generate(uuid);
+		uuid_generate(args->uuid);
 
 		label_prop = daos_prop_alloc(1);
 		if (label_prop == NULL) {
