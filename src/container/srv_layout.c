@@ -57,7 +57,7 @@ struct daos_prop_entry cont_prop_entries_default[CONT_PROP_NUM] = {
 		.dpe_str	= "container_label_not_set",
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_TYPE,
-		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKOWN,
+		.dpe_val	= DAOS_PROP_CO_LAYOUT_UNKNOWN,
 	}, {
 		.dpe_type	= DAOS_PROP_CO_LAYOUT_VER,
 		.dpe_val	= 1,

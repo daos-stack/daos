@@ -204,7 +204,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	}
 
 	daos_parse_ctype(t, &attr->da_type);
-	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
+	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		D_ERROR("Invalid DAOS LMV format: Container layout cannot be"
 			" unknown\n");
 		return EINVAL;
@@ -565,7 +565,7 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_GOTO(err, rc = EINVAL);
 	}
 	daos_parse_ctype(t, &attr->da_type);
-	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
+	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		D_ERROR("Invalid DAOS xattr format: Container layout cannot be unknown\n");
 		D_GOTO(err, rc = EINVAL);
 	}
@@ -796,20 +796,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		return rc;
 	}
 
-	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
-		/** create a new file if HDF5 container */
-		int fd;
-
-		fd = open(path, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
-		if (fd == -1) {
-			rc = errno;
-
-			D_ERROR("Failed to create file %s: %s\n", path,
-				strerror(rc));
-			return rc;
-		}
-		close(fd);
-	} else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		struct statfs   fs;
 		char            *dir, *dirp;
 		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
@@ -851,6 +838,19 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			D_ERROR("Failed to create dir %s: %s\n", path, strerror(rc));
 			return rc;
 		}
+	} else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
+		/** create a new file for other container types */
+		int fd;
+
+		fd = open(path, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+		if (fd == -1) {
+			rc = errno;
+
+			D_ERROR("Failed to create file %s: %s\n", path,
+				strerror(rc));
+			return rc;
+		}
+		close(fd);
 	} else {
 		D_ERROR("Invalid container layout.\n");
 		return EINVAL;
@@ -919,10 +919,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 	return rc;
 err_link:
-	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5)
-		unlink(path);
-	else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX)
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX)
 		rmdir(path);
+	else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN)
+		unlink(path);
 	return rc;
 }
 
@@ -947,21 +947,7 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 		return daos_der2errno(rc);
 	}
 
-	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
-#ifdef LUSTRE_INCLUDE
-		if (dattr.da_on_lustre)
-			rc = (*unlink_foreign)((char *)path);
-		else
-#endif
-			rc = unlink(path);
-		if (rc) {
-			int err = errno;
-
-			D_ERROR("Failed to unlink %sfile %s: %s\n",
-				dattr.da_on_lustre ? "Lustre " : " ", path, strerror(errno));
-			return err;
-		}
-	} else if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 #ifdef LUSTRE_INCLUDE
 		if (dattr.da_on_lustre)
 			rc = (*unlink_foreign)((char *)path);
@@ -972,6 +958,20 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 			int err = errno;
 
 			D_ERROR("Failed to remove %sdir %s: %s\n",
+				dattr.da_on_lustre ? "Lustre " : " ", path, strerror(errno));
+			return err;
+		}
+	} else if (dattr.da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
+#ifdef LUSTRE_INCLUDE
+		if (dattr.da_on_lustre)
+			rc = (*unlink_foreign)((char *)path);
+		else
+#endif
+			rc = unlink(path);
+		if (rc) {
+			int err = errno;
+
+			D_ERROR("Failed to unlink %sfile %s: %s\n",
 				dattr.da_on_lustre ? "Lustre " : " ", path, strerror(errno));
 			return err;
 		}
