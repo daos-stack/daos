@@ -66,6 +66,7 @@ struct daos_llink {
 	d_list_t		 ll_qlink;	/**< Temp link for traverse */
 	uint32_t		 ll_ref;	/**< refcount for this ref */
 	uint32_t		 ll_evicted:1;	/**< has been evicted */
+	uint32_t		 ll_accessed;	/**< last accessed time */
 	struct daos_llink_ops	*ll_ops;	/**< ops to maintain refs */
 };
 
@@ -75,6 +76,7 @@ struct daos_llink {
 struct daos_lru_cache {
 	uint32_t		 dlc_csize;	/**< Provided cache size */
 	uint32_t		 dlc_count;	/**< count of refs in cache */
+	d_list_t		 dlc_lru;	/**< list head of LRU */
 	struct d_hash_table	 dlc_htable;	/**< Hash table for all refs */
 	struct daos_llink_ops	*dlc_ops;	/**< ops to maintain refs */
 };
