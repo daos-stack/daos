@@ -89,11 +89,12 @@ daos_policy_try_parse(const char *policy_str, struct policy_desc_t *out_pd)
 	bool		ret_val = false;
 	int		i, j;
 	size_t		len;
-	char		*str;
+	char		*str, *orig_str;
 	unsigned int	policy_idx = DAOS_MEDIA_POLICY_MAX;
 
 	len = strlen(policy_str);
 	D_STRNDUP(str, policy_str, len); /* for strtok_r */
+	orig_str = str;	/* save the dup'd string ptr to free it later */
 
 	/* tokenize input to "name=value" format */
 	for (i = 0; ; i++, str = NULL) {
@@ -149,6 +150,6 @@ daos_policy_try_parse(const char *policy_str, struct policy_desc_t *out_pd)
 	if (policy_idx != DAOS_MEDIA_POLICY_MAX)
 		ret_val = true;
 out:
-	D_FREE(str);
+	D_FREE(orig_str);
 	return ret_val;
 }
