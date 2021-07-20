@@ -86,11 +86,6 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 		return err
 	}
 
-	// includes hardware validation errors e.g. hardware across hostset differs
-	if err != nil {
-		return err
-	}
-
 	bytes, err := yaml.Marshal(resp.ConfigOut)
 	if err != nil {
 		return err

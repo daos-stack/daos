@@ -90,11 +90,12 @@ main(int argc, char **argv)
 			{"delay", required_argument, NULL, 'D'},
 			{"meta", no_argument, NULL, 'M'},
 			{"type", no_argument, NULL, 'T'},
+			{"read", no_argument, NULL, 'r'},
 			{"help", no_argument, NULL, 'h'},
 			{NULL, 0, NULL, 0}
 		};
 
-		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MTh",
+		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MTrh",
 				       long_options, NULL);
 		if (opt == -1)
 			break;
@@ -132,6 +133,9 @@ main(int argc, char **argv)
 			break;
 		case 'T':
 			show_type = true;
+			break;
+		case 'r':
+			show_when_read = true;
 			break;
 		case 'D':
 			delay = atoi(optarg);

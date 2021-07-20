@@ -1322,7 +1322,6 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 {
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	char			*fullpath = NULL;
-	char			*node_name = NULL;
 	char			*parent_name = NULL;
 
 	if ((node == NULL) || (stream == NULL))
@@ -1348,10 +1347,6 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		return;
 
 	while (node != NULL) {
-		node_name = conv_ptr(shmem, node->dtn_name);
-		if (node_name == NULL)
-			node_name = "(null)";
-
 		if ((path == NULL) ||
 		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0))
 			D_ASPRINTF(fullpath, "%s", parent_name);

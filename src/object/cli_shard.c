@@ -1175,9 +1175,12 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	} else {
 		if (opc == DAOS_OBJ_RPC_UPDATE && args->bulks != NULL &&
 		    !(orw->orw_flags & ORF_RESEND) &&
-		    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1))
+		    DAOS_FAIL_CHECK(DAOS_DTX_RESEND_DELAY1)) {
 			/* RPC (from client to server) timeout is 3 seconds. */
 			rc = crt_req_set_timeout(req, 3);
+			if (rc != 0)
+				D_ERROR("crt_req_set_timeout error: %d", rc);
+		    }
 
 		rc = daos_rpc_send(req, task);
 	}
