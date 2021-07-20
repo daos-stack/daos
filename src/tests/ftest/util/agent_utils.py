@@ -5,13 +5,15 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import socket
+import re
+import os
 from getpass import getuser
 
 from command_utils_base import \
     CommandFailure, FormattedParameter, EnvironmentVariables, \
     CommonConfig
 from command_utils import YamlCommand, CommandWithSubCommand, SubprocessManager
-from general_utils import get_log_file
+from general_utils import get_log_file, run_pcmd
 from agent_utils_params import \
     DaosAgentTransportCredentials, DaosAgentYamlParameters
 
@@ -163,7 +165,7 @@ class DaosAgentManager(SubprocessManager):
     """Manages the daos_agent execution on one or more hosts."""
 
     def __init__(self, group, bin_dir, cert_dir, config_file, config_temp=None,
-                 manager="Orterun"):
+                 manager="Orterun", outputdir=None):
         """Initialize a DaosAgentManager object.
 
         Args:
@@ -177,6 +179,8 @@ class DaosAgentManager(SubprocessManager):
             manager (str, optional): the name of the JobManager class used to
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
+            outputdir (str, optional): path to avocado test outputdir. Defaults
+                to None.
         """
         agent_command = get_agent_command(
             group, cert_dir, bin_dir, config_file, config_temp)
@@ -189,9 +193,12 @@ class DaosAgentManager(SubprocessManager):
         # Set default agent debug levels
         env_vars = {
             "D_LOG_MASK": "DEBUG,RPC=ERR",
-            "DD_MASK": "mgmt,io,md,epc,rebuild"
+            "DD_MASK": "mgmt,io,md,epc,rebuild",
+            "D_LOG_FILE_APPEND_PID": "1"
         }
         self.manager.assign_environment_default(EnvironmentVariables(env_vars))
+        self.attachinfo = None
+        self.outputdir = outputdir
 
     def _set_hosts(self, hosts, path, slots):
         """Set the hosts used to execute the daos command.
@@ -223,6 +230,42 @@ class DaosAgentManager(SubprocessManager):
         self.verify_socket_directory(getuser())
 
         super().start()
+
+    def dump_attachinfo(self):
+        """Run dump-attachinfo on the daos_agent."""
+        self.manager.job.set_sub_command("dump-attachinfo")
+        self.manager.job.sudo = True
+        self.attachinfo = run_pcmd(self.hosts,
+                                   str(self.manager.job))[0]["stdout"]
+        self.log.info("Agent attachinfo: %s", self.attachinfo)
+
+    def get_attachinfo_file(self):
+        """Run dump-attachinfo on the daos_agent."""
+
+        server_name = self.get_config_value("name")
+
+        self.dump_attachinfo()
+
+        a = self.attachinfo
+
+        # Filter log messages from attachinfo content
+        L = [x for x in a if re.match(r"^(name\s|size\s|all|\d+\s)", x)]
+        attach_info_contents = "\n".join(L)
+        attach_info_filename = "{}.attach_info_tmp".format(server_name)
+
+        if len(L) < 4:
+            self.log.info("Malformed attachinfo file: %s",
+                          attach_info_contents)
+            return None
+
+        # Write an attach_info_tmp file in this directory for cart_ctl to use
+        attachinfo_file_path = os.path.join(self.outputdir,
+                                            attach_info_filename)
+
+        with open(attachinfo_file_path, 'w') as file_handle:
+            file_handle.write(attach_info_contents)
+
+        return attachinfo_file_path
 
     def stop(self):
         """Stop the agent through the job manager.
