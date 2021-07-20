@@ -732,7 +732,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 		int dti_cos_cnt, struct dtx_memberships *mbs, bool leader,
 		bool solo, bool sync, bool dist, bool migration,
 		bool ignore_uncommitted, bool force_refresh, bool resent,
-		struct dtx_handle *dth)
+		bool prepared, struct dtx_handle *dth)
 {
 	if (sub_modification_cnt > DTX_SUB_MOD_MAX) {
 		D_ERROR("Too many modifications in a single transaction:"
@@ -764,6 +764,7 @@ dtx_handle_init(struct dtx_id *dti, daos_handle_t coh, struct dtx_epoch *epoch,
 	dth->dth_for_migration = migration ? 1 : 0;
 	dth->dth_ignore_uncommitted = ignore_uncommitted ? 1 : 0;
 	dth->dth_force_refresh = force_refresh ? 1 : 0;
+	dth->dth_prepared = prepared ? 1 : 0;
 
 	dth->dth_dti_cos = dti_cos;
 	dth->dth_dti_cos_count = dti_cos_cnt;
@@ -1009,7 +1010,8 @@ dtx_leader_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_DIST) ? true : false,
 			     (flags & DTX_FOR_MIGRATION) ? true : false, false,
 			     (flags & DTX_FORCE_REFRESH) ? true : false,
-			     (flags & DTX_RESEND) ? true : false, dth);
+			     (flags & DTX_RESEND) ? true : false,
+			     (flags & DTX_PREPARED) ? true : false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, leader "
 		DF_UOID", dti_cos_cnt %d, flags %x: "DF_RC"\n",
@@ -1078,7 +1080,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 	if (daos_is_zero_dti(&dth->dth_xid))
 		D_GOTO(out, result = result < 0 ? result : rc);
 
-	if (dth->dth_pinned || dth->dth_resent) {
+	if (dth->dth_pinned || dth->dth_prepared) {
 		status = vos_dtx_validation(dth);
 		if (status == DTX_ST_COMMITTED || status == DTX_ST_COMMITTABLE)
 			D_GOTO(out, result = 0);
@@ -1102,7 +1104,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 		D_ASSERT(0);
 	}
 
-	if ((!dth->dth_active && dth->dth_dist) || dth->dth_resent) {
+	if ((!dth->dth_active && dth->dth_dist) || dth->dth_prepared) {
 		/* We do not know whether some other participants have
 		 * some active entry for this DTX, consider distributed
 		 * transaction case, the other participants may execute
@@ -1317,7 +1319,7 @@ dtx_begin(daos_handle_t coh, struct dtx_id *dti,
 			     (flags & DTX_FOR_MIGRATION) ? true : false,
 			     (flags & DTX_IGNORE_UNCOMMITTED) ? true : false,
 			     (flags & DTX_FORCE_REFRESH) ? true : false,
-			     false, dth);
+			     (flags & DTX_RESEND) ? true : false, false, dth);
 
 	D_DEBUG(DB_IO, "Start DTX "DF_DTI" sub modification %d, ver %u, "
 		"dti_cos_cnt %d, flags %x: "DF_RC"\n",

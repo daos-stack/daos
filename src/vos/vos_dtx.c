@@ -441,7 +441,11 @@ dtx_cmt_ent_update(struct btr_instance *tins, struct btr_record *rec,
 		rec->rec_off = umem_ptr2off(&tins->ti_umm, dce_new);
 		D_FREE(dce_old);
 	} else if (!dce_old->dce_reindex) {
-		D_ASSERT(dce_new->dce_reindex);
+		D_ASSERTF(dce_new->dce_reindex, "Repeatedly commit DTX "
+			  DF_DTI": old is %s, new is %s\n",
+			  DP_DTI(&DCE_XID(dce_new)),
+			  dce_old->dce_resent ? "resent" : "original",
+			  dce_new->dce_resent ? "resent" : "original");
 		dce_new->dce_exist = 1;
 	}
 
@@ -772,8 +776,10 @@ dtx_rec_release(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 
 static int
 vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
-		   daos_epoch_t epoch, struct vos_dtx_cmt_ent **dce_p,
-		   struct vos_dtx_act_ent **dae_p, bool *rm_cos, bool *fatal)
+		   daos_epoch_t epoch, bool resent,
+		   struct vos_dtx_cmt_ent **dce_p,
+		   struct vos_dtx_act_ent **dae_p,
+		   bool *rm_cos, bool *fatal)
 {
 	struct vos_dtx_act_ent		*dae = NULL;
 	struct vos_dtx_cmt_ent		*dce = NULL;
@@ -839,6 +845,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 	if (dae != NULL) {
 		DCE_XID(dce) = DAE_XID(dae);
 		DCE_EPOCH(dce) = dae->dae_start_time;
+		dce->dce_resent = dae->dae_resent;
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
 
@@ -846,6 +853,7 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 		DCE_XID(dce) = *dti;
 		DCE_EPOCH(dce) = crt_hlc_get();
+		dce->dce_resent = resent;
 	}
 
 	d_iov_set(&riov, dce, sizeof(*dce));
@@ -1055,6 +1063,9 @@ vos_dtx_alloc(struct vos_dtx_blob_df *dbd, struct dtx_handle *dth)
 	DAE_EPOCH(dae) = dth->dth_epoch;
 	DAE_FLAGS(dae) = dth->dth_flags;
 	DAE_VER(dae) = dth->dth_ver;
+
+	if (dth->dth_resent)
+		dae->dae_resent = 1;
 
 	if (dth->dth_mbs != NULL) {
 		DAE_TGT_CNT(dae) = dth->dth_mbs->dm_tgt_cnt;
@@ -1646,7 +1657,9 @@ vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p)
 
 	if (dth->dth_solo) {
 		rc = vos_dtx_commit_internal(cont, &dth->dth_xid, 1,
-					     dth->dth_epoch, NULL, NULL, dce_p);
+					     dth->dth_epoch,
+					     dth->dth_resent ? true : false,
+					     NULL, NULL, dce_p);
 		dth->dth_active = 0;
 		dth->dth_pinned = 0;
 		if (rc >= 0) {
@@ -1833,7 +1846,7 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (mbs != NULL)
 			dae->dae_maybe_shared = 1;
 
-		/* Leader has not finish the 'prepare' phase, */
+		/* Leader has not finish the 'prepare' phase. */
 		if (dae->dae_dbd == NULL)
 			return -DER_INPROGRESS;
 
@@ -1871,7 +1884,8 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count, daos_epoch_t epoch, bool *rm_cos,
+			int count, daos_epoch_t epoch,
+			bool resent, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces)
 {
@@ -1908,7 +1922,7 @@ again:
 	     i++, cur++) {
 		struct vos_dtx_cmt_ent	*dce = NULL;
 
-		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, &dce,
+		rc = vos_dtx_commit_one(cont, &dtis[cur], epoch, resent, &dce,
 					daes != NULL ? &daes[cur] : NULL,
 					rm_cos != NULL ? &rm_cos[cur] : NULL,
 					&fatal);
@@ -2088,7 +2102,7 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count, bool *rm_cos)
 	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
 	if (rc == 0) {
 		committed = vos_dtx_commit_internal(cont, dtis, count, 0,
-						    rm_cos, daes, dces);
+						    false, rm_cos, daes, dces);
 		rc = umem_tx_end(vos_cont2umm(cont),
 				 committed > 0 ? 0 : committed);
 		if (rc == 0)
