@@ -56,6 +56,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         # It is up to individual test to enable it.
         self.test_with_rf = False
         self.test_with_blank_node = False
+        self.test_with_snapshot = False
 
     @fail_on(CommandFailure)
     def get_pool_leader(self):

@@ -4,6 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from copy import deepcopy
+
 from ior_test_base import IorTestBase
 from control_test_base import ControlTestBase
 
@@ -24,20 +26,6 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
 
         # Init the pool
         self.add_pool(connect=False)
-        self.uuid = self.pool.pool.get_uuid_str()
-
-    def get_pool_query_info(self, uuid):
-        """Get the information from the dmg pool query command.
-
-        Args:
-            uuid (str): UUID of the pool for which to collect information
-
-        Returns:
-            dict: the pool information stored in a dictionary
-
-        """
-        self.log.info("==>   Running dmg pool query:")
-        return self.dmg.pool_query(uuid)
 
     def test_pool_query_basic(self):
         """
@@ -53,19 +41,20 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         :avocado: tags=pool_query_basic
         """
         self.log.info("==>   Verify dmg output against expected output:")
-        dmg_info = self.get_pool_query_info(self.uuid)
+        self.pool.set_query_data()
+
         # We won't be testing free, min, max, and mean because the values
         # fluctuate across test runs. In addition, they're related to object
         # placement and testing them wouldn't be straightforward, so we'll need
         # some separate test cases.
-        del dmg_info["response"]["scm"]["free"]
-        del dmg_info["response"]["scm"]["min"]
-        del dmg_info["response"]["scm"]["max"]
-        del dmg_info["response"]["scm"]["mean"]
-        del dmg_info["response"]["nvme"]["free"]
-        del dmg_info["response"]["nvme"]["min"]
-        del dmg_info["response"]["nvme"]["max"]
-        del dmg_info["response"]["nvme"]["mean"]
+        del self.pool.query_data["response"]["tier_stats"][0]["free"]
+        del self.pool.query_data["response"]["tier_stats"][0]["min"]
+        del self.pool.query_data["response"]["tier_stats"][0]["max"]
+        del self.pool.query_data["response"]["tier_stats"][0]["mean"]
+        del self.pool.query_data["response"]["tier_stats"][1]["free"]
+        del self.pool.query_data["response"]["tier_stats"][1]["min"]
+        del self.pool.query_data["response"]["tier_stats"][1]["max"]
+        del self.pool.query_data["response"]["tier_stats"][1]["mean"]
 
         # Get the expected pool query values from the test yaml.  This should be
         # as simple as:
@@ -74,7 +63,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         # defined manually:
         exp_info = {
             "status": self.params.get("pool_status", path="/run/exp_vals/*"),
-            "uuid": self.uuid.lower(),
+            "uuid": self.pool.uuid.lower(),
             "total_targets": self.params.get(
                 "total_targets", path="/run/exp_vals/*"),
             "active_targets": self.params.get(
@@ -85,12 +74,16 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
                 "disabled_targets", path="/run/exp_vals/*"),
             "version": self.params.get("version", path="/run/exp_vals/*"),
             "leader": self.params.get("leader", path="/run/exp_vals/*"),
-            "scm": {
-                "total": self.params.get("total", path="/run/exp_vals/scm/*")
-            },
-            "nvme": {
-                "total": self.params.get("total", path="/run/exp_vals/nvme/*")
-            },
+            "tier_stats": [
+                {
+                    "total": self.params.get(
+                        "total", path="/run/exp_vals/scm/*")
+                },
+                {
+                    "total": self.params.get(
+                        "total", path="/run/exp_vals/nvme/*")
+                }
+            ],
             "rebuild": {
                 "status": self.params.get(
                     "rebuild_status", path="/run/exp_vals/rebuild/*"),
@@ -104,7 +97,7 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         }
 
         self.assertDictEqual(
-            dmg_info["response"], exp_info,
+            self.pool.query_data["response"], exp_info,
             "Found difference in dmg pool query output and the expected values")
 
         self.log.info("All expect values found in dmg pool query output.")
@@ -127,14 +120,14 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         uuids = self.params.get("uuids", '/run/pool_uuids/*')
 
         # Add a pass case to verify test is working
-        uuids.append([self.uuid, "PASS"])
+        uuids.append([self.pool.uuid, "PASS"])
 
         # Disable raising an exception if the dmg command fails
         self.dmg.exit_status_exception = False
 
         for uuid in uuids:
             # Verify pool query status
-            data = self.get_pool_query_info(uuid[0])
+            data = self.dmg.pool_query(uuid[0])
             error = data["error"] if "error" in data else None
 
             self.log.info("")
@@ -170,7 +163,8 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         :avocado: tags=pool_query_write
         """
         # Store original pool info
-        out_b = self.get_pool_query_info(self.uuid)
+        self.pool.set_query_data()
+        out_b = deepcopy(self.pool.query_data)
         self.log.info("==>   Pool info before write: \n%s", out_b)
 
         #  Run ior
@@ -178,13 +172,14 @@ class DmgPoolQueryTest(ControlTestBase, IorTestBase):
         self.run_ior_with_pool()
 
         # Check pool written data
-        out_a = self.get_pool_query_info(self.uuid)
+        self.pool.set_query_data()
+        out_a = deepcopy(self.pool.query_data)
         self.log.info("==>   Pool info after write: \n%s", out_a)
 
         # The file should have been written into nvme, compare info
-        bytes_orig_val = int(out_b["response"]["nvme"]["free"])
-        bytes_curr_val = int(out_a["response"]["nvme"]["free"])
+        bytes_orig_val = int(out_b["response"]["tier_stats"][1]["free"])
+        bytes_curr_val = int(out_a["response"]["tier_stats"][1]["free"])
         if bytes_orig_val <= bytes_curr_val:
             self.fail(
                 "Current NVMe free space should be smaller than {}".format(
-                    out_b["response"]["nvme"]["free"]))
+                    out_b["response"]["tier_stats"][1]["free"]))

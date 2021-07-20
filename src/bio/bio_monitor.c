@@ -728,7 +728,7 @@ collect_raw_health_data(struct bio_xs_context *ctxt)
 }
 
 void
-bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass)
+bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now)
 {
 	struct bio_dev_health	*dev_health;
 	struct bio_blobstore	*bbs;
@@ -761,7 +761,7 @@ bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass)
 		D_ERROR("State transition on target %d failed. %d\n",
 			ctxt->bxc_tgt_id, rc);
 
-	if (!bypass)
+	if (!bypass_health_collect())
 		collect_raw_health_data(ctxt);
 }
 
@@ -819,6 +819,9 @@ bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name)
 
 	D_ASSERT(bb != NULL);
 	D_ASSERT(bdev_name != NULL);
+
+	if (bypass_health_collect())
+		return 0;
 
 	hp_sz = sizeof(struct spdk_nvme_health_information_page);
 	bb->bb_dev_health.bdh_health_buf = spdk_dma_zmalloc(hp_sz, 0, NULL);
