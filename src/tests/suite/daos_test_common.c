@@ -605,7 +605,10 @@ bool
 test_runable(test_arg_t *arg, unsigned int required_nodes)
 {
 	int		 i;
-	static bool	 runable = true;
+	static bool	 runable;
+
+	/** reset runable for each new test runable check */
+	runable = true;
 
 	if (arg == NULL) {
 		print_message("state not set, likely due to group-setup"
