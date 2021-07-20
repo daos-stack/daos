@@ -8,10 +8,18 @@ package netdetect
 
 import (
 	"context"
+	"fmt"
+	"io/ioutil"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	. "github.com/daos-stack/daos/src/control/common"
+)
+
+const (
+	sampleDevClass = 32
 )
 
 // TestParseTopology uses XML topology data to simulate real systems.
@@ -531,5 +539,68 @@ func TestValidateProviderSm(t *testing.T) {
 	for _, sf := range results {
 		err := ValidateProviderConfig(netCtx, sf.DeviceName, "sm")
 		AssertEqual(t, err, nil, "Network device configuration is invalid - provider not supported")
+	}
+}
+
+// Read a device type file in /tmp/<netdev>/type. This method is identical to
+// GetDeviceClass in netdetec.go except it reads the type file from
+// /tmp/<netdev> instead of /sys/class/net/<netdev>
+func GetDeviceClassStub(netdev string) (uint32, error) {
+	devClass, err := ioutil.ReadFile(fmt.Sprintf("/tmp/%s/type", netdev))
+	if err != nil {
+		return 0, err
+	}
+
+	res, err := strconv.Atoi(strings.TrimSpace(string(devClass)))
+	return uint32(res), err
+}
+
+// Write type files in /tmp/<netdev> where <netdev> is the key of deviceToClass
+// and the device type written to the file is the corresponding value of
+// deviceToClass.
+func WriteSampleType(deviceToClass map[string]int) error {
+	for k, _ := range deviceToClass {
+		err := os.Mkdir(fmt.Sprintf("/tmp/%s", k), 0755)
+		if err != nil {
+			return err
+		}
+
+		filePath := fmt.Sprintf("/tmp/%s/type", k)
+		deviceClass := []byte(strconv.Itoa(deviceToClass[k]))
+		err = ioutil.WriteFile(filePath, deviceClass, 0644)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Creates device type files and write the corrensponding device type ID. Then
+// use GetDeviceClassStub to read the content of each of the device type files
+// and verify. Delete the files created.
+func TestDeviceClass(t *testing.T) {
+	// Prepare sample device name and the corresponding device type.
+	deviceToClass := make(map[string]int)
+	deviceToClass["eth0"] = Ether
+	deviceToClass["eth1"] = Ether
+	deviceToClass["ib0"] = Infiniband
+	deviceToClass["ib1"] = Infiniband
+
+	// Create a type file for each of the sample device in /tmp.
+	err := WriteSampleType(deviceToClass)
+	AssertEqual(t, err, nil, "Error writing sample type file!")
+
+	// Read the sample type file, /tmp/<netdev>/type, and compare the content
+	// against the expected type ID.
+	for k, _ := range deviceToClass {
+		t.Run(k, func(t *testing.T) {
+			res, err := GetDeviceClassStub(k)
+			AssertEqual(t, err, nil, "Error in GetDeviceClassStub!")
+			AssertEqual(
+				t, res, uint32(deviceToClass[k]),
+				fmt.Sprintf("Device class is not %d!\n", deviceToClass[k]))
+		})
+		os.RemoveAll(fmt.Sprintf("/tmp/%s", k))
 	}
 }
