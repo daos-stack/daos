@@ -66,6 +66,7 @@ struct bio_nvme_data {
 	/* When using SPDK primary mode, specifies memory allocation in MB */
 	int			 bd_mem_size;
 	bool			 bd_started;
+	bool			 bd_bypass_health_collect;
 };
 
 static struct bio_nvme_data nvme_glb;
@@ -129,9 +130,16 @@ bio_nvme_configured(void)
 	return nvme_glb.bd_nvme_conf != NULL;
 }
 
+bool
+bypass_health_collect()
+{
+	return nvme_glb.bd_bypass_health_collect;
+}
+
 int
 bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-	      int hugepage_size, int tgt_nr, struct sys_db *db)
+	      int hugepage_size, int tgt_nr, struct sys_db *db,
+	      bool bypass_health_collect)
 {
 	char		*env;
 	int		 rc, fd;
@@ -140,6 +148,7 @@ bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
 	nvme_glb.bd_xstream_cnt = 0;
 	nvme_glb.bd_init_thread = NULL;
 	nvme_glb.bd_nvme_conf = NULL;
+	nvme_glb.bd_bypass_health_collect = bypass_health_collect;
 	D_INIT_LIST_HEAD(&nvme_glb.bd_bdevs);
 
 	rc = ABT_mutex_create(&nvme_glb.bd_mutex);
@@ -1522,14 +1531,13 @@ bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now)
  * Execute the messages on msg ring, call all registered pollers.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
- * \param[IN] bypass	Set to bypass the health check
  *
  * \returns		0: If mo work was done
  *			1: If work was done
  *			-1: If thread has exited
  */
 int
-bio_nvme_poll(struct bio_xs_context *ctxt, bool bypass)
+bio_nvme_poll(struct bio_xs_context *ctxt)
 {
 	uint64_t now = d_timeus_secdiff(0);
 	int rc;
@@ -1556,7 +1564,7 @@ bio_nvme_poll(struct bio_xs_context *ctxt, bool bypass)
 	 */
 	if (ctxt->bxc_blobstore != NULL &&
 	    is_bbs_owner(ctxt, ctxt->bxc_blobstore))
-		bio_bs_monitor(ctxt, now, bypass);
+		bio_bs_monitor(ctxt, now);
 
 	if (is_init_xstream(ctxt)) {
 		scan_bio_bdevs(ctxt, now);

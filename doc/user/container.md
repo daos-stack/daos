@@ -1,12 +1,14 @@
 # Container Management
 
-DAOS containers are datasets managed by the users. A container is the unit of
-snapshot and has a type. It can be a POSIX namespace, an HDF5 file or any other
-new application-specific data model. The chapter explains how to manager
-container, while the subsequent ones detail how to access a DAOS container from
-applications.
+DAOS containers (not to be confused with Linux containers) are datasets managed
+by the users. A container is the unit of snapshot and has a type. It can be a
+POSIX namespace, an HDF5 file or any other application-specific data model.
+The chapter explains how to manage a container, while the subsequent ones detail
+how to access a DAOS container from applications.
 
-## Container Creation/Destroy
+## Container Basic Operations
+
+### Creating a Container
 
 Containers can be created and destroyed through the `daos(1)` utility.
 provided to manage containers.
@@ -61,6 +63,8 @@ $ daos cont query --path /tmp/mycontainer
   Chunk Size                 : 1.0 MiB
 ```
 
+### Listing Containers
+
 **To list all containers available in a pool:**
 
 ```bash
@@ -70,6 +74,8 @@ UUID                                 Label
 30e5d364-62c9-4ddf-9284-1021359455f2 container_label_not_set
 daefe12c-45d4-44f7-8e56-995d02549041 mycont
 ```
+
+### Destroying a Container
 
 **To destroy a container:**
 ```bash
@@ -224,10 +230,9 @@ The table below summarizes the different container properties available.
 | compression             | Yes             | Whether online compression is enabled (off, lz4, deflate[1-4])|
 | dedup                   | Yes             | Inline deduplication off, hash based (hash) or using memory compare (memcmp)|
 | dedup\_threshold        | Yes             | Minimum I/O size to consider for deduplication|
-| encryption              | Yes             | Inline encryption off, or algorithm
-to use (XTS[128|256], CBC[128|192|256] or GCM]129|256]|
+| encryption              | Yes             | Inline encryption off, or algorithm to use (XTS[128\|256], CBC[128\|192\|256] or GCM[128\|256])|
 | status                  | No              | Current state of the container|
-| alloc\_oid               | No              | Maximum allocated object ID by container allocator|
+| alloc\_oid              | No              | Maximum allocated object ID by container allocator|
 
 Refer to the [Data Integrity](#Data-Integrity) and [Access Control Lists](#Access_Control_Lists)
 sections for more details on the checksum and access-related properties.
@@ -241,7 +246,7 @@ metadata, many of them are still under development. The ability to modify some
 of these properties on an existing container will also be provided in a future
 release.
 
-## Data Integrity
+### Data Integrity
 
 DAOS allows to detect and fix (when data protection is enabled) silent data
 corruptions. This is done by calculating checksums for both data and metadata
@@ -289,7 +294,7 @@ Server Checksumming   on
     Note that currently, once a container is created, its checksum configuration
     cannot be changed.
 
-## Inline Deduplication (Preview)
+### Inline Deduplication (Preview)
 
 Data deduplication (dedup) is a process that allows to eliminate duplicated
 data copies in order to decrease capacity requirements. DAOS has some initial
@@ -326,12 +331,15 @@ configure dedup, the following container properties are used:
     NVMe isn't supported for dedup enabled container, so please make sure not
     using dedup on the pool with NVMe enabled.
 
-## Compression & Encryption (unsupported)
+### Compression (unsupported)
 
-The compression (`DAOS_PROP_CO_COMPRESS`) and encryption
-(`DAOS_PROP_CO_ENCRYPT`) properties are reserved for configuring respectively
-online compression and encryption.
-These features are currently not on the roadmap.
+The compression (`DAOS_PROP_CO_COMPRESS`) property is reserved for configuring
+online compression and not implemented yet.
+
+### Encryption (unsupported)
+
+The encryption (`DAOS_PROP_CO_ENCRYPT`) property is reserved for configuring
+online encryption and not implemented yet.
 
 ## Snapshot & Rollback
 
@@ -454,12 +462,12 @@ $ daos cont get-acl <pool_label> <container_label>
 The output is in the same string format used in the ACL file during creation,
 with one ACE per line.
 
-### Modifying a Container's ACL
+### Modifying ACL
 
 For all of these commands using an ACL file, the ACL file must be in the format
 noted above for container creation.
 
-#### Overwriting the ACL
+#### Overwriting ACL
 
 To replace a container's ACL with a new ACL:
 

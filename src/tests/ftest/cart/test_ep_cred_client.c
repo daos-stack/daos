@@ -5,7 +5,7 @@
  */
 #include <semaphore.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 #include "test_ep_cred_common.h"
 
 static int resp_count;
@@ -67,10 +67,10 @@ test_run()
 	DBG_PRINT("Number of credits: %d Number of burst: %d\n",
 		   test.tg_credits, test.tg_burst_count);
 
-	tc_cli_start_basic(test.tg_local_group_name,
-			   test.tg_remote_group_name,
-			   &grp, &rank_list, &test.tg_crt_ctx,
-			   &test.tg_tid, true, test.tg_use_cfg, &opt);
+	crtu_cli_start_basic(test.tg_local_group_name,
+			     test.tg_remote_group_name,
+			     &grp, &rank_list, &test.tg_crt_ctx,
+			     &test.tg_tid, true, test.tg_use_cfg, &opt);
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -127,14 +127,14 @@ test_run()
 		rc = crt_req_send(rpc, rpc_handle_ping_front_q, NULL);
 		D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-		tc_sem_timedwait(&test.tg_queue_front_token, 61, __LINE__);
+		crtu_sem_timedwait(&test.tg_queue_front_token, 61, __LINE__);
 		D_ASSERTF(sent_count != resp_count,
 			"Send count matches response count\n");
 	}
 
 	DBG_PRINT("Waiting for responses to %d rpcs\n",
 		test.tg_burst_count);
-	tc_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
+	crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 	DBG_PRINT("Got all responses\n");
 
 	if (test.tg_send_shutdown) {
@@ -144,7 +144,7 @@ test_run()
 
 		rc = crt_req_send(rpc, rpc_handle_shutdown_reply, NULL);
 		D_ASSERTF(rc == 0, "crt_req_send() failed; rc=%d\n", rc);
-		tc_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
+		crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 	}
 
 	d_rank_list_free(rank_list);
@@ -159,7 +159,7 @@ test_run()
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	tc_progress_stop();
+	crtu_progress_stop();
 
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
@@ -190,7 +190,7 @@ main(int argc, char **argv)
 	}
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, 40, false, true);
+	crtu_test_init(0, 40, false, true);
 
 	test_run();
 
