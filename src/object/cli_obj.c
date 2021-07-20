@@ -4659,7 +4659,7 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 	oca = obj_get_oca(obj);
 	obj_ec_get_parity_shards(obj, grp_idx, obj_ec_parity_tgt_nr(oca),
 				 obj_ec_data_tgt_nr(oca), parities);
-	if (unlikely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
+	if (likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
 		if (obj_auxi->to_leader) {
 			/* proper way to choose leader ? XXX */
 			shard = parities[0];
@@ -4676,14 +4676,14 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 			if (obj->cob_shards->do_shards[shard].do_rebuilding)
 				continue;
 
-			if (obj->cob_shards->do_shards[shard].do_target_id !=
-									-1)
+			if (obj->cob_shards->do_shards[shard].do_target_id != -1)
 				break;
 		}
 
-		D_DEBUG(DB_IO, "choose parity shard %d\n", shard);
-		if (i < p_size)
+		if (i < p_size) {
+			D_DEBUG(DB_IO, "choose parity shard %d\n", shard);
 			D_GOTO(out, shard);
+		}
 	}
 
 	D_DEBUG(DB_IO, "let's choose from the data shard 0 for "DF_OID"\n",
