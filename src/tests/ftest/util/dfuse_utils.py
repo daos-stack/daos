@@ -28,8 +28,7 @@ class DfuseCommand(ExecutableCommand):
         self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
         self.enable_caching = FormattedParameter("--enable-caching", False)
-        self.enable_wb_caching = FormattedParameter("--enable-wb-cache",
-                                                     False)
+        self.enable_wb_caching = FormattedParameter("--enable-wb-cache",False)
         self.disable_caching = FormattedParameter("--disable-caching", False)
         self.disable_wb_caching = FormattedParameter("--disable-wb-cache",
                                                      False)
