@@ -62,5 +62,8 @@ def scons():
     # ftest
     SConscript('ftest/SConscript')
 
+    # Simple DFS test
+    libs = ['daos', 'daos_common_pmem', 'uuid', 'dfs']
+    daos_build.program(denv, 'simple_dfs', 'simple_dfs.c', LIBS=libs)
 if __name__ == "SCons.Script":
     scons()
