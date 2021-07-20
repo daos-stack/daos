@@ -315,7 +315,6 @@ co_properties(void **state)
 	char			*label2_v2 = "test_cont_prop_label2_version2";
 	uuid_t			 cuuid2;
 	daos_handle_t		 coh2;
-	uuid_t			 cuuid3;
 	daos_handle_t		 coh3;
 	uuid_t			 cuuid4;
 	uint64_t		 snapshot_max = 128;
@@ -448,8 +447,7 @@ co_properties(void **state)
 
 		/* Create container C2: no UUID specified, new label - pass */
 		print_message("Checking create: different UUID and label\n");
-		rc = daos_cont_create_by_label(arg->pool.poh, label2, NULL,
-					       NULL, NULL /* ev */);
+		rc = daos_cont_create(arg->pool.poh, label2, NULL, NULL);
 		assert_rc_equal(rc, 0);
 		print_message("created container C2: %s\n", label2);
 		/* Open by label, and immediately close */
@@ -479,12 +477,10 @@ co_properties(void **state)
 		 */
 		print_message("Checking set-prop and create label conflict "
 			      "(will fail)\n");
-		rc = daos_cont_create_by_label(arg->pool.poh, foo_label,
-					       NULL /* prop */, &cuuid3,
-					       NULL /* ev */);
+		rc = daos_cont_create(arg->pool.poh, foo_label, NULL /* prop */,
+				      NULL /* ev */);
 		assert_rc_equal(rc, 0);
-		print_message("step1: created container C3: %s : "
-			      "UUID:"DF_UUIDF"\n", foo_label, DP_UUID(cuuid3));
+		print_message("step1: created container C3: %s\n", foo_label);
 		rc = daos_cont_open(arg->pool.poh, foo_label, DAOS_COO_RW,
 				    &coh3, NULL, NULL);
 		assert_rc_equal(rc, 0);
@@ -521,8 +517,7 @@ co_properties(void **state)
 		rc = daos_cont_destroy(arg->pool.poh, label2_v2, 0 /* force */,
 				       NULL /* ev */);
 		assert_rc_equal(rc, 0);
-		print_message("destroyed container C3: %s : "
-			      "UUID:"DF_UUIDF"\n", label2_v2, DP_UUID(cuuid3));
+		print_message("destroyed container C3: %s\n", label2_v2);
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 

@@ -22,12 +22,20 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
 	return dc_cont_global2local(poh, glob, coh);
 }
 
+/** Disable backward compat code */
+#undef daos_cont_create
+
+/**
+ * Kept for backward ABI compatibility when a UUID is provided instead of a
+ * label
+ */
 int
-daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
+daos_cont_create(daos_handle_t poh, const char *cont, daos_prop_t *cont_prop,
 		 daos_event_t *ev)
 {
 	daos_cont_create_t	*args;
 	tse_task_t		*task;
+	const unsigned char	*uuid = (const unsigned char *) cont;
 	int			 rc;
 
 	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
@@ -44,66 +52,47 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
 		return rc;
 
 	args = dc_task_get_args(task);
-	args->poh = poh;
+	args->poh	= poh;
 	uuid_copy((unsigned char *)args->uuid, uuid);
-	args->prop = cont_prop;
+	args->prop	= cont_prop;
+	args->label	= NULL;
 
 	return dc_task_schedule(task, true);
 }
 
+/**
+ * Real latest & greatest implementation of container create.
+ * Used by anyone including the daos_cont.h header file.
+ */
 int
-daos_cont_create_by_label(daos_handle_t poh, const char *label,
-			  daos_prop_t *cont_prop, uuid_t *uuid,
-			  daos_event_t *ev)
+daos_cont_create2(daos_handle_t poh, const char *label, daos_prop_t *cont_prop,
+		  daos_event_t *ev)
 {
-	daos_prop_t		*label_prop;
-	daos_prop_t		*merged_props = NULL;
-	uuid_t			 cuuid;
+	daos_cont_create_t	*args;
+	tse_task_t		*task;
 	int			 rc;
 
-	/* TODO: if want early label check, use daos_label_is_valid() when
-	 * implemented. Otherwise rely on prop check in daos_cont_create().
-	 */
+	DAOS_API_ARG_ASSERT(*args, CONT_CREATE);
 
-	label_prop = daos_prop_alloc(1);
-	if (label_prop == NULL) {
-		D_ERROR("failed to allocate label_prop\n");
-		return -DER_NOMEM;
-	}
-	label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(label_prop->dpp_entries[0].dpe_str, label,
-		  DAOS_PROP_LABEL_MAX_LEN);
-	if (label_prop->dpp_entries[0].dpe_str == NULL) {
-		rc = -DER_NOMEM;
-		goto out_prop;
+	if (label == NULL)
+		return -DER_INVAL;
+
+	if (cont_prop != NULL && !daos_prop_valid(cont_prop, false, true)) {
+		D_ERROR("Invalid container properties.\n");
+		return -DER_INVAL;
 	}
 
-	if (cont_prop) {
-		merged_props = daos_prop_merge(cont_prop, label_prop);
-		if (merged_props == NULL) {
-			D_ERROR("failed to merge cont_prop and label_prop\n");
-			rc = -DER_NOMEM;
-			goto out_prop;
-		}
-	}
+	rc = dc_task_create(dc_cont_create, NULL, ev, &task);
+	if (rc)
+		return rc;
 
-	uuid_generate(cuuid);
-	rc = daos_cont_create(poh, cuuid,
-			      merged_props ? merged_props : label_prop, ev);
-	if (rc != 0) {
-		D_ERROR("daos_cont_create UUID:"DF_UUIDF" label=%s failed, "
-			DF_RC"\n", DP_UUID(cuuid), label, DP_RC(rc));
-		goto out_merged_props;
-	}
-	if (uuid)
-		uuid_copy(*uuid, cuuid);
+	args = dc_task_get_args(task);
+	args->poh	= poh;
+	uuid_clear(args->uuid);
+	args->prop	= cont_prop;
+	args->label	= label;
 
-out_merged_props:
-	daos_prop_free(merged_props);
-
-out_prop:
-	daos_prop_free(label_prop);
-	return rc;
+	return dc_task_schedule(task, true);
 }
 
 /** Disable backward compat code */

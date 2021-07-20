@@ -483,7 +483,7 @@ pool_properties(void **state)
 	assert_rc_equal(rc, 0);
 
 	prop = daos_prop_alloc(1);
-	/* label - set arg->pool_label to use daos_pool_connect_by_label() */
+	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
 	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
