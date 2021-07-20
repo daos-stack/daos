@@ -1,10 +1,6 @@
 name: Codespell
 
 on:
-   push:
-     branches:
-       - master
-       - 'release/*'
    pull_request:
 
 jobs:

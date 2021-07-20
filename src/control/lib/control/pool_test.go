@@ -268,16 +268,9 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: drpc.DaosIOError,
 		},
-		"mixture of auto/manual storage params": {
-			req: &PoolCreateReq{
-				TotalBytes: 10,
-				ScmBytes:   20,
-			},
-			expErr: errors.New("can't mix"),
-		},
 		"missing storage params": {
 			req:    &PoolCreateReq{},
-			expErr: errors.New("0 SCM"),
+			expErr: errors.New("size of 0"),
 		},
 		"bad label": {
 			req: &PoolCreateReq{
@@ -426,19 +419,21 @@ func TestControl_PoolQuery(t *testing.T) {
 							Objects: 1,
 							Records: 2,
 						},
-						Scm: &mgmtpb.StorageUsageStats{
-							Total: 123456,
-							Free:  0,
-							Min:   1,
-							Max:   2,
-							Mean:  3,
-						},
-						Nvme: &mgmtpb.StorageUsageStats{
-							Total: 123456,
-							Free:  0,
-							Min:   1,
-							Max:   2,
-							Mean:  3,
+						TierStats: []*mgmtpb.StorageUsageStats{
+							{
+								Total: 123456,
+								Free:  0,
+								Min:   1,
+								Max:   2,
+								Mean:  3,
+							},
+							{
+								Total: 123456,
+								Free:  0,
+								Min:   1,
+								Max:   2,
+								Mean:  3,
+							},
 						},
 					},
 				),
@@ -454,19 +449,21 @@ func TestControl_PoolQuery(t *testing.T) {
 						Objects: 1,
 						Records: 2,
 					},
-					Scm: &StorageUsageStats{
-						Total: 123456,
-						Free:  0,
-						Min:   1,
-						Max:   2,
-						Mean:  3,
-					},
-					Nvme: &StorageUsageStats{
-						Total: 123456,
-						Free:  0,
-						Min:   1,
-						Max:   2,
-						Mean:  3,
+					TierStats: []*StorageUsageStats{
+						{
+							Total: 123456,
+							Free:  0,
+							Min:   1,
+							Max:   2,
+							Mean:  3,
+						},
+						{
+							Total: 123456,
+							Free:  0,
+							Min:   1,
+							Max:   2,
+							Mean:  3,
+						},
 					},
 				},
 			},
@@ -884,8 +881,7 @@ func TestControl_Pool_setUsage(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			resp := &PoolQueryResp{Status: tc.status}
-			resp.Scm = tc.scmStats
-			resp.Nvme = tc.nvmeStats
+			resp.TierStats = append(resp.TierStats, tc.scmStats, tc.nvmeStats)
 			resp.TotalTargets = tc.totalTargets
 			resp.ActiveTargets = tc.activeTargets
 			resp.DisabledTargets = tc.activeTargets
@@ -912,26 +908,23 @@ func TestControl_ListPools(t *testing.T) {
 				Objects: 1,
 				Records: 2,
 			},
-			Scm: &mgmtpb.StorageUsageStats{
-				Total: 123456,
-				Free:  0,
-				Min:   1000,
-				Max:   2000,
-				Mean:  1500,
-			},
-			Nvme: &mgmtpb.StorageUsageStats{
-				Total: 1234567,
-				Free:  600000,
-				Min:   1000,
-				Max:   2000,
-				Mean:  15000,
+			TierStats: []*mgmtpb.StorageUsageStats{
+				{Total: 123456,
+					Free: 0,
+					Min:  1000,
+					Max:  2000,
+					Mean: 1500,
+				},
+				{
+					Total: 1234567,
+					Free:  600000,
+					Min:   1000,
+					Max:   2000,
+					Mean:  15000,
+				},
 			},
 		}
 	}
-	queryRespNilScm := queryResp(1)
-	queryRespNilScm.Scm = nil
-	queryRespNilNvme := queryResp(1)
-	queryRespNilNvme.Nvme = nil
 	expUsage := []*PoolTierUsage{
 		{
 			TierName:  "SCM",
@@ -1000,38 +993,6 @@ func TestControl_ListPools(t *testing.T) {
 					},
 				},
 			},
-		},
-		"one pool; nil scm in query response": {
-			mic: &MockInvokerConfig{
-				UnaryResponseSet: []*UnaryResponse{
-					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
-						Pools: []*mgmtpb.ListPoolsResp_Pool{
-							{
-								Uuid:    common.MockUUID(1),
-								SvcReps: []uint32{1, 3, 5, 8},
-							},
-						},
-					}),
-					MockMSResponse("host1", nil, queryRespNilScm),
-				},
-			},
-			expErr: errors.New("missing scm"),
-		},
-		"one pool; nil nvme in query response": {
-			mic: &MockInvokerConfig{
-				UnaryResponseSet: []*UnaryResponse{
-					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
-						Pools: []*mgmtpb.ListPoolsResp_Pool{
-							{
-								Uuid:    common.MockUUID(1),
-								SvcReps: []uint32{1, 3, 5, 8},
-							},
-						},
-					}),
-					MockMSResponse("host1", nil, queryRespNilNvme),
-				},
-			},
-			expErr: errors.New("missing nvme"),
 		},
 		"one pool; uuid mismatch in query response": {
 			mic: &MockInvokerConfig{

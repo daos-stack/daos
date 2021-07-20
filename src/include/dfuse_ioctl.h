@@ -11,7 +11,7 @@
 
 #define DFUSE_IOCTL_TYPE 0xA3       /* Arbitrary "unique" type of the IOCTL */
 #define DFUSE_IOCTL_REPLY_BASE 0xC1 /* Number of the IOCTL.  Also arbitrary */
-#define DFUSE_IOCTL_VERSION 6       /* Version of ioctl protocol */
+#define DFUSE_IOCTL_VERSION 7       /* Version of ioctl protocol */
 
 #define DFUSE_IOCTL_REPLY_CORE (DFUSE_IOCTL_REPLY_BASE)
 
@@ -26,12 +26,16 @@
 #define DFUSE_IOCTL_REPLY_SIZE (DFUSE_IOCTL_REPLY_BASE + 6)
 #define DFUSE_IOCTL_REPLY_DSIZE (DFUSE_IOCTL_REPLY_BASE + 7)
 
+/** Metadada caching is enabled for this file */
+#define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
+
 /* Core IOCTL reply */
 struct dfuse_il_reply {
 	int		fir_version;
 	daos_obj_id_t	fir_oid;
 	uuid_t		fir_pool;
 	uuid_t		fir_cont;
+	uint64_t	fir_flags;
 };
 
 /* Query for global pool/container handle sizes */
@@ -48,7 +52,6 @@ struct dfuse_hsd_reply {
 	size_t		fsr_dobj_size;
 };
 
-
 /* Defines the IOCTL command to get the object ID for a open file */
 #define DFUSE_IOCTL_IL ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_CORE, \
 				  struct dfuse_il_reply))
@@ -59,7 +62,6 @@ struct dfuse_hsd_reply {
 #define DFUSE_IOCTL_IL_SIZE ((int)_IOR(DFUSE_IOCTL_TYPE,		\
 				       DFUSE_IOCTL_REPLY_SIZE,		\
 				       struct dfuse_hs_reply))
-
 
 /* Defined the IOCTL command to get the dfs/object handle sizes for a
  * open file
