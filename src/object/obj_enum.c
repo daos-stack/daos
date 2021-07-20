@@ -273,7 +273,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 		arg->kds[arg->kds_len].kd_val_type = OBJ_ITER_OBJ_PUNCH_EPOCH;
 		arg->kds_len++;
 
-		D_ASSERT(iov->iov_len + pi_size < iov->iov_buf_len);
+		D_ASSERT(iov->iov_len + pi_size <= iov->iov_buf_len);
 		memcpy(iov->iov_buf + iov->iov_len, &key_ent->ie_obj_punch,
 		       pi_size);
 
@@ -303,7 +303,7 @@ fill_key(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 						OBJ_ITER_DKEY_EPOCH;
 		arg->kds_len++;
 
-		D_ASSERT(iov->iov_len + pi_size < iov->iov_buf_len);
+		D_ASSERT(iov->iov_len + pi_size <= iov->iov_buf_len);
 		memcpy(iov->iov_buf + iov->iov_len, &key_ent->ie_punch,
 		       pi_size);
 
@@ -585,7 +585,7 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	arg->kds[arg->kds_len].kd_key_len += sizeof(*rec);
 
 	/* Append the recx record to iovs. */
-	D_ASSERT(iovs[arg->sgl_idx].iov_len + sizeof(*rec) <
+	D_ASSERT(iovs[arg->sgl_idx].iov_len + sizeof(*rec) <=
 		 iovs[arg->sgl_idx].iov_buf_len);
 	rec = iovs[arg->sgl_idx].iov_buf + iovs[arg->sgl_idx].iov_len;
 	rec->rec_recx = key_ent->ie_recx;

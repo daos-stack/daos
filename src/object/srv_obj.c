@@ -2669,33 +2669,6 @@ obj_enum_complete(crt_rpc_t *rpc, int status, int map_version,
 }
 
 static int
-obj_enum_prep_sgls(d_sg_list_t *dst_sgls, d_sg_list_t *sgls, int number)
-{
-	int i;
-	int j;
-	int rc = 0;
-
-	for (i = 0; i < number; i++) {
-		dst_sgls[i].sg_nr = sgls[i].sg_nr;
-		D_ALLOC_ARRAY(dst_sgls[i].sg_iovs, sgls[i].sg_nr);
-		if (dst_sgls[i].sg_iovs == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-
-		for (j = 0; j < dst_sgls[i].sg_nr; j++) {
-			dst_sgls[i].sg_iovs[j].iov_buf_len =
-				sgls[i].sg_iovs[j].iov_buf_len;
-
-			D_ALLOC(dst_sgls[i].sg_iovs[j].iov_buf,
-				dst_sgls[i].sg_iovs[j].iov_buf_len);
-			if (dst_sgls[i].sg_iovs[j].iov_buf == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-		}
-	}
-out:
-	return rc;
-}
-
-static int
 obj_restore_enum_args(crt_rpc_t *rpc, struct dss_enum_arg *des,
 		      struct dss_enum_arg *src)
 {
@@ -2718,7 +2691,7 @@ obj_restore_enum_args(crt_rpc_t *rpc, struct dss_enum_arg *des,
 		return 0;
 
 	d_sgl_fini(&oeo->oeo_sgl, true);
-	rc = obj_enum_prep_sgls(&oeo->oeo_sgl, &oei->oei_sgl, 1);
+	rc = daos_sgls_alloc(&oeo->oeo_sgl, &oei->oei_sgl, 1);
 	if (rc != 0)
 		return rc;
 
@@ -2931,9 +2904,9 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 	}
 
 	if (oei->oei_bulk) {
-		D_DEBUG(DB_IO, "reply bulk %zd nr_out %d\n",
+		D_DEBUG(DB_IO, "reply bulk %zd nr %d nr_out %d\n",
 			oeo->oeo_sgl.sg_iovs[0].iov_len,
-			oeo->oeo_sgl.sg_nr_out);
+			oeo->oeo_sgl.sg_nr, oeo->oeo_sgl.sg_nr_out);
 		sgls[idx] = &oeo->oeo_sgl;
 		bulks[idx] = oei->oei_bulk;
 		idx++;
@@ -3014,7 +2987,7 @@ ds_obj_enum_handler(crt_rpc_t *rpc)
 		enum_arg.recxs_cap = oei->oei_nr;
 		enum_arg.recxs_len = 0;
 	} else {
-		rc = obj_enum_prep_sgls(&oeo->oeo_sgl, &oei->oei_sgl, 1);
+		rc = daos_sgls_alloc(&oeo->oeo_sgl, &oei->oei_sgl, 1);
 		if (rc != 0)
 			D_GOTO(out, rc);
 		enum_arg.sgl = &oeo->oeo_sgl;

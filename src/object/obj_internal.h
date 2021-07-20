@@ -455,6 +455,7 @@ struct dc_obj_verify_args {
 	char				*list_buf;
 	char				*fetch_buf;
 	char				 inline_buf[DOVA_BUF_LEN];
+	uint32_t			 current_shard;
 	struct dc_obj_verify_cursor	 cursor;
 };
 

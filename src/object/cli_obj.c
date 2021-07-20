@@ -2368,7 +2368,10 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 			    obj_ec_data_tgt_nr(oca)) {
 				/* Client dispatch for EC recx enumeration */
 				flags = OBJ_TGT_FLAG_CLI_DISPATCH;
-				shard_cnt = obj_ec_data_tgt_nr(oca);
+				if (obj_auxi->spec_shard)
+					shard_cnt = 1;
+				else
+					shard_cnt = obj_ec_data_tgt_nr(oca);
 				D_DEBUG(DB_IO, "data shard %d enumeration for "
 					DF_OID"\n", shard_cnt,
 					DP_OID(obj->cob_md.omd_id));
@@ -4566,7 +4569,8 @@ shard_list_prep(struct shard_auxi_args *shard_auxi, struct dc_object *obj,
 	shard_arg->la_api_args = obj_args;
 	oca = obj_get_oca(obj);
 	if (obj_auxi->is_ec_obj &&
-	    shard_auxi->shard < obj_ec_data_tgt_nr(oca)) {
+	    shard_auxi->shard < obj_ec_data_tgt_nr(oca) &&
+	    !obj_auxi->spec_shard) {
 		uint32_t		idx = shard_auxi->shard;
 		daos_anchor_t		*sub_anchors;
 		int			shard_nr;
@@ -5493,20 +5497,17 @@ dc_obj_verify(daos_handle_t oh, daos_epoch_t *epochs, unsigned int nr)
 		return -DER_NO_HDL;
 
 	oc_attr = obj_get_oca(obj);
+	if (oc_attr->ca_resil != DAOS_RES_REPL) {
+		reps = 1;
+	} else {
+		if (oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
+			reps = obj->cob_grp_size;
+		else
+			reps = oc_attr->u.rp.r_num;
 
-	/* XXX: Currently, only support to verify replicated object.
-	 *	Need more work for EC object in the future.
-	 */
-	if (oc_attr->ca_resil != DAOS_RES_REPL)
-		D_GOTO(out, rc = -DER_NOSYS);
-
-	if (oc_attr->u.rp.r_num == DAOS_OBJ_REPL_MAX)
-		reps = obj->cob_grp_size;
-	else
-		reps = oc_attr->u.rp.r_num;
-
-	if (reps == 1)
-		goto out;
+		if (reps == 1)
+			goto out;
+	}
 
 	/* XXX: If we support progressive object layout in the future,
 	 *	The "obj->cob_grp_nr" may be different from given @nr.
