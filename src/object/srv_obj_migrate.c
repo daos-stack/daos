@@ -286,6 +286,8 @@ obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 {
+	if (!tls)
+		return;
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version);
 	if (tls->mpt_pool)
@@ -309,12 +311,16 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 void
 migrate_pool_tls_get(struct migrate_pool_tls *tls)
 {
+	if (!tls)
+		return;
 	tls->mpt_refcount++;
 }
 
 void
 migrate_pool_tls_put(struct migrate_pool_tls *tls)
 {
+	if (!tls)
+		return;
 	tls->mpt_refcount--;
 	if (tls->mpt_fini && tls->mpt_refcount == 1)
 		ABT_eventual_set(tls->mpt_done_eventual, NULL, 0);
@@ -2482,7 +2488,7 @@ migrate_obj_ult(void *data)
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(arg->pool_uuid));
-		D_GOTO(free, rc = 0);
+		D_GOTO(free_notls, rc = 0);
 	}
 
 	if (tls->mpt_del_local_objs) {
@@ -2555,6 +2561,7 @@ free:
 		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version,
 		DP_UOID(arg->oid), arg->shard, tls->mpt_obj_executed_ult,
 		DP_RC(rc));
+free_notls:
 	D_FREE(arg->snaps);
 	D_FREE(arg);
 	migrate_pool_tls_put(tls);
