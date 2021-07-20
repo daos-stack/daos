@@ -218,6 +218,7 @@ enum {
 	DAOS_PROP_CO_LAYOUT_POSIX,	/** DFS/dfuse/MPI-IO */
 	DAOS_PROP_CO_LAYOUT_HDF5,	/** HDF5 DAOS VOL connector */
 	DAOS_PROP_CO_LAYOUT_PYTHON,	/** PyDAOS */
+	DAOS_PROP_CO_LAYOUT_SPARK,	/** Specific layout for Spark shuffle */
 	DAOS_PROP_CO_LAYOUT_DATABASE,	/** SQL Database */
 	DAOS_PROP_CO_LAYOUT_ROOT,	/** ROOT/RNTuple format */
 	DAOS_PROP_CO_LAYOUT_SEISMIC,	/** Seismic Graph, aka SEGY */
