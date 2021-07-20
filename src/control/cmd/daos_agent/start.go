@@ -64,13 +64,19 @@ func (cmd *startCmd) Execute(_ []string) error {
 	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 
+	fabricCache := newLocalFabricCache(cmd.log)
+	if len(cmd.cfg.FabricInterfaces) > 0 {
+		fi := NUMAFabricFromConfig(cmd.log, cmd.cfg.FabricInterfaces)
+		fabricCache.localNUMAFabric = fi
+	}
+
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.log, cmd.cfg.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
 		log:         cmd.log,
 		sys:         cmd.cfg.SystemName,
 		ctlInvoker:  cmd.ctlInvoker,
 		aiCache:     newAttachInfoCache(cmd.log, enabled),
-		fabricCache: newLocalFabricCache(cmd.log),
+		fabricCache: fabricCache,
 		numaAware:   numaAware,
 		netCtx:      netCtx,
 		monitor:     procmon,

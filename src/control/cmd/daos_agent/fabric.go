@@ -153,6 +153,14 @@ func (n *NUMAFabric) getNextDevIndex(numaNode int) (int, error) {
 	return 0, fmt.Errorf("no fabric interfaces on NUMA node %d", numaNode)
 }
 
+func (n *NUMAFabric) setDefaultNUMANode() {
+	for numa := range n.numaMap {
+		n.defaultNumaNode = numa
+		n.log.Debugf("The default NUMA node is: %d", numa)
+		break
+	}
+}
+
 func newNUMAFabric(log logging.Logger) *NUMAFabric {
 	return &NUMAFabric{
 		log:               log,
@@ -192,15 +200,30 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan []*netdete
 			newIF.Name, newIF.Domain, numa, fabric.NumDevices(numa)-1)
 	}
 
-	for numa := range fabric.numaMap {
-		fabric.defaultNumaNode = numa
-		log.Debugf("The default NUMA node is: %d", numa)
-		break
-	}
+	fabric.setDefaultNUMANode()
 
 	if fabric.NumNUMANodes() == 0 {
 		log.Info("No network devices detected in fabric scan\n")
 	}
+
+	return fabric
+}
+
+// NUMAFabricFromConfig generates a NUMAFabric layout based on a config.
+func NUMAFabricFromConfig(log logging.Logger, cfg []*NUMAFabricConfig) *NUMAFabric {
+	fabric := newNUMAFabric(log)
+
+	for _, fc := range cfg {
+		node := fc.NUMANode
+		for _, fi := range fc.Interfaces {
+			fabric.numaMap[node] = append(fabric.numaMap[node],
+				&FabricInterface{
+					Name:   fi.Interface,
+					Domain: fi.Domain,
+				})
+		}
+	}
+	fabric.setDefaultNUMANode()
 
 	return fabric
 }

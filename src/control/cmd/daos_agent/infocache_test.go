@@ -147,7 +147,7 @@ func newTestFabricCache(t *testing.T, log logging.Logger, cacheMap *NUMAFabric) 
 	return cache
 }
 
-func TestAgent_localFabricCache_Cache(t *testing.T) {
+func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		lfc       *localFabricCache
 		input     []*netdetect.FabricScan
@@ -274,7 +274,7 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 				tc.lfc.log = log
 			}
 
-			err := tc.lfc.Cache(context.TODO(), tc.input)
+			err := tc.lfc.CacheScan(context.TODO(), tc.input)
 
 			common.CmpErr(t, tc.expErr, err)
 			common.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
