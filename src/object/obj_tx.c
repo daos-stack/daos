@@ -980,7 +980,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 	}
 
 	if (pool_task != NULL)
-		dc_task_schedule(pool_task, true);
+		tse_task_schedule(pool_task, true);
 
 	rc = 0;
 
