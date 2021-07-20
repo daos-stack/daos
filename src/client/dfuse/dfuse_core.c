@@ -1041,6 +1041,9 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 
 	args.argc = 4;
 
+	if (dfs->dfs_multi_user)
+		args.argc++;
+
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
 	 */
@@ -1065,6 +1068,12 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (!args.argv[3])
 		D_GOTO(err, rc = -DER_NOMEM);
 
+	if (dfs->dfs_multi_user) {
+		args.argv[5] = strndup("-oallow_other", 32);
+		if (!args.argv[5])
+			D_GOTO(err, rc = -DER_NOMEM);
+	}
+
 	fuse_ops = dfuse_get_fuse_ops();
 	if (!fuse_ops)
 		D_GOTO(err, rc = -DER_NOMEM);
@@ -1086,7 +1095,8 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	dfs->dfs_ino = ie->ie_stat.st_ino;
 
-	if (dfs->dfs_ops == &dfuse_dfs_ops) {
+	if (dfs->dfs_ops == &dfuse_dfs_ops ||
+	    dfs->dfs_ops == &dfuse_login_ops) {
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
 				NULL, NULL);
 		if (rc) {

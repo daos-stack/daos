@@ -299,6 +299,7 @@ main(int argc, char **argv)
 
 	struct option long_options[] = {
 		{"mountpoint",		required_argument, 0, 'm'},
+		{"multi-user",		no_argument,	   0, 'M'},
 		{"path",		required_argument, 0, 'P'},
 		{"pool",		required_argument, 0, 'p'},
 		{"container",		required_argument, 0, 'c'},
@@ -351,6 +352,9 @@ main(int argc, char **argv)
 			break;
 		case 'm':
 			dfuse_info->di_mountpoint = optarg;
+			break;
+		case 'M':
+			dfuse_info->di_multi_user = true;
 			break;
 		case 'P':
 			path = optarg;
@@ -417,17 +421,22 @@ main(int argc, char **argv)
 	/* Reserve one CPU thread for the daos event queue */
 	dfuse_info->di_thread_count -= 1;
 
+	if (cont_name && !pool_name) {
+		printf("Container name specified without pool\n");
+		D_GOTO(out_debug, rc = -DER_INVAL);
+	}
+
+	if (dfuse_info->di_multi_user && !cont_name) {
+		printf("Multi-user mode requires a container\n");
+		D_GOTO(out_debug, rc = -DER_INVAL);
+	}
+
 	if (!dfuse_info->di_foreground) {
 		rc = dfuse_bg(dfuse_info);
 		if (rc != 0) {
 			printf("Failed to background\n");
 			exit(2);
 		}
-	}
-
-	if (cont_name && !pool_name) {
-		printf("Container name specified without pool\n");
-		D_GOTO(out_debug, rc = -DER_INVAL);
 	}
 
 	rc = daos_init();
@@ -554,6 +563,9 @@ main(int argc, char **argv)
 
 	if (uuid_is_null(dfp->dfp_pool))
 		dfs->dfs_ops = &dfuse_pool_ops;
+
+	if (dfuse_info->di_multi_user)
+		dfs->dfs_multi_user = true;
 
 	rc = dfuse_start(fs_handle, dfs);
 	if (rc != -DER_SUCCESS)

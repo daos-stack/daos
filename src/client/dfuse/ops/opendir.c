@@ -37,6 +37,12 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 		fi_out.cache_readdir = 1;
 #endif
 
+#if 0
+	/* These are fuse version dependent so need compile-time checking */
+	if (ie->ie_dfs->dfs_attr_timeout)
+		fi->flags = FOPEN_KEEP_CACHE | FOPEN_CACHE_DIR;
+#endif
+
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
 	return;
 err:

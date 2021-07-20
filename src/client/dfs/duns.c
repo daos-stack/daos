@@ -19,6 +19,7 @@
 #include <sys/ioctl.h>
 #include <dlfcn.h>
 #include <regex.h>
+#include <pwd.h>
 #ifdef LUSTRE_INCLUDE
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_idl.h>
@@ -714,20 +715,105 @@ err:
 }
 #endif
 
+#define PW_BUF_SIZE 1024
+
 static int
-create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
+duns_set_fuse_acl(const char *path, daos_handle_t coh)
+{
+	char		*buf;
+	int		rc = 0;
+	struct daos_acl	*acl;
+	struct daos_ace	*ace;
+	struct stat	stbuf = {};
+	int		uid;
+	struct passwd	pwd = {};
+	struct passwd	*pwdp = NULL;
+	char		*name;
+
+	rc = stat(path, &stbuf);
+	if (rc == -1)
+		return errno;
+
+	uid = geteuid();
+
+	if (uid == stbuf.st_uid) {
+		D_DEBUG(DB_TRACE, "Same user, returning\n");
+		return 0;
+	}
+
+	printf("Setting ACL for new container\n");
+
+	/* TODO: Use daos_acl_uid_to_principal() here */
+
+	D_ALLOC(buf, PW_BUF_SIZE);
+	if (buf == NULL)
+		return ENOMEM;
+
+	errno = 0;
+	rc = getpwuid_r(stbuf.st_uid, &pwd, buf, PW_BUF_SIZE, &pwdp);
+	if (rc == -1 || pwdp == NULL) {
+		int err = errno;
+
+		D_ERROR("getpwuid() failed, (%s)\n", strerror(rc));
+		D_GOTO(out_buf, rc = err);
+	}
+
+	D_ASPRINTF(name, "%s@", pwdp->pw_name);
+	if (name == NULL)
+		D_GOTO(out_buf, rc = ENOMEM);
+
+	ace = daos_ace_create(DAOS_ACL_USER, name);
+	if (ace == NULL) {
+		D_ERROR("daos_ace_create() failed.\n");
+		D_GOTO(out_name, rc = EIO);
+	}
+
+	ace->dae_access_types = DAOS_ACL_ACCESS_ALLOW;
+	ace->dae_allow_perms = DAOS_ACL_PERM_READ | DAOS_ACL_PERM_WRITE |
+		DAOS_ACL_PERM_GET_PROP | DAOS_ACL_PERM_GET_ACL;
+
+	acl = daos_acl_create(&ace, 1);
+	if (acl == NULL)
+		D_GOTO(out_ace, rc = EIO);
+
+	rc = daos_cont_update_acl(coh, acl, NULL);
+	if (rc) {
+		D_ERROR("daos_cont_update_acl() failed, " DF_RC "\n",
+			DP_RC(rc));
+	}
+
+	daos_acl_free(acl);
+
+out_ace:
+	daos_ace_free(ace);
+out_name:
+	D_FREE(name);
+out_buf:
+	D_FREE(buf);
+	return rc;
+}
+
+static int
+create_cont(daos_handle_t poh, struct duns_attr_t *attrp,
+	    const char *path, bool backend_dfuse)
 {
 	int rc;
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		dfs_attr_t dfs_attr = {};
+		daos_handle_t   coh;
 
 		/** TODO: set Lustre FID here. */
 		dfs_attr.da_id = 0;
 		dfs_attr.da_oclass_id = attrp->da_oclass_id;
 		dfs_attr.da_chunk_size = attrp->da_chunk_size;
 		dfs_attr.da_props = attrp->da_props;
-		rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr, NULL, NULL);
+		rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
+				     backend_dfuse ? &coh : NULL, NULL);
+		if (rc == -DER_SUCCESS && backend_dfuse) {
+			rc = duns_set_fuse_acl(path, coh);
+			daos_cont_close(coh, NULL);
+		}
 	} else {
 		daos_prop_t	*prop;
 		int		 nr = 1;
@@ -790,7 +876,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			return EINVAL;
 		}
 
-		rc = create_cont(poh, attrp);
+		rc = create_cont(poh, attrp, NULL, false);
 		if (rc)
 			D_ERROR("Failed to create container (%d)\n", rc);
 		return rc;
@@ -897,7 +983,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			goto err_link;
 		}
 
-		rc = create_cont(poh, attrp);
+		rc = create_cont(poh, attrp, path, true);
 		if (rc == -DER_SUCCESS && backend_dfuse) {
 			/* This next setxattr will cause dfuse to lookup the entry point and perform
 			 * a container connect, therefore this xattr will be set in the root of the

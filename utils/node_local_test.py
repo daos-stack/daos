@@ -377,6 +377,8 @@ def get_base_env(clean=False):
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
+DEFAULT_AGENT_DIR = '/var/run/daos_agent'
+
 class DaosPool():
     """Class to store data about daos pools"""
     def __init__(self, server, pool_uuid, label):
@@ -437,7 +439,10 @@ class DaosServer():
         if not os.path.exists(socket_dir):
             os.mkdir(socket_dir)
 
-        self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
+        if os.access(DEFAULT_AGENT_DIR, os.W_OK):
+            self.agent_dir = DEFAULT_AGENT_DIR
+        else:
+            self.agent_dir = tempfile.mkdtemp(prefix='dnt_agent_')
 
         self._yaml_file = None
         self._io_server_dir = None
@@ -936,6 +941,7 @@ class DFuse():
                  conf,
                  pool=None,
                  container=None,
+                 multi_user=False,
                  mount_path=None,
                  uns_path=None,
                  caching=True):
@@ -948,6 +954,7 @@ class DFuse():
         self.valgrind_file = None
         self.container = container
         self.conf = conf
+        self.multi_user = multi_user
         # Detect the number of cores and do something sensible, if there are
         # more than 32 on the node then use 12, otherwise use the whole node.
         num_cores = len(os.sched_getaffinity(0))
@@ -1009,6 +1016,9 @@ class DFuse():
                     '--mountpoint',
                     self.dir,
                     '--foreground'])
+
+        if self.multi_user:
+            cmd.append('--multi-user')
 
         if single_threaded:
             cmd.append('--singlethread')
@@ -1077,7 +1087,7 @@ class DFuse():
             time.sleep(2)
             umount(self.dir)
 
-        run_log_test = True
+        run_leak_test = True
         try:
             ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
@@ -1087,10 +1097,9 @@ class DFuse():
             print('Timeout stopping dfuse')
             self._sp.send_signal(signal.SIGTERM)
             fatal_errors = True
-            run_log_test = False
+            run_leak_test = False
         self._sp = None
-        if run_log_test:
-            log_test(self.conf, self.log_file)
+        log_test(self.conf, self.log_file, show_memleaks=run_leak_test)
 
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
@@ -1656,6 +1665,9 @@ class posix_tests():
                  stat.S_IRUSR]
 
         for mode in modes:
+            print(os.stat(fname))
+            print('Setting mode to 0{}'.format(oct(mode)))
+            print(os.stat(fname))
             os.chmod(fname, mode)
             attr = os.stat(fname)
             assert stat.S_IMODE(attr.st_mode) == mode
@@ -2540,11 +2552,16 @@ def run_in_fg(server, conf):
 
     t_dir = os.path.join(dfuse.dir, container)
 
+    os.mkdir(t_dir)
+    t_dir = dfuse.dir
+
     print('Running at {}'.format(t_dir))
+    print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
     print('daos container create --type POSIX ' \
           '{} --path {}/uns-link'.format(
               pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
+
     print('daos container destroy --path {}/uns-link'.format(t_dir))
     print('daos cont list {}'.format(pool))
     try:
@@ -3298,6 +3315,7 @@ def main():
     parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--class-name', default=None, help='class name to use for junit')
     parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
+    parser.add_argument('--multi-user', action='store_true')
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')

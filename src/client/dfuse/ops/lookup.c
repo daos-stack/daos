@@ -35,6 +35,12 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
 
+	if (!is_new && ie->ie_dfs->dfs_multi_user) {
+		rc = dfuse_get_uid(ie);
+		if (rc)
+			D_GOTO(out_err, rc);
+	}
+
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;
@@ -148,10 +154,6 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
 		return ENOTSUP;
 
-	/* Search the currently connect dfp list, if one matches then use that,
-	 * otherwise allocate a new one.
-	 */
-
 	rc = dfuse_pool_connect(fs_handle, &dattr.da_puuid, &dfp);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_err, rc);
@@ -159,6 +161,11 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	rc = dfuse_cont_open(fs_handle, dfp, &dattr.da_cuuid, &dfs);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_dfp, rc);
+
+	if (fs_handle->dpi_info->di_multi_user)
+		dfs->dfs_ops = &dfuse_dfs_ops_safe;
+	else
+		dfs->dfs_ops = &dfuse_dfs_ops;
 
 	/* The inode has a reference to the dfs, so keep that. */
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);

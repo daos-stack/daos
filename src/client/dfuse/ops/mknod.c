@@ -39,6 +39,10 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
+	rc = ie_set_uid(ie, req);
+	if (rc)
+		D_GOTO(release, rc);
+
 	LOG_MODES(ie, mode);
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
@@ -50,7 +54,27 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
 	return;
+release:
+	dfs_release(ie->ie_obj);
 err:
 	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 	D_FREE(ie);
+}
+
+void
+dfuse_cb_mknod_safe(fuse_req_t req, struct dfuse_inode_entry *parent,
+		    const char *name, mode_t mode)
+{
+	const struct fuse_ctx *ctx = fuse_req_ctx(req);
+	int rc;
+
+	if ((ctx->uid != parent->ie_stat.st_uid) ||
+	    ctx->gid != parent->ie_stat.st_gid)
+		D_GOTO(out, rc = ENOTSUP);
+
+	dfuse_cb_mknod(req, parent, name, mode);
+	return;
+
+out:
+	DFUSE_REPLY_ERR_RAW(parent, req, rc);
 }
