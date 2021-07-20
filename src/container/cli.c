@@ -109,9 +109,9 @@ cont_create_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
-	if (args->cuuid != NULL)
+	if (arg->cuuid != NULL)
 		/** return UUID allocated to the container */
-		uuid_copy(*args->cuuid, args->uuid);
+		uuid_copy(*arg->cuuid, arg->uuid);
 	D_DEBUG(DF_DSMC, "completed creating container\n");
 
 out:
