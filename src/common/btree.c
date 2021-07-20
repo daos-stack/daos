@@ -1385,7 +1385,7 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 			nd	= btr_off2ptr(tcx, nd_off);
 			end	= nd->tn_keyn - 1;
 
-			/* There may be hold in the leaf node because of lazy
+			/* There may be hole in the leaf node because of lazy
 			 * rebalance. So let's search from some larger range.
 			 */
 			if (tcx->tc_feats & BTR_FEAT_LAZY_LEAF_REBAL &&
@@ -4086,7 +4086,7 @@ dbtree_lazy_leaf_rebal(daos_handle_t toh, struct btr_node *nd)
 	D_ASSERT(nd->tn_flags & BTR_NODE_LAZY_REBAL);
 
 	if (btr_has_tx(tcx)) {
-		/* The 'nd' may has been attached to the tx,
+		/* The 'nd' might have been attached to the tx,
 		 * it is not a big problem if add it again.
 		 */
 		rc = btr_node_tx_add(tcx, off);

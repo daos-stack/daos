@@ -68,7 +68,7 @@ struct btr_node {
 	union {
 		/** the first child, it is unused on leaf node */
 		umem_off_t		tn_child;
-		/** Pointer to the next leaf node in DRAM. */
+		/** Pointer to the next leaf node for lazy rebalance. */
 		void			*tn_next;
 	};
 	/** records in this node */
@@ -497,7 +497,17 @@ enum btr_feats {
 	 *  tree class
 	 */
 	BTR_FEAT_DYNAMIC_ROOT		= (1 << 2),
-	/** Lazy leaf node rebalance when delete some record from the leaf. */
+	/** Lazy leaf node rebalance when delete some record from the leaf.
+	 * It is not important whether related btree is DRAM or PMEM based.
+	 * If the sponsor that deletes records from the btree wants to lazy
+	 * renbalance the tree, it needs to guarantee that there is no CPU
+	 * yield during the series of deleting record operations before the
+	 * final rebalance.
+	 *
+	 * On the other hand, if the btree is PMEM based, the caller needs
+	 * to guarantee that the series of deleting record operations are
+	 * handled within the same transaction.
+	 */
 	BTR_FEAT_LAZY_LEAF_REBAL	= (1 << 3),
 };
 
