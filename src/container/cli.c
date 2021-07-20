@@ -109,6 +109,10 @@ cont_create_complete(tse_task_t *task, void *data)
 		D_GOTO(out, rc);
 	}
 
+	/** Returned container UUID upon successful creation */
+	if (arg->cuuid != NULL)
+		uuid_copy(*arg->cuuid, arg->uuid);
+
 	D_DEBUG(DF_DSMC, "completed creating container\n");
 
 out:
@@ -221,8 +225,9 @@ dc_cont_create(tse_task_t *task)
 	daos_prop_t	       *rpc_prop = NULL;
 
 	args = dc_task_get_args(task);
-	if (uuid_is_null(args->uuid))
-		D_GOTO(err_task, rc = -DER_INVAL);
+	if (!daos_uuid_valid(args->uuid))
+		/** generate a UUID for the new container */
+		uuid_generate(args->uuid);
 
 	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
 	if (entry != NULL) {

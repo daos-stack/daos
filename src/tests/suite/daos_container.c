@@ -448,8 +448,8 @@ co_properties(void **state)
 
 		/* Create container C2: no UUID specified, new label - pass */
 		print_message("Checking create: different UUID and label\n");
-		rc = daos_cont_create_by_label(arg->pool.poh, label2, NULL,
-					       NULL, NULL /* ev */);
+		rc = daos_cont_create_with_label(arg->pool.poh, label2, NULL,
+						 NULL, NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		print_message("created container C2: %s\n", label2);
 		/* Open by label, and immediately close */
@@ -479,9 +479,9 @@ co_properties(void **state)
 		 */
 		print_message("Checking set-prop and create label conflict "
 			      "(will fail)\n");
-		rc = daos_cont_create_by_label(arg->pool.poh, foo_label,
-					       NULL /* prop */, &cuuid3,
-					       NULL /* ev */);
+		rc = daos_cont_create_with_label(arg->pool.poh, foo_label,
+						 NULL /* prop */, &cuuid3,
+						 NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		print_message("step1: created container C3: %s : "
 			      "UUID:"DF_UUIDF"\n", foo_label, DP_UUID(cuuid3));
