@@ -8,7 +8,6 @@ from avocado.core.exceptions import TestFail
 
 from ior_test_base import IorTestBase
 from general_utils import get_remote_file_size, run_pcmd
-from apricot import TestWithServers
 
 
 class POSIXStatTest(IorTestBase):
@@ -54,7 +53,7 @@ class POSIXStatTest(IorTestBase):
             current_epoch = -1
             output = run_pcmd(hosts=self.hostlist_clients, command="date +%s")
             stdout = output[0]["stdout"]
-            self.log.info("date stdout = {}".format(stdout))
+            self.log.info("date stdout = %s".format(stdout))
             current_epoch = stdout[-1]
 
             test_file_suffix = "_{}".format(i)
@@ -70,12 +69,11 @@ class POSIXStatTest(IorTestBase):
 
             # Get epoch of the created file.
             creation_epoch = -1
-            cmd_output = ""
             # As in date command, run stat command in the client node.
             stat_command = "stat -c%Z {}".format(self.ior_cmd.test_file.value)
             output = run_pcmd(hosts=self.hostlist_clients, command=stat_command)
             stdout = output[0]["stdout"]
-            self.log.info("stat stdout = {}".format(stdout))
+            self.log.info("stat stdout = %s".format(stdout))
             creation_epoch = stdout[-1]
 
             # Calculate the epoch difference between the creation time and the
