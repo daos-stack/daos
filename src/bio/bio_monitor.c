@@ -532,8 +532,8 @@ get_spdk_intel_smart_log_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 
 	/* Store Intel SMART stats in in-memory health state log. */
-	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
-	populate_intel_smart_stats(dev_health);
+	if (dev_health->bdh_vendor_id == SPDK_PCI_VID_INTEL)
+		populate_intel_smart_stats(dev_health);
 
 	/* Prep NVMe command to get controller data */
 	cp_sz = sizeof(struct spdk_nvme_ctrlr_data);
@@ -599,7 +599,7 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 	/* Prep NVMe command to get SPDK Intel NVMe SSD Smart Attributes */
 	if (dev_health->bdh_vendor_id != SPDK_PCI_VID_INTEL) {
 		get_spdk_intel_smart_log_completion(bdev_io, true, ctxt);
-		goto out;
+		return;
 	}
 	page_sz = sizeof(struct spdk_nvme_intel_smart_information_page);
 	numd = page_sz / sizeof(uint32_t) - 1u;
