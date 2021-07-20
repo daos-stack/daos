@@ -1720,7 +1720,7 @@ int main(int argc, char *argv[])
 			{0, 0, 0, 0}
 		};
 
-		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btnqp:u:",
+		c = getopt_long(argc, argv, "g:m:e:s:r:i:a:btnqp:u",
 				long_options, NULL);
 		if (c == -1)
 			break;
