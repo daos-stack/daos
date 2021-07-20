@@ -33,6 +33,16 @@ struct  ilog_df {
 	char	id_pad[24];
 };
 
+#define DF_TREC DF_X64".%d"
+#define DP_TREC(trec) (trec)->tr_epc, (trec)->tr_minor_epc
+
+struct ilog_time_rec {
+	/** Major epoch of update/punch */
+	daos_epoch_t	tr_epc;
+	/** Minor epoch of update/punch */
+	uint16_t	tr_minor_epc;
+};
+
 struct umem_instance;
 
 enum ilog_status {
@@ -194,6 +204,8 @@ struct ilog_entries {
  *  \param	punch_major[in]	Max minor epoch punch of parent incarnation log
  *  \param	entries[in]	Used for efficiency since aggregation is used
  *				by vos_iterator
+ *  \param	update[in]	Optional, indicates next update after the range
+ *				in case the ilog would otherwise be left empty
  *
  *  \return	0		success
  *		1		success but indicates log is empty
@@ -203,7 +215,7 @@ int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
 	       bool discard, daos_epoch_t punch_major, uint16_t punch_minor,
-	       struct ilog_entries *entries);
+	       struct ilog_entries *entries, const struct ilog_time_rec *update);
 
 /** Initialize an ilog_entries struct for fetch
  *

@@ -529,7 +529,7 @@ rdb_vos_discard(daos_handle_t cont, daos_epoch_t low, daos_epoch_t high)
 	range.epr_lo = low;
 	range.epr_hi = high;
 
-	return vos_discard(cont, &range, NULL, NULL);
+	return vos_discard(cont, NULL, &range, NULL, NULL);
 }
 
 int
