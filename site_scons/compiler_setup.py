@@ -21,6 +21,27 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
 
+generic_src = """
+#include <stdbool.h>
+#define check(x) _Generic((x), int : true, default : false)
+void fn(int x)
+{
+if (check(x))
+ return;
+}
+"""
+
+def check_generic(context):
+    """Check if the compiler supports _Generic"""
+
+    compiler = context.env.get('CC')
+
+    context.Message('Checking if {} supports _Generic '.format(compiler))
+
+    rc = context.TryCompile(generic_src, '.c')
+    context.Result(rc)
+    return rc
+
 def base_setup(env, prereqs=None):
     """Setup the scons environment for the compiler
 
@@ -67,6 +88,7 @@ def base_setup(env, prereqs=None):
 
     if build_type != 'release':
         env.AppendUnique(CPPDEFINES={'FAULT_INJECTION':'1'})
+        env.AppendUnique(CPPDEFINES='DUSE_GOTO_LOGGING')
 
     env.AppendUnique(CPPDEFINES={'CMOCKA_FILTER_SUPPORTED':'0'})
 
@@ -74,7 +96,12 @@ def base_setup(env, prereqs=None):
 
     cenv = env.Clone()
     cenv.Append(CFLAGS='-Werror')
-    config = Configure(cenv)
+    config = Configure(cenv,
+                       custom_tests={'GenericTest': check_generic})
+
+    if config.GenericTest():
+        env.AppendUnique(CPPDEFINES={'HAVE_GENERIC':'1'})
+
     if config.CheckHeader('stdatomic.h'):
         config.Finish()
         env.AppendUnique(CPPDEFINES={'HAVE_STDATOMIC':'1'})

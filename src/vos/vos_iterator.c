@@ -659,7 +659,7 @@ probe:
 					  "(type=%d anchor=%p): "DF_RC"\n",
 					  type, probe_anchor, DP_RC(rc));
 		}
-		D_GOTO(out, rc);
+		goto out;
 	}
 
 	while (1) {
@@ -695,7 +695,6 @@ probe:
 					 !daos_anchor_is_eof(anchor));
 				goto probe;
 			}
-
 		}
 
 		if (recursive && !is_last_level(type) && !skipped &&

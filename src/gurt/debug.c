@@ -515,7 +515,7 @@ d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 	D_MUTEX_LOCK(&d_log_lock);
 	d_log_refcount++;
 	if (d_log_refcount > 1) /* Already initialized */
-		D_GOTO(out, 0);
+		goto out;
 
 	/* Load priority error from environment variable (DD_STDERR)
 	 * A Priority error will be output to stderr by the debug system.

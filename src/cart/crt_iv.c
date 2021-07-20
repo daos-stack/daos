@@ -650,7 +650,7 @@ crt_ivns_internal_create(crt_context_t crt_ctx, struct crt_grp_priv *grp_priv,
 
 	D_ALLOC_PTR(ivns_internal);
 	if (ivns_internal == NULL)
-		D_GOTO(exit, 0);
+		goto exit;
 
 	rc = D_MUTEX_INIT(&ivns_internal->cii_lock, 0);
 	if (rc != 0) {
@@ -2230,7 +2230,7 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	switch (sync_type->ivs_mode) {
 	case CRT_IV_SYNC_NONE:
 		D_DEBUG(DB_TRACE, "NONE syncMode\n");
-		D_GOTO(exit, rc = 0);
+		goto exit;
 
 	case CRT_IV_SYNC_EAGER:
 		D_DEBUG(DB_TRACE, "EAGER syncMode\n");
@@ -2524,7 +2524,7 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 	if (iv_info->uci_sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
 		transfer_back_to_child(&input->ivu_key, iv_info, true,
 				       cb_info->cci_rc);
-		D_GOTO(exit, 0);
+		goto exit;
 	}
 
 	iv_ops = crt_iv_ops_get(iv_info->uci_ivns_internal,

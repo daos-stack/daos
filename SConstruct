@@ -347,7 +347,7 @@ def scons(): # pylint: disable=too-many-locals
     prereqs.init_build_targets(build_prefix)
     prereqs.load_defaults(platform_arm)
     if prereqs.check_component('valgrind_devel'):
-        env.AppendUnique(CPPDEFINES=["D_HAS_VALGRIND"])
+        env.AppendUnique(CPPDEFINES='D_HAS_VALGRIND')
 
     AddOption('--deps-only',
               dest='deps_only',

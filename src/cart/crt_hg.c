@@ -225,7 +225,7 @@ crt_hg_pool_put(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_hdl_reuse == NULL) {
 		D_ALLOC_PTR(hdl);
 		if (hdl == NULL)
-			D_GOTO(out, 0);
+			goto out;
 		D_INIT_LIST_HEAD(&hdl->chh_link);
 		hdl->chh_hdl = rpc_priv->crp_hg_hdl;
 	} else {
@@ -439,7 +439,7 @@ d_list_t
 {
 	struct crt_prov_gdata *prov_data = crt_get_prov_gdata(provider);
 
-	return &(prov_data->cpg_ctx_list);
+	return &prov_data->cpg_ctx_list;
 }
 
 static int
@@ -457,7 +457,7 @@ crt_get_info_string(int provider, char **string, int ctx_idx)
 
 	if (provider == CRT_NA_SM) {
 		D_ASPRINTF(*string, "%s://", provider_str);
-		D_GOTO(out, 0);
+		goto out;
 	}
 
 	if (crt_provider_is_contig_ep(provider) && start_port != -1) {
@@ -980,7 +980,7 @@ crt_hg_req_destroy(struct crt_rpc_priv *rpc_priv)
 				RPC_TRACE(DB_NET, rpc_priv,
 					  "hg_hdl %p put to pool.\n",
 					  rpc_priv->crp_hg_hdl);
-				D_GOTO(mem_free, 0);
+				goto mem_free;
 			}
 		}
 		/* HACK alert:  Do we need to provide a low-level interface

@@ -81,7 +81,6 @@ out:
 	return rc;
 }
 
-
 #define CRT_TREE_PARAMETER_CHECKING(grp_priv, tree_topo, root, self)	\
 	do {								\
 									\
@@ -184,7 +183,6 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 	struct crt_topo_ops	*tops;
 	int			 i, rc = 0;
 
-
 	D_RWLOCK_RDLOCK(&grp_priv->gp_rwlock);
 	if (ver_match != NULL) {
 		*ver_match = (bool)(grp_ver == grp_priv->gp_membs_ver);
@@ -238,7 +236,7 @@ crt_tree_get_children(struct crt_grp_priv *grp_priv, uint32_t grp_ver,
 
 	if (nchildren == 0) {
 		*children_rank_list = NULL;
-		D_GOTO(out, rc = 0);
+		goto out;
 	}
 	result_rank_list = d_rank_list_alloc(nchildren);
 	if (result_rank_list == NULL)

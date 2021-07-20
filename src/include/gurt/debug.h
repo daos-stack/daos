@@ -113,7 +113,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 
 #define D_LOG_ENABLED(flag)					\
 	({							\
-		_D_DEBUG(D_NOOP, flag);				\
+		_D_DEBUG(D_NOOP_PRINT, flag);			\
 		__builtin_expect(DD_FLAG(flag, D_LOGFAC), 0);	\
 	})
 

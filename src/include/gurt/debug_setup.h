@@ -48,6 +48,8 @@
 	ACTION(DB_ANY,   any,   any,   0, arg)  \
 	/** Extremely verbose debug stream */   \
 	ACTION(DB_TRACE, trace, trace, 0, arg)  \
+	/** Logging of D_GOTO calls */		\
+	ACTION(DB_GOTO, trace, trace, 0, arg)	\
 	/** Memory operations */                \
 	ACTION(DB_MEM,   mem,   mem,   0, arg)  \
 	/** Network operations */               \

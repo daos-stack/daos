@@ -110,7 +110,7 @@ crt_opc_map_destroy(struct crt_opc_map *map)
 
 	if (map->com_map == NULL) {
 		D_DEBUG(DB_TRACE, "opc map empty, skipping.\n");
-		D_GOTO(skip, 0);
+		goto skip;
 	}
 
 	for (i = 0; i < map->com_num_slots_total; i++)
@@ -186,17 +186,17 @@ crt_opc_lookup(struct crt_opc_map *map, crt_opcode_t opc, int locked)
 	if (L1_idx >= map->com_num_slots_total) {
 		D_WARN("base opc %d out of range [0, %d]\n", L1_idx,
 		       map->com_num_slots_total);
-		D_GOTO(out, 0);
+		goto out;
 	}
 	if (L2_idx >= map->com_map[L1_idx].L2_num_slots_total) {
 		D_WARN("version number %d out of range [0, %d]\n", L2_idx,
 		       map->com_map[L1_idx].L2_num_slots_total);
-		D_GOTO(out, 0);
+		goto out;
 	}
 	if (L3_idx >= map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total) {
 		D_WARN("rpc id %d out of range [0, %d]\n", L3_idx,
 		       map->com_map[L1_idx].L2_map[L2_idx].L3_num_slots_total);
-		D_GOTO(out, 0);
+		goto out;
 	}
 
 	info = &map->com_map[L1_idx].L2_map[L2_idx].L3_map[L3_idx];

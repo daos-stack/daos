@@ -89,7 +89,6 @@ prec2id(struct ilog_id *id, const union prec *prec)
 	id->id_value = prec->p_value;
 }
 
-
 static inline union prec *
 rec2prec(struct btr_record *rec)
 {
@@ -1096,7 +1095,6 @@ ilog_update(daos_handle_t loh, const daos_epoch_range_t *epr,
 		range = *epr;
 
 	return ilog_modify(loh, &id, &range, ILOG_OP_UPDATE);
-
 }
 
 /** Makes a specific update to the incarnation log permanent and
@@ -1139,6 +1137,7 @@ struct ilog_priv {
 	/** Embedded entries */
 	struct ilog_entry	 ip_embedded[NUM_EMBEDDED];
 };
+
 D_CASSERT(sizeof(struct ilog_priv) <= ILOG_PRIV_SIZE);
 
 static inline struct ilog_priv *
@@ -1351,7 +1350,7 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 	lctx = &priv->ip_lctx;
 
 	if (ilog_empty(root))
-		D_GOTO(out, rc = 0);
+		goto out;
 
 	if (root->lr_tree.it_embedded) {
 		status = ilog_status_get(lctx, root->lr_id.id_tx_id,
@@ -1400,8 +1399,10 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 			goto fail;
 
 		rc = dbtree_iter_next(priv->ip_ih);
-		if (rc == -DER_NONEXIST)
-			D_GOTO(out, rc = 0);
+		if (rc == -DER_NONEXIST) {
+			rc = 0;
+			goto out;
+		}
 		if (rc != 0)
 			goto fail;
 	}
@@ -1491,7 +1492,6 @@ entry_punched(const struct ilog_entry *entry, const struct agg_arg *agg_arg)
 		return true;
 
 	return minor_epc <= agg_arg->aa_punched_minor;
-
 }
 
 static int
@@ -1531,7 +1531,8 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 			/* A create covers the prior punch */
 			agg_arg->aa_prior_punch = NULL;
 		}
-		D_GOTO(done, rc = AGG_RC_NEXT);
+		rc = AGG_RC_NEXT;
+		goto done;
 	}
 
 	/* With purge set, there should not be uncommitted entries */
@@ -1559,7 +1560,8 @@ check_agg_entry(const struct ilog_entry *entry, struct agg_arg *agg_arg)
 
 	if (!ilog_is_punch(entry)) {
 		/* Create is needed for now */
-		D_GOTO(done, rc = AGG_RC_NEXT);
+		rc = AGG_RC_NEXT;
+		goto done;
 	}
 
 	if (agg_arg->aa_prev == NULL) {
