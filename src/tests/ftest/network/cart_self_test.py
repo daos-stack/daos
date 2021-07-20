@@ -79,13 +79,7 @@ class CartSelfTest(TestWithServers):
             self.server_managers[0].get_config_value("provider")
         self.cart_env["OFI_INTERFACE"] = \
             self.server_managers[0].get_config_value("fabric_iface")
-
-        self.cart_env["DEFAULT_DAOS_AGENT_DRPC_SOCK"] = \
-            "/var/run/daos_agent/daos_agent.sock"
-        self.cart_env["DAOS_AGENT_DRPC_DIR"] = \
-            "/var/run/daos_agent/"
-        self.cart_env["DAOS_AGENT_DRPC_SOCK_NAME"] = \
-            "daos_agent.sock"
+        self.cart_env["DAOS_AGENT_DRPC_DIR"] = "/var/run/daos_agent/"
 
         self.server_managers[0].manager.assign_environment(self.cart_env, True)
 
