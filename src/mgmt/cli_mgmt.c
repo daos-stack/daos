@@ -227,7 +227,8 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	D_DEBUG(DB_MGMT, "getting attach info for %s\n", name);
 
 	/* Connect to daos_agent. */
-	D_ASSERT(dc_agent_sockpath != NULL);
+	if (dc_agent_sockpath == NULL)
+		D_GOTO(out, rc = -DER_INVAL);
 	rc = drpc_connect(dc_agent_sockpath, &ctx);
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("failed to connect to %s " DF_RC "\n",

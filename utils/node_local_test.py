@@ -412,6 +412,7 @@ class DaosServer():
             self._test_class = None
         self.valgrind = valgrind
         self._agent = None
+        self.system_name = None
         self.engines = conf.args.engine_count
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
@@ -553,6 +554,7 @@ class DaosServer():
         scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
 
         scyaml = yaml.safe_load(scfd)
+        self.system_name = scyaml['name']
         if self.conf.args.server_debug:
             scyaml['control_log_mask'] = 'ERROR'
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
@@ -626,6 +628,7 @@ class DaosServer():
                 pass
             rc = self.run_dmg(cmd)
 
+            print(rc)
             data = json.loads(rc.stdout.decode('utf-8'))
             print('cmd: {} data: {}'.format(cmd, data))
 
@@ -748,6 +751,7 @@ class DaosServer():
 
         exe_cmd = [os.path.join(self.conf['PREFIX'], 'bin', 'dmg')]
         exe_cmd.append('--insecure')
+        exe_cmd.extend(['--config-path', 'utils/nlt_control.yml'])
         exe_cmd.extend(cmd)
 
         print('running {}'.format(exe_cmd))
@@ -779,10 +783,13 @@ class DaosServer():
 
         # This should exist but might be 'None' so check for that rather than
         # iterating.
+        print(data)
         pools = []
         if not data['response']['pools']:
             return pools
         for pool in data['response']['pools']:
+            if pool['query_error_msg']:
+                print(pool['query_error_msg'])
             pobj = DaosPool(self,
                             pool['uuid'],
                             pool.get('label', None))
@@ -794,6 +801,8 @@ class DaosServer():
     def _make_pool(self):
         """Create a DAOS pool"""
 
+        time.sleep(2)
+        
         size = 1024*2
 
         rc = self.run_dmg(['pool',
@@ -803,7 +812,7 @@ class DaosServer():
                            '--scm-size',
                            '{}M'.format(size)])
         print(rc)
-        assert rc.returncode == 0
+        assert rc.returncode == 0, rc
         self.fetch_pools()
 
     def get_test_pool(self):
@@ -932,7 +941,7 @@ class DFuse():
     instance_num = 0
 
     def __init__(self,
-                 daos,
+                 server,
                  conf,
                  pool=None,
                  container=None,
@@ -955,7 +964,7 @@ class DFuse():
             self.cores = 12
         else:
             self.cores = None
-        self._daos = daos
+        self._server = server
         self.caching = caching
         self.use_valgrind = True
         self._sp = None
@@ -987,7 +996,7 @@ class DFuse():
         self.log_file = log_file.name
 
         my_env['D_LOG_FILE'] = self.log_file
-        my_env['DAOS_AGENT_DRPC_DIR'] = self._daos.agent_dir
+        my_env['DAOS_AGENT_DRPC_DIR'] = self._server.agent_dir
         if self.conf.args.dtx == 'yes':
             my_env['DFS_USE_DTX'] = '1'
 
@@ -1018,6 +1027,8 @@ class DFuse():
 
         if self.uns_path:
             cmd.extend(['--path', self.uns_path])
+
+        cmd.extend(['--sys-name', self._server.system_name])
 
         if self.pool:
             cmd.extend(['--pool', self.pool])
@@ -1248,7 +1259,7 @@ def create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valgr
         destroy_container(conf, pool, label)
         rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
 
-    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
+    assert rc.returncode == 0, rc
     return rc.json['response']['container_uuid']
 
 def destroy_container(conf, pool, container, valgrind=True):
@@ -2278,7 +2289,7 @@ def set_server_fi(server):
     cmd_env['CRT_PHY_ADDR_STR'] = 'ofi+sockets'
     vh = ValgrindHelper(server.conf)
 
-    system_name = 'daos_server'
+    system_name = server.system_name
 
     exec_cmd = vh.get_cmd_prefix()
 
@@ -2303,7 +2314,7 @@ def set_server_fi(server):
            '--cfg_path',
            addr_dir.name,
            '--group-name',
-           'daos_server',
+           system_name,
            '--rank',
            '0',
            '--attr',
