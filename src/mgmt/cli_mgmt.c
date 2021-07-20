@@ -743,7 +743,7 @@ dc_mgmt_sys_encode(struct dc_mgmt_sys *sys, void *buf, size_t cap)
 		return -DER_TRUNC;
 
 	D_CASSERT(sizeof(sysb->syb_name) == sizeof(sys->sy_name));
-	strncpy(sysb->syb_name, sys->sy_name, sizeof(sysb->syb_name));
+	strncpy(sysb->syb_name, sys->sy_name, DAOS_SYS_NAME_MAX);
 
 	return len;
 }
