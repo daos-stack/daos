@@ -374,7 +374,8 @@ func (p *Provider) scanBdevTiers(isEngineRunning bool, scan scanFn) (results []B
 		bsr, err := scanBdevs(p.log, req, &p.bdevCache, scan)
 		p.Unlock()
 		if err != nil {
-			return nil, errors.Wrap(err, "nvme scan")
+			fmt.Printf("sbt:sb:%v\n", err)
+			return nil, err
 		}
 
 		p.log.Debugf("instance %d storage scan: tier %d bypass cache (%v), %v: %v",
@@ -394,10 +395,12 @@ func filterScanResp(log logging.Logger, resp *BdevScanResponse, pciFilter ...str
 	out := make(NvmeControllers, 0)
 
 	for _, c := range resp.Controllers {
-		if len(pciFilter) == 0 || !common.Includes(pciFilter, c.PciAddr) {
-			cn := *c
-			out = append(out, &cn)
+		if len(pciFilter) != 0 && !common.Includes(pciFilter, c.PciAddr) {
+			log.Debugf("filter out bdev %s from scan response", c.PciAddr)
+			continue
 		}
+		cn := *c
+		out = append(out, &cn)
 	}
 
 	if len(out) != len(resp.Controllers) {
@@ -416,6 +419,7 @@ func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResp
 		return filterScanResp(log, cachedResp, req.DeviceList...), nil
 	}
 
+	log.Debugf("storage provider retrieving bdev details from backend: %+v, %+v", req, cachedResp)
 	resp, err := scan(req)
 
 	return filterScanResp(log, resp, req.DeviceList...), err

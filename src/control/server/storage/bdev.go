@@ -8,6 +8,7 @@ package storage
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -151,6 +152,14 @@ func (nc NvmeController) Free() (tb uint64) {
 		tb += d.AvailBytes
 	}
 	return
+}
+
+func (ncs NvmeControllers) String() string {
+	var ss []string
+	for _, c := range ncs {
+		ss = append(ss, c.PciAddr)
+	}
+	return strings.Join(ss, ", ")
 }
 
 // Capacity returns the cumulative total bytes of all controller capacities.

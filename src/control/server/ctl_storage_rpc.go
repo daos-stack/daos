@@ -63,19 +63,20 @@ func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
 
-	for idx, ei := range instances {
+	for _, ei := range instances {
 		if !ei.HasBlockDevices() {
 			continue
 		}
 
-		engineRunning := ei.IsReady()
+		isEngineRunning := ei.IsReady()
 
-		tsrs, err := ei.ScanBdevTiers(engineRunning)
+		tsrs, err := ei.ScanBdevTiers(isEngineRunning)
 		if err != nil {
+			fmt.Printf("\nsab:sbt:%v\n", err)
 			return nil, err
 		}
 
-		if !engineRunning || !statsReq {
+		if !isEngineRunning || !statsReq {
 			for _, tsr := range tsrs {
 				ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
 			}
@@ -159,15 +160,20 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 		}
 	}
 	if !bdevsInCfg {
+		fmt.Printf("no cfg\n")
+		c.log.Debugf("no bdevs in cfg so scan all")
 		// return details of all bdevs if none are assigned to engines
-		resp, err := c.storage.ScanBdevs(storage.BdevScanRequest{})
+		resp, err := c.storage.ScanBdevs(storage.BdevScanRequest{
+			BypassCache: true,
+		})
 
 		return newScanNvmeResp(req, resp, err)
 	}
 
 	transientStatsRequested := req.GetHealth() || req.GetMeta()
 
-	c.log.Debugf("calling into scanAssignedBdevs() with tsr %v", transientStatsRequested)
+	fmt.Printf("cfg\n")
+	c.log.Debugf("bdevs in cfg so scan only assigned (stats req: %v)", transientStatsRequested)
 	resp, err := c.scanAssignedBdevs(ctx, transientStatsRequested)
 
 	return newScanNvmeResp(req, resp, err)

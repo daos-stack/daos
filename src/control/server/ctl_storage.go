@@ -40,6 +40,7 @@ func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *
 	}
 }
 
+// NewMockStorageControlService returns an initialized mock *StorageControlService
 func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider) *StorageControlService {
 	instanceStorage := make(map[uint32]*storage.Config)
 	for i, cfg := range engineCfgs {
@@ -192,7 +193,7 @@ func (c *StorageControlService) Setup() error {
 		}
 	}
 
-	nvmeScanResp, err := c.storage.ScanBdevs(storage.BdevScanRequest{})
+	nvmeScanResp, err := c.NvmeScan(storage.BdevScanRequest{})
 	if err != nil {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, NVMe Scan"))
 		return nil

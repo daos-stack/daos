@@ -175,6 +175,8 @@ func (ei *EngineInstance) ScanBdevTiers(isEngineRunning bool) ([]storage.BdevTie
 	return ei.storage.ScanBdevTiers(isEngineRunning)
 }
 
+// SetBdevCache stores the given bdev scan response in the engine's storage
+// provider for later use.
 func (ei *EngineInstance) SetBdevCache(resp storage.BdevScanResponse) {
 	ei.storage.SetBdevCache(resp)
 }

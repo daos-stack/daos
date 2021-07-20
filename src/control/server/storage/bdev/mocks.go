@@ -47,12 +47,8 @@ func (mb *MockBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 	if mb.cfg.ScanRes == nil {
 		mb.cfg.ScanRes = new(storage.BdevScanResponse)
 	}
-	// hack: filter based on request here because mock
-	// provider has forwarding disabled and filter is
-	// therefore skipped in test
-	_, resp := filterScanResp(mb.cfg.ScanRes, req.DeviceList...)
 
-	return resp, mb.cfg.ScanErr
+	return mb.cfg.ScanRes, mb.cfg.ScanErr
 }
 
 func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
