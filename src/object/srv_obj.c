@@ -1251,6 +1251,7 @@ obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_io_context *ioc)
 	 * that flag was only set when (snapshot_epoch < sc_ec_agg_eph_boundry).
 	 */
 	if ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0 &&
+	    (orw->orw_flags & ORF_FOR_MIGRATION) == 0 &&
 	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundry)
 		return true;
 
