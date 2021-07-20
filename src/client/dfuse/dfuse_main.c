@@ -168,7 +168,8 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
 		ret = fuse_session_loop(dfuse_info->di_session);
 	if (ret != 0)
 		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d", ret);
+				"Fuse loop exited with return code: %d %s",
+				ret, strerror(ret));
 
 	return ret;
 }
