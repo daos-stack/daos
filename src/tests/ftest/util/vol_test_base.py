@@ -50,6 +50,11 @@ class VolTestBase(DfuseTestBase):
         env["DAOS_CONT"] = "{}".format(self.container.uuid)
         env["HDF5_VOL_CONNECTOR"] = "daos"
         env["HDF5_PLUGIN_PATH"] = "{}".format(plugin_path)
+        env["FI_SOCKETS_MAX_CONN_RETRY"] = "5"
+        env["FI_SOCKETS_CONN_TIMEOUT"] = "2000"
+        env["FI_SOCKETS_DEF_CONN_MAP_SZ"] = "65536"
+        env["FI_SOCKETS_DEF_AV_SZ"] = "65536"
+        env["FI_SOCKETS_DEF_CQ_SZ"] = "65536"
         self.job_manager.assign_hosts(self.hostlist_clients)
         self.job_manager.assign_processes(client_processes)
         self.job_manager.assign_environment(env, True)

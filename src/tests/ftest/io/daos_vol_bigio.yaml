@@ -3,25 +3,30 @@ hosts:
         - server-A
     test_clients:
         - client-B
-timeout: 7200
-job_manager_timeout: 700
+timeout: 1500
+job_manager_timeout: 1000
 server_config:
     name: daos_server
+    targets: 8
     servers:
-        bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
         env_vars:
-            - CRT_SWIM_RPC_TIMEOUT=20
-            - SWIM_PING_TIMEOUT=1800
-            - SWIM_SUSPECT_TIMEOUT=16000
+         - CRT_SWIM_RPC_TIMEOUT=60
+         - SWIM_PING_TIMEOUT=18000
+         - SWIM_SUSPECT_TIMEOUT=160000
+         - DAOS_MD_CAP=1024
+         - FI_SOCKETS_MAX_CONN_RETRY=5
+         - FI_SOCKETS_CONN_TIMEOUT=2000
+         - FI_SOCKETS_DEF_CONN_MAP_SZ=65536
+         - FI_SOCKETS_DEF_AV_SZ=65536
+         - FI_SOCKETS_DEF_CQ_SZ=65536
+         - PMEMOBJ_CONF=prefault.at_open=1;prefault.at_create=1;
 pool:
     control_method: dmg
     mode: 511
     name: daos_server
-    scm_size: 100G
-    nvme_size: 200G
+    scm_size: 200G
 container:
     type: POSIX
     control_method: daos
