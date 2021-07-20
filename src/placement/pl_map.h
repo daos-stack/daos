@@ -75,6 +75,7 @@ unsigned int pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
  */
 struct failed_shard {
 	d_list_t        fs_list;
+	void		*fs_data;
 	uint32_t        fs_shard_idx;
 	uint32_t        fs_fseq;
 	uint32_t        fs_tgt_id;
@@ -92,7 +93,7 @@ reint_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint);
+		struct pool_target *tgt, bool for_reint, void *data);
 
 int
 remap_insert_copy_one(d_list_t *remap_list, struct failed_shard *original);
