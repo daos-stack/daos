@@ -46,6 +46,7 @@
 	ACTION(security,  security,  arg)	\
 	ACTION(dtx,       dtx,       arg)	\
 	ACTION(dfuse,     dfuse,     arg)	\
+	ACTION(fuse,      fuse,      arg)	\
 	ACTION(il,        il,        arg)	\
 	ACTION(csum,      csum,      arg)
 
