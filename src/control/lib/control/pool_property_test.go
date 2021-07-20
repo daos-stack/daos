@@ -162,6 +162,17 @@ func TestControl_PoolProperties(t *testing.T) {
 			value:  "wat",
 			expErr: errors.New("invalid"),
 		},
+		"policy-valid": {
+			name:    "policy",
+			value:   "type=io_size",
+			expStr:  "policy:type=io_size",
+			expJson: []byte(`{"name":"policy","description":"Tier placement policy","value":"type=io_size"}`),
+		},
+		"policy-invalid": {
+			name:   "policy",
+			value:  "deadd00d",
+			expErr: errors.New("invalid"),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			prop, err := control.PoolProperties().GetProperty(tc.name)

@@ -295,7 +295,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expResp: &PoolCreateResp{},
 		},
-		"-DER_GRPVER is retried": {
+		"create -DER_GRPVER is retried": {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -305,7 +305,7 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expResp: &PoolCreateResp{},
 		},
-		"-DER_AGAIN is retried": {
+		"create -DER_AGAIN is retried": {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -605,8 +605,9 @@ func TestPoolSetProp(t *testing.T) {
 
 func TestPoolGetProp(t *testing.T) {
 	defaultReq := &PoolGetPropReq{
-		UUID:       common.MockUUID(),
-		Properties: []*PoolProperty{propWithVal("label", "")},
+		UUID: common.MockUUID(),
+		Properties: []*PoolProperty{propWithVal("label", ""),
+			propWithVal("policy", "type=io_size")},
 	}
 
 	for name, tc := range map[string]struct {
@@ -727,6 +728,10 @@ func TestPoolGetProp(t *testing.T) {
 							Number: propWithVal("ec_cell_sz", "").Number,
 							Value:  &mgmtpb.PoolProperty_Numval{1024},
 						},
+						{
+							Number: propWithVal("policy", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"type=io_size"},
+						},
 					},
 				}),
 			},
@@ -736,6 +741,7 @@ func TestPoolGetProp(t *testing.T) {
 			expResp: []*PoolProperty{
 				propWithVal("ec_cell_sz", "1024"),
 				propWithVal("label", "foo"),
+				propWithVal("policy", "type=io_size"),
 				propWithVal("reclaim", "disabled"),
 				propWithVal("self_heal", "exclude"),
 				propWithVal("space_rb", "42"),

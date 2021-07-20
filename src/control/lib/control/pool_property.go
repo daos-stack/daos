@@ -116,6 +116,20 @@ func PoolProperties() PoolPropertyMap {
 				jsonNumeric: true,
 			},
 		},
+		"policy": {
+			Property: PoolProperty{
+				Number:      drpc.PoolPropertyPolicy,
+				Description: "Tier placement policy",
+				valueHandler: func(s string) (*PoolPropertyValue, error) {
+					err := VerifyPolicyString(s)
+					if err != nil {
+						return nil, errors.Errorf("invalid policy string %q", s)
+					}
+					return &PoolPropertyValue{s}, nil
+
+				},
+			},
+		},
 	}
 }
 

@@ -263,10 +263,10 @@ vos_pool_destroy(const char *path, uuid_t uuid);
 /**
  * Open a Versioning Object Storage Pool (VOSP)
  *
- * \param path	[IN]	Path of the memory pool
- * \param uuid	[IN]    Pool UUID
- * \param flags [IN]	Pool open flags (see vos_pool_open_flags)
- * \param poh	[OUT]	Returned pool handle
+ * \param path	 [IN]	Path of the memory pool
+ * \param uuid	 [IN]	Pool UUID
+ * \param flags  [IN]	Pool open flags (see vos_pool_open_flags)
+ * \param poh	 [OUT]	Returned pool handle
  *
  * \return              Zero on success, negative value if error
  */
@@ -1065,6 +1065,8 @@ enum vos_pool_opc {
 	VOS_PO_CTL_VEA_PLUG,
 	/** Pairing with PLUG, usually called after container destroy done. */
 	VOS_PO_CTL_VEA_UNPLUG,
+	/** Set pool tiering policy */
+	VOS_PO_CTL_SET_POLICY,
 };
 
 /**
@@ -1072,7 +1074,7 @@ enum vos_pool_opc {
  * mostly for debug & test
  */
 int
-vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc);
+vos_pool_ctl(daos_handle_t poh, enum vos_pool_opc opc, void *param);
 
 int
 vos_gc_pool(daos_handle_t poh, int credits, bool (*yield_func)(void *arg),
