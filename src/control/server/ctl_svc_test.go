@@ -31,13 +31,12 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		)
 	}
 
-	bp := bdev.NewMockProvider(log, bmbc)
 	cs := &ControlService{
 		StorageControlService: *NewMockStorageControlService(log,
 			cfg.Engines,
 			scm.NewMockSysProvider(smsc),
 			scm.NewMockProvider(log, smbc, smsc),
-			bp),
+			bdev.NewMockProvider(log, bmbc)),
 		harness: &EngineHarness{
 			log: log,
 		},
@@ -50,8 +49,9 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		rCfg.Running.SetTrue()
 		runner := engine.NewTestRunner(rCfg, engineCfg)
 
-		storageProvider := storage.MockProvider(log, 0, &engineCfg.Storage, cs.storage.Sys, cs.storage.Scm, bp)
-		instance := NewEngineInstance(log, storageProvider, nil, runner)
+		sp := storage.MockProvider(log, 0, &engineCfg.Storage,
+			cs.storage.Sys, cs.storage.Scm, bdev.NewMockProvider(log, bmbc))
+		instance := NewEngineInstance(log, sp, nil, runner)
 		instance.setSuperblock(&Superblock{
 			Rank: system.NewRankPtr(engineCfg.Rank.Uint32()),
 		})
