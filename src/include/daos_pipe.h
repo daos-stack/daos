@@ -191,57 +191,57 @@ daos_pipeline_check(daos_pipeline_t *pipe);
  * \param[in]		pipe		Pipeline object.
  *
  * \param[in]		th		Optional transaction handle. Use
- *           				DAOS_TX_NONE for an independent
- *           				transaction.
+ *					DAOS_TX_NONE for an independent
+ *					transaction.
  *
  * \param[in]		flags		Conditional operations.
  *
  * \param[in]		dkey		Optional dkey. When passed, no iteration
- *           				is done and processing isonly performed
- *           				on this specific dkey.
+ *					is done and processing isonly performed
+ *					on this specific dkey.
  *
  * \param[in]		nr_iods		Number of I/O descriptors in the iods
- *               			table.
+ *					table.
  *
  * \param[in,out]	iods		[in]: Array of I/O descriptors. Each
- *               			descriptor is associated with a given
- *               			akey and describes the list of
- *               			record extents to fetch from the array.
- *               			[out]: Checksum of each extent is
- *               			returned via
- *               			\a iods[]::iod_csums[]. If the record
- *               			size of an extent is unknown (i.e. set
- *               			to DAOS_REC_ANY as input), then the
- *               			actual record size will be returned in
- *               			\a iods[]::iod_size.
+ *					descriptor is associated with a given
+ *					akey and describes the list of
+ *					record extents to fetch from the array.
+ *					[out]: Checksum of each extent is
+ *					returned via
+ *					\a iods[]::iod_csums[]. If the record
+ *					size of an extent is unknown (i.e. set
+ *					to DAOS_REC_ANY as input), then the
+ *					actual record size will be returned in
+ *					\a iods[]::iod_size.
  *
  * \param[in,out]	anchor		Hash anchor for the next call, it should
- *               			be set to zeroes for the first call, it
- *               			should not be changed by caller
- *               			between calls.
+ *					be set to zeroes for the first call, it
+ *					should not be changed by caller
+ *					between calls.
  *
  * \param[in,out]	nr_kds		[in]: Number of key descriptors in
- *               			\a kds.
- *               			[out:] Number of returned key descriptors.
+ *					\a kds.
+ *					[out:] Number of returned key descriptors.
  *
  * \param[in,out]	kds		[in]: Optional preallocated array of \nr
- *               			key descriptors.
- *               			[out]: Size of each individual key along
- *               			with checksum type and size stored just
- *               			after the key in \a sgl_keys.
+ *					key descriptors.
+ *					[out]: Size of each individual key along
+ *					with checksum type and size stored just
+ *					after the key in \a sgl_keys.
  *
  * \param[out]		sgl_keys	Optional sgl storing all dkeys to be
- *            				returned.
+ *					returned.
  *
  * \param[out]		sgl_recx	Optional sgl storing all the records to
- *            				be returned.
+ *					be returned.
  *
  * \param[out]		sgl_agg		Optional sgl with the returned value of
- *            				the aggregator(s).
+ *					the aggregator(s).
  *
  * \param[in]		ev		Completion event. It is optional.
- *           				Function will run in blocking mode if
- *           				\a ev is NULL.
+ *					Function will run in blocking mode if
+ *					\a ev is NULL.
  */
 int
 daos_pipeline_run(daos_pipeline_t *pipe, daos_handle_t th, uint64_t flags,
