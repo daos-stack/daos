@@ -29,7 +29,7 @@ class IorLarge(IorTestBase):
         :avocado: tags=all
         :avocado: tags=hw,large
         :avocado: tags=daosio
-        :avocado: tags=iorlarge_sequential,iorlarge
+        :avocado: tags=ior,iorlarge_sequential,iorlarge,dfuse
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/sequential/")
         self.ior_cmd.flags.update(ior_flags)
@@ -49,7 +49,7 @@ class IorLarge(IorTestBase):
         :avocado: tags=all
         :avocado: tags=hw,large
         :avocado: tags=daosio
-        :avocado: tags=iorlarge_random,iorlarge
+        :avocado: tags=ior,iorlarge_random,iorlarge,dfuse
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/random/")
         self.ior_cmd.flags.update(ior_flags)
@@ -69,7 +69,7 @@ class IorLarge(IorTestBase):
         :avocado: tags=all
         :avocado: tags=hw,large
         :avocado: tags=daosio
-        :avocado: tags=iorlarge_fpp,iorlarge
+        :avocado: tags=ior,iorlarge_fpp,iorlarge,dfuse
         """
         ior_flags = self.params.get("F", "/run/ior/iorflags/fpp/")
         self.ior_cmd.flags.update(ior_flags)

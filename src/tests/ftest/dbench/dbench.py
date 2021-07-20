@@ -4,11 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from command_utils import CommandFailure
 from dbench_utils import Dbench
+
 
 class DbenchTest(DfuseTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
@@ -37,7 +37,7 @@ class DbenchTest(DfuseTestBase):
 
         self.add_pool(connect=False)
         self.add_container(self.pool)
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.start_dfuse(self.pool, self.container)
 
         dbench_cmd = Dbench(self.hostlist_clients, self.tmp)
         dbench_cmd.get_params(self)

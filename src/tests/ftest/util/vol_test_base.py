@@ -38,7 +38,7 @@ class VolTestBase(DfuseTestBase):
         #  Currently nfs does not have this attribute so it was recommended
         #  to create a dfuse dir and run vol tests from there.
         # create dfuse container
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.start_dfuse(self.pool, self.container)
 
         # Assign the test to run
         self.job_manager.job = os.path.join(test_repo, testname)

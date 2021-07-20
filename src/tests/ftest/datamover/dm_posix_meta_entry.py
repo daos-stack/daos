@@ -19,10 +19,13 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
     """
 
     def test_dm_posix_meta_entry_dcp(self):
-        """JIRA id: DAOS-6390
+        """JIRA id: DAOS-6390.
+
         Test Description:
             Verifies that POSIX metadata is preserved for dcp.
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_posix_meta_entry,dm_posix_meta_entry_dcp
         """
@@ -58,7 +61,7 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
         test_desc = self.test_id + " (preserve={})".format(str(preserve_on))
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        self.start_dfuse()
 
         # Create 1 pool
         pool1 = self.create_pool()

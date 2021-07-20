@@ -56,7 +56,7 @@ class DmvrSerialLargePosix(DataMoverTestBase):
 
         # Use dfuse as a shared intermediate for serialize + deserialize
         dfuse_cont = self.create_cont(pool1)
-        self.start_dfuse(self.dfuse_hosts, pool1, dfuse_cont)
+        self.start_dfuse(pool1, dfuse_cont)
         self.serial_tmp_dir = self.dfuse.mount_dir.value
 
         # Serialize/Deserialize cont1 to a new cont2 in pool2
@@ -75,9 +75,11 @@ class DmvrSerialLargePosix(DataMoverTestBase):
             flags=mdtest_flags[1])
 
     def test_dm_serial_large_posix_dserialize(self):
-        """
+        """JIRA id: DAOS-7432.
+
         Test Description:
             DAOS-7432: Verify serializing a large POSIX container.
+
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=datamover,dserialize,dfuse

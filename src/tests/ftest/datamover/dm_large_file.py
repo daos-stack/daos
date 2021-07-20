@@ -64,7 +64,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
         self.create_cont(self.pool[0])
 
         # start dfuse on cont3
-        self.start_dfuse(self.dfuse_hosts, self.pool[0], self.container[2])
+        self.start_dfuse(self.pool[0], self.container[2])
 
         # dcp treats a trailing slash on the source as /*
         # so strip trailing slash from posix path so dcp
@@ -96,9 +96,11 @@ class DmvrPosixLargeFile(DataMoverTestBase):
 
     def test_dm_large_file_dcp(self):
         """Jira ID: DAOS-4782.
+
         Test Description:
             Copy a very large file between daos POSIX containers and
             an external POSIX file system using dcp.
+
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=datamover,dcp,dfuse
@@ -108,9 +110,11 @@ class DmvrPosixLargeFile(DataMoverTestBase):
 
     def test_dm_large_file_fs_copy(self):
         """Jira ID: DAOS-6233.
+
         Test Description:
             Copy a very large file between daos POSIX containers and
             an external POSIX file system using daos filesystem copy.
+
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=datamover,fs_copy,dfuse

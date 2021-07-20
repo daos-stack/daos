@@ -89,7 +89,10 @@ class DfuseSpaceCheck(IorTestBase):
             return all the space back.
             Now create small files again until pool is out of space and check,
             whether out of space happens at the same file count as before.
-        :avocado: tags=all,hw,daosio,small,full_regression,dfusespacecheck
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=aggregation,dfuse_space_check,dfuse,daosio
         """
         # get test params for cont and pool count
         self.block_size = self.params.get("block_size",
@@ -98,7 +101,7 @@ class DfuseSpaceCheck(IorTestBase):
         # Create a pool, container and start dfuse.
         self.create_pool()
         self.create_cont()
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.start_dfuse(self.pool, self.container)
 
         # get scm space before write
         self.space_before = self.get_nvme_free_space()

@@ -18,10 +18,13 @@ class DmvrPosixSymlinks(DataMoverTestBase):
     """
 
     def test_dm_posix_symlinks(self):
-        """JIRA id: DAOS-5998
+        """JIRA id: DAOS-5998.
+
         Test Description:
             Tests copying POSIX symlinks with dcp.
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_posix_symlinks,dm_posix_symlinks_dcp
         """
@@ -54,7 +57,7 @@ class DmvrPosixSymlinks(DataMoverTestBase):
         self.set_tool(tool)
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        self.start_dfuse()
 
         # Create 1 pool
         pool1 = self.create_pool()

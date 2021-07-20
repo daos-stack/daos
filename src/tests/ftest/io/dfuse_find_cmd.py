@@ -225,12 +225,11 @@ class FindCmd(DfuseTestBase):
         for count in range(cont_count):
             self.add_container(self.pool)
             cont_dir = "{}_daos_dfuse_{}".format(self.pool.uuid, count)
-            mount_dir = os.path.join(dfs_path, cont_dir)
+            self.dfuse.mount_dir.update(os.path.join(dfs_path, cont_dir))
             self.log.info(
                 "Creating container Pool UUID: %s Con UUID: %s",
                 self.pool, self.container)
-            self.start_dfuse(
-                self.hostlist_clients, self.pool, self.container, mount_dir)
+            self.start_dfuse(self.pool, self.container)
             dfuses.append(self.dfuse)
             containers.append(self.container)
             mount_dirs.append(self.dfuse.mount_dir.value)

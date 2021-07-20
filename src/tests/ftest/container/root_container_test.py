@@ -96,7 +96,8 @@ class RootContainerTest(DfuseTestBase):
         container = self._create_cont(pool)
         self.dfuse_hosts = self.agent_managers[0].hosts
         # mount fuse
-        self.start_dfuse(self.dfuse_hosts, pool, container)
+        self.dfuse.hosts = self.dfuse_hosts
+        self.start_dfuse(pool, container)
         # Create another container and add it as sub container under
         # root container
         sub_container = str(self.dfuse.mount_dir.value + "/cont0")

@@ -31,9 +31,8 @@ class DmvrPosixTypesTest(DataMoverTestBase):
         self.test_file = self.ior_cmd.test_file.value
 
     def run_dm_posix_types(self, tool):
-        """
-        Test Description:
-            Tests POSIX copies with dcp using different src and dst types.
+        """Test POSIX copies with dcp using different src and dst types.
+
         Use Cases:
             Create pool1 and pool2.
             Create POSIX type cont1 and cont2 in pool1 with UNS paths.
@@ -55,15 +54,12 @@ class DmvrPosixTypesTest(DataMoverTestBase):
             Copy all data from POSIX FS to a different POSIX FS.
             Repeat the copy operations, but specify file -> file.
             Repeat the copy operations, but specify file -> dir.
-        :avocado: tags=all,daily_regression
-        :avocado: tags=datamover
-        :avocado: tags=copy_basics,copy_types
         """
         # Set the tool to use
         self.set_tool(tool)
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        self.start_dfuse()
 
         # Create 2 pools
         pool1 = self.create_pool()
@@ -222,35 +218,44 @@ class DmvrPosixTypesTest(DataMoverTestBase):
                                  self.test_file, self.ior_flags[1])
 
     def test_dm_posix_types_dcp(self):
-        """
+        """JIRA id: DAOS-5508.
+
         Test Description:
             Tests POSIX copies with dcp using different src and dst types.
             DAOS-5508: Verify copy between POSIX, UUIDs, and UNS paths.
             Daos-5511: Verify copy across pools.
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_posix_types,dm_posix_types_dcp
         """
         self.run_dm_posix_types("DCP")
 
     def test_dm_posix_types_dsync(self):
-        """
+        """JIRA id: DAOS-6389.
+
         Test Description:
             Tests POSIX copies with dsync using different src and dst types.
             DAOS-6389: add basic tests for dsync posix
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,dsync,dfuse
         :avocado: tags=dm_posix_types,dm_posix_types_dsync
         """
         self.run_dm_posix_types("DSYNC")
 
     def test_dm_posix_types_fs_copy(self):
-        """
+        """JIRA id: DAOS-6233.
+
         Test Description:
             Tests POSIX copies with daos fs copy using different
             src and dst types.
             DAOS-6233: add tests for daos filesystem copy
+
         :avocado: tags=all,daily_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,fs_copy,dfuse
         :avocado: tags=dm_posix_types,dm_posix_types_fs_copy
         """

@@ -36,7 +36,7 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,ior_intercept_verify_data
+        :avocado: tags=daosio,ior,ior_intercept_verify_data,dfuse
         """
         self.add_pool()
         self.add_container(self.pool)

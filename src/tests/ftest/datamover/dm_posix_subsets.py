@@ -47,7 +47,7 @@ class DmvrPosixSubsets(DataMoverTestBase):
         self.set_tool(tool)
 
         # Start dfuse to hold all pools/containers
-        self.start_dfuse(self.dfuse_hosts)
+        self.start_dfuse()
 
         # Create 1 pool
         pool1 = self.create_pool()
@@ -130,22 +130,28 @@ class DmvrPosixSubsets(DataMoverTestBase):
                                  self.test_file, self.ior_flags[1])
 
     def test_dm_posix_subsets_dcp(self):
-        """
+        """JIRA id: DAOS-5512.
+
         Test Description:
             Tests copying POSIX container subsets with dcp.
             DAOS-5512: Verify ability to copy container subsets
+
         :avocado: tags=all,full_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_dcp
         """
         self.run_dm_posix_subsets("DCP")
 
     def test_dm_posix_subsets_fs_copy(self):
-        """
+        """JIRA id: DAOS-6752.
+
         Test Description:
         Tests copying POSIX container subsets with fs copy.
             DAOS-6752: daos fs copy improvements
+
         :avocado: tags=all,daily_regression
+        :avocado: tags=vm
         :avocado: tags=datamover,fs_copy,dfuse
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
         """

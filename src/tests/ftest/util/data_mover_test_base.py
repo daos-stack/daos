@@ -96,6 +96,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         super().setUp()
 
         self.dfuse_hosts = self.agent_managers[0].hosts
+        self.dfuse.hosts = self.dfuse_hosts
 
         # initialize daos_cmd
         self.daos_cmd = DaosCommand(self.bin)
@@ -242,7 +243,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         return path
 
     def _validate_param_type(self, param_type):
-        """Validates the param_type.
+        """Validate the param_type.
 
         It converts param_types to upper-case and handles shorthand types.
 
@@ -867,7 +868,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.ddeserialize_cmd.set_params(
                 src_path=tmp_path,
                 pool=uuid_from_obj(dst_pool))
-
 
     def set_ior_params(self, param_type, path, pool=None, cont=None,
                        path_suffix=None, flags=None, display=True):

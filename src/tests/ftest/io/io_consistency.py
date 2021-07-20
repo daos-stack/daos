@@ -15,11 +15,13 @@ class IoConsistency(IorTestBase):
     :avocado: recursive
     """
 
-    def test_ioconsistency(self):
+    def test_io_consistency(self):
         """Jira ID: DAOS-4778.
+
         Test Description:
             Run IOR first using DFS and then using POSIX to verify data
             consistency.
+
         Use Cases:
             Create a pool
             Create POSIX type container.
@@ -30,12 +32,12 @@ class IoConsistency(IorTestBase):
             Try to re-create to the same file name after deletion, which should
             work without issues.
             Repeat the same steps as above for SSF this time.
+
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,ioconsistency,ior
+        :avocado: tags=daosio,io,io_consistency,ior,dfuse
         :avocado: tags=DAOS_5610
         """
-
         # test params
         apis_flags = self.params.get("api_flag", "/run/ior/io_consistency/*")
 
