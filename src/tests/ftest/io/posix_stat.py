@@ -7,7 +7,7 @@
 from avocado.core.exceptions import TestFail
 
 from ior_test_base import IorTestBase
-from general_utils import get_remote_file_size, run_task
+from general_utils import get_remote_file_size, run_pcmd
 from apricot import TestWithServers
 
 
@@ -37,7 +37,6 @@ class POSIXStatTest(IorTestBase):
         :avocado: tags=stat_parameters
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
-        testfile_path_base = "/tmp/daos_dfuse/testfile"
         error_list = []
 
         self.add_pool(connect=False)
@@ -53,14 +52,10 @@ class POSIXStatTest(IorTestBase):
             # created by ior is near the time of the start of the ior command
             # execution.
             current_epoch = -1
-            cmd_output = ""
-            # Run date command in the client node because that's where the file
-            # is created.
-            task = run_task(self.hostlist_clients, "date +%s")
-            for output, _ in task.iter_buffers():
-                cmd_output = "\n".join(
-                    [line.decode("utf-8") for line in output])
-            current_epoch = cmd_output.split()[-1]
+            output = run_pcmd(hosts=self.hostlist_clients, command="date +%s")
+            stdout = output[0]["stdout"]
+            self.log.info("date stdout = {}".format(stdout))
+            current_epoch = stdout[-1]
 
             test_file_suffix = "_{}".format(i)
             i += 1
@@ -77,16 +72,11 @@ class POSIXStatTest(IorTestBase):
             creation_epoch = -1
             cmd_output = ""
             # As in date command, run stat command in the client node.
-            testfile_path = testfile_path_base + test_file_suffix
-            task = run_task(
-                self.hostlist_clients, "stat -c%Z {}".format(testfile_path))
-            for output, _ in task.iter_buffers():
-                cmd_output = "\n".join(
-                    [line.decode("utf-8") for line in output])
-
-            # The output may contain some warning messages, so use split to get
-            # the value we want.
-            creation_epoch = cmd_output.split()[-1]
+            stat_command = "stat -c%Z {}".format(self.ior_cmd.test_file.value)
+            output = run_pcmd(hosts=self.hostlist_clients, command=stat_command)
+            stdout = output[0]["stdout"]
+            self.log.info("stat stdout = {}".format(stdout))
+            creation_epoch = stdout[-1]
 
             # Calculate the epoch difference between the creation time and the
             # value in the file metadata. They're usually 5 to 10 sec apart.
@@ -101,7 +91,7 @@ class POSIXStatTest(IorTestBase):
             # 2. Verify file size.
             # Get file size.
             file_size = get_remote_file_size(
-                self.hostlist_clients[0], testfile_path)
+                self.hostlist_clients[0], self.ior_cmd.test_file.value)
 
             # Adjust the file size and verify that it matches the expected size.
             expected_size = block_size[:-1]
@@ -111,10 +101,6 @@ class POSIXStatTest(IorTestBase):
                 msg = "Unexpected file size! Expected = {}; Actual = {}"
                 error_list.append(
                     msg.format(int(expected_size), file_size_adjusted))
-
-        # Manually stop dfuse because we set stop_dfuse=False in
-        # run_ior_with_pool.
-        self.stop_dfuse()
 
         if error_list:
             self.fail("\n----- Errors detected! -----\n{}".format(
