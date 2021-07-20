@@ -277,7 +277,7 @@ void   srv__pool_find_by_label_resp__free_unpacked
   assert(message->base.descriptor == &srv__pool_find_by_label_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[5] =
+static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[6] =
 {
   {
     "uri",
@@ -339,18 +339,31 @@ static const ProtobufCFieldDescriptor srv__notify_ready_req__field_descriptors[5
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "rank_inc",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Srv__NotifyReadyReq, rank_inc),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned srv__notify_ready_req__field_indices_by_name[] = {
   2,   /* field[2] = drpcListenerSock */
   3,   /* field[3] = instanceIdx */
   1,   /* field[1] = nctxs */
   4,   /* field[4] = ntgts */
+  5,   /* field[5] = rank_inc */
   0,   /* field[0] = uri */
 };
 static const ProtobufCIntRange srv__notify_ready_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor srv__notify_ready_req__descriptor =
 {
@@ -360,7 +373,7 @@ const ProtobufCMessageDescriptor srv__notify_ready_req__descriptor =
   "Srv__NotifyReadyReq",
   "srv",
   sizeof(Srv__NotifyReadyReq),
-  5,
+  6,
   srv__notify_ready_req__field_descriptors,
   srv__notify_ready_req__field_indices_by_name,
   1,  srv__notify_ready_req__number_ranges,

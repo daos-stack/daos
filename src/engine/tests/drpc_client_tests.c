@@ -35,6 +35,7 @@ uint32_t	dss_tgt_offload_xs_nr = 3;
 uint32_t	dss_tgt_nr = 4;
 uint32_t	dss_sys_xs_nr = 2;
 uint32_t	dss_instance_idx = 5;
+uint64_t	dss_rank_inc = 6;
 
 static int		 crt_self_uri_get_return;
 static const char	*crt_self_uri_get_uri = "/cart/test/uri";

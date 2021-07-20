@@ -100,6 +100,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	evt->hw_id = (hwid != NULL) ? hwid : NULL;
 	/* UINT32_MAX/CRT_NO_RANK indicates nil rank in daos_{,io_}server */
 	evt->rank = (rank != NULL) ? (uint32_t)*rank : CRT_NO_RANK;
+	evt->rank_inc = dss_rank_inc;
 	evt->job_id = (jobid != NULL) ? jobid : NULL;
 	evt->ctl_op = (ctlop != NULL) ? ctlop : NULL;
 
