@@ -332,7 +332,7 @@ dc_tx_alloc(daos_handle_t coh, daos_epoch_t epoch, uint64_t flags,
 	 *         1	[0,   0 us]
 	 *         2	[0,  16 us]
 	 *         3	[0,  64 us]
-	 *         4	[0, 128 us]
+	 *         4	[0, 256 us]
 	 *       ...	...
 	 *        10	[0,  ~1  s]
 	 *        11	[0,  ~1  s]
@@ -923,7 +923,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 
 		dcsr = &tx->tx_req_cache[dc_tx_leftmost_req(tx, false)];
 		rc1 = obj_pool_query_task(tse_task2sched(task), dcsr->dcsr_obj,
-					  &pool_task);
+					  oco->oco_map_version, &pool_task);
 		if (rc1 != 0) {
 			D_ERROR("Failed to refresh the pool map: "
 				DF_RC", original error: "DF_RC"\n",
@@ -942,7 +942,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_MUTEX_UNLOCK(&tx->tx_lock);
 			locked = false;
 
-			dc_task_schedule(pool_task, true);
+			tse_task_schedule(pool_task, true);
 		}
 
 		D_GOTO(out, rc = -DER_TX_RESTART);
@@ -961,7 +961,7 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 			D_ERROR("Failed to add dependency on pool query: "
 				DF_RC", original error: "DF_RC"\n",
 				DP_RC(rc1), DP_RC(rc));
-			dc_task_decref(pool_task);
+			dc_pool_abandon_map_refresh_task(pool_task);
 			tx->tx_status = TX_ABORTED;
 
 			D_GOTO(out, rc = rc1);
@@ -973,14 +973,14 @@ dc_tx_commit_cb(tse_task_t *task, void *data)
 		D_ERROR("Failed to re-init task (%p): "DF_RC", original error: "
 			DF_RC"\n", task, DP_RC(rc1), DP_RC(rc));
 		if (pool_task != NULL)
-			dc_task_decref(pool_task);
+			dc_pool_abandon_map_refresh_task(pool_task);
 		tx->tx_status = TX_ABORTED;
 
 		D_GOTO(out, rc = rc1);
 	}
 
 	if (pool_task != NULL)
-		dc_task_schedule(pool_task, true);
+		tse_task_schedule(pool_task, true);
 
 	rc = 0;
 

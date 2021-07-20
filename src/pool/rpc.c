@@ -114,6 +114,8 @@ CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
 CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
 		DAOS_OSEQ_POOL_QUERY_INFO)
+CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
+		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
