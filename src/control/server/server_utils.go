@@ -397,10 +397,11 @@ type netInterface interface {
 }
 
 func getSrxSetting(cfg *config.Server) (int32, error) {
-	srxVarName := "FI_OFI_RXM_USE_SRX"
-	cliSrx := int32(-1) // default to unset
-	srxMismatchErr := errors.Errorf("%s must match in all engine configs", srxVarName)
+	if len(cfg.Engines) == 0 {
+		return -1, nil
+	}
 
+	srxVarName := "FI_OFI_RXM_USE_SRX"
 	getSetting := func(ev string) (bool, int32) {
 		kv := strings.Split(ev, "=")
 		if len(kv) != 2 {
@@ -416,30 +417,13 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 		return true, int32(v)
 	}
 
+	engineVals := make([]int32, len(cfg.Engines))
 	for idx, ec := range cfg.Engines {
-		if cliSrx != -1 && len(ec.EnvVars) == 0 {
-			return -1, srxMismatchErr
-		}
-
+		engineVals[idx] = -1 // default to unset
 		for _, ev := range ec.EnvVars {
 			if match, engSrx := getSetting(ev); match {
-				if engSrx == -1 {
-					if cliSrx == -1 {
-						continue
-					}
-					return -1, srxMismatchErr
-				} else {
-					if cliSrx == engSrx {
-						continue
-					}
-					// no engine srx, or client srx is set but not equal
-					if engSrx == -1 || cliSrx != -1 || idx > 0 {
-						return -1, srxMismatchErr
-					}
-					cliSrx = engSrx
-				}
-			} else if cliSrx != -1 {
-				return -1, srxMismatchErr
+				engineVals[idx] = engSrx
+				break
 			}
 		}
 
@@ -447,6 +431,13 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 			if pte == srxVarName {
 				return -1, errors.Errorf("%s may not be set as a pass-through env var", srxVarName)
 			}
+		}
+	}
+
+	cliSrx := engineVals[0]
+	for i := 1; i < len(engineVals); i++ {
+		if engineVals[i] != cliSrx {
+			return -1, errors.Errorf("%s setting must be the same for all engines", srxVarName)
 		}
 	}
 
