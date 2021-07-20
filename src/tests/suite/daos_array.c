@@ -17,17 +17,10 @@
 /** num of mem segments for strided access - Must evenly divide NUM_ELEMS */
 #define NUM_SEGS	4
 
-static daos_size_t chunk_size = 16;
 static daos_ofeat_t feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
 	DAOS_OF_ARRAY;
 static daos_ofeat_t featb = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
 	DAOS_OF_ARRAY | DAOS_OF_ARRAY_BYTE;
-
-static void simple_array_mgmt(void **state);
-static void contig_mem_contig_arr_io(void **state);
-static void contig_mem_str_arr_io(void **state);
-static void str_mem_str_arr_io(void **state);
-static void read_empty_records(void **state);
 
 static void
 array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
@@ -69,7 +62,7 @@ array_oh_share(daos_handle_t coh, int rank, daos_handle_t *oh)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 }
-
+#if 0
 static void
 simple_array_mgmt(void **state)
 {
@@ -1079,8 +1072,140 @@ truncate_array(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 } /* End str_mem_str_arr_io */
+#endif
+
+#define NUM_RECS 16*1024
+
+static void
+large_io(void **state) {
+	test_arg_t		*arg = *state;
+	daos_obj_id_t		oid;
+	daos_handle_t		oh;
+	daos_array_iod_t	iod;
+	daos_range_t		rg;
+	d_sg_list_t		sgl;
+	d_iov_t			iov;
+	int			*wbuf = NULL;
+	int			i;
+	uuid_t			uuid;
+	daos_handle_t		coh;
+	daos_cont_info_t	info;
+	daos_prop_t		*prop;
+	int			rc;
+
+	/** create the array on rank 0 and share the oh. */
+	if (arg->myrank == 0) {
+		/** container uuid */
+		uuid_generate(uuid);
+
+		rc = daos_cont_create(arg->pool.poh, uuid, NULL, NULL);
+		assert_int_equal(rc, 0);
+
+		rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh,
+				    &info, NULL);
+		assert_int_equal(rc, 0);
+	}
+	handle_share(&coh, HANDLE_CO, arg->myrank, arg->pool.poh, 0);
+
+	double start, end, total = 0;
+
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		D_ERROR("Failed to allocate prop.");
+		assert_non_null(prop);		
+	}
+
+	start = MPI_Wtime();
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	daos_prop_free(prop);
+	if (rc) {
+		D_ERROR("daos_cont_query() Failed (%d)\n", rc);
+		assert_int_equal(rc, 0);
+	}
+	end = MPI_Wtime();
+	total = end-start;
+
+	if (total > 1)
+		printf("rank %d had a timeout. total time = %f seconds\n",
+		       arg->myrank, total);
+
+	if (arg->myrank == 0) {
+		oid = dts_oid_gen(OC_SX, feat, 0);
+		rc = daos_array_create(coh, oid, DAOS_TX_NONE, 1, NUM_RECS,
+				       &oh, NULL);
+		assert_int_equal(rc, 0);
+	}
+	array_oh_share(coh, arg->myrank, &oh);
+
+	/** Allocate and set buffer */
+	D_ALLOC_ARRAY(wbuf, NUM_RECS);
+	assert_non_null(wbuf);
+	for (i = 0; i < NUM_RECS; i++)
+		wbuf[i] = i+1;
+
+	/** set memory location */
+	sgl.sg_nr = 1;
+	d_iov_set(&iov, wbuf, NUM_RECS);
+	sgl.sg_iovs = &iov;
+
+	total = 0;
+
+	for (i = 0; i < 1000; i++) {
+		/** set array location */
+		iod.arr_nr = 1;
+		rg.rg_len = NUM_RECS;
+		rg.rg_idx = (uint64_t)arg->myrank * NUM_RECS +
+			(uint64_t)i * NUM_RECS * arg->rank_size;
+		iod.arr_rgs = &rg;
+
+		start = MPI_Wtime();
+		rc = daos_array_write(oh, DAOS_TX_NONE, &iod, &sgl, NULL, NULL);
+		if (rc)
+			printf("%d: Rank %d (%d: idx %"PRIu64")\n", rc,
+			       arg->myrank, i, rg.rg_idx);
+		assert_int_equal(rc, 0);
+		end = MPI_Wtime();
+		total += (end - start);
+		if (end - start > 1)
+			printf("Rank %d - idx %"PRIu64": took %f seconds\n",
+			       arg->myrank, rg.rg_idx, end - start);
+	}
+	if (total > 10)
+		printf("rank %d had a timeout. total time = %f seconds\n",
+		       arg->myrank, total);
+
+	D_FREE(wbuf);
+	rc = daos_array_close(oh, NULL);
+	assert_int_equal(rc, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = daos_cont_close(coh, NULL);
+	assert_int_equal(rc, 0);
+
+	/** Barrier to make sure everyone is done and closed coh */
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0) {
+		rc = daos_cont_destroy(arg->pool.poh, uuid, 1, NULL);
+		if (rc != 0)
+			printf("FAILED DAOS CONT destroy (%d)\n", rc);
+	}
+	MPI_Bcast(&rc, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	if (rc)
+		MPI_Abort(MPI_COMM_WORLD, 1);
+	assert_int_equal(rc, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0)
+		printf("IOR replicator passed.");
+	MPI_Barrier(MPI_COMM_WORLD);
+}
 
 static const struct CMUnitTest array_api_tests[] = {
+	{"Array I/O: Large IO",
+	 large_io, async_disable, NULL},
+#if 0
 	{"Array API: create/open/close (blocking)",
 	 simple_array_mgmt, async_disable, NULL},
 	{"Array API: small/simple array IO (blocking)",
@@ -1103,6 +1228,7 @@ static const struct CMUnitTest array_api_tests[] = {
 	 strided_array, async_disable, NULL},
 	{"Array API: write after truncate",
 	 truncate_array, async_disable, NULL},
+#endif
 };
 
 static int
