@@ -242,7 +242,7 @@ show_help(char *name)
 		"	-S --singlethread	Single threaded\n"
 		"	-t --thread-count=count	Number of fuse threads to use\n"
 		"	-f --foreground		Run in foreground\n"
-		"	   --enabling-caching	Enable all caching\n"
+		"	   --enable-caching	Enable all caching\n"
 		"	   --disable-caching	Disable all caching\n"
 		"	   --disable-wb-cache	Use write-through rather than write-back cache\n"
 		"\n"
