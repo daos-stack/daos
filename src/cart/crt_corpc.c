@@ -132,13 +132,16 @@ crt_corpc_initiate(struct crt_rpc_priv *rpc_priv)
 		/* rollback refcount taken in above */
 		if (grp_ref_taken)
 			crt_grp_priv_decref(grp_priv);
-		RPC_ERROR(rpc_priv, "crt_corpc_info_init failed: "DF_RC"\n",
-			  DP_RC(rc));
+
+		if (rc != -DER_GRPVER)
+			RPC_ERROR(rpc_priv,
+				  "crt_corpc_info_init failed: "DF_RC"\n",
+				  DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
 	rc = crt_corpc_req_hdlr(rpc_priv);
-	if (rc != 0)
+	if (rc != 0 && rc != -DER_GRPVER)
 		RPC_ERROR(rpc_priv, "crt_corpc_req_hdlr failed: "DF_RC"\n",
 			  DP_RC(rc));
 
@@ -177,8 +180,10 @@ crt_corpc_chained_bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	rpc_priv->crp_pub.cr_co_bulk_hdl = local_bulk_hdl;
 	rc = crt_corpc_initiate(rpc_priv);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_corpc_initiate failed: "DF_RC"\n",
-			  DP_RC(rc));
+		if (rc != -DER_GRPVER)
+			RPC_ERROR(rpc_priv,
+				  "crt_corpc_initiate failed: "DF_RC"\n",
+				  DP_RC(rc));
 		crt_hg_reply_error_send(rpc_priv, rc);
 	}
 
@@ -309,13 +314,13 @@ crt_corpc_common_hdlr(struct crt_rpc_priv *rpc_priv)
 	} else {
 		rpc_priv->crp_pub.cr_co_bulk_hdl = CRT_BULK_NULL;
 		rc = crt_corpc_initiate(rpc_priv);
-		if (rc != 0)
+		if (rc != 0 && rc != -DER_GRPVER)
 			RPC_ERROR(rpc_priv, "crt_corpc_initiate failed: "
 				  DF_RC"\n", DP_RC(rc));
 	}
 
 out:
-	if (rc != 0)
+	if (rc != 0 && rc != -DER_GRPVER)
 		RPC_ERROR(rpc_priv, "crt_corpc_common_hdlr failed: "
 			  DF_RC"\n", DP_RC(rc));
 	return rc;
@@ -425,8 +430,10 @@ crt_corpc_req_create(crt_context_t crt_ctx, crt_group_t *grp,
 				 flags, tree_topo, grp_root,
 				 true /* init_hdr */, root_excluded);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_corpc_info_init failed: "DF_RC"\n",
-			  DP_RC(rc));
+		if (rc != -DER_GRPVER)
+			RPC_ERROR(rpc_priv,
+				  "crt_corpc_info_init failed: "DF_RC"\n",
+				  DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 
@@ -632,7 +639,10 @@ crt_corpc_reply_hdlr(const struct crt_cb_info *cb_info)
 
 	rc = cb_info->cci_rc;
 	if (rc != 0) {
-		RPC_ERROR(child_rpc_priv, "error, rc: "DF_RC"\n", DP_RC(rc));
+		if (rc != -DER_GRPVER)
+			RPC_ERROR(child_rpc_priv, "error, rc: "DF_RC"\n",
+				  DP_RC(rc));
+
 		co_info->co_rc = rc;
 	}
 	/* propagate failure rc to parent */
@@ -779,10 +789,13 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		rc = co_ops->co_pre_forward(&rpc_priv->crp_pub,
 					    co_info->co_priv);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "co_pre_forward(group %s) failed: "DF_RC"\n",
-				  co_info->co_grp_priv->gp_pub.cg_grpid,
-				  DP_RC(rc));
+			if (rc != -DER_GRPVER)
+				RPC_ERROR(rpc_priv,
+					  "co_pre_forward(group %s) failed: "
+					  DF_RC"\n",
+					  co_info->co_grp_priv->gp_pub.cg_grpid,
+					  DP_RC(rc));
+
 			crt_corpc_fail_parent_rpc(rpc_priv, rc);
 			D_GOTO(forward_done, rc);
 		}
@@ -870,9 +883,11 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		RPC_ADDREF(rpc_priv);
 		rc = crt_req_send(child_rpc, crt_corpc_reply_hdlr, rpc_priv);
 		if (rc != 0) {
-			RPC_ERROR(rpc_priv,
-				  "crt_req_send(tgt_ep: %d) failed: "
-				  DF_RC"\n", tgt_ep.ep_rank, DP_RC(rc));
+			if (rc != -DER_GRPVER)
+				RPC_ERROR(rpc_priv,
+					  "crt_req_send(tgt_ep: %d) failed: "
+					  DF_RC"\n", tgt_ep.ep_rank, DP_RC(rc));
+
 			RPC_DECREF(rpc_priv);
 
 			/*
@@ -903,8 +918,11 @@ forward_done:
 	/* invoke RPC handler on local node */
 	rc = crt_rpc_common_hdlr(rpc_priv);
 	if (rc != 0) {
-		RPC_ERROR(rpc_priv, "crt_rpc_common_hdlr failed: "DF_RC"\n",
-			  DP_RC(rc));
+		if (rc != -DER_GRPVER)
+			RPC_ERROR(rpc_priv,
+				  "crt_rpc_common_hdlr failed: "DF_RC"\n",
+				  DP_RC(rc));
+
 		crt_corpc_fail_child_rpc(rpc_priv, 1, rc);
 
 		D_SPIN_LOCK(&rpc_priv->crp_lock);
