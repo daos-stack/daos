@@ -8,7 +8,6 @@ import traceback
 import ctypes
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
-from general_utils import create_string_buffer
 
 
 class BadConnectTest(TestWithServers):
@@ -36,7 +35,6 @@ class BadConnectTest(TestWithServers):
 
         setlist = self.params.get("setname",
                                   '/run/connecttests/connectsetnames/*/')
-        connectset = setlist[0]
         expected_for_param.append(setlist[1])
 
         uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')

@@ -53,10 +53,6 @@ class BadCreateTest(TestWithServers):
         expected_for_param.append(gidlist[1])
 
         setidlist = self.params.get("setname", '/run/createtests/setnames/*')
-        if setidlist[0] == 'NULLPTR':
-            group = None
-        else:
-            group = setidlist[0]
         expected_for_param.append(setidlist[1])
 
         # Uncomment this block when we test targetptr.

@@ -46,7 +46,6 @@ class SimpleCreateDeleteTest(TestWithServers):
         expected_for_param.append(gidlist[1])
 
         setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
         expected_for_param.append(setidlist[1])
 
         expected_result = 'PASS'
@@ -59,7 +58,7 @@ class SimpleCreateDeleteTest(TestWithServers):
         self.pool.uid = uid
         self.pool.gid = gid
 
-        try:            
+        try:
             self.pool.create()
             if expected_result == 'FAIL':
                 self.fail("Test was expected to fail but it passed.\n")

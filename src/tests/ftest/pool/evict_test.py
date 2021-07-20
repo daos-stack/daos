@@ -9,7 +9,6 @@ from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
 from command_utils_base import CommandFailure
 from test_utils_container import TestContainer
-from general_utils import create_string_buffer
 
 
 class EvictTests(TestWithServers):

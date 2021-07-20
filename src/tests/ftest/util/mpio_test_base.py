@@ -10,7 +10,6 @@ import os
 
 from apricot import TestWithServers
 from mpio_utils import MpioUtils, MpioFailed
-from test_utils_pool import TestPool
 from daos_utils import DaosCommand
 from env_modules import load_mpi
 
