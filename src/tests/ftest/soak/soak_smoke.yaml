@@ -55,8 +55,8 @@ server_config:
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server
-    scm_size: 30GB
-    nvme_size: 500GB
+    scm_size: 12GB
+    nvme_size: 200GB
     properties: reclaim:time,ec_cell_sz:64KiB
     control_method: dmg
 pool_reserved:
@@ -190,11 +190,11 @@ mdtest_smoke:
     depth:
         - 0
     dfs_oclass:
-        - "EC_2P1GX"
+        - "EC_2P1G1"
 #        - "EC_4P1G1"
-#        - "EC_4P2GX"
+#        - "EC_4P2G1"
 #        - "EC_8P2G1"
-#        - "EC_16P2GX"
+#        - "EC_16P2G1"
     dfs_destroy: False
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"
