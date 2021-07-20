@@ -310,7 +310,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 {
 	struct evt_entry_array	*enta;
 	struct evt_entry	*entry;
-	struct evt_rect		 rtmp;
+	struct evt_rect		 rtmp = {};
 	uint32_t		 intent;
 	int			 flags = 0;
 	int			 rc = 0;

@@ -412,6 +412,9 @@ class DaosServer():
             self._test_class = None
         self.valgrind = valgrind
         self._agent = None
+        self.max_start_time = 120
+        self.max_stop_time = 30
+        self.stop_sleep_time = 0.5
         self.engines = conf.args.engine_count
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
@@ -431,7 +434,7 @@ class DaosServer():
             self.server_logs.append(lf)
         self.__process_name = 'daos_engine'
         if self.valgrind:
-            self.__process_name = 'valgrind'
+            self.__process_name = 'memcheck-amd64-'
 
         socket_dir = '/tmp/dnt_sockets'
         if not os.path.exists(socket_dir):
@@ -516,20 +519,34 @@ class DaosServer():
 
         server_env = get_base_env(clean=True)
 
+        plain_env = os.environ.copy()
+
         if self.valgrind:
             valgrind_args = ['--fair-sched=yes',
+                             '--gen-suppressions=all',
                              '--xml=yes',
                              '--xml-file=dnt_server.%p.memcheck.xml',
-                             '--num-callers=2',
-                             '--leak-check=no',
-                             '--keep-stacktraces=none',
-                             '--undef-value-errors=no']
+                             '--num-callers=20',
+                             '--leak-check=full']
+            suppression_file = os.path.join('src',
+                                            'cart',
+                                            'utils',
+                                            'memcheck-cart.supp')
+            if not os.path.exists(suppression_file):
+                suppression_file = os.path.join(self.conf['PREFIX'],
+                                                'etc',
+                                                'memcheck-cart.supp')
+
+            valgrind_args.append('--suppressions={}'.format(
+                os.path.realpath(suppression_file)))
+
             self._io_server_dir = tempfile.TemporaryDirectory(prefix='dnt_io_')
 
             fd = open(os.path.join(self._io_server_dir.name,
                                    'daos_engine'), 'w')
             fd.write('#!/bin/sh\n')
-            fd.write('export PATH=$REAL_PATH\n')
+            fd.write('export PATH={}:$PATH\n'.format(
+                os.path.join(self.conf['PREFIX'], 'bin')))
             fd.write('exec valgrind {} daos_engine "$@"\n'.format(
                 ' '.join(valgrind_args)))
             fd.close()
@@ -537,10 +554,11 @@ class DaosServer():
             os.chmod(os.path.join(self._io_server_dir.name, 'daos_engine'),
                      stat.S_IXUSR | stat.S_IRUSR)
 
-            server_env['REAL_PATH'] = '{}:{}'.format(
-                os.path.join(self.conf['PREFIX'], 'bin'), server_env['PATH'])
-            server_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
-                                                server_env['PATH'])
+            plain_env['PATH'] = '{}:{}'.format(self._io_server_dir.name,
+                                               plain_env['PATH'])
+            self.max_start_time = 300
+            self.max_stop_time = 300
+            self.stop_sleep_time = 10
 
         daos_server = os.path.join(self.conf['PREFIX'], 'bin', 'daos_server')
 
@@ -587,7 +605,7 @@ class DaosServer():
         if self.conf.args.no_root:
             cmd.append('--recreate-superblocks')
 
-        self._sp = subprocess.Popen(cmd)
+        self._sp = subprocess.Popen(cmd, env=plain_env)
 
         agent_config = os.path.join(self_dir, 'nlt_agent.yaml')
 
@@ -613,7 +631,6 @@ class DaosServer():
         # /mnt/daos is mounted but empty.  It will be used-as is.
         # In this last case the --no-root option must be used.
         start = time.time()
-        max_start_time = 120
 
         cmd = ['storage', 'format', '--json']
         while True:
@@ -635,7 +652,7 @@ class DaosServer():
             if 'running system' in data['error']:
                 break
 
-            self._check_timing('format', start, max_start_time)
+            self._check_timing('format', start, self.max_start_time)
         duration = time.time() - start
         self._add_test_case('format', duration=duration)
         print('Format completion in {:.2f} seconds'.format(duration))
@@ -646,7 +663,7 @@ class DaosServer():
             time.sleep(0.5)
             if self._check_system_state(['ready', 'joined']):
                 break
-            self._check_timing("start", start, max_start_time)
+            self._check_timing("start", start, self.max_start_time)
         duration = time.time() - start
         self._add_test_case('start', duration=duration)
         print('Server started in {:.2f} seconds'.format(duration))
@@ -706,6 +723,7 @@ class DaosServer():
                       .format(len(procs), self.engines)
             entry['message'] = message
             self.conf.wf.issues.append(entry)
+
         rc = self.run_dmg(['system', 'stop'])
         if rc.returncode != 0:
             print(rc)
@@ -717,15 +735,15 @@ class DaosServer():
             msg = 'dmg system stop failed with {}'.format(rc.returncode)
             entry['message'] = msg
             self.conf.wf.issues.append(entry)
-        assert rc.returncode == 0, rc
+        if not self.valgrind:
+            assert rc.returncode == 0, rc
 
         start = time.time()
-        max_stop_time = 30
         while True:
-            time.sleep(0.5)
-            if self._check_system_state('stopped'):
+            time.sleep(self.stop_sleep_time)
+            if self._check_system_state(['stopped', 'errored']):
                 break
-            self._check_timing("stop", start, max_stop_time)
+            self._check_timing("stop", start, self.max_stop_time)
 
         duration = time.time() - start
         self._add_test_case('stop', duration=duration)
@@ -3186,8 +3204,6 @@ def test_alloc_fail(server, conf):
 def run(wf, args):
     """Main entry point"""
 
-    conf = load_conf(args)
-
     wf_server = WarningsFactory('nlt-server-leaks.json', post=True, check='Server leak checking')
     wf_client = WarningsFactory('nlt-client-leaks.json')
 
@@ -3200,6 +3216,9 @@ def run(wf, args):
 
     fatal_errors = BoolRatchet()
     fi_test = False
+
+    if args.server_valgrind:
+        args.mode = 'kv'
 
     if args.mode == 'launch':
         run_in_fg(server, conf)
@@ -3243,13 +3262,15 @@ def run(wf, args):
     # If running all tests then restart the server under valgrind.
     # This is really, really slow so just do cont list, then
     # exit again.
-    if args.mode == 'server-valgrind':
+    if args.server_valgrind:
         server = DaosServer(conf, valgrind=True, test_class='valgrind')
         server.start()
         pools = server.fetch_pools()
         for pool in pools:
             cmd = ['cont', 'list', pool.id()]
-            run_daos_cmd(conf, cmd, valgrind=False)
+            rc = run_daos_cmd(conf, cmd, valgrind=False)
+            print(rc)
+            time.sleep(5)
         if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)
 
@@ -3298,6 +3319,7 @@ def main():
     parser.add_argument('--dfuse-debug', default=None)
     parser.add_argument('--class-name', default=None, help='class name to use for junit')
     parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
+    parser.add_argument('--server-valgrind', action='store_true')
     parser.add_argument('--no-root', action='store_true')
     parser.add_argument('--max-log-size', default=None)
     parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')
