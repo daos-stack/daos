@@ -1720,13 +1720,17 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 				iom->iom_flags = DAOS_IOMF_DETAIL;
 				io_arg->ioms = iom;
 				rc = tse_task_register_deps(stask, 1, &io_task);
-				if (rc)
+				if (rc) {
+					tse_task_complete(io_task, rc);
 					D_GOTO(err_iotask, rc);
+				}
 			} else {
 				io_arg->ioms = NULL;
 				rc = tse_task_register_deps(task, 1, &io_task);
-				if (rc)
+				if (rc) {
+					tse_task_complete(io_task, rc);
 					D_GOTO(err_iotask, rc);
+				}
 			}
 		} else if (op_type == DAOS_OPC_ARRAY_WRITE ||
 			   op_type == DAOS_OPC_ARRAY_PUNCH) {
@@ -1748,8 +1752,10 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 			io_arg->iods	= iod;
 			io_arg->sgls	= sgl;
 			rc = tse_task_register_deps(task, 1, &io_task);
-			if (rc)
+			if (rc) {
+				tse_task_complete(io_task, rc);
 				D_GOTO(err_iotask, rc);
+			}
 		} else {
 			D_ASSERTF(0, "Invalid array operation.\n");
 		}
@@ -1810,14 +1816,17 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	return 0;
 
 err_iotask:
+	if (head && !head_cb_registered) {
+		tse_task_register_comp_cb(task, free_io_params_cb, &head, sizeof(head));
+		head_cb_registered = true;
+	}
 	tse_task_list_abort(&io_task_list, rc);
 err_stask:
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array)
 		tse_task_complete(stask, rc);
 err_task:
 	if (head && !head_cb_registered)
-		tse_task_register_comp_cb(task, free_io_params_cb, &head,
-					  sizeof(head));
+		tse_task_register_comp_cb(task, free_io_params_cb, &head, sizeof(head));
 	if (array)
 		array_decref(array);
 	tse_task_complete(task, rc);
