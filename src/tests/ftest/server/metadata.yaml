@@ -1,6 +1,5 @@
 # change host names to your reserved nodes, the
 # required quantity is indicated by the placeholders
-
 hosts:
   test_servers:
     - server-A
@@ -8,48 +7,14 @@ hosts:
     - server-C
     - server-D
   test_clients:
-    - client-C
-timeouts:
-  test_metadata_fillup: 300
-  test_metadata_addremove: 900
-  test_container_removal_after_der_nospace: 180
+    - client-A
+timeout: 36000
 server_config:
   name: daos_server
-  engines_per_host: 2
   servers:
-    0:
-      targets: 8
-      first_core: 0
-      pinned_numa_node: 0
-      fabric_iface: ib0
-      fabric_iface_port: 31317
-      log_file: daos_server0.log
-      scm_mount: /mnt/daos0
-      scm_list: ["/dev/pmem0"]
-      # common items below (same in server 0 and server 1)
-      scm_class: dcpm
-      nr_xs_helpers: 16
-      log_mask: DEBUG,MEM=ERR
-      env_vars:
-        - DAOS_MD_CAP=128
-        - DD_MASK=mgmt,md,dsms,any
-    1:
-      targets: 8
-      first_core: 0
-      pinned_numa_node: 1
-      fabric_iface: ib1
-      fabric_iface_port: 31417
-      log_file: daos_server1.log
-      scm_mount: /mnt/daos1
-      scm_list: ["/dev/pmem1"]
-      # common items below (same in server 0 and server 1)
-      scm_class: dcpm
-      nr_xs_helpers: 16
-      log_mask: DEBUG,MEM=ERR
-      env_vars:
-        - DAOS_MD_CAP=128
-        - DD_MASK=mgmt,md,dsms,any
-
+    scm_size: 20
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a"]
 pool:
   createmode:
     mode: 511
@@ -57,9 +22,11 @@ pool:
     group: daos_server
   createsvc:
     svcn: 3
+  target_list: [0,1,2,3]
+  rebuild_timeout: 120
   createsize:
-    scm_size: 1073741824
-    nvme_size: 8589934592
+    scm_size: 1G
+    nvme_size: 10G
   control_method: dmg
 ior:
     clientslots:
