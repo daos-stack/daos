@@ -121,9 +121,6 @@ pool_hop_free(struct d_ulink *hlink)
 	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
-	if (pool->vp_uma.uma_pool)
-		vos_pmemobj_close(pool->vp_uma.uma_pool);
-
 	vos_dedup_fini(pool);
 
 	D_FREE(pool);
