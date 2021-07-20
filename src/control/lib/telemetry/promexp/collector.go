@@ -200,8 +200,8 @@ func (es *EngineSource) Collect(log logging.Logger, ch chan<- *rankMetric) {
 	for metric := range metrics {
 		if es.IsEnabled() {
 			ch <- &rankMetric{
-				r: es.Rank,
-				m: metric,
+				rank:   es.Rank,
+				metric: metric,
 			}
 		}
 	}
@@ -223,8 +223,8 @@ func (es *EngineSource) Disable() {
 }
 
 type rankMetric struct {
-	r uint32
-	m telemetry.Metric
+	rank   uint32
+	metric telemetry.Metric
 }
 
 func (c *Collector) isIgnored(name string) bool {
@@ -343,37 +343,37 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	counters := make(cvMap)
 
 	for rm := range rankMetrics {
-		labels, name := extractLabels(rm.m.FullPath())
-		labels["rank"] = fmt.Sprintf("%d", rm.r)
+		labels, name := extractLabels(rm.metric.FullPath())
+		labels["rank"] = fmt.Sprintf("%d", rm.rank)
 
 		baseName := strings.Join([]string{"engine", name}, "_")
-		desc := rm.m.Desc()
+		desc := rm.metric.Desc()
 
 		if c.isIgnored(baseName) {
 			continue
 		}
 
-		switch rm.m.Type() {
+		switch rm.metric.Type() {
 		case telemetry.MetricTypeGauge:
-			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
 		case telemetry.MetricTypeStatsGauge:
-			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
-			for _, ms := range getMetricStats(baseName, desc, rm.m) {
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
+			for _, ms := range getMetricStats(baseName, desc, rm.metric) {
 				gauges.add(ms.name, ms.desc, ms.value, labels)
 			}
 		case telemetry.MetricTypeCounter:
-			counters.add(baseName, desc, rm.m.FloatValue(), labels)
+			counters.add(baseName, desc, rm.metric.FloatValue(), labels)
 		case telemetry.MetricTypeTimestamp:
-			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
 		case telemetry.MetricTypeSnapshot:
-			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
 		case telemetry.MetricTypeDuration:
-			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
-			for _, ms := range getMetricStats(baseName, desc, rm.m) {
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
+			for _, ms := range getMetricStats(baseName, desc, rm.metric) {
 				gauges.add(ms.name, ms.desc, ms.value, labels)
 			}
 		default:
-			c.log.Errorf("[%s]: metric type %d not supported", name, rm.m.Type())
+			c.log.Errorf("[%s]: metric type %d not supported", name, rm.metric.Type())
 		}
 	}
 
