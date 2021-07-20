@@ -1595,10 +1595,14 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		       oeo->oeo_recxs.ca_count);
 	}
 
-	if (enum_args->eaa_sgl && oeo->oeo_sgl.sg_nr > 0) {
-		rc = daos_sgl_copy_data_out(enum_args->eaa_sgl, &oeo->oeo_sgl);
-		if (rc)
-			D_GOTO(out, rc);
+	if (enum_args->eaa_sgl) {
+		if (oeo->oeo_sgl.sg_nr > 0) {
+			rc = daos_sgl_copy_data_out(enum_args->eaa_sgl, &oeo->oeo_sgl);
+			if (rc)
+				D_GOTO(out, rc);
+		} else {
+			dc_sgl_out_set(enum_args->eaa_sgl, oeo->oeo_size);
+		}
 	}
 
 	/* Update dkey hash and tag */
