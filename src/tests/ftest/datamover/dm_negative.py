@@ -6,7 +6,6 @@
 '''
 from data_mover_test_base import DataMoverTestBase
 from os.path import join
-from apricot import skipForTicket
 
 
 class DmvrNegativeTest(DataMoverTestBase):
@@ -242,7 +241,6 @@ class DmvrNegativeTest(DataMoverTestBase):
             "POSIX", "/fake/fake/fake",
             expected_rc=1)
 
-    @skipForTicket("DAOS-6871")
     def test_dm_negative_space_dcp(self):
         """Jira ID: DAOS-5515
         Test Description:
@@ -253,6 +251,9 @@ class DmvrNegativeTest(DataMoverTestBase):
         :avocado: tags=dm_negative,dm_negative_space_dcp
         """
         self.set_tool("DCP")
+
+        # Override from config to use 1 process
+        self.dcp_processes = 1
 
         # Create a large test file in POSIX
         block_size_large = self.params.get(
@@ -284,8 +285,7 @@ class DmvrNegativeTest(DataMoverTestBase):
             self.test_id + " (dst posix out of space)",
             "POSIX", self.posix_test_paths[0], None, None,
             "POSIX", self.dfuse.mount_dir.value,
-            expected_rc=255,
-            expected_err=["errno=28"])
+            expected_rc=255)
 
     def test_dm_negative_error_check_dcp(self):
         """Jira ID: DAOS-5515

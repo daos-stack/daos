@@ -1,3 +1,25 @@
+iters1: !mux
+    iter1:
+        iter: 1
+    iter2:
+        iter: 2
+    iter3:
+        iter: 3
+    iter4:
+        iter: 4
+    iter5:
+        iter: 5
+iters12: !mux
+    iter1:
+        iter: 1
+    iter2:
+        iter: 2
+    iter3:
+        iter: 3
+    iter4:
+        iter: 4
+    iter5:
+        iter: 5
 hosts:
     test_servers:
         - server-A
@@ -28,3 +50,4 @@ dcp:
         np: 3
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
+    disable_caching: True
