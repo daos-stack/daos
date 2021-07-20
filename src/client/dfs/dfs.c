@@ -1236,7 +1236,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 		DFS_DEFAULT_CHUNK_SIZE;
 	attr->da_oclass_id = oclass;
 
-	/** DFS_RELAXED by default */
+	/** DFS_BALANCED (0) by default */
 	attr->da_mode = mode;
 
 	return 0;
@@ -1310,7 +1310,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		    (attr->da_mode & MODE_MASK) == DFS_BALANCED)
 			dattr.da_mode = attr->da_mode;
 		else
-			dattr.da_mode = DFS_RELAXED;
+			dattr.da_mode = DFS_BALANCED;
 
 		/** check non default chunk size */
 		if (attr->da_chunk_size != 0)
@@ -1319,7 +1319,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 			dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 	} else {
 		dattr.da_oclass_id = 0;
-		dattr.da_mode = DFS_RELAXED;
+		dattr.da_mode = DFS_BALANCED;
 		dattr.da_chunk_size = DFS_DEFAULT_CHUNK_SIZE;
 	}
 
@@ -1390,7 +1390,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	rc = insert_entry(super_oh, DAOS_TX_NONE, "/", 1,
 			  DAOS_COND_DKEY_INSERT, &entry);
 	if (rc && rc != EEXIST) {
-		D_ERROR("Failed to insert root entry, %d\n", rc);
+		D_ERROR("Failed to insert root entry (%d).", rc);
 		D_GOTO(err_super, rc);
 	}
 
@@ -1402,7 +1402,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 
 	if (_dfs) {
 		/** Mount DFS on the container we just created */
-		rc = dfs_mount(poh, coh, O_RDWR, &dfs);
+		rc = dfs_mount(poh, coh, O_RDWR | dattr.da_mode, &dfs);
 		if (rc) {
 			D_ERROR("dfs_mount() failed (%d)\n", rc);
 			D_GOTO(err_close, rc);
@@ -1547,12 +1547,12 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 			D_GOTO(err_super, rc = EINVAL);
 		}
 
-		if ((flags & MODE_MASK) == DFS_BALANCED) {
-			dfs->use_dtx = true;
-			D_DEBUG(DB_ALL, "DFS mount in Balanced mode.\n");
-		} else {
+		if ((flags & MODE_MASK) == DFS_RELAXED) {
 			dfs->use_dtx = false;
 			D_DEBUG(DB_ALL, "DFS mount in Relaxed mode.\n");
+		} else {
+			dfs->use_dtx = true;
+			D_DEBUG(DB_ALL, "DFS mount in Balanced mode.\n");
 		}
 	}
 
@@ -1561,8 +1561,12 @@ dfs_mount(daos_handle_t poh, daos_handle_t coh, int flags, dfs_t **_dfs)
 	 * default input setting, only if container was created with relaxed
 	 * mode.
 	 */
-	if ((dfs->attr.da_mode & MODE_MASK) == DFS_RELAXED)
-		d_getenv_bool("DFS_USE_DTX", &dfs->use_dtx);
+	if ((dfs->attr.da_mode & MODE_MASK) == DFS_RELAXED) {
+		bool no_dtx;
+
+		d_getenv_bool("DFS_NO_DTX", &no_dtx);
+		dfs->use_dtx = !no_dtx;
+	}
 
 	/** Check if super object has the root entry */
 	strcpy(dfs->root.name, "/");
