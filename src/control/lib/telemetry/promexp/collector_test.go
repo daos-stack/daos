@@ -26,7 +26,7 @@ import (
 )
 
 func TestPromexp_NewEngineSource(t *testing.T) {
-	testIdx := uint32(telemetry.NextTestID())
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
@@ -69,7 +69,7 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 }
 
 func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
-	testIdx := uint32(telemetry.NextTestID())
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
@@ -127,7 +127,7 @@ func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 }
 
 func TestPromExp_EngineSource_Collect(t *testing.T) {
-	testIdx := uint32(telemetry.NextTestID())
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -293,7 +293,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	testIdx := uint32(telemetry.NextTestID())
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 4096)
 	defer telemetry.CleanupTestMetricsProducer(t)
