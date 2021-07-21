@@ -739,6 +739,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 	bool			 is_equal;
 	int			 visibility = ILOG_COMMITTED;
 	uint32_t		 new_len;
+	size_t			 new_size;
 	umem_off_t		 new_array;
 	struct ilog_array	*array;
 	struct ilog_array_cache	 cache;
@@ -809,9 +810,10 @@ insert:
 	/* We want to insert after 'i', so just increment it */
 	i++;
 	if (cache.ac_nr == cache.ac_array->ia_max_len) {
-		new_len = cache.ac_nr + ILOG_ARRAY_APPEND_NR;
-		new_array = umem_zalloc(&lctx->ic_umm, sizeof(*cache.ac_array) +
-					sizeof(cache.ac_entries[0]) * new_len);
+		new_len = (cache.ac_nr + 1) * 2 - 1;
+		new_size = sizeof(*cache.ac_array) + sizeof(cache.ac_entries[0]) * new_len;
+		D_ASSERT((new_size & (ILOG_ARRAY_CHUNK_SIZE - 1)) == 0);
+		new_array = umem_zalloc(&lctx->ic_umm, new_size);
 		if (new_array == UMOFF_NULL)
 			return lctx->ic_umm.umm_nospc_rc;
 
