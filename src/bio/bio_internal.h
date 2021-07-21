@@ -502,6 +502,7 @@ struct bio_bdev *lookup_dev_by_id(uuid_t dev_id);
 void setup_bio_bdev(void *arg);
 void destroy_bio_bdev(struct bio_bdev *d_bdev);
 void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
+bool bypass_health_collect(void);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
@@ -581,7 +582,7 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
-void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass);
+void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);
 void bio_media_error(void *msg_arg);
 void bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name);
