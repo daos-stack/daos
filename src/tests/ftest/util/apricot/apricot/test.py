@@ -27,7 +27,7 @@ from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing, run_command
+    get_default_config_file, pcmd, get_file_listing
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -725,9 +725,6 @@ class TestWithServers(TestWithoutServers):
             for manager in self.agent_managers:
                 # Fetch attachinfo data from server via the agent
                 attachinfo_file = manager.get_attachinfo_file()
-                # cp_command = "sudo cp {} {}".format(attachinfo_file, ".")
-                # run_command(cp_command, verbose=True, raise_exception=False)
-                # cart_ctl.cfg_path.value = "."
                 cart_ctl.cfg_path.value = os.path.dirname(attachinfo_file)
                 cart_ctl.group_name.value = "daos_server"
                 cart_ctl.run()
