@@ -153,7 +153,7 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_EC_CELL_SZ);
 	if (entry == NULL) {
-		fprintf(stderr, "EC cell size not found\n");
+		fprintf(ap->errstream, "EC cell size not found\n");
 		rc = -DER_INVAL;
 	} else {
 		if (!daos_ec_cs_valid(entry->dpe_val)) {
@@ -1314,7 +1314,7 @@ cont_decode_props(struct cmd_args_s *ap, daos_prop_t *props,
 
 	entry = daos_prop_entry_get(props, DAOS_PROP_CO_EC_CELL_SZ);
 	if (entry == NULL) {
-		fprintf(stderr, "EC cell size property not found\n");
+		fprintf(ap->errstream, "EC cell size property not found\n");
 		rc = -DER_INVAL;
 	} else {
 		D_PRINT("EC cell size:\t%d\n", (int)entry->dpe_val);
@@ -1737,10 +1737,8 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	int			rc;
 
 	prop = daos_prop_alloc(1);
-	if (prop == NULL) {
-		fprintf(stderr, "Failed to allocate prop");
+	if (prop == NULL)
 		D_GOTO(err_out, rc = -DER_NOMEM);
-	}
 
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 
@@ -2329,11 +2327,10 @@ closedir_dfs(struct cmd_args_s *ap, DIR *_dirp)
 	struct	fs_copy_dirent *dirp	= (struct fs_copy_dirent *)_dirp;
 	int	rc			= dfs_release(dirp->dir);
 
-	if (rc) {
+	if (rc)
 		fprintf(ap->errstream, "dfs_release failed (%d %s)\n",
 			rc, strerror(rc));
-		rc = EINVAL;
-	}
+
 	D_FREE(dirp);
 	return rc;
 }
@@ -2367,10 +2364,10 @@ close_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file)
 {
 	int rc = dfs_release(file_dfs->obj);
 
-	if (rc) {
+	if (rc)
 		fprintf(ap->errstream, "dfs_close %s failed (%d %s)\n",
 			file, rc, strerror(rc));
-	}
+
 	return rc;
 }
 
@@ -2510,7 +2507,7 @@ fs_copy_file(struct cmd_args_s *ap,
 		ssize_t bytes_read = file_read(ap, src_file_dfs, src_path,
 					       buf, left_to_read);
 		if (bytes_read < 0) {
-			fprintf(stderr, "read failed on %s\n", src_path);
+			fprintf(ap->errstream, "read failed on %s\n", src_path);
 			D_GOTO(out_buf, rc = EIO);
 		}
 		size_t bytes_to_write = (size_t)bytes_read;
@@ -2519,7 +2516,7 @@ fs_copy_file(struct cmd_args_s *ap,
 		bytes_written = file_write(ap, dst_file_dfs, dst_path,
 					   buf, bytes_to_write);
 		if (bytes_written < 0) {
-			fprintf(stderr, "write failed on %s\n", dst_path);
+			fprintf(ap->errstream, "write failed on %s\n", dst_path);
 			D_GOTO(out_buf, rc = EIO);
 		}
 
@@ -2529,7 +2526,7 @@ fs_copy_file(struct cmd_args_s *ap,
 	/* set perms on destination to original source perms */
 	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
 	if (rc != 0) {
-		fprintf(stderr,
+		fprintf(ap->errstream,
 			"updating dst file permissions failed (%d)\n", rc);
 		D_GOTO(out_buf, rc);
 	}
@@ -2641,7 +2638,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 			(*num_dirs)++;
 			break;
 		default:
-			fprintf(stderr,
+			fprintf(ap->errstream,
 				"Only files and directories are supported\n");
 			D_GOTO(out, rc = ENOTSUP);
 		}
@@ -2652,8 +2649,9 @@ fs_copy_dir(struct cmd_args_s *ap,
 	/* set original source perms on directories after copying */
 	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
 	if (rc != 0) {
-		fprintf(stderr, "updating destination permissions failed on "
-			"%s (%d)\n", dst_path, rc);
+		fprintf(ap->errstream,
+			"updating destination permissions failed on %s (%d)\n",
+			dst_path, rc);
 		D_GOTO(out, rc);
 	}
 out:
@@ -2819,6 +2817,8 @@ out:
 	return rc;
 }
 
+/* Returns a DAOS error number */
+
 static int
 dm_connect(struct cmd_args_s *ap,
 	   bool is_posix_copy,
@@ -2861,7 +2861,7 @@ dm_connect(struct cmd_args_s *ap,
 			if (rc) {
 				fprintf(ap->errstream, "dfs mount on source "
 					"failed: %d\n", rc);
-				D_GOTO(err_src, rc);
+				D_GOTO(err_src, rc = daos_errno2der(rc));
 			}
 		}
 	}
@@ -2905,7 +2905,7 @@ dm_connect(struct cmd_args_s *ap,
 		if (!is_posix_copy) {
 			props = daos_prop_alloc(2);
 			if (props == NULL) {
-				fprintf(stderr, "Failed to allocate prop\n");
+				fprintf(ap->errstream, "Failed to allocate prop\n");
 				D_GOTO(out, rc = -DER_NOMEM);
 			}
 			props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
@@ -2956,7 +2956,7 @@ dm_connect(struct cmd_args_s *ap,
 				fprintf(ap->errstream, "provide a destination "
 					"pool or UNS path of the form:\n\t"
 					"--dst </$pool> | </path/to/uns>\n");
-					D_GOTO(err_dst_root, rc);
+				D_GOTO(err_dst_root, rc = daos_errno2der(rc));
 			}
 			uuid_copy(ca->dst_c_uuid, dattr.da_cuuid);
 		}
@@ -3009,9 +3009,8 @@ dm_connect(struct cmd_args_s *ap,
 				       &dst_file_dfs->dfs);
 			if (rc != 0) {
 				fprintf(ap->errstream,
-				"dfs mount on destination "
-				"failed: %d\n", rc);
-				D_GOTO(err_dst, rc);
+					"dfs mount on destination failed: %d\n", rc);
+				D_GOTO(err_dst, rc = daos_errno2der(rc));
 			}
 		}
 	}
@@ -3030,18 +3029,22 @@ err_dst_root:
 			d_errdesc(rc), rc);
 	}
 err_src:
-	rc = daos_cont_close(ca->src_coh, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to close source container (%d)\n", rc);
+	if (daos_handle_is_valid(ca->src_coh)) {
+		rc = daos_cont_close(ca->src_coh, NULL);
+		if (rc != 0) {
+			fprintf(ap->errstream,
+				"failed to close source container (%d)\n", rc);
+		}
 	}
 err_src_root:
-	rc = daos_pool_disconnect(ca->src_poh, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to disconnect from source pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ca->src_p_uuid),
-			d_errdesc(rc), rc);
+	if (daos_handle_is_valid(ca->src_poh)) {
+		rc = daos_pool_disconnect(ca->src_poh, NULL);
+		if (rc != 0) {
+			fprintf(ap->errstream,
+				"failed to disconnect from source pool "DF_UUIDF
+				": %s (%d)\n", DP_UUID(ca->src_p_uuid),
+				d_errdesc(rc), rc);
+		}
 	}
 out:
 	if (props != NULL)
@@ -3127,7 +3130,7 @@ out:
 * Parse a path of the format:
 * daos://<pool>/<cont>/<path> | <UNS path> | <POSIX path>
 * Modifies "path" to be the relative container path, defaulting to "/".
-* Returns 0 if a daos path was successfully parsed.
+* Returns 0 if a daos path was successfully parsed, a error number if not.
 */
 static int
 dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
@@ -3147,7 +3150,7 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		}
 	} else if (strncmp(path, "daos://", 7) == 0) {
 		/* Error, since we expect a DAOS path */
-		D_GOTO(out, rc = 1);
+		D_GOTO(out, rc = EINVAL);
 	} else {
 		/* not a DAOS path, set type to POSIX,
 		 * POSIX dir will be checked with stat
@@ -3216,7 +3219,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	if (rc != 0) {
 		fprintf(ap->errstream,
 			"failed to parse destination path: %d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
 	/* if container UUID has not been provided generate one */
@@ -3226,8 +3229,8 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	rc = dm_connect(ap, is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
 			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
-		fprintf(ap->errstream, "fs copy failed to connect: %d\n", rc);
-		D_GOTO(out, rc = daos_errno2der(rc));
+		fprintf(ap->errstream, "fs copy failed to connect: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
 	}
 
 	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs,
@@ -3686,7 +3689,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	if (rc != 0) {
 		fprintf(ap->errstream,
 			"failed to parse destination path: %d\n", rc);
-		D_GOTO(out, rc);
+		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
 	if (!uuid_is_null(ca.dst_c_uuid)) {
