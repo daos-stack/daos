@@ -2422,7 +2422,7 @@ chmod_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file,
 	} else {
 		rc = dfs_chmod(file_dfs->dfs, parent, name, mode);
 		if (rc) {
-			fprintf(ap->errstream, "dfs_chmod %s failed (%d %s)",
+			fprintf(ap->errstream, "dfs_chmod %s failed (%d %s)\n",
 				name, rc, strerror(rc));
 			errno = rc;
 		}
@@ -2838,6 +2838,7 @@ dm_connect(struct cmd_args_s *ap,
 	int			size = 2;
 	uint32_t		dpe_types[size];
 	uint64_t		dpe_vals[size];
+	int rc2;
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
@@ -3016,35 +3017,30 @@ dm_connect(struct cmd_args_s *ap,
 	}
 	D_GOTO(out, rc);
 err_dst:
-	rc = daos_cont_close(ca->dst_coh, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to close destination "
-			"container (%d)\n", rc);
-	}
+	rc2 = daos_cont_close(ca->dst_coh, NULL);
+	if (rc2 != 0)
+		fprintf(ap->errstream,
+			"failed to close destination container "DF_RC"\n", DP_RC(rc2));
 err_dst_root:
-	rc = daos_pool_disconnect(ca->dst_poh, NULL);
-	if (rc != 0) {
-		fprintf(ap->errstream, "failed to disconnect from destination "
-			"pool "DF_UUIDF ": %s (%d)\n", DP_UUID(ca->src_p_uuid),
-			d_errdesc(rc), rc);
-	}
+	rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
+	if (rc2 != 0)
+		fprintf(ap->errstream, "failed to disconnect from destination pool "DF_UUIDF
+			": "DF_RC"\n", DP_UUID(ca->src_p_uuid), DP_RC(rc2));
 err_src:
 	if (daos_handle_is_valid(ca->src_coh)) {
-		rc = daos_cont_close(ca->src_coh, NULL);
-		if (rc != 0) {
+		rc2 = daos_cont_close(ca->src_coh, NULL);
+		if (rc2 != 0)
 			fprintf(ap->errstream,
-				"failed to close source container (%d)\n", rc);
-		}
+				"failed to close source container (%d)\n", rc2);
 	}
 err_src_root:
 	if (daos_handle_is_valid(ca->src_poh)) {
-		rc = daos_pool_disconnect(ca->src_poh, NULL);
-		if (rc != 0) {
+		rc2 = daos_pool_disconnect(ca->src_poh, NULL);
+		if (rc2 != 0)
 			fprintf(ap->errstream,
-				"failed to disconnect from source pool "DF_UUIDF
-				": %s (%d)\n", DP_UUID(ca->src_p_uuid),
-				d_errdesc(rc), rc);
-		}
+				"failed to disconnect from source pool "DF_UUIDF": "DF_RC"\n",
+				DP_UUID(ca->src_p_uuid),
+				DP_RC(rc2));
 	}
 out:
 	if (props != NULL)
@@ -3071,20 +3067,19 @@ dm_disconnect(struct cmd_args_s *ap,
 	      struct file_dfs *dst_file_dfs)
 {
 	int rc = 0;
+	int rc2;
 
 	if (src_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_umount(src_file_dfs->dfs);
 			if (rc != 0) {
-				fprintf(ap->errstream, "failed to unmount "
-				"source (%d)\n", rc);
+				fprintf(ap->errstream, "failed to unmount source (%d)\n", rc);
 				D_GOTO(out, rc);
 			}
 		}
 		rc = daos_cont_close(ca->src_coh, NULL);
 		if (rc != 0) {
-			fprintf(ap->errstream, "failed to close source "
-				"container (%d)\n", rc);
+			fprintf(ap->errstream, "failed to close source container (%d)\n", rc);
 			D_GOTO(err_src, rc);
 		}
 		rc = daos_pool_disconnect(ca->src_poh, NULL);
@@ -3099,27 +3094,26 @@ dm_disconnect(struct cmd_args_s *ap,
 err_src:
 	if (dst_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
-			rc = dfs_umount(dst_file_dfs->dfs);
-			if (rc != 0) {
+			rc2 = dfs_umount(dst_file_dfs->dfs);
+			if (rc2 != 0) {
 				fprintf(ap->errstream,
-					"failed to unmount destination "
-					"(%d)\n", rc);
-				D_GOTO(out, rc);
+					"failed to unmount destination (%d)\n", rc2);
+				D_GOTO(out, rc = daos_der2errno(rc2));
 			}
 		}
-		rc = daos_cont_close(ca->dst_coh, NULL);
-		if (rc != 0) {
-			fprintf(ap->errstream, "failed to close destination "
-				"container (%d)\n", rc);
-			D_GOTO(out, rc);
+		rc2 = daos_cont_close(ca->dst_coh, NULL);
+		if (rc2 != 0) {
+			fprintf(ap->errstream,
+				"failed to close destination container "DF_RC"\n", DP_RC(rc2));
+			D_GOTO(out, rc = rc2);
 		}
-		rc = daos_pool_disconnect(ca->dst_poh, NULL);
-		if (rc != 0) {
+		rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
+		if (rc2 != 0) {
 			fprintf(ap->errstream,
 				"failed to disconnect from destination "
 				"pool "DF_UUIDF ": %s (%d)\n",
-				DP_UUID(ca->dst_p_uuid), d_errdesc(rc), rc);
-			D_GOTO(out, rc);
+				DP_UUID(ca->dst_p_uuid), d_errdesc(rc2), rc2);
+			D_GOTO(out, rc = rc2);
 		}
 	}
 out:
@@ -3835,7 +3829,7 @@ out_disconnect:
 	rc = dm_disconnect(ap, is_posix_copy, &ca, &src_cp_type,
 			   &dst_cp_type);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to disconnect: %d\n", rc);
+		fprintf(ap->errstream, "failed to disconnect: "DF_RC"\n", DP_RC(rc));
 	}
 out:
 	if (rc == 0) {
