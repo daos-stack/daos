@@ -701,36 +701,41 @@ class TestWithServers(TestWithoutServers):
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
             self.set_job_manager_timeout()
 
-    def write_string_to_logfile(self, s):
-        """Write a string to the server log
-
-        Args:
-            s (string): string to write to log file.  Log message will be in
-                the following format:
-                  $date $hostname DAOS[$pid/0/6] rpc EMIT \
-                    src/cart/crt_rpc.c:53 crt_hdlr_ctl_log_add_msg() $s
-
-        """
-
-        # Fetch attachinfo data from server
-        attachinfo_file_path = self.agent_managers[0].get_attachinfo_file()
-
-        cp_command = "sudo cp {} {}".format(attachinfo_file_path, ".")
-        run_command(cp_command, verbose=True, raise_exception=False)
-
-        # Compose and run cart_ctl command
-        cart_ctl = CartCtl()
-        cart_ctl.add_log_msg.value = "add_log_msg"
-        cart_ctl.rank.value = "all"
-        cart_ctl.cfg_path.value = "."
-        cart_ctl.group_name.value = "daos_server"
-        cart_ctl.m.value = s
-
-        cart_ctl.n.value = None
-        cart_ctl.run()
-
         # Mark the end of setup
         self.log.info("=" * 100)
+
+    def write_string_to_logfile(self, message):
+        """Write a string to the server log.
+
+        The server log message will be appear in the following format:
+            <date> <hostname> DAOS[<pid>/0/6] rpc EMIT
+                src/cart/crt_rpc.c:53 crt_hdlr_ctl_log_add_msg() <message>
+
+        Args:
+            message (str): message to write to log file.
+        """
+        if self.server_managers and self.agent_managers:
+            # Compose and run cart_ctl command
+            cart_ctl = CartCtl()
+            cart_ctl.add_log_msg.value = "add_log_msg"
+            cart_ctl.rank.value = "all"
+            cart_ctl.m.value = message
+            cart_ctl.n.value = None
+
+            for manager in self.agent_managers:
+                # Fetch attachinfo data from server via the agent
+                attachinfo_file = manager.get_attachinfo_file()
+                # cp_command = "sudo cp {} {}".format(attachinfo_file, ".")
+                # run_command(cp_command, verbose=True, raise_exception=False)
+                # cart_ctl.cfg_path.value = "."
+                cart_ctl.cfg_path.value = os.path.dirname(attachinfo_file)
+                cart_ctl.group_name.value = "daos_server"
+                cart_ctl.run()
+        else:
+            self.log.info(
+                "Unable to write message to the server log: %d servers groups "
+                "running / %d agent groups running",
+                len(self.server_managers), len(self.agent_managers))
 
     def set_job_manager_timeout(self):
         """Set the timeout for the job manager.
