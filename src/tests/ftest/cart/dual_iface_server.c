@@ -325,7 +325,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	syncfs(fd_write);
 
 	/* Give time for both servers to write to local tmp file */
-	sleep(1);
+	sleep(5);
 
 	/* Read each others URIs from the file */
 	memset(other_server_uri, 0x0, MAX_URI);
