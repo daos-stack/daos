@@ -2952,7 +2952,6 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	daos_size_t		file_size = 0;
 	int			rc;
 
-
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if ((dfs->amode != O_RDWR) && (flags & O_CREAT))
@@ -3289,8 +3288,8 @@ dfs_release(dfs_obj_t *obj)
 
 	if (rc)
 		D_ERROR("daos_obj_close() failed, "DF_RC"\n", DP_RC(rc));
-
-	D_FREE(obj);
+	else
+		D_FREE(obj);
 	return daos_der2errno(rc);
 }
 
