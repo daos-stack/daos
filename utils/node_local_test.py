@@ -3204,6 +3204,8 @@ def test_alloc_fail(server, conf):
 def run(wf, args):
     """Main entry point"""
 
+    conf = load_conf(args)
+
     wf_server = WarningsFactory('nlt-server-leaks.json', post=True, check='Server leak checking')
     wf_client = WarningsFactory('nlt-client-leaks.json')
 
