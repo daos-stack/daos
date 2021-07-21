@@ -2776,7 +2776,7 @@ set_dm_args_default(struct dm_args *dm)
 	dm->dst_coh = DAOS_HDL_INVAL;
 	dm->cont_prop_oid = DAOS_PROP_CO_ALLOCED_OID;
 	dm->cont_prop_layout = DAOS_PROP_CO_LAYOUT_TYPE;
-	dm->cont_layout = DAOS_PROP_CO_LAYOUT_UNKOWN;
+	dm->cont_layout = DAOS_PROP_CO_LAYOUT_UNKNOWN;
 	dm->cont_oid = 0;
 }
 

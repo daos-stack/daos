@@ -99,6 +99,10 @@ func TestServer_getSrxSetting(t *testing.T) {
 		expSetting int32
 		expErr     error
 	}{
+		"no engines": {
+			cfg:        config.DefaultServer(),
+			expSetting: -1,
+		},
 		"not set": {
 			cfg: config.DefaultServer().WithEngines(
 				engine.NewConfig(),
@@ -106,12 +110,40 @@ func TestServer_getSrxSetting(t *testing.T) {
 			),
 			expSetting: -1,
 		},
-		"set in both": {
+		"set to 0 in both (single)": {
 			cfg: config.DefaultServer().WithEngines(
 				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
 				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0"),
 			),
 			expSetting: 0,
+		},
+		"set to 1 in both (single)": {
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+			),
+			expSetting: 1,
+		},
+		"set to 0 in both (multi)": {
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
+				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=0"),
+			),
+			expSetting: 0,
+		},
+		"set to 1 in both (multi)": {
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
+				engine.NewConfig().WithEnvVars("FOO=BAR", "FI_OFI_RXM_USE_SRX=1"),
+			),
+			expSetting: 1,
+		},
+		"set twice; first value used": {
+			cfg: config.DefaultServer().WithEngines(
+				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=0", "FI_OFI_RXM_USE_SRX=1"),
+				engine.NewConfig().WithEnvVars("FI_OFI_RXM_USE_SRX=1"),
+			),
+			expErr: errors.New("FI_OFI_RXM_USE_SRX"),
 		},
 		"set in both; different values": {
 			cfg: config.DefaultServer().WithEngines(
