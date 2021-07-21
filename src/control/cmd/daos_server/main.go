@@ -23,7 +23,6 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/hardware/hwprov"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/pbin"
 )
 
 const defaultConfigFile = "daos_server.yml"
@@ -208,17 +207,7 @@ func parseOpts(args []string, opts *mainOpts, log *logging.LeveledLogger) error 
 
 func main() {
 	log := logging.NewCommandLineLogger()
-	opts := mainOpts{
-		preExecTests: []execTestFn{
-			// Check that the privileged helper is installed and working.
-			func() error {
-				return pbin.CheckHelper(log, pbin.DaosPrivHelperName)
-			},
-		},
-		netInitHelper:  initNetworkCmd,
-		nvmeInitHelper: initNvmeCmd,
-		scmInitHelper:  initScmCmd,
-	}
+	var opts mainOpts
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {

@@ -178,14 +178,14 @@ func (a *App) isCallerPermitted(callerName string) bool {
 }
 
 func (a *App) checkPrivileges() error {
-	if !a.process.IsPrivileged() {
-		return PrivilegedHelperNotPrivileged(a.Name())
-	}
+	// if !a.process.IsPrivileged() {
+	// 	return PrivilegedHelperNotPrivileged(a.Name())
+	// }
 
-	// hack for stuff that doesn't use geteuid() (e.g. ipmctl)
-	if err := a.process.ElevatePrivileges(); err != nil {
-		return err
-	}
+	// // hack for stuff that doesn't use geteuid() (e.g. ipmctl)
+	// if err := a.process.ElevatePrivileges(); err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
