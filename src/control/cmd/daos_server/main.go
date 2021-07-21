@@ -189,9 +189,9 @@ func main() {
 	var opts mainOpts
 
 	// Check this right away to avoid lots of annoying failures later.
-	if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
+	/*if err := pbin.CheckHelper(log, pbin.DaosAdminName); err != nil {
 		exitWithError(log, err)
-	}
+	}*/
 
 	if err := parseOpts(os.Args[1:], &opts, log); err != nil {
 		if errors.Cause(err) == context.Canceled {
