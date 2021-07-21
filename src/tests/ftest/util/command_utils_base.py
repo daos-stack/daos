@@ -665,6 +665,10 @@ class EnvironmentVariables(dict):
         return export_str
 
 class PositionalParameter(BasicParameter):
+    """Parameter that defines position.
+
+    Used to support positional parameters for dmg and daos.
+    """
 
     def __init__(self, position, default=None):
         """Create a PositionalParameter  object.
@@ -673,6 +677,7 @@ class PositionalParameter(BasicParameter):
             position (int): argument position/order
             default (object, optional): default value for the param. Defaults to
                 None.
+
         """
         super().__init__(default, default)
         self._position = position
@@ -695,10 +700,15 @@ class PositionalParameter(BasicParameter):
 
         This is used in CommandWithPositionalParameters.get_attribute_names()
         where we use this object as the key for a dictionary.
+
         """
         return self.position
 
 class CommandWithPositionalParameters(CommandWithParameters):
+    """Command that uses positional parameters.
+
+    Used to support positional parameters for dmg and daos.
+    """
 
     def get_attribute_names(self, attr_type=None):
         """Get a sorted list of the names of the attr_type attributes.

@@ -56,8 +56,8 @@ class QueryAttributeTest(TestWithServers):
 
         expected_uuid = self.pool.uuid.lower()
         if expected_uuid != actual_uuid:
-            msg = "Unexpected UUID from daos pool query! Expected = {}; " +\
-                "Actual = {}".format(expected_uuid, actual_uuid)
+            msg = "Unexpected UUID from daos pool query! " +\
+                "Expected = {}; Actual = {}".format(expected_uuid, actual_uuid)
             errors.append(msg)
 
         if expected_size != actual_size:
@@ -91,8 +91,9 @@ class QueryAttributeTest(TestWithServers):
         expected_attrs.sort()
 
         if actual_attrs != expected_attrs:
-            msg = "Unexpected attribute names! Expected = {}; " +\
-                "Actual = {}".format(expected_attrs, actual_attrs)
+            msg = "Unexpected attribute names! " +\
+                "Expected = {}; Actual = {}".format(
+                    expected_attrs, actual_attrs)
             errors.append(msg)
 
         # Get each attribute's value and compare against those set.
@@ -101,8 +102,9 @@ class QueryAttributeTest(TestWithServers):
                 pool=self.pool.uuid, attr=sample_attrs[i])
             actual_val = output["response"]["value"]
             if sample_vals[i] != actual_val:
-                msg = "Unexpected attribute value! Expected = {}; " +\
-                    "Actual = {}".format(sample_vals[i], actual_val)
+                msg = "Unexpected attribute value! " +\
+                    "Expected = {}; Actual = {}".format(
+                        sample_vals[i], actual_val)
                 errors.append(msg)
 
         if errors:
