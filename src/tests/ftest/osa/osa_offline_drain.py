@@ -66,6 +66,12 @@ class OSAOfflineDrain(OSAUtils):
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
                 self.run_mdtest_thread(oclass)
+                if self.test_with_snapshot is True:
+                    # Create a snapshot of the container
+                    # after IOR job completes.
+                    self.container.create_snap()
+                    self.log.info("Created container snapshot: %s",
+                                  self.container.epoch)
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
@@ -205,4 +211,19 @@ class OSAOfflineDrain(OSAUtils):
         self.test_during_rebuild = self.params.get("test_with_rebuild",
                                                    '/run/rebuild/*')
         self.log.info("Offline Drain : During Rebuild")
+        self.run_offline_drain_test(1, data=True)
+
+    def test_osa_offline_drain_after_snapsot(self):
+        """Test ID: DAOS-8057
+        Test Description: Validate Offline Drain
+        after taking snapshot.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,osa_drain,checksum
+        :avocado: tags=offline_drain,offline_drain_after_snapshot
+        """
+        self.test_with_snapshot = self.params.get("test_with_snapshot",
+                                                  '/run/snapshot/*')
+        self.log.info("Offline Drain : After taking snapshot")
         self.run_offline_drain_test(1, data=True)

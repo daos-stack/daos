@@ -18,5 +18,5 @@ send_rpc_shutdown(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-	tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+	crtu_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
 }
