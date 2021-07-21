@@ -1773,7 +1773,7 @@ dc_array_io(daos_handle_t array_oh, daos_handle_t th,
 	 */
 	if (op_type == DAOS_OPC_ARRAY_READ && array->byte_array) {
 		if (head == NULL) {
-			tse_task_complete(stask, rc = 0);
+			tse_task_complete(stask, 0);
 		} else {
 			struct hole_params	*sparams;
 
