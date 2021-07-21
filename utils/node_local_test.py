@@ -3075,7 +3075,12 @@ class AllocFailTest():
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
-        aftf = AllocFailTestRun(self, self.cmd, cmd_env, loc)
+        if callable(self.cmd):
+            cmd = self.cmd()
+        else:
+            cmd = self.cmd
+
+        aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
             aftf.vh = ValgrindHelper(self.conf)
             # Turn off leak checking in this case, as we're just interested in
@@ -3089,43 +3094,33 @@ class AllocFailTest():
 def test_alloc_fail_copy(server, conf, wf):
     """Run container (filesystem) copy under fault injection.
 
-    TODO: Complete this test and resolve some issues:
-    Each copy will be to the same container, so in a lot of them the destination
-    will exist.  Two options here are either to run in serial, or create a
-    container per iteration, neither of which are ideal.  Another option might
-    be to copy from a container to a posix directory, as creating a target
-    directory per iteration would be cheap.  If container copy can work with
-    subdirs and create them automatically this would be preferred.
+    This test will create a new uuid per iteration, and the test will then try to create a matching
+    container so this is potentially resource intensive.
 
-    Handle stderr from the command when it runs with no faults.  This is
-    currently logging "file exists", see above.
-
-    Remove the container when complete.
-
-    Check output of the command itself.  This probably just needs enabling.
+    There are lots of errors in the stdout/stderr of this command which we need to work through but
+    are not yet checked for.
     """
 
     pool = server.get_test_pool()
-
-    container = create_cont(conf, pool, posix=True)
 
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
     ofd = open(os.path.join(src_dir.name, 'file'), 'w')
     ofd.write('hello')
     ofd.close()
 
-    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
-           'filesystem',
-           'copy',
-           '--src',
-           src_dir.name,
-           '--dst',
-           'daos://{}/{}'.format(pool, container)]
+    def get_cmd():
+        container = str(uuid.uuid4())
+        cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+               'filesystem',
+               'copy',
+               '--src',
+               src_dir.name,
+               '--dst',
+               'daos://{}/{}'.format(pool, container)]
+        return cmd
 
-    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd = AllocFailTest(conf, get_cmd)
     test_cmd.wf = wf
-    # TODO: Remove this setting once test is updated to use new container for
-    # each iteration.
     test_cmd.check_post_stdout = False
 
     rc = test_cmd.launch()
@@ -3263,11 +3258,9 @@ def run(wf, args):
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
-#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
-#                                                         wf_client))
-            fatal_errors.add_result(test_alloc_fail_cat(server,
-                                                        conf, wf_client))
-            fatal_errors.add_result(test_alloc_fail(server, conf))
+            fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+#            fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
+#            fatal_errors.add_result(test_alloc_fail(server, conf))
         if args.perf_check:
             check_readdir_perf(server, conf)
         if server.stop(wf_server) != 0:

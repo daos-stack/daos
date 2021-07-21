@@ -849,8 +849,8 @@ restart:
 					       DAOS_OO_RW, 1, chunk_size,
 					       &file->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
-				rc);
+			D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
@@ -1396,7 +1396,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 
 	rc = daos_obj_close(super_oh, NULL);
 	if (rc) {
-		D_ERROR("Failed to close SB object\n");
+		D_ERROR("Failed to close SB object "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_close, rc = daos_der2errno(rc));
 	}
 
@@ -2951,7 +2951,6 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	size_t			len;
 	daos_size_t		file_size = 0;
 	int			rc;
-
 
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;

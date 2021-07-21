@@ -1970,8 +1970,8 @@ open_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file,
 
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
-		fprintf(ap->errstream, "dfs_lookup %s failed with error %d\n",
-			dir_name, rc);
+		fprintf(ap->errstream, "dfs_lookup %s failed with error %d (%s)\n",
+			dir_name, rc, strerror(rc));
 		D_GOTO(out, rc = EINVAL);
 	}
 	rc = dfs_open(file_dfs->dfs, parent, name, mode | S_IFREG,
@@ -2529,8 +2529,8 @@ fs_copy_file(struct cmd_args_s *ap,
 	/* set perms on destination to original source perms */
 	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
 	if (rc != 0) {
-		fprintf(stderr, "updating dst file "
-			"permissions failed (%d)\n", rc);
+		fprintf(stderr,
+			"updating dst file permissions failed (%d)\n", rc);
 		D_GOTO(out_buf, rc);
 	}
 
@@ -2973,22 +2973,20 @@ dm_connect(struct cmd_args_s *ap,
 						     ca->dst_c_uuid,
 						     &attr, NULL, NULL);
 				if (rc != 0) {
-					fprintf(ap->errstream, "failed to "
-						"create destination "
-						"container: %d\n", rc);
-						D_GOTO(err_dst_root,
-						       rc);
+					fprintf(ap->errstream,
+						"failed to create destination container: %d %s\n",
+						rc, strerror(rc));
+					D_GOTO(err_dst_root, rc = daos_errno2der(rc));
 				}
 			} else {
 				rc = daos_cont_create(ca->dst_poh,
 						      ca->dst_c_uuid,
 						      props, NULL);
 				if (rc != 0) {
-					fprintf(ap->errstream, "failed to "
-						"create destination "
-						"container: %d\n", rc);
-						D_GOTO(err_dst_root,
-						       rc);
+					fprintf(ap->errstream,
+						"failed to create destination container: %d\n",
+						rc);
+					D_GOTO(err_dst_root, rc);
 				}
 			}
 			rc = daos_cont_open(ca->dst_poh, ca->dst_c_uuid,
@@ -2996,16 +2994,14 @@ dm_connect(struct cmd_args_s *ap,
 					    dst_cont_info, NULL);
 			if (rc != 0) {
 				fprintf(ap->errstream,
-					"failed to open container: "
-					"%d\n", rc);
+					"failed to open container: %d\n", rc);
 				D_GOTO(err_dst_root, rc);
 			}
 			fprintf(ap->outstream,
 				"Successfully created container "
 				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
-			fprintf(ap->errstream, "failed to open container: "
-				"%d\n", rc);
+			fprintf(ap->errstream, "failed to open container: %d\n", rc);
 			D_GOTO(err_dst_root, rc);
 		}
 		if (is_posix_copy) {
@@ -3701,8 +3697,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 				       DAOS_PC_RW, &ca.dst_poh, NULL, NULL);
 		if (rc != 0) {
 			fprintf(ap->errstream,
-				"failed to connect to destination "
-				"pool: %d\n", rc);
+				"failed to connect to destination pool: "DF_RC"\n", DP_RC(rc));
 			D_GOTO(out, rc);
 		}
 		/* make sure this destination container doesn't exist already,
