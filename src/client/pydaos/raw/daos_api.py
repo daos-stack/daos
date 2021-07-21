@@ -1282,7 +1282,7 @@ class DaosContainer():
             else:
                 # TODO: This should ideally fail.
                 self.cont_prop.dpp_entries[idx].dpe_val = ctypes.c_uint64(
-                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKOWN.value)
+                    DaosContPropEnum.DAOS_PROP_CO_LAYOUT_UNKNOWN.value)
             idx = idx + 1
         # If checksum flag is enabled.
         if self.cont_input_values.enable_chksum is True:
