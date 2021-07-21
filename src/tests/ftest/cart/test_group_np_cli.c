@@ -15,7 +15,7 @@
 #include <semaphore.h>
 #include <ctype.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 #include "test_group_rpc.h"
 #include "test_group_np_common.h"
 #include "test_group_np_common_cli.h"
@@ -42,7 +42,7 @@ send_rpc_swim_check(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-	tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+	crtu_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
 }
 
 static void
@@ -66,7 +66,7 @@ send_rpc_disable_swim(crt_endpoint_t server_ep, crt_rpc_t *rpc_req)
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-	tc_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
+	crtu_sem_timedwait(&test_g.t_token_to_proceed, 61, __LINE__);
 }
 
 void
@@ -94,11 +94,11 @@ test_run(void)
 				  "crt_group_config_path_set failed %d\n", rc);
 		}
 
-		tc_cli_start_basic(test_g.t_local_group_name,
-				   test_g.t_remote_group_name,
-				   &grp, &rank_list, &test_g.t_crt_ctx[0],
-				   &test_g.t_tid[0], test_g.t_srv_ctx_num,
-				   test_g.t_use_cfg, NULL);
+		crtu_cli_start_basic(test_g.t_local_group_name,
+				     test_g.t_remote_group_name,
+				     &grp, &rank_list, &test_g.t_crt_ctx[0],
+				     &test_g.t_tid[0], test_g.t_srv_ctx_num,
+				     test_g.t_use_cfg, NULL);
 
 		rc = sem_init(&test_g.t_token_to_proceed, 0, 0);
 		D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -113,7 +113,7 @@ test_run(void)
 			_cg_ranks = (uint32_t *)test_g.cg_ranks;
 			_cg_num_ranks = test_g.cg_num_ranks;
 
-			/* free up rank list from tc_cli_start_basic */
+			/* free up rank list from crtu_cli_start_basic */
 			if (rank_list != NULL) {
 				/* avoid checkpatch warning */
 				d_rank_list_free(rank_list);
@@ -122,13 +122,13 @@ test_run(void)
 							      _cg_num_ranks);
 		}
 
-		rc = tc_wait_for_ranks(test_g.t_crt_ctx[0],
-				       grp,
-				       rank_list,
-				       test_g.t_srv_ctx_num - 1,
-				       test_g.t_srv_ctx_num,
-				       5,
-				       150);
+		rc = crtu_wait_for_ranks(test_g.t_crt_ctx[0],
+					 grp,
+					 rank_list,
+					 test_g.t_srv_ctx_num - 1,
+					 test_g.t_srv_ctx_num,
+					 5,
+					 150);
 		D_ASSERTF(rc == 0, "wait_for_ranks() failed; rc=%d\n", rc);
 	}
 
@@ -148,7 +148,7 @@ test_run(void)
 
 			snprintf(msg, sizeof(msg), "Sending message to %d",
 				 rank);
-			tc_log_msg(test_g.t_crt_ctx[0], grp, rank, msg);
+			crtu_log_msg(test_g.t_crt_ctx[0], grp, rank, msg);
 
 			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
 				DBG_PRINT("Sending rpc to %d:%d\n", rank, tag);
@@ -158,8 +158,8 @@ test_run(void)
 
 		for (i = 0; i < rank_list->rl_nr; i++) {
 			for (tag = 0; tag < test_g.t_srv_ctx_num; tag++) {
-				tc_sem_timedwait(&test_g.t_token_to_proceed, 61,
-						 __LINE__);
+				crtu_sem_timedwait(&test_g.t_token_to_proceed,
+						   61, __LINE__);
 			}
 		}
 	}
@@ -219,7 +219,7 @@ clean_up:
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	tc_progress_stop();
+	crtu_progress_stop();
 
 	rc = pthread_join(test_g.t_tid[0], NULL);
 	if (rc != 0)
@@ -250,7 +250,7 @@ int main(int argc, char **argv)
 	}
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, 40, false, true);
+	crtu_test_init(0, 40, false, true);
 
 	test_run();
 

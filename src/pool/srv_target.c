@@ -189,10 +189,8 @@ pool_child_add_one(void *varg)
 
 	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tgt_id,
 			      &path);
-	if (rc != 0) {
-		D_FREE(path);
+	if (rc != 0)
 		goto out_free;
-	}
 
 	rc = vos_pool_open(path, arg->pla_uuid, 0, &child->spc_hdl);
 
