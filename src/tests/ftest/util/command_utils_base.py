@@ -684,6 +684,9 @@ class PositionalParameter(BasicParameter):
 
     @property
     def position(self):
+        """Position property that defines the position of the parameter.
+
+        """
         return self._position
 
     def __lt__(self, other):
