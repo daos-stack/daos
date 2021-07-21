@@ -2776,8 +2776,8 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 			param.ip_epc_expr = VOS_IT_EPC_RE;
 		}
 		recursive = true;
-		enum_arg->chk_key2big = true;
-		enum_arg->need_punch = true;
+		enum_arg->chk_key2big = 1;
+		enum_arg->need_punch = 1;
 		enum_arg->copy_data_cb = vos_iter_copy;
 		fill_oid(oei->oei_oid, enum_arg);
 	}
@@ -2834,6 +2834,22 @@ re_pack:
 
 			goto re_pack;
 		}
+	}
+
+	if ((rc == -DER_KEY2BIG) && opc == DAOS_OBJ_RPC_ENUMERATE &&
+	    enum_arg->kds_len < 4) {
+		/* let's query the total size for one update (oid/dkey/akey/rec)
+		 * to make sure the migration/enumeration can go ahead.
+		 */
+		enum_arg->size_query = 1;
+		enum_arg->kds_len = 0;
+		enum_arg->kds[0].kd_key_len = 0;
+		enum_arg->kds_cap = 4;
+		goto re_pack;
+	} else if (enum_arg->size_query) {
+		D_DEBUG(DB_IO, DF_UOID "query size by kds %d total %zd\n",
+			DP_UOID(oei->oei_oid), enum_arg->kds_len, enum_arg->kds[0].kd_key_len);
+		rc = -DER_KEY2BIG;
 	}
 
 	/* dss_enum_pack may return 1. */
