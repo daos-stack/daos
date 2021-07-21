@@ -25,6 +25,9 @@ const (
 	defaultDomain        = "lo"
 )
 
+// NotCachedErr is the error returned when trying to fetch data that is not cached.
+var NotCachedErr = errors.New("not cached")
+
 func newAttachInfoCache(log logging.Logger, enabled bool) *attachInfoCache {
 	return &attachInfoCache{
 		log:     log,
@@ -33,14 +36,14 @@ func newAttachInfoCache(log logging.Logger, enabled bool) *attachInfoCache {
 }
 
 type attachInfoCache struct {
-	mutex sync.Mutex
+	mutex sync.RWMutex
 
 	log         logging.Logger
 	enabled     atm.Bool
 	initialized atm.Bool
 
 	// cached response from remote server
-	AttachInfo *mgmtpb.GetAttachInfoResp
+	attachInfo *mgmtpb.GetAttachInfoResp
 }
 
 // IsEnabled reports whether the cache is enabled.
@@ -57,48 +60,73 @@ func (c *attachInfoCache) IsCached() bool {
 	if c == nil {
 		return false
 	}
-	return c.enabled.IsTrue() && c.initialized.IsTrue()
+	return c.initialized.IsTrue()
 }
 
 // Cache preserves the results of a GetAttachInfo remote call.
-func (c *attachInfoCache) Cache(ctx context.Context, resp *mgmtpb.GetAttachInfoResp) error {
+func (c *attachInfoCache) Cache(ctx context.Context, resp *mgmtpb.GetAttachInfoResp) {
 	if c == nil {
-		return errors.New("nil attachInfoCache")
+		return
 	}
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
 	if !c.IsEnabled() {
-		return errors.New("cache is not enabled")
+		return
 	}
 
 	if resp == nil {
-		return errors.New("nil input")
+		return
 	}
 
-	c.AttachInfo = resp
-
+	c.attachInfo = resp
 	c.initialized.SetTrue()
-	return nil
 }
 
-func newLocalFabricCache(log logging.Logger) *localFabricCache {
+// GetAttachInfoResp fetches the cached GetAttachInfoResp.
+func (c *attachInfoCache) GetAttachInfoResp() (*mgmtpb.GetAttachInfoResp, error) {
+	if c == nil {
+		return nil, NotCachedErr
+	}
+
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if !c.IsCached() {
+		return nil, NotCachedErr
+	}
+
+	return c.attachInfo, nil
+}
+
+func newLocalFabricCache(log logging.Logger, enabled bool) *localFabricCache {
 	return &localFabricCache{
 		log:             log,
 		localNUMAFabric: newNUMAFabric(log),
+		enabled:         atm.NewBool(enabled),
 	}
 }
 
 type localFabricCache struct {
-	sync.Mutex // Caller should lock and unlock around cache operations
+	mutex sync.RWMutex
 
 	log         logging.Logger
+	enabled     atm.Bool
 	initialized atm.Bool
 	// cached fabric interfaces organized by NUMA affinity
 	localNUMAFabric *NUMAFabric
 
 	getDevAlias func(ctx context.Context, devName string) (string, error)
+}
+
+// IsEnabled reports whether the cache is enabled.
+func (c *localFabricCache) IsEnabled() bool {
+	if c == nil {
+		return false
+	}
+
+	return c.enabled.IsTrue()
 }
 
 // IsCached reports whether there is data in the cache.
@@ -111,9 +139,16 @@ func (c *localFabricCache) IsCached() bool {
 }
 
 // Cache caches the results of a fabric scan locally.
-func (c *localFabricCache) Cache(ctx context.Context, scan []*netdetect.FabricScan) error {
+func (c *localFabricCache) Cache(ctx context.Context, scan []*netdetect.FabricScan) {
 	if c == nil {
-		return errors.New("nil localFabricCache")
+		return
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if !c.IsEnabled() {
+		return
 	}
 
 	if c.getDevAlias == nil {
@@ -123,16 +158,19 @@ func (c *localFabricCache) Cache(ctx context.Context, scan []*netdetect.FabricSc
 	c.localNUMAFabric = NUMAFabricFromScan(ctx, c.log, scan, c.getDevAlias)
 
 	c.initialized.SetTrue()
-	return nil
 }
 
 // GetDevices fetches an appropriate fabric device from the cache.
 func (c *localFabricCache) GetDevice(numaNode int, netDevClass uint32) (*FabricInterface, error) {
 	if c == nil {
-		return nil, errors.New("nil localFabricCache")
+		return nil, NotCachedErr
 	}
+
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
 	if !c.IsCached() {
-		return nil, errors.New("not cached")
+		return nil, NotCachedErr
 	}
 	return c.localNUMAFabric.GetDevice(numaNode, netDevClass)
 }

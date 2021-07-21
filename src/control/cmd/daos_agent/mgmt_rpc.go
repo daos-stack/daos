@@ -9,7 +9,6 @@ package main
 import (
 	"net"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -28,15 +27,14 @@ import (
 // Management Service proxy, handling dRPCs sent by libdaos by forwarding them
 // to MS.
 type mgmtModule struct {
-	log         logging.Logger
-	sys         string
-	ctlInvoker  control.Invoker
-	cacheMutex  sync.Mutex
-	aiCache     *attachInfoCache
-	fabricCache *localFabricCache
-	numaAware   bool
-	netCtx      context.Context
-	monitor     *procMon
+	log        logging.Logger
+	sys        string
+	ctlInvoker control.Invoker
+	attachInfo *attachInfoCache
+	fabricInfo *localFabricCache
+	numaAware  bool
+	netCtx     context.Context
+	monitor    *procMon
 }
 
 func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req []byte) ([]byte, error) {
@@ -132,14 +130,7 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 }
 
 func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	var resp *mgmtpb.GetAttachInfoResp
-	var err error
-	if mod.aiCache.IsEnabled() {
-		resp, err = mod.getAttachInfoCached(ctx, numaNode, sys)
-	} else {
-		resp, err = mod.getAttachInfoRemote(ctx, numaNode, sys)
-	}
-
+	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
 	if err != nil {
 		return nil, err
 	}
@@ -160,12 +151,9 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 	return resp, nil
 }
 
-func (mod *mgmtModule) getAttachInfoCached(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
-	mod.cacheMutex.Lock()
-	defer mod.cacheMutex.Unlock()
-
-	if mod.aiCache.IsCached() {
-		return mod.aiCache.AttachInfo, nil
+func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
+	if mod.attachInfo.IsCached() {
+		return mod.attachInfo.GetAttachInfoResp()
 	}
 
 	resp, err := mod.getAttachInfoRemote(ctx, numaNode, sys)
@@ -173,7 +161,7 @@ func (mod *mgmtModule) getAttachInfoCached(ctx context.Context, numaNode int, sy
 		return nil, err
 	}
 
-	mod.aiCache.Cache(ctx, resp)
+	mod.attachInfo.Cache(ctx, resp)
 	return resp, nil
 }
 
@@ -201,10 +189,8 @@ func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sy
 }
 
 func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32) (*FabricInterface, error) {
-	mod.cacheMutex.Lock()
-	defer mod.cacheMutex.Unlock()
-	if mod.fabricCache.IsCached() {
-		return mod.fabricCache.GetDevice(numaNode, netDevClass)
+	if mod.fabricInfo.IsCached() {
+		return mod.fabricInfo.GetDevice(numaNode, netDevClass)
 	}
 
 	netCtx, err := netdetect.Init(ctx)
@@ -217,9 +203,9 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 	if err != nil {
 		return nil, err
 	}
-	mod.fabricCache.Cache(ctx, result)
+	mod.fabricInfo.Cache(ctx, result)
 
-	return mod.fabricCache.GetDevice(numaNode, netDevClass)
+	return mod.fabricInfo.GetDevice(numaNode, netDevClass)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

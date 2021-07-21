@@ -44,9 +44,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 		return err
 	}
 
-	enabled := (os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
-	if !enabled {
+	aicEnabled := (os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
+	if !aicEnabled {
 		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
+	}
+
+	ficEnabled := (os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") != "true")
+	if !ficEnabled {
+		cmd.log.Debugf("Local fabric interface caching has been disabled\n")
 	}
 
 	netCtx, err := netdetect.Init(context.Background())
@@ -66,14 +71,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.log, cmd.cfg.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
-		log:         cmd.log,
-		sys:         cmd.cfg.SystemName,
-		ctlInvoker:  cmd.ctlInvoker,
-		aiCache:     newAttachInfoCache(cmd.log, enabled),
-		fabricCache: newLocalFabricCache(cmd.log),
-		numaAware:   numaAware,
-		netCtx:      netCtx,
-		monitor:     procmon,
+		log:        cmd.log,
+		sys:        cmd.cfg.SystemName,
+		ctlInvoker: cmd.ctlInvoker,
+		attachInfo: newAttachInfoCache(cmd.log, aicEnabled),
+		fabricInfo: newLocalFabricCache(cmd.log, ficEnabled),
+		numaAware:  numaAware,
+		netCtx:     netCtx,
+		monitor:    procmon,
 	})
 
 	err = drpcServer.Start()

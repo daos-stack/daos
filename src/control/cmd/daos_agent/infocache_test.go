@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -44,9 +43,6 @@ func TestAgent_newAttachInfoCache(t *testing.T) {
 			common.AssertEqual(t, log, cache.log, "")
 			common.AssertEqual(t, tc.enabled, cache.IsEnabled(), "IsEnabled()")
 			common.AssertFalse(t, cache.IsCached(), "default state is uncached")
-			if cache.AttachInfo != nil {
-				t.Fatalf("initial data should be nil, got %+v", cache.AttachInfo)
-			}
 		})
 	}
 }
@@ -55,19 +51,14 @@ func TestAgent_attachInfoCache_Cache(t *testing.T) {
 	for name, tc := range map[string]struct {
 		aic       *attachInfoCache
 		input     *mgmtpb.GetAttachInfoResp
-		expErr    error
 		expCached bool
 	}{
-		"nil cache": {
-			expErr: errors.New("nil attachInfoCache"),
-		},
+		"nil cache": {},
 		"not enabled": {
-			aic:    &attachInfoCache{},
-			expErr: errors.New("not enabled"),
+			aic: &attachInfoCache{},
 		},
 		"nil input": {
-			aic:    &attachInfoCache{enabled: atm.NewBool(true)},
-			expErr: errors.New("nil input"),
+			aic: &attachInfoCache{enabled: atm.NewBool(true)},
 		},
 		"success": {
 			aic: &attachInfoCache{enabled: atm.NewBool(true)},
@@ -82,18 +73,29 @@ func TestAgent_attachInfoCache_Cache(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			err := tc.aic.Cache(context.TODO(), tc.input)
+			tc.aic.Cache(context.TODO(), tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
 			common.AssertEqual(t, tc.expCached, tc.aic.IsCached(), "IsCached()")
 
 			if tc.aic == nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.input, tc.aic.AttachInfo, common.DefaultCmpOpts()...); diff != "" {
-				t.Fatalf("-want, +got:\n%s", diff)
+			cachedResp, err := tc.aic.GetAttachInfoResp()
+			if tc.expCached {
+				if diff := cmp.Diff(tc.input, cachedResp, common.DefaultCmpOpts()...); diff != "" {
+					t.Fatalf("-want, +got:\n%s", diff)
+				}
+				if err != nil {
+					t.Fatalf("expected no error, got: %s", err.Error())
+				}
+			} else {
+				common.CmpErr(t, NotCachedErr, err)
+				if cachedResp != nil {
+					t.Fatalf("expected nothing cached, got: %+v", cachedResp)
+				}
 			}
+
 		})
 	}
 }
@@ -121,23 +123,35 @@ func TestAgent_attachInfoCache_IsEnabled(t *testing.T) {
 }
 
 func TestAgent_newLocalFabricCache(t *testing.T) {
-	log, buf := logging.NewTestLogger(t.Name())
-	defer common.ShowBufferOnFailure(t, buf)
+	for name, tc := range map[string]struct {
+		enabled bool
+	}{
+		"enabled": {
+			enabled: true,
+		},
+		"disabled": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
 
-	cache := newLocalFabricCache(log)
+			cache := newLocalFabricCache(log, tc.enabled)
 
-	if cache == nil {
-		t.Fatal("expected non-nil cache")
+			if cache == nil {
+				t.Fatal("expected non-nil cache")
+			}
+
+			common.AssertEqual(t, log, cache.log, "")
+			common.AssertFalse(t, cache.IsCached(), "default state is uncached")
+			common.AssertEqual(t, tc.enabled, cache.IsEnabled(), "")
+		})
 	}
-
-	common.AssertEqual(t, log, cache.log, "")
-	common.AssertFalse(t, cache.IsCached(), "default state is uncached")
 }
 
 func newTestFabricCache(t *testing.T, log logging.Logger, cacheMap *NUMAFabric) *localFabricCache {
 	t.Helper()
 
-	cache := newLocalFabricCache(log)
+	cache := newLocalFabricCache(log, true)
 	if cache == nil {
 		t.Fatalf("nil cache")
 	}
@@ -147,26 +161,54 @@ func newTestFabricCache(t *testing.T, log logging.Logger, cacheMap *NUMAFabric) 
 	return cache
 }
 
+func TestAgent_localFabricCache_IsEnabled(t *testing.T) {
+	for name, tc := range map[string]struct {
+		fic        *localFabricCache
+		expEnabled bool
+	}{
+		"nil": {},
+		"not enabled": {
+			fic: &localFabricCache{},
+		},
+		"enabled": {
+			fic:        &localFabricCache{enabled: atm.NewBool(true)},
+			expEnabled: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			enabled := tc.fic.IsEnabled()
+
+			common.AssertEqual(t, tc.expEnabled, enabled, "IsEnabled()")
+		})
+	}
+}
+
 func TestAgent_localFabricCache_Cache(t *testing.T) {
 	for name, tc := range map[string]struct {
 		lfc       *localFabricCache
 		input     []*netdetect.FabricScan
-		expErr    error
 		expCached bool
 		expResult *NUMAFabric
 	}{
-		"nil": {
-			expErr: errors.New("nil localFabricCache"),
+		"nil": {},
+		"disabled": {
+			lfc: &localFabricCache{
+				enabled: atm.NewBool(false),
+			},
 		},
 		"no devices in scan": {
-			lfc:       &localFabricCache{},
+			lfc: &localFabricCache{
+				enabled: atm.NewBool(true),
+			},
 			expCached: true,
 			expResult: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{},
 			},
 		},
 		"successfully cached": {
-			lfc: &localFabricCache{},
+			lfc: &localFabricCache{
+				enabled: atm.NewBool(true),
+			},
 			input: []*netdetect.FabricScan{
 				{
 					Provider:    "ofi+sockets",
@@ -216,6 +258,7 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 		},
 		"with device alias": {
 			lfc: &localFabricCache{
+				enabled: atm.NewBool(true),
 				getDevAlias: func(_ context.Context, dev string) (string, error) {
 					return dev + "_alias", nil
 				},
@@ -274,17 +317,20 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 				tc.lfc.log = log
 			}
 
-			err := tc.lfc.Cache(context.TODO(), tc.input)
+			tc.lfc.Cache(context.TODO(), tc.input)
 
-			common.CmpErr(t, tc.expErr, err)
 			common.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
 
 			if tc.lfc == nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResult.numaMap, tc.lfc.localNUMAFabric.numaMap); diff != "" {
-				t.Fatalf("-want, +got:\n%s", diff)
+			if tc.expCached {
+				if diff := cmp.Diff(tc.expResult.numaMap, tc.lfc.localNUMAFabric.numaMap); diff != "" {
+					t.Fatalf("-want, +got:\n%s", diff)
+				}
+			} else if tc.lfc.localNUMAFabric != nil {
+				t.Fatalf("expected nothing cached, found: %+v", tc.lfc.localNUMAFabric)
 			}
 		})
 	}
@@ -345,11 +391,11 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 		expErr      error
 	}{
 		"nil cache": {
-			expErr: errors.New("nil localFabricCache"),
+			expErr: NotCachedErr,
 		},
 		"nothing cached": {
 			lfc:    &localFabricCache{},
-			expErr: errors.New("not cached"),
+			expErr: NotCachedErr,
 		},
 		"success": {
 			lfc:         newTestFabricCache(t, nil, populatedCache),
