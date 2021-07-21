@@ -2298,8 +2298,12 @@ retry:
 			break;
 		}
 
-		if (num == 0)
+		/* Each object enumeration RPC will at least one OID */
+		if (num < 2) {
+			D_DEBUG(DB_REBUILD, "enumeration buffer %u empty"
+				DF_UOID"\n", num, DP_UOID(arg->oid));
 			break;
+		}
 
 		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, &csum,
 				     migrate_enum_unpack_cb, &unpack_arg);

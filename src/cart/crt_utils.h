@@ -14,17 +14,17 @@
 
 #define DBG_PRINT(x...)							\
 	do {								\
-		struct test_options *opts;				\
-		opts = crtu_get_opts();					\
+		struct test_options *__opts;				\
+		__opts = crtu_get_opts();					\
 		D_INFO(x);						\
-		if (opts->is_server)					\
+		if (__opts->is_server)					\
 			fprintf(stderr, "SRV [rank=%d pid=%d]\t",       \
-			opts->self_rank,				\
-			opts->mypid);					\
+			__opts->self_rank,				\
+			__opts->mypid);					\
 		else							\
 			fprintf(stderr, "CLI [rank=%d pid=%d]\t",       \
-			opts->self_rank,				\
-			opts->mypid);					\
+			__opts->self_rank,				\
+			__opts->mypid);					\
 		fprintf(stderr, x);					\
 	} while (0)
 
