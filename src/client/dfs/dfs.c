@@ -1333,7 +1333,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 					 0, dattr.da_oclass_id, 0, 0);
 	if (rc) {
 		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
 	/* select oclass and generate ROOT OID */
@@ -1343,7 +1343,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 					 0, dattr.da_oclass_id, 0, 0);
 	if (rc) {
 		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
 	/* store SB & root OIDs as container property */
