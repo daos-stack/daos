@@ -416,7 +416,6 @@ daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
  * Backward compatibility code.
  * Please don't use directly
  */
-
 int
 daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
 		   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);

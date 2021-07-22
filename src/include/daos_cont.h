@@ -660,16 +660,18 @@ int
 daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 		       daos_event_t *ev);
 
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
+int
+daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
+		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
 
 /**
  * Backward compatibility code.
  * Please don't use directly
  */
-
-int
-daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
-		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
-
 int
 daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
 		   daos_event_t *ev);
@@ -733,6 +735,10 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 		_ret;							\
 	})
 
+ /**
+  * for backward compatility, support old api where a const uuid_t was used
+  * instead of a string to identify the container.
+  */
 #define daos_cont_destroy(poh, co, ...)					\
 	({								\
 		int _ret;						\
