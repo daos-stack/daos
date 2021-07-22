@@ -155,15 +155,15 @@ typedef struct {
 
 
 /**
- * Adds a new pipeline node to the pipeline 'pipe' object. The effect of this
- * function is to "push back" the new node at the end of the pipeline.
+ * Adds a new pipeline node to the pipeline 'pipeline' object. The effect of
+ * this function is to "push back" the new node at the end of the pipeline.
  *
- * \param[in,out]	pipe	Pipeline object.
+ * \param[in,out]	pipeline	Pipeline object.
  *
- * \param[in]		node	Node object to be added to the pipeline.
+ * \param[in]		node		Node object to be added to the pipeline.
 */
 int
-daos_pipeline_push(daos_pipeline_t *pipe, daos_pipeline_node_t *node);
+daos_pipeline_push(daos_pipeline_t *pipeline, daos_pipeline_node_t *node);
 
 /**
  * Adds a new filter object to the pipeline node object 'node'.
@@ -179,15 +179,15 @@ daos_pipeline_node_push(daos_node_t *node, daos_pipeline_filter_t *filter);
  * Checks that a pipeline object is well built. If the pipeline object is well
  * built, the function will return 0 (no error).
  *
- * \param[in]		pipe	Pipeline object.
+ * \param[in]		pipeline	Pipeline object.
  */
 int
-daos_pipeline_check(daos_pipeline_t *pipe);
+daos_pipeline_check(daos_pipeline_t *pipeline);
 
 /**
  * Runs a pipeline on DAOS, returning objects and/or aggregated results.
  *
- * \param[in]		pipe		Pipeline object.
+ * \param[in]		pipeline	Pipeline object.
  *
  * \param[in]		th		Optional transaction handle. Use
  *					DAOS_TX_NONE for an independent
@@ -243,7 +243,7 @@ daos_pipeline_check(daos_pipeline_t *pipe);
  *					\a ev is NULL.
  */
 int
-daos_pipeline_run(daos_pipeline_t *pipe, daos_handle_t th, uint64_t flags,
+daos_pipeline_run(daos_pipeline_t *pipeline, daos_handle_t th, uint64_t flags,
 		  daos_key_t *dkey, uint32_t nr_iods, daos_iod_t *iods,
 		  daos_anchor_t *anchor, uint32_t *nr_kds, daos_key_desc_t *kds,
 		  d_sg_list_t *sgl_keys, d_sg_list_t *sgl_recx,
