@@ -72,8 +72,6 @@ D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 #define DTX_BTREE_ORDER	23	/* Order for DTX tree */
 #define VEA_TREE_ODR		20	/* Order of a VEA tree */
 
-#define DAOS_VOS_VERSION 1
-
 extern struct dss_module_key vos_module_key;
 
 #define VOS_POOL_HHASH_BITS 10 /* Up to 1024 pools */
@@ -260,7 +258,8 @@ struct vos_dtx_act_ent {
 					 dae_committed:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
-					 dae_prepared:1;
+					 dae_prepared:1,
+					 dae_resent:1;
 };
 
 #ifdef VOS_STANDALONE
@@ -315,7 +314,8 @@ struct vos_dtx_cmt_ent {
 
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
-					 dce_invalid:1;
+					 dce_invalid:1,
+					 dce_resent:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
@@ -499,7 +499,8 @@ vos_dtx_prepared(struct dtx_handle *dth);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count, daos_epoch_t epoch, bool *rm_cos,
+			int count, daos_epoch_t epoch,
+			bool resent, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces);
 void

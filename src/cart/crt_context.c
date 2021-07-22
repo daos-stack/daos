@@ -242,29 +242,31 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	/** initialize sensors */
 	if (crt_gdata.cg_use_sensors) {
 		int	ret;
+		char	*prov;
 
+		prov = crt_provider_name_get(ctx->cc_hg_ctx.chc_provider);
 		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
 				      "Total number of timed out RPC requests",
-				      "", "net/%d/%u/req_timeout",
-				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
+				      "reqs", "net/%s/req_timeout/ctx_%u",
+				      prov, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create timed out req counter: "DF_RC
 			       "\n", DP_RC(ret));
 
 		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
 				      "Total number of timed out URI lookup "
-				      "requests", "",
-				      "net/%d/%u/uri_lookup_timeout",
-				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
+				      "requests", "reqs",
+				      "net/%s/uri_lookup_timeout/ctx_%u",
+				      prov, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create timed out uri req counter: "
 			       DF_RC"\n", DP_RC(ret));
 
 		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
 				      "Total number of failed address "
-				      "resolution attempts", "",
-				      "net/%d/%u/failed_addr",
-				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
+				      "resolution attempts", "reqs",
+				      "net/%s/failed_addr/ctx_%u",
+				      prov, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create failed addr counter: "DF_RC
 			       "\n", DP_RC(ret));
