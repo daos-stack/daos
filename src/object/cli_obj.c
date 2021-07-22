@@ -24,7 +24,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(12)
+#define OBJ_TGT_INLINE_NR	(11)
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -780,7 +780,7 @@ obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
 
 	D_ASSERT((uintptr_t)(tmp_ptr - size_tgt_nr) <=
 		 (uintptr_t)(buf + buf_size));
-	D_SPIN_INIT(&reasb_req->orr_spin, PTHREAD_PROCESS_PRIVATE);
+	D_MUTEX_INIT(&reasb_req->orr_mutex, NULL);
 
 	return 0;
 }
@@ -804,7 +804,7 @@ obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr)
 		obj_ec_tgt_oiod_fini(reasb_req->tgt_oiods);
 		reasb_req->tgt_oiods = NULL;
 	}
-	D_SPIN_DESTROY(&reasb_req->orr_spin);
+	D_MUTEX_DESTROY(&reasb_req->orr_mutex);
 	obj_ec_fail_info_free(reasb_req);
 	D_FREE(reasb_req->orr_iods);
 }
@@ -4659,7 +4659,7 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 	oca = obj_get_oca(obj);
 	obj_ec_get_parity_shards(obj, grp_idx, obj_ec_parity_tgt_nr(oca),
 				 obj_ec_data_tgt_nr(oca), parities);
-	if (unlikely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
+	if (likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
 		if (obj_auxi->to_leader) {
 			/* proper way to choose leader ? XXX */
 			shard = parities[0];
@@ -4676,14 +4676,14 @@ obj_ec_list_get_shard(struct obj_auxi_args *obj_auxi, unsigned int map_ver,
 			if (obj->cob_shards->do_shards[shard].do_rebuilding)
 				continue;
 
-			if (obj->cob_shards->do_shards[shard].do_target_id !=
-									-1)
+			if (obj->cob_shards->do_shards[shard].do_target_id != -1)
 				break;
 		}
 
-		D_DEBUG(DB_IO, "choose parity shard %d\n", shard);
-		if (i < p_size)
+		if (i < p_size) {
+			D_DEBUG(DB_IO, "choose parity shard %d\n", shard);
 			D_GOTO(out, shard);
+		}
 	}
 
 	D_DEBUG(DB_IO, "let's choose from the data shard 0 for "DF_OID"\n",
@@ -4843,8 +4843,25 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	    daos_anchor_get_flags(args->dkey_anchor) & DIOF_FOR_MIGRATION)
 		obj_auxi->no_retry = 1;
 
-	if (obj_is_ec(obj))
+	if (obj_is_ec(obj)) {
 		obj_auxi->is_ec_obj = 1;
+		if (obj_auxi->io_retry) {
+			d_list_t *head = NULL;
+
+			/* Since enumeration retry might retry to send multiple
+			 * shards, remove the original shard fetch tasks and will
+			 * recreate new shard fetch tasks with new parameters.
+			 */
+			D_DEBUG(DB_IO, DF_OID" retrying enumeration.\n",
+				DP_OID(obj->cob_md.omd_id));
+			head = &obj_auxi->shard_task_head;
+			if (head != NULL) {
+				tse_task_list_traverse(head, shard_task_remove, NULL);
+				D_ASSERT(d_list_empty(head));
+			}
+			obj_auxi->new_shard_tasks = 1;
+		}
+	}
 
 	shard = obj_list_get_shard(obj_auxi, map_ver, args);
 	if (shard < 0)

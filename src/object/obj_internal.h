@@ -140,7 +140,7 @@ struct obj_reasb_req {
 	uint32_t			 orr_iom_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
-	pthread_spinlock_t		 orr_spin;
+	pthread_mutex_t			 orr_mutex;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
