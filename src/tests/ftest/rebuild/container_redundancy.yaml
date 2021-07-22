@@ -30,7 +30,13 @@ container:
   record_qty: 10
 rebuild:
   object_class: OC_RP_3G1
-  rank:
-    - 3
-    - 4
-    - 5
+  cont_rf: !mux
+    negative_test:
+      rank:
+        - 3
+        - 4
+        - 5
+    positive_test:
+      rank:
+        - 4
+        - 5
