@@ -106,8 +106,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 		return -DER_NOMEM;
 	}
 	label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(label_prop->dpp_entries[0].dpe_str, label,
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP(label_prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
 	if (label_prop->dpp_entries[0].dpe_str == NULL) {
 		rc = -DER_NOMEM;
 		goto out_prop;
@@ -122,8 +121,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 		}
 	}
 
-	rc = daos_cont_create2(poh, uuid,
-			       merged_props ? merged_props : label_prop, ev);
+	rc = daos_cont_create2(poh, uuid, merged_props ? merged_props : label_prop, ev);
 	if (rc != 0) {
 		D_ERROR("daos_cont_create UUID: label=%s failed, "
 			DF_RC"\n", label, DP_RC(rc));

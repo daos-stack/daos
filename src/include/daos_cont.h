@@ -721,8 +721,7 @@ daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
 	})
 
 int
-daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop,
-		  daos_event_t *ev);
+daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
 
 #define daos_cont_create(poh, co, ...)					\
 	({								\
