@@ -1118,6 +1118,52 @@ rebuild_with_large_offset(void **state)
 		assert_rc_equal(rc, -DER_NOSYS);
 }
 
+#define LARGE_KEY_SIZE	1048576
+/** i/o to variable idx offset */
+static void
+rebuild_with_large_key(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		*dkey;
+	char		*akey;
+	d_rank_t	kill_rank = 0;
+	int		kill_rank_nr;
+	int		i;
+	int		rc;
+
+	if (!test_runable(arg, 4))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, arg->obj_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	dkey = calloc(LARGE_KEY_SIZE, 1);
+	akey = calloc(LARGE_KEY_SIZE, 1);
+	memset(dkey, 'd', LARGE_KEY_SIZE - 1);
+	for (i = 0; i < 10; i++) {
+		memset(akey, 'a' + i, LARGE_KEY_SIZE - 1);
+		insert_single(dkey, akey, 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+	}
+
+	get_killing_rank_by_oid(arg, oid, 1, 0, &kill_rank, &kill_rank_nr);
+	ioreq_fini(&req);
+
+	rebuild_single_pool_target(arg, kill_rank, -1, false);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+
+	reintegrate_with_inflight_io(arg, &oid, kill_rank, -1);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	if (rc != 0)
+		assert_rc_equal(rc, -DER_NOSYS);
+	free(dkey);
+	free(akey);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -1158,6 +1204,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_multiple_group, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD19: rebuild with large offset",
 	 rebuild_with_large_offset, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD20: rebuild with large key",
+	 rebuild_with_large_key, rebuild_small_sub_setup, test_teardown},
 };
 
 int

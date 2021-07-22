@@ -20,7 +20,7 @@ patch -p1 < utils/16-contexts.patch
 echo ::endgroup::
 
 echo "::group::Stack analyzer output (post build)"
-$SCONS --jobs 10 PREFIX=/opt/daos --analyze-stack="-x tests -c 128" server
+$SCONS --jobs 10 --analyze-stack="-x tests -c 128" server
 echo ::endgroup::
 
 echo "::group::Stack analyzer output (immediate)"
