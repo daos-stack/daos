@@ -520,7 +520,7 @@ vos_self_nvme_init()
 
 	rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID, VOS_NVME_MEM_SIZE,
 			   VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET,
-			   vos_db_get());
+			   vos_db_get(), true);
 	if (rc)
 		return rc;
 

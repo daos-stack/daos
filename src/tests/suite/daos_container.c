@@ -453,8 +453,8 @@ co_properties(void **state)
 		assert_rc_equal(rc, 0);
 		print_message("created container C2: %s\n", label2);
 		/* Open by label, and immediately close */
-		rc = daos_cont_open_by_label(arg->pool.poh, label2, DAOS_COO_RW,
-					     &coh2, NULL, NULL);
+		rc = daos_cont_open(arg->pool.poh, label2, DAOS_COO_RW, &coh2,
+				    NULL, NULL);
 		assert_rc_equal(rc, 0);
 		rc = daos_cont_close(coh2, NULL /* ev */);
 		assert_rc_equal(rc, 0);
@@ -469,8 +469,8 @@ co_properties(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 
 		/* destroy the container C2 (will re-create it next) */
-		rc = daos_cont_destroy_by_label(arg->pool.poh, label2,
-						0 /* force */, NULL /* ev */);
+		rc = daos_cont_destroy(arg->pool.poh, label2, 0 /* force */,
+				       NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		print_message("destroyed container C2: %s\n", label2);
 
@@ -485,8 +485,8 @@ co_properties(void **state)
 		assert_rc_equal(rc, 0);
 		print_message("step1: created container C3: %s : "
 			      "UUID:"DF_UUIDF"\n", foo_label, DP_UUID(cuuid3));
-		rc = daos_cont_open_by_label(arg->pool.poh, foo_label,
-					     DAOS_COO_RW, &coh3, NULL, NULL);
+		rc = daos_cont_open(arg->pool.poh, foo_label, DAOS_COO_RW,
+				    &coh3, NULL, NULL);
 		assert_rc_equal(rc, 0);
 		print_message("step2: C3 set-prop, rename %s -> %s\n",
 			      foo_label, prop->dpp_entries[0].dpe_str);
@@ -518,8 +518,8 @@ co_properties(void **state)
 		/* destroy container C3 */
 		rc = daos_cont_close(coh3, NULL);
 		assert_rc_equal(rc, 0);
-		rc = daos_cont_destroy_by_label(arg->pool.poh, label2_v2,
-						0 /* force */, NULL /* ev */);
+		rc = daos_cont_destroy(arg->pool.poh, label2_v2, 0 /* force */,
+				       NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		print_message("destroyed container C3: %s : "
 			      "UUID:"DF_UUIDF"\n", label2_v2, DP_UUID(cuuid3));
@@ -2048,6 +2048,7 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	const char	*name = "AttrName";
 	size_t		 val_size = TEST_MAX_ATTR_LEN;
 	char		 value[val_size];
+	void		*valptr = &value;
 
 	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
 						       DAOS_PROP_CO_ACL);
@@ -2061,7 +2062,7 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	if (arg->myrank == 0) {
 		/* Trivial case - just to see if we have access */
 		rc = daos_cont_get_attr(arg->coh, 1, &name,
-					(void * const*)&value,
+					(void * const*)&valptr,
 					&val_size,
 					NULL);
 

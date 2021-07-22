@@ -1,11 +1,11 @@
 name: Build
 
 on:
-   push:
-     branches:
-       - master
-       - 'release/*'
    pull_request:
+
+concurrency:
+  group: ci2-${{ github.head_ref }}
+  cancel-in-progress: true
 
 jobs:
 
@@ -75,6 +75,10 @@ jobs:
                           --tag build-image
     - name: Build and Test
       run: ./utils/run_in_ga_wrapper.sh
+    - name: Dmesg
+      # Always save dmesg, to be able to check for DAOS-7764 or other critical issues.
+      if: always()
+      run: sudo dmesg
     - name: Publish NLT test results
       if: always()
       uses: EnricoMi/publish-unit-test-result-action@v1.17

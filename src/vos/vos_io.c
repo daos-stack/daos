@@ -888,6 +888,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		goto out;
 
 	*rsize = rbund.rb_gsize;
+	ioc->ic_io_size += rbund.rb_rsize;
 out:
 	return rc;
 }
@@ -1614,6 +1615,8 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	if (rc != 0)
 		D_ERROR("Failed to update subtree: "DF_RC"\n", DP_RC(rc));
 
+	ioc->ic_io_size += rsize;
+
 	return rc;
 }
 
@@ -2243,7 +2246,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
 					      dth->dth_dti_cos_count,
-					      0, NULL, daes, dces);
+					      0, false, NULL, daes, dces);
 		if (err <= 0)
 			D_FREE(daes);
 	}

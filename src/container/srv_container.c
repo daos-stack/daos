@@ -3299,18 +3299,18 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:
 	case CONT_OPEN_BYLABEL:
-		d_tm_inc_counter(metrics->cpm_open, 1);
-		d_tm_inc_gauge(metrics->cpm_open_cont, 1);
+		d_tm_inc_counter(metrics->cpm_open_count, 1);
+		d_tm_inc_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_open(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_CLOSE:
-		d_tm_inc_counter(metrics->cpm_close, 1);
-		d_tm_dec_gauge(metrics->cpm_open_cont, 1);
+		d_tm_inc_counter(metrics->cpm_close_count, 1);
+		d_tm_dec_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_close(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_DESTROY:
 	case CONT_DESTROY_BYLABEL:
-		d_tm_inc_counter(metrics->cpm_destroy, 1);
+		d_tm_inc_counter(metrics->cpm_destroy_count, 1);
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
 		break;
 	default:

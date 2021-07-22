@@ -405,11 +405,13 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * \param[IN] hugepage_size	Configured hugepage size on system
  * \paran[IN] tgt_nr		Number of targets
  * \param[IN] db		persistent database to store SMD data
+ * \param[IN] bypass		Set to bypass health data collection
  *
  * \return		Zero on success, negative value on error
  */
 int bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-		  int hugepage_size, int tgt_nr, struct sys_db *db);
+		  int hugepage_size, int tgt_nr, struct sys_db *db,
+		  bool bypass);
 
 /**
  * Global NVMe finilization.
@@ -461,13 +463,12 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  * NVMe poller to poll NVMe I/O completions.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
- * \param[IN] bypass	Set to bypass the health check
  *
  * \return		0: If no work was done
  *			1: If work was done
  *			-1: If thread has exited
  */
-int bio_nvme_poll(struct bio_xs_context *ctxt,  bool bypass);
+int bio_nvme_poll(struct bio_xs_context *ctxt);
 
 /*
  * Create per VOS instance blob.
