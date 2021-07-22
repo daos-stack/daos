@@ -20,7 +20,7 @@ class BashCmd(DfuseTestBase):
     """
 
     def test_bashcmd(self):
-        """Jira ID: DAOS-3508.
+        """Jira ID: DAOS-3508, DAOS-7860
 
         Test Description:
             Purpose of this test is to mount different mount points of dfuse
@@ -45,6 +45,7 @@ class BashCmd(DfuseTestBase):
               Rename file
               Verify renamed file exist using list.
               Remove a directory
+              Test Memory Registration Problem with echo/cat
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,medium,ib2
@@ -92,7 +93,8 @@ class BashCmd(DfuseTestBase):
                                                abs_file_path2),
                             "ls -al {}".format(abs_file_path2),
                             "rm {}".format(abs_file_path2),
-                            "rmdir {}".format(abs_dir_path)]
+                            "echo 12345 > {0}; cat {0}".format(abs_file_path1),
+                            "rm -rf {}".format(abs_dir_path)]
                 for cmd in commands:
                     try:
                         # execute bash cmds
