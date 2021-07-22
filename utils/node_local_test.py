@@ -3082,6 +3082,40 @@ class AllocFailTestRun():
         if not self.aft.check_stderr:
             return
 
+        # Check stderr from a daos command.
+        # These should mostly be from the DH_PERROR_SYS or DH_PERROR_DER macros so check for
+        # this format.  There may be multiple lines and the two styles may be mixed.
+        if self.aft.check_daos_stderr:
+            stderr = self.stderr.decode('utf-8').rstrip()
+            for line in stderr.splitlines():
+
+                # This is what the go code uses.
+                if line.endswith(': DER_NOMEM(-1009): Out of memory'):
+                    continue
+
+                # This is what DH_PERROR_DER uses
+                if line.endswith(': Out of memory (-1009)'):
+                    continue
+
+                # This is what DH_PERROR_SYS uses
+                if line.endswith(': Cannot allocate memory (12)'):
+                    continue
+
+                if 'DER_UNKNOWN' in line:
+                    self.aft.wf.add(self.fi_loc,
+                                    'HIGH',
+                                    "Incorrect stderr '{}'".format(line),
+                                    mtype='Invalid error code used')
+                    continue
+
+                print('XXX{}XXX'.format(line))
+
+                self.aft.wf.add(self.fi_loc,
+                                'NORMAL',
+                                "Unexpected stderr '{}'".format(line),
+                                mtype='Unrecognised error')
+            return
+
         if self.returncode == 0:
             if self.stdout != self.aft.expected_stdout:
                 self.aft.wf.add(self.fi_loc,
@@ -3102,8 +3136,7 @@ class AllocFailTestRun():
             self.aft.wf.add(self.fi_loc,
                             'NORMAL',
                             "Incorrect stderr '{}'".format(stderr),
-                            mtype='Out of memory not reported '
-                            'correctly via stderr')
+                            mtype='Out of memory not reported incorrectly via stderr')
 
 class AllocFailTest():
     """Class to describe fault injection command"""
@@ -3116,6 +3149,8 @@ class AllocFailTest():
         self.check_stderr = False
         # Check stdout/error from commands where faults were not injected
         self.check_post_stdout = True
+        # Check stderr conforms to daos_hdlr.c style
+        self.check_daos_stderr = False
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
@@ -3243,7 +3278,9 @@ def test_alloc_fail_copy(server, conf, wf):
 
     test_cmd = AllocFailTest(conf, get_cmd)
     test_cmd.wf = wf
+    test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     return rc
@@ -3380,11 +3417,11 @@ def run(wf, args):
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
-#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
-#                                                         wf_client))
-            fatal_errors.add_result(test_alloc_fail_cat(server,
-                                                        conf, wf_client))
-            fatal_errors.add_result(test_alloc_fail(server, conf))
+            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
+                                                         wf_client))
+#            fatal_errors.add_result(test_alloc_fail_cat(server,
+#                                                        conf, wf_client))
+#            fatal_errors.add_result(test_alloc_fail(server, conf))
         if args.perf_check:
             check_readdir_perf(server, conf)
         if server.stop(wf_server) != 0:
