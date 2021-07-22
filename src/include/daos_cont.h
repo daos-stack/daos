@@ -167,7 +167,6 @@ daos_cont_create_by_label(daos_handle_t poh, const char *label,
 			  daos_prop_t *cont_prop, uuid_t *uuid,
 			  daos_event_t *ev);
 
-#if DAOS_MACRO
 /**
  * Open an existing container identified by \a cont, a label or UUID string.
  * Upon successful completion, \a coh and \a info, both of which shall be
@@ -194,7 +193,6 @@ daos_cont_create_by_label(daos_handle_t poh, const char *label,
 int
 daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
 	       daos_cont_info_t *info, daos_event_t *ev);
-#endif /* DAOS_MACRO */
 
 /**
  * Close a container handle. Upon successful completion, the container handle's
@@ -214,7 +212,6 @@ daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_han
 int
 daos_cont_close(daos_handle_t coh, daos_event_t *ev);
 
-#if DAOS_MACRO
 /**
  * Destroy a container identified by \a cont, a label or UUID string associated
  * with the container. All objects within this container will be destroyed.
@@ -242,7 +239,6 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
  */
 int
 daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *ev);
-#endif /* DAOS_MACRO */
 
 /**
  * Query container information.
@@ -681,15 +677,16 @@ daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
 #if defined(__cplusplus)
 }
 
+#define daos_cont_open daos_cont_open_cpp
 static inline int
-daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
-	       daos_cont_info_t *info, daos_event_t *ev)
+daos_cont_open_cpp(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
+		   daos_cont_info_t *info, daos_event_t *ev)
 {
 	return daos_cont_open2(poh, cont, flags, coh, info, ev);
 }
 
 static inline int
-daos_cont_open(daos_handle_t poh, const uuid_t cont, unsigned int flags, daos_handle_t *coh,
+daos_cont_open_cpp(daos_handle_t poh, const uuid_t cont, unsigned int flags, daos_handle_t *coh,
 	       daos_cont_info_t *info, daos_event_t *ev)
 {
 	char str[37];
@@ -698,14 +695,15 @@ daos_cont_open(daos_handle_t poh, const uuid_t cont, unsigned int flags, daos_ha
 	return daos_cont_open2(poh, str, flags, coh, info, ev);
 }
 
+#define daos_cont_destroy daos_cont_destroy_cpp
 static inline int
-daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *ev)
+daos_cont_destroy_cpp(daos_handle_t poh, const char *cont, int force, daos_event_t *ev)
 {
 	return daos_cont_destroy2(poh, cont, force, ev);
 }
 
 static inline int
-daos_cont_destroy(daos_handle_t poh, const uuid_t cont, int force, daos_event_t *ev)
+daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_event_t *ev)
 {
 	char str[37];
 

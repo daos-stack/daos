@@ -163,7 +163,6 @@ struct daos_pool_cont_info {
 	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
 };
 
-#if DAOS_MACRO
 /**
  * Connect to the DAOS pool identified by \a pool, a label or UUID string.
  * Upon a successful completion, \a poh returns the pool handle, and \a info
@@ -191,7 +190,6 @@ struct daos_pool_cont_info {
 int
 daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
-#endif /* DAOS_MACRO */
 
 /**
  * Disconnect from the DAOS pool. It should revoke all the container open
@@ -426,16 +424,17 @@ daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
 
 #if defined(__cplusplus)
 }
+#define daos_pool_connect daos_pool_connect_cpp
 static inline int
-daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
-		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+daos_pool_connect_cpp(const char *pool, const char *sys, unsigned int flags, daos_handle_t *poh,
+		      daos_pool_info_t *info, daos_event_t *ev)
 {
 	return daos_pool_connect2(pool, sys, flags, poh, info, ev);
 }
 
 static inline int
-daos_pool_connect(const uuid_t pool, const char *sys, unsigned int flags,
-		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+daos_pool_connect_cpp(const uuid_t pool, const char *sys, unsigned int flags, daos_handle_t *poh,
+		      daos_pool_info_t *info, daos_event_t *ev)
 {
 	char str[37];
 
