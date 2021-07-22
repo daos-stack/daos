@@ -963,7 +963,6 @@ class DFuse():
             self.dir = os.path.join(conf.dfuse_parent_dir, 'dfuse_mount')
         self.pool = pool
         self.uns_path = uns_path
-        self.valgrind_file = None
         self.container = container
         self.conf = conf
         # Detect the number of cores and do something sensible, if there are
@@ -1530,12 +1529,7 @@ class posix_tests():
         nfd.close()
         print(os.fstat(ofd.fileno()))
         os.rename(newfile, fname)
-        # This should fail, because the file has been deleted.
-        try:
-            print(os.fstat(ofd.fileno()))
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() replaced file')
+        print(os.fstat(ofd.fileno()))
         ofd.close()
 
     @needs_dfuse
@@ -1547,12 +1541,7 @@ class posix_tests():
         pre = os.fstat(ofd.fileno())
         print(pre)
         os.rename(fname, newfile)
-        try:
-            post = os.fstat(ofd.fileno())
-            print(post)
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() renamed file')
+        print(os.fstat(ofd.fileno()))
         os.stat(newfile)
         post = os.fstat(ofd.fileno())
         print(post)
@@ -1566,20 +1555,8 @@ class posix_tests():
         ofd = open(fname, 'w')
         print(os.fstat(ofd.fileno()))
         os.unlink(fname)
-        try:
-            print(os.fstat(ofd.fileno()))
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() unlinked file')
-        # With wb caching enabled the kernel will do a setattr to set the times
-        # on close, so with caching enabled catch that and ignore it.
-        if self.dfuse.caching:
-            try:
-                ofd.close()
-            except FileNotFoundError:
-                pass
-        else:
-            ofd.close()
+        print(os.fstat(ofd.fileno()))
+        ofd.close()
 
     @needs_dfuse
     def test_symlink_broken(self):
@@ -1715,6 +1692,151 @@ class posix_tests():
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
+
+    @needs_dfuse
+    def test_rename(self):
+        """Test that rename clobbers files correctly
+
+        use rename to delete a file, but where the kernel is aware of a different file.
+        Create a filename to be clobbered and stat it.
+        Create a file to copy over.
+        Start a second dfuse instance and overwrite the original file with a new name.
+        Perform a rename on the first dfuse.
+
+        This should clobber a file, but not the one that the kernel is expecting, although it will
+        do a lookup of the destination filename before the rename.
+
+        Inspection of the logs is required to verify what is happening here which is beyond the
+        scope of this test, however this does execute the code-paths and ensures that all refs
+        are correctly updated.
+
+        """
+
+        # Create all three files in the dfuse instance we're checking.
+        for index in range(3):
+            fd = open(os.path.join(self.dfuse.dir, 'file.{}'.format(index)), 'w')
+            fd.write('test')
+            fd.close()
+
+        # Start another dfuse instance to move the files around without the kernel knowing.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False,
+                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+        dfuse.start(v_hint='rename_other')
+
+        print(os.listdir(self.dfuse.dir))
+        print(os.listdir(dfuse.dir))
+
+        # Rename file 1 to file 2 in the background, this will remove file 2
+        os.rename(os.path.join(dfuse.dir, 'file.1') ,os.path.join(dfuse.dir, 'file.2'))
+
+        # Rename file 0 to file 2 in the test dfuse.  Here the kernel thinks it's clobbering
+        # file 2 but it's really clobbering file 1, although it will stat() file 2 before the
+        # operation so may have the correct data.
+        # Dfuse should return file 1 for the details of what has been deleted.
+        os.rename(os.path.join(self.dfuse.dir, 'file.0') ,os.path.join(self.dfuse.dir, 'file.2'))
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        # Finally, perform some more I/O so we can tell from the dfuse logs where the test ends and
+        # dfuse teardown starts.  At this point file 1 and file 2 have been deleted.
+        time.sleep(1)
+        print(os.statvfs(self.dfuse.dir))
+
+    @needs_dfuse
+    def test_complex_unlink(self):
+        """Test that unlink clears file data correctly.
+
+        Create two files, exchange them in the backend then unlink the one.
+
+        The kernel will be unlinking what it thinks is file 1 but it will actually be file 0.
+        """
+
+        fds = []
+
+        # Create both files in the dfuse instance we're checking.  These files are created in
+        # binary mode with buffering off so the writes are sent direct to the kernel.
+        for index in range(2):
+            fd = open(os.path.join(self.dfuse.dir, 'file.{}'.format(index)), 'wb', buffering=0)
+            fd.write(b'test')
+            fds.append(fd)
+
+        # Start another dfuse instance to move the files around without the kernel knowing.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False,
+                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+        dfuse.start(v_hint='unlink')
+
+        print(os.listdir(self.dfuse.dir))
+        print(os.listdir(dfuse.dir))
+
+        # Rename file 0 to file 0 in the background, this will remove file 1
+        os.rename(os.path.join(dfuse.dir, 'file.0') ,os.path.join(dfuse.dir, 'file.1'))
+
+        # Perform the unlink, this will unlink the other file.
+        os.unlink(os.path.join(self.dfuse.dir, 'file.1'))
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        # Finally, perform some more I/O so we can tell from the dfuse logs where the test ends and
+        # dfuse teardown starts.  At this point file 1 and file 2 have been deleted.
+        time.sleep(1)
+        print(os.statvfs(self.dfuse.dir))
+
+        for fd in fds:
+            fd.close()
+
+    @needs_dfuse
+    def test_complex_rename(self):
+        """Test for rename semantics, and that rename is correctly updating the dfuse data for
+        the moved rile.
+
+        # Create a file, read/write to it.
+        # Check fstat works.
+        # Rename it from the backend
+        # Check fstat - it should not work.
+        # Rename the file into a new directory, this should allow the kernel to 'find' the file
+        # again and update the name/parent.
+        # check fstat works.
+        """
+
+        fname = os.path.join(self.dfuse.dir, 'file')
+        ofd = open(fname, 'w')
+        print(os.fstat(ofd.fileno()))
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False,
+                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+        dfuse.start(v_hint='rename')
+
+        os.mkdir(os.path.join(dfuse.dir, 'step_dir'))
+        os.mkdir(os.path.join(dfuse.dir, 'new_dir'))
+        os.rename(os.path.join(dfuse.dir, 'file'), os.path.join(dfuse.dir, 'step_dir', 'file-new'))
+
+        # This should fail, because the file has been deleted.
+        try:
+            print(os.fstat(ofd.fileno()))
+            self.fail()
+        except FileNotFoundError:
+            print('Failed to fstat() replaced file')
+
+        os.rename(os.path.join(self.dfuse.dir, 'step_dir', 'file-new'),
+                  os.path.join(self.dfuse.dir, 'new_dir', 'my-file'))
+
+        print(os.fstat(ofd.fileno()))
+
+        ofd.close()
 
     def test_with_path(self):
         """Test that dfuse starts with path option."""
