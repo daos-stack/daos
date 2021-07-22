@@ -76,7 +76,7 @@ class RbldContRedundancyFactor(RebuildTestBase):
             "#Container health-status mismatch, actual: {},"
             " expected: {}.".format(health, expected_health))
 
-    def start_rebuild(self, rf):
+    def start_rebuild_cont_rf(self, rf):
         """Start the rebuild process and check for container properties.
 
         Args:
@@ -93,7 +93,7 @@ class RbldContRedundancyFactor(RebuildTestBase):
         self.server_managers[0].stop_ranks(
             self.inputs.rank.value, self.d_log)
 
-    def execute_during_rebuild(self, rf, expect_cont_status="HEALTHY"):
+    def execute_during_rebuild_cont_rf(self, rf, expect_cont_status="HEALTHY"):
         """Execute test steps during rebuild.
 
         Args:
@@ -139,9 +139,9 @@ class RbldContRedundancyFactor(RebuildTestBase):
         # Verify the rank to be excluded has at least one object
         self.verify_rank_has_objects()
         # Start the rebuild process
-        self.start_rebuild(rf)
+        self.start_rebuild_cont_rf(rf)
         # Execute the test steps during rebuild
-        self.execute_during_rebuild(rf, expect_cont_status)
+        self.execute_during_rebuild_cont_rf(rf, expect_cont_status)
         # Refresh local pool and container
         self.log.info(
             "==>(6)Check for pool and container info after rebuild.")
@@ -187,4 +187,3 @@ class RbldContRedundancyFactor(RebuildTestBase):
         """
         self.mode = "container_rf"
         self.execute_rebuild_test()
-
