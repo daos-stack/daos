@@ -497,7 +497,7 @@ dmg_pool_create(const char *dmg_config_file,
 			}
 
 			/* pool label is required, generate one randomly */
-			args = cmd_push_arg(args, &argcount, "--label=test-%x ",
+			args = cmd_push_arg(args, &argcount, "--label=test_%x ",
 					    rand());
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
