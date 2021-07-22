@@ -3085,6 +3085,8 @@ class AllocFailTestRun():
         # Check stderr from a daos command.
         # These should mostly be from the DH_PERROR_SYS or DH_PERROR_DER macros so check for
         # this format.  There may be multiple lines and the two styles may be mixed.
+        # These checks will report an error against the line of code that introduced the "leak"
+        # which may well only have a loose correlation to where the error was reported.
         if self.aft.check_daos_stderr:
             stderr = self.stderr.decode('utf-8').rstrip()
             for line in stderr.splitlines():
@@ -3107,8 +3109,6 @@ class AllocFailTestRun():
                                     "Incorrect stderr '{}'".format(line),
                                     mtype='Invalid error code used')
                     continue
-
-                print('XXX{}XXX'.format(line))
 
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
@@ -3136,7 +3136,7 @@ class AllocFailTestRun():
             self.aft.wf.add(self.fi_loc,
                             'NORMAL',
                             "Incorrect stderr '{}'".format(stderr),
-                            mtype='Out of memory not reported incorrectly via stderr')
+                            mtype='Out of memory not reported correctly via stderr')
 
 class AllocFailTest():
     """Class to describe fault injection command"""

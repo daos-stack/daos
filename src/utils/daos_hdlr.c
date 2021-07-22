@@ -2069,10 +2069,8 @@ mkdir_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
 		D_GOTO(out, rc);
 	}
 	rc = dfs_mkdir(file_dfs->dfs, parent, name, *mode, 0);
-	if (rc != 0) {
-		/* TODO: continue if directory exists, fail otherwise */
+	if (rc != 0)
 		DH_PERROR_SYS(ap, rc, "dfs_mkdir '%s' failed", name);
-	}
 out:
 	if (parent != NULL) {
 		tmp_rc = dfs_release(parent);
@@ -3042,7 +3040,7 @@ dm_disconnect(struct cmd_args_s *ap,
 		if (is_posix_copy) {
 			rc = dfs_umount(src_file_dfs->dfs);
 			if (rc != 0) {
-				fprintf(ap->errstream, "failed to unmount source (%d)\n", rc);
+				DH_PERROR_SYS(ap, rc, "failed to unmount source");
 				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 		}
@@ -3065,7 +3063,7 @@ err_src:
 		if (is_posix_copy) {
 			rc2 = dfs_umount(dst_file_dfs->dfs);
 			if (rc2 != 0) {
-				DH_PERROR_DER(ap, rc2, "failed to unmount destination");
+				DH_PERROR_SYS(ap, rc2, "failed to unmount destination");
 				D_GOTO(out, rc = daos_der2errno(rc2));
 			}
 		}
