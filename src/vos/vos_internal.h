@@ -258,7 +258,8 @@ struct vos_dtx_act_ent {
 					 dae_committed:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
-					 dae_prepared:1;
+					 dae_prepared:1,
+					 dae_resent:1;
 };
 
 #ifdef VOS_STANDALONE
@@ -313,7 +314,8 @@ struct vos_dtx_cmt_ent {
 
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
-					 dce_invalid:1;
+					 dce_invalid:1,
+					 dce_resent:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
@@ -497,7 +499,8 @@ vos_dtx_prepared(struct dtx_handle *dth);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int count, daos_epoch_t epoch, bool *rm_cos,
+			int count, daos_epoch_t epoch,
+			bool resent, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces);
 void

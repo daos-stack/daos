@@ -4843,8 +4843,25 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	    daos_anchor_get_flags(args->dkey_anchor) & DIOF_FOR_MIGRATION)
 		obj_auxi->no_retry = 1;
 
-	if (obj_is_ec(obj))
+	if (obj_is_ec(obj)) {
 		obj_auxi->is_ec_obj = 1;
+		if (obj_auxi->io_retry) {
+			d_list_t *head = NULL;
+
+			/* Since enumeration retry might retry to send multiple
+			 * shards, remove the original shard fetch tasks and will
+			 * recreate new shard fetch tasks with new parameters.
+			 */
+			D_DEBUG(DB_IO, DF_OID" retrying enumeration.\n",
+				DP_OID(obj->cob_md.omd_id));
+			head = &obj_auxi->shard_task_head;
+			if (head != NULL) {
+				tse_task_list_traverse(head, shard_task_remove, NULL);
+				D_ASSERT(d_list_empty(head));
+			}
+			obj_auxi->new_shard_tasks = 1;
+		}
+	}
 
 	shard = obj_list_get_shard(obj_auxi, map_ver, args);
 	if (shard < 0)
