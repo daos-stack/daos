@@ -39,11 +39,10 @@ var DefaultFabricInterface = &FabricInterface{
 type NUMAFabric struct {
 	log logging.Logger
 
-	numaMap map[int][]*FabricInterface
+	numaMap         map[int][]*FabricInterface
+	numaDevIndexMap map[int]chan int
 
-	// current device idx to use on each NUMA node
-	currentNumaDevIdx map[int]int
-	defaultNumaNode   int
+	defaultNumaNode int
 }
 
 // Add adds a fabric interface to a specific NUMA node.
@@ -142,23 +141,61 @@ func (n *NUMAFabric) findOnRemoteNUMA(netDevClass uint32) (*FabricInterface, err
 // getNextDevIndex is a simple round-robin load balancing scheme
 // for NUMA nodes that have multiple adapters to choose from.
 func (n *NUMAFabric) getNextDevIndex(numaNode int) (int, error) {
-	if n.currentNumaDevIdx == nil {
-		n.currentNumaDevIdx = make(map[int]int)
-	}
 	numDevs := n.NumDevices(numaNode)
 	if numDevs > 0 {
-		deviceIndex := n.currentNumaDevIdx[numaNode]
-		n.currentNumaDevIdx[numaNode] = (deviceIndex + 1) % numDevs
-		return deviceIndex, nil
+		if len(n.numaDevIndexMap) == 0 {
+			return 0, errors.New("devIdx loops not started")
+		}
+
+		idxCh, found := n.numaDevIndexMap[numaNode]
+		if !found {
+			return 0, errors.Errorf("no devIdx channel for NUMA node %d", numaNode)
+		}
+		return <-idxCh, nil
 	}
 	return 0, fmt.Errorf("no fabric interfaces on NUMA node %d", numaNode)
 }
 
+// startDevIdxLoops starts a loop for each NUMA node that is used
+// to keep track of the current device index.
+func (n *NUMAFabric) startDevIdxLoops(ctx context.Context) {
+	if len(n.numaMap) == 0 {
+		return
+	}
+
+	for numaNode := range n.numaMap {
+		n.numaDevIndexMap[numaNode] = make(chan int)
+	}
+
+	for numaNode, idxCh := range n.numaDevIndexMap {
+		numDevs := n.NumDevices(numaNode)
+		if numDevs == 0 {
+			// no need to start a goroutine for this NUMA node
+			continue
+		}
+
+		go func(ctx context.Context, idxCh chan int) {
+			curIdx := 0
+
+			for {
+				devIdx := curIdx
+				curIdx = (curIdx + 1) % numDevs
+
+				select {
+				case <-ctx.Done():
+					return
+				case idxCh <- devIdx:
+				}
+			}
+		}(ctx, idxCh)
+	}
+}
+
 func newNUMAFabric(log logging.Logger) *NUMAFabric {
 	return &NUMAFabric{
-		log:               log,
-		numaMap:           make(map[int][]*FabricInterface),
-		currentNumaDevIdx: make(map[int]int),
+		log:             log,
+		numaMap:         make(map[int][]*FabricInterface),
+		numaDevIndexMap: make(map[int]chan int),
 	}
 }
 
@@ -202,6 +239,8 @@ func NUMAFabricFromScan(ctx context.Context, log logging.Logger, scan []*netdete
 	if fabric.NumNUMANodes() == 0 {
 		log.Info("No network devices detected in fabric scan\n")
 	}
+
+	fabric.startDevIdxLoops(ctx)
 
 	return fabric
 }

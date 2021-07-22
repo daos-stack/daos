@@ -381,6 +381,7 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 				},
 			},
 		},
+		numaDevIndexMap: make(map[int]chan int),
 	}
 
 	for name, tc := range map[string]struct {
@@ -416,6 +417,12 @@ func TestAgent_localFabricCache_GetDevice(t *testing.T) {
 				tc.lfc.log = log
 				if tc.lfc.localNUMAFabric != nil {
 					tc.lfc.localNUMAFabric.log = log
+				}
+
+				if tc.lfc.localNUMAFabric != nil {
+					ctx, cancel := context.WithCancel(context.Background())
+					defer cancel()
+					tc.lfc.localNUMAFabric.startDevIdxLoops(ctx)
 				}
 			}
 
