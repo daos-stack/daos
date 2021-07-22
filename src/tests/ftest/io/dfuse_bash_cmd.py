@@ -95,6 +95,7 @@ class BashCmd(DfuseTestBase):
                             "rm {}".format(abs_file_path2),
                             "echo 12345 > {0}; cat {0}".format(abs_file_path1),
                             "rm -rf {}".format(abs_dir_path)]
+                
                 for cmd in commands:
                     try:
                         # execute bash cmds
