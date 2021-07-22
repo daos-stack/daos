@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/atm"
@@ -97,7 +98,8 @@ func (c *attachInfoCache) GetAttachInfoResp() (*mgmtpb.GetAttachInfoResp, error)
 		return nil, NotCachedErr
 	}
 
-	return c.attachInfo, nil
+	aiCopy := proto.Clone(c.attachInfo)
+	return aiCopy.(*mgmtpb.GetAttachInfoResp), nil
 }
 
 func newLocalFabricCache(log logging.Logger, enabled bool) *localFabricCache {
