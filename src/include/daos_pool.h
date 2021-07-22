@@ -163,6 +163,7 @@ struct daos_pool_cont_info {
 	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
 };
 
+#if DAOS_MACRO
 /**
  * Connect to the DAOS pool identified by \a pool, a label or UUID string.
  * Upon a successful completion, \a poh returns the pool handle, and \a info
@@ -190,6 +191,7 @@ struct daos_pool_cont_info {
 int
 daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
+#endif /* DAOS_MACRO */
 
 /**
  * Disconnect from the DAOS pool. It should revoke all the container open
@@ -421,6 +423,26 @@ int
 daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
 		   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
 
+
+#if defined(__cplusplus)
+}
+static inline int
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
+		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+{
+	return daos_pool_connect2(pool, sys, flags, poh, info, ev);
+}
+
+static inline int
+daos_pool_connect(const uuid_t pool, const char *sys, unsigned int flags,
+		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev)
+{
+	char str[37];
+
+	uuid_unparse(pool, str);
+	return daos_pool_connect2(str, sys, flags, poh, info, ev);
+}
+#else
 /**
  * For backward compatibility, support old API where a const uuid_t was used
  * instead of a string to identify the pool.
@@ -430,20 +452,17 @@ daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
 		int _ret;						\
 		char _str[37];						\
 		const char *__str;					\
-		if (__builtin_types_compatible_p(typeof(po), char *) ||	\
+		if (__builtin_types_compatible_p(typeof(po), uuid_t) ||	\
 		    __builtin_types_compatible_p(typeof(po),		\
-						 const char *)) {	\
-			__str = (const char *)(po);			\
-		} else {						\
+						 const uuid_t)) {	\
 			uuid_unparse((unsigned char *)(po), _str);	\
 			__str = _str;					\
+		} else {						\
+			__str = (const char *)(po);			\
 		}							\
 		_ret = daos_pool_connect2(__str, __VA_ARGS__);		\
 		_ret;							\
 	})
-
-#if defined(__cplusplus)
-}
 #endif
 
 #endif /* __DAOS_POOL_H__ */
