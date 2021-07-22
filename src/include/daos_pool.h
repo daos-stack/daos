@@ -450,9 +450,7 @@ daos_pool_connect_cpp(const uuid_t pool, const char *sys, unsigned int flags, da
 		int _ret;						\
 		char _str[37];						\
 		const char *__str;					\
-		if (__builtin_types_compatible_p(typeof(po), uuid_t) ||	\
-		    __builtin_types_compatible_p(typeof(po),		\
-						 const uuid_t)) {	\
+		if (d_is_uuid(po)) {					\
 			uuid_unparse((unsigned char *)(po), _str);	\
 			__str = _str;					\
 		} else {						\

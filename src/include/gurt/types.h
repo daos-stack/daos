@@ -33,6 +33,10 @@
 
 #if defined(__cplusplus)
 extern "C" {
+#else
+#define d_is_uuid(var)						\
+	(__builtin_types_compatible_p(typeof(var), uuid_t) ||	\
+	 __builtin_types_compatible_p(typeof(var), const uuid_t))
 #endif
 
 #if defined(__has_warning)

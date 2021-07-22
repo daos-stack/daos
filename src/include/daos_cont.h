@@ -713,7 +713,6 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 	return daos_cont_destroy2(poh, str, force, ev);
 }
 #else
-
  /**
   * for backward compatility, support old api where a const uuid_t was used
   * instead of a string to identify the container.
@@ -723,9 +722,7 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 		int _ret;						\
 		char _str[37];						\
 		const char *__str;					\
-		if (__builtin_types_compatible_p(typeof(co), uuid_t) ||	\
-		    __builtin_types_compatible_p(typeof(co),		\
-						 const uuid_t)) {	\
+		if (d_is_uuid(co)) {					\
 			uuid_unparse((unsigned char *)(co), _str);	\
 			__str = _str;					\
 		} else {						\
@@ -744,9 +741,7 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 		int _ret;						\
 		char _str[37];						\
 		const char *__str;					\
-		if (__builtin_types_compatible_p(typeof(co), uuid_t) ||	\
-		    __builtin_types_compatible_p(typeof(co),		\
-						 const uuid_t)) {	\
+		if (d_is_uuid(co)) {					\
 			uuid_unparse((unsigned char *)(co), _str);	\
 			__str = _str;					\
 		} else {						\
@@ -756,5 +751,5 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 		_ret;							\
 	})
 
-#endif
+#endif /* __cplusplus */
 #endif /* __DAOS_CONT_H__ */
