@@ -6,7 +6,7 @@ LIBDAOS_SRC = ['agent.c', 'array.c', 'container.c', 'event.c', 'init.c', 'job.c'
 
 def scons():
     """Execute build"""
-    Import('env', 'base_env', 'API_VERSION', 'prereqs')
+    Import('env', 'base_env', 'API_VERSION', 'prereqs', 'common_lib')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
@@ -20,17 +20,20 @@ def scons():
     Export('libdaos_tgts')
 
     if prereqs.client_requested():
-        libdaos= daos_build.library(denv, 'daos', libdaos_tgts,
+        libdaos= daos_build.library(env, 'daos', libdaos_tgts,
                                      SHLIBVERSION=API_VERSION,
                                      LIBS=['daos_common'])
+        env.Requires(libdaos, common_lib)
         if hasattr(env, 'InstallVersionedLib'):
-            denv.InstallVersionedLib('$PREFIX/lib64/', libdaos,
+            env.InstallVersionedLib('$PREFIX/lib64/', libdaos,
                                     SHLIBVERSION=API_VERSION)
         else:
             env.Install('$PREFIX/lib64/', libdaos)
         check_libs = ['daos', 'gurt', 'uuid']
-        _compile_check = daos_build.test(denv, ["compile_check.c"], LIBS=check_libs)
-        _compile_check_cpp = daos_build.test(denv, ["compile_check_cpp.cpp"], LIBS=check_libs)
+        compile_check = daos_build.test(denv, ["compile_check.c"], LIBS=check_libs)
+        compile_check_cpp = daos_build.test(denv, ["compile_check_cpp.cpp"], LIBS=check_libs)
+        denv.Requires(compile_check, libdaos)
+        denv.Requires(compile_check_cpp, libdaos)
 
 
     if prereqs.test_requested():
