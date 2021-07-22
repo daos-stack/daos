@@ -373,8 +373,7 @@ class ExecutableCommand(CommandWithParameters):
 class CommandWithSubCommand(ExecutableCommand):
     """A class for a command with a sub command."""
 
-    def __init__(self, namespace, command, path="", subprocess=False,
-                 with_json=False):
+    def __init__(self, namespace, command, path="", subprocess=False):
         """Create a CommandWithSubCommand object.
 
         Args:
@@ -384,7 +383,6 @@ class CommandWithSubCommand(ExecutableCommand):
                 Defaults to "".
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
-            with_json (bool, optional): whether to use JSON.
         """
         super().__init__(namespace, command, path)
 
@@ -423,6 +421,8 @@ class CommandWithSubCommand(ExecutableCommand):
         #   interrupted     - whether the command completed within timeout
         #   pid             - command's pid
         self.result = None
+
+        self.json = None
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
