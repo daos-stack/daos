@@ -73,6 +73,14 @@ struct dm_args {
 
 };
 
+/* Report an error with a system error number using a standard output format */
+#define DH_PERROR_SYS(AP, RC, STR, ...)					\
+	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, strerror(RC), (RC))
+
+/* Report an error with a daos error number using a standard output format */
+#define DH_PERROR_DER(AP, RC, STR, ...)					\
+	fprintf((AP)->errstream, STR ": %s (%d)\n", ## __VA_ARGS__, d_errdesc(RC), (RC))
+
 static int
 parse_acl_file(struct cmd_args_s *ap, const char *path, struct daos_acl **acl);
 
@@ -1920,8 +1928,7 @@ write_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 	rc = dfs_write(file_dfs->dfs, file_dfs->obj, &sgl,
 		       file_dfs->offset, NULL);
 	if (rc) {
-		fprintf(ap->errstream, "dfs_write %s failed (%d %s)\n",
-			file, rc, strerror(rc));
+		DH_PERROR_SYS(ap, rc, "dfs_write '%s' failed", file);
 		errno = rc;
 		size = -1;
 		D_GOTO(out, rc);
@@ -1967,24 +1974,19 @@ open_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file,
 		return rc;
 
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
-	if (parent == NULL) {
-		fprintf(ap->errstream, "dfs_lookup %s failed with error %d (%s)\n",
-			dir_name, rc, strerror(rc));
-		D_GOTO(out, rc = EINVAL);
+	if (rc != 0) {
+		DH_PERROR_SYS(ap, rc, "dfs_lookup '%s' failed", dir_name);
+		D_GOTO(out, rc);
 	}
 	rc = dfs_open(file_dfs->dfs, parent, name, mode | S_IFREG,
 		      flags, 0, 0, NULL, &file_dfs->obj);
-	if (rc != 0) {
-		fprintf(ap->errstream, "dfs_open %s failed (%d)\n", name, rc);
-	}
+	if (rc != 0)
+		DH_PERROR_SYS(ap, rc, "dfs_open '%s' failed", name);
 out:
 	if (parent != NULL) {
 		tmp_rc = dfs_release(parent);
-		if (tmp_rc && rc != 0) {
-			fprintf(ap->errstream,
-				"dfs_release %s failed with error %d\n",
-				dir_name, rc);
-		}
+		if (tmp_rc && rc != 0)
+			DH_PERROR_SYS(ap, rc, "dfs_release '%s' failed", dir_name);
 	}
 	D_FREE(name);
 	D_FREE(dir_name);
@@ -2023,8 +2025,7 @@ file_open(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 	} else if (file_dfs->type == DAOS) {
 		rc = open_dfs(ap, file_dfs, file, flags, mode);
 		if (rc != 0) {
-			fprintf(ap->errstream, "file_open failed on %s: %d\n",
-				file, rc);
+			DH_PERROR_SYS(ap, rc, "file_open failed on '%s'", file);
 		}
 	} else {
 		rc = EINVAL;
@@ -2062,26 +2063,21 @@ mkdir_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *path,
 		D_GOTO(out, rc = EINVAL);
 	}
 
-	rc = dfs_lookup(file_dfs->dfs, dname,
-			O_RDWR, &parent, NULL, NULL);
-	if (parent == NULL) {
-		fprintf(ap->errstream, "dfs_lookup %s failed\n", dname);
-		D_GOTO(out, rc = EINVAL);
+	rc = dfs_lookup(file_dfs->dfs, dname, O_RDWR, &parent, NULL, NULL);
+	if (rc != 0) {
+		DH_PERROR_SYS(ap, rc, "dfs_lookup '%s' failed", dname);
+		D_GOTO(out, rc);
 	}
 	rc = dfs_mkdir(file_dfs->dfs, parent, name, *mode, 0);
 	if (rc != 0) {
-		/* continue if directory exists, fail otherwise */
-		fprintf(ap->errstream, "dfs_mkdir %s failed, %s\n",
-			name, strerror(rc));
+		/* TODO: continue if directory exists, fail otherwise */
+		DH_PERROR_SYS(ap, rc, "dfs_mkdir '%s' failed", name);
 	}
 out:
 	if (parent != NULL) {
 		tmp_rc = dfs_release(parent);
-		if (tmp_rc && rc != 0) {
-			fprintf(ap->errstream,
-				"dfs_release %s failed with error %d\n",
-				dname, rc);
-		}
+		if (tmp_rc && rc != 0)
+			DH_PERROR_SYS(ap, rc, "dfs_release '%s' failed", dname);
 	}
 	D_FREE(name);
 	D_FREE(dname);
@@ -2129,7 +2125,7 @@ opendir_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *dir)
 	}
 	rc = dfs_lookup(file_dfs->dfs, dir, O_RDWR, &dirp->dir, NULL, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "dfs_lookup %s failed\n", dir);
+		DH_PERROR_SYS(ap, rc, "dfs_lookup '%s' failed", dir);
 		errno = rc;
 		D_FREE(dirp);
 	}
@@ -2167,8 +2163,7 @@ readdir_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, DIR *_dirp)
 				 &dirp->anchor, &dirp->num_ents,
 				dirp->ents);
 		if (rc) {
-			fprintf(ap->errstream, "dfs_readdir failed (%d %s)\n",
-				rc, strerror(rc));
+			DH_PERROR_SYS(ap, rc, "dfs_readdir failed");
 			dirp->num_ents = 0;
 			memset(&dirp->anchor, 0, sizeof(dirp->anchor));
 			errno = rc;
@@ -2218,27 +2213,22 @@ stat_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 	/* Lookup the parent directory */
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
-		fprintf(ap->errstream,
-			"dfs_lookup %s failed, %d\n", dir_name, rc);
+		DH_PERROR_SYS(ap, rc, "dfs_lookup '%s' failed", dir_name);
 		errno = rc;
 		D_GOTO(out, rc);
 	} else {
 		/* Stat the path */
 		rc = dfs_stat(file_dfs->dfs, parent, name, buf);
 		if (rc) {
-			fprintf(ap->errstream, "dfs_stat %s failed (%d %s)\n",
-				name, rc, strerror(rc));
+			DH_PERROR_SYS(ap, rc, "dfs_stat '%s' failed", name);
 			errno = rc;
 		}
 	}
 out:
 	if (parent != NULL) {
 		tmp_rc = dfs_release(parent);
-		if (tmp_rc && rc != 0) {
-			fprintf(ap->errstream,
-				"dfs_release %s failed with error %d\n",
-				dir_name, rc);
-		}
+		if (tmp_rc && rc != 0)
+			DH_PERROR_SYS(ap, rc, "dfs_release '%s' failed", dir_name);
 	}
 	D_FREE(name);
 	D_FREE(dir_name);
@@ -2290,8 +2280,7 @@ read_dfs(struct cmd_args_s *ap,
 	int rc = dfs_read(file_dfs->dfs, file_dfs->obj, &sgl,
 			  file_dfs->offset, &got_size, NULL);
 	if (rc) {
-		fprintf(ap->errstream, "dfs_read %s failed (%d %s)\n",
-			file, rc, strerror(rc));
+		DH_PERROR_SYS(ap, rc, "dfs_read '%s' failed", file);
 		errno = rc;
 		got_size = -1;
 		D_GOTO(out, rc);
@@ -2328,8 +2317,7 @@ closedir_dfs(struct cmd_args_s *ap, DIR *_dirp)
 	int	rc			= dfs_release(dirp->dir);
 
 	if (rc)
-		fprintf(ap->errstream, "dfs_release failed (%d %s)\n",
-			rc, strerror(rc));
+		DH_PERROR_SYS(ap, rc, "dfs_release failed");
 
 	D_FREE(dirp);
 	return rc;
@@ -2365,8 +2353,7 @@ close_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file)
 	int rc = dfs_release(file_dfs->obj);
 
 	if (rc)
-		fprintf(ap->errstream, "dfs_close %s failed (%d %s)\n",
-			file, rc, strerror(rc));
+		DH_PERROR_SYS(ap, rc, "dfs_close failed");
 
 	return rc;
 }
@@ -2416,24 +2403,19 @@ chmod_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file,
 	/* Lookup the parent directory */
 	rc = dfs_lookup(file_dfs->dfs, dir_name, O_RDWR, &parent, NULL, NULL);
 	if (parent == NULL) {
-		fprintf(ap->errstream, "dfs_lookup %s failed\n", dir_name);
+		DH_PERROR_SYS(ap, rc, "dfs_lookup '%s' failed", dir_name);
 		errno = rc;
-		rc = EINVAL;
 	} else {
 		rc = dfs_chmod(file_dfs->dfs, parent, name, mode);
 		if (rc) {
-			fprintf(ap->errstream, "dfs_chmod %s failed (%d %s)\n",
-				name, rc, strerror(rc));
+			DH_PERROR_SYS(ap, rc, "dfs_chmod '%s' failed", name);
 			errno = rc;
 		}
 	}
 	if (parent != NULL) {
 		tmp_rc = dfs_release(parent);
-		if (tmp_rc && rc != 0) {
-			fprintf(ap->errstream,
-				"dfs_release %s failed with error %d\n",
-				dir_name, rc);
-		}
+		if (tmp_rc && rc != 0)
+			DH_PERROR_SYS(ap, rc, "dfs_release '%s' failed", dir_name);
 	}
 	D_FREE(name);
 	D_FREE(dir_name);
@@ -2507,8 +2489,9 @@ fs_copy_file(struct cmd_args_s *ap,
 		ssize_t bytes_read = file_read(ap, src_file_dfs, src_path,
 					       buf, left_to_read);
 		if (bytes_read < 0) {
-			fprintf(ap->errstream, "read failed on %s\n", src_path);
-			D_GOTO(out_buf, rc = EIO);
+			rc = EIO;
+			DH_PERROR_SYS(ap, rc, "read 'failed on '%s'", src_path);
+			D_GOTO(out_buf, rc);
 		}
 		size_t bytes_to_write = (size_t)bytes_read;
 		ssize_t bytes_written;
@@ -2516,8 +2499,9 @@ fs_copy_file(struct cmd_args_s *ap,
 		bytes_written = file_write(ap, dst_file_dfs, dst_path,
 					   buf, bytes_to_write);
 		if (bytes_written < 0) {
-			fprintf(ap->errstream, "write failed on %s\n", dst_path);
-			D_GOTO(out_buf, rc = EIO);
+			rc = EIO;
+			DH_PERROR_SYS(ap, rc, "write failed on '%s'", dst_path);
+			D_GOTO(out_buf, rc);
 		}
 
 		total_bytes += bytes_read;
@@ -2526,8 +2510,7 @@ fs_copy_file(struct cmd_args_s *ap,
 	/* set perms on destination to original source perms */
 	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
 	if (rc != 0) {
-		fprintf(ap->errstream,
-			"updating dst file permissions failed (%d)\n", rc);
+		DH_PERROR_SYS(ap, rc, "updating dst file permissions failed");
 		D_GOTO(out_buf, rc);
 	}
 
@@ -2566,9 +2549,9 @@ fs_copy_dir(struct cmd_args_s *ap,
 	/* begin by opening source directory */
 	src_dir = file_opendir(ap, src_file_dfs, src_path);
 	if (!src_dir) {
-		fprintf(ap->errstream, "Cannot open directory '%s': %s\n",
-			src_path, strerror(errno));
-		D_GOTO(out, rc = errno);
+		rc = errno;
+		DH_PERROR_SYS(ap, rc, "Cannot open directory '%s'", src_path);
+		D_GOTO(out, rc);
 	}
 
 	/* create the destination directory if it does not exist */
@@ -2607,11 +2590,9 @@ fs_copy_dir(struct cmd_args_s *ap,
 			D_GOTO(out, rc = ENOMEM);
 
 		/* stat the next source path */
-		rc = file_lstat(ap,
-				src_file_dfs, next_src_path, &next_src_stat);
+		rc = file_lstat(ap, src_file_dfs, next_src_path, &next_src_stat);
 		if (rc != 0) {
-			fprintf(ap->errstream, "Cannot stat path %s, %s\n",
-				next_src_path, strerror(errno));
+			DH_PERROR_SYS(ap, rc, "Cannot stat path '%s'", next_src_path);
 			D_GOTO(out, rc);
 		}
 
@@ -2649,9 +2630,7 @@ fs_copy_dir(struct cmd_args_s *ap,
 	/* set original source perms on directories after copying */
 	rc = file_chmod(ap, dst_file_dfs, dst_path, src_stat->st_mode);
 	if (rc != 0) {
-		fprintf(ap->errstream,
-			"updating destination permissions failed on %s (%d)\n",
-			dst_path, rc);
+		DH_PERROR_SYS(ap, rc, "updating destination permissions failed on '%s'", dst_path);
 		D_GOTO(out, rc);
 	}
 out:
@@ -2665,8 +2644,7 @@ out:
 
 		close_rc = file_closedir(ap, src_file_dfs, src_dir);
 		if (close_rc != 0) {
-			fprintf(ap->errstream, "Could not close '%s': %d\n",
-				src_path, close_rc);
+			DH_PERROR_SYS(ap, close_rc, "Could not close '%s'", src_path);
 			if (rc == 0)
 				rc = close_rc;
 		}
@@ -2717,8 +2695,7 @@ fs_copy(struct cmd_args_s *ap,
 		/* Get the dirname and basename */
 		rc = parse_filename_dfs(src_path, &tmp_name, &tmp_dir);
 		if (rc != 0) {
-			fprintf(ap->errstream,
-				"Failed to parse path %s\n", src_path);
+			DH_PERROR_SYS(ap, rc, "Failed to parse path '%s'", src_path);
 			D_GOTO(out, rc);
 		}
 
@@ -2793,7 +2770,8 @@ dm_get_cont_prop(struct cmd_args_s *ap,
 
 	prop = daos_prop_alloc(size);
 	if (prop == NULL) {
-		fprintf(ap->errstream, "Failed to allocate prop (%d)", rc);
+		rc = -DER_NOMEM;
+		DH_PERROR_DER(ap, rc, "Failed to allocate prop");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -2803,7 +2781,7 @@ dm_get_cont_prop(struct cmd_args_s *ap,
 
 	rc = daos_cont_query(coh, NULL, prop, NULL);
 	if (rc) {
-		fprintf(ap->errstream, "daos_cont_query() failed (%d)", rc);
+		DH_PERROR_DER(ap, rc, "daos_cont_query() failed");
 		daos_prop_free(prop);
 		D_GOTO(out, rc);
 	}
@@ -2838,22 +2816,20 @@ dm_connect(struct cmd_args_s *ap,
 	int			size = 2;
 	uint32_t		dpe_types[size];
 	uint64_t		dpe_vals[size];
-	int rc2;
+	int			rc2;
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
 		rc = daos_pool_connect(ca->src_p_uuid, sysname,
 				       DAOS_PC_RW, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
-			fprintf(ap->errstream, "failed to connect to source "
-				"pool: %d\n", rc);
+			DH_PERROR_DER(ap, rc, "failed to connect to source pool");
 			D_GOTO(out, rc);
 		}
 		rc = daos_cont_open(ca->src_poh, ca->src_c_uuid, DAOS_COO_RW,
 				    &ca->src_coh, src_cont_info, NULL);
 		if (rc != 0) {
-			fprintf(ap->errstream, "failed to open source "
-				"container: %d\n", rc);
+			DH_PERROR_DER(ap, rc, "failed to open source container\n");
 			D_GOTO(err_src_root, rc);
 		}
 		if (is_posix_copy) {
@@ -2926,9 +2902,8 @@ dm_connect(struct cmd_args_s *ap,
 						       DAOS_PC_RW, &ca->dst_poh,
 						       NULL, NULL);
 				if (rc != 0) {
-					fprintf(ap->errstream,
-						"failed to connect to "
-						"destination pool: %d\n", rc);
+					DH_PERROR_DER(ap, rc,
+						      "failed to connect to destination pool");
 					D_GOTO(err_src, rc);
 				}
 			}
@@ -2943,8 +2918,7 @@ dm_connect(struct cmd_args_s *ap,
 					       DAOS_PC_RW, &ca->dst_poh,
 					       NULL, NULL);
 			if (rc != 0) {
-				fprintf(ap->errstream, "failed to connect to "
-					"destination pool: %d\n", rc);
+				DH_PERROR_DER(ap, rc, "failed to connect to destination pool");
 				D_GOTO(err_src, rc);
 			}
 			uuid_copy(dattr.da_puuid, ca->dst_p_uuid);
@@ -2974,9 +2948,7 @@ dm_connect(struct cmd_args_s *ap,
 						     ca->dst_c_uuid,
 						     &attr, NULL, NULL);
 				if (rc != 0) {
-					fprintf(ap->errstream,
-						"failed to create destination container: %d %s\n",
-						rc, strerror(rc));
+					DH_PERROR_SYS(ap, rc, "failed to create destination container");
 					D_GOTO(err_dst_root, rc = daos_errno2der(rc));
 				}
 			} else {
@@ -2984,9 +2956,7 @@ dm_connect(struct cmd_args_s *ap,
 						      ca->dst_c_uuid,
 						      props, NULL);
 				if (rc != 0) {
-					fprintf(ap->errstream,
-						"failed to create destination container: %d\n",
-						rc);
+					DH_PERROR_DER(ap, rc, "failed to create destination container");
 					D_GOTO(err_dst_root, rc);
 				}
 			}
@@ -2994,23 +2964,21 @@ dm_connect(struct cmd_args_s *ap,
 					    DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
 			if (rc != 0) {
-				fprintf(ap->errstream,
-					"failed to open container: %d\n", rc);
+				DH_PERROR_DER(ap, rc, "failed to open container");
 				D_GOTO(err_dst_root, rc);
 			}
 			fprintf(ap->outstream,
 				"Successfully created container "
 				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
-			fprintf(ap->errstream, "failed to open container: %d\n", rc);
+			DH_PERROR_DER(ap, rc, "failed to open container");
 			D_GOTO(err_dst_root, rc);
 		}
 		if (is_posix_copy) {
 			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR,
 				       &dst_file_dfs->dfs);
 			if (rc != 0) {
-				fprintf(ap->errstream,
-					"dfs mount on destination failed: %d\n", rc);
+				DH_PERROR_SYS(ap, rc, "dfs_mount on destination failed");
 				D_GOTO(err_dst, rc = daos_errno2der(rc));
 			}
 		}
@@ -3019,19 +2987,18 @@ dm_connect(struct cmd_args_s *ap,
 err_dst:
 	rc2 = daos_cont_close(ca->dst_coh, NULL);
 	if (rc2 != 0)
-		fprintf(ap->errstream,
-			"failed to close destination container "DF_RC"\n", DP_RC(rc2));
+		DH_PERROR_DER(ap, rc2, "failed to close destination container");
 err_dst_root:
 	rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
 	if (rc2 != 0)
-		fprintf(ap->errstream, "failed to disconnect from destination pool "DF_UUIDF
-			": "DF_RC"\n", DP_UUID(ca->src_p_uuid), DP_RC(rc2));
+		DH_PERROR_DER(ap, rc2,
+			"failed to disconnect from destination pool "DF_UUIDF,
+			DP_UUID(ca->dst_p_uuid));
 err_src:
 	if (daos_handle_is_valid(ca->src_coh)) {
 		rc2 = daos_cont_close(ca->src_coh, NULL);
 		if (rc2 != 0)
-			fprintf(ap->errstream,
-				"failed to close source container (%d)\n", rc2);
+			DH_PERROR_DER(ap, rc2, "failed to close source container");
 	}
 err_src_root:
 	if (daos_handle_is_valid(ca->src_poh)) {
@@ -3074,7 +3041,7 @@ dm_disconnect(struct cmd_args_s *ap,
 			rc = dfs_umount(src_file_dfs->dfs);
 			if (rc != 0) {
 				fprintf(ap->errstream, "failed to unmount source (%d)\n", rc);
-				D_GOTO(out, rc);
+				D_GOTO(out, rc = daos_der2errno(rc));
 			}
 		}
 		rc = daos_cont_close(ca->src_coh, NULL);
@@ -3096,23 +3063,20 @@ err_src:
 		if (is_posix_copy) {
 			rc2 = dfs_umount(dst_file_dfs->dfs);
 			if (rc2 != 0) {
-				fprintf(ap->errstream,
-					"failed to unmount destination (%d)\n", rc2);
+				DH_PERROR_DER(ap, rc2, "failed to unmount destination");
 				D_GOTO(out, rc = daos_der2errno(rc2));
 			}
 		}
 		rc2 = daos_cont_close(ca->dst_coh, NULL);
 		if (rc2 != 0) {
-			fprintf(ap->errstream,
-				"failed to close destination container "DF_RC"\n", DP_RC(rc2));
+			DH_PERROR_DER(ap, rc2, "failed to close destination container");
 			D_GOTO(out, rc = rc2);
 		}
 		rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc2 != 0) {
-			fprintf(ap->errstream,
-				"failed to disconnect from destination "
-				"pool "DF_UUIDF ": %s (%d)\n",
-				DP_UUID(ca->dst_p_uuid), d_errdesc(rc2), rc2);
+			DH_PERROR_DER(ap, rc2,
+				"failed to disconnect from destination pool "DF_UUIDF,
+				DP_UUID(ca->dst_p_uuid));
 			D_GOTO(out, rc = rc2);
 		}
 	}
@@ -3142,6 +3106,9 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		} else {
 			strncpy(path, dattr.da_rel_path, path_len);
 		}
+	} else if (rc == ENOMEM) {
+		/* TODO: Take this path of rc != ENOENT? */
+		return rc;
 	} else if (strncmp(path, "daos://", 7) == 0) {
 		/* Error, since we expect a DAOS path */
 		D_GOTO(out, rc = EINVAL);
@@ -3193,7 +3160,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	rc = dm_parse_path(&src_file_dfs, src_str, src_str_len,
 			   &ca.src_p_uuid, &ca.src_c_uuid);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to parse source path: %d\n", rc);
+		DH_PERROR_SYS(ap, rc, "failed to parse source path");
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
@@ -3211,8 +3178,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	rc = dm_parse_path(&dst_file_dfs, dst_str, dst_str_len,
 			   &ca.dst_p_uuid, &ca.dst_c_uuid);
 	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to parse destination path: %d\n", rc);
+		DH_PERROR_SYS(ap, rc, "failed to parse destination path");
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
@@ -3223,7 +3189,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	rc = dm_connect(ap, is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
 			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
-		fprintf(ap->errstream, "fs copy failed to connect: "DF_RC"\n", DP_RC(rc));
+		DH_PERROR_DER(ap, rc, "fs copy failed to connect");
 		D_GOTO(out, rc);
 	}
 
@@ -3247,7 +3213,7 @@ out_disconnect:
 	rc = dm_disconnect(ap, is_posix_copy, &ca,
 			   &src_file_dfs, &dst_file_dfs);
 	if (rc != 0)
-		fprintf(ap->errstream, "failed to disconnect (%d)\n", rc);
+		DH_PERROR_DER(ap, rc, "failed to disconnect");
 out:
 	D_FREE(src_str);
 	D_FREE(dst_str);
