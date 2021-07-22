@@ -1943,6 +1943,7 @@ cleanup:
 	if (all_params != NULL)
 		D_FREE(all_params);
 	d_log_fini();
+	dc_mgmt_fini();
 
 	return ret;
 }
