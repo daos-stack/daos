@@ -8,6 +8,7 @@
 #include <grp.h>
 #include <linux/limits.h>
 #include <json-c/json.h>
+#include <stdlib.h>
 
 #include <daos/common.h>
 #include <daos/tests_lib.h>
@@ -485,6 +486,19 @@ dmg_pool_create(const char *dmg_config_file,
 		if (entry != NULL) {
 			args = cmd_push_arg(args, &argcount, "--label=%s ",
 					    entry->dpe_str);
+			if (args == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		} else {
+			static bool need_init_rand = true;
+
+			if (need_init_rand) {
+				srand((unsigned int)time(NULL));
+				need_init_rand = false;
+			}
+
+			/* pool label is required, generate one randomly */
+			args = cmd_push_arg(args, &argcount, "--label=test-%x ",
+					    rand());
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 		}

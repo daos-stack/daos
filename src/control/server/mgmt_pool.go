@@ -212,6 +212,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
+	labelExists := false
 	var poolLabel string
 	for _, prop := range req.GetProperties() {
 		if prop.Number != drpc.PoolPropertyLabel {
@@ -223,9 +224,14 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 			break
 		}
 
+		labelExists = true
 		if _, err := svc.sysdb.FindPoolServiceByLabel(poolLabel); err == nil {
 			return nil, FaultPoolDuplicateLabel(poolLabel)
 		}
+	}
+
+	if !labelExists {
+		return nil, FaultPoolNoLabel
 	}
 
 	allRanks, err := svc.sysdb.MemberRanks(system.AvailableMemberFilter)
