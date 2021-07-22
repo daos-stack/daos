@@ -27,7 +27,7 @@ from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing
+    get_default_config_file, pcmd, get_file_listing, run_command
 from logger_utils import TestLogger
 from test_utils_pool import TestPool
 from test_utils_container import TestContainer
@@ -719,14 +719,16 @@ class TestWithServers(TestWithoutServers):
             cart_ctl = CartCtl()
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
+            cart_ctl.cfg_path.value = "."
             cart_ctl.m.value = message
             cart_ctl.n.value = None
 
             for manager in self.agent_managers:
                 # Fetch attachinfo data from server via the agent
                 attachinfo_file = manager.get_attachinfo_file()
-                cart_ctl.cfg_path.value = os.path.dirname(attachinfo_file)
-                cart_ctl.group_name.value = "daos_server"
+                cp_command = "sudo cp {} {}".format(attachinfo_file, ".")
+                run_command(cp_command, verbose=True, raise_exception=False)
+                cart_ctl.group_name.value = manager.get_config_value("name")
                 cart_ctl.run()
         else:
             self.log.info(
