@@ -52,13 +52,20 @@ extern "C" {
 #define D_HAS_WARNING(gcc_version, warning) ((gcc_version) <= __GNUC__)
 #endif /* defined(__has_warning) */
 
+#if D_HAS_WARNING(5, "-Wsizeof-array-argument")
+#define DISABLE_SIZEOF_ARRAY_ARGUMENT	\
+	_Pragma("GCC diagnostic ignored \"-Wsizeof-array-argument\"")
+#else
+#define DISABLE_SIZEOF_ARRAY_ARGUMENT (void)0
+#endif
+
 /* Macro for checking if a variable is one of various string types */
 #define d_is_string(var)							\
 	({									\
 		bool __result = false;						\
 										\
 		_Pragma("GCC diagnostic push");					\
-		_Pragma("GCC diagnostic ignored \"-Wsizeof-array-argument\"");	\
+		DISABLE_SIZEOF_ARRAY_ARGUMENT;					\
 		__result = d_is_string_non_literal(var) ||			\
 			   d_is_string_literal(var);				\
 		_Pragma("GCC diagnostic pop");					\
