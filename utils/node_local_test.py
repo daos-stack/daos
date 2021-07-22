@@ -802,7 +802,7 @@ class DaosServer():
         """Create a DAOS pool"""
 
         time.sleep(2)
-        
+
         size = 1024*2
 
         rc = self.run_dmg(['pool',
