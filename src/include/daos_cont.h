@@ -726,18 +726,19 @@ daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_
 #define daos_cont_create(poh, co, ...)					\
 	({								\
 		int _ret;						\
-		const char *_str;					\
+		uuid_t *_u;						\
 		if (__builtin_types_compatible_p(typeof(co),		\
 						 typeof(uuid_t)) ||	\
 		    __builtin_types_compatible_p(typeof(co),		\
-						 typeof(const uuid_t)))	\
-		{							\
-			_str = (const unsigned char *)(co);		\
-			_ret = daos_cont_create((poh), _str,		\
+						 typeof(const uuid_t)) || \
+		    __builtin_types_compatible_p(typeof(co),		\
+						 typeof(unsigned char *))) { \
+			_u = (uuid_t *)((unsigned char *)(co));		\
+			_ret = daos_cont_create((poh), _u,		\
 						__VA_ARGS__);		\
 		} else {						\
-			_str = (unsigned char **)(co);			\
-			_ret = daos_cont_create2((poh), _str,		\
+			_u = (uuid_t *)(co);				\
+			_ret = daos_cont_create2((poh), _u,		\
 						 __VA_ARGS__);		\
 		}							\
 		_ret;							\
