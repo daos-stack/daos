@@ -449,12 +449,12 @@ daos_pool_connect_cpp(const uuid_t pool, const char *sys, unsigned int flags, da
 	({								\
 		int _ret;						\
 		char _str[37];						\
-		const char *__str;					\
-		if (d_is_uuid(po)) {					\
+		const char *__str = NULL;				\
+		if (d_is_string(po)) {					\
+			__str = (const char *)(po);			\
+		} else if (d_is_uuid(po)) {				\
 			uuid_unparse((unsigned char *)(po), _str);	\
 			__str = _str;					\
-		} else {						\
-			__str = (const char *)(po);			\
 		}							\
 		_ret = daos_pool_connect2(__str, __VA_ARGS__);		\
 		_ret;							\

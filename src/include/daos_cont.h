@@ -721,12 +721,12 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 	({								\
 		int _ret;						\
 		char _str[37];						\
-		const char *__str;					\
-		if (d_is_uuid(co)) {					\
+		const char *__str = NULL;				\
+		if (d_is_string(co)) {					\
+			__str = (const char *)(co);			\
+		} else if (d_is_uuid(co)) {				\
 			uuid_unparse((unsigned char *)(co), _str);	\
 			__str = _str;					\
-		} else {						\
-			__str = (const char *)(co);			\
 		}							\
 		_ret = daos_cont_open2((poh), __str, __VA_ARGS__);	\
 		_ret;							\
@@ -740,12 +740,12 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 	({								\
 		int _ret;						\
 		char _str[37];						\
-		const char *__str;					\
-		if (d_is_uuid(co)) {					\
+		const char *__str = NULL;				\
+		if (d_is_string(co)) {					\
+			__str = (const char *)(co);			\
+		} else if (d_is_uuid(co)) {				\
 			uuid_unparse((unsigned char *)(co), _str);	\
 			__str = _str;					\
-		} else {						\
-			__str = (const char *)(co);			\
 		}							\
 		_ret = daos_cont_destroy2((poh), __str, __VA_ARGS__);	\
 		_ret;							\
