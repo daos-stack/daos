@@ -130,7 +130,7 @@ struct swim_ops {
 				swim_id_t id, struct swim_member_state *state);
 
 	/**
-	 * Increase the incarnation number of a given member.
+	 * Set new incarnation number of a given member.
 	 *
 	 * @param[in]  ctx    SWIM context pointer from swim_init()
 	 * @param[in]  id     member ID
