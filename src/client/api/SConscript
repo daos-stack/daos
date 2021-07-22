@@ -18,6 +18,7 @@ def scons():
     libdaos_tgts += dc_pool_tgts + dc_co_tgts + dc_placement_tgts + dc_obj_tgts
     libdaos_tgts += dc_mgmt_tgts + dc_array_tgts + dc_kv_tgts + dc_security_tgts
     Export('libdaos_tgts')
+    compile_check = denv.Object(["compile_check.c", "compile_check_cpp.cpp"])
 
     if prereqs.client_requested():
         libdaos= daos_build.library(env, 'daos', libdaos_tgts,
@@ -30,11 +31,6 @@ def scons():
         else:
             env.Install('$PREFIX/lib64/', libdaos)
         check_libs = ['daos', 'gurt', 'uuid']
-        compile_check = daos_build.test(denv, ["compile_check.c"], LIBS=check_libs)
-        compile_check_cpp = daos_build.test(denv, ["compile_check_cpp.cpp"], LIBS=check_libs)
-        denv.Requires(compile_check, libdaos)
-        denv.Requires(compile_check_cpp, libdaos)
-
 
     if prereqs.test_requested():
         SConscript('tests/SConscript', exports='denv')
