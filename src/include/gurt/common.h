@@ -134,8 +134,8 @@ char *d_realpath(const char *path, char *resolved_path);
 
 #define D_STRNDUP_S(ptr, s)						\
 	do {								\
-		_Static_assert(sizeof(s) != sizeof(void *) ||		\
-			__builtin_types_compatible_p(typeof(s), typeof("1234567")), \
+		D_CASSERT(sizeof(s) != sizeof(void *) ||		\
+			 __builtin_types_compatible_p(typeof(s), typeof("1234567")), \
 	"D_STRNDUP_S cannot be used with this type");			\
 		(ptr) = d_strndup(s, sizeof(s));			\
 		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\

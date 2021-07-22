@@ -680,9 +680,7 @@ daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
 		int _ret;						\
 		char _str[37];						\
 		const char *__str;					\
-		if (__builtin_types_compatible_p(typeof(co), char *) ||	\
-		    __builtin_types_compatible_p(typeof(co),		\
-						 const char *)) {	\
+		if (d_is_string(co)) {					\
 			__str = (const char *)(co);			\
 		} else {						\
 			uuid_unparse((unsigned char *)(co), _str);	\
@@ -701,9 +699,7 @@ daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
 		int _ret;						\
 		char _str[37];						\
 		const char *__str;					\
-		if (__builtin_types_compatible_p(typeof(co), char *) ||	\
-		    __builtin_types_compatible_p(typeof(co),		\
-						 const char *)) {	\
+		if (d_is_string(co)) {					\
 			__str = (const char *)(co);			\
 		} else {						\
 			uuid_unparse((unsigned char *)(co), _str);	\

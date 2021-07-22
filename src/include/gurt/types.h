@@ -32,14 +32,38 @@
  */
 
 #if defined(__cplusplus)
+#include <type_traits>
 extern "C" {
+#define d_check_type(var, type)	std::is_same<decltype(var), type>::value
+#else
+#define d_check_type(var, type)	__builtin_types_compatible_p(typeof(var), type)
 #endif
+#define D_STR(s) #s
+#define d_is_string_literal(s)		\
+	(sizeof(D_STR(#s)) == sizeof(#s) + 4 && sizeof(#s) == sizeof(s) + 2)
+
+#define d_is_string_non_literal(s)						\
+	(d_check_type(s, char *) || d_check_type(s, const char *) ||		\
+	 d_check_type(s, char[sizeof(s)]) || d_check_type(s, const char [sizeof(s)]))
 
 #if defined(__has_warning)
 #define D_HAS_WARNING(gcc_version, warning)	__has_warning(warning)
 #else  /* !defined(__has_warning) */
 #define D_HAS_WARNING(gcc_version, warning) ((gcc_version) <= __GNUC__)
 #endif /* defined(__has_warning) */
+
+/* Macro for checking if a variable is one of various string types */
+#define d_is_string(var)							\
+	({									\
+		bool __result = false;						\
+										\
+		_Pragma("GCC diagnostic push");					\
+		_Pragma("GCC diagnostic ignored \"-Wsizeof-array-argument\"");	\
+		__result = d_is_string_non_literal(var) ||			\
+			   d_is_string_literal(var);				\
+		_Pragma("GCC diagnostic pop");					\
+		__result;							\
+	})
 
 /**
  * hide the dark secret that uuid_t is an array not a structure.

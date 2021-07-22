@@ -10,10 +10,6 @@
 #ifndef DAOS_TYPES_H
 #define DAOS_TYPES_H
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,6 +21,10 @@ extern "C" {
 #include <cart/types.h>
 
 #include <daos_errno.h>
+
+#if defined(__cplusplus)
+extern "C" {
+#endif
 
 /** Maximum length (excluding the '\0') of a DAOS system name */
 #define DAOS_SYS_NAME_MAX 15

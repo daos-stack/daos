@@ -304,6 +304,9 @@ do {									\
 	assert(cond);							\
 } while (0)
 
+#ifdef __cplusplus
+#define _Static_assert static_assert
+#endif
 #define D_CASSERT(cond, ...)						\
 	_Static_assert(cond, #cond ": " __VA_ARGS__)
 
