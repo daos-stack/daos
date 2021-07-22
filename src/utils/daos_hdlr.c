@@ -2948,7 +2948,8 @@ dm_connect(struct cmd_args_s *ap,
 						     ca->dst_c_uuid,
 						     &attr, NULL, NULL);
 				if (rc != 0) {
-					DH_PERROR_SYS(ap, rc, "failed to create destination container");
+					DH_PERROR_SYS(ap, rc,
+						      "failed to create destination container");
 					D_GOTO(err_dst_root, rc = daos_errno2der(rc));
 				}
 			} else {
@@ -2956,7 +2957,8 @@ dm_connect(struct cmd_args_s *ap,
 						      ca->dst_c_uuid,
 						      props, NULL);
 				if (rc != 0) {
-					DH_PERROR_DER(ap, rc, "failed to create destination container");
+					DH_PERROR_DER(ap, rc,
+						      "failed to create destination container");
 					D_GOTO(err_dst_root, rc);
 				}
 			}
