@@ -7,12 +7,65 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+/* Handle a file that has been moved.
+ *
+ * Dfuse may not be aware of this file, but if it is find the inode and update it for the new
+ * location.
+ */
+
+static void
+dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
+		struct dfuse_inode_entry *parent, const char *name,
+		struct dfuse_inode_entry *newparent,
+		const char *newname)
+{
+	struct dfuse_inode_entry	*ie;
+	d_list_t			*rlink;
+	int				rc;
+	ino_t ino;
+
+	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
+
+	DFUSE_TRA_DEBUG(fs_handle, "Renamed file was %#lx", ino);
+
+	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+	if (!rlink)
+		return;
+
+	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
+
+	/* If the move is not from where we thought the file was then invalidate the old entry */
+	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
+		(strncmp(ie->ie_name, name, NAME_MAX + 1) != 0)) {
+		DFUSE_TRA_DEBUG(ie, "Invalidating old name");
+
+		rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
+						      ie->ie_parent,
+						      ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
+
+		if (rc)
+			DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
+	}
+
+	/* Update the inode entry data */
+	ie->ie_parent = newparent->ie_parent;
+	strncpy(ie->ie_name, newname, NAME_MAX);
+
+	/* Set the new parent and name */
+	dfs_update_parentfd(ie->ie_obj, newparent->ie_obj, newname);
+
+	/* Drop the ref again */
+	d_hash_rec_decref(&fs_handle->dpi_iet, rlink);
+}
+
 void
 dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name, struct dfuse_inode_entry *newparent,
 		const char *newname, unsigned int flags)
 {
 	struct dfuse_projection_info	*fs_handle;
+	daos_obj_id_t			moid = {};
+	daos_obj_id_t			oid = {};
 	int				rc;
 
 	fs_handle = fuse_req_userdata(req);
@@ -23,27 +76,23 @@ dfuse_cb_rename(fuse_req_t req, struct dfuse_inode_entry *parent,
 	if (!newparent)
 		newparent = parent;
 
-	rc = dfs_move(parent->ie_dfs->dfs_ns, parent->ie_obj, (char *)name,
-		      newparent->ie_obj, (char *)newname, NULL);
+	rc = dfs_move_internal(parent->ie_dfs->dfs_ns, parent->ie_obj, (char *)name,
+			       newparent->ie_obj, (char *)newname, &moid, &oid);
 	if (rc)
 		D_GOTO(out, rc);
 
-	DFUSE_TRA_INFO(parent, "Renamed %s to %s in %p",
+	DFUSE_TRA_INFO(newparent, "Renamed '%s' to '%s' in %p",
 		       name, newname, newparent);
 
-	DFUSE_REPLY_ZERO(parent, req);
+	/* update moid */
+	dfuse_oid_moved(fs_handle, &moid, parent, name, newparent, newname);
 
-	if (parent->ie_dfs->dfc_dentry_timeout ||
-		parent->ie_dfs->dfc_dentry_dir_timeout ||
-		parent->ie_dfs->dfc_ndentry_timeout) {
-		/* The caller has a reference on newparent */
-		rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
-						      newparent->ie_stat.st_ino,
-						      newname, strnlen(newname, NAME_MAX));
-		if (rc)
-			DFUSE_TRA_ERROR(parent,
-					"inval_entry failed %d", rc);
-	}
+	/* Check if a file was unlinked and see if anything needs updating */
+	if (oid.lo || oid.hi)
+		dfuse_oid_unlinked(fs_handle, req, &oid, newparent, newname);
+	else
+		DFUSE_REPLY_ZERO(newparent, req);
+
 	return;
 
 out:
