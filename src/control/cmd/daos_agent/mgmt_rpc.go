@@ -132,11 +132,14 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
 	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
 	if err != nil {
+		mod.log.Errorf("failed to fetch remote AttachInfo: %s", err.Error())
 		return nil, err
 	}
 
 	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass)
 	if err != nil {
+		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
+			netdetect.DevClassName(resp.ClientNetHint.NetDevClass), err.Error())
 		return nil, err
 	}
 
