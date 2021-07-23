@@ -223,13 +223,13 @@ func TestPoolCommands(t *testing.T) {
 		},
 		{
 			"Create pool with scrubbing",
-			fmt.Sprintf("pool create --scm-size %s --properties=scrub:continuous,scrub-freq:1,scrub-cred:10", testScmSizeStr),
+			fmt.Sprintf("pool create --scm-size %s --properties=scrub:continuous,scrub-freq:1,scrub-cred:10", testSizeStr),
 			strings.Join([]string{
 				printRequest(t, &control.PoolCreateReq{
-					ScmBytes:  uint64(testScmSize),
 					User:      eUsr.Username + "@",
 					UserGroup: eGrp.Name + "@",
 					Ranks:     []system.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
 				}),
 			}, " "),
 			nil,
