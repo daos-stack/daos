@@ -193,7 +193,7 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	DFUSE_TRA_DEBUG(ie, "parent %lu", ie->ie_parent);
+	DFUSE_TRA_DEBUG(ie, "parent %#lx", ie->ie_parent);
 	dfuse_ie_close(fs_handle, ie);
 }
 
