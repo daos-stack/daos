@@ -119,7 +119,7 @@ func PoolProperties() PoolPropertyMap {
 		"scrub": {
 			Property: PoolProperty{
 				Number:      drpc.PoolPropertyScrubSched,
-				Description: "Checksum scrubbing schedule",
+				Description: "Checksum scrubbing policy",
 			},
 			values: map[string]uint64{
 				"off":        drpc.PoolScrubSchedOff,
@@ -132,7 +132,7 @@ func PoolProperties() PoolPropertyMap {
 		"scrub-freq": {
 			Property: PoolProperty{
 				Number:      drpc.PoolPropertyScrubFreq,
-				Description: "Checksum scrubbing schedule",
+				Description: "Checksum scrubbing frequency",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Scrubbing Frequency value %s", s)
 					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
@@ -146,7 +146,7 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return "not set"
 					}
-					return fmt.Sprintf("%d%%", n)
+					return fmt.Sprintf("%d", n)
 				},
 				jsonNumeric: true,
 			},
@@ -154,7 +154,7 @@ func PoolProperties() PoolPropertyMap {
 		"scrub-cred": {
 			Property: PoolProperty{
 				Number:      drpc.PoolPropertyScrubCred,
-				Description: "Checksum scrubbing schedule",
+				Description: "Checksum scrubbing credits",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
 					rbErr := errors.Errorf("invalid Scrubbing Credits value %s", s)
 					rsPct, err := strconv.ParseUint(strings.ReplaceAll(s, "%", ""), 10, 64)
@@ -169,7 +169,7 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return "not set"
 					}
-					return fmt.Sprintf("%d%%", n)
+					return fmt.Sprintf("%d", n)
 				},
 				jsonNumeric: true,
 			},
