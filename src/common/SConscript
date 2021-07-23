@@ -80,8 +80,7 @@ def scons():
     denv = env.Clone(LIBS=[])
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
-    common_lib = build_daos_common(denv, True, prereqs)
-    Export('common_lib')
+    build_daos_common(denv, True, prereqs)
 
     control_tgts = [File('control.c')]
     Export('control_tgts')
