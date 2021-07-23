@@ -24,7 +24,7 @@ static const char *POLICY_PARAMS[DAOS_MEDIA_POLICY_MAX]
 {"wr_size", "hot1", "hot2", ""}			/* write_intensivity */
 };
 
-static const char *PARAM_DELIM = ",";
+static const char *PARAM_DELIM = "/";
 static const char *VALUE_DELIM = "=";
 
 static bool

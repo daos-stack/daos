@@ -42,7 +42,7 @@ are_policy_descs_equal(const struct policy_desc_t *left,
 static void
 test_policy_positive(void **state)
 {
-	const char *str = "type=io_size,th1=512,th2=4096";
+	const char *str = "type=io_size/th1=512/th2=4096";
 	struct policy_desc_t out, exp_out;
 	bool result = false;
 
@@ -62,7 +62,7 @@ test_policy_positive(void **state)
 static void
 test_policy_negative(void **state)
 {
-	const char *str = "type=unknown,th1=512,th2=4096";
+	const char *str = "type=unknown/th1=512/th2=4096";
 	struct policy_desc_t out, exp_out;
 	bool result = false;
 
@@ -128,7 +128,7 @@ test_policy_blank(void **state)
 static void
 test_policy_junk(void **state)
 {
-	const char *str = "dfgj=jaosdfhg,asdg=2346,wgdsh=25";
+	const char *str = "dfgj=jaosdfhg/asdg=2346/wgdsh=25";
 	struct policy_desc_t out, exp_out;
 	bool result = false;
 
@@ -146,7 +146,7 @@ test_policy_junk(void **state)
 static void
 test_policy_too_many_params(void **state)
 {
-	const char *str = "type=io_size,th1=512,th2=4096,th3=666,th4=42,th5=6";
+	const char *str = "type=io_size/th1=512/th2=4096/th3=666/th4=42/th5=6";
 	struct policy_desc_t out, exp_out;
 	bool result = false;
 
@@ -161,7 +161,7 @@ test_policy_too_many_params(void **state)
 static void
 test_policy_bad_param(void **state)
 {
-	const char *str = "type=io_size,th1=asdf,th2=4096";
+	const char *str = "type=io_size/th1=asdf/th2=4096";
 	struct policy_desc_t out, exp_out;
 	bool result = false;
 
@@ -189,7 +189,7 @@ test_policy_bad_chars(void **state)
 static void
 test_policy_type_not_first(void **state)
 {
-	const char *str = "th1=512,th2=4096,type=io_size";
+	const char *str = "th1=512/th2=4096/type=io_size";
 	struct policy_desc_t out, exp_out;
 	bool result = false;
 
