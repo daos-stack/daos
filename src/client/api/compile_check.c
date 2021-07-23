@@ -10,6 +10,8 @@
 #if defined(__cplusplus)
 #define check_uuid(var, expect, type) (void)0
 #define check_string(var, expect, type) (void)0
+#define check_uuid_func(...) (void)0
+#define check_const_uuid_func(...) (void)0
 #else
 #define check_uuid(var, expect, type)							\
 	do {										\
@@ -24,6 +26,20 @@
 		       expect ? "string" : "uuid", d_is_string(var) ? "string" : "uuid");	\
 		D_CASSERT(d_is_string(var) == expect);						\
 	} while (0)
+
+static void
+check_uuid_func(uuid_t uuid)
+{
+	check_uuid(uuid, true, uuid_t (in function));
+	check_string(uuid, false, uuid_t (in function));
+}
+
+static void
+check_const_uuid_func(const uuid_t uuid)
+{
+	check_uuid(uuid, true, const uuid_t (in function));
+	check_string(uuid, false, const uuid_t (in function));
+}
 #endif
 
 #define noop
@@ -38,8 +54,7 @@
 	ACTION(const char *, ccharp, noop, NULL, poh, coh, false)	\
 	ACTION(char,         arr,    [10], {0},  poh, coh, false)	\
 	ACTION(const char,   carr,   [10], {0},  poh, coh, false)	\
-	ACTION(char,         arru,   [37], {0},  poh, coh, false)	\
-	ACTION(const char,   carru,  [37], {0},  poh, coh, false)	\
+	ACTION(char,         arrs,   [16], {0},  poh, coh, false)	\
 	ACTION(char,         dyn,    [],   "c",  poh, coh, false)
 
 #define FOREACH_ALL(ACTION, poh, coh)					\
@@ -57,7 +72,7 @@
 	} while (0)
 
 #define RUN_ACTION(type, name, mod, init, poh, coh, expect)			\
-	check_uuid(name, expect, type mod);						\
+	check_uuid(name, expect, type mod);					\
 	RUN_FUNCTION(daos_pool_connect(name, NULL, 0, &poh, NULL, NULL) == 0);	\
 	RUN_FUNCTION(daos_cont_open(poh, name, 0, &coh, NULL, NULL) == 0);	\
 	RUN_FUNCTION(daos_cont_destroy(poh, name, 0, NULL) == 0);		\
@@ -71,6 +86,10 @@ int main(int argc, char **argv)
 	FOREACH_TYPE(DECLARE_ACTION, poh, coh);
 
 	FOREACH_ALL(RUN_ACTION, poh, coh);
+
+	check_uuid_func(uuid);
+	check_const_uuid_func(uuid);
+	check_const_uuid_func(cuuid);
 
 	return 0;
 }
