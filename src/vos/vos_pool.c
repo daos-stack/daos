@@ -255,20 +255,61 @@ vos_blob_unmap_cb(uint64_t off, uint64_t cnt, void *data)
 static int pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		     unsigned int flags, daos_handle_t *poh);
 
+struct vos_pool_pmemobj_args {
+	char				*vppa_path;
+	PMEMobjpool			*vppa_ph;
+	daos_size_t			 vppa_scm_sz;
+	int				 vppa_is_open;
+	int				 vppa_rc;
+};
+
+static void *
+vos_pool_pmemobj_thread(void *arg)
+{
+	struct vos_pool_pmemobj_args	*vppa = arg;
+
+	if (vppa->vppa_is_open) {
+		D_ERROR("Start open the pool %s\n", vppa->vppa_path);
+		vppa->vppa_ph = vos_pmemobj_open(vppa->vppa_path,
+						 POBJ_LAYOUT_NAME(vos_pool_layout));
+	} else {
+		D_ERROR("Start create the pool %s, size="DF_U64"\n", vppa->vppa_path,
+			vppa->vppa_scm_sz);
+		vppa->vppa_ph = vos_pmemobj_create(vppa->vppa_path,
+						   POBJ_LAYOUT_NAME(vos_pool_layout),
+						   vppa->vppa_scm_sz, 0600);
+	}
+
+	if (vppa->vppa_ph == NULL) {
+		vppa->vppa_rc = daos_errno2der(errno);
+		if (vppa->vppa_is_open)
+			D_ERROR("Error in opening the pool %s: %s\n",
+				vppa->vppa_path, pmemobj_errormsg());
+		else
+			D_ERROR("Failed to create pool %s, size="DF_U64": %s\n",
+				vppa->vppa_path, vppa->vppa_scm_sz, pmemobj_errormsg());
+	}
+
+	D_ERROR("Complete pmemobj for the pool %s\n", vppa->vppa_path);
+	return NULL;
+}
+
 int
 vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		daos_size_t nvme_sz, unsigned int flags, daos_handle_t *poh)
 {
-	PMEMobjpool		*ph;
-	struct umem_attr	 uma = {0};
-	struct umem_instance	 umem = {0};
-	struct vos_pool_df	*pool_df;
-	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
-	struct bio_blob_hdr	 blob_hdr;
-	daos_handle_t		 hdl;
-	struct d_uuid		 ukey;
-	struct vos_pool		*pool = NULL;
-	int			 rc = 0, enabled = 1;
+	pthread_t			 thread;
+	struct vos_pool_pmemobj_args	 vppa;
+	PMEMobjpool			*ph;
+	struct umem_attr		 uma = {0};
+	struct umem_instance		 umem = {0};
+	struct vos_pool_df		*pool_df;
+	struct bio_xs_context		*xs_ctxt = vos_xsctxt_get();
+	struct bio_blob_hdr		 blob_hdr;
+	daos_handle_t			 hdl;
+	struct d_uuid			 ukey;
+	struct vos_pool			*pool = NULL;
+	int				 rc = 0, enabled = 1;
 
 	if (!path || uuid_is_null(uuid))
 		return -DER_INVAL;
@@ -295,14 +336,45 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 		return daos_errno2der(errno);
 	}
 
-	ph = vos_pmemobj_create(path, POBJ_LAYOUT_NAME(vos_pool_layout), scm_sz,
-				0600);
-	if (!ph) {
-		rc = errno;
-		D_ERROR("Failed to create pool %s, size="DF_U64": %s\n", path,
-			scm_sz, pmemobj_errormsg());
-		return daos_errno2der(rc);
+	vppa.vppa_path    = (char *)path;
+	vppa.vppa_scm_sz  = scm_sz;
+	vppa.vppa_is_open = 0;
+	vppa.vppa_ph      = NULL;
+	vppa.vppa_rc      = 0;
+
+	rc = pthread_create(&thread, NULL, vos_pool_pmemobj_thread, &vppa);
+	if (rc) {
+		rc = daos_errno2der(errno);
+		D_ERROR("Failed to create thread: "DF_RC"\n", DP_RC(rc));
+		return rc;
 	}
+
+	for (;;) {
+		void *res;
+
+		/* Try to join with thread - either canceled or normal exit. */
+		rc = pthread_tryjoin_np(thread, &res);
+		if (rc == 0) {
+			if (res == PTHREAD_CANCELED) {
+				D_DEBUG(DB_MGMT,
+					DF_UUID": pmem pool create canceled\n", DP_UUID(uuid));
+				rc = -DER_CANCELED;
+			} else {
+				D_DEBUG(DB_MGMT,
+					DF_UUID": pmem pool create finished\n", DP_UUID(uuid));
+				rc = vppa.vppa_rc;
+			}
+			break;
+		}
+		ABT_thread_yield();
+	}
+	/* check the result of vos_pool_create_thread() */
+	if (rc)
+		return rc;
+
+	ph = vppa.vppa_ph;
+	if (ph == NULL)
+		return -DER_NOMEM;
 
 	rc = pmemobj_ctl_set(ph, "stats.enabled", &enabled);
 	if (rc) {
@@ -725,11 +797,13 @@ int
 vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	      daos_handle_t *poh)
 {
-	struct vos_pool_df	*pool_df;
-	struct vos_pool		*pool = NULL;
-	struct d_uuid		 ukey;
-	PMEMobjpool		*ph;
-	int			 rc, enabled = 1;
+	pthread_t			 thread;
+	struct vos_pool_pmemobj_args	 vppa;
+	struct vos_pool_df		*pool_df;
+	struct vos_pool			*pool = NULL;
+	struct d_uuid			 ukey;
+	PMEMobjpool			*ph;
+	int				 rc, enabled = 1;
 
 	if (path == NULL || poh == NULL) {
 		D_ERROR("Invalid parameters.\n");
@@ -762,13 +836,45 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 		return 0;
 	}
 
-	ph = vos_pmemobj_open(path, POBJ_LAYOUT_NAME(vos_pool_layout));
-	if (ph == NULL) {
-		rc = errno;
-		D_ERROR("Error in opening the pool "DF_UUID": %s\n",
-			DP_UUID(uuid), pmemobj_errormsg());
-		return daos_errno2der(rc);
+	vppa.vppa_path    = (char *)path;
+	vppa.vppa_scm_sz  = 0;
+	vppa.vppa_is_open = 1;
+	vppa.vppa_ph      = NULL;
+	vppa.vppa_rc      = 0;
+
+	rc = pthread_create(&thread, NULL, vos_pool_pmemobj_thread, &vppa);
+	if (rc) {
+		rc = daos_errno2der(errno);
+		D_ERROR("Failed to create thread: "DF_RC"\n", DP_RC(rc));
+		return rc;
 	}
+
+	for (;;) {
+		void *res;
+
+		/* Try to join with thread - either canceled or normal exit. */
+		rc = pthread_tryjoin_np(thread, &res);
+		if (rc == 0) {
+			if (res == PTHREAD_CANCELED) {
+				D_DEBUG(DB_MGMT,
+					DF_UUID": pmem pool create canceled\n", DP_UUID(uuid));
+				rc = -DER_CANCELED;
+			} else {
+				D_DEBUG(DB_MGMT,
+					DF_UUID": pmem pool create finished\n", DP_UUID(uuid));
+				rc = vppa.vppa_rc;
+			}
+			break;
+		}
+		ABT_thread_yield();
+	}
+	/* check the result of vos_pool_create_thread() */
+	if (rc)
+		return rc;
+
+	ph = vppa.vppa_ph;
+	if (ph == NULL)
+		return -DER_NOMEM;
 
 	rc = pmemobj_ctl_set(ph, "stats.enabled", &enabled);
 	if (rc) {
