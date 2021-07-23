@@ -31,12 +31,6 @@ const (
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
 )
 
-// PolicyMap is a map of available policies mapped the their parameter set
-var PolicyMap = map[string]string{
-	"io_size":           "th1,th2",
-	"write_intensivity": "wr_size,wr_int",
-}
-
 // checkUUID is a helper function for validating that the supplied
 // UUID string parses as a valid UUID.
 func checkUUID(uuidStr string) error {
@@ -990,48 +984,4 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	}
 
 	return resp, nil
-}
-
-// VerifyPolicyString will parse the incoming policy string and return
-// a flag whether a combination of policy type and its parameters is valid
-// Returns an error if policy string is wrong, policy can't be found or policy parameters are wrong
-func VerifyPolicyString(stringPolicy string) (err error) {
-
-	sp := strings.Split(strings.ToLower(stringPolicy), ",")
-
-	var policystr string = ""
-	var policyparams string = ""
-
-	for _, paramstr := range sp {
-		param_split := strings.Split(paramstr, "=")
-		if len(param_split) > 2 {
-			return errors.New("Bad policy parameter format.")
-		}
-		if param_split[0] == "type" && policystr == "" {
-			p, found := PolicyMap[param_split[1]]
-			if !found {
-				return errors.New("Policy " + param_split[1] + " does not exist.")
-			}
-			policystr = param_split[1]
-			policyparams = p
-			continue
-		} else if param_split[0] == "type" {
-			return errors.New("Bad policy parameter format - 'type' can only be set once")
-		} else if param_split[0] != "type" && policystr == "" {
-			return errors.New("Bad policy parameter format - 'type' has to be the first parameter")
-		} else {
-			pp := strings.Split(policyparams, ",")
-			var param_found bool = false
-			for _, z := range pp {
-				if param_split[0] == z {
-					param_found = true
-					break //parameter name ok. TODO: add to already processed parameter array to prevent multiple assignment to the same param.
-				}
-			}
-			if !param_found {
-				return errors.New("Bad policy parameter format - unknown parameter name: '" + param_split[0] + "' for policy: '" + policystr + "'.")
-			}
-		}
-	}
-	return nil
 }

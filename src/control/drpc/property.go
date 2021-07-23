@@ -7,8 +7,12 @@ package drpc
 
 import "unsafe"
 
-// #include <daos_prop.h>
-// #include <daos_srv/policy.h>
+/*
+#cgo LDFLAGS: -ldaos_common
+
+#include <daos_prop.h>
+#include <daos_srv/policy.h>
+*/
 import "C"
 
 const (
@@ -70,3 +74,14 @@ const (
 	// PoolPolicyDefault sets the pool's policy to write_intensivity
 	PoolPolicyWriteIntensivity PoolPolicy = C.DAOS_MEDIA_POLICY_WRITE_INTENSIVITY
 )
+
+// PoolPolicyIsValid returns a boolean indicating whether or not the
+// pool tiering policy string is valid.
+func PoolPolicyIsValid(polStr string) bool {
+	var polDesc C.struct_policy_desc_t
+
+	cStr := C.CString(polStr)
+	defer C.free(unsafe.Pointer(cStr))
+
+	return bool(C.daos_policy_try_parse(cStr, &polDesc))
+}

@@ -121,8 +121,7 @@ func PoolProperties() PoolPropertyMap {
 				Number:      drpc.PoolPropertyPolicy,
 				Description: "Tier placement policy",
 				valueHandler: func(s string) (*PoolPropertyValue, error) {
-					err := VerifyPolicyString(s)
-					if err != nil {
+					if !drpc.PoolPolicyIsValid(s) {
 						return nil, errors.Errorf("invalid policy string %q", s)
 					}
 					return &PoolPropertyValue{s}, nil
