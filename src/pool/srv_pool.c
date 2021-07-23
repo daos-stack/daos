@@ -955,7 +955,7 @@ out:
 }
 
 static void
-ds_pool_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+ds_pool_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		     enum crt_event_type type, void *arg)
 {
 	daos_prop_t		prop = { 0 };

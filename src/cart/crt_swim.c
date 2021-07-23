@@ -619,7 +619,7 @@ crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
 		cb_args = cbs_event[i].cecp_args;
 		/* check for and execute event callbacks here */
 		if (cb_func != NULL)
-			cb_func(rank, CRT_EVS_SWIM, cb_type, cb_args);
+			cb_func(rank, state->sms_incarnation, CRT_EVS_SWIM, cb_type, cb_args);
 	}
 }
 
@@ -677,9 +677,16 @@ static void crt_swim_new_incarnation(struct swim_context *ctx,
 				     swim_id_t id,
 				     struct swim_member_state *state)
 {
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	uint64_t		 incarnation = crt_hlc_get();
+
 	D_ASSERTF(id == swim_self_get(ctx), DF_U64" == "DF_U64"\n",
 		  id, swim_self_get(ctx));
-	state->sms_incarnation = crt_hlc_get();
+	crt_swim_csm_lock(csm);
+	csm->csm_incarnation = incarnation;
+	crt_swim_csm_unlock(csm);
+	state->sms_incarnation = incarnation;
 }
 
 static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
@@ -756,6 +763,12 @@ int crt_swim_init(int crt_ctx_idx)
 
 	grp_membs = grp_priv_get_membs(grp_priv);
 	csm->csm_crt_ctx_idx = crt_ctx_idx;
+	/*
+	 * Because daos needs to call crt_self_incarnation_get before it calls
+	 * crt_rank_self_set, we choose the self incarnation here instead of in
+	 * crt_swim_rank_add.
+	 */
+	csm->csm_incarnation = crt_hlc_get();
 	csm->csm_ctx = swim_init(SWIM_ID_INVALID, &crt_swim_ops, NULL);
 	if (csm->csm_ctx == NULL) {
 		D_ERROR("swim_init() failed for self=%u, crt_ctx_idx=%d\n",
@@ -1032,7 +1045,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	crt_swim_csm_lock(csm);
 	if (D_CIRCLEQ_EMPTY(&csm->csm_head)) {
 		cst->cst_id = (swim_id_t)self;
-		cst->cst_state.sms_incarnation = crt_hlc_get();
+		cst->cst_state.sms_incarnation = csm->csm_incarnation;
 		cst->cst_state.sms_status = SWIM_MEMBER_ALIVE;
 		D_CIRCLEQ_INSERT_HEAD(&csm->csm_head, cst, cst_link);
 		self_in_list = true;
@@ -1189,6 +1202,28 @@ crt_rank_state_get(crt_group_t *grp, d_rank_t rank,
 	csm = &grp_priv->gp_membs_swim;
 	rc = crt_swim_get_member_state(csm->csm_ctx, (swim_id_t)rank, state);
 
+out:
+	return rc;
+}
+
+int
+crt_self_incarnation_get(uint64_t *incarnation)
+{
+	struct crt_grp_priv	*grp_priv = crt_grp_pub2priv(NULL);
+	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	int			 rc = 0;
+
+	if (incarnation == NULL) {
+		D_ERROR("Passed state pointer is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (!crt_gdata.cg_swim_inited)
+		D_GOTO(out, rc = -DER_UNINIT);
+
+	crt_swim_csm_lock(csm);
+	*incarnation = csm->csm_incarnation;
+	crt_swim_csm_unlock(csm);
 out:
 	return rc;
 }
