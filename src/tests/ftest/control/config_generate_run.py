@@ -4,13 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import os
 import yaml
 
 from apricot import TestWithServers
 from command_utils import CommandFailure
 from server_utils import ServerFailed
-from server_utils_params import DaosServerYamlParameters
 
 
 class ConfigGenerateRun(TestWithServers):
@@ -57,7 +55,8 @@ class ConfigGenerateRun(TestWithServers):
         try:
             generated_yaml = yaml.safe_load(result.stdout)
         except yaml.YAMLError as error:
-            raise CommandFailure("Error loading dmg generated config!")
+            raise CommandFailure(
+                "Error loading dmg generated config!") from error
 
         # Stop and restart daos_server. self.start_server_managers() has the
         # server startup check built into it, so if there's something wrong,
@@ -77,7 +76,7 @@ class ConfigGenerateRun(TestWithServers):
         try:
             agent_force = self.start_server_managers(force=True)
         except ServerFailed as error:
-            self.fail("Restarting server failed! %s", error)
+            self.fail("Restarting server failed!")
 
         # We don't need agent for this test. However, when we stop the server,
         # agent is also stopped. Then the harness checks that the agent is
