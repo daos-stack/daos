@@ -338,35 +338,35 @@ scanning anything on that SSD.
 These properties are provided when a pool is created, but should
 also be able to update them. When updated, they should be active right away.
 
-- **Pool Scrubber Schedule** - How the scrubber will run at the pool 
-  level. The  container configuration can disable scrubbing for the 
+- **Pool Scrubber Schedule** - How the scrubber will run at the pool
+  level. The  container configuration can disable scrubbing for the
   container, but it cannot alter the type of schedule.
     - **OFF**
-    - **Run & Wait** - Will run the scrubber to completion, yielding 
-      after consuming configured "credits". Then, if completed before 
+    - **Run & Wait** - Will run the scrubber to completion, yielding
+      after consuming configured "credits". Then, if completed before
       configured frequency, will sleep until it's time to start again.
-    - **Continuous** - Will run the scanner, sleeping in between 
-      object scrubs so that the duration of the scrubber takes whole 
-      frequency time and will start again as soon as it completes. Knowing 
-      how many objects are in the system is required for this approach to 
-      work. The scrubber will use the previous scrubber count of objects as 
-      best guess for current.      
-    - **Run Once** - Run the scrubber once then turn off. Useful for  better 
-      control by external scripts to control the schedule. Will still yield 
+    - **Continuous** - Will run the scanner, sleeping in between
+      object scrubs so that the duration of the scrubber takes whole
+      frequency time and will start again as soon as it completes. Knowing
+      how many objects are in the system is required for this approach to
+      work. The scrubber will use the previous scrubber count of objects as
+      best guess for current.
+    - **Run Once** - Run the scrubber once then turn off. Useful for  better
+      control by external scripts to control the schedule. Will still yield
       after consuming "credits".
-    - **Run Once Fast** - Run the scrubber once, without yielding, 
-      then turn off. Useful for better control by external scripts to 
-      control the schedule. Maybe want to get it done really fast and don't 
+    - **Run Once Fast** - Run the scrubber once, without yielding,
+      then turn off. Useful for better control by external scripts to
+      control the schedule. Maybe want to get it done really fast and don't
       care about I/O at this time.
-- **Pool Scrubber Frequency** - How frequently the scrubber should run in 
-  number of seconds. If a scan takes longer than frequency, it would start 
-  again as soon as the previous scan completes.  
+- **Pool Scrubber Frequency** - How frequently the scrubber should run in
+  number of seconds. If a scan takes longer than frequency, it would start
+  again as soon as the previous scan completes.
 - **Pool Credits** - Number of credits consumed before the scrubber yields. Each
   time a checksum is calculated to verify object data, a credit is consumed.
 - **In Place Correction** - If the number checksum errors is below the Eviction
   Threshold, DAOS will attempt to repair the corrupted data using replicas if
   they exist.
-  
+
 The command to create a pool with scrubbing enabled might look like this:
 ```bash
 dmg pool create --scm-size 1G --properties=scrub:continuous,scrub-freq:1,scrub-cred:10
@@ -378,7 +378,7 @@ dmg pool set-prop ${POOL} --properties=scrub:run_wait
 ### Container Properties (-> doc/user/container.md)
 - **Container Disable Scrubbing** - If scrubbing is enabled for a pool, a
   container can disable it for itself.
-  
+
 ### Server Config (-> utils/config/daos_server.yml)
 - **Engine SSD Eviction Threshold** - number of distinct silent data corruption
   events. When a target hits the threshold its corresponding NVMe storage device
@@ -386,7 +386,7 @@ dmg pool set-prop ${POOL} --properties=scrub:run_wait
   configured in the server.yaml configuration file. If this value is 0, then SSD
   Auto Eviction will not occur. - Default: 10
 
-## Telemetry 
+## Telemetry
 The following telemetry metrics are gathered and can be reported for better
 understanding of how the scrubber is running. They will be gathered at both the
 pool and container level, with the exception of the Scrubber ULT Start.

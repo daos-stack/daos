@@ -323,11 +323,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_PO_SCRUB_SCHED:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_SCRUB_SCHED_OFF &&
-			    val != DAOS_SCRUB_SCHED_RUN_WAIT &&
-			    val != DAOS_SCRUB_SCHED_CONTINUOUS &&
-			    val != DAOS_SCRUB_SCHED_RUN_ONCE &&
-			    val != DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD)
+			if (val >= DAOS_SCRUB_SCHED_INVALID)
 				return false;
 			break;
 		case DAOS_PROP_PO_SCRUB_FREQ:

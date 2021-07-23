@@ -228,7 +228,7 @@ conv_req_props(daos_prop_t **out_prop, bool set_props,
 			D_GOTO(out, rc = -DER_INVAL);
 		}
 	}
-	out:
+out:
 	if (rc != 0)
 		daos_prop_free(new_props);
 	else

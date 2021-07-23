@@ -104,16 +104,20 @@ enum {
 	DAOS_RECLAIM_TIME,
 };
 
-/** Pool checksum scrubbing schedule type */
+/**
+ * Pool checksum scrubbing schedule type
+ * It is expected that these stay contiguous.
+ */
 enum {
-	DAOS_SCRUB_SCHED_OFF,
-	DAOS_SCRUB_SCHED_RUN_WAIT,
-	DAOS_SCRUB_SCHED_CONTINUOUS,
-	DAOS_SCRUB_SCHED_RUN_ONCE,
-	DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD,
+	DAOS_SCRUB_SCHED_OFF = 0,
+	DAOS_SCRUB_SCHED_RUN_WAIT = 1,
+	DAOS_SCRUB_SCHED_CONTINUOUS = 2,
+	DAOS_SCRUB_SCHED_RUN_ONCE = 3,
+	DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD = 4,
+	DAOS_SCRUB_SCHED_INVALID = 4,
 };
 
-/** self headling strategy bits */
+/** self healing strategy bits */
 #define DAOS_SELF_HEAL_AUTO_EXCLUDE	(1U << 0)
 #define DAOS_SELF_HEAL_AUTO_REBUILD	(1U << 1)
 
