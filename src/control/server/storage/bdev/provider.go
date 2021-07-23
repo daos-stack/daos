@@ -22,6 +22,7 @@ type (
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
 		PrepareReset() error
+		PrepareVMDReset(storage.BdevPrepareRequest) error
 		Prepare(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
@@ -124,12 +125,21 @@ func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResp
 // Prepare attempts to perform all actions necessary to make NVMe
 // components available for use by DAOS.
 func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	resp := new(storage.BdevPrepareResponse)
+
+	// resetting VMD devices requires the address to be passed as allowlist
+	if !req.DisableVMD && req.ResetOnly {
+		if err := p.backend.PrepareVMDReset(req); err != nil {
+			return nil, errors.Wrap(err, "bdev prepare vmd reset")
+		}
+		return resp, nil
+	}
+
 	// run reset first to ensure reallocation of hugepages
 	if err := p.backend.PrepareReset(); err != nil {
 		return nil, errors.Wrap(err, "bdev prepare reset")
 	}
 
-	resp := new(storage.BdevPrepareResponse)
 	// if we're only resetting, return before prep
 	if req.ResetOnly {
 		return resp, nil

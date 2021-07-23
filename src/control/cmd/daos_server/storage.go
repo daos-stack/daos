@@ -64,12 +64,18 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			cmd.TargetUser = runningUser.Username
 		}
 
+		disablevmd := true
+		if cmd.EnableVMD {
+			disablevmd = false
+		}
+
 		// Prepare NVMe access through SPDK
 		if _, err := cmd.scs.NvmePrepare(storage.BdevPrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
 			PCIAllowlist:  cmd.PCIAllowList,
 			ResetOnly:     cmd.Reset,
+			DisableVMD:    disablevmd,
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}

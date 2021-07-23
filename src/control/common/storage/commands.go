@@ -24,6 +24,7 @@ type StoragePrepareNvmeCmd struct {
 	PCIAllowList string `short:"w" long:"pci-allowlist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
+	EnableVMD    bool   `long:"enable-vmd" description:"Enable VMD devices to be unbound (default is disabled)."`
 }
 
 type StoragePrepareScmCmd struct{}
