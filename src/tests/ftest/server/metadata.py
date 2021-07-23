@@ -4,13 +4,15 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
+from os import error
 import traceback
 import uuid
 import threading
 import avocado
 import queue
+
+from avocado.core.exceptions import TestFail
+
 from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
@@ -18,17 +20,6 @@ from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
 from test_utils_pool import TestPool
 
-# Rough maximum number of containers that can be created
-# Determined experimentally with DAOS_MD_CAP=128
-# (ensure metadata.yaml matches)
-# and taking into account vos reserving in vos_space_init():
-#  5% for fragmentation overhead
-#  ~ 1MB for background garbage collection use
-#  ~48MB for background aggregation use
-# 52% of remaining free space set aside for staging log container
-# (installsnapshot RPC handling in raft)
-#NO_OF_MAX_CONTAINER = 4150
-NO_OF_MAX_CONTAINER = 3465
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -61,24 +52,94 @@ class ObjectMetadata(TestWithServers):
     :avocado: recursive
     """
 
+    # Minimum number of containers that should be able to be created
+    CREATED_CONTAINERS_MIN = 3000
+
+    # Number of created containers that should not be possible
+    CREATED_CONTAINERS_LIMIT = 3500
+
     def __init__(self, *args, **kwargs):
         """Initialize a ObjectMetadata object."""
         super().__init__(*args, **kwargs)
         self.out_queue = None
 
-    def setUp(self):
-        """Set up each test case."""
-        # Start the servers and agents
-        super().setUp()
+    def create_pool(self):
+        """Create a pool and display the svc ranks."""
+        self.add_pool(connect=False)
+        self.log.info("Created pool %s: svc ranks:", self.pool.uuid)
+        for index, rank in enumerate(self.pool.svc_ranks):
+            self.log.info("[%d]: %d", index, rank)
 
-        # Create a pool
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
-        self.log.info("Created pool %s: svcranks:",
-                      self.pool.pool.get_uuid_str())
-        for r in range(len(self.pool.svc_ranks)):
-            self.log.info("[%d]: %d", r, self.pool.svc_ranks[r])
+    def create_all_containers(self, expected=None):
+        """Create the maximum number of supported containers.
+
+        Args:
+            expected (int, optional): number of containers expected to be
+                created. Defaults to None.
+
+        Returns:
+            bool: True if all of the expected number of containers were created
+                successfully; False otherwise
+
+        """
+        status = True
+        self.container = []
+        while(1):
+            # Continue to create containers until there is not enough space
+            try:
+                self.container.append(self.get_container(self.pool))
+            except TestFail as error:
+                if "RC: -1007" in error:
+                    self.log.info(
+                        "Created %s containers before running out of space",
+                        len(self.container))
+                else:
+                    self.log.error(error)
+                    self.log.error(
+                        "Unexpected error creating %d containers",
+                        len(self.container) + 1)
+                    status = False
+                break
+
+            # Safety check to avoid test timeout - should hit an exception first
+            if len(self.container) >= self.CREATED_CONTAINERS_LIMIT:
+                self.log.error(
+                    "Created too many containers: %d", len(self.container))
+                status = False
+                break
+
+        # Verify that at least MIN_CREATED_CONTAINERS have been created
+        if status and len(self.container) < self.CREATED_CONTAINERS_MIN:
+            self.log.error(
+                "Only %d containers created; expected %d",
+                len(self.container), self.CREATED_CONTAINERS_MIN)
+            status = False
+
+        # Verify that the expected number of containers were created
+        if status and expected and len(self.container) != expected:
+            self.log.error(
+                "Unexpected created container quantity: %d/%d",
+                len(self.container), expected)
+            status = False
+
+        return status
+
+    def destroy_all_containers(self):
+        """Destroy all of the created containers.
+
+        Returns:
+            bool: True if all of the containers were destroyed successfully;
+                False otherwise
+
+        """
+        errors = self.destroy_containers()
+        if errors:
+            self.log.error(
+                "Errors detected destroying %d containers: %d",
+                len(self.container), len(errors))
+            for error in errors:
+                self.log.error("  %s", error)
+        return len(errors) == 0
 
     def thread_control(self, threads, operation):
         """Start threads and wait until all threads are finished.
@@ -91,6 +152,7 @@ class ObjectMetadata(TestWithServers):
             str: "PASS" if all threads completed successfully; "FAIL" otherwise
 
         """
+        self.create_pool()
         self.d_log.debug("IOR {0} Threads Started -----".format(operation))
         for thrd in threads:
             thrd.start()
@@ -112,9 +174,11 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=all,metadata,large,metadatafill,hw
-        :avocado: tags=full_regression
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server,metadata,metadata_fillup
         """
+        self.create_pool()
 
         # 3 Phases in nested try/except blocks below
         # Phase 1: overload pool metadata with a container create loop
@@ -130,66 +194,55 @@ class ObjectMetadata(TestWithServers):
         #          rdb log compaction, eventually settling into continuous
         #          -DER_NOSPACE. Make sure service keeps running.
         #
-        self.pool.pool.connect(2)
 
-        self.log.info("Phase 1: Fillup Metadata (expected to fail) ...")
-        container_array = []
-        try:
-            # Phase 1 container creates
-            for _cont in range(NO_OF_MAX_CONTAINER + 1000):
-                container = DaosContainer(self.context)
-                container.create(self.pool.pool.handle)
-                container_array.append(container)
+        # Phase 1 container creates
+        self.log.info("Phase 1: Fill up Metadata (expected to fail) ...")
+        if not self.create_all_containers():
+            self.fail("Phase 1: failed (metadata full error did not occur)")
+        self.log.info(
+            "Phase 1: passed (container create %d failed after metadata full)",
+            len(self.container) + 1)
 
-        # Phase 1 got DaosApiError (expected - proceed to Phase 2)
-        except DaosApiError:
-            self.log.info("Phase 1: passed (container create %d failed after "
-                          "metadata full)", _cont)
+        # Phase 2 clean up containers (expected to succeed)
+        self.log.info(
+            "Phase 2: Cleaning up %d containers (expected to work)",
+            len(self.container))
+        if not self.destroy_all_containers():
+            self.fail("Phase 2: fail (unexpected container destroy error)")
+        self.log.info("Phase 2: passed")
 
-            # Phase 2 clean up containers (expected to succeed)
+        # Phase 3 sustained container creates even after nospace error
+        # Due to rdb log compaction after initial nospace errors, some brief
+        # periods of available space will occur, allowing a few container
+        # creates to succeed in the interim.
+        self.log.info(
+            "Phase 3: sustained container creates: to nospace and beyond")
+        self.container = []
+        in_failure = False
+        for loop in range(30000):
             try:
-                self.log.info("Phase 2: Cleaning up containers after "
-                              "DaosApiError (expected to work)")
-                for container in container_array:
-                    container.destroy()
-                self.log.info("Phase 2: pass (containers destroyed "
-                              "successfully)")
+                self.container.append(self.get_container(self.pool))
+                if in_failure:
+                    self.log.info(
+                        "Phase 3: nospace -> available transition, cont %d",
+                        loop)
+                    in_failure = False
+            except TestFail as error:
+                if "RC: -1007" in error:
+                    if not in_failure:
+                        self.log.info(
+                            "Phase 3: available -> nospace transition, cont %d",
+                            loop)
+                    in_failure = True
+                else:
+                    self.log.error(
+                        "Unexpected container create error: %s", error)
+                    self.fail(
+                        "Phase 3: fail (unexpected container create error)")
+        self.log.info(
+            "Phase 3: passed (created %d / %d containers)",
+            len(self.container), 30000)
 
-                # Phase 3 sustained container creates even after nospace error
-                # Due to rdb log compaction after initial nospace errors,
-                # Some brief periods of available space will occur, allowing
-                # a few container creates to succeed in the interim.
-                self.log.info("Phase 3: sustained container creates: "
-                              "to nospace and beyond")
-                big_array = []
-                in_failure = False
-                for _cont in range(30000):
-                    try:
-                        container = DaosContainer(self.context)
-                        container.create(self.pool.pool.handle)
-                        big_array.append(container)
-                        if in_failure:
-                            self.log.info("Phase 3: nospace -> available "
-                                          "transition, cont %d", _cont)
-                            in_failure = False
-                    except DaosApiError:
-                        if not in_failure:
-                            self.log.info("Phase 3: available -> nospace "
-                                          "transition, cont %d", _cont)
-                        in_failure = True
-
-                self.log.info("Phase 3: passed (created %d / %d containers)",
-                              len(big_array), 30000)
-                return
-
-            except DaosApiError as exe2:
-                print(exe2, traceback.format_exc())
-                self.fail("Phase 2: fail (unexpected container destroy error)")
-
-        # Phase 1 failure
-        self.fail("Phase 1: failed (metadata full error did not occur)")
-
-    @avocado.fail_on(DaosApiError)
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
 
@@ -199,28 +252,21 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_free_space,nvme,large,hw
-        :avocado: tags=full_regression
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server,metadata,metadata_free_space,nvme
         """
-        self.pool.pool.connect(2)
-        for k in range(10):
-            container_array = []
-            self.log.info("Container Create Iteration %d / 9", k)
-            for cont in range(NO_OF_MAX_CONTAINER):
-                container = DaosContainer(self.context)
-                try:
-                    container.create(self.pool.pool.handle)
-                except DaosApiError as exc:
-                    self.log.info("Container create %d/%d failed: %s",
-                                  cont, NO_OF_MAX_CONTAINER, exc)
-                    self.fail("Container create failed")
+        self.create_pool()
 
-                container_array.append(container)
+        self.container = []
+        for loop in range(10):
+            self.log.info("Container Create Iteration %d / 9", loop)
+            if not self.create_all_containers(len(self.container)):
+                self.fail(f"Errors during create iteration {loop} / 9")
 
-            self.log.info("Created %d containers", (cont+1))
-            self.log.info("Container Remove Iteration %d / 9", k)
-            for cont in container_array:
-                cont.destroy()
+            self.log.info("Container Remove Iteration %d / 9", loop)
+            if not self.destroy_all_containers():
+                self.fail(f"Errors during remove iteration {loop} / 9")
 
     @avocado.fail_on(DaosApiError)
     def test_metadata_server_restart(self):
@@ -237,8 +283,11 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_ior,nvme,large
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server,metadata,metadata_ior,nvme
         """
+        self.create_pool()
         files_per_thread = 400
         total_ior_threads = 5
         self.out_queue = queue.Queue()
@@ -279,7 +328,7 @@ class ObjectMetadata(TestWithServers):
                             "results": self.out_queue}))
 
                 self.log.info(
-                    "Creatied %s thread %s with container uuids %s", operation,
+                    "Created %s thread %s with container uuids %s", operation,
                     index, list_of_uuid_lists[index])
 
             # Launch the IOR threads
@@ -307,7 +356,6 @@ class ObjectMetadata(TestWithServers):
                 # Start the servers
                 self.start_server_managers()
 
-    @avocado.fail_on(DaosApiError)
     def test_container_removal_after_der_nospace(self):
         """JIRA ID: DAOS-4858
 
@@ -315,69 +363,54 @@ class ObjectMetadata(TestWithServers):
            Verify container can be successfully deleted when the storage pool
            is full ACL grant/remove modification.
 
-        :avocado: tags=metadata,metadata_der_nospace,nvme,large,hw
-        :avocado: tags=full_regression,der_nospace
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server,metadata,metadata_der_nospace,nvme,der_nospace
         """
-        self.pool.pool.connect(2)
-        init_container = NO_OF_MAX_CONTAINER
-        additional_container = 1000000
-        der_no_space = "RC: -1007"
+        self.create_pool()
 
-        container_array = []
-        self.log.info("(1)Start Creating %d containers..", init_container)
-        for cont in range(init_container):
-            container = DaosContainer(self.context)
-            container.create(self.pool.pool.handle)
-            container_array.append(container)
+        self.log.info("(1) Start creating containers..")
+        if not self.create_all_containers():
+            self.fail("Unexpected error creating containers")
+        self.log.info("(1.1) %d containers created.", len(self.container))
 
-        self.log.info("(1.1)%d Container Created.", init_container)
-        self.log.info("(1.2)Create additional 100 Containers, expect Fail.")
-
-        #Create additional containers to check for DaosApiError -1007
-        for cont in range(additional_container):
+        additional_containers = 1000000
+        self.log.info(
+            "(1.2) Create %d additional containers, expect fail.",
+            additional_containers)
+        for loop in range(additional_containers):
             try:
-                container = DaosContainer(self.context)
-                container.create(self.pool.pool.handle)
-                container_array.append(container)
-            except DaosApiError as exc:
-                self.log.info("(1.3)Expected DaosApiError info: %s", exc)
-                if der_no_space not in str(exc):
-                    self.fail(
-                        "##Expecting der_no_space RC: -1007, not seen")
-                else:
+                self.container.append(self.get_container(self.pool))
+            except TestFail as error:
+                self.log.info("(1.3) Expected create failure: %s", error)
+                if "RC: -1007" in error:
                     self.log.info(traceback.format_exc())
-                    self.log.info("(1.4)No space error shown with additional "
-                                  "%d containers created, test passed.", cont)
+                    self.log.info(
+                        "(1.4) No space error shown with additional %d "
+                        "containers created, test passed.", loop)
+                else:
+                    self.fail("Expecting der_no_space 'RC: -1007' missing")
                 break
-        if cont == additional_container - 1:
+        if loop == additional_containers - 1:
             self.fail(
-                "##Storage resource did not exhausted after {} containers "
-                "created".format(len(container_array)))
+                f"Storage resource not exhausted after {len(self.container)} "
+                "containers created")
         self.log.info(
-            "(1.5)Additional %d containers created and detected der_no_space.",
-            cont)
-        self.log.info(
-            "(2)Verify %d Container Removal after storage full.. ",
-            len(container_array))
-        for cont in container_array:
-            try:
-                cont.destroy()
-            except DaosApiError as exc:
-                self.fail(
-                    "##Container destroy failed after storage full.")
-        self.log.info("(2.1)Container Removal succeed after storage full.")
+            "(1.5) Additional %d containers created and detected der_no_space.",
+            loop)
 
         self.log.info(
-            "(3)Create %d containers after container cleanup.",
-            init_container)
-        for cont in range(init_container):
-            try:
-                container = DaosContainer(self.context)
-                container.create(self.pool.pool.handle)
-                container_array.append(container)
-            except DaosApiError as exc:
-                self.log.info(traceback.format_exc())
-                self.fail(
-                    "##Failed to create containers after container cleanup.")
+            "(2) Verify removal of %d containers after full storage .. ",
+            len(self.container))
+        if not self.destroy_all_containers():
+            self.fail("Container destroy failed after full storage.")
+        self.log.info("(2.1) Container removal succeed after full storage.")
+
         self.log.info(
-            "(3.1)Create %d containers succeed after cleanup.", init_container)
+            "(3) Create %d containers after container cleanup.",
+            len(self.container))
+        if not self.create_all_containers(len(self.container)):
+            self.fail("Failed to create containers after container cleanup.")
+        self.log.info(
+            "(3.1) Create %d containers succeed after cleanup.",
+            len(self.container))
