@@ -170,8 +170,8 @@ drpc_notify_ready(void)
 	rc = crt_self_incarnation_get(&incarnation);
 	if (rc != 0)
 		goto out_uri;
-	/* TODO: Put incarnation in Srv__NotifyReadyReq. */
-	(void)incarnation;
+
+	req.incarnation = incarnation;
 	req.nctxs = DSS_CTX_NR_TOTAL;
 	/* Do not free, this string is managed by the dRPC listener */
 	req.drpclistenersock = drpc_listener_socket_path;

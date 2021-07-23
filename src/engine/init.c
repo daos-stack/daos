@@ -521,7 +521,7 @@ dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 	d_tm_inc_counter(metrics->dead_rank_events, 1);
 	d_tm_record_timestamp(metrics->last_event_time);
 
-	rc = ds_notify_swim_rank_dead(rank);
+	rc = ds_notify_swim_rank_dead(rank, incarnation);
 	if (rc)
 		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
 			src, type, DP_RC(rc));
@@ -532,7 +532,8 @@ dss_crt_hlc_error_cb(void *arg)
 {
 	/* Rank will be populated automatically */
 	ds_notify_ras_eventf(RAS_ENGINE_CLOCK_DRIFT, RAS_TYPE_INFO,
-			     RAS_SEV_ERROR, NULL /* hwid */, NULL /* rank */,
+			     RAS_SEV_ERROR, NULL /* hwid */,
+			     NULL /* rank */, NULL /* inc */,
 			     NULL /* jobid */, NULL /* pool */,
 			     NULL /* cont */, NULL /* objid */,
 			     NULL /* ctlop */, NULL /* data */,
