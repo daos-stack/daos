@@ -388,8 +388,12 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 				return
 			}
 
+			if tc.lfc.localNUMAFabric == nil {
+				t.Fatal("NUMAFabric in cache is nil")
+			}
+
 			if tc.expCached {
-				if diff := cmp.Diff(tc.input, tc.lfc.localNUMAFabric, cmp.AllowUnexported(NUMAFabric{})); diff != "" {
+				if diff := cmp.Diff(tc.input.numaMap, tc.lfc.localNUMAFabric.numaMap); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
 			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {
