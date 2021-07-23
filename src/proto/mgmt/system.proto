@@ -26,6 +26,7 @@ message SystemMember {
 	// ancillary info e.g. error msg or reason for state change
 	string info = 7;
 	string fault_domain = 8;
+	string last_update = 9;
 }
 
 // SystemStopReq supplies system shutdown parameters.

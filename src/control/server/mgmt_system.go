@@ -571,7 +571,7 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		return nil, err
 	}
 
-	svc.log.Debugf("Responding to SystemQuery RPC: %+v", resp)
+	svc.log.Debugf("Responding to SystemQuery RPC: %s", mgmtpb.Debug(resp))
 
 	return resp, nil
 }

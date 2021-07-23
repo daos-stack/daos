@@ -552,11 +552,13 @@ class CommandWithSubCommand(ExecutableCommand):
         # Issue the command and store the command result
         return self.run()
 
-    def _get_json_result(self, sub_command_list=None, **kwargs):
+    def _get_json_result(self, sub_command_list=None, json_err=False, **kwargs):
         """Wrap the base _get_result method to force JSON output.
 
         Args:
             sub_command_list (list): List of subcommands.
+            json_err (bool, optional): If True, return JSON
+                even if the command fails.
             kwargs (dict): Parameters for the command.
         """
         if self.json is None:
@@ -566,11 +568,16 @@ class CommandWithSubCommand(ExecutableCommand):
         self.json.update(True)
         prev_output_check = self.output_check
         self.output_check = "both"
+        if json_err:
+            prev_exit_exception = self.exit_status_exception
+            self.exit_status_exception = False
         try:
             self._get_result(sub_command_list, **kwargs)
         finally:
             self.json.update(prev_json_val)
             self.output_check = prev_output_check
+            if json_err:
+                self.exit_status_exception = prev_exit_exception
         return json.loads(self.result.stdout)
 
 
@@ -1141,13 +1148,15 @@ class SubprocessManager():
                     self._expected_states[rank]["state"], state)
                 self._expected_states[rank]["state"] = state
 
-    def verify_expected_states(self, set_expected=False):
+    def verify_expected_states(self, set_expected=False, show_logs=True):
         """Verify that the expected job process states match the current states.
 
         Args:
             set_expected (bool, optional): option to update the expected job
                 process states to the current states prior to verification.
                 Defaults to False.
+            show_logs (bool, optional): Show log entries for hosts not in
+                expected states.
 
         Returns:
             dict: a dictionary of whether or not any of the job process states
@@ -1259,7 +1268,7 @@ class SubprocessManager():
                 "%Y-%m-%d %H:%M:%S")
 
         # Dump the server logs for any identified server
-        if show_log_hosts:
+        if show_logs and show_log_hosts:
             self.log.info(
                 "<SERVER> logs for ranks in the errored state since start "
                 "detection or detected in an unexpected state")

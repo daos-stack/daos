@@ -168,6 +168,7 @@ func (mdb *MemberDatabase) updateMember(m *Member) {
 	}
 	cur.state = m.state
 	cur.Info = m.Info
+	cur.LastUpdate = m.LastUpdate
 
 	mdb.removeFromFaultDomainTree(cur)
 	cur.FaultDomain = m.FaultDomain

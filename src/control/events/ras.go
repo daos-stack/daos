@@ -137,6 +137,12 @@ type RASEvent struct {
 	forwardable atm.Bool
 }
 
+// GetTimestamp returns a time.Time parsed from the event
+// timestamp.
+func (evt *RASEvent) GetTimestamp() (time.Time, error) {
+	return common.ParseTime(evt.Timestamp)
+}
+
 // IsForwarded returns true if event has been forwarded between hosts.
 func (evt *RASEvent) IsForwarded() bool {
 	return evt.forwarded.Load()
