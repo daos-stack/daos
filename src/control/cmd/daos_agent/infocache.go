@@ -141,7 +141,7 @@ func (c *localFabricCache) IsCached() bool {
 }
 
 // Cache caches the results of a fabric scan locally.
-func (c *localFabricCache) Cache(ctx context.Context, scan []*netdetect.FabricScan) {
+func (c *localFabricCache) CacheScan(ctx context.Context, scan []*netdetect.FabricScan) {
 	if c == nil {
 		return
 	}
@@ -149,15 +149,32 @@ func (c *localFabricCache) Cache(ctx context.Context, scan []*netdetect.FabricSc
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if !c.IsEnabled() {
-		return
-	}
-
 	if c.getDevAlias == nil {
 		c.getDevAlias = netdetect.GetDeviceAlias
 	}
 
-	c.localNUMAFabric = NUMAFabricFromScan(ctx, c.log, scan, c.getDevAlias)
+	scanResult := NUMAFabricFromScan(ctx, c.log, scan, c.getDevAlias)
+	c.setCache(scanResult)
+}
+
+// Cache initializes the cache with a specific NUMAFabric.
+func (c *localFabricCache) Cache(ctx context.Context, nf *NUMAFabric) {
+	if c == nil || nf == nil {
+		return
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.setCache(nf)
+}
+
+func (c *localFabricCache) setCache(nf *NUMAFabric) {
+	if !c.IsEnabled() {
+		return
+	}
+
+	c.localNUMAFabric = nf
 
 	c.initialized.SetTrue()
 }
