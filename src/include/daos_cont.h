@@ -116,18 +116,15 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
  */
 
 /**
- * Create a new container on the storage pool connected by \a poh.
- * The label (along with other container properties) can be passed
- * via the \a cont_prop.
- * If no label is specified, a container without any labels will be
- * created. In this case, the only way to identify the newly created
- * container will be via its UUID. It is thus recommended to pass a
- * \a uuid argumnent so that the UUID allocated to the container can
- * be returned to the caller.
+ * Create a new container on the storage pool connected by \a poh.  The label (along with other
+ * container properties) can be passed via the \a cont_prop.
+ * If no label is specified, a container without any labels will be created. In this case, the only
+ * way to identify the newly created container will be via its UUID. It is thus recommended to pass
+ * a \a uuid argumnent so that the UUID allocated to the container can be returned to the caller.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[out]	uuid	Optional, pointer to uuid_t to hold the
- *		        implementation-generated container UUID.
+ * \param[out]	uuid	Optional, pointer to uuid_t to hold the implementation-generated container
+ *			UUID.
  * \param[in]	cont_prop
  *			Optional, container properties pointer
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -142,8 +139,7 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
  *			-DER_UNREACH	network is unreachable
  */
 int
-daos_cont_create(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop,
-		 daos_event_t *ev);
+daos_cont_create(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
 
 /**
  * Create a new container with label \a label on the storage pool connected
@@ -743,8 +739,6 @@ daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_
 		}							\
 		_ret;							\
 	})
-
-
 
 #if defined(__cplusplus)
 }

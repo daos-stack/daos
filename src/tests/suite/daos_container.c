@@ -2449,6 +2449,70 @@ delet_container_during_aggregation(void **state)
 	pool_storage_info(state, &pinfo);
 }
 
+static void
+co_api_compat(void **state)
+{
+	test_arg_t		*arg = *state;
+	uuid_t			uuid1;
+	uuid_t			uuid2;
+	char			*label = "test_api_compat_label1";
+	daos_handle_t		coh;
+	daos_cont_info_t	info;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(uuid1);
+	uuid_clear(uuid2);
+
+	print_message("creating container with uuid specified ... ");
+	rc = daos_cont_create(arg->pool.poh, uuid1, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("creating container with a uuid pointer ... ");
+	rc = daos_cont_create(arg->pool.poh, &uuid2, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("creating container with a NULL pointer ... ");
+	rc = daos_cont_create(arg->pool.poh, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("creating container with a Label ... ");
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("opening container using uuid ... ");
+	rc = daos_cont_open(arg->pool.poh, uuid1, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("opening container using Label ... ");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("destroying container using uuid ... ");
+	rc = daos_cont_destroy(arg->pool.poh, uuid1, 0, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, uuid2, 0, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("destroying container using label ... ");
+	rc = daos_cont_destroy(arg->pool.poh, label, 0, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -2524,6 +2588,8 @@ static const struct CMUnitTest co_tests[] = {
 	{ "CONT25: Delete Container during Aggregation",
 	  delet_container_during_aggregation, co_setup_async,
 	  test_case_teardown},
+	{ "CONT26: container API compat",
+	  co_api_compat, NULL, test_case_teardown},
 };
 
 int
