@@ -222,14 +222,6 @@ class ManagementServiceResilience(TestWithServers):
             self.fail("Can't list pools after quorum loss.")
         self.pool = None
 
-        # TODO (DAOS-7812): Remove this sleep after we've exposed rank
-        # incarnation numbers to the MS via Join/RAS. Until then, we
-        # have to make sure that all swim_rank_dead events have trickled
-        # in before restarting the servers, otherwise we can encounter
-        # a situation where an event for the previous incarnation of a
-        # rank causes the current incarnation to be marked excluded.
-        time.sleep(self.SWIM_SUSP_TIMEOUT * 2)
-
         # Finally, restart the dead servers and verify that quorum is
         # regained, which should allow for write operations to succeed again.
         self.server_managers[0].restart(list(kill_list), wait=True)

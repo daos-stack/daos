@@ -911,9 +911,9 @@ func TestSystem_Membership_OnEvent(t *testing.T) {
 
 func TestSystem_Membership_MarkDead(t *testing.T) {
 	for name, tc := range map[string]struct {
-		rank      Rank
-		timestamp time.Time
-		expErr    error
+		rank        Rank
+		incarnation uint64
+		expErr      error
 	}{
 		"unknown member": {
 			rank:   42,
@@ -924,33 +924,36 @@ func TestSystem_Membership_MarkDead(t *testing.T) {
 			expErr: errors.New("illegal member state update"),
 		},
 		"stale event for joined member": {
-			rank:      0,
-			timestamp: time.Now().Add(-5 * time.Second),
-			expErr:    errors.New("before member"),
+			rank:        0,
+			incarnation: 1,
+			expErr:      errors.New("incarnation"),
 		},
 		"new event for joined member": {
-			rank:      3,
-			timestamp: time.Now().Add(time.Second),
+			rank:        0,
+			incarnation: 2,
 		},
 		"event for stopped member": {
-			rank:      1,
-			timestamp: time.Now().Add(-5 * time.Second),
+			rank:        1,
+			incarnation: 2,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			joinedBefore := MockMember(t, 3, MemberStateJoined)
-			joinedBefore.LastUpdate = tc.timestamp.Add(-1 * time.Second)
+			mock := func(rank uint32, inc uint64, state MemberState) *Member {
+				m := MockMember(t, rank, state)
+				m.Incarnation = inc
+				return m
+			}
+
 			ms := populateMembership(t, log,
-				MockMember(t, 0, MemberStateJoined),
-				MockMember(t, 1, MemberStateStopped),
-				MockMember(t, 2, MemberStateExcluded),
-				joinedBefore,
+				mock(0, 2, MemberStateJoined),
+				mock(1, 2, MemberStateStopped),
+				mock(2, 2, MemberStateExcluded),
 			)
 
-			gotErr := ms.MarkRankDead(tc.rank, tc.timestamp)
+			gotErr := ms.MarkRankDead(tc.rank, tc.incarnation)
 			common.CmpErr(t, tc.expErr, gotErr)
 		})
 	}

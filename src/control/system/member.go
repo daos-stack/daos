@@ -160,6 +160,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
 	Rank           Rank         `json:"rank"`
+	Incarnation    uint64       `json:"incarnation"`
 	UUID           uuid.UUID    `json:"uuid"`
 	Addr           *net.TCPAddr `json:"addr"`
 	FabricURI      string       `json:"fabric_uri"`

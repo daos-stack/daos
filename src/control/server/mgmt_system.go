@@ -258,6 +258,7 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 		FabricURI:      req.GetUri(),
 		FabricContexts: req.GetNctxs(),
 		FaultDomain:    fd,
+		Incarnation:    req.GetIncarnation(),
 	})
 	if err != nil {
 		return &batchJoinResponse{joinErr: err}
