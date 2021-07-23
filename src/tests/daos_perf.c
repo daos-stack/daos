@@ -66,8 +66,14 @@ bool			 ts_pause;
 
 bool			 ts_oid_init;
 
+typedef char		 key_str_t[DTS_KEY_LEN];
+
 daos_handle_t		*ts_ohs;		/* all opened objects */
 daos_obj_id_t		*ts_oids;		/* object IDs */
+key_str_t		*ts_dkey_vals;
+key_str_t		*ts_akey_vals;
+daos_key_t		*ts_dkeys;
+daos_key_t		*ts_akeys;
 daos_unit_oid_t		*ts_uoids;		/* object shard IDs (for VOS) */
 uint64_t		*ts_indices;
 
@@ -87,6 +93,8 @@ static ABT_xstream	abt_xstream;
 struct pf_param {
 	/* output performance */
 	bool		pa_perf;
+	/** Verbose output */
+	bool		pa_verbose;
 	/* no key reset, verification cannot work after enabling it */
 	bool		pa_no_reset;
 	/* # iterations of the test */
@@ -98,15 +106,9 @@ struct pf_param {
 		struct {
 			/* nested iterator */
 			bool	nested;
+			/* visible iteration */
+			bool	visible;
 		} pa_iter;
-		/* private parameter for OIT */
-		struct {
-			bool	verbose;
-		} pa_oit;
-		/* private parameter for query */
-		struct {
-			int	verbose;
-		} pa_query;
 		/* private parameter for update, fetch and verify */
 		struct {
 			/* offset within stride */
@@ -115,6 +117,8 @@ struct pf_param {
 			int	size;
 			/* verify the read */
 			bool	verify;
+			/* dkey flag */
+			bool	dkey_flag;
 		} pa_rw;
 	};
 };
@@ -477,15 +481,19 @@ daos_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 
 static int
 akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
-		     char *dkey, char *akey, daos_epoch_t *epoch,
+		     daos_key_t *dkey, daos_key_t *akey, daos_epoch_t *epoch,
 		     int idx, struct pf_param *param)
 {
 	struct io_credit *cred;
 	daos_iod_t	     *iod;
 	d_sg_list_t	     *sgl;
 	daos_recx_t	     *recx;
-	size_t		      len;
 	int		      rc = 0;
+
+	if (param->pa_verbose)
+		D_PRINT("%s "DF_UOID" dkey="DF_KEY" akey="DF_KEY"\n",
+			op_type == TS_DO_UPDATE ? "Update" : "Fetch ",
+			DP_UOID(ts_uoids[obj_idx]), DP_KEY(dkey), DP_KEY(akey));
 
 	cred = credit_take(&ts_ctx);
 	if (!cred) {
@@ -498,18 +506,10 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 	sgl  = &cred->tc_sgl;
 	recx = &cred->tc_recx;
 
-	/* setup dkey */
-	if (ts_dkey_prefix == NULL)
-		len = sizeof(uint64_t);
-	else
-		len = min(strlen(dkey), DTS_KEY_LEN);
-	memcpy(cred->tc_dbuf, dkey, len);
-	d_iov_set(&cred->tc_dkey, cred->tc_dbuf, len);
+	d_iov_set(&cred->tc_dkey, dkey->iov_buf, dkey->iov_len);
 
 	/* setup I/O descriptor */
-	len = min(strlen(akey), DTS_KEY_LEN);
-	memcpy(cred->tc_abuf, akey, len);
-	d_iov_set(&iod->iod_name, cred->tc_abuf, len);
+	d_iov_set(&iod->iod_name, akey->iov_buf, akey->iov_len);
 	if (ts_single) {
 		iod->iod_type = DAOS_IOD_SINGLE;
 		iod->iod_size = param->pa_rw.size;
@@ -569,14 +569,14 @@ akey_update_or_fetch(int obj_idx, enum ts_op_type op_type,
 }
 
 static int
-dkey_update_or_fetch(enum ts_op_type op_type, char *dkey, daos_epoch_t *epoch,
+dkey_update_or_fetch(enum ts_op_type op_type, daos_key_t *dkey, daos_epoch_t *epoch,
 		     struct pf_param *param)
 {
-	char		 akey[DTS_KEY_LEN] = "0";
 	int		 i;
 	int		 j;
 	int		 k;
 	int		 rc = 0;
+	int		 akey_idx;
 
 	if (!ts_indices) {
 		ts_indices = dts_rand_iarr_alloc_set(ts_recx_p_akey, 0,
@@ -585,12 +585,13 @@ dkey_update_or_fetch(enum ts_op_type op_type, char *dkey, daos_epoch_t *epoch,
 	}
 
 	for (i = 0; i < ts_akey_p_dkey; i++) {
+		akey_idx = i;
 		if (!ts_const_akey)
-			dts_key_gen(akey, DTS_KEY_LEN, PF_AKEY_PREF);
+			akey_idx = 0;
 		for (j = 0; j < ts_recx_p_akey; j++) {
 			for (k = 0; k < ts_obj_p_cont; k++) {
 				rc = akey_update_or_fetch(k, op_type, dkey,
-							  akey, epoch, j,
+							  &ts_akeys[akey_idx], epoch, j,
 							  param);
 				if (rc)
 					break;
@@ -605,6 +606,23 @@ objects_open(void)
 {
 	int	i;
 	int	rc;
+	int	len;
+
+	for (i = 0; i < ts_dkey_p_obj; i++) {
+		dts_key_gen(ts_dkey_vals[i], DTS_KEY_LEN, ts_dkey_prefix);
+
+		if (ts_dkey_prefix == NULL)
+			len = sizeof(uint64_t);
+		else
+			len = min(strlen(ts_dkey_vals[i]), DTS_KEY_LEN);
+		d_iov_set(&ts_dkeys[i], ts_dkey_vals[i], len);
+	}
+
+	for (i = 0; i < ts_akey_p_dkey; i++) {
+		dts_key_gen(ts_akey_vals[i], DTS_KEY_LEN, "akey-");
+		len = min(strlen(ts_akey_vals[i]), DTS_KEY_LEN);
+		d_iov_set(&ts_akeys[i], ts_akey_vals[i], len);
+	}
 
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		if (!ts_oid_init) {
@@ -651,9 +669,82 @@ objects_close(void)
 }
 
 static int
+punch_objects(daos_epoch_t *epoch, struct pf_param *param)
+{
+	int i;
+	int rc;
+
+	for (i = 0; i < ts_obj_p_cont; i++) {
+		if (param->pa_verbose)
+			D_PRINT("Punch "DF_UOID"\n", DP_UOID(ts_uoids[i]));
+		if (ts_mode == TS_MODE_VOS) {
+			rc = vos_obj_punch(ts_ctx.tsc_coh, ts_uoids[i], *epoch, 0, 0, NULL, 0, NULL,
+					   NULL);
+		}
+		(*epoch)++;
+
+		if (rc)
+			return rc;
+	}
+	return 0;
+}
+
+static int
+punch_keys(daos_key_t *dkey, daos_epoch_t *epoch, struct pf_param *param)
+{
+	int		i;
+	int		rc;
+
+	for (i = 0; i < ts_obj_p_cont; i++) {
+		if (param->pa_verbose)
+			D_PRINT("Punch "DF_UOID" dkey="DF_KEY"\n", DP_UOID(ts_uoids[i]),
+				DP_KEY(dkey));
+		if (ts_mode == TS_MODE_VOS) {
+			rc = vos_obj_punch(ts_ctx.tsc_coh, ts_uoids[i], *epoch, 0, 0, dkey, 0, NULL,
+					   NULL);
+		}
+		(*epoch)++;
+
+		if (rc)
+			return rc;
+	}
+	return 0;
+}
+
+
+static int
+objects_punch(struct pf_param *param)
+{
+	daos_epoch_t epoch = crt_hlc_get();
+	int		i;
+	int		rc = 0;
+	uint64_t	start = 0;
+	bool		dkey_punch = param->pa_rw.dkey_flag;
+	bool		object_punch = !dkey_punch;
+
+	++epoch;
+
+	TS_TIME_START(&param->pa_duration, start);
+
+	if (object_punch) {
+		rc = punch_objects(&epoch, param);
+	} else {
+		for (i = 0; i < ts_dkey_p_obj; i++) {
+			rc = punch_keys(&ts_dkeys[i], &epoch, param);
+			if (rc)
+				break;
+		}
+	}
+
+	TS_TIME_END(&param->pa_duration, start);
+
+	return rc;
+}
+
+static int
 objects_update(struct pf_param *param)
 {
-	static daos_epoch_t epoch = 1;
+	daos_epoch_t epoch = crt_hlc_get();
 	int		i;
 	int		rc = 0;
 	int		rc_drain;
@@ -666,10 +757,7 @@ objects_update(struct pf_param *param)
 		TS_TIME_START(&param->pa_duration, start);
 
 	for (i = 0; i < ts_dkey_p_obj; i++) {
-		char	 dkey[DTS_KEY_LEN];
-
-		dts_key_gen(dkey, DTS_KEY_LEN, ts_dkey_prefix);
-		rc = dkey_update_or_fetch(TS_DO_UPDATE, dkey, &epoch,
+		rc = dkey_update_or_fetch(TS_DO_UPDATE, &ts_dkeys[i], &epoch,
 					  param);
 		if (rc)
 			break;
@@ -697,10 +785,7 @@ objects_fetch(struct pf_param *param)
 		TS_TIME_START(&param->pa_duration, start);
 
 	for (i = 0; i < ts_dkey_p_obj; i++) {
-		char	 dkey[DTS_KEY_LEN];
-
-		dts_key_gen(dkey, DTS_KEY_LEN, ts_dkey_prefix);
-		rc = dkey_update_or_fetch(TS_DO_FETCH, dkey, &epoch,
+		rc = dkey_update_or_fetch(TS_DO_FETCH, &ts_dkeys[i], &epoch,
 					  param);
 		if (rc != 0)
 			break;
@@ -739,7 +824,7 @@ objects_query(struct pf_param *param)
 				       &akey_iov, &recx, NULL);
 		if (rc != 0 && rc != -DER_NONEXIST)
 			break;
-		if (param->pa_query.verbose) {
+		if (param->pa_verbose) {
 			if (rc == -DER_NONEXIST) {
 				printf("query_key "DF_UOID ": -DER_NONEXIST\n",
 				       DP_UOID(ts_uoids[i]));
@@ -759,98 +844,39 @@ objects_query(struct pf_param *param)
 	return rc;
 }
 
-typedef int (*iterate_cb_t)(daos_handle_t ih, vos_iter_entry_t *key_ent,
-			    vos_iter_param_t *param);
-
 static int
-ts_iterate_internal(uint32_t type, vos_iter_param_t *param,
-		    iterate_cb_t iter_cb)
+iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_iter_param_t *param,
+	void *cb_arg, unsigned int *acts)
 {
-	daos_anchor_t		*probe_hash = NULL;
-	vos_iter_entry_t	key_ent;
-	daos_handle_t		ih;
-	int			rc;
+	struct pf_param *ppa = cb_arg;
 
-	rc = vos_iter_prepare(type, param, &ih, NULL);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			rc = 0;
-		else
-			D_ERROR("Failed to prepare d-key iterator: "DF_RC"\n",
-				DP_RC(rc));
-		D_GOTO(out, rc);
-	}
-
-	rc = vos_iter_probe(ih, probe_hash);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST || rc == -DER_AGAIN)
-			rc = 0;
-		D_GOTO(out_iter_fini, rc);
-	}
-
-	while (1) {
-		rc = vos_iter_fetch(ih, &key_ent, NULL);
-		if (rc != 0)
+	if (ppa->pa_verbose) {
+		switch (type) {
+		case VOS_ITER_DKEY:
+			D_PRINT("\tdkey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
 			break;
-
-		/* fill the key to iov if there are enough space */
-		if (iter_cb) {
-			rc = iter_cb(ih, &key_ent, param);
-			if (rc != 0)
-				break;
+		case VOS_ITER_AKEY:
+			D_PRINT("\takey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
+			break;
+		case VOS_ITER_SINGLE:
+			D_PRINT("\tsingv="DF_U64" bytes\n", entry->ie_rsize);
+			break;
+		case VOS_ITER_RECX:
+			D_PRINT("\trecx ="DF_U64" records ("DF_U64" bytes) at "DF_U64"\n",
+				entry->ie_recx.rx_nr, entry->ie_rsize, entry->ie_recx.rx_idx);
+			break;
+		default:
+			D_ASSERT(0);
 		}
-
-		rc = vos_iter_next(ih);
-		if (rc)
-			break;
 	}
-
-	if (rc == -DER_NONEXIST)
-		rc = 0;
-
-out_iter_fini:
-	vos_iter_finish(ih);
-out:
-	return rc;
-}
-
-static int
-iter_akey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
-	     vos_iter_param_t *param)
-{
-	int	rc;
-
-	param->ip_akey = key_ent->ie_key;
-	/* iterate array record */
-	if (ts_nest_iterator)
-		param->ip_ih = ih;
-
-	rc = ts_iterate_internal(VOS_ITER_RECX, param, NULL);
-	if (rc)
-		return rc;
-
-	rc = ts_iterate_internal(VOS_ITER_SINGLE, param, NULL);
-	return rc;
-}
-
-static int
-iter_dkey_cb(daos_handle_t ih, vos_iter_entry_t *key_ent,
-	     vos_iter_param_t *param)
-{
-	int	rc;
-
-	param->ip_dkey = key_ent->ie_key;
-	if (ts_nest_iterator)
-		param->ip_ih = ih;
-	/* iterate akey */
-	rc = ts_iterate_internal(VOS_ITER_AKEY, param, iter_akey_cb);
-	return rc;
+	return 0;
 }
 
 /* Iterate all of dkey/akey/record */
 static int
 obj_iter_records(daos_unit_oid_t oid, struct pf_param *ppa)
 {
+	struct vos_iter_anchors	anchors = {0};
 	vos_iter_param_t	param = {};
 	int			rc = 0;
 	uint64_t		start = 0;
@@ -861,12 +887,18 @@ obj_iter_records(daos_unit_oid_t oid, struct pf_param *ppa)
 	param.ip_hdl = ts_ctx.tsc_coh;
 	param.ip_oid = oid;
 
+	if (ppa->pa_iter.visible)
+		param.ip_flags = VOS_IT_RECX_VISIBLE;
+	else
+		param.ip_flags = VOS_IT_PUNCHED;
 	param.ip_epr.epr_lo = 0;
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
-	param.ip_epc_expr = VOS_IT_EPC_RE;
+	param.ip_epc_expr = VOS_IT_EPC_RR;
 
 	TS_TIME_START(&ppa->pa_duration, start);
-	rc = ts_iterate_internal(VOS_ITER_DKEY, &param, iter_dkey_cb);
+	if (ppa->pa_verbose)
+		D_PRINT("Iteration dkeys in "DF_UOID"\n", DP_UOID(oid));
+	rc = vos_iterate(&param, VOS_ITER_DKEY, true, &anchors, iter_cb, NULL, ppa, NULL);
 	TS_TIME_END(&ppa->pa_duration, start);
 	return rc;
 }
@@ -881,6 +913,30 @@ pf_update(struct pf_test *ts, struct pf_param *param)
 		return rc;
 
 	rc = objects_update(param);
+	if (rc)
+		return rc;
+
+	rc = objects_close();
+	return rc;
+}
+
+static int
+pf_punch(struct pf_test *ts, struct pf_param *param)
+{
+	int	rc;
+
+	if (ts_mode != TS_MODE_VOS) {
+		fprintf(stderr, "Currently, punch test can only run with -T \"vos\"\n");
+		if (ts_ctx.tsc_mpi_rank == 0)
+			ts_print_usage();
+		return -1;
+	}
+
+	rc = objects_open();
+	if (rc)
+		return rc;
+
+	rc = objects_punch(param);
 	if (rc)
 		return rc;
 
@@ -976,7 +1032,7 @@ pf_oit(struct pf_test *pf, struct pf_param *param)
 
 		D_PRINT("returned %d oids\n", oids_nr);
 		for (i = 0; i < oids_nr; i++) {
-			if (param->pa_oit.verbose) {
+			if (param->pa_verbose) {
 				D_PRINT("oid[%d] ="DF_OID"\n",
 					total, DP_OID(oids[i]));
 			}
@@ -1086,6 +1142,9 @@ pf_parse_common(char *str, struct pf_param *param, pf_parse_cb_t parse_cb,
 
 			param->pa_iteration = strtol(&str[1], &str, 0);
 			break;
+		case 'v':
+			str++;
+			param->pa_verbose = true;
 		}
 		skip = *str != PARAM_SEP;
 	}
@@ -1101,6 +1160,10 @@ pf_parse_rw_cb(char *str, struct pf_param *param, char **strp)
 
 	switch (c) {
 	default:
+		str++;
+		break;
+	case 'd':
+		param->pa_rw.dkey_flag = true;
 		str++;
 		break;
 	case 'o':
@@ -1147,22 +1210,6 @@ pf_parse_rw(char *str, struct pf_param *param, char **strp)
 	return 0;
 }
 
-static int
-pf_parse_query_cb(char *str, struct pf_param *pa, char **strp)
-{
-	switch (*str) {
-	default:
-		str++;
-		break;
-	case 'v':
-		pa->pa_query.verbose = true;
-		str++;
-		break;
-	}
-	*strp = str;
-	return 0;
-}
-
 /**
  * Example: "U;p Q;p;"
  * 'U' is update test.  Integer dkey required
@@ -1175,7 +1222,7 @@ pf_parse_query_cb(char *str, struct pf_param *pa, char **strp)
 static int
 pf_parse_query(char *str, struct pf_param *pa, char **strp)
 {
-	return pf_parse_common(str, pa, pf_parse_query_cb, strp);
+	return pf_parse_common(str, pa, NULL, strp);
 }
 
 static int
@@ -1187,6 +1234,10 @@ pf_parse_iterate_cb(char *str, struct pf_param *pa, char **strp)
 		break;
 	case 'n':
 		pa->pa_iter.nested = true;
+		str++;
+		break;
+	case 'V':
+		pa->pa_iter.visible = true;
 		str++;
 		break;
 	}
@@ -1201,25 +1252,9 @@ pf_parse_iterate(char *str, struct pf_param *pa, char **strp)
 }
 
 static int
-pf_parse_oit_cb(char *str, struct pf_param *pa, char **strp)
-{
-	switch (*str) {
-	default:
-		str++;
-		break;
-	case 'v':
-		pa->pa_oit.verbose = true;
-		str++;
-		break;
-	}
-	*strp = str;
-	return 0;
-}
-
-static int
 pf_parse_oit(char *str, struct pf_param *pa, char **strp)
 {
-	return pf_parse_common(str, pa, pf_parse_oit_cb, strp);
+	return pf_parse_common(str, pa, NULL, strp);
 }
 
 /* predefined test cases */
@@ -1229,6 +1264,12 @@ struct pf_test pf_tests[] = {
 		.ts_name	= "UPDATE",
 		.ts_parse	= pf_parse_rw,
 		.ts_func	= pf_update,
+	},
+	{
+		.ts_code	= 'P',
+		.ts_name	= "PUNCH",
+		.ts_parse	= pf_parse_rw,
+		.ts_func	= pf_punch,
 	},
 	{
 		.ts_code	= 'F',
@@ -1667,6 +1708,7 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 
 	if (ts_ctx.tsc_mpi_rank == 0) {
 		unsigned long	total;
+		bool		show_bw = false;
 		double		bandwidth;
 		double		latency;
 		double		rate;
@@ -1674,7 +1716,12 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 		if (strcmp(test_name, "QUERY") == 0) {
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
 				ts_obj_p_cont;
+		} else if (strcmp(test_name, "PUNCH") == 0) {
+			total = ts_ctx.tsc_mpi_size * param->pa_iteration * ts_obj_p_cont;
+			if (param->pa_rw.dkey_flag)
+				total *= ts_dkey_p_obj;
 		} else {
+			show_bw = true;
 			total = ts_ctx.tsc_mpi_size * param->pa_iteration *
 				ts_obj_p_cont * ts_dkey_p_obj *
 				ts_akey_p_dkey * ts_recx_p_akey;
@@ -1682,15 +1729,16 @@ show_result(struct pf_param *param, uint64_t start, uint64_t end,
 
 		rate = total / agg_duration;
 		latency = duration_max / total;
-		bandwidth = (rate * param->pa_rw.size) / (1024 * 1024);
 
 		fprintf(stdout, "%s successfully completed:\n"
-			"\tduration : %-10.6f sec\n"
-			"\tbandwith : %-10.3f MB/sec\n"
-			"\trate     : %-10.2f IO/sec\n"
+			"\tduration : %-10.6f sec\n", test_name, agg_duration);
+		if (show_bw) {
+			bandwidth = (rate * param->pa_rw.size) / (1024 * 1024);
+			fprintf(stdout, "\tbandwith : %-10.3f MB/sec\n", bandwidth);
+		}
+		fprintf(stdout, "\trate     : %-10.2f IO/sec\n"
 			"\tlatency  : %-10.3f us "
-			"(nonsense if credits > 1)\n",
-			test_name, agg_duration, bandwidth, rate, latency);
+			"(nonsense if credits > 1)\n", rate, latency);
 
 		fprintf(stdout, "Duration across processes:\n");
 		fprintf(stdout, "\tMAX duration : %-10.6f sec\n",
@@ -2011,8 +2059,12 @@ main(int argc, char **argv)
 
 	ts_ohs = calloc(ts_obj_p_cont, sizeof(*ts_ohs));
 	ts_oids = calloc(ts_obj_p_cont, sizeof(*ts_oids));
+	ts_dkeys = calloc(ts_dkey_p_obj, sizeof(*ts_dkeys));
+	ts_akeys = calloc(ts_akey_p_dkey, sizeof(*ts_akeys));
+	ts_dkey_vals = calloc(ts_dkey_p_obj, sizeof(*ts_dkey_vals));
+	ts_akey_vals = calloc(ts_akey_p_dkey, sizeof(*ts_akey_vals));
 	ts_uoids = calloc(ts_obj_p_cont, sizeof(*ts_uoids));
-	if (!ts_ohs || !ts_oids || !ts_uoids) {
+	if (!ts_ohs || !ts_oids || !ts_uoids || !ts_dkeys || !ts_akeys) {
 		fprintf(stderr, "failed to allocate %u open handles\n",
 			ts_obj_p_cont);
 		return -1;
@@ -2042,6 +2094,14 @@ main(int argc, char **argv)
 		free(ts_oids);
 	if (ts_ohs)
 		free(ts_ohs);
+	if (ts_dkeys)
+		free(ts_dkeys);
+	if (ts_akeys)
+		free(ts_akeys);
+	if (ts_dkey_vals)
+		free(ts_dkey_vals);
+	if (ts_akey_vals)
+		free(ts_akey_vals);
 
 	return 0;
 }
