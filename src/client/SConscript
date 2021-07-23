@@ -14,6 +14,7 @@ def scons():
         SConscript('dfs/SConscript')
         SConscript('dfuse/SConscript')
         SConscript('pydaos/SConscript')
+        SConscript('serialize/SConscript')
 
 if __name__ == "SCons.Script":
     scons()

@@ -183,7 +183,7 @@ func TestAgent_localFabricCache_IsEnabled(t *testing.T) {
 	}
 }
 
-func TestAgent_localFabricCache_Cache(t *testing.T) {
+func TestAgent_localFabricCache_CacheScan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		lfc       *localFabricCache
 		input     []*netdetect.FabricScan
@@ -192,23 +192,17 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 	}{
 		"nil": {},
 		"disabled": {
-			lfc: &localFabricCache{
-				enabled: atm.NewBool(false),
-			},
+			lfc: newLocalFabricCache(nil, false),
 		},
 		"no devices in scan": {
-			lfc: &localFabricCache{
-				enabled: atm.NewBool(true),
-			},
+			lfc:       newLocalFabricCache(nil, true),
 			expCached: true,
 			expResult: &NUMAFabric{
 				numaMap: map[int][]*FabricInterface{},
 			},
 		},
 		"successfully cached": {
-			lfc: &localFabricCache{
-				enabled: atm.NewBool(true),
-			},
+			lfc: newLocalFabricCache(nil, true),
 			input: []*netdetect.FabricScan{
 				{
 					Provider:    "ofi+sockets",
@@ -317,7 +311,7 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 				tc.lfc.log = log
 			}
 
-			tc.lfc.Cache(context.TODO(), tc.input)
+			tc.lfc.CacheScan(context.TODO(), tc.input)
 
 			common.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
 
@@ -329,8 +323,77 @@ func TestAgent_localFabricCache_Cache(t *testing.T) {
 				if diff := cmp.Diff(tc.expResult.numaMap, tc.lfc.localNUMAFabric.numaMap); diff != "" {
 					t.Fatalf("-want, +got:\n%s", diff)
 				}
-			} else if tc.lfc.localNUMAFabric != nil {
-				t.Fatalf("expected nothing cached, found: %+v", tc.lfc.localNUMAFabric)
+			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {
+				t.Fatalf("expected nothing cached, found: %+v", tc.lfc.localNUMAFabric.numaMap)
+			}
+		})
+	}
+}
+
+func TestAgent_localFabricCache_Cache(t *testing.T) {
+	for name, tc := range map[string]struct {
+		lfc       *localFabricCache
+		input     *NUMAFabric
+		expCached bool
+	}{
+		"nil": {},
+		"nil NUMAFabric": {
+			lfc: newLocalFabricCache(nil, true),
+		},
+		"no NUMA nodes": {
+			lfc: newLocalFabricCache(nil, true),
+			input: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{},
+			},
+			expCached: true,
+		},
+		"successfully cached": {
+			lfc: newLocalFabricCache(nil, true),
+			input: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "test1",
+							NetDevClass: netdetect.Infiniband,
+						},
+						{
+							Name:        "test2",
+							NetDevClass: netdetect.Ether,
+						},
+					},
+					1: {
+						{
+							Name:        "test0",
+							NetDevClass: netdetect.Ether,
+						},
+					},
+				},
+			},
+			expCached: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			if tc.lfc != nil {
+				tc.lfc.log = log
+			}
+
+			tc.lfc.Cache(context.TODO(), tc.input)
+
+			common.AssertEqual(t, tc.expCached, tc.lfc.IsCached(), "IsCached()")
+
+			if tc.lfc == nil {
+				return
+			}
+
+			if tc.expCached {
+				if diff := cmp.Diff(tc.input, tc.lfc.localNUMAFabric, cmp.AllowUnexported(NUMAFabric{})); diff != "" {
+					t.Fatalf("-want, +got:\n%s", diff)
+				}
+			} else if len(tc.lfc.localNUMAFabric.numaMap) > 0 {
+				t.Fatalf("expected nothing cached, got: %+v", tc.lfc.localNUMAFabric.numaMap)
 			}
 		})
 	}
