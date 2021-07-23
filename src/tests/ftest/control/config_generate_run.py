@@ -61,7 +61,7 @@ class ConfigGenerateRun(TestWithServers):
         # Stop and restart daos_server. self.start_server_managers() has the
         # server startup check built into it, so if there's something wrong,
         # it'll throw an error.
-        self.log.info("Stopping servers")
+        self.log.info("Stopping servers.")
         self.stop_servers()
 
         # Create a new server config from generated_yaml and update SCM-related
