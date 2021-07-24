@@ -58,7 +58,7 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 // health statistics and stored server meta-data. If I/O Engines are running
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
-// assigned to I/O Engines.
+// assigned to I/O Engineslled.
 func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()
@@ -68,15 +68,14 @@ func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (
 			continue
 		}
 
-		isEngineRunning := ei.IsReady()
-
-		tsrs, err := ei.ScanBdevTiers(isEngineRunning)
+		tsrs, err := ei.ScanBdevTiers()
 		if err != nil {
-			fmt.Printf("\nsab:sbt:%v\n", err)
 			return nil, err
 		}
 
-		if !isEngineRunning || !statsReq {
+		// If the is not running or we aren't interested in temporal
+		// statistics for the bdev devices then continue to next.
+		if !ei.IsReady() || !statsReq {
 			for _, tsr := range tsrs {
 				ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
 			}
@@ -160,7 +159,6 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 		}
 	}
 	if !bdevsInCfg {
-		fmt.Printf("no cfg\n")
 		c.log.Debugf("no bdevs in cfg so scan all")
 		// return details of all bdevs if none are assigned to engines
 		resp, err := c.storage.ScanBdevs(storage.BdevScanRequest{
@@ -170,11 +168,7 @@ func (c *ControlService) scanBdevs(ctx context.Context, req *ctlpb.ScanNvmeReq) 
 		return newScanNvmeResp(req, resp, err)
 	}
 
-	transientStatsRequested := req.GetHealth() || req.GetMeta()
-
-	fmt.Printf("cfg\n")
-	c.log.Debugf("bdevs in cfg so scan only assigned (stats req: %v)", transientStatsRequested)
-	resp, err := c.scanAssignedBdevs(ctx, transientStatsRequested)
+	resp, err := c.scanAssignedBdevs(ctx, req.GetHealth() || req.GetMeta())
 
 	return newScanNvmeResp(req, resp, err)
 }

@@ -170,13 +170,13 @@ func (ei *EngineInstance) HasBlockDevices() bool {
 
 // ScanBdevTiers calls in to the private engine storage provider to scan bdev
 // tiers. Scan will avoid using any cached results if direct is set to true.
-func (ei *EngineInstance) ScanBdevTiers(isEngineRunning bool) ([]storage.BdevTierScanResult, error) {
-	ei.log.Infof("%s instance %d storage ScanBdvTe, %v running", build.DataPlaneName, ei.Index())
-	return ei.storage.ScanBdevTiers(isEngineRunning)
-}
+func (ei *EngineInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
+	isReady := ei.IsReady()
+	upDn := "down"
+	if isReady {
+		upDn = "up"
+	}
+	ei.log.Debugf("scanning engine-%d bdev tiers while engine is %s", ei.Index(), upDn)
 
-// SetBdevCache stores the given bdev scan response in the engine's storage
-// provider for later use.
-func (ei *EngineInstance) SetBdevCache(resp storage.BdevScanResponse) {
-	ei.storage.SetBdevCache(resp)
+	return ei.storage.ScanBdevTiers(!isReady)
 }

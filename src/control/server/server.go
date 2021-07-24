@@ -253,7 +253,8 @@ func (srv *server) addEngines(ctx context.Context) error {
 	// storage provider(s) during scan even if devices are in use.
 	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{})
 	if err != nil {
-		return err
+		srv.log.Errorf("nvme scan failed: %s", err)
+		nvmeScanResp = &storage.BdevScanResponse{}
 	}
 	if nvmeScanResp == nil {
 		return errors.New("nil nvme scan response received")
@@ -266,7 +267,7 @@ func (srv *server) addEngines(ctx context.Context) error {
 			return err
 		}
 
-		engine.SetBdevCache(*nvmeScanResp)
+		engine.storage.SetBdevCache(*nvmeScanResp)
 
 		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
 

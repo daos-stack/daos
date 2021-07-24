@@ -341,14 +341,7 @@ type BdevTierScanResult struct {
 	Result *BdevScanResponse
 }
 
-// ScanBdevTiers scans all Bdev tiers in the provider's engine storage
-// configuration. If the engine is not running, bypass cache to retrieve fresh
-// results as devices are accessible from the control plane.
-func (p *Provider) ScanBdevTiers(isEngineRunning bool) (results []BdevTierScanResult, err error) {
-	return p.scanBdevTiers(isEngineRunning, p.bdev.Scan)
-}
-
-func (p *Provider) scanBdevTiers(isEngineRunning bool, scan scanFn) (results []BdevTierScanResult, err error) {
+func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierScanResult, err error) {
 	bdevCfgs := p.engineStorage.Tiers.BdevConfigs()
 	results = make([]BdevTierScanResult, 0, len(bdevCfgs))
 
@@ -367,19 +360,18 @@ func (p *Provider) scanBdevTiers(isEngineRunning bool, scan scanFn) (results []B
 
 		req := BdevScanRequest{
 			DeviceList:  cfg.Bdev.DeviceList,
-			BypassCache: !isEngineRunning,
+			BypassCache: direct,
 		}
 
 		p.Lock()
 		bsr, err := scanBdevs(p.log, req, &p.bdevCache, scan)
 		p.Unlock()
 		if err != nil {
-			fmt.Printf("sbt:sb:%v\n", err)
 			return nil, err
 		}
 
-		p.log.Debugf("instance %d storage scan: tier %d bypass cache (%v), %v: %v",
-			p.engineIndex, ti, req.BypassCache, req.DeviceList, bsr.Controllers)
+		p.log.Debugf("storage provider for engine %d: scan tier-%d, bdevs %v, direct %v",
+			p.engineIndex, ti, req.DeviceList, req.BypassCache)
 
 		result := BdevTierScanResult{
 			Tier:   cfg.Tier,
@@ -389,6 +381,12 @@ func (p *Provider) scanBdevTiers(isEngineRunning bool, scan scanFn) (results []B
 	}
 
 	return
+}
+
+// ScanBdevTiers scans all Bdev tiers in the provider's engine storage configuration.
+// If direct is set to true, bypass cache to retrieve up-to-date details.
+func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err error) {
+	return p.scanBdevTiers(direct, p.bdev.Scan)
 }
 
 func filterScanResp(log logging.Logger, resp *BdevScanResponse, pciFilter ...string) *BdevScanResponse {
@@ -415,12 +413,11 @@ type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
 
 func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResponse, scan scanFn) (*BdevScanResponse, error) {
 	if !req.BypassCache && cachedResp != nil && len(cachedResp.Controllers) != 0 {
-		log.Debugf("loading bdev scan cache: %v", cachedResp.Controllers)
 		return filterScanResp(log, cachedResp, req.DeviceList...), nil
 	}
 
-	log.Debugf("storage provider retrieving bdev details from backend: %+v, %+v", req, cachedResp)
 	resp, err := scan(req)
+	log.Debugf("storage provider retrieving bdev details from backend: %+v, %+v", req, resp)
 
 	return filterScanResp(log, resp, req.DeviceList...), err
 }
