@@ -199,6 +199,7 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		Incarnation: ready.GetIncarnation(),
 	})
 	if err != nil {
+		ei.log.Errorf("join failed: %s", err)
 		return system.NilRank, false, err
 	} else if resp.State == system.MemberStateExcluded {
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
