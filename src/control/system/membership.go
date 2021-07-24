@@ -493,10 +493,10 @@ func (m *Membership) MarkRankDead(rank Rank, incarnation uint64) error {
 
 		return errors.New(msg)
 	}
-	m.log.Debugf("member %d last update: %s", rank, member.LastUpdate)
+	m.log.Debugf("member %d:%x last update: %s", rank, member.Incarnation, member.LastUpdate)
 
 	if member.State() == MemberStateJoined && member.Incarnation > incarnation {
-		m.log.Debugf("ignoring rank dead event for previous incarnation of %d (%d < %d)", rank, incarnation, member.Incarnation)
+		m.log.Debugf("ignoring rank dead event for previous incarnation of %d (%x < %x)", rank, incarnation, member.Incarnation)
 		return errors.Errorf("event is for previous incarnation of %d", rank)
 	}
 

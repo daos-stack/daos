@@ -268,21 +268,22 @@ func (evt *RASEvent) ToProto() (*sharedpb.RASEvent, error) {
 // FromProto initializes a native event from a provided protobuf event.
 func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 	*evt = RASEvent{
-		ID:        RASID(pbEvt.Id),
-		Timestamp: pbEvt.Timestamp,
-		Type:      RASTypeID(pbEvt.Type),
-		Severity:  RASSeverityID(pbEvt.Severity),
-		Msg:       pbEvt.Msg,
-		Hostname:  pbEvt.Hostname,
-		Rank:      pbEvt.Rank,
-		HWID:      pbEvt.HwId,
-		ProcID:    pbEvt.ProcId,
-		ThreadID:  pbEvt.ThreadId,
-		JobID:     pbEvt.JobId,
-		PoolUUID:  pbEvt.PoolUuid,
-		ContUUID:  pbEvt.ContUuid,
-		ObjID:     pbEvt.ObjId,
-		CtlOp:     pbEvt.CtlOp,
+		ID:          RASID(pbEvt.Id),
+		Timestamp:   pbEvt.Timestamp,
+		Type:        RASTypeID(pbEvt.Type),
+		Severity:    RASSeverityID(pbEvt.Severity),
+		Msg:         pbEvt.Msg,
+		Hostname:    pbEvt.Hostname,
+		Rank:        pbEvt.Rank,
+		Incarnation: pbEvt.Incarnation,
+		HWID:        pbEvt.HwId,
+		ProcID:      pbEvt.ProcId,
+		ThreadID:    pbEvt.ThreadId,
+		JobID:       pbEvt.JobId,
+		PoolUUID:    pbEvt.PoolUuid,
+		ContUUID:    pbEvt.ContUuid,
+		ObjID:       pbEvt.ObjId,
+		CtlOp:       pbEvt.CtlOp,
 	}
 
 	evt.forwarded.SetFalse()

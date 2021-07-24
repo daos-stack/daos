@@ -162,7 +162,7 @@ log_event(Shared__RASEvent *evt)
 	if (evt->rank != CRT_NO_RANK)
 		D_FPRINTF(stream, " rank: [%u]", evt->rank);
 	if (evt->incarnation != 0)
-		D_FPRINTF(stream, " inc: [%"PRIu64"]", evt->incarnation);
+		D_FPRINTF(stream, " inc: [%x]", evt->incarnation);
 	if (evt->job_id != NULL)
 		D_FPRINTF(stream, " jobid: [%s]", evt->job_id);
 	if (evt->pool_uuid != NULL)
