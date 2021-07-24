@@ -1216,6 +1216,9 @@ finish_rpc:
 	if (rc != 0) {
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, rc);
+
+		/* Do not propagate error further as we've completed the rpc */
+		rc = DER_SUCCESS;
 	}
 
 out:
