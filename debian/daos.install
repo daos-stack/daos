@@ -4,4 +4,5 @@ usr/lib64/daos/certgen/*
 usr/lib64/daos/VERSION
 usr/lib64/libcart.so.*
 usr/lib64/libgurt.so.*
+usr/lib64/libdaos_common.so
 etc/bash_completion.d/daos.bash
