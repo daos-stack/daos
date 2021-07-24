@@ -95,7 +95,7 @@ layout_find_diff(struct pl_jump_map *jmap, struct pl_obj_layout *original,
 							PO_COMP_ST_UP |
 							PO_COMP_ST_DRAIN |
 							PO_COMP_ST_NEW))
-				remap_alloc_one(diff, index, temp_tgt, true);
+				remap_alloc_one(diff, index, temp_tgt, true, NULL);
 			else
 				/* XXX: This isn't desirable - but it can happen
 				 * when a reintegration is happening when
@@ -264,6 +264,22 @@ get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status)
 
 	return num_dom;
 }
+
+static void
+reset_dom_cur_grp(uint8_t *dom_cur_grp_used, uint8_t *dom_occupied, uint32_t dom_size)
+{
+	int i;
+
+	for (i = 0; i < dom_size; i++) {
+		if (isset(dom_occupied, i))
+			/* if all targets used up, this dom will not be used anyway */
+			setbit(dom_cur_grp_used, i);
+		else
+			/* otherwise reset it */
+			clrbit(dom_cur_grp_used, i);
+	}
+}
+
 /**
  * This function recursively chooses a single target to be used in the
  * object shard layout. This function is called for every shard that needs a
@@ -280,8 +296,11 @@ get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status)
  *                              information on whether or not an internal node
  *                              (non-target) in a domain has been used.
  * \param[in]   dom_occupied    This is a contiguous array that contains
- *                              information on whether or not an internal node
- *                              (non-target) in a domain has been occupied.
+ *                              information on whether or not all targets of the
+ *                              domain has been occupied.
+ * \param[in]	dom_cur_grp_used The array contains information if the domain
+ *                              is used by the current group, so it can try not
+ *                              put the different shards in the same domain.
  * \param[in]   used_targets    A list of the targets that have been used. We
  *                              iterate through this when selecting the next
  *                              target in a placement to determine if that
@@ -296,17 +315,21 @@ get_num_domains(struct pool_domain *curr_dom, uint32_t allow_status)
 static void
 get_target(struct pool_domain *curr_dom, struct pool_target **target,
 	   uint64_t obj_key, uint8_t *dom_used, uint8_t *dom_occupied,
-	   uint8_t *tgts_used, int shard_num, uint32_t allow_status)
+	   uint8_t *dom_cur_grp_used, uint8_t *tgts_used, int shard_num,
+	   uint32_t allow_status)
 {
 	int                     range_set;
 	uint8_t                 found_target = 0;
 	uint32_t                selected_dom;
 	struct pool_domain      *root_pos;
 	struct pool_domain	*dom_stack[MAX_STACK] = { 0 };
+	uint32_t		dom_size;
 	int			top = -1;
 
 	obj_key = crc(obj_key, shard_num);
 	root_pos = curr_dom;
+	dom_size = (struct pool_domain *)(root_pos->do_targets) - (root_pos) + 1;
+retry:
 	do {
 		uint32_t        num_doms;
 
@@ -350,6 +373,7 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			} while (isset(tgts_used, dom_id));
 
 			setbit(tgts_used, dom_id);
+			setbit(dom_cur_grp_used, curr_dom - root_pos);
 			/* Found target (which may be available or not) */
 			found_target = 1;
 		} else {
@@ -360,23 +384,38 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 			key = obj_key;
 
-			/*
-			 * If all of the nodes in this domain have been used for
-			 * shards but we still have shards to place mark all
-			 * nodes as unused in bookkeeping array so duplicates
-			 * can be chosen
-			 */
 			start_dom = (curr_dom->do_children) - root_pos;
 			end_dom = start_dom + (num_doms - 1);
 
-			range_set = isset_range(dom_occupied, start_dom,
-						end_dom);
+			/* Check if all targets under the domain range has been
+			 * used up (occupied), go back to its parent if it does.
+			 */
+			range_set = isset_range(dom_occupied, start_dom, end_dom);
 			if (range_set) {
 				if (top == -1) {
+					/* shard nr > target nr, no extra target for the shard */
 					*target = NULL;
 					return;
 				}
 				setbit(dom_occupied, curr_dom - root_pos);
+				setbit(dom_cur_grp_used, curr_dom - root_pos);
+				curr_dom = dom_stack[top--];
+				continue;
+			}
+
+			/* Check if all domain range has been used for the current group */
+			range_set = isset_range(dom_cur_grp_used, start_dom, end_dom);
+			if (range_set) {
+				if (top == -1) {
+					/* all domains have been used by the current group,
+					 * then we cleanup the dom_cur_grp_used bits, i.e.
+					 * the shards within the same group might be put
+					 * to the same domain.
+					 */
+					reset_dom_cur_grp(dom_cur_grp_used, dom_occupied, dom_size);
+					goto retry;
+				}
+				setbit(dom_cur_grp_used, curr_dom - root_pos);
 				curr_dom = dom_stack[top--];
 				continue;
 			}
@@ -384,11 +423,22 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 			range_set = isset_range(dom_used, start_dom, end_dom);
 			if (range_set) {
 				int idx;
+				bool reset_used = false;
 
 				/* Skip the domain whose targets are used up */
 				for (idx = start_dom; idx <= end_dom; ++idx) {
-					if (isclr(dom_occupied, idx))
+					/* Only reused the domain, if there are still targets
+					 * available (not being used) within this domain, and the
+					 * domain has not being used by current group yet. so
+					 * 1. there won't be multiple shards in the same target.
+					 * 2. there won't be multiple shards within same group
+					 *    are in the same domain.
+					 */
+					if (isclr(dom_occupied, idx) &&
+					    isclr(dom_cur_grp_used, idx)) {
 						clrbit(dom_used, idx);
+						reset_used = true;
+					}
 				}
 				/* if all children of the current dom have been
 				 * used, then let's go back its parent to check
@@ -399,11 +449,17 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 					D_ASSERT(top != -1);
 					curr_dom = dom_stack[top--];
 				} else {
+					/* If no used dom is being reset, then let's reset
+					 * dom_cur_grp_used and start put multiple same group
+					 * in the same domain.
+					 */
+					if (!reset_used)
+						reset_dom_cur_grp(dom_cur_grp_used, dom_occupied,
+								  dom_size);
 					curr_dom = root_pos;
 				}
 				continue;
 			}
-
 			/*
 			 * Keep choosing new domains until one that has
 			 * not been used is found
@@ -415,7 +471,6 @@ get_target(struct pool_domain *curr_dom, struct pool_target **target,
 
 			/* Mark this domain as used */
 			setbit(dom_used, start_dom + selected_dom);
-
 			D_ASSERT(top < MAX_STACK - 1);
 			dom_stack[++top] = curr_dom;
 			curr_dom = &(curr_dom->do_children[selected_dom]);
@@ -442,6 +497,11 @@ count_available_spares(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 
 	return num_targets - unusable_tgts;
 }
+
+struct dom_grp_used {
+	uint8_t		*dgu_used;
+	d_list_t	dgu_list;
+};
 
 /**
 * Try to remap all the failed shards in the @remap_list to proper
@@ -505,6 +565,7 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 			DF_FAILEDSHARD"\n", DP_FAILEDSHARD(*f_shard));
 		debug_print_allow_status(allow_status);
 
+		D_ASSERT(f_shard->fs_data != NULL);
 		/*
 		 * If there are any targets left, there are potentially valid
 		 * spares. Don't be picky here about refusing to accept a
@@ -515,9 +576,13 @@ obj_remap_shards(struct pl_jump_map *jmap, struct daos_obj_md *md,
 		 */
 		spare_avail = spares_left > 0;
 		if (spare_avail) {
+			struct dom_grp_used *dgu = f_shard->fs_data;
+
+			D_ASSERT(dgu != NULL);
 			rebuild_key = crc(key, f_shard->fs_shard_idx);
 			get_target(root, &spare_tgt, crc(key, rebuild_key),
-				   dom_used, dom_occupied, tgts_used,
+				   dom_used, dom_occupied,
+				   dgu->dgu_used, tgts_used,
 				   shard_id, allow_status);
 			D_ASSERT(spare_tgt != NULL);
 			D_DEBUG(DB_PL, "Trying new target: "DF_TARGET"\n",
@@ -589,6 +654,20 @@ jump_map_obj_spec_place_get(struct pl_jump_map *jmap, daos_obj_id_t oid,
 	return 0;
 }
 
+static struct dom_grp_used*
+remap_gpu_alloc_one(d_list_t *remap_list, uint8_t *dom_cur_grp_used)
+{
+	struct dom_grp_used	*dgu;
+
+	D_ALLOC_PTR(dgu);
+	if (dgu == NULL)
+		return NULL;
+
+	dgu->dgu_used = dom_cur_grp_used;
+	d_list_add_tail(&dgu->dgu_list, remap_list);
+	return dgu;
+}
+
 /**
  * This function handles getting the initial layout for the object as well as
  * determining if there are targets that are unavailable.
@@ -608,6 +687,8 @@ jump_map_obj_spec_place_get(struct pl_jump_map *jmap, daos_obj_id_t oid,
  * \return                      An error code determining if the function
  *                              succeeded (0) or failed.
  */
+#define	LOCAL_DOM_ARRAY_SIZE	2
+#define	LOCAL_TGT_ARRAY_SIZE	4
 static int
 get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		  struct jm_obj_placement *jmop, d_list_t *out_list,
@@ -620,12 +701,21 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	uint8_t                 *dom_used = NULL;
 	uint8_t                 *dom_occupied = NULL;
 	uint8_t                 *tgts_used = NULL;
+	uint8_t			*dom_cur_grp_used = NULL;
+	uint8_t			dom_used_array[LOCAL_DOM_ARRAY_SIZE] = { 0 };
+	uint8_t			dom_occupied_array[LOCAL_DOM_ARRAY_SIZE] = { 0 };
+	uint8_t			tgts_used_array[LOCAL_TGT_ARRAY_SIZE] = { 0 };
+	d_list_t		dgu_remap_list;
 	uint32_t                dom_size;
+	uint32_t                dom_array_size;
 	uint64_t                key;
 	uint32_t		fail_tgt_cnt = 0;
 	bool			spec_oid = false;
+	bool			realloc_grp_used = true;
 	d_list_t		local_list;
 	d_list_t		*remap_list;
+	struct dom_grp_used	*dgu;
+	struct dom_grp_used	*tmp;
 	int			i, j, k;
 	int			rc = 0;
 
@@ -643,15 +733,27 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	rc = 0;
 
 	D_INIT_LIST_HEAD(&local_list);
+	D_INIT_LIST_HEAD(&dgu_remap_list);
 	if (out_list != NULL)
 		remap_list = out_list;
 	else
 		remap_list = &local_list;
 
 	dom_size = (struct pool_domain *)(root->do_targets) - (root) + 1;
-	D_ALLOC_ARRAY(dom_used, (dom_size / NBBY) + 1);
-	D_ALLOC_ARRAY(dom_occupied, (dom_size / NBBY) + 1);
-	D_ALLOC_ARRAY(tgts_used, (root->do_target_nr / NBBY) + 1);
+	dom_array_size = dom_size/NBBY + 1;
+	if (dom_array_size > LOCAL_DOM_ARRAY_SIZE) {
+		D_ALLOC_ARRAY(dom_used, dom_array_size);
+		D_ALLOC_ARRAY(dom_occupied, dom_array_size);
+	} else {
+		dom_used = dom_used_array;
+		dom_occupied = dom_occupied_array;
+	}
+
+	if (root->do_target_nr / NBBY + 1 > LOCAL_TGT_ARRAY_SIZE)
+		D_ALLOC_ARRAY(tgts_used, (root->do_target_nr / NBBY) + 1);
+	else
+		tgts_used = tgts_used_array;
+
 	if (dom_used == NULL || dom_occupied == NULL || tgts_used == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -661,6 +763,17 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 		spec_oid = true;
 
 	for (i = 0, k = 0; i < jmop->jmop_grp_nr; i++) {
+		struct dom_grp_used  *remap_grp_used = NULL;
+
+		if (realloc_grp_used) {
+			realloc_grp_used = false;
+			D_ALLOC_ARRAY(dom_cur_grp_used, dom_array_size);
+			if (dom_cur_grp_used == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+		} else {
+			memset(dom_cur_grp_used, 0, dom_array_size);
+		}
+
 		for (j = 0; j < jmop->jmop_grp_size; j++, k++) {
 			target = NULL;
 			if (spec_oid && i == 0 && j == 0) {
@@ -681,8 +794,8 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				setbit(tgts_used, target->ta_comp.co_id);
 			} else {
 				get_target(root, &target, key, dom_used,
-					   dom_occupied, tgts_used, k,
-					   allow_status);
+					   dom_occupied, dom_cur_grp_used,
+					   tgts_used, k, allow_status);
 			}
 
 			if (target == NULL) {
@@ -705,8 +818,16 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 				D_DEBUG(DB_PL, "Target unavailable " DF_TARGET
 					". Adding to remap_list: fail cnt %d\n",
 					DP_TARGET(target), fail_tgt_cnt);
-				rc = remap_alloc_one(remap_list, k, target,
-						     false);
+
+				if (remap_grp_used == NULL) {
+					remap_grp_used = remap_gpu_alloc_one(&dgu_remap_list,
+									     dom_cur_grp_used);
+					if (remap_grp_used == NULL)
+						D_GOTO(out, rc = -DER_NOMEM);
+					realloc_grp_used = true;
+				}
+
+				rc = remap_alloc_one(remap_list, k, target, false, remap_grp_used);
 				if (rc)
 					D_GOTO(out, rc);
 
@@ -731,11 +852,28 @@ out:
 	if (remap_list == &local_list)
 		remap_list_free_all(&local_list);
 
-	if (dom_used)
+	if (dom_cur_grp_used != NULL) {
+		bool cur_grp_freed = false;
+
+		d_list_for_each_entry_safe(dgu, tmp, &dgu_remap_list, dgu_list) {
+			d_list_del(&dgu->dgu_list);
+			if (dgu->dgu_used == dom_cur_grp_used)
+				cur_grp_freed = true;
+			D_FREE(dgu->dgu_used);
+			D_FREE(dgu);
+		}
+		/* If dom_cur_grp_used is not attached to dgu, i.e. no targets needs
+		 * be remapped, then free dom_cur_grp_used separately.
+		 */
+		if (!cur_grp_freed)
+			D_FREE(dom_cur_grp_used);
+	}
+
+	if (dom_used && dom_used != dom_used_array)
 		D_FREE(dom_used);
-	if (dom_occupied)
+	if (dom_occupied && dom_occupied != dom_occupied_array)
 		D_FREE(dom_occupied);
-	if (tgts_used)
+	if (tgts_used && tgts_used != tgts_used_array)
 		D_FREE(tgts_used);
 
 	return rc;

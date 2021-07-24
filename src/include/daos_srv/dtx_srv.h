@@ -163,9 +163,15 @@ struct dtx_leader_handle {
 struct dtx_stat {
 	uint64_t	dtx_committable_count;
 	uint64_t	dtx_oldest_committable_time;
-	uint64_t	dtx_committed_count;
-	uint64_t	dtx_oldest_committed_time;
 	uint64_t	dtx_oldest_active_time;
+	/* The epoch for the oldest entry in the 1st committed blob. */
+	uint64_t	dtx_first_cmt_blob_time_up;
+	/* The epoch for the newest entry in the 1st committed blob. */
+	uint64_t	dtx_first_cmt_blob_time_lo;
+	/* container-based committed DTX entries count. */
+	uint32_t	dtx_cont_cmt_count;
+	/* pool-based committed DTX entries count. */
+	uint32_t	dtx_pool_cmt_count;
 };
 
 enum dtx_flags {
