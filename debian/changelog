@@ -1,3 +1,9 @@
+daos (1.3.103-5) unstable; urgency=low
+  [ Michael MacDonald ]
+  * Move libdaos_common.so from daos-client to daos package
+
+ -- Michael MacDonald <mjmac.macdonald@intel.com>  Sat, 24 Jul 2021 13:58:03 -0000
+
 daos (1.3.103-4) unstable; urgency=medium
   [ Li Wei ]
   * Update raft to fix slow leader re-elections

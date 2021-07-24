@@ -349,6 +349,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/%{name}/VERSION
 %{_libdir}/libcart.so.*
 %{_libdir}/libgurt.so.*
+%{_libdir}/libdaos_common.so
 %doc
 
 %files server
@@ -390,7 +391,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_unitdir}/%{server_svc_name}
 
 %files client
-%{_libdir}/libdaos_common.so
 %{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
@@ -472,6 +472,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Sat Jul 24 2021 Michael MacDonald <mjmac.macdonald@intel.com> 1.3.103-6
+- Move libdaos_common.so from daos-client to daos package
+
 * Mon Jul 19 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-5
 - Add DAOS serialization library that requires hdf5
 
