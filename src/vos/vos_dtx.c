@@ -1582,7 +1582,16 @@ vos_dtx_register_record(struct umem_instance *umm, umem_off_t record,
 		dth->dth_active = 1;
 	}
 
-	rc = vos_dtx_append(dth, record, type);
+	rc = 0;
+	/* XXX: It is hack: we bypass ilog record register, that assumes the
+	 *	update/punch for this TX will succeed, then when DTX commit,
+	 *	we do not need to handle ilog related logic. That is helpful
+	 *	to measure how much ilog related logic affects the DTX commit.
+	 *	Only for test.
+	 */
+	if (type != DTX_RT_ILOG)
+		rc = vos_dtx_append(dth, record, type);
+
 	if (rc == 0) {
 		/* Incarnation log entry implies a share */
 		*tx_id = DAE_LID(dae);
