@@ -9,7 +9,6 @@ import random
 import threading
 
 from itertools import product
-from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
@@ -67,7 +66,7 @@ class OSAOnlineReintegration(OSAUtils):
         """
         num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
         # Create a pool
-        pool = {}
+        self.pool = []
         pool_uuid = []
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
@@ -81,15 +80,14 @@ class OSAOnlineReintegration(OSAUtils):
             time.sleep(30)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context, self.get_dmg_command())
-            pool[val].get_params(self)
+            self.pool.append(self.get_pool(create=False))
             # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
-            pool[val].create()
-            pool_uuid.append(pool[val].uuid)
+            self.pool[-1].scm_size.value = int(
+                self.pool[-1].scm_size.value / num_pool)
+            self.pool[-1].nvme_size.value = int(
+                self.pool[-1].nvme_size.value / num_pool)
+            self.pool[-1].create()
+            pool_uuid.append(self.pool[-1].uuid)
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
@@ -101,29 +99,29 @@ class OSAOnlineReintegration(OSAUtils):
                 for _ in range(0, num_jobs):
                     # Add a thread for these IOR arguments
                     threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={"pool": pool[val],
-                                                            "oclass": oclass,
-                                                            "api": api,
-                                                            "test": test,
-                                                            "flags": flags,
-                                                            "results":
-                                                            self.out_queue}))
+                                                    kwargs={
+                                                        "pool": self.pool[val],
+                                                        "oclass": oclass,
+                                                        "api": api,
+                                                        "test": test,
+                                                        "flags": flags,
+                                                        "results":
+                                                        self.out_queue}))
                 # Launch the IOR threads
                 for thrd in threads:
                     self.log.info("Thread : %s", thrd)
                     thrd.start()
                     time.sleep(1)
-            self.pool = pool[val]
             time.sleep(5)
-            self.pool.display_pool_daos_space("Pool space: Beginning")
+            self.pool[val].display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
             if server_boot is False:
-                output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                       rank)
+                output = self.dmg_command.pool_exclude(
+                    self.pool[val].uuid, rank)
             else:
                 output = self.dmg_command.system_stop(ranks=rank)
-                self.pool.wait_for_rebuild(True)
+                self.pool[val].wait_for_rebuild(True)
                 self.log.info(output)
                 output = self.dmg_command.system_start(ranks=rank)
 
@@ -139,8 +137,8 @@ class OSAOnlineReintegration(OSAUtils):
             # pver_begin + 8 targets.
             self.assertTrue(pver_exclude > (pver_begin + 8),
                             "Pool Version Error:  After exclude")
-            output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                       rank)
+            output = self.dmg_command.pool_reintegrate(
+                self.pool[val].uuid, rank)
             self.log.info(output)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
@@ -164,8 +162,7 @@ class OSAOnlineReintegration(OSAUtils):
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space(display_string)
+            self.pool[val].display_pool_daos_space(display_string)
 
     @skipForTicket("DAOS-6573")
     def test_osa_online_reintegration(self):

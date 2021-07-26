@@ -3099,6 +3099,40 @@ class AllocFailTestRun():
         if not self.aft.check_stderr:
             return
 
+        # Check stderr from a daos command.
+        # These should mostly be from the DH_PERROR_SYS or DH_PERROR_DER macros so check for
+        # this format.  There may be multiple lines and the two styles may be mixed.
+        # These checks will report an error against the line of code that introduced the "leak"
+        # which may well only have a loose correlation to where the error was reported.
+        if self.aft.check_daos_stderr:
+            stderr = self.stderr.decode('utf-8').rstrip()
+            for line in stderr.splitlines():
+
+                # This is what the go code uses.
+                if line.endswith(': DER_NOMEM(-1009): Out of memory'):
+                    continue
+
+                # This is what DH_PERROR_DER uses
+                if line.endswith(': Out of memory (-1009)'):
+                    continue
+
+                # This is what DH_PERROR_SYS uses
+                if line.endswith(': Cannot allocate memory (12)'):
+                    continue
+
+                if 'DER_UNKNOWN' in line:
+                    self.aft.wf.add(self.fi_loc,
+                                    'HIGH',
+                                    "Incorrect stderr '{}'".format(line),
+                                    mtype='Invalid error code used')
+                    continue
+
+                self.aft.wf.add(self.fi_loc,
+                                'NORMAL',
+                                "Unexpected stderr '{}'".format(line),
+                                mtype='Unrecognised error')
+            return
+
         if self.returncode == 0:
             if self.stdout != self.aft.expected_stdout:
                 self.aft.wf.add(self.fi_loc,
@@ -3119,8 +3153,7 @@ class AllocFailTestRun():
             self.aft.wf.add(self.fi_loc,
                             'NORMAL',
                             "Incorrect stderr '{}'".format(stderr),
-                            mtype='Out of memory not reported '
-                            'correctly via stderr')
+                            mtype='Out of memory not reported correctly via stderr')
 
 class AllocFailTest():
     """Class to describe fault injection command"""
@@ -3133,6 +3166,8 @@ class AllocFailTest():
         self.check_stderr = False
         # Check stdout/error from commands where faults were not injected
         self.check_post_stdout = True
+        # Check stderr conforms to daos_hdlr.c style
+        self.check_daos_stderr = False
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
@@ -3214,7 +3249,12 @@ class AllocFailTest():
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
-        aftf = AllocFailTestRun(self, self.cmd, cmd_env, loc)
+        if callable(self.cmd):
+            cmd = self.cmd()
+        else:
+            cmd = self.cmd
+
+        aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
             aftf.vh = ValgrindHelper(self.conf)
             # Turn off leak checking in this case, as we're just interested in
@@ -3228,44 +3268,36 @@ class AllocFailTest():
 def test_alloc_fail_copy(server, conf, wf):
     """Run container (filesystem) copy under fault injection.
 
-    TODO: Complete this test and resolve some issues:
-    Each copy will be to the same container, so in a lot of them the destination
-    will exist.  Two options here are either to run in serial, or create a
-    container per iteration, neither of which are ideal.  Another option might
-    be to copy from a container to a posix directory, as creating a target
-    directory per iteration would be cheap.  If container copy can work with
-    subdirs and create them automatically this would be preferred.
+    This test will create a new uuid per iteration, and the test will then try to create a matching
+    container so this is potentially resource intensive.
 
-    Handle stderr from the command when it runs with no faults.  This is
-    currently logging "file exists", see above.
-
-    Remove the container when complete.
-
-    Check output of the command itself.  This probably just needs enabling.
+    There are lots of errors in the stdout/stderr of this command which we need to work through but
+    are not yet checked for.
     """
 
     pool = server.get_test_pool()
-
-    container = create_cont(conf, pool, posix=True)
 
     src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
     ofd = open(os.path.join(src_dir.name, 'file'), 'w')
     ofd.write('hello')
     ofd.close()
 
-    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
-           'filesystem',
-           'copy',
-           '--src',
-           src_dir.name,
-           '--dst',
-           'daos://{}/{}'.format(pool, container)]
+    def get_cmd():
+        container = str(uuid.uuid4())
+        cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+               'filesystem',
+               'copy',
+               '--src',
+               src_dir.name,
+               '--dst',
+               'daos://{}/{}'.format(pool, container)]
+        return cmd
 
-    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd = AllocFailTest(conf, get_cmd)
     test_cmd.wf = wf
-    # TODO: Remove this setting once test is updated to use new container for
-    # each iteration.
+    test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     return rc
