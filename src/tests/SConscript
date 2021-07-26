@@ -36,12 +36,12 @@ def scons():
                                     LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
 
-    #perf_common = denv.SharedObject(['perf_common.c'])
+    perf_common = denv.SharedObject(['perf_common.c'])
 
-    #daos_perf = daos_build.program(denv, 'daos_perf',
-    #                               ['daos_perf.c', perf_common],
-    #                               LIBS = libs)
-    #denv.Install('$PREFIX/bin/', daos_perf)
+    daos_perf = daos_build.program(denv, 'daos_perf',
+                                   ['daos_perf.c', perf_common],
+                                   LIBS = libs)
+    denv.Install('$PREFIX/bin/', daos_perf)
 
     #vos_engine = denv.SharedObject(['vos_engine.c'])
 
