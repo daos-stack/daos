@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from os import error
+from os import error, stat
 import traceback
 import uuid
 import threading
@@ -18,7 +18,7 @@ from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
-from test_utils_pool import TestPool
+
 
 
 def ior_runner_thread(manager, uuids, results):
@@ -82,31 +82,33 @@ class ObjectMetadata(TestWithServers):
                 successfully; False otherwise
 
         """
-        status = True
+        status = False
         self.container = []
-        while(1):
+        for index in range(self.CREATED_CONTAINERS_LIMIT):
             # Continue to create containers until there is not enough space
+            self.log.info("Creating container %d", index + 1)
+            self.container.append(self.get_container(self.pool, create=False))
+            if self.container[-1].daos:
+                self.container[-1].daos.verbose = False
             try:
-                self.container.append(self.get_container(self.pool))
+                self.container.create()
             except TestFail as error:
                 if "RC: -1007" in error:
                     self.log.info(
                         "Created %s containers before running out of space",
                         len(self.container))
+                    status = True
                 else:
                     self.log.error(error)
                     self.log.error(
                         "Unexpected error creating %d containers",
                         len(self.container) + 1)
-                    status = False
                 break
 
-            # Safety check to avoid test timeout - should hit an exception first
-            if len(self.container) >= self.CREATED_CONTAINERS_LIMIT:
-                self.log.error(
-                    "Created too many containers: %d", len(self.container))
-                status = False
-                break
+        # Safety check to avoid test timeout - should hit an exception first
+        if len(self.container) >= self.CREATED_CONTAINERS_LIMIT:
+            self.log.error(
+                "Created too many containers: %d", len(self.container))
 
         # Verify that at least MIN_CREATED_CONTAINERS have been created
         if status and len(self.container) < self.CREATED_CONTAINERS_MIN:
