@@ -28,7 +28,7 @@ dmg:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 9000000000
+    scm_size: 10000000000
     nvme_size: 27000000000
     control_method: dmg
 container:
@@ -50,7 +50,7 @@ ior:
           ior_api:
             - DFS
           transfer_block_size:
-            - [1M, 64M]
+            - [1M, 256M]
           obj_class:
             - "SX"
 # Commenting it out until DAOS-3097/3143 is resolved.
