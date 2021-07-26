@@ -48,7 +48,7 @@ public class DaosEventQueue {
   private long lastProgressed;
 
   private int nbrOfTimedOut;
-  
+
   private Map<Class<?>, List<Attachment>> attMap = new HashMap<>();
 
   private static final int DEFAULT_POLL_TIMEOUT_MS = 10;
