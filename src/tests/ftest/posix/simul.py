@@ -81,13 +81,13 @@ class PosixSimul(DfuseTestBase):
 
         """
         # Assuming all vms use the same OS
-        platform = platform.dist()[0].lower()
+        host_os = platform.dist()[0].lower()
 
-        if "centos" in platform:
+        if "centos" in host_os:
             simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul",
                           "mpich": "/usr/lib64/mpich/bin/simul"
                           }
-        elif "suse" in platform:
+        elif "suse" in host_os:
             simul_dict = {"openmpi": "/usr/lib64/mpi/gcc/openmpi3/bin/simul",
                           "mpich": "/usr/lib64/mpi/gcc/mpich/bin/simul"
                           }
@@ -137,7 +137,7 @@ class PosixSimul(DfuseTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=posix,simul
+        :avocado: tags=posix,simul,dfuse
         """
         self.run_simul(exclude="9,18,30,39,40")
 
@@ -146,7 +146,7 @@ class PosixSimul(DfuseTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=posix,simul_failure
+        :avocado: tags=posix,simul_failure,dfuse
         """
         expected_failures = ["9", "18", "30", "39", "40"]
         for test in expected_failures:
@@ -158,3 +158,4 @@ class PosixSimul(DfuseTestBase):
                     self.log.info("Expected failure")
                 else:
                     raise exception
+
