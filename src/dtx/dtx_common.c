@@ -452,6 +452,9 @@ dtx_aggregation_main(void *arg)
 
 		sched_req_sleep(dmi->dmi_dtx_agg_req, sleep_time);
 	}
+
+	sched_req_put(dmi->dmi_dtx_agg_req);
+	dmi->dmi_dtx_agg_req = NULL;
 }
 
 static void
@@ -525,7 +528,7 @@ dtx_batched_commit(void *arg)
 	}
 
 	dtx_init_sched_req(NULL, &dmi->dmi_dtx_agg_req, child);
-	if (dmi->dmi_dtx_cmt_req == NULL) {
+	if (dmi->dmi_dtx_agg_req == NULL) {
 		D_ERROR("Failed to get DTX aggregation sched request.\n");
 		ABT_thread_join(child);
 		goto out;
