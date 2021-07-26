@@ -44,6 +44,9 @@ class BashCmd(DfuseTestBase):
               Remove copied file.
               Rename file
               Verify renamed file exist using list.
+              Verify dfuse support for '.'
+              Verify defuse support for '..'
+              Remove renamed file
               Remove a directory
 
         :avocado: tags=all,full_regression
@@ -91,6 +94,8 @@ class BashCmd(DfuseTestBase):
                             "mv {} {}".format(abs_file_path1,
                                                abs_file_path2),
                             "ls -al {}".format(abs_file_path2),
+                            "ls -al {}/.".format(abs_dir_path),
+                            "ls -al {}/..".format(abs_dir_path),
                             "rm {}".format(abs_file_path2),
                             "rmdir {}".format(abs_dir_path)]
                 for cmd in commands:
