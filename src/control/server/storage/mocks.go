@@ -165,7 +165,9 @@ func MockScmMountPoint(varIdx ...int32) *ScmMountPoint {
 	idx := common.GetIndex(varIdx...)
 
 	return &ScmMountPoint{
+		Class:      ClassDcpm,
 		Path:       fmt.Sprintf("/mnt/daos%d", idx),
+		DeviceList: []string{fmt.Sprintf("pmem%d", idx)},
 		TotalBytes: uint64(humanize.TByte) * uint64(idx+1),
 		AvailBytes: uint64(humanize.TByte/4) * uint64(idx+1), // 75% used
 	}

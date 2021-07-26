@@ -39,6 +39,9 @@ type Provider struct {
 
 // DefaultProvider returns a provider populated with default parameters.
 func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provider {
+	if engineStorage == nil {
+		engineStorage = new(Config)
+	}
 	return &Provider{
 		log:           log,
 		engineIndex:   idx,
@@ -69,10 +72,12 @@ func (p *Provider) GetScmUsage() (*ScmMountPoint, error) {
 		return nil, err
 	}
 
+	p.log.Debugf("calling into p.Syst/a/ ret Sys provider: %v", p.Sys)
 	total, avail, err := p.Sys.GetfsUsage(cfg.Scm.MountPoint)
 	if err != nil {
 		return nil, err
 	}
+	p.log.Debugf("t/a/ ret Sys provider: %d, %d", total, avail)
 
 	return &ScmMountPoint{
 		Class:      cfg.Class,

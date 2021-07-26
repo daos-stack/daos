@@ -225,7 +225,7 @@ func TestServer_MgmtSvc_calculateCreateStorage(t *testing.T) {
 			}
 			svc := newTestMgmtSvc(t, log)
 			sp := storage.MockProvider(log, 0, &engineCfg.Storage, nil, nil, nil)
-			svc.harness.instances[0] = newTestEngine(log, false, sp)
+			svc.harness.instances[0] = newTestEngine(log, false, sp, engineCfg)
 
 			gotErr := svc.calculateCreateStorage(tc.in)
 			common.CmpErr(t, tc.expErr, gotErr)

@@ -16,6 +16,13 @@ import (
 )
 
 type (
+	// GetfsUsageRetval encapsulates return values from a GetfsUsage call.
+	GetfsUsageRetval struct {
+		Total, Avail uint64
+		Err          error
+	}
+
+	// MockSysConfig alters mock SystemProvider behaviour.
 	MockSysConfig struct {
 		IsMountedBool   bool
 		IsMountedErr    error
@@ -25,9 +32,8 @@ type (
 		GetfsStr        string
 		GetfsErr        error
 		SourceToTarget  map[string]string
-		GetfsUsageTotal uint64
-		GetfsUsageAvail uint64
-		GetfsUsageErr   error
+		getfsIndex      int
+		GetfsUsageResps []GetfsUsageRetval
 		isMounted       map[string]bool
 		statErrors      map[string]error
 		realStat        bool
@@ -90,7 +96,12 @@ func (msp *MockSysProvider) Getfs(_ string) (string, error) {
 }
 
 func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
-	return msp.cfg.GetfsUsageTotal, msp.cfg.GetfsUsageAvail, msp.cfg.GetfsUsageErr
+	msp.cfg.getfsIndex += 1
+	if len(msp.cfg.GetfsUsageResps) < msp.cfg.getfsIndex {
+		return 0, 0, nil
+	}
+	resp := msp.cfg.GetfsUsageResps[msp.cfg.getfsIndex-1]
+	return resp.Total, resp.Avail, resp.Err
 }
 
 func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {

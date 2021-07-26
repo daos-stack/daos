@@ -8,10 +8,7 @@ package server
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
 
-	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 
@@ -36,71 +33,6 @@ func newResponseState(inErr error, badStatus ctlpb.ResponseStatus, infoMsg strin
 	}
 
 	return rs
-}
-
-// mapCtrlrs maps each controller to it's PCI address.
-func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeController, error) {
-	ctrlrMap := make(map[string]*storage.NvmeController)
-
-	for _, ctrlr := range ctrlrs {
-		if _, exists := ctrlrMap[ctrlr.PciAddr]; exists {
-			return nil, errors.Errorf("duplicate entries for controller %s",
-				ctrlr.PciAddr)
-		}
-
-		ctrlrMap[ctrlr.PciAddr] = ctrlr
-	}
-
-	return ctrlrMap, nil
-}
-
-// scanAssignedBdevs retrieves up-to-date NVMe controller info including
-// health statistics and stored server meta-data. If I/O Engines are running
-// then query is issued over dRPC as go-spdk bindings cannot be used to access
-// controller claimed by another process. Only update info for controllers
-// assigned to I/O Engineslled.
-func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
-	var ctrlrs storage.NvmeControllers
-	instances := c.harness.Instances()
-
-	for _, ei := range instances {
-		if !ei.HasBlockDevices() {
-			continue
-		}
-
-		tsrs, err := ei.ScanBdevTiers()
-		if err != nil {
-			return nil, err
-		}
-
-		// If the is not running or we aren't interested in temporal
-		// statistics for the bdev devices then continue to next.
-		if !ei.IsReady() || !statsReq {
-			for _, tsr := range tsrs {
-				ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
-			}
-			continue
-		}
-
-		// If engine is running and has claimed the assigned devices for
-		// each tier, iterate over scan results for each tier and send query
-		// over drpc to update controller details with current health stats
-		// and smd info.
-		for _, tsr := range tsrs {
-			ctrlrMap, err := mapCtrlrs(tsr.Result.Controllers)
-			if err != nil {
-				return nil, errors.Wrap(err, "create controller map")
-			}
-
-			if err := ei.updateInUseBdevs(ctx, ctrlrMap); err != nil {
-				return nil, errors.Wrap(err, "updating bdev health and smd info")
-			}
-
-			ctrlrs = ctrlrs.Update(tsr.Result.Controllers...)
-		}
-	}
-
-	return &storage.BdevScanResponse{Controllers: ctrlrs}, nil
 }
 
 // stripNvmeDetails removes all controller details leaving only PCI address and
@@ -200,72 +132,6 @@ func newScanScmResp(inResp *storage.ScmScanResponse, inErr error) (*ctlpb.ScanSc
 	return outResp, nil
 }
 
-func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.ScmNamespace {
-	for _, scanned := range ssr.Namespaces {
-		for _, path := range pmemDevs {
-			if strings.TrimSpace(path) == "" {
-				continue
-			}
-			if filepath.Base(path) == scanned.BlockDevice {
-				return scanned
-			}
-		}
-	}
-
-	return nil
-}
-
-// getScmUsage will retrieve usage statistics (how much space is available for
-// new DAOS pools) for either PMem namespaces or SCM emulation with ramdisk.
-//
-// Usage is only retrieved for active mountpoints being used by online DAOS I/O
-// Server instances.
-func (c *ControlService) getScmUsage(ssr *storage.ScmScanResponse) (*storage.ScmScanResponse, error) {
-	instances := c.harness.Instances()
-
-	nss := make(storage.ScmNamespaces, len(instances))
-	for idx, srv := range instances {
-		if !srv.IsReady() {
-			continue // skip if not running
-		}
-
-		cfg, err := srv.GetScmConfig()
-		if err != nil {
-			return nil, err
-		}
-
-		mount, err := srv.GetScmUsage()
-		if err != nil {
-			return nil, err
-		}
-
-		switch mount.Class {
-		case storage.ClassRam: // generate fake namespace for emulated ramdisk mounts
-			nss[idx] = &storage.ScmNamespace{
-				Mount:       mount,
-				BlockDevice: "ramdisk",
-				Size:        uint64(humanize.GiByte * cfg.Scm.RamdiskSize),
-			}
-		case storage.ClassDcpm: // update namespace mount info for online storage
-			ns := findPMemInScan(ssr, mount.DeviceList)
-			if ns == nil {
-				return nil, errors.Errorf("instance %d: no pmem namespace for mount %s",
-					srv.Index(), mount.Path)
-			}
-			ns.Mount = mount
-			nss[idx] = ns
-		default:
-			return nil, errors.Errorf("instance %d: unsupported scm class %q",
-				srv.Index(), mount.Class)
-		}
-
-		c.log.Debugf("updated scm fs usage on device %s mounted at %s: %+v",
-			nss[idx].BlockDevice, mount.Path, nss[idx].Mount)
-	}
-
-	return &storage.ScmScanResponse{Namespaces: nss}, nil
-}
-
 // scanScm will return mount details and usage for either emulated RAM or real PMem.
 func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*ctlpb.ScanScmResp, error) {
 	if req == nil {
@@ -277,9 +143,11 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 	ssr, scanErr := c.ScmScan(scmReq)
 
 	if scanErr != nil || !req.GetUsage() {
+		c.log.Debug("xq3q3 A")
 		return newScanScmResp(ssr, scanErr)
 	}
 
+	c.log.Debugf("xXX 0can resp: %+v", ssr)
 	return newScanScmResp(c.getScmUsage(ssr))
 }
 
