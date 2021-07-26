@@ -95,7 +95,6 @@ class PoolServicesFaultInjection(TestWithServers):
     def test_pool_services(self):
         """ Test the following pool commands:
                 Create
-                Delete
                 Create container
                 Write container (not a pool command)
                 Exclude rank from pool
@@ -154,8 +153,8 @@ class PoolServicesFaultInjection(TestWithServers):
         end_message = f"Failed commands: {failed_commands} \n" \
                       f"Failed requests: {self.failed_requests}"
         self.log.info(end_message)
-        assert failed_commands == 0, "Execution of command(s) failed."
-        assert self.failed_requests > 0, "No faults detected."
+        self.assertEqual(failed_commands, 0, "Execution of command(s) failed.")
+        self.assertGreater(self.failed_requests, 0, "No faults detected.")
 
     def manual_test_create_containers_while_blocking_daos_using_iptables(self):
         """ This is a manual test.
