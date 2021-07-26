@@ -36,25 +36,25 @@ def scons():
                                     LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_racer)
 
-    perf_common = denv.SharedObject(['perf_common.c'])
+    #perf_common = denv.SharedObject(['perf_common.c'])
 
-    daos_perf = daos_build.program(denv, 'daos_perf',
-                                   ['daos_perf.c', perf_common],
-                                   LIBS = libs)
-    denv.Install('$PREFIX/bin/', daos_perf)
+    #daos_perf = daos_build.program(denv, 'daos_perf',
+    #                               ['daos_perf.c', perf_common],
+    #                               LIBS = libs)
+    #denv.Install('$PREFIX/bin/', daos_perf)
 
-    vos_engine = denv.SharedObject(['vos_engine.c'])
+    #vos_engine = denv.SharedObject(['vos_engine.c'])
 
-    vos_perf = daos_build.program(denv, 'vos_perf',
-                                  ['vos_perf.c', perf_common, vos_engine],
-                                  LIBS = libs)
-    denv.Install('$PREFIX/bin/', vos_perf)
+    #vos_perf = daos_build.program(denv, 'vos_perf',
+    #                              ['vos_perf.c', perf_common, vos_engine],
+    #                              LIBS = libs)
+    #denv.Install('$PREFIX/bin/', vos_perf)
 
-    Import('mpi_cmd_parser')
-    obj_ctl = daos_build.program(denv, 'obj_ctl',
-                                 ['obj_ctl.c', mpi_cmd_parser, vos_engine],
-                                 LIBS=libs)
-    denv.Install('$PREFIX/bin/', obj_ctl)
+    #Import('mpi_cmd_parser')
+    #obj_ctl = daos_build.program(denv, 'obj_ctl',
+    #                             ['obj_ctl.c', mpi_cmd_parser, vos_engine],
+    #                             LIBS=libs)
+    #denv.Install('$PREFIX/bin/', obj_ctl)
 
     jobtest = daos_build.program(denv, 'jobtest', ['jobtest.c'], LIBS=libs)
     denv.Install('$PREFIX/bin/', jobtest)
