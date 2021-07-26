@@ -849,8 +849,8 @@ restart:
 					       DAOS_OO_RW, 1, chunk_size,
 					       &file->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
-				rc);
+			D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
@@ -1194,7 +1194,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
 				     &dkey, SB_AKEYS, iods, sgls, NULL);
 		if (rc) {
-			D_ERROR("Failed to create DFS superblock (%d)\n", rc);
+			D_ERROR("Failed to create DFS superblock "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err, rc = daos_der2errno(rc));
 		}
 
@@ -1287,10 +1287,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		prop = daos_prop_alloc(attr->da_props->dpp_nr + 2);
 	else
 		prop = daos_prop_alloc(2);
-	if (prop == NULL) {
-		D_ERROR("Failed to allocate container prop.");
+	if (prop == NULL)
 		return ENOMEM;
-	}
 
 	if (attr != NULL && attr->da_props != NULL) {
 		rc = daos_prop_copy(prop, attr->da_props);
@@ -1364,7 +1362,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 
 	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_open() failed (%d)\n", rc);
+		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
 	}
 
@@ -1396,7 +1394,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 
 	rc = daos_obj_close(super_oh, NULL);
 	if (rc) {
-		D_ERROR("Failed to close SB object\n");
+		D_ERROR("Failed to close SB object "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_close, rc = daos_der2errno(rc));
 	}
 
@@ -1415,7 +1413,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	} else {
 		rc = daos_cont_close(coh, NULL);
 		if (rc) {
-			D_ERROR("daos_cont_close() failed (%d)\n", rc);
+			D_ERROR("daos_cont_close() failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_destroy, rc = daos_der2errno(rc));
 		}
 	}
@@ -2952,7 +2950,6 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	daos_size_t		file_size = 0;
 	int			rc;
 
-
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if ((dfs->amode != O_RDWR) && (flags & O_CREAT))
@@ -3288,9 +3285,9 @@ dfs_release(dfs_obj_t *obj)
 	}
 
 	if (rc)
-		D_ERROR("daos_obj_close() failed, "DF_RC"\n", DP_RC(rc));
-
-	D_FREE(obj);
+		D_ERROR("Failed to close DFS object, "DF_RC"\n", DP_RC(rc));
+	else
+		D_FREE(obj);
 	return daos_der2errno(rc);
 }
 
@@ -3573,6 +3570,17 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name)
 	}
 
 	return 0;
+}
+
+/* Update a in-memory object to a new parent, taking the parent directly */
+void
+dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *new_parent, const char *name)
+{
+	oid_cp(&obj->parent_oid, new_parent->oid);
+
+	D_ASSERT(name);
+	strncpy(obj->name, name, DFS_MAX_NAME);
+	obj->name[DFS_MAX_NAME] = '\0';
 }
 
 int
@@ -4164,9 +4172,10 @@ out:
 	return rc;
 }
 
+/* Returns oids for both moved and clobbered files, but does not check either of them */
 int
-dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name, daos_obj_id_t *oid)
+dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent, char *new_name,
+		  daos_obj_id_t *moid, daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -4218,6 +4227,9 @@ restart:
 	}
 	if (exists == false)
 		D_GOTO(out, rc = ENOENT);
+
+	if (moid)
+		oid_cp(moid, entry.oid);
 
 	rc = fetch_entry(new_parent->oh, th, new_name, new_len, true, &exists,
 			 &new_entry, 0, NULL, NULL, NULL);
@@ -4344,6 +4356,14 @@ out:
 		D_FREE(new_entry.value);
 	}
 	return rc;
+}
+
+/* Wrapper function, only permit oid as a input parameter and return if it has data */
+int
+dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
+	 char *new_name, daos_obj_id_t *oid)
+{
+	return dfs_move_internal(dfs, parent, name, new_parent, new_name, NULL, oid);
 }
 
 int

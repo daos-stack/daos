@@ -11,7 +11,6 @@ import queue
 from command_utils_base import CommandFailure
 from avocado.core.exceptions import TestFail
 from ior_test_base import IorTestBase
-from test_utils_pool import TestPool
 from ior_utils import IorCommand
 from server_utils import ServerFailed
 
@@ -229,8 +228,7 @@ class ServerFillUp(IorTestBase):
               Replace with dmg options in future when it's available.
         """
         # Create a pool
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
 
         if nvme or scm:
             sizes = self.get_max_storage_sizes()

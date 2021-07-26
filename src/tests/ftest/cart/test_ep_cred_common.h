@@ -79,7 +79,6 @@ ping_hdlr_1(crt_rpc_t *rpc_req)
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 }
 
-
 static void
 shutdown_handler(crt_rpc_t *rpc_req)
 {
@@ -90,7 +89,7 @@ shutdown_handler(crt_rpc_t *rpc_req)
 
 	crt_reply_send(rpc_req);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	DBG_PRINT("server set shutdown flag.\n");
 }
 

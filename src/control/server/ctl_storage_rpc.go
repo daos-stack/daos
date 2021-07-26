@@ -363,7 +363,7 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// Block until all instances have formatted NVMe to avoid
 	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
-	// TODO: supply whitelist of instance.Devs to init() on format.
+	// TODO: supply allowlist of instance.Devs to init() on format.
 	for _, srv := range instances {
 		if instanceErrored[srv.Index()] {
 			c.log.Errorf(msgFormatErr, srv.Index())
