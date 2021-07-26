@@ -1466,6 +1466,16 @@ dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_
 	return dfs_cont_create_int(poh, cuuid, true, co_uuid, attr, coh, dfs);
 }
 
+/** API version for when the uuid is required to be passed in. */
+int
+dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		 dfs_t **dfs)
+{
+	uuid_t *u = (uuid_t *)((unsigned char *)cuuid);
+
+	return dfs_cont_create(poh, u, attr, coh, dfs);
+}
+
 /*
  * Real latest & greatest implementation of container create. Used by anyone including the
  * daos_cont.h header file.

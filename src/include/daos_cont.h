@@ -684,6 +684,8 @@ daos_cont_destroy2(daos_handle_t poh, const char *cont, int force, daos_event_t 
  */
 int
 daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
+int
+daos_cont_create1(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }
@@ -732,7 +734,7 @@ daos_cont_create_cpp(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, da
 static inline int
 daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev)
 {
-	return daos_cont_create(poh, uuid, cont_prop, ev);
+	return daos_cont_create1(poh, uuid, cont_prop, ev);
 }
 #else
 /**

@@ -29,8 +29,7 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh)
  * Kept for backward ABI compatibility when a UUID is provided by the caller
  */
 int
-daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
-		 daos_event_t *ev)
+daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop, daos_event_t *ev)
 {
 	daos_cont_create_t	*args;
 	tse_task_t		*task;
@@ -57,6 +56,17 @@ daos_cont_create(daos_handle_t poh, uuid_t *cuuid, daos_prop_t *cont_prop,
 	args->cuuid	= NULL;
 
 	return dc_task_schedule(task, true);
+}
+
+/**
+ * Create version that requires uuid to be passed in
+ */
+int
+daos_cont_create1(daos_handle_t poh, const uuid_t cuuid, daos_prop_t *cont_prop, daos_event_t *ev)
+{
+	uuid_t *u = (uuid_t *)((unsigned char *)cuuid);
+
+	return daos_cont_create(poh, u, cont_prop, ev);
 }
 
 /**
