@@ -16,7 +16,6 @@ from job_manager_utils import Mpirun
 from general_utils import pcmd
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
 
@@ -53,12 +52,8 @@ class IorTestBase(DfuseTestBase):
 
     def create_pool(self):
         """Create a TestPool object to use with ior."""
-        # Get the pool params
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-
-        # Create a pool
-        self.pool.create()
+        # Get the pool params and create a pool
+        self.add_pool(connect=False)
 
     def create_cont(self):
         """Create a TestContainer object to be used to create container.

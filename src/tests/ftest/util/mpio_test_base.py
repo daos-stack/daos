@@ -10,7 +10,6 @@ import os
 
 from apricot import TestWithServers
 from mpio_utils import MpioUtils, MpioFailed
-from test_utils_pool import TestPool
 from daos_utils import DaosCommand
 from env_modules import load_mpi
 
@@ -30,15 +29,13 @@ class MpiioTests(TestWithServers):
         self.cont_uuid = None
 
     def setUp(self):
+        """Initialization function for MpiioTests."""
         super().setUp()
 
         # initialize daos_cmd
         self.daos_cmd = DaosCommand(self.bin)
 
-        # initialize a python pool object then create the underlying
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
+        self.add_pool(connect=False)
 
     def _create_cont(self):
         """Create a container.

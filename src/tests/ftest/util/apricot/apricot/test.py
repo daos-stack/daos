@@ -29,7 +29,7 @@ from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
     get_default_config_file, pcmd, get_file_listing, run_command
 from logger_utils import TestLogger
-from test_utils_pool import TestPool
+from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
 from env_modules import load_mpi
 from distutils.spawn import find_executable
@@ -551,6 +551,7 @@ class TestWithServers(TestWithoutServers):
         # self.debug = False
         # self.config = None
         self.job_manager = None
+        self.label_generator = LabelGenerator()
 
     def setUp(self):
         """Set up each test case."""
@@ -1456,7 +1457,9 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(self.context, self.get_dmg_command(index))
+        pool = TestPool(
+            context=self.context, dmg_command=self.get_dmg_command(index),
+            label_generator=self.label_generator)
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
