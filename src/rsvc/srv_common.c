@@ -259,21 +259,29 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 			D_ERROR("%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_iovs;
-		} else {
-			iovs[j].iov_buf_len = sizes[i];
-			sizes[i] = iovs[j].iov_len;
+		} else if (sizes[i] > 0) {
+			daos_size_t size;
+
+			size = min(sgl.sg_iovs[j].iov_len, sizes[i]);
 
 			/* need to copy from pmem to ram to avoid errors
 			 * during RDMA registration
 			 */
-			D_ALLOC(new_buf, iovs[j].iov_len);
+			D_ALLOC(new_buf, size);
 			if (new_buf == NULL) {
 				rc = -DER_NOMEM;
 				goto out_iovs;
 			}
-			memcpy(new_buf, iovs[j].iov_buf, iovs[j].iov_len);
+			memcpy(new_buf, iovs[j].iov_buf, size);
+			iovs[j].iov_buf_len = sizes[i];
+			sizes[i] = iovs[j].iov_len;
+			iovs[j].iov_len = size;
 			iovs[j].iov_buf = new_buf;
 			new_index = j;
+		} else {
+			/* only return size of attr */
+			sizes[i] = iovs[j].iov_len;
+			iovs[j].iov_buf_len = 0;
 		}
 
 		/* If buffer length is zero, send only size */
@@ -307,8 +315,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	for (i = 1; i < sgl.sg_nr; i++) {
 		daos_size_t size;
 
-		size = min(sgl.sg_iovs[i].iov_len,
-				       sgl.sg_iovs[i].iov_buf_len);
+		size = min(sgl.sg_iovs[i].iov_len, sgl.sg_iovs[i].iov_buf_len);
 		rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
 					remote_bulk, local_offset,
 					remote_offset, size);
