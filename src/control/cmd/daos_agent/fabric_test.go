@@ -172,14 +172,14 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 		node        int
 		netDevClass uint32
 		expErr      error
-		expResult   *FabricInterface
+		expResults  []*FabricInterface
 	}{
 		"nil": {
 			expErr: errors.New("nil NUMAFabric"),
 		},
 		"empty": {
-			nf:        newNUMAFabric(nil),
-			expResult: DefaultFabricInterface,
+			nf:         newNUMAFabric(nil),
+			expResults: []*FabricInterface{DefaultFabricInterface},
 		},
 		"type not found": {
 			nf: &NUMAFabric{
@@ -217,9 +217,15 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			},
 			node:        0,
 			netDevClass: netdetect.Infiniband,
-			expResult: &FabricInterface{
-				Name:        "t1",
-				NetDevClass: netdetect.Infiniband,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t1",
+					NetDevClass: netdetect.Infiniband,
+				},
+				{
+					Name:        "t1",
+					NetDevClass: netdetect.Infiniband,
+				},
 			},
 		},
 		"choose later device": {
@@ -239,9 +245,19 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			},
 			node:        0,
 			netDevClass: netdetect.Infiniband,
-			expResult: &FabricInterface{
-				Name:        "t2",
-				NetDevClass: netdetect.Infiniband,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					NetDevClass: netdetect.Infiniband,
+				},
+				{
+					Name:        "t2",
+					NetDevClass: netdetect.Infiniband,
+				},
+				{
+					Name:        "t2",
+					NetDevClass: netdetect.Infiniband,
+				},
 			},
 		},
 		"nothing on NUMA node": {
@@ -258,9 +274,11 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			},
 			node:        1,
 			netDevClass: netdetect.Infiniband,
-			expResult: &FabricInterface{
-				Name:        "t1",
-				NetDevClass: netdetect.Infiniband,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t1",
+					NetDevClass: netdetect.Infiniband,
+				},
 			},
 		},
 		"type not found on NUMA node": {
@@ -282,9 +300,45 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			},
 			node:        1,
 			netDevClass: netdetect.Infiniband,
-			expResult: &FabricInterface{
-				Name:        "t1",
-				NetDevClass: netdetect.Infiniband,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t1",
+					NetDevClass: netdetect.Infiniband,
+				},
+				{
+					Name:        "t1",
+					NetDevClass: netdetect.Infiniband,
+				},
+			},
+		},
+		"manual FI matches any": {
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "t1",
+							NetDevClass: FabricDevClassManual,
+						},
+					},
+					1: {
+						{
+							Name:        "t2",
+							NetDevClass: FabricDevClassManual,
+						},
+					},
+				},
+			},
+			node:        1,
+			netDevClass: netdetect.Infiniband,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					NetDevClass: FabricDevClassManual,
+				},
+				{
+					Name:        "t2",
+					NetDevClass: FabricDevClassManual,
+				},
 			},
 		},
 		"load balancing": {
@@ -311,9 +365,23 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			},
 			node:        0,
 			netDevClass: netdetect.Ether,
-			expResult: &FabricInterface{
-				Name:        "t2",
-				NetDevClass: netdetect.Ether,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					NetDevClass: netdetect.Ether,
+				},
+				{
+					Name:        "t3",
+					NetDevClass: netdetect.Ether,
+				},
+				{
+					Name:        "t1",
+					NetDevClass: netdetect.Ether,
+				},
+				{
+					Name:        "t2",
+					NetDevClass: netdetect.Ether,
+				},
 			},
 		},
 	} {
@@ -324,115 +392,17 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				tc.nf.log = log
 			}
 
-			result, err := tc.nf.GetDevice(tc.node, tc.netDevClass)
-
-			common.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
-				t.Fatalf("-want, +got:\n%s", diff)
+			var results []*FabricInterface
+			for i := 0; i < tc.nf.NumDevices(tc.node)+1; i++ {
+				result, err := tc.nf.GetDevice(tc.node, tc.netDevClass)
+				common.CmpErr(t, tc.expErr, err)
+				if tc.expErr != nil {
+					return
+				}
+				results = append(results, result)
 			}
-		})
-	}
-}
 
-func TestAgent_NUMAFabric_getNextDevice(t *testing.T) {
-	for name, tc := range map[string]struct {
-		nf         *NUMAFabric
-		node       int
-		expErr     error
-		expResult  *FabricInterface
-		expNodeIdx int
-	}{
-		"empty node": {
-			nf: &NUMAFabric{
-				numaMap: map[int][]*FabricInterface{
-					0: {},
-				},
-			},
-			node:   0,
-			expErr: errors.New("no fabric interfaces"),
-		},
-		"single item": {
-			nf: &NUMAFabric{
-				numaMap: map[int][]*FabricInterface{
-					0: {
-						{
-							Name:        "t1",
-							NetDevClass: netdetect.Ether,
-						},
-					},
-				},
-				currentNumaDevIdx: map[int]int{
-					0: 0,
-				},
-			},
-			expResult: &FabricInterface{
-				Name:        "t1",
-				NetDevClass: netdetect.Ether,
-			},
-		},
-		"multi item": {
-			nf: &NUMAFabric{
-				numaMap: map[int][]*FabricInterface{
-					0: {
-						{
-							Name:        "t1",
-							NetDevClass: netdetect.Ether,
-						},
-						{
-							Name:        "t2",
-							NetDevClass: netdetect.Ether,
-						},
-						{
-							Name:        "t3",
-							NetDevClass: netdetect.Ether,
-						},
-					},
-				},
-				currentNumaDevIdx: map[int]int{
-					0: 0,
-				},
-			},
-			expResult: &FabricInterface{
-				Name:        "t1",
-				NetDevClass: netdetect.Ether,
-			},
-			expNodeIdx: 1,
-		},
-		"round robin": {
-			nf: &NUMAFabric{
-				numaMap: map[int][]*FabricInterface{
-					0: {
-						{
-							Name:        "t1",
-							NetDevClass: netdetect.Ether,
-						},
-						{
-							Name:        "t2",
-							NetDevClass: netdetect.Ether,
-						},
-						{
-							Name:        "t3",
-							NetDevClass: netdetect.Ether,
-						},
-					},
-				},
-				currentNumaDevIdx: map[int]int{
-					0: 2,
-				},
-			},
-			expResult: &FabricInterface{
-				Name:        "t3",
-				NetDevClass: netdetect.Ether,
-			},
-			expNodeIdx: 0,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			result, err := tc.nf.getNextDevice(tc.node)
-
-			common.AssertEqual(t, tc.expNodeIdx, tc.nf.currentNumaDevIdx[tc.node], "")
-			common.CmpErr(t, tc.expErr, err)
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+			if diff := cmp.Diff(tc.expResults, results); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
 			}
 		})
@@ -568,6 +538,120 @@ func TestAgent_NUMAFabricFromScan(t *testing.T) {
 			defer common.ShowBufferOnFailure(t, buf)
 
 			result := NUMAFabricFromScan(context.TODO(), log, tc.input, tc.getDevAlias)
+
+			if diff := cmp.Diff(tc.expResult, result.numaMap); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
+
+			defaultNumaOK := false
+			for _, numa := range tc.possibleDefaultNUMA {
+				if numa == result.defaultNumaNode {
+					defaultNumaOK = true
+				}
+			}
+
+			if !defaultNumaOK {
+				t.Fatalf("default NUMA node %d (expected in list: %+v)", result.defaultNumaNode, tc.possibleDefaultNUMA)
+			}
+		})
+	}
+}
+
+func TestAgent_NUMAFabricFromConfig(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input               []*NUMAFabricConfig
+		expResult           map[int][]*FabricInterface
+		possibleDefaultNUMA []int
+	}{
+		"empty input": {
+			expResult:           map[int][]*FabricInterface{},
+			possibleDefaultNUMA: []int{0},
+		},
+		"no devices on NUMA node": {
+			input: []*NUMAFabricConfig{
+				{
+					NUMANode:   1,
+					Interfaces: []*FabricInterfaceConfig{},
+				},
+			},
+			expResult:           map[int][]*FabricInterface{},
+			possibleDefaultNUMA: []int{0},
+		},
+		"single NUMA node": {
+			input: []*NUMAFabricConfig{
+				{
+					NUMANode: 1,
+					Interfaces: []*FabricInterfaceConfig{
+						{
+							Interface: "test0",
+							Domain:    "test0_domain",
+						},
+					},
+				},
+			},
+			expResult: map[int][]*FabricInterface{
+				1: {
+					{
+						Name:        "test0",
+						Domain:      "test0_domain",
+						NetDevClass: FabricDevClassManual,
+					},
+				},
+			},
+			possibleDefaultNUMA: []int{1},
+		},
+		"multiple devices": {
+			input: []*NUMAFabricConfig{
+				{
+					NUMANode: 0,
+					Interfaces: []*FabricInterfaceConfig{
+						{
+							Interface: "test1",
+						},
+						{
+							Interface: "test2",
+							Domain:    "test2_domain",
+						},
+					},
+				},
+				{
+					NUMANode: 1,
+					Interfaces: []*FabricInterfaceConfig{
+						{
+							Interface: "test0",
+							Domain:    "test0_domain",
+						},
+					},
+				},
+			},
+			expResult: map[int][]*FabricInterface{
+				0: {
+					{
+						Name:        "test1",
+						NetDevClass: FabricDevClassManual,
+					},
+					{
+						Name:        "test2",
+						Domain:      "test2_domain",
+						NetDevClass: FabricDevClassManual,
+					},
+				},
+				1: {
+					{
+						Name:        "test0",
+						Domain:      "test0_domain",
+						NetDevClass: FabricDevClassManual,
+					},
+				},
+			},
+			possibleDefaultNUMA: []int{0, 1},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			result := NUMAFabricFromConfig(log, tc.input)
 
 			if diff := cmp.Diff(tc.expResult, result.numaMap); diff != "" {
 				t.Fatalf("-want, +got:\n%s", diff)
