@@ -67,7 +67,8 @@ echo ::group::Setting up daos_admin
 echo ::endgroup::
 
 echo ::group::Container copy test
-export LD_LIBRARY_PATH=/opt/daos/prereq/debug/spdk/lib/
+# export LD_LIBRARY_PATH=/opt/daos/prereq/debug/spdk/lib/
+ldd /opt/daos/bin/daos_engine
 ./utils/node_local_test.py --no-root --memcheck no --test cont_copy
 echo ::endgroup::
 
