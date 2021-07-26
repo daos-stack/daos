@@ -634,6 +634,110 @@ dfs_test_cont_atomic(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
+static void
+dfs_test_file_create_atomicity(void **state)
+{
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*file;
+	char		*filename = "testfile";
+	daos_obj_id_t	oid1, oid2;
+	uint64_t	*oids_hi = NULL, *oids_lo = NULL;
+	int		i;
+	int		rc;
+
+	if (arg->myrank == 0)
+		print_message("All ranks create the same file without O_EXCL\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** all should succeed with the same file oid */
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR, O_RDWR | O_CREAT, 0, 0,
+		      NULL, &file);
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_obj2id(file, &oid1);
+	assert_int_equal(rc, 0);
+
+	if (arg->myrank == 0) {
+		D_ALLOC_ARRAY(oids_hi, arg->rank_size);
+		assert_non_null(oids_hi);
+		D_ALLOC_ARRAY(oids_lo, arg->rank_size);
+		assert_non_null(oids_lo);
+	}
+
+	MPI_Gather(&oid1.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&oid1.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+	if (arg->myrank == 0) {
+		for (i = 0; i < arg->rank_size; i++) {
+			if (oid1.hi != oids_hi[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(oid1.hi, oids_hi[i]);
+			if (oid1.lo != oids_lo[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(oid1.lo, oids_lo[i]);
+		}
+	}
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		print_message("remove the file\n");
+		rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank == 0)
+		print_message("reopen the file with OCREAT from all ranks\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** all should succeed with the same file oid */
+	rc = dfs_open(dfs_mt, NULL, filename, S_IFREG | S_IWUSR | S_IRUSR,
+		      O_RDWR | O_CREAT, 0, 0, NULL, &file);
+	assert_int_equal(rc, 0);
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_obj2id(file, &oid2);
+	assert_int_equal(rc, 0);
+
+	if (oid2.hi == oid1.hi && oid2.lo == oid1.lo) {
+		print_error("%d: dfs_open returned an existing OID!\n", arg->myrank);
+		assert_false(oid2.hi == oid1.hi && oid2.lo == oid1.lo);
+	}
+
+	MPI_Gather(&oid2.hi, 1, MPI_UINT64_T, oids_hi, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+	MPI_Gather(&oid2.lo, 1, MPI_UINT64_T, oids_lo, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+	if (arg->myrank == 0) {
+		for (i = 0; i < arg->rank_size; i++) {
+			if (oid2.hi != oids_hi[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(oid2.hi, oids_hi[i]);
+			if (oid2.lo != oids_lo[i])
+				print_error("OID mismatch between ranks opening the same file");
+			assert_int_equal(oid2.lo, oids_lo[i]);
+		}
+	}
+
+	rc = dfs_release(file);
+	assert_int_equal(rc, 0);
+	if (arg->myrank == 0) {
+		D_FREE(oids_hi);
+		D_FREE(oids_lo);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		print_message("remove the file\n");
+		rc = dfs_remove(dfs_mt, NULL, filename, true, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 static const struct CMUnitTest dfs_par_tests[] = {
 	{ "DFS_PAR_TEST1: Conditional OPs",
 	  dfs_test_cond, async_disable, test_case_teardown},
@@ -645,6 +749,8 @@ static const struct CMUnitTest dfs_par_tests[] = {
 	  dfs_test_hole_mgmt, async_disable, test_case_teardown},
 	{ "DFS_PAR_TEST5: DFS Container create atomicity",
 	  dfs_test_cont_atomic, async_disable, test_case_teardown},
+	{ "DFS_PAR_TEST6: DFS File create (without O_EXCL) atomicity",
+	  dfs_test_file_create_atomicity, async_disable, test_case_teardown},
 };
 
 static int
@@ -660,9 +766,11 @@ dfs_setup(void **state)
 	arg = *state;
 
 	if (arg->myrank == 0) {
+		dfs_attr_t attr = {};
+
 		uuid_generate(co_uuid);
-		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
-				     &dfs_mt);
+		attr.da_oclass_id = OC_RP_3G1;
+		rc = dfs_cont_create(arg->pool.poh, co_uuid, &attr, &co_hdl, &dfs_mt);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
