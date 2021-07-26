@@ -455,8 +455,8 @@ func TestServerConfig_Validation(t *testing.T) {
 	}
 }
 
-// replaceText only matches when oldTxt is exactly the same as a file line.
-func replaceText(r io.Reader, w io.Writer, oldTxt, newTxt string) (int, error) {
+// replaceLine only matches when oldTxt is exactly the same as a file line.
+func replaceLine(r io.Reader, w io.Writer, oldTxt, newTxt string) (int, error) {
 	var changedLines int
 
 	// use scanner to read line by line
@@ -491,7 +491,7 @@ func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
 	defer tmp.Close()
 
 	// replace while copying from f to tmp
-	linesChanged, err := replaceText(f, tmp, oldTxt, newTxt)
+	linesChanged, err := replaceLine(f, tmp, oldTxt, newTxt)
 	if err != nil {
 		t.Fatal(err)
 	}
