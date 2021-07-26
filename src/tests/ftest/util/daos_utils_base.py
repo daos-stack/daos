@@ -4,7 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from command_utils_base import FormattedParameter, CommandWithParameters
+from command_utils_base import FormattedParameter, CommandWithParameters,\
+    CommandWithPositionalParameters, PositionalParameter
 from command_utils import CommandWithSubCommand
 
 
@@ -18,6 +19,8 @@ class DaosCommandBase(CommandWithSubCommand):
             path (str): path to the daos command
         """
         super().__init__("/run/daos/*", "daos", path)
+
+        self.json = FormattedParameter("-j", False)
 
     def get_sub_command_class(self):
         # pylint: disable=redefined-variable-type
@@ -62,8 +65,15 @@ class DaosCommandBase(CommandWithSubCommand):
             else:
                 self.sub_command_class = None
 
-        class CommonPoolSubCommand(CommandWithParameters):
-            """Defines an object for the common daos pool sub-command."""
+        class CommonPoolSubCommand(CommandWithPositionalParameters):
+            """Defines an object for the common daos pool sub-command.
+
+            Use PositionalParameter for positional parameter subcommands. The
+            value passed in defines the position. "pool" comes first, so it gets
+            1. Other subcommands get 2 or later. For example set-attr's attr and
+            value gets 2 and 3 because the order is "daos pool set-attr <attr>
+            <value>".
+            """
 
             def __init__(self, sub_command):
                 """Create a common daos pool sub-command object.
@@ -73,7 +83,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 """
                 super().__init__(
                     "/run/daos/pool/{}/*".format(sub_command), sub_command)
-                self.pool = FormattedParameter("--pool={}")
+                self.pool = PositionalParameter(1)
                 self.sys_name = FormattedParameter("--sys-name={}")
                 self.sys = FormattedParameter("--sys={}")
 
@@ -104,6 +114,8 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos pool list-attr command object."""
                 super().__init__("list-attrs")
+                self.sys_name = FormattedParameter("--sys-name={}")
+                self.verbose = FormattedParameter("--verbose", False)
 
         class GetAttrSubCommand(CommonPoolSubCommand):
             """Defines an object for the daos pool get-attr command."""
@@ -111,7 +123,8 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos pool get-attr command object."""
                 super().__init__("get-attr")
-                self.attr = FormattedParameter("--attr={}")
+                self.attr = PositionalParameter(2)
+                self.sys_name = FormattedParameter("--sys-name={}")
 
         class SetAttrSubCommand(CommonPoolSubCommand):
             """Defines an object for the daos pool set-attr command."""
@@ -119,8 +132,9 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos pool set-attr command object."""
                 super().__init__("set-attr")
-                self.attr = FormattedParameter("--attr={}")
-                self.value = FormattedParameter("--value={}")
+                self.attr = PositionalParameter(2)
+                self.value = PositionalParameter(3)
+                self.sys_name = FormattedParameter("--sys-name={}")
 
         class AutotestSubCommand(CommonPoolSubCommand):
             """Defines an object for the daos pool autotest command."""
