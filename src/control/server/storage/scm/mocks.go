@@ -22,7 +22,7 @@ type (
 		Err          error
 	}
 
-	// MockSysConfig alters mock SystemProvider behaviour.
+	// MockSysConfig alters mock SystemProvider behavior.
 	MockSysConfig struct {
 		IsMountedBool   bool
 		IsMountedErr    error
