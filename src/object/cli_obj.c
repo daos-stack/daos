@@ -3767,6 +3767,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_auxi->ec_in_recov = 0;
 		obj_auxi->reasb_req.orr_recov = 0;
 		obj_auxi->reasb_req.orr_recov_snap = 0;
+		obj_auxi->reasb_req.orr_iom_tgt_nr = 0;
 		obj_ec_fail_info_free(&obj_auxi->reasb_req);
 		D_DEBUG(DB_IO, DF_OID" EC fetch again.\n",
 			DP_OID(obj->cob_md.omd_id));
