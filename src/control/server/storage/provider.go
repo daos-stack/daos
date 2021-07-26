@@ -394,7 +394,11 @@ func (p *Provider) ScanBdevTiers(direct bool) (results []BdevTierScanResult, err
 	return p.scanBdevTiers(direct, p.bdev.Scan)
 }
 
-func filterScanResp(log logging.Logger, resp *BdevScanResponse, pciFilter ...string) *BdevScanResponse {
+func filterScanResp(log logging.Logger, resp *BdevScanResponse, pciFilter ...string) (*BdevScanResponse, error) {
+	if resp == nil {
+		return nil, errors.New("unexpected nil response")
+	}
+
 	out := make(NvmeControllers, 0)
 
 	for _, c := range resp.Controllers {
@@ -411,20 +415,23 @@ func filterScanResp(log logging.Logger, resp *BdevScanResponse, pciFilter ...str
 			pciFilter)
 	}
 
-	return &BdevScanResponse{Controllers: out}
+	return &BdevScanResponse{Controllers: out}, nil
 }
 
 type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
 
 func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResponse, scan scanFn) (*BdevScanResponse, error) {
 	if !req.BypassCache && cachedResp != nil && len(cachedResp.Controllers) != 0 {
-		return filterScanResp(log, cachedResp, req.DeviceList...), nil
+		return filterScanResp(log, cachedResp, req.DeviceList...)
 	}
 
 	resp, err := scan(req)
+	if err != nil {
+		return nil, err
+	}
 	log.Debugf("storage provider retrieving bdev details from backend: %+v, %+v", req, resp)
 
-	return filterScanResp(log, resp, req.DeviceList...), err
+	return filterScanResp(log, resp, req.DeviceList...)
 }
 
 // ScanBdevs either calls into backend bdev provider to scan SSDs or returns

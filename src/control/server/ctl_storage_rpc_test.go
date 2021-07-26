@@ -872,6 +872,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 							Blockdev: "ramdisk",
 							Size:     uint64(humanize.GiByte * 16),
 							Mount: &ctlpb.ScmNamespace_Mount{
+								Class:      "ram",
 								Path:       mockPbScmMount0.Path,
 								TotalBytes: mockPbScmMount0.TotalBytes,
 								AvailBytes: mockPbScmMount0.AvailBytes,
