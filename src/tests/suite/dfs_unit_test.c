@@ -1042,16 +1042,14 @@ dfs_setup(void **state)
 	test_arg_t		*arg;
 	int			rc = 0;
 
-	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			0, NULL);
+	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
 	assert_int_equal(rc, 0);
 
 	arg = *state;
 
 	if (arg->myrank == 0) {
 		uuid_generate(co_uuid);
-		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
-				     &dfs_mt);
+		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs_mt);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}

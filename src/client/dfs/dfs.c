@@ -849,8 +849,8 @@ restart:
 					       DAOS_OO_RW, 1, chunk_size,
 					       &file->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
-				rc);
+			D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
@@ -1194,7 +1194,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
 				     &dkey, SB_AKEYS, iods, sgls, NULL);
 		if (rc) {
-			D_ERROR("Failed to create DFS superblock (%d)\n", rc);
+			D_ERROR("Failed to create DFS superblock "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err, rc = daos_der2errno(rc));
 		}
 
@@ -1265,7 +1265,7 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 }
 
 static int
-dfs_cont_create_int(daos_handle_t poh, uuid_t *co_uuid, bool uuid_is_set, uuid_t cuuid,
+dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t in_uuid,
 		    dfs_attr_t *attr, daos_handle_t *_coh, dfs_t **_dfs)
 {
 	daos_handle_t		coh, super_oh;
@@ -1278,7 +1278,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *co_uuid, bool uuid_is_set, uuid_t
 	struct daos_prop_co_roots roots;
 	int			rc;
 
-	if (co_uuid == NULL)
+	if (cuuid == NULL)
 		return EINVAL;
 	if (_dfs && _coh == NULL) {
 		D_ERROR("Should pass a valid container handle pointer\n");
@@ -1289,10 +1289,8 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *co_uuid, bool uuid_is_set, uuid_t
 		prop = daos_prop_alloc(attr->da_props->dpp_nr + 2);
 	else
 		prop = daos_prop_alloc(2);
-	if (prop == NULL) {
-		D_ERROR("Failed to allocate container prop.");
+	if (prop == NULL)
 		return ENOMEM;
-	}
 
 	if (attr != NULL && attr->da_props != NULL) {
 		rc = daos_prop_copy(prop, attr->da_props);
@@ -1357,9 +1355,9 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *co_uuid, bool uuid_is_set, uuid_t
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
 
 	if (uuid_is_set)
-		rc = daos_cont_create(poh, cuuid, prop, NULL);
+		rc = daos_cont_create(poh, in_uuid, prop, NULL);
 	else
-		rc = daos_cont_create(poh, co_uuid, prop, NULL);
+		rc = daos_cont_create(poh, cuuid, prop, NULL);
 	/* should not be freed by daos_prop_free */
 	prop->dpp_entries[prop->dpp_nr - 2].dpe_val_ptr = NULL;
 	if (rc) {
@@ -1367,9 +1365,12 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *co_uuid, bool uuid_is_set, uuid_t
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
-	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	if (uuid_is_set)
+		rc = daos_cont_open(poh, in_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	else
+		rc = daos_cont_open(poh, *cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_open() failed (%d)\n", rc);
+		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
 	}
 
@@ -1401,7 +1402,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *co_uuid, bool uuid_is_set, uuid_t
 
 	rc = daos_obj_close(super_oh, NULL);
 	if (rc) {
-		D_ERROR("Failed to close SB object\n");
+		D_ERROR("Failed to close SB object "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_close, rc = daos_der2errno(rc));
 	}
 
@@ -1420,7 +1421,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *co_uuid, bool uuid_is_set, uuid_t
 	} else {
 		rc = daos_cont_close(coh, NULL);
 		if (rc) {
-			D_ERROR("daos_cont_close() failed (%d)\n", rc);
+			D_ERROR("daos_cont_close() failed "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_destroy, rc = daos_der2errno(rc));
 		}
 	}
@@ -1437,8 +1438,12 @@ err_destroy:
 	 * the SB creation, so do not destroy the container, since another
 	 * process might have created it.
 	 */
-	if (rc != EEXIST)
-		daos_cont_destroy(poh, co_uuid, 1, NULL);
+	if (rc != EEXIST) {
+		if (uuid_is_set)
+			daos_cont_destroy(poh, in_uuid, 1, NULL);
+		else
+			daos_cont_destroy(poh, *cuuid, 1, NULL);
+	}
 err_prop:
 	daos_prop_free(prop);
 	return rc;
@@ -3321,8 +3326,8 @@ dfs_release(dfs_obj_t *obj)
 
 	if (rc)
 		D_ERROR("Failed to close DFS object, "DF_RC"\n", DP_RC(rc));
-
-	D_FREE(obj);
+	else
+		D_FREE(obj);
 	return daos_der2errno(rc);
 }
 

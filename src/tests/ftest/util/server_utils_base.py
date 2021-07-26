@@ -271,7 +271,7 @@ class DaosServerCommand(YamlCommand):
                     "/run/daos_server/storage/prepare/*", "prepare")
 
                 # daos_server storage prepare command options:
-                #   --pci-whitelist=    Whitespace separated list of PCI
+                #   --pci-allowlist=    Whitespace separated list of PCI
                 #                       devices (by address) to be unbound from
                 #                       Kernel driver and used with SPDK
                 #                       (default is all PCI devices).
@@ -287,7 +287,7 @@ class DaosServerCommand(YamlCommand):
                 #                       kernel modules.
                 #   --force             Perform format without prompting for
                 #                       confirmation
-                self.pci_whitelist = FormattedParameter("--pci-whitelist={}")
+                self.pci_allowlist = FormattedParameter("--pci-allowlist={}")
                 self.hugepages = FormattedParameter("--hugepages={}")
                 self.target_user = FormattedParameter("--target-user={}")
                 self.nvme_only = FormattedParameter("--nvme-only", False)

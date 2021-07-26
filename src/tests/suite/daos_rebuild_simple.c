@@ -15,6 +15,7 @@
 #define D_LOGFAC	DD_FAC(tests)
 
 #include "daos_iotest.h"
+#include "dfs_test.h"
 #include <daos/pool.h>
 #include <daos/mgmt.h>
 #include <daos/container.h>
@@ -1164,6 +1165,77 @@ rebuild_with_large_key(void **state)
 	free(akey);
 }
 
+void
+rebuild_with_dfs_open_create_punch(void **state)
+{
+	dfs_t		*dfs_mt;
+	daos_handle_t	co_hdl;
+	test_arg_t	*arg = *state;
+	dfs_obj_t	*obj;
+	dfs_obj_t	*dir;
+	uuid_t		co_uuid;
+	char		filename[32];
+	d_rank_t	rank;
+	daos_obj_id_t	oid;
+	int		i;
+	daos_size_t	chunk_size = 1048576;
+	int		rc;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	uuid_generate(co_uuid);
+	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs_mt);
+	assert_int_equal(rc, 0);
+	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
+
+	rc = dfs_open(dfs_mt, NULL, "dir1", S_IWUSR | S_IRUSR | S_IFDIR,
+		      O_RDWR | O_CREAT, OC_RP_2G1, 0, NULL, &dir);
+	assert_int_equal(rc, 0);
+
+	for (i = 0; i < 20; i++) {
+		sprintf(filename, "degrade_file_%d", i);
+		rc = dfs_open(dfs_mt, dir, filename, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT | O_EXCL, OC_RP_3G6, chunk_size, NULL, &obj);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+	}
+
+	dfs_obj2id(dir, &oid);
+
+	rank = get_rank_by_oid_shard(arg, oid, 0);
+	rebuild_single_pool_rank(arg, rank, false);
+	reintegrate_single_pool_rank_no_disconnect(arg, rank);
+
+	for (i = 0; i < 20; i++) {
+		sprintf(filename, "degrade_file_%d", i);
+		rc = dfs_remove(dfs_mt, dir, filename, 0, NULL);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_open(dfs_mt, dir, filename, S_IFREG | S_IWUSR | S_IRUSR,
+			      O_RDWR | O_CREAT | O_EXCL, OC_RP_3G6, chunk_size, NULL, &obj);
+		assert_int_equal(rc, 0);
+		rc = dfs_release(obj);
+		assert_int_equal(rc, 0);
+	}
+
+	daos_cont_status_clear(co_hdl, NULL);
+
+	rc = dfs_release(dir);
+	assert_int_equal(rc, 0);
+
+	rc = dfs_umount(dfs_mt);
+	assert_int_equal(rc, 0);
+
+	rc = daos_cont_close(co_hdl, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD1: rebuild small rec multiple dkeys",
@@ -1206,6 +1278,8 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 rebuild_with_large_offset, rebuild_small_sub_setup, test_teardown},
 	{"REBUILD20: rebuild with large key",
 	 rebuild_with_large_key, rebuild_small_sub_setup, test_teardown},
+	{"REBUILD21: rebuild with dfs open create punch",
+	 rebuild_with_dfs_open_create_punch, rebuild_small_sub_setup, test_teardown},
 };
 
 int

@@ -899,16 +899,33 @@ int
 dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
 		 dfs_t **dfs);
 
+#if defined(__cplusplus)
+}
+
+#define dfs_cont_create dfs_cont_create_cpp
+static inline int
+dfs_cont_create_cpp(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		    dfs_t **dfs)
+{
+	return dfs_cont_create2(poh, cuuid, attr, coh, dfs);
+}
+
+static inline int
+dfs_cont_create_cpp(daos_handle_t poh, uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		    dfs_t **dfs)
+{
+	return dfs_cont_create(poh, cuuid, attr, coh, dfs);
+};
+#else
+/**
+ * for backward compatility, support old api where a const uuid_t was required to be passed in for
+ * the container to be created.
+ */
 #define dfs_cont_create(poh, co, ...)					\
 	({								\
 		int _ret;						\
 		uuid_t *_u;						\
-		if (__builtin_types_compatible_p(typeof(co),		\
-						 typeof(uuid_t)) ||	\
-		    __builtin_types_compatible_p(typeof(co),		\
-						 typeof(const uuid_t)) || \
-		    __builtin_types_compatible_p(typeof(co),		\
-						 typeof(unsigned char *))) { \
+		if (d_is_uuid(co)) {					\
 			_u = (uuid_t *)((unsigned char *)(co));		\
 			_ret = dfs_cont_create((poh), _u, __VA_ARGS__);	\
 		} else {						\
@@ -918,7 +935,6 @@ dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle
 		_ret;							\
 	})
 
-#if defined(__cplusplus)
-}
-#endif
+
+#endif /* __cplusplus */
 #endif /* __DAOS_FS_H__ */

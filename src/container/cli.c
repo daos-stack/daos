@@ -153,7 +153,7 @@ dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
 	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_OWNER)) {
 		rc = daos_acl_uid_to_principal(uid, &owner);
 		if (rc != 0) {
-			D_ERROR("Invalid uid\n");
+			D_ERROR("Failed to parse uid "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_out, rc);
 		}
 
@@ -163,7 +163,7 @@ dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
 	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_OWNER_GROUP)) {
 		rc = daos_acl_gid_to_principal(gid, &owner_grp);
 		if (rc != 0) {
-			D_ERROR("Invalid gid\n");
+			D_ERROR("Failed to parse gid "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_out, rc);
 		}
 
@@ -172,10 +172,8 @@ dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
 
 	/* We always free this prop in the callback - so need to make a copy */
 	final_prop = daos_prop_alloc(entries);
-	if (final_prop == NULL) {
-		D_ERROR("failed to allocate props");
+	if (final_prop == NULL)
 		D_GOTO(err_out, -DER_NOMEM);
-	}
 
 	if (prop_in != NULL && prop_in->dpp_nr > 0) {
 		rc = daos_prop_copy(final_prop, prop_in);
@@ -823,7 +821,6 @@ err_rpc:
 err:
 	D_DEBUG(DF_DSMC, "failed to open container: "DF_RC"\n", DP_RC(rc));
 	return rc;
-
 }
 
 int
