@@ -29,7 +29,6 @@ func (ei *EngineInstance) GetScmConfig() (*storage.TierConfig, error) {
 // GetScmUsage calls in to the private engine storage provider to retrieve the
 // SCM usage.
 func (ei *EngineInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
-	ei.log.Debugf("calling into storage provider get scm usage")
 	return ei.storage.GetScmUsage()
 }
 

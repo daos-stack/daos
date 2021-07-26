@@ -155,7 +155,7 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	}
 	clean(retPtr)
 
-	// DAOS-
+	// TODO DAOS-8040: re-enable VMD
 	//	if opts.DisableVMD {
 	//		return nil
 	//	}

@@ -33,6 +33,7 @@ func TestProvider_Scan(t *testing.T) {
 		"no devices": {
 			req:    storage.BdevScanRequest{},
 			expRes: &storage.BdevScanResponse{},
+			// TODO DAOS-8040: re-enable VMD
 			// expVMDDisabled: true, // disabled in mock by default
 		},
 		"single device": {
@@ -41,6 +42,7 @@ func TestProvider_Scan(t *testing.T) {
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr1},
 				},
+				// TODO DAOS-8040: re-enable VMD
 				// VmdEnabled: true,
 			},
 			expRes: &storage.BdevScanResponse{
@@ -78,6 +80,7 @@ func TestProvider_Scan(t *testing.T) {
 					ctrlr1, ctrlr2, ctrlr3,
 				},
 			},
+			// TODO DAOS-8040: re-enable VMD
 			// expVMDDisabled: true,
 		},
 		"failure": {
@@ -105,6 +108,7 @@ func TestProvider_Scan(t *testing.T) {
 			if diff := cmp.Diff(tc.expRes, gotRes, defCmpOpts()...); diff != "" {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}
+			// TODO DAOS-8040: re-enable VMD
 			// common.AssertEqual(t, tc.expVMDDisabled, p.IsVMDDisabled(), "vmd disabled")
 		})
 	}

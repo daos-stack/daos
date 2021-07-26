@@ -143,11 +143,9 @@ func (c *ControlService) scanScm(ctx context.Context, req *ctlpb.ScanScmReq) (*c
 	ssr, scanErr := c.ScmScan(scmReq)
 
 	if scanErr != nil || !req.GetUsage() {
-		c.log.Debug("xq3q3 A")
 		return newScanScmResp(ssr, scanErr)
 	}
 
-	c.log.Debugf("xXX 0can resp: %+v", ssr)
 	return newScanScmResp(c.getScmUsage(ssr))
 }
 

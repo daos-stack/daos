@@ -341,14 +341,9 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 			if diff := cmp.Diff(tc.expResp, resp, defStorageScanCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
-
-			log.Infof("&&& %v\n\n", resp.Nvme.GetCtrlrs())
-			log.Infof("&&& %v\n\n", tc.expResp.Nvme.GetCtrlrs())
-
 			if diff := cmp.Diff(tc.expResp, resp, defStorageScanCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
-
 		})
 	}
 }
@@ -1011,15 +1006,15 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				sp.SetBdevCache(*nvmeScanResp)
 				ne := newTestEngine(log, false, sp)
 				// mock drpc responses
-				dcCfg := new(mockDrpcClientConfig)
+				dcc := new(mockDrpcClientConfig)
 				if tc.junkResp {
-					dcCfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+					dcc.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
 				} else if len(tc.drpcResps) > i {
 					for _, mock := range tc.drpcResps[i] {
-						dcCfg.setSendMsgResponseList(t, mock)
+						dcc.setSendMsgResponseList(t, mock)
 					}
 				}
-				ne.setDrpcClient(newMockDrpcClient(dcCfg))
+				ne.setDrpcClient(newMockDrpcClient(dcc))
 				ne._superblock.Rank = system.NewRankPtr(uint32(i + 1))
 
 				cs.harness.instances[i] = ne
