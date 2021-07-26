@@ -454,6 +454,15 @@ abt_init(int argc, char *argv[])
 		ABT_finalize();
 		return dss_abterr2der(rc);
 	}
+
+	D_INIT_LIST_HEAD(&stack_free_list);
+	rc = D_MUTEX_INIT(&stack_free_list_lock, NULL);
+	if (rc != 0) {
+		D_ERROR("Failed to initialize stacks free-list:" DF_RC "\n",
+			DP_RC(rc));
+		ABT_finalize();
+		return rc;
+	}
 #endif
 
 	return 0;
@@ -464,6 +473,19 @@ abt_fini(void)
 {
 #ifdef ULT_MMAP_STACK
 	ABT_key_free(&stack_key);
+
+	D_MUTEX_LOCK(&stack_free_list_lock);
+	while (!d_list_empty(&stack_free_list)) {
+		mmap_stack_desc_t *mmap_stack_desc;
+
+		mmap_stack_desc = container_of(stack_free_list.next,
+					       mmap_stack_desc_t, stack_list);
+		d_list_del_init(stack_free_list.next);
+		D_MUTEX_UNLOCK(&stack_free_list_lock);
+		munmap(mmap_stack_desc->stack, mmap_stack_desc->stack_size);
+		D_MUTEX_LOCK(&stack_free_list_lock);
+	}
+	D_MUTEX_UNLOCK(&stack_free_list_lock);
 #endif
 	ABT_finalize();
 }

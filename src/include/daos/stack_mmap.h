@@ -29,7 +29,12 @@ typedef struct {
 	size_t stack_size;
 	void (*thread_func)(void *);
 	void *thread_arg;
+	d_list_t stack_list;
 } mmap_stack_desc_t;
+
+/* pool of free stacks */
+extern pthread_mutex_t stack_free_list_lock;
+extern d_list_t stack_free_list;
 
 void free_stack(void *arg);
 

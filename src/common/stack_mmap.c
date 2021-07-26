@@ -21,12 +21,20 @@
 /* ABT_key for mmap()'ed ULT stacks */
 ABT_key stack_key;
 
+/* pool of free stacks */
+pthread_mutex_t stack_free_list_lock;
+d_list_t stack_free_list;
+
 /* callback to free stack upon ULT exit and stack_key deregister */
 void free_stack(void *arg)
 {
 	mmap_stack_desc_t *desc = (mmap_stack_desc_t *)arg;
 
-	munmap(desc->stack, desc->stack_size);
+	D_MUTEX_LOCK(&stack_free_list_lock);
+	d_list_add_tail(&stack_free_list, &desc->stack_list);
+	D_MUTEX_UNLOCK(&stack_free_list_lock);
+	D_DEBUG(DB_MEM, "%p mmap()'ed stack has been put on stack free list.\n",
+		desc->stack);
 }
 
 /* wrapper for ULT main function, mainly to register mmap()'ed stack
@@ -52,7 +60,7 @@ int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
 	ABT_thread_attr new_attr = ABT_THREAD_ATTR_NULL;
 	int rc;
 	void *stack;
-	mmap_stack_desc_t *mmap_stack_desc;
+	mmap_stack_desc_t *mmap_stack_desc = NULL;
 	size_t stack_size = MMAPED_ULT_STACK_SIZE, new_stack_size;
 
 	if (attr != ABT_THREAD_ATTR_NULL) {
@@ -76,31 +84,54 @@ int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
 		attr = new_attr;
 	}
 
-	stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE,
-		     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
-		     -1, 0);
-	if (stack == MAP_FAILED) {
-		D_ERROR("Failed to mmap() ULT stack : %s\n", strerror(errno));
-		/* return an ABT error */
-		D_GOTO(out_err, rc = ABT_ERR_MEM);
+	D_MUTEX_LOCK(&stack_free_list_lock);
+	if (!d_list_empty(&stack_free_list)) {
+		mmap_stack_desc = container_of(stack_free_list.next,
+					       mmap_stack_desc_t, stack_list);
+		d_list_del_init(stack_free_list.next);
+		D_MUTEX_UNLOCK(&stack_free_list_lock);
+		stack = mmap_stack_desc->stack;
+		/* XXX may need to reevaluate stack size since a growth may
+		 * have occured during previous context life time ?
+		 */
+		stack_size = mmap_stack_desc->stack_size;
+		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken from stack free list.\n",
+			mmap_stack_desc->stack);
+	} else {
+		D_MUTEX_UNLOCK(&stack_free_list_lock);
+		stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE,
+			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
+			     -1, 0);
+		if (stack == MAP_FAILED) {
+			D_ERROR("Failed to mmap() ULT stack : %s\n", strerror(errno));
+			/* return an ABT error */
+			D_GOTO(out_err, rc = ABT_ERR_MEM);
+		}
+
+		/* put descriptor at bottom of mmap()'ed stack */
+		mmap_stack_desc = (mmap_stack_desc_t *)(stack + stack_size -
+				  sizeof(mmap_stack_desc_t));
+
+		/* start to fill descriptor */
+		mmap_stack_desc->stack = stack;
+		mmap_stack_desc->stack_size = stack_size;
+		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
+		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken allocated.\n",
+			mmap_stack_desc->stack);
 	}
 
-	/* put descriptor at bottom of mmap()'ed stack */
-	mmap_stack_desc = (mmap_stack_desc_t *)(stack + stack_size -
-			  sizeof(mmap_stack_desc_t));
+	/* continue to fill/update descriptor */
+	mmap_stack_desc->thread_func = thread_func;
+	mmap_stack_desc->thread_arg = thread_arg;
 
+	/* usable stack size */
 	new_stack_size = stack_size - sizeof(mmap_stack_desc_t);
+
 	rc = ABT_thread_attr_set_stack(attr, stack, new_stack_size);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("Failed to set stack attrs : %d\n", rc);
 		D_GOTO(out_err, rc);
 	}
-
-	/* fill descriptor */
-	mmap_stack_desc->stack = stack;
-	mmap_stack_desc->stack_size = stack_size;
-	mmap_stack_desc->thread_func = thread_func;
-	mmap_stack_desc->thread_arg = thread_arg;
 
 	/* XXX if newthread is set, we may need to use
 	 * ABT_thread_set_specific() ??
@@ -112,8 +143,8 @@ int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
 		D_GOTO(out_err, rc);
 	}
 out_err:
-	if (rc)
-		munmap(stack, stack_size);
+	if (rc && mmap_stack_desc != NULL)
+		free_stack(mmap_stack_desc);
 	/* free local attr if used */
 	if (new_attr != ABT_THREAD_ATTR_NULL)
 		ABT_thread_attr_free(&new_attr);
@@ -128,7 +159,7 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 	ABT_thread_attr new_attr = ABT_THREAD_ATTR_NULL;
 	int rc;
 	void *stack;
-	mmap_stack_desc_t *mmap_stack_desc;
+	mmap_stack_desc_t *mmap_stack_desc = NULL;
 	size_t stack_size = MMAPED_ULT_STACK_SIZE, new_stack_size;
 
 	if (attr != ABT_THREAD_ATTR_NULL) {
@@ -152,30 +183,54 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 		}
 	}
 
-	stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE,
-		     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
-		     -1, 0);
-	if (stack == MAP_FAILED) {
-		D_ERROR("Failed to mmap() ULT stack : %s\n", strerror(errno));
-		D_GOTO(out_err, rc = ABT_ERR_MEM);
+	D_MUTEX_LOCK(&stack_free_list_lock);
+	if (!d_list_empty(&stack_free_list)) {
+		mmap_stack_desc = container_of(stack_free_list.next,
+					       mmap_stack_desc_t, stack_list);
+		d_list_del_init(stack_free_list.next);
+		D_MUTEX_UNLOCK(&stack_free_list_lock);
+		stack = mmap_stack_desc->stack;
+		/* XXX may need to reevaluate stack size since a growth may
+		 * have occured during previous context life time ?
+		 */
+		stack_size = mmap_stack_desc->stack_size;
+		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken from stack free list.\n",
+			mmap_stack_desc->stack);
+	} else {
+		D_MUTEX_UNLOCK(&stack_free_list_lock);
+		stack = mmap(NULL, stack_size, PROT_READ | PROT_WRITE,
+			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
+			     -1, 0);
+		if (stack == MAP_FAILED) {
+			D_ERROR("Failed to mmap() ULT stack : %s\n", strerror(errno));
+			/* return an ABT error */
+			D_GOTO(out_err, rc = ABT_ERR_MEM);
+		}
+
+		/* put descriptor at bottom of mmap()'ed stack */
+		mmap_stack_desc = (mmap_stack_desc_t *)(stack + stack_size -
+				  sizeof(mmap_stack_desc_t));
+
+		/* start to fill descriptor */
+		mmap_stack_desc->stack = stack;
+		mmap_stack_desc->stack_size = stack_size;
+		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
+		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken allocated.\n",
+			mmap_stack_desc->stack);
 	}
 
-	/* put descriptor at bottom of mmap()'ed stack */
-	mmap_stack_desc = (mmap_stack_desc_t *)(stack + stack_size -
-			  sizeof(mmap_stack_desc_t));
+	/* continue to fill/update descriptor */
+	mmap_stack_desc->thread_func = thread_func;
+	mmap_stack_desc->thread_arg = thread_arg;
 
+	/* usable stack size */
 	new_stack_size = stack_size - sizeof(mmap_stack_desc_t);
+
 	rc = ABT_thread_attr_set_stack(attr, stack, new_stack_size);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("Failed to set stack attrs : %d\n", rc);
 		D_GOTO(out_err, rc);
 	}
-
-	/* fill descriptor */
-	mmap_stack_desc->stack = stack;
-	mmap_stack_desc->stack_size = stack_size;
-	mmap_stack_desc->thread_func = thread_func;
-	mmap_stack_desc->thread_arg = thread_arg;
 
 	/* XXX if newthread is set, we may need to use
 	 * ABT_thread_set_specific() ??
@@ -187,8 +242,8 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 		D_GOTO(out_err, rc);
 	}
 out_err:
-	if (rc)
-		munmap(stack, stack_size);
+	if (rc && mmap_stack_desc != NULL)
+		free_stack(mmap_stack_desc);
 	if (new_attr != ABT_THREAD_ATTR_NULL)
 		ABT_thread_attr_free(&attr);
 	return rc;
