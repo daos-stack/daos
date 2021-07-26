@@ -20,7 +20,6 @@ from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes
 import slurm_utils
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
@@ -59,10 +58,7 @@ def add_pools(self, pool_names):
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(TestPool(self.context, self.dmg_command))
-        self.pool[-1].namespace = path
-        self.pool[-1].get_params(self)
-        self.pool[-1].create()
+        self.pool.append(self.get_pool(namespace=path, connect=False))
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 

@@ -373,7 +373,7 @@ struct daos_prop_entry {
 static inline bool
 daos_label_is_valid(const char *label)
 {
-	size_t	len;
+	int	len;
 	int	i;
 
 	/** Label cannot be NULL */

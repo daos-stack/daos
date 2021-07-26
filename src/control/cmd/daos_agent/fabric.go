@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -40,6 +41,11 @@ var DefaultFabricInterface = &FabricInterface{
 // supplied by the user.
 const FabricDevClassManual = uint32(1 << 31)
 
+// addrFI is a fabric interface that can provide its addresses.
+type addrFI interface {
+	Addrs() ([]net.Addr, error)
+}
+
 // NUMAFabric represents a set of fabric interfaces organized by NUMA node.
 type NUMAFabric struct {
 	log   logging.Logger
@@ -50,6 +56,8 @@ type NUMAFabric struct {
 	// current device idx to use on each NUMA node
 	currentNumaDevIdx map[int]int
 	defaultNumaNode   int
+
+	getAddrInterface func(name string) (addrFI, error)
 }
 
 // Add adds a fabric interface to a specific NUMA node.
@@ -134,14 +142,50 @@ func (n *NUMAFabric) getDeviceFromNUMA(numaNode int, netDevClass uint32) (*Fabri
 		fabricIF := n.getNextDevice(numaNode)
 
 		if fabricIF.NetDevClass != netDevClass && fabricIF.NetDevClass != FabricDevClassManual {
-			n.log.Debugf("Excluding device: %s, network device class: %s from attachInfoCache. Does not match network device class: %s",
+			n.log.Debugf("Excluding device: %s, network device class: %s. Does not match requested network device class: %s",
 				fabricIF.Name, netdetect.DevClassName(fabricIF.NetDevClass), netdetect.DevClassName(netDevClass))
+			continue
+		}
+
+		if err := n.validateDevice(fabricIF); err != nil {
+			n.log.Infof("Excluding device %q: %s", fabricIF.Name, err.Error())
 			continue
 		}
 
 		return fabricIF, nil
 	}
 	return nil, FabricNotFoundErr(netDevClass)
+}
+
+// getAddrFI wraps net.InterfaceByName to allow using the addrFI interface as
+// the return value.
+func getAddrFI(name string) (addrFI, error) {
+	return net.InterfaceByName(name)
+}
+
+func (n *NUMAFabric) validateDevice(fi *FabricInterface) error {
+	if n.getAddrInterface == nil {
+		n.getAddrInterface = getAddrFI
+	}
+
+	addrInterface, err := n.getAddrInterface(fi.Name)
+	if err != nil {
+		return err
+	}
+
+	addrs, err := addrInterface.Addrs()
+	if err != nil {
+		return err
+	}
+
+	for _, a := range addrs {
+		n.log.Debugf("Interface: %s, Addr: %s %s", fi.Name, a.Network(), a.String())
+		if ipAddr, isIP := a.(*net.IPNet); isIP && ipAddr.IP != nil && !ipAddr.IP.IsUnspecified() {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("no IP addresses for fabric interface %s", fi.Name)
 }
 
 func (n *NUMAFabric) getNextDevice(numaNode int) *FabricInterface {
