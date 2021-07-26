@@ -154,21 +154,10 @@ fini_free(struct ds_rsvc *svc)
 }
 
 void
-ds_rsvc_get(struct ds_rsvc *svc)
+ds_rsvc_put0(struct ds_rsvc *svc)
 {
-	svc->s_ref++;
-}
-
-/** Put a replicated service reference. */
-void
-ds_rsvc_put(struct ds_rsvc *svc)
-{
-	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
-	svc->s_ref--;
-	if (svc->s_ref == 0) {
-		rdb_stop(svc->s_db);
-		fini_free(svc);
-	}
+	rdb_stop(svc->s_db);
+	fini_free(svc);
 }
 
 static struct d_hash_table rsvc_hash;
@@ -194,18 +183,25 @@ static void
 rsvc_rec_addref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_rsvc *svc = rsvc_obj(rlink);
+	int new;
 
-	svc->s_ref++;
+	new = ++svc->s_ref;
+
+	D_DEBUG(DB_MD, "addref(%p) to %d\n", svc, new);
 }
 
 static bool
 rsvc_rec_decref(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_rsvc *svc = rsvc_obj(rlink);
+	int new;
 
 	D_ASSERTF(svc->s_ref > 0, "%d\n", svc->s_ref);
-	svc->s_ref--;
-	return svc->s_ref == 0;
+	new = --svc->s_ref;
+
+	D_DEBUG(DB_MD, "decref(%p) to %d\n", svc, new);
+
+	return new == 0;
 }
 
 static void
@@ -213,8 +209,7 @@ rsvc_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_rsvc *svc = rsvc_obj(rlink);
 
-	rdb_stop(svc->s_db);
-	fini_free(svc);
+	ds_rsvc_put0(svc);
 }
 
 static d_hash_table_ops_t rsvc_hash_ops = {
@@ -276,8 +271,7 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 				rsvc_class(class)->sc_name(id, &name);
 				D_ERROR("%s: failed to stat %s: %d\n", name,
 					path, errno);
-				if (name != NULL)
-					D_FREE(name);
+				D_FREE(name);
 			}
 		}
 		D_FREE(path);
@@ -1380,6 +1374,7 @@ rsvc_module_fini(void)
 	rsvc_hash_fini();
 	return 0;
 }
+
 struct dss_module rsvc_module = {
 	.sm_name	= "rsvc",
 	.sm_mod_id	= DAOS_RSVC_MODULE,
