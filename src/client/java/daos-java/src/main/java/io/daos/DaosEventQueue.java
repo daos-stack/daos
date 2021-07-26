@@ -53,7 +53,8 @@ public class DaosEventQueue {
 
   private static final int DEFAULT_POLL_TIMEOUT_MS = 10;
 
-  private static final int DEFAULT_NO_PROGRESS_DURATION_ERROR = Integer.valueOf(System.getProperty("DAOS_TIMEOUT", "60000")); // MS
+  private static final int DEFAULT_NO_PROGRESS_DURATION_ERROR = Integer.valueOf(
+      System.getProperty(Constants.CFG_DAOS_TIMEOUT, Constants.DEFAULT_DAOS_TIMEOUT_MS)); // MS
 
   private static final int DEFAULT_NBR_OF_TIMEDOUT_WARN = 5;
 
