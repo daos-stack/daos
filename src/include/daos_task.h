@@ -339,7 +339,10 @@ typedef struct {
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Container UUID. */
+	/**
+	 * Deprecated, container UUID replaced by UUID string or label via the
+	 * cont arg at the end of this structure.
+	 */
 	uuid_t			uuid;
 	/** Open mode, represented by the DAOS_COO_ bits.*/
 	unsigned int		flags;
@@ -347,8 +350,8 @@ typedef struct {
 	daos_handle_t		*coh;
 	/** Optional, return container information. */
 	daos_cont_info_t	*info;
-	/** Container label, API v1.2.2 (placed at end for ABI compatibility) */
-	const char		*label;
+	/** Container (UUID string or label) to open, API v1.3.0 */
+	const char		*cont;
 } daos_cont_open_t;
 
 /** Container close args */
@@ -361,12 +364,15 @@ typedef struct {
 typedef struct {
 	/** Pool open handle. */
 	daos_handle_t		poh;
-	/** Container UUID. */
+	/**
+	 * Deprecated, container UUID replaced by UUID string or label via the
+	 * cont arg at the end of this structure.
+	 */
 	uuid_t			uuid;
 	/** Force destroy even if there is outstanding open handles. */
 	int			force;
-	/* label, API v1.2.4 (placed at end for ABI compatibility) */
-	const char	       *label;
+	/** Container (UUID string or label) to destroy, API v1.3.0 */
+	const char	       *cont;
 } daos_cont_destroy_t;
 
 /** Container query args */

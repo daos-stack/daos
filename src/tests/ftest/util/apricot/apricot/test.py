@@ -23,12 +23,13 @@ from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
 from dmg_utils import get_dmg_command
 from daos_utils import DaosCommand
+from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing
+    get_default_config_file, pcmd, get_file_listing, run_command
 from logger_utils import TestLogger
-from test_utils_pool import TestPool
+from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
 from env_modules import load_mpi
 from distutils.spawn import find_executable
@@ -550,6 +551,7 @@ class TestWithServers(TestWithoutServers):
         # self.debug = False
         # self.config = None
         self.job_manager = None
+        self.label_generator = LabelGenerator()
 
     def setUp(self):
         """Set up each test case."""
@@ -680,6 +682,14 @@ class TestWithServers(TestWithoutServers):
         if self.setup_start_agents:
             self.start_agents(force=force_agent_start)
 
+        # If there's no server started, then there's no server log to write to.
+        if self.setup_start_servers:
+
+            # Write an ID string to the log file for cross-referencing logs
+            # with test ID
+            id_str = '"Test.name: ' + str(self) + '"'
+            self.write_string_to_logfile(id_str)
+
         # Setup a job manager command for running the test command
         manager_class_name = self.params.get(
             "job_manager_class_name", default=None)
@@ -694,6 +704,38 @@ class TestWithServers(TestWithoutServers):
 
         # Mark the end of setup
         self.log.info("=" * 100)
+
+    def write_string_to_logfile(self, message):
+        """Write a string to the server log.
+
+        The server log message will be appear in the following format:
+            <date> <hostname> DAOS[<pid>/0/6] rpc EMIT
+                src/cart/crt_rpc.c:53 crt_hdlr_ctl_log_add_msg() <message>
+
+        Args:
+            message (str): message to write to log file.
+        """
+        if self.server_managers and self.agent_managers:
+            # Compose and run cart_ctl command
+            cart_ctl = CartCtl()
+            cart_ctl.add_log_msg.value = "add_log_msg"
+            cart_ctl.rank.value = "all"
+            cart_ctl.cfg_path.value = "."
+            cart_ctl.m.value = message
+            cart_ctl.n.value = None
+
+            for manager in self.agent_managers:
+                # Fetch attachinfo data from server via the agent
+                attachinfo_file = manager.get_attachinfo_file()
+                cp_command = "sudo cp {} {}".format(attachinfo_file, ".")
+                run_command(cp_command, verbose=True, raise_exception=False)
+                cart_ctl.group_name.value = manager.get_config_value("name")
+                cart_ctl.run()
+        else:
+            self.log.info(
+                "Unable to write message to the server log: %d servers groups "
+                "running / %d agent groups running",
+                len(self.server_managers), len(self.agent_managers))
 
     def set_job_manager_timeout(self):
         """Set the timeout for the job manager.
@@ -902,7 +944,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_managers.append(
             DaosAgentManager(
                 group, self.bin, cert_dir, config_file, config_temp,
-                self.agent_manager_class)
+                self.agent_manager_class, outputdir=self.outputdir)
         )
 
     def add_server_manager(self, group=None, svr_config_file=None,
@@ -1415,7 +1457,9 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(self.context, self.get_dmg_command(index))
+        pool = TestPool(
+            context=self.context, dmg_command=self.get_dmg_command(index),
+            label_generator=self.label_generator)
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
