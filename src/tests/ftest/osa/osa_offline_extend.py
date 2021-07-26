@@ -6,7 +6,7 @@
 """
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
+from test_utils_pool import TestPool, LabelGenerator
 from dmg_utils import check_system_query_status
 from apricot import skipForTicket
 
@@ -44,6 +44,7 @@ class OSAOfflineExtend(OSAUtils):
             oclass (list) : list of daos object class (eg: "RP_2G8")
         """
         # Create a pool
+        label_generator = LabelGenerator()
         pool = {}
         if oclass is None:
             oclass = []
@@ -57,7 +58,9 @@ class OSAOfflineExtend(OSAUtils):
                 index = val
             else:
                 index = 0
-            pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.get_dmg_command(),
+                label_generator=label_generator)
             pool[val].get_params(self)
             pool[val].create()
             self.pool = pool[val]
@@ -68,6 +71,12 @@ class OSAOfflineExtend(OSAUtils):
                 self.run_mdtest_thread(oclass[index])
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass[index], test_seq)
+                if self.test_with_snapshot is True:
+                    # Create a snapshot of the container
+                    # after IOR job completes.
+                    self.container.create_snap()
+                    self.log.info("Created container snapshot: %s",
+                                  self.container.epoch)
         # Start the additional servers and extend the pool
         self.log.info("Extra Servers = %s", self.extra_servers)
         self.start_additional_servers(self.extra_servers)
@@ -195,3 +204,18 @@ class OSAOfflineExtend(OSAUtils):
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         self.log.info("Offline Extend : Aggregation")
         self.run_offline_extend_test(3, data=True, oclass=self.test_oclass)
+
+    def test_osa_offline_extend_after_snapshot(self):
+        """Test ID: DAOS-8057
+        Test Description: Validate Offline extend after
+        taking snapshot.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=osa,osa_extend
+        :avocado: tags=offline_extend,offline_extend_after_snapshot
+        """
+        self.test_with_snapshot = self.params.get("test_with_snapshot",
+                                                  '/run/snapshot/*')
+        self.log.info("Offline Extend Testing: After taking snapshot")
+        self.run_offline_extend_test(1, data=True)

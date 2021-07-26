@@ -1143,10 +1143,9 @@ fs_op_hdlr(struct cmd_args_s *ap)
 		}
 
 		if (ap->cont_label) {
-			rc = daos_cont_open_by_label(ap->pool, ap->cont_label,
-						     DAOS_COO_RW |
-						     DAOS_COO_FORCE,
-						     &ap->cont, NULL, NULL);
+			rc = daos_cont_open(ap->pool, ap->cont_label,
+					    DAOS_COO_RW | DAOS_COO_FORCE,
+					    &ap->cont, NULL, NULL);
 			fprintf(stderr,
 				"failed to open container %s: %s (%d)\n",
 				ap->cont_label, d_errdesc(rc), rc);
@@ -1330,9 +1329,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
 		if (ap->cont_label) {
-			rc = daos_cont_open_by_label(ap->pool, ap->cont_label,
-					     DAOS_COO_RW | DAOS_COO_FORCE,
-					     &ap->cont, &cont_info, NULL);
+			rc = daos_cont_open(ap->pool, ap->cont_label,
+					    DAOS_COO_RW | DAOS_COO_FORCE,
+					    &ap->cont, &cont_info, NULL);
 			if (rc != 0) {
 				fprintf(stderr, "failed to open "
 					"container %s: %s (%d)\n",

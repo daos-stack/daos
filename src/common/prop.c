@@ -324,9 +324,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_PROP_CO_LAYOUT_UNKOWN &&
-			    val != DAOS_PROP_CO_LAYOUT_POSIX &&
-			    val != DAOS_PROP_CO_LAYOUT_HDF5) {
+			if (val >= DAOS_PROP_CO_LAYOUT_MAX) {
 				D_ERROR("invalid layout type "DF_U64".\n", val);
 				return false;
 			}

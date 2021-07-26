@@ -245,13 +245,13 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, bool started,
-	   int err)
+	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts,
+	   bool started, int err)
 {
 	struct dtx_handle	*dth = dth_in;
 	struct dtx_rsrvd_uint	*dru;
+	struct vos_dtx_cmt_ent	*dce = NULL;
 	struct dtx_handle	 tmp = {0};
-	int			 rc = err;
 
 	if (!dtx_is_valid_handle(dth)) {
 		/** Created a dummy dth handle for publishing extents */
@@ -283,25 +283,30 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	dth->dth_local_tx_started = 0;
 
 	if (dtx_is_valid_handle(dth_in) && err == 0)
-		err = vos_dtx_prepared(dth);
+		err = vos_dtx_prepared(dth, &dce);
 
 	if (err == 0)
-		rc = vos_tx_publish(dth, true);
+		err = vos_tx_publish(dth, true);
 
-	rc = umem_tx_end(vos_cont2umm(cont), rc);
+	err = umem_tx_end(vos_cont2umm(cont), err);
 
 cancel:
-	if (rc != 0) {
+	if (err != 0) {
 		/* The transaction aborted or failed to commit. */
 		vos_tx_publish(dth, false);
 		if (dtx_is_valid_handle(dth_in))
 			vos_dtx_cleanup_internal(dth);
 	}
 
-	if (err != 0)
-		return err;
+	if (dce != NULL) {
+		struct vos_dtx_act_ent	*dae = dth_in->dth_ent;
 
-	return rc;
+		vos_dtx_post_handle(cont, &dae, &dce, 1, false,
+				    err != 0 ? true : false);
+		dth_in->dth_ent = NULL;
+	}
+
+	return err;
 }
 
 /**
@@ -520,7 +525,7 @@ vos_self_nvme_init()
 
 	rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID, VOS_NVME_MEM_SIZE,
 			   VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET,
-			   vos_db_get());
+			   vos_db_get(), true);
 	if (rc)
 		return rc;
 

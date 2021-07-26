@@ -87,8 +87,8 @@ func (cmd *containerBaseCmd) openContainer() error {
 		defer freeString(cLabel)
 
 		cmd.log.Debugf("opening container: %s", cmd.contLabel)
-		rc = C.daos_cont_open_by_label(cmd.cPoolHandle, cLabel,
-			openFlags, &cmd.cContHandle, &contInfo, nil)
+		rc = C.daos_cont_open2(cmd.cPoolHandle, cLabel, openFlags,
+			&cmd.cContHandle, &contInfo, nil)
 		if rc == 0 {
 			var err error
 			cmd.contUUID, err = uuidFromC(contInfo.ci_uuid)
@@ -99,7 +99,9 @@ func (cmd *containerBaseCmd) openContainer() error {
 		}
 	case cmd.contUUID != uuid.Nil:
 		cmd.log.Debugf("opening container: %s", cmd.contUUID)
-		rc = C.daos_cont_open(cmd.cPoolHandle, cmd.contUUIDPtr(),
+		cUUIDstr := C.CString(cmd.contUUID.String())
+		defer freeString(cUUIDstr)
+		rc = C.daos_cont_open2(cmd.cPoolHandle, cUUIDstr,
 			openFlags, &cmd.cContHandle, nil, nil)
 	default:
 		return errors.New("no container UUID or label supplied")
@@ -547,12 +549,14 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 		defer freeString(cPath)
 		rc = C.duns_destroy_path(cmd.cPoolHandle, cPath)
 	case cmd.ContainerID().HasUUID():
-		rc = C.daos_cont_destroy(cmd.cPoolHandle,
-			cmd.contUUIDPtr(), goBool2int(cmd.Force), nil)
+		cUUIDstr := C.CString(cmd.contUUID.String())
+		defer freeString(cUUIDstr)
+		rc = C.daos_cont_destroy2(cmd.cPoolHandle, cUUIDstr,
+			goBool2int(cmd.Force), nil)
 	case cmd.ContainerID().Label != "":
 		cLabel := C.CString(cmd.ContainerID().Label)
 		defer freeString(cLabel)
-		rc = C.daos_cont_destroy_by_label(cmd.cPoolHandle,
+		rc = C.daos_cont_destroy2(cmd.cPoolHandle,
 			cLabel, goBool2int(cmd.Force), nil)
 	default:
 		return errors.New("no UUID or label or path for container")
