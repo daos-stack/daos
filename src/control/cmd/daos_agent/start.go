@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/daos-stack/daos/src/control/drpc"
-	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 )
 
@@ -45,9 +44,14 @@ func (cmd *startCmd) Execute(_ []string) error {
 		return err
 	}
 
-	enabled := atm.NewBool(os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
-	if enabled.IsFalse() {
+	aicEnabled := (os.Getenv("DAOS_AGENT_DISABLE_CACHE") != "true")
+	if !aicEnabled {
 		cmd.log.Debugf("GetAttachInfo agent caching has been disabled\n")
+	}
+
+	ficEnabled := (os.Getenv("DAOS_AGENT_DISABLE_OFI_CACHE") != "true")
+	if !ficEnabled {
+		cmd.log.Debugf("Local fabric interface caching has been disabled\n")
 	}
 
 	netCtx, err := netdetect.Init(context.Background())
@@ -65,12 +69,21 @@ func (cmd *startCmd) Execute(_ []string) error {
 	procmon := NewProcMon(cmd.log, cmd.ctlInvoker, cmd.cfg.SystemName)
 	procmon.startMonitoring(ctx)
 
+	fabricCache := newLocalFabricCache(cmd.log, ficEnabled)
+	if len(cmd.cfg.FabricInterfaces) > 0 {
+		// Cache is required to use user-defined fabric interfaces
+		fabricCache.enabled.SetTrue()
+		nf := NUMAFabricFromConfig(cmd.log, cmd.cfg.FabricInterfaces)
+		fabricCache.Cache(ctx, nf)
+	}
+
 	drpcServer.RegisterRPCModule(NewSecurityModule(cmd.log, cmd.cfg.TransportConfig))
 	drpcServer.RegisterRPCModule(&mgmtModule{
 		log:        cmd.log,
 		sys:        cmd.cfg.SystemName,
 		ctlInvoker: cmd.ctlInvoker,
-		aiCache:    &attachInfoCache{log: cmd.log, enabled: enabled},
+		attachInfo: newAttachInfoCache(cmd.log, aicEnabled),
+		fabricInfo: newLocalFabricCache(cmd.log, ficEnabled),
 		numaAware:  numaAware,
 		netCtx:     netCtx,
 		monitor:    procmon,

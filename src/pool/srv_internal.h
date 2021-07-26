@@ -22,17 +22,6 @@ struct pool_metrics {
 	struct d_tm_node_t	*open_hdl_gauge;
 };
 
-/* Metrics for each individual active pool */
-struct active_pool_metrics {
-	uuid_t			pool_uuid;
-	d_list_t		link;
-
-	struct d_tm_node_t	*started_timestamp;
-	/* TODO: add more per-pool metrics */
-};
-
-extern struct pool_metrics ds_pool_metrics;
-
 /**
  * DSM server thread local storage structure
  */
@@ -196,10 +185,9 @@ void ds_stop_scrubbing_ult(struct ds_pool_child *child);
 /*
  * srv_metrics.c
  */
-int ds_pool_metrics_init(void);
-int ds_pool_metrics_fini(void);
-void ds_pool_metrics_start(uuid_t pool_uuid);
-void ds_pool_metrics_stop(uuid_t pool_uuid);
-struct active_pool_metrics *ds_pool_metrics_get(uuid_t pool_uuid);
+void *ds_pool_metrics_alloc(const char *path, int tgt_id);
+void ds_pool_metrics_free(void *data);
+int ds_pool_metrics_start(struct ds_pool *pool);
+void ds_pool_metrics_stop(struct ds_pool *pool);
 
 #endif /* __POOL_SRV_INTERNAL_H__ */

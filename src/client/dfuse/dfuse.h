@@ -25,8 +25,6 @@
 
 struct dfuse_info {
 	struct fuse_session		*di_session;
-	char				*di_pool;
-	char				*di_cont;
 	char				*di_group;
 	char				*di_mountpoint;
 	uint32_t			di_thread_count;
@@ -547,6 +545,9 @@ struct dfuse_inode_entry {
 	bool			ie_truncated;
 
 	bool			ie_root;
+
+	/** File has been unlinked from daos */
+	bool			ie_unlinked;
 };
 
 /* Generate the inode to use for this dfs object.  This is generating a single
@@ -684,6 +685,11 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct fuse_file_info *fi_out,
 		  fuse_req_t req,
 		  bool have_uid);
+
+/* Mark object as removed and invalidate any kernel data for it */
+void
+dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos_obj_id_t *oid,
+		   struct dfuse_inode_entry *parent, const char *name);
 
 /* dfuse_cont.c */
 void

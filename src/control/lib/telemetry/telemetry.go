@@ -32,12 +32,13 @@ import (
 type MetricType int
 
 const (
-	MetricTypeUnknown   MetricType = 0
-	MetricTypeCounter   MetricType = C.D_TM_COUNTER
-	MetricTypeDuration  MetricType = C.D_TM_DURATION
-	MetricTypeGauge     MetricType = C.D_TM_GAUGE
-	MetricTypeSnapshot  MetricType = C.D_TM_TIMER_SNAPSHOT
-	MetricTypeTimestamp MetricType = C.D_TM_TIMESTAMP
+	MetricTypeUnknown    MetricType = 0
+	MetricTypeCounter    MetricType = C.D_TM_COUNTER
+	MetricTypeDuration   MetricType = C.D_TM_DURATION
+	MetricTypeGauge      MetricType = C.D_TM_GAUGE
+	MetricTypeStatsGauge MetricType = C.D_TM_STATS_GAUGE
+	MetricTypeSnapshot   MetricType = C.D_TM_TIMER_SNAPSHOT
+	MetricTypeTimestamp  MetricType = C.D_TM_TIMESTAMP
 
 	BadUintVal  = ^uint64(0)
 	BadFloatVal = float64(BadUintVal)
@@ -49,6 +50,7 @@ type (
 	Metric interface {
 		Path() string
 		Name() string
+		FullPath() string
 		Type() MetricType
 		Desc() string
 		Units() string
@@ -98,9 +100,13 @@ const (
 	handleKey telemetryKey = "handle"
 )
 
+func (h *handle) isValid() bool {
+	return h != nil && h.ctx != nil && h.root != nil
+}
+
 func getHandle(ctx context.Context) (*handle, error) {
 	handle, ok := ctx.Value(handleKey).(*handle)
-	if !ok {
+	if !ok || handle == nil {
 		return nil, errors.New("no handle set on context")
 	}
 	return handle, nil
@@ -117,6 +123,17 @@ func findNode(hdl *handle, name string) (*C.struct_d_tm_node_t, error) {
 	}
 
 	return node, nil
+}
+
+func splitFullName(fullName string) (string, string) {
+	tokens := strings.Split(fullName, "/")
+	if len(tokens) == 1 {
+		return "", tokens[0]
+	}
+
+	name := tokens[len(tokens)-1]
+	path := strings.Join(tokens[:len(tokens)-1], "/")
+	return name, path
 }
 
 func (mb *metricBase) Type() MetricType {
@@ -141,6 +158,14 @@ func (mb *metricBase) Name() string {
 	}
 
 	return *mb.name
+}
+
+func (mb *metricBase) FullPath() string {
+	if mb == nil || mb.handle == nil || mb.node == nil {
+		return "<nil>"
+	}
+
+	return strings.Join([]string{mb.Path(), mb.Name()}, "/")
 }
 
 func (mb *metricBase) fillMetadata() {
@@ -234,8 +259,35 @@ func (sm *statsMetric) SampleSize() uint64 {
 	return uint64(sm.stats.sample_size)
 }
 
+func collectGarbageLoop(ctx context.Context, ticker *time.Ticker) {
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			hdl, err := getHandle(ctx)
+			if err != nil {
+				return // can't do anything with this
+			}
+			hdl.Lock()
+			if !hdl.isValid() {
+				// Handle won't become valid again on this ctx
+				hdl.Unlock()
+				return
+			}
+			C.d_tm_gc_ctx(hdl.ctx)
+			hdl.Unlock()
+		}
+	}
+}
+
 // Init initializes the telemetry bindings
 func Init(parent context.Context, idx uint32) (context.Context, error) {
+	if parent == nil {
+		return nil, errors.New("nil parent context")
+	}
+
 	tmCtx := C.d_tm_open(C.int(idx))
 	if tmCtx == nil {
 		return nil, errors.Errorf("no shared memory segment found for idx: %d", idx)
@@ -252,13 +304,19 @@ func Init(parent context.Context, idx uint32) (context.Context, error) {
 		root: root,
 	}
 
-	return context.WithValue(parent, handleKey, handle), nil
+	newCtx := context.WithValue(parent, handleKey, handle)
+	go collectGarbageLoop(newCtx, time.NewTicker(60*time.Second))
+
+	return newCtx, nil
 }
 
 // Detach detaches from the telemetry handle
 func Detach(ctx context.Context) {
-	if hdl, err := getHandle(ctx); err != nil {
+	if hdl, err := getHandle(ctx); err == nil {
+		hdl.Lock()
 		C.d_tm_close(&hdl.ctx)
+		hdl.root = nil
+		hdl.Unlock()
 	}
 }
 
@@ -271,19 +329,27 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 	path := strings.Join(pathComps, "/")
 	name := C.GoString(C.d_tm_get_name(hdl.ctx, node))
 
-	switch node.dtn_type {
-	case C.D_TM_DIRECTORY:
+	cType := node.dtn_type
+
+	switch {
+	case cType == C.D_TM_DIRECTORY:
 		next = C.d_tm_get_child(hdl.ctx, node)
 		if next != nil {
 			visit(hdl, next, append(pathComps, name), out)
 		}
-	case C.D_TM_GAUGE:
+	case cType == C.D_TM_GAUGE:
 		out <- newGauge(hdl, path, &name, node)
-	case C.D_TM_COUNTER:
+	case cType == C.D_TM_STATS_GAUGE:
+		out <- newStatsGauge(hdl, path, &name, node)
+	case cType == C.D_TM_COUNTER:
 		out <- newCounter(hdl, path, &name, node)
-	case C.D_TM_TIMESTAMP:
+	case cType == C.D_TM_TIMESTAMP:
 		out <- newTimestamp(hdl, path, &name, node)
-	case C.D_TM_LINK:
+	case (cType & C.D_TM_TIMER_SNAPSHOT) != 0:
+		out <- newSnapshot(hdl, path, &name, node)
+	case (cType & C.D_TM_DURATION) != 0:
+		out <- newDuration(hdl, path, &name, node)
+	case cType == C.D_TM_LINK:
 		next = C.d_tm_follow_link(hdl.ctx, node)
 		if next != nil {
 			// link leads to a directory with the same name
@@ -298,42 +364,24 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 	}
 }
 
-func CollectMetrics(ctx context.Context, dirname string, out chan<- Metric) error {
+func CollectMetrics(ctx context.Context, out chan<- Metric) error {
+	defer close(out)
+
 	hdl, err := getHandle(ctx)
 	if err != nil {
 		return err
 	}
+	hdl.Lock()
+	defer hdl.Unlock()
+
+	if !hdl.isValid() {
+		return errors.New("invalid handle")
+	}
 
 	node := hdl.root
 
-	if dirname != "/" && dirname != "" {
-		node, err = findNode(hdl, dirname)
-		if err != nil {
-			return errors.Wrapf(err, "unable to find %s", dirname)
-		}
-	}
-
-	if node == nil {
-		return errors.Errorf("directory or metric:[%s] was not found", dirname)
-	}
-
-	var nl *C.struct_d_tm_nodeList_t
-
-	filter := C.D_TM_ALL_NODES
-	rc := C.d_tm_list(hdl.ctx, &nl, node, C.int(filter))
-
-	if rc != C.DER_SUCCESS {
-		return errors.Errorf("unable to find entry for %s.  rc = %d\n", dirname, rc)
-	}
-
 	var pathComps []string
-	if dirname != "" {
-		pathComps = append(pathComps, dirname)
-	}
-	visit(hdl, nl.dtnl_node, pathComps, out)
-
-	close(out)
-	C.d_tm_list_free(nl)
+	visit(hdl, node, pathComps, out)
 
 	return nil
 }

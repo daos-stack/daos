@@ -146,7 +146,7 @@ dc_rw_cb_iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
 		      uint64_t off)
 {
 	struct daos_sgl_idx	sgl_idx = {0};
-	int			rc;
+	int			i, rc;
 
 	cp_iod->iod_recxs = &iod->iod_recxs[siod->siod_idx];
 	cp_iod->iod_nr = siod->siod_nr;
@@ -155,14 +155,21 @@ dc_rw_cb_iod_sgl_copy(daos_iod_t *iod, d_sg_list_t *sgl, daos_iod_t *cp_iod,
 	if (rc)
 		return rc;
 
-	if (sgl_idx.iov_idx >= sgl->sg_nr || sgl_idx.iov_offset != 0) {
+	if (sgl_idx.iov_idx >= sgl->sg_nr) {
 		D_ERROR("bad sgl/siod, iov_idx %d, iov_offset "DF_U64
 			", offset "DF_U64", tgt_idx %d\n", sgl_idx.iov_idx,
 			sgl_idx.iov_offset, off, siod->siod_tgt_idx);
 		return -DER_IO;
 	}
-	cp_sgl->sg_iovs = &sgl->sg_iovs[sgl_idx.iov_idx];
+
 	cp_sgl->sg_nr = sgl->sg_nr - sgl_idx.iov_idx;
+	cp_sgl->sg_nr_out = cp_sgl->sg_nr;
+	for (i = 0; i < cp_sgl->sg_nr; i++)
+		cp_sgl->sg_iovs[i] = sgl->sg_iovs[sgl_idx.iov_idx + i];
+	D_ASSERT(sgl_idx.iov_offset < cp_sgl->sg_iovs[0].iov_len);
+	cp_sgl->sg_iovs[0].iov_buf += sgl_idx.iov_offset;
+	cp_sgl->sg_iovs[0].iov_len -= sgl_idx.iov_offset;
+	cp_sgl->sg_iovs[0].iov_buf_len = cp_sgl->sg_iovs[0].iov_len;
 
 	return 0;
 }
@@ -292,8 +299,11 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		orw->orw_nr);
 
 	for (i = 0; i < orw->orw_nr; i++) {
+#define IOV_INLINE	8
 		daos_iod_t		*iod = &iods[i];
 		daos_iod_t		 shard_iod = *iod;
+		d_iov_t			 iovs_inline[IOV_INLINE];
+		d_iov_t			*iovs_alloc = NULL;
 		d_sg_list_t		 shard_sgl = sgls[i];
 		struct dcs_iod_csums	*iod_csum = &iods_csums[i];
 		uint64_t		*sizes;
@@ -305,14 +315,26 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		sizes = orwo->orw_iod_sizes.ca_arrays;
 		shard_iod.iod_size = sizes[i];
 		if (iod->iod_type == DAOS_IOD_ARRAY && oiods != NULL) {
+			if (sgls[i].sg_nr <= IOV_INLINE) {
+				shard_sgl.sg_iovs = iovs_inline;
+			} else {
+				D_ALLOC_ARRAY(iovs_alloc, sgls[i].sg_nr);
+				if (iovs_alloc == NULL) {
+					rc = -DER_NOMEM;
+					break;
+				}
+				shard_sgl.sg_iovs = iovs_alloc;
+			}
 			rc = dc_rw_cb_iod_sgl_copy(iod, &sgls[i], &shard_iod,
-					&shard_sgl, &oiods->oiod_siods[i],
+					&shard_sgl, oiods[i].oiod_siods,
 					rw_args->shard_args->offs[i]);
 			if (rc != 0) {
 				D_ERROR("dc_rw_cb_iod_sgl_copy failed (object: "
 					DF_OID"): "DF_RC"\n",
 					DP_OID(orw->orw_oid.id_pub),
 					DP_RC(rc));
+				if (iovs_alloc != NULL)
+					D_FREE(iovs_alloc);
 				break;
 			}
 		}
@@ -323,6 +345,8 @@ dc_rw_cb_csum_verify(const struct rw_cb_args *rw_args)
 		rc = daos_csummer_verify_iod(csummer_copy, &shard_iod,
 					     &shard_sgl, iod_csum, singv_lo,
 					     shard_idx, map);
+		if (iovs_alloc != NULL)
+			D_FREE(iovs_alloc);
 		if (rc != 0) {
 			bool			 is_ec_obj;
 
@@ -427,7 +451,7 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 	if (recov_list != NULL)
 		daos_recx_ep_list_hilo(recov_list, &recov_hi, &recov_lo);
 
-	D_SPIN_LOCK(&reasb_req->orr_spin);
+	D_MUTEX_LOCK(&reasb_req->orr_mutex);
 
 	/* merge iom_recx_hi */
 	hi = src->iom_recx_hi;
@@ -471,7 +495,7 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 
 	if ((dst->iom_flags & DAOS_IOMF_DETAIL) == 0) {
 		dst->iom_nr_out = 0;
-		D_SPIN_UNLOCK(&reasb_req->orr_spin);
+		D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
 		return 0;
 	}
 
@@ -483,7 +507,7 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 		iom_nr = roundup(iom_nr, 8);
 		D_ALLOC_ARRAY(dst->iom_recxs, iom_nr);
 		if (dst->iom_recxs == NULL) {
-			D_SPIN_UNLOCK(&reasb_req->orr_spin);
+			D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
 			return -DER_NOMEM;
 		}
 		dst->iom_nr = iom_nr;
@@ -565,7 +589,7 @@ obj_ec_iom_merge(struct obj_reasb_req *reasb_req, uint32_t shard,
 	}
 
 out:
-	D_SPIN_UNLOCK(&reasb_req->orr_spin);
+	D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
 	return rc;
 }
 
@@ -837,13 +861,25 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			D_GOTO(out, rc = -DER_PROTO);
 		}
 
-		if (is_ec_obj) {
+		if (is_ec_obj && !reasb_req->orr_recov) {
 			rc = obj_ec_recov_add(reasb_req,
 					      orwo->orw_rels.ca_arrays,
 					      orwo->orw_rels.ca_count);
 			if (rc) {
-				D_ERROR("fail to add recov list for "DF_UOID
-					",rc %d.\n", DP_UOID(orw->orw_oid), rc);
+				D_ERROR(DF_UOID" obj_ec_recov_add failed, "
+					DF_RC".\n", DP_UOID(orw->orw_oid),
+					DP_RC(rc));
+				goto out;
+			}
+		} else if (is_ec_obj && reasb_req->orr_recov &&
+			   orwo->orw_rels.ca_arrays != NULL) {
+			rc = obj_ec_parity_check(reasb_req,
+						 orwo->orw_rels.ca_arrays,
+						 orwo->orw_rels.ca_count);
+			if (rc) {
+				D_ERROR(DF_UOID" obj_ec_parity_check failed, "
+					DF_RC".\n", DP_UOID(orw->orw_oid),
+					DP_RC(rc));
 				goto out;
 			}
 		}
@@ -927,6 +963,7 @@ dc_rw_cb(tse_task_t *task, void *arg)
 			daos_iom_t			*reply_maps;
 			struct daos_recx_ep_list	*recov_list;
 
+			D_ASSERT(reasb_req == NULL || !reasb_req->orr_recov);
 			/** Should have 1 map per iod */
 			D_ASSERT(orwo->orw_maps.ca_count == orw->orw_nr);
 			for (i = 0; i < orw->orw_nr; i++) {
@@ -1130,10 +1167,14 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	rw_args.shard_args = args;
 	/* remember the sgl to copyout the data inline for fetch */
 	rw_args.rwaa_sgls = (opc == DAOS_OBJ_RPC_FETCH) ? sgls : NULL;
-	if (args->reasb_req && args->reasb_req->orr_recov)
+	if (args->reasb_req && args->reasb_req->orr_recov) {
 		rw_args.maps = NULL;
-	else
+		orw->orw_flags |= ORF_EC_RECOV;
+		if (args->reasb_req->orr_recov_snap)
+			orw->orw_flags |= ORF_EC_RECOV_SNAP;
+	} else {
 		rw_args.maps = args->api_args->ioms;
+	}
 	if (opc == DAOS_OBJ_RPC_FETCH) {
 		if (args->iod_csums != NULL) {
 			orw->orw_flags |= (ORF_CREATE_MAP |
@@ -1578,10 +1619,14 @@ dc_enumerate_cb(tse_task_t *task, void *arg)
 		       oeo->oeo_recxs.ca_count);
 	}
 
-	if (enum_args->eaa_sgl && oeo->oeo_sgl.sg_nr > 0) {
-		rc = daos_sgl_copy_data_out(enum_args->eaa_sgl, &oeo->oeo_sgl);
-		if (rc)
-			D_GOTO(out, rc);
+	if (enum_args->eaa_sgl) {
+		if (oeo->oeo_sgl.sg_nr > 0) {
+			rc = daos_sgl_copy_data_out(enum_args->eaa_sgl, &oeo->oeo_sgl);
+			if (rc)
+				D_GOTO(out, rc);
+		} else {
+			dc_sgl_out_set(enum_args->eaa_sgl, oeo->oeo_size);
+		}
 	}
 
 	/* Update dkey hash and tag */
@@ -1793,7 +1838,8 @@ struct obj_query_key_cb_args {
 
 static void
 obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
-			  struct obj_query_key_out *okqo, bool get_max)
+			  struct obj_query_key_out *okqo, bool get_max,
+			  bool changed)
 {
 	daos_recx_t		*reply_recx = &okqo->okqo_recx;
 	daos_recx_t		*result_recx = cb_args->recx;
@@ -1828,6 +1874,8 @@ re_check:
 		tmp_recx->rx_idx = rx_idx;
 		tmp_recx->rx_nr = stripe_rec_nr *
 				     (reply_recx->rx_nr / cell_rec_nr);
+		D_DEBUG(DB_IO, "shard %d get recx "DF_U64" "DF_U64"\n",
+			shard, tmp_recx->rx_idx, tmp_recx->rx_nr);
 	} else {
 		/* data ext from data shard needs to convert to daos ext,
 		 * replica ext from parity shard needs not to convert.
@@ -1849,6 +1897,8 @@ re_check:
 							       stripe_rec_nr,
 							       cell_rec_nr,
 							       tgt_idx);
+			D_DEBUG(DB_IO, "shard %d get recx "DF_U64" "DF_U64"\n",
+				shard, tmp_recx->rx_idx, tmp_recx->rx_nr);
 		}
 	}
 	if (!parity_checked && !from_data_tgt) {
@@ -1864,15 +1914,21 @@ re_check:
 	end[0] = DAOS_RECX_END(recx[0]);
 	end[1] = DAOS_RECX_END(recx[1]);
 	if (get_max) {
-		if (end[0] > end[1])
-			*result_recx = recx[0];
-		else
-			*result_recx = recx[1];
+		if (end[0] > end[1]) {
+			if (DAOS_RECX_END(*result_recx) < end[0] || changed)
+				*result_recx = recx[0];
+		} else {
+			if (DAOS_RECX_END(*result_recx) < end[1] || changed)
+				*result_recx = recx[1];
+		}
 	} else {
-		if (end[0] < end[1])
-			*result_recx = recx[0];
-		else
-			*result_recx = recx[1];
+		if (end[0] < end[1]) {
+			if (DAOS_RECX_END(*result_recx) > end[0] || changed)
+				*result_recx = recx[0];
+		} else {
+			if (DAOS_RECX_END(*result_recx) > end[1] || changed)
+				*result_recx = recx[1];
+		}
 	}
 }
 
@@ -1957,6 +2013,8 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 			changed = true;
 		} else if (flags & DAOS_GET_MAX) {
 			if (*val > *cur) {
+				D_DEBUG(DB_IO, "dkey update "DF_U64"->"
+					DF_U64"\n", *cur, *val);
 				*cur = *val;
 				/** set to change akey and recx */
 				changed = true;
@@ -1965,7 +2023,7 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 				 * replica obj, for EC obj need to check again
 				 * as it possibly from different data shards.
 				 */
-				if (!is_ec_obj)
+				if (!is_ec_obj || *val < *cur)
 					check = false;
 			}
 		} else if (flags & DAOS_GET_MIN) {
@@ -2000,10 +2058,8 @@ obj_shard_query_key_cb(tse_task_t *task, void *data)
 		if (!first && !changed)
 			D_ASSERT(is_ec_obj);
 
-		if (changed)
-			obj_shard_query_recx_post(cb_args,
-						  okqi->okqi_oid.id_shard,
-						  okqo, get_max);
+		obj_shard_query_recx_post(cb_args, okqi->okqi_oid.id_shard,
+					  okqo, get_max, changed);
 	}
 	D_RWLOCK_UNLOCK(&cb_args->obj->cob_lock);
 

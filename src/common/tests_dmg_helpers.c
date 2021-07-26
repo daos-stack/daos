@@ -355,15 +355,12 @@ dmg_pool_set_prop(const char *dmg_config_file,
 	int			rc = 0;
 
 	uuid_unparse_lower(pool_uuid, uuid_str);
-	args = cmd_push_arg(args, &argcount, "--pool=%s ", uuid_str);
+	args = cmd_push_arg(args, &argcount, "%s ", uuid_str);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	args = cmd_push_arg(args, &argcount, "--name=%s ", prop_name);
-	if (args == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
-
-	args = cmd_push_arg(args, &argcount, "--value=%s ", prop_value);
+	args = cmd_push_arg(args, &argcount, "%s:%s",
+			    prop_name, prop_value);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
@@ -553,7 +550,7 @@ dmg_pool_destroy(const char *dmg_config_file,
 
 	uuid_unparse_lower(uuid, uuid_str);
 	args = cmd_push_arg(args, &argcount,
-			    "--pool=%s ", uuid_str);
+			    "%s ", uuid_str);
 	if (args == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 

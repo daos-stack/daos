@@ -172,6 +172,12 @@ rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
 }
 
 void
+reintegrate_single_pool_rank_no_disconnect(test_arg_t *arg, d_rank_t failed_rank)
+{
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, RB_OP_TYPE_REINT);
+}
+
+void
 rebuild_pools_ranks(test_arg_t **args, int args_cnt, d_rank_t *failed_ranks,
 		    int ranks_nr, bool kill)
 {
@@ -919,6 +925,25 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	print_message("idx %u grp %u rank %d\n", idx, grp_idx, rank);
 	daos_obj_layout_free(layout);
 	return rank;
+}
+
+uint32_t
+get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
+			 uint32_t shard)
+{
+	struct daos_obj_layout	*layout;
+	uint32_t		grp_idx;
+	uint32_t		idx;
+	uint32_t		tgt_idx;
+
+	daos_obj_layout_get(arg->coh, oid, &layout);
+	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
+	idx = shard % layout->ol_shards[0]->os_replica_nr;
+	tgt_idx = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_tgt_idx;
+
+	print_message("idx %u grp %u tgt_idx %d\n", idx, grp_idx, tgt_idx);
+	daos_obj_layout_free(layout);
+	return tgt_idx;
 }
 
 int

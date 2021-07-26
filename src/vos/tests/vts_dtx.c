@@ -67,6 +67,7 @@ vts_dtx_begin(const daos_unit_oid_t *oid, daos_handle_t coh, daos_epoch_t epoch,
 	dth->dth_for_migration = 0;
 	dth->dth_ignore_uncommitted = 0;
 	dth->dth_force_refresh = 0;
+	dth->dth_prepared = 0;
 
 	dth->dth_dti_cos_count = 0;
 	dth->dth_dti_cos = NULL;
@@ -826,7 +827,7 @@ dtx_18(void **state)
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
-				   NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, DTX_ST_COMMITTED);
 	}
 
@@ -838,7 +839,7 @@ dtx_18(void **state)
 
 	for (i = 0; i < 10; i++) {
 		rc = vos_dtx_check(args->ctx.tc_co_hdl, &xid[i],
-				   NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL, false);
 		assert_rc_equal(rc, -DER_NONEXIST);
 	}
 

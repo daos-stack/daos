@@ -29,7 +29,7 @@ enum {
 	EC_SPECIFIED,
 };
 
-static bool
+bool
 oid_is_ec(daos_obj_id_t oid, struct daos_oclass_attr **attr)
 {
 	struct daos_oclass_attr *oca;
@@ -251,7 +251,7 @@ ec_setup_single_recx_data(struct ec_agg_test_ctx *ctx, unsigned int mode,
 	ctx->fetch_iom.iom_nr = 1;
 	ctx->fetch_iom.iom_nr_out = 0;
 
-	/** Setup Fetch IOD*/
+	/** Setup Fetch IOD */
 	ctx->fetch_iod.iod_name = ctx->update_iod.iod_name;
 	ctx->fetch_iod.iod_size = ctx->update_iod.iod_size;
 	ctx->fetch_iod.iod_recxs = ctx->update_iod.iod_recxs;
@@ -786,24 +786,164 @@ setup_ec_agg_tests(void **statep, struct ec_agg_test_ctx *ctx)
 static void
 cleanup_ec_agg_tests(struct ec_agg_test_ctx *ctx)
 {
+	if (ctx->update_iod.iod_name.iov_buf)
+		D_FREE(ctx->update_iod.iod_name.iov_buf);
+	if (ctx->dkey.iov_buf)
+		D_FREE(ctx->dkey.iov_buf);
 	ec_cleanup_cont(ctx);
 }
 
 static void
 test_all_ec_agg(void **statep)
 {
+	test_arg_t		*arg = *statep;
 	struct ec_agg_test_ctx	 ctx = { 0 };
 
+	if (!test_runable(arg, 5))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	setup_ec_agg_tests(statep, &ctx);
 	test_filled_stripe(&ctx);
 	test_half_stripe(&ctx);
 	test_partial_stripe(&ctx);
 	test_range_punch(&ctx);
-	sleep(40);
+	print_message("sleep 45 seconds for aggregation ...\n");
+	sleep(45);
+	print_message("verification after aggregation\n");
 	verify_1p(&ctx, DAOS_OC_EC_K2P1_L32K, 2);
 	verify_2p(&ctx, DAOS_OC_EC_K2P2_L32K);
 	verify_1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
 	verify_rp1p(&ctx, DAOS_OC_EC_K4P1_L32K, 4);
+	cleanup_ec_agg_tests(&ctx);
+}
+
+static void
+fetch_snap_with_agg(void **statep)
+{
+	test_arg_t		*arg = *statep;
+	struct ec_agg_test_ctx	 ctx = { 0 };
+	struct daos_oclass_attr	*oca;
+	uint32_t		 cs, ss;
+	daos_epoch_t		 snap_epoch;
+	d_iov_t			 dkey;
+	d_sg_list_t		 sgl;
+	d_iov_t			 sg_iov;
+	daos_iod_t		 iod;
+	daos_recx_t		 recx;
+	char			 *wbuf1;
+	char			 *wbuf2;
+	char			 *rbuf;
+	daos_handle_t		 th;
+	uint16_t		 fail_shard = 1;
+	uint64_t		 fail_val;
+	bool			 snap_higher = false;
+	int			 rc;
+
+	if (!test_runable(arg, 4))
+		skip();
+
+	FAULT_INJECTION_REQUIRED();
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	setup_ec_agg_tests(statep, &ctx);
+	dts_ec_agg_oc = DAOS_OC_EC_K2P2_L32K;
+	ec_setup_cont_obj(&ctx, dts_ec_agg_oc);
+	assert_int_equal(oid_is_ec(ctx.oid, &oca), true);
+	assert_int_equal(oca->u.ec.e_k, 2);
+	assert_int_equal(oca->u.ec.e_k, 2);
+	cs = oca->u.ec.e_len;
+	ss = cs * oca->u.ec.e_k;
+	wbuf1 = calloc(ss, 1);
+	wbuf2 = calloc(ss, 1);
+	rbuf = calloc(ss, 1);
+	memset(wbuf1, 'a', ss);
+	memset(wbuf2, 'b', ss);
+	memset(rbuf, 0, ss);
+
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+	d_iov_set(&iod.iod_name, "akey", strlen("akey"));
+
+	d_iov_set(&sg_iov, wbuf1, ss);
+	sgl.sg_nr = 1;
+	sgl.sg_nr_out = 0;
+	sgl.sg_iovs = &sg_iov;
+	iod.iod_nr	= 1;
+	iod.iod_size	= 1;
+	recx.rx_idx	= 0;
+	recx.rx_nr	= ss;
+	iod.iod_recxs	= &recx;
+	iod.iod_type	= DAOS_IOD_ARRAY;
+
+re_test:
+	/* write @low_epoch */
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+	/* create snapshot */
+	if (!snap_higher) {
+		print_message("test fetch_snapshot < vos_agg_boundary\n");
+		rc = daos_cont_create_snap(ctx.coh, &snap_epoch, NULL, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	/* overwrite @high_epoch */
+	d_iov_set(&sg_iov, wbuf2, ss);
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
+	/* wait aggregation */
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      DAOS_FORCE_EC_AGG | DAOS_FAIL_ALWAYS,
+			      0, NULL);
+	print_message("wait for 25 seconds for VOS aggregation.\n");
+	sleep(25);
+
+	if (snap_higher) {
+		print_message("test fetch_snapshot > vos_agg_boundary\n");
+		rc = daos_cont_create_snap(ctx.coh, &snap_epoch, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+				      DAOS_FAIL_AGG_BOUNDRY_MOVED |
+				      DAOS_FAIL_ONCE, 0, NULL);
+	}
+
+	/* degraded fetch from snapshot, compare fetched data with
+	 * buffer written @low_epoch
+	 */
+	rc = daos_tx_open_snap(ctx.coh, snap_epoch, &th, NULL);
+	assert_rc_equal(rc, 0);
+
+	fail_val = daos_shard_fail_value(&fail_shard, 1);
+	daos_fail_loc_set(DAOS_FAIL_SHARD_FETCH | DAOS_FAIL_ONCE);
+	daos_fail_value_set(fail_val);
+	d_iov_set(&sg_iov, rbuf, ss);
+	rc = daos_obj_fetch(ctx.oh, th, 0, &dkey, 1, &iod, &sgl,
+			    NULL, NULL);
+	assert_rc_equal(rc, 0);
+	if (!snap_higher)
+		assert_memory_equal(rbuf, wbuf1, ss);
+	else
+		assert_memory_equal(rbuf, wbuf2, ss);
+
+	rc = daos_tx_close(th, NULL);
+	assert_rc_equal(rc, 0);
+
+	daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+			      0, 0, NULL);
+	daos_fail_loc_set(0);
+	daos_fail_value_set(0);
+
+	if (!snap_higher) {
+		snap_higher = true;
+		goto re_test;
+	}
+
+	free(wbuf1);
+	free(wbuf2);
+	free(rbuf);
+	rc = daos_obj_close(ctx.oh, NULL);
+	assert_rc_equal(rc, 0);
 	cleanup_ec_agg_tests(&ctx);
 }
 
@@ -818,6 +958,8 @@ ec_setup(void **statep)
 static const struct CMUnitTest ec_agg_tests[] = {
 	{"DAOS_ECAG00: test EC aggregation", test_all_ec_agg,
 	  incremental_fill, test_case_teardown},
+	{"DAOS_ECAG01: test fetch snapshot lower than vos agg boundary",
+	  fetch_snap_with_agg, async_disable, test_case_teardown},
 };
 
 int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
@@ -825,14 +967,18 @@ int run_daos_aggregation_ec_test(int rank, int size, int *sub_tests,
 {
 	int rc = 0;
 
-	if (rank != 0) {
-		MPI_Barrier(MPI_COMM_WORLD);
-		return rc;
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (sub_tests_size == 0) {
+		sub_tests_size = ARRAY_SIZE(ec_agg_tests);
+		sub_tests = NULL;
 	}
-	rc = cmocka_run_group_tests_name("DAOS_EC_Aggregation",
-					 ec_agg_tests, ec_setup, test_teardown);
+	if (rank != 0)
+		goto out;
+	rc += run_daos_sub_tests("DAOS_EC_Aggregation", ec_agg_tests,
+				 ARRAY_SIZE(ec_agg_tests), sub_tests,
+				 sub_tests_size, ec_setup, test_teardown);
 
+out:
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
 }
-

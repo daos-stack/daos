@@ -21,6 +21,7 @@
 #include <daos_srv/vos_types.h>
 #include <daos_pool.h>
 #include <daos_security.h>
+#include <gurt/telemetry_common.h>
 
 /*
  * Pool object
@@ -55,6 +56,17 @@ struct ds_pool {
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1;
+
+	/** path to ephemeral metrics */
+	char			sp_path[D_TM_MAX_NAME_LEN];
+
+	/**
+	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
+	 * actual structure. Initialized only for modules that specified a
+	 * set of handlers via dss_module::sm_metrics handlers and reported
+	 * DAOS_SYS_TAG.
+	 */
+	void			*sp_metrics[DAOS_NR_MODULE];
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -108,6 +120,14 @@ struct ds_pool_child {
 	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
+
+	/**
+	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
+	 * actual structure. Initialized only for modules that specified a
+	 * set of handlers via dss_module::sm_metrics handlers and reported
+	 * DAOS_TGT_TAG.
+	 */
+	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);

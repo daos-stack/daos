@@ -244,10 +244,13 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		epoch_min = param->ap_start_eph_get(cont);
 	}
 
-	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG)))
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG) ||
+		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_FAIL) ||
+		     DAOS_FAIL_CHECK(DAOS_FORCE_EC_AGG_PEER_FAIL)))
 		interval = 0;
 	else
 		interval = crt_sec2hlc(DAOS_AGG_THRESHOLD);
+
 	D_ASSERT(hlc > (interval * 2));
 	/*
 	 * Assume 'current hlc - interval' as the highest stable view (all
@@ -269,7 +272,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		return 0;
 	}
 
-	D_DEBUG(DB_EPC, "hlc "DF_U64" epoch_max "DF_U64" agg max "DF_U64"\n",
+	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch_max "DF_X64" agg max "DF_X64"\n",
 		hlc, epoch_max, cont->sc_aggregation_max);
 	/* Cap the aggregation upper bound to the snapshot in creating */
 	if (epoch_max >= cont->sc_aggregation_max)
@@ -342,13 +345,14 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		D_GOTO(free, rc = 0);
 
 	*msecs = 0;
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: %lu; HLC: %lu\n",
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: MIN: "DF_X64"; HLC: "DF_X64"\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_min, hlc);
 
 	for ( ; i < snapshots_nr && snapshots[i] < epoch_max; ++i) {
 		epoch_range.epr_hi = snapshots[i];
-		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+		D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "
+			DF_X64"}\n",
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
@@ -363,7 +367,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		goto out;
 
 	epoch_range.epr_hi = epoch_max;
-	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {%lu -> %lu}\n",
+	D_DEBUG(DB_EPC, DF_CONT"[%d]: Aggregating {"DF_X64" -> "DF_X64"}\n",
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
@@ -2242,7 +2246,8 @@ struct cont_ec_eph {
 	d_list_t	ce_list;
 	daos_epoch_t	ce_eph;
 	daos_epoch_t	ce_last_eph;
-	int		ce_destroy:1;
+	int		ce_destroy:1,
+			ce_first:1;
 };
 
 /* Argument to query ec aggregate epoch from each xstream */
@@ -2307,6 +2312,7 @@ lookup_insert_cont_ec_eph(d_list_t *ec_list, uuid_t cont_uuid)
 	if (found == NULL)
 		return NULL;
 
+	found->ce_first = 1;
 	d_list_add(&found->ce_list, ec_list);
 	uuid_copy(found->ce_cont_uuid, cont_uuid);
 	return found;
@@ -2324,10 +2330,14 @@ cont_ec_eph_reduce(void *agg_arg, void *xs_arg)
 
 		c_eph = lookup_insert_cont_ec_eph(&pool->sp_ec_ephs_list,
 						  x_arg->ephs[i].cont_uuid);
-		if (c_eph->ce_eph == 0 ||
-		    (x_arg->ephs[i].eph != 0 &&
-		     x_arg->ephs[i].eph > c_eph->ce_last_eph))
+		if (x_arg->ephs[i].eph < c_eph->ce_last_eph)
+			continue;
+		if (c_eph->ce_first) {
 			c_eph->ce_eph = x_arg->ephs[i].eph;
+			c_eph->ce_first = 0;
+		} else if (x_arg->ephs[i].eph < c_eph->ce_eph) {
+			c_eph->ce_eph = x_arg->ephs[i].eph;
+		}
 	}
 }
 
@@ -2442,10 +2452,6 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 				continue;
 			}
 
-			if (ec_eph->ce_eph == 0 ||
-			    ec_eph->ce_eph < ec_eph->ce_last_eph)
-				ec_eph->ce_eph = 0;
-
 			D_DEBUG(DB_MD, "eph "DF_X64" "DF_UUID"\n",
 				ec_eph->ce_eph, DP_UUID(ec_eph->ce_cont_uuid));
 			rc = cont_iv_ec_agg_eph_update(pool->sp_iv_ns,
@@ -2454,6 +2460,7 @@ ds_cont_tgt_ec_eph_query_ult(void *data)
 			if (rc == 0) {
 				ec_eph->ce_last_eph = ec_eph->ce_eph;
 				ec_eph->ce_eph = 0;
+				ec_eph->ce_first = 1;
 			} else {
 				D_INFO(DF_CONT": Update min epoch: %d\n",
 				       DP_CONT(pool->sp_uuid,
@@ -2511,7 +2518,7 @@ cont_rw_capa_set(void *data)
 
 	cont_child->sc_rw_disabled = arg->csa_rw_disable;
 	if (dss_get_module_info()->dmi_tgt_id == 0)
-		D_ERROR(DF_CONT" read/write permission %s.\n",
+		D_DEBUG(DB_IO, DF_CONT" read/write permission %s.\n",
 			DP_CONT(arg->csa_pool_uuid, arg->csa_cont_uuid),
 			cont_child->sc_rw_disabled ? "disabled" : "enabled");
 

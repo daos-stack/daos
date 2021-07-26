@@ -253,7 +253,10 @@ extern "C" {
 	       Shards overlap)						\
 	/** #failures exceed RF(Redundancy Factor), data possibly lost */ \
 	ACTION(DER_RF,			(DER_ERR_DAOS_BASE + 31),	\
-	       Failures exceed RF)
+	       Failures exceed RF)					\
+	/** Re-fetch again, an internal error code used in EC deg-fetch */ \
+	ACTION(DER_FETCH_AGAIN,		(DER_ERR_DAOS_BASE + 32),	\
+	       Fetch again)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
@@ -337,6 +340,14 @@ const char *d_errdesc(int errnum);
 
 /** @}
  */
+
+#define DO_PRAGMA(str)	_Pragma(#str)
+#define DEPRECATE_ERROR(olde, newe)				\
+({								\
+	DO_PRAGMA(message(#olde " is deprecated, use " #newe)); \
+	newe;							\
+})
+#define DER_EVICTED DEPRECATE_ERROR(DER_EVICTED, DER_EXCLUDED)
 
 #ifndef DF_RC
 #define DF_RC "%s(%d): '%s'"

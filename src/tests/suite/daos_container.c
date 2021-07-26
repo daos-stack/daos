@@ -96,25 +96,28 @@ co_attribute(void **state)
 	int		 rc;
 
 	char const *const names[] = { "AVeryLongName", "Name" };
+	char const *const names_get[] = { "AVeryLongName", "Wrong", "Name" };
 	size_t const name_sizes[] = {
 				strlen(names[0]) + 1,
 				strlen(names[1]) + 1,
 	};
 	void const *const in_values[] = {
 				"value",
-				"this is a long value"
+				"this is a long value",
 	};
 	size_t const in_sizes[] = {
 				strlen(in_values[0]),
-				strlen(in_values[1])
+				strlen(in_values[1]),
 	};
-	int			 n = (int) ARRAY_SIZE(names);
+	int			 n = (int)ARRAY_SIZE(names);
+	int			 m = (int)ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
-						  &out_buf[1 * BUFSIZE]
+						  &out_buf[1 * BUFSIZE],
+						  &out_buf[2 * BUFSIZE],
 						};
-	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE };
+	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE, BUFSIZE };
 	size_t			 total_size;
 
 	if (arg->async) {
@@ -149,7 +152,7 @@ co_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 	assert_string_equal(out_buf, names[1]);
 
-	total_size = 10*BUFSIZE;
+	total_size = 10 * BUFSIZE;
 	rc = daos_cont_list_attr(arg->coh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
@@ -162,7 +165,7 @@ co_attribute(void **state)
 	print_message("getting container attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_cont_get_attr(arg->coh, n, names, out_values, out_sizes,
+	rc = daos_cont_get_attr(arg->coh, m, names_get, out_values, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
@@ -172,20 +175,26 @@ co_attribute(void **state)
 	assert_memory_equal(out_values[0], in_values[0], in_sizes[0]);
 
 	print_message("Verifying Name-Value (B)..\n");
-	assert_true(in_sizes[1] > BUFSIZE);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
-	assert_memory_equal(out_values[1], in_values[1], BUFSIZE);
+	assert_int_equal(out_sizes[1], 0);
 
-	rc = daos_cont_get_attr(arg->coh, n, names, NULL, out_sizes,
+	print_message("Verifying Name-Value (C)..\n");
+	assert_true(in_sizes[1] > BUFSIZE);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
+	assert_memory_equal(out_values[2], in_values[1], BUFSIZE);
+
+	rc = daos_cont_get_attr(arg->coh, m, names_get, NULL, out_sizes,
 				arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying with NULL buffer..\n");
 	assert_int_equal(out_sizes[0], in_sizes[0]);
-	assert_int_equal(out_sizes[1], in_sizes[1]);
+	assert_int_equal(out_sizes[1], 0);
+	assert_int_equal(out_sizes[2], in_sizes[1]);
 
-	rc = daos_cont_del_attr(arg->coh, n, names, arg->async ? &ev : NULL);
+	rc = daos_cont_del_attr(arg->coh, m, names_get,
+				arg->async ? &ev : NULL);
+	/* should work even if "Wrong" do not exist */
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
@@ -301,6 +310,14 @@ co_properties(void **state)
 	test_arg_t		*arg0 = *state;
 	test_arg_t		*arg = NULL;
 	char			*label = "test_cont_properties";
+	char			*label2 = "test_cont_prop_label2";
+	char			*foo_label = "foo";
+	char			*label2_v2 = "test_cont_prop_label2_version2";
+	uuid_t			 cuuid2;
+	daos_handle_t		 coh2;
+	uuid_t			 cuuid3;
+	daos_handle_t		 coh3;
+	uuid_t			 cuuid4;
 	uint64_t		 snapshot_max = 128;
 	daos_prop_t		*prop;
 	daos_prop_t		*prop_query;
@@ -405,9 +422,108 @@ co_properties(void **state)
 	}
 	D_FREE(exp_owner_grp);
 
-	if (arg->myrank == 0)
+	if (arg->myrank == 0) {
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, 0,
 				     0, NULL);
+
+		/* Create container: different UUID, same label - fail */
+		print_message("Checking create: different UUID same label "
+			      "(will fail)\n");
+		uuid_generate(cuuid2);
+		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
+		assert_rc_equal(rc, -DER_EXIST);
+
+		/* Create container: same UUID, different label - fail */
+		print_message("Checking create: same UUID, different label "
+			      "(will fail)\n");
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2);
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* Create container: same UUID, no label - pass (idempotent) */
+		print_message("Checking create: same UUID, no label\n");
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* Create container C2: no UUID specified, new label - pass */
+		print_message("Checking create: different UUID and label\n");
+		rc = daos_cont_create_by_label(arg->pool.poh, label2, NULL,
+					       NULL, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("created container C2: %s\n", label2);
+		/* Open by label, and immediately close */
+		rc = daos_cont_open(arg->pool.poh, label2, DAOS_COO_RW, &coh2,
+				    NULL, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_close(coh2, NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("opened and closed container %s\n", label2);
+
+		/* Create container: C1 UUID, different label - fail
+		 * uuid matches first container, label matches second container
+		 */
+		print_message("Checking create: same UUID, different label "
+			      "(will fail)\n");
+		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
+		assert_rc_equal(rc, -DER_INVAL);
+
+		/* destroy the container C2 (will re-create it next) */
+		rc = daos_cont_destroy(arg->pool.poh, label2, 0 /* force */,
+				       NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("destroyed container C2: %s\n", label2);
+
+		/* Create C3 with an initial label, rename to old C2 label2
+		 * Create container with label2  - fail.
+		 */
+		print_message("Checking set-prop and create label conflict "
+			      "(will fail)\n");
+		rc = daos_cont_create_by_label(arg->pool.poh, foo_label,
+					       NULL /* prop */, &cuuid3,
+					       NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("step1: created container C3: %s : "
+			      "UUID:"DF_UUIDF"\n", foo_label, DP_UUID(cuuid3));
+		rc = daos_cont_open(arg->pool.poh, foo_label, DAOS_COO_RW,
+				    &coh3, NULL, NULL);
+		assert_rc_equal(rc, 0);
+		print_message("step2: C3 set-prop, rename %s -> %s\n",
+			      foo_label, prop->dpp_entries[0].dpe_str);
+		rc = daos_cont_set_prop(coh3, prop, NULL);
+		assert_rc_equal(rc, 0);
+		uuid_generate(cuuid4);
+		print_message("step3: create cont with label: %s (will fail)\n",
+			      prop->dpp_entries[0].dpe_str);
+		rc = daos_cont_create(arg->pool.poh, cuuid4, prop, NULL);
+		assert_rc_equal(rc, -DER_EXIST);
+
+		/* Container 3 set-prop label2_v2,
+		 * container 1 set-prop label2 - pass
+		 */
+		print_message("Checking label rename and reuse\n");
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2_v2);
+		print_message("step: C3 set-prop change FROM %s TO %s\n",
+			      label2, label2_v2);
+		rc = daos_cont_set_prop(coh3, prop, NULL);
+		assert_rc_equal(rc, 0);
+		free(prop->dpp_entries[0].dpe_str);
+		prop->dpp_entries[0].dpe_str = strdup(label2);
+		print_message("step: C1 set-prop change FROM %s TO %s\n",
+			      label, label2);
+		rc = daos_cont_set_prop(arg->coh, prop, NULL);
+		assert_rc_equal(rc, 0);
+
+		/* destroy container C3 */
+		rc = daos_cont_close(coh3, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_destroy(arg->pool.poh, label2_v2, 0 /* force */,
+				       NULL /* ev */);
+		assert_rc_equal(rc, 0);
+		print_message("destroyed container C3: %s : "
+			      "UUID:"DF_UUIDF"\n", label2_v2, DP_UUID(cuuid3));
+	}
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	daos_prop_free(prop);
@@ -1338,7 +1454,7 @@ get_daos_prop_with_label(void)
 	assert_non_null(prop);
 
 	setup_str_prop_entry(&prop->dpp_entries[0], DAOS_PROP_CO_LABEL,
-			     "My container");
+			     "My_container");
 
 	return prop;
 }
@@ -1353,7 +1469,7 @@ get_daos_prop_with_all_prop_categories(void)
 	assert_non_null(prop);
 
 	setup_str_prop_entry(&prop->dpp_entries[0], DAOS_PROP_CO_LABEL,
-			     "Container 1");
+			     "Container_1");
 	setup_str_prop_entry(&prop->dpp_entries[1], DAOS_PROP_CO_OWNER,
 			     "niceuser@");
 	setup_str_prop_entry(&prop->dpp_entries[2], DAOS_PROP_CO_OWNER_GROUP,
@@ -1852,7 +1968,7 @@ co_owner_implicit_access(void **state)
 	print_message("- Verify set-prop denied\n");
 	tmp_prop = daos_prop_alloc(1);
 	tmp_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(tmp_prop->dpp_entries[0].dpe_str, "My Label", 16);
+	D_STRNDUP_S(tmp_prop->dpp_entries[0].dpe_str, "My_Label");
 	rc = daos_cont_set_prop(arg->coh, tmp_prop, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 	daos_prop_free(tmp_prop);
@@ -1932,6 +2048,7 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	const char	*name = "AttrName";
 	size_t		 val_size = TEST_MAX_ATTR_LEN;
 	char		 value[val_size];
+	void		*valptr = &value;
 
 	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
 						       DAOS_PROP_CO_ACL);
@@ -1945,9 +2062,16 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	if (arg->myrank == 0) {
 		/* Trivial case - just to see if we have access */
 		rc = daos_cont_get_attr(arg->coh, 1, &name,
-					(void * const*)&value,
+					(void * const*)&valptr,
 					&val_size,
 					NULL);
+
+		/* 0 size means non-existing attr and this is possible
+		 * only because we do not support empty attrs for now
+		 */
+		if (val_size == 0)
+			rc = -DER_NONEXIST;
+
 		assert_rc_equal(rc, exp_result);
 	}
 
@@ -2163,7 +2287,8 @@ co_rf_simple(void **state)
 
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_DISABLE, 0, NULL);
+				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS,
+				      0, NULL);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 5);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
@@ -2323,7 +2448,6 @@ delet_container_during_aggregation(void **state)
 	/* Run Pool query at the end */
 	pool_storage_info(state, &pinfo);
 }
-
 
 static int
 co_setup_sync(void **state)

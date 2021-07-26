@@ -13,6 +13,8 @@
 #include <uuid/uuid.h>
 #include <daos/rpc.h>
 #include <daos/btree.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 
 /*
  * RPC operation codes
@@ -62,16 +64,16 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  *	it cannot be too small; otherwise, handing resent RPC
  *	make hit uncertain case and got failure -DER_EP_OLD.
  */
-#define DTX_AGG_THRESHOLD_CNT_LOWER	(1 << 24)
+#define DTX_AGG_THD_CNT_LO	((1 << 19) * 6)
 
 /* The count threshold for triggerring DTX aggregation. */
-#define DTX_AGG_THRESHOLD_CNT_UPPER	((DTX_AGG_THRESHOLD_CNT_LOWER >> 1) * 3)
+#define DTX_AGG_THD_CNT_UP	((1 << 19) * 7)
 
 /* The time threshold for triggerring DTX aggregation. If the oldest
  * DTX in the DTX table exceeds such threshold, it will trigger DTX
  * aggregation locally.
  */
-#define DTX_AGG_THRESHOLD_AGE_UPPER	1200
+#define DTX_AGG_THD_AGE_UP	210
 
 /* If DTX aggregation is triggered, then the DTXs with older ages than
  * this threshold will be aggregated.
@@ -79,22 +81,42 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  * XXX: It cannot be too small; otherwise, handing resent RPC
  *	make hit uncertain case and got failure -DER_EP_OLD.
  */
-#define DTX_AGG_THRESHOLD_AGE_LOWER	900
+#define DTX_AGG_THD_AGE_LO	180
 
 /* The time threshold for triggerring DTX cleanup of stale entries.
  * If the oldest active DTX exceeds such threshold, it will trigger
  * DTX cleanup locally.
  */
-#define DTX_CLEANUP_THRESHOLD_AGE_UPPER	240
+#define DTX_CLEANUP_THD_AGE_UP	60
 
 /* If DTX cleanup for stale entries is triggered, then the DTXs with
  * older ages than this threshold will be cleanup.
  */
-#define DTX_CLEANUP_THRESHOLD_AGE_LOWER	180
+#define DTX_CLEANUP_THD_AGE_LO	45
+
+struct dtx_pool_metrics {
+	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT];
+};
+
+/*
+ * DTX TLS
+ */
+struct dtx_tls {
+	struct d_tm_node_t	*dt_committable;
+};
+
+extern struct dss_module_key dtx_module_key;
+
+static inline struct dtx_tls *
+dtx_tls_get(void)
+{
+	return dss_module_key_get(dss_tls_get(), &dtx_module_key);
+}
 
 extern struct crt_proto_format dtx_proto_fmt;
 extern btr_ops_t dbtree_dtx_cf_ops;
 extern btr_ops_t dtx_btr_cos_ops;
+extern uint64_t dtx_agg_gen;
 
 /* dtx_common.c */
 int dtx_handle_reinit(struct dtx_handle *dth);
@@ -103,7 +125,7 @@ void dtx_batched_commit(void *arg);
 /* dtx_cos.c */
 int dtx_fetch_committable(struct ds_cont_child *cont, uint32_t max_cnt,
 			  daos_unit_oid_t *oid, daos_epoch_t epoch,
-			  struct dtx_entry ***dtes);
+			  struct dtx_entry ***dtes, struct dtx_cos_key **dcks);
 int dtx_add_cos(struct ds_cont_child *cont, struct dtx_entry *dte,
 		daos_unit_oid_t *oid, uint64_t dkey_hash,
 		daos_epoch_t epoch, uint32_t flags);
@@ -113,7 +135,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       int count, bool drop_cos);
+	       struct dtx_cos_key *dcks, int count);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 

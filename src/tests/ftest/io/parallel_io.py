@@ -133,7 +133,10 @@ class ParallelIo(FioBase, IorTestBase):
             Otherwise, try accessing the deleted container.
             This should fail.
             Check dfuse again.
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression,parallelio
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=daosio,tx,dfuse
+        :avocado: tags=parallelio
         """
         # get test params for cont and pool count
         self.cont_count = self.params.get("cont_count", '/run/container/*')
@@ -222,7 +225,9 @@ class ParallelIo(FioBase, IorTestBase):
             completion or exit the loop after trying for 240 secs of wait and
             fail the test.
 
-        :avocado: tags=all,hw,daosio,medium,ib2,full_regression
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=daosio,dfuse
         :avocado: tags=multipoolparallelio
         """
         # test params

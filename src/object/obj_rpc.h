@@ -162,6 +162,10 @@ enum obj_rpc_flags {
 	ORF_DTX_REFRESH		= (1 << 15),
 	/* for EC aggregate (to bypass read perm check related with RF) */
 	ORF_FOR_EC_AGG		= (1 << 16),
+	/* for EC data recovery */
+	ORF_EC_RECOV		= (1 << 17),
+	/* EC data recovery from snapshot */
+	ORF_EC_RECOV_SNAP	= (1 << 18),
 };
 
 /* common for update/fetch */
@@ -340,10 +344,7 @@ CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 	((daos_epoch_range_t)	(ea_epoch_range)	CRT_VAR)	\
 	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
-	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
-	((uint32_t)		(ea_remove_nr)		CRT_VAR)	\
-	((daos_recx_t)		(ea_remove_recxs)	CRT_ARRAY)	\
-	((daos_epoch_t)		(ea_remove_eps)		CRT_ARRAY)
+	((uint32_t)		(ea_map_ver)		CRT_VAR)
 
 
 #define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \
@@ -360,6 +361,7 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 	((daos_unit_oid_t)	(er_oid)		CRT_VAR)	\
 	((daos_key_t)		(er_dkey)		CRT_VAR)	\
 	((daos_iod_t)		(er_iod)		CRT_VAR)	\
+	((struct dcs_iod_csums)	(er_iod_csums)		CRT_ARRAY)	\
 	((uint64_t)		(er_epoch)		CRT_VAR)	\
 	((uint64_t)		(er_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\

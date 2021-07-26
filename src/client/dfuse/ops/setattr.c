@@ -16,6 +16,26 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
+	if (ie->ie_unlinked) {
+		DFUSE_TRA_DEBUG(ie, "File is unlinked, returning most recent data");
+
+		/* This will happen on close with caching enabled if there are writes through the
+		 * cache so accept these two entries only and reject anything else.  This allows
+		 * the read/write case to work on unlinked files without triggering an error.
+		 */
+		if (to_set & ~(FUSE_SET_ATTR_MTIME | FUSE_SET_ATTR_CTIME))
+			D_GOTO(err, rc = ENOENT);
+
+		if (to_set & FUSE_SET_ATTR_MTIME)
+			ie->ie_stat.st_mtim = attr->st_mtim;
+
+		if (to_set & FUSE_SET_ATTR_CTIME)
+			ie->ie_stat.st_ctim = attr->st_ctim;
+
+		DFUSE_REPLY_ATTR(ie, req, &ie->ie_stat);
+		return;
+	}
+
 	/* The uid and gid flags are handled differently, unless
 	 * multi-user is enabled they're not supported at all, if
 	 * it is enabled then they're handled by extended
@@ -69,7 +89,6 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		rc = dfuse_get_uid(ie);
 		if (rc)
 			D_GOTO(err, rc);
-	}
 
 	if (to_set & FUSE_SET_ATTR_MODE) {
 		DFUSE_TRA_DEBUG(ie, "mode %#o %#o",

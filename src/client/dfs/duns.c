@@ -204,7 +204,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 	}
 
 	daos_parse_ctype(t, &attr->da_type);
-	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
+	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKNOWN) {
 		D_ERROR("Invalid DAOS LMV format: Container layout cannot be"
 			" unknown\n");
 		return EINVAL;
@@ -246,9 +246,11 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 #endif
 
 #define UUID_REGEX "([a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}){1}"
-#define DAOS_FORMAT "^daos://"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_PREFIX "^[/]+"UUID_REGEX"/"UUID_REGEX"[/]?"
-#define DAOS_FORMAT_NO_CONT "^daos://"UUID_REGEX"[/]?$"
+/** 127 corresponds to DAOS_PROP_LABEL_MAX_LEN. */
+#define LABEL_REGEX "([a-zA-Z0-9._:]{1,127})"
+#define DAOS_FORMAT "^daos://("UUID_REGEX"|"LABEL_REGEX")/("UUID_REGEX"|"LABEL_REGEX")(/.*)?$"
+#define DAOS_FORMAT_NO_PREFIX "^[/]+("UUID_REGEX")/("UUID_REGEX")(/.*)?$"
+#define DAOS_FORMAT_NO_CONT "^daos://("UUID_REGEX"|"LABEL_REGEX")[/]?$"
 
 static int
 check_direct_format(const char *path, bool no_prefix, bool *pool_only)
@@ -257,8 +259,7 @@ check_direct_format(const char *path, bool no_prefix, bool *pool_only)
 	int	rc;
 
 	if (no_prefix)
-		rc = regcomp(&regx, DAOS_FORMAT_NO_PREFIX,
-			     REG_EXTENDED | REG_ICASE);
+		rc = regcomp(&regx, DAOS_FORMAT_NO_PREFIX, REG_EXTENDED | REG_ICASE);
 	else
 		rc = regcomp(&regx, DAOS_FORMAT, REG_EXTENDED | REG_ICASE);
 	if (rc)
@@ -330,6 +331,88 @@ parse_path(const char *path, size_t path_len, size_t *cur_end_idx,
 	return 0;
 }
 
+static int
+resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix,
+		    bool pool_only)
+{
+	char	*saveptr, *t;
+	char	*dir;
+	int	rc = 0;
+
+	D_STRNDUP(dir, path, PATH_MAX);
+	if (dir == NULL)
+		return ENOMEM;
+
+	t = strtok_r(dir, "/", &saveptr);
+	if (t == NULL) {
+		D_ERROR("Invalid DAOS format (%s).\n", path);
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	/** if there is a daos: prefix, skip over it */
+	if (!no_prefix) {
+		t = strtok_r(NULL, "/", &saveptr);
+		if (t == NULL) {
+			D_ERROR("Invalid DAOS format (%s).\n", path);
+			D_GOTO(err, rc = EINVAL);
+		}
+	}
+
+	/** parse the pool uuid */
+	rc = uuid_parse(t, attr->da_puuid);
+	if (rc) {
+		rc = 0;
+		/** redundant, but to make sure property check is OK */
+		if (!daos_label_is_valid(t))
+			D_GOTO(err, rc = EINVAL);
+		D_STRNDUP(attr->da_pool_label, t, DAOS_PROP_LABEL_MAX_LEN);
+		if (attr->da_pool_label == NULL)
+			D_GOTO(err, rc = ENOMEM);
+	} else {
+		attr->da_pool_label = NULL;
+	}
+
+	if (pool_only) {
+		D_FREE(dir);
+		return 0;
+	}
+
+	t = strtok_r(NULL, "/", &saveptr);
+	if (t == NULL) {
+		D_ERROR("Invalid DAOS format (%s).\n", path);
+		D_GOTO(err, rc = EINVAL);
+	}
+
+	/** parse the container uuid */
+	rc = uuid_parse(t, attr->da_cuuid);
+	if (rc) {
+		rc = 0;
+		/** redundant, but to make sure property check is OK */
+		if (!daos_label_is_valid(t))
+			D_GOTO(err, rc = EINVAL);
+		D_STRNDUP(attr->da_cont_label, t, DAOS_PROP_LABEL_MAX_LEN);
+		if (attr->da_cont_label == NULL)
+			D_GOTO(err, rc = ENOMEM);
+	} else {
+		attr->da_cont_label = NULL;
+	}
+
+	/** if there is a relative path, parse it out */
+	t = strtok_r(NULL, "", &saveptr);
+	if (t != NULL) {
+		D_ASPRINTF(attr->da_rel_path, "/%s", t);
+		if (attr->da_rel_path == NULL)
+			D_GOTO(err, rc = ENOMEM);
+	}
+
+out:
+	D_FREE(dir);
+	return rc;
+err:
+	duns_destroy_attr(attr);
+	goto out;
+}
+
 int
 duns_resolve_path(const char *path, struct duns_attr_t *attr)
 {
@@ -337,6 +420,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	char		str[DUNS_MAX_XATTR_LEN];
 	struct statfs	fs;
 	bool		pool_only = false;
+	bool		no_prefix = false;
 	char		*realp = NULL;
 	char		*rel_path = NULL;
 	char		*dir_path = NULL;
@@ -345,76 +429,23 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	size_t		rel_len = 0;
 	int		rc;
 
-	rc = check_direct_format(path, attr->da_no_prefix, &pool_only);
-	if (rc == 0) {
-		char	*dir;
-		char	*saveptr, *t;
+	if (path == NULL || strlen(path) == 0)
+		return EINVAL;
 
-		D_STRNDUP(dir, path, PATH_MAX);
-		if (dir == NULL) {
-			D_ERROR("Failed to copy path\n");
-			return ENOMEM;
-		}
+	if (attr->da_no_prefix || attr->da_flags & DUNS_NO_PREFIX)
+		no_prefix = true;
 
-		D_DEBUG(DB_TRACE, "DUNS resolve to direct path: %s\n", dir);
-		t = strtok_r(dir, "/", &saveptr);
-		if (t == NULL) {
-			D_ERROR("Invalid DAOS format (%s).\n", path);
-			D_FREE(dir);
-			return EINVAL;
-		}
-
-		/** if there is a daos: prefix, skip over it */
-		if (!attr->da_no_prefix) {
-			t = strtok_r(NULL, "/", &saveptr);
-			if (t == NULL) {
-				D_ERROR("Invalid DAOS format (%s).\n", path);
-				D_FREE(dir);
-				return EINVAL;
-			}
-		}
-
-		/** parse the pool uuid */
-		rc = uuid_parse(t, attr->da_puuid);
-		if (rc) {
-			D_ERROR("Invalid format: pool UUID cannot be parsed\n");
-			D_FREE(dir);
-			return EINVAL;
-		}
-
-		if (pool_only) {
-			D_FREE(dir);
-			return 0;
-		}
-
-		t = strtok_r(NULL, "/", &saveptr);
-		if (t == NULL) {
-			D_ERROR("Invalid DAOS format (%s).\n", path);
-			D_FREE(dir);
-			return EINVAL;
-		}
-
-		/** parse the container uuid */
-		rc = uuid_parse(t, attr->da_cuuid);
-		if (rc) {
-			D_ERROR("Invalid format: cont UUID cannot be parsed\n");
-			D_FREE(dir);
-			return EINVAL;
-		}
-
-		/** if there is a relative path, parse it out */
-		t = strtok_r(NULL, "", &saveptr);
-		if (t != NULL) {
-			D_ASPRINTF(attr->da_rel_path, "/%s", t);
-			if (!attr->da_rel_path) {
-				D_FREE(dir);
-				return ENOMEM;
-			}
-		}
-
-		D_FREE(dir);
-		return 0;
+	/**
+	 * If caller requested to not check the file system path, we do the
+	 * direct format parsing right away regardless of the format.
+	 */
+	if (attr->da_flags & DUNS_NO_CHECK_PATH ||
+	    check_direct_format(path, no_prefix, &pool_only) == 0) {
+		D_DEBUG(DB_TRACE, "DUNS resolve to direct path: %s\n", path);
+		return resolve_direct_path(path, attr, no_prefix, pool_only);
 	}
+
+	/** no match for direct format, do the UNS fs check */
 
 	rc = statfs(path, &fs);
 	if (rc == -1) {
@@ -461,9 +492,9 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 			int err = errno;
 
 			if (err == ENODATA) {
-				if (cur_idx == 0 || attr->da_no_reverse_lookup)
-					D_INFO("Path does not represent a DAOS"
-					       " link\n");
+				if (cur_idx == 0 || (attr->da_flags &
+						     DUNS_NO_REVERSE_LOOKUP))
+					D_INFO("Path does not represent a DAOS link\n");
 				else
 					goto parse;
 			} else if (err == ENOTSUP) {
@@ -489,8 +520,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** if the xattr parsing succeeds, break */
 		break;
 parse:
-		rc = parse_path(realp, path_len, &cur_idx, &rel_len, dir_path,
-				rel_path);
+		rc = parse_path(realp, path_len, &cur_idx, &rel_len, dir_path, rel_path);
 		if (rc) {
 			D_ERROR("Failed to parse %s (%s)\n",
 				path, strerror(rc));
@@ -500,7 +530,7 @@ parse:
 
 	if (cur_idx != path_len) {
 		D_ASSERT(rel_path);
-		attr->da_rel_path = strndup(rel_path, rel_len);
+		D_STRNDUP(attr->da_rel_path, rel_path, rel_len);
 		if (attr->da_rel_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
 	}
@@ -535,9 +565,8 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_GOTO(err, rc = EINVAL);
 	}
 	daos_parse_ctype(t, &attr->da_type);
-	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKOWN) {
-		D_ERROR("Invalid DAOS xattr format: Container layout cannot be"
-			" unknown\n");
+	if (attr->da_type == DAOS_PROP_CO_LAYOUT_UNKNOWN) {
+		D_ERROR("Invalid DAOS xattr format: Container layout cannot be unknown\n");
 		D_GOTO(err, rc = EINVAL);
 	}
 
@@ -549,8 +578,7 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 
 	rc = uuid_parse(t, attr->da_puuid);
 	if (rc) {
-		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be"
-			" parsed\n");
+		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
 
@@ -561,8 +589,7 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 	}
 	rc = uuid_parse(t, attr->da_cuuid);
 	if (rc) {
-		D_ERROR("Invalid DAOS xattr format: container UUID cannot be"
-			" parsed\n");
+		D_ERROR("Invalid DAOS xattr format: container UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
 
@@ -700,8 +727,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
 		dfs_attr.da_oclass_id = attrp->da_oclass_id;
 		dfs_attr.da_chunk_size = attrp->da_chunk_size;
 		dfs_attr.da_props = attrp->da_props;
-		rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
-				     NULL, NULL);
+		rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr, NULL, NULL);
 	} else {
 		daos_prop_t	*prop;
 		int		 nr = 1;
@@ -722,8 +748,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
 				return daos_der2errno(rc);
 			}
 		}
-		prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
-			DAOS_PROP_CO_LAYOUT_TYPE;
+		prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 		prop->dpp_entries[prop->dpp_nr - 1].dpe_val = attrp->da_type;
 		rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 		if (rc)
@@ -742,6 +767,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	char		str[DUNS_MAX_XATTR_LEN];
 	int		len;
 	bool		try_multiple = true;
+	bool		no_prefix = false;
 	int		rc;
 	bool		backend_dfuse = false;
 	bool		pool_only;
@@ -754,7 +780,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 	path_len = strlen(path);
 
-	rc = check_direct_format(path, attrp->da_no_prefix, &pool_only);
+	if (attrp->da_no_prefix || attrp->da_flags & DUNS_NO_PREFIX)
+		no_prefix = true;
+
+	rc = check_direct_format(path, no_prefix, &pool_only);
 	if (rc == 0) {
 		if (pool_only) {
 			D_ERROR("Invalid DUNS format: %s\n", path);
@@ -767,42 +796,23 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		return rc;
 	}
 
-	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
-		/** create a new file if HDF5 container */
-		int fd;
-
-		fd = open(path, O_CREAT | O_EXCL,
-			  S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
-		if (fd == -1) {
-			rc = errno;
-
-			D_ERROR("Failed to create file %s: %s\n", path,
-				strerror(rc));
-			return rc;
-		}
-		close(fd);
-	} else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		struct statfs   fs;
 		char            *dir, *dirp;
 		mode_t		mode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
 
 		D_STRNDUP(dir, path, path_len);
 		if (dir == NULL) {
-			D_ERROR("Failed copy path %s: %s\n", path,
-				strerror(errno));
+			D_ERROR("Failed copy path %s: %s\n", path, strerror(errno));
 			return ENOMEM;
 		}
 
-		/* dirname() may modify dir content or not, so use an
-		 * alternate pointer (see dirname() man page)
-		 */
 		dirp = dirname(dir);
 		rc = statfs(dirp, &fs);
 		if (rc == -1) {
 			int err = errno;
 
-			D_ERROR("Failed to statfs dir %s: %s\n",
-				dirp, strerror(errno));
+			D_ERROR("Failed to statfs dir %s: %s\n", dirp, strerror(errno));
 			D_FREE(dir);
 			return err;
 		}
@@ -816,9 +826,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			rc = duns_create_lustre_path(poh, path, attrp);
 			if (rc == 0)
 				return 0;
-			/* if Lustre specific method fails, fallback to try
-			 * the normal way...
-			 */
+			/* if Lustre specific method fails, fallback to try the normal way... */
 		}
 #endif
 
@@ -827,10 +835,22 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (rc == -1) {
 			rc = errno;
 
-			D_ERROR("Failed to create dir %s: %s\n",
-				path, strerror(rc));
+			D_ERROR("Failed to create dir %s: %s\n", path, strerror(rc));
 			return rc;
 		}
+	} else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
+		/** create a new file for other container types */
+		int fd;
+
+		fd = open(path, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+		if (fd == -1) {
+			rc = errno;
+
+			D_ERROR("Failed to create file %s: %s\n", path,
+				strerror(rc));
+			return rc;
+		}
+		close(fd);
 	} else {
 		D_ERROR("Invalid container layout.\n");
 		return EINVAL;
@@ -849,8 +869,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	if (!uuid_is_null(attrp->da_cuuid)) {
 		try_multiple = false;
 		uuid_unparse(attrp->da_cuuid, cont);
-		D_INFO("try create once with provided container UUID: %36s\n",
-		       cont);
+		D_INFO("try create once with provided container UUID: %36s\n", cont);
 	}
 	do {
 		if (try_multiple) {
@@ -859,12 +878,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		/** store the daos attributes in the path xattr */
-		len = snprintf(str,
-			       DUNS_MAX_XATTR_LEN,
-			       DUNS_XATTR_FMT,
-			       type,
-			       pool,
-			       cont);
+		len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type, pool, cont);
 		if (len < 0) {
 			D_ERROR("Failed to create xattr value\n");
 			D_GOTO(err_link, rc = EINVAL);
@@ -874,8 +888,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (rc) {
 			rc = errno;
 			if (rc == ENOTSUP) {
-				D_INFO("Path is not in a filesystem that "
-					"supports the DAOS unified "
+				D_INFO("Path is not in a filesystem that supports the DAOS unified "
 					"namespace\n");
 			} else {
 				D_ERROR("Failed to set DAOS xattr: %s\n",
@@ -886,17 +899,14 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 		rc = create_cont(poh, attrp);
 		if (rc == -DER_SUCCESS && backend_dfuse) {
-			/* This next setxattr will cause dfuse to lookup the
-			 * entry point and perform a container connect,
-			 * therefore this xattr will be set in the root of the
+			/* This next setxattr will cause dfuse to lookup the entry point and perform
+			 * a container connect, therefore this xattr will be set in the root of the
 			 * new container, not the directory.
 			 */
-			rc = lsetxattr(path, DUNS_XATTR_NAME, str,
-				       len + 1, XATTR_CREATE);
+			rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, XATTR_CREATE);
 			if (rc) {
 				rc = errno;
-				D_ERROR("Failed to set DAOS xattr: %s\n",
-					strerror(rc));
+				D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
 				goto err_link;
 			}
 		}
@@ -909,10 +919,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 	return rc;
 err_link:
-	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_HDF5)
-		unlink(path);
-	else if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX)
+	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX)
 		rmdir(path);
+	else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN)
+		unlink(path);
 	return rc;
 }
 
@@ -925,8 +935,7 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	/* Resolve pool, container UUIDs from path */
 	rc = duns_resolve_path(path, &dattr);
 	if (rc) {
-		D_ERROR("duns_resolve_path() Failed on path %s (%d)\n",
-			path, rc);
+		D_ERROR("duns_resolve_path() Failed on path %s (%d)\n", path, rc);
 		return rc;
 	}
 
@@ -938,22 +947,7 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 		return daos_der2errno(rc);
 	}
 
-	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_HDF5) {
-#ifdef LUSTRE_INCLUDE
-		if (dattr.da_on_lustre)
-			rc = (*unlink_foreign)((char *)path);
-		else
-#endif
-			rc = unlink(path);
-		if (rc) {
-			int err = errno;
-
-			D_ERROR("Failed to unlink %sfile %s: %s\n",
-				dattr.da_on_lustre ? "Lustre " : " ", path,
-				strerror(errno));
-			return err;
-		}
-	} else if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
+	if (dattr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 #ifdef LUSTRE_INCLUDE
 		if (dattr.da_on_lustre)
 			rc = (*unlink_foreign)((char *)path);
@@ -964,11 +958,59 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 			int err = errno;
 
 			D_ERROR("Failed to remove %sdir %s: %s\n",
-				dattr.da_on_lustre ? "Lustre " : " ", path,
-				strerror(errno));
+				dattr.da_on_lustre ? "Lustre " : " ", path, strerror(errno));
+			return err;
+		}
+	} else if (dattr.da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
+#ifdef LUSTRE_INCLUDE
+		if (dattr.da_on_lustre)
+			rc = (*unlink_foreign)((char *)path);
+		else
+#endif
+			rc = unlink(path);
+		if (rc) {
+			int err = errno;
+
+			D_ERROR("Failed to unlink %sfile %s: %s\n",
+				dattr.da_on_lustre ? "Lustre " : " ", path, strerror(errno));
 			return err;
 		}
 	}
 
 	return 0;
+}
+
+int
+duns_set_pool_label(struct duns_attr_t *attrp, const char *label)
+{
+	if (attrp == NULL)
+		return EINVAL;
+	D_STRNDUP(attrp->da_pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	if (attrp->da_pool_label == NULL)
+		return ENOMEM;
+
+	return 0;
+}
+
+int
+duns_set_cont_label(struct duns_attr_t *attrp, const char *label)
+{
+	if (attrp == NULL)
+		return EINVAL;
+	D_STRNDUP(attrp->da_cont_label, label, DAOS_PROP_LABEL_MAX_LEN);
+	if (attrp->da_cont_label == NULL)
+		return ENOMEM;
+
+	return 0;
+}
+
+void
+duns_destroy_attr(struct duns_attr_t *attrp)
+{
+	if (attrp == NULL)
+		return;
+
+	D_FREE(attrp->da_rel_path);
+	D_FREE(attrp->da_pool_label);
+	D_FREE(attrp->da_cont_label);
 }
