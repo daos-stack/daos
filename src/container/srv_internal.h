@@ -29,10 +29,10 @@ struct ds_pool_hdl;
 
 /* Container metrics */
 struct cont_pool_metrics {
-	struct d_tm_node_t	*cpm_open;
-	struct d_tm_node_t	*cpm_close;
-	struct d_tm_node_t	*cpm_destroy;
-	struct d_tm_node_t	*cpm_open_cont;
+	struct d_tm_node_t	*cpm_open_count;
+	struct d_tm_node_t	*cpm_close_count;
+	struct d_tm_node_t	*cpm_destroy_count;
+	struct d_tm_node_t	*cpm_open_cont_gauge;
 };
 
 /* ds_cont thread local storage structure */

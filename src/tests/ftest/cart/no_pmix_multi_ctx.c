@@ -23,7 +23,7 @@
 #include <fcntl.h>
 #include <semaphore.h>
 #include <cart/api.h>
-#include "tests_common.h"
+#include "crt_utils.h"
 
 #define NUM_CTX 8
 #define NUM_RANKS 99
@@ -47,7 +47,7 @@ int main(int argc, char **argv)
 	}
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, 20, true, true);
+	crtu_test_init(0, 20, true, true);
 
 	grp = crt_group_lookup(NULL);
 	if (!grp) {
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
 		}
 
 		rc = pthread_create(&progress_thread[i], 0,
-				tc_progress_fn, &crt_ctx[i]);
+				    crtu_progress_fn, &crt_ctx[i]);
 		assert(rc == 0);
 	}
 
@@ -90,8 +90,8 @@ int main(int argc, char **argv)
 	}
 
 	D_FREE(my_uri);
-	tc_set_shutdown_delay(0);
-	tc_progress_stop();
+	crtu_set_shutdown_delay(0);
+	crtu_progress_stop();
 
 	for (i = 0; i < NUM_CTX; i++)
 		pthread_join(progress_thread[i], NULL);

@@ -7,14 +7,17 @@ project or specific job. Pools are allocated, shrunk, grown and destroyed by
 the administrators.
 
 The typical workflow consists of:
+
 * New project members meet and define storage requirements including space,
 bandwidth, IOPS & data protection needs.
+
 * Administrators collect those requirements, create a pool for the new
 project and set relevant ACL to grant access to project members.
+
 * Administrators notify the project members that the pool has been created and
 provide the pool label to the users.
 
-Users can then create datasets (i.e. called containers) in the pool. Containers
+Users can then create datasets (i.e. containers) in the pool. Containers
 will share the pool space and have their own ACL to be managed by the container
 owner.
 
@@ -25,7 +28,7 @@ each job.
 Another alternative use case is to emulate a parallel file system by creating
 one big pool with a single POSIX container to be accessed by all users.
 
-## `daos` Utility
+## `daos(1)` Utility
 
 The `daos(1)` utility is built over the `libdaos` library and is the primary
 command-line interface for users to interact with their pool and containers.
@@ -61,7 +64,9 @@ Available commands:
   version     print daos version
 ```
 
-## Pool Access Validation
+## Accessing Your Pool
+
+### Access Validation
 
 To validate the pool can be successfully accessed prior to running
 applications, the daos pool autotest suite can be executed.
@@ -98,7 +103,7 @@ All steps passed.
     Smaller pools may show DER_NOSPACE(-1007): 'No space
     on storage target'
 
-## Pool Query
+### Querying the Pool
 
 Once a pool has been assigned to your project (labeled `tank` in the example
 below), you can verify how much space was allocated to your project via the

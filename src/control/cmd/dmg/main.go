@@ -157,14 +157,14 @@ type cliOptions struct {
 	JSON           bool          `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs       bool          `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath     string        `short:"o" long:"config-path" description:"Client config file path"`
-	Storage        storageCmd    `command:"storage" alias:"st" description:"Perform tasks related to storage attached to remote servers"`
-	Config         configCmd     `command:"config" alias:"co" description:"Perform tasks related to configuration of hardware remote servers"`
-	System         SystemCmd     `command:"system" alias:"sy" description:"Perform distributed tasks related to DAOS system"`
-	Network        NetCmd        `command:"network" alias:"n" description:"Perform tasks related to network devices attached to remote servers"`
-	Pool           PoolCmd       `command:"pool" alias:"p" description:"Perform tasks related to DAOS pools"`
-	Cont           ContCmd       `command:"cont" alias:"c" description:"Perform tasks related to DAOS containers"`
+	Storage        storageCmd    `command:"storage" alias:"sto" description:"Perform tasks related to storage attached to remote servers"`
+	Config         configCmd     `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware remote servers"`
+	System         SystemCmd     `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
+	Network        NetCmd        `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
+	Pool           PoolCmd       `command:"pool" description:"Perform tasks related to DAOS pools"`
+	Cont           ContCmd       `command:"container" alias:"cont" description:"Perform tasks related to DAOS containers"`
 	Version        versionCmd    `command:"version" description:"Print dmg version"`
-	Telemetry      telemCmd      `command:"telemetry" description:"Perform telemetry operations"`
+	Telemetry      telemCmd      `command:"telemetry" alias:"telem" description:"Perform telemetry operations"`
 	firmwareOption               // build with tag "firmware" to enable
 	ManPage        common.ManCmd `command:"manpage" hidden:"true"`
 }
@@ -191,7 +191,6 @@ func parseOpts(args []string, opts *cliOptions, invoker control.Invoker, log *lo
 	p := flags.NewParser(opts, flags.Default)
 	p.Name = "dmg"
 	p.ShortDescription = "Administrative tool for managing DAOS clusters"
-	p.Usage = "[OPTIONS] [COMMAND] [SUBCOMMAND]"
 	p.LongDescription = `dmg (DAOS Management) is a tool for connecting to DAOS servers
 for the purpose of issuing administrative commands to the cluster. dmg is
 provided as a means for allowing administrators to securely discover and

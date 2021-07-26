@@ -4,14 +4,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import avocado
 
 from pydaos.raw import DaosApiError
-from test_utils_pool import TestPool
 from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
+
 
 class NvmeIoVerification(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -44,7 +42,10 @@ class NvmeIoVerification(IorTestBase):
             as transfer size is > 4096.
             (4) Repeat the case(3) with maximum nvme pool size that can be
             created.
-        :avocado: tags=all,full_regression,hw,large,daosio,nvme_io_verification
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio,nvme_io_verification
         """
         # Test params
         tests = self.params.get("ior_sequence", '/run/ior/*')
@@ -55,8 +56,7 @@ class NvmeIoVerification(IorTestBase):
         # Loop for every IOR object type
         for ior_param in tests:
             # Create and connect to a pool
-            self.pool = TestPool(self.context, self.get_dmg_command())
-            self.pool.get_params(self)
+            self.add_pool(create=False)
 
             # update pool sizes
             self.pool.scm_size.update(ior_param[0])
@@ -87,7 +87,7 @@ class NvmeIoVerification(IorTestBase):
                 self.verify_pool_size(size_before_ior, self.processes)
 
             # destroy pool
-            self.destroy_pools(self.pool)
+            self.pool.destroy()
 
     @avocado.fail_on(DaosApiError)
     def test_nvme_server_restart(self):
@@ -123,8 +123,7 @@ class NvmeIoVerification(IorTestBase):
         # Loop for every IOR object type
         for ior_param in tests:
             # Create and connect to a pool
-            self.pool = TestPool(self.context, self.get_dmg_command())
-            self.pool.get_params(self)
+            self.add_pool(create=False)
 
             # update pool sizes
             self.pool.scm_size.update(ior_param[0])
@@ -165,4 +164,4 @@ class NvmeIoVerification(IorTestBase):
                 self.run_ior(self.get_ior_job_manager_command(), processes)
 
             # destroy pool
-            self.destroy_pools(self.pool)
+            self.pool.destroy()
