@@ -175,6 +175,10 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
 		return 0;
 
+	/* Skip orphan entry that will be handled via other special tool. */
+	if (ent->ie_dtx_flags & DTE_ORPHAN)
+		return 0;
+
 	/* Stop the iteration if current DTX is not too old. */
 	if (dtx_hlc_age2sec(ent->ie_dtx_start_time) <=
 	    DTX_CLEANUP_THD_AGE_LO)
@@ -452,6 +456,9 @@ dtx_aggregation_main(void *arg)
 
 		sched_req_sleep(dmi->dmi_dtx_agg_req, sleep_time);
 	}
+
+	sched_req_put(dmi->dmi_dtx_agg_req);
+	dmi->dmi_dtx_agg_req = NULL;
 }
 
 static void
@@ -525,7 +532,7 @@ dtx_batched_commit(void *arg)
 	}
 
 	dtx_init_sched_req(NULL, &dmi->dmi_dtx_agg_req, child);
-	if (dmi->dmi_dtx_cmt_req == NULL) {
+	if (dmi->dmi_dtx_agg_req == NULL) {
 		D_ERROR("Failed to get DTX aggregation sched request.\n");
 		ABT_thread_join(child);
 		goto out;
