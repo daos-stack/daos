@@ -330,9 +330,15 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			},
 			node:        1,
 			netDevClass: netdetect.Infiniband,
-			expResult: &FabricInterface{
-				Name:        "t2",
-				NetDevClass: FabricDevClassManual,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					NetDevClass: FabricDevClassManual,
+				},
+				{
+					Name:        "t2",
+					NetDevClass: FabricDevClassManual,
+				},
 			},
 		},
 		"load balancing": {

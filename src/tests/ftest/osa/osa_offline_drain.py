@@ -33,8 +33,7 @@ class OSAOfflineDrain(OSAUtils):
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
 
-    def run_offline_drain_test(self, num_pool, data=False,
-                               oclass=None):
+    def run_offline_drain_test(self, num_pool, data=False, oclass=None):
         """Run the offline drain without data.
             Args:
             num_pool (int) : total pools to create for testing purposes.
@@ -56,7 +55,9 @@ class OSAOfflineDrain(OSAUtils):
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.get_dmg_command(),
+                label_generator=self.label_generator)
             pool[val].get_params(self)
             pool[val].create()
             self.pool = pool[val]
@@ -182,7 +183,8 @@ class OSAOfflineDrain(OSAUtils):
                                                   '/run/checksum/*')
         self.log.info("Offline Drain : Oclass")
         for oclass in self.test_oclass:
-            self.run_offline_drain_test(1, data=True, oclass=oclass)
+            self.run_offline_drain_test(
+                1, data=True, oclass=oclass)
 
     def test_osa_offline_drain_multiple_pools(self):
         """Test ID: DAOS-7159
