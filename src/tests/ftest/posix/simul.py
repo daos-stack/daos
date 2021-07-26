@@ -4,9 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+
+import platform
 from avocado.core.exceptions import TestFail
 from dfuse_test_base import DfuseTestBase
-from env_modules import load_mpi
 from general_utils import DaosTestError
 from general_utils import run_command
 
@@ -79,12 +80,19 @@ class PosixSimul(DfuseTestBase):
         If include value is set, exclude value is ignored and vice versa.
 
         """
-        simul_openmpi = "/usr/lib64/openmpi3/bin/simul"
-        simul_mpich = "/usr/lib64/mpich/bin/simul"
-        # Assuming loading mpi module witll add bin to path
-        simul_dict = {"openmpi": "simul",
-                      "mpich": "simul"
-                      }
+        # Assuming all vms use the same OS
+        platform = platform.dist()[0].lower()
+
+        if "centos" in platform:
+            simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul",
+                          "mpich": "/usr/lib64/mpich/bin/simul"
+                          }
+        elif "suse" in platform:
+            simul_dict = {"openmpi": "/usr/lib64/mpi/gcc/openmpi3/bin/simul",
+                          "mpich": "/usr/lib64/mpi/gcc/mpich/bin/simul"
+                          }
+        else:
+            raise NotImplementedError
 
         clients = self.params.get("test_clients", '/run/hosts/*')
         dfuse_mount_dir = self.params.get("mount_dir", '/run/dfuse/*')
@@ -99,9 +107,7 @@ class PosixSimul(DfuseTestBase):
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
         self.dfuse.check_running()
 
-        # Load openmpi
         for mpi, simul in simul_dict.items():
-            load_mpi(mpi)
 
             for client in clients:
                 if include:
@@ -117,8 +123,7 @@ class PosixSimul(DfuseTestBase):
                         dfuse_mount_dir,
                         exclude)
                 try:
-                    stdout = run_command(cmd)
-                    print(stdout)
+                    run_command(cmd)
                 except DaosTestError:
                     self.stop_dfuse()
                     self.fail("Simul failed on {}".format(mpi))
