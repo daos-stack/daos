@@ -23,8 +23,8 @@ const (
 	defaultNrHugepages = 4096
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
-	pciAllowListEnv    = "_PCI_WHITELIST"
-	pciBlockListEnv    = "_PCI_BLACKLIST"
+	pciAllowListEnv    = "_PCI_ALLOWED"
+	pciBlockListEnv    = "_PCI_BLOCKED"
 	driverOverrideEnv  = "_DRIVER_OVERRIDE"
 	vfioDisabledDriver = "uio_pci_generic"
 )
@@ -103,7 +103,7 @@ func (s *spdkSetupScript) Reset() error {
 // (that don't have active mountpoints) from generic kernel driver to be
 // used with SPDK. Either all PCI devices will be unbound by default if wlist
 // parameter is not set, otherwise PCI devices can be specified by passing in a
-// whitelist of PCI addresses.
+// allowlist of PCI addresses.
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
 func (s *spdkSetupScript) Prepare(req storage.BdevPrepareRequest) error {
