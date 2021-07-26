@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -330,9 +331,15 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 			},
 			node:        1,
 			netDevClass: netdetect.Infiniband,
-			expResult: &FabricInterface{
-				Name:        "t2",
-				NetDevClass: FabricDevClassManual,
+			expResults: []*FabricInterface{
+				{
+					Name:        "t2",
+					NetDevClass: FabricDevClassManual,
+				},
+				{
+					Name:        "t2",
+					NetDevClass: FabricDevClassManual,
+				},
 			},
 		},
 		"load balancing": {
@@ -378,12 +385,33 @@ func TestAgent_NUMAFabric_GetDevice(t *testing.T) {
 				},
 			},
 		},
+		"validating IPs fails": {
+			nf: &NUMAFabric{
+				numaMap: map[int][]*FabricInterface{
+					0: {
+						{
+							Name:        "t1",
+							NetDevClass: netdetect.Infiniband,
+						},
+					},
+				},
+				getAddrInterface: func(_ string) (addrFI, error) {
+					return nil, errors.New("mock getAddrInterface")
+				},
+			},
+			node:        0,
+			netDevClass: netdetect.Infiniband,
+			expErr:      FabricNotFoundErr(netdetect.Infiniband),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 			if tc.nf != nil {
 				tc.nf.log = log
+				if tc.nf.getAddrInterface == nil {
+					tc.nf.getAddrInterface = getMockNetInterfaceSuccess
+				}
 			}
 
 			var results []*FabricInterface
@@ -661,6 +689,93 @@ func TestAgent_NUMAFabricFromConfig(t *testing.T) {
 			if !defaultNumaOK {
 				t.Fatalf("default NUMA node %d (expected in list: %+v)", result.defaultNumaNode, tc.possibleDefaultNUMA)
 			}
+		})
+	}
+}
+
+type mockNetInterface struct {
+	addrs    []net.Addr
+	addrsErr error
+}
+
+func (m *mockNetInterface) Addrs() ([]net.Addr, error) {
+	return m.addrs, m.addrsErr
+}
+
+func getMockNetInterfaceSuccess(_ string) (addrFI, error) {
+	return &mockNetInterface{
+		addrs: []net.Addr{
+			&net.IPNet{
+				IP: net.IP("127.0.0.1"),
+			},
+		},
+	}, nil
+}
+
+func TestAgent_NUMAFabric_validateDevice(t *testing.T) {
+	getMockNetInterfaceFunc := func(addrs []net.Addr, err error) func(string) (addrFI, error) {
+		return func(_ string) (addrFI, error) {
+			return &mockNetInterface{
+				addrs:    addrs,
+				addrsErr: err,
+			}, nil
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		getAddrInterface func(name string) (addrFI, error)
+		expErr           error
+	}{
+		"getAddrInterface fails": {
+			getAddrInterface: func(name string) (addrFI, error) {
+				return nil, errors.New("mock getAddrInterface")
+			},
+			expErr: errors.New("mock getAddrInterface"),
+		},
+		"interface Addrs() fails": {
+			getAddrInterface: getMockNetInterfaceFunc(nil, errors.New("mock Addrs()")),
+			expErr:           errors.New("mock Addrs()"),
+		},
+		"empty Addrs()": {
+			getAddrInterface: getMockNetInterfaceFunc([]net.Addr{}, nil),
+			expErr:           errors.New("no IP addresses"),
+		},
+		"no IP addrs": {
+			getAddrInterface: getMockNetInterfaceFunc([]net.Addr{
+				&net.TCPAddr{},
+			}, nil),
+			expErr: errors.New("no IP addresses"),
+		},
+		"IP addr is empty": {
+			getAddrInterface: getMockNetInterfaceFunc([]net.Addr{
+				&net.IPNet{},
+			}, nil),
+			expErr: errors.New("no IP addresses"),
+		},
+		"IP addr is unspecified": {
+			getAddrInterface: getMockNetInterfaceFunc([]net.Addr{
+				&net.IPNet{
+					IP: net.IPv4zero,
+				},
+			}, nil),
+			expErr: errors.New("no IP addresses"),
+		},
+		"success": {
+			getAddrInterface: getMockNetInterfaceSuccess,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			nf := newNUMAFabric(log)
+			nf.getAddrInterface = tc.getAddrInterface
+
+			err := nf.validateDevice(&FabricInterface{
+				Name: "not_real",
+			})
+
+			common.CmpErr(t, tc.expErr, err)
 		})
 	}
 }

@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers, skipForTicket
-from test_utils_pool import TestPool
 
 
 class RbldNoCapacity(TestWithServers):
@@ -28,16 +27,16 @@ class RbldNoCapacity(TestWithServers):
         Use Cases:
             Verify pool query.
 
-        :avocado: tags=all,medium,daily_regression,pool,rebuild,nocap
+        :avocado: tags=all,daily_regression
+        :avocado: tags=medium
+        :avocado: tags=pool,rebuild,no_cap
         """
         # Get the test params
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
         targets = self.params.get("targets", "/run/server_config/*")
         rank = self.params.get("rank_to_kill", "/run/testparams/*")
 
         # Create a pool
-        self.pool.create()
+        self.add_pool()
 
         # Display pool size before write
         self.pool.display_pool_daos_space("before write")

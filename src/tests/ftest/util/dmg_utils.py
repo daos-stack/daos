@@ -9,7 +9,6 @@
 from grp import getgrgid
 from pwd import getpwuid
 import re
-import json
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
@@ -77,19 +76,6 @@ class DmgCommand(DmgCommandBase):
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
-
-    def _get_json_result(self, sub_command_list=None, **kwargs):
-        """Wrap the base _get_result method to force JSON output."""
-        prev_json_val = self.json.value
-        self.json.update(True)
-        prev_output_check = self.output_check
-        self.output_check = "both"
-        try:
-            self._get_result(sub_command_list, **kwargs)
-        finally:
-            self.json.update(prev_json_val)
-            self.output_check = prev_output_check
-        return json.loads(self.result.stdout)
 
     def network_scan(self, provider=None):
         """Get the result of the dmg network scan command.
@@ -383,7 +369,7 @@ class DmgCommand(DmgCommandBase):
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
-                    tier_ratio=None, properties=None):
+                    tier_ratio=None, properties=None, label=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -406,6 +392,7 @@ class DmgCommand(DmgCommandBase):
                 size. Defaults to None.
             properties (str, optional): Comma separated name:value string
                 Defaults to None
+            label (str, optional): Pool label. Defaults to None.
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -425,7 +412,8 @@ class DmgCommand(DmgCommandBase):
             "nvme_size": nvme_size,
             "nsvc": svcn,
             "acl_file": acl_file,
-            "properties": properties
+            "properties": properties,
+            "label": label
         }
         if target_list is not None:
             kwargs["ranks"] = ",".join([str(target) for target in target_list])
