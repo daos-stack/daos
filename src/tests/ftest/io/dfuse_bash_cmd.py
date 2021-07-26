@@ -45,7 +45,7 @@ class BashCmd(DfuseTestBase):
               Rename file
               Verify renamed file exist using list.
               Verify dfuse support for '.'
-              Verify defuse support for '..'
+              Verify dfuse support for '..'
               Remove renamed file
               Remove a directory
 
