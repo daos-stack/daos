@@ -15,13 +15,17 @@ import org.apache.hadoop.fs.FileSystem;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class DaosFileSourceAsync extends DaosFileSource {
 
   private IODfsDesc desc;
 
   private DaosEventQueue eq;
+
+  private Set<IODfsDesc> candidates = new HashSet<>();
 
   private List<DaosEventQueue.Attachment> completed = new ArrayList<>(1);
 
@@ -52,6 +56,7 @@ public class DaosFileSourceAsync extends DaosFileSource {
     }
     desc = daosFile.createDfsDesc(buffer, eq);
     desc.setReadOrWrite(readOrWrite);
+    candidates.add(desc);
   }
 
   @Override
@@ -84,21 +89,13 @@ public class DaosFileSourceAsync extends DaosFileSource {
     int limit = length/speedDenom;
     limit = limit < 3 ? 3 : limit;
     int cnt = 0;
-    int nbr;
     do {
-      nbr = eq.pollCompleted(completed, 1, TIMEOUT_MS);
-      cnt++;
       if (cnt > limit) {
-        break;
+        throw new DaosIOException("failed to get expected return after trying " + limit + " times");
       }
-      if (nbr > 0 && completed.get(0) != desc) { // discard unexpected return
-        nbr = 0;
-        limit++;
-      }
-    } while (nbr == 0);
-    if (nbr != 1) {
-      throw new DaosIOException("failed to get expected return after trying " + limit + " times");
-    }
+      eq.pollCompleted(completed, IODfsDesc.class, candidates, 1, TIMEOUT_MS);
+      cnt++;
+    } while (completed.isEmpty());
     completed.clear();
   }
 }
