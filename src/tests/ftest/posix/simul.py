@@ -81,8 +81,9 @@ class PosixSimul(DfuseTestBase):
         """
         simul_openmpi = "/usr/lib64/openmpi3/bin/simul"
         simul_mpich = "/usr/lib64/mpich/bin/simul"
-        simul_dict = {"openmpi": simul_openmpi,
-                      "mpich": simul_mpich
+        # Assuming loading mpi module witll add bin to path
+        simul_dict = {"openmpi": "simul",
+                      "mpich": "simul"
                       }
 
         clients = self.params.get("test_clients", '/run/hosts/*')
@@ -116,7 +117,8 @@ class PosixSimul(DfuseTestBase):
                         dfuse_mount_dir,
                         exclude)
                 try:
-                    run_command(cmd)
+                    stdout = run_command(cmd)
+                    print(stdout)
                 except DaosTestError:
                     self.stop_dfuse()
                     self.fail("Simul failed on {}".format(mpi))
