@@ -42,7 +42,7 @@ class ManagementServiceResilience(TestWithServers):
         Returns:
             Pool entry, if found, or None.
         """
-        for pool_uuid in self.get_dmg_command().pool_list():
+        for pool_uuid in self.get_dmg_command().pool_list(no_query=True):
             if pool_uuid.lower() == search_uuid.lower():
                 return pool_uuid
         return None

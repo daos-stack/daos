@@ -610,8 +610,11 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "delete-acl"), pool=pool, principal=principal)
 
-    def pool_list(self):
+    def pool_list(self, no_query=False):
         """List pools.
+
+        Args:
+            no_query (bool, optional): If True, do not query for pool stats.
 
         Raises:
             CommandFailure: if the dmg pool pool list command fails.
@@ -650,7 +653,7 @@ class DmgCommand(DmgCommandBase):
         #    "error": null,
         #    "status": 0
         # }
-        output = self._get_json_result(("pool", "list"))
+        output = self._get_json_result(("pool", "list"), no_query=no_query)
 
         data = {}
         if output["response"] is None or output["response"]["pools"] is None:
