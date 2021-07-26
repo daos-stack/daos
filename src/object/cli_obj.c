@@ -1070,8 +1070,13 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		if (req_tgts->ort_srv_disp) {
 			rc = obj_grp_leader_get(obj, shard_idx, map_ver);
 			if (rc < 0) {
-				D_ERROR(DF_OID" no valid shard, rc "DF_RC"\n",
-					DP_OID(obj->cob_md.omd_id),
+				D_ERROR(DF_OID" no valid shard %u, grp size %u "
+					"grp nr %u, shards %u, reps %u, is %s: "
+					DF_RC"\n", DP_OID(obj->cob_md.omd_id),
+					shard_idx, obj->cob_grp_size,
+					obj->cob_grp_nr, obj->cob_shards_nr,
+					obj_get_replicas(obj),
+					obj_is_ec(obj) ? "EC-obj" : "REP-obj",
 					DP_RC(rc));
 				return rc;
 			}
@@ -1133,6 +1138,10 @@ obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
 	*start_shard = 0;
 	*shard_nr = obj->cob_shards_nr;
 	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
+
+	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "
+		  DF_OID": %u/%u\n",
+		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
 }
 
 static int
@@ -1642,6 +1651,8 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		extra_flags = DIOF_EC_RECOV;
 		if (recov_task->ert_snapshot)
 			extra_flags |= DIOF_EC_RECOV_SNAP;
+		if ((obj_auxi->flags & ORF_FOR_MIGRATION) != 0)
+			extra_flags |= DIOF_FOR_MIGRATION;
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
 					      extra_flags,
 					      &recov_task->ert_iod,
@@ -2388,6 +2399,7 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 	case DAOS_OBJ_RPC_SYNC:
 		obj_ptr2shards(obj, &shard_idx, &shard_cnt, &grp_nr);
 		flags = OBJ_TGT_FLAG_LEADER_ONLY;
+		obj_auxi->to_leader = 1;
 		break;
 	default:
 		D_ERROR("bad opc %d.\n", opc);
@@ -4843,8 +4855,25 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	    daos_anchor_get_flags(args->dkey_anchor) & DIOF_FOR_MIGRATION)
 		obj_auxi->no_retry = 1;
 
-	if (obj_is_ec(obj))
+	if (obj_is_ec(obj)) {
 		obj_auxi->is_ec_obj = 1;
+		if (obj_auxi->io_retry) {
+			d_list_t *head = NULL;
+
+			/* Since enumeration retry might retry to send multiple
+			 * shards, remove the original shard fetch tasks and will
+			 * recreate new shard fetch tasks with new parameters.
+			 */
+			D_DEBUG(DB_IO, DF_OID" retrying enumeration.\n",
+				DP_OID(obj->cob_md.omd_id));
+			head = &obj_auxi->shard_task_head;
+			if (head != NULL) {
+				tse_task_list_traverse(head, shard_task_remove, NULL);
+				D_ASSERT(d_list_empty(head));
+			}
+			obj_auxi->new_shard_tasks = 1;
+		}
+	}
 
 	shard = obj_list_get_shard(obj_auxi, map_ver, args);
 	if (shard < 0)
@@ -5470,12 +5499,12 @@ dc_obj_sync(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	D_DEBUG(DB_IO, "sync "DF_OID", reps %d\n",
-		DP_OID(obj->cob_md.omd_id), obj_get_replicas(obj));
+	D_DEBUG(DB_IO, "sync "DF_OID", %s obj: %d\n",
+		DP_OID(obj->cob_md.omd_id), obj_is_ec(obj) ? "EC" : "REP",
+		obj_get_replicas(obj));
 
-	rc = obj_req_fanout(obj, obj_auxi, 0, map_ver, &epoch, shard_sync_prep,
-			    dc_obj_shard_sync, task);
-	return rc;
+	return obj_req_fanout(obj, obj_auxi, 0, map_ver, &epoch,
+			      shard_sync_prep, dc_obj_shard_sync, task);
 
 out_task:
 	tse_task_complete(task, rc);
