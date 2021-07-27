@@ -438,7 +438,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release  --stack_mmap",
                                    build_deps: "no"
                     }
                     post {
@@ -479,7 +479,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release  --stack_mmap",
                                    build_deps: "no"
                         sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos7.release --test cont_copy""",
                             label: 'Run NLT smoke test')
@@ -524,182 +524,6 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
                                    scons_exe: 'scons-3',
-<<<<<<< HEAD
-                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release --stack_mmap",
-                                   build_deps: "no"
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: clang(pattern: 'centos7-clang-build.log',
-                                                     id: "analysis-centos7-clang")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos7-clang
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos7-clang',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on CentOS 8') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_build_on_centos8_gcc_dev() }
-                     }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.8'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild(),
-                                                                deps_build:true) +
-                                                " -t ${sanitized_JOB_NAME}-centos8 "
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release --stack_mmap",
-                                   build_deps: "no",
-                                   scons_exe: 'scons-3'
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos8-gcc-build.log',
-                                                    id: "analysis-centos8-gcc")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-centos8-gcc
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-centos8-gcc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on Ubuntu 20.04') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_build_on_landing_branch() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.ubuntu.20.04'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
-                                                " -t ${sanitized_JOB_NAME}-ubuntu20.04"
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release --stack_mmap",
-                                   build_deps: "no"
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'ubuntu20.04-gcc-build.log',
-                                                    id: "analysis-ubuntu20")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-ubuntu20.04-gcc
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-ubuntu20.04-gcc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on Ubuntu 20.04 with Clang') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_build_on_ubuntu_clang() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.ubuntu.20.04'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
-                                                " -t ${sanitized_JOB_NAME}-ubuntu20.04"
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build(),
-                                   scons_args: scons_faults_args() + " PREFIX=/opt/daos TARGET_TYPE=release --stack_mmap",
-                                   build_deps: "no"
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: clang(pattern: 'ubuntu20.04-clang-build.log',
-                                                     id: "analysis-ubuntu20-clang")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-ubuntu20.04-clang
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-ubuntu20.04-clang',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on Leap 15') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_build_on_leap15_gcc() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(qb: quickbuild()) +
-                                                " -t ${sanitized_JOB_NAME}-leap15 " +
-                                                ' --build-arg QUICKBUILD_DEPS="' +
-                                                quick_build_deps('leap15') + '"' +
-                                                ' --build-arg REPOS="' + pr_repos() + '"'
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build(),
-                                   stash_files: 'ci/test_files_to_stash.txt',
-                                   scons_args: scons_faults_args() + " --stack_mmap"
-                    }
-                    post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'leap15-gcc-build.log',
-                                                    id: "analysis-gcc-leap15")
-                        }
-                        unsuccessful {
-                            sh """if [ -f config.log ]; then
-                                      mv config.log config.log-leap15-gcc
-                                  fi"""
-                            archiveArtifacts artifacts: 'config.log-leap15-gcc',
-                                             allowEmptyArchive: true
-                        }
-                    }
-                }
-                stage('Build on Leap 15 with Clang') {
-                    when {
-                        beforeAgent true
-                        expression { ! skip_build_on_landing_branch() }
-                    }
-                    agent {
-                        dockerfile {
-                            filename 'utils/docker/Dockerfile.leap.15'
-                            label 'docker_runner'
-                            additionalBuildArgs dockerBuildArgs(deps_build:true) +
-                                                " -t ${sanitized_JOB_NAME}-leap15"
-                        }
-                    }
-                    steps {
-                        sconsBuild parallel_build: parallel_build(),
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release --stack_mmap",
                                    build_deps: "no"
                     }
