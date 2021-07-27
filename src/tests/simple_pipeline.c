@@ -16,9 +16,9 @@
 #include <daos.h>
 
 /** datos info */
-static daos_handle_t	poh; // pool
-static daos_handle_t	coh; // container
-static daos_handle_t	oh;  // object
+static daos_handle_t	poh; /** pool */
+static daos_handle_t	coh; /** container */
+static daos_handle_t	oh;  /** object */
 
 #define	ASSERT(cond, ...)					\
 do {								\
@@ -31,11 +31,11 @@ do {								\
 /** DB info */
 #define NR_IODS		3
 #define STRING_LEN	10
-static char*	fields[NR_IODS]	= {"owner", "species", "sex"};
+static char	*fields[NR_IODS]	= {"owner", "species", "sex"};
 
 
 void
-insert_example_records (void)
+insert_example_records(void)
 {
 	int		rc;
 	d_iov_t		dkey;
@@ -44,38 +44,38 @@ insert_example_records (void)
 	daos_iod_t	iods[NR_IODS];
 	uint32_t	i, j;
 
-	char	name[8][STRING_LEN]   		= {"Slim\0",
-						   "Buffy\0",
-						   "Claws\0",
-						   "Whistler\0",
-						   "Chirpy\0",
-						   "Browser\0",
-						   "Fang\0",
-						   "Fluffy\0"};
-	char	owner[8][STRING_LEN]   		= {"Benny\0",
-						   "Harold\0",
-						   "GWen\0",
-						   "Gwen\0",
-						   "Gwen\0",
-						   "Diane\0",
-						   "Benny\0",
-						   "Harold\0"};
-	char	species[8][STRING_LEN] 		= {"snake\0",
-						   "dog\0",
-						   "cat\0",
-						   "bird\0",
-						   "bird\0",
-						   "dog\0",
-						   "dog\0",
-						   "cat\0"};
-	char	sex[8][STRING_LEN]  		= {"m\0",
-						   "f\0",
-						   "m\0",
-						   "m\0",
-						   "f\0",
-						   "m\0",
-						   "m\0",
-						   "f\0"};
+	char	name[8][STRING_LEN]	= {"Slim\0",
+					   "Buffy\0",
+					   "Claws\0",
+					   "Whistler\0",
+					   "Chirpy\0",
+					   "Browser\0",
+					   "Fang\0",
+					   "Fluffy\0"};
+	char	owner[8][STRING_LEN]	= {"Benny\0",
+					   "Harold\0",
+					   "GWen\0",
+					   "Gwen\0",
+					   "Gwen\0",
+					   "Diane\0",
+					   "Benny\0",
+					   "Harold\0"};
+	char	species[8][STRING_LEN]	= {"snake\0",
+					   "dog\0",
+					   "cat\0",
+					   "bird\0",
+					   "bird\0",
+					   "dog\0",
+					   "dog\0",
+					   "cat\0"};
+	char	sex[8][STRING_LEN]	= {"m\0",
+					   "f\0",
+					   "m\0",
+					   "m\0",
+					   "f\0",
+					   "m\0",
+					   "m\0",
+					   "f\0"};
 	char	**data[NR_IODS];
 
 	data[0] = (char **)owner;
@@ -99,7 +99,8 @@ insert_example_records (void)
 			iods[j].iod_recxs	= NULL;
 			iods[j].iod_type	= DAOS_IOD_SINGLE;
 		}
-		rc = daos_obj_update(oh,DAOS_TX_NONE,0,&dkey,NR_IODS,iods,sgls,NULL);
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NR_IODS, iods,
+					sgls, NULL);
 		ASSERT(rc == 0, "Obj update failed with %d", rc);
 	}
 }
@@ -108,7 +109,7 @@ insert_example_records (void)
  * Build filter "Owner == Benny"
  */
 void
-build_filter_one (daos_pipeline_t *pipeline)
+build_filter_one(daos_pipeline_t *pipeline)
 {
 	daos_pipeline_filter_t	akey_ft, eqfunc_ft, const_ft;
 	char			constant[STRING_LEN] = "Benny\0";
@@ -153,7 +154,7 @@ build_filter_one (daos_pipeline_t *pipeline)
 }
 
 void
-run_pipeline (daos_pipeline_t *pipeline)
+run_pipeline(daos_pipeline_t *pipeline)
 {
 	daos_iod_t	iods[NR_IODS];
 	daos_anchor_t	anchor;
@@ -246,7 +247,7 @@ run_pipeline (daos_pipeline_t *pipeline)
 }
 
 int
-main (int argc, char **argv)
+main(int argc, char **argv)
 {
 	uuid_t			pool_uuid;
 	uuid_t			co_uuid;
@@ -274,7 +275,8 @@ main (int argc, char **argv)
 	/** Create and open a container.
 	  * Alternatively, one could create the container outside of this
 	  * program using the daos utility: daos cont create --pool=puuid
-	  * and pass the uuid to the app. */
+	  * and pass the uuid to the app.
+	  * */
 	uuid_generate(co_uuid);
 	rc = daos_cont_create(poh, co_uuid, NULL, NULL);
 	ASSERT(rc == 0, "container create failed with %d", rc);

@@ -199,9 +199,9 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *					on this specific dkey.
  *
  * \param[in,out]	nr_iods		[in]: Number of I/O descriptors in the
- * 					iods table.
- * 					[out]: Number of returned I/O
- * 					descriptors in the iods table.
+ *					iods table.
+ *					[out]: Number of returned I/O
+ *					descriptors in the iods table.
  *
  * \param[in,out]	iods		[in/out]: Array of I/O descriptors. Each
  *					descriptor is associated with a given
