@@ -16,8 +16,6 @@
 #include <daos_srv/dtx_srv.h>
 #include "dtx_internal.h"
 
-#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
-
 static void *
 dtx_tls_init(int xs_id, int tgt_id)
 {
@@ -134,10 +132,11 @@ dtx_handler(crt_rpc_t *rpc)
 
 	switch (opc) {
 	case DTX_COMMIT:
-		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT) ||
+		    unlikely(din->di_dtx_array.ca_count == 0))
 			break;
 
-		while (i < din->di_dtx_array.ca_count) {
+		while (1) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
 
@@ -147,6 +146,10 @@ dtx_handler(crt_rpc_t *rpc)
 				rc = rc1;
 
 			i += count;
+			if (i >= din->di_dtx_array.ca_count)
+				break;
+
+			ABT_thread_yield();
 		}
 		break;
 	case DTX_ABORT:
