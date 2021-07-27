@@ -29,7 +29,7 @@ from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
     get_default_config_file, pcmd, get_file_listing, run_command
 from logger_utils import TestLogger
-from test_utils_pool import TestPool
+from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
 from env_modules import load_mpi
 from distutils.spawn import find_executable
@@ -551,6 +551,7 @@ class TestWithServers(TestWithoutServers):
         # self.debug = False
         # self.config = None
         self.job_manager = None
+        self.label_generator = LabelGenerator()
 
     def setUp(self):
         """Set up each test case."""
@@ -593,8 +594,12 @@ class TestWithServers(TestWithoutServers):
             host_list_name = "_".join(["hostlist", name])
             partition_name = "_".join([name[:-1], "partition"])
             reservation_name = "_".join([name[:-1], "reservation"])
+            reservation_env = "_".join(["DAOS", reservation_name.upper()])
             partition = self.params.get(partition_name, "/run/hosts/*")
-            reservation = self.params.get(reservation_name, "/run/hosts/*")
+            reservation = os.environ.get(reservation_env, None)
+            self.log.info("env %s = %s", reservation_env, reservation)
+            if reservation is None:
+                reservation = self.params.get(reservation_name, "/run/hosts/*")
             host_list = getattr(self, host_list_name)
             if partition is not None and host_list is None:
                 # If a partition is provided instead of a list of hosts use the
@@ -701,36 +706,40 @@ class TestWithServers(TestWithoutServers):
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
             self.set_job_manager_timeout()
 
-    def write_string_to_logfile(self, s):
-        """Write a string to the server log
-
-        Args:
-            s (string): string to write to log file.  Log message will be in
-                the following format:
-                  $date $hostname DAOS[$pid/0/6] rpc EMIT \
-                    src/cart/crt_rpc.c:53 crt_hdlr_ctl_log_add_msg() $s
-
-        """
-
-        # Fetch attachinfo data from server
-        attachinfo_file_path = self.agent_managers[0].get_attachinfo_file()
-
-        cp_command = "sudo cp {} {}".format(attachinfo_file_path, ".")
-        run_command(cp_command, verbose=True, raise_exception=False)
-
-        # Compose and run cart_ctl command
-        cart_ctl = CartCtl()
-        cart_ctl.add_log_msg.value = "add_log_msg"
-        cart_ctl.rank.value = "all"
-        cart_ctl.cfg_path.value = "."
-        cart_ctl.group_name.value = "daos_server"
-        cart_ctl.m.value = s
-
-        cart_ctl.n.value = None
-        cart_ctl.run()
-
         # Mark the end of setup
         self.log.info("=" * 100)
+
+    def write_string_to_logfile(self, message):
+        """Write a string to the server log.
+
+        The server log message will be appear in the following format:
+            <date> <hostname> DAOS[<pid>/0/6] rpc EMIT
+                src/cart/crt_rpc.c:53 crt_hdlr_ctl_log_add_msg() <message>
+
+        Args:
+            message (str): message to write to log file.
+        """
+        if self.server_managers and self.agent_managers:
+            # Compose and run cart_ctl command
+            cart_ctl = CartCtl()
+            cart_ctl.add_log_msg.value = "add_log_msg"
+            cart_ctl.rank.value = "all"
+            cart_ctl.cfg_path.value = "."
+            cart_ctl.m.value = message
+            cart_ctl.n.value = None
+
+            for manager in self.agent_managers:
+                # Fetch attachinfo data from server via the agent
+                attachinfo_file = manager.get_attachinfo_file()
+                cp_command = "sudo cp {} {}".format(attachinfo_file, ".")
+                run_command(cp_command, verbose=True, raise_exception=False)
+                cart_ctl.group_name.value = manager.get_config_value("name")
+                cart_ctl.run()
+        else:
+            self.log.info(
+                "Unable to write message to the server log: %d servers groups "
+                "running / %d agent groups running",
+                len(self.server_managers), len(self.agent_managers))
 
     def set_job_manager_timeout(self):
         """Set the timeout for the job manager.
@@ -1452,7 +1461,9 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(self.context, self.get_dmg_command(index))
+        pool = TestPool(
+            context=self.context, dmg_command=self.get_dmg_command(index),
+            label_generator=self.label_generator)
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)

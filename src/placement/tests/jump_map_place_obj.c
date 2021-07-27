@@ -1801,6 +1801,60 @@ unbalanced_config(void **state)
 	TEST_NON_STANDARD_SYSTEMS(3, domain_targets, OC_RP_2G2, 4);
 }
 
+static void
+same_group_shards_not_in_same_domain(void **state)
+{
+	struct jm_test_ctx	ctx;
+	int	tgt;
+	int	other_tgt;
+	int	miss_cnt = 0;
+	int	i;
+	int	j;
+	int	k;
+
+	jtc_init_with_layout(&ctx, 32, 2, 4, OC_EC_2P1G64, g_verbose);
+	for (i = 0; i < 64; i++) {
+		for (j = 0; j < 3; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, 3 * i + j);
+			for (k = j + 1; k < 3; k++) {
+				other_tgt = jtc_layout_shard_tgt(&ctx, 3 * i + k);
+				if (tgt/4 == other_tgt/4)
+					miss_cnt++;
+			}
+		}
+	}
+	jtc_fini(&ctx);
+	assert_rc_equal(miss_cnt, 0);
+
+	jtc_init_with_layout(&ctx, 18, 1, 512, OC_EC_16P2G512, g_verbose);
+	for (i = 0; i < 512; i++) {
+		for (j = 0; j < 18; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
+			for (k = j + 1; k < 18; k++) {
+				other_tgt = jtc_layout_shard_tgt(&ctx, 18 * i + k);
+				if (tgt/512 == other_tgt/512)
+					miss_cnt++;
+			}
+		}
+	}
+	jtc_fini(&ctx);
+	assert_rc_equal(miss_cnt, 0);
+
+	jtc_init_with_layout(&ctx, 512, 1, 18, OC_EC_16P2G512, g_verbose);
+	for (i = 0; i < 512; i++) {
+		for (j = 0; j < 18; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
+			for (k = j + 1; k < 18; k++) {
+				other_tgt = jtc_layout_shard_tgt(&ctx, 18 * i + k);
+				if (tgt/18 == other_tgt/18)
+					miss_cnt++;
+			}
+		}
+	}
+	jtc_fini(&ctx);
+	assert_true(miss_cnt < 2);
+}
+
 /*
  * ------------------------------------------------
  * End Test Cases
@@ -1881,6 +1935,8 @@ static const struct CMUnitTest tests[] = {
 	/* Non-standard system setups*/
 	T("Non-standard system configurations. All healthy",
 	  unbalanced_config),
+	T("shards in the same group not in the same domain",
+	  same_group_shards_not_in_same_domain),
 };
 
 int

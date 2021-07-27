@@ -437,6 +437,7 @@ void dfs_ec_rebuild_io(void **state, int *shards, int shards_nr);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
+void reintegrate_single_pool_rank_no_disconnect(test_arg_t *arg, d_rank_t failed_rank);
 void rebuild_pools_ranks(test_arg_t **args, int args_cnt,
 		d_rank_t *failed_ranks, int ranks_nr, bool kill);
 

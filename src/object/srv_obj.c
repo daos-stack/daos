@@ -1251,6 +1251,7 @@ obj_ec_recov_need_try_again(struct obj_rw_in *orw, struct obj_io_context *ioc)
 	 * that flag was only set when (snapshot_epoch < sc_ec_agg_eph_boundry).
 	 */
 	if ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0 &&
+	    (orw->orw_flags & ORF_FOR_MIGRATION) == 0 &&
 	    orw->orw_epoch < ioc->ioc_coc->sc_ec_agg_eph_boundry)
 		return true;
 
@@ -2054,6 +2055,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	struct obj_io_context	 ioc;
 	daos_handle_t		 ioh = DAOS_HDL_INVAL;
 	int			 rc;
+	int			 rc1;
 
 	D_ASSERT(oea != NULL);
 	D_ASSERT(oeao != NULL);
@@ -2104,24 +2106,38 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 				DP_UOID(oea->ea_oid), DP_RC(rc));
 			goto out;
 		}
+
 		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc,
 				    &ioc.ioc_io_size, NULL);
 		if (rc) {
-			D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
-				DP_UOID(oea->ea_oid), DP_RC(rc));
-			goto out;
+			if (rc == -DER_NO_PERM) {
+				/* Parity already exists, May need a
+				 * different error code.
+				 */
+				D_DEBUG(DB_EPC, DF_UOID" parity already"
+					" exists\n", DP_UOID(oea->ea_oid));
+				rc = 0;
+			} else {
+				D_ERROR(DF_UOID" vos_update_end failed: "
+					DF_RC".\n", DP_UOID(oea->ea_oid),
+					DP_RC(rc));
+				D_GOTO(out, rc);
+			}
 		}
 	}
 
+	/* Since parity update has succeed, so let's ignore the failure
+	 * of replica remove, otherwise it will cause the leader not
+	 * updating its parity, then the parity will not be consistent.
+	 */
 	recx.rx_idx = oea->ea_stripenum * obj_ioc2ec_ss(&ioc);
 	recx.rx_nr = obj_ioc2ec_ss(&ioc);
-	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
+	rc1 = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 				  &oea->ea_epoch_range, dkey,
 				  &iod->iod_name, &recx);
-	if (rc) {
+	if (rc1)
 		D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc));
-	}
+			DP_UOID(oea->ea_oid), DP_RC(rc1));
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);

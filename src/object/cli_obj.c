@@ -24,7 +24,9 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(11)
+#define OBJ_TGT_INLINE_NR	11
+#define OBJ_INLINE_BTIMAP	4
+
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -82,6 +84,7 @@ struct obj_auxi_args {
 					 is_ec_obj:1,
 					 csum_retry:1,
 					 csum_report:1,
+					 tx_uncertain:1,
 					 no_retry:1,
 					 ec_wait_recov:1,
 					 ec_in_recov:1,
@@ -90,6 +93,8 @@ struct obj_auxi_args {
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
+	/* 64-bits alignment, bitmap for retry next replicas. */
+	uint8_t				 retry_bitmap[OBJ_INLINE_BTIMAP];
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
@@ -882,15 +887,19 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	bool			 ec_degrade = false;
 	uint32_t		 ec_deg_tgt = 0, start_shard;
 	bool			 csum_err = false;
+	bool			 tx_uncertain = false;
 	int			 rc;
 
 	shard_tgt->st_ec_tgt = ec_tgt_idx;
 	start_shard = shard - ec_tgt_idx;
 
 	if (obj_auxi->is_ec_obj &&
-	    (obj_auxi->csum_retry ||
+	    (obj_auxi->csum_retry || obj_auxi->tx_uncertain ||
 	     DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))) {
-		if (obj_auxi->csum_retry) {
+		if (obj_auxi->tx_uncertain) {
+			tx_uncertain = true;
+			obj_auxi->tx_uncertain = 0;
+		} else if (obj_auxi->csum_retry) {
 			csum_err = true;
 			obj_auxi->csum_retry = 0;
 		}
@@ -938,7 +947,11 @@ ec_deg_get:
 			if (csum_err) {
 				obj_auxi->no_retry = 1;
 				rc = -DER_CSUM;
+			} else if (tx_uncertain) {
+				obj_auxi->no_retry = 1;
+				rc = -DER_TX_UNCERTAIN;
 			}
+
 			D_ERROR(DF_OID" obj_ec_get_degrade failed, rc "
 				DF_RC"\n", DP_OID(obj->cob_md.omd_id),
 				DP_RC(rc));
@@ -1070,8 +1083,13 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 		if (req_tgts->ort_srv_disp) {
 			rc = obj_grp_leader_get(obj, shard_idx, map_ver);
 			if (rc < 0) {
-				D_ERROR(DF_OID" no valid shard, rc "DF_RC"\n",
-					DP_OID(obj->cob_md.omd_id),
+				D_ERROR(DF_OID" no valid shard %u, grp size %u "
+					"grp nr %u, shards %u, reps %u, is %s: "
+					DF_RC"\n", DP_OID(obj->cob_md.omd_id),
+					shard_idx, obj->cob_grp_size,
+					obj->cob_grp_nr, obj->cob_shards_nr,
+					obj_get_replicas(obj),
+					obj_is_ec(obj) ? "EC-obj" : "REP-obj",
 					DP_RC(rc));
 				return rc;
 			}
@@ -1133,6 +1151,10 @@ obj_ptr2shards(struct dc_object *obj, uint32_t *start_shard, uint32_t *shard_nr,
 	*start_shard = 0;
 	*shard_nr = obj->cob_shards_nr;
 	*grp_nr = obj->cob_shards_nr / obj_get_grp_size(obj);
+
+	D_ASSERTF(*grp_nr == obj->cob_grp_nr, "Unmatched grp nr for "
+		  DF_OID": %u/%u\n",
+		  DP_OID(obj->cob_md.omd_id), *grp_nr, obj->cob_grp_nr);
 }
 
 static int
@@ -1642,6 +1664,8 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 		extra_flags = DIOF_EC_RECOV;
 		if (recov_task->ert_snapshot)
 			extra_flags |= DIOF_EC_RECOV_SNAP;
+		if ((obj_auxi->flags & ORF_FOR_MIGRATION) != 0)
+			extra_flags |= DIOF_FOR_MIGRATION;
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
 					      extra_flags,
 					      &recov_task->ert_iod,
@@ -2388,6 +2412,7 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 	case DAOS_OBJ_RPC_SYNC:
 		obj_ptr2shards(obj, &shard_idx, &shard_cnt, &grp_nr);
 		flags = OBJ_TGT_FLAG_LEADER_ONLY;
+		obj_auxi->to_leader = 1;
 		break;
 	default:
 		D_ERROR("bad opc %d.\n", opc);
@@ -3666,6 +3691,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 	obj_auxi = tse_task_stack_pop(task, sizeof(*obj_auxi));
 	obj_auxi->io_retry = 0;
 	obj_auxi->result = 0;
+	obj_auxi->csum_retry = 0;
+	obj_auxi->tx_uncertain = 0;
 	obj = obj_auxi->obj;
 	rc = obj_comp_cb_internal(obj_auxi);
 	if (rc != 0 || obj_auxi->result) {
@@ -3713,11 +3740,15 @@ obj_comp_cb(tse_task_t *task, void *data)
 		     task->dt_result != -DER_TX_BUSY))
 			obj_auxi->io_retry = 1;
 
-		if (task->dt_result == -DER_CSUM) {
+		if (task->dt_result == -DER_CSUM ||
+		    task->dt_result == -DER_TX_UNCERTAIN) {
 			if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
 			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov &&
-			     obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
-				obj_auxi->csum_retry = 1;
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+				if (task->dt_result == -DER_CSUM)
+					obj_auxi->csum_retry = 1;
+				else
+					obj_auxi->tx_uncertain = 1;
 			} else {
 				/* not retrying updates yet */
 				obj_auxi->io_retry = 0;
@@ -3736,6 +3767,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_auxi->ec_in_recov = 0;
 		obj_auxi->reasb_req.orr_recov = 0;
 		obj_auxi->reasb_req.orr_recov_snap = 0;
+		obj_auxi->reasb_req.orr_iom_tgt_nr = 0;
 		obj_ec_fail_info_free(&obj_auxi->reasb_req);
 		D_DEBUG(DB_IO, DF_OID" EC fetch again.\n",
 			DP_OID(obj->cob_md.omd_id));
@@ -4168,32 +4200,41 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 /* Selects next replica in the object's layout.
  */
 static int
-obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
-		     uint64_t dkey_hash, unsigned int map_ver, uint8_t *bitmap)
+obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
+		     uint64_t dkey_hash, unsigned int map_ver)
 {
-	D_WARN("Retrying replica because of checksum error.\n");
-	unsigned int		 next_shard, retry_size, shard_cnt, shard_idx;
+	unsigned int		 next_shard, retry_size, shard_cnt, start_shard;
 	int			 rc = 0;
 
+	D_WARN("Retrying replica because of %s error.\n",
+	       obj_auxi->csum_retry ? "csum" : "tx_uncertain");
+
 	rc = obj_dkey2grpmemb(obj, dkey_hash, map_ver,
-			      &shard_idx, &shard_cnt);
+			      &start_shard, &shard_cnt);
 	if (rc != 0)
-		goto out;
+		return rc;
 
-	/* bitmap has only 8 bits, so retry to the first eight replicas */
-	retry_size = shard_cnt <= 8 ? shard_cnt : 8;
+	/* bitmap in obj_auxi_args has only 4 bytes, then let's only retry
+	 * the first 32 replicas, that should be enough for most of cases.
+	 */
+
+	retry_size = shard_cnt <= OBJ_INLINE_BTIMAP * 8 ?
+		     shard_cnt : OBJ_INLINE_BTIMAP * 8;
 	next_shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1) %
-		retry_size + shard_idx;
+		     retry_size + start_shard;
 
-	/* all replicas have csum error for this fetch request */
 	if (next_shard == obj_auxi->initial_shard) {
 		obj_auxi->no_retry = 1;
-		rc = -DER_CSUM;
-		goto out;
+		if (obj_auxi->csum_retry)
+			return -DER_CSUM;
+
+		return -DER_TX_UNCERTAIN;
 	}
-	setbit(bitmap, next_shard - shard_idx);
-out:
-	return rc;
+
+	memset(obj_auxi->retry_bitmap, 0, OBJ_INLINE_BTIMAP);
+	setbit(obj_auxi->retry_bitmap, next_shard - start_shard);
+
+	return 0;
 }
 
 int
@@ -4208,7 +4249,6 @@ dc_obj_fetch_task(tse_task_t *task)
 	struct dtx_epoch	 epoch;
 	uint32_t		 shard = 0;
 	int			 rc;
-	uint8_t                  csum_bitmap = 0;
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_FETCH, &epoch, &map_ver,
 			   &obj);
@@ -4275,12 +4315,13 @@ dc_obj_fetch_task(tse_task_t *task)
 		obj_auxi->to_leader = (args->extra_flags & DIOF_TO_LEADER) != 0;
 	}
 
-	if (obj_auxi->csum_retry && !obj_auxi->is_ec_obj) {
-		rc = obj_retry_csum_err(obj, obj_auxi, dkey_hash, map_ver,
-					&csum_bitmap);
+	if ((obj_auxi->csum_retry || obj_auxi->tx_uncertain) &&
+	    !obj_auxi->is_ec_obj) {
+		rc = obj_retry_next_shard(obj, obj_auxi, dkey_hash, map_ver);
 		if (rc)
 			goto out_task;
-		tgt_bitmap = &csum_bitmap;
+
+		tgt_bitmap = obj_auxi->retry_bitmap;
 	} else {
 		if (obj_auxi->is_ec_obj)
 			tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;
@@ -5487,12 +5528,12 @@ dc_obj_sync(tse_task_t *task)
 	if (rc != 0)
 		D_GOTO(out_task, rc);
 
-	D_DEBUG(DB_IO, "sync "DF_OID", reps %d\n",
-		DP_OID(obj->cob_md.omd_id), obj_get_replicas(obj));
+	D_DEBUG(DB_IO, "sync "DF_OID", %s obj: %d\n",
+		DP_OID(obj->cob_md.omd_id), obj_is_ec(obj) ? "EC" : "REP",
+		obj_get_replicas(obj));
 
-	rc = obj_req_fanout(obj, obj_auxi, 0, map_ver, &epoch, shard_sync_prep,
-			    dc_obj_shard_sync, task);
-	return rc;
+	return obj_req_fanout(obj, obj_auxi, 0, map_ver, &epoch,
+			      shard_sync_prep, dc_obj_shard_sync, task);
 
 out_task:
 	tse_task_complete(task, rc);
