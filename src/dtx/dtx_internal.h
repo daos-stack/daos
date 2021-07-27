@@ -94,6 +94,8 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
  */
 #define DTX_CLEANUP_THD_AGE_LO	45
 
+#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT << 3)
+
 struct dtx_pool_metrics {
 	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT];
 };
