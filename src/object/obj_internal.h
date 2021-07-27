@@ -140,7 +140,7 @@ struct obj_reasb_req {
 	uint32_t			 orr_iom_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
-	pthread_spinlock_t		 orr_spin;
+	pthread_mutex_t			 orr_mutex;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
@@ -455,6 +455,7 @@ struct dc_obj_verify_args {
 	char				*list_buf;
 	char				*fetch_buf;
 	char				 inline_buf[DOVA_BUF_LEN];
+	uint32_t			 current_shard;
 	struct dc_obj_verify_cursor	 cursor;
 };
 
@@ -545,7 +546,7 @@ obj_retry_error(int err)
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
-	       err == -DER_TX_BUSY ||
+	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
 	       daos_crt_network_error(err);
 }
 

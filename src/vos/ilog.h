@@ -163,16 +163,19 @@ struct ilog_entry {
 	struct ilog_id	ie_id;
 	/** The status of the incarnation log entry.  See enum ilog_status */
 	int32_t		ie_status;
+	/** Index of the ilog entry */
+	int32_t		ie_idx;
 };
 
-#define ILOG_PRIV_SIZE 456
+#define ILOG_PRIV_SIZE 416
 /** Structure for storing the full incarnation log for ilog_fetch.  The
  * fields shouldn't generally be accessed directly but via the iteration
  * APIs below.
  */
 struct ilog_entries {
 	/** Array of log entries */
-	struct ilog_entry	*ie_entries;
+	struct ilog_id		*ie_ids;
+	uint32_t		*ie_statuses;
 	/** Number of entries in the log */
 	int64_t			 ie_num_entries;
 	/** Private log data */
@@ -237,21 +240,31 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root,
 void
 ilog_fetch_finish(struct ilog_entries *entries);
 
+/** For internal use by ilog_foreach* */
+static inline bool
+ilog_cache_entry(const struct ilog_entries *entries, struct ilog_entry *entry, int idx)
+{
+	entry->ie_id.id_value = entries->ie_ids[idx].id_value;
+	entry->ie_id.id_epoch = entries->ie_ids[idx].id_epoch;
+	entry->ie_status = entries->ie_statuses[idx];
+	return true;
+}
+
 /** Iterator for fetched incarnation log entries
  *
  *  \param	entries[in]	The fetched entries
  */
-#define ilog_foreach_entry(ents, entry)		\
-	for (entry = &(ents)->ie_entries[0];	\
-	     entry != &(ents)->ie_entries[(ents)->ie_num_entries]; entry++)
+#define ilog_foreach_entry(ents, entry)						\
+	for ((entry)->ie_idx = 0; (entry)->ie_idx < (ents)->ie_num_entries &&	\
+	     ilog_cache_entry(ents, entry, (entry)->ie_idx); (entry)->ie_idx++)
 
 /** Reverse iterator for fetched incarnation log entries
  *
  *  \param	entries[in]	The fetched entries
  */
-#define ilog_foreach_entry_reverse(ents, entry)				\
-	for (entry = &(ents)->ie_entries[(ents)->ie_num_entries - 1];	\
-	     entry != &(ents)->ie_entries[-1]; entry--)
+#define ilog_foreach_entry_reverse(ents, entry)						\
+	for ((entry)->ie_idx = (ents)->ie_num_entries - 1; (entry)->ie_idx >= 0 &&	\
+	     ilog_cache_entry(ents, entry, (entry)->ie_idx); (entry)->ie_idx--)
 
 /** Fetch the address of the timestamp index from the ilog
  *
