@@ -35,9 +35,6 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
 
-    env.AppendUnique(RPATH_FULL=[Dir('gurt')])
-    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('gurt').path])
-
     # Detect if we have explicit_bzero
     conf = Configure(env)
     if not conf.CheckFunc('explicit_bzero'):

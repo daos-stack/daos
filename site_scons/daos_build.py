@@ -25,6 +25,9 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
     env.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
     rpaths = env.subst("$RPATH_FULL").split()
     prefix = env.get("PREFIX")
+    if not is_bin:
+        path = r'\$$ORIGIN'
+        env.AppendUnique(RPATH=[DaosLiteral(path)])
     for rpath in rpaths:
         if rpath.startswith('/usr'):
             env.AppendUnique(RPATH=[rpath])
@@ -55,21 +58,29 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
                           env.subst("$_LIBDIRFLAGS " "$_RPATH"),
                           sep=" ")
 
+def add_build_rpath(env, path):
+    """Add a build directory with -Wl,-rpath-link"""
+    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
+    env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath-link=%s" % path, sep=" ")
+
 def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
     denv = env.Clone()
+    denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     return denv.SharedLibrary(*args, **kwargs)
 
 def program(env, *args, **kwargs):
     """build Program with relative RPATH"""
     denv = env.Clone()
+    denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
     return denv.Program(*args, **kwargs)
 
 def test(env, *args, **kwargs):
     """build Program with fixed RPATH"""
     denv = env.Clone()
+    denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
     return denv.Program(*args, **kwargs)
 
