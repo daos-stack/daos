@@ -279,14 +279,14 @@ func TestProvider_Scan(t *testing.T) {
 			req:       storage.BdevScanRequest{DisableVMD: false},
 			forwarded: true,
 			mbc: &MockBackendConfig{
-				ScanRes: &ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{
 						ctrlr1, ctrlr2, vmdctrlr1, vmdctrlr2,
 					},
 				},
 				VmdEnabled: true,
 			},
-			expRes: &ScanResponse{
+			expRes: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{
 					ctrlr1, ctrlr2, vmdctrlr1, vmdctrlr2,
 				},

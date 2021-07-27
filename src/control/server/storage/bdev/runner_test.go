@@ -96,7 +96,7 @@ func TestRunner_Prepare(t *testing.T) {
 			},
 		},
 		"defaults with vmd present": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				TargetUser: username,
 				DisableVMD: true,
 			},
@@ -124,7 +124,7 @@ func TestRunner_Prepare(t *testing.T) {
 			},
 		},
 		"user-specified values with vmd present": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				DisableCleanHugePages: true,
 				TargetUser:            username,
@@ -158,7 +158,7 @@ func TestRunner_Prepare(t *testing.T) {
 			},
 		},
 		"blocklist with vmd present": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				DisableCleanHugePages: true,
 				TargetUser:            username,
