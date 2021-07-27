@@ -47,10 +47,10 @@ def scons():
 
     vos_engine = denv.StaticObject(['vos_engine.c'])
 
-    #vos_perf = daos_build.program(denv, 'vos_perf',
-    #                              ['vos_perf.c', perf_common, vos_engine],
-    #                              LIBS = libs)
-    #denv.Install('$PREFIX/bin/', vos_perf)
+    vos_perf = daos_build.program(denv, 'vos_perf',
+                                  ['vos_perf.c', perf_common, vos_engine],
+                                  LIBS = libs)
+    denv.Install('$PREFIX/bin/', vos_perf)
 
     Import('mpi_cmd_parser')
     obj_ctl = daos_build.program(denv, 'obj_ctl',
