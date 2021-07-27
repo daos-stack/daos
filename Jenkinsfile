@@ -348,7 +348,8 @@ pipeline {
                             filename 'utils/docker/Dockerfile.centos.7'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
-                                                                qb: quickBuild()) +
+                                                                qb: quickBuild(),
+                                                                deps_build: true) +
                                                 " -t ${sanitized_JOB_NAME}-centos7 " +
                                                 ' --build-arg QUICKBUILD_DEPS="' +
                                                 quickBuildDeps('centos7') + '"' +
@@ -357,17 +358,11 @@ pipeline {
                     }
                     steps {
                         sconsBuild parallel_build: parallelBuild(),
-                                   stash_files: 'ci/test_files_to_stash.txt',
                                    scons_exe: 'scons-3',
-                                   scons_args: sconsFaultsArgs()
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-build.log',
-                                                    id: "analysis-gcc-centos7")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-gcc
@@ -402,12 +397,6 @@ pipeline {
                                    scons_args: sconsFaultsArgs()
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-covc-build.log',
-                                                    id: "analysis-covc-centos7")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-covc
@@ -442,12 +431,6 @@ pipeline {
                                    build_deps: "no"
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-debug-build.log',
-                                                    id: "analysis-gcc-centos7-debug")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-gcc-debug
@@ -486,10 +469,6 @@ pipeline {
                     }
                     post {
                         always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-release-build.log',
-                                                    id: "analysis-gcc-centos7-release")
                             junit testResults: 'nlt-junit.xml'
                             archiveArtifacts artifacts: 'nlt_logs/centos7.release/',
                                              allowEmptyArchive: true
@@ -528,12 +507,6 @@ pipeline {
                                    build_deps: "no"
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: clang(pattern: 'centos7-clang-debug-build.log',
-                                                     id: "analysis-centos7-debug-clang")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-clang-debug
@@ -564,12 +537,6 @@ pipeline {
                                    build_deps: "no"
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: intel(pattern: 'leap15-icc-build.log',
-                                                     id: "analysis-leap15-intelc")
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-leap15-intelc
