@@ -1569,7 +1569,8 @@ dtx_26(void **state)
 }
 
 static void
-dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort)
+dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort,
+			     bool delay)
 {
 	const char	*dkey1 = "a_dkey_1";
 	const char	*dkey2 = "b_dkey_2";
@@ -1627,28 +1628,61 @@ dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, delay ?
+				      (DAOS_DTX_UNCERTAIN | DAOS_FAIL_ALWAYS) :
 				      0, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	print_message("Verify transactional update result with loc %lx\n", loc);
 
-	for (i = 0; i < DTX_NC_CNT; i++) {
-		lookup_single(dkey1, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
-			      &reqs[i]);
-		if (abort)
-			assert_int_equal(val, i + 1);
-		else
-			assert_int_equal(val, i + 21);
+	if (delay) {
+		arg->not_check_result = 1;
+		for (i = 0; i < DTX_NC_CNT; i++) {
+			lookup_single(dkey1, akey, 0, &val, sizeof(val),
+				      DAOS_TX_NONE, &reqs[i]);
+			rc = reqs[i].result;
+			lookup_single(dkey2, akey, 0, &val, sizeof(val),
+				      DAOS_TX_NONE, &reqs[i]);
 
-		lookup_single(dkey2, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
-			      &reqs[i]);
-		if (abort)
-			assert_int_equal(val, i + 1);
-		else
-			assert_int_equal(val, i + 21);
+			/* Either the 1st result or the 2nd one must be
+			 * -DER_TX_UNCERTAIN, and only one can be zero,
+			 *  the other is -DER_TX_UNCERTAIN.
+			 */
+			if (rc == 0) {
+				assert_int_equal(reqs[i].result,
+						 -DER_TX_UNCERTAIN);
+			} else {
+				assert_int_equal(rc, -DER_TX_UNCERTAIN);
+				assert_int_equal(reqs[i].result, 0);
+			}
 
-		ioreq_fini(&reqs[i]);
+			ioreq_fini(&reqs[i]);
+		}
+		arg->not_check_result = 0;
+
+		MPI_Barrier(MPI_COMM_WORLD);
+		if (arg->myrank == 0)
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					      0, 0, NULL);
+		MPI_Barrier(MPI_COMM_WORLD);
+	} else {
+		for (i = 0; i < DTX_NC_CNT; i++) {
+			lookup_single(dkey1, akey, 0, &val, sizeof(val),
+				      DAOS_TX_NONE, &reqs[i]);
+			if (abort)
+				assert_int_equal(val, i + 1);
+			else
+				assert_int_equal(val, i + 21);
+
+			lookup_single(dkey2, akey, 0, &val, sizeof(val),
+				      DAOS_TX_NONE, &reqs[i]);
+			if (abort)
+				assert_int_equal(val, i + 1);
+			else
+				assert_int_equal(val, i + 21);
+
+			ioreq_fini(&reqs[i]);
+		}
 	}
 }
 
@@ -1659,7 +1693,8 @@ dtx_27(void **state)
 
 	print_message("DTX27: uncertain status check - miss commit\n");
 
-	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_COMMIT, false);
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_COMMIT,
+				     false, false);
 }
 
 static void
@@ -1669,7 +1704,7 @@ dtx_28(void **state)
 
 	print_message("DTX28: uncertain status check - miss abort\n");
 
-	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_ABORT, true);
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_ABORT, true, false);
 }
 
 static void
@@ -2954,6 +2989,26 @@ dtx_39(void **state)
 	reintegrate_single_pool_rank(arg, kill_rank);
 }
 
+static void
+dtx_40(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX40: uncertain check - miss commit with delay\n");
+
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_COMMIT, false, true);
+}
+
+static void
+dtx_41(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX41: uncertain check - miss abort with delay\n");
+
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_ABORT, true, true);
+}
+
 static test_arg_t *saved_dtx_arg;
 
 static int
@@ -3063,6 +3118,11 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_38, dtx_sub_setup, dtx_sub_teardown},
 	{"DTX39: not restart the transaction with fixed epoch",
 	 dtx_39, dtx_sub_setup, dtx_sub_teardown},
+
+	{"DTX40: uncertain check - miss commit with delay",
+	 dtx_40, NULL, test_case_teardown},
+	{"DTX41: uncertain check - miss abort with delay",
+	 dtx_41, NULL, test_case_teardown},
 };
 
 static int
