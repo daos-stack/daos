@@ -50,7 +50,7 @@ class BashCmd(DfuseTestBase):
               Remove a directory
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium,ib2
+        :avocado: tags=hw,small
         :avocado: tags=daosio,dfuse
         :avocado: tags=bashcmd
         """
