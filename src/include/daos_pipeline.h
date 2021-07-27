@@ -169,7 +169,8 @@ daos_pipeline_push(daos_pipeline_t *pipeline, daos_pipeline_node_t *node);
  * \param[in]		filter	Filter object to be added to a pipeline node.
  */
 int
-daos_pipeline_node_push(daos_node_t *node, daos_pipeline_filter_t *filter);
+daos_pipeline_node_push(daos_pipeline_node_t *node,
+			daos_pipeline_filter_t *filter);
 
 /**
  * Checks that a pipeline object is well built. If the pipeline object is well
@@ -197,20 +198,15 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *					is done and processing isonly performed
  *					on this specific dkey.
  *
- * \param[in]		nr_iods		Number of I/O descriptors in the iods
- *					table.
+ * \param[in,out]	nr_iods		[in]: Number of I/O descriptors in the
+ * 					iods table.
+ * 					[out]: Number of returned I/O
+ * 					descriptors in the iods table.
  *
- * \param[in,out]	iods		[in]: Array of I/O descriptors. Each
+ * \param[in,out]	iods		[in/out]: Array of I/O descriptors. Each
  *					descriptor is associated with a given
  *					akey and describes the list of
  *					record extents to fetch from the array.
- *					[out]: Checksum of each extent is
- *					returned via
- *					\a iods[]::iod_csums[]. If the record
- *					size of an extent is unknown (i.e. set
- *					to DAOS_REC_ANY as input), then the
- *					actual record size will be returned in
- *					\a iods[]::iod_size.
  *
  * \param[in,out]	anchor		Hash anchor for the next call, it should
  *					be set to zeroes for the first call, it
@@ -231,7 +227,8 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *					returned.
  *
  * \param[out]		sgl_recx	Optional sgl storing all the records to
- *					be returned.
+ *					be returned. Allocated by the user, and
+ *					array size has to be nr_kds*nr_iods.
  *
  * \param[out]		sgl_agg		Optional sgl with the returned value of
  *					the aggregator(s).
