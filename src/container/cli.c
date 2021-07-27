@@ -2427,7 +2427,7 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 }
 
 static int
-free_name(tse_task_t *task, void *args)
+free_heap_copy(tse_task_t *task, void *args)
 {
 	char *name = *(char **)args;
 
@@ -2475,13 +2475,12 @@ dc_cont_get_attr(tse_task_t *task)
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
 		D_GOTO(out, rc = -DER_NOMEM);
-	rc = tse_task_register_comp_cb(task, free_name, &new_names,
+	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
 		D_GOTO(out, rc);
 	}
-
 	for (i = 0 ; i < args->n ; i++) {
 		uint64_t len;
 
@@ -2490,8 +2489,8 @@ dc_cont_get_attr(tse_task_t *task)
 		D_STRNDUP(new_names[i], args->names[i], len);
 		if (new_names[i] == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
-					       sizeof(char *));
+		rc = tse_task_register_comp_cb(task, free_heap_copy,
+					       &new_names[i], sizeof(char *));
 		if (rc) {
 			D_FREE(new_names[i]);
 			D_GOTO(out, rc);
@@ -2532,6 +2531,7 @@ dc_cont_set_attr(tse_task_t *task)
 	struct cont_req_arg	 cb_args;
 	int			 i, rc;
 	char			**new_names = NULL;
+	void			**new_values = NULL;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -2557,31 +2557,55 @@ dc_cont_set_attr(tse_task_t *task)
 	/* no easy way to determine if a name storage address is likely
 	 * to cause an EFAULT during memory registration, so duplicate
 	 * name in heap
-	 * XXX may need to do the same for values ??
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
 		D_GOTO(out, rc = -DER_NOMEM);
-	rc = tse_task_register_comp_cb(task, free_name, &new_names,
+	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
 		D_GOTO(out, rc);
 	}
-
 	for (i = 0 ; i < args->n ; i++) {
 		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
 		if (new_names[i] == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
-					       sizeof(char *));
+		rc = tse_task_register_comp_cb(task, free_heap_copy,
+					       &new_names[i], sizeof(char *));
 		if (rc) {
 			D_FREE(new_names[i]);
 			D_GOTO(out, rc);
 		}
 	}
 
-	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
+	/* no easy way to determine if a value storage address is likely
+	 * to cause an EFAULT during memory registration, so duplicate
+	 * value in heap
+	 */
+	D_ALLOC_ARRAY(new_values, args->n);
+	if (!new_values)
+		D_GOTO(out, rc = -DER_NOMEM);
+	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_values,
+				       sizeof(char *));
+	if (rc) {
+		D_FREE(new_values);
+		D_GOTO(out, rc);
+	}
+	for (i = 0 ; i < args->n ; i++) {
+		D_ALLOC(new_values[i], args->sizes[i]);
+		if (new_values[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		memcpy(new_values[i], args->values[i], args->sizes[i]);
+		rc = tse_task_register_comp_cb(task, free_heap_copy,
+					       &new_values[i], sizeof(char *));
+		if (rc) {
+			D_FREE(new_values[i]);
+			D_GOTO(out, rc);
+		}
+	}
+
+	rc = attr_bulk_create(args->n, new_names, new_values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
 			      CRT_BULK_RO, &in->casi_bulk);
 	if (rc != 0) {
@@ -2613,7 +2637,8 @@ dc_cont_del_attr(tse_task_t *task)
 	daos_cont_set_attr_t	*args;
 	struct cont_attr_del_in	*in;
 	struct cont_req_arg	 cb_args;
-	int			 rc;
+	int			 i, rc;
+	char			**new_names;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -2634,7 +2659,33 @@ dc_cont_del_attr(tse_task_t *task)
 
 	in = crt_req_get(cb_args.cra_rpc);
 	in->cadi_count = args->n;
-	rc = attr_bulk_create(args->n, (char **)args->names, NULL, NULL,
+
+	/* no easy way to determine if a name storage address is likely
+	 * to cause an EFAULT during memory registration, so duplicate
+	 * name in heap
+	 */
+	D_ALLOC_ARRAY(new_names, args->n);
+	if (!new_names)
+		D_GOTO(out, rc = -DER_NOMEM);
+	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
+				       sizeof(char *));
+	if (rc) {
+		D_FREE(new_names);
+		D_GOTO(out, rc);
+	}
+	for (i = 0 ; i < args->n ; i++) {
+		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
+		if (new_names[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		rc = tse_task_register_comp_cb(task, free_heap_copy,
+					       &new_names[i], sizeof(char *));
+		if (rc) {
+			D_FREE(new_names[i]);
+			D_GOTO(out, rc);
+		}
+	}
+
+	rc = attr_bulk_create(args->n, new_names, NULL, NULL,
 			      daos_task2ctx(task), CRT_BULK_RO, &in->cadi_bulk);
 	if (rc != 0) {
 		cont_req_cleanup(CLEANUP_RPC, &cb_args);

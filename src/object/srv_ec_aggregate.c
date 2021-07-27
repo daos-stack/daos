@@ -1821,7 +1821,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	ec_age_set_no_parity(entry);
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, dth);
-	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: "DF_X64
+	D_DEBUG(DB_EPC, "Querying parity for stripe: %lu, offset: "DF_X64
 		", "DF_RC"\n", entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx, DP_RC(rc));
 	if (rc != 0)
@@ -1831,6 +1831,13 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	if (ec_age_with_parity(entry) && ec_age_parity_higher(entry)) {
 		update_vos = true;
 		write_parity = false;
+		D_DEBUG(DB_EPC, "delete replica for stripe: %lu,"
+			DF_U64"/"DF_U64" eph "DF_X64" >= "DF_X64"\n",
+			entry->ae_cur_stripe.as_stripenum,
+			iter_param.ip_recx.rx_idx,
+			iter_param.ip_recx.rx_nr,
+			entry->ae_par_extent.ape_epoch,
+			entry->ae_cur_stripe.as_hi_epoch);
 		goto out;
 	}
 
