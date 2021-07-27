@@ -106,6 +106,7 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
+        self.disable_vmd = BasicParameter(None, True)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
