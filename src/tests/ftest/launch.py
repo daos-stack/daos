@@ -631,12 +631,12 @@ def get_nvme_replacement(args):
     include_vmd_flag = ""
 
     command_list = [
-        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"] 
+        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
     if ":" in args.nvme:
         vmd_flag = args.nvme.split(":")
         include_vmd_flag = vmd_flag[1]
         if include_vmd_flag == "vmd":
-            search_str = "grep 'Non-Volatile memory controller:\|Volume'"
+            search_str = "grep 'Non-Volatile memory controller: \\| Volume'"
             command_list[1] = search_str
         else:
             command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
@@ -682,7 +682,7 @@ def find_pci_address(value, list_nvme_behind_vmd = True):
         pattern = r"[{0}]{{4,5}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
     else:
         # Truncate higher domain PCI address when listing VMD address.
-        pattern = r"[{0}]{{4}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")  
+        pattern = r"[{0}]{{4}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
     return re.findall(pattern, str(value))
 
 
