@@ -240,14 +240,6 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root,
 void
 ilog_fetch_finish(struct ilog_entries *entries);
 
-/** Convenience structure for iterators */
-struct ilog_iter {
-	/** Placeholder for current entry */
-	struct ilog_entry	ii_entry;
-	/** Current index */
-	int			ii_idx;
-};
-
 /** For internal use by ilog_foreach* */
 static inline bool
 ilog_cache_entry(const struct ilog_entries *entries, struct ilog_entry *entry, int idx)

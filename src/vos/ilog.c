@@ -42,6 +42,8 @@ struct ilog_array {
 	uint32_t	ia_len;
 	/** Allocated length of array */
 	uint32_t	ia_max_len;
+	/** Pad to 16 bytes */
+	uint64_t	ia_pad;
 	/** Entries in array */
 	struct ilog_id	ia_id[0];
 };
@@ -492,6 +494,13 @@ fail:
 	return rc;
 }
 
+#define ILOG_ARRAY_INIT_NR	3
+#define ILOG_ARRAY_APPEND_NR	4
+#define ILOG_ARRAY_CHUNK_SIZE	64
+D_CASSERT(sizeof(struct ilog_array) + sizeof(struct ilog_id) * ILOG_ARRAY_INIT_NR ==
+	  ILOG_ARRAY_CHUNK_SIZE);
+D_CASSERT(sizeof(struct ilog_id) * ILOG_ARRAY_APPEND_NR == ILOG_ARRAY_CHUNK_SIZE);
+
 static int
 ilog_root_migrate(struct ilog_context *lctx, const struct ilog_id *id_in)
 {
@@ -511,7 +520,7 @@ ilog_root_migrate(struct ilog_context *lctx, const struct ilog_id *id_in)
 		return rc;
 	}
 
-	tree_root = umem_alloc(&lctx->ic_umm, sizeof(*array) + sizeof(array->ia_id[0]) * 2);
+	tree_root = umem_zalloc(&lctx->ic_umm, ILOG_ARRAY_CHUNK_SIZE);
 
 	if (tree_root == UMOFF_NULL)
 		return lctx->ic_umm.umm_nospc_rc;
@@ -532,7 +541,7 @@ ilog_root_migrate(struct ilog_context *lctx, const struct ilog_id *id_in)
 	array->ia_id[idx].id_value = id_in->id_value;
 	array->ia_id[idx].id_epoch = id_in->id_epoch;
 	array->ia_len = 2;
-	array->ia_max_len = 2;
+	array->ia_max_len = ILOG_ARRAY_INIT_NR;
 
 	rc = ilog_log_add(lctx, &array->ia_id[idx]);
 	if (rc != 0)
@@ -730,6 +739,7 @@ ilog_tree_modify(struct ilog_context *lctx, const struct ilog_id *id_in,
 	bool			 is_equal;
 	int			 visibility = ILOG_COMMITTED;
 	uint32_t		 new_len;
+	size_t			 new_size;
 	umem_off_t		 new_array;
 	struct ilog_array	*array;
 	struct ilog_array_cache	 cache;
@@ -800,9 +810,10 @@ insert:
 	/* We want to insert after 'i', so just increment it */
 	i++;
 	if (cache.ac_nr == cache.ac_array->ia_max_len) {
-		new_len = cache.ac_nr * 2;
-		new_array = umem_zalloc(&lctx->ic_umm, sizeof(*cache.ac_array) +
-					sizeof(cache.ac_entries[0]) * new_len);
+		new_len = (cache.ac_nr + 1) * 2 - 1;
+		new_size = sizeof(*cache.ac_array) + sizeof(cache.ac_entries[0]) * new_len;
+		D_ASSERT((new_size & (ILOG_ARRAY_CHUNK_SIZE - 1)) == 0);
+		new_array = umem_zalloc(&lctx->ic_umm, new_size);
 		if (new_array == UMOFF_NULL)
 			return lctx->ic_umm.umm_nospc_rc;
 
