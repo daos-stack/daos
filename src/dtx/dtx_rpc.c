@@ -123,7 +123,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 		goto out;
 
 	dout = crt_reply_get(req);
-	if (dra->dra_opc != DTX_REFRESH)
+	if (dout->do_status != 0 || dra->dra_opc != DTX_REFRESH)
 		D_GOTO(out, rc = dout->do_status);
 
 	if (din->di_dtx_array.ca_count != dout->do_sub_rets.ca_count)
@@ -176,6 +176,34 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			D_FREE(dsp);
 			D_GOTO(out, rc = -DER_DATA_LOSS);
 		case -DER_NONEXIST:
+			if (dtx_hlc_age2sec(dsp->dsp_epoch) >
+			    DTX_AGG_THD_AGE_LO ||
+			    DAOS_FAIL_CHECK(DAOS_DTX_UNCERTAIN)) {
+
+				/* Related DTX entry on leader does not exist.
+				 * We do not know whether it has been aborted
+				 * or committed (then aggregated). Then has to
+				 * mark it as 'orphan' that will be handled via
+				 * some special DAOS tools in the future.
+				 */
+
+				rc = vos_dtx_set_flags(dra->dra_cont->sc_hdl,
+						       &dsp->dsp_xid, 1,
+						       DTE_ORPHAN);
+
+				D_ERROR("Hit uncertain leaked DTX "DF_DTI
+					", mark it as orphan: %d\n",
+					DP_DTI(&dsp->dsp_xid), rc);
+
+				if (rc == -DER_NONEXIST)
+					rc = 0;
+				else
+					rc = -DER_TX_UNCERTAIN;
+
+				D_FREE(dsp);
+				break;
+			}
+
 			/* The leader does not have related DTX info,
 			 * we may miss related DTX abort request, so
 			 * let's abort it locally.
@@ -700,7 +728,11 @@ dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 	D_ASSERT(dti != NULL);
 
 	/* Local abort firstly. */
-	rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
+	if (epoch != 0)
+		rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
+	else
+		rc = vos_dtx_set_flags(cont->sc_hdl, dti, count, DTE_CORRUPTED);
+
 	if (rc > 0 || rc == -DER_NONEXIST)
 		rc = 0;
 
