@@ -139,6 +139,9 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 		case IsConnectionError(err), system.IsUnavailable(err):
 			return true
 		}
+		if err == errNoMsResponse {
+			return true
+		}
 		return false
 	}
 	rpcClient.Debugf("DAOS system join request: %+v", pbReq)

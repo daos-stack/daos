@@ -317,16 +317,24 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			return false
 		}
 
-		// If the error is something other than a context error,
-		// then it's considered a hard failure and not retryable.
-		code := status.Code(errors.Cause(err))
-		if code != codes.Canceled && code != codes.DeadlineExceeded {
-			return true
+		log.Debugf("checking %+v for hard failure", err)
+		switch errors.Cause(err) {
+		case context.DeadlineExceeded, context.Canceled:
+			// These may be retryable.
+		default:
+			// Check to see if the error contains a gRPC status code.
+			code := status.Code(errors.Cause(err))
+			if code != codes.Canceled && code != codes.DeadlineExceeded {
+				log.Debugf("error is not a context error, not retrying: %+v", err)
+				// If the error is not a context error, it's a hard failure.
+				return true
+			}
 		}
 
-		// If the context error is from the overall request context,
+		// If the context error is from the parent request context,
 		// then it's a hard failure. Otherwise, it's a soft failure
 		// and can be retried.
+		log.Debugf("%+v=%+v ? %t", errors.Cause(err), reqCtx.Err(), errors.Cause(err) == reqCtx.Err())
 		return errors.Cause(err) == reqCtx.Err()
 	}
 
@@ -340,18 +348,21 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 	for {
 		tryCtx := reqCtx
 		if tryTimeout := req.getRetryTimeout(); tryTimeout > 0 {
+			log.Debugf("try %d: setting deadline for %s", try, tryTimeout)
 			var tryCancel context.CancelFunc
 			tryCtx, tryCancel = context.WithTimeout(reqCtx, tryTimeout)
 			defer tryCancel()
 		}
 		respChan, err := c.InvokeUnaryRPCAsync(tryCtx, req)
 		if isHardFailure(err, reqCtx) {
+			log.Debugf("hard failure 1: %+v", err)
 			return nil, err
 		}
 
 		ur := &UnaryResponse{fromMS: true}
 		err = gatherResponses(tryCtx, respChan, ur)
 		if isHardFailure(err, reqCtx) {
+			log.Debugf("hard failure 2: %+v", err)
 			return nil, err
 		}
 
@@ -418,6 +429,7 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		log.Debugf("MS request error: %v; retrying after %s", err, backoff)
 		select {
 		case <-reqCtx.Done():
+			log.Debug("request context canceled")
 			return nil, reqCtx.Err()
 		case <-time.After(backoff):
 		}
