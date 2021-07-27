@@ -583,7 +583,7 @@ pool_properties(void **state)
 	}
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_SCHED);
-	if (entry == NULL || entry->dpe_val != DAOS_SCRUB_SCHED_RUN_WAIT)
+	if (entry == NULL || entry->dpe_val != DAOS_SCRUB_SCHED_OFF)
 		fail_msg("scrubber sched verification failed.\n");
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_FREQ);
