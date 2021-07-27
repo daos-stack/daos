@@ -636,6 +636,9 @@ def get_nvme_replacement(args):
         vmd_flag = args.nvme.split(":")
         include_vmd_flag = vmd_flag[1]
         if include_vmd_flag == "vmd":
+            search_str = "grep 'Volume'"
+            command_list[1] = search_str
+        elif include_vmd_flag == "mixed":
             search_str = "grep 'Non-Volatile memory controller: \\| Volume'"
             command_list[1] = search_str
         else:
@@ -658,15 +661,15 @@ def get_nvme_replacement(args):
 
     # Get the list of NVMe PCI addresses found in the output
     output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
-    if include_vmd_flag == "vmd":
+    if include_vmd_flag == "vmd" or include_vmd_flag == "mixed":
         devices = find_pci_address(output_str, False)
     else:
-        devices = find_pci_address(output_str, True)
+        devices = find_pci_address(output_str)
     print("Auto-detected NVMe devices on {}: {}".format(host_list, devices))
     return ",".join(devices)
 
 
-def find_pci_address(value, list_nvme_behind_vmd = True):
+def find_pci_address(value, list_nvme_behind_vmd=True):
     """Find PCI addresses in the specified string.
 
     Args:
