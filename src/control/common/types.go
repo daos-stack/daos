@@ -58,13 +58,6 @@ func (acl *AccessControlList) String() string {
 	return fmt.Sprintf("%+v", *acl)
 }
 
-// PoolDiscovery represents the basic discovery information for a pool.
-type PoolDiscovery struct {
-	UUID        string   `json:"uuid"`            // Unique identifier
-	Label       string   `json:"label,omitempty"` // optional human-friendly id
-	SvcReplicas []uint32 `json:"svc_reps"`        // Ranks of pool service replicas
-}
-
 // InterfaceIsNil returns true if the interface itself or its underlying value
 // is nil.
 func InterfaceIsNil(i interface{}) bool {

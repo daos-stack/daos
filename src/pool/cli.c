@@ -583,72 +583,48 @@ dc_pool_connect(tse_task_t *task)
 {
 	daos_pool_connect_t	*args;
 	struct dc_pool		*pool = NULL;
+	const char		*label;
+	uuid_t			 uuid;
 	int			 rc;
 
 	args = dc_task_get_args(task);
 	pool = dc_task_get_priv(task);
 
-	if (pool == NULL) {
-		if (!daos_uuid_valid(args->uuid))
-			D_GOTO(out_task, rc = -DER_INVAL);
-		if (!flags_are_valid(args->flags) || args->poh == NULL)
-			D_GOTO(out_task, rc = -DER_INVAL);
-
-		/** allocate and fill in pool connection */
-		rc = init_pool(NULL /* label */, args->uuid, args->flags,
-			       args->grp, &pool);
-		if (rc)
-			goto out_task;
-
-		daos_task_set_priv(task, pool);
-		D_DEBUG(DF_DSMC, DF_UUID": connecting: hdl="DF_UUIDF
-			" flags=%x\n", DP_UUID(args->uuid),
-			DP_UUID(pool->dp_pool_hdl), args->flags);
+	if (daos_uuid_valid(args->uuid)) {
+		/** Backward compatibility, we are provided a UUID */
+		label = NULL;
+		uuid_copy(uuid, args->uuid);
+	} else if (daos_label_is_valid(args->pool)) {
+		/** The provided string is a valid label */
+		uuid_clear(uuid);
+		label = args->pool;
+	} else if (uuid_parse(args->pool, uuid) == 0) {
+		/**
+		 * The provided string was successfully parsed as a
+		 * UUID
+		 */
+		label = NULL;
+	} else {
+		/** neither a label nor a UUID ... try again */
+		D_GOTO(out_task, rc = -DER_INVAL);
 	}
 
-	rc = dc_pool_connect_internal(task, args->info, NULL, args->poh);
-	if (rc)
-		goto out_pool;
-
-	return rc;
-
-out_pool:
-	dc_pool_put(pool);
-out_task:
-	tse_task_complete(task, rc);
-	return rc;
-}
-
-int
-dc_pool_connect_lbl(tse_task_t *task)
-{
-	daos_pool_connect_t	*args;
-	struct dc_pool		*pool = NULL;
-	uuid_t			 null_uuid;
-	int			 rc;
-
-	args = dc_task_get_args(task);
-	pool = dc_task_get_priv(task);
-	uuid_clear(null_uuid);
-
 	if (pool == NULL) {
-		if (args->label == NULL)
-			D_GOTO(out_task, rc = -DER_INVAL);
 		if (!flags_are_valid(args->flags) || args->poh == NULL)
 			D_GOTO(out_task, rc = -DER_INVAL);
 
 		/** allocate and fill in pool connection */
-		rc = init_pool(args->label, null_uuid, args->flags, args->grp,
-			       &pool);
+		rc = init_pool(label, uuid, args->flags, args->grp, &pool);
 		if (rc)
 			goto out_task;
 
 		daos_task_set_priv(task, pool);
 		D_DEBUG(DF_DSMC, "%s: connecting: hdl="DF_UUIDF" flags=%x\n",
-			args->label,  DP_UUID(pool->dp_pool_hdl), args->flags);
+				args->pool ? : "<compat>",
+				DP_UUID(pool->dp_pool_hdl), args->flags);
 	}
 
-	rc = dc_pool_connect_internal(task, args->info, args->label, args->poh);
+	rc = dc_pool_connect_internal(task, args->info, label, args->poh);
 	if (rc)
 		goto out_pool;
 
@@ -747,9 +723,8 @@ dc_pool_disconnect(tse_task_t *task)
 	D_RWLOCK_RDLOCK(&pool->dp_co_list_lock);
 	if (!d_list_empty(&pool->dp_co_list)) {
 		D_RWLOCK_UNLOCK(&pool->dp_co_list_lock);
-		D_ERROR("cannot disconnect pool "DF_UUID
-			", container not closed. %d\n",
-			DP_UUID(pool->dp_pool), -DER_BUSY);
+		D_ERROR("cannot disconnect pool "DF_UUID", container not closed, "DF_RC"\n",
+			DP_UUID(pool->dp_pool), DP_RC(-DER_BUSY));
 		D_GOTO(out_pool, rc = -DER_BUSY);
 	}
 	pool->dp_disconnecting = 1;
@@ -809,7 +784,6 @@ out_pool:
 out_task:
 	tse_task_complete(task, rc);
 	return rc;
-
 }
 
 #define DC_POOL_GLOB_MAGIC	(0x16da0386)
@@ -1133,8 +1107,7 @@ pool_tgt_update_cp(tse_task_t *task, void *data)
 		DP_UUID(in->pti_op.pi_uuid), DP_UUID(in->pti_op.pi_hdl),
 		(int)out->pto_addr_list.ca_count);
 
-	if (in->pti_addr_list.ca_arrays)
-		D_FREE(in->pti_addr_list.ca_arrays);
+	D_FREE(in->pti_addr_list.ca_arrays);
 
 	if (out->pto_addr_list.ca_arrays != NULL &&
 	    out->pto_addr_list.ca_count > 0) {
@@ -1465,7 +1438,7 @@ struct pool_lc_arg {
 static int
 pool_list_cont_cb(tse_task_t *task, void *data)
 {
-	struct pool_lc_arg		*arg = (struct pool_lc_arg *) data;
+	struct pool_lc_arg		*arg = (struct pool_lc_arg *)data;
 	struct pool_list_cont_in	*in = crt_req_get(arg->rpc);
 	struct pool_list_cont_out	*out = crt_reply_get(arg->rpc);
 	int				 rc = task->dt_result;
@@ -1998,7 +1971,7 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 	}
 
 	for (i = 0; i < n; i++) {
-		if (names[i] == NULL || *(names[i]) == '\0') {
+		if (names[i] == NULL || *names[i] == '\0') {
 			D_ERROR("Invalid Arguments: names[%d] = %s",
 				i, names[i] == NULL ? "NULL" : "\'\\0\'");
 
@@ -2026,7 +1999,7 @@ attr_check_input(int n, char const *const names[], void const *const values[],
 }
 
 static int
-free_name(tse_task_t *task, void *args)
+free_heap_copy(tse_task_t *task, void *args)
 {
 	char *name = *(char **)args;
 
@@ -2048,7 +2021,7 @@ dc_pool_get_attr(tse_task_t *task)
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
 
 	rc = attr_check_input(args->n, args->names,
-			      (const void *const*) args->values,
+			      (const void *const*)args->values,
 			      (size_t *)args->sizes, true);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -2073,13 +2046,12 @@ dc_pool_get_attr(tse_task_t *task)
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
 		D_GOTO(out, rc = -DER_NOMEM);
-	rc = tse_task_register_comp_cb(task, free_name, &new_names,
+	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
 		D_GOTO(out, rc);
 	}
-
 	for (i = 0 ; i < args->n ; i++) {
 		uint64_t len;
 
@@ -2088,8 +2060,8 @@ dc_pool_get_attr(tse_task_t *task)
 		D_STRNDUP(new_names[i], args->names[i], len);
 		if (new_names[i] == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
-					       sizeof(char *));
+		rc = tse_task_register_comp_cb(task, free_heap_copy,
+					       &new_names[i], sizeof(char *));
 		if (rc) {
 			D_FREE(new_names[i]);
 			D_GOTO(out, rc);
@@ -2129,6 +2101,7 @@ dc_pool_set_attr(tse_task_t *task)
 	struct pool_req_arg	 cb_args;
 	int			 i, rc;
 	char			**new_names = NULL;
+	void			**new_values = NULL;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -2153,33 +2126,57 @@ dc_pool_set_attr(tse_task_t *task)
 	/* no easy way to determine if a name storage address is likely
 	 * to cause an EFAULT during memory registration, so duplicate
 	 * name in heap
-	 * XXX may need to do the same for values ??
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
 	if (!new_names)
 		D_GOTO(out, rc = -DER_NOMEM);
-	rc = tse_task_register_comp_cb(task, free_name, &new_names,
+	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
 		D_GOTO(out, rc);
 	}
-
 	for (i = 0 ; i < args->n ; i++) {
 		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
 		if (new_names[i] == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
-		rc = tse_task_register_comp_cb(task, free_name, &new_names[i],
-					       sizeof(char *));
+		rc = tse_task_register_comp_cb(task, free_heap_copy,
+					       &new_names[i], sizeof(char *));
 		if (rc) {
 			D_FREE(new_names[i]);
 			D_GOTO(out, rc);
 		}
 	}
 
-	rc = attr_bulk_create(args->n, new_names, (void **)args->values,
+	/* no easy way to determine if a value storage address is likely
+	 * to cause an EFAULT during memory registration, so duplicate
+	 * value in heap
+	 */
+	D_ALLOC_ARRAY(new_values, args->n);
+	if (!new_values)
+		D_GOTO(out, rc = -DER_NOMEM);
+	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_values,
+				       sizeof(char *));
+	if (rc) {
+		D_FREE(new_values);
+		D_GOTO(out, rc);
+	}
+	for (i = 0 ; i < args->n ; i++) {
+		D_ALLOC(new_values[i], args->sizes[i]);
+		if (new_values[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		memcpy(new_values[i], args->values[i], args->sizes[i]);
+		rc = tse_task_register_comp_cb(task, free_heap_copy,
+					       &new_values[i], sizeof(void *));
+		if (rc) {
+			D_FREE(new_values[i]);
+			D_GOTO(out, rc);
+		}
+	}
+
+	rc = attr_bulk_create(args->n, new_names, new_values,
 			      (size_t *)args->sizes, daos_task2ctx(task),
-			       CRT_BULK_RO, &in->pasi_bulk);
+			      CRT_BULK_RO, &in->pasi_bulk);
 	if (rc != 0) {
 		pool_req_cleanup(CLEANUP_RPC, &cb_args);
 		D_GOTO(out, rc);
@@ -2208,7 +2205,8 @@ dc_pool_del_attr(tse_task_t *task)
 	daos_pool_del_attr_t	*args;
 	struct pool_attr_del_in	*in;
 	struct pool_req_arg	 cb_args;
-	int			 rc;
+	int			 i, rc;
+	char			**new_names;
 
 	args = dc_task_get_args(task);
 	D_ASSERTF(args != NULL, "Task Argument OPC does not match DC OPC\n");
@@ -2228,7 +2226,33 @@ dc_pool_del_attr(tse_task_t *task)
 
 	in = crt_req_get(cb_args.pra_rpc);
 	in->padi_count = args->n;
-	rc = attr_bulk_create(args->n, (char **)args->names, NULL, NULL,
+
+	/* no easy way to determine if a name storage address is likely
+	 * to cause an EFAULT during memory registration, so duplicate
+	 * name in heap
+	 */
+	D_ALLOC_ARRAY(new_names, args->n);
+	if (!new_names)
+		D_GOTO(out, rc = -DER_NOMEM);
+	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
+				       sizeof(char *));
+	if (rc) {
+		D_FREE(new_names);
+		D_GOTO(out, rc);
+	}
+	for (i = 0 ; i < args->n ; i++) {
+		D_STRNDUP(new_names[i], args->names[i], DAOS_ATTR_NAME_MAX);
+		if (new_names[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+		rc = tse_task_register_comp_cb(task, free_heap_copy,
+					       &new_names[i], sizeof(char *));
+		if (rc) {
+			D_FREE(new_names[i]);
+			D_GOTO(out, rc);
+		}
+	}
+
+	rc = attr_bulk_create(args->n, new_names, NULL, NULL,
 			      daos_task2ctx(task), CRT_BULK_RO, &in->padi_bulk);
 	if (rc != 0) {
 		pool_req_cleanup(CLEANUP_RPC, &cb_args);

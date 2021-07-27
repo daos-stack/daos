@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/build"
@@ -24,15 +25,33 @@ const (
 
 // Config defines the agent configuration.
 type Config struct {
-	SystemName      string                    `yaml:"name"`
-	AccessPoints    []string                  `yaml:"access_points"`
-	ControlPort     int                       `yaml:"port"`
-	RuntimeDir      string                    `yaml:"runtime_dir"`
-	LogFile         string                    `yaml:"log_file"`
-	TransportConfig *security.TransportConfig `yaml:"transport_config"`
+	SystemName       string                    `yaml:"name"`
+	AccessPoints     []string                  `yaml:"access_points"`
+	ControlPort      int                       `yaml:"port"`
+	RuntimeDir       string                    `yaml:"runtime_dir"`
+	LogFile          string                    `yaml:"log_file"`
+	TransportConfig  *security.TransportConfig `yaml:"transport_config"`
+	FabricInterfaces []*NUMAFabricConfig       `yaml:"fabric_ifaces,omitempty"`
 }
 
+// NUMAFabricConfig defines a list of fabric interfaces that belong to a NUMA
+// node.
+type NUMAFabricConfig struct {
+	NUMANode   int                      `yaml:"numa_node"`
+	Interfaces []*FabricInterfaceConfig `yaml:"devices"`
+}
+
+// FabricInterfaceConfig defines a specific fabric interface device.
+type FabricInterfaceConfig struct {
+	Interface string `yaml:"iface"`
+	Domain    string `yaml:"domain"`
+}
+
+// LoadConfig reads a config file and uses it to populate a Config.
 func LoadConfig(cfgPath string) (*Config, error) {
+	if cfgPath == "" {
+		return nil, errors.New("no path supplied")
+	}
 	data, err := ioutil.ReadFile(cfgPath)
 	if err != nil {
 		return nil, err
@@ -45,6 +64,7 @@ func LoadConfig(cfgPath string) (*Config, error) {
 	return cfg, nil
 }
 
+// DefaultConfig creates a basic default configuration.
 func DefaultConfig() *Config {
 	localServer := fmt.Sprintf("localhost:%d", build.DefaultControlPort)
 	return &Config{

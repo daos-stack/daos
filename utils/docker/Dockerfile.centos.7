@@ -140,14 +140,9 @@ RUN dnf -y install deltarpm && \
         patchelf \
         pciutils \
         python3-pip \
-        python36-Cython \
         python36-devel \
         python36-distro \
         python36-junit_xml \
-        python36-numpy \
-        python36-paramiko \
-        python36-pylint \
-        python36-requests \
         python36-tabulate \
         python36-pyxattr \
         python36-PyYAML \
@@ -177,7 +172,7 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
 # Longer term, we should upload our RPM build of this to the public packaging
 # site and install it by RPM, but for now, we'll just pip install it
 USER daos_server:daos_server
-RUN pip3 --no-cache-dir --disable-pip-version-check install --user pyelftools
+RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user pyelftools
 USER root:root
 
 ARG QUICKBUILD=false

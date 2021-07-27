@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 func mockRun(log logging.Logger, env []string, cmdStr string, args ...string) (string, error) {
@@ -60,14 +61,14 @@ func TestRunner_Prepare(t *testing.T) {
 	username := usrCurrent.Username
 
 	for name, tc := range map[string]struct {
-		req    PrepareRequest
+		req    storage.BdevPrepareRequest
 		mbc    *MockBackendConfig
 		expEnv []string
 		expErr error
 		vmd    bool
 	}{
 		"prepare reset fails": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				TargetUser: username,
 			},
 			mbc: &MockBackendConfig{
@@ -76,7 +77,7 @@ func TestRunner_Prepare(t *testing.T) {
 			expErr: errors.New("reset failed"),
 		},
 		"prepare fails": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				TargetUser: username,
 			},
 			mbc: &MockBackendConfig{
@@ -85,7 +86,7 @@ func TestRunner_Prepare(t *testing.T) {
 			expErr: errors.New("prepare failed"),
 		},
 		"defaults": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				TargetUser: username,
 			},
 			expEnv: []string{
@@ -107,7 +108,7 @@ func TestRunner_Prepare(t *testing.T) {
 			vmd: true,
 		},
 		"user-specified values": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				DisableCleanHugePages: true,
 				TargetUser:            username,
@@ -141,7 +142,7 @@ func TestRunner_Prepare(t *testing.T) {
 			vmd: true,
 		},
 		"blocklist": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				DisableCleanHugePages: true,
 				TargetUser:            username,
@@ -175,7 +176,7 @@ func TestRunner_Prepare(t *testing.T) {
 			vmd: true,
 		},
 		"blocklist allowlist fails": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				DisableCleanHugePages: true,
 				TargetUser:            username,
@@ -187,7 +188,7 @@ func TestRunner_Prepare(t *testing.T) {
 				"bdev_include and bdev_exclude can not be used together"),
 		},
 		"unknown target user fails": {
-			req: PrepareRequest{
+			req: storage.BdevPrepareRequest{
 				DisableCleanHugePages: true,
 				TargetUser:            nonexistentTargetUser,
 				DisableVFIO:           true,
@@ -233,7 +234,7 @@ func TestRunner_Prepare(t *testing.T) {
 				},
 			}
 			b := newBackend(log, s)
-			p := NewProvider(log, b).WithForwardingDisabled()
+			p := NewProvider(log, b)
 
 			_, gotErr := p.Prepare(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
