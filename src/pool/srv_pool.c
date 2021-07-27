@@ -1292,7 +1292,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		DP_UUID(svc->ps_uuid), DP_UUID(pool_hdl_uuid),
 		DP_UUID(cont_hdl_uuid));
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
 	if (rc != 0)
 		goto out;
 
