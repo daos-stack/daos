@@ -7,8 +7,9 @@
 package main
 
 import (
+	"fmt"
 	"net"
-	"sync"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -30,10 +31,10 @@ type mgmtModule struct {
 	log        logging.Logger
 	sys        string
 	ctlInvoker control.Invoker
-	aiCache    *attachInfoCache
+	attachInfo *attachInfoCache
+	fabricInfo *localFabricCache
 	numaAware  bool
 	netCtx     context.Context
-	mutex      sync.Mutex
 	monitor    *procMon
 }
 
@@ -69,8 +70,6 @@ func (mod *mgmtModule) HandleCall(session *drpc.Session, method drpc.Method, req
 		// call the disconnect handler and return success.
 		mod.handleNotifyExit(ctx, cred.Pid)
 		return nil, nil
-	default:
-		return nil, drpc.UnknownMethodFailure()
 	}
 
 	return nil, drpc.UnknownMethodFailure()
@@ -121,64 +120,101 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		}
 	}
 
-	// synchronize access to mod.aiCache.* resources used below
-	mod.mutex.Lock()
-	defer mod.mutex.Unlock()
-
-	if mod.aiCache.isCached() {
-		if !mod.numaAware {
-			numaNode = mod.aiCache.defaultNumaNode
-		}
-		return mod.aiCache.getResponse(numaNode)
+	resp, err := mod.getAttachInfo(ctx, numaNode, pbReq.Sys)
+	if err != nil {
+		return nil, err
 	}
 
+	mod.log.Debugf("GetAttachInfoResp: %+v", resp)
+
+	return proto.Marshal(resp)
+}
+
+func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
+	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
+	if err != nil {
+		mod.log.Errorf("failed to fetch remote AttachInfo: %s", err.Error())
+		return nil, err
+	}
+
+	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass)
+	if err != nil {
+		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
+			netdetect.DevClassName(resp.ClientNetHint.NetDevClass), err.Error())
+		return nil, err
+	}
+
+	resp.ClientNetHint.Interface = fabricIF.Name
+	resp.ClientNetHint.Domain = fabricIF.Name
+	if strings.HasPrefix(resp.ClientNetHint.Provider, verbsProvider) {
+		if fabricIF.Domain == "" {
+			mod.log.Errorf("domain is required for verbs provider, none found on interface %s", fabricIF.Name)
+			return nil, fmt.Errorf("no domain on interface %s", fabricIF.Name)
+		}
+
+		resp.ClientNetHint.Domain = fabricIF.Domain
+		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
+			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
+	}
+
+	return resp, nil
+}
+
+func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
+	if mod.attachInfo.IsCached() {
+		return mod.attachInfo.GetAttachInfoResp()
+	}
+
+	resp, err := mod.getAttachInfoRemote(ctx, numaNode, sys)
+	if err != nil {
+		return nil, err
+	}
+
+	mod.attachInfo.Cache(ctx, resp)
+	return resp, nil
+}
+
+func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
 	// Ask the MS for _all_ info, regardless of pbReq.AllRanks, so that the
 	// cache can serve future "pbReq.AllRanks == true" requests.
 	req := new(control.GetAttachInfoReq)
-	req.SetSystem(pbReq.GetSys())
+	req.SetSystem(sys)
 	req.AllRanks = true
 	resp, err := control.GetAttachInfo(ctx, mod.ctlInvoker, req)
 	if err != nil {
-		return nil, errors.Wrapf(err, "GetAttachInfo %+v", pbReq)
+		return nil, errors.Wrapf(err, "GetAttachInfo %+v", req)
 	}
 
 	if resp.ClientNetHint.Provider == "" {
 		return nil, errors.New("GetAttachInfo response contained no provider")
 	}
 
-	// Scan the local fabric to determine what devices are available that match our provider
-	scanResults, err := netdetect.ScanFabric(mod.netCtx, resp.ClientNetHint.Provider)
-	if err != nil {
-		return nil, err
-	}
-
-	mod.log.Debugf("GetAttachInfo resp from MS: %+v", resp)
-
 	pbResp := new(mgmtpb.GetAttachInfoResp)
 	if err := convert.Types(resp, pbResp); err != nil {
 		return nil, errors.Wrap(err, "Failed to convert GetAttachInfo response")
 	}
 
-	err = mod.aiCache.initResponseCache(mod.netCtx, pbResp, scanResults)
+	return pbResp, nil
+}
+
+func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, netDevClass uint32) (*FabricInterface, error) {
+	if mod.fabricInfo.IsCached() {
+		return mod.fabricInfo.GetDevice(numaNode, netDevClass)
+	}
+
+	netCtx, err := netdetect.Init(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer netdetect.CleanUp(netCtx)
 
-	if !mod.numaAware {
-		numaNode = mod.aiCache.defaultNumaNode
-	}
-
-	cacheResp, err := mod.aiCache.getResponse(numaNode)
+	result, err := netdetect.ScanFabric(netCtx, "")
 	if err != nil {
 		return nil, err
 	}
+	mod.fabricInfo.CacheScan(netCtx, result)
 
-	// If pbReq.AllRanks == false, we shouldn't return the rank URIs.
-	// Implementing that may require changing the cache to either hold
-	// unmarshalled responses (more computation work for daos_agent) or
-	// two variants of marshalled responses.
-
-	return cacheResp, err
+	return mod.fabricInfo.GetDevice(numaNode, netDevClass)
 }
 
 func (mod *mgmtModule) handleNotifyPoolConnect(ctx context.Context, reqb []byte, pid int32) error {

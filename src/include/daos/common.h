@@ -737,6 +737,7 @@ enum {
 #define DAOS_DTX_SRV_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x46)
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
 #define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
+#define DAOS_DTX_UNCERTAIN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x49)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
@@ -870,8 +871,24 @@ daos_parse_ctype(const char *string, daos_cont_layout_t *type)
 		*type = DAOS_PROP_CO_LAYOUT_HDF5;
 	else if (strcasecmp(string, "POSIX") == 0)
 		*type = DAOS_PROP_CO_LAYOUT_POSIX;
+	else if (strcasecmp(string, "PYTHON") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_PYTHON;
+	else if (strcasecmp(string, "SPARK") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_SPARK;
+	else if (strcasecmp(string, "DATABASE") == 0 ||
+		 strcasecmp(string, "DB") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_DATABASE;
+	else if (strcasecmp(string, "ROOT") == 0 ||
+		 strcasecmp(string, "RNTuple") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_ROOT;
+	else if (strcasecmp(string, "SEISMIC") == 0 ||
+		 strcasecmp(string, "DSG") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_SEISMIC;
+	else if (strcasecmp(string, "METEO") == 0 ||
+		 strcasecmp(string, "FDB") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_METEO;
 	else
-		*type = DAOS_PROP_CO_LAYOUT_UNKOWN;
+		*type = DAOS_PROP_CO_LAYOUT_UNKNOWN;
 }
 
 static inline void
@@ -883,6 +900,24 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		break;
 	case DAOS_PROP_CO_LAYOUT_HDF5:
 		strcpy(string, "HDF5");
+		break;
+	case DAOS_PROP_CO_LAYOUT_PYTHON:
+		strcpy(string, "PYTHON");
+		break;
+	case DAOS_PROP_CO_LAYOUT_SPARK:
+		strcpy(string, "SPARK");
+		break;
+	case DAOS_PROP_CO_LAYOUT_DATABASE:
+		strcpy(string, "DATABASE");
+		break;
+	case DAOS_PROP_CO_LAYOUT_ROOT:
+		strcpy(string, "ROOT");
+		break;
+	case DAOS_PROP_CO_LAYOUT_SEISMIC:
+		strcpy(string, "SEISMIC");
+		break;
+	case DAOS_PROP_CO_LAYOUT_METEO:
+		strcpy(string, "METEO");
 		break;
 	default:
 		strcpy(string, "unknown");
