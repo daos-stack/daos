@@ -191,8 +191,8 @@ daos_cont_create_by_label(daos_handle_t poh, const char *label,
  *			-DER_RF		#failures exceed RF, data possibly lost
  */
 int
-daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags,
-	       daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
+daos_cont_open(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
+	       daos_cont_info_t *info, daos_event_t *ev);
 
 /**
  * Close a container handle. Upon successful completion, the container handle's
@@ -238,8 +238,7 @@ daos_cont_close(daos_handle_t coh, daos_event_t *ev);
  *			-DER_BUSY	Pool is busy
  */
 int
-daos_cont_destroy(daos_handle_t poh, const char *cont, int force,
-		  daos_event_t *ev);
+daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *ev);
 
 /**
  * Query container information.
@@ -661,16 +660,59 @@ int
 daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
 		       daos_event_t *ev);
 
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
+int
+daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
+		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
 
 /**
  * Backward compatibility code.
  * Please don't use directly
  */
-
 int
-daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
-		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
+daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
+		   daos_event_t *ev);
 
+#if defined(__cplusplus)
+}
+
+#define daos_cont_open daos_cont_open_cpp
+static inline int
+daos_cont_open_cpp(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
+		   daos_cont_info_t *info, daos_event_t *ev)
+{
+	return daos_cont_open2(poh, cont, flags, coh, info, ev);
+}
+
+static inline int
+daos_cont_open_cpp(daos_handle_t poh, const uuid_t cont, unsigned int flags, daos_handle_t *coh,
+	       daos_cont_info_t *info, daos_event_t *ev)
+{
+	char str[37];
+
+	uuid_unparse(cont, str);
+	return daos_cont_open2(poh, str, flags, coh, info, ev);
+}
+
+#define daos_cont_destroy daos_cont_destroy_cpp
+static inline int
+daos_cont_destroy_cpp(daos_handle_t poh, const char *cont, int force, daos_event_t *ev)
+{
+	return daos_cont_destroy2(poh, cont, force, ev);
+}
+
+static inline int
+daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_event_t *ev)
+{
+	char str[37];
+
+	uuid_unparse(cont, str);
+	return daos_cont_destroy2(poh, str, force, ev);
+}
+#else
  /**
   * for backward compatility, support old api where a const uuid_t was used
   * instead of a string to identify the container.
@@ -679,12 +721,10 @@ daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
 	({								\
 		int _ret;						\
 		char _str[37];						\
-		const char *__str;					\
-		if (__builtin_types_compatible_p(typeof(co), char *) ||	\
-		    __builtin_types_compatible_p(typeof(co),		\
-						 const char *)) {	\
+		const char *__str = NULL;				\
+		if (d_is_string(co)) {					\
 			__str = (const char *)(co);			\
-		} else {						\
+		} else if (d_is_uuid(co)) {				\
 			uuid_unparse((unsigned char *)(co), _str);	\
 			__str = _str;					\
 		}							\
@@ -692,20 +732,18 @@ daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
 		_ret;							\
 	})
 
-int
-daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
-		   daos_event_t *ev);
-
+ /**
+  * for backward compatility, support old api where a const uuid_t was used
+  * instead of a string to identify the container.
+  */
 #define daos_cont_destroy(poh, co, ...)					\
 	({								\
 		int _ret;						\
 		char _str[37];						\
-		const char *__str;					\
-		if (__builtin_types_compatible_p(typeof(co), char *) ||	\
-		    __builtin_types_compatible_p(typeof(co),		\
-						 const char *)) {	\
+		const char *__str = NULL;				\
+		if (d_is_string(co)) {					\
 			__str = (const char *)(co);			\
-		} else {						\
+		} else if (d_is_uuid(co)) {				\
 			uuid_unparse((unsigned char *)(co), _str);	\
 			__str = _str;					\
 		}							\
@@ -713,7 +751,5 @@ daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
 		_ret;							\
 	})
 
-#if defined(__cplusplus)
-}
-#endif
+#endif /* __cplusplus */
 #endif /* __DAOS_CONT_H__ */
