@@ -117,6 +117,7 @@ dtx_handler(crt_rpc_t *rpc)
 	struct dtx_cos_key	 dcks[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
+	int			*ptr;
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
 	int			 rc1 = 0;
@@ -157,8 +158,12 @@ dtx_handler(crt_rpc_t *rpc)
 				count = din->di_dtx_array.ca_count - i;
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
-					    dtis, count);
+			if (din->di_epoch != 0)
+				rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
+						    dtis, count);
+			else
+				rc1 = vos_dtx_set_flags(cont->sc_hdl, dtis,
+							count, DTE_CORRUPTED);
 			if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
@@ -190,9 +195,17 @@ dtx_handler(crt_rpc_t *rpc)
 
 		dout->do_sub_rets.ca_count = count;
 
-		for (i = 0, rc1 = 0; i < count; i++) {
-			int	*ptr = (int *)dout->do_sub_rets.ca_arrays + i;
+		if (DAOS_FAIL_CHECK(DAOS_DTX_UNCERTAIN)) {
+			for (i = 0; i < count; i++) {
+				ptr = (int *)dout->do_sub_rets.ca_arrays + i;
+				*ptr = -DER_NONEXIST;
+			}
 
+			D_GOTO(out, rc = 0);
+		}
+
+		for (i = 0, rc1 = 0; i < count; i++) {
+			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
 					     &mbs[i], &dcks[i], false);
@@ -293,6 +306,8 @@ static int
 dtx_setup(void)
 {
 	int	rc;
+
+	dtx_agg_gen = 1;
 
 	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
 	if (rc != 0)
