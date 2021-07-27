@@ -1,5 +1,6 @@
 """Common DAOS build functions"""
 from SCons.Subst import Literal
+from SCons.Script import Dir
 from SCons.Script import GetOption
 from SCons.Script import WhereIs
 from env_modules import load_mpi
@@ -58,8 +59,9 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
                           env.subst("$_LIBDIRFLAGS " "$_RPATH"),
                           sep=" ")
 
-def add_build_rpath(env, path):
+def add_build_rpath(env, pathin="."):
     """Add a build directory with -Wl,-rpath-link"""
+    path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
     env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath-link=%s" % path, sep=" ")
 
