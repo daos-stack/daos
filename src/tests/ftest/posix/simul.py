@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import platform
+import distro
 from avocado.core.exceptions import TestFail
 from dfuse_test_base import DfuseTestBase
 from general_utils import DaosTestError
@@ -81,7 +81,7 @@ class PosixSimul(DfuseTestBase):
 
         """
         # Assuming all vms use the same OS
-        host_os = platform.dist()[0].lower()
+        host_os = distro.distro.linux_distribution()[0].lower()
 
         if "centos" in host_os:
             simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul",
@@ -92,6 +92,7 @@ class PosixSimul(DfuseTestBase):
                           "mpich": "/usr/lib64/mpi/gcc/mpich/bin/simul"
                           }
         else:
+            print(host_os)
             raise NotImplementedError
 
         clients = self.params.get("test_clients", '/run/hosts/*')
