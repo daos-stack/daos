@@ -624,6 +624,9 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 	int			 rc;
 	int			 rc1 = 0;
 	int			 rc2 = 0;
+	int			 step = DTX_YIELD_CYCLE;
+	int			 cur = 0;
+	int			 i;
 
 	D_INIT_LIST_HEAD(&head);
 	memset(&uma, 0, sizeof(uma));
@@ -652,18 +655,31 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 			D_GOTO(out, rc1 = -DER_NOMEM);
 	}
 
-	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count, rm_cos);
-	if (rc1 >= 0 && rm_cos != NULL) {
-		int	i;
+	while (1) {
+		if (cur + step > count)
+			step = count - cur;
 
-		for (i = 0; i < count; i++) {
-			if (rm_cos[i]) {
+		rc1 = vos_dtx_commit(cont->sc_hdl, &dti[cur], step,
+				     rm_cos != NULL ? rm_cos + cur : NULL);
+		i = cur;
+		cur += step;
+
+		if (rc1 >= 0 && rm_cos != NULL) {
+			for (; i < cur; i++) {
+				if (!rm_cos[i])
+					continue;
+
 				D_ASSERT(!daos_oid_is_null(dcks[i].oid.id_pub));
 
 				dtx_del_cos(cont, &dti[i], &dcks[i].oid,
 					    dcks[i].dkey_hash);
 			}
 		}
+
+		if (cur >= count)
+			break;
+
+		ABT_thread_yield();
 	}
 
 	D_FREE(rm_cos);
