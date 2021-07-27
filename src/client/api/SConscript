@@ -8,8 +8,8 @@ def scons():
     """Execute build"""
     Import('env', 'base_env', 'API_VERSION', 'prereqs')
 
-    daos_build.add_build_rpath(base_env, Dir('.'))
-    daos_build.add_build_rpath(env, Dir('.'))
+    daos_build.add_build_rpath(base_env, Dir('.').path)
+    daos_build.add_build_rpath(env, Dir('.').path)
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
