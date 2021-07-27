@@ -44,7 +44,8 @@ class DaosCommandBase(CommandWithSubCommand):
         def get_sub_command_class(self):
             # pylint: disable=redefined-variable-type
             """Get the dmg network sub command object."""
-            if self.sub_command.value == "list-containers":
+            if ((self.sub_command.value == "list-containers") or
+                (self.sub_command.value == "list")):
                 self.sub_command_class = self.ListContainersSubCommand()
             elif self.sub_command.value == "query":
                 self.sub_command_class = self.QuerySubCommand()
@@ -56,6 +57,8 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.GetAttrSubCommand()
             elif self.sub_command.value == "set-attr":
                 self.sub_command_class = self.SetAttrSubCommand()
+            elif self.sub_command.value == "autotest":
+                self.sub_command_class = self.AutotestSubCommand()
             else:
                 self.sub_command_class = None
 
@@ -119,6 +122,13 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.attr = FormattedParameter("--attr={}")
                 self.value = FormattedParameter("--value={}")
 
+        class AutotestSubCommand(CommonPoolSubCommand):
+            """Defines an object for the daos pool autotest command."""
+
+            def __init__(self):
+                """Create a daos pool autotest command object."""
+                super().__init__("autotest")
+
     class ContainerSubCommand(CommandWithSubCommand):
         """Defines an object for the daos container sub command."""
 
@@ -135,6 +145,8 @@ class DaosCommandBase(CommandWithSubCommand):
                 self.sub_command_class = self.CloneSubCommand()
             elif self.sub_command.value == "destroy":
                 self.sub_command_class = self.DestroySubCommand()
+            elif self.sub_command.value == "check":
+                self.sub_command_class = self.CheckSubCommand()
             elif self.sub_command.value == "list-objects":
                 self.sub_command_class = self.ListObjectsSubCommand()
             elif self.sub_command.value == "query":
@@ -257,6 +269,15 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container query command object."""
                 super().__init__("query")
+
+        class CheckSubCommand(CommonContainerSubCommand):
+            """Defines an object for the daos container check command."""
+
+            def __init__(self):
+                """Create a daos container check command object."""
+                super(
+                    DaosCommandBase.ContainerSubCommand.CheckSubCommand,
+                    self).__init__("check")
 
         class GetAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container get-acl command."""

@@ -10,10 +10,10 @@ import (
 	"net"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -142,12 +142,12 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 		return nil, errors.Wrapf(err, "GetAttachInfo %+v", pbReq)
 	}
 
-	if resp.Provider == "" {
+	if resp.ClientNetHint.Provider == "" {
 		return nil, errors.New("GetAttachInfo response contained no provider")
 	}
 
 	// Scan the local fabric to determine what devices are available that match our provider
-	scanResults, err := netdetect.ScanFabric(mod.netCtx, resp.Provider)
+	scanResults, err := netdetect.ScanFabric(mod.netCtx, resp.ClientNetHint.Provider)
 	if err != nil {
 		return nil, err
 	}

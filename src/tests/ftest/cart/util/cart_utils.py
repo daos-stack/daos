@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -12,11 +12,12 @@ import logging
 import cart_logparse
 import cart_logtest
 import socket
+import re
+import glob
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
 from write_host_file import write_host_file
-
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
@@ -35,6 +36,49 @@ class CartTest(TestWithoutServers):
         super().setUp()
         self.set_other_env_vars()
         self.env = self.get_env()
+
+        # Add test binaries and daos binaries to PATH
+        test_dirs = {"TESTING": "tests", "install": "bin"}
+        found_path = False
+        path_dirname = os.path.dirname(os.path.abspath(__file__))
+
+        # Use the developer environment from which this python file was called
+        if ("DAOS_ENV" in os.environ) and (os.environ["DAOS_ENV"] == "dev"):
+
+            while True:
+                if os.path.basename(path_dirname) == "TESTING":
+                    added_path = os.path.join(path_dirname,
+                                              test_dirs["TESTING"])
+                    os.environ["PATH"] += os.pathsep + added_path
+                    self.print("\nAdding {} to PATH\n".format(added_path))
+                    found_path = True
+                elif os.path.basename(path_dirname) == "install":
+                    added_path = os.path.join(path_dirname,
+                                              test_dirs["install"])
+                    if os.path.isdir(added_path):
+                        os.environ["PATH"] += os.pathsep + added_path
+                        self.print("\nAdding {} to PATH\n".format(added_path))
+                        found_path = True
+                    else:
+                        print("ERROR: Directory does not exist: " + added_path)
+                elif re.match(r"^\s*\/+\s*$", path_dirname) is not None:
+                    if not found_path:
+                        print("ERROR: Couldn't find a directory " +
+                              "named 'TESTING' or 'install' to add " +
+                              "to your PATH.\n")
+                    break
+
+                path_dirname = os.path.dirname(path_dirname)
+
+        # Default to to testing RPM
+        else:
+
+            tests_dir = "/usr/lib/daos/TESTING/tests/"
+            if os.path.isdir(tests_dir):
+                os.environ["PATH"] += os.pathsep + tests_dir
+            else:
+                print("WARNING: I didn't find the daos tests directory. " +
+                      "No test directories have been added to your PATH..\n")
 
     def tearDown(self):
         """Tear down the test case."""
@@ -61,6 +105,36 @@ class CartTest(TestWithoutServers):
             time.sleep(1)
             i = i - 1
         return return_code
+
+    def check_files(self, glob_pattern, count=1, retries=10):
+        """Check for files."""
+
+        file_list = glob.glob(glob_pattern)
+        found_files = False
+
+        retry = 0
+        while retry < retries:
+            retry += 1
+            file_list = glob.glob(glob_pattern)
+
+            self.log.info("Found completion files: [%s]\n",
+                          ", ".join(file_list))
+
+            if len(file_list) == count:
+                found_files = True
+                break
+
+            time.sleep(1)
+
+        if not found_files:
+            self.log.info("Expected %d completion files, ", count)
+            self.log.info("but only found %d.\n", len(file_list))
+
+        # Clean up completion file(s) for next test for next runrun
+        for _file in file_list:
+            os.unlink(_file)
+
+        return found_files
 
     def cleanup_processes(self):
         """Clean up cart processes, in case avocado/apricot does not."""
@@ -160,6 +234,9 @@ class CartTest(TestWithoutServers):
         env += " -x D_LOG_FILE={!s}".format(log_file)
         env += " -x D_LOG_FILE_APPEND_PID=1"
 
+        if os.environ.get("PATH") is not None:
+            env += " -x PATH"
+
         if log_mask is not None:
             env += " -x D_LOG_MASK={!s}".format(log_mask)
 
@@ -176,6 +253,8 @@ class CartTest(TestWithoutServers):
             env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
+        env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
+        env += " -x COVFILE=/tmp/test.cov"
 
         self.log_path = log_path
 
@@ -224,6 +303,7 @@ class CartTest(TestWithoutServers):
     def build_cmd(self, env, host, **kwargs):
         """Build a command string."""
         tst_cmd = ""
+        tst_cont = None
 
         index = kwargs.get('index', None)
 
@@ -274,6 +354,11 @@ class CartTest(TestWithoutServers):
             self.orterun, mca_flags, tst_ppn, hostfile)
 
         tst_cmd += env
+
+        tst_cont = os.getenv("CRT_TEST_CONT", "0")
+        if tst_cont is not None:
+            if tst_cont == "1":
+                tst_cmd += " --continuous"
 
         if tst_ctx is not None:
             tst_cmd += " -x CRT_CTX_NUM=" + tst_ctx
@@ -388,15 +473,3 @@ class CartTest(TestWithoutServers):
             # For compatibility with cart tests, which set env vars in oretrun
             # command via -x options
             self.env = os.environ
-
-    def unset_other_env_vars(self):
-        """Unset env vars from yaml file."""
-        default_env = self.params.get("default", "/run/ENV/")
-        if default_env:
-            for kv_pair in default_env:
-                try:
-                    key = kv_pair[0][0]
-                    self.log.info("Removing key %s from environment.", key)
-                    del os.environ[key]
-                except IndexError:
-                    pass

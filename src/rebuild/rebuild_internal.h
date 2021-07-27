@@ -199,9 +199,6 @@ struct rebuild_task {
  */
 struct rebuild_pool_tls {
 	uuid_t		rebuild_pool_uuid;
-	uuid_t		rebuild_poh_uuid;
-	uuid_t		rebuild_coh_uuid;
-	daos_handle_t	rebuild_pool_hdl;
 	daos_handle_t	rebuild_tree_hdl; /*hold objects being rebuilt */
 	d_list_t	rebuild_pool_list;
 	uint64_t	rebuild_pool_obj_count;
@@ -335,9 +332,6 @@ rgt_put(struct rebuild_global_pool_tracker *rgt);
 struct rebuild_global_pool_tracker *
 rebuild_global_pool_tracker_lookup(const uuid_t pool_uuid, unsigned int ver);
 
-int
-rebuild_status_completed_update(const uuid_t pool_uuid,
-				struct daos_rebuild_status *rs);
 int
 rebuild_global_status_update(struct rebuild_global_pool_tracker *master_rpt,
 			     struct rebuild_iv *iv);

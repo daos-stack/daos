@@ -83,7 +83,6 @@ crt_init(crt_group_id_t grpid, uint32_t flags)
 int
 crt_context_create(crt_context_t *crt_ctx);
 
-
 /**
  * Set the timeout value for all RPC requests created on the specified context.
  * Setting the timeout after crt_req_create() call will not affect already
@@ -685,29 +684,14 @@ crt_ep_abort(crt_endpoint_t *ep);
  # CRT_GEN_PROC_FUNC(struct, CRT_SEQ_MY_TYPE)
  *
  */
-#define CRT_VAR   0
-#define CRT_PTR   1
-#define CRT_ARRAY 2
-#define CRT_RAW   3
+#define CRT_VAR		(0)
+#define CRT_PTR		(1)
+#define CRT_ARRAY	(2)
+#define CRT_RAW		(3)
 
-#define CRT_GEN_GET_TYPE(seq) BOOST_PP_SEQ_HEAD(seq)
+#define CRT_GEN_GET_TYPE(seq) BOOST_PP_SEQ_ELEM(0, seq)
 #define CRT_GEN_GET_NAME(seq) BOOST_PP_SEQ_ELEM(1, seq)
-#define CRT_GEN_GET_KIND(seq) BOOST_PP_SEQ_TAIL(BOOST_PP_SEQ_TAIL(seq))
-
-#define CRT_GEN_STRUCT_FIELD(r, data, seq)				\
-	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
-		struct {						\
-			uint64_t		 ca_count;		\
-			CRT_GEN_GET_TYPE(seq)	*ca_arrays;		\
-		},							\
-		CRT_GEN_GET_TYPE(seq))					\
-	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_PTR, CRT_GEN_GET_KIND(seq)),	\
-		*CRT_GEN_GET_NAME(seq), CRT_GEN_GET_NAME(seq));
-
-#define CRT_GEN_STRUCT(struct_type_name, seq)				\
-	struct struct_type_name {					\
-		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_STRUCT_FIELD, , seq)	\
-	};
+#define CRT_GEN_GET_KIND(seq) BOOST_PP_SEQ_ELEM(2, seq)
 
 /* convert constructed name into proper name */
 #define crt_proc_struct BOOST_PP_RPAREN() BOOST_PP_CAT BOOST_PP_LPAREN() \
@@ -716,73 +700,170 @@ crt_ep_abort(crt_endpoint_t *ep);
 #define CRT_GEN_X(x) x
 #define CRT_GEN_X2(x) CRT_GEN_X BOOST_PP_LPAREN() crt_proc_##x BOOST_PP_RPAREN()
 #define CRT_GEN_GET_FUNC(seq) CRT_GEN_X2 BOOST_PP_SEQ_FIRST_N(1, seq)
+#define CRT_GEN_X3(x) CRT_GEN_X BOOST_PP_LPAREN() fail_##x BOOST_PP_RPAREN()
+#define CRT_GEN_FAIL_LABEL(seq) CRT_GEN_X3 BOOST_PP_SEQ_TAIL(BOOST_PP_SEQ_FIRST_N(2, seq))
 
-#define CRT_GEN_PROC_FIELD(r, ptr, seq)					\
-	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
-	{								\
-		uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;	\
-		CRT_GEN_GET_TYPE(seq)** e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
-		CRT_GEN_GET_TYPE(seq)* e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
-		int i;							\
-		crt_proc_op_t proc_op;					\
-		rc = crt_proc_get_op(proc, &proc_op);			\
-		if (rc)							\
-			D_GOTO(out, rc);				\
-		/* process the count of array first */			\
-		rc = crt_proc_uint64_t(proc, &count);			\
-		if (rc)							\
-			D_GOTO(out, rc);				\
-		ptr->CRT_GEN_GET_NAME(seq).ca_count = count;		\
-		if (count == 0) {					\
-			if (proc_op == CRT_PROC_DECODE)			\
-				*e_ptrp = NULL;				\
-			goto next_field_##r;				\
+#define CRT_GEN_STRUCT_FIELD(seq)					\
+	BOOST_PP_EXPAND(						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),\
+		struct {						\
+			uint64_t		 ca_count;		\
+			CRT_GEN_GET_TYPE(seq)	*ca_arrays;		\
+		},							\
+		CRT_GEN_GET_TYPE(seq))					\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_PTR, CRT_GEN_GET_KIND(seq)), \
+		*CRT_GEN_GET_NAME(seq), CRT_GEN_GET_NAME(seq));)
+
+#define CRT_GEN_STRUCT_FIELDS(z, n, seq)				\
+	CRT_GEN_STRUCT_FIELD(BOOST_PP_SEQ_ELEM(n, seq))
+
+#define CRT_GEN_STRUCT(struct_type_name, seq)				\
+	struct struct_type_name {					\
+		BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq),			\
+				CRT_GEN_STRUCT_FIELDS, seq)		\
+	};
+
+#define CRT_GEN_PROC_ARRAY(ptr, seq)					\
+	do {								\
+	CRT_GEN_GET_TYPE(seq) **e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays;\
+	CRT_GEN_GET_TYPE(seq) *e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+	uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;		\
+	uint64_t i;							\
+	if (proc_op == CRT_PROC_DECODE)					\
+		*e_ptrp = NULL;						\
+	/* process the count of array first */				\
+	rc = crt_proc_uint64_t(proc, proc_op, &count);			\
+	if (unlikely(rc))						\
+		goto CRT_GEN_FAIL_LABEL(seq);				\
+	ptr->CRT_GEN_GET_NAME(seq).ca_count = count;			\
+	if (unlikely(count == 0))					\
+		break; /* goto next field */				\
+	if (proc_op == CRT_PROC_DECODE) {				\
+		D_ALLOC_ARRAY(e_ptr, (int)count);			\
+		if (unlikely(e_ptr == NULL)) {				\
+			rc = -DER_NOMEM;				\
+			goto CRT_GEN_FAIL_LABEL(seq);			\
 		}							\
-		if (proc_op == CRT_PROC_DECODE) {			\
-			D_ALLOC_ARRAY(e_ptr, (int)count);		\
-			if (e_ptr == NULL)				\
-				D_GOTO(out, rc = -DER_NOMEM);		\
-			*e_ptrp = e_ptr;				\
-		}							\
-		/* process the elements of array */			\
-		for (i = 0; i < count; i++) {				\
-			rc = CRT_GEN_GET_FUNC(seq)(proc, &e_ptr[i]);	\
-			if (rc) {					\
-				if (proc_op == CRT_PROC_DECODE)		\
-					D_FREE(e_ptr);			\
-				D_GOTO(out, rc);			\
-			}						\
-		}							\
-		if (proc_op == CRT_PROC_FREE)				\
-			D_FREE(e_ptr);					\
+		*e_ptrp = e_ptr;					\
 	}								\
-	next_field_##r:,						\
-	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_RAW, CRT_GEN_GET_KIND(seq)),	\
-	rc = crt_proc_memcpy(proc, &ptr->CRT_GEN_GET_NAME(seq),		\
+	/* process the elements of array */				\
+	for (i = 0; i < count && e_ptr != NULL; i++) {			\
+		rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op, &e_ptr[i]);	\
+		if (unlikely(rc)) {					\
+			if (proc_op == CRT_PROC_DECODE)			\
+				ptr->CRT_GEN_GET_NAME(seq).ca_count = i;\
+			goto CRT_GEN_FAIL_LABEL(seq);			\
+		}							\
+	}								\
+	if (proc_op == CRT_PROC_FREE)					\
+		D_FREE(*e_ptrp);					\
+	} while (0);
+
+#define CRT_GEN_FAIL_ARRAY(ptr, seq)					\
+	CRT_GEN_FAIL_LABEL(seq):					\
+	if (proc_op == CRT_PROC_DECODE) {				\
+		CRT_GEN_GET_TYPE(seq) **e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays;\
+		CRT_GEN_GET_TYPE(seq) *e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+		uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;	\
+		uint64_t i;						\
+		/* process the elements of array */			\
+		for (i = 0; i < count && e_ptr != NULL; i++)		\
+			(void)CRT_GEN_GET_FUNC(seq)(proc, CRT_PROC_FREE,\
+						    &e_ptr[i]);		\
+		D_FREE(*e_ptrp);					\
+		ptr->CRT_GEN_GET_NAME(seq).ca_count = 0;		\
+	}
+
+#define CRT_GEN_PROC_RAW(ptr, seq)					\
+	rc = crt_proc_memcpy(proc, proc_op, &ptr->CRT_GEN_GET_NAME(seq),\
 			     sizeof(CRT_GEN_GET_TYPE(seq)));		\
-	if (rc)								\
-		D_GOTO(out, rc);,					\
-	rc = CRT_GEN_GET_FUNC(seq)(proc, &ptr->CRT_GEN_GET_NAME(seq));	\
-	if (rc)								\
-		D_GOTO(out, rc);					\
-	))
+	if (unlikely(rc))						\
+		goto CRT_GEN_FAIL_LABEL(seq);
+
+#define CRT_GEN_FAIL_RAW(ptr, seq)					\
+	CRT_GEN_FAIL_LABEL(seq):;
+
+#define CRT_GEN_PROC_ALL(ptr, seq)					\
+	rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op,			\
+				   &ptr->CRT_GEN_GET_NAME(seq));	\
+	if (unlikely(rc))						\
+		goto CRT_GEN_FAIL_LABEL(seq);
+
+#define CRT_GEN_FAIL_ALL(ptr, seq)					\
+	(void)CRT_GEN_GET_FUNC(seq)(proc, CRT_PROC_FREE,		\
+				    &ptr->CRT_GEN_GET_NAME(seq));	\
+	CRT_GEN_FAIL_LABEL(seq):;
+
+#define CRT_GEN_PROC_FIELD(ptr, seq)					\
+	BOOST_PP_EXPAND(						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),\
+		CRT_GEN_PROC_ARRAY(ptr, seq),				\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_RAW, CRT_GEN_GET_KIND(seq)), \
+		CRT_GEN_PROC_RAW(ptr, seq),				\
+		CRT_GEN_PROC_ALL(ptr, seq))))
+
+#define CRT_GEN_FAIL_FIELD(ptr, seq)					\
+	BOOST_PP_EXPAND(						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),\
+		CRT_GEN_FAIL_ARRAY(ptr, seq),				\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_RAW, CRT_GEN_GET_KIND(seq)), \
+		CRT_GEN_FAIL_RAW(ptr, seq),				\
+		CRT_GEN_FAIL_ALL(ptr, seq))))
+
+#define CRT_GEN_PROC_FIELDS(z, n, seq)					\
+	CRT_GEN_PROC_FIELD(ptr, BOOST_PP_SEQ_ELEM(n, seq))
+
+#define CRT_GEN_FAIL_FIELDS(z, n, seq)					\
+	CRT_GEN_FAIL_FIELD(ptr, BOOST_PP_SEQ_ELEM(BOOST_PP_SUB(BOOST_PP_DEC(BOOST_PP_SEQ_SIZE(seq)), n), seq))
 
 #define CRT_GEN_PROC_FUNC(type_name, seq)				\
-	static int crt_proc_struct_##type_name(crt_proc_t proc,		\
-					       struct type_name *ptr) {	\
-		int rc = 0;						\
-		if (proc == NULL || ptr == NULL)			\
-			D_GOTO(out, rc = -DER_INVAL);			\
-		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_PROC_FIELD, ptr, seq)	\
-	out:								\
+	static int							\
+	crt_proc_##type_name(crt_proc_t proc, struct type_name *ptr) {	\
+		crt_proc_op_t proc_op;					\
+		int rc;							\
+		if (unlikely(proc == NULL || ptr == NULL))		\
+			return -DER_INVAL;				\
+		rc = crt_proc_get_op(proc, &proc_op);			\
+		if (unlikely(rc))					\
+			return rc;					\
+		BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq),			\
+				CRT_GEN_PROC_FIELDS, seq)		\
+		if (unlikely(rc)) {					\
+			BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq),		\
+					CRT_GEN_FAIL_FIELDS, seq)	\
+		}							\
 		return rc;						\
 	}
 
+#define POP_BACK(seq) BOOST_PP_SEQ_HEAD(BOOST_PP_SEQ_REVERSE(seq))
+#define FOFFSET(sname, seq)						\
+	offsetof(struct sname, CRT_GEN_GET_NAME(POP_BACK(seq)))
+
 #define CRT_RPC_DECLARE(rpc_name, fields_in, fields_out)		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
-		CRT_GEN_STRUCT(rpc_name##_in, fields_in), )		\
+		    CRT_GEN_STRUCT(rpc_name##_in, fields_in), )		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
-		CRT_GEN_STRUCT(rpc_name##_out, fields_out), )		\
+		    CRT_GEN_STRUCT(rpc_name##_out, fields_out), )	\
+	/* Generate a packed struct and assert use the offset of the */	\
+	/* last field to assert that there are no holes */		\
+	_Pragma("pack(push, 1)")					\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
+		CRT_GEN_STRUCT(rpc_name##_in_packed, fields_in), )	\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
+		CRT_GEN_STRUCT(rpc_name##_out_packed, fields_out), )	\
+	_Pragma("pack(pop)")						\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
+		    static_assert(FOFFSET(rpc_name##_out_packed,	\
+					  ((_) (_) (_)) fields_out) ==	\
+				  FOFFSET(rpc_name##_out, ((_) (_) (_))	\
+					  fields_out), #rpc_name	\
+				  " output struct has a hole");, )	\
+	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
+		    static_assert(FOFFSET(rpc_name##_in_packed,		\
+					  ((_) (_) (_)) fields_in) ==	\
+				  FOFFSET(rpc_name##_in, ((_) (_) (_))	\
+					  fields_in), #rpc_name		\
+				  " input struct has a hole");, )	\
 	extern struct crt_req_format CQF_##rpc_name;
 
 /* warning was introduced in version 8 of GCC */
@@ -795,18 +876,18 @@ crt_ep_abort(crt_endpoint_t *ep);
 
 #define CRT_RPC_DEFINE(rpc_name, fields_in, fields_out)			\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
-		CRT_GEN_PROC_FUNC(rpc_name##_in, fields_in), )		\
+		    CRT_GEN_PROC_FUNC(rpc_name##_in, fields_in), )	\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
-		CRT_GEN_PROC_FUNC(rpc_name##_out, fields_out), )	\
+		    CRT_GEN_PROC_FUNC(rpc_name##_out, fields_out), )	\
 	_Pragma("GCC diagnostic push")					\
 	CRT_DISABLE_SIZEOF_POINTER_DIV					\
 	struct crt_req_format CQF_##rpc_name = {			\
 		.crf_proc_in  = (crt_proc_cb_t)				\
 		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),		\
-			crt_proc_struct_##rpc_name##_in, NULL),		\
+			crt_proc_##rpc_name##_in, NULL),		\
 		.crf_proc_out = (crt_proc_cb_t)				\
 		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),		\
-			crt_proc_struct_##rpc_name##_out, NULL),	\
+			crt_proc_##rpc_name##_out, NULL),		\
 		.crf_size_in  =						\
 		BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),		\
 			sizeof(struct rpc_name##_in), 0),		\
@@ -984,11 +1065,6 @@ crt_bulk_access(crt_bulk_t bulk_hdl, d_sg_list_t *sgl);
  */
 int
 crt_bulk_free(crt_bulk_t bulk_hdl);
-
-/**
- * Decrease reference of the bulk handle.
- */
-#define crt_bulk_decref(bulk_hdl)	crt_bulk_free(bulk_hdl)
 
 /**
  * Start a bulk transferring (inside an RPC handler).
@@ -1275,7 +1351,6 @@ crt_group_config_remove(crt_group_t *grp);
 int
 crt_group_detach(crt_group_t *attached_grp);
 
-
 /**
  * Convert a primary group rank to a local subgroup rank. Given a primary group
  * rank \p rank_in, find its rank number \p rank_out within a sub-group \p
@@ -1427,6 +1502,10 @@ typedef enum {
 	CRT_PROC_FREE
 } crt_proc_op_t;
 
+#define ENCODING(proc_op) (proc_op == CRT_PROC_ENCODE)
+#define DECODING(proc_op) (proc_op == CRT_PROC_DECODE)
+#define FREEING(proc_op)  (proc_op == CRT_PROC_FREE)
+
 #define crt_proc_raw crt_proc_memcpy
 
 /**
@@ -1444,13 +1523,111 @@ crt_proc_get_op(crt_proc_t proc, crt_proc_op_t *proc_op);
  * Base proc routine using memcpy().
  *
  * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
  * \param[in,out] data         pointer to data
  * \param[in] data_size        data size
  *
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size);
+crt_proc_memcpy(crt_proc_t proc, crt_proc_op_t proc_op,
+		void *data, size_t data_size);
+
+/**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_int8_t(crt_proc_t proc, crt_proc_op_t proc_op, int8_t *data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_uint8_t(crt_proc_t proc, crt_proc_op_t proc_op, uint8_t *data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_int16_t(crt_proc_t proc, crt_proc_op_t proc_op, int16_t *data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_uint16_t(crt_proc_t proc, crt_proc_op_t proc_op, uint16_t *data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_int32_t(crt_proc_t proc, crt_proc_op_t proc_op, int32_t *data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_uint32_t(crt_proc_t proc, crt_proc_op_t proc_op, uint32_t *data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_int64_t(crt_proc_t proc, crt_proc_op_t proc_op, int64_t *data);
+
+/**
+ * Generic processing routine.
+ *
+ * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
+ * \param[in,out] data         pointer to data
+ *
+ * \return                     DER_SUCCESS on success, negative value if error
+ */
+int
+crt_proc_uint64_t(crt_proc_t proc, crt_proc_op_t proc_op, uint64_t *data);
 
 /**
  * Generic processing routine.
@@ -1461,144 +1638,63 @@ crt_proc_memcpy(crt_proc_t proc, void *data, size_t data_size);
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_int8_t(crt_proc_t proc, int8_t *data);
+crt_proc_bool(crt_proc_t proc, crt_proc_op_t proc_op, bool *data);
 
 /**
  * Generic processing routine.
  *
  * \param[in,out] proc         abstract processor object
- * \param[in,out] data         pointer to data
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_uint8_t(crt_proc_t proc, uint8_t *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
- * \param[in,out] data         pointer to data
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_int16_t(crt_proc_t proc, int16_t *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
- * \param[in,out] data         pointer to data
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_uint16_t(crt_proc_t proc, uint16_t *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
- * \param[in,out] data         pointer to data
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_int32_t(crt_proc_t proc, int32_t *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
- * \param[in,out] data         pointer to data
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_uint32_t(crt_proc_t proc, uint32_t *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
- * \param[in,out] data         pointer to data
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_int64_t(crt_proc_t proc, int64_t *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
- * \param[in,out] data         pointer to data
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_uint64_t(crt_proc_t proc, uint64_t *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
- * \param[in,out] data         pointer to data
- *
- * \return                     DER_SUCCESS on success, negative value if error
- */
-int
-crt_proc_bool(crt_proc_t proc, bool *data);
-
-/**
- * Generic processing routine.
- *
- * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
  * \param[in,out] bulk_hdl     pointer to bulk handle
  *
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_crt_bulk_t(crt_proc_t proc, crt_bulk_t *bulk_hdl);
+crt_proc_crt_bulk_t(crt_proc_t proc, crt_proc_op_t proc_op,
+		    crt_bulk_t *bulk_hdl);
 
 /**
  * Generic processing routine.
  *
  * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
  * \param[in,out] data         pointer to data
  *
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_d_string_t(crt_proc_t proc, d_string_t *data);
+crt_proc_d_string_t(crt_proc_t proc, crt_proc_op_t proc_op, d_string_t *data);
 
 /**
  * Generic processing routine.
  *
  * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
  * \param[in,out] data         pointer to data
  *
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_d_const_string_t(crt_proc_t proc, d_const_string_t *data);
+crt_proc_d_const_string_t(crt_proc_t proc, crt_proc_op_t proc_op,
+			  d_const_string_t *data);
 
 /**
  * Generic processing routine.
  *
  * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
  * \param[in,out] data         pointer to data
  *
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_uuid_t(crt_proc_t proc, uuid_t *data);
+crt_proc_uuid_t(crt_proc_t proc, crt_proc_op_t proc_op, uuid_t *data);
 
 /**
  * Generic processing routine.
  *
  * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
  * \param[in,out] data         second level pointer to data
  *
  * \return                     DER_SUCCESS on success, negative value if error
@@ -1611,18 +1707,20 @@ crt_proc_uuid_t(crt_proc_t proc, uuid_t *data);
  *    function will internally free the memory when freeing the input or output.
  */
 int
-crt_proc_d_rank_list_t(crt_proc_t proc, d_rank_list_t **data);
+crt_proc_d_rank_list_t(crt_proc_t proc, crt_proc_op_t proc_op,
+		       d_rank_list_t **data);
 
 /**
  * Generic processing routine.
  *
  * \param[in,out] proc         abstract processor object
+ * \param[in] proc_op          proc operation type
  * \param[in,out] data         pointer to data
  *
  * \return                     DER_SUCCESS on success, negative value if error
  */
 int
-crt_proc_d_iov_t(crt_proc_t proc, d_iov_t *data);
+crt_proc_d_iov_t(crt_proc_t proc, crt_proc_op_t proc_op, d_iov_t *data);
 
 typedef void
 (*crt_progress_cb) (crt_context_t ctx, void *arg);
@@ -1698,6 +1796,20 @@ crt_register_event_cb(crt_event_cb event_handler, void *arg);
 int
 crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
 
+typedef void
+(*crt_hlc_error_cb) (void *arg);
+
+/**
+ * This function registers an event handler for hlc synchronization errors.
+ * Only a single hlc error event handler can be registered at a time.
+ *
+ * \param[in] event_handler    event handler to register
+ * \param[in] arg              arg to event_handler
+ *
+ * \return                     DER_SUCCESS on success, negative value on error
+ */
+int
+crt_register_hlc_error_cb(crt_hlc_error_cb event_handler, void *arg);
 
 /**
  * A protocol is a set of RPCs. A protocol has a base opcode and a version,
@@ -1735,7 +1847,6 @@ crt_unregister_event_cb(crt_event_cb event_handler, void *arg);
  * 3) The client registers MY_BASE_OPC with version number MY_VER, then starts
  *    sending RPCs using it's member opcodes.
  */
-
 
 /**
  * 1) define crf for each member RPC. my_rpc_crf_1, my_rpc_crf_2
@@ -1809,7 +1920,6 @@ int
 crt_proto_query(crt_endpoint_t *tgt_ep, crt_opcode_t base_opc,
 		uint32_t *ver, int count, crt_proto_query_cb_t cb, void *arg);
 
-
 /**
  * Set self rank.
  *
@@ -1878,7 +1988,6 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  *                              on failure.
  */
 int crt_self_uri_get(int tag, char **uri);
-
 
 /**
  * Retrieve group information containing ranks and associated uris
@@ -2035,7 +2144,6 @@ int crt_group_auto_rank_remove(crt_group_t *grp, bool enable);
  *                               failure.
  */
 int crt_group_secondary_destroy(crt_group_t *grp);
-
 
 /**
  * Perform a primary group modification in an atomic fashion based on the

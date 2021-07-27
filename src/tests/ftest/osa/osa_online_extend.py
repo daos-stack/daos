@@ -7,13 +7,13 @@
 import time
 import threading
 
-from itertools import product
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
+from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
 from apricot import skipForTicket
-import queue
+from daos_utils import DaosCommand
 
 
 class OSAOnlineExtend(OSAUtils):
@@ -28,14 +28,11 @@ class OSAOnlineExtend(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
-        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        self.ior_test_sequence = self.params.get("ior_test_sequence",
-                                                 '/run/ior/iorflags/*')
-        self.ior_daos_oclass = self.params.get("obj_class",
-                                               '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get(
-            "obj_class", '/run/ior/iorflags/*')
+        self.daos_command = DaosCommand(self.bin)
+        self.ior_test_sequence = self.params.get(
+            "ior_test_sequence", '/run/ior/iorflags/*')
+        self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        self.ranks = self.params.get("rank_list", '/run/test_ranks/*')
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
                                              "/run/extra_servers/*")
@@ -43,8 +40,7 @@ class OSAOnlineExtend(OSAUtils):
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
         self.pool = None
-        self.out_queue = queue.Queue()
-        self.ds_racer_queue = queue.Queue()
+        self.dmg_command.exit_status_exception = True
         self.daos_racer = None
 
     def daos_racer_thread(self):
@@ -56,18 +52,23 @@ class OSAOnlineExtend(OSAUtils):
             self.daos_racer.get_environment(self.server_managers[0]))
         self.daos_racer.run()
 
-    def run_online_extend_test(self, num_pool, racer=False):
+    def run_online_extend_test(self, num_pool, racer=False,
+                               oclass=None, app_name="ior"):
         """Run the Online extend without data.
             Args:
-             int : total pools to create for testing purposes.
+             num_pool(int) : total pools to create for testing purposes.
+             racer(bool) : Run the testing along with daos_racer.
+                           Defaults to False.
+             oclass(str) : Object Class (eg: RP_2G1, etc). Default to None.
+             app_name(str) : App (ior or mdtest) to run during the testing.
+                             Defaults to ior.
         """
-        num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
-        # Create a pool
+        # Pool dictionary
         pool = {}
-        pool_uuid = []
 
-        # Extend one of the ranks 4 and 5
-        rank = [4, 5]
+        if oclass is None:
+            oclass = self.ior_cmd.dfs_oclass.value
+        test_seq = self.ior_test_sequence[0]
 
         # Start the daos_racer thread
         if racer is True:
@@ -78,54 +79,49 @@ class OSAOnlineExtend(OSAUtils):
         for val in range(0, num_pool):
             pool[val] = TestPool(self.context, self.get_dmg_command())
             pool[val].get_params(self)
-            # Split total SCM and NVME size for creating multiple pools.
-            pool[val].scm_size.value = int(pool[val].scm_size.value /
-                                           num_pool)
-            pool[val].nvme_size.value = int(pool[val].nvme_size.value /
-                                            num_pool)
             pool[val].create()
-            pool_uuid.append(pool[val].uuid)
+            pool[val].set_property("reclaim", "disabled")
 
         # Extend the pool_uuid, rank and targets
         for val in range(0, num_pool):
             threads = []
-            for oclass, api, test, flags in product(self.ior_dfs_oclass,
-                                                    self.ior_apis,
-                                                    self.ior_test_sequence,
-                                                    self.ior_flags):
-                for _ in range(0, num_jobs):
-                    # Add a thread for these IOR arguments
-                    threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={"pool": pool[val],
-                                                            "oclass": oclass,
-                                                            "api": api,
-                                                            "test": test,
-                                                            "flags": flags,
-                                                            "results":
-                                                            self.out_queue}))
-                # Launch the IOR threads
-                for thrd in threads:
-                    self.log.info("Thread : %s", thrd)
-                    thrd.start()
-                    time.sleep(1)
             self.pool = pool[val]
-            scm_size = self.pool.scm_size
-            nvme_size = self.pool.nvme_size
-            self.pool.display_pool_daos_space("Pool space: Beginning")
-            pver_begin = self.get_pool_version()
 
             # Start the additional servers and extend the pool
             self.log.info("Extra Servers = %s", self.extra_servers)
             self.start_additional_servers(self.extra_servers)
-            # Give sometime for the additional server to come up.
-            time.sleep(25)
+            if self.test_during_aggregation is True:
+                for _ in range(0, 2):
+                    self.run_ior_thread("Write", oclass, test_seq)
+                self.delete_extra_container(self.pool)
+            # The following thread runs while performing osa operations.
+            if app_name == "ior":
+                threads.append(threading.Thread(target=self.run_ior_thread,
+                                                kwargs={"action": "Write",
+                                                        "oclass": oclass,
+                                                        "test": test_seq}))
+            else:
+                threads.append(threading.Thread(target=self.run_mdtest_thread))
+            # Make sure system map has all ranks in joined state.
+            for retry in range(0, 10):
+                scan_info = self.get_dmg_command().system_query()
+                if not check_system_query_status(scan_info):
+                    if retry == 9:
+                        self.fail("One or more servers not in expected status")
+                else:
+                    break
+
+            # Launch the IOR or mdtest thread
+            for thrd in threads:
+                self.log.info("Thread : %s", thrd)
+                thrd.start()
+                time.sleep(1)
+
+            self.pool.display_pool_daos_space("Pool space: Beginning")
+            pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_extend(self.pool.uuid,
-                                                  rank, scm_size,
-                                                  nvme_size)
-            self.log.info(output)
-            self.is_rebuild_done(3)
-            self.assert_on_rebuild_failure()
+            output = self.dmg_command.pool_extend(self.pool.uuid, self.ranks)
+            self.print_and_assert_on_rebuild_failure(output)
 
             pver_extend = self.get_pool_version()
             self.log.info("Pool Version after extend %s", pver_extend)
@@ -134,7 +130,9 @@ class OSAOnlineExtend(OSAUtils):
                             "Pool Version Error:  After extend")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join(timeout=20)
+                thrd.join()
+                if not self.out_queue.empty():
+                    self.assert_on_exception()
 
         # Check data consistency for IOR in future
         # Presently, we are running daos_racer in parallel
@@ -148,14 +146,80 @@ class OSAOnlineExtend(OSAUtils):
             display_string = "Pool{} space at the End".format(val)
             self.pool = pool[val]
             self.pool.display_pool_daos_space(display_string)
+            self.run_ior_thread("Read", oclass, test_seq)
+            self.container = self.pool_cont_dict[self.pool][0]
+            kwargs = {"pool": self.pool.uuid,
+                      "cont": self.container.uuid}
+            output = self.daos_command.container_check(**kwargs)
+            self.log.info(output)
 
-    @skipForTicket("DAOS-6555")
+    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend(self):
         """Test ID: DAOS-4751
-        Test Description: Validate Online extend
+        Test Description: Validate Online extend with checksum
+        enabled.
 
-        :avocado: tags=all,pr,daily_regression,hw,medium,ib2
-        :avocado: tags=osa,osa_extend,online_extend
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_extend,online_extend,online_extend_with_csum
         """
-        # Perform extend testing with 1 to 2 pools
+        self.log.info("Online Extend : With Checksum")
+        self.run_online_extend_test(1)
+
+    @skipForTicket("DAOS-7195,DAOS-7955")
+    def test_osa_online_extend_without_checksum(self):
+        """Test ID: DAOS-6645
+        Test Description: Validate Online extend without checksum enabled.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_extend,online_extend,online_extend_without_csum
+        """
+        self.log.info("Online Extend : Without Checksum")
+        self.test_with_checksum = self.params.get("test_with_checksum",
+                                                  '/run/checksum/*')
+        self.run_online_extend_test(1)
+
+    @skipForTicket("DAOS-7195,DAOS-7955")
+    def test_osa_online_extend_oclass(self):
+        """Test ID: DAOS-6645
+        Test Description: Validate Online extend with different
+        object class.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_extend,online_extend,online_extend_oclass
+        """
+        self.log.info("Online Extend : Oclass")
+        self.run_online_extend_test(1, oclass=self.test_oclass[0])
+
+    @skipForTicket("DAOS-7195,DAOS-7955")
+    def test_osa_online_extend_mdtest(self):
+        """Test ID: DAOS-6645
+        Test Description: Validate Online extend with mdtest application.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_extend,online_extend,online_extend_mdtest
+        """
+        self.log.info("Online Extend : Mdtest")
+        self.run_online_extend_test(1, app_name="mdtest")
+
+    @skipForTicket("DAOS-7195,DAOS-7955")
+    def test_osa_online_extend_with_aggregation(self):
+        """Test ID: DAOS-6645
+        Test Description: Validate Online extend with aggregation on.
+
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=osa_extend,online_extend,online_extend_with_aggregation
+        """
+        self.log.info("Online Extend : Aggregation")
+        self.test_during_aggregation = self.params.get("test_with_aggregation",
+                                                       '/run/aggregation/*')
         self.run_online_extend_test(1)

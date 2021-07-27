@@ -8,6 +8,8 @@ package config
 
 import (
 	"bufio"
+	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -19,11 +21,13 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -63,10 +67,11 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 		}
 		key := fields[0]
 
-		// If we're in a server config, reset the
+		// If we're in a server or a storage tier config, reset the
 		// seen map to allow the same params in different
 		// server configs.
-		if line == "-" {
+		lineTmp := strings.TrimLeft(line, " ")
+		if lineTmp == "-" {
 			seenKeys = make(map[string]struct{})
 		}
 		if _, seen := seenKeys[key]; seen && strings.HasSuffix(key, ":") {
@@ -81,8 +86,9 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 	}
 }
 
-// supply mock external interface, populates config from given file path
-func mockConfigFromFile(t *testing.T, path string) *Server {
+// mockConfigFromFile returns a populated server config file from the
+// file at the given path.
+func mockConfigFromFile(t *testing.T, path string) (*Server, error) {
 	t.Helper()
 	c := DefaultServer().
 		WithProviderValidator(netdetect.ValidateProviderStub).
@@ -90,11 +96,7 @@ func mockConfigFromFile(t *testing.T, path string) *Server {
 		WithGetNetworkDeviceClass(getDeviceClassStub)
 	c.Path = path
 
-	if err := c.Load(); err != nil {
-		t.Fatalf("failed to load %s: %s", path, err)
-	}
-
-	return c
+	return c, c.Load()
 }
 
 func getDeviceClassStub(netdev string) (uint32, error) {
@@ -196,10 +198,14 @@ func TestServerConfig_Constructed(t *testing.T) {
 	// First, load a config based on the server config with all options uncommented.
 	testFile := filepath.Join(testDir, sConfigUncomment)
 	uncommentServerConfig(t, testFile)
-	defaultCfg := mockConfigFromFile(t, testFile)
+	defaultCfg, err := mockConfigFromFile(t, testFile)
+	if err != nil {
+		t.Fatalf("failed to load %s: %s", testFile, err)
+	}
 
 	var numaNode0 uint = 0
 	var numaNode1 uint = 1
+	var bypass = true
 
 	// Next, construct a config to compare against the first one. It should be
 	// possible to construct an identical configuration with the helpers.
@@ -232,14 +238,19 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithTargetCount(16).
 				WithHelperStreamCount(6).
 				WithServiceThreadCore(0).
-				WithScmMountPoint("/mnt/daos/1").
-				WithScmClass("ram").
-				WithScmRamdiskSize(16).
-				WithBdevClass("nvme").
-				WithBdevDeviceList("0000:81:00.0").
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmMountPoint("/mnt/daos/1").
+						WithScmClass("ram").
+						WithScmRamdiskSize(16),
+					storage.NewTierConfig().
+						WithBdevClass("nvme").
+						WithBdevDeviceList("0000:81:00.0"),
+				).
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode0).
+				WithBypassHealthChk(&bypass).
 				WithEnvVars("CRT_TIMEOUT=30").
 				WithLogFile("/tmp/daos_engine.0.log").
 				WithLogMask("WARN"),
@@ -248,13 +259,16 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithTargetCount(16).
 				WithHelperStreamCount(6).
 				WithServiceThreadCore(22).
-				WithScmMountPoint("/mnt/daos/2").
-				WithScmClass("dcpm").
-				WithScmDeviceList("/dev/pmem0").
-				WithBdevClass("malloc").
-				WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-				WithBdevDeviceCount(1).
-				WithBdevFileSize(4).
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmMountPoint("/mnt/daos/2").
+						WithScmClass("dcpm").
+						WithScmDeviceList("/dev/pmem1"),
+					storage.NewTierConfig().
+						WithBdevClass("file").
+						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
+						WithBdevFileSize(16),
+				).
 				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
@@ -333,16 +347,32 @@ func TestServerConfig_Validation(t *testing.T) {
 
 	for name, tt := range map[string]struct {
 		extraConfig func(c *Server) *Server
-		setServers  bool // replace engines section with legacy servers in conf
 		expErr      error
 	}{
 		"example config": {},
-		"nil server entry": {
+		"nil engine entry": {
 			extraConfig: func(c *Server) *Server {
 				var nilEngineConfig *engine.Config
 				return c.WithEngines(nilEngineConfig)
 			},
 			expErr: errors.New("validation"),
+		},
+		"no engine entries": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines()
+			},
+		},
+		"no fabric provider": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithFabricProvider("")
+			},
+			expErr: FaultConfigNoProvider,
+		},
+		"no access point": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints()
+			},
+			expErr: FaultConfigBadAccessPoints,
 		},
 		"single access point": {
 			extraConfig: func(c *Server) *Server {
@@ -362,9 +392,26 @@ func TestServerConfig_Validation(t *testing.T) {
 		},
 		"multiple access points (dupes)": {
 			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4", "5.6.7.8", "1.2.3.4")
+			},
+			expErr: FaultConfigBadAccessPoints,
+		},
+		"multiple access points (dupes with ports)": {
+			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:1234", "5.6.7.8:5678", "1.2.3.4:1234")
 			},
-			expErr: FaultConfigEvenAccessPoints,
+			expErr: FaultConfigBadAccessPoints,
+		},
+		"multiple access points (dupes with and without ports)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:10001", "5.6.7.8:5678", "1.2.3.4")
+			},
+			expErr: FaultConfigBadAccessPoints,
+		},
+		"multiple access points (dupes with different ports)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:10002", "5.6.7.8:5678", "1.2.3.4")
+			},
 		},
 		"no access points": {
 			extraConfig: func(c *Server) *Server {
@@ -384,22 +431,56 @@ func TestServerConfig_Validation(t *testing.T) {
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"single access point including invalid port": {
+		"single access point including invalid port (alphanumeric)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("1.2.3.4:0a0")
+			},
+			expErr: FaultConfigBadControlPort,
+		},
+		"single access point including invalid port (zero)": {
 			extraConfig: func(c *Server) *Server {
 				return c.WithAccessPoints("1.2.3.4:0")
 			},
 			expErr: FaultConfigBadControlPort,
 		},
-		"use legacy servers conf directive rather than engines": {
-			setServers: true,
-		},
-		"specify legacy servers conf directive in addition to engines": {
+		"single access point including negative port": {
 			extraConfig: func(c *Server) *Server {
-				var nilEngineConfig *engine.Config
-				return c.WithEngines(nilEngineConfig)
+				return c.WithAccessPoints("1.2.3.4:-10002")
 			},
-			setServers: true,
-			expErr:     errors.New("cannot specify both"),
+			expErr: FaultConfigBadControlPort,
+		},
+		"single access point hostname including negative port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithAccessPoints("hostX:-10002")
+			},
+			expErr: FaultConfigBadControlPort,
+		},
+		"good control port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlPort(1234)
+			},
+		},
+		"bad control port (zero)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithControlPort(0)
+			},
+			expErr: FaultConfigBadControlPort,
+		},
+		"good telemetry port": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithTelemetryPort(1234)
+			},
+		},
+		"good telemetry port (zero)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithTelemetryPort(0)
+			},
+		},
+		"bad telemetry port (negative)": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithTelemetryPort(-123)
+			},
+			expErr: FaultConfigBadTelemetryPort,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -416,15 +497,92 @@ func TestServerConfig_Validation(t *testing.T) {
 			// First, load a config based on the server config with all options uncommented.
 			testFile := filepath.Join(testDir, sConfigUncomment)
 			uncommentServerConfig(t, testFile)
-			if tt.setServers {
-				replaceFile(t, testFile, "engines:", "servers:")
+			config, err := mockConfigFromFile(t, testFile)
+			if err != nil {
+				t.Fatalf("failed to load %s: %s", testFile, err)
 			}
-			config := mockConfigFromFile(t, testFile)
 
 			// Apply extra config test case
 			config = tt.extraConfig(config)
 
 			CmpErr(t, tt.expErr, config.Validate(log))
+		})
+	}
+}
+
+func TestServerConfig_Parsing(t *testing.T) {
+	noopExtra := func(c *Server) *Server { return c }
+
+	for name, tt := range map[string]struct {
+		inTxt          string
+		outTxt         string
+		extraConfig    func(c *Server) *Server
+		expParseErr    error
+		expValidateErr error
+	}{
+		"bad engine section": {
+			inTxt:       "engines:",
+			outTxt:      "engine:",
+			expParseErr: errors.New("field engine not found"),
+		},
+		"use legacy servers conf directive rather than engines": {
+			inTxt:          "engines:",
+			outTxt:         "servers:",
+			expValidateErr: errors.New("use \"engines\" instead"),
+		},
+		"specify legacy servers conf directive in addition to engines": {
+			inTxt:  "engines:",
+			outTxt: "servers:",
+			extraConfig: func(c *Server) *Server {
+				var nilEngineConfig *engine.Config
+				return c.WithEngines(nilEngineConfig)
+			},
+			expValidateErr: errors.New("use \"engines\" instead"),
+		},
+		"duplicates in bdev_list from config": {
+			extraConfig: func(c *Server) *Server {
+				return c.WithEngines(
+					engine.NewConfig().
+						WithFabricInterface("qib0").
+						WithFabricInterfacePort(20000).
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/mnt/daos/2"),
+							storage.NewTierConfig().
+								WithBdevClass("nvme").
+								WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+						))
+			},
+			expValidateErr: errors.New("bdev_list contains duplicate pci"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer ShowBufferOnFailure(t, buf)
+
+			if tt.extraConfig == nil {
+				tt.extraConfig = noopExtra
+			}
+
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
+
+			// First, load a config based on the server config with all options uncommented.
+			testFile := filepath.Join(testDir, sConfigUncomment)
+			uncommentServerConfig(t, testFile)
+
+			replaceFile(t, testFile, tt.inTxt, tt.outTxt)
+
+			config, errParse := mockConfigFromFile(t, testFile)
+			CmpErr(t, tt.expParseErr, errParse)
+			if tt.expParseErr != nil {
+				return
+			}
+			config = tt.extraConfig(config)
+
+			CmpErr(t, tt.expValidateErr, config.Validate(log))
 		})
 	}
 }
@@ -512,18 +670,24 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithLogFile("a").
 			WithFabricInterface("a").
 			WithFabricInterfacePort(42).
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithScmMountPoint("a")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("a"),
+			)
 	}
 	configB := func() *engine.Config {
 		return engine.NewConfig().
 			WithLogFile("b").
 			WithFabricInterface("b").
 			WithFabricInterfacePort(42).
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithScmMountPoint("b")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("b"),
+			)
 	}
 
 	for name, tc := range map[string]struct {
@@ -550,26 +714,60 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 		"duplicate scm_mount": {
 			configA: configA(),
 			configB: configB().
-				WithScmMountPoint(configA().Storage.SCM.MountPoint),
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmDeviceList("a").
+						WithScmMountPoint(configA().Storage.Tiers.ScmConfigs()[0].Scm.MountPoint),
+				),
 			expErr: FaultConfigDuplicateScmMount(1, 0),
 		},
 		"duplicate scm_list": {
 			configA: configA().
-				WithScmClass("dcpm").
-				WithScmRamdiskSize(0).
-				WithScmDeviceList("a"),
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint("aa").
+						WithScmDeviceList("a"),
+				),
 			configB: configB().
-				WithScmClass("dcpm").
-				WithScmRamdiskSize(0).
-				WithScmDeviceList("a"),
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint("bb").
+						WithScmDeviceList("a"),
+				),
 			expErr: FaultConfigDuplicateScmDeviceList(1, 0),
 		},
 		"overlapping bdev_list": {
 			configA: configA().
-				WithBdevDeviceList("a"),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1)),
+				),
 			configB: configB().
-				WithBdevDeviceList("b", "a"),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
+				),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
+		},
+		"duplicates in bdev_list": {
+			configA: configA().
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+				),
+			configB: configB().
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+				),
+			expErr: errors.New("bdev_list contains duplicate pci addresses"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -591,36 +789,45 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	configA := func() *engine.Config {
 		return engine.NewConfig().
 			WithLogFile("a").
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithFabricInterfacePort(42).
-			WithScmMountPoint("a")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("a"),
+			).
+			WithFabricInterfacePort(42)
 	}
 	configB := func() *engine.Config {
 		return engine.NewConfig().
 			WithLogFile("b").
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithFabricInterfacePort(43).
-			WithScmMountPoint("b")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("b"),
+			).
+			WithFabricInterfacePort(43)
 	}
 
 	for name, tc := range map[string]struct {
-		configA *engine.Config
-		configB *engine.Config
-		expErr  error
+		configA      *engine.Config
+		configB      *engine.Config
+		expNetDevCls uint32
+		expErr       error
 	}{
 		"successful validation with matching Infiniband": {
 			configA: configA().
 				WithFabricInterface("ib1"),
 			configB: configB().
 				WithFabricInterface("ib0"),
+			expNetDevCls: netdetect.Infiniband,
 		},
-		"successful validation with mathching Ethernet": {
+		"successful validation with matching Ethernet": {
 			configA: configA().
 				WithFabricInterface("eth0"),
 			configB: configB().
 				WithFabricInterface("eth1"),
+			expNetDevCls: netdetect.Ether,
 		},
 		"mismatching net dev class with primary server as ib0 / Infiniband": {
 			configA: configA().
@@ -652,16 +859,52 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
+			gotNetDevCls, gotErr := DefaultServer().
+				WithFabricProvider("test").
+				WithGetNetworkDeviceClass(getDeviceClassStub).
+				WithEngines(tc.configA, tc.configB).
+				CheckFabric(context.Background())
+
+			CmpErr(t, tc.expErr, gotErr)
+			if gotErr != nil {
+				return
+			}
+
+			AssertEqual(t, tc.expNetDevCls, gotNetDevCls,
+				"unexpected config network device class")
+		})
+	}
+}
+
+func TestServerConfig_SaveActiveConfig(t *testing.T) {
+	testDir, cleanup := CreateTestDir(t)
+	defer cleanup()
+
+	t.Logf("test dir: %s", testDir)
+
+	for name, tc := range map[string]struct {
+		cfgPath   string
+		expLogOut string
+	}{
+		"successful write": {
+			cfgPath:   testDir,
+			expLogOut: fmt.Sprintf("config saved to %s/%s", testDir, configOut),
+		},
+		"missing directory": {
+			cfgPath:   filepath.Join(testDir, "non-existent/"),
+			expLogOut: "could not be saved",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
-			conf := DefaultServer().
-				WithFabricProvider("test").
-				WithGetNetworkDeviceClass(getDeviceClassStub).
-				WithEngines(tc.configA, tc.configB)
+			cfg := DefaultServer().WithSocketDir(tc.cfgPath)
 
-			gotErr := conf.Validate(log)
-			CmpErr(t, tc.expErr, gotErr)
+			cfg.SaveActiveConfig(log)
+
+			common.AssertTrue(t, strings.Contains(buf.String(), tc.expLogOut),
+				fmt.Sprintf("expected %q in %q", tc.expLogOut, buf.String()))
 		})
 	}
 }

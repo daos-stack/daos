@@ -27,9 +27,9 @@
 #include <vos_obj.h>
 #include <vos_internal.h>
 
-#define UPDATE_DKEY_SIZE	32
+#define UPDATE_DKEY_SIZE	64
 #define UPDATE_DKEY		"dkey"
-#define UPDATE_AKEY_SIZE	32
+#define UPDATE_AKEY_SIZE	64
 #define UPDATE_AKEY		"akey"
 #define UPDATE_AKEY_SV		"akey.sv"
 #define UPDATE_AKEY_ARRAY	"akey.array"
@@ -53,6 +53,7 @@ enum vts_test_flags {
 	IF_USE_ARRAY		= (1 << 6),
 	TF_USE_VAL		= (1 << 7),
 	TF_USE_CSUMS		= (1 << 8),
+	TF_DELETE		= (1 << 9),
 	IF_DISABLED		= (1 << 30),
 };
 

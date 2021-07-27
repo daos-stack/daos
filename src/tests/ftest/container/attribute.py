@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -11,6 +11,7 @@ import random
 from apricot import TestWithServers
 from general_utils import DaosTestError, get_random_bytes
 from pydaos.raw import DaosApiError
+from daos_utils import DaosCommand
 
 # pylint: disable = global-variable-not-assigned, global-statement
 GLOB_SIGNAL = None
@@ -31,6 +32,12 @@ class ContainerAttributeTest(TestWithServers):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a ContainerAttributeTest object."""
+        super().__init__(*args, **kwargs)
+        self.expected_cont_uuid = None
+        self.daos_cmd = None
+
     @staticmethod
     def create_data_set():
         """Create the large attribute dictionary.
@@ -46,20 +53,31 @@ class ContainerAttributeTest(TestWithServers):
             data_set[key] = get_random_bytes(size)
         return data_set
 
-    def verify_list_attr(self, indata, size, buff, mode="sync"):
+    def verify_list_attr(self, indata, outdata, mode="sync"):
         """
-        verify the length of the Attribute names
+        Args:
+            indata: Dict used to set attr
+            outdata: Dict obtained from list attr
+            mode: sync or async
+
+        Verify the length of the Attribute names
         """
-        length = sum(
-            len(i) if i is not None else 0 for i in list(indata.keys()))
-        length += len(list(indata.keys()))
+        length = 0
+        for key in indata.keys():
+            length += len(key)
+
         if mode == "async":
-            length = length + 1
+            length += 1
+
+        attributes_list = outdata["attrs"]
+        size = 0
+        for attr in attributes_list:
+            size += len(attr)
 
         self.log.info("Verifying list_attr output:")
         self.log.info("  set_attr names:  %s", list(indata.keys()))
         self.log.info("  set_attr size:   %s", length)
-        self.log.info("  list_attr names: %s", buff)
+        self.log.info("  list_attr names: %s", attributes_list)
         self.log.info("  list_attr size:  %s", size)
 
         if length != size:
@@ -68,10 +86,18 @@ class ContainerAttributeTest(TestWithServers):
                 "len={} and received len={}".format(length, size))
         # verify the Attributes names in list_attr retrieve
         for key in list(indata.keys()):
-            if key not in buff:
+            found = False
+            for attr in attributes_list:
+                # Workaround
+                # decode() is used to be able to compare bytes with strings
+                # We get strings from daos_command, while in pydaos we get bytes
+                if key.decode() == attr:
+                    found = True
+                    break
+            if not found:
                 self.fail(
                     "FAIL: Name does not match after list attr, Expected "
-                    "buf={} and received buf={}".format(key, buff))
+                    "buf={} and received buf={}".format(key, attributes_list))
 
     def verify_get_attr(self, indata, outdata):
         """
@@ -79,13 +105,16 @@ class ContainerAttributeTest(TestWithServers):
         """
         self.log.info("Verifying get_attr output:")
         self.log.info("  get_attr data: %s", indata)
-        self.log.info("  set_attr date: %s", outdata)
+        self.log.info("  set_attr data: %s", outdata)
 
         for attr, value in indata.items():
-            if value != outdata[attr]:
+            # Workaround: attributes from daos_command have b prefix
+            # need to remove it
+            if value != outdata.get(attr, None):
                 self.fail(
                     "FAIL: Value does not match after get attr, Expected "
-                    "val={} and received val={}".format(value, outdata[attr]))
+                    "val={} and received val={}".format(value,
+                                                        outdata[attr]))
 
     def test_container_large_attributes(self):
         """
@@ -93,19 +122,28 @@ class ContainerAttributeTest(TestWithServers):
 
         Test description: Test large randomly created container attribute.
 
-        :avocado: tags=container,container_attr,attribute,large_conattribute
+        :avocado: tags=all,full_regression
+        :avocado: tags=container,attribute
+        :avocado: tags=large_conattribute
+        :avocado: tags=container_attribute
         """
         self.add_pool()
         self.add_container(self.pool)
         self.container.open()
-
+        self.daos_cmd = DaosCommand(self.bin)
         attr_dict = self.create_data_set()
 
         try:
             self.container.container.set_attr(data=attr_dict)
-            # skip step due to DAOS-6880
-            #size, buf = self.container.container.list_attr()
-            #self.verify_list_attr(attr_dict, size, buf)
+
+            # Workaround
+            # Due to DAOS-7093 skip the usage of pydaos cont list attr
+            # size, buf = self.container.container.list_attr()
+
+            out_attr_dict = self.daos_cmd.container_list_attrs(
+                pool=self.pool.uuid,
+                cont=self.container.uuid)
+            self.verify_list_attr(attr_dict, out_attr_dict)
 
             results = self.container.container.get_attr(list(attr_dict.keys()))
             self.verify_get_attr(attr_dict, results)
@@ -117,11 +155,15 @@ class ContainerAttributeTest(TestWithServers):
     def test_container_attribute(self):
         """
         Test basic container attribute tests.
-        :avocado: tags=all,tiny,full_regression,container,sync_conattribute
+        :avocado: tags=all,tiny,full_regression
+        :avocado: tags=container,attribute
+        :avocado: tags=sync_conattribute
+        :avocado: tags=container_attribute
         """
         self.add_pool()
         self.add_container(self.pool)
         self.container.open()
+        self.daos_cmd = DaosCommand(self.bin)
 
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
@@ -144,18 +186,27 @@ class ContainerAttributeTest(TestWithServers):
                 break
         try:
             self.container.container.set_attr(data=attr_dict)
-            # skip step due to DAOS-6880
-            #size, buf = self.container.container.list_attr()
-            #self.verify_list_attr(attr_dict, size, buf)
+
+            # Workaround
+            # Due to DAOS-7093 skip the usage of pydaos cont list attr
+            # size, buf = self.container.container.list_attr()
+            out_attr_dict = self.daos_cmd.container_list_attrs(
+                pool=self.pool.uuid,
+                cont=self.container.uuid)
+            self.verify_list_attr(attr_dict, out_attr_dict)
 
             # Request something that doesn't exist
             if name[0] is not None and b"Negative" in name[0]:
                 name[0] = b"rubbish"
 
-            results = {}
-            results = self.container.container.get_attr([name[0]])
+            attr_value_dict = self.container.container.get_attr([name[0]])
 
-            self.verify_get_attr(attr_dict, results)
+            # Raise an exception if the attr value is empty
+            # This is expected to happen on Negative test cases
+            if not attr_value_dict[name[0]]:
+                raise DaosApiError("Attr value is empty. "
+                                   "Did you set the value?")
+            self.verify_get_attr(attr_dict, attr_value_dict)
 
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
@@ -166,11 +217,14 @@ class ContainerAttributeTest(TestWithServers):
             if expected_result == 'PASS':
                 self.fail("Test was expected to pass but it failed.\n")
 
-    def test_container_attribute_asyn(self):
+    def test_container_attribute_async(self):
         """
         Test basic container attribute tests.
 
-        :avocado: tags=all,small,full_regression,container,async_conattribute
+        :avocado: tags=all,small,full_regression
+        :avocado: tags=container,attribute
+        :avocado: tags=async_conattribute
+        :avocado: tags=container_attribute
         """
         global GLOB_SIGNAL
         global GLOB_RC
@@ -178,6 +232,7 @@ class ContainerAttributeTest(TestWithServers):
         self.add_pool()
         self.add_container(self.pool)
         self.container.open()
+        self.daos_cmd = DaosCommand(self.bin)
 
         expected_for_param = []
         name = self.params.get("name", '/run/attrtests/name_handles/*/')
@@ -192,7 +247,6 @@ class ContainerAttributeTest(TestWithServers):
             value[0] = value[0].encode("utf-8")
 
         attr_dict = {name[0]: value[0]}
-
         expected_result = 'PASS'
         for result in expected_for_param:
             if result == 'FAIL':
@@ -206,23 +260,32 @@ class ContainerAttributeTest(TestWithServers):
                 self.fail("RC not as expected after set_attr First {0}"
                           .format(GLOB_RC))
 
-            # skip-step due to DAOS-6880
-            #GLOB_SIGNAL = threading.Event()
-            #size, buf = self.container.container.list_attr(cb_func=cb_func)
-            #GLOB_SIGNAL.wait()
-            #if GLOB_RC != 0 and expected_result in ['PASS']:
-            #    self.fail("RC not as expected after list_attr First {0}"
-            #              .format(GLOB_RC))
-            #if expected_result in ['PASS']:
-            #    self.verify_list_attr(attr_dict, size, buf, mode="async")
+            # Workaround
+            # Due to DAOS-7093 skip the usage of pydaos cont list attr
+            # GLOB_SIGNAL = threading.Event()
+            #
+            # size, buf = self.container.container.list_attr(cb_func=cb_func)
+            #
+            out_attr_dict = self.daos_cmd.container_list_attrs(
+                pool=self.pool.uuid,
+                cont=self.container.uuid)
+
+            # GLOB_SIGNAL.wait()
+            # if GLOB_RC != 0 and expected_result in ['PASS']:
+            #     self.fail("RC not as expected after list_attr First {0}"
+            #               .format(GLOB_RC))
+
+            if expected_result in ['PASS']:
+                # Workaround: async mode is not used for list_attr
+                self.verify_list_attr(attr_dict, out_attr_dict)
 
             # Request something that doesn't exist
             if name[0] is not None and b"Negative" in name[0]:
                 name[0] = b"rubbish"
 
             GLOB_SIGNAL = threading.Event()
-            self.container.container.get_attr([name[0]], cb_func=cb_func)
-
+            self.container.container.get_attr([name[0]],
+                                              cb_func=cb_func)
             GLOB_SIGNAL.wait()
 
             if GLOB_RC != 0 and expected_result in ['PASS']:
@@ -230,10 +293,13 @@ class ContainerAttributeTest(TestWithServers):
                           .format(GLOB_RC))
 
             # not verifying the get_attr since its not available asynchronously
+            # Therefore we want to avoid passing negative test
+            # e.g. rubbish getting assigned.
 
             if value[0] is not None:
                 if GLOB_RC == 0 and expected_result in ['FAIL']:
-                    self.fail("Test was expected to fail but it passed.\n")
+                    if name[0] != b"rubbish":
+                        self.fail("Test was expected to fail but it passed.\n")
 
         except DaosApiError as excep:
             print(excep)

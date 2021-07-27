@@ -89,6 +89,9 @@ unsigned int	dss_sys_xs_nr = DAOS_TGT0_OFFSET + DRPC_XS_NR;
  */
 bool		dss_helper_pool;
 
+/** Bypass for the nvme health check */
+bool		dss_nvme_bypass_health_check;
+
 static daos_epoch_t	dss_start_epoch;
 
 unsigned int
@@ -264,7 +267,7 @@ dss_nvme_poll_ult(void *args)
 
 	D_ASSERT(dx->dx_main_xs);
 	while (!dss_xstream_exiting(dx)) {
-		bio_nvme_poll(dmi->dmi_nvme_ctxt);
+		bio_nvme_poll(dmi->dmi_nvme_ctxt, dss_nvme_bypass_health_check);
 		ABT_thread_yield();
 	}
 }
@@ -912,6 +915,8 @@ dss_xstreams_init(void)
 	D_INFO("CPU relax mode is set to [%s]\n",
 	       sched_relax_mode2str(sched_relax_mode));
 
+	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
 		"%d cores total detected starting %d main xstreams\n",
@@ -1216,11 +1221,12 @@ dss_srv_init(void)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
-	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id,
-			   dss_nvme_mem_size, vos_db_get());
+	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id, dss_nvme_mem_size,
+			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get());
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;
+	bio_register_bulk_ops(crt_bulk_create, crt_bulk_free);
 
 	/* start xstreams */
 	rc = dss_xstreams_init();

@@ -16,7 +16,7 @@ container:
     control_method: daos
 dcp:
     client_processes:
-        np: 1
+        np: 3
     preserve_mux: !mux
         preserve_off:
             preserve: false
@@ -24,3 +24,4 @@ dcp:
             preserve: true
 dfuse:
     mount_dir: "/tmp/daos_dfuse"
+    disable_caching: True

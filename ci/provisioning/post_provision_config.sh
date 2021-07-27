@@ -14,6 +14,7 @@ EOF
 
 DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
 DSG_REPO_var="DAOS_STACK_${DISTRO}_GROUP_REPO"
+DSA_REPO_var="DAOS_STACK_${DISTRO}_APPSTREAM_REPO"
 
 clush -B -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 
@@ -27,13 +28,14 @@ time clush -B -S -l root -w "$NODESTRING" \
            JENKINS_URL=\"$JENKINS_URL\"
            DAOS_STACK_LOCAL_REPO=\"${!DSL_REPO_var}\"
            DAOS_STACK_GROUP_REPO=\"${!DSG_REPO_var:-}\"
+           DAOS_STACK_EL_8_APPSTREAM_REPO=\"${!DSA_REPO_var:-}\"
            DISTRO=\"$DISTRO\"
            $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
            $(cat ci/provisioning/post_provision_config_nodes.sh)"
 
 git log --format=%s -n 1 HEAD | ssh -i ci_key -l jenkins "${NODELIST%%,*}" \
                                     "cat >/tmp/commit_title"
-git log --pretty=format:%h --abbrev-commit |
+git log --pretty=format:%h --abbrev-commit --abbrev=7 |
   ssh -i ci_key -l jenkins "${NODELIST%%,*}" "cat >/tmp/commit_list"
-ssh root@"${NODELIST%%,*}" "mkdir /scratch && " \
+ssh root@"${NODELIST%%,*}" "mkdir -p /scratch && " \
                            "mount wolf-2:/export/scratch /scratch"

@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -30,7 +30,7 @@ func queryRank(reqRank uint32, srvRank system.Rank) bool {
 
 func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
 	for _, srv := range svc.harness.Instances() {
-		if !srv.isReady() {
+		if !srv.IsReady() {
 			svc.log.Debugf("skipping not-ready instance")
 			continue
 		}
@@ -46,7 +46,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 		rResp := new(ctlpb.SmdQueryResp_RankResp)
 		rResp.Rank = srvRank.Uint32()
 
-		listDevsResp, err := srv.listSmdDevices(ctx, new(ctlpb.SmdDevReq))
+		listDevsResp, err := srv.ListSmdDevices(ctx, new(ctlpb.SmdDevReq))
 		if err != nil {
 			return errors.Wrapf(err, "rank %d", srvRank)
 		}
@@ -96,7 +96,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 		}
 
 		for _, dev := range rResp.Devices {
-			health, err := srv.getBioHealth(ctx, &ctlpb.BioHealthReq{
+			health, err := srv.GetBioHealth(ctx, &ctlpb.BioHealthReq{
 				DevUuid: dev.Uuid,
 			})
 			if err != nil {
@@ -110,7 +110,7 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 
 func (svc *ControlService) querySmdPools(ctx context.Context, req *ctlpb.SmdQueryReq, resp *ctlpb.SmdQueryResp) error {
 	for _, srv := range svc.harness.Instances() {
-		if !srv.isReady() {
+		if !srv.IsReady() {
 			svc.log.Debugf("skipping not-ready instance")
 			continue
 		}

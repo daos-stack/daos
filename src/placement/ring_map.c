@@ -814,7 +814,7 @@ ring_obj_placement_get(struct pl_ring_map *rimap, struct daos_obj_md *md,
 	int rc;
 
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid);
+	oc_attr = daos_oclass_attr_find(oid, NULL);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
@@ -1091,15 +1091,13 @@ ring_obj_layout_fill(struct pl_map *map, struct daos_obj_md *md,
 	}
 
 	rc = ring_obj_remap_shards(rimap, md, layout, rop, remap_list,
-			for_reint);
+				   for_reint);
 
 	if (rc == 0)
 		obj_layout_dump(md->omd_id, layout);
 out:
-	if (rc) {
+	if (rc)
 		D_ERROR("ring_obj_layout_fill failed, rc "DF_RC"\n", DP_RC(rc));
-		remap_list_free_all(remap_list);
-	}
 	return rc;
 }
 
@@ -1134,6 +1132,7 @@ ring_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	if (rc) {
 		D_ERROR("ring_obj_layout_fill failed, rc "DF_RC"\n", DP_RC(rc));
 		pl_obj_layout_free(layout);
+		remap_list_free_all(&remap_list);
 		return rc;
 	}
 

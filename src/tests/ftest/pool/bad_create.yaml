@@ -38,10 +38,10 @@ createtests:
              - daos_server
              - PASS
    target: !mux
-      #nullptr:
-      #   rankptr:
-      #       - NULL
-      #       - FAIL
+      nullptr:
+         rankptr:
+             - NULL
+             - FAIL
       goodtgt:
          rankptr:
              - VALID
@@ -51,31 +51,29 @@ createtests:
          devptr:
              - NULL
              - FAIL
-      #badstr:
-      #   devptr:
-      #       - complete_rubbish
-      #       - PASS
+      badstr:
+         devptr:
+             - complete_rubbish
+             - PASS
    psize: !mux
       toobig:
          size:
              - 999999999999999999999999
              - FAIL
-      # broken now
-      #toosmall:
-      #   size:
-      #       - 1
-      #       - FAIL
+      toosmall:
+         size:
+             - 1
+             - FAIL
       justright:
          size:
              - 1073741824
              - PASS
    svc: !mux
-      #nullptr:
-      #   rankptr:
-      #       - NULL
-      #       - FAIL
+      nullptr:
+         rankptr:
+             - NULL
+             - FAIL
       goodptr:
          rankptr:
              - VALID
              - PASS
-

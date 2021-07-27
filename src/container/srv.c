@@ -27,15 +27,19 @@ init(void)
 
 	rc = ds_cont_iv_init();
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_oid_iv, rc);
 
 	rc = ds_cont_prop_default_init();
 	if (rc)
-		D_GOTO(err, rc);
+		D_GOTO(err_cont_iv, rc);
 
 	return 0;
-err:
+
+err_cont_iv:
+	ds_cont_iv_fini();
+err_oid_iv:
 	ds_oid_iv_fini();
+err:
 	return rc;
 }
 
@@ -133,6 +137,12 @@ struct dss_module_key cont_module_key = {
 	.dmk_fini = dsm_tls_fini,
 };
 
+struct dss_module_metrics cont_metrics = {
+	.dmm_tags = DAOS_SYS_TAG,
+	.dmm_init = ds_cont_metrics_alloc,
+	.dmm_fini = ds_cont_metrics_free,
+};
+
 struct dss_module cont_module =  {
 	.sm_name	= "cont",
 	.sm_mod_id	= DAOS_CONT_MODULE,
@@ -143,4 +153,5 @@ struct dss_module cont_module =  {
 	.sm_cli_count	= CONT_PROTO_CLI_COUNT,
 	.sm_handlers	= cont_handlers,
 	.sm_key		= &cont_module_key,
+	.sm_metrics	= &cont_metrics,
 };

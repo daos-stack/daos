@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package scm
 
 import (
@@ -27,7 +28,7 @@ var (
 	defaultNamespace = &storage.ScmNamespace{}
 )
 
-func TestProviderScan(t *testing.T) {
+func TestProvider_Scan(t *testing.T) {
 	for name, tc := range map[string]struct {
 		rescan          bool
 		discoverErr     error
@@ -35,38 +36,38 @@ func TestProviderScan(t *testing.T) {
 		getNamespaceErr error
 		getNamespaceRes storage.ScmNamespaces
 		getStateErr     error
-		expResponse     *ScanResponse
+		expResponse     *storage.ScmScanResponse
 	}{
 		"no modules": {
 			discoverRes: storage.ScmModules{},
-			expResponse: &ScanResponse{
+			expResponse: &storage.ScmScanResponse{
 				Modules: storage.ScmModules{},
 			},
 		},
 		"no namespaces": {
 			discoverRes:     storage.ScmModules{defaultModule},
 			getNamespaceRes: storage.ScmNamespaces{},
-			expResponse: &ScanResponse{
+			expResponse: &storage.ScmScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: storage.ScmNamespaces{},
 			},
 		},
 		"ok": {
-			expResponse: &ScanResponse{
+			expResponse: &storage.ScmScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: storage.ScmNamespaces{defaultNamespace},
 			},
 		},
 		"rescan": {
 			rescan: true,
-			expResponse: &ScanResponse{
+			expResponse: &storage.ScmScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: storage.ScmNamespaces{defaultNamespace},
 			},
 		},
 		"ndctl missing": {
 			getNamespaceErr: FaultMissingNdctl,
-			expResponse: &ScanResponse{
+			expResponse: &storage.ScmScanResponse{
 				Modules:    storage.ScmModules{defaultModule},
 				Namespaces: nil,
 			},
@@ -96,14 +97,14 @@ func TestProviderScan(t *testing.T) {
 				GetPmemStateErr:     tc.getStateErr,
 			}
 			p := NewMockProvider(log, mbc, nil)
-			cmpRes := func(t *testing.T, want, got *ScanResponse) {
+			cmpRes := func(t *testing.T, want, got *storage.ScmScanResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 				}
 			}
 
-			res, err := p.Scan(ScanRequest{})
+			res, err := p.Scan(storage.ScmScanRequest{})
 			if err != nil {
 				switch err {
 				case FaultMissingNdctl:
@@ -119,7 +120,7 @@ func TestProviderScan(t *testing.T) {
 
 			// TODO: Try to simulate finding something new?
 			// For now, just make sure nothing breaks.
-			res, err = p.Scan(ScanRequest{Rescan: tc.rescan})
+			res, err = p.Scan(storage.ScmScanRequest{Rescan: tc.rescan})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -128,7 +129,7 @@ func TestProviderScan(t *testing.T) {
 	}
 }
 
-func TestProviderPrepare(t *testing.T) {
+func TestProvider_Prepare(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startInitialized bool
 		reset            bool
@@ -140,13 +141,13 @@ func TestProviderPrepare(t *testing.T) {
 		prepErr          error
 		startState       storage.ScmState
 		expEndState      storage.ScmState
-		expResponse      *PrepareResponse
+		expResponse      *storage.ScmPrepareResponse
 	}{
 		"init scan fails": {
 			discoverErr: FaultDiscoveryFailed,
 		},
 		"noop": {
-			expResponse: &PrepareResponse{
+			expResponse: &storage.ScmPrepareResponse{
 				RebootRequired: false,
 			},
 		},
@@ -154,7 +155,7 @@ func TestProviderPrepare(t *testing.T) {
 			shouldReboot: true,
 			startState:   storage.ScmStateNoRegions,
 			expEndState:  storage.ScmStateFreeCapacity,
-			expResponse: &PrepareResponse{
+			expResponse: &storage.ScmPrepareResponse{
 				State:          storage.ScmStateFreeCapacity,
 				RebootRequired: true,
 			},
@@ -164,7 +165,7 @@ func TestProviderPrepare(t *testing.T) {
 			shouldReboot: true,
 			startState:   storage.ScmStateNoCapacity,
 			expEndState:  storage.ScmStateNoRegions,
-			expResponse: &PrepareResponse{
+			expResponse: &storage.ScmPrepareResponse{
 				State:          storage.ScmStateNoRegions,
 				RebootRequired: true,
 			},
@@ -226,14 +227,14 @@ func TestProviderPrepare(t *testing.T) {
 				p.modules = mbc.DiscoverRes
 				p.namespaces = tc.getNamespaceRes
 			}
-			cmpRes := func(t *testing.T, want, got *PrepareResponse) {
+			cmpRes := func(t *testing.T, want, got *storage.ScmPrepareResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 				}
 			}
 
-			res, err := p.Prepare(PrepareRequest{Reset: tc.reset})
+			res, err := p.Prepare(storage.ScmPrepareRequest{Reset: tc.reset})
 			if err != nil {
 				switch err {
 				case FaultMissingNdctl:
@@ -250,7 +251,7 @@ func TestProviderPrepare(t *testing.T) {
 	}
 }
 
-func TestProviderGetPmemState(t *testing.T) {
+func TestProvider_GetPmemState(t *testing.T) {
 	for name, tc := range map[string]struct {
 		startInitialized bool
 		discoverErr      error
@@ -303,7 +304,7 @@ func TestProviderGetPmemState(t *testing.T) {
 	}
 }
 
-func TestProviderCheckFormat(t *testing.T) {
+func TestProvider_CheckFormat(t *testing.T) {
 	const (
 		goodMountPoint = "/mnt/daos"
 		goodDevice     = "/dev/pmem0"
@@ -317,14 +318,26 @@ func TestProviderCheckFormat(t *testing.T) {
 		isMountedErr    error
 		getFsStr        string
 		getFsErr        error
-		request         *FormatRequest
-		expResponse     *FormatResponse
+		request         *storage.ScmFormatRequest
+		expResponse     *storage.ScmFormatResponse
 		expErr          error
 	}{
-		"init scan fails": {
+		"init scan fails (dcpm)": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &storage.DcpmParams{
+					Device: goodDevice,
+				},
+			},
 			discoverErr: FaultDiscoveryFailed,
 		},
-		"missing ndctl": {
+		"missing ndctl (dcpm)": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &storage.DcpmParams{
+					Device: goodDevice,
+				},
+			},
 			getNamespaceErr: FaultMissingNdctl,
 		},
 		"missing mount point": {
@@ -332,26 +345,26 @@ func TestProviderCheckFormat(t *testing.T) {
 			expErr:     FaultFormatMissingMountpoint,
 		},
 		"conflicting config": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Ramdisk: &RamdiskParams{
+				Ramdisk: &storage.RamdiskParams{
 					Size: 1,
 				},
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			expErr: FaultFormatConflictingParam,
 		},
 		"missing dcpm device": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm:       &DcpmParams{},
+				Dcpm:       &storage.DcpmParams{},
 			},
 			expErr: FaultFormatInvalidDeviceCount,
 		},
 		"missing source config": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
 			},
 			expErr: FaultFormatMissingParam,
@@ -363,7 +376,7 @@ func TestProviderCheckFormat(t *testing.T) {
 		"mountpoint doesn't exist": {
 			mountPoint:   goodMountPoint,
 			isMountedErr: os.ErrNotExist,
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  false,
 			},
@@ -371,57 +384,57 @@ func TestProviderCheckFormat(t *testing.T) {
 		"already mounted": {
 			mountPoint:     goodMountPoint,
 			alreadyMounted: true,
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 				Mounted:    true,
 			},
 		},
 		"getFs fails": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsErr: errors.New("getfs failed"),
 		},
 		"already formatted; not mountable": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsStr: "reiserfs",
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 			},
 		},
 		"already formatted; mountable": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsStr: fsTypeExt4,
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Mountable:  true,
 				Formatted:  true,
 			},
 		},
 		"not formatted": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsStr: fsTypeNone,
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  false,
 			},
@@ -443,7 +456,7 @@ func TestProviderCheckFormat(t *testing.T) {
 				GetfsErr:      tc.getFsErr,
 			}
 			p := NewMockProvider(log, mbc, msc)
-			cmpRes := func(t *testing.T, want, got *FormatResponse) {
+			cmpRes := func(t *testing.T, want, got *storage.ScmFormatResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -452,9 +465,9 @@ func TestProviderCheckFormat(t *testing.T) {
 
 			req := tc.request
 			if req == nil {
-				req = &FormatRequest{
+				req = &storage.ScmFormatRequest{
 					Mountpoint: tc.mountPoint,
-					Ramdisk: &RamdiskParams{
+					Ramdisk: &storage.RamdiskParams{
 						Size: 1,
 					},
 				}
@@ -474,11 +487,120 @@ func TestProviderCheckFormat(t *testing.T) {
 	}
 }
 
-func TestProviderFormat(t *testing.T) {
+func TestProvider_makeMountPath(t *testing.T) {
+	testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(testDir)
+
+	dir1 := "/fake"
+	dir2 := "/nested"
+	dir3 := "/mountpoint"
+	nestedMount := dir1 + dir2 + dir3
+
+	for name, tc := range map[string]struct {
+		mntpt     string
+		existPath string
+		statErrs  map[string]error
+		expCreate bool
+		expErr    error
+	}{
+		"existing nested": {
+			mntpt: nestedMount,
+		},
+		"existing nested; bad perms": {
+			mntpt: nestedMount,
+			statErrs: map[string]error{
+				nestedMount: os.ErrPermission,
+			},
+			expErr: os.ErrPermission,
+		},
+		"new nested": {
+			mntpt: nestedMount,
+			statErrs: map[string]error{
+				dir1:        os.ErrNotExist,
+				dir1 + dir2: os.ErrNotExist,
+				nestedMount: os.ErrNotExist,
+			},
+			expCreate: true,
+		},
+		"partial existing nested": {
+			mntpt:     nestedMount,
+			existPath: dir1,
+			statErrs: map[string]error{
+				dir1 + dir2: os.ErrNotExist,
+				nestedMount: os.ErrNotExist,
+			},
+			expCreate: true,
+		},
+		// similate situation where mount ancestor dir exists with
+		// incompatible permissions
+		"partial existing nested; bad perms": {
+			mntpt:     nestedMount,
+			existPath: dir1 + dir2,
+			statErrs: map[string]error{
+				dir1 + dir2: os.ErrPermission,
+				nestedMount: os.ErrNotExist,
+			},
+			expErr: os.ErrPermission,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			testCaseDir := filepath.Join(testDir, "tc")
+			if err := os.Mkdir(testCaseDir, defaultMountPointPerms); err != nil {
+				t.Fatal(err)
+			}
+			defer os.RemoveAll(testCaseDir)
+
+			if tc.existPath != "" {
+				// when simulating full or partial mountpoint
+				// path, create the existing directory structure
+				// in the test case temporary directory
+				ep := filepath.Join(testCaseDir, tc.existPath)
+				if err := os.MkdirAll(ep, defaultMountPointPerms); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			msc := MockSysConfig{
+				statErrors: make(map[string]error),
+			}
+			for mp, err := range tc.statErrs {
+				// mocked stat return errors updated for paths
+				// relative to the test case temporary directory
+				k := filepath.Join(testCaseDir, mp)
+				msc.statErrors[k] = err
+			}
+			p := NewMockProvider(log, nil, &msc)
+
+			tMntpt := filepath.Join(testCaseDir, tc.mntpt)
+
+			gotErr := p.makeMountPath(tMntpt, os.Getuid(), os.Getgid())
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil || tc.expCreate == false {
+				return
+			}
+
+			// verify that the expected directory structure has been
+			// created within the test case temporary directory
+			if _, err := os.Stat(tMntpt); err != nil {
+				t.Fatalf("Mount point not accessible: %s", err)
+			}
+		})
+	}
+}
+
+func TestProvider_Format(t *testing.T) {
 	const (
-		goodMountPoint = "/mnt/daos"
-		badMountPoint  = "/this/should/not/work"
-		goodDevice     = "/dev/pmem0"
+		goodMountPoint     = "/mnt/daos"
+		nestedMountPoint   = "/mnt/daos/0"
+		relativeMountPoint = "mnt/daos/0"
+		badMountPoint      = "/this/should/not/work"
+		goodDevice         = "/dev/pmem0"
 	)
 
 	// NB: Some overlap here between this and CheckFormat tests,
@@ -494,14 +616,26 @@ func TestProviderFormat(t *testing.T) {
 		mountErr        error
 		unmountErr      error
 		mkfsErr         error
-		request         *FormatRequest
-		expResponse     *FormatResponse
+		request         *storage.ScmFormatRequest
+		expResponse     *storage.ScmFormatResponse
 		expErr          error
 	}{
-		"init scan fails": {
+		"init scan fails (dcpm)": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &storage.DcpmParams{
+					Device: goodDevice,
+				},
+			},
 			discoverErr: FaultDiscoveryFailed,
 		},
-		"missing ndctl": {
+		"missing ndctl (dcpm)": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: goodMountPoint,
+				Dcpm: &storage.DcpmParams{
+					Device: goodDevice,
+				},
+			},
 			getNamespaceErr: FaultMissingNdctl,
 		},
 		"missing mount point": {
@@ -509,26 +643,26 @@ func TestProviderFormat(t *testing.T) {
 			expErr:     FaultFormatMissingMountpoint,
 		},
 		"conflicting config": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Ramdisk: &RamdiskParams{
+				Ramdisk: &storage.RamdiskParams{
 					Size: 1,
 				},
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			expErr: FaultFormatConflictingParam,
 		},
 		"missing dcpm device": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm:       &DcpmParams{},
+				Dcpm:       &storage.DcpmParams{},
 			},
 			expErr: FaultFormatInvalidDeviceCount,
 		},
 		"missing source config": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
 			},
 			expErr: FaultFormatMissingParam,
@@ -540,11 +674,21 @@ func TestProviderFormat(t *testing.T) {
 		"ramdisk: mountpoint doesn't exist": {
 			mountPoint:   goodMountPoint,
 			isMountedErr: os.ErrNotExist,
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 				Mounted:    true,
 			},
+		},
+		"ramdisk: mountpoint not accessible": {
+			mountPoint:   nestedMountPoint,
+			isMountedErr: os.ErrPermission,
+			expResponse: &storage.ScmFormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+			expErr: FaultPathAccessDenied(nestedMountPoint),
 		},
 		"ramdisk: already mounted, no reformat": {
 			mountPoint:     goodMountPoint,
@@ -552,22 +696,22 @@ func TestProviderFormat(t *testing.T) {
 			expErr:         FaultFormatNoReformat,
 		},
 		"ramdisk: not mounted": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Ramdisk: &RamdiskParams{
+				Ramdisk: &storage.RamdiskParams{
 					Size: 1,
 				},
 			},
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 				Mounted:    true,
 			},
 		},
 		"ramdisk: not mounted; mkdir fails": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: badMountPoint,
-				Ramdisk: &RamdiskParams{
+				Ramdisk: &storage.RamdiskParams{
 					Size: 1,
 				},
 			},
@@ -575,25 +719,25 @@ func TestProviderFormat(t *testing.T) {
 				strings.Split(badMountPoint, "/")[1]),
 		},
 		"ramdisk: already mounted; reformat": {
-			request: &FormatRequest{
-				Reformat:   true,
+			request: &storage.ScmFormatRequest{
+				Force:      true,
 				Mountpoint: goodMountPoint,
-				Ramdisk: &RamdiskParams{
+				Ramdisk: &storage.RamdiskParams{
 					Size: 1,
 				},
 			},
 			alreadyMounted: true,
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 				Mounted:    true,
 			},
 		},
 		"ramdisk: already mounted; reformat; unmount fails": {
-			request: &FormatRequest{
-				Reformat:   true,
+			request: &storage.ScmFormatRequest{
+				Force:      true,
 				Mountpoint: goodMountPoint,
-				Ramdisk: &RamdiskParams{
+				Ramdisk: &storage.RamdiskParams{
 					Size: 1,
 				},
 			},
@@ -601,20 +745,29 @@ func TestProviderFormat(t *testing.T) {
 			unmountErr:     errors.New("unmount failed"),
 		},
 		"ramdisk: already mounted; reformat; mount fails": {
-			request: &FormatRequest{
-				Reformat:   true,
+			request: &storage.ScmFormatRequest{
+				Force:      true,
 				Mountpoint: goodMountPoint,
-				Ramdisk: &RamdiskParams{
+				Ramdisk: &storage.RamdiskParams{
 					Size: 1,
 				},
 			},
 			alreadyMounted: true,
 			mountErr:       errors.New("mount failed"),
 		},
+		"ramdisk: mountpoint doesn't exist; nested mountpoint": {
+			mountPoint:   nestedMountPoint,
+			isMountedErr: os.ErrNotExist,
+			expResponse: &storage.ScmFormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+		},
 		"dcpm: getFs fails": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
@@ -622,19 +775,30 @@ func TestProviderFormat(t *testing.T) {
 		},
 		"dcpm: mountpoint doesn't exist; already formatted; no reformat": {
 			isMountedErr: os.ErrNotExist,
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsStr: "reiserfs",
 			expErr:   FaultFormatNoReformat,
 		},
+		"dcpm: mountpoint not accessible": {
+			isMountedErr: os.ErrPermission,
+			request: &storage.ScmFormatRequest{
+				Mountpoint: nestedMountPoint,
+				Dcpm: &storage.DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: "reiserfs",
+			expErr:   FaultPathAccessDenied(nestedMountPoint),
+		},
 		"dcpm: not mounted; already formatted; no reformat": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
@@ -643,45 +807,45 @@ func TestProviderFormat(t *testing.T) {
 		},
 		"dcpm: mountpoint doesn't exist; already formatted; reformat": {
 			isMountedErr: os.ErrNotExist,
-			request: &FormatRequest{
-				Reformat:   true,
+			request: &storage.ScmFormatRequest{
+				Force:      true,
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsStr: "reiserfs",
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 				Mounted:    true,
 			},
 		},
 		"dcpm: not mounted; already formatted; reformat": {
-			request: &FormatRequest{
-				Reformat:   true,
+			request: &storage.ScmFormatRequest{
+				Force:      true,
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsStr: "reiserfs",
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 				Mounted:    true,
 			},
 		},
 		"dcpm: mounted; already formatted; reformat": {
-			request: &FormatRequest{
-				Reformat:   true,
+			request: &storage.ScmFormatRequest{
+				Force:      true,
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsStr: "reiserfs",
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 				Mounted:    true,
@@ -689,37 +853,37 @@ func TestProviderFormat(t *testing.T) {
 		},
 		"dcpm: mountpoint doesn't exist; not formatted": {
 			isMountedErr: os.ErrNotExist,
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsStr: fsTypeNone,
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 				Mounted:    true,
 			},
 		},
 		"dcpm: not mounted; not formatted": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
 			getFsStr: fsTypeNone,
-			expResponse: &FormatResponse{
+			expResponse: &storage.ScmFormatResponse{
 				Mountpoint: goodMountPoint,
 				Formatted:  true,
 				Mounted:    true,
 			},
 		},
 		"dcpm: not mounted; not formatted; mkfs fails": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
@@ -727,9 +891,9 @@ func TestProviderFormat(t *testing.T) {
 			mkfsErr:  errors.New("mkfs failed"),
 		},
 		"dcpm: not mounted; not formatted; mount fails": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: goodDevice,
 				},
 			},
@@ -737,9 +901,9 @@ func TestProviderFormat(t *testing.T) {
 			mountErr: errors.New("mount failed"),
 		},
 		"dcpm: missing device": {
-			request: &FormatRequest{
+			request: &storage.ScmFormatRequest{
 				Mountpoint: goodMountPoint,
-				Dcpm: &DcpmParams{
+				Dcpm: &storage.DcpmParams{
 					Device: "/bad/device",
 				},
 			},
@@ -750,10 +914,42 @@ func TestProviderFormat(t *testing.T) {
 			},
 			expErr: FaultFormatMissingDevice("/bad/device"),
 		},
+		"dcpm: mountpoint doesn't exist; not formatted; nested mountpoint": {
+			isMountedErr: os.ErrNotExist,
+			request: &storage.ScmFormatRequest{
+				Mountpoint: nestedMountPoint,
+				Dcpm: &storage.DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeNone,
+			expResponse: &storage.ScmFormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+		},
+		"dcpm: not mounted; not formatted; nested mountpoint": {
+			request: &storage.ScmFormatRequest{
+				Mountpoint: nestedMountPoint,
+				Dcpm: &storage.DcpmParams{
+					Device: goodDevice,
+				},
+			},
+			getFsStr: fsTypeNone,
+			expResponse: &storage.ScmFormatResponse{
+				Mountpoint: nestedMountPoint,
+				Formatted:  true,
+				Mounted:    true,
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
+
+			testDir, clean := common.CreateTestDir(t)
+			defer clean()
 
 			mbc := &MockBackendConfig{
 				DiscoverErr:         tc.discoverErr,
@@ -770,24 +966,18 @@ func TestProviderFormat(t *testing.T) {
 				UnmountErr:    tc.unmountErr,
 			}
 			p := NewMockProvider(log, mbc, msc)
-			cmpRes := func(t *testing.T, want, got *FormatResponse) {
+			cmpRes := func(t *testing.T, want, got *storage.ScmFormatResponse) {
 				t.Helper()
 				if diff := cmp.Diff(want, got); diff != "" {
 					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 				}
 			}
 
-			testDir, err := ioutil.TempDir("", strings.Replace(t.Name(), "/", "-", -1))
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer os.RemoveAll(testDir)
-
 			req := tc.request
 			if req == nil {
-				req = &FormatRequest{
+				req = &storage.ScmFormatRequest{
 					Mountpoint: tc.mountPoint,
-					Ramdisk: &RamdiskParams{
+					Ramdisk: &storage.RamdiskParams{
 						Size: 1,
 					},
 				}
@@ -817,10 +1007,18 @@ func TestProviderFormat(t *testing.T) {
 					}
 					t.Fatalf("%s leaked from IsMounted() check", err)
 				default:
-					if tc.expErr != nil && tc.expErr.Error() == errors.Cause(err).Error() {
-						return
+					if tc.expErr == nil {
+						t.Fatal(err)
 					}
-					t.Fatal(err)
+
+					// expErr will contain the original mountpoint
+					errStr := errors.Cause(err).Error()
+					errStr = strings.Replace(errStr, testDir, "", 1)
+					if diff := cmp.Diff(tc.expErr.Error(), errStr); diff != "" {
+						t.Fatalf("unexpected error (-want, +got):\n%s\n", diff)
+					}
+
+					return
 				}
 			}
 			cmpRes(t, tc.expResponse, res)

@@ -10,6 +10,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -65,18 +66,24 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 
 	// TODO: decide whether we want meaningful JSON output
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(new(control.ConfigGenerateResp), nil)
+		return cmd.outputJSON(nil, errors.New("JSON output not supported"))
 	}
 
 	resp, err := control.ConfigGenerate(ctx, req)
-
-	if resp != nil && resp.Errors() != nil {
-		// host level errors e.g. unresponsive daos_server process
-		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+	if err != nil {
+		cge, ok := errors.Cause(err).(*control.ConfigGenerateError)
+		if !ok {
+			// includes hardware validation errors e.g. hardware across hostset differs
 			return err
 		}
-		cmd.log.Error(bld.String()) // no-op if no host level errors
+
+		// host level errors e.g. unresponsive daos_server process
+		var bld strings.Builder
+		if err := pretty.PrintResponseErrors(cge, &bld); err != nil {
+			return err
+		}
+		cmd.log.Error(bld.String())
+		return err
 	}
 
 	// includes hardware validation errors e.g. hardware across hostset differs

@@ -10,7 +10,7 @@ from daos_core_base import DaosCoreBase
 from avocado.utils import process
 from general_utils import get_log_file
 
-class CSumErrorLog(DaosCoreBase):
+class CsumErrorLog(DaosCoreBase):
     """
     Test Class Description: This test runs
     daos_test -z (Checksum tests) and verifies
@@ -85,10 +85,9 @@ class CSumErrorLog(DaosCoreBase):
 
         Test Description: Write Avocado Test to verify single data after
                           pool/container disconnect/reconnect.
-
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=faults
+        :avocado: tags=checksum,faults
         :avocado: tags=csum_error_log
         """
         dev_id = self.get_nvme_device_id()

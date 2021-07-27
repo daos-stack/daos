@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package bdev
 
 import (
@@ -14,6 +15,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -21,8 +23,8 @@ const (
 	defaultNrHugepages = 4096
 	nrHugepagesEnv     = "_NRHUGE"
 	targetUserEnv      = "_TARGET_USER"
-	pciWhiteListEnv    = "_PCI_WHITELIST"
-	pciBlackListEnv    = "_PCI_BLACKLIST"
+	pciAllowListEnv    = "_PCI_WHITELIST"
+	pciBlockListEnv    = "_PCI_BLACKLIST"
 	driverOverrideEnv  = "_DRIVER_OVERRIDE"
 	vfioDisabledDriver = "uio_pci_generic"
 )
@@ -104,7 +106,7 @@ func (s *spdkSetupScript) Reset() error {
 // whitelist of PCI addresses.
 //
 // NOTE: will make the controller disappear from /dev until reset() called.
-func (s *spdkSetupScript) Prepare(req PrepareRequest) error {
+func (s *spdkSetupScript) Prepare(req storage.BdevPrepareRequest) error {
 	nrHugepages := req.HugePageCount
 	if nrHugepages <= 0 {
 		nrHugepages = defaultNrHugepages
@@ -116,15 +118,15 @@ func (s *spdkSetupScript) Prepare(req PrepareRequest) error {
 		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
 	}
 
-	if req.PCIWhitelist != "" && req.PCIBlacklist != "" {
-		return errors.New("bdev_include and bdev_exclude can't be used together\n")
+	if req.PCIAllowlist != "" && req.PCIBlocklist != "" {
+		return errors.New("bdev_include and bdev_exclude can not be used together")
 	}
 
-	if req.PCIWhitelist != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciWhiteListEnv, req.PCIWhitelist))
+	if req.PCIAllowlist != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowlist))
 	}
-	if req.PCIBlacklist != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciBlackListEnv, req.PCIBlacklist))
+	if req.PCIBlocklist != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciBlockListEnv, req.PCIBlocklist))
 	}
 	if req.DisableVFIO {
 		env = append(env, fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver))

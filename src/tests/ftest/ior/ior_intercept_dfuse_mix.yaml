@@ -28,7 +28,6 @@ container:
 ior:
     client_processes:
       np: 32
-    test_file: daos:testFile
     repetitions: 1
 # Remove the below line once DAOS-3143 is resolved
     dfs_destroy: False
@@ -38,8 +37,8 @@ ior:
           api: POSIX
           transfer_size: '1M'
           block_size: '8G'
-          write_x: 1
-          read_x: 1
+          write_x: 4
+          read_x: 2
           dfs_oclass: "SX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"

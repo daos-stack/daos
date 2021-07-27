@@ -5,6 +5,12 @@ hosts:
         - server-B
         - server-C
         - server-D
+        - server-E
+        - server-F
+        - server-G
+        - server-H
+        - server-I
+        - server-J
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
@@ -18,35 +24,53 @@ setup:
     start_servers: True
     start_agents: True
 server_config:
+    engines_per_host: 2
     name: daos_server
     provider: ofi+verbs;ofi_rxm
     nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
-        log_mask: ERR
-        fabric_iface: ib0
-        fabric_iface_port: 31416
-        log_mask: ERR
-        log_file: daos_io0.log
-        # Storage definitions for AEP and NVMe
-        scm_mount: /mnt/daos0
-        scm_class: dcpm
-        scm_list: [/dev/pmem0]
-        bdev_class: nvme
-        bdev_list: ["0000:81:00.0","0000:da:00.0"]
-        env_vars:
-            - FI_UNIVERSE_SIZE=2048
+        0:
+            targets: 4
+            pinned_numa_node: 0
+            nr_xs_helpers: 1
+            fabric_iface: ib0
+            fabric_iface_port: 31317
+            log_file: daos_server0.log
+            bdev_class: nvme
+            bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+            scm_class: dcpm
+            scm_list: ["/dev/pmem0"]
+            scm_mount: /mnt/daos0
+            log_mask: ERR
+            env_vars:
+                - FI_UNIVERSE_SIZE=2048
+                - DAOS_MC_CAP=1024
+        1:
+            targets: 4
+            pinned_numa_node: 1
+            nr_xs_helpers: 1
+            fabric_iface: ib1
+            fabric_iface_port: 31417
+            log_file: daos_server1.log
+            bdev_class: nvme
+            bdev_list: ["cccc:cc:cc.c","dddd:dd:dd.d"]
+            scm_class: dcpm
+            scm_list: ["/dev/pmem1"]
+            scm_mount: /mnt/daos1
+            log_mask: ERR
+            env_vars:
+                - FI_UNIVERSE_SIZE=2048
+                - DAOS_MC_CAP=1024
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-    mode: 146
     name: daos_server
-    scm_size: 160GB
-    nvme_size: 800GB
-    svcn: 1
+    scm_size: 200GB
+    nvme_size: 1TB
+    properties: reclaim:time,ec_cell_sz:64KiB
     control_method: dmg
 pool_reserved:
-    mode: 511
     name: daos_server
     scm_size: 3GB
     nvme_size: 50GB
@@ -54,20 +78,12 @@ pool_reserved:
 container:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    oclass: SX
     control_method: daos
 container_reserved:
-    oclass: OC_SX
-    akey_size: 5
-    dkey_size: 5
-    data_size: 4096
-    object_qty: 20
-    record_qty: 1
-    record_size: 100
-    array_size: 1
     type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
-    control_method: API
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+    oclass: EC_2P1GX
+    control_method: daos
 # test_params - Defines the type of test to run and how long it runs
 #               It also defines how many pools and jobs to create
 #               name:                The name of the Avocado testcase
@@ -84,27 +100,27 @@ soak_stress:
     name: soak_stress
     # stress test timeout in hours
     test_timeout: 48
-    # maximum timeout for a single job in test in minutes
-    job_timeout: 30
-    nodesperjob:
-        - 2
-        - 4
-        - 8
-        - -1
-    # used for performance benchmarks
-    taskspernode:
-        - 1
-        - 16
-        - 32
     joblist:
         - fio_stress
         - daos_racer
         - ior_stress
+        - mdtest_stress
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
 # sequential
 ior_stress:
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 30
+    nodesperjob:
+        - 1
+        - 4
+        - 8
+    # used for performance benchmarks
+    taskspernode:
+        - 1
+        - 16
+        - 32
     api:
         - DFS
         - MPIIO
@@ -112,26 +128,29 @@ ior_stress:
         - HDF5
         - HDF5-VOL
     test_file: daos:testFile
-    flags: -v -w -W -r -R -F -k
+    flags: -v -w -W -r -R -k
     block_size:
         - '64M'
     repetitions: 5
     transfer_size:
-        - '4k'
-        - '128k'
         - '1m'
-        - '512K'
-        - '64k'
+        - '4k'
     dfs_oclass:
-        - 'SX'
-    dfs_dir_oclass:
-        - 'SX'
+        - "SX"
+        - "EC_2P1GX"
+#        - "EC_4P1G1"
+#        - "EC_4P2GX"
+#        - "EC_8P2G1"
+#        - "EC_16P2GX"
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/ior/"
+        disable_caching: True
 fio_stress:
   names:
     - global
     - test
   global:
-    directory: "/tmp/daos_dfuse/"
+    directory: "/tmp/daos_dfuse/fio/"
     ioengine: 'libaio'
     thread: 1
     group_reporting: 1
@@ -151,16 +170,56 @@ fio_stress:
         - 'rw'
         - 'randrw'
     oclass:
-        - 'SX'
+        - "SX"
+        - "EC_2P1GX"
+        # - "EC_4P1G1"
+        # - "EC_4P2GX"
+        # - "EC_8P2G1"
+        # - "EC_16P2GX"
+  dfuse:
+    mount_dir: "/tmp/daos_dfuse/fio/"
+    disable_wb_caching: True
 daos_racer:
-  runtime: 7200
-  container:
-    type: POSIX
-    oclass: SX
-    control_method: daos
-dfuse:
-    mount_dir: "/tmp/daos_dfuse/"
-    disable_direct_io: True
+    runtime: 120
+    container:
+        type: POSIX
+        oclass: SX
+        control_method: daos
+mdtest_stress:
+    # maximum timeout for a single job in test in minutes
+    job_timeout: 40
+    nodesperjob:
+        - 1
+        - 4
+        - 8
+    taskspernode:
+        - 16
+    test_dir: "/"
+    api:
+        - 'DFS'
+        - 'POSIX'
+    iteration: 1
+    num_of_files_dirs: 3000
+    branching_factor: 1
+    flags: '-v'
+    write_bytes:
+        - 3901
+    read_bytes:
+        - 3901
+    depth:
+        - 10
+        - 0
+    dfs_oclass:
+        - "S1"
+        - "EC_2P1GX"
+#        - "EC_4P1G1"
+#        - "EC_4P2GX"
+#        - "EC_8P2G1"
+#        - "EC_16P2GX"
+    dfs_destroy: False
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/mdtest/"
+        disable_caching: True
 hdf5_vol:
     plugin_path: "/usr/lib64/mpich/lib"
 events:
@@ -169,3 +228,4 @@ events:
 monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
+    - "ps -C daos_engine -o %mem,%cpu,cmd"

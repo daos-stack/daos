@@ -2,41 +2,69 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.1~rc1-1%{?dist}
-%global libfabric_version 1.12.0~rc1-1
+%global mercury_version 2.0.1-1%{?dist}
+%global libfabric_version 1.12.0
 %global __python %{__python3}
 
+%if (0%{?rhel} >= 8)
+# https://bugzilla.redhat.com/show_bug.cgi?id=1955184
+%define _use_internal_dependency_generator 0
+%define __find_requires %{_sourcedir}/bz-1955184_find-requires
+%endif
+
 Name:          daos
-Version:       1.3.0
-Release:       3%{?relval}%{?dist}
+Version:       1.3.103
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
 URL:           https//github.com/daos-stack/daos
 Source0:       %{name}-%{version}.tar.gz
+Source1:       bz-1955184_find-requires
 %if (0%{?rhel} >= 7)
+%if (0%{?rhel} >= 8)
+BuildRequires: python3-scons >= 2.4
+%else
 BuildRequires: python36-scons >= 2.4
+%endif
 %else
 BuildRequires: scons >= 2.4
 %endif
 BuildRequires: libfabric-devel >= %{libfabric_version}
 BuildRequires: mercury-devel = %{mercury_version}
+%if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
 BuildRequires: libpsm2-devel
+%endif
 BuildRequires: gcc-c++
+%if (0%{?rhel} >= 8)
+BuildRequires: openmpi-devel
+%else
 BuildRequires: openmpi3-devel
+%endif
 BuildRequires: hwloc-devel
+%if ("%{?compiler_args}" == "COMPILER=covc")
+BuildRequires: bullseye
+%endif
 %if (0%{?rhel} >= 7)
-BuildRequires: argobots-devel >= 1.0rc1
+BuildRequires: argobots-devel >= 1.1
 BuildRequires: json-c-devel
+%if (0%{?rhel} >= 8)
+BuildRequires: boost-python3-devel
+%else
 BuildRequires: boost-python36-devel
+%endif
 %else
 BuildRequires: libabt-devel >= 1.0rc1
 BuildRequires: libjson-c-devel
 BuildRequires: boost-devel
 %endif
-BuildRequires: libpmem-devel >= 1.8, libpmemobj-devel >= 1.8
+BuildRequires: libpmemobj-devel >= 1.11
+%if (0%{?rhel} >= 8)
+BuildRequires: fuse3-devel >= 3
+%else
 BuildRequires: fuse3-devel >= 3.4.2
+%endif
 %if (0%{?suse_version} >= 1500)
 # NB: OpenSUSE is stupid about this... If we just
 # specify go >= 1.X, it installs go=1.11 AND 1.X.
@@ -48,7 +76,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 20, spdk-devel < 21
+BuildRequires: spdk-devel >= 21.04
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -56,12 +84,11 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: raft-devel = 0.7.3
+BuildRequires: daos-raft-devel = 0.8.0
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
 BuildRequires: libcmocka-devel
-BuildRequires: readline-devel
 BuildRequires: valgrind-devel
 BuildRequires: systemd
 %if (0%{?rhel} >= 7)
@@ -71,7 +98,11 @@ BuildRequires: golang-bin >= 1.12
 # needed to retrieve PMM region info through control-plane
 BuildRequires: libipmctl-devel
 BuildRequires: python36-devel
+%if (0%{?rhel} >= 8)
+BuildRequires: python3-distro
+%else
 BuildRequires: python36-distro
+%endif
 BuildRequires: Lmod
 %else
 %if (0%{?suse_version} >= 1315)
@@ -101,11 +132,6 @@ BuildRequires: libpsm_infinipath1
 %endif
 %endif
 %endif
-%if (0%{?suse_version} >= 1500)
-Requires: libpmem1 >= 1.8, libpmemobj1 >= 1.8
-%else
-Requires: libpmem >= 1.8, libpmemobj >= 1.8
-%endif
 Requires: protobuf-c
 Requires: openssl
 # This should only be temporary until we can get a stable upstream release
@@ -127,14 +153,15 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: %{name}-client%{?_isa} = %{version}-%{release}
-Requires: spdk-tools
+Requires: spdk-tools >= 21.04
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
-Requires: ipmctl < 02.00.00.3809
+Requires: ipmctl >= 02.00.00.3733
+Requires: libpmemobj1 >= 1.11
 %else
 Requires: ipmctl > 02.00.00.3816
+Requires: libpmemobj >= 1.11
 %endif
 Requires: hwloc
 Requires: mercury = %{mercury_version}
@@ -152,14 +179,22 @@ Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
 Requires: libfabric >= %{libfabric_version}
+%if (0%{?rhel} >= 8)
+Requires: fuse3 >= 3
+%else
 Requires: fuse3 >= 3.4.2
+%endif
 Obsoletes: cart < 1000
 %if (0%{?suse_version} >= 1500)
 Requires: libfuse3-3 >= 3.4.2
 %else
 # because our repo has a deprecated fuse-3.x RPM, make sure we don't
 # get it when fuse3 Requires: /etc/fuse.conf
+%if (0%{?rhel} >= 8)
+Requires: fuse3 >= 3
+%else
 Requires: fuse < 3, fuse3-libs >= 3.4.2
+%endif
 %endif
 %{?systemd_requires}
 
@@ -168,20 +203,23 @@ This is the package needed to run a DAOS client
 
 %package tests
 Summary: The DAOS test suite
+#This is a bit messy and needs some cleanup.  In theory,
+#we should have client tests and server tests in separate
+#packages but some binaries need libraries from both at
+#present.
 Requires: %{name}-client%{?_isa} = %{version}-%{release}
-%if (0%{?rhel} >= 7)
-Requires: python36
+Requires: %{name}-server%{?_isa} = %{version}-%{release}
+%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
 Requires: python36-distro
 Requires: python36-tabulate
-%endif
-%if (0%{?suse_version} >= 1500)
-Requires: python3
+%else
 Requires: python3-distro
 Requires: python3-tabulate
 %endif
 Requires: fio
 Requires: dbench
 Requires: lbzip2
+Requires: attr
 %if (0%{?suse_version} >= 1315)
 Requires: libpsm_infinipath1
 %endif
@@ -190,17 +228,25 @@ Requires: libpsm_infinipath1
 This is the package needed to run the DAOS test suite
 
 %package devel
-# Leap 15 doesn't seem to be creating dependencies as richly as EL7
-# for example, EL7 automatically adds:
-# Requires: libdaos.so.0()(64bit)
-%if (0%{?suse_version} >= 1500)
-Requires: %{name}-client%{?_isa} = %{version}-%{release}
-Requires: %{name}%{?_isa} = %{version}-%{release}
-%endif
 Summary: The DAOS development libraries and headers
+Requires: %{name}-client%{?_isa} = %{version}-%{release}
+Requires: libuuid-devel
 
 %description devel
 This is the package needed to build software with the DAOS library.
+
+%package firmware
+Summary: The DAOS firmware management helper
+Requires: %{name}-server%{?_isa} = %{version}-%{release}
+
+%description firmware
+This is the package needed to manage server storage firmware on DAOS servers.
+
+%if (0%{?suse_version} > 0)
+%global __debug_package 1
+%global _debuginfo_subpackages 0
+%debug_package
+%endif
 
 %prep
 %autosetup
@@ -218,23 +264,34 @@ This is the package needed to build software with the DAOS library.
       --no-rpath             \
       --stack_mmap         \
       USE_INSTALLED=all      \
+      FIRMWARE_MGMT=yes      \
       CONF_DIR=%{conf_dir}   \
       PREFIX=%{buildroot}    \
-     %{?scons_args}
+     %{?scons_args}          \
+     %{?compiler_args}
+
+%if ("%{?compiler_args}" == "COMPILER=covc")
+mv test.cov{,-build}
+%endif
 
 %install
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
       --no-rpath                      \
-      --stack_mmap                   \
-      --install-sandbox=%{buildroot} \
-      %{buildroot}%{_prefix}         \
-      %{buildroot}%{conf_dir}        \
+      --stack_mmap                    \
+      --install-sandbox=%{buildroot}  \
+      %{buildroot}%{_prefix}          \
+      %{buildroot}%{conf_dir}         \
       USE_INSTALLED=all               \
+      FIRMWARE_MGMT=yes               \
       CONF_DIR=%{conf_dir}            \
       PREFIX=%{_prefix}               \
-      %{?scons_args}
+      %{?scons_args}                  \
+      %{?compiler_args}
 
+%if ("%{?compiler_args}" == "COMPILER=covc")
+mv test.cov-build %{buildroot}/usr/lib/daos/TESTING/ftest/test.cov
+%endif
 mkdir -p %{buildroot}/%{_sysconfdir}/ld.so.conf.d/
 echo "%{_libdir}/daos_srv" > %{buildroot}/%{_sysconfdir}/ld.so.conf.d/daos.conf
 mkdir -p %{buildroot}/%{_unitdir}
@@ -246,7 +303,7 @@ install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
 mkdir -p %{buildroot}/%{conf_dir}/certs/clients
-mv %{buildroot}/%{_sysconfdir}/daos/bash_completion.d %{buildroot}/%{_sysconfdir}
+mv %{buildroot}/%{conf_dir}/bash_completion.d %{buildroot}/%{_sysconfdir}
 
 %pre server
 getent group daos_metrics >/dev/null || groupadd -r daos_metrics
@@ -273,46 +330,27 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 
 %files
 %defattr(-, root, root, -)
-# you might think libvio.so goes in the server RPM but
-# the 2 tools following it need it
-%{_libdir}/daos_srv/libbio.so
-# you might think libdaos_tests.so goes in the tests RPM but
-# the 4 tools following it need it
-%{_libdir}/libdaos_tests.so
 %{_sysconfdir}/ld.so.conf.d/daos.conf
-%{_bindir}/io_conf
-%{_bindir}/jump_pl_map
-%{_bindir}/ring_pl_map
-%{_bindir}/pl_bench
-%{_bindir}/rdbt
-%{_libdir}/libvos.so
-%{_libdir}/libcart*
-%{_libdir}/libgurt*
-%{_sysconfdir}/daos/memcheck-cart.supp
-%dir %{_sysconfdir}/daos
-%{_sysconfdir}/daos/vos_size_input.yaml
+%dir %attr(0755,root,root) %{conf_dir}/certs
+%{conf_dir}/memcheck-cart.supp
+%dir %{conf_dir}
 %dir %{_sysconfdir}/bash_completion.d
 %{_sysconfdir}/bash_completion.d/daos.bash
-%{_libdir}/libdaos_common.so
-%{_libdir}/libdaos_common_pmem.so
-# TODO: this should move from daos_srv to daos
-%{_libdir}/daos_srv/libplacement.so
 # Certificate generation files
 %dir %{_libdir}/%{name}
 %{_libdir}/%{name}/certgen/
 %{_libdir}/%{name}/VERSION
+%{_libdir}/libcart.so.*
+%{_libdir}/libgurt.so.*
 %doc
 
 %files server
-%config(noreplace) %{conf_dir}/daos_server.yml
-%dir %{conf_dir}/certs
-%attr(0755,root,root) %{conf_dir}/certs
-%dir %{conf_dir}/certs/clients
-%attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
-%attr(0644,root,root) %{conf_dir}/daos_server.yml
+%config(noreplace) %attr(0644,root,root) %{conf_dir}/daos_server.yml
+%dir %attr(0700,daos_server,daos_server) %{conf_dir}/certs/clients
 # set daos_admin to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_admin
 # set daos_server to be setgid daos_server in order to invoke daos_admin
+# and/or daos_firmware
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
 %dir %{_libdir}/daos_srv
@@ -327,45 +365,51 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/daos_srv/librsvc.so
 %{_libdir}/daos_srv/libsecurity.so
 %{_libdir}/daos_srv/libvos_srv.so
+%{_libdir}/daos_srv/libvos_size.so
+%{_libdir}/daos_srv/libvos.so
+%{_libdir}/daos_srv/libbio.so
+%{_libdir}/daos_srv/libplacement.so
+%{_libdir}/libdaos_common_pmem.so
+%{conf_dir}/vos_size_input.yaml
+%{_bindir}/daos_storage_estimator.py
+%{python3_sitearch}/storage_estimator/*.py
+%dir %{python3_sitearch}/storage_estimator
+%if (0%{?rhel} >= 7)
+%dir %{python3_sitearch}/storage_estimator/__pycache__
+%{python3_sitearch}/storage_estimator/__pycache__/*.pyc
+%endif
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
 %{_unitdir}/%{server_svc_name}
 
 %files client
+%{_libdir}/libdaos_common.so
+%{_libdir}/libdaos.so.*
 %{_bindir}/cart_ctl
 %{_bindir}/self_test
 %{_bindir}/dmg
 %{_bindir}/daos_agent
 %{_bindir}/dfuse
 %{_bindir}/daos
-%{_bindir}/dfuse_hl
-%{_bindir}/daos_storage_estimator.py
-%{_libdir}/*.so.*
+%{_bindir}/daos_old
+%{_libdir}/libdaos_cmd_hdlrs.so
 %{_libdir}/libdfs.so
 %{_libdir}/%{name}/API_VERSION
 %{_libdir}/libduns.so
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
-%{_libdir}/libvos_size.so
-%{_libdir}/libdts.so
-%dir %{_libdir}/python3/site-packages/pydaos
-%dir %{_libdir}/python3/site-packages/storage_estimator
-%{_libdir}/python3/site-packages/pydaos/*.py
-%{_libdir}/python3/site-packages/storage_estimator/*.py
+%dir %{python3_sitearch}/pydaos
+%{python3_sitearch}/pydaos/*.py
+%dir %{python3_sitearch}/pydaos/raw
+%{python3_sitearch}/pydaos/raw/*.py
 %if (0%{?rhel} >= 7)
-%dir %{_libdir}/python3/site-packages/pydaos/__pycache__
-%dir %{_libdir}/python3/site-packages/storage_estimator/__pycache__
-%{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
-%{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos/__pycache__
+%{python3_sitearch}/pydaos/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos/raw/__pycache__
+%{python3_sitearch}/pydaos/raw/__pycache__/*.pyc
 %endif
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim_3.so
-%dir %{_libdir}/python3/site-packages/pydaos/raw
-%{_libdir}/python3/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7)
-%dir %{_libdir}/python3/site-packages/pydaos/raw/__pycache__
-%{_libdir}/python3/site-packages/pydaos/raw/__pycache__/*.pyc
-%endif
+%{python3_sitearch}/pydaos/pydaos_shim.so
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos_control.yml
@@ -376,35 +420,132 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
-%exclude %{_prefix}/lib/daos/TESTING/ftest/list_tests.py
+%{_prefix}/lib/daos/TESTING/ftest/list_tests.py
 %{_bindir}/hello_drpc
 %{_bindir}/*_test*
 %{_bindir}/jobtest
-%exclude %{_bindir}/self_test
+%{_bindir}/self_test
+%{_libdir}/libdaos_tests.so
+%{_bindir}/jump_pl_map
+%{_bindir}/ring_pl_map
+%{_bindir}/pl_bench
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
 %{_bindir}/daos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
+%{_bindir}/io_conf
+%{_bindir}/rdbt
 %{_bindir}/obj_ctl
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
 %{_bindir}/daos_metrics
-%{_sysconfdir}/daos/fault-inject-cart.yaml
+%{_bindir}/daos_test
+%{_bindir}/dfs_test
+%{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
 %{_prefix}/lib/daos/.build_vars.json
 %{_prefix}/lib/daos/.build_vars.sh
+%{_libdir}/libdts.so
 
 %files devel
 %{_includedir}/*
 %{_libdir}/libdaos.so
+%{_libdir}/libgurt.so
+%{_libdir}/libcart.so
 %{_libdir}/*.a
 
+%files firmware
+# set daos_firmware to be setuid root in order to perform privileged tasks
+%attr(4750,root,daos_server) %{_bindir}/daos_firmware
+
 %changelog
-* Thu Mar 25 2021 Bruno Faccini <bruno.faccini@intel.com> 1.3.0-3
+* Tue Jul 27 2021 Bruno Faccini <bruno.faccini@intel.com> 1.3.103-5
 - Build with --stack_mmap
+
+* Wed Jul 14 2021 Li Wei <wei.g.li@intel.com> 1.3.103-4
+- Update raft to fix slow leader re-elections
+
+* Tue Jul 13 2021  Maureen Jean <maureen.jean@intel.com> 1.3.103-3
+- Add python modules to python3.6 site-packages
+
+* Mon Jul 12 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.103-2
+- Update to mercury release v2.0.1
+
+* Mon Jul 12 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.103-1
+- Version bump to 1.3.103 for 2.0 test build 3
+
+* Wed Jul 7 2021 Phillip Henderson <phillip.henderson@intel.com> 1.3.102-6
+- Update daos-devel to always require the same version daos-client
+
+* Wed Jun 30 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.102-5
+- Update to spdk 21.04 and (indirectly) dpdk 21.05
+
+* Fri Jun 25 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.102-4
+- Add libuuid-devel back as a requirement of daos-devel
+
+* Wed Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+- Update raft to pick up Pre-Vote
+
+* Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2
+- Update to pmdk 1.11.0-rc1
+- Remove dependence on libpmem since we use libpmemobj directly
+
+* Fri Jun 11 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.102-1
+- Version bump to 1.3.102 for 2.0 test build 2
+
+* Wed Jun 02 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-3
+- Remove libs from devel package
+
+* Thu May 20 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-101-2
+- Remove client libs from common package
+
+* Wed May 19 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.101-1
+- Version bump to 1.3.101 for 2.0 test build 1
+
+* Fri May 07 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-16
+- Enable debuginfo package building on SUSE platforms
+
+* Thu May 06 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-15
+- Update to build on EL8
+
+* Wed May 05 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-14
+- Package /etc/daos/certs in main/common package so that both server
+  and client get it created
+
+* Wed Apr 21 2021 Tom Nabarro <tom.nabarro@intel.com> - 1.3.0-13
+- Relax ipmctl version requirement on leap15 as we have runtime checks
+
+* Fri Apr 16 2021 Mohamad Chaarawi <mohamad.chaarawi@intel.com> - 1.3.0-12
+- remove dfuse_hl
+
+* Wed Apr 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> - 1.3.0-11
+- Remove storage_estimator and io_conf from client packages to remove
+  any client side dependence on bio and vos (and and PMDK/SPDK)
+
+* Mon Apr 12 2021 Dalton A. Bohning <daltonx.bohning@intel.com> - 1.3.0-10
+- Add attr to the test dependencies
+
+* Tue Apr 06 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.0-9
+- Add package for daos_firmware helper binary
+
+* Fri Apr 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.0-8
+- Remove unused readline-devel
+
+* Thu Apr 01 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.0-7
+- Update argobots to 1.1
+
+* Tue Mar 30 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-6
+- Change pydaos_shim_3 to pydaos_shim
+
+* Mon Mar 29 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.0-5
+- Move libdts.so to the daos-tests subpackage
+
+* Tue Mar 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.0-4
+- Update libfabric to v1.12.0
+- Disable grdcopy/gdrapi linkage in libfabric
 
 * Thu Mar 18 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-3
 - Update to python3

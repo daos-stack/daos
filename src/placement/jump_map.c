@@ -154,7 +154,7 @@ jm_obj_placement_get(struct pl_jump_map *jmap, struct daos_obj_md *md,
 
 	/* Get the Object ID and the Object class */
 	oid = md->omd_id;
-	oc_attr = daos_oclass_attr_find(oid);
+	oc_attr = daos_oclass_attr_find(oid, NULL);
 
 	if (oc_attr == NULL) {
 		D_ERROR("Can not find obj class, invalid oid="DF_OID"\n",
@@ -642,12 +642,11 @@ get_object_layout(struct pl_jump_map *jmap, struct pl_obj_layout *layout,
 	}
 	rc = 0;
 
-	if (out_list != NULL) {
+	D_INIT_LIST_HEAD(&local_list);
+	if (out_list != NULL)
 		remap_list = out_list;
-	} else {
-		D_INIT_LIST_HEAD(&local_list);
+	else
 		remap_list = &local_list;
-	}
 
 	dom_size = (struct pool_domain *)(root->do_targets) - (root) + 1;
 	D_ALLOC_ARRAY(dom_used, (dom_size / NBBY) + 1);
@@ -939,11 +938,14 @@ jump_map_obj_place(struct pl_map *map, struct daos_obj_md *md,
 	 */
 	if (unlikely(is_extending || is_adding_new)) {
 		/* Needed to check if domains are being added to pool map */
-		D_DEBUG(DB_PL, DF_OID"/%d is being extended.\n",
-			DP_OID(oid), md->omd_ver);
+		D_DEBUG(DB_PL, DF_OID"/%d is being added: %s or extended: %s\n",
+			DP_OID(oid), md->omd_ver, is_adding_new ? "yes" : "no",
+			is_extending ? "yes" : "no");
+
 		if (is_adding_new)
 			allow_status |= PO_COMP_ST_NEW;
-		else
+
+		if (is_extending)
 			allow_status |= PO_COMP_ST_UP | PO_COMP_ST_DRAIN;
 
 		/* Don't repeat remapping failed shards during this phase -

@@ -1,23 +1,33 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2019-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from rebuild_test_base import RebuildTestBase
+from daos_utils import DaosCommand
 
-
-class ReadArrayTest(RebuildTestBase):
+class RbldReadArrayTest(RebuildTestBase):
     # pylint: disable=too-many-ancestors
     """Run rebuild tests with DAOS servers and clients.
 
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [["DAOS-2799", "targets", 8]]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.daos_cmd = None
 
     def execute_during_rebuild(self):
         """Read the objects during rebuild."""
+
+        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd.container_set_prop(
+                      pool=self.pool.uuid,
+                      cont=self.container.uuid,
+                      prop="status",
+                      value="healthy")
+
         message = "Reading the array objects during rebuild"
         self.log.info(message)
         self.d_log.info(message)
@@ -43,6 +53,7 @@ class ReadArrayTest(RebuildTestBase):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
 
-        :avocado: tags=all,large,full_regression,rebuild,rebuildreadarray
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm,large,rebuild,rebuildreadarray
         """
         self.execute_rebuild_test()

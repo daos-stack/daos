@@ -18,8 +18,8 @@
  * This example doesn't _do_ anything with the data it reads other than print
  * it out.
  */
-void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
-		  int filter, bool show_meta)
+void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
+		  char *dirname, int filter, bool show_meta)
 {
 	struct d_tm_nodeList_t	*nodelist = NULL;
 	struct d_tm_nodeList_t	*head = NULL;
@@ -31,12 +31,13 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 	char			*desc;
 	char			*units;
 	char			*name;
+	int			options = 0;
 	int			rc;
 
 	node = root;
 	if (dirname != NULL) {
 		if (strncmp(dirname, "/", D_TM_MAX_NAME_LEN) != 0) {
-			node = d_tm_find_metric(shmem_root, dirname);
+			node = d_tm_find_metric(ctx, dirname);
 			if (node == NULL) {
 				printf("Cannot find directory or metric: %s\n",
 				       dirname);
@@ -45,7 +46,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 		}
 	}
 
-	rc = d_tm_list(&nodelist, shmem_root, node, filter);
+	rc = d_tm_list(ctx, &nodelist, node, filter);
 	if (rc != DER_SUCCESS) {
 		printf("d_tm_list failure: " DF_RC "\n", DP_RC(rc));
 		return;
@@ -53,84 +54,82 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 	head = nodelist;
 
 	printf("\nThere are %" PRIu64 " metrics in the directory %s\n",
-	       d_tm_count_metrics(shmem_root, node, filter),
+	       d_tm_count_metrics(ctx, node, filter),
 	       dirname ? dirname : "/");
 
 	while (nodelist) {
-		name = d_tm_conv_ptr(shmem_root, nodelist->dtnl_node->dtn_name);
+		node = nodelist->dtnl_node;
+
+		name = d_tm_get_name(ctx, node);
 		if (name == NULL)
 			return;
 
-		d_tm_get_metadata(&desc, &units, shmem_root,
-				  nodelist->dtnl_node, NULL);
+		d_tm_get_metadata(ctx, &desc, &units, node);
 
-		switch (nodelist->dtnl_node->dtn_type) {
+		switch (node->dtn_type) {
 		case D_TM_DIRECTORY:
 			fprintf(stdout, "Directory: %-20s\n", name);
 			break;
 		case D_TM_COUNTER:
-			rc = d_tm_get_counter(&val, shmem_root,
-					      nodelist->dtnl_node, NULL);
+			rc = d_tm_get_counter(ctx, &val, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on counter read: " DF_RC "\n",
 				       DP_RC(rc));
 				break;
 			}
 			d_tm_print_counter(val, name, D_TM_STANDARD, units,
-					   stdout);
+					   options, stdout);
 			break;
 		case D_TM_TIMESTAMP:
-			rc = d_tm_get_timestamp(&clk, shmem_root,
-						nodelist->dtnl_node, NULL);
+			rc = d_tm_get_timestamp(ctx, &clk, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on timestamp read: " DF_RC "\n",
 				       DP_RC(rc));
 				break;
 			}
-			d_tm_print_timestamp(&clk, name, D_TM_STANDARD, stdout);
+			d_tm_print_timestamp(&clk, name, D_TM_STANDARD, options,
+					     stdout);
 			break;
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_REALTIME):
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_PROCESS_CPUTIME):
 		case (D_TM_TIMER_SNAPSHOT | D_TM_CLOCK_THREAD_CPUTIME):
-			rc = d_tm_get_timer_snapshot(&tms, shmem_root,
-						     nodelist->dtnl_node, NULL);
+			rc = d_tm_get_timer_snapshot(ctx, &tms, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on highres timer read: " DF_RC
 				       "\n", DP_RC(rc));
 				break;
 			}
 			d_tm_print_timer_snapshot(&tms, name,
-						  nodelist->dtnl_node->dtn_type,
-						  D_TM_STANDARD, stdout);
+						  node->dtn_type,
+						  D_TM_STANDARD, options,
+						  stdout);
 			break;
 		case D_TM_DURATION | D_TM_CLOCK_REALTIME:
 		case D_TM_DURATION | D_TM_CLOCK_PROCESS_CPUTIME:
 		case D_TM_DURATION | D_TM_CLOCK_THREAD_CPUTIME:
-			rc = d_tm_get_duration(&tms, &stats, shmem_root,
-					       nodelist->dtnl_node, NULL);
+			rc = d_tm_get_duration(ctx, &tms, &stats, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on duration read: " DF_RC "\n",
 				       DP_RC(rc));
 				break;
 			}
 			d_tm_print_duration(&tms, &stats, name,
-					    nodelist->dtnl_node->dtn_type,
-					    D_TM_STANDARD, stdout);
+					    node->dtn_type,
+					    D_TM_STANDARD, options, stdout);
 			break;
 		case D_TM_GAUGE:
-			rc = d_tm_get_gauge(&val, &stats, shmem_root,
-					    nodelist->dtnl_node, NULL);
+			rc = d_tm_get_gauge(ctx, &val, &stats, node);
 			if (rc != DER_SUCCESS) {
 				printf("Error on gauge read: " DF_RC "\n",
 				       DP_RC(rc));
 				break;
 			}
 			d_tm_print_gauge(val, &stats, name, D_TM_STANDARD,
-					 units, stdout);
+					 units, options, stdout);
 			break;
 		default:
 			printf("Item: %s has unknown type: 0x%x\n",
-			       name, nodelist->dtnl_node->dtn_type);
+			       name, node->dtn_type);
 			break;
 		}
 
@@ -140,7 +139,7 @@ void read_metrics(uint64_t *shmem_root, struct d_tm_node_t *root, char *dirname,
 		D_FREE_PTR(desc);
 		D_FREE_PTR(units);
 
-		if (nodelist->dtnl_node->dtn_type != D_TM_DIRECTORY)
+		if (node->dtn_type != D_TM_DIRECTORY)
 			printf("\n");
 
 		nodelist = nodelist->dtnl_next;
@@ -152,7 +151,7 @@ int
 main(int argc, char **argv)
 {
 	struct d_tm_node_t	*root = NULL;
-	uint64_t		*shmem_root = NULL;
+	struct d_tm_context	*ctx = NULL;
 	char			dirname[D_TM_MAX_NAME_LEN] = {0};
 	bool			show_meta = false;
 	int			simulated_srv_idx = 0;
@@ -168,29 +167,30 @@ main(int argc, char **argv)
 	printf("This simulated server instance has ID: %d\n",
 	       simulated_srv_idx);
 
-	shmem_root = d_tm_get_shared_memory(simulated_srv_idx);
-	if (!shmem_root)
+	ctx = d_tm_open(simulated_srv_idx);
+	if (ctx == NULL)
 		goto failure;
 
-	root = d_tm_get_root(shmem_root);
+	root = d_tm_get_root(ctx);
 
 	printf("Full directory tree from root node:\n");
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 		  D_TM_DURATION | D_TM_GAUGE | D_TM_DIRECTORY);
 	show_meta = true;
-	d_tm_print_my_children(shmem_root, root, 0, filter, NULL,
-			       D_TM_STANDARD, show_meta, false, stdout);
+	d_tm_print_my_children(ctx, root, 0, filter, NULL,
+			       D_TM_STANDARD, D_TM_INCLUDE_METADATA, stdout);
 
 	sprintf(dirname, "manually added");
 	filter = (D_TM_COUNTER | D_TM_TIMESTAMP | D_TM_TIMER_SNAPSHOT |
 			D_TM_DURATION | D_TM_GAUGE);
 	show_meta = false;
-	read_metrics(shmem_root, root, dirname, filter, show_meta);
+	read_metrics(ctx, root, dirname, filter, show_meta);
 
 	filter = D_TM_COUNTER;
 	show_meta = true;
-	read_metrics(shmem_root, root, dirname, filter, show_meta);
+	read_metrics(ctx, root, dirname, filter, show_meta);
 
+	d_tm_close(&ctx);
 	return 0;
 
 failure:

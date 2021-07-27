@@ -110,8 +110,11 @@ create_entry(struct dfuse_projection_info *fs_handle,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	entry->attr_timeout = parent->ie_dfs->dfs_attr_timeout;
-	entry->entry_timeout = parent->ie_dfs->dfs_attr_timeout;
+	entry->attr_timeout = parent->ie_dfs->dfc_attr_timeout;
+	if (S_ISDIR(ie->ie_stat.st_mode))
+		entry->entry_timeout = parent->ie_dfs->dfc_dentry_dir_timeout;
+	else
+		entry->entry_timeout = parent->ie_dfs->dfc_dentry_timeout;
 
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
@@ -125,6 +128,7 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		}
 		entry->attr.st_mode = ie->ie_stat.st_mode;
 		entry->attr.st_ino = ie->ie_stat.st_ino;
+		ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
 	}
 
 	entry->generation = 1;
@@ -155,8 +159,11 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		/* Update the existing object with the new name/parent */
 
 		DFUSE_TRA_DEBUG(inode,
-				"Maybe updating parent inode %#lx dfs_ino %lu",
+				"Maybe updating parent inode %#lx dfs_ino %#lx",
 				entry->ino, ie->ie_dfs->dfs_ino);
+
+		/** update the chunk size and oclass of inode entry */
+		dfs_obj_copy_attr(inode->ie_obj, ie->ie_obj);
 
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
@@ -172,17 +179,14 @@ create_entry(struct dfuse_projection_info *fs_handle,
 		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
-		ie->ie_parent = 0;
-		ie->ie_root = 0;
-		ie_close(fs_handle, ie);
+		dfuse_ie_close(fs_handle, ie);
 		ie = inode;
 	}
 
 	*rlinkp = rlink;
-out:
 	if (rc != 0)
-		ie_close(fs_handle, ie);
-
+		dfuse_ie_close(fs_handle, ie);
+out:
 	return rc;
 }
 
@@ -218,12 +222,12 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 	D_ALLOC(reply_buff, size);
 	if (reply_buff == NULL)
-		D_GOTO(err, rc = ENOMEM);
+		D_GOTO(out, rc = ENOMEM);
 
 	if (oh->doh_dre == NULL) {
 		D_ALLOC_ARRAY(oh->doh_dre, READDIR_MAX_COUNT);
 		if (oh->doh_dre == NULL)
-			D_GOTO(err, rc = ENOMEM);
+			D_GOTO(out, rc = ENOMEM);
 	}
 
 	/* if starting from the beginning, reset the anchor attached to
@@ -265,7 +269,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 					 (NAME_MAX + 1) * num,
 					 NULL, NULL);
 			if (rc)
-				D_GOTO(err, rc);
+				D_GOTO(out_reset, rc);
 
 			if (daos_anchor_is_eof(&oh->doh_anchor)) {
 				dfuse_readdir_reset(oh);
@@ -305,7 +309,7 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			rc = fetch_dir_entries(oh, offset, to_fetch, &eod);
 			if (rc != 0)
-				D_GOTO(err, 0);
+				D_GOTO(out_reset, 0);
 
 			if (eod)
 				D_GOTO(reply, 0);
@@ -341,13 +345,15 @@ dfuse_cb_readdir(fuse_req_t req, struct dfuse_obj_hdl *oh,
 
 			if (plus)
 				rc = dfs_lookupx(oh->doh_dfs, oh->doh_obj,
-						 dre->dre_name, O_RDONLY, &obj,
+						 dre->dre_name,
+						 O_RDONLY | O_NOFOLLOW, &obj,
 						 &stbuf.st_mode, &stbuf,
 						 1, &duns_xattr_name,
 						 (void **)&outp, &attr_len);
 			else
 				rc = dfs_lookup_rel(oh->doh_dfs, oh->doh_obj,
-						    dre->dre_name, O_RDONLY,
+						    dre->dre_name,
+						    O_RDONLY | O_NOFOLLOW,
 						    &obj, &stbuf.st_mode, NULL);
 			if (rc == ENOENT) {
 				DFUSE_TRA_DEBUG(oh, "File does not exist");
@@ -429,15 +435,16 @@ reply:
 		DFUSE_TRA_DEBUG(oh, "Replying with %d entries", added);
 
 	if (added == 0 && rc != 0)
-		D_GOTO(err, 0);
+		D_GOTO(out_reset, 0);
 
 	DFUSE_REPLY_BUF(oh, req, reply_buff, buff_offset);
 	D_FREE(reply_buff);
 
 	return;
 
-err:
+out_reset:
 	dfuse_readdir_reset(oh);
+out:
 	DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(reply_buff);
 }

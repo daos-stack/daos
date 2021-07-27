@@ -10,8 +10,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
 )
 
 type (
@@ -70,6 +71,10 @@ type (
 	}
 )
 
+var (
+	errNoRetryHandler = errors.New("request has not set a retry handler")
+)
+
 // request is an embeddable struct to provide basic functionality
 // common to all request types.
 type request struct {
@@ -83,13 +88,17 @@ func (r *request) SetSystem(name string) {
 	r.Sys = name
 }
 
-// getSystem returns the system name set for the request, or
-// the default name.
-func (r *request) getSystem() string {
-	if r.Sys == "" {
+// getSystem returns the system name set on the request or that returned by the
+// supplied sysGetter implementation or the build defined default name.
+func (r *request) getSystem(getter sysGetter) string {
+	switch {
+	case r.Sys != "":
+		return r.Sys
+	case getter.GetSystem() != "":
+		return getter.GetSystem()
+	default:
 		return build.DefaultSystemName
 	}
-	return r.Sys
 }
 
 // getHostList returns the hostlist set for the request, which
@@ -140,7 +149,7 @@ func (r *request) canRetry(_ error, _ uint) bool {
 // calling retry, in order to avoid wasting effort on a request
 // that does not implement its own retry logic.
 func (r *request) onRetry(_ context.Context, _ uint) error {
-	return errors.New("request is not retryable")
+	return errNoRetryHandler
 }
 
 // retryAfter implements the retrier interface and always returns
@@ -214,5 +223,5 @@ func (r *retryableRequest) onRetry(ctx context.Context, cur uint) error {
 		return r.retryFn(ctx, cur)
 	}
 
-	return nil
+	return errNoRetryHandler
 }

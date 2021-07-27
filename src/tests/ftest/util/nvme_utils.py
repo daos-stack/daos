@@ -162,7 +162,7 @@ class ServerFillUp(IorTestBase):
         _tmp_block_size = (((free_space/100)*self.capacity)/self.processes)
         _tmp_block_size = int(_tmp_block_size / int(replica_server))
         block_size = (
-            (_tmp_block_size / int(self.ior_cmd.transfer_size.value)) *
+            int(_tmp_block_size / int(self.ior_cmd.transfer_size.value)) *
             int(self.ior_cmd.transfer_size.value))
         return block_size
 
@@ -205,8 +205,9 @@ class ServerFillUp(IorTestBase):
 
         """
         try:
-            sizes = self.server_managers[0].get_available_storage()
-        except ServerFailed as error:
+            sizes_dict = self.server_managers[0].get_available_storage()
+            sizes = [sizes_dict["scm"], sizes_dict["nvme"]]
+        except (ServerFailed, KeyError) as error:
             self.fail(error)
 
         # Return the 96% of storage space as it won't be used 100%

@@ -52,16 +52,20 @@ def build_dts_library(env):
 
     denv.AppendUnique(CPPPATH=["../tests/suite"])
 
-    Import('dc_credit')
-    dts_lib = daos_build.library(denv, 'libdts', [dc_credit, 'dts.c'],
+    denv.Replace(SHOBJPREFIX='mpi_')
+    mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    Export('mpi_cmd_parser')
+
+    dts_lib = daos_build.library(denv, 'libdts', ['credit.c', 'dts.c'],
                                  LIBS=libraries)
     denv.Install('$PREFIX/lib64/', dts_lib)
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('env', 'base_env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
@@ -76,21 +80,22 @@ def scons():
     prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc', 'argobots')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
     build_daos_common(denv, True, prereqs)
-    build_daos_common(denv, False, prereqs)
 
-
-    prereqs.require(env, 'pmdk')
     control_tgts = [File('control.c')]
     Export('control_tgts')
 
-    tlib_env = denv.Clone()
-    tlib_env.AppendUnique(LIBS=['json-c'])
-
+    cmd_parser = denv.SharedObject(['cmd_parser.c'])
+    Export('cmd_parser')
     dc_credit = denv.SharedObject(['credit.c'])
     Export('dc_credit')
 
-    cmd_parser = denv.SharedObject(['cmd_parser.c'])
-    Export('cmd_parser')
+    if prereqs.server_requested():
+        build_daos_common(denv, False, prereqs)
+
+    if not prereqs.test_requested():
+        return
+    tlib_env = denv.Clone()
+    tlib_env.AppendUnique(LIBS=['json-c'])
 
     tests_lib_src = ['tests_lib.c', 'tests_dmg_helpers.c']
     tests_lib = daos_build.library(tlib_env, 'libdaos_tests', tests_lib_src)
@@ -100,7 +105,7 @@ def scons():
     prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    build_dts_library(denv)
+    build_dts_library(base_env)
 
 if __name__ == "SCons.Script":
     scons()

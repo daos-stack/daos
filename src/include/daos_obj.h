@@ -364,7 +364,9 @@ enum {
 	DAOS_OCH_RDD_RP		= (1 << 2),	/** Replication */
 	DAOS_OCH_RDD_EC		= (1 << 3),	/** Erasure Code */
 	/** Flags to control OC Sharding */
-	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default - use 1 grp */
+	DAOS_OCH_SHD_DEF	= (1 << 4),	/** Default: Use MAX for array &
+						 * flat KV; 1 grp for others.
+						 */
 	DAOS_OCH_SHD_TINY	= (1 << 5),	/** <= 4 grps */
 	DAOS_OCH_SHD_REG	= (1 << 6),	/** max(128, 25%) */
 	DAOS_OCH_SHD_HI		= (1 << 7),	/** max(256, 50%) */
@@ -474,7 +476,7 @@ daos_obj_punch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to punch dkeys in.
  *			Use DAOS_TX_NONE for an independent transaction.
- * \param[in]	flags	Punch flags (currently ignored).
+ * \param[in]	flags	Punch flags (conditional ops).
  * \param[in]	nr	number of dkeys to punch.
  * \param[in]	dkeys	Array of dkeys to punch.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -501,7 +503,7 @@ daos_obj_punch_dkeys(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	oh	Object open handle.
  * \param[in]	th	Optional transaction handle to punch akeys in.
  *			Use DAOS_TX_NONE for an independent transaction.
- * \param[in]	flags	Punch flags (currently ignored).
+ * \param[in]	flags	Punch flags (conditional ops).
  * \param[in]	dkey	dkey to punch akeys from.
  * \param[in]	nr	number of akeys to punch.
  * \param[in]	akeys	Array of akeys to punch.
@@ -557,7 +559,7 @@ daos_obj_query(daos_handle_t oh, struct daos_obj_attr *oa, d_rank_list_t *ranks,
  * \param[in]	th	Optional transaction handle to fetch with.
  *			Use DAOS_TX_NONE for an independent transaction.
  *
- * \param[in]	flags	Fetch flags (currently ignored).
+ * \param[in]	flags	Fetch flags (conditional ops).
  *
  * \param[in]	dkey	Distribution key associated with the fetch operation.
  *
@@ -620,7 +622,7 @@ daos_obj_fetch(daos_handle_t oh, daos_handle_t th, uint64_t flags,
  * \param[in]	th	Optional transaction handle to update with.
  *			Use DAOS_TX_NONE for an independent transaction.
  *
- * \param[in]	flags	Update flags (currently ignored).
+ * \param[in]	flags	Update flags (conditional ops).
  *
  * \param[in]	dkey	Distribution key associated with the update operation.
  *

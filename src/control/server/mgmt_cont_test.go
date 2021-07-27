@@ -108,8 +108,7 @@ func TestListCont_ZeroContSuccess(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(expectedResp, resp, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }
@@ -136,8 +135,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(expectedResp, resp, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }

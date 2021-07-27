@@ -13,9 +13,9 @@ from test_utils_base import TestDaosApiBase
 from avocado import fail_on
 from command_utils import BasicParameter, CommandFailure
 from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
-from general_utils import (check_pool_files, DaosTestError, run_command,
-                           create_string_buffer)
+from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
+from server_utils_base import ServerFailed, AutosizeCancel
 
 
 class TestPool(TestDaosApiBase):
@@ -45,12 +45,24 @@ class TestPool(TestDaosApiBase):
         self.name = BasicParameter(None)            # server group name
         self.svcn = BasicParameter(None)
         self.target_list = BasicParameter(None)
+        self.size = BasicParameter(None)
+        self.tier_ratio = BasicParameter(None)
         self.scm_size = BasicParameter(None)
         self.nvme_size = BasicParameter(None)
         self.prop_name = BasicParameter(None)       # name of property to be set
         self.prop_value = BasicParameter(None)      # value of property
+        self.properties = BasicParameter(None)      # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
+
+        # Optional TestPool parameters used to autosize the dmg pool create
+        # 'size', 'scm_size', and/or 'nvme_size' values:
+        #   server_index: TestWithServers.server_managers list index
+        #   quantity:     number of pools to account for in sizing
+        #   min_targets:  minimum number of targets allowed
+        self.server_index = BasicParameter(None, 0)
+        self.quantity = BasicParameter(None, 1)
+        self.min_targets = BasicParameter(None, 1)
 
         self.pool = None
         self.uuid = None
@@ -60,6 +72,48 @@ class TestPool(TestDaosApiBase):
 
         self.dmg = dmg_command
         self.query_data = []
+
+    def get_params(self, test):
+        """Get values for all of the command params from the yaml file.
+
+        Autosize any size/scm_size/nvme_size parameter whose value ends in "%".
+
+        Args:
+            test (Test): avocado Test object
+        """
+        super().get_params(test)
+
+        # Autosize any size/scm_size/nvme_size parameters
+        # pylint: disable=too-many-boolean-expressions
+        if ((self.size.value is not None and str(self.size.value).endswith("%"))
+                or (self.scm_size.value is not None
+                    and str(self.scm_size.value).endswith("%"))
+                or (self.nvme_size.value is not None
+                    and str(self.nvme_size.value).endswith("%"))):
+            index = self.server_index.value
+            try:
+                params = test.server_managers[index].autosize_pool_params(
+                    size=self.size.value,
+                    tier_ratio=self.tier_ratio.value,
+                    scm_size=self.scm_size.value,
+                    nvme_size=self.nvme_size.value,
+                    min_targets=self.min_targets.value,
+                    quantity=self.quantity.value)
+            except ServerFailed as error:
+                test.fail(
+                    "Failure autosizing pool parameters: {}".format(error))
+            except AutosizeCancel as error:
+                test.cancel(error)
+
+            # Update the pool parameters with any autosized values
+            for name in params:
+                test_pool_param = getattr(self, name)
+                test_pool_param.update(params[name], name)
+
+                # Cache the autosized value so we do not calculate it again
+                # pylint: disable=protected-access
+                cache_id = (name, self.namespace, test_pool_param._default)
+                test.params._cache[cache_id] = params[name]
 
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
@@ -94,8 +148,11 @@ class TestPool(TestDaosApiBase):
         kwargs = {
             "uid": self.uid,
             "gid": self.gid,
+            "size": self.size.value,
+            "tier_ratio": self.tier_ratio.value,
             "scm_size": self.scm_size.value,
-            "group": self.name.value}
+            "properties": self.properties.value,
+        }
         for key in ("target_list", "svcn", "nvme_size"):
             value = getattr(self, key).value
             if value is not None:
@@ -111,11 +168,6 @@ class TestPool(TestDaosApiBase):
             self._log_method("dmg.pool_create", kwargs)
             data = self.dmg.pool_create(**kwargs)
             if self.dmg.result.exit_status == 0:
-                # Populate the empty DaosPool object with the properties of the
-                # pool created with dmg pool create.
-                if self.name.value:
-                    self.pool.group = create_string_buffer(self.name.value)
-
                 # Convert the string of service replicas from the dmg command
                 # output into an ctype array for the DaosPool object using the
                 # same technique used in DaosPool.create().
@@ -209,11 +261,11 @@ class TestPool(TestDaosApiBase):
                 self.log.info("Destroying pool %s", self.uuid)
 
                 if self.control_method.value == self.USE_API:
-                    # Destroy the pool with the API method
-                    self._call_method(self.pool.destroy, {"force": force})
-                    status = True
+                    raise CommandFailure(
+                        "Error: control method {} not supported for "
+                        "create()".format(self.control_method.value))
 
-                elif self.control_method.value == self.USE_DMG and self.dmg:
+                if self.control_method.value == self.USE_DMG and self.dmg:
                     # Destroy the pool with the dmg command
                     self.dmg.pool_destroy(pool=self.uuid, force=force)
                     status = True
@@ -271,8 +323,7 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(CommandFailure)
     def evict(self):
-        """Evict all pool connections to a DAOS pool"""
-
+        """Evict all pool connections to a DAOS pool."""
         if self.pool:
             self.log.info("Evict all pool connections for pool: %s", self.uuid)
 

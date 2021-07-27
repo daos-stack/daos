@@ -24,6 +24,7 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 func testExpectedError(t *testing.T, expected, actual error) {
@@ -43,9 +44,12 @@ func genMinimalConfig() *config.Server {
 		WithGetNetworkDeviceClass(getDeviceClassStub).
 		WithEngines(
 			engine.NewConfig().
-				WithScmClass("ram").
-				WithScmRamdiskSize(1).
-				WithScmMountPoint("/mnt/daos").
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass("ram").
+						WithScmRamdiskSize(1).
+						WithScmMountPoint("/mnt/daos"),
+				).
 				WithFabricInterface("foo0").
 				WithFabricInterfacePort(42),
 		)
@@ -54,14 +58,15 @@ func genMinimalConfig() *config.Server {
 }
 
 func genDefaultExpected() *config.Server {
-	hostname, _ := os.Hostname()
 	return genMinimalConfig().
 		WithEngines(
 			engine.NewConfig().
-				WithHostname(hostname).
-				WithScmClass("ram").
-				WithScmRamdiskSize(1).
-				WithScmMountPoint("/mnt/daos").
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass("ram").
+						WithScmRamdiskSize(1).
+						WithScmMountPoint("/mnt/daos"),
+				).
 				WithFabricInterface("foo0").
 				WithFabricInterfacePort(42),
 		)
@@ -136,14 +141,14 @@ func TestStartOptions(t *testing.T) {
 		"Storage Path (short)": {
 			argList: []string{"-s", "/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Engines[0].WithScmMountPoint("/foo/bar")
+				cfg.Engines[0].Storage.Tiers[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},
 		"Storage Path (long)": {
 			argList: []string{"--storage=/foo/bar"},
 			expCfgFn: func(cfg *config.Server) *config.Server {
-				cfg.Engines[0].WithScmMountPoint("/foo/bar")
+				cfg.Engines[0].Storage.Tiers[0].WithScmMountPoint("/foo/bar")
 				return cfg
 			},
 		},

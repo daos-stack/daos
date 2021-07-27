@@ -20,7 +20,9 @@ struct dtx_share_peer {
 	d_list_t		dsp_link;
 	struct dtx_id		dsp_xid;
 	daos_unit_oid_t		dsp_oid;
-	uint32_t		dsp_leader;
+	daos_epoch_t		dsp_epoch;
+	uint64_t		dsp_dkey_hash;
+	struct dtx_memberships	dsp_mbs;
 };
 
 /**
@@ -56,6 +58,8 @@ struct dtx_handle {
 	daos_unit_oid_t			 dth_leader_oid;
 
 	uint32_t			 dth_sync:1, /* commit synchronously. */
+					 /* Pin the DTX entry in DRAM. */
+					 dth_pinned:1,
 					 /* DTXs in CoS list are committed. */
 					 dth_cos_done:1,
 					 dth_resent:1, /* For resent case. */
@@ -113,8 +117,13 @@ struct dtx_handle {
 	void				**dth_deferred;
 	/* NVME extents to release */
 	d_list_t			 dth_deferred_nvme;
+	/* Committed or comittable DTX list */
 	d_list_t			 dth_share_cmt_list;
+	/* Aborted DTX list */
+	d_list_t			 dth_share_abt_list;
+	/* Active DTX list */
 	d_list_t			 dth_share_act_list;
+	/* DTX list to be checked */
 	d_list_t			 dth_share_tbd_list;
 	int				 dth_share_tbd_count;
 };
@@ -154,6 +163,7 @@ struct dtx_stat {
 	uint64_t	dtx_oldest_committable_time;
 	uint64_t	dtx_committed_count;
 	uint64_t	dtx_oldest_committed_time;
+	uint64_t	dtx_oldest_active_time;
 };
 
 enum dtx_flags {
@@ -213,6 +223,8 @@ void dtx_batched_commit_deregister(struct ds_cont_child *cont);
 int dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 		 daos_epoch_t epoch);
 
+int dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
+	      struct dtx_entry **dtes, int count);
 int dtx_refresh(struct dtx_handle *dth, struct ds_cont_child *cont);
 
 /**

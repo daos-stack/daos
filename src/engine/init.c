@@ -62,6 +62,9 @@ int			dss_nvme_shm_id = DAOS_NVME_SHMID_NONE;
 /** NVMe mem_size for SPDK memory allocation when using primary mode */
 int			dss_nvme_mem_size = DAOS_NVME_MEM_PRIMARY;
 
+/** NVMe hugepage_size for DPDK/SPDK memory allocation */
+int			dss_nvme_hugepage_size;
+
 /** I/O Engine instance index */
 unsigned int		dss_instance_idx;
 
@@ -82,6 +85,11 @@ hwloc_obj_t		numa_obj;
 int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
+/** Number of storage tiers: 2 for SCM and NVMe */
+int dss_storage_tiers = 2;
+
+/** Flag to indicate Arbogots is initialized */
+static bool dss_abt_init;
 
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
@@ -198,7 +206,6 @@ modules_load(void)
 	D_FREE(sep);
 	return rc;
 }
-
 
 /**
  * Get the appropriate number of main XS based on the number of cores and
@@ -464,6 +471,7 @@ abt_init(int argc, char *argv[])
 		return rc;
 	}
 #endif
+	dss_abt_init = true;
 
 	return 0;
 }
@@ -487,6 +495,7 @@ abt_fini(void)
 	}
 	D_MUTEX_UNLOCK(&stack_free_list_lock);
 #endif
+	dss_abt_init = false;
 	ABT_finalize();
 }
 
@@ -494,9 +503,8 @@ static void
 dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
-	static struct d_tm_node_t	*dead_ranks;
-	static struct d_tm_node_t	*last_ts;
-	int				 rc = 0;
+	int			 rc = 0;
+	struct engine_metrics	*metrics;
 
 	/* We only care about dead ranks for now */
 	if (src != CRT_EVS_SWIM || type != CRT_EVT_DEAD) {
@@ -505,8 +513,10 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		return;
 	}
 
-	(void)d_tm_increment_counter(&dead_ranks, 1, "events/dead_ranks");
-	(void)d_tm_record_timestamp(&last_ts, "events/last_event_ts");
+	metrics = &dss_engine_metrics;
+
+	d_tm_inc_counter(metrics->dead_rank_events, 1);
+	d_tm_record_timestamp(metrics->last_event_time);
 
 	rc = ds_notify_swim_rank_dead(rank);
 	if (rc)
@@ -514,18 +524,65 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 			src, type, DP_RC(rc));
 }
 
+static void
+dss_crt_hlc_error_cb(void *arg)
+{
+	/* Rank will be populated automatically */
+	ds_notify_ras_eventf(RAS_ENGINE_CLOCK_DRIFT, RAS_TYPE_INFO,
+			     RAS_SEV_ERROR, NULL /* hwid */, NULL /* rank */,
+			     NULL /* jobid */, NULL /* pool */,
+			     NULL /* cont */, NULL /* objid */,
+			     NULL /* ctlop */, NULL /* data */,
+			     "clock drift detected");
+}
+
+static void
+server_id_cb(uint32_t *tid, uint64_t *uid)
+{
+
+	if (server_init_state != DSS_INIT_STATE_SET_UP)
+		return;
+
+	if (uid != NULL && dss_abt_init) {
+		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
+		int rc;
+
+		rc = ABT_self_get_type(&type);
+
+		if (rc == 0 && (type == ABT_UNIT_TYPE_THREAD || type == ABT_UNIT_TYPE_TASK))
+			ABT_self_get_thread_id(uid);
+	}
+
+	if (tid != NULL) {
+		struct dss_thread_local_storage *dtc;
+		struct dss_module_info *dmi;
+		int index = daos_srv_modkey.dmk_index;
+
+		/* Avoid assertion in dss_module_key_get() */
+		dtc = dss_tls_get();
+		if (dtc != NULL && index >= 0 && index < DAOS_MODULE_KEYS_NR &&
+		    dss_module_keys[index] == &daos_srv_modkey) {
+			dmi = dss_get_module_info();
+			if (dmi != NULL)
+				*tid = dmi->dmi_xs_id;
+		}
+	}
+}
+
 static int
 server_init(int argc, char *argv[])
 {
-	uint64_t	bound;
-	int64_t		diff;
-	unsigned int	ctx_nr;
-	int		rc;
+	uint64_t		 bound;
+	int64_t			 diff;
+	unsigned int		 ctx_nr;
+	int			 rc;
+	struct engine_metrics	*metrics;
 
 	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
+	daos_debug_set_id_cb(server_id_cb);
 	rc = daos_debug_init(DAOS_LOG_DEFAULT);
 	if (rc != 0)
 		return rc;
@@ -535,13 +592,20 @@ server_init(int argc, char *argv[])
 	if (rc != 0)
 		goto exit_debug_init;
 
+	rc = dss_engine_metrics_init();
+	if (rc != 0)
+		D_WARN("Unable to initialize engine metrics, " DF_RC "\n",
+		       DP_RC(rc));
+
+	metrics = &dss_engine_metrics;
+
 	/** Report timestamp when engine was started */
-	(void)d_tm_record_timestamp(NULL, "started_at");
+	d_tm_record_timestamp(metrics->started_time);
 
 	rc = drpc_init();
 	if (rc != 0) {
 		D_ERROR("Failed to initialize dRPC: "DF_RC"\n", DP_RC(rc));
-		goto exit_telemetry_init;
+		goto exit_metrics_init;
 	}
 
 	rc = register_dbtree_classes();
@@ -676,14 +740,18 @@ server_init(int argc, char *argv[])
 	if (rc)
 		D_GOTO(exit_init_state, rc);
 
+	rc = crt_register_hlc_error_cb(dss_crt_hlc_error_cb, NULL);
+	if (rc)
+		D_GOTO(exit_init_state, rc);
+
 	dss_xstreams_open_barrier();
 	D_INFO("Service fully up\n");
 
 	/** Report timestamp when engine was open for business */
-	(void)d_tm_record_timestamp(NULL, "servicing_at");
+	d_tm_record_timestamp(metrics->ready_time);
 
 	/** Report rank */
-	(void)d_tm_increment_counter(NULL, dss_self_rank(), "rank");
+	d_tm_set_counter(metrics->rank_id, dss_self_rank());
 
 	D_PRINT("DAOS I/O Engine (v%s) process %u started on rank %u "
 		"with %u target, %d helper XS, firstcore %d, host %s.\n",
@@ -700,8 +768,8 @@ exit_init_state:
 exit_srv_init:
 	dss_srv_fini(true);
 exit_mod_loaded:
-	dss_module_unload_all();
 	ds_iv_fini();
+	dss_module_unload_all();
 	if (dss_mod_facs & DSS_FAC_LOAD_CLI) {
 		daos_fini();
 	} else {
@@ -716,7 +784,8 @@ exit_abt_init:
 	abt_fini();
 exit_drpc_fini:
 	drpc_fini();
-exit_telemetry_init:
+exit_metrics_init:
+	dss_engine_metrics_fini();
 	d_tm_fini();
 exit_debug_init:
 	daos_debug_fini();
@@ -735,10 +804,10 @@ server_fini(bool force)
 	D_INFO("server_init_state_fini() done\n");
 	dss_srv_fini(force);
 	D_INFO("dss_srv_fini() done\n");
-	dss_module_unload_all();
-	D_INFO("dss_module_unload_all() done\n");
 	ds_iv_fini();
 	D_INFO("ds_iv_fini() done\n");
+	dss_module_unload_all();
+	D_INFO("dss_module_unload_all() done\n");
 	/*
 	 * Client stuff finalization needs be done after all ULTs drained
 	 * in dss_srv_fini().
@@ -758,6 +827,8 @@ server_fini(bool force)
 	D_INFO("abt_fini() done\n");
 	drpc_fini();
 	D_INFO("drpc_fini() done\n");
+	dss_engine_metrics_fini();
+	D_INFO("dss_engine_metrics_fini() done\n");
 	d_tm_fini();
 	D_INFO("d_tm_fini() done\n");
 	daos_debug_fini();
@@ -796,8 +867,14 @@ Options:\n\
       Identifier for this server instance (default %u)\n\
   --pinned_numa_node=numanode, -p numanode\n\
       Bind to cores within the specified NUMA node\n\
+  --bypass_health_chk, -b\n\
+      Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
       Allocates mem_size MB for SPDK when using primary process mode\n\
+  --hugepage_size=hugepage_size, -H hugepage_size\n\
+      Passes the configured hugepage size(2MB or 1GB)\n\
+  --storage_tiers=ntiers, -T ntiers\n\
+      Number of storage tiers\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -818,10 +895,13 @@ parse(int argc, char **argv)
 		{ "nvme",		required_argument,	NULL,	'n' },
 		{ "pinned_numa_node",	required_argument,	NULL,	'p' },
 		{ "mem_size",		required_argument,	NULL,	'r' },
+		{ "hugepage_size",	required_argument,	NULL,	'H' },
 		{ "targets",		required_argument,	NULL,	't' },
 		{ "storage",		required_argument,	NULL,	's' },
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
 		{ "instance_idx",	required_argument,	NULL,	'I' },
+		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
+		{ "storage_tiers",	required_argument,	NULL,	'T' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -829,7 +909,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:t:s:x:I:",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -880,11 +960,24 @@ parse(int argc, char **argv)
 		case 'r':
 			dss_nvme_mem_size = atoi(optarg);
 			break;
+		case 'H':
+			dss_nvme_hugepage_size = atoi(optarg);
+			break;
 		case 'h':
 			usage(argv[0], stdout);
 			break;
 		case 'I':
 			dss_instance_idx = atoi(optarg);
+			break;
+		case 'b':
+			dss_nvme_bypass_health_check = true;
+			break;
+		case 'T':
+			dss_storage_tiers = atoi(optarg);
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
+				printf("Requires 1 or 2 tiers\n");
+				rc = -DER_INVAL;
+			}
 			break;
 		default:
 			usage(argv[0], stderr);
@@ -1062,16 +1155,20 @@ main(int argc, char **argv)
 
 			 if (abt_infos == NULL) {
 				/* filename format is
-				 * "/tmp/daos_dump_YYYYMMDD_hh_mm.txt"
+				 * "/tmp/daos_dump_<PID>_YYYYMMDD_hh_mm.txt"
 				 */
-				char name[34] = "/tmp/daos_dump.txt";
+				char name[50];
 
 				if (rc != -1 && tm != NULL)
-					snprintf(name, 34,
-						 "/tmp/daos_dump_%04d%02d%02d_%02d_%02d.txt",
-						 tm->tm_year + 1900,
+					snprintf(name, 50,
+						 "/tmp/daos_dump_%d_%04d%02d%02d_%02d_%02d.txt",
+						 getpid(), tm->tm_year + 1900,
 						 tm->tm_mon + 1, tm->tm_mday,
 						 tm->tm_hour, tm->tm_min);
+				else
+					snprintf(name, 50,
+						 "/tmp/daos_dump_%d.txt",
+						 getpid());
 
 				abt_infos = fopen(name, "a");
 				if (abt_infos == NULL) {

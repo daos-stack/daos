@@ -131,7 +131,7 @@ new_access_prop(struct daos_acl *acl, const char *owner, const char *group)
 		return NULL;
 
 	prop = daos_prop_alloc(num_entries);
-	entry = &(prop->dpp_entries[0]);
+	entry = &prop->dpp_entries[0];
 
 	if (acl != NULL) {
 		entry->dpe_type = DAOS_PROP_PO_ACL;
@@ -709,6 +709,7 @@ expect_drpc_list_cont_resp_with_containers(Drpc__Response *resp,
 		uuid_unparse(exp_cont[i].pci_uuid, exp_uuid);
 		assert_string_equal(cont_resp->containers[i]->uuid, exp_uuid);
 	}
+	mgmt__list_cont_resp__free_unpacked(cont_resp, NULL);
 }
 
 static void
@@ -838,25 +839,37 @@ expect_drpc_pool_set_prop_resp_with_error(Drpc__Response *resp,
 	mgmt__pool_set_prop_resp__free_unpacked(set_prop_resp, NULL);
 }
 
-static void
-test_drpc_pool_set_prop_invalid_property_type(void **state)
+static Mgmt__PoolProperty **
+alloc_prop_msg_list(size_t nr)
 {
-	Drpc__Call		call = DRPC__CALL__INIT;
-	Drpc__Response		resp = DRPC__RESPONSE__INIT;
-	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
+	Mgmt__PoolProperty **list;
+	int		    i;
 
-	req.uuid = TEST_UUID;
-	/* make the value valid to ensure we're testing the property */
-	req.numval = 1;
-	req.value_case = MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL;
-	setup_pool_set_prop_drpc_call(&call, &req);
+	D_ALLOC_ARRAY(list, nr);
+	assert_non_null(list);
 
-	ds_mgmt_drpc_pool_set_prop(&call, &resp);
+	for (i = 0; i < nr; i++) {
+		D_ALLOC(list[i], sizeof(Mgmt__PoolProperty));
+		assert_non_null(list[i]);
+		mgmt__pool_property__init(list[i]);
+	}
 
-	expect_drpc_pool_set_prop_resp_with_error(&resp, -DER_INVAL);
+	return list;
+}
 
-	D_FREE(call.body.data);
-	D_FREE(resp.body.data);
+static void
+free_prop_msg_list(Mgmt__PoolProperty **list, size_t nr)
+{
+	int i;
+
+	assert_non_null(list);
+
+	for (i = 0; i < nr; i++) {
+		if (list[i]->value_case == MGMT__POOL_PROPERTY__VALUE_STRVAL)
+			D_FREE(list[i]->strval);
+		D_FREE(list[i]);
+	}
+	D_FREE(list);
 }
 
 static void
@@ -867,14 +880,16 @@ test_drpc_pool_set_prop_invalid_value_type(void **state)
 	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
 
 	req.uuid = TEST_UUID;
-	req.number = 1; /* doesn't matter */
-	req.property_case = MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER;
+	req.properties = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+	req.properties[0]->number = 1; /* doesn't matter */
 	setup_pool_set_prop_drpc_call(&call, &req);
 
 	ds_mgmt_drpc_pool_set_prop(&call, &resp);
 
 	expect_drpc_pool_set_prop_resp_with_error(&resp, -DER_INVAL);
 
+	free_prop_msg_list(req.properties, req.n_properties);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -887,14 +902,16 @@ test_drpc_pool_set_prop_bad_uuid(void **state)
 	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
 
 	req.uuid = "wow this won't work";
-	req.number = 1; /* doesn't matter */
-	req.property_case = MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER;
+	req.properties = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+	req.properties[0]->number = 1; /* doesn't matter */
 	setup_pool_set_prop_drpc_call(&call, &req);
 
 	ds_mgmt_drpc_pool_set_prop(&call, &resp);
 
 	expect_drpc_pool_set_prop_resp_with_error(&resp, -DER_INVAL);
 
+	free_prop_msg_list(req.properties, req.n_properties);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -912,8 +929,6 @@ expect_drpc_pool_set_prop_resp_success(Drpc__Response *resp,
 					 resp->body.data);
 	assert_non_null(setprop_resp);
 	assert_int_equal(setprop_resp->status, 0);
-	assert_int_equal(setprop_resp->number, prop_number);
-	assert_int_equal(setprop_resp->numval, val_number);
 
 	mgmt__pool_set_prop_resp__free_unpacked(setprop_resp, NULL);
 }
@@ -924,26 +939,202 @@ test_drpc_pool_set_prop_success(void **state)
 	Drpc__Call		call = DRPC__CALL__INIT;
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
-	daos_prop_t		*exp_result;
 	int			prop_number = DAOS_PROP_PO_MAX;
 	int			val_number = 1;
 
 	req.uuid = TEST_UUID;
-	req.number = prop_number;
-	req.property_case = MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER;
-	req.numval = val_number;
-	req.value_case = MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL;
+	req.properties = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+	req.properties[0]->number = prop_number;
+	req.properties[0]->numval = val_number;
+	req.properties[0]->value_case = MGMT__POOL_PROPERTY__VALUE_NUMVAL;
 	setup_pool_set_prop_drpc_call(&call, &req);
-
-	exp_result = daos_prop_alloc(1);
-	exp_result->dpp_entries[0].dpe_type = prop_number;
-	exp_result->dpp_entries[0].dpe_val = val_number;
-	ds_mgmt_pool_set_prop_result = exp_result;
 
 	ds_mgmt_drpc_pool_set_prop(&call, &resp);
 
 	expect_drpc_pool_set_prop_resp_success(&resp, prop_number, val_number);
 
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
+ * dRPC Pool GetProp setup/teardown
+ */
+
+static int
+drpc_pool_get_prop_setup(void **state)
+{
+	mock_ds_mgmt_pool_get_prop_setup();
+
+	return 0;
+}
+
+static int
+drpc_pool_get_prop_teardown(void **state)
+{
+	mock_ds_mgmt_pool_get_prop_teardown();
+
+	return 0;
+}
+
+/*
+ * dRPC Pool GetProp tests
+ */
+
+static void
+setup_pool_get_prop_drpc_call(Drpc__Call *call, Mgmt__PoolGetPropReq *req)
+{
+	size_t			len;
+	uint8_t			*body;
+
+	len = mgmt__pool_get_prop_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	mgmt__pool_get_prop_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+expect_drpc_pool_get_prop_resp_with_error(Drpc__Response *resp,
+					  int expected_err)
+{
+	Mgmt__PoolGetPropResp *get_prop_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	get_prop_resp = mgmt__pool_get_prop_resp__unpack(NULL,
+			resp->body.len, resp->body.data);
+	assert_non_null(get_prop_resp);
+	assert_int_equal(get_prop_resp->status, expected_err);
+
+	mgmt__pool_get_prop_resp__free_unpacked(get_prop_resp, NULL);
+}
+
+static void
+expect_drpc_pool_get_prop_num_success(Drpc__Response *resp,
+				      uint32_t exp_prop_nr,
+				      uint64_t exp_prop_val)
+{
+	Mgmt__PoolGetPropResp *get_prop_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	get_prop_resp = mgmt__pool_get_prop_resp__unpack(NULL,
+			resp->body.len, resp->body.data);
+	assert_non_null(get_prop_resp);
+	assert_int_equal(get_prop_resp->n_properties, 1);
+	assert_int_equal(get_prop_resp->properties[0]->number, exp_prop_nr);
+	assert_int_equal(get_prop_resp->properties[0]->numval, exp_prop_val);
+
+	mgmt__pool_get_prop_resp__free_unpacked(get_prop_resp, NULL);
+}
+
+static void
+expect_drpc_pool_get_prop_str_success(Drpc__Response *resp,
+				      uint32_t exp_prop_nr,
+				      char *exp_prop_val)
+{
+	Mgmt__PoolGetPropResp *get_prop_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	get_prop_resp = mgmt__pool_get_prop_resp__unpack(NULL,
+			resp->body.len, resp->body.data);
+	assert_non_null(get_prop_resp);
+	assert_int_equal(get_prop_resp->n_properties, 1);
+	assert_int_equal(get_prop_resp->properties[0]->number, exp_prop_nr);
+	assert_string_equal(get_prop_resp->properties[0]->strval, exp_prop_val);
+
+	mgmt__pool_get_prop_resp__free_unpacked(get_prop_resp, NULL);
+}
+
+static void
+test_drpc_pool_get_prop_bad_uuid(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolGetPropReq	req = MGMT__POOL_GET_PROP_REQ__INIT;
+
+	req.uuid = "wow this won't work";
+	req.properties = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+	req.properties[0]->number = 1; /* doesn't matter */
+	setup_pool_get_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_get_prop(&call, &resp);
+
+	expect_drpc_pool_get_prop_resp_with_error(&resp, -DER_INVAL);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_get_prop_num_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolGetPropReq	req = MGMT__POOL_GET_PROP_REQ__INIT;
+	int			prop_number = DAOS_PROP_PO_SPACE_RB;
+	uint64_t		prop_val = 42;
+
+	ds_mgmt_pool_get_prop_out = daos_prop_alloc(1);
+	assert_non_null(ds_mgmt_pool_get_prop_out);
+	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_type = prop_number;
+	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_val = prop_val;
+
+	req.uuid = TEST_UUID;
+	req.properties = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+	req.properties[0]->number = prop_number;
+	setup_pool_get_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_get_prop(&call, &resp);
+
+	expect_drpc_pool_get_prop_num_success(&resp, prop_number, prop_val);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+static void
+test_drpc_pool_get_prop_str_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Mgmt__PoolGetPropReq	req = MGMT__POOL_GET_PROP_REQ__INIT;
+	int			prop_number = DAOS_PROP_PO_LABEL;
+	char			prop_val[] = "foo";
+
+	ds_mgmt_pool_get_prop_out = daos_prop_alloc(1);
+	assert_non_null(ds_mgmt_pool_get_prop_out);
+	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_type = prop_number;
+	D_STRNDUP_S(ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_str,
+		    prop_val);
+	assert_non_null(ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_str);
+
+	req.uuid = TEST_UUID;
+	req.properties = alloc_prop_msg_list(1);
+	req.n_properties = 1;
+	req.properties[0]->number = prop_number;
+	setup_pool_get_prop_drpc_call(&call, &req);
+
+	ds_mgmt_drpc_pool_get_prop(&call, &resp);
+
+	expect_drpc_pool_get_prop_str_success(&resp, prop_number, prop_val);
+
+	free_prop_msg_list(req.properties, req.n_properties);
+	D_FREE(ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_str);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
 }
@@ -1118,12 +1309,14 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_int_equal(pq_resp->active_targets,
 			 exp_info->pi_space.ps_ntargets);
 
-	assert_non_null(pq_resp->scm);
-	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_SCM, pq_resp->scm);
+	assert_int_equal(pq_resp->n_tier_stats, DAOS_MEDIA_MAX);
+	assert_non_null(pq_resp->tier_stats[DAOS_MEDIA_SCM]);
+	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_SCM,
+		pq_resp->tier_stats[DAOS_MEDIA_SCM]);
 
-	assert_non_null(pq_resp->nvme);
+	assert_non_null(pq_resp->tier_stats[DAOS_MEDIA_NVME]);
 	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_NVME,
-			     pq_resp->nvme);
+			     pq_resp->tier_stats[DAOS_MEDIA_NVME]);
 
 	assert_non_null(pq_resp->rebuild);
 	expect_rebuild_status(&exp_info->pi_rebuild_st, exp_state,
@@ -1287,7 +1480,6 @@ test_drpc_pool_create_invalid_acl(void **state)
 	size_t			num_acl = 2;
 	size_t			i;
 	char			**bad_acl;
-	const char		*ace = "A::myuser@:rw"; /* to be duplicated */
 
 	pc_req.uuid = TEST_UUID;
 
@@ -1295,7 +1487,7 @@ test_drpc_pool_create_invalid_acl(void **state)
 	D_ALLOC_ARRAY(bad_acl, num_acl);
 	assert_non_null(bad_acl);
 	for (i = 0; i < num_acl; i++) {
-		D_STRNDUP(bad_acl[i], ace, DAOS_ACL_MAX_ACE_STR_LEN);
+		D_STRNDUP_S(bad_acl[i], "A::myuser@:rw");
 		assert_non_null(bad_acl[i]);
 	}
 
@@ -1309,13 +1501,11 @@ test_drpc_pool_create_invalid_acl(void **state)
 	expect_create_resp_with_error(&resp, -DER_INVAL);
 
 	/* clean up */
-	for (i = 0; i < num_acl; i++) {
+	for (i = 0; i < num_acl; i++)
 		D_FREE(bad_acl[i]);
-	}
 	D_FREE(bad_acl);
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
-
 }
 
 /*
@@ -1561,10 +1751,12 @@ static void
 setup_extend_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolExtendReq req = MGMT__POOL_EXTEND_REQ__INIT;
+	uint64_t tierbytes = 1000000000;
 
 	req.uuid = uuid;
 	req.n_ranks = 3;
-	req.scmbytes = 1000000000;
+	req.n_tierbytes = 1;
+	req.tierbytes = &tierbytes;
 	req.ranks = TEST_RANKS;
 	pack_pool_extend_req(call, &req);
 }
@@ -1848,7 +2040,6 @@ test_drpc_ping_rank_success(void **state)
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
-
 }
 
 /*
@@ -2067,6 +2258,9 @@ test_drpc_cont_set_owner_success(void **state)
 						drpc_pool_set_prop_setup, \
 						drpc_pool_set_prop_teardown)
 
+#define POOL_GET_PROP_TEST(x) cmocka_unit_test_setup_teardown(x, \
+						drpc_pool_get_prop_setup, \
+						drpc_pool_get_prop_teardown)
 
 #define QUERY_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_pool_query_setup)
@@ -2086,7 +2280,6 @@ test_drpc_cont_set_owner_success(void **state)
 
 #define POOL_EVICT_TEST(x)	cmocka_unit_test_setup(x, \
 						drpc_evict_setup)
-
 
 #define PING_RANK_TEST(x)	cmocka_unit_test(x)
 
@@ -2121,11 +2314,12 @@ main(void)
 		LIST_CONT_TEST(test_drpc_pool_list_cont_no_containers),
 		LIST_CONT_TEST(test_drpc_pool_list_cont_with_containers),
 		POOL_SET_PROP_TEST(
-			test_drpc_pool_set_prop_invalid_property_type),
-		POOL_SET_PROP_TEST(
 			test_drpc_pool_set_prop_invalid_value_type),
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_bad_uuid),
 		POOL_SET_PROP_TEST(test_drpc_pool_set_prop_success),
+		POOL_GET_PROP_TEST(test_drpc_pool_get_prop_bad_uuid),
+		POOL_GET_PROP_TEST(test_drpc_pool_get_prop_num_success),
+		POOL_GET_PROP_TEST(test_drpc_pool_get_prop_str_success),
 		EXCLUDE_TEST(test_drpc_exclude_bad_uuid),
 		EXCLUDE_TEST(test_drpc_exclude_mgmt_svc_fails),
 		EXCLUDE_TEST(test_drpc_exclude_success),

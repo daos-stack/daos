@@ -70,6 +70,8 @@ struct d_log_state {
 	uint64_t	 log_size;
 	/** max size of log file */
 	uint64_t	 log_size_max;
+	/** Callback to get thread id and ULT id */
+	d_log_id_cb_t	 log_id_cb;
 	/* note: tag, dlog_facs, and fac_cnt are in xstate now */
 	int def_mask;		/* default facility mask value */
 	int stderr_mask;	/* mask above which we send to stderr  */
@@ -498,8 +500,11 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 {
 #define DLOG_TBSIZ    1024	/* bigger than any line should be */
 	static __thread char b[DLOG_TBSIZ];
+	static __thread uint32_t tid = -1;
+	static __thread uint32_t pid = -1;
 	static uint64_t	last_flush;
 
+	uint64_t uid = 0;
 	int fac, lvl, pri;
 	bool flush;
 	char *b_nopt1hdr;
@@ -531,6 +536,23 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	/* Assumes stderr mask isn't used for debug messages */
 	if (mst.stderr_mask != 0 && lvl >= mst.stderr_mask)
 		flags |= DLOG_STDERR;
+
+	if ((mst.oflags & DLOG_FLV_TAG) && (mst.oflags & DLOG_FLV_LOGPID)) {
+		/* Init static members in ahead of lock */
+		if (pid == (uint32_t)(-1))
+			pid = (uint32_t)getpid();
+
+		if (tid == (uint32_t)(-1)) {
+			if (mst.log_id_cb)
+				mst.log_id_cb(&tid, NULL);
+			else
+				tid = (uint32_t)syscall(SYS_gettid);
+		}
+
+		if (mst.log_id_cb)
+			mst.log_id_cb(NULL, &uid);
+
+	}
 
 	/*
 	 * we must log it, start computing the parts of the log we'll need.
@@ -565,13 +587,9 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 
 	if (mst.oflags & DLOG_FLV_TAG) {
 		if (mst.oflags & DLOG_FLV_LOGPID) {
-			static __thread pid_t tid = -1;
-
-			if (tid == -1)
-				tid = (pid_t)syscall(SYS_gettid);
-
-			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s/%d] ",
-					 d_log_xst.tag, tid);
+			hlen += snprintf(b + hlen, sizeof(b) - hlen,
+					 "%s%d/%d/"DF_U64"] ", d_log_xst.tag,
+					 pid, tid, uid);
 		} else {
 			hlen += snprintf(b + hlen, sizeof(b) - hlen, "%s ",
 					 d_log_xst.tag);
@@ -609,23 +627,18 @@ void d_vlog(int flags, const char *fmt, va_list ap)
 	 * ends in a newline.
 	 */
 	tlen = hlen + mlen;
-	/* if overflow or totally full without newline at end ... */
-	if (tlen >= sizeof(b) ||
-	    (tlen == sizeof(b) - 1 && b[sizeof(b) - 2] != '\n')) {
-		tlen = sizeof(b) - 1;	/* truncate, counting final null */
-		/*
-		 * could overwrite the end of b with "[truncated...]" or
-		 * something like that if we wanted to note the problem.
-		 */
-		b[sizeof(b) - 2] = '\n';	/* jam a \n at the end */
+	/* after condition, tlen will point at index of null byte */
+	if (unlikely(tlen >= (sizeof(b) - 1))) {
+		/* Either the string was truncated or the buffer is full. */
+		tlen = sizeof(b) - 1;
 	} else {
-		/* it fit, make sure it ends in newline */
-		if (b[tlen - 1] != '\n') {
-			D_ASSERT(tlen < DLOG_TBSIZ - 1);
-			b[tlen++] = '\n';
-			b[tlen] = 0;
-		}
+		/* it fits with a byte to spare, make sure it ends in newline */
+		if (unlikely(b[tlen - 1] != '\n'))
+			tlen++;
 	}
+	/* Ensure it ends with '\n' and '\0' */
+	b[tlen - 1] = '\n';
+	b[tlen] = '\0';
 	b_nopt1hdr = b + hlen_pt1;
 	if (mst.oflags & DLOG_FLV_STDOUT)
 		flags |= DLOG_STDOUT;
@@ -764,7 +777,7 @@ d_getenv_size(char *env)
  */
 int
 d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
-	   char *logfile, int flags)
+	   char *logfile, int flags, d_log_id_cb_t log_id_cb)
 {
 	int		tagblen;
 	char		*newtag = NULL, *cp;
@@ -776,6 +789,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 
 	memset(&mst, 0, sizeof(mst));
 	mst.flush_pri = DLOG_WARN;
+	mst.log_id_cb = log_id_cb;
 
 	env = getenv(D_LOG_FLUSH_ENV);
 	if (env) {
@@ -841,7 +855,7 @@ d_log_open(char *tag, int maxfac_hint, int default_mask, int stderr_mask,
 	D_INIT_LIST_HEAD(&d_log_caches);
 
 	if (flags & DLOG_FLV_LOGPID)
-		snprintf(newtag, tagblen, "%s[%d", tag, getpid());
+		snprintf(newtag, tagblen, "%s[", tag);
 	else
 		snprintf(newtag, tagblen, "%s", tag);
 	mst.def_mask = default_mask;

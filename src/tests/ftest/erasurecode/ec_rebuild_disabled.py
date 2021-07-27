@@ -8,8 +8,7 @@ import time
 from ec_utils import ErasureCodeIor
 from apricot import skipForTicket
 
-
-class EcDisabledRebuild(ErasureCodeIor):
+class EcodDisabledRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object data after killing
@@ -17,7 +16,7 @@ class EcDisabledRebuild(ErasureCodeIor):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-6660")
+    @skipForTicket("DAOS-7592")
     def test_ec_degrade(self):
         """Jira ID: DAOS-5893.
 
@@ -26,8 +25,11 @@ class EcDisabledRebuild(ErasureCodeIor):
                   EC object type class for small and large transfer sizes.
                   kill single server, verify all IOR read data and verified.
 
-        :avocado: tags=all,hw,large,ib2,full_regression
-        :avocado: tags=ec,ec_disabled_rebuild
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large,ib2
+        :avocado: tags=ec,ec_array,ec_disabled_rebuild,rebuild
+        :avocado: tags=ec_disabled_rebuild_array
+
         """
         # Disabled pool Rebuild
         self.pool.set_property("self_heal", "exclude")
@@ -38,7 +40,8 @@ class EcDisabledRebuild(ErasureCodeIor):
 
         # Kill the last server rank and wait for 20 seconds, Rebuild is disabled
         # so data should not be rebuild
-        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log)
+        self.server_managers[0].stop_ranks([self.server_count - 1], self.d_log,
+                                           force=True)
         time.sleep(20)
 
         # Read IOR data and verify for different EC object and different sizes
@@ -47,7 +50,8 @@ class EcDisabledRebuild(ErasureCodeIor):
 
         # Kill the another server rank and wait for 20 seconds,Rebuild will
         # not happens because i's disabled.Read/verify data with Parity 2.
-        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log)
+        self.server_managers[0].stop_ranks([self.server_count - 2], self.d_log,
+                                           force=True)
         time.sleep(20)
 
         # Read IOR data and verify for different EC object and different sizes

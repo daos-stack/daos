@@ -43,15 +43,22 @@ struct test_t {
 	d_rank_t		 cg_ranks[MAX_NUM_RANKS];
 	int			 cg_num_ranks;
 	struct			 t_swim_status t_verify_swim_status;
+	int			 t_disable_swim;
 	char			*t_cfg_path;
 	uint32_t		 t_hold_time;
 	unsigned int		 t_srv_ctx_num;
+	int			 t_write_completion_file;
 	crt_context_t		 t_crt_ctx[TEST_CTX_MAX_NUM];
 	pthread_t		 t_tid[TEST_CTX_MAX_NUM];
 	sem_t			 t_token_to_proceed;
 	int			 t_roomno;
 	struct d_fault_attr_t	*t_fault_attr_1000;
 	struct d_fault_attr_t	*t_fault_attr_5000;
+
+	crt_group_t		*t_local_group;
+	crt_group_t		*t_remote_group;
+	uint32_t		t_remote_group_size;
+	d_rank_t		t_my_rank;
 };
 
 struct test_t test_g = { .t_hold_time = 0,
@@ -90,6 +97,32 @@ CRT_RPC_DECLARE(test_swim_status,
 CRT_RPC_DEFINE(test_swim_status,
 	       CRT_ISEQ_TEST_SWIM_STATUS, CRT_OSEQ_TEST_SWIM_STATUS)
 
+/* input fields */
+#define CRT_ISEQ_TEST_DISABLE_SWIM				 \
+	((uint32_t)		(rank)			CRT_VAR)
+
+/* output fields */
+#define CRT_OSEQ_TEST_DISABLE_SWIM				 \
+	((uint32_t)		(bool_val)		CRT_VAR)
+
+CRT_RPC_DECLARE(test_disable_swim,
+		CRT_ISEQ_TEST_DISABLE_SWIM, CRT_OSEQ_TEST_DISABLE_SWIM)
+CRT_RPC_DEFINE(test_disable_swim,
+	       CRT_ISEQ_TEST_DISABLE_SWIM, CRT_OSEQ_TEST_DISABLE_SWIM)
+
+/* input fields */
+#define CRT_ISEQ_TEST_SHUTDOWN				 \
+	((uint32_t)		(rank)			CRT_VAR)
+
+/* output fields */
+#define CRT_OSEQ_TEST_SHUTDOWN				 \
+	((uint32_t)		(bool_val)		CRT_VAR)
+
+CRT_RPC_DECLARE(test_shutdown,
+		CRT_ISEQ_TEST_SHUTDOWN, CRT_OSEQ_TEST_SHUTDOWN)
+CRT_RPC_DEFINE(test_shutdown,
+	       CRT_ISEQ_TEST_SHUTDOWN, CRT_OSEQ_TEST_SHUTDOWN)
+
 static void
 test_checkin_handler(crt_rpc_t *rpc_req)
 {
@@ -123,18 +156,21 @@ test_checkin_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, \
-			 room_no: %d.\n", e_reply->ret, e_reply->room_no);
+	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d,"
+		  "  room_no: %d.\n", e_reply->ret, e_reply->room_no);
 }
 
 /* Track number of dead-alive swim status changes */
 struct rank_status {
-  int num_alive;
-  int num_dead;
+	int num_alive;
+	int num_dead;
 };
 
-/* Keep a table of whether each rank is alive (0) or dead (1) */
-static char *swim_status_by_rank[MAX_NUM_RANKS];
+/**
+ * As we want to catch swim status flickering (sequenes of dead, alive, dead);
+ * track swim state sequences by rank, e.g., 0001 (0=alive, 1=dead) by rank .
+ */
+static char swim_seq_by_rank[MAX_NUM_RANKS][MAX_SWIM_STATUSES] = { { 0 } };
 
 static void
 test_swim_status_handler(crt_rpc_t *rpc_req)
@@ -146,45 +182,48 @@ test_swim_status_handler(crt_rpc_t *rpc_req)
 	regex_t				 regex_dead;
 	static const char		*dead_regex = ".?0*1";
 	static const char		*alive_regex = ".?0*";
-	char				*swim_seq = malloc(MAX_SWIM_STATUSES);
+	int				rank;
+	int				rc_dead;
+	int				rc_alive;
 
 	/* CaRT internally already allocated the input/output buffer */
 	e_req = crt_req_get(rpc_req);
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
 
-	if (swim_status_by_rank[e_req->rank] != NULL)
-		strcpy(swim_seq, swim_status_by_rank[e_req->rank]);
-	else
-		memset(swim_seq, 0x0, MAX_SWIM_STATUSES);
+	rank = e_req->rank;
 
 	/* compile and run regex's */
 	regcomp(&regex_dead, dead_regex, REG_EXTENDED);
-	int rc_dead = regexec(&regex_dead,
-			      swim_seq,
+	rc_dead = regexec(&regex_dead,
+			      swim_seq_by_rank[rank],
 			      0, NULL, 0);
 	regcomp(&regex_alive, alive_regex, REG_EXTENDED);
-	int rc_alive = regexec(&regex_alive,
-			       swim_seq,
+	rc_alive = regexec(&regex_alive,
+			       swim_seq_by_rank[rank],
 			       0, NULL, 0);
 
-	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+	regfree(&regex_alive);
+	regfree(&regex_dead);
 
 	DBG_PRINT("tier1 test_server recv'd swim_status, opc: %#x.\n",
 		  rpc_req->cr_opc);
 	DBG_PRINT("tier1 swim_status input - rank: %d, exp_status: %d.\n",
-		  e_req->rank, e_req->exp_status);
+		  rank, e_req->exp_status);
 
 	if (e_req->exp_status == CRT_EVT_ALIVE)
 		D_ASSERTF(rc_alive == 0,
-			  "Swim status sequence (%s) does not match '%s'.\n",
-			  swim_seq, alive_regex);
+			  "Swim status alive sequence (%s) "
+			  "does not match '%s' for rank %d.\n",
+			  swim_seq_by_rank[rank], alive_regex, rank);
 	else if (e_req->exp_status == CRT_EVT_DEAD)
 		D_ASSERTF(rc_dead == 0,
-			  "Swim status sequence (%s) does not match '%s'.\n",
-			  swim_seq, dead_regex);
+			  "Swim status dead sequence (%s) "
+			  "does not match '%s' for rank %d..\n",
+			  swim_seq_by_rank[rank], dead_regex, rank);
 
 	DBG_PRINT("Rank [%d] SWIM state sequence (%s) for "
 		  "status [%d] is as expected.\n",
-		  e_req->rank, swim_seq,
+		  rank, swim_seq_by_rank[rank],
 		  e_req->exp_status);
 
 	e_reply = crt_reply_get(rpc_req);
@@ -213,9 +252,9 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	p_req = crt_req_get(rpc_req);
 	D_ASSERTF(p_req != NULL, "crt_req_get() failed. p_req: %p\n", p_req);
 
-	DBG_PRINT("tier1 test_server recv'd checkin, opc: %#x.\n",
+	DBG_PRINT("tier1 test_server recv'd ping delay, opc: %#x.\n",
 		  rpc_req->cr_opc);
-	DBG_PRINT("tier1 checkin input - age: %d, name: %s, days: %d, "
+	DBG_PRINT("tier1 delayed ping input - age: %d, name: %s, days: %d, "
 			"delay: %u.\n", p_req->age, p_req->name, p_req->days,
 			 p_req->delay);
 
@@ -230,7 +269,7 @@ test_ping_delay_handler(crt_rpc_t *rpc_req)
 	rc = crt_reply_send(rpc_req);
 	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
-	DBG_PRINT("tier1 test_srver sent checkin reply, ret: %d, "
+	DBG_PRINT("tier1 test_srver sent delayed ping reply, ret: %d, "
 		   "room_no: %d.\n", p_reply->ret, p_reply->room_no);
 }
 
@@ -244,9 +283,19 @@ client_cb_common(const struct crt_cb_info *cb_info)
 	struct test_swim_status_in	*swim_status_rpc_req_input;
 	struct test_swim_status_out	*swim_status_rpc_req_output;
 
+	struct test_disable_swim_in	*disable_swim_rpc_req_input;
+	struct test_disable_swim_out	*disable_swim_rpc_req_output;
+
+	struct test_shutdown_in		*shutdown_rpc_req_input;
+	struct test_shutdown_out	*shutdown_rpc_req_output;
+
+	struct crt_test_ping_delay_in	*ping_delay_rpc_req_input;
+	struct crt_test_ping_delay_out	*ping_delay_rpc_req_output;
+
 	rpc_req = cb_info->cci_rpc;
 
 	if (cb_info->cci_arg != NULL) {
+		/* avoid checkpatch warning */
 		*(int *) cb_info->cci_arg = 1;
 	}
 
@@ -259,6 +308,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(test_ping_rpc_req_output != NULL);
 
 		if (cb_info->cci_rc != 0) {
+			D_FREE(test_ping_rpc_req_input->name);
 			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
 				rpc_req->cr_opc, cb_info->cci_rc);
 			break;
@@ -269,6 +319,7 @@ client_cb_common(const struct crt_cb_info *cb_info)
 			  test_ping_rpc_req_output->ret,
 			  test_ping_rpc_req_output->room_no,
 			  test_ping_rpc_req_output->bool_val);
+		D_FREE(test_ping_rpc_req_input->name);
 		sem_post(&test_g.t_token_to_proceed);
 		D_ASSERT(test_ping_rpc_req_output->bool_val == true);
 		break;
@@ -293,12 +344,69 @@ client_cb_common(const struct crt_cb_info *cb_info)
 		D_ASSERT(swim_status_rpc_req_output->bool_val == true);
 		break;
 	case TEST_OPC_SHUTDOWN:
+
 		DBG_PRINT("Received TEST_OPC_SHUTDOWN.\n");
-		tc_progress_stop();
+
+		shutdown_rpc_req_input = crt_req_get(rpc_req);
+		D_ASSERT(shutdown_rpc_req_input != NULL);
+		shutdown_rpc_req_output = crt_reply_get(rpc_req);
+		D_ASSERT(shutdown_rpc_req_output != NULL);
+
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			break;
+		}
+		DBG_PRINT("shutdown result - rank: %d, result: %d.\n",
+			  shutdown_rpc_req_input->rank,
+			  shutdown_rpc_req_output->bool_val);
+		sem_post(&test_g.t_token_to_proceed);
+		D_ASSERT(shutdown_rpc_req_output->bool_val == true);
+		break;
+
+	case TEST_OPC_DISABLE_SWIM:
+
+		disable_swim_rpc_req_input = crt_req_get(rpc_req);
+		D_ASSERT(disable_swim_rpc_req_input != NULL);
+		disable_swim_rpc_req_output = crt_reply_get(rpc_req);
+		D_ASSERT(disable_swim_rpc_req_output != NULL);
+
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			break;
+		}
+		DBG_PRINT("disable_swim result - rank: %d, result: %d.\n",
+			  disable_swim_rpc_req_input->rank,
+			  disable_swim_rpc_req_output->bool_val);
+		sem_post(&test_g.t_token_to_proceed);
+		D_ASSERT(disable_swim_rpc_req_output->bool_val == true);
+		break;
+
+	case TEST_OPC_PING_DELAY:
+		ping_delay_rpc_req_input = crt_req_get(rpc_req);
+		if (ping_delay_rpc_req_input == NULL)
+			return;
+		ping_delay_rpc_req_output = crt_reply_get(rpc_req);
+		if (ping_delay_rpc_req_output == NULL)
+			return;
+		if (cb_info->cci_rc != 0) {
+			D_ERROR("rpc (opc: %#x) failed, rc: %d.\n",
+				rpc_req->cr_opc, cb_info->cci_rc);
+			D_FREE(ping_delay_rpc_req_input->name);
+			break;
+		}
+		printf("%s ping result - ret: %d, room_no: %d.\n",
+		       ping_delay_rpc_req_input->name,
+		       ping_delay_rpc_req_output->ret,
+		       ping_delay_rpc_req_output->room_no);
+		D_FREE(ping_delay_rpc_req_input->name);
 		sem_post(&test_g.t_token_to_proceed);
 		break;
+
 	default:
-		DBG_PRINT("Received unregistered opcode.\n");
+		DBG_PRINT("Received unregistered opcode (opc: %#x)\n",
+			  rpc_req->cr_opc);
 		break;
 	}
 }
@@ -306,14 +414,70 @@ client_cb_common(const struct crt_cb_info *cb_info)
 static void
 test_shutdown_handler(crt_rpc_t *rpc_req)
 {
-	DBG_PRINT("tier1 test_srver received shutdown request, opc: %#x.\n",
-		  rpc_req->cr_opc);
+	struct test_shutdown_in		*e_req;
+	struct test_shutdown_out	*e_reply;
+	int				rc = 0;
 
-	D_ASSERTF(rpc_req->cr_input == NULL, "RPC request has invalid input\n");
-	D_ASSERTF(rpc_req->cr_output == NULL, "RPC request output is NULL\n");
+	/* CaRT internally already allocated the input/output buffer */
+	e_req = crt_req_get(rpc_req);
+
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+
+	DBG_PRINT("tier1 test_server recv'd shutdown, opc: %#x.\n",
+		  rpc_req->cr_opc);
+	DBG_PRINT("tier1 shutdown input - rank: %d.\n",
+		  e_req->rank);
+
+	e_reply = crt_reply_get(rpc_req);
+
+	/* If we got past the previous assert, then we've succeeded */
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+		  e_reply);
+	e_reply->bool_val = true;
+
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
 
 	tc_progress_stop();
-	DBG_PRINT("tier1 test_srver set shutdown flag.\n");
+
+	DBG_PRINT("tier1 test_srver sent shutdown reply,"
+		  "e_reply->bool_val: %d.\n",
+		  e_reply->bool_val);
+}
+
+static void
+test_disable_swim_handler(crt_rpc_t *rpc_req)
+{
+	struct test_disable_swim_in	*e_req;
+	struct test_disable_swim_out	*e_reply;
+	int				 rc = 0;
+
+	/* CaRT internally already allocated the input/output buffer */
+	e_req = crt_req_get(rpc_req);
+
+	D_ASSERTF(e_req != NULL, "crt_req_get() failed. e_req: %p\n", e_req);
+
+	DBG_PRINT("tier1 test_server recv'd disable_swim, opc: %#x.\n",
+		  rpc_req->cr_opc);
+	DBG_PRINT("tier1 disable_swim input - rank: %d.\n",
+		  e_req->rank);
+
+	crt_swim_disable_all();
+	crt_rank_abort_all(NULL);
+
+	e_reply = crt_reply_get(rpc_req);
+
+	/* If we got past the previous assert, then we've succeeded */
+	D_ASSERTF(e_reply != NULL, "crt_reply_get() failed. e_reply: %p\n",
+		  e_reply);
+	e_reply->bool_val = true;
+
+	rc = crt_reply_send(rpc_req);
+	D_ASSERTF(rc == 0, "crt_reply_send() failed. rc: %d\n", rc);
+
+	DBG_PRINT("tier1 test_srver sent disable_swim reply,"
+		  "e_reply->bool_val: %d.\n",
+		  e_reply->bool_val);
 }
 
 static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
@@ -323,8 +487,8 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 		.prf_hdlr	= test_checkin_handler,
 		.prf_co_ops	= NULL,
 	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
-		.prf_req_fmt	= NULL,
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= &CQF_test_shutdown,
 		.prf_hdlr	= test_shutdown_handler,
 		.prf_co_ops	= NULL,
 	}, {
@@ -337,6 +501,11 @@ static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group1[] = {
 		.prf_req_fmt	= &CQF_crt_test_ping_delay,
 		.prf_hdlr	= test_ping_delay_handler,
 		.prf_co_ops	= NULL,
+	}, {
+		.prf_flags	= CRT_RPC_FEAT_NO_TIMEOUT,
+		.prf_req_fmt	= &CQF_test_disable_swim,
+		.prf_hdlr	= test_disable_swim_handler,
+		.prf_co_ops	= NULL,
 	}
 };
 
@@ -348,35 +517,8 @@ struct crt_proto_format my_proto_fmt_test_group1 = {
 	.cpf_base	= TEST_GROUP_BASE,
 };
 
-static struct crt_proto_rpc_format my_proto_rpc_fmt_test_group2[] = {
-	{
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_test_ping_check,
-		.prf_hdlr	= test_checkin_handler,
-		.prf_co_ops	= NULL,
-	}, {
-		.prf_flags	= CRT_RPC_FEAT_NO_REPLY,
-		.prf_req_fmt	= NULL,
-		.prf_hdlr	= test_shutdown_handler,
-		.prf_co_ops	= NULL,
-	}, {
-		.prf_flags	= 0,
-		.prf_req_fmt	= &CQF_test_swim_status,
-		.prf_hdlr	= test_swim_status_handler,
-		.prf_co_ops	= NULL,
-	}
-};
-
-struct crt_proto_format my_proto_fmt_test_group2 = {
-	.cpf_name	= "my-proto-test-group2",
-	.cpf_ver	= TEST_GROUP_VER,
-	.cpf_count	= ARRAY_SIZE(my_proto_rpc_fmt_test_group2),
-	.cpf_prf	= &my_proto_rpc_fmt_test_group2[0],
-	.cpf_base	= TEST_GROUP_BASE,
-};
-
 void
-check_in(crt_group_t *remote_group, int rank, int tag)
+send_rpc_check_in(crt_group_t *remote_group, int rank, int tag)
 {
 	crt_rpc_t			*rpc_req = NULL;
 	struct test_ping_check_in	*rpc_req_input;
@@ -418,6 +560,13 @@ check_in(crt_group_t *remote_group, int rank, int tag)
 
 	rc = crt_req_send(rpc_req, client_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
+
+	/*
+	 * Note: it is the responsibility of the caller of this
+	 * function to call sem_wait/sem_timewait on test semaphore
+	 * test_g.t_token_to_proceed for each call to this function.
+	 */
+
 }
 
 static struct t_swim_status
@@ -444,8 +593,8 @@ parse_verify_swim_status_arg(char *source)
 	cursor = source;
 
 	for (m = 0; m < maxMatches; m++) {
-
 		if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0)) {
+			/* avoid checkpatch warning */
 			break;	/* No more matches */
 		}
 
@@ -453,12 +602,13 @@ parse_verify_swim_status_arg(char *source)
 		unsigned int offset = 0;
 
 		for (g = 0; g < maxGroups; g++) {
-
 			if (groupArray[g].rm_so == (size_t)-1) {
+				/* avoid checkpatch warning */
 				break;	/* No more groups */
 			}
 
 			if (g == 0) {
+				/* avoid checkpatch warning */
 				offset = groupArray[g].rm_eo;
 			}
 
@@ -476,21 +626,23 @@ parse_verify_swim_status_arg(char *source)
 					 cC + groupArray[g].rm_so);
 
 			if (g == 1) {
+				/* avoid checkpatch warning */
 				ss.rank = atoi(cC +
 					       groupArray[g].rm_so);
 			}
 			if (g == 2) {
-
 				int exp_status_len = 8;
 				char exp_status[exp_status_len];
 
 				if (exp_status_len >
 				    strlen(cC + groupArray[g].rm_so)) {
+					/* avoid checkpatch warning */
 					memcpy(exp_status, cC +
 						groupArray[g].rm_so,
 						strlen(cC +
 						       groupArray[g].rm_so));
 				} else {
+					/* avoid checkpatch warning */
 					D_ERROR("Use 'dead' or 'alive' for "
 						"swim status label.\n");
 				}
@@ -506,6 +658,7 @@ parse_verify_swim_status_arg(char *source)
 				 */
 				ss.swim_status = 0;
 				if (tolower(exp_status[0]) == 'd') {
+					/* avoid checkpatch warning */
 					ss.swim_status = 1;
 				}
 
@@ -603,8 +756,11 @@ test_parse_args(int argc, char **argv)
 		{"use_cfg", required_argument, 0, 'u'},
 		{"register_swim_callback", required_argument, 0, 'w'},
 		{"verify_swim_status", required_argument, 0, 'v'},
+		{"disable_swim", no_argument, &test_g.t_disable_swim, 1},
 		{"get_swim_status", no_argument, 0, 'g'},
 		{"shutdown_delay", required_argument, 0, 'd'},
+		{"write_completion_file", no_argument,
+		 &test_g.t_write_completion_file, 1},
 		{0, 0, 0, 0}
 	};
 
@@ -622,7 +778,7 @@ test_parse_args(int argc, char **argv)
 	struct t_swim_status vss;
 
 	while (1) {
-		rc = getopt_long(argc, argv, "n:a:c:h:u:r:", long_options,
+		rc = getopt_long(argc, argv, "n:a:c:h:u:r:ml", long_options,
 				 &option_index);
 
 		if (rc == -1)

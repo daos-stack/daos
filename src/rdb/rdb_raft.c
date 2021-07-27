@@ -68,19 +68,20 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 {
 	struct rdb		       *db = arg;
 	struct rdb_raft_node	       *rdb_node = raft_node_get_udata(node);
+	char			       *s = msg->prevote ? " (prevote)" : "";
 	crt_rpc_t		       *rpc;
 	struct rdb_requestvote_in      *in;
 	int				rc;
 
 	D_ASSERT(db->d_raft == raft);
-	D_DEBUG(DB_TRACE, DF_DB": sending rv to node %d rank %u: term=%ld\n",
-		DP_DB(db), raft_node_get_id(node), rdb_node->dn_rank,
+	D_DEBUG(DB_TRACE, DF_DB": sending rv%s to node %d rank %u: term=%ld\n",
+		DP_DB(db), s, raft_node_get_id(node), rdb_node->dn_rank,
 		msg->term);
 
 	rc = rdb_create_raft_rpc(RDB_REQUESTVOTE, node, &rpc);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to create RV RPC to node %d: %d\n",
-			DP_DB(db), raft_node_get_id(node), rc);
+		D_ERROR(DF_DB": failed to create RV%s RPC to node %d: %d\n",
+			DP_DB(db), s, raft_node_get_id(node), rc);
 		return rc;
 	}
 	in = crt_req_get(rpc);
@@ -89,8 +90,8 @@ rdb_raft_cb_send_requestvote(raft_server_t *raft, void *arg, raft_node_t *node,
 
 	rc = rdb_send_raft_rpc(rpc, db);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to send RV RPC to node %d: %d\n",
-			DP_DB(db), raft_node_get_id(node), rc);
+		D_ERROR(DF_DB": failed to send RV%s RPC to node %d: %d\n",
+			DP_DB(db), s, raft_node_get_id(node), rc);
 		crt_req_decref(rpc);
 	}
 	return rc;
@@ -1490,7 +1491,7 @@ rdb_compactd(void *arg)
 				": %d\n", DP_DB(db), base, rc);
 			break;
 		}
-		vos_gc_pool_run(db->d_pool, -1, rdb_gc_yield, NULL);
+		vos_gc_pool(db->d_pool, -1, rdb_gc_yield, NULL);
 	}
 	D_DEBUG(DB_MD, DF_DB": compactd stopping\n", DP_DB(db));
 }
@@ -2287,6 +2288,12 @@ lc:
 	/* Load the log entries. */
 	for (i = db->d_lc_record.dlr_base + 1; i < db->d_lc_record.dlr_tail;
 	     i++) {
+		/*
+		 * Yield before loading the first entry (for the rdb_lc_discard
+		 * call above) and every a few entries.
+		 */
+		if ((i - db->d_lc_record.dlr_base - 1) % 64 == 0)
+			ABT_thread_yield();
 		rc = rdb_raft_load_entry(db, i);
 		if (rc != 0)
 			goto err_lc;
@@ -2598,8 +2605,8 @@ rdb_raft_campaign(struct rdb *db)
 	rdb_raft_save_state(db, &state);
 	D_DEBUG(DB_MD, DF_DB": calling election from current term %ld\n",
 		DP_DB(db), raft_get_current_term(db->d_raft));
-	rc = raft_election_start(db->d_raft);
-	rc = rdb_raft_check_state(db, &state, rc /* raft_rc */);
+	raft_election_start(db->d_raft);
+	rc = rdb_raft_check_state(db, &state, 0 /* raft_rc */);
 	ABT_mutex_unlock(db->d_raft_mutex);
 	return rc;
 }
@@ -2637,10 +2644,12 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	struct rdb_requestvote_in      *in = crt_req_get(rpc);
 	struct rdb_requestvote_out     *out = crt_reply_get(rpc);
 	struct rdb		       *db;
+	char			       *s;
 	struct rdb_raft_state		state;
 	d_rank_t			srcrank;
 	int				rc;
 
+	s = in->rvi_msg.prevote ? " (prevote)" : "";
 	rc = crt_req_src_rank_get(rpc, &srcrank);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
@@ -2650,8 +2659,8 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	if (db->d_stop)
 		D_GOTO(out_db, rc = -DER_CANCELED);
 
-	D_DEBUG(DB_TRACE, DF_DB": handling raft rv from rank %u\n", DP_DB(db),
-		srcrank);
+	D_DEBUG(DB_TRACE, DF_DB": handling raft rv%s from rank %u\n",
+		DP_DB(db), s, srcrank);
 	ABT_mutex_lock(db->d_raft_mutex);
 	rdb_raft_save_state(db, &state);
 	rc = raft_recv_requestvote(db->d_raft,
@@ -2661,8 +2670,8 @@ rdb_requestvote_handler(crt_rpc_t *rpc)
 	rc = rdb_raft_check_state(db, &state, rc);
 	ABT_mutex_unlock(db->d_raft_mutex);
 	if (rc != 0) {
-		D_ERROR(DF_DB": failed to process REQUESTVOTE from rank %u: "
-			"%d\n", DP_DB(db), srcrank, rc);
+		D_ERROR(DF_DB": failed to process REQUESTVOTE%s from rank %u: "
+			"%d\n", DP_DB(db), s, srcrank, rc);
 		/* raft_recv_requestvote() always generates a valid reply. */
 		rc = 0;
 	}
@@ -2673,9 +2682,9 @@ out:
 	out->rvo_op.ro_rc = rc;
 	rc = crt_reply_send(rpc);
 	if (rc != 0)
-		D_ERROR(DF_UUID": failed to send REQUESTVOTE reply to rank %u: "
-			"%d\n", DP_UUID(in->rvi_op.ri_uuid), srcrank,
-			rc);
+		D_ERROR(DF_UUID": failed to send REQUESTVOTE%s reply to "
+			"rank %u: %d\n", DP_UUID(in->rvi_op.ri_uuid), s,
+			srcrank, rc);
 }
 
 void

@@ -9,7 +9,7 @@ hosts:
     - server-F
     - server-G
     - server-H
-timeout: 200
+timeout: 900
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -39,11 +39,10 @@ server_config:
       scm_mount: /mnt/daos1
       log_mask: ERR
 pool:
-    mode: 146
     name: daos_server
-    scm_size: 100G
-    nvme_size: 200G
     control_method: dmg
+    scm_size: 25%
+    nvme_size: 93%
 container:
     type: POSIX
     control_method: daos
@@ -53,17 +52,30 @@ ior:
     np: 48
   dfs_destroy: False
   iorflags:
-      flags: "-w -W -r -R -k -G 1 -vv"
+      flags: "-w -W -r -R -G 1 -vv"
   test_file: /testFile
   repetitions: 1
-  transfersize_blocksize:
+  transfersize_blocksize: !mux
     1M_128M:
       transfer_size: 1M
       block_size: 128M
+    2M_128M:
+      transfer_size: 2M
+      block_size: 512M
   objectclass:
       dfs_oclass:
       - "EC_2P1G1"
+      - "EC_2P1G8"
+      - "EC_2P1GX"
       - "EC_2P2G1"
+      - "EC_2P2G8"
+      - "EC_2P2GX"
       - "EC_4P1G1"
+      - "EC_4P1G8"
+      - "EC_4P1GX"
       - "EC_4P2G1"
+      - "EC_4P2G8"
+      - "EC_4P2GX"
       - "EC_8P2G1"
+      - "EC_8P2G8"
+      - "EC_8P2GX"

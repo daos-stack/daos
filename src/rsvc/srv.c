@@ -361,9 +361,17 @@ ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 	return 0;
 }
 
+/** Get a reference to the leader fields of \a svc. */
+void
+ds_rsvc_get_leader(struct ds_rsvc *svc)
+{
+	ds_rsvc_get(svc);
+	get_leader(svc);
+}
+
 /**
- * As a convenience for general replicated service RPC handlers, this function
- * puts svc returned by ds_rsvc_lookup_leader.
+ * Put the reference returned by ds_rsvc_lookup_leader or ds_rsvc_get_leader to
+ * the leader fields of \a svc.
  */
 void
 ds_rsvc_put_leader(struct ds_rsvc *svc)
@@ -454,7 +462,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		rc = 0;
 		goto out_mutex;
 	} else if (rc != 0) {
-		D_ERROR("%s: failed to step up as leader "DF_U64": "DF_RC"\n",
+		D_DEBUG(DB_MD, "%s: failed to step up to "DF_U64": "DF_RC"\n",
 			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
@@ -683,16 +691,14 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 		goto err;
 	svc->s_ref++;
 
-	if (create) {
-		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas);
-		if (rc != 0)
-			goto err_svc;
-	}
-
-	rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs, svc,
-		       &svc->s_db);
+	if (create)
+		rc = rdb_create(svc->s_db_path, svc->s_db_uuid, size, replicas,
+				&rsvc_rdb_cbs, svc, &svc->s_db);
+	else
+		rc = rdb_start(svc->s_db_path, svc->s_db_uuid, &rsvc_rdb_cbs,
+			       svc, &svc->s_db);
 	if (rc != 0)
-		goto err_creation;
+		goto err_svc;
 
 	/*
 	 * If creating a replica with an initial membership, we are
@@ -720,7 +726,6 @@ start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid, bool create,
 
 err_db:
 	rdb_stop(svc->s_db);
-err_creation:
 	if (create)
 		rdb_destroy(svc->s_db_path, svc->s_db_uuid);
 err_svc:
@@ -1057,7 +1062,7 @@ ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 }
 
 int
-ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
+ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, bool stop)
 {
 	d_rank_list_t	*stop_ranks;
 	int		 rc;
@@ -1069,7 +1074,7 @@ ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
 
 	/* filter out failed ranks */
 	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
-	if (stop_ranks->rl_nr > 0)
+	if (stop_ranks->rl_nr > 0 && stop)
 		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks,
 				  NULL, true /* destroy */);
 	d_rank_list_free(stop_ranks);
@@ -1078,7 +1083,7 @@ ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
 
 int
 ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
-			d_rank_list_t *ranks, struct rsvc_hint *hint)
+			d_rank_list_t *ranks, bool stop, struct rsvc_hint *hint)
 {
 	struct ds_rsvc	*svc;
 	int		 rc;
@@ -1086,7 +1091,7 @@ ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
 	if (rc != 0)
 		return rc;
-	rc = ds_rsvc_remove_replicas_s(svc, ranks);
+	rc = ds_rsvc_remove_replicas_s(svc, ranks, stop);
 	ds_rsvc_set_hint(svc, hint);
 	put_leader(svc);
 	return rc;

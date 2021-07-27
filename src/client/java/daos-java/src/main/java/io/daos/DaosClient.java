@@ -7,7 +7,6 @@
 package io.daos;
 
 import io.daos.dfs.*;
-import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +56,7 @@ public class DaosClient implements ForceCloseable {
       public void run() {
         try {
           closeAll();
+          DaosEventQueue.destroyAll();
           daosSafeFinalize();
           log.info("daos finalized");
           ShutdownHookManager.removeHook(this);
@@ -168,11 +168,20 @@ public class DaosClient implements ForceCloseable {
    * @param eqWrapperHdl  handle of EQ wrapper
    * @param memoryAddress memory address of ByteBuf to hold indices of completed events
    * @param nbrOfEvents   maximum number of events to complete
-   * @param timeoutMs
+   * @param timeoutMs timeout in milliseconds
    * @throws IOException
    */
   public static native void pollCompleted(long eqWrapperHdl, long memoryAddress,
-                                          int nbrOfEvents, int timeoutMs) throws IOException;
+                                          int nbrOfEvents, long timeoutMs) throws IOException;
+
+  /**
+   * abort event in given EQ.
+   *
+   * @param eqWrapperHdl handle of EQ wrapper
+   * @param id event id
+   * @return true if event being aborted. false if event is not in use.
+   */
+  public static native boolean abortEvent(long eqWrapperHdl, short id);
 
   /**
    * destroy event queue identified by <code>queueHdl</code>.
@@ -410,7 +419,12 @@ public class DaosClient implements ForceCloseable {
       if (poolId == null) {
         throw new IllegalArgumentException("need pool UUID");
       }
-      DaosClient client = new DaosClient((DaosClientBuilder) ObjectUtils.clone(this));
+      DaosClient client;
+      try {
+        client = new DaosClient(clone());
+      } catch (CloneNotSupportedException ce) {
+        throw new IllegalStateException("clone not supported.", ce);
+      }
       client.init();
       return client;
     }

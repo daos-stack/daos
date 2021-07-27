@@ -15,10 +15,10 @@
  * is valid but needs to wait for rebuild to finish, -DER_INVAL if the state
  * transition is invalid
  */
-int
+static int
 update_one_tgt(struct pool_map *map, struct pool_target *target,
-	       struct pool_domain *dom, int opc, bool evict_rank,
-	       uint32_t *version, bool print_changes)
+	       struct pool_domain *dom, int opc, uint32_t *version,
+	       bool print_changes)
 {
 	int rc;
 
@@ -119,7 +119,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			D_DEBUG(DF_DSMS, "change "DF_TARGET" to UP %p\n",
 				DP_TARGET(target), map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
-			++(*version);
+			target->ta_comp.co_in_ver = ++(*version);
 			if (print_changes)
 				D_PRINT(DF_TARGET " start reintegration.\n",
 					DP_TARGET(target));
@@ -160,7 +160,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			rc = pool_map_activate_new_target(map,
 						target->ta_comp.co_id);
 			D_ASSERT(rc != 0); /* This target must be findable */
-			(*version)++;
+			target->ta_comp.co_in_ver = ++(*version);
 			break;
 		}
 		break;
@@ -208,7 +208,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
  */
 int
 ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
-			int opc, bool evict_rank, uint32_t *tgt_map_ver,
+			int opc, bool exclude_rank, uint32_t *tgt_map_ver,
 			bool print_changes)
 {
 	uint32_t	version;
@@ -242,15 +242,15 @@ ds_pool_map_tgts_update(struct pool_map *map, struct pool_target_id_list *tgts,
 			return -DER_NONEXIST;
 		}
 
-		rc = update_one_tgt(map, target, dom, opc, evict_rank,
-				    &version, print_changes);
+		rc = update_one_tgt(map, target, dom, opc, &version,
+				    print_changes);
 		if (rc != 0)
 			return rc;
 
 		if (tgt_map_ver != NULL && *tgt_map_ver < version)
 			*tgt_map_ver = version;
 
-		if (evict_rank &&
+		if (exclude_rank &&
 		    !(dom->do_comp.co_status & (PO_COMP_ST_DOWN |
 						PO_COMP_ST_DOWNOUT)) &&
 		    pool_map_node_status_match(dom, PO_COMP_ST_DOWN |

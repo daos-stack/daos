@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
+	"github.com/daos-stack/daos/src/control/common"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -24,7 +25,7 @@ func TestProto_ConvertNvmeHealth(t *testing.T) {
 	}
 	expNative := storage.MockNvmeHealth(1)
 
-	if diff := cmp.Diff(expNative, native); diff != "" {
+	if diff := cmp.Diff(expNative, native, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }
@@ -37,7 +38,7 @@ func TestProto_ConvertNvmeNamespace(t *testing.T) {
 	}
 	expNative := storage.MockNvmeNamespace()
 
-	if diff := cmp.Diff(expNative, native); diff != "" {
+	if diff := cmp.Diff(expNative, native, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }
@@ -50,9 +51,9 @@ func TestProto_ConvertNvmeController(t *testing.T) {
 	}
 	expNative := storage.MockNvmeController()
 
-	cmpOpts := []cmp.Option{
+	cmpOpts := append(common.DefaultCmpOpts(),
 		cmpopts.IgnoreFields(storage.NvmeController{}, "HealthStats", "Serial"),
-	}
+	)
 	if diff := cmp.Diff(expNative, native, cmpOpts...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
@@ -73,8 +74,10 @@ func TestProto_ConvertNvmeControllers(t *testing.T) {
 	if err := convertedNatives.FromNative(natives); err != nil {
 		t.Fatal(err)
 	}
+
+	opts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(pbs,
-		([]*ctlpb.NvmeController)(convertedNatives)); diff != "" {
+		([]*ctlpb.NvmeController)(convertedNatives), opts...); diff != "" {
 
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
@@ -108,8 +111,10 @@ func TestProto_ConvertScmModules(t *testing.T) {
 	if err := convertedNatives.FromNative(natives); err != nil {
 		t.Fatal(err)
 	}
+
+	opts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(pbs,
-		([]*ctlpb.ScmModule)(convertedNatives)); diff != "" {
+		([]*ctlpb.ScmModule)(convertedNatives), opts...); diff != "" {
 
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
@@ -125,7 +130,8 @@ func TestProto_ConvertScmNamespace(t *testing.T) {
 	expNative := storage.MockScmNamespace()
 	expNative.Mount = storage.MockScmMountPoint()
 
-	if diff := cmp.Diff(expNative, native); diff != "" {
+	opts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(expNative, native, opts...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }
@@ -145,8 +151,9 @@ func TestProto_ConvertScmNamespaces(t *testing.T) {
 	if err := convertedNatives.FromNative(natives); err != nil {
 		t.Fatal(err)
 	}
+	opts := common.DefaultCmpOpts()
 	if diff := cmp.Diff(pbs,
-		([]*ctlpb.ScmNamespace)(convertedNatives)); diff != "" {
+		([]*ctlpb.ScmNamespace)(convertedNatives), opts...); diff != "" {
 
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}

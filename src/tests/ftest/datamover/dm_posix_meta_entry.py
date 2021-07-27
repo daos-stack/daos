@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import join
 
 
-class DmPosixMetaEntry(DataMoverTestBase):
+class DmvrPosixMetaEntry(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover entry metadata validation.
 
@@ -23,7 +23,7 @@ class DmPosixMetaEntry(DataMoverTestBase):
         Test Description:
             Verifies that POSIX metadata is preserved for dcp.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_posix_meta_entry,dm_posix_meta_entry_dcp
         """
         self.run_dm_posix_meta_entry("DCP")
@@ -70,8 +70,13 @@ class DmPosixMetaEntry(DataMoverTestBase):
             self.dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_src_path)
         self.create_data(dfuse_src_path)
 
+        # Create a container to emulate a POSIX filesystem
+        posix_cont = self.create_cont(pool1)
+        posix_root = "{}/{}/{}".format(
+            self.dfuse.mount_dir.value, pool1.uuid, posix_cont.uuid)
+
         # Create 1 source posix path with test data
-        posix_src_path = self.new_posix_test_path()
+        posix_src_path = self.new_posix_test_path(False, posix_root)
         self.create_data(posix_src_path)
 
         # Run each variation with and without the --preserve option
@@ -90,7 +95,7 @@ class DmPosixMetaEntry(DataMoverTestBase):
             cmp_times=preserve_on, cmp_xattr=preserve_on)
 
         # DAOS -> POSIX
-        posix_dst_path = self.new_posix_test_path(False)
+        posix_dst_path = self.new_posix_test_path(False, posix_root)
         self.run_datamover(
             test_desc + "(DAOS->POSIX)",
             "DAOS", daos_src_path, pool1, cont1,
@@ -122,18 +127,16 @@ class DmPosixMetaEntry(DataMoverTestBase):
             "mkdir -p '{}'".format(join(path, "dir1")),
             "pushd '{}'".format(path),
 
-            # Disable xattr comparison for now
             # xattrs for the directory
-            #"setfattr -n 'user.dir1_attr1' -v 'dir1_value1' 'dir1'",
-            #"setfattr -n 'user.dir1_attr2' -v 'dir1_value2' 'dir1'",
+            "setfattr -n 'user.dir1_attr1' -v 'dir1_value1' 'dir1'",
+            "setfattr -n 'user.dir1_attr2' -v 'dir1_value2' 'dir1'",
 
             # One file in the directory
             "echo 'test_data' > 'dir1/file1'",
 
-            # Disable xattr comparison for now
             # xattrs for the file
-            #"setfattr -n 'user.file1_attr1' -v 'file1_value1' 'dir1/file1'",
-            #"setfattr -n 'user.file1_attr2' -v 'file1_value2' 'dir1/file1'",
+            "setfattr -n 'user.file1_attr1' -v 'file1_value1' 'dir1/file1'",
+            "setfattr -n 'user.file1_attr2' -v 'file1_value2' 'dir1/file1'",
 
             # One symlink in the directory
             "ln -s 'file1' 'dir1/link1'",
@@ -162,9 +165,6 @@ class DmPosixMetaEntry(DataMoverTestBase):
                 Default is False.
         """
         self.log.info("compare_data('%s', '%s')", path1, path2)
-
-        # Disable xattr comparison for now
-        cmp_xattr = False
 
         # Generate the fields to compare
         field_printf = ""

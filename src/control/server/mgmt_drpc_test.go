@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
@@ -117,7 +117,7 @@ func TestSrvModule_HandleNotifyReady_Success_Single(t *testing.T) {
 		t.Fatalf("Expected no error, got %q", err.Error())
 	}
 
-	waitForEngineReady(t, mod.engines[0])
+	waitForEngineReady(t, mod.engines[0].(*EngineInstance))
 }
 
 func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
@@ -147,9 +147,10 @@ func TestSrvModule_HandleNotifyReady_Success_Multi(t *testing.T) {
 	}
 
 	// I/O Engine at idx should be marked ready
-	waitForEngineReady(t, mod.engines[idx])
+	waitForEngineReady(t, mod.engines[idx].(*EngineInstance))
 	// None of the other IO engines should have gotten the message
-	for i, s := range mod.engines {
+	for i, e := range mod.engines {
+		s := e.(*EngineInstance)
 		if uint32(i) != idx && isEngineReady(s) {
 			t.Errorf("Expected engine at idx %v to be NOT ready", i)
 		}

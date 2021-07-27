@@ -69,7 +69,7 @@ server operations:
 |Component|Config Parameter|Example Config Value|
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
-|Data Plane|log_file|/tmp/daos_engine.*.log|
+|Data Plane|log_file|/tmp/daos_engine.\*.log|
 |[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
@@ -133,23 +133,6 @@ logging. By default all subsystems are enabled ("DD_SUBSYS=all").
 
 ### Priority Logging
 
-All macros that output logs have a priority level, shown in descending
-order below.
-
--   D_FATAL(fmt, ...) FATAL
-
--   D_CRIT(fmt, ...) CRIT
-
--   D_ERROR(fmt, ...) ERR
-
--   D_WARN(fmt, ...) WARN
-
--   D_NOTE(fmt, ...) NOTE
-
--   D_INFO(fmt, ...) INFO
-
--   D_DEBUG(mask, fmt, ...) DEBUG
-
 The priority level that outputs to stderr is set with DD_STDERR. By
 default in DAOS (specific to the project), this is set to CRIT
 ("DD_STDERR=CRIT") meaning that all CRIT and more severe log messages
@@ -203,30 +186,30 @@ are enabled by default ("DD_MASK=all").
 
 -   Generic setup for all messages (default settings)
 
-        $ D_LOG_MASK=DEBUG
-        $ DD_SUBSYS=all
-        $ DD_MASK=all
+        D_LOG_MASK=DEBUG
+        DD_SUBSYS=all
+        DD_MASK=all
 
 -   Disable all logs for performance tuning
 
-        $ D_LOG_MASK=ERR -> will only log error messages from all facilities
-        $ D_LOG_MASK=FATAL -> will only log system fatal messages
+        D_LOG_MASK=ERR -> will only log error messages from all facilities
+        D_LOG_MASK=FATAL -> will only log system fatal messages
 
 -   Disable a noisy debug logging subsystem
 
-        $ D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by
+        D_LOG_MASK=DEBUG,MEM=ERR -> disables MEM facility by
         restricting all logs from that facility to ERROR or higher priority only
 
 -   Enable a subset of facilities of interest
 
-        $ DD_SUBSYS=rpc,tests
-        $ D_LOG_MASK=DEBUG -> required to see logs for RPC and TESTS
+        DD_SUBSYS=rpc,tests
+        D_LOG_MASK=DEBUG -> required to see logs for RPC and TESTS
         less severe than INFO (the majority of log messages)
 
 -   Fine-tune the debug messages by setting a debug mask
 
-        $ D_LOG_MASK=DEBUG
-        $ DD_MASK=mgmt -> only logs DEBUG messages related to pool
+        D_LOG_MASK=DEBUG
+        DD_MASK=mgmt -> only logs DEBUG messages related to pool
         management
 
 Refer to the DAOS Environment Variables document for
@@ -260,7 +243,7 @@ Issue ```ipcs``` to view the Shared Memory Segments.  The output will show a
 list of segments organized by ```key```.
 
 ```
-$ipcs
+ipcs
 
 ------ Message Queues --------
 key        msqid      owner      perms      used-bytes   messages
@@ -288,6 +271,40 @@ To remove the shared memory segment left behind by I/O Engine instance 1, issue:
 ```
 sudo ipcrm -M 0x10242049
 ```
+
+### Server Start Issues
+1. Read the log located in the `control_log_file`.
+1. Verify that the `daos_server` process is not currently running.
+1. Check the SCM device path in /dev.
+1. Verify the PCI addresses using `dmg storage scan`.
+
+    !!! note
+        A server must be started with minimum setup.
+        You can also obtain the addresses with `daos_server storage scan`.
+
+1. Format the SCMs defined in the config file.
+1. Generate the config file using `dmg config generate`. The various requirements will be populated without a syntax error.
+1. Try starting with `allow_insecure: true`. This will rule out the credential certificate issue.
+1. Verify that the `access_points` host is accessible and the port is not used.
+1. Check the `provider` entry. See the "Network Scan and Configuration" section of the admin guide for determining the right provider to use.
+1. Check `fabric_iface` in `engines`. They should be available and enabled.
+1. Check that `socket_dir` is writeable by the daos_server.
+
+### Errors creating a Pool
+1. Check which engine rank you want to create a pool in with `dmg system query --verbose` and verify their State is Joined.
+1. `DER_NOSPACE(-1007)` appears: Check the size of the NVMe and PMEM. Next, check the size of the existing pool. Then check that this new pool being created will fit into the remaining disk space.
+
+### Problems creating a container
+1. Check that the path to daos is your intended binary. It's usually `/usr/bin/daos`.
+1. When the server configuration is changed, it's necessary to restart the agent.
+1. `DER_UNREACH(-1006)`: Check the socket ID consistency between PMEM and NVMe. First, determine which socket you're using with `daos_server network scan -p all`. e.g., if the interface you're using in the engine section is eth0, find which NUMA Socket it belongs to. Next, determine the disks you can use with this socket by calling `daos_server storage scan` or `dmg storage scan`. e.g., if eth0 belongs to NUMA Socket 0, use only the disks with 0 in the Socket ID column.
+1. Check the interface used in the server config (`fabric_iface`) also exists in the client and can communicate with the server.
+1. Check the access_points of the agent config points to the correct server host.
+1. Call `daos pool query` and check that the pool exists and has free space.
+
+### Applications run slow
+Verify if you're using Infiniband for `fabric_iface`: in the server config. The IO will be significantly slower with Ethernet.
+
 
 ## Bug Report
 

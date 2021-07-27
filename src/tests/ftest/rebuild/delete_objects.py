@@ -5,9 +5,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from rebuild_test_base import RebuildTestBase
+from daos_utils import DaosCommand
 
-
-class RebuildDeleteObjects(RebuildTestBase):
+class RbldDeleteObjects(RebuildTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for deleting objects during pool rebuild.
 
@@ -18,27 +18,23 @@ class RebuildDeleteObjects(RebuildTestBase):
     :avocado: recursive
     """
 
-    CANCEL_FOR_TICKET = [
-        [
-            "DAOS-6751",
-            "test_method_name", "test_rebuild_delete_records",
-            "record_qty", 1
-        ],
-        [
-            "DAOS-6865",
-            "rank", 4
-        ],
-    ]
-
     def __init__(self, *args, **kwargs):
         """Initialize a RebuildDeleteObjects object."""
         super().__init__(*args, **kwargs)
         self.punched_indices = None
         self.punched_qty = 0
         self.punch_type = None
+        self.daos_cmd = None
 
     def execute_during_rebuild(self):
         """Delete half of the objects from the container during rebuild."""
+        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd.container_set_prop(
+                      pool=self.pool.uuid,
+                      cont=self.container.uuid,
+                      prop="status",
+                      value="healthy")
+
         if self.punch_type == "object":
             # Punch half of the objects
             self.punched_indices = [
@@ -90,7 +86,9 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleteobject
+        :avocado: tags=all,full_regression
+        :avocado: tags=large
+        :avocado: tags=rebuild,delete_objects,rebuilddeleteobject
         """
         self.punch_type = "object"
         self.execute_rebuild_test()
@@ -107,7 +105,9 @@ class RebuildDeleteObjects(RebuildTestBase):
         Use Cases:
             foo
 
-        :avocado: tags=all,large,full_regression,rebuild,rebuilddeleterecord
+        :avocado: tags=all,full_regression
+        :avocado: tags=large
+        :avocado: tags=rebuild,delete_objects,rebuilddeleterecord
         """
         self.punch_type = "record"
         self.execute_rebuild_test()

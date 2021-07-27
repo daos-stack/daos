@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -10,7 +10,7 @@ from ior_test_base import IorTestBase
 
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
-class PoolDestroyWithIO(IorTestBase):
+class RbldPoolDestroyWithIO(IorTestBase):
     """Rebuild test cases featuring IOR.
 
     This class contains tests for pool rebuild that feature I/O going on
@@ -33,7 +33,10 @@ class PoolDestroyWithIO(IorTestBase):
           Destroy Pool during rebuild.
           Re-create pool on reamining ranks.
 
-        :avocado: tags=all,pr,hw,medium,ib2,pool,rebuild,pooldestroywithio
+        :avocado: tags=all,pr,hw
+        :avocado: tags=medium,ib2
+        :avocado: tags=pool,rebuild,ior
+        :avocado: tags=pooldestroywithio
         """
         # set params
         targets = self.params.get("targets", "/run/server_config/*/0/*")

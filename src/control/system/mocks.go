@@ -149,6 +149,7 @@ func MockDatabaseWithAddr(t *testing.T, log logging.Logger, addr *net.TCPAddr) *
 	db.raft.setSvc(newMockRaftService(&mockRaftServiceConfig{
 		State: raft.Leader,
 	}, (*fsm)(db)))
+	db.initialized.SetTrue()
 
 	return db
 }

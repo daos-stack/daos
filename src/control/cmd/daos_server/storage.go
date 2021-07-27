@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"os/user"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -17,8 +18,7 @@ import (
 	commands "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 type storageCmd struct {
@@ -43,8 +43,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	// that we should have made these Execute() methods thin
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
-		cmd.scs = server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-			scm.DefaultProvider(cmd.log), config.DefaultServer().Engines)
+		cmd.scs = server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
 	}
 
 	op := "Preparing"
@@ -57,18 +56,26 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 	if prepNvme {
 		cmd.log.Info(op + " locally-attached NVMe storage...")
 
+		if cmd.TargetUser == "" {
+			runningUser, err := user.Current()
+			if err != nil {
+				return errors.Wrap(err, "couldn't lookup running user")
+			}
+			cmd.TargetUser = runningUser.Username
+		}
+
 		// Prepare NVMe access through SPDK
-		if _, err := cmd.scs.NvmePrepare(bdev.PrepareRequest{
+		if _, err := cmd.scs.NvmePrepare(storage.BdevPrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
-			PCIWhitelist:  cmd.PCIWhiteList,
+			PCIAllowlist:  cmd.PCIAllowList,
 			ResetOnly:     cmd.Reset,
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}
 	}
 
-	scmScan, err := cmd.scs.ScmScan(scm.ScanRequest{})
+	scmScan, err := cmd.scs.ScmScan(storage.ScmScanRequest{})
 	if err != nil {
 		return common.ConcatErrors(scanErrors, err)
 	}
@@ -82,12 +89,12 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 		// Prepare SCM modules to be presented as pmem device files.
 		// Pass evaluated state to avoid running GetScmState() twice.
-		resp, err := cmd.scs.ScmPrepare(scm.PrepareRequest{Reset: cmd.Reset})
+		resp, err := cmd.scs.ScmPrepare(storage.ScmPrepareRequest{Reset: cmd.Reset})
 		if err != nil {
 			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
-			cmd.log.Info(scm.MsgRebootRequired)
+			cmd.log.Info(storage.ScmMsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
 			var bld strings.Builder
 			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
@@ -113,15 +120,14 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc := server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-		scm.DefaultProvider(cmd.log), config.DefaultServer().Engines)
+	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
 
 	cmd.log.Info("Scanning locally-attached storage...")
 
 	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)
 
-	nvmeResp, err := svc.NvmeScan(bdev.ScanRequest{})
+	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
@@ -134,7 +140,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		}
 	}
 
-	scmResp, err := svc.ScmScan(scm.ScanRequest{})
+	scmResp, err := svc.ScmScan(storage.ScmScanRequest{})
 	switch {
 	case err != nil:
 		scanErrors = append(scanErrors, err)

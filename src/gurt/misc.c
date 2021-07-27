@@ -26,9 +26,46 @@ d_calloc(size_t count, size_t eltsize)
 }
 
 void *
+d_malloc(size_t size)
+{
+	return malloc(size);
+}
+
+void *
 d_realloc(void *ptr, size_t size)
 {
 	return realloc(ptr, size);
+}
+
+char *
+d_strndup(const char *s, size_t n)
+{
+	return strndup(s, n);
+}
+
+int
+d_asprintf(char **strp, const char *fmt, ...)
+{
+	va_list	ap;
+	int	rc;
+
+	va_start(ap, fmt);
+	rc = vasprintf(strp, fmt, ap);
+	va_end(ap);
+
+	return rc;
+}
+
+char *
+d_realpath(const char *path, char *resolved_path)
+{
+	return realpath(path, resolved_path);
+}
+
+void *
+d_aligned_alloc(size_t alignment, size_t size)
+{
+	return aligned_alloc(alignment, size);
 }
 
 int
@@ -55,7 +92,7 @@ d_rank_list_dup(d_rank_list_t **dst, const d_rank_list_t *src)
 
 	D_ALLOC_ARRAY(rank_list->rl_ranks, rank_list->rl_nr);
 	if (rank_list->rl_ranks == NULL) {
-		D_FREE_PTR(rank_list);
+		D_FREE(rank_list);
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
 
@@ -181,7 +218,7 @@ d_rank_list_alloc(uint32_t size)
 
 	D_ALLOC_ARRAY(rank_list->rl_ranks, size);
 	if (rank_list->rl_ranks == NULL) {
-		D_FREE_PTR(rank_list);
+		D_FREE(rank_list);
 		return NULL;
 	}
 
@@ -203,7 +240,7 @@ d_rank_list_realloc(d_rank_list_t *ptr, uint32_t size)
 		d_rank_list_free(ptr);
 		return NULL;
 	}
-	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, size);
+	D_REALLOC_ARRAY(new_rl_ranks, ptr->rl_ranks, ptr->rl_nr, size);
 	if (new_rl_ranks != NULL) {
 		ptr->rl_ranks = new_rl_ranks;
 		ptr->rl_nr = size;
@@ -332,11 +369,10 @@ out:
 int
 d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 {
-	uint32_t		 old_num;
+	uint32_t		 old_num = rank_list->rl_nr;
 	d_rank_list_t		*new_rank_list;
 	int			 rc = 0;
 
-	old_num = rank_list->rl_nr;
 	new_rank_list = d_rank_list_realloc(rank_list, old_num + 1);
 	if (new_rank_list == NULL) {
 		D_ERROR("d_rank_list_realloc() failed.\n");
@@ -347,6 +383,7 @@ d_rank_list_append(d_rank_list_t *rank_list, d_rank_t rank)
 out:
 	return rc;
 }
+
 /*
  * Compare whether or not the two rank lists are identical.
  * This function possibly will change the order of the passed in rank list, it
@@ -419,9 +456,9 @@ d_idx_in_rank_list(d_rank_list_t *rank_list, d_rank_t rank, uint32_t *idx)
 /**
  * Print out the content of a rank_list to stderr.
  *
- * \param  rank_list [IN]	the rank list to print
- * \param  name      [IN]	a name to describe the rank list
- * \param  name_len  [IN]	length of the name string (excluding the
+ * \param[in]  rank_list	the rank list to print
+ * \param[in]  name		a name to describe the rank list
+ * \param[in]  name_len		length of the name string (excluding the
  *				trailing \n);
  *
  * \return			0 on success, a negative value on error
@@ -515,12 +552,13 @@ dis_integer_str(char *str)
 /**
  * get a bool type environment variables
  *
- * \param env	[IN]		name of the environment variable
- * \param bool_val [IN/OUT]	returned value of the ENV. Will not change the
- *				original value if ENV is not set. Set as false
- *				if the env is set to 0, otherwise set as true.
+ * \param[in]		env		name of the environment variable
+ * \param[in,out]	bool_val	returned value of the ENV. Will not change the original
+ *					value if ENV is not set. Set as false if the env is set to
+ *					0, otherwise set as true.
  */
-void d_getenv_bool(const char *env, bool *bool_val)
+void
+d_getenv_bool(const char *env, bool *bool_val)
 {
 	char *env_val;
 
@@ -542,12 +580,13 @@ void d_getenv_bool(const char *env, bool *bool_val)
 /**
  * get an integer type environment variables
  *
- * \param env	[IN]		name of the environment variable
- * \param int_val [IN/OUT]	returned value of the ENV. Will not change the
- *				original value if ENV is not set or set as a
+ * \param[in]		env	name of the environment variable
+ * \param[in,out]	int_val	returned value of the ENV. Will not change the original value if ENV
+ *				is not set or set as a
  *				non-integer value.
  */
-void d_getenv_int(const char *env, unsigned *int_val)
+void
+d_getenv_int(const char *env, unsigned *int_val)
 {
 	char		*env_val;
 	unsigned	 value;
@@ -567,6 +606,41 @@ void d_getenv_int(const char *env, unsigned *int_val)
 	value = atoi(env_val);
 	D_DEBUG(DB_TRACE, "get ENV %s as %d.\n", env, value);
 	*int_val = value;
+}
+
+int
+d_getenv_uint64_t(const char *env, uint64_t *val)
+{
+	char		*env_val;
+	size_t		env_len;
+	int		matched;
+	uint64_t	new_val;
+	int		count;
+
+	env_val = getenv(env);
+	if (!env_val) {
+		D_DEBUG(DB_TRACE, "ENV '%s' unchanged at %"PRId64"\n", env, *val);
+		return -DER_NONEXIST;
+	}
+
+	env_len = strnlen(env_val, 128);
+	if (env_len == 128) {
+		D_ERROR("ENV '%s' is invalid\n", env);
+		return -DER_INVAL;
+	}
+
+	/* Now do scanf, check that the number was matched, and there are no extra unmatched
+	 * characters at the end.
+	 */
+	matched = sscanf(env_val, "%"PRId64"%n", &new_val, &count);
+	if (matched == 1 && env_len == count) {
+		*val = new_val;
+		D_DEBUG(DB_TRACE, "ENV '%s' set to %"PRId64"\n", env, *val);
+		return -DER_SUCCESS;
+	}
+
+	D_ERROR("ENV '%s' is invalid: '%s'\n", env, env_val);
+	return -DER_INVAL;
 }
 
 /**
@@ -625,7 +699,7 @@ d_write_string_buffer(struct d_string_buffer_t *buf, const char *format, ...)
 		}
 
 		size = buf->buf_size * 2;
-		D_REALLOC(new_buf, buf->str, size);
+		D_REALLOC(new_buf, buf->str, buf->buf_size, size);
 		if (new_buf == NULL) {
 			buf->status = -DER_NOMEM;
 			return -DER_NOMEM;
@@ -647,7 +721,6 @@ d_free_string(struct d_string_buffer_t *buf)
 {
 	if (buf->str != NULL) {
 		D_FREE(buf->str);
-		buf->str = NULL;
 		buf->status = 0;
 		buf->str_size = 0;
 		buf->buf_size = 0;
