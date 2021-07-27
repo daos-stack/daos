@@ -66,7 +66,8 @@ vos_dtx_validation(struct dtx_handle *dth);
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
- * \param mbs		[OUT	Pointer to the DTX participants information.]
+ * \param mbs		[OUT]	Pointer to the DTX participants information.
+ * \param dck		[OUT]	Pointer to the key for CoS cache.
  * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
@@ -85,7 +86,8 @@ vos_dtx_validation(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs,
+	      struct dtx_cos_key *dck, bool for_resent);
 
 /**
  * Commit the specified DTXs.
@@ -93,15 +95,14 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  * \param coh	[IN]	Container open handle.
  * \param dtis	[IN]	The array for DTX identifiers to be committed.
  * \param count [IN]	The count of DTXs to be committed.
- * \param dcks	[OUT]	The array to hold the OID and dkey hash corresponding to
- *			the committed DTXs array for subsequent CoS handling.
+ * \param rm_cos [OUT]	The array for whether remove entry from CoS cache.
  *
  * \return		Negative value if error.
  * \return		Others are for the count of committed DTXs.
  */
 int
 vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
-	       struct dtx_cos_key *dcks);
+	       bool *rm_cos);
 
 /**
  * Abort the specified DTXs.
@@ -117,6 +118,21 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 	      int count);
+
+/**
+ * Set flags on the active DTXs.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dtis	[IN]	The array for DTX identifiers to be handled.
+ * \param count [IN]	The count of DTXs to be handled.
+ * \param flags [IN]	The flags for the DTXs.
+ *
+ * \return		Negative value if error.
+ * \return		Others are for the count of handled DTXs.
+ */
+int
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dtis, int count,
+		  uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.

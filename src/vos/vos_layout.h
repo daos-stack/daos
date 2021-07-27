@@ -88,7 +88,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				16
+#define POOL_DF_VER_1				19
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_VER_1
 
@@ -141,30 +141,24 @@ enum vos_dtx_record_types {
 
 #define DTX_INLINE_REC_CNT	4
 
-struct vos_dtx_ent_common {
-	/** The DTX identifier. */
-	struct dtx_id			dec_xid;
-	/** The epoch# for the DTX. */
-	daos_epoch_t			dec_epoch;
-	/** The identifier of the modified object (shard). */
-	daos_unit_oid_t			dec_oid;
-	/** The hashed dkey if applicable. */
-	uint64_t			dec_dkey_hash;
-};
-
 /** Committed DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_cmt_ent_df {
-	struct vos_dtx_ent_common	dce_common;
+	/** The DTX identifier. */
+	struct dtx_id			dce_xid;
+	/** The epoch# for the DTX. */
+	daos_epoch_t			dce_epoch;
 };
-
-#define dce_xid		dce_common.dec_xid
-#define dce_epoch	dce_common.dec_epoch
-#define dce_oid		dce_common.dec_oid
-#define dce_dkey_hash	dce_common.dec_dkey_hash
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */
 struct vos_dtx_act_ent_df {
-	struct vos_dtx_ent_common	dae_common;
+	/** The DTX identifier. */
+	struct dtx_id			dae_xid;
+	/** The epoch# for the DTX. */
+	daos_epoch_t			dae_epoch;
+	/** The identifier of the modified object (shard). */
+	daos_unit_oid_t			dae_oid;
+	/** The hashed dkey if applicable. */
+	uint64_t			dae_dkey_hash;
 	/** The allocated local id for the DTX entry */
 	uint32_t			dae_lid;
 	/** DTX flags, see enum dtx_entry_flags. */
@@ -195,11 +189,6 @@ struct vos_dtx_act_ent_df {
 	/** The offset for the dtx mbs if out of inline. */
 	umem_off_t			dae_mbs_off;
 };
-
-#define dae_xid		dae_common.dec_xid
-#define dae_epoch	dae_common.dec_epoch
-#define dae_oid		dae_common.dec_oid
-#define dae_dkey_hash	dae_common.dec_dkey_hash
 
 struct vos_dtx_blob_df {
 	/** Magic number, can be used to distinguish active or committed DTX. */

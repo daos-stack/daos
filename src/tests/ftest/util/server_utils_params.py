@@ -175,6 +175,27 @@ class DaosServerYamlParameters(YamlParameters):
 
         return yaml_data
 
+    def is_yaml_data_updated(self):
+        """Determine if any of the yaml file parameters have been updated.
+
+        Returns:
+            bool: whether or not a yaml file parameter has been updated
+
+        """
+        yaml_data_updated = super().is_yaml_data_updated()
+        if not yaml_data_updated:
+            for engine_params in self.engine_params:
+                if engine_params.is_yaml_data_updated():
+                    yaml_data_updated = True
+                    break
+        return yaml_data_updated
+
+    def reset_yaml_data_updated(self):
+        """Reset each yaml file parameter updated state to False."""
+        super().reset_yaml_data_updated()
+        for engine_params in self.engine_params:
+            engine_params.reset_yaml_data_updated()
+
     def set_value(self, name, value):
         """Set the value for a specified attribute name.
 
@@ -342,7 +363,8 @@ class DaosServerYamlParameters(YamlParameters):
                 "ABT_ENV_MAX_NUM_XSTREAMS=100",
                 "ABT_MAX_NUM_XSTREAMS=100",
                 "DAOS_MD_CAP=1024",
-                "DD_MASK=mgmt,io,md,epc,rebuild"
+                "DD_MASK=mgmt,io,md,epc,rebuild",
+                "D_LOG_FILE_APPEND_PID=1"
             ]
             if default_provider == "ofi+sockets":
                 default_env_vars.extend([

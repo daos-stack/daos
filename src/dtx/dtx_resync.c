@@ -22,6 +22,7 @@ struct dtx_resync_entry {
 	d_list_t		dre_link;
 	daos_epoch_t		dre_epoch;
 	daos_unit_oid_t		dre_oid;
+	uint64_t		dre_dkey_hash;
 	struct dtx_entry	dre_dte;
 };
 
@@ -54,16 +55,23 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		  struct dtx_resync_head *drh, int count)
 {
 	struct dtx_resync_entry		 *dre;
-	struct dtx_entry		**dte = NULL;
+	struct dtx_entry		**dtes = NULL;
+	struct dtx_cos_key		 *dcks = NULL;
 	int				  rc = 0;
 	int				  i = 0;
 	int				  j = 0;
 
 	D_ASSERT(drh->drh_count >= count);
 
-	D_ALLOC_ARRAY(dte, count);
-	if (dte == NULL)
+	D_ALLOC_ARRAY(dtes, count);
+	if (dtes == NULL)
 		return -DER_NOMEM;
+
+	D_ALLOC_ARRAY(dcks, count);
+	if (dcks == NULL) {
+		D_FREE(dtes);
+		return -DER_NOMEM;
+	}
 
 	for (i = 0; i < count; i++) {
 		dre = d_list_entry(drh->drh_list.next,
@@ -74,7 +82,7 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * DTXs. So double check the status before current commit.
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dre->dre_xid,
-				   NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL, false);
 
 		/* Skip this DTX since it has been committed or aggregated. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
@@ -85,22 +93,25 @@ dtx_resync_commit(struct ds_cont_child *cont,
 		 * not committed, then commit it (again), that is harmless.
 		 */
 
-		dte[j++] = dtx_entry_get(&dre->dre_dte);
+		dtes[j] = dtx_entry_get(&dre->dre_dte);
+		dcks[j].oid = dre->dre_oid;
+		dcks[j].dkey_hash = dre->dre_dkey_hash;
+		j++;
 
 next:
 		dtx_dre_release(drh, dre);
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dte, j, true);
+		rc = dtx_commit(cont, dtes, dcks, j);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
 
 		for (i = 0; i < j; i++) {
-			D_ASSERT(dte[i]->dte_refs == 1);
+			D_ASSERT(dtes[i]->dte_refs == 1);
 
-			dre = d_list_entry(dte[i], struct dtx_resync_entry,
+			dre = d_list_entry(dtes[i], struct dtx_resync_entry,
 					   dre_dte);
 			D_FREE(dre);
 		}
@@ -108,7 +119,8 @@ next:
 		rc = 0;
 	}
 
-	D_FREE(dte);
+	D_FREE(dtes);
+	D_FREE(dcks);
 	return rc;
 }
 
@@ -272,7 +284,7 @@ dtx_status_handle_one(struct ds_cont_child *cont, struct dtx_entry *dte,
 		 * DTXs. So double check the status before next action.
 		 */
 		rc = vos_dtx_check(cont->sc_hdl, &dte->dte_xid,
-				   NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL, false);
 
 		/* Skip this DTX that it may has been committed or aborted. */
 		if (rc == DTX_ST_COMMITTED || rc == DTX_ST_COMMITTABLE ||
@@ -446,6 +458,10 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
 		return 0;
 
+	/* Skip orphan entry that will be handled via other special tool. */
+	if (ent->ie_dtx_flags & DTE_ORPHAN)
+		return 0;
+
 	if (dra->resync_all) {
 		/* For open container. */
 		if (ent->ie_dtx_flags & DTE_LEADER) {
@@ -480,6 +496,7 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 	dre->dre_epoch = ent->ie_epoch;
 	dre->dre_oid = ent->ie_dtx_oid;
+	dre->dre_dkey_hash = ent->ie_dkey_hash;
 
 	dte = &dre->dre_dte;
 	mbs = (struct dtx_memberships *)(dte + 1);

@@ -123,7 +123,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 		goto out;
 
 	dout = crt_reply_get(req);
-	if (dra->dra_opc != DTX_REFRESH)
+	if (dout->do_status != 0 || dra->dra_opc != DTX_REFRESH)
 		D_GOTO(out, rc = dout->do_status);
 
 	if (din->di_dtx_array.ca_count != dout->do_sub_rets.ca_count)
@@ -176,6 +176,34 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			D_FREE(dsp);
 			D_GOTO(out, rc = -DER_DATA_LOSS);
 		case -DER_NONEXIST:
+			if (dtx_hlc_age2sec(dsp->dsp_epoch) >
+			    DTX_AGG_THD_AGE_LO ||
+			    DAOS_FAIL_CHECK(DAOS_DTX_UNCERTAIN)) {
+
+				/* Related DTX entry on leader does not exist.
+				 * We do not know whether it has been aborted
+				 * or committed (then aggregated). Then has to
+				 * mark it as 'orphan' that will be handled via
+				 * some special DAOS tools in the future.
+				 */
+
+				rc = vos_dtx_set_flags(dra->dra_cont->sc_hdl,
+						       &dsp->dsp_xid, 1,
+						       DTE_ORPHAN);
+
+				D_ERROR("Hit uncertain leaked DTX "DF_DTI
+					", mark it as orphan: %d\n",
+					DP_DTI(&dsp->dsp_xid), rc);
+
+				if (rc == -DER_NONEXIST)
+					rc = 0;
+				else
+					rc = -DER_TX_UNCERTAIN;
+
+				D_FREE(dsp);
+				break;
+			}
+
 			/* The leader does not have related DTX info,
 			 * we may miss related DTX abort request, so
 			 * let's abort it locally.
@@ -581,13 +609,13 @@ dtx_dti_classify(struct ds_pool *pool, daos_handle_t tree,
  */
 int
 dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	   int count, bool drop_cos)
+	   struct dtx_cos_key *dcks, int count)
 {
 	struct dtx_req_args	 dra;
 	struct dtx_req_rec	*drr;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
 	struct dtx_id		*dti = NULL;
-	struct dtx_cos_key	*dcks = NULL;
+	bool			*rm_cos = NULL;
 	struct umem_attr	 uma;
 	struct btr_root		 tree_root = { 0 };
 	daos_handle_t		 tree_hdl = DAOS_HDL_INVAL;
@@ -618,25 +646,27 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 			goto out;
 	}
 
-	if (drop_cos) {
-		D_ALLOC_ARRAY(dcks, count);
-		if (dcks == NULL)
+	if (dcks != NULL) {
+		D_ALLOC_ARRAY(rm_cos, count);
+		if (rm_cos == NULL)
 			D_GOTO(out, rc1 = -DER_NOMEM);
 	}
 
-	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count, dcks);
-
-	if (rc1 >= 0 && drop_cos) {
+	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count, rm_cos);
+	if (rc1 >= 0 && rm_cos != NULL) {
 		int	i;
 
 		for (i = 0; i < count; i++) {
-			if (!daos_oid_is_null(dcks[i].oid.id_pub))
+			if (rm_cos[i]) {
+				D_ASSERT(!daos_oid_is_null(dcks[i].oid.id_pub));
+
 				dtx_del_cos(cont, &dti[i], &dcks[i].oid,
 					    dcks[i].dkey_hash);
+			}
 		}
 	}
 
-	D_FREE(dcks);
+	D_FREE(rm_cos);
 
 	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
 	if (rc1 == -DER_NONEXIST)
@@ -698,7 +728,11 @@ dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 	D_ASSERT(dti != NULL);
 
 	/* Local abort firstly. */
-	rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
+	if (epoch != 0)
+		rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
+	else
+		rc = vos_dtx_set_flags(cont->sc_hdl, dti, count, DTE_CORRUPTED);
+
 	if (rc > 0 || rc == -DER_NONEXIST)
 		rc = 0;
 
@@ -977,7 +1011,7 @@ next:
 
 	/* Handle the entries whose leaders are on current server. */
 	d_list_for_each_entry_safe(dsp, tmp, &self, dsp_link) {
-		struct dtx_entry	 dte;
+		struct dtx_entry	dte;
 
 		d_list_del(&dsp->dsp_link);
 
@@ -991,8 +1025,11 @@ next:
 		switch (rc) {
 		case DSHR_NEED_COMMIT: {
 			struct dtx_entry	*pdte = &dte;
+			struct dtx_cos_key	 dck;
 
-			rc = dtx_commit(cont, &pdte, 1, true);
+			dck.oid = dsp->dsp_oid;
+			dck.dkey_hash = dsp->dsp_dkey_hash;
+			rc = dtx_commit(cont, &pdte, &dck, 1);
 			if (rc < 0 && rc != -DER_NONEXIST && cmt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, cmt_list);
 			else

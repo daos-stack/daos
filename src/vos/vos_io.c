@@ -21,6 +21,7 @@
 
 /** I/O context */
 struct vos_io_context {
+	EVT_ENT_ARRAY_LG_PTR(ic_ent_array);
 	/** The epoch bound including uncertainty */
 	daos_epoch_t		 ic_bound;
 	daos_epoch_range_t	 ic_epr;
@@ -887,6 +888,7 @@ akey_fetch_single(daos_handle_t toh, const daos_epoch_range_t *epr,
 		goto out;
 
 	*rsize = rbund.rb_gsize;
+	ioc->ic_io_size += rbund.rb_rsize;
 out:
 	return rc;
 }
@@ -955,7 +957,6 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	/* At present, this is not exposed in interface but passing it toggles
 	 * sorting and clipping of rectangles
 	 */
-	struct evt_entry_array	 ent_array = { 0 };
 	struct evt_filter	 filter;
 	struct bio_iov		 biov = {0};
 	daos_size_t		 holes; /* hole width */
@@ -964,6 +965,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	daos_off_t		 end;
 	bool			 csum_enabled = false;
 	bool			 with_shadow = (shadow_ep != DAOS_EPOCH_MAX);
+	uint32_t		 inob;
 	int			 rc;
 
 	index = recx->rx_idx;
@@ -978,14 +980,15 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	filter.fr_punch_minor_epc =
 		ioc->ic_akey_info.ii_prior_punch.pr_minor_epc;
 
-	evt_ent_array_init(&ent_array);
-	rc = evt_find(toh, &filter, &ent_array);
+	evt_ent_array_init(ioc->ic_ent_array, 0);
+	rc = evt_find(toh, &filter, ioc->ic_ent_array);
 	if (rc != 0 || vos_dtx_hit_inprogress())
 		D_GOTO(failed, rc = (rc == 0 ? -DER_INPROGRESS : rc));
 
 	holes = 0;
 	rsize = 0;
-	evt_ent_array_for_each(ent, &ent_array) {
+	inob = ioc->ic_ent_array->ea_inob;
+	evt_ent_array_for_each(ent, ioc->ic_ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
 		daos_size_t	 nr;
@@ -1012,12 +1015,12 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		if (holes != 0) {
 			if (with_shadow) {
 				rc = save_recx(ioc, lo - holes, holes,
-					       shadow_ep, ent_array.ea_inob,
+					       shadow_ep, inob,
 					       DRT_SHADOW);
 				if (rc != 0)
 					goto failed;
 			}
-			biov_set_hole(&biov, holes * ent_array.ea_inob);
+			biov_set_hole(&biov, holes * inob);
 			/* skip the hole */
 			rc = iod_fetch(ioc, &biov);
 			if (rc != 0)
@@ -1026,17 +1029,17 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		}
 
 		if (rsize == 0)
-			rsize = ent_array.ea_inob;
-		D_ASSERT(rsize == ent_array.ea_inob);
+			rsize = inob;
+		D_ASSERT(rsize == inob);
 
 		if (ioc->ic_save_recx) {
 			rc = save_recx(ioc, lo, nr, ent->en_epoch,
-				       ent_array.ea_inob, DRT_NORMAL);
+				       inob, DRT_NORMAL);
 			if (rc != 0)
 				goto failed;
 		}
-		bio_iov_set(&biov, ent->en_addr, nr * ent_array.ea_inob);
-		ioc->ic_io_size += nr * ent_array.ea_inob;
+		bio_iov_set(&biov, ent->en_addr, nr * inob);
+		ioc->ic_io_size += nr * inob;
 		if (ci_is_valid(&ent->en_csum)) {
 			rc = save_csum(ioc, &ent->en_csum, ent, rsize);
 			if (rc != 0)
@@ -1064,11 +1067,11 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	if (holes != 0) { /* trailing holes */
 		if (with_shadow) {
 			rc = save_recx(ioc, end - holes, holes, shadow_ep,
-				       ent_array.ea_inob, DRT_SHADOW);
+				       inob, DRT_SHADOW);
 			if (rc != 0)
 				goto failed;
 		}
-		biov_set_hole(&biov, holes * ent_array.ea_inob);
+		biov_set_hole(&biov, holes * inob);
 		rc = iod_fetch(ioc, &biov);
 		if (rc != 0)
 			goto failed;
@@ -1076,7 +1079,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	if (rsize_p && *rsize_p == 0)
 		*rsize_p = rsize;
 failed:
-	evt_ent_array_fini(&ent_array);
+	evt_ent_array_fini(ioc->ic_ent_array);
 	return rc;
 }
 
@@ -1611,6 +1614,8 @@ akey_update_single(daos_handle_t toh, uint32_t pm_ver, daos_size_t rsize,
 	rc = dbtree_update(toh, &kiov, &riov);
 	if (rc != 0)
 		D_ERROR("Failed to update subtree: "DF_RC"\n", DP_RC(rc));
+
+	ioc->ic_io_size += rsize;
 
 	return rc;
 }
@@ -2241,7 +2246,7 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 
 		err = vos_dtx_commit_internal(ioc->ic_cont, dth->dth_dti_cos,
 					      dth->dth_dti_cos_count,
-					      0, NULL, daes, dces);
+					      0, false, NULL, daes, dces);
 		if (err <= 0)
 			D_FREE(daes);
 	}
@@ -2284,15 +2289,16 @@ abort:
 	if (err == 0) {
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 		if (daes != NULL) {
-			vos_dtx_post_handle(ioc->ic_cont, daes, NULL,
-					    dth->dth_dti_cos_count, false);
+			vos_dtx_post_handle(ioc->ic_cont, daes, dces,
+					    dth->dth_dti_cos_count,
+					    false, false);
 			dth->dth_cos_done = 1;
 		}
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
 				  &ioc->ic_dedup_entries, false);
 	} else if (daes != NULL) {
 		vos_dtx_post_handle(ioc->ic_cont, daes, dces,
-				    dth->dth_dti_cos_count, false);
+				    dth->dth_dti_cos_count, false, true);
 		dth->dth_cos_done = 0;
 	}
 

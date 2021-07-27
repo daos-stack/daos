@@ -109,8 +109,8 @@ co_attribute(void **state)
 				strlen(in_values[0]),
 				strlen(in_values[1]),
 	};
-	int			 n = (int) ARRAY_SIZE(names);
-	int			 m = (int) ARRAY_SIZE(names_get);
+	int			 n = (int)ARRAY_SIZE(names);
+	int			 m = (int)ARRAY_SIZE(names_get);
 	char			 out_buf[10 * BUFSIZE] = { 0 };
 	void			*out_values[] = {
 						  &out_buf[0 * BUFSIZE],
@@ -152,7 +152,7 @@ co_attribute(void **state)
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 	assert_string_equal(out_buf, names[1]);
 
-	total_size = 10*BUFSIZE;
+	total_size = 10 * BUFSIZE;
 	rc = daos_cont_list_attr(arg->coh, out_buf, &total_size,
 				 arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
@@ -431,7 +431,7 @@ co_properties(void **state)
 			      "(will fail)\n");
 		uuid_generate(cuuid2);
 		rc = daos_cont_create(arg->pool.poh, cuuid2, prop, NULL);
-		assert_rc_equal(rc, -DER_INVAL);
+		assert_rc_equal(rc, -DER_EXIST);
 
 		/* Create container: same UUID, different label - fail */
 		print_message("Checking create: same UUID, different label "
@@ -453,8 +453,8 @@ co_properties(void **state)
 		assert_rc_equal(rc, 0);
 		print_message("created container C2: %s\n", label2);
 		/* Open by label, and immediately close */
-		rc = daos_cont_open_by_label(arg->pool.poh, label2, DAOS_COO_RW,
-					     &coh2, NULL, NULL);
+		rc = daos_cont_open(arg->pool.poh, label2, DAOS_COO_RW, &coh2,
+				    NULL, NULL);
 		assert_rc_equal(rc, 0);
 		rc = daos_cont_close(coh2, NULL /* ev */);
 		assert_rc_equal(rc, 0);
@@ -469,8 +469,8 @@ co_properties(void **state)
 		assert_rc_equal(rc, -DER_INVAL);
 
 		/* destroy the container C2 (will re-create it next) */
-		rc = daos_cont_destroy_by_label(arg->pool.poh, label2,
-						0 /* force */, NULL /* ev */);
+		rc = daos_cont_destroy(arg->pool.poh, label2, 0 /* force */,
+				       NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		print_message("destroyed container C2: %s\n", label2);
 
@@ -485,8 +485,8 @@ co_properties(void **state)
 		assert_rc_equal(rc, 0);
 		print_message("step1: created container C3: %s : "
 			      "UUID:"DF_UUIDF"\n", foo_label, DP_UUID(cuuid3));
-		rc = daos_cont_open_by_label(arg->pool.poh, foo_label,
-					     DAOS_COO_RW, &coh3, NULL, NULL);
+		rc = daos_cont_open(arg->pool.poh, foo_label, DAOS_COO_RW,
+				    &coh3, NULL, NULL);
 		assert_rc_equal(rc, 0);
 		print_message("step2: C3 set-prop, rename %s -> %s\n",
 			      foo_label, prop->dpp_entries[0].dpe_str);
@@ -496,7 +496,7 @@ co_properties(void **state)
 		print_message("step3: create cont with label: %s (will fail)\n",
 			      prop->dpp_entries[0].dpe_str);
 		rc = daos_cont_create(arg->pool.poh, cuuid4, prop, NULL);
-		assert_rc_equal(rc, -DER_INVAL);
+		assert_rc_equal(rc, -DER_EXIST);
 
 		/* Container 3 set-prop label2_v2,
 		 * container 1 set-prop label2 - pass
@@ -518,8 +518,8 @@ co_properties(void **state)
 		/* destroy container C3 */
 		rc = daos_cont_close(coh3, NULL);
 		assert_rc_equal(rc, 0);
-		rc = daos_cont_destroy_by_label(arg->pool.poh, label2_v2,
-						0 /* force */, NULL /* ev */);
+		rc = daos_cont_destroy(arg->pool.poh, label2_v2, 0 /* force */,
+				       NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		print_message("destroyed container C3: %s : "
 			      "UUID:"DF_UUIDF"\n", label2_v2, DP_UUID(cuuid3));
@@ -1968,7 +1968,7 @@ co_owner_implicit_access(void **state)
 	print_message("- Verify set-prop denied\n");
 	tmp_prop = daos_prop_alloc(1);
 	tmp_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(tmp_prop->dpp_entries[0].dpe_str, "My_Label", 16);
+	D_STRNDUP_S(tmp_prop->dpp_entries[0].dpe_str, "My_Label");
 	rc = daos_cont_set_prop(arg->coh, tmp_prop, NULL);
 	assert_rc_equal(rc, -DER_NO_PERM);
 	daos_prop_free(tmp_prop);
@@ -2048,6 +2048,7 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	const char	*name = "AttrName";
 	size_t		 val_size = TEST_MAX_ATTR_LEN;
 	char		 value[val_size];
+	void		*valptr = &value;
 
 	cont_prop = get_daos_prop_with_owner_acl_perms(perms,
 						       DAOS_PROP_CO_ACL);
@@ -2061,7 +2062,7 @@ expect_co_get_attr_access(test_arg_t *arg, uint64_t perms, int exp_result)
 	if (arg->myrank == 0) {
 		/* Trivial case - just to see if we have access */
 		rc = daos_cont_get_attr(arg->coh, 1, &name,
-					(void * const*)&value,
+					(void * const*)&valptr,
 					&val_size,
 					NULL);
 
@@ -2286,7 +2287,8 @@ co_rf_simple(void **state)
 
 	if (arg->myrank == 0) {
 		daos_debug_set_params(NULL, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_REBUILD_DISABLE, 0, NULL);
+				      DAOS_REBUILD_DELAY | DAOS_FAIL_ALWAYS,
+				      0, NULL);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
 				    arg->dmg_config, 5);
 		daos_exclude_server(arg->pool.pool_uuid, arg->group,
@@ -2446,7 +2448,6 @@ delet_container_during_aggregation(void **state)
 	/* Run Pool query at the end */
 	pool_storage_info(state, &pinfo);
 }
-
 
 static int
 co_setup_sync(void **state)

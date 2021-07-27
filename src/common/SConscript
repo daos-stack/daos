@@ -15,15 +15,17 @@ def build_daos_common(env, client, prereqs):
     """ Building non-pmem version for client's common lib"""
     denv = env.Clone()
 
+    common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread']
     if client:
         libname = 'libdaos_common'
     else:
+        common_libs.extend(['pmemobj'])
         denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
         denv.Append(OBJPREFIX="v_")
         libname = 'libdaos_common_pmem'
         prereqs.require(denv, 'pmdk')
 
-    common = daos_build.library(denv, libname, COMMON_FILES)
+    common = daos_build.library(denv, libname, COMMON_FILES, LIBS=common_libs)
     denv.Install('$PREFIX/lib64/', common)
 
 def build_dts_library(env):
@@ -61,10 +63,10 @@ def build_dts_library(env):
 
 def scons():
     """Execute build"""
-    Import('env', 'il_env', 'prereqs')
+    Import('env', 'base_env', 'prereqs')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
-    il_env.AppendUnique(LIBPATH=[Dir('.')])
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path
@@ -106,7 +108,7 @@ def scons():
     prereqs.require(tenv, 'pmdk')
     SConscript('tests/SConscript', exports='tenv')
 
-    build_dts_library(denv)
+    build_dts_library(base_env)
 
 if __name__ == "SCons.Script":
     scons()

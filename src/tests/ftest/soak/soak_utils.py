@@ -20,7 +20,6 @@ from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes
 import slurm_utils
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
@@ -59,11 +58,7 @@ def add_pools(self, pool_names):
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(TestPool(self.context, self.dmg_command))
-        self.pool[-1].namespace = path
-        self.pool[-1].get_params(self)
-        self.pool[-1].create()
-        self.pool[-1].set_property("reclaim", "time")
+        self.pool.append(self.get_pool(namespace=path, connect=False))
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 
@@ -74,15 +69,46 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         pool: pool to create container
         oclass: object class of container
 
+
     """
+    rf = None
     # Create a container and add it to the overall list of containers
     self.container.append(
         TestContainer(pool, daos_command=self.get_daos_command()))
     self.container[-1].namespace = path
     self.container[-1].get_params(self)
+    # don't include oclass in daos cont cmd; include rf based on the class
     if oclass:
-        self.container[-1].oclass.update(oclass)
+        self.container[-1].oclass.update(None)
+        redundancy_factor = get_rf(oclass)
+        rf = 'rf:{}'.format(str(redundancy_factor))
+    properties = self.container[-1].properties.value
+    cont_properties = (",").join(filter(None, [properties, rf]))
+    self.container[-1].properties.update(cont_properties)
     self.container[-1].create()
+
+
+def get_rf(oclass):
+    """Return redundancy factor based on the oclass.
+
+    Args:
+        oclass(string): object class.
+
+    return:
+        redundancy factor(int) from object type
+    """
+    rf = 0
+    if "EC" in oclass:
+        tmp = re.findall(r'\d+', oclass)
+        if tmp:
+            rf = int(tmp[1])
+    elif "RP" in oclass:
+        tmp = re.findall(r'\d+', oclass)
+        if tmp:
+            rf = int(tmp[0]) - 1
+    else:
+        rf = 0
+    return rf
 
 
 def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
@@ -646,18 +672,16 @@ def cleanup_dfuse(self):
         slurm_utils.srun(
             NodeSet.fromlist(
                 self.hostlist_clients), "{}".format(
-                    ";".join(cmd)), self.srun_params)
+                    ";".join(cmd)), self.srun_params, timeout=180)
     except slurm_utils.SlurmFailed as error:
-        raise SoakTestError(
-            "<<FAILED: Dfuse processes not stopped>>") from error
+        self.log.info("Dfuse processes not stopped")
     try:
         slurm_utils.srun(
             NodeSet.fromlist(
                 self.hostlist_clients), "{}".format(
-                    ";".join(cmd2)), self.srun_params)
+                    ";".join(cmd2)), self.srun_params, timeout=180)
     except slurm_utils.SlurmFailed as error:
-        raise SoakTestError(
-            "<<FAILED: Dfuse mountpoints not deleted>>") from error
+        self.log.info("Dfuse mountpoints not deleted")
 
 
 def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
@@ -718,8 +742,12 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         ior_cmd.api.update(api)
                     ior_cmd.block_size.update(b_size)
                     ior_cmd.transfer_size.update(t_size)
-                    ior_cmd.dfs_oclass.update(o_type)
-                    ior_cmd.dfs_dir_oclass.update(o_type)
+                    if (api in ["HDF5-VOL", "POSIX"]):
+                        ior_cmd.dfs_oclass.update(None)
+                        ior_cmd.dfs_dir_oclass.update(None)
+                    else:
+                        ior_cmd.dfs_oclass.update(o_type)
+                        ior_cmd.dfs_dir_oclass.update(o_type)
                     if ior_cmd.api.value == "DFS":
                         ior_cmd.test_file.update(
                             os.path.join("/", "testfile"))
@@ -787,8 +815,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     read_bytes_list = self.params.get("read_bytes", mdtest_params)
     depth_list = self.params.get("depth", mdtest_params)
     flag = self.params.get("flags", mdtest_params)
-    oclass = self.params.get("dfs_oclass", mdtest_params)
-    oclass_dir = self.params.get("dfs_dir_oclass", mdtest_params)
+    oclass_list = self.params.get("dfs_oclass", mdtest_params)
     num_of_files_dirs = self.params.get(
         "num_of_files_dirs", mdtest_params)
     # update mdtest cmdline for each additional mdtest obj
@@ -798,53 +825,67 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
         for write_bytes in write_bytes_list:
             for read_bytes in read_bytes_list:
                 for depth in depth_list:
-                    # Get the parameters for Mdtest
-                    mdtest_cmd = MdtestCommand()
-                    mdtest_cmd.namespace = mdtest_params
-                    mdtest_cmd.get_params(self)
-                    mdtest_cmd.api.update(api)
-                    mdtest_cmd.write_bytes.update(write_bytes)
-                    mdtest_cmd.read_bytes.update(read_bytes)
-                    mdtest_cmd.depth.update(depth)
-                    mdtest_cmd.flags.update(flag)
-                    mdtest_cmd.num_of_files_dirs.update(
-                        num_of_files_dirs)
-                    add_containers(self, pool, oclass)
-                    mdtest_cmd.set_daos_params(
-                        self.server_group, pool,
-                        self.container[-1].uuid)
-                    mdtest_cmd.dfs_oclass.update(oclass)
-                    mdtest_cmd.dfs_dir_oclass.update(oclass_dir)
-                    env = mdtest_cmd.get_default_env("srun")
-                    sbatch_cmds = [
-                        "module load -q {}".format(mpi_module)]
-                    # include dfuse cmdlines
-                    log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
-                        job_spec, api, write_bytes, read_bytes, depth,
-                        oclass, nodesperjob * ppn, nodesperjob,
-                        ppn)
-                    if api in ["POSIX"]:
-                        dfuse, dfuse_start_cmdlist = start_dfuse(
-                            self, pool, self.container[-1], nodesperjob,
-                            "SLURM", name=log_name, job_spec=job_spec)
-                        sbatch_cmds.extend(dfuse_start_cmdlist)
-                        mdtest_cmd.test_dir.update(
-                            dfuse.mount_dir.value)
-                    srun_cmd = Srun(mdtest_cmd)
-                    srun_cmd.assign_processes(nodesperjob * ppn)
-                    srun_cmd.assign_environment(env, True)
-                    srun_cmd.ntasks_per_node.update(ppn)
-                    srun_cmd.nodes.update(nodesperjob)
-                    sbatch_cmds.append(str(srun_cmd))
-                    sbatch_cmds.append("status=$?")
-                    if api in ["POSIX"]:
-                        sbatch_cmds.extend(
-                            stop_dfuse(dfuse, nodesperjob, "SLURM"))
-                    commands.append([sbatch_cmds, log_name])
-                    self.log.info(
-                        "<<MDTEST {} cmdlines>>:".format(api))
-                    for cmd in sbatch_cmds:
-                        self.log.info("%s", cmd)
+                    for oclass in oclass_list:
+                        # Get the parameters for Mdtest
+                        mdtest_cmd = MdtestCommand()
+                        mdtest_cmd.namespace = mdtest_params
+                        mdtest_cmd.get_params(self)
+                        mdtest_cmd.api.update(api)
+                        mdtest_cmd.write_bytes.update(write_bytes)
+                        mdtest_cmd.read_bytes.update(read_bytes)
+                        mdtest_cmd.depth.update(depth)
+                        mdtest_cmd.flags.update(flag)
+                        mdtest_cmd.num_of_files_dirs.update(
+                            num_of_files_dirs)
+                        if ("POSIX" in api):
+                            mdtest_cmd.dfs_oclass.update(None)
+                            mdtest_cmd.dfs_dir_oclass.update(None)
+                        else:
+                            mdtest_cmd.dfs_oclass.update(oclass)
+                            mdtest_cmd.dfs_dir_oclass.update(oclass)
+                        if "EC" in oclass:
+                            # oclass_dir can not be EC must be RP based on rf
+                            rf = get_rf(oclass)
+                            if rf >= 2:
+                                mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
+                            elif rf == 1:
+                                mdtest_cmd.dfs_dir_oclass.update("RP_2G1")
+                            else:
+                                mdtest_cmd.dfs_dir_oclass.update("SX")
+                        add_containers(self, pool, oclass)
+                        mdtest_cmd.set_daos_params(
+                            self.server_group, pool,
+                            self.container[-1].uuid)
+                        env = mdtest_cmd.get_default_env("srun")
+                        sbatch_cmds = [
+                            "module load -q {}".format(mpi_module)]
+                        # include dfuse cmdlines
+                        log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
+                            job_spec, api, write_bytes, read_bytes, depth,
+                            oclass, nodesperjob * ppn, nodesperjob,
+                            ppn)
+                        if api in ["POSIX"]:
+                            dfuse, dfuse_start_cmdlist = start_dfuse(
+                                self, pool, self.container[-1], nodesperjob,
+                                "SLURM", name=log_name, job_spec=job_spec)
+                            sbatch_cmds.extend(dfuse_start_cmdlist)
+                            mdtest_cmd.test_dir.update(
+                                dfuse.mount_dir.value)
+                        srun_cmd = Srun(mdtest_cmd)
+                        srun_cmd.assign_processes(nodesperjob * ppn)
+                        srun_cmd.assign_environment(env, True)
+                        srun_cmd.ntasks_per_node.update(ppn)
+                        srun_cmd.nodes.update(nodesperjob)
+                        sbatch_cmds.append(str(srun_cmd))
+                        sbatch_cmds.append("status=$?")
+                        if api in ["POSIX"]:
+                            sbatch_cmds.extend(
+                                stop_dfuse(dfuse, nodesperjob, "SLURM"))
+                        commands.append([sbatch_cmds, log_name])
+                        self.log.info(
+                            "<<MDTEST {} cmdlines>>:".format(api))
+                        for cmd in sbatch_cmds:
+                            self.log.info("%s", cmd)
     return commands
 
 

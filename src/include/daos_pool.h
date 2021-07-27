@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 /**
- * DAOS stoarge pool types and functions
+ * DAOS storage pool types and functions
  */
 #ifndef __DAOS_POOL_H__
 #define __DAOS_POOL_H__
@@ -164,12 +164,13 @@ struct daos_pool_cont_info {
 };
 
 /**
- * Connect to the DAOS pool identified by UUID \a uuid. Upon a successful
- * completion, \a poh returns the pool handle, and \a info returns the latest
- * pool information.
+ * Connect to the DAOS pool identified by \a pool, a label or UUID string.
+ * Upon a successful completion, \a poh returns the pool handle, and \a info
+ * returns the latest pool information.
  *
- * \param[in]	uuid	UUID to identify a pool.
- * \param[in]	grp	Process set name of the DAOS servers managing the pool
+ * \param[in]	pool	label or UUID string to identify a pool.
+ * \param[in]	sys	DAOS system name to use for the pool connect.
+ *			Pass NULL to connect to the default system.
  * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
  * \param[out]	poh	Returned open handle.
  * \param[in,out]
@@ -187,38 +188,8 @@ struct daos_pool_cont_info {
  *			-DER_NONEXIST	Pool is nonexistent
  */
 int
-daos_pool_connect(const uuid_t uuid, const char *grp,
-		  unsigned int flags,
+daos_pool_connect(const char *pool, const char *sys, unsigned int flags,
 		  daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
-
-/**
- * Connect to the DAOS pool identified by \a label. Upon a successful
- * completion, \a poh returns the pool handle, and \a info returns the latest
- * pool information.
- *
- * \param[in]	label	label string to identify a pool.
- * \param[in]	grp	Process set name of the DAOS servers managing the pool
- * \param[in]	flags	Connect mode represented by the DAOS_PC_ bits.
- * \param[out]	poh	Returned open handle.
- * \param[in,out]
- *		info	Optional, returned pool information,
- *			see daos_pool_info_bit.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- *			-DER_NONEXIST	Pool is nonexistent
- */
-int
-daos_pool_connect_by_label(const char *label, const char *grp,
-			   unsigned int flags,
-			   daos_handle_t *poh, daos_pool_info_t *info,
-			   daos_event_t *ev);
 
 /**
  * Disconnect from the DAOS pool. It should revoke all the container open
@@ -441,8 +412,53 @@ int
 daos_pool_list_cont(daos_handle_t poh, daos_size_t *ncont,
 		    struct daos_pool_cont_info *cbuf, daos_event_t *ev);
 
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
+int
+daos_pool_connect2(const char *pool, const char *sys, unsigned int flags,
+		   daos_handle_t *poh, daos_pool_info_t *info, daos_event_t *ev);
+
+
 #if defined(__cplusplus)
 }
+#define daos_pool_connect daos_pool_connect_cpp
+static inline int
+daos_pool_connect_cpp(const char *pool, const char *sys, unsigned int flags, daos_handle_t *poh,
+		      daos_pool_info_t *info, daos_event_t *ev)
+{
+	return daos_pool_connect2(pool, sys, flags, poh, info, ev);
+}
+
+static inline int
+daos_pool_connect_cpp(const uuid_t pool, const char *sys, unsigned int flags, daos_handle_t *poh,
+		      daos_pool_info_t *info, daos_event_t *ev)
+{
+	char str[37];
+
+	uuid_unparse(pool, str);
+	return daos_pool_connect2(str, sys, flags, poh, info, ev);
+}
+#else
+/**
+ * For backward compatibility, support old API where a const uuid_t was used
+ * instead of a string to identify the pool.
+ */
+#define daos_pool_connect(po, ...)					\
+	({								\
+		int _ret;						\
+		char _str[37];						\
+		const char *__str = NULL;				\
+		if (d_is_string(po)) {					\
+			__str = (const char *)(po);			\
+		} else if (d_is_uuid(po)) {				\
+			uuid_unparse((unsigned char *)(po), _str);	\
+			__str = _str;					\
+		}							\
+		_ret = daos_pool_connect2(__str, __VA_ARGS__);		\
+		_ret;							\
+	})
 #endif
 
 #endif /* __DAOS_POOL_H__ */

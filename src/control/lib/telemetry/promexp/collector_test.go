@@ -26,7 +26,7 @@ import (
 )
 
 func TestPromexp_NewEngineSource(t *testing.T) {
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
@@ -37,14 +37,14 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 		expResult *EngineSource
 	}{
 		"bad idx": {
-			idx:    testIdx + 1,
+			idx:    (1 << 31),
 			expErr: errors.New("failed to init"),
 		},
 		"success": {
 			idx:  testIdx,
 			rank: 123,
 			expResult: &EngineSource{
-				Index: testIdx,
+				Index: uint32(testIdx),
 				Rank:  123,
 			},
 		},
@@ -68,6 +68,35 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 	}
 }
 
+func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
+	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
+	defer telemetry.CleanupTestMetricsProducer(t)
+
+	es, cleanup, err := NewEngineSource(context.Background(), uint32(testIdx), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if es == nil {
+		t.Fatal("EngineSource was nil")
+	}
+
+	common.AssertTrue(t, es.IsEnabled(), "default state should be enabled")
+
+	es.Enable()
+	common.AssertTrue(t, es.IsEnabled(), "Enable() while enabled")
+
+	es.Disable()
+	common.AssertFalse(t, es.IsEnabled(), "Disable() while enabled")
+
+	es.Disable()
+	common.AssertFalse(t, es.IsEnabled(), "Disable() while disabled")
+
+	es.Enable()
+	common.AssertTrue(t, es.IsEnabled(), "Enable() while disabled")
+}
+
 func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 	t.Helper()
 
@@ -79,6 +108,10 @@ func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 		telemetry.MetricTypeGauge: &telemetry.TestMetric{
 			Name: "simple/gauge1",
 			Cur:  1,
+		},
+		telemetry.MetricTypeStatsGauge: &telemetry.TestMetric{
+			Name: "stats/gauge2",
+			Cur:  100.5,
 		},
 		telemetry.MetricTypeTimestamp: &telemetry.TestMetric{
 			Name: "timer/stamp",
@@ -94,7 +127,7 @@ func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 }
 
 func TestPromExp_EngineSource_Collect(t *testing.T) {
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -102,11 +135,18 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 	realMetrics := allTestMetrics(t)
 	telemetry.AddTestMetrics(t, realMetrics)
 
-	validSrc, cleanup, err := NewEngineSource(context.Background(), testIdx, testRank)
+	validSrc, cleanupValid, err := NewEngineSource(context.Background(), testIdx, testRank)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cleanup()
+	defer cleanupValid()
+
+	disabledSrc, cleanupDisabled, err := NewEngineSource(context.Background(), testIdx, testRank)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanupDisabled()
+	disabledSrc.Disable()
 
 	for name, tc := range map[string]struct {
 		es         *EngineSource
@@ -132,6 +172,11 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 			resultChan: make(chan *rankMetric),
 			expMetrics: realMetrics,
 		},
+		"disabled": {
+			es:         disabledSrc,
+			resultChan: make(chan *rankMetric),
+			expMetrics: telemetry.TestMetricsMap{},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -143,7 +188,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 			for {
 				done := false
 				select {
-				case <-time.After(50 * time.Millisecond):
+				case <-time.After(500 * time.Millisecond):
 					done = true
 				case m := <-tc.resultChan:
 					gotMetrics = append(gotMetrics, m)
@@ -156,15 +201,15 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 
 			common.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "wrong number of metrics returned")
 			for _, got := range gotMetrics {
-				common.AssertEqual(t, testRank, got.r, "wrong rank")
-				expM, ok := tc.expMetrics[got.m.Type()]
+				common.AssertEqual(t, testRank, got.rank, "wrong rank")
+				expM, ok := tc.expMetrics[got.metric.Type()]
 				if !ok {
-					t.Fatalf("metric type %d not expected", got.m.Type())
+					t.Fatalf("metric type %d not expected", got.metric.Type())
 				}
 
 				tokens := strings.Split(expM.Name, "/")
 				expName := tokens[len(tokens)-1]
-				common.AssertEqual(t, expName, got.m.Name(), "unexpected name")
+				common.AssertEqual(t, expName, got.metric.Name(), "unexpected name")
 			}
 		})
 	}
@@ -248,7 +293,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 4096)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -270,6 +315,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	ignores := []string{
 		"engine_simple_counter1",
 		"engine_simple_gauge1",
+		"engine_stats_gauge2",
 		"engine_timer_duration",
 	}
 	ignoreCollector, err := NewCollector(log, &CollectorOpts{
@@ -296,13 +342,18 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 			expMetricNames: []string{
 				"engine_simple_counter1",
 				"engine_simple_gauge1",
-				"engine_simple_gauge1_min",
-				"engine_simple_gauge1_max",
-				"engine_simple_gauge1_mean",
-				"engine_simple_gauge1_stddev",
+				"engine_stats_gauge2",
+				"engine_stats_gauge2_min",
+				"engine_stats_gauge2_max",
+				"engine_stats_gauge2_mean",
+				"engine_stats_gauge2_stddev",
 				"engine_timer_stamp",
 				"engine_timer_snapshot",
 				"engine_timer_duration",
+				"engine_timer_duration_min",
+				"engine_timer_duration_max",
+				"engine_timer_duration_mean",
+				"engine_timer_duration_stddev",
 			},
 		},
 		"ignore some metrics": {
@@ -318,17 +369,13 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 			go tc.collector.Collect(tc.resultChan)
 
 			gotMetrics := []prometheus.Metric{}
-			for {
-				done := false
+			done := false
+			for !done {
 				select {
-				case <-time.After(50 * time.Millisecond):
+				case <-time.After(500 * time.Millisecond):
 					done = true
 				case m := <-tc.resultChan:
 					gotMetrics = append(gotMetrics, m)
-				}
-
-				if done {
-					break
 				}
 			}
 
@@ -345,6 +392,98 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				if !found {
 					t.Errorf("expected metric %q not found", exp)
 				}
+			}
+		})
+	}
+}
+
+func TestPromExp_extractLabels(t *testing.T) {
+	for name, tc := range map[string]struct {
+		input     string
+		expName   string
+		expLabels labelMap
+	}{
+		"empty": {},
+		"nothing to change": {
+			input:   "goodname",
+			expName: "goodname",
+		},
+		"fix spaces": {
+			input:   "a fine name",
+			expName: "a_fine_name",
+		},
+		"ID": {
+			input:   "ID: 2_stat",
+			expName: "stat",
+		},
+		"io latency B": {
+			input:   "io_latency_fetch_16B",
+			expName: "io_latency_fetch",
+			expLabels: labelMap{
+				"size": "16B",
+			},
+		},
+		"io latency KB": {
+			input:   "io_latency_update_128KB",
+			expName: "io_latency_update",
+			expLabels: labelMap{
+				"size": "128KB",
+			},
+		},
+		"io latency MB": {
+			input:   "io_latency_update_256MB",
+			expName: "io_latency_update",
+			expLabels: labelMap{
+				"size": "256MB",
+			},
+		},
+		"io latency >size": {
+			input:   "io_latency_update_GT4MB",
+			expName: "io_latency_update",
+			expLabels: labelMap{
+				"size": "GT4MB",
+			},
+		},
+		"net rank": {
+			input:   "net_15_stat",
+			expName: "net_stat",
+			expLabels: labelMap{
+				"rank": "15",
+			},
+		},
+		"pool UUID": {
+			input:   "pool_11111111_2222_3333_4444_555555555555_info",
+			expName: "pool_info",
+			expLabels: labelMap{
+				"pool": "11111111-2222-3333-4444-555555555555",
+			},
+		},
+		"target": {
+			input:   "io_update_latency_tgt_1",
+			expName: "io_update_latency",
+			expLabels: labelMap{
+				"target": "1",
+			},
+		},
+		"context": {
+			input:   "failed_addr_ctx_1",
+			expName: "failed_addr",
+			expLabels: labelMap{
+				"context": "1",
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			labels, name := extractLabels(tc.input)
+
+			common.AssertEqual(t, tc.expName, name, "")
+			common.AssertEqual(t, len(tc.expLabels), len(labels), "wrong number of labels")
+			for key, val := range labels {
+				expVal, exists := tc.expLabels[key]
+				if !exists {
+					t.Fatalf("key %q was not expected", key)
+				}
+				common.AssertEqual(t, expVal, val, "incorrect value")
 			}
 		})
 	}

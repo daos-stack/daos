@@ -391,7 +391,7 @@ cont_existence_check(struct rdb_tx *tx, struct cont_svc *svc,
 	/* Label provided in request - search for it in cs_uuids KVS
 	 * and perform additional sanity checks.
 	 */
-	d_iov_set(&key, clabel, strnlen(clabel, DAOS_PROP_LABEL_MAX_LEN+1));
+	d_iov_set(&key, clabel, strnlen(clabel, DAOS_PROP_LABEL_MAX_LEN + 1));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &svc->cs_uuids, &key, &val);
 	if (rc != -DER_NONEXIST) {
@@ -402,7 +402,7 @@ cont_existence_check(struct rdb_tx *tx, struct cont_svc *svc,
 		if (!may_exist) {
 			D_ERROR(DF_CONT": non-unique label: %s\n",
 				DP_CONT(puuid, cuuid), clabel);
-			return -DER_INVAL;
+			return -DER_EXIST;
 		}
 
 		/* found by UUID, and found by label: make sure the
@@ -835,7 +835,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		/* If we have come this far (see existence check), there must
 		 * not be an entry with this label in cs_uuids. Just update.
 		 */
-		d_iov_set(&key, lbl, strnlen(lbl, DAOS_PROP_LABEL_MAX_LEN+1));
+		d_iov_set(&key, lbl, strnlen(lbl, DAOS_PROP_LABEL_MAX_LEN + 1));
 		d_iov_set(&value, in->cci_op.ci_uuid, sizeof(uuid_t));
 		rc = rdb_tx_update(tx, &svc->cs_uuids, &key, &value);
 		if (rc != 0) {
@@ -1140,7 +1140,7 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	lbl_ent = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
 	if (lbl_ent) {
 		d_iov_set(&key, lbl_ent->dpe_str,
-			  strnlen(lbl_ent->dpe_str, DAOS_PROP_LABEL_MAX_LEN+1));
+			  strnlen(lbl_ent->dpe_str, DAOS_PROP_LABEL_MAX_LEN + 1));
 		d_iov_set(&val, NULL, 0);
 		rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
 		if (rc != -DER_NONEXIST) {
@@ -1551,7 +1551,7 @@ cont_lookup_bylabel(struct rdb_tx *tx, const struct cont_svc *svc,
 	d_iov_t		val;
 	int		rc;
 
-	label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN+1);
+	label_len = strnlen(label, DAOS_PROP_LABEL_MAX_LEN + 1);
 	if (!label || (label_len == 0) || (label_len > DAOS_PROP_LABEL_MAX_LEN))
 		return -DER_INVAL;
 
@@ -1758,7 +1758,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (rc != 0)
 		goto out;
 
-
 out:
 	if (rc == 0) {
 		/**
@@ -1768,7 +1767,6 @@ out:
 		 */
 		rc = cont_prop_read(tx, cont, in->coi_prop_bits, &prop);
 		out->coo_prop = prop;
-
 	}
 	if (rc != 0 && cont_hdl_opened)
 		cont_iv_capability_invalidate(pool_hdl->sph_pool->sp_iv_ns,
@@ -2624,7 +2622,6 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	uuid_t			 match_cuuid;
 	int			 rc;
 
-
 	/* If label property not in the request, nothing more to do */
 	in_ent = daos_prop_entry_get(prop_in, DAOS_PROP_CO_LABEL);
 	if (in_ent == NULL)
@@ -2656,7 +2653,7 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 		return 0;
 
 	/* Remove old label from cs_uuids KVS, if applicable */
-	d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_LABEL_MAX_LEN+1));
+	d_iov_set(&key, old_lbl, strnlen(old_lbl, DAOS_PROP_LABEL_MAX_LEN + 1));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
 	if (rc != -DER_NONEXIST) {
@@ -2677,7 +2674,7 @@ check_set_prop_label(struct rdb_tx *tx, struct ds_pool *pool, struct cont *cont,
 	}
 
 	/* Insert new label into cs_uuids KVS, fail if already in use */
-	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_LABEL_MAX_LEN+1));
+	d_iov_set(&key, in_lbl, strnlen(in_lbl, DAOS_PROP_LABEL_MAX_LEN + 1));
 	d_iov_set(&val, match_cuuid, sizeof(uuid_t));
 	rc = rdb_tx_lookup(tx, &cont->c_svc->cs_uuids, &key, &val);
 	if (rc != -DER_NONEXIST) {
@@ -3132,7 +3129,7 @@ enum_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	struct cont			*cont;
 	daos_prop_t			*prop = NULL;
 	int				 rc;
-	(void) val;
+	(void)val;
 
 	if (key->iov_len != sizeof(uuid_t)) {
 		D_ERROR("invalid key size: key="DF_U64"\n", key->iov_len);
@@ -3294,26 +3291,26 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	d_iov_t				 key;
 	d_iov_t				 value;
 	struct container_hdl		 hdl;
-	struct cont_metrics		*metrics;
+	struct cont_pool_metrics	*metrics;
 	int				 rc;
 
-	metrics = &ds_cont_metrics;
+	metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
 
 	switch (opc_get(rpc->cr_opc)) {
 	case CONT_OPEN:
 	case CONT_OPEN_BYLABEL:
-		d_tm_inc_counter(metrics->op_open_ctr, 1);
-		d_tm_inc_gauge(metrics->open_cont_gauge, 1);
+		d_tm_inc_counter(metrics->cpm_open_count, 1);
+		d_tm_inc_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_open(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_CLOSE:
-		d_tm_inc_counter(metrics->op_close_ctr, 1);
-		d_tm_dec_gauge(metrics->open_cont_gauge, 1);
+		d_tm_inc_counter(metrics->cpm_close_count, 1);
+		d_tm_dec_gauge(metrics->cpm_open_cont_gauge, 1);
 		rc = cont_close(tx, pool_hdl, cont, rpc);
 		break;
 	case CONT_DESTROY:
 	case CONT_DESTROY_BYLABEL:
-		d_tm_inc_counter(metrics->op_destroy_ctr, 1);
+		d_tm_inc_counter(metrics->cpm_destroy_count, 1);
 		rc = cont_destroy(tx, pool_hdl, cont, rpc);
 		break;
 	default:

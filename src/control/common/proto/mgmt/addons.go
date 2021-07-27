@@ -5,30 +5,16 @@
 //
 package mgmt
 
-// SetPropertyName sets the Property field to a string-based name.
-func (r *PoolSetPropReq) SetPropertyName(name string) {
-	r.Property = &PoolSetPropReq_Name{
-		Name: name,
-	}
-}
-
-// SetPropertyNumber sets the Property field to a uint32-based number.
-func (r *PoolSetPropReq) SetPropertyNumber(number uint32) {
-	r.Property = &PoolSetPropReq_Number{
-		Number: number,
-	}
-}
-
 // SetValueString sets the Value field to a string.
-func (r *PoolSetPropReq) SetValueString(strVal string) {
-	r.Value = &PoolSetPropReq_Strval{
+func (p *PoolProperty) SetValueString(strVal string) {
+	p.Value = &PoolProperty_Strval{
 		Strval: strVal,
 	}
 }
 
 // SetValueNumber sets the Value field to a uint64.
-func (r *PoolSetPropReq) SetValueNumber(numVal uint64) {
-	r.Value = &PoolSetPropReq_Numval{
+func (p *PoolProperty) SetValueNumber(numVal uint64) {
+	p.Value = &PoolProperty_Numval{
 		Numval: numVal,
 	}
 }
@@ -38,6 +24,11 @@ func (r *PoolSetPropReq) SetValueNumber(numVal uint64) {
 
 // SetSvcRanks sets the request's Pool Service Ranks.
 func (r *PoolSetPropReq) SetSvcRanks(rl []uint32) {
+	r.SvcRanks = rl
+}
+
+// SetSvcRanks sets the request's Pool Service Ranks.
+func (r *PoolGetPropReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 

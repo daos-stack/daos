@@ -12,6 +12,7 @@ import re
 import time
 import signal
 import os
+import json
 
 from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
@@ -421,6 +422,8 @@ class CommandWithSubCommand(ExecutableCommand):
         #   pid             - command's pid
         self.result = None
 
+        self.json = None
+
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
 
@@ -548,6 +551,27 @@ class CommandWithSubCommand(ExecutableCommand):
 
         # Issue the command and store the command result
         return self.run()
+
+    def _get_json_result(self, sub_command_list=None, **kwargs):
+        """Wrap the base _get_result method to force JSON output.
+
+        Args:
+            sub_command_list (list): List of subcommands.
+            kwargs (dict): Parameters for the command.
+        """
+        if self.json is None:
+            raise CommandFailure(
+                f"The {self.command} command doesn't have json option defined!")
+        prev_json_val = self.json.value
+        self.json.update(True)
+        prev_output_check = self.output_check
+        self.output_check = "both"
+        try:
+            self._get_result(sub_command_list, **kwargs)
+        finally:
+            self.json.update(prev_json_val)
+            self.output_check = prev_output_check
+        return json.loads(self.result.stdout)
 
 
 class SubProcessCommand(CommandWithSubCommand):

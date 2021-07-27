@@ -33,11 +33,6 @@ init(void)
 	if (rc)
 		D_GOTO(err_cont_iv, rc);
 
-	rc = ds_cont_metrics_init();
-	if (rc)
-		D_WARN("Unable to initialize container metrics, " DF_RC "\n",
-		       DP_RC(rc));
-
 	return 0;
 
 err_cont_iv:
@@ -54,7 +49,6 @@ fini(void)
 	ds_cont_iv_fini();
 	ds_oid_iv_fini();
 	ds_cont_prop_default_fini();
-	ds_cont_metrics_fini();
 
 	return 0;
 }
@@ -143,6 +137,12 @@ struct dss_module_key cont_module_key = {
 	.dmk_fini = dsm_tls_fini,
 };
 
+struct dss_module_metrics cont_metrics = {
+	.dmm_tags = DAOS_SYS_TAG,
+	.dmm_init = ds_cont_metrics_alloc,
+	.dmm_fini = ds_cont_metrics_free,
+};
+
 struct dss_module cont_module =  {
 	.sm_name	= "cont",
 	.sm_mod_id	= DAOS_CONT_MODULE,
@@ -153,4 +153,5 @@ struct dss_module cont_module =  {
 	.sm_cli_count	= CONT_PROTO_CLI_COUNT,
 	.sm_handlers	= cont_handlers,
 	.sm_key		= &cont_module_key,
+	.sm_metrics	= &cont_metrics,
 };

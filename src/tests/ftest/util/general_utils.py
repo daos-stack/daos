@@ -355,9 +355,10 @@ def run_pcmd(hosts, command, verbose=True, timeout=None, expect_rc=0):
     task = run_task(hosts, command, timeout)
 
     # Get the exit status of each host
-    host_exit_status = {
-        host: exit_status for exit_status, host_list in task.iter_retcodes()
-        for host in host_list}
+    host_exit_status = {host: None for host in hosts}
+    for exit_status, host_list in task.iter_retcodes():
+        for host in host_list:
+            host_exit_status[host] = exit_status
 
     # Get a list of any interrupted hosts
     host_interrupted = []
@@ -889,6 +890,7 @@ def error_count(error, hostlist, log_file):
 
     return requested_error_count, other_error_count
 
+
 def get_module_class(name, module):
     """Get the class object in the specified module by its name.
 
@@ -1223,3 +1225,18 @@ def create_string_buffer(value, size=None):
     if isinstance(value, str):
         value = value.encode("utf-8")
     return ctypes.create_string_buffer(value, size)
+
+
+def get_display_size(size):
+    """Get a string of the provided size in bytes and human-readable sizes.
+
+    Args:
+        size (int): size in bytes
+
+    Returns:
+        str: the size represented in bytes and human-readable sizes
+
+    """
+    return "{} ({}) ({})".format(
+        size, bytes_to_human(size, binary=True),
+        bytes_to_human(size, binary=False))
