@@ -601,6 +601,14 @@ def get_nvme_replacement(args):
         da:00.0 Non-Volatile memory controller:
             Intel Corporation NVMe Datacenter SSD [Optane]
 
+    Optionally filter the above output even further with a specified search
+    string (e.g. '--nvme=auto:vmd'):
+        $ lspci -D | grep Volume
+        0000:5d:05.5 RAID bus controller:
+            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
+        0000:85:05.5 RAID bus controller:
+            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
+
     Args:
         args (argparse.Namespace): command line arguments for this program
 
@@ -615,20 +623,26 @@ def get_nvme_replacement(args):
         sys.exit(1)
 
     # Get a list of NVMe, VMD devices from each specified server host
-    # if args.vmd_disable is True, all PCI Non-volatile memory controller
+    # if nvme:auto is set, all PCI Non-volatile memory controller
     # devices are considered NVME (some NVMEs might be behind the VMD
-    # controller). if args.vmd_disable is False, then ignore the NVME
+    # controller). if nvme:vmd, then ignore the NVME
     # PCI addressed devices behind the VMD controller.
     host_list = list(args.test_servers)
+    include_vmd_flag = ""
+
     command_list = [
-        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
-    if args.vmd_disable is False:
-        vmd_list = [
-            "/sbin/lspci -D", "grep 'Volume'"]
-        command = " | ".join(vmd_list)
+        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"] 
     if ":" in args.nvme:
-        command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+        vmd_flag = args.nvme.split(":")
+        include_vmd_flag = vmd_flag[1]
+        if include_vmd_flag == "vmd":
+            search_str = "grep 'Non-Volatile memory controller:\|Volume'"
+            command_list[1] = search_str
+        else:
+            command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+
     command = " | ".join(command_list)
+
     task = get_remote_output(host_list, command)
 
     # Verify the command was successful on each server host
@@ -644,13 +658,15 @@ def get_nvme_replacement(args):
 
     # Get the list of NVMe PCI addresses found in the output
     output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
-    if args.vmd_disable is True:
-        devices = find_pci_address(output_str)
+    if include_vmd_flag == "vmd":
+        devices = find_pci_address(output_str, False)
+    else:
+        devices = find_pci_address(output_str, True)
     print("Auto-detected NVMe devices on {}: {}".format(host_list, devices))
     return ",".join(devices)
 
 
-def find_pci_address(value, list_nvme_behind_vmd=True):
+def find_pci_address(value, list_nvme_behind_vmd = True):
     """Find PCI addresses in the specified string.
 
     Args:
@@ -663,10 +679,10 @@ def find_pci_address(value, list_nvme_behind_vmd=True):
 
     """
     if list_nvme_behind_vmd is True:
-        pattern = r"[{0}]{{5}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
+        pattern = r"[{0}]{{4,5}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
     else:
-        # Truncate the higher domain PCI devices behind the VMD
-        pattern = r"[{0}]{{4}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
+        # Truncate higher domain PCI address when listing VMD address.
+        pattern = r"[{0}]{{4}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")  
     return re.findall(pattern, str(value))
 
 
@@ -755,14 +771,9 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
                     # order they are found, e.g.
                     #   0000:81:00.0 --> 0000:12:00.0
                     value_format = "\"{}\""
-                    if args.vmd_disable is True:
-                        values_to_replace = [
-                            value_format.format(item)
-                            for item in find_pci_address(yaml_find[key])]
-                    elif args.vmd_disable is False:
-                        values_to_replace = [
-                            value_format.format(item)
-                            for item in find_pci_address(yaml_find[key], False)]
+                    values_to_replace = [
+                        value_format.format(item)
+                        for item in find_pci_address(yaml_find[key])]
 
                 # Add the next user-specified value as a replacement for key
                 for value in values_to_replace:
