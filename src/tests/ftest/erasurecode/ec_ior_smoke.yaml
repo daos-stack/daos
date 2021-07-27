@@ -10,6 +10,9 @@ hosts:
     - server-G
     - server-H
 timeout: 900
+setup:
+  start_agents_once: False
+  start_servers_once: False
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -61,7 +64,7 @@ ior:
       block_size: 128M
     2M_128M:
       transfer_size: 2M
-      block_size: 512M
+      block_size: 64M
   objectclass:
       dfs_oclass:
       - "EC_2P1G1"

@@ -18,22 +18,41 @@ setup:
     start_servers: True
     start_agents: True
 server_config:
+    engines_per_host: 2
     name: daos_server
     provider: ofi+verbs;ofi_rxm
     nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
-        log_mask: INFO
-        fabric_iface: ib0
-        fabric_iface_port: 31416
-        log_file: daos_io0.log
-        # Storage definitions for AEP and NVMe
-        scm_mount: /mnt/daos0
-        scm_class: dcpm
-        scm_list: [/dev/pmem0]
-        bdev_class: nvme
-        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+        0:
+            pinned_numa_node: 0
+            nr_xs_helpers: 1
+            fabric_iface: ib0
+            fabric_iface_port: 31317
+            log_file: daos_server0.log
+            bdev_class: nvme
+            bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+            scm_class: dcpm
+            scm_list: ["/dev/pmem0"]
+            scm_mount: /mnt/daos0
+            log_mask: ERR
+            env_vars:
+                - FI_UNIVERSE_SIZE=2048
+        1:
+            pinned_numa_node: 1
+            nr_xs_helpers: 1
+            fabric_iface: ib1
+            fabric_iface_port: 31417
+            log_file: daos_server1.log
+            bdev_class: nvme
+            bdev_list: ["cccc:cc:cc.c","dddd:dd:dd.d"]
+            scm_class: dcpm
+            scm_list: ["/dev/pmem1"]
+            scm_mount: /mnt/daos1
+            log_mask: ERR
+            env_vars:
+                - FI_UNIVERSE_SIZE=2048
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server

@@ -1,6 +1,9 @@
 """Build DAOS client"""
 import daos_build
 
+LIBDAOS_SRC = ['agent.c', 'array.c', 'container.c', 'event.c', 'init.c', 'job.c', 'kv.c', 'mgmt.c',
+               'object.c', 'pool.c', 'rpc.c', 'task.c', 'tx.c']
+
 def scons():
     """Execute build"""
     Import('env', 'base_env', 'API_VERSION', 'prereqs')
@@ -9,13 +12,13 @@ def scons():
     base_env.AppendUnique(LIBPATH=[Dir('.')])
     denv = env.Clone()
     prereqs.require(denv, 'protobufc')
-    libdaos_tgts = denv.SharedObject(Glob('*.c'))
-
+    libdaos_tgts = denv.SharedObject(LIBDAOS_SRC)
     Import('dc_pool_tgts', 'dc_co_tgts', 'dc_obj_tgts', 'dc_placement_tgts')
     Import('dc_mgmt_tgts', 'dc_array_tgts', 'dc_kv_tgts', 'dc_security_tgts')
     libdaos_tgts += dc_pool_tgts + dc_co_tgts + dc_placement_tgts + dc_obj_tgts
     libdaos_tgts += dc_mgmt_tgts + dc_array_tgts + dc_kv_tgts + dc_security_tgts
     Export('libdaos_tgts')
+    _compile_check = denv.Object(["compile_check.c", "compile_check_cpp.cpp"])
 
     if prereqs.client_requested():
         libdaos= daos_build.library(env, 'daos', libdaos_tgts,

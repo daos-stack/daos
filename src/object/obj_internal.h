@@ -546,7 +546,7 @@ obj_retry_error(int err)
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
-	       err == -DER_TX_BUSY ||
+	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
 	       daos_crt_network_error(err);
 }
 

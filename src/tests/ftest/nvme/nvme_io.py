@@ -4,10 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 from ior_test_base import IorTestBase
-from test_utils_pool import TestPool
 
 
 class NvmeIo(IorTestBase):
@@ -31,7 +28,9 @@ class NvmeIo(IorTestBase):
         Use Cases:
             Running multiple IOR on same server start instance.
 
-        :avocado: tags=all,full_regression,hw,large,daosio,nvme_io
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio,nvme_io
         """
 
         # Test params
@@ -48,8 +47,7 @@ class NvmeIo(IorTestBase):
                     continue
 
                 # Create and connect to a pool
-                self.pool = TestPool(self.context, self.get_dmg_command())
-                self.pool.get_params(self)
+                self.add_pool(create=False)
                 self.pool.scm_size.update(ior_param[0])
                 self.pool.nvme_size.update(ior_param[1])
                 self.pool.create()
