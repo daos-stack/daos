@@ -109,7 +109,7 @@ pipeline {
         booleanParam(name: 'CI_RPM_leap15_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build RPM packages for Leap 15')
-        booleanParam(name: 'CI_DEB_Ubuntu20_BUILD',
+        booleanParam(name: 'CI_DEB_Ubuntu20_NOBUILD',
                      defaultValue: false,
                      description: 'Do not build DEB packages for Ubuntu 20')
         booleanParam(name: 'CI_ALLOW_UNSTABLE_TEST',
