@@ -133,8 +133,7 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 
 	rc = daos_cont_create2(poh, uuid, merged_props ? merged_props : label_prop, ev);
 	if (rc != 0) {
-		D_ERROR("daos_cont_create UUID: label=%s failed, "
-			DF_RC"\n", label, DP_RC(rc));
+		D_ERROR("daos_cont_create label=%s failed, "DF_RC"\n", label, DP_RC(rc));
 		goto out_merged_props;
 	}
 

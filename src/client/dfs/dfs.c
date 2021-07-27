@@ -1365,10 +1365,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
-	if (uuid_is_set)
-		rc = daos_cont_open(poh, in_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
-	else
-		rc = daos_cont_open(poh, *cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	rc = daos_cont_open(poh, *cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
@@ -1438,12 +1435,8 @@ err_destroy:
 	 * the SB creation, so do not destroy the container, since another
 	 * process might have created it.
 	 */
-	if (rc != EEXIST) {
-		if (uuid_is_set)
-			daos_cont_destroy(poh, in_uuid, 1, NULL);
-		else
-			daos_cont_destroy(poh, *cuuid, 1, NULL);
-	}
+	if (rc != EEXIST)
+		daos_cont_destroy(poh, *cuuid, 1, NULL);
 err_prop:
 	daos_prop_free(prop);
 	return rc;
@@ -1478,7 +1471,7 @@ dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_h
 
 /*
  * Real latest & greatest implementation of container create. Used by anyone including the
- * daos_cont.h header file.
+ * daos_fs.h header file.
  */
 int
 dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
