@@ -165,10 +165,10 @@ int ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 		int _new = --((SVC)->s_ref);				\
 		D_DEBUG(DB_MD, "put_ref(%p) to %d\n", (SVC), _new);	\
 		if (_new == 0)						\
-			ds_rsvc_put0(SVC);				\
+			ds_rsvc_put_free(SVC);				\
 	} while (0)
 
-void ds_rsvc_put0(struct ds_rsvc *svc);
+void ds_rsvc_put_free(struct ds_rsvc *svc);
 
 void ds_rsvc_get_leader(struct ds_rsvc *svc);
 void ds_rsvc_put_leader(struct ds_rsvc *svc);

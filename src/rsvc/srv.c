@@ -154,7 +154,7 @@ fini_free(struct ds_rsvc *svc)
 }
 
 void
-ds_rsvc_put0(struct ds_rsvc *svc)
+ds_rsvc_put_free(struct ds_rsvc *svc)
 {
 	rdb_stop(svc->s_db);
 	fini_free(svc);
@@ -209,7 +209,7 @@ rsvc_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct ds_rsvc *svc = rsvc_obj(rlink);
 
-	ds_rsvc_put0(svc);
+	ds_rsvc_put_free(svc);
 }
 
 static d_hash_table_ops_t rsvc_hash_ops = {
