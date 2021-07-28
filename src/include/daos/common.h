@@ -437,7 +437,8 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
- *  * struct) @type, return pointer to the embedding instance of @type. */
+ *  * struct) @type, return pointer to the embedding instance of @type.
+ */
 # define container_of(ptr, type, member)		\
 	 ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
@@ -495,6 +496,11 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 static inline int
 daos_errno2der(int err)
 {
+	if (err < 0) {
+		D_ERROR("error < 0 (%d)\n", err);
+		return -DER_UNKNOWN;
+	}
+
 	switch (err) {
 	case 0:			return -DER_SUCCESS;
 	case EPERM:

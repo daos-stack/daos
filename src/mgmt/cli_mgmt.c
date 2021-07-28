@@ -230,7 +230,7 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	D_ASSERT(dc_agent_sockpath != NULL);
 	rc = drpc_connect(dc_agent_sockpath, &ctx);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("failed to connect to %s " DF_RC "\n",
+		D_ERROR("failed to connect to %s "DF_RC"\n",
 			dc_agent_sockpath, DP_RC(rc));
 		D_GOTO(out, 0);
 	}
@@ -414,7 +414,7 @@ static int send_monitor_request(struct dc_pool *pool, int request_type)
 	D_ASSERT(dc_agent_sockpath != NULL);
 	rc = drpc_connect(dc_agent_sockpath, &ctx);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("failed to connect to %s " DF_RC "\n",
+		D_ERROR("failed to connect to %s "DF_RC"\n",
 			dc_agent_sockpath, DP_RC(rc));
 		D_GOTO(out, 0);
 	}
@@ -500,7 +500,7 @@ dc_mgmt_notify_exit(void)
 	D_ASSERT(dc_agent_sockpath != NULL);
 	rc = drpc_connect(dc_agent_sockpath, &ctx);
 	if (rc != -DER_SUCCESS) {
-		D_ERROR("failed to connect to %s " DF_RC "\n",
+		D_ERROR("failed to connect to %s "DF_RC"\n",
 			dc_agent_sockpath, DP_RC(rc));
 		D_GOTO(out, 0);
 	}
@@ -834,7 +834,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 		rc = daos_rpc_send_wait(rpc);
 		if (rc != 0) {
 			D_DEBUG(DB_MGMT, "daos_rpc_send_wait() failed, "
-				DF_RC "\n", DP_RC(rc));
+				DF_RC"\n", DP_RC(rc));
 			crt_req_decref(rpc);
 			idx = (idx + 1) % ms_ranks->rl_nr;
 			continue;
@@ -873,7 +873,7 @@ dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label, uuid_t puuid,
 
 	rc = d_rank_list_dup(svcranksp, rpc_out->pfo_ranks);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup() failed, " DF_RC "\n", DP_RC(rc));
+		D_ERROR("d_rank_list_dup() failed, "DF_RC"\n", DP_RC(rc));
 		goto decref;
 	}
 
