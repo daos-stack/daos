@@ -8,6 +8,7 @@
 import distro
 from avocado.core.exceptions import TestFail
 from dfuse_test_base import DfuseTestBase
+from env_modules import load_mpi
 from general_utils import DaosTestError
 from general_utils import run_command
 
@@ -110,6 +111,7 @@ class PosixSimul(DfuseTestBase):
         self.dfuse.check_running()
 
         for mpi, simul in simul_dict.items():
+            load_mpi(mpi)
             if include:
                 cmd = "/usr/bin/ssh {0} {1} -vv -d {2} -i {3}".format(
                     client,
