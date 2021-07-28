@@ -5,7 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from apricot import TestWithServers
-from test_utils_pool import TestPool
+
 
 class DestroyRebuild(TestWithServers):
     """Test class for pool destroy tests.
@@ -29,17 +29,16 @@ class DestroyRebuild(TestWithServers):
         Use Cases:
             Verifying that a pool can be destroyed during rebuild.
 
-        :avocado: tags=all,daily_regression,medium
-        :avocado: tags=pool,destroypoolrebuild
+        :avocado: tags=all,daily_regression
+        :avocado: tags=medium
+        :avocado: tags=pool,destroy_pool_rebuild
         """
         # Get the test parameters
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
         targets = self.params.get("targets", "/run/server_config/servers/*")
         ranks = self.params.get("rank_to_kill", "/run/testparams/*")
 
         # Create a pool
-        self.pool.create()
+        self.add_pool()
 
         # Verify the pool information before starting rebuild
         checks = {
