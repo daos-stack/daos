@@ -81,7 +81,7 @@ class PosixSimul(DfuseTestBase):
 
         """
         # Assuming all vms use the same OS
-        host_os = distro.distro.linux_distribution()[0].lower()
+        host_os = distro.linux_distribution()[0].lower()
 
         if "centos" in host_os:
             simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul",
@@ -96,6 +96,7 @@ class PosixSimul(DfuseTestBase):
             raise NotImplementedError
 
         clients = self.params.get("test_clients", '/run/hosts/*')
+        client = clients[0]
         dfuse_mount_dir = self.params.get("mount_dir", '/run/dfuse/*')
 
         if not self.pool:
@@ -109,28 +110,25 @@ class PosixSimul(DfuseTestBase):
         self.dfuse.check_running()
 
         for mpi, simul in simul_dict.items():
+            if include:
+                cmd = "/usr/bin/ssh {0} {1} -vv -d {2} -i {3}".format(
+                    client,
+                    simul,
+                    dfuse_mount_dir,
+                    include)
+            else:
+                cmd = "/usr/bin/ssh {0} {1} -vv -d {2} -e {3}".format(
+                    client,
+                    simul,
+                    dfuse_mount_dir,
+                    exclude)
+            try:
+                run_command(cmd)
+            except DaosTestError:
+                self.stop_dfuse()
+                self.fail("Simul failed on {}".format(mpi))
 
-            for client in clients:
-                if include:
-                    cmd = "/usr/bin/ssh {0} {1} -vv -d {2} -i {3}".format(
-                        client,
-                        simul,
-                        dfuse_mount_dir,
-                        include)
-                else:
-                    cmd = "/usr/bin/ssh {0} {1} -vv -d {2} -e {3}".format(
-                        client,
-                        simul,
-                        dfuse_mount_dir,
-                        exclude)
-                try:
-                    run_command(cmd)
-                except DaosTestError:
-                    self.stop_dfuse()
-                    self.fail("Simul failed on {}".format(mpi))
-
-                self.log.info("Simul passed on %s", mpi)
-
+            self.log.info("Simul passed on %s", mpi)
         self.stop_dfuse()
 
     def test_posix_simul(self):
