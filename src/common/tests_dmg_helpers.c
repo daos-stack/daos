@@ -397,6 +397,7 @@ dmg_pool_create(const char *dmg_config_file,
 	FILE			*tmp_file = NULL;
 	daos_mgmt_pool_info_t	pool_info = {};
 	struct json_object	*dmg_out = NULL;
+	bool			 has_label = false;
 	int			fd = -1, rc = 0;
 
 	if (grp != NULL) {
@@ -488,20 +489,23 @@ dmg_pool_create(const char *dmg_config_file,
 					    entry->dpe_str);
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
-		} else {
-			static bool need_init_rand = true;
-
-			if (need_init_rand) {
-				srand((unsigned int)time(NULL));
-				need_init_rand = false;
-			}
-
-			/* pool label is required, generate one randomly */
-			args = cmd_push_arg(args, &argcount, "--label=test_%x ",
-					    rand());
-			if (args == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
+			has_label = true;
 		}
+	}
+
+	if (!has_label) {
+		static bool need_init_rand = true;
+
+		if (need_init_rand) {
+			srand((unsigned int)time(NULL));
+			need_init_rand = false;
+		}
+
+		/* pool label is required, generate one randomly */
+		args = cmd_push_arg(args, &argcount, "--label=test_%x ",
+					rand());
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (svc != NULL) {
