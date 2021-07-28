@@ -53,6 +53,9 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 		err = nil
 	}
 
+	msp.Lock()
+	defer msp.Unlock()
+
 	// lookup target of a given source device (target actually a source
 	// device in this case)
 	mount, exists := msp.cfg.SourceToTarget[target]
@@ -60,8 +63,6 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 		target = mount
 	}
 
-	msp.RLock()
-	defer msp.RUnlock()
 	isMounted, exists := msp.cfg.isMounted[target]
 	if !exists {
 		return msp.cfg.IsMountedBool, err
@@ -72,8 +73,8 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
 	if msp.cfg.MountErr == nil {
 		msp.Lock()
-		defer msp.Unlock()
 		msp.cfg.isMounted[target] = true
+		msp.Unlock()
 	}
 	return msp.cfg.MountErr
 }
@@ -81,8 +82,8 @@ func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) erro
 func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
 		msp.Lock()
-		defer msp.Unlock()
 		msp.cfg.isMounted[target] = false
+		msp.Unlock()
 	}
 	return msp.cfg.UnmountErr
 }
