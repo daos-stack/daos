@@ -15,7 +15,7 @@
 #include <sys/types.h>
 #include <daos.h>
 
-/** datos info */
+/** daos info */
 static daos_handle_t	poh; /** pool */
 static daos_handle_t	coh; /** container */
 static daos_handle_t	oh;  /** object */
@@ -31,7 +31,7 @@ do {								\
 /** DB info */
 #define NR_IODS		3
 #define STRING_LEN	10
-static char	*fields[NR_IODS]	= {"owner", "species", "sex"};
+static char	*fields[NR_IODS]	= {"Owner", "Species", "Sex"};
 
 
 void
@@ -149,7 +149,6 @@ build_filter_one(daos_pipeline_t *pipeline)
 	daos_pipeline_node_push(&comp_eq_node, &const_ft);
 
 	/** adding the node to the pipeline */
-	pipeline->num_nodes = 1;
 	daos_pipeline_push(pipeline, &comp_eq_node);
 }
 
@@ -170,7 +169,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	uint32_t	i, j, l;
 	int		rc;
 
-	/** iods */
+	/** iods: information about what akeys to retreive */
 	for (i = 0; i < NR_IODS; i++) {
 		iods[i].iod_nr		= 1;
 		iods[i].iod_size	= STRING_LEN;
@@ -180,10 +179,13 @@ run_pipeline(daos_pipeline_t *pipeline)
 						strlen(fields[i]));
 	}
 
-	/** reading in chunks of 64 keys (at most) at a time */
+	/**
+	 * reading in chunks of 64 keys (at most) at a time
+	 * */
 	nr_kds   = 64;
 	nr_iods  = NR_IODS;
 
+	/** sgl_keys: to store the retrieved dkeys */
 	kds		= malloc(sizeof(daos_key_desc_t)*nr_kds);
 	sgl_keys	= malloc(sizeof(d_sg_list_t)*nr_kds);
 	iovs_keys	= malloc(sizeof(d_iov_t)*nr_kds);
@@ -195,6 +197,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 		d_iov_set(&iovs_keys[i], &(buf_keys[i*STRING_LEN]), STRING_LEN);
 	}
 
+	/** sgl_recx: to store the retrieved data for the akeys of each dkey */
 	sgl_recx	= malloc(sizeof(d_sg_list_t)*nr_kds*nr_iods);
 	iovs_recx	= malloc(sizeof(d_iov_t)*nr_kds*nr_iods);
 	buf_recx	= malloc(nr_kds*nr_iods*STRING_LEN);
@@ -214,6 +217,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	memset(&anchor, 0, sizeof(daos_anchor_t));
 
 	/** reading 64 records at a time */
+	printf("records:\n");
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_kds = 64; /** trying to read 64 at a time */
 		rc = daos_pipeline_run(oh, *pipeline, DAOS_TX_NONE, 0, NULL,
@@ -222,7 +226,6 @@ run_pipeline(daos_pipeline_t *pipeline)
 				       NULL);
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
 		/** process nr_kds fetched records */
-		printf("records:\n");
 		for (i = 0; i < nr_kds; i++) {
 			printf("\tname(dkey)=%s  ",
 					(char *) sgl_keys[i].sg_iovs->iov_buf);
@@ -233,9 +236,9 @@ run_pipeline(daos_pipeline_t *pipeline)
 					 (char *) iods[i].iod_name.iov_buf,
 					 (char *) sgl_recx[l].sg_iovs->iov_buf);
 			}
-			printf("\n");
 		}
 	}
+	printf("\n");
 
 	free(kds);
 	free(sgl_keys);
