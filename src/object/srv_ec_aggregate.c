@@ -1821,7 +1821,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	ec_age_set_no_parity(entry);
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, dth);
-	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: "DF_X64
+	D_DEBUG(DB_EPC, "Querying parity for stripe: %lu, offset: "DF_X64
 		", "DF_RC"\n", entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx, DP_RC(rc));
 	if (rc != 0)
@@ -1831,6 +1831,13 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	if (ec_age_with_parity(entry) && ec_age_parity_higher(entry)) {
 		update_vos = true;
 		write_parity = false;
+		D_DEBUG(DB_EPC, "delete replica for stripe: %lu,"
+			DF_U64"/"DF_U64" eph "DF_X64" >= "DF_X64"\n",
+			entry->ae_cur_stripe.as_stripenum,
+			iter_param.ip_recx.rx_idx,
+			iter_param.ip_recx.rx_nr,
+			entry->ae_par_extent.ape_epoch,
+			entry->ae_cur_stripe.as_hi_epoch);
 		goto out;
 	}
 
@@ -1858,7 +1865,7 @@ out:
 	if (process_holes && rc == 0) {
 		rc = agg_process_holes(entry);
 	} else if (update_vos && rc == 0) {
-		if (rc == 0 && ec_age2p(entry) > 1)  {
+		if (ec_age2p(entry) > 1)  {
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
 			if (rc)
@@ -2105,7 +2112,6 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	D_ASSERT(agg_param->ap_yield_func != NULL);
 
 	return agg_param->ap_yield_func(agg_param->ap_yield_arg);
-
 }
 
 /* Post iteration call back for outer iterator
@@ -2131,20 +2137,6 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	default:
 		break;
-	}
-
-	agg_param->ap_credits++;
-
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
-		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
-		if (!(*acts & VOS_ITER_CB_SKIP))
-			agg_reset_pos(type, agg_entry);
-		D_DEBUG(DB_EPC, "EC aggregation yield type %d.\n", type);
-		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
-		}
 	}
 
 	return rc;
@@ -2275,6 +2267,20 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc < 0) {
 		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
+
+	agg_param->ap_credits++;
+	if (agg_param->ap_credits > agg_param->ap_credits_max) {
+		agg_param->ap_credits = 0;
+		*acts |= VOS_ITER_CB_YIELD;
+		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
+			type, *acts);
+		if (!(*acts & VOS_ITER_CB_SKIP))
+			agg_reset_pos(type, agg_entry);
+		if (ec_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
+			rc = 1;
+		}
 	}
 
 	return rc;
