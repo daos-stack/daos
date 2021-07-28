@@ -92,10 +92,10 @@ int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
 		D_MUTEX_UNLOCK(&stack_free_list_lock);
 		stack = mmap_stack_desc->stack;
 		/* XXX may need to reevaluate stack size since a growth may
-		 * have occured during previous context life time ?
+		 * have occurred during previous context life time ?
 		 */
 		stack_size = mmap_stack_desc->stack_size;
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken from stack free list.\n",
+		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken from free list.\n",
 			mmap_stack_desc->stack);
 	} else {
 		D_MUTEX_UNLOCK(&stack_free_list_lock);
@@ -116,7 +116,7 @@ int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
 		mmap_stack_desc->stack = stack;
 		mmap_stack_desc->stack_size = stack_size;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken allocated.\n",
+		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been allocated.\n",
 			mmap_stack_desc->stack);
 	}
 
@@ -191,10 +191,10 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 		D_MUTEX_UNLOCK(&stack_free_list_lock);
 		stack = mmap_stack_desc->stack;
 		/* XXX may need to reevaluate stack size since a growth may
-		 * have occured during previous context life time ?
+		 * have occurred during previous context life time ?
 		 */
 		stack_size = mmap_stack_desc->stack_size;
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken from stack free list.\n",
+		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken from free list.\n",
 			mmap_stack_desc->stack);
 	} else {
 		D_MUTEX_UNLOCK(&stack_free_list_lock);
@@ -215,7 +215,7 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 		mmap_stack_desc->stack = stack;
 		mmap_stack_desc->stack_size = stack_size;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been taken allocated.\n",
+		D_DEBUG(DB_MEM, "%p mmap()'ed stack has been allocated.\n",
 			mmap_stack_desc->stack);
 	}
 

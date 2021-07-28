@@ -148,7 +148,7 @@ ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons --stack_mmap --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+    { scons --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
       BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
     /bin/rm -rf build && go clean -cache && \
     cp -r utils/config/examples /opt/daos; }

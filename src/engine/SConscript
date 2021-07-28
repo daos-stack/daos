@@ -10,6 +10,8 @@ def scons():
 
     denv = env.Clone()
 
+    if denv["STACK_MMAP"] == 1:
+        denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
     denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     libraries = ['daos_common_pmem', 'gurt', 'cart', 'vos_srv']
     libraries += ['bio', 'dl', 'uuid', 'pthread', 'abt']

@@ -8,8 +8,7 @@ COMMON_FILES = ['debug.c', 'mem.c', 'fail_loc.c', 'lru.c',
                 'acl_api.c', 'acl_util.c', 'acl_principal.c', 'cont_props.c',
                 'dedup.c', 'profile.c', 'compression.c', 'compression_isal.c',
                 'compression_qat.c', 'multihash.c', 'multihash_isal.c',
-                'cipher.c', 'cipher_isal.c', 'qat.c', 'fault_domain.c',
-                'stack_mmap.c']
+                'cipher.c', 'cipher_isal.c', 'qat.c', 'fault_domain.c']
 
 
 def build_daos_common(env, client, prereqs):
@@ -25,6 +24,11 @@ def build_daos_common(env, client, prereqs):
         denv.Append(OBJPREFIX="v_")
         libname = 'libdaos_common_pmem'
         prereqs.require(denv, 'pmdk')
+        if denv["STACK_MMAP"] == 1:
+            common_libs.extend(['abt'])
+            COMMON_FILES.extend(['stack_mmap.c'])
+            prereqs.require(denv, 'argobots')
+            denv.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
     common = daos_build.library(denv, libname, COMMON_FILES, LIBS=common_libs)
     denv.Install('$PREFIX/lib64/', common)
@@ -79,7 +83,7 @@ def scons():
     prereqs.require(env, 'isal_crypto')
 
     denv = env.Clone(LIBS=[])
-    prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc', 'argobots')
+    prereqs.require(denv, 'isal', 'isal_crypto', 'protobufc')
     denv.AppendUnique(LIBS=['cart', 'gurt', 'lz4'])
     build_daos_common(denv, True, prereqs)
 
@@ -98,6 +102,8 @@ def scons():
         return
     tlib_env = denv.Clone()
     tlib_env.AppendUnique(LIBS=['json-c'])
+
+    prereqs.require(tlib_env, 'argobots')
 
     tests_lib_src = ['tests_lib.c', 'tests_dmg_helpers.c']
     tests_lib = daos_build.library(tlib_env, 'libdaos_tests', tests_lib_src)

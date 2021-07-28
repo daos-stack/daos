@@ -31,9 +31,16 @@ def scons():
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs)
     libs += ['vos', 'bio', 'pthread', 'abt', 'dts']
 
-    daos_perf = daos_build.program(denv, 'daos_perf',
-                                   ['daos_perf.c'],
-                                   LIBS=libs)
+    if denv["STACK_MMAP"] == 1:
+        new_env = denv.Clone()
+        new_env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
+        daos_perf = daos_build.program(new_env, 'daos_perf',
+                                       ['daos_perf.c'],
+                                       LIBS=libs)
+    else:
+        daos_perf = daos_build.program(denv, 'daos_perf',
+                                       ['daos_perf.c'],
+                                       LIBS=libs)
     denv.Install('$PREFIX/bin/', daos_perf)
 
     daos_racer = daos_build.program(denv, 'daos_racer',

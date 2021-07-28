@@ -271,7 +271,6 @@ tools, as well as the preserve option for the filesystem copy tool.
 %{scons_exe} %{?_smp_mflags} \
       --config=force         \
       --no-rpath             \
-      --stack_mmap         \
       USE_INSTALLED=all      \
       FIRMWARE_MGMT=yes      \
       CONF_DIR=%{conf_dir}   \
@@ -287,7 +286,6 @@ mv test.cov{,-build}
 %{scons_exe} %{?_smp_mflags}          \
       --config=force                  \
       --no-rpath                      \
-      --stack_mmap                    \
       --install-sandbox=%{buildroot}  \
       %{buildroot}%{_prefix}          \
       %{buildroot}%{conf_dir}         \
@@ -474,9 +472,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Tue Jul 27 2021 Bruno Faccini <bruno.faccini@intel.com> 1.3.103-6
-- Build with --stack_mmap
-
 * Mon Jul 19 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-5
 - Add DAOS serialization library that requires hdf5
 
@@ -561,6 +556,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Tue Mar 23 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.0-4
 - Update libfabric to v1.12.0
 - Disable grdcopy/gdrapi linkage in libfabric
+
 
 * Thu Mar 18 2021 Maureen Jean <maureen.jean@intel.com> 1.3.0-3
 - Update to python3

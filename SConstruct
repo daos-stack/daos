@@ -104,11 +104,6 @@ def set_defaults(env, daos_version):
               action='store_true',
               default=False,
               help='Preprocess selected files for profiling')
-    AddOption('--stack_mmap',
-              dest='stack_mmap',
-              action='store_true',
-              default=False,
-              help='Build with mmap()ed ULT stack support')
     AddOption('--no-rpath',
               dest='no_rpath',
               action='store_true',
@@ -126,9 +121,6 @@ def set_defaults(env, daos_version):
 
     env.Append(CCFLAGS=['-DDAOS_VERSION=\\"' + daos_version + '\\"'])
     env.Append(CCFLAGS=['-DAPI_VERSION=\\"' + API_VERSION + '\\"'])
-
-    if GetOption("stack_mmap"):
-        env.Append(CCFLAGS=['-DULT_MMAP_STACK'])
 
 def build_misc():
     """Build miscellaneous items"""
