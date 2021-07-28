@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -34,7 +35,7 @@ type (
 		SourceToTarget  map[string]string
 		getfsIndex      int
 		GetfsUsageResps []GetfsUsageRetval
-		isMounted       map[string]bool
+		isMounted       map[string]atm.Bool
 		statErrors      map[string]error
 		realStat        bool
 	}
@@ -67,13 +68,14 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 	if !exists {
 		return msp.cfg.IsMountedBool, err
 	}
-	return isMounted, err
+	return isMounted.Load(), err
 }
 
 func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
 	if msp.cfg.MountErr == nil {
 		msp.Lock()
-		msp.cfg.isMounted[target] = true
+		im := msp.cfg.isMounted[target]
+		im.SetTrue()
 		msp.Unlock()
 	}
 	return msp.cfg.MountErr
@@ -82,7 +84,8 @@ func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) erro
 func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
 		msp.Lock()
-		msp.cfg.isMounted[target] = false
+		im := msp.cfg.isMounted[target]
+		im.SetFalse()
 		msp.Unlock()
 	}
 	return msp.cfg.UnmountErr
@@ -123,7 +126,7 @@ func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
 		cfg = &MockSysConfig{}
 	}
 	if cfg.isMounted == nil {
-		cfg.isMounted = make(map[string]bool)
+		cfg.isMounted = make(map[string]atm.Bool)
 	}
 	if cfg.statErrors == nil {
 		cfg.realStat = true
