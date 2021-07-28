@@ -98,17 +98,17 @@ ds_mgmt_drpc_ping_rank(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 void
 ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
-	struct drpc_alloc		 alloc = PROTO_ALLOCATOR_INIT(alloc);
-	Ctl__SetEngineLogMasksReq	*req = NULL;
-	Ctl__SetEngineLogMasksResp	 resp;
-	uint8_t				*body;
-	size_t				 len;
-	int				 rc;
+	struct drpc_alloc	 alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Ctl__SetLogMasksReq	*req = NULL;
+	Ctl__SetLogMasksResp	 resp;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc;
 
 	/* Unpack the inner request from the drpc call body */
-	req = ctl__set_engine_log_masks_req__unpack(&alloc.alloc,
-						    drpc_req->body.len,
-						    drpc_req->body.data);
+	req = ctl__set_log_masks_req__unpack(&alloc.alloc,
+					     drpc_req->body.len,
+					     drpc_req->body.data);
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (set log masks)\n");
@@ -117,28 +117,31 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to set log masks to '%s'\n", req->masks);
 
-	/* Response status is populated with SUCCESS on init. */
-	ctl__set_engine_log_masks_resp__init(&resp);
+	/* Response status (rc) is populated with SUCCESS (0) on init */
+	ctl__set_log_masks_resp__init(&resp);
 
+#ifndef DRPC_TEST
+	/* This assumes req->masks is a null terminated string */
 	rc = d_log_setmasks(req->masks, -1);
 	if (rc != 0) {
 		D_ERROR("Failed to set log masks to %s: "DF_RC"\n",
 			req->masks, DP_RC(rc));
 		resp.status = rc;
 	}
+#endif
 
-	len = ctl__set_engine_log_masks_resp__get_packed_size(&resp);
+	len = ctl__set_log_masks_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
 		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
-		ctl__set_engine_log_masks_resp__pack(&resp, body);
+		ctl__set_log_masks_resp__pack(&resp, body);
 		drpc_resp->body.len = len;
 		drpc_resp->body.data = body;
 	}
 
-	ctl__set_engine_log_masks_req__free_unpacked(req, &alloc.alloc);
+	ctl__set_log_masks_req__free_unpacked(req, &alloc.alloc);
 }
 
 void

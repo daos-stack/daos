@@ -35,7 +35,7 @@ service CtlSvc {
 	// Query the per-server metadata
 	rpc SmdQuery(SmdQueryReq) returns (SmdQueryResp) {}
 	// Set log level for DAOS I/O Engines on a host.
-	rpc SetEngineLogMasks(SetEngineLogMasksReq) returns (SetEngineLogMasksResp) {}
+	rpc SetEngineLogMasks(SetLogMasksReq) returns (SetLogMasksResp) {}
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)
 	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)

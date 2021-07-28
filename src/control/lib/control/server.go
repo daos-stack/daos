@@ -20,7 +20,6 @@ import (
 type SetEngineLogMasksReq struct {
 	unaryRequest
 	Masks string
-	Reset bool
 }
 
 // SetEngineLogMasksResp contains the results of a set engine log level
@@ -33,9 +32,7 @@ type SetEngineLogMasksResp struct {
 // level of all DAOS engines in a system.
 func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngineLogMasksReq) (*SetEngineLogMasksResp, error) {
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewCtlSvcClient(conn).SetEngineLogMasks(ctx, &ctlpb.SetEngineLogMasksReq{
-			Masks: req.Masks, Reset_: req.Reset,
-		})
+		return ctlpb.NewCtlSvcClient(conn).SetEngineLogMasks(ctx, &ctlpb.SetLogMasksReq{Masks: req.Masks})
 	})
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
@@ -43,14 +40,14 @@ func SetEngineLogMasks(ctx context.Context, rpcClient UnaryInvoker, req *SetEngi
 		return nil, err
 	}
 
-	sellr := new(SetEngineLogMasksResp)
+	resp := new(SetEngineLogMasksResp)
 	for _, hostResp := range ur.Responses {
 		if hostResp.Error != nil {
-			if err := sellr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
+			if err := resp.addHostError(hostResp.Addr, hostResp.Error); err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	return sellr, nil
+	return resp, nil
 }

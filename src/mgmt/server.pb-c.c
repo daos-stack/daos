@@ -7,97 +7,97 @@
 #endif
 
 #include "server.pb-c.h"
-void   ctl__set_engine_log_masks_req__init
-                     (Ctl__SetEngineLogMasksReq         *message)
+void   ctl__set_log_masks_req__init
+                     (Ctl__SetLogMasksReq         *message)
 {
-  static const Ctl__SetEngineLogMasksReq init_value = CTL__SET_ENGINE_LOG_MASKS_REQ__INIT;
+  static const Ctl__SetLogMasksReq init_value = CTL__SET_LOG_MASKS_REQ__INIT;
   *message = init_value;
 }
-size_t ctl__set_engine_log_masks_req__get_packed_size
-                     (const Ctl__SetEngineLogMasksReq *message)
+size_t ctl__set_log_masks_req__get_packed_size
+                     (const Ctl__SetLogMasksReq *message)
 {
-  assert(message->base.descriptor == &ctl__set_engine_log_masks_req__descriptor);
+  assert(message->base.descriptor == &ctl__set_log_masks_req__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t ctl__set_engine_log_masks_req__pack
-                     (const Ctl__SetEngineLogMasksReq *message,
+size_t ctl__set_log_masks_req__pack
+                     (const Ctl__SetLogMasksReq *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &ctl__set_engine_log_masks_req__descriptor);
+  assert(message->base.descriptor == &ctl__set_log_masks_req__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t ctl__set_engine_log_masks_req__pack_to_buffer
-                     (const Ctl__SetEngineLogMasksReq *message,
+size_t ctl__set_log_masks_req__pack_to_buffer
+                     (const Ctl__SetLogMasksReq *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &ctl__set_engine_log_masks_req__descriptor);
+  assert(message->base.descriptor == &ctl__set_log_masks_req__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Ctl__SetEngineLogMasksReq *
-       ctl__set_engine_log_masks_req__unpack
+Ctl__SetLogMasksReq *
+       ctl__set_log_masks_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Ctl__SetEngineLogMasksReq *)
-     protobuf_c_message_unpack (&ctl__set_engine_log_masks_req__descriptor,
+  return (Ctl__SetLogMasksReq *)
+     protobuf_c_message_unpack (&ctl__set_log_masks_req__descriptor,
                                 allocator, len, data);
 }
-void   ctl__set_engine_log_masks_req__free_unpacked
-                     (Ctl__SetEngineLogMasksReq *message,
+void   ctl__set_log_masks_req__free_unpacked
+                     (Ctl__SetLogMasksReq *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &ctl__set_engine_log_masks_req__descriptor);
+  assert(message->base.descriptor == &ctl__set_log_masks_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-void   ctl__set_engine_log_masks_resp__init
-                     (Ctl__SetEngineLogMasksResp         *message)
+void   ctl__set_log_masks_resp__init
+                     (Ctl__SetLogMasksResp         *message)
 {
-  static const Ctl__SetEngineLogMasksResp init_value = CTL__SET_ENGINE_LOG_MASKS_RESP__INIT;
+  static const Ctl__SetLogMasksResp init_value = CTL__SET_LOG_MASKS_RESP__INIT;
   *message = init_value;
 }
-size_t ctl__set_engine_log_masks_resp__get_packed_size
-                     (const Ctl__SetEngineLogMasksResp *message)
+size_t ctl__set_log_masks_resp__get_packed_size
+                     (const Ctl__SetLogMasksResp *message)
 {
-  assert(message->base.descriptor == &ctl__set_engine_log_masks_resp__descriptor);
+  assert(message->base.descriptor == &ctl__set_log_masks_resp__descriptor);
   return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
 }
-size_t ctl__set_engine_log_masks_resp__pack
-                     (const Ctl__SetEngineLogMasksResp *message,
+size_t ctl__set_log_masks_resp__pack
+                     (const Ctl__SetLogMasksResp *message,
                       uint8_t       *out)
 {
-  assert(message->base.descriptor == &ctl__set_engine_log_masks_resp__descriptor);
+  assert(message->base.descriptor == &ctl__set_log_masks_resp__descriptor);
   return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
 }
-size_t ctl__set_engine_log_masks_resp__pack_to_buffer
-                     (const Ctl__SetEngineLogMasksResp *message,
+size_t ctl__set_log_masks_resp__pack_to_buffer
+                     (const Ctl__SetLogMasksResp *message,
                       ProtobufCBuffer *buffer)
 {
-  assert(message->base.descriptor == &ctl__set_engine_log_masks_resp__descriptor);
+  assert(message->base.descriptor == &ctl__set_log_masks_resp__descriptor);
   return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
 }
-Ctl__SetEngineLogMasksResp *
-       ctl__set_engine_log_masks_resp__unpack
+Ctl__SetLogMasksResp *
+       ctl__set_log_masks_resp__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data)
 {
-  return (Ctl__SetEngineLogMasksResp *)
-     protobuf_c_message_unpack (&ctl__set_engine_log_masks_resp__descriptor,
+  return (Ctl__SetLogMasksResp *)
+     protobuf_c_message_unpack (&ctl__set_log_masks_resp__descriptor,
                                 allocator, len, data);
 }
-void   ctl__set_engine_log_masks_resp__free_unpacked
-                     (Ctl__SetEngineLogMasksResp *message,
+void   ctl__set_log_masks_resp__free_unpacked
+                     (Ctl__SetLogMasksResp *message,
                       ProtobufCAllocator *allocator)
 {
   if(!message)
     return;
-  assert(message->base.descriptor == &ctl__set_engine_log_masks_resp__descriptor);
+  assert(message->base.descriptor == &ctl__set_log_masks_resp__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor ctl__set_engine_log_masks_req__field_descriptors[3] =
+static const ProtobufCFieldDescriptor ctl__set_log_masks_req__field_descriptors[2] =
 {
   {
     "sys",
@@ -105,7 +105,7 @@ static const ProtobufCFieldDescriptor ctl__set_engine_log_masks_req__field_descr
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Ctl__SetEngineLogMasksReq, sys),
+    offsetof(Ctl__SetLogMasksReq, sys),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -117,51 +117,38 @@ static const ProtobufCFieldDescriptor ctl__set_engine_log_masks_req__field_descr
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Ctl__SetEngineLogMasksReq, masks),
+    offsetof(Ctl__SetLogMasksReq, masks),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
-  {
-    "reset",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_BOOL,
-    0,   /* quantifier_offset */
-    offsetof(Ctl__SetEngineLogMasksReq, reset),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
 };
-static const unsigned ctl__set_engine_log_masks_req__field_indices_by_name[] = {
+static const unsigned ctl__set_log_masks_req__field_indices_by_name[] = {
   1,   /* field[1] = masks */
-  2,   /* field[2] = reset */
   0,   /* field[0] = sys */
 };
-static const ProtobufCIntRange ctl__set_engine_log_masks_req__number_ranges[1 + 1] =
+static const ProtobufCIntRange ctl__set_log_masks_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 3 }
+  { 0, 2 }
 };
-const ProtobufCMessageDescriptor ctl__set_engine_log_masks_req__descriptor =
+const ProtobufCMessageDescriptor ctl__set_log_masks_req__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.SetEngineLogMasksReq",
-  "SetEngineLogMasksReq",
-  "Ctl__SetEngineLogMasksReq",
+  "ctl.SetLogMasksReq",
+  "SetLogMasksReq",
+  "Ctl__SetLogMasksReq",
   "ctl",
-  sizeof(Ctl__SetEngineLogMasksReq),
-  3,
-  ctl__set_engine_log_masks_req__field_descriptors,
-  ctl__set_engine_log_masks_req__field_indices_by_name,
-  1,  ctl__set_engine_log_masks_req__number_ranges,
-  (ProtobufCMessageInit) ctl__set_engine_log_masks_req__init,
+  sizeof(Ctl__SetLogMasksReq),
+  2,
+  ctl__set_log_masks_req__field_descriptors,
+  ctl__set_log_masks_req__field_indices_by_name,
+  1,  ctl__set_log_masks_req__number_ranges,
+  (ProtobufCMessageInit) ctl__set_log_masks_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor ctl__set_engine_log_masks_resp__field_descriptors[1] =
+static const ProtobufCFieldDescriptor ctl__set_log_masks_resp__field_descriptors[1] =
 {
   {
     "status",
@@ -169,33 +156,33 @@ static const ProtobufCFieldDescriptor ctl__set_engine_log_masks_resp__field_desc
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_INT32,
     0,   /* quantifier_offset */
-    offsetof(Ctl__SetEngineLogMasksResp, status),
+    offsetof(Ctl__SetLogMasksResp, status),
     NULL,
     NULL,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
 };
-static const unsigned ctl__set_engine_log_masks_resp__field_indices_by_name[] = {
+static const unsigned ctl__set_log_masks_resp__field_indices_by_name[] = {
   0,   /* field[0] = status */
 };
-static const ProtobufCIntRange ctl__set_engine_log_masks_resp__number_ranges[1 + 1] =
+static const ProtobufCIntRange ctl__set_log_masks_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
   { 0, 1 }
 };
-const ProtobufCMessageDescriptor ctl__set_engine_log_masks_resp__descriptor =
+const ProtobufCMessageDescriptor ctl__set_log_masks_resp__descriptor =
 {
   PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
-  "ctl.SetEngineLogMasksResp",
-  "SetEngineLogMasksResp",
-  "Ctl__SetEngineLogMasksResp",
+  "ctl.SetLogMasksResp",
+  "SetLogMasksResp",
+  "Ctl__SetLogMasksResp",
   "ctl",
-  sizeof(Ctl__SetEngineLogMasksResp),
+  sizeof(Ctl__SetLogMasksResp),
   1,
-  ctl__set_engine_log_masks_resp__field_descriptors,
-  ctl__set_engine_log_masks_resp__field_indices_by_name,
-  1,  ctl__set_engine_log_masks_resp__number_ranges,
-  (ProtobufCMessageInit) ctl__set_engine_log_masks_resp__init,
+  ctl__set_log_masks_resp__field_descriptors,
+  ctl__set_log_masks_resp__field_indices_by_name,
+  1,  ctl__set_log_masks_resp__number_ranges,
+  (ProtobufCMessageInit) ctl__set_log_masks_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };

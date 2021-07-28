@@ -15,8 +15,8 @@ PROTOBUF_C__BEGIN_DECLS
 #endif
 
 
-typedef struct _Ctl__SetEngineLogMasksReq Ctl__SetEngineLogMasksReq;
-typedef struct _Ctl__SetEngineLogMasksResp Ctl__SetEngineLogMasksResp;
+typedef struct _Ctl__SetLogMasksReq Ctl__SetLogMasksReq;
+typedef struct _Ctl__SetLogMasksResp Ctl__SetLogMasksResp;
 
 
 /* --- enums --- */
@@ -25,9 +25,9 @@ typedef struct _Ctl__SetEngineLogMasksResp Ctl__SetEngineLogMasksResp;
 /* --- messages --- */
 
 /*
- * SetEngineLogMasksReq provides parameters to set system-wide log masks.
+ * SetLogMasksReq provides parameters to set system-wide log masks.
  */
-struct  _Ctl__SetEngineLogMasksReq
+struct  _Ctl__SetLogMasksReq
 {
   ProtobufCMessage base;
   /*
@@ -38,20 +38,16 @@ struct  _Ctl__SetEngineLogMasksReq
    * set log masks for a set of facilities to a given level
    */
   char *masks;
-  /*
-   * indicates level should be reset to default
-   */
-  protobuf_c_boolean reset;
 };
-#define CTL__SET_ENGINE_LOG_MASKS_REQ__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__set_engine_log_masks_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+#define CTL__SET_LOG_MASKS_REQ__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__set_log_masks_req__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string }
 
 
 /*
  * SetEngineLogMasksResp returns results of attempts to set engine log masks.
  */
-struct  _Ctl__SetEngineLogMasksResp
+struct  _Ctl__SetLogMasksResp
 {
   ProtobufCMessage base;
   /*
@@ -59,56 +55,56 @@ struct  _Ctl__SetEngineLogMasksResp
    */
   int32_t status;
 };
-#define CTL__SET_ENGINE_LOG_MASKS_RESP__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&ctl__set_engine_log_masks_resp__descriptor) \
+#define CTL__SET_LOG_MASKS_RESP__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&ctl__set_log_masks_resp__descriptor) \
     , 0 }
 
 
-/* Ctl__SetEngineLogMasksReq methods */
-void   ctl__set_engine_log_masks_req__init
-                     (Ctl__SetEngineLogMasksReq         *message);
-size_t ctl__set_engine_log_masks_req__get_packed_size
-                     (const Ctl__SetEngineLogMasksReq   *message);
-size_t ctl__set_engine_log_masks_req__pack
-                     (const Ctl__SetEngineLogMasksReq   *message,
+/* Ctl__SetLogMasksReq methods */
+void   ctl__set_log_masks_req__init
+                     (Ctl__SetLogMasksReq         *message);
+size_t ctl__set_log_masks_req__get_packed_size
+                     (const Ctl__SetLogMasksReq   *message);
+size_t ctl__set_log_masks_req__pack
+                     (const Ctl__SetLogMasksReq   *message,
                       uint8_t             *out);
-size_t ctl__set_engine_log_masks_req__pack_to_buffer
-                     (const Ctl__SetEngineLogMasksReq   *message,
+size_t ctl__set_log_masks_req__pack_to_buffer
+                     (const Ctl__SetLogMasksReq   *message,
                       ProtobufCBuffer     *buffer);
-Ctl__SetEngineLogMasksReq *
-       ctl__set_engine_log_masks_req__unpack
+Ctl__SetLogMasksReq *
+       ctl__set_log_masks_req__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   ctl__set_engine_log_masks_req__free_unpacked
-                     (Ctl__SetEngineLogMasksReq *message,
+void   ctl__set_log_masks_req__free_unpacked
+                     (Ctl__SetLogMasksReq *message,
                       ProtobufCAllocator *allocator);
-/* Ctl__SetEngineLogMasksResp methods */
-void   ctl__set_engine_log_masks_resp__init
-                     (Ctl__SetEngineLogMasksResp         *message);
-size_t ctl__set_engine_log_masks_resp__get_packed_size
-                     (const Ctl__SetEngineLogMasksResp   *message);
-size_t ctl__set_engine_log_masks_resp__pack
-                     (const Ctl__SetEngineLogMasksResp   *message,
+/* Ctl__SetLogMasksResp methods */
+void   ctl__set_log_masks_resp__init
+                     (Ctl__SetLogMasksResp         *message);
+size_t ctl__set_log_masks_resp__get_packed_size
+                     (const Ctl__SetLogMasksResp   *message);
+size_t ctl__set_log_masks_resp__pack
+                     (const Ctl__SetLogMasksResp   *message,
                       uint8_t             *out);
-size_t ctl__set_engine_log_masks_resp__pack_to_buffer
-                     (const Ctl__SetEngineLogMasksResp   *message,
+size_t ctl__set_log_masks_resp__pack_to_buffer
+                     (const Ctl__SetLogMasksResp   *message,
                       ProtobufCBuffer     *buffer);
-Ctl__SetEngineLogMasksResp *
-       ctl__set_engine_log_masks_resp__unpack
+Ctl__SetLogMasksResp *
+       ctl__set_log_masks_resp__unpack
                      (ProtobufCAllocator  *allocator,
                       size_t               len,
                       const uint8_t       *data);
-void   ctl__set_engine_log_masks_resp__free_unpacked
-                     (Ctl__SetEngineLogMasksResp *message,
+void   ctl__set_log_masks_resp__free_unpacked
+                     (Ctl__SetLogMasksResp *message,
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
-typedef void (*Ctl__SetEngineLogMasksReq_Closure)
-                 (const Ctl__SetEngineLogMasksReq *message,
+typedef void (*Ctl__SetLogMasksReq_Closure)
+                 (const Ctl__SetLogMasksReq *message,
                   void *closure_data);
-typedef void (*Ctl__SetEngineLogMasksResp_Closure)
-                 (const Ctl__SetEngineLogMasksResp *message,
+typedef void (*Ctl__SetLogMasksResp_Closure)
+                 (const Ctl__SetLogMasksResp *message,
                   void *closure_data);
 
 /* --- services --- */
@@ -116,8 +112,8 @@ typedef void (*Ctl__SetEngineLogMasksResp_Closure)
 
 /* --- descriptors --- */
 
-extern const ProtobufCMessageDescriptor ctl__set_engine_log_masks_req__descriptor;
-extern const ProtobufCMessageDescriptor ctl__set_engine_log_masks_resp__descriptor;
+extern const ProtobufCMessageDescriptor ctl__set_log_masks_req__descriptor;
+extern const ProtobufCMessageDescriptor ctl__set_log_masks_resp__descriptor;
 
 PROTOBUF_C__END_DECLS
 

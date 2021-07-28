@@ -31,7 +31,7 @@ type CtlSvcClient interface {
 	// Query the per-server metadata
 	SmdQuery(ctx context.Context, in *SmdQueryReq, opts ...grpc.CallOption) (*SmdQueryResp, error)
 	// Set log level for DAOS I/O Engines on a host.
-	SetEngineLogMasks(ctx context.Context, in *SetEngineLogMasksReq, opts ...grpc.CallOption) (*SetEngineLogMasksResp, error)
+	SetEngineLogMasks(ctx context.Context, in *SetLogMasksReq, opts ...grpc.CallOption) (*SetLogMasksResp, error)
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)
 	PrepShutdownRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)
@@ -106,8 +106,8 @@ func (c *ctlSvcClient) SmdQuery(ctx context.Context, in *SmdQueryReq, opts ...gr
 	return out, nil
 }
 
-func (c *ctlSvcClient) SetEngineLogMasks(ctx context.Context, in *SetEngineLogMasksReq, opts ...grpc.CallOption) (*SetEngineLogMasksResp, error) {
-	out := new(SetEngineLogMasksResp)
+func (c *ctlSvcClient) SetEngineLogMasks(ctx context.Context, in *SetLogMasksReq, opts ...grpc.CallOption) (*SetLogMasksResp, error) {
+	out := new(SetLogMasksResp)
 	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/SetEngineLogMasks", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -177,7 +177,7 @@ type CtlSvcServer interface {
 	// Query the per-server metadata
 	SmdQuery(context.Context, *SmdQueryReq) (*SmdQueryResp, error)
 	// Set log level for DAOS I/O Engines on a host.
-	SetEngineLogMasks(context.Context, *SetEngineLogMasksReq) (*SetEngineLogMasksResp, error)
+	SetEngineLogMasks(context.Context, *SetLogMasksReq) (*SetLogMasksResp, error)
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)
 	PrepShutdownRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)
@@ -213,7 +213,7 @@ func (UnimplementedCtlSvcServer) FirmwareUpdate(context.Context, *FirmwareUpdate
 func (UnimplementedCtlSvcServer) SmdQuery(context.Context, *SmdQueryReq) (*SmdQueryResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SmdQuery not implemented")
 }
-func (UnimplementedCtlSvcServer) SetEngineLogMasks(context.Context, *SetEngineLogMasksReq) (*SetEngineLogMasksResp, error) {
+func (UnimplementedCtlSvcServer) SetEngineLogMasks(context.Context, *SetLogMasksReq) (*SetLogMasksResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetEngineLogMasks not implemented")
 }
 func (UnimplementedCtlSvcServer) PrepShutdownRanks(context.Context, *RanksReq) (*RanksResp, error) {
@@ -353,7 +353,7 @@ func _CtlSvc_SmdQuery_Handler(srv interface{}, ctx context.Context, dec func(int
 }
 
 func _CtlSvc_SetEngineLogMasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetEngineLogMasksReq)
+	in := new(SetLogMasksReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -365,7 +365,7 @@ func _CtlSvc_SetEngineLogMasks_Handler(srv interface{}, ctx context.Context, dec
 		FullMethod: "/ctl.CtlSvc/SetEngineLogMasks",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CtlSvcServer).SetEngineLogMasks(ctx, req.(*SetEngineLogMasksReq))
+		return srv.(CtlSvcServer).SetEngineLogMasks(ctx, req.(*SetLogMasksReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
