@@ -1,0 +1,41 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+  test_clients:
+    - client-A
+timeout: 150
+server_config:
+  name: daos_server
+  servers:
+    targets: 1
+pool:
+  name: daos_server
+  scm_size: 1G
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+block_sizes: [10M, 500M]
+transfer_sizes: [1M]
+io_test_metrics: [
+  "engine_io_dtx_committed",
+  "engine_io_dtx_committed_max",
+  "engine_io_dtx_committed_mean",
+  "engine_io_dtx_committed_min",
+  "engine_io_dtx_committed_stddev",
+  "engine_io_ops_fetch_active_max",
+  "engine_io_ops_fetch_active_mean",
+  "engine_io_ops_fetch_active_min",
+  "engine_io_ops_fetch_active_stddev",
+  "engine_io_ops_update_active_max",
+  "engine_io_ops_update_active_mean",
+  "engine_io_ops_update_active_min",
+  "engine_io_ops_update_active_stddev"
+  ]
+ior:
+  api: POSIX
+  flags: "-v -w -k"
+  max_duration: 10
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"

@@ -449,6 +449,29 @@ class TelemetryUtils():
                         data[host][name] = metric["value"]
         return data
 
+    def get_io_metrics(self, test_metrics=None):
+        """Get the container telemetry test metrics.
+
+        Returns:
+            dict: dictionary of dictionaries of specified io metric names and
+                values per server host key
+
+        """
+        data = {}
+        info = self.get_metrics(",".join(test_metrics))
+        self.log.info("Engine IO test Telemetry Information")
+        for host in info:
+            data[host] = {name: 0 for name in test_metrics}
+            for name in test_metrics:
+                if name in info[host]:
+                    for metric in info[host][name]["metrics"]:
+                        self.log.info(
+                            "  %s (%s): %s (%s)",
+                            info[host][name]["description"], name,
+                            metric["value"], host)
+                        data[host][name] = metric["value"]
+        return data
+
     def check_container_metrics(self, open_count=None, active_count=None,
                                 close_count=None, destroy_count=None):
         """Verify the container telemetry metrics.
