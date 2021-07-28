@@ -47,6 +47,8 @@ struct mvcc_arg {
 	bool		fail_fast;
 	/** used to generate different epochs */
 	daos_epoch_t	epoch;
+	/** Used to delay commit for first rw op */
+	bool		delay_commit;
 };
 
 enum type {
@@ -1150,6 +1152,8 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	struct tx_helper	*wtx;
 	struct tx_helper	 txh1 = {0};
 	struct tx_helper	 txh2 = {0};
+	struct tx_helper	 txh_saved = {0};
+	bool			 expect_inprogress = false;
 	int			 expected_rrc = 0;
 	int			 expected_wrc = 0;
 	int			 nfailed = 0;
@@ -1178,10 +1182,10 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		goto out;
 	}
 
-	print_message("CASE %d.%d: %s, %s(%s, "DF_X64"), %s(%s, "DF_X64"), "
+	print_message("CASE %d.%d: %s, %s(%s, "DF_X64")%s, %s(%s, "DF_X64"), "
 		      "%s TX [%d]\n", i, j, empty ? "empty" : "nonempty",
-		      r->o_name, rp, re, w->o_name, wp, we,
-		      same_tx ? "same" : "diff", mvcc_arg->i);
+		      r->o_name, rp, re, mvcc_arg->delay_commit ? " delay commit" : "",
+		      w->o_name, wp, we, same_tx ? "same" : "diff", mvcc_arg->i);
 
 	if (same_tx) {
 		rtx = wtx = &txh1;
@@ -1197,8 +1201,13 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 		txh1.th_nr_ops = txh2.th_nr_ops = 1;
 		txh1.th_op_seq = txh2.th_op_seq = 1;
 		txh2.th_nr_mods = 1;
-		if (is_rw(r))
+		if (is_rw(r)) {
 			txh1.th_nr_mods = 1;
+			if (mvcc_arg->delay_commit) {
+				txh1.th_skip_commit = true;
+				txh_saved = txh2;
+			}
+		}
 	}
 
 	/* If requested, prepare the data that will be read. */
@@ -1245,25 +1254,60 @@ conflicting_rw_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 			if (expected_rrc == 0 && is_rw(r))
 				e = (r->o_wtype == W_E);
 		}
+
+		if (mvcc_arg->delay_commit && is_rw(r)) {
+			if (empty) {
+				if (expected_rrc == 0)
+					expect_inprogress = true;
+			} else if (is_punch(r)) {
+				expect_inprogress = true;
+			}
+		}
 		if (w->o_rtype == R_E && !e)
 			expected_wrc = -DER_EXIST;
 		else if (w->o_rtype == R_NE && e)
 			expected_wrc = -DER_NONEXIST;
+
 	}
 	print_message("  %s(%s, "DF_X64") (expect %s): ",
-		      w->o_name, wp, we, d_errstr(expected_wrc));
+		      w->o_name, wp, we, expect_inprogress ? "DER_INPROGRESS" :
+		      d_errstr(expected_wrc));
 	rc = w->o_func(arg, wtx, wp, we);
 	print_message("%s\n", d_errstr(rc));
-	if (rc != expected_wrc)
+	if (expect_inprogress) {
+		if (rc != -DER_INPROGRESS) {
+			nfailed++;
+			goto out;
+		}
+	} else if (rc != expected_wrc) {
 		nfailed++;
+		goto out;
+	}
+
+	/* Go ahead and commit, the uncommitted one, if needed */
+	if (!daos_is_zero_dti(&txh1.th_saved_xid)) {
+		if (txh1.th_skip_commit) {
+			rc = vos_dtx_commit(arg->ctx.tc_co_hdl,
+					    &txh1.th_saved_xid, 1, NULL);
+			assert(rc >= 0 || rc == -DER_NONEXIST);
+		}
+		if (expect_inprogress) {
+			print_message("  %s(%s, "DF_X64") (expect %s): ",
+				      w->o_name, wp, we, d_errstr(expected_wrc));
+			rc = w->o_func(arg, &txh_saved, wp, we);
+			print_message("%s\n", d_errstr(rc));
+			if (rc != expected_wrc)
+				nfailed++;
+		}
+	}
 
 out:
 	if (nfailed > 0)
 		print_message("FAILED: CASE %d.%d: %s, %s(%s, "DF_X64
-			      "), %s(%s, "DF_X64"), %s TX [%d]\n", i, j,
+			      ") %s, %s(%s, "DF_X64"),%s TX [%d]\n", i, j,
 			      empty ? "empty" : "nonempty", r->o_name, rp, re,
-			      w->o_name, wp, we, same_tx ? "same" : "diff",
-			      mvcc_arg->i);
+			      mvcc_arg->delay_commit ? " delay commit" : "", w->o_name, wp, we,
+			      same_tx ? "same" : "diff", mvcc_arg->i);
 	return nfailed;
 }
 
@@ -1290,6 +1334,8 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
 
 	for (k = 0; k < ARRAY_SIZE(emptiness); k++) {
 		bool empty = emptiness[k];
+
+		mvcc_arg->delay_commit = false;
 
 		/* Read, then write. re > we. */
 		re = mvcc_arg->epoch + 10;
@@ -1328,6 +1374,22 @@ conflicting_rw_exec(struct io_test_args *arg, int i, struct op *r, struct op *w,
 		mvcc_arg->epoch += 100;
 
 		/* Read, then write. re < we. Shall write OK. */
+		re = mvcc_arg->epoch;
+		we = mvcc_arg->epoch + 10;
+		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
+						   re, w, wp, we,
+						   false /* same_tx */,
+						   skipped);
+		(*cases)++;
+		j++;
+		mvcc_arg->i++;
+		mvcc_arg->epoch += 100;
+
+		if (!is_rw(r))
+			continue;
+
+		/* Final case, do rw but with delayed commit */
+		mvcc_arg->delay_commit = true;
 		re = mvcc_arg->epoch;
 		we = mvcc_arg->epoch + 10;
 		nfailed += conflicting_rw_exec_one(arg, i, j, empty, r, rp,
@@ -1406,6 +1468,8 @@ uncertainty_check_exec_one(struct io_test_args *arg, int i, int j, bool empty,
 	print_message(DF_CASE"\n",
 		      DP_CASE(i, j, empty, w, wp, we, commit, a, ap, ae, bound,
 			      mvcc_arg->i));
+
+	mvcc_arg->delay_commit = false;
 
 	/* If requested, prepare the data that will be overwritten by w. */
 	if (!empty) {
