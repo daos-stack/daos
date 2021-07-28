@@ -103,9 +103,7 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Ctl__SetLogMasksResp	 resp;
 	uint8_t			*body;
 	size_t			 len;
-#ifndef DRPC_TEST
-	int			 rc;
-#endif
+	char			 retbuf[1024];
 
 	/* Unpack the inner request from the drpc call body */
 	req = ctl__set_log_masks_req__unpack(&alloc.alloc,
@@ -117,20 +115,14 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to set log masks to '%s'\n", req->masks);
-
 	/* Response status (rc) is populated with SUCCESS (0) on init */
 	ctl__set_log_masks_resp__init(&resp);
 
-#ifndef DRPC_TEST
 	/* This assumes req->masks is a null terminated string */
-	rc = d_log_setmasks(req->masks, -1);
-	if (rc != 0) {
-		D_ERROR("Failed to set log masks to %s: "DF_RC"\n",
-			req->masks, DP_RC(rc));
-		resp.status = rc;
-	}
-#endif
+	d_log_setmasks(req->masks, -1);
+	d_log_getmasks(retbuf, 0, sizeof(retbuf), 0);
+	D_INFO("Received request to set log masks '%s', masks are now %s\n",
+		req->masks, retbuf);
 
 	len = ctl__set_log_masks_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
