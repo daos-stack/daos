@@ -2,10 +2,17 @@ hosts:
   test_servers:
     - server-A
     - server-B
+    - server-C
+    - server-D
+    - server-E
   test_clients:
-    - client-C
-    - client-D
-timeout: 7200
+    - server-F
+    - server-G
+    - server-H
+timeout: 900
+setup:
+  start_agents_once: False
+  start_servers_once: False
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -17,7 +24,7 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
-      bdev_list: ["0000:81:00.0"]
+      bdev_list: ["aaaa:aa:aa.a"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
@@ -29,59 +36,48 @@ server_config:
       fabric_iface_port: 31417
       log_file: daos_server1.log
       bdev_class: nvme
-      bdev_list: ["0000:da:00.0"]
+      bdev_list: ["bbbb:bb:bb.b"]
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
       log_mask: ERR
-  transport_config:
-    allow_insecure: True
-agent_config:
-  transport_config:
-    allow_insecure: True
-dmg:
-  transport_config:
-    allow_insecure: True
 pool:
-    mode: 146
     name: daos_server
-    scm_size: 53687091200 #50GB
     control_method: dmg
+    scm_size: 25%
+    nvme_size: 93%
+    cell_size: !mux
+      cell_size_4K:
+        properties: ec_cell_sz:4KiB
+      cell_size_64K:
+        properties: ec_cell_sz:64KiB
+      cell_size_128K:
+        properties: ec_cell_sz:128KiB
+      cell_size_1M:
+        properties: ec_cell_sz:1MiB
 container:
     type: POSIX
     control_method: daos
-    properties: rf:1
 ior:
   api: "DFS"
   client_processes:
-    np: 16
+    np: 48
   dfs_destroy: False
   iorflags:
-      flags: "-w -F -r -R -k -G 1"
+      flags: "-w -W -r -R -G 1 -vv"
   test_file: /testFile
   repetitions: 1
-  transfersize_blocksize:
-    16M:
-      transfer_size: 16777216 #16M
+  transfersize_blocksize: !mux
+    1M_128M:
+      transfer_size: 8k
+      block_size: 64M
+    2M_128M:
+      transfer_size: 1M
+      block_size: 128M
   objectclass:
-    RP_2G1:
-      dfs_oclass: "RP_2G1"
-  objectdirclass:
-    RP_2G1:
-      dfs_dir_oclass: "RP_2G1"
-faulttests:
-  pool_capacity:
-    10_Percent:
-      percentage: 10
-  no_of_servers: !mux
-    single:
-      count: 1
-# Skipped because of DAOS-5281
-#    Two:
-#      count: 2
-  no_of_drives:
-    single:
-      count: 1
-  no_of_pools:
-    single:
-      count: 1
+      dfs_oclass:
+      - "EC_2P1GX"
+      - "EC_2P2GX"
+      - "EC_4P1GX"
+      - "EC_4P2GX"
+      - "EC_8P2GX"
