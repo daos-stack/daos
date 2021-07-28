@@ -914,10 +914,10 @@ dfs_cont_create_cpp(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_han
 }
 
 static inline int
-dfs_cont_create_cpp(daos_handle_t poh, uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
 		    dfs_t **dfs)
 {
-	return dfs_cont_create(poh, cuuid, attr, coh, dfs);
+	return dfs_cont_create1(poh, cuuid, attr, coh, dfs);
 };
 #else
 /**
