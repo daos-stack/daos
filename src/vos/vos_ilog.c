@@ -336,6 +336,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
+	bool			 has_cond;
 	int			 rc;
 
 	if (parent != NULL) {
@@ -349,18 +350,19 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	D_DEBUG(DB_TRACE, "Checking and updating incarnation log in range "
 		DF_X64"-"DF_X64"\n", max_epr.epr_lo, max_epr.epr_hi);
 
+	has_cond = cond == VOS_ILOG_COND_UPDATE || cond == VOS_ILOG_COND_INSERT;
+
 	/** Do a fetch first.  The log may already exist */
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 			    DAOS_INTENT_UPDATE, ilog, epr->epr_hi, bound,
 			    0, parent, info);
+	/** For now, if the state isn't settled, just retry with later timestamp. The state
+	 *  should get settled quickly due to commit on share
+	 */
+	if (has_cond && info->ii_uncommitted)
+		D_GOTO(done, rc = -DER_INPROGRESS);
 	if (rc == -DER_TX_RESTART)
 		goto done;
-	/** For now, if the state isn't settled, just retry with later
-	 *  timestamp.   The state should get settled quickly when there
-	 *  is conditional update and sharing.
-	 */
-	if (cond == VOS_ILOG_COND_UPDATE && info->ii_uncommitted != 0)
-		D_GOTO(done, rc = -DER_INPROGRESS);
 	if (rc == -DER_NONEXIST)
 		goto update;
 	if (rc != 0) {
@@ -378,13 +380,10 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 		return rc;
 	}
 update:
-	if (rc == -DER_NONEXIST && (cond == VOS_ILOG_COND_UPDATE || cond == VOS_ILOG_COND_INSERT)) {
+	if (has_cond && rc == -DER_NONEXIST) {
 		/* There is an uncertain create, so restart */
-		if (info->ii_uncertain_create)
+		if (info->ii_uncertain_create != 0)
 			D_GOTO(done, rc = -DER_TX_RESTART);
-		/* Don't know yet if this entry exists because we need to wait for resolution */
-		if (info->ii_uncommitted)
-			D_GOTO(done, rc = -DER_INPROGRESS);
 		if (cond == VOS_ILOG_COND_UPDATE)
 			D_GOTO(done, rc = -DER_NONEXIST);
 	}
