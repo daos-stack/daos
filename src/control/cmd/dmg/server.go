@@ -8,9 +8,11 @@ package main
 
 import (
 	"context"
+	"strings"
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
@@ -58,7 +60,13 @@ func (cmd *serverSetLogMasksCmd) Execute(_ []string) (errOut error) {
 		return cmd.outputJSON(resp, resp.Errors())
 	}
 
-	if resp.Errors() == nil {
+	var outErr strings.Builder
+	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
+		return err
+	}
+	if outErr.Len() > 0 {
+		cmd.log.Error(outErr.String())
+	} else {
 		cmd.log.Info("Engine log levels have been updated successfully.")
 	}
 
