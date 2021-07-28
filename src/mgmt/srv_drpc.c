@@ -103,7 +103,9 @@ ds_mgmt_drpc_set_log_masks(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	Ctl__SetLogMasksResp	 resp;
 	uint8_t			*body;
 	size_t			 len;
+#ifndef DRPC_TEST
 	int			 rc;
+#endif
 
 	/* Unpack the inner request from the drpc call body */
 	req = ctl__set_log_masks_req__unpack(&alloc.alloc,
