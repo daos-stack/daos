@@ -54,7 +54,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
     def test_telmetry_metrics(self):
         """JIRA ID: DAOS-5241
 
-            Create files of 500M and 1M with transfer size 1M to cerify the
+            Create files of 500M and 1M with transfer size 1M to verify the
             DAOS engine IO telemetry basic metrics infrastructure.
 
         :avocado: tags=all,pr,daily_regression
