@@ -472,8 +472,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Thu Jul 22 2021 Christopher Hoffman <christopherx.hoffman@intel.com> 1.3.103-5
-- Update conditional statement to include checking for rhel 8 and leap 15 to
+* Wed Jul 28 2021 Christopher Hoffman <christopherx.hoffman@intel.com> 1.3.103-6
+- Update conditional statement to include checking for distributions to
+  Cleaned up whitespace
   determine which unit files to use for daos-server and daos-agent
 
 * Wed Aug 04 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.104-3
