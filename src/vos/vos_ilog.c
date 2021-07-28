@@ -370,18 +370,23 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	rc = vos_ilog_update_check(info, &max_epr);
 	if (rc == 0) {
 		if (cond == VOS_ILOG_COND_INSERT)
-			return -DER_EXIST;
-		return rc;
+			D_GOTO(done, rc = -DER_EXIST);
+		goto done;
 	}
 	if (rc != -DER_NONEXIST) {
 		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 update:
-	if (rc == -DER_NONEXIST && cond == VOS_ILOG_COND_UPDATE) {
+	if (rc == -DER_NONEXIST && (cond == VOS_ILOG_COND_UPDATE || cond == VOS_ILOG_COND_INSERT)) {
+		/* There is an uncertain create, so restart */
 		if (info->ii_uncertain_create)
-			return -DER_TX_RESTART;
-		return -DER_NONEXIST;
+			D_GOTO(done, rc = -DER_TX_RESTART);
+		/* Don't know yet if this entry exists because we need to wait for resolution */
+		if (info->ii_uncommitted)
+			D_GOTO(done, rc = -DER_INPROGRESS);
+		if (cond == VOS_ILOG_COND_UPDATE)
+			D_GOTO(done, rc = -DER_NONEXIST);
 	}
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
