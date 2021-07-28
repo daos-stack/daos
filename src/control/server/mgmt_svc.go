@@ -31,6 +31,7 @@ type mgmtSvc struct {
 	clientNetworkHint *mgmtpb.ClientNetHint
 	joinReqs          joinReqChan
 	groupUpdateReqs   chan struct{}
+	lastMapVer        uint32
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {

@@ -322,6 +322,13 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 	if len(gm.RankURIs) == 0 {
 		return system.ErrEmptyGroupMap
 	}
+	if gm.Version == svc.lastMapVer {
+		svc.log.Debugf("skipping duplicate GroupUpdate @ %d", gm.Version)
+		return nil
+	}
+	if gm.Version < svc.lastMapVer {
+		return errors.Errorf("group map version %d is less than last map version %d", gm.Version, svc.lastMapVer)
+	}
 
 	req := &mgmtpb.GroupUpdateReq{
 		MapVersion: gm.Version,
@@ -344,6 +351,7 @@ func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
 		svc.log.Errorf("dRPC GroupUpdate call failed: %s", err)
 		return err
 	}
+	svc.lastMapVer = gm.Version
 
 	resp := new(mgmtpb.GroupUpdateResp)
 	if err = proto.Unmarshal(dResp.Body, resp); err != nil {

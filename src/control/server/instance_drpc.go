@@ -81,6 +81,7 @@ func (ei *EngineInstance) CallDrpc(ctx context.Context, method drpc.Method, body
 		ei.log.Debugf("dRPC to index %d%s: %s/%dB/%s", ei.Index(), rankMsg, method, proto.Size(body), time.Since(startedAt))
 	}()
 
+	ei.log.Debugf("making dRPC call: %s", method)
 	return makeDrpcCall(ctx, ei.log, dc, method, body)
 }
 
