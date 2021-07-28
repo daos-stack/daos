@@ -98,7 +98,7 @@ typedef enum _Uns__PropType {
   /*
    **
    * Layout type: unknown, POSIX, MPI-IO, HDF5, Apache Arrow, ...
-   * default value = DAOS_PROP_CO_LAYOUT_UNKOWN
+   * default value = DAOS_PROP_CO_LAYOUT_UNKNOWN
    */
   UNS__PROP_TYPE__DAOS_PROP_CO_LAYOUT_TYPE = 4098,
   /*

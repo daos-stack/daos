@@ -12,11 +12,11 @@ import time
 from nvme_utils import ServerFillUp
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
-from test_utils_pool import TestPool
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError
 from command_utils_base import CommandFailure
 from general_utils import DaosTestError
+
 
 def get_data_parity_number(log, oclass):
     """Return EC Object Data and Parity count.
@@ -219,11 +219,7 @@ class ErasureCodeSingle(TestWithServers):
                                          '/run/objectclass/*')
         self.singledata_set = self.params.get("single_data_set",
                                               '/run/container/*')
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        # Create a pool and connect
-        self.pool.create()
-        self.pool.connect()
+        self.add_pool()
         self.out_queue = queue.Queue()
 
     def ec_container_create(self, index, oclass):

@@ -77,7 +77,7 @@ again:
 		return 1;
 	}
 
-	if (rc == 0 && daos_anchor_is_eof(&dova->dkey_anchor))
+	if (rc == 0 && (daos_anchor_is_eof(&dova->dkey_anchor) || dova->num < 2))
 		dova->eof = 1;
 
 	return rc;
@@ -632,21 +632,185 @@ dc_obj_verify_cmp(struct dc_obj_verify_args *dova_a,
 	return 0;
 }
 
-int
-dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
-		  uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch)
+static int
+dc_obj_verify_ec_cb(struct dss_enum_unpack_io *io, void *arg)
+{
+	struct dc_obj_verify_args	*dova = arg;
+	struct dc_object		*obj = obj_hdl2ptr(dova->oh);
+	d_sg_list_t			sgls[DSS_ENUM_UNPACK_MAX_IODS];
+	d_iov_t				iovs[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	d_sg_list_t			sgls_verify[DSS_ENUM_UNPACK_MAX_IODS];
+	d_iov_t				iovs_verify[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	daos_iod_t			iods[DSS_ENUM_UNPACK_MAX_IODS] = { 0 };
+	tse_task_t			*task;
+	tse_task_t			*verify_task;
+	uint64_t			shard = dova->current_shard;
+	int				nr = io->ui_iods_top + 1;
+	int				i;
+	int				idx = 0;
+	int				rc;
+
+	D_DEBUG(DB_TRACE, "compare "DF_KEY" nr %d shard "DF_U64"\n", DP_KEY(&io->ui_dkey),
+		nr, shard);
+	if (nr == 0)
+		return 0;
+
+	for (i = 0; i < nr; i++) {
+		daos_size_t	size;
+		char		*data;
+		char		*data_verify;
+		daos_iod_t	*iod = &io->ui_iods[i];
+
+		/* skip punched iod */
+		if (iod->iod_size == 0)
+			continue;
+
+		size = daos_iods_len(iod, 1);
+		D_ASSERT(size != -1);
+		D_ALLOC(data, size);
+		if (data == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		d_iov_set(&iovs[idx], data, size);
+		sgls[idx].sg_nr = 1;
+		sgls[idx].sg_nr_out = 1;
+		sgls[idx].sg_iovs = &iovs[idx];
+
+		D_ALLOC(data_verify, size);
+		if (data_verify == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		d_iov_set(&iovs_verify[idx], data_verify, size);
+		sgls_verify[idx].sg_nr = 1;
+		sgls_verify[idx].sg_nr_out = 1;
+		sgls_verify[idx].sg_iovs = &iovs_verify[idx];
+		if (iod->iod_type == DAOS_IOD_ARRAY) {
+			rc = obj_recx_ec2_daos(obj_get_oca(obj),
+					       io->ui_oid.id_shard,
+					       &iod->iod_recxs, &iod->iod_nr);
+			if (rc != 0)
+				D_GOTO(out, rc);
+		}
+		iods[idx++] = *iod;
+	}
+
+	if (idx == 0) {
+		D_DEBUG(DB_TRACE, "all punched "DF_KEY" nr %d shard "DF_U64"\n",
+			DP_KEY(&io->ui_dkey), nr, shard);
+		return 0;
+	}
+
+	/* Fetch by specific shard */
+	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
+				      0, iods, sgls, NULL, &shard, NULL, NULL, NULL,
+				      &task);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = dc_task_schedule(task, true);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
+	rc = dc_obj_fetch_task_create(dova->oh, dova->th, 0, &io->ui_dkey, idx,
+				      0, iods, sgls_verify, NULL, &shard, NULL, NULL,
+				      NULL, &verify_task);
+	if (rc != 0)
+		D_GOTO(out, rc);
+
+	rc = dc_task_schedule(verify_task, true);
+	if (rc)
+		D_GOTO(out, rc);
+	daos_fail_loc_set(0);
+
+	for (i = 0; i < idx; i++) {
+		if (sgls[i].sg_iovs[0].iov_len != sgls_verify[i].sg_iovs[0].iov_len ||
+		    memcmp(sgls[i].sg_iovs[0].iov_buf, sgls_verify[i].sg_iovs[0].iov_buf,
+			   sgls[i].sg_iovs[0].iov_len)) {
+			D_ERROR(DF_OID" shard %u mismatch\n", DP_OID(obj->cob_md.omd_id),
+				dova->current_shard);
+			D_GOTO(out, rc = -DER_MISMATCH);
+		}
+		D_DEBUG(DB_TRACE, DF_OID" shard %u match\n", DP_OID(obj->cob_md.omd_id),
+			dova->current_shard);
+	}
+out:
+	for (i = 0; i < idx; i++) {
+		if (iovs[i].iov_buf)
+			D_FREE(iovs[i].iov_buf);
+
+		if (iovs_verify[i].iov_buf)
+			D_FREE(iovs_verify[i].iov_buf);
+	}
+
+	return rc;
+}
+
+static int
+dc_obj_verify_ec_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
+		     uint32_t rdg_idx, daos_handle_t th)
+{
+	struct daos_oclass_attr *oca;
+	uint32_t		start;
+	int			data_nr;
+	int			i;
+	int			rc = 0;
+
+	oca = obj_get_oca(obj);
+	D_ASSERT(oca->ca_resil == DAOS_RES_EC);
+	data_nr = obj_ec_data_tgt_nr(oca);
+	start = rdg_idx * obj_ec_tgt_nr(oca);
+	for (i = 0; i < data_nr; i++) {
+		struct dc_obj_verify_cursor	*cursor = &dova->cursor;
+		daos_unit_oid_t			oid;
+
+		memset(&dova->anchor, 0, sizeof(dova->anchor));
+		memset(&dova->dkey_anchor, 0, sizeof(dova->dkey_anchor));
+		memset(&dova->akey_anchor, 0, sizeof(dova->akey_anchor));
+		dc_obj_shard2anchor(&dova->dkey_anchor, start + i);
+		daos_anchor_set_flags(&dova->dkey_anchor, DIOF_TO_SPEC_SHARD |
+							  DIOF_WITH_SPEC_EPOCH);
+		dova->th = th;
+		dova->eof = 0;
+		dova->non_exist = 0;
+		dova->current_shard = i;
+		memset(cursor, 0, sizeof(*cursor));
+		cursor->iod.iod_nr = 1;
+		cursor->iod.iod_recxs = &cursor->recx;
+
+		oid.id_pub = obj->cob_md.omd_id;
+		oid.id_shard = start + i;
+		while (!dova->eof) {
+			rc = dc_obj_verify_list(dova);
+			if (rc < 0) {
+				D_ERROR("Failed to verify object list: "DF_RC"\n",
+					DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+
+			rc = dss_enum_unpack(oid, dova->kds, dova->num, &dova->list_sgl,
+					     NULL, dc_obj_verify_ec_cb, dova);
+			if (rc) {
+				D_ERROR("Failed to verify ec object: "DF_RC"\n",
+					DP_RC(rc));
+				D_GOTO(out, rc);
+			}
+		}
+	}
+
+out:
+	return rc;
+}
+
+/* verify the replication object */
+static int
+dc_obj_verify_rep_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
+		      uint32_t rdg_idx, uint32_t reps, daos_handle_t th)
 {
 	daos_obj_id_t	oid = obj->cob_md.omd_id;
-	daos_handle_t	th;
 	uint32_t	start = rdg_idx * reps;
 	int		rc = 0;
 	int		i;
-
-	rc = dc_tx_local_open(obj->cob_coh, epoch, 0, &th);
-	if (rc != 0) {
-		D_ERROR("dc_tx_local-open failed: "DF_RC"\n", DP_RC(rc));
-		return rc;
-	}
 
 	for (i = 0; i < reps; i++) {
 		struct dc_obj_verify_cursor	*cursor = &dova[i].cursor;
@@ -718,8 +882,28 @@ dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 			D_GOTO(out, rc = -DER_MISMATCH);
 		}
 	}
-
 out:
+	return rc;
+}
+
+int
+dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
+		  uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch)
+{
+	daos_handle_t	th;
+	int		rc;
+
+	rc = dc_tx_local_open(obj->cob_coh, epoch, 0, &th);
+	if (rc != 0) {
+		D_ERROR("dc_tx_local-open failed: "DF_RC"\n", DP_RC(rc));
+		return rc;
+	}
+
+	if (obj_is_ec(obj))
+		rc = dc_obj_verify_ec_rdg(obj, dova, rdg_idx, th);
+	else
+		rc = dc_obj_verify_rep_rdg(obj, dova, rdg_idx, reps, th);
+
 	dc_tx_local_close(th);
 
 	return rc > 0 ? 0 : rc;

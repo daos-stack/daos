@@ -9,6 +9,7 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
+#include "mercury_util.h"
 
 /*
  * na_dict table should be in the same order of enum crt_na_type, the last one
@@ -354,7 +355,7 @@ crt_provider_domain_get(int provider)
 	return prov_data->cpg_na_ofi_config.noc_domain;
 }
 
-static char*
+char *
 crt_provider_name_get(int provider)
 {
 	return crt_na_dict[provider].nad_str;
@@ -497,8 +498,9 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 int
 crt_hg_init(void)
 {
-	int	rc = 0;
-	char	*env;
+	const char	*log_subsys;
+	char		*log_level;
+	int		rc = 0;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -507,14 +509,17 @@ crt_hg_init(void)
 
 	#define EXT_FAC DD_FAC(external)
 
-	/* If mercury log level is not set, set it to warning by default */
-	env = getenv("HG_LOG_LEVEL");
-	if (!env)
-		HG_Set_log_level("warning");
+	log_subsys = getenv("HG_LOG_SUBSYS");
+	log_level = getenv("HG_LOG_LEVEL");
 
-	env = getenv("HG_NA_LOG_LEVEL");
-	if (!env)
-		NA_Set_log_level("warning");
+	if (!log_level)
+		log_level = "warning";
+
+	HG_Set_log_level(log_level);
+
+	/* set default subsystem with the provided log level */
+	if (!log_subsys)
+		HG_Util_set_log_level(log_level);
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
