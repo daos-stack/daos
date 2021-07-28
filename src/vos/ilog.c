@@ -443,7 +443,6 @@ ilog_log2cache(struct ilog_context *lctx, struct ilog_array_cache *cache)
 	}
 }
 
-
 int
 ilog_destroy(struct umem_instance *umm,
 	     struct ilog_desc_cbs *cbs, struct ilog_df *root)
@@ -675,7 +674,6 @@ reset_root(struct ilog_context *lctx, struct ilog_array_cache *cache, int i)
 	tmp.lr_magic = ilog_ver_inc(lctx);
 	if (cache->ac_nr >= 2)
 		tree = lctx->ic_root->lr_tree.it_root;
-
 
 	if (i != -1) {
 		tmp.lr_id.id_value = cache->ac_entries[i].id_value;
@@ -1163,7 +1161,8 @@ done:
 
 	return 0;
 }
-static int
+
+static void
 set_entry(struct ilog_entries *entries, int i, int status)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
@@ -1171,8 +1170,6 @@ set_entry(struct ilog_entries *entries, int i, int status)
 	D_ASSERT(i < NUM_EMBEDDED || i < priv->ip_alloc_size);
 	D_ASSERT(i == entries->ie_num_entries);
 	entries->ie_statuses[entries->ie_num_entries++] = status;
-
-	return 0;
 }
 
 int
@@ -1223,8 +1220,6 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 		if (status != -DER_INPROGRESS && status < 0)
 			D_GOTO(fail, rc = status);
 		set_entry(entries, i, status);
-		if (rc != 0)
-			goto fail;
 	}
 
 out:
