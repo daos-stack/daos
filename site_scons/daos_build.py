@@ -64,6 +64,10 @@ def add_build_rpath(env, pathin="."):
     path = Dir(pathin).path
     env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
     env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath-link=%s" % path, sep=" ")
+    # We actually run installed binaries from the build area to generate
+    # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
+    # the dependencies
+    env.AppendENVPath("LD_LIBRARY_PATH", path)
 
 def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
