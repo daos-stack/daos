@@ -635,7 +635,7 @@ def get_nvme_replacement(args):
     host_list = list(args.test_servers)
 
     command_list = [
-        "/sbin/lspci -D", 
+        "/sbin/lspci -D",
         "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
         "Non-Volatile memory controller:'"]
     if ":" in args.nvme:
@@ -702,8 +702,6 @@ def get_vmd_replacement(args):
         on all of the specified test servers
         bool: VMD PCI address included in the pci address string (True)
               VMD PCI address not included in the pci address string (False)
-           
-
     """
     # A list of server host is required to able to auto-detect NVMe devices
     if not args.test_servers:
