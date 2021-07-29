@@ -35,6 +35,17 @@ const (
 	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
 	psm2Example      = "../../../../utils/config/examples/daos_server_psm2.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
+	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
+)
+
+var (
+	defConfigCmpOpts = []cmp.Option{
+		cmpopts.IgnoreUnexported(
+			Server{},
+			security.CertificateConfig{},
+		),
+		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn", "Path"),
+	}
 )
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
@@ -177,14 +188,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(
-					Server{},
-					security.CertificateConfig{},
-				),
-				cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn"),
-			}
-			if diff := cmp.Diff(configA, configB, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(configA, configB, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
@@ -278,68 +282,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		)
 	constructed.Path = testFile // just to avoid failing the cmp
 
-	cmpOpts := []cmp.Option{
-		cmpopts.IgnoreUnexported(
-			Server{},
-			security.CertificateConfig{},
-		),
-		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn"),
-	}
-	if diff := cmp.Diff(defaultCfg, constructed, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(defaultCfg, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
 	}
-}
-
-func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
-	// open original file
-	f, err := os.Open(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-
-	// create temp file
-	tmp, err := ioutil.TempFile("", "replace-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tmp.Close()
-
-	// replace while copying from f to tmp
-	if err := replaceText(f, tmp, oldTxt, newTxt); err != nil {
-		t.Fatal(err)
-	}
-
-	// make sure the tmp file was successfully written to
-	if err := tmp.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// close the file we're reading from
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// overwrite the original file with the temp file
-	if err := os.Rename(tmp.Name(), name); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func replaceText(r io.Reader, w io.Writer, oldTxt, newTxt string) error {
-	// use scanner to read line by line
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
-		line := sc.Text()
-		if line == oldTxt {
-			line = newTxt
-		}
-		if _, err := io.WriteString(w, line+"\n"); err != nil {
-			return err
-		}
-	}
-
-	return sc.Err()
 }
 
 func TestServerConfig_Validation(t *testing.T) {
@@ -510,15 +455,118 @@ func TestServerConfig_Validation(t *testing.T) {
 	}
 }
 
+// replaceLine only matches when oldTxt is exactly the same as a file line.
+func replaceLine(r io.Reader, w io.Writer, oldTxt, newTxt string) (int, error) {
+	var changedLines int
+
+	// use scanner to read line by line
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		line := sc.Text()
+		if line == oldTxt {
+			line = newTxt
+			changedLines++
+		}
+		if _, err := io.WriteString(w, line+"\n"); err != nil {
+			return changedLines, err
+		}
+	}
+
+	return changedLines, sc.Err()
+}
+
+func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
+	// open original file
+	f, err := os.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	// create temp file
+	tmp, err := ioutil.TempFile("", "replace-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmp.Close()
+
+	// replace while copying from f to tmp
+	linesChanged, err := replaceLine(f, tmp, oldTxt, newTxt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linesChanged == 0 {
+		t.Fatalf("no recurrences of %q in file %q", oldTxt, name)
+	}
+
+	// make sure the tmp file was successfully written to
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// close the file we're reading from
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// overwrite the original file with the temp file
+	if err := os.Rename(tmp.Name(), name); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestServerConfig_Parsing(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
+
+	cfgFromFile := func(t *testing.T, testFile, matchText, replaceText string) (*Server, error) {
+		t.Helper()
+
+		if matchText != "" {
+			replaceFile(t, testFile, matchText, replaceText)
+		}
+
+		return mockConfigFromFile(t, testFile)
+	}
+
+	// load a config based on the server config with all options uncommented.
+	loadFromDefaultFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+		t.Helper()
+
+		defaultConfigFile := filepath.Join(testDir, sConfigUncomment)
+		uncommentServerConfig(t, defaultConfigFile)
+
+		return cfgFromFile(t, defaultConfigFile, matchText, replaceText)
+	}
+
+	// load a config file with a legacy storage config
+	loadFromLegacyFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+		t.Helper()
+
+		lcp := strings.Split(legacyConfig, "/")
+		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
+		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
+			return nil, err
+		}
+
+		return cfgFromFile(t, testLegacyConfigFile, matchText, replaceText)
+	}
+
+	loadFromFile := func(t *testing.T, testDir, matchText, replaceText string, legacy bool) (*Server, error) {
+		if legacy {
+			return loadFromLegacyFile(t, testDir, matchText, replaceText)
+		}
+
+		return loadFromDefaultFile(t, testDir, matchText, replaceText)
+	}
 
 	for name, tt := range map[string]struct {
 		inTxt          string
 		outTxt         string
+		legacyStorage  bool
 		extraConfig    func(c *Server) *Server
 		expParseErr    error
 		expValidateErr error
+		expCheck       func(c *Server) error
 	}{
 		"bad engine section": {
 			inTxt:       "engines:",
@@ -557,32 +605,79 @@ func TestServerConfig_Parsing(t *testing.T) {
 			},
 			expValidateErr: errors.New("bdev_list contains duplicate pci"),
 		},
+		"legacy storage; empty bdev_list": {
+			legacyStorage: true,
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 1 {
+					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+				}
+				return nil
+			},
+		},
+		"legacy storage; no bdev_list": {
+			legacyStorage: true,
+			inTxt:         "  bdev_list: []",
+			outTxt:        "",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 1 {
+					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+				}
+				return nil
+			},
+		},
+		"legacy storage; no bdev_class": {
+			legacyStorage: true,
+			inTxt:         "  bdev_class: nvme",
+			outTxt:        "",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 1 {
+					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+				}
+				return nil
+			},
+		},
+		"legacy storage; non-empty bdev_list": {
+			legacyStorage: true,
+			inTxt:         "  bdev_list: []",
+			outTxt:        "  bdev_list: [0000:80:00.0]",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 2 {
+					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+				}
+				return nil
+			},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
+
 			if tt.extraConfig == nil {
 				tt.extraConfig = noopExtra
 			}
 
-			testDir, cleanup := CreateTestDir(t)
-			defer cleanup()
-
-			// First, load a config based on the server config with all options uncommented.
-			testFile := filepath.Join(testDir, sConfigUncomment)
-			uncommentServerConfig(t, testFile)
-
-			replaceFile(t, testFile, tt.inTxt, tt.outTxt)
-
-			config, errParse := mockConfigFromFile(t, testFile)
+			config, errParse := loadFromFile(t, testDir, tt.inTxt, tt.outTxt, tt.legacyStorage)
 			CmpErr(t, tt.expParseErr, errParse)
 			if tt.expParseErr != nil {
 				return
 			}
 			config = tt.extraConfig(config)
+			log.Debugf("%+v", config)
 
 			CmpErr(t, tt.expValidateErr, config.Validate(log))
+
+			if tt.expCheck != nil {
+				if err := tt.expCheck(config); err != nil {
+					t.Fatal(err)
+				}
+			}
 		})
 	}
 }
