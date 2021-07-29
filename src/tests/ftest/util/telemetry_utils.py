@@ -450,7 +450,7 @@ class TelemetryUtils():
         return data
 
     def get_io_metrics(self, test_metrics=None):
-        """Get the container telemetry test metrics.
+        """Get the telemetry test io metrics.
 
         Returns:
             dict: dictionary of dictionaries of specified io metric names and
