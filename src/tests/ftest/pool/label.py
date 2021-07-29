@@ -113,7 +113,7 @@ class Label(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=small
-        :avocado: tags=pool,test_valid_labels
+        :avocado: tags=pool,create_valid_labels
         """
         self.pool = []
         errors = []
