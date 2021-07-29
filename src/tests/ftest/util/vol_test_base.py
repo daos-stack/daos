@@ -9,6 +9,7 @@ import os
 
 from dfuse_test_base import DfuseTestBase
 from command_utils_base import EnvironmentVariables, CommandFailure
+from command_utils import ExecutableCommand
 
 
 class VolTestBase(DfuseTestBase):
@@ -41,7 +42,9 @@ class VolTestBase(DfuseTestBase):
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
         # Assign the test to run
-        self.job_manager.job = os.path.join(test_repo, testname)
+        self.job_manager.job = ExecutableCommand(
+            namespace=None, command=testname, path=test_repo,
+            check_results=["FAILED"])
 
         env = EnvironmentVariables()
         env["DAOS_POOL"] = "{}".format(self.pool.uuid)
