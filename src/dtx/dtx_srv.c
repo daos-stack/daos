@@ -16,7 +16,7 @@
 #include <daos_srv/dtx_srv.h>
 #include "dtx_internal.h"
 
-#define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
+uint32_t dtx_yield_cycle;
 
 static void *
 dtx_tls_init(int xs_id, int tgt_id)
@@ -118,7 +118,7 @@ dtx_handler(crt_rpc_t *rpc)
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
 	int			*ptr;
-	int			 count = DTX_YIELD_CYCLE;
+	int			 count = dtx_yield_cycle;
 	int			 i = 0;
 	int			 rc1 = 0;
 	int			 rc;
@@ -134,10 +134,11 @@ dtx_handler(crt_rpc_t *rpc)
 
 	switch (opc) {
 	case DTX_COMMIT:
-		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
+		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT) ||
+		    unlikely(din->di_dtx_array.ca_count == 0))
 			break;
 
-		while (i < din->di_dtx_array.ca_count) {
+		while (1) {
 			if (i + count > din->di_dtx_array.ca_count)
 				count = din->di_dtx_array.ca_count - i;
 
@@ -147,6 +148,10 @@ dtx_handler(crt_rpc_t *rpc)
 				rc = rc1;
 
 			i += count;
+			if (i >= din->di_dtx_array.ca_count)
+				break;
+
+			ABT_thread_yield();
 		}
 		break;
 	case DTX_ABORT:
@@ -286,7 +291,23 @@ out:
 static int
 dtx_init(void)
 {
-	int	rc;
+	const char	*str;
+	int		 rc;
+
+	str = getenv("DTX_YIELD_CYCLE");
+	if (str != NULL) {
+		dtx_yield_cycle = atoi(str);
+		if (dtx_yield_cycle < DTX_YIELD_MIN ||
+		    dtx_yield_cycle > DTX_YIELD_MAX) {
+			D_WARN("Invalid DTX yield cycle %d, the valid range is "
+			       "[%d, %d], use the default value %d\n",
+			       dtx_yield_cycle, DTX_YIELD_MIN, DTX_YIELD_MAX,
+			       DTX_YIELD_DEF);
+			dtx_yield_cycle = DTX_YIELD_DEF;
+		}
+	} else {
+		dtx_yield_cycle = DTX_YIELD_DEF;
+	}
 
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
