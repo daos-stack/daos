@@ -30,6 +30,7 @@ struct crt_swim_membs {
 	struct crt_swim_target		*csm_target;
 	struct swim_context		*csm_ctx;
 	int				 csm_crt_ctx_idx;
+	uint64_t			 csm_incarnation;
 };
 
 static inline void
