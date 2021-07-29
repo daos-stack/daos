@@ -859,12 +859,9 @@ restart:
 		entry->atime = entry->mtime = entry->ctime = time(NULL);
 		entry->chunk_size = chunk_size;
 
-		if (!dfs->use_dtx || oexcl)
-			printf("using COND insert to create file %s\n", file->name);
 		rc = insert_entry(parent->oh, th, file->name, len,
 				  (!dfs->use_dtx || oexcl) ?
 				  DAOS_COND_DKEY_INSERT : 0, entry);
-		printf("insert %s rc = %d\n", file->name, rc);
 		if (rc == EEXIST && !oexcl) {
 			/** just try refetching entry to open the file */
 			daos_array_close(file->oh, NULL);

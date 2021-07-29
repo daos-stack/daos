@@ -32,7 +32,6 @@ server_config:
     control_log_file: daos_control0.log
     servers:
         0:
-            targets: 4
             pinned_numa_node: 0
             nr_xs_helpers: 1
             fabric_iface: ib0
@@ -47,7 +46,6 @@ server_config:
             env_vars:
                 - FI_UNIVERSE_SIZE=2048
         1:
-            targets: 4
             pinned_numa_node: 1
             nr_xs_helpers: 1
             fabric_iface: ib1
@@ -218,9 +216,9 @@ mdtest_harasser:
     dfs_oclass:
         - "EC_2P1GX"
 #        - "EC_4P1G1"
-#        - "EC_4P2GX"
+#        - "EC_4P2G1"
 #        - "EC_8P2G1"
-#        - "EC_16P2GX"
+#        - "EC_16P2G1"
     dfs_destroy: False
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"

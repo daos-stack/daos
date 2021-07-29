@@ -112,6 +112,42 @@ get_module_info(void)
 	return dss_get_module_info();
 }
 
+/* See the comment near where this function is called. */
+static uint64_t
+hlc_recovery_begin(void)
+{
+	return crt_hlc_epsilon_get_bound(crt_hlc_get());
+}
+
+/* See the comment near where this function is called. */
+static void
+hlc_recovery_end(uint64_t bound)
+{
+	int64_t	diff;
+
+	diff = bound - crt_hlc_get();
+	if (diff > 0) {
+		struct timespec	tv;
+
+		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
+		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
+
+		/* XXX: If the server restart so quickly as to all related
+		 *	things are handled within HLC epsilon, then it is
+		 *	possible that current local HLC after restart may
+		 *	be older than some HLC that was generated before
+		 *	server restart because of the clock drift between
+		 *	servers. So here, we control the server (re)start
+		 *	process to guarantee that the restart time window
+		 *	will be longer than the HLC epsilon, then new HLC
+		 *	generated after server restart will not rollback.
+		 */
+		D_INFO("nanosleep %lu:%lu before open external service.\n",
+		       tv.tv_sec, tv.tv_nsec);
+		nanosleep(&tv, NULL);
+	}
+}
+
 /*
  * Register the dbtree classes used by native server-side modules (e.g.,
  * ds_pool, ds_cont, etc.). Unregistering is currently not supported.
@@ -467,7 +503,7 @@ abt_fini(void)
 }
 
 static void
-dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
 	int			 rc = 0;
@@ -540,12 +576,15 @@ static int
 server_init(int argc, char *argv[])
 {
 	uint64_t		 bound;
-	int64_t			 diff;
 	unsigned int		 ctx_nr;
 	int			 rc;
 	struct engine_metrics	*metrics;
 
-	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
+	/*
+	 * Begin the HLC recovery as early as possible. Do not read the HLC
+	 * before the hlc_recovery_end call below.
+	 */
+	bound = hlc_recovery_begin();
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
@@ -592,7 +631,6 @@ server_init(int argc, char *argv[])
 	rc = dss_module_init();
 	if (rc)
 		goto exit_abt_init;
-
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
@@ -640,6 +678,14 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Module %s successfully loaded\n", modules);
 
+	/*
+	 * End the HLC recovery so that module init callbacks (e.g.,
+	 * vos_mod_init) invoked by the dss_module_init_all call below can read
+	 * the HLC.
+	 */
+	hlc_recovery_end(bound);
+	dss_set_start_epoch();
+
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
@@ -656,7 +702,6 @@ server_init(int argc, char *argv[])
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
-
 	D_INFO("Service initialized\n");
 
 	rc = server_init_state_init();
@@ -673,30 +718,6 @@ server_init(int argc, char *argv[])
 	}
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
-
-	diff = bound - crt_hlc_get();
-	if (diff > 0) {
-		struct timespec		tv;
-
-		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
-		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
-
-		/* XXX: If the server restart so quickly as to all related
-		 *	things are handled within HLC epsilon, then it is
-		 *	possible that current local HLC after restart may
-		 *	be older than some HLC that was generated before
-		 *	server restart because of the clock drift between
-		 *	servers. So here, we control the server (re)start
-		 *	process to guarantee that the restart time window
-		 *	will be longer than the HLC epsilon, then new HLC
-		 *	generated after server restart will not rollback.
-		 */
-		D_INFO("nanosleep %lu:%lu before open external service.\n",
-		       tv.tv_sec, tv.tv_nsec);
-		nanosleep(&tv, NULL);
-	}
-
-	dss_set_start_epoch();
 
 	rc = dss_module_setup_all();
 	if (rc != 0)

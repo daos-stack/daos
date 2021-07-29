@@ -24,7 +24,9 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	(11)
+#define OBJ_TGT_INLINE_NR	11
+#define OBJ_INLINE_BTIMAP	4
+
 struct obj_req_tgts {
 	/* to save memory allocation if #targets <= OBJ_TGT_INLINE_NR */
 	struct daos_shard_tgt	 ort_tgts_inline[OBJ_TGT_INLINE_NR];
@@ -82,6 +84,7 @@ struct obj_auxi_args {
 					 is_ec_obj:1,
 					 csum_retry:1,
 					 csum_report:1,
+					 tx_uncertain:1,
 					 no_retry:1,
 					 ec_wait_recov:1,
 					 ec_in_recov:1,
@@ -90,6 +93,8 @@ struct obj_auxi_args {
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
+	/* 64-bits alignment, bitmap for retry next replicas. */
+	uint8_t				 retry_bitmap[OBJ_INLINE_BTIMAP];
 	struct obj_req_tgts		 req_tgts;
 	crt_bulk_t			*bulks;
 	uint32_t			 iod_nr;
@@ -313,14 +318,14 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	}
 
 	map = pl_map_find(pool->dp_pool, obj->cob_md.omd_id);
-	dc_pool_put(pool);
-
 	if (map == NULL) {
 		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
+		dc_pool_put(pool);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
+	dc_pool_put(pool);
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
@@ -882,15 +887,19 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 	bool			 ec_degrade = false;
 	uint32_t		 ec_deg_tgt = 0, start_shard;
 	bool			 csum_err = false;
+	bool			 tx_uncertain = false;
 	int			 rc;
 
 	shard_tgt->st_ec_tgt = ec_tgt_idx;
 	start_shard = shard - ec_tgt_idx;
 
 	if (obj_auxi->is_ec_obj &&
-	    (obj_auxi->csum_retry ||
+	    (obj_auxi->csum_retry || obj_auxi->tx_uncertain ||
 	     DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))) {
-		if (obj_auxi->csum_retry) {
+		if (obj_auxi->tx_uncertain) {
+			tx_uncertain = true;
+			obj_auxi->tx_uncertain = 0;
+		} else if (obj_auxi->csum_retry) {
 			csum_err = true;
 			obj_auxi->csum_retry = 0;
 		}
@@ -938,7 +947,11 @@ ec_deg_get:
 			if (csum_err) {
 				obj_auxi->no_retry = 1;
 				rc = -DER_CSUM;
+			} else if (tx_uncertain) {
+				obj_auxi->no_retry = 1;
+				rc = -DER_TX_UNCERTAIN;
 			}
+
 			D_ERROR(DF_OID" obj_ec_get_degrade failed, rc "
 				DF_RC"\n", DP_OID(obj->cob_md.omd_id),
 				DP_RC(rc));
@@ -1168,66 +1181,70 @@ obj_ptr2pm_ver(struct dc_object *obj, unsigned int *map_ver)
 	return 0;
 }
 
+struct obj_pool_query_arg {
+	struct dc_pool		*oqa_pool;
+	struct dc_object	*oqa_obj;
+};
+
 static int
 obj_pool_query_cb(tse_task_t *task, void *data)
 {
-	struct dc_object	*obj = *((struct dc_object **)data);
-	daos_pool_query_t	*args;
-
-	args = dc_task_get_args(task);
+	struct obj_pool_query_arg *arg = data;
 
 	if (task->dt_result != 0) {
 		D_DEBUG(DB_IO, "obj_pool_query_cb task=%p result=%d\n",
 			task, task->dt_result);
 	} else {
-		D_ASSERT(args->info != NULL);
-		if (obj->cob_version < args->info->pi_map_ver)
-			obj_layout_refresh(obj);
+		if (arg->oqa_obj->cob_version <
+		    dc_pool_get_version(arg->oqa_pool))
+			obj_layout_refresh(arg->oqa_obj);
 	}
-	obj_decref(obj);
 
-	D_FREE(args->info);
+	obj_decref(arg->oqa_obj);
+	dc_pool_put(arg->oqa_pool);
 	return 0;
 }
 
 int
 obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
-		    tse_task_t **taskp)
+		    unsigned int map_ver, tse_task_t **taskp)
 {
-	tse_task_t		*task;
-	daos_pool_query_t	*args;
-	daos_handle_t		 ph;
-	int			 rc = 0;
+	tse_task_t		       *task;
+	daos_handle_t			ph;
+	struct dc_pool		       *pool;
+	struct obj_pool_query_arg	arg;
+	int				rc = 0;
 
 	rc = obj_ptr2poh(obj, &ph);
 	if (rc != 0)
 		return rc;
 
-	rc = dc_task_create(dc_pool_query, sched, NULL, &task);
-	if (rc != 0)
-		return rc;
+	pool = dc_hdl2pool(ph);
+	if (pool == NULL)
+		return -DER_NO_HDL;
 
-	args = dc_task_get_args(task);
-	args->poh = ph;
-	D_ALLOC_PTR(args->info);
-	if (args->info == NULL)
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	obj_addref(obj);
-	rc = dc_task_reg_comp_cb(task, obj_pool_query_cb, &obj, sizeof(obj));
+	rc = dc_pool_create_map_refresh_task(pool, map_ver, sched, &task);
 	if (rc != 0) {
-		obj_decref(obj);
-		D_GOTO(err, rc);
+		dc_pool_put(pool);
+		return rc;
+	}
+
+	arg.oqa_pool = pool;
+	pool = NULL;
+	obj_addref(obj);
+	arg.oqa_obj = obj;
+
+	rc = tse_task_register_comp_cb(task, obj_pool_query_cb, &arg,
+				       sizeof(arg));
+	if (rc != 0) {
+		obj_decref(arg.oqa_obj);
+		dc_pool_put(arg.oqa_pool);
+		dc_pool_abandon_map_refresh_task(task);
+		return rc;
 	}
 
 	*taskp = task;
 	return 0;
-err:
-	dc_task_decref(task);
-	if (args->info)
-		D_FREE(args->info);
-
-	return rc;
 }
 
 int
@@ -1533,7 +1550,8 @@ dc_obj_layout_refresh(daos_handle_t oh)
 
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
-	     struct obj_auxi_args *obj_auxi, bool pmap_stale)
+	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
+	     unsigned int srv_pmap_ver)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
@@ -1542,7 +1560,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	bool		  keep_result = false;
 
 	if (pmap_stale) {
-		rc = obj_pool_query_task(sched, obj, &pool_task);
+		rc = obj_pool_query_task(sched, obj, srv_pmap_ver, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}
@@ -1574,7 +1592,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 
 	if (pool_task != NULL)
 		/* ignore returned value, error is reported by comp_cb */
-		dc_task_schedule(pool_task, obj_auxi->io_retry);
+		tse_task_schedule(pool_task, obj_auxi->io_retry);
 
 	if (keep_result)
 		task->dt_result = result;
@@ -1585,7 +1603,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	return 0;
 err:
 	if (pool_task)
-		dc_task_decref(pool_task);
+		dc_pool_abandon_map_refresh_task(pool_task);
 
 	task->dt_result = result; /* restore the original error */
 	obj_auxi->io_retry = 0;
@@ -3678,6 +3696,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 	obj_auxi = tse_task_stack_pop(task, sizeof(*obj_auxi));
 	obj_auxi->io_retry = 0;
 	obj_auxi->result = 0;
+	obj_auxi->csum_retry = 0;
+	obj_auxi->tx_uncertain = 0;
 	obj = obj_auxi->obj;
 	rc = obj_comp_cb_internal(obj_auxi);
 	if (rc != 0 || obj_auxi->result) {
@@ -3725,11 +3745,15 @@ obj_comp_cb(tse_task_t *task, void *data)
 		     task->dt_result != -DER_TX_BUSY))
 			obj_auxi->io_retry = 1;
 
-		if (task->dt_result == -DER_CSUM) {
+		if (task->dt_result == -DER_CSUM ||
+		    task->dt_result == -DER_TX_UNCERTAIN) {
 			if (!obj_auxi->spec_shard && !obj_auxi->spec_group &&
 			    !obj_auxi->no_retry && !obj_auxi->ec_wait_recov &&
-			     obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
-				obj_auxi->csum_retry = 1;
+			    obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+				if (task->dt_result == -DER_CSUM)
+					obj_auxi->csum_retry = 1;
+				else
+					obj_auxi->tx_uncertain = 1;
 			} else {
 				/* not retrying updates yet */
 				obj_auxi->io_retry = 0;
@@ -3748,6 +3772,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_auxi->ec_in_recov = 0;
 		obj_auxi->reasb_req.orr_recov = 0;
 		obj_auxi->reasb_req.orr_recov_snap = 0;
+		obj_auxi->reasb_req.orr_iom_tgt_nr = 0;
 		obj_ec_fail_info_free(&obj_auxi->reasb_req);
 		D_DEBUG(DB_IO, DF_OID" EC fetch again.\n",
 			DP_OID(obj->cob_md.omd_id));
@@ -3762,7 +3787,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_auxi->io_retry = 0;
 
 	if (!obj_auxi->no_retry && (pm_stale || obj_auxi->io_retry))
-		obj_retry_cb(task, obj, obj_auxi, pm_stale);
+		obj_retry_cb(task, obj, obj_auxi, pm_stale,
+			     obj_auxi->map_ver_reply);
 
 	if (!obj_auxi->io_retry) {
 		struct obj_ec_fail_info	*fail_info;
@@ -4180,32 +4206,41 @@ obj_csum_fetch(const struct dc_object *obj, daos_obj_fetch_t *args,
 /* Selects next replica in the object's layout.
  */
 static int
-obj_retry_csum_err(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
-		     uint64_t dkey_hash, unsigned int map_ver, uint8_t *bitmap)
+obj_retry_next_shard(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
+		     uint64_t dkey_hash, unsigned int map_ver)
 {
-	D_WARN("Retrying replica because of checksum error.\n");
-	unsigned int		 next_shard, retry_size, shard_cnt, shard_idx;
+	unsigned int		 next_shard, retry_size, shard_cnt, start_shard;
 	int			 rc = 0;
 
+	D_WARN("Retrying replica because of %s error.\n",
+	       obj_auxi->csum_retry ? "csum" : "tx_uncertain");
+
 	rc = obj_dkey2grpmemb(obj, dkey_hash, map_ver,
-			      &shard_idx, &shard_cnt);
+			      &start_shard, &shard_cnt);
 	if (rc != 0)
-		goto out;
+		return rc;
 
-	/* bitmap has only 8 bits, so retry to the first eight replicas */
-	retry_size = shard_cnt <= 8 ? shard_cnt : 8;
+	/* bitmap in obj_auxi_args has only 4 bytes, then let's only retry
+	 * the first 32 replicas, that should be enough for most of cases.
+	 */
+
+	retry_size = shard_cnt <= OBJ_INLINE_BTIMAP * 8 ?
+		     shard_cnt : OBJ_INLINE_BTIMAP * 8;
 	next_shard = (obj_auxi->req_tgts.ort_shard_tgts[0].st_shard + 1) %
-		retry_size + shard_idx;
+		     retry_size + start_shard;
 
-	/* all replicas have csum error for this fetch request */
 	if (next_shard == obj_auxi->initial_shard) {
 		obj_auxi->no_retry = 1;
-		rc = -DER_CSUM;
-		goto out;
+		if (obj_auxi->csum_retry)
+			return -DER_CSUM;
+
+		return -DER_TX_UNCERTAIN;
 	}
-	setbit(bitmap, next_shard - shard_idx);
-out:
-	return rc;
+
+	memset(obj_auxi->retry_bitmap, 0, OBJ_INLINE_BTIMAP);
+	setbit(obj_auxi->retry_bitmap, next_shard - start_shard);
+
+	return 0;
 }
 
 int
@@ -4220,7 +4255,6 @@ dc_obj_fetch_task(tse_task_t *task)
 	struct dtx_epoch	 epoch;
 	uint32_t		 shard = 0;
 	int			 rc;
-	uint8_t                  csum_bitmap = 0;
 
 	rc = obj_req_valid(task, args, DAOS_OBJ_RPC_FETCH, &epoch, &map_ver,
 			   &obj);
@@ -4287,12 +4321,13 @@ dc_obj_fetch_task(tse_task_t *task)
 		obj_auxi->to_leader = (args->extra_flags & DIOF_TO_LEADER) != 0;
 	}
 
-	if (obj_auxi->csum_retry && !obj_auxi->is_ec_obj) {
-		rc = obj_retry_csum_err(obj, obj_auxi, dkey_hash, map_ver,
-					&csum_bitmap);
+	if ((obj_auxi->csum_retry || obj_auxi->tx_uncertain) &&
+	    !obj_auxi->is_ec_obj) {
+		rc = obj_retry_next_shard(obj, obj_auxi, dkey_hash, map_ver);
 		if (rc)
 			goto out_task;
-		tgt_bitmap = &csum_bitmap;
+
+		tgt_bitmap = obj_auxi->retry_bitmap;
 	} else {
 		if (obj_auxi->is_ec_obj)
 			tgt_bitmap = obj_auxi->reasb_req.tgt_bitmap;

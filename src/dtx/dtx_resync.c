@@ -458,6 +458,10 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
 		return 0;
 
+	/* Skip orphan entry that will be handled via other special tool. */
+	if (ent->ie_dtx_flags & DTE_ORPHAN)
+		return 0;
+
 	if (dra->resync_all) {
 		/* For open container. */
 		if (ent->ie_dtx_flags & DTE_LEADER) {
