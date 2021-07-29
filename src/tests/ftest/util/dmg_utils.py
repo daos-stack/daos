@@ -9,7 +9,6 @@
 from grp import getgrgid
 from pwd import getpwuid
 import re
-import json
 
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
@@ -77,19 +76,6 @@ class DmgCommand(DmgCommandBase):
             r"[-]+\s+([a-z0-9-]+)\s+[-]+\s+|Devices\s+|(?:UUID:[a-z0-9-]+\s+"
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
-
-    def _get_json_result(self, sub_command_list=None, **kwargs):
-        """Wrap the base _get_result method to force JSON output."""
-        prev_json_val = self.json.value
-        self.json.update(True)
-        prev_output_check = self.output_check
-        self.output_check = "both"
-        try:
-            self._get_result(sub_command_list, **kwargs)
-        finally:
-            self.json.update(prev_json_val)
-            self.output_check = prev_output_check
-        return json.loads(self.result.stdout)
 
     def network_scan(self, provider=None):
         """Get the result of the dmg network scan command.
@@ -383,7 +369,7 @@ class DmgCommand(DmgCommandBase):
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
-                    scm_ratio=None):
+                    tier_ratio=None, properties=None, label=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -400,10 +386,13 @@ class DmgCommand(DmgCommandBase):
             svcn (str, optional): Number of pool service replicas. Defaults to
                 None, in which case the default value is set by the server.
             acl_file (str, optional): ACL file. Defaults to None.
-            size (str, optional): NVMe pool size to create with scm_ratio.
+            size (str, optional): NVMe pool size to create with tier_ratio.
                 Defaults to None.
-            scm_ratio (str, optional): SCM pool size to create as a ratio of
+            tier_ratio (str, optional): SCM pool size to create as a ratio of
                 size. Defaults to None.
+            properties (str, optional): Comma separated name:value string
+                Defaults to None
+            label (str, optional): Pool label. Defaults to None.
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -418,11 +407,13 @@ class DmgCommand(DmgCommandBase):
             "user": getpwuid(uid).pw_name if isinstance(uid, int) else uid,
             "group": getgrgid(gid).gr_name if isinstance(gid, int) else gid,
             "size": size,
-            "scm_ratio": scm_ratio,
+            "tier_ratio": tier_ratio,
             "scm_size": scm_size,
             "nvme_size": nvme_size,
             "nsvc": svcn,
-            "acl_file": acl_file
+            "acl_file": acl_file,
+            "properties": properties,
+            "label": label
         }
         if target_list is not None:
             kwargs["ranks"] = ",".join([str(target) for target in target_list])
@@ -453,8 +444,8 @@ class DmgCommand(DmgCommandBase):
             [str(svc) for svc in output["response"]["svc_reps"]])
         data["ranks"] = ",".join(
             [str(r) for r in output["response"]["tgt_ranks"]])
-        data["scm_per_rank"] = output["response"]["scm_bytes"]
-        data["nvme_per_rank"] = output["response"]["nvme_bytes"]
+        data["scm_per_rank"] = output["response"]["tier_bytes"][0]
+        data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
 
         return data
 

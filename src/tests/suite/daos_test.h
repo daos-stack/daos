@@ -333,7 +333,7 @@ enum {
 };
 
 int run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size);
-int run_daos_pool_test(int rank, int size);
+int run_daos_pool_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size, int *tests, int test_size);
@@ -420,7 +420,7 @@ get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid, uint32_t shard);
 void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
-		      char *verify_data);
+		      char *verify_data, daos_handle_t th);
 
 int run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		       int tests_size, int *sub_tests, int sub_tests_size,
@@ -437,6 +437,7 @@ void dfs_ec_rebuild_io(void **state, int *shards, int shards_nr);
 void rebuild_single_pool_target(test_arg_t *arg, d_rank_t failed_rank,
 				int failed_tgt, bool kill);
 void rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill);
+void reintegrate_single_pool_rank_no_disconnect(test_arg_t *arg, d_rank_t failed_rank);
 void rebuild_pools_ranks(test_arg_t **args, int args_cnt,
 		d_rank_t *failed_ranks, int ranks_nr, bool kill);
 
@@ -477,8 +478,11 @@ int wait_and_verify_blobstore_state(uuid_t bs_uuid, char *expected_state,
 int wait_and_verify_pool_tgt_state(daos_handle_t poh, int tgtidx, int rank,
 				   char *expected_state);
 void save_group_state(void **state);
+
 void trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
-				    int oids_nr, uint64_t fail_loc);
+				    int oids_nr, char *dkey, char *akey,
+				    daos_off_t start, daos_size_t size,
+				    uint64_t fail_loc);
 
 enum op_type {
 	PARTIAL_UPDATE	=	1,

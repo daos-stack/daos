@@ -5,6 +5,12 @@ hosts:
         - server-B
         - server-C
         - server-D
+        - server-E
+        - server-F
+        - server-G
+        - server-H
+        - server-I
+        - server-J
 # servers if a server partition is defined
     # server_partition: daos_server
     client_partition: daos_client
@@ -18,57 +24,66 @@ setup:
     start_servers: True
     start_agents: True
 server_config:
+    engines_per_host: 2
     name: daos_server
     provider: ofi+verbs;ofi_rxm
     nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
     servers:
-        log_mask: ERR
-        fabric_iface: ib0
-        fabric_iface_port: 31416
-        log_mask: ERR
-        log_file: daos_io0.log
-        # Storage definitions for AEP and NVMe
-        scm_mount: /mnt/daos0
-        scm_class: dcpm
-        scm_list: [/dev/pmem0]
-        bdev_class: nvme
-        bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
-    transport_config:
-      allow_insecure: True
-agent_config:
-    transport_config:
-      allow_insecure: True
-dmg:
-    transport_config:
-      allow_insecure: True
+        0:
+            pinned_numa_node: 0
+            nr_xs_helpers: 1
+            fabric_iface: ib0
+            fabric_iface_port: 31317
+            log_file: daos_server0.log
+            bdev_class: nvme
+            bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+            scm_class: dcpm
+            scm_list: ["/dev/pmem0"]
+            scm_mount: /mnt/daos0
+            log_mask: ERR
+            env_vars:
+                - FI_UNIVERSE_SIZE=2048
+        1:
+            pinned_numa_node: 1
+            nr_xs_helpers: 1
+            fabric_iface: ib1
+            fabric_iface_port: 31417
+            log_file: daos_server1.log
+            bdev_class: nvme
+            bdev_list: ["cccc:cc:cc.c","dddd:dd:dd.d"]
+            scm_class: dcpm
+            scm_list: ["/dev/pmem1"]
+            scm_mount: /mnt/daos1
+            log_mask: ERR
+            env_vars:
+                - FI_UNIVERSE_SIZE=2048
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-    mode: 146
     name: daos_server
-    scm_size: 160GB
-    nvme_size: 800GB
-    svcn: 1
+    scm_size: 200GB
+    nvme_size: 1TB
+    properties: reclaim:time,ec_cell_sz:64KiB
     control_method: dmg
     rebuild_timeout: 240
     pool_query_timeout: 120
 pool_reserved:
-    mode: 511
     name: daos_server
     scm_size: 3GB
     nvme_size: 50GB
     control_method: dmg
+    rebuild_timeout: 240
+    pool_query_timeout: 120
 container:
     type: POSIX
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
-    oclass: RP_2G1
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
     daos_timeout: 30
 container_reserved:
     type: POSIX
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
-    oclass: RP_2G1
+    oclass: EC_2P1GX
     control_method: daos
     daos_timeout: 30
 # test_params - Defines the type of test to run and how long it runs
@@ -134,9 +149,11 @@ ior_harasser:
         - '1m'
     segment_count: 1
     dfs_oclass:
-        - 'RP_2G1'
-    dfs_dir_oclass:
-        - 'RP_2G1'
+        - "EC_2P1GX"
+#        - "EC_4P1G1"
+#        - "EC_4P2GX"
+#        - "EC_8P2G1"
+#        - "EC_16P2GX"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/ior"
         disable_caching: True
@@ -163,7 +180,11 @@ fio_harasser:
         - 'rw'
         - 'randrw'
     oclass:
-        - 'RP_2G1'
+        - "EC_2P1GX"
+        # - "EC_4P1G1"
+        # - "EC_4P2GX"
+        # - "EC_8P2G1"
+        # - "EC_16P2GX"
   dfuse:
     mount_dir: "/tmp/daos_dfuse/fio/"
     disable_wb_caching: True
@@ -192,8 +213,12 @@ mdtest_harasser:
     depth:
         - 10
         - 0
-    dfs_oclass: 'RP_2G1'
-    dfs_dir_oclass: 'RP_2G1'
+    dfs_oclass:
+        - "EC_2P1GX"
+#        - "EC_4P1G1"
+#        - "EC_4P2G1"
+#        - "EC_8P2G1"
+#        - "EC_16P2G1"
     dfs_destroy: False
     dfuse:
         mount_dir: "/tmp/daos_dfuse/mdtest/"

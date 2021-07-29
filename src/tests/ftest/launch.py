@@ -237,18 +237,8 @@ def set_python_environment():
         os.path.abspath("util"),
         os.path.abspath("cart/util"),
     ]
-    site_packages = site.getsitepackages()
 
-    # Including paths for pydaos shim - should be removed when shim is removed
-    additional_site_packages = []
-    for site_package in site_packages:
-        if "/lib64/python3." in site_package:
-            additional_site_packages.append(
-                re.sub(r"python[0-9.]+", "python3", site_package))
-    site_packages.extend(additional_site_packages)
-    # end of shim work around
-
-    required_python_paths.extend(site_packages)
+    required_python_paths.extend(site.getsitepackages())
 
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")

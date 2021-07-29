@@ -32,12 +32,13 @@ import (
 type MetricType int
 
 const (
-	MetricTypeUnknown   MetricType = 0
-	MetricTypeCounter   MetricType = C.D_TM_COUNTER
-	MetricTypeDuration  MetricType = C.D_TM_DURATION
-	MetricTypeGauge     MetricType = C.D_TM_GAUGE
-	MetricTypeSnapshot  MetricType = C.D_TM_TIMER_SNAPSHOT
-	MetricTypeTimestamp MetricType = C.D_TM_TIMESTAMP
+	MetricTypeUnknown    MetricType = 0
+	MetricTypeCounter    MetricType = C.D_TM_COUNTER
+	MetricTypeDuration   MetricType = C.D_TM_DURATION
+	MetricTypeGauge      MetricType = C.D_TM_GAUGE
+	MetricTypeStatsGauge MetricType = C.D_TM_STATS_GAUGE
+	MetricTypeSnapshot   MetricType = C.D_TM_TIMER_SNAPSHOT
+	MetricTypeTimestamp  MetricType = C.D_TM_TIMESTAMP
 
 	BadUintVal  = ^uint64(0)
 	BadFloatVal = float64(BadUintVal)
@@ -49,6 +50,7 @@ type (
 	Metric interface {
 		Path() string
 		Name() string
+		FullPath() string
 		Type() MetricType
 		Desc() string
 		Units() string
@@ -123,6 +125,17 @@ func findNode(hdl *handle, name string) (*C.struct_d_tm_node_t, error) {
 	return node, nil
 }
 
+func splitFullName(fullName string) (string, string) {
+	tokens := strings.Split(fullName, "/")
+	if len(tokens) == 1 {
+		return "", tokens[0]
+	}
+
+	name := tokens[len(tokens)-1]
+	path := strings.Join(tokens[:len(tokens)-1], "/")
+	return name, path
+}
+
 func (mb *metricBase) Type() MetricType {
 	return MetricTypeUnknown
 }
@@ -145,6 +158,14 @@ func (mb *metricBase) Name() string {
 	}
 
 	return *mb.name
+}
+
+func (mb *metricBase) FullPath() string {
+	if mb == nil || mb.handle == nil || mb.node == nil {
+		return "<nil>"
+	}
+
+	return strings.Join([]string{mb.Path(), mb.Name()}, "/")
 }
 
 func (mb *metricBase) fillMetadata() {
@@ -318,6 +339,8 @@ func visit(hdl *handle, node *C.struct_d_tm_node_t, pathComps []string, out chan
 		}
 	case cType == C.D_TM_GAUGE:
 		out <- newGauge(hdl, path, &name, node)
+	case cType == C.D_TM_STATS_GAUGE:
+		out <- newStatsGauge(hdl, path, &name, node)
 	case cType == C.D_TM_COUNTER:
 		out <- newCounter(hdl, path, &name, node)
 	case cType == C.D_TM_TIMESTAMP:

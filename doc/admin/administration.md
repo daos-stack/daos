@@ -10,189 +10,50 @@ communicated and logged within DAOS.
 The following table describes the structure of a DAOS RAS event including
 descriptions of mandatory and optional fields.
 
-+-------------------+----------------------+----------------------------------------------------------+
-|                   |                      |                                                          |
+
 | Field             | Optional/Mandatory   | Description                                              |
-|                   |                      |                                                          |
-+-------------------+----------------------+----------------------------------------------------------+
-|                   |                      |                                                          |
+|:----|:----|:----|
 | ID                | Mandatory            | Unique event identifier referenced in the manual.        |
-|                   |                      | 64-char string.                                          |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
-| Type              | Mandatory            | Event type of STATE_CHANGE causes an update to the       |
-|                   |                      | Management Service (MS) database in addition to event    |
-|                   |                      | being written to SYSLOG. INFO_ONLY type events are only  |
-|                   |                      | written to SYSLOG.                                       |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
-|                   |                      | Fully qualified timestamp associated with the event.     |
-| Timestamp         | Mandatory            | Resolution at the microseconds and include the           |
-|                   |                      | timezone offset to avoid locality issues.                |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
+| Type              | Mandatory            | Event type of STATE\_CHANGE causes an update to the Management Service (MS) database in addition to event being written to SYSLOG. INFO\_ONLY type events are only written to SYSLOG.                                       |
+| Timestamp         | Mandatory            | Resolution at the microseconds and include the timezone offset to avoid locality issues.                |
 | Severity          | Mandatory            | Indicates event severity, Error/Warning/Notice.          |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
 | Msg               | Mandatory            | Human readable message.                                  |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
-| HID               | Optional             | Identify hardware component involved in the event.       |
-|                   |                      | E.g. PCI address for SSD, network interface              |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
+| HID               | Optional             | Identify hardware component involved in the event. E.g. PCI address for SSD, network interface              |
 | Rank              | Optional             | DAOS rank involved in the event.                         |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
 | PID               | Optional             | Identifier of the process involved in the RAS event      |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
 | TID               | Optional             | Identifier of the thread involved in the RAS event.      |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
 | JOBID             | Optional             | Identifier of the job involved in the RAS event.         |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
 | Hostname          | Optional             | Hostname of the node involved in the event.              |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
 | PUUID             | Optional             | Pool UUID involved in the event, if any.                 |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
 | CUUID             | Optional             | Container UUID involved in the event, if relevant.       |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
-| OID               | Optional             | Object identifier involved in the event, if              |
-|                   |                      | relevant.                                                |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
+| OID               | Optional             | Object identifier involved in the event, if relevant.                                                |
 | Control Operation | Optional             | Recommended automatic action, if any.                    |
-|                   |                      |                                                          |
-|-------------------|----------------------|----------------------------------------------------------|
-|                   |                      |                                                          |
 | Data              | Optional             | Specific instance data treated as a blob.                |
-|                   |                      |                                                          |
-+-------------------+----------------------+----------------------------------------------------------+
+
 
 ### RAS Event IDs
 
 The following table lists supported DAOS RAS events including IDs, type,
 severity, message, description and cause.
 
-+---------------------------------------+--------------+----------+--------------------+----------------------------------------+------------------------------+
-| Event                                 | Event type   | Severity | Message            | Description                            | Cause                        |
-+---------------------------------------+--------------+----------+--------------------+----------------------------------------+------------------------------+
-|                                       |              |          |                    |                                        |                              |
-| engine_format required                | INFO_ONLY    | NOTICE   | DAOS engine <idx>  | Indicates engine is waiting for        | DAOS server attempts to      |
-|                                       |              |          | requires a <type>  | allocated storage to be formatted on   | bring-up an engine which has |
-|                                       |              |          | format             | formatted on instance <idx> with dmg   | unformatted storage.         |
-|                                       |              |          |                    | tool. <type> can be either SCM or      |                              |
-|                                       |              |          |                    | Metadata.                              |                              |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| engine_died                           | STATE_CHANGE | ERROR    | DAOS engine <idx>  | Indicates engine instance <idx> exited | N/A                          |
-|                                       |              |          | exited             | unexpectedly. <error> describes the    |                              |
-|                                       |              |          | unexpectedly:      | exit state returned from exited        |                              |
-|                                       |              |          | <error>            | daos_engine process.                   |                              |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| engine_asserted                       | STATE_CHANGE | ERROR    | TBD                | Indicates engine instance <idx> threw  | An unexpected internal state |
-|                                       |              |          |                    | a runtime assertion, causing a crash.  | resulted in assert failure.  |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| engine_clock_drift                    | INFO_ONLY    | ERROR    | clock drift        | Indicates CART comms layer has         | NTP may not be syncing       |
-|                                       |              |          | detected           | detected clock skew between engines.   | clocks across DAOS system.   |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| pool_rebuild_started                  | INFO_ONLY    | NOTICE   | Pool rebuild       | Indicates a pool rebuild has started.  | When a pool rank becomes     |
-|                                       |              |          | started.           | Event data field contains pool map     | unavailable a rebuild will   |
-|                                       |              |          |                    | version and pool operation identifier. | be triggered.                |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| pool_rebuild_finished                 | INFO_ONLY    | NOTICE   | Pool rebuild       | Indicates a pool rebuild has finished  | N/A                          |
-|                                       |              |          | finished.          | successfully. Event data field         |                              |
-|                                       |              |          |                    | includes the pool map version and pool |                              |
-|                                       |              |          |                    | operation identifier.                  |                              |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| pool_rebuild_failed                   | INFO_ONLY    | ERROR    | Pool rebuild       | Indicates a pool rebuild has failed.   | N/A                          |
-|                                       |              |          | failed: <rc>.      | successfully. Event data field         |                              |
-|                                       |              |          |                    | includes the pool map version and pool |                              |
-|                                       |              |          |                    | operation identifier. <rc> provides a  |                              |
-|                                       |              |          |                    | string representation of DER code.     |                              |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| pool_replicas_updated                 | STATE_CHANGE | NOTICE   | List of pool       | Indicates a pool service replica list  | When a pool service replica  |
-|                                       |              |          | service replica    | has changed. The event contains the    | rank becomes unavailable a   |
-|                                       |              |          | ranks has been     | new service replica list in a custom   | new rank is selected to      |
-|                                       |              |          | updated.           | payload.                               | replace it (if available).   |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| pool_durable_format_incompatible      | INFO_ONLY    | ERROR    | incompatible       | Indicates the given pool's layout      | DAOS engine is started with  |
-|                                       |              |          | layout version:    | version does not match any of the      | pool data in local storage   |
-|                                       |              |          | <current> not in   | versions supported by the currently    | that has an incompatible     |
-|                                       |              |          | [<min>, <max>]     | running DAOS software.                 | layout version.              |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| container_durable_format_incompatible | INFO_ONLY    | ERROR    | incompatible       | Indicates the given container's layout | DAOS engine is started with  |
-|                                       |              |          | layout version[:   | version does not match any of the      | container data in local      |
-|                                       |              |          | <current> not in   | versions supported by the currently    | storage that has an          |
-|                                       |              |          | [<min>, <max>]]    | running DAOS software.                 | incompatible layout version. |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| rdb_durable_format_incompatible       | INFO_ONLY    | ERROR    | incompatible       | Indicates the given rdb's layout       | DAOS engine is started with  |
-|                                       |              |          | layout version[:   | version does not match any of the      | rdb data in local storage    |
-|                                       |              |          | <current> not in   | versions supported by the currently    | that has an incompatible     |
-|                                       |              |          | [<min>, <max>]]    | running DAOS software.                 | layout version.              |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| swim_rank_alive                       | STATE_CHANGE | NOTICE   | TBD                | The SWIM protocol has detected the     | A remote DAOS engine has     |
-|                                       |              |          |                    | specified rank is responsive.          | become responsive.           |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| swim_rank_dead                        | STATE_CHANGE | NOTICE   | SWIM rank marked   | The SWIM protocol has detected the     | A remote DAOS engine has     |
-|                                       |              |          | as dead.           | specified rank is unresponsive.        | become unresponsive.         |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| system_start_failed                   | INFO_ONLY    | ERROR    | System startup     | Indicates that a user initiated        | Ranks failed to start.       |
-|                                       |              |          | failed, <errors>   | controlled startup failed. <errors>    |                              |
-|                                       |              |          |                    | shows which ranks failed.              |                              |
-|                                       |              |          |                    |                                        |                              |
-|---------------------------------------|--------------|----------|--------------------|----------------------------------------|------------------------------|
-|                                       |              |          |                    |                                        |                              |
-| system_stop_failed                    | INFO_ONLY    | ERROR    | System shutdown    | Indicates that a user initiated        | Ranks failed to stop.        |
-|                                       |              |          | failed during      | controlled shutdown failed. <action>   |                              |
-|                                       |              |          | <action> action,   | identifies the failing shutdown action |                              |
-|                                       |              |          | <errors>           | and <errors> shows which ranks failed. |                              |
-|                                       |              |          |                    |                                        |                              |
-+---------------------------------------+--------------+----------+--------------------+----------------------------------------+------------------------------+
+|Event|Event type|Severity|Message|Description|Cause|
+|:----|:----|:----|:----|:----|:----|
+|engine\_format required|INFO\_ONLY|NOTICE|DAOS engine <idx\> requires a <type\> format|Indicates engine is waiting for allocated storage to be formatted on formatted on instance <idx\> with dmg tool. <type\> can be either SCM or Metadata.|DAOS server attempts to bring-up an engine which has unformatted storage.|
+| engine\_died| STATE\_CHANGE| ERROR| DAOS engine <idx\> exited exited unexpectedly: <error\> | Indicates engine instance <idx\> unexpectedly. <error> describes the exit state returned from exited daos\_engine process.| N/A                          |
+| engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
+| engine\_clock\_drift| INFO\_ONLY   | ERROR| clock drift detected| Indicates CART comms layer has detected clock skew between engines.| NTP may not be syncing clocks across DAOS system.      |
+| pool\_rebuild\_started| INFO\_ONLY| NOTICE   | Pool rebuild started.| Indicates a pool rebuild has started. Event data field contains pool map version and pool operation identifier. | When a pool rank becomes unavailable a rebuild will be triggered.   |
+| pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. Event data field includes the pool map version and pool operation identifier.  | N/A|
+| pool\_rebuild\_failed| INFO\_ONLY| ERROR| Pool rebuild failed: <rc\>.| Indicates a pool rebuild has failed. Event data field includes the pool map version and pool operation identifier. <rc\> provides a string representation of DER code.| N/A                          |
+| pool\_replicas\_updated| STATE\_CHANGE| NOTICE| List of pool service replica ranks has been updated.| Indicates a pool service replica list has changed. The event contains the new service replica list in a custom payload. | When a pool service replica rank becomes unavailable a new rank is selected to replace it (if available). |
+| pool\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with pool data in local storage that has an incompatible layout version. |
+| container\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with container data in local storage that has an incompatible layout version.|
+| rdb\_durable\_format\_incompatible| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>]]| Indicates the given rdb's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with rdb data in local storage that has an incompatible layout version.|
+| swim\_rank\_alive| STATE\_CHANGE| NOTICE| TBD| The SWIM protocol has detected the specified rank is responsive.| A remote DAOS engine has become responsive.|
+| swim\_rank\_dead| STATE\_CHANGE| NOTICE| SWIM rank marked as dead.| The SWIM protocol has detected the specified rank is unresponsive.| A remote DAOS engine has become unresponsive.|
+| system\_start\_failed| INFO\_ONLY| ERROR| System startup failed, <errors\>| Indicates that a user initiated controlled startup failed. <errors\> shows which ranks failed.| Ranks failed to start.|
+| system\_stop\_failed| INFO\_ONLY| ERROR| System shutdown failed during <action\> action, <errors\>  | Indicates that a user initiated controlled shutdown failed. <action\> identifies the failing shutdown action and <errors\> shows which ranks failed.| Ranks failed to stop.|
+
 
 ## System Monitoring
 
@@ -201,13 +62,13 @@ control plane and will be documented in a future revision.
 
 ## Storage Operations
 
-### Per-Storage-Server Space Utilization
+### Space Utilization
 
 To query SCM and NVMe storage space usage and show how much space is available to
 create new DAOS pools with, run the following command:
 
 ```bash
-bash-4.2$ dmg storage query usage
+$ dmg storage query usage
 Hosts   SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
 -----   --------- -------- -------- ---------- --------- ---------
 wolf-71 6.4 TB    2.0 TB   68 %     1.5 TB     1.1 TB    27 %
@@ -236,7 +97,15 @@ that can be specified is approximately `dmg pool create -s 1T -n 5T` (may need t
 specify slightly below the maximum to take account of negligible metadata
 overhead).
 
-### NVMe SSD Health Monitoring
+### Storage Scrubbing
+
+Support for end-to-end data integrity is planned for DAOS v1.2 and
+background checksum scrubbing for v2.2. Once available, that
+functionality will be documented here.
+
+### SSD Management
+
+#### Health Monitoring
 
 Useful admin dmg commands to query NVMe SSD health:
 
@@ -342,7 +211,7 @@ boro-11
         Read Only: OK
         Volatile Memory Backup: OK
 ```
-### NVMe SSD Eviction and Hotplug
+#### Eviction and Hotplug
 
 - Manually Evict an NVMe SSD: `dmg storage set nvme-faulty`
 
@@ -360,7 +229,9 @@ The device state will transition from "NORMAL" to "FAULTY" (shown above), which 
 trigger the faulty device reaction (all targets on the SSD will be rebuilt and the SSD
 will remain evicted until device replacement occurs).
 
-**Full NVMe hot plug capability will be available and supported in DAOS 2.0 release. Use is currently intended for testing only and is not supported for production.**
+!!! note
+    Full NVMe hot plug capability will be available and supported in DAOS 2.2 release.
+    Use is currently intended for testing only and is not supported for production.
 
 - Replace an Evicted SSD with a New Device: `dmg storage replace nvme`
 
@@ -394,7 +265,7 @@ The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" sta
 and will again be available for use with DAOS. The use case of this command will mainly
 be for testing, or for accidental device eviction.
 
-### NVMe SSD Identification
+#### Identification
 
 The SSD identification feature is simply a way to quickly and visually locate a
 device. It requires the use of Intel VMD (Volume Management Device), which needs
@@ -458,7 +329,7 @@ specified when starting `daos_server` instances.
     Whilst individual system instances can be stopped, if a subset is restarted,
     existing pools will not be automatically integrated with restarted instances.
 
-### Query
+### Membership
 
 The system membership can be queried using the command:
 
@@ -537,13 +408,13 @@ Example illustration with two IO instances specified in the config file:
 
 - Then restart DAOS Servers and format.
 
-### Fault Domain Maintenance and Reintegration
+### Fault Domain
 
 Details on how to drain an individual storage node or fault domain (e.g.
 rack) in preparation for maintenance activity and how to reintegrate it
 will be provided in a future revision.
 
-### DAOS System Extension
+### System Extension
 
 Ability to add new DAOS server instances to a pre-existing DAOS system
 will be documented in a future revision.
@@ -618,7 +489,7 @@ failure to the control API. Similarly, the connection from clients
 running a protocol version incompatible with the targets will return an
 error.
 
-### Persistent Schema Compatibility and Update
+### Persistent Layout
 
 The schema of persistent data structures may evolve from time to time to
 fix bugs, add new optimizations, or support new features. To that end,
@@ -637,11 +508,5 @@ of the supported schema versions. New pool shards will always be
 formatted with the latest version. This versioning schema only applies
 to a data structure stored in persistent memory and not to block storage
 that only stores user data with no metadata.
-
-## Storage Scrubbing
-
-Support for end-to-end data integrity is planned for DAOS v1.2 and
-background checksum scrubbing for v2.2. Once available, that
-functionality will be documented here.
 
 [^1]: https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914

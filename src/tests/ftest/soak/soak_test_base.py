@@ -67,12 +67,6 @@ class SoakTestBase(TestWithServers):
         """Define test setup to be done."""
         self.log.info("<<setUp Started>> at %s", time.ctime())
         super().setUp()
-        # Log the version of rpms being used for this test
-        cmd = "sudo dnf list daos-client"
-        try:
-            _ = run_command(cmd, timeout=30)
-        except DaosTestError as error:
-            self.log.info("No daos rpm package info available %s", error)
         self.username = getuser()
         # Initialize loop param for all tests
         self.loop = 1
@@ -151,11 +145,7 @@ class SoakTestBase(TestWithServers):
         if self.check_errors:
             errors.extend(self.check_errors)
         # Check if any dfuse mount points need to be cleaned
-        try:
-            cleanup_dfuse(self)
-        except SoakTestError as error:
-            self.log.info("Dfuse cleanup failed with %s", error)
-
+        cleanup_dfuse(self)
         # daos_agent is always started on this node when start agent is false
         if not self.setup_start_agents:
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
@@ -504,9 +494,6 @@ class SoakTestBase(TestWithServers):
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get(
             "single_test_pool", test_param + "*", True)
-        self.dmg_command.copy_certificates(
-            get_log_file("daosCA/certs"), self.hostlist_clients)
-        self.dmg_command.copy_configuration(self.hostlist_clients)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         if harassers:
@@ -527,8 +514,7 @@ class SoakTestBase(TestWithServers):
             reserved_file_copy(self, initial_resv_file, self.pool[0], resv_cont,
                                num_bytes=500000000, cmd="write")
         except CommandFailure as error:
-            raise SoakTestError(
-                "<<FAILED: Soak reserved container write failed>>") from error
+            self.fail(error)
 
         # Create pool for jobs
         if single_test_pool:
@@ -618,8 +604,8 @@ class SoakTestBase(TestWithServers):
         try:
             reserved_file_copy(self, final_resv_file, self.pool[0], resv_cont)
         except CommandFailure as error:
-            raise SoakTestError(
-                "<<FAILED: Soak reserved container read failed>>") from error
+            self.soak_errors.append(
+                "<<FAILED: Soak reserved container read failed>>")
 
         if not cmp(initial_resv_file, final_resv_file):
             self.soak_errors.append("Data verification error on reserved pool"
