@@ -220,6 +220,7 @@ def set_test_environment(args):
     # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
     os.environ["COVFILE"] = "/tmp/test.cov"
+    os.environ["DAOS_DISABLE_VMD"] = "True"
 
     # Python paths required for functional testing
     set_python_environment()
@@ -556,13 +557,14 @@ def get_test_list(tags):
     return test_tags, test_list
 
 
-def get_test_files(test_list, args, yaml_dir):
+def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
     """Get a list of the test scripts to run and their yaml files.
 
     Args:
         test_list (list): list of test scripts to run
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
+        vmd_flag (bool): PCI address list contains VMD address.
 
     Returns:
         list: a list of dictionaries of each test script and yaml file; If
@@ -574,7 +576,7 @@ def get_test_files(test_list, args, yaml_dir):
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
         test_file["yaml"] = replace_yaml_file(
-            "{}.yaml".format(base), args, yaml_dir)
+            "{}.yaml".format(base), args, yaml_dir, vmd_flag)
 
     return test_files
 
@@ -615,6 +617,9 @@ def get_nvme_replacement(args):
     Returns:
         str: a comma-separated list of nvme device pci addresses available on
             all of the specified test servers
+        bool: VMD PCI address included in the pci address string (True)
+              VMD PCI address not included in the pci address string (False)
+              Defaults to False (For NVME only)
 
     """
     # A list of server host is required to able to auto-detect NVMe devices
@@ -628,21 +633,13 @@ def get_nvme_replacement(args):
     # controller). if nvme:vmd, then ignore the NVME
     # PCI addressed devices behind the VMD controller.
     host_list = list(args.test_servers)
-    include_vmd_flag = ""
 
     command_list = [
-        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
+        "/sbin/lspci -D", 
+        "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+        "Non-Volatile memory controller:'"]
     if ":" in args.nvme:
-        vmd_flag = args.nvme.split(":")
-        include_vmd_flag = vmd_flag[1]
-        if include_vmd_flag == "vmd":
-            search_str = "grep 'Volume'"
-            command_list[1] = search_str
-        elif include_vmd_flag == "mixed":
-            search_str = "grep 'Non-Volatile memory controller: \\| Volume'"
-            command_list[1] = search_str
-        else:
-            command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+        command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
 
     command = " | ".join(command_list)
 
@@ -661,35 +658,140 @@ def get_nvme_replacement(args):
 
     # Get the list of NVMe PCI addresses found in the output
     output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
-    if include_vmd_flag == "vmd" or include_vmd_flag == "mixed":
-        devices = find_pci_address(output_str, False)
-    else:
-        devices = find_pci_address(output_str)
+    devices = find_pci_address(output_str)
     print("Auto-detected NVMe devices on {}: {}".format(host_list, devices))
-    return ",".join(devices)
+    return ",".join(devices), False
 
 
-def find_pci_address(value, list_nvme_behind_vmd=True):
+def get_vmd_replacement(args):
+    """Determine the value to use for the '--nvme=auto_vmd*' command line argument.
+
+    Parse the lspci output for any VMD devices, (e.g. --nvme=auto_vmd)
+        $ lspci -D | grep Volume
+        0000:5d:05.5 RAID bus controller:
+            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
+
+    Other command line options which will be supported are:
+    (e.g. '--nvme=auto_vmd_disks') [Use all NVME devices behind the VMD
+    controller]
+        $ lspci | grep 'Non-Volatile memory controller:' | grep '10001'
+        10001:01:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    (e.g. '--name=auto_vmd_mixed) [Use the NVME devices and VMD controller PCI
+    address]
+        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
+        0000:5d:05.5 RAID bus controller:
+            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
+        0000:da:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    (e.g. '--name=auto_vmd_nvme) [Use the NVME devices and NVME devices behind
+    VMD controller]
+        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
+        0000:da:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+        10001:01:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        str: a comma-separated list of vmd,nvme device pci addresses available
+        on all of the specified test servers
+        bool: VMD PCI address included in the pci address string (True)
+              VMD PCI address not included in the pci address string (False)
+           
+
+    """
+    # A list of server host is required to able to auto-detect NVMe devices
+    if not args.test_servers:
+        print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
+        sys.exit(1)
+
+    # Get a list of NVMe, VMD devices from each specified server host
+    # if nvme:auto is set, all PCI Non-volatile memory controller
+    # devices are considered NVME (some NVMEs might be behind the VMD
+    # controller). if nvme:vmd, then ignore the NVME
+    # PCI addressed devices behind the VMD controller.
+    host_list = list(args.test_servers)
+    vmd_include_flag = False
+
+    if args.nvme == "auto_vmd":
+        command_list = [
+            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
+        vmd_include_flag = True
+    elif args.nvme == "auto_vmd_disks":
+        command_list = [
+            "/sbin/lspci -D",
+            "grep -E '^[0-9a-f]{5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+            "Non-Volatile memory controller:'"]
+    elif args.nvme == "auto_vmd_nvme":
+        command_list = [
+            "/sbin/lspci -D",
+            "grep -E '^[0-9a-f]{4,5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+            "Non-Volatile memory controller:'"]
+    elif args.nvme == "auto_vmd_mixed":
+        command_list1 = [
+            "/sbin/lspci -D",
+            "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+            "Non-Volatile memory controller:'"]
+        command_list2 = [
+            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
+        vmd_include_flag = True
+    else:
+        print("ERROR: Invalid --nvme argument")
+        sys.exit(1)
+
+    if ":" in args.nvme and args.nvme != "auto_vmd_mixed":
+        command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+    elif ":" in args.nvme and args.nvme == "auto_vmd_mixed":
+        command_list1.append("grep '{}'".format(args.nvme.split(":")[1]))
+        command_list2.append("grep '{}'".format(args.nvme.split(":")[1]))
+
+    if args.nvme != "auto_vmd_mixed":
+        command = " | ".join(command_list)
+    else:
+        command1 = " | ".join(command_list1)
+        command2 = " | ".join(command_list2)
+        command = command1 + ";" + command2
+
+    task = get_remote_output(host_list, command)
+
+    # Verify the command was successful on each server host
+    if not check_remote_output(task, command):
+        print("ERROR: Issuing commands to detect VMD/NVME PCI addresses.")
+        sys.exit(1)
+
+    # Verify each server host has the same VMD/NVMe PCI addresses
+    output_data = list(task.iter_buffers())
+    if len(output_data) > 1:
+        print("ERROR: Non-homogeneous VMD/NVMe PCI addresses.")
+        sys.exit(1)
+
+    # Get the list of NVMe PCI addresses found in the output
+    output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
+    devices = find_pci_address(output_str)
+    print("Auto-detected VMD/NVMe devices on {}: {}".format(host_list, devices))
+    return ",".join(devices), vmd_include_flag
+
+
+def find_pci_address(value):
     """Find PCI addresses in the specified string.
 
     Args:
         value (str): string to search for PCI addresses
-        list_nvme_behind_vmd (bool) : True or False
-                                      Defaults to True.
 
     Returns:
         list: a list of all the PCI addresses found in the string
 
     """
-    if list_nvme_behind_vmd is True:
-        pattern = r"[{0}]{{4,5}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
-    else:
-        # Truncate higher domain PCI address when listing VMD address.
-        pattern = r"[{0}]{{4}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
+    pattern = r"[{0}]{{4,5}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
     return re.findall(pattern, str(value))
 
 
-def replace_yaml_file(yaml_file, args, yaml_dir):
+def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
     """Create a temporary test yaml file with any requested values replaced.
 
     Optionally replace the following test yaml file values if specified by the
@@ -718,6 +820,9 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
         yaml_file (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
         yaml_dir (str): directory in which to write the modified yaml files
+        vmd_flag (bool): PCI address includes VMD address (True)
+                         PCI address doesn't include VMD address (False).
+                         Defaults to False
 
     Returns:
         str: the test yaml file; None if the yaml file contains placeholders
@@ -791,6 +896,11 @@ def replace_yaml_file(yaml_file, args, yaml_dir):
                         args,
                         "  - Replacement: {} -> {}".format(
                             value, replacements[value]))
+
+    # if VMD pci address in present under nvme_data,
+    # set DAOS_DISABLE_VMD to False
+    if vmd_flag is True:
+        os.environ["DAOS_DISABLE_VMD"] = "False"
 
     if replacements:
         # Read in the contents of the yaml file to retain the !mux entries
@@ -2171,10 +2281,12 @@ def main():
 
     # Setup the user environment
     set_test_environment(args)
-
+    vmd_flag = False
     # Auto-detect nvme test yaml replacement values if requested
-    if args.nvme and args.nvme.startswith("auto"):
-        args.nvme = get_nvme_replacement(args)
+    if args.nvme and args.nvme.startswith("auto_vmd"):
+        args.nvme, vmd_flag = get_vmd_replacement(args)
+    elif args.nvme and args.nvme.startswith("auto"):
+        args.nvme, vmd_flag = get_nvme_replacement(args)
 
     # Process the tags argument to determine which tests to run
     tag_filter, test_list = get_test_list(args.tags)
@@ -2199,7 +2311,7 @@ def main():
             os.mkdir(yaml_dir)
 
     # Create a dictionary of test and their yaml files
-    test_files = get_test_files(test_list, args, yaml_dir)
+    test_files = get_test_files(test_list, args, yaml_dir, vmd_flag)
     if args.modify:
         sys.exit(0)
 

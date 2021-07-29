@@ -106,13 +106,14 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.provider = BasicParameter(None, default_provider)
         self.hyperthreads = BasicParameter(None, False)
-        self.disable_vmd = BasicParameter(None, True)
         self.socket_dir = BasicParameter(None, "/var/run/daos_server")
         self.nr_hugepages = BasicParameter(None, 4096)
         self.control_log_mask = BasicParameter(None, "DEBUG")
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
         self.telemetry_port = BasicParameter(None, 9191)
+        default_disable_vmd = os.environ.get("DAOS_DISABLE_VMD", True)
+        self.disable_vmd = BasicParameter(None, default_disable_vmd)
 
         # Used to drop privileges before starting data plane
         # (if started as root to perform hardware provisioning)
