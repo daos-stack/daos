@@ -1,11 +1,11 @@
 name: Workflow
 
 on:
-   push:
-     branches:
-       - master
-       - 'release/*'
    pull_request:
+
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
 
 jobs:
 
@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        distro: [centos.7, leap.15]
+        distro: [centos.7]
         compiler: [gcc, clang]
     steps:
     - name: Checkout code

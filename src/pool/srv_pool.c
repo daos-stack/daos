@@ -1292,7 +1292,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		DP_UUID(svc->ps_uuid), DP_UUID(pool_hdl_uuid),
 		DP_UUID(cont_hdl_uuid));
 
-	rc = ds_rebuild_regenerate_task(svc->ps_pool);
+	rc = ds_rebuild_regenerate_task(svc->ps_pool, prop);
 	if (rc != 0)
 		goto out;
 
@@ -1953,96 +1953,6 @@ bulk_cb(const struct crt_bulk_cb_info *cb_info)
 	return 0;
 }
 
-/*
- * Transfer the pool map to "remote_bulk". If the remote bulk buffer is too
- * small, then return -DER_TRUNC and set "required_buf_size" to the local pool
- * map buffer size.
- * If the map_buf_bulk is non-NULL, then the created local bulk handle for
- * pool_buf will be returned and caller needs to do crt_bulk_free later.
- * If the map_buf_bulk is NULL then the internally created local bulk handle
- * will be freed within this function.
- */
-static int
-transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
-		 struct pool_svc *svc, crt_rpc_t *rpc,
-		 crt_bulk_t remote_bulk, uint32_t *required_buf_size)
-{
-	size_t			map_buf_size;
-	daos_size_t		remote_bulk_size;
-	d_iov_t			map_iov;
-	d_sg_list_t		map_sgl;
-	crt_bulk_t		bulk = CRT_BULK_NULL;
-	struct crt_bulk_desc	map_desc;
-	crt_bulk_opid_t		map_opid;
-	ABT_eventual		eventual;
-	uint32_t		pm_ver;
-	int		       *status;
-	int			rc;
-
-	pm_ver = ds_pool_get_version(svc->ps_pool);
-	if (map_version != pm_ver) {
-		D_ERROR(DF_UUID": found different cached and persistent pool "
-			"map versions: cached=%u persistent=%u\n",
-			DP_UUID(svc->ps_uuid), pm_ver, map_version);
-		D_GOTO(out, rc = -DER_IO);
-	}
-
-	map_buf_size = pool_buf_size(map_buf->pb_nr);
-
-	/* Check if the client bulk buffer is large enough. */
-	rc = crt_bulk_get_len(remote_bulk, &remote_bulk_size);
-	if (rc != 0)
-		D_GOTO(out, rc);
-	if (remote_bulk_size < map_buf_size) {
-		D_ERROR(DF_UUID": remote pool map buffer ("DF_U64") < required "
-			"(%lu)\n", DP_UUID(svc->ps_uuid), remote_bulk_size,
-			map_buf_size);
-		*required_buf_size = map_buf_size;
-		D_GOTO(out, rc = -DER_TRUNC);
-	}
-
-	d_iov_set(&map_iov, map_buf, map_buf_size);
-	map_sgl.sg_nr = 1;
-	map_sgl.sg_nr_out = 0;
-	map_sgl.sg_iovs = &map_iov;
-
-	rc = crt_bulk_create(rpc->cr_ctx, &map_sgl, CRT_BULK_RO, &bulk);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
-	/* Prepare "map_desc" for crt_bulk_transfer(). */
-	map_desc.bd_rpc = rpc;
-	map_desc.bd_bulk_op = CRT_BULK_PUT;
-	map_desc.bd_remote_hdl = remote_bulk;
-	map_desc.bd_remote_off = 0;
-	map_desc.bd_local_hdl = bulk;
-	map_desc.bd_local_off = 0;
-	map_desc.bd_len = map_iov.iov_len;
-
-	rc = ABT_eventual_create(sizeof(*status), &eventual);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_bulk, rc = dss_abterr2der(rc));
-
-	rc = crt_bulk_transfer(&map_desc, bulk_cb, &eventual, &map_opid);
-	if (rc != 0)
-		D_GOTO(out_eventual, rc);
-
-	rc = ABT_eventual_wait(eventual, (void **)&status);
-	if (rc != ABT_SUCCESS)
-		D_GOTO(out_eventual, rc = dss_abterr2der(rc));
-
-	if (*status != 0)
-		D_GOTO(out_eventual, rc = *status);
-
-out_eventual:
-	ABT_eventual_free(&eventual);
-out_bulk:
-	if (bulk != CRT_BULK_NULL)
-		crt_bulk_free(bulk);
-out:
-	return rc;
-}
-
 void
 ds_pool_connect_handler(crt_rpc_t *rpc)
 {
@@ -2068,8 +1978,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	uint64_t			sec_capas = 0;
 	struct pool_metrics	       *metrics;
 	char			       *machine = NULL;
-
-	metrics = &ds_global_pool_metrics;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p: hdl="DF_UUID"\n",
 		DP_UUID(in->pci_op.pi_uuid), rpc, DP_UUID(in->pci_op.pi_hdl));
@@ -2174,7 +2082,6 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc = -DER_NO_PERM);
 	}
 
-	d_tm_inc_gauge(metrics->open_hdl_gauge, 1);
 	/*
 	 * Transfer the pool map to the client before adding the pool handle,
 	 * so that we don't need to worry about rolling back the transaction
@@ -2189,8 +2096,8 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
 		D_GOTO(out_map_version, rc);
 	}
-	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pci_map_bulk,
-			      &out->pco_map_buf_size);
+	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
+				      in->pci_map_bulk, &out->pco_map_buf_size);
 	if (rc != 0)
 		D_GOTO(out_map_version, rc);
 
@@ -2253,6 +2160,10 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 	rc = rdb_tx_commit(&tx);
 	if (rc)
 		D_GOTO(out_map_version, rc);
+
+	/** update metric */
+	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
+	d_tm_inc_gauge(metrics->open_hdl_gauge, 1);
 
 	if (in->pci_query_bits & DAOS_PO_QUERY_SPACE)
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pci_op.pi_hdl,
@@ -2331,8 +2242,6 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 
 	D_ASSERTF(n_hdl_uuids > 0, "%d\n", n_hdl_uuids);
 
-	metrics = &ds_global_pool_metrics;
-
 	D_DEBUG(DF_DSMS, DF_UUID": disconnecting %d hdls: hdl_uuids[0]="DF_UUID
 		"\n", DP_UUID(svc->ps_uuid), n_hdl_uuids,
 		DP_UUID(hdl_uuids[0]));
@@ -2350,6 +2259,8 @@ pool_disconnect_hdls(struct rdb_tx *tx, struct pool_svc *svc, uuid_t *hdl_uuids,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
+	/** update metric */
+	metrics = svc->ps_pool->sp_metrics[DAOS_POOL_MODULE];
 	d_tm_dec_gauge(metrics->open_hdl_gauge, n_hdl_uuids);
 
 	d_iov_set(&value, &nhandles, sizeof(nhandles));
@@ -2765,8 +2676,8 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	struct pool_query_in   *in = crt_req_get(rpc);
 	struct pool_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
-	struct pool_buf		*map_buf = NULL;
-	uint32_t		map_version;
+	struct pool_buf	       *map_buf;
+	uint32_t		map_version = 0;
 	struct pool_svc	       *svc;
 	struct rdb_tx		tx;
 	d_iov_t			key;
@@ -2814,7 +2725,7 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 	/* read optional properties */
 	rc = pool_prop_read(&tx, svc, in->pqi_query_bits, &prop);
 	if (rc != 0)
-		D_GOTO(out_map_version, rc);
+		D_GOTO(out_lock, rc);
 	out->pqo_prop = prop;
 
 	if (DAOS_FAIL_CHECK(DAOS_FORCE_PROP_VERIFY) && prop != NULL) {
@@ -2824,14 +2735,14 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 
 		D_ALLOC_PTR(iv_prop);
 		if (iv_prop == NULL)
-			D_GOTO(out_map_version, rc = -DER_NOMEM);
+			D_GOTO(out_lock, rc = -DER_NOMEM);
 
 		rc = ds_pool_iv_prop_fetch(svc->ps_pool, iv_prop);
 		if (rc) {
 			D_ERROR("ds_pool_iv_prop_fetch failed "DF_RC"\n",
 				DP_RC(rc));
 			daos_prop_free(iv_prop);
-			D_GOTO(out_map_version, rc);
+			D_GOTO(out_lock, rc);
 		}
 
 		for (i = 0; i < prop->dpp_nr; i++) {
@@ -2892,36 +2803,39 @@ ds_pool_query_handler(crt_rpc_t *rpc)
 		daos_prop_free(iv_prop);
 		if (rc) {
 			D_ERROR("iv_prop verify failed "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out_map_version, rc);
+			D_GOTO(out_lock, rc);
 		}
 	}
 
 	rc = read_map_buf(&tx, &svc->ps_root, &map_buf, &map_version);
-	if (rc != 0) {
+	if (rc != 0)
 		D_ERROR(DF_UUID": failed to read pool map: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
-		D_GOTO(out_map_version, rc);
-	}
 
-	rc = transfer_map_buf(map_buf, map_version, svc, rpc, in->pqi_map_bulk,
-			      &out->pqo_map_buf_size);
-	if (rc != 0)
-		D_GOTO(out_map_version, rc);
-
-out_map_version:
-	out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
-	if (map_buf)
-		D_FREE(map_buf);
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
 	rdb_tx_end(&tx);
-out_svc:
-	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
+	if (rc != 0)
+		goto out_svc;
+
+	rc = ds_pool_transfer_map_buf(map_buf, map_version, rpc,
+				      in->pqi_map_bulk, &out->pqo_map_buf_size);
+	D_FREE(map_buf);
+	if (rc != 0)
+		goto out_svc;
+
 	/* See comment above, rebuild doesn't connect the pool */
-	if (rc == 0 && (in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
+	if ((in->pqi_query_bits & DAOS_PO_QUERY_SPACE) &&
 	    !is_pool_from_srv(in->pqi_op.pi_uuid, in->pqi_op.pi_hdl))
 		rc = pool_space_query_bcast(rpc->cr_ctx, svc, in->pqi_op.pi_hdl,
 					    &out->pqo_space);
+
+out_svc:
+	if (map_version == 0)
+		out->pqo_op.po_map_version = ds_pool_get_version(svc->ps_pool);
+	else
+		out->pqo_op.po_map_version = map_version;
+	ds_rsvc_set_hint(&svc->ps_rsvc, &out->pqo_op.po_hint);
 	pool_svc_put_leader(svc);
 out:
 	out->pqo_op.po_rc = rc;
@@ -4011,7 +3925,7 @@ replace_failed_replicas(struct pool_svc *svc, struct pool_map *map)
 	if (replacement.rl_nr > 0)
 		ds_rsvc_add_replicas_s(&svc->ps_rsvc, &replacement,
 				       ds_rsvc_get_md_cap());
-	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed);
+	ds_rsvc_remove_replicas_s(&svc->ps_rsvc, &failed, false /* stop */);
 	/** `replacement.rl_ranks` is not allocated and shouldn't be freed **/
 	D_FREE(failed.rl_ranks);
 
@@ -4261,12 +4175,12 @@ struct redist_open_hdls_arg {
 static int
 get_open_handles_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
-	struct redist_open_hdls_arg *arg = varg;
-	uuid_t *uuid = key->iov_buf;
-	struct pool_hdl *hdl = val->iov_buf;
-	struct ds_pool_hdl *lookup_hdl;
-	size_t size_needed;
-	int rc = DER_SUCCESS;
+	struct redist_open_hdls_arg	*arg = varg;
+	uuid_t				*uuid = key->iov_buf;
+	struct pool_hdl			*hdl = val->iov_buf;
+	struct ds_pool_hdl		*lookup_hdl;
+	size_t				size_needed;
+	int				rc = DER_SUCCESS;
 
 	if (key->iov_len != sizeof(uuid_t) ||
 	    val->iov_len != sizeof(struct pool_hdl)) {
@@ -5657,7 +5571,7 @@ ds_pool_replicas_update_handler(crt_rpc_t *rpc)
 
 	case POOL_REPLICAS_REMOVE:
 		rc = ds_rsvc_remove_replicas(DS_RSVC_CLASS_POOL, &id, ranks,
-					     &out->pmo_hint);
+					     true /* stop */, &out->pmo_hint);
 		break;
 
 	default:

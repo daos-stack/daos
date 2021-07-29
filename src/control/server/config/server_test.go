@@ -27,6 +27,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -34,6 +35,17 @@ const (
 	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
 	psm2Example      = "../../../../utils/config/examples/daos_server_psm2.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
+	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
+)
+
+var (
+	defConfigCmpOpts = []cmp.Option{
+		cmpopts.IgnoreUnexported(
+			Server{},
+			security.CertificateConfig{},
+		),
+		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn", "Path"),
+	}
 )
 
 // uncommentServerConfig removes leading comment chars from daos_server.yml
@@ -66,10 +78,11 @@ func uncommentServerConfig(t *testing.T, outFile string) {
 		}
 		key := fields[0]
 
-		// If we're in a server config, reset the
+		// If we're in a server or a storage tier config, reset the
 		// seen map to allow the same params in different
 		// server configs.
-		if line == "-" {
+		lineTmp := strings.TrimLeft(line, " ")
+		if lineTmp == "-" {
 			seenKeys = make(map[string]struct{})
 		}
 		if _, seen := seenKeys[key]; seen && strings.HasSuffix(key, ":") {
@@ -175,14 +188,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			cmpOpts := []cmp.Option{
-				cmpopts.IgnoreUnexported(
-					Server{},
-					security.CertificateConfig{},
-				),
-				cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn"),
-			}
-			if diff := cmp.Diff(configA, configB, cmpOpts...); diff != "" {
+			if diff := cmp.Diff(configA, configB, defConfigCmpOpts...); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})
@@ -236,11 +242,15 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithTargetCount(16).
 				WithHelperStreamCount(6).
 				WithServiceThreadCore(0).
-				WithScmMountPoint("/mnt/daos/1").
-				WithScmClass("ram").
-				WithScmRamdiskSize(16).
-				WithBdevClass("nvme").
-				WithBdevDeviceList("0000:81:00.0").
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmMountPoint("/mnt/daos/1").
+						WithScmClass("ram").
+						WithScmRamdiskSize(16),
+					storage.NewTierConfig().
+						WithBdevClass("nvme").
+						WithBdevDeviceList("0000:81:00.0"),
+				).
 				WithFabricInterface("qib0").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode0).
@@ -253,12 +263,16 @@ func TestServerConfig_Constructed(t *testing.T) {
 				WithTargetCount(16).
 				WithHelperStreamCount(6).
 				WithServiceThreadCore(22).
-				WithScmMountPoint("/mnt/daos/2").
-				WithScmClass("dcpm").
-				WithScmDeviceList("/dev/pmem0").
-				WithBdevClass("file").
-				WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-				WithBdevFileSize(16).
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmMountPoint("/mnt/daos/2").
+						WithScmClass("dcpm").
+						WithScmDeviceList("/dev/pmem1"),
+					storage.NewTierConfig().
+						WithBdevClass("file").
+						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
+						WithBdevFileSize(16),
+				).
 				WithFabricInterface("qib1").
 				WithFabricInterfacePort(20000).
 				WithPinnedNumaNode(&numaNode1).
@@ -268,68 +282,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		)
 	constructed.Path = testFile // just to avoid failing the cmp
 
-	cmpOpts := []cmp.Option{
-		cmpopts.IgnoreUnexported(
-			Server{},
-			security.CertificateConfig{},
-		),
-		cmpopts.IgnoreFields(Server{}, "GetDeviceClassFn"),
-	}
-	if diff := cmp.Diff(defaultCfg, constructed, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(defaultCfg, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
 	}
-}
-
-func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
-	// open original file
-	f, err := os.Open(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-
-	// create temp file
-	tmp, err := ioutil.TempFile("", "replace-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tmp.Close()
-
-	// replace while copying from f to tmp
-	if err := replaceText(f, tmp, oldTxt, newTxt); err != nil {
-		t.Fatal(err)
-	}
-
-	// make sure the tmp file was successfully written to
-	if err := tmp.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// close the file we're reading from
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// overwrite the original file with the temp file
-	if err := os.Rename(tmp.Name(), name); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func replaceText(r io.Reader, w io.Writer, oldTxt, newTxt string) error {
-	// use scanner to read line by line
-	sc := bufio.NewScanner(r)
-	for sc.Scan() {
-		line := sc.Text()
-		if line == oldTxt {
-			line = newTxt
-		}
-		if _, err := io.WriteString(w, line+"\n"); err != nil {
-			return err
-		}
-	}
-
-	return sc.Err()
 }
 
 func TestServerConfig_Validation(t *testing.T) {
@@ -500,15 +455,118 @@ func TestServerConfig_Validation(t *testing.T) {
 	}
 }
 
+// replaceLine only matches when oldTxt is exactly the same as a file line.
+func replaceLine(r io.Reader, w io.Writer, oldTxt, newTxt string) (int, error) {
+	var changedLines int
+
+	// use scanner to read line by line
+	sc := bufio.NewScanner(r)
+	for sc.Scan() {
+		line := sc.Text()
+		if line == oldTxt {
+			line = newTxt
+			changedLines++
+		}
+		if _, err := io.WriteString(w, line+"\n"); err != nil {
+			return changedLines, err
+		}
+	}
+
+	return changedLines, sc.Err()
+}
+
+func replaceFile(t *testing.T, name, oldTxt, newTxt string) {
+	// open original file
+	f, err := os.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	// create temp file
+	tmp, err := ioutil.TempFile("", "replace-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmp.Close()
+
+	// replace while copying from f to tmp
+	linesChanged, err := replaceLine(f, tmp, oldTxt, newTxt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if linesChanged == 0 {
+		t.Fatalf("no recurrences of %q in file %q", oldTxt, name)
+	}
+
+	// make sure the tmp file was successfully written to
+	if err := tmp.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// close the file we're reading from
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// overwrite the original file with the temp file
+	if err := os.Rename(tmp.Name(), name); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestServerConfig_Parsing(t *testing.T) {
 	noopExtra := func(c *Server) *Server { return c }
+
+	cfgFromFile := func(t *testing.T, testFile, matchText, replaceText string) (*Server, error) {
+		t.Helper()
+
+		if matchText != "" {
+			replaceFile(t, testFile, matchText, replaceText)
+		}
+
+		return mockConfigFromFile(t, testFile)
+	}
+
+	// load a config based on the server config with all options uncommented.
+	loadFromDefaultFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+		t.Helper()
+
+		defaultConfigFile := filepath.Join(testDir, sConfigUncomment)
+		uncommentServerConfig(t, defaultConfigFile)
+
+		return cfgFromFile(t, defaultConfigFile, matchText, replaceText)
+	}
+
+	// load a config file with a legacy storage config
+	loadFromLegacyFile := func(t *testing.T, testDir, matchText, replaceText string) (*Server, error) {
+		t.Helper()
+
+		lcp := strings.Split(legacyConfig, "/")
+		testLegacyConfigFile := filepath.Join(testDir, lcp[len(lcp)-1])
+		if err := common.CopyFile(legacyConfig, testLegacyConfigFile); err != nil {
+			return nil, err
+		}
+
+		return cfgFromFile(t, testLegacyConfigFile, matchText, replaceText)
+	}
+
+	loadFromFile := func(t *testing.T, testDir, matchText, replaceText string, legacy bool) (*Server, error) {
+		if legacy {
+			return loadFromLegacyFile(t, testDir, matchText, replaceText)
+		}
+
+		return loadFromDefaultFile(t, testDir, matchText, replaceText)
+	}
 
 	for name, tt := range map[string]struct {
 		inTxt          string
 		outTxt         string
+		legacyStorage  bool
 		extraConfig    func(c *Server) *Server
 		expParseErr    error
 		expValidateErr error
+		expCheck       func(c *Server) error
 	}{
 		"bad engine section": {
 			inTxt:       "engines:",
@@ -535,39 +593,91 @@ func TestServerConfig_Parsing(t *testing.T) {
 					engine.NewConfig().
 						WithFabricInterface("qib0").
 						WithFabricInterfacePort(20000).
-						WithScmClass("ram").
-						WithScmRamdiskSize(1).
-						WithScmMountPoint("/mnt/daos/2").
-						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)))
+						WithStorage(
+							storage.NewTierConfig().
+								WithScmClass("ram").
+								WithScmRamdiskSize(1).
+								WithScmMountPoint("/mnt/daos/2"),
+							storage.NewTierConfig().
+								WithBdevClass("nvme").
+								WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+						))
 			},
 			expValidateErr: errors.New("bdev_list contains duplicate pci"),
+		},
+		"legacy storage; empty bdev_list": {
+			legacyStorage: true,
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 1 {
+					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+				}
+				return nil
+			},
+		},
+		"legacy storage; no bdev_list": {
+			legacyStorage: true,
+			inTxt:         "  bdev_list: []",
+			outTxt:        "",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 1 {
+					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+				}
+				return nil
+			},
+		},
+		"legacy storage; no bdev_class": {
+			legacyStorage: true,
+			inTxt:         "  bdev_class: nvme",
+			outTxt:        "",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 1 {
+					return errors.Errorf("want %d storage tiers, got %d", 1, nr)
+				}
+				return nil
+			},
+		},
+		"legacy storage; non-empty bdev_list": {
+			legacyStorage: true,
+			inTxt:         "  bdev_list: []",
+			outTxt:        "  bdev_list: [0000:80:00.0]",
+			expCheck: func(c *Server) error {
+				nr := len(c.Engines[0].Storage.Tiers)
+				if nr != 2 {
+					return errors.Errorf("want %d storage tiers, got %d", 2, nr)
+				}
+				return nil
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer ShowBufferOnFailure(t, buf)
 
+			testDir, cleanup := CreateTestDir(t)
+			defer cleanup()
+
 			if tt.extraConfig == nil {
 				tt.extraConfig = noopExtra
 			}
 
-			testDir, cleanup := CreateTestDir(t)
-			defer cleanup()
-
-			// First, load a config based on the server config with all options uncommented.
-			testFile := filepath.Join(testDir, sConfigUncomment)
-			uncommentServerConfig(t, testFile)
-
-			replaceFile(t, testFile, tt.inTxt, tt.outTxt)
-
-			config, errParse := mockConfigFromFile(t, testFile)
+			config, errParse := loadFromFile(t, testDir, tt.inTxt, tt.outTxt, tt.legacyStorage)
 			CmpErr(t, tt.expParseErr, errParse)
 			if tt.expParseErr != nil {
 				return
 			}
 			config = tt.extraConfig(config)
+			log.Debugf("%+v", config)
 
 			CmpErr(t, tt.expValidateErr, config.Validate(log))
+
+			if tt.expCheck != nil {
+				if err := tt.expCheck(config); err != nil {
+					t.Fatal(err)
+				}
+			}
 		})
 	}
 }
@@ -655,18 +765,24 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 			WithLogFile("a").
 			WithFabricInterface("a").
 			WithFabricInterfacePort(42).
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithScmMountPoint("a")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("a"),
+			)
 	}
 	configB := func() *engine.Config {
 		return engine.NewConfig().
 			WithLogFile("b").
 			WithFabricInterface("b").
 			WithFabricInterfacePort(42).
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithScmMountPoint("b")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("b"),
+			)
 	}
 
 	for name, tc := range map[string]struct {
@@ -693,32 +809,59 @@ func TestServerConfig_DuplicateValues(t *testing.T) {
 		"duplicate scm_mount": {
 			configA: configA(),
 			configB: configB().
-				WithScmMountPoint(configA().Storage.SCM.MountPoint),
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmDeviceList("a").
+						WithScmMountPoint(configA().Storage.Tiers.ScmConfigs()[0].Scm.MountPoint),
+				),
 			expErr: FaultConfigDuplicateScmMount(1, 0),
 		},
 		"duplicate scm_list": {
 			configA: configA().
-				WithScmClass("dcpm").
-				WithScmRamdiskSize(0).
-				WithScmDeviceList("a"),
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint("aa").
+						WithScmDeviceList("a"),
+				),
 			configB: configB().
-				WithScmClass("dcpm").
-				WithScmRamdiskSize(0).
-				WithScmDeviceList("a"),
+				WithStorage(
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint("bb").
+						WithScmDeviceList("a"),
+				),
 			expErr: FaultConfigDuplicateScmDeviceList(1, 0),
 		},
 		"overlapping bdev_list": {
 			configA: configA().
-				WithBdevDeviceList(MockPCIAddr(1)),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1)),
+				),
 			configB: configB().
-				WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(1)),
+				),
 			expErr: FaultConfigOverlappingBdevDeviceList(1, 0),
 		},
 		"duplicates in bdev_list": {
 			configA: configA().
-				WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(1), MockPCIAddr(1)),
+				),
 			configB: configB().
-				WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+				WithStorage(
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(MockPCIAddr(2), MockPCIAddr(2)),
+				),
 			expErr: errors.New("bdev_list contains duplicate pci addresses"),
 		},
 	} {
@@ -741,18 +884,24 @@ func TestServerConfig_NetworkDeviceClass(t *testing.T) {
 	configA := func() *engine.Config {
 		return engine.NewConfig().
 			WithLogFile("a").
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithFabricInterfacePort(42).
-			WithScmMountPoint("a")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("a"),
+			).
+			WithFabricInterfacePort(42)
 	}
 	configB := func() *engine.Config {
 		return engine.NewConfig().
 			WithLogFile("b").
-			WithScmClass("ram").
-			WithScmRamdiskSize(1).
-			WithFabricInterfacePort(43).
-			WithScmMountPoint("b")
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass("ram").
+					WithScmRamdiskSize(1).
+					WithScmMountPoint("b"),
+			).
+			WithFabricInterfacePort(43)
 	}
 
 	for name, tc := range map[string]struct {

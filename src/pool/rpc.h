@@ -92,7 +92,10 @@
 		ds_pool_replicas_update_handler, NULL),			\
 	X(POOL_LIST_CONT,						\
 		0, &CQF_pool_list_cont,					\
-		ds_pool_list_cont_handler, NULL)
+		ds_pool_list_cont_handler, NULL),			\
+	X(POOL_TGT_QUERY_MAP,						\
+		0, &CQF_pool_tgt_query_map,				\
+		ds_pool_tgt_query_map_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
 	X(POOL_TGT_DISCONNECT,						\
@@ -431,6 +434,19 @@ CRT_RPC_DECLARE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 
 CRT_RPC_DECLARE(pool_ranks_get, DAOS_ISEQ_POOL_RANKS_GET,
 		DAOS_OSEQ_POOL_RANKS_GET)
+
+#define DAOS_ISEQ_POOL_TGT_QUERY_MAP	/* input fields */	 \
+	((struct pool_op_in)	(tmi_op)		CRT_VAR) \
+	((crt_bulk_t)		(tmi_map_bulk)		CRT_VAR) \
+	((uint32_t)		(tmi_map_version)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_TGT_QUERY_MAP	/* output fields */	 \
+	((struct pool_op_out)	(tmo_op)		CRT_VAR) \
+	/* only set on -DER_TRUNC */				 \
+	((uint32_t)		(tmo_map_buf_size)	CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
+		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
 
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,

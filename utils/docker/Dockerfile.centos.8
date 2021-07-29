@@ -116,7 +116,6 @@ RUN dnf -y upgrade && \
         clang-analyzer \
         cmake \
         CUnit-devel \
-        doxygen \
         e2fsprogs \
         file \
         flex \
@@ -145,30 +144,22 @@ RUN dnf -y upgrade && \
         Lmod \
         lz4-devel \
         make \
-        man \
         maven \
         meson \
-        nasm \
         ndctl \
         ninja-build \
         numactl \
         numactl-devel \
         openmpi-devel \
         openssl-devel \
-        pandoc \
         patch \
         patchelf \
         pciutils \
-        python3-Cython \
         python3-devel \
         python3-distro \
         python3-junit_xml \
-        python3-numpy \
-        python3-paramiko \
         python3-pip \
-        python3-pylint \
         python3-pyxattr \
-        python3-requests \
         python3-tabulate \
         python3-scons \
         python3-yaml \
@@ -177,11 +168,6 @@ RUN dnf -y upgrade && \
         valgrind-devel \
         yasm && \
     dnf clean all
-
-# DPDK/SPDK needs pyelftools now
-# Longer term, we should upload our RPM build of this to the public packaging
-# site and install it by RPM, but for now, we'll just pip install it
-RUN pip3 install pyelftools
 
 ARG UID=1000
 
@@ -197,6 +183,13 @@ RUN echo "daos_server ALL=(root) NOPASSWD: ALL" >> /etc/sudoers.d/daos_sudo_setu
 RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
     chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
+
+# DPDK/SPDK needs pyelftools now
+# Longer term, we should upload our RPM build of this to the public packaging
+# site and install it by RPM, but for now, we'll just pip install it
+USER daos_server:daos_server
+RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user pyelftools
+USER root:root
 
 ARG QUICKBUILD=false
 ARG QUICKBUILD_DEPS

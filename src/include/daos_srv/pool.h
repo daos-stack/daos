@@ -21,47 +21,7 @@
 #include <daos_srv/vos_types.h>
 #include <daos_pool.h>
 #include <daos_security.h>
-
-/** Metrics for each individual active pool */
-struct ds_pool_metrics {
-	uuid_t			pm_pool_uuid;
-	ABT_mutex		pm_lock; /* multiple threads may have access */
-
-	struct d_tm_node_t	*pm_started_timestamp;
-	/* TODO: add more per-pool metrics */
-};
-
-/**
- * Lock a pool metrics structure for synchronized access.
- *
- * \param[in]	metrics		Pool metrics
- */
-static inline void
-ds_pool_metrics_lock(struct ds_pool_metrics *metrics)
-{
-	if (unlikely(metrics == NULL))
-		return;
-
-	ABT_mutex_lock(metrics->pm_lock);
-}
-
-/**
- * Unlock a pool metrics structure for synchronized access.
- *
- * \param[in]	metrics		Pool metrics
- */
-static inline void
-ds_pool_metrics_unlock(struct ds_pool_metrics *metrics)
-{
-	if (unlikely(metrics == NULL))
-		return;
-
-	ABT_mutex_unlock(metrics->pm_lock);
-}
-
-struct ds_pool_metrics *ds_pool_metrics_get(const uuid_t pool_uuid);
-int ds_pool_metrics_get_path(const uuid_t pool_uuid, char *path,
-			     size_t path_len);
+#include <gurt/telemetry_common.h>
 
 /*
  * Pool object
@@ -97,8 +57,16 @@ struct ds_pool {
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1;
 
-	struct ds_pool_metrics *sp_metrics; /* Metrics for this pool */
+	/** path to ephemeral metrics */
+	char			sp_path[D_TM_MAX_NAME_LEN];
 
+	/**
+	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
+	 * actual structure. Initialized only for modules that specified a
+	 * set of handlers via dss_module::sm_metrics handlers and reported
+	 * DAOS_SYS_TAG.
+	 */
+	void			*sp_metrics[DAOS_NR_MODULE];
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -152,6 +120,14 @@ struct ds_pool_child {
 	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
+
+	/**
+	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
+	 * actual structure. Initialized only for modules that specified a
+	 * set of handlers via dss_module::sm_metrics handlers and reported
+	 * DAOS_TGT_TAG.
+	 */
+	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);

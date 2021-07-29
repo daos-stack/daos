@@ -182,8 +182,64 @@ out:
 }
 
 static int
+conv_req_props(daos_prop_t **out_prop, bool set_props,
+	       Mgmt__PoolProperty **req_props, size_t n_props)
+{
+	daos_prop_t		*new_props = NULL;
+	struct daos_prop_entry	*entry = NULL;
+	int			 i, rc = 0;
+
+	D_ASSERT(out_prop != NULL);
+	D_ASSERT(req_props != NULL);
+
+	if (n_props < 1)
+		return 0;
+
+	new_props = daos_prop_alloc(n_props);
+	if (new_props == NULL) {
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < n_props; i++) {
+		entry = &new_props->dpp_entries[i];
+		entry->dpe_type = req_props[i]->number;
+
+		if (!set_props)
+			continue;
+
+		switch (req_props[i]->value_case) {
+		case MGMT__POOL_PROPERTY__VALUE_STRVAL:
+			if (req_props[i]->strval == NULL) {
+				D_ERROR("string value is NULL\n");
+				D_GOTO(out, rc = -DER_PROTO);
+			}
+
+			D_STRNDUP(entry->dpe_str, req_props[i]->strval,
+				DAOS_PROP_LABEL_MAX_LEN);
+			if (entry->dpe_str == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			break;
+		case MGMT__POOL_PROPERTY__VALUE_NUMVAL:
+			entry->dpe_val = req_props[i]->numval;
+			break;
+		default:
+			D_ERROR("Pool property request with no value (%d)\n",
+				req_props[i]->value_case);
+			D_GOTO(out, rc = -DER_INVAL);
+		}
+	}
+out:
+	if (rc != 0)
+		daos_prop_free(new_props);
+	else
+		*out_prop = new_props;
+
+	return rc;
+}
+
+static int
 create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
-		  char *label, const char **ace_list, size_t ace_nr)
+		  const char **ace_list, size_t ace_nr)
 {
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
@@ -213,14 +269,6 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 	if (owner_grp != NULL && *owner_grp != '\0') {
 		D_ASPRINTF(out_owner_grp, "%s", owner_grp);
 		if (out_owner_grp == NULL)
-			D_GOTO(err_out, rc = -DER_NOMEM);
-
-		entries++;
-	}
-
-	if (label != NULL && *label != '\0') {
-		D_ASPRINTF(out_label, "%s", label);
-		if (out_label == NULL)
 			D_GOTO(err_out, rc = -DER_NOMEM);
 
 		entries++;
@@ -282,6 +330,8 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t		*svc = NULL;
 	uuid_t			 pool_uuid;
 	daos_prop_t		*prop = NULL;
+	daos_prop_t		*req_props = NULL;
+	daos_prop_t		*base_props = NULL;
 	uint8_t			*body;
 	size_t			 len;
 	int			 rc;
@@ -297,6 +347,18 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	D_INFO("Received request to create pool on %zu ranks\n", req->n_ranks);
 
+	if (req->n_tierbytes != DAOS_MEDIA_MAX)
+		D_GOTO(out, rc = -DER_INVAL);
+
+	if (req->n_properties > 0) {
+		rc = conv_req_props(&req_props, true,
+				    req->properties, req->n_properties);
+		if (rc != 0) {
+			D_ERROR("get_req_props() failed: "DF_RC"\n", DP_RC(rc));
+			goto out;
+		}
+	}
+
 	if (req->n_ranks > 0) {
 		targets = uint32_array_to_rank_list(req->ranks, req->n_ranks);
 		if (targets == NULL)
@@ -311,14 +373,26 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	}
 	D_DEBUG(DB_MGMT, DF_UUID": creating pool\n", DP_UUID(pool_uuid));
 
-	rc = create_pool_props(&prop, req->user, req->usergroup, req->label,
+	rc = create_pool_props(&base_props, req->user, req->usergroup,
 			       (const char **)req->acl, req->n_acl);
 	if (rc != 0)
 		goto out;
 
+	if (req->n_properties > 0) {
+		prop = daos_prop_merge(base_props, req_props);
+		daos_prop_free(req_props);
+		daos_prop_free(base_props);
+		if (prop == NULL) {
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+	} else {
+		prop = base_props;
+	}
+
 	/* Ranks to allocate targets (in) & svc for pool replicas (out). */
 	rc = ds_mgmt_create_pool(pool_uuid, req->sys, "pmem", targets,
-				 req->scmbytes, req->nvmebytes,
+				 req->tierbytes[DAOS_MEDIA_SCM],
+				 req->tierbytes[DAOS_MEDIA_NVME],
 				 prop, req->numsvcreps, &svc,
 				 req->n_faultdomains, req->faultdomains);
 	if (rc != 0) {
@@ -659,6 +733,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uuid_t			uuid;
 	uint8_t			*body;
 	size_t			len;
+	uint64_t		scm_bytes, nvme_bytes = 0;
 	int			rc;
 
 	mgmt__pool_extend_resp__init(&resp);
@@ -672,6 +747,17 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
 		D_ERROR("Failed to unpack req (Extend target)\n");
 		return;
+	}
+
+	if (req->n_tierbytes == 0 || req->n_tierbytes > DAOS_MEDIA_MAX) {
+		D_ERROR("Invalid number of storage tiers: "DF_U64"\n",
+			req->n_tierbytes);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	scm_bytes = req->tierbytes[DAOS_MEDIA_SCM];
+	if (req->n_tierbytes > DAOS_MEDIA_NVME) {
+		nvme_bytes = req->tierbytes[DAOS_MEDIA_NVME];
 	}
 
 	rc = uuid_parse(req->uuid, uuid);
@@ -690,7 +776,7 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out_list, rc = -DER_NOMEM);
 
 	rc = ds_mgmt_pool_extend(uuid, svc_ranks, rank_list, "pmem",
-				 req->scmbytes, req->nvmebytes,
+				 scm_bytes, nvme_bytes,
 				 req->n_faultdomains, req->faultdomains);
 
 	if (rc != 0)
@@ -703,8 +789,8 @@ ds_mgmt_drpc_pool_extend(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	 * In the future, we may need to adjust the allocations somehow and
 	 * this is how we would let the caller know.
 	 */
-	resp.scm_bytes = req->scmbytes;
-	resp.nvme_bytes = req->nvmebytes;
+	resp.n_tier_bytes = req->n_tierbytes;
+	resp.tier_bytes = req->tierbytes;
 
 out_list:
 	d_rank_list_free(rank_list);
@@ -779,9 +865,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
 	Mgmt__PoolSetPropReq	*req = NULL;
 	Mgmt__PoolSetPropResp	 resp = MGMT__POOL_SET_PROP_RESP__INIT;
-	daos_prop_t		*new_prop = NULL;
-	daos_prop_t		*result = NULL;
-	struct daos_prop_entry	*entry = NULL;
+	daos_prop_t		*new_props = NULL;
 	uuid_t			 uuid;
 	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
@@ -790,7 +874,7 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 
 	/* Unpack the inner request from the drpc call body */
 	req = mgmt__pool_set_prop_req__unpack(&alloc.alloc, drpc_req->body.len,
-					     drpc_req->body.data);
+					      drpc_req->body.data);
 
 	if (alloc.oom || req == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
@@ -804,116 +888,184 @@ void ds_mgmt_drpc_pool_set_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
-	D_INFO(DF_UUID": received request to set pool property\n",
+	D_INFO(DF_UUID": received request to set pool properties\n",
 	       DP_UUID(uuid));
 
-	new_prop = daos_prop_alloc(1);
-	if (new_prop == NULL) {
-		D_ERROR("Failed to allocate daos property\n");
-		D_GOTO(out, rc = -DER_NOMEM);
-	}
-
-	if (req->property_case != MGMT__POOL_SET_PROP_REQ__PROPERTY_NUMBER) {
-		D_ERROR("Pool property request must be numeric\n");
-		D_GOTO(out, rc = -DER_INVAL);
-	}
-	new_prop->dpp_entries[0].dpe_type = req->number;
-
-	switch (req->value_case) {
-	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
-		if (req->strval == NULL) {
-			D_ERROR("string value is NULL\n");
-			D_GOTO(out, rc = -DER_PROTO);
-		}
-
-		entry = &new_prop->dpp_entries[0];
-		D_STRNDUP(entry->dpe_str, req->strval,
-			  DAOS_PROP_LABEL_MAX_LEN);
-		if (entry->dpe_str == NULL)
-			D_GOTO(out, rc = -DER_NOMEM);
-		break;
-	case MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL:
-		new_prop->dpp_entries[0].dpe_val = req->numval;
-		break;
-	default:
-		D_ERROR("Pool property request with no value (%d)\n",
-			req->value_case);
-		D_GOTO(out, rc = -DER_INVAL);
-	}
+	rc = conv_req_props(&new_props, true,
+			    req->properties, req->n_properties);
+	if (rc != 0)
+		goto out;
 
 	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
 	if (svc_ranks == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
-	rc = ds_mgmt_pool_set_prop(uuid, svc_ranks, new_prop, &result);
+	rc = ds_mgmt_pool_set_prop(uuid, svc_ranks, new_props);
 	if (rc != 0) {
-		D_ERROR("Failed to set pool property on "DF_UUID": "DF_RC"\n",
+		D_ERROR(DF_UUID": failed to set pool properties: "DF_RC"\n",
 			DP_UUID(uuid), DP_RC(rc));
 		goto out_ranks;
 	}
 
-	if (result == NULL) {
-		D_ERROR("Null set pool property response\n");
-		D_GOTO(out_ranks, rc = -DER_NOMEM);
-	}
-
-	entry = daos_prop_entry_get(result, req->number);
-	if (entry == NULL) {
-		D_ERROR("Did not receive property %d in result\n",
-			req->number);
-		D_GOTO(out_result, rc = -DER_INVAL);
-	}
-
-	if (entry->dpe_type != req->number) {
-		D_ERROR("Property req/resp mismatch (%d != %d)",
-			entry->dpe_type, req->number);
-		D_GOTO(out_result, rc = -DER_INVAL);
-	}
-
-	resp.property_case = MGMT__POOL_SET_PROP_RESP__PROPERTY_NUMBER;
-	resp.number = entry->dpe_type;
-
-	switch (req->value_case) {
-	case MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL:
-		if (entry->dpe_str == NULL)
-			D_GOTO(out_result, rc = -DER_INVAL);
-		D_ASPRINTF(resp.strval, "%s", entry->dpe_str);
-		if (resp.strval == NULL)
-			D_GOTO(out_result, rc = -DER_NOMEM);
-		resp.value_case = MGMT__POOL_SET_PROP_RESP__VALUE_STRVAL;
-		break;
-	case MGMT__POOL_SET_PROP_REQ__VALUE_NUMVAL:
-		resp.numval = entry->dpe_val;
-		resp.value_case = MGMT__POOL_SET_PROP_RESP__VALUE_NUMVAL;
-		break;
-	default:
-		D_ERROR("Pool property response with no value (%d)\n",
-			req->value_case);
-		D_GOTO(out_result, rc = -DER_INVAL);
-	}
-
-out_result:
-	daos_prop_free(result);
 out_ranks:
 	d_rank_list_free(svc_ranks);
 out:
-	daos_prop_free(new_prop);
+	daos_prop_free(new_props);
 
 	resp.status = rc;
 	len = mgmt__pool_set_prop_resp__get_packed_size(&resp);
 	D_ALLOC(body, len);
 	if (body == NULL) {
 		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
-		D_ERROR("Failed to allocate drpc response body\n");
 	} else {
 		mgmt__pool_set_prop_resp__pack(&resp, body);
 		drpc_resp->body.len  = len;
 		drpc_resp->body.data = body;
 	}
 
-	if (req->value_case == MGMT__POOL_SET_PROP_REQ__VALUE_STRVAL)
-		D_FREE(resp.strval);
 	mgmt__pool_set_prop_req__free_unpacked(req, &alloc.alloc);
+}
+
+void
+free_response_props(Mgmt__PoolProperty **props, size_t n_props)
+{
+	int i;
+
+	for (i = 0; i < n_props; i++) {
+		if (props[i]->value_case == MGMT__POOL_PROPERTY__VALUE_STRVAL)
+			D_FREE(props[i]->strval);
+		D_FREE(props[i]);
+	}
+
+	D_FREE(props);
+}
+
+static int
+add_props_to_resp(daos_prop_t *prop, Mgmt__PoolGetPropResp *resp)
+{
+	Mgmt__PoolProperty	**resp_props;
+	struct daos_prop_entry	*entry;
+	int			 i, rc = 0;
+
+	if (prop == NULL || prop->dpp_nr == 0)
+		return 0;
+
+	D_ALLOC_ARRAY(resp_props, prop->dpp_nr);
+	if (resp_props == NULL) {
+		return -DER_NOMEM;
+	}
+
+	for (i = 0; i < prop->dpp_nr; i++) {
+		D_ALLOC(resp_props[i], sizeof(Mgmt__PoolProperty));
+		if (resp_props[i] == NULL) {
+			D_GOTO(out, rc = -DER_NOMEM);
+		}
+		mgmt__pool_property__init(resp_props[i]);
+
+		entry = &prop->dpp_entries[i];
+		resp_props[i]->number = entry->dpe_type;
+
+		if (daos_prop_has_str(entry)) {
+			if (entry->dpe_str == NULL) {
+				D_ERROR("prop string unset\n");
+				D_GOTO(out, rc = -DER_INVAL);
+			}
+
+			resp_props[i]->value_case =
+				MGMT__POOL_PROPERTY__VALUE_STRVAL;
+			D_STRNDUP(resp_props[i]->strval, entry->dpe_str,
+				  DAOS_PROP_LABEL_MAX_LEN);
+			if (resp_props[i]->strval == NULL) {
+				D_GOTO(out, rc = -DER_NOMEM);
+			}
+		} else if (daos_prop_has_ptr(entry)) {
+			D_ERROR("pointer-value props not supported\n");
+			D_GOTO(out, rc = -DER_INVAL);
+		} else {
+			resp_props[i]->numval = entry->dpe_val;
+			resp_props[i]->value_case =
+				MGMT__POOL_PROPERTY__VALUE_NUMVAL;
+		}
+	}
+
+	resp->properties = resp_props;
+	resp->n_properties = prop->dpp_nr;
+
+out:
+	if (rc != 0)
+		free_response_props(resp_props, prop->dpp_nr);
+
+	return rc;
+}
+
+void ds_mgmt_drpc_pool_get_prop(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
+{
+	struct drpc_alloc	alloc = PROTO_ALLOCATOR_INIT(alloc);
+	Mgmt__PoolGetPropReq	*req = NULL;
+	Mgmt__PoolGetPropResp	 resp = MGMT__POOL_GET_PROP_RESP__INIT;
+	daos_prop_t		*props = NULL;
+	uuid_t			 uuid;
+	d_rank_list_t		*svc_ranks = NULL;
+	uint8_t			*body;
+	size_t			 len;
+	int			 rc;
+
+	/* Unpack the inner request from the drpc call body */
+	req = mgmt__pool_get_prop_req__unpack(&alloc.alloc, drpc_req->body.len,
+					      drpc_req->body.data);
+
+	if (alloc.oom || req == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_UNMARSHAL_PAYLOAD;
+		D_ERROR("Failed to unpack req (pool getprop)\n");
+		return;
+	}
+
+	rc = uuid_parse(req->uuid, uuid);
+	if (rc != 0) {
+		D_ERROR("Couldn't parse '%s' to UUID\n", req->uuid);
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	D_INFO(DF_UUID": received request to get pool properties\n",
+	       DP_UUID(uuid));
+
+	rc = conv_req_props(&props, false, req->properties, req->n_properties);
+	if (rc != 0)
+		goto out;
+
+	svc_ranks = uint32_array_to_rank_list(req->svc_ranks, req->n_svc_ranks);
+	if (svc_ranks == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	rc = ds_mgmt_pool_get_prop(uuid, svc_ranks, props);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to get pool properties: "DF_RC"\n",
+			DP_UUID(uuid), DP_RC(rc));
+		goto out_ranks;
+	}
+
+	rc = add_props_to_resp(props, &resp);
+	if (rc != 0)
+		goto out_ranks;
+
+out_ranks:
+	d_rank_list_free(svc_ranks);
+out:
+	daos_prop_free(props);
+
+	resp.status = rc;
+	len = mgmt__pool_get_prop_resp__get_packed_size(&resp);
+	D_ALLOC(body, len);
+	if (body == NULL) {
+		drpc_resp->status = DRPC__STATUS__FAILED_MARSHAL;
+	} else {
+		mgmt__pool_get_prop_resp__pack(&resp, body);
+		drpc_resp->body.len  = len;
+		drpc_resp->body.data = body;
+	}
+
+	free_response_props(resp.properties, resp.n_properties);
+	mgmt__pool_get_prop_req__free_unpacked(req, &alloc.alloc);
 }
 
 static void
@@ -1360,6 +1512,16 @@ pool_rebuild_status_from_info(Mgmt__PoolRebuildStatus *rebuild,
 	}
 }
 
+static void
+pool_query_free_tier_stats(Mgmt__PoolQueryResp *resp)
+{
+	if (resp->tier_stats != NULL) {
+		D_FREE(resp->tier_stats);
+		resp->tier_stats = NULL;
+	}
+	resp->n_tier_stats = 0;
+}
+
 void
 ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 {
@@ -1411,17 +1573,26 @@ ds_mgmt_drpc_pool_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp.leader = pool_info.pi_leader;
 	resp.version = pool_info.pi_map_ver;
 
+	D_ALLOC_ARRAY(resp.tier_stats, DAOS_MEDIA_MAX);
+	if (resp.tier_stats == NULL) {
+		D_ERROR("Failed to allocate tier_stats for resp\n");
+		D_GOTO(out_tiers, rc = -DER_NOMEM);
+	}
+
 	storage_usage_stats_from_pool_space(&scm, &pool_info.pi_space,
 					    DAOS_MEDIA_SCM);
-	resp.scm = &scm;
+	resp.tier_stats[DAOS_MEDIA_SCM] = &scm;
+	resp.n_tier_stats++;
 
 	storage_usage_stats_from_pool_space(&nvme, &pool_info.pi_space,
 					    DAOS_MEDIA_NVME);
-	resp.nvme = &nvme;
+	resp.tier_stats[DAOS_MEDIA_NVME] = &nvme;
+	resp.n_tier_stats++;
 
 	pool_rebuild_status_from_info(&rebuild, &pool_info.pi_rebuild_st);
 	resp.rebuild = &rebuild;
 
+out_tiers:
 out_ranks:
 	d_rank_list_free(svc_ranks);
 out:
@@ -1438,6 +1609,8 @@ out:
 	}
 
 	mgmt__pool_query_req__free_unpacked(req, &alloc.alloc);
+
+	pool_query_free_tier_stats(&resp);
 }
 
 void
@@ -1676,6 +1849,26 @@ ds_mgmt_drpc_bio_health_query(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	resp->volatile_mem_warn = stats.volatile_mem_warn;
 	resp->total_bytes = stats.total_bytes;
 	resp->avail_bytes = stats.avail_bytes;
+	resp->program_fail_cnt_norm = stats.program_fail_cnt_norm;
+	resp->program_fail_cnt_raw = stats.program_fail_cnt_raw;
+	resp->erase_fail_cnt_norm = stats.erase_fail_cnt_norm;
+	resp->erase_fail_cnt_raw = stats.erase_fail_cnt_raw;
+	resp->wear_leveling_cnt_norm = stats.wear_leveling_cnt_norm;
+	resp->wear_leveling_cnt_min = stats.wear_leveling_cnt_min;
+	resp->wear_leveling_cnt_max = stats.wear_leveling_cnt_max;
+	resp->wear_leveling_cnt_avg = stats.wear_leveling_cnt_avg;
+	resp->endtoend_err_cnt_raw = stats.endtoend_err_cnt_raw;
+	resp->crc_err_cnt_raw = stats.crc_err_cnt_raw;
+	resp->media_wear_raw = stats.media_wear_raw;
+	resp->host_reads_raw = stats.host_reads_raw;
+	resp->workload_timer_raw = stats.workload_timer_raw;
+	resp->thermal_throttle_status = stats.thermal_throttle_status;
+	resp->thermal_throttle_event_cnt = stats.thermal_throttle_event_cnt;
+	resp->retry_buffer_overflow_cnt = stats.retry_buffer_overflow_cnt;
+	resp->pll_lock_loss_cnt = stats.pll_lock_loss_cnt;
+	resp->nand_bytes_written = stats.nand_bytes_written;
+	resp->host_bytes_written = stats.host_bytes_written;
+
 out:
 	resp->status = rc;
 	len = ctl__bio_health_resp__get_packed_size(resp);

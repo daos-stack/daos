@@ -292,20 +292,11 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 		}
 		srv := srvs[0]
 
-		if err := srv.callSetRank(ctx, joinResponse.Member.Rank); err != nil {
+		if err := srv.SetupRank(ctx, joinResponse.Member.Rank); err != nil {
 			return &batchJoinResponse{
-				joinErr: errors.Wrap(err, "failed to set rank on local instance"),
+				joinErr: errors.Wrap(err, "SetupRank on local instance failed"),
 			}
 		}
-
-		if err := srv.callSetUp(ctx); err != nil {
-			return &batchJoinResponse{
-				joinErr: errors.Wrap(err, "failed to load local instance modules"),
-			}
-		}
-
-		// mark the engine as ready to handle dRPC requests
-		srv.ready.SetTrue()
 	}
 
 	return resp

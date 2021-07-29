@@ -28,7 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -45,8 +45,10 @@ const (
 
 func cfgHasBdevs(cfg *config.Server) bool {
 	for _, engineCfg := range cfg.Engines {
-		if len(engineCfg.Storage.Bdev.DeviceList) > 0 {
-			return true
+		for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
+			if len(bc.Bdev.DeviceList) > 0 {
+				return true
+			}
 		}
 	}
 
@@ -70,8 +72,11 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	if len(cfg.Engines) == 0 {
 		return "" // can't save to SCM
 	}
+	if len(cfg.Engines[0].Storage.Tiers.ScmConfigs()) == 0 {
+		return ""
+	}
 
-	return filepath.Join(cfg.Engines[0].Storage.SCM.MountPoint, "control_raft")
+	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, "control_raft")
 }
 
 func iommuDetected() bool {
@@ -158,7 +163,7 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 
 func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
 	// Perform an automatic prepare based on the values in the config file.
-	prepReq := bdev.PrepareRequest{
+	prepReq := storage.BdevPrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    srv.runningUser,
@@ -191,7 +196,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
 	srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
-	if _, err := srv.bdevProvider.Prepare(prepReq); err != nil {
+	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
 		srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
 	}
 
@@ -216,7 +221,10 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		engineCfg.HugePageSz = PageSizeMb
 		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
 		// Warn if hugepages are not enough to sustain average
-		// I/O workload (~1GB)
+		// I/O workload (~1GB), ignore warning if only using SCM backend
+		if !hasBdevs {
+			continue
+		}
 		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
 			srv.log.Errorf("Not enough hugepages are allocated!")
 		}
@@ -389,10 +397,11 @@ type netInterface interface {
 }
 
 func getSrxSetting(cfg *config.Server) (int32, error) {
-	srxVarName := "FI_OFI_RXM_USE_SRX"
-	cliSrx := int32(-1) // default to unset
-	srxMismatchErr := errors.Errorf("%s must match in all engine configs", srxVarName)
+	if len(cfg.Engines) == 0 {
+		return -1, nil
+	}
 
+	srxVarName := "FI_OFI_RXM_USE_SRX"
 	getSetting := func(ev string) (bool, int32) {
 		kv := strings.Split(ev, "=")
 		if len(kv) != 2 {
@@ -408,30 +417,13 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 		return true, int32(v)
 	}
 
+	engineVals := make([]int32, len(cfg.Engines))
 	for idx, ec := range cfg.Engines {
-		if cliSrx != -1 && len(ec.EnvVars) == 0 {
-			return -1, srxMismatchErr
-		}
-
+		engineVals[idx] = -1 // default to unset
 		for _, ev := range ec.EnvVars {
 			if match, engSrx := getSetting(ev); match {
-				if engSrx == -1 {
-					if cliSrx == -1 {
-						continue
-					}
-					return -1, srxMismatchErr
-				} else {
-					if cliSrx == engSrx {
-						continue
-					}
-					// no engine srx, or client srx is set but not equal
-					if engSrx == -1 || cliSrx != -1 || idx > 0 {
-						return -1, srxMismatchErr
-					}
-					cliSrx = engSrx
-				}
-			} else if cliSrx != -1 {
-				return -1, srxMismatchErr
+				engineVals[idx] = engSrx
+				break
 			}
 		}
 
@@ -439,6 +431,13 @@ func getSrxSetting(cfg *config.Server) (int32, error) {
 			if pte == srxVarName {
 				return -1, errors.Errorf("%s may not be set as a pass-through env var", srxVarName)
 			}
+		}
+	}
+
+	cliSrx := engineVals[0]
+	for i := 1; i < len(engineVals); i++ {
+		if engineVals[i] != cliSrx {
+			return -1, errors.Errorf("%s setting must be the same for all engines", srxVarName)
 		}
 	}
 

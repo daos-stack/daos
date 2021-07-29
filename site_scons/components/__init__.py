@@ -276,14 +276,19 @@ def define_components(reqs):
 
     retriever = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 
-    pmdk_build = ["make all \"BUILD_RPMEM=n\" \"NDCTL_ENABLE=n\" "
-                  "\"NDCTL_DISABLE=y\" $JOBS_OPT install "
-                  "prefix=$PMDK_PREFIX"]
+    pmdk_build = ['make all "BUILD_RPMEM=n" "NDCTL_ENABLE=n" '
+                  '"NDCTL_DISABLE=y" "DOC=n" $JOBS_OPT install '
+                  'prefix=$PMDK_PREFIX']
 
     reqs.define('pmdk',
                 retriever=retriever,
                 commands=pmdk_build,
                 libs=["pmemobj"])
+
+    if reqs.target_type == 'debug':
+        ABT_DEBUG = ' --enable-debug=most'
+    else:
+        ABT_DEBUG = ' --disable-debug'
 
     retriever = GitRepoRetriever("https://github.com/pmodels/argobots.git",
                                  True)
@@ -293,7 +298,8 @@ def define_components(reqs):
                           './autogen.sh',
                           './configure --prefix=$ARGOBOTS_PREFIX CC=gcc'
                           ' --enable-valgrind'
-                          ' --enable-stack-unwind',
+                          ' --enable-stack-unwind' +
+                          ABT_DEBUG,
                           'make $JOBS_OPT',
                           'make $JOBS_OPT install'],
                 requires=['valgrind_devel', 'libunwind'],

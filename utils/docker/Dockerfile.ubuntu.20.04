@@ -23,8 +23,6 @@ RUN apt-get -y update && \
         build-essential \
         clang \
         cmake \
-        curl \
-        doxygen \
         fuse3 \
         git \
         golang-go \
@@ -52,13 +50,11 @@ RUN apt-get -y update && \
         numactl \
         ninja-build \
         openjdk-8-jdk \
-        pandoc \
         patchelf \
         pciutils \
         pkg-config \
         python3-dev \
         python3-distro \
-        python3-distutils \
         python3-junit.xml \
         python3-pyelftools \
         python3-pyxattr \

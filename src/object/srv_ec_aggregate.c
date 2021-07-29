@@ -258,13 +258,11 @@ agg_carry_over(struct ec_agg_entry *entry, struct ec_agg_extent *agg_extent)
 
 	if (end_stripe > start_stripe) {
 		D_ASSERTF(end_stripe - start_stripe == 1,
-			  "IDX="DF_U64", SS="DF_U64", ES="DF_U64
+			  DF_UOID ", recx "DF_RECX" SS="DF_U64", ES="DF_U64
 			  ", EC_OCA(k=%d, p=%d, cs=%d)\n",
-			  agg_extent->ae_recx.rx_idx,
-			  start_stripe, end_stripe,
-			  entry->ae_oca.u.ec.e_k,
-			  entry->ae_oca.u.ec.e_p,
-			  entry->ae_oca.u.ec.e_len);
+			  DP_UOID(entry->ae_oid), DP_RECX(agg_extent->ae_recx),
+			  start_stripe, end_stripe, entry->ae_oca.u.ec.e_k,
+			  entry->ae_oca.u.ec.e_p, entry->ae_oca.u.ec.e_len);
 
 		tail_size = DAOS_RECX_END(agg_extent->ae_recx) -
 			    end_stripe * stripe_size;
@@ -1226,7 +1224,7 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_process_partial_stripe_ult, &stripe_ud,
-			    DSS_XS_OFFLOAD, tid, 0, NULL);
+			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1455,7 +1453,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_peer_update_ult, &stripe_ud,
-			    DSS_XS_OFFLOAD, tid, 0, NULL);
+			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1737,7 +1735,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 	}
 	tid = dss_get_module_info()->dmi_tgt_id;
 	rc = dss_ult_create(agg_process_holes_ult, &stripe_ud,
-			    DSS_XS_OFFLOAD, tid, 0, NULL);
+			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
@@ -1809,9 +1807,13 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	 * parity ext epoch if exist.
 	 */
 	iter_param.ip_hdl		= DAOS_HDL_INVAL;
+	/* set epr_lo as zero to pass-through possibly existed snapshot
+	 * between agg_param->ap_epr.epr_lo and .epr_hi.
+	 */
+	iter_param.ip_epr.epr_lo	= 0;
+	iter_param.ip_epr.epr_hi	= agg_param->ap_epr.epr_hi;
 	iter_param.ip_ih		= entry->ae_thdl;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE |
-					  VOS_IT_SKIP_REMOVED;
+	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_nr	= ec_age2cs(entry);
 	iter_param.ip_recx.rx_idx	= PARITY_INDICATOR |
 					  (entry->ae_cur_stripe.as_stripenum *
@@ -1819,7 +1821,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	ec_age_set_no_parity(entry);
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, dth);
-	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: "DF_X64
+	D_DEBUG(DB_EPC, "Querying parity for stripe: %lu, offset: "DF_X64
 		", "DF_RC"\n", entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx, DP_RC(rc));
 	if (rc != 0)
@@ -1829,6 +1831,13 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	if (ec_age_with_parity(entry) && ec_age_parity_higher(entry)) {
 		update_vos = true;
 		write_parity = false;
+		D_DEBUG(DB_EPC, "delete replica for stripe: %lu,"
+			DF_U64"/"DF_U64" eph "DF_X64" >= "DF_X64"\n",
+			entry->ae_cur_stripe.as_stripenum,
+			iter_param.ip_recx.rx_idx,
+			iter_param.ip_recx.rx_nr,
+			entry->ae_par_extent.ape_epoch,
+			entry->ae_cur_stripe.as_hi_epoch);
 		goto out;
 	}
 
@@ -1856,7 +1865,7 @@ out:
 	if (process_holes && rc == 0) {
 		rc = agg_process_holes(entry);
 	} else if (update_vos && rc == 0) {
-		if (rc == 0 && ec_age2p(entry) > 1)  {
+		if (ec_age2p(entry) > 1)  {
 			/* offload of ds_obj_update to push remote parity */
 			rc = agg_peer_update(entry, write_parity);
 			if (rc)
@@ -2103,7 +2112,6 @@ ec_aggregate_yield(struct ec_agg_param *agg_param)
 	D_ASSERT(agg_param->ap_yield_func != NULL);
 
 	return agg_param->ap_yield_func(agg_param->ap_yield_arg);
-
 }
 
 /* Post iteration call back for outer iterator
@@ -2129,20 +2137,6 @@ agg_iterate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	default:
 		break;
-	}
-
-	agg_param->ap_credits++;
-
-	if (agg_param->ap_credits > agg_param->ap_credits_max) {
-		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
-		if (!(*acts & VOS_ITER_CB_SKIP))
-			agg_reset_pos(type, agg_entry);
-		D_DEBUG(DB_EPC, "EC aggregation yield type %d.\n", type);
-		if (ec_aggregate_yield(agg_param)) {
-			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
-			rc = 1;
-		}
 	}
 
 	return rc;
@@ -2273,6 +2267,20 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	if (rc < 0) {
 		D_ERROR("EC aggregation failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
+	}
+
+	agg_param->ap_credits++;
+	if (agg_param->ap_credits > agg_param->ap_credits_max) {
+		agg_param->ap_credits = 0;
+		*acts |= VOS_ITER_CB_YIELD;
+		D_DEBUG(DB_EPC, "EC aggregation yield type %d. acts %u\n",
+			type, *acts);
+		if (!(*acts & VOS_ITER_CB_SKIP))
+			agg_reset_pos(type, agg_entry);
+		if (ec_aggregate_yield(agg_param)) {
+			D_DEBUG(DB_EPC, "EC aggregation aborted\n");
+			rc = 1;
+		}
 	}
 
 	return rc;
@@ -2447,8 +2455,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
 	iter_param.ip_epr.epr_hi	= epr->epr_hi;
 	iter_param.ip_epc_expr		= VOS_IT_EPC_RR;
-	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE |
-					  VOS_IT_SKIP_REMOVED;
+	iter_param.ip_flags		= VOS_IT_RECX_VISIBLE;
 	iter_param.ip_recx.rx_idx	= 0ULL;
 	iter_param.ip_recx.rx_nr	= ~PARITY_INDICATOR;
 
