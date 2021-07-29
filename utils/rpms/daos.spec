@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.103
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -418,11 +418,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
-%{_prefix}/lib/daos/TESTING/ftest/list_tests.py
 %{_bindir}/hello_drpc
-%{_bindir}/*_test*
 %{_bindir}/jobtest
-%{_bindir}/self_test
 %{_libdir}/libdaos_tests.so
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
@@ -442,6 +439,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_metrics
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
+%{_bindir}/common_test
+%{_bindir}/acl_dump_test
+%{_bindir}/agent_tests
+%{_bindir}/drpc_engine_test
+%{_bindir}/drpc_test
+%{_bindir}/eq_tests
+%{_bindir}/job_tests
+%{_bindir}/security_test
+%{_bindir}/srv_checksum_tests
+%{_bindir}/vos_tests
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
@@ -461,6 +468,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
 %changelog
+* Wed Jul 28 2021 Niu Yawei <yawei.niu@intel.com> 1.3.103-5
+- Fix duplicates
+- Add vos_perf
+
 * Wed Jul 14 2021 Li Wei <wei.g.li@intel.com> 1.3.103-4
 - Update raft to fix slow leader re-elections
 
