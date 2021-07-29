@@ -117,8 +117,6 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 		return err
 	}
 
-	ei.log.Debugf("idx %d createSuperblock()", ei.Index())
-
 	if err := ei.MountScm(); err != nil {
 		return err
 	}
@@ -151,8 +149,8 @@ func (ei *EngineInstance) createSuperblock(recreate bool) error {
 		}
 	}
 	ei.setSuperblock(superblock)
-	ei.log.Debugf("creating %s: (rank: %s, uuid: %s)",
-		ei.superblockPath(), superblock.Rank, superblock.UUID)
+	ei.log.Debugf("index %d: creating %s: (rank: %s, uuid: %s)",
+		ei.Index(), ei.superblockPath(), superblock.Rank, superblock.UUID)
 
 	return ei.WriteSuperblock()
 }
