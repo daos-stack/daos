@@ -427,8 +427,8 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 }
 
 static int
-is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
-		     int num_whitelist_devices)
+is_addr_in_allowlist(char *pci_addr, const struct spdk_pci_addr *allowlist,
+		     int num_allowlist_devices)
 {
 	int			i;
 	struct spdk_pci_addr    tmp;
@@ -438,8 +438,8 @@ is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
 		return -EINVAL;
 	}
 
-	for (i = 0; i < num_whitelist_devices; i++) {
-		if (spdk_pci_addr_compare(&tmp, &whitelist[i]) == 0) {
+	for (i = 0; i < num_allowlist_devices; i++) {
+		if (spdk_pci_addr_compare(&tmp, &allowlist[i]) == 0) {
 			return 1;
 		}
 	}
@@ -447,7 +447,7 @@ is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
 	return 0;
 }
 
-/** Add PCI address to spdk_env_opts whitelist, ignoring any duplicates. */
+/** Add PCI address to spdk_env_opts allowlist, ignoring any duplicates. */
 static int
 opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		  char *traddr)
@@ -456,7 +456,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 	size_t			count = opts->num_pci_addr;
 	struct spdk_pci_addr   *tmp = *list;
 
-	rc = is_addr_in_whitelist(traddr, *list, count);
+	rc = is_addr_in_allowlist(traddr, *list, count);
 	if (rc < 0)
 		return rc;
 	if (rc == 1)

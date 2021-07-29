@@ -449,7 +449,18 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 						WithScmRamdiskSize(ec.LegacyStorage.RamdiskSize),
 				)
 			}
-			if ec.LegacyStorage.BdevClass != storage.ClassNone {
+
+			// Do not add bdev tier if cls is none or nvme has no
+			// devices to maintain backward compatible behavior.
+			bc := ec.LegacyStorage.BdevClass
+			switch {
+			case bc == storage.ClassNvme && len(ec.LegacyStorage.BdevConfig.DeviceList) == 0:
+				log.Debugf("legacy storage config conversion skipped for class %s with empty bdev_list",
+					storage.ClassNvme)
+			case bc == storage.ClassNone:
+				log.Debugf("legacy storage config conversion skipped for class %s",
+					storage.ClassNone)
+			default:
 				tierCfgs = append(tierCfgs,
 					storage.NewTierConfig().
 						WithBdevClass(ec.LegacyStorage.BdevClass.String()).

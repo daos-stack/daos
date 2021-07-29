@@ -30,6 +30,7 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 	d_rank_t		kill_ranks[4] = { -1 };
 	int			kill_ranks_num = 0;
 	d_rank_t		extra_kill_ranks[4] = { -1 };
+	int			rc;
 
 	if (oclass == OC_EC_2P1G1 && !test_runable(arg, 4))
 		return;
@@ -65,15 +66,10 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2, false);
 	}
 
-	if (write_type == PARTIAL_UPDATE)
-		verify_ec_partial(&req, arg->index, 0);
-	else if (write_type == FULL_UPDATE)
-		verify_ec_full(&req, arg->index, 0);
-	else if (write_type == FULL_PARTIAL_UPDATE)
-		verify_ec_full_partial(&req, arg->index, 0);
-	else if (write_type == PARTIAL_FULL_UPDATE)
-		verify_ec_full(&req, arg->index, 0);
 	ioreq_fini(&req);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	assert_int_equal(rc, 0);
 
 	reintegrate_pools_ranks(&arg, 1, kill_ranks, kill_ranks_num);
 	if (oclass == OC_EC_2P1G1)
@@ -81,17 +77,8 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 	else /* oclass OC_EC_4P2G1 */
 		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2);
 
-	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	if (write_type == PARTIAL_UPDATE)
-		verify_ec_partial(&req, arg->index, 0);
-	else if (write_type == FULL_UPDATE)
-		verify_ec_full(&req, arg->index, 0);
-	else if (write_type == FULL_PARTIAL_UPDATE)
-		verify_ec_full_partial(&req, arg->index, 0);
-	else if (write_type == PARTIAL_FULL_UPDATE)
-		verify_ec_full(&req, arg->index, 0);
-
-	ioreq_fini(&req);
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	assert_int_equal(rc, 0);
 }
 
 #define CELL_SIZE	1048576
@@ -155,10 +142,11 @@ static int
 rebuild_ec_setup(void  **state, int number)
 {
 	test_arg_t	*arg;
+	daos_prop_t	*prop = NULL;
 	int		rc;
 
 	save_group_state(state);
-	rc = test_setup(state, SETUP_CONT_CONNECT, true,
+	rc = test_setup(state, SETUP_POOL_CONNECT, true,
 			REBUILD_SMALL_POOL_SIZE, number, NULL);
 	if (rc) {
 		/* Let's skip for this case, since it is possible there
@@ -171,6 +159,14 @@ rebuild_ec_setup(void  **state, int number)
 	}
 
 	arg = *state;
+	/* sustain 2 failure here */
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
+	assert_int_equal(rc, 0);
+
 	if (dt_obj_class != DAOS_OC_UNKNOWN)
 		arg->obj_class = dt_obj_class;
 	else
@@ -670,6 +666,63 @@ rebuild_multiple_group_ec_object(void **state)
 	free(verify_data);
 }
 
+static int
+enumerate_cb(void *data)
+{
+	test_arg_t	*arg = data;
+	struct ioreq	*req = arg->rebuild_cb_arg;
+	daos_anchor_t	anchor = { 0 };
+	int		total = 0;
+	char		buf[512];
+	daos_size_t	buf_len = 512;
+	int		rc;
+
+	while (!daos_anchor_is_eof(&anchor)) {
+		daos_key_desc_t kds[10];
+		uint32_t number = 10;
+
+		memset(buf, 0, buf_len);
+		rc = enumerate_dkey(DAOS_TX_NONE, &number, kds, &anchor, buf,
+				    buf_len, req);
+		assert_rc_equal(rc, 0);
+		total += number;
+	}
+
+	assert_int_equal(total, 100);
+	return 0;
+}
+
+static void
+rebuild_ec_dkey_enumeration(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 100; i++) {
+		char dkey[32];
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		sprintf(dkey, "dkey_%d", i);
+		insert_single(dkey, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+	}
+
+	rank = get_rank_by_oid_shard(arg, oid, 4);
+	arg->rebuild_cb = enumerate_cb;
+	arg->rebuild_cb_arg = &req;
+	rebuild_single_pool_rank(arg, rank, false);
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -774,6 +827,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD36: rebuild multiple group EC object",
 	 rebuild_multiple_group_ec_object, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD37: rebuild EC dkey enumeration",
+	 rebuild_ec_dkey_enumeration, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 

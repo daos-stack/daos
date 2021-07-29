@@ -63,7 +63,7 @@ enum PropType {
   DAOS_PROP_CO_LABEL = 0x1001;
   /**
    * Layout type: unknown, POSIX, MPI-IO, HDF5, Apache Arrow, ...
-   * default value = DAOS_PROP_CO_LAYOUT_UNKOWN
+   * default value = DAOS_PROP_CO_LAYOUT_UNKNOWN
    */
   DAOS_PROP_CO_LAYOUT_TYPE = 0x1002;
   /**

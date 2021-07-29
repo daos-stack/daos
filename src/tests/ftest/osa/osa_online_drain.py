@@ -8,7 +8,6 @@ import time
 import random
 import threading
 
-from test_utils_pool import TestPool
 from write_host_file import write_host_file
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
@@ -46,7 +45,7 @@ class OSAOnlineDrain(OSAUtils):
                              Defaults to ior.
         """
         # Create a pool
-        pool = {}
+        self.pool = []
         target_list = []
         if oclass is None:
             oclass = self.ior_cmd.dfs_oclass.value
@@ -63,20 +62,17 @@ class OSAOnlineDrain(OSAUtils):
         rank = random.randint(1, drain_servers)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context, self.get_dmg_command())
-            pool[val].get_params(self)
-            pool[val].create()
-            pool[val].set_property("reclaim", "disabled")
+            self.pool.append(self.get_pool())
+            self.pool[-1].set_property("reclaim", "disabled")
 
         # Drain the rank and targets
         for val in range(0, num_pool):
             threads = []
-            self.pool = pool[val]
             # Instantiate aggregation
             if self.test_during_aggregation is True:
                 for _ in range(0, 2):
                     self.run_ior_thread("Write", oclass, test_seq)
-                self.delete_extra_container(self.pool)
+                self.delete_extra_container(self.pool[val])
             # The following thread runs while performing osa operations.
             if app_name == "ior":
                 threads.append(threading.Thread(target=self.run_ior_thread,
@@ -93,11 +89,11 @@ class OSAOnlineDrain(OSAUtils):
                 time.sleep(1)
             # Wait the threads to write some data before drain.
             time.sleep(5)
-            self.pool.display_pool_daos_space("Pool space: Beginning")
+            self.pool[val].display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
-            output = self.dmg_command.pool_drain(self.pool.uuid,
-                                                 rank, t_string)
+            output = self.dmg_command.pool_drain(
+                self.pool[val].uuid, rank, t_string)
             self.print_and_assert_on_rebuild_failure(output)
 
             pver_drain = self.get_pool_version()
@@ -113,11 +109,10 @@ class OSAOnlineDrain(OSAUtils):
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space(display_string)
+            self.pool[val].display_pool_daos_space(display_string)
             self.run_ior_thread("Read", oclass, test_seq)
-            self.container = self.pool_cont_dict[self.pool][0]
-            kwargs = {"pool": self.pool.uuid,
+            self.container = self.pool_cont_dict[self.pool[val]][0]
+            kwargs = {"pool": self.pool[val].uuid,
                       "cont": self.container.uuid}
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
