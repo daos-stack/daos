@@ -362,15 +362,12 @@ resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix,
 	rc = uuid_parse(t, attr->da_puuid);
 	if (rc) {
 		rc = 0;
-		/** redundant, but to make sure property check is OK */
 		if (!daos_label_is_valid(t))
 			D_GOTO(err, rc = EINVAL);
-		D_STRNDUP(attr->da_pool_label, t, DAOS_PROP_LABEL_MAX_LEN);
-		if (attr->da_pool_label == NULL)
-			D_GOTO(err, rc = ENOMEM);
-	} else {
-		attr->da_pool_label = NULL;
 	}
+	D_STRNDUP(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_pool == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	if (pool_only) {
 		D_FREE(dir);
@@ -390,12 +387,10 @@ resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix,
 		/** redundant, but to make sure property check is OK */
 		if (!daos_label_is_valid(t))
 			D_GOTO(err, rc = EINVAL);
-		D_STRNDUP(attr->da_cont_label, t, DAOS_PROP_LABEL_MAX_LEN);
-		if (attr->da_cont_label == NULL)
-			D_GOTO(err, rc = ENOMEM);
-	} else {
-		attr->da_cont_label = NULL;
 	}
+	D_STRNDUP(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_cont == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	/** if there is a relative path, parse it out */
 	t = strtok_r(NULL, "", &saveptr);
@@ -576,143 +571,39 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_GOTO(err, rc = EINVAL);
 	}
 
+	/** da_puuid is deprecated, but in case users are still using it parse the uuid there */
 	rc = uuid_parse(t, attr->da_puuid);
 	if (rc) {
 		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
+	/** da_pool is what users should be using; dup the string there. */
+	D_STRNDUP(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_pool == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	t = strtok_r(NULL, "/", &saveptr);
 	if (t == NULL) {
 		D_ERROR("Invalid DAOS xattr format (%s).\n", str);
 		D_GOTO(err, rc = EINVAL);
 	}
+
+	/** da_cuuid is deprecated, but in case users are still using it parse the uuid there */
 	rc = uuid_parse(t, attr->da_cuuid);
 	if (rc) {
 		D_ERROR("Invalid DAOS xattr format: container UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
+	/** da_cont is what users should be using; dup the string there. */
+	D_STRNDUP(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_cont == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	rc = 0;
 err:
 	D_FREE(local);
 	return rc;
 }
-
-#ifdef LUSTRE_INCLUDE
-static int
-duns_create_lustre_path(daos_handle_t poh, const char *path,
-			struct duns_attr_t *attrp)
-{
-	char			pool[37], cont[37];
-	char			oclass[10], type[10];
-	char			str[DUNS_MAX_XATTR_LEN + 1];
-	int			len;
-	int			try_multiple = 1;		/* boolean */
-	int			rc;
-
-	/* XXX pool must already be created, and associated DFuse-mount
-	 * should already be mounted
-	 */
-
-	/* XXX if liblustreapi is not binded, do it now ! */
-	if (liblustre_binded == false && liblustre_notfound == false) {
-		rc = bind_liblustre();
-		if (rc)
-			return EINVAL;
-	}
-
-	uuid_unparse(attrp->da_puuid, pool);
-	daos_oclass_id2name(attrp->da_oclass_id, oclass);
-	daos_unparse_ctype(attrp->da_type, type);
-
-	/* create container with specified container uuid (try_multiple=0)
-	 * or a generated random container uuid (try_multiple!=0).
-	 */
-	if (!uuid_is_null(attrp->da_cuuid)) {
-		try_multiple = 0;
-		uuid_unparse(attrp->da_cuuid, cont);
-		D_INFO("try create once with provided container UUID: %36s\n",
-		       cont);
-	}
-	/* create container */
-	do {
-		if (try_multiple) {
-			uuid_generate(attrp->da_cuuid);
-			uuid_unparse(attrp->da_cuuid, cont);
-		}
-
-		if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-			dfs_attr_t	dfs_attr = { 0 };
-
-			/** TODO: set Lustre FID here. */
-			dfs_attr.da_id = 0;
-			dfs_attr.da_oclass_id = attrp->da_oclass_id;
-			dfs_attr.da_chunk_size = attrp->da_chunk_size;
-			dfs_attr.da_props = attrp->da_props;
-			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
-					     NULL, NULL);
-		} else {
-			daos_prop_t	*prop;
-			int		 nr = 1;
-
-			if (attrp->da_props != NULL)
-				nr = attrp->da_props->dpp_nr + 1;
-
-			prop = daos_prop_alloc(nr);
-			if (prop == NULL) {
-				D_ERROR("Failed to allocate container prop.");
-				D_GOTO(err, rc = ENOMEM);
-			}
-			if (attrp->da_props != NULL) {
-				rc = daos_prop_copy(prop, attrp->da_props);
-				if (rc) {
-					daos_prop_free(prop);
-					D_ERROR("failed to copy properties (%d)\n", rc);
-					return daos_der2errno(rc);
-				}
-			}
-			prop->dpp_entries[prop->dpp_nr - 1].dpe_type =
-				DAOS_PROP_CO_LAYOUT_TYPE;
-			prop->dpp_entries[prop->dpp_nr - 1].dpe_val =
-				attrp->da_type;
-			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
-			daos_prop_free(prop);
-		}
-
-	} while ((rc == -DER_EXIST) && try_multiple);
-
-	if (rc) {
-		D_ERROR("Failed to create container (%d)\n", rc);
-		D_GOTO(err, rc);
-	}
-
-	/* XXX should file with foreign LOV be expected/supoorted here ? */
-
-	/** create dir and store the daos attributes in the path LMV */
-	len = snprintf(str,
-		       DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type, pool, cont);
-	if (len < 0) {
-		D_ERROR("Failed to create LMV value\n");
-		D_GOTO(err_cont, rc = EINVAL);
-	}
-
-	rc = (*dir_create_foreign)(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH,
-				   LU_FOREIGN_TYPE_SYMLINK, 0xda05, str);
-	if (rc) {
-		D_ERROR("Failed to create Lustre dir '%s' with foreign "
-			"LMV '%s' (rc = %d).\n", path, str, rc);
-		D_GOTO(err_cont, rc = EINVAL);
-	}
-
-	return rc;
-
-err_cont:
-	daos_cont_destroy(poh, attrp->da_cuuid, 1, NULL);
-err:
-	return rc;
-}
-#endif
 
 static int
 create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
@@ -759,19 +650,95 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
 	return rc;
 }
 
+#ifdef LUSTRE_INCLUDE
+static int
+duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *path,
+			struct duns_attr_t *attrp)
+{
+	char			pool[37], cont[37];
+	char			oclass[10], type[10];
+	char			str[DUNS_MAX_XATTR_LEN + 1];
+	int			len;
+	bool			try_multiple = true;
+	int			rc;
+
+	/* XXX pool must already be created, and associated DFuse-mount should already be mounted */
+
+	/* XXX if liblustreapi is not binded, do it now ! */
+	if (liblustre_binded == false && liblustre_notfound == false) {
+		rc = bind_liblustre();
+		if (rc)
+			return EINVAL;
+	}
+
+	uuid_unparse(info.pi_uuid, pool);
+	daos_oclass_id2name(attrp->da_oclass_id, oclass);
+	daos_unparse_ctype(attrp->da_type, type);
+
+	/* create container with specified container uuid (try_multiple=0) or a generated random
+	 * container uuid (try_multiple!=0).
+	 */
+	if (!uuid_is_null(attrp->da_cuuid)) {
+		try_multiple = 0;
+		uuid_unparse(attrp->da_cuuid, cont);
+		D_INFO("try create once with provided container UUID: %36s\n",
+		       cont);
+	}
+
+	/* create container */
+	do {
+		if (try_multiple) {
+			uuid_generate(attrp->da_cuuid);
+			uuid_unparse(attrp->da_cuuid, cont);
+		}
+
+		rc = create_cont(poh, attrp);
+	} while ((rc == EEXIST) && try_multiple);
+	if (rc) {
+		D_ERROR("Failed to create container (%s)\n", strerror(rc));
+		D_GOTO(err, rc);
+	}
+
+	/* XXX should file with foreign LOV be expected/supoorted here ? */
+
+	/** create dir and store the daos attributes in the path LMV */
+	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type, pool, cont);
+	if (len < 0) {
+		D_ERROR("Failed to create LMV value\n");
+		D_GOTO(err_cont, rc = EINVAL);
+	}
+
+	rc = (*dir_create_foreign)(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH,
+				   LU_FOREIGN_TYPE_SYMLINK, 0xda05, str);
+	if (rc) {
+		D_ERROR("Failed to create Lustre dir '%s' with foreign "
+			"LMV '%s' (rc = %d).\n", path, str, rc);
+		D_GOTO(err_cont, rc = EINVAL);
+	}
+
+	return rc;
+
+err_cont:
+	daos_cont_destroy(poh, attrp->da_cuuid, 1, NULL);
+err:
+	return rc;
+}
+#endif
+
 int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 {
-	char		pool[37], cont[37];
-	char		oclass[10], type[10];
-	char		str[DUNS_MAX_XATTR_LEN];
-	int		len;
-	bool		try_multiple = true;
-	bool		no_prefix = false;
-	int		rc;
-	bool		backend_dfuse = false;
-	bool		pool_only;
-	size_t		path_len;
+	char			pool[37], cont[37];
+	char			oclass[10], type[10];
+	daos_pool_info_t	info;
+	char			str[DUNS_MAX_XATTR_LEN];
+	int			len;
+	bool			try_multiple = true;
+	bool			no_prefix = false;
+	bool			backend_dfuse = false;
+	bool			pool_only;
+	size_t			path_len;
+	int			rc;
 
 	if (path == NULL) {
 		D_ERROR("Invalid path\n");
@@ -790,10 +757,29 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			return EINVAL;
 		}
 
+		rc = resolve_direct_path(path, attrp, no_prefix, pool_only);
+		if (rc) {
+			D_ERROR("Failed to resolve direct path %s\n", path);
+			return rc;
+		}
+
 		rc = create_cont(poh, attrp);
 		if (rc)
 			D_ERROR("Failed to create container (%d)\n", rc);
 		return rc;
+	}
+
+	rc = daos_pool_query(poh, NULL, &info, NULL, NULL);
+	if (rc) {
+		D_ERROR("Failed to query pool info\n");
+		return daos_der2errno(rc);
+	}
+
+	if (!uuid_is_null(attrp->da_puuid)) {
+		if (uuid_compare(attrp->da_puuid, info.pi_uuid) != 0) {
+			D_ERROR("Pool open handle must match the passed in uuid\n");
+			return EINVAL;
+		}
 	}
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
@@ -823,7 +809,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_create_lustre_path(poh, path, attrp);
+			rc = duns_create_lustre_path(poh, info, path, attrp);
 			if (rc == 0)
 				return 0;
 			/* if Lustre specific method fails, fallback to try the normal way... */
@@ -846,8 +832,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (fd == -1) {
 			rc = errno;
 
-			D_ERROR("Failed to create file %s: %s\n", path,
-				strerror(rc));
+			D_ERROR("Failed to create file %s: %s\n", path, strerror(rc));
 			return rc;
 		}
 		close(fd);
@@ -856,15 +841,15 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		return EINVAL;
 	}
 
-	uuid_unparse(attrp->da_puuid, pool);
+	uuid_unparse(info.pi_uuid, pool);
 	if (attrp->da_oclass_id != OC_UNKNOWN)
 		daos_oclass_id2name(attrp->da_oclass_id, oclass);
 	else
 		strcpy(oclass, "UNKNOWN");
 	daos_unparse_ctype(attrp->da_type, type);
 
-	/* create container with specified container uuid (try_multiple)
-	 * or a generated random container uuid (!try_multiple).
+	/* create container with specified container uuid (try_multiple) or a generated random
+	 * container uuid (!try_multiple).
 	 */
 	if (!uuid_is_null(attrp->da_cuuid)) {
 		try_multiple = false;
@@ -898,7 +883,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		rc = create_cont(poh, attrp);
-		if (rc == -DER_SUCCESS && backend_dfuse) {
+		if (rc == 0 && backend_dfuse) {
 			/* This next setxattr will cause dfuse to lookup the entry point and perform
 			 * a container connect, therefore this xattr will be set in the root of the
 			 * new container, not the directory.
@@ -910,11 +895,16 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 				goto err_link;
 			}
 		}
-
-	} while ((rc == -DER_EXIST) && try_multiple);
+	} while ((rc == EEXIST) && try_multiple);
 	if (rc) {
-		D_ERROR("Failed to create container (%d)\n", rc);
-		D_GOTO(err_link, rc = daos_der2errno(rc));
+		D_ERROR("Failed to create container (%s)\n", strerror(rc));
+		D_GOTO(err_link, rc);
+	}
+
+	D_STRNDUP(attrp->da_cont, cont, DAOS_PROP_LABEL_MAX_LEN);
+	if (attrp->da_cont == NULL) {
+		daos_cont_destroy(poh, cont, 0, NULL);
+		D_GOTO(err_link, rc = ENOMEM);
 	}
 
 	return rc;
@@ -940,7 +930,7 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	}
 
 	/** Destroy the container */
-	rc = daos_cont_destroy(poh, dattr.da_cuuid, 1, NULL);
+	rc = daos_cont_destroy(poh, dattr.da_cont, 1, NULL);
 	if (rc) {
 		D_ERROR("Failed to destroy container (%d)\n", rc);
 		/** recreate the link ? */
@@ -981,24 +971,24 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 }
 
 int
-duns_set_pool_label(struct duns_attr_t *attrp, const char *label)
+duns_set_pool_attr(struct duns_attr_t *attrp, const char *pool)
 {
 	if (attrp == NULL)
 		return EINVAL;
-	D_STRNDUP(attrp->da_pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
-	if (attrp->da_pool_label == NULL)
+	D_STRNDUP(attrp->da_pool, pool, DAOS_PROP_LABEL_MAX_LEN);
+	if (attrp->da_pool == NULL)
 		return ENOMEM;
 
 	return 0;
 }
 
 int
-duns_set_cont_label(struct duns_attr_t *attrp, const char *label)
+duns_set_cont_attr(struct duns_attr_t *attrp, const char *cont)
 {
 	if (attrp == NULL)
 		return EINVAL;
-	D_STRNDUP(attrp->da_cont_label, label, DAOS_PROP_LABEL_MAX_LEN);
-	if (attrp->da_cont_label == NULL)
+	D_STRNDUP(attrp->da_cont, cont, DAOS_PROP_LABEL_MAX_LEN);
+	if (attrp->da_cont == NULL)
 		return ENOMEM;
 
 	return 0;
@@ -1011,6 +1001,6 @@ duns_destroy_attr(struct duns_attr_t *attrp)
 		return;
 
 	D_FREE(attrp->da_rel_path);
-	D_FREE(attrp->da_pool_label);
-	D_FREE(attrp->da_cont_label);
+	D_FREE(attrp->da_pool);
+	D_FREE(attrp->da_cont);
 }

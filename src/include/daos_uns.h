@@ -46,9 +46,17 @@ enum {
 
 /** struct that has the values to make the connection from the UNS to DAOS */
 struct duns_attr_t {
-	/** IN/OUT: Pool uuid of the container. */
+	/** IN/OUT: (Deprecated) Pool UUID of the container to be created in duns_create_path().
+	 *
+	 * The pool UUID is now obtained from the pool handle in duns_create_path(). The pool UUID
+	 * is returned as a string in \a da_pool with duns_resolve_path().
+	 */
 	uuid_t			da_puuid;
-	/** IN/OUT: Container uuid that is created for the path. */
+	/** IN/OUT: (Deprecated) Optional UUID of the cont to be created in duns_create_path().
+	 *
+	 * The UUID will be used to create the container in duns_create_path() if set. The cont UUID
+	 * or label is returned as a string in \a da_cont with duns_resolve_path().
+	 */
 	uuid_t			da_cuuid;
 	/** IN/OUT: Container layout (POSIX, HDF5) */
 	daos_cont_layout_t	da_type;
@@ -56,7 +64,8 @@ struct duns_attr_t {
 	daos_oclass_id_t	da_oclass_id;
 	/** IN: (Optional) Chunk size for all files in container */
 	daos_size_t		da_chunk_size;
-	/** OUT: Relative component of path from where the UNS entry is located.
+	/** OUT: Relative component of path from where the UNS entry is located (returned on
+	 * duns_resolve_path()).
 	 *
 	 * This is returned if the UNS entry is not the last entry in the path, and the UNS library
 	 * performs a reverse lookup to find a UNS entry in the path. To check only the last entry
@@ -80,18 +89,22 @@ struct duns_attr_t {
 	 * DUNS_NO_CHECK_PATH:
 	 */
 	uint32_t		da_flags;
-	/** OUT: Pool label returned with a direct path.
+	/** OUT: Pool UUID or label string.
 	 *
-	 * If the path is a direct path, we parse the first entry (pool) as either a uuid or a
-	 * label. If the format is not a uuid, then it's returned as a label.
+	 * On duns_resolve_path(), a UUID string is returned that was stored on that path. If the
+	 * path is a direct path, we parse the first entry (pool) in the path as either a UUID or a
+	 * label. If the format is not a UUID, then it's returned as a label. This can be used in
+	 * daos_pool_connect() regardless of whether it's a UUID or label.
 	 */
-	char			*da_pool_label;
-	/** OUT: Container label returned with a direct path.
+	char			*da_pool;
+	/** OUT: Container UUID or label string.
 	 *
-	 * If the path is a direct path, we parse the second entry (cont) as either a uuid or a
-	 * label. If the format is not a uuid, then it's returned as a label.
+	 * On duns_resolve_path(), a UUID string is returned that was stored on that path. If the
+	 * path is a direct path, we parse the second entry (cont) in the path as either a UUID or a
+	 * label. If the format is not a UUID, then it's returned as a label. This can be used in
+	 * daos_cont_open() regardless of whether it's a UUID or label.
 	 */
-	char			*da_cont_label;
+	char			*da_cont;
 };
 
 /** extended attribute name that will container the UNS info */
@@ -120,8 +133,7 @@ struct duns_attr_t {
  * \return		0 on Success. errno code on failure.
  */
 int
-duns_create_path(daos_handle_t poh, const char *path,
-		 struct duns_attr_t *attrp);
+duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp);
 
 /**
  * Retrieve the pool and container uuids from a path corresponding to a DAOS location. If this was a

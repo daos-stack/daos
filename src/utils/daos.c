@@ -598,8 +598,8 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->user);
 	D_FREE(ap->group);
 	D_FREE(ap->principal);
-	D_FREE(ap->pool_label);
-	D_FREE(ap->cont_label);
+	D_FREE(ap->pool_str);
+	D_FREE(ap->cont_str);
 }
 
 static int
@@ -1077,23 +1077,13 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			ap->type = dattr.da_type;
 
 			/** set pool/cont label or uuid */
-			if (dattr.da_pool_label) {
-				D_STRNDUP(ap->pool_label, dattr.da_pool_label,
-					  DAOS_PROP_LABEL_MAX_LEN);
-				if (ap->pool_label == NULL)
-					D_GOTO(out, rc = ENOMEM);
-			} else {
-				uuid_copy(ap->p_uuid, dattr.da_puuid);
-			}
+			D_STRNDUP(ap->pool_str, dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
+			if (ap->pool_str == NULL)
+				D_GOTO(out, rc = ENOMEM);
 
-			if (dattr.da_cont_label) {
-				D_STRNDUP(ap->cont_label, dattr.da_cont_label,
-					  DAOS_PROP_LABEL_MAX_LEN);
-				if (ap->cont_label == NULL)
-					D_GOTO(out, rc = ENOMEM);
-			} else {
-				uuid_copy(ap->c_uuid, dattr.da_cuuid);
-			}
+			D_STRNDUP(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+			if (ap->cont_str == NULL)
+				D_GOTO(out, rc = ENOMEM);
 
 			if (name) {
 				if (dattr.da_rel_path) {
@@ -1117,50 +1107,20 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
 		}
 
-		if (ap->pool_label) {
-			rc = daos_pool_connect(ap->pool_label,
-					       ap->sysname,
-					       DAOS_PC_RW, &ap->pool,
-					       NULL, NULL);
-			if (rc != 0) {
-				fprintf(stderr,
-					"failed to connect to pool "
-					"%s: %s (%d)\n",
-					ap->pool_label, d_errdesc(rc), rc);
-				D_GOTO(out, rc);
-			}
-		} else {
-			rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-					       DAOS_PC_RW, &ap->pool,
-					       NULL, NULL);
-			if (rc != 0) {
-				fprintf(stderr,
-					"failed to connect to pool "
-					""DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-				D_GOTO(out, rc);
-			}
+		rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RW, &ap->pool,
+				       NULL, NULL);
+		if (rc) {
+			fprintf(stderr, "failed to connect to pool %s: %s (%d)\n", ap->pool_str,
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
 		}
 
-		if (ap->cont_label) {
-			rc = daos_cont_open(ap->pool, ap->cont_label,
-					    DAOS_COO_RW | DAOS_COO_FORCE,
-					    &ap->cont, NULL, NULL);
-			fprintf(stderr,
-				"failed to open container %s: %s (%d)\n",
-				ap->cont_label, d_errdesc(rc), rc);
+		rc = daos_cont_open(ap->pool, ap->cont_str, DAOS_COO_RW | DAOS_COO_FORCE, &ap->cont,
+				    NULL, NULL);
+		if (rc) {
+			fprintf(stderr, "failed to open container %s: %s (%d)\n", ap->cont_str,
+				d_errdesc(rc), rc);
 			D_GOTO(out_disconnect, rc);
-		} else {
-			rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW |
-					    DAOS_COO_FORCE, &ap->cont,
-					    NULL, NULL);
-			if (rc != 0) {
-				fprintf(stderr,
-					"failed to open container "
-					""DF_UUIDF ": %s (%d)\n",
-					DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
-				D_GOTO(out_disconnect, rc);
-			}
 		}
 
 		rc = fs_dfs_hdlr(ap);
@@ -1257,26 +1217,16 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			ap->type = dattr.da_type;
 
 			/** set pool/cont label or uuid */
-			if (dattr.da_pool_label) {
-				D_STRNDUP(ap->pool_label, dattr.da_pool_label,
-					  DAOS_PROP_LABEL_MAX_LEN);
-				if (ap->pool_label == NULL) {
-					duns_destroy_attr(&dattr);
-					D_GOTO(out, rc = ENOMEM);
-				}
-			} else {
-				uuid_copy(ap->p_uuid, dattr.da_puuid);
+			D_STRNDUP(ap->pool_str, dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
+			if (ap->pool_str == NULL) {
+				duns_destroy_attr(&dattr);
+				D_GOTO(out, rc = ENOMEM);
 			}
 
-			if (dattr.da_cont_label) {
-				D_STRNDUP(ap->cont_label, dattr.da_cont_label,
-					  DAOS_PROP_LABEL_MAX_LEN);
-				if (ap->cont_label == NULL) {
-					duns_destroy_attr(&dattr);
-					D_GOTO(out, rc = ENOMEM);
-				}
-			} else {
-				uuid_copy(ap->c_uuid, dattr.da_cuuid);
+			D_STRNDUP(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+			if (ap->cont_str == NULL) {
+				duns_destroy_attr(&dattr);
+				D_GOTO(out, rc = ENOMEM);
 			}
 		}
 		duns_destroy_attr(&dattr);
@@ -1284,26 +1234,11 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
 	}
 
-	if (ap->pool_label) {
-		rc = daos_pool_connect(ap->pool_label, ap->sysname,
-				       DAOS_PC_RW, &ap->pool,
-				       NULL, NULL);
-		if (rc != 0) {
-			fprintf(stderr, "failed to connect to "
-				"pool %s: %s (%d)\n",
-				ap->pool_label, d_errdesc(rc), rc);
-			D_GOTO(out, rc);
-		}
-	} else {
-		rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
-				       &ap->pool, NULL /* info */,
-				       NULL /* ev */);
-		if (rc != 0) {
-			fprintf(stderr, "failed to connect to "
-				"pool "DF_UUIDF ": %s (%d)\n",
-				DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-			D_GOTO(out, rc);
-		}
+	rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RW, &ap->pool, NULL, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool %s: %s (%d)\n", ap->pool_str,
+			d_errdesc(rc), rc);
+		D_GOTO(out, rc);
 	}
 
 	/* container UUID: user-provided, generated here or by uns
@@ -1328,27 +1263,12 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
-		if (ap->cont_label) {
-			rc = daos_cont_open(ap->pool, ap->cont_label,
-					    DAOS_COO_RW | DAOS_COO_FORCE,
-					    &ap->cont, &cont_info, NULL);
-			if (rc != 0) {
-				fprintf(stderr, "failed to open "
-					"container %s: %s (%d)\n",
-					ap->cont_label, d_errdesc(rc), rc);
-				D_GOTO(out_disconnect, rc);
-			}
-		} else {
-			rc = daos_cont_open(ap->pool, ap->c_uuid,
-					    DAOS_COO_RW | DAOS_COO_FORCE,
-					    &ap->cont, &cont_info, NULL);
-			if (rc != 0) {
-				fprintf(stderr, "failed to open "
-					"container "DF_UUIDF
-					": %s (%d)\n", DP_UUID(ap->c_uuid),
-					d_errdesc(rc), rc);
-				D_GOTO(out_disconnect, rc);
-			}
+		rc = daos_cont_open(ap->pool, ap->cont_str, DAOS_COO_RW | DAOS_COO_FORCE, &ap->cont,
+				    &cont_info, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to open container %s: %s (%d)\n", ap->cont_str,
+				d_errdesc(rc), rc);
+			D_GOTO(out_disconnect, rc);
 		}
 	}
 

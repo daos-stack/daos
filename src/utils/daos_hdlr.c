@@ -1434,12 +1434,7 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 		D_GOTO(err_out, rc);
 	}
 
-	if (ap->cont_label)
-		D_PRINT("Container properties for \"%s\":\n", ap->cont_label);
-	else
-		D_PRINT("Container properties for "DF_UUIDF" :\n",
-			DP_UUID(ap->c_uuid));
-
+	D_PRINT("Container properties for \"%s\":\n", ap->cont_str);
 	rc = cont_decode_props(ap, prop_query, prop_acl);
 
 err_out:
@@ -1729,6 +1724,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 		"Successfully created container "DF_UUIDF" type %s\n",
 		DP_UUID(ap->c_uuid), type);
 
+	duns_destroy_attr(&dattr);
 	return 0;
 
 err_rc:
@@ -2923,8 +2919,7 @@ dm_connect(struct cmd_args_s *ap,
 			uuid_copy(dattr.da_cuuid, ca->dst_c_uuid);
 			dattr.da_type = ca->cont_layout;
 			dattr.da_props = props;
-			rc = duns_create_path(ca->dst_poh, path,
-					      &dattr);
+			rc = duns_create_path(ca->dst_poh, path, &dattr);
 			if (rc != 0) {
 				fprintf(ap->errstream, "provide a destination "
 					"pool or UNS path of the form:\n\t"
@@ -2932,6 +2927,7 @@ dm_connect(struct cmd_args_s *ap,
 				D_GOTO(err_dst_root, rc = daos_errno2der(rc));
 			}
 			uuid_copy(ca->dst_c_uuid, dattr.da_cuuid);
+			duns_destroy_attr(&dattr);
 		}
 		/* try to open container if this is a filesystem copy,
 		 * and if it fails try to create a destination,
@@ -3099,8 +3095,12 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 
 	rc = duns_resolve_path(path, &dattr);
 	if (rc == 0) {
-		uuid_copy(*p_uuid, dattr.da_puuid);
-		uuid_copy(*c_uuid, dattr.da_cuuid);
+		rc = uuid_parse(dattr.da_pool, *p_uuid);
+		if (rc != 0)
+			D_GOTO(out, rc = EINVAL);
+		rc = uuid_parse(dattr.da_cont, *c_uuid);
+		if (rc != 0)
+			D_GOTO(out, rc = EINVAL);
 		if (dattr.da_rel_path == NULL) {
 			strncpy(path, "/", path_len);
 		} else {
