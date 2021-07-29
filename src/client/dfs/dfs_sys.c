@@ -213,7 +213,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	hdl->name_len = sys_path->dir_name_len;
 	D_STRNDUP(hdl->name, sys_path->dir_name, sys_path->dir_name_len);
 	if (hdl->name == NULL)
-		D_GOTO(free_hdl, ENOMEM);
+		D_GOTO(free_hdl, rc = ENOMEM);
 
 	/* Start with 2 so we have exactly 1 reference left
 	 * when dfs_sys_umount is called.
