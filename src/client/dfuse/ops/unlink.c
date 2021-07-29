@@ -61,7 +61,7 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 		rc = fuse_lowlevel_notify_delete(fs_handle->dpi_info->di_session,
 						 ie->ie_parent, ino,
 						 ie->ie_name, strnlen(ie->ie_name, NAME_MAX));
-		if (rc)
+		if (rc && rc != -ENOENT)
 			DFUSE_TRA_ERROR(ie, "notify_delete returned %d: %s", rc, strerror(-rc));
 	}
 

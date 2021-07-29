@@ -843,6 +843,65 @@ dfuse_open(const char *pathname, int flags, ...)
 }
 
 DFUSE_PUBLIC int
+dfuse_openat(int dirfd, const char *pathname, int flags, ...)
+{
+	struct fd_entry entry = {0};
+	int fd;
+	int status;
+	unsigned int mode; /* mode_t gets "promoted" to unsigned int
+			    * for va_arg routine
+			    */
+
+	if (flags & O_CREAT) {
+		va_list ap;
+
+		va_start(ap, flags);
+		mode = va_arg(ap, unsigned int);
+		va_end(ap);
+
+		fd = __real_openat(dirfd, pathname, flags, mode);
+	} else {
+		fd =  __real_openat(dirfd, pathname, flags);
+		mode = 0;
+	}
+
+	if (!ioil_iog.iog_initialized || (fd == -1))
+		return fd;
+
+	if (!dfuse_check_valid_path(pathname)) {
+		DFUSE_LOG_DEBUG("openat(pathname=%s) ignoring by path",
+				pathname);
+		return fd;
+	}
+
+	status = DFUSE_IO_BYPASS;
+	/* Disable bypass for O_APPEND|O_PATH */
+	if ((flags & (O_PATH | O_APPEND)) != 0)
+		status = DFUSE_IO_DIS_FLAG;
+
+	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
+		DFUSE_LOG_DEBUG("openat(pathname=%s) interception not possible",
+				pathname);
+		return fd;
+	}
+
+	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
+
+	if (flags & O_CREAT)
+		DFUSE_LOG_DEBUG("openat(pathname=%s, flags=0%o, mode=0%o) = "
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, mode, fd, entry.fd_fstat,
+				bypass_status[entry.fd_status]);
+	else
+		DFUSE_LOG_DEBUG("openat(pathname=%s, flags=0%o) = "
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, fd, entry.fd_fstat,
+				bypass_status[entry.fd_status]);
+
+	return fd;
+}
+
+DFUSE_PUBLIC int
 dfuse_creat(const char *pathname, mode_t mode)
 {
 	struct fd_entry entry = {0};

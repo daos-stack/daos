@@ -52,8 +52,8 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 
 	DFUSE_TRA_UP(ev, oh, "event");
 
-	DFUSE_TRA_INFO(ev, "%#zx-%#zx requested pid=%d",
-		       position, position + len - 1, fc->pid);
+	DFUSE_TRA_DEBUG(oh, "%#zx-%#zx requested pid=%d",
+			position, position + len - 1, fc->pid);
 
 	if (oh->doh_ie->ie_truncated &&
 	    position + len < oh->doh_ie->ie_stat.st_size &&

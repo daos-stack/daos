@@ -19,8 +19,6 @@ handle_il_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	struct dfuse_il_reply	il_reply = {0};
 	int			rc;
 
-	DFUSE_TRA_INFO(oh, "Requested");
-
 	rc = dfs_obj2id(oh->doh_ie->ie_obj, &il_reply.fir_oid);
 	if (rc)
 		D_GOTO(err, rc);
@@ -45,8 +43,6 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	struct dfuse_hs_reply	hs_reply = {0};
 	d_iov_t			iov = {};
 	int			rc;
-
-	DFUSE_TRA_INFO(oh, "Requested");
 
 	hs_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
@@ -144,14 +140,12 @@ handle_dsize_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 	d_iov_t			iov = {};
 	int			rc;
 
-	DFUSE_TRA_INFO(oh, "Requested");
-
 	hsd_reply.fsr_version = DFUSE_IOCTL_VERSION;
 
 	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
 				  &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	hsd_reply.fsr_dobj_size = iov.iov_buf_len;
 	if (hsd_reply.fsr_dobj_size > MAX_IOCTL_SIZE)
@@ -177,7 +171,7 @@ handle_doh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 
 	rc = dfs_local2global(oh->doh_ie->ie_dfs->dfs_ns, &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
@@ -206,7 +200,7 @@ handle_dooh_ioctl(struct dfuse_obj_hdl *oh, size_t size, fuse_req_t req)
 	rc = dfs_obj_local2global(oh->doh_ie->ie_dfs->dfs_ns, oh->doh_obj,
 				  &iov);
 	if (rc)
-		D_GOTO(err, rc = daos_der2errno(rc));
+		D_GOTO(err, rc);
 
 	if (iov.iov_len != iov.iov_buf_len)
 		D_GOTO(free, rc = EAGAIN);
@@ -236,7 +230,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	uid_t			uid;
 	gid_t			gid;
 
-	DFUSE_TRA_INFO(oh, "ioctl cmd=%#x", cmd);
+	DFUSE_TRA_DEBUG(oh, "ioctl cmd=%#x", cmd);
 
 	if (cmd == TCGETS) {
 		DFUSE_TRA_DEBUG(oh, "Ignoring TCGETS ioctl");
@@ -287,7 +281,7 @@ void dfuse_cb_ioctl(fuse_req_t req, fuse_ino_t ino, unsigned int cmd, void *arg,
 	if (fc->uid != uid || fc->gid != gid)
 		D_GOTO(out_err, rc = EPERM);
 
-	DFUSE_TRA_INFO(oh, "trusted pid %d", fc->pid);
+	DFUSE_TRA_DEBUG(oh, "trusted pid %d", fc->pid);
 
 	if (cmd == DFUSE_IOCTL_IL_SIZE) {
 		if (out_bufsz < sizeof(struct dfuse_hs_reply))

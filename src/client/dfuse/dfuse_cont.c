@@ -77,8 +77,7 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 		ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-		DFUSE_TRA_INFO(ie,
-			       "Reusing existing container entry without reconnect");
+		DFUSE_TRA_DEBUG(ie, "Reusing existing container entry without reconnect");
 
 		/* Update the stat information, but copy in the
 		 * inode value afterwards.

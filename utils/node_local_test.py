@@ -398,6 +398,34 @@ class DaosPool():
         """
         return self.id()
 
+    def fetch_containers(self):
+        """Query the server and return a list of pool objects"""
+        rc = run_daos_cmd(self._server.conf, ['container', 'list', self.uuid], use_json=True)
+
+        data = rc.json
+
+        assert data['status'] == 0, rc
+        assert data['error'] is None, rc
+
+        if data['response'] is None:
+            print('No containers in pool')
+            return []
+
+        containers = []
+        for cont in data['response']:
+            containers.append(DaosCont(cont['UUID'], cont['Label']))
+        return containers
+
+class DaosCont():
+    """Class to store data about daos containers"""
+
+    def __init__(self, cont_uuid, label):
+        self.uuid = cont_uuid
+        if label == 'container_label_not_set':
+            self.label = None
+        else:
+            self.label = label
+
 class DaosServer():
     """Manage a DAOS server instance"""
 
@@ -806,6 +834,16 @@ class DaosServer():
         assert rc.returncode == 0
         self.fetch_pools()
 
+    def get_test_pool_obj(self):
+        """Return a pool object to be used for testing
+
+        Create a pool as required"""
+
+        if self.test_pool is None:
+            self._make_pool()
+
+        return self.test_pool
+
     def get_test_pool(self):
         """Return a pool uuid to be used for testing
 
@@ -1107,6 +1145,7 @@ class DFuse():
         # Finally, modify the valgrind xml file to remove the
         # prefix to the src dir.
         self.valgrind.convert_xml()
+        os.rmdir(self.dir)
 
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
@@ -2666,28 +2705,38 @@ def run_in_fg(server, conf):
     Block until ctrl-c is pressed.
     """
 
-    pool = server.get_test_pool()
+    pool = server.get_test_pool_obj()
+    label = 'foreground_cont'
+    container = None
 
-    dfuse = DFuse(server, conf, pool=pool)
+    conts = pool.fetch_containers()
+    for cont in conts:
+        if cont.label == label:
+            container = cont.uuid
+            break
+
+    if not container:
+        container = create_cont(conf, pool.uuid, label=label, ctype="POSIX")
+
+    dfuse = DFuse(server, conf, pool=pool.uuid, caching=False)
     dfuse.start()
-
-    container = create_cont(conf, pool, ctype="POSIX")
 
     run_daos_cmd(conf,
                  ['container', 'set-attr',
-                  pool, container,
+                  pool.uuid, container,
                   '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
                  show_stdout=True)
 
     t_dir = os.path.join(dfuse.dir, container)
 
     print('Running at {}'.format(t_dir))
-    print('daos container create --type POSIX ' \
-          '{} --path {}/uns-link'.format(
-              pool, t_dir))
+    print('export LD_PRELOAD={}'.format(os.path.join(conf['PREFIX'], 'lib64', 'libioil.so')))
+    print('export DAOS_AGENT_DRPC_DIR={}'.format(conf.agent_dir))
+    print('export D_IL_REPORT=-1')
+    print('daos container create --type POSIX {} --path {}/uns-link'.format(pool.uuid, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos cont list {}'.format(pool))
+    print('daos cont list {}'.format(pool.uuid))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:

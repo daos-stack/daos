@@ -29,7 +29,8 @@
 #define FOREACH_ALIASED_INTERCEPT(ACTION)                                     \
 	ACTION(FILE *,  fopen,     (const char *, const char *))              \
 	ACTION(FILE *,  freopen,   (const char *, const char *, FILE *))      \
-	ACTION(int,     open,      (const char *, int, ...))                  \
+	ACTION(int,     open,      (const char *, int, ...))		      \
+	ACTION(int,     openat,    (int, const char *, int, ...))	      \
 	ACTION(ssize_t, pread,     (int, void *, size_t, off_t))              \
 	ACTION(ssize_t, pwrite,    (int, const void *, size_t, off_t))        \
 	ACTION(off_t,   lseek,     (int, off_t, int))                         \
