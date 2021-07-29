@@ -87,9 +87,9 @@ class ExecutableCommand(CommandWithParameters):
         # the words are found in the command output (self.result.stdout_text and
         # self.result.stderr_text).  Useful for detecting a command failure that
         # may not be caught through the command exit status.
-        self.check_result_list = []
+        self.check_results_list = []
         if check_results:
-            self.check_result_list = list(check_results)
+            self.check_results_list = list(check_results)
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -174,8 +174,8 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         status = True
-        if self.result and self.check_result_list:
-            regex = r"({})".format("|".join(self.check_result_list))
+        if self.result and self.check_results_list:
+            regex = r"({})".format("|".join(self.check_results_list))
             for output in (self.result.stdout_text, self.result.stderr_text):
                 match = re.findall(regex, output)
                 if match:
