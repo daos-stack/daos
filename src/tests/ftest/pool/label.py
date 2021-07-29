@@ -13,7 +13,7 @@ from command_utils_base import CommandFailure
 
 
 class Label(TestWithServers):
-    """Test create and destroy a pool with a lable.
+    """Test create and destroy a pool with a label.
 
     :avocado: recursive
     """
