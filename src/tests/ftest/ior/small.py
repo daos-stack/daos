@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """
-(C) Copyright 2018-2021 Intel Corporation.
+(C) Copyright 2018-2022 Intel Corporation.
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
@@ -48,17 +48,17 @@ class IorSmall(IorTestBase):
         results = self.run_ior_multiple_variants(obj_class, apis, transfer_block_size,
                                                  flags, dfuse_mount_dir)
         # Running a variant for ior fpp
-        self.ior_cmd.flags.update(flags[1])
-        self.ior_cmd.api.update(apis[0])
-        self.ior_cmd.block_size.update((transfer_block_size[1])[1])
-        self.ior_cmd.transfer_size.update((transfer_block_size[1])[0])
-        self.ior_cmd.dfs_oclass.update(obj_class[0])
-        # run ior
-        try:
-            self.run_ior_with_pool(plugin_path=None, timeout=self.ior_timeout)
-            results.append(["PASS", str(self.ior_cmd)])
-        except TestFail:
-            results.append(["FAIL", str(self.ior_cmd)])
+        # self.ior_cmd.flags.update(flags[1])
+        # self.ior_cmd.api.update(apis[0])
+        # self.ior_cmd.block_size.update((transfer_block_size[1])[1])
+        # self.ior_cmd.transfer_size.update((transfer_block_size[1])[0])
+        # self.ior_cmd.dfs_oclass.update(obj_class[0])
+        # # run ior
+        # try:
+        #     self.run_ior_with_pool(plugin_path=None, timeout=self.ior_timeout)
+        #     results.append(["PASS", str(self.ior_cmd)])
+        # except TestFail:
+        #     results.append(["FAIL", str(self.ior_cmd)])
 
         self.log.error("Summary of IOR small test results:")
         errors = False

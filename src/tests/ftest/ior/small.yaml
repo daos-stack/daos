@@ -49,16 +49,16 @@ ior:
             - "-v -W -w -r -R -F"
           ior_api:
             - DFS
-            - MPIIO
-            - POSIX
-            - HDF5
-            - HDF5-VOL
+            # - MPIIO
+            # - POSIX
+            # - HDF5
+            # - HDF5-VOL
           transfer_block_size:
-            - [256B, 2M]
+            # - [256B, 2M]
             - [1M, 32M]
           obj_class:
             - "SX"
-            - "RP_2GX"
+            # - "RP_2GX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_caching: True
