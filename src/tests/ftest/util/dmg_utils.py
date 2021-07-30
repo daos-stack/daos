@@ -369,7 +369,7 @@ class DmgCommand(DmgCommandBase):
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
-                    tier_ratio=None, nranks=None, properties=None, label=None):
+                    tier_ratio=None, properties=None, label=None, nranks=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -390,10 +390,10 @@ class DmgCommand(DmgCommandBase):
                 Defaults to None.
             tier_ratio (str, optional): SCM pool size to create as a ratio of
                 size. Defaults to None.
-            nranks (str, optional): Number of ranks to use. Defaults to None
             properties (str, optional): Comma separated name:value string
                 Defaults to None
             label (str, optional): Pool label. Defaults to None.
+            nranks (str, optional): Number of ranks to use. Defaults to None
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -413,9 +413,9 @@ class DmgCommand(DmgCommandBase):
             "nvme_size": nvme_size,
             "nsvc": svcn,
             "acl_file": acl_file,
-            "nranks": nranks,
             "properties": properties,
-            "label": label
+            "label": label,
+            "nranks": nranks
         }
 
         if target_list is not None:
