@@ -887,6 +887,8 @@ def run_tests(test_files, tag_filter, args):
         command_list.append("--show-job-log")
     if tag_filter:
         command_list.extend(tag_filter)
+    if args.failfast:
+        command_list.extend(["--failfast", "on"])
 
     # Run each test
     skip_reason = None
@@ -1046,6 +1048,12 @@ def run_tests(test_files, tag_filter, args):
                 hosts,
                 "/tmp/test.cov*",
                 args)
+
+        # If the test failed and the user requested that testing should
+        # stop after the first failure, then we should break out of the
+        # loop and not re-run the tests.
+        if return_code != 0 and args.failfast:
+            break
 
     return return_code
 
@@ -2056,6 +2064,10 @@ def main():
         action="store_true",
         help="when replacing server/client yaml file placeholders, discard "
              "any placeholders that do not end up with a replacement value")
+    parser.add_argument(
+        "--failfast",
+        action="store_true",
+        help="stop the test suite after the first failure")
     parser.add_argument(
         "-i", "--include_localhost",
         action="store_true",
