@@ -174,14 +174,21 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 		case <-parent.Done():
 			svc.log.Debug("stopped joinLoop")
 			return
-		case <-svc.groupUpdateReqs:
+		case sync := <-svc.groupUpdateReqs:
 			groupUpdateNeeded = true
+			if sync {
+				if err := svc.doGroupUpdate(parent, true); err != nil {
+					svc.log.Errorf("sync GroupUpdate failed: %s", err)
+					continue
+				}
+			}
+			groupUpdateNeeded = false
 		case <-groupUpdateTimer.C:
 			if !groupUpdateNeeded {
 				continue
 			}
-			if err := svc.doGroupUpdate(parent); err != nil {
-				svc.log.Errorf("GroupUpdate failed: %s", err)
+			if err := svc.doGroupUpdate(parent, false); err != nil {
+				svc.log.Errorf("async GroupUpdate failed: %s", err)
 				continue
 			}
 			groupUpdateNeeded = false
@@ -203,7 +210,7 @@ func (svc *mgmtSvc) joinLoop(parent context.Context) {
 			// the last timer and these join requests will be handled
 			// here.
 			groupUpdateNeeded = false
-			if err := svc.doGroupUpdate(parent); err != nil {
+			if err := svc.doGroupUpdate(parent, false); err != nil {
 				// If the call failed, however, make sure that
 				// it gets called again by the timer. We have to
 				// deal with the situation where a local MS service
@@ -303,18 +310,24 @@ func (svc *mgmtSvc) join(ctx context.Context, req *batchJoinRequest) *batchJoinR
 	return resp
 }
 
-// reqGroupUpdate requests an asynchronous group update.
-func (svc *mgmtSvc) reqGroupUpdate(ctx context.Context) {
+// reqGroupUpdate requests a group update.
+func (svc *mgmtSvc) reqGroupUpdate(ctx context.Context, sync bool) {
 	select {
 	case <-ctx.Done():
-	case svc.groupUpdateReqs <- struct{}{}:
+	case svc.groupUpdateReqs <- sync:
 	}
 }
 
 // doGroupUpdate performs a synchronous group update.
 // NB: This method must not be called concurrently, as out-of-order
 // group updates may trigger engine assertions.
-func (svc *mgmtSvc) doGroupUpdate(ctx context.Context) error {
+func (svc *mgmtSvc) doGroupUpdate(ctx context.Context, forced bool) error {
+	if forced {
+		if err := svc.sysdb.IncMapVer(); err != nil {
+			return err
+		}
+	}
+
 	gm, err := svc.sysdb.GroupMap()
 	if err != nil {
 		return err

@@ -38,6 +38,7 @@ const (
 	raftOpAddPoolService
 	raftOpUpdatePoolService
 	raftOpRemovePoolService
+	raftOpIncMapVer
 
 	sysDBFile = "daos_system.db"
 )
@@ -262,6 +263,15 @@ func createRaftUpdate(op raftOp, inner interface{}) ([]byte, error) {
 	})
 }
 
+// submitMapVerInc submits the map version increment operation to the raft service.
+func (db *Database) submitIncMapVer() error {
+	data, err := createRaftUpdate(raftOpIncMapVer, nil)
+	if err != nil {
+		return err
+	}
+	return db.submitRaftUpdate(data)
+}
+
 // submitMemberUpdate submits the given member update operation to
 // the raft service.
 func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
@@ -324,6 +334,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 
 	switch c.Op {
+	case raftOpIncMapVer:
+		f.data.applyMapVersionIncrement()
 	case raftOpAddMember, raftOpUpdateMember, raftOpRemoveMember:
 		f.data.applyMemberUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpAddPoolService, raftOpUpdatePoolService, raftOpRemovePoolService:
@@ -334,6 +346,13 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 
 	return nil
+}
+
+// applyMapVersionIncrement is responsible for incrementing the group map version.
+func (d *dbData) applyMapVersionIncrement() {
+	d.Lock()
+	defer d.Unlock()
+	d.MapVersion++
 }
 
 // applyMemberUpdate is responsible for applying the membership update

@@ -357,7 +357,7 @@ func registerLeaderSubscriptions(srv *server) {
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
 				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err == nil {
-					srv.mgmtSvc.reqGroupUpdate(ctx)
+					srv.mgmtSvc.reqGroupUpdate(ctx, false)
 				}
 			}
 		}))
