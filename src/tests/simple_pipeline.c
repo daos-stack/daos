@@ -14,6 +14,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <daos.h>
+#include <daos_pipeline.h>
 
 /** daos info */
 static daos_handle_t	poh; /** pool */
