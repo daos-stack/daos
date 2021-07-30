@@ -588,7 +588,7 @@ class Systemctl(JobManager):
         except CommandFailure as error:
             self.log.info(
                 "Error stopping/disabling %s: %s", self.job.service_name, error)
-        super(Systemctl, self).kill()
+        super().kill()
 
     def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.
