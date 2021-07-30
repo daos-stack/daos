@@ -624,6 +624,8 @@ class DaosServerManager(SubprocessManager):
             query_data = {"status": 1}
         if query_data["status"] == 0:
             if "response" in query_data and "members" in query_data["response"]:
+                if query_data["response"]["members"] is None:
+                    return data
                 for member in query_data["response"]["members"]:
                     host = member["fault_domain"].split(".")[0].replace("/", "")
                     if host in self._hosts:
