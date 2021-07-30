@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from command_utils import CommandFailure
 
 
 class UUIDCornerCase(TestWithServers):
