@@ -457,7 +457,8 @@ class DmgCommand(DmgCommandBase):
                                         target_list=target_list,
                                         svcn=svcn,
                                         acl_file=acl_file)
-            raise DmgJsonCommandFailure(output["error"])
+            if self.exit_status_exception:
+                raise DmgJsonCommandFailure(output["error"])
 
         if output["response"] is None:
             return data
