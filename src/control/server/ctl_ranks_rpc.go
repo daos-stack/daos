@@ -415,6 +415,7 @@ func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.Set
 		}
 
 		if req.Masks == "" {
+			// no need to validate here as config value already validated on start-up
 			req.Masks = svc.srvCfg.Engines[idx].LogMask
 		}
 		if req.Masks == "" {

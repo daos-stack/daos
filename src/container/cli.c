@@ -85,6 +85,7 @@ static int
 cont_create_complete(tse_task_t *task, void *data)
 {
 	struct cont_args       *arg = (struct cont_args *)data;
+	daos_cont_create_t     *args;
 	struct dc_pool	       *pool = arg->pool;
 	struct cont_create_out *out = crt_reply_get(arg->rpc);
 	int			rc = task->dt_result;
@@ -108,6 +109,11 @@ cont_create_complete(tse_task_t *task, void *data)
 			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	args = dc_task_get_args(task);
+	/** Returned container UUID upon successful creation */
+	if (args->cuuid != NULL)
+		uuid_copy(*args->cuuid, args->uuid);
 
 	D_DEBUG(DF_DSMC, "completed creating container\n");
 
@@ -219,8 +225,9 @@ dc_cont_create(tse_task_t *task)
 	daos_prop_t	       *rpc_prop = NULL;
 
 	args = dc_task_get_args(task);
-	if (uuid_is_null(args->uuid))
-		D_GOTO(err_task, rc = -DER_INVAL);
+	if (!daos_uuid_valid(args->uuid))
+		/** generate a UUID for the new container */
+		uuid_generate(args->uuid);
 
 	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
 	if (entry != NULL) {
