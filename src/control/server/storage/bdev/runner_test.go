@@ -55,8 +55,10 @@ func TestRunner_Prepare(t *testing.T) {
 		"prepare reset fails": {
 			req: storage.BdevPrepareRequest{
 				TargetUser: username,
+				ResetOnly:  true,
 			},
 			mbc: &MockBackendConfig{
+				PrepareErr:      errors.New("prepare failed"),
 				PrepareResetErr: errors.New("reset failed"),
 			},
 			expErr: errors.New("reset failed"),
@@ -66,7 +68,8 @@ func TestRunner_Prepare(t *testing.T) {
 				TargetUser: username,
 			},
 			mbc: &MockBackendConfig{
-				PrepareErr: errors.New("prepare failed"),
+				PrepareErr:      errors.New("prepare failed"),
+				PrepareResetErr: errors.New("reset failed"),
 			},
 			expErr: errors.New("prepare failed"),
 		},
@@ -85,7 +88,7 @@ func TestRunner_Prepare(t *testing.T) {
 				HugePageCount:         testNrHugePages,
 				DisableCleanHugePages: true,
 				TargetUser:            username,
-				PCIAllowlist:          testPciAllowlist,
+				PciAllowList:          testPciAllowlist,
 				DisableVFIO:           true,
 			},
 			expEnv: []string{
@@ -101,7 +104,7 @@ func TestRunner_Prepare(t *testing.T) {
 				HugePageCount:         testNrHugePages,
 				DisableCleanHugePages: true,
 				TargetUser:            username,
-				PCIBlocklist:          testPciBlocklist,
+				PciBlockList:          testPciBlocklist,
 				DisableVFIO:           true,
 			},
 			expEnv: []string{
@@ -117,8 +120,8 @@ func TestRunner_Prepare(t *testing.T) {
 				HugePageCount:         testNrHugePages,
 				DisableCleanHugePages: true,
 				TargetUser:            username,
-				PCIBlocklist:          testPciBlocklist,
-				PCIAllowlist:          testPciAllowlist,
+				PciBlockList:          testPciBlocklist,
+				PciAllowList:          testPciAllowlist,
 				DisableVFIO:           true,
 			},
 			expErr: errors.New(
@@ -162,7 +165,7 @@ func TestRunner_Prepare(t *testing.T) {
 			b := newBackend(log, s)
 			p := NewProvider(log, b)
 
-			_, gotErr := p.Prepare(tc.req)
+			_, gotErr := p.backend.Prepare(tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return

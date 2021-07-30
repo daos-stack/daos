@@ -73,15 +73,18 @@ fi
 echo "calling into script: $scriptpath"
 
 if [[ $1 == reset ]]; then
-	PATH=/sbin:$PATH "$scriptpath" reset
+	set -x
+	PCI_ALLOWED=${_PCI_ALLOWED} PCI_BLOCKED=${_PCI_BLOCKED} \
+	PATH=/sbin:${PATH} ${scriptpath} reset
+	set +x
 else
 	# avoid shadowing by prefixing input envars
-	PCI_ALLOWED="$_PCI_ALLOWED" \
-	PCI_BLOCKED="$_PCI_BLOCKED" \
-	NRHUGE="$_NRHUGE" \
-	TARGET_USER="$_TARGET_USER" \
-	DRIVER_OVERRIDE="$_DRIVER_OVERRIDE" \
-	 PATH=/sbin:$PATH "$scriptpath"
+	set -x
+	PCI_ALLOWED=${_PCI_ALLOWED} PCI_BLOCKED=${_PCI_BLOCKED} \
+	NRHUGE=${_NRHUGE} TARGET_USER=${_TARGET_USER} \
+	DRIVER_OVERRIDE=${_DRIVER_OVERRIDE} PATH=/sbin:${PATH} \
+	${scriptpath}
+	set +x
 
 	# build arglist manually to filter missing directories/files
 	# so we don't error on non-existent entities

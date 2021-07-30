@@ -20,6 +20,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -291,6 +292,48 @@ func (sb *spdkBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (
 	return res, nil
 }
 
+// hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
+// name begins with prefix and owner has uid equal to tgtUID.
+func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn) filepath.WalkFunc {
+	return func(path string, info os.FileInfo, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case info == nil:
+			return errors.New("nil fileinfo")
+		case info.IsDir():
+			if path == hugePageDir {
+				return nil
+			}
+			return filepath.SkipDir // skip subdirectories
+		case !strings.HasPrefix(info.Name(), prefix):
+			return nil // skip files without prefix
+		}
+
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat == nil {
+			return errors.New("stat missing for file")
+		}
+		if strconv.Itoa(int(stat.Uid)) != tgtUID {
+			return nil // skip not owned by target user
+		}
+
+		if err := remove(path); err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+// cleanHugePages removes hugepage files with pathPrefix that are owned by the
+// user with username tgtUsr by processing directory tree with filepath.WalkFunc
+// returned from hugePageWalkFunc.
+func cleanHugePages(hugePageDir, prefix, tgtUID string) error {
+	return filepath.Walk(hugePageDir,
+		hugePageWalkFunc(hugePageDir, prefix, tgtUID, os.Remove))
+}
+
 // detectVMD returns whether VMD devices have been found and a slice of VMD
 // PCI addresses if found.
 func detectVMD() ([]string, error) {
@@ -345,79 +388,103 @@ func detectVMD() ([]string, error) {
 	return vmdAddrs, nil
 }
 
-// hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
-// name begins with prefix and owner has uid equal to tgtUID.
-func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn) filepath.WalkFunc {
-	return func(path string, info os.FileInfo, err error) error {
-		switch {
-		case err != nil:
-			return err
-		case info == nil:
-			return errors.New("nil fileinfo")
-		case info.IsDir():
-			if path == hugePageDir {
-				return nil
-			}
-			return filepath.SkipDir // skip subdirectories
-		case !strings.HasPrefix(info.Name(), prefix):
-			return nil // skip files without prefix
-		}
+// vmdProcessFilters takes an input request and a list of discovered VMD addresses.
+// The VMD addresses are validated against the input request allow and block lists.
+// The output allow list will only contain VMD addresses if either both input allow
+// and block lists are empty or if included in allow and not included in block lists.
+func vmdProcessFilters(inReq *storage.BdevPrepareRequest, vmdPciAddrs []string) storage.BdevPrepareRequest {
+	var outAllowList []string
+	outReq := *inReq
 
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || stat == nil {
-			return errors.New("stat missing for file")
-		}
-		if strconv.Itoa(int(stat.Uid)) != tgtUID {
-			return nil // skip not owned by target user
-		}
-
-		if err := remove(path); err != nil {
-			return err
-		}
-
-		return nil
+	if inReq.PciAllowList == "" && inReq.PciBlockList == "" {
+		outReq.PciAllowList = strings.Join(vmdPciAddrs, storage.BdevPciAddrSep)
+		outReq.PciBlockList = ""
+		return outReq
 	}
+
+	if inReq.PciAllowList != "" {
+		allowed := strings.Split(inReq.PciAllowList, storage.BdevPciAddrSep)
+		for _, addr := range vmdPciAddrs {
+			if common.Includes(allowed, addr) {
+				outAllowList = append(outAllowList, addr)
+			}
+		}
+		if len(outAllowList) == 0 {
+			// no allowed vmd addresses
+			outReq.PciAllowList = ""
+			outReq.PciBlockList = ""
+			return outReq
+		}
+	}
+
+	if inReq.PciBlockList != "" {
+		var outList []string
+		inList := outAllowList // incase vmdPciAddrs list has already been filtered
+		if len(inList) == 0 {
+			inList = vmdPciAddrs
+		}
+		blocked := strings.Split(inReq.PciBlockList, storage.BdevPciAddrSep)
+		for _, addr := range inList {
+			if !common.Includes(blocked, addr) {
+				outList = append(outList, addr)
+			}
+		}
+		outAllowList = outList
+		if len(outAllowList) == 0 {
+			// no allowed vmd addresses
+			outReq.PciAllowList = ""
+			outReq.PciBlockList = ""
+			return outReq
+		}
+	}
+
+	outReq.PciAllowList = strings.Join(outAllowList, storage.BdevPciAddrSep)
+	outReq.PciBlockList = ""
+	return outReq
 }
 
-// cleanHugePages removes hugepage files with pathPrefix that are owned by the
-// user with username tgtUsr by processing directory tree with filepath.WalkFunc
-// returned from hugePageWalkFunc.
-func cleanHugePages(hugePageDir, prefix, tgtUID string) error {
-	return filepath.Walk(hugePageDir,
-		hugePageWalkFunc(hugePageDir, prefix, tgtUID, os.Remove))
-}
-
+// vmdPrep determines if VMD devices are going to be used and runs a dedicated
+// bdev prepare (SPDK setup) with the VMD addresses explicitly in PCI_ALLOWED list.
 func (sb *spdkBackend) vmdPrep(req storage.BdevPrepareRequest) (bool, error) {
-	vmdDevs, err := detectVMD()
+	vmdPciAddrs, err := detectVMD()
 	if err != nil {
 		return false, errors.Wrap(err, "VMD could not be enabled")
 	}
 
-	if len(vmdDevs) == 0 {
+	if len(vmdPciAddrs) == 0 {
+		sb.log.Debug("vmd prep: no vmd devices found")
 		return false, nil
 	}
+	sb.log.Debugf("volume management devices detected: %v", vmdPciAddrs)
 
-	vmdReq := req
-	// If VMD devices are going to be used, then need to run a separate
-	// bdev prepare (SPDK setup) with the VMD address as the PCI_ALLOWED
-	//
-	// TODO: ignore devices not in include list
-	vmdReq.PCIAllowlist = strings.Join(vmdDevs, " ")
+	vmdReq := vmdProcessFilters(&req, vmdPciAddrs)
+
+	if req.PciAllowList != "" && vmdReq.PciAllowList == "" {
+		sb.log.Debugf("vmd prep: %v devices not allowed", vmdPciAddrs)
+		return false, nil
+	}
+	if req.PciBlockList != "" && vmdReq.PciAllowList == "" {
+		sb.log.Debugf("vmd prep: %v devices blocked", vmdPciAddrs)
+		return false, nil
+	}
 
 	if err := sb.script.Prepare(vmdReq); err != nil {
 		return false, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 	}
+	sb.log.Debugf("volume management devices prepared: %v", vmdReq.PciAllowList)
 
-	sb.log.Debugf("volume management devices detected: %v", vmdDevs)
 	return true, nil
 }
 
-// Prepare will cleanup any leftover hugepages owned by the target user and then
-// executes the SPDK setup.sh script to rebind PCI devices as selected by
+// Prepare will perform a lookup on the requested target user to validate existence
+// then prepare non-VMD NVMe devices for use with SPDK (or reset if set in request).
+// If DisableVmd is false in request then attempt to prepare VMD NVMe devices.
+// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
+// owned by the target user.
+// Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // bdev_include and bdev_exclude list filters provided in the server config file.
-// This will make the devices available though SPDK.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	sb.log.Debugf("provider backend prepare %v", req)
+	sb.log.Debugf("provider backend prepare %+v", req)
 	resp := &storage.BdevPrepareResponse{}
 
 	usr, err := user.Lookup(req.TargetUser)
@@ -429,6 +496,16 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
 	}
 
+	if !req.DisableVMD {
+		// If VMD has been explicitly enabled and there are VMD enabled
+		// NVMe devices on the host, attempt to prepare them.
+		vmdPrepared, err := sb.vmdPrep(req)
+		if err != nil {
+			return nil, err
+		}
+		resp.VmdPrepared = vmdPrepared
+	}
+
 	if !req.DisableCleanHugePages {
 		// remove hugepages matching /dev/hugepages/spdk* owned by target user
 		err := cleanHugePages(hugePageDir, hugePagePrefix, usr.Uid)
@@ -437,20 +514,7 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 		}
 	}
 
-	if !req.DisableVMD {
-		vmdDetected, err := sb.vmdPrep(req)
-		if err != nil {
-			return nil, err
-		}
-		resp.VmdDetected = vmdDetected
-	}
-
 	return resp, nil
-}
-
-func (sb *spdkBackend) PrepareReset() error {
-	sb.log.Debugf("provider backend prepare reset")
-	return sb.script.Reset()
 }
 
 func (sb *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {

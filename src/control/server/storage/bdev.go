@@ -19,6 +19,8 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+const BdevPciAddrSep = " "
+
 type (
 	// NvmeHealth represents a set of health statistics for a NVMe device
 	// and mirrors C.struct_nvme_stats.
@@ -237,8 +239,8 @@ type (
 		pbin.ForwardableRequest
 		HugePageCount         int
 		DisableCleanHugePages bool
-		PCIAllowlist          string
-		PCIBlocklist          string
+		PciAllowList          string
+		PciBlockList          string
 		TargetUser            string
 		ResetOnly             bool
 		DisableVFIO           bool
@@ -247,7 +249,7 @@ type (
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		VmdDetected bool
+		VmdPrepared bool
 	}
 
 	// BdevTierProperties contains basic configuration properties of a bdev tier.

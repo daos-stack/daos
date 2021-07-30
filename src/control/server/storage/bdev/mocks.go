@@ -83,19 +83,20 @@ func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevForma
 	return mb.cfg.FormatRes, mb.cfg.FormatErr
 }
 
-func (mb *MockBackend) PrepareReset() error {
-	return mb.cfg.PrepareResetErr
-}
-
-func (mb *MockBackend) Prepare(_ storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	if mb.cfg.PrepareErr != nil {
-		return nil, mb.cfg.PrepareErr
-	}
-	if mb.cfg.PrepareResp == nil {
+func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	switch {
+	case req.ResetOnly:
+		if mb.cfg.PrepareResetErr != nil {
+			return nil, mb.cfg.PrepareResetErr
+		}
 		return new(storage.BdevPrepareResponse), nil
+	case mb.cfg.PrepareErr != nil:
+		return nil, mb.cfg.PrepareErr
+	case mb.cfg.PrepareResp == nil:
+		return new(storage.BdevPrepareResponse), nil
+	default:
+		return mb.cfg.PrepareResp, nil
 	}
-
-	return mb.cfg.PrepareResp, nil
 }
 
 func (mb *MockBackend) DisableVMD() {

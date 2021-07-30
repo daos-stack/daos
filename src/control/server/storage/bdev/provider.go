@@ -21,7 +21,6 @@ var _ storage.BdevProvider = &Provider{}
 type (
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
-		PrepareReset() error
 		Prepare(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
@@ -121,20 +120,25 @@ func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResp
 	return p.backend.Scan(req)
 }
 
-// Prepare attempts to perform all actions necessary to make NVMe
-// components available for use by DAOS.
+// Prepare attempts to perform all actions necessary to make NVMe components
+// available for use by DAOS. If ResetOnly is set, return after initial prep reset,
+// otherwise run prep reset followed by prep setup.
 func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	// run reset first to ensure reallocation of hugepages
-	if err := p.backend.PrepareReset(); err != nil {
+	exitAfterReset := req.ResetOnly
+
+	// run prep reset first to ensure reallocation of hugepages
+	req.ResetOnly = true
+	resp, err := p.backend.Prepare(req)
+	if err != nil {
 		return nil, errors.Wrap(err, "bdev prepare reset")
 	}
 
-	resp := new(storage.BdevPrepareResponse)
-	// if we're only resetting, return before prep
-	if req.ResetOnly {
+	// if we're only resetting, return before prep setup
+	if exitAfterReset {
 		return resp, nil
 	}
 
+	req.ResetOnly = false
 	return p.backend.Prepare(req)
 }
 
