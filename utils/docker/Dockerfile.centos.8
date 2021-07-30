@@ -23,6 +23,7 @@ ARG CB0
 # installed.
 ARG REPO_URL
 ARG REPO_DISTRO
+ARG RELVER="8.3"
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
       rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
@@ -43,7 +44,8 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
           -i /etc/dnf/dnf.conf;                                 \
       dnf -y upgrade epel-release;                              \
     else                                                        \
-      dnf -y install epel-release dnf-plugins-core &&           \
+      dnf -y --releasever=${RELVER} install                     \
+              epel-release dnf-plugins-core &&                  \
       dnf config-manager --assumeyes --set-enabled powertools;  \
     fi;                                                         \
     dnf clean all
@@ -110,8 +112,8 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
 # libatomic should be in this list, but can not for now due to CI
 # post provisioning issue.
 # *** Keep these in as much alphbetical order as possible ***
-RUN dnf -y upgrade && \
-    dnf -y install \
+RUN dnf -y --releasever=${RELVER} upgrade && \
+    dnf -y --releasever=${RELVER} install \
         boost-python3-devel \
         clang-analyzer \
         cmake \
@@ -197,7 +199,7 @@ ARG QUICKBUILD_DEPS
 RUN if $QUICKBUILD; then                                                      \
         echo "Installing: $QUICKBUILD_DEPS";                                  \
         echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |             \
-          xargs -0 dnf -y install;                                            \
+          xargs -0 dnf --releasever=${RELVER} -y install;                     \
         dnf clean all;                                                        \
     fi
 
@@ -236,7 +238,7 @@ ARG DAOS_TARGET_TYPE=release
 # ensure that latest dependencies are used.
 USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { dnf -y upgrade \
+    { dnf -y --releasever=${RELVER} upgrade \
           --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all; }
 USER daos_server:daos_server
@@ -251,7 +253,7 @@ RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
 # force an upgrade to get any newly built RPMs
 USER root:root
 ARG CACHEBUST
-RUN dnf -y upgrade \
+RUN dnf -y --releasever=${RELVER} upgrade \
         --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all
 USER daos_server:daos_server
