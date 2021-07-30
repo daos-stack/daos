@@ -24,7 +24,6 @@
 #include <daos_pool.h>
 #include <daos_mgmt.h>
 #include <daos_security.h>
-#include <daos_pipeline.h>
 
 #include <daos_api.h>
 #if defined(__cplusplus)
