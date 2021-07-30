@@ -21,22 +21,16 @@ class UUIDCornerCase(TestWithServers):
 
         Assume that self.pool is configured to use UUID.
         """
-        try:
-            # Destroy with UUID.
-            cmd_result = self.pool.destroy()
-            if cmd_result:
-                self.log.info("pool destroy with UUID succeeded")
-            else:
-                self.fail("pool isn't defined!")
-        except CommandFailure:
-            self.fail("Pool destroy with UUID failed!")
+        if not self.pool.destroy():
+            self.fail("pool isn't defined!")
+        self.log.info("pool destroy with UUID succeeded")
 
     def test_create_label_destroy_uuid(self):
         """Test ID: JIRA-7943
 
         Test Description: Create with a label, destroy with UUID.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=small
         :avocado: tags=pool,uuid_corner_case,create_label_destroy_uuid
         """
@@ -54,7 +48,7 @@ class UUIDCornerCase(TestWithServers):
 
         Test Description: Create without label, destroy with UUID.
 
-        :avocado: tags=all,daily_regression
+        :avocado: tags=all,full_regression
         :avocado: tags=small
         :avocado: tags=pool,uuid_corner_case,create_without_label_destroy_uuid
         """
@@ -62,6 +56,7 @@ class UUIDCornerCase(TestWithServers):
 
         # Make the TestPool object to use UUID.
         self.pool.use_label = False
+        self.pool.label.update(None)
 
         # Create without a label.
         self.pool.create()

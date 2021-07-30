@@ -5,10 +5,6 @@ timeout: 60
 server_config:
   name: daos_server
 pool:
-  mode: 511
   name: daos_server
   scm_size: 1G
   control_method: dmg
-container:
-  control_method: daos
-  type: POSIX
