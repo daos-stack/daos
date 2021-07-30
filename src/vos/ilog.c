@@ -1420,11 +1420,8 @@ done:
 static inline void
 set_update_max_entry(struct agg_arg *agg_arg, const struct ilog_entry *entry)
 {
-	if (entry->ie_id.id_epoch < agg_arg->aa_max)
+	if (entry->ie_id.id_epoch <= agg_arg->aa_max)
 		return;
-
-	/* Not possible.  There should only be one entry per major epoch */
-	D_ASSERT(entry->ie_id.id_epoch != agg_arg->aa_max);
 
 	if (ilog_is_punch(entry)) {
 		/** Last entry is a punch, if it holds, we will not need to
