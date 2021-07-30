@@ -349,7 +349,6 @@ retry:
 			range_set = isset_range(tgts_used, start_tgt, end_tgt);
 			if (range_set) {
 				/* Used up all targets in this domain */
-				setbit(dom_occupied, curr_dom - root_pos);
 				D_ASSERT(top != -1);
 				curr_dom = dom_stack[top--]; /* try parent */
 				continue;
@@ -374,6 +373,14 @@ retry:
 
 			setbit(tgts_used, dom_id);
 			setbit(dom_cur_grp_used, curr_dom - root_pos);
+			range_set = isset_range(tgts_used, start_tgt, end_tgt);
+			if (range_set) {
+				/* Used up all targets in this domain */
+				D_DEBUG(DB_PL, "dom %d used up\n",
+					(int)(curr_dom - root_pos));
+				setbit(dom_occupied, curr_dom - root_pos);
+			}
+
 			/* Found target (which may be available or not) */
 			found_target = 1;
 		} else {
@@ -398,6 +405,8 @@ retry:
 					return;
 				}
 				setbit(dom_occupied, curr_dom - root_pos);
+				D_DEBUG(DB_PL, "used up dom %d\n",
+					(int)(curr_dom - root_pos));
 				setbit(dom_cur_grp_used, curr_dom - root_pos);
 				curr_dom = dom_stack[top--];
 				continue;
