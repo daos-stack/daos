@@ -767,8 +767,12 @@ int crt_swim_init(int crt_ctx_idx)
 	 * Because daos needs to call crt_self_incarnation_get before it calls
 	 * crt_rank_self_set, we choose the self incarnation here instead of in
 	 * crt_swim_rank_add.
+	 *
+	 * The locking is to suppress Coverity complains.
 	 */
+	crt_swim_csm_lock(csm);
 	csm->csm_incarnation = crt_hlc_get();
+	crt_swim_csm_unlock(csm);
 	csm->csm_ctx = swim_init(SWIM_ID_INVALID, &crt_swim_ops, NULL);
 	if (csm->csm_ctx == NULL) {
 		D_ERROR("swim_init() failed for self=%u, crt_ctx_idx=%d\n",
