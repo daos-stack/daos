@@ -26,7 +26,7 @@ import (
 )
 
 func TestPromexp_NewEngineSource(t *testing.T) {
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
@@ -37,14 +37,14 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 		expResult *EngineSource
 	}{
 		"bad idx": {
-			idx:    testIdx + 1,
+			idx:    (1 << 31),
 			expErr: errors.New("failed to init"),
 		},
 		"success": {
 			idx:  testIdx,
 			rank: 123,
 			expResult: &EngineSource{
-				Index: testIdx,
+				Index: uint32(testIdx),
 				Rank:  123,
 			},
 		},
@@ -69,11 +69,11 @@ func TestPromexp_NewEngineSource(t *testing.T) {
 }
 
 func TestPromExp_EngineSource_IsEnabled(t *testing.T) {
-	testIdx := uint32(42)
-	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
+	telemetry.InitTestMetricsProducer(t, int(testIdx), 1024)
 	defer telemetry.CleanupTestMetricsProducer(t)
 
-	es, cleanup, err := NewEngineSource(context.Background(), testIdx, 2)
+	es, cleanup, err := NewEngineSource(context.Background(), uint32(testIdx), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func allTestMetrics(t *testing.T) telemetry.TestMetricsMap {
 }
 
 func TestPromExp_EngineSource_Collect(t *testing.T) {
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 2048)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -188,7 +188,7 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 			for {
 				done := false
 				select {
-				case <-time.After(50 * time.Millisecond):
+				case <-time.After(500 * time.Millisecond):
 					done = true
 				case m := <-tc.resultChan:
 					gotMetrics = append(gotMetrics, m)
@@ -201,15 +201,15 @@ func TestPromExp_EngineSource_Collect(t *testing.T) {
 
 			common.AssertEqual(t, len(tc.expMetrics), len(gotMetrics), "wrong number of metrics returned")
 			for _, got := range gotMetrics {
-				common.AssertEqual(t, testRank, got.r, "wrong rank")
-				expM, ok := tc.expMetrics[got.m.Type()]
+				common.AssertEqual(t, testRank, got.rank, "wrong rank")
+				expM, ok := tc.expMetrics[got.metric.Type()]
 				if !ok {
-					t.Fatalf("metric type %d not expected", got.m.Type())
+					t.Fatalf("metric type %d not expected", got.metric.Type())
 				}
 
 				tokens := strings.Split(expM.Name, "/")
 				expName := tokens[len(tokens)-1]
-				common.AssertEqual(t, expName, got.m.Name(), "unexpected name")
+				common.AssertEqual(t, expName, got.metric.Name(), "unexpected name")
 			}
 		})
 	}
@@ -293,7 +293,7 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	testIdx := uint32(42)
+	testIdx := uint32(telemetry.NextTestID(telemetry.PromexpIDBase))
 	testRank := uint32(123)
 	telemetry.InitTestMetricsProducer(t, int(testIdx), 4096)
 	defer telemetry.CleanupTestMetricsProducer(t)
@@ -350,6 +350,10 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 				"engine_timer_stamp",
 				"engine_timer_snapshot",
 				"engine_timer_duration",
+				"engine_timer_duration_min",
+				"engine_timer_duration_max",
+				"engine_timer_duration_mean",
+				"engine_timer_duration_stddev",
 			},
 		},
 		"ignore some metrics": {
@@ -365,17 +369,13 @@ func TestPromExp_Collector_Collect(t *testing.T) {
 			go tc.collector.Collect(tc.resultChan)
 
 			gotMetrics := []prometheus.Metric{}
-			for {
-				done := false
+			done := false
+			for !done {
 				select {
-				case <-time.After(50 * time.Millisecond):
+				case <-time.After(500 * time.Millisecond):
 					done = true
 				case m := <-tc.resultChan:
 					gotMetrics = append(gotMetrics, m)
-				}
-
-				if done {
-					break
 				}
 			}
 
@@ -416,54 +416,60 @@ func TestPromExp_extractLabels(t *testing.T) {
 			input:   "ID: 2_stat",
 			expName: "stat",
 		},
-		"io target": {
-			input:   "io_3_latency",
-			expName: "io_latency",
-			expLabels: labelMap{
-				"target": "3",
-			},
-		},
 		"io latency B": {
-			input:   "io_fetch_latency_16B",
-			expName: "io_fetch_latency",
+			input:   "io_latency_fetch_16B",
+			expName: "io_latency_fetch",
 			expLabels: labelMap{
 				"size": "16B",
 			},
 		},
 		"io latency KB": {
-			input:   "io_update_latency_128KB",
-			expName: "io_update_latency",
+			input:   "io_latency_update_128KB",
+			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "128KB",
 			},
 		},
 		"io latency MB": {
-			input:   "io_fetch_latency_256MB",
-			expName: "io_fetch_latency",
+			input:   "io_latency_update_256MB",
+			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "256MB",
 			},
 		},
 		"io latency >size": {
-			input:   "io_update_latency_GT4MB",
-			expName: "io_update_latency",
+			input:   "io_latency_update_GT4MB",
+			expName: "io_latency_update",
 			expLabels: labelMap{
 				"size": "GT4MB",
 			},
 		},
-		"net rank and context": {
-			input:   "net_15_128_stat",
+		"net rank": {
+			input:   "net_15_stat",
 			expName: "net_stat",
 			expLabels: labelMap{
-				"rank":    "15",
-				"context": "128",
+				"rank": "15",
 			},
 		},
-		"pool current UUID": {
-			input:   "pool_current_11111111_2222_3333_4444_555555555555_info",
+		"pool UUID": {
+			input:   "pool_11111111_2222_3333_4444_555555555555_info",
 			expName: "pool_info",
 			expLabels: labelMap{
 				"pool": "11111111-2222-3333-4444-555555555555",
+			},
+		},
+		"target": {
+			input:   "io_update_latency_tgt_1",
+			expName: "io_update_latency",
+			expLabels: labelMap{
+				"target": "1",
+			},
+		},
+		"context": {
+			input:   "failed_addr_ctx_1",
+			expName: "failed_addr",
+			expLabels: labelMap{
+				"context": "1",
 			},
 		},
 	} {

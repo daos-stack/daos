@@ -9,7 +9,7 @@ hosts:
     - client-A
     - client-B
     - client-C
-timeout: 7200
+timeout: 2500
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -41,8 +41,8 @@ server_config:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 200G
-    nvme_size: 500G
+    scm_size: 20%
+    nvme_size: 90%
     control_method: dmg
     pool_query_timeout: 30
 container:

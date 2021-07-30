@@ -29,10 +29,14 @@ import (
 var (
 	engineCfg = func(t *testing.T, numa int) *engine.Config {
 		return engine.NewConfig().
-			WithScmClass(storage.ScmClassDCPM.String()).
-			WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
-			WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)).
-			WithBdevClass(storage.BdevClassNvme.String())
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmClass(storage.ClassDcpm.String()).
+					WithScmMountPoint(fmt.Sprintf("/mnt/daos%d", numa)).
+					WithScmDeviceList(fmt.Sprintf("/dev/pmem%d", numa)),
+				storage.NewTierConfig().
+					WithBdevClass(storage.ClassNvme.String()),
+			)
 	}
 	engineCfgWithSSDs = func(t *testing.T, numa int) *engine.Config {
 		var pciAddrs []string
@@ -42,7 +46,13 @@ var (
 			}
 		}
 
-		return engineCfg(t, numa).WithBdevDeviceList(pciAddrs...)
+		cfg := engineCfg(t, numa)
+		for _, sc := range cfg.Storage.Tiers {
+			if sc.IsBdev() {
+				sc.WithBdevDeviceList(pciAddrs...)
+			}
+		}
+		return cfg
 	}
 	ib0 = &HostFabricInterface{
 		Provider: "ofi+psm2", Device: "ib0", NumaNode: 0, NetDevClass: 32, Priority: 0,
@@ -426,7 +436,7 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 			hostResponses: hostRespWithScmNs,
 			expErr: errors.Errorf(errInsufNrPMemGroups,
 				numaPMemsMap{0: []string{
-					engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
+					engineCfgWithSSDs(t, 0).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList[0],
 				}}, 2, 1),
 		},
 		"dual engine dual pmems zero ssds": {
@@ -444,8 +454,8 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 			hostResponses: hostRespWithScmNssNumaZero,
 			expErr: errors.Errorf(errInsufNrPMemGroups,
 				numaPMemsMap{0: []string{
-					engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList[0],
-					engineCfgWithSSDs(t, 1).Storage.SCM.DeviceList[0],
+					engineCfgWithSSDs(t, 0).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList[0],
+					engineCfgWithSSDs(t, 1).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList[0],
 				}}, 2, 1),
 		},
 		"single min ssd single ctrlr on single numa node": {
@@ -457,12 +467,12 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 			engineCount:   2,
 			hostResponses: hostRespWithSSDs,
 			expPMems: [][]string{
-				engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList,
-				engineCfgWithSSDs(t, 1).Storage.SCM.DeviceList,
+				engineCfgWithSSDs(t, 0).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
 			},
 			expSSDs: [][]string{
-				engineCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
-				engineCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
+				engineCfgWithSSDs(t, 0).Storage.Tiers.BdevConfigs()[0].Bdev.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Tiers.BdevConfigs()[0].Bdev.DeviceList,
 			},
 		},
 		"dual min ssd multiple ctrlrs on dual numa nodes": {
@@ -470,12 +480,12 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 			minSSDs:       2,
 			hostResponses: hostRespWithSSDs,
 			expPMems: [][]string{
-				engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList,
-				engineCfgWithSSDs(t, 1).Storage.SCM.DeviceList,
+				engineCfgWithSSDs(t, 0).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
 			},
 			expSSDs: [][]string{
-				engineCfgWithSSDs(t, 0).Storage.Bdev.DeviceList,
-				engineCfgWithSSDs(t, 1).Storage.Bdev.DeviceList,
+				engineCfgWithSSDs(t, 0).Storage.Tiers.BdevConfigs()[0].Bdev.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Tiers.BdevConfigs()[0].Bdev.DeviceList,
 			},
 		},
 		"zero min ssd multiple ctrlrs on dual numa nodes": {
@@ -483,8 +493,8 @@ func TestControl_AutoConfig_getStorageDetails(t *testing.T) {
 			disableNVMe:   true,
 			hostResponses: hostRespWithSSDs,
 			expPMems: [][]string{
-				engineCfgWithSSDs(t, 0).Storage.SCM.DeviceList,
-				engineCfgWithSSDs(t, 1).Storage.SCM.DeviceList,
+				engineCfgWithSSDs(t, 0).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
+				engineCfgWithSSDs(t, 1).Storage.Tiers.ScmConfigs()[0].Scm.DeviceList,
 			},
 			expSSDs: [][]string{{}, {}},
 		},
@@ -650,7 +660,6 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"hostX"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10001").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
@@ -658,11 +667,14 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0).
-					WithScmDeviceList("/dev/pmem0").
-					WithScmMountPoint("/mnt/daos0").
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem0").
+							WithScmMountPoint("/mnt/daos0"),
+					).
 					// out path blank if bdev_list empty
-					WithBdevOutputConfigPath("").
-					WithBdevVosEnv("NVME").
+					WithStorageConfigOutputPath("").
 					WithHelperStreamCount(7)),
 		},
 		"access point with valid port": {
@@ -670,7 +682,6 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"hostX:10002"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
@@ -678,10 +689,13 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0).
-					WithScmDeviceList("/dev/pmem0").
-					WithScmMountPoint("/mnt/daos0").
-					WithBdevOutputConfigPath("").
-					WithBdevVosEnv("NVME").
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem0").
+							WithScmMountPoint("/mnt/daos0"),
+					).
+					WithStorageConfigOutputPath("").
 					WithHelperStreamCount(7)),
 		},
 		"access point with invalid port": {
@@ -698,7 +712,6 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			accessPoints:   []string{"192.168.1.1:10002"},
 			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
 			numaIfaces:     numaNetIfaceMap{0: ib0},
-			numaSSDs:       numaSSDsMap{0: []string{}},
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expCfg: baseConfig("ofi+psm2").WithAccessPoints("192.168.1.1:10002").WithNrHugePages(8192).WithEngines(
 				defaultEngineCfg(0).
@@ -706,10 +719,13 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0).
-					WithScmDeviceList("/dev/pmem0").
-					WithScmMountPoint("/mnt/daos0").
-					WithBdevOutputConfigPath("").
-					WithBdevVosEnv("NVME").
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem0").
+							WithScmMountPoint("/mnt/daos0"),
+					).
+					WithStorageConfigOutputPath("").
 					WithHelperStreamCount(7)),
 		},
 		"access point ip with invalid port": {
@@ -734,11 +750,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0).
-					WithScmDeviceList("/dev/pmem0").
-					WithScmMountPoint("/mnt/daos0").
-					WithBdevDeviceList(common.MockPCIAddr(1)).
-					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
-					WithBdevVosEnv("NVME").
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem0").
+							WithScmMountPoint("/mnt/daos0"),
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(common.MockPCIAddr(1)),
+					).
+					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
+					WithStorageVosEnv("NVME").
 					WithHelperStreamCount(7)),
 		},
 		"dual pmem dual ssd": {
@@ -758,11 +780,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0).
-					WithScmDeviceList("/dev/pmem0").
-					WithScmMountPoint("/mnt/daos0").
-					WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...).
-					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
-					WithBdevVosEnv("NVME").
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem0").
+							WithScmMountPoint("/mnt/daos0"),
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
+					).
+					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
+					WithStorageVosEnv("NVME").
 					WithHelperStreamCount(7),
 				defaultEngineCfg(1).
 					WithFabricInterface("ib1").
@@ -770,11 +798,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 						int(defaultFiPort+defaultFiPortInterval)).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa1).
-					WithScmDeviceList("/dev/pmem1").
-					WithScmMountPoint("/mnt/daos1").
-					WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...).
-					WithBdevOutputConfigPath("/mnt/daos1/daos_nvme.conf").
-					WithBdevVosEnv("NVME").
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem1").
+							WithScmMountPoint("/mnt/daos1"),
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
+					).
+					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
+					WithStorageVosEnv("NVME").
 					WithTargetCount(15).
 					WithHelperStreamCount(6)),
 		},
@@ -791,11 +825,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0).
-					WithScmDeviceList("/dev/pmem0").
-					WithScmMountPoint("/mnt/daos0").
-					WithBdevDeviceList(common.MockPCIAddr(1)).
-					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
-					WithBdevVosEnv("NVME").
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem0").
+							WithScmMountPoint("/mnt/daos0"),
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(common.MockPCIAddr(1)),
+					).
+					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
+					WithStorageVosEnv("NVME").
 					WithTargetCount(8).
 					WithHelperStreamCount(2)),
 		},
@@ -816,11 +856,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 					WithFabricInterfacePort(defaultFiPort).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa0).
-					WithScmDeviceList("/dev/pmem0").
-					WithScmMountPoint("/mnt/daos0").
-					WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...).
-					WithBdevOutputConfigPath("/mnt/daos0/daos_nvme.conf").
-					WithBdevVosEnv("NVME").
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem0").
+							WithScmMountPoint("/mnt/daos0"),
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(common.MockPCIAddrs(0, 1, 2, 3)...),
+					).
+					WithStorageConfigOutputPath("/mnt/daos0/daos_nvme.conf").
+					WithStorageVosEnv("NVME").
 					WithTargetCount(12).
 					WithHelperStreamCount(2),
 				defaultEngineCfg(1).
@@ -829,11 +875,17 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 						int(defaultFiPort+defaultFiPortInterval)).
 					WithFabricProvider("ofi+psm2").
 					WithPinnedNumaNode(&numa1).
-					WithScmDeviceList("/dev/pmem1").
-					WithScmMountPoint("/mnt/daos1").
-					WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...).
-					WithBdevOutputConfigPath("/mnt/daos1/daos_nvme.conf").
-					WithBdevVosEnv("NVME").
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem1").
+							WithScmMountPoint("/mnt/daos1"),
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList(common.MockPCIAddrs(4, 5, 6)...),
+					).
+					WithStorageConfigOutputPath("/mnt/daos1/daos_nvme.conf").
+					WithStorageVosEnv("NVME").
 					WithTargetCount(6).
 					WithHelperStreamCount(0)),
 		},

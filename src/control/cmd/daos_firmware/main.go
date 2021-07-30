@@ -12,8 +12,7 @@ import (
 	"os"
 
 	"github.com/daos-stack/daos/src/control/pbin"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 func main() {
@@ -23,9 +22,10 @@ func main() {
 		app = app.WithLogFile(logPath)
 	}
 
-	app.AddHandler(scm.FirmwareQueryMethod, &scmQueryHandler{})
-	app.AddHandler(scm.FirmwareUpdateMethod, &scmUpdateHandler{})
-	app.AddHandler(bdev.FirmwareUpdateMethod, &nvmeUpdateHandler{})
+	app.AddHandler(storage.ScmFirmwareQueryMethod, &scmQueryHandler{})
+	app.AddHandler(storage.ScmFirmwareUpdateMethod, &scmUpdateHandler{})
+	app.AddHandler(storage.NVMeFirmwareQueryMethod, &nvmeQueryHandler{})
+	app.AddHandler(storage.NVMeFirmwareUpdateMethod, &nvmeUpdateHandler{})
 
 	err := app.Run()
 	if err != nil {

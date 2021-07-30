@@ -648,6 +648,7 @@ prepare_segments(struct agg_merge_window *mw)
 {
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
 	struct agg_phy_ent	*phy_ent = NULL;
+	struct agg_phy_ent	*first = NULL;
 	struct agg_phy_ent	*temp = NULL;
 	struct agg_lgc_ent	*lgc_ent;
 	struct agg_lgc_seg	*lgc_seg;
@@ -737,15 +738,12 @@ prepare_segments(struct agg_merge_window *mw)
 	D_ASSERT(io->ic_seg_cnt < io->ic_seg_max);
 
 process_physical:
-	if (mw->mw_csum_support) {
-		cs_len = phy_ent->pe_csum_info.cs_len;
-		cs_type = phy_ent->pe_csum_info.cs_type;
-		chunksize = phy_ent->pe_csum_info.cs_chunksize;
-	}
-
 	/* Generate truncated segments according to physical entries */
 	d_list_for_each_entry_safe(phy_ent, temp, &mw->mw_phy_ents, pe_link) {
 		struct agg_rmv_ent	*rm_ent;
+
+		if (first == NULL)
+			first = phy_ent; /* Save the first one */
 
 		lgc_seg = &io->ic_segs[io->ic_seg_cnt];
 		ent_in = &lgc_seg->ls_ent_in;
@@ -820,6 +818,11 @@ process_physical:
 		D_ASSERT(io->ic_seg_cnt <= io->ic_seg_max);
 	}
 	if (mw->mw_csum_support) {
+		D_ASSERT(first != NULL);
+		cs_len = first->pe_csum_info.cs_len;
+		cs_type = first->pe_csum_info.cs_type;
+		chunksize = first->pe_csum_info.cs_chunksize;
+
 		for (i = 0; i < io->ic_seg_cnt; i++) {
 			lgc_seg = &io->ic_segs[i];
 			ent_in = &lgc_seg->ls_ent_in;
@@ -1247,7 +1250,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	int			 rc = 0;
 
 	if (io->ic_seg_cnt == 0) {
-		/** No logical extents to handle (only removals) */
+		/** No logical extent or truncated physical extent (only removals) */
 		return 0;
 	}
 

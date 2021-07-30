@@ -25,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -190,18 +191,6 @@ func (cfg *Server) WithEngines(engineList ...*engine.Config) *Server {
 	cfg.Engines = engineList
 	for i := range cfg.Engines {
 		cfg.updateServerConfig(&cfg.Engines[i])
-	}
-	return cfg
-}
-
-// WithScmMountPoint sets the SCM mountpoint for the first I/O Engine.
-//
-// Deprecated: This function exists to ease transition away from
-// specifying the SCM mountpoint via daos_server CLI flag. Future
-// versions will require the mountpoint to be set via configuration.
-func (cfg *Server) WithScmMountPoint(mp string) *Server {
-	if len(cfg.Engines) > 0 {
-		cfg.Engines[0].WithScmMountPoint(mp)
 	}
 	return cfg
 }
@@ -447,6 +436,44 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return errors.New("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
 	}
 
+	for idx, ec := range cfg.Engines {
+		if ec.LegacyStorage.WasDefined() {
+			log.Infof("engine %d: Legacy storage configuration detected. Please migrate to new-style storage configuration.", idx)
+			var tierCfgs storage.TierConfigs
+			if ec.LegacyStorage.ScmClass != storage.ClassNone {
+				tierCfgs = append(tierCfgs,
+					storage.NewTierConfig().
+						WithScmClass(ec.LegacyStorage.ScmClass.String()).
+						WithScmDeviceList(ec.LegacyStorage.ScmConfig.DeviceList...).
+						WithScmMountPoint(ec.LegacyStorage.MountPoint).
+						WithScmRamdiskSize(ec.LegacyStorage.RamdiskSize),
+				)
+			}
+
+			// Do not add bdev tier if cls is none or nvme has no
+			// devices to maintain backward compatible behavior.
+			bc := ec.LegacyStorage.BdevClass
+			switch {
+			case bc == storage.ClassNvme && len(ec.LegacyStorage.BdevConfig.DeviceList) == 0:
+				log.Debugf("legacy storage config conversion skipped for class %s with empty bdev_list",
+					storage.ClassNvme)
+			case bc == storage.ClassNone:
+				log.Debugf("legacy storage config conversion skipped for class %s",
+					storage.ClassNone)
+			default:
+				tierCfgs = append(tierCfgs,
+					storage.NewTierConfig().
+						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
+						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
+						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
+						WithBdevFileSize(ec.LegacyStorage.FileSize),
+				)
+			}
+			ec.WithStorage(tierCfgs...)
+			ec.LegacyStorage = engine.LegacyStorage{}
+		}
+	}
+
 	// A config without engines is valid when initially discovering hardware
 	// prior to adding per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
@@ -541,29 +568,33 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 			seenValues[logConfig] = idx
 		}
 
-		scmConf := engine.Storage.SCM
-		mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.MountPoint)
-		if seenIn, exists := seenValues[mountConfig]; exists {
-			log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
-			return FaultConfigDuplicateScmMount(idx, seenIn)
-		}
-		seenValues[mountConfig] = idx
-
-		for _, dev := range scmConf.DeviceList {
-			if seenIn, exists := seenScmSet[dev]; exists {
-				log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
-				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
+		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+			mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.Scm.MountPoint)
+			if seenIn, exists := seenValues[mountConfig]; exists {
+				log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
+				return FaultConfigDuplicateScmMount(idx, seenIn)
 			}
-			seenScmSet[dev] = idx
+			seenValues[mountConfig] = idx
 		}
 
-		bdevConf := engine.Storage.Bdev
-		for _, dev := range bdevConf.DeviceList {
-			if seenIn, exists := seenBdevSet[dev]; exists {
-				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
-				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
+		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+			for _, dev := range scmConf.Scm.DeviceList {
+				if seenIn, exists := seenScmSet[dev]; exists {
+					log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
+					return FaultConfigDuplicateScmDeviceList(idx, seenIn)
+				}
+				seenScmSet[dev] = idx
 			}
-			seenBdevSet[dev] = idx
+		}
+
+		for _, bdevConf := range engine.Storage.Tiers.BdevConfigs() {
+			for _, dev := range bdevConf.Bdev.DeviceList {
+				if seenIn, exists := seenBdevSet[dev]; exists {
+					log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
+					return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
+				}
+				seenBdevSet[dev] = idx
+			}
 		}
 	}
 
