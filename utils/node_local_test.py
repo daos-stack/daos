@@ -3423,7 +3423,7 @@ def run(wf, args):
         server.start()
         pools = server.fetch_pools()
         for pool in pools:
-            cmd = ['cont', 'list', pool.id()]
+            cmd = ['pool', 'query', pool.id()]
             rc = run_daos_cmd(conf, cmd, valgrind=False)
             print(rc)
             time.sleep(5)
