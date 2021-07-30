@@ -74,5 +74,9 @@ def scons():
     # ftest
     SConscript('ftest/SConscript')
 
+    # DFS remove perf test
+    denv.AppendUnique(LIBPATH=["$BUILD_DIR/src/client/dfs"])
+    libs = ['daos', 'daos_common_pmem', 'uuid', 'dfs']
+    daos_build.program(denv, 'dfs_remove_perf', 'dfs_remove_perf.c', LIBS=libs)
 if __name__ == "SCons.Script":
     scons()
