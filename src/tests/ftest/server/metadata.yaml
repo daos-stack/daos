@@ -12,6 +12,7 @@ hosts:
 timeouts:
   test_metadata_fillup: 300
   test_metadata_addremove: 900
+  test_metadata_server_restart: 900
   test_container_removal_after_der_nospace: 180
 server_config:
   name: daos_server

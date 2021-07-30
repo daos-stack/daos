@@ -14,11 +14,9 @@ import queue
 from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
-
 
 
 def ior_runner_thread(manager, uuids, results):
@@ -91,7 +89,7 @@ class ObjectMetadata(TestWithServers):
             if self.container[-1].daos:
                 self.container[-1].daos.verbose = False
             try:
-                self.container.create()
+                self.container[-1].create()
             except TestFail as error:
                 if "RC: -1007" in error:
                     self.log.info(
@@ -270,7 +268,6 @@ class ObjectMetadata(TestWithServers):
             if not self.destroy_all_containers():
                 self.fail(f"Errors during remove iteration {loop} / 9")
 
-    @avocado.fail_on(DaosApiError)
     def test_metadata_server_restart(self):
         """JIRA ID: DAOS-1512.
 
