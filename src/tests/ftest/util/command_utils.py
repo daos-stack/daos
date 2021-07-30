@@ -156,7 +156,7 @@ class ExecutableCommand(CommandWithParameters):
             # Command failed or possibly timed out
             raise CommandFailure from error
 
-        if not self._check_results():
+        if self.exit_status_exception and not self.check_results():
             # Command failed if its output contains bad keywords
             raise CommandFailure(
                 "<{}> command failed: Error messages detected in output".format(
@@ -164,7 +164,7 @@ class ExecutableCommand(CommandWithParameters):
 
         return self.result
 
-    def _check_results(self):
+    def check_results(self):
         """Check the command result for any bad keywords.
 
         Returns:
