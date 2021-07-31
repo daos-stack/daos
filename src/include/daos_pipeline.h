@@ -121,8 +121,8 @@ typedef struct {
 	/**
 	 * Version number of the data structure.
 	 */
-	uint8_t			version_major	= 1;
-	uint8_t			version_minor	= 0;
+	uint8_t			version_major;
+	uint8_t			version_minor;
 	/**
 	 * Node type can be any of the following:
 	 *   -- DAOS_PIPELINE_CONDITION:
