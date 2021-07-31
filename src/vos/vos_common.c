@@ -32,6 +32,46 @@ struct vos_self_mode		 self_mode = {
 	.self_lock	= PTHREAD_MUTEX_INITIALIZER,
 };
 
+#define VOS_BUF_LEN 1024
+static __thread char vos_of_buf[VOS_BUF_LEN];
+static __thread int vos_of_buf_len;
+static inline void
+append_buf(const char *str, size_t len)
+{
+	if (vos_of_buf_len + len > VOS_BUF_LEN)
+		return;
+
+	if (vos_of_buf_len == 2)
+		vos_of_buf_len--;
+	else
+		vos_of_buf[vos_of_buf_len - 1] = ' ';
+	strncpy(&vos_of_buf[vos_of_buf_len], str, len);
+	vos_of_buf_len += len;
+}
+
+#define VOS_ADD_FLAG(name, value, flags)			\
+	do {							\
+		if ((flags) & (value))				\
+			append_buf(#name, sizeof(#name));	\
+	} while (0);
+
+const char *
+vos_of2str(uint64_t flags)
+{
+	vos_of_buf[0] = '(';
+	vos_of_buf[1] = 0;
+	vos_of_buf_len = 2;
+
+	VOS_FOREACH_OF(VOS_ADD_FLAG, flags);
+
+	if (vos_of_buf_len < VOS_BUF_LEN) {
+		vos_of_buf[vos_of_buf_len - 1] = ')';
+		vos_of_buf[vos_of_buf_len] = 0;
+	}
+
+	return &vos_of_buf[0];
+}
+
 #define DF_MAX_BUF 128
 void
 vos_report_layout_incompat(const char *type, int version, int min_version,

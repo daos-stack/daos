@@ -1263,4 +1263,9 @@ vos_ts_add_missing(struct vos_ts_set *ts_set, daos_key_t *dkey, int akey_nr,
 int
 vos_pool_settings_init(void);
 
+#define DF_OF "%s"
+#define DP_OF(flags) vos_of2str(flags)
+const char *
+vos_of2str(uint64_t flags);
+
 #endif /* __VOS_INTERNAL_H__ */

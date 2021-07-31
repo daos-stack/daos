@@ -212,45 +212,49 @@ typedef enum {
 	VOS_IT_EPC_EQ,
 } vos_it_epc_expr_t;
 
+#define VOS_FOREACH_OF(action, arg)							\
+	/** Conditional Op: Punch key if it exists, fail otherwise */			\
+	action(VOS_OF_COND_PUNCH,		DAOS_COND_PUNCH,	arg)		\
+	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */		\
+	action(VOS_OF_COND_DKEY_INSERT,		DAOS_COND_DKEY_INSERT,	arg)		\
+	/** Conditional Op: Update dkey if it exists, fail otherwise */			\
+	action(VOS_OF_COND_DKEY_UPDATE,		DAOS_COND_DKEY_UPDATE,	arg)		\
+	/** Conditional Op: Fetch dkey if it exists, fail otherwise */			\
+	action(VOS_OF_COND_DKEY_FETCH,		DAOS_COND_DKEY_FETCH,	arg)		\
+	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */		\
+	action(VOS_OF_COND_AKEY_INSERT,		DAOS_COND_AKEY_INSERT,	arg)		\
+	/** Conditional Op: Update akey if it exists, fail otherwise */			\
+	action(VOS_OF_COND_AKEY_UPDATE,		DAOS_COND_AKEY_UPDATE,	arg)		\
+	/** Conditional Op: Fetch akey if it exists, fail otherwise */			\
+	action(VOS_OF_COND_AKEY_FETCH,		DAOS_COND_AKEY_FETCH,	arg)		\
+	/** Indicates akey conditions are specified in iod_flags */			\
+	action(VOS_OF_COND_PER_AKEY,		DAOS_COND_PER_AKEY,	arg)		\
+	/* critical update - skip checks on SCM system/held space */			\
+	action(VOS_OF_CRIT,			(1 << 8),		arg)		\
+	/** Instead of update or punch of extents, remove all extents in range */	\
+	action(VOS_OF_REMOVE,			(1 << 9),		arg)		\
+	/* only query iod_size */							\
+	action(VOS_OF_FETCH_SIZE_ONLY,		(1 << 10),		arg)		\
+	/* query recx list */								\
+	action(VOS_OF_FETCH_RECX_LIST,		(1 << 11),		arg)		\
+	/* only set read TS */								\
+	action(VOS_OF_FETCH_SET_TS_ONLY,	(1 << 12),		arg)		\
+	/* check the target (obj/dkey/akey) existence */				\
+	action(VOS_OF_FETCH_CHECK_EXISTENCE,	(1 << 13),		arg)		\
+	/** Set when propagating a punch that results in empty subtree */		\
+	action(VOS_OF_PUNCH_PROPAGATE,		(1 << 14),		arg)		\
+	/** replay punch (underwrite) */						\
+	action(VOS_OF_REPLAY_PC,		(1 << 15),		arg)		\
+	/** Dedup update mode */							\
+	action(VOS_OF_DEDUP,			(1 << 16),		arg)		\
+	/** Dedup update with memcmp verify mode */					\
+	action(VOS_OF_DEDUP_VERIFY,		(1 << 17),		arg)
+
+#define VOS_DEFINE_OF_ENUM(name, value, arg)	\
+	name	= (value),
+
 enum {
-	/** Conditional Op: Punch key if it exists, fail otherwise */
-	VOS_OF_COND_PUNCH		= DAOS_COND_PUNCH,
-	/** Conditional Op: Insert dkey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_DKEY_INSERT		= DAOS_COND_DKEY_INSERT,
-	/** Conditional Op: Update dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_UPDATE		= DAOS_COND_DKEY_UPDATE,
-	/** Conditional Op: Fetch dkey if it exists, fail otherwise */
-	VOS_OF_COND_DKEY_FETCH		= DAOS_COND_DKEY_FETCH,
-	/** Conditional Op: Insert akey if it doesn't exist, fail otherwise */
-	VOS_OF_COND_AKEY_INSERT		= DAOS_COND_AKEY_INSERT,
-	/** Conditional Op: Update akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_UPDATE		= DAOS_COND_AKEY_UPDATE,
-	/** Conditional Op: Fetch akey if it exists, fail otherwise */
-	VOS_OF_COND_AKEY_FETCH		= DAOS_COND_AKEY_FETCH,
-	/** Indicates akey conditions are specified in iod_flags */
-	VOS_OF_COND_PER_AKEY		= DAOS_COND_PER_AKEY,
-	/* critical update - skip checks on SCM system/held space */
-	VOS_OF_CRIT			= (1 << 8),
-	/** Instead of update or punch of extents, remove all extents
-	 * under the specified range. Intended for internal use only.
-	 */
-	VOS_OF_REMOVE			= (1 << 9),
-	/* only query iod_size */
-	VOS_OF_FETCH_SIZE_ONLY		= (1 << 10),
-	/* query recx list */
-	VOS_OF_FETCH_RECX_LIST		= (1 << 11),
-	/* only set read TS */
-	VOS_OF_FETCH_SET_TS_ONLY	= (1 << 12),
-	/* check the target (obj/dkey/akey) existence */
-	VOS_OF_FETCH_CHECK_EXISTENCE	= (1 << 13),
-	/** Set when propagating a punch that results in empty subtree */
-	VOS_OF_PUNCH_PROPAGATE		= (1 << 14),
-	/** replay punch (underwrite) */
-	VOS_OF_REPLAY_PC		= (1 << 15),
-	/** Dedup update mode */
-	VOS_OF_DEDUP			= (1 << 16),
-	/** Dedup update with memcmp verify mode */
-	VOS_OF_DEDUP_VERIFY		= (1 << 17),
+	VOS_FOREACH_OF(VOS_DEFINE_OF_ENUM, noop)
 };
 
 /** Mask for any conditionals passed to to the fetch */

@@ -1472,16 +1472,24 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		struct daos_recx_ep_list *shadows, daos_handle_t *ioh,
 		struct dtx_handle *dth)
 {
+	bool mask_set = false;
 	struct vos_io_context	*ioc;
 	int			 i, rc;
 
-	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_X64"\n",
-		DP_UOID(oid), iod_nr, epoch);
+	if (dkey != NULL && dkey->iov_len == 8 && memcmp(dkey->iov_buf, "testfile", 8) == 0) {
+		mask_set = true;
+		d_log_setmasks("DEBUG", -1);
+	}
+	D_DEBUG(DB_TRACE, "Fetch "DF_UOID", desc_nr %d, epoch "DF_X64" flags="DF_OF"\n",
+		DP_UOID(oid), iod_nr, epoch, DP_OF(vos_flags));
 
 	rc = vos_ioc_create(coh, oid, true, epoch, iod_nr, iods,
 			    NULL, vos_flags, shadows, 0, dth, &ioc);
-	if (rc != 0)
+	if (rc != 0) {
+		if (mask_set)
+			d_log_setmasks("ERR", -1);
 		return rc;
+	}
 
 	vos_dth_set(dth);
 
@@ -1532,11 +1540,14 @@ out:
 		vos_ts_set_update(ioc->ic_ts_set, ioc->ic_epr.epr_hi);
 	}
 
+	D_DEBUG(DB_TRACE, "rc = "DF_RC"\n", DP_RC(rc));
 	if (rc != 0) {
 		daos_recx_ep_list_free(ioc->ic_recx_lists, ioc->ic_iod_nr);
 		ioc->ic_recx_lists = NULL;
 		return vos_fetch_end(vos_ioc2ioh(ioc), NULL, rc);
 	}
+	if (mask_set)
+		d_log_setmasks("ERR", -1);
 	return 0;
 }
 
@@ -2206,12 +2217,20 @@ int
 vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	       daos_size_t *size, struct dtx_handle *dth)
 {
+	bool			mask_set = false;
 	struct vos_dtx_act_ent	**daes = NULL;
 	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
 	uint64_t		 time = 0;
 	bool			 tx_started = false;
+
+	if (dkey != NULL && dkey->iov_len == 8 && memcmp(dkey->iov_buf, "testfile", 8) == 0) {
+		mask_set = true;
+		d_log_setmasks("DEBUG", -1);
+	}
+	D_DEBUG(DB_TRACE, "Updating "DF_UOID", iod_nr %d, epc "DF_X64"\n", DP_UOID(ioc->ic_oid),
+		ioc->ic_iod_nr, ioc->ic_epr.epr_hi);
 
 	VOS_TIME_START(time, VOS_UPDATE_END);
 	D_ASSERT(ioc->ic_update);
@@ -2320,6 +2339,9 @@ abort:
 	D_FREE(dces);
 	vos_ioc_destroy(ioc, err != 0);
 	vos_dth_set(NULL);
+	D_DEBUG(DB_TRACE, "rc = "DF_RC"\n", DP_RC(err));
+	if (mask_set)
+		d_log_setmasks("ERR", -1);
 
 	return err;
 }
@@ -2362,15 +2384,24 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
 		 uint32_t dedup_th, daos_handle_t *ioh, struct dtx_handle *dth)
 {
+	bool mask_set = false;
 	struct vos_io_context	*ioc;
 	int			 rc;
 
 	if (oid.id_shard % 3 == 1 && DAOS_FAIL_CHECK(DAOS_DTX_FAIL_IO))
 		return -DER_IO;
 
+	if (dkey != NULL && dkey->iov_len == 8 && memcmp(dkey->iov_buf, "testfile", 8) == 0) {
+		mask_set = true;
+		d_log_setmasks("DEBUG", -1);
+	}
+
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
-		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
-		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
+		", flags="DF_OF"\n", DP_UOID(oid), iod_nr,
+		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, DP_OF(flags));
+
+	if (mask_set)
+		d_log_setmasks("ERR", -1);
 
 	rc = vos_check_akeys(iod_nr, iods);
 	if (rc != 0) {
