@@ -184,7 +184,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 
 	/**
 	 * reading in chunks of 64 keys (at most) at a time
-	 * */
+	 */
 	nr_kds   = 64;
 	nr_iods  = NR_IODS;
 
@@ -278,11 +278,12 @@ main(int argc, char **argv)
 	rc = daos_pool_connect(pool_uuid, NULL, DAOS_PC_RW, &poh, NULL, NULL);
 	ASSERT(rc == 0, "pool connect failed with %d", rc);
 
-	/** Create and open a container.
-	  * Alternatively, one could create the container outside of this
-	  * program using the daos utility: daos cont create --pool=puuid
-	  * and pass the uuid to the app.
-	  * */
+	/*
+	 * Create and open a container.
+	 * Alternatively, one could create the container outside of this
+	 * program using the daos utility: daos cont create --pool=puuid
+	 * and pass the uuid to the app.
+	 */
 	uuid_generate(co_uuid);
 	rc = daos_cont_create(poh, co_uuid, NULL, NULL);
 	ASSERT(rc == 0, "container create failed with %d", rc);
