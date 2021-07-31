@@ -22,6 +22,7 @@
 #include "../pool.pb-c.h"
 #include "../cont.pb-c.h"
 #include "../svc.pb-c.h"
+#include "../server.pb-c.h"
 #include "../drpc_internal.h"
 #include "mocks.h"
 
@@ -89,6 +90,7 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	 * to test for proper handling of garbage in the payload
 	 */
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_prep_shutdown);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_set_log_masks);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_ping_rank);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_set_rank);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_create);
@@ -2079,6 +2081,59 @@ test_drpc_prep_shutdown_success(void **state)
 }
 
 /*
+ * dRPC set log masks tests
+ */
+static void
+setup_set_log_masks_call(Drpc__Call *call, Ctl__SetLogMasksReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = ctl__set_log_masks_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	ctl__set_log_masks_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+expect_drpc_set_log_masks_resp_with_status(Drpc__Response *resp,
+					   int expected_err)
+{
+	Ctl__SetLogMasksResp *payload_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	payload_resp = ctl__set_log_masks_resp__unpack(NULL, resp->body.len,
+							 resp->body.data);
+	assert_non_null(payload_resp);
+	assert_int_equal(payload_resp->status, expected_err);
+
+	ctl__set_log_masks_resp__free_unpacked(payload_resp, NULL);
+}
+
+static void
+test_drpc_set_log_masks_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Ctl__SetLogMasksReq	req = CTL__SET_LOG_MASKS_REQ__INIT;
+
+	setup_set_log_masks_call(&call, &req);
+
+	ds_mgmt_drpc_set_log_masks(&call, &resp);
+
+	expect_drpc_set_log_masks_resp_with_status(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
  * dRPC cont set owner setup/teardown
  */
 
@@ -2285,6 +2340,8 @@ test_drpc_cont_set_owner_success(void **state)
 
 #define PREP_SHUTDOWN_TEST(x)	cmocka_unit_test(x)
 
+#define SET_LOG_MASKS_TEST(x)	cmocka_unit_test(x)
+
 #define CONT_SET_OWNER_TEST(x) cmocka_unit_test_setup_teardown(x, \
 						drpc_cont_set_owner_setup, \
 						drpc_cont_set_owner_teardown)
@@ -2342,6 +2399,7 @@ main(void)
 		POOL_EVICT_TEST(test_drpc_pool_evict_success),
 		PING_RANK_TEST(test_drpc_ping_rank_success),
 		PREP_SHUTDOWN_TEST(test_drpc_prep_shutdown_success),
+		SET_LOG_MASKS_TEST(test_drpc_set_log_masks_success),
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_cont_uuid),
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_pool_uuid),
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_failed),
