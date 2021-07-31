@@ -22,6 +22,11 @@ type (
 		Err          error
 	}
 
+	mountMap struct {
+		sync.RWMutex
+		mounted map[string]bool
+	}
+
 	// MockSysConfig alters mock SystemProvider behavior.
 	MockSysConfig struct {
 		IsMountedBool   bool
@@ -34,7 +39,6 @@ type (
 		SourceToTarget  map[string]string
 		getfsIndex      int
 		GetfsUsageResps []GetfsUsageRetval
-		isMounted       map[string]bool
 		statErrors      map[string]error
 		realStat        bool
 	}
@@ -42,9 +46,28 @@ type (
 	// MockSysProvider gives a mock SystemProvider implementation.
 	MockSysProvider struct {
 		sync.RWMutex
-		cfg MockSysConfig
+		cfg       MockSysConfig
+		isMounted mountMap
 	}
 )
+
+func (mm *mountMap) Set(mount string, mounted bool) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	if mm.mounted == nil {
+		mm.mounted = make(map[string]bool)
+	}
+	mm.mounted[mount] = mounted
+}
+
+func (mm *mountMap) Get(mount string) (bool, bool) {
+	mm.RLock()
+	defer mm.RUnlock()
+
+	mounted, exists := mm.mounted[mount]
+	return mounted, exists
+}
 
 func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 	err := msp.cfg.IsMountedErr
@@ -64,7 +87,7 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 		target = mount
 	}
 
-	isMounted, exists := msp.cfg.isMounted[target]
+	isMounted, exists := msp.isMounted.Get(target)
 	if !exists {
 		return msp.cfg.IsMountedBool, err
 	}
@@ -74,7 +97,7 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
 	if msp.cfg.MountErr == nil {
 		msp.Lock()
-		msp.cfg.isMounted[target] = true
+		msp.isMounted.Set(target, true)
 		msp.Unlock()
 	}
 	return msp.cfg.MountErr
@@ -83,7 +106,7 @@ func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) erro
 func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
 		msp.Lock()
-		msp.cfg.isMounted[target] = false
+		msp.isMounted.Set(target, false)
 		msp.Unlock()
 	}
 	return msp.cfg.UnmountErr
@@ -123,14 +146,14 @@ func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
 	if cfg == nil {
 		cfg = &MockSysConfig{}
 	}
-	if cfg.isMounted == nil {
-		cfg.isMounted = make(map[string]bool)
-	}
 	if cfg.statErrors == nil {
 		cfg.realStat = true
 	}
 	return &MockSysProvider{
 		cfg: *cfg,
+		isMounted: mountMap{
+			mounted: make(map[string]bool),
+		},
 	}
 }
 

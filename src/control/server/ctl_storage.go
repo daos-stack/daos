@@ -28,36 +28,36 @@ type StorageControlService struct {
 	instanceStorage map[uint32]*storage.Config
 }
 
-// NewStorageControlService returns an initialized *StorageControlService
-func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
+func newStorageControlService(l logging.Logger, ecs []*engine.Config, sp *storage.Provider) *StorageControlService {
 	instanceStorage := make(map[uint32]*storage.Config)
-	for i, cfg := range engineCfgs {
-		instanceStorage[uint32(i)] = &cfg.Storage
+	for i, c := range ecs {
+		instanceStorage[uint32(i)] = &c.Storage
 	}
 
 	return &StorageControlService{
-		log: log,
-		storage: storage.DefaultProvider(log, 0, &storage.Config{
-			Tiers: nil,
-		}),
+		log:             l,
+		storage:         sp,
 		instanceStorage: instanceStorage,
 	}
 }
 
-// NewMockStorageControlService returns an initialized mock *StorageControlService
-func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider) *StorageControlService {
-	instanceStorage := make(map[uint32]*storage.Config)
-	for i, cfg := range engineCfgs {
-		instanceStorage[uint32(i)] = &cfg.Storage
-	}
+// NewStorageControlService returns an initialized *StorageControlService
+func NewStorageControlService(log logging.Logger, engineCfgs []*engine.Config) *StorageControlService {
+	return newStorageControlService(log, engineCfgs,
+		storage.DefaultProvider(log, 0, &storage.Config{
+			Tiers: nil,
+		}),
+	)
+}
 
-	return &StorageControlService{
-		log: log,
-		storage: storage.MockProvider(log, 0, &storage.Config{
+// NewMockStorageControlService returns a StorageControlService with a mocked
+// storage provider consisting of the given sys, scm and bdev providers.
+func NewMockStorageControlService(log logging.Logger, engineCfgs []*engine.Config, sys storage.SystemProvider, scm storage.ScmProvider, bdev storage.BdevProvider) *StorageControlService {
+	return newStorageControlService(log, engineCfgs,
+		storage.MockProvider(log, 0, &storage.Config{
 			Tiers: nil,
 		}, sys, scm, bdev),
-		instanceStorage: instanceStorage,
-	}
+	)
 }
 
 // findBdevsWithDomain retrieves controllers in scan response that match the
