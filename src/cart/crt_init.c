@@ -94,7 +94,7 @@ prov_data_init(struct crt_prov_gdata *prov_data, int provider,
 	prov_data->cpg_contig_ports = true;
 	prov_data->cpg_ctx_max_num = max_ctx_num;
 
-	D_INIT_LIST_HEAD(&(prov_data->cpg_ctx_list));
+	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 }
 
 /* first step init - for initializing crt_gdata */
@@ -192,7 +192,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	}
 	crt_gdata.cg_credit_ep_ctx = credits;
 	D_ASSERT(crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
-
 
 	/** Enable statistics only for the server side and if requested */
 	if (opt && opt->cio_use_sensors && server) {
@@ -589,7 +588,7 @@ crt_finalize(void)
 		crt_self_test_fini();
 
 		/* TODO: Needs to happen for every initialized provider */
-		prov_data = &(crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov]);
+		prov_data = &crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov];
 
 		if (prov_data->cpg_ctx_num > 0) {
 			D_ASSERT(!crt_context_empty(crt_gdata.cg_init_prov,
@@ -598,7 +597,7 @@ crt_finalize(void)
 				prov_data->cpg_ctx_num);
 			crt_gdata.cg_refcount++;
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			D_GOTO(out, rc = -DER_NO_PERM);
+			D_GOTO(out, rc = -DER_BUSY);
 		} else {
 			D_ASSERT(crt_context_empty(crt_gdata.cg_init_prov,
 				 CRT_LOCKED));
@@ -649,11 +648,10 @@ direct_out:
 	if (rc == 0)
 		d_log_fini(); /* d_log_fini is reference counted */
 	else
-		D_ERROR("failed, rc: %d.\n", rc);
+		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
-
 
 static inline na_bool_t is_integer_str(char *str)
 {
