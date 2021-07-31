@@ -85,8 +85,8 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                 # Run ior command.
                 try:
                     self.run_ior_with_pool(
-                        timeout=200, stop_dfuse=True, create_pool=False,
-                        create_cont=False, test_file_suffix=test_file_suffix)
+                        timeout=200, create_pool=False, create_cont=False,
+                        test_file_suffix=test_file_suffix)
                 except TestFail:
                     self.log.info("#ior command failed!")
         metrics_data[i] = self.telemetry.get_io_metrics(test_metrics)

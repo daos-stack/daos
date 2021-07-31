@@ -449,8 +449,11 @@ class TelemetryUtils():
                         data[host][name] = metric["value"]
         return data
 
-    def get_io_metrics(self, test_metrics=None):
+    def get_io_metrics(self, test_metrics):
         """Get the telemetry test io metrics.
+
+        Args:
+            test_metrics (list): list of the test io telemetry metrics
 
         Returns:
             dict: dictionary of dictionaries of specified io metric names and
