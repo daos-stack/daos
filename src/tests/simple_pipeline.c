@@ -21,12 +21,12 @@ static daos_handle_t	poh; /** pool */
 static daos_handle_t	coh; /** container */
 static daos_handle_t	oh;  /** object */
 
-#define	ASSERT(cond, ...)					\
-do {								\
-	if (!(cond)) {						\
-		fprintf(stderr, __VA_ARGS__);			\
-		exit(1);					\
-	}							\
+#define	ASSERT(cond, ...)			\
+do {						\
+	if (!(cond)) {				\
+		fprintf(stderr, __VA_ARGS__);	\
+		exit(1);			\
+	}					\
 } while (0)
 
 /** DB info */
@@ -125,12 +125,14 @@ build_filter_one(daos_pipeline_t *pipeline)
 	akey_ft.data_len    = STRING_LEN;
 
 	/** constant for filter */
-	const_ft.filter_type = DAOS_FILTER_CONST;
-	const_ft.data_type   = DAOS_FILTER_TYPE_STRING;
-	const_ft.num_params  = 0;
-	d_iov_set(&(const_ft.constant), constant, STRING_LEN);
-	const_ft.data_offset = 0;
-	const_ft.data_len    = STRING_LEN;
+	const_ft.filter_type   = DAOS_FILTER_CONST;
+	const_ft.data_type     = DAOS_FILTER_TYPE_STRING;
+	const_ft.num_params    = 0;
+	const_ft.num_constants = 1;
+	const_ft.constant      = (d_iov_t *) malloc(sizeof(d_iov_t));
+	d_iov_set(const_ft.constant, constant, STRING_LEN);
+	const_ft.data_offset   = 0;
+	const_ft.data_len      = STRING_LEN;
 
 	/** function for filter */
 	eqfunc_ft.filter_type = DAOS_FILTER_FUNC_EQ;

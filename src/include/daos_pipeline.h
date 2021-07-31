@@ -96,9 +96,13 @@ typedef struct {
 	 */
 	d_iov_t		akey;
 	/**
-	 * If filter object is a constant, this holds its value.
+	 * How many constants we have in \a constant
 	 */
-	d_iov_t		constant;
+	size_t		num_constants;
+	/**
+	 * This object holds the value of the constants
+	 */
+	d_iov_t		*constant;
 	/**
 	 * If filter should only be applied starting at an offset of the data.
 	 */
@@ -113,6 +117,12 @@ typedef struct {
  * A pipeline node, used to build a pipeline.
  */
 typedef struct {
+
+	/**
+	 * Version number of the data structure.
+	 */
+	uint8_t			version_major	=1;
+	uint8_t			version_minor	=0;
 	/**
 	 * Node type can be any of the following:
 	 *   -- DAOS_PIPELINE_CONDITION:
