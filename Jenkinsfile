@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-@Library(value="pipeline-lib@add-cart-ftest-with-valgrind-stage-2")
+@Library(value="pipeline-lib@bmurrell/add-cart-ftest-with-valgrind-stage-2")
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -762,7 +762,8 @@ pipeline {
                     steps {
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
+                                       test_function: 'runTestFunctionalV2',
+                                       valgrind_stash: 'centos7-gcc-functional-memcheck'
                     }
                     post {
                         always {
@@ -972,7 +973,8 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck']
+                                                     'centos7-gcc-unit-memcheck',
+                                                     'centos7-gcc-functional-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch
