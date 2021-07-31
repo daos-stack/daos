@@ -116,11 +116,15 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
  */
 
 /**
- * Create a new container with uuid \a uuid on the storage pool connected
- * by \a poh.
+ * Create a new container on the storage pool connected by \a poh.  The label (along with other
+ * container properties) can be passed via the \a cont_prop.
+ * If no label is specified, a container without any labels will be created. In this case, the only
+ * way to identify the newly created container will be via its UUID. It is thus recommended to pass
+ * a \a uuid argumnent so that the UUID allocated to the container can be returned to the caller.
  *
  * \param[in]	poh	Pool connection handle.
- * \param[in]	uuid	UUID of the new Container.
+ * \param[out]	uuid	Optional, pointer to uuid_t to hold the implementation-generated container
+ *			UUID.
  * \param[in]	cont_prop
  *			Optional, container properties pointer
  * \param[in]	ev	Completion event, it is optional and can be NULL.
@@ -135,12 +139,11 @@ daos_cont_global2local(daos_handle_t poh, d_iov_t glob, daos_handle_t *coh);
  *			-DER_UNREACH	network is unreachable
  */
 int
-daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
-		 daos_event_t *ev);
+daos_cont_create(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
 
 /**
  * Create a new container with label \a label on the storage pool connected
- * by \a poh.
+ * by \a poh. Helper method built over the regular daos_cont_create().
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in]	label	Required, label property of the new container.
@@ -163,9 +166,9 @@ daos_cont_create(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop,
  *			-DER_UNREACH	network is unreachable
  */
 int
-daos_cont_create_by_label(daos_handle_t poh, const char *label,
-			  daos_prop_t *cont_prop, uuid_t *uuid,
-			  daos_event_t *ev);
+daos_cont_create_with_label(daos_handle_t poh, const char *label,
+			    daos_prop_t *cont_prop, uuid_t *uuid,
+			    daos_event_t *ev);
 
 /**
  * Open an existing container identified by \a cont, a label or UUID string.
@@ -665,16 +668,24 @@ daos_cont_destroy_snap(daos_handle_t coh, daos_epoch_range_t epr,
  * Please don't use directly
  */
 int
-daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags,
-		daos_handle_t *coh, daos_cont_info_t *info, daos_event_t *ev);
+daos_cont_open2(daos_handle_t poh, const char *cont, unsigned int flags, daos_handle_t *coh,
+		daos_cont_info_t *info, daos_event_t *ev);
 
 /**
  * Backward compatibility code.
  * Please don't use directly
  */
 int
-daos_cont_destroy2(daos_handle_t poh, const char *cont, int force,
-		   daos_event_t *ev);
+daos_cont_destroy2(daos_handle_t poh, const char *cont, int force, daos_event_t *ev);
+
+/**
+ * Backward compatibility code.
+ * Please don't use directly
+ */
+int
+daos_cont_create2(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev);
+int
+daos_cont_create1(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev);
 
 #if defined(__cplusplus)
 }
@@ -712,11 +723,24 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 	uuid_unparse(cont, str);
 	return daos_cont_destroy2(poh, str, force, ev);
 }
+
+#define daos_cont_create daos_cont_create_cpp
+static inline int
+daos_cont_create_cpp(daos_handle_t poh, uuid_t *uuid, daos_prop_t *cont_prop, daos_event_t *ev)
+{
+	return daos_cont_create2(poh, uuid, cont_prop, ev);
+}
+
+static inline int
+daos_cont_create_cpp(daos_handle_t poh, const uuid_t uuid, daos_prop_t *cont_prop, daos_event_t *ev)
+{
+	return daos_cont_create1(poh, uuid, cont_prop, ev);
+}
 #else
- /**
-  * for backward compatility, support old api where a const uuid_t was used
-  * instead of a string to identify the container.
-  */
+/**
+ * for backward compatility, support old api where a const uuid_t was used instead of a string to
+ * identify the container.
+ */
 #define daos_cont_open(poh, co, ...)					\
 	({								\
 		int _ret;						\
@@ -732,10 +756,10 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 		_ret;							\
 	})
 
- /**
-  * for backward compatility, support old api where a const uuid_t was used
-  * instead of a string to identify the container.
-  */
+/**
+ * for backward compatility, support old api where a const uuid_t was used instead of a string to
+ * identify the container.
+ */
 #define daos_cont_destroy(poh, co, ...)					\
 	({								\
 		int _ret;						\
@@ -748,6 +772,26 @@ daos_cont_destroy_cpp(daos_handle_t poh, const uuid_t cont, int force, daos_even
 			__str = _str;					\
 		}							\
 		_ret = daos_cont_destroy2((poh), __str, __VA_ARGS__);	\
+		_ret;							\
+	})
+
+/**
+ * for backward compatility, support old api where a const uuid_t was required to be passed in for
+ * the container to be created.
+ */
+#define daos_cont_create(poh, co, ...)					\
+	({								\
+		int _ret;						\
+		uuid_t *_u;						\
+		if (d_is_uuid(co)) {					\
+			_u = (uuid_t *)((unsigned char *)(co));		\
+			_ret = daos_cont_create((poh), _u,		\
+						__VA_ARGS__);		\
+		} else {						\
+			_u = (uuid_t *)(co);				\
+			_ret = daos_cont_create2((poh), _u,		\
+						 __VA_ARGS__);		\
+		}							\
 		_ret;							\
 	})
 

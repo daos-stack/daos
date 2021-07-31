@@ -47,6 +47,14 @@ crt_self_uri_get(int tag, char **uri)
 	return crt_self_uri_get_return;
 }
 
+static uint64_t	crt_self_incarnation_get_incarnation = 123;
+int
+crt_self_incarnation_get(uint64_t *incarnation)
+{
+	*incarnation = crt_self_incarnation_get_incarnation;
+	return 0;
+}
+
 static uint32_t	mock_self_rank = 1;
 int
 crt_group_rank(crt_group_t *grp, d_rank_t *rank)
