@@ -611,17 +611,15 @@ class TestPool(TestDaosApiBase):
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
-    def exclude(self, ranks, daos_log=None, tgt_idx=None):
+    def exclude(self, ranks, tgt_idx=None):
         """Manually exclude a rank from this pool.
 
         Args:
             ranks (list): a list daos server ranks (int) to exclude
-            daos_log (DaosLog): object for logging messages
             tgt_idx (string): str of targets to exclude on ranks ex: "1,2"
 
         Returns:
-            bool: True if the ranks were excluded from the pool; False if the
-                pool is undefined
+            bool: True if the ranks were excluded from the pool; False otherwise
 
         """
         status = False
@@ -630,7 +628,7 @@ class TestPool(TestDaosApiBase):
                 "Error: control method {} not supported for exclude()".format(
                     self.control_method.value))
 
-        elif self.control_method.value == self.USE_DMG and self.dmg:
+        if self.control_method.value == self.USE_DMG and self.dmg:
             self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
             status = True
 
