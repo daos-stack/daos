@@ -419,7 +419,7 @@ func vmdProcessFilters(inReq *storage.BdevPrepareRequest, vmdPciAddrs []string) 
 
 	if inReq.PciBlockList != "" {
 		var outList []string
-		inList := outAllowList // incase vmdPciAddrs list has already been filtered
+		inList := outAllowList // in case vmdPciAddrs list has already been filtered
 		if len(inList) == 0 {
 			inList = vmdPciAddrs
 		}
