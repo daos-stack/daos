@@ -250,7 +250,7 @@ class DaosCommand(DaosCommandBase):
             sys_name (str, optional): System name. Defaults to None.
 
         Returns:
-            dict: JSON output.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos container list command fails.
