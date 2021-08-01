@@ -43,8 +43,8 @@ class ListContainerTest(TestWithServers):
                 self.daos_cmd.get_output("container_create", **kwargs)[0])
         expected_uuids.sort()
         # daos pool list-cont returns container UUIDs as a list.
-        data = self.daos_cmd.pool_list_cont(**kwargs)
-        actual_uuids = data["uuids"]
+        data = self.daos_cmd.container_list(**kwargs)
+        actual_uuids = [uuid_label["UUID"] for uuid_label in data["response"]]
         actual_uuids.sort()
         self.assertEqual(expected_uuids, actual_uuids)
 
@@ -57,7 +57,9 @@ class ListContainerTest(TestWithServers):
         Use Cases:
             See test cases in the class description.
 
-        :avocado: tags=all,container,full_regression,list_containers
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=container,list_containers
         """
         expected_uuids1 = []
         data1 = self.get_dmg_command().pool_create(scm_size="150MB")
