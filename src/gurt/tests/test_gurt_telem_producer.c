@@ -68,7 +68,7 @@ test_increment_counter(void **state)
 		d_tm_inc_counter(loop, 1);
 	}
 
-	rc = d_tm_get_counter(cli_ctx, &val, srv_to_cli_node(loop));
+	rc = d_tm_get_counter(cli_ctx, &val, srv_to_cli_node(loop), false);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, count);
 }
@@ -88,7 +88,7 @@ test_add_to_counter(void **state)
 	d_tm_inc_counter(loop, count);
 	d_tm_inc_counter(loop, 1);
 
-	rc = d_tm_get_counter(cli_ctx, &val, srv_to_cli_node(loop));
+	rc = d_tm_get_counter(cli_ctx, &val, srv_to_cli_node(loop), false);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, count + 1);
 }
@@ -350,7 +350,7 @@ check_bucket_counter(char *path, int bucket_id, uint64_t exp_val)
 
 	node = d_tm_find_metric(cli_ctx, bucket_path);
 	assert_non_null(node);
-	rc = d_tm_get_counter(cli_ctx, &val, node);
+	rc = d_tm_get_counter(cli_ctx, &val, node, false);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(val, exp_val);
 }

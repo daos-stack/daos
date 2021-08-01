@@ -71,7 +71,7 @@ void read_metrics(struct d_tm_context *ctx, struct d_tm_node_t *root,
 			fprintf(stdout, "Directory: %-20s\n", name);
 			break;
 		case D_TM_COUNTER:
-			rc = d_tm_get_counter(ctx, &val, node);
+			rc = d_tm_get_counter(ctx, &val, node, false);
 			if (rc != DER_SUCCESS) {
 				printf("Error on counter read: " DF_RC "\n",
 				       DP_RC(rc));

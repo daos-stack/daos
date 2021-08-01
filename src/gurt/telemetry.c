@@ -1184,7 +1184,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			fprintf(stream, "%-8s\n", name);
 		break;
 	case D_TM_COUNTER:
-		rc = d_tm_get_counter(ctx, &val, node);
+		rc = d_tm_get_counter(ctx, &val, node, false);
 		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on counter read: %d\n", rc);
 			break;
@@ -2766,6 +2766,7 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
  * \param[in]	ctx	Client context
  * \param[out]	val	The value of the counter is stored here
  * \param[in]	node	Pointer to the stored metric node
+ * \param[in]	for_srv	Server side fast version to read the counter.
  *
  * \return	DER_SUCCESS		Success
  *		-DER_INVAL		Invalid input
@@ -2774,21 +2775,31 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
  */
 int
 d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
-		 struct d_tm_node_t *node)
+		 struct d_tm_node_t *node, bool for_srv)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	int			 rc;
 
-	if (ctx == NULL || val == NULL || node == NULL)
+	if (val == NULL || node == NULL)
+		return -DER_INVAL;
+
+	if (node->dtn_type != D_TM_COUNTER)
+		return -DER_OP_NOT_PERMITTED;
+
+	if (for_srv) {
+		d_tm_node_lock(node);
+		*val = node->dtn_metric->dtm_data.value;
+		d_tm_node_unlock(node);
+		return DER_SUCCESS;
+	}
+
+	if (ctx == NULL)
 		return -DER_INVAL;
 
 	rc = validate_node_ptr(ctx, node, &shmem);
 	if (rc != 0)
 		return rc;
-
-	if (node->dtn_type != D_TM_COUNTER)
-		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
 	if (metric_data != NULL) {

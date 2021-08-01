@@ -11,7 +11,7 @@
 /* Developer facing client API to read data */
 char *d_tm_get_name(struct d_tm_context *ctx, struct d_tm_node_t *node);
 int d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
-		     struct d_tm_node_t *node);
+		     struct d_tm_node_t *node, bool for_srv);
 int d_tm_get_timestamp(struct d_tm_context *ctx, time_t *val,
 		       struct d_tm_node_t *node);
 int d_tm_get_timer_snapshot(struct d_tm_context *ctx, struct timespec *tms,
