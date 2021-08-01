@@ -250,10 +250,10 @@ class DaosCommand(DaosCommandBase):
             sys_name (str, optional): System name. Defaults to None.
 
         Returns:
-            dict: Dictionary that contains the list of UUIDs in the key "uuids".
+            dict: JSON output.
 
         Raises:
-            CommandFailure: if the daos pool list-containers command fails.
+            CommandFailure: if the daos container list command fails.
 
         """
         # Sample output.
