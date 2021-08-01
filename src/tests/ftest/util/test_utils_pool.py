@@ -136,6 +136,20 @@ class TestPool(TestDaosApiBase):
                         "Undefined label_generator")
             self.label.update(self.label_generator.get_label(self.label.value))
 
+    @property
+    def identifier(self):
+        """Get the pool uuid or label.
+
+        Returns:
+            str: pool label if using labels and one is defined; otherwise the
+                pool uuid
+
+        """
+        identifier = self.uuid
+        if self.use_label and self.label.value is not None:
+            identifier = self.label.value
+        return identifier
+
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def create(self):
@@ -290,15 +304,8 @@ class TestPool(TestDaosApiBase):
                         "create()".format(self.control_method.value))
 
                 if self.control_method.value == self.USE_DMG and self.dmg:
-                    # Destroy the pool with the dmg command. First, check the
-                    # flag and see if the caller wants to use the label or UUID.
-                    # If the caller want to use the label, check to make sure
-                    # that self.label is set.
-                    if self.use_label and self.label.value is not None:
-                        self.dmg.pool_destroy(
-                            pool=self.label.value, force=force)
-                    else:
-                        self.dmg.pool_destroy(pool=self.uuid, force=force)
+                    # Destroy the pool with the dmg command.
+                    self.dmg.pool_destroy(pool=self.identifier, force=force)
                     status = True
 
                 elif self.control_method.value == self.USE_DMG:
@@ -342,11 +349,7 @@ class TestPool(TestDaosApiBase):
                     prop_name = self.prop_name.value
                 if prop_value is None:
                     prop_value = self.prop_value.value
-                if self.use_label and self.label.value is not None:
-                    self.dmg.pool_set_prop(
-                        self.label.value, prop_name, prop_value)
-                else:
-                    self.dmg.pool_set_prop(self.uuid, prop_name, prop_value)
+                self.dmg.pool_set_prop(self.identifier, prop_name, prop_value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
@@ -363,10 +366,7 @@ class TestPool(TestDaosApiBase):
             self.log.info("Evict all pool connections for pool: %s", self.uuid)
 
             if self.control_method.value == self.USE_DMG and self.dmg:
-                if self.use_label and self.label.value is not None:
-                    self.dmg.pool_evict(self.label.value)
-                else:
-                    self.dmg.pool_evict(self.uuid)
+                self.dmg.pool_evict(self.identifier)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
@@ -626,19 +626,12 @@ class TestPool(TestDaosApiBase):
         """
         status = False
         if self.control_method.value == self.USE_API:
-            msg = "Excluding server ranks {} from pool {}".format(
-                ranks, self.uuid)
-            self.log.info(msg)
-            if daos_log is not None:
-                daos_log.info(msg)
-            self._call_method(self.pool.exclude, {"rank_list": ranks})
-            status = True
+            raise CommandFailure(
+                "Error: control method {} not supported for exclude()".format(
+                    self.control_method.value))
 
         elif self.control_method.value == self.USE_DMG and self.dmg:
-            if self.use_label and self.label.value is not None:
-                self.dmg.pool_exclude(self.label.value, ranks, tgt_idx)
-            else:
-                self.dmg.pool_exclude(self.uuid, ranks, tgt_idx)
+            self.dmg.pool_exclude(self.identifier, ranks, tgt_idx)
             status = True
 
         return status
@@ -862,10 +855,7 @@ class TestPool(TestDaosApiBase):
 
         """
         status = False
-        if self.use_label and self.label.value is not None:
-            self.dmg.pool_reintegrate(self.label.value, rank, tgt_idx)
-        else:
-            self.dmg.pool_reintegrate(self.uuid, rank, tgt_idx)
+        self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
         status = True
 
         return status
@@ -885,11 +875,7 @@ class TestPool(TestDaosApiBase):
 
         """
         status = False
-
-        if self.use_label and self.label.value is not None:
-            self.dmg.pool_drain(self.label.value, rank, tgt_idx)
-        else:
-            self.dmg.pool_drain(self.uuid, rank, tgt_idx)
+        self.dmg.pool_drain(self.identifier, rank, tgt_idx)
         status = True
 
         return status
