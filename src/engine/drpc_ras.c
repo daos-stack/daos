@@ -44,8 +44,8 @@ safe_self_rank(void)
 
 static int
 init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
-	   char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
-	   uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
+	   char *hwid, d_rank_t *rank, uint64_t *inc, char *jobid,
+	   uuid_t *pool, uuid_t *cont, daos_obj_id_t *objid, char *ctlop,
 	   Shared__RASEvent *evt)
 {
 	struct dss_module_info	*dmi = get_module_info();
@@ -64,9 +64,9 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	}
 	strftime(zone, 6, "%z", tm);
 	/* NB: Timestamp should be in ISO8601 format. */
-	D_ASPRINTF(evt->timestamp, "%04d-%02d-%02dT%02d:%02d:%02d.%03ld%s",
+	D_ASPRINTF(evt->timestamp, "%04d-%02d-%02dT%02d:%02d:%02d.%06ld%s",
 		   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, tm->tm_hour,
-		   tm->tm_min, tm->tm_sec, (long)tv.tv_usec / 10000, zone);
+		   tm->tm_min, tm->tm_sec, tv.tv_usec, zone);
 	if (evt->timestamp == NULL) {
 		D_ERROR("failed to generate timestamp string\n");
 		D_GOTO(out, rc = -DER_NOMEM);
@@ -100,6 +100,7 @@ init_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 	evt->hw_id = (hwid != NULL) ? hwid : NULL;
 	/* UINT32_MAX/CRT_NO_RANK indicates nil rank in daos_{,io_}server */
 	evt->rank = (rank != NULL) ? (uint32_t)*rank : CRT_NO_RANK;
+	evt->incarnation = (inc != NULL) ? (uint64_t)*inc : 0;
 	evt->job_id = (jobid != NULL) ? jobid : NULL;
 	evt->ctl_op = (ctlop != NULL) ? ctlop : NULL;
 
@@ -160,6 +161,8 @@ log_event(Shared__RASEvent *evt)
 		D_FPRINTF(stream, " hwid: [%s]", evt->hw_id);
 	if (evt->rank != CRT_NO_RANK)
 		D_FPRINTF(stream, " rank: [%u]", evt->rank);
+	if (evt->incarnation != 0)
+		D_FPRINTF(stream, " inc: [%lx]", evt->incarnation);
 	if (evt->job_id != NULL)
 		D_FPRINTF(stream, " jobid: [%s]", evt->job_id);
 	if (evt->pool_uuid != NULL)
@@ -228,11 +231,11 @@ out:
 
 static int
 raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
-	  d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
+	  d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool, uuid_t *cont,
 	  daos_obj_id_t *objid, char *ctlop, Shared__RASEvent *evt,
 	  bool wait_for_resp)
 {
-	int rc = init_event(id, msg, type, sev, hwid, rank, jobid, pool, cont,
+	int rc = init_event(id, msg, type, sev, hwid, rank, inc, jobid, pool, cont,
 			    objid, ctlop, evt);
 	if (rc != 0) {
 		D_ERROR("failed to init RAS event %s: "DF_RC"\n",
@@ -253,8 +256,9 @@ raise_ras(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev, char *hwid,
 
 void
 ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
-		    char *hwid, d_rank_t *rank, char *jobid, uuid_t *pool,
-		    uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data)
+		    char *hwid, d_rank_t *rank, uint64_t *inc, char *jobid,
+		    uuid_t *pool, uuid_t *cont, daos_obj_id_t *objid,
+		    char *ctlop, char *data)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
 	d_rank_t		this_rank;
@@ -269,14 +273,14 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
 		rank = &this_rank;
 	}
 
-	raise_ras(id, msg, type, sev, hwid, rank, jobid, pool, cont, objid,
+	raise_ras(id, msg, type, sev, hwid, rank, inc, jobid, pool, cont, objid,
 		  ctlop, &evt, false /* wait_for_resp */);
 }
 
 void
 ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
-		     d_rank_t *rank, char *jobid, uuid_t *pool, uuid_t *cont,
-		     daos_obj_id_t *objid, char *ctlop, char *data,
+		     d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
+		     uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data,
 		     const char *fmt, ...)
 {
 	char	buf[DAOS_RAS_STR_FIELD_SIZE];
@@ -291,7 +295,7 @@ ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 		buf[sizeof(buf) - 2] = '$';
 	}
 
-	ds_notify_ras_event(id, buf, type, sev, hwid, rank, jobid, pool, cont,
+	ds_notify_ras_event(id, buf, type, sev, hwid, rank, inc, jobid, pool, cont,
 			    objid, ctlop, data);
 }
 
@@ -325,7 +329,7 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 	rc = raise_ras(RAS_POOL_REPS_UPDATE,
 		       "List of pool service replica ranks has been updated.",
 		       RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
-		       &rank /* rank */, NULL /* jobid */, pool,
+		       &rank /* rank */, NULL /* inc */, NULL /* jobid */, pool,
 		       NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
 		       &evt, true /* wait_for_resp */);
 
@@ -335,13 +339,13 @@ ds_notify_pool_svc_update(uuid_t *pool, d_rank_list_t *svcl)
 }
 
 int
-ds_notify_swim_rank_dead(d_rank_t rank)
+ds_notify_swim_rank_dead(d_rank_t rank, uint64_t incarnation)
 {
 	Shared__RASEvent	evt = SHARED__RASEVENT__INIT;
 
 	return raise_ras(RAS_SWIM_RANK_DEAD, "SWIM marked rank as dead.",
 			 RAS_TYPE_STATE_CHANGE, RAS_SEV_NOTICE, NULL /* hwid */,
-			 &rank /* rank */, NULL /* jobid */, NULL /* pool */,
-			 NULL /* cont */, NULL /* objid */, NULL /* ctlop */,
-			 &evt, false /* wait_for_resp */);
+			 &rank /* rank */, &incarnation /* inc */, NULL /* jobid */,
+			 NULL /* pool */, NULL /* cont */, NULL /* objid */,
+			 NULL /* ctlop */, &evt, false /* wait_for_resp */);
 }
