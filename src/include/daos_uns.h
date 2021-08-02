@@ -78,8 +78,8 @@ struct duns_attr_t {
 	bool			da_on_lustre;
 	/** IN: (Deprecated - use flags) String does not include daos:// prefix
 	 *
-	 * Path that is passed does not have daos: prefix but is direct: (/puuid/cuuid/xyz) and does
-	 * not need to parse a path UNS attrs.  This is usually set to false.
+	 * Path that is passed does not have daos: prefix but is direct: (/pool/cont/xyz) and does
+	 * not need to parse a path for the UNS attrs.  This is usually set to false.
 	 */
 	bool			da_no_prefix;
 	/** IN: access flags
@@ -91,20 +91,20 @@ struct duns_attr_t {
 	uint32_t		da_flags;
 	/** OUT: Pool UUID or label string.
 	 *
-	 * On duns_resolve_path(), a UUID string is returned that was stored on that path. If the
-	 * path is a direct path, we parse the first entry (pool) in the path as either a UUID or a
-	 * label. If the format is not a UUID, then it's returned as a label. This can be used in
-	 * daos_pool_connect() regardless of whether it's a UUID or label.
+	 * On duns_resolve_path(), a UUID string is returned for the pool that was stored on that
+	 * path. If the path is a direct path, we parse the first entry (pool) in the path as either
+	 * a UUID or a label. This can be used in daos_pool_connect() regardless of whether it's a
+	 * UUID or label.
 	 */
-	char			*da_pool;
+	char			da_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
 	/** OUT: Container UUID or label string.
 	 *
-	 * On duns_resolve_path(), a UUID string is returned that was stored on that path. If the
-	 * path is a direct path, we parse the second entry (cont) in the path as either a UUID or a
-	 * label. If the format is not a UUID, then it's returned as a label. This can be used in
-	 * daos_cont_open() regardless of whether it's a UUID or label.
+	 * On duns_resolve_path(), a UUID string is returned for the container that was stored on
+	 * that path. If the path is a direct path, we parse the second entry (cont) in the path as
+	 * either a UUID or a label. This can be used in daos_cont_open() regardless of whether it's
+	 * a UUID or label.
 	 */
-	char			*da_cont;
+	char			da_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
 };
 
 /** extended attribute name that will container the UNS info */

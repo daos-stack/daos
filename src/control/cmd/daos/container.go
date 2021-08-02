@@ -119,11 +119,13 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
 	var cType [10]C.char
 
-	props, entries, err := allocProps(1)
+	props, entries, err := allocProps(2)
 	if err != nil {
 		return nil, err
 	}
 	entries[0].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
+	props.dpp_nr++
+	entries[1].dpe_type = C.DAOS_PROP_CO_LABEL
 	props.dpp_nr++
 	defer func() { C.daos_prop_free(props) }()
 
@@ -135,6 +137,13 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	lType := C.get_dpe_val(&entries[0])
 	C.daos_unparse_ctype(C.ushort(lType), &cType[0])
 	ci.Type = C.GoString(&cType[0])
+
+	if C.get_dpe_str(&entries[1]) == nil {
+		ci.ContainerLabel = ""
+	} else {
+		cStr := C.get_dpe_str(&entries[1])
+		ci.ContainerLabel = C.GoString(cStr)
+	}
 
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
 		var dfs *C.dfs_t
@@ -350,8 +359,8 @@ func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err 
 			return
 		}
 
-		cmd.poolBaseCmd.Args.Pool.Label = C.GoString(ap.pool_str)
-		cmd.contLabel = C.GoString(ap.cont_str)
+		cmd.poolBaseCmd.Args.Pool.Label = C.GoString(&ap.pool_str[0])
+		cmd.contLabel = C.GoString(&ap.cont_str[0])
 		cmd.contUUID = cmd.Args.Container.UUID
 	} else {
 		switch {
@@ -704,10 +713,6 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 		return errors.Wrapf(err,
 			"failed to query container %s",
 			cmd.contUUID)
-	}
-
-	if cmd.contLabel != "" {
-		ci.ContainerLabel = cmd.contLabel
 	}
 
 	if cmd.jsonOutputEnabled() {

@@ -451,8 +451,7 @@ main(int argc, char **argv)
 
 		path_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info,
-			       "duns_resolve_path() on path returned %d %s",
+		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path returned %d %s",
 			       rc, strerror(rc));
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
@@ -462,8 +461,7 @@ main(int argc, char **argv)
 			 * because the path is supposed to provide
 			 * pool/container details and it's an error if it can't.
 			 */
-			printf("Error reading attr from path %d %s\n",
-				rc, strerror(rc));
+			printf("Error reading attr from path %d %s\n", rc, strerror(rc));
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 

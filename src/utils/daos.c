@@ -598,8 +598,6 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->user);
 	D_FREE(ap->group);
 	D_FREE(ap->principal);
-	D_FREE(ap->pool_str);
-	D_FREE(ap->cont_str);
 }
 
 static int
@@ -1077,28 +1075,19 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			ap->type = dattr.da_type;
 
 			/** set pool/cont label or uuid */
-			D_STRNDUP(ap->pool_str, dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
-			if (ap->pool_str == NULL)
-				D_GOTO(out, rc = ENOMEM);
-
-			D_STRNDUP(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
-			if (ap->cont_str == NULL)
-				D_GOTO(out, rc = ENOMEM);
+			strncpy(ap->pool_str, dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
+			strncpy(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
 
 			if (name) {
-				if (dattr.da_rel_path) {
-					D_ASPRINTF(ap->dfs_path, "%s/%s",
-						   dattr.da_rel_path, name);
-				} else {
+				if (dattr.da_rel_path)
+					D_ASPRINTF(ap->dfs_path, "%s/%s", dattr.da_rel_path, name);
+				else
 					D_ASPRINTF(ap->dfs_path, "/%s", name);
-				}
 			} else {
-				if (dattr.da_rel_path) {
-					D_STRNDUP(ap->dfs_path,
-						  dattr.da_rel_path, PATH_MAX);
-				} else {
+				if (dattr.da_rel_path)
+					D_STRNDUP(ap->dfs_path, dattr.da_rel_path, PATH_MAX);
+				else
 					D_STRNDUP_S(ap->dfs_path, "/");
-				}
 			}
 			if (ap->dfs_path == NULL)
 				D_GOTO(out, rc = ENOMEM);
@@ -1166,11 +1155,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	op = ap->c_op;
 
-	/* cont_clone uses its own src and dst variables, and does
-	 * not use the regular pool and cont ones stored in the
-	 * ap struct. This is because for a clone it is necessary
-	 * to explicitly specify whether a container is a src or
-	 * dst
+	/* cont_clone uses its own src and dst variables, and does not use the regular pool and cont
+	 * ones stored in the ap struct. This is because for a clone it is necessary to explicitly
+	 * specify whether a container is a src or dst
 	 */
 	if (op == CONT_CLONE) {
 		if (ap->src != NULL && ap->dst != NULL) {
@@ -1181,22 +1168,18 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		return rc;
 	}
 
-	/* All container operations require a pool handle, connect
-	 * here. Take specified pool UUID or look up through unified
-	 * namespace.
+	/* All container operations require a pool handle, connect here. Take specified pool UUID or
+	 * look up through unified namespace.
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 		struct dfuse_il_reply il_reply = {0};
 
-		ARGS_VERIFY_PATH_NON_CREATE(ap, out,
-					    rc = RC_PRINT_HELP);
+		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
-		/* Resolve pool, container UUIDs from path if needed
-		 * Firtly check for a unified namespace entry point,
-		 * then if that isn't detected then check for dfuse
-		 * backing the path, and print pool/container/oid
-		 * for the path.
+		/* Resolve pool, container UUIDs from path if needed Firtly check for a unified
+		 * namespace entry point, then if that isn't detected then check for dfuse backing
+		 * the path, and print pool/container/oid for the path.
 		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
@@ -1217,17 +1200,8 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			ap->type = dattr.da_type;
 
 			/** set pool/cont label or uuid */
-			D_STRNDUP(ap->pool_str, dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
-			if (ap->pool_str == NULL) {
-				duns_destroy_attr(&dattr);
-				D_GOTO(out, rc = ENOMEM);
-			}
-
-			D_STRNDUP(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
-			if (ap->cont_str == NULL) {
-				duns_destroy_attr(&dattr);
-				D_GOTO(out, rc = ENOMEM);
-			}
+			strncpy(ap->pool_str, dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
+			strncpy(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
 		}
 		duns_destroy_attr(&dattr);
 	} else {
@@ -1258,8 +1232,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 *			    (currently c_uuid null / clear).
 	 * 4) neither specified   : create a UUID in c_uuid.
 	 */
-	if ((op == CONT_CREATE) && (ap->path == NULL) &&
-	    (uuid_is_null(ap->c_uuid)))
+	if ((op == CONT_CREATE) && (ap->path == NULL) && (uuid_is_null(ap->c_uuid)))
 		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {

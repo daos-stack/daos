@@ -59,35 +59,28 @@ resolve_duns_path(struct cmd_args_s *ap)
 	}
 
 	if (rc) {
-		fprintf(ap->errstream, "could not resolve pool, container by "
-		"path: %d %s %s\n", rc, strerror(rc), ap->path);
+		fprintf(ap->errstream, "could not resolve pool, container by path %s: %s (%d)\n",
+			ap->path, strerror(rc), rc);
 		D_GOTO(out, rc);
 	}
 
 	ap->type = dattr.da_type;
 
 	/** set pool/cont label or uuid */
-	D_STRNDUP(ap->pool_str, dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
-	if (ap->pool_str == NULL)
-		D_GOTO(out, rc = ENOMEM);
-
-	D_STRNDUP(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
-	if (ap->cont_str == NULL)
-		D_GOTO(out, rc = ENOMEM);
+	strncpy(ap->pool_str, dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
+	strncpy(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
 
 	if (ap->fs_op != -1) {
 		if (name) {
-			if (dattr.da_rel_path) {
+			if (dattr.da_rel_path)
 				D_ASPRINTF(ap->dfs_path, "%s/%s", dattr.da_rel_path, name);
-			} else {
+			else
 				D_ASPRINTF(ap->dfs_path, "/%s", name);
-			}
 		} else {
-			if (dattr.da_rel_path) {
+			if (dattr.da_rel_path)
 				D_STRNDUP(ap->dfs_path, dattr.da_rel_path, PATH_MAX);
-			} else {
+			else
 				D_STRNDUP(ap->dfs_path, "/", 1);
-			}
 		}
 		if (ap->dfs_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
