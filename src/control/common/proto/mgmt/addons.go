@@ -5,6 +5,15 @@
 //
 package mgmt
 
+import (
+	"fmt"
+	"strings"
+
+	"google.golang.org/protobuf/proto"
+
+	"github.com/daos-stack/daos/src/control/system"
+)
+
 // SetValueString sets the Value field to a string.
 func (p *PoolProperty) SetValueString(strVal string) {
 	p.Value = &PoolProperty_Strval{
@@ -75,4 +84,25 @@ func (r *ModifyACLReq) SetSvcRanks(rl []uint32) {
 // SetSvcRanks sets the request's Pool Service Ranks.
 func (r *DeleteACLReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
+}
+
+func Debug(msg proto.Message) string {
+	switch t := msg.(type) {
+	case *SystemQueryResp:
+		stateRanks := make(map[string]*system.RankSet)
+		for _, m := range t.Members {
+			if _, found := stateRanks[m.State]; !found {
+				stateRanks[m.State] = &system.RankSet{}
+			}
+			stateRanks[m.State].Add(system.Rank(m.Rank))
+		}
+		var bld strings.Builder
+		fmt.Fprintf(&bld, "%T ", t)
+		for state, set := range stateRanks {
+			fmt.Fprintf(&bld, "%s: %s ", state, set.String())
+		}
+		return bld.String()
+	default:
+		return fmt.Sprintf("%+v", t)
+	}
 }
