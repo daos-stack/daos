@@ -237,18 +237,8 @@ def set_python_environment():
         os.path.abspath("util"),
         os.path.abspath("cart/util"),
     ]
-    site_packages = site.getsitepackages()
 
-    # Including paths for pydaos shim - should be removed when shim is removed
-    additional_site_packages = []
-    for site_package in site_packages:
-        if "/lib64/python3." in site_package:
-            additional_site_packages.append(
-                re.sub(r"python[0-9.]+", "python3", site_package))
-    site_packages.extend(additional_site_packages)
-    # end of shim work around
-
-    required_python_paths.extend(site_packages)
+    required_python_paths.extend(site.getsitepackages())
 
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")
@@ -897,6 +887,8 @@ def run_tests(test_files, tag_filter, args):
         command_list.append("--show-job-log")
     if tag_filter:
         command_list.extend(tag_filter)
+    if args.failfast:
+        command_list.extend(["--failfast", "on"])
 
     # Run each test
     skip_reason = None
@@ -1044,6 +1036,12 @@ def run_tests(test_files, tag_filter, args):
                 hosts,
                 "/tmp/test.cov*",
                 args)
+
+        # If the test failed and the user requested that testing should
+        # stop after the first failure, then we should break out of the
+        # loop and not re-run the tests.
+        if return_code != 0 and args.failfast:
+            break
 
     return return_code
 
@@ -2055,6 +2053,10 @@ def main():
         action="store_true",
         help="when replacing server/client yaml file placeholders, discard "
              "any placeholders that do not end up with a replacement value")
+    parser.add_argument(
+        "--failfast",
+        action="store_true",
+        help="stop the test suite after the first failure")
     parser.add_argument(
         "-i", "--include_localhost",
         action="store_true",

@@ -5,6 +5,8 @@
 //
 package drpc
 
+import "unsafe"
+
 // #include <daos_prop.h>
 import "C"
 
@@ -24,6 +26,8 @@ const (
 	PoolPropertyOwner = C.DAOS_PROP_PO_OWNER
 	// PoolPropertyOwnerGroup is the group that acts as the owner of the pool.
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
+	// PoolPropertyECCellSize is the EC Cell size.
+	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
 )
 
 const (
@@ -45,3 +49,12 @@ const (
 	// PoolSelfHealingAutoRebuild sets the self-healing strategy to auto-rebuild.
 	PoolSelfHealingAutoRebuild = C.DAOS_SELF_HEAL_AUTO_REBUILD
 )
+
+// LabelIsValid checks a label to verify that it meets length/content
+// requirements.
+func LabelIsValid(label string) bool {
+	cLabel := C.CString(label)
+	defer C.free(unsafe.Pointer(cLabel))
+
+	return bool(C.daos_label_is_valid(cLabel))
+}

@@ -27,7 +27,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -35,9 +34,15 @@ var (
 	_ Engine = (*MockInstance)(nil)
 )
 
-func getTestEngineInstance(logger logging.Logger) *EngineInstance {
-	runner := engine.NewRunner(logger, &engine.Config{})
-	return NewEngineInstance(logger, nil, nil, nil, runner)
+func getTestEngineInstance(log logging.Logger) *EngineInstance {
+	cfg := engine.NewConfig().WithStorage(
+		storage.NewTierConfig().
+			WithScmClass("ram").
+			WithScmMountPoint("/foo/bar"),
+	)
+	runner := engine.NewRunner(log, cfg)
+	storage := storage.MockProvider(log, 0, &cfg.Storage, nil, nil, nil)
+	return NewEngineInstance(log, storage, nil, runner)
 }
 
 func getTestBioErrorReq(t *testing.T, sockPath string, idx uint32, tgt int32, unmap bool, read bool, write bool) *srvpb.BioErrorReq {
@@ -185,6 +190,9 @@ type (
 		RemoveSuperblockErr error
 		SetupRankErr        error
 		StopErr             error
+		ScmTierConfig       *storage.TierConfig
+		ScanBdevTiersResult []storage.BdevTierScanResult
+		HasBlockDevices     bool
 	}
 
 	MockInstance struct {
@@ -248,6 +256,18 @@ func (mi *MockInstance) Stop(os.Signal) error {
 	return mi.cfg.StopErr
 }
 
+func (mi *MockInstance) GetScmConfig() (*storage.TierConfig, error) {
+	return mi.cfg.ScmTierConfig, nil
+}
+
+func (mi *MockInstance) HasBlockDevices() bool {
+	return mi.cfg.HasBlockDevices
+}
+
+func (mi *MockInstance) ScanBdevTiers(_ bool) ([]storage.BdevTierScanResult, error) {
+	return nil, nil
+}
+
 func (mi *MockInstance) OnReady(fns ...onReadyFn) {}
 
 func (mi *MockInstance) OnInstanceExit(fns ...onInstanceExitFn) {}
@@ -296,10 +316,14 @@ func (mi *MockInstance) ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlp
 	return nil, nil
 }
 
-func (mi *MockInstance) StorageFormatNVMe(*bdev.Provider) commonpb.NvmeControllerResults {
+func (mi *MockInstance) StorageFormatNVMe() commonpb.NvmeControllerResults {
 	return nil
 }
 
 func (mi *MockInstance) StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult {
+	return nil
+}
+
+func (mi *MockInstance) StorageWriteNvmeConfig() error {
 	return nil
 }

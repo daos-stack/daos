@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"runtime/debug"
 
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
@@ -142,7 +143,6 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 	p := flags.NewParser(opts, flags.Default)
 	p.Name = "daos"
 	p.ShortDescription = "Command to manage DAOS pool/container/object"
-	p.Usage = "RESOURCE COMMAND [OPTIONS]"
 	p.LongDescription = `daos is a tool that can be used to manage/query pool content,
 create/query/manage/destroy a container inside a pool, copy data
 between a POSIX container and a POSIX filesystem, clone a DAOS container,
@@ -201,6 +201,10 @@ or query/manage an object inside a container.`
 		exitWithError(log, err)
 	}
 	defer debugFini()
+
+	// Set the traceback level such that a crash results in
+	// a coredump (when ulimit -c is set appropriately).
+	debug.SetTraceback("crash")
 
 	_, err = p.ParseArgs(args)
 	if opts.JSON && wroteJSON.IsFalse() {

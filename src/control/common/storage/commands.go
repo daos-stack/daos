@@ -21,7 +21,7 @@ const MsgStoragePrepareWarn = "Memory allocation goals for SCM will be changed a
 	"and subsequent reboot maybe required.\n"
 
 type StoragePrepareNvmeCmd struct {
-	PCIAllowList string `short:"w" long:"pci-whitelist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
+	PCIAllowList string `short:"w" long:"pci-allowlist" description:"Whitespace separated list of PCI devices (by address) to be unbound from Kernel driver and used with SPDK (default is all PCI devices)."`
 	NrHugepages  int    `short:"p" long:"hugepages" description:"Number of hugepages to allocate (in MB) for use by SPDK (default 1024)"`
 	TargetUser   string `short:"u" long:"target-user" description:"User that will own hugepage mountpoint directory and vfio groups."`
 }

@@ -684,29 +684,14 @@ crt_ep_abort(crt_endpoint_t *ep);
  # CRT_GEN_PROC_FUNC(struct, CRT_SEQ_MY_TYPE)
  *
  */
-#define CRT_VAR   0
-#define CRT_PTR   1
-#define CRT_ARRAY 2
-#define CRT_RAW   3
+#define CRT_VAR		(0)
+#define CRT_PTR		(1)
+#define CRT_ARRAY	(2)
+#define CRT_RAW		(3)
 
-#define CRT_GEN_GET_TYPE(seq) BOOST_PP_SEQ_HEAD(seq)
+#define CRT_GEN_GET_TYPE(seq) BOOST_PP_SEQ_ELEM(0, seq)
 #define CRT_GEN_GET_NAME(seq) BOOST_PP_SEQ_ELEM(1, seq)
-#define CRT_GEN_GET_KIND(seq) BOOST_PP_SEQ_TAIL(BOOST_PP_SEQ_TAIL(seq))
-
-#define CRT_GEN_STRUCT_FIELD(r, data, seq)				\
-	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
-		struct {						\
-			uint64_t		 ca_count;		\
-			CRT_GEN_GET_TYPE(seq)	*ca_arrays;		\
-		},							\
-		CRT_GEN_GET_TYPE(seq))					\
-	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_PTR, CRT_GEN_GET_KIND(seq)),	\
-		*CRT_GEN_GET_NAME(seq), CRT_GEN_GET_NAME(seq));
-
-#define CRT_GEN_STRUCT(struct_type_name, seq)				\
-	struct struct_type_name {					\
-		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_STRUCT_FIELD, , seq)	\
-	};
+#define CRT_GEN_GET_KIND(seq) BOOST_PP_SEQ_ELEM(2, seq)
 
 /* convert constructed name into proper name */
 #define crt_proc_struct BOOST_PP_RPAREN() BOOST_PP_CAT BOOST_PP_LPAREN() \
@@ -715,67 +700,138 @@ crt_ep_abort(crt_endpoint_t *ep);
 #define CRT_GEN_X(x) x
 #define CRT_GEN_X2(x) CRT_GEN_X BOOST_PP_LPAREN() crt_proc_##x BOOST_PP_RPAREN()
 #define CRT_GEN_GET_FUNC(seq) CRT_GEN_X2 BOOST_PP_SEQ_FIRST_N(1, seq)
+#define CRT_GEN_X3(x) CRT_GEN_X BOOST_PP_LPAREN() fail_##x BOOST_PP_RPAREN()
+#define CRT_GEN_FAIL_LABEL(seq) CRT_GEN_X3 BOOST_PP_SEQ_TAIL(BOOST_PP_SEQ_FIRST_N(2, seq))
 
-#define CRT_GEN_PROC_FIELD(r, ptr, seq)					\
-	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_ARRAY, CRT_GEN_GET_KIND(seq)),	\
-	{								\
-		uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;	\
-		CRT_GEN_GET_TYPE(seq)** e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
-		CRT_GEN_GET_TYPE(seq)* e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
-		int i;							\
-		/* process the count of array first */			\
-		rc = crt_proc_uint64_t(proc, proc_op, &count);		\
-		if (unlikely(rc))					\
-			goto out;					\
-		ptr->CRT_GEN_GET_NAME(seq).ca_count = count;		\
-		if (unlikely(count == 0)) {				\
-			if (DECODING(proc_op))				\
-				*e_ptrp = NULL;				\
-			goto next_field_##r;				\
+#define CRT_GEN_STRUCT_FIELD(seq)					\
+	BOOST_PP_EXPAND(						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),\
+		struct {						\
+			uint64_t		 ca_count;		\
+			CRT_GEN_GET_TYPE(seq)	*ca_arrays;		\
+		},							\
+		CRT_GEN_GET_TYPE(seq))					\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_PTR, CRT_GEN_GET_KIND(seq)), \
+		*CRT_GEN_GET_NAME(seq), CRT_GEN_GET_NAME(seq));)
+
+#define CRT_GEN_STRUCT_FIELDS(z, n, seq)				\
+	CRT_GEN_STRUCT_FIELD(BOOST_PP_SEQ_ELEM(n, seq))
+
+#define CRT_GEN_STRUCT(struct_type_name, seq)				\
+	struct struct_type_name {					\
+		BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq),			\
+				CRT_GEN_STRUCT_FIELDS, seq)		\
+	};
+
+#define CRT_GEN_PROC_ARRAY(ptr, seq)					\
+	do {								\
+	CRT_GEN_GET_TYPE(seq) **e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays;\
+	CRT_GEN_GET_TYPE(seq) *e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+	uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;		\
+	uint64_t i;							\
+	if (proc_op == CRT_PROC_DECODE)					\
+		*e_ptrp = NULL;						\
+	/* process the count of array first */				\
+	rc = crt_proc_uint64_t(proc, proc_op, &count);			\
+	if (unlikely(rc))						\
+		goto CRT_GEN_FAIL_LABEL(seq);				\
+	ptr->CRT_GEN_GET_NAME(seq).ca_count = count;			\
+	if (unlikely(count == 0))					\
+		break; /* goto next field */				\
+	if (proc_op == CRT_PROC_DECODE) {				\
+		D_ALLOC_ARRAY(e_ptr, (int)count);			\
+		if (unlikely(e_ptr == NULL)) {				\
+			rc = -DER_NOMEM;				\
+			goto CRT_GEN_FAIL_LABEL(seq);			\
 		}							\
-		if (DECODING(proc_op)) {				\
-			D_ALLOC_ARRAY(e_ptr, (int)count);		\
-			if (unlikely(e_ptr == NULL)) {			\
-				rc = -DER_NOMEM;			\
-				goto out;				\
-			}						\
-			*e_ptrp = e_ptr;				\
-		}							\
-		/* process the elements of array */			\
-		for (i = 0; i < count; i++) {				\
-			rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op, &e_ptr[i]); \
-			if (unlikely(rc)) {				\
-				if (DECODING(proc_op))			\
-					D_FREE(e_ptr);			\
-				goto out;				\
-			}						\
-		}							\
-		if (FREEING(proc_op))					\
-			D_FREE(e_ptr);					\
+		*e_ptrp = e_ptr;					\
 	}								\
-	next_field_##r:,						\
-	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_RAW, CRT_GEN_GET_KIND(seq)),	\
-	rc = crt_proc_memcpy(proc, proc_op, &ptr->CRT_GEN_GET_NAME(seq), \
+	/* process the elements of array */				\
+	for (i = 0; i < count && e_ptr != NULL; i++) {			\
+		rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op, &e_ptr[i]);	\
+		if (unlikely(rc)) {					\
+			if (proc_op == CRT_PROC_DECODE)			\
+				ptr->CRT_GEN_GET_NAME(seq).ca_count = i;\
+			goto CRT_GEN_FAIL_LABEL(seq);			\
+		}							\
+	}								\
+	if (proc_op == CRT_PROC_FREE)					\
+		D_FREE(*e_ptrp);					\
+	} while (0);
+
+#define CRT_GEN_FAIL_ARRAY(ptr, seq)					\
+	CRT_GEN_FAIL_LABEL(seq):					\
+	if (proc_op == CRT_PROC_DECODE) {				\
+		CRT_GEN_GET_TYPE(seq) **e_ptrp = &ptr->CRT_GEN_GET_NAME(seq).ca_arrays;\
+		CRT_GEN_GET_TYPE(seq) *e_ptr = ptr->CRT_GEN_GET_NAME(seq).ca_arrays; \
+		uint64_t count = ptr->CRT_GEN_GET_NAME(seq).ca_count;	\
+		uint64_t i;						\
+		/* process the elements of array */			\
+		for (i = 0; i < count && e_ptr != NULL; i++)		\
+			(void)CRT_GEN_GET_FUNC(seq)(proc, CRT_PROC_FREE,\
+						    &e_ptr[i]);		\
+		D_FREE(*e_ptrp);					\
+		ptr->CRT_GEN_GET_NAME(seq).ca_count = 0;		\
+	}
+
+#define CRT_GEN_PROC_RAW(ptr, seq)					\
+	rc = crt_proc_memcpy(proc, proc_op, &ptr->CRT_GEN_GET_NAME(seq),\
 			     sizeof(CRT_GEN_GET_TYPE(seq)));		\
 	if (unlikely(rc))						\
-		goto out;,						\
-	rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op, &ptr->CRT_GEN_GET_NAME(seq));\
+		goto CRT_GEN_FAIL_LABEL(seq);
+
+#define CRT_GEN_FAIL_RAW(ptr, seq)					\
+	CRT_GEN_FAIL_LABEL(seq):;
+
+#define CRT_GEN_PROC_ALL(ptr, seq)					\
+	rc = CRT_GEN_GET_FUNC(seq)(proc, proc_op,			\
+				   &ptr->CRT_GEN_GET_NAME(seq));	\
 	if (unlikely(rc))						\
-		goto out;						\
-	))
+		goto CRT_GEN_FAIL_LABEL(seq);
+
+#define CRT_GEN_FAIL_ALL(ptr, seq)					\
+	(void)CRT_GEN_GET_FUNC(seq)(proc, CRT_PROC_FREE,		\
+				    &ptr->CRT_GEN_GET_NAME(seq));	\
+	CRT_GEN_FAIL_LABEL(seq):;
+
+#define CRT_GEN_PROC_FIELD(ptr, seq)					\
+	BOOST_PP_EXPAND(						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),\
+		CRT_GEN_PROC_ARRAY(ptr, seq),				\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_RAW, CRT_GEN_GET_KIND(seq)), \
+		CRT_GEN_PROC_RAW(ptr, seq),				\
+		CRT_GEN_PROC_ALL(ptr, seq))))
+
+#define CRT_GEN_FAIL_FIELD(ptr, seq)					\
+	BOOST_PP_EXPAND(						\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_ARRAY, CRT_GEN_GET_KIND(seq)),\
+		CRT_GEN_FAIL_ARRAY(ptr, seq),				\
+	BOOST_PP_IF(BOOST_PP_EQUAL(CRT_GEN_X CRT_RAW, CRT_GEN_GET_KIND(seq)), \
+		CRT_GEN_FAIL_RAW(ptr, seq),				\
+		CRT_GEN_FAIL_ALL(ptr, seq))))
+
+#define CRT_GEN_PROC_FIELDS(z, n, seq)					\
+	CRT_GEN_PROC_FIELD(ptr, BOOST_PP_SEQ_ELEM(n, seq))
+
+#define CRT_GEN_FAIL_FIELDS(z, n, seq)					\
+	CRT_GEN_FAIL_FIELD(ptr, BOOST_PP_SEQ_ELEM(BOOST_PP_SUB(BOOST_PP_DEC(BOOST_PP_SEQ_SIZE(seq)), n), seq))
 
 #define CRT_GEN_PROC_FUNC(type_name, seq)				\
-	static int crt_proc_##type_name(crt_proc_t proc,		\
-					struct type_name *ptr) {	\
+	static int							\
+	crt_proc_##type_name(crt_proc_t proc, struct type_name *ptr) {	\
 		crt_proc_op_t proc_op;					\
-		int rc = -DER_INVAL;					\
+		int rc;							\
 		if (unlikely(proc == NULL || ptr == NULL))		\
-			goto out;					\
+			return -DER_INVAL;				\
 		rc = crt_proc_get_op(proc, &proc_op);			\
 		if (unlikely(rc))					\
-			goto out;					\
-		BOOST_PP_SEQ_FOR_EACH(CRT_GEN_PROC_FIELD, ptr, seq)	\
-	out:								\
+			return rc;					\
+		BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq),			\
+				CRT_GEN_PROC_FIELDS, seq)		\
+		if (unlikely(rc)) {					\
+			BOOST_PP_REPEAT(BOOST_PP_SEQ_SIZE(seq),		\
+					CRT_GEN_FAIL_FIELDS, seq)	\
+		}							\
 		return rc;						\
 	}
 
@@ -785,9 +841,9 @@ crt_ep_abort(crt_endpoint_t *ep);
 
 #define CRT_RPC_DECLARE(rpc_name, fields_in, fields_out)		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
-		CRT_GEN_STRUCT(rpc_name##_in, fields_in), )		\
+		    CRT_GEN_STRUCT(rpc_name##_in, fields_in), )		\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
-		CRT_GEN_STRUCT(rpc_name##_out, fields_out), )		\
+		    CRT_GEN_STRUCT(rpc_name##_out, fields_out), )	\
 	/* Generate a packed struct and assert use the offset of the */	\
 	/* last field to assert that there are no holes */		\
 	_Pragma("pack(push, 1)")					\
@@ -798,14 +854,14 @@ crt_ep_abort(crt_endpoint_t *ep);
 	_Pragma("pack(pop)")						\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
 		    static_assert(FOFFSET(rpc_name##_out_packed,	\
-					  ((_) (_) _) fields_out) ==	\
-				  FOFFSET(rpc_name##_out, ((_) (_) _)	\
+					  ((_) (_) (_)) fields_out) ==	\
+				  FOFFSET(rpc_name##_out, ((_) (_) (_))	\
 					  fields_out), #rpc_name	\
 				  " output struct has a hole");, )	\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
 		    static_assert(FOFFSET(rpc_name##_in_packed,		\
-					  ((_) (_) _) fields_in) ==	\
-				  FOFFSET(rpc_name##_in, ((_) (_) _)	\
+					  ((_) (_) (_)) fields_in) ==	\
+				  FOFFSET(rpc_name##_in, ((_) (_) (_))	\
 					  fields_in), #rpc_name		\
 				  " input struct has a hole");, )	\
 	extern struct crt_req_format CQF_##rpc_name;
@@ -820,9 +876,9 @@ crt_ep_abort(crt_endpoint_t *ep);
 
 #define CRT_RPC_DEFINE(rpc_name, fields_in, fields_out)			\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_in),			\
-		CRT_GEN_PROC_FUNC(rpc_name##_in, fields_in), )		\
+		    CRT_GEN_PROC_FUNC(rpc_name##_in, fields_in), )	\
 	BOOST_PP_IF(BOOST_PP_SEQ_SIZE(fields_out),			\
-		CRT_GEN_PROC_FUNC(rpc_name##_out, fields_out), )	\
+		    CRT_GEN_PROC_FUNC(rpc_name##_out, fields_out), )	\
 	_Pragma("GCC diagnostic push")					\
 	CRT_DISABLE_SIZEOF_POINTER_DIV					\
 	struct crt_req_format CQF_##rpc_name = {			\
@@ -1704,8 +1760,18 @@ enum crt_event_type {
 	CRT_EVT_DEAD,
 };
 
+/**
+ * Event handler callback.
+ *
+ * \param[in] rank             rank this event is about
+ * \param[in] incarnation      rank incarnation if \a src is CRT_EVS_SWIM
+ * \param[in] src              event source
+ * \param[in] type             event type
+ * \param[in] arg              arg passed to crt_register_event_cb with this
+ *                             callback
+ */
 typedef void
-(*crt_event_cb) (d_rank_t rank, enum crt_event_source src,
+(*crt_event_cb) (d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		 enum crt_event_type type, void *arg);
 
 /**
@@ -1932,6 +1998,16 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  *                              on failure.
  */
 int crt_self_uri_get(int tag, char **uri);
+
+/**
+ * Retrieve incarnation of self.
+ *
+ * \param[out] incarnation      Returned incarnation
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_self_incarnation_get(uint64_t *incarnation);
 
 /**
  * Retrieve group information containing ranks and associated uris

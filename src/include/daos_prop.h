@@ -101,8 +101,8 @@ enum daos_cont_props {
 	 */
 	DAOS_PROP_CO_LABEL,
 	/**
-	 * Layout type: unknown, POSIX, MPI-IO, HDF5, Apache Arrow, ...
-	 * default value = DAOS_PROP_CO_LAYOUT_UNKOWN
+	 * Layout type: unknown, POSIX, HDF5, Python, Database, Parquet, ...
+	 * default value = DAOS_PROP_CO_LAYOUT_UNKNOWN
 	 */
 	DAOS_PROP_CO_LAYOUT_TYPE,
 	/**
@@ -213,9 +213,17 @@ typedef uint16_t daos_cont_layout_t;
 
 /** container layout type */
 enum {
-	DAOS_PROP_CO_LAYOUT_UNKOWN,
-	DAOS_PROP_CO_LAYOUT_POSIX,
-	DAOS_PROP_CO_LAYOUT_HDF5,
+	DAOS_PROP_CO_LAYOUT_UNKNOWN,
+	DAOS_PROP_CO_LAYOUT_UNKOWN = DAOS_PROP_CO_LAYOUT_UNKNOWN,
+	DAOS_PROP_CO_LAYOUT_POSIX,	/** DFS/dfuse/MPI-IO */
+	DAOS_PROP_CO_LAYOUT_HDF5,	/** HDF5 DAOS VOL connector */
+	DAOS_PROP_CO_LAYOUT_PYTHON,	/** PyDAOS */
+	DAOS_PROP_CO_LAYOUT_SPARK,	/** Specific layout for Spark shuffle */
+	DAOS_PROP_CO_LAYOUT_DATABASE,	/** SQL Database */
+	DAOS_PROP_CO_LAYOUT_ROOT,	/** ROOT/RNTuple format */
+	DAOS_PROP_CO_LAYOUT_SEISMIC,	/** Seismic Graph, aka SEGY */
+	DAOS_PROP_CO_LAYOUT_METEO,	/** Meteorology, aka Field Data Base */
+	DAOS_PROP_CO_LAYOUT_MAX
 };
 
 /** container checksum type */
@@ -365,7 +373,7 @@ struct daos_prop_entry {
 static inline bool
 daos_label_is_valid(const char *label)
 {
-	size_t	len;
+	int	len;
 	int	i;
 
 	/** Label cannot be NULL */
@@ -478,6 +486,28 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 int
 daos_prop_entry_dup_co_roots(struct daos_prop_entry *dst,
 			     struct daos_prop_entry *src);
+
+/**
+ * Check a DAOS prop entry for a string value.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Has a string value.
+ *			false		Does not have a string value.
+ */
+bool
+daos_prop_has_str(struct daos_prop_entry *entry);
+
+/**
+ * Check a DAOS prop entry for a pointer value.
+ *
+ * \param[in]		entry		Entry to be checked.
+ *
+ * \return		true		Has a pointer value.
+ *			false		Does not have a pointer value.
+ */
+bool
+daos_prop_has_ptr(struct daos_prop_entry *entry);
 
 #if defined(__cplusplus)
 }
