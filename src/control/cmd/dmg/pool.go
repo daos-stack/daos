@@ -200,7 +200,8 @@ type PoolListCmd struct {
 	cfgCmd
 	ctlInvokerCmd
 	jsonOutputCmd
-	Verbose bool `short:"v" long:"verbose" required:"0" description:"Add pool UUIDs and service replica lists to display."`
+	Verbose bool `short:"v" long:"verbose" description:"Add pool UUIDs and service replica lists to display"`
+	NoQuery bool `short:"n" long:"no-query" description:"Disable query of listed pools"`
 }
 
 // Execute is run when PoolListCmd activates
@@ -213,7 +214,9 @@ func (cmd *PoolListCmd) Execute(_ []string) (errOut error) {
 		return errors.New("no configuration loaded")
 	}
 
-	req := new(control.ListPoolsReq)
+	req := &control.ListPoolsReq{
+		NoQuery: cmd.NoQuery,
+	}
 
 	resp, err := control.ListPools(context.Background(), cmd.ctlInvoker, req)
 	if err != nil {
