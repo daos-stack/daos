@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import uuid
+
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
 from command_utils_base import CommandFailure
@@ -13,7 +14,6 @@ from test_utils_container import TestContainer
 
 class EvictTests(TestWithServers):
     """
-
     Tests DAOS client eviction from a pool that the client is using.
 
     :avocado: recursive
@@ -112,6 +112,7 @@ class EvictTests(TestWithServers):
 
         # Make it not fail at CommandFailure and call.
         self.pool.dmg.exit_status_exception = False
+        self.pool.use_label = False
         self.pool.evict()
 
         # Restore the original UUID.
@@ -252,9 +253,9 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid uuid.
 
-        :avocado: tags=all,pool,pr,daily_regression,full_regression,small
-        :avocado: tags=poolevict
-        :avocado: tags=pool_evict_bad_uuid,DAOS_5610
+        :avocado: tags=all,pool,pr,daily_regression,full_regression
+        :avocado: tags=small
+        :avocado: tags=pool_evict,pool_evict_bad_uuid,DAOS_5610
         """
         test_param = self.params.get("uuid", '/run/badparams/*')
         self.assertTrue(self.evict_bad_param(test_param))

@@ -238,7 +238,12 @@ no pools in system
 					},
 				},
 			},
-			expErr: errors.New("no usage"),
+			expPrintStr: `
+Pool     Size Used Imbalance Disabled 
+----     ---- ---- --------- -------- 
+00000001 0 B  0%   0%        0/0      
+
+`,
 		},
 		"one pool; no uuid": {
 			resp: &control.ListPoolsResp{
