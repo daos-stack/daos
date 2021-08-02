@@ -234,7 +234,7 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container clone command object."""
-                super().__init__("clone")
+                super().__init__("/run/daos/container/clone/*", "clone")
                 self.src = FormattedParameter("--src={}")
                 self.dst = FormattedParameter("--dst={}")
 
