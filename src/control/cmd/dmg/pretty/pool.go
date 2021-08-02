@@ -129,7 +129,7 @@ func poolListCreateRow(pool *control.Pool) txtfmt.TableRow {
 	}
 
 	// display imbalance of the most imbalanced tier
-	imbalance := pool.Usage[0].Imbalance
+	var imbalance uint32
 	for ti := 0; ti < len(pool.Usage); ti++ {
 		if pool.Usage[ti].Imbalance > imbalance {
 			imbalance = pool.Usage[ti].Imbalance

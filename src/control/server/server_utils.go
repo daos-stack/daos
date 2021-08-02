@@ -348,10 +348,16 @@ func registerLeaderSubscriptions(srv *server) {
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
+				ts, err := evt.GetTimestamp()
+				if err != nil {
+					srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
+					return
+				}
+				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank)); err == nil {
-					srv.mgmtSvc.reqGroupUpdate(ctx)
+				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err == nil {
+					srv.mgmtSvc.reqGroupUpdate(ctx, false)
 				}
 			}
 		}))
