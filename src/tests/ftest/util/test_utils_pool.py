@@ -342,7 +342,11 @@ class TestPool(TestDaosApiBase):
                     prop_name = self.prop_name.value
                 if prop_value is None:
                     prop_value = self.prop_value.value
-                self.dmg.pool_set_prop(self.uuid, prop_name, prop_value)
+                if self.use_label and self.label.value is not None:
+                    self.dmg.pool_set_prop(
+                        self.label.value, prop_name, prop_value)
+                else:
+                    self.dmg.pool_set_prop(self.uuid, prop_name, prop_value)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
@@ -359,7 +363,10 @@ class TestPool(TestDaosApiBase):
             self.log.info("Evict all pool connections for pool: %s", self.uuid)
 
             if self.control_method.value == self.USE_DMG and self.dmg:
-                self.dmg.pool_evict(self.uuid)
+                if self.use_label and self.label.value is not None:
+                    self.dmg.pool_evict(self.label.value)
+                else:
+                    self.dmg.pool_evict(self.uuid)
 
             elif self.control_method.value == self.USE_DMG:
                 self.log.error("Error: Undefined dmg command")
@@ -628,7 +635,10 @@ class TestPool(TestDaosApiBase):
             status = True
 
         elif self.control_method.value == self.USE_DMG and self.dmg:
-            self.dmg.pool_exclude(self.uuid, ranks, tgt_idx)
+            if self.use_label and self.label.value is not None:
+                self.dmg.pool_exclude(self.label.value, ranks, tgt_idx)
+            else:
+                self.dmg.pool_exclude(self.uuid, ranks, tgt_idx)
             status = True
 
         return status
@@ -812,7 +822,11 @@ class TestPool(TestDaosApiBase):
                     end_time = time() + self.pool_query_timeout.value
                 while True:
                     try:
-                        self.query_data = self.dmg.pool_query(uuid)
+                        if self.use_label and self.label.value is not None:
+                            self.query_data = self.dmg.pool_query(
+                                self.label.value)
+                        else:
+                            self.query_data = self.dmg.pool_query(uuid)
                         break
                     except CommandFailure as error:
                         if end_time is not None:
@@ -848,7 +862,10 @@ class TestPool(TestDaosApiBase):
 
         """
         status = False
-        self.dmg.pool_reintegrate(self.uuid, rank, tgt_idx)
+        if self.use_label and self.label.value is not None:
+            self.dmg.pool_reintegrate(self.label.value, rank, tgt_idx)
+        else:
+            self.dmg.pool_reintegrate(self.uuid, rank, tgt_idx)
         status = True
 
         return status
@@ -869,7 +886,10 @@ class TestPool(TestDaosApiBase):
         """
         status = False
 
-        self.dmg.pool_drain(self.uuid, rank, tgt_idx)
+        if self.use_label and self.label.value is not None:
+            self.dmg.pool_drain(self.label.value, rank, tgt_idx)
+        else:
+            self.dmg.pool_drain(self.uuid, rank, tgt_idx)
         status = True
 
         return status
