@@ -13,8 +13,7 @@ SELF_TEST = 'self_test.c'
 def scons():
     """scons function"""
 
-    Import('env', 'prereqs', 'cart_lib', 'gurt_lib', 'cart_utils_objs',
-           'dc_mgmt_tgts')
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib', 'cart_utils_objs')
 
     tenv = env.Clone(LIBS=[])
 
