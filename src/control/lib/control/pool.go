@@ -301,7 +301,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		case drpc.DaosStatus:
 			switch e {
 			// These destroy errors can be retried.
-			case drpc.DaosGroupVersionMismatch,
+			case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
 				drpc.DaosTryAgain:
 				return true
 			default:
@@ -878,6 +878,7 @@ func (p *Pool) GetName() string {
 type ListPoolsReq struct {
 	unaryRequest
 	msRequest
+	NoQuery bool
 }
 
 // ListPoolsResp contains the status of the request and, if successful, the list
@@ -908,7 +909,7 @@ func (lpr *ListPoolsResp) Validate() (string, error) {
 			continue // no usage stats expected
 		}
 		if len(p.Usage) == 0 {
-			return "", errors.Errorf("pool %s has no usage info", p.UUID)
+			continue // no usage stats in response
 		}
 		if numTiers != 0 && len(p.Usage) != numTiers {
 			return "", errors.Errorf("pool %s has %d storage tiers, want %d",
@@ -950,6 +951,10 @@ func ListPools(ctx context.Context, rpcClient UnaryInvoker, req *ListPoolsReq) (
 	resp := new(ListPoolsResp)
 	if err := convertMSResponse(ur, resp); err != nil {
 		return nil, err
+	}
+
+	if req.NoQuery {
+		return resp, nil
 	}
 
 	// issue query request and populate usage statistics for each pool
