@@ -1516,6 +1516,7 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 	}
 	*p_layout = layout;
 out:
+	obj_decref(obj);
 	if (rc && layout != NULL)
 		daos_obj_layout_free(layout);
 	return rc;
