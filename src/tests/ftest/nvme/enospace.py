@@ -204,8 +204,8 @@ class NvmeEnospace(ServerFillUp):
                   continuously.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=nvme,ib2,der_enospace,enospc_lazy,enospc_lazy_bg
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_bg
         """
         print(self.pool.pool_percentage_used())
 
@@ -229,8 +229,8 @@ class NvmeEnospace(ServerFillUp):
                   Do this in loop for 10 times and verify space is released.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=nvme,ib2,der_enospace,enospc_lazy,enospc_lazy_fg
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_fg
         """
         print(self.pool.pool_percentage_used())
 
@@ -263,8 +263,8 @@ class NvmeEnospace(ServerFillUp):
                   continuously.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=nvme,ib2,der_enospace,enospc_time,enospc_time_bg
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_bg
         """
         print(self.pool.pool_percentage_used())
 
@@ -291,8 +291,8 @@ class NvmeEnospace(ServerFillUp):
                   Do this in loop for 10 times and verify space is released.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=nvme,ib2,der_enospace,enospc_time,enospc_time_fg
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_fg
         """
         print(self.pool.pool_percentage_used())
 
@@ -325,8 +325,8 @@ class NvmeEnospace(ServerFillUp):
                   to the number ran prior system storage was full.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=nvme,ib2,der_enospace,enospc_performance
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_performance
         """
         #Write the IOR Baseline and get the Read BW for later comparison.
         print(self.pool.pool_percentage_used())
@@ -370,8 +370,8 @@ class NvmeEnospace(ServerFillUp):
                   free size after container destroy.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=nvme,ib2,der_enospace,enospc_no_aggregation
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_no_aggregation
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches

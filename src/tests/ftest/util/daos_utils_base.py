@@ -215,8 +215,8 @@ class DaosCommandBase(CommandWithSubCommand):
                         "/run/daos/container/{}/*".format(sub_command),
                         sub_command)
                 self.pool = PositionalParameter(1)
+                self.cont = PositionalParameter(2)
                 self.sys_name = FormattedParameter("--sys-name={}")
-                self.cont = FormattedParameter("--cont={}")
                 self.path = FormattedParameter("--path={}")
 
         class CheckSubCommand(CommonContainerSubCommand):
@@ -227,10 +227,9 @@ class DaosCommandBase(CommandWithSubCommand):
                 super(
                     DaosCommandBase.ContainerSubCommand.CheckSubCommand,
                     self).__init__("check")
-                self.cont = PositionalParameter(2)
                 self.src = FormattedParameter("--epc={}")
 
-        class CloneSubCommand(CommonContainerSubCommand):
+        class CloneSubCommand(CommandWithParameters):
             """Defines an object for the daos container clone command."""
 
             def __init__(self):
@@ -274,6 +273,9 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --acl-file=PATH
                 #           input file containing ACL
                 self.acl_file = FormattedParameter("--acl-file={}", None)
+                #    -c, --cont=<UUID>
+                #           container UUID (optional)
+                self.cont = FormattedParameter("--cont={}")
 
         class CreateSnapSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container create-snap command."""
@@ -289,8 +291,8 @@ class DaosCommandBase(CommandWithSubCommand):
 
             def __init__(self):
                 """Create a daos container del-attrs command object."""
-                super().__init__("del-attrs")
-                self.attr = FormattedParameter("--attr={}")
+                super().__init__("del-attr")
+                self.attr = PositionalParameter(3)
 
         class DeleteAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container delete-acl command."""
@@ -306,7 +308,6 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container destroy command object."""
                 super().__init__("destroy")
-                self.cont = PositionalParameter(2)
                 self.force = FormattedParameter("--force", False)
 
         class DestroySnapSubCommand(CommonContainerSubCommand):
@@ -315,7 +316,6 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container destroy-snap command object."""
                 super().__init__("destroy-snap")
-                self.snap = FormattedParameter("--snap={}")
                 self.epc = FormattedParameter("--epc={}")
                 self.epcrange = FormattedParameter("--epcrange={}")
 
@@ -332,6 +332,9 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --outfile=PATH
                 #           write ACL to file (get-acl)
                 self.outfile = FormattedParameter("--outfile={}")
+                #     -f, --force
+                #           overwrite existing outfile
+                self.force = FormattedParameter("--force", False)
 
         class GetAttrSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container get-attr command."""
@@ -339,7 +342,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container get-attr command object."""
                 super().__init__("get-attr")
-                self.attr = FormattedParameter("--attr={}")
+                self.attr = PositionalParameter(3)
 
         class GetPropSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container get-prop command."""
@@ -347,14 +350,15 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container get-prop command object."""
                 super().__init__("get-prop")
-                self.prop = FormattedParameter("--prop={}")
+                self.prop = FormattedParameter("--properties={}")
 
-        class ListSubCommand(CommonContainerSubCommand):
+        class ListSubCommand(CommandWithPositionalParameters):
             """Defines an object for the daos container list command."""
 
             def __init__(self):
                 """Create a daos container list command object."""
-                super().__init__("list")
+                super().__init__("/run/daos/container/list/*", "list")
+                self.pool = PositionalParameter(1)
                 self.sys_name = FormattedParameter("--sys-name={}")
 
         class ListAttrsSubCommand(CommonContainerSubCommand):
@@ -363,6 +367,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container list-attrs command object."""
                 super().__init__("list-attrs")
+                self.verbose = FormattedParameter("--verbose", False)
 
         class ListObjectsSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container list-objects command."""
@@ -370,6 +375,7 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container list-objects command object."""
                 super().__init__("list-objects")
+                self.epc = FormattedParameter("--epc={}")
 
         class ListSnapsSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container list-snaps command."""
@@ -408,8 +414,8 @@ class DaosCommandBase(CommandWithSubCommand):
             def __init__(self):
                 """Create a daos container set-attr command object."""
                 super().__init__("set-attr")
-                self.attr = FormattedParameter("--attr={}")
-                self.value = FormattedParameter("--value={}")
+                self.attr = PositionalParameter(3)
+                self.value = PositionalParameter(4)
 
         class SetOwnerSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container set-owner command."""
