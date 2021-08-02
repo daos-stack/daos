@@ -496,8 +496,12 @@ class DaosCommand(DaosCommandBase):
         # attr48
         match = re.findall(r"\n([\S ]+)", self.result.stdout_text)
         # strip all trailing spaces from new daos cmd output formatting
+        # XXX to be removed when DAOS-7093 will be fixed and API/pydaos
+        # will be used instead of running daos command !!
         match = [x.rstrip() for x in match]
         # remove 2 header lines
+        # XXX to be removed when DAOS-7093 will be fixed and API/pydaos
+        # will be used instead of running daos command !!
         del match[0:2]
         return {"attrs": match}
 
