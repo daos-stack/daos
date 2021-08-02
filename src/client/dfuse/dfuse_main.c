@@ -168,7 +168,8 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
 		ret = fuse_session_loop(dfuse_info->di_session);
 	if (ret != 0)
 		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d", ret);
+				"Fuse loop exited with return code: %d %s",
+				ret, strerror(ret));
 
 	return ret;
 }
@@ -242,6 +243,8 @@ show_help(char *name)
 		"	-S --singlethread	Single threaded\n"
 		"	-t --thread-count=count	Number of fuse threads to use\n"
 		"	-f --foreground		Run in foreground\n"
+		"	   --enable-caching	Enable all caching (default)\n"
+		"	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
 		"	   --disable-caching	Disable all caching\n"
 		"	   --disable-wb-cache	Use write-through rather than write-back cache\n"
 		"\n"
@@ -306,6 +309,8 @@ main(int argc, char **argv)
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"thread-count",	required_argument, 0, 't'},
 		{"foreground",		no_argument,	   0, 'f'},
+		{"enable-caching",	no_argument,	   0, 'E'},
+		{"enable-wb-cache",	no_argument,	   0, 'F'},
 		{"disable-caching",	no_argument,	   0, 'A'},
 		{"disable-wb-cache",	no_argument,	   0, 'B'},
 		{"version",		no_argument,	   0, 'v'},
@@ -341,6 +346,13 @@ main(int argc, char **argv)
 			break;
 		case 'G':
 			dfuse_info->di_group = optarg;
+			break;
+		case 'E':
+			dfuse_info->di_caching = true;
+			dfuse_info->di_wb_cache = true;
+			break;
+		case 'F':
+			dfuse_info->di_wb_cache = true;
 			break;
 		case 'A':
 			dfuse_info->di_caching = false;

@@ -455,7 +455,11 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 			bc := ec.LegacyStorage.BdevClass
 			switch {
 			case bc == storage.ClassNvme && len(ec.LegacyStorage.BdevConfig.DeviceList) == 0:
+				log.Debugf("legacy storage config conversion skipped for class %s with empty bdev_list",
+					storage.ClassNvme)
 			case bc == storage.ClassNone:
+				log.Debugf("legacy storage config conversion skipped for class %s",
+					storage.ClassNone)
 			default:
 				tierCfgs = append(tierCfgs,
 					storage.NewTierConfig().
@@ -509,9 +513,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
-	case len(cfg.AccessPoints) > 1:
-		// temporary notification while the feature is still being polished.
-		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
 	}
 
 	for i, engine := range cfg.Engines {

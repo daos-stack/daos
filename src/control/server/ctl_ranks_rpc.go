@@ -8,10 +8,13 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -111,7 +114,7 @@ func (svc *ControlService) PrepShutdownRanks(ctx context.Context, req *ctlpb.Ran
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("MgmtSvc.PrepShutdownRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.PrepShutdownRanks dispatch, req:%+v\n", req)
 
 	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPrepShutdown)
 	if err != nil {
@@ -123,7 +126,7 @@ func (svc *ControlService) PrepShutdownRanks(ctx context.Context, req *ctlpb.Ran
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.PrepShutdown dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -167,7 +170,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.StopRanks dispatch, req:%+v\n", req)
 
 	signal := syscall.SIGINT
 	if req.Force {
@@ -210,7 +213,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.StopRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.StopRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -257,7 +260,7 @@ func (svc *ControlService) PingRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, errors.New("no ranks specified in request")
 	}
 
-	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.PingRanks dispatch, req:%+v\n", req)
 
 	results, err := svc.queryLocalRanks(ctx, req)
 	if err != nil {
@@ -269,7 +272,7 @@ func (svc *ControlService) PingRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.PingRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.PingRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -290,7 +293,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.ResetFormatRanks dispatch, req:%+v\n", req)
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
@@ -340,7 +343,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.ResetFormatRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -358,7 +361,7 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.StartRanks dispatch, req:%+v\n", req)
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
@@ -392,7 +395,55 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.StartRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
+}
+
+// SetEngineLogMasks calls into each engine over dRPC to set loglevel at runtime.
+func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.SetLogMasksReq) (*ctlpb.SetLogMasksResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	var errs []string
+
+	for idx, ei := range svc.harness.Instances() {
+		if !ei.IsReady() {
+			errs = append(errs, fmt.Sprintf("engine-%d: not ready", ei.Index()))
+			continue
+		}
+
+		if req.Masks == "" {
+			// no need to validate here as config value already validated on start-up
+			req.Masks = svc.srvCfg.Engines[idx].LogMask
+		}
+		if req.Masks == "" {
+			errs = append(errs, fmt.Sprintf("engine-%d: no log_mask set in engine config", ei.Index()))
+			continue
+		}
+
+		dresp, err := ei.CallDrpc(ctx, drpc.MethodSetLogMasks, req)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
+			continue
+		}
+
+		engineResp := new(ctlpb.SetLogMasksResp)
+		if err = proto.Unmarshal(dresp.Body, engineResp); err != nil {
+			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
+			continue
+		}
+
+		if engineResp.Status != 0 {
+			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(),
+				drpc.DaosStatus(engineResp.Status)))
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.New(strings.Join(errs, ", "))
+	}
+
+	return new(ctlpb.SetLogMasksResp), nil
 }

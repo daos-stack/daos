@@ -55,6 +55,35 @@ severity, message, description and cause.
 | system\_stop\_failed| INFO\_ONLY| ERROR| System shutdown failed during <action\> action, <errors\>  | Indicates that a user initiated controlled shutdown failed. <action\> identifies the failing shutdown action and <errors\> shows which ranks failed.| Ranks failed to stop.|
 
 
+## System Logging
+
+Engine logging is initially configured by setting the `log_file` and `log_mask`
+parameters in the server config file. Logging is described in detail in the
+[`Debugging System`](https://daos-stack.github.io/admin/troubleshooting/#debugging-system)
+section.
+
+Engine log levels can be changed dynamically (at runtime) by setting log masks
+for a set of facilities to a given level.
+Settings will be applied to all running DAOS I/O Engines present in the configured
+dmg hostlist using the command `dmg server set-logmasks [<masks>]`.
+The command accepts 0-1 positional arguments.
+If no args are passed then the log masks for each running engine will be reset
+to the value of engine "log\_mask" parameter in the server config file (as set
+at the time of daos\_server startup).
+If a single arg is passed then this will be used as the log masks setting.
+
+Example usage:
+`dmg server set-logmasks ERR,mgmt=DEBUG`
+
+The input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the
+syntax is identical to what is expected by the 'D_LOG_MASK' environment variable.
+If the 'PREFIX=' part is omitted, then the level applies to all defined
+facilities (e.g. a value of 'WARN' sets everything to WARN).
+
+Supported priority levels for engine logging are FATAL, CRIT, ERR, WARN, NOTE,
+INFO, DEBUG.
+
+
 ## System Monitoring
 
 System monitoring and telemetry data will be provided as part of the
