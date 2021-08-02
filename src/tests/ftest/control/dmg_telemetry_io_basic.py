@@ -17,13 +17,15 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
     :avocado: recursive
     """
 
-    def verify_io_test_metrics(self, io_test_metrics, metrics_data):
+    def verify_io_test_metrics(self, io_test_metrics, metrics_data, threshold):
         """ Verify telemetry io metrics from metrics_data.
 
         Args:
             io_test_metrics (list): list of telemetry io metrics.
             metrics_data (dict): a dictionary of host keys linked to a
                                  list of io metric names.
+            threshold (int): test io metrics threshold.
+
         """
         for host in self.hostlist_servers:
             self.log.info("==Host: %s", host)
@@ -36,7 +38,9 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                     else:
                         self.log.info("   testloop %s: %s", i,
                                       m_data[host][name])
-                    #m_data compare with io_metrics data threshold to be added
+                    #Detail for each test io metrics threshold to be updated
+                    self.assertGreaterEqual(m_data[host][name], threshold,
+                        "##Telemetry test io metrics less than the threshold")
 
     def display_io_test_metrics(self, metrics_data):
         """ Display metrics_data.
@@ -68,6 +72,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
         block_sizes = self.params.get("block_sizes", "/run/*")
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         test_metrics = self.params.get("io_test_metrics", "/run/*")
+        threshold = self.params.get("io_test_metrics_threshold", "/run/*")
         i = 0
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)
@@ -91,5 +96,5 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                     self.log.info("#ior command failed!")
         metrics_data[i] = self.telemetry.get_io_metrics(test_metrics)
         self.display_io_test_metrics(metrics_data)
-        self.verify_io_test_metrics(test_metrics, metrics_data)
+        self.verify_io_test_metrics(test_metrics, metrics_data, threshold)
         self.log.info("------Test passed------")
