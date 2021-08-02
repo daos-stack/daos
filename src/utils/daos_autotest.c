@@ -184,7 +184,7 @@ oS1(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, 0, OC_S1, 0, 0);
+	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
 	for (i = 0; i < 1000000; i++) {
 
@@ -213,7 +213,7 @@ oSX(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, 0, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
 	for (i = 0; i < 10000; i++) {
 
@@ -479,7 +479,7 @@ kv_insert128(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -578,7 +578,7 @@ kv_insert4k(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
@@ -641,7 +641,7 @@ kv_insert1m(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
