@@ -481,6 +481,15 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 	}
 }
 
+// IncMapVer forces the system database to increment the map version.
+func (db *Database) IncMapVer() error {
+	if err := db.CheckLeader(); err != nil {
+		return err
+	}
+
+	return db.submitIncMapVer()
+}
+
 func newGroupMap(version uint32) *GroupMap {
 	return &GroupMap{
 		Version:  version,
