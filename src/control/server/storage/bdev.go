@@ -19,6 +19,7 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+// BdevPciAddrSep defines the separator used between PCI addresses in string lists.
 const BdevPciAddrSep = " "
 
 type (

@@ -26,7 +26,8 @@ type (
 	}
 
 	MockBackend struct {
-		cfg MockBackendConfig
+		cfg          MockBackendConfig
+		PrepareCalls []storage.BdevPrepareRequest
 	}
 )
 
@@ -84,6 +85,8 @@ func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevForma
 }
 
 func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	mb.PrepareCalls = append(mb.PrepareCalls, req)
+
 	switch {
 	case req.ResetOnly:
 		if mb.cfg.PrepareResetErr != nil {

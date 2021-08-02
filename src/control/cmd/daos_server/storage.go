@@ -79,6 +79,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
 			PciAllowList:  cmd.PciAllowList,
+			PciBlockList:  cmd.PciBlockList,
 			ResetOnly:     cmd.Reset,
 			DisableVMD:    !cmd.EnableVMD,
 		}); err != nil {

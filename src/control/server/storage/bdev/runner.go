@@ -119,10 +119,6 @@ func (s *spdkSetupScript) Prepare(req storage.BdevPrepareRequest) error {
 		)
 	}
 
-	if req.PciAllowList != "" && req.PciBlockList != "" {
-		return errors.New("bdev_include and bdev_exclude can not be used together")
-	}
-
 	if req.PciAllowList != "" {
 		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PciAllowList))
 	}

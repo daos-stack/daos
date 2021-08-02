@@ -45,7 +45,10 @@ type (
 		script  *spdkSetupScript
 	}
 
-	removeFn func(string) error
+	removeFn     func(string) error
+	userLookupFn func(string) (*user.User, error)
+	vmdDetectFn  func() ([]string, error)
+	hpCleanFn    func(string, string, string) error
 )
 
 // suppressOutput is a horrible, horrible hack necessitated by the fact that
@@ -445,8 +448,8 @@ func vmdProcessFilters(inReq *storage.BdevPrepareRequest, vmdPciAddrs []string) 
 
 // vmdPrep determines if VMD devices are going to be used and runs a dedicated
 // bdev prepare (SPDK setup) with the VMD addresses explicitly in PCI_ALLOWED list.
-func (sb *spdkBackend) vmdPrep(req storage.BdevPrepareRequest) (bool, error) {
-	vmdPciAddrs, err := detectVMD()
+func (sb *spdkBackend) vmdPrep(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn) (bool, error) {
+	vmdPciAddrs, err := vmdDetect()
 	if err != nil {
 		return false, errors.Wrap(err, "VMD could not be enabled")
 	}
@@ -471,23 +474,21 @@ func (sb *spdkBackend) vmdPrep(req storage.BdevPrepareRequest) (bool, error) {
 	if err := sb.script.Prepare(vmdReq); err != nil {
 		return false, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 	}
-	sb.log.Debugf("volume management devices prepared: %v", vmdReq.PciAllowList)
+	op := "prepared"
+	if vmdReq.ResetOnly {
+		op = "reset"
+	}
+	sb.log.Debugf("volume management devices %s: %v", op, vmdReq.PciAllowList)
 
 	return true, nil
 }
 
-// Prepare will perform a lookup on the requested target user to validate existence
-// then prepare non-VMD NVMe devices for use with SPDK (or reset if set in request).
-// If DisableVmd is false in request then attempt to prepare VMD NVMe devices.
-// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
-// owned by the target user.
-// Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
-// bdev_include and bdev_exclude list filters provided in the server config file.
-func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+// prepare receives function pointers for external interfaces.
+func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLookupFn, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("provider backend prepare %+v", req)
 	resp := &storage.BdevPrepareResponse{}
 
-	usr, err := user.Lookup(req.TargetUser)
+	usr, err := userLookup(req.TargetUser)
 	if err != nil {
 		return nil, errors.Wrapf(err, "lookup on local host")
 	}
@@ -499,7 +500,7 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 	if !req.DisableVMD {
 		// If VMD has been explicitly enabled and there are VMD enabled
 		// NVMe devices on the host, attempt to prepare them.
-		vmdPrepared, err := sb.vmdPrep(req)
+		vmdPrepared, err := sb.vmdPrep(req, vmdDetect)
 		if err != nil {
 			return nil, err
 		}
@@ -508,13 +509,24 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 
 	if !req.DisableCleanHugePages {
 		// remove hugepages matching /dev/hugepages/spdk* owned by target user
-		err := cleanHugePages(hugePageDir, hugePagePrefix, usr.Uid)
+		err := hpClean(hugePageDir, hugePagePrefix, usr.Uid)
 		if err != nil {
 			return nil, errors.Wrapf(err, "clean spdk hugepages")
 		}
 	}
 
 	return resp, nil
+}
+
+// Prepare will perform a lookup on the requested target user to validate existence
+// then prepare non-VMD NVMe devices for use with SPDK (or reset if set in request).
+// If DisableVmd is false in request then attempt to prepare VMD NVMe devices.
+// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
+// owned by the target user.
+// Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
+// bdev_include and bdev_exclude list filters provided in the server config file.
+func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	return sb.prepare(req, user.Lookup, detectVMD, cleanHugePages)
 }
 
 func (sb *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {
