@@ -96,8 +96,6 @@ class PosixSimul(DfuseTestBase):
             print(host_os)
             raise NotImplementedError
 
-        clients = self.params.get("test_clients", '/run/hosts/*')
-        client = clients[0]
         dfuse_mount_dir = self.params.get("mount_dir", '/run/dfuse/*')
 
         if not self.pool:
@@ -107,20 +105,20 @@ class PosixSimul(DfuseTestBase):
             self.log.info("Create container")
             self.add_container(self.pool)
 
-        self.start_dfuse(self.hostlist_clients, self.pool, self.container)
+        self.start_dfuse(self.hostlist_servers, self.pool, self.container)
         self.dfuse.check_running()
 
         for mpi, simul in simul_dict.items():
+            # The use of MPI here is to run in parallel all simul tests
+            # on a single host.
             load_mpi(mpi)
             if include:
-                cmd = "/usr/bin/ssh {0} {1} -vv -d {2} -i {3}".format(
-                    client,
+                cmd = "{0} -vv -d {1} -i {2}".format(
                     simul,
                     dfuse_mount_dir,
                     include)
             else:
-                cmd = "/usr/bin/ssh {0} {1} -vv -d {2} -e {3}".format(
-                    client,
+                cmd = "{0} -vv -d {1} -e {2}".format(
                     simul,
                     dfuse_mount_dir,
                     exclude)
