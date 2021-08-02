@@ -497,6 +497,8 @@ class DaosCommand(DaosCommandBase):
         match = re.findall(r"\n([\S ]+)", self.result.stdout_text)
         # strip all trailing spaces from new daos cmd output formatting
         match = [x.rstrip() for x in match]
+        # remove 2 header lines
+        del match[0:2]
         return {"attrs": match}
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
