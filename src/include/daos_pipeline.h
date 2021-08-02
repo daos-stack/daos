@@ -117,12 +117,6 @@ typedef struct {
  * A pipeline node, used to build a pipeline.
  */
 typedef struct {
-
-	/**
-	 * Version number of the data structure.
-	 */
-	uint8_t			version_major;
-	uint8_t			version_minor;
 	/**
 	 * Node type can be any of the following:
 	 *   -- DAOS_PIPELINE_CONDITION:
@@ -149,6 +143,10 @@ typedef struct {
  * A pipeline.
  */
 typedef struct {
+	/**
+	 * Version number of the data structure.
+	 */
+	uint64_t		version;
 	/**
 	 * Number of nodes chained in this pipeline
 	 */
