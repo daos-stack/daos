@@ -494,7 +494,9 @@ class DaosCommand(DaosCommandBase):
         # ~@#$%^*-=_+[]{}:/?,.
         # aa bb
         # attr48
-        match = re.sub(r"\s*$", "", self.result.stdout_text.rstrip())
+        match = re.findall(r"\n([\S ]+)", self.result.stdout_text)
+        # strip all trailing spaces from new daos cmd output formatting
+	match = [x.rstrip() for x in match]
         return {"attrs": match}
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
