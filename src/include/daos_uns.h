@@ -190,32 +190,6 @@ int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);
 
 /**
- * Set the pool label in the duns attr struct in case it was fetched in a different way than
- * duns_resolve_path(). This is used in case user wants to call duns_destroy_attr() to free that
- * buffer rather than free those independently.
- *
- * \param[in]	attrp	Attr pointer
- * \param[in]	label	Pool label
- *
- * \return		0 on Success. errno code on failure.
- */
-int
-duns_set_pool_label(struct duns_attr_t *attrp, const char *label);
-
-/**
- * Set the cont label in the duns attr struct in case it was fetched in a different way than
- * duns_resolve_path(). This is used in case user wants to call duns_destroy_attr() to free that
- * buffer rather than free those independently.
- *
- * \param[in]	attrp	Attr pointer
- * \param[in]	label	Cont label
- *
- * \return		0 on Success. errno code on failure.
- */
-int
-duns_set_cont_label(struct duns_attr_t *attrp, const char *label);
-
-/**
  * Free internal buffers allocated by the DUNS on the \a attr struct.
  *
  * \param[in]	attrp	Attr pointer that was passed in to duns_resolve_path.
