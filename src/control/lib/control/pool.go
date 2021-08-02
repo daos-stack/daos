@@ -301,7 +301,7 @@ func PoolDestroy(ctx context.Context, rpcClient UnaryInvoker, req *PoolDestroyRe
 		case drpc.DaosStatus:
 			switch e {
 			// These destroy errors can be retried.
-			case drpc.DaosGroupVersionMismatch,
+			case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
 				drpc.DaosTryAgain:
 				return true
 			default:

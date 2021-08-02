@@ -69,6 +69,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_PING_RANK:
 		ds_mgmt_drpc_ping_rank(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_SET_LOG_MASKS:
+		ds_mgmt_drpc_set_log_masks(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_SET_RANK:
 		ds_mgmt_drpc_set_rank(drpc_req, drpc_resp);
 		break;
