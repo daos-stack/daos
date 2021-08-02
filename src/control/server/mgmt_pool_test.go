@@ -98,6 +98,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 			if err := svc.sysdb.AddPoolService(&system.PoolService{
 				PoolUUID: uuid.MustParse(common.MockUUID(0)),
 				State:    tc.state,
+				Storage:  &system.PoolServiceStorage{},
 			}); err != nil {
 				t.Fatal(err)
 			}

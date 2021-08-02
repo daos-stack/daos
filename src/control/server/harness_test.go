@@ -504,7 +504,9 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 		},
 		"instance not ready": {
 			mics: []*MockInstanceConfig{
-				{},
+				{
+					Started: atm.NewBool(true),
+				},
 			},
 			expErr: errInstanceNotReady,
 		},

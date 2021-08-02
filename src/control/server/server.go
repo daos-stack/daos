@@ -315,14 +315,19 @@ func (srv *server) setupGrpc() error {
 func (srv *server) registerEvents() {
 	registerFollowerSubscriptions(srv)
 
-	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
-		srv.log.Infof("MS leader running on %s", srv.hostname)
-		srv.mgmtSvc.startJoinLoop(ctx)
-		registerLeaderSubscriptions(srv)
-		srv.log.Debugf("requesting sync GroupUpdate after leader change")
-		srv.mgmtSvc.reqGroupUpdate(ctx, true)
-		return nil
-	})
+	srv.sysdb.OnLeadershipGained(
+		func(ctx context.Context) error {
+			srv.log.Infof("MS leader running on %s", srv.hostname)
+			srv.mgmtSvc.startJoinLoop(ctx)
+			registerLeaderSubscriptions(srv)
+			srv.log.Debugf("requesting sync GroupUpdate after leader change")
+			srv.mgmtSvc.reqGroupUpdate(ctx, true)
+			return nil
+		},
+		func(ctx context.Context) error {
+			return srv.mgmtSvc.checkPools(ctx)
+		},
+	)
 	srv.sysdb.OnLeadershipLost(func() error {
 		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
 		registerFollowerSubscriptions(srv)

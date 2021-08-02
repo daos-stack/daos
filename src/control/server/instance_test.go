@@ -31,6 +31,8 @@ import (
 )
 
 var (
+	// compiler check to ensure that MockInstance implements the
+	// Engine interface.
 	_ Engine = (*MockInstance)(nil)
 )
 

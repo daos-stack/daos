@@ -195,8 +195,14 @@ func (h *EngineHarness) CallDrpc(ctx context.Context, method drpc.Method, body p
 	// If the request fails, that error will be returned.
 	for _, i := range h.Instances() {
 		if !i.IsReady() {
-			if err == nil {
-				err = errInstanceNotReady
+			if i.IsStarted() {
+				if err == nil {
+					err = errInstanceNotReady
+				}
+			} else {
+				if err == nil {
+					err = FaultDataPlaneNotStarted
+				}
 			}
 			continue
 		}

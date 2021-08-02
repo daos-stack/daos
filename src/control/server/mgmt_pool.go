@@ -191,7 +191,8 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", req)
+
+	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%s\n", mgmtpb.Debug(req))
 
 	uuid, err := uuid.Parse(req.GetUuid())
 	if err != nil {
@@ -205,6 +206,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		resp.Status = int32(drpc.DaosAlready)
 		if ps.State == system.PoolServiceStateCreating {
 			resp.Status = int32(drpc.DaosTryAgain)
+			return resp, svc.checkPools(ctx)
 		}
 		return resp, nil
 	}
@@ -350,10 +352,23 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		}
 	}()
 
-	svc.log.Debugf("MgmtSvc.PoolCreate forwarding modified req:%+v\n", req)
+	svc.log.Debugf("MgmtSvc.PoolCreate forwarding modified req:%s\n", mgmtpb.Debug(req))
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)
 	if err != nil {
-		return nil, err
+		svc.log.Errorf("pool create dRPC call failed: %s", err)
+		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
+			return nil, err
+		}
+
+		switch errors.Cause(err) {
+		case errInstanceNotReady, FaultDataPlaneNotStarted:
+			// If the pool create failed because there was no available instance
+			// to service the request, signal to the client that it should try again.
+			resp.Status = int32(drpc.DaosTryAgain)
+			return resp, nil
+		default:
+			return nil, err
+		}
 	}
 
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
@@ -364,6 +379,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
 			return nil, err
 		}
+
 		return resp, nil
 	}
 	// let the caller know what was actually created
@@ -378,9 +394,58 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.PoolCreate dispatch resp:%+v\n", resp)
+	svc.log.Debugf("MgmtSvc.PoolCreate dispatch resp:%s\n", mgmtpb.Debug(resp))
 
 	return resp, nil
+}
+
+// checkPools iterates over the list of pools in the system to check
+// for any that are in an unexpected state. Pools not in the Ready
+// state will be cleaned up and removed from the system.
+//
+// NB: Care should be taken to avoid calling this when it could race
+// with a PoolCreate request.
+func (svc *mgmtSvc) checkPools(ctx context.Context) error {
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return err
+	}
+
+	psList, err := svc.sysdb.PoolServiceList()
+	if err != nil {
+		return err
+	}
+
+	svc.log.Debugf("checking %d pools", len(psList))
+	for _, ps := range psList {
+		if ps.State == system.PoolServiceStateReady {
+			continue
+		}
+
+		svc.log.Errorf("pool %s is in unexpected state %s", ps.PoolUUID, ps.State)
+
+		// Change the pool state to Destroying in order to trigger
+		// the cleanup mode of PoolDestroy(), which will cause the
+		// destroy RPC to be sent to all ranks and then the service
+		// will be removed from the system.
+		ps.State = system.PoolServiceStateDestroying
+		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+			return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
+		}
+
+		// Attempt to destroy the pool.
+		dr := &mgmtpb.PoolDestroyReq{
+			Sys:   svc.sysdb.SystemName(),
+			Force: true,
+			Uuid:  ps.PoolUUID.String(),
+		}
+
+		_, err := svc.PoolDestroy(ctx, dr)
+		if err != nil {
+			svc.log.Errorf("error while destroying pool %s: %s", ps.PoolUUID, err)
+		}
+	}
+
+	return nil
 }
 
 // PoolResolveID implements a handler for resolving a user-friendly Pool ID into
