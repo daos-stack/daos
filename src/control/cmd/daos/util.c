@@ -67,8 +67,8 @@ resolve_duns_path(struct cmd_args_s *ap)
 	ap->type = dattr.da_type;
 
 	/** set pool/cont label or uuid */
-	strncpy(ap->pool_str, dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
-	strncpy(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+	snprintf(ap->pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 
 	if (ap->fs_op != -1) {
 		if (name) {

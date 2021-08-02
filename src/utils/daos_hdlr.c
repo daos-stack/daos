@@ -1695,12 +1695,11 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);
 	if (rc) {
-		fprintf(ap->errstream,
-			"duns_create_path() error: %s\n", strerror(rc));
+		fprintf(ap->errstream, "duns_create_path() error: %s\n", strerror(rc));
 		D_GOTO(err_rc, rc);
 	}
 
-	strncpy(ap->cont_str, dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 	daos_unparse_ctype(ap->type, type);
 	fprintf(ap->outstream, "Successfully created container %s type %s\n", ap->cont_str, type);
 

@@ -222,7 +222,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS LMV format: pool UUID cannot be parsed\n");
 		return EINVAL;
 	}
-	strncpy(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	snprintf(attr->da_pool, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
 
 	t = strtok_r(NULL, "/", &saveptr);
 	if (t == NULL) {
@@ -236,7 +236,7 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS LMV format: container UUID cannot be parsed\n");
 		return EINVAL;
 	}
-	strncpy(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	snprintf(attr->da_cont, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
 
 	/* path is DAOS-foreign and will need to be unlinked using
 	 * unlink_foreign API
@@ -367,7 +367,7 @@ resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix,
 		if (!daos_label_is_valid(t))
 			D_GOTO(err, rc = EINVAL);
 	}
-	strncpy(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	snprintf(attr->da_pool, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
 
 	if (pool_only) {
 		D_FREE(dir);
@@ -388,7 +388,7 @@ resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix,
 		if (!daos_label_is_valid(t))
 			D_GOTO(err, rc = EINVAL);
 	}
-	strncpy(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	snprintf(attr->da_cont, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
 
 	/** if there is a relative path, parse it out */
 	t = strtok_r(NULL, "", &saveptr);
@@ -575,7 +575,7 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
-	strncpy(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	snprintf(attr->da_pool, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
 
 	t = strtok_r(NULL, "/", &saveptr);
 	if (t == NULL) {
@@ -589,7 +589,7 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS xattr format: container UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
-	strncpy(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	snprintf(attr->da_cont, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
 
 	rc = 0;
 err:
