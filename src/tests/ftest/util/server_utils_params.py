@@ -112,7 +112,7 @@ class DaosServerYamlParameters(YamlParameters):
         self.control_log_file = LogParameter(log_dir, None, "daos_control.log")
         self.helper_log_file = LogParameter(log_dir, None, "daos_admin.log")
         self.telemetry_port = BasicParameter(None, 9191)
-        default_disable_vmd = os.environ.get("DAOS_DISABLE_VMD", True)
+        default_disable_vmd = eval(os.environ.get("DAOS_DISABLE_VMD", "True"))
         self.disable_vmd = BasicParameter(None, default_disable_vmd)
 
         # Used to drop privileges before starting data plane
