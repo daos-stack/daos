@@ -85,6 +85,7 @@ static int
 cont_create_complete(tse_task_t *task, void *data)
 {
 	struct cont_args       *arg = (struct cont_args *)data;
+	daos_cont_create_t     *args;
 	struct dc_pool	       *pool = arg->pool;
 	struct cont_create_out *out = crt_reply_get(arg->rpc);
 	int			rc = task->dt_result;
@@ -108,6 +109,11 @@ cont_create_complete(tse_task_t *task, void *data)
 			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
+
+	args = dc_task_get_args(task);
+	/** Returned container UUID upon successful creation */
+	if (args->cuuid != NULL)
+		uuid_copy(*args->cuuid, args->uuid);
 
 	D_DEBUG(DF_DSMC, "completed creating container\n");
 
@@ -219,8 +225,9 @@ dc_cont_create(tse_task_t *task)
 	daos_prop_t	       *rpc_prop = NULL;
 
 	args = dc_task_get_args(task);
-	if (uuid_is_null(args->uuid))
-		D_GOTO(err_task, rc = -DER_INVAL);
+	if (!daos_uuid_valid(args->uuid))
+		/** generate a UUID for the new container */
+		uuid_generate(args->uuid);
 
 	entry = daos_prop_entry_get(args->prop, DAOS_PROP_CO_STATUS);
 	if (entry != NULL) {
@@ -556,8 +563,8 @@ pmap_refresh_cb(tse_task_t *task, void *data)
 			goto out;
 		}
 
-		rc = dc_task_reg_comp_cb(task, pmap_refresh_cb, cb_arg,
-					 sizeof(*cb_arg));
+		rc = tse_task_register_comp_cb(task, pmap_refresh_cb, cb_arg,
+					       sizeof(*cb_arg));
 		if (rc) {
 			D_ERROR(DF_UUID": pmap_refresh version (%d:%d), failed "
 				"to reg_comp_cb, "DF_RC"\n",
@@ -586,7 +593,6 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 	struct dc_pool			*pool;
 	struct pmap_refresh_cb_arg	 cb_arg;
 	tse_sched_t			*sched;
-	daos_pool_query_t		*pargs;
 	tse_task_t			*ptask = NULL;
 	int				 rc;
 
@@ -595,17 +601,15 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 		return -DER_NO_HDL;
 
 	sched = (task != NULL) ? tse_task2sched(task) : NULL;
-	rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);
+	rc = dc_pool_create_map_refresh_task(pool, pm_ver, sched, &ptask);
 	if (rc != 0)
 		goto out;
 
-	pargs = dc_task_get_args(ptask);
-	pargs->poh = poh;
 	cb_arg.pra_pool = pool;
 	cb_arg.pra_pm_ver = pm_ver;
 	cb_arg.pra_retry_nr = 0;
-	rc = dc_task_reg_comp_cb(ptask, pmap_refresh_cb, &cb_arg,
-				 sizeof(cb_arg));
+	rc = tse_task_register_comp_cb(ptask, pmap_refresh_cb, &cb_arg,
+				       sizeof(cb_arg));
 	if (rc != 0)
 		goto out;
 
@@ -615,14 +619,14 @@ pmap_refresh(tse_task_t *task, daos_handle_t poh, uint32_t pm_ver)
 			goto out;
 	}
 
-	rc = dc_task_schedule(ptask, true);
+	rc = tse_task_schedule(ptask, true);
 	return rc;
 
 out:
 	if (rc) {
 		dc_pool_put(pool);
 		if (ptask)
-			dc_task_decref(ptask);
+			dc_pool_abandon_map_refresh_task(ptask);
 	}
 	return rc;
 }
@@ -1684,16 +1688,6 @@ struct cont_oid_alloc_args {
 };
 
 static int
-pool_query_cb(tse_task_t *task, void *data)
-{
-	daos_pool_query_t	*args;
-
-	args = dc_task_get_args(task);
-	D_FREE(args->info);
-	return task->dt_result;
-}
-
-static int
 cont_oid_alloc_complete(tse_task_t *task, void *data)
 {
 	struct cont_oid_alloc_args *arg = (struct cont_oid_alloc_args *)data;
@@ -1704,45 +1698,29 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 
 	if (daos_rpc_retryable_rc(rc) || rc == -DER_STALE) {
 		tse_sched_t *sched = tse_task2sched(task);
-		daos_pool_query_t *pargs;
 		tse_task_t *ptask;
+		unsigned int map_version = out->coao_op.co_map_version;
 
-		/** pool map update task */
-		rc = dc_task_create(dc_pool_query, sched, NULL, &ptask);
+		/** pool map refresh task */
+		rc = dc_pool_create_map_refresh_task(pool, map_version, sched,
+						     &ptask);
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		pargs = dc_task_get_args(ptask);
-		pargs->poh = arg->coaa_cont->dc_pool_hdl;
-		D_ALLOC_PTR(pargs->info);
-		if (pargs->info == NULL) {
-			dc_task_decref(ptask);
-			D_GOTO(out, rc = -DER_NOMEM);
-		}
-
-		rc = dc_task_reg_comp_cb(ptask, pool_query_cb, NULL, 0);
-		if (rc != 0) {
-			D_FREE(pargs->info);
-			dc_task_decref(ptask);
-			D_GOTO(out, rc);
-		}
-
 		rc = dc_task_resched(task);
 		if (rc != 0) {
-			D_FREE(pargs->info);
-			dc_task_decref(ptask);
+			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
 		}
 
 		rc = dc_task_depend(task, 1, &ptask);
 		if (rc != 0) {
-			D_FREE(pargs->info);
-			dc_task_decref(ptask);
+			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
 		}
 
 		/* ignore returned value, error is reported by comp_cb */
-		dc_task_schedule(ptask, true);
+		tse_task_schedule(ptask, true);
 		D_GOTO(out, rc = 0);
 	} else if (rc != 0) {
 		/** error but non retryable RPC */
