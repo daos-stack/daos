@@ -212,17 +212,8 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	tc_in->tps_value_extra = ps_in->ps_value_extra;
 
 	rc = dss_rpc_send(tc_req);
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
 
-	out = crt_reply_get(tc_req);
-	rc = out->srv_rc;
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
+	crt_req_decref(tc_req);
 out:
 	out = crt_reply_get(rpc);
 	out->srv_rc = rc;
@@ -262,17 +253,8 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	tc_in->p_op = in->p_op;
 	tc_in->p_avg = in->p_avg;
 	rc = dss_rpc_send(tc_req);
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
 
-	out = crt_reply_get(tc_req);
-	rc = out->p_rc;
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
+	crt_req_decref(tc_req);
 out:
 	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out = crt_reply_get(rpc);
@@ -310,17 +292,8 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 
 	tc_in->m_mark = in->m_mark;
 	rc = dss_rpc_send(tc_req);
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
 
-	out = crt_reply_get(tc_req);
-	rc = out->m_rc;
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
+	crt_req_decref(tc_req);
 out:
 	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
 	out = crt_reply_get(rpc);
