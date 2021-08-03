@@ -1543,7 +1543,8 @@ dc_enumerate_copy_csum(d_iov_t *dst, const d_iov_t *src)
 			   src->iov_len));
 		dst->iov_len = src->iov_len;
 		if (dst->iov_len > dst->iov_buf_len) {
-			D_DEBUG(DB_CSUM, "Checksum buffer truncated");
+			D_DEBUG(DB_CSUM, "Checksum buffer truncated %d > %d\n",
+				(int)dst->iov_len, (int)dst->iov_buf_len);
 			return -DER_TRUNC;
 		}
 	}
