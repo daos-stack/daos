@@ -9,7 +9,6 @@ package control
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"runtime"
 	"sort"
@@ -219,7 +218,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 
 func TestControl_InvokeUnaryRPC(t *testing.T) {
 	// make the rand deterministic for testing
-	msCandidateRandSource = rand.NewSource(1)
+	msCandidateRandSource = newSafeRandSource(1)
 
 	clientCfg := DefaultConfig()
 	clientCfg.TransportConfig.AllowInsecure = true
