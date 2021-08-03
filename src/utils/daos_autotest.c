@@ -32,6 +32,11 @@ clock_t	end;
 
 /** generated container UUID */
 uuid_t		cuuid;
+
+/** generate container UUID for aux cont */
+uuid_t		cuuid2;
+uuid_t		cuuid3;
+
 /** initial object ID */
 uint64_t	oid_hi = 1;
 daos_obj_id_t	oid = { .hi = 1, .lo = 1 }; /** object ID */
@@ -151,6 +156,34 @@ ccreate(void)
 	/** Create container */
 	uuid_generate(cuuid);
 	rc = daos_cont_create(poh, cuuid, NULL, NULL);
+	if (rc) {
+		step_fail(d_errdesc(rc));
+		return -1;
+	}
+
+	/** Create container with RF=1 */
+	daos_prop_t	*prop;
+        prop = daos_prop_alloc(1);
+        prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+        prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+	
+	uuid_generate(cuuid2);	
+
+	rc = daos_cont_create(poh,cuuid2, prop, NULL);
+	if (rc) {
+		step_fail(d_errdesc(rc));
+		return -1;
+	}
+
+	/** Create container with RF=2 */
+	daos_prop_t	*prop2;
+        prop2 = daos_prop_alloc(1);
+        prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+        prop2->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+
+	uuid_generate(cuuid3);
+	
+	rc = daos_cont_create(poh,cuuid3, prop2, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
 		return -1;
@@ -714,12 +747,25 @@ static int
 cdestroy(void)
 {
 	int rc;
-
 	rc = daos_cont_destroy(poh, cuuid, force, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
 		return -1;
 	}
+	
+
+	rc = daos_cont_destroy(poh, cuuid2, force, NULL);
+	if (rc) {
+		step_fail(d_errdesc(rc));
+		return -1;
+	}
+	
+	rc = daos_cont_destroy(poh, cuuid3, force, NULL);
+	if (rc) {
+		step_fail(d_errdesc(rc));
+		return -1;
+	}
+
 	step_success("");
 	return 0;
 }
