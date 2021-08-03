@@ -66,8 +66,8 @@ class ContainerQueryAttributeTest(TestWithServers):
             "cont": self.expected_cont_uuid
         }
         query_output = self.daos_cmd.get_output("container_query", **kwargs)[0]
-        actual_pool_uuid = query_output[0]
-        actual_cont_uuid = query_output[1]
+        actual_pool_uuid = query_output[2]
+        actual_cont_uuid = query_output[0]
         self.assertEqual(actual_pool_uuid, self.pool.uuid.lower())
         self.assertEqual(actual_cont_uuid, self.expected_cont_uuid)
 
