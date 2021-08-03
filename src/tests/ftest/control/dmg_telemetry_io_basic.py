@@ -29,18 +29,25 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
         """
         for host in self.hostlist_servers:
             self.log.info("==Host: %s", host)
+            status = 0
             for name in io_test_metrics:
                 self.log.info("  --telemetry metric: %s", name)
-                for i, _ in enumerate(metrics_data):
-                    m_data = metrics_data[i]
-                    if i == 0:
-                        self.log.info("   Initial    : %s", m_data[host][name])
-                    else:
-                        self.log.info("   testloop %s: %s", i,
-                                      m_data[host][name])
+                for key in sorted(metrics_data):
+                    m_data = metrics_data[key]
+                    self.log.info(
+                        "  %12s: %s",
+                        "Initial    " if key == 0 else "Test Loop {}".format(
+                            key), metrics_data[key][host][name])
+
                     #Detail for each test io metrics threshold to be updated
-                    self.assertGreaterEqual(m_data[host][name], threshold,
-                        "##Telemetry test io metrics less than the threshold")
+                    if m_data[host][name] < threshold:
+                        self.log.info(
+                            "#Host %s, test io metrics %s, value %s "
+                            "less than the threshold limit %s".format(
+                                host, name, m_data[host][name], threshold))
+                        status = 1
+            if status == 1:
+                self.fail("##Telemetry test io metrics verification failed.")
 
     def display_io_test_metrics(self, metrics_data):
         """ Display metrics_data.
@@ -49,12 +56,12 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
             metrics_data (dict): a dictionary of host keys linked to a
                                  list of io metric names.
         """
-        for i, _ in enumerate(metrics_data):
-            if i == 0:
-                self.log.info(" Initial: %s ====>", i)
-            else:
-                self.log.info(" test loop: %s ====>", i)
-            self.log.info(" metrics_data[%s]= %s", i, metrics_data[i])
+        for key in sorted(metrics_data):
+            self.log.info(
+                "  %12s: %s",
+                "Initial " if key == 0 else "Test Loop {}".format(key),
+                metrics_data[key])
+
 
     def test_telmetry_metrics(self):
         """JIRA ID: DAOS-5241
@@ -79,7 +86,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
         metrics_data = {}
         for block_size in block_sizes:
             for transfer_size in transfer_sizes:
-                metrics_data[i] = self.telemetry.get_io_metrics(test_metrics)
+                metrics_data[i] = self.telemetry.get_io_metrics()
                 i += 1
                 self.log.info("==Start ior testloop: %s, Block Size = %s, "
                               "transfer_size =  %s", i, block_size,
@@ -94,7 +101,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                         test_file_suffix=test_file_suffix)
                 except TestFail:
                     self.log.info("#ior command failed!")
-        metrics_data[i] = self.telemetry.get_io_metrics(test_metrics)
+        metrics_data[i] = self.telemetry.get_io_metrics()
         self.display_io_test_metrics(metrics_data)
         self.verify_io_test_metrics(test_metrics, metrics_data, threshold)
         self.log.info("------Test passed------")
