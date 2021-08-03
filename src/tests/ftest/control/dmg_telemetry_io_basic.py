@@ -43,7 +43,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                     if m_data[host][name] < threshold:
                         self.log.info(
                             "#Host %s, metrics %s, value %s "
-                            "less than the threshold limit %s", 
+                            "less than the threshold limit %s",
                             host, name, m_data[host][name], threshold)
                         status = 1
             if status == 1:
