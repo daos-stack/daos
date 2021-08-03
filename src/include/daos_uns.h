@@ -97,7 +97,7 @@ struct duns_attr_t {
 	 * a UUID or a label. This can be used in daos_pool_connect() regardless of whether it's a
 	 * UUID or label.
 	 */
-	char			da_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char			*da_pool;
 	/** OUT: Container UUID or label string.
 	 *
 	 * On duns_resolve_path(), a UUID string is returned for the container that was stored on
@@ -105,7 +105,7 @@ struct duns_attr_t {
 	 * either a UUID or a label. This can be used in daos_cont_open() regardless of whether it's
 	 * a UUID or label.
 	 */
-	char			da_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char			*da_cont;
 };
 
 /** extended attribute name that will container the UNS info */
@@ -189,6 +189,32 @@ duns_destroy_path(daos_handle_t poh, const char *path);
  */
 int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);
+
+/**
+ * Set the pool UUID or label string in the duns attr struct in case it was fetched in a different
+ * way than duns_resolve_path(). This is used in case user wants to call duns_destroy_attr() to free
+ * that buffer rather than free those independently.
+ *
+ * \param[in]	attrp	DUNS attribute pointer
+ * \param[in]	pool	Pool UUID or label
+ *
+ * \return		0 on Success. errno code on failure.
+ */
+int
+duns_set_pool_attr(struct duns_attr_t *attrp, const char *pool);
+
+/**
+ * Set the cont UUID or label string in the duns attr struct in case it was fetched in a different
+ * way than duns_resolve_path(). This is used in case user wants to call duns_destroy_attr() to free
+ * that buffer rather than free those independently.
+ *
+ * \param[in]	attrp	DUNS attribute pointer
+ * \param[in]	cont	Container UUID or label
+ *
+ * \return		0 on Success. errno code on failure.
+ */
+int
+duns_set_cont_attr(struct duns_attr_t *attrp, const char *cont);
 
 /**
  * Free internal buffers allocated by the DUNS on the \a attr struct.

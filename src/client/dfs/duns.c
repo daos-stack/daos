@@ -222,7 +222,9 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS LMV format: pool UUID cannot be parsed\n");
 		return EINVAL;
 	}
-	snprintf(attr->da_pool, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	D_STRNDUP(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_pool == NULL)
+		return ENOMEM;
 
 	t = strtok_r(NULL, "/", &saveptr);
 	if (t == NULL) {
@@ -236,7 +238,11 @@ duns_resolve_lustre_path(const char *path, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS LMV format: container UUID cannot be parsed\n");
 		return EINVAL;
 	}
-	snprintf(attr->da_cont, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	D_STRNDUP(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_cont == NULL) {
+		D_FREE(attr->da_pool);
+		return ENOMEM;
+	}
 
 	/* path is DAOS-foreign and will need to be unlinked using
 	 * unlink_foreign API
@@ -367,7 +373,9 @@ resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix,
 		if (!daos_label_is_valid(t))
 			D_GOTO(err, rc = EINVAL);
 	}
-	snprintf(attr->da_pool, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	D_STRNDUP(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_pool == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	if (pool_only) {
 		D_FREE(dir);
@@ -388,7 +396,9 @@ resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix,
 		if (!daos_label_is_valid(t))
 			D_GOTO(err, rc = EINVAL);
 	}
-	snprintf(attr->da_cont, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	D_STRNDUP(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_cont == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	/** if there is a relative path, parse it out */
 	t = strtok_r(NULL, "", &saveptr);
@@ -575,7 +585,9 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS xattr format: pool UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
-	snprintf(attr->da_pool, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	D_STRNDUP(attr->da_pool, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_pool == NULL)
+		D_GOTO(err, rc = ENOMEM);
 
 	t = strtok_r(NULL, "/", &saveptr);
 	if (t == NULL) {
@@ -589,7 +601,11 @@ duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr)
 		D_ERROR("Invalid DAOS xattr format: container UUID cannot be parsed\n");
 		D_GOTO(err, rc = EINVAL);
 	}
-	snprintf(attr->da_cont, DAOS_PROP_LABEL_MAX_LEN + 1,  "%s", t);
+	D_STRNDUP(attr->da_cont, t, DAOS_PROP_LABEL_MAX_LEN);
+	if (attr->da_cont == NULL) {
+		D_FREE(attr->da_pool);
+		D_GOTO(err, rc = ENOMEM);
+	}
 
 	rc = 0;
 err:
@@ -644,8 +660,14 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
 			rc = daos_der2errno(rc);
 		daos_prop_free(prop);
 	}
-	if (rc == 0)
+	if (rc == 0) {
+		D_ALLOC(attrp->da_cont, 37);
+		if (attrp->da_cont == NULL) {
+			daos_cont_destroy(poh, attrp->da_cuuid, 1, NULL);
+			return ENOMEM;
+		}
 		uuid_unparse(attrp->da_cuuid, attrp->da_cont);
+	}
 	return rc;
 }
 
@@ -668,6 +690,9 @@ duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *pa
 			return EINVAL;
 	}
 
+	D_ALLOC(attrp->da_pool, 37);
+	if (attrp->da_pool == NULL)
+		return ENOMEM
 	uuid_unparse(info.pi_uuid, attrp->da_pool);
 	daos_oclass_id2name(attrp->da_oclass_id, oclass);
 	daos_unparse_ctype(attrp->da_type, type);
@@ -704,6 +729,7 @@ err_cont:
 	if (rc2)
 		D_ERROR("Failed to cleanup created container %s (%d)\n", attrp->da_cont, rc2);
 err:
+	duns_destroy_attr(attrp);
 	return rc;
 }
 #endif
@@ -822,6 +848,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		return EINVAL;
 	}
 
+	D_ALLOC(attrp->da_pool, 37);
+	if (attrp->da_pool == NULL)
+		D_GOTO(err_link, rc = ENOMEM);
 	uuid_unparse(info.pi_uuid, attrp->da_pool);
 	if (attrp->da_oclass_id != OC_UNKNOWN)
 		daos_oclass_id2name(attrp->da_oclass_id, oclass);
@@ -879,6 +908,7 @@ err_link:
 		rmdir(path);
 	else if (attrp->da_type != DAOS_PROP_CO_LAYOUT_UNKNOWN)
 		unlink(path);
+	duns_destroy_attr(attrp);
 	return rc;
 }
 
@@ -936,10 +966,38 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	return 0;
 }
 
+int
+duns_set_pool_attr(struct duns_attr_t *attrp, const char *pool)
+{
+	if (attrp == NULL)
+		return EINVAL;
+
+	D_STRNDUP(attrp->da_pool, pool, DAOS_PROP_LABEL_MAX_LEN);
+	if (attrp->da_pool == NULL)
+		return ENOMEM;
+
+	return 0;
+}
+
+int
+duns_set_cont_attr(struct duns_attr_t *attrp, const char *cont)
+{
+	if (attrp == NULL)
+		return EINVAL;
+
+	D_STRNDUP(attrp->da_cont, cont, DAOS_PROP_LABEL_MAX_LEN);
+	if (attrp->da_cont == NULL)
+		return ENOMEM;
+
+	return 0;
+}
+
 void
 duns_destroy_attr(struct duns_attr_t *attrp)
 {
 	if (attrp == NULL)
 		return;
 	D_FREE(attrp->da_rel_path);
+	D_FREE(attrp->da_pool);
+	D_FREE(attrp->da_cont);
 }
