@@ -360,6 +360,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
+%{_bindir}/daos_metrics
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
@@ -447,7 +448,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
-%{_bindir}/daos_metrics
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{conf_dir}/fault-inject-cart.yaml
