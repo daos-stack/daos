@@ -193,8 +193,8 @@ func getSpdkConfigMethods(req *storage.BdevWriteNvmeConfigRequest) (sscs []*Spdk
 	return
 }
 
-// WithVmdEnabled adds vmd subsystem with enable method to an SpdkConfig.
-func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
+// WithVMDEnabled adds vmd subsystem with enable method to an SpdkConfig.
+func (sc *SpdkConfig) WithVMDEnabled() *SpdkConfig {
 	sc.Subsystems = append(sc.Subsystems, &SpdkSubsystem{
 		Name: "vmd",
 		Configs: []*SpdkSubsystemConfig{
@@ -230,7 +230,7 @@ func newSpdkConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteNvm
 
 	for _, tp := range req.TierProps {
 		if enableVmd && tp.Class == storage.ClassNvme {
-			sc.WithVmdEnabled()
+			sc.WithVMDEnabled()
 			break
 		}
 	}

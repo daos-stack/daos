@@ -22,7 +22,7 @@ type (
 		FormatErr   error
 		ScanRes     *storage.BdevScanResponse
 		ScanErr     error
-		VmdEnabled  bool // set disabled by default
+		VMDEnabled  bool // set disabled by default
 		UpdateErr   error
 	}
 
@@ -95,14 +95,6 @@ func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepa
 	}
 
 	return new(storage.BdevPrepareResponse), nil
-}
-
-func (mb *MockBackend) EnableVMD() {
-	mb.cfg.VmdEnabled = true
-}
-
-func (mb *MockBackend) IsVMDEnabled() bool {
-	return mb.cfg.VmdEnabled
 }
 
 func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {

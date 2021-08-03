@@ -202,7 +202,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 }
 
 // TODO DAOS-8040: re-enable VMD
-// func TestServer_CtlSvc_checkCfgBdevs(t *testing.T) {
+// func TestServer_CtlSvc_checkCfgBdevsExist(t *testing.T) {
 // 	scanAddrs := []string{
 // 		"0000:90:00.0", "0000:d8:00.0", "5d0505:01:00.0", "0000:8e:00.0",
 // 		"0000:8a:00.0", "0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0",
@@ -318,7 +318,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 // 					WithBdevDeviceList(tc.inCfgBdevLists[idx]...)
 // 			}
 //
-// 			mbc := &bdev.MockBackendConfig{VmdEnabled: tc.vmdEnabled}
+// 			mbc := &bdev.MockBackendConfig{VMDEnabled: tc.vmdEnabled}
 // 			cs := mockControlService(t, log, testCfg, mbc, nil, nil)
 //
 // 			if tc.inScanResp == nil {
@@ -326,7 +326,7 @@ func TestServer_CtlSvc_getScmUsage(t *testing.T) {
 // 					Controllers: scanCtrlrs,
 // 				}
 // 			}
-// 			gotErr := cs.checkCfgBdevs(tc.inScanResp)
+// 			gotErr := cs.checkCfgBdevsExist(tc.inScanResp)
 // 			common.CmpErr(t, tc.expErr, gotErr)
 // 			if tc.expErr != nil {
 // 				return

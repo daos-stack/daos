@@ -226,17 +226,18 @@ type (
 		Scan(BdevScanRequest) (*BdevScanResponse, error)
 		Prepare(BdevPrepareRequest) (*BdevPrepareResponse, error)
 		Format(BdevFormatRequest) (*BdevFormatResponse, error)
+		WriteNvmeConfig(BdevWriteNvmeConfigRequest) (*BdevWriteNvmeConfigResponse, error)
 		QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error)
 		UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error)
-		WriteNvmeConfig(BdevWriteNvmeConfigRequest) (*BdevWriteNvmeConfigResponse, error)
 	}
 
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList  []string
-		EnableVMD   bool
-		BypassCache bool
+		DeviceList    []string
+		EngineStorage map[uint32]*Config // to validate against
+		VMDEnabled    bool
+		BypassCache   bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.
@@ -276,8 +277,9 @@ type (
 		Properties BdevTierProperties
 		OwnerUID   int
 		OwnerGID   int
-		EnableVMD  bool
+		VMDEnabled bool
 		Hostname   string
+		BdevCache  *BdevScanResponse
 	}
 
 	// BdevWriteNvmeConfigRequest defines the parameters for a WriteConfig operation.
@@ -287,7 +289,9 @@ type (
 		OwnerUID         int
 		OwnerGID         int
 		TierProps        []BdevTierProperties
+		VMDEnabled       bool
 		Hostname         string
+		BdevCache        *BdevScanResponse
 	}
 
 	// BdevWriteNvmeConfigResponse contains the result of a WriteConfig operation.
@@ -369,6 +373,7 @@ func NewBdevForwarder(log logging.Logger) *BdevForwarder {
 
 type BdevAdminForwarder struct {
 	pbin.Forwarder
+	vmdEnabled bool
 }
 
 func NewBdevAdminForwarder(log logging.Logger) *BdevAdminForwarder {
@@ -381,6 +386,7 @@ func NewBdevAdminForwarder(log logging.Logger) *BdevAdminForwarder {
 
 func (f *BdevAdminForwarder) Scan(req BdevScanRequest) (*BdevScanResponse, error) {
 	req.Forwarded = true
+	req.VMDEnabled = f.vmdEnabled
 
 	res := new(BdevScanResponse)
 	if err := f.SendReq("BdevScan", req, res); err != nil {
@@ -397,12 +403,14 @@ func (f *BdevAdminForwarder) Prepare(req BdevPrepareRequest) (*BdevPrepareRespon
 	if err := f.SendReq("BdevPrepare", req, res); err != nil {
 		return nil, err
 	}
+	f.vmdEnabled = res.VMDPrepared
 
 	return res, nil
 }
 
 func (f *BdevAdminForwarder) Format(req BdevFormatRequest) (*BdevFormatResponse, error) {
 	req.Forwarded = true
+	req.VMDEnabled = f.vmdEnabled
 
 	res := new(BdevFormatResponse)
 	if err := f.SendReq("BdevFormat", req, res); err != nil {
@@ -414,10 +422,13 @@ func (f *BdevAdminForwarder) Format(req BdevFormatRequest) (*BdevFormatResponse,
 
 func (f *BdevAdminForwarder) WriteNvmeConfig(req BdevWriteNvmeConfigRequest) (*BdevWriteNvmeConfigResponse, error) {
 	req.Forwarded = true
+	req.VMDEnabled = f.vmdEnabled
+
 	res := new(BdevWriteNvmeConfigResponse)
 	if err := f.SendReq("BdevWriteNvmeConfig", req, res); err != nil {
 		return nil, err
 	}
+
 	return res, nil
 }
 

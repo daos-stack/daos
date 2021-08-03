@@ -27,7 +27,7 @@ type SystemProvider interface {
 
 // Provider provides storage specific capabilities.
 type Provider struct {
-	sync.Mutex
+	sync.RWMutex
 	log           logging.Logger
 	engineIndex   int
 	engineStorage *Config
@@ -250,32 +250,6 @@ func BdevFormatRequestFromConfig(log logging.Logger, cfg *TierConfig) (BdevForma
 	return req, nil
 }
 
-// BdevWriteNvmeConfigRequestFromConfig returns a config write request from
-// a storage config.
-func BdevWriteNvmeConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWriteNvmeConfigRequest, error) {
-	req := BdevWriteNvmeConfigRequest{
-		ConfigOutputPath: cfg.ConfigOutputPath,
-		OwnerUID:         os.Geteuid(),
-		OwnerGID:         os.Getegid(),
-	}
-
-	hn, err := os.Hostname()
-	if err != nil {
-		log.Errorf("get hostname: %s", err)
-		return req, err
-	}
-	req.Hostname = hn
-
-	bdevTiers := cfg.Tiers.BdevConfigs()
-	req.TierProps = make([]BdevTierProperties, 0, len(bdevTiers))
-	for _, tier := range bdevTiers {
-		tierProps := BdevTierPropertiesFromConfig(tier)
-		req.TierProps = append(req.TierProps, tierProps)
-	}
-
-	return req, nil
-}
-
 // BdevTierFormatResult contains details of a format operation result.
 type BdevTierFormatResult struct {
 	Tier   int
@@ -306,6 +280,7 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 			continue
 		}
 
+		req.BdevCache = &p.bdevCache
 		results[i].Result, results[i].Error = p.bdev.Format(req)
 
 		if err := results[i].Error; err != nil {
@@ -320,6 +295,32 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 	return
 }
 
+// BdevWriteNvmeConfigRequestFromConfig returns a config write request from
+// a storage config.
+func BdevWriteNvmeConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWriteNvmeConfigRequest, error) {
+	req := BdevWriteNvmeConfigRequest{
+		ConfigOutputPath: cfg.ConfigOutputPath,
+		OwnerUID:         os.Geteuid(),
+		OwnerGID:         os.Getegid(),
+	}
+
+	hn, err := os.Hostname()
+	if err != nil {
+		log.Errorf("get hostname: %s", err)
+		return req, err
+	}
+	req.Hostname = hn
+
+	bdevTiers := cfg.Tiers.BdevConfigs()
+	req.TierProps = make([]BdevTierProperties, 0, len(bdevTiers))
+	for _, tier := range bdevTiers {
+		tierProps := BdevTierPropertiesFromConfig(tier)
+		req.TierProps = append(req.TierProps, tierProps)
+	}
+
+	return req, nil
+}
+
 // WriteNvmeConfig creates an NVMe config file which describes what devices
 // should be used by a DAOS engine process.
 func (p *Provider) WriteNvmeConfig() error {
@@ -328,6 +329,7 @@ func (p *Provider) WriteNvmeConfig() error {
 		return err
 	}
 
+	req.BdevCache = &p.bdevCache
 	_, err = p.bdev.WriteNvmeConfig(req)
 	return err
 }
@@ -360,9 +362,9 @@ func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierSc
 			BypassCache: direct,
 		}
 
-		p.Lock()
+		p.RLock()
 		bsr, err := scanBdevs(p.log, req, &p.bdevCache, scan)
-		p.Unlock()
+		p.RUnlock()
 		if err != nil {
 			return nil, err
 		}
@@ -428,8 +430,8 @@ func scanBdevs(log logging.Logger, req BdevScanRequest, cachedResp *BdevScanResp
 // ScanBdevs either calls into backend bdev provider to scan SSDs or returns
 // cached results if BypassCache is set to false in the request.
 func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
-	p.Lock()
-	defer p.Unlock()
+	p.RLock()
+	defer p.RUnlock()
 
 	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)
 }
