@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.103
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -472,6 +472,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Mon Aug 2 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.103-6
+- Move daos_metrics tool from tests package to server package
+
 * Mon Jul 19 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-5
 - Add DAOS serialization library that requires hdf5
 
