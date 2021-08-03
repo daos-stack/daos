@@ -104,7 +104,7 @@ int
 main(int argc, char **argv)
 {
 	int			rc, num_keys, i, j;
-	uint64_t		*keys;
+	uint64_t		*keys = NULL;
 	struct daos_llink	*link_ret[3] = {NULL};
 	struct daos_lru_cache	*tcache = NULL;
 	int			csize;
@@ -126,6 +126,12 @@ main(int argc, char **argv)
 				   &tcache);
 	if (rc)
 		D_ASSERTF(0, "Error in creating lru cache\n");
+
+	if (num_keys < 0 || num_keys > INT_MAX) {
+		rc = -DER_INVAL;
+		D_ERROR("Invalid number of keys\n");
+		D_GOTO(exit, rc);
+	}
 
 	D_ALLOC_ARRAY(keys, (num_keys + 2));
 	if (keys == NULL)
