@@ -42,9 +42,9 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                     #Detail for each test io metrics threshold to be updated
                     if m_data[host][name] < threshold:
                         self.log.info(
-                            "#Host %s, test io metrics %s, value %s "
-                            "less than the threshold limit %s".format(
-                                host, name, m_data[host][name], threshold))
+                            "#Host %s, metrics %s, value %s "
+                            "less than the threshold limit %s", 
+                            host, name, m_data[host][name], threshold)
                         status = 1
             if status == 1:
                 self.fail("##Telemetry test io metrics verification failed.")
