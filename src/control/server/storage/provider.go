@@ -42,14 +42,8 @@ func DefaultProvider(log logging.Logger, idx int, engineStorage *Config) *Provid
 	if engineStorage == nil {
 		engineStorage = new(Config)
 	}
-	return &Provider{
-		log:           log,
-		engineIndex:   idx,
-		engineStorage: engineStorage,
-		Sys:           system.DefaultProvider(),
-		Scm:           NewScmForwarder(log),
-		bdev:          NewBdevForwarder(log),
-	}
+	return NewProvider(log, idx, engineStorage, system.DefaultProvider(),
+		NewScmForwarder(log), NewBdevForwarder(log))
 }
 
 // GetScmConfig returns the only SCM tier config.

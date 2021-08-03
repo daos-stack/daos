@@ -31,12 +31,13 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		)
 	}
 
-	// share sys provider between engines to be able to access to same config instance
-	sp := scm.NewMockSysProvider(smsc)
+	// share sys provider between engines to be able to access to same mock config data
+	sp := scm.NewMockSysProvider(log, smsc)
 
 	cs := &ControlService{
-		StorageControlService: *NewMockStorageControlService(log,
-			cfg.Engines, sp, scm.NewMockProvider(log, smbc, smsc),
+		StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
+			sp,
+			scm.NewProvider(log, scm.NewMockBackend(smbc), sp),
 			bdev.NewMockProvider(log, bmbc)),
 		harness: &EngineHarness{
 			log: log,
@@ -51,7 +52,7 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		runner := engine.NewTestRunner(trc, ec)
 
 		sp := storage.MockProvider(log, 0, &ec.Storage, sp,
-			scm.NewMockProvider(log, smbc, smsc),
+			scm.NewProvider(log, scm.NewMockBackend(smbc), sp),
 			bdev.NewMockProvider(log, bmbc))
 		ei := NewEngineInstance(log, sp, nil, runner)
 		ei.setSuperblock(&Superblock{

@@ -46,6 +46,7 @@ type (
 	// MockSysProvider gives a mock SystemProvider implementation.
 	MockSysProvider struct {
 		sync.RWMutex
+		log       logging.Logger
 		cfg       MockSysConfig
 		isMounted mountMap
 	}
@@ -55,9 +56,6 @@ func (mm *mountMap) Set(mount string, mounted bool) {
 	mm.Lock()
 	defer mm.Unlock()
 
-	if mm.mounted == nil {
-		mm.mounted = make(map[string]bool)
-	}
 	mm.mounted[mount] = mounted
 }
 
@@ -142,23 +140,26 @@ func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
 	return nil, msp.cfg.statErrors[path]
 }
 
-func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
+func NewMockSysProvider(log logging.Logger, cfg *MockSysConfig) *MockSysProvider {
 	if cfg == nil {
 		cfg = &MockSysConfig{}
 	}
 	if cfg.statErrors == nil {
 		cfg.realStat = true
 	}
-	return &MockSysProvider{
+	msp := &MockSysProvider{
+		log: log,
 		cfg: *cfg,
 		isMounted: mountMap{
 			mounted: make(map[string]bool),
 		},
 	}
+	log.Debugf("creating MockSysProvider with cfg: %+v", msp.cfg)
+	return msp
 }
 
-func DefaultMockSysProvider() *MockSysProvider {
-	return NewMockSysProvider(nil)
+func DefaultMockSysProvider(log logging.Logger) *MockSysProvider {
+	return NewMockSysProvider(log, nil)
 }
 
 // MockBackendConfig specifies behavior for a mock SCM backend
@@ -244,9 +245,9 @@ func DefaultMockBackend() *MockBackend {
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *MockSysConfig) *Provider {
-	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc))
+	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(log, msc))
 }
 
 func DefaultMockProvider(log logging.Logger) *Provider {
-	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider())
+	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider(log))
 }

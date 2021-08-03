@@ -36,11 +36,11 @@ func (ei *EngineInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
 func (ei *EngineInstance) MountScm() error {
-	isMount, err := ei.storage.ScmIsMounted()
+	isMounted, err := ei.storage.ScmIsMounted()
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
 		return errors.WithMessage(err, "failed to check SCM mount")
 	}
-	if isMount {
+	if isMounted {
 		return nil
 	}
 
