@@ -1703,7 +1703,6 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	daos_unparse_ctype(ap->type, type);
 	fprintf(ap->outstream, "Successfully created container %s type %s\n", ap->cont_str, type);
 
-	duns_destroy_attr(&dattr);
 	return 0;
 
 err_rc:
@@ -2899,7 +2898,6 @@ dm_connect(struct cmd_args_s *ap,
 				D_GOTO(err_dst_root, rc = daos_errno2der(rc));
 			}
 			uuid_copy(ca->dst_c_uuid, dattr.da_cuuid);
-			duns_destroy_attr(&dattr);
 		}
 		/* try to open container if this is a filesystem copy,
 		 * and if it fails try to create a destination,
