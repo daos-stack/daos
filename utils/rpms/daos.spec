@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.103
-Release:       6%{?relval}%{?dist}
+Version:       1.3.104
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -472,8 +472,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Wed Aug 04 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.103-6
+* Wed Aug 04 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.104-2
 - Update to spdk 21.07 and (indirectly) dpdk 21.05
+
+* Mon Aug 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.104-1
+- Version bump to 1.3.104 for 2.0 test build 4
 
 * Mon Jul 19 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-5
 - Add DAOS serialization library that requires hdf5

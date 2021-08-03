@@ -17,6 +17,7 @@ message NotifyReadyReq {
 	string drpcListenerSock = 3; // Path to I/O Engine's dRPC listener socket
 	uint32 instanceIdx = 4; // I/O Engine instance index
 	uint32 ntgts = 5; // number of VOS targets allocated in I/O Engine
+	uint64 incarnation = 6; // HLC incarnation number
 }
 
 // NotifyReadyResp is nil.
