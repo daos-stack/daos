@@ -1093,7 +1093,9 @@ fs_op_hdlr(struct cmd_args_s *ap)
 				D_GOTO(out, rc = ENOMEM);
 		} else {
 			ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+			uuid_unparse(ap->p_uuid, ap->pool_str);
 			ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+			uuid_unparse(ap->c_uuid, ap->cont_str);
 		}
 
 		rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RW, &ap->pool,
@@ -1206,6 +1208,7 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		duns_destroy_attr(&dattr);
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+		uuid_unparse(ap->p_uuid, ap->pool_str);
 	}
 
 	rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RW, &ap->pool, NULL, NULL);
@@ -1222,8 +1225,10 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* for container lookup ops: if no path specified,
 	 * require --cont
 	 */
-	if ((op != CONT_CREATE) && (ap->path == NULL))
+	if ((op != CONT_CREATE) && (ap->path == NULL)) {
 		ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+		uuid_unparse(ap->c_uuid, ap->cont_str);
+	}
 
 	/* container create scenarios (generate UUID if necessary):
 	 * 1) both --cont, --path : uns library will use specified c_uuid.
