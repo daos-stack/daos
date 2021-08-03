@@ -2075,6 +2075,14 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 		D_GOTO(out_map_version, rc);
 	}
 
+	rc = ds_sec_pool_get_origin(&in->pci_cred, &machine);
+
+	if (rc != 0) {
+		D_ERROR(DF_UUID": unable to retrieve origin error: "DF_RC"\n",
+			DP_UUID(in->pci_op.pi_uuid),DP_RC(rc));
+		D_GOTO(out_map_version, rc);
+	}
+
 	if (!ds_sec_pool_can_connect(sec_capas)) {
 		D_ERROR(DF_UUID": permission denied for connect attempt for "
 			DF_X64"\n", DP_UUID(in->pci_op.pi_uuid),
