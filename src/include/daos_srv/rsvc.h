@@ -127,6 +127,8 @@ struct ds_rsvc {
 
 int ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id,
 		       uuid_t db_uuid);
+int ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id);
+
 int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 		  bool create, size_t size, d_rank_list_t *replicas, void *arg);
 int ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy);

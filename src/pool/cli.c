@@ -1481,6 +1481,7 @@ create_map_refresh_rpc(struct dc_pool *pool, unsigned int map_version,
 
 	ep.ep_grp = group;
 	ep.ep_rank = rank;
+	ep.ep_tag = 0;
 
 	rc = pool_req_create(ctx, &ep, POOL_TGT_QUERY_MAP, &c);
 	if (rc != 0) {

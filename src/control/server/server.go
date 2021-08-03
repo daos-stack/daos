@@ -335,6 +335,8 @@ func (srv *server) registerEvents() {
 		srv.log.Infof("MS leader running on %s", srv.hostname)
 		srv.mgmtSvc.startJoinLoop(ctx)
 		registerLeaderSubscriptions(srv)
+		srv.log.Debugf("requesting sync GroupUpdate after leader change")
+		srv.mgmtSvc.reqGroupUpdate(ctx, true)
 		return nil
 	})
 	srv.sysdb.OnLeadershipLost(func() error {

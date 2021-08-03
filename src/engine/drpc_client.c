@@ -161,11 +161,17 @@ drpc_notify_ready(void)
 	uint8_t		       *reqb;
 	size_t			reqb_size;
 	Drpc__Response	       *dresp;
+	uint64_t		incarnation;
 	int			rc;
 
 	rc = crt_self_uri_get(0 /* tag */, &req.uri);
 	if (rc != 0)
 		goto out;
+	rc = crt_self_incarnation_get(&incarnation);
+	if (rc != 0)
+		goto out_uri;
+
+	req.incarnation = incarnation;
 	req.nctxs = DSS_CTX_NR_TOTAL;
 	/* Do not free, this string is managed by the dRPC listener */
 	req.drpclistenersock = drpc_listener_socket_path;
