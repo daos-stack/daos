@@ -493,18 +493,18 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 		return nil, errors.Wrapf(err, "lookup on local host")
 	}
 
-	if err := sb.script.Prepare(req); err != nil {
-		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
-	}
-
 	if !req.DisableVMD {
 		// If VMD has been explicitly enabled and there are VMD enabled
-		// NVMe devices on the host, attempt to prepare them.
+		// NVMe devices on the host, attempt to prepare them first.
 		vmdPrepared, err := sb.vmdPrep(req, vmdDetect)
 		if err != nil {
 			return nil, err
 		}
 		resp.VmdPrepared = vmdPrepared
+	}
+
+	if err := sb.script.Prepare(req); err != nil {
+		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
 	}
 
 	if !req.DisableCleanHugePages {
