@@ -54,8 +54,9 @@ struct duns_attr_t {
 	uuid_t			da_puuid;
 	/** IN/OUT: (Deprecated) Optional UUID of the cont to be created in duns_create_path().
 	 *
-	 * The UUID will be used to create the container in duns_create_path() if set. The cont UUID
-	 * or label is returned as a string in \a da_cont with duns_resolve_path().
+	 * The UUID will be used to create the container in duns_create_path() if set, otherwise a
+	 * random one will be generated. The cont UUID or label is returned as a string in \a
+	 * da_cont with duns_resolve_path().
 	 */
 	uuid_t			da_cuuid;
 	/** IN/OUT: Container layout (POSIX, HDF5) */

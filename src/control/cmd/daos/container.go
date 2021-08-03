@@ -560,7 +560,11 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 			cmd.ContainerID())
 	}
 
-	cmd.log.Infof("Successfully destroyed container %s", cmd.ContainerID())
+	if cmd.ContainerID().Empty() {
+		cmd.log.Infof("Successfully destroyed container %s", cmd.Path)
+	} else {
+		cmd.log.Infof("Successfully destroyed container %s", cmd.ContainerID())
+	}
 
 	return nil
 }

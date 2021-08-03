@@ -726,7 +726,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		return EINVAL;
 	}
 
-	path_len = strlen(path);
+	path_len = strnlen(path, PATH_MAX);
 
 	if (attrp->da_no_prefix || attrp->da_flags & DUNS_NO_PREFIX)
 		no_prefix = true;
