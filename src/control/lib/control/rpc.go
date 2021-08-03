@@ -34,8 +34,33 @@ const (
 	maxMSCandidates    = 5
 )
 
+type (
+	safeRandSource struct {
+		sync.Mutex
+		src rand.Source
+	}
+)
+
+func (srs *safeRandSource) Int63() int64 {
+	srs.Lock()
+	defer srs.Unlock()
+	return srs.src.Int63()
+}
+
+func (srs *safeRandSource) Seed(seed int64) {
+	srs.Lock()
+	defer srs.Unlock()
+	srs.src.Seed(seed)
+}
+
+func newSafeRandSource(seed int64) *safeRandSource {
+	return &safeRandSource{
+		src: rand.NewSource(seed),
+	}
+}
+
 var (
-	msCandidateRandSource = rand.NewSource(time.Now().UnixNano())
+	msCandidateRandSource = newSafeRandSource(time.Now().UnixNano())
 )
 
 type (
