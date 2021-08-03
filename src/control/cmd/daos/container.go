@@ -620,7 +620,7 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	rows := []txtfmt.TableRow{
 		{"Container UUID": ci.ContainerUUID.String()},
 	}
-	if ci.ContainerLabel != "" {
+	if ci.ContainerLabel != "" && ci.ContainerLabel != "container_label_not_set" {
 		rows = append(rows, txtfmt.TableRow{"Container Label": ci.ContainerLabel})
 	}
 	rows = append(rows, txtfmt.TableRow{"Container Type": ci.Type})
