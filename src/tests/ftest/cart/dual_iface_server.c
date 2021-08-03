@@ -576,6 +576,7 @@ int main(int argc, char **argv)
 	printf("----------------------------------------\n\n");
 
 	/* Spawn 2 servers, each one reads and writes URIs into diff file */
+	umask(600);
 	fd0 = mkstemp(tmp_file0);
 	fd1 = mkstemp(tmp_file1);
 
