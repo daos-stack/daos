@@ -197,7 +197,7 @@ class EvictTests(TestWithServers):
 
         pool[-1].dmg.exit_status_exception = False
         pool[-1].evict()
-        if pool.dmg.result.exit_status != 0:
+        if pool[-1].dmg.result.exit_status != 0:
             self.fail("Pool evict failed!")
         pool[-1].dmg.exit_status_exception = True
 

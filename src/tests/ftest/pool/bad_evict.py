@@ -59,14 +59,14 @@ class BadEvictTest(TestWithServers):
         # trash the UUID value in various ways
         if excludeuuid is None:
             saveduuid = (ctypes.c_ubyte * 16)(0)
-            for item in range(0, len(saveduuid)):
-                saveduuid[item] = self.pool.pool.uuid[item]
+            for index, _ in enumerate(saveduuid):
+                saveduuid[index] = self.pool.pool.uuid[index]
             self.pool.pool.uuid[0:] = \
                 [0 for item in range(0, len(self.pool.pool.uuid))]
         elif excludeuuid == 'JUNK':
             saveduuid = (ctypes.c_ubyte * 16)(0)
-            for item in range(0, len(saveduuid)):
-                saveduuid[item] = self.pool.pool.uuid[item]
+            for index, _ in enumerate(saveduuid):
+                saveduuid[index] = self.pool.pool.uuid[index]
             self.pool.pool.uuid[4] = 244
 
         self.pool.uuid = self.pool.pool.get_uuid_str()
