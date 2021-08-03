@@ -180,9 +180,9 @@ open_retry:
 		rc = dc_obj_shard_open(obj, oid, obj->cob_mode, obj_shard);
 		if (rc)
 			D_GOTO(unlock, rc);
-	}
 
-	if (rc == 0) {
+		*shard_ptr = obj_shard;
+	} else {
 		/* hold the object shard */
 		obj_shard_addref(obj_shard);
 		*shard_ptr = obj_shard;
@@ -367,6 +367,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 		obj_shard = &obj->cob_shards->do_shards[i];
 		obj_shard->do_shard = layout->ol_shards[i].po_shard;
+		obj_shard->do_shard_idx = i;
 		obj_shard->do_target_id = layout->ol_shards[i].po_target;
 		obj_shard->do_fseq = layout->ol_shards[i].po_fseq;
 		obj_shard->do_rebuilding = layout->ol_shards[i].po_rebuilding;
@@ -5610,6 +5611,8 @@ out:
 			if (dova[i].list_buf != dova[i].inline_buf)
 				D_FREE(dova[i].list_buf);
 
+			daos_iov_free(&dova[i].cursor.dkey);
+			daos_iov_free(&dova[i].cursor.iod.iod_name);
 			D_FREE(dova[i].fetch_buf);
 		}
 
