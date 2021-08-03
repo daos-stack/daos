@@ -194,11 +194,11 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	// TODO: enable per-instance formatting
 	formatting := 0
-	for _, srv := range instances {
+	for _, ei := range instances {
 		formatting++
-		go func(s Engine) {
-			scmChan <- s.StorageFormatSCM(ctx, req.Reformat)
-		}(srv)
+		go func(e Engine) {
+			scmChan <- e.StorageFormatSCM(ctx, req.Reformat)
+		}(ei)
 	}
 
 	instanceErrored := make(map[uint32]bool)
@@ -217,20 +217,20 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 
 	var err error
 	// TODO: perform bdev format in parallel
-	for _, srv := range instances {
-		if instanceErrored[srv.Index()] {
+	for _, ei := range instances {
+		if instanceErrored[ei.Index()] {
 			// if scm errored, indicate skipping bdev format
-			ret := srv.newCret("", nil)
-			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, srv.Index())
+			ret := ei.newCret("", nil)
+			ret.State.Info = fmt.Sprintf(msgNvmeFormatSkip, ei.Index())
 			resp.Crets = append(resp.Crets, ret)
 			continue
 		}
 		// SCM formatted correctly on this instance, format NVMe
-		cResults := srv.StorageFormatNVMe()
+		cResults := ei.StorageFormatNVMe()
 		if cResults.HasErrors() {
-			instanceErrored[srv.Index()] = true
+			instanceErrored[ei.Index()] = true
 		} else {
-			err = srv.StorageWriteNvmeConfig()
+			err = ei.StorageWriteNvmeConfig()
 		}
 		resp.Crets = append(resp.Crets, cResults...)
 	}
@@ -240,12 +240,12 @@ func (c *ControlService) StorageFormat(ctx context.Context, req *ctlpb.StorageFo
 	// VFIO device or resource busy when starting I/O Engines
 	// because devices have already been claimed during format.
 	// TODO: supply allowlist of instance.Devs to init() on format.
-	for _, srv := range instances {
-		if instanceErrored[srv.Index()] {
-			c.log.Errorf(msgFormatErr, srv.Index())
+	for _, ei := range instances {
+		if instanceErrored[ei.Index()] {
+			c.log.Errorf(msgFormatErr, ei.Index())
 			continue
 		}
-		srv.NotifyStorageReady()
+		ei.NotifyStorageReady()
 	}
 
 	return resp, err

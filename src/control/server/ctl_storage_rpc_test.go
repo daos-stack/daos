@@ -311,9 +311,9 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 
 			cs := mockControlService(t, log, sCfg, tc.bmbc, tc.smbc, nil)
-			for _, srv := range cs.harness.instances {
+			for _, ei := range cs.harness.instances {
 				// tests are for pre-engine-start scenario
-				srv.(*EngineInstance).ready.SetFalse()
+				ei.(*EngineInstance).ready.SetFalse()
 			}
 
 			// TODO DAOS-8040: re-enable VMD
@@ -1548,7 +1548,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			}
 
 			for i, e := range instances {
-				srv := e.(*EngineInstance)
+				ei := e.(*EngineInstance)
 				root := filepath.Dir(tc.sMounts[i])
 				if tc.scmMounted {
 					root = tc.sMounts[i]
@@ -1559,7 +1559,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {
-					if err := srv.createSuperblock(false); err != nil {
+					if err := ei.createSuperblock(false); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -1567,9 +1567,9 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
 					trc.Running.SetTrue()
-					srv.ready.SetTrue()
+					ei.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, config.Engines[i])
+				ei.runner = engine.NewTestRunner(trc, config.Engines[i])
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -1580,11 +1580,11 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 			awaitCh := make(chan error)
 			inflight := 0
-			for _, srv := range instances {
+			for _, ei := range instances {
 				inflight++
-				go func(s *EngineInstance) {
-					awaitCh <- s.awaitStorageReady(ctx, tc.recreateSBs)
-				}(srv.(*EngineInstance))
+				go func(e *EngineInstance) {
+					awaitCh <- e.awaitStorageReady(ctx, tc.recreateSBs)
+				}(ei.(*EngineInstance))
 			}
 
 			awaitingFormat := make(chan struct{})
@@ -1592,8 +1592,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			go func(ctxIn context.Context) {
 				for {
 					ready := true
-					for _, srv := range instances {
-						if !srv.(*EngineInstance).isAwaitingFormat() {
+					for _, ei := range instances {
+						if !ei.(*EngineInstance).isAwaitingFormat() {
 							ready = false
 						}
 					}
