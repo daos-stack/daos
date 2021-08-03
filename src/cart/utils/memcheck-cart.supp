@@ -370,19 +370,3 @@
    fun:HG_Init_opt
    ...
 }
-{
-   hg_dlog_mkcount32
-   Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:malloc
-   fun:hg_dlog_mkcount32
-   obj:/usr/lib64/libna.so.2.0.1
-   fun:NA_Initialize_opt
-   obj:/usr/lib64/libmercury.so.2.0.1
-   fun:HG_Core_init_opt
-   fun:HG_Init_opt
-   obj:/usr/lib64/libcart.so.4.9.0
-   fun:crt_hg_ctx_init
-   fun:crt_context_provider_create
-   ...
-}
