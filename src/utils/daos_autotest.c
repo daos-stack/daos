@@ -19,6 +19,8 @@
 #include <daos/common.h>
 
 #include "daos_hdlr.h"
+#include <dirent.h>
+#include <fcntl.h>
 
 /** Input arguments passed to daos utility */
 struct cmd_args_s *autotest_ap;
@@ -118,10 +120,74 @@ step_init(void)
 }
 
 static int
+agent(void)
+{
+	int rc = 0;
+	/** Check for running daos_agent process */
+	DIR *dir;
+	struct dirent *ent;
+	char *dirpath = NULL;
+	char *fullpath = NULL;
+	char *path = "/proc";
+	char *needle = "daos_agent";	
+	char *readbuf = malloc(1024);
+	bool found = false;
+	FILE *fp;
+	dir = opendir(path);
+	if (dir == NULL) {
+		if (errno == ENOENT)
+			D_GOTO(out, rc);
+		D_ERROR("can't open directory %s, %d (%s)",
+			path, errno, strerror(errno));
+		D_GOTO(out, rc = daos_errno2der(errno));
+	}
+	
+	while ((ent = readdir(dir)) != NULL) {
+		if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
+                	continue;
+
+		D_ASPRINTF(dirpath, "%s/%s", path, ent->d_name);
+
+		if (ent->d_type == DT_DIR) {
+			D_ASPRINTF(fullpath, "%s/%s", dirpath, "comm");
+			if (access(fullpath, F_OK) == 0) {
+				fp = fopen(fullpath,"r");
+				rc = fscanf(fp, "%s", readbuf);
+				if (strcmp(needle, readbuf) == 0) {
+					found = true;
+					fclose(fp);
+					rc = 0;
+					break;
+				}
+				fclose(fp);
+			} 
+		}
+	}
+	
+	if (!found) {
+		errno = ESRCH;
+		D_ERROR("can't find daos_agent pid, %d (%s)",
+			errno, strerror(errno));
+		D_GOTO(out, rc = 1);
+	}
+
+out:
+	D_FREE(dirpath);
+	D_FREE(fullpath);
+	D_FREE(readbuf);
+	if (rc) {
+		step_fail(d_errdesc(rc));
+		return -1;
+	}
+	step_success("");
+	return rc;
+}
+
+static int
 init(void)
 {
 	int rc;
-
+	
 	rc = daos_init();
 	if (rc) {
 		step_fail(d_errdesc(rc));
@@ -806,11 +872,14 @@ struct step {
 };
 
 static struct step steps[] = {
+	/** Pre-test checks */
+	{ 0,	"Checking daos_agent pid",	agent,		100 },
+
 	/** Set up */
-	{ 0,	"Initializing DAOS",		init ,		100 },
-	{ 1,	"Connecting to pool",		pconnect,	99 },
-	{ 2,	"Creating container",		ccreate,	98 },
-	{ 3,	"Opening container",		copen,		97 },
+	{ 1,	"Initializing DAOS",		init ,		100 },
+	{ 2,	"Connecting to pool",		pconnect,	99 },
+	{ 3,	"Creating container",		ccreate,	98 },
+	{ 4,	"Opening container",		copen,		97 },
 
 	/** Layout generation tests */
 	{ 10,	"Generating 1M S1 layouts",	oS1,		96 },
