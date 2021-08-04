@@ -86,11 +86,9 @@ class PosixSimul(DfuseTestBase):
 
         if "centos" in host_os:
             simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul",
-                          "mpich": "/usr/lib64/mpich/bin/simul"
                           }
         elif "suse" in host_os:
             simul_dict = {"openmpi": "/usr/lib64/mpi/gcc/openmpi3/bin/simul",
-                          "mpich": "/usr/lib64/mpi/gcc/mpich/bin/simul"
                           }
         else:
             print(host_os)
@@ -105,7 +103,7 @@ class PosixSimul(DfuseTestBase):
             self.log.info("Create container")
             self.add_container(self.pool)
 
-        self.start_dfuse(self.hostlist_servers, self.pool, self.container)
+        self.start_dfuse(self.hostfile_clients, self.pool, self.container)
         self.dfuse.check_running()
 
         for mpi, simul in simul_dict.items():
