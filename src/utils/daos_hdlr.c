@@ -2307,8 +2307,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 			 * so break out of the while loop.
 			 */
 			break;
-		} 
-		
+		}
+
 		/* Check that the entry is not "src_path"
 		 * or src_path's parent.
 		 */
