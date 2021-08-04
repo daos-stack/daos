@@ -35,7 +35,6 @@ class NvmeFault(ServerFillUp):
         #Set to True to generate the NVMe fault during IO
         self.set_faulty_device = True
 
-    @skipForTicket("DAOS-8080")
     def test_nvme_fault(self):
         """Jira ID: DAOS-4722.
 

@@ -18,7 +18,6 @@ class NvmeHealth(ServerFillUp):
     Test Class Description: To validate NVMe health test cases
     :avocado: recursive
     """
-    @skipForTicket("DAOS-8080")
     def test_monitor_for_large_pools(self):
         """Jira ID: DAOS-4722.
 
