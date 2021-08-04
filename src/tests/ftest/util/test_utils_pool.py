@@ -137,6 +137,29 @@ class TestPool(TestDaosApiBase):
             self.label.update(self.label_generator.get_label(self.label.value))
 
     @property
+    def uuid(self):
+        """Get the pool UUID.
+
+        Returns:
+            str: pool UUID
+
+        """
+        uuid = None
+        if self.pool:
+            uuid = self.pool.get_uuid_str()
+        return uuid
+
+    @uuid.setter
+    def uuid(self, value):
+        """Set the pool UUID.
+
+        Args:
+            value (str): pool UUID
+        """
+        if self.pool:
+            self.pool.set_uuid_str(value)
+
+    @property
     def identifier(self):
         """Get the pool uuid or label.
 
@@ -234,7 +257,6 @@ class TestPool(TestDaosApiBase):
             self.svc_ranks = [
                 int(self.pool.svc.rl_ranks[index])
                 for index in range(self.pool.svc.rl_nr)]
-            self.uuid = self.pool.get_uuid_str()
 
     @fail_on(DaosApiError)
     def connect(self, permission=2):
@@ -296,7 +318,7 @@ class TestPool(TestDaosApiBase):
             if disconnect:
                 self.disconnect()
             if self.pool.attached:
-                self.log.info("Destroying pool %s", self.uuid)
+                self.log.info("Destroying pool %s", self.identifier)
 
                 if self.control_method.value == self.USE_API:
                     raise CommandFailure(
@@ -341,7 +363,7 @@ class TestPool(TestDaosApiBase):
 
         """
         if self.pool:
-            self.log.info("Set-prop for Pool: %s", self.uuid)
+            self.log.info("Set-prop for Pool: %s", self.identifier)
 
             if self.control_method.value == self.USE_DMG and self.dmg:
                 # If specific values are not provided, use the class values
@@ -363,7 +385,8 @@ class TestPool(TestDaosApiBase):
     def evict(self):
         """Evict all pool connections to a DAOS pool."""
         if self.pool:
-            self.log.info("Evict all pool connections for pool: %s", self.uuid)
+            self.log.info(
+                "Evict all pool connections for pool: %s", self.identifier)
 
             if self.control_method.value == self.USE_DMG and self.dmg:
                 self.dmg.pool_evict(self.identifier)
@@ -609,7 +632,6 @@ class TestPool(TestDaosApiBase):
         self.log.info(
             "Rebuild %s detected", "start" if to_start else "completion")
 
-    @fail_on(DaosApiError)
     @fail_on(CommandFailure)
     def exclude(self, ranks, tgt_idx=None):
         """Manually exclude a rank from this pool.
