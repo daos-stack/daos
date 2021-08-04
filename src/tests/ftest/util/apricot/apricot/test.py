@@ -727,6 +727,7 @@ class TestWithServers(TestWithoutServers):
             cart_ctl.cfg_path.value = "."
             cart_ctl.m.value = message
             cart_ctl.n.value = None
+            cart_ctl.use_daos_agent_env.value = "--use_daos_agent_env"
 
             for manager in self.agent_managers:
                 # Fetch attachinfo data from server via the agent
