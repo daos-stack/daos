@@ -494,7 +494,7 @@ dmg_pool_create(const char *dmg_config_file,
 	}
 
 	if (!has_label) {
-		char	label[] = "test_XXXXXX";
+		char	label[] = "/tmp/test_XXXXXX";
 		int	tmp_fd;
 
 		/* pool label is required, generate a unique one randomly */
@@ -505,7 +505,7 @@ dmg_pool_create(const char *dmg_config_file,
 			D_GOTO(out, rc = d_errno2der(errno));
 		}
 
-		args = cmd_push_arg(args, &argcount, "--label=%s ", label);
+		args = cmd_push_arg(args, &argcount, "--label=%s ", &label[5]);
 		if (args == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
