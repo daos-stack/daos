@@ -36,6 +36,20 @@ func defaultBackendWithMockRunner(log logging.Logger) *spdkBackend {
 	return newBackend(log, mockScriptRunner(log))
 }
 
+// Check if VMD devices are present
+func VmdPresent(t *testing.T) bool {
+	t.Helper()
+	vmdDevs, err := detectVMD()
+	if err != nil {
+		return false
+	}
+	if len(vmdDevs) == 0 {
+		return false
+	}
+
+	return true
+}
+
 func TestRunner_Prepare(t *testing.T) {
 	const (
 		testNrHugePages       = 42
@@ -51,6 +65,7 @@ func TestRunner_Prepare(t *testing.T) {
 		mbc    *MockBackendConfig
 		expEnv []string
 		expErr error
+		vmd    bool
 	}{
 		"prepare reset fails": {
 			req: storage.BdevPrepareRequest{
@@ -80,6 +95,18 @@ func TestRunner_Prepare(t *testing.T) {
 				fmt.Sprintf("%s=%s", targetUserEnv, username),
 			},
 		},
+		"defaults with vmd present": {
+			req: storage.BdevPrepareRequest{
+				TargetUser: username,
+				DisableVMD: true,
+			},
+			expEnv: []string{
+				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+				fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
+				fmt.Sprintf("%s=%s", targetUserEnv, username),
+			},
+			vmd: true,
+		},
 		"user-specified values": {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
@@ -96,6 +123,24 @@ func TestRunner_Prepare(t *testing.T) {
 				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
 		},
+		"user-specified values with vmd present": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				DisableCleanHugePages: true,
+				TargetUser:            username,
+				PCIAllowlist:          testPciAllowlist,
+				DisableVFIO:           true,
+				DisableVMD:            true,
+			},
+			expEnv: []string{
+				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+				fmt.Sprintf("%s=%s", targetUserEnv, username),
+				fmt.Sprintf("%s=%s", pciAllowListEnv, testPciAllowlist),
+				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
+			},
+			vmd: true,
+		},
 		"blocklist": {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
@@ -111,6 +156,24 @@ func TestRunner_Prepare(t *testing.T) {
 				fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
 				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 			},
+		},
+		"blocklist with vmd present": {
+			req: storage.BdevPrepareRequest{
+				HugePageCount:         testNrHugePages,
+				DisableCleanHugePages: true,
+				TargetUser:            username,
+				PCIBlocklist:          testPciBlocklist,
+				DisableVFIO:           true,
+				DisableVMD:            true,
+			},
+			expEnv: []string{
+				fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+				fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+				fmt.Sprintf("%s=%s", targetUserEnv, username),
+				fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
+				fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
+			},
+			vmd: true,
 		},
 		"blocklist allowlist fails": {
 			req: storage.BdevPrepareRequest{
@@ -137,6 +200,17 @@ func TestRunner_Prepare(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(name)
 			defer common.ShowBufferOnFailure(t, buf)
+
+			// Need to set DisableVMD=true if VMD devices are present.
+			// By default, provider backend prepare will add VMD addrs
+			// present to PCI_WHITELIST
+			if tc.expErr == nil {
+				// specific VMD tests will be run when VMD devices are
+				// present to avoid skipping all test functionality
+				if tc.vmd != VmdPresent(t) {
+					t.Skip("")
+				}
+			}
 
 			s := &spdkSetupScript{
 				log: log,
