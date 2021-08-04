@@ -494,18 +494,21 @@ dmg_pool_create(const char *dmg_config_file,
 	}
 
 	if (!has_label) {
-		char	label[] = "/tmp/test_XXXXXX";
-		int	tmp_fd;
+		char	 path[] = "/tmp/test_XXXXXX";
+		int	 tmp_fd;
+		char	*label = &path[5];
 
 		/* pool label is required, generate a unique one randomly */
-		tmp_fd = mkstemp(label);
+		tmp_fd = mkstemp(path);
 		if (tmp_fd < 0) {
 			D_ERROR("failed to generate unique label: %s\n",
 				strerror(errno));
 			D_GOTO(out, rc = d_errno2der(errno));
 		}
+		close(tmp_fd);
+		unlink(path);
 
-		args = cmd_push_arg(args, &argcount, "--label=%s ", &label[5]);
+		args = cmd_push_arg(args, &argcount, "--label=%s ", label);
 		if (args == NULL)
 			D_GOTO(out, rc = -DER_NOMEM);
 	}
