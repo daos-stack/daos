@@ -7,9 +7,7 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 """
 
 import enum
-import uuid
 import pickle
-import sys
 
 # pylint: disable=relative-beyond-top-level
 from . import pydaos_shim
@@ -65,18 +63,18 @@ class ObjID():
 class Cont():
     """
     Class representing of DAOS Container
-    Can be identified via a path or a combination of pool UUID and container
-    UUID. DAOS pool and container are opened during the __init__ phase and
-    closed on __del__.
+    Can be identified via a path or a combination of pool label and container
+    label (alternatively, UUID strings are supported too). DAOS pool and
+    container are opened during the __init__ phase and closed on __del__.
 
     Attributes
     ----------
     path : string
         Path for container representation in unified namespace
-    puuid : uuid
-        Pool uuid, parsed via uuid.UUID(puuid)
-    cuuid : uuid
-        Container uuid, parsed via uuid.UUID(cuuid)
+    pool : string
+        Pool label or UUID string
+    cont : string
+        Container label or UUID string
 
     Methods
     -------
@@ -84,9 +82,8 @@ class Cont():
         Generate a new object ID globally unique for this container.
         cid must be on type ObjClassID and identify the object class to use for
         the new object. Upon success, a python object of type ObjID is returned.
-    rootkv(cid = ObjClassID.OC_SX)
+    rootkv()
         Open the container root key-value store.
-        Default object class can be modified but should remain always the same.
         Upon success, a python object of type KVObj is returned.
     newkv(cid = ObjClassID.OC_SX)
         Allocate a new key-value store of class cid.
@@ -95,41 +92,39 @@ class Cont():
         Open an already-allocated object identified by oid of type ObjID.
         Upon success, a python object of type KVObj is returned.
     __str__
-        print pool and container UUIDs
+        print pool and container identifiers
     """
-    def __init__(self, puuid=None, cuuid=None, path=None):
+    def __init__(self, pool=None, cont=None, path=None):
         self._dc = DaosClient()
-        self.coh = None
-        if path is None and (puuid is None or cuuid is None):
+        self._hdl = None
+        if path is None and (pool is None or cont is None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
-        if path != None:
-            self.puuid = None
-            self.cuuid = None
-            (ret, poh, coh) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, 0)
+        if path is not None:
+            self.pool  = None
+            self.cont = None
+            (ret, hdl) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, 0)
         else:
-            self.puuid = uuid.UUID(puuid)
-            self.cuuid = uuid.UUID(cuuid)
-            (ret, poh, coh) = pydaos_shim.cont_open(DAOS_MAGIC, str(puuid),
-                                                    str(cuuid), 0)
+            self.pool  = pool
+            self.cont  = cont
+            (ret, hdl) = pydaos_shim.cont_open(DAOS_MAGIC, pool, cont, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to access container", ret)
-        self.poh = poh
-        self.coh = coh
+        self._hdl = hdl
         self._root_kv = None
 
     def __del__(self):
-        if not self.coh:
+        if not self._hdl:
             return
         self._root_kv = None
-        ret = pydaos_shim.cont_close(DAOS_MAGIC, self.poh, self.coh)
+        ret = pydaos_shim.cont_close(DAOS_MAGIC, self._hdl)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close container", ret)
 
     def genoid(self, cid):
         """Generate a new object ID globally unique for this container."""
 
-        (ret, hi, lo) = pydaos_shim.obj_idgen(DAOS_MAGIC, self.coh, cid.value)
+        (ret, hi, lo) = pydaos_shim.obj_idgen(DAOS_MAGIC, self._hdl, cid.value)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate object identifier", ret)
         return ObjID(hi, lo)
@@ -137,22 +132,22 @@ class Cont():
     def newkv(self, cid=ObjClassID.OC_SX):
         """Allocate a new key-value store of class cid."""
         oid = self.genoid(cid)
-        return KVObj(self.coh, oid, self)
+        return KVObj(self._hdl, oid, self)
 
     def kv(self, oid):
         """Open an already-allocated object identified by oid of type ObjID."""
-        return KVObj(self.coh, oid, self)
+        return KVObj(self._hdl, oid, self)
 
-    def rootkv(self, cid=ObjClassID.OC_SX):
+    def rootkv(self):
         """Open the container root key-value store."""
 
         if self._root_kv:
             return self._root_kv
-        (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, self.coh, cid.value)
+        (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, self._hdl)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to generate root object identifier", ret)
         oid = ObjID(hi, lo)
-        self._root_kv = KVObj(self.coh, oid, self)
+        self._root_kv = KVObj(self._hdl, oid, self)
         return self._root_kv
 
     def get_kv_by_name(self, name, root=None, create=False):
@@ -180,13 +175,13 @@ class Cont():
         return new_kv
 
     def __str__(self):
-        return '{}@{}'.format(self.cuuid, self.puuid)
+        return '{}@{}'.format(self.cont, self.pool)
 
 
 class _Obj():
     oh = None
 
-    def __init__(self, coh, oid, cont):
+    def __init__(self, hdl, oid, cont):
         self._dc = DaosClient()
         self.oid = oid
         # Set self.oh to None here so it's defined in __del__ if there's
@@ -196,7 +191,7 @@ class _Obj():
         self.cont = cont
         # Open to the object
         (ret, oh) = pydaos_shim.kv_open(
-            DAOS_MAGIC, coh, self.oid.hi, self.oid.lo, 0)
+            DAOS_MAGIC, hdl, self.oid.hi, self.oid.lo, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to open object", ret)
         self.oh = oh
@@ -258,8 +253,7 @@ class KVIter():
 
         if len(self._entries) != 0:
             return self._entries.pop()
-        else:
-            raise StopIteration()
+        raise StopIteration()
 # pylint: enable=too-few-public-methods
 
 
@@ -382,6 +376,20 @@ class KVObj(_Obj):
             return True
         except KeyError:
             return False
+
+    def __eq__(self, other):
+        # Not efficient for now. Could use the bulk operation.
+        try:
+            for k in other.keys():
+                if not self.__getitem__(k) == other[k]:
+                    return False
+        except AttributeError:
+            return False
+
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
     def __iter__(self):
         return KVIter(self)
