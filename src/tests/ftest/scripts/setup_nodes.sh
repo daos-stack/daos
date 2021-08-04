@@ -37,6 +37,8 @@
 # THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 set -eux
+# using mmap()'ed ULT stacks requires to bump system default
+sudo sysctl vm.max_map_count=1000000
 # allow core files to be generated
 sudo bash -c "set -ex
 if [ \"\$(ulimit -c)\" != \"unlimited\" ]; then
