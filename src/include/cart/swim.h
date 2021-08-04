@@ -128,6 +128,16 @@ struct swim_ops {
 	 */
 	int (*set_member_state)(struct swim_context *ctx,
 				swim_id_t id, struct swim_member_state *state);
+
+	/**
+	 * Set new incarnation number of a given member.
+	 *
+	 * @param[in]  ctx    SWIM context pointer from swim_init()
+	 * @param[in]  id     member ID
+	 * @param[in]  state  pointer to given member's SWIM state
+	 */
+	void (*new_incarnation)(struct swim_context *ctx,
+				swim_id_t id, struct swim_member_state *state);
 };
 
 /**

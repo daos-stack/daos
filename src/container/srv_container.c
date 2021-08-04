@@ -203,7 +203,8 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	if (rc == -DER_NONEXIST) {
 		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */,
 				     &svc->cs_pool_uuid, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
@@ -218,7 +219,8 @@ ds_cont_svc_step_up(struct cont_svc *svc)
 	if (version < DS_CONT_MD_VERSION_LOW || version > DS_CONT_MD_VERSION) {
 		ds_notify_ras_eventf(RAS_CONT_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */,
 				     &svc->cs_pool_uuid, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,

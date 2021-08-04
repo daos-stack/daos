@@ -20,12 +20,14 @@ message SystemMember {
 	string addr = 1;
 	string uuid = 2;
 	uint32 rank = 3;
-	string state = 4;
-	string fabric_uri = 5;
-	uint32 fabric_contexts = 6;
+	uint64 incarnation = 4;
+	string state = 5;
+	string fabric_uri = 6;
+	uint32 fabric_contexts = 7;
 	// ancillary info e.g. error msg or reason for state change
-	string info = 7;
-	string fault_domain = 8;
+	string info = 8;
+	string fault_domain = 9;
+	string last_update = 10;
 }
 
 // SystemStopReq supplies system shutdown parameters.

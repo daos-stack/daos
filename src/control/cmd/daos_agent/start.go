@@ -83,7 +83,7 @@ func (cmd *startCmd) Execute(_ []string) error {
 		sys:        cmd.cfg.SystemName,
 		ctlInvoker: cmd.ctlInvoker,
 		attachInfo: newAttachInfoCache(cmd.log, aicEnabled),
-		fabricInfo: newLocalFabricCache(cmd.log, ficEnabled),
+		fabricInfo: fabricCache,
 		numaAware:  numaAware,
 		netCtx:     netCtx,
 		monitor:    procmon,

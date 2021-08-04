@@ -96,6 +96,7 @@ type SystemJoinReq struct {
 	NumContexts uint32              `json:"Nctxs"`
 	FaultDomain *system.FaultDomain `json:"SrvFaultDomain"`
 	InstanceIdx uint32              `json:"Idx"`
+	Incarnation uint64              `json:"Incarnation"`
 }
 
 // MarshalJSON packs SystemJoinResp struct into a JSON message.
@@ -136,6 +137,9 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	req.retryTestFn = func(err error, _ uint) bool {
 		switch {
 		case IsConnectionError(err), system.IsUnavailable(err):
+			return true
+		}
+		if err == errNoMsResponse {
 			return true
 		}
 		return false
