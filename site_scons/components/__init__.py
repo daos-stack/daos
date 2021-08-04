@@ -314,7 +314,7 @@ def define_components(reqs):
                 retriever=retriever,
                 commands=['./configure --prefix="$SPDK_PREFIX"'                \
                           ' --disable-tests --disable-unit-tests '             \
-                          ' --disable-examples --disable-apps --without-vhost '\
+                          ' --disable-apps --without-vhost '                   \
                           ' --without-crypto --without-pmdk --without-rbd '    \
                           ' --with-rdma --without-iscsi-initiator '            \
                           ' --without-isal --without-vtune --with-shared',
