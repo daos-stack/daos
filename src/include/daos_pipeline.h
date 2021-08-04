@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+
 #ifndef __DAOS_PIPE_H__
 #define __DAOS_PIPE_H__
 
