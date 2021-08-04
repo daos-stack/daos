@@ -194,11 +194,14 @@ class EvictTests(TestWithServers):
             container[count].create()
             container[count].write_objects(target_list[-1])
 
-        pool[-1].dmg.exit_status_exception = False
-        pool[-1].evict()
+        try:
+            pool[-1].dmg.exit_status_exception = False
+            pool[-1].evict()
+        finally:
+            pool[-1].dmg.exit_status_exception = True
+
         if pool[-1].dmg.result.exit_status != 0:
             self.fail("Pool evict failed!")
-        pool[-1].dmg.exit_status_exception = True
 
         for count in range(len(tlist)):
             # Commented out due to DAOS-3836.

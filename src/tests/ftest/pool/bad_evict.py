@@ -51,9 +51,6 @@ class BadEvictTest(TestWithServers):
         self.add_pool(connect=False)
         original_test_pool_uuid = self.pool.uuid
 
-        # Make dmg call and poolevict() not fail.
-        self.pool.dmg.exit_status_exception = False
-
         # trash the UUID value in various ways
         if excludeuuid is None:
             saveduuid = (ctypes.c_ubyte * 16)(0)
@@ -69,9 +66,14 @@ class BadEvictTest(TestWithServers):
 
         self.pool.uuid = self.pool.pool.get_uuid_str()
 
-        self.pool.use_label = False
-        self.pool.evict()
-        self.pool.use_label = True
+        try:
+            # Make dmg call and poolevict() not fail.
+            self.pool.dmg.exit_status_exception = False
+            self.pool.use_label = False
+            self.pool.evict()
+        finally:
+            self.pool.use_label = True
+            self.pool.dmg.exit_status_exception = True
 
         exit_status = self.pool.dmg.result.exit_status
         if exit_status == 0 and expected_result in ['FAIL']:
