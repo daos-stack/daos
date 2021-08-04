@@ -472,7 +472,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Tue Aug 3 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.104-3
+* Wed Aug 04 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.104-3
 - Move daos_metrics tool from tests package to server package
 
 * Wed Aug 04 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.104-2
