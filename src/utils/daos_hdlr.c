@@ -1919,12 +1919,12 @@ static int
 file_write(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 	   const char *file, void *buf, daos_size_t *size)
 {
-	int		rc = 0;
-	daos_size_t	write_size;
+	int rc = 0;
 
 	if (file_dfs->type == POSIX) {
-		write_size = write(file_dfs->fd, buf, *size);
-		*size = write_size;
+		*size = write(file_dfs->fd, buf, *size);
+		if (*size < 0)
+			rc = errno;
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_write(file_dfs->dfs_sys, file_dfs->obj, buf, file_dfs->offset,
 				   size, NULL);
@@ -1934,11 +1934,6 @@ file_write(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 	} else {
 		rc = EINVAL;
 		DH_PERROR_SYS(ap, rc, "File type not known '%s' type=%d", file, file_dfs->type);
-	}
-	if (*size < 0) {
-		if (file_dfs->type == POSIX)
-			rc = errno;
-		DH_PERROR_SYS(ap, rc, "write error on '%s' type=%d", file, file_dfs->type);
 	}
 	return rc;
 }
@@ -2082,12 +2077,13 @@ static int
 file_read(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 	  const char *file, void *buf, daos_size_t *size)
 {
-	int	    rc = 0;
-	daos_size_t read_size;
+	int rc = 0;
 
 	if (file_dfs->type == POSIX) {
-		read_size = read(file_dfs->fd, buf, *size);
-		*size = read_size;
+		*size = read(file_dfs->fd, buf, *size);
+		if (*size < 0) {
+			rc = errno;
+		}
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_read(file_dfs->dfs_sys, file_dfs->obj, buf, file_dfs->offset,
 				  size, NULL);
@@ -2095,12 +2091,8 @@ file_read(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 			/* update file pointer with number of bytes read */
 			file_dfs->offset += (daos_off_t)*size;
 	} else {
+		rc = EINVAL;
 		DH_PERROR_SYS(ap, rc, "File type not known '%s' type=%d", file, file_dfs->type);
-	}
-	if (*size < 0) {
-		if (file_dfs->type == POSIX)
-			rc = errno;
-		DH_PERROR_SYS(ap, rc, "read error on '%s' type=%d", file, file_dfs->type);
 	}
 	return rc;
 }
@@ -2220,6 +2212,7 @@ fs_copy_file(struct cmd_args_s *ap,
 		rc = file_read(ap, src_file_dfs, src_path, buf, &left_to_read);
 		if (rc != 0) {
 			rc = daos_errno2der(rc);
+			DH_PERROR_DER(ap, rc, "File read failed");
 			D_GOTO(out_buf, rc);
 		}
 		daos_size_t bytes_to_write = left_to_read;
@@ -2227,6 +2220,7 @@ fs_copy_file(struct cmd_args_s *ap,
 		rc = file_write(ap, dst_file_dfs, dst_path, buf, &bytes_to_write);
 		if (rc != 0) {
 			rc = daos_errno2der(rc);
+			DH_PERROR_DER(ap, rc, "File write failed");
 			D_GOTO(out_buf, rc);
 		}
 		total_bytes += left_to_read;
