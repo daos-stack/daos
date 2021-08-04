@@ -5,7 +5,6 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from general_utils import stop_processes
 import random
 import socket
 import time
