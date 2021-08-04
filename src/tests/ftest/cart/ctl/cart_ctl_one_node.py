@@ -18,7 +18,7 @@ class CartCtlOneNodeTest(CartTest):
         """Test CaRT ctl.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cart,ctl,one_node
+        :avocado: tags=cart,ctl,one_node,memcheck
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 

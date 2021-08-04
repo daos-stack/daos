@@ -19,7 +19,7 @@ class CartNoPmixLauncherOneNodeTest(CartTest):
         """Test CaRT NoPmix Launcher.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cart,no_pmix_launcher,one_node
+        :avocado: tags=cart,no_pmix_launcher,one_node,memcheck
         """
         cli_bin = self.params.get("test_clients_bin", '/run/tests/*/')
         cli_arg = self.params.get("test_clients_arg", '/run/tests/*/')

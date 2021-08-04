@@ -18,7 +18,7 @@ class CartCoRpcOneNodeTest(CartTest):
         """Test CaRT CoRPC.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=cart,corpc,one_node
+        :avocado: tags=cart,corpc,one_node,memcheck
         """
         cmd = self.build_cmd(self.env, "test_servers")
         self.launch_test(cmd)
