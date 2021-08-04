@@ -7,9 +7,6 @@
 package bdev
 
 import (
-	"fmt"
-	"sync"
-
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/logging"
@@ -24,8 +21,9 @@ type (
 		Prepare(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
-		DisableVMD()
-		IsVMDDisabled() bool
+		// TODO DAOS-8040: re-enable VMD
+		//		DisableVMD()
+		//		IsVMDDisabled() bool
 		UpdateFirmware(pciAddr string, path string, slot int32) error
 		WriteNvmeConfig(storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error)
 	}
@@ -33,10 +31,8 @@ type (
 	// Provider encapsulates configuration and logic for interacting with a Block
 	// Device Backend.
 	Provider struct {
-		sync.Mutex // ensure mutually exclusive access to scan cache
-		log        logging.Logger
-		backend    Backend
-		scanCache  *storage.BdevScanResponse
+		log     logging.Logger
+		backend Backend
 	}
 )
 
@@ -54,68 +50,24 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 	return p
 }
 
-func (p *Provider) disableVMD() {
-	p.backend.DisableVMD()
-}
+// TODO DAOS-8040: re-enable VMD
+//func (p *Provider) disableVMD() {
+//	p.backend.DisableVMD()
+//}
 
 // IsVMDDisabled returns true if provider has disabled VMD device awareness.
-func (p *Provider) IsVMDDisabled() bool {
-	return p.backend.IsVMDDisabled()
-}
+//func (p *Provider) IsVMDDisabled() bool {
+//	return p.backend.IsVMDDisabled()
+//}
 
-type scanFwdFn func(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
-
-func forwardScan(req storage.BdevScanRequest, cache *storage.BdevScanResponse, scan scanFwdFn) (msg string, resp *storage.BdevScanResponse, update bool, err error) {
-	var action string
-	switch {
-	case req.NoCache:
-		action = "bypass"
-		resp, err = scan(req)
-	case cache != nil && len(cache.Controllers) != 0:
-		action = "reuse"
-		resp = cache
-	default:
-		action = "update"
-		resp, err = scan(req)
-		if err == nil && resp != nil {
-			update = true
-		}
-	}
-
-	msg = fmt.Sprintf("bdev scan: %s cache", action)
-
-	if err != nil {
-		return
-	}
-
-	if resp == nil {
-		err = errors.New("unexpected nil response from bdev backend")
-		return
-	}
-
-	msg += fmt.Sprintf(" (%d", len(resp.Controllers))
-	if len(req.DeviceList) != 0 && len(resp.Controllers) != 0 {
-		var num int
-		num, resp = filterScanResp(resp, req.DeviceList...)
-		if num != 0 {
-			msg += fmt.Sprintf("-%d filtered", num)
-		}
-	}
-
-	msg += " devices)"
-
-	return
-}
-
-// storage.BdevScan attempts to perform a scan to discover NVMe components in the
-// system. Results will be cached at the provider and returned if
-// "NoCache" is set to "false" in the request. Returned results will be
-// filtered by request "DeviceList" and empty filter implies allowing all.
+// Scan calls into the backend to discover NVMe components in the
+// system.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
+	// TODO DAOS-8040: re-enable VMD
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.DisableVMD {
-		p.disableVMD()
-	}
+	//	if req.IsForwarded() && req.DisableVMD {
+	//		p.disableVMD()
+	//	}
 
 	return p.backend.Scan(req)
 }
@@ -149,14 +101,16 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 		return nil, errors.New("empty DeviceList in FormatRequest")
 	}
 
+	// TODO DAOS-8040: re-enable VMD
 	// set vmd state on remote provider in forwarded request
-	if req.IsForwarded() && req.DisableVMD {
-		p.disableVMD()
-	}
+	//	if req.IsForwarded() && req.DisableVMD {
+	//		p.disableVMD()
+	//	}
 
 	return p.backend.Format(req)
 }
 
+// WriteNvmeConfig calls into the bdev backend to create an nvme config file.
 func (p *Provider) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error) {
 	return p.backend.WriteNvmeConfig(req)
 }
