@@ -38,6 +38,14 @@
 
 set -eux
 
+# check that vm.max_map_count has been configured/bumped
+if [ $(sysctl -n vm.max_map_count) != 1000000 ] ; then
+    echo vm.max_map_count not set as expected
+    exit 1
+else
+    echo vm.max_map_count set as expected
+fi
+
 # shellcheck disable=SC2153
 mapfile -t TEST_TAG_ARR <<< "$TEST_TAG_ARG"
 
