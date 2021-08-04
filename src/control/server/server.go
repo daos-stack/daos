@@ -213,6 +213,7 @@ func (srv *server) initStorage() error {
 		return err
 	}
 
+	srv.log.Debug("running storage setup on server start-up, scanning storage devices")
 	return srv.ctlSvc.Setup()
 }
 
@@ -247,11 +248,26 @@ func (srv *server) addEngines(ctx context.Context) error {
 	var allStarted sync.WaitGroup
 	registerTelemetryCallbacks(ctx, srv)
 
+	// Store cached NVMe device details retrieved on start-up (before
+	// engines are started) so static details can be recovered by the engine
+	// storage provider(s) during scan even if devices are in use.
+	nvmeScanResp, err := srv.ctlSvc.NvmeScan(storage.BdevScanRequest{})
+	if err != nil {
+		srv.log.Errorf("nvme scan failed: %s", err)
+		nvmeScanResp = &storage.BdevScanResponse{}
+	}
+	if nvmeScanResp == nil {
+		return errors.New("nil nvme scan response received")
+	}
+	srv.log.Debugf("set bdev cache when creating engine: %v", nvmeScanResp.Controllers)
+
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
 			return err
 		}
+
+		engine.storage.SetBdevCache(*nvmeScanResp)
 
 		registerEngineEventCallbacks(engine, srv.hostname, srv.pubSub, &allStarted)
 
