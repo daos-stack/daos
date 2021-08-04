@@ -1915,34 +1915,32 @@ out:
 	return rc;
 }
 
-static ssize_t
+static int
 file_write(struct cmd_args_s *ap, struct file_dfs *file_dfs,
-	   const char *file, void *buf, size_t size)
+	   const char *file, void *buf, daos_size_t *size)
 {
-	ssize_t		num_bytes_written = 0;
 	int		rc = 0;
 	daos_size_t	write_size;
 
 	if (file_dfs->type == POSIX) {
-		num_bytes_written = write(file_dfs->fd, buf, size);
+		write_size = write(file_dfs->fd, buf, *size);
+		*size = write_size;
 	} else if (file_dfs->type == DAOS) {
-		write_size = size;
 		rc = dfs_sys_write(file_dfs->dfs_sys, file_dfs->obj, buf, file_dfs->offset,
-				   &write_size, NULL);
+				   size, NULL);
 		if (rc == 0)
 			/* update file pointer with number of bytes written */
-			file_dfs->offset += write_size;
-		num_bytes_written = write_size;
+			file_dfs->offset += *size;
 	} else {
 		rc = EINVAL;
 		DH_PERROR_SYS(ap, rc, "File type not known '%s' type=%d", file, file_dfs->type);
 	}
-	if (num_bytes_written < 0) {
+	if (*size < 0) {
 		if (file_dfs->type == POSIX)
 			rc = errno;
 		DH_PERROR_SYS(ap, rc, "write error on '%s' type=%d", file, file_dfs->type);
 	}
-	return num_bytes_written;
+	return rc;
 }
 
 int
@@ -2002,7 +2000,6 @@ file_mkdir(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_mkdir(file_dfs->dfs_sys, dir, *mode, 0);
 		if (rc != 0) {
-			/* mkdir_dfs already prints error */
 			D_GOTO(out, rc);
 		}
 	} else {
@@ -2013,8 +2010,8 @@ out:
 	return rc;
 }
 
-static DIR*
-file_opendir(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *dir)
+static int
+file_opendir(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *dir, DIR **_dirp)
 {
 	DIR *dirp = NULL;
 	int rc	  = 0;
@@ -2025,32 +2022,38 @@ file_opendir(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *dir)
 			rc = errno;
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_opendir(file_dfs->dfs_sys, dir, 0, &dirp);
-		if (rc != 0)
-			dirp = NULL;
 	} else {
+		rc = EINVAL;
 		DH_PERROR_SYS(ap, rc, "File type not known '%s' type=%d", dir, file_dfs->type);
 	}
-	return dirp;
+	*_dirp = dirp;
+	return rc;
 }
 
-static struct dirent*
-file_readdir(struct cmd_args_s *ap, struct file_dfs *file_dfs, DIR *dirp)
+static int
+file_readdir(struct cmd_args_s *ap, struct file_dfs *file_dfs, DIR *dirp, struct dirent **_entry)
 {
 	struct dirent *entry = NULL;
 	int rc		     = 0;
 
 	if (file_dfs->type == POSIX) {
-		entry = readdir(dirp);
-		if (entry == NULL)
-			rc = errno;
+		do {
+			/* errno set to zero before calling readdir to distinguish error from
+			 * end of stream per readdir documentation
+			 */
+			errno = 0;
+			entry = readdir(dirp);
+			if (entry == NULL)
+				rc = errno;
+		} while (errno == EAGAIN);
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_readdir(file_dfs->dfs_sys, dirp, &entry);
-		if (rc != 0)
-			entry = NULL;
 	} else {
+		rc = EINVAL;
 		DH_PERROR_SYS(ap, rc, "File type not known type=%d", file_dfs->type);
 	}
-	return entry;
+	*_entry = entry;
+	return rc;
 }
 
 static int
@@ -2067,40 +2070,39 @@ file_lstat(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 		if (rc != 0)
 			rc = errno;
 	} else if (file_dfs->type == DAOS) {
-		rc = dfs_sys_stat(file_dfs->dfs_sys, path, 0, buf);
+		rc = dfs_sys_stat(file_dfs->dfs_sys, path, O_NOFOLLOW, buf);
 	} else {
+		rc = EINVAL;
 		DH_PERROR_SYS(ap, rc, "File type not known '%s' type=%d", path, file_dfs->type);
 	}
 	return rc;
 }
 
-static ssize_t
+static int
 file_read(struct cmd_args_s *ap, struct file_dfs *file_dfs,
-	  const char *file, void *buf, size_t size)
+	  const char *file, void *buf, daos_size_t *size)
 {
-	ssize_t	    got_size = 0;
 	int	    rc = 0;
 	daos_size_t read_size;
 
 	if (file_dfs->type == POSIX) {
-		got_size = read(file_dfs->fd, buf, size);
+		read_size = read(file_dfs->fd, buf, *size);
+		*size = read_size;
 	} else if (file_dfs->type == DAOS) {
-		read_size = size;
 		rc = dfs_sys_read(file_dfs->dfs_sys, file_dfs->obj, buf, file_dfs->offset,
-				  &read_size, NULL);
+				  size, NULL);
 		if (rc == 0)
 			/* update file pointer with number of bytes read */
-			file_dfs->offset += (daos_off_t)got_size;
-		got_size = read_size;
+			file_dfs->offset += (daos_off_t)*size;
 	} else {
 		DH_PERROR_SYS(ap, rc, "File type not known '%s' type=%d", file, file_dfs->type);
 	}
-	if (got_size < 0) {
+	if (*size < 0) {
 		if (file_dfs->type == POSIX)
 			rc = errno;
 		DH_PERROR_SYS(ap, rc, "read error on '%s' type=%d", file, file_dfs->type);
 	}
-	return got_size;
+	return rc;
 }
 
 static int
@@ -2142,7 +2144,7 @@ file_close(struct cmd_args_s *ap, struct file_dfs *file_dfs, const char *file)
 			rc = errno;
 		}
 	} else if (file_dfs->type == DAOS) {
-		dfs_sys_close(file_dfs->obj);
+		rc = dfs_sys_close(file_dfs->obj);
 		if (rc == 0)
 			file_dfs->obj = NULL;
 	} else {
@@ -2210,27 +2212,24 @@ fs_copy_file(struct cmd_args_s *ap,
 
 	/* read from source file, then write to dest file */
 	while (total_bytes < file_length) {
-		size_t left_to_read = buf_size;
+		daos_size_t left_to_read = buf_size;
 		uint64_t bytes_left = file_length - total_bytes;
 
 		if (bytes_left < buf_size)
 			left_to_read = (size_t)bytes_left;
-		ssize_t bytes_read = file_read(ap, src_file_dfs, src_path,
-					       buf, left_to_read);
-		if (bytes_read < 0) {
+		rc = file_read(ap, src_file_dfs, src_path, buf, &left_to_read);
+		if (rc != 0) {
 			rc = daos_errno2der(rc);
 			D_GOTO(out_buf, rc);
 		}
-		size_t bytes_to_write = (size_t)bytes_read;
-		ssize_t bytes_written;
+		daos_size_t bytes_to_write = left_to_read;
 
-		bytes_written = file_write(ap, dst_file_dfs, dst_path,
-					   buf, bytes_to_write);
-		if (bytes_written < 0) {
+		rc = file_write(ap, dst_file_dfs, dst_path, buf, &bytes_to_write);
+		if (rc != 0) {
 			rc = daos_errno2der(rc);
 			D_GOTO(out_buf, rc);
 		}
-		total_bytes += bytes_read;
+		total_bytes += left_to_read;
 	}
 
 	/* set perms on destination to original source perms */
@@ -2274,8 +2273,8 @@ fs_copy_dir(struct cmd_args_s *ap,
 	int			rc = 0;
 
 	/* begin by opening source directory */
-	src_dir = file_opendir(ap, src_file_dfs, src_path);
-	if (!src_dir) {
+	rc = file_opendir(ap, src_file_dfs, src_path, &src_dir);
+	if (rc != 0) {
 		rc = daos_errno2der(rc);
 		DH_PERROR_DER(ap, rc, "Cannot open directory '%s'", src_path);
 		D_GOTO(out, rc);
@@ -2295,14 +2294,21 @@ fs_copy_dir(struct cmd_args_s *ap,
 		const char *d_name;
 
 		/* walk source directory */
-		entry = file_readdir(ap, src_file_dfs, src_dir);
+		rc = file_readdir(ap, src_file_dfs, src_dir, &entry);
+		if (rc != 0) {
+			rc = daos_errno2der(rc);
+			DH_PERROR_DER(ap, rc, "Cannot read directory");
+			D_GOTO(out, rc);
+		}
+
+		/* end of stream when entry is NULL and rc == 0 */
 		if (!entry) {
 			/* There are no more entries in this directory,
 			 * so break out of the while loop.
 			 */
 			break;
-		}
-
+		} 
+		
 		/* Check that the entry is not "src_path"
 		 * or src_path's parent.
 		 */
@@ -2489,7 +2495,7 @@ dm_get_cont_prop(struct cmd_args_s *ap,
 		 daos_cont_info_t *cont_info,
 		 int size,
 		 uint32_t *dpe_types,
-		 uint64_t **dpe_vals)
+		 uint64_t *dpe_vals)
 {
 	int                     rc = 0;
 	int                     i = 0;
@@ -2514,7 +2520,7 @@ dm_get_cont_prop(struct cmd_args_s *ap,
 	}
 
 	for (i = 0; i < size; i++) {
-		(*dpe_vals)[i] = prop->dpp_entries[i].dpe_val;
+		dpe_vals[i] = prop->dpp_entries[i].dpe_val;
 	}
 
 	daos_prop_free(prop);
@@ -2541,13 +2547,10 @@ dm_connect(struct cmd_args_s *ap,
 	daos_prop_t		*props = NULL;
 	int			size = 2;
 	uint32_t		dpe_types[size];
-	uint64_t		*dpe_vals = NULL;
+	uint64_t		dpe_vals[size];
 	int			rc2;
 
 	/* open src pool, src cont, and mount dfs */
-	D_ALLOC_ARRAY(dpe_vals, size);
-	if (dpe_vals == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
 	if (src_file_dfs->type == DAOS) {
 		rc = daos_pool_connect(ca->src_p_uuid, sysname,
 				       DAOS_PC_RW, &ca->src_poh, NULL, NULL);
@@ -2605,7 +2608,7 @@ dm_connect(struct cmd_args_s *ap,
 		 * set them in the destination when
 		 * the --preserve option is added
 		 */
-		rc = dm_get_cont_prop(ap, ca->src_coh, src_cont_info, size, dpe_types, &dpe_vals);
+		rc = dm_get_cont_prop(ap, ca->src_coh, src_cont_info, size, dpe_types, dpe_vals);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to get cont property");
 			D_GOTO(err_src, rc);
@@ -2747,7 +2750,6 @@ err_src_root:
 				      DP_UUID(ca->dst_p_uuid));
 	}
 out:
-	D_FREE(dpe_vals);
 	if (props != NULL)
 		daos_prop_free(props);
 	return rc;
@@ -3347,7 +3349,6 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	}
 	rc = dm_parse_path(&src_cp_type, src_str, src_str_len, &ca.src_p_uuid, &ca.src_c_uuid);
 	if (rc != 0) {
-		rc = daos_errno2der(rc);
 		DH_PERROR_DER(ap, rc, "Failed to parse source path");
 		D_GOTO(out, rc);
 	}
@@ -3361,7 +3362,6 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	}
 	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len, &ca.dst_p_uuid, &ca.dst_c_uuid);
 	if (rc != 0) {
-		rc = daos_errno2der(rc);
 		DH_PERROR_DER(ap, rc, "Failed to parse destination path");
 		D_GOTO(out, rc);
 	}
@@ -3383,7 +3383,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 				    &ca.dst_coh, &dst_cont_info, NULL);
 		if (rc == 0) {
 			fprintf(ap->errstream,
-				"This destination container already exists, please provide a "
+				"This destination container already exists. Please provide a "
 				"destination container uuid that does not exist already, or "
 				"provide an existing pool or new UNS path of the "
 				"form:\n\t--dst </$pool> | <path/to/uns>\n");
