@@ -122,11 +122,12 @@ step_init(void)
 static int
 attachinfo(void)
 {
-	char *command = "sudo daos_agent dump-attachinfo";
- 	FILE *fp = popen(command, "r");
- 	char *line = NULL;
- 	size_t len = 0;
-	size_t read;
+	char 	*command = "sudo daos_agent dump-attachinfo";
+	FILE 	*fp = popen(command, "r");
+	char 	*line = NULL;
+	size_t 	len = 0;
+	size_t 	read;
+	int	rc;
 	if (fp == NULL)
 		return -DER_INVAL;
 
@@ -134,7 +135,6 @@ attachinfo(void)
 		continue;
 	}
 
-	int rc;
 	rc = pclose(fp);
 	if (rc) {
 		step_fail("Are daos_server and daos_agent running?");
@@ -148,7 +148,7 @@ static int
 init(void)
 {
 	int rc;
-	
+
 	rc = daos_init();
 	if (rc) {
 		step_fail(d_errdesc(rc));
@@ -190,13 +190,13 @@ ccreate(void)
 
 	/** Create container with RF=1 */
 	daos_prop_t	*prop;
-        prop = daos_prop_alloc(1);
-        prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
-        prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
-	
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+ 	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+
 	uuid_generate(cuuid2);	
 
-	rc = daos_cont_create(poh,cuuid2, prop, NULL);
+	rc = daos_cont_create(poh, cuuid2, prop, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
 		return -1;
@@ -204,9 +204,9 @@ ccreate(void)
 
 	/** Create container with RF=2 */
 	daos_prop_t	*prop2;
-        prop2 = daos_prop_alloc(1);
-        prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
-        prop2->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+	prop2 = daos_prop_alloc(1);
+	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop2->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
 
 	uuid_generate(cuuid3);
 	
@@ -779,14 +779,13 @@ cdestroy(void)
 		step_fail(d_errdesc(rc));
 		return -1;
 	}
-	
 
 	rc = daos_cont_destroy(poh, cuuid2, force, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
 		return -1;
 	}
-	
+
 	rc = daos_cont_destroy(poh, cuuid3, force, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
