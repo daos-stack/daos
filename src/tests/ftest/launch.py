@@ -603,14 +603,6 @@ def get_nvme_replacement(args):
         da:00.0 Non-Volatile memory controller:
             Intel Corporation NVMe Datacenter SSD [Optane]
 
-    Optionally filter the above output even further with a specified search
-    string (e.g. '--nvme=auto:vmd'):
-        $ lspci -D | grep Volume
-        0000:5d:05.5 RAID bus controller:
-            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
-        0000:85:05.5 RAID bus controller:
-            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
-
     Args:
         args (argparse.Namespace): command line arguments for this program
 
@@ -660,7 +652,7 @@ def get_nvme_replacement(args):
     output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
     devices = find_pci_address(output_str)
     print("Auto-detected NVMe devices on {}: {}".format(host_list, devices))
-    return ",".join(devices), False
+    return ",".join(devices)
 
 
 def get_vmd_replacement(args):
@@ -895,12 +887,12 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
                         "  - Replacement: {} -> {}".format(
                             value, replacements[value]))
 
-    # if VMD pci address in present under nvme_data,
-    # set DAOS_DISABLE_VMD to False
-    if vmd_flag is True:
-        os.environ["DAOS_DISABLE_VMD"] = "False"
-
     if replacements:
+        # if VMD pci address in present under nvme_data,
+        # set DAOS_DISABLE_VMD to False
+        if vmd_flag is True:
+            os.environ["DAOS_DISABLE_VMD"] = "False"
+
         # Read in the contents of the yaml file to retain the !mux entries
         print("Reading {}".format(yaml_file))
         with open(yaml_file) as yaml_buffer:
@@ -2296,7 +2288,7 @@ def main():
     if args.nvme and args.nvme.startswith("auto_vmd"):
         args.nvme, vmd_flag = get_vmd_replacement(args)
     elif args.nvme and args.nvme.startswith("auto"):
-        args.nvme, vmd_flag = get_nvme_replacement(args)
+        args.nvme = get_nvme_replacement(args)
 
     # Process the tags argument to determine which tests to run
     tag_filter, test_list = get_test_list(args.tags)
