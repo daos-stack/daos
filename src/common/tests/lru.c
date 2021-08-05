@@ -121,24 +121,25 @@ main(int argc, char **argv)
 	csize = strtol(argv[1], (char **)NULL, 10);
 	num_keys = strtol(argv[2], (char **)NULL, 10);
 
+	if (csize < 0 || csize > INT_MAX) {
+		rc = -DER_INVAL;
+		D_ERROR("Invalid cell size\n");
+		D_GOTO(exit, rc);
+	}
+
 	rc = daos_lru_cache_create(csize, D_HASH_FT_RWLOCK,
 				   &uint_ref_llink_ops,
 				   &tcache);
 	if (rc)
 		D_ASSERTF(0, "Error in creating lru cache\n");
 
-	/* make sure these could fit into int variable, since
+	/* make sure csize and num_keys can
+	 * fit into int variable, since
 	 * they used to be cast to int values
 	 */
 	if (num_keys < 0 || num_keys > INT_MAX) {
 		rc = -DER_INVAL;
 		D_ERROR("Invalid number of keys\n");
-		D_GOTO(exit, rc);
-	}
-
-	if (csize < 0 || csize > INT_MAX) {
-		rc = -DER_INVAL;
-		D_ERROR("Invalid cell size\n");
 		D_GOTO(exit, rc);
 	}
 
