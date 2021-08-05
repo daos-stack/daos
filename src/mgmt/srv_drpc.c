@@ -189,7 +189,8 @@ ds_mgmt_drpc_group_update(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to update group map\n");
+	D_INFO("Received request to update group map with %zu ranks.\n",
+	       req->n_engines);
 
 	D_ALLOC_ARRAY(in.gui_servers, req->n_engines);
 	if (in.gui_servers == NULL) {
@@ -388,7 +389,7 @@ ds_mgmt_drpc_pool_create(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		return;
 	}
 
-	D_INFO("Received request to create pool on %zu ranks\n", req->n_ranks);
+	D_INFO("Received request to create pool on %zu ranks.\n", req->n_ranks);
 
 	if (req->n_tierbytes != DAOS_MEDIA_MAX)
 		D_GOTO(out, rc = -DER_INVAL);
