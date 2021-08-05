@@ -131,11 +131,12 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mRe
 
 // StorageFormatNVMe performs format on NVMe if superblock needs writing.
 func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResults) {
-	ei.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName, ei.Index())
-
 	// If no superblock exists, format NVMe and populate response with results.
 	needsSuperblock, err := ei.NeedsSuperblock()
 	if err != nil {
+		ei.log.Errorf("engine storage for %s instance %d: NeedsSuperblock(): %s",
+			build.DataPlaneName, ei.Index(), err)
+
 		return proto.NvmeControllerResults{
 			ei.newCret("", err),
 		}
@@ -150,6 +151,8 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 	return
 }
 
+// StorageWriteNvmeConfig writes output NVMe config file used to allocate devices to be used by an
+// engine process.
 func (ei *EngineInstance) StorageWriteNvmeConfig() error {
 	ei.log.Infof("Writing nvme config file for %s instance %d", build.DataPlaneName, ei.Index())
 	return ei.bdevWriteConfig()

@@ -558,25 +558,31 @@ def process_host_list(hoststr):
     return host_list
 
 
-def get_random_string(length, exclude=None):
+def get_random_string(length, exclude=None, include=None):
     """Create a specified length string of random ascii letters and numbers.
 
     Optionally exclude specific random strings from being returned.
 
     Args:
         length (int): length of the string to return
-        exclude (list|None): list of strings to not return
+        exclude (list, optional): list of strings to not return. Defaults to
+            None.
+        include (list, optional): list of characters to use in the random
+            string. Defaults to None, in which case use all upper case and
+            digits.
 
     Returns:
         str: a string of random ascii letters and numbers
 
     """
     exclude = exclude if isinstance(exclude, list) else []
+
+    if include is None:
+        include = string.ascii_uppercase + string.digits
+
     random_string = None
     while not isinstance(random_string, str) or random_string in exclude:
-        random_string = "".join(
-            random.choice(string.ascii_uppercase + string.digits)
-            for _ in range(length))
+        random_string = "".join(random.choice(include) for _ in range(length))
     return random_string
 
 
@@ -1240,3 +1246,21 @@ def get_display_size(size):
     return "{} ({}) ({})".format(
         size, bytes_to_human(size, binary=True),
         bytes_to_human(size, binary=False))
+
+
+def report_errors(test, errors):
+    """Print errors and fail the test if there's any errors.
+
+    Args:
+        test (Test): Test class.
+        errors (list): List of errors.
+    """
+    if errors:
+        test.log.error("Errors detected:")
+        for error in errors:
+            test.log.error("  %s", error)
+        error_msg = ("{} error{} detected".format(
+            len(errors), "" if len(errors) == 0 else "s"))
+        test.fail(error_msg)
+
+    test.log.info("No errors detected.")
