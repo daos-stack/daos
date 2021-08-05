@@ -360,14 +360,6 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		if (!create &&
-		    (entry->dpe_type == DAOS_PROP_PO_EC_CELL_SZ)) {
-			D_ERROR("Can't change immutable property=%d\n",
-				entry->dpe_type);
-			rc = -DER_NO_PERM;
-			break;
-		}
-
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			if (entry->dpe_str == NULL ||
@@ -1095,7 +1087,8 @@ read_db_for_stepping_up(struct pool_svc *svc, struct pool_buf **map_buf,
 	if (version < DS_POOL_MD_VERSION_LOW || version > DS_POOL_MD_VERSION) {
 		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */,
 				     &svc->ps_uuid, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
@@ -1129,7 +1122,8 @@ check_map:
 		/* This DB is not new and uses a layout that lacks a version. */
 		ds_notify_ras_eventf(RAS_POOL_DF_INCOMPAT, RAS_TYPE_INFO,
 				     RAS_SEV_ERROR, NULL /* hwid */,
-				     NULL /* rank */, NULL /* jobid */,
+				     NULL /* rank */, NULL /* inc */,
+				     NULL /* jobid */,
 				     &svc->ps_uuid, NULL /* cont */,
 				     NULL /* objid */, NULL /* ctlop */,
 				     NULL /* data */,
