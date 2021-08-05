@@ -819,11 +819,11 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
         str: the test yaml file; None if the yaml file contains placeholders
             w/o replacements
         env_vars (dict): Returns environment variable dictionary. Presently,
-            returns DAOS_DISABLE_VMD: "False"/"True" or empty dictionary.
+            returns DAOS_DISABLE_VMD: "False" or "True" dictionary.
 
     """
     replacements = {}
-    env_vars = {}
+    env_vars = {"DAOS_DISABLE_VMD": "True"}
 
     if args.test_servers or args.nvme:
         # Find the test yaml keys and values that match the replaceable fields
