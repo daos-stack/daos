@@ -56,8 +56,9 @@ class OSAOfflineReintegration(OSAUtils):
         # Exclude ranks [0, 3, 4]
         rank = [0, 3, 4]
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.get_dmg_command(),
+                label_generator=self.label_generator)
             pool[val].get_params(self)
             pool[val].create()
             self.pool = pool[val]
@@ -66,6 +67,12 @@ class OSAOfflineReintegration(OSAUtils):
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
                 self.run_mdtest_thread(oclass)
+                if self.test_with_snapshot is True:
+                    # Create a snapshot of the container
+                    # after IOR job completes.
+                    self.container.create_snap()
+                    self.log.info("Created container snapshot: %s",
+                                  self.container.epoch)
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
@@ -269,11 +276,25 @@ class OSAOfflineReintegration(OSAUtils):
         """Test ID: DAOS-6923
         Test Description: Reintegrate rank with no data.
 
-        :avocado: tags=all,full_regression,hw,medium,ib2
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_full
         :avocado: tags=offline_reintegrate_with_blank_node
         """
         self.test_with_blank_node = self.params.get("test_with_blank_node",
                                                     '/run/blank_node/*')
         self.log.info("Offline Reintegration : Test with blank node")
+        self.run_offline_reintegration_test(1, data=True)
+
+    def test_osa_offline_reintegrate_after_snapshot(self):
+        """Test ID: DAOS-8057
+        Test Description: Reintegrate rank after taking snapshot.
+
+        :avocado: tags=all,daily_regression,hw,medium,ib2
+        :avocado: tags=osa,offline_reintegration_full
+        :avocado: tags=offline_reintegrate_after_snapshot
+        """
+        self.test_with_snapshot = self.params.get("test_with_snapshot",
+                                                  '/run/snapshot/*')
+        self.log.info("Offline Reintegration : Test with snapshot")
         self.run_offline_reintegration_test(1, data=True)

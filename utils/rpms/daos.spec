@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.103
-Release:       4%{?relval}%{?dist}
+Version:       1.3.104
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -76,7 +76,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.04
+BuildRequires: spdk-devel >= 21.07
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -153,7 +153,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.04
+Requires: spdk-tools >= 21.07
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -241,6 +241,15 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 
 %description firmware
 This is the package needed to manage server storage firmware on DAOS servers.
+
+%package daos_serialize
+Summary: DAOS serialization library that uses HDF5
+BuildRequires: hdf5-devel
+Requires: hdf5
+
+%description daos_serialize
+This is the package needed to use the DAOS serialization and deserialization
+tools, as well as the preserve option for the filesystem copy tool.
 
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
@@ -351,6 +360,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
+%{_bindir}/daos_metrics
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
@@ -438,7 +448,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
-%{_bindir}/daos_metrics
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{conf_dir}/fault-inject-cart.yaml
@@ -459,7 +468,22 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
+%files daos_serialize
+%{_libdir}/libdaos_serialize.so
+
 %changelog
+* Wed Aug 04 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.104-3
+- Move daos_metrics tool from tests package to server package
+
+* Wed Aug 04 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.104-2
+- Update to spdk 21.07 and (indirectly) dpdk 21.05
+
+* Mon Aug 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.104-1
+- Version bump to 1.3.104 for 2.0 test build 4
+
+* Mon Jul 19 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-5
+- Add DAOS serialization library that requires hdf5
+
 * Wed Jul 14 2021 Li Wei <wei.g.li@intel.com> 1.3.103-4
 - Update raft to fix slow leader re-elections
 

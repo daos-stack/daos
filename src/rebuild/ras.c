@@ -29,7 +29,8 @@ raise_ras(ras_event_t id, ras_sev_t sev,
 
 	ds_notify_ras_event(id, msg, RAS_TYPE_INFO, sev,
 			    NULL /* hwid */, NULL /* rank */,
-			    NULL /* jobid */, pool, NULL /* cont */,
+			    NULL /* inc */, NULL /* jobid */,
+			    pool, NULL /* cont */,
 			    NULL /* objid */, NULL /* ctlop */, data);
 	D_FREE(data);
 	return 0;

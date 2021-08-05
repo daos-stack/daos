@@ -11,7 +11,6 @@ import copy
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
-from test_utils_pool import TestPool
 from command_utils import CommandFailure
 from apricot import skipForTicket
 import queue
@@ -85,7 +84,7 @@ class OSAOfflineParallelTest(OSAUtils):
             oclass (str) : Daos object class (RP_2G1,etc)
         """
         # Create a pool
-        pool = {}
+        self.pool = []
         pool_uuid = []
         target_list = []
         if oclass is None:
@@ -102,13 +101,9 @@ class OSAOfflineParallelTest(OSAUtils):
 
         test_seq = self.ior_test_sequence[0]
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
-            pool[val].get_params(self)
-            pool[val].create()
-            pool_uuid.append(pool[val].uuid)
-            self.pool = pool[val]
-            self.pool.set_property("reclaim", "disabled")
+            self.pool.append(self.get_pool())
+            pool_uuid.append(self.pool[-1].uuid)
+            self.pool[-1].set_property("reclaim", "disabled")
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
                 if oclass != "S1":
@@ -133,27 +128,26 @@ class OSAOfflineParallelTest(OSAUtils):
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
-            self.pool = pool[val]
-            self.pool.display_pool_daos_space("Pool space: Beginning")
+            self.pool[val].display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # If we need to trigger aggregation on pool 1, delete
             # the second container which has IOR data.
             if self.test_during_aggregation is True and val == 0:
-                self.delete_extra_container(self.pool)
+                self.delete_extra_container(self.pool[val])
             # Create the threads here
             threads = []
             # Action dictionary with OSA dmg command parameters
             action_args = {
-                "drain": {"pool": self.pool.uuid, "rank": rank,
+                "drain": {"pool": self.pool[val].uuid, "rank": rank,
                           "tgt_idx": None},
-                "exclude": {"pool": self.pool.uuid, "rank": (rank + 1),
+                "exclude": {"pool": self.pool[val].uuid, "rank": (rank + 1),
                             "tgt_idx": t_string},
-                "reintegrate": {"pool": self.pool.uuid, "rank": (rank + 1),
+                "reintegrate": {"pool": self.pool[val].uuid, "rank": (rank + 1),
                                 "tgt_idx": t_string},
-                "extend": {"pool": self.pool.uuid, "ranks": (rank + 2),
-                           "scm_size": self.pool.scm_size,
-                           "nvme_size": self.pool.nvme_size}
+                "extend": {"pool": self.pool[val].uuid, "ranks": (rank + 2),
+                           "scm_size": self.pool[val].scm_size,
+                           "nvme_size": self.pool[val].nvme_size}
             }
             for action in sorted(action_args):
                 # Add a dmg thread
@@ -179,7 +173,7 @@ class OSAOfflineParallelTest(OSAUtils):
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
-            pool[val].display_pool_daos_space(display_string)
+            self.pool[val].display_pool_daos_space(display_string)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
             pver_end = self.get_pool_version()
@@ -190,8 +184,8 @@ class OSAOfflineParallelTest(OSAUtils):
             self.run_ior_thread("Read", oclass, test_seq)
             if oclass != "S1":
                 self.run_mdtest_thread()
-            self.container = self.pool_cont_dict[self.pool][0]
-            kwargs = {"pool": self.pool.uuid,
+            self.container = self.pool_cont_dict[self.pool[-1]][0]
+            kwargs = {"pool": self.pool[-1].uuid,
                       "cont": self.container.uuid}
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
