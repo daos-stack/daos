@@ -74,7 +74,6 @@ class TestPool(TestDaosApiBase):
         self.min_targets = BasicParameter(None, 1)
 
         self.pool = None
-        self.uuid = None
         self.info = None
         self.svc_ranks = None
         self.connected = False
@@ -241,7 +240,7 @@ class TestPool(TestDaosApiBase):
                     rl_ranks, len(service_replicas))
 
                 # Set UUID and attached to the DaosPool object
-                self.pool.set_uuid_str(data["uuid"])
+                self.uuid = data["uuid"]
                 self.pool.attached = 1
 
         elif self.control_method.value == self.USE_DMG:
@@ -339,7 +338,6 @@ class TestPool(TestDaosApiBase):
                         self.control_method.value)
 
             self.pool = None
-            self.uuid = None
             self.info = None
             self.svc_ranks = None
 
@@ -826,26 +824,22 @@ class TestPool(TestDaosApiBase):
         self.query_data = {}
         if self.pool:
             if self.dmg:
-                uuid = self.pool.get_uuid_str()
                 end_time = None
                 if self.pool_query_timeout.value is not None:
                     self.log.info(
                         "Waiting for pool %s query to be responsive with a %s "
-                        "second timeout", uuid, self.pool_query_timeout.value)
+                        "second timeout", self.identifier,
+                        self.pool_query_timeout.value)
                     end_time = time() + self.pool_query_timeout.value
                 while True:
                     try:
-                        if self.use_label and self.label.value is not None:
-                            self.query_data = self.dmg.pool_query(
-                                self.label.value)
-                        else:
-                            self.query_data = self.dmg.pool_query(uuid)
+                        self.query_data = self.dmg.pool_query(self.identifier)
                         break
                     except CommandFailure as error:
                         if end_time is not None:
                             self.log.info(
                                 "Pool %s query still non-responsive: %s",
-                                uuid, str(error))
+                                self.identifier, str(error))
                             if time() > end_time:
                                 raise CommandFailure(
                                     "TIMEOUT detected after {} seconds while "
@@ -853,7 +847,8 @@ class TestPool(TestDaosApiBase):
                                     "timeout can be adjusted via the "
                                     "'pool/pool_query_timeout' test yaml "
                                     "parameter.".format(
-                                        uuid, self.pool_query_timeout.value)) \
+                                        self.identifier,
+                                        self.pool_query_timeout.value)) \
                                             from error
                         else:
                             raise CommandFailure(error) from error
