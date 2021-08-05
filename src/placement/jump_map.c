@@ -271,12 +271,13 @@ reset_dom_cur_grp(uint8_t *dom_cur_grp_used, uint8_t *dom_occupied, uint32_t dom
 	int i;
 
 	for (i = 0; i < dom_size; i++) {
-		if (isset(dom_occupied, i))
+		if (isset(dom_occupied, i)) {
 			/* if all targets used up, this dom will not be used anyway */
 			setbit(dom_cur_grp_used, i);
-		else
+		} else {
 			/* otherwise reset it */
 			clrbit(dom_cur_grp_used, i);
+		}
 	}
 }
 
@@ -376,9 +377,9 @@ retry:
 			range_set = isset_range(tgts_used, start_tgt, end_tgt);
 			if (range_set) {
 				/* Used up all targets in this domain */
-				D_DEBUG(DB_PL, "dom %d used up\n",
-					(int)(curr_dom - root_pos));
 				setbit(dom_occupied, curr_dom - root_pos);
+				D_DEBUG(DB_PL, "dom %p %d used up\n",
+					dom_occupied, (int)(curr_dom - root_pos));
 			}
 
 			/* Found target (which may be available or not) */
@@ -429,22 +430,27 @@ retry:
 				continue;
 			}
 
+			/* Check if all targets under the domain have been used, and try to reset
+			 * the used targets.
+			 */
 			range_set = isset_range(dom_used, start_dom, end_dom);
 			if (range_set) {
 				int idx;
 				bool reset_used = false;
 
-				/* Skip the domain whose targets are used up */
 				for (idx = start_dom; idx <= end_dom; ++idx) {
-					/* Only reused the domain, if there are still targets
-					 * available (not being used) within this domain, and the
-					 * domain has not being used by current group yet. so
-					 * 1. there won't be multiple shards in the same target.
-					 * 2. there won't be multiple shards within same group
-					 *    are in the same domain.
-					 */
-					if (isclr(dom_occupied, idx) &&
-					    isclr(dom_cur_grp_used, idx)) {
+					if (isset(dom_occupied, idx)) {
+						/* If all targets of the domain has been used up,
+						 * then these targets can not be reused. And also
+						 * set the group bits here to make the check easier.
+						 */
+						setbit(dom_cur_grp_used, idx);
+					} else if (isclr(dom_cur_grp_used, idx)) {
+						/* If the domain has been used for the current
+						 * group, then let's do not reset the used bits,
+						 * i.e. do not choose the domain unless all domain
+						 * are used. see above.
+						 */
 						clrbit(dom_used, idx);
 						reset_used = true;
 					}
@@ -458,9 +464,10 @@ retry:
 					D_ASSERT(top != -1);
 					curr_dom = dom_stack[top--];
 				} else {
-					/* If no used dom is being reset, then let's reset
-					 * dom_cur_grp_used and start put multiple same group
-					 * in the same domain.
+					/* If no used dom is being reset at root level, then it
+					 * means all domain has been used for the group. So let's
+					 * reset dom_cur_grp_used and start put multiple domain in
+					 * the same group.
 					 */
 					if (!reset_used)
 						reset_dom_cur_grp(dom_cur_grp_used, dom_occupied,
