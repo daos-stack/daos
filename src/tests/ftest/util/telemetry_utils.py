@@ -9,6 +9,7 @@ from ClusterShell.NodeSet import NodeSet
 
 
 class TelemetryUtils():
+    # pylint: disable=too-many-nested-blocks
     """Defines a object used to verify telemetry information."""
 
     ENGINE_CONTAINER_METRICS = [

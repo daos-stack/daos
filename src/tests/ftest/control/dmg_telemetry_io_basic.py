@@ -12,6 +12,7 @@ from telemetry_test_base import TestWithTelemetry
 
 class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
     # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-nested-blocks
     """Test telemetry engine io basic metrics.
 
     :avocado: recursive
