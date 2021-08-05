@@ -220,7 +220,6 @@ def set_test_environment(args):
     # Update PATH
     os.environ["PATH"] = ":".join([bin_dir, sbin_dir, usr_sbin, path])
     os.environ["COVFILE"] = "/tmp/test.cov"
-    os.environ["DAOS_DISABLE_VMD"] = "True"
 
     # Python paths required for functional testing
     set_python_environment()
@@ -572,11 +571,13 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
             dictionary entry will be set to None.
 
     """
-    test_files = [{"py": test, "yaml": None} for test in test_list]
+    test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        test_file["yaml"] = replace_yaml_file(
+        yanl_file, env_vars = replace_yaml_file(
             "{}.yaml".format(base), args, yaml_dir, vmd_flag)
+        test_file["yaml"] = yanl_file
+        test_file["env"] = env_vars
 
     return test_files
 
@@ -817,9 +818,12 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
     Returns:
         str: the test yaml file; None if the yaml file contains placeholders
             w/o replacements
+        env_vars (dict): Returns environment variable dictionary. Presently,
+            returns DAOS_DISABLE_VMD: "False"/"True" or empty dictionary.
 
     """
     replacements = {}
+    env_vars = {}
 
     if args.test_servers or args.nvme:
         # Find the test yaml keys and values that match the replaceable fields
@@ -872,6 +876,10 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
                     values_to_replace = [
                         value_format.format(item)
                         for item in find_pci_address(yaml_find[key])]
+                    # if VMD pci address in present under nvme_data,
+                    # set DAOS_DISABLE_VMD to False
+                    if vmd_flag is True:
+                        env_vars["DAOS_DISABLE_VMD"] = "False"
 
                 # Add the next user-specified value as a replacement for key
                 for value in values_to_replace:
@@ -888,11 +896,6 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
                             value, replacements[value]))
 
     if replacements:
-        # if VMD pci address in present under nvme_data,
-        # set DAOS_DISABLE_VMD to False
-        if vmd_flag is True:
-            os.environ["DAOS_DISABLE_VMD"] = "False"
-
         # Read in the contents of the yaml file to retain the !mux entries
         print("Reading {}".format(yaml_file))
         with open(yaml_file) as yaml_buffer:
@@ -937,7 +940,7 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
             print(get_output(cmd, False))
 
     # Return the untouched or modified yaml file
-    return yaml_file
+    return yaml_file, env_vars
 
 
 def setup_test_directory(args, mode="all"):
@@ -1064,6 +1067,10 @@ def run_tests(test_files, tag_filter, args):
                         return_code |= 64
                     return_code |= 128
                     continue
+            
+            # Set the environment variable for each test.
+            for key in test_file["env"]:
+                os.environ[key] = test_file["env"][key]
 
             # Execute this test
             test_command_list = list(command_list)
