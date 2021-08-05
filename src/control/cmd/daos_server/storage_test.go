@@ -42,9 +42,9 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 	}
 	bdevPrepCmd.NrHugepages = testNrHugePages
 	bdevPrepCmd.TargetUser = username
-	bdevPrepCmd.PciAllowList = fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+	bdevPrepCmd.PCIAllowList = fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 		storage.BdevPciAddrSep, common.MockPCIAddr(2))
-	bdevPrepCmd.PciBlockList = common.MockPCIAddr(1)
+	bdevPrepCmd.PCIBlockList = common.MockPCIAddr(1)
 	bdevPrepCmdwVmd := bdevPrepCmd
 
 	for name, tc := range map[string]struct {
@@ -140,21 +140,21 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				// allocations and another to set them as requested
 				{
 					ResetOnly:     true,
-					DisableVMD:    true,
+					EnableVMD:     false,
 					HugePageCount: testNrHugePages,
 					TargetUser:    username,
-					PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PciBlockList: common.MockPCIAddr(1),
+					PCIBlockList: common.MockPCIAddr(1),
 				},
 				{
 					ResetOnly:     false,
-					DisableVMD:    true,
+					EnableVMD:     false,
 					HugePageCount: testNrHugePages,
 					TargetUser:    username,
-					PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PciBlockList: common.MockPCIAddr(1),
+					PCIBlockList: common.MockPCIAddr(1),
 				},
 			},
 		},
@@ -167,12 +167,12 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				// as above but fist call (reset) fails so second is not made
 				{
 					ResetOnly:     true,
-					DisableVMD:    true,
+					EnableVMD:     false,
 					HugePageCount: testNrHugePages,
 					TargetUser:    username,
-					PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PciBlockList: common.MockPCIAddr(1),
+					PCIBlockList: common.MockPCIAddr(1),
 				},
 			},
 			expErr: errors.New("backed prep reset failed"),
@@ -186,21 +186,21 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 				// as above but second call (setup) fails
 				{
 					ResetOnly:     true,
-					DisableVMD:    true,
+					EnableVMD:     false,
 					HugePageCount: testNrHugePages,
 					TargetUser:    username,
-					PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PciBlockList: common.MockPCIAddr(1),
+					PCIBlockList: common.MockPCIAddr(1),
 				},
 				{
 					ResetOnly:     false,
-					DisableVMD:    true,
+					EnableVMD:     false,
 					HugePageCount: testNrHugePages,
 					TargetUser:    username,
-					PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PciBlockList: common.MockPCIAddr(1),
+					PCIBlockList: common.MockPCIAddr(1),
 				},
 			},
 			expErr: errors.New("backed prep setup failed"),
@@ -211,22 +211,22 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 			expPrepCalls: []storage.BdevPrepareRequest{
 				// as above but second call (setup) fails
 				{
-					DisableVMD:    false,
+					EnableVMD:     true,
 					ResetOnly:     true,
 					HugePageCount: testNrHugePages,
 					TargetUser:    username,
-					PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PciBlockList: common.MockPCIAddr(1),
+					PCIBlockList: common.MockPCIAddr(1),
 				},
 				{
-					DisableVMD:    false,
+					EnableVMD:     true,
 					ResetOnly:     false,
 					HugePageCount: testNrHugePages,
 					TargetUser:    username,
-					PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PciBlockList: common.MockPCIAddr(1),
+					PCIBlockList: common.MockPCIAddr(1),
 				},
 			},
 		},

@@ -610,7 +610,7 @@ func TestBackend_vmdProcessFilters(t *testing.T) {
 			expOutReq: storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
 			},
 		},
@@ -618,14 +618,14 @@ func TestBackend_vmdProcessFilters(t *testing.T) {
 			inReq: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
 			},
 			inVmdAddrs: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
 			expOutReq: storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
 			},
 		},
@@ -633,7 +633,7 @@ func TestBackend_vmdProcessFilters(t *testing.T) {
 			inReq: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
 			},
 			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
@@ -646,20 +646,20 @@ func TestBackend_vmdProcessFilters(t *testing.T) {
 			inReq: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList:  common.MockPCIAddr(1),
+				PCIAllowList:  common.MockPCIAddr(1),
 			},
 			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(1)},
 			expOutReq: storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList:  common.MockPCIAddr(1),
+				PCIAllowList:  common.MockPCIAddr(1),
 			},
 		},
 		"addresses blocked": {
 			inReq: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciBlockList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+				PCIBlockList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
 			},
 			inVmdAddrs: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
@@ -672,14 +672,14 @@ func TestBackend_vmdProcessFilters(t *testing.T) {
 			inReq: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciBlockList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+				PCIBlockList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
 			},
 			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
 			expOutReq: storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(3),
+				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(3),
 					storage.BdevPciAddrSep, common.MockPCIAddr(4)),
 			},
 		},
@@ -687,28 +687,28 @@ func TestBackend_vmdProcessFilters(t *testing.T) {
 			inReq: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciBlockList:  common.MockPCIAddr(1),
+				PCIBlockList:  common.MockPCIAddr(1),
 			},
 			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(1)},
 			expOutReq: storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList:  common.MockPCIAddr(3),
+				PCIAllowList:  common.MockPCIAddr(3),
 			},
 		},
 		"addresses partially allowed and partially blocked": {
 			inReq: &storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
+				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
 					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-				PciBlockList: common.MockPCIAddr(1),
+				PCIBlockList: common.MockPCIAddr(1),
 			},
 			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(2), common.MockPCIAddr(1)},
 			expOutReq: storage.BdevPrepareRequest{
 				HugePageCount: testNrHugePages,
 				TargetUser:    username,
-				PciAllowList:  common.MockPCIAddr(2),
+				PCIAllowList:  common.MockPCIAddr(2),
 			},
 		},
 	} {
@@ -728,9 +728,9 @@ func TestBackend_Prepare(t *testing.T) {
 		username              = "bob"
 	)
 	var (
-		testPciAllowlist = fmt.Sprintf("%s %s %s", common.MockPCIAddr(1), common.MockPCIAddr(2),
+		testPCIAllowList = fmt.Sprintf("%s %s %s", common.MockPCIAddr(1), common.MockPCIAddr(2),
 			common.MockPCIAddr(3))
-		testPciBlocklist = fmt.Sprintf("%s %s", common.MockPCIAddr(4), common.MockPCIAddr(3))
+		testPCIBlockList = fmt.Sprintf("%s %s", common.MockPCIAddr(4), common.MockPCIAddr(3))
 	)
 
 	for name, tc := range map[string]struct {
@@ -747,7 +747,7 @@ func TestBackend_Prepare(t *testing.T) {
 		"unknown target user": {
 			req: storage.BdevPrepareRequest{
 				TargetUser:            username,
-				DisableVMD:            true,
+				EnableVMD:             false,
 				DisableCleanHugePages: true,
 			},
 			userLookupErr: errors.New("unknown user"),
@@ -756,7 +756,7 @@ func TestBackend_Prepare(t *testing.T) {
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
 				TargetUser:            username,
-				DisableVMD:            true,
+				EnableVMD:             false,
 				DisableCleanHugePages: true,
 			},
 			expScriptCalls: &[]scriptCall{
@@ -774,9 +774,9 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
-				PciAllowList:          testPciAllowlist,
+				PCIAllowList:          testPCIAllowList,
 				DisableVFIO:           true,
-				DisableVMD:            true,
+				EnableVMD:             false,
 				DisableCleanHugePages: true,
 			},
 			expScriptCalls: &[]scriptCall{
@@ -785,7 +785,7 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPciAllowlist),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 					},
 					Args: []string{},
@@ -796,8 +796,8 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
-				PciBlockList:          testPciBlocklist,
-				DisableVMD:            true,
+				PCIBlockList:          testPCIBlockList,
+				EnableVMD:             false,
 				DisableCleanHugePages: true,
 			},
 			expScriptCalls: &[]scriptCall{
@@ -806,7 +806,7 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},
@@ -816,9 +816,9 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
-				PciBlockList:          testPciBlocklist,
-				PciAllowList:          testPciAllowlist,
-				DisableVMD:            true,
+				PCIBlockList:          testPCIBlockList,
+				PCIAllowList:          testPCIAllowList,
+				EnableVMD:             false,
 				DisableCleanHugePages: true,
 			},
 			expScriptCalls: &[]scriptCall{
@@ -827,8 +827,8 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPciAllowlist),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},
@@ -837,7 +837,7 @@ func TestBackend_Prepare(t *testing.T) {
 		"prepare setup; fails": {
 			req: storage.BdevPrepareRequest{
 				TargetUser:            username,
-				DisableVMD:            true,
+				EnableVMD:             false,
 				DisableCleanHugePages: true,
 			},
 			mbc: &MockBackendConfig{
@@ -850,7 +850,7 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				TargetUser:            username,
 				ResetOnly:             true,
-				DisableVMD:            true,
+				EnableVMD:             false,
 				DisableCleanHugePages: true,
 			},
 			expScriptCalls: &[]scriptCall{
@@ -866,7 +866,7 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				TargetUser:            username,
 				ResetOnly:             true,
-				DisableVMD:            true,
+				EnableVMD:             false,
 				DisableCleanHugePages: true,
 			},
 			mbc: &MockBackendConfig{
@@ -880,7 +880,7 @@ func TestBackend_Prepare(t *testing.T) {
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
 				DisableCleanHugePages: true,
-				DisableVMD:            false,
+				EnableVMD:             true,
 			},
 			vmdDetectRet: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
 			expScriptCalls: &[]scriptCall{
@@ -909,7 +909,7 @@ func TestBackend_Prepare(t *testing.T) {
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
 				DisableCleanHugePages: true,
-				DisableVMD:            false,
+				EnableVMD:             true,
 			},
 			vmdDetectRet: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
 			vmdDetectErr: errors.New("vmd detect failed"),
@@ -930,7 +930,7 @@ func TestBackend_Prepare(t *testing.T) {
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
 				DisableCleanHugePages: true,
-				DisableVMD:            false,
+				EnableVMD:             true,
 			},
 			vmdDetectRet: []string{},
 			expScriptCalls: &[]scriptCall{
@@ -948,9 +948,9 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
-				PciAllowList:          testPciAllowlist,
+				PCIAllowList:          testPCIAllowList,
 				DisableCleanHugePages: true,
-				DisableVMD:            false,
+				EnableVMD:             true,
 			},
 			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
 			expScriptCalls: &[]scriptCall{
@@ -968,7 +968,7 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPciAllowlist),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 					},
 					Args: []string{},
 				},
@@ -978,9 +978,9 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
-				PciBlockList:          testPciBlocklist,
+				PCIBlockList:          testPCIBlockList,
 				DisableCleanHugePages: true,
-				DisableVMD:            false,
+				EnableVMD:             true,
 			},
 			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(5)},
 			expScriptCalls: &[]scriptCall{
@@ -998,7 +998,7 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},
@@ -1008,9 +1008,9 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
-				PciBlockList:          testPciBlocklist,
+				PCIBlockList:          testPCIBlockList,
 				DisableCleanHugePages: true,
-				DisableVMD:            false,
+				EnableVMD:             true,
 			},
 			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
 			expScriptCalls: &[]scriptCall{
@@ -1019,7 +1019,7 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},
@@ -1029,10 +1029,10 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
-				PciAllowList:          testPciAllowlist,
-				PciBlockList:          testPciBlocklist,
+				PCIAllowList:          testPCIAllowList,
+				PCIBlockList:          testPCIBlockList,
 				DisableCleanHugePages: true,
-				DisableVMD:            false,
+				EnableVMD:             true,
 			},
 			vmdDetectRet: []string{common.MockPCIAddr(3), common.MockPCIAddr(2)},
 			expScriptCalls: &[]scriptCall{
@@ -1050,8 +1050,8 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPciAllowlist),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},
@@ -1061,8 +1061,8 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
-				PciAllowList:          testPciAllowlist,
-				PciBlockList:          testPciBlocklist,
+				PCIAllowList:          testPCIAllowList,
+				PCIBlockList:          testPCIBlockList,
 				DisableCleanHugePages: false,
 			},
 			expScriptCalls: &[]scriptCall{
@@ -1071,8 +1071,8 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPciAllowlist),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},
@@ -1082,8 +1082,8 @@ func TestBackend_Prepare(t *testing.T) {
 			req: storage.BdevPrepareRequest{
 				HugePageCount:         testNrHugePages,
 				TargetUser:            username,
-				PciAllowList:          testPciAllowlist,
-				PciBlockList:          testPciBlocklist,
+				PCIAllowList:          testPCIAllowList,
+				PCIBlockList:          testPCIBlockList,
 				DisableCleanHugePages: false,
 			},
 			hpCleanErr: errors.New("clean failed"),
@@ -1093,8 +1093,8 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPciAllowlist),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPciBlocklist),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},

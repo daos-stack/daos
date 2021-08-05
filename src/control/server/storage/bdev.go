@@ -235,7 +235,7 @@ type (
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
 		DeviceList  []string
-		DisableVMD  bool
+		EnableVMD   bool
 		BypassCache bool
 	}
 
@@ -249,12 +249,12 @@ type (
 		pbin.ForwardableRequest
 		HugePageCount         int
 		DisableCleanHugePages bool
-		PciAllowList          string
-		PciBlockList          string
+		PCIAllowList          string
+		PCIBlockList          string
 		TargetUser            string
 		ResetOnly             bool
 		DisableVFIO           bool
-		DisableVMD            bool
+		EnableVMD             bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
@@ -276,7 +276,7 @@ type (
 		Properties BdevTierProperties
 		OwnerUID   int
 		OwnerGID   int
-		DisableVMD bool
+		EnableVMD  bool
 		Hostname   string
 	}
 

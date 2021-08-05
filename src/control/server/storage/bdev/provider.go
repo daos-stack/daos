@@ -22,8 +22,8 @@ type (
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
 		// TODO DAOS-8040: re-enable VMD
-		//		DisableVMD()
-		//		IsVMDDisabled() bool
+		//		EnableVMD()
+		//		IsVMDEnabled() bool
 		UpdateFirmware(pciAddr string, path string, slot int32) error
 		WriteNvmeConfig(storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error)
 	}
@@ -51,13 +51,13 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 }
 
 // TODO DAOS-8040: re-enable VMD
-//func (p *Provider) disableVMD() {
-//	p.backend.DisableVMD()
+//func (p *Provider) enableVMD() {
+//	p.backend.EnableVMD()
 //}
 
-// IsVMDDisabled returns true if provider has disabled VMD device awareness.
-//func (p *Provider) IsVMDDisabled() bool {
-//	return p.backend.IsVMDDisabled()
+// IsVMDEnabled returns true if provider has enabled VMD device awareness.
+//func (p *Provider) IsVMDEnabled() bool {
+//	return p.backend.IsVMDEnabled()
 //}
 
 // Scan calls into the backend to discover NVMe components in the
@@ -65,8 +65,8 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
 	// TODO DAOS-8040: re-enable VMD
 	// set vmd state on remote provider in forwarded request
-	//	if req.IsForwarded() && req.DisableVMD {
-	//		p.disableVMD()
+	//	if req.IsForwarded() && req.EnableVMD {
+	//		p.enableVMD()
 	//	}
 
 	return p.backend.Scan(req)
@@ -103,8 +103,8 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 
 	// TODO DAOS-8040: re-enable VMD
 	// set vmd state on remote provider in forwarded request
-	//	if req.IsForwarded() && req.DisableVMD {
-	//		p.disableVMD()
+	//	if req.IsForwarded() && req.EnableVMD {
+	//		p.enableVMD()
 	//	}
 
 	return p.backend.Format(req)

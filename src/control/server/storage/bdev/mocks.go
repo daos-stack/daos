@@ -78,12 +78,12 @@ func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 	}
 }
 
-func (mb *MockBackend) DisableVMD() {
-	mb.cfg.VmdEnabled = false
+func (mb *MockBackend) EnableVMD() {
+	mb.cfg.VmdEnabled = true
 }
 
-func (mb *MockBackend) IsVMDDisabled() bool {
-	return !mb.cfg.VmdEnabled
+func (mb *MockBackend) IsVMDEnabled() bool {
+	return mb.cfg.VmdEnabled
 }
 
 func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {

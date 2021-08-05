@@ -167,10 +167,10 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    srv.runningUser,
-		PciAllowList:  strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
-		PciBlockList:  strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
+		PCIAllowList:  strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
+		PCIBlockList:  strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:   srv.cfg.DisableVFIO,
-		DisableVMD:    srv.cfg.DisableVMD || srv.cfg.DisableVFIO || !iommuEnabled,
+		EnableVMD:     srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
 	}
 
 	hasBdevs := cfgHasBdevs(srv.cfg)

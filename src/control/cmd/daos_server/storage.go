@@ -78,10 +78,10 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		if _, err := cmd.scs.NvmePrepare(storage.BdevPrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
-			PciAllowList:  cmd.PciAllowList,
-			PciBlockList:  cmd.PciBlockList,
+			PCIAllowList:  cmd.PCIAllowList,
+			PCIBlockList:  cmd.PCIBlockList,
 			ResetOnly:     cmd.Reset,
-			DisableVMD:    !cmd.EnableVMD,
+			EnableVMD:     cmd.EnableVMD,
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}

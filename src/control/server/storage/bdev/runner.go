@@ -119,11 +119,11 @@ func (s *spdkSetupScript) Prepare(req storage.BdevPrepareRequest) error {
 		)
 	}
 
-	if req.PciAllowList != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PciAllowList))
+	if req.PCIAllowList != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))
 	}
-	if req.PciBlockList != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciBlockListEnv, req.PciBlockList))
+	if req.PCIBlockList != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciBlockListEnv, req.PCIBlockList))
 	}
 	if req.DisableVFIO {
 		env = append(env, fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver))
