@@ -128,6 +128,7 @@ attachinfo(void)
 	size_t 	len = 0;
 	size_t 	read;
 	int	rc;
+	
 	if (fp == NULL)
 		return -DER_INVAL;
 
@@ -194,7 +195,7 @@ ccreate(void)
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
  	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
 
-	uuid_generate(cuuid2);	
+	uuid_generate(cuuid2);
 
 	rc = daos_cont_create(poh, cuuid2, prop, NULL);
 	if (rc) {
@@ -209,8 +210,8 @@ ccreate(void)
 	prop2->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
 
 	uuid_generate(cuuid3);
-	
-	rc = daos_cont_create(poh,cuuid3, prop2, NULL);
+
+	rc = daos_cont_create(poh, cuuid3, prop2, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
 		return -1;
@@ -836,7 +837,7 @@ static struct step steps[] = {
 	{ 0,	"Dumping AttachInfo",		attachinfo,	100 },
 
 	/** Set up */
-	{ 1,	"Initializing DAOS",		init ,		100 },
+	{ 1,	"Initializing DAOS",		init,		100 },
 	{ 2,	"Connecting to pool",		pconnect,	99 },
 	{ 3,	"Creating container",		ccreate,	98 },
 	{ 4,	"Opening container",		copen,		97 },
