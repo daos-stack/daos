@@ -31,7 +31,7 @@ func mockScriptRunner(t *testing.T, log logging.Logger, mbc *MockBackendConfig) 
 			calls = append(calls, scriptCall{Env: env, Args: args})
 
 			if len(args) > 0 && args[0] == "reset" {
-				return "", mbc.PrepareResetErr
+				return "", mbc.ResetErr
 			}
 
 			if mbc.PrepareErr != nil {

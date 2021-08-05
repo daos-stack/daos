@@ -90,35 +90,10 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 	}
 }
 
-// Prepare executes setup script to allocate hugepages and unbind PCI devices
-// (that don't have active mountpoints) from generic kernel driver to be
-// used with SPDK. Either all PCI devices will be unbound by default if allow list
-// parameter is not set, otherwise PCI devices can be specified by passing in a
-// allow list of PCI addresses.
-//
-// NOTE: will make the controller disappear from /dev until reset() called.
-func (s *spdkSetupScript) Prepare(req storage.BdevPrepareRequest) error {
+func (s *spdkSetupScript) prepare(req *storage.BdevPrepareRequest, op string, extraEnvs []string) error {
 	env := []string{
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 	}
-
-	var op string
-	args := []string{}
-	if req.ResetOnly {
-		op = "reset"
-		args = append(args, op)
-	} else {
-		op = "setup"
-		nrHugepages := req.HugePageCount
-		if nrHugepages <= 0 {
-			nrHugepages = defaultNrHugepages
-		}
-		env = append(env,
-			fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
-			fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
-		)
-	}
-
 	if req.PCIAllowList != "" {
 		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))
 	}
@@ -128,10 +103,46 @@ func (s *spdkSetupScript) Prepare(req storage.BdevPrepareRequest) error {
 	if req.DisableVFIO {
 		env = append(env, fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver))
 	}
+	env = append(env, extraEnvs...)
+
+	args := []string{}
+	if op == "reset" {
+		args = append(args, "reset")
+	}
 
 	s.log.Debugf("spdk %s env: %v", op, env)
 	out, err := s.runCmd(s.log, env, s.scriptPath, args...)
 	s.log.Debugf("spdk %s stdout:\n%s\n", op, out)
 
 	return errors.Wrapf(err, "spdk %s failed (%s)", op, out)
+}
+
+// Prepare executes setup script to allocate hugepages and unbind PCI devices
+// (that don't have active mountpoints) from generic kernel driver to be
+// used with SPDK. Either all PCI devices will be unbound by default if allow list
+// parameter is not set, otherwise PCI devices can be specified by passing in a
+// allow list of PCI addresses.
+//
+// NOTE: will make the controller disappear from /dev until reset() called.
+func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
+	nrHugepages := req.HugePageCount
+	if nrHugepages <= 0 {
+		nrHugepages = defaultNrHugepages
+	}
+
+	return s.prepare(req, "setup", []string{
+		fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
+		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
+	})
+}
+
+// Reset executes setup script to reset hugepage allocations and unbind PCI devices
+// (that don't have active mountpoints) from SPDK compatible driver e.g. VFIO and
+// bind back to the kernel bdev driver to be used by the OS. Either all PCI devices
+// will be unbound by default if allow list parameter is not set, otherwise PCI
+// devices can be specified by passing in a allow list of PCI addresses.
+//
+// NOTE: will make the controller reappear in /dev.
+func (s *spdkSetupScript) Reset(req *storage.BdevPrepareRequest) error {
+	return s.prepare(req, "reset", []string{})
 }

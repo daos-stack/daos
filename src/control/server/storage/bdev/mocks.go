@@ -7,26 +7,30 @@
 package bdev
 
 import (
+	"sync"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 type (
 	MockBackendConfig struct {
-		PrepareResetErr error
-		PrepareResp     *storage.BdevPrepareResponse
-		PrepareErr      error
-		FormatRes       *storage.BdevFormatResponse
-		FormatErr       error
-		ScanRes         *storage.BdevScanResponse
-		ScanErr         error
-		VmdEnabled      bool // set disabled by default
-		UpdateErr       error
+		ResetErr    error
+		PrepareResp *storage.BdevPrepareResponse
+		PrepareErr  error
+		FormatRes   *storage.BdevFormatResponse
+		FormatErr   error
+		ScanRes     *storage.BdevScanResponse
+		ScanErr     error
+		VmdEnabled  bool // set disabled by default
+		UpdateErr   error
 	}
 
 	MockBackend struct {
+		sync.RWMutex
 		cfg          MockBackendConfig
 		PrepareCalls []storage.BdevPrepareRequest
+		ResetCalls   []storage.BdevPrepareRequest
 	}
 )
 
@@ -61,14 +65,14 @@ func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevForma
 }
 
 func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	mb.Lock()
+	if req.EnableVMD {
+		mb.PrepareCalls = append(mb.PrepareCalls, req)
+	}
 	mb.PrepareCalls = append(mb.PrepareCalls, req)
+	mb.Unlock()
 
 	switch {
-	case req.ResetOnly:
-		if mb.cfg.PrepareResetErr != nil {
-			return nil, mb.cfg.PrepareResetErr
-		}
-		return new(storage.BdevPrepareResponse), nil
 	case mb.cfg.PrepareErr != nil:
 		return nil, mb.cfg.PrepareErr
 	case mb.cfg.PrepareResp == nil:
@@ -76,6 +80,21 @@ func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 	default:
 		return mb.cfg.PrepareResp, nil
 	}
+}
+
+func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	mb.Lock()
+	if req.EnableVMD {
+		mb.ResetCalls = append(mb.ResetCalls, req)
+	}
+	mb.ResetCalls = append(mb.ResetCalls, req)
+	mb.Unlock()
+
+	if mb.cfg.ResetErr != nil {
+		return nil, mb.cfg.ResetErr
+	}
+
+	return new(storage.BdevPrepareResponse), nil
 }
 
 func (mb *MockBackend) EnableVMD() {

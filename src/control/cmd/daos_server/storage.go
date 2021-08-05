@@ -80,7 +80,7 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 			TargetUser:    cmd.TargetUser,
 			PCIAllowList:  cmd.PCIAllowList,
 			PCIBlockList:  cmd.PCIBlockList,
-			ResetOnly:     cmd.Reset,
+			Reset_:        cmd.Reset,
 			EnableVMD:     cmd.EnableVMD,
 		}); err != nil {
 			scanErrors = append(scanErrors, err)

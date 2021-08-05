@@ -124,24 +124,21 @@ func TestProvider_Prepare(t *testing.T) {
 		expErr        error
 	}{
 		"reset fails": {
-			req: storage.BdevPrepareRequest{},
+			req: storage.BdevPrepareRequest{Reset_: true},
 			mbc: &MockBackendConfig{
-				PrepareResetErr: errors.New("reset failed"),
+				ResetErr:   errors.New("reset failed"),
+				PrepareErr: errors.New("prepare failed"),
 			},
 			expErr: errors.New("reset failed"),
 		},
-		"reset-only": {
-			req: storage.BdevPrepareRequest{
-				ResetOnly: true,
-			},
-			mbc: &MockBackendConfig{
-				PrepareErr: errors.New("should not get this far"),
-			},
+		"reset succeeds": {
+			req:    storage.BdevPrepareRequest{Reset_: true},
 			expRes: &storage.BdevPrepareResponse{},
 		},
 		"prepare fails": {
 			req: storage.BdevPrepareRequest{},
 			mbc: &MockBackendConfig{
+				ResetErr:   errors.New("reset failed"),
 				PrepareErr: errors.New("prepare failed"),
 			},
 			expErr: errors.New("prepare failed"),

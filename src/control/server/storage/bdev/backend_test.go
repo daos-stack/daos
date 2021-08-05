@@ -734,6 +734,7 @@ func TestBackend_Prepare(t *testing.T) {
 	)
 
 	for name, tc := range map[string]struct {
+		reset          bool
 		req            storage.BdevPrepareRequest
 		mbc            *MockBackendConfig
 		userLookupRet  *user.User
@@ -752,6 +753,34 @@ func TestBackend_Prepare(t *testing.T) {
 			},
 			userLookupErr: errors.New("unknown user"),
 			expErr:        errors.New("lookup on local host: unknown user"),
+		},
+		"prepare reset; defaults": {
+			reset: true,
+			req: storage.BdevPrepareRequest{
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			expScriptCalls: &[]scriptCall{
+				{
+					Env: []string{
+						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+					},
+					Args: []string{"reset"},
+				},
+			},
+		},
+		"prepare reset fails": {
+			reset: true,
+			req: storage.BdevPrepareRequest{
+				TargetUser:            username,
+				EnableVMD:             false,
+				DisableCleanHugePages: true,
+			},
+			mbc: &MockBackendConfig{
+				ResetErr: errors.New("reset failed"),
+			},
+			expErr: errors.New("reset failed"),
 		},
 		"prepare setup; defaults": {
 			req: storage.BdevPrepareRequest{
@@ -783,10 +812,10 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 						fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 					Args: []string{},
 				},
@@ -804,9 +833,9 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},
@@ -825,10 +854,10 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 					Args: []string{},
 				},
@@ -841,39 +870,9 @@ func TestBackend_Prepare(t *testing.T) {
 				DisableCleanHugePages: true,
 			},
 			mbc: &MockBackendConfig{
-				PrepareErr:      errors.New("prepare failed"),
-				PrepareResetErr: errors.New("reset failed"),
+				PrepareErr: errors.New("prepare failed"),
 			},
 			expErr: errors.New("prepare failed"),
-		},
-		"prepare reset; defaults": {
-			req: storage.BdevPrepareRequest{
-				TargetUser:            username,
-				ResetOnly:             true,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
-			},
-			expScriptCalls: &[]scriptCall{
-				{
-					Env: []string{
-						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-					},
-					Args: []string{"reset"},
-				},
-			},
-		},
-		"prepare reset fails": {
-			req: storage.BdevPrepareRequest{
-				TargetUser:            username,
-				ResetOnly:             true,
-				EnableVMD:             false,
-				DisableCleanHugePages: true,
-			},
-			mbc: &MockBackendConfig{
-				PrepareErr:      errors.New("prepare failed"),
-				PrepareResetErr: errors.New("reset failed"),
-			},
-			expErr: errors.New("reset failed"),
 		},
 		"prepare setup; vmd enabled": {
 			req: storage.BdevPrepareRequest{
@@ -887,10 +886,10 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, fmt.Sprintf("%s %s",
 							common.MockPCIAddr(1), common.MockPCIAddr(2))),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 					Args: []string{},
 				},
@@ -957,18 +956,18 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(3)),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(3)),
 					},
 					Args: []string{},
 				},
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 					},
 					Args: []string{},
 				},
@@ -987,18 +986,18 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(5)),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(5)),
 					},
 					Args: []string{},
 				},
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},
@@ -1017,9 +1016,9 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 					Args: []string{},
 				},
@@ -1039,19 +1038,19 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(2)),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(2)),
 					},
 					Args: []string{},
 				},
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 					Args: []string{},
 				},
@@ -1069,10 +1068,10 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 					Args: []string{},
 				},
@@ -1091,10 +1090,10 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
-						fmt.Sprintf("%s=%s", targetUserEnv, username),
 						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
+						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
+						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
 					Args: []string{},
 				},
@@ -1122,7 +1121,12 @@ func TestBackend_Prepare(t *testing.T) {
 				return tc.hpCleanErr
 			}
 
-			_, gotErr := b.prepare(tc.req, mockUserLookup, mockVmdDetect, mockHpClean)
+			scriptCall := b.script.Prepare
+			if tc.reset {
+				scriptCall = b.script.Reset
+			}
+
+			_, gotErr := b.prepare(tc.req, scriptCall, mockUserLookup, mockVmdDetect, mockHpClean)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return

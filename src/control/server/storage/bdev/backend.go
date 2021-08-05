@@ -46,6 +46,7 @@ type (
 	}
 
 	removeFn     func(string) error
+	scriptCallFn func(*storage.BdevPrepareRequest) error
 	userLookupFn func(string) (*user.User, error)
 	vmdDetectFn  func() ([]string, error)
 	hpCleanFn    func(string, string, string) error
@@ -395,19 +396,19 @@ func detectVMD() ([]string, error) {
 // The VMD addresses are validated against the input request allow and block lists.
 // The output allow list will only contain VMD addresses if either both input allow
 // and block lists are empty or if included in allow and not included in block lists.
-func vmdProcessFilters(inReq *storage.BdevPrepareRequest, vmdPciAddrs []string) storage.BdevPrepareRequest {
+func vmdProcessFilters(inReq *storage.BdevPrepareRequest, vmdPCIAddrs []string) storage.BdevPrepareRequest {
 	var outAllowList []string
 	outReq := *inReq
 
 	if inReq.PCIAllowList == "" && inReq.PCIBlockList == "" {
-		outReq.PCIAllowList = strings.Join(vmdPciAddrs, storage.BdevPciAddrSep)
+		outReq.PCIAllowList = strings.Join(vmdPCIAddrs, storage.BdevPciAddrSep)
 		outReq.PCIBlockList = ""
 		return outReq
 	}
 
 	if inReq.PCIAllowList != "" {
 		allowed := strings.Split(inReq.PCIAllowList, storage.BdevPciAddrSep)
-		for _, addr := range vmdPciAddrs {
+		for _, addr := range vmdPCIAddrs {
 			if common.Includes(allowed, addr) {
 				outAllowList = append(outAllowList, addr)
 			}
@@ -422,9 +423,9 @@ func vmdProcessFilters(inReq *storage.BdevPrepareRequest, vmdPciAddrs []string) 
 
 	if inReq.PCIBlockList != "" {
 		var outList []string
-		inList := outAllowList // in case vmdPciAddrs list has already been filtered
+		inList := outAllowList // in case vmdPCIAddrs list has already been filtered
 		if len(inList) == 0 {
-			inList = vmdPciAddrs
+			inList = vmdPCIAddrs
 		}
 		blocked := strings.Split(inReq.PCIBlockList, storage.BdevPciAddrSep)
 		for _, addr := range inList {
@@ -446,45 +447,43 @@ func vmdProcessFilters(inReq *storage.BdevPrepareRequest, vmdPciAddrs []string) 
 	return outReq
 }
 
-// vmdPrep determines if VMD devices are going to be used and runs a dedicated
-// bdev prepare (SPDK setup) with the VMD addresses explicitly in PCI_ALLOWED list.
-func (sb *spdkBackend) vmdPrep(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn) (bool, error) {
-	vmdPciAddrs, err := vmdDetect()
+// getVMDPrepReq determines if VMD devices are going to be used and returns a
+// bdev prepare request with the VMD addresses explicitly set in PCI_ALLOWED list.
+//
+// If VMD is not to be prepared, a nil request is returned.
+func getVMDPrepReq(log logging.Logger, req *storage.BdevPrepareRequest, vmdDetect vmdDetectFn) (*storage.BdevPrepareRequest, error) {
+	if !req.EnableVMD {
+		return nil, nil
+	}
+
+	vmdPCIAddrs, err := vmdDetect()
 	if err != nil {
-		return false, errors.Wrap(err, "VMD could not be enabled")
+		return nil, errors.Wrap(err, "VMD could not be enabled")
 	}
 
-	if len(vmdPciAddrs) == 0 {
-		sb.log.Debug("vmd prep: no vmd devices found")
-		return false, nil
+	if len(vmdPCIAddrs) == 0 {
+		log.Debug("vmd prep: no vmd devices found")
+		return nil, nil
 	}
-	sb.log.Debugf("volume management devices detected: %v", vmdPciAddrs)
+	log.Debugf("volume management devices detected: %v", vmdPCIAddrs)
 
-	vmdReq := vmdProcessFilters(&req, vmdPciAddrs)
+	vmdReq := vmdProcessFilters(req, vmdPCIAddrs)
 
 	if req.PCIAllowList != "" && vmdReq.PCIAllowList == "" {
-		sb.log.Debugf("vmd prep: %v devices not allowed", vmdPciAddrs)
-		return false, nil
+		log.Debugf("vmd prep: %v devices not allowed", vmdPCIAddrs)
+		return nil, nil
 	}
 	if req.PCIBlockList != "" && vmdReq.PCIAllowList == "" {
-		sb.log.Debugf("vmd prep: %v devices blocked", vmdPciAddrs)
-		return false, nil
+		log.Debugf("vmd prep: %v devices blocked", vmdPCIAddrs)
+		return nil, nil
 	}
+	log.Debugf("volume management devices selected: %v", req.PCIAllowList)
 
-	if err := sb.script.Prepare(vmdReq); err != nil {
-		return false, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
-	}
-	op := "prepared"
-	if vmdReq.ResetOnly {
-		op = "reset"
-	}
-	sb.log.Debugf("volume management devices %s: %v", op, vmdReq.PCIAllowList)
-
-	return true, nil
+	return &vmdReq, nil
 }
 
 // prepare receives function pointers for external interfaces.
-func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLookupFn, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
+func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, scriptCall scriptCallFn, userLookup userLookupFn, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
 	sb.log.Debugf("provider backend prepare %+v", req)
 	resp := &storage.BdevPrepareResponse{}
 
@@ -493,17 +492,20 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 		return nil, errors.Wrapf(err, "lookup on local host")
 	}
 
-	if req.EnableVMD {
-		// If VMD has been explicitly enabled and there are VMD enabled
-		// NVMe devices on the host, attempt to prepare them first.
-		vmdPrepared, err := sb.vmdPrep(req, vmdDetect)
-		if err != nil {
-			return nil, err
+	// If VMD has been explicitly enabled and there are VMD enabled
+	// NVMe devices on the host, attempt to prepare them first.
+	vmdReq, err := getVMDPrepReq(sb.log, &req, vmdDetect)
+	if err != nil {
+		return nil, err
+	}
+	if vmdReq != nil {
+		if err := scriptCall(vmdReq); err != nil {
+			return nil, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 		}
-		resp.VmdPrepared = vmdPrepared
+		resp.VMDPrepared = true
 	}
 
-	if err := sb.script.Prepare(req); err != nil {
+	if err := scriptCall(&req); err != nil {
 		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
 	}
 
@@ -519,14 +521,25 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 }
 
 // Prepare will perform a lookup on the requested target user to validate existence
-// then prepare non-VMD NVMe devices for use with SPDK (or reset if set in request).
-// If EnableVmd is true in request then attempt to prepare VMD NVMe devices.
+// then prepare non-VMD NVMe devices for use with SPDK.
+// If EnableVmd is true in request then attempt to use VMD NVMe devices.
 // If DisableCleanHugePages is false in request then cleanup any leftover hugepages
 // owned by the target user.
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // bdev_include and bdev_exclude list filters provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	return sb.prepare(req, user.Lookup, detectVMD, cleanHugePages)
+	return sb.prepare(req, sb.script.Prepare, user.Lookup, detectVMD, cleanHugePages)
+}
+
+// Reset will perform a lookup on the requested target user to validate existence
+// then reset non-VMD NVMe devices for use by the OS/kernel.
+// If EnableVmd is true in request then attempt to use VMD NVMe devices.
+// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
+// owned by the target user.
+// Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
+// bdev_include and bdev_exclude list filters provided in the server config file.
+func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	return sb.prepare(req, sb.script.Reset, user.Lookup, detectVMD, cleanHugePages)
 }
 
 func (sb *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {

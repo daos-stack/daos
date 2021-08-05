@@ -19,6 +19,7 @@ type (
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
 		Prepare(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
+		Reset(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
 		// TODO DAOS-8040: re-enable VMD
@@ -73,24 +74,16 @@ func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResp
 }
 
 // Prepare attempts to perform all actions necessary to make NVMe components
-// available for use by DAOS. If ResetOnly is set, return after initial prep reset,
-// otherwise run prep reset followed by prep setup.
+// available for use by DAOS. If Reset_ is set, rebind devices to kernel and
+// reset allocation of hugepages, otherwise rebind devices to user-space
+// driver compatible with SPDK and allocate hugeages.
 func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	exitAfterReset := req.ResetOnly
-
-	// run prep reset first to ensure reallocation of hugepages
-	req.ResetOnly = true
-	resp, err := p.backend.Prepare(req)
-	if err != nil {
-		return nil, errors.Wrap(err, "bdev prepare reset")
+	if req.Reset_ {
+		p.log.Debug("run bdev storage provider prepare reset")
+		return p.backend.Reset(req)
 	}
 
-	// if we're only resetting, return before prep setup
-	if exitAfterReset {
-		return resp, nil
-	}
-
-	req.ResetOnly = false
+	p.log.Debug("run bdev storage provider prepare setup")
 	return p.backend.Prepare(req)
 }
 

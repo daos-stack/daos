@@ -171,6 +171,7 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		PCIBlockList:  strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:   srv.cfg.DisableVFIO,
 		EnableVMD:     srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
+		Reset_:        true, // first reset allocations before preparing devices
 	}
 
 	hasBdevs := cfgHasBdevs(srv.cfg)
@@ -194,9 +195,14 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+		srv.log.Errorf("automatic NVMe prepare reset failed (check configuration?)\n%s", err)
+	} else {
+		prepReq.Reset_ = false
+		srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+		if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
+			srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+		}
 	}
 
 	hugePages, err := hpiGetter()

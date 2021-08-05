@@ -252,14 +252,14 @@ type (
 		PCIAllowList          string
 		PCIBlockList          string
 		TargetUser            string
-		ResetOnly             bool
+		Reset_                bool
 		DisableVFIO           bool
 		EnableVMD             bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		VmdPrepared bool
+		VMDPrepared bool
 	}
 
 	// BdevTierProperties contains basic configuration properties of a bdev tier.
