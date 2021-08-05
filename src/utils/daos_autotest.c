@@ -184,6 +184,31 @@ out:
 }
 
 static int
+attachinfo(void)
+{
+	char *command = "sudo daos_agent dump-attachinfo";
+ 	FILE *fp = popen(command, "r");
+ 	char *line = NULL;
+ 	size_t len = 0;
+	size_t read;
+	if (fp == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		continue;
+	}
+
+	int rc;
+	rc = pclose(fp);
+	if (rc) {
+		step_fail("Are daos_server and daos_agent running?");
+		return -1;
+	}
+	step_success("");
+	return rc;
+}
+
+static int
 init(void)
 {
 	int rc;
@@ -874,12 +899,13 @@ struct step {
 static struct step steps[] = {
 	/** Pre-test checks */
 	{ 0,	"Checking daos_agent pid",	agent,		100 },
+	{ 1,	"Dumping AttachInfo",		attachinfo,	100 },
 
 	/** Set up */
-	{ 1,	"Initializing DAOS",		init ,		100 },
-	{ 2,	"Connecting to pool",		pconnect,	99 },
-	{ 3,	"Creating container",		ccreate,	98 },
-	{ 4,	"Opening container",		copen,		97 },
+	{ 2,	"Initializing DAOS",		init ,		100 },
+	{ 3,	"Connecting to pool",		pconnect,	99 },
+	{ 4,	"Creating container",		ccreate,	98 },
+	{ 5,	"Opening container",		copen,		97 },
 
 	/** Layout generation tests */
 	{ 10,	"Generating 1M S1 layouts",	oS1,		96 },
