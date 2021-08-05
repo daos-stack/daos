@@ -187,8 +187,13 @@ class OSAOfflineParallelTest(OSAUtils):
             self.assert_on_rebuild_failure()
             pver_end = self.get_pool_version()
             self.log.info("Pool Version at the End %s", pver_end)
-            self.assertTrue(pver_end >= 25,
-                            "Pool Version Error:  at the end")
+            if self.server_boot is True:
+                self.assertTrue(pver_end >= 17,
+                                "Pool Version Error:  at the end")
+            else:
+                self.assertTrue(pver_end >= 25,
+                                "Pool Version Error:  at the end")
+
 
         # Finally run IOR to read the data and perform daos_container_check
         for val in range(0, num_pool):
