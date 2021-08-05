@@ -206,8 +206,8 @@ ccreate(void)
 
 	/** Create container with RF=2 */
 	daos_prop_t	*prop2;
-	prop2 = daos_prop_alloc(1);
 
+	prop2 = daos_prop_alloc(1);
 	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 	prop2->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
 
