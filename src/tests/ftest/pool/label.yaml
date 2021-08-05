@@ -1,0 +1,9 @@
+hosts:
+  test_servers:
+    - server-A
+timeout: 90
+setup:
+  start_servers_once: False
+pool:
+  control_method: dmg
+  scm_size: 1G
