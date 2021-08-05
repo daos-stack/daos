@@ -1493,9 +1493,6 @@ static const struct CMUnitTest sv_tests[] = {
 	   update_fetch_sv),
 };
 
-/** in srv_scrubbing_tests.c */
-extern int run_scrubbing_tests(void);
-
 int
 main(int argc, char **argv)
 {

@@ -41,6 +41,7 @@
 	X(RAS_ENGINE_DIED,		"engine_died")			\
 	X(RAS_ENGINE_ASSERTED,		"engine_asserted")		\
 	X(RAS_ENGINE_CLOCK_DRIFT,	"engine_clock_drift")		\
+	X(RAS_CORRUPTION_DETECTED,	"corruption_detected")		\
 	X(RAS_POOL_REBUILD_START,	"pool_rebuild_started")		\
 	X(RAS_POOL_REBUILD_END,		"pool_rebuild_finished")	\
 	X(RAS_POOL_REBUILD_FAILED,	"pool_rebuild_failed")		\

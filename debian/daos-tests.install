@@ -12,6 +12,7 @@ usr/bin/jobtest
 usr/bin/eq_tests
 usr/bin/security_test
 usr/bin/srv_checksum_tests
+usr/bin/srv_scrubbing_tests
 usr/bin/vos_tests
 usr/bin/smd_ut
 usr/bin/vea_ut

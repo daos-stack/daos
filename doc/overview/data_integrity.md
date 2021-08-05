@@ -153,6 +153,7 @@ Unit and functional testing is performed at many layers.
 ./commont_test
 ./vos_test -z
 ./srv_checksum_tests
+./srv_scrubbing_tests
 ```
 **With daos_server running**
 ```
@@ -230,26 +231,24 @@ scanning anything on that SSD.
 These properties are provided when a pool is created, but should
 also be able to update them. When updated, they should be active right away.
 
-- **Pool Scrubber Schedule** - How the scrubber will run at the pool
-  level. The  container configuration can disable scrubbing for the
-  container, but it cannot alter the type of schedule.
-  - **OFF**
-  - **Run & Wait** - Will run the scrubber to completion, yielding
-    after consuming configured "credits". Then, if completed before
-    configured frequency, will sleep until it's time to start again.
-  - **Continuous** - Will run the scanner, sleeping in between
-    object scrubs so that the duration of the scrubber takes whole
-    frequency time and will start again as soon as it completes. Knowing
-    how many objects are in the system is required for this approach to
-    work. The scrubber will use the previous scrubber count of objects as
-    best guess for current.
-  - **Run Once** - Run the scrubber once then turn off. Useful for  better
-    control by external scripts to control the schedule. Will still yield
-    after consuming "credits".
-  - **Run Once Fast** - Run the scrubber once, without yielding,
-    then turn off. Useful for better control by external scripts to
-    control the schedule. Maybe want to get it done really fast and don't
-    care about I/O at this time.
+- **Pool Scrubber Schedule** - How the scrubber will run at the pool level. The
+  container configuration can disable scrubbing for the container, but it cannot
+  alter the type of schedule.
+    - **OFF**
+    - **Run & Wait** - Will run the scrubber to completion, yielding after
+      consuming configured "credits". Then, if completed before configured
+      frequency, will sleep until it's time to start again.
+    - **Continuous** - Will run the scanner, sleeping in between object scrubs so
+      that the duration of the scrubber takes whole frequency time and will
+      start again as soon as it completes. Knowing how many objects are in the
+      system is required for this approach to work. The scrubber will use the
+      previous scrubber count of objects as best guess for current.
+    - **Run Once** - Run the scrubber once then turn off. Useful for better
+      control by external scripts to control the schedule. Will still yield after
+      consuming "credits".
+    - **Run Once Fast** - Run the scrubber once, without yielding, then turn off.
+      Useful for better control by external scripts to control the schedule. Maybe
+      want to get it done really fast and don't care about I/O at this time.
 - **Pool Scrubber Frequency** - How frequently the scrubber should run in
   number of seconds. If a scan takes longer than frequency, it would start
   again as soon as the previous scan completes.
@@ -314,21 +313,6 @@ ds_start_scrubbing_ult ~> scrubbing_ult -> scrub_pool ~> cont_iter_scrub_cb ->
     scrub_cont ~> obj_iter_scrub_cb ...
 ```
 
-#### Silent Data Corruption Detection (TODO)
-::Still todo::
-```c
-obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
-{
-        build_iod
-        vos_obj_fetch(coh, oid, epoch, dkey, iod, sgl);
-        // for single value
-        csum = calc_checksum(type, csummer, iod, sgl)
-        compare(csum, entry.csum)
-        // for recx
-        for each chunk calc csum and compare
-}
-```
-
 ### VOS Layer
 - In order to mark data as corrupted a flag field is added to bio_addr_t which
   includes a CORRUPTED bit.
@@ -342,6 +326,10 @@ obj_iter_scrub(coh, epr, csummer, pool_uuid, event_handlers, entry, type)
   rebuild the server calls VOS to update value as corrupted.
 - (TBD) Add Server Side Verifying on fetch so can know if media or network
   corruption (note: need something so extents aren't double verified?)
+
+## Testing
+- srv_scrubbing_tests
+- Add scrubbing status to daos_pool_info_t so it can be queried
 
 
 ## Debugging

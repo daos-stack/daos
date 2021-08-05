@@ -1,0 +1,24 @@
+"""Build daos iosrv tests"""
+import daos_build
+
+
+def scons():
+    """Execute build"""
+    Import('denv', 'prereqs')
+
+    prereqs.require(denv, 'pmdk')
+    denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
+    unit_env = denv.Clone()
+    # Add runtime paths for daos libraries
+    unit_env.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
+
+    libraries = ['daos_common_pmem', 'daos_tests', 'gurt', 'cart', 'cmocka',
+                 'vos', 'uuid', 'pmem', 'pmemobj', 'bio', 'pthread', 'abt']
+    src = ['srv_scrubbing_tests.c', '../srv_pool_scrub.c',
+           'srv_scrubbing_sched_tests.c']
+    srv_scrubbing_tests = daos_build.test(unit_env, 'srv_scrubbing_tests', src,
+                                          LIBS=libraries)
+    unit_env.Install('$PREFIX/bin/', [srv_scrubbing_tests])
+
+if __name__ == "SCons.Script":
+    scons()

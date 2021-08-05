@@ -247,6 +247,10 @@ daos_csummer_csum_compare(struct daos_csummer *obj, uint8_t *a,
 			  uint8_t *b, uint32_t csum_len);
 
 int
+daos_csummer_calc_for_iov(struct daos_csummer *csummer, daos_key_t *iov,
+			  uint8_t *csum_buf, uint16_t csum_buf_len);
+
+int
 daos_csummer_calc_one(struct daos_csummer *obj, d_sg_list_t *sgl,
 		       struct dcs_csum_info *csums, size_t rec_len, size_t nr,
 		       size_t idx);
