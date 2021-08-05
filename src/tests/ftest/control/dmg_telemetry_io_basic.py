@@ -17,6 +17,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
     :avocado: recursive
     """
 
+
     def verify_io_test_metrics(self, io_test_metrics, metrics_data, threshold):
         """ Verify telemetry io metrics from metrics_data.
 
@@ -27,27 +28,35 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
             threshold (int): test io metrics threshold.
 
         """
-        for host in self.hostlist_servers:
-            self.log.info("==Host: %s", host)
-            status = 0
-            for name in io_test_metrics:
-                self.log.info("  --telemetry metric: %s", name)
-                for key in sorted(metrics_data):
-                    m_data = metrics_data[key]
-                    self.log.info(
-                        "  %12s: %s",
-                        "Initial    " if key == 0 else "Test Loop {}".format(
-                            key), metrics_data[key][host][name])
-
-                    #Detail for each test io metrics threshold to be updated
-                    if m_data[host][name] < threshold:
-                        self.log.info(
-                            "#Host %s, metrics %s, value %s "
-                            "less than the threshold limit %s",
-                            host, name, m_data[host][name], threshold)
-                        status = 1
-            if status == 1:
-                self.fail("##Telemetry test io metrics verification failed.")
+        status = True
+        for name in sorted(io_test_metrics):
+            self.log.info("  --telemetry metric: %s", name)
+            self.log.info(
+                "    %-9s %-12s %-4s %-6s %-6s %s",
+                "TestLoop", "Host", "Rank", "Target", "Size", "Value")
+            for key in sorted(metrics_data):
+                m_data = metrics_data[key]
+                if key == 0:
+                    testloop = "Initial"
+                else:
+                    testloop = str(key)
+                for host in sorted(m_data[name]):
+                    for rank in sorted(m_data[name][host]):
+                        for target in sorted(m_data[name][host][rank]):
+                            for size in sorted(
+                                m_data[name][host][rank][target]):
+                                value = m_data[name][host][rank][target][size]
+                                invalid = ""
+                                if (value < threshold[0]
+                                    or value >= threshold[1]):
+                                    status = False
+                                    invalid = "**exceed threshold"
+                                self.log.info(
+                                    "    %-9s %-12s %-4s %-6s %-6s %s %s",
+                                    testloop, host, rank, target, size, value,
+                                    invalid)
+        if not status:
+            self.fail("##Telemetry test io metrics verification failed.")
 
     def display_io_test_metrics(self, metrics_data):
         """ Display metrics_data.
@@ -58,7 +67,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
         """
         for key in sorted(metrics_data):
             self.log.info(
-                "  %12s: %s",
+                "\n  %12s: %s",
                 "Initial " if key == 0 else "Test Loop {}".format(key),
                 metrics_data[key])
 

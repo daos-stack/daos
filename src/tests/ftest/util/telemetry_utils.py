@@ -426,23 +426,20 @@ class TelemetryUtils():
                         }
         return info
 
-    def get_select_metrics(self, metric_names):
-        """Get the selected telemetry metrics.
-
-        Args:
-            metric_names(list): list of telemetry metric names to get.
+    def get_container_metrics(self):
+        """Get the container telemetry metrics.
 
         Returns:
-            dict: dictionary of dictionaries of the selected metric names and
+            dict: dictionary of dictionaries of container metric names and
                 values per server host key
 
         """
         data = {}
-        info = self.get_metrics(",".join(metric_names))
-        self.log.info("Telemetry Information")
+        info = self.get_metrics(",".join(self.ENGINE_CONTAINER_METRICS))
+        self.log.info("Container Telemetry Information")
         for host in info:
-            data[host] = {name: 0 for name in metric_names}
-            for name in metric_names:
+            data[host] = {name: 0 for name in self.ENGINE_CONTAINER_METRICS}
+            for name in self.ENGINE_CONTAINER_METRICS:
                 if name in info[host]:
                     for metric in info[host][name]["metrics"]:
                         self.log.info(
@@ -452,25 +449,62 @@ class TelemetryUtils():
                         data[host][name] = metric["value"]
         return data
 
-    def get_container_metrics(self):
-        """Get the container telemetry metrics.
+    def get_io_metrics(self):
+        """Get the io telemetry metrics.
 
         Returns:
             dict: dictionary of dictionaries of container metric names and
                 values per server host key
 
         """
-        return self.get_select_metrics(self.ENGINE_CONTAINER_METRICS)
-
-    def get_io_metrics(self):
-        """Get the I/O telemetry metrics.
-
-        Returns:
-            dict: dictionary of dictionaries of io metric names and
-                values per server host key
-
-        """
-        return self.get_select_metrics(self.ENGINE_IO_METRICS)
+        data = {}
+        info = self.get_metrics(",".join(self.ENGINE_IO_METRICS))
+        self.log.info("I/O Telemetry Information")
+        for name in self.ENGINE_IO_METRICS:
+            for index, host in enumerate(info):
+                if name in info[host]:
+                    if index == 0:
+                        self.log.info(
+                            "  %s (%s):",
+                            name, info[host][name]["description"])
+                        self.log.info(
+                            "    %-12s %-4s %-6s %-6s %s",
+                            "Host", "Rank", "Target", "Size", "Value")
+                    if name not in data:
+                        data[name] = {}
+                    if host not in data[name]:
+                        data[name][host] = {}
+                    for metric in info[host][name]["metrics"]:
+                        if "labels" in metric:
+                            if ("rank" in metric["labels"]
+                                    and "target" in metric["labels"]
+                                    and "size" in metric["labels"]):
+                                rank = metric["labels"]["rank"]
+                                target = metric["labels"]["target"]
+                                size = metric["labels"]["size"]
+                                if rank not in data[name][host]:
+                                    data[name][host][rank] = {}
+                                if target not in data[name][host][rank]:
+                                    data[name][host][rank][target] = {}
+                                data[name][host][rank][target][size] = \
+                                    metric["value"]
+                                self.log.info(
+                                    "    %-12s %-4s %-6s %-6s %s",
+                                    host, rank, target, size, metric["value"])
+                            elif ("rank" in metric["labels"]
+                                    and "target" in metric["labels"]):
+                                rank = metric["labels"]["rank"]
+                                target = metric["labels"]["target"]
+                                if rank not in data[name][host]:
+                                    data[name][host][rank] = {}
+                                if target not in data[name][host][rank]:
+                                    data[name][host][rank][target] = {}
+                                data[name][host][rank][target]["-"] = \
+                                    metric["value"]
+                                self.log.info(
+                                    "    %-12s %-4s %-6s %-6s %s",
+                                    host, rank, target, "-", metric["value"])
+        return data
 
     def check_container_metrics(self, open_count=None, active_count=None,
                                 close_count=None, destroy_count=None):
