@@ -266,7 +266,7 @@ func (mi *MockInstance) HasBlockDevices() bool {
 	return mi.cfg.HasBlockDevices
 }
 
-func (mi *MockInstance) ScanBdevTiers(_ bool) ([]storage.BdevTierScanResult, error) {
+func (mi *MockInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
 	return nil, nil
 }
 
