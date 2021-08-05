@@ -194,7 +194,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_STATUS,
 	/** OID value to start allocation from */
 	DAOS_PROP_CO_ALLOCED_OID,
-	/** EC cell size, it can overwrite DAOS_PROP_EC_CELL_SZ of pool */
+	/** EC cell size, it can overwrite DAOS_PROP_CO_EC_CELL_SZ of pool */
 	DAOS_PROP_CO_EC_CELL_SZ,
 	DAOS_PROP_CO_MAX,
 };
