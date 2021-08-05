@@ -73,8 +73,7 @@ int ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 int ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		       uuid_t *handles, size_t n_handles, const char *group);
 int ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-				     uint32_t rank,
-				     struct pool_target_id_list *tgt_list,
+				     struct pool_target_addr_list *tgt_addr,
 				     pool_comp_state_t new_state);
 int ds_mgmt_pool_reintegrate(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			     uint32_t reint_rank,

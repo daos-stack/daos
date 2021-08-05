@@ -134,6 +134,28 @@ struct pool_domain {
 #define do_child_nr		do_comp.co_nr
 #define do_cpu_nr		do_comp.co_nr
 
+/** Target address for each pool target */
+struct pool_target_addr {
+	/** rank of the node where the target resides */
+	d_rank_t	pta_rank;
+	/** target index within each node */
+	uint32_t	pta_target;
+};
+
+struct pool_target_addr_list {
+	int			 pta_number;
+	struct pool_target_addr	*pta_addrs;
+};
+
+int
+pool_target_addr_list_alloc(unsigned int num,
+			    struct pool_target_addr_list *list);
+int
+pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
+			     struct pool_target_addr *src);
+void
+pool_target_addr_list_free(struct pool_target_addr_list *list);
+
 struct pool_target_id {
 	uint32_t	pti_id;
 };

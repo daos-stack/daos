@@ -162,8 +162,7 @@ int ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const d_rank_list_t *rank_list, int ndomains,
 		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
-				uint32_t rank,
-				struct pool_target_id_list *target_list,
+				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
