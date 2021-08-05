@@ -19,6 +19,7 @@
 #include <daos/common.h>
 
 #include "daos_hdlr.h"
+#include <fcntl.h>
 
 /** Input arguments passed to daos utility */
 struct cmd_args_s *autotest_ap;
@@ -32,6 +33,11 @@ clock_t	end;
 
 /** generated container UUID */
 uuid_t		cuuid;
+
+/** generate container UUID for aux cont */
+uuid_t		cuuid2;
+uuid_t		cuuid3;
+
 /** initial object ID */
 uint64_t	oid_hi = 1;
 daos_obj_id_t	oid = { .hi = 1, .lo = 1 }; /** object ID */
@@ -113,6 +119,32 @@ step_init(void)
 }
 
 static int
+attachinfo(void)
+{
+	char	*command = "sudo daos_agent dump-attachinfo";
+	FILE	*fp = popen(command, "r");
+	char	*line = NULL;
+	size_t	len = 0;
+	size_t	read;
+	int	rc;
+
+	if (fp == NULL)
+		return -DER_INVAL;
+
+	while ((read = getline(&line, &len, fp)) != -1) {
+		continue;
+	}
+
+	rc = pclose(fp);
+	if (rc) {
+		step_fail("Are daos_server and daos_agent running?");
+		return -1;
+	}
+	step_success("");
+	return rc;
+}
+
+static int
 init(void)
 {
 	int rc;
@@ -156,6 +188,36 @@ ccreate(void)
 		return -1;
 	}
 
+	/** Create container with RF=1 */
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+
+	uuid_generate(cuuid2);
+
+	rc = daos_cont_create(poh, cuuid2, prop, NULL);
+	if (rc) {
+		step_fail(d_errdesc(rc));
+		return -1;
+	}
+
+	/** Create container with RF=2 */
+	daos_prop_t	*prop2;
+
+	prop2 = daos_prop_alloc(1);
+	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop2->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+
+	uuid_generate(cuuid3);
+
+	rc = daos_cont_create(poh, cuuid3, prop2, NULL);
+	if (rc) {
+		step_fail(d_errdesc(rc));
+		return -1;
+	}
+
 	step_success("uuid = "DF_UUIDF, DP_UUID(cuuid));
 	return 0;
 }
@@ -184,7 +246,7 @@ oS1(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, 0, OC_S1, 0, 0);
+	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
 	for (i = 0; i < 1000000; i++) {
 
@@ -213,7 +275,7 @@ oSX(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, 0, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
 	for (i = 0; i < 10000; i++) {
 
@@ -479,7 +541,7 @@ kv_insert128(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -578,7 +640,7 @@ kv_insert4k(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
@@ -641,7 +703,7 @@ kv_insert1m(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -714,12 +776,24 @@ static int
 cdestroy(void)
 {
 	int rc;
-
 	rc = daos_cont_destroy(poh, cuuid, force, NULL);
 	if (rc) {
 		step_fail(d_errdesc(rc));
 		return -1;
 	}
+
+	rc = daos_cont_destroy(poh, cuuid2, force, NULL);
+	if (rc) {
+		step_fail(d_errdesc(rc));
+		return -1;
+	}
+
+	rc = daos_cont_destroy(poh, cuuid3, force, NULL);
+	if (rc) {
+		step_fail(d_errdesc(rc));
+		return -1;
+	}
+
 	step_success("");
 	return 0;
 }
@@ -760,11 +834,14 @@ struct step {
 };
 
 static struct step steps[] = {
+	/** Pre-test checks */
+	{ 0,	"Dumping AttachInfo",		attachinfo,	100 },
+
 	/** Set up */
-	{ 0,	"Initializing DAOS",		init ,		100 },
-	{ 1,	"Connecting to pool",		pconnect,	99 },
-	{ 2,	"Creating container",		ccreate,	98 },
-	{ 3,	"Opening container",		copen,		97 },
+	{ 1,	"Initializing DAOS",		init,		100 },
+	{ 2,	"Connecting to pool",		pconnect,	99 },
+	{ 3,	"Creating container",		ccreate,	98 },
+	{ 4,	"Opening container",		copen,		97 },
 
 	/** Layout generation tests */
 	{ 10,	"Generating 1M S1 layouts",	oS1,		96 },
