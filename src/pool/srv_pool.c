@@ -701,7 +701,8 @@ rechoose:
 	rc = rsvc_client_complete_rpc(&client, &ep, rc,
 				      rc == 0 ? out->pro_op.po_rc : -DER_IO,
 				      rc == 0 ? &out->pro_op.po_hint : NULL);
-	if (rc == RSVC_CLIENT_RECHOOSE) {
+	if (rc == RSVC_CLIENT_RECHOOSE ||
+	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->pro_op.po_rc))) {
 		crt_req_decref(rpc);
 		dss_sleep(d_backoff_seq_next(&backoff_seq));
 		D_GOTO(rechoose, rc);
@@ -2545,9 +2546,7 @@ realloc_resp:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->plco_op.po_rc,
-				      &out->plco_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->plco_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		/* To simplify logic, destroy bulk hdl and buffer each time */
 		list_cont_bulk_destroy(in->plci_cont_bulk);
@@ -3228,9 +3227,7 @@ rechoose:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->pgo_op.po_rc,
-				      &out->pgo_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pgo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
@@ -3297,8 +3294,7 @@ rechoose:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-		out->peo_op.po_rc, &out->peo_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->peo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
@@ -3389,8 +3385,7 @@ rechoose:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-		out->pto_op.po_rc, &out->pto_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pto_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
@@ -3547,9 +3542,7 @@ rechoose:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->pso_op.po_rc,
-				      &out->pso_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pso_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
@@ -3721,9 +3714,7 @@ rechoose:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->puo_op.po_rc,
-				      &out->puo_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->puo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
@@ -3887,9 +3878,7 @@ rechoose:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->pdo_op.po_rc,
-				      &out->pdo_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pdo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
@@ -4949,7 +4938,7 @@ out:
 
 /**
  * Send a CaRT message to the pool svc to test and
- * (if applicable based on destoy and force option) evict all open handles
+ * (if applicable based on destroy and force option) evict all open handles
  * on a pool.
  *
  * \param[in]	pool_uuid	UUID of the pool
@@ -5017,9 +5006,7 @@ rechoose:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->pvo_op.po_rc,
-				      &out->pvo_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pvo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		crt_req_decref(rpc);
 		dss_sleep(1000 /* ms */);
@@ -5205,9 +5192,7 @@ realloc_resp:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->prgo_op.po_rc,
-				      &out->prgo_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->prgo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		/* To simplify logic, destroy bulk hdl and buffer each time */
 		ranks_get_bulk_destroy(in->prgi_ranks_bulk);
