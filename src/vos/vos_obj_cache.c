@@ -220,12 +220,14 @@ vos_obj_release(struct daos_lru_cache *occ, struct vos_object *obj, bool evict)
 
 /** Move local object to the lru cache */
 static inline int
-cache_object(struct daos_lru_cache *occ)
+cache_object(struct daos_lru_cache *occ, struct vos_object **objp)
 {
 	struct vos_object	*obj_new;
 	struct daos_llink	*lret;
 	struct obj_lru_key	 lkey;
 	int			 rc;
+
+	*objp = NULL;
 
 	D_ASSERT(obj_local.obj_cont != NULL);
 
@@ -233,8 +235,11 @@ cache_object(struct daos_lru_cache *occ)
 	lkey.olk_oid = obj_local.obj_id;
 
 	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), obj_local.obj_cont, &lret);
-	if (rc != 0)
+	if (rc != 0) {
+		clean_object(&obj_local);
+		memset(&obj_local, 0, sizeof(obj_local));
 		return rc; /* Can't cache new object */
+	}
 
 	/** Object is in cache */
 	obj_new = container_of(lret, struct vos_object, obj_llink);
@@ -247,8 +252,12 @@ cache_object(struct daos_lru_cache *occ)
 	obj_new->obj_sync_epoch = obj_local.obj_sync_epoch;
 	obj_new->obj_df = obj_local.obj_df;
 	obj_new->obj_zombie = obj_local.obj_zombie;
+	obj_local.obj_toh = DAOS_HDL_INVAL;
+	obj_local.obj_ih = DAOS_HDL_INVAL;
 	clean_object(&obj_local);
 	memset(&obj_local, 0, sizeof(obj_local));
+
+	*objp = obj_new;
 
 	return 0;
 }
@@ -288,20 +297,12 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	lkey.olk_cont = cont;
 	lkey.olk_oid = oid;
 
-try_hold:
 	/** Pass NULL as the create_args the first time.   We don't want to
 	 *  evict an entry until we need to do so.
 	 */
 	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), NULL, &lret);
 	if (rc == -DER_NONEXIST) {
-		/** Object isn't in cache, use a threadprivate variable for the checks */
-		if (obj_local.obj_cont != NULL) {
-			/** Threadprivate variable is in used, first move it to cache */
-			rc = cache_object(occ);
-			if (rc != 0)
-				goto failed_2;
-			goto try_hold;
-		}
+		D_ASSERT(obj_local.obj_cont == NULL);
 		obj = &obj_local;
 		init_object(obj, oid, cont);
 	} else if (rc != 0) {
@@ -315,15 +316,14 @@ try_hold:
 		D_GOTO(failed, rc = -DER_AGAIN);
 
 	if (intent == DAOS_INTENT_KILL) {
-		if (obj == &obj_local)
-			goto out; /* Ok to delete, not referenced */
+		if (obj != &obj_local) {
+			if (vos_obj_refcount(obj) > 2)
+				D_GOTO(failed, rc = -DER_BUSY);
 
-		if (vos_obj_refcount(obj) > 2)
-			D_GOTO(failed, rc = -DER_BUSY);
-
+			vos_obj_evict(occ, obj);
+		}
 		/* no one else can hold it */
 		obj->obj_zombie = true;
-		vos_obj_evict(occ, obj);
 		if (obj->obj_df)
 			goto out; /* Ok to delete */
 	}
@@ -444,7 +444,13 @@ out:
 		D_GOTO(failed, rc = -DER_TX_RESTART);
 	}
 
-	if (obj == &obj_local) {
+	if (!create && obj == &obj_local) {
+		/** For a read, go ahead and cache the object.  For writes, it should get released
+		 *  before the next yield.
+		 */
+		rc = cache_object(occ, &obj);
+		if (rc != 0)
+			goto failed_2;
 	}
 
 	*obj_p = obj;
@@ -460,11 +466,8 @@ failed_2:
 void
 vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj)
 {
-	if (obj == &obj_local) {
-		/** prevent new holders */
-		obj_local.obj_zombie = true;
+	if (obj == &obj_local)
 		return;
-	}
 	daos_lru_ref_evict(occ, &obj->obj_llink);
 }
 
@@ -483,13 +486,6 @@ vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
 	if (rc == 0) {
 		daos_lru_ref_evict(occ, lret);
 		daos_lru_ref_release(occ, lret);
-	}
-
-	if (rc == -DER_NONEXIST && obj_local.obj_cont == cont &&
-	    memcmp(&obj_local.obj_id.id_pub, &oid.id_pub, sizeof(oid.id_pub)) == 0) {
-		/** prevent new holders */
-		obj_local.obj_zombie = true;
-		rc = 0;
 	}
 
 	return rc == -DER_NONEXIST ? 0 : rc;
