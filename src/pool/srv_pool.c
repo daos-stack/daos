@@ -360,14 +360,6 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		if (!create &&
-		    (entry->dpe_type == DAOS_PROP_PO_EC_CELL_SZ)) {
-			D_ERROR("Can't change immutable property=%d\n",
-				entry->dpe_type);
-			rc = -DER_NO_PERM;
-			break;
-		}
-
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			if (entry->dpe_str == NULL ||
