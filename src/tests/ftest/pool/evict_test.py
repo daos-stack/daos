@@ -8,7 +8,6 @@ import uuid
 
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
-from command_utils_base import CommandFailure
 from test_utils_container import TestContainer
 
 
@@ -157,9 +156,10 @@ class EvictTests(TestWithServers):
         The handle is removed.
         The test verifies that the other two pools were not affected
         by the evict
+
         :avocado: tags=all,pr,daily_regression,full_regression
         :avocado: tags=small
-        :avocado: tags=pool,pool_evict
+        :avocado: tags=pool,pool_evict,pool_evict_basic
         :avocado: tags=DAOS_5610
         """
         # Do not use self.pool. It will cause -1002 error when disconnecting.
@@ -195,15 +195,13 @@ class EvictTests(TestWithServers):
             container[count].write_objects(target_list[-1])
 
         try:
-            self.log.info(
-                "Attempting to evict clients from pool with UUID: %s",
-                pool[-1].uuid)
-            # Evict the last pool in the list
-            pool[-1].dmg.pool_evict(pool=pool[-1].pool.get_uuid_str())
-        except CommandFailure as result:
-            self.fail(
-                "Detected exception while evicting a client {}".format(
-                    str(result)))
+            pool[-1].dmg.exit_status_exception = False
+            pool[-1].evict()
+        finally:
+            pool[-1].dmg.exit_status_exception = True
+
+        if pool[-1].dmg.result.exit_status != 0:
+            self.fail("Pool evict failed!")
 
         for count in range(len(tlist)):
             # Commented out due to DAOS-3836.

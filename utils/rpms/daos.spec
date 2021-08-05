@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.104
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -76,7 +76,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.04
+BuildRequires: spdk-devel >= 21.07
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -153,7 +153,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.04
+Requires: spdk-tools >= 21.07
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -480,9 +480,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Wed Aug 04 2021 Yawei <yawei.niu@intel.com> 1.3.104-2
+* Thu Aug 05 2021 Yawei <yawei.niu@intel.com> 1.3.104-3
 - Fix duplicates
 - Add vos_perf
+
+* Wed Aug 04 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.104-2
+- Update to spdk 21.07 and (indirectly) dpdk 21.05
 
 * Mon Aug 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.104-1
 - Version bump to 1.3.104 for 2.0 test build 4
