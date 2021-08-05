@@ -331,14 +331,19 @@ func (srv *server) setupGrpc() error {
 func (srv *server) registerEvents() {
 	registerFollowerSubscriptions(srv)
 
-	srv.sysdb.OnLeadershipGained(func(ctx context.Context) error {
-		srv.log.Infof("MS leader running on %s", srv.hostname)
-		srv.mgmtSvc.startJoinLoop(ctx)
-		registerLeaderSubscriptions(srv)
-		srv.log.Debugf("requesting sync GroupUpdate after leader change")
-		srv.mgmtSvc.reqGroupUpdate(ctx, true)
-		return nil
-	})
+	srv.sysdb.OnLeadershipGained(
+		func(ctx context.Context) error {
+			srv.log.Infof("MS leader running on %s", srv.hostname)
+			srv.mgmtSvc.startJoinLoop(ctx)
+			registerLeaderSubscriptions(srv)
+			srv.log.Debugf("requesting sync GroupUpdate after leader change")
+			srv.mgmtSvc.reqGroupUpdate(ctx, true)
+			return nil
+		},
+		func(ctx context.Context) error {
+			return srv.mgmtSvc.checkPools(ctx)
+		},
+	)
 	srv.sysdb.OnLeadershipLost(func() error {
 		srv.log.Infof("MS leader no longer running on %s", srv.hostname)
 		registerFollowerSubscriptions(srv)
@@ -366,7 +371,25 @@ func (srv *server) start(ctx context.Context, shutdown context.CancelFunc) error
 		shutdown()
 	}()
 
-	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.pubSub, srv.cfg),
+	drpcSetupReq := &drpcServerSetupReq{
+		log:     srv.log,
+		sockDir: srv.cfg.SocketDir,
+		engines: srv.harness.Instances(),
+		tc:      srv.cfg.TransportConfig,
+		sysdb:   srv.sysdb,
+		events:  srv.pubSub,
+	}
+	// Single daos_server dRPC server to handle all engine requests
+	if err := drpcServerSetup(ctx, drpcSetupReq); err != nil {
+		return errors.WithMessage(err, "dRPC server setup")
+	}
+	defer func() {
+		if err := drpcCleanup(srv.cfg.SocketDir); err != nil {
+			srv.log.Errorf("error during dRPC cleanup: %s", err)
+		}
+	}()
+
+	return errors.Wrapf(srv.harness.Start(ctx, srv.sysdb, srv.cfg),
 		"%s harness exited", build.ControlPlaneName)
 }
 
