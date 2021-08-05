@@ -506,6 +506,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
 		inCleanupMode = true
 	} else {
+		if req.Force {
+			// If the destroy request is being forced, we should zap
+			// the label so that the entry doesn't prevent a new pool
+			// with the same label from being created.
+			ps.PoolLabel = ""
+		}
+
 		ps.State = system.PoolServiceStateDestroying
 		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 			return nil, errors.Wrapf(err, "failed to update pool %s", uuid)

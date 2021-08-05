@@ -29,6 +29,8 @@ const (
 	// PoolCreateTimeout defines the amount of time a pool create
 	// request can take before being timed out.
 	PoolCreateTimeout = 10 * time.Minute // be generous for large pools
+	// DefaultPoolTimeout is the default timeout for a pool request.
+	DefaultPoolTimeout = 60 * time.Second // fail faster if it's going to fail
 )
 
 // checkUUID is a helper function for validating that the supplied
@@ -162,6 +164,14 @@ type (
 		retryableRequest
 	}
 )
+
+func (r *poolRequest) getDeadline() time.Time {
+	// If the request has a custom deadline, use that.
+	if !r.deadline.IsZero() {
+		return r.deadline
+	}
+	return time.Now().Add(DefaultPoolTimeout)
+}
 
 func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 	// If the request has set a custom retry test function, use it.

@@ -32,7 +32,7 @@ func (p *PoolProperty) SetValueNumber(numVal uint64) {
 // The following set of addons implements the poolServiceReq interface
 // in mgmt_pool.go.
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *PoolDestroyReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -42,7 +42,7 @@ func (r *PoolSetPropReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *PoolSetPropReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -52,7 +52,7 @@ func (r *PoolGetPropReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *PoolGetPropReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -62,7 +62,7 @@ func (r *PoolEvictReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *PoolEvictReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -72,7 +72,7 @@ func (r *PoolExcludeReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *PoolExcludeReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -82,7 +82,7 @@ func (r *PoolDrainReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *PoolDrainReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -92,7 +92,7 @@ func (r *PoolReintegrateReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *PoolReintegrateReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -102,7 +102,7 @@ func (r *PoolExtendReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *PoolExtendReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -112,7 +112,7 @@ func (r *PoolQueryReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *PoolQueryReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -122,7 +122,7 @@ func (r *GetACLReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *GetACLReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -132,7 +132,7 @@ func (r *ModifyACLReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *ModifyACLReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
@@ -142,7 +142,7 @@ func (r *DeleteACLReq) SetSvcRanks(rl []uint32) {
 	r.SvcRanks = rl
 }
 
-// SetID sets the request's ID to a UUID.
+// SetUUID sets the request's ID to a UUID.
 func (r *DeleteACLReq) SetUUID(id uuid.UUID) {
 	r.Id = id.String()
 }
