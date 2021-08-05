@@ -8,7 +8,7 @@ import time
 import random
 import threading
 
-from test_utils_pool import TestPool
+from test_utils_pool import TestPool, LabelGenerator
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
@@ -70,6 +70,7 @@ class OSAOnlineReintegration(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
         test_seq = self.ior_test_sequence[0]
         # Create a pool
+        label_generator = LabelGenerator()
         pool = {}
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
@@ -83,8 +84,9 @@ class OSAOnlineReintegration(OSAUtils):
             time.sleep(30)
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.get_dmg_command(),
+                label_generator=label_generator)
             pool[val].get_params(self)
             pool[val].create()
             pool[val].set_property("reclaim", "disabled")
@@ -113,8 +115,8 @@ class OSAOnlineReintegration(OSAUtils):
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
             if server_boot is False:
-                output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                       rank)
+                output = self.dmg_command.pool_exclude(
+                    self.pool.uuid, rank)
             else:
                 output = self.dmg_command.system_stop(ranks=rank, force=True)
                 self.pool.wait_for_rebuild(False)
@@ -172,7 +174,7 @@ class OSAOnlineReintegration(OSAUtils):
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration
+        :avocado: tags=online_reintegration,online_reintegration_basic
         """
         self.log.info("Online Reintegration : Basic test")
         self.run_online_reintegration_test(1)

@@ -579,8 +579,6 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
  * Note: the csum_iov is modified so a shallow copy should be sent instead of
  * the original.
  */
-
-
 static int
 migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
@@ -604,7 +602,12 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		if (mrone->mo_iods[i].iod_size == 0)
 			continue;
 
-		if (mrone->mo_sgls != NULL && mrone->mo_sgls[i].sg_nr > 0) {
+		/* Let's do real fetch for all EC object, since the
+		 * checksum needs to be re-calculated for EC rebuild,
+		 * and we do not have checksum information yet.
+		 */
+		if ((mrone->mo_sgls != NULL && mrone->mo_sgls[i].sg_nr > 0) &&
+		     !daos_oclass_is_ec(&mrone->mo_oca)) {
 			sgls[i] = mrone->mo_sgls[i];
 		} else {
 			sgls[i].sg_nr = 1;
@@ -2152,6 +2155,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	daos_size_t		 buf_len;
 	daos_key_desc_t		 kds[KDS_NUM] = {0};
 	d_iov_t			 csum = {0};
+	d_iov_t			 *p_csum;
 	uint8_t			 stack_csum_buf[CSUM_BUF_SIZE] = {0};
 	struct cont_props	 props;
 	struct enum_unpack_arg	 unpack_arg = { 0 };
@@ -2205,7 +2209,13 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		D_GOTO(out_cont, rc);
 	}
 
-	d_iov_set(&csum, stack_csum_buf, CSUM_BUF_SIZE);
+	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
+		p_csum = NULL;
+	} else {
+		p_csum = &csum;
+		d_iov_set(&csum, stack_csum_buf, CSUM_BUF_SIZE);
+	}
+
 	while (!tls->mpt_fini) {
 		memset(buf, 0, buf_len);
 		memset(kds, 0, KDS_NUM * sizeof(*kds));
@@ -2217,7 +2227,8 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		sgl.sg_nr_out = 1;
 		sgl.sg_iovs = &iov;
 
-		csum.iov_len = 0;
+		if (p_csum != NULL)
+			p_csum->iov_len = 0;
 
 		num = KDS_NUM;
 		daos_anchor_set_flags(&dkey_anchor,
@@ -2227,7 +2238,7 @@ retry:
 		unpack_arg.invalid_inline_sgl = 0;
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, NULL,
 				     &num, kds, &sgl, &anchor,
-				     &dkey_anchor, &akey_anchor, &csum);
+				     &dkey_anchor, &akey_anchor, p_csum);
 
 		if (rc == -DER_KEY2BIG) {
 			D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" got "
@@ -2242,17 +2253,17 @@ retry:
 				break;
 			}
 			continue;
-		} else if (rc == -DER_TRUNC &&
-			   csum.iov_len > csum.iov_buf_len) {
+		} else if (rc == -DER_TRUNC && p_csum != NULL &&
+			   p_csum->iov_len > p_csum->iov_buf_len) {
 			D_DEBUG(DB_REBUILD, "migrate obj csum buf "
 				"not large enough. Increase and try again");
-			if (csum.iov_buf != stack_csum_buf)
-				D_FREE(csum.iov_buf);
+			if (p_csum->iov_buf != stack_csum_buf)
+				D_FREE(p_csum->iov_buf);
 
-			csum.iov_buf_len = csum.iov_len;
-			csum.iov_len = 0;
-			D_ALLOC(csum.iov_buf, csum.iov_buf_len);
-			if (csum.iov_buf == NULL) {
+			p_csum->iov_buf_len = p_csum->iov_len;
+			p_csum->iov_len = 0;
+			D_ALLOC(p_csum->iov_buf, p_csum->iov_buf_len);
+			if (p_csum->iov_buf == NULL) {
 				rc = -DER_NOMEM;
 				break;
 			}
@@ -2293,15 +2304,19 @@ retry:
 				rc = 0;
 			}
 
-			D_DEBUG(DB_REBUILD, "Can not rebuild "
-				DF_UOID"\n", DP_UOID(arg->oid));
+			D_DEBUG(DB_REBUILD, "Can not rebuild "DF_UOID" "DF_RC"\n",
+				DP_UOID(arg->oid), DP_RC(rc));
 			break;
 		}
 
-		if (num == 0)
+		/* Each object enumeration RPC will at least one OID */
+		if (num < 2) {
+			D_DEBUG(DB_REBUILD, "enumeration buffer %u empty"
+				DF_UOID"\n", num, DP_UOID(arg->oid));
 			break;
+		}
 
-		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, &csum,
+		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, p_csum,
 				     migrate_enum_unpack_cb, &unpack_arg);
 		if (rc) {
 			D_ERROR("migrate "DF_UOID" failed: %d\n",

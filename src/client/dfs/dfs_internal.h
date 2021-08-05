@@ -53,6 +53,18 @@ dfs_lookupx(dfs_t *dfs, dfs_obj_t *parent, const char *name, int flags,
 	    dfs_obj_t **obj, mode_t *mode, struct stat *stbuf, int xnr,
 	    char *xnames[], void *xvals[], daos_size_t *xsizes);
 
+/* moid is moved oid, oid is clobbered file.
+ * This isn't yet fully compatible with dfuse because we also want to pass in a flag for if the
+ * destination exists.
+ */
+int
+dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent, char *new_name,
+		  daos_obj_id_t *moid, daos_obj_id_t *oid);
+
+/* Set the in-memory parent, but takes the parent, rather than another file object */
+void
+dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *new_parent, const char *name);
+
 /** update chunk size and oclass of obj with the ones from new_obj */
 void
 dfs_obj_copy_attr(dfs_obj_t *dst_obj, dfs_obj_t *src_obj);

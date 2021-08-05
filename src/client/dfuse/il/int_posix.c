@@ -52,7 +52,7 @@ struct ioil_global {
 	uint64_t	iog_file_count;		/**< Number of file opens intercepted */
 	uint64_t	iog_read_count;		/**< Number of read operations intercepted */
 	uint64_t	iog_write_count;	/**< Number of write operations intercepted */
-
+	uint64_t	iog_fstat_count;	/**< Number of fstat operations intercepted */
 };
 
 static vector_t	fd_table;
@@ -150,12 +150,15 @@ ioil_shrink(struct ioil_cont *cont)
 static void
 entry_array_close(void *arg) {
 	struct fd_entry *entry = arg;
+	int rc;
 
 	DFUSE_LOG_DEBUG("entry %p closing array fd_count %d",
 			entry, entry->fd_cont->ioc_open_count);
 
 	DFUSE_TRA_DOWN(entry->fd_dfsoh);
-	dfs_release(entry->fd_dfsoh);
+	rc = dfs_release(entry->fd_dfsoh);
+	if (rc == ENOMEM)
+		dfs_release(entry->fd_dfsoh);
 
 	entry->fd_cont->ioc_open_count -= 1;
 
@@ -186,7 +189,7 @@ pread_rpc(struct fd_entry *entry, char *buff, size_t len, off_t offset)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_read_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting read\n");
+		fprintf(stderr, "[libioil] Intercepting read of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_read = ioil_do_pread(buff, len, offset, entry, &errcode);
@@ -227,7 +230,7 @@ pwrite_rpc(struct fd_entry *entry, const char *buff, size_t len, off_t offset)
 	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_write_count, 1);
 
 	if (counter < ioil_iog.iog_report_count)
-		fprintf(stderr, "[libioil] Intercepting write\n");
+		fprintf(stderr, "[libioil] Intercepting write of size %zi\n", len);
 
 	/* Just get rpc working then work out how to really do this */
 	bytes_written = ioil_do_writex(buff, len, offset, entry,
@@ -278,7 +281,7 @@ ioil_init(void)
 {
 	struct rlimit rlimit;
 	int rc;
-	unsigned report_count = -1;
+	uint64_t report_count = 0;
 
 	pthread_once(&init_links_flag, init_links);
 
@@ -298,8 +301,11 @@ ioil_init(void)
 		return;
 	}
 
-	d_getenv_int("D_IL_REPORT", &report_count);
-	if (report_count != -1) {
+	/* Check what progress to report on.  If the env is set but could not be
+	 * parsed then just show the summary (report_count will be 0).
+	 */
+	rc = d_getenv_uint64_t("D_IL_REPORT", &report_count);
+	if (rc != -DER_NONEXIST) {
 		ioil_iog.iog_show_summary = true;
 		ioil_iog.iog_report_count = report_count;
 	}
@@ -328,7 +334,8 @@ ioil_show_summary()
 	if (ioil_iog.iog_file_count == 0 || !ioil_iog.iog_show_summary)
 		return;
 
-	fprintf(stderr, "[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
+	fprintf(stderr,
+		"[libioil] Performed %"PRIu64" reads and %"PRIu64" writes from %"PRIu64" files\n",
 		ioil_iog.iog_read_count, ioil_iog.iog_write_count, ioil_iog.iog_file_count);
 }
 
@@ -711,6 +718,12 @@ get_file:
 	entry->fd_status = DFUSE_IO_BYPASS;
 	entry->fd_cont = cont;
 
+	/* Only intercept fstat if caching is not on for this file */
+	if ((il_reply.fir_flags & DFUSE_IOCTL_FLAGS_MCACHE) == 0)
+		entry->fd_fstat = true;
+
+	DFUSE_LOG_INFO("Flags are %#lx %d", il_reply.fir_flags, entry->fd_fstat);
+
 	/* Now open the file object to allow read/write */
 	rc = fetch_dfs_obj_handle(fd, entry);
 	if (rc)
@@ -817,12 +830,13 @@ dfuse_open(const char *pathname, int flags, ...)
 
 	if (flags & O_CREAT)
 		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o, mode=0%o) = "
-				"%d. intercepted, bypass=%s",
-				pathname, flags, mode, fd,
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, mode, fd, entry.fd_fstat,
 				bypass_status[entry.fd_status]);
 	else
-		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o) = %d. intercepted, bypass=%s",
-				pathname, flags, fd,
+		DFUSE_LOG_DEBUG("open(pathname=%s, flags=0%o) = "
+				"%d. intercepted, fstat=%d, bypass=%s",
+				pathname, flags, fd, entry.fd_fstat,
 				bypass_status[entry.fd_status]);
 
 	return fd;
@@ -1492,6 +1506,69 @@ dfuse_fclose(FILE *stream)
 
 do_real_fclose:
 	return __real_fclose(stream);
+}
+
+DFUSE_PUBLIC int
+dfuse___fxstat(int ver, int fd, struct stat *buf)
+{
+	struct fd_entry	*entry = NULL;
+	int		counter;
+	int		rc;
+
+	rc = vector_get(&fd_table, fd, &entry);
+	if (rc != 0)
+		goto do_real_fstat;
+
+	/* Turn off this feature if the kernel is doing metadata caching, in this case it's btter
+	 * to use the kernel cache and keep it up-to-date than query the severs each time.
+	 */
+	if (!entry->fd_fstat) {
+		vector_decref(&fd_table, entry);
+		goto do_real_fstat;
+	}
+
+	counter = atomic_fetch_add_relaxed(&ioil_iog.iog_fstat_count, 1);
+
+	if (counter < ioil_iog.iog_report_count)
+		fprintf(stderr, "[libioil] Intercepting fstat\n");
+
+	/* fstat needs to return both the device magic number and the inode
+	 * neither of which can change over time, but they're also not known
+	 * at this point.  For the first call to fstat do the real call
+	 * through the kernel, then save these two entries for next time.
+	 */
+	if (entry->fd_dev == 0) {
+		rc =  __real___fxstat(ver, fd, buf);
+
+		DFUSE_TRA_DEBUG(entry->fd_dfsoh, "initial fstat() returned %d", rc);
+
+		if (rc) {
+			vector_decref(&fd_table, entry);
+			return rc;
+		}
+		entry->fd_dev = buf->st_dev;
+		entry->fd_ino = buf->st_ino;
+		vector_decref(&fd_table, entry);
+		return 0;
+	}
+
+	rc = dfs_ostat(entry->fd_cont->ioc_dfs, entry->fd_dfsoh, buf);
+
+	DFUSE_TRA_DEBUG(entry->fd_dfsoh, "dfs_ostat() returned %d", rc);
+
+	buf->st_ino = entry->fd_ino;
+	buf->st_dev = entry->fd_dev;
+
+	vector_decref(&fd_table, entry);
+
+	if (rc) {
+		errno = rc;
+		return -1;
+	}
+
+	return 0;
+do_real_fstat:
+	return __real___fxstat(ver, fd, buf);
 }
 
 DFUSE_PUBLIC int

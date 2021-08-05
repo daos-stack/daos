@@ -91,6 +91,7 @@ class DaosCoreBase(TestWithServers):
                         for item in env_vars}
                     env_dict["CRT_CTX_SHARE_ADDR"] = "1"
                     env_dict["COVFILE"] = "/tmp/test.cov"
+                    env_dict["D_LOG_FILE_APPEND_PID"] = "1"
                     if "CRT_CTX_NUM" not in env_dict or \
                             int(env_dict["CRT_CTX_NUM"]) < int(targets):
                         env_dict["CRT_CTX_NUM"] = str(targets)

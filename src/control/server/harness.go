@@ -24,7 +24,6 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -41,8 +40,6 @@ type Engine interface {
 	// These are definitely wrong... They indicate that too much internal
 	// information is being leaked outside of the implementation.
 	newCret(string, error) *ctlpb.NvmeControllerResult
-	bdevConfig() storage.BdevConfig
-	scmConfig() storage.ScmConfig
 	tryDrpc(context.Context, drpc.Method) *system.MemberResult
 	requestStart(context.Context)
 	updateInUseBdevs(context.Context, map[string]*storage.NvmeController) error
@@ -56,10 +53,14 @@ type Engine interface {
 	// These methods should probably be refactored out into functions that
 	// accept the engine instance as a parameter.
 	GetBioHealth(context.Context, *ctlpb.BioHealthReq) (*ctlpb.BioHealthResp, error)
+	GetScmConfig() (*storage.TierConfig, error)
 	GetScmUsage() (*storage.ScmMountPoint, error)
+	HasBlockDevices() bool
+	ScanBdevTiers() ([]storage.BdevTierScanResult, error)
 	ListSmdDevices(context.Context, *ctlpb.SmdDevReq) (*ctlpb.SmdDevResp, error)
-	StorageFormatNVMe(*bdev.Provider) commonpb.NvmeControllerResults
 	StorageFormatSCM(context.Context, bool) *ctlpb.ScmMountResult
+	StorageFormatNVMe() commonpb.NvmeControllerResults
+	StorageWriteNvmeConfig() error
 
 	// This is a more reasonable surface that will be easier to maintain and test.
 	CallDrpc(context.Context, drpc.Method, proto.Message) (*drpc.Response, error)

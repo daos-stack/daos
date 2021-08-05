@@ -40,12 +40,15 @@ var (
 		protocmp.IgnoreFields(&ctlpb.NvmeController{}, "serial"))
 )
 
-func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
+func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 	ctrlr := storage.MockNvmeController()
 	ctrlr.SmdDevices = nil
 	ctrlrPB := proto.MockNvmeController()
 	ctrlrPB.HealthStats = nil
 	ctrlrPB.SmdDevices = nil
+	ctrlrPB2 := proto.MockNvmeController(2)
+	ctrlrPB2.HealthStats = nil
+	ctrlrPB2.SmdDevices = nil
 	ctrlrPBwHealth := proto.MockNvmeController()
 	ctrlrPBwHealth.SmdDevices = nil
 	ctrlrPBBasic := proto.MockNvmeController()
@@ -55,25 +58,57 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 	ctrlrPBBasic.Model = ""
 
 	for name, tc := range map[string]struct {
-		multiIO     bool
-		req         *ctlpb.StorageScanReq
-		bmbc        *bdev.MockBackendConfig
-		smbc        *scm.MockBackendConfig
-		expSetupErr error
-		expErr      error
-		expResp     ctlpb.StorageScanResp
+		multiEngine  bool
+		req          *ctlpb.StorageScanReq
+		bmbc         *bdev.MockBackendConfig
+		smbc         *scm.MockBackendConfig
+		noBdevsInCfg bool
+		expSetupErr  error
+		expErr       error
+		expResp      *ctlpb.StorageScanResp
 	}{
-		"successful scan with bdev and scm namespaces": {
+		"scan with no bdevs in config; scm namespaces": {
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
-					Controllers: storage.NvmeControllers{ctrlr},
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						ctrlr,
+						storage.MockNvmeController(2),
+					},
+				},
+			},
+			noBdevsInCfg: true,
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{
+						ctrlrPB,
+						ctrlrPB2,
+					},
+					State: new(ctlpb.ResponseState),
+				},
+				Scm: &ctlpb.ScanScmResp{
+					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
+					State:      new(ctlpb.ResponseState),
+				},
+			},
+		},
+		"bdev devices filtered by config assignment": {
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						ctrlr,
+						storage.MockNvmeController(2),
+					},
 				},
 			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
 				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{ctrlrPB},
 					State:  new(ctlpb.ResponseState),
@@ -86,14 +121,14 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 		},
 		"successful scan no scm namespaces": {
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr},
 				},
 			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes: storage.ScmModules{storage.MockScmModule()},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{ctrlrPB},
 					State:  new(ctlpb.ResponseState),
@@ -112,7 +147,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
 				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					State: &ctlpb.ResponseState{
 						Error:  "spdk scan failed",
@@ -127,14 +162,14 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 		},
 		"scm module discovery failure": {
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr},
 				},
 			},
 			smbc: &scm.MockBackendConfig{
 				DiscoverErr: errors.New("scm discover failed"),
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{ctrlrPB},
 					State:  new(ctlpb.ResponseState),
@@ -154,7 +189,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			smbc: &scm.MockBackendConfig{
 				DiscoverErr: errors.New("scm discover failed"),
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					State: &ctlpb.ResponseState{
 						Error:  "spdk scan failed",
@@ -169,7 +204,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 		},
-		"scan bdev health with single io server down": {
+		"scan bdev health with single engine down": {
 			req: &ctlpb.StorageScanReq{
 				Scm: &ctlpb.ScanScmReq{},
 				Nvme: &ctlpb.ScanNvmeReq{
@@ -177,11 +212,11 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{ctrlrPBwHealth},
 					State:  new(ctlpb.ResponseState),
@@ -191,8 +226,8 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 		},
-		"scan bdev health with multiple io servers down": {
-			multiIO: true,
+		"scan bdev health with multiple engines down": {
+			multiEngine: true,
 			req: &ctlpb.StorageScanReq{
 				Scm: &ctlpb.ScanScmReq{},
 				Nvme: &ctlpb.ScanNvmeReq{
@@ -200,11 +235,11 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					// response should not contain duplicates
 					Ctrlrs: proto.NvmeControllers{ctrlrPBwHealth},
@@ -215,7 +250,7 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 		},
-		"scan bdev meta with io servers down": {
+		"scan bdev meta with engines down": {
 			req: &ctlpb.StorageScanReq{
 				Scm: &ctlpb.ScanScmReq{},
 				Nvme: &ctlpb.ScanNvmeReq{
@@ -223,11 +258,11 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{ctrlrPB},
 					State:  new(ctlpb.ResponseState),
@@ -245,11 +280,11 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 				},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{ctrlrPBBasic},
 					State:  new(ctlpb.ResponseState),
@@ -264,60 +299,56 @@ func TestServer_CtlSvc_StorageScan_PreIOStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			emptyCfg := config.DefaultServer()
-			engineCfg := engine.NewConfig().
-				WithBdevClass("nvme").
-				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
+			tCfg := storage.NewTierConfig().WithBdevClass(storage.ClassNvme.String())
+			if !tc.noBdevsInCfg {
+				tCfg = tCfg.WithBdevDeviceList(storage.MockNvmeController().PciAddr)
+			}
+			engineCfg := engine.NewConfig().WithStorage(tCfg)
 			engineCfgs := []*engine.Config{engineCfg}
-			if tc.multiIO {
+			if tc.multiEngine {
 				engineCfgs = append(engineCfgs, engineCfg)
 			}
-			defaultWithNvme := config.DefaultServer().WithEngines(engineCfgs...)
+			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 
-			// test for both empty and default config cases
-			for _, config := range []*config.Server{defaultWithNvme, emptyCfg} {
-				cs := mockControlService(t, log, config, tc.bmbc, tc.smbc, nil)
-				for _, srv := range cs.harness.instances {
-					srv.(*EngineInstance).ready.SetFalse()
+			cs := mockControlService(t, log, sCfg, tc.bmbc, tc.smbc, nil)
+			for _, ei := range cs.harness.instances {
+				// tests are for pre-engine-start scenario
+				ei.(*EngineInstance).ready.SetFalse()
+			}
+
+			// TODO DAOS-8040: re-enable VMD
+			// t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+
+			if tc.req == nil {
+				tc.req = &ctlpb.StorageScanReq{
+					Scm:  new(ctlpb.ScanScmReq),
+					Nvme: new(ctlpb.ScanNvmeReq),
 				}
+			}
 
-				t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+			// cs.StorageScan should never return err
+			resp, err := cs.StorageScan(context.TODO(), tc.req)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-				// runs discovery for nvme & scm
-				err := cs.Setup()
-				common.CmpErr(t, tc.expSetupErr, err)
-				if err != nil {
-					return
+			if tc.req.Nvme.Health || tc.req.Nvme.Meta {
+				if len(cs.harness.instances) == 0 {
+					tc.expResp.Nvme.Ctrlrs = nil
 				}
+			}
 
-				if tc.req == nil {
-					tc.req = &ctlpb.StorageScanReq{
-						Scm:  new(ctlpb.ScanScmReq),
-						Nvme: new(ctlpb.ScanNvmeReq),
-					}
-				}
-
-				// cs.StorageScan will never return err
-				resp, err := cs.StorageScan(context.TODO(), tc.req)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if tc.req.Nvme.Health || tc.req.Nvme.Meta {
-					if len(cs.harness.instances) == 0 {
-						tc.expResp.Nvme.Ctrlrs = nil
-					}
-				}
-
-				if diff := cmp.Diff(tc.expResp, *resp, defStorageScanCmpOpts...); diff != "" {
-					t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
-				}
+			if diff := cmp.Diff(tc.expResp, resp, defStorageScanCmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+			if diff := cmp.Diff(tc.expResp, resp, defStorageScanCmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
 	}
 }
 
-func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
+func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 	// output to be returned from mock bdev backend
 	newCtrlr := func(idx int32) *storage.NvmeController {
 		ctrlr := storage.MockNvmeController(idx)
@@ -402,6 +433,13 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 
 		return ctrlr, &ctlpb.SmdDevResp{Devices: smdDevRespDevices}
 	}
+	newCtrlrPBwBasic := func(idx int32) *ctlpb.NvmeController {
+		c, _ := newCtrlrMeta(idx)
+		c.SmdDevices = nil
+		c.FwRev = ""
+		c.Model = ""
+		return c
+	}
 	newCtrlrPBwMeta := func(idx int32, smdIndexes ...int32) *ctlpb.NvmeController {
 		c, _ := newCtrlrMeta(idx, smdIndexes...)
 		return c
@@ -411,30 +449,70 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 		return s
 	}
 
-	mockPbScmMount := proto.MockScmMountPoint()
-	mockPbScmNamespace := proto.MockScmNamespace()
-	mockPbScmNamespace.Mount = mockPbScmMount
+	mockPbScmMount0 := proto.MockScmMountPoint(0)
+	mockPbScmNamespace0 := proto.MockScmNamespace(0)
+	mockPbScmNamespace0.Mount = mockPbScmMount0
+	mockPbScmMount1 := proto.MockScmMountPoint(1)
+	mockPbScmNamespace1 := proto.MockScmNamespace(1)
+	mockPbScmNamespace1.Mount = mockPbScmMount1
 
 	for name, tc := range map[string]struct {
-		req       *ctlpb.StorageScanReq
-		bmbc      *bdev.MockBackendConfig
-		smbc      *scm.MockBackendConfig
-		smsc      *scm.MockSysConfig
-		cfg       *config.Server
-		scanTwice bool
-		junkResp  bool
-		drpcResps map[int][]*mockDrpcResponse
-		expErr    error
-		expResp   ctlpb.StorageScanResp
+		req         *ctlpb.StorageScanReq
+		bmbc        *bdev.MockBackendConfig
+		smbc        *scm.MockBackendConfig
+		smsc        *scm.MockSysConfig
+		storageCfgs []storage.TierConfigs
+		scanTwice   bool
+		junkResp    bool
+		drpcResps   map[int][]*mockDrpcResponse
+		expErr      error
+		expResp     *ctlpb.StorageScanResp
 	}{
-		"scan bdev health with io servers up": {
+		"engine up; scan bdev basic": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  new(ctlpb.ScanScmReq),
+				Nvme: &ctlpb.ScanNvmeReq{Basic: true},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{newCtrlr(1)},
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{newCtrlrPBwBasic(1)},
+					State:  new(ctlpb.ResponseState),
+				},
+				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
+			},
+		},
+		"engine up; scan bdev health": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Health: true},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
-					Controllers: storage.NvmeControllers{newCtrlr(1)},
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						newCtrlr(1),
+					},
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
@@ -443,7 +521,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					{Message: newBioHealthResp(1)},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{newCtrlrPBwHealth(1)},
 					State:  new(ctlpb.ResponseState),
@@ -451,14 +529,21 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
 		},
-		"scan bdev meta with io servers up": {
+		"engine up; scan bdev meta": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{newCtrlr(1)},
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
 				},
 			},
 			drpcResps: map[int][]*mockDrpcResponse{
@@ -467,7 +552,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					{Message: newBioHealthResp(1)},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{newCtrlrPBwMeta(1)},
 					State:  new(ctlpb.ResponseState),
@@ -475,26 +560,31 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
 		},
-		"scan bdev health with multiple io servers up": {
+		"engines up; scan bdev health": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Health: true},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{
-						newCtrlr(1), newCtrlr(2),
+						newCtrlr(1),
+						newCtrlr(2),
 					},
 				},
 			},
-			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
-				engine.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController(2).PciAddr),
-			),
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(2).PciAddr),
+				},
+			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
 					{Message: newSmdDevResp(1)},
@@ -505,7 +595,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					{Message: newBioHealthResp(2)},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{
 						newCtrlrPBwHealth(1),
@@ -516,26 +606,31 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
 		},
-		"scan bdev meta with multiple io servers up": {
+		"engines up; scan bdev meta": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{
-						newCtrlr(1), newCtrlr(2),
+						newCtrlr(1),
+						newCtrlr(2),
 					},
 				},
 			},
-			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
-				engine.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController(2).PciAddr),
-			),
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(2).PciAddr),
+				},
+			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
 					{Message: newSmdDevResp(1)},
@@ -546,7 +641,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					{Message: newBioHealthResp(2)},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{
 						newCtrlrPBwMeta(1),
@@ -564,20 +659,25 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{
-						newCtrlr(1), newCtrlr(2),
+						newCtrlr(1),
+						newCtrlr(2),
 					},
 				},
 			},
-			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
-				engine.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController(2).PciAddr),
-			),
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(2).PciAddr),
+				},
+			},
 			scanTwice: true,
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
@@ -593,7 +693,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					{Message: newBioHealthResp(2)},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{
 						newCtrlrPBwMeta(1),
@@ -604,26 +704,30 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Scm: &ctlpb.ScanScmResp{State: new(ctlpb.ResponseState)},
 			},
 		},
-		"scan bdev meta with multiple io servers up with multiple nvme namespaces": {
+		"engines up; scan bdev meta; multiple nvme namespaces": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  new(ctlpb.ScanScmReq),
 				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{
 						newCtrlrMultiNs(1, 2), newCtrlrMultiNs(2, 2),
 					},
 				},
 			},
-			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController(1).PciAddr),
-				engine.NewConfig().
-					WithBdevClass("nvme").
-					WithBdevDeviceList(storage.MockNvmeController(2).PciAddr),
-			),
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+				{
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(2).PciAddr),
+				},
+			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {
 					{Message: newSmdDevResp(1, 1, 2)},
@@ -636,7 +740,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 					{Message: newBioHealthResp(4, 2)},
 				},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					Ctrlrs: proto.NvmeControllers{
 						newCtrlrPBwMeta(1, 1, 2),
@@ -653,27 +757,34 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Nvme: new(ctlpb.ScanNvmeReq),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule(0)},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			smsc: &scm.MockSysConfig{
-				GetfsUsageTotal: mockPbScmMount.TotalBytes,
-				GetfsUsageAvail: mockPbScmMount.AvailBytes,
+				GetfsUsageResps: []scm.GetfsUsageRetval{
+					{
+						Total: mockPbScmMount0.TotalBytes,
+						Avail: mockPbScmMount0.AvailBytes,
+					},
+				},
 			},
-			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().
-					WithScmMountPoint(mockPbScmMount.Path).
-					WithScmClass(storage.ScmClassDCPM.String()).
-					WithScmDeviceList(mockPbScmNamespace.Blockdev)),
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockPbScmMount0.Path).
+						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
+				},
+			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					State: new(ctlpb.ResponseState),
 				},
 				Scm: &ctlpb.ScanScmResp{
-					Namespaces: proto.ScmNamespaces{mockPbScmNamespace},
+					Namespaces: proto.ScmNamespaces{mockPbScmNamespace0},
 					State:      new(ctlpb.ResponseState),
 				},
 			},
@@ -684,29 +795,36 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Nvme: new(ctlpb.ScanNvmeReq),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule(0)},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			smsc: &scm.MockSysConfig{
-				GetfsUsageTotal: mockPbScmMount.TotalBytes,
-				GetfsUsageAvail: mockPbScmMount.AvailBytes,
+				GetfsUsageResps: []scm.GetfsUsageRetval{
+					{
+						Total: mockPbScmMount0.TotalBytes,
+						Avail: mockPbScmMount0.AvailBytes,
+					},
+				},
 			},
-			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().
-					WithScmMountPoint(mockPbScmMount.Path).
-					WithScmClass(storage.ScmClassDCPM.String()).
-					WithScmDeviceList("/dev/foo", "/dev/bar")),
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockPbScmMount0.Path).
+						WithScmDeviceList("/dev/foo", "/dev/bar"),
+				},
+			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					State: new(ctlpb.ResponseState),
 				},
 				Scm: &ctlpb.ScanScmResp{
 					State: &ctlpb.ResponseState{
 						Status: ctlpb.ResponseStatus_CTL_ERR_SCM,
-						Error:  "instance 0: no pmem namespace for mount /mnt/daos1",
+						Error:  "instance 0: no pmem namespace for mount /mnt/daos0",
 					},
 				},
 			},
@@ -717,22 +835,29 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				Nvme: new(ctlpb.ScanNvmeReq),
 			},
 			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
+				DiscoverRes:         storage.ScmModules{storage.MockScmModule(0)},
+				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace(0)},
 			},
 			smsc: &scm.MockSysConfig{
-				GetfsUsageTotal: mockPbScmMount.TotalBytes,
-				GetfsUsageAvail: mockPbScmMount.AvailBytes,
+				GetfsUsageResps: []scm.GetfsUsageRetval{
+					{
+						Total: mockPbScmMount0.TotalBytes,
+						Avail: mockPbScmMount0.AvailBytes,
+					},
+				},
 			},
-			cfg: config.DefaultServer().WithEngines(
-				engine.NewConfig().
-					WithScmMountPoint(mockPbScmMount.Path).
-					WithScmClass(storage.ScmClassRAM.String()).
-					WithScmRamdiskSize(16)),
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassRam.String()).
+						WithScmMountPoint(mockPbScmMount0.Path).
+						WithScmRamdiskSize(16),
+				},
+			},
 			drpcResps: map[int][]*mockDrpcResponse{
 				0: {},
 			},
-			expResp: ctlpb.StorageScanResp{
+			expResp: &ctlpb.StorageScanResp{
 				Nvme: &ctlpb.ScanNvmeResp{
 					State: new(ctlpb.ResponseState),
 				},
@@ -742,11 +867,93 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 							Blockdev: "ramdisk",
 							Size:     uint64(humanize.GiByte * 16),
 							Mount: &ctlpb.ScmNamespace_Mount{
-								Path:       mockPbScmMount.Path,
-								TotalBytes: mockPbScmMount.TotalBytes,
-								AvailBytes: mockPbScmMount.AvailBytes,
+								Class:      "ram",
+								Path:       mockPbScmMount0.Path,
+								TotalBytes: mockPbScmMount0.TotalBytes,
+								AvailBytes: mockPbScmMount0.AvailBytes,
 							},
 						},
+					},
+					State: new(ctlpb.ResponseState),
+				},
+			},
+		},
+		"multi-engine; multi-tier; with usage": {
+			req: &ctlpb.StorageScanReq{
+				Scm:  &ctlpb.ScanScmReq{Usage: true},
+				Nvme: &ctlpb.ScanNvmeReq{Meta: true},
+			},
+			bmbc: &bdev.MockBackendConfig{
+				ScanRes: &storage.BdevScanResponse{
+					Controllers: storage.NvmeControllers{
+						newCtrlr(1),
+						newCtrlr(2),
+					},
+				},
+			},
+			smbc: &scm.MockBackendConfig{
+				DiscoverRes: storage.ScmModules{
+					storage.MockScmModule(0),
+				},
+				GetPmemNamespaceRes: storage.ScmNamespaces{
+					storage.MockScmNamespace(0),
+					storage.MockScmNamespace(1),
+				},
+			},
+			smsc: &scm.MockSysConfig{
+				GetfsUsageResps: []scm.GetfsUsageRetval{
+					{
+						Total: mockPbScmMount0.TotalBytes,
+						Avail: mockPbScmMount0.AvailBytes,
+					},
+					{
+						Total: mockPbScmMount1.TotalBytes,
+						Avail: mockPbScmMount1.AvailBytes,
+					},
+				},
+			},
+			storageCfgs: []storage.TierConfigs{
+				{
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockPbScmMount0.Path).
+						WithScmDeviceList(mockPbScmNamespace0.Blockdev),
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(1).PciAddr),
+				},
+				{
+					storage.NewTierConfig().
+						WithScmClass(storage.ClassDcpm.String()).
+						WithScmMountPoint(mockPbScmMount1.Path).
+						WithScmDeviceList(mockPbScmNamespace1.Blockdev),
+					storage.NewTierConfig().
+						WithBdevClass(storage.ClassNvme.String()).
+						WithBdevDeviceList(newCtrlr(2).PciAddr),
+				},
+			},
+			drpcResps: map[int][]*mockDrpcResponse{
+				0: {
+					{Message: newSmdDevResp(1)},
+					{Message: newBioHealthResp(1)},
+				},
+				1: {
+					{Message: newSmdDevResp(2)},
+					{Message: newBioHealthResp(2)},
+				},
+			},
+			expResp: &ctlpb.StorageScanResp{
+				Nvme: &ctlpb.ScanNvmeResp{
+					Ctrlrs: proto.NvmeControllers{
+						newCtrlrPBwMeta(1),
+						newCtrlrPBwMeta(2),
+					},
+					State: new(ctlpb.ResponseState),
+				},
+				Scm: &ctlpb.ScanScmResp{
+					Namespaces: proto.ScmNamespaces{
+						mockPbScmNamespace0,
+						mockPbScmNamespace1,
 					},
 					State: new(ctlpb.ResponseState),
 				},
@@ -757,44 +964,62 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			if tc.cfg == nil {
-				tc.cfg = config.DefaultServer().WithEngines(
-					engine.NewConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList(storage.MockNvmeController().PciAddr),
-				)
-			}
-			if len(tc.cfg.Engines) != len(tc.drpcResps) {
-				t.Fatalf("num servers in tc.cfg doesn't match num drpc msgs")
+			if len(tc.storageCfgs) != len(tc.drpcResps) {
+				t.Fatalf("number of tc.storageCfgs doesn't match num drpc msg groups")
 			}
 
-			cs := mockControlService(t, log, tc.cfg, tc.bmbc, tc.smbc, tc.smsc)
-			cs.harness.started.SetTrue()
-			for i := range cs.harness.instances {
-				// replace harness instance with mock I/O Engine
-				// to enable mocking of harness instance drpc channel
-				newSrv := newTestEngine(log, false, tc.cfg.Engines[i])
-				newSrv.scmProvider = cs.scm
-				cs.harness.instances[i] = newSrv
-
-				cfg := new(mockDrpcClientConfig)
-				if tc.junkResp {
-					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
-				} else if len(tc.drpcResps) > i {
-					for _, mock := range tc.drpcResps[i] {
-						cfg.setSendMsgResponseList(t, mock)
-					}
-				}
-				newSrv.setDrpcClient(newMockDrpcClient(cfg))
-				newSrv._superblock.Rank = system.NewRankPtr(uint32(i + 1))
+			var engineCfgs []*engine.Config
+			for _, sc := range tc.storageCfgs {
+				engineCfgs = append(engineCfgs, engine.NewConfig().WithStorage(sc...))
 			}
+			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
+			cs := mockControlService(t, log, sCfg, tc.bmbc, tc.smbc, tc.smsc)
 
-			t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+			// TODO DAOS-8040: re-enable VMD
+			// t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
-			// runs discovery for nvme & scm
+			// In production, during server/server.go:srv.addEngines() and after
+			// srv.createEngine(), engine.storage.SetBdevCache() is called to load the
+			// results of the start-up bdev scan from the control service storage
+			// provider into the engine's storage provider. The control service and
+			// each of the engines have distinct storage provider instances so cached
+			// cached results have to be explicitly shared so cache is available when
+			// engines are up.
+
+			// This block mimics control service start-up and engine creation where
+			// cache is shared, Setup() runs discovery for nvme & scm.
 			if err := cs.Setup(); err != nil {
 				t.Fatal(err)
 			}
+			nvmeScanResp, err := cs.NvmeScan(storage.BdevScanRequest{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i, ec := range engineCfgs {
+				// replace harness instance with mock I/O Engine
+				// to enable mocking of harness instance drpc channel
+				sp := storage.MockProvider(log, 0, &ec.Storage,
+					cs.storage.Sys, // share system provider cfo
+					scm.NewMockProvider(log, tc.smbc, nil),
+					bdev.NewMockProvider(log, tc.bmbc))
+				// share bdev cache with control service
+				sp.SetBdevCache(*nvmeScanResp)
+				ne := newTestEngine(log, false, sp)
+				// mock drpc responses
+				dcc := new(mockDrpcClientConfig)
+				if tc.junkResp {
+					dcc.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					for _, mock := range tc.drpcResps[i] {
+						dcc.setSendMsgResponseList(t, mock)
+					}
+				}
+				ne.setDrpcClient(newMockDrpcClient(dcc))
+				ne._superblock.Rank = system.NewRankPtr(uint32(i + 1))
+
+				cs.harness.instances[i] = ne
+			}
+			cs.harness.started.SetTrue()
 
 			if tc.req == nil {
 				tc.req = &ctlpb.StorageScanReq{
@@ -817,7 +1042,7 @@ func TestServer_CtlSvc_StorageScan_PostIOStart(t *testing.T) {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, *resp, defStorageScanCmpOpts...); diff != "" {
+			if diff := cmp.Diff(tc.expResp, resp, defStorageScanCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -838,10 +1063,10 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		mkdirRet         error
 		removeRet        error
 		sMounts          []string
-		sClass           storage.ScmClass
+		sClass           storage.Class
 		sDevs            []string
 		sSize            int
-		bClass           storage.BdevClass
+		bClass           storage.Class
 		bDevs            [][]string
 		bSize            int
 		bmbc             *bdev.MockBackendConfig
@@ -854,7 +1079,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 	}{
 		"ram no nvme": {
 			sMounts: []string{"/mnt/daos"},
-			sClass:  storage.ScmClassRAM,
+			sClass:  storage.ClassRam,
 			sSize:   6,
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{},
@@ -868,7 +1093,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		},
 		"dcpm no nvme": {
 			sMounts: []string{"/mnt/daos"},
-			sClass:  storage.ScmClassDCPM,
+			sClass:  storage.ClassDcpm,
 			sDevs:   []string{"/dev/pmem1"},
 			expResp: &ctlpb.StorageFormatResp{
 				Crets: []*ctlpb.NvmeControllerResult{},
@@ -882,18 +1107,18 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		},
 		"nvme and ram": {
 			sMounts: []string{"/mnt/daos"},
-			sClass:  storage.ScmClassRAM,
+			sClass:  storage.ClassRam,
 			sDevs:   []string{"/dev/pmem1"}, // ignored if SCM class is ram
 			sSize:   6,
-			bClass:  storage.BdevClassNvme,
+			bClass:  storage.ClassNvme,
 			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0},
 				},
-				FormatRes: &bdev.FormatResponse{
-					DeviceResponses: bdev.DeviceFormatResponses{
-						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
 							Formatted: true,
 						},
 					},
@@ -916,19 +1141,19 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		},
 		"aio file no size and ram": {
 			sMounts: []string{"/mnt/daos"},
-			sClass:  storage.ScmClassRAM,
+			sClass:  storage.ClassRam,
 			sDevs:   []string{"/dev/pmem1"}, // ignored if SCM class is ram
 			sSize:   6,
-			bClass:  storage.BdevClassFile,
+			bClass:  storage.ClassFile,
 			bDevs:   [][]string{{"/tmp/daos-bdev"}},
 			bSize:   6,
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0},
 				},
-				FormatRes: &bdev.FormatResponse{
-					DeviceResponses: bdev.DeviceFormatResponses{
-						"/tmp/daos-bdev": new(bdev.DeviceFormatResponse),
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						"/tmp/daos-bdev": new(storage.BdevDeviceFormatResponse),
 					},
 				},
 			},
@@ -949,17 +1174,17 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		},
 		"nvme and dcpm": {
 			sMounts: []string{"/mnt/daos"},
-			sClass:  storage.ScmClassDCPM,
+			sClass:  storage.ClassDcpm,
 			sDevs:   []string{"dev/pmem0"},
-			bClass:  storage.BdevClassNvme,
+			bClass:  storage.ClassNvme,
 			bDevs:   [][]string{{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0},
 				},
-				FormatRes: &bdev.FormatResponse{
-					DeviceResponses: bdev.DeviceFormatResponses{
-						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
 							Formatted: true,
 						},
 					},
@@ -984,12 +1209,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			instancesStarted: true,
 			scmMounted:       true,
 			sMounts:          []string{"/mnt/daos"},
-			sClass:           storage.ScmClassRAM,
+			sClass:           storage.ClassRam,
 			sSize:            6,
-			bClass:           storage.BdevClassNvme,
+			bClass:           storage.ClassNvme,
 			bDevs:            [][]string{{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0},
 				},
 			},
@@ -1023,12 +1248,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		"ram already mounted no reformat": {
 			scmMounted: true,
 			sMounts:    []string{"/mnt/daos"},
-			sClass:     storage.ScmClassRAM,
+			sClass:     storage.ClassRam,
 			sSize:      6,
-			bClass:     storage.BdevClassNvme,
+			bClass:     storage.ClassNvme,
 			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0},
 				},
 			},
@@ -1058,17 +1283,17 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			scmMounted: true,
 			reformat:   true,
 			sMounts:    []string{"/mnt/daos"},
-			sClass:     storage.ScmClassRAM,
+			sClass:     storage.ClassRam,
 			sSize:      6,
-			bClass:     storage.BdevClassNvme,
+			bClass:     storage.ClassNvme,
 			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0},
 				},
-				FormatRes: &bdev.FormatResponse{
-					DeviceResponses: bdev.DeviceFormatResponses{
-						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
 							Formatted: true,
 						},
 					},
@@ -1092,12 +1317,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		"dcpm already mounted no reformat": {
 			scmMounted: true,
 			sMounts:    []string{"/mnt/daos"},
-			sClass:     storage.ScmClassDCPM,
+			sClass:     storage.ClassDcpm,
 			sDevs:      []string{"/dev/pmem1"},
-			bClass:     storage.BdevClassNvme,
+			bClass:     storage.ClassNvme,
 			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0},
 				},
 			},
@@ -1127,17 +1352,17 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			scmMounted: true,
 			reformat:   true,
 			sMounts:    []string{"/mnt/daos"},
-			sClass:     storage.ScmClassDCPM,
+			sClass:     storage.ClassDcpm,
 			sDevs:      []string{"/dev/pmem1"},
-			bClass:     storage.BdevClassNvme,
+			bClass:     storage.ClassNvme,
 			bDevs:      [][]string{{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0},
 				},
-				FormatRes: &bdev.FormatResponse{
-					DeviceResponses: bdev.DeviceFormatResponses{
-						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
 							Formatted: true,
 						},
 					},
@@ -1164,12 +1389,12 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			superblockExists: true,
 			reformat:         true,
 			sMounts:          []string{"/mnt/daos"},
-			sClass:           storage.ScmClassDCPM,
+			sClass:           storage.ClassDcpm,
 			sDevs:            []string{"/dev/pmem1"},
-			bClass:           storage.BdevClassNvme,
+			bClass:           storage.ClassNvme,
 			bDevs:            [][]string{{mockNvmeController0.PciAddr}},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0},
 				},
 			},
@@ -1186,20 +1411,20 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 		},
 		"nvme and dcpm success multi-io": {
 			sMounts: []string{"/mnt/daos0", "/mnt/daos1"},
-			sClass:  storage.ScmClassDCPM,
+			sClass:  storage.ClassDcpm,
 			sDevs:   []string{"/dev/pmem0", "/dev/pmem1"},
-			bClass:  storage.BdevClassNvme,
+			bClass:  storage.ClassNvme,
 			bDevs: [][]string{
 				{mockNvmeController0.PciAddr},
 				{mockNvmeController1.PciAddr},
 			},
 			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &bdev.ScanResponse{
+				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{mockNvmeController0, mockNvmeController1},
 				},
-				FormatRes: &bdev.FormatResponse{
-					DeviceResponses: bdev.DeviceFormatResponses{
-						mockNvmeController0.PciAddr: &bdev.DeviceFormatResponse{
+				FormatRes: &storage.BdevFormatResponse{
+					DeviceResponses: storage.BdevDeviceFormatResponses{
+						mockNvmeController0.PciAddr: &storage.BdevDeviceFormatResponse{
 							Formatted: true,
 						},
 					},
@@ -1279,18 +1504,22 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 			// add all I/O Engine configurations
 			for idx, scmMount := range tc.sMounts {
-				if tc.sClass == storage.ScmClassDCPM {
+				if tc.sClass == storage.ClassDcpm {
 					devToMount[tc.sDevs[idx]] = scmMount
 					t.Logf("sDevs[%d]= %v, value= %v", idx, tc.sDevs[idx], scmMount)
 				}
 				engine := engine.NewConfig().
-					WithScmMountPoint(scmMount).
-					WithScmClass(tc.sClass.String()).
-					WithBdevClass(tc.bClass.String()).
-					WithBdevFileSize(tc.bSize).
-					WithScmRamdiskSize(tc.sSize).
-					WithBdevDeviceList(tc.bDevs[idx]...).
-					WithScmDeviceList(tc.sDevs[idx])
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmMountPoint(scmMount).
+							WithScmClass(tc.sClass.String()).
+							WithScmRamdiskSize(uint(tc.sSize)).
+							WithScmDeviceList(tc.sDevs[idx]),
+						storage.NewTierConfig().
+							WithBdevClass(tc.bClass.String()).
+							WithBdevFileSize(tc.bSize).
+							WithBdevDeviceList(tc.bDevs[idx]...),
+					)
 				config.Engines = append(config.Engines, engine)
 			}
 
@@ -1310,7 +1539,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			instances := cs.harness.Instances()
 			common.AssertEqual(t, len(tc.sMounts), len(instances), name)
 
-			t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
+			// TODO DAOS-8040: re-enable VMD
+			// t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
 
 			// runs discovery for nvme & scm
 			if err := cs.Setup(); err != nil {
@@ -1318,7 +1548,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			}
 
 			for i, e := range instances {
-				srv := e.(*EngineInstance)
+				ei := e.(*EngineInstance)
 				root := filepath.Dir(tc.sMounts[i])
 				if tc.scmMounted {
 					root = tc.sMounts[i]
@@ -1329,7 +1559,7 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 				// if the instance is expected to have a valid superblock, create one
 				if tc.superblockExists {
-					if err := srv.createSuperblock(false); err != nil {
+					if err := ei.createSuperblock(false); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -1337,9 +1567,9 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
 					trc.Running.SetTrue()
-					srv.ready.SetTrue()
+					ei.ready.SetTrue()
 				}
-				srv.runner = engine.NewTestRunner(trc, config.Engines[i])
+				ei.runner = engine.NewTestRunner(trc, config.Engines[i])
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
@@ -1350,11 +1580,11 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 
 			awaitCh := make(chan error)
 			inflight := 0
-			for _, srv := range instances {
+			for _, ei := range instances {
 				inflight++
-				go func(s *EngineInstance) {
-					awaitCh <- s.awaitStorageReady(ctx, tc.recreateSBs)
-				}(srv.(*EngineInstance))
+				go func(e *EngineInstance) {
+					awaitCh <- e.awaitStorageReady(ctx, tc.recreateSBs)
+				}(ei.(*EngineInstance))
 			}
 
 			awaitingFormat := make(chan struct{})
@@ -1362,8 +1592,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			go func(ctxIn context.Context) {
 				for {
 					ready := true
-					for _, srv := range instances {
-						if !srv.(*EngineInstance).isAwaitingFormat() {
+					for _, ei := range instances {
+						if !ei.(*EngineInstance).isAwaitingFormat() {
 							ready = false
 						}
 					}

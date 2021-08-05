@@ -21,8 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -44,8 +43,7 @@ type (
 type EngineInstance struct {
 	log             logging.Logger
 	runner          EngineRunner
-	bdevProvider    *bdev.Provider
-	scmProvider     *scm.Provider
+	storage         *storage.Provider
 	waitFormat      atm.Bool
 	storageReady    chan bool
 	waitDrpc        atm.Bool
@@ -71,15 +69,13 @@ type EngineInstance struct {
 
 // NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
-func NewEngineInstance(log logging.Logger, bp *bdev.Provider, sp *scm.Provider,
-	joinFn systemJoinFn, r EngineRunner) *EngineInstance {
+func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner) *EngineInstance {
 
 	return &EngineInstance{
-		log:            log,
+		log:            l,
 		runner:         r,
-		bdevProvider:   bp,
-		scmProvider:    sp,
-		joinSystem:     joinFn,
+		storage:        p,
+		joinSystem:     jf,
 		drpcReady:      make(chan *srvpb.NotifyReadyReq),
 		storageReady:   make(chan bool),
 		startRequested: make(chan bool),
@@ -200,8 +196,10 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		NumContexts: ready.GetNctxs(),
 		FaultDomain: ei.hostFaultDomain,
 		InstanceIdx: ei.Index(),
+		Incarnation: ready.GetIncarnation(),
 	})
 	if err != nil {
+		ei.log.Errorf("join failed: %s", err)
 		return system.NilRank, false, err
 	} else if resp.State == system.MemberStateExcluded {
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
