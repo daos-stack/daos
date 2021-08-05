@@ -275,6 +275,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	int			 tmprc;
 	uint32_t		 cond_mask = 0;
 	bool			 create;
+	void			*create_flag = NULL;
 	bool			 visible_only;
 
 	D_ASSERT(cont != NULL);
@@ -287,6 +288,11 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 
 	create = flags & VOS_OBJ_CREATE;
 	visible_only = flags & VOS_OBJ_VISIBLE;
+	/** Pass NULL as the create_args if we are not creating the object so we avoid
+	 *  evicting an entry until we need to
+	 */
+	if (create)
+		create_flag = cont;
 
 	D_DEBUG(DB_TRACE, "Try to hold cont="DF_UUID", obj="DF_UOID
 		" create=%s epr="DF_X64"-"DF_X64"\n",
@@ -297,10 +303,7 @@ vos_obj_hold(struct daos_lru_cache *occ, struct vos_container *cont,
 	lkey.olk_cont = cont;
 	lkey.olk_oid = oid;
 
-	/** Pass NULL as the create_args the first time.   We don't want to
-	 *  evict an entry until we need to do so.
-	 */
-	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), NULL, &lret);
+	rc = daos_lru_ref_hold(occ, &lkey, sizeof(lkey), create_flag, &lret);
 	if (rc == -DER_NONEXIST) {
 		D_ASSERT(obj_local.obj_cont == NULL);
 		obj = &obj_local;
@@ -444,10 +447,8 @@ out:
 		D_GOTO(failed, rc = -DER_TX_RESTART);
 	}
 
-	if (!create && obj == &obj_local) {
-		/** For a read, go ahead and cache the object.  For writes, it should get released
-		 *  before the next yield.
-		 */
+	if (obj == &obj_local) {
+		/** Ok, it's successful, go ahead and cache the object. */
 		rc = cache_object(occ, &obj);
 		if (rc != 0)
 			goto failed_2;
