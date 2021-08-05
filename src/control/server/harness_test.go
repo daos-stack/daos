@@ -223,7 +223,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
 
 				msc := scm.MockSysConfig{IsMountedBool: true}
-				sysp := scm.NewMockSysProvider(&msc)
+				sysp := scm.NewMockSysProvider(log, &msc)
 				provider := storage.MockProvider(
 					log, 0, &engineCfg.Storage,
 					sysp,
