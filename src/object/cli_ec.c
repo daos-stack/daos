@@ -1963,7 +1963,6 @@ obj_ec_fail_info_reset(struct obj_reasb_req *reasb_req)
 {
 	struct obj_ec_fail_info		*fail_info = reasb_req->orr_fail;
 	struct daos_recx_ep_list	*recx_lists;
-	uint32_t			 i;
 
 	if (fail_info == NULL)
 		return;
@@ -1972,8 +1971,13 @@ obj_ec_fail_info_reset(struct obj_reasb_req *reasb_req)
 	recx_lists = fail_info->efi_recx_lists;
 	if (recx_lists == NULL)
 		return;
-	for (i = 0; i < fail_info->efi_nrecx_lists; i++)
-		recx_lists[i].re_nr = 0;
+	daos_recx_ep_list_free(fail_info->efi_recx_lists,
+			       fail_info->efi_nrecx_lists);
+	daos_recx_ep_list_free(fail_info->efi_stripe_lists,
+			       fail_info->efi_nrecx_lists);
+	fail_info->efi_recx_lists = NULL;
+	fail_info->efi_stripe_lists = NULL;
+	fail_info->efi_nrecx_lists = 0;
 	daos_recx_ep_list_free(fail_info->efi_parity_lists,
 			       fail_info->efi_parity_list_nr);
 	fail_info->efi_parity_lists = NULL;
