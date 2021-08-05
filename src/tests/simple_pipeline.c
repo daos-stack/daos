@@ -172,7 +172,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 	uint32_t	i, j, l;
 	int		rc;
 
-	/** iods: information about what akeys to retreive */
+	/** iods: information about what akeys to retrieve */
 	for (i = 0; i < NR_IODS; i++) {
 		iods[i].iod_nr		= 1;
 		iods[i].iod_size	= STRING_LEN;
