@@ -1067,7 +1067,7 @@ def run_tests(test_files, tag_filter, args):
                         return_code |= 64
                     return_code |= 128
                     continue
-            
+
             # Set the environment variable for each test.
             for key in test_file["env"]:
                 os.environ[key] = test_file["env"][key]
