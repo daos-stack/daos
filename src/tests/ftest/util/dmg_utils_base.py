@@ -596,7 +596,7 @@ class DmgCommandBase(YamlCommand):
                     """Create a dmg telemetry metrics list object."""
                     super().__init__(
                         "/run/dmg/telemetry/metrics/list/*", "list")
-                    self.host = FormattedParameter("--host={}", None)
+                    self.host = FormattedParameter("--hostlist={}", None)
                     self.port = FormattedParameter("--port={}", None)
 
             class QuerySubCommand(CommandWithParameters):
@@ -606,6 +606,6 @@ class DmgCommandBase(YamlCommand):
                     """Create a dmg telemetry metrics query object."""
                     super().__init__(
                         "/run/dmg/telemetry/metrics/query/*", "query")
-                    self.host = FormattedParameter("--host={}", None)
+                    self.host = FormattedParameter("--hostlist={}", None)
                     self.port = FormattedParameter("--port={}", None)
                     self.metrics = FormattedParameter("--metrics={}", None)
