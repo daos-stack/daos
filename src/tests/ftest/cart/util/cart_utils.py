@@ -421,7 +421,7 @@ class CartTest(TestWithoutServers):
                 print("Problem with getcwd, chdir, rename, chdir: ", e)
 
         if memcheck_errors > 0:
-            # Temporarily pass memcheck errors (while suppression file is in progres)
+            # Temporarily pass memcheck errors (while suppression file is in progress)
             # self.fail( ...
             self.log.info(
                 "Failed, found " + str(memcheck_errors) +
