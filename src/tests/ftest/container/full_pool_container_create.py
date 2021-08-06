@@ -8,7 +8,6 @@ from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from general_utils import get_random_bytes
 
-
 class FullPoolContainerCreate(TestWithServers):
     """
     Class for test to create a container in a pool with no remaining free space.
@@ -23,6 +22,9 @@ class FullPoolContainerCreate(TestWithServers):
         err = "-1007"
         # probably should be -1007, revisit later
         err2 = "-1009"
+
+        # test params
+        threshold_percent = self.params.get("threshold_percent", "/run/pool/*")
 
         # create pool and connect
         self.prepare_pool()
@@ -86,32 +88,56 @@ class FullPoolContainerCreate(TestWithServers):
             "Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
 
         # create a 2nd container now that pool is full
-        try:
-            self.log.info("creating 2nd container")
-            cont2 = DaosContainer(self.context)
-            cont2.create(self.pool.pool.handle)
-            self.log.info("created 2nd container")
+        # try writing to this second container which should
+        # fail after writing a few Kb of data as there should
+        # be some space emptied up due to agregation and
+        # rdb log compression
+        self.log.info("creating 2nd container")
+        cont2 = DaosContainer(self.context)
+        cont2.create(self.pool.pool.handle)
+        self.log.info("created 2nd container")
+        self.log.info("opening container 2")
+        cont2.open()
 
-            self.log.info("opening container 2")
-            cont2.open()
+        written_data_cont2 = 0
+        self.log.info("writing more objects, write expected to fail "
+                      "after writing a few Kb")
+        for obj_sz in [10, 1]:
+            write_count = 0
+            while True:
+                try:
+                    # write to second container
+                    cont2.write_an_obj(my_str, obj_sz, dkey, akey,
+                                       obj_cls="OC_SX")
+                    write_count += 1
 
-            self.log.info("writing one more object, write expected to fail")
-            cont2.write_an_obj(my_str, my_str_sz, dkey, akey,
-                               obj_cls="OC_SX")
-            self.log.info("closing container")
-            cont2.close()
-            self.fail("wrote one more object after pool was completely filled,"
-                      " this should never print")
-        except DaosApiError as excep:
-            if not (err in repr(excep) or err2 in repr(excep)):
-                self.log.error("caught unexpected exception while "
-                               "writing object: %s", repr(excep))
-                self.log.info("closing container")
-                cont2.close()
-                self.fail("caught unexpected exception while writing "
-                          "object: {}".format(repr(excep)))
-            else:
-                self.log.info("correctly caught -1007 while attempting "
-                              "to write object in full pool")
-                self.log.info("closing container")
-                cont2.close()
+                except DaosApiError as excep:
+                    if not (err in repr(excep) or err2 in repr(excep)):
+                        self.log.error("caught unexpected exception while "
+                                       "writing object: %s", repr(excep))
+                        self.log.info("closing container")
+                        cont2.close()
+                        self.fail("caught unexpected exception while writing "
+                                  "object: {}".format(repr(excep)))
+                    else:
+                        # calculate the data written to second container
+                        # and verify it is under the threshold of 0.1%
+                        # of pool size
+                        written_data_cont2 = (written_data_cont2 +
+                                              (write_count * obj_sz))
+                        threshold_value = (threshold_percent *
+                                           self.pool.scm_size.value)
+                        if written_data_cont2 > threshold_value:
+                            cont2.close()
+                            self.fail("Written {} bytes to container2 which is "
+                                      "more than 0.1% of pool "
+                                      "size".format(written_data_cont2))
+                        else:
+                            break
+
+        self.log.info("Total data written to container2 "
+                      "{} bytes".format(written_data_cont2))
+        self.log.info("correctly caught -1007 while attempting "
+                      "to write object to a full pool")
+        self.log.info("closing container")
+        cont2.close()
