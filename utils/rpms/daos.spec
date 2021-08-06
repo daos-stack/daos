@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.104
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -360,6 +360,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
+%{_bindir}/daos_metrics
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
@@ -445,7 +446,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
-%{_bindir}/daos_metrics
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{_bindir}/common_test
@@ -480,9 +480,12 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Thu Aug 05 2021 Yawei <yawei.niu@intel.com> 1.3.104-3
+* Thu Aug 05 2021 Yawei <yawei.niu@intel.com> 1.3.104-4
 - Fix duplicates
 - Add vos_perf
+
+* Wed Aug 04 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.104-3
+- Move daos_metrics tool from tests package to server package
 
 * Wed Aug 04 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.104-2
 - Update to spdk 21.07 and (indirectly) dpdk 21.05

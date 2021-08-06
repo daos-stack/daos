@@ -223,7 +223,7 @@ func PoolCreate(ctx context.Context, rpcClient UnaryInvoker, req *PoolCreateReq)
 	if err != nil {
 		return nil, errors.Wrap(err, "pool create failed")
 	}
-	rpcClient.Debugf("Create DAOS pool response: %+v\n", msResp)
+	rpcClient.Debugf("Create DAOS pool response: %s\n", mgmtpb.Debug(msResp))
 
 	pbPcr, ok := msResp.(*mgmtpb.PoolCreateResp)
 	if !ok {
