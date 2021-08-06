@@ -347,14 +347,13 @@ type metricsCmd struct {
 type metricsListCmd struct {
 	logCmd
 	jsonOutputCmd
-	cfgCmd
 	hostListCmd
 	Port uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 }
 
 // Execute runs the command to list metrics from the DAOS storage nodes.
 func (cmd *metricsListCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.config, cmd.hostlist)
+	host, err := getMetricsHost(cmd.hostlist)
 	if err != nil {
 		return err
 	}
@@ -385,12 +384,9 @@ func (cmd *metricsListCmd) Execute(args []string) error {
 	return nil
 }
 
-func getMetricsHost(cfg *control.Config, custom []string) (string, error) {
-	var hostlist []string
-	if len(custom) > 0 {
-		hostlist = custom
-	} else {
-		hostlist = cfg.HostList
+func getMetricsHost(hostlist []string) (string, error) {
+	if len(hostlist) == 0 {
+		return "localhost", nil
 	}
 
 	if len(hostlist) == 1 {
@@ -411,7 +407,6 @@ func getConnectingMsg(host string, port uint32) string {
 type metricsQueryCmd struct {
 	logCmd
 	jsonOutputCmd
-	cfgCmd
 	hostListCmd
 	Port    uint32 `short:"p" long:"port" default:"9191" description:"Telemetry port on the host"`
 	Metrics string `short:"m" long:"metrics" default:"" description:"Comma-separated list of metric names"`
@@ -419,7 +414,7 @@ type metricsQueryCmd struct {
 
 // Execute runs the command to query metrics from the DAOS storage nodes.
 func (cmd *metricsQueryCmd) Execute(args []string) error {
-	host, err := getMetricsHost(cmd.config, cmd.hostlist)
+	host, err := getMetricsHost(cmd.hostlist)
 	if err != nil {
 		return err
 	}
