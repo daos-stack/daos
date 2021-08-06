@@ -45,6 +45,10 @@ func TestValidateLogMasks(t *testing.T) {
 			masks:  "mgmt=DEBUG,ERR",
 			expErr: errors.New("want PREFIX=LEVEL"),
 		},
+		"single assignment; single level; lower case levels": {
+			masks:  "mgmt=debug,err",
+			expErr: errors.New("want PREFIX=LEVEL"),
+		},
 		"multiple assignment": {
 			masks: "mgmt=DEBUG,bio=ERR",
 		},
