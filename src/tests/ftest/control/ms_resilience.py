@@ -30,8 +30,7 @@ class ManagementServiceResilience(TestWithServers):
         super().__init__(*args, **kwargs)
         self.setup_start_servers = False
         self.start_servers_once = False
-        self.L_QUERY_TIMER = 300 # adjust down as we learn more
-        self.SWIM_SUSP_TIMEOUT = 8
+        self.L_QUERY_TIMER = 30
 
     def find_pool(self, search_uuid):
         """Find a pool in the output of `dmg pool list`.

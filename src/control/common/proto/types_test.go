@@ -123,7 +123,10 @@ func TestProto_ConvertScmModules(t *testing.T) {
 
 func TestProto_ConvertScmMountPoint(t *testing.T) {
 	a := storage.MockScmMountPoint()
-	resA, _ := json.Marshal(a)
+	resA, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var b storage.ScmMountPoint
 	if err := json.Unmarshal(resA, &b); err != nil {
