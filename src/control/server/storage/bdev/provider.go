@@ -18,13 +18,13 @@ var _ storage.BdevProvider = &Provider{}
 type (
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
-		PrepareReset() error
 		Prepare(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
+		Reset(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
 		// TODO DAOS-8040: re-enable VMD
-		//		DisableVMD()
-		//		IsVMDDisabled() bool
+		//		EnableVMD()
+		//		IsVMDEnabled() bool
 		UpdateFirmware(pciAddr string, path string, slot int32) error
 		WriteNvmeConfig(storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error)
 	}
@@ -52,13 +52,13 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 }
 
 // TODO DAOS-8040: re-enable VMD
-//func (p *Provider) disableVMD() {
-//	p.backend.DisableVMD()
+//func (p *Provider) enableVMD() {
+//	p.backend.EnableVMD()
 //}
 
-// IsVMDDisabled returns true if provider has disabled VMD device awareness.
-//func (p *Provider) IsVMDDisabled() bool {
-//	return p.backend.IsVMDDisabled()
+// IsVMDEnabled returns true if provider has enabled VMD device awareness.
+//func (p *Provider) IsVMDEnabled() bool {
+//	return p.backend.IsVMDEnabled()
 //}
 
 // Scan calls into the backend to discover NVMe components in the
@@ -66,27 +66,24 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
 	// TODO DAOS-8040: re-enable VMD
 	// set vmd state on remote provider in forwarded request
-	//	if req.IsForwarded() && req.DisableVMD {
-	//		p.disableVMD()
+	//	if req.IsForwarded() && req.EnableVMD {
+	//		p.enableVMD()
 	//	}
 
 	return p.backend.Scan(req)
 }
 
-// Prepare attempts to perform all actions necessary to make NVMe
-// components available for use by DAOS.
+// Prepare attempts to perform all actions necessary to make NVMe components
+// available for use by DAOS. If Reset_ is set, rebind devices to kernel and
+// reset allocation of hugepages, otherwise rebind devices to user-space
+// driver compatible with SPDK and allocate hugeages.
 func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	// run reset first to ensure reallocation of hugepages
-	if err := p.backend.PrepareReset(); err != nil {
-		return nil, errors.Wrap(err, "bdev prepare reset")
+	if req.Reset_ {
+		p.log.Debug("run bdev storage provider prepare reset")
+		return p.backend.Reset(req)
 	}
 
-	resp := new(storage.BdevPrepareResponse)
-	// if we're only resetting, return before prep
-	if req.ResetOnly {
-		return resp, nil
-	}
-
+	p.log.Debug("run bdev storage provider prepare setup")
 	return p.backend.Prepare(req)
 }
 
@@ -99,8 +96,8 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 
 	// TODO DAOS-8040: re-enable VMD
 	// set vmd state on remote provider in forwarded request
-	//	if req.IsForwarded() && req.DisableVMD {
-	//		p.disableVMD()
+	//	if req.IsForwarded() && req.EnableVMD {
+	//		p.enableVMD()
 	//	}
 
 	return p.backend.Format(req)
