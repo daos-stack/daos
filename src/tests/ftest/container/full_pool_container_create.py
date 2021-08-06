@@ -90,7 +90,7 @@ class FullPoolContainerCreate(TestWithServers):
         # create a 2nd container now that pool is full
         # try writing to this second container which should
         # fail after writing a few Kb of data as there should
-        # be some space emptied up due to agregation and
+        # be some space emptied up due to aggregation and
         # rdb log compression
         self.log.info("creating 2nd container")
         cont2 = DaosContainer(self.context)
