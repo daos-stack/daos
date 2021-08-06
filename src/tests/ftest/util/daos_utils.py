@@ -242,30 +242,37 @@ class DaosCommand(DaosCommandBase):
             ("container", "update-acl"), pool=pool, cont=cont,
             entry=entry, acl_file=acl_file)
 
-    def pool_list_cont(self, pool, sys_name=None):
+    def container_list(self, pool, sys_name=None):
         """List containers in the given pool.
 
         Args:
-            pool (str): Pool UUID
+            pool (str): Pool label or UUID
             sys_name (str, optional): System name. Defaults to None.
 
         Returns:
-            dict: Dictionary that contains the list of UUIDs in the key "uuids".
+            dict: JSON output
 
         Raises:
-            CommandFailure: if the daos pool list-containers command fails.
+            CommandFailure: if the daos container list command fails.
 
         """
-        self._get_result(
-            ("cont", "list"), pool=pool, sys_name=sys_name)
         # Sample output.
-        # c8bfc7c9-cb19-4574-bae2-af4046d24b58
-        # 182347e4-08ce-4069-b5e2-0dd04406dffd
-        data = {}
-        if self.result.exit_status == 0:
-            data["uuids"] = re.findall(r"([0-9a-f-]{36})",
-            self.result.stdout_text)
-        return data
+        # {
+        #   "response": [
+        #     {
+        #       "UUID": "bad80a98-aabd-498c-b001-6547cd061c8c",
+        #       "Label": "container_label_not_set"
+        #     },
+        #     {
+        #       "UUID": "dd9fc365-5729-4736-9d34-e46504a4a92d",
+        #       "Label": "mkc1"
+        #     }
+        #   ],
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(
+            ("container", "list"), pool=pool, sys_name=sys_name)
 
     def pool_set_attr(self, pool, attr, value, sys_name=None):
         """Set pool attribute.

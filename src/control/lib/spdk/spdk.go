@@ -155,13 +155,14 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	}
 	clean(retPtr)
 
-	if opts.DisableVMD {
-		return nil
-	}
-
-	if rc := C.spdk_vmd_init(); rc != 0 {
-		return Rc2err("spdk_vmd_init()", rc)
-	}
+	// TODO DAOS-8040: re-enable VMD
+	//	if opts.DisableVMD {
+	//		return nil
+	//	}
+	//
+	//	if rc := C.spdk_vmd_init(); rc != 0 {
+	//		return Rc2err("spdk_vmd_init()", rc)
+	//	}
 
 	return nil
 }

@@ -4,11 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import traceback
 import ctypes
 
 from apricot import TestWithServers
-from command_utils import CommandFailure
 
 
 class BadEvictTest(TestWithServers):
@@ -50,39 +48,40 @@ class BadEvictTest(TestWithServers):
 
         saveduuid = None
 
+        self.add_pool(connect=False)
+        original_test_pool_uuid = self.pool.uuid
+
+        # trash the UUID value in various ways
+        if excludeuuid is None:
+            saveduuid = (ctypes.c_ubyte * 16)(0)
+            for index, _ in enumerate(saveduuid):
+                saveduuid[index] = self.pool.pool.uuid[index]
+            self.pool.pool.uuid[0:] = \
+                [0 for item in range(0, len(self.pool.pool.uuid))]
+        elif excludeuuid == 'JUNK':
+            saveduuid = (ctypes.c_ubyte * 16)(0)
+            for index, _ in enumerate(saveduuid):
+                saveduuid[index] = self.pool.pool.uuid[index]
+            self.pool.pool.uuid[4] = 244
+
+        self.pool.uuid = self.pool.pool.get_uuid_str()
+
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            self.add_pool(connect=False)
-
-            # trash the UUID value in various ways
-            if excludeuuid is None:
-                saveduuid = (ctypes.c_ubyte * 16)(0)
-                for item in range(0, len(saveduuid)):
-                    saveduuid[item] = self.pool.pool.uuid[item]
-                self.pool.pool.uuid[0:] = \
-                    [0 for item in range(0, len(self.pool.pool.uuid))]
-            elif excludeuuid == 'JUNK':
-                saveduuid = (ctypes.c_ubyte * 16)(0)
-                for item in range(0, len(saveduuid)):
-                    saveduuid[item] = self.pool.pool.uuid[item]
-                self.pool.pool.uuid[4] = 244
-
-            # evict the pool
-            self.get_dmg_command().pool_evict(self.pool.pool.get_uuid_str())
-
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
-
-        except CommandFailure as excep:
-            self.log.error(str(excep))
-            self.log.error(traceback.format_exc())
-            if expected_result in ['PASS']:
-                self.fail("Test was expected to pass but it failed.\n")
+            # Make dmg call and poolevict() not fail.
+            self.pool.dmg.exit_status_exception = False
+            self.pool.use_label = False
+            self.pool.evict()
         finally:
-            if self.pool is not None:
-                # if the test trashed some pool parameter, put it back the
-                # way it was
-                if saveduuid is not None:
-                    self.pool.pool.uuid = saveduuid
-                self.pool.destroy()
+            self.pool.use_label = True
+            self.pool.dmg.exit_status_exception = True
+
+        exit_status = self.pool.dmg.result.exit_status
+        if exit_status == 0 and expected_result in ['FAIL']:
+            self.fail("Test was expected to fail but it passed.\n")
+        elif exit_status != 0 and expected_result in ['PASS']:
+            self.fail("Test was expected to pass but it failed.\n")
+
+        # if the test trashed some pool parameter, put it back the way it was
+        if saveduuid is not None:
+            self.pool.pool.uuid = saveduuid
+            self.pool.uuid = original_test_pool_uuid
