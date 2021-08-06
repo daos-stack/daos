@@ -28,6 +28,12 @@ const (
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
 	// PoolPropertyECCellSize is the EC Cell size.
 	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
+	// PoolPropertyScrubSched Checksum scrubbing schedule
+	PoolPropertyScrubSched = C.DAOS_PROP_PO_SCRUB_SCHED
+	// PoolPropertyScrubFreq Checksum scrubbing frequency
+	PoolPropertyScrubFreq = C.DAOS_PROP_PO_SCRUB_FREQ
+	// PoolPropertyScrubCred Checksum scrubbing credits
+	PoolPropertyScrubCred = C.DAOS_PROP_PO_SCRUB_CREDITS
 )
 
 const (
@@ -58,3 +64,11 @@ func LabelIsValid(label string) bool {
 
 	return bool(C.daos_label_is_valid(cLabel))
 }
+
+const (
+	PoolScrubSchedOff        = C.DAOS_SCRUB_SCHED_OFF
+	PoolScrubSchedWait       = C.DAOS_SCRUB_SCHED_RUN_WAIT
+	PoolScrubSchedContinuous = C.DAOS_SCRUB_SCHED_CONTINUOUS
+	PoolScrubSchedRunOnce    = C.DAOS_SCRUB_SCHED_RUN_ONCE
+	PoolScrubSchedNoYield    = C.DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD
+)

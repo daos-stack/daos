@@ -333,7 +333,7 @@ enum {
 };
 
 int run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size);
-int run_daos_pool_test(int rank, int size);
+int run_daos_pool_test(int rank, int size, int *p_int, int i);
 int run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size, int *tests, int test_size);

@@ -222,6 +222,19 @@ func TestPoolCommands(t *testing.T) {
 			dmgTestErr(fmt.Sprintf("ACL file '%s' contains no entries", testEmptyFile)),
 		},
 		{
+			"Create pool with scrubbing",
+			fmt.Sprintf("pool create --scm-size %s --properties=scrub:continuous,scrub-freq:1,scrub-cred:10", testSizeStr),
+			strings.Join([]string{
+				printRequest(t, &control.PoolCreateReq{
+					User:      eUsr.Username + "@",
+					UserGroup: eGrp.Name + "@",
+					Ranks:     []system.Rank{},
+					TierBytes: []uint64{uint64(testSize), 0},
+				}),
+			}, " "),
+			nil,
+		},
+		{
 			"Exclude a target with single target idx",
 			"pool exclude 031bcaf8-f0f5-42ef-b3c5-ee048676dceb --rank 0 --target-idx 1",
 			strings.Join([]string{
