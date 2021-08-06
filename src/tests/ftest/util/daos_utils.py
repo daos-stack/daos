@@ -18,12 +18,12 @@ class DaosCommand(DaosCommandBase):
         "run": r"(.*)",
         "container_create": r"container ([0-9a-f-]+)",
         "container_query":
-            r"  Container UUID\s+:\s+([0-9a-f-]+)\n" +
-            r"  Container Type\s+:\s+([0-9a-z]+)\n" +
-            r"  Pool UUID\s+:\s+([0-9a-f-]+)\n" +
-            r"  Number of snapshots\s+:\s+(\d+)\n" +
-            r"  Latest Persistent Snapshot\s+:\s+(\d+)\n" +
-            r"  Highest Aggregated Epoch\s+:\s+(\d+)",
+            r"  Container UUID\s+:\s+([0-9a-f-]+)\s*\n" +
+            r"  Container Type\s+:\s+([0-9a-z]+)\s*\n" +
+            r"  Pool UUID\s+:\s+([0-9a-f-]+)\s*\n" +
+            r"  Number of snapshots\s+:\s+(\d+)\s*\n" +
+            r"  Latest Persistent Snapshot\s+:\s+(\d+)\s*\n" +
+            r"  Highest Aggregated Epoch\s+:\s+(\d+)\s*\n",
     }
 
     def pool_query(self, pool, sys_name=None, sys=None):
