@@ -297,7 +297,7 @@ func detectVMD() ([]string, error) {
 	// Check available VMD devices with command:
 	// "$lspci | grep  -i -E "201d | Volume Management Device"
 	lspciCmd := exec.Command("lspci")
-	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
+	vmdCmd := exec.Command("grep", "-i", "-E", "Volume Management Device")
 	var cmdOut bytes.Buffer
 	var prefixIncluded bool
 
@@ -316,9 +316,6 @@ func detectVMD() ([]string, error) {
 		// sometimes the output may not include "0000:" prefix
 		// usually when muliple devices are in PCI_ALLOWED
 		vmdCount = bytes.Count(cmdOut.Bytes(), []byte("Volume"))
-		if vmdCount == 0 {
-			vmdCount = bytes.Count(cmdOut.Bytes(), []byte("201d"))
-		}
 	} else {
 		prefixIncluded = true
 	}
@@ -400,16 +397,53 @@ func (sb *spdkBackend) vmdPrep(req storage.BdevPrepareRequest) (bool, error) {
 	vmdReq := req
 	// If VMD devices are going to be used, then need to run a separate
 	// bdev prepare (SPDK setup) with the VMD address as the PCI_ALLOWED
-	//
-	// TODO: ignore devices not in include list
-	vmdReq.PCIAllowlist = strings.Join(vmdDevs, " ")
+	// Use only VMD addresses that are both in the include list and
+	// present on the system
+	vmdPCIAllowList := make([]string, 0, len(vmdDevs))
+	for _, s := range vmdDevs {
+		if bytes.Contains([]byte(vmdReq.PCIAllowlist), []byte(s)) {
+			vmdPCIAllowList = append(vmdPCIAllowList, s)
+		}
+	}
+	if len(vmdPCIAllowList) == 0 {
+		return false, nil
+	}
+	vmdReq.PCIAllowlist = strings.Join(vmdPCIAllowList, " ")
 
 	if err := sb.script.Prepare(vmdReq); err != nil {
 		return false, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 	}
 
 	sb.log.Debugf("volume management devices detected: %v", vmdDevs)
+	sb.log.Debugf("volume management devices unbound for use: %v", vmdPCIAllowList)
+
 	return true, nil
+}
+
+// Check if there are only VMD devices present in the include list of devices,
+// or if there are mixed NVMe SSDs and VMD addresses
+func (sb *spdkBackend) allVMD(req storage.BdevPrepareRequest) (bool, error) {
+	vmdDevs, err := detectVMD()
+	if err != nil {
+		return false, errors.Wrap(err, "VMD could not be enabled")
+	}
+
+	if len(vmdDevs) == 0 {
+		return false, nil
+	}
+
+	vmdPCIAllowList := make([]string, 0, len(vmdDevs))
+	for _, s := range vmdDevs {
+		if bytes.Contains([]byte(req.PCIAllowlist), []byte(s)) {
+			vmdPCIAllowList = append(vmdPCIAllowList, s)
+		}
+	}
+	vmdCount := bytes.Count([]byte(req.PCIAllowlist), []byte(" "))
+	if len(vmdPCIAllowList) == (vmdCount + 1) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // Prepare will cleanup any leftover hugepages owned by the target user and then
@@ -425,8 +459,25 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 		return nil, errors.Wrapf(err, "lookup on local host")
 	}
 
+	// call vmdPrep() if there are only VMD addresses in PCIAllowList
+	if !req.DisableVMD {
+		onlyVMD, _ := sb.allVMD(req)
+		if onlyVMD {
+			goto UnbindVMD
+		}
+	}
+
 	if err := sb.script.Prepare(req); err != nil {
 		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
+	}
+
+UnbindVMD:
+	if !req.DisableVMD {
+		vmdDetected, err := sb.vmdPrep(req)
+		if err != nil {
+			return nil, err
+		}
+		resp.VmdDetected = vmdDetected
 	}
 
 	if !req.DisableCleanHugePages {
@@ -437,20 +488,23 @@ func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 		}
 	}
 
-	if !req.DisableVMD {
-		vmdDetected, err := sb.vmdPrep(req)
-		if err != nil {
-			return nil, err
-		}
-		resp.VmdDetected = vmdDetected
-	}
-
 	return resp, nil
 }
 
 func (sb *spdkBackend) PrepareReset() error {
 	sb.log.Debugf("provider backend prepare reset")
 	return sb.script.Reset()
+}
+
+// Resetting VMD devices requires the address to be passed as allowlist
+func (sb *spdkBackend) PrepareVMDReset(req storage.BdevPrepareRequest) error {
+	sb.log.Debugf("provider backend prepare reset vmd %v", req)
+
+	if err := sb.script.ResetVMD(req); err != nil {
+		return errors.Wrap(err, "re-binding VMD ssds")
+	}
+
+	return nil
 }
 
 func (sb *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {

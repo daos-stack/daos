@@ -14,6 +14,7 @@ import (
 type (
 	MockBackendConfig struct {
 		PrepareResetErr error
+		PrepareVMDResetErr error
 		PrepareResp     *storage.BdevPrepareResponse
 		PrepareErr      error
 		FormatRes       *storage.BdevFormatResponse
@@ -61,6 +62,10 @@ func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevForma
 
 func (mb *MockBackend) PrepareReset() error {
 	return mb.cfg.PrepareResetErr
+}
+
+func (mb *MockBackend) PrepareVMDReset(_ storage.BdevPrepareRequest) error {
+	return mb.cfg.PrepareVMDResetErr
 }
 
 func (mb *MockBackend) Prepare(_ storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {

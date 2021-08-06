@@ -63,6 +63,7 @@ func run(log logging.Logger, env []string, cmdStr string, args ...string) (strin
 	}
 
 	log.Debugf("running script: %s", cmdPath)
+	log.Errorf("running script: %s, env: %v, cmdStr: %v, args: %v", cmdPath, env, cmdStr, args)
 	cmd := exec.Command(cmdPath, args...)
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
@@ -99,6 +100,24 @@ func (s *spdkSetupScript) Reset() error {
 	return errors.Wrapf(err, "spdk reset failed (%s)", out)
 }
 
+func (s *spdkSetupScript) ResetVMD(req storage.BdevPrepareRequest) error {
+	env := []string{
+		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
+	}
+
+	if req.PCIAllowlist != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowlist))
+	}
+
+	s.log.Debugf("spdk setup (vmd reset) env: %v", env)
+	s.log.Errorf("spdk setup (vmd reset) env: %v", env)
+	out, err := s.runCmd(s.log, env, s.scriptPath, "reset")
+	s.log.Debugf("spdk setup (vmd reset) stdout:\n%s\n", out)
+	s.log.Errorf("spdk setup (vmd reset) stdout:\n%s\n", out)
+	return errors.Wrapf(err, "spdk setup (vmd reset) failed (%s)", out)
+}
+
 // Prepare executes setup script to allocate hugepages and unbind PCI devices
 // (that don't have active mountpoints) from generic kernel driver to be
 // used with SPDK. Either all PCI devices will be unbound by default if wlist
@@ -133,7 +152,9 @@ func (s *spdkSetupScript) Prepare(req storage.BdevPrepareRequest) error {
 	}
 
 	s.log.Debugf("spdk setup env: %v", env)
+	s.log.Errorf("spdk setup env: %v", env)
 	out, err := s.runCmd(s.log, env, s.scriptPath)
 	s.log.Debugf("spdk setup stdout:\n%s\n", out)
+	s.log.Errorf("spdk setup stdout:\n%s\n", out)
 	return errors.Wrapf(err, "spdk setup failed (%s)", out)
 }
