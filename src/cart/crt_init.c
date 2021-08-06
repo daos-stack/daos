@@ -64,19 +64,7 @@ mem_pin_workaround(void)
 		goto exit;
 	}
 
-	if (rlim.rlim_cur == RLIM_INFINITY &&
-	    rlim.rlim_max == RLIM_INFINITY) {
-		D_INFO("Infinite rlimit detected; performing mlockall()\n");
-
-		/* Lock all pages */
-		rc = mlockall(MCL_CURRENT | MCL_FUTURE);
-		if (rc)
-			D_WARN("Failed to mlockall(); errno=%d (%s)\n",
-			       errno, strerror(errno));
-
-	} else {
-		D_INFO("mlockall() skipped\n");
-	}
+	D_INFO("mlockall(MCL_CURRENT | MCL_FUTURE) has been disabled !!...\n");
 
 	D_DEBUG(DB_ALL, "Memory pinning workaround enabled\n");
 exit:
