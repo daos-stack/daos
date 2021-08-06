@@ -1067,6 +1067,23 @@ ilog_fetch_init(struct ilog_entries *entries)
 	entries->ie_statuses = &priv->ip_embedded[0];
 }
 
+void
+ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src)
+{
+	struct ilog_priv	*priv_dest = ilog_ent2priv(dest);
+	struct ilog_priv	*priv_src = ilog_ent2priv(src);
+
+	D_ASSERT(dest != NULL);
+	D_ASSERT(src != NULL);
+
+	/** We've already copied everything, just fix up any pointers here */
+	if (src->ie_statuses == &priv_src->ip_embedded[0])
+		dest->ie_statuses = &priv_dest->ip_embedded[0];
+
+	priv_src->ip_alloc_size = 0;
+	priv_src->ip_removals = NULL;
+}
+
 static void
 ilog_status_refresh(struct ilog_context *lctx, uint32_t intent,
 		    struct ilog_entries *entries)

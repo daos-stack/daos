@@ -3310,7 +3310,7 @@ ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 	crt_endpoint_t			ep;
 	struct dss_module_info		*info = dss_get_module_info();
 	crt_rpc_t			*rpc;
-	struct pool_target_addr_list	list;
+	struct pool_target_addr_list	list = { 0 };
 	struct pool_add_in		*in;
 	struct pool_add_out		*out;
 	crt_opcode_t			opcode;
@@ -3390,6 +3390,7 @@ rechoose:
 out_rpc:
 	crt_req_decref(rpc);
 out_client:
+	pool_target_addr_list_free(&list);
 	rsvc_client_fini(&client);
 	return rc;
 }
