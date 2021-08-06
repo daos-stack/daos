@@ -2303,15 +2303,16 @@ abort:
 	if (err == 0) {
 		vos_ts_set_upgrade(ioc->ic_ts_set);
 		if (daes != NULL) {
-			vos_dtx_post_handle(ioc->ic_cont, daes, NULL,
-					    dth->dth_dti_cos_count, false);
+			vos_dtx_post_handle(ioc->ic_cont, daes, dces,
+					    dth->dth_dti_cos_count,
+					    false, false);
 			dth->dth_cos_done = 1;
 		}
 		vos_dedup_process(vos_cont2pool(ioc->ic_cont),
 				  &ioc->ic_dedup_entries, false);
 	} else if (daes != NULL) {
 		vos_dtx_post_handle(ioc->ic_cont, daes, dces,
-				    dth->dth_dti_cos_count, false);
+				    dth->dth_dti_cos_count, false, true);
 		dth->dth_cos_done = 0;
 	}
 

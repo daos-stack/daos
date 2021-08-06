@@ -230,7 +230,7 @@ enum daos_cont_props {
 	DAOS_PROP_CO_STATUS,
 	/** OID value to start allocation from */
 	DAOS_PROP_CO_ALLOCED_OID,
-	/** EC cell size, it can overwrite DAOS_PROP_EC_CELL_SZ of pool */
+	/** EC cell size, it can overwrite DAOS_PROP_CO_EC_CELL_SZ of pool */
 	DAOS_PROP_CO_EC_CELL_SZ,
 	DAOS_PROP_CO_MAX,
 };
@@ -409,7 +409,7 @@ struct daos_prop_entry {
 static inline bool
 daos_label_is_valid(const char *label)
 {
-	size_t	len;
+	int	len;
 	int	i;
 
 	/** Label cannot be NULL */

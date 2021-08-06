@@ -15,15 +15,17 @@ def build_daos_common(env, client, prereqs):
     """ Building non-pmem version for client's common lib"""
     denv = env.Clone()
 
+    common_libs = ['isal', 'isal_crypto', 'cart', 'gurt', 'lz4', 'protobuf-c', 'uuid', 'pthread']
     if client:
         libname = 'libdaos_common'
     else:
+        common_libs.extend(['pmemobj'])
         denv.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
         denv.Append(OBJPREFIX="v_")
         libname = 'libdaos_common_pmem'
         prereqs.require(denv, 'pmdk')
 
-    common = daos_build.library(denv, libname, COMMON_FILES)
+    common = daos_build.library(denv, libname, COMMON_FILES, LIBS=common_libs)
     denv.Install('$PREFIX/lib64/', common)
 
 def build_dts_library(env):
@@ -65,6 +67,8 @@ def scons():
 
     env.AppendUnique(LIBPATH=[Dir('.')])
     base_env.AppendUnique(LIBPATH=[Dir('.')])
+    daos_build.add_build_rpath(base_env)
+    daos_build.add_build_rpath(env)
 
     # Hack alert, the argobots headers are required but the shared
     # library isn't so add the dependency so the include path

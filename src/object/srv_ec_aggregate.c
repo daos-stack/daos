@@ -1821,7 +1821,7 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	ec_age_set_no_parity(entry);
 	rc = vos_iterate(&iter_param, VOS_ITER_RECX, false, &anchors,
 			 agg_recx_iter_pre_cb, NULL, entry, dth);
-	D_DEBUG(DB_TRACE, "Querying parity for stripe: %lu, offset: "DF_X64
+	D_DEBUG(DB_EPC, "Querying parity for stripe: %lu, offset: "DF_X64
 		", "DF_RC"\n", entry->ae_cur_stripe.as_stripenum,
 		iter_param.ip_recx.rx_idx, DP_RC(rc));
 	if (rc != 0)
@@ -1831,6 +1831,13 @@ agg_process_stripe(struct ec_agg_param *agg_param, struct ec_agg_entry *entry)
 	if (ec_age_with_parity(entry) && ec_age_parity_higher(entry)) {
 		update_vos = true;
 		write_parity = false;
+		D_DEBUG(DB_EPC, "delete replica for stripe: %lu,"
+			DF_U64"/"DF_U64" eph "DF_X64" >= "DF_X64"\n",
+			entry->ae_cur_stripe.as_stripenum,
+			iter_param.ip_recx.rx_idx,
+			iter_param.ip_recx.rx_nr,
+			entry->ae_par_extent.ape_epoch,
+			entry->ae_cur_stripe.as_hi_epoch);
 		goto out;
 	}
 
@@ -2237,6 +2244,8 @@ agg_iterate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
 	int			 rc = 0;
 
+	D_ASSERT(agg_param->ap_initialized);
+
 	switch (type) {
 	case VOS_ITER_OBJ:
 		agg_param->ap_epr = param->ip_epr;
@@ -2347,7 +2356,7 @@ ec_agg_param_fini(struct ec_agg_param *agg_param)
 	memset(agg_param, 0, sizeof(*agg_param));
 }
 
-static void
+static int
 ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 {
 	struct ec_agg_param	*agg_param = param->ap_data;
@@ -2414,6 +2423,8 @@ out:
 	} else {
 		agg_param->ap_initialized = 1;
 	}
+
+	return rc;
 }
 
 /* Iterates entire VOS. Invokes nested iterator to recurse through trees
@@ -2441,8 +2452,11 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	if (dss_ult_exiting(cont->sc_ec_agg_req))
 		return 1;
 
-	if (!ec_agg_param->ap_initialized)
-		ec_agg_param_init(cont, agg_param);
+	if (!ec_agg_param->ap_initialized) {
+		rc = ec_agg_param_init(cont, agg_param);
+		if (rc)
+			return rc;
+	}
 
 	iter_param.ip_hdl		= cont->sc_hdl;
 	iter_param.ip_epr.epr_lo	= epr->epr_lo;
@@ -2506,6 +2520,7 @@ ds_obj_ec_aggregate(void *arg)
 	struct ds_cont_child	*cont = arg;
 	struct ec_agg_param	agg_param = { 0 };
 	struct agg_param	param = { 0 };
+	int			rc;
 
 	D_DEBUG(DB_EPC, "start EC aggregation "DF_UUID"\n",
 		DP_UUID(cont->sc_uuid));
@@ -2513,7 +2528,16 @@ ds_obj_ec_aggregate(void *arg)
 	param.ap_start_eph_get = cont_ec_agg_start_eph_get;
 	param.ap_cont = cont;
 	param.ap_req = cont->sc_ec_agg_req;
-	ec_agg_param_init(cont, &param);
+	rc = ec_agg_param_init(cont, &param);
+	if (rc) {
+		/* To make sure the EC aggregation can be run on this xstream,
+		 * let's do not exit here, and in cont_ec_aggregate_cb(), it will
+		 * keep retrying parameter init.
+		 */
+		D_CDEBUG(rc == -DER_NOTLEADER, DB_EPC, DLOG_ERR,
+			 DF_UUID" EC aggregation failed: "DF_RC"\n",
+			 DP_UUID(cont->sc_uuid), DP_RC(rc));
+	}
 
 	cont_aggregate_interval(cont, cont_ec_aggregate_cb, &param);
 

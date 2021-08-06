@@ -1,3 +1,15 @@
+daos (1.3.104-2) unstable; urgency=medium
+  [ Kris Jacque ]
+  * Move daos_metrics to server package
+
+ -- Kris Jacque <kristin.jacque@intel.com>  Tue, 03 Aug 2021 17:45:35 -0600
+
+daos (1.3.104-1) unstable; urgency=medium
+  [ Jeff Olivier ]
+  * Version bump to 1.3.104 for 2.0 test build 4
+
+ -- Jeff Olivier <jeffrey.v.olivier@intel.com>  Mon, 02 Aug 2021 09:33:00 -0500
+
 daos (1.3.103-4) unstable; urgency=medium
   [ Li Wei ]
   * Update raft to fix slow leader re-elections

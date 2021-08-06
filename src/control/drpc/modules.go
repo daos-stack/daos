@@ -126,6 +126,7 @@ func (m MgmtMethod) String() string {
 		MethodPrepShutdown:    "PrepShutdown",
 		MethodPingRank:        "Ping",
 		MethodSetRank:         "SetRank",
+		MethodSetLogMasks:     "SetLogMasks",
 		MethodSetUp:           "Setup",
 		MethodGroupUpdate:     "GroupUpdate",
 		MethodPoolCreate:      "PoolCreate",
@@ -163,6 +164,8 @@ const (
 	MethodPingRank MgmtMethod = C.DRPC_METHOD_MGMT_PING_RANK
 	// MethodSetRank is a ModuleMgmt method
 	MethodSetRank MgmtMethod = C.DRPC_METHOD_MGMT_SET_RANK
+	// MethodSetLogMasks is a ModuleMgmt method
+	MethodSetLogMasks MgmtMethod = C.DRPC_METHOD_MGMT_SET_LOG_MASKS
 	// MethodCreateMS is a ModuleMgmt method
 	MethodCreateMS MgmtMethod = C.DRPC_METHOD_MGMT_CREATE_MS
 	// MethodStartMS is a ModuleMgmt method

@@ -749,7 +749,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	vos_cont_close(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
 	daos_csummer_destroy(&cont->sc_csummer);
-
+	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);

@@ -10,8 +10,9 @@
  */
 #define D_LOGFAC	DD_FAC(tests)
 
-#include "daos_test.h"
 #include <daos_security.h>
+#include "daos_test.h"
+#include "daos_iotest.h"
 
 /* To make test indexing with "-u" prop 0 based without changing the test
  * number of all existing pool tests
@@ -30,6 +31,8 @@ pool_connect_nonexist(void **state)
 	uuid_t		 uuid;
 	daos_handle_t	 poh;
 	int		 rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (arg->myrank != 0)
 		return;
@@ -50,6 +53,8 @@ pool_connect(void **state)
 	daos_event_t	 ev;
 	daos_pool_info_t info = {0};
 	int		 rc;
+
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (!arg->hdl_share && arg->myrank != 0)
 		return;
@@ -114,6 +119,8 @@ pool_connect_exclusively(void **state)
 	daos_handle_t	 poh_ex;
 	int		 rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	if (arg->myrank != 0)
 		return;
 
@@ -164,6 +171,8 @@ pool_exclude(void **state)
 	int		 tgt = -1;
 	int		 rc;
 	int		 idx;
+
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (1) {
 		print_message("Skip it for now, because CaRT can't support "
@@ -237,6 +246,7 @@ pool_attribute(void **state)
 {
 	test_arg_t *arg = *state;
 	daos_event_t	 ev;
+	daos_handle_t	 poh;
 	int		 rc;
 
 	char const *const names[] = { "AVeryLongName", "Name" };
@@ -264,15 +274,23 @@ pool_attribute(void **state)
 	size_t			 out_sizes[] =	{ BUFSIZE, BUFSIZE, BUFSIZE };
 	size_t			 total_size;
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank != 0)
+		return;
+
 	if (arg->async) {
 		rc = daos_event_init(&ev, arg->eq, NULL);
 		assert_rc_equal(rc, 0);
 	}
 
+	print_message("connecting to pool\n");
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW, &poh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
 	print_message("setting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
-	rc = daos_pool_set_attr(arg->pool.poh, n, names, in_values, in_sizes,
-				arg->async ? &ev : NULL);
+	rc = daos_pool_set_attr(poh, n, names, in_values, in_sizes, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
@@ -280,16 +298,14 @@ pool_attribute(void **state)
 		      arg->async ? "a" : "");
 
 	total_size = 0;
-	rc = daos_pool_list_attr(arg->pool.poh, NULL, &total_size,
-				 arg->async ? &ev : NULL);
+	rc = daos_pool_list_attr(poh, NULL, &total_size, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying Total Name Length..\n");
 	assert_int_equal(total_size, (name_sizes[0] + name_sizes[1]));
 
 	total_size = BUFSIZE;
-	rc = daos_pool_list_attr(arg->pool.poh, out_buf, &total_size,
-				 arg->async ? &ev : NULL);
+	rc = daos_pool_list_attr(poh, out_buf, &total_size, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying Small Name..\n");
@@ -297,8 +313,7 @@ pool_attribute(void **state)
 	assert_string_equal(out_buf, names[1]);
 
 	total_size = 10*BUFSIZE;
-	rc = daos_pool_list_attr(arg->pool.poh, out_buf, &total_size,
-				 arg->async ? &ev : NULL);
+	rc = daos_pool_list_attr(poh, out_buf, &total_size, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	print_message("Verifying All Names..\n");
@@ -309,8 +324,7 @@ pool_attribute(void **state)
 	print_message("getting pool attributes %ssynchronously ...\n",
 		      arg->async ? "a" : "");
 
-	rc = daos_pool_get_attr(arg->pool.poh, m, names_get, out_values,
-				out_sizes, arg->async ? &ev : NULL);
+	rc = daos_pool_get_attr(poh, m, names_get, out_values, out_sizes, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
@@ -326,8 +340,7 @@ pool_attribute(void **state)
 	assert_int_equal(out_sizes[2], in_sizes[1]);
 	assert_memory_equal(out_values[2], in_values[1], BUFSIZE);
 
-	rc = daos_pool_get_attr(arg->pool.poh, m, names_get, NULL, out_sizes,
-				arg->async ? &ev : NULL);
+	rc = daos_pool_get_attr(poh, m, names_get, NULL, out_sizes, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
@@ -337,19 +350,21 @@ pool_attribute(void **state)
 	assert_int_equal(out_sizes[2], in_sizes[1]);
 
 	print_message("Deleting all attributes\n");
-	rc = daos_pool_del_attr(arg->pool.poh, m, names_get,
-				arg->async ? &ev : NULL);
+	rc = daos_pool_del_attr(poh, m, names_get, arg->async ? &ev : NULL);
 	/* should work even if "Wrong" do not exist */
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 
 	print_message("Verifying all attributes deletion\n");
 	total_size = 0;
-	rc = daos_pool_list_attr(arg->pool.poh, NULL, &total_size,
-				 arg->async ? &ev : NULL);
+	rc = daos_pool_list_attr(poh, NULL, &total_size, arg->async ? &ev : NULL);
 	assert_rc_equal(rc, 0);
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(total_size, 0);
+
+	print_message("disconnecting from pool\n");
+	rc = daos_pool_disconnect(poh, NULL);
+	assert_rc_equal(rc, 0);
 
 	if (arg->async) {
 		rc = daos_event_fini(&ev);
@@ -362,10 +377,15 @@ static void
 init_fini_conn(void **state)
 {
 	test_arg_t		*arg = *state;
+	daos_handle_t		 poh;
 	int			 rc;
 
-	rc = daos_pool_disconnect(arg->pool.poh, NULL /* ev */);
-	arg->pool.poh = DAOS_HDL_INVAL;
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW, &poh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_pool_disconnect(poh, NULL /* ev */);
 	assert_rc_equal(rc, 0);
 
 	rc = daos_eq_destroy(arg->eq, 0);
@@ -387,15 +407,16 @@ init_fini_conn(void **state)
 	rc = daos_eq_create(&arg->eq);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-			       DAOS_PC_RW,
-			       &arg->pool.poh, &arg->pool.pool_info,
-			       NULL /* ev */);
+	rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW, &poh,
+			       &arg->pool.pool_info, NULL /* ev */);
 	if (rc)
 		print_message("daos_pool_connect failed, rc: %d\n", rc);
 	else
 		print_message("connected to pool, ntarget=%d\n",
 			      arg->pool.pool_info.pi_ntargets);
+	assert_rc_equal(rc, 0);
+
+	rc = daos_pool_disconnect(poh, NULL /* ev */);
 	assert_rc_equal(rc, 0);
 }
 
@@ -486,13 +507,15 @@ pool_properties(void **state)
 	char			*expected_owner;
 	char			*expected_group;
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	print_message("create pool with properties, and query it to verify.\n");
 	rc = test_setup((void **)&arg, SETUP_EQ, arg0->multi_rank,
 			SMALL_POOL_SIZE, 0, NULL);
 	assert_rc_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
-	/* label - set arg->pool_label to use daos_pool_connect_by_label() */
+	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
 	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
@@ -616,6 +639,8 @@ pool_op_retry(void **state)
 	daos_pool_info_t info = {0};
 	int		 rc;
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	if (arg->myrank != 0)
 		return;
 
@@ -663,22 +688,6 @@ pool_op_retry(void **state)
 	rc = daos_pool_disconnect(poh, NULL /* ev */);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
-}
-
-static int
-pool_setup_sync(void **state)
-{
-	async_disable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
-			  0, NULL);
-}
-
-static int
-pool_setup_async(void **state)
-{
-	async_enable(state);
-	return test_setup(state, SETUP_POOL_CONNECT, true, SMALL_POOL_SIZE,
-			  0, NULL);
 }
 
 static int
@@ -945,6 +954,7 @@ verify_cont_info(void **state, int rc_ret, daos_size_t nconts_in,
 		}
 	}
 }
+
 /* Common function for testing list containers feature.
  * Some tests can only be run when multiple containers have been created,
  * Other tests may run when there are zero or more containers in the pool.
@@ -960,6 +970,11 @@ list_containers_test(void **state)
 	daos_size_t			 nconts_orig;
 	struct daos_pool_cont_info	*conts = NULL;
 	int				 tnum = 0;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	if (arg->myrank != 0)
+		return;
 
 	/***** Test: retrieve number of containers in pool *****/
 	nconts = nconts_orig = 0xDEF0; /* Junk value (e.g., uninitialized) */
@@ -1087,6 +1102,8 @@ pool_connect_access(void **state)
 {
 	test_arg_t	*arg0 = *state;
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	print_message("pool ACL gives the owner no permissions\n");
 	expect_pool_connect_access(arg0, 0, DAOS_PC_RO, -DER_NO_PERM);
 
@@ -1165,6 +1182,8 @@ label_strings_test(void **state)
 	size_t	n_valid = ARRAY_SIZE(valid_labels);
 	size_t	n_invalid = ARRAY_SIZE(invalid_labels);
 
+	MPI_Barrier(MPI_COMM_WORLD);
+
 	if (arg->myrank == 0) {
 		print_message("Verify %zu valid labels\n", n_valid);
 		for (i = 0; i < n_valid; i++) {
@@ -1184,6 +1203,76 @@ label_strings_test(void **state)
 	}
 }
 
+static void
+pool_map_refreshes(void **state)
+{
+	test_arg_t	*arg = *state;
+	d_rank_t	 rank = ranks_to_kill[0];
+	int		 tgt = 0;
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/*
+	 * Since the rebuild_single_pool_target call below refreshes the pool
+	 * map of arg->pool.poh, we must use a separate connection, which is
+	 * mostly clearly done with another client rank.
+	 */
+	if (arg->rank_size < 2) {
+		print_message("need at least two client ranks\n");
+		skip();
+	}
+
+	if (!test_runable(arg, 2))
+		skip();
+
+	rebuild_single_pool_target(arg, rank, tgt, false);
+
+	if (arg->myrank == 1) {
+		int		 n = 4;
+		daos_obj_id_t	 oids[n];
+		struct ioreq	 reqs[n];
+		const char	*akey = "pmr_akey";
+		const char	*value = "d";
+		daos_size_t	 iod_size = 1;
+		int		 rx_nr = 1;
+		uint64_t	 idx = 0;
+		int		 i;
+
+		for (i = 0; i < n; i++) {
+			oids[i] = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, i);
+			ioreq_init(&reqs[i], arg->coh, oids[i], DAOS_IOD_SINGLE, arg);
+		}
+
+		print_message("rank 1: setting fail_loc DAOS_POOL_FAIL_MAP_REFRESH\n");
+		daos_fail_loc_set(DAOS_POOL_FAIL_MAP_REFRESH | DAOS_FAIL_ONCE);
+
+		print_message("rank 1: invoking concurrent updates to trigger concurrent pool map "
+			      "refreshes\n");
+		for (i = 0; i < n; i++)
+			insert_nowait("pmr_dkey", 1, &akey, &iod_size, &rx_nr, &idx,
+				      (void **)&value, DAOS_TX_NONE, &reqs[i], 0);
+
+		print_message("rank 1: waiting for the updates to complete\n");
+		for (i = 0; i < n; i++)
+			insert_wait(&reqs[i]);
+
+		print_message("rank 1: clearing fail_loc\n");
+		daos_fail_loc_set(0);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	print_message("reintegrating the excluded targets\n");
+	reintegrate_single_pool_target(arg, rank, tgt);
+}
+
+static int
+pool_map_refreshes_setup(void **state)
+{
+	async_enable(state);
+	return test_setup(state, SETUP_CONT_CONNECT, true, SMALL_POOL_SIZE, 0, NULL);
+}
+
 static const struct CMUnitTest pool_tests[] = {
 	{ "POOL0: No-Test", do_nothing_test, NULL, NULL},
 	{ "POOL1: connect to non-existing pool",
@@ -1196,13 +1285,12 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_connect, hdl_share_enable, test_case_teardown},
 	{ "POOL5: exclusive connection",
 	  pool_connect_exclusively, NULL, test_case_teardown},
-	/* Keep this one at the end, as it excludes target rank 1. */
 	{ "POOL6: exclude targets and query pool info",
 	  pool_exclude, async_disable, NULL},
 	{ "POOL7: set/get/list user-defined pool attributes (sync)",
-	  pool_attribute, pool_setup_sync, test_case_teardown},
+	  pool_attribute, NULL, test_case_teardown},
 	{ "POOL8: set/get/list user-defined pool attributes (async)",
-	  pool_attribute, pool_setup_async, test_case_teardown},
+	  pool_attribute, NULL, test_case_teardown},
 	{ "POOL9: pool reconnect after daos re-init",
 	  init_fini_conn, NULL, test_case_teardown},
 	{ "POOL10: pool create with properties and query",
@@ -1217,26 +1305,19 @@ static const struct CMUnitTest pool_tests[] = {
 	  pool_connect_access, NULL, test_case_teardown},
 	{ "POOL15: label property string validation",
 	  label_strings_test, NULL, test_case_teardown},
+	{ "POOL16: pool map refreshes",
+	  pool_map_refreshes, pool_map_refreshes_setup, test_case_teardown},
 };
 
 int
 run_daos_pool_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
-	int rc = 0;
+	int rc;
 
-	if (rank == 0) {
-		if (sub_tests_size == 0) {
-			rc = cmocka_run_group_tests_name(
-				"DAOS_Pool", pool_tests, setup,
-				test_teardown);
-		} else {
-			rc = run_daos_sub_tests(
-				"DAOS_Pool", pool_tests,
-				ARRAY_SIZE(pool_tests),
-				sub_tests, sub_tests_size, setup,
-				test_teardown);
-		}
-	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = run_daos_sub_tests("DAOS_Pool", pool_tests, ARRAY_SIZE(pool_tests), sub_tests,
+				sub_tests_size, setup, test_teardown);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	return rc;
