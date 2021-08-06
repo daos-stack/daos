@@ -70,7 +70,6 @@ type EngineInstance struct {
 // NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
 func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner) *EngineInstance {
-
 	return &EngineInstance{
 		log:            l,
 		runner:         r,

@@ -109,7 +109,6 @@ obj_tree_destory_cb(daos_handle_t ih, d_iov_t *key_iov,
 	if (rc)
 		D_ERROR("dbtree_destroy, cont "DF_UUID" failed: "DF_RC"\n",
 			DP_UUID(*(uuid_t *)key_iov->iov_buf), DP_RC(rc));
-
 	return rc;
 }
 
@@ -131,62 +130,45 @@ out:
 	return rc;
 }
 
-/* Create tree root by key_iov */
-static int
-tree_cache_create_internal(daos_handle_t toh, unsigned int tree_class,
-			   d_iov_t *key_iov, struct tree_cache_root **rootp)
-{
-	d_iov_t			val_iov;
-	struct umem_attr	uma;
-	struct tree_cache_root	root;
-	struct btr_root		*broot;
-	int			rc;
-
-	D_ALLOC_PTR(broot);
-	if (broot == NULL)
-		return -DER_NOMEM;
-
-	memset(&root, 0, sizeof(root));
-	root.root_hdl = DAOS_HDL_INVAL;
-	memset(&uma, 0, sizeof(uma));
-	uma.uma_id = UMEM_CLASS_VMEM;
-
-	rc = dbtree_create_inplace(tree_class, BTR_FEAT_DIRECT_KEY, 32,
-				   &uma, broot, &root.root_hdl);
-	if (rc) {
-		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
-		D_FREE(broot);
-		D_GOTO(out, rc);
-	}
-
-	d_iov_set(&val_iov, &root, sizeof(root));
-	rc = dbtree_update(toh, key_iov, &val_iov);
-	if (rc)
-		D_GOTO(out, rc);
-
-	d_iov_set(&val_iov, NULL, 0);
-	rc = dbtree_lookup(toh, key_iov, &val_iov);
-	if (rc)
-		D_GOTO(out, rc);
-
-	*rootp = val_iov.iov_buf;
-	D_ASSERT(*rootp != NULL);
-out:
-	if (rc < 0 && daos_handle_is_valid(root.root_hdl))
-		dbtree_destroy(root.root_hdl, NULL);
-	return rc;
-}
-
 static int
 container_tree_create(daos_handle_t toh, uuid_t uuid,
 		      struct tree_cache_root **rootp)
 {
-	d_iov_t	key_iov;
+	d_iov_t			key_iov;
+	d_iov_t			val_iov;
+	struct umem_attr	uma;
+	struct tree_cache_root	root = { 0 };
+	struct tree_cache_root	*tmp_root;
+	int			rc;
 
 	d_iov_set(&key_iov, uuid, sizeof(uuid_t));
+	d_iov_set(&val_iov, &root, sizeof(root));
+	rc = dbtree_update(toh, &key_iov, &val_iov);
+	if (rc)
+		return rc;
 
-	return tree_cache_create_internal(toh, DBTREE_CLASS_NV, &key_iov,
-					  rootp);
+	d_iov_set(&val_iov, NULL, 0);
+	rc = dbtree_lookup(toh, &key_iov, &val_iov);
+	if (rc)
+		D_GOTO(out, rc);
+
+	tmp_root = val_iov.iov_buf;
+
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+	rc = dbtree_create_inplace(DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY, 32,
+				   &uma, &tmp_root->btr_root, &tmp_root->root_hdl);
+	if (rc) {
+		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	*rootp = tmp_root;
+
+out:
+	if (rc < 0)
+		dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
+	return rc;
 }
 
 int
@@ -579,8 +561,6 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
  * Note: the csum_iov is modified so a shallow copy should be sent instead of
  * the original.
  */
-
-
 static int
 migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 			    struct ds_cont_child *ds_cont)
@@ -604,7 +584,12 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 		if (mrone->mo_iods[i].iod_size == 0)
 			continue;
 
-		if (mrone->mo_sgls != NULL && mrone->mo_sgls[i].sg_nr > 0) {
+		/* Let's do real fetch for all EC object, since the
+		 * checksum needs to be re-calculated for EC rebuild,
+		 * and we do not have checksum information yet.
+		 */
+		if ((mrone->mo_sgls != NULL && mrone->mo_sgls[i].sg_nr > 0) &&
+		     !daos_oclass_is_ec(&mrone->mo_oca)) {
 			sgls[i] = mrone->mo_sgls[i];
 		} else {
 			sgls[i].sg_nr = 1;
@@ -2152,6 +2137,7 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	daos_size_t		 buf_len;
 	daos_key_desc_t		 kds[KDS_NUM] = {0};
 	d_iov_t			 csum = {0};
+	d_iov_t			 *p_csum;
 	uint8_t			 stack_csum_buf[CSUM_BUF_SIZE] = {0};
 	struct cont_props	 props;
 	struct enum_unpack_arg	 unpack_arg = { 0 };
@@ -2205,7 +2191,13 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		D_GOTO(out_cont, rc);
 	}
 
-	d_iov_set(&csum, stack_csum_buf, CSUM_BUF_SIZE);
+	if (daos_oclass_is_ec(&unpack_arg.oc_attr)) {
+		p_csum = NULL;
+	} else {
+		p_csum = &csum;
+		d_iov_set(&csum, stack_csum_buf, CSUM_BUF_SIZE);
+	}
+
 	while (!tls->mpt_fini) {
 		memset(buf, 0, buf_len);
 		memset(kds, 0, KDS_NUM * sizeof(*kds));
@@ -2217,7 +2209,8 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 		sgl.sg_nr_out = 1;
 		sgl.sg_iovs = &iov;
 
-		csum.iov_len = 0;
+		if (p_csum != NULL)
+			p_csum->iov_len = 0;
 
 		num = KDS_NUM;
 		daos_anchor_set_flags(&dkey_anchor,
@@ -2227,7 +2220,7 @@ retry:
 		unpack_arg.invalid_inline_sgl = 0;
 		rc = dsc_obj_list_obj(oh, epr, NULL, NULL, NULL,
 				     &num, kds, &sgl, &anchor,
-				     &dkey_anchor, &akey_anchor, &csum);
+				     &dkey_anchor, &akey_anchor, p_csum);
 
 		if (rc == -DER_KEY2BIG) {
 			D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" got "
@@ -2242,17 +2235,17 @@ retry:
 				break;
 			}
 			continue;
-		} else if (rc == -DER_TRUNC &&
-			   csum.iov_len > csum.iov_buf_len) {
+		} else if (rc == -DER_TRUNC && p_csum != NULL &&
+			   p_csum->iov_len > p_csum->iov_buf_len) {
 			D_DEBUG(DB_REBUILD, "migrate obj csum buf "
 				"not large enough. Increase and try again");
-			if (csum.iov_buf != stack_csum_buf)
-				D_FREE(csum.iov_buf);
+			if (p_csum->iov_buf != stack_csum_buf)
+				D_FREE(p_csum->iov_buf);
 
-			csum.iov_buf_len = csum.iov_len;
-			csum.iov_len = 0;
-			D_ALLOC(csum.iov_buf, csum.iov_buf_len);
-			if (csum.iov_buf == NULL) {
+			p_csum->iov_buf_len = p_csum->iov_len;
+			p_csum->iov_len = 0;
+			D_ALLOC(p_csum->iov_buf, p_csum->iov_buf_len);
+			if (p_csum->iov_buf == NULL) {
 				rc = -DER_NOMEM;
 				break;
 			}
@@ -2293,8 +2286,8 @@ retry:
 				rc = 0;
 			}
 
-			D_DEBUG(DB_REBUILD, "Can not rebuild "
-				DF_UOID"\n", DP_UOID(arg->oid));
+			D_DEBUG(DB_REBUILD, "Can not rebuild "DF_UOID" "DF_RC"\n",
+				DP_UOID(arg->oid), DP_RC(rc));
 			break;
 		}
 
@@ -2305,7 +2298,7 @@ retry:
 			break;
 		}
 
-		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, &csum,
+		rc = dss_enum_unpack(arg->oid, kds, num, &sgl, p_csum,
 				     migrate_enum_unpack_cb, &unpack_arg);
 		if (rc) {
 			D_ERROR("migrate "DF_UOID" failed: %d\n",
@@ -2784,6 +2777,14 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 
 	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" finish.\n",
 		DP_UUID(cont_uuid), ih.cookie);
+
+	rc = dbtree_destroy(root->root_hdl, NULL);
+	if (rc) {
+		/* Ignore the DRAM migrate object tree for the moment, since
+		 * it does not impact the migration on the storage anyway
+		 */
+		D_ERROR("dbtree_destroy failed: "DF_RC"\n", DP_RC(rc));
+	}
 
 	/* Snapshot fetch will yield the ULT, let's reprobe before delete  */
 	d_iov_set(&tmp_iov, cont_uuid, sizeof(uuid_t));

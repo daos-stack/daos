@@ -8,6 +8,7 @@ package storage
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -153,6 +154,14 @@ func (nc NvmeController) Free() (tb uint64) {
 	return
 }
 
+func (ncs NvmeControllers) String() string {
+	var ss []string
+	for _, c := range ncs {
+		ss = append(ss, c.PciAddr)
+	}
+	return strings.Join(ss, ", ")
+}
+
 // Capacity returns the cumulative total bytes of all controller capacities.
 func (ncs NvmeControllers) Capacity() (tb uint64) {
 	for _, c := range ncs {
@@ -222,9 +231,9 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList []string
-		DisableVMD bool
-		NoCache    bool
+		DeviceList  []string
+		DisableVMD  bool
+		BypassCache bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.

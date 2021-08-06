@@ -28,6 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -174,7 +175,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 			harness := NewEngineHarness(log)
-			srv := newTestEngine(log, true)
+			sp := storage.NewProvider(log, 0, nil, nil, nil, nil)
+			srv := newTestEngine(log, true, sp)
 
 			if err := harness.AddInstance(srv); err != nil {
 				t.Fatal(err)
