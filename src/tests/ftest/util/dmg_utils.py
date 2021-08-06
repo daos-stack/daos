@@ -456,7 +456,11 @@ class DmgCommand(DmgCommandBase):
                                         nvme_size=nvme_size,
                                         target_list=target_list,
                                         svcn=svcn,
-                                        acl_file=acl_file)
+                                        acl_file=acl_file,
+                                        size=size,
+                                        tier_ratio=tier_ratio,
+                                        properties=properties,
+                                        label=label)
             if self.exit_status_exception:
                 raise DmgJsonCommandFailure(output["error"])
 
