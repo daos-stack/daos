@@ -8,10 +8,11 @@ import time
 import random
 import threading
 
-from itertools import product
+from test_utils_pool import TestPool, LabelGenerator
 from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from osa_utils import OSAUtils
+from daos_utils import DaosCommand
 from apricot import skipForTicket
 import queue
 
@@ -30,19 +31,17 @@ class OSAOnlineReintegration(OSAUtils):
         """Set up for test case."""
         super().setUp()
         self.dmg_command = self.get_dmg_command()
-        self.ior_flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
-        self.ior_apis = self.params.get("ior_api", '/run/ior/iorflags/*')
+        self.daos_command = DaosCommand(self.bin)
         self.ior_test_sequence = self.params.get(
             "ior_test_sequence", '/run/ior/iorflags/*')
-        self.ior_dfs_oclass = self.params.get(
-            "obj_class", '/run/ior/iorflags/*')
+        self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
         self.pool = None
-        self.out_queue = queue.Queue()
         self.ds_racer_queue = queue.Queue()
         self.daos_racer = None
+        self.dmg_command.exit_status_exception = True
 
     def daos_racer_thread(self):
         """Start the daos_racer thread."""
@@ -54,7 +53,8 @@ class OSAOnlineReintegration(OSAUtils):
         self.daos_racer.run()
 
     def run_online_reintegration_test(self, num_pool, racer=False,
-                                      server_boot=False):
+                                      server_boot=False,
+                                      oclass=None):
         """Run the Online reintegration without data.
 
         Args:
@@ -63,11 +63,15 @@ class OSAOnlineReintegration(OSAUtils):
                           some data in pool. Defaults to False.
             server_boot (bool) : Perform system stop/start on a rank.
                                  Defults to False.
+            oclass (str) : daos object class string (eg: "RP_2G8").
+                           Defaults to None.
         """
-        num_jobs = self.params.get("no_parallel_job", '/run/ior/*')
+        if oclass is None:
+            oclass = self.ior_cmd.dfs_oclass.value
+        test_seq = self.ior_test_sequence[0]
         # Create a pool
-        self.pool = []
-        pool_uuid = []
+        label_generator = LabelGenerator()
+        pool = {}
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
         # Exclude one rank : other than rank 0.
@@ -80,56 +84,47 @@ class OSAOnlineReintegration(OSAUtils):
             time.sleep(30)
 
         for val in range(0, num_pool):
-            self.pool.append(self.get_pool(create=False))
-            # Split total SCM and NVME size for creating multiple pools.
-            self.pool[-1].scm_size.value = int(
-                self.pool[-1].scm_size.value / num_pool)
-            self.pool[-1].nvme_size.value = int(
-                self.pool[-1].nvme_size.value / num_pool)
-            self.pool[-1].create()
-            pool_uuid.append(self.pool[-1].uuid)
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.get_dmg_command(),
+                label_generator=label_generator)
+            pool[val].get_params(self)
+            pool[val].create()
+            pool[val].set_property("reclaim", "disabled")
 
         # Exclude and reintegrate the pool_uuid, rank and targets
         for val in range(0, num_pool):
             threads = []
-            for oclass, api, test, flags in product(self.ior_dfs_oclass,
-                                                    self.ior_apis,
-                                                    self.ior_test_sequence,
-                                                    self.ior_flags):
-                for _ in range(0, num_jobs):
-                    # Add a thread for these IOR arguments
-                    threads.append(threading.Thread(target=self.ior_thread,
-                                                    kwargs={
-                                                        "pool": self.pool[val],
-                                                        "oclass": oclass,
-                                                        "api": api,
-                                                        "test": test,
-                                                        "flags": flags,
-                                                        "results":
-                                                        self.out_queue}))
-                # Launch the IOR threads
-                for thrd in threads:
-                    self.log.info("Thread : %s", thrd)
-                    thrd.start()
-                    time.sleep(1)
-            time.sleep(5)
-            self.pool[val].display_pool_daos_space("Pool space: Beginning")
+            self.pool = pool[val]
+            # Instantiate aggregation
+            if self.test_during_aggregation is True:
+                for _ in range(0, 2):
+                    self.run_ior_thread("Write", oclass, test_seq)
+                self.delete_extra_container(self.pool)
+            # The following thread runs while performing osa operations.
+            threads.append(threading.Thread(target=self.run_ior_thread,
+                                            kwargs={"action": "Write",
+                                                    "oclass": oclass,
+                                                    "test": test_seq}))
+
+            # Launch the IOR threads
+            for thrd in threads:
+                self.log.info("Thread : %s", thrd)
+                thrd.start()
+                time.sleep(1)
+            self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
             self.log.info("Pool Version at the beginning %s", pver_begin)
             if server_boot is False:
                 output = self.dmg_command.pool_exclude(
-                    self.pool[val].uuid, rank)
+                    self.pool.uuid, rank)
             else:
-                output = self.dmg_command.system_stop(ranks=rank)
-                self.pool[val].wait_for_rebuild(True)
+                output = self.dmg_command.system_stop(ranks=rank, force=True)
+                self.pool.wait_for_rebuild(False)
                 self.log.info(output)
                 output = self.dmg_command.system_start(ranks=rank)
 
-            self.log.info(output)
-            self.is_rebuild_done(3)
-            self.assert_on_rebuild_failure()
+            self.print_and_assert_on_rebuild_failure(output)
             pver_exclude = self.get_pool_version()
-            time.sleep(5)
 
             self.log.info("Pool Version after exclude %s", pver_exclude)
             # Check pool version incremented after pool exclude
@@ -137,11 +132,9 @@ class OSAOnlineReintegration(OSAUtils):
             # pver_begin + 8 targets.
             self.assertTrue(pver_exclude > (pver_begin + 8),
                             "Pool Version Error:  After exclude")
-            output = self.dmg_command.pool_reintegrate(
-                self.pool[val].uuid, rank)
-            self.log.info(output)
-            self.is_rebuild_done(3)
-            self.assert_on_rebuild_failure()
+            output = self.dmg_command.pool_reintegrate(self.pool.uuid,
+                                                       rank)
+            self.print_and_assert_on_rebuild_failure(output)
 
             pver_reint = self.get_pool_version()
             self.log.info("Pool Version after reintegrate %d", pver_reint)
@@ -150,7 +143,9 @@ class OSAOnlineReintegration(OSAUtils):
                             "Pool Version Error:  After reintegrate")
             # Wait to finish the threads
             for thrd in threads:
-                thrd.join(timeout=20)
+                thrd.join()
+                if not self.out_queue.empty():
+                    self.assert_on_exception()
 
         # Check data consistency for IOR in future
         # Presently, we are running daos_racer in parallel
@@ -162,30 +157,83 @@ class OSAOnlineReintegration(OSAUtils):
 
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
-            self.pool[val].display_pool_daos_space(display_string)
+            self.pool = pool[val]
+            self.pool.display_pool_daos_space(display_string)
+            self.run_ior_thread("Read", oclass, test_seq)
+            self.container = self.pool_cont_dict[self.pool][0]
+            kwargs = {"pool": self.pool.uuid,
+                      "cont": self.container.uuid}
+            output = self.daos_command.container_check(**kwargs)
+            self.log.info(output)
 
-    @skipForTicket("DAOS-6573")
     def test_osa_online_reintegration(self):
         """Test ID: DAOS-5075.
 
         Test Description: Validate Online Reintegration
 
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration
+        :avocado: tags=online_reintegration,online_reintegration_basic
         """
-        # Perform reintegration testing with 1 pool.
-        for pool_num in range(1, 2):
-            self.run_online_reintegration_test(pool_num)
+        self.log.info("Online Reintegration : Basic test")
+        self.run_online_reintegration_test(1)
 
-    @skipForTicket("DAOS-6766, DAOS-6783")
+    @skipForTicket("DAOS-7195")
     def test_osa_online_reintegration_server_stop(self):
         """Test ID: DAOS-5920.
         Test Description: Validate Online Reintegration with server stop
-        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
         :avocado: tags=osa,checksum
-        :avocado: tags=online_reintegration_srv_stop
+        :avocado: tags=online_reintegration,online_reintegration_srv_stop
         """
+        self.log.info("Online Reintegration : System stop/start")
         self.run_online_reintegration_test(1, server_boot=True)
+
+    def test_osa_online_reintegration_without_csum(self):
+        """Test ID: DAOS-5075.
+
+        Test Description: Validate Online Reintegration
+        without checksum
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=online_reintegration,online_reintegration_without_csum
+        """
+        self.log.info("Online Reintegration : No Checksum")
+        self.test_with_checksum = self.params.get("test_with_checksum",
+                                                  '/run/checksum/*')
+        self.run_online_reintegration_test(1)
+
+    @skipForTicket("DAOS-7996")
+    def test_osa_online_reintegration_with_aggregation(self):
+        """Test ID: DAOS-6715
+        Test Description: Reintegrate rank while aggregation
+        is happening in parallel
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=online_reintegration,online_reintegration_aggregation
+        """
+        self.test_during_aggregation = self.params.get("test_with_aggregation",
+                                                       '/run/aggregation/*')
+        self.log.info("Online Reintegration : Aggregation")
+        self.run_online_reintegration_test(1)
+
+    @skipForTicket("DAOS-7996")
+    def test_osa_online_reintegration_oclass(self):
+        """Test ID: DAOS-6715
+        Test Description: Reintegrate rank with different
+        object class
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,checksum
+        :avocado: tags=online_reintegration,online_reintegration_oclass
+        """
+        self.log.info("Online Reintegration : Object Class")
+        for oclass in self.test_oclass:
+            self.run_online_reintegration_test(1, oclass=oclass)

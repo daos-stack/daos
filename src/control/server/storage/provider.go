@@ -395,7 +395,6 @@ func filterScanResp(log logging.Logger, resp *BdevScanResponse, pciFilter ...str
 
 	for _, c := range resp.Controllers {
 		if len(pciFilter) != 0 && !common.Includes(pciFilter, c.PciAddr) {
-			log.Debugf("filter out bdev %s from scan response", c.PciAddr)
 			continue
 		}
 		cn := *c

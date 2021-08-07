@@ -658,7 +658,8 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	struct json_object	*targets;
 	int			tgts_len;
 	int			i, j;
-	char		*tmp_var;
+	int			rc;
+	char			*tmp_var;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
@@ -676,8 +677,12 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			D_ERROR("unable to extract uuid from JSON\n");
 			return -DER_INVAL;
 		}
-		uuid_parse(json_object_get_string(tmp),
-			   devices[*disks].device_id);
+
+		rc = uuid_parse(json_object_get_string(tmp), devices[*disks].device_id);
+		if (rc != 0) {
+			D_ERROR("failed parsing uuid_str\n");
+			return -DER_INVAL;
+		}
 
 		if (!json_object_object_get_ex(dev, "tgt_ids",
 					       &targets)) {
