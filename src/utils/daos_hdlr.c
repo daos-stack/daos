@@ -2697,8 +2697,8 @@ err:
 	if (daos_handle_is_valid(ca->dst_poh)) {
 		rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc2 != 0)
-			DH_PERROR_DER(ap, rc2, "failed to disconnect from destination pool "DF_UUIDF,
-				      DP_UUID(ca->dst_p_uuid));
+			DH_PERROR_DER(ap, rc2, "failed to disconnect from destination pool "
+				      ""DF_UUIDF, DP_UUID(ca->dst_p_uuid));
 	}
 	if (daos_handle_is_valid(ca->src_poh)) {
 		rc2 = daos_pool_disconnect(ca->src_poh, NULL);
@@ -2735,7 +2735,7 @@ dm_disconnect(struct cmd_args_s *ap,
 	 * code immediately after a failure to umount/close/disconnect then fault injection
 	 * will always report a memory leak. Is it better to immediately return if one of
 	 * these fails? This will cause memory leaks in fault injection tests for fs copy,
-	 * so not sure what is the best thing to do here. 
+	 * so not sure what is the best thing to do here.
 	 */
 	int rc = 0;
 
