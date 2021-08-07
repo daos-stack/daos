@@ -83,6 +83,7 @@ class PosixSimul(DfuseTestBase):
         """
         # Assuming all vms use the same OS
         host_os = distro.linux_distribution()[0].lower()
+        dfuse_hosts = self.agent_managers[0].hosts
 
         if "centos" in host_os:
             simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul",
@@ -102,8 +103,7 @@ class PosixSimul(DfuseTestBase):
         if not self.container:
             self.log.info("Create container")
             self.add_container(self.pool)
-
-        self.start_dfuse(self.hostfile_clients, self.pool, self.container)
+        self.start_dfuse(dfuse_hosts, self.pool, self.container)
         self.dfuse.check_running()
 
         for mpi, simul in simul_dict.items():
@@ -122,9 +122,11 @@ class PosixSimul(DfuseTestBase):
                     exclude)
             try:
                 run_command(cmd)
-            except DaosTestError:
-                self.stop_dfuse()
-                self.fail("Simul failed on {}".format(mpi))
+            except DaosTestError as exception:
+                if "FAILED in simul" in exception.args[0]:
+                    self.log.info("Expected failure")
+                    self.stop_dfuse()
+                    self.fail("Simul failed on {}".format(mpi))
 
             self.log.info("Simul passed on %s", mpi)
         self.stop_dfuse()
