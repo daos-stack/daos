@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.104
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -305,7 +305,7 @@ mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
 install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
-%else
+%else if (0%{?rhel} == 8 or  %{?suse_version} == 1500)
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
@@ -472,6 +472,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Thu Aug 05 2021 Christopher Hoffman <christopherx.hoffman@intel.com> 1.3.104-4
+- Update conditional statement to include checking for distributions to
+  determine which unit files to use for daos-server and daos-agent
+
 * Wed Aug 04 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.104-3
 - Move daos_metrics tool from tests package to server package
 

@@ -215,6 +215,15 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
 void
 ilog_fetch_init(struct ilog_entries *entries);
 
+/** Assuming src has already been copied to dest, just fix up internal pointers
+ *  and reset src
+ *
+ *  \param	dest[in]	Destination entries
+ *  \param	src[in]		Source entries
+ */
+void
+ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src);
+
 /** Fetch the entire incarnation log.  This function will refresh only when
  * the underlying log or the intent has changed.  If the struct is shared
  * between multiple ULT's fetch should be done after every yield.

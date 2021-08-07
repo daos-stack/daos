@@ -312,9 +312,8 @@ func (c *StorageControlService) ScmScan(req storage.ScmScanRequest) (*storage.Sc
 }
 
 // NvmePrepare preps locally attached SSDs and returns error.
-//
-// Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	c.log.Debugf("calling bdev provider prepare: %+v", req)
 	return c.storage.PrepareBdevs(req)
 }
 
@@ -338,7 +337,7 @@ func mapCtrlrs(ctrlrs storage.NvmeControllers) (map[string]*storage.NvmeControll
 // health statistics and stored server meta-data. If I/O Engines are running
 // then query is issued over dRPC as go-spdk bindings cannot be used to access
 // controller claimed by another process. Only update info for controllers
-// assigned to I/O Engineslled.
+// assigned to I/O Engines.
 func (c *ControlService) scanAssignedBdevs(ctx context.Context, statsReq bool) (*storage.BdevScanResponse, error) {
 	var ctrlrs storage.NvmeControllers
 	instances := c.harness.Instances()

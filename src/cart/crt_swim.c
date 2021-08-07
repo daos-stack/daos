@@ -289,6 +289,7 @@ out_reply:
 	rpc_out->rc  = rc;
 	rpc_out->pad = 0;
 	rc = crt_reply_send(rpc);
+	D_FREE(rpc_out->upds.ca_arrays);
 	if (rc)
 		D_TRACE_ERROR(rpc, "send reply: "DF_RC" failed: "DF_RC"\n",
 			      DP_RC(rpc_out->rc), DP_RC(rc));
@@ -514,6 +515,7 @@ static int crt_swim_send_reply(struct swim_context *ctx, swim_id_t from,
 	 * So, we need to decrement reference.
 	 * Was incremented in crt_swim_srv_cb().
 	 */
+	D_FREE(rpc_out->upds.ca_arrays);
 	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
 	RPC_DECREF(rpc_priv);
 	return rc;
