@@ -48,10 +48,25 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                                 m_data[name][host][rank][target]):
                                 value = m_data[name][host][rank][target][size]
                                 invalid = ""
+                                #Verify value within threshold
                                 if (value < threshold[0]
                                     or value >= threshold[1]):
                                     status = False
-                                    invalid = "**exceed threshold"
+                                    invalid = "*exceed threshold"
+                                #Verify if min < max
+                                if "_min" in name:
+                                    name2 = name.replace("_min", "_max")
+                                    if value > m_data\
+                                        [name2][host][rank][target][size]:
+                                        status = False
+                                        invalid += " *_min > _max"
+                                #Verify if value decremental
+                                if ("_min" in name or \
+                                    "_max" in name) and key > 0:
+                                    if value < metrics_data[key-1]\
+                                        [name][host][rank][target][size]:
+                                        status = False
+                                        invalid += " *value decreased"
                                 self.log.info(
                                     "    %-9s %-12s %-4s %-6s %-6s %s %s",
                                     testloop, host, rank, target, size, value,
