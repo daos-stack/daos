@@ -312,8 +312,9 @@ func (c *StorageControlService) ScmScan(req storage.ScmScanRequest) (*storage.Sc
 }
 
 // NvmePrepare preps locally attached SSDs and returns error.
+//
+// Suitable for commands invoked directly on server, not over gRPC.
 func (c *StorageControlService) NvmePrepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	c.log.Debugf("calling bdev provider prepare: %+v", req)
 	return c.storage.PrepareBdevs(req)
 }
 

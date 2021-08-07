@@ -8,7 +8,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"os/user"
 	"strings"
 
@@ -17,7 +16,6 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
-	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -32,20 +30,12 @@ type storagePrepareCmd struct {
 	scs *server.StorageControlService
 	logCmd
 	commands.StoragePrepareCmd
-	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
-	EnableVMD     bool   `long:"enable-vmd" description:"Additionally try to prepare any discovered VMD NVMe devices."`
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
 	prepNvme, prepScm, err := cmd.Validate()
 	if err != nil {
 		return err
-	}
-
-	if cmd.HelperLogFile != "" {
-		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
-			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
-		}
 	}
 
 	// This is a little ugly, but allows for easier unit testing.
@@ -78,10 +68,8 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		if _, err := cmd.scs.NvmePrepare(storage.BdevPrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
-			PCIAllowList:  cmd.PCIAllowList,
-			PCIBlockList:  cmd.PCIBlockList,
-			Reset_:        cmd.Reset,
-			EnableVMD:     cmd.EnableVMD,
+			PCIAllowlist:  cmd.PCIAllowList,
+			ResetOnly:     cmd.Reset,
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}

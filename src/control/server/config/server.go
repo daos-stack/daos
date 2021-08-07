@@ -51,7 +51,7 @@ type Server struct {
 	BdevInclude         []string         `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool             `yaml:"disable_vfio"`
-	EnableVMD           bool             `yaml:"enable_vmd"`
+	DisableVMD          bool             `yaml:"disable_vmd"`
 	NrHugepages         int              `yaml:"nr_hugepages"`
 	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
 	ControlLogFile      string           `yaml:"control_log_file"`
@@ -245,10 +245,10 @@ func (cfg *Server) WithDisableVFIO(disabled bool) *Server {
 	return cfg
 }
 
-// WithEnableVMD can be used to set the state of VMD functionality,
-// if enabled then VMD devices will be used if they exist.
-func (cfg *Server) WithEnableVMD(enabled bool) *Server {
-	cfg.EnableVMD = enabled
+// WithDisableVMD indicates that vmd devices should not be used even if they
+// exist.
+func (cfg *Server) WithDisableVMD(disabled bool) *Server {
+	cfg.DisableVMD = disabled
 	return cfg
 }
 
@@ -315,7 +315,7 @@ func DefaultServer() *Server {
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
 		GetDeviceClassFn:   netdetect.GetDeviceClass,
-		EnableVMD:          false, // disabled by default
+		DisableVMD:         true, // support currently unstable
 	}
 }
 

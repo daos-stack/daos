@@ -23,18 +23,18 @@ func TestProvider_Scan(t *testing.T) {
 	ctrlr3 := storage.MockNvmeController(3)
 
 	for name, tc := range map[string]struct {
-		req           storage.BdevScanRequest
-		forwarded     bool
-		mbc           *MockBackendConfig
-		expRes        *storage.BdevScanResponse
-		expErr        error
-		expVMDEnabled bool
+		req            storage.BdevScanRequest
+		forwarded      bool
+		mbc            *MockBackendConfig
+		expRes         *storage.BdevScanResponse
+		expErr         error
+		expVMDDisabled bool
 	}{
 		"no devices": {
 			req:    storage.BdevScanRequest{},
 			expRes: &storage.BdevScanResponse{},
 			// TODO DAOS-8040: re-enable VMD
-			// expVMDEnabled: false, // disabled in mock by default
+			// expVMDDisabled: true, // disabled in mock by default
 		},
 		"single device": {
 			req: storage.BdevScanRequest{},
@@ -43,7 +43,7 @@ func TestProvider_Scan(t *testing.T) {
 					Controllers: storage.NvmeControllers{ctrlr1},
 				},
 				// TODO DAOS-8040: re-enable VMD
-				// VmdEnabled: false,
+				// VmdEnabled: true,
 			},
 			expRes: &storage.BdevScanResponse{
 				Controllers: storage.NvmeControllers{ctrlr1},
@@ -63,10 +63,10 @@ func TestProvider_Scan(t *testing.T) {
 					ctrlr1, ctrlr2, ctrlr3,
 				},
 			},
-			expVMDEnabled: false,
+			expVMDDisabled: true,
 		},
-		"multiple devices; vmd enabled": {
-			req:       storage.BdevScanRequest{EnableVMD: true},
+		"multiple devices with vmd disabled": {
+			req:       storage.BdevScanRequest{DisableVMD: true},
 			forwarded: true,
 			mbc: &MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{
@@ -81,7 +81,7 @@ func TestProvider_Scan(t *testing.T) {
 				},
 			},
 			// TODO DAOS-8040: re-enable VMD
-			// expVMDEnabled: true,
+			// expVMDDisabled: true,
 		},
 		"failure": {
 			req: storage.BdevScanRequest{},
@@ -109,7 +109,7 @@ func TestProvider_Scan(t *testing.T) {
 				t.Fatalf("\nunexpected response (-want, +got):\n%s\n", diff)
 			}
 			// TODO DAOS-8040: re-enable VMD
-			// common.AssertEqual(t, tc.expVMDEnabled, p.IsVMDEnabled(), "vmd enabled")
+			// common.AssertEqual(t, tc.expVMDDisabled, p.IsVMDDisabled(), "vmd disabled")
 		})
 	}
 }
@@ -124,21 +124,24 @@ func TestProvider_Prepare(t *testing.T) {
 		expErr        error
 	}{
 		"reset fails": {
-			req: storage.BdevPrepareRequest{Reset_: true},
+			req: storage.BdevPrepareRequest{},
 			mbc: &MockBackendConfig{
-				ResetErr:   errors.New("reset failed"),
-				PrepareErr: errors.New("prepare failed"),
+				PrepareResetErr: errors.New("reset failed"),
 			},
 			expErr: errors.New("reset failed"),
 		},
-		"reset succeeds": {
-			req:    storage.BdevPrepareRequest{Reset_: true},
+		"reset-only": {
+			req: storage.BdevPrepareRequest{
+				ResetOnly: true,
+			},
+			mbc: &MockBackendConfig{
+				PrepareErr: errors.New("should not get this far"),
+			},
 			expRes: &storage.BdevPrepareResponse{},
 		},
 		"prepare fails": {
 			req: storage.BdevPrepareRequest{},
 			mbc: &MockBackendConfig{
-				ResetErr:   errors.New("reset failed"),
 				PrepareErr: errors.New("prepare failed"),
 			},
 			expErr: errors.New("prepare failed"),
