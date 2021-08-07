@@ -53,7 +53,6 @@ struct file_dfs {
 	int fd;
 	daos_off_t offset;
 	dfs_obj_t *obj;
-	dfs_t *dfs;
 	dfs_sys_t *dfs_sys;
 };
 
@@ -2372,7 +2371,7 @@ out:
 
 		close_rc = file_closedir(ap, src_file_dfs, src_dir);
 		if (close_rc != 0) {
-			rc = daos_errno2der(close_rc);
+			close_rc = daos_errno2der(close_rc);
 			DH_PERROR_DER(ap, close_rc, "Could not close '%s'", src_path);
 			if (rc == 0)
 				rc = close_rc;
@@ -2556,7 +2555,7 @@ dm_connect(struct cmd_args_s *ap,
 				    &ca->src_coh, src_cont_info, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to open source container\n");
-			D_GOTO(err_src_root, rc);
+			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
 			rc = dfs_sys_mount(ca->src_poh, ca->src_coh, O_RDWR,
@@ -2564,15 +2563,8 @@ dm_connect(struct cmd_args_s *ap,
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "Failed to mount DFS filesystem on source");
-				D_GOTO(err_src, rc);
-			}
-			rc = dfs_sys2base(src_file_dfs->dfs_sys, &src_file_dfs->dfs);
-			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "Failed to get DFS base");
 				dfs_sys_umount(src_file_dfs->dfs_sys);
-				src_file_dfs->dfs_sys = NULL;
-				D_GOTO(err_src, rc);
+				D_GOTO(err, rc);
 			}
 		}
 	}
@@ -2605,7 +2597,7 @@ dm_connect(struct cmd_args_s *ap,
 		rc = dm_get_cont_prop(ap, ca->src_coh, src_cont_info, size, dpe_types, dpe_vals);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "Failed to get cont property");
-			D_GOTO(err_src, rc);
+			D_GOTO(err, rc);
 		}
 
 		ca->cont_layout = dpe_vals[0];
@@ -2616,7 +2608,7 @@ dm_connect(struct cmd_args_s *ap,
 			if (props == NULL) {
 				rc = -DER_NOMEM;
 				DH_PERROR_DER(ap, rc, "Failed to allocate property");
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 			props->dpp_entries[0].dpe_type = ca->cont_prop_layout;
 			props->dpp_entries[0].dpe_val = ca->cont_layout;
@@ -2637,7 +2629,7 @@ dm_connect(struct cmd_args_s *ap,
 				if (rc != 0) {
 					DH_PERROR_DER(ap, rc,
 						      "failed to connect to destination pool");
-					D_GOTO(err_src, rc);
+					D_GOTO(err, rc);
 				}
 			}
 		/* if the dst pool uuid is null that means that this
@@ -2651,7 +2643,7 @@ dm_connect(struct cmd_args_s *ap,
 					       NULL, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "failed to connect to destination pool");
-				D_GOTO(err_src, rc);
+				D_GOTO(err, rc);
 			}
 			uuid_copy(dattr.da_puuid, ca->dst_p_uuid);
 			uuid_copy(dattr.da_cuuid, ca->dst_c_uuid);
@@ -2663,7 +2655,7 @@ dm_connect(struct cmd_args_s *ap,
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "provide a destination pool or UNS path "
 					      "of the form:\n\t --dst </$pool> | </path/to/uns>");
-				D_GOTO(err_dst_root, rc);
+				D_GOTO(err, rc);
 			}
 			uuid_copy(ca->dst_c_uuid, dattr.da_cuuid);
 		}
@@ -2680,27 +2672,27 @@ dm_connect(struct cmd_args_s *ap,
 					rc = daos_errno2der(rc);
 					DH_PERROR_DER(ap, rc, "failed to create destination "
 						      "container");
-					D_GOTO(err_dst_root, rc);
+					D_GOTO(err, rc);
 				}
 			} else {
 				rc = daos_cont_create(ca->dst_poh, ca->dst_c_uuid, props, NULL);
 				if (rc != 0) {
 					DH_PERROR_DER(ap, rc,
 						      "failed to create destination container");
-					D_GOTO(err_dst_root, rc);
+					D_GOTO(err, rc);
 				}
 			}
 			rc = daos_cont_open(ca->dst_poh, ca->dst_c_uuid, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "failed to open container");
-				D_GOTO(err_dst_root, rc);
+				D_GOTO(err, rc);
 			}
 			fprintf(ap->outstream, "Successfully created container "DF_UUIDF"\n",
 				DP_UUID(ca->dst_c_uuid));
 		} else if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to open container");
-			D_GOTO(err_dst_root, rc);
+			D_GOTO(err, rc);
 		}
 		if (is_posix_copy) {
 			rc = dfs_sys_mount(ca->dst_poh, ca->dst_coh, O_RDWR, DFS_SYS_NO_LOCK,
@@ -2708,35 +2700,29 @@ dm_connect(struct cmd_args_s *ap,
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
 				DH_PERROR_DER(ap, rc, "dfs_mount on destination failed");
-				D_GOTO(err_dst, rc);
-			}
-			rc = dfs_sys2base(dst_file_dfs->dfs_sys, &dst_file_dfs->dfs);
-			if (rc != 0) {
-				rc = daos_errno2der(rc);
-				DH_PERROR_DER(ap, rc, "Failed to get DFS base");
 				dfs_sys_umount(dst_file_dfs->dfs_sys);
-				dst_file_dfs->dfs_sys = NULL;
-				D_GOTO(err_dst, rc);
+				D_GOTO(err, rc);
 			}
 		}
 	}
 	D_GOTO(out, rc);
-err_dst:
-	rc2 = daos_cont_close(ca->dst_coh, NULL);
-	if (rc2 != 0)
-		DH_PERROR_DER(ap, rc2, "failed to close destination container");
-err_dst_root:
-	rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
-	if (rc2 != 0)
-		DH_PERROR_DER(ap, rc2, "failed to disconnect from destination pool "DF_UUIDF,
-			      DP_UUID(ca->dst_p_uuid));
-err_src:
+err:
+	if (daos_handle_is_valid(ca->dst_coh)) {
+		rc2 = daos_cont_close(ca->dst_coh, NULL);
+		if (rc2 != 0)
+			DH_PERROR_DER(ap, rc2, "failed to close destination container");
+	}
 	if (daos_handle_is_valid(ca->src_coh)) {
 		rc2 = daos_cont_close(ca->src_coh, NULL);
 		if (rc2 != 0)
 			DH_PERROR_DER(ap, rc2, "failed to close source container");
 	}
-err_src_root:
+	if (daos_handle_is_valid(ca->dst_poh)) {
+		rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
+		if (rc2 != 0)
+			DH_PERROR_DER(ap, rc2, "failed to disconnect from destination pool "DF_UUIDF,
+				      DP_UUID(ca->dst_p_uuid));
+	}
 	if (daos_handle_is_valid(ca->src_poh)) {
 		rc2 = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc2 != 0)
@@ -2757,7 +2743,7 @@ file_set_defaults_dfs(struct file_dfs *file_dfs)
 	file_dfs->fd = -1;
 	file_dfs->offset = 0;
 	file_dfs->obj = NULL;
-	file_dfs->dfs = NULL;
+	file_dfs->dfs_sys = NULL;
 }
 
 static int
@@ -2767,56 +2753,57 @@ dm_disconnect(struct cmd_args_s *ap,
 	      struct file_dfs *src_file_dfs,
 	      struct file_dfs *dst_file_dfs)
 {
+	 /* The fault injection tests expect no memory leaks but inject faults that
+	 * block umount/close/disconnect calls, etc. So, if I use GOTO and return the error
+	 * code immediately after a failure to umount/close/disconnect then fault injection
+	 * will always report a memory leak. Is it better to immediately return if one of
+	 * these fails? This will cause memory leaks in fault injection tests for fs copy,
+	 * so not sure what is the best thing to do here. 
+	 */
 	int rc = 0;
-	int rc2;
 
 	if (src_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
 			rc = dfs_sys_umount(src_file_dfs->dfs_sys);
 			if (rc != 0) {
-				DH_PERROR_SYS(ap, rc, "failed to unmount source");
-				D_GOTO(out, rc = daos_der2errno(rc));
+				rc = daos_errno2der(rc);
+				DH_PERROR_DER(ap, rc, "failed to unmount source");
+				dfs_sys_umount(src_file_dfs->dfs_sys);
 			}
 			src_file_dfs->dfs_sys = NULL;
 		}
 		rc = daos_cont_close(ca->src_coh, NULL);
 		if (rc != 0) {
-			fprintf(ap->errstream, "failed to close source container (%d)\n", rc);
-			D_GOTO(err_src, rc);
+			DH_PERROR_DER(ap, rc, "failed to close source container");
+			daos_cont_close(ca->src_coh, NULL);
 		}
 		rc = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc != 0) {
-			fprintf(ap->errstream,
-				"failed to disconnect from source "
-				"pool "DF_UUIDF ": %s (%d)\n",
-				DP_UUID(ca->src_p_uuid), d_errdesc(rc), rc);
-			D_GOTO(out, rc);
+			DH_PERROR_DER(ap, rc, "failed to disconnect source pool");
+			daos_pool_disconnect(ca->src_poh, NULL);
 		}
 	}
-err_src:
 	if (dst_file_dfs->type == DAOS) {
 		if (is_posix_copy) {
-			rc2 = dfs_sys_umount(dst_file_dfs->dfs_sys);
-			if (rc2 != 0) {
-				DH_PERROR_SYS(ap, rc2, "failed to unmount destination");
-				D_GOTO(out, rc = daos_der2errno(rc2));
+			rc = dfs_sys_umount(dst_file_dfs->dfs_sys);
+			if (rc != 0) {
+				rc = daos_errno2der(rc);
+				DH_PERROR_DER(ap, rc, "failed to unmount source");
+				dfs_sys_umount(dst_file_dfs->dfs_sys);
 			}
 			dst_file_dfs->dfs_sys = NULL;
 		}
-		rc2 = daos_cont_close(ca->dst_coh, NULL);
-		if (rc2 != 0) {
-			DH_PERROR_DER(ap, rc2, "failed to close destination container");
-			D_GOTO(out, rc = rc2);
+		rc = daos_cont_close(ca->dst_coh, NULL);
+		if (rc != 0) {
+			DH_PERROR_DER(ap, rc, "failed to close destination container");
+			daos_cont_close(ca->dst_coh, NULL);
 		}
-		rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
-		if (rc2 != 0) {
-			DH_PERROR_DER(ap, rc2,
-				"failed to disconnect from destination pool "DF_UUIDF,
-				DP_UUID(ca->dst_p_uuid));
-			D_GOTO(out, rc = rc2);
+		rc = daos_pool_disconnect(ca->dst_poh, NULL);
+		if (rc != 0) {
+			DH_PERROR_DER(ap, rc, "failed to disconnect destination pool");
+			daos_pool_disconnect(ca->dst_poh, NULL);
 		}
 	}
-out:
 	return rc;
 }
 

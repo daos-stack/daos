@@ -126,10 +126,13 @@ static void
 hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct hash_hdl *hdl = hash_hdl_obj(rlink);
+	int		rc = 0;
 
 	D_DEBUG(DB_TRACE, "name=%s\n", hdl->name);
 
-	dfs_release(hdl->obj);
+	rc = dfs_release(hdl->obj);
+	if (rc == ENOMEM)
+		dfs_release(hdl->obj);
 	D_FREE(hdl->name);
 	D_FREE(hdl);
 }
@@ -1129,7 +1132,12 @@ out_free_path:
 int
 dfs_sys_close(dfs_obj_t *obj)
 {
-	return dfs_release(obj);
+	int rc = 0;
+
+	rc = dfs_release(obj);
+	if (rc == ENOMEM)
+		dfs_release(obj);
+	return rc;
 }
 
 int
@@ -1393,6 +1401,8 @@ dfs_sys_closedir(DIR *dirp)
 	sys_dir = (struct dfs_sys_dir *)dirp;
 
 	rc = dfs_release(sys_dir->obj);
+	if (rc == ENOMEM)
+		dfs_release(sys_dir->obj);
 
 	D_FREE(sys_dir);
 
