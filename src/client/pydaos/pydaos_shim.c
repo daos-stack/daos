@@ -27,10 +27,25 @@
 #define PY_SHIM_MAGIC_NUMBER 0x7A89
 #define MAX_OID_HI ((1UL << 32) - 1)
 
+/** Durable format of entries in the root kv */
+struct pydaos_df {
+	daos_obj_id_t	oid;
+	uint32_t	otype;
+	uint32_t	res1;
+	uint64_t	res2[5];
+};
+
+/** Object type, stored in pydaos_df::otype */
+enum pydaos_otype {
+	PYDAOS_DICT,
+	PYDAOS_ARRAY,
+};
+
+/** in-memory tracking of handles */
 struct open_handle {
 	daos_handle_t	poh;   /** pool handle */
 	daos_handle_t	coh;   /** container handle */
-	daos_obj_id_t	root;  /** OID of root kv */
+	daos_handle_t	oh;    /** root object handle */
 	daos_obj_id_t	alloc; /** last allocated objid */
 };
 
@@ -128,6 +143,7 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	struct open_handle		*hdl = NULL;
 	daos_handle_t			coh = {0};
 	daos_handle_t			poh = {0};
+	daos_handle_t			oh = {0};
 	daos_prop_t			*prop = NULL;
 	struct daos_prop_entry		*entry;
 	struct daos_prop_co_roots	*roots;
@@ -182,7 +198,15 @@ cont_open(int ret, char *pool, char *cont, int flags)
 		goto out;
 	}
 
-	/** Track container open handle and associated attributes */
+	/** Use flatkv option for root kv */
+	roots->cr_oids[0].hi |= (uint64_t)DAOS_OF_KV_FLAT << OID_FMT_FEAT_SHIFT;
+
+	/** Open root object */
+	rc = daos_kv_open(coh, roots->cr_oids[0], DAOS_OO_RW, &oh, NULL);
+	if (rc)
+		goto out;
+
+	/** Track all handles */
 	D_ALLOC_PTR(hdl);
 	if (hdl == NULL) {
 		D_ERROR("failed to allocate internal handle to open container\n");
@@ -191,15 +215,15 @@ cont_open(int ret, char *pool, char *cont, int flags)
 	}
 	hdl->poh	= poh;
 	hdl->coh	= coh;
-	hdl->root	= roots->cr_oids[0];
-	/** Use flatkv option for root kv */
-	hdl->root.hi	|= (uint64_t)DAOS_OF_KV_FLAT << OID_FMT_FEAT_SHIFT;
+	hdl->oh		= oh;
 	hdl->alloc.lo	= 0;
 	hdl->alloc.hi	= MAX_OID_HI;
 out:
 	if (prop)
 		daos_prop_free(prop);
 	if (rc) {
+		if (daos_handle_is_valid(oh))
+			daos_kv_close(oh, NULL);
 		if (daos_handle_is_valid(coh))
 			daos_cont_close(coh, NULL);
 		if (daos_handle_is_valid(poh))
@@ -253,21 +277,134 @@ out:
 }
 
 static PyObject *
+__shim_handle__cont_get(PyObject *self, PyObject *args)
+{
+	PyObject		*return_list;
+	struct open_handle	*hdl;
+	char			*name;
+	struct pydaos_df	entry;
+	size_t			size = sizeof(entry);
+	daos_obj_id_t		oid = {0, };
+	unsigned int		otype = 0;
+	int			rc;
+
+	/* Parse arguments */
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ks", &hdl, &name);
+
+	/** Lookup name in root kv */
+	rc = daos_kv_get(hdl->oh, DAOS_TX_NONE, 0, name, &size, &entry, NULL);
+	if (rc != -DER_SUCCESS)
+		goto out;
+
+	/** Check if entry actually exists */
+	if (size == 0) {
+		rc = -DER_NONEXIST;
+		goto out;
+	}
+
+	/** If we fetched a value which isn't an entry ... we have a problem */
+	if (size != sizeof(entry)) {
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	oid	= entry.oid;
+	otype	= entry.otype;
+out:
+	/* Populate return list */
+	return_list = PyList_New(4);
+	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 1, PyLong_FromLong(oid.hi));
+	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
+	PyList_SetItem(return_list, 3, PyInt_FromLong(otype));
+
+	return return_list;
+}
+
+static PyObject *
+__shim_handle__cont_newobj(PyObject *self, PyObject *args)
+{
+	PyObject		*return_list;
+	struct open_handle	*hdl;
+	char			*name;
+	unsigned int		otype;
+	struct pydaos_df	entry;
+	daos_obj_id_t		oid = {0, };
+	daos_ofeat_t		feat;
+	int			rc;
+
+	/* Parse arguments */
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ksi", &hdl, &name, &otype);
+
+	/** Allocate OID for new object */
+	if (hdl->alloc.hi >= MAX_OID_HI) {
+		rc = daos_cont_alloc_oids(hdl->coh, 1, &hdl->alloc.lo, NULL);
+		if (rc) {
+			D_ERROR("daos_cont_alloc_oids() Failed ("DF_RC")\n",
+				DP_RC(rc));
+			goto out;
+		}
+		if (hdl->alloc.lo == 0)
+			/** reserve the first 100 object IDs */
+			hdl->alloc.hi = 100;
+		else
+			hdl->alloc.hi = 0;
+	}
+
+	/** set oid lo and bump the current hi value */
+	oid.lo = hdl->alloc.lo;
+	oid.hi = hdl->alloc.hi++;
+
+	/** generate the actual object ID */
+	if (otype == PYDAOS_DICT)
+		feat = DAOS_OF_KV_FLAT;
+	else /** PYDAOS_ARRAY */
+		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY;
+	rc = daos_obj_generate_oid(hdl->coh, &oid, feat, 0, 0, 0);
+	if (rc)
+		goto out;
+
+	/**
+	 * Insert name in root kv, use conditional insert to fail if already
+	 * exist
+	 */
+	entry.oid	= oid;
+	entry.otype	= otype;
+	rc = daos_kv_put(hdl->oh, DAOS_TX_NONE, DAOS_COND_KEY_INSERT, name,
+			 sizeof(entry), &entry, NULL);
+	if (rc != -DER_SUCCESS)
+		goto out;
+
+out:
+	/* Populate return list */
+	return_list = PyList_New(3);
+	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
+	PyList_SetItem(return_list, 1, PyLong_FromLong(oid.hi));
+	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
+
+	return return_list;
+}
+
+static PyObject *
 __shim_handle__cont_close(PyObject *self, PyObject *args)
 {
 	struct open_handle	*hdl;
-	int			rc;
+	int			rc = 0;
 	int			ret;
 
 	/** Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "K", &hdl);
 
+	/** Close root object */
+	rc = daos_kv_close(hdl->oh, NULL);
+
 	/** Close container */
-	rc = daos_cont_close(hdl->coh, NULL);
+	ret = daos_cont_close(hdl->coh, NULL);
+	if (rc == 0)
+		rc = ret;
 
 	/** Disconnect from pool */
 	ret = daos_pool_disconnect(hdl->poh, NULL);
-
 	if (rc == 0)
 		rc = ret;
 
@@ -417,67 +554,6 @@ anchor2capsule(daos_anchor_t *anchor)
 	obj = PyCapsule_New(anchor, "daos_anchor", anchor_destructor);
 
 	return obj;
-}
-
-static PyObject *
-__shim_handle__obj_idroot(PyObject *self, PyObject *args)
-{
-	PyObject		*return_list;
-	struct open_handle	*hdl;
-
-	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "K", &hdl);
-
-	/** Return root object ID fetched from properties at open time */
-	return_list = PyList_New(3);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(DER_SUCCESS));
-	PyList_SetItem(return_list, 1, PyLong_FromLong(hdl->root.hi));
-	PyList_SetItem(return_list, 2, PyLong_FromLong(hdl->root.lo));
-
-	return return_list;
-}
-
-static PyObject *
-__shim_handle__obj_idgen(PyObject *self, PyObject *args)
-{
-	PyObject		*return_list;
-	struct open_handle	*hdl;
-	daos_oclass_id_t	 cid;
-	int			 cid_in;
-	daos_obj_id_t		 oid;
-	int			 rc = DER_SUCCESS;
-
-	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ki", &hdl, &cid_in);
-	cid = (uint16_t) cid_in;
-
-	/** If we ran out of local OIDs, alloc one from the container */
-	if (hdl->alloc.hi >= MAX_OID_HI) {
-		rc = daos_cont_alloc_oids(hdl->coh, 1, &hdl->alloc.lo, NULL);
-		if (rc) {
-			D_ERROR("daos_cont_alloc_oids() Failed (%d)\n", rc);
-			goto out;
-		}
-		if (hdl->alloc.lo == 0)
-			/** reserve the first 100 object IDs */
-			hdl->alloc.hi = 100;
-		else
-			hdl->alloc.hi = 0;
-	}
-
-	/** set oid and lo, bump the current hi value */
-	oid.lo = hdl->alloc.lo;
-	oid.hi = hdl->alloc.hi++;
-
-	/** generate the actual object ID */
-	rc = daos_obj_generate_oid(hdl->coh, &oid, DAOS_OF_KV_FLAT, cid, 0, 0);
-out:
-	return_list = PyList_New(3);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
-	PyList_SetItem(return_list, 1, PyLong_FromLong(oid.hi));
-	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
-
-	return return_list;
 }
 
 static PyObject *
@@ -1043,11 +1119,9 @@ static PyMethodDef daosMethods[] = {
 	/** Container operations */
 	EXPORT_PYTHON_METHOD(cont_open),
 	EXPORT_PYTHON_METHOD(cont_open_by_path),
+	EXPORT_PYTHON_METHOD(cont_get),
+	EXPORT_PYTHON_METHOD(cont_newobj),
 	EXPORT_PYTHON_METHOD(cont_close),
-
-	/** Object operations */
-	EXPORT_PYTHON_METHOD(obj_idgen),
-	EXPORT_PYTHON_METHOD(obj_idroot),
 
 	/** KV operations */
 	EXPORT_PYTHON_METHOD(kv_open),
@@ -1055,6 +1129,8 @@ static PyMethodDef daosMethods[] = {
 	EXPORT_PYTHON_METHOD(kv_get),
 	EXPORT_PYTHON_METHOD(kv_put),
 	EXPORT_PYTHON_METHOD(kv_iter),
+
+	/** Array operations */
 
 	{NULL, NULL}
 };
@@ -1104,6 +1180,10 @@ PyMODINIT_FUNC PyInit_pydaos_shim(void)
 	D_FOREACH_GURT_ERR(DEFINE_PY_RETURN_CODE);
 	D_FOREACH_DAOS_ERR(DEFINE_PY_RETURN_CODE);
 	PyModule_AddIntConstant(module, "DER_SUCCESS", DER_SUCCESS);
+
+	/** export object type */
+	PyModule_AddIntConstant(module, "PYDAOS_DICT", PYDAOS_DICT);
+	PyModule_AddIntConstant(module, "PYDAOS_ARRAY", PYDAOS_ARRAY);
 
 	/** export object class */
 	oc_define(module);
