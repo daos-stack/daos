@@ -292,19 +292,21 @@ struct evt_entry_in {
 
 enum evt_visibility {
 	/** It is unknown if entry is covered or visible */
-	EVT_UNKNOWN	= 0,
+	EVT_UNKNOWN		= 0,
 	/** Entry is visible at specified epoch */
-	EVT_VISIBLE	= (1 << 0),
+	EVT_VISIBLE		= (1 << 0),
 	/** Entry is covered at specified epoch */
-	EVT_COVERED	= (1 << 1),
+	EVT_COVERED		= (1 << 1),
 	/** Entry is a remove record (See evt_remove_all */
-	EVT_REMOVE	= (1 << 2),
+	EVT_REMOVE		= (1 << 2),
 	/** Entry is part of larger in-tree extent */
-	EVT_PARTIAL	= (1 << 3),
-	/** Visibility mask */
-	EVT_VIS_MASK	= (EVT_REMOVE | EVT_COVERED | EVT_VISIBLE),
+	EVT_PARTIAL		= (1 << 3),
 	/** Marks the final entry sorted iterator */
-	EVT_LAST	= (1 << 4),
+	EVT_LAST		= (1 << 4),
+	/** Ignore the parity bit in sort */
+	EVT_MERGE_PARITY	= (1 << 7),
+	/** Visibility mask */
+	EVT_VIS_MASK		= (EVT_REMOVE | EVT_COVERED | EVT_VISIBLE | EVT_MERGE_PARITY),
 };
 
 /**
@@ -650,10 +652,13 @@ enum {
 	EVT_ITER_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
 	EVT_ITER_FOR_MIGRATION	= (1 << 6),
+	/** Ignore the parity bit in sorting algorithm */
+	EVT_ITER_MERGE_PARITY	= (1 << 7),
 };
 
 D_CASSERT((int)EVT_VISIBLE == (int)EVT_ITER_VISIBLE);
 D_CASSERT((int)EVT_COVERED == (int)(EVT_ITER_COVERED & ~EVT_ITER_VISIBLE));
+D_CASSERT((int)EVT_ITER_MERGE_PARITY == (int)EVT_MERGE_PARITY);
 
 /**
  * Initialize an iterator.

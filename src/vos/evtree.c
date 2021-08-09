@@ -944,6 +944,8 @@ evt_find_visible(struct evt_context *tcx, const struct evt_filter *filter,
 	return 0;
 }
 
+#define PARITY_BIT (1ULL << 63)
+
 /** Place all entries into covered list in sorted order based on selected
  * range.   Then walk through the range to find only extents that are visible
  * and place them in the main list.   Update the selection bounds for visible
@@ -958,12 +960,23 @@ evt_ent_array_sort(struct evt_context *tcx, struct evt_entry_array *ent_array,
 	int			(*compar)(const void *, const void *);
 	int			 total;
 	int			 num_visible = 0;
-	int			 rc;
+	int			 rc, i;
 
 	D_DEBUG(DB_TRACE, "Sorting array with filter "DF_FILTER"\n",
 		DP_FILTER(filter));
 	if (ent_array->ea_ent_nr == 0)
 		return 0;
+
+	if (flags & EVT_MERGE_PARITY) {
+		for (i = 0; i < ent_array->ea_ent_nr; i++) {
+			/** Just clear the parity bit and let visibility algorithm do its thing */
+			ent = evt_ent_array_get(ent_array, i);
+			ent->en_ext.ex_lo &= ~PARITY_BIT;
+			ent->en_ext.ex_hi &= ~PARITY_BIT;
+			ent->en_sel_ext.ex_lo &= ~PARITY_BIT;
+			ent->en_sel_ext.ex_hi &= ~PARITY_BIT;
+		}
+	}
 
 	if (ent_array->ea_ent_nr == 1) {
 		ent = evt_ent_array_get(ent_array, 0);

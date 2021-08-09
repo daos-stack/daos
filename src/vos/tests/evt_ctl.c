@@ -2202,6 +2202,74 @@ test_evt_outer_punch(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static char my_value[100] = {0};
+static void
+insert_entry(struct test_arg *arg, daos_handle_t toh, uint64_t lo, uint64_t hi, bool parity,
+	     bool punch)
+{
+	static int epoch = 1;
+	struct evt_entry_in	 entry = {0};
+	int			 rc;
+
+	if (parity) {
+		entry.ei_rect.rc_ex.ex_lo = lo | (1ULL << 63);
+		entry.ei_rect.rc_ex.ex_hi = hi | (1ULL << 63);
+	} else {
+		entry.ei_rect.rc_ex.ex_lo = lo;
+		entry.ei_rect.rc_ex.ex_hi = hi;
+	}
+	entry.ei_rect.rc_epc = entry.ei_bound = epoch++;
+	memset(&entry.ei_csum, 0, sizeof(entry.ei_csum));
+	entry.ei_ver = 0;
+	entry.ei_inob = 1;
+	if (!punch) {
+		rc = bio_alloc_init(arg->ta_utx, &entry.ei_addr, my_value, hi - lo + 1);
+		assert_int_equal(rc, 0);
+	} else {
+		bio_addr_set_hole(&entry.ei_addr, 1);
+	}
+
+	rc = evt_insert(toh, &entry, NULL);
+	assert_rc_equal(rc, 0);
+}
+
+static void
+test_evt_iter_merge_parity(void **state)
+{
+	struct test_arg		*arg = *state;
+	daos_handle_t		 toh;
+	daos_handle_t		 ih;
+	struct evt_entry	 ent;
+	int			 rc;
+	unsigned int		 inob;
+
+	rc = evt_create(arg->ta_root, ts_feats, ORDER_DEF_INTERNAL, arg->ta_uma,
+			&ts_evt_desc_nofree_cbs, &toh);
+	assert_rc_equal(rc, 0);
+
+	insert_entry(arg, toh, 0, 99, true /* parity */, false /* punch */);
+	insert_entry(arg, toh, 0, 30, false /* parity */, false /* punch */);
+	insert_entry(arg, toh, 5, 99, true /* parity */, true /* punch */);
+
+	rc = evt_iter_prepare(toh, EVT_ITER_VISIBLE | EVT_ITER_REVERSE | EVT_ITER_SKIP_HOLES |
+			      EVT_ITER_MERGE_PARITY, NULL, &ih);
+	assert_rc_equal(rc, 0);
+
+	rc = evt_iter_probe(ih, EVT_ITER_FIRST, NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	rc = evt_iter_fetch(ih, &inob, &ent, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(ent.en_sel_ext.ex_lo, 0);
+	assert_int_equal(ent.en_sel_ext.ex_hi, 4);
+
+	rc = evt_iter_finish(ih);
+	assert_rc_equal(rc, 0);
+
+	rc = evt_destroy(toh);
+	assert_rc_equal(rc, 0);
+}
+
 static int
 run_internal_tests(char *test_name)
 {
@@ -2237,6 +2305,8 @@ run_internal_tests(char *test_name)
 			setup_builtin, teardown_builtin},
 		{ "EVT019: evt_various_data_size_internal",
 			test_evt_various_data_size_internal,
+			setup_builtin, teardown_builtin},
+		{ "EVT030: merge parity", test_evt_iter_merge_parity,
 			setup_builtin, teardown_builtin},
 		{ NULL, NULL, NULL, NULL }
 	};
