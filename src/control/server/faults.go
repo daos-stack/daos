@@ -46,6 +46,11 @@ var (
 		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
 	)
+	FaultPoolNoLabel = serverFault(
+		code.ServerPoolNoLabel,
+		"cannot create a pool without a pool label",
+		"retry the operation with a label set",
+	)
 )
 
 func FaultPoolInvalidServiceReps(maxSvcReps uint32) *fault.Fault {

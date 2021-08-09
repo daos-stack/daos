@@ -20,6 +20,9 @@ import (
 	"github.com/daos-stack/daos/src/control/system"
 )
 
+// BdevPciAddrSep defines the separator used between PCI addresses in string lists.
+const BdevPciAddrSep = " "
+
 type (
 	// NvmeHealth represents a set of health statistics for a NVMe device
 	// and mirrors C.struct_nvme_stats.
@@ -232,7 +235,7 @@ type (
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
 		DeviceList  []string
-		DisableVMD  bool
+		EnableVMD   bool
 		BypassCache bool
 	}
 
@@ -246,17 +249,17 @@ type (
 		pbin.ForwardableRequest
 		HugePageCount         int
 		DisableCleanHugePages bool
-		PCIAllowlist          string
-		PCIBlocklist          string
+		PCIAllowList          string
+		PCIBlockList          string
 		TargetUser            string
-		ResetOnly             bool
+		Reset_                bool
 		DisableVFIO           bool
-		DisableVMD            bool
+		EnableVMD             bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		VmdDetected bool
+		VMDPrepared bool
 	}
 
 	// BdevTierProperties contains basic configuration properties of a bdev tier.
@@ -273,7 +276,7 @@ type (
 		Properties BdevTierProperties
 		OwnerUID   int
 		OwnerGID   int
-		DisableVMD bool
+		EnableVMD  bool
 		Hostname   string
 	}
 
