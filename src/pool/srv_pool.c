@@ -360,14 +360,6 @@ pool_prop_write(struct rdb_tx *tx, const rdb_path_t *kvs, daos_prop_t *prop,
 
 	for (i = 0; i < prop->dpp_nr; i++) {
 		entry = &prop->dpp_entries[i];
-		if (!create &&
-		    (entry->dpe_type == DAOS_PROP_PO_EC_CELL_SZ)) {
-			D_ERROR("Can't change immutable property=%d\n",
-				entry->dpe_type);
-			rc = -DER_NO_PERM;
-			break;
-		}
-
 		switch (entry->dpe_type) {
 		case DAOS_PROP_PO_LABEL:
 			if (entry->dpe_str == NULL ||
@@ -2134,8 +2126,11 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, in->pci_flags,
 				  sec_capas, &in->pci_cred);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC))
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC)) {
+		D_DEBUG(DF_DSMS, DF_UUID": fault injected: DAOS_POOL_CONNECT_FAIL_CORPC\n",
+			DP_UUID(in->pci_op.pi_uuid));
 		rc = -DER_TIMEDOUT;
+	}
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: "DF_RC"\n",
 			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
@@ -2206,8 +2201,11 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	in->tdi_hdls.ca_arrays = pool_hdls;
 	in->tdi_hdls.ca_count = n_pool_hdls;
 	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DISCONNECT_FAIL_CORPC))
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DISCONNECT_FAIL_CORPC)) {
+		D_DEBUG(DF_DSMS, DF_UUID": fault injected: DAOS_POOL_DISCONNECT_FAIL_CORPC\n",
+			DP_UUID(svc->ps_uuid));
 		rc = -DER_TIMEDOUT;
+	}
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -2361,8 +2359,11 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
 	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
 	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC))
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC)) {
+		D_DEBUG(DF_DSMS, DF_UUID": fault injected: DAOS_POOL_QUERY_FAIL_CORPC\n",
+			DP_UUID(svc->ps_uuid));
 		rc = -DER_TIMEDOUT;
+	}
 	if (rc != 0)
 		goto out_rpc;
 
@@ -3318,7 +3319,7 @@ ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
 	crt_endpoint_t			ep;
 	struct dss_module_info		*info = dss_get_module_info();
 	crt_rpc_t			*rpc;
-	struct pool_target_addr_list	list;
+	struct pool_target_addr_list	list = { 0 };
 	struct pool_add_in		*in;
 	struct pool_add_out		*out;
 	crt_opcode_t			opcode;
@@ -3398,6 +3399,7 @@ rechoose:
 out_rpc:
 	crt_req_decref(rpc);
 out_client:
+	pool_target_addr_list_free(&list);
 	rsvc_client_fini(&client);
 	return rc;
 }

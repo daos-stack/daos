@@ -142,7 +142,7 @@ static int
 rebuild_ec_setup(void  **state, int number)
 {
 	test_arg_t	*arg;
-	daos_prop_t	*prop = NULL;
+	daos_prop_t	*props = NULL;
 	int		rc;
 
 	save_group_state(state);
@@ -160,12 +160,18 @@ rebuild_ec_setup(void  **state, int number)
 
 	arg = *state;
 	/* sustain 2 failure here */
-	prop = daos_prop_alloc(1);
-	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
-	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+	props = daos_prop_alloc(3);
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	props->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
+	props->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
+	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+	props->dpp_entries[2].dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
+
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
-		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
+		rc = test_setup_next_step((void **)&arg, NULL, NULL, props);
 	assert_int_equal(rc, 0);
+	daos_prop_free(props);
 
 	if (dt_obj_class != DAOS_OC_UNKNOWN)
 		arg->obj_class = dt_obj_class;

@@ -2214,7 +2214,7 @@ obj_ec_recov_task_fini(struct obj_reasb_req *reasb_req)
 	struct obj_ec_fail_info		*fail_info = reasb_req->orr_fail;
 	uint32_t			 i;
 
-	for (i = 0; i < fail_info->efi_nrecx_lists; i++)
+	for (i = 0; i < fail_info->efi_stripe_sgls_nr; i++)
 		d_sgl_fini(&fail_info->efi_stripe_sgls[i], true);
 	D_FREE(fail_info->efi_stripe_sgls);
 
@@ -2250,6 +2250,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	D_ALLOC_ARRAY(fail_info->efi_stripe_sgls, iod_nr);
 	if (fail_info->efi_stripe_sgls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	fail_info->efi_stripe_sgls_nr = iod_nr;
 
 	recx_ep_nr = 0;
 	for (i = 0; i < iod_nr; i++) {
