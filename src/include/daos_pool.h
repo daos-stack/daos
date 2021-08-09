@@ -163,6 +163,8 @@ struct daos_pool_cont_info {
 	char		pci_label[DAOS_PROP_LABEL_MAX_LEN+1];
 };
 
+#define DAOS_SYS_NAME_MAX_LEN 127
+
 /**
  * Connect to the DAOS pool identified by \a pool, a label or UUID string.
  * Upon a successful completion, \a poh returns the pool handle, and \a info

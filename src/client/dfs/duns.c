@@ -424,9 +424,13 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 
 	if (path == NULL || strlen(path) == 0)
 		return EINVAL;
-
+	if (attr == NULL)
+		return EINVAL;
 	if (attr->da_no_prefix || attr->da_flags & DUNS_NO_PREFIX)
 		no_prefix = true;
+
+	/** for now just set this to NULL to use the default DAOS system */
+	attr->da_sys = NULL;
 
 	/**
 	 * If caller requested to not check the file system path, we do the
@@ -936,10 +940,23 @@ duns_destroy_path(daos_handle_t poh, const char *path)
 	return 0;
 }
 
+int
+duns_set_sys_name(struct duns_attr_t *attrp, const char *sys)
+{
+	if (attrp == NULL)
+		return EINVAL;
+	D_STRNDUP(attrp->da_sys, sys, DAOS_SYS_NAME_MAX_LEN);
+	if (attrp->da_sys == NULL)
+		return ENOMEM;
+
+	return 0;
+}
+
 void
 duns_destroy_attr(struct duns_attr_t *attrp)
 {
 	if (attrp == NULL)
 		return;
 	D_FREE(attrp->da_rel_path);
+	D_FREE(attrp->da_sys);
 }
