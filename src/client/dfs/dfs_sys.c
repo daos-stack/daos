@@ -227,8 +227,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR, &hdl->obj,
 			&mode, NULL);
 	if (rc != 0) {
-		D_ERROR("dfs_lookup() %s failed: %s\n",
-			sys_path->dir_name, strerror(rc));
+		D_DEBUG(DB_TRACE, "dfs_lookup() %s failed: %s\n", sys_path->dir_name, strerror(rc));
 		D_GOTO(free_hdl_name, rc);
 	}
 
