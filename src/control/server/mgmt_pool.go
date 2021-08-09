@@ -40,14 +40,21 @@ const (
 
 type poolServiceReq interface {
 	proto.Message
-	GetUuid() string
+	GetId() string
+	SetUUID(uuid.UUID)
 	GetSvcRanks() []uint32
 	SetSvcRanks(rl []uint32)
 }
 
 func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method, req poolServiceReq) (*drpc.Response, error) {
+	ps, err := svc.getPoolService(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	req.SetUUID(ps.PoolUUID)
+
 	if len(req.GetSvcRanks()) == 0 {
-		rl, err := svc.getPoolServiceRanks(req.GetUuid())
+		rl, err := svc.getPoolServiceRanks(ps)
 		if err != nil {
 			return nil, err
 		}
@@ -57,11 +64,35 @@ func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method,
 	return svc.harness.CallDrpc(ctx, method, req)
 }
 
+// resolvePoolID implements a handler for resolving a user-friendly Pool ID into
+// a UUID.
+func (svc *mgmtSvc) resolvePoolID(id string) (uuid.UUID, error) {
+	if id == "" {
+		return uuid.Nil, errors.New("empty pool id")
+	}
+
+	if out, err := uuid.Parse(id); err == nil {
+		return out, nil
+	}
+
+	type lookupFn func(string) (*system.PoolService, error)
+	// Cycle through a list of lookup functions, returning the first one
+	// that succeeds in finding the pool, or an error if no pool is found.
+	for _, lookup := range []lookupFn{svc.sysdb.FindPoolServiceByLabel} {
+		ps, err := lookup(id)
+		if err == nil {
+			return ps.PoolUUID, nil
+		}
+	}
+
+	return uuid.Nil, errors.Errorf("unable to find pool with label %q", id)
+}
+
 // getPoolService returns the pool service entry for the given UUID.
-func (svc *mgmtSvc) getPoolService(uuidStr string) (*system.PoolService, error) {
-	uuid, err := uuid.Parse(uuidStr)
+func (svc *mgmtSvc) getPoolService(id string) (*system.PoolService, error) {
+	uuid, err := svc.resolvePoolID(id)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse request uuid %q", uuidStr)
+		return nil, err
 	}
 
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
@@ -78,8 +109,8 @@ func (svc *mgmtSvc) getPoolService(uuidStr string) (*system.PoolService, error) 
 
 // getPoolServiceStorage returns a slice of values representing the
 // per-rank allocation on each storage tier.
-func (svc *mgmtSvc) getPoolServiceStorage(uuidStr string) ([]uint64, error) {
-	ps, err := svc.getPoolService(uuidStr)
+func (svc *mgmtSvc) getPoolServiceStorage(id string) ([]uint64, error) {
+	ps, err := svc.getPoolService(id)
 	if err != nil {
 		return nil, err
 	}
@@ -89,12 +120,7 @@ func (svc *mgmtSvc) getPoolServiceStorage(uuidStr string) ([]uint64, error) {
 
 // getPoolServiceRanks returns a slice of ranks designated as the
 // pool service hosts.
-func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
-	ps, err := svc.getPoolService(uuidStr)
-	if err != nil {
-		return nil, err
-	}
-
+func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error) {
 	readyRanks := make([]system.Rank, 0, len(ps.Replicas))
 	for _, r := range ps.Replicas {
 		m, err := svc.sysdb.FindMemberByRank(r)
@@ -108,7 +134,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 	}
 
 	if len(readyRanks) == 0 {
-		return nil, errors.Errorf("unable to find any available service ranks for pool %s", uuidStr)
+		return nil, errors.Errorf("unable to find any available service ranks for pool %s", ps.PoolUUID)
 	}
 
 	return system.RanksToUint32(readyRanks), nil
@@ -337,7 +363,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 			var pdResp *mgmtpb.PoolDestroyResp
 			pdResp, cuErr = svc.PoolDestroy(ctx,
 				&mgmtpb.PoolDestroyReq{
-					Uuid:     req.Uuid,
+					Id:       req.Uuid,
 					Sys:      req.Sys,
 					Force:    true,
 					SvcRanks: req.Ranks,
@@ -442,7 +468,7 @@ func (svc *mgmtSvc) checkPools(ctx context.Context) error {
 		dr := &mgmtpb.PoolDestroyReq{
 			Sys:   svc.sysdb.SystemName(),
 			Force: true,
-			Uuid:  ps.PoolUUID.String(),
+			Id:    ps.PoolUUID.String(),
 		}
 
 		_, err := svc.PoolDestroy(ctx, dr)
@@ -454,39 +480,6 @@ func (svc *mgmtSvc) checkPools(ctx context.Context) error {
 	return nil
 }
 
-// PoolResolveID implements a handler for resolving a user-friendly Pool ID into
-// a UUID.
-func (svc *mgmtSvc) PoolResolveID(ctx context.Context, req *mgmtpb.PoolResolveIDReq) (*mgmtpb.PoolResolveIDResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
-		return nil, err
-	}
-	svc.log.Debugf("MgmtSvc.PoolResolveID dispatch, req:%+v", req)
-
-	if req.HumanID == "" {
-		return nil, errors.New("empty request")
-	}
-
-	resp := new(mgmtpb.PoolResolveIDResp)
-	type lookupFn func(string) (*system.PoolService, error)
-	// Cycle through a list of lookup functions, returning the first one
-	// that succeeds in finding the pool, or an error if no pool is found.
-	for _, lookup := range []lookupFn{svc.sysdb.FindPoolServiceByLabel} {
-		ps, err := lookup(req.HumanID)
-		if err == nil {
-			resp.Uuid = ps.PoolUUID.String()
-			break
-		}
-	}
-
-	if resp.Uuid == "" {
-		return nil, errors.Errorf("unable to find pool service with human-friendly id %q", req.HumanID)
-	}
-
-	svc.log.Debugf("MgmtSvc.PoolResolveID dispatch, resp:%+v", resp)
-
-	return resp, nil
-}
-
 // PoolDestroy implements the method defined for the Management Service.
 func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq) (*mgmtpb.PoolDestroyResp, error) {
 	if err := svc.checkLeaderRequest(req); err != nil {
@@ -494,7 +487,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", req)
 
-	uuid, err := uuid.Parse(req.GetUuid())
+	uuid, err := svc.resolvePoolID(req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -503,6 +496,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	if err != nil {
 		return nil, err
 	}
+	req.SetUUID(uuid)
 
 	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
@@ -512,6 +506,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
 		inCleanupMode = true
 	} else {
+		if req.Force {
+			// If the destroy request is being forced, we should zap
+			// the label so that the entry doesn't prevent a new pool
+			// with the same label from being created.
+			ps.PoolLabel = ""
+		}
+
 		ps.State = system.PoolServiceStateDestroying
 		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 			return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
@@ -636,7 +637,7 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	// Look up the pool service record to find the storage allocations
 	// used at creation.
-	ps, err := svc.getPoolService(req.GetUuid())
+	ps, err := svc.getPoolService(req.GetId())
 	if err != nil {
 		return nil, err
 	}
@@ -734,7 +735,7 @@ func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.U
 
 	req := &mgmtpb.PoolSetPropReq{
 		Sys:        sys,
-		Uuid:       uuid.String(),
+		Id:         uuid.String(),
 		Properties: []*mgmtpb.PoolProperty{prop},
 	}
 
@@ -766,9 +767,9 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 	}
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req:%+v", req)
 
-	uuid, err := uuid.Parse(req.GetUuid())
+	uuid, err := svc.resolvePoolID(req.GetId())
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse request uuid %q", req.GetUuid())
+		return nil, err
 	}
 
 	if len(req.GetProperties()) == 0 {
