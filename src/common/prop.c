@@ -40,8 +40,8 @@ daos_prop_alloc(uint32_t entries_nr)
 	return prop;
 }
 
-static void
-daos_prop_entry_free_value(struct daos_prop_entry *entry)
+bool
+daos_prop_has_str(struct daos_prop_entry *entry)
 {
 	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_LABEL:
@@ -50,21 +50,40 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	case DAOS_PROP_CO_OWNER:
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
-		D_FREE(entry->dpe_str);
-		break;
+		return true;
+	}
+	return false;
+}
+
+bool
+daos_prop_has_ptr(struct daos_prop_entry *entry)
+{
+	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
+		return true;
+	}
+	return false;
+}
+
+static void
+daos_prop_entry_free_value(struct daos_prop_entry *entry)
+{
+	if (daos_prop_has_str(entry)) {
+		D_FREE(entry->dpe_str);
+		return;
+	}
+
+	if (daos_prop_has_ptr(entry)) {
 		D_FREE(entry->dpe_val_ptr);
-		break;
-	case DAOS_PROP_PO_SVC_LIST:
+		return;
+	}
+
+	if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST)
 		if (entry->dpe_val_ptr)
 			d_rank_list_free(
 				(d_rank_list_t *)entry->dpe_val_ptr);
-		break;
-	default:
-		break;
-	};
 }
 
 void
@@ -162,21 +181,22 @@ err:
 }
 
 static bool
-daos_prop_str_valid(d_string_t str, const char *prop_name, size_t max_len)
+str_valid(const char *str, const char *prop_name, size_t max_len)
 {
 	size_t len;
 
-	if (str == NULL) {
+	if (unlikely(str == NULL)) {
 		D_ERROR("invalid NULL %s\n", prop_name);
 		return false;
 	}
 	/* Detect if it's longer than max_len */
 	len = strnlen(str, max_len + 1);
 	if (len == 0 || len > max_len) {
-		D_ERROR("invalid %s len=%lu, max=%lu\n",
-			prop_name, len, max_len);
+		D_ERROR("invalid %s len=%lu, max=%lu\n", prop_name, len,
+			max_len);
 		return false;
 	}
+
 	return true;
 }
 
@@ -184,22 +204,14 @@ static bool
 daos_prop_owner_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
-	return daos_prop_str_valid(owner, "owner",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
+	return str_valid(owner, "owner", DAOS_ACL_MAX_PRINCIPAL_LEN);
 }
 
 static bool
 daos_prop_owner_group_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
-	return daos_prop_str_valid(owner, "owner-group",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
-}
-
-static bool
-daos_prop_label_valid(d_string_t label)
-{
-	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN);
+	return str_valid(owner, "owner-group", DAOS_ACL_MAX_PRINCIPAL_LEN);
 }
 
 /**
@@ -261,9 +273,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			if (!daos_prop_label_valid(
-				prop->dpp_entries[i].dpe_str))
+			if (!daos_label_is_valid(
+						prop->dpp_entries[i].dpe_str)) {
+				D_ERROR("invalid label \"%s\"\n",
+					prop->dpp_entries[i].dpe_str);
 				return false;
+			}
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
@@ -309,9 +324,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_PROP_CO_LAYOUT_UNKOWN &&
-			    val != DAOS_PROP_CO_LAYOUT_POSIX &&
-			    val != DAOS_PROP_CO_LAYOUT_HDF5) {
+			if (val >= DAOS_PROP_CO_LAYOUT_MAX) {
 				D_ERROR("invalid layout type "DF_U64".\n", val);
 				return false;
 			}
@@ -426,6 +439,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 					co_status.dcs_status);
 				return false;
 			}
+			break;
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ROOTS:
 		case DAOS_PROP_CO_EC_CELL_SZ:
@@ -514,14 +528,14 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
  * \a pool true for pool properties, false for container properties.
  */
 daos_prop_t *
-daos_prop_dup(daos_prop_t *prop, bool pool)
+daos_prop_dup(daos_prop_t *prop, bool pool, bool input)
 {
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
 	int			 i;
 	int			 rc;
 
-	if (!daos_prop_valid(prop, pool, true))
+	if (!daos_prop_valid(prop, pool, input))
 		return NULL;
 
 	prop_dup = daos_prop_alloc(prop->dpp_nr);

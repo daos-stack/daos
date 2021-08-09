@@ -141,9 +141,9 @@ func TestSystem_Database_Cancel(t *testing.T) {
 		return nil
 	})
 
-	waitForLeadership(ctx, t, db, true, 10*time.Second)
+	waitForLeadership(ctx, t, db, true, 15*time.Second)
 	dbCancel()
-	waitForLeadership(ctx, t, db, false, 10*time.Second)
+	waitForLeadership(ctx, t, db, false, 15*time.Second)
 
 	if atomic.LoadUint32(&onGainedCalled) != 1 {
 		t.Fatal("OnLeadershipGained callbacks didn't execute")
@@ -270,10 +270,9 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 			State:     PoolServiceStateReady,
 			Replicas:  <-replicas,
 			Storage: &PoolServiceStorage{
-				CreationRankStr: fmt.Sprintf("[0-%d]", maxRanks),
-				CurrentRankStr:  fmt.Sprintf("[0-%d]", maxRanks),
-				ScmPerRank:      1,
-				NVMePerRank:     2,
+				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),
+				CurrentRankStr:     fmt.Sprintf("[0-%d]", maxRanks),
+				PerRankTierStorage: []uint64{1, 2},
 			},
 		}
 		data, err := createRaftUpdate(raftOpAddPoolService, ps)
@@ -642,40 +641,44 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 		"pool svc replicas update miss": {
 			poolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 			event: events.NewPoolSvcReplicasUpdateEvent(
 				"foo", 1, puuidAnother.String(), []uint32{2, 3, 5, 6, 7}, 1),
 			expPoolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 		},
 		"pool svc replicas update hit": {
 			poolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 			event: events.NewPoolSvcReplicasUpdateEvent(
 				"foo", 1, puuid.String(), []uint32{2, 3, 5, 6, 7}, 1),
 			expPoolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{2, 3, 5, 6, 7},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{2, 3, 5, 6, 7},
+					LastUpdate: time.Now(),
 				},
 			},
 		},
@@ -710,6 +713,7 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(PoolService{}),
+				cmpopts.EquateApproxTime(time.Second),
 			}
 			if diff := cmp.Diff(tc.expPoolSvcs, poolSvcs, cmpOpts...); diff != "" {
 				t.Errorf("unexpected pool service replicas (-want, +got):\n%s\n", diff)

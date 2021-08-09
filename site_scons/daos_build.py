@@ -1,8 +1,10 @@
 """Common DAOS build functions"""
 from SCons.Subst import Literal
+from SCons.Script import Dir
 from SCons.Script import GetOption
+from SCons.Script import WhereIs
 from env_modules import load_mpi
-from distutils.spawn import find_executable
+import compiler_setup
 import os
 
 # pylint: disable=too-few-public-methods
@@ -24,7 +26,13 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
     env.AppendUnique(RPATH_FULL=['$PREFIX/lib64'])
     rpaths = env.subst("$RPATH_FULL").split()
     prefix = env.get("PREFIX")
+    if not is_bin:
+        path = r'\$$ORIGIN'
+        env.AppendUnique(RPATH=[DaosLiteral(path)])
     for rpath in rpaths:
+        if rpath.startswith('/usr'):
+            env.AppendUnique(RPATH=[rpath])
+            continue
         if install_off is None:
             env.AppendUnique(RPATH=[os.path.join(prefix, rpath)])
             continue
@@ -51,21 +59,34 @@ def add_rpaths(env, install_off, set_cgo_ld, is_bin):
                           env.subst("$_LIBDIRFLAGS " "$_RPATH"),
                           sep=" ")
 
+def add_build_rpath(env, pathin="."):
+    """Add a build directory with -Wl,-rpath-link"""
+    path = Dir(pathin).path
+    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % path])
+    env.AppendENVPath("CGO_LDFLAGS", "-Wl,-rpath-link=%s" % path, sep=" ")
+    # We actually run installed binaries from the build area to generate
+    # man pages.  In such cases, we need LD_LIBRARY_PATH set to pick up
+    # the dependencies
+    env.AppendENVPath("LD_LIBRARY_PATH", path)
+
 def library(env, *args, **kwargs):
     """build SharedLibrary with relative RPATH"""
     denv = env.Clone()
+    denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, False)
     return denv.SharedLibrary(*args, **kwargs)
 
 def program(env, *args, **kwargs):
     """build Program with relative RPATH"""
     denv = env.Clone()
+    denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get('install_off', '..'), False, True)
     return denv.Program(*args, **kwargs)
 
 def test(env, *args, **kwargs):
     """build Program with fixed RPATH"""
     denv = env.Clone()
+    denv.Replace(RPATH=[])
     add_rpaths(denv, kwargs.get("install_off", None), False, True)
     return denv.Program(*args, **kwargs)
 
@@ -77,11 +98,11 @@ def install(env, subdir, files):
 
 def load_mpi_path(env):
     """Load location of mpicc into path if MPI_PKG is set"""
-    mpicc = find_executable("mpicc")
+    mpicc = WhereIs('mpicc')
     if mpicc:
         env.PrependENVPath("PATH", os.path.dirname(mpicc))
 
-def clear_icc_env(env):
+def _clear_icc_env(env):
     """Remove icc specific options from environment"""
     if env.subst("$COMPILER") == "icc":
         linkflags = str(env.get("LINKFLAGS")).split()
@@ -102,13 +123,15 @@ def clear_icc_env(env):
 
 def _find_mpicc(env):
     """find mpicc"""
-    mpicc = find_executable("mpicc")
+    mpicc = WhereIs('mpicc')
     if mpicc:
         env.Replace(CC="mpicc")
         env.Replace(LINK="mpicc")
         env.AppendUnique(CPPDEFINES=["-DDAOS_MPI_PATH=\"%s\"" % mpicc])
-        clear_icc_env(env)
+        _clear_icc_env(env)
         load_mpi_path(env)
+        compiler_setup.base_setup(env)
+
         return True
     return False
 

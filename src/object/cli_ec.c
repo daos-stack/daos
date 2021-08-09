@@ -205,7 +205,17 @@ obj_ec_seg_pack(struct obj_ec_seg_sorter *sorter, d_sg_list_t *sgl)
 		D_ASSERT(tgt_head->esh_first != OBJ_EC_SEG_NIL);
 		seg = &sorter->ess_segs[tgt_head->esh_first];
 		do {
-			sgl->sg_iovs[idx++] = seg->oes_iov;
+			if ((idx > 0) &&
+			    ((sgl->sg_iovs[idx - 1].iov_buf +
+			      sgl->sg_iovs[idx - 1].iov_len) ==
+			     seg->oes_iov.iov_buf)) {
+				sgl->sg_iovs[idx - 1].iov_len +=
+					seg->oes_iov.iov_len;
+				sgl->sg_iovs[idx - 1].iov_buf_len =
+					sgl->sg_iovs[idx - 1].iov_len;
+			} else {
+				sgl->sg_iovs[idx++] = seg->oes_iov;
+			}
 			if (seg->oes_next == OBJ_EC_SEG_NIL)
 				break;
 			seg = &sorter->ess_segs[seg->oes_next];
@@ -1845,6 +1855,7 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 	if (recx_lists == NULL || nr == 0)
 		return 0;
 
+	D_MUTEX_LOCK(&reasb_req->orr_mutex);
 	recov_lists = reasb_req->orr_fail->efi_recx_lists;
 	if (recov_lists == NULL) {
 		D_ALLOC_ARRAY(recov_lists, nr);
@@ -1859,6 +1870,7 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 	for (i = 0; i < nr; i++) {
 		dst_list = &recov_lists[i];
 		src_list = &recx_lists[i];
+		dst_list->re_snapshot = src_list->re_snapshot;
 		D_ASSERT(daos_recx_ep_list_ep_valid(src_list));
 		for (j = 0; j < src_list->re_nr; j++) {
 			rc = daos_recx_ep_add(dst_list, &src_list->re_items[j]);
@@ -1866,8 +1878,55 @@ obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 				return rc;
 		}
 	}
-	daos_recx_ep_list_set_ep_valid(recov_lists, nr);
+	daos_recx_ep_list_set(recov_lists, nr, 0, false);
+	D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
 	return 0;
+}
+
+/**
+ * In EC data recovery, need to check if different parity shards' parity exts'
+ * epochs are match. To deal with the race condition between EC aggregation and
+ * degraded fetch. In EC aggregation, for some cases need to generate new
+ * parity exts, those new parity exts will be written to different remote parity
+ * shards asynchronously, so possibly that in EC data recovery can get the
+ * parity on some parity shards but cannot on other parity shard. Here check
+ * different parity shards replied parity ext are match (with same epoch), if
+ * mismatch then need to redo the degraded fetch from beginning.
+ */
+int
+obj_ec_parity_check(struct obj_reasb_req *reasb_req,
+		    struct daos_recx_ep_list *recx_lists, unsigned int nr)
+{
+	struct daos_recx_ep_list	*parity_lists;
+	int				 rc = 0;
+
+	if (recx_lists == NULL || nr == 0)
+		return 0;
+
+	D_MUTEX_LOCK(&reasb_req->orr_mutex);
+	parity_lists = reasb_req->orr_fail->efi_parity_lists;
+	if (parity_lists == NULL) {
+		reasb_req->orr_fail->efi_parity_lists =
+			daos_recx_ep_lists_dup(recx_lists, nr);
+		reasb_req->orr_fail->efi_parity_list_nr = nr;
+		parity_lists = reasb_req->orr_fail->efi_parity_lists;
+		if (parity_lists == NULL)
+			rc = -DER_NOMEM;
+		goto out;
+	}
+
+	if (!obj_ec_parity_lists_match(parity_lists, recx_lists, nr) ||
+	    DAOS_FAIL_CHECK(DAOS_FAIL_PARITY_EPOCH_DIFF)) {
+		rc = -DER_FETCH_AGAIN;
+		D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));
+		daos_recx_ep_list_dump(parity_lists, nr);
+		daos_recx_ep_list_dump(recx_lists, nr);
+		goto out;
+	}
+
+out:
+	D_MUTEX_UNLOCK(&reasb_req->orr_mutex);
+	return rc;
 }
 
 static void
@@ -1890,6 +1949,7 @@ obj_ec_fail_info_get(struct obj_reasb_req *reasb_req, bool create, uint16_t nr)
 	if (fail_info == NULL)
 		return NULL;
 	reasb_req->orr_fail = fail_info;
+	reasb_req->orr_fail_alloc = 1;
 
 	D_ALLOC_ARRAY(fail_info->efi_tgt_list, nr);
 	if (fail_info->efi_tgt_list == NULL)
@@ -1914,6 +1974,10 @@ obj_ec_fail_info_reset(struct obj_reasb_req *reasb_req)
 		return;
 	for (i = 0; i < fail_info->efi_nrecx_lists; i++)
 		recx_lists[i].re_nr = 0;
+	daos_recx_ep_list_free(fail_info->efi_parity_lists,
+			       fail_info->efi_parity_list_nr);
+	fail_info->efi_parity_lists = NULL;
+	fail_info->efi_parity_list_nr = 0;
 }
 
 static bool
@@ -2103,6 +2167,7 @@ obj_ec_stripe_list_init(struct obj_reasb_req *reasb_req)
 		recx_list = &recx_lists[i];
 		D_ASSERTF(recx_list->re_ep_valid, "recx_list %p", recx_list);
 		stripe_list->re_ep_valid = 1;
+		stripe_list->re_snapshot = recx_list->re_snapshot;
 		iod = &iods[i];
 		if (iod->iod_type == DAOS_IOD_SINGLE) {
 			if (recx_list->re_nr == 0)
@@ -2149,7 +2214,7 @@ obj_ec_recov_task_fini(struct obj_reasb_req *reasb_req)
 	struct obj_ec_fail_info		*fail_info = reasb_req->orr_fail;
 	uint32_t			 i;
 
-	for (i = 0; i < fail_info->efi_nrecx_lists; i++)
+	for (i = 0; i < fail_info->efi_stripe_sgls_nr; i++)
 		d_sgl_fini(&fail_info->efi_stripe_sgls[i], true);
 	D_FREE(fail_info->efi_stripe_sgls);
 
@@ -2185,6 +2250,7 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 	D_ALLOC_ARRAY(fail_info->efi_stripe_sgls, iod_nr);
 	if (fail_info->efi_stripe_sgls == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
+	fail_info->efi_stripe_sgls_nr = iod_nr;
 
 	recx_ep_nr = 0;
 	for (i = 0; i < iod_nr; i++) {
@@ -2263,18 +2329,20 @@ obj_ec_recov_task_init(struct obj_reasb_req *reasb_req, daos_obj_id_t oid,
 		sgl = &fail_info->efi_stripe_sgls[i];
 		buf_off = 0;
 		for (j = 0; j < recx_nr; j++) {
-			if (reasb_req->orr_singv_only)
+			D_ASSERT(tidx < fail_info->efi_recov_ntasks);
+			rtask = &fail_info->efi_recov_tasks[tidx++];
+			if (reasb_req->orr_singv_only) {
 				recx_ep = NULL;
-			else
+			} else {
 				recx_ep =  &stripe_list->re_items[j];
+				rtask->ert_snapshot = stripe_list->re_snapshot;
+			}
 			if (iod->iod_type == DAOS_IOD_SINGLE) {
 				stripe_nr = 1;
 			} else {
 				stripe_nr = recx_ep->re_recx.rx_nr /
 					    stripe_rec_nr;
 			}
-			D_ASSERT(tidx < fail_info->efi_recov_ntasks);
-			rtask = &fail_info->efi_recov_tasks[tidx++];
 			rtask->ert_oiod = iod;
 			rtask->ert_iod.iod_name = iod->iod_name;
 			rtask->ert_iod.iod_type = iod->iod_type;
@@ -2309,7 +2377,7 @@ obj_ec_fail_info_free(struct obj_reasb_req *reasb_req)
 {
 	struct obj_ec_fail_info *fail_info = reasb_req->orr_fail;
 
-	if (fail_info == NULL || reasb_req->orr_recov == 1)
+	if (fail_info == NULL || reasb_req->orr_fail_alloc == 0)
 		return;
 
 	obj_ec_recov_task_fini(reasb_req);
@@ -2318,9 +2386,12 @@ obj_ec_fail_info_free(struct obj_reasb_req *reasb_req)
 			       fail_info->efi_nrecx_lists);
 	daos_recx_ep_list_free(fail_info->efi_stripe_lists,
 			       fail_info->efi_nrecx_lists);
+	daos_recx_ep_list_free(fail_info->efi_parity_lists,
+			       fail_info->efi_parity_list_nr);
 	D_FREE(fail_info->efi_tgt_list);
 	D_FREE(fail_info);
 	reasb_req->orr_fail = NULL;
+	reasb_req->orr_fail_alloc = 0;
 }
 
 int

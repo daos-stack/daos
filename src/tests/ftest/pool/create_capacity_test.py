@@ -37,8 +37,7 @@ class PoolCreateTests(PoolTestBase):
         # Create some number of pools each using a equal amount of 60% of the
         # available capacity, e.g. 0.6% for 100 pools.
         quantity = self.params.get("quantity", "/run/pool/*", 1)
-        ratio = 0.6 / quantity
-        self.pool = self.get_pool_list(quantity, ratio, ratio, 1)
+        self.add_pool_qty(quantity, create=False)
         self.check_pool_creation(10)
 
         # Verify DAOS can be restarted in less than 2 minutes
@@ -58,8 +57,9 @@ class PoolCreateTests(PoolTestBase):
             duration, 120,
             "DAOS not ready to accept requests with in 2 minutes")
 
+        self.dmg.timeout = 360
         # Verify all the pools exists after the restart
-        detected_pools = [uuid.lower() for uuid in self.dmg.pool_list()]
+        detected_pools = [uuid.lower() for uuid in self.dmg.pool_list(no_query=True)]
         missing_pools = []
         for pool in self.pool:
             pool_uuid = pool.uuid.lower()

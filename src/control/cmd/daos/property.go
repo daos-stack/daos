@@ -19,20 +19,18 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/lib/txtfmt"
+	"github.com/daos-stack/daos/src/control/lib/ui"
 )
 
 /*
-#define D_LOGFAC	DD_FAC(client)
+#include "util.h"
 
-#include <daos.h>
-#include <daos/common.h>
 #include <daos/multihash.h>
 #include <daos/compression.h>
 #include <daos/cipher.h>
 #include <daos/object.h>
-
-#include "property.h"
 */
 import "C"
 
@@ -52,6 +50,8 @@ type propHdlr struct {
 	// toString defines a closure for converting the
 	// entry's value into a string.
 	toString entryStringer
+	// readOnly indicates that the property may not be set.
+	readOnly bool
 }
 
 // propHdlrs defines a map of property names to handlers that
@@ -71,15 +71,19 @@ type propHdlr struct {
 //		map[string]valHdlr{	   // optional map of string value processors
 //			"key": closure of type valHdlr, // process set value
 //		},
-//		closure of type entryStringer // optional pretty-printer
+//		closure of type entryStringer, // optional pretty-printer
+//		bool,			   // if true, property may not be set
 // 	},
 var propHdlrs = propHdlrMap{
 	"label": {
 		C.DAOS_PROP_CO_LABEL,
 		"Label",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
+			if !drpc.LabelIsValid(v) {
+				return errors.Errorf("invalid label %q", v)
+			}
 			cStr := C.CString(v)
-			C.set_dpe_dupe_str(e, cStr, C.int(len(v)+1))
+			C.set_dpe_dupe_str(e, cStr, C.size_t(len(v)+1))
 			freeString(cStr)
 			return nil
 		},
@@ -89,10 +93,11 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			if C.get_dpe_str(e) == nil {
-				return "container label not set"
+				return "container_label_not_set"
 			}
 			return strValStringer(e, name)
 		},
+		false,
 	},
 	"cksum": {
 		C.DAOS_PROP_CO_CSUM,
@@ -132,6 +137,7 @@ var propHdlrs = propHdlrMap{
 			}
 			return C.GoString(csum.cf_name)
 		},
+		false,
 	},
 	"cksum_size": {
 		C.DAOS_PROP_CO_CSUM_CHUNK_SIZE,
@@ -147,6 +153,7 @@ var propHdlrs = propHdlrMap{
 		},
 		nil,
 		humanSizeStringer,
+		false,
 	},
 	"srv_cksum": {
 		C.DAOS_PROP_CO_CSUM_SERVER_VERIFY,
@@ -176,6 +183,7 @@ var propHdlrs = propHdlrMap{
 				return propInvalidValue(e, name)
 			}
 		},
+		false,
 	},
 	"dedup": {
 		C.DAOS_PROP_CO_DEDUP,
@@ -208,6 +216,7 @@ var propHdlrs = propHdlrMap{
 				return propInvalidValue(e, name)
 			}
 		},
+		false,
 	},
 	"dedup_threshold": {
 		C.DAOS_PROP_CO_DEDUP_THRESHOLD,
@@ -223,6 +232,7 @@ var propHdlrs = propHdlrMap{
 		},
 		nil,
 		humanSizeStringer,
+		false,
 	},
 	"compression": {
 		C.DAOS_PROP_CO_COMPRESS,
@@ -262,6 +272,7 @@ var propHdlrs = propHdlrMap{
 			}
 			return C.GoString(algo.cf_name)
 		},
+		false,
 	},
 	"encryption": {
 		C.DAOS_PROP_CO_ENCRYPT,
@@ -301,6 +312,7 @@ var propHdlrs = propHdlrMap{
 			}
 			return C.GoString(algo.cf_name)
 		},
+		false,
 	},
 	"rf": {
 		C.DAOS_PROP_CO_REDUN_FAC,
@@ -339,6 +351,7 @@ var propHdlrs = propHdlrMap{
 				return propInvalidValue(e, name)
 			}
 		},
+		false,
 	},
 	"status": {
 		C.DAOS_PROP_CO_STATUS,
@@ -371,6 +384,7 @@ var propHdlrs = propHdlrMap{
 				return propInvalidValue(e, name)
 			}
 		},
+		false,
 	},
 	"ec_cell": {
 		C.DAOS_PROP_CO_EC_CELL_SZ,
@@ -401,6 +415,7 @@ var propHdlrs = propHdlrMap{
 			}
 			return humanSizeStringer(e, name)
 		},
+		false,
 	},
 	// Read-only properties here for use by get-property.
 	"layout_type": {
@@ -418,12 +433,14 @@ var propHdlrs = propHdlrMap{
 			return fmt.Sprintf("%s (%d)",
 				C.GoString((*C.char)(unsafe.Pointer(&loStr[0]))), loInt)
 		},
+		true,
 	},
 	"layout_version": {
 		C.DAOS_PROP_CO_LAYOUT_VER,
 		"Layout Version",
 		nil, nil,
 		uintStringer,
+		true,
 	},
 	"rf_lvl": {
 		C.DAOS_PROP_CO_REDUN_LVL,
@@ -442,30 +459,35 @@ var propHdlrs = propHdlrMap{
 				return fmt.Sprintf("(%d)", lvl)
 			}
 		},
+		true,
 	},
 	"max_snapshot": {
 		C.DAOS_PROP_CO_SNAPSHOT_MAX,
 		"Max Snapshot",
 		nil, nil,
 		uintStringer,
+		true,
 	},
 	"alloc_oid": {
 		C.DAOS_PROP_CO_ALLOCED_OID,
 		"Highest Allocated OID",
 		nil, nil,
 		uintStringer,
+		true,
 	},
 	"owner": {
 		C.DAOS_PROP_CO_OWNER,
 		"Owner",
 		nil, nil,
 		strValStringer,
+		true,
 	},
 	"group": {
 		C.DAOS_PROP_CO_OWNER_GROUP,
 		"Group",
 		nil, nil,
 		strValStringer,
+		true,
 	},
 }
 
@@ -700,59 +722,59 @@ func getContainerProperties(hdl C.daos_handle_t, names ...string) (out []*proper
 // properties on an existing container and the GetPropertiesFlag type
 // for getting properties on an existing container.
 type PropertiesFlag struct {
+	ui.SetPropertiesFlag
+
 	props *C.daos_prop_t
-
-	allowedProps map[string]struct{}
 }
 
-func (f *PropertiesFlag) setAllowedProps(props ...string) {
-	f.allowedProps = make(map[string]struct{})
-	for _, prop := range props {
-		f.allowedProps[prop] = struct{}{}
-	}
-}
-
-func (f *PropertiesFlag) isAllowedProp(prop string) bool {
-	// If the list of allowed props is not set, default
-	// to allowing all.
-	if len(f.allowedProps) == 0 {
-		return true
-	}
-
-	_, allowed := f.allowedProps[prop]
-	return allowed
-}
-
-func (f *PropertiesFlag) Complete(match string) (comps []flags.Completion) {
-	var prefix string
-	propPairs := strings.Split(match, ",")
-	if len(propPairs) > 1 {
-		match = propPairs[len(propPairs)-1:][0]
-		prefix = strings.Join(propPairs[0:len(propPairs)-1], ",")
-		prefix += ","
-	}
-
-	for propKey, hdlr := range propHdlrs {
-		if !f.isAllowedProp(propKey) {
+func (f *PropertiesFlag) Complete(match string) []flags.Completion {
+	comps := make(ui.CompletionMap)
+	for key, hdlr := range propHdlrs {
+		if !f.IsSettable(key) {
 			continue
 		}
+		comps[key] = hdlr.valHdlrs.keys()
+	}
+	f.SetCompletions(comps)
 
-		if len(hdlr.valHdlrs) == 0 || !strings.Contains(match, ":") {
-			if strings.HasPrefix(propKey, match) {
-				comps = append(comps, flags.Completion{Item: prefix + propKey + ":"})
-			}
-			continue
+	return f.SetPropertiesFlag.Complete(match)
+}
+
+func (f *PropertiesFlag) AddPropVal(key, val string) error {
+	var entries propSlice
+	var err error
+	if f.props == nil {
+		f.props, entries, err = allocProps(len(propHdlrs))
+		if err != nil {
+			return err
 		}
+	} else {
+		entries = createPropSlice(f.props, len(propHdlrs))
+	}
 
-		for valKey := range hdlr.valHdlrs {
-			propVal := propKey + ":" + valKey
-			if strings.HasPrefix(propVal, match) {
-				comps = append(comps, flags.Completion{Item: valKey})
-			}
+	hdlr, err := propHdlrs.get(key)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < int(f.props.dpp_nr); i++ {
+		if uint32(entries[i].dpe_type) == hdlr.dpeType {
+			return errors.Errorf("cannot update value for existing prop %s", hdlr.shortDesc)
 		}
 	}
 
-	return
+	if err := hdlr.execute(&entries[f.props.dpp_nr], val); err != nil {
+		return err
+	}
+	entries[f.props.dpp_nr].dpe_type = C.uint32_t(hdlr.dpeType)
+	f.props.dpp_nr++
+
+	if f.ParsedProps == nil {
+		f.ParsedProps = make(map[string]string)
+	}
+	f.ParsedProps[key] = val
+
+	return nil
 }
 
 func (f *PropertiesFlag) UnmarshalFlag(fv string) (err error) {
@@ -767,41 +789,18 @@ func (f *PropertiesFlag) UnmarshalFlag(fv string) (err error) {
 		return
 	}
 
-	for _, propStr := range strings.Split(fv, ",") {
-		keyVal := strings.Split(propStr, ":")
-		if len(keyVal) != 2 {
-			return propError("invalid property %q (must be name:val)", propStr)
-		}
+	if err := f.SetPropertiesFlag.UnmarshalFlag(fv); err != nil {
+		return err
+	}
 
-		name := strings.TrimSpace(keyVal[0])
-		value := strings.TrimSpace(keyVal[1])
-		if len(name) == 0 {
-			return propError("name must not be empty")
-		}
-		if len(name) > maxNameLen {
-			return propError("name too long (%d > %d)",
-				len(name), maxNameLen)
-		}
-		if len(value) == 0 {
-			return propError("value must not be empty")
-		}
-		if len(value) > maxValueLen {
-			return propError("value too long (%d > %d)",
-				len(value), maxValueLen)
-		}
-
+	for key, val := range f.ParsedProps {
 		var hdlr *propHdlr
-		hdlr, err = propHdlrs.get(name)
+		hdlr, err = propHdlrs.get(key)
 		if err != nil {
 			return
 		}
 
-		if !f.isAllowedProp(name) {
-			return propError("prop %q is not allowed to be set",
-				name)
-		}
-
-		if err = hdlr.execute(&entries[f.props.dpp_nr], value); err != nil {
+		if err = hdlr.execute(&entries[f.props.dpp_nr], val); err != nil {
 			return
 		}
 		entries[f.props.dpp_nr].dpe_type = C.uint(hdlr.dpeType)
@@ -820,6 +819,40 @@ func (f *PropertiesFlag) Cleanup() {
 	C.daos_prop_free(f.props)
 }
 
+// CreatePropertiesFlag embeds the base PropertiesFlag struct to
+// compose a flag that is used for setting properties on a
+// new container. It is intended to be used where only a subset of
+// properties are valid for setting on create.
+type CreatePropertiesFlag struct {
+	PropertiesFlag
+}
+
+func (f *CreatePropertiesFlag) setWritableKeys() {
+	keys := make([]string, 0, len(propHdlrs))
+	for key, hdlr := range propHdlrs {
+		if !hdlr.readOnly {
+			keys = append(keys, key)
+		}
+	}
+	f.SettableKeys(keys...)
+}
+
+func (f *CreatePropertiesFlag) Complete(match string) []flags.Completion {
+	f.setWritableKeys()
+
+	return f.PropertiesFlag.Complete(match)
+}
+
+func (f *CreatePropertiesFlag) UnmarshalFlag(fv string) error {
+	f.setWritableKeys()
+
+	if err := f.PropertiesFlag.UnmarshalFlag(fv); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // SetPropertiesFlag embeds the base PropertiesFlag struct to
 // compose a flag that is used for setting properties on a
 // container. It is intended to be used where only a subset of
@@ -829,13 +862,13 @@ type SetPropertiesFlag struct {
 }
 
 func (f *SetPropertiesFlag) Complete(match string) []flags.Completion {
-	f.setAllowedProps("label", "status")
+	f.SettableKeys("label", "status")
 
 	return f.PropertiesFlag.Complete(match)
 }
 
 func (f *SetPropertiesFlag) UnmarshalFlag(fv string) error {
-	f.setAllowedProps("label", "status")
+	f.SettableKeys("label", "status")
 
 	if err := f.PropertiesFlag.UnmarshalFlag(fv); err != nil {
 		return err
@@ -882,7 +915,7 @@ func (f *GetPropertiesFlag) Complete(match string) (comps []flags.Completion) {
 	}
 
 	for propKey := range propHdlrs {
-		if !f.isAllowedProp(propKey) {
+		if !f.IsSettable(propKey) {
 			continue
 		}
 

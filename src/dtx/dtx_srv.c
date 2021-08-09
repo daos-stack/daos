@@ -14,11 +14,46 @@
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
-#include <gurt/telemetry_common.h>
-#include <gurt/telemetry_producer.h>
 #include "dtx_internal.h"
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
+
+static void *
+dtx_tls_init(int xs_id, int tgt_id)
+{
+	struct dtx_tls  *tls;
+	int              rc;
+
+	D_ALLOC_PTR(tls);
+	if (tls == NULL)
+		return NULL;
+
+	/** Skip sensor setup on system xstreams */
+	if (tgt_id < 0)
+		return tls;
+
+	rc = d_tm_add_metric(&tls->dt_committable, D_TM_STATS_GAUGE,
+			     "total number of committable DTX entries",
+			     "entries", "io/dtx/committable/tgt_%u", tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX committable metric: " DF_RC"\n",
+		       DP_RC(rc));
+
+	return tls;
+}
+
+static void
+dtx_tls_fini(void *data)
+{
+	D_FREE(data);
+}
+
+struct dss_module_key dtx_module_key = {
+	.dmk_tags       = DAOS_SERVER_TAG,
+	.dmk_index      = -1,
+	.dmk_init       = dtx_tls_init,
+	.dmk_fini       = dtx_tls_fini,
+};
 
 static inline char *
 dtx_opc_to_str(crt_opcode_t opc)
@@ -31,69 +66,58 @@ dtx_opc_to_str(crt_opcode_t opc)
 	return "dtx_unknown";
 }
 
-struct dtx_tls {
-	struct d_tm_node_t	*ot_op_total[DTX_PROTO_SRV_RPC_COUNT];
-};
-
 static void *
-dtx_tls_init(int xs_id, int tgt_id)
+dtx_metrics_alloc(const char *path, int tgt_id)
 {
-	struct dtx_tls	*tls;
-	uint32_t	 opc;
-	int		 rc;
+	struct dtx_pool_metrics *metrics;
+	uint32_t		opc;
+	int			rc;
 
-	D_ALLOC_PTR(tls);
-	if (tls == NULL)
+	D_ASSERT(tgt_id >= 0);
+
+	D_ALLOC_PTR(metrics);
+	if (metrics == NULL)
 		return NULL;
 
-	/** Skip sensor setup on system xstreams */
-	if (tgt_id < 0)
-		return tls;
-
-	/** Register different per-opcode sensors */
+	/** Register different per-opcode counters */
 	for (opc = 0; opc < DTX_PROTO_SRV_RPC_COUNT; opc++) {
-		rc = d_tm_add_metric(&tls->ot_op_total[opc], D_TM_COUNTER,
-				     "total number of processed DTX RPCs", "",
-				     "io/%u/ops/%s/total_cnt",
-				     tgt_id, dtx_opc_to_str(opc));
+		rc = d_tm_add_metric(&metrics->dpm_total[opc], D_TM_COUNTER,
+				     "total number of processed DTX RPCs",
+				     "ops", "%s/ops/%s/tgt_%u", path,
+				     dtx_opc_to_str(opc), tgt_id);
 		if (rc != DER_SUCCESS)
-			D_WARN("Failed to create DTX RPC cnt sensor for %s: "
+			D_WARN("Failed to create DTX RPC cnt metric for %s: "
 			       DF_RC"\n", dtx_opc_to_str(opc), DP_RC(rc));
 	}
 
-	return tls;
+	return metrics;
 }
 
 static void
-dtx_tls_fini(void *data)
+dtx_metrics_free(void *data)
 {
 	D_FREE(data);
 }
 
-struct dss_module_key dtx_module_key = {
-	.dmk_tags	= DAOS_SERVER_TAG,
-	.dmk_index	= -1,
-	.dmk_init	= dtx_tls_init,
-	.dmk_fini	= dtx_tls_fini,
+struct dss_module_metrics dtx_metrics = {
+	.dmm_tags = DAOS_TGT_TAG,
+	.dmm_init = dtx_metrics_alloc,
+	.dmm_fini = dtx_metrics_free,
 };
-
-static inline struct dtx_tls *
-dtx_tls_get(void)
-{
-	return dss_module_key_get(dss_tls_get(), &dtx_module_key);
-}
 
 static void
 dtx_handler(crt_rpc_t *rpc)
 {
-	struct dtx_tls		*tls = dtx_tls_get();
+	struct dtx_pool_metrics	*dpm;
 	struct dtx_in		*din = crt_req_get(rpc);
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
 	struct dtx_id		*dtis;
 	struct dtx_memberships	*mbs[DTX_REFRESH_MAX] = { 0 };
+	struct dtx_cos_key	 dcks[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 vers[DTX_REFRESH_MAX] = { 0 };
 	uint32_t		 opc = opc_get(rpc->cr_opc);
+	int			*ptr;
 	int			 count = DTX_YIELD_CYCLE;
 	int			 i = 0;
 	int			 rc1 = 0;
@@ -134,8 +158,12 @@ dtx_handler(crt_rpc_t *rpc)
 				count = din->di_dtx_array.ca_count - i;
 
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
-			rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
-					    dtis, count);
+			if (din->di_epoch != 0)
+				rc1 = vos_dtx_abort(cont->sc_hdl, din->di_epoch,
+						    dtis, count);
+			else
+				rc1 = vos_dtx_set_flags(cont->sc_hdl, dtis,
+							count, DTE_CORRUPTED);
 			if (rc == 0 && rc1 < 0)
 				rc = rc1;
 
@@ -148,7 +176,7 @@ dtx_handler(crt_rpc_t *rpc)
 			D_GOTO(out, rc = -DER_PROTO);
 
 		rc = vos_dtx_check(cont->sc_hdl, din->di_dtx_array.ca_arrays,
-				   NULL, NULL, NULL, false);
+				   NULL, NULL, NULL, NULL, false);
 		if (rc == -DER_NONEXIST && cont->sc_dtx_reindex)
 			rc = -DER_INPROGRESS;
 
@@ -167,12 +195,20 @@ dtx_handler(crt_rpc_t *rpc)
 
 		dout->do_sub_rets.ca_count = count;
 
-		for (i = 0, rc1 = 0; i < count; i++) {
-			int	*ptr = (int *)dout->do_sub_rets.ca_arrays + i;
+		if (DAOS_FAIL_CHECK(DAOS_DTX_UNCERTAIN)) {
+			for (i = 0; i < count; i++) {
+				ptr = (int *)dout->do_sub_rets.ca_arrays + i;
+				*ptr = -DER_NONEXIST;
+			}
 
+			D_GOTO(out, rc = 0);
+		}
+
+		for (i = 0, rc1 = 0; i < count; i++) {
+			ptr = (int *)dout->do_sub_rets.ca_arrays + i;
 			dtis = (struct dtx_id *)din->di_dtx_array.ca_arrays + i;
 			*ptr = vos_dtx_check(cont->sc_hdl, dtis, NULL, &vers[i],
-					     &mbs[i], false);
+					     &mbs[i], &dcks[i], false);
 			/* The DTX status may be changes by DTX resync soon. */
 			if ((*ptr == DTX_ST_PREPARED &&
 			     cont->sc_dtx_resyncing) ||
@@ -199,7 +235,8 @@ out:
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
 
-	d_tm_inc_counter(tls->ot_op_total[opc], 1);
+	dpm = cont->sc_pool->spc_metrics[DAOS_DTX_MODULE];
+	d_tm_inc_counter(dpm->dpm_total[opc], 1);
 
 	if (opc == DTX_REFRESH && rc1 > 0) {
 		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };
@@ -218,6 +255,7 @@ out:
 			dtes[j].dte_mbs = mbs[i];
 
 			pdte[j] = &dtes[j];
+			dcks[j] = dcks[i];
 			j++;
 		}
 
@@ -226,7 +264,7 @@ out:
 		/* Commit the DTX after replied the original refresh request to
 		 * avoid further query the same DTX.
 		 */
-		rc = dtx_commit(cont, pdte, j, true);
+		rc = dtx_commit(cont, pdte, dcks, j);
 		if (rc < 0)
 			D_WARN("Failed to commit DTX "DF_DTI", count %d: "
 			       DF_RC"\n", DP_DTI(&dtes[0].dte_xid), j,
@@ -269,6 +307,8 @@ dtx_setup(void)
 {
 	int	rc;
 
+	dtx_agg_gen = 1;
+
 	rc = dss_ult_create_all(dtx_batched_commit, NULL, true);
 	if (rc != 0)
 		D_ERROR("Failed to create DTX batched commit ULT: "DF_RC"\n",
@@ -301,4 +341,5 @@ struct dss_module dtx_module =  {
 	.sm_cli_count	= 0,
 	.sm_handlers	= dtx_handlers,
 	.sm_key		= &dtx_module_key,
+	.sm_metrics	= &dtx_metrics,
 };

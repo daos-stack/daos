@@ -18,6 +18,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -27,7 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/config"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -76,13 +77,13 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 	nonReplica := system.MockMember(t, 1, system.MemberStateJoined)
 
 	for name, tc := range map[string]struct {
-		svc              *mgmtSvc
-		clientNetworkCfg *config.ClientNetworkCfg
-		req              *mgmtpb.GetAttachInfoReq
-		expResp          *mgmtpb.GetAttachInfoResp
+		svc               *mgmtSvc
+		clientNetworkHint *mgmtpb.ClientNetHint
+		req               *mgmtpb.GetAttachInfoReq
+		expResp           *mgmtpb.GetAttachInfoResp
 	}{
 		"Server uses verbs + Infiniband": {
-			clientNetworkCfg: &config.ClientNetworkCfg{
+			clientNetworkHint: &mgmtpb.ClientNetHint{
 				Provider:        "ofi+verbs",
 				CrtCtxShareAddr: 1,
 				CrtTimeout:      10, NetDevClass: netdetect.Infiniband,
@@ -92,10 +93,12 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				AllRanks: true,
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
-				Provider:        "ofi+verbs",
-				CrtCtxShareAddr: 1,
-				CrtTimeout:      10,
-				NetDevClass:     netdetect.Infiniband,
+				ClientNetHint: &mgmtpb.ClientNetHint{
+					Provider:        "ofi+verbs",
+					CrtCtxShareAddr: 1,
+					CrtTimeout:      10,
+					NetDevClass:     netdetect.Infiniband,
+				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
 						Rank: msReplica.Rank.Uint32(),
@@ -110,7 +113,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 		},
 		"Server uses sockets + Ethernet": {
-			clientNetworkCfg: &config.ClientNetworkCfg{
+			clientNetworkHint: &mgmtpb.ClientNetHint{
 				Provider:        "ofi+sockets",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
@@ -121,10 +124,12 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				AllRanks: true,
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
-				Provider:        "ofi+sockets",
-				CrtCtxShareAddr: 0,
-				CrtTimeout:      5,
-				NetDevClass:     netdetect.Ether,
+				ClientNetHint: &mgmtpb.ClientNetHint{
+					Provider:        "ofi+sockets",
+					CrtCtxShareAddr: 0,
+					CrtTimeout:      5,
+					NetDevClass:     netdetect.Ether,
+				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
 						Rank: msReplica.Rank.Uint32(),
@@ -139,7 +144,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			},
 		},
 		"older client (AllRanks: false)": {
-			clientNetworkCfg: &config.ClientNetworkCfg{
+			clientNetworkHint: &mgmtpb.ClientNetHint{
 				Provider:        "ofi+sockets",
 				CrtCtxShareAddr: 0,
 				CrtTimeout:      5,
@@ -150,10 +155,12 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 				AllRanks: false,
 			},
 			expResp: &mgmtpb.GetAttachInfoResp{
-				Provider:        "ofi+sockets",
-				CrtCtxShareAddr: 0,
-				CrtTimeout:      5,
-				NetDevClass:     netdetect.Ether,
+				ClientNetHint: &mgmtpb.ClientNetHint{
+					Provider:        "ofi+sockets",
+					CrtCtxShareAddr: 0,
+					CrtTimeout:      5,
+					NetDevClass:     netdetect.Ether,
+				},
 				RankUris: []*mgmtpb.GetAttachInfoResp_RankUri{
 					{
 						Rank: msReplica.Rank.Uint32(),
@@ -168,7 +175,8 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 			harness := NewEngineHarness(log)
-			srv := newTestEngine(log, true)
+			sp := storage.NewProvider(log, 0, nil, nil, nil, nil)
+			srv := newTestEngine(log, true, sp)
 
 			if err := harness.AddInstance(srv); err != nil {
 				t.Fatal(err)
@@ -185,7 +193,7 @@ func TestServer_MgmtSvc_GetAttachInfo(t *testing.T) {
 			if _, err := tc.svc.membership.Add(nonReplica); err != nil {
 				t.Fatal(err)
 			}
-			tc.svc.clientNetworkCfg = tc.clientNetworkCfg
+			tc.svc.clientNetworkHint = tc.clientNetworkHint
 			gotResp, gotErr := tc.svc.GetAttachInfo(context.TODO(), tc.req)
 			if gotErr != nil {
 				t.Fatalf("unexpected error: %+v\n", gotErr)
@@ -448,7 +456,10 @@ func checkMembers(t *testing.T, exp system.Members, ms *system.Membership) {
 			t.Fatalf("unexpected member state for rank %d (-want, +got)\n%s\n", em.Rank, diff)
 		}
 
-		cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(system.Member{})}
+		cmpOpts := []cmp.Option{
+			cmpopts.IgnoreUnexported(system.Member{}),
+			cmpopts.EquateApproxTime(time.Second),
+		}
 		if diff := cmp.Diff(em, am, cmpOpts...); diff != "" {
 			t.Fatalf("unexpected members (-want, +got)\n%s\n", diff)
 		}
@@ -474,7 +485,7 @@ func mgmtSystemTestSetup(t *testing.T, l logging.Logger, mbs system.Members, r .
 
 	svc := newTestMgmtSvcMulti(t, l, maxEngines, false)
 	svc.harness.started.SetTrue()
-	svc.harness.instances[0]._superblock.Rank = system.NewRankPtr(0)
+	svc.harness.instances[0].(*EngineInstance)._superblock.Rank = system.NewRankPtr(0)
 	svc.membership, _ = system.MockMembership(t, l, mockResolver)
 	for _, m := range mbs {
 		if _, err := svc.membership.Add(m); err != nil {
@@ -829,7 +840,10 @@ func TestServer_MgmtSvc_rpcFanout(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(system.MemberResult{}, system.Member{})}
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(system.MemberResult{}, system.Member{}),
+				cmpopts.EquateApproxTime(time.Second),
+			}
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
@@ -1019,11 +1033,12 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 				return
 			}
 
-			cmpOpts := common.DefaultCmpOpts()
+			cmpOpts := append(common.DefaultCmpOpts(),
+				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
+			)
 			if diff := cmp.Diff(tc.expMembers, gotResp.Members, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
-			common.AssertEqual(t, tc.expMembers, gotResp.Members, name)
 			common.AssertEqual(t, tc.expAbsentHosts, gotResp.Absenthosts, "absent hosts")
 			common.AssertEqual(t, tc.expAbsentRanks, gotResp.Absentranks, "absent ranks")
 		})
@@ -1188,7 +1203,9 @@ func TestServer_MgmtSvc_SystemStart(t *testing.T) {
 				return
 			}
 
-			cmpOpts := common.DefaultCmpOpts()
+			cmpOpts := append(common.DefaultCmpOpts(),
+				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
+			)
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
@@ -1379,7 +1396,9 @@ func TestServer_MgmtSvc_SystemStop(t *testing.T) {
 				return
 			}
 
-			cmpOpts := common.DefaultCmpOpts()
+			cmpOpts := append(common.DefaultCmpOpts(),
+				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
+			)
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}
@@ -1507,7 +1526,9 @@ func TestServer_MgmtSvc_SystemErase(t *testing.T) {
 				return
 			}
 
-			cmpOpts := common.DefaultCmpOpts()
+			cmpOpts := append(common.DefaultCmpOpts(),
+				protocmp.IgnoreFields(&mgmtpb.SystemMember{}, "last_update"),
+			)
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, cmpOpts...); diff != "" {
 				t.Logf("unexpected results (-want, +got)\n%s\n", diff) // prints on err
 			}

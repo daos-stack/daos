@@ -742,7 +742,7 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_8, NULL, test_case_teardown},
 	{"DTX9: update with committable punch DTX ",
 	 dtx_9, NULL, test_case_teardown},
-	{"DTX10: DTX batched commit with over conut threshold",
+	{"DTX10: DTX batched commit with over count threshold",
 	 dtx_10, NULL, test_case_teardown},
 	{"DTX11: DTX batched commit with over time threshold",
 	 dtx_11, NULL, test_case_teardown},

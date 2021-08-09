@@ -37,8 +37,11 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         self.container[-1].type.update(
             "POSIX" if posix else None, "container.type")
         self.container[-1].create()
-        self.metrics["open_count"][self.pool_leader_host] += 2
-        self.metrics["close_count"][self.pool_leader_host] += 2
+        self.metrics["open_count"][self.pool_leader_host] += 1
+        self.metrics["close_count"][self.pool_leader_host] += 1
+        if posix:
+            self.metrics["open_count"][self.pool_leader_host] += 1
+            self.metrics["close_count"][self.pool_leader_host] += 1
 
     def open_container(self, container):
         """Open the container and update the metrics.
@@ -67,10 +70,6 @@ class TestWithTelemetryBasic(TestWithTelemetry):
             container (TestContainer): container to destroy
         """
         container.destroy()
-        # For the moment, the new daos tool opens and closes
-        # the container before destroying it.
-        self.metrics["open_count"][self.pool_leader_host] += 1
-        self.metrics["close_count"][self.pool_leader_host] += 1
         self.metrics["destroy_count"][self.pool_leader_host] += 1
 
     def check_metrics(self):
@@ -119,13 +118,13 @@ class TestWithTelemetryBasic(TestWithTelemetry):
         data = self.telemetry.get_container_metrics()
         for host in data:
             self.metrics["open_count"][host] = \
-                data[host]["engine_container_ops_open_total"]
+                data[host]["engine_pool_ops_cont_open"]
             self.metrics["active_count"][host] = \
-                data[host]["engine_container_ops_open_active"]
+                data[host]["engine_pool_container_handles"]
             self.metrics["close_count"][host] = \
-                data[host]["engine_container_ops_close_total"]
+                data[host]["engine_pool_ops_cont_close"]
             self.metrics["destroy_count"][host] = \
-                data[host]["engine_container_ops_destroy_total"]
+                data[host]["engine_pool_ops_cont_destroy"]
 
         # Create a number of containers and verify metrics
         for loop in range(1, container_qty + 1):

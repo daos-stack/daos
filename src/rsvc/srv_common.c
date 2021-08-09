@@ -116,7 +116,7 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	void				*data;
 	char				*names;
 	int				 rc;
-	int				 i;
+	int				 i, nonexist = 0;
 
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
@@ -152,12 +152,22 @@ ds_rsvc_del_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		names += len;
 
 		rc = rdb_tx_delete(tx, path, &key);
-		if (rc != 0) {
+		if (rc == -DER_NONEXIST) {
+			D_DEBUG(DB_ANY, "%s: failed to delete attribute "DF_KEY
+				": "DF_RC"\n", svc->s_name, DP_KEY(&key),
+				DP_RC(rc));
+			nonexist++;
+		} else if (rc != 0) {
 			D_ERROR("%s: failed to delete attribute "DF_KEY
 				": "DF_RC"\n",
 				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_bulk;
 		}
+	}
+
+	if (nonexist == count) {
+		rc = -DER_NONEXIST;
+		goto out_bulk;
 	}
 
 out_bulk:
@@ -182,9 +192,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	void				*data;
 	char				*names;
 	size_t				*sizes;
-	int				 rc;
-	int				 i;
-	int				 j;
+	int				 rc, i, j, nonexist = 0, new_index = -1;
 
 	rc = crt_bulk_get_len(remote_bulk, &bulk_size);
 	if (rc != 0)
@@ -230,6 +238,7 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	for (i = 0, j = 1; i < count; ++i) {
 		size_t len;
 		d_iov_t key;
+		char *new_buf;
 
 		len = strlen(names) + /* trailing '\0' */ 1;
 		d_iov_set(&key, names, len);
@@ -238,15 +247,42 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 
 		rc = rdb_tx_lookup(tx, path, &key, &iovs[j]);
 
-		if (rc != 0) {
-			D_CDEBUG(rc == -DER_NONEXIST, DB_ANY, DLOG_ERR,
-				 "%s: failed to lookup attribute "DF_KEY
-				 ": "DF_RC"\n",
-				 svc->s_name, DP_KEY(&key), DP_RC(rc));
+		if (rc == -DER_NONEXIST) {
+			/* attribute do not exist */
+			iovs[j - 1].iov_buf_len += sizes[i];
+			sizes[i] = 0;
+
+			D_DEBUG(DB_ANY, "%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
+			nonexist++;
+		} else if (rc != 0) {
+			D_ERROR("%s: failed to lookup attribute "DF_KEY": "DF_RC"\n",
+				svc->s_name, DP_KEY(&key), DP_RC(rc));
 			goto out_iovs;
+		} else if (sizes[i] > 0) {
+			daos_size_t size;
+
+			size = min(sgl.sg_iovs[j].iov_len, sizes[i]);
+
+			/* need to copy from pmem to ram to avoid errors
+			 * during RDMA registration
+			 */
+			D_ALLOC(new_buf, size);
+			if (new_buf == NULL) {
+				rc = -DER_NOMEM;
+				goto out_iovs;
+			}
+			memcpy(new_buf, iovs[j].iov_buf, size);
+			iovs[j].iov_buf_len = sizes[i];
+			sizes[i] = iovs[j].iov_len;
+			iovs[j].iov_len = size;
+			iovs[j].iov_buf = new_buf;
+			new_index = j;
+		} else {
+			/* only return size of attr */
+			sizes[i] = iovs[j].iov_len;
+			iovs[j].iov_buf_len = 0;
 		}
-		iovs[j].iov_buf_len = sizes[i];
-		sizes[i] = iovs[j].iov_len;
 
 		/* If buffer length is zero, send only size */
 		if (iovs[j].iov_buf_len > 0)
@@ -265,14 +301,21 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	if (rc != 0)
 		goto out_iovs;
 
-	local_offset = count * sizeof(*sizes);
-	remote_offset = key_length + count * sizeof(*sizes);
+	/* sizes have been sent back, so if none of attrs exist, just stop here
+	 * and return -DER_NONEXIST
+	 */
+	if (nonexist == count) {
+		rc = -DER_NONEXIST;
+		goto out_iovs;
+	}
+
+	local_offset = iovs[0].iov_buf_len;
+	remote_offset = key_length + iovs[0].iov_buf_len;
 
 	for (i = 1; i < sgl.sg_nr; i++) {
 		daos_size_t size;
 
-		size = min(sgl.sg_iovs[i].iov_len,
-				       sgl.sg_iovs[i].iov_buf_len);
+		size = min(sgl.sg_iovs[i].iov_len, sgl.sg_iovs[i].iov_buf_len);
 		rc = attr_bulk_transfer(rpc, CRT_BULK_PUT, local_bulk,
 					remote_bulk, local_offset,
 					remote_offset, size);
@@ -288,6 +331,8 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 		goto out_iovs;
 
 out_iovs:
+	for (i = 1; i <= new_index; i++)
+		D_FREE(iovs[i].iov_buf);
 	D_FREE(iovs);
 out_data:
 	D_FREE(data);
@@ -301,7 +346,7 @@ ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 {
 	crt_bulk_t			 local_bulk;
 	daos_size_t			 bulk_size;
-	int				 rc;
+	int				 rc, i, new_index = -1;
 	struct attr_list_iter_args	 iter_args;
 
 	/*
@@ -340,6 +385,23 @@ ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 			.sg_nr	   = iter_args.iov_index,
 			.sg_iovs   = iter_args.iovs
 		};
+		char *new_buf;
+
+		/* need to copy from pmem to ram to avoid errors
+		 * during RDMA registration
+		 */
+		for (i = 0; i < iter_args.iov_index; i++) {
+			D_ALLOC(new_buf, iter_args.iovs[i].iov_len);
+			if (new_buf == NULL) {
+				rc = -DER_NOMEM;
+				goto out_mem;
+			}
+			memcpy(new_buf, iter_args.iovs[i].iov_buf,
+			       iter_args.iovs[i].iov_len);
+			iter_args.iovs[i].iov_buf = new_buf;
+			new_index = i;
+		}
+
 		rc = crt_bulk_create(rpc->cr_ctx, &sgl,
 				     CRT_BULK_RW, &local_bulk);
 		if (rc != 0)
@@ -352,6 +414,8 @@ ds_rsvc_list_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	}
 
 out_mem:
+	for (i = 0; i <= new_index; i++)
+		D_FREE(iter_args.iovs[i].iov_buf);
 	D_FREE(iter_args.iovs);
 out:
 	return rc;

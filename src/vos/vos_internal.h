@@ -72,8 +72,6 @@ D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 #define DTX_BTREE_ORDER	23	/* Order for DTX tree */
 #define VEA_TREE_ODR		20	/* Order of a VEA tree */
 
-#define DAOS_VOS_VERSION 1
-
 extern struct dss_module_key vos_module_key;
 
 #define VOS_POOL_HHASH_BITS 10 /* Up to 1024 pools */
@@ -167,6 +165,8 @@ struct vos_pool {
 	daos_size_t		vp_space_held[DAOS_MEDIA_MAX];
 	/** Dedup hash */
 	struct d_hash_table	*vp_dedup_hash;
+	/* The count of committed DTXs for the whole pool. */
+	uint32_t		 vp_dtx_committed_count;
 };
 
 /**
@@ -191,16 +191,10 @@ struct vos_container {
 	struct btr_root		vc_dtx_active_btr;
 	/** The root of the B+ tree for committed DTXs. */
 	struct btr_root		vc_dtx_committed_btr;
-	/* The global list for committed DTXs. */
-	d_list_t		vc_dtx_committed_list;
-	/* The temporary list for committed DTXs during re-index. */
-	d_list_t		vc_dtx_committed_tmp_list;
 	/* The list for active DTXs, roughly ordered in time. */
 	d_list_t		vc_dtx_act_list;
 	/* The count of committed DTXs. */
 	uint32_t		vc_dtx_committed_count;
-	/* The items count in vc_dtx_committed_tmp_list. */
-	uint32_t		vc_dtx_committed_tmp_count;
 	/** Index for timestamp lookup */
 	uint32_t		*vc_ts_idx;
 	/** Direct pointer to the VOS container */
@@ -260,7 +254,8 @@ struct vos_dtx_act_ent {
 					 dae_committed:1,
 					 dae_aborted:1,
 					 dae_maybe_shared:1,
-					 dae_prepared:1;
+					 dae_prepared:1,
+					 dae_resent:1;
 };
 
 #ifdef VOS_STANDALONE
@@ -309,19 +304,16 @@ do {						\
 #define DAE_MBS_OFF(dae)	((dae)->dae_base.dae_mbs_off)
 
 struct vos_dtx_cmt_ent {
-	/* Link into vos_conter::vc_dtx_committed_list */
-	d_list_t			 dce_committed_link;
 	struct vos_dtx_cmt_ent_df	 dce_base;
 
 	uint32_t			 dce_reindex:1,
 					 dce_exist:1,
-					 dce_invalid:1;
+					 dce_invalid:1,
+					 dce_resent:1;
 };
 
 #define DCE_XID(dce)		((dce)->dce_base.dce_xid)
 #define DCE_EPOCH(dce)		((dce)->dce_base.dce_epoch)
-#define DCE_OID(dce)		((dce)->dce_base.dce_oid)
-#define DCE_DKEY_HASH(dce)	((dce)->dce_base.dce_dkey_hash)
 
 extern int vos_evt_feats;
 
@@ -497,17 +489,19 @@ vos_dtx_deregister_record(struct umem_instance *umm, daos_handle_t coh,
  * \return		0 on success and negative on failure.
  */
 int
-vos_dtx_prepared(struct dtx_handle *dth);
+vos_dtx_prepared(struct dtx_handle *dth, struct vos_dtx_cmt_ent **dce_p);
 
 int
 vos_dtx_commit_internal(struct vos_container *cont, struct dtx_id *dtis,
-			int counti, daos_epoch_t epoch,
-			struct dtx_cos_key *dcks,
+			int count, daos_epoch_t epoch,
+			bool resent, bool *rm_cos,
 			struct vos_dtx_act_ent **daes,
 			struct vos_dtx_cmt_ent **dces);
 void
-vos_dtx_post_handle(struct vos_container *cont, struct vos_dtx_act_ent **daes,
-		    struct vos_dtx_cmt_ent **dces, int count, bool abort);
+vos_dtx_post_handle(struct vos_container *cont,
+		    struct vos_dtx_act_ent **daes,
+		    struct vos_dtx_cmt_ent **dces,
+		    int count, bool abort, bool rollback);
 
 /**
  * Establish indexed active DTX table in DRAM.

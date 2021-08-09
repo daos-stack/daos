@@ -94,6 +94,10 @@ setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.0rc5
 EOF
     fi
 
+    # CORCI-1096
+    echo 'relayhost = [mail.wolf.hpdd.intel.com]' >> /etc/postfix/main.cf
+    postfix reload
+
 }
 
 post_provision_config_nodes() {
@@ -143,6 +147,13 @@ post_provision_config_nodes() {
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
     time dnf -y install $LSB_RELEASE
+
+    if lspci | grep "ConnectX-6"; then
+        # No openmpi3 or MACSio-openmpi3 can be installed currently
+        # when the ConnnectX-6 driver is installed
+        INST_RPMS="${INST_RPMS// openmpi3/}"
+        INST_RPMS="${INST_RPMS// MACSio-openmpi3}"
+    fi
 
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&

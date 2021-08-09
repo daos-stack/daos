@@ -89,7 +89,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			opc;
 	struct mgmt_tgt_create_in	*tc_in;
-	struct mgmt_tgt_create_out	*tc_out;
+	struct mgmt_tgt_create_out	*tc_out = NULL;
 	d_rank_t			*tc_out_ranks;
 	uuid_t				*tc_out_uuids;
 	unsigned int			i;
@@ -162,12 +162,14 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 		D_DEBUG(DB_TRACE, "fill ranks %d idx %d "DF_UUID"\n",
 			tc_out_ranks[i], idx, DP_UUID(tc_out_uuids[i]));
 	}
-	D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
-	D_FREE(tc_out->tc_ranks.ca_arrays);
-
 	rc = DER_SUCCESS;
 
 decref:
+	if (tc_out) {
+		D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
+		D_FREE(tc_out->tc_ranks.ca_arrays);
+	}
+
 	crt_req_decref(tc_req);
 	if (rc) {
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
@@ -618,40 +620,41 @@ out:
 
 int
 ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		      daos_prop_t *prop, daos_prop_t **result)
+		      daos_prop_t *prop)
 {
 	int              rc;
-	size_t           i;
-	daos_prop_t	*res_prop;
 
 	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
-		D_ERROR("invalid property\n");
+		D_ERROR("invalid property list\n");
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "Setting property for pool "DF_UUID"\n",
+	D_DEBUG(DB_MGMT, "Setting properties for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
 	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
-	if (rc != 0)
-		goto out;
 
-	res_prop = daos_prop_alloc(prop->dpp_nr);
-	if (res_prop == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+out:
+	return rc;
+}
 
-	for (i = 0; i < prop->dpp_nr; i++)
-		res_prop->dpp_entries[i].dpe_type =
-			prop->dpp_entries[i].dpe_type;
+int
+ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		      daos_prop_t *prop)
+{
+	int              rc;
 
-	rc = ds_pool_svc_get_prop(pool_uuid, svc_ranks, res_prop);
-	if (rc != 0) {
-		daos_prop_free(res_prop);
+	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
+		D_ERROR("invalid property list\n");
+		rc = -DER_INVAL;
 		goto out;
 	}
 
-	*result = res_prop;
+	D_DEBUG(DB_MGMT, "Getting properties for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_pool_svc_get_prop(pool_uuid, svc_ranks, prop);
 
 out:
 	return rc;

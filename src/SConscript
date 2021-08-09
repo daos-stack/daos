@@ -29,14 +29,11 @@ def generate_daos_version_header(env):
 def scons():
     """Execute build"""
 
-    Import('env', 'il_env', 'prereqs')
+    Import('env', 'base_env', 'prereqs')
 
     # For Common library (tse.h)
     env.AppendUnique(CPPPATH=[Dir('include/daos').srcnode()])
     env.Install(os.path.join('$PREFIX', 'include/daos'), 'include/daos/tse.h')
-
-    env.AppendUnique(RPATH_FULL=[Dir('gurt')])
-    env.AppendUnique(LINKFLAGS=["-Wl,-rpath-link=%s" % Dir('gurt').path])
 
     # Detect if we have explicit_bzero
     conf = Configure(env)
@@ -47,8 +44,8 @@ def scons():
     # Generic DAOS includes
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('include')])
-    il_env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
-    il_env.AppendUnique(CPPPATH=[Dir('include')])
+    base_env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
+    base_env.AppendUnique(CPPPATH=[Dir('include')])
     generate_daos_version_header(env)
     for header in HEADERS:
         env.Install(os.path.join('$PREFIX', 'include'), 'include/%s' % header)

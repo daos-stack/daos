@@ -1,7 +1,7 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of centOS-based
+# 'recipe' for Docker to build an image of centOS 7 based
 # environment for building the DAOS project.
 #
 
@@ -12,20 +12,18 @@ LABEL maintainer="daos@daos.groups.io"
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
 ARG CB0
 
-# Switch to using DNF instead of yum.
-#
 # If a local distro repository is supplied, then we should use it
-# and disable using the distro repositories.
+# and disable using the distro repositories that can be mirrored.
 # The Docker image starts out with the DISTRO provided GPG keys
 # on the disk, but not installed.  These must be installed before
 # adding any repo that needs GPG keys but does not provide meta
 # data for installing those keys.  Then the epel-release package
 # version from the extras repository must be installed and the
 # GPG key it provides must be installed.
-ARG REPO_URL=""
-ARG REPO_DISTRO=""
+ARG REPO_URL
+ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
-      rpm --import /etc/pki/rpm-gpg/* ;                         \
+      rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
       MY_NAME="${MY_REPO#*//}";                                 \
       MY_NAME="${MY_NAME//\//_}";                               \
@@ -51,7 +49,7 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
-ARG REPO_DAOS=""
+ARG REPO_DAOS
 RUN if [ -n "$REPO_DAOS" ]; then                                \
       MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
       MY_NAME="${MY_REPO#*//}";                                 \
@@ -64,6 +62,29 @@ repo_gpgcheck=0\n\
 exclude=fuse-3* fuse-devel-3* fuse-libs-3* fuse-debuginfo-3* ompi*\n\
 gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
     fi
+
+ARG JENKINS_URL
+ARG REPOS
+RUN for repo in $REPOS; do                                                \
+        branch="master";                                                  \
+        build_number="lastSuccessfulBuild";                               \
+        if [[ $repo = *@* ]]; then                                        \
+            branch="${repo#*@}";                                          \
+            repo="${repo%@*}";                                            \
+            if [[ $branch = *:* ]]; then                                  \
+                build_number="${branch#*:}";                              \
+                branch="${branch%:*}";                                    \
+            fi;                                                           \
+        fi;                                                               \
+        echo -e "[$repo:$branch:$build_number]\n\
+name=$repo:$branch:$build_number\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+enabled=1\n\
+gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
+        cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
+        dnf repolist; \
+        dnf --disablerepo=\* --enablerepo=$repo:$branch:$build_number makecache; \
+    done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
 # that come from the core repo.
@@ -79,11 +100,11 @@ RUN dnf -y install deltarpm && \
         clang-analyzer \
         cmake \
         CUnit-devel \
-        doxygen \
         e2fsprogs \
         file \
         flex \
         fuse3-devel \
+        fuse3 \
         gcc \
         gcc-c++ \
         git \
@@ -107,26 +128,21 @@ RUN dnf -y install deltarpm && \
         Lmod \
         lz4-devel \
         make \
-        man \
         maven \
-        nasm \
+        meson \
         ndctl \
+        ninja-build \
         numactl \
         numactl-devel \
         openmpi3-devel \
         openssl-devel \
-        pandoc \
         patch \
         patchelf \
         pciutils \
-        python36-Cython \
+        python3-pip \
         python36-devel \
         python36-distro \
         python36-junit_xml \
-        python36-numpy \
-        python36-paramiko \
-        python36-pylint \
-        python36-requests \
         python36-tabulate \
         python36-pyxattr \
         python36-PyYAML \
@@ -152,38 +168,24 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
     chown daos_server.daos_server /opt/daos /mnt/daos /var/run/daos_server &&  \
     chown daos_agent.daos_agent /var/run/daos_agent
 
-# Dependencies
-# Packages for NVML exist in CentOS, but are
-# unfortunately outdated. The DAOS build system will rebuild those packages.
-ARG JENKINS_URL=""
+# DPDK/SPDK needs pyelftools now
+# Longer term, we should upload our RPM build of this to the public packaging
+# site and install it by RPM, but for now, we'll just pip install it
+USER daos_server:daos_server
+RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user pyelftools
+USER root:root
+
 ARG QUICKBUILD=false
-ARG QUICKBUILD_DEPS=""
-ARG REPOS=""
+ARG QUICKBUILD_DEPS
+
 RUN if $QUICKBUILD; then                                                      \
-        for repo in $REPOS; do                                                \
-            branch="master";                                                  \
-            build_number="lastSuccessfulBuild";                               \
-            if [[ $repo = *@* ]]; then                                        \
-                branch="${repo#*@}";                                          \
-                repo="${repo%@*}";                                            \
-                if [[ $branch = *:* ]]; then                                  \
-                    build_number="${branch#*:}";                              \
-                    branch="${branch%:*}";                                    \
-                fi;                                                           \
-            fi;                                                               \
-            echo -e "[$repo:$branch:$build_number]\n\
-name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
-enabled=1\n\
-gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;       \
-        done;                                                                 \
         echo "Installing: $QUICKBUILD_DEPS";                                  \
         echo "$QUICKBUILD_DEPS" | sed -e '/^$/d' | tr '\n' '\0' |             \
           xargs -0 dnf -y install;                                            \
         dnf clean all;                                                        \
     fi
 
-ARG BULLSEYE=""
+ARG BULLSEYE
 RUN if [ "x$BULLSEYE" != "x" ]; then \
       curl ${JENKINS_URL}job/daos-stack/job/tools/job/master/lastSuccessfulBuild/artifact/bullseyecoverage-linux.tar \
         --retry 10 --retry-max-time 60 --silent --show-error -o bullseye.tar; \
@@ -210,6 +212,8 @@ USER daos_server:daos_server
 # ease-of-use for users, however in CI everything is turned off and then
 # selectively enabled.  Turning off any step disables all future steps.
 ARG DAOS_DEPS_BUILD=yes
+ARG DAOS_KEEP_BUILD=no
+ARG DAOS_TARGET_TYPE=release
 
 # Now do an update to ensure software is up to date for the deps build.  If the
 # src hasn't changed then this won't do anything, but if it has then we want to
@@ -218,22 +222,27 @@ USER root:root
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
     { dnf -y upgrade \
           --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
-      dnf clean all; }
+    dnf clean all; }
 USER daos_server:daos_server
 
 ARG DEPS_JOBS=1
 
 RUN [ "$DAOS_DEPS_BUILD" != "yes" ] || \
-    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos --deps-only && \
-    /bin/rm -rf build *.gz; }
+    { scons-3 --build-deps=yes --jobs $DEPS_JOBS PREFIX=/opt/daos \
+      TARGET_TYPE=$DAOS_TARGET_TYPE --deps-only && \
+    ([ "$DAOS_KEEP_BUILD" != "no" ] || /bin/rm -rf build *.gz); }
 
-USER root:root
 # force an upgrade to get any newly built RPMs
+USER root:root
 ARG CACHEBUST
 RUN dnf -y upgrade \
         --exclude=spdk,spdk-devel,dpdk-devel,dpdk,mercury-devel,mercury && \
     dnf clean all
 USER daos_server:daos_server
+
+# Set a label.  This is useful for searching for DAOS images, but is also used
+# in github-actions to prune elements of the dockerfile below this point.
+LABEL DAOS=stage1
 
 WORKDIR /home/daos/daos/
 COPY VERSION LICENSE ftest.sh SConstruct ./
@@ -241,23 +250,29 @@ COPY site_scons site_scons
 COPY utils utils
 COPY src src
 USER root:root
-RUN chown -R daos_server.daos_server /home/daos
+RUN chown -R daos_server.daos_server /home/daos/daos/
 USER daos_server:daos_server
 
 # select compiler to use
 ARG COMPILER=gcc
 ARG JOBS=$DEPS_JOBS
+ARG DAOS_BUILD_TYPE=$DAOS_TARGET_TYPE
 ARG DAOS_BUILD=$DAOS_DEPS_BUILD
 
 # Build DAOS
 RUN [ "$DAOS_BUILD" != "yes" ] || \
-    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER && \
-    /bin/rm -rf build && \
+    { scons-3 --jobs $JOBS install PREFIX=/opt/daos COMPILER=$COMPILER \
+      BUILD_TYPE=$DAOS_BUILD_TYPE TARGET_TYPE=$DAOS_TARGET_TYPE && \
+    /bin/rm -rf build && go clean -cache && \
     cp -r utils/config/examples /opt/daos; }
 
 # Set environment variables
 ENV PATH=/opt/daos/bin:$PATH
 ENV FI_SOCKETS_MAX_CONN_RETRY=1
+
+USER root:root
+LABEL DAOS=true
+USER daos_server:daos_server
 
 # Build java and hadoop bindings
 WORKDIR /home/daos/daos/src/client/java
@@ -280,5 +295,6 @@ RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos
 
+ARG DAOS_KEEP_SRC=no
 # Remove local copy
-RUN rm -rf /home/daos/*
+RUN [ $"DAOS_KEEP_SRC" != "no" ] || rm -rf /home/daos/*

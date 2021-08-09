@@ -50,15 +50,16 @@ extern unsigned int	srv_io_mode;
 struct dc_obj_shard {
 	/** refcount */
 	unsigned int		do_ref;
+	uint32_t		do_target_rank;
 	/** object id */
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
-	uint8_t			do_target_idx;	/* target VOS index in node */
-	uint32_t		do_target_rank;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
 	struct dc_object	*do_obj;
+	uint32_t		do_shard_idx;
+	uint8_t			do_target_idx;	/* target VOS index in node */
 };
 
 #define do_shard	do_pl_shard.po_shard
@@ -140,7 +141,7 @@ struct obj_reasb_req {
 	uint32_t			 orr_iom_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
-	pthread_spinlock_t		 orr_spin;
+	pthread_mutex_t			 orr_mutex;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
@@ -154,6 +155,8 @@ struct obj_reasb_req {
 	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */
 	uint32_t			 orr_recov:1,
+	/* for snapshot data recovery flag */
+					 orr_recov_snap:1,
 	/* for iod_size fetching flag */
 					 orr_size_fetch:1,
 	/* for iod_size fetched flag */
@@ -165,7 +168,9 @@ struct obj_reasb_req {
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
 					 orr_iom_realloc:1,
 	/* iod_size is set by IO reply */
-					 orr_size_set:1;
+					 orr_size_set:1,
+	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
+					 orr_fail_alloc:1;
 };
 
 static inline void
@@ -265,6 +270,20 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
  */
 #define NR_LATENCY_BUCKETS 16
 
+struct obj_pool_metrics {
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t	*opm_total[OBJ_PROTO_CLI_COUNT];
+	/** Total number of bytes fetched (type = counter) */
+	struct d_tm_node_t	*opm_fetch_bytes;
+	/** Total number of bytes updated (type = counter) */
+	struct d_tm_node_t	*opm_update_bytes;
+
+	/** Total number of silently restarted updates (type = counter) */
+	struct d_tm_node_t	*opm_update_restart;
+	/** Total number of resent update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_resent;
+};
+
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
@@ -273,22 +292,10 @@ struct obj_tls {
 	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
 	/** Count number of per-opcode active requests (type = gauge) */
 	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
-	/** Count number of total per-opcode requests (type = counter) */
-	struct d_tm_node_t	*ot_op_total[OBJ_PROTO_CLI_COUNT];
 
 	/** Measure update/fetch latency based on I/O size (type = gauge) */
 	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
 	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
-
-	/** Total number of bytes fetched (type = counter) */
-	struct d_tm_node_t	*ot_fetch_bytes;
-	/** Total number of bytes updated (type = counter) */
-	struct d_tm_node_t	*ot_update_bytes;
-
-	/** Total number of silently restarted updates (type = counter) */
-	struct d_tm_node_t	*ot_update_restart;
-	/** Total number of resent update operations (type = counter) */
-	struct d_tm_node_t	*ot_update_resent;
 };
 
 struct obj_ec_parity {
@@ -449,6 +456,7 @@ struct dc_obj_verify_args {
 	char				*list_buf;
 	char				*fetch_buf;
 	char				 inline_buf[DOVA_BUF_LEN];
+	uint32_t			 current_shard;
 	struct dc_obj_verify_cursor	 cursor;
 };
 
@@ -507,7 +515,7 @@ int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
 int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
 int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
-			tse_task_t **taskp);
+			unsigned int map_ver, tse_task_t **taskp);
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
@@ -539,7 +547,7 @@ obj_retry_error(int err)
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
-	       err == -DER_TX_BUSY ||
+	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
 	       daos_crt_network_error(err);
 }
 
@@ -614,7 +622,8 @@ struct obj_io_context {
 	uint64_t		 ioc_io_size;
 	uint32_t		 ioc_began:1,
 				 ioc_free_sgls:1,
-				 ioc_lost_reply:1;
+				 ioc_lost_reply:1,
+				 ioc_fetch_snap:1;
 };
 
 struct ds_obj_exec_arg {
@@ -822,6 +831,38 @@ obj_dtx_need_refresh(struct dtx_handle *dth, int rc)
 	return rc == -DER_INPROGRESS && dth->dth_share_tbd_count > 0;
 }
 
+static inline void
+daos_recx_ep_list_set(struct daos_recx_ep_list *lists, unsigned int nr,
+		      daos_epoch_t epoch, bool snapshot)
+{
+	struct daos_recx_ep_list	*list;
+	struct daos_recx_ep		*recx_ep;
+	unsigned int			 i, j;
+
+	for (i = 0; i < nr; i++) {
+		list = &lists[i];
+		list->re_ep_valid = 1;
+		if (epoch == 0)
+			continue;
+		if (snapshot)
+			list->re_snapshot = 1;
+		for (j = 0; j < list->re_nr; j++) {
+			recx_ep = &list->re_items[j];
+			if (snapshot)
+				recx_ep->re_ep = epoch;
+			else
+				recx_ep->re_ep = max(recx_ep->re_ep, epoch);
+		}
+	}
+}
+
+static inline bool
+daos_recx_ep_list_ep_valid(struct daos_recx_ep_list *list)
+{
+	return (list->re_ep_valid == 1);
+}
+
+/** Query the highest and lowest recx in the recx_ep_list */
 int  obj_class_init(void);
 void obj_class_fini(void);
 int  obj_utils_init(void);

@@ -45,6 +45,27 @@ class JobManager(ExecutableCommand):
         """Get the list of hosts associated with this command."""
         return self._hosts
 
+    @property
+    def job(self):
+        """Get the JobManager job.
+
+        Returns:
+            ExecutableCommand: the command managed by this class
+
+        """
+        return self._job
+
+    @job.setter
+    def job(self, value):
+        """Set the JobManager job.
+
+        Args:
+            value (ExecutableCommand): the command to be managed by this class
+        """
+        self._job = value
+        if self._job and self._job.check_results_list:
+            self.check_results_list.extend(self._job.check_results_list)
+
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -567,7 +588,7 @@ class Systemctl(JobManager):
         except CommandFailure as error:
             self.log.info(
                 "Error stopping/disabling %s: %s", self.job.service_name, error)
-        super(Systemctl, self).kill()
+        super().kill()
 
     def check_subprocess_status(self, sub_process):
         """Verify command status when called in a subprocess.

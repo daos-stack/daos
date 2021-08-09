@@ -8,10 +8,13 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -31,7 +34,7 @@ const (
 // Returns true if all instances return true from the validate function within
 // the given timeout, false otherwise. Error is returned if parent context is
 // cancelled or times out.
-func pollInstanceState(ctx context.Context, instances []*EngineInstance, validate func(*EngineInstance) bool, timeout time.Duration) (bool, error) {
+func pollInstanceState(ctx context.Context, instances []Engine, validate func(Engine) bool, timeout time.Duration) (bool, error) {
 	ready := make(chan struct{})
 	go func() {
 		for {
@@ -80,8 +83,8 @@ func (svc *ControlService) drpcOnLocalRanks(parent context.Context, req *ctlpb.R
 	ch := make(chan *system.MemberResult)
 	for _, srv := range instances {
 		inflight++
-		go func(s *EngineInstance) {
-			ch <- s.TryDrpc(ctx, method)
+		go func(e Engine) {
+			ch <- e.tryDrpc(ctx, method)
 		}(srv)
 	}
 
@@ -111,7 +114,7 @@ func (svc *ControlService) PrepShutdownRanks(ctx context.Context, req *ctlpb.Ran
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("MgmtSvc.PrepShutdownRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.PrepShutdownRanks dispatch, req:%+v\n", req)
 
 	results, err := svc.drpcOnLocalRanks(ctx, req, drpc.MethodPrepShutdown)
 	if err != nil {
@@ -123,14 +126,14 @@ func (svc *ControlService) PrepShutdownRanks(ctx context.Context, req *ctlpb.Ran
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.PrepShutdown dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.PrepShutdown dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
 
 // memberStateResults returns system member results reflecting whether the state
 // of the given member is equivalent to the supplied desired state value.
-func (svc *ControlService) memberStateResults(instances []*EngineInstance, tgtState system.MemberState, okMsg, failMsg string) (system.MemberResults, error) {
+func (svc *ControlService) memberStateResults(instances []Engine, tgtState system.MemberState, okMsg, failMsg string) (system.MemberResults, error) {
 	results := make(system.MemberResults, 0, len(instances))
 	for _, srv := range instances {
 		rank, err := srv.GetRank()
@@ -167,7 +170,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("MgmtSvc.StopRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.StopRanks dispatch, req:%+v\n", req)
 
 	signal := syscall.SIGINT
 	if req.Force {
@@ -184,7 +187,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 	defer svc.events.EnableEventIDs(events.RASEngineDied)
 
 	for _, srv := range instances {
-		if !srv.isStarted() {
+		if !srv.IsStarted() {
 			continue
 		}
 		if err := srv.Stop(signal); err != nil {
@@ -194,7 +197,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 
 	// ignore poll results as we gather state immediately after
 	if _, err = pollInstanceState(ctx, instances,
-		func(s *EngineInstance) bool { return !s.isStarted() },
+		func(s Engine) bool { return !s.IsStarted() },
 		svc.harness.rankReqTimeout); err != nil {
 
 		return nil, err
@@ -210,7 +213,7 @@ func (svc *ControlService) StopRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.StopRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.StopRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -257,7 +260,7 @@ func (svc *ControlService) PingRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, errors.New("no ranks specified in request")
 	}
 
-	svc.log.Debugf("MgmtSvc.PingRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.PingRanks dispatch, req:%+v\n", req)
 
 	results, err := svc.queryLocalRanks(ctx, req)
 	if err != nil {
@@ -269,7 +272,7 @@ func (svc *ControlService) PingRanks(ctx context.Context, req *ctlpb.RanksReq) (
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.PingRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.PingRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -290,7 +293,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.ResetFormatRanks dispatch, req:%+v\n", req)
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
@@ -305,7 +308,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		}
 		savedRanks[srv.Index()] = rank
 
-		if srv.isStarted() {
+		if srv.IsStarted() {
 			return nil, FaultInstancesNotStopped("reset format", rank)
 		}
 		if err := srv.RemoveSuperblock(); err != nil {
@@ -315,7 +318,9 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances, (*EngineInstance).isAwaitingFormat,
+	if _, err = pollInstanceState(ctx, instances, func(e Engine) bool {
+		return e.isAwaitingFormat()
+	},
 		svc.harness.rankStartTimeout); err != nil {
 
 		return nil, err
@@ -338,7 +343,7 @@ func (svc *ControlService) ResetFormatRanks(ctx context.Context, req *ctlpb.Rank
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.ResetFormatRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.ResetFormatRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
 }
@@ -356,21 +361,23 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 	if len(req.GetRanks()) == 0 {
 		return nil, errors.New("no ranks specified in request")
 	}
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, req:%+v\n", *req)
+	svc.log.Debugf("CtlSvc.StartRanks dispatch, req:%+v\n", req)
 
 	instances, err := svc.harness.FilterInstancesByRankSet(req.GetRanks())
 	if err != nil {
 		return nil, err
 	}
 	for _, srv := range instances {
-		if srv.isStarted() {
+		if srv.IsStarted() {
 			continue
 		}
 		srv.requestStart(ctx)
 	}
 
 	// ignore poll results as we gather state immediately after
-	if _, err = pollInstanceState(ctx, instances, (*EngineInstance).isReady,
+	if _, err = pollInstanceState(ctx, instances, func(e Engine) bool {
+		return e.IsReady()
+	},
 		svc.harness.rankStartTimeout); err != nil {
 
 		return nil, err
@@ -388,7 +395,55 @@ func (svc *ControlService) StartRanks(ctx context.Context, req *ctlpb.RanksReq) 
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.StartRanks dispatch, resp:%+v\n", *resp)
+	svc.log.Debugf("CtlSvc.StartRanks dispatch, resp:%+v\n", resp)
 
 	return resp, nil
+}
+
+// SetEngineLogMasks calls into each engine over dRPC to set loglevel at runtime.
+func (svc *ControlService) SetEngineLogMasks(ctx context.Context, req *ctlpb.SetLogMasksReq) (*ctlpb.SetLogMasksResp, error) {
+	if req == nil {
+		return nil, errors.New("nil request")
+	}
+
+	var errs []string
+
+	for idx, ei := range svc.harness.Instances() {
+		if !ei.IsReady() {
+			errs = append(errs, fmt.Sprintf("engine-%d: not ready", ei.Index()))
+			continue
+		}
+
+		if req.Masks == "" {
+			// no need to validate here as config value already validated on start-up
+			req.Masks = svc.srvCfg.Engines[idx].LogMask
+		}
+		if req.Masks == "" {
+			errs = append(errs, fmt.Sprintf("engine-%d: no log_mask set in engine config", ei.Index()))
+			continue
+		}
+
+		dresp, err := ei.CallDrpc(ctx, drpc.MethodSetLogMasks, req)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
+			continue
+		}
+
+		engineResp := new(ctlpb.SetLogMasksResp)
+		if err = proto.Unmarshal(dresp.Body, engineResp); err != nil {
+			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(), err))
+			continue
+		}
+
+		if engineResp.Status != 0 {
+			errs = append(errs, fmt.Sprintf("engine-%d: %s", ei.Index(),
+				drpc.DaosStatus(engineResp.Status)))
+		}
+	}
+
+	if len(errs) > 0 {
+		return nil, errors.New(strings.Join(errs, ", "))
+	}
+
+	return new(ctlpb.SetLogMasksResp), nil
 }

@@ -76,8 +76,10 @@ struct cmd_args_s {
 	enum sh_op		sh_op;		/* DAOS shell sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
+	char			*pool_label;	/* pool label */
 	daos_handle_t		pool;
 	uuid_t			c_uuid;		/* --cont */
+	char			*cont_label;	/* container label */
 	daos_handle_t		cont;
 	int			force;		/* --force */
 	char			*attrname_str;	/* --attr attribute name */
@@ -144,7 +146,7 @@ struct cmd_args_s {
 
 #define ARGS_VERIFY_PATH_CREATE(ap, label, rcexpr)			\
 	do {								\
-		if (((ap)->type == DAOS_PROP_CO_LAYOUT_UNKOWN)) {	\
+		if (((ap)->type == DAOS_PROP_CO_LAYOUT_UNKNOWN)) {	\
 			fprintf(stderr, "create by --path : must also "	\
 					"specify --type\n");		\
 			D_GOTO(label, (rcexpr));			\
@@ -153,7 +155,7 @@ struct cmd_args_s {
 
 #define ARGS_VERIFY_PATH_NON_CREATE(ap, label, rcexpr)			\
 	do {								\
-		if (((ap)->type != DAOS_PROP_CO_LAYOUT_UNKOWN) ||	\
+		if (((ap)->type != DAOS_PROP_CO_LAYOUT_UNKNOWN) ||	\
 		    ((ap)->oclass != OC_UNKNOWN)	||		\
 		    ((ap)->chunk_size != 0)) {				\
 			fprintf(stderr, "query by --path : do not "	\

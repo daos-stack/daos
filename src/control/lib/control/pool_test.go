@@ -8,9 +8,9 @@ package control
 
 import (
 	"context"
-	"strconv"
 	"testing"
 
+	"github.com/dustin/go-humanize"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -19,6 +19,7 @@ import (
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestControl_PoolDestroy(t *testing.T) {
@@ -29,7 +30,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolDestroyReq{
-				UUID: common.MockUUID(),
+				ID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -38,22 +39,16 @@ func TestControl_PoolDestroy(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolDestroyReq{
-				UUID: common.MockUUID(),
+				ID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},
-		"invalid UUID": {
-			req: &PoolDestroyReq{
-				UUID: "bad",
-			},
-			expErr: errors.New("invalid UUID"),
-		},
 		"-DER_GRPVER is retried": {
 			req: &PoolDestroyReq{
-				UUID: common.MockUUID(),
+				ID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -64,7 +59,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 		},
 		"-DER_AGAIN is retried": {
 			req: &PoolDestroyReq{
-				UUID: common.MockUUID(),
+				ID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponseSet: []*UnaryResponse{
@@ -75,7 +70,7 @@ func TestControl_PoolDestroy(t *testing.T) {
 		},
 		"success": {
 			req: &PoolDestroyReq{
-				UUID: common.MockUUID(),
+				ID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
@@ -113,7 +108,7 @@ func TestControl_PoolDrain(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolDrainReq{
-				UUID:      common.MockUUID(),
+				ID:        common.MockUUID(),
 				Rank:      2,
 				Targetidx: []uint32{1, 2, 3},
 			},
@@ -124,7 +119,7 @@ func TestControl_PoolDrain(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolDrainReq{
-				UUID:      common.MockUUID(),
+				ID:        common.MockUUID(),
 				Rank:      2,
 				Targetidx: []uint32{1, 2, 3},
 			},
@@ -133,17 +128,9 @@ func TestControl_PoolDrain(t *testing.T) {
 			},
 			expErr: errors.New("remote failed"),
 		},
-		"invalid UUID": {
-			req: &PoolDrainReq{
-				UUID:      "bad",
-				Rank:      2,
-				Targetidx: []uint32{1, 2, 3},
-			},
-			expErr: errors.New("invalid UUID"),
-		},
 		"success": {
 			req: &PoolDrainReq{
-				UUID:      common.MockUUID(),
+				ID:        common.MockUUID(),
 				Rank:      2,
 				Targetidx: []uint32{1, 2, 3},
 			},
@@ -183,7 +170,7 @@ func TestControl_PoolEvict(t *testing.T) {
 	}{
 		"local failure": {
 			req: &PoolEvictReq{
-				UUID: common.MockUUID(),
+				ID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryError: errors.New("local failed"),
@@ -192,22 +179,16 @@ func TestControl_PoolEvict(t *testing.T) {
 		},
 		"remote failure": {
 			req: &PoolEvictReq{
-				UUID: common.MockUUID(),
+				ID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
 			},
 			expErr: errors.New("remote failed"),
 		},
-		"invalid UUID": {
-			req: &PoolEvictReq{
-				UUID: "bad",
-			},
-			expErr: errors.New("invalid UUID"),
-		},
 		"success": {
 			req: &PoolEvictReq{
-				UUID: common.MockUUID(),
+				ID: common.MockUUID(),
 			},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
@@ -267,16 +248,22 @@ func TestControl_PoolCreate(t *testing.T) {
 			},
 			expErr: drpc.DaosIOError,
 		},
-		"mixture of auto/manual storage params": {
-			req: &PoolCreateReq{
-				TotalBytes: 10,
-				ScmBytes:   20,
-			},
-			expErr: errors.New("can't mix"),
-		},
 		"missing storage params": {
 			req:    &PoolCreateReq{},
-			expErr: errors.New("0 SCM"),
+			expErr: errors.New("size of 0"),
+		},
+		"bad label": {
+			req: &PoolCreateReq{
+				TotalBytes: 10,
+				Properties: []*PoolProperty{
+					{
+						Name:   "label",
+						Number: drpc.PoolPropertyLabel,
+						Value:  PoolPropertyValue{"yikes!"},
+					},
+				},
+			},
+			expErr: errors.New("invalid label"),
 		},
 		"create -DER_TIMEDOUT is retried": {
 			req: &PoolCreateReq{TotalBytes: 10},
@@ -309,6 +296,30 @@ func TestControl_PoolCreate(t *testing.T) {
 			expResp: &PoolCreateResp{},
 		},
 		"success": {
+			req: &PoolCreateReq{
+				TotalBytes: 10,
+				Properties: []*PoolProperty{
+					{
+						Name:   "label",
+						Number: drpc.PoolPropertyLabel,
+						Value:  PoolPropertyValue{"foo"},
+					},
+				},
+			},
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil,
+					&mgmtpb.PoolCreateResp{
+						SvcReps:  []uint32{0, 1, 2},
+						TgtRanks: []uint32{0, 1, 2},
+					},
+				),
+			},
+			expResp: &PoolCreateResp{
+				SvcReps:  []uint32{0, 1, 2},
+				TgtRanks: []uint32{0, 1, 2},
+			},
+		},
+		"success no props": {
 			req: &PoolCreateReq{TotalBytes: 10},
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
@@ -369,12 +380,6 @@ func TestControl_PoolQuery(t *testing.T) {
 			},
 			expErr: errors.New("remote failed"),
 		},
-		"invalid UUID": {
-			req: &PoolQueryReq{
-				UUID: "bad",
-			},
-			expErr: errors.New("invalid UUID"),
-		},
 		"query succeeds": {
 			mic: &MockInvokerConfig{
 				UnaryResponse: MockMSResponse("host1", nil,
@@ -388,19 +393,21 @@ func TestControl_PoolQuery(t *testing.T) {
 							Objects: 1,
 							Records: 2,
 						},
-						Scm: &mgmtpb.StorageUsageStats{
-							Total: 123456,
-							Free:  0,
-							Min:   1,
-							Max:   2,
-							Mean:  3,
-						},
-						Nvme: &mgmtpb.StorageUsageStats{
-							Total: 123456,
-							Free:  0,
-							Min:   1,
-							Max:   2,
-							Mean:  3,
+						TierStats: []*mgmtpb.StorageUsageStats{
+							{
+								Total: 123456,
+								Free:  0,
+								Min:   1,
+								Max:   2,
+								Mean:  3,
+							},
+							{
+								Total: 123456,
+								Free:  0,
+								Min:   1,
+								Max:   2,
+								Mean:  3,
+							},
 						},
 					},
 				),
@@ -416,19 +423,21 @@ func TestControl_PoolQuery(t *testing.T) {
 						Objects: 1,
 						Records: 2,
 					},
-					Scm: &StorageUsageStats{
-						Total: 123456,
-						Free:  0,
-						Min:   1,
-						Max:   2,
-						Mean:  3,
-					},
-					Nvme: &StorageUsageStats{
-						Total: 123456,
-						Free:  0,
-						Min:   1,
-						Max:   2,
-						Mean:  3,
+					TierStats: []*StorageUsageStats{
+						{
+							Total: 123456,
+							Free:  0,
+							Min:   1,
+							Max:   2,
+							Mean:  3,
+						},
+						{
+							Total: 123456,
+							Free:  0,
+							Min:   1,
+							Max:   2,
+							Mean:  3,
+						},
 					},
 				},
 			},
@@ -441,7 +450,7 @@ func TestControl_PoolQuery(t *testing.T) {
 			req := tc.req
 			if req == nil {
 				req = &PoolQueryReq{
-					UUID: common.MockUUID(),
+					ID: common.MockUUID(),
 				}
 			}
 			mic := tc.mic
@@ -465,23 +474,27 @@ func TestControl_PoolQuery(t *testing.T) {
 	}
 }
 
+func propWithVal(key, val string) *PoolProperty {
+	hdlr := PoolProperties()[key]
+	prop := hdlr.GetProperty(key)
+	if val != "" {
+		if err := prop.SetValue(val); err != nil {
+			panic(err)
+		}
+	}
+	return prop
+}
+
 func TestPoolSetProp(t *testing.T) {
-	const (
-		testPropName          = "test-prop"
-		testPropValStr        = "test-val"
-		testPropValNum uint64 = 42
-	)
 	defaultReq := &PoolSetPropReq{
-		UUID:     common.MockUUID(),
-		Property: testPropName,
-		Value:    testPropValStr,
+		ID:         common.MockUUID(),
+		Properties: []*PoolProperty{propWithVal("label", "foo")},
 	}
 
 	for name, tc := range map[string]struct {
-		mic     *MockInvokerConfig
-		req     *PoolSetPropReq
-		expResp *PoolSetPropResp
-		expErr  error
+		mic    *MockInvokerConfig
+		req    *PoolSetPropReq
+		expErr error
 	}{
 		"local failure": {
 			mic: &MockInvokerConfig{
@@ -495,102 +508,41 @@ func TestPoolSetProp(t *testing.T) {
 			},
 			expErr: errors.New("remote failed"),
 		},
-		"invalid UUID": {
+		"empty request properties": {
 			req: &PoolSetPropReq{
-				UUID: "bad",
+				ID: common.MockUUID(),
 			},
-			expErr: errors.New("invalid UUID"),
+			expErr: errors.New("empty properties list"),
 		},
-		"empty request property": {
+		"unknown property": {
 			req: &PoolSetPropReq{
-				UUID:     common.MockUUID(),
-				Property: "",
-			},
-			expErr: errors.New("invalid property name"),
-		},
-		"invalid request value": {
-			req: &PoolSetPropReq{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-			},
-			expErr: errors.New("unhandled property value"),
-		},
-		"wrong response message": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil, &MockMessage{}),
-			},
-			expErr: errors.New("unable to extract"),
-		},
-		"invalid response property": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolSetPropResp{
-						Property: nil,
-						Value:    nil,
+				ID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					{
+						Name: "fido",
 					},
-				),
+				},
 			},
-			expErr: errors.New("unable to represent response value"),
+			expErr: errors.New("unknown property"),
 		},
-		"invalid response value": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolSetPropResp{
-						Property: &mgmtpb.PoolSetPropResp_Name{
-							Name: testPropName,
-						},
-						Value: nil,
-					},
-				),
-			},
-			expErr: errors.New("unable to represent response value"),
-		},
-		"successful string property": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolSetPropResp{
-						Property: &mgmtpb.PoolSetPropResp_Name{
-							Name: testPropName,
-						},
-						Value: &mgmtpb.PoolSetPropResp_Strval{
-							Strval: testPropValStr,
-						},
-					},
-				),
-			},
+		"bad property": {
 			req: &PoolSetPropReq{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-				Value:    testPropValStr,
-			},
-			expResp: &PoolSetPropResp{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-				Value:    testPropValStr,
-			},
-		},
-		"successful numeric property": {
-			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.PoolSetPropResp{
-						Property: &mgmtpb.PoolSetPropResp_Name{
-							Name: testPropName,
-						},
-						Value: &mgmtpb.PoolSetPropResp_Numval{
-							Numval: testPropValNum,
-						},
+				ID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					{
+						Name: "label",
 					},
-				),
+				},
 			},
+			expErr: errors.New("invalid label"),
+		},
+		"success": {
 			req: &PoolSetPropReq{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-				Value:    testPropValNum,
-			},
-			expResp: &PoolSetPropResp{
-				UUID:     common.MockUUID(),
-				Property: testPropName,
-				Value:    strconv.FormatUint(testPropValNum, 10),
+				ID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", "ok"),
+					propWithVal("space_rb", "5"),
+				},
 			},
 		},
 	} {
@@ -610,13 +562,296 @@ func TestPoolSetProp(t *testing.T) {
 			ctx := context.TODO()
 			mi := NewMockInvoker(log, mic)
 
-			gotResp, gotErr := PoolSetProp(ctx, mi, req)
+			gotErr := PoolSetProp(ctx, mi, req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+		})
+	}
+}
+
+func TestPoolGetProp(t *testing.T) {
+	defaultReq := &PoolGetPropReq{
+		ID:         common.MockUUID(),
+		Properties: []*PoolProperty{propWithVal("label", "")},
+	}
+
+	for name, tc := range map[string]struct {
+		mic     *MockInvokerConfig
+		req     *PoolGetPropReq
+		expResp []*PoolProperty
+		expErr  error
+	}{
+		"local failure": {
+			mic: &MockInvokerConfig{
+				UnaryError: errors.New("local failed"),
+			},
+			expErr: errors.New("local failed"),
+		},
+		"remote failure": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", errors.New("remote failed"), nil),
+			},
+			expErr: errors.New("remote failed"),
+		},
+		"nil prop in request": {
+			req: &PoolGetPropReq{
+				ID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", ""),
+					nil,
+					propWithVal("space_rb", ""),
+				},
+			},
+			expErr: errors.New("nil prop"),
+		},
+		"duplicate props in response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				ID: common.MockUUID(),
+			},
+			expErr: errors.New("got > 1"),
+		},
+		"missing prop in response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				ID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", ""),
+					propWithVal("space_rb", ""),
+				},
+			},
+			expErr: errors.New("unable to find prop"),
+		},
+		"nil prop value in response": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  nil,
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				ID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", ""),
+				},
+			},
+			expErr: errors.New("unable to represent"),
+		},
+		"all props requested": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+						{
+							Number: propWithVal("space_rb", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{42},
+						},
+						{
+							Number: propWithVal("reclaim", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSpaceReclaimDisabled},
+						},
+						{
+							Number: propWithVal("self_heal", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{drpc.PoolSelfHealingAutoExclude},
+						},
+						{
+							Number: propWithVal("ec_cell_sz", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{1024},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				ID: common.MockUUID(),
+			},
+			expResp: []*PoolProperty{
+				propWithVal("ec_cell_sz", "1024"),
+				propWithVal("label", "foo"),
+				propWithVal("reclaim", "disabled"),
+				propWithVal("self_heal", "exclude"),
+				propWithVal("space_rb", "42"),
+			},
+		},
+		"specific props requested": {
+			mic: &MockInvokerConfig{
+				UnaryResponse: MockMSResponse("host1", nil, &mgmtpb.PoolGetPropResp{
+					Properties: []*mgmtpb.PoolProperty{
+						{
+							Number: propWithVal("label", "").Number,
+							Value:  &mgmtpb.PoolProperty_Strval{"foo"},
+						},
+						{
+							Number: propWithVal("space_rb", "").Number,
+							Value:  &mgmtpb.PoolProperty_Numval{42},
+						},
+					},
+				}),
+			},
+			req: &PoolGetPropReq{
+				ID: common.MockUUID(),
+				Properties: []*PoolProperty{
+					propWithVal("label", ""),
+					propWithVal("space_rb", ""),
+				},
+			},
+			expResp: []*PoolProperty{
+				propWithVal("label", "foo"),
+				propWithVal("space_rb", "42"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			req := tc.req
+			if req == nil {
+				req = defaultReq
+			}
+			mic := tc.mic
+			if mic == nil {
+				mic = DefaultMockInvokerConfig()
+			}
+
+			ctx := context.TODO()
+			mi := NewMockInvoker(log, mic)
+
+			gotResp, gotErr := PoolGetProp(ctx, mi, req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expResp, gotResp); diff != "" {
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(PoolProperty{}),
+				cmp.Comparer(func(a, b PoolPropertyValue) bool {
+					return a.String() == b.String()
+				}),
+			}
+			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_Pool_setUsage(t *testing.T) {
+	for name, tc := range map[string]struct {
+		status        int32
+		scmStats      *StorageUsageStats
+		nvmeStats     *StorageUsageStats
+		totalTargets  uint32
+		activeTargets uint32
+		expPool       *Pool
+		expErr        error
+	}{
+		"successful query": {
+			scmStats: &StorageUsageStats{
+				Total: humanize.GByte * 30,
+				Free:  humanize.GByte * 15,
+				Min:   humanize.GByte * 1.6,
+				Max:   humanize.GByte * 2,
+			},
+			nvmeStats: &StorageUsageStats{
+				Total: humanize.GByte * 500,
+				Free:  humanize.GByte * 250,
+				Min:   humanize.GByte * 29.5,
+				Max:   humanize.GByte * 36,
+			},
+			totalTargets:  8,
+			activeTargets: 8,
+			expPool: &Pool{
+				Usage: []*PoolTierUsage{
+					{
+						TierName:  "SCM",
+						Size:      humanize.GByte * 30,
+						Free:      humanize.GByte * 15,
+						Imbalance: 10,
+					},
+					{
+						TierName:  "NVME",
+						Size:      humanize.GByte * 500,
+						Free:      humanize.GByte * 250,
+						Imbalance: 10,
+					},
+				},
+			},
+		},
+		"disabled targets": {
+			scmStats: &StorageUsageStats{
+				Total: humanize.GByte * 30,
+				Free:  humanize.GByte * 15,
+				Min:   humanize.GByte * 1.6,
+				Max:   humanize.GByte * 2,
+			},
+			nvmeStats: &StorageUsageStats{
+				Total: humanize.GByte * 500,
+				Free:  humanize.GByte * 250,
+				Min:   humanize.GByte * 29.5,
+				Max:   humanize.GByte * 36,
+			},
+			totalTargets:  8,
+			activeTargets: 4,
+			expPool: &Pool{
+				Usage: []*PoolTierUsage{
+					{
+						TierName:  "SCM",
+						Size:      humanize.GByte * 30,
+						Free:      humanize.GByte * 15,
+						Imbalance: 5,
+					},
+					{
+						TierName:  "NVME",
+						Size:      humanize.GByte * 500,
+						Free:      humanize.GByte * 250,
+						Imbalance: 5,
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp := &PoolQueryResp{Status: tc.status}
+			resp.TierStats = append(resp.TierStats, tc.scmStats, tc.nvmeStats)
+			resp.TotalTargets = tc.totalTargets
+			resp.ActiveTargets = tc.activeTargets
+			resp.DisabledTargets = tc.activeTargets
+
+			pool := new(Pool)
+			pool.setUsage(resp)
+
+			if diff := cmp.Diff(tc.expPool, pool); diff != "" {
 				t.Fatalf("Unexpected response (-want, +got):\n%s\n", diff)
 			}
 		})
@@ -624,6 +859,49 @@ func TestPoolSetProp(t *testing.T) {
 }
 
 func TestControl_ListPools(t *testing.T) {
+	queryResp := func(i int32) *mgmtpb.PoolQueryResp {
+		return &mgmtpb.PoolQueryResp{
+			Uuid:            common.MockUUID(i),
+			TotalTargets:    42,
+			ActiveTargets:   16,
+			DisabledTargets: 17,
+			Rebuild: &mgmtpb.PoolRebuildStatus{
+				State:   mgmtpb.PoolRebuildStatus_BUSY,
+				Objects: 1,
+				Records: 2,
+			},
+			TierStats: []*mgmtpb.StorageUsageStats{
+				{Total: 123456,
+					Free: 0,
+					Min:  1000,
+					Max:  2000,
+					Mean: 1500,
+				},
+				{
+					Total: 1234567,
+					Free:  600000,
+					Min:   1000,
+					Max:   2000,
+					Mean:  15000,
+				},
+			},
+		}
+	}
+	expUsage := []*PoolTierUsage{
+		{
+			TierName:  "SCM",
+			Size:      123456,
+			Free:      0,
+			Imbalance: 12,
+		},
+		{
+			TierName:  "NVME",
+			Size:      1234567,
+			Free:      600000,
+			Imbalance: 1,
+		},
+	}
+
 	for name, tc := range map[string]struct {
 		mic     *MockInvokerConfig
 		req     *ListPoolsReq
@@ -654,22 +932,154 @@ func TestControl_ListPools(t *testing.T) {
 		},
 		"one pool": {
 			mic: &MockInvokerConfig{
-				UnaryResponse: MockMSResponse("host1", nil,
-					&mgmtpb.ListPoolsResp{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
 						Pools: []*mgmtpb.ListPoolsResp_Pool{
 							{
-								Uuid:    common.MockUUID(),
+								Uuid:    common.MockUUID(1),
 								SvcReps: []uint32{1, 3, 5, 8},
 							},
 						},
-					},
-				),
+					}),
+					MockMSResponse("host1", nil, queryResp(1)),
+				},
 			},
 			expResp: &ListPoolsResp{
-				Pools: []*common.PoolDiscovery{
+				Pools: []*Pool{
 					{
-						UUID:        common.MockUUID(),
-						SvcReplicas: []uint32{1, 3, 5, 8},
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+				},
+			},
+		},
+		"one pool; uuid mismatch in query response": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expErr: errors.New("uuid does not match"),
+		},
+		"two pools": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, queryResp(1)),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+				},
+			},
+		},
+		"two pools; one query has error": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+							},
+						},
+					}),
+					MockMSResponse("host1", errors.New("remote failed"), nil),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						QueryErrorMsg:   "remote failed",
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
+					},
+				},
+			},
+		},
+		"two pools; one query has bad status": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("host1", nil, &mgmtpb.ListPoolsResp{
+						Pools: []*mgmtpb.ListPoolsResp_Pool{
+							{
+								Uuid:    common.MockUUID(1),
+								SvcReps: []uint32{1, 3, 5, 8},
+							},
+							{
+								Uuid:    common.MockUUID(2),
+								SvcReps: []uint32{1, 2, 3},
+							},
+						},
+					}),
+					MockMSResponse("host1", nil, &mgmtpb.PoolQueryResp{
+						Status: int32(drpc.DaosNotInit),
+					}),
+					MockMSResponse("host1", nil, queryResp(2)),
+				},
+			},
+			expResp: &ListPoolsResp{
+				Pools: []*Pool{
+					{
+						UUID:            common.MockUUID(1),
+						ServiceReplicas: []system.Rank{1, 3, 5, 8},
+						QueryStatusMsg:  "DER_UNINIT(-1015): Device or resource not initialized",
+					},
+					{
+						UUID:            common.MockUUID(2),
+						ServiceReplicas: []system.Rank{1, 2, 3},
+						TargetsTotal:    42,
+						TargetsDisabled: 17,
+						Usage:           expUsage,
 					},
 				},
 			},
