@@ -268,18 +268,18 @@ iter_cb(daos_handle_t ih, vos_iter_entry_t *entry, vos_iter_type_t type, vos_ite
 	void *cb_arg, unsigned int *acts)
 {
 	struct pf_param *ppa = cb_arg;
- 
+
 	if (ppa->pa_verbose) {
 		switch (type) {
 		case VOS_ITER_DKEY:
 			D_PRINT("\tdkey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
- 			break;
+			break;
 		case VOS_ITER_AKEY:
 			D_PRINT("\takey ="DF_KEY"\n", DP_KEY(&entry->ie_key));
 			break;
 		case VOS_ITER_SINGLE:
 			D_PRINT("\tsingv="DF_U64" bytes\n", entry->ie_rsize);
- 			break;
+			break;
 		case VOS_ITER_RECX:
 			D_PRINT("\trecx ="DF_U64" records ("DF_U64" bytes) at "DF_U64"\n",
 				entry->ie_recx.rx_nr, entry->ie_rsize, entry->ie_recx.rx_idx);
