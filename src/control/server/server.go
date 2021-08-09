@@ -230,7 +230,7 @@ func (srv *server) createEngine(ctx context.Context, idx int, cfg *engine.Config
 	// TODO DAOS-8040: re-enable VMD
 	// Indicate whether VMD devices have been detected and can be used.
 	// for _, bc := range cfg.Storage.BdevConfigs() {
-	//	bc.Bdev.VmdDisabled = srv.bdevProvider.IsVMDDisabled()
+	//	bc.Bdev.VmdEnabled = srv.bdevProvider.IsVMDEnabled()
 	// }
 
 	engine := NewEngineInstance(srv.log, storage.DefaultProvider(srv.log, idx, &cfg.Storage), joinFn,

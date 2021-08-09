@@ -115,14 +115,13 @@
 #disable_vfio: true
 #
 #
-## Disable VMD Usage
+## Enable VMD Usage
 #
-## In some circumstances it may be preferable to not use Intel Volume Management
-## Devices even if available. VMD needs to be available and configured in the
-## system BIOS before use.
+## The use of Intel Volume Management Devices can be optionally enabled.
+## VMD needs to be available and configured in the ##system BIOS before use.
 #
-## default: true
-#disable_vmd: false
+## default: false
+#enable_vmd: true
 #
 #
 ## Use Hyperthreads

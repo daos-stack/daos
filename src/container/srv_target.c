@@ -1333,10 +1333,16 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
 	if (!rc) {
 		rc = cont_child_start(pool_child, cont_uuid, cont_out);
-		if (rc == 0)
+		if (rc == 0) {
 			(*cont_out)->sc_status_pm_ver = pm_ver;
-		else
-			vos_cont_destroy(pool_child->spc_hdl, cont_uuid);
+		} else {
+			int rc_tmp;
+
+			rc_tmp = vos_cont_destroy(pool_child->spc_hdl, cont_uuid);
+			if (rc_tmp != 0)
+				D_ERROR("failed to destroy "DF_UUID": %d\n",
+					DP_UUID(cont_uuid), rc_tmp);
+		}
 	}
 
 	ds_pool_child_put(pool_child);
@@ -1572,6 +1578,8 @@ err_reindex:
 	cont_stop_dtx_reindex_ult(hdl->sch_cont);
 err_cont:
 	if (daos_handle_is_valid(poh)) {
+		int rc_tmp;
+
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(pool_uuid, cont_uuid));
 
@@ -1582,7 +1590,10 @@ err_cont:
 		D_ASSERT(cont != NULL);
 		cont_child_stop(cont);
 
-		vos_cont_destroy(poh, cont_uuid);
+		rc_tmp = vos_cont_destroy(poh, cont_uuid);
+		if (rc_tmp != 0)
+			D_ERROR("failed to destroy "DF_UUID": %d\n",
+				DP_UUID(cont_uuid), rc_tmp);
 	}
 err_hdl:
 	if (hdl != NULL) {
