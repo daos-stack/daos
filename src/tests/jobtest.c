@@ -18,13 +18,21 @@
 #include <daos_mgmt.h>
 #include <daos/common.h>
 #include <daos/pool.h>
+#include <daos/container.h>
 
 static char *progname;
 
 void print_usage(void)
 {
-	fprintf(stderr, "Usage: %s -p pool_str [-s nsecs] [-x] "
+	fprintf(stderr, "Usage: %s -p pool_str [-s nsecs] [-xwi] "
 			"[-h handles_per_pool]\n", progname);
+}
+
+int pause_for_keypress()
+{
+	char ch;
+	printf("Press any key to continue.\n");
+	return scanf("%c", &ch);
 }
 
 void cleanup_handles(uuid_t *pool_uuids, int num_pools,
@@ -42,6 +50,19 @@ void cleanup_handles(uuid_t *pool_uuids, int num_pools,
 		for (j = 0; j < handles_per_pool; j++) {
 			if (daos_handle_is_inval(pool_handles[i][j])) {
 				continue;
+			}
+			rc = daos_cont_close(cont_handles[i][j], NULL);
+			if (rc) {
+				uuid_t		cont;
+				uuid_t		hdl;
+				char		cont_str[64];
+				char		hdl_str[64];
+
+				dc_cont_hdl2uuid(cont_handles[i][j], &hdl, &cont);;
+				uuid_unparse_lower(cont, cont_str);
+				uuid_unparse_lower(hdl, hdl_str);
+				printf("disconnect handle %s from container %s "
+					"failed: %d\n", hdl_str, cont_str, rc);
 			}
 
 			rc = daos_pool_disconnect(pool_handles[i][j], NULL);
@@ -121,13 +142,14 @@ main(int argc, char **argv)
 	int		abnormal_exit = 0; /* whether to kill the process*/
 	int		handles_per_pool = 5; /* Number of pool connections*/
 	int		well_behaved = 0; /* Whether to disconnect at the end*/
+	int		interactive = 0; /* Program needs manual advancement*/
 	char		*pool_str = NULL;
 	uuid_t		*pool_uuids = NULL;
 	daos_handle_t	**pool_handles = NULL;
 	daos_handle_t	**cont_handles = NULL;
 
 	progname = argv[0];
-	while ((opt = getopt(argc, argv, "xs:h:wp:")) != -1) {
+	while ((opt = getopt(argc, argv, "xs:h:wip:")) != -1) {
 		switch (opt) {
 		case 'x':
 			abnormal_exit = 1;
@@ -143,6 +165,9 @@ main(int argc, char **argv)
 			break;
 		case 'w':
 			well_behaved = 1;
+			break;
+		case 'i':
+			interactive = 1;
 			break;
 		default: /* '?' */
 			print_usage();
@@ -218,8 +243,12 @@ main(int argc, char **argv)
 		}
 	}
 
-	/** Give a sleep grace period then exit based on -x switch */
-	sleep(sleep_seconds);
+	if (interactive) {
+		rc = pause_for_keypress();
+	} else {
+		/** Give a sleep grace period then exit based on -x switch */
+		sleep(sleep_seconds);
+	}
 
 	/* User our handles by creating pools and connecting to them */
 	for (i = 0; i < num_pools; i++) {

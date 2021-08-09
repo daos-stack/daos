@@ -2153,7 +2153,7 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	hdl.ph_flags = in->pci_flags;
 	hdl.ph_sec_capas = sec_capas;
-	strcpy(hdl.ph_machine, machine);
+	strncpy(hdl.ph_machine, machine, MAXHOSTNAMELEN);
 
 	nhandles++;
 	d_iov_set(&key, in->pci_op.pi_hdl, sizeof(uuid_t));
@@ -4792,7 +4792,7 @@ static int
 find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 		   size_t *hdl_uuids_size, int *n_hdl_uuids, char *machine)
 {
-	struct evict_iter_arg	arg;
+	struct evict_iter_arg	arg = {0};
 	int			rc;
 
 	arg.eia_hdl_uuids_size = sizeof(uuid_t) * 4;
@@ -4800,6 +4800,8 @@ find_hdls_to_evict(struct rdb_tx *tx, struct pool_svc *svc, uuid_t **hdl_uuids,
 	if (arg.eia_hdl_uuids == NULL)
 		return -DER_NOMEM;
 	arg.eia_n_hdl_uuids = 0;
+	if (machine)
+		arg.eia_machine = machine;
 
 	rc = rdb_tx_iterate(tx, &svc->ps_handles, false /* backward */,
 			    evict_iter_cb, &arg);
