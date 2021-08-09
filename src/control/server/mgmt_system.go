@@ -891,7 +891,7 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 
 	for _, ps := range psList {
 		// Use our incoming request and just replace the uuid on each iteration
-		evictReq.Uuid = ps.PoolUUID.String()
+		evictReq.Id = ps.PoolUUID.String()
 
 		dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, evictReq)
 		if err != nil {
@@ -904,10 +904,10 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 		}
 
 		if res.Status != int32(drpc.DaosSuccess) {
-			return nil, errors.Errorf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Uuid)
+			return nil, errors.Errorf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
 		}
 		resp.Pools = append(resp.Pools, &mgmtpb.SystemCleanupResp_Pool{
-			Uuid:  evictReq.Uuid,
+			Uuid:  evictReq.Id,
 			Count: uint32(res.Count),
 		})
 	}

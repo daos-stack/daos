@@ -753,7 +753,7 @@ type SystemCleanupReq struct {
 }
 
 type CleanupCount struct {
-	UUID  string `json:"uuid"`  // Unique identifier
+	Id    string `json:"Id"`    // Unique identifier
 	Count uint32 `json:"count"` // Number of pools reclaimed
 }
 
@@ -799,5 +799,8 @@ func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemClean
 	}
 
 	resp := new(SystemCleanupResp)
+
+	rpcClient.Debugf("DAOS system cleanup response: %+v", resp)
+
 	return resp, convertMSResponse(ur, resp)
 }
