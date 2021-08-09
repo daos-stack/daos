@@ -49,6 +49,7 @@ pool:
     nvme_size: 108000000000
     svcn: 4
     control_method: dmg
+    properties: scrub:continuous
 container:
     type: POSIX
     control_method: daos
