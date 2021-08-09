@@ -22,7 +22,7 @@ message ACLResp {
 // Request to fetch an ACL
 message GetACLReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // Target UUID
+	string id = 2; // Target UUID or label
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
@@ -30,7 +30,7 @@ message GetACLReq {
 // Results depend on the specific modification command.
 message ModifyACLReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // Target UUID
+	string id = 2; // Target UUID or label
 	repeated string ACL = 3; // List of ACEs to overwrite ACL with
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }
@@ -38,7 +38,7 @@ message ModifyACLReq {
 // Delete a principal's entry from the ACL
 message DeleteACLReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // Target UUID
+	string id = 2; // Target UUID or label
 	string principal = 3; // Principal whose entry is to be deleted
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }
