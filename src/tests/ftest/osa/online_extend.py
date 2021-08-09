@@ -12,7 +12,6 @@ from write_host_file import write_host_file
 from daos_racer_utils import DaosRacerCommand
 from dmg_utils import check_system_query_status
 from osa_utils import OSAUtils
-from apricot import skipForTicket
 from daos_utils import DaosCommand
 
 
@@ -155,7 +154,6 @@ class OSAOnlineExtend(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend(self):
         """Test ID: DAOS-4751
         Test Description: Validate Online extend with checksum
@@ -169,7 +167,6 @@ class OSAOnlineExtend(OSAUtils):
         self.log.info("Online Extend : With Checksum")
         self.run_online_extend_test(1)
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend_without_checksum(self):
         """Test ID: DAOS-6645
         Test Description: Validate Online extend without checksum enabled.
@@ -184,7 +181,6 @@ class OSAOnlineExtend(OSAUtils):
                                                   '/run/checksum/*')
         self.run_online_extend_test(1)
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend_oclass(self):
         """Test ID: DAOS-6645
         Test Description: Validate Online extend with different
@@ -198,7 +194,6 @@ class OSAOnlineExtend(OSAUtils):
         self.log.info("Online Extend : Oclass")
         self.run_online_extend_test(1, oclass=self.test_oclass[0])
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend_mdtest(self):
         """Test ID: DAOS-6645
         Test Description: Validate Online extend with mdtest application.
@@ -211,7 +206,6 @@ class OSAOnlineExtend(OSAUtils):
         self.log.info("Online Extend : Mdtest")
         self.run_online_extend_test(1, app_name="mdtest")
 
-    @skipForTicket("DAOS-7195,DAOS-7955")
     def test_osa_online_extend_with_aggregation(self):
         """Test ID: DAOS-6645
         Test Description: Validate Online extend with aggregation on.
