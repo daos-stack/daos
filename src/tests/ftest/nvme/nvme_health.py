@@ -25,9 +25,10 @@ class NvmeHealth(ServerFillUp):
                   dmg list-pools, device-health and nvme-health works for all
                   pools.
 
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
-        :avocado: tags=nvme,ib2,nvme_health
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,small
+        :avocado: tags=nvme,nvme_health
+
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches

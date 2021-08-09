@@ -1,7 +1,6 @@
 hosts:
   test_servers:
     - server-A
-    - server-B
 timeouts:
   test_telemetry_list_nvme: 90
 server_config:

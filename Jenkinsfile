@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@samirrav/DAOS-8161") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -172,6 +172,9 @@ pipeline {
         string(name: 'CI_STORAGE_PREP_LABEL',
                defaultValue: '',
                description: 'Label for cluster to do a DAOS Storage Preparation')
+        string(name: 'CI_NVME_VMD_LABEL',
+               defaultValue: 'ci_vmd1',
+               description: 'Label to use for 1 node NVMe VMD tests')
     }
 
     stages {
@@ -971,12 +974,13 @@ pipeline {
                     }
                     agent {
                         // 2 node cluster with 1 IB/node + 1 test control node
-                        label params.CI_NVME_3_LABEL
+                        label params.CI_NVME_VMD_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages(1, next_version),
-                                       test_function: 'runTestFunctionalV2'
+                                       test_function: 'runTestFunctionalV2',
+                                       node_count: 2
                     }
                     post {
                         always {

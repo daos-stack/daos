@@ -21,7 +21,7 @@ class TestWithTelemetryNvme(TestWithTelemetry):
             Verify the dmg telemetry list command.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw
         :avocado: tags=control,telemetry,nvme
         :avocado: tags=test_with_telemetry_nvme,test_telemetry_list_nvme
         """
