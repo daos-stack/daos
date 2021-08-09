@@ -13,7 +13,7 @@ from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
-from general_utils import pcmd
+from general_utils import pcmd, get_random_string
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_container import TestContainer
@@ -130,6 +130,10 @@ class IorTestBase(DfuseTestBase):
 
         # start dfuse if api is POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
+            # add a substring in case of HDF5-VOL
+            if plugin_path:
+                sub_dir = get_random_string(5)
+                mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self.start_dfuse(
