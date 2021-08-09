@@ -207,7 +207,6 @@ class OSAOnlineReintegration(OSAUtils):
                                                   '/run/checksum/*')
         self.run_online_reintegration_test(1)
 
-    @skipForTicket("DAOS-7996")
     def test_osa_online_reintegration_with_aggregation(self):
         """Test ID: DAOS-6715
         Test Description: Reintegrate rank while aggregation
@@ -223,7 +222,6 @@ class OSAOnlineReintegration(OSAUtils):
         self.log.info("Online Reintegration : Aggregation")
         self.run_online_reintegration_test(1)
 
-    @skipForTicket("DAOS-7996")
     def test_osa_online_reintegration_oclass(self):
         """Test ID: DAOS-6715
         Test Description: Reintegrate rank with different
