@@ -256,15 +256,16 @@ and access control settings, along with system wide operations.`
 		invoker.SetConfig(ctlCfg)
 		if ctlCmd, ok := cmd.(ctlInvoker); ok {
 			ctlCmd.setInvoker(invoker)
-			if opts.HostList != "" {
-				if hlCmd, ok := cmd.(hostListSetter); ok {
-					hl := strings.Split(opts.HostList, ",")
-					hlCmd.setHostList(hl)
-					ctlCfg.HostList = hl
-				} else {
-					return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
-						control.UserConfigPath(), control.SystemConfigPath())
-				}
+		}
+
+		if opts.HostList != "" {
+			if hlCmd, ok := cmd.(hostListSetter); ok {
+				hl := strings.Split(opts.HostList, ",")
+				hlCmd.setHostList(hl)
+				ctlCfg.HostList = hl
+			} else {
+				return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
+					control.UserConfigPath(), control.SystemConfigPath())
 			}
 		}
 
