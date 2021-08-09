@@ -16,13 +16,6 @@ from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
 
-RETRYABLE_POOL_CREATE_ERRORS = [
-    -1006, # -DER_UNREACH: Can happen after ranks are killed but before
-           #               SWIM has noticed and excluded them.
-    -1019, # -DER_OOG: Can happen after restart.
-]
-POOL_RETRY_INTERVAL = 1 # seconds
-
 class DmgJsonCommandFailure(CommandFailure):
     """Exception raised when a dmg --json command fails."""
 
@@ -450,17 +443,6 @@ class DmgCommand(DmgCommandBase):
                                        json_err=True, **kwargs)
         if output["error"] is not None:
             self.log.error(output["error"])
-            if output["status"] in RETRYABLE_POOL_CREATE_ERRORS:
-                time.sleep(POOL_RETRY_INTERVAL)
-                return self.pool_create(scm_size, uid=uid, gid=gid,
-                                        nvme_size=nvme_size,
-                                        target_list=target_list,
-                                        svcn=svcn,
-                                        acl_file=acl_file,
-                                        size=size,
-                                        tier_ratio=tier_ratio,
-                                        properties=properties,
-                                        label=label)
             if self.exit_status_exception:
                 raise DmgJsonCommandFailure(output["error"])
 

@@ -232,7 +232,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		resp.Status = int32(drpc.DaosAlready)
 		if ps.State == system.PoolServiceStateCreating {
 			resp.Status = int32(drpc.DaosTryAgain)
-			return resp, svc.checkPools(ctx)
+			return resp, svc.checkPools(ctx, ps)
 		}
 		return resp, nil
 	}
@@ -434,17 +434,17 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 // checkPools iterates over the list of pools in the system to check
 // for any that are in an unexpected state. Pools not in the Ready
 // state will be cleaned up and removed from the system.
-//
-// NB: Care should be taken to avoid calling this when it could race
-// with a PoolCreate request.
-func (svc *mgmtSvc) checkPools(ctx context.Context) error {
+func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolService) error {
 	if err := svc.sysdb.CheckLeader(); err != nil {
 		return err
 	}
 
-	psList, err := svc.sysdb.PoolServiceList()
-	if err != nil {
-		return err
+	var err error
+	if len(psList) == 0 {
+		psList, err = svc.sysdb.PoolServiceList()
+		if err != nil {
+			return errors.Wrap(err, "failed to fetch pool service list")
+		}
 	}
 
 	svc.log.Debugf("checking %d pools", len(psList))

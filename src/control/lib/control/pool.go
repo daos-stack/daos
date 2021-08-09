@@ -185,7 +185,7 @@ func (r *poolRequest) canRetry(reqErr error, try uint) bool {
 		switch e {
 		// These pool errors can be retried.
 		case drpc.DaosTimedOut, drpc.DaosGroupVersionMismatch,
-			drpc.DaosTryAgain, drpc.DaosOutOfGroup:
+			drpc.DaosTryAgain, drpc.DaosOutOfGroup, drpc.DaosUnreachable:
 			return true
 		default:
 			return false
