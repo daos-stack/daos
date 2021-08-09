@@ -109,7 +109,6 @@ obj_tree_destory_cb(daos_handle_t ih, d_iov_t *key_iov,
 	if (rc)
 		D_ERROR("dbtree_destroy, cont "DF_UUID" failed: "DF_RC"\n",
 			DP_UUID(*(uuid_t *)key_iov->iov_buf), DP_RC(rc));
-
 	return rc;
 }
 
@@ -131,62 +130,45 @@ out:
 	return rc;
 }
 
-/* Create tree root by key_iov */
-static int
-tree_cache_create_internal(daos_handle_t toh, unsigned int tree_class,
-			   d_iov_t *key_iov, struct tree_cache_root **rootp)
-{
-	d_iov_t			val_iov;
-	struct umem_attr	uma;
-	struct tree_cache_root	root;
-	struct btr_root		*broot;
-	int			rc;
-
-	D_ALLOC_PTR(broot);
-	if (broot == NULL)
-		return -DER_NOMEM;
-
-	memset(&root, 0, sizeof(root));
-	root.root_hdl = DAOS_HDL_INVAL;
-	memset(&uma, 0, sizeof(uma));
-	uma.uma_id = UMEM_CLASS_VMEM;
-
-	rc = dbtree_create_inplace(tree_class, BTR_FEAT_DIRECT_KEY, 32,
-				   &uma, broot, &root.root_hdl);
-	if (rc) {
-		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
-		D_FREE(broot);
-		D_GOTO(out, rc);
-	}
-
-	d_iov_set(&val_iov, &root, sizeof(root));
-	rc = dbtree_update(toh, key_iov, &val_iov);
-	if (rc)
-		D_GOTO(out, rc);
-
-	d_iov_set(&val_iov, NULL, 0);
-	rc = dbtree_lookup(toh, key_iov, &val_iov);
-	if (rc)
-		D_GOTO(out, rc);
-
-	*rootp = val_iov.iov_buf;
-	D_ASSERT(*rootp != NULL);
-out:
-	if (rc < 0 && daos_handle_is_valid(root.root_hdl))
-		dbtree_destroy(root.root_hdl, NULL);
-	return rc;
-}
-
 static int
 container_tree_create(daos_handle_t toh, uuid_t uuid,
 		      struct tree_cache_root **rootp)
 {
-	d_iov_t	key_iov;
+	d_iov_t			key_iov;
+	d_iov_t			val_iov;
+	struct umem_attr	uma;
+	struct tree_cache_root	root = { 0 };
+	struct tree_cache_root	*tmp_root;
+	int			rc;
 
 	d_iov_set(&key_iov, uuid, sizeof(uuid_t));
+	d_iov_set(&val_iov, &root, sizeof(root));
+	rc = dbtree_update(toh, &key_iov, &val_iov);
+	if (rc)
+		return rc;
 
-	return tree_cache_create_internal(toh, DBTREE_CLASS_NV, &key_iov,
-					  rootp);
+	d_iov_set(&val_iov, NULL, 0);
+	rc = dbtree_lookup(toh, &key_iov, &val_iov);
+	if (rc)
+		D_GOTO(out, rc);
+
+	tmp_root = val_iov.iov_buf;
+
+	memset(&uma, 0, sizeof(uma));
+	uma.uma_id = UMEM_CLASS_VMEM;
+	rc = dbtree_create_inplace(DBTREE_CLASS_NV, BTR_FEAT_DIRECT_KEY, 32,
+				   &uma, &tmp_root->btr_root, &tmp_root->root_hdl);
+	if (rc) {
+		D_ERROR("failed to create rebuild tree: "DF_RC"\n", DP_RC(rc));
+		D_GOTO(out, rc);
+	}
+
+	*rootp = tmp_root;
+
+out:
+	if (rc < 0)
+		dbtree_delete(toh, BTR_PROBE_EQ, &key_iov, NULL);
+	return rc;
 }
 
 int
@@ -2795,6 +2777,14 @@ migrate_cont_iter_cb(daos_handle_t ih, d_iov_t *key_iov,
 
 	D_DEBUG(DB_REBUILD, "iter cont "DF_UUID"/%"PRIx64" finish.\n",
 		DP_UUID(cont_uuid), ih.cookie);
+
+	rc = dbtree_destroy(root->root_hdl, NULL);
+	if (rc) {
+		/* Ignore the DRAM migrate object tree for the moment, since
+		 * it does not impact the migration on the storage anyway
+		 */
+		D_ERROR("dbtree_destroy failed: "DF_RC"\n", DP_RC(rc));
+	}
 
 	/* Snapshot fetch will yield the ULT, let's reprobe before delete  */
 	d_iov_set(&tmp_iov, cont_uuid, sizeof(uuid_t));
