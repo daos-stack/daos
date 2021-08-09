@@ -182,7 +182,9 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	}
 
 	freeString(ap.sysname)
-	C.free_daos_alloc(unsafe.Pointer(ap.dfs_path))
+
+	C.free(unsafe.Pointer(ap.dfs_path))
+	C.free(unsafe.Pointer(ap.dfs_prefix))
 	C.free_daos_alloc(unsafe.Pointer(ap.pool_label))
 	C.free_daos_alloc(unsafe.Pointer(ap.cont_label))
 
