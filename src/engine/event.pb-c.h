@@ -16,7 +16,7 @@ PROTOBUF_C__BEGIN_DECLS
 
 
 typedef struct _Shared__RASEvent Shared__RASEvent;
-typedef struct _Shared__RASEvent__RankStateEventInfo Shared__RASEvent__RankStateEventInfo;
+typedef struct _Shared__RASEvent__EngineStateEventInfo Shared__RASEvent__EngineStateEventInfo;
 typedef struct _Shared__RASEvent__PoolSvcEventInfo Shared__RASEvent__PoolSvcEventInfo;
 typedef struct _Shared__ClusterEventReq Shared__ClusterEventReq;
 typedef struct _Shared__ClusterEventResp Shared__ClusterEventResp;
@@ -28,9 +28,9 @@ typedef struct _Shared__ClusterEventResp Shared__ClusterEventResp;
 /* --- messages --- */
 
 /*
- * RankStateEventInfo defines extended fields for rank state change events.
+ * EngineStateEventInfo defines extended fields for state change events.
  */
-struct  _Shared__RASEvent__RankStateEventInfo
+struct  _Shared__RASEvent__EngineStateEventInfo
 {
   ProtobufCMessage base;
   /*
@@ -46,8 +46,8 @@ struct  _Shared__RASEvent__RankStateEventInfo
    */
   char *error;
 };
-#define SHARED__RASEVENT__RANK_STATE_EVENT_INFO__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&shared__rasevent__rank_state_event_info__descriptor) \
+#define SHARED__RASEVENT__ENGINE_STATE_EVENT_INFO__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&shared__rasevent__engine_state_event_info__descriptor) \
     , 0, 0, (char *)protobuf_c_empty_string }
 
 
@@ -74,9 +74,9 @@ struct  _Shared__RASEvent__PoolSvcEventInfo
 
 typedef enum {
   SHARED__RASEVENT__EXTENDED_INFO__NOT_SET = 0,
-  SHARED__RASEVENT__EXTENDED_INFO_STR_INFO = 16,
-  SHARED__RASEVENT__EXTENDED_INFO_RANK_STATE_INFO = 17,
-  SHARED__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 18
+  SHARED__RASEVENT__EXTENDED_INFO_STR_INFO = 17,
+  SHARED__RASEVENT__EXTENDED_INFO_ENGINE_STATE_INFO = 18,
+  SHARED__RASEVENT__EXTENDED_INFO_POOL_SVC_INFO = 19
     PROTOBUF_C__FORCE_ENUM_TO_BE_INT_SIZE(SHARED__RASEVENT__EXTENDED_INFO)
 } Shared__RASEvent__ExtendedInfoCase;
 
@@ -115,6 +115,10 @@ struct  _Shared__RASEvent
    */
   uint32_t rank;
   /*
+   * (optional) Incarnation of DAOS rank involved in event.
+   */
+  uint64_t incarnation;
+  /*
    * (optional) Hardware component involved in event.
    */
   char *hw_id;
@@ -152,13 +156,13 @@ struct  _Shared__RASEvent
      * Opaque data blob.
      */
     char *str_info;
-    Shared__RASEvent__RankStateEventInfo *rank_state_info;
+    Shared__RASEvent__EngineStateEventInfo *engine_state_info;
     Shared__RASEvent__PoolSvcEventInfo *pool_svc_info;
   };
 };
 #define SHARED__RASEVENT__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&shared__rasevent__descriptor) \
-    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, SHARED__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
+    , 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, 0, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, SHARED__RASEVENT__EXTENDED_INFO__NOT_SET, {0} }
 
 
 /*
@@ -201,9 +205,9 @@ struct  _Shared__ClusterEventResp
     , 0, 0 }
 
 
-/* Shared__RASEvent__RankStateEventInfo methods */
-void   shared__rasevent__rank_state_event_info__init
-                     (Shared__RASEvent__RankStateEventInfo         *message);
+/* Shared__RASEvent__EngineStateEventInfo methods */
+void   shared__rasevent__engine_state_event_info__init
+                     (Shared__RASEvent__EngineStateEventInfo         *message);
 /* Shared__RASEvent__PoolSvcEventInfo methods */
 void   shared__rasevent__pool_svc_event_info__init
                      (Shared__RASEvent__PoolSvcEventInfo         *message);
@@ -266,8 +270,8 @@ void   shared__cluster_event_resp__free_unpacked
                       ProtobufCAllocator *allocator);
 /* --- per-message closures --- */
 
-typedef void (*Shared__RASEvent__RankStateEventInfo_Closure)
-                 (const Shared__RASEvent__RankStateEventInfo *message,
+typedef void (*Shared__RASEvent__EngineStateEventInfo_Closure)
+                 (const Shared__RASEvent__EngineStateEventInfo *message,
                   void *closure_data);
 typedef void (*Shared__RASEvent__PoolSvcEventInfo_Closure)
                  (const Shared__RASEvent__PoolSvcEventInfo *message,
@@ -288,7 +292,7 @@ typedef void (*Shared__ClusterEventResp_Closure)
 /* --- descriptors --- */
 
 extern const ProtobufCMessageDescriptor shared__rasevent__descriptor;
-extern const ProtobufCMessageDescriptor shared__rasevent__rank_state_event_info__descriptor;
+extern const ProtobufCMessageDescriptor shared__rasevent__engine_state_event_info__descriptor;
 extern const ProtobufCMessageDescriptor shared__rasevent__pool_svc_event_info__descriptor;
 extern const ProtobufCMessageDescriptor shared__cluster_event_req__descriptor;
 extern const ProtobufCMessageDescriptor shared__cluster_event_resp__descriptor;

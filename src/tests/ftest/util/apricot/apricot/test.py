@@ -7,9 +7,6 @@
 # pylint: disable=too-many-lines
 
 # Some useful test classes inherited from avocado.Test
-
-
-
 import os
 import json
 import re
@@ -26,12 +23,13 @@ from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
 from dmg_utils import get_dmg_command
 from daos_utils import DaosCommand
+from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing
+    get_default_config_file, pcmd, get_file_listing, run_command
 from logger_utils import TestLogger
-from test_utils_pool import TestPool
+from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
 from env_modules import load_mpi
 from distutils.spawn import find_executable
@@ -41,6 +39,7 @@ from write_host_file import write_host_file
 def skipForTicket(ticket): # pylint: disable=invalid-name
     """Skip a test with a comment about a ticket."""
     return skip("Skipping until {} is fixed.".format(ticket))
+
 
 def get_log_file(name):
     """Get the full log file name and path.
@@ -155,8 +154,7 @@ class Test(avocadoTest):
         super().setUp()
 
     def add_test_data(self, filename, data):
-        """Add a file containing the specified data to the test variant
-           specific data directory.
+        """Add a file to the test variant specific data directory.
 
         Args:
             filename (str): name of the file to create
@@ -170,8 +168,7 @@ class Test(avocadoTest):
             self.fail("Error writing {}: {}".format(filename, error))
 
     def cancel_from_list(self):
-        """Check if test is in skip list"""
-
+        """Check if test is in skip list."""
         def skip_process_error(message):
             self.log.info(message)
             self.log.info("Trudging on without skipping known failing tests")
@@ -196,7 +193,7 @@ class Test(avocadoTest):
                 # first see if it's being fixed in this PR
                 try:
                     with open(os.path.join(os.sep, 'tmp',
-                              'commit_title')) as commit_handle:
+                                           'commit_title')) as commit_handle:
                         if commit_handle.read().strip().startswith(
                                 ticket + " "):
                             # fix is in this PR
@@ -225,9 +222,9 @@ class Test(avocadoTest):
                     if commits and vals[1] in commits:
                         # fix is in this code base
                         self.log.info("This test variant is included in the "
-                                     "skip list for ticket %s, but is fixed "
-                                     "in %s.  Test will not be "
-                                     "skipped", ticket, vals[1])
+                                      "skip list for ticket %s, but is fixed "
+                                      "in %s.  Test will not be "
+                                      "skipped", ticket, vals[1])
                         return
                     # fix is not in this code base
                     self.log.info("Skipping due to being on the "
@@ -336,6 +333,9 @@ class Test(avocadoTest):
     def report_timeout(self):
         """Report whether or not this test case was timed out."""
         if not self._timeout_reported:
+            # Mark the beginning of tearDown
+            self.log.info("=" * 100)
+
             # Update the elapsed time
             self.get_state()
             if self.timeout is None:
@@ -551,6 +551,7 @@ class TestWithServers(TestWithoutServers):
         # self.debug = False
         # self.config = None
         self.job_manager = None
+        self.label_generator = LabelGenerator()
 
     def setUp(self):
         """Set up each test case."""
@@ -593,8 +594,12 @@ class TestWithServers(TestWithoutServers):
             host_list_name = "_".join(["hostlist", name])
             partition_name = "_".join([name[:-1], "partition"])
             reservation_name = "_".join([name[:-1], "reservation"])
+            reservation_env = "_".join(["DAOS", reservation_name.upper()])
             partition = self.params.get(partition_name, "/run/hosts/*")
-            reservation = self.params.get(reservation_name, "/run/hosts/*")
+            reservation = os.environ.get(reservation_env, None)
+            self.log.info("env %s = %s", reservation_env, reservation)
+            if reservation is None:
+                reservation = self.params.get(reservation_name, "/run/hosts/*")
             host_list = getattr(self, host_list_name)
             if partition is not None and host_list is None:
                 # If a partition is provided instead of a list of hosts use the
@@ -631,6 +636,7 @@ class TestWithServers(TestWithoutServers):
             "access_points", "/run/setup/*", self.hostlist_servers[:1])
 
         # Display host information
+        self.log.info("-" * 100)
         self.log.info("--- HOST INFORMATION ---")
         self.log.info("hostlist_servers:    %s", self.hostlist_servers)
         self.log.info("hostlist_clients:    %s", self.hostlist_clients)
@@ -641,6 +647,7 @@ class TestWithServers(TestWithoutServers):
         self.log.info("access_points:       %s", self.access_points)
 
         # List common test directory contents before running the test
+        self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
         hosts = list(self.hostlist_servers)
         if self.hostlist_clients:
@@ -656,6 +663,7 @@ class TestWithServers(TestWithoutServers):
             hosts = list(self.hostlist_servers)
             if self.hostlist_clients:
                 hosts.extend(self.hostlist_clients)
+            self.log.info("-" * 100)
             self.stop_leftover_processes(["orterun"], hosts)
 
             # Ensure write permissions for the daos command log files when
@@ -663,18 +671,28 @@ class TestWithServers(TestWithoutServers):
             if (self.agent_manager_class == "Systemctl" or
                     self.server_manager_class == "Systemctl"):
                 log_dir = os.environ.get("DAOS_TEST_LOG_DIR", "/tmp")
+                self.log.info("-" * 100)
                 self.log.info(
                     "Updating file permissions for %s for use with systemctl",
                     log_dir)
                 pcmd(hosts, "chmod a+rw {}".format(log_dir))
 
+        # Start the servers
+        force_agent_start = False
+        if self.setup_start_servers:
+            force_agent_start = self.start_servers()
+
         # Start the clients (agents)
         if self.setup_start_agents:
-            self.start_agents()
+            self.start_agents(force=force_agent_start)
 
-        # Start the servers
+        # If there's no server started, then there's no server log to write to.
         if self.setup_start_servers:
-            self.start_servers()
+
+            # Write an ID string to the log file for cross-referencing logs
+            # with test ID
+            id_str = '"Test.name: ' + str(self) + '"'
+            self.write_string_to_logfile(id_str)
 
         # Setup a job manager command for running the test command
         manager_class_name = self.params.get(
@@ -687,6 +705,41 @@ class TestWithServers(TestWithoutServers):
             self.job_manager = get_job_manager_class(
                 manager_class_name, None, manager_subprocess, manager_mpi_type)
             self.set_job_manager_timeout()
+
+        # Mark the end of setup
+        self.log.info("=" * 100)
+
+    def write_string_to_logfile(self, message):
+        """Write a string to the server log.
+
+        The server log message will be appear in the following format:
+            <date> <hostname> DAOS[<pid>/0/6] rpc EMIT
+                src/cart/crt_rpc.c:53 crt_hdlr_ctl_log_add_msg() <message>
+
+        Args:
+            message (str): message to write to log file.
+        """
+        if self.server_managers and self.agent_managers:
+            # Compose and run cart_ctl command
+            cart_ctl = CartCtl()
+            cart_ctl.add_log_msg.value = "add_log_msg"
+            cart_ctl.rank.value = "all"
+            cart_ctl.cfg_path.value = "."
+            cart_ctl.m.value = message
+            cart_ctl.n.value = None
+
+            for manager in self.agent_managers:
+                # Fetch attachinfo data from server via the agent
+                attachinfo_file = manager.get_attachinfo_file()
+                cp_command = "sudo cp {} {}".format(attachinfo_file, ".")
+                run_command(cp_command, verbose=True, raise_exception=False)
+                cart_ctl.group_name.value = manager.get_config_value("name")
+                cart_ctl.run()
+        else:
+            self.log.info(
+                "Unable to write message to the server log: %d servers groups "
+                "running / %d agent groups running",
+                len(self.server_managers), len(self.agent_managers))
 
     def set_job_manager_timeout(self):
         """Set the timeout for the job manager.
@@ -709,7 +762,53 @@ class TestWithServers(TestWithoutServers):
                 if self.job_manager.timeout is None:
                     self.job_manager.timeout = self.timeout - 30
 
-    def start_agents(self, agent_groups=None):
+    def start_agents(self, agent_groups=None, force=False):
+        """Start the daos_agent processes.
+
+        Args:
+            agent_groups (dict, optional): dictionary of dictionaries,
+                containing the list of hosts on which to start the daos agent
+                and the list of server access points, using a unique server
+                group name key. Defaults to None which will use the server group
+                name, all of the client hosts, and the access points from the
+                test's yaml file to define a single server group entry.
+            force (bool, optional): whether or not to force starting the agents.
+                Defaults to False.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an error starting the
+                agents
+
+        """
+        self.setup_agents(agent_groups)
+        if self.agent_managers:
+            self.start_agent_managers(force)
+
+    def start_servers(self, server_groups=None, force=False):
+        """Start the daos_server processes.
+
+        Args:
+            server_groups (dict, optional): dictionary of dictionaries,
+                containing the list of hosts on which to start the daos server
+                and the list of access points, using a unique server group name
+                key. Defaults to None which will use the server group name, all
+                of the server hosts, and the access points from the test's yaml
+                file to define a single server group entry.
+            force (bool, optional): whether or not to force starting the
+                servers. Defaults to False.
+
+        Raises:
+            avocado.core.exceptions.TestFail: if there is an error starting the
+                servers
+
+        """
+        force_agent_start = False
+        self.setup_servers(server_groups)
+        if self.server_managers:
+            force_agent_start = self.start_server_managers(force)
+        return force_agent_start
+
+    def setup_agents(self, agent_groups=None):
         """Start the daos_agent processes.
 
         Args:
@@ -735,7 +834,8 @@ class TestWithServers(TestWithoutServers):
                 }
             }
 
-        self.log.debug("--- STARTING AGENT GROUPS: %s ---", agent_groups)
+        self.log.info("-" * 100)
+        self.log.debug("--- SETTING UP AGENT GROUPS: %s ---", agent_groups)
 
         if isinstance(agent_groups, dict):
             for group, info in list(agent_groups.items()):
@@ -746,9 +846,8 @@ class TestWithServers(TestWithoutServers):
                     info["hosts"],
                     self.hostfile_clients_slots,
                     info["access_points"])
-            self.start_agent_managers()
 
-    def start_servers(self, server_groups=None):
+    def setup_servers(self, server_groups=None):
         """Start the daos_server processes.
 
         Args:
@@ -768,22 +867,28 @@ class TestWithServers(TestWithoutServers):
             server_groups = {
                 self.server_group: {
                     "hosts": self.hostlist_servers,
-                    "access_points": self.access_points
+                    "access_points": self.access_points,
+                    "svr_config_file": None,
+                    "dmg_config_file": None,
+                    "svr_config_temp": None,
+                    "dmg_config_temp": None
                 }
             }
 
-        self.log.debug("--- STARTING SERVER GROUPS: %s ---", server_groups)
+        self.log.info("-" * 100)
+        self.log.debug("--- SETTING UP SERVER GROUPS: %s ---", server_groups)
 
         if isinstance(server_groups, dict):
             for group, info in list(server_groups.items()):
-                self.add_server_manager(group)
+                self.add_server_manager(
+                    group, info["svr_config_file"], info["dmg_config_file"],
+                    info["svr_config_temp"], info["dmg_config_temp"])
                 self.configure_manager(
                     "server",
                     self.server_managers[-1],
                     info["hosts"],
                     self.hostfile_servers_slots,
                     info["access_points"])
-            self.start_server_managers()
 
     def get_config_file(self, name, command, path=None):
         """Get the yaml configuration file.
@@ -843,7 +948,7 @@ class TestWithServers(TestWithoutServers):
         self.agent_managers.append(
             DaosAgentManager(
                 group, self.bin, cert_dir, config_file, config_temp,
-                self.agent_manager_class)
+                self.agent_manager_class, outputdir=self.outputdir)
         )
 
     def add_server_manager(self, group=None, svr_config_file=None,
@@ -921,6 +1026,7 @@ class TestWithServers(TestWithoutServers):
             access_points (list, optional): list of access point hosts. Defaults
                 to None which uses self.access_points.
         """
+        self.log.info("-" * 100)
         self.log.info("--- CONFIGURING %s MANAGER ---", name.upper())
         if access_points is None:
             access_points = self.access_points
@@ -932,39 +1038,79 @@ class TestWithServers(TestWithoutServers):
         manager.hosts = (hosts, self.workdir, slots)
 
     @fail_on(CommandFailure)
-    def start_agent_managers(self):
-        """Start the daos_agent processes on each specified list of hosts."""
-        self.log.info("-" * 100)
-        start_agents = True
-        if self.start_agents_once:
-            # Starting agents for each test variant is enabled.  The agents
-            # will still need be started if any agent is down.
-            status = self.check_running(
-                "agents", self.agent_managers, False, True)
-            start_agents = status["restart"]
-        if start_agents:
+    def start_agent_managers(self, force=False):
+        """Start the daos_agent processes on each specified list of hosts.
+
+        Args:
+            force (bool, optional): whether or not to force starting the agents.
+                Defaults to False.
+        """
+        # Determine if all the expected agents are currently running
+        status = self.check_running("agents", self.agent_managers, False, True)
+
+        # Start/restart the agents
+        if force or status["restart"] or not self.start_agents_once:
+            # Stop any running agents
+            self.log.info("-" * 100)
+            self.log.info("--- STOPPING AGENTS ---")
+            self.test_log.info(
+                "Stopping %s group(s) of agents", len(self.agent_managers))
+            self._stop_managers(self.agent_managers, "agents")
+
+            # Start the agents
+            self.log.info("-" * 100)
             self.log.info("--- STARTING AGENTS ---")
             self._start_manager_list("agent", self.agent_managers)
-        self.log.info("-" * 100)
+
+        elif self.start_agents_once:
+            self.log.info(
+                "All %s groups(s) of agents currently running",
+                len(self.agent_managers))
 
     @fail_on(CommandFailure)
-    def start_server_managers(self):
-        """Start the daos_server processes on each specified list of hosts."""
-        self.log.info("-" * 100)
-        start_servers = True
-        if self.start_servers_once:
-            # Starting servers for each test variant is enabled.  The servers
-            # will still need be started if any server is down.  Since the
-            # ServerManager objects have been initialized but start() has not
-            # been called, the dmg command will need to be prepared and the
-            # expected states will need to be assigned.
-            status = self.check_running(
-                "servers", self.server_managers, True, True)
-            start_servers = status["restart"]
-        if start_servers:
+    def start_server_managers(self, force=False):
+        """Start the daos_server processes on each specified list of hosts.
+
+        Args:
+            force (bool, optional): whether or not to force starting the
+                servers. Defaults to False.
+
+        Returns:
+            bool: whether or not to force the starting of the agents
+
+        """
+        force_agent_start = False
+
+        # Determine if all the expected servers are currently running
+        status = self.check_running(
+            "servers", self.server_managers, True, True)
+
+        # Start/restart the severs
+        if force or status["restart"] or not self.start_servers_once:
+            # Stop any running servers
+            self.log.info("-" * 100)
+            self.log.info("--- STOPPING SERVERS ---")
+            self.test_log.info(
+                "Stopping %s group(s) of servers", len(self.server_managers))
+            self._stop_managers(self.server_managers, "servers")
+
+            # Start the servers
+            self.log.info("-" * 100)
             self.log.info("--- STARTING SERVERS ---")
             self._start_manager_list("server", self.server_managers)
-        self.log.info("-" * 100)
+
+            # Force agent restart whenever servers are restarted
+            force_agent_start = True
+            self.log.info(
+                "-- Forcing the start/restart of agents due to the server "
+                "start/restart --")
+
+        elif self.start_servers_once:
+            self.log.info(
+                "All %s groups(s) of servers currently running",
+                len(self.server_managers))
+
+        return force_agent_start
 
     def check_running(self, name, manager_list, prepare_dmg=False,
                       set_expected=False):
@@ -989,6 +1135,7 @@ class TestWithServers(TestWithoutServers):
 
         """
         status = {"expected": True, "restart": False}
+        self.log.info("-" * 100)
         self.log.info(
             "--- VERIFYING STATES OF %s %s GROUP%s ---",
             len(manager_list), name.upper(),
@@ -1149,6 +1296,8 @@ class TestWithServers(TestWithoutServers):
             list: a list of exceptions raised stopping the agents
 
         """
+        self.log.info("-" * 100)
+        self.log.info("--- STOPPING AGENTS ---")
         errors = []
         status = self.check_running("agents", self.agent_managers)
         if self.start_agents_once and not status["restart"]:
@@ -1172,6 +1321,8 @@ class TestWithServers(TestWithoutServers):
             list: a list of exceptions raised stopping the servers
 
         """
+        self.log.info("-" * 100)
+        self.log.info("--- STOPPING SERVERS ---")
         errors = []
         status = self.check_running("servers", self.server_managers)
         if self.start_servers_once and not status["restart"]:
@@ -1310,7 +1461,9 @@ class TestWithServers(TestWithoutServers):
             TestPool: the created test pool object.
 
         """
-        pool = TestPool(self.context, self.get_dmg_command(index))
+        pool = TestPool(
+            context=self.context, dmg_command=self.get_dmg_command(index),
+            label_generator=self.label_generator)
         if namespace is not None:
             pool.namespace = namespace
         pool.get_params(self)
@@ -1335,6 +1488,36 @@ class TestWithServers(TestWithoutServers):
             index (int, optional): Server index for dmg command. Defaults to 0.
         """
         self.pool = self.get_pool(namespace, create, connect, index)
+
+    def add_pool_qty(self, quantity, namespace=None, create=True, connect=True,
+                     index=0):
+        """Add multiple pools to the test case.
+
+        This method requires self.pool to be defined as a list.  If self.pool is
+        undefined it will define it as a list.
+
+        Args:
+            quantity (int): number of pools to create
+            namespace (str, optional): namespace for TestPool parameters in the
+                test yaml file. Defaults to None.
+            create (bool, optional): should the pool be created. Defaults to
+                True.
+            connect (bool, optional): should the pool be connected. Defaults to
+                True.
+            index (int, optional): Server index for dmg command. Defaults to 0.
+
+        Raises:
+            TestFail: if self.pool is defined, but not as a list object.
+
+        """
+        if self.pool is None:
+            self.pool = []
+        if not isinstance(self.pool, list):
+            self.fail(
+                "add_pool_qty(): self.pool must be a list: {}".format(
+                    type(self.pool)))
+        for _ in range(quantity):
+            self.pool.append(self.get_pool(namespace, create, connect, index))
 
     def get_container(self, pool, namespace=None, create=True):
         """Get a test container object.

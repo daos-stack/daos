@@ -17,8 +17,6 @@ import com.google.protobuf.TextFormat;
 import io.daos.*;
 import io.daos.dfs.uns.*;
 
-import org.apache.commons.lang.ObjectUtils;
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -126,7 +124,7 @@ public class DaosUns {
    * {@link DaosIOException}
    */
   public static void setAppInfo(String path, String attrName, String value) throws IOException {
-    if (StringUtils.isBlank(attrName)) {
+    if (DaosUtils.isBlankStr(attrName)) {
       throw new IllegalArgumentException("attribute name cannot be empty");
     }
     if (!attrName.startsWith("user.")) {
@@ -154,7 +152,7 @@ public class DaosUns {
    * {@link DaosIOException}
    */
   public static String getAppInfo(String path, String attrName, int maxValueLen) throws IOException {
-    if (StringUtils.isBlank(attrName)) {
+    if (DaosUtils.isBlankStr(attrName)) {
       throw new IllegalArgumentException("attribute name cannot be empty");
     }
     if (!attrName.startsWith("user.")) {
@@ -476,7 +474,11 @@ public class DaosUns {
         throw new IllegalArgumentException("layout should be posix or HDF5");
       }
       DaosUns duns = new DaosUns();
-      duns.builder = (DaosUnsBuilder) ObjectUtils.clone(this);
+      try {
+        duns.builder = clone();
+      } catch (CloneNotSupportedException e) {
+        throw new IllegalStateException("clone not supported.", e);
+      }
       buildAttribute(duns);
       return duns;
     }
@@ -660,7 +662,7 @@ public class DaosUns {
 
   private static void util() {
     String op = System.getProperty("op");
-    if (StringUtils.isBlank(op)) {
+    if (DaosUtils.isBlankStr(op)) {
       throw new IllegalArgumentException("need operation type.\n" + getUsage());
     }
     switch (op) {
@@ -704,7 +706,7 @@ public class DaosUns {
 
   private static void getPropertyValueType() {
     String type = System.getProperty("prop_type");
-    if (StringUtils.isBlank(type)) {
+    if (DaosUtils.isBlankStr(type)) {
       throw new IllegalArgumentException("need property type.\n" + getUsage());
     }
     log.info("property value type is: " + PropValue.getValueClass(PropType.valueOf(type)));
@@ -723,7 +725,7 @@ public class DaosUns {
 
   private static void escapeAppValue() {
     String input = System.getProperty("input");
-    if (StringUtils.isBlank(input)) {
+    if (DaosUtils.isBlankStr(input)) {
       throw new IllegalArgumentException("need input.\n" + getUsage());
     }
     log.info("escaped value is: " + DaosUtils.escapeUnsValue(input));
@@ -838,10 +840,10 @@ public class DaosUns {
     String serverGrp = System.getProperty("server_group");
     String poolFlags = System.getProperty("pool_flags");
 
-    if (StringUtils.isBlank(path)) {
+    if (DaosUtils.isBlankStr(path)) {
       throw new IllegalArgumentException("need path, -Dpath=");
     }
-    if (StringUtils.isBlank(poolId)) {
+    if (DaosUtils.isBlankStr(poolId)) {
       throw new IllegalArgumentException("need pool UUID, -Dpool_id");
     }
 
@@ -850,13 +852,13 @@ public class DaosUns {
     builder.path(file.getAbsolutePath());
     builder.poolId(poolId);
 
-    if (!StringUtils.isBlank(ranks)) {
+    if (!DaosUtils.isBlankStr(ranks)) {
       builder.ranks(ranks);
     }
-    if (!StringUtils.isBlank(serverGrp)) {
+    if (!DaosUtils.isBlankStr(serverGrp)) {
       builder.serverGroup(serverGrp);
     }
-    if (!StringUtils.isBlank(poolFlags)) {
+    if (!DaosUtils.isBlankStr(poolFlags)) {
       builder.poolFlags(Integer.valueOf(poolFlags));
     }
 
@@ -882,10 +884,10 @@ public class DaosUns {
     String poolFlags = System.getProperty("pool_flags");
     String properties = System.getProperty("properties");
 
-    if (StringUtils.isBlank(path)) {
+    if (DaosUtils.isBlankStr(path)) {
       throw new IllegalArgumentException("need path, -Dpath=");
     }
-    if (StringUtils.isBlank(poolId)) {
+    if (DaosUtils.isBlankStr(poolId)) {
       throw new IllegalArgumentException("need pool UUID, -Dpool_id");
     }
 
@@ -893,31 +895,31 @@ public class DaosUns {
     DaosUns.DaosUnsBuilder builder = new DaosUns.DaosUnsBuilder();
     builder.path(file.getAbsolutePath());
     builder.poolId(poolId);
-    if (!StringUtils.isBlank(contId)) {
+    if (!DaosUtils.isBlankStr(contId)) {
       builder.containerId(contId);
     }
-    if (!StringUtils.isBlank(layout)) {
+    if (!DaosUtils.isBlankStr(layout)) {
       builder.layout(Layout.valueOf(layout));
     }
-    if (!StringUtils.isBlank(objectType)) {
+    if (!DaosUtils.isBlankStr(objectType)) {
       builder.objectType(DaosObjectType.valueOf(objectType));
     }
-    if (!StringUtils.isBlank(chunkSize)) {
+    if (!DaosUtils.isBlankStr(chunkSize)) {
       builder.chunkSize(Long.valueOf(chunkSize));
     }
-    if (!StringUtils.isBlank(onLustre)) {
+    if (!DaosUtils.isBlankStr(onLustre)) {
       builder.onLustre(Boolean.valueOf(onLustre));
     }
-    if (!StringUtils.isBlank(ranks)) {
+    if (!DaosUtils.isBlankStr(ranks)) {
       builder.ranks(ranks);
     }
-    if (!StringUtils.isBlank(serverGrp)) {
+    if (!DaosUtils.isBlankStr(serverGrp)) {
       builder.serverGroup(serverGrp);
     }
-    if (!StringUtils.isBlank(poolFlags)) {
+    if (!DaosUtils.isBlankStr(poolFlags)) {
       builder.poolFlags(Integer.valueOf(poolFlags));
     }
-    if (!StringUtils.isBlank(properties)) {
+    if (!DaosUtils.isBlankStr(properties)) {
       Properties.Builder pb = Properties.newBuilder();
       try {
         TextFormat.getParser().merge(properties, pb);

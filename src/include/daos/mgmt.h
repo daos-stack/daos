@@ -36,6 +36,7 @@ struct dc_mgmt_sys_info {
 	char		domain[DAOS_SYS_INFO_STRING_MAX + 1];
 	uint32_t	crt_ctx_share_addr;
 	uint32_t	crt_timeout;
+	int32_t		srv_srx_set;
 	d_rank_list_t  *ms_ranks;
 };
 
@@ -57,6 +58,8 @@ ssize_t dc_mgmt_sys_decode(void *buf, size_t len, struct dc_mgmt_sys **sysp);
 int dc_mgmt_net_cfg(const char *name);
 int dc_mgmt_get_pool_svc_ranks(struct dc_mgmt_sys *sys, const uuid_t puuid,
 			       d_rank_list_t **svcranksp);
+int dc_mgmt_pool_find(struct dc_mgmt_sys *sys, const char *label,
+		      uuid_t puuid, d_rank_list_t **svcranksp);
 int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
 int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);

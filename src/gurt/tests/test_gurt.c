@@ -15,12 +15,12 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include "wrap_cmocka.h"
-#include "gurt/common.h"
-#include "gurt/list.h"
-#include "gurt/heap.h"
-#include "gurt/dlog.h"
-#include "gurt/hash.h"
-#include "gurt/atomic.h"
+#include <gurt/common.h>
+#include <gurt/list.h>
+#include <gurt/heap.h>
+#include <gurt/dlog.h>
+#include <gurt/hash.h>
+#include <gurt/atomic.h>
 
 /* machine epsilon */
 #define EPSILON (1.0E-16)
@@ -245,7 +245,7 @@ init_tests(void **state)
 	char		*tmp;
 	unsigned int	 seed;
 
-	D_STRNDUP(__root, "/tmp/XXXXXX", 32);
+	D_STRNDUP_S(__root, "/tmp/XXXXXX");
 	tmp = mkdtemp(__root);
 
 	if (tmp != __root) {
@@ -684,7 +684,7 @@ test_log(void **state)
 	/* Alternatively, a component may have its own mask */
 	logmask = getenv("TEST_LOG_MASK");
 	if (logmask == NULL) {
-		D_STRNDUP(allocated_mask, "ERR,T1=DEBUG,CLOG=DEBUG", 32);
+		D_STRNDUP_S(allocated_mask, "ERR,T1=DEBUG,CLOG=DEBUG");
 		logmask = allocated_mask;
 	}
 	assert_non_null(logmask);
@@ -710,7 +710,7 @@ test_log(void **state)
 	setenv("D_LOG_MASK", "T2=WARN", 1);
 	setenv("DD_MASK", "trace", 1);
 	d_log_sync_mask();
-	D_STRNDUP(logmask, "T2=WARN", 32);
+	D_STRNDUP_S(logmask, "T2=WARN");
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
@@ -725,7 +725,7 @@ test_log(void **state)
 	setenv("D_LOG_MASK", "T1=DEBUG", 1);
 	setenv("DD_MASK", "trace", 1); /* DB_TRACE stream is set */
 	d_log_sync_mask();
-	D_STRNDUP(logmask, "T1=DEBUG", 32);
+	D_STRNDUP_S(logmask, "T1=DEBUG");
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
@@ -743,7 +743,7 @@ test_log(void **state)
 	/* Set test debug mask */
 	setenv("DD_MASK", "test", 1); /* DB_TEST stream is now also set */
 	d_log_sync_mask();
-	D_STRNDUP(logmask, "T1=DEBUG", 32);
+	D_STRNDUP_S(logmask, "T1=DEBUG");
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
@@ -809,9 +809,9 @@ test_log(void **state)
 	d_log_fini();
 }
 
-#define TEST_GURT_HASH_NUM_BITS (12)
+#define TEST_GURT_HASH_NUM_BITS (D_ON_VALGRIND ? 4 : 12)
 #define TEST_GURT_HASH_NUM_ENTRIES (1 << TEST_GURT_HASH_NUM_BITS)
-#define TEST_GURT_HASH_NUM_THREADS (16)
+#define TEST_GURT_HASH_NUM_THREADS (D_ON_VALGRIND ? 4 : 16)
 #define TEST_GURT_HASH_ENTRIES_PER_THREAD \
 	(TEST_GURT_HASH_NUM_ENTRIES / TEST_GURT_HASH_NUM_THREADS)
 #define TEST_GURT_HASH_KEY_LEN (65L)
@@ -1166,11 +1166,14 @@ test_gurt_hash_decref(void **state)
 	assert_int_equal(rc, 0);
 }
 
+#define GA_BUF_SIZE 32
 static void
 test_gurt_alloc(void **state)
 {
 	const char *str1 = "Hello World1";
 	const char str2[] = "Hello World2";
+	char zero_buf[GA_BUF_SIZE] = {0};
+	char fill_buf[GA_BUF_SIZE] = {0};
 	char *testptr;
 	char *newptr;
 	int *testint;
@@ -1180,6 +1183,8 @@ test_gurt_alloc(void **state)
 	int nr = 10;
 	int rc;
 
+	memset(fill_buf, 'f', sizeof(fill_buf));
+
 	rc = d_log_init();
 	assert_int_equal(rc, 0);
 
@@ -1187,20 +1192,20 @@ test_gurt_alloc(void **state)
 	assert_non_null(path);
 	assert_string_equal(path, "/usr");
 	D_FREE(path);
-	D_STRNDUP(testptr, str1, 32);
+	D_STRNDUP(testptr, str1, 13);
 	assert_non_null(testptr);
 	assert_string_equal(testptr, str1);
 	D_FREE(testptr);
 	assert_null(testptr);
-	D_STRNDUP(testptr, str2, sizeof(str2));
+	D_STRNDUP_S(testptr, str2);
 	assert_non_null(testptr);
 	assert_string_equal(testptr, str2);
 	D_FREE(testptr);
 	assert_null(testptr);
-	D_REALLOC(newptr, testptr, 10);
+	D_REALLOC(newptr, testptr, 0, 10);
 	assert_non_null(newptr);
 	assert_null(testptr);
-	D_REALLOC(testptr, newptr, 20);
+	D_REALLOC(testptr, newptr, 10, 20);
 	assert_non_null(testptr);
 	assert_null(newptr);
 	D_FREE(testptr);
@@ -1218,19 +1223,43 @@ test_gurt_alloc(void **state)
 	assert_non_null(testint);
 	D_FREE(testint);
 	assert_null(testint);
+	D_ALLOC_PTR_NZ(testint);
+	assert_non_null(testint);
+	D_FREE(testint);
+	assert_null(testint);
 
 	D_ALLOC_ARRAY(ptr1, nr);
 	assert_non_null(ptr1);
-
-	D_REALLOC_ARRAY(ptr2, ptr1, nr + 10);
-
+	D_REALLOC_ARRAY(ptr2, ptr1, nr, nr + 10);
 	assert_non_null(ptr2);
 	assert_null(ptr1);
-	/* Fill memory to catch wrong allocation via valgrind */
-	memset(ptr2, 0x0, (nr + 10) * sizeof(*ptr2));
-
 	D_FREE(ptr2);
 	assert_null(ptr2);
+
+	D_ALLOC_ARRAY_NZ(ptr1, nr);
+	assert_non_null(ptr1);
+	D_REALLOC_ARRAY_NZ(ptr2, ptr1, nr + 10);
+	assert_non_null(ptr2);
+	assert_null(ptr1);
+	D_FREE(ptr2);
+	assert_null(ptr2);
+
+	D_ALLOC(newptr, GA_BUF_SIZE);
+	assert_non_null(newptr);
+	assert_memory_equal(newptr, zero_buf, sizeof(zero_buf));
+	D_FREE(newptr);
+	assert_null(newptr);
+	D_REALLOC(newptr, testptr, 0, GA_BUF_SIZE);
+	assert_non_null(newptr);
+	assert_memory_equal(newptr, zero_buf, sizeof(zero_buf));
+	memset(newptr, 'f', sizeof(fill_buf));
+	D_REALLOC(testptr, newptr, GA_BUF_SIZE, GA_BUF_SIZE * 2);
+	assert_non_null(testptr);
+	newptr = testptr;
+	assert_memory_equal(newptr, fill_buf, sizeof(fill_buf));
+	assert_memory_equal(newptr + GA_BUF_SIZE, zero_buf, sizeof(zero_buf));
+	D_FREE(newptr);
+	assert_null(newptr);
 
 	d_log_fini();
 }
@@ -1281,7 +1310,7 @@ hash_parallel_insert(struct hash_thread_arg *arg)
 	     i++) {
 		rc = d_hash_rec_insert(arg->thtab, arg->entries[i]->tl_key,
 				       TEST_GURT_HASH_KEY_LEN,
-				       &(arg->entries[i]->tl_link), 1);
+				       &arg->entries[i]->tl_link, 1);
 		if (arg->check_result)
 			TEST_THREAD_ASSERT(rc == 0);
 	}
@@ -1338,7 +1367,7 @@ hash_parallel_lookup(struct hash_thread_arg *arg)
 				       TEST_GURT_HASH_KEY_LEN);
 		if (arg->check_result)
 			/* Make sure the returned pointer is the right one */
-			TEST_THREAD_ASSERT(test == &(arg->entries[i]->tl_link));
+			TEST_THREAD_ASSERT(test == &arg->entries[i]->tl_link);
 	}
 
 	return NULL;
@@ -2075,7 +2104,8 @@ hash_perf(int hash_type, unsigned int buckets, unsigned int loop)
 static void
 test_hash_perf(void **state)
 {
-	unsigned el = (16 << 10); /* elements per buckert */
+	unsigned shift = D_ON_VALGRIND ? 3 : 10;
+	unsigned el = (16 << shift); /* elements per buckert */
 	unsigned i;
 
 	/* hash buckets: 2, 4, 8... 8192 */

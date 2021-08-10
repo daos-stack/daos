@@ -21,29 +21,13 @@ const maxHelperStreamCount = 2
 // engine's configuration.
 var ErrNoPinnedNumaNode = errors.New("pinned NUMA node was not configured")
 
-// StorageConfig encapsulates an I/O Engine's storage configuration.
-type StorageConfig struct {
-	SCM  storage.ScmConfig  `yaml:",inline"`
-	Bdev storage.BdevConfig `yaml:",inline"`
-}
-
-// Validate ensures that the configuration meets minimum standards.
-func (sc *StorageConfig) Validate() error {
-	if err := sc.SCM.Validate(); err != nil {
-		return errors.Wrap(err, "scm config validation failed")
-	}
-	if err := sc.Bdev.Validate(); err != nil {
-		return errors.Wrap(err, "bdev config validation failed")
-	}
-	return nil
-}
-
 // FabricConfig encapsulates networking fabric configuration.
 type FabricConfig struct {
 	Provider        string `yaml:"provider,omitempty" cmdEnv:"CRT_PHY_ADDR_STR"`
 	Interface       string `yaml:"fabric_iface,omitempty" cmdEnv:"OFI_INTERFACE"`
 	InterfacePort   int    `yaml:"fabric_iface_port,omitempty" cmdEnv:"OFI_PORT,nonzero"`
 	PinnedNumaNode  *uint  `yaml:"pinned_numa_node,omitempty" cmdLongFlag:"--pinned_numa_node" cmdShortFlag:"-p"`
+	BypassHealthChk *bool  `yaml:"bypass_health_chk,omitempty" cmdLongFlag:"--bypass_health_chk" cmdShortFlag:"-b"`
 	CrtCtxShareAddr uint32 `yaml:"crt_ctx_share_addr,omitempty" cmdEnv:"CRT_CTX_SHARE_ADDR"`
 	CrtTimeout      uint32 `yaml:"crt_timeout,omitempty" cmdEnv:"CRT_TIMEOUT"`
 }
@@ -78,16 +62,18 @@ func (fc *FabricConfig) GetNumaNode() (uint, error) {
 
 // Validate ensures that the configuration meets minimum standards.
 func (fc *FabricConfig) Validate() error {
-	if fc.Provider == "" {
+	switch {
+	case fc.Provider == "":
 		return errors.New("provider not set")
-	}
-	if fc.Interface == "" {
+	case fc.Interface == "":
 		return errors.New("fabric_iface not set")
-	}
-	if fc.InterfacePort == 0 {
+	case fc.InterfacePort == 0:
 		return errors.New("fabric_iface_port not set")
+	case fc.InterfacePort < 0:
+		return errors.New("fabric_iface_port cannot be negative")
+	default:
+		return nil
 	}
-	return nil
 }
 
 // cleanEnvVars scrubs the supplied slice of environment
@@ -153,22 +139,36 @@ func mergeEnvVars(curVars []string, newVars []string) (merged []string) {
 	return
 }
 
+type LegacyStorage struct {
+	storage.ScmConfig  `yaml:",inline,omitempty"`
+	ScmClass           storage.Class `yaml:"scm_class,omitempty"`
+	storage.BdevConfig `yaml:",inline,omitempty"`
+	BdevClass          storage.Class `yaml:"bdev_class,omitempty"`
+}
+
+func (ls *LegacyStorage) WasDefined() bool {
+	return ls.ScmClass != storage.ClassNone || ls.BdevClass != storage.ClassNone
+}
+
 // Config encapsulates an I/O Engine's configuration.
 type Config struct {
-	Rank              *system.Rank  `yaml:"rank,omitempty"`
-	Modules           string        `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
-	TargetCount       int           `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
-	HelperStreamCount int           `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
-	ServiceThreadCore int           `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
-	SystemName        string        `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
-	SocketDir         string        `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
-	LogMask           string        `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
-	LogFile           string        `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
-	Storage           StorageConfig `yaml:",inline"`
-	Fabric            FabricConfig  `yaml:",inline"`
-	EnvVars           []string      `yaml:"env_vars,omitempty"`
-	EnvPassThrough    []string      `yaml:"env_pass_through,omitempty"`
-	Index             uint32        `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
+	Rank              *system.Rank   `yaml:"rank,omitempty"`
+	Modules           string         `yaml:"modules,omitempty" cmdLongFlag:"--modules" cmdShortFlag:"-m"`
+	TargetCount       int            `yaml:"targets,omitempty" cmdLongFlag:"--targets,nonzero" cmdShortFlag:"-t,nonzero"`
+	HelperStreamCount int            `yaml:"nr_xs_helpers" cmdLongFlag:"--xshelpernr" cmdShortFlag:"-x"`
+	ServiceThreadCore int            `yaml:"first_core" cmdLongFlag:"--firstcore,nonzero" cmdShortFlag:"-f,nonzero"`
+	SystemName        string         `yaml:"name,omitempty" cmdLongFlag:"--group" cmdShortFlag:"-g"`
+	SocketDir         string         `yaml:"socket_dir,omitempty" cmdLongFlag:"--socket_dir" cmdShortFlag:"-d"`
+	LogMask           string         `yaml:"log_mask,omitempty" cmdEnv:"D_LOG_MASK"`
+	LogFile           string         `yaml:"log_file,omitempty" cmdEnv:"D_LOG_FILE"`
+	LegacyStorage     LegacyStorage  `yaml:",inline,omitempty"`
+	Storage           storage.Config `yaml:",inline,omitempty"`
+	Fabric            FabricConfig   `yaml:",inline"`
+	EnvVars           []string       `yaml:"env_vars,omitempty"`
+	EnvPassThrough    []string       `yaml:"env_pass_through,omitempty"`
+	Index             uint32         `yaml:"-" cmdLongFlag:"--instance_idx" cmdShortFlag:"-I"`
+	MemSize           int            `yaml:"-" cmdLongFlag:"--mem_size" cmdShortFlag:"-r"`
+	HugePageSz        int            `yaml:"-" cmdLongFlag:"--hugepage_size" cmdShortFlag:"-H"`
 }
 
 // NewConfig returns an I/O Engine config.
@@ -188,24 +188,47 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
+	if c.LogMask != "" {
+		return ValidateLogMasks(c.LogMask)
+	}
+
 	return nil
 }
 
 // CmdLineArgs returns a slice of command line arguments to be
 // supplied when starting an I/O Engine instance.
 func (c *Config) CmdLineArgs() ([]string, error) {
-	return parseCmdTags(c, shortFlagTag, joinShortArgs, nil)
+	args, err := parseCmdTags(c, shortFlagTag, joinShortArgs, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, sc := range c.Storage.Tiers {
+		sArgs, err := parseCmdTags(sc, shortFlagTag, joinShortArgs, nil)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, sArgs...)
+	}
+
+	return args, nil
 }
 
 // CmdLineEnv returns a slice of environment variables to be
 // supplied when starting an I/O Engine instance.
 func (c *Config) CmdLineEnv() ([]string, error) {
-	tagEnv, err := parseCmdTags(c, envTag, joinEnvVars, nil)
+	env, err := parseCmdTags(c, envTag, joinEnvVars, nil)
 	if err != nil {
 		return nil, err
 	}
+	for _, sc := range c.Storage.Tiers {
+		sEnv, err := parseCmdTags(sc, envTag, joinEnvVars, nil)
+		if err != nil {
+			return nil, err
+		}
+		env = mergeEnvVars(env, sEnv)
+	}
 
-	return mergeEnvVars(c.EnvVars, tagEnv), nil
+	return mergeEnvVars(c.EnvVars, env), nil
 }
 
 // HasEnvVar returns true if the configuration contains
@@ -248,70 +271,42 @@ func (c *Config) WithSystemName(name string) *Config {
 	return c
 }
 
-// WithHostname sets the hostname to be used when generating NVMe configurations.
-func (c *Config) WithHostname(name string) *Config {
-	c.Storage.Bdev.Hostname = name
+// WithStorage creates the set of storage tier configurations.
+// Note that this method replaces any existing configs. To append,
+// use AppendStorage().
+func (c *Config) WithStorage(cfgs ...*storage.TierConfig) *Config {
+	c.Storage.Tiers = c.Storage.Tiers[:]
+	c.AppendStorage(cfgs...)
+	return c
+}
+
+// AppendStorage appends the given storage tier configurations to
+// the existing set of storage configs.
+func (c *Config) AppendStorage(cfgs ...*storage.TierConfig) *Config {
+	for _, cfg := range cfgs {
+		if cfg.Tier == 0 {
+			cfg.Tier = len(c.Storage.Tiers)
+		}
+		c.Storage.Tiers = append(c.Storage.Tiers, cfg)
+	}
+	return c
+}
+
+// WithStorageConfigOutputPath sets the path to the generated NVMe config file used by SPDK.
+func (c *Config) WithStorageConfigOutputPath(cfgPath string) *Config {
+	c.Storage.ConfigOutputPath = cfgPath
+	return c
+}
+
+// WithStorageVosEnv sets the VOS_BDEV_CLASS env variable.
+func (c *Config) WithStorageVosEnv(ve string) *Config {
+	c.Storage.VosEnv = ve
 	return c
 }
 
 // WithSocketDir sets the path to the instance's dRPC socket directory.
 func (c *Config) WithSocketDir(dir string) *Config {
 	c.SocketDir = dir
-	return c
-}
-
-// WithScmClass defines the type of SCM storage to be configured.
-func (c *Config) WithScmClass(scmClass string) *Config {
-	c.Storage.SCM.Class = storage.ScmClass(scmClass)
-	return c
-}
-
-// WithScmMountPoint sets the path to the device used for SCM storage.
-func (c *Config) WithScmMountPoint(scmPath string) *Config {
-	c.Storage.SCM.MountPoint = scmPath
-	return c
-}
-
-// WithScmRamdiskSize sets the size (in GB) of the ramdisk used
-// to emulate SCM (no effect if ScmClass is not RAM).
-func (c *Config) WithScmRamdiskSize(size int) *Config {
-	c.Storage.SCM.RamdiskSize = size
-	return c
-}
-
-// WithScmDeviceList sets the list of devices to be used for SCM storage.
-func (c *Config) WithScmDeviceList(devices ...string) *Config {
-	c.Storage.SCM.DeviceList = devices
-	return c
-}
-
-// WithBdevClass defines the type of block device storage to be used.
-func (c *Config) WithBdevClass(bdevClass string) *Config {
-	c.Storage.Bdev.Class = storage.BdevClass(bdevClass)
-	return c
-}
-
-// WithBdevDeviceList sets the list of block devices to be used.
-func (c *Config) WithBdevDeviceList(devices ...string) *Config {
-	c.Storage.Bdev.DeviceList = devices
-	return c
-}
-
-// WithBdevDeviceCount sets the number of devices to be created when BdevClass is malloc.
-func (c *Config) WithBdevDeviceCount(count int) *Config {
-	c.Storage.Bdev.DeviceCount = count
-	return c
-}
-
-// WithBdevFileSize sets the backing file size (used when BdevClass is malloc or file).
-func (c *Config) WithBdevFileSize(size int) *Config {
-	c.Storage.Bdev.FileSize = size
-	return c
-}
-
-// WithBdevConfigPath sets the path to the generated NVMe config file used by SPDK.
-func (c *Config) WithBdevConfigPath(cfgPath string) *Config {
-	c.Storage.Bdev.ConfigPath = cfgPath
 	return c
 }
 
@@ -342,6 +337,12 @@ func (c *Config) WithFabricInterfacePort(ifacePort int) *Config {
 // WithPinnedNumaNode sets the NUMA node affinity for the I/O Engine instance
 func (c *Config) WithPinnedNumaNode(numa *uint) *Config {
 	c.Fabric.PinnedNumaNode = numa
+	return c
+}
+
+// WithBypassHealthChk sets the NVME health check bypass for this instance
+func (c *Config) WithBypassHealthChk(bypass *bool) *Config {
+	c.Fabric.BypassHealthChk = bypass
 	return c
 }
 
@@ -384,5 +385,17 @@ func (c *Config) WithLogFile(logPath string) *Config {
 // WithLogMask sets the DAOS logging mask to be used by this instance.
 func (c *Config) WithLogMask(logMask string) *Config {
 	c.LogMask = logMask
+	return c
+}
+
+// WithMemSize sets the NVMe memory size for SPDK memory allocation on this instance.
+func (c *Config) WithMemSize(memsize int) *Config {
+	c.MemSize = memsize
+	return c
+}
+
+// WithHugePageSize sets the configured hugepage size on this instance.
+func (c *Config) WithHugePageSize(hugepagesz int) *Config {
+	c.HugePageSz = hugepagesz
 	return c
 }

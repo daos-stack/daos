@@ -20,19 +20,22 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 {
 	struct fuse_entry_param	entry = {0};
 	d_list_t		*rlink;
+	ino_t			wipe_parent = 0;
+	char			wipe_name[NAME_MAX + 1];
 	int			rc;
 
 	D_ASSERT(ie->ie_parent);
 	D_ASSERT(ie->ie_dfs);
 
-	/* Do not cache directory attributes as this does not work with uns */
-	if (!S_ISDIR(ie->ie_stat.st_mode))
-		entry.entry_timeout = ie->ie_dfs->dfs_attr_timeout;
+	if (S_ISDIR(ie->ie_stat.st_mode))
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_dir_timeout;
+	else
+		entry.entry_timeout = ie->ie_dfs->dfc_dentry_timeout;
+
+	/* Set the attr caching attributes of this entry */
+	entry.attr_timeout = ie->ie_dfs->dfc_attr_timeout;
 
 	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
-
-	/* Set the caching attributes of this entry */
-	entry.attr_timeout = ie->ie_dfs->dfs_attr_timeout;
 
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
@@ -91,19 +94,25 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 				"Maybe updating parent inode %#lx dfs_ino %#lx",
 				entry.ino, ie->ie_dfs->dfs_ino);
 
+		/** update the chunk size and oclass of inode entry */
+		dfs_obj_copy_attr(inode->ie_obj, ie->ie_obj);
+
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
-		} else {
-			rc = dfs_update_parent(inode->ie_obj, ie->ie_obj,
-					       ie->ie_name);
-			if (rc != 0)
-				DFUSE_TRA_ERROR(inode,
-						"dfs_update_parent() failed %d",
-						rc);
-		}
-		inode->ie_parent = ie->ie_parent;
-		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
+		} else if ((inode->ie_parent != ie->ie_parent) ||
+			(strncmp(inode->ie_name, ie->ie_name, NAME_MAX + 1) != 0)) {
+			DFUSE_TRA_DEBUG(inode, "File has moved from '%s to '%s'",
+					inode->ie_name, ie->ie_name);
 
+			dfs_update_parent(inode->ie_obj, ie->ie_obj, ie->ie_name);
+
+			/* Save the old name so that we can invalidate it in later */
+			wipe_parent = inode->ie_parent;
+			strncpy(wipe_name, inode->ie_name, NAME_MAX + 1);
+
+			inode->ie_parent = ie->ie_parent;
+			strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
+		}
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(fs_handle, ie);
 		ie = inode;
@@ -113,6 +122,15 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		DFUSE_REPLY_CREATE(ie, req, entry, fi_out);
 	else
 		DFUSE_REPLY_ENTRY(ie, req, entry);
+
+	if (wipe_parent == 0)
+		return;
+
+	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session, wipe_parent,
+					      wipe_name, strnlen(wipe_name, NAME_MAX));
+	if (rc)
+		DFUSE_TRA_ERROR(ie, "inval_entry returned %d: %s", rc, strerror(-rc));
+
 	return;
 out_err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
@@ -148,7 +166,7 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	 * otherwise allocate a new one.
 	 */
 
-	rc = dfuse_pool_open(fs_handle, &dattr.da_puuid, &dfp);
+	rc = dfuse_pool_connect(fs_handle, &dattr.da_puuid, &dfp);
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_err, rc);
 
@@ -197,13 +215,13 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 		const char *name)
 {
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
-	struct dfuse_inode_entry	*ie = NULL;
+	struct dfuse_inode_entry	*ie;
 	int				rc;
 	char				out[DUNS_MAX_XATTR_LEN];
 	char				*outp = &out[0];
 	daos_size_t			attr_len = DUNS_MAX_XATTR_LEN;
 
-	DFUSE_TRA_DEBUG(fs_handle,
+	DFUSE_TRA_DEBUG(parent,
 			"Parent:%#lx '%s'", parent->ie_stat.st_ino, name);
 
 	D_ALLOC_PTR(ie);
@@ -252,11 +270,10 @@ out_release:
 out_free:
 	D_FREE(ie);
 out:
-	if (rc == ENOENT && parent->ie_dfs->dfs_attr_timeout > 0) {
+	if (rc == ENOENT && parent->ie_dfs->dfc_ndentry_timeout > 0) {
 		struct fuse_entry_param entry = {};
 
-		entry.entry_timeout = parent->ie_dfs->dfs_attr_timeout;
-
+		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
 		DFUSE_REPLY_ENTRY(parent, req, entry);
 	} else {
 		DFUSE_REPLY_ERR_RAW(parent, req, rc);

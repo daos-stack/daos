@@ -35,6 +35,7 @@ void ds_mgmt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_tgt_params_set_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_profile_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc);
+void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc);
 void ds_mgmt_mark_hdlr(crt_rpc_t *rpc);
 
 /** srv_system.c */
@@ -83,7 +84,9 @@ int ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			size_t scm_size, size_t nvme_size,
 			size_t domains_nr, uint32_t *domains);
 int ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-			  daos_prop_t *prop, daos_prop_t **result);
+			  daos_prop_t *prop);
+int ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+			  daos_prop_t *prop);
 int ds_mgmt_pool_get_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 			 daos_prop_t **access_prop);
 int ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,

@@ -13,13 +13,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/drpc"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -145,7 +146,7 @@ func setupMockDrpcClientBytes(svc *mgmtSvc, respBytes []byte, err error) {
 	mi := svc.harness.instances[0]
 	cfg := &mockDrpcClientConfig{}
 	cfg.setSendMsgResponse(drpc.Status_SUCCESS, respBytes, err)
-	mi.setDrpcClient(newMockDrpcClient(cfg))
+	mi.(*EngineInstance).setDrpcClient(newMockDrpcClient(cfg))
 }
 
 // setupMockDrpcClient sets up the dRPC client for the mgmtSvc to return
@@ -156,15 +157,22 @@ func setupMockDrpcClient(svc *mgmtSvc, resp proto.Message, err error) {
 }
 
 // newTestEngine returns an EngineInstance configured for testing.
-func newTestEngine(log logging.Logger, isAP bool, engineCfg ...*engine.Config) *EngineInstance {
+func newTestEngine(log logging.Logger, isAP bool, provider *storage.Provider, engineCfg ...*engine.Config) *EngineInstance {
 	if len(engineCfg) == 0 {
-		engineCfg = append(engineCfg, engine.NewConfig().WithTargetCount(1))
+		engineCfg = append(engineCfg, engine.NewConfig().
+			WithTargetCount(1).
+			WithStorage(
+				storage.NewTierConfig().
+					WithBdevClass("nvme").
+					WithBdevDeviceList("foo", "bar"),
+			),
+		)
 	}
 	rCfg := new(engine.TestRunnerConfig)
 	rCfg.Running.SetTrue()
 	r := engine.NewTestRunner(rCfg, engineCfg[0])
 
-	srv := NewEngineInstance(log, nil, nil, nil, r)
+	srv := NewEngineInstance(log, provider, nil, r)
 	srv.setSuperblock(&Superblock{
 		Rank: system.NewRankPtr(0),
 	})
@@ -186,9 +194,11 @@ func mockTCPResolver(netString string, address string) (*net.TCPAddr, error) {
 // newTestMgmtSvc creates a mgmtSvc that contains an EngineInstance
 // properly set up as an MS.
 func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
-	srv := newTestEngine(log, true)
-
 	harness := NewEngineHarness(log)
+	provider := storage.MockProvider(log, 0, nil, nil, nil, nil)
+
+	srv := newTestEngine(log, true, provider)
+
 	if err := harness.AddInstance(srv); err != nil {
 		t.Fatal(err)
 	}
@@ -203,9 +213,10 @@ func newTestMgmtSvc(t *testing.T, log logging.Logger) *mgmtSvc {
 // configured as an access point.
 func newTestMgmtSvcMulti(t *testing.T, log logging.Logger, count int, isAP bool) *mgmtSvc {
 	harness := NewEngineHarness(log)
+	provider := storage.MockProvider(log, 0, nil, nil, nil, nil)
 
 	for i := 0; i < count; i++ {
-		srv := newTestEngine(log, i == 0 && isAP)
+		srv := newTestEngine(log, i == 0 && isAP, provider)
 		srv._superblock.Rank = system.NewRankPtr(uint32(i))
 
 		if err := harness.AddInstance(srv); err != nil {

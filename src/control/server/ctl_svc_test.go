@@ -14,6 +14,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
 	"github.com/daos-stack/daos/src/control/system"
@@ -30,12 +31,14 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		)
 	}
 
+	// share sys provider between engines to be able to access to same mock config data
+	sp := scm.NewMockSysProvider(log, smsc)
+
 	cs := &ControlService{
-		StorageControlService: *NewStorageControlService(log,
-			bdev.NewMockProvider(log, bmbc),
-			scm.NewMockProvider(log, smbc, smsc),
-			cfg.Engines,
-		),
+		StorageControlService: *NewMockStorageControlService(log, cfg.Engines,
+			sp,
+			scm.NewProvider(log, scm.NewMockBackend(smbc), sp),
+			bdev.NewMockProvider(log, bmbc)),
 		harness: &EngineHarness{
 			log: log,
 		},
@@ -43,19 +46,20 @@ func mockControlService(t *testing.T, log logging.Logger, cfg *config.Server, bm
 		srvCfg: cfg,
 	}
 
-	for _, engineCfg := range cfg.Engines {
-		bp, err := bdev.NewClassProvider(log, "", &engineCfg.Storage.Bdev)
-		if err != nil {
-			t.Fatal(err)
-		}
-		rCfg := new(engine.TestRunnerConfig)
-		rCfg.Running.SetTrue()
-		runner := engine.NewTestRunner(rCfg, engineCfg)
-		instance := NewEngineInstance(log, bp, cs.scm, nil, runner)
-		instance.setSuperblock(&Superblock{
-			Rank: system.NewRankPtr(engineCfg.Rank.Uint32()),
+	for _, ec := range cfg.Engines {
+		trc := new(engine.TestRunnerConfig)
+		trc.Running.SetTrue()
+		runner := engine.NewTestRunner(trc, ec)
+
+		sp := storage.MockProvider(log, 0, &ec.Storage, sp,
+			scm.NewProvider(log, scm.NewMockBackend(smbc), sp),
+			bdev.NewMockProvider(log, bmbc))
+		ei := NewEngineInstance(log, sp, nil, runner)
+		ei.setSuperblock(&Superblock{
+			Rank: system.NewRankPtr(ec.Rank.Uint32()),
 		})
-		if err := cs.harness.AddInstance(instance); err != nil {
+		ei.ready.SetTrue()
+		if err := cs.harness.AddInstance(ei); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -67,9 +71,10 @@ func mockControlServiceNoSB(t *testing.T, log logging.Logger, cfg *config.Server
 	cs := mockControlService(t, log, cfg, bmbc, smbc, smsc)
 
 	// don't set a superblock and init with a stopped test runner
-	for i, srv := range cs.harness.instances {
-		srv.setSuperblock(nil)
-		srv.runner = engine.NewTestRunner(nil, cfg.Engines[i])
+	for i, e := range cs.harness.instances {
+		ei := e.(*EngineInstance)
+		ei.setSuperblock(nil)
+		ei.runner = engine.NewTestRunner(nil, cfg.Engines[i])
 	}
 
 	return cs

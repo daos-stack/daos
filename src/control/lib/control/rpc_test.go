@@ -9,19 +9,18 @@ package control
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"runtime"
 	"sort"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -219,7 +218,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 
 func TestControl_InvokeUnaryRPC(t *testing.T) {
 	// make the rand deterministic for testing
-	msCandidateRandSource = rand.NewSource(1)
+	msCandidateRandSource = newSafeRandSource(1)
 
 	clientCfg := DefaultConfig()
 	clientCfg.TransportConfig.AllowInsecure = true

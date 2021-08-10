@@ -112,7 +112,7 @@ iv_shutdown(crt_rpc_t *rpc)
 	rc = crt_reply_send(rpc);
 	assert(rc == 0);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 
 	DBG_EXIT();
 	return 0;
@@ -127,7 +127,7 @@ init_work_contexts(void)
 	assert(rc == 0);
 
 	rc = pthread_create(&g_progress_thread, 0,
-			    tc_progress_fn, &g_main_ctx);
+			    crtu_progress_fn, &g_main_ctx);
 	assert(rc == 0);
 }
 
@@ -1264,10 +1264,10 @@ int main(int argc, char **argv)
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(my_rank, 20, true, true);
+	crtu_test_init(my_rank, 20, true, true);
 
 	rc = crt_init(IV_GRP_NAME, CRT_FLAG_BIT_SERVER |
-				CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+				   CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert(rc == 0);
 
 	rc = crt_rank_self_set(my_rank);
@@ -1297,7 +1297,7 @@ int main(int argc, char **argv)
 		D_DEBUG(DB_TEST, "Group Config File: %s\n", grp_cfg_file);
 	}
 
-	rc = tc_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
+	rc = crtu_load_group_from_file(grp_cfg_file, g_main_ctx, grp, my_rank,
 				     true);
 	if (rc != 0) {
 		D_ERROR("Failed to load group file %s\n", grp_cfg_file);
@@ -1318,7 +1318,7 @@ int main(int argc, char **argv)
 	rc = crt_group_ranks_get(grp, &rank_list);
 	assert(rc == 0);
 
-	rc = tc_wait_for_ranks(g_main_ctx, grp, rank_list, 0, 1, 5, 120);
+	rc = crtu_wait_for_ranks(g_main_ctx, grp, rank_list, 0, 1, 5, 120);
 	assert(rc == 0);
 
 	d_rank_list_free(rank_list);
@@ -1330,9 +1330,6 @@ int main(int argc, char **argv)
 	 * before those are fully initialized
 	 */
 	wait_for_namespace();
-
-	rc = crt_swim_init(0);
-	assert(rc == 0);
 
 	if (g_my_rank == 0) {
 		rc = crt_group_config_save(grp, true);

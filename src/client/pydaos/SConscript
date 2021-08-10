@@ -1,18 +1,19 @@
 """Build pydaos client"""
 import daos_build
+import sys
+import compiler_setup
 
-def build_shim_module(env, lib_prefix, version):
+def build_shim_module(env, lib_prefix):
     """Build PyDAOS shim module for the specified python version"""
 
     if GetOption('help'):
         return
 
     new_env = env.Clone()
-    extra_flags = ""
-
-    if version == "3":
+    version = "{}.{}".format(
+        sys.version_info.major, sys.version_info.minor)
+    if sys.version_info.major == 3:
         tgt_name = 'pydaos_shim'
-        extra_flags = " -D__USE_PYTHON3__==1"
         new_env.ParseConfig("pkg-config --cflags --libs python3")
     else:
         raise Exception("Unsupported python version %s" % version)
@@ -20,13 +21,14 @@ def build_shim_module(env, lib_prefix, version):
     new_env.Replace(LIBS=['daos', 'duns'])
     new_env.AppendUnique(LIBPATH=["../dfs"])
 
-    daos_build.clear_icc_env(new_env)
+    new_env['CC'] = 'gcc'
+    new_env.AppendUnique(CCFLAGS='-pthread')
+
+    compiler_setup.base_setup(new_env)
 
     obj = new_env.SharedObject(tgt_name, 'pydaos_shim.c',
-                               CC='gcc -pthread',
                                SHLINKFLAGS=[],
-                               SHLIBPREFIX="",
-                               CPPFLAGS=extra_flags)
+                               SHLIBPREFIX="")
     base = daos_build.library(new_env, target=tgt_name, source=[obj],
                               install_off="../../../..",
                               SHLINK='gcc -pthread -shared',
@@ -48,9 +50,9 @@ def build_shim_module(env, lib_prefix, version):
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('base_env')
 
-    build_shim_module(env, '$PREFIX/lib64/', "3")
+    build_shim_module(base_env, '$PREFIX/lib64/')
 
 if __name__ == "SCons.Script":
     scons()

@@ -5,6 +5,8 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 # pylint: disable=too-many-lines
+# this needs to be disabled as list_tests.py is still using python2
+# pylint: disable=raise-missing-from
 
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
@@ -67,7 +69,7 @@ def display(args, message):
         args (argparse.Namespace): command line arguments for this program
         message (str): message to display if verbosity is set
     """
-    if args.verbose:
+    if args.verbose > 0:
         print(message)
 
 
@@ -222,7 +224,7 @@ def set_test_environment(args):
     # Python paths required for functional testing
     set_python_environment()
 
-    if args.verbose:
+    if args.verbose > 0:
         print("ENVIRONMENT VARIABLES")
         for key in sorted(os.environ):
             print("  {}: {}".format(key, os.environ[key]))
@@ -235,18 +237,8 @@ def set_python_environment():
         os.path.abspath("util"),
         os.path.abspath("cart/util"),
     ]
-    site_packages = site.getsitepackages()
 
-    # Including paths for pydaos shim - should be removed when shim is removed
-    additional_site_packages = []
-    for site_package in site_packages:
-        if "/lib64/python3." in site_package:
-            additional_site_packages.append(
-                re.sub(r"python[0-9.]+", "python3", site_package))
-    site_packages.extend(additional_site_packages)
-    # end of shim work around
-
-    required_python_paths.extend(site_packages)
+    required_python_paths.extend(site.getsitepackages())
 
     # Check the PYTHONPATH env definition
     python_path = os.environ.get("PYTHONPATH")
@@ -548,7 +540,10 @@ def get_test_list(tags):
         if not test_list:
             test_list = ["./"]
         version = float(get_output(["avocado", "-v"]).split()[-1])
-        if version >= 82.0:
+        print("Running with Avocado {}".format(version))
+        if version >= 83.0:
+            command = ["avocado", "list"]
+        elif version >= 82.0:
             command = ["avocado", "--paginator=off", "list"]
         else:
             command = ["avocado", "list", "--paginator=off"]
@@ -561,14 +556,14 @@ def get_test_list(tags):
     return test_tags, test_list
 
 
-def get_test_files(test_list, args, tmp_dir):
+def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
     """Get a list of the test scripts to run and their yaml files.
 
     Args:
         test_list (list): list of test scripts to run
         args (argparse.Namespace): command line arguments for this program
-        tmp_dir (TemporaryDirectory): temporary directory object to use to
-            write modified yaml files
+        yaml_dir (str): directory in which to write the modified yaml files
+        vmd_flag (bool): PCI address list contains VMD address.
 
     Returns:
         list: a list of dictionaries of each test script and yaml file; If
@@ -576,11 +571,13 @@ def get_test_files(test_list, args, tmp_dir):
             dictionary entry will be set to None.
 
     """
-    test_files = [{"py": test, "yaml": None} for test in test_list]
+    test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        test_file["yaml"] = replace_yaml_file(
-            "{}.yaml".format(base), args, tmp_dir)
+        yaml_file, env_vars = replace_yaml_file(
+            "{}.yaml".format(base), args, yaml_dir, vmd_flag)
+        test_file["yaml"] = yaml_file
+        test_file["env"] = env_vars
 
     return test_files
 
@@ -613,6 +610,9 @@ def get_nvme_replacement(args):
     Returns:
         str: a comma-separated list of nvme device pci addresses available on
             all of the specified test servers
+        bool: VMD PCI address included in the pci address string (True)
+              VMD PCI address not included in the pci address string (False)
+              Defaults to False (For NVME only)
 
     """
     # A list of server host is required to able to auto-detect NVMe devices
@@ -620,13 +620,22 @@ def get_nvme_replacement(args):
         print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
         sys.exit(1)
 
-    # Get a list of NVMe devices from each specified server host
+    # Get a list of NVMe, VMD devices from each specified server host
+    # if nvme:auto is set, all PCI Non-volatile memory controller
+    # devices are considered NVME (some NVMEs might be behind the VMD
+    # controller). if nvme:vmd, then ignore the NVME
+    # PCI addressed devices behind the VMD controller.
     host_list = list(args.test_servers)
+
     command_list = [
-        "/sbin/lspci -D", "grep 'Non-Volatile memory controller:'"]
+        "/sbin/lspci -D",
+        "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+        "Non-Volatile memory controller:'"]
     if ":" in args.nvme:
         command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+
     command = " | ".join(command_list)
+
     task = get_remote_output(host_list, command)
 
     # Verify the command was successful on each server host
@@ -647,6 +656,118 @@ def get_nvme_replacement(args):
     return ",".join(devices)
 
 
+def get_vmd_replacement(args):
+    """Determine the value to use for the '--nvme=auto_vmd*' command line argument.
+
+    Parse the lspci output for any VMD devices, (e.g. --nvme=auto_vmd)
+        $ lspci -D | grep Volume
+        0000:5d:05.5 RAID bus controller:
+            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
+
+    Other command line options which will be supported are:
+    (e.g. '--nvme=auto_vmd_disks') [Use all NVME devices behind the VMD
+    controller]
+        $ lspci | grep 'Non-Volatile memory controller:' | grep '10001'
+        10001:01:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    (e.g. '--name=auto_vmd_mixed) [Use the NVME devices and VMD controller PCI
+    address]
+        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
+        0000:5d:05.5 RAID bus controller:
+            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
+        0000:da:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    (e.g. '--name=auto_vmd_nvme) [Use the NVME devices and NVME devices behind
+    VMD controller]
+        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
+        0000:da:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+        10001:01:00.0 Non-Volatile memory controller:
+            Intel Corporation NVMe Datacenter SSD [Optane]
+
+    Args:
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        str: a comma-separated list of vmd,nvme device pci addresses available
+        on all of the specified test servers
+        bool: VMD PCI address included in the pci address string (True)
+              VMD PCI address not included in the pci address string (False)
+    """
+    # A list of server host is required to able to auto-detect NVMe devices
+    if not args.test_servers:
+        print("ERROR: Missing a test_servers list to auto-detect NVMe devices")
+        sys.exit(1)
+
+    # Get a list of NVMe, VMD devices from each specified server host
+    # if nvme:auto is set, all PCI Non-volatile memory controller
+    # devices are considered NVME (some NVMEs might be behind the VMD
+    # controller). if nvme:vmd, then ignore the NVME
+    # PCI addressed devices behind the VMD controller.
+    host_list = list(args.test_servers)
+    vmd_include_flag = False
+
+    if args.nvme == "auto_vmd":
+        command_list = [
+            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
+        vmd_include_flag = True
+    elif args.nvme == "auto_vmd_disks":
+        command_list = [
+            "/sbin/lspci -D",
+            "grep -E '^[0-9a-f]{5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+            "Non-Volatile memory controller:'"]
+    elif args.nvme == "auto_vmd_nvme":
+        command_list = [
+            "/sbin/lspci -D",
+            "grep -E '^[0-9a-f]{4,5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+            "Non-Volatile memory controller:'"]
+    elif args.nvme == "auto_vmd_mixed":
+        command_list1 = [
+            "/sbin/lspci -D",
+            "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+            "Non-Volatile memory controller:'"]
+        command_list2 = [
+            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
+        vmd_include_flag = True
+    else:
+        print("ERROR: Invalid --nvme argument")
+        sys.exit(1)
+
+    if ":" in args.nvme and args.nvme != "auto_vmd_mixed":
+        command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
+    elif ":" in args.nvme and args.nvme == "auto_vmd_mixed":
+        command_list1.append("grep '{}'".format(args.nvme.split(":")[1]))
+        command_list2.append("grep '{}'".format(args.nvme.split(":")[1]))
+
+    if args.nvme != "auto_vmd_mixed":
+        command = " | ".join(command_list)
+    else:
+        command1 = " | ".join(command_list1)
+        command2 = " | ".join(command_list2)
+        command = command1 + ";" + command2
+
+    task = get_remote_output(host_list, command)
+
+    # Verify the command was successful on each server host
+    if not check_remote_output(task, command):
+        print("ERROR: Issuing commands to detect VMD/NVME PCI addresses.")
+        sys.exit(1)
+
+    # Verify each server host has the same VMD/NVMe PCI addresses
+    output_data = list(task.iter_buffers())
+    if len(output_data) > 1:
+        print("ERROR: Non-homogeneous VMD/NVMe PCI addresses.")
+        sys.exit(1)
+
+    # Get the list of NVMe PCI addresses found in the output
+    output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
+    devices = find_pci_address(output_str)
+    print("Auto-detected VMD/NVMe devices on {}: {}".format(host_list, devices))
+    return ",".join(devices), vmd_include_flag
+
+
 def find_pci_address(value):
     """Find PCI addresses in the specified string.
 
@@ -657,11 +778,11 @@ def find_pci_address(value):
         list: a list of all the PCI addresses found in the string
 
     """
-    pattern = r"[{0}]{{4}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
+    pattern = r"[{0}]{{4,5}}:[{0}]{{2}}:[{0}]{{2}}\.[{0}]".format("0-9a-fA-F")
     return re.findall(pattern, str(value))
 
 
-def replace_yaml_file(yaml_file, args, tmp_dir):
+def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
     """Create a temporary test yaml file with any requested values replaced.
 
     Optionally replace the following test yaml file values if specified by the
@@ -689,15 +810,20 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
     Args:
         yaml_file (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
-        tmp_dir (TemporaryDirectory): temporary directory object to use to
-            write modified yaml files
+        yaml_dir (str): directory in which to write the modified yaml files
+        vmd_flag (bool): PCI address includes VMD address (True)
+                         PCI address doesn't include VMD address (False).
+                         Defaults to False
 
     Returns:
         str: the test yaml file; None if the yaml file contains placeholders
             w/o replacements
+        env_vars (dict): Returns environment variable dictionary. Presently,
+            returns DAOS_ENABLE_VMD: "False" or "True" dictionary.
 
     """
     replacements = {}
+    env_vars = {"DAOS_ENABLE_VMD": "False"}
 
     if args.test_servers or args.nvme:
         # Find the test yaml keys and values that match the replaceable fields
@@ -750,8 +876,12 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
                     values_to_replace = [
                         value_format.format(item)
                         for item in find_pci_address(yaml_find[key])]
+                    # if VMD pci address in present under nvme_data,
+                    # set DAOS_ENABLE_VMD to True
+                    if vmd_flag is True:
+                        env_vars["DAOS_ENABLE_VMD"] = "True"
 
-                # Add the next user-specified value as a replacement for the key
+                # Add the next user-specified value as a replacement for key
                 for value in values_to_replace:
                     if value in replacements:
                         continue
@@ -799,18 +929,18 @@ def replace_yaml_file(yaml_file, args, tmp_dir):
         # ensure unique yaml files for tests with the same filename.
         orig_yaml_file = yaml_file
         yaml_name = get_test_category(yaml_file)
-        yaml_file = os.path.join(tmp_dir.name, "{}.yaml".format(yaml_name))
+        yaml_file = os.path.join(yaml_dir, "{}.yaml".format(yaml_name))
         print("Creating copy: {}".format(yaml_file))
         with open(yaml_file, "w") as yaml_buffer:
             yaml_buffer.write(yaml_data)
 
         # Optionally display the file
-        if args.verbose:
+        if args.verbose > 0:
             cmd = ["diff", "-y", orig_yaml_file, yaml_file]
             print(get_output(cmd, False))
 
     # Return the untouched or modified yaml file
-    return yaml_file
+    return yaml_file, env_vars
 
 
 def setup_test_directory(args, mode="all"):
@@ -885,100 +1015,174 @@ def run_tests(test_files, tag_filter, args):
         command_list.append("--ignore-missing-references")
     else:
         command_list.extend(["--ignore-missing-references", "on"])
-    command_list.extend(["--html-job-result", "on"])
-    command_list.extend(["--tap-job-result", "off"])
+    if version >= 83.0:
+        command_list.append("--disable-tap-job-result")
+    else:
+        command_list.extend(["--html-job-result", "on"])
+        command_list.extend(["--tap-job-result", "off"])
     if not args.sparse and version < 82.0:
         command_list.append("--show-job-log")
     if tag_filter:
         command_list.extend(tag_filter)
+    if args.failfast:
+        command_list.extend(["--failfast", "on"])
 
     # Run each test
     skip_reason = None
-    for test_file in test_files:
-        if skip_reason is not None:
-            # An error was detected running clean_logs for a previous test.  As
-            # this is typically an indication of a communication issue with one
-            # of the hosts, do not attempt to run subsequent tests.
-            if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, skip_reason):
-                return_code |= 64
-            continue
-
-        if not isinstance(test_file["yaml"], str):
-            # The test was not run due to an error replacing host placeholders
-            # in the yaml file.  Treat this like a failed avocado command.
-            reason = "error replacing yaml file placeholders"
-            if not report_skipped_test(
-                    test_file["py"], avocado_logs_dir, reason):
-                return_code |= 64
-            return_code |= 4
-            continue
-
-        # Optionally clean the log files before running this test on the
-        # servers and clients specified for this test
-        if args.clean:
-            if not clean_logs(test_file["yaml"], args):
-                # Report errors for this skipped test
-                skip_reason = (
-                    "host communication error attempting to clean out "
-                    "leftover logs from a previous test run prior to "
-                    "running this test")
+    for loop in range(1, args.repeat + 1):
+        print("-" * 80)
+        print("Starting loop {}/{}".format(loop, args.repeat))
+        for test_file in test_files:
+            if skip_reason is not None:
+                # An error was detected running clean_logs for a previous test.
+                # As this is typically an indication of a communication issue
+                # with one of the hosts, do not attempt to run subsequent tests.
                 if not report_skipped_test(
                         test_file["py"], avocado_logs_dir, skip_reason):
                     return_code |= 64
-                return_code |= 128
                 continue
 
-        # Execute this test
-        test_command_list = list(command_list)
-        test_command_list.extend([
-            "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
-        run_return_code = time_command(test_command_list)
-        if run_return_code != 0:
-            # Move any avocado crash files into job-results/latest/crashes
-            data_dir = avocado_logs_dir.replace("job-results", "data")
-            crash_dir = os.path.join(data_dir, "crashes")
-            if os.path.isdir(crash_dir):
-                crash_files = [
-                    os.path.join(crash_dir, crash_file)
-                    for crash_file in os.listdir(crash_dir)
-                    if os.path.isfile(os.path.join(crash_dir, crash_file))]
-                if crash_files:
-                    latest_dir = os.path.join(avocado_logs_dir, "latest")
-                    latest_crash_dir = os.path.join(latest_dir, "crashes")
-                    run_command(["mkdir", latest_crash_dir])
-                    for crash_file in crash_files:
-                        run_command(["mv", crash_file, latest_crash_dir])
-                else:
-                    print(
-                        "No avocado crash files found in {}".format(crash_dir))
-        return_code |= run_return_code
-        return_code |= stop_daos_agent_services(test_file["py"], args)
-        return_code |= stop_daos_server_service(test_file["py"], args)
+            if not isinstance(test_file["yaml"], str):
+                # The test was not run due to an error replacing host
+                # placeholders in the yaml file.  Treat this like a failed
+                # avocado command.
+                reason = "error replacing yaml file placeholders"
+                if not report_skipped_test(
+                        test_file["py"], avocado_logs_dir, reason):
+                    return_code |= 64
+                return_code |= 4
+                continue
 
-        # Optionally store all of the server and client config files
-        # and archive remote logs and report big log files, if any.
-        if args.archive:
-            return_code |= archive_config_files(avocado_logs_dir, args)
-            return_code |= archive_daos_logs(
-                avocado_logs_dir, test_file, args)
-            return_code |= archive_cart_logs(
-                avocado_logs_dir, test_file, args)
+            # Optionally clean the log files before running this test on the
+            # servers and clients specified for this test
+            if args.clean:
+                if not clean_logs(test_file["yaml"], args):
+                    # Report errors for this skipped test
+                    skip_reason = (
+                        "host communication error attempting to clean out "
+                        "leftover logs from a previous test run prior to "
+                        "running this test")
+                    if not report_skipped_test(
+                            test_file["py"], avocado_logs_dir, skip_reason):
+                        return_code |= 64
+                    return_code |= 128
+                    continue
 
-            # Compress any log file that haven't been remotely compressed.
-            compress_log_files(avocado_logs_dir, args)
+            # Set the environment variable for each test.
+            for key in test_file["env"]:
+                os.environ[key] = test_file["env"][key]
 
-        # Optionally rename the test results directory for this test
-        if args.rename:
-            return_code |= rename_logs(avocado_logs_dir, test_file["py"], args)
+            # Execute this test
+            test_command_list = list(command_list)
+            test_command_list.extend([
+                "--mux-yaml", test_file["yaml"], "--", test_file["py"]])
+            run_return_code = time_command(test_command_list)
+            if run_return_code != 0:
+                collect_crash_files(avocado_logs_dir)
+            return_code |= run_return_code
 
-        # Optionally process core files
-        if args.process_cores:
-            if not process_the_cores(avocado_logs_dir, test_file["yaml"], args):
-                return_code |= 256
+            # Stop any agents or servers running via systemd
+            return_code |= stop_daos_agent_services(test_file["py"], args)
+            return_code |= stop_daos_server_service(test_file["py"], args)
 
-    if args.jenkinslog:
-        return_code |= archive_cov_usrlib_logs(avocado_logs_dir, args)
+            # Optionally store all of the server and client config files
+            # and archive remote logs and report big log files, if any.
+            if args.archive:
+                test_hosts = get_hosts_from_yaml(test_file["yaml"], args)
+                test_log_dir = os.environ.get(
+                    "DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
+
+                # Archive local config files
+                return_code |= archive_files(
+                    "local configuration files",
+                    os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+                    socket.gethostname().split(".")[0:1],
+                    "{}/*_*_*.yaml".format(
+                        get_temporary_directory(
+                            args, get_build_environment(args)["PREFIX"])),
+                    args)
+
+                # Archive remote server configuration files
+                return_code |= archive_files(
+                    "remote server config files",
+                    os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+                    get_hosts_from_yaml(
+                        test_file["yaml"], args, YAML_KEYS["test_servers"]),
+                    "{}/daos_server*.yml".format(
+                        os.path.join(os.sep, "etc", "daos")),
+                    args)
+
+                # Archive remote client configuration files
+                return_code |= archive_files(
+                    "remote client config files",
+                    os.path.join(avocado_logs_dir, "latest", "daos_configs"),
+                    get_hosts_from_yaml(
+                        test_file["yaml"], args, YAML_KEYS["test_clients"]),
+                    "{0}/daos_agent*.yml {0}/daos_control*.yml".format(
+                        os.path.join(os.sep, "etc", "daos")),
+                    args)
+
+                # Archive remote daos log files
+                return_code |= archive_files(
+                    "daos log files",
+                    os.path.join(avocado_logs_dir, "latest", "daos_logs"),
+                    test_hosts,
+                    "{}/*.log*".format(test_log_dir),
+                    args,
+                    avocado_logs_dir,
+                    get_test_category(test_file["py"]))
+
+                # Archive remote ULTs stacks dump files
+                return_code |= archive_files(
+                    "ULTs stacks dump files",
+                    os.path.join(avocado_logs_dir, "latest", "daos_dumps"),
+                    get_hosts_from_yaml(
+                        test_file["yaml"], args, YAML_KEYS["test_servers"]),
+                    "/tmp/daos_dump*.txt*",
+                    args,
+                    avocado_logs_dir,
+                    get_test_category(test_file["py"]))
+
+                # Archive remote cart log files
+                return_code |= archive_files(
+                    "cart log files",
+                    os.path.join(avocado_logs_dir, "latest", "cart_logs"),
+                    test_hosts,
+                    "{}/*/*log*".format(test_log_dir),
+                    args,
+                    avocado_logs_dir,
+                    get_test_category(test_file["py"]))
+
+                # Compress any log file that haven't been remotely compressed.
+                compress_log_files(avocado_logs_dir, args)
+
+            # Optionally rename the test results directory for this test
+            if args.rename:
+                return_code |= rename_logs(
+                    avocado_logs_dir, test_file["py"], loop, args)
+
+            # Optionally process core files
+            if args.process_cores:
+                if not process_the_cores(
+                        avocado_logs_dir, test_file["yaml"], args):
+                    return_code |= 256
+
+        if args.jenkinslog:
+            # Archive bullseye coverage logs
+            hosts = list(args.test_servers)
+            hosts += socket.gethostname().split(".")[0:1]
+            return_code |= archive_files(
+                "bullseye coverage logs",
+                os.path.join(avocado_logs_dir, "bullseye_coverage_logs"),
+                hosts,
+                "/tmp/test.cov*",
+                args)
+
+        # If the test failed and the user requested that testing should
+        # stop after the first failure, then we should break out of the
+        # loop and not re-run the tests.
+        if return_code != 0 and args.failfast:
+            break
 
     return return_code
 
@@ -1023,7 +1227,7 @@ def find_yaml_hosts(test_yaml):
         [YAML_KEYS["test_servers"], YAML_KEYS["test_clients"]])
 
 
-def get_hosts_from_yaml(test_yaml, args):
+def get_hosts_from_yaml(test_yaml, args, key_match=None):
     """Extract the list of hosts from the test yaml file.
 
     This host will be included in the list if no clients are explicitly called
@@ -1032,23 +1236,34 @@ def get_hosts_from_yaml(test_yaml, args):
     Args:
         test_yaml (str): test yaml file
         args (argparse.Namespace): command line arguments for this program
+        key_match (str, optional): test yaml key used to filter which hosts to
+            find.  Defaults to None which will match all keys.
 
     Returns:
         list: a unique list of hosts specified in the test's yaml file
 
     """
+    display(
+        args,
+        "Extracting hosts from {} - matching key '{}'".format(
+            test_yaml, key_match))
     host_set = set()
-    if args.include_localhost:
+    if args.include_localhost and key_match != YAML_KEYS["test_servers"]:
         host_set.add(socket.gethostname().split(".")[0])
     found_client_key = False
     for key, value in list(find_yaml_hosts(test_yaml).items()):
-        host_set.update(value)
+        display(args, "  Found {}: {}".format(key, value))
+        if key_match is None or key == key_match:
+            display(args, "    Adding {}".format(value))
+            host_set.update(value)
         if key in YAML_KEYS["test_clients"]:
             found_client_key = True
 
     # Include this host as a client if no clients are specified
-    if not found_client_key:
-        host_set.add(socket.gethostname().split(".")[0])
+    if not found_client_key and key_match != YAML_KEYS["test_servers"]:
+        local_host = socket.gethostname().split(".")[0]
+        display(args, "    Adding the localhost: {}".format(local_host))
+        host_set.add(local_host)
 
     return sorted(list(host_set))
 
@@ -1064,12 +1279,38 @@ def clean_logs(test_yaml, args):
     logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
     host_list = get_hosts_from_yaml(test_yaml, args)
     command = "sudo rm -fr {}".format(os.path.join(logs_dir, "*.log*"))
+    # also remove any ABT infos/stacks dumps
+    command += " /tmp/daos_dump*.txt*"
+    print("-" * 80)
     print("Cleaning logs on {}".format(host_list))
     if not spawn_commands(host_list, command):
         print("Error cleaning logs, aborting")
         return False
 
     return True
+
+
+def collect_crash_files(avocado_logs_dir):
+    """Move any avocado crash files into job-results/latest/crashes.
+
+    Args:
+        avocado_logs_dir (str): path to the avocado log files.
+    """
+    data_dir = avocado_logs_dir.replace("job-results", "data")
+    crash_dir = os.path.join(data_dir, "crashes")
+    if os.path.isdir(crash_dir):
+        crash_files = [
+            os.path.join(crash_dir, crash_file)
+            for crash_file in os.listdir(crash_dir)
+            if os.path.isfile(os.path.join(crash_dir, crash_file))]
+        if crash_files:
+            latest_dir = os.path.join(avocado_logs_dir, "latest")
+            latest_crash_dir = os.path.join(latest_dir, "crashes")
+            run_command(["mkdir", latest_crash_dir])
+            for crash_file in crash_files:
+                run_command(["mv", crash_file, latest_crash_dir])
+        else:
+            print("No avocado crash files found in {}".format(crash_dir))
 
 
 def get_remote_file_command():
@@ -1083,198 +1324,111 @@ def compress_log_files(avocado_logs_dir, args):
     Args:
         avocado_logs_dir (str): path to the avocado log files
     """
+    print("-" * 80)
     print("Compressing files in {}".format(socket.gethostname().split(".")[0]))
     logs_dir = os.path.join(avocado_logs_dir, "latest", "daos_logs", "*.log*")
     command = [
         get_remote_file_command(), "-z", "-x", "-f {}".format(logs_dir)]
-    if args.verbose:
+    if args.verbose > 1:
         command.append("-v")
     print(get_output(command, check=False))
 
 
-def archive_daos_logs(avocado_logs_dir, test_files, args):
-    """Archive daos log files to the avocado results directory.
+def archive_files(description, destination, hosts, source_files, args,
+                  avocado_logs_dir=None, test_name=None):
+    """Archive all of the remote files to a local directory.
 
     Args:
-        avocado_logs_dir (str): path to the avocado log files
-        test_files (dict): a list of dictionaries of each test script/yaml file
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: status code.
-
-    """
-    # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "latest", "daos_logs")
-
-    # Copy any DAOS logs created on any host under test
-    hosts = get_hosts_from_yaml(test_files["yaml"], args)
-    print("Archiving host logs from {} in {}".format(hosts, destination))
-
-    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    task = archive_files(
-        destination, hosts, "{}/*.log*".format(logs_dir), True, args)
-
-    # Determine if the command completed successfully across all the hosts
-    status = 0
-    if not check_remote_output(task, "archive_daos_logs command"):
-        status |= 16
-    if args.logs_threshold:
-        test_name = get_test_category(test_files["py"])
-        if not check_big_files(avocado_logs_dir, task, test_name, args):
-            status |= 32
-    return status
-
-
-def archive_cart_logs(avocado_logs_dir, test_files, args):
-    """Archive cart log files to the avocado results directory.
-
-    Args:
-        avocado_logs_dir (str): path to the avocado log files
-        test_files (dict): a list of dictionaries of each test script/yaml file
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: status code.
-
-    """
-    # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "latest", "cart_logs")
-
-    # Copy any DAOS logs created on any host under test
-    hosts = get_hosts_from_yaml(test_files["yaml"], args)
-    print("Archiving host logs from {} in {}".format(hosts, destination))
-
-    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    logs_dir = os.environ.get("DAOS_TEST_LOG_DIR", DEFAULT_DAOS_TEST_LOG_DIR)
-    task = archive_files(
-        destination, hosts, "{}/*/*log*".format(logs_dir), True, args)
-
-    # Determine if the command completed successfully across all the hosts
-    status = 0
-    if not check_remote_output(task, "archive_cart_logs command"):
-        status |= 16
-    if args.logs_threshold:
-        test_name = get_test_category(test_files["py"])
-        if not check_big_files(avocado_logs_dir, task, test_name, args):
-            status |= 32
-    return status
-
-
-def archive_config_files(avocado_logs_dir, args):
-    """Copy all of the configuration files to the avocado results directory.
-
-    Args:
-        avocado_logs_dir (str): path to the avocado log files
-        args (argparse.Namespace): command line arguments for this program
-
-    Returns:
-        int: status code.
-
-    """
-    # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "latest", "daos_configs")
-
-    # Config files can be copied from the local host as they are currently
-    # written to a shared directory
-    this_host = socket.gethostname().split(".")[0]
-    host_list = [this_host]
-    print("Archiving config files from {} in {}".format(host_list, destination))
-
-    # Copy any config files
-    base_dir = get_build_environment(args)["PREFIX"]
-    configs_dir = get_temporary_directory(args, base_dir)
-    task = archive_files(
-        destination, host_list, "{}/*_*_*.yaml".format(configs_dir), False,
-        args)
-
-    status = 0
-    if not check_remote_output(task, "archive_config_files"):
-        status = 16
-    return status
-
-def archive_cov_usrlib_logs(avocado_logs_dir, args):
-    """Archive daos cov files to the avocado results directory.
-    Args:
-        avocado_logs_dir (str): path to the avocado log files
-        args (argparse.Namespace): command line arguments for this program
-    Returns:
-        int: status code.
-    """
-    # Create a subdirectory in the avocado logs directory for this test
-    destination = os.path.join(avocado_logs_dir, "daos_covs_usrlib")
-
-    # Copy any DAOS covs created on all hosts
-    hosts = list(args.test_servers)
-    hosts.append(socket.gethostname().split(".")[0])
-    print("Archiving host covs from {} in {}".format(hosts, destination))
-
-    # Copy any log files written to the DAOS_TEST_LOG_DIR directory
-    task = archive_files(destination, hosts,
-                         "/tmp/test.cov*",False, args)
-
-    # Determine if the command completed successfully across all the hosts
-    status = 0
-    if not check_remote_output(task, "archive_daos_covs command"):
-        status |= 16
-    return status
-
-def archive_files(destination, hosts, source_files, cart, args):
-    """Archive all of the remote files to the destination directory.
-
-    Args:
-        destination (str): path to which to archive files
+        description (str): string identifying the archiving operation
+        destination (str): path in which to archive files
         hosts (list): hosts from which to archive files
         source_files (str): remote files to archive
         cart (str): enable running cart_logtest.py
         args (argparse.Namespace): command line arguments for this program
+        avocado_logs_dir (optional, str): path to the avocado log files.
+            Required for checking for large log files - see 'test_name'.
+            Defaults to None.
+        test_name (optional, str): current running testname. If specified the
+            cart_logtest.py will be run against each log file and the size of
+            each log file will be checked against the threshold (if enabled).
+            Defaults to None.
 
     Returns:
-        Task: a Task object containing the result of the running the command on
-            the specified hosts
+        int: status of archiving the files
 
     """
-    this_host = socket.gethostname().split(".")[0]
+    status = 0
+    if hosts:
+        print("-" * 80)
+        print(
+            "Archiving {} from {} in {}".format(
+                description, hosts, destination))
 
-    # Create the destination directory
-    if not os.path.exists(destination):
-        get_output(["mkdir", destination])
+        # Create the destination directory
+        if not os.path.exists(destination):
+            get_output(["mkdir", destination])
 
-    # Display available disk space prior to copy.  Allow commands to fail w/o
-    # exiting this program.  Any disk space issues preventing the creation of a
-    # directory will be caught in the archiving of the source files.
-    display_disk_space(destination)
+        # Display available disk space prior to copy.  Allow commands to fail
+        # w/o exiting this program.  Any disk space issues preventing the
+        # creation of a directory will be caught in the archiving of the source
+        # files.
+        display_disk_space(destination)
 
-    command = [
-        get_remote_file_command(),
-        "-z",
-        "-a \"{}:{}\"".format(this_host, destination),
-        "-f \"{}\"".format(source_files),
-    ]
-    if cart:
-        command.append("-c")
-    if args.logs_threshold:
-        command.append("-t \"{}\"".format(args.logs_threshold))
-    if args.verbose:
-        command.append("-v")
-    return get_remote_output(hosts, " ".join(command), 900)
+        this_host = socket.gethostname().split(".")[0]
+        command = [
+            get_remote_file_command(),
+            "-z",
+            "-a \"{}:{}\"".format(this_host, destination),
+            "-f \"{}\"".format(source_files),
+        ]
+        if test_name is not None:
+            command.append("-c")
+        if args.logs_threshold:
+            command.append("-t \"{}\"".format(args.logs_threshold))
+        if args.verbose > 1:
+            command.append("-v")
+        task = get_remote_output(hosts, " ".join(command), 900)
+
+        # Determine if the command completed successfully across all the hosts
+        cmd_description = "archive_files command for {}".format(description)
+        if not check_remote_output(task, cmd_description):
+            status |= 16
+        if test_name is not None and args.logs_threshold:
+            if not check_big_files(avocado_logs_dir, task, test_name, args):
+                status |= 32
+
+    return status
 
 
-def rename_logs(avocado_logs_dir, test_file, args):
+def rename_logs(avocado_logs_dir, test_file, loop, args):
     """Append the test name to its avocado job-results directory name.
 
     Args:
         avocado_logs_dir (str): avocado job-results directory
         test_file (str): the test python file
+        loop (int): test execution loop count
+        args (argparse.Namespace): command line arguments for this program
+
+    Returns:
+        int: status of renaming the avocado job-results directory name
+
     """
     status = 0
     test_name = get_test_category(test_file)
     test_logs_lnk = os.path.join(avocado_logs_dir, "latest")
     test_logs_dir = os.path.realpath(test_logs_lnk)
 
+    print("-" * 80)
+    print("Renaming the avocado job-results directory")
+
     if args.jenkinslog:
-        new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
+        if args.repeat > 1:
+            # When repeating tests ensure jenkins-style avocado log directories
+            # are unique by including the loop count in the path
+            new_test_logs_dir = os.path.join(
+                avocado_logs_dir, test_file, str(loop))
+        else:
+            new_test_logs_dir = os.path.join(avocado_logs_dir, test_file)
         try:
             os.makedirs(new_test_logs_dir)
         except OSError as error:
@@ -1546,14 +1700,24 @@ def resolve_debuginfo_dnf(pkg):
     dnf_base = dnf.Base()
     dnf_base.conf.assumeyes = True
     dnf_base.read_all_repos()
-    dnf_base.fill_sack()
+    try:
+        dnf_base.fill_sack()
+    except OSError as error:
+        print("Got an OSError trying to fill_sack(): ", error)
+        raise RuntimeError("resolve_debuginfo_dnf() "
+                           "failed: ", error)
 
     query = dnf_base.sack.query()
     latest = query.latest()
     latest_info = latest.filter(name=pkg)
 
     debuginfo = None
-    package = list(latest_info)[0]
+    try:
+        package = list(latest_info)[0]
+    except IndexError as error:
+        raise RuntimeError("Could not find package info for "
+                           "{}".format(pkg))
+
     if package:
         debuginfo_map = {"glibc": "glibc-debuginfo-common"}
         try:
@@ -1575,13 +1739,22 @@ def resolve_debuginfo_dnf(pkg):
 
 def install_debuginfos():
     """Install debuginfo packages."""
-    install_pkgs = [{'name': 'gdb'}]
+    distro_info = detect()
+    if "centos" in distro_info.name.lower():
+        install_pkgs = [{'name': 'gdb'}, {'name': 'python3-debuginfo'}]
+    else:
+        install_pkgs = []
 
     cmds = []
 
     # -debuginfo packages that don't get installed with debuginfo-install
-    for pkg in ['python', 'daos', 'systemd', 'ndctl', 'mercury', 'hdf5']:
-        debug_pkg = resolve_debuginfo(pkg)
+    for pkg in ['systemd', 'ndctl', 'mercury', 'hdf5']:
+        try:
+            debug_pkg = resolve_debuginfo(pkg)
+        except RuntimeError as error:
+            print("Failed trying to install_debuginfos(): ", error)
+            raise
+
         if debug_pkg and debug_pkg not in install_pkgs:
             install_pkgs.append(debug_pkg)
 
@@ -1592,20 +1765,27 @@ def install_debuginfos():
         cmds.append(["sudo", "rm", "-f", path])
 
     if USE_DEBUGINFO_INSTALL:
-        distro_info = detect()
-        yum_args = ["--exclude", "ompi-debuginfo", "openmpi3"]
-        if "suse" in distro_info.name.lower():
-            yum_args.extend(["libpmemobj1", "python3"])
-        elif "centos" in distro_info.name.lower():
-            yum_args.extend(["libpmemobj", "python36"])
-        else:
-            raise RuntimeError(
-                "install_debuginfos(): Unsupported distro: {}".format(
-                    distro_info))
-        cmds.append(["sudo", "yum", "-y", "install"] + yum_args)
+        dnf_args = ["--exclude", "ompi-debuginfo"]
+        if os.getenv("TEST_RPMS", 'false') == 'true':
+            if "suse" in distro_info.name.lower():
+                dnf_args.extend(["libpmemobj1", "python3", "openmpi3"])
+            elif "centos" in distro_info.name.lower() and \
+                 distro_info.version == "7":
+                dnf_args.extend(["--enablerepo=*-debuginfo", "--exclude",
+                                 "nvml-debuginfo", "libpmemobj",
+                                 "python36", "openmpi3", "gcc"])
+            elif "centos" in distro_info.name.lower() and \
+                 distro_info.version == "8":
+                dnf_args.extend(["--enablerepo=*-debuginfo", "libpmemobj",
+                                 "python3", "openmpi", "gcc"])
+            else:
+                raise RuntimeError(
+                    "install_debuginfos(): Unsupported distro: {}".format(
+                        distro_info))
+            cmds.append(["sudo", "dnf", "-y", "install"] + dnf_args)
         cmds.append(
-            ["sudo", "debuginfo-install", "--enablerepo=*-debuginfo", "-y"] +
-            yum_args + ["daos-server", "gcc"])
+            ["sudo", "dnf", "debuginfo-install",
+             "-y"] + dnf_args + ["daos-server"])
     else:
         # We're not using the yum API to install packages
         # See the comments below.
@@ -1626,7 +1806,10 @@ def install_debuginfos():
     # yum_base.processTransaction(rpmDisplay=yum.rpmtrans.NoOutputCallBack())
 
     # Now install a few pkgs that debuginfo-install wouldn't
-    cmd = ["sudo", "yum", "-y", "--enablerepo=*debug*", "install"]
+    cmd = ["sudo", "dnf", "-y"]
+    if "centos" in distro_info.name.lower():
+        cmd.append("--enablerepo=*debug*")
+    cmd.append("install")
     for pkg in install_pkgs:
         try:
             cmd.append(
@@ -1642,13 +1825,15 @@ def install_debuginfos():
             print(run_command(cmd))
         except RuntimeError as error:
             # got an error, so abort this list of commands and re-run
-            # it with a yum clean, makecache first
+            # it with a dnf clean, makecache first
             print(error)
             retry = True
             break
     if retry:
         print("Going to refresh caches and try again")
-        cmd_prefix = ["sudo", "yum", "--enablerepo=*debug*"]
+        cmd_prefix = ["sudo", "dnf"]
+        if "centos" in distro_info.name.lower():
+            cmd_prefix.append("--enablerepo=*debug*")
         cmds.insert(0, cmd_prefix + ["clean", "all"])
         cmds.insert(1, cmd_prefix + ["makecache"])
         for cmd in cmds:
@@ -1676,6 +1861,7 @@ def process_the_cores(avocado_logs_dir, test_yaml, args):
     daos_cores_dir = os.path.join(avocado_logs_dir, "latest", "stacktraces")
 
     # Create a subdirectory in the avocado logs directory for this test
+    print("-" * 80)
     print("Processing cores from {} in {}".format(host_list, daos_cores_dir))
     get_output(["mkdir", daos_cores_dir])
 
@@ -1808,6 +1994,7 @@ def stop_daos_agent_services(test_file, args):
 
     """
     service = "daos_agent.service"
+    print("-" * 80)
     print("Verifying {} after running '{}'".format(service, test_file))
     if args.test_clients:
         hosts = list(args.test_clients)
@@ -1831,6 +2018,7 @@ def stop_daos_server_service(test_file, args):
 
     """
     service = "daos_server.service"
+    print("-" * 80)
     print("Verifying {} after running '{}'".format(service, test_file))
     return stop_service(list(args.test_servers), service)
 
@@ -1839,36 +2027,43 @@ def stop_service(hosts, service):
     """Stop any daos_server.service running on the hosts running servers.
 
     Args:
-        host_list (list): list of hosts on which to stop the service.
+        hosts (list): list of hosts on which to stop the service.
         service (str): name of the service
 
     Returns:
         int: status code: 0 = success, 512 = failure
 
     """
-    status, stop_hosts, disable_hosts = get_service_status(hosts, service)
-    if stop_hosts:
-        print("Stopping {} on {}".format(service, stop_hosts))
-        command = "sudo systemctl stop {}".format(service)
-        get_remote_output(str(stop_hosts), command)
-    if disable_hosts:
-        print("Disabling {} on {}".format(service, stop_hosts))
-        command = "sudo systemctl disable {}".format(service)
-        get_remote_output(str(disable_hosts), command)
-    if stop_hosts or disable_hosts:
-        check_hosts = NodeSet()
-        check_hosts.add(stop_hosts)
-        check_hosts.add(disable_hosts)
+    result = {"status": 0}
+    status_keys = ["reset-failed", "stop", "disable"]
+    mapping = {"stop": "active", "disable": "enabled", "reset-failed": "failed"}
+    check_hosts = NodeSet.fromlist(hosts)
+    loop = 1
+    # Reduce 'max_loops' to 2 once https://jira.hpdd.intel.com/browse/DAOS-7809
+    # has been resolved
+    max_loops = 3
+    while check_hosts:
+        # Check the status of the service on each host
         result = get_service_status(check_hosts, service)
-        if result[1]:
-            print("Error {} still active on {}".format(service, result[1]))
-            status = 512
-        if result[2]:
-            print("Error {} still enabled on {}".format(service, result[2]))
-            status = 512
-        if result[0] != 0:
-            status = 512
-    return status
+        check_hosts = NodeSet()
+        for key in status_keys:
+            if result[key]:
+                if loop == max_loops:
+                    # Exit the while loop if the service is still running
+                    print(
+                        " - Error {} still {} on {}".format(
+                            service, mapping[key], result[key]))
+                    result["status"] = 512
+                else:
+                    # Issue the appropriate systemctl command to remedy the
+                    # detected state, e.g. 'stop' for 'active'.
+                    command = "sudo systemctl {} {}".format(key, service)
+                    get_remote_output(str(result[key]), command)
+
+                    # Run the status check again on this group of hosts
+                    check_hosts.add(result[key])
+        loop += 1
+    return result["status"]
 
 
 def get_service_status(host_list, service):
@@ -1879,35 +2074,41 @@ def get_service_status(host_list, service):
         service (str): name of the service
 
     Returns:
-        tuple: a tuple containing:
-            - (int): status code: 0 = success, 512 = failure
-            - (NodeSet): hosts with an active daos_server.service
-            - (NodeSet): hosts with a loaded daos_server.service
+        dict: a dictionary with the following keys:
+            - "status":       status code: 0 = success, 512 = failure
+            - "stop":         NodeSet where to stop the daos_server.service
+            - "disable":      NodeSet where to disable the daos_server.service
+            - "reset-failed": NodeSet where to reset the daos_server.service
 
     """
-    status = 0
-    hosts = {"stop": NodeSet(), "disable": NodeSet()}
-    # Possible states:
-    #   active, inactive, activating, deactivating, failed, unknown
-    states_requiring_stop = ["active", "activating", "deactivating"]
-    states_requiring_disable = states_requiring_stop + ["failed"]
+    status = {
+        "status": 0,
+        "stop": NodeSet(),
+        "disable": NodeSet(),
+        "reset-failed": NodeSet()}
+    status_states = {
+        "stop": ["active", "activating", "deactivating"],
+        "disable": ["active", "activating", "deactivating"],
+        "reset-failed": ["failed"]}
     command = "systemctl is-active {}".format(service)
     task = get_remote_output(host_list, command)
     for output, nodelist in task.iter_buffers():
-        output_str = "\n".join([line.decode("utf-8") for line in output])
+        output_lines = [line.decode("utf-8") for line in output]
         nodeset = NodeSet.fromlist(nodelist)
-        if output_str in states_requiring_stop:
-            hosts["stop"].add(nodeset)
-        if output_str in states_requiring_disable:
-            hosts["disable"].add(nodeset)
-        print("  {}: {}".format(nodeset, output_str))
+        print(" {}: {}".format(nodeset, "\n".join(output_lines)))
+        for key in status_states:
+            for line in output_lines:
+                if line in status_states[key]:
+                    status[key].add(nodeset)
+                    break
     if task.num_timeout() > 0:
-        status = 512
-        hosts["stop"].add(nodeset)
-        hosts["disable"].add(nodeset)
         nodeset = NodeSet.fromlist(task.iter_keys_timeout())
+        status["status"] = 512
+        status["stop"].add(nodeset)
+        status["disable"].add(nodeset)
+        status["reset-failed"].add(nodeset)
         print("  {}: TIMEOUT".format(nodeset))
-    return status, hosts["stop"], hosts["disable"]
+    return status
 
 
 def indent_text(indent, text):
@@ -1994,6 +2195,10 @@ def main():
         help="when replacing server/client yaml file placeholders, discard "
              "any placeholders that do not end up with a replacement value")
     parser.add_argument(
+        "--failfast",
+        action="store_true",
+        help="stop the test suite after the first failure")
+    parser.add_argument(
         "-i", "--include_localhost",
         action="store_true",
         help="include the local host when cleaning and archiving")
@@ -2005,6 +2210,14 @@ def main():
         "-m", "--modify",
         action="store_true",
         help="modify the test yaml files but do not run the tests")
+    parser.add_argument(
+        "-mo", "--mode",
+        choices=['normal', 'manual'],
+        default='normal',
+        help="provide the mode of test to be run under. Default is normal, "
+             "in which the final return code of launch.py is still zero if "
+             "any of the tests failed. 'manual' is where the return code is "
+             "non-zero if any of the tests as part of launch.py failed.")
     parser.add_argument(
         "-n", "--nvme",
         action="store",
@@ -2018,6 +2231,12 @@ def main():
         "-r", "--rename",
         action="store_true",
         help="rename the avocado test logs directory to include the test name")
+    parser.add_argument(
+        "-re", "--repeat",
+        action="store",
+        default=1,
+        type=int,
+        help="number of times to repeat test execution")
     parser.add_argument(
         "-p", "--process_cores",
         action="store_true",
@@ -2055,12 +2274,21 @@ def main():
              "will also be used to replace client placeholders.")
     parser.add_argument(
         "-v", "--verbose",
-        action="store_true",
-        help="verbose output")
+        action="count",
+        default=0,
+        help="verbosity output level. Specify multiple times (e.g. -vv) for "
+             "additional output")
     parser.add_argument(
         "-j", "--jenkinslog",
         action="store_true",
         help="rename the avocado test logs directory for publishing in Jenkins")
+    parser.add_argument(
+        "-y", "--yaml_directory",
+        action="store",
+        default=None,
+        help="directory in which to write the modified yaml files. A temporary "
+             "directory - which only exists for the duration of the launch.py "
+             "command - is used by default.")
     args = parser.parse_args()
     print("Arguments: {}".format(args))
 
@@ -2070,9 +2298,11 @@ def main():
 
     # Setup the user environment
     set_test_environment(args)
-
+    vmd_flag = False
     # Auto-detect nvme test yaml replacement values if requested
-    if args.nvme and args.nvme.startswith("auto"):
+    if args.nvme and args.nvme.startswith("auto_vmd"):
+        args.nvme, vmd_flag = get_vmd_replacement(args)
+    elif args.nvme and args.nvme.startswith("auto"):
         args.nvme = get_nvme_replacement(args)
 
     # Process the tags argument to determine which tests to run
@@ -2089,10 +2319,16 @@ def main():
         sys.exit(0)
 
     # Create a temporary directory
-    tmp_dir = TemporaryDirectory()
+    if args.yaml_directory is None:
+        temp_dir = TemporaryDirectory()
+        yaml_dir = temp_dir.name
+    else:
+        yaml_dir = args.yaml_directory
+        if not os.path.exists(yaml_dir):
+            os.mkdir(yaml_dir)
 
     # Create a dictionary of test and their yaml files
-    test_files = get_test_files(test_list, args, tmp_dir)
+    test_files = get_test_files(test_list, args, yaml_dir, vmd_flag)
     if args.modify:
         sys.exit(0)
 
@@ -2113,6 +2349,8 @@ def main():
     else:
         if status & 1 == 1:
             print("Detected one or more avocado test failures!")
+            if args.mode == 'manual':
+                ret_code = 1
         if status & 8 == 8:
             print("Detected one or more interrupted avocado jobs!")
         if status & 2 == 2:

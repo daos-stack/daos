@@ -324,13 +324,10 @@ crt_proto_reg_L3(struct crt_opc_map_L3 *L3_map,
 
 	/* make sure array is big enough, realloc if necessary */
 	if (L3_map->L3_num_slots_total < cpf->cpf_count) {
-		D_REALLOC_ARRAY(info_array, L3_map->L3_map, cpf->cpf_count);
+		D_REALLOC_ARRAY(info_array, L3_map->L3_map,
+				L3_map->L3_num_slots_total, cpf->cpf_count);
 		if (info_array == NULL)
 			return -DER_NOMEM;
-		/* set new space to 0 */
-		memset(&info_array[L3_map->L3_num_slots_total], 0,
-		       (cpf->cpf_count - L3_map->L3_num_slots_total)
-			* sizeof(struct crt_opc_info));
 		L3_map->L3_map = info_array;
 		L3_map->L3_num_slots_total = cpf->cpf_count;
 	}
@@ -360,12 +357,10 @@ get_L3_map(struct crt_opc_map_L2 *L2_map, struct crt_proto_format *cpf)
 	struct crt_opc_map_L3 *new_map;
 
 	if (L2_map->L2_num_slots_total < cpf->cpf_ver + 1) {
-		D_REALLOC_ARRAY(new_map, L2_map->L2_map, (cpf->cpf_ver + 1));
+		D_REALLOC_ARRAY(new_map, L2_map->L2_map,
+				L2_map->L2_num_slots_total, cpf->cpf_ver + 1);
 		if (new_map == NULL)
 			return NULL;
-		memset(&new_map[L2_map->L2_num_slots_total], 0,
-		       (cpf->cpf_ver + 1 - L2_map->L2_num_slots_total)
-			* sizeof(struct crt_opc_map_L3));
 		L2_map->L2_map = new_map;
 		L2_map->L2_num_slots_total = cpf->cpf_ver + 1;
 	}

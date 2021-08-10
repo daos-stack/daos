@@ -38,7 +38,7 @@ func NewRunner(log logging.Logger, config *Config) *Runner {
 	}
 }
 
-func (r *Runner) run(ctx context.Context, args, env []string) error {
+func (r *Runner) run(ctx context.Context, args, env []string, errOut chan<- error) error {
 	binPath, err := common.FindBinary(engineBin)
 	if err != nil {
 		return errors.Wrapf(err, "can't start %s", engineBin)
@@ -76,11 +76,14 @@ func (r *Runner) run(ctx context.Context, args, env []string) error {
 	}
 	r.cmd = cmd
 
-	r.running.SetTrue()
-	defer r.running.SetFalse()
+	go func() {
+		r.running.SetTrue()
+		defer r.running.SetFalse()
 
-	return errors.Wrapf(common.GetExitStatus(cmd.Wait()),
-		"%s (instance %d) exited", binPath, r.Config.Index)
+		errOut <- errors.Wrapf(common.GetExitStatus(cmd.Wait()), "%s exited", binPath)
+	}()
+
+	return nil
 }
 
 // Start asynchronously starts the Engine instance.
@@ -95,11 +98,7 @@ func (r *Runner) Start(ctx context.Context, errOut chan<- error) error {
 	}
 	env = mergeEnvVars(cleanEnvVars(os.Environ(), r.Config.EnvPassThrough), env)
 
-	go func() {
-		errOut <- r.run(ctx, args, env)
-	}()
-
-	return nil
+	return r.run(ctx, args, env, errOut)
 }
 
 // IsRunning indicates whether the Runner process is running or not.
@@ -116,6 +115,16 @@ func (r *Runner) Signal(signal os.Signal) error {
 	r.log.Debugf("Signalling I/O Engine instance %d (%s)", r.Config.Index, signal)
 
 	return r.cmd.Process.Signal(signal)
+}
+
+// GetLastPid returns the PID after runner has exited, return
+// zero if no cmd or ProcessState exists.
+func (r *Runner) GetLastPid() uint64 {
+	if r.cmd == nil || r.cmd.ProcessState == nil {
+		return 0
+	}
+
+	return uint64(r.cmd.ProcessState.Pid())
 }
 
 // GetConfig returns the runner's configuration

@@ -14,7 +14,7 @@ import "ctl/network.proto";
 import "ctl/firmware.proto";
 import "ctl/smd.proto";
 import "ctl/ranks.proto";
-import "shared/ranks.proto";
+import "ctl/server.proto";
 
 // Service definitions for communications between gRPC management server and
 // client regarding tasks related to DAOS system and server hardware.
@@ -22,8 +22,6 @@ import "shared/ranks.proto";
 // All Control service RPCs will terminate at gRPC server and do not interact
 // with the Management Service.
 service CtlSvc {
-	// Prepare nonvolatile storage devices for use with DAOS
-	rpc StoragePrepare(StoragePrepareReq) returns (StoragePrepareResp) {};
 	// Retrieve details of nonvolatile storage on server, including health info
 	rpc StorageScan(StorageScanReq) returns(StorageScanResp) {};
 	// Format nonvolatile storage devices for use with DAOS
@@ -36,6 +34,8 @@ service CtlSvc {
 	rpc FirmwareUpdate(FirmwareUpdateReq) returns (FirmwareUpdateResp) {};
 	// Query the per-server metadata
 	rpc SmdQuery(SmdQueryReq) returns (SmdQueryResp) {}
+	// Set log level for DAOS I/O Engines on a host.
+	rpc SetEngineLogMasks(SetLogMasksReq) returns (SetLogMasksResp) {}
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)
 	rpc PrepShutdownRanks(RanksReq) returns (RanksResp) {}
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)

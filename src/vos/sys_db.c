@@ -252,7 +252,7 @@ db_delete(struct sys_db *db, char *table, d_iov_t *key)
 	if (rc == 0) {
 		int creds = 100;
 		/* vos_obj_del_key() wouldn't free space */
-		vos_gc_pool(vdb->db_poh, &creds);
+		vos_gc_pool_tight(vdb->db_poh, &creds);
 	}
 	return rc;
 }
@@ -414,8 +414,14 @@ vos_db_fini(void)
 		ABT_mutex_free(&vos_db.db_lock);
 
 	if (vos_db.db_file) {
-		if (vos_db.db_vos_self)
-			vos_pool_destroy(vos_db.db_file, vos_db.db_pool);
+		if (vos_db.db_vos_self) {
+			int rc;
+
+			rc = vos_pool_destroy(vos_db.db_file, vos_db.db_pool);
+			if (rc != 0)
+				D_ERROR(DF_UUID": failed to destroy %s: %d\n",
+					DP_UUID(vos_db.db_pool), vos_db.db_file, rc);
+		}
 		free(vos_db.db_file);
 	}
 

@@ -23,6 +23,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -116,6 +117,7 @@ func TestRunnerContextExit(t *testing.T) {
 
 func TestRunnerNormalExit(t *testing.T) {
 	var numaNode uint = 1
+	var bypass bool = false
 	createFakeBinary(t)
 
 	// set this to control the behavior in TestMain()
@@ -140,8 +142,14 @@ func TestRunnerNormalExit(t *testing.T) {
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
 		WithPinnedNumaNode(&numaNode).
+		WithBypassHealthChk(&bypass).
 		WithCrtCtxShareAddr(1).
-		WithCrtTimeout(30)
+		WithCrtTimeout(30).
+		WithStorage(
+			storage.NewTierConfig().
+				WithScmClass("ram").
+				WithScmMountPoint("/foo/bar"),
+		)
 	runner := NewRunner(log, cfg)
 	errOut := make(chan error)
 
@@ -155,7 +163,7 @@ func TestRunnerNormalExit(t *testing.T) {
 	}
 
 	// Light integration testing of arg/env generation; unit tests elsewhere.
-	wantArgs := "-t 42 -x 1 -p 1 -I 0"
+	wantArgs := "-t 42 -x 1 -T 1 -p 1 -I 0 -r 0 -H 0 -s /foo/bar"
 	var gotArgs string
 	env := []string{
 		"CRT_CTX_SHARE_ADDR=1",

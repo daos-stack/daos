@@ -16,15 +16,16 @@
 #define crt_proc_daos_target_state_t crt_proc_uint32_t
 
 static int
-crt_proc_struct_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
+crt_proc_struct_pool_target_addr(crt_proc_t proc, crt_proc_op_t proc_op,
+				 struct pool_target_addr *tgt)
 {
 	int rc;
 
-	rc = crt_proc_uint32_t(proc, &tgt->pta_rank);
+	rc = crt_proc_uint32_t(proc, proc_op, &tgt->pta_rank);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &tgt->pta_target);
+	rc = crt_proc_uint32_t(proc, proc_op, &tgt->pta_target);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -32,19 +33,20 @@ crt_proc_struct_pool_target_addr(crt_proc_t proc, struct pool_target_addr *tgt)
 }
 
 static int
-crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
+crt_proc_struct_rsvc_hint(crt_proc_t proc, crt_proc_op_t proc_op,
+			  struct rsvc_hint *hint)
 {
 	int rc;
 
-	rc = crt_proc_uint32_t(proc, &hint->sh_flags);
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_flags);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &hint->sh_rank);
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_rank);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, &hint->sh_term);
+	rc = crt_proc_uint64_t(proc, proc_op, &hint->sh_term);
 	if (rc != 0)
 		return -DER_HG;
 
@@ -52,6 +54,21 @@ crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
 }
 
 CRT_RPC_DEFINE(pool_op, DAOS_ISEQ_POOL_OP, DAOS_OSEQ_POOL_OP)
+
+static int
+crt_proc_struct_pool_op_in(crt_proc_t proc, crt_proc_op_t proc_op,
+			   struct pool_op_in *data)
+{
+	return crt_proc_pool_op_in(proc, data);
+}
+
+static int
+crt_proc_struct_pool_op_out(crt_proc_t proc, crt_proc_op_t proc_op,
+			    struct pool_op_out *data)
+{
+	return crt_proc_pool_op_out(proc, data);
+}
+
 CRT_RPC_DEFINE(pool_create, DAOS_ISEQ_POOL_CREATE, DAOS_OSEQ_POOL_CREATE)
 CRT_RPC_DEFINE(pool_connect, DAOS_ISEQ_POOL_CONNECT, DAOS_OSEQ_POOL_CONNECT)
 CRT_RPC_DEFINE(pool_disconnect, DAOS_ISEQ_POOL_DISCONNECT,
@@ -97,6 +114,8 @@ CRT_RPC_DEFINE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 		DAOS_OSEQ_POOL_LIST_CONT)
 CRT_RPC_DEFINE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
 		DAOS_OSEQ_POOL_QUERY_INFO)
+CRT_RPC_DEFINE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
+		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
 
 /* Define for cont_rpcs[] array population below.
  * See POOL_PROTO_*_RPC_LIST macro definition
@@ -154,7 +173,7 @@ pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
 		return 0;
 
 	D_REALLOC_ARRAY(new_addrs, addr_list->pta_addrs,
-			addr_list->pta_number + 1);
+			addr_list->pta_number, addr_list->pta_number + 1);
 	if (new_addrs == NULL)
 		return -DER_NOMEM;
 
@@ -222,6 +241,9 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 			break;
 		case DAOS_PROP_PO_RECLAIM:
 			bits |= DAOS_PO_QUERY_PROP_RECLAIM;
+			break;
+		case DAOS_PROP_PO_EC_CELL_SZ:
+			bits |= DAOS_PO_QUERY_PROP_EC_CELL_SZ;
 			break;
 		case DAOS_PROP_PO_ACL:
 			bits |= DAOS_PO_QUERY_PROP_ACL;

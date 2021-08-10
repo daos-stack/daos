@@ -252,6 +252,8 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 	d_list_t       *entry;
 	bool		nonexist = false;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry == NULL) {
 		char	       *path = NULL;
@@ -361,9 +363,17 @@ ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 	return 0;
 }
 
+/** Get a reference to the leader fields of \a svc. */
+void
+ds_rsvc_get_leader(struct ds_rsvc *svc)
+{
+	ds_rsvc_get(svc);
+	get_leader(svc);
+}
+
 /**
- * As a convenience for general replicated service RPC handlers, this function
- * puts svc returned by ds_rsvc_lookup_leader.
+ * Put the reference returned by ds_rsvc_lookup_leader or ds_rsvc_get_leader to
+ * the leader fields of \a svc.
  */
 void
 ds_rsvc_put_leader(struct ds_rsvc *svc)
@@ -454,7 +464,7 @@ rsvc_step_up_cb(struct rdb *db, uint64_t term, void *arg)
 		rc = 0;
 		goto out_mutex;
 	} else if (rc != 0) {
-		D_ERROR("%s: failed to step up as leader "DF_U64": "DF_RC"\n",
+		D_DEBUG(DB_MD, "%s: failed to step up to "DF_U64": "DF_RC"\n",
 			svc->s_name, term, DP_RC(rc));
 		if (map_distd_initialized)
 			drain_map_distd(svc);
@@ -734,6 +744,8 @@ ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid)
 	d_list_t		*entry;
 	int			 rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
@@ -782,6 +794,31 @@ out:
 	return rc;
 }
 
+int
+ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
+{
+	struct ds_rsvc		*svc;
+	int			 rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	rc = ds_rsvc_lookup(class, id, &svc);
+	if (rc != 0)
+		return -DER_ALREADY;
+
+	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
+
+	ABT_mutex_lock(svc->s_mutex);
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+		drain_map_distd(svc);
+	ABT_mutex_unlock(svc->s_mutex);
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+		fini_map_distd(svc);
+
+	ds_rsvc_put(svc);
+	return 0;
+}
+
 /**
  * Start a replicated service. If \a create is false, all remaining input
  * parameters are ignored; otherwise, create the replica first. If \a replicas
@@ -808,6 +845,8 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	struct ds_rsvc_class	*impl;
 	d_list_t		*entry;
 	int			 rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
 	impl = rsvc_class(class);
 	if (!create) {
@@ -910,6 +949,7 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 	struct ds_rsvc		*svc;
 	int			 rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = ds_rsvc_lookup(class, id, &svc);
 	if (rc != 0)
 		return -DER_ALREADY;
@@ -1054,7 +1094,7 @@ ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 }
 
 int
-ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
+ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks, bool stop)
 {
 	d_rank_list_t	*stop_ranks;
 	int		 rc;
@@ -1066,7 +1106,7 @@ ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
 
 	/* filter out failed ranks */
 	daos_rank_list_filter(ranks, stop_ranks, true /* exclude */);
-	if (stop_ranks->rl_nr > 0)
+	if (stop_ranks->rl_nr > 0 && stop)
 		ds_rsvc_dist_stop(svc->s_class, &svc->s_id, stop_ranks,
 				  NULL, true /* destroy */);
 	d_rank_list_free(stop_ranks);
@@ -1075,7 +1115,7 @@ ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks)
 
 int
 ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
-			d_rank_list_t *ranks, struct rsvc_hint *hint)
+			d_rank_list_t *ranks, bool stop, struct rsvc_hint *hint)
 {
 	struct ds_rsvc	*svc;
 	int		 rc;
@@ -1083,7 +1123,7 @@ ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 	rc = ds_rsvc_lookup_leader(class, id, &svc, hint);
 	if (rc != 0)
 		return rc;
-	rc = ds_rsvc_remove_replicas_s(svc, ranks);
+	rc = ds_rsvc_remove_replicas_s(svc, ranks, stop);
 	ds_rsvc_set_hint(svc, hint);
 	put_leader(svc);
 	return rc;
@@ -1372,6 +1412,7 @@ rsvc_module_fini(void)
 	rsvc_hash_fini();
 	return 0;
 }
+
 struct dss_module rsvc_module = {
 	.sm_name	= "rsvc",
 	.sm_mod_id	= DAOS_RSVC_MODULE,

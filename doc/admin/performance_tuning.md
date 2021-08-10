@@ -1,7 +1,5 @@
 # DAOS Performance Tuning
 
-This section will be expanded in a future revision.
-
 ## Network Performance
 
 The DAOS [CaRT][1] layer can validate and benchmark network communications in
@@ -19,7 +17,7 @@ bulk transfers, multiple targets, and the following test scenarios:
     servers that will issue cross-server RPCs. This model supports a
     many to many communication model.
 
-### Getting DAOS CaRT self_test
+### Building CaRT self_test
 
 The CaRT `self_test` and its tests are delivered as part of the daos_client
 and daos_tests [distribution packages][2]. It can also be built from scratch.
@@ -91,29 +89,42 @@ $ ./bin/self_test --help
 ```
 
 **To run self_test in client-to-servers mode:**
+(Assuming sockets provider over eth0)
 ```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile ${hostfile} --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
-  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16 \
-  ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
+
+# Specify provider
+export CRT_PHY_ADDR_STR='ofi+sockets'
+
+# Specify interface
+export OFI_INTERFACE=eth0
+
+# Specify domain; usually only required when running over ofi+verbs;ofi_rxm
+# For example in such configuration OFI_DOMAIN might be set to mlx5_0
+# run fi_info --provider='verbs;ofi_rxm' in order to find an appropriate domain
+export OFI_DOMAIN=eth0
+
+# Export additional CART-level environment variables as described in README.env
+# if needed. For example export D_LOG_FILE=/path/to/log will allow dumping of the
+# log into the file instead of stdout/stderr
+
+$ ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
   --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
-  --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+  --max-inflight-rpcs 16 --repetitions 100 -p /path/to/attach_info
 ```
 
 **To run self_test in cross-servers mode:**
 ```bash
-$ /usr/lib64/openmpi3/bin/orterun --mca btl self,tcp -N 1 \
-  --hostfile ${hostfile} --output-filename testLogs/ \
-  -x D_LOG_FILE=testLogs/self_test.log -x D_LOG_FILE_APPEND_PID=1 \
-  -x D_LOG_MASK=WARN -x CRT_PHY_ADDR_STR=ofi+sockets -x OFI_INTERFACE=eth0 \
-  -x CRT_CTX_SHARE_ADDR=0 -x CRT_CTX_NUM=16  \
-  ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
+
+$ ./bin/self_test --group-name daos_server --endpoint 0-<MAX_SERVER-1>:0 \
   --master-endpoint 0-<MAX_SERVER-1>:0 \
   --message-sizes "b1048576,b1048576 0,0 b1048576,i2048,i2048 0,0 i2048" \
-  --max-inflight-rpcs 16 --repetitions 100 -t -n -p .
+  --max-inflight-rpcs 16 --repetitions 100 -p /path/to/attach_info
 ```
+
+Note:
+Number of repetitions, max inflight rpcs, message sizes can be adjusted based on the
+particular test/experiment.
+
 
 ## Benchmarking DAOS
 
@@ -125,37 +136,81 @@ benchmarks.
 
 IOR (<https://github.com/hpc/ior>) with the following backends:
 
--   The IOR APIs POSIX, MPIIO and HDF5 can be used with DAOS POSIX containers that
-    are accessed over dfuse. This works without or with the I/O interception library
-    (`libioil`). Performance is significantly better when using `libioil`.
+-   The IOR APIs POSIX, MPIIO and HDF5 can be used with DAOS POSIX containers
+    that are accessed over dfuse. This works without or with the I/O
+    interception library (`libioil`). Performance is significantly better when
+    using `libioil`. For detailed information on dfuse usage with the IO
+    interception library, please refer to the [POSIX DFUSE section][7].
 
 -   A custom DFS (DAOS File System) plugin for DAOS can be used by building IOR
     with DAOS support, and selecting API=DFS. This integrates IOR directly with the
     DAOS File System (`libdfs`), without requiring FUSE or an interception library.
+    Please refer to the [DAOS README][10] in the hpc/ior repository for some basic
+    instructions on how to use the DFS driver.
 
 -   When using the IOR API=MPIIO, the ROMIO ADIO driver for DAOS can be used by
     providing the `daos://` prefix to the filename. This ADIO driver bypasses `dfuse`
     and directly invkes the `libdfs` calls to perform I/O to a DAOS POSIX container.
-    The DAOS-enabled MPIIO driver is available in the upstream MPICH repository 
-    (MPICH 3.4.1 or higher).
+    The DAOS-enabled MPIIO driver is available in the upstream MPICH repository and
+    included with Intel MPI. Please refer to the [MPI-IO documentation][8].
 
--   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model 
+-   An HDF5 VOL connector for DAOS is under development. This maps the HDF5 data model
     directly to the DAOS data model, and works in conjunction with DAOS containers of
     `--type=HDF5` (in contrast to DAOS container of `--type=POSIX` that are used for
-    the other IOR APIs).
+    the other IOR APIs). Please refer the the [HDF5 with DAOS documentation][9].
+
+IOR has several parameters to characterize performance. The main parameters to
+work with include:
+- transfer size (-t)
+- block size (-b)
+- segment size (-s)
+
+For more use cases, the IO-500 workloads are a good starting point to measure
+performance on a system: https://github.com/IO500/io500
 
 ### mdtest
 
-mdtest is released in the same repository as IOR. The corresponding backends that are
-listed above support mdtest, except for the MPI-IO and HDF5 backends that were
-only designed to support IOR.
+mdtest is released in the same repository as IOR. The corresponding backends
+that are listed above support mdtest, except for the MPI-IO and HDF5 backends
+that were only designed to support IOR. The [DAOS README][10] in the hpc/ior
+repository includes some examples to run mdtest with DAOS.
+
+The IO-500 workloads for mdtest provide some good criteria for performance
+measurements.
 
 ### FIO
 
+A DAOS engine is integrated into FIO and available upstream.
+To build it, just run:
+
+```bash
+$ git clone http://git.kernel.dk/fio.git
+$ cd fio
+$ ./configure
+$ make install
+```
+
+If DAOS is installed via packages, it should be automatically detected.
+If not, please specific the path to the DAOS library and headers to configure
+as follows:
+```
+$ CFLAGS="-I/path/to/daos/install/include" LDFLAGS="-L/path/to/daos/install/lib64" ./configure
+```
+
+Once successfully build, once can run the default example:
+```bash
+$ export POOL= # your pool UUID
+$ export CONT= # your container UUID
+$ fio ./examples/dfs.fio
+```
+
+Please note that DAOS does not transfer data (i.e. zeros) over the network
+when reading a hole in a sparse POSIX file. Very high read bandwidth can
+thus be reported if fio reads unallocated extents in a file. It is thus
+a good practice to start fio with a first write phase.
+
 FIO can also be used to benchmark DAOS performance using dfuse and the
-interception library with all the POSIX based engines like sync and libaio. We
-do, however, provide a native DFS engine for FIO similar to what we do for
-IOR. That engine is available on GitHub: <https://github.com/daos-stack/dfio>
+interception library with all the POSIX based engines like sync and libaio.
 
 ### daos_perf
 
@@ -244,3 +299,7 @@ section.
 [4]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#server-startup> (DAOS server startup documentation)
 [5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
 [6]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
+[7]: <https://daos-stack.github.io/user/posix/#dfuse>
+[8]: <https://github.com/daos-stack/daos/blob/master/doc/user/mpi-io.md>
+[9]: <https://github.com/daos-stack/daos/blob/master/doc/user/hdf5.md>
+[10]: <https://github.com/hpc/ior/blob/main/README_DAOS>

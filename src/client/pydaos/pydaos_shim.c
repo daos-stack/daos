@@ -3,13 +3,12 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#ifdef __USE_PYTHON3__
+
 /* Those are gone from python3, replaced with new functions */
 #define PyInt_FromLong		PyLong_FromLong
 #define PyString_FromString	PyUnicode_FromString
 #define PyString_FromStringAndSize PyUnicode_FromStringAndSize
 #define PyString_AsString	PyBytes_AsString
-#endif
 
 #include <Python.h>
 
@@ -26,6 +25,14 @@
 #include <daos_uns.h>
 
 #define PY_SHIM_MAGIC_NUMBER 0x7A89
+#define MAX_OID_HI ((1UL << 32) - 1)
+
+struct open_handle {
+	daos_handle_t	poh;   /** pool handle */
+	daos_handle_t	coh;   /** container handle */
+	daos_obj_id_t	root;  /** OID of root kv */
+	daos_obj_id_t	alloc; /** last allocated objid */
+};
 
 static int
 __is_magic_valid(int input)
@@ -115,12 +122,16 @@ __shim_handle__err_to_str(PyObject *self, PyObject *args)
  */
 
 static PyObject *
-cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
+cont_open(int ret, char *pool, char *cont, int flags)
 {
-	PyObject	*return_list;
-	daos_handle_t	 coh = {0};
-	daos_handle_t	 poh = {0};
-	int		 rc;
+	PyObject			*return_list;
+	struct open_handle		*hdl = NULL;
+	daos_handle_t			coh = {0};
+	daos_handle_t			poh = {0};
+	daos_prop_t			*prop = NULL;
+	struct daos_prop_entry		*entry;
+	struct daos_prop_co_roots	*roots;
+	int				rc;
 
 	if (ret != DER_SUCCESS) {
 		rc = ret;
@@ -128,21 +139,77 @@ cont_open(int ret, uuid_t puuid, uuid_t cuuid, int flags)
 	}
 
 	/** Connect to pool */
-	rc = daos_pool_connect(puuid, "daos_server", DAOS_PC_RW, &poh,
+	rc = daos_pool_connect(pool, NULL, DAOS_PC_RW, &poh,
 			       NULL, NULL);
 	if (rc)
 		goto out;
 
 	/** Open container */
-	rc = daos_cont_open(poh, cuuid, DAOS_COO_RW, &coh, NULL, NULL);
+	rc = daos_cont_open(poh, cont, DAOS_COO_RW, &coh, NULL, NULL);
 	if (rc)
-		daos_pool_disconnect(poh, NULL);
+		goto out;
+
+	/** Retrieve container properties via cont_query() */
+	prop = daos_prop_alloc(0);
+	if (prop == NULL) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	rc = daos_cont_query(coh, NULL, prop, NULL);
+	if (rc)
+		goto out;
+
+	/** Verify that this is a python container */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LAYOUT_TYPE);
+	if (entry == NULL || entry->dpe_val != DAOS_PROP_CO_LAYOUT_PYTHON) {
+		D_ERROR("Container is not a python container\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/** Fetch root object ID */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ROOTS);
+	if (entry == NULL) {
+		D_ERROR("Invalid entry in properties for root object ID\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+	roots = (struct daos_prop_co_roots *)entry->dpe_val_ptr;
+	if (roots->cr_oids[0].hi == 0 && roots->cr_oids[0].lo == 0) {
+		D_ERROR("Invalid root object ID in properties\n");
+		rc = -DER_INVAL;
+		goto out;
+	}
+
+	/** Track container open handle and associated attributes */
+	D_ALLOC_PTR(hdl);
+	if (hdl == NULL) {
+		D_ERROR("failed to allocate internal handle to open container\n");
+		rc = -DER_NOMEM;
+		goto out;
+	}
+	hdl->poh	= poh;
+	hdl->coh	= coh;
+	hdl->root	= roots->cr_oids[0];
+	/** Use flatkv option for root kv */
+	hdl->root.hi	|= (uint64_t)DAOS_OF_KV_FLAT << OID_FMT_FEAT_SHIFT;
+	hdl->alloc.lo	= 0;
+	hdl->alloc.hi	= MAX_OID_HI;
 out:
+	if (prop)
+		daos_prop_free(prop);
+	if (rc) {
+		if (daos_handle_is_valid(coh))
+			daos_cont_close(coh, NULL);
+		if (daos_handle_is_valid(poh))
+			daos_pool_disconnect(poh, NULL);
+	}
+
 	/* Populate return list */
-	return_list = PyList_New(3);
+	return_list = PyList_New(2);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
-	PyList_SetItem(return_list, 1, PyLong_FromLong(poh.cookie));
-	PyList_SetItem(return_list, 2, PyLong_FromLong(coh.cookie));
+	PyList_SetItem(return_list, 1, PyLong_FromVoidPtr(hdl));
 
 	return return_list;
 }
@@ -150,23 +217,14 @@ out:
 static PyObject *
 __shim_handle__cont_open(PyObject *self, PyObject *args)
 {
-	const char	*puuid_str;
-	const char	*cuuid_str;
-	uuid_t		 puuid;
-	uuid_t		 cuuid;
-	int		 flags;
-	int		 rc;
+	char	*pool;
+	char	*cont;
+	int	 flags;
 
 	/** Parse arguments, flags not used for now */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &puuid_str, &cuuid_str,
-				       &flags);
-	rc = uuid_parse(puuid_str, puuid);
-	if (rc)
-		goto out;
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "ssi", &pool, &cont, &flags);
 
-	rc = uuid_parse(cuuid_str, cuuid);
-out:
-	return cont_open(rc, puuid, cuuid, flags);
+	return cont_open(0, pool, cont, flags);
 }
 
 static PyObject *
@@ -181,29 +239,41 @@ __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "si", &path, &flags);
 
 	rc = duns_resolve_path(path, &attr);
+	if (rc)
+		goto out;
 
-	return cont_open(rc, attr.da_puuid, attr.da_cuuid, flags);
+	if (attr.da_type != DAOS_PROP_CO_LAYOUT_PYTHON)
+		rc = -DER_INVAL;
+out:
+	/**
+	 * XXX attr.da_pool/cont_label to be replaced by attr.da_pool/cont
+	 * once PR 6333 is landed
+	 */
+	return cont_open(rc, attr.da_pool_label, attr.da_cont_label, flags);
 }
 
 static PyObject *
 __shim_handle__cont_close(PyObject *self, PyObject *args)
 {
-	daos_handle_t	 poh;
-	daos_handle_t	 coh;
-	int		 rc;
-	int		 ret;
+	struct open_handle	*hdl;
+	int			rc;
+	int			ret;
 
 	/** Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LL", &poh.cookie, &coh.cookie);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "K", &hdl);
 
 	/** Close container */
-	rc = daos_cont_close(coh, NULL);
+	rc = daos_cont_close(hdl->coh, NULL);
 
 	/** Disconnect from pool */
-	ret = daos_pool_disconnect(poh, NULL);
+	ret = daos_pool_disconnect(hdl->poh, NULL);
 
 	if (rc == 0)
 		rc = ret;
+
+	/** if everything went well, free up the handle */
+	if (rc == 0)
+		D_FREE(hdl);
 
 	return PyInt_FromLong(rc);
 }
@@ -353,23 +423,16 @@ static PyObject *
 __shim_handle__obj_idroot(PyObject *self, PyObject *args)
 {
 	PyObject		*return_list;
-	daos_oclass_id_t	 cid;
-	daos_handle_t		 coh;
-	int			 cid_in;
-	daos_obj_id_t		 oid;
+	struct open_handle	*hdl;
 
 	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Li", &coh.cookie, &cid_in);
-	cid = (uint16_t) cid_in;
-	oid.hi = 0;
-	oid.lo = 0;
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "K", &hdl);
 
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, cid, 0, 0);
-
+	/** Return root object ID fetched from properties at open time */
 	return_list = PyList_New(3);
 	PyList_SetItem(return_list, 0, PyInt_FromLong(DER_SUCCESS));
-	PyList_SetItem(return_list, 1, PyLong_FromLong(oid.hi));
-	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
+	PyList_SetItem(return_list, 1, PyLong_FromLong(hdl->root.hi));
+	PyList_SetItem(return_list, 2, PyLong_FromLong(hdl->root.lo));
 
 	return return_list;
 }
@@ -378,24 +441,39 @@ static PyObject *
 __shim_handle__obj_idgen(PyObject *self, PyObject *args)
 {
 	PyObject		*return_list;
-	daos_handle_t		 coh;
+	struct open_handle	*hdl;
 	daos_oclass_id_t	 cid;
 	int			 cid_in;
 	daos_obj_id_t		 oid;
+	int			 rc = DER_SUCCESS;
 
 	/* Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Li", &coh.cookie, &cid_in);
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "Ki", &hdl, &cid_in);
 	cid = (uint16_t) cid_in;
 
-	/** XXX: OID should be generated via daos_cont_alloc_oids() */
-	srand(time(0));
-	oid.lo = rand();
-	oid.hi = 0;
+	/** If we ran out of local OIDs, alloc one from the container */
+	if (hdl->alloc.hi >= MAX_OID_HI) {
+		rc = daos_cont_alloc_oids(hdl->coh, 1, &hdl->alloc.lo, NULL);
+		if (rc) {
+			D_ERROR("daos_cont_alloc_oids() Failed (%d)\n", rc);
+			goto out;
+		}
+		if (hdl->alloc.lo == 0)
+			/** reserve the first 100 object IDs */
+			hdl->alloc.hi = 100;
+		else
+			hdl->alloc.hi = 0;
+	}
 
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, cid, 0, 0);
+	/** set oid and lo, bump the current hi value */
+	oid.lo = hdl->alloc.lo;
+	oid.hi = hdl->alloc.hi++;
 
+	/** generate the actual object ID */
+	rc = daos_obj_generate_oid(hdl->coh, &oid, DAOS_OF_KV_FLAT, cid, 0, 0);
+out:
 	return_list = PyList_New(3);
-	PyList_SetItem(return_list, 0, PyInt_FromLong(DER_SUCCESS));
+	PyList_SetItem(return_list, 0, PyInt_FromLong(rc));
 	PyList_SetItem(return_list, 1, PyLong_FromLong(oid.hi));
 	PyList_SetItem(return_list, 2, PyLong_FromLong(oid.lo));
 
@@ -405,19 +483,19 @@ __shim_handle__obj_idgen(PyObject *self, PyObject *args)
 static PyObject *
 __shim_handle__kv_open(PyObject *self, PyObject *args)
 {
-	PyObject	*return_list;
-	daos_handle_t	 coh;
-	daos_handle_t	 oh;
-	daos_obj_id_t	 oid;
-	int		 flags;
-	int		 rc;
+	PyObject		*return_list;
+	struct open_handle	*hdl;
+	daos_handle_t		oh;
+	daos_obj_id_t		oid;
+	int			flags;
+	int			rc;
 
 	/** Parse arguments */
-	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LLLi", &coh.cookie, &oid.hi,
+	RETURN_NULL_IF_FAILED_TO_PARSE(args, "KLLi", &hdl, &oid.hi,
 				       &oid.lo, &flags);
 
 	/** Open object */
-	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
+	rc = daos_kv_open(hdl->coh, oid, DAOS_OO_RW, &oh, NULL);
 
 	/* Populate return list */
 	return_list = PyList_New(2);
@@ -560,7 +638,7 @@ rewait:
 			} else if (evp->ev_error == -DER_REC2BIG) {
 				char *new_buff;
 
-				D_REALLOC(new_buff, op->buf, op->size);
+				D_REALLOC_NZ(new_buff, op->buf, op->size);
 				if (new_buff == NULL) {
 					rc = -DER_NOMEM;
 					break;
@@ -586,12 +664,10 @@ rewait:
 
 		/** submit get request */
 		op->key_obj = key;
-#ifdef __USE_PYTHON3__
+
 		if (PyUnicode_Check(key)) {
 			op->key = (char *)PyUnicode_AsUTF8(key);
-		} else
-#endif
-		{
+		} else {
 			op->key = PyString_AsString(key);
 		}
 		if (!op->key)
@@ -623,7 +699,7 @@ rewait:
 				daos_event_fini(evp);
 				rc2 = daos_event_init(evp, eq, NULL);
 
-				D_REALLOC(new_buff, op->buf, op->size);
+				D_REALLOC_NZ(new_buff, op->buf, op->size);
 				if (new_buff == NULL)
 					D_GOTO(out, rc = -DER_NOMEM);
 
@@ -686,7 +762,7 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 
 	/* Parse arguments */
 	RETURN_NULL_IF_FAILED_TO_PARSE(args, "LO!", &oh.cookie,
-				&PyDict_Type, &daos_dict);
+				       &PyDict_Type, &daos_dict);
 
 	rc = daos_eq_create(&eq);
 	if (rc)
@@ -728,13 +804,11 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 		/** XXX: Interpret all values as strings for now */
 		if (value == Py_None) {
 			size = 0;
-#ifdef __USE_PYTHON3__
 		} else if (PyUnicode_Check(value)) {
 			Py_ssize_t pysize = 0;
 
 			buf = (char *)PyUnicode_AsUTF8AndSize(value, &pysize);
 			size = pysize;
-#endif
 		} else {
 			Py_ssize_t pysize = 0;
 
@@ -745,12 +819,9 @@ __shim_handle__kv_put(PyObject *self, PyObject *args)
 			size = pysize;
 		}
 
-#ifdef __USE_PYTHON3__
 		if (PyUnicode_Check(key)) {
 			key_str = (char *)PyUnicode_AsUTF8(key);
-		} else
-#endif
-		{
+		} else {
 			key_str = PyString_AsString(key);
 		}
 		if (!key_str)
@@ -802,6 +873,7 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 	PyObject	*anchor_cap;
 	char		*enum_buf = NULL;
 	daos_size_t	 size;
+	daos_size_t	 oldsize;
 	char		*ptr;
 	uint32_t	 i;
 	int		 rc = 0;
@@ -813,6 +885,8 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 		rc = -DER_INVAL;
 		goto out;
 	}
+
+	oldsize = size;
 
 	/** Allocate an anchor for the first iteration */
 	if (anchor_cap == Py_None) {
@@ -875,11 +949,12 @@ __shim_handle__kv_iter(PyObject *self, PyObject *args)
 			size = kds[0].kd_key_len;
 
 			/** realloc buffer twice as big */
-			D_REALLOC(new_buf, enum_buf, size);
+			D_REALLOC(new_buf, enum_buf, oldsize, size);
 			if (new_buf == NULL) {
 				rc = -DER_NOMEM;
 				goto out;
 			}
+			oldsize = size;
 
 			/** refresh daos structures to point at new buffer */
 			d_iov_set(&iov, (void *)new_buf, size);

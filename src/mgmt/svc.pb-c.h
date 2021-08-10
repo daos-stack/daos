@@ -24,6 +24,7 @@ typedef struct _Mgmt__JoinResp Mgmt__JoinResp;
 typedef struct _Mgmt__LeaderQueryReq Mgmt__LeaderQueryReq;
 typedef struct _Mgmt__LeaderQueryResp Mgmt__LeaderQueryResp;
 typedef struct _Mgmt__GetAttachInfoReq Mgmt__GetAttachInfoReq;
+typedef struct _Mgmt__ClientNetHint Mgmt__ClientNetHint;
 typedef struct _Mgmt__GetAttachInfoResp Mgmt__GetAttachInfoResp;
 typedef struct _Mgmt__GetAttachInfoResp__RankUri Mgmt__GetAttachInfoResp__RankUri;
 typedef struct _Mgmt__PrepShutdownReq Mgmt__PrepShutdownReq;
@@ -132,10 +133,14 @@ struct  _Mgmt__JoinReq
    * Instance index on server node.
    */
   uint32_t idx;
+  /*
+   * rank incarnation
+   */
+  uint64_t incarnation;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Mgmt__JoinResp
@@ -209,33 +214,9 @@ struct  _Mgmt__GetAttachInfoReq
     , (char *)protobuf_c_empty_string, 0 }
 
 
-struct  _Mgmt__GetAttachInfoResp__RankUri
+struct  _Mgmt__ClientNetHint
 {
   ProtobufCMessage base;
-  uint32_t rank;
-  char *uri;
-};
-#define MGMT__GET_ATTACH_INFO_RESP__RANK_URI__INIT \
- { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__rank_uri__descriptor) \
-    , 0, (char *)protobuf_c_empty_string }
-
-
-struct  _Mgmt__GetAttachInfoResp
-{
-  ProtobufCMessage base;
-  /*
-   * DAOS error code
-   */
-  int32_t status;
-  /*
-   * Rank URIs
-   */
-  size_t n_rank_uris;
-  Mgmt__GetAttachInfoResp__RankUri **rank_uris;
-  /*
-   * These CaRT settings are shared with the
-   * libdaos client to aid in CaRT initialization.
-   */
   /*
    * CaRT OFI provider
    */
@@ -264,14 +245,52 @@ struct  _Mgmt__GetAttachInfoResp
    * I/O Engine network interface
    */
   /*
+   * Server SRX setting (-1, 0, 1; -1 == unset)
+   */
+  int32_t srv_srx_set;
+};
+#define MGMT__CLIENT_NET_HINT__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__client_net_hint__descriptor) \
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0 }
+
+
+struct  _Mgmt__GetAttachInfoResp__RankUri
+{
+  ProtobufCMessage base;
+  uint32_t rank;
+  char *uri;
+};
+#define MGMT__GET_ATTACH_INFO_RESP__RANK_URI__INIT \
+ { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__rank_uri__descriptor) \
+    , 0, (char *)protobuf_c_empty_string }
+
+
+struct  _Mgmt__GetAttachInfoResp
+{
+  ProtobufCMessage base;
+  /*
+   * DAOS error code
+   */
+  int32_t status;
+  /*
+   * Rank URIs
+   */
+  size_t n_rank_uris;
+  Mgmt__GetAttachInfoResp__RankUri **rank_uris;
+  /*
+   * These CaRT settings are shared with the
+   * libdaos client to aid in CaRT initialization.
+   */
+  /*
    * Ranks local to MS replicas
    */
   size_t n_ms_ranks;
   uint32_t *ms_ranks;
+  Mgmt__ClientNetHint *client_net_hint;
 };
 #define MGMT__GET_ATTACH_INFO_RESP__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__get_attach_info_resp__descriptor) \
-    , 0, 0,NULL, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0, 0, 0,NULL }
+    , 0, 0,NULL, 0,NULL, NULL }
 
 
 struct  _Mgmt__PrepShutdownReq
@@ -493,6 +512,25 @@ Mgmt__GetAttachInfoReq *
 void   mgmt__get_attach_info_req__free_unpacked
                      (Mgmt__GetAttachInfoReq *message,
                       ProtobufCAllocator *allocator);
+/* Mgmt__ClientNetHint methods */
+void   mgmt__client_net_hint__init
+                     (Mgmt__ClientNetHint         *message);
+size_t mgmt__client_net_hint__get_packed_size
+                     (const Mgmt__ClientNetHint   *message);
+size_t mgmt__client_net_hint__pack
+                     (const Mgmt__ClientNetHint   *message,
+                      uint8_t             *out);
+size_t mgmt__client_net_hint__pack_to_buffer
+                     (const Mgmt__ClientNetHint   *message,
+                      ProtobufCBuffer     *buffer);
+Mgmt__ClientNetHint *
+       mgmt__client_net_hint__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data);
+void   mgmt__client_net_hint__free_unpacked
+                     (Mgmt__ClientNetHint *message,
+                      ProtobufCAllocator *allocator);
 /* Mgmt__GetAttachInfoResp__RankUri methods */
 void   mgmt__get_attach_info_resp__rank_uri__init
                      (Mgmt__GetAttachInfoResp__RankUri         *message);
@@ -620,6 +658,9 @@ typedef void (*Mgmt__LeaderQueryResp_Closure)
 typedef void (*Mgmt__GetAttachInfoReq_Closure)
                  (const Mgmt__GetAttachInfoReq *message,
                   void *closure_data);
+typedef void (*Mgmt__ClientNetHint_Closure)
+                 (const Mgmt__ClientNetHint *message,
+                  void *closure_data);
 typedef void (*Mgmt__GetAttachInfoResp__RankUri_Closure)
                  (const Mgmt__GetAttachInfoResp__RankUri *message,
                   void *closure_data);
@@ -654,6 +695,7 @@ extern const ProtobufCEnumDescriptor    mgmt__join_resp__state__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__leader_query_req__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__leader_query_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor;
+extern const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__rank_uri__descriptor;
 extern const ProtobufCMessageDescriptor mgmt__prep_shutdown_req__descriptor;

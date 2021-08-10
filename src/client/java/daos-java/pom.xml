@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.2.1-SNAPSHOT</version>
   </parent>
 
   <groupId>io.daos</groupId>
@@ -32,10 +32,6 @@
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>
       <artifactId>log4j-core</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>commons-lang</groupId>
-      <artifactId>commons-lang</artifactId>
     </dependency>
     <dependency>
       <groupId>com.google.protobuf</groupId>
@@ -84,6 +80,17 @@
             <arg>${project.basedir}/src/main/native/include</arg>
           </compilerArgs>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>test-jar</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -160,7 +167,7 @@
                   <arg value="-I/usr/local/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
-                  <arg value="-I${daos.install.path}/include/"/>
+                  <arg value="-I${sl-prefix}/include/"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/daos_jni_common.c"/>
                   <arg value="-o${native.build.path}/daos_jni_common.o"/>
@@ -175,7 +182,7 @@
                   <arg value="-I/usr/local/"/>
                   <arg value="-I${java-home}/include/"/>
                   <arg value="-I${java-home}/include/linux/"/>
-                  <arg value="-I${daos.install.path}/include/"/>
+                  <arg value="-I${sl-prefix}/include/"/>
                   <arg value="-I${project.basedir}/src/main/native/include/"/>
                   <arg value="${project.basedir}/src/main/native/io_daos_DaosClient.c"/>
                   <arg value="-o${native.build.path}/io_daos_DaosClient.o"/>
@@ -269,7 +276,7 @@
         <artifactId>maven-shade-plugin</artifactId>
         <executions>
           <execution>
-            <id>shade-protobuf3</id>
+            <id>shade-protobuf3-netty4</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
@@ -293,38 +300,13 @@
               <artifactSet>
                 <excludes>
                   <exclude>org.slf4j:slf4j-api</exclude>
-                  <exclude>org.apache.logging.log4j:log4j-slf4j-impl</exclude>
-                  <exclude>org.apache.logging.log4j:log4j-core</exclude>
+                  <exclude>org.apache.logging.log4j:*</exclude>
                   <exclude>commons-lang:commons-lang</exclude>
                   <exclude>com.google.code.findbugs:jsr305</exclude>
                   <exclude>org.javassist:javassist</exclude>
                 </excludes>
               </artifactSet>
-              <finalName>${artifactId}-${version}-proto3-netty4-shaded</finalName>
-            </configuration>
-          </execution>
-          <execution>
-            <id>shade</id>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <shadedArtifactAttached>true</shadedArtifactAttached>
-              <relocations>
-                <relocation>
-                  <pattern>com.google.protobuf</pattern>
-                  <shadedPattern>com.google.protoshadebuf3</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>io.netty.buffer</pattern>
-                  <shadedPattern>io.netty.buffershade4</shadedPattern>
-                </relocation>
-                <relocation>
-                  <pattern>io.netty.util</pattern>
-                  <shadedPattern>io.netty.utilshade4</shadedPattern>
-                </relocation>
-              </relocations>
+              <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
             </configuration>
           </execution>
         </executions>
@@ -343,14 +325,9 @@
             <configuration>
               <artifacts>
                 <artifact>
-                  <file>target/${artifactId}-${version}-proto3-netty4-shaded.jar</file>
+                  <file>target/${artifactId}-${version}-protobuf3-netty4-shaded.jar</file>
                   <type>jar</type>
-                  <classifier>proto3-netty4-shaded</classifier>
-                </artifact>
-                <artifact>
-                  <file>target/${artifactId}-${version}-shaded.jar</file>
-                  <type>jar</type>
-                  <classifier>all-shaded</classifier>
+                  <classifier>protobuf3-netty4-shaded</classifier>
                 </artifact>
               </artifacts>
             </configuration>
@@ -423,4 +400,66 @@
       </plugin>
     </plugins>
   </reporting>
+
+  <profiles>
+    <profile>
+      <id>shade-all</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-shade-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>shade-all</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>shade</goal>
+                </goals>
+                <configuration>
+                  <shadedArtifactAttached>true</shadedArtifactAttached>
+                  <relocations>
+                    <relocation>
+                      <pattern>com.google.protobuf</pattern>
+                      <shadedPattern>com.google.protoshadebuf3</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>io.netty.buffer</pattern>
+                      <shadedPattern>io.netty.buffershade4</shadedPattern>
+                    </relocation>
+                    <relocation>
+                      <pattern>io.netty.util</pattern>
+                      <shadedPattern>io.netty.utilshade4</shadedPattern>
+                    </relocation>
+                  </relocations>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>3.0.0</version>
+            <executions>
+              <execution>
+                <id>attach-shaded-all</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>attach-artifact</goal>
+                </goals>
+                <configuration>
+                  <artifacts>
+                    <artifact>
+                      <file>target/${artifactId}-${version}-shaded.jar</file>
+                      <type>jar</type>
+                      <classifier>all-shaded</classifier>
+                    </artifact>
+                  </artifacts>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

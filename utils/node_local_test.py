@@ -19,13 +19,15 @@ import sys
 import time
 import uuid
 import json
+import copy
 import signal
 import stat
-import errno
 import argparse
 import tabulate
 import functools
+import traceback
 import subprocess
+import junit_xml
 import tempfile
 import pickle
 import xattr
@@ -74,9 +76,17 @@ class NLTConf():
         self.wf = None
         self.args = None
         self.max_log_size = None
-
+        self.valgrind_errors = False
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
+        self.tmp_dir = None
+        if args.class_name:
+            self.tmp_dir = os.path.join('nlt_logs', args.class_name)
+            if os.path.exists(self.tmp_dir):
+                for old_file in os.listdir(self.tmp_dir):
+                    os.unlink(os.path.join(self.tmp_dir, old_file))
+                os.rmdir(self.tmp_dir)
+            os.makedirs(self.tmp_dir)
 
     def __del__(self):
         os.rmdir(self.dfuse_parent_dir)
@@ -131,16 +141,46 @@ class WarningsFactory():
 
     # Error levels supported by the reporting are LOW, NORMAL, HIGH, ERROR.
 
-    def __init__(self, filename):
+    def __init__(self,
+                 filename,
+                 junit=False,
+                 class_id=None,
+                 post=False,
+                 post_error=False,
+                 check=None):
         self._fd = open(filename, 'w')
         self.filename = filename
+        self.post = post
+        self.post_error = post_error
+        self.check = check
         self.issues = []
+        self._class_id = class_id
         self.pending = []
         self._running = True
         # Save the filename of the object, as __file__ does not
         # work in __del__
         self._file = __file__.lstrip('./')
         self._flush()
+
+        if junit:
+            # Insert a test-case and force it to failed.  Save this to file
+            # and keep it there, until close() method is called, then remove
+            # it and re-save.  This means any crash will result in there
+            # being a results file with an error recorded.
+            tc = junit_xml.TestCase('Sanity', classname=self._class_name('core'))
+            tc.add_error_info('NLT exited abnormally')
+            test_case = junit_xml.TestCase('Startup', classname=self._class_name('core'))
+            self.ts = junit_xml.TestSuite('Node Local Testing', test_cases=[test_case, tc])
+            self._write_test_file()
+        else:
+            self.ts = None
+
+    def _class_name(self, class_name):
+        """Return a formatted ID string for class"""
+
+        if self._class_id:
+            return 'NLT.{}.{}'.format(self._class_id, class_name)
+        return 'NLT.{}'.format(class_name)
 
     def __del__(self):
         """Ensure the file is flushed on exit, but if it hasn't already
@@ -149,14 +189,44 @@ class WarningsFactory():
             return
 
         entry = {}
-        entry['fileName'] = os.path.basename(self._file)
-        entry['directory'] = os.path.dirname(self._file)
+        entry['fileName'] = self._file
         # pylint: disable=protected-access
         entry['lineStart'] = sys._getframe().f_lineno
         entry['message'] = 'Tests exited without shutting down properly'
         entry['severity'] = 'ERROR'
         self.issues.append(entry)
+
+        # Do not try and write the junit file here, as that does not work
+        # during teardown.
+        self.ts = None
         self.close()
+
+    def add_test_case(self, name, failure=None, test_class='core',
+                      output=None,
+                      duration=None):
+        """Add a test case to the results
+
+        class and other metadata will be set automatically,
+        if failure is set the test will fail with the message
+        provided.  Saves the state to file after each update.
+        """
+        if not self.ts:
+            return
+
+        tc = junit_xml.TestCase(name,
+                                classname=self._class_name(test_class),
+                                elapsed_sec=duration)
+        if failure:
+            tc.add_failure_info(failure, output=output)
+        self.ts.test_cases.append(tc)
+
+        self._write_test_file()
+
+    def _write_test_file(self):
+        """Write test results to file"""
+
+        with open('nlt-junit.xml', 'w') as f:
+            junit_xml.TestSuite.to_file(f, [self.ts], prettyprint=True)
 
     def explain(self, line, log_file, esignal):
         """Log an error, along with the other errors it caused
@@ -204,8 +274,7 @@ class WarningsFactory():
         Add it to the pending array, for later clarification
         """
         entry = {}
-        entry['directory'] = os.path.dirname(line.filename)
-        entry['fileName'] = os.path.basename(line.filename)
+        entry['fileName'] = line.filename
         if mtype:
             entry['type'] = mtype
         else:
@@ -221,12 +290,20 @@ class WarningsFactory():
             self.reset_pending()
         self.pending.append((line, message))
         self._flush()
+        if self.post or (self.post_error and sev in ('HIGH', 'ERROR')):
+            # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
+            if self.post_error:
+                message = line.get_msg()
+            print('::warning file={},line={},::{}, {}'.format(line.filename,
+                                                              line.lineno,
+                                                              self.check,
+                                                              message))
 
     def reset_pending(self):
         """Reset the pending list
 
         Should be called before iterating on each new file, so errors
-        from previous files aren't attribured to new files.
+        from previous files aren't attributed to new files.
         """
         self.pending = []
 
@@ -245,8 +322,7 @@ class WarningsFactory():
             # When the test is running insert an error in case of abnormal
             # exit, so that crashes in this code can be identified.
             entry = {}
-            entry['fileName'] = os.path.basename(self._file)
-            entry['directory'] = os.path.dirname(self._file)
+            entry['fileName'] = self._file
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
@@ -263,6 +339,12 @@ class WarningsFactory():
         self._fd = None
         print('Closed JSON file {} with {} errors'.format(self.filename,
                                                           len(self.issues)))
+        if self.ts:
+            # This is a controlled shutdown, so wipe the error saying forced
+            # exit.
+            self.ts.test_cases[1].errors = []
+            self.ts.test_cases[1].error_message = []
+            self._write_test_file()
 
 def load_conf(args):
     """Load the build config file"""
@@ -295,25 +377,58 @@ def get_base_env(clean=False):
     env['FI_UNIVERSE_SIZE'] = '128'
     return env
 
+class DaosPool():
+    """Class to store data about daos pools"""
+    def __init__(self, server, pool_uuid, label):
+        self._server = server
+        self.uuid = pool_uuid
+        self.label = label
+
+    def id(self):
+        """Return the pool ID (label if set; UUID otherwise)"""
+        if self.label:
+            return self.label
+        return self.uuid
+
+    def dfuse_mount_name(self):
+        """Return the string to pass to dfuse mount
+
+        This should be a label if set, otherwise just the
+        uuid.
+        """
+        return self.id()
+
 class DaosServer():
     """Manage a DAOS server instance"""
 
-    def __init__(self, conf, valgrind=False):
+    def __init__(self, conf, test_class=None, valgrind=False):
         self.running = False
         self._file = __file__.lstrip('./')
         self._sp = None
         self.conf = conf
+        if test_class:
+            self._test_class = 'Server.{}'.format(test_class)
+        else:
+            self._test_class = None
         self.valgrind = valgrind
         self._agent = None
+        self.engines = conf.args.engine_count
         self.control_log = tempfile.NamedTemporaryFile(prefix='dnt_control_',
                                                        suffix='.log',
+                                                       dir=conf.tmp_dir,
                                                        delete=False)
         self.agent_log = tempfile.NamedTemporaryFile(prefix='dnt_agent_',
                                                      suffix='.log',
+                                                     dir=conf.tmp_dir,
                                                      delete=False)
-        self.server_log = tempfile.NamedTemporaryFile(prefix='dnt_server_',
-                                                      suffix='.log',
-                                                      delete=False)
+        self.server_logs = []
+        for engine in range(self.engines):
+            prefix = 'dnt_server_{}_'.format(engine)
+            lf = tempfile.NamedTemporaryFile(prefix=prefix,
+                                             suffix='.log',
+                                             dir=conf.tmp_dir,
+                                             delete=False)
+            self.server_logs.append(lf)
         self.__process_name = 'daos_engine'
         if self.valgrind:
             self.__process_name = 'valgrind'
@@ -326,38 +441,77 @@ class DaosServer():
 
         self._yaml_file = None
         self._io_server_dir = None
-        self._size = os.statvfs('/mnt/daos')
-        capacity = self._size.f_blocks * self._size.f_bsize
-        mb = int(capacity / (1024*1024))
-        self.mb = mb
+        self.test_pool = None
 
     def __del__(self):
-        if self.running:
-            self.stop(None)
-        os.rmdir(self.agent_dir)
+        if self._agent:
+            self._stop_agent()
+        try:
+            if self.running:
+                self.stop(None)
+        except NLTestTimeout:
+            print('Ignoring timeout on stop')
+        server_file = os.path.join(self.agent_dir, '.daos_server.active.yml')
+        if os.path.exists(server_file):
+            os.unlink(server_file)
+        for log in self.server_logs:
+            if os.path.exists(log.name):
+                log_test(self.conf, log.name)
+        try:
+            os.rmdir(self.agent_dir)
+        except OSError as error:
+            print(os.listdir(self.agent_dir))
+            raise error
+
+    def _add_test_case(self, op, failure=None, duration=None):
+        """Add a test case to the server instance
+
+        Simply wrapper to automatically add the class
+        """
+        if not self._test_class:
+            return
+
+        self.conf.wf.add_test_case(op,
+                                   failure=failure,
+                                   duration=duration,
+                                   test_class=self._test_class)
 
     # pylint: disable=no-self-use
     def _check_timing(self, op, start, max_time):
         elapsed = time.time() - start
         if elapsed > max_time:
-            raise NLTestTimeout("{} failed after {:.2f}s (max {:.2f}s)".format(
-                op, elapsed, max_time))
+            res = '{} failed after {:.2f}s (max {:.2f}s)'.format(op, elapsed,
+                                                                 max_time)
+            self._add_test_case(op, duration=elapsed, failure=res)
+            raise NLTestTimeout(res)
 
     def _check_system_state(self, desired_states):
+        """Check the system state for against list
+
+        Return true if all members are in a state specified by the
+        desired_states.
+        """
         if not isinstance(desired_states, list):
             desired_states = [desired_states]
 
         rc = self.run_dmg(['system', 'query', '--json'])
-        if rc.returncode == 0:
-            data = json.loads(rc.stdout.decode('utf-8'))
-            members = data['response']['members']
-            if members is not None:
-                for desired_state in desired_states:
-                    if members[0]['state'] == desired_state:
-                        return True
-        return False
+        if rc.returncode != 0:
+            return False
+        data = json.loads(rc.stdout.decode('utf-8'))
+        if data['error'] or data['status'] != 0:
+            return False
+        members = data['response']['members']
+        if members is None:
+            return False
+        if len(members) != self.engines:
+            return False
 
-    def start(self, clean=True):
+        for member in members:
+            if member['state'] not in desired_states:
+                return False
+        return True
+
+    def start(self):
         """Start a DAOS server"""
 
         server_env = get_base_env(clean=True)
@@ -399,7 +553,6 @@ class DaosServer():
         scfd = open(os.path.join(self_dir, 'nlt_server.yaml'), 'r')
 
         scyaml = yaml.safe_load(scfd)
-        scyaml['engines'][0]['log_file'] = self.server_log.name
         if self.conf.args.server_debug:
             scyaml['control_log_mask'] = 'ERROR'
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
@@ -408,6 +561,19 @@ class DaosServer():
         for (key, value) in server_env.items():
             scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
 
+        ref_engine = copy.deepcopy(scyaml['engines'][0])
+        ref_engine['storage'][0]['scm_size'] = int(
+            ref_engine['storage'][0]['scm_size'] / self.engines)
+        scyaml['engines'] = []
+        server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
+        for idx in range(self.engines):
+            engine = copy.deepcopy(ref_engine)
+            engine['log_file'] = self.server_logs[idx].name
+            engine['first_core'] = ref_engine['targets'] * idx
+            engine['fabric_iface_port'] += server_port_count * idx
+            engine['storage'][0]['scm_mount'] = '{}_{}'.format(
+                ref_engine['storage'][0]['scm_mount'], idx)
+            scyaml['engines'].append(engine)
         self._yaml_file = tempfile.NamedTemporaryFile(
             prefix='nlt-server-config-',
             suffix='.yaml')
@@ -417,6 +583,9 @@ class DaosServer():
 
         cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
                'start', '-t', '4', '--insecure', '-d', self.agent_dir]
+
+        if self.conf.args.no_root:
+            cmd.append('--recreate-superblocks')
 
         self._sp = subprocess.Popen(cmd)
 
@@ -435,75 +604,42 @@ class DaosServer():
 
         self._agent = subprocess.Popen(agent_cmd)
         self.conf.agent_dir = self.agent_dir
-        self.running = True
 
         # Configure the storage.  DAOS wants to mount /mnt/daos itself if not
         # already mounted, so let it do that.
         # This code supports three modes of operation:
         # /mnt/daos is not mounted.  It will be mounted and formatted.
-        # /mnt/daos is mounted but empty.  It will be remounted and formatted
         # /mnt/daos exists and has data in.  It will be used as is.
+        # /mnt/daos is mounted but empty.  It will be used-as is.
+        # In this last case the --no-root option must be used.
         start = time.time()
-        max_start_time = 30
-
-        error_resolutions = {
-            'system_erase': (
-                ['running system'], ['system', 'erase', '--json'],
-            ),
-            'system_stop': (
-                ['to be stopped'], ['system', 'stop', '--json'],
-            ),
-            'storage_force_format': (
-                ['already-formatted', 'raft service unavailable'],
-                ['storage', 'format', '--force', '--json']
-            )
-        }
+        max_start_time = 120
 
         cmd = ['storage', 'format', '--json']
         while True:
-            time.sleep(0.5)
+            try:
+                self._sp.wait(timeout=0.5)
+                res = 'daos server died waiting for start'
+                self._add_test_case('format', failure=res)
+                raise Exception(res)
+            except subprocess.TimeoutExpired:
+                pass
             rc = self.run_dmg(cmd)
 
             data = json.loads(rc.stdout.decode('utf-8'))
             print('cmd: {} data: {}'.format(cmd, data))
 
-            if rc.returncode == 0:
+            if data['error'] is None:
                 break
-            if data['error'] is not None:
-                resolved = False
-                for res in error_resolutions.values():
-                    for err_msg in res[0]:
-                        if err_msg in data['error']:
-                            cmd = res[1]
-                            resolved = True
-                            break
-                    if resolved:
-                        break
 
-                # If we don't need to start from a clean slate and the system is
-                # already running, just move on.
-                if not clean and cmd == error_resolutions['system_erase'][1]:
-                    break
-            else:
-                if data['response'] is not None and \
-                    'host_errors' in data['response']:
-                    if len(data['response']['host_errors']) == 0:
-                        break
+            if 'running system' in data['error']:
+                break
 
-                    host_err = list(data['response']['host_errors'])[0]
-                    for err_msg in error_resolutions['storage_force_format'][0]:
-                        if err_msg in host_err:
-                            cmd = error_resolutions['storage_force_format'][1]
-                            break
-                elif cmd == error_resolutions['system_stop'][1]:
-                    cmd = error_resolutions['system_erase'][1]
-                elif cmd == error_resolutions['system_erase'][1]:
-                    cmd = error_resolutions['storage_force_format'][1]
-                elif cmd == error_resolutions['storage_force_format'][1]:
-                    break
-
-            self._check_timing("format", start, max_start_time)
-        print('Format completion in {:.2f} seconds'.format(time.time() - start))
+            self._check_timing('format', start, max_start_time)
+        duration = time.time() - start
+        self._add_test_case('format', duration=duration)
+        print('Format completion in {:.2f} seconds'.format(duration))
+        self.running = True
 
         # Now wait until the system is up, basically the format to happen.
         while True:
@@ -511,14 +647,21 @@ class DaosServer():
             if self._check_system_state(['ready', 'joined']):
                 break
             self._check_timing("start", start, max_start_time)
-        print('Server started in {:.2f} seconds'.format(time.time() - start))
+        duration = time.time() - start
+        self._add_test_case('start', duration=duration)
+        print('Server started in {:.2f} seconds'.format(duration))
+        self.fetch_pools()
+
+    def _stop_agent(self):
+        self._agent.send_signal(signal.SIGINT)
+        ret = self._agent.wait(timeout=5)
+        print('rc from agent is {}'.format(ret))
+        self._agent = None
 
     def stop(self, wf):
         """Stop a previously started DAOS server"""
         if self._agent:
-            self._agent.send_signal(signal.SIGINT)
-            ret = self._agent.wait(timeout=5)
-            print('rc from agent is {}'.format(ret))
+            self._stop_agent()
 
         if not self._sp:
             return 0
@@ -549,32 +692,44 @@ class DaosServer():
                     procs.append(proc_id)
                     break
 
-        if len(procs) != 1:
+        if len(procs) != self.engines:
+            # Mark this as a warning, but not a failure.  This is currently
+            # expected when running with pre-existing data because the server
+            # is calling exec.  Do not mark as a test failure for the same
+            # reason.
             entry = {}
-            entry['fileName'] = os.path.basename(self._file)
-            entry['directory'] = os.path.dirname(self._file)
+            entry['fileName'] = self._file
+            # pylint: disable=protected-access
+            entry['lineStart'] = sys._getframe().f_lineno
+            entry['severity'] = 'NORMAL'
+            message = 'Incorrect number of engines running ({} vs {})'\
+                      .format(len(procs), self.engines)
+            entry['message'] = message
+            self.conf.wf.issues.append(entry)
+        rc = self.run_dmg(['system', 'stop'])
+        if rc.returncode != 0:
+            print(rc)
+            entry = {}
+            entry['fileName'] = self._file
             # pylint: disable=protected-access
             entry['lineStart'] = sys._getframe().f_lineno
             entry['severity'] = 'ERROR'
-            entry['message'] = 'daos_engine died during testing'
+            msg = 'dmg system stop failed with {}'.format(rc.returncode)
+            entry['message'] = msg
             self.conf.wf.issues.append(entry)
-
-        rc = self.run_dmg(['system', 'stop'])
-        assert rc.returncode == 0
+        assert rc.returncode == 0, rc
 
         start = time.time()
-        max_stop_time = 5
+        max_stop_time = 30
         while True:
             time.sleep(0.5)
             if self._check_system_state('stopped'):
                 break
-            try:
-                self._check_timing("stop", start, max_stop_time)
-            except NLTestTimeout as e:
-                print('Failed to stop: {}'.format(e))
-                if time.time() - start > 30:
-                    raise
-        print('Server stopped in {:.2f} seconds'.format(time.time() - start))
+            self._check_timing("stop", start, max_stop_time)
+
+        duration = time.time() - start
+        self._add_test_case('stop', duration=duration)
+        print('Server stopped in {:.2f} seconds'.format(duration))
 
         self._sp.send_signal(signal.SIGTERM)
         ret = self._sp.wait(timeout=5)
@@ -583,7 +738,8 @@ class DaosServer():
         compress_file(self.agent_log.name)
         compress_file(self.control_log.name)
 
-        log_test(self.conf, self.server_log.name, leak_wf=wf)
+        for log in self.server_logs:
+            log_test(self.conf, log.name, leak_wf=wf)
         self.running = False
         return ret
 
@@ -600,7 +756,67 @@ class DaosServer():
                               stderr=subprocess.PIPE,
                               check=False)
 
-def il_cmd(dfuse, cmd, check_read=True, check_write=True):
+    def run_dmg_json(self, cmd):
+        """Run the specified dmg command in json mode
+
+        return data as json, or raise exception on failure
+        """
+
+        cmd.append('--json')
+        rc = self.run_dmg(cmd)
+        print(rc)
+        assert rc.returncode == 0
+        assert rc.stderr == b''
+        data = json.loads(rc.stdout.decode('utf-8'))
+        assert not data['error']
+        assert data['status'] == 0
+        assert data['response']['status'] == 0
+        return data
+
+    def fetch_pools(self):
+        """Query the server and return a list of pool objects"""
+        data = self.run_dmg_json(['pool', 'list'])
+
+        # This should exist but might be 'None' so check for that rather than
+        # iterating.
+        pools = []
+        if not data['response']['pools']:
+            return pools
+        for pool in data['response']['pools']:
+            pobj = DaosPool(self,
+                            pool['uuid'],
+                            pool.get('label', None))
+            pools.append(pobj)
+            if pobj.label == 'NLT':
+                self.test_pool = pobj
+        return pools
+
+    def _make_pool(self):
+        """Create a DAOS pool"""
+
+        size = 1024*2
+
+        rc = self.run_dmg(['pool',
+                           'create',
+                           '--label',
+                           'NLT',
+                           '--scm-size',
+                           '{}M'.format(size)])
+        print(rc)
+        assert rc.returncode == 0
+        self.fetch_pools()
+
+    def get_test_pool(self):
+        """Return a pool uuid to be used for testing
+
+        Create a pool as required"""
+
+        if self.test_pool is None:
+            self._make_pool()
+
+        return self.test_pool.uuid
+
+def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """Run a command under the interception library
 
     Do not run valgrind here, not because it's not useful
@@ -618,6 +834,7 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
     my_env['LD_PRELOAD'] = os.path.join(dfuse.conf['PREFIX'],
                                         'lib64', 'libioil.so')
     my_env['DAOS_AGENT_DRPC_DIR'] = dfuse._daos.agent_dir
+    my_env['D_IL_REPORT'] = '2'
     ret = subprocess.run(cmd, env=my_env, check=False)
     print('Logged il to {}'.format(log_file.name))
     print(ret)
@@ -626,7 +843,8 @@ def il_cmd(dfuse, cmd, check_read=True, check_write=True):
         log_test(dfuse.conf,
                  log_file.name,
                  check_read=check_read,
-                 check_write=check_write)
+                 check_write=check_write,
+                 check_fstat=check_fstat)
         assert ret.returncode == 0
     except NLTestNoFunction as error:
         print("ERROR: command '{}' did not log via {}".format(' '.join(cmd),
@@ -674,6 +892,8 @@ class ValgrindHelper():
         else:
             cmd.append('--leak-check=no')
 
+        cmd.append('--gen-suppressions=all')
+
         src_suppression_file = os.path.join('src',
                                             'cart',
                                             'utils',
@@ -716,14 +936,15 @@ class DFuse():
                  conf,
                  pool=None,
                  container=None,
-                 path=None,
-                 caching=False):
-        if path:
-            self.dir = path
+                 mount_path=None,
+                 uns_path=None,
+                 caching=True):
+        if mount_path:
+            self.dir = mount_path
         else:
             self.dir = os.path.join(conf.dfuse_parent_dir, 'dfuse_mount')
         self.pool = pool
-        self.valgrind_file = None
+        self.uns_path = uns_path
         self.container = container
         self.conf = conf
         # Detect the number of cores and do something sensible, if there are
@@ -744,11 +965,9 @@ class DFuse():
         if not os.path.exists(self.dir):
             os.mkdir(self.dir)
 
-    def start(self, v_hint=None):
+    def start(self, v_hint=None, single_threaded=False):
         """Start a dfuse instance"""
         dfuse_bin = os.path.join(self.conf['PREFIX'], 'bin', 'dfuse')
-
-        single_threaded = False
 
         pre_inode = os.stat(self.dir).st_ino
 
@@ -785,18 +1004,25 @@ class DFuse():
 
         cmd.extend(self.valgrind.get_cmd_prefix())
 
-        cmd.extend([dfuse_bin, '-m', self.dir, '-f'])
+        cmd.extend([dfuse_bin,
+                    '--mountpoint',
+                    self.dir,
+                    '--foreground'])
 
         if single_threaded:
-            cmd.append('-S')
+            cmd.append('--singlethread')
 
-        if self.caching:
-            cmd.append('--enable-caching')
+        if not self.caching:
+            cmd.append('--disable-caching')
+
+        if self.uns_path:
+            cmd.extend(['--path', self.uns_path])
 
         if self.pool:
             cmd.extend(['--pool', self.pool])
         if self.container:
             cmd.extend(['--container', self.container])
+        print('Running {}'.format(' '.join(cmd)))
         self._sp = subprocess.Popen(cmd, env=my_env)
         print('Started dfuse at {}'.format(self.dir))
         print('Log file is {}'.format(self.log_file))
@@ -810,6 +1036,7 @@ class DFuse():
                 self._sp = None
                 if os.path.exists(self.log_file):
                     log_test(self.conf, self.log_file)
+                os.rmdir(self.dir)
                 raise Exception('dfuse died waiting for start')
             except subprocess.TimeoutExpired:
                 pass
@@ -881,20 +1108,6 @@ class DFuse():
         # prefix to the src dir.
         self.valgrind.convert_xml()
 
-def get_pool_list():
-    """Return a list of valid pool names"""
-    pools = []
-
-    for fname in os.listdir('/mnt/daos'):
-        if len(fname) != 36:
-            continue
-        try:
-            uuid.UUID(fname)
-        except ValueError:
-            continue
-        pools.append(fname)
-    return pools
-
 def assert_file_size_fd(fd, size):
     """Verify the file size is as expected"""
     my_stat = os.fstat(fd)
@@ -908,11 +1121,7 @@ def assert_file_size(ofd, size):
 def import_daos(server, conf):
     """Return a handle to the pydaos module"""
 
-    if sys.version_info.major < 3:
-        pydir = 'python{}.{}'.format(sys.version_info.major,
-                                     sys.version_info.minor)
-    else:
-        pydir = 'python{}'.format(sys.version_info.major)
+    pydir = 'python{}.{}'.format(sys.version_info.major, sys.version_info.minor)
 
     sys.path.append(os.path.join(conf['PREFIX'],
                                  'lib64',
@@ -930,7 +1139,9 @@ def import_daos(server, conf):
 
 def run_daos_cmd(conf,
                  cmd,
-                 valgrind=True):
+                 show_stdout=False,
+                 valgrind=True,
+                 use_json=False):
     """Run a DAOS command
 
     Run a command, returning what subprocess.run() would.
@@ -950,6 +1161,8 @@ def run_daos_cmd(conf,
 
     exec_cmd = vh.get_cmd_prefix()
     exec_cmd.append(os.path.join(conf['PREFIX'], 'bin', 'daos'))
+    if use_json:
+        exec_cmd.append('--json')
     exec_cmd.extend(cmd)
 
     cmd_env = get_base_env()
@@ -957,6 +1170,7 @@ def run_daos_cmd(conf,
     prefix = 'dnt_cmd_{}_'.format(get_inc_id())
     log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                            suffix='.log',
+                                           dir=conf.tmp_dir,
                                            delete=False)
 
     cmd_env['D_LOG_FILE'] = log_file.name
@@ -972,6 +1186,9 @@ def run_daos_cmd(conf,
         print('Stderr from command')
         print(rc.stderr.decode('utf-8').strip())
 
+    if show_stdout and rc.stdout != b'':
+        print(rc.stdout.decode('utf-8').strip())
+
     show_memleaks = True
 
     # A negative return code means the process exited with a signal so do not
@@ -984,58 +1201,115 @@ def run_daos_cmd(conf,
                          log_file.name,
                          show_memleaks=show_memleaks)
     vh.convert_xml()
+    # If there are valgrind errors here then mark them for later reporting but
+    # do not abort.  This allows a full-test run to report all valgrind issues
+    # in a single test run.
+    if vh.use_valgrind and rc.returncode == 42:
+        print("Valgrind errors detected")
+        print(rc)
+        conf.valgrind_errors = True
+        rc.returncode = 0
+    if use_json:
+        rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
-def create_cont(conf, pool, posix=False):
-    """Create a container and return the uuid"""
-    if posix:
-        cmd = ['container', 'create', '--pool', pool, '--type', 'POSIX']
-    else:
-        cmd = ['container', 'create', '--pool', pool]
-    rc = run_daos_cmd(conf, cmd)
-    print('rc is {}'.format(rc))
-    assert rc.returncode == 0
-    return rc.stdout.decode().split(' ')[-1].rstrip()
+def _create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgrind=False):
+    """Helper function for create_cont"""
 
-def destroy_container(conf, pool, container):
-    """Destroy a container"""
-    cmd = ['container', 'destroy', '--pool', pool, '--cont', container]
-    rc = run_daos_cmd(conf, cmd)
+    cmd = ['container',
+           'create',
+           pool]
+
+    if label:
+        cmd.extend(['--properties',
+                    'label:{}'.format(label)])
+    if ctype:
+        cmd.extend(['--type', ctype])
+
+    if path:
+        cmd.extend(['--path', path])
+
+    if cont:
+        cmd.extend(['--cont', cont])
+
+    rc = run_daos_cmd(conf, cmd, use_json=True, valgrind=valgrind)
     print('rc is {}'.format(rc))
-    assert rc.returncode == 0
+    print(rc.json)
+    return rc
+
+def create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgrind=False):
+    """Create a container and return the uuid"""
+
+    rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
+
+    if rc.returncode == 1 and \
+       rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
+        destroy_container(conf, pool, label)
+        rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
+
+    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
+    return rc.json['response']['container_uuid']
+
+def destroy_container(conf, pool, container, valgrind=True):
+    """Destroy a container"""
+    cmd = ['container', 'destroy', pool, container]
+    rc = run_daos_cmd(conf, cmd, valgrind=valgrind)
+    print('rc is {}'.format(rc))
+    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.stdout.decode('utf-8').strip()
 
-def make_pool(daos):
-    """Create a DAOS pool"""
-
-    size = int(daos.mb / 4)
-
-    attempt = 0
-    max_tries = 5
-    while attempt < max_tries:
-        rc = daos.run_dmg(['pool',
-                           'create',
-                           '--scm-size',
-                           '{}M'.format(size)])
-        if rc.returncode == 0:
-            break
-        attempt += 1
-        time.sleep(0.5)
-
-    print(rc)
-    assert rc.returncode == 0
-
-    return get_pool_list()
+def check_dfs_tool_output(output, oclass, csize):
+    """verify daos fs tool output"""
+    line = output.splitlines()
+    dfs_attr = line[0].split()[-1]
+    if oclass is not None:
+        if dfs_attr != oclass:
+            return False
+    dfs_attr = line[1].split()[-1]
+    if csize is not None:
+        if dfs_attr != csize:
+            return False
+    return True
 
 def needs_dfuse(method):
-    """Decorator function for starting dfuse under posix_tests class"""
+    """Decorator function for starting dfuse under posix_tests class
+
+    Runs every test twice, once with caching enabled, and once with
+    caching disabled.
+    """
+    @functools.wraps(method)
+    def _helper(self):
+        if self.call_index == 0:
+            caching=True
+            self.needs_more = True
+            self.test_name = '{}_with_caching'.format(method.__name__)
+        else:
+            caching=False
+
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           caching=caching,
+                           pool=self.pool.dfuse_mount_name(),
+                           container=self.container_label)
+        self.dfuse.start(v_hint=self.test_name)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+
+    return _helper
+
+def needs_dfuse_single(method):
+    """Decorator function for starting dfuse single threaded
+    under posix_tests class"""
     @functools.wraps(method)
     def _helper(self):
         self.dfuse = DFuse(self.server,
                            self.conf,
-                           pool=self.pool,
+                           caching=True,
+                           pool=self.pool.dfuse_mount_name(),
                            container=self.container)
-        self.dfuse.start(v_hint=method.__name__)
+        self.dfuse.start(v_hint=method.__name__, single_threaded=True)
         rc = method(self)
         if self.dfuse.stop():
             self.fatal_errors = True
@@ -1048,8 +1322,8 @@ def needs_dfuse_with_cache(method):
     def _helper(self):
         self.dfuse = DFuse(self.server,
                            self.conf,
-                           pool=self.pool,
                            caching=True,
+                           pool=self.pool.dfuse_mount_name(),
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
         rc = method(self)
@@ -1058,21 +1332,126 @@ def needs_dfuse_with_cache(method):
         return rc
     return _helper
 
+# This is test code where methods are tests, so we want to have lots of them.
+# pylint: disable=too-many-public-methods
 class posix_tests():
     """Class for adding standalone unit tests"""
 
-    def __init__(self, server, conf, pool=None, container=None):
+    def __init__(self, server, conf, pool=None):
         self.server = server
         self.conf = conf
         self.pool = pool
-        self.container = container
+        self.container = None
+        self.container_label = None
         self.dfuse = None
         self.fatal_errors = False
+
+        # Ability to invoke each method multiple times, call_index is set to
+        # 0 for each test method, if the method requires invoking a second time
+        # (for example to re-run with caching) then it should set needs_more
+        # to true, and it will be invoked with a greater value for call_index
+        # self.test_name will be set automatically, but can be modified by
+        # constructors, see @needs_dfuse for where this is used.
+        self.call_index = 0
+        self.needs_more = False
+        self.test_name = ''
 
     # pylint: disable=no-self-use
     def fail(self):
         """Mark a test method as failed"""
         raise NLTestFail
+
+    def test_cache(self):
+        """Test with caching enabled"""
+
+        container = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='Cache')
+        run_daos_cmd(self.conf,
+                     ['container', 'query',
+                      self.pool.id(), container],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      self.pool.id(), container,
+                      '--attr', 'dfuse-attr-time', '--value', '2'],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      self.pool.id(), container,
+                      '--attr', 'dfuse-dentry-time', '--value', '100s'],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      self.pool.id(), container,
+                      '--attr', 'dfuse-dentry-time-dir', '--value', '100s'],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      self.pool.id(), container,
+                      '--attr', 'dfuse-ndentry-time', '--value', '100s'],
+                     show_stdout=True)
+
+        run_daos_cmd(self.conf,
+                     ['container', 'list-attrs',
+                      self.pool.id(), container],
+                     show_stdout=True)
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.uuid,
+                      container=container)
+        dfuse.start()
+
+        print(os.listdir(dfuse.dir))
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        destroy_container(self.conf, self.pool.id(), container)
+
+    def test_two_mounts(self):
+        """Create two mounts, and check that a file created in one
+        can be read from the other"""
+
+        dfuse0 = DFuse(self.server,
+                       self.conf,
+                       caching=True,
+                       pool=self.pool.uuid,
+                       container=self.container)
+        dfuse0.start(v_hint='two_0')
+
+        dfuse1 = DFuse(self.server,
+                       self.conf,
+                       caching=True,
+                       mount_path=os.path.join(self.conf.dfuse_parent_dir,
+                                               'dfuse_mount_1'),
+                       pool=self.pool.uuid,
+                       container=self.container)
+        dfuse1.start(v_hint='two_1')
+
+        file0 = os.path.join(dfuse0.dir, 'file')
+        fd = open(file0, 'w')
+        fd.write('test')
+        fd.close()
+
+        file1 = os.path.join(dfuse1.dir, 'file')
+        fd = open(file1, 'r')
+        data = fd.read()
+        fd.close()
+        print(data)
+        assert data == 'test'
+
+        fd = open(file0, 'w')
+        fd.write('test')
+        fd.close()
+
+        if dfuse0.stop():
+            self.fatal_errors = True
+        if dfuse1.stop():
+            self.fatal_errors = True
 
     @needs_dfuse
     def test_readdir_25(self):
@@ -1116,6 +1495,11 @@ class posix_tests():
         print(len(files))
         assert len(files) == count
 
+    @needs_dfuse_single
+    def test_single_threaded(self):
+        """Test single-threaded mode"""
+        self.readdir_test(10)
+
     @needs_dfuse
     def test_open_replaced(self):
         """Test that fstat works on file clobbered by rename"""
@@ -1127,12 +1511,7 @@ class posix_tests():
         nfd.close()
         print(os.fstat(ofd.fileno()))
         os.rename(newfile, fname)
-        # This should fail, because the file has been deleted.
-        try:
-            print(os.fstat(ofd.fileno()))
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() replaced file')
+        print(os.fstat(ofd.fileno()))
         ofd.close()
 
     @needs_dfuse
@@ -1144,12 +1523,7 @@ class posix_tests():
         pre = os.fstat(ofd.fileno())
         print(pre)
         os.rename(fname, newfile)
-        try:
-            post = os.fstat(ofd.fileno())
-            print(post)
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() renamed file')
+        print(os.fstat(ofd.fileno()))
         os.stat(newfile)
         post = os.fstat(ofd.fileno())
         print(post)
@@ -1163,12 +1537,64 @@ class posix_tests():
         ofd = open(fname, 'w')
         print(os.fstat(ofd.fileno()))
         os.unlink(fname)
-        try:
-            print(os.fstat(ofd.fileno()))
-            self.fail()
-        except FileNotFoundError:
-            print('Failed to fstat() unlinked file')
+        print(os.fstat(ofd.fileno()))
         ofd.close()
+
+    @needs_dfuse
+    def test_symlink_broken(self):
+        """Check that broken symlinks work"""
+
+        src_link = os.path.join(self.dfuse.dir, 'source')
+
+        os.symlink('target', src_link)
+        entry = os.listdir(self.dfuse.dir)
+        print(entry)
+        assert len(entry) == 1
+        assert entry[0] == 'source'
+        os.lstat(src_link)
+
+        try:
+            os.stat(src_link)
+            assert False
+        except FileNotFoundError:
+            pass
+
+    @needs_dfuse
+    def test_symlink_rel(self):
+        """Check that relative symlinks work"""
+
+        src_link = os.path.join(self.dfuse.dir, 'source')
+
+        os.symlink('../target', src_link)
+        entry = os.listdir(self.dfuse.dir)
+        print(entry)
+        assert len(entry) == 1
+        assert entry[0] == 'source'
+        os.lstat(src_link)
+
+        try:
+            os.stat(src_link)
+            assert False
+        except FileNotFoundError:
+            pass
+
+    @needs_dfuse
+    def test_il_cat(self):
+        """Quick check for the interception library"""
+
+        fname = os.path.join(self.dfuse.dir, 'file')
+        ofd = open(fname, 'w')
+        ofd.close()
+
+        check_fstat = True
+        if self.dfuse.caching:
+            check_fstat = False
+
+        rc = il_cmd(self.dfuse,
+                    ['cat', fname],
+                    check_write=False,
+                    check_fstat=check_fstat)
+        assert rc.returncode == 0
 
     @needs_dfuse
     def test_xattr(self):
@@ -1182,14 +1608,14 @@ class posix_tests():
         try:
             xattr.set(fd, 'user.dfuse.ids', b'other_value')
             assert False
-        except OSError as e:
-            assert e.errno == errno.EPERM
+        except PermissionError:
+            pass
 
         try:
             xattr.set(fd, 'user.dfuse', b'other_value')
             assert False
-        except OSError as e:
-            assert e.errno == errno.EPERM
+        except PermissionError:
+            pass
 
         xattr.set(fd, 'user.Xfuse.ids', b'other_value')
         for (key, value) in xattr.get_all(fd):
@@ -1243,52 +1669,203 @@ class posix_tests():
     def test_uns_create(self):
         """Simple test to create a container using a path in dfuse"""
         path = os.path.join(self.dfuse.dir, 'mycont')
-        cmd = ['container', 'create',
-               '--pool', self.pool, '--path', path,
-               '--type', 'POSIX']
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
+        create_cont(self.conf, pool=self.pool.uuid, path=path, ctype="POSIX")
         stbuf = os.stat(path)
         print(stbuf)
         assert stbuf.st_ino < 100
         print(os.listdir(path))
 
-    @needs_dfuse_with_cache
-    def test_uns_create_with_cache(self):
-        """Simple test to create a container using a path in dfuse"""
-        path = os.path.join(self.dfuse.dir, 'mycont2')
-        cmd = ['container', 'create',
-               '--pool', self.pool, '--path', path,
-               '--type', 'POSIX']
-        rc = run_daos_cmd(self.conf, cmd)
-        assert rc.returncode == 0
-        stbuf = os.stat(path)
-        print(stbuf)
-        assert stbuf.st_ino < 100
-        print(os.listdir(path))
+    @needs_dfuse
+    def test_rename(self):
+        """Test that rename clobbers files correctly
+
+        use rename to delete a file, but where the kernel is aware of a different file.
+        Create a filename to be clobbered and stat it.
+        Create a file to copy over.
+        Start a second dfuse instance and overwrite the original file with a new name.
+        Perform a rename on the first dfuse.
+
+        This should clobber a file, but not the one that the kernel is expecting, although it will
+        do a lookup of the destination filename before the rename.
+
+        Inspection of the logs is required to verify what is happening here which is beyond the
+        scope of this test, however this does execute the code-paths and ensures that all refs
+        are correctly updated.
+
+        """
+
+        # Create all three files in the dfuse instance we're checking.
+        for index in range(3):
+            fd = open(os.path.join(self.dfuse.dir, 'file.{}'.format(index)), 'w')
+            fd.write('test')
+            fd.close()
+
+        # Start another dfuse instance to move the files around without the kernel knowing.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False,
+                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+        dfuse.start(v_hint='rename_other')
+
+        print(os.listdir(self.dfuse.dir))
+        print(os.listdir(dfuse.dir))
+
+        # Rename file 1 to file 2 in the background, this will remove file 2
+        os.rename(os.path.join(dfuse.dir, 'file.1') ,os.path.join(dfuse.dir, 'file.2'))
+
+        # Rename file 0 to file 2 in the test dfuse.  Here the kernel thinks it's clobbering
+        # file 2 but it's really clobbering file 1, although it will stat() file 2 before the
+        # operation so may have the correct data.
+        # Dfuse should return file 1 for the details of what has been deleted.
+        os.rename(os.path.join(self.dfuse.dir, 'file.0') ,os.path.join(self.dfuse.dir, 'file.2'))
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        # Finally, perform some more I/O so we can tell from the dfuse logs where the test ends and
+        # dfuse teardown starts.  At this point file 1 and file 2 have been deleted.
+        time.sleep(1)
+        print(os.statvfs(self.dfuse.dir))
+
+    @needs_dfuse
+    def test_complex_unlink(self):
+        """Test that unlink clears file data correctly.
+
+        Create two files, exchange them in the backend then unlink the one.
+
+        The kernel will be unlinking what it thinks is file 1 but it will actually be file 0.
+        """
+
+        fds = []
+
+        # Create both files in the dfuse instance we're checking.  These files are created in
+        # binary mode with buffering off so the writes are sent direct to the kernel.
+        for index in range(2):
+            fd = open(os.path.join(self.dfuse.dir, 'file.{}'.format(index)), 'wb', buffering=0)
+            fd.write(b'test')
+            fds.append(fd)
+
+        # Start another dfuse instance to move the files around without the kernel knowing.
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False,
+                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+        dfuse.start(v_hint='unlink')
+
+        print(os.listdir(self.dfuse.dir))
+        print(os.listdir(dfuse.dir))
+
+        # Rename file 0 to file 0 in the background, this will remove file 1
+        os.rename(os.path.join(dfuse.dir, 'file.0') ,os.path.join(dfuse.dir, 'file.1'))
+
+        # Perform the unlink, this will unlink the other file.
+        os.unlink(os.path.join(self.dfuse.dir, 'file.1'))
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+        # Finally, perform some more I/O so we can tell from the dfuse logs where the test ends and
+        # dfuse teardown starts.  At this point file 1 and file 2 have been deleted.
+        time.sleep(1)
+        print(os.statvfs(self.dfuse.dir))
+
+        for fd in fds:
+            fd.close()
+
+    @needs_dfuse
+    def test_complex_rename(self):
+        """Test for rename semantics, and that rename is correctly updating the dfuse data for
+        the moved rile.
+
+        # Create a file, read/write to it.
+        # Check fstat works.
+        # Rename it from the backend
+        # Check fstat - it should not work.
+        # Rename the file into a new directory, this should allow the kernel to 'find' the file
+        # again and update the name/parent.
+        # check fstat works.
+        """
+
+        fname = os.path.join(self.dfuse.dir, 'file')
+        ofd = open(fname, 'w')
+        print(os.fstat(ofd.fileno()))
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      pool=self.pool.id(),
+                      container=self.container,
+                      caching=False,
+                      mount_path=os.path.join(self.conf.dfuse_parent_dir, 'dfuse_mount_backend'))
+        dfuse.start(v_hint='rename')
+
+        os.mkdir(os.path.join(dfuse.dir, 'step_dir'))
+        os.mkdir(os.path.join(dfuse.dir, 'new_dir'))
+        os.rename(os.path.join(dfuse.dir, 'file'), os.path.join(dfuse.dir, 'step_dir', 'file-new'))
+
+        # This should fail, because the file has been deleted.
+        try:
+            print(os.fstat(ofd.fileno()))
+            self.fail()
+        except FileNotFoundError:
+            print('Failed to fstat() replaced file')
+
+        os.rename(os.path.join(self.dfuse.dir, 'step_dir', 'file-new'),
+                  os.path.join(self.dfuse.dir, 'new_dir', 'my-file'))
+
+        print(os.fstat(ofd.fileno()))
+
+        ofd.close()
+
+    def test_with_path(self):
+        """Test that dfuse starts with path option."""
+
+        tmp_dir = tempfile.mkdtemp()
+
+        cont_path = os.path.join(tmp_dir, 'my-cont')
+        create_cont(self.conf, self.pool.uuid, ctype="POSIX", path=cont_path)
+
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      caching=True,
+                      uns_path=cont_path)
+        dfuse.start(v_hint='with_path')
+
+        # Simply write a file.  This will fail if dfuse isn't backed via
+        # a container.
+        file = os.path.join(dfuse.dir, 'file')
+        fd = open(file, 'w')
+        fd.write('test')
+        fd.close()
+
+        if dfuse.stop():
+            self.fatal_errors = True
 
     def test_uns_basic(self):
         """Create a UNS entry point and access it via both EP and path"""
 
-        pool = self.pool
+        pool = self.pool.uuid
         container = self.container
         server = self.server
         conf = self.conf
 
         # Start dfuse on the container.
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dfuse.start('uns-0')
 
         # Create a new container within it using UNS
         uns_path = os.path.join(dfuse.dir, 'ep0')
         uns_container = str(uuid.uuid4())
-        cmd = ['container', 'create',
-               '--pool', pool, '--cont', uns_container, '--path', uns_path,
-               '--type', 'POSIX']
-
         print('Inserting entry point')
-        rc = run_daos_cmd(conf, cmd)
-        print('rc is {}'.format(rc))
+        create_cont(conf,
+                    pool=pool,
+                    cont=uns_container,
+                    path=uns_path,
+                    ctype="POSIX")
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
 
@@ -1303,7 +1880,7 @@ class posix_tests():
             self.fatal_errors = True
 
         print('Trying UNS')
-        dfuse = DFuse(server, conf)
+        dfuse = DFuse(server, conf, caching=False)
         dfuse.start('uns-1')
 
         # List the root container.
@@ -1316,13 +1893,12 @@ class posix_tests():
         uns_container = str(uuid.uuid4())
 
         # Make a link within the new container.
-        cmd = ['container', 'create',
-               '--pool', pool, '--cont', uns_container,
-               '--path', uns_path, '--type', 'POSIX']
-
         print('Inserting entry point')
-        rc = run_daos_cmd(conf, cmd)
-        print('rc is {}'.format(rc))
+        create_cont(conf,
+                    pool=pool,
+                    cont=uns_container,
+                    path=uns_path,
+                    ctype="POSIX")
 
         # List the root container again.
         print(os.listdir(os.path.join(dfuse.dir, pool, container)))
@@ -1346,7 +1922,7 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
         print('Trying UNS with previous cont')
-        dfuse = DFuse(server, conf)
+        dfuse = DFuse(server, conf, caching=False)
         dfuse.start('uns-3')
 
         files = os.listdir(second_path)
@@ -1361,27 +1937,240 @@ class posix_tests():
         if dfuse.stop():
             self.fatal_errors = True
 
+    def test_dfuse_dio_off(self):
+        """Test for dfuse with no caching options, but
+        direct-io disabled"""
+
+        run_daos_cmd(self.conf,
+                     ['container', 'set-attr',
+                      self.pool.id(), self.container,
+                      '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
+                     show_stdout=True)
+        dfuse = DFuse(self.server,
+                      self.conf,
+                      caching=True,
+                      pool=self.pool.uuid,
+                      container=self.container)
+
+        dfuse.start(v_hint='dio_off')
+
+        print(os.listdir(dfuse.dir))
+
+        fname = os.path.join(dfuse.dir, 'test_file3')
+        ofd = open(fname, 'w')
+        ofd.write('hello')
+        ofd.close()
+
+        if dfuse.stop():
+            self.fatal_errors = True
+
+    @needs_dfuse
+    def test_daos_fs_tool(self):
+        """Create a UNS entry point"""
+
+        dfuse = self.dfuse
+        pool = self.pool.uuid
+        conf = self.conf
+
+        # Create a new container within it using UNS
+        uns_path = os.path.join(dfuse.dir, 'ep1')
+        uns_container = str(uuid.uuid4())
+        print('Inserting entry point')
+        create_cont(conf,
+                    pool=pool,
+                    cont=uns_container,
+                    path=uns_path,
+                    ctype="POSIX")
+
+        print(os.stat(uns_path))
+        print(os.listdir(dfuse.dir))
+
+        # Verify that it exists.
+        run_container_query(conf, uns_path)
+
+        # Make a directory in the new container itself, and query that.
+        dir1 = os.path.join(uns_path, 'd1')
+        os.mkdir(dir1)
+        run_container_query(conf, dir1)
+
+        # Create a file in dir1
+        file1 = os.path.join(dir1, 'f1')
+        ofd = open(file1, 'w')
+        ofd.close()
+
+        # Run a command to get attr of new dir and file
+        cmd = ['fs', 'get-attr', '--path', dir1]
+        print('get-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '1048576')
+
+        cmd = ['fs', 'get-attr', '--path', file1]
+        print('get-attr of d1/f1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        # SX is not deterministic, so don't check it here
+        assert check_dfs_tool_output(output, None, '1048576')
+
+        # Run a command to change attr of dir1
+        cmd = ['fs', 'set-attr', '--path', dir1, '--oclass', 'S2',
+               '--chunk-size', '16']
+        print('set-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+
+        # Run a command to change attr of file1, should fail
+        cmd = ['fs', 'set-attr', '--path', file1, '--oclass', 'S2',
+               '--chunk-size', '16']
+        print('set-attr of f1')
+        rc = run_daos_cmd(conf, cmd)
+        print('rc is {}'.format(rc))
+        assert rc.returncode != 0
+
+        # Run a command to create new file with set-attr
+        file2 = os.path.join(dir1, 'f2')
+        cmd = ['fs', 'set-attr', '--path', file2, '--oclass', 'S1']
+        print('set-attr of f2')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+
+        # Run a command to get attr of dir and file2
+        cmd = ['fs', 'get-attr', '--path', dir1]
+        print('get-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S2', '16')
+
+        cmd = ['fs', 'get-attr', '--path', file2]
+        print('get-attr of d1/f2')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '16')
+
+    def test_cont_copy(self):
+        """Verify that copying into a container works"""
+
+        # Create a temporary directory, with one file into it and copy it into
+        # the container.  Check the returncode only, do not verify the data.
+        # tempfile() will remove the directory on completion.
+        src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+        ofd = open(os.path.join(src_dir.name, 'file'), 'w')
+        ofd.write('hello')
+        ofd.close()
+
+        cmd = ['filesystem',
+               'copy',
+               '--src',
+               src_dir.name,
+               '--dst',
+               'daos://{}/{}'.format(self.pool.uuid, self.container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+
+    def test_cont_clone(self):
+        """Verify that cloning a container works
+
+        This extends cont_copy, to also clone it afterwards.
+        """
+
+        # Create a temporary directory, with one file into it and copy it into
+        # the container.  Check the returncode only, do not verify the data.
+        # tempfile() will remove the directory on completion.
+        src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+        ofd = open(os.path.join(src_dir.name, 'file'), 'w')
+        ofd.write('hello')
+        ofd.close()
+
+        cmd = ['filesystem',
+               'copy',
+               '--src',
+               src_dir.name,
+               '--dst',
+               'daos://{}/{}'.format(self.pool.uuid, self.container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+
+        # Now create a container uuid and do an object based copy.
+        # The daos command will create the target container on demand.
+        container = str(uuid.uuid4())
+        cmd = ['container',
+               'clone',
+               '--src',
+               'daos://{}/{}'.format(self.pool.uuid, self.container),
+               '--dst',
+               'daos://{}/{}'.format(self.pool.uuid, container)]
+        rc = run_daos_cmd(self.conf, cmd)
+        print(rc)
+        assert rc.returncode == 0
+        destroy_container(self.conf, self.pool.id(), container)
+# pylint: enable=too-many-public-methods
+
 def run_posix_tests(server, conf, test=None):
-    """Run one or all posix tests"""
+    """Run one or all posix tests
+
+    Create a new container per test, to ensure that every test is
+    isolated from others.
+    """
 
     def _run_test():
-        start = time.time()
-        print('Calling {}'.format(fn))
-        rc = obj()
-        duration = time.time() - start
-        print('rc from {} is {}'.format(fn, rc))
-        print('Took {:.1f} seconds'.format(duration))
+        pt.call_index = 0
+        while True:
+            pt.needs_more = False
+            pt.test_name = fn
+            start = time.time()
+            print('Calling {}'.format(fn))
+            try:
+                # Do this with valgrind disabled as this code is run often and valgrind has a big
+                # performance impact.  There are other tests that run with valgrind enabled so this
+                # should not reduce coverage.
+                pt.container = create_cont(conf,
+                                           pool.id(),
+                                           ctype="POSIX",
+                                           valgrind=False,
+                                           label=fn)
+                pt.container_label = fn
+                rc = obj()
+                destroy_container(conf, pool.id(), pt.container_label, valgrind=False)
+                pt.container = None
+            except Exception as inst:
+                trace = ''.join(traceback.format_tb(inst.__traceback__))
+                duration = time.time() - start
+                conf.wf.add_test_case(pt.test_name,
+                                      repr(inst),
+                                      output = trace,
+                                      test_class='test',
+                                      duration = duration)
+                raise
+            duration = time.time() - start
+            print('rc from {} is {}'.format(fn, rc))
+            print('Took {:.1f} seconds'.format(duration))
+            conf.wf.add_test_case(pt.test_name,
+                                  test_class='test',
+                                  duration = duration)
+            if not pt.needs_more:
+                break
+            pt.call_index = pt.call_index + 1
 
-    pools = get_pool_list()
-    while len(pools) < 1:
-        pools = make_pool(server)
-    pool = pools[0]
-    container = create_cont(conf, pool, posix=True)
+    server.get_test_pool()
+    pool = server.test_pool
 
-    pt = posix_tests(server, conf, pool=pool, container=container)
+    pt = posix_tests(server, conf, pool=pool)
     if test:
         fn = 'test_{}'.format(test)
         obj = getattr(pt, fn)
+
         _run_test()
     else:
 
@@ -1393,7 +2182,6 @@ def run_posix_tests(server, conf, test=None):
                 continue
             _run_test()
 
-    destroy_container(conf, pool, container)
     return pt.fatal_errors
 
 def run_tests(dfuse):
@@ -1443,8 +2231,8 @@ def run_tests(dfuse):
         fd = os.open(fname, os.O_CREAT | os.O_EXCL)
         os.close(fd)
         assert False
-    except OSError as e:
-        assert e.errno == errno.EEXIST
+    except FileExistsError:
+        pass
     os.unlink(fname)
 
     # DAOS-6238
@@ -1535,7 +2323,8 @@ def log_test(conf,
              fi_signal=None,
              leak_wf=None,
              check_read=False,
-             check_write=False):
+             check_write=False,
+             check_fstat=False):
     """Run the log checker on filename, logging to stdout"""
 
     # Check if the log file has wrapped, if it has then log parsing checks do
@@ -1580,7 +2369,7 @@ def log_test(conf,
 
     functions = set()
 
-    if check_read or check_write:
+    if check_read or check_write or check_fstat:
         for line in log_iter.new_iter():
             functions.add(line.function)
 
@@ -1589,6 +2378,9 @@ def log_test(conf,
 
     if check_write and 'dfuse_write' not in functions:
         raise NLTestNoFunction('dfuse_write')
+
+    if check_fstat and 'dfuse___fxstat' not in functions:
+        raise NLTestNoFunction('dfuse___fxstat')
 
     compress_file(filename)
 
@@ -1697,28 +2489,16 @@ def run_duns_overlay_test(server, conf):
     and expose the container.
     """
 
-    pools = get_pool_list()
-    while len(pools) < 1:
-        pools = make_pool(server)
+    pool = server.get_test_pool()
 
     parent_dir = tempfile.TemporaryDirectory(dir=conf.dfuse_parent_dir,
                                              prefix='dnt_uns_')
 
     uns_dir = os.path.join(parent_dir.name, 'uns_ep')
 
-    rc = run_daos_cmd(conf, ['container',
-                             'create',
-                             '--pool',
-                             pools[0],
-                             '--type',
-                             'POSIX',
-                             '--path',
-                             uns_dir])
+    create_cont(conf, pool=pool, path=uns_dir, ctype="POSIX")
 
-    print('rc is {}'.format(rc))
-    assert rc.returncode == 0
-
-    dfuse = DFuse(server, conf, path=uns_dir)
+    dfuse = DFuse(server, conf, mount_path=uns_dir, caching=False)
 
     dfuse.start(v_hint='uns-overlay')
     # To show the contents.
@@ -1734,11 +2514,9 @@ def run_dfuse(server, conf):
 
     fatal_errors = BoolRatchet()
 
-    pools = get_pool_list()
-    while len(pools) < 1:
-        pools = make_pool(server)
+    pool = server.get_test_pool()
 
-    dfuse = DFuse(server, conf)
+    dfuse = DFuse(server, conf, caching=False)
     try:
         pre_stat = os.stat(dfuse.dir)
     except OSError:
@@ -1752,17 +2530,17 @@ def run_dfuse(server, conf):
     print('Running dfuse with nothing')
     stat_and_check(dfuse, pre_stat)
     check_no_file(dfuse)
-    for pool in pools:
-        pool_stat = os.stat(os.path.join(dfuse.dir, pool))
-        print('stat for {}'.format(pool))
-        print(pool_stat)
-        cdir = os.path.join(dfuse.dir, pool, container)
-        os.mkdir(cdir)
-        #create_and_read_via_il(dfuse, cdir)
+
+    pool_stat = os.stat(os.path.join(dfuse.dir, pool))
+    print('stat for {}'.format(pool))
+    print(pool_stat)
+    cdir = os.path.join(dfuse.dir, pool, container)
+    os.mkdir(cdir)
+    #create_and_read_via_il(dfuse, cdir)
     fatal_errors.add_result(dfuse.stop())
 
     container2 = str(uuid.uuid4())
-    dfuse = DFuse(server, conf, pool=pools[0])
+    dfuse = DFuse(server, conf, pool=pool, caching=False)
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_only')
     print('Running dfuse with pool only')
@@ -1775,7 +2553,8 @@ def run_dfuse(server, conf):
 
     fatal_errors.add_result(dfuse.stop())
 
-    dfuse = DFuse(server, conf, pool=pools[0], container=container)
+    dfuse = DFuse(server, conf, pool=pool, container=container,
+                  caching=False)
     dfuse.cores = 2
     pre_stat = os.stat(dfuse.dir)
     dfuse.start(v_hint='pool_and_cont')
@@ -1798,33 +2577,27 @@ def run_dfuse(server, conf):
 def run_il_test(server, conf):
     """Run a basic interception library test"""
 
-    pools = get_pool_list()
+    pool = server.get_test_pool()
 
     # TODO:                       # pylint: disable=W0511
-    # This doesn't work with two pools, partly related to
-    # DAOS-5109 but there may be other issues.
-    while len(pools) < 1:
-        pools = make_pool(server)
+    # Implement a test which copies across two pools.
 
-    print('pools are ', ','.join(pools))
-
-    dfuse = DFuse(server, conf)
+    dfuse = DFuse(server, conf, caching=False)
     dfuse.start()
 
     dirs = []
 
-    for p in pools:
-        for _ in range(2):
-            # Use a unique ID for each container to avoid DAOS-5109
-            container = str(uuid.uuid4())
+    for _ in range(2):
+        # Use a unique ID for each container to avoid DAOS-5109
+        container = str(uuid.uuid4())
 
-            d = os.path.join(dfuse.dir, p, container)
-            try:
-                print('Making directory {}'.format(d))
-                os.mkdir(d)
-            except FileExistsError:
-                pass
-            dirs.append(d)
+        d = os.path.join(dfuse.dir, pool, container)
+        try:
+            print('Making directory {}'.format(d))
+            os.mkdir(d)
+        except FileExistsError:
+            pass
+        dirs.append(d)
 
     # Create a file natively.
     f = os.path.join(dirs[0], 'file')
@@ -1850,14 +2623,15 @@ def run_il_test(server, conf):
     # intercepted.
     ret = il_cmd(dfuse,
                  ['md5sum', os.path.join(dirs[-1], 'bash')],
-                 check_read=False, check_write=False)
+                 check_read=False, check_write=False, check_fstat=False)
     assert ret.returncode == 0
     ret = il_cmd(dfuse, ['dd',
                          'if={}'.format(os.path.join(dirs[-1], 'bash')),
                          'of={}'.format(os.path.join(dirs[-1], 'bash_copy')),
                          'iflag=direct',
                          'oflag=direct',
-                         'bs=128k'])
+                         'bs=128k'],
+                 check_fstat=False)
 
     print(ret)
     assert ret.returncode == 0
@@ -1873,23 +2647,28 @@ def run_in_fg(server, conf):
     Block until ctrl-c is pressed.
     """
 
-    pools = get_pool_list()
+    pool = server.get_test_pool()
 
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    dfuse = DFuse(server, conf, pool=pools[0])
+    dfuse = DFuse(server, conf, pool=pool)
     dfuse.start()
-    container = str(uuid.uuid4())
+
+    container = create_cont(conf, pool, ctype="POSIX")
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool, container,
+                  '--attr', 'dfuse-direct-io-disable', '--value', 'on'],
+                 show_stdout=True)
+
     t_dir = os.path.join(dfuse.dir, container)
-    os.mkdir(t_dir)
+
     print('Running at {}'.format(t_dir))
     print('daos container create --type POSIX ' \
-          '--pool {} --path {}/uns-link'.format(
-              pools[0], t_dir))
+          '{} --path {}/uns-link'.format(
+              pool, t_dir))
     print('cd {}/uns-link'.format(t_dir))
     print('daos container destroy --path {}/uns-link'.format(t_dir))
-    print('daos pool list-containers --pool {}'.format(pools[0]))
+    print('daos cont list {}'.format(pool))
     try:
         dfuse.wait_for_exit()
     except KeyboardInterrupt:
@@ -1966,12 +2745,7 @@ def check_readdir_perf(server, conf):
                                 headers=headers,
                                 floatfmt=".2f"))
 
-    pools = get_pool_list()
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
+    pool = server.get_test_pool()
 
     container = str(uuid.uuid4())
 
@@ -1994,7 +2768,8 @@ def check_readdir_perf(server, conf):
 
         row = [count]
         row.extend(create_times)
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dir_dir = os.path.join(dfuse.dir,
                                'dirs.{}'.format(count))
         file_dir = os.path.join(dfuse.dir,
@@ -2007,7 +2782,8 @@ def check_readdir_perf(server, conf):
                                                            elapsed))
         row.append(elapsed)
         dfuse.stop()
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dfuse.start()
         start = time.time()
         subprocess.run(['/bin/ls', file_dir], stdout=subprocess.PIPE,
@@ -2018,7 +2794,8 @@ def check_readdir_perf(server, conf):
         row.append(elapsed)
         dfuse.stop()
 
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dfuse.start()
         start = time.time()
         subprocess.run(['/bin/ls', '-t', dir_dir], stdout=subprocess.PIPE,
@@ -2028,7 +2805,8 @@ def check_readdir_perf(server, conf):
                                                            elapsed))
         row.append(elapsed)
         dfuse.stop()
-        dfuse = DFuse(server, conf, pool=pool, container=container)
+        dfuse = DFuse(server, conf, pool=pool, container=container,
+                      caching=False)
         dfuse.start()
         start = time.time()
         # Use sort by time here so ls calls stat, if you run ls -l then it will
@@ -2078,9 +2856,7 @@ def check_readdir_perf(server, conf):
 
     run_daos_cmd(conf, ['container',
                         'destroy',
-                        '--pool',
                         pool,
-                        '--cont',
                         container])
     print_results()
 
@@ -2094,14 +2870,9 @@ def test_pydaos_kv(server, conf):
     os.environ['D_LOG_FILE'] = pydaos_log_file.name
     daos = import_daos(server, conf)
 
-    pools = get_pool_list()
+    pool = server.get_test_pool()
 
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
-
-    c_uuid = create_cont(conf, pool)
+    c_uuid = create_cont(conf, pool, ctype="PYTHON")
 
     container = daos.Cont(pool, c_uuid)
 
@@ -2203,11 +2974,17 @@ class AllocFailTestRun():
         res = "Fault injection test of '{}'\n".format(' '.join(self.cmd))
         res += 'Fault injection location {}\n'.format(self.loc)
         if self.vh:
-            res += 'Valgrind enabled for this test'
+            res += 'Valgrind enabled for this test\n'
         if self.returncode is None:
             res += 'Process not completed'
         else:
             res += 'Returncode was {}'.format(self.returncode)
+
+        if self.stdout:
+            res += '\nSTDOUT:{}'.format(self.stdout.decode('utf-8').strip())
+
+        if self.stderr:
+            res += '\nSTDERR:{}'.format(self.stderr.decode('utf-8').strip())
         return res
 
     def start(self):
@@ -2268,10 +3045,6 @@ class AllocFailTestRun():
         self.stdout = self._sp.stdout.read()
         self.stderr = self._sp.stderr.read()
 
-        if self.stderr != b'':
-            print('Stderr from command')
-            print(self.stderr.decode('utf-8').strip())
-
         show_memleaks = True
 
         fi_signal = None
@@ -2295,16 +3068,52 @@ class AllocFailTestRun():
             # If a fault wasn't injected then check output is as expected.
             # It's not possible to log these as warnings, because there is
             # no src line to log them against, so simply assert.
-            assert self.returncode == 0
-            assert self.stderr == b''
-            if self.aft.expected_stdout is not None:
-                assert self.stdout == self.aft.expected_stdout
+            assert self.returncode == 0, self
+
+            if self.aft.check_post_stdout:
+                assert self.stderr == b''
+                if self.aft.expected_stdout is not None:
+                    assert self.stdout == self.aft.expected_stdout
             self.fault_injected = False
         if self.vh:
             self.vh.convert_xml()
         if not self.fault_injected:
             return
         if not self.aft.check_stderr:
+            return
+
+        # Check stderr from a daos command.
+        # These should mostly be from the DH_PERROR_SYS or DH_PERROR_DER macros so check for
+        # this format.  There may be multiple lines and the two styles may be mixed.
+        # These checks will report an error against the line of code that introduced the "leak"
+        # which may well only have a loose correlation to where the error was reported.
+        if self.aft.check_daos_stderr:
+            stderr = self.stderr.decode('utf-8').rstrip()
+            for line in stderr.splitlines():
+
+                # This is what the go code uses.
+                if line.endswith(': DER_NOMEM(-1009): Out of memory'):
+                    continue
+
+                # This is what DH_PERROR_DER uses
+                if line.endswith(': Out of memory (-1009)'):
+                    continue
+
+                # This is what DH_PERROR_SYS uses
+                if line.endswith(': Cannot allocate memory (12)'):
+                    continue
+
+                if 'DER_UNKNOWN' in line:
+                    self.aft.wf.add(self.fi_loc,
+                                    'HIGH',
+                                    "Incorrect stderr '{}'".format(line),
+                                    mtype='Invalid error code used')
+                    continue
+
+                self.aft.wf.add(self.fi_loc,
+                                'NORMAL',
+                                "Unexpected stderr '{}'".format(line),
+                                mtype='Unrecognised error')
             return
 
         if self.returncode == 0:
@@ -2316,7 +3125,7 @@ class AllocFailTestRun():
                                 'code with incorrect output')
 
         stderr = self.stderr.decode('utf-8').rstrip()
-        if not stderr.endswith("Out of memory (-1009)") and \
+        if not stderr.endswith("(-1009): Out of memory") and \
            'error parsing command line arguments' not in stderr and \
            self.stdout != self.aft.expected_stdout:
             if self.stdout != b'':
@@ -2327,8 +3136,7 @@ class AllocFailTestRun():
             self.aft.wf.add(self.fi_loc,
                             'NORMAL',
                             "Incorrect stderr '{}'".format(stderr),
-                            mtype='Out of memory not reported '
-                            'correctly via stderr')
+                            mtype='Out of memory not reported correctly via stderr')
 
 class AllocFailTest():
     """Class to describe fault injection command"""
@@ -2337,7 +3145,12 @@ class AllocFailTest():
         self.conf = conf
         self.cmd = cmd
         self.prefix = True
+        # Check stderr from commands where faults were injected.
         self.check_stderr = False
+        # Check stdout/error from commands where faults were not injected
+        self.check_post_stdout = True
+        # Check stderr conforms to daos_hdlr.c style
+        self.check_daos_stderr = False
         self.expected_stdout = None
         self.use_il = False
         self.wf = conf.wf
@@ -2419,7 +3232,12 @@ class AllocFailTest():
 
         cmd_env['DAOS_AGENT_DRPC_DIR'] = self.conf.agent_dir
 
-        aftf = AllocFailTestRun(self, self.cmd, cmd_env, loc)
+        if callable(self.cmd):
+            cmd = self.cmd()
+        else:
+            cmd = self.cmd
+
+        aftf = AllocFailTestRun(self, cmd, cmd_env, loc)
         if valgrind:
             aftf.vh = ValgrindHelper(self.conf)
             # Turn off leak checking in this case, as we're just interested in
@@ -2430,6 +3248,43 @@ class AllocFailTest():
 
         return aftf
 
+def test_alloc_fail_copy(server, conf, wf):
+    """Run container (filesystem) copy under fault injection.
+
+    This test will create a new uuid per iteration, and the test will then try to create a matching
+    container so this is potentially resource intensive.
+
+    There are lots of errors in the stdout/stderr of this command which we need to work through but
+    are not yet checked for.
+    """
+
+    pool = server.get_test_pool()
+
+    src_dir = tempfile.TemporaryDirectory(prefix='copy_src_',)
+    ofd = open(os.path.join(src_dir.name, 'file'), 'w')
+    ofd.write('hello')
+    ofd.close()
+
+    def get_cmd():
+        container = str(uuid.uuid4())
+        cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+               'filesystem',
+               'copy',
+               '--src',
+               src_dir.name,
+               '--dst',
+               'daos://{}/{}'.format(pool, container)]
+        return cmd
+
+    test_cmd = AllocFailTest(conf, get_cmd)
+    test_cmd.wf = wf
+    test_cmd.check_daos_stderr = True
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = True
+
+    rc = test_cmd.launch()
+    return rc
+
 def test_alloc_fail_cat(server, conf, wf):
     """Run the Interception library with fault injection
 
@@ -2437,12 +3292,7 @@ def test_alloc_fail_cat(server, conf, wf):
     itself yet.
     """
 
-    pools = get_pool_list()
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
+    pool = server.get_test_pool()
 
     dfuse = DFuse(server, conf, pool=pool)
     dfuse.use_valgrind = False
@@ -2470,17 +3320,11 @@ def test_alloc_fail_cat(server, conf, wf):
 def test_alloc_fail(server, conf):
     """run 'daos' client binary with fault injection"""
 
-    pools = get_pool_list()
-
-    while len(pools) < 1:
-        pools = make_pool(server)
-
-    pool = pools[0]
+    pool = server.get_test_pool()
 
     cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
-           'pool',
-           'list-containers',
-           '--pool',
+           'cont',
+           'list',
            pool]
     test_cmd = AllocFailTest(conf, cmd)
 
@@ -2493,48 +3337,19 @@ def test_alloc_fail(server, conf):
     destroy_container(conf, pool, container)
     return rc
 
-def main():
+def run(wf, args):
     """Main entry point"""
-
-    parser = argparse.ArgumentParser(
-        description='Run DAOS client on local node')
-    parser.add_argument('--server-debug', default=None)
-    parser.add_argument('--dfuse-debug', default=None)
-    parser.add_argument('--memcheck', default='some',
-                        choices=['yes', 'no', 'some'])
-    parser.add_argument('--max-log-size', default=None)
-    parser.add_argument('--dfuse-dir', default='/tmp',
-                        help='parent directory for all dfuse mounts')
-    parser.add_argument('--perf-check', action='store_true')
-    parser.add_argument('--dtx', action='store_true')
-    parser.add_argument('--test', help="Use '--test list' for list")
-    parser.add_argument('mode', nargs='?')
-    args = parser.parse_args()
-
-    if args.mode and args.test:
-        print('Cannot use mode and test')
-        sys.exit(1)
-
-    if args.test == 'list':
-        tests = []
-        for fn in dir(posix_tests):
-            if fn.startswith('test'):
-                tests.append(fn[5:])
-        print('Tests are: {}'.format(','.join(sorted(tests))))
-        return
 
     conf = load_conf(args)
 
-    wf = WarningsFactory('nlt-errors.json')
-
-    wf_server = WarningsFactory('nlt-server-leaks.json')
+    wf_server = WarningsFactory('nlt-server-leaks.json', post=True, check='Server leak checking')
     wf_client = WarningsFactory('nlt-client-leaks.json')
 
     conf.set_wf(wf)
     conf.set_args(args)
     setup_log_test(conf)
 
-    server = DaosServer(conf)
+    server = DaosServer(conf, test_class='first')
     server.start()
 
     fatal_errors = BoolRatchet()
@@ -2554,35 +3369,40 @@ def main():
         fi_test = True
     elif args.mode == 'all':
         fi_test = True
+        fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(run_duns_overlay_test(server, conf))
-        fatal_errors.add_result(run_posix_tests(server, conf))
         test_pydaos_kv(server, conf)
         fatal_errors.add_result(set_server_fi(server))
+    elif args.test == 'all':
+        fatal_errors.add_result(run_posix_tests(server, conf))
     elif args.test:
-        if args.test == 'all':
-            fatal_errors.add_result(run_posix_tests(server, conf))
-        else:
-            fatal_errors.add_result(run_posix_tests(server, conf, args.test))
+        fatal_errors.add_result(run_posix_tests(server, conf, args.test))
     else:
+        fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
-        fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(set_server_fi(server))
 
     if server.stop(wf_server) != 0:
         fatal_errors.fail()
 
+    if args.mode == 'all':
+        server = DaosServer(conf)
+        server.start()
+        if server.stop(wf_server) != 0:
+            fatal_errors.fail()
+
     # If running all tests then restart the server under valgrind.
-    # This is really, really slow so just do list-containers, then
+    # This is really, really slow so just do cont list, then
     # exit again.
     if args.mode == 'server-valgrind':
-        server = DaosServer(conf, valgrind=True)
-        server.start(clean=False)
-        pools = get_pool_list()
+        server = DaosServer(conf, valgrind=True, test_class='valgrind')
+        server.start()
+        pools = server.fetch_pools()
         for pool in pools:
-            cmd = ['pool', 'list-containers', '--pool', pool]
+            cmd = ['cont', 'list', pool.id()]
             run_daos_cmd(conf, cmd, valgrind=False)
         if server.stop(wf_server) != 0:
             fatal_errors.add_result(True)
@@ -2594,9 +3414,11 @@ def main():
         args.server_debug = 'INFO'
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
-        server = DaosServer(conf)
-        server.start(clean=False)
+        server = DaosServer(conf, test_class='no-debug')
+        server.start()
         if fi_test:
+#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
+#                                                         wf_client))
             fatal_errors.add_result(test_alloc_fail_cat(server,
                                                         conf, wf_client))
             fatal_errors.add_result(test_alloc_fail(server, conf))
@@ -2605,9 +3427,72 @@ def main():
         if server.stop(wf_server) != 0:
             fatal_errors.fail()
 
-    wf.close()
+    if fatal_errors.errors:
+        wf.add_test_case('Errors', 'Significant errors encountered')
+    else:
+        wf.add_test_case('Errors')
+
+    if conf.valgrind_errors:
+        print("Valgrind errors detected during execution")
+        fatal_errors.add_result(True)
+
     wf_server.close()
     wf_client.close()
+    return fatal_errors
+
+def main():
+    """Wrap the core function, and catch/report any exceptions
+
+    This allows the junit results to show at least a stack trace and assertion message for
+    any failure, regardless of if it's from a test case or not.
+    """
+
+    parser = argparse.ArgumentParser(description='Run DAOS client on local node')
+    parser.add_argument('--server-debug', default=None)
+    parser.add_argument('--dfuse-debug', default=None)
+    parser.add_argument('--class-name', default=None, help='class name to use for junit')
+    parser.add_argument('--memcheck', default='some', choices=['yes', 'no', 'some'])
+    parser.add_argument('--no-root', action='store_true')
+    parser.add_argument('--max-log-size', default=None)
+    parser.add_argument('--engine-count', type=int, default=1, help='Number of daos engines to run')
+    parser.add_argument('--dfuse-dir', default='/tmp', help='parent directory for all dfuse mounts')
+    parser.add_argument('--perf-check', action='store_true')
+    parser.add_argument('--dtx', action='store_true')
+    parser.add_argument('--test', help="Use '--test list' for list")
+    parser.add_argument('mode', nargs='?')
+    args = parser.parse_args()
+
+    if args.mode and args.test:
+        print('Cannot use mode and test')
+        sys.exit(1)
+
+    if args.test == 'list':
+        tests = []
+        for fn in dir(posix_tests):
+            if fn.startswith('test'):
+                tests.append(fn[5:])
+        print('Tests are: {}'.format(','.join(sorted(tests))))
+        sys.exit(1)
+
+    wf = WarningsFactory('nlt-errors.json',
+                         post_error=True,
+                         check='Log file errors',
+                         class_id=args.class_name,
+                         junit=True)
+
+    try:
+        fatal_errors = run(wf, args)
+        wf.add_test_case('exit_wrapper')
+        wf.close()
+    except Exception as error:
+        print(error)
+        print(str(error))
+        print(repr(error))
+        trace = ''.join(traceback.format_tb(error.__traceback__))
+        wf.add_test_case('exit_wrapper', str(error), output=trace)
+        wf.close()
+        raise
+
     if fatal_errors.errors:
         print("Significant errors encountered")
         sys.exit(1)

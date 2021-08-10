@@ -14,85 +14,17 @@ import (
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
-	types "github.com/daos-stack/daos/src/control/common/storage"
 	"github.com/daos-stack/daos/src/control/lib/control"
 )
 
 // storageCmd is the struct representing the top-level storage subcommand.
 type storageCmd struct {
-	Prepare  storagePrepareCmd  `command:"prepare" alias:"p" description:"Prepare SCM and NVMe storage attached to remote servers."`
 	Scan     storageScanCmd     `command:"scan" alias:"s" description:"Scan SCM and NVMe storage attached to remote servers."`
 	Format   storageFormatCmd   `command:"format" alias:"f" description:"Format SCM and NVMe storage attached to remote servers."`
 	Query    storageQueryCmd    `command:"query" alias:"q" description:"Query storage commands, including raw NVMe SSD device health stats and internal blobstore health info."`
 	Set      setFaultyCmd       `command:"set" alias:"s" description:"Manually set the device state."`
 	Replace  storageReplaceCmd  `command:"replace" alias:"r" description:"Replace a storage device that has been hot-removed with a new device."`
 	Identify storageIdentifyCmd `command:"identify" alias:"i" description:"Blink the status LED on a given VMD device for visual SSD identification."`
-}
-
-// storagePrepareCmd is the struct representing the prep storage subcommand.
-type storagePrepareCmd struct {
-	logCmd
-	ctlInvokerCmd
-	hostListCmd
-	jsonOutputCmd
-	types.StoragePrepareCmd
-}
-
-// Execute is run when storagePrepareCmd activates
-func (cmd *storagePrepareCmd) Execute(args []string) error {
-	prepNvme, prepScm, err := cmd.Validate()
-	if err != nil {
-		return err
-	}
-
-	req := &control.StoragePrepareReq{}
-	if prepNvme {
-		cmd.log.Debug("setting nvme in storage prepare request")
-		req.NVMe = &control.NvmePrepareReq{
-			PCIAllowList: cmd.PCIAllowList,
-			NrHugePages:  int32(cmd.NrHugepages),
-			TargetUser:   cmd.TargetUser,
-			Reset:        cmd.Reset,
-		}
-	}
-	if prepScm {
-		cmd.log.Debug("setting scm in storage prepare request")
-		if cmd.jsonOutputEnabled() && !cmd.Force {
-			return errors.New("Cannot use --json without --force")
-		}
-		if err := cmd.Warn(cmd.log); err != nil {
-			return err
-		}
-		req.SCM = &control.ScmPrepareReq{Reset: cmd.Reset}
-	}
-
-	req.SetHostList(cmd.hostlist)
-	resp, err := control.StoragePrepare(context.Background(), cmd.ctlInvoker, req)
-	if err != nil {
-		return err
-	}
-
-	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(resp, resp.Errors())
-	}
-
-	var outErr strings.Builder
-	if err := pretty.PrintResponseErrors(resp, &outErr); err != nil {
-		return err
-	}
-	if outErr.Len() > 0 {
-		cmd.log.Error(outErr.String())
-	}
-
-	if prepScm {
-		var out strings.Builder
-		if err := pretty.PrintScmPrepareMap(resp.HostStorage, &out); err != nil {
-			return err
-		}
-		cmd.log.Info(out.String())
-	}
-
-	return resp.Errors()
 }
 
 // storageScanCmd is the struct representing the scan storage subcommand.
@@ -288,7 +220,7 @@ func (cmd *nvmeReplaceCmd) Execute(_ []string) error {
 
 // storageIdentifyCmd is the struct representing the identify storage subcommand.
 type storageIdentifyCmd struct {
-	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification."`
+	VMD vmdIdentifyCmd `command:"vmd" alias:"n" description:"Quickly blink the status LED on a VMD NVMe SSD for device identification. Duration of LED event can be configured by setting the VMD_LED_PERIOD environment variable, otherwise default is 60 seconds."`
 }
 
 // vmdIdentifyCmd is the struct representing the identify vmd storage subcommand.

@@ -57,13 +57,6 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 	DFUSE_TRA_INFO(fs_handle, "Proto %d %d", conn->proto_major,
 		       conn->proto_minor);
 
-	/* This value has to be set here to the same value passed to
-	 * register_fuse().  Fuse always sets this value to zero so
-	 * set it before reporting the value.
-	 */
-	conn->max_read = fs_handle->dpi_max_read;
-	conn->max_write = fs_handle->dpi_max_write;
-
 	DFUSE_TRA_INFO(fs_handle, "max read %#x", conn->max_read);
 	DFUSE_TRA_INFO(fs_handle, "max write %#x", conn->max_write);
 	DFUSE_TRA_INFO(fs_handle, "readahead %#x", conn->max_readahead);
@@ -77,6 +70,11 @@ dfuse_fuse_init(void *arg, struct fuse_conn_info *conn)
 
 	conn->want |= FUSE_CAP_READDIRPLUS;
 	conn->want |= FUSE_CAP_READDIRPLUS_AUTO;
+
+	conn->time_gran = 1000000000;
+
+	if (fs_handle->dpi_info->di_wb_cache)
+		conn->want |= FUSE_CAP_WRITEBACK_CACHE;
 
 	dfuse_show_flags(fs_handle, conn->want);
 

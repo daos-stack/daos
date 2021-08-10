@@ -1,13 +1,12 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from pydaos.raw import DaosContainer, DaosApiError
 from avocado.core.exceptions import TestFail
-from test_utils_pool import TestPool
 
 RESULT_PASS = "PASS"  # nosec
 RESULT_FAIL = "FAIL"
@@ -31,13 +30,14 @@ class Permission(TestWithServers):
         ["DAOS-3442", "mode", 292],
     ]
 
-    def test_connectpermission(self):
+    def test_connect_permission(self):
         """Test ID: DAOS-???.
 
         Test Description:
             Test pool connections with specific permissions.
 
-        :avocado: tags=all,daily_regression,pool,permission,connectpermission
+        :avocado: tags=all,daily_regression,
+        :avocado: tags=pool,permission,connect_permission
         """
         # parameter used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -58,9 +58,8 @@ class Permission(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, self.get_dmg_command())
+        self.add_pool(create=False)
         self.test_log.debug("Pool initialization successful")
-        self.pool.get_params(self)
         self.pool.mode.value = createmode
         self.pool.create()
         self.test_log.debug("Pool Creation successful")
@@ -81,15 +80,15 @@ class Permission(TestWithServers):
                     "Test was expected to pass but it failed at " +
                     "pool.connect.\n")
 
-    @skipForTicket("DAOS-7221")
-    def test_filemodification(self):
+    def test_file_modification(self):
         """Test ID: DAOS-???.
 
         Test Description:
             Test whether file modification happens as expected under different
             permission levels.
 
-        :avocado: tags=all,daily_regression,pool,permission,filemodification
+        :avocado: tags=all,daily_regression
+        :avocado: tags=pool,permission,file_modification
         """
         # parameters used in pool create
         createmode = self.params.get("mode", '/run/createtests/createmode/*/')
@@ -105,10 +104,10 @@ class Permission(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, self.get_dmg_command())
+        self.add_pool(create=False)
         self.test_log.debug("Pool initialization successful")
-        self.pool.get_params(self)
         self.pool.mode.value = createmode
+        self.pool.create()
         self.test_log.debug("Pool Creation successful")
 
         try:

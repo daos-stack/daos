@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import basename
 
 # pylint: disable=too-many-ancestors
-class DmLargeDir(DataMoverTestBase):
+class DmvrLargeDir(DataMoverTestBase):
     """Test class Description: Add datamover test to copy a large directory
                                amongst daos containers and external file
                                system.
@@ -108,7 +108,7 @@ class DmLargeDir(DataMoverTestBase):
             an external POSIX file system using dcp.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_large_dir,dm_large_dir_dcp
         """
         self.run_dm_large_dir("DCP")

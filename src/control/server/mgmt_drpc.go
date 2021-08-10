@@ -7,9 +7,9 @@
 package server
 
 import (
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 	srvpb "github.com/daos-stack/daos/src/control/common/proto/srv"
@@ -38,18 +38,25 @@ func (mod *mgmtModule) ID() drpc.ModuleID {
 	return drpc.ModuleMgmt
 }
 
+// poolResolver defines an interface to be implemented by
+// something that can resolve a pool ID into a PoolService.
+type poolResolver interface {
+	FindPoolServiceByLabel(string) (*system.PoolService, error)
+	FindPoolServiceByUUID(uuid.UUID) (*system.PoolService, error)
+}
+
 // srvModule represents the daos_server dRPC module. It handles dRPCs sent by
 // the daos_engine (src/engine).
 type srvModule struct {
 	log     logging.Logger
-	sysdb   *system.Database
-	engines []*EngineInstance
+	sysdb   poolResolver
+	engines []Engine
 	events  *events.PubSub
 }
 
 // newSrvModule creates a new srv module references to the system database,
 // resident EngineInstances and event publish subscribe reference.
-func newSrvModule(log logging.Logger, sysdb *system.Database, engines []*EngineInstance, events *events.PubSub) *srvModule {
+func newSrvModule(log logging.Logger, sysdb poolResolver, engines []Engine, events *events.PubSub) *srvModule {
 	return &srvModule{
 		log:     log,
 		sysdb:   sysdb,
@@ -67,6 +74,8 @@ func (mod *srvModule) HandleCall(session *drpc.Session, method drpc.Method, req 
 		return nil, mod.handleBioErr(req)
 	case drpc.MethodGetPoolServiceRanks:
 		return mod.handleGetPoolServiceRanks(req)
+	case drpc.MethodPoolFindByLabel:
+		return mod.handlePoolFindByLabel(req)
 	case drpc.MethodClusterEvent:
 		return mod.handleClusterEvent(req)
 	default:
@@ -99,11 +108,34 @@ func (mod *srvModule) handleGetPoolServiceRanks(reqb []byte) ([]byte, error) {
 		resp.Status = int32(drpc.DaosNonexistant)
 		mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 		return proto.Marshal(resp)
-		// return nil, err
 	}
 
 	resp.Svcreps = system.RanksToUint32(ps.Replicas)
 
+	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
+
+	return proto.Marshal(resp)
+}
+
+func (mod *srvModule) handlePoolFindByLabel(reqb []byte) ([]byte, error) {
+	req := new(srvpb.PoolFindByLabelReq)
+	if err := proto.Unmarshal(reqb, req); err != nil {
+		return nil, drpc.UnmarshalingPayloadFailure()
+	}
+
+	mod.log.Debugf("handling PoolFindByLabel: %+v", req)
+
+	resp := new(srvpb.PoolFindByLabelResp)
+
+	ps, err := mod.sysdb.FindPoolServiceByLabel(req.GetLabel())
+	if err != nil {
+		resp.Status = int32(drpc.DaosNonexistant)
+		mod.log.Debugf("PoolFindByLabelResp: %+v", resp)
+		return proto.Marshal(resp)
+	}
+
+	resp.Svcreps = system.RanksToUint32(ps.Replicas)
+	resp.Uuid = ps.PoolUUID.String()
 	mod.log.Debugf("GetPoolSvcResp: %+v", resp)
 
 	return proto.Marshal(resp)

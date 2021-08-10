@@ -190,6 +190,93 @@ ds_pool_bcast_create(crt_context_t ctx, struct ds_pool *pool,
 	return rc;
 }
 
+static int
+bulk_cb(const struct crt_bulk_cb_info *cb_info)
+{
+	ABT_eventual *eventual = cb_info->bci_arg;
+
+	ABT_eventual_set(*eventual, (void *)&cb_info->bci_rc,
+			 sizeof(cb_info->bci_rc));
+	return 0;
+}
+
+/*
+ * Transfer the pool map buffer to "remote_bulk". If the remote bulk buffer is
+ * too small, then return -DER_TRUNC and set "required_buf_size" to the local
+ * pool map buffer size.
+ */
+int
+ds_pool_transfer_map_buf(struct pool_buf *map_buf, uint32_t map_version,
+			 crt_rpc_t *rpc, crt_bulk_t remote_bulk,
+			 uint32_t *required_buf_size)
+{
+	size_t			map_buf_size;
+	daos_size_t		remote_bulk_size;
+	d_iov_t			map_iov;
+	d_sg_list_t		map_sgl;
+	crt_bulk_t		bulk;
+	struct crt_bulk_desc	map_desc;
+	crt_bulk_opid_t		map_opid;
+	ABT_eventual		eventual;
+	int		       *status;
+	int			rc;
+
+	map_buf_size = pool_buf_size(map_buf->pb_nr);
+
+	/* Check if the client bulk buffer is large enough. */
+	rc = crt_bulk_get_len(remote_bulk, &remote_bulk_size);
+	if (rc != 0)
+		goto out;
+	if (remote_bulk_size < map_buf_size) {
+		*required_buf_size = map_buf_size;
+		rc = -DER_TRUNC;
+		goto out;
+	}
+
+	d_iov_set(&map_iov, map_buf, map_buf_size);
+	map_sgl.sg_nr = 1;
+	map_sgl.sg_nr_out = 0;
+	map_sgl.sg_iovs = &map_iov;
+
+	rc = crt_bulk_create(rpc->cr_ctx, &map_sgl, CRT_BULK_RO, &bulk);
+	if (rc != 0)
+		goto out;
+
+	/* Prepare "map_desc" for crt_bulk_transfer(). */
+	map_desc.bd_rpc = rpc;
+	map_desc.bd_bulk_op = CRT_BULK_PUT;
+	map_desc.bd_remote_hdl = remote_bulk;
+	map_desc.bd_remote_off = 0;
+	map_desc.bd_local_hdl = bulk;
+	map_desc.bd_local_off = 0;
+	map_desc.bd_len = map_iov.iov_len;
+
+	rc = ABT_eventual_create(sizeof(*status), &eventual);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_bulk;
+	}
+
+	rc = crt_bulk_transfer(&map_desc, bulk_cb, &eventual, &map_opid);
+	if (rc != 0)
+		goto out_eventual;
+
+	rc = ABT_eventual_wait(eventual, (void **)&status);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_eventual;
+	}
+
+	rc = *status;
+
+out_eventual:
+	ABT_eventual_free(&eventual);
+out_bulk:
+	crt_bulk_free(bulk);
+out:
+	return rc;
+}
+
 #define SWAP_RANKS(ranks, i, j)					\
 	do {							\
 		d_rank_t r = ranks->rl_ranks[i];		\
@@ -261,8 +348,6 @@ ds_pool_check_failed_replicas(struct pool_map *map, d_rank_list_t *replicas,
 	 * in the pool map and not present in the list of replicas.
 	 **/
 	for (i = 0, nreplaced = 0; i < nnodes && nreplaced < nfailed; i++) {
-		if (nodes[i].do_comp.co_rank == 0 /* Skip rank 0 */)
-			continue;
 		if (!map_ranks_include(MAP_RANKS_UP,
 				       nodes[i].do_comp.co_status))
 			continue;
@@ -369,6 +454,7 @@ static int
 check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 		   d_rank_t *pl_rank)
 {
+	struct ds_pool_child	*pool_child;
 	struct ds_pool		*pool;
 	struct pool_target	*target = NULL;
 	d_rank_t		 rank = dss_self_rank();
@@ -376,11 +462,24 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	int			 i, nr, rc = 0;
 
 	/* Get pool map to check the target status */
-	pool = ds_pool_lookup(pool_id);
-	if (pool == NULL) {
+	pool_child = ds_pool_child_lookup(pool_id);
+	if (pool_child == NULL) {
 		D_ERROR(DF_UUID": Pool cache not found\n", DP_UUID(pool_id));
-		return -DER_UNINIT;
+		/*
+		 * The SMD pool info could be inconsistent with global pool
+		 * info when pool creation/destroy partially succeed or fail.
+		 * For example: If a pool destroy happened after a blobstore
+		 * is torndown for faulty SSD, the blob and SMD info for the
+		 * affected pool targets will be left behind.
+		 *
+		 * SSD faulty/reint reaction should tolerate such kind of
+		 * inconsistency, otherwise, state transition for the SSD
+		 * won't be able to moving forward.
+		 */
+		return 0;
 	}
+	pool = pool_child->spc_pool;
+	D_ASSERT(pool != NULL);
 
 	nr_downout = nr_down = nr_upin = nr_up = 0;
 	ABT_rwlock_rdlock(pool->sp_lock);
@@ -422,7 +521,7 @@ check_pool_targets(uuid_t pool_id, int *tgt_ids, int tgt_cnt, bool reint,
 	}
 
 	ABT_rwlock_unlock(pool->sp_lock);
-	ds_pool_put(pool);
+	ds_pool_child_put(pool_child);
 
 	if (rc)
 		return rc;

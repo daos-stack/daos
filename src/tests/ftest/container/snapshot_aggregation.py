@@ -43,7 +43,9 @@ class SnapshotAggregation(IorTestBase):
             the writes and confirm that deleting the snapshot reduces the pool
             capacity by half.
 
-        :avocado: tags=all,pr,daily_regression,hw,large,container,snapshot
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=container,snapshot,snap
         :avocado: tags=snapshot_aggregation
         """
         self.dmg = self.get_dmg_command()
@@ -103,7 +105,10 @@ class SnapshotAggregation(IorTestBase):
             "NVMe free pool space was not reduced by the overwrite")
 
         # Enable the aggregation
+        # Test UUID.
+        self.pool.use_label = False
         self.pool.set_property("reclaim", "time")
+        self.pool.use_label = True
 
         # Delete the snapshot.
         daos.container_destroy_snap(

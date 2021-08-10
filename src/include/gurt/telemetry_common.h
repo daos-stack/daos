@@ -10,8 +10,8 @@
 
 #define D_TM_VERSION			1
 #define D_TM_MAX_NAME_LEN		256
-#define D_TM_MAX_DESC_LEN		64
-#define D_TM_MAX_UNIT_LEN		16
+#define D_TM_MAX_DESC_LEN		128
+#define D_TM_MAX_UNIT_LEN		32
 #define D_TM_TIME_BUFF_LEN		26
 
 #define D_TM_SHARED_MEMORY_KEY		0x10242048
@@ -134,15 +134,19 @@ enum {
 	D_TM_TIMER_SNAPSHOT		= 0x008,
 	D_TM_DURATION			= 0x010,
 	D_TM_GAUGE			= 0x020,
-	D_TM_CLOCK_REALTIME		= 0x040,
-	D_TM_CLOCK_PROCESS_CPUTIME	= 0x080,
-	D_TM_CLOCK_THREAD_CPUTIME	= 0x100,
+	D_TM_STATS_GAUGE		= 0x040,
+	D_TM_CLOCK_REALTIME		= 0x080,
+	D_TM_CLOCK_PROCESS_CPUTIME	= 0x100,
+	D_TM_CLOCK_THREAD_CPUTIME	= 0x200,
+	D_TM_LINK			= 0x400,
 	D_TM_ALL_NODES			= (D_TM_DIRECTORY | \
 					   D_TM_COUNTER | \
 					   D_TM_TIMESTAMP | \
 					   D_TM_TIMER_SNAPSHOT | \
 					   D_TM_DURATION | \
-					   D_TM_GAUGE)
+					   D_TM_GAUGE | \
+					   D_TM_STATS_GAUGE | \
+					   D_TM_LINK)
 };
 
 enum {
@@ -171,71 +175,68 @@ enum {
  * and sample size.
  */
 struct d_tm_stats_t {
-	uint64_t dtm_min;
-	uint64_t dtm_max;
-	uint64_t dtm_sum;
-	double std_dev;
-	double mean;
-	double sum_of_squares;
-	uint64_t sample_size;
+	uint64_t	dtm_min;
+	uint64_t	dtm_max;
+	uint64_t	dtm_sum;
+	double		std_dev;
+	double		mean;
+	double		sum_of_squares;
+	uint64_t	sample_size;
 };
 
 struct d_tm_bucket_t {
-	uint64_t dtb_min;
-	uint64_t dtb_max;
-	struct d_tm_node_t *dtb_bucket;
+	uint64_t		dtb_min;
+	uint64_t		dtb_max;
+	struct d_tm_node_t	*dtb_bucket;
 };
 
 struct d_tm_histogram_t {
-	struct d_tm_bucket_t *dth_buckets;
-	int dth_num_buckets;
-	int dth_initial_width;
-	int dth_value_multiplier;
+	struct d_tm_bucket_t	*dth_buckets;
+	int			dth_num_buckets;
+	int			dth_initial_width;
+	int			dth_value_multiplier;
 };
 
 struct d_tm_metric_t {
 	union data {
-		uint64_t value;
-		struct timespec tms[2];
-	} dtm_data;
-	struct d_tm_stats_t *dtm_stats;
-	struct d_tm_histogram_t *dtm_histogram;
-	char *dtm_desc;
-	char *dtm_units;
+		uint64_t	value;
+		struct		timespec tms[2];
+	}			dtm_data;
+	struct d_tm_stats_t	*dtm_stats;
+	struct d_tm_histogram_t	*dtm_histogram;
+	char			*dtm_desc;
+	char			*dtm_units;
 };
 
 struct d_tm_node_t {
-	struct d_tm_node_t *dtn_child;
-	struct d_tm_node_t *dtn_sibling;
-	char *dtn_name;
-	int dtn_type;
-	pthread_mutex_t dtn_lock;
-	struct d_tm_metric_t *dtn_metric;
-	bool dtn_protect;
+	struct d_tm_node_t	*dtn_child; /** first child */
+	struct d_tm_node_t	*dtn_sibling; /** first sibling */
+	char			*dtn_name; /** metric name */
+	int			dtn_type; /** mask of D_TM_ types */
+	key_t			dtn_shmem_key; /** shmem region key */
+	pthread_mutex_t		dtn_lock; /** individual mutex */
+	struct d_tm_metric_t	*dtn_metric; /** values */
+	bool			dtn_protect; /** synchronized access */
 };
 
 struct d_tm_nodeList_t {
-	struct d_tm_node_t *dtnl_node;
-	struct d_tm_nodeList_t *dtnl_next;
+	struct d_tm_node_t	*dtnl_node;
+	struct d_tm_nodeList_t	*dtnl_next;
 };
 
-void *d_tm_shmalloc(int length);
-uint64_t *d_tm_allocate_shared_memory(int srv_idx, size_t mem_size);
-int d_tm_clock_id(int clk_id);
-char *d_tm_clock_string(int clk_id);
-bool d_tm_validate_shmem_ptr(uint64_t *shmem_root, void *ptr);
-int d_tm_add_node(struct d_tm_node_t *src, struct d_tm_nodeList_t **nodelist);
+/** Context for a telemetry instance */
+struct d_tm_context;
+
+key_t d_tm_get_srv_key(int srv_idx);
+struct d_tm_node_t *d_tm_follow_link(struct d_tm_context *ctx,
+				     struct d_tm_node_t *link);
+int d_tm_list_add_node(struct d_tm_node_t *src,
+		       struct d_tm_nodeList_t **nodelist);
 void d_tm_list_free(struct d_tm_nodeList_t *nodeList);
-void d_tm_free_node(uint64_t *shmem_root, struct d_tm_node_t *node);
-struct d_tm_node_t *d_tm_find_child(uint64_t *shmem_root,
-				    struct d_tm_node_t *parent, char *name);
-int d_tm_alloc_node(struct d_tm_node_t **newnode, char *name);
-int d_tm_add_child(struct d_tm_node_t **newnode, struct d_tm_node_t *parent,
-		   char *name);
 int d_tm_get_version(void);
 void d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value);
 double d_tm_compute_standard_dev(double sum_of_squares, uint64_t sample_size,
 				 double mean);
-int d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
+void d_tm_compute_histogram(struct d_tm_node_t *node, uint64_t value);
 void d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format);
 #endif /* __TELEMETRY_COMMON_H__ */

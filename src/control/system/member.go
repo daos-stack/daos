@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/dustin/go-humanize/english"
 	"github.com/google/uuid"
@@ -36,13 +37,18 @@ const (
 	MemberStateStopping MemberState = 0x0010
 	// MemberStateStopped indicates process has been stopped.
 	MemberStateStopped MemberState = 0x0020
-	// MemberStateEvicted indicates rank has been evicted from DAOS system.
-	MemberStateEvicted MemberState = 0x0040
+	// MemberStateExcluded indicates rank has been automatically excluded from DAOS system.
+	MemberStateExcluded MemberState = 0x0040
 	// MemberStateErrored indicates the process stopped with errors.
 	MemberStateErrored MemberState = 0x0080
 	// MemberStateUnresponsive indicates the process is not responding.
 	MemberStateUnresponsive MemberState = 0x0100
+	// MemberStateAdminExcluded indicates that the rank has been administratively excluded.
+	MemberStateAdminExcluded MemberState = 0x0200
 
+	// ExcludedMemberFilter defines the state(s) to be used when determining
+	// whether or not a member should be excluded from CaRT group map updates.
+	ExcludedMemberFilter = MemberStateAwaitFormat | MemberStateExcluded | MemberStateAdminExcluded
 	// AvailableMemberFilter defines the state(s) to be used when determining
 	// whether or not a member is available for the purposes of pool creation, etc.
 	AvailableMemberFilter = MemberStateReady | MemberStateJoined
@@ -64,8 +70,10 @@ func (ms MemberState) String() string {
 		return "Stopping"
 	case MemberStateStopped:
 		return "Stopped"
-	case MemberStateEvicted:
-		return "Evicted"
+	case MemberStateExcluded:
+		return "Excluded"
+	case MemberStateAdminExcluded:
+		return "AdminExcluded"
 	case MemberStateErrored:
 		return "Errored"
 	case MemberStateUnresponsive:
@@ -89,8 +97,10 @@ func memberStateFromString(in string) MemberState {
 		return MemberStateStopping
 	case "stopped":
 		return MemberStateStopped
-	case "evicted":
-		return MemberStateEvicted
+	case "excluded":
+		return MemberStateExcluded
+	case "adminexcluded":
+		return MemberStateAdminExcluded
 	case "errored":
 		return MemberStateErrored
 	case "unresponsive":
@@ -114,13 +124,13 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 
 	return map[MemberState]map[MemberState]bool{
 		MemberStateAwaitFormat: {
-			MemberStateEvicted: true,
+			MemberStateExcluded: true,
 		},
 		MemberStateStarting: {
-			MemberStateEvicted: true,
+			MemberStateExcluded: true,
 		},
 		MemberStateReady: {
-			MemberStateEvicted: true,
+			MemberStateExcluded: true,
 		},
 		MemberStateJoined: {
 			MemberStateReady: true,
@@ -128,7 +138,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 		MemberStateStopping: {
 			MemberStateReady: true,
 		},
-		MemberStateEvicted: {
+		MemberStateExcluded: {
 			MemberStateReady:    true,
 			MemberStateJoined:   true,
 			MemberStateStopping: true,
@@ -150,6 +160,7 @@ func (ms MemberState) isTransitionIllegal(to MemberState) bool {
 // system running on host with the control-plane listening at "Addr".
 type Member struct {
 	Rank           Rank         `json:"rank"`
+	Incarnation    uint64       `json:"incarnation"`
 	UUID           uuid.UUID    `json:"uuid"`
 	Addr           *net.TCPAddr `json:"addr"`
 	FabricURI      string       `json:"fabric_uri"`
@@ -157,6 +168,7 @@ type Member struct {
 	state          MemberState
 	Info           string       `json:"info"`
 	FaultDomain    *FaultDomain `json:"fault_domain"`
+	LastUpdate     time.Time    `json:"last_update"`
 }
 
 // MarshalJSON marshals system.Member to JSON.
@@ -247,7 +259,8 @@ func NewMember(rank Rank, uuidStr, uri string, addr *net.TCPAddr, state MemberSt
 	// or else change the return signature to include an error
 	newUUID := uuid.MustParse(uuidStr)
 	return &Member{Rank: rank, UUID: newUUID, FabricURI: uri, Addr: addr,
-		state: state, FaultDomain: MustCreateFaultDomain()}
+		state: state, FaultDomain: MustCreateFaultDomain(),
+		LastUpdate: time.Now()}
 }
 
 // Members is a type alias for a slice of member references

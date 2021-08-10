@@ -1,15 +1,12 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-import traceback
 import ctypes
 
 from apricot import TestWithServers
-from command_utils import CommandFailure
-from test_utils_pool import TestPool
 
 
 class BadEvictTest(TestWithServers):
@@ -28,7 +25,9 @@ class BadEvictTest(TestWithServers):
         Test Description:
             Pass bad parameters to the pool evict clients call.
 
-        :avocado: tags=all,pool,full_regression,tiny,badevict
+        :avocado: tags=all,full_regression
+        :avocado: tags=tiny
+        :avocado: tags=pool,bad_evict
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -48,43 +47,41 @@ class BadEvictTest(TestWithServers):
                 break
 
         saveduuid = None
-        pool = None
+
+        self.add_pool(connect=False)
+        original_test_pool_uuid = self.pool.uuid
+
+        # trash the UUID value in various ways
+        if excludeuuid is None:
+            saveduuid = (ctypes.c_ubyte * 16)(0)
+            for index, _ in enumerate(saveduuid):
+                saveduuid[index] = self.pool.pool.uuid[index]
+            self.pool.pool.uuid[0:] = \
+                [0 for item in range(0, len(self.pool.pool.uuid))]
+        elif excludeuuid == 'JUNK':
+            saveduuid = (ctypes.c_ubyte * 16)(0)
+            for index, _ in enumerate(saveduuid):
+                saveduuid[index] = self.pool.pool.uuid[index]
+            self.pool.pool.uuid[4] = 244
+
+        self.pool.uuid = self.pool.pool.get_uuid_str()
 
         try:
-            # initialize a python pool object then create the underlying
-            # daos storage
-            pool = TestPool(self.context, self.get_dmg_command())
-            pool.get_params(self)
-            pool.create()
-
-            # trash the UUID value in various ways
-            if excludeuuid is None:
-                saveduuid = (ctypes.c_ubyte * 16)(0)
-                for item in range(0, len(saveduuid)):
-                    saveduuid[item] = pool.pool.uuid[item]
-                pool.pool.uuid[0:] = \
-                    [0 for item in range(0, len(pool.pool.uuid))]
-            elif excludeuuid == 'JUNK':
-                saveduuid = (ctypes.c_ubyte * 16)(0)
-                for item in range(0, len(saveduuid)):
-                    saveduuid[item] = pool.pool.uuid[item]
-                pool.pool.uuid[4] = 244
-
-            # evict the pool
-            self.get_dmg_command().pool_evict(pool.pool.get_uuid_str())
-
-            if expected_result in ['FAIL']:
-                self.fail("Test was expected to fail but it passed.\n")
-
-        except CommandFailure as excep:
-            self.log.error(str(excep))
-            self.log.error(traceback.format_exc())
-            if expected_result in ['PASS']:
-                self.fail("Test was expected to pass but it failed.\n")
+            # Make dmg call and poolevict() not fail.
+            self.pool.dmg.exit_status_exception = False
+            self.pool.use_label = False
+            self.pool.evict()
         finally:
-            if pool is not None:
-                # if the test trashed some pool parameter, put it back the
-                # way it was
-                if saveduuid is not None:
-                    pool.pool.uuid = saveduuid
-                pool.destroy()
+            self.pool.use_label = True
+            self.pool.dmg.exit_status_exception = True
+
+        exit_status = self.pool.dmg.result.exit_status
+        if exit_status == 0 and expected_result in ['FAIL']:
+            self.fail("Test was expected to fail but it passed.\n")
+        elif exit_status != 0 and expected_result in ['PASS']:
+            self.fail("Test was expected to pass but it failed.\n")
+
+        # if the test trashed some pool parameter, put it back the way it was
+        if saveduuid is not None:
+            self.pool.pool.uuid = saveduuid
+            self.pool.uuid = original_test_pool_uuid

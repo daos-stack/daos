@@ -48,15 +48,21 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 		if (!dfc)
 			D_GOTO(err, rc = ENOMEM);
 
+		DFUSE_TRA_UP(dfc, dfp, "dfc");
+
 		rc = dfs_cont_create(dfp->dfp_poh, cont, NULL,
 				     &dfc->dfs_coh, &dfc->dfs_ns);
 		if (rc) {
-			DFUSE_TRA_ERROR(parent,
+			DFUSE_TRA_ERROR(dfc,
 					"dfs_cont_create() failed: (%d)",
 					rc);
 			D_FREE(dfc);
 			D_GOTO(err, rc);
 		}
+
+		uuid_copy(dfc->dfs_cont, cont);
+		if (fs_handle->dpi_info->di_caching)
+			dfuse_set_default_cont_cache_values(dfc);
 	}
 
 	rc = dfuse_cont_open(fs_handle, dfp, &cont, &dfc);
@@ -88,7 +94,8 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 
 		d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 		entry.attr.st_ino = ie->ie_stat.st_ino;
-		entry.entry_timeout = dfc->dfs_attr_timeout;
+		entry.attr_timeout = dfc->dfc_attr_timeout;
+		entry.entry_timeout = dfc->dfc_dentry_dir_timeout;
 		entry.generation = 1;
 		entry.ino = entry.attr.st_ino;
 		DFUSE_REPLY_ENTRY(ie, req, entry);
@@ -126,7 +133,14 @@ close:
 decref:
 	d_hash_rec_decref(&dfp->dfp_cont_table, &dfc->dfs_entry);
 err:
-	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
+	if (rc == ENOENT) {
+		struct fuse_entry_param entry = {0};
+
+		entry.entry_timeout = parent->ie_dfs->dfc_ndentry_timeout;
+		DFUSE_REPLY_ENTRY(parent, req, entry);
+	} else {
+		DFUSE_REPLY_ERR_RAW(parent, req, rc);
+	}
 }
 
 void

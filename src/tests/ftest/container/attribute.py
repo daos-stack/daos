@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -110,7 +110,7 @@ class ContainerAttributeTest(TestWithServers):
         for attr, value in indata.items():
             # Workaround: attributes from daos_command have b prefix
             # need to remove it
-            if value != outdata[attr]:
+            if value != outdata.get(attr, None):
                 self.fail(
                     "FAIL: Value does not match after get attr, Expected "
                     "val={} and received val={}".format(value,
@@ -122,7 +122,9 @@ class ContainerAttributeTest(TestWithServers):
 
         Test description: Test large randomly created container attribute.
 
-        :avocado: tags=container,attribute,large_conattribute
+        :avocado: tags=all,full_regression
+        :avocado: tags=container,attribute
+        :avocado: tags=large_conattribute
         :avocado: tags=container_attribute
         """
         self.add_pool()
@@ -153,7 +155,9 @@ class ContainerAttributeTest(TestWithServers):
     def test_container_attribute(self):
         """
         Test basic container attribute tests.
-        :avocado: tags=all,tiny,full_regression,container,sync_conattribute
+        :avocado: tags=all,tiny,full_regression
+        :avocado: tags=container,attribute
+        :avocado: tags=sync_conattribute
         :avocado: tags=container_attribute
         """
         self.add_pool()
@@ -196,6 +200,12 @@ class ContainerAttributeTest(TestWithServers):
                 name[0] = b"rubbish"
 
             attr_value_dict = self.container.container.get_attr([name[0]])
+
+            # Raise an exception if the attr value is empty
+            # This is expected to happen on Negative test cases
+            if not attr_value_dict[name[0]]:
+                raise DaosApiError("Attr value is empty. "
+                                   "Did you set the value?")
             self.verify_get_attr(attr_dict, attr_value_dict)
 
             if expected_result in ['FAIL']:
@@ -211,7 +221,9 @@ class ContainerAttributeTest(TestWithServers):
         """
         Test basic container attribute tests.
 
-        :avocado: tags=all,small,full_regression,container,async_conattribute
+        :avocado: tags=all,small,full_regression
+        :avocado: tags=container,attribute
+        :avocado: tags=async_conattribute
         :avocado: tags=container_attribute
         """
         global GLOB_SIGNAL
@@ -235,7 +247,6 @@ class ContainerAttributeTest(TestWithServers):
             value[0] = value[0].encode("utf-8")
 
         attr_dict = {name[0]: value[0]}
-
         expected_result = 'PASS'
         for result in expected_for_param:
             if result == 'FAIL':
@@ -273,8 +284,8 @@ class ContainerAttributeTest(TestWithServers):
                 name[0] = b"rubbish"
 
             GLOB_SIGNAL = threading.Event()
-            self.container.container.get_attr([name[0]], cb_func=cb_func)
-
+            self.container.container.get_attr([name[0]],
+                                              cb_func=cb_func)
             GLOB_SIGNAL.wait()
 
             if GLOB_RC != 0 and expected_result in ['PASS']:
@@ -282,10 +293,13 @@ class ContainerAttributeTest(TestWithServers):
                           .format(GLOB_RC))
 
             # not verifying the get_attr since its not available asynchronously
+            # Therefore we want to avoid passing negative test
+            # e.g. rubbish getting assigned.
 
             if value[0] is not None:
                 if GLOB_RC == 0 and expected_result in ['FAIL']:
-                    self.fail("Test was expected to fail but it passed.\n")
+                    if name[0] != b"rubbish":
+                        self.fail("Test was expected to fail but it passed.\n")
 
         except DaosApiError as excep:
             print(excep)

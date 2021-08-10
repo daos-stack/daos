@@ -25,13 +25,15 @@ class DfuseCommand(ExecutableCommand):
         self.cuuid = FormattedParameter("--container {}")
         self.mount_dir = FormattedParameter("--mountpoint {}")
         self.sys_name = FormattedParameter("--sys-name {}")
-        self.singlethreaded = FormattedParameter("--singlethreaded", False)
+        self.singlethreaded = FormattedParameter("--singlethread", False)
         self.foreground = FormattedParameter("--foreground", False)
-        self.disable_direct_io = FormattedParameter("--disable-direct-io",
-                                                    False)
+        self.enable_caching = FormattedParameter("--enable-caching", False)
+        self.enable_wb_cache = FormattedParameter("--enable-wb-cache", False)
+        self.disable_caching = FormattedParameter("--disable-caching", False)
+        self.disable_wb_cache = FormattedParameter("--disable-wb-cache", False)
 
         # Environment variable names to export when running dfuse
-        self._env_names = ["D_LOG_FILE"]
+        self.update_env_names(["D_LOG_FILE"])
 
     def set_dfuse_params(self, pool, display=True):
         """Set the dfuse params for the DAOS group, pool, and container uuid.

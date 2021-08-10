@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -82,6 +83,7 @@ type (
 		sync.Mutex
 		log                logging.Logger
 		cfg                *DatabaseConfig
+		initialized        atm.Bool
 		replicaAddr        *syncTCPAddr
 		raft               syncRaft
 		raftTransport      raft.Transport
@@ -301,6 +303,10 @@ func (db *Database) CheckReplica() error {
 		return &ErrNotReplica{db.cfg.stringReplicas(nil)}
 	}
 
+	if db.initialized.IsFalse() {
+		return ErrUninitialized
+	}
+
 	return db.raft.withReadLock(func(_ raftService) error { return nil })
 }
 
@@ -387,6 +393,10 @@ func (db *Database) Start(parent context.Context) error {
 		return errors.Wrap(err, "unable to configure raft service")
 	}
 
+	// Set this before starting raft so that we can distinguish between
+	// an unformatted system and one where raft isn't started.
+	db.initialized.SetTrue()
+
 	if err := db.startRaft(newDB); err != nil {
 		return errors.Wrap(err, "unable to start raft service")
 	}
@@ -471,6 +481,15 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 	}
 }
 
+// IncMapVer forces the system database to increment the map version.
+func (db *Database) IncMapVer() error {
+	if err := db.CheckLeader(); err != nil {
+		return err
+	}
+
+	return db.submitIncMapVer()
+}
+
 func newGroupMap(version uint32) *GroupMap {
 	return &GroupMap{
 		Version:  version,
@@ -488,7 +507,17 @@ func (db *Database) GroupMap() (*GroupMap, error) {
 
 	gm := newGroupMap(db.data.MapVersion)
 	for _, srv := range db.data.Members.Ranks {
-		if srv.state&AvailableMemberFilter == 0 {
+		// Only members that have been auto-excluded or administratively
+		// excluded should be omitted from the group map. If a member
+		// is actually down, it will be marked dead by swim and moved
+		// into the excluded state eventually.
+		if srv.state&ExcludedMemberFilter != 0 {
+			continue
+		}
+		// Quick sanity-check: Don't include members that somehow have
+		// a nil rank or fabric URI, either.
+		if srv.Rank.Equals(NilRank) || srv.FabricURI == "" {
+			db.log.Errorf("member has invalid rank (%d) or URI (%s)", srv.Rank, srv.FabricURI)
 			continue
 		}
 		gm.RankURIs[srv.Rank] = srv.FabricURI

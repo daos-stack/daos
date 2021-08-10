@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.daos</groupId>
     <artifactId>daos-java-root</artifactId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.2.1-SNAPSHOT</version>
   </parent>
 
   <groupId>io.daos</groupId>
@@ -15,7 +15,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <hadoop.version>3.3.0</hadoop.version>
+    <hadoop.version>3.3.1</hadoop.version>
     <native.build.path>${project.basedir}/build</native.build.path>
     <daos.install.path>${project.basedir}/install</daos.install.path>
   </properties>
@@ -100,6 +100,7 @@
         <artifactId>maven-shade-plugin</artifactId>
         <executions>
           <execution>
+            <id>shade-protobuf3-netty4</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
@@ -107,8 +108,7 @@
             <configuration>
               <shadedArtifactAttached>true</shadedArtifactAttached>
               <transformers>
-                <transformer
-                  implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
                   <resource>META-INF/org.apache.hadoop.fs.FileSystem</resource>
                 </transformer>
               </transformers>
@@ -117,7 +117,22 @@
                   <pattern>com.google.protobuf</pattern>
                   <shadedPattern>com.google.protoshadebuf3</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>io.netty.buffer</pattern>
+                  <shadedPattern>io.netty.buffershade4</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>io.netty.util</pattern>
+                  <shadedPattern>io.netty.utilshade4</shadedPattern>
+                </relocation>
               </relocations>
+              <artifactSet>
+                <includes>
+                  <include>io.netty:netty-buffer</include>
+                  <include>com.google.protobuf:protobuf-java</include>
+                </includes>
+              </artifactSet>
+              <finalName>${artifactId}-${version}-protobuf3-netty4-shaded</finalName>
             </configuration>
           </execution>
         </executions>
@@ -167,4 +182,63 @@
     </plugins>
   </reporting>
 
+  <profiles>
+    <profile>
+      <id>shade-all</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-shade-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>shade-all</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>shade</goal>
+                </goals>
+                <configuration>
+                  <shadedArtifactAttached>true</shadedArtifactAttached>
+                  <transformers>
+                    <transformer
+                            implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                      <resource>META-INF/org.apache.hadoop.fs.FileSystem</resource>
+                    </transformer>
+                  </transformers>
+                  <relocations>
+                    <relocation>
+                      <pattern>com.google.protobuf</pattern>
+                      <shadedPattern>com.google.protoshadebuf3</shadedPattern>
+                    </relocation>
+                  </relocations>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <version>3.0.0</version>
+            <executions>
+              <execution>
+                <id>attach-shaded-all</id>
+                <phase>package</phase>
+                <goals>
+                  <goal>attach-artifact</goal>
+                </goals>
+                <configuration>
+                  <artifacts>
+                    <artifact>
+                      <file>target/${artifactId}-${version}-shaded.jar</file>
+                      <type>jar</type>
+                      <classifier>all-shaded</classifier>
+                    </artifact>
+                  </artifacts>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

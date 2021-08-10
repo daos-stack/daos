@@ -5,9 +5,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from rebuild_test_base import RebuildTestBase
-from apricot import skipForTicket
+from daos_utils import DaosCommand
 
-class CascadingFailures(RebuildTestBase):
+class RbldCascadingFailures(RebuildTestBase):
     # pylint: disable=too-many-ancestors
     """Test cascading failures during rebuild.
 
@@ -18,6 +18,7 @@ class CascadingFailures(RebuildTestBase):
         """Initialize a CascadingFailures object."""
         super().__init__(*args, **kwargs)
         self.mode = None
+        self.daos_cmd = None
 
     def create_test_container(self):
         """Create a container and write objects."""
@@ -69,15 +70,20 @@ class CascadingFailures(RebuildTestBase):
 
     def execute_during_rebuild(self):
         """Execute test steps during rebuild."""
+        self.daos_cmd = DaosCommand(self.bin)
         if self.mode == "cascading":
             # Exclude the second rank from the pool during rebuild
             self.server_managers[0].stop_ranks(
                 [self.inputs.rank.value[1]], self.d_log)
 
+        self.daos_cmd.container_set_prop(
+                      pool=self.pool.uuid,
+                      cont=self.container.uuid,
+                      prop="status",
+                      value="healthy")
         # Populate the container with additional data during rebuild
         self.container.write_objects(obj_class=self.inputs.object_class.value)
 
-    @skipForTicket("DAOS-6728")
     def test_simultaneous_failures(self):
         """Jira ID: DAOS-842.
 
@@ -97,7 +103,6 @@ class CascadingFailures(RebuildTestBase):
         self.mode = "simultaneous"
         self.execute_rebuild_test()
 
-    @skipForTicket("DAOS-6728")
     def test_sequential_failures(self):
         """Jira ID: DAOS-843.
 

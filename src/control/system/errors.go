@@ -18,8 +18,9 @@ import (
 )
 
 var (
-	ErrEmptyGroupMap = errors.New("empty GroupMap")
+	ErrEmptyGroupMap = errors.New("empty group map (all ranks excluded?)")
 	ErrRaftUnavail   = errors.New("raft service unavailable (not started yet?)")
+	ErrUninitialized = errors.New("system is uninitialized (storage format required?)")
 )
 
 // IsUnavailable returns a boolean indicating whether or not the
@@ -38,6 +39,15 @@ func IsEmptyGroupMap(err error) bool {
 		return false
 	}
 	return strings.Contains(errors.Cause(err).Error(), ErrEmptyGroupMap.Error())
+}
+
+// IsUninitialized returns a boolean indicating whether or not the
+// supplied error corresponds to an uninitialized system.
+func IsUninitialized(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(errors.Cause(err).Error(), ErrUninitialized.Error())
 }
 
 // ErrNotReplica indicates that a request was made to a control plane
@@ -115,6 +125,7 @@ func IsMemberExists(err error) bool {
 type ErrJoinFailure struct {
 	rankChanged bool
 	uuidChanged bool
+	isExcluded  bool
 	newUUID     *uuid.UUID
 	curUUID     *uuid.UUID
 	newRank     *Rank
@@ -127,6 +138,8 @@ func (err *ErrJoinFailure) Error() string {
 		return fmt.Sprintf("can't rejoin member with uuid %s: rank changed from %d -> %d", *err.curUUID, *err.curRank, *err.newRank)
 	case err.uuidChanged:
 		return fmt.Sprintf("can't rejoin member with rank %d: uuid changed from %s -> %s", *err.curRank, *err.curUUID, *err.newUUID)
+	case err.isExcluded:
+		return fmt.Sprintf("member %s (rank %d) has been administratively excluded", err.curUUID, *err.curRank)
 	default:
 		return "unknown join failure"
 	}
@@ -147,6 +160,14 @@ func errUuidChanged(new, cur uuid.UUID, rank Rank) *ErrJoinFailure {
 		newUUID:     &new,
 		curUUID:     &cur,
 		curRank:     &rank,
+	}
+}
+
+func errAdminExcluded(uuid uuid.UUID, rank Rank) *ErrJoinFailure {
+	return &ErrJoinFailure{
+		isExcluded: true,
+		curUUID:    &uuid,
+		curRank:    &rank,
 	}
 }
 

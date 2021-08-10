@@ -23,9 +23,13 @@ static struct daos_obj_class  *oclass_ident2cl(daos_oclass_id_t oc_id);
 static struct daos_obj_class  *oclass_scale2cl(struct daos_oclass_attr *ca);
 static struct daos_obj_class  *oclass_resil2cl(struct daos_oclass_attr *ca);
 
-/** find the object class attributes for the provided @oid */
+/**
+ * Find the object class attributes for the provided @oid.
+ * NB: Because ec.e_len can be overwritten by pool/container property,
+ * please don't directly use ec.e_len.
+ */
 struct daos_oclass_attr *
-daos_oclass_attr_find(daos_obj_id_t oid)
+daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv)
 {
 	struct daos_obj_class	*oc;
 
@@ -38,6 +42,8 @@ daos_oclass_attr_find(daos_obj_id_t oid)
 	}
 	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
 		oc->oc_name, DP_OID(oid));
+	if (is_priv)
+		*is_priv = oc->oc_private;
 	return &oc->oc_attr;
 }
 
@@ -128,6 +134,12 @@ dc_oclass_list(daos_handle_t coh, struct daos_oclass_list *clist,
 	return -DER_NOSYS;
 }
 
+bool
+daos_oclass_is_valid(daos_oclass_id_t oc_id)
+{
+	return (oclass_ident2cl(oc_id) != NULL) ? true : false;
+}
+
 /**
  * Return the number of redundancy groups for the object class @oc_attr with
  * the provided metadata @md
@@ -193,18 +205,16 @@ daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
 }
 
 int
-dc_set_oclass(daos_handle_t coh, int domain_nr, int target_nr,
+dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
 	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
 	      daos_oclass_id_t *oc_id_p)
 {
-	uint64_t		rf_factor;
 	daos_oclass_id_t	cid = 0;
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	ca;
 	uint16_t		shd, rdd;
 	int			grp_size;
 
-	rf_factor = dc_cont_hdl2redunfac(coh);
 	rdd = hints & DAOS_OCH_RDD_MASK;
 	shd = hints & DAOS_OCH_SHD_MASK;
 
@@ -321,6 +331,50 @@ struct daos_oc_ec_codec {
 
 static struct daos_oc_ec_codec	*oc_ec_codecs;
 static int			 oc_ec_codec_nr;
+/* for binary search */
+static struct daos_oc_ec_codec **ecc_array;
+
+static void
+ecc_sop_swap(void *array, int a, int b)
+{
+	struct daos_oc_ec_codec **ecc = (struct daos_oc_ec_codec **)array;
+	struct daos_oc_ec_codec  *tmp;
+
+	tmp = ecc[a];
+	ecc[a] = ecc[b];
+	ecc[b] = tmp;
+}
+
+static int
+ecc_sop_cmp(void *array, int a, int b)
+{
+	struct daos_oc_ec_codec **ecc = (struct daos_oc_ec_codec **)array;
+
+	if (ecc[a]->ec_oc_id > ecc[b]->ec_oc_id)
+		return 1;
+	if (ecc[a]->ec_oc_id < ecc[b]->ec_oc_id)
+		return -1;
+	return 0;
+}
+
+static int
+ecc_sop_cmp_key(void *array, int i, uint64_t key)
+{
+	struct daos_oc_ec_codec **ecc = (struct daos_oc_ec_codec **)array;
+	unsigned int		  id  = (unsigned int)key;
+
+	if (ecc[i]->ec_oc_id > id)
+		return 1;
+	if (ecc[i]->ec_oc_id < id)
+		return -1;
+	return 0;
+}
+
+static daos_sort_ops_t	ecc_sort_ops = {
+	.so_swap	= ecc_sop_swap,
+	.so_cmp		= ecc_sop_cmp,
+	.so_cmp_key	= ecc_sop_cmp_key,
+};
 
 void
 obj_ec_codec_fini(void)
@@ -330,11 +384,16 @@ obj_ec_codec_fini(void)
 	int			 ocnr = 0;
 	int			 i;
 
+	if (ecc_array) {
+		D_FREE(ecc_array);
+		ecc_array = NULL;
+	}
+
 	if (oc_ec_codecs == NULL)
 		return;
 
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (DAOS_OC_IS_EC(&oc->oc_attr))
+		if (daos_oclass_is_ec(&oc->oc_attr))
 			ocnr++;
 	}
 	D_ASSERTF(oc_ec_codec_nr == ocnr,
@@ -370,24 +429,27 @@ obj_ec_codec_init()
 
 	ocnr = 0;
 	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (DAOS_OC_IS_EC(&oc->oc_attr))
+		if (daos_oclass_is_ec(&oc->oc_attr))
 			ocnr++;
 	}
 	if (ocnr == 0)
 		return 0;
 
+	oc_ec_codec_nr = ocnr;
 	D_ALLOC_ARRAY(oc_ec_codecs, ocnr);
 	if (oc_ec_codecs == NULL)
 		D_GOTO(failed, rc = -DER_NOMEM);
-	oc_ec_codec_nr = ocnr;
 
-	i = 0;
-	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
-		if (!DAOS_OC_IS_EC(&oc->oc_attr))
+	D_ALLOC_ARRAY(ecc_array, ocnr);
+	if (ecc_array == NULL)
+		D_GOTO(failed, rc = -DER_NOMEM);
+
+	for (i = 0, oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
+		if (!daos_oclass_is_ec(&oc->oc_attr))
 			continue;
 
 		oc_ec_codecs[i].ec_oc_id = oc->oc_id;
-		ec_codec = &oc_ec_codecs[i++].ec_codec;
+		ec_codec = &oc_ec_codecs[i].ec_codec;
 		k = oc->oc_attr.ca_ec_k;
 		p = oc->oc_attr.ca_ec_p;
 		if (k > OBJ_EC_MAX_K || p > OBJ_EC_MAX_P) {
@@ -421,9 +483,14 @@ obj_ec_codec_init()
 		/* Initialize gf tables from encode matrix */
 		ec_init_tables(k, p, &encode_matrix[k * k],
 			       ec_codec->ec_gftbls);
-	}
 
+		ecc_array[i] = &oc_ec_codecs[i];
+		i++;
+	}
 	D_ASSERT(i == ocnr);
+
+	rc = daos_array_sort(ecc_array, oc_ec_codec_nr, true, &ecc_sort_ops);
+	D_ASSERT(rc == 0);
 	return 0;
 
 failed:
@@ -434,98 +501,14 @@ failed:
 struct obj_ec_codec *
 obj_ec_codec_get(daos_oclass_id_t oc_id)
 {
-	struct daos_oc_ec_codec *oc_ec_codec;
-	int			 i;
+	int	idx;
 
-	if (oc_ec_codecs == NULL)
+	D_ASSERT(ecc_array);
+	idx = daos_array_find(ecc_array, oc_ec_codec_nr, oc_id, &ecc_sort_ops);
+	if (idx < 0)
 		return NULL;
 
-	D_ASSERT(oc_ec_codec_nr >= 1);
-	for (i = 0; i < oc_ec_codec_nr; i++) {
-		oc_ec_codec = &oc_ec_codecs[i];
-		D_ASSERT(oc_ec_codec->ec_codec.ec_en_matrix != NULL);
-		D_ASSERT(oc_ec_codec->ec_codec.ec_gftbls != NULL);
-		if (oc_ec_codec->ec_oc_id == oc_id)
-			return &oc_ec_codec->ec_codec;
-	}
-
-	return NULL;
-}
-
-/**
- * Encode (using ISA-L) a full stripe from the submitted scatter-gather list.
- *
- * oid		[IN]		The object id of the object undergoing encode.
- * sgl		[IN]		The SGL containing the user data.
- * sg_idx	[IN|OUT]	Index of sg_iov entry in array.
- * sg_off	[IN|OUT]	Offset into sg_iovs' io_buf.
- * parity	[IN|OUT]	Struct containing parity buffers.
- * p_idx	[IN]		Index into parity p_bufs array.
- */
-int
-obj_encode_full_stripe(daos_obj_id_t oid, d_sg_list_t *sgl, uint32_t *sg_idx,
-		       size_t *sg_off, struct obj_ec_parity *parity,
-		       uint32_t p_idx)
-{
-	struct obj_ec_codec		*codec = obj_ec_codec_get(
-							daos_obj_id2class(oid));
-	struct daos_oclass_attr		*oca = daos_oclass_attr_find(oid);
-	unsigned int			 len = oca->ca_ec_cell;
-	unsigned int			 k = oca->ca_ec_k;
-	unsigned int			 p = oca->ca_ec_p;
-	unsigned char			*data[k];
-	unsigned char			*ldata[k];
-	int				 i, lcnt = 0;
-	int				 rc = 0;
-
-	for (i = 0; i < k; i++) {
-		if (sgl->sg_iovs[*sg_idx].iov_len - *sg_off >= len) {
-			unsigned char *from =
-				(unsigned char *)sgl->sg_iovs[*sg_idx].iov_buf;
-
-			data[i] = &from[*sg_off];
-			*sg_off += len;
-			if (*sg_off == sgl->sg_iovs[*sg_idx].iov_len) {
-				*sg_off = 0;
-				(*sg_idx)++;
-			}
-		} else {
-			int cp_cnt = 0;
-
-			D_ALLOC(ldata[lcnt], len);
-			if (ldata[lcnt] == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			while (cp_cnt < len) {
-				int cp_amt =
-					sgl->sg_iovs[*sg_idx].iov_len-*sg_off <
-					len - cp_cnt ?
-					sgl->sg_iovs[*sg_idx].iov_len-*sg_off :
-					len - cp_cnt;
-				unsigned char *from =
-					sgl->sg_iovs[*sg_idx].iov_buf;
-
-				memcpy(&ldata[lcnt][cp_cnt], &from[*sg_off],
-				       cp_amt);
-				if (sgl->sg_iovs[*sg_idx].iov_len - *sg_off <=
-					len - cp_cnt) {
-					*sg_off = 0;
-					(*sg_idx)++;
-				} else
-					*sg_off += cp_amt;
-				cp_cnt += cp_amt;
-				if (cp_cnt < len && *sg_idx >= sgl->sg_nr)
-					D_GOTO(out, rc = -DER_INVAL);
-			}
-			data[i] = ldata[lcnt++];
-		}
-	}
-
-	ec_encode_data(len, k, p, codec->ec_gftbls, data,
-		       &parity->p_bufs[p_idx]);
-out:
-	for (i = 0; i < lcnt; i++)
-		D_FREE(ldata[i]);
-	return rc;
+	return &ecc_array[idx]->ec_codec;
 }
 
 static void

@@ -9,8 +9,8 @@ storage hardware provisioning and would typically be run from a login
 node.
 
 After `daos_server` instances have been started on each storage node for the
-first time, `dmg storage prepare` will set PMem storage into the necessary
-state for use with DAOS.
+first time, `daos_server storage prepare --scm-only` will set PMem storage
+into the necessary state for use with DAOS when run on each host.
 Then `dmg storage format` formats persistent storage devices (specified in the
 server configuration file) on the storage nodes and writes necessary metadata
 before starting DAOS Engine processes that will operate across the fabric.
@@ -290,47 +290,7 @@ transport_config:
 
 ### Server Startup
 
-One instance of the `daos_server` process is to be started per
-storage node. The server can be started either individually (e.g. independently
-on each storage node via systemd) or collectively (e.g. pdsh, mpirun or as a
-Kubernetes Pod).
-
-#### Parallel Launcher
-
-Practically any parallel launcher can be used to start the DAOS server
-collectively on a set of storage nodes. pdsh, clush and orterun are most
-commonly used.
-
-```bash
-$ clush -w <server_list> -o "-t -t" daos_server start -o <config_file>`
-```
-will launch `daos_server` on the specified hosts connecting to the `port`
-parameter value specified in the server config file.
-If the number of storage node exceed the default fanout value, then "-f"
-followed by the number of storage nodes should be used.
-
-Similarly, pdsh can be used:
-```bash
-$ pdsh -w <server_list> daos_server start -o <config_file>`
-```
-
-As for orterun, the list of storage nodes can be specified on the command line
-via the -H option. To start the DAOS server, run:
-```bash
-$ orterun --map-by node --mca btl tcp,self --mca oob tcp -np <num_servers>
--H <server_list> --enable-recovery daos_server start -o <config_file>
-```
-The --enable-recovery is required for fault tolerance to guarantee that
-the fault of one server does not cause the others to be stopped.
-
-The --allow-run-as-root option can be added to the command line to
-allow the `daos_server` to run with root privileges on each storage
-nodes (for example when needing to perform privileged tasks relating
-to storage format). See the orterun(1) man page for additional options.
-
-#### Systemd Integration
-
-The DAOS Server can be started as a systemd service. The DAOS Server
+The DAOS Server is started as a systemd service. The DAOS Server
 unit file is installed in the correct location when installing from RPMs.
 The DAOS Server will be run as `daos-server` user which will be created
 during RPM install.
@@ -376,11 +336,6 @@ configuration file with a populated per-engine section can be stored in
 `/etc/daos/daos_server.yml`, and after reestarting the `daos_server` service
 it is then ready for the storage to be formatted.
 
-#### Kubernetes Pod
-
-DAOS service integration with Kubernetes is planned and will be
-supported in a future DAOS version.
-
 ## DAOS Server Remote Access
 
 Remote tasking of the DAOS system and individual DAOS Server processes can be
@@ -416,15 +371,12 @@ regions (interleaved mode) in groups of modules local to a specific socket
 (NUMA), and resultant nvdimm namespaces are defined by a device identifier
 (e.g., /dev/pmem0).
 
-PMem preparation is required once per DAOS installation and
-requires the DAOS Control Servers to be running as root.
+PMem preparation is required once per DAOS installation.
 
-This step requires a reboot to enable PMem resource allocation
-changes to be read by BIOS.
+This step requires a reboot to enable PMem resource allocation changes to be
+read by BIOS.
 
-PMem preparation can be performed from the management tool
-`dmg storage prepare --scm-only` or using the Control Server directly
-`sudo daos_server storage prepare --scm-only`.
+PMem preparation can be performed with `daos_server storage prepare --scm-only`.
 
 The first time the command is run, the SCM interleaved regions will be created
 as resource allocations on any available PMem modules (one region per NUMA
@@ -435,58 +387,29 @@ the storage node(s) in order for the BIOS to activate the new storage
 allocations.
 The storage prepare command does not initiate the reboot itself.
 
-After running the command a reboot will be required, then the Control
-Servers will then need to be started again and the command run for a
-second time to expose the namespace device to be used by DAOS.
+After running the command a reboot will be required, the command will then need
+to be run for a second time to expose the namespace device to be used by DAOS.
 
 Example usage:
 
-- `dmg -l wolf-[118-121,130-133] -i storage prepare --scm-only`
+- `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
 after running, the user should be prompted for a reboot.
 
 - `clush -w wolf-[118-121,130-133] reboot`
 
-- `clush -w wolf-[118-121,130-133] daos_server start -o utils/config/examples/daos_server_sockets.yml`
-
-- `dmg -l wolf-[118-121,130-133] -i storage prepare --scm-only`
-after running, `/dev/pmemX` devices should be available on each of the hosts.
-
-`sudo daos_server storage prepare --scm-only` should be run for a second time after
-system reboot to create the pmem kernel devices (/dev/pmemX
-namespaces created on the new SCM regions).
+- `clush -w wolf-[118-121,130-133] daos_server storage prepare --scm-only`
+after running, PMem devices (/dev/pmemX namespaces created on the new SCM
+regions) should be available on each of the hosts.
 
 On the second run, one namespace per region is created, and each namespace may
 take up to a few minutes to create. Details of the pmem devices will be
 displayed in JSON format on command completion.
 
-Example output from the initial call (with the SCM modules set to default MemoryMode):
-
-```bash
-Memory allocation goals for SCM will be changed and namespaces modified, this
-will be a destructive operation.  ensure namespaces are unmounted and SCM is
-otherwise unused.
-A reboot is required to process new memory allocation goals.
-```
-
-Example output from the subsequent call (SCM modules configured to interleaved
-mode, and host rebooted):
-
-```bash
-Memory allocation goals for SCM will be changed and namespaces modified. This
-will be a destructive operation. Ensure namespaces are unmounted and the SCM
-is otherwise unused.
-creating SCM namespace, may take a few minutes...
-creating SCM namespace, may take a few minutes...
-Persistent memory kernel devices:
-[{UUID:5d2f2517-9217-4d7d-9c32-70731c9ac11e Blockdev:pmem1 Dev:namespace1.0 NumaNode:1} {UUID:2bfe6c40-f79a-4b8e-bddf-ba81d4427b9b Blockdev:pmem0 Dev:namespace0.0 NumaNode:0}]
-```
-
 Upon successful creation of the pmem devices, the Intel(R) Optane(TM)
 persistent memory is configured and one can move on to the next step.
 
-If required, the pmem devices can be destroyed via the --reset option:
-
-`sudo daos_server [<app_opts>] storage prepare [--scm-only|-s] --reset [<cmd_opts>]`
+If required, the pmem devices can be destroyed with the command
+`daos_server storage prepare --scm-only --reset`.
 
 All namespaces are disabled and destroyed. The SCM regions are removed by
 resetting modules into "MemoryMode" through resource allocations.
@@ -496,19 +419,6 @@ devices are mounted before running reset (as per the printed warning).
 
 A subsequent reboot is required for BIOS to read the new resource
 allocations.
-
-Example output when resetting the SCM modules:
-
-```bash
-Memory allocation goals for SCM will be changed and namespaces modified, this
-will be a destructive operation.  ensure namespaces are unmounted and SCM is
-otherwise unused.
-removing SCM namespace, may take a few minutes...
-removing SCM namespace, may take a few minutes...
-resetting SCM memory allocations
-A reboot is required to process new memory allocation goals.
-```
-
 
 
 ### Storage Selection
@@ -523,10 +433,11 @@ administrator wants to have finer control over the storage selection.
 `dmg storage scan` can be run to query remote running `daos_server`
 processes over the management network.
 
-`sudo daos_server storage scan` can be used to query `daos_server`
-directly (scans locally-attached SSDs and Intel Persistent Memory
-Modules usable by DAOS). Output will be equivalent running
-`dmg storage scan --verbose` remotely.
+`daos_server storage scan` can be used to query `daos_server` directly
+(scans locally-attached SSDs and Intel Persistent Memory Modules usable by
+DAOS) but SSDs need to be made accessible first by running
+`daos_server storage prepare --nvme-only -u <current_user` first.
+The output will be equivalent running `dmg storage scan --verbose` remotely.
 
 ```bash
 bash-4.2$ dmg storage scan
@@ -692,7 +603,7 @@ NVMe PCI     Model                FW Revision Socket ID Capacity
 0000:da:00.0 INTEL SSDPED1K750GA  E2010325    1         750.00GB
 ```
 
-In this situation, the configuration file `servers` section could be
+In this situation, the configuration file `engines` section could be
 populated as follows:
 
 ```yaml
@@ -700,171 +611,79 @@ populated as follows:
 port: 10001
 access_points: ["wolf-71"] # <----- updated
 <snip>
-servers:
+engines:
 -
-  targets: 8                # number of I/O service threads per-engine
-  first_core: 0             # offset of the first core for service threads
-  nr_xs_helpers: 2          # count of I/O offload threads per target
-  fabric_iface: eth0        # map to OFI_INTERFACE=eth0
-  fabric_iface_port: 31416  # map to OFI_PORT=31416
-  log_mask: ERR             # map to D_LOG_MASK=ERR
-  log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
-  - DAOS_MD_CAP=1024
-  - CRT_CTX_SHARE_ADDR=0
-  - CRT_TIMEOUT=30
-  - FI_SOCKETS_MAX_CONN_RETRY=1
-  - FI_SOCKETS_CONN_TIMEOUT=2000
-  scm_mount: /mnt/daos  # map to -s /mnt/daos
-  scm_class: dcpm
-  scm_list: [/dev/pmem0] # <----- updated
-  bdev_class: nvme
-  bdev_list: ["0000:87:00.0", "0000:81:00.0"]  # <----- updated
+  targets: 16                 # number of I/O service threads per-engine
+  first_core: 0               # offset of the first core to bind service threads
+  nr_xs_helpers: 0            # count of I/O offload threads
+  fabric_iface: eth0          # network interface to use for this engine
+  fabric_iface_port: 31416    # network port
+  log_mask: ERR               # debug level to start with the engine with
+  log_file: /tmp/server1.log  # where to store engine logs
+  scm_mount: /mnt/daos        # where to mount SCM
+  scm_class: dcpm             # type of SCM
+  scm_list: [/dev/pmem0]      # <----- updated
+  bdev_class: nvme            # type of block device
+  bdev_list: ["0000:87:00.0"] # <----- updated
 -
-  targets: 8                # number of I/O service threads per-engine
-  first_core: 0             # offset of the first core for service threads
-  nr_xs_helpers: 2          # count of I/O offload threads per target
-  fabric_iface: eth0        # map to OFI_INTERFACE=eth0
-  fabric_iface_port: 31416  # map to OFI_PORT=31416
-  log_mask: ERR             # map to D_LOG_MASK=ERR
-  log_file: /tmp/server.log # map to D_LOG_FILE=/tmp/server.log
-  env_vars:                 # influence DAOS I/O Engine behavior by setting env variables
-  - DAOS_MD_CAP=1024
-  - CRT_CTX_SHARE_ADDR=0
-  - CRT_TIMEOUT=30
-  - FI_SOCKETS_MAX_CONN_RETRY=1
-  - FI_SOCKETS_CONN_TIMEOUT=2000
-  scm_mount: /mnt/daos  # map to -s /mnt/daos
+  targets: 16
+  first_core: 0
+  nr_xs_helpers: 0
+  fabric_iface: eth0
+  fabric_iface_port: 32416
+  log_mask: ERR
+  log_file: /tmp/server2.log
+  scm_mount: /mnt/daos
   scm_class: dcpm
-  scm_list: [/dev/pmem1] # <----- updated
+  scm_list: [/dev/pmem1]       # <----- updated
   bdev_class: nvme
   bdev_list: ["0000:da:00.0"]  # <----- updated
 <end>
 ```
 
-### Network Scan and Configuration
+There are a few optional providers that are not built by default. For detailed
+information, please refer to the [DAOS build documentation][6].
 
-The `daos_server` supports the `network scan` function to display the network
+>**_NOTE_**
+>
+>The support of the optional providers is not guarantee and can be removed
+>without further notification.
+
+### Network Configuration
+
+#### Network Scan
+
+The `dmg` utility supports the `network scan` function to display the network
 interfaces, related OFI fabric providers and associated NUMA node for each
 device.
 This information is used to configure the global fabric provider and the unique
-local network interface for each I/O Engine instance on this node.
+local network interface for each I/O Engine instance on the storage nodes.
 This section will help you determine what to provide for the `provider`,
 `fabric_iface` and `pinned_numa_node` entries in the `daos_server.yml` file.
 
 The following commands are typical examples:
 ```bash
-$ daos_server network scan
-$ daos_server network scan -p all
-$ daos_server network scan -p ofi+sockets
-$ daos_server network scan --provider 'ofi+verbs;ofi_rxm'
+$ dmg network scan
+$ dmg network scan -p all
+$ dmg network scan -p ofi+sockets
+$ dmg network scan --provider 'ofi+verbs;ofi_rxm'
 ```
 
 In the early stages when a `daos_server` has not yet been fully configured and
 lacks a declaration of the system's fabric provider, it may be helpful to view
 an unfiltered list of scan results.
 
-Use either of these `daos_server` commands in the early stages to accomplish
+Use either of these `dmg` commands in the early stages to accomplish
 this goal:
 
 ```bash
-$ daos_server network scan
-$ daos_server network scan -p all
+$ dmg network scan
+$ dgm network scan -p all
 ```
 
 Typical network scan results look as follows:
 ```bash
-$ daos_server network scan -p all
----------
-localhost
----------
-
-    -------------
-    NUMA Socket 0
-    -------------
-
-        Provider          Interfaces
-        --------          ----------
-        ofi+verbs;ofi_rxm ib0
-        ofi+tcp;ofi_rxm   ib0, eth0
-        ofi+verbs         ib0
-        ofi+tcp           ib0, eth0
-        ofi+sockets       ib0, eth0
-        ofi+psm2          ib0
-
-    -------------
-    NUMA Socket 1
-    -------------
-
-        Provider          Interfaces
-        --------          ----------
-        ofi+verbs;ofi_rxm ib1
-        ofi+tcp;ofi_rxm   ib1
-        ofi+verbs         ib1
-        ofi+tcp           ib1
-        ofi+sockets       ib1
-        ofi+psm2          ib1
-```
-
-Use one of these providers to configure the `provider` in the `daos_server.yml`.
-Only one provider may be specified for the entire DAOS installation.
-Client nodes must be capable of communicating to the `daos_server` nodes via
-the same provider.
-Therefore, it is helpful to choose network settings for the `daos_server` that
-are compatible with the expected client node configuration.
-
-After the `daos_server.yml` file has been edited and contains a provider,
-subsequent `daos_server network scan` commands will filter the results based on
-that provider.
-If it is desired to view an unfiltered list again, issue `daos_server network
-scan -p all`.
-
-Regardless of the provider in the `daos_server.yml` file, the results may be
-filtered to the specified provider with the command `daos_server network scan
--p ofi_provider` where `ofi_provider` is one of the available providers from
-the list.
-
-The results of the network scan may be used to help configure the I/O Engine
-instances for this DAOS Server.
-
-Each I/O Engine instance is configured with a unique `fabric_iface` and
-optional `pinned_numa_node`.
-The interfaces and NUMA Sockets listed in the scan results map to the
-`daos_server.yml` `fabric_iface` and `pinned_numa_node` respectively.
-The use of `pinned_numa_node` is optional, but recommended for best
-performance.
-When specified with the value that matches the network interface, the I/O
-Engine will bind itself to that NUMA node and to cores purely within that NUMA
-node.
-This configuration yields the fastest access to that network device.
-
-### Changing Network Providers
-
-Information about the network configuration is stored as metadata on the DAOS
-storage.
-
-If, after initial deployment, the provider must be changed, it is necessary to
-reformat the storage devices using `dmg storage format` after the configuration
-file has been updated with the new provider.
-
-## Network Scanning All DAOS Server Nodes
-
-While the `daos_server network scan` is useful for scanning the localhost, it
-does not provide results for any other `daos_server` instance on the network.
-The DAOS Management tool, `dmg`, is used for that purpose. The network scan
-operates the same way as the `daos_server` network scan, however, to use the
-dmg tool, at least one known `daos_server` instance must be running.
-
-The command `dmg network scan` performs a query over all `daos_server`s in the
-`daos_control.yml` `hostlist`. By default, the scan will return results that
-are filtered by the provider that is specified in the `daos_server.yml`.
-Like the `daos_server network scan`, the `dmg network scan` supports the
-optional `-p/--provider` where a different provider may be specified, or `all`
-for an unfiltered list that is unrelated to what was already configured on the
-`daos_server` installation.
-
-```bash
-dmg network scan
+$ dmg network scan
 -------
 wolf-29
 -------
@@ -898,14 +717,48 @@ localhost
         ofi+sockets ib1
 ```
 
-## Provider Configuration and Debug
+Use one of these providers to configure the `provider` in the `daos_server.yml`.
+Only one provider may be specified for the entire DAOS installation.
+Client nodes must be capable of communicating to the `daos_server` nodes via
+the same provider.
+Therefore, it is helpful to choose network settings for the `daos_server` that
+are compatible with the expected client node configuration.
 
-To aid in provider configuration and debug, it may be helpful to run the
-`fi_pingpong` test (delivered as part of OFI/libfabric).
-To run that test, determine the name of the provider to test usually by
-removing the "ofi+" prefix from the network scan provider data.
-Although the "ofi+" prefix is required in `daos_server.yml`, it cannot be used
-when specifying the provider for `fi_pingpong`.
+After the `daos_server.yml` file has been edited and contains a provider,
+subsequent `dmg network scan` commands will filter the results based on
+that provider.
+If it is desired to view an unfiltered list again, issue `dmg network
+scan -p all`.
+
+Regardless of the provider in the `daos_server.yml` file, the results may be
+filtered to the specified provider with the command `dmg network scan
+-p ofi_provider` where `ofi_provider` is one of the available providers from
+the list.
+
+The results of the network scan may be used to help configure the I/O Engine
+instances.
+
+Each I/O Engine instance is configured with a unique `fabric_iface` and
+optional `pinned_numa_node`.
+The interfaces and NUMA Sockets listed in the scan results map to the
+`daos_server.yml` `fabric_iface` and `pinned_numa_node` respectively.
+The use of `pinned_numa_node` is optional, but recommended for best
+performance.
+When specified with the value that matches the network interface, the I/O
+Engine will bind itself to that NUMA node and to cores purely within that NUMA
+node.
+This configuration yields the fastest access to that network device.
+
+#### Changing Network Providers
+
+Information about the network configuration is stored as metadata on the DAOS
+storage.
+
+If, after initial deployment, the provider must be changed, it is necessary to
+reformat the storage devices using `dmg storage format` after the configuration
+file has been updated with the new provider.
+
+#### Provider Testing
 
 Then, the `fi_pingpong` test can be used to verify that the targeted OFI
 provider works fine:
@@ -1107,45 +960,6 @@ the `[Service]` section before reloading systemd and restarting the
 
 `Environment=DAOS_AGENT_DISABLE_CACHE=true`
 
-## System Validation
-
-To validate that the DAOS system is properly installed, the `daos_test`
-suite can be executed. Ensure the DAOS Agent is configured before running
-`daos_test`.  If the agent is using a non-default path for the socket, then
-configure `DAOS_AGENT_DRPC_DIR` in the client environment to point to this new
-location.
-
-DAOS automatically configures a client with a compatible fabric provider,
-network interface, network domain, CaRT timeout, and CaRT context share address,
-that will allow it to connect to the DAOS system.
-
-The client may not override the fabric provider or the CaRT context share
-address.
-
-A client application may override the three remaining settings by configuring
-environment variables in the client's shell prior to launch.
-
-To manually configure the CaRT timeout, set `CRT_TIMEOUT` such as:
-```
-export CRT_TIMEOUT=5
-```
-To manually configure the network interface, set `OFI_INTERFACE` such as:
-```
-export OFI_INTERFACE=lo
-```
-When manually configuring an Infiniband device with a verbs provider, the network
-device domain is required.  To manually configure the domain, set `OFI_DOMAIN` such as:
-```
-export OFI_DOMAIN=hfi1_0
-```
-### Launch the client application
-```bash
-mpirun -np <num_clients> --hostfile <hostfile> ./daos_test
-```
-
-`daos_test` requires at least 8GB of SCM (or DRAM with tmpfs) storage on
-each storage node.
-
 [^1]: https://github.com/intel/ipmctl
 
 [^2]: https://github.com/daos-stack/daos/tree/master/utils/config
@@ -1155,3 +969,5 @@ each storage node.
 [^4]: https://github.com/daos-stack/daos/tree/master/src/control/README.md
 
 [^5]: https://github.com/pmem/ndctl/issues/130
+
+[6]: <../dev/development.md#building-optional-components> (Building DAOS for Development)

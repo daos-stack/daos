@@ -14,17 +14,17 @@
 #include <getopt.h>
 #include <semaphore.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 #include "test_group_rpc.h"
 #include "test_group_np_common.h"
 
 /* Callback to process a SWIM message */
 static void
-swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+swim_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		  enum crt_event_type type, void *arg)
 {
-	char type_to_a[2];
-	int max = MAX_SWIM_STATUSES;
+	int maxlen;
+	char swim_state_str[2];
 
 	/* Example output for SWIM CRT_EVT_DEAD on rank #2:
 	 *	 rank = 2, crt_event_source = 1, crt_event_type = 1
@@ -43,20 +43,18 @@ swim_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 		"rank = %d, "
 		"crt_event_source = %d, "
 		"crt_event_type = %d\n",
-		 rank, src, type);
+		rank, src, type);
 
-	/* convert integer to string */
-	snprintf(type_to_a, 2, "%d", type);
+	swim_state_str[0] = type + '0';
+	swim_state_str[1] = 0;
 
-	if (swim_status_by_rank[rank] == NULL) {
-		swim_status_by_rank[rank] = (char *)malloc(max * sizeof(char));
-		strcpy(swim_status_by_rank[rank], "\0");
-	}
-
-	strcat(swim_status_by_rank[rank], type_to_a);
+	maxlen = MAX_SWIM_STATUSES - strlen(swim_state_str);
+	if (strlen(swim_seq_by_rank[rank]) < maxlen)
+		strcat(swim_seq_by_rank[rank], swim_state_str);
 
 	/* Remove rank from context, so we stop sending swim RPCs to it. */
 	if (src == CRT_EVS_SWIM && type == CRT_EVT_DEAD) {
+		/* avoid checkpatch warning */
 		crt_group_rank_remove(NULL, rank);
 	}
 }
@@ -69,11 +67,12 @@ test_run(d_rank_t my_rank)
 	int			 i;
 	int			 rc = 0;
 
-	tc_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
-			   &test_g.t_tid[0], &grp, &grp_size, NULL);
+	crtu_srv_start_basic(test_g.t_local_group_name, &test_g.t_crt_ctx[0],
+			     &test_g.t_tid[0], &grp, &grp_size, NULL);
 
 	/* Register event callback after CaRT has initialized */
 	if (test_g.t_register_swim_callback) {
+		/* avoid checkpatch warning */
 		crt_register_event_cb(swim_crt_event_cb, NULL);
 	}
 
@@ -89,7 +88,7 @@ test_run(d_rank_t my_rank)
 			rc);
 
 	/* Do not delay shutdown for this server */
-	tc_set_shutdown_delay(test_g.t_shutdown_delay);
+	crtu_set_shutdown_delay(test_g.t_shutdown_delay);
 
 	DBG_PRINT("Protocol registered\n");
 	for (i = 1; i < test_g.t_srv_ctx_num; i++) {
@@ -97,7 +96,7 @@ test_run(d_rank_t my_rank)
 		D_ASSERTF(rc == 0, "crt_context_create() failed. rc: %d\n", rc);
 		DBG_PRINT("Context %d created\n", i);
 
-		rc = pthread_create(&test_g.t_tid[i], NULL, tc_progress_fn,
+		rc = pthread_create(&test_g.t_tid[i], NULL, crtu_progress_fn,
 				    &test_g.t_crt_ctx[i]);
 		D_ASSERTF(rc == 0, "pthread_create() failed. rc: %d\n", rc);
 		DBG_PRINT("Progress thread %d started\n", i);
@@ -122,6 +121,9 @@ test_run(d_rank_t my_rank)
 			fprintf(stderr, "pthread_join failed. rc: %d\n", rc);
 		D_DEBUG(DB_TEST, "joined progress thread.\n");
 	}
+
+	if (test_g.t_write_completion_file)
+		write_completion_file();
 
 	DBG_PRINT("Exiting server\n");
 	rc = sem_destroy(&test_g.t_token_to_proceed);
@@ -158,7 +160,10 @@ int main(int argc, char **argv)
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(my_rank, 20, true, true);
+	crtu_test_init(my_rank, 20, true, true);
+
+	if (test_g.t_register_swim_callback)
+		crtu_test_swim_enable(true);
 
 	DBG_PRINT("STARTING SERVER\n");
 	test_run(my_rank);

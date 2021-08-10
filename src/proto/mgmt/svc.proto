@@ -39,6 +39,7 @@ message JoinReq {
 	string addr = 6;	// Server management address.
 	string srvFaultDomain = 7; // Fault domain for this instance's server
 	uint32 idx = 8;		// Instance index on server node.
+	uint64 incarnation = 9; // rank incarnation
 }
 
 message JoinResp {
@@ -67,6 +68,17 @@ message GetAttachInfoReq {
 	bool all_ranks = 2;	// Return Rank URIs for all ranks.
 }
 
+message ClientNetHint {
+	string provider = 1;		// CaRT OFI provider
+	string interface = 2;		// CaRT OFI_INTERFACE
+	string domain = 3;		// CaRT OFI_DOMAIN for given OFI_INTERFACE
+	uint32 crt_ctx_share_addr = 4;	// CaRT CRT_CTX_SHARE_ADDR
+	uint32 crt_timeout = 5;		// CaRT CRT_TIMEOUT
+	uint32 net_dev_class = 6;	// ARP protocol hardware identifier of the
+					// I/O Engine network interface
+	int32 srv_srx_set = 7;          // Server SRX setting (-1, 0, 1; -1 == unset)
+}
+
 message GetAttachInfoResp {
 	int32 status = 1;		// DAOS error code
 	message RankUri {
@@ -76,14 +88,8 @@ message GetAttachInfoResp {
 	repeated RankUri rank_uris = 2;	// Rank URIs
 					// These CaRT settings are shared with the
 					// libdaos client to aid in CaRT initialization.
-	string provider = 3;		// CaRT OFI provider
-	string interface = 4;		// CaRT OFI_INTERFACE
-	string domain = 5;		// CaRT OFI_DOMAIN for given OFI_INTERFACE
-	uint32 crt_ctx_share_addr = 6;	// CaRT CRT_CTX_SHARE_ADDR
-	uint32 crt_timeout = 7;		// CaRT CRT_TIMEOUT
-	uint32 net_dev_class = 8;	// ARP protocol hardware identifier of the
-					// I/O Engine network interface
-	repeated uint32 ms_ranks = 9;	// Ranks local to MS replicas
+	repeated uint32 ms_ranks = 3;	// Ranks local to MS replicas
+	ClientNetHint client_net_hint = 4;
 }
 
 message PrepShutdownReq {

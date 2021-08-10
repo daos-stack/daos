@@ -59,7 +59,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
    */
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint)
+		struct pool_target *tgt, bool for_reint, void *data)
 {
 	struct failed_shard *f_new;
 
@@ -71,6 +71,7 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_shard_idx = shard_idx;
 	f_new->fs_fseq = tgt->ta_comp.co_fseq;
 	f_new->fs_status = tgt->ta_comp.co_status;
+	f_new->fs_data = data;
 
 	D_DEBUG(DB_PL, "tgt %u status %u reint %s\n", tgt->ta_comp.co_id,
 		tgt->ta_comp.co_status, for_reint ? "yes" : "no");
@@ -129,7 +130,7 @@ op_get_grp_size(unsigned int domain_nr, unsigned int *grp_size,
 {
 	struct daos_oclass_attr *oc_attr;
 
-	oc_attr = daos_oclass_attr_find(oid);
+	oc_attr = daos_oclass_attr_find(oid, NULL);
 
 	*grp_size = daos_oclass_grp_size(oc_attr);
 	D_ASSERT(*grp_size != 0);
@@ -359,7 +360,8 @@ grp_map_extend(uint32_t *grp_map, uint32_t *grp_map_size)
 	int	 i;
 
 	if (*grp_map_size > STACK_TGTS_SIZE)
-		D_REALLOC_ARRAY(new_grp_map, grp_map, new_grp_size);
+		D_REALLOC_ARRAY(new_grp_map, grp_map, *grp_map_size,
+				new_grp_size);
 	else
 		D_ALLOC_ARRAY(new_grp_map, new_grp_size);
 

@@ -13,8 +13,8 @@
 #include <math.h>
 #include <ctype.h>
 
-#include "tests_common.h"
 #include "configini.h"
+#include "crt_utils.h"
 #include "daos_errno.h"
 
 /* Configini Section names */
@@ -201,6 +201,9 @@ static struct option long_options[] = {
 #endif
 	{0, 0, 0, 0}
 };
+static int g_shutdown_flag;
+static bool g_randomize_endpoints;
+static bool g_group_inited;
 
 #ifdef INCLUDE_OBSOLETE
 #define ARGV_PARAMETERS "a:bc:d:e:f:g:hi:m:no:p:qr:s:tv:w:x:y:z:"
@@ -254,7 +257,7 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	int		 ret;
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, attach_retries, false, false);
+	crtu_test_init(0, attach_retries, false, false);
 
 	if (listen)
 		init_flags |= CRT_FLAG_BIT_SERVER;
@@ -287,6 +290,9 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		D_ERROR("crt_group_attach failed; ret = %d\n", ret);
 		return ret;
 	}
+
+	g_group_inited = true;
+
 	D_ASSERTF(*srv_grp != NULL,
 		  "crt_group_attach succeeded but returned group is NULL\n");
 
@@ -323,8 +329,8 @@ self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	 * 5 - ping timeout
 	 * 150 - total timeout
 	 */
-	ret = tc_wait_for_ranks(*crt_ctx, *srv_grp, rank_list,
-				0, 1, 5, 150);
+	ret = crtu_wait_for_ranks(*crt_ctx, *srv_grp, rank_list,
+				  0, 1, 5, 150);
 	D_ASSERTF(ret == 0, "wait_for_ranks() failed; ret=%d\n", ret);
 
 	max_rank = rank_list->rl_ranks[0];
@@ -2367,8 +2373,8 @@ run_self_test(struct st_size_params all_params[],
 		if (num_ms_endpts != num_ms_endpts_in) {
 			struct st_master_endpt *realloc_ptr;
 
-			D_REALLOC(realloc_ptr, ms_endpts,
-				  num_ms_endpts * sizeof(*ms_endpts));
+			D_REALLOC_ARRAY(realloc_ptr, ms_endpts,
+					num_ms_endpts_in, num_ms_endpts);
 			if (realloc_ptr == NULL)
 				D_GOTO(cleanup, ret = -ENOMEM);
 			ms_endpts = realloc_ptr;
@@ -2483,7 +2489,7 @@ cleanup_nothread:
 		D_FREE(latencies);
 	}
 
-	if (srv_grp != NULL) {
+	if (srv_grp != NULL && g_group_inited) {
 		cleanup_ret = crt_group_detach(srv_grp);
 		if (cleanup_ret != 0)
 			D_ERROR("crt_group_detach failed; ret = %d\n",
@@ -2926,7 +2932,7 @@ parse_endpoint_string(char *const opt_arg,
 	uint32_t		 num_ranks = 0;
 	char			*tag_valid_str = NULL;
 	uint32_t		 num_tags = 0;
-	void			*realloced_mem;
+	struct st_endpoint	*realloced_mem;
 	struct st_endpoint	*next_endpoint;
 	char			*save_ptr = NULL;
 
@@ -3008,11 +3014,11 @@ parse_endpoint_string(char *const opt_arg,
 	printf("  tags: %s (# tags = %u)\n", tag_valid_str, num_tags);
 
 	/* Reallocate/expand the endpoints array */
-	*num_endpts += num_ranks * num_tags;
-	D_REALLOC(realloced_mem, *endpts,
-		  sizeof(struct st_endpoint) * (*num_endpts));
+	D_REALLOC_ARRAY(realloced_mem, *endpts, *num_endpts,
+			*num_endpts + num_ranks * num_tags);
 	if (realloced_mem == NULL)
-		D_GOTO(cleanup, ret = -ENOMEM);
+		D_GOTO(cleanup, ret = -DER_NOMEM);
+	*num_endpts += num_ranks * num_tags;
 	*endpts = (struct st_endpoint *)realloced_mem;
 
 	/* Populate the newly expanded values in the endpoints array */
@@ -3693,8 +3699,12 @@ parse_command_options(int argc, char *argv[])
 			gbl.g_config_append = optarg;
 			break;
 #ifdef INCLUDE_OBSOLETE
-		case 'n':
+		/* 't' and 'n' options are deprecated */
 		case 't':
+			printf("Warning: 't' argument is deprecated\n");
+			break;
+		case 'n':
+			printf("Warning: 'n' argument is deprecated\n");
 			break;
 #endif
 		case 'h':
@@ -3864,11 +3874,11 @@ main(int argc, char *argv[])
 
 	/* Shrink the buffer if some of the user's tokens weren't kept */
 	if (num_msg_sizes < num_tokens + 1) {
-		void *realloced_mem;
+		struct st_size_params *realloced_mem;
 
 		/* This should always succeed since the buffer is shrinking.. */
-		D_REALLOC(realloced_mem, all_params,
-			  num_msg_sizes * sizeof(all_params[0]));
+		D_REALLOC_ARRAY(realloced_mem, all_params, num_tokens + 1,
+				num_msg_sizes);
 		if (realloced_mem == NULL)
 			D_GOTO(cleanup, ret = -ENOMEM);
 		all_params = (struct st_size_params *)realloced_mem;

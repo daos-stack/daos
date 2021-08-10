@@ -52,8 +52,8 @@ server_config:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 500G
-    nvme_size: 500G
+    scm_size: 25%
+    nvme_size: 93%
     svcn: 1
     control_method: dmg
 container:
@@ -77,9 +77,6 @@ ior:
    dfs_oclass:
     #- [EC_Object_Class, Minimum number of servers]
     - ["EC_2P1G1", 6]
-    - ["EC_2P2G1", 6]
-    - ["DAOS_OC_EC_K2P2_L32K", 6]
     - ["EC_4P1G1", 8]
     - ["EC_4P2G1", 8]
-    - ["DAOS_OC_EC_K4P2_L32K", 8]
     - ["EC_8P2G1", 12]

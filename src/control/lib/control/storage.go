@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/mitchellh/hashstructure/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
@@ -247,105 +247,6 @@ func StorageScan(ctx context.Context, rpcClient UnaryInvoker, req *StorageScanRe
 }
 
 type (
-	// NvmePrepareReq contains the parameters for a NVMe prepare request.
-	NvmePrepareReq struct {
-		PCIAllowList string
-		NrHugePages  int32
-		TargetUser   string
-		Reset        bool
-	}
-
-	// ScmPrepareReq contains the parameters for a SCM prepare request.
-	ScmPrepareReq struct {
-		Reset bool
-	}
-
-	// StoragePrepareReq contains the parameters for a storage prepare request.
-	StoragePrepareReq struct {
-		unaryRequest
-		NVMe *NvmePrepareReq
-		SCM  *ScmPrepareReq
-	}
-
-	// StoragePrepareResp contains the response from a storage prepare request.
-	StoragePrepareResp struct {
-		HostErrorsResp
-		HostStorage HostStorageMap
-	}
-)
-
-// addHostResponse is responsible for validating the given HostResponse
-// and adding it to the StoragePrepareResp.
-func (spr *StoragePrepareResp) addHostResponse(hr *HostResponse) (err error) {
-	pbResp, ok := hr.Message.(*ctlpb.StoragePrepareResp)
-	if !ok {
-		return errors.Errorf("unable to unpack message: %+v", hr.Message)
-	}
-
-	hs := new(HostStorage)
-	if pbResp.GetNvme().GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-		pbErr := pbResp.GetNvme().GetState().GetError()
-		if err := spr.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
-			return err
-		}
-	}
-
-	if pbResp.GetScm().GetState().GetStatus() != ctlpb.ResponseStatus_CTL_SUCCESS {
-		pbErr := pbResp.GetScm().GetState().GetError()
-		if err := spr.addHostError(hr.Addr, errors.New(pbErr)); err != nil {
-			return err
-		}
-	} else {
-		err := convert.Types(pbResp.GetScm().GetNamespaces(), &hs.ScmNamespaces)
-		if err != nil {
-			return spr.addHostError(hr.Addr, err)
-		}
-		hs.RebootRequired = pbResp.GetScm().GetRebootrequired()
-	}
-
-	if spr.HostStorage == nil {
-		spr.HostStorage = make(HostStorageMap)
-	}
-	return spr.HostStorage.Add(hr.Addr, hs)
-}
-
-// StoragePrepare concurrently performs storage preparation steps across
-// all hosts supplied in the request's hostlist, or all configured hosts
-// if not explicitly specified. The function blocks until all results
-// (successful or otherwise) are received, and returns a single response
-// structure containing results for all host storage prepare operations.
-func StoragePrepare(ctx context.Context, rpcClient UnaryInvoker, req *StoragePrepareReq) (*StoragePrepareResp, error) {
-	pbReq := new(ctlpb.StoragePrepareReq)
-	if err := convert.Types(req, pbReq); err != nil {
-		return nil, err
-	}
-	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
-		return ctlpb.NewCtlSvcClient(conn).StoragePrepare(ctx, pbReq)
-	})
-
-	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	spr := new(StoragePrepareResp)
-	for _, hostResp := range ur.Responses {
-		if hostResp.Error != nil {
-			if err := spr.addHostError(hostResp.Addr, hostResp.Error); err != nil {
-				return nil, err
-			}
-			continue
-		}
-
-		if err := spr.addHostResponse(hostResp); err != nil {
-			return nil, err
-		}
-	}
-
-	return spr, nil
-}
-
-type (
 	// StorageFormatReq contains the parameters for a storage format request.
 	StorageFormatReq struct {
 		unaryRequest
@@ -440,7 +341,8 @@ func checkFormatReq(ctx context.Context, rpcClient UnaryInvoker, req *StorageFor
 		// We expect a system unavailable error when the MS is
 		// not running, so it's safe to swallow these errors. Any
 		// other error should be returned.
-		if !(system.IsUnavailable(err) || err == errMSConnectionFailure) {
+		if !(system.IsUnavailable(err) || system.IsUninitialized(err) ||
+			err == errMSConnectionFailure) {
 			return err
 		}
 

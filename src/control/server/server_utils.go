@@ -11,15 +11,15 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"os"
-	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
@@ -28,7 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -45,8 +45,10 @@ const (
 
 func cfgHasBdevs(cfg *config.Server) bool {
 	for _, engineCfg := range cfg.Engines {
-		if len(engineCfg.Storage.Bdev.DeviceList) > 0 {
-			return true
+		for _, bc := range engineCfg.Storage.Tiers.BdevConfigs() {
+			if len(bc.Bdev.DeviceList) > 0 {
+				return true
+			}
 		}
 	}
 
@@ -70,17 +72,11 @@ func cfgGetRaftDir(cfg *config.Server) string {
 	if len(cfg.Engines) == 0 {
 		return "" // can't save to SCM
 	}
-
-	return filepath.Join(cfg.Engines[0].Storage.SCM.MountPoint, "control_raft")
-}
-
-func hostname() string {
-	hn, err := os.Hostname()
-	if err != nil {
-		return fmt.Sprintf("Hostname() failed: %s", err.Error())
+	if len(cfg.Engines[0].Storage.Tiers.ScmConfigs()) == 0 {
+		return ""
 	}
 
-	return hn
+	return filepath.Join(cfg.Engines[0].Storage.Tiers.ScmConfigs()[0].Scm.MountPoint, "control_raft")
 }
 
 func iommuDetected() bool {
@@ -165,17 +161,17 @@ func netInit(ctx context.Context, log *logging.LeveledLogger, cfg *config.Server
 	return netDevClass, nil
 }
 
-func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter getHugePageInfoFn) error {
+func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePageInfoFn) error {
 	// Perform an automatic prepare based on the values in the config file.
-	prepReq := bdev.PrepareRequest{
+	prepReq := storage.BdevPrepareRequest{
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
-		TargetUser:    usr.Username,
-		PCIAllowlist:  strings.Join(srv.cfg.BdevInclude, " "),
-		PCIBlocklist:  strings.Join(srv.cfg.BdevExclude, " "),
+		TargetUser:    srv.runningUser,
+		PCIAllowList:  strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
+		PCIBlockList:  strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:   srv.cfg.DisableVFIO,
-		DisableVMD:    srv.cfg.DisableVMD || srv.cfg.DisableVFIO || !iommuEnabled,
-		// TODO: pass vmd include list
+		EnableVMD:     srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
+		Reset_:        true, // first reset allocations before preparing devices
 	}
 
 	hasBdevs := cfgHasBdevs(srv.cfg)
@@ -186,7 +182,7 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 
 		// Perform these checks to avoid even trying a prepare if the system
 		// isn't configured properly.
-		if usr.Uid != "0" {
+		if srv.runningUser != "root" {
 			if srv.cfg.DisableVFIO {
 				return FaultVfioDisabled
 			}
@@ -199,9 +195,14 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
-	if _, err := srv.bdevProvider.Prepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
+		srv.log.Errorf("automatic NVMe prepare reset failed (check configuration?)\n%s", err)
+	} else {
+		prepReq.Reset_ = false
+		srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+		if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
+			srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+		}
 	}
 
 	hugePages, err := hpiGetter()
@@ -213,6 +214,24 @@ func prepBdevStorage(srv *server, usr *user.User, iommuEnabled bool, hpiGetter g
 		// Double-check that we got the requested number of huge pages after prepare.
 		if hugePages.Free < prepReq.HugePageCount {
 			return FaultInsufficientFreeHugePages(hugePages.Free, prepReq.HugePageCount)
+		}
+	}
+
+	for _, engineCfg := range srv.cfg.Engines {
+		// Calculate mem_size per I/O engine (in MB)
+		PageSizeMb := hugePages.PageSizeKb >> 10
+		engineCfg.MemSize = hugePages.Free / len(srv.cfg.Engines)
+		engineCfg.MemSize *= PageSizeMb
+		// Pass hugepage size, do not assume 2MB is used
+		engineCfg.HugePageSz = PageSizeMb
+		srv.log.Debugf("MemSize:%dMB, HugepageSize:%dMB", engineCfg.MemSize, engineCfg.HugePageSz)
+		// Warn if hugepages are not enough to sustain average
+		// I/O workload (~1GB), ignore warning if only using SCM backend
+		if !hasBdevs {
+			continue
+		}
+		if (engineCfg.MemSize / engineCfg.TargetCount) < 1024 {
+			srv.log.Errorf("Not enough hugepages are allocated!")
 		}
 	}
 
@@ -235,9 +254,12 @@ func setDaosHelperEnvs(cfg *config.Server, setenv func(k, v string) error) error
 	return nil
 }
 
-func registerEngineCallbacks(engine *EngineInstance, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
-	// Register callback to publish I/O Engine process exit events.
-	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname(), engine.Index()))
+func registerEngineEventCallbacks(engine *EngineInstance, hostname string, pubSub *events.PubSub, allStarted *sync.WaitGroup) {
+	// Register callback to publish engine process exit events.
+	engine.OnInstanceExit(publishInstanceExitFn(pubSub.Publish, hostname))
+
+	// Register callback to publish engine format requested events.
+	engine.OnAwaitFormat(publishFormatRequiredFn(pubSub.Publish, hostname))
 
 	var onceReady sync.Once
 	engine.OnReady(func(_ context.Context) error {
@@ -301,17 +323,23 @@ func registerTelemetryCallbacks(ctx context.Context, srv *server) {
 
 	srv.OnEnginesStarted(func(ctxIn context.Context) error {
 		srv.log.Debug("starting Prometheus exporter")
-		return startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
+		cleanup, err := startPrometheusExporter(ctxIn, srv.log, telemPort, srv.harness.Instances())
+		if err != nil {
+			return err
+		}
+		srv.OnShutdown(cleanup)
+		return nil
 	})
 }
 
-// registerInitialSubscriptions sets up forwarding of published actionable
-// events (type RASTypeStateChange) to the management service leader, behavior
-// is updated on leadership change.
+// registerFollowerSubscriptions stops handling received forwarded (in addition
+// to local) events and starts forwarding events to the new MS leader.
 // Log events on the host that they were raised (and first published) on.
-func registerInitialSubscriptions(srv *server) {
-	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
+// This is the initial behavior before leadership has been determined.
+func registerFollowerSubscriptions(srv *server) {
+	srv.pubSub.Reset()
 	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
+	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
 // registerLeaderSubscriptions stops forwarding events to MS and instead starts
@@ -325,21 +353,19 @@ func registerLeaderSubscriptions(srv *server) {
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
+				ts, err := evt.GetTimestamp()
+				if err != nil {
+					srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
+					return
+				}
+				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank)); err == nil {
-					srv.mgmtSvc.reqGroupUpdate(ctx)
+				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err == nil {
+					srv.mgmtSvc.reqGroupUpdate(ctx, false)
 				}
 			}
 		}))
-}
-
-// registerFollowerSubscriptions stops handling received forwarded (in addition
-// to local) events and starts forwarding events to the new MS leader.
-func registerFollowerSubscriptions(srv *server) {
-	srv.pubSub.Reset()
-	srv.pubSub.Subscribe(events.RASTypeAny, srv.evtLogger)
-	srv.pubSub.Subscribe(events.RASTypeStateChange, srv.evtForwarder)
 }
 
 func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, error) {
@@ -375,4 +401,82 @@ func getGrpcOpts(cfgTransport *security.TransportConfig) ([]grpc.ServerOption, e
 		grpc.ChainUnaryInterceptor(unaryInterceptors...),
 		grpc.ChainStreamInterceptor(streamInterceptors...),
 	}...), nil
+}
+
+type netInterface interface {
+	Addrs() ([]net.Addr, error)
+}
+
+func getSrxSetting(cfg *config.Server) (int32, error) {
+	if len(cfg.Engines) == 0 {
+		return -1, nil
+	}
+
+	srxVarName := "FI_OFI_RXM_USE_SRX"
+	getSetting := func(ev string) (bool, int32) {
+		kv := strings.Split(ev, "=")
+		if len(kv) != 2 {
+			return false, -1
+		}
+		if kv[0] != srxVarName {
+			return false, -1
+		}
+		v, err := strconv.ParseInt(kv[1], 10, 32)
+		if err != nil {
+			return true, -1
+		}
+		return true, int32(v)
+	}
+
+	engineVals := make([]int32, len(cfg.Engines))
+	for idx, ec := range cfg.Engines {
+		engineVals[idx] = -1 // default to unset
+		for _, ev := range ec.EnvVars {
+			if match, engSrx := getSetting(ev); match {
+				engineVals[idx] = engSrx
+				break
+			}
+		}
+
+		for _, pte := range ec.EnvPassThrough {
+			if pte == srxVarName {
+				return -1, errors.Errorf("%s may not be set as a pass-through env var", srxVarName)
+			}
+		}
+	}
+
+	cliSrx := engineVals[0]
+	for i := 1; i < len(engineVals); i++ {
+		if engineVals[i] != cliSrx {
+			return -1, errors.Errorf("%s setting must be the same for all engines", srxVarName)
+		}
+	}
+
+	return cliSrx, nil
+}
+
+func checkFabricInterface(name string, lookup func(string) (netInterface, error)) error {
+	if name == "" {
+		return errors.New("no name provided")
+	}
+
+	if lookup == nil {
+		return errors.New("no lookup function provided")
+	}
+
+	netIF, err := lookup(name)
+	if err != nil {
+		return err
+	}
+
+	addrs, err := netIF.Addrs()
+	if err != nil {
+		return err
+	}
+
+	if len(addrs) == 0 {
+		return fmt.Errorf("no network addresses for interface %q", name)
+	}
+
+	return nil
 }

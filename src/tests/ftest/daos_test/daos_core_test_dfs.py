@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
@@ -11,7 +11,7 @@ from daos_core_base import DaosCoreBase
 
 class DaosCoreTestDfs(DaosCoreBase):
     # pylint: disable=too-many-ancestors
-    """Runs DAOS file system (DFS) tests.
+    """Runs DAOS File System (DFS) tests.
 
     :avocado: recursive
     """
@@ -25,14 +25,15 @@ class DaosCoreTestDfs(DaosCoreBase):
         """Jira ID: DAOS-5409.
 
         Test Description:
-            Run daos_test -u
+            Run dfs_test -u
 
         Use cases:
-            Daos File system tests
+            DAOS File System unit tests
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=daos_test,daos_core_test_dfs,test_daos_dfs_unit
+        :avocado: tags=daos_test,dfs_test
+        :avocado: tags=daos_core_test_dfs,test_daos_dfs_unit
         """
         self.daos_test = os.path.join(self.bin, 'dfs_test')
         self.run_subtest()
@@ -41,14 +42,32 @@ class DaosCoreTestDfs(DaosCoreBase):
         """Jira ID: DAOS-5409.
 
         Test Description:
-            Run daos_test -p
+            Run dfs_test -p
 
         Use cases:
-            Daos File system tests
+            DAOS File System parallel unit tests
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=daos_test,daos_core_test_dfs,test_daos_dfs_parallel
+        :avocado: tags=daos_test,dfs_test
+        :avocado: tags=daos_core_test_dfs,test_daos_dfs_parallel
+        """
+        self.daos_test = os.path.join(self.bin, 'dfs_test')
+        self.run_subtest()
+
+    def test_daos_dfs_sys(self):
+        """Jira ID: DAOS-7759.
+
+        Test Description:
+            Run dfs_test -s
+
+        Use cases:
+            DAOS File System sys unit tests
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daos_test,dfs_test
+        :avocado: tags=daos_core_test_dfs,test_daos_dfs_sys
         """
         self.daos_test = os.path.join(self.bin, 'dfs_test')
         self.run_subtest()

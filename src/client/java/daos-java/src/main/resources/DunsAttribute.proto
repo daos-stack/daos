@@ -63,7 +63,7 @@ enum PropType {
   DAOS_PROP_CO_LABEL = 0x1001;
   /**
    * Layout type: unknown, POSIX, MPI-IO, HDF5, Apache Arrow, ...
-   * default value = DAOS_PROP_CO_LAYOUT_UNKOWN
+   * default value = DAOS_PROP_CO_LAYOUT_UNKNOWN
    */
   DAOS_PROP_CO_LAYOUT_TYPE = 0x1002;
   /**
@@ -94,7 +94,7 @@ enum PropType {
   DAOS_PROP_CO_REDUN_FAC = 0x1007;
   /**
    * Redundancy level: default fault domain level for placement.
-   * default = rack (DAOS_PROP_CO_REDUN_RACK)
+   * default = rack (DAOS_PROP_CO_REDUN_NODE)
    */
   DAOS_PROP_CO_REDUN_LVL = 0x1008;
   /**

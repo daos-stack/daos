@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import random
-import time
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
@@ -34,28 +33,7 @@ class OSAOfflineDrain(OSAUtils):
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
 
-    def simple_drain_reintegrate_loop(self, rank, loop_time=100):
-        """This method performs drain and reintegration on a rank,
-        for a certain amount of time.
-        Args:
-            rank (int): daos server rank.
-            loop_time: Total time to perform drain/reintegrate
-                       operation in a loop. (Default : 100 secs)
-        """
-        start_time = 0
-        finish_time = 0
-        while int(finish_time - start_time) < loop_time:
-            start_time = time.time()
-            output = self.dmg_command.pool_drain(self.pool.uuid,
-                                                 rank)
-            self.print_and_assert_on_rebuild_failure(output)
-            output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                       rank)
-            self.print_and_assert_on_rebuild_failure(output)
-            finish_time = time.time()
-
-    def run_offline_drain_test(self, num_pool, data=False,
-                               oclass=None):
+    def run_offline_drain_test(self, num_pool, data=False, oclass=None):
         """Run the offline drain without data.
             Args:
             num_pool (int) : total pools to create for testing purposes.
@@ -77,7 +55,9 @@ class OSAOfflineDrain(OSAUtils):
         t_string = "{},{}".format(target_list[0], target_list[1])
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.get_dmg_command(),
+                label_generator=self.label_generator)
             pool[val].get_params(self)
             pool[val].create()
             self.pool = pool[val]
@@ -86,7 +66,13 @@ class OSAOfflineDrain(OSAUtils):
 
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
-                self.run_mdtest_thread()
+                self.run_mdtest_thread(oclass)
+                if self.test_with_snapshot is True:
+                    # Create a snapshot of the container
+                    # after IOR job completes.
+                    self.container.create_snap()
+                    self.log.info("Created container snapshot: %s",
+                                  self.container.epoch)
                 if self.test_during_aggregation is True:
                     self.run_ior_thread("Write", oclass, test_seq)
 
@@ -103,7 +89,7 @@ class OSAOfflineDrain(OSAUtils):
                 if self.test_during_aggregation is True and index == 0:
                     self.pool.set_property("reclaim", "time")
                     self.delete_extra_container(self.pool)
-                    self.simple_drain_reintegrate_loop(rank)
+                    self.simple_osa_reintegrate_loop(rank=rank, action="drain")
                 if (self.test_during_rebuild is True and val == 0):
                     # Exclude rank 3
                     output = self.dmg_command.pool_exclude(self.pool.uuid, "3")
@@ -132,7 +118,7 @@ class OSAOfflineDrain(OSAUtils):
             pool[val].display_pool_daos_space(display_string)
             if data:
                 self.run_ior_thread("Read", oclass, test_seq)
-                self.run_mdtest_thread()
+                self.run_mdtest_thread(oclass)
                 self.container = self.pool_cont_dict[self.pool][0]
                 kwargs = {"pool": self.pool.uuid,
                           "cont": self.container.uuid}
@@ -147,7 +133,7 @@ class OSAOfflineDrain(OSAUtils):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=osa,osa_drain,checksum
+        :avocado: tags=osa,osa_drain,checksum,ior
         :avocado: tags=offline_drain,offline_drain_with_csum
         """
         self.log.info("Offline Drain : Basic Drain")
@@ -197,7 +183,8 @@ class OSAOfflineDrain(OSAUtils):
                                                   '/run/checksum/*')
         self.log.info("Offline Drain : Oclass")
         for oclass in self.test_oclass:
-            self.run_offline_drain_test(1, data=True, oclass=oclass)
+            self.run_offline_drain_test(
+                1, data=True, oclass=oclass)
 
     def test_osa_offline_drain_multiple_pools(self):
         """Test ID: DAOS-7159
@@ -226,4 +213,19 @@ class OSAOfflineDrain(OSAUtils):
         self.test_during_rebuild = self.params.get("test_with_rebuild",
                                                    '/run/rebuild/*')
         self.log.info("Offline Drain : During Rebuild")
+        self.run_offline_drain_test(1, data=True)
+
+    def test_osa_offline_drain_after_snapsot(self):
+        """Test ID: DAOS-8057
+        Test Description: Validate Offline Drain
+        after taking snapshot.
+
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=osa,osa_drain,checksum
+        :avocado: tags=offline_drain,offline_drain_after_snapshot
+        """
+        self.test_with_snapshot = self.params.get("test_with_snapshot",
+                                                  '/run/snapshot/*')
+        self.log.info("Offline Drain : After taking snapshot")
         self.run_offline_drain_test(1, data=True)

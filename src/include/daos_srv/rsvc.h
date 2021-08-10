@@ -127,6 +127,8 @@ struct ds_rsvc {
 
 int ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id,
 		       uuid_t db_uuid);
+int ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id);
+
 int ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 		  bool create, size_t size, d_rank_list_t *replicas, void *arg);
 int ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy);
@@ -144,15 +146,18 @@ int ds_rsvc_add_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks,
 int ds_rsvc_add_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
 			 d_rank_list_t *ranks, size_t size,
 			 struct rsvc_hint *hint);
-int ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks);
+int ds_rsvc_remove_replicas_s(struct ds_rsvc *svc, d_rank_list_t *ranks,
+			      bool stop);
 int ds_rsvc_remove_replicas(enum ds_rsvc_class_id class, d_iov_t *id,
-			    d_rank_list_t *ranks, struct rsvc_hint *hint);
+			    d_rank_list_t *ranks, bool stop,
+			    struct rsvc_hint *hint);
 int ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 		   struct ds_rsvc **svc);
 int ds_rsvc_lookup_leader(enum ds_rsvc_class_id class, d_iov_t *id,
 			  struct ds_rsvc **svcp, struct rsvc_hint *hint);
 void ds_rsvc_get(struct ds_rsvc *svc);
 void ds_rsvc_put(struct ds_rsvc *svc);
+void ds_rsvc_get_leader(struct ds_rsvc *svc);
 void ds_rsvc_put_leader(struct ds_rsvc *svc);
 void ds_rsvc_set_hint(struct ds_rsvc *svc, struct rsvc_hint *hint);
 

@@ -50,8 +50,8 @@ vos_report_layout_incompat(const char *type, int version, int min_version,
 	}
 
 	ds_notify_ras_event(RAS_POOL_DF_INCOMPAT, buf, RAS_TYPE_INFO,
-			    RAS_SEV_ERROR, NULL, NULL, NULL, uuid, NULL,
-			    NULL, NULL, NULL);
+			    RAS_SEV_ERROR, NULL, NULL, NULL, NULL, uuid,
+			    NULL, NULL, NULL, NULL);
 }
 
 struct vos_tls *
@@ -245,13 +245,13 @@ vos_tx_begin(struct dtx_handle *dth, struct umem_instance *umm)
 
 int
 vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
-	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts, bool started,
-	   int err)
+	   struct vos_rsrvd_scm **rsrvd_scmp, d_list_t *nvme_exts,
+	   bool started, int err)
 {
 	struct dtx_handle	*dth = dth_in;
 	struct dtx_rsrvd_uint	*dru;
+	struct vos_dtx_cmt_ent	*dce = NULL;
 	struct dtx_handle	 tmp = {0};
-	int			 rc = err;
 
 	if (!dtx_is_valid_handle(dth)) {
 		/** Created a dummy dth handle for publishing extents */
@@ -283,25 +283,30 @@ vos_tx_end(struct vos_container *cont, struct dtx_handle *dth_in,
 	dth->dth_local_tx_started = 0;
 
 	if (dtx_is_valid_handle(dth_in) && err == 0)
-		err = vos_dtx_prepared(dth);
+		err = vos_dtx_prepared(dth, &dce);
 
 	if (err == 0)
-		rc = vos_tx_publish(dth, true);
+		err = vos_tx_publish(dth, true);
 
-	rc = umem_tx_end(vos_cont2umm(cont), rc);
+	err = umem_tx_end(vos_cont2umm(cont), err);
 
 cancel:
-	if (rc != 0) {
+	if (err != 0) {
 		/* The transaction aborted or failed to commit. */
 		vos_tx_publish(dth, false);
 		if (dtx_is_valid_handle(dth_in))
 			vos_dtx_cleanup_internal(dth);
 	}
 
-	if (err != 0)
-		return err;
+	if (dce != NULL) {
+		struct vos_dtx_act_ent	*dae = dth_in->dth_ent;
 
-	return rc;
+		vos_dtx_post_handle(cont, &dae, &dce, 1, false,
+				    err != 0 ? true : false);
+		dth_in->dth_ent = NULL;
+	}
+
+	return err;
 }
 
 /**
@@ -325,7 +330,21 @@ vos_tls_fini(void *data)
 {
 	struct vos_tls *tls = data;
 
-	D_ASSERT(d_list_empty(&tls->vtl_gc_pools));
+	/* All GC callers should have exited, but they can still leave
+	 * uncleaned pools behind. It is OK to free these pool handles with
+	 * leftover, because GC can clean up leftover when it starts again.
+	 */
+	D_ASSERTF(tls->vtl_gc_running == 0, "GC running = %d\n",
+		  tls->vtl_gc_running);
+
+	while (!d_list_empty(&tls->vtl_gc_pools)) {
+		struct vos_pool *pool;
+
+		pool = d_list_entry(tls->vtl_gc_pools.next,
+				    struct vos_pool, vp_gc_link);
+		gc_del_pool(pool);
+	}
+
 	if (tls->vtl_ocache)
 		vos_obj_cache_destroy(tls->vtl_ocache);
 
@@ -345,7 +364,7 @@ static void *
 vos_tls_init(int xs_id, int tgt_id)
 {
 	struct vos_tls *tls;
-	int rc;
+	int		rc;
 
 	D_ALLOC_PTR(tls);
 	if (tls == NULL)
@@ -385,6 +404,18 @@ vos_tls_init(int xs_id, int tgt_id)
 		D_ERROR("Error in creating timestamp table: %d\n", rc);
 		goto failed;
 	}
+
+	if (tgt_id < 0)
+		/** skip sensor setup on standalone vos & sys xstream */
+		return tls;
+
+	rc = d_tm_add_metric(&tls->vtl_committed, D_TM_STATS_GAUGE,
+			     "Number of committed entries kept around for reply"
+			     " reconstruction", "entries",
+			     "io/dtx/committed/tgt_%u", tgt_id);
+	if (rc)
+		D_WARN("Failed to create committed cnt sensor: "DF_RC"\n",
+		       DP_RC(rc));
 
 	return tls;
 failed:
@@ -453,7 +484,7 @@ vos_mod_fini(void)
 struct dss_module vos_srv_module =  {
 	.sm_name	= "vos_srv",
 	.sm_mod_id	= DAOS_VOS_MODULE,
-	.sm_ver		= DAOS_VOS_VERSION,
+	.sm_ver		= 1,
 	.sm_init	= vos_mod_init,
 	.sm_fini	= vos_mod_fini,
 	.sm_key		= &vos_module_key,
@@ -476,7 +507,9 @@ vos_self_nvme_fini(void)
 #define VOS_STORAGE_PATH	"/mnt/daos"
 #define VOS_NVME_CONF		"/etc/daos_nvme.conf"
 #define VOS_NVME_SHM_ID		DAOS_NVME_SHMID_NONE
-#define VOS_NVME_MEM_SIZE	DAOS_NVME_MEM_PRIMARY
+#define VOS_NVME_MEM_SIZE	1024
+#define VOS_NVME_HUGEPAGE_SIZE	2	/* 2MB */
+#define VOS_NVME_NR_TARGET	1
 
 static int
 vos_self_nvme_init()
@@ -490,8 +523,9 @@ vos_self_nvme_init()
 	if (rc != 0 && rc != -DER_EXIST)
 		return rc;
 
-	rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID,
-			   VOS_NVME_MEM_SIZE, vos_db_get());
+	rc = bio_nvme_init(VOS_NVME_CONF, VOS_NVME_SHM_ID, VOS_NVME_MEM_SIZE,
+			   VOS_NVME_HUGEPAGE_SIZE, VOS_NVME_NR_TARGET,
+			   vos_db_get(), true);
 	if (rc)
 		return rc;
 
@@ -543,6 +577,12 @@ vos_self_init(const char *db_path)
 		D_GOTO(out, rc);
 	}
 
+	rc = vos_pool_settings_init();
+	if (rc != 0) {
+		D_MUTEX_UNLOCK(&self_mode.self_lock);
+		return rc;
+	}
+
 	rc = ABT_init(0, NULL);
 	if (rc != 0) {
 		D_MUTEX_UNLOCK(&self_mode.self_lock);
@@ -552,7 +592,7 @@ vos_self_init(const char *db_path)
 	vos_start_epoch = 0;
 
 #if VOS_STANDALONE
-	self_mode.self_tls = vos_tls_init(0, 0);
+	self_mode.self_tls = vos_tls_init(0, -1);
 	if (!self_mode.self_tls) {
 		ABT_finalize();
 		D_MUTEX_UNLOCK(&self_mode.self_lock);

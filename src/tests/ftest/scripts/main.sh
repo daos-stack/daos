@@ -220,10 +220,13 @@ if [[ "${TEST_TAG_ARG}" =~ soak ]]; then
     fi
 fi
 
+# need to increase the number of oopen files (on EL8 at least)
+ulimit -n 4096
 
 launch_args="-jcrisa"
 # can only process cores on EL7 currently
-if [ "$(lsb_release -s -i)" = "CentOS" ]; then
+if [ "$(lsb_release -s -i)" = "CentOS" ] ||
+   [ "$(lsb_release -s -i)" = "openSUSE" ]; then
     launch_args="-jcrispa"
 fi
 
@@ -235,7 +238,7 @@ fi
 # now run it!
 # shellcheck disable=SC2086
 if ! ./launch.py "${launch_args}" -th "${LOGS_THRESHOLD}" \
-                 -ts "${TEST_NODES}" ${NVME_ARG} ${TEST_TAG_ARR[*]}; then
+                 -ts "${TEST_NODES}" ${LAUNCH_OPT_ARGS} ${TEST_TAG_ARR[*]}; then
     rc=${PIPESTATUS[0]}
 else
     rc=0

@@ -25,10 +25,6 @@
 
 #include "obj_ec.h"
 
-#define ENCODING(proc_op) (proc_op == CRT_PROC_ENCODE)
-#define DECODING(proc_op) (proc_op == CRT_PROC_DECODE)
-#define FREEING(proc_op)  (proc_op == CRT_PROC_FREE)
-
 /* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
  * for other RPC fields and cart/HG headers.
  */
@@ -40,7 +36,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 3
+#define DAOS_OBJ_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
@@ -164,6 +160,12 @@ enum obj_rpc_flags {
 	ORF_FOR_MIGRATION	= (1 << 14),
 	/* Force DTX refresh if hit non-committed DTX on non-leader. */
 	ORF_DTX_REFRESH		= (1 << 15),
+	/* for EC aggregate (to bypass read perm check related with RF) */
+	ORF_FOR_EC_AGG		= (1 << 16),
+	/* for EC data recovery */
+	ORF_EC_RECOV		= (1 << 17),
+	/* EC data recovery from snapshot */
+	ORF_EC_RECOV_SNAP	= (1 << 18),
 };
 
 /* common for update/fetch */
@@ -320,10 +322,10 @@ CRT_RPC_DECLARE(obj_sync, DAOS_ISEQ_OBJ_SYNC, DAOS_OSEQ_OBJ_SYNC)
 	((uint64_t)		(om_max_eph)		CRT_VAR)	\
 	((uint32_t)		(om_version)		CRT_VAR)	\
 	((uint32_t)		(om_tgt_idx)		CRT_VAR)	\
-	((int32_t)		(om_del_local_obj)	CRT_VAR)	\
 	((daos_unit_oid_t)	(om_oids)		CRT_ARRAY)	\
 	((uint64_t)		(om_ephs)		CRT_ARRAY)	\
-	((uint32_t)		(om_shards)		CRT_ARRAY)
+	((uint32_t)		(om_shards)		CRT_ARRAY)	\
+	((int32_t)		(om_del_local_obj)	CRT_VAR)
 
 #define DAOS_OSEQ_OBJ_MIGRATE	/* output fields */		 \
 	((int32_t)		(om_status)		CRT_VAR)
@@ -337,15 +339,12 @@ CRT_RPC_DECLARE(obj_migrate, DAOS_ISEQ_OBJ_MIGRATE, DAOS_OSEQ_OBJ_MIGRATE)
 	((uuid_t)		(ea_coh_uuid)		CRT_VAR)	\
 	((daos_unit_oid_t)	(ea_oid)		CRT_VAR)	\
 	((daos_key_t)		(ea_dkey)		CRT_VAR)	\
-	((daos_key_t)		(ea_akey)		CRT_VAR)	\
+	((daos_iod_t)		(ea_iod)		CRT_VAR)	\
+	((struct dcs_iod_csums)	(ea_iod_csums)		CRT_ARRAY)	\
 	((daos_epoch_range_t)	(ea_epoch_range)	CRT_VAR)	\
 	((uint64_t)		(ea_stripenum)		CRT_VAR)	\
-	((uint64_t)		(ea_rsize)		CRT_VAR)	\
 	((crt_bulk_t)		(ea_bulk)		CRT_VAR)	\
-	((uint32_t)		(ea_map_ver)		CRT_VAR)	\
-	((uint32_t)		(ea_remove_nr)		CRT_VAR)	\
-	((daos_recx_t)		(ea_remove_recxs)	CRT_ARRAY)	\
-	((daos_epoch_t)		(ea_remove_eps)		CRT_ARRAY)
+	((uint32_t)		(ea_map_ver)		CRT_VAR)
 
 
 #define DAOS_OSEQ_OBJ_EC_AGG	/* output fields */		 \
@@ -362,6 +361,7 @@ CRT_RPC_DECLARE(obj_ec_agg, DAOS_ISEQ_OBJ_EC_AGG, DAOS_OSEQ_OBJ_EC_AGG)
 	((daos_unit_oid_t)	(er_oid)		CRT_VAR)	\
 	((daos_key_t)		(er_dkey)		CRT_VAR)	\
 	((daos_iod_t)		(er_iod)		CRT_VAR)	\
+	((struct dcs_iod_csums)	(er_iod_csums)		CRT_ARRAY)	\
 	((uint64_t)		(er_epoch)		CRT_VAR)	\
 	((uint64_t)		(er_stripenum)		CRT_VAR)	\
 	((crt_bulk_t)		(er_bulk)		CRT_VAR)	\
@@ -582,9 +582,14 @@ obj_is_modification_opc(uint32_t opc)
 		opc == DAOS_OBJ_RPC_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_TGT_PUNCH_DKEYS ||
 		opc == DAOS_OBJ_RPC_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS ||
-		opc == DAOS_OBJ_RPC_EC_AGGREGATE ||
-		opc == DAOS_OBJ_RPC_EC_REPLICATE;
+		opc == DAOS_OBJ_RPC_TGT_PUNCH_AKEYS;
+}
+
+static inline bool
+obj_is_ec_agg_opc(uint32_t opc)
+{
+	return opc == DAOS_OBJ_RPC_EC_AGGREGATE ||
+	       opc == DAOS_OBJ_RPC_EC_REPLICATE;
 }
 
 static inline bool

@@ -66,7 +66,8 @@ func TestDmg_JsonOutput(t *testing.T) {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			testArgs := append([]string{"-i", "--json"}, args...)
 			switch strings.Join(args, " ") {
-			case "version", "telemetry config", "telemetry run":
+			case "version", "telemetry config", "telemetry run", "config generate",
+				"manpage":
 				return
 			case "storage prepare":
 				testArgs = append(testArgs, "--force")
@@ -83,18 +84,20 @@ func TestDmg_JsonOutput(t *testing.T) {
 			case "pool create":
 				testArgs = append(testArgs, []string{"-s", "1TB"}...)
 			case "pool destroy", "pool evict", "pool query", "pool get-acl":
-				testArgs = append(testArgs, []string{"--pool", common.MockUUID()}...)
+				testArgs = append(testArgs, []string{common.MockUUID()}...)
 			case "pool overwrite-acl", "pool update-acl":
-				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "-a", aclPath}...)
+				testArgs = append(testArgs, []string{common.MockUUID(), "-a", aclPath}...)
 			case "pool delete-acl":
-				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "-p", "foo@"}...)
+				testArgs = append(testArgs, []string{common.MockUUID(), "-p", "foo@"}...)
 			case "pool set-prop":
-				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "-n", "foo", "-v", "bar"}...)
+				testArgs = append(testArgs, []string{common.MockUUID(), "label:foo"}...)
+			case "pool get-prop":
+				testArgs = append(testArgs, []string{common.MockUUID(), "label"}...)
 			case "pool extend":
-				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--ranks", "0", "-s", "1TB"}...)
+				testArgs = append(testArgs, []string{common.MockUUID(), "--ranks", "0"}...)
 			case "pool exclude", "pool drain", "pool reintegrate":
-				testArgs = append(testArgs, []string{"--pool", common.MockUUID(), "--rank", "0"}...)
-			case "cont set-owner":
+				testArgs = append(testArgs, []string{common.MockUUID(), "--rank", "0"}...)
+			case "container set-owner":
 				testArgs = append(testArgs, []string{"--user", "foo", "--pool", common.MockUUID(), "--cont", common.MockUUID()}...)
 			case "telemetry metrics list", "telemetry metrics query":
 				return // These commands query via http directly

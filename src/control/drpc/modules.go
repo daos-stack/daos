@@ -11,8 +11,8 @@ package drpc
 import (
 	fmt "fmt"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 // #cgo CFLAGS: -I${SRCDIR}/../../include
@@ -126,6 +126,7 @@ func (m MgmtMethod) String() string {
 		MethodPrepShutdown:    "PrepShutdown",
 		MethodPingRank:        "Ping",
 		MethodSetRank:         "SetRank",
+		MethodSetLogMasks:     "SetLogMasks",
 		MethodSetUp:           "Setup",
 		MethodGroupUpdate:     "GroupUpdate",
 		MethodPoolCreate:      "PoolCreate",
@@ -163,6 +164,8 @@ const (
 	MethodPingRank MgmtMethod = C.DRPC_METHOD_MGMT_PING_RANK
 	// MethodSetRank is a ModuleMgmt method
 	MethodSetRank MgmtMethod = C.DRPC_METHOD_MGMT_SET_RANK
+	// MethodSetLogMasks is a ModuleMgmt method
+	MethodSetLogMasks MgmtMethod = C.DRPC_METHOD_MGMT_SET_LOG_MASKS
 	// MethodCreateMS is a ModuleMgmt method
 	MethodCreateMS MgmtMethod = C.DRPC_METHOD_MGMT_CREATE_MS
 	// MethodStartMS is a ModuleMgmt method
@@ -227,6 +230,8 @@ const (
 	MethodNotifyExit MgmtMethod = C.DRPC_METHOD_MGMT_NOTIFY_EXIT
 	// MethodIdentifyStorage is a ModuleMgmt method
 	MethodIdentifyStorage MgmtMethod = C.DRPC_METHOD_MGMT_DEV_IDENTIFY
+	// MethodPoolGetProp defines a method for getting pool properties
+	MethodPoolGetProp MgmtMethod = C.DRPC_METHOD_MGMT_POOL_GET_PROP
 )
 
 type srvMethod int32
@@ -269,6 +274,8 @@ const (
 	MethodBIOError srvMethod = C.DRPC_METHOD_SRV_BIO_ERR
 	// MethodGetPoolServiceRanks requests the service ranks for a pool
 	MethodGetPoolServiceRanks srvMethod = C.DRPC_METHOD_SRV_GET_POOL_SVC
+	// MethodPoolFindByLabel requests the service ranks and UUID for a pool
+	MethodPoolFindByLabel srvMethod = C.DRPC_METHOD_SRV_POOL_FIND_BYLABEL
 	// MethodClusterEvent notifies of a cluster event in the I/O Engine.
 	MethodClusterEvent srvMethod = C.DRPC_METHOD_SRV_CLUSTER_EVENT
 )

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
 (C) Copyright 2018-2021 Intel Corporation.
 
@@ -36,7 +36,7 @@ class IorSmall(IorTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio,checksum,DAOS_5610
+        :avocado: tags=daosio,checksum,mpich,dfuse,DAOS_5610
         :avocado: tags=iorsmall
         """
         results = []

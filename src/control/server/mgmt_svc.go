@@ -7,42 +7,44 @@
 package server
 
 import (
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
+	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/events"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
 // mgmtSvc implements (the Go portion of) Management Service, satisfying
 // mgmtpb.MgmtSvcServer.
 type mgmtSvc struct {
-	log              logging.Logger
-	harness          *EngineHarness
-	membership       *system.Membership // if MS leader, system membership list
-	sysdb            *system.Database
-	rpcClient        control.UnaryInvoker
-	events           *events.PubSub
-	clientNetworkCfg *config.ClientNetworkCfg
-	joinReqs         joinReqChan
-	groupUpdateReqs  chan struct{}
+	mgmtpb.UnimplementedMgmtSvcServer
+	log               logging.Logger
+	harness           *EngineHarness
+	membership        *system.Membership // if MS leader, system membership list
+	sysdb             *system.Database
+	rpcClient         control.UnaryInvoker
+	events            *events.PubSub
+	clientNetworkHint *mgmtpb.ClientNetHint
+	joinReqs          joinReqChan
+	groupUpdateReqs   chan bool
+	lastMapVer        uint32
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
 	return &mgmtSvc{
-		log:              h.log,
-		harness:          h,
-		membership:       m,
-		sysdb:            s,
-		rpcClient:        c,
-		events:           p,
-		clientNetworkCfg: new(config.ClientNetworkCfg),
-		joinReqs:         make(joinReqChan),
-		groupUpdateReqs:  make(chan struct{}),
+		log:               h.log,
+		harness:           h,
+		membership:        m,
+		sysdb:             s,
+		rpcClient:         c,
+		events:            p,
+		clientNetworkHint: new(mgmtpb.ClientNetHint),
+		joinReqs:          make(joinReqChan),
+		groupUpdateReqs:   make(chan bool),
 	}
 }
 

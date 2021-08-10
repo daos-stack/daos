@@ -26,15 +26,25 @@ def remove_certain_gcc_flags(_str):
 def scons():
     """scons function"""
 
+<<<<<<< HEAD
     tenv = env.Clone(LIBS=[])
     tenv.AppendUnique(CPPPATH=['#/src/utils/self_test/src'])
     tenv.AppendUnique(CPPPATH=['#/src/cart', '#/src/tests/ftest/cart'])
+=======
+    Import('env', 'prereqs', 'cart_lib', 'gurt_lib', 'cart_utils_objs')
+
+    tenv = env.Clone(LIBS=[])
+
+>>>>>>> 818d17476bfe0cf0dfb8093c954a3640caa8e0a5
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
     prereqs.require(tenv, 'mercury')
-    tenv.AppendUnique(LIBPATH=['#/src/cart'])
     tenv.AppendUnique(FLAGS='-pthread')
 
+<<<<<<< HEAD
     self_test = daos_build.program(tenv, [SELF_TEST, LIB_CONFIG_INI])
+=======
+    self_test = daos_build.program(tenv, [SELF_TEST, cart_utils_objs])
+>>>>>>> 818d17476bfe0cf0dfb8093c954a3640caa8e0a5
     tenv.Requires(self_test, [cart_lib, gurt_lib])
 
     tenv.Install(os.path.join("$PREFIX", 'bin'), self_test)

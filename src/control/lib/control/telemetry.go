@@ -8,10 +8,12 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -68,23 +70,30 @@ const (
 	MetricTypeGauge
 	MetricTypeSummary
 	MetricTypeHistogram
+
+	metricTypeUnknownStr   = "Unknown"
+	metricTypeGenericStr   = "Generic"
+	metricTypeCounterStr   = "Counter"
+	metricTypeGaugeStr     = "Gauge"
+	metricTypeSummaryStr   = "Summary"
+	metricTypeHistogramStr = "Histogram"
 )
 
 func (t MetricType) String() string {
 	switch t {
 	case MetricTypeGeneric:
-		return "Generic"
+		return metricTypeGenericStr
 	case MetricTypeCounter:
-		return "Counter"
+		return metricTypeCounterStr
 	case MetricTypeGauge:
-		return "Gauge"
+		return metricTypeGaugeStr
 	case MetricTypeSummary:
-		return "Summary"
+		return metricTypeSummaryStr
 	case MetricTypeHistogram:
-		return "Histogram"
+		return metricTypeHistogramStr
 	}
 
-	return "Unknown"
+	return metricTypeUnknownStr
 }
 
 func metricTypeFromPrometheus(pType pclient.MetricType) MetricType {
@@ -101,6 +110,23 @@ func metricTypeFromPrometheus(pType pclient.MetricType) MetricType {
 		return MetricTypeGeneric
 	}
 
+	return MetricTypeUnknown
+}
+
+func metricTypeFromString(typeStr string) MetricType {
+	// normalize the strings for comparison
+	switch strings.ToLower(typeStr) {
+	case strings.ToLower(metricTypeCounterStr):
+		return MetricTypeCounter
+	case strings.ToLower(metricTypeGaugeStr):
+		return MetricTypeGauge
+	case strings.ToLower(metricTypeSummaryStr):
+		return MetricTypeSummary
+	case strings.ToLower(metricTypeHistogramStr):
+		return MetricTypeHistogram
+	case strings.ToLower(metricTypeGenericStr):
+		return MetricTypeGeneric
+	}
 	return MetricTypeUnknown
 }
 
@@ -155,13 +181,32 @@ type (
 )
 
 // IsMetric identifies SimpleMetric as a Metric.
-func (_ *SimpleMetric) IsMetric() {}
+func (*SimpleMetric) IsMetric() {}
 
 // IsMetric identifies SummaryMetric as a Metric.
-func (_ *SummaryMetric) IsMetric() {}
+func (*SummaryMetric) IsMetric() {}
+
+// UnmarshalJSON unmarshals a SummaryMetric from JSON.
+func (m *SummaryMetric) UnmarshalJSON(data []byte) error {
+	if m == nil {
+		return errors.New("nil SummaryMetric")
+	}
+
+	if m.Quantiles == nil {
+		m.Quantiles = make(QuantileMap)
+	}
+
+	type Alias SummaryMetric
+	aux := (*Alias)(m)
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 // IsMetric identifies HistogramMetric as a Metric.
-func (_ *HistogramMetric) IsMetric() {}
+func (*HistogramMetric) IsMetric() {}
 
 // Keys gets the sorted list of label keys.
 func (m LabelMap) Keys() []string {
@@ -181,6 +226,133 @@ func (m QuantileMap) Keys() []float64 {
 	}
 	sort.Float64s(result)
 	return result
+}
+
+// MarshalJSON marshals the QuantileMap into JSON.
+func (m QuantileMap) MarshalJSON() ([]byte, error) {
+	strMap := make(map[string]string)
+
+	fmtFloat := func(f float64) string {
+		return strconv.FormatFloat(f, 'g', -1, 64)
+	}
+
+	for key, val := range m {
+		strMap[fmtFloat(key)] = fmtFloat(val)
+	}
+
+	return json.Marshal(&strMap)
+}
+
+// UnmarshalJSON unmarshals the QuantileMap from JSON.
+func (m QuantileMap) UnmarshalJSON(data []byte) error {
+	if m == nil {
+		return errors.New("QuantileMap is nil")
+	}
+
+	fromJSON := make(map[string]string)
+
+	if err := json.Unmarshal(data, &fromJSON); err != nil {
+		return nil
+	}
+
+	for key, val := range fromJSON {
+		floatKey, err := strconv.ParseFloat(key, 64)
+		if err != nil {
+			return errors.Wrapf(err, "QuantileMap key %q", key)
+		}
+
+		floatVal, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return errors.Wrapf(err, "QuantileMap value %q for key %q", val, key)
+		}
+
+		m[floatKey] = floatVal
+	}
+	return nil
+}
+
+// MarshalJSON marshals the MetricSet to JSON.
+func (ms *MetricSet) MarshalJSON() ([]byte, error) {
+	type toJSON MetricSet
+	return json.Marshal(&struct {
+		Type string `json:"type"`
+		*toJSON
+	}{
+		Type:   strings.ToLower(ms.Type.String()),
+		toJSON: (*toJSON)(ms),
+	})
+}
+
+// jsonMetric serves as a universal metric representation for unmarshaling from
+// JSON. It covers all possible fields of Metric types.
+type jsonMetric struct {
+	Labels      LabelMap        `json:"labels"`
+	Value       float64         `json:"value"`
+	SampleCount uint64          `json:"sample_count"`
+	SampleSum   float64         `json:"sample_sum"`
+	Quantiles   QuantileMap     `json:"quantiles"`
+	Buckets     []*MetricBucket `json:"buckets"`
+}
+
+// UnmarshalJSON unmarshals a Metric into the jsonMetric type.
+func (jm *jsonMetric) UnmarshalJSON(data []byte) error {
+	if jm == nil {
+		return errors.New("nil jsonMetric")
+	}
+
+	if jm.Quantiles == nil {
+		jm.Quantiles = make(QuantileMap)
+	}
+
+	type Alias jsonMetric
+	aux := (*Alias)(jm)
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// UnmarshalJSON unmarshals the MetricSet from JSON.
+func (ms *MetricSet) UnmarshalJSON(data []byte) error {
+	if ms == nil {
+		return errors.New("nil MetricSet")
+	}
+
+	type fromJSON MetricSet
+	from := &struct {
+		Type    string        `json:"type"`
+		Metrics []*jsonMetric `json:"metrics"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(ms),
+	}
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	ms.Type = metricTypeFromString(from.Type)
+	for _, m := range from.Metrics {
+		switch ms.Type {
+		case MetricTypeSummary:
+			ms.Metrics = append(ms.Metrics, &SummaryMetric{
+				Labels:      m.Labels,
+				SampleCount: m.SampleCount,
+				SampleSum:   m.SampleSum,
+				Quantiles:   m.Quantiles,
+			})
+		case MetricTypeHistogram:
+			ms.Metrics = append(ms.Metrics, &HistogramMetric{
+				Labels:      m.Labels,
+				SampleCount: m.SampleCount,
+				SampleSum:   m.SampleSum,
+				Buckets:     m.Buckets,
+			})
+		default:
+			ms.Metrics = append(ms.Metrics, newSimpleMetric(m.Labels, m.Value))
+		}
+	}
+	return nil
 }
 
 type (

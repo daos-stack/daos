@@ -4,12 +4,15 @@ import os
 
 def scons():
     """Execute build"""
-    Import('env', 'prereqs')
+    Import('base_env', 'prereqs')
+
+    if not prereqs.test_requested():
+        return
 
     libs = ['daos', 'daos_common_pmem', 'gurt', 'm', 'cart', 'uuid', 'cmocka',
             'daos_tests']
 
-    denv = env.Clone()
+    denv = base_env.Clone()
 
     if not GetOption('help') and not GetOption('clean'):
         mpi = daos_build.configure_mpi(denv, libs)
@@ -22,7 +25,7 @@ def scons():
     denv.AppendUnique(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
 
     denv.Append(CPPPATH=[Dir('suite').srcnode()])
-    prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk')
+    prereqs.require(denv, 'argobots', 'hwloc', 'protobufc', 'pmdk', 'isal')
 
     daos_build.program(denv, 'simple_array', 'simple_array.c', LIBS=libs)
     daos_build.program(denv, 'simple_obj', 'simple_obj.c', LIBS=libs)

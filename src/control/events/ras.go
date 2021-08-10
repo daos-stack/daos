@@ -45,15 +45,14 @@ type RASID uint32
 // RASID constant definitions matching those used when creating events either in
 // the control or data (engine) planes.
 const (
-	RASUnknownEvent   RASID = C.RAS_UNKNOWN_EVENT
-	RASRankUp         RASID = C.RAS_RANK_UP
-	RASRankDown       RASID = C.RAS_RANK_DOWN
-	RASRankNoResponse RASID = C.RAS_RANK_NO_RESPONSE
-	RASPoolRepsUpdate RASID = C.RAS_POOL_REPS_UPDATE
-	RASSwimRankAlive  RASID = C.RAS_SWIM_RANK_ALIVE
-	RASSwimRankDead   RASID = C.RAS_SWIM_RANK_DEAD
-	RASSystemStop     RASID = C.RAS_SYSTEM_STOP
-	RASSystemStart    RASID = C.RAS_SYSTEM_START
+	RASUnknownEvent         RASID = C.RAS_UNKNOWN_EVENT
+	RASEngineFormatRequired RASID = C.RAS_ENGINE_FORMAT_REQUIRED // notice
+	RASEngineDied           RASID = C.RAS_ENGINE_DIED            // error
+	RASPoolRepsUpdate       RASID = C.RAS_POOL_REPS_UPDATE       // info
+	RASSwimRankAlive        RASID = C.RAS_SWIM_RANK_ALIVE        // info
+	RASSwimRankDead         RASID = C.RAS_SWIM_RANK_DEAD         // info
+	RASSystemStartFailed    RASID = C.RAS_SYSTEM_START_FAILED    // error
+	RASSystemStopFailed     RASID = C.RAS_SYSTEM_STOP_FAILED     // error
 )
 
 func (id RASID) String() string {
@@ -90,10 +89,9 @@ type RASSeverityID uint32
 // RASSeverityID constant definitions.
 const (
 	RASSeverityUnknown RASSeverityID = C.RAS_SEV_UNKNOWN
-	RASSeverityFatal   RASSeverityID = C.RAS_SEV_FATAL
-	RASSeverityWarn    RASSeverityID = C.RAS_SEV_WARN
 	RASSeverityError   RASSeverityID = C.RAS_SEV_ERROR
-	RASSeverityInfo    RASSeverityID = C.RAS_SEV_INFO
+	RASSeverityWarning RASSeverityID = C.RAS_SEV_WARNING
+	RASSeverityNotice  RASSeverityID = C.RAS_SEV_NOTICE
 )
 
 func (sev RASSeverityID) String() string {
@@ -108,10 +106,9 @@ func (sev RASSeverityID) Uint32() uint32 {
 // SyslogPriority maps RAS severity to syslog package priority.
 func (sev RASSeverityID) SyslogPriority() syslog.Priority {
 	slSev := map[RASSeverityID]syslog.Priority{
-		RASSeverityFatal: syslog.LOG_CRIT,
-		RASSeverityError: syslog.LOG_ERR,
-		RASSeverityWarn:  syslog.LOG_WARNING,
-		RASSeverityInfo:  syslog.LOG_INFO,
+		RASSeverityError:   syslog.LOG_ERR,
+		RASSeverityWarning: syslog.LOG_WARNING,
+		RASSeverityNotice:  syslog.LOG_NOTICE,
 	}[sev]
 
 	return slSev | syslog.LOG_DAEMON
@@ -126,6 +123,7 @@ type RASEvent struct {
 	Msg          string          `json:"msg"`
 	Hostname     string          `json:"hostname"`
 	Rank         uint32          `json:"rank"`
+	Incarnation  uint64          `json:"incarnation"`
 	HWID         string          `json:"hw_id"`
 	ProcID       uint64          `json:"proc_id"`
 	ThreadID     uint64          `json:"thread_id"`
@@ -140,6 +138,12 @@ type RASEvent struct {
 	forwardable atm.Bool
 }
 
+// GetTimestamp returns a time.Time parsed from the event
+// timestamp.
+func (evt *RASEvent) GetTimestamp() (time.Time, error) {
+	return common.ParseTime(evt.Timestamp)
+}
+
 // IsForwarded returns true if event has been forwarded between hosts.
 func (evt *RASEvent) IsForwarded() bool {
 	return evt.forwarded.Load()
@@ -148,7 +152,6 @@ func (evt *RASEvent) IsForwarded() bool {
 // WithForwarded sets the forwarded state of this event.
 func (evt *RASEvent) WithForwarded(forwarded bool) *RASEvent {
 	evt.forwarded.Store(forwarded)
-
 	return evt
 }
 
@@ -161,18 +164,23 @@ func (evt *RASEvent) ShouldForward() bool {
 // WithForwardable sets the forwardable state of this event.
 func (evt *RASEvent) WithForwardable(forwardable bool) *RASEvent {
 	evt.forwardable.Store(forwardable)
-
 	return evt
 }
 
-// New accepts a pointer to a RASEvent and fills in any
+// WithRank sets the rank identifier on the event.
+func (evt *RASEvent) WithRank(rid uint32) *RASEvent {
+	evt.Rank = rid
+	return evt
+}
+
+// fill accepts a pointer to a RASEvent and fills in any
 // missing fields before returning the event.
-func New(evt *RASEvent) *RASEvent {
+func fill(evt *RASEvent) *RASEvent {
 	if evt == nil {
 		evt = &RASEvent{}
 	}
 
-	// Set defaults as necessary.
+	// set defaults
 	if evt.Timestamp == "" {
 		evt.Timestamp = common.FormatTime(time.Now())
 	}
@@ -190,7 +198,7 @@ func New(evt *RASEvent) *RASEvent {
 		evt.ProcID = uint64(os.Getpid())
 	}
 	if evt.Severity == RASSeverityUnknown {
-		evt.Severity = RASSeverityInfo
+		evt.Severity = RASSeverityNotice
 	}
 	evt.forwarded.SetFalse()
 	evt.forwardable.SetTrue()
@@ -246,8 +254,8 @@ func (evt *RASEvent) ToProto() (*sharedpb.RASEvent, error) {
 
 	var err error
 	switch ei := evt.ExtendedInfo.(type) {
-	case *RankStateInfo:
-		pbEvt.ExtendedInfo, err = RankStateInfoToProto(ei)
+	case *EngineStateInfo:
+		pbEvt.ExtendedInfo, err = EngineStateInfoToProto(ei)
 	case *PoolSvcInfo:
 		pbEvt.ExtendedInfo, err = PoolSvcInfoToProto(ei)
 	case *StrInfo:
@@ -260,29 +268,30 @@ func (evt *RASEvent) ToProto() (*sharedpb.RASEvent, error) {
 // FromProto initializes a native event from a provided protobuf event.
 func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 	*evt = RASEvent{
-		ID:        RASID(pbEvt.Id),
-		Timestamp: pbEvt.Timestamp,
-		Type:      RASTypeID(pbEvt.Type),
-		Severity:  RASSeverityID(pbEvt.Severity),
-		Msg:       pbEvt.Msg,
-		Hostname:  pbEvt.Hostname,
-		Rank:      pbEvt.Rank,
-		HWID:      pbEvt.HwId,
-		ProcID:    pbEvt.ProcId,
-		ThreadID:  pbEvt.ThreadId,
-		JobID:     pbEvt.JobId,
-		PoolUUID:  pbEvt.PoolUuid,
-		ContUUID:  pbEvt.ContUuid,
-		ObjID:     pbEvt.ObjId,
-		CtlOp:     pbEvt.CtlOp,
+		ID:          RASID(pbEvt.Id),
+		Timestamp:   pbEvt.Timestamp,
+		Type:        RASTypeID(pbEvt.Type),
+		Severity:    RASSeverityID(pbEvt.Severity),
+		Msg:         pbEvt.Msg,
+		Hostname:    pbEvt.Hostname,
+		Rank:        pbEvt.Rank,
+		Incarnation: pbEvt.Incarnation,
+		HWID:        pbEvt.HwId,
+		ProcID:      pbEvt.ProcId,
+		ThreadID:    pbEvt.ThreadId,
+		JobID:       pbEvt.JobId,
+		PoolUUID:    pbEvt.PoolUuid,
+		ContUUID:    pbEvt.ContUuid,
+		ObjID:       pbEvt.ObjId,
+		CtlOp:       pbEvt.CtlOp,
 	}
 
 	evt.forwarded.SetFalse()
 	evt.forwardable.SetTrue()
 
 	switch ei := pbEvt.GetExtendedInfo().(type) {
-	case *sharedpb.RASEvent_RankStateInfo:
-		evt.ExtendedInfo, err = RankStateInfoFromProto(ei)
+	case *sharedpb.RASEvent_EngineStateInfo:
+		evt.ExtendedInfo, err = EngineStateInfoFromProto(ei)
 	case *sharedpb.RASEvent_PoolSvcInfo:
 		evt.ExtendedInfo, err = PoolSvcInfoFromProto(ei)
 	case *sharedpb.RASEvent_StrInfo:
@@ -301,8 +310,8 @@ func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 func (evt *RASEvent) PrintRAS() string {
 	var b strings.Builder
 
-	/* Log mandatory RAS fields. */
-	fmt.Fprintf(&b, "&&& RAS EVENT id: [%s]", evt.ID)
+	// log mandatory ras fields
+	fmt.Fprintf(&b, "id: [%s]", evt.ID)
 	if evt.Timestamp != "" {
 		fmt.Fprintf(&b, " ts: [%s]", evt.Timestamp)
 	}
@@ -320,7 +329,7 @@ func (evt *RASEvent) PrintRAS() string {
 		fmt.Fprintf(&b, " tid: [%d]", evt.ThreadID)
 	}
 
-	/* Log optional RAS fields. */
+	// log optional ras fields
 	if evt.HWID != "" {
 		fmt.Fprintf(&b, " hwid: [%s]", evt.HWID)
 	}
@@ -343,7 +352,7 @@ func (evt *RASEvent) PrintRAS() string {
 		fmt.Fprintf(&b, " ctlop: [%s]", evt.CtlOp)
 	}
 
-	/* Log data blob if event info is non-specific */
+	// log data blob if event info is non-specific
 	if ei := evt.GetStrInfo(); ei != nil && *ei != "" {
 		fmt.Fprintf(&b, " data: [%s]", *ei)
 	}

@@ -19,9 +19,6 @@
 int dts_obj_class	= OC_RP_2G1;
 int dts_obj_replica_cnt	= 2;
 
-int dts_ec_obj_class	= OC_EC_2P2G1;
-int dts_ec_grp_size	= 4;
-
 void
 ioreq_init(struct ioreq *req, daos_handle_t coh, daos_obj_id_t oid,
 	   daos_iod_type_t iod_type, test_arg_t *arg)
@@ -1220,7 +1217,6 @@ io_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 	/** Lookup */
 	memset(fetch_buf, 0, size);
 	lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE, &req);
-	print_message("\tsize: %lu\n", req.iod[0].iod_size);
 
 	/** Verify data consistency */
 	if (!daos_obj_is_echo(oid)) {
@@ -1321,7 +1317,7 @@ enumerate_akey(daos_handle_t th, char *dkey, uint32_t *number,
 	return rc;
 }
 
-static void
+void
 enumerate_rec(daos_handle_t th, char *dkey, char *akey,
 	      daos_size_t *size, uint32_t *number, daos_recx_t *recxs,
 	      daos_epoch_range_t *eprs, daos_anchor_t *anchor, bool incr,
@@ -2129,7 +2125,6 @@ basic_byte_array(void **state)
 	char		 *buf;
 	char		 *buf_out;
 	int		 buf_len, tmp_len;
-	bool		 test_ec = false;
 	int		 step = 1;
 	int		 rc;
 
@@ -2140,14 +2135,7 @@ basic_byte_array(void **state)
 	dts_buf_render(stack_buf, STACK_BUF_LEN);
 	dts_buf_render(bulk_buf, TEST_BULK_BUF_LEN);
 
-test_ec_obj:
-	/** open object */
-	if (test_ec)
-		oid = daos_test_oid_gen(arg->coh, dts_ec_obj_class, 0, 0,
-					arg->myrank);
-	else
-		oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0,
-					arg->myrank);
+	oid = daos_test_oid_gen(arg->coh, dts_obj_class, 0, 0, arg->myrank);
 	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -2258,13 +2246,6 @@ next_step:
 	/** close object */
 	rc = daos_obj_close(oh, NULL);
 	assert_rc_equal(rc, 0);
-
-	if (test_runable(arg, dts_ec_grp_size) && !test_ec) {
-		print_message("\nrun same test fr EC object ...\n");
-		test_ec = true;
-		step = 1;
-		goto test_ec_obj;
-	}
 
 	print_message("all good\n");
 	D_FREE(bulk_buf);
@@ -2927,7 +2908,7 @@ io_nospace(void **state)
 	struct ioreq	req;
 	int		buf_size = 1 << 20;
 	char		*large_buf;
-	char		key[10];
+	char		key[32];
 	int		i;
 
 	FAULT_INJECTION_REQUIRED();
@@ -3236,9 +3217,9 @@ update_overlapped_recxs(void **state)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	 oid;
 	daos_handle_t	 oh;
-	d_iov_t	 dkey;
+	d_iov_t		dkey;
 	d_sg_list_t	 sgl;
-	d_iov_t	 sg_iov;
+	d_iov_t		sg_iov;
 	daos_iod_t	 iod;
 	daos_recx_t	 recx[128];
 	char		 buf[STACK_BUF_LEN];
@@ -3307,9 +3288,9 @@ io_obj_key_query(void **state)
 	daos_iod_t	iod = {0};
 	d_sg_list_t	sgl = {0};
 	uint32_t	update_var = 0xdeadbeef;
-	d_iov_t	val_iov;
-	d_iov_t	dkey;
-	d_iov_t	akey;
+	d_iov_t		val_iov;
+	d_iov_t		dkey;
+	d_iov_t		akey;
 	daos_recx_t	recx;
 	uint64_t	dkey_val, akey_val;
 	uint32_t	flags;
@@ -4159,7 +4140,7 @@ check_oclass(daos_handle_t coh, int domain_nr, daos_oclass_hints_t hints,
 	assert_rc_equal(rc, 0);
 
 	cid = daos_obj_id2class(oid);
-	attr = daos_oclass_attr_find(oid);
+	attr = daos_oclass_attr_find(oid, NULL);
 
 	daos_oclass_id2name(cid, name);
 	printf("%s\n", name);
@@ -4467,6 +4448,100 @@ oclass_auto_setting(void **state)
 
 }
 
+static void
+int_key_setting(void **state)
+{
+	test_arg_t              *arg = *state;
+	daos_obj_id_t		oid;
+	daos_handle_t		oh;
+	d_iov_t			dkey;
+	char			dkey_buf[128];
+	char			akey_buf[128];
+	d_sg_list_t		sgl;
+	d_iov_t			sg_iov;
+	daos_iod_t		iod;
+	char			buf[STACK_BUF_LEN];
+	int                     rc;
+
+	/*
+	 * Object with integer dkey / akey should fail IO with -DER_INVAL if
+	 * key size is not correct.
+	 */
+	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OF_DKEY_UINT64, 0,
+				arg->myrank);
+
+	dts_buf_render(buf, STACK_BUF_LEN);
+	dts_buf_render(dkey_buf, 128);
+	dts_buf_render(akey_buf, 128);
+
+	/** init dkey */
+	d_iov_set(&dkey, dkey_buf, sizeof(dkey_buf));
+
+	/** init scatter/gather */
+	d_iov_set(&sg_iov, buf, sizeof(buf));
+	sgl.sg_nr		= 1;
+	sgl.sg_nr_out		= 0;
+	sgl.sg_iovs		= &sg_iov;
+
+	/** init I/O descriptor */
+	d_iov_set(&iod.iod_name, akey_buf, sizeof(akey_buf));
+	iod.iod_size    = STACK_BUF_LEN;
+	iod.iod_type	= DAOS_IOD_SINGLE;
+	iod.iod_recxs	= NULL;
+	iod.iod_nr	= 1;
+
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Update with invalid DKEY\n");
+	/** update record */
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("Fetch with invalid DKEY\n");
+	/** fetch record size */
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod,
+			    NULL, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("Punch with invalid DKEY\n");
+	/** Punch Dkey */
+	rc = daos_obj_punch_dkeys(oh, DAOS_TX_NONE, 0, 1, &dkey, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	oid = daos_test_oid_gen(arg->coh, OC_S1, DAOS_OF_AKEY_UINT64, 0,
+				arg->myrank);
+
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("Update with invalid AKEY\n");
+	/** update record */
+	iod.iod_size	= STACK_BUF_LEN;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("Fetch with invalid AKEY\n");
+	/** fetch record size */
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod,
+			    NULL, NULL, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	print_message("Punch with invalid AKEY\n");
+	/** Punch Akey */
+	rc = daos_obj_punch_akeys(oh, DAOS_TX_NONE, 0, &dkey, 1,
+				  &iod.iod_name, NULL);
+	assert_rc_equal(rc, -DER_INVAL);
+
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+}
+
 static const struct CMUnitTest io_tests[] = {
 	{ "IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
@@ -4556,6 +4631,8 @@ static const struct CMUnitTest io_tests[] = {
 	  test_case_teardown},
 	{ "IO43: Object class selection",
 	  oclass_auto_setting, async_disable, test_case_teardown},
+	{ "IO44: INT dkey/akey checks",
+	  int_key_setting, async_disable, test_case_teardown},
 };
 
 int
@@ -4590,6 +4667,8 @@ int
 run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
+	char oclass[16] = {0};
+	char buf[32];
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (sub_tests_size == 0) {
@@ -4597,7 +4676,14 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("DAOS_IO", io_tests,
+	if (dt_obj_class != OC_UNKNOWN) {
+		oclass[0] = '_';
+		daos_oclass_id2name(dt_obj_class, &oclass[1]);
+	}
+	snprintf(buf, sizeof(buf), "DAOS_IO%s", oclass);
+	buf[sizeof(buf) - 1] = 0;
+
+	rc = run_daos_sub_tests(buf, io_tests,
 				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
 				obj_setup, test_teardown);
 
