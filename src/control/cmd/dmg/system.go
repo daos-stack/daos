@@ -273,7 +273,17 @@ func (cmd *systemCleanupCmd) Execute(_ []string) (errOut error) {
 		return cmd.outputJSON(resp, err)
 	}
 
-	cmd.log.Infof("Response from SystemCleanup RPC: %+v", resp)
+	var out, outErr strings.Builder
+	if err := pretty.PrintSystemCleanupResponse(&out, &outErr, resp, cmd.Verbose); err != nil {
+		return err
+	}
+	if outErr.String() != "" {
+		cmd.log.Error(outErr.String())
+	}
+
+	// Infof prints raw string and doesn't try to expand "%"
+	// preserving column formatting in txtfmt table
+	cmd.log.Infof("%s", out.String())
 
 	return resp.Errors()
 }

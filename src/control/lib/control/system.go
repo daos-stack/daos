@@ -763,9 +763,30 @@ type SystemCleanupResp struct {
 	Pools  []*CleanupCount `json:"pools"`
 }
 
+// Validate returns error if response contents are unexpected, string of
+// warnings if pool queries have failed or nil values if contents are expected.
+func (scr *SystemCleanupResp) Validate() (string, error) {
+	out := new(strings.Builder)
+
+	for i, p := range scr.Pools {
+		if p.Id == "" {
+			return "", errors.Errorf("pool with index %d has no Id", i)
+		}
+	}
+
+	return out.String(), nil
+}
+
 // Errors returns a single error combining all error messages associated with a
 // system cleanup response.
-func (resp *SystemCleanupResp) Errors() error {
+func (scr *SystemCleanupResp) Errors() error {
+	warn, err := scr.Validate()
+	if err != nil {
+		return err
+	}
+	if warn != "" {
+		return errors.New(warn)
+	}
 	return nil
 }
 
@@ -799,8 +820,5 @@ func SystemCleanup(ctx context.Context, rpcClient UnaryInvoker, req *SystemClean
 	}
 
 	resp := new(SystemCleanupResp)
-
-	rpcClient.Debugf("DAOS system cleanup response: %+v", resp)
-
 	return resp, convertMSResponse(ur, resp)
 }

@@ -180,3 +180,50 @@ func PrintSystemStartResponse(out, outErr io.Writer, resp *control.SystemStartRe
 func PrintSystemStopResponse(out, outErr io.Writer, resp *control.SystemStopResp) error {
 	return printSystemResults(out, outErr, resp.Results, &resp.AbsentHosts, &resp.AbsentRanks)
 }
+
+func printSystemCleanupRespVerbose(out io.Writer, resp *control.SystemCleanupResp) error {
+	if len(resp.Pools) == 0 {
+		fmt.Fprintln(out, "no handles cleanedup")
+		return nil
+	}
+
+	titles := []string{"Id", "Count"}
+	formatter := txtfmt.NewTableFormatter(titles...)
+
+	var table []txtfmt.TableRow
+	for _, pool := range resp.Pools {
+		row := txtfmt.TableRow{
+			"Id":    pool.Id,
+			"Count": fmt.Sprintf("%d", pool.Count),
+		}
+		table = append(table, row)
+	}
+
+	fmt.Fprintln(out, formatter.Format(table))
+
+	return nil
+}
+
+// PrintSystemCleanupResponse generates a human-readable representation of the
+// supplied SystemCleanupResp struct and writes it to the supplied io.Writer.
+func PrintSystemCleanupResponse(out, outErr io.Writer, resp *control.SystemCleanupResp, verbose bool) error {
+	warn, err := resp.Validate()
+	if err != nil {
+		return err
+	}
+	if warn != "" {
+		fmt.Fprintln(outErr, warn)
+	}
+
+	if len(resp.Pools) == 0 {
+		fmt.Fprintln(out, "No handles cleanedup")
+		return nil
+	}
+
+	if verbose {
+		return printSystemCleanupRespVerbose(out, resp)
+	}
+
+	fmt.Fprintln(out, "System Cleanup Success")
+	return nil
+}
