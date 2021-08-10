@@ -1916,18 +1916,22 @@ out:
 
 static int
 file_write(struct cmd_args_s *ap, struct file_dfs *file_dfs,
-	   const char *file, void *buf, daos_size_t *size)
+	   const char *file, void *buf, ssize_t *size)
 {
 	int rc = 0;
+	/* posix write returns -1 on error so wrapper uses ssize_t, but
+	 * dfs_sys_read takes daos_size_t for size argument
+	 */
+	daos_size_t tmp_size = *size;
 
 	if (file_dfs->type == POSIX) {
 		*size = write(file_dfs->fd, buf, *size);
-		/* cast to fix compiler warning about comparison of unsigned type */
-		if ((int)*size < 0)
+		if (*size < 0)
 			rc = errno;
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_write(file_dfs->dfs_sys, file_dfs->obj, buf, file_dfs->offset,
-				   size, NULL);
+				   &tmp_size, NULL);
+		*size = tmp_size;
 		if (rc == 0)
 			/* update file pointer with number of bytes written */
 			file_dfs->offset += *size;
@@ -2075,19 +2079,22 @@ file_lstat(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 
 static int
 file_read(struct cmd_args_s *ap, struct file_dfs *file_dfs,
-	  const char *file, void *buf, daos_size_t *size)
+	  const char *file, void *buf, ssize_t *size)
 {
 	int rc = 0;
+	/* posix read returns -1 on error so wrapper uses ssize_t, but
+	 * dfs_sys_read takes daos_size_t for size argument
+	 */
+	daos_size_t tmp_size = *size;
 
 	if (file_dfs->type == POSIX) {
 		*size = read(file_dfs->fd, buf, *size);
-		/* cast to int to fix compiler warning */
-		if ((int)*size < 0) {
+		if (*size < 0)
 			rc = errno;
-		}
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_read(file_dfs->dfs_sys, file_dfs->obj, buf, file_dfs->offset,
-				  size, NULL);
+				  &tmp_size, NULL);
+		*size = tmp_size;
 		if (rc == 0)
 			/* update file pointer with number of bytes read */
 			file_dfs->offset += (daos_off_t)*size;
@@ -2205,7 +2212,7 @@ fs_copy_file(struct cmd_args_s *ap,
 
 	/* read from source file, then write to dest file */
 	while (total_bytes < file_length) {
-		daos_size_t left_to_read = buf_size;
+		ssize_t left_to_read = buf_size;
 		uint64_t bytes_left = file_length - total_bytes;
 
 		if (bytes_left < buf_size)
@@ -2216,7 +2223,7 @@ fs_copy_file(struct cmd_args_s *ap,
 			DH_PERROR_DER(ap, rc, "File read failed");
 			D_GOTO(out_buf, rc);
 		}
-		daos_size_t bytes_to_write = left_to_read;
+		ssize_t bytes_to_write = left_to_read;
 
 		rc = file_write(ap, dst_file_dfs, dst_path, buf, &bytes_to_write);
 		if (rc != 0) {
