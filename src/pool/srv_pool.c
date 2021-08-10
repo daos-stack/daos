@@ -4899,6 +4899,8 @@ ds_pool_evict_handler(crt_rpc_t *rpc)
 					&n_hdl_uuids, in->pvi_machine);
 	}
 
+	D_DEBUG(DB_MGMT, "number of handles found was: %d\n", n_hdl_uuids);
+
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 

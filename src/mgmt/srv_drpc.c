@@ -595,14 +595,13 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			}
 		}
 		n_handles = req->n_handles;
-	} else {;
+	} else if (req->machine != protobuf_c_empty_string) {;
 		machine = req->machine;
 	}
 
 	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, machine,
 				req->sys, &count);
 
-	D_DEBUG(DB_MGMT, "Count from evict is: %d\n", count);
 	if (rc != 0) {
 		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n",
 			req->id, DP_RC(rc));
