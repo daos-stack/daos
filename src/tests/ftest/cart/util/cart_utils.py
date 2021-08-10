@@ -422,12 +422,12 @@ class CartTest(TestWithoutServers):
 
         if memcheck_errors > 0:
             # Temporarily pass memcheck errors (while suppression file is in progress)
-            # self.fail( ...
+            # self.fail( ... )
             self.log.info(
-                "Failed, found " + str(memcheck_errors) +
-                " <error> element(s) in the " +
-                " memcheck XML log file(s): [" +
-                ", ".join(memcheck_files) + "]")
+                "Failed, found %s  <error> element(s) in the " +
+                " memcheck XML log file(s): [%s]",
+                str(memcheck_errors),
+                ", ".join(memcheck_files))
 
         return 0
 
