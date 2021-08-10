@@ -3598,6 +3598,8 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 		goto done;
 
 	evt_ent_array_for_each(ent, ent_array) {
+		if (ent->en_minor_epc == EVT_MINOR_EPC_MAX)
+			continue; /* Skip existing removal records */
 		entry.ei_rect.rc_ex = ent->en_ext;
 		entry.ei_bound = entry.ei_rect.rc_epc = ent->en_epoch;
 		entry.ei_rect.rc_minor_epc = ent->en_minor_epc;

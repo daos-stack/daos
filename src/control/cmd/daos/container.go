@@ -181,7 +181,7 @@ func (cmd *containerBaseCmd) connectPool(ap *C.struct_cmd_args_s) (func(), error
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	Type        string               `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5"`
+	Type        string               `long:"type" short:"t" description:"container type"`
 	Path        string               `long:"path" short:"d" description:"container namespace path"`
 	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
@@ -258,10 +258,14 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		ap.props = cmd.Properties.props
 	}
 
+	// convert the container type string to a DAOS_PROP_CO_LAYOUT_* value
+	cType := C.CString(cmd.Type)
+	defer freeString(cType)
+	C.daos_parse_ctype(cType, &ap._type)
+
 	switch cmd.Type {
 	case "POSIX":
-		ap._type = C.DAOS_PROP_CO_LAYOUT_POSIX
-
+		// POSIX containers have extra attributes
 		if cmd.ChunkSize.Set {
 			ap.chunk_size = cmd.ChunkSize.Size
 		}
@@ -271,8 +275,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if cmd.Mode.Set {
 			ap.mode = cmd.Mode.Mode
 		}
-	case "HDF5":
-		ap._type = C.DAOS_PROP_CO_LAYOUT_HDF5
 	}
 
 	var rc C.int
