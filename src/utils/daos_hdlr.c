@@ -2690,8 +2690,8 @@ dm_connect(struct cmd_args_s *ap,
 				rc = dfs_cont_create(ca->dst_poh, ca->dst_c_uuid, NULL, NULL, NULL);
 				if (rc != 0) {
 					rc = daos_errno2der(rc);
-					DH_PERROR_DER(ap, rc, "failed to create destination "
-						      "container");
+					DH_PERROR_DER(ap, rc,
+						      "failed to create destination container");
 					D_GOTO(err, rc);
 				}
 			} else {
@@ -2741,7 +2741,7 @@ err:
 		rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc2 != 0)
 			DH_PERROR_DER(ap, rc2, "failed to disconnect from destination pool "
-				      ""DF_UUIDF, DP_UUID(ca->dst_p_uuid));
+				      DF_UUIDF, DP_UUID(ca->dst_p_uuid));
 	}
 	if (daos_handle_is_valid(ca->src_poh)) {
 		rc2 = daos_pool_disconnect(ca->src_poh, NULL);
