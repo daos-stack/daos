@@ -1900,7 +1900,8 @@ file_write(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 
 	if (file_dfs->type == POSIX) {
 		*size = write(file_dfs->fd, buf, *size);
-		if (*size < 0)
+		/* cast to fix compiler warning about comparison of unsigned type */
+		if ((int)*size < 0)
 			rc = errno;
 	} else if (file_dfs->type == DAOS) {
 		rc = dfs_sys_write(file_dfs->dfs_sys, file_dfs->obj, buf, file_dfs->offset,
