@@ -1942,8 +1942,11 @@ cleanup:
 	}
 	if (all_params != NULL)
 		D_FREE(all_params);
+
+	if (use_daos_agent_vars) {
+		dc_mgmt_fini();
+	}
 	d_log_fini();
-	dc_mgmt_fini();
 
 	return ret;
 }

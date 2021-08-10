@@ -715,8 +715,10 @@ ctl_init()
 	rc = crt_finalize();
 	D_ASSERTF(rc == 0, "crt_finalize() failed. rc: %d\n", rc);
 
+	if (ctl_gdata.cg_use_daos_agent_env) {
+		dc_mgmt_fini();
+	}
 	d_log_fini();
-	dc_mgmt_fini();
 
 out:
 	return rc;
