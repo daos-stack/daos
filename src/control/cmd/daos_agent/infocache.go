@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/atm"
@@ -97,7 +98,8 @@ func (c *attachInfoCache) GetAttachInfoResp() (*mgmtpb.GetAttachInfoResp, error)
 		return nil, NotCachedErr
 	}
 
-	return c.attachInfo, nil
+	aiCopy := proto.Clone(c.attachInfo)
+	return aiCopy.(*mgmtpb.GetAttachInfoResp), nil
 }
 
 func newLocalFabricCache(log logging.Logger, enabled bool) *localFabricCache {
@@ -139,7 +141,7 @@ func (c *localFabricCache) IsCached() bool {
 }
 
 // Cache caches the results of a fabric scan locally.
-func (c *localFabricCache) Cache(ctx context.Context, scan []*netdetect.FabricScan) {
+func (c *localFabricCache) CacheScan(ctx context.Context, scan []*netdetect.FabricScan) {
 	if c == nil {
 		return
 	}
@@ -147,17 +149,35 @@ func (c *localFabricCache) Cache(ctx context.Context, scan []*netdetect.FabricSc
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if !c.IsEnabled() {
-		return
-	}
-
 	if c.getDevAlias == nil {
 		c.getDevAlias = netdetect.GetDeviceAlias
 	}
 
-	c.localNUMAFabric = NUMAFabricFromScan(ctx, c.log, scan, c.getDevAlias)
+	scanResult := NUMAFabricFromScan(ctx, c.log, scan, c.getDevAlias)
+	c.setCache(scanResult)
+}
+
+// Cache initializes the cache with a specific NUMAFabric.
+func (c *localFabricCache) Cache(ctx context.Context, nf *NUMAFabric) {
+	if c == nil || nf == nil {
+		return
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.setCache(nf)
+}
+
+func (c *localFabricCache) setCache(nf *NUMAFabric) {
+	if !c.IsEnabled() {
+		return
+	}
+
+	c.localNUMAFabric = nf
 
 	c.initialized.SetTrue()
+	c.log.Debugf("cached:\n%+v", c.localNUMAFabric.numaMap)
 }
 
 // GetDevices fetches an appropriate fabric device from the cache.

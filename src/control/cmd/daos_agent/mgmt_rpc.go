@@ -7,6 +7,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"strings"
 
@@ -132,17 +133,25 @@ func (mod *mgmtModule) handleGetAttachInfo(ctx context.Context, reqb []byte, pid
 func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
 	resp, err := mod.getAttachInfoResp(ctx, numaNode, sys)
 	if err != nil {
+		mod.log.Errorf("failed to fetch remote AttachInfo: %s", err.Error())
 		return nil, err
 	}
 
 	fabricIF, err := mod.getFabricInterface(ctx, numaNode, resp.ClientNetHint.NetDevClass)
 	if err != nil {
+		mod.log.Errorf("failed to fetch fabric interface of type %s: %s",
+			netdetect.DevClassName(resp.ClientNetHint.NetDevClass), err.Error())
 		return nil, err
 	}
 
 	resp.ClientNetHint.Interface = fabricIF.Name
 	resp.ClientNetHint.Domain = fabricIF.Name
 	if strings.HasPrefix(resp.ClientNetHint.Provider, verbsProvider) {
+		if fabricIF.Domain == "" {
+			mod.log.Errorf("domain is required for verbs provider, none found on interface %s", fabricIF.Name)
+			return nil, fmt.Errorf("no domain on interface %s", fabricIF.Name)
+		}
+
 		resp.ClientNetHint.Domain = fabricIF.Domain
 		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
@@ -203,7 +212,7 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 	if err != nil {
 		return nil, err
 	}
-	mod.fabricInfo.Cache(ctx, result)
+	mod.fabricInfo.CacheScan(netCtx, result)
 
 	return mod.fabricInfo.GetDevice(numaNode, netDevClass)
 }

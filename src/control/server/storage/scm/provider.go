@@ -62,7 +62,6 @@ type (
 		system.UnmountProvider
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
-		GetfsUsage(string) (uint64, uint64, error)
 		Stat(string) (os.FileInfo, error)
 	}
 
@@ -503,7 +502,7 @@ func (p *Provider) makeMountPath(path string, tgtUID, tgtGID int) error {
 	return nil
 }
 
-// storage.ScmFormat attempts to fulfill the specified SCM format request.
+// Format attempts to fulfill the specified SCM format request.
 func (p *Provider) Format(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
 	check, err := p.CheckFormat(req)
 	if err != nil {
@@ -689,18 +688,4 @@ func (p *Provider) IsMounted(target string) (bool, error) {
 	}
 
 	return isMounted, err
-}
-
-// GetfsUsage returns space utilization info for a mount point.
-func (p *Provider) GetfsUsage(target string) (*storage.ScmMountPoint, error) {
-	total, avail, err := p.sys.GetfsUsage(target)
-	if err != nil {
-		return nil, err
-	}
-
-	return &storage.ScmMountPoint{
-		Path:       target,
-		TotalBytes: total,
-		AvailBytes: avail,
-	}, nil
 }
