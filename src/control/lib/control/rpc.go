@@ -34,8 +34,33 @@ const (
 	maxMSCandidates    = 5
 )
 
+type (
+	safeRandSource struct {
+		sync.Mutex
+		src rand.Source
+	}
+)
+
+func (srs *safeRandSource) Int63() int64 {
+	srs.Lock()
+	defer srs.Unlock()
+	return srs.src.Int63()
+}
+
+func (srs *safeRandSource) Seed(seed int64) {
+	srs.Lock()
+	defer srs.Unlock()
+	srs.src.Seed(seed)
+}
+
+func newSafeRandSource(seed int64) *safeRandSource {
+	return &safeRandSource{
+		src: rand.NewSource(seed),
+	}
+}
+
 var (
-	msCandidateRandSource = rand.NewSource(time.Now().UnixNano())
+	msCandidateRandSource = newSafeRandSource(time.Now().UnixNano())
 )
 
 type (
@@ -291,7 +316,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		// send the request to a server that can handle the request directly.
 		rnd := rand.New(msCandidateRandSource)
 		msCandidates := hostlist.MustCreateSet("")
-		for i := 0; i < len(defaultHosts) && msCandidates.Count() < maxMSCandidates; i++ {
+
+		numCandidates := maxMSCandidates
+		if len(defaultHosts) < numCandidates {
+			numCandidates = len(defaultHosts)
+		}
+
+		for msCandidates.Count() < numCandidates {
 			if _, err := msCandidates.Insert(defaultHosts[rnd.Intn(len(defaultHosts))]); err != nil {
 				return nil, errors.Wrap(err, "failed to build MS candidates set")
 			}
@@ -302,19 +333,28 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 	}
 
+	// Copy the starting hostlist to use for reset on retry later.
+	startHostList := make([]string, len(req.getHostList()))
+	copy(startHostList, req.getHostList())
+
 	isHardFailure := func(err error, reqCtx context.Context) bool {
 		if err == nil {
 			return false
 		}
 
-		// If the error is something other than a context error,
-		// then it's considered a hard failure and not retryable.
-		code := status.Code(errors.Cause(err))
-		if code != codes.Canceled && code != codes.DeadlineExceeded {
-			return true
+		switch errors.Cause(err) {
+		// These may be retryable.
+		case context.DeadlineExceeded, context.Canceled:
+		default:
+			// Check to see if the error contains a gRPC status code.
+			code := status.Code(errors.Cause(err))
+			if code != codes.Canceled && code != codes.DeadlineExceeded {
+				// If the error is not a context error, it's a hard failure.
+				return true
+			}
 		}
 
-		// If the context error is from the overall request context,
+		// If the context error is from the parent request context,
 		// then it's a hard failure. Otherwise, it's a soft failure
 		// and can be retried.
 		return errors.Cause(err) == reqCtx.Err()
@@ -387,6 +427,9 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			// is retryable, but doesn't define its own retry logic,
 			// just break out so it can be tried again as usual.
 			if req.canRetry(err, try) {
+				// Reset the hostlist to the starting hostlist, in order
+				// to restart the search for the current MS leader.
+				req.SetHostList(startHostList)
 				break
 			}
 

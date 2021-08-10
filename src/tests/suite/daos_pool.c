@@ -506,7 +506,7 @@ pool_properties(void **state)
 	assert_rc_equal(rc, 0);
 
 	prop = daos_prop_alloc(1);
-	/* label - set arg->pool_label to use daos_pool_connect_by_label() */
+	/* label - set arg->pool_label to use daos_pool_connect() */
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
 	D_STRNDUP(prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
 	assert_ptr_not_equal(prop->dpp_entries[0].dpe_str, NULL);
@@ -616,10 +616,10 @@ pool_op_retry(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	print_message("setting DAOS_POOL_CONNECT_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
+	print_message("setting on leader %u DAOS_POOL_CONNECT_FAIL_CORPC ... ",
+		arg->pool.pool_info.pi_leader);
+	rc = daos_debug_set_params(arg->group, arg->pool.pool_info.pi_leader, DMG_KEY_FAIL_LOC,
+				   DAOS_POOL_CONNECT_FAIL_CORPC | DAOS_FAIL_ONCE, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -633,10 +633,9 @@ pool_op_retry(void **state)
 	assert_int_equal(info.pi_ndisabled, 0);
 	print_message("success\n");
 
-	print_message("setting DAOS_POOL_QUERY_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE,
-				  0, NULL);
+	print_message("setting on leader %u DAOS_POOL_QUERY_FAIL_CORPC ... ", info.pi_leader);
+	rc = daos_debug_set_params(arg->group, info.pi_leader, DMG_KEY_FAIL_LOC,
+				   DAOS_POOL_QUERY_FAIL_CORPC | DAOS_FAIL_ONCE, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
@@ -648,10 +647,9 @@ pool_op_retry(void **state)
 	assert_int_equal(info.pi_ndisabled, 0);
 	print_message("success\n");
 
-	print_message("setting DAOS_POOL_DISCONNECT_FAIL_CORPC ... ");
-	rc = daos_debug_set_params(arg->group, 0, DMG_KEY_FAIL_LOC,
-				  DAOS_POOL_DISCONNECT_FAIL_CORPC |
-				  DAOS_FAIL_ONCE, 0, NULL);
+	print_message("setting on leader %u DAOS_POOL_DISCONNECT_FAIL_CORPC ... ", info.pi_leader);
+	rc = daos_debug_set_params(arg->group, info.pi_leader, DMG_KEY_FAIL_LOC,
+				  DAOS_POOL_DISCONNECT_FAIL_CORPC | DAOS_FAIL_ONCE, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 

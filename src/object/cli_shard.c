@@ -21,7 +21,7 @@ static inline struct dc_obj_layout *
 obj_shard2layout(struct dc_obj_shard *shard)
 {
 	return container_of(shard, struct dc_obj_layout,
-			    do_shards[shard->do_shard]);
+			    do_shards[shard->do_shard_idx]);
 }
 
 void
@@ -80,7 +80,7 @@ dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t oid,
 	shard->do_target_idx = map_tgt->ta_comp.co_index;
 	shard->do_obj = obj;
 	shard->do_co_hdl = obj->cob_coh;
-	obj_shard_addref(shard);
+	obj_shard_addref(shard); /* release this until obj_layout_free */
 
 	D_SPIN_LOCK(&obj->cob_spin);
 	obj->cob_shards->do_open_count++;
@@ -1543,7 +1543,8 @@ dc_enumerate_copy_csum(d_iov_t *dst, const d_iov_t *src)
 			   src->iov_len));
 		dst->iov_len = src->iov_len;
 		if (dst->iov_len > dst->iov_buf_len) {
-			D_DEBUG(DB_CSUM, "Checksum buffer truncated");
+			D_DEBUG(DB_CSUM, "Checksum buffer truncated %d > %d\n",
+				(int)dst->iov_len, (int)dst->iov_buf_len);
 			return -DER_TRUNC;
 		}
 	}

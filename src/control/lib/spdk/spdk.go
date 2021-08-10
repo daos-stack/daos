@@ -70,19 +70,19 @@ func Rc2err(label string, rc C.int) error {
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	PciAllowList []string // restrict SPDK device access
-	DisableVMD   bool     // flag if VMD devices should not be included
+	PCIAllowList []string // restrict SPDK device access
+	EnableVMD    bool     // flag if VMD functionality should be enabled
 }
 
 func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
-	if !o.DisableVMD {
+	if !o.EnableVMD {
 		// DPDK will not accept VMD backing device addresses
 		// so convert to VMD address
-		newAllowList, err := revertBackingToVmd(log, o.PciAllowList)
+		newAllowList, err := revertBackingToVmd(log, o.PCIAllowList)
 		if err != nil {
 			return err
 		}
-		o.PciAllowList = newAllowList
+		o.PCIAllowList = newAllowList
 	}
 
 	return nil
@@ -135,11 +135,11 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 		return errors.Wrap(err, "sanitizing PCI include list")
 	}
 
-	// Build C array in Go from opts.PciAllowList []string
-	cAllowList := C.makeCStringArray(C.int(len(opts.PciAllowList)))
-	defer C.freeCStringArray(cAllowList, C.int(len(opts.PciAllowList)))
+	// Build C array in Go from opts.PCIAllowList []string
+	cAllowList := C.makeCStringArray(C.int(len(opts.PCIAllowList)))
+	defer C.freeCStringArray(cAllowList, C.int(len(opts.PCIAllowList)))
 
-	for i, s := range opts.PciAllowList {
+	for i, s := range opts.PCIAllowList {
 		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
 
@@ -148,20 +148,21 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	envCtx := C.CString("--no-telemetry")
 	defer C.free(unsafe.Pointer(envCtx))
 
-	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(len(opts.PciAllowList)),
+	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(len(opts.PCIAllowList)),
 		cAllowList)
 	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
 		return err
 	}
 	clean(retPtr)
 
-	if opts.DisableVMD {
-		return nil
-	}
-
-	if rc := C.spdk_vmd_init(); rc != 0 {
-		return Rc2err("spdk_vmd_init()", rc)
-	}
+	// TODO DAOS-8040: re-enable VMD
+	//	if !opts.EnableVMD {
+	//		return nil
+	//	}
+	//
+	//	if rc := C.spdk_vmd_init(); rc != 0 {
+	//		return Rc2err("spdk_vmd_init()", rc)
+	//	}
 
 	return nil
 }
@@ -173,7 +174,7 @@ func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 	C.spdk_env_fini()
 
 	// TODO: enable when vmd_fini supported in daos spdk version
-	//	if opts.DisableVMD {
+	//	if !opts.EnableVMD {
 	//		return nil
 	//	}
 	//
