@@ -20,8 +20,6 @@ class FullPoolContainerCreate(TestWithServers):
         """
         # full storage rc
         err = "-1007"
-        # probably should be -1007, revisit later
-        err2 = "-1009"
 
         # test params
         threshold_percent = self.params.get("threshold_percent", "/run/pool/*")
@@ -67,7 +65,7 @@ class FullPoolContainerCreate(TestWithServers):
                                                                     obj_sz))
                     write_count += 1
                 except DaosApiError as excep:
-                    if not (err in repr(excep) or err2 in repr(excep)):
+                    if not err in repr(excep):
                         self.log.error("caught exception while writing "
                                        "object: %s", repr(excep))
                         cont.close()
@@ -104,6 +102,8 @@ class FullPoolContainerCreate(TestWithServers):
                       "after writing a few Kb")
         for obj_sz in [10, 1]:
             write_count = 0
+            threshold_value = (threshold_percent *
+                               self.pool.scm_size.value)
             while True:
                 try:
                     # write to second container
@@ -112,7 +112,7 @@ class FullPoolContainerCreate(TestWithServers):
                     write_count += 1
 
                 except DaosApiError as excep:
-                    if not (err in repr(excep) or err2 in repr(excep)):
+                    if not err in repr(excep):
                         self.log.error("caught unexpected exception while "
                                        "writing object: %s", repr(excep))
                         self.log.info("closing container")
@@ -125,8 +125,6 @@ class FullPoolContainerCreate(TestWithServers):
                         # of pool size
                         written_data_cont2 = (written_data_cont2 +
                                               (write_count * obj_sz))
-                        threshold_value = (threshold_percent *
-                                           self.pool.scm_size.value)
                         if written_data_cont2 > threshold_value:
                             cont2.close()
                             self.fail("Written {} bytes to container2 which is "
