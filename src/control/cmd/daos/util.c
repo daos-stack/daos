@@ -53,6 +53,11 @@ resolve_duns_path(struct cmd_args_s *ap)
 			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
 			uuid_copy(ap->p_uuid, il_reply.fir_pool);
 			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+
+			/** set pool/cont label or uuid */
+			uuid_unparse(ap->p_uuid, ap->pool_str);
+			uuid_unparse(ap->c_uuid, ap->cont_str);
+
 			ap->oid = il_reply.fir_oid;
 			D_GOTO(out, rc);
 		}

@@ -368,15 +368,24 @@ func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err 
 		switch {
 		case cmd.ContainerID().HasLabel():
 			cmd.contLabel = cmd.ContainerID().Label
+			if ap != nil {
+				cLabel := C.CString(cmd.ContainerID().Label)
+				defer freeString(cLabel)
+				C.strncpy(&ap.cont_str[0], cLabel, C.DAOS_PROP_LABEL_MAX_LEN)
+			}
 		case cmd.ContainerID().HasUUID():
 			cmd.contUUID = cmd.ContainerID().UUID
+			if ap != nil {
+				cUUIDstr := C.CString(cmd.contUUID.String())
+				defer freeString(cUUIDstr)
+				C.strncpy(&ap.cont_str[0], cUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
+			}
 		default:
 			return errors.New("no container label or UUID supplied")
 		}
 	}
 
-	cmd.log.Debugf("pool ID: %s, container ID: %s",
-		cmd.PoolID(), cmd.ContainerID())
+	cmd.log.Debugf("pool ID: %s, container ID: %s", cmd.PoolID(), cmd.ContainerID())
 
 	return nil
 }

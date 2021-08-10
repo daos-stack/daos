@@ -634,7 +634,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
 			rc = daos_prop_copy(prop, attrp->da_props);
 			if (rc) {
 				daos_prop_free(prop);
-				D_ERROR("failed to copy properties (%d)\n", rc);
+				D_ERROR("failed to copy properties "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
 			}
 		}
@@ -706,7 +706,8 @@ duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *pa
 err_cont:
 	rc2 = daos_cont_destroy(poh, attrp->da_cont, 1, NULL);
 	if (rc2)
-		D_ERROR("Failed to cleanup created container %s (%d)\n", attrp->da_cont, rc2);
+		D_ERROR("Failed to cleanup created container %s "DF_RC"\n", attrp->da_cont,
+			DP_RC(rc2));
 err:
 	return rc;
 }
@@ -854,8 +855,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			D_INFO("Path is not in a filesystem that supports the DAOS unified "
 			       "namespace\n");
 		} else {
-			D_ERROR("Failed to set DAOS xattr: %s\n",
-				strerror(rc));
+			D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
 		}
 		goto err_link;
 	}
