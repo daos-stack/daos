@@ -8,6 +8,7 @@ package storage
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -18,6 +19,9 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+// BdevPciAddrSep defines the separator used between PCI addresses in string lists.
+const BdevPciAddrSep = " "
 
 type (
 	// NvmeHealth represents a set of health statistics for a NVMe device
@@ -153,6 +157,14 @@ func (nc NvmeController) Free() (tb uint64) {
 	return
 }
 
+func (ncs NvmeControllers) String() string {
+	var ss []string
+	for _, c := range ncs {
+		ss = append(ss, c.PciAddr)
+	}
+	return strings.Join(ss, ", ")
+}
+
 // Capacity returns the cumulative total bytes of all controller capacities.
 func (ncs NvmeControllers) Capacity() (tb uint64) {
 	for _, c := range ncs {
@@ -222,9 +234,9 @@ type (
 	// BdevScanRequest defines the parameters for a Scan operation.
 	BdevScanRequest struct {
 		pbin.ForwardableRequest
-		DeviceList []string
-		DisableVMD bool
-		NoCache    bool
+		DeviceList  []string
+		EnableVMD   bool
+		BypassCache bool
 	}
 
 	// BdevScanResponse contains information gleaned during a successful Scan operation.
@@ -237,17 +249,17 @@ type (
 		pbin.ForwardableRequest
 		HugePageCount         int
 		DisableCleanHugePages bool
-		PCIAllowlist          string
-		PCIBlocklist          string
+		PCIAllowList          string
+		PCIBlockList          string
 		TargetUser            string
-		ResetOnly             bool
+		Reset_                bool
 		DisableVFIO           bool
-		DisableVMD            bool
+		EnableVMD             bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		VmdDetected bool
+		VMDPrepared bool
 	}
 
 	// BdevTierProperties contains basic configuration properties of a bdev tier.
@@ -264,7 +276,7 @@ type (
 		Properties BdevTierProperties
 		OwnerUID   int
 		OwnerGID   int
-		DisableVMD bool
+		EnableVMD  bool
 		Hostname   string
 	}
 
