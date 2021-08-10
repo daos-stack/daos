@@ -539,6 +539,11 @@ daos_errno2der(int err)
 static inline int
 daos_der2errno(int err)
 {
+	if (err > 0) {
+		D_ERROR("error > 0 (%d)\n", err);
+		return EINVAL;
+	}
+
 	switch (err) {
 	case -DER_SUCCESS:	return 0;
 	case -DER_NO_PERM:
