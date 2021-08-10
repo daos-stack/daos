@@ -133,10 +133,14 @@ struct  _Mgmt__JoinReq
    * Instance index on server node.
    */
   uint32_t idx;
+  /*
+   * rank incarnation
+   */
+  uint64_t incarnation;
 };
 #define MGMT__JOIN_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__join_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0 }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, 0, (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0, 0 }
 
 
 struct  _Mgmt__JoinResp

@@ -3333,7 +3333,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 			cb_args = cbs_event[cb_idx].cecp_args;
 
 			if (cb_func != NULL)
-				cb_func(rank, CRT_EVS_GRPMOD, CRT_EVT_ALIVE,
+				cb_func(rank, 0 /* incarnation */, CRT_EVS_GRPMOD, CRT_EVT_ALIVE,
 					cb_args);
 		}
 	}
@@ -3354,7 +3354,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 			cb_args = cbs_event[cb_idx].cecp_args;
 
 			if (cb_func != NULL)
-				cb_func(rank, CRT_EVS_GRPMOD, CRT_EVT_DEAD,
+				cb_func(rank, 0 /* incarnation */, CRT_EVS_GRPMOD, CRT_EVT_DEAD,
 					cb_args);
 		}
 

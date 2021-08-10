@@ -9,11 +9,22 @@
 from grp import getgrgid
 from pwd import getpwuid
 import re
+import time
 
+from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
 
+RETRYABLE_POOL_CREATE_ERRORS = [
+    -1006, # -DER_UNREACH: Can happen after ranks are killed but before
+           #               SWIM has noticed and excluded them.
+    -1019, # -DER_OOG: Can happen after restart.
+]
+POOL_RETRY_INTERVAL = 1 # seconds
+
+class DmgJsonCommandFailure(CommandFailure):
+    """Exception raised when a dmg --json command fails."""
 
 def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     """Get a dmg command object.
@@ -435,7 +446,24 @@ class DmgCommand(DmgCommandBase):
         # },
         # "error": null,
         # "status": 0
-        output = self._get_json_result(("pool", "create"), **kwargs)
+        output = self._get_json_result(("pool", "create"),
+                                       json_err=True, **kwargs)
+        if output["error"] is not None:
+            self.log.error(output["error"])
+            if output["status"] in RETRYABLE_POOL_CREATE_ERRORS:
+                time.sleep(POOL_RETRY_INTERVAL)
+                return self.pool_create(scm_size, uid=uid, gid=gid,
+                                        nvme_size=nvme_size,
+                                        target_list=target_list,
+                                        svcn=svcn,
+                                        acl_file=acl_file,
+                                        size=size,
+                                        tier_ratio=tier_ratio,
+                                        properties=properties,
+                                        label=label)
+            if self.exit_status_exception:
+                raise DmgJsonCommandFailure(output["error"])
+
         if output["response"] is None:
             return data
 
@@ -587,8 +615,11 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "delete-acl"), pool=pool, principal=principal)
 
-    def pool_list(self):
+    def pool_list(self, no_query=False):
         """List pools.
+
+        Args:
+            no_query (bool, optional): If True, do not query for pool stats.
 
         Raises:
             CommandFailure: if the dmg pool pool list command fails.
@@ -627,7 +658,7 @@ class DmgCommand(DmgCommandBase):
         #    "error": null,
         #    "status": 0
         # }
-        output = self._get_json_result(("pool", "list"))
+        output = self._get_json_result(("pool", "list"), no_query=no_query)
 
         data = {}
         if output["response"] is None or output["response"]["pools"] is None:

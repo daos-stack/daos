@@ -185,6 +185,7 @@ fill_data_csum(struct dcs_csum_info *src_csum_info, d_iov_t *csum_iov)
 	rc = iov_alloc_for_csum_info(csum_iov, src_csum_info);
 	if (rc != 0)
 		return rc;
+
 	rc = ci_serialize(src_csum_info, csum_iov);
 	/** iov_alloc_for_csum_info should have allocated enough so this
 	 * would be a programmer error and want to know right away
@@ -1490,11 +1491,10 @@ dss_enum_unpack(daos_unit_oid_t oid, daos_key_desc_t *kds, int kds_num,
 			      &unpack_arg);
 	if (rc)
 		D_GOTO(out, rc);
-
+out:
 	if (io.ui_iods_top >= 0)
 		rc = complete_io(&io, cb, cb_arg);
 
-out:
 	D_DEBUG(DB_REBUILD, "process list buf "DF_UOID" rc "DF_RC"\n",
 		DP_UOID(io.ui_oid), DP_RC(rc));
 

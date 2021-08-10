@@ -10,6 +10,9 @@ hosts:
     - client-B
     - client-C
 timeout: 2500
+setup:
+  start_agents_once: False
+  start_servers_once: False
 server_config:
   engines_per_host: 2
   name: daos_server
