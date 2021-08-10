@@ -312,7 +312,8 @@ def define_components(reqs):
     retriever = GitRepoRetriever("https://github.com/spdk/spdk.git", True)
     reqs.define('spdk',
                 retriever=retriever,
-                commands=['./configure --prefix="$SPDK_PREFIX"'                \
+                commands=['git fetch', 'git cherry-pick 690783a',              \
+                          './configure --prefix="$SPDK_PREFIX"'                \
                           ' --disable-tests --disable-unit-tests '             \
                           ' --disable-apps --without-vhost '                   \
                           ' --without-crypto --without-pmdk --without-rbd '    \
