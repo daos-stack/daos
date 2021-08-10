@@ -73,7 +73,7 @@ struct dm_args {
 	uint32_t cont_prop_oid;
 	uint32_t cont_prop_layout;
 	uint64_t cont_layout;
-
+	uint64_t cont_oid;
 };
 
 /* Report an error with a system error number using a standard output format */
@@ -2915,9 +2915,6 @@ dm_connect(struct cmd_args_s *ap,
 	int			rc = 0;
 	struct duns_attr_t	dattr = {0};
 	daos_prop_t		*props = NULL;
-	int			size = 2;
-	uint32_t		dpe_types[size];
-	uint64_t		dpe_vals[size];
 	int			rc2;
 
 	/* open src pool, src cont, and mount dfs */
@@ -3082,7 +3079,7 @@ dm_connect(struct cmd_args_s *ap,
 			if (rc != 0) {
 				fprintf(stderr, "Failed to deserialize "
 					"metadata: "DF_RC, DP_RC(rc));
-				D_GOTO(out, rc);
+				D_GOTO(err, rc);
 			}
 		}
 
@@ -3096,7 +3093,7 @@ dm_connect(struct cmd_args_s *ap,
 		if (rc != 0) {
 			fprintf(stderr, "copying user attributes "
 				"failed: %d\n", rc);
-				D_GOTO(err_dst, rc);
+				D_GOTO(err, rc);
 		}
 
 	}
@@ -3314,7 +3311,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		uuid_generate(ca.dst_c_uuid);
 	}
 	rc = dm_connect(ap, is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
-			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
+			ap->sysname, ap->dst, ap->preserve, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "fs copy failed to connect");
 		D_GOTO(out, rc);
@@ -3789,7 +3786,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = dm_connect(ap, is_posix_copy, &dst_cp_type, &src_cp_type,
-			&ca, ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
+			&ca, ap->sysname, ap->dst, ap->preserve, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
 		D_GOTO(out_disconnect, rc);
 	}
