@@ -48,11 +48,11 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                                 m_data[name][host][rank][target]):
                                 value = m_data[name][host][rank][target][size]
                                 invalid = ""
-                                #Verify value within threshold
+                                #Verify value within range
                                 if (value < threshold[0]
                                     or value >= threshold[1]):
                                     status = False
-                                    invalid = "*exceed threshold"
+                                    invalid = "*out of valid range"
                                 #Verify if min < max
                                 if "_min" in name:
                                     name2 = name.replace("_min", "_max")
@@ -104,7 +104,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
         block_sizes = self.params.get("block_sizes", "/run/*")
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
         test_metrics = self.params.get("io_test_metrics", "/run/*")
-        threshold = self.params.get("io_test_metrics_threshold", "/run/*")
+        threshold = self.params.get("io_test_metrics_valid", "/run/*")
         i = 0
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)
