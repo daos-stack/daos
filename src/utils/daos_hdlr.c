@@ -2059,7 +2059,8 @@ file_read(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 
 	if (file_dfs->type == POSIX) {
 		*size = read(file_dfs->fd, buf, *size);
-		if (*size < 0) {
+		/* cast to int to fix compiler warning */
+		if ((int)*size < 0) {
 			rc = errno;
 		}
 	} else if (file_dfs->type == DAOS) {
