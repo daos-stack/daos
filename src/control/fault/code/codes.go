@@ -124,6 +124,7 @@ const (
 	ServerInstancesNotStopped
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
+	ServerPoolNoLabel
 )
 
 // server config fault codes

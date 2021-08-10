@@ -128,7 +128,7 @@ func (ll *LeveledLogger) AddDebugLogger(newLogger DebugLogger) {
 // Debug emits an unformatted message at Debug level, if
 // the logger is configured to do so.
 func (ll *LeveledLogger) Debug(msg string) {
-	ll.Debugf(msg)
+	ll.Debugf("%s", msg)
 }
 
 // Debugf emits a formatted message at Debug level, if
@@ -157,7 +157,7 @@ func (ll *LeveledLogger) AddInfoLogger(newLogger InfoLogger) {
 // Info emits an unformatted message at Info level, if
 // the logger is configured to do so.
 func (ll *LeveledLogger) Info(msg string) {
-	ll.Infof(msg)
+	ll.Infof("%s", msg)
 }
 
 // Infof emits a formatted message at Info level, if
@@ -186,7 +186,7 @@ func (ll *LeveledLogger) AddErrorLogger(newLogger ErrorLogger) {
 // Error emits an unformatted message at Error level, if
 // the logger is configured to do so.
 func (ll *LeveledLogger) Error(msg string) {
-	ll.Errorf(msg)
+	ll.Errorf("%s", msg)
 }
 
 // Errorf emits a formatted message at Error level, if
