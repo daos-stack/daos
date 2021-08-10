@@ -92,7 +92,7 @@ class RbldBasic(TestWithServers):
             if index == 0:
                 self.server_managers[0].stop_ranks([rank], self.d_log, True)
             else:
-                self.pool[index].exclude([rank], self.d_log)
+                self.pool[index].exclude(ranks=[rank])
 
         # Wait for recovery to start
         for index in range(pool_quantity):

@@ -167,11 +167,11 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		// Default to minimum necessary for scan to work correctly.
 		HugePageCount: minHugePageCount,
 		TargetUser:    srv.runningUser,
-		PCIAllowlist:  strings.Join(srv.cfg.BdevInclude, " "),
-		PCIBlocklist:  strings.Join(srv.cfg.BdevExclude, " "),
+		PCIAllowList:  strings.Join(srv.cfg.BdevInclude, storage.BdevPciAddrSep),
+		PCIBlockList:  strings.Join(srv.cfg.BdevExclude, storage.BdevPciAddrSep),
 		DisableVFIO:   srv.cfg.DisableVFIO,
-		DisableVMD:    srv.cfg.DisableVMD || srv.cfg.DisableVFIO || !iommuEnabled,
-		// TODO: pass vmd include list
+		EnableVMD:     srv.cfg.EnableVMD && !srv.cfg.DisableVFIO && iommuEnabled,
+		Reset_:        true, // first reset allocations before preparing devices
 	}
 
 	hasBdevs := cfgHasBdevs(srv.cfg)
@@ -195,9 +195,14 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
-	srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+		srv.log.Errorf("automatic NVMe prepare reset failed (check configuration?)\n%s", err)
+	} else {
+		prepReq.Reset_ = false
+		srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
+		if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
+			srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+		}
 	}
 
 	hugePages, err := hpiGetter()
@@ -348,10 +353,16 @@ func registerLeaderSubscriptions(srv *server) {
 		events.HandlerFunc(func(ctx context.Context, evt *events.RASEvent) {
 			switch evt.ID {
 			case events.RASSwimRankDead:
+				ts, err := evt.GetTimestamp()
+				if err != nil {
+					srv.log.Errorf("bad event timestamp %q: %s", evt.Timestamp, err)
+					return
+				}
+				srv.log.Debugf("%s marked rank %d:%x dead @ %s", evt.Hostname, evt.Rank, evt.Incarnation, ts)
 				// Mark the rank as unavailable for membership in
 				// new pools, etc. Do group update on success.
-				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank)); err == nil {
-					srv.mgmtSvc.reqGroupUpdate(ctx)
+				if err := srv.membership.MarkRankDead(system.Rank(evt.Rank), evt.Incarnation); err == nil {
+					srv.mgmtSvc.reqGroupUpdate(ctx, false)
 				}
 			}
 		}))

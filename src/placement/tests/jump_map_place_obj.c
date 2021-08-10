@@ -1855,6 +1855,33 @@ same_group_shards_not_in_same_domain(void **state)
 	assert_true(miss_cnt < 2);
 }
 
+static void
+large_shards_over_limited_targets(void **state)
+{
+	struct jm_test_ctx	ctx;
+	int i;
+
+	D_DEBUG(DB_TRACE, "shards over limit\n");
+	jtc_init_with_layout(&ctx, 4, 1, 8, OC_RP_2G8, g_verbose);
+	for (i = 0; i < 8; i++) {
+		jtc_set_status_on_target(&ctx, DOWN, i);
+		jtc_scan(&ctx);
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+	}
+
+	assert_success(jtc_create_layout(&ctx));
+
+	for (i = 24; i < 32; i++) {
+		jtc_set_status_on_target(&ctx, DOWN, i);
+		jtc_scan(&ctx);
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+	}
+
+	assert_success(jtc_create_layout(&ctx));
+
+	jtc_fini(&ctx);
+}
+
 /*
  * ------------------------------------------------
  * End Test Cases
@@ -1937,6 +1964,8 @@ static const struct CMUnitTest tests[] = {
 	  unbalanced_config),
 	T("shards in the same group not in the same domain",
 	  same_group_shards_not_in_same_domain),
+	T("large shards over limited targets",
+	  large_shards_over_limited_targets),
 };
 
 int

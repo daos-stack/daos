@@ -956,6 +956,59 @@ dfs_test_rename(void **state)
 	assert_int_equal(rc, 0);
 }
 
+static void
+dfs_test_compat(void **state)
+{
+	test_arg_t	*arg = *state;
+	uuid_t		uuid1;
+	uuid_t		uuid2;
+	daos_handle_t	coh;
+	dfs_t		*dfs;
+	int		rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(uuid1);
+	uuid_clear(uuid2);
+
+	print_message("creating DFS container with set uuid "DF_UUIDF" ...\n", DP_UUID(uuid1));
+	rc = dfs_cont_create(arg->pool.poh, uuid1, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
+	rc = daos_cont_open(arg->pool.poh, uuid1, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, uuid1, 1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid1));
+
+	print_message("creating DFS container with a uuid pointer (not set by caller) ...\n");
+	rc = dfs_cont_create(arg->pool.poh, &uuid2, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
+	rc = daos_cont_open(arg->pool.poh, uuid2, DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	assert_int_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, uuid2, 1, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(uuid2));
+
+	print_message("creating DFS container with a NULL pointer, should fail ...\n");
+	rc = dfs_cont_create(arg->pool.poh, NULL, NULL, &coh, &dfs);
+	assert_int_equal(rc, EINVAL);
+}
+
 static const struct CMUnitTest dfs_unit_tests[] = {
 	{ "DFS_UNIT_TEST1: DFS mount / umount",
 	  dfs_test_mount, async_disable, test_case_teardown},
@@ -979,6 +1032,8 @@ static const struct CMUnitTest dfs_unit_tests[] = {
 	  dfs_test_mt_mkdir, async_disable, test_case_teardown},
 	{ "DFS_UNIT_TEST11: Simple rename",
 	  dfs_test_rename, async_disable, test_case_teardown},
+	{ "DFS_UNIT_TEST12: DFS API compat",
+	  dfs_test_compat, async_disable, test_case_teardown},
 };
 
 static int
@@ -987,16 +1042,14 @@ dfs_setup(void **state)
 	test_arg_t		*arg;
 	int			rc = 0;
 
-	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE,
-			0, NULL);
+	rc = test_setup(state, SETUP_POOL_CONNECT, true, DEFAULT_POOL_SIZE, 0, NULL);
 	assert_int_equal(rc, 0);
 
 	arg = *state;
 
 	if (arg->myrank == 0) {
 		uuid_generate(co_uuid);
-		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
-				     &dfs_mt);
+		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs_mt);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}

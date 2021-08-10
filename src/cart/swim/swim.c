@@ -1063,7 +1063,7 @@ swim_updates_parse(struct swim_context *ctx, swim_id_t from_id,
 					   upds[i].smu_state.sms_incarnation,
 					   from_id);
 
-				self_state.sms_incarnation++;
+				ctx->sc_ops->new_incarnation(ctx, self_id, &self_state);
 				rc = swim_updates_notify(ctx, self_id, self_id,
 							 &self_state, 0);
 				if (rc) {
