@@ -336,6 +336,7 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	daos_epoch_range_t	 max_epr = *epr;
 	struct ilog_desc_cbs	 cbs;
 	daos_handle_t		 loh;
+	bool			 has_cond;
 	int			 rc;
 
 	if (parent != NULL) {
@@ -349,18 +350,19 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	D_DEBUG(DB_TRACE, "Checking and updating incarnation log in range "
 		DF_X64"-"DF_X64"\n", max_epr.epr_lo, max_epr.epr_hi);
 
+	has_cond = cond == VOS_ILOG_COND_UPDATE || cond == VOS_ILOG_COND_INSERT;
+
 	/** Do a fetch first.  The log may already exist */
 	rc = vos_ilog_fetch(vos_cont2umm(cont), vos_cont2hdl(cont),
 			    DAOS_INTENT_UPDATE, ilog, epr->epr_hi, bound,
 			    0, parent, info);
+	/** For now, if the state isn't settled, just retry with later timestamp. The state
+	 *  should get settled quickly due to commit on share
+	 */
+	if (has_cond && info->ii_uncommitted)
+		D_GOTO(done, rc = -DER_INPROGRESS);
 	if (rc == -DER_TX_RESTART)
 		goto done;
-	/** For now, if the state isn't settled, just retry with later
-	 *  timestamp.   The state should get settled quickly when there
-	 *  is conditional update and sharing.
-	 */
-	if (cond == VOS_ILOG_COND_UPDATE && info->ii_uncommitted != 0)
-		D_GOTO(done, rc = -DER_INPROGRESS);
 	if (rc == -DER_NONEXIST)
 		goto update;
 	if (rc != 0) {
@@ -370,18 +372,20 @@ int vos_ilog_update_(struct vos_container *cont, struct ilog_df *ilog,
 	rc = vos_ilog_update_check(info, &max_epr);
 	if (rc == 0) {
 		if (cond == VOS_ILOG_COND_INSERT)
-			return -DER_EXIST;
-		return rc;
+			D_GOTO(done, rc = -DER_EXIST);
+		goto done;
 	}
 	if (rc != -DER_NONEXIST) {
 		D_ERROR("Check failed: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 update:
-	if (rc == -DER_NONEXIST && cond == VOS_ILOG_COND_UPDATE) {
-		if (info->ii_uncertain_create)
-			return -DER_TX_RESTART;
-		return -DER_NONEXIST;
+	if (has_cond && rc == -DER_NONEXIST) {
+		/* There is an uncertain create, so restart */
+		if (info->ii_uncertain_create != 0)
+			D_GOTO(done, rc = -DER_TX_RESTART);
+		if (cond == VOS_ILOG_COND_UPDATE)
+			D_GOTO(done, rc = -DER_NONEXIST);
 	}
 
 	vos_ilog_desc_cbs_init(&cbs, vos_cont2hdl(cont));
@@ -537,6 +541,13 @@ vos_ilog_fetch_init(struct vos_ilog_info *info)
 {
 	memset(info, 0, sizeof(*info));
 	ilog_fetch_init(&info->ii_entries);
+}
+
+void
+vos_ilog_fetch_move(struct vos_ilog_info *dest, struct vos_ilog_info *src)
+{
+	memcpy(dest, src, sizeof(*dest));
+	ilog_fetch_move(&dest->ii_entries, &src->ii_entries);
 }
 
 /** Finalize incarnation log information */

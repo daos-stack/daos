@@ -105,7 +105,10 @@ class SnapshotAggregation(IorTestBase):
             "NVMe free pool space was not reduced by the overwrite")
 
         # Enable the aggregation
+        # Test UUID.
+        self.pool.use_label = False
         self.pool.set_property("reclaim", "time")
+        self.pool.use_label = True
 
         # Delete the snapshot.
         daos.container_destroy_snap(
