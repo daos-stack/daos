@@ -344,7 +344,6 @@ crt_ivf_pending_request_add(struct crt_ivns_internal *ivns_internal,
 	iv_ops->ivo_on_put(ivns_internal, &iv_info->ifc_iv_value,
 			   iv_info->ifc_user_priv);
 
-	IVNS_ADDREF(iv_info->ifc_ivns_internal);
 	pending_fetch->pf_cb_info = iv_info;
 
 	d_list_add_tail(&pending_fetch->pf_link,

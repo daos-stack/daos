@@ -16,6 +16,18 @@ import (
 )
 
 type (
+	// GetfsUsageRetval encapsulates return values from a GetfsUsage call.
+	GetfsUsageRetval struct {
+		Total, Avail uint64
+		Err          error
+	}
+
+	mountMap struct {
+		sync.RWMutex
+		mounted map[string]bool
+	}
+
+	// MockSysConfig alters mock SystemProvider behavior.
 	MockSysConfig struct {
 		IsMountedBool   bool
 		IsMountedErr    error
@@ -25,19 +37,35 @@ type (
 		GetfsStr        string
 		GetfsErr        error
 		SourceToTarget  map[string]string
-		GetfsUsageTotal uint64
-		GetfsUsageAvail uint64
-		GetfsUsageErr   error
-		isMounted       map[string]bool
+		getfsIndex      int
+		GetfsUsageResps []GetfsUsageRetval
 		statErrors      map[string]error
 		realStat        bool
 	}
 
+	// MockSysProvider gives a mock SystemProvider implementation.
 	MockSysProvider struct {
 		sync.RWMutex
-		cfg MockSysConfig
+		log       logging.Logger
+		cfg       MockSysConfig
+		isMounted mountMap
 	}
 )
+
+func (mm *mountMap) Set(mount string, mounted bool) {
+	mm.Lock()
+	defer mm.Unlock()
+
+	mm.mounted[mount] = mounted
+}
+
+func (mm *mountMap) Get(mount string) (bool, bool) {
+	mm.RLock()
+	defer mm.RUnlock()
+
+	mounted, exists := mm.mounted[mount]
+	return mounted, exists
+}
 
 func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 	err := msp.cfg.IsMountedErr
@@ -47,6 +75,9 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 		err = nil
 	}
 
+	msp.Lock()
+	defer msp.Unlock()
+
 	// lookup target of a given source device (target actually a source
 	// device in this case)
 	mount, exists := msp.cfg.SourceToTarget[target]
@@ -54,9 +85,7 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 		target = mount
 	}
 
-	msp.RLock()
-	defer msp.RUnlock()
-	isMounted, exists := msp.cfg.isMounted[target]
+	isMounted, exists := msp.isMounted.Get(target)
 	if !exists {
 		return msp.cfg.IsMountedBool, err
 	}
@@ -66,8 +95,8 @@ func (msp *MockSysProvider) IsMounted(target string) (bool, error) {
 func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) error {
 	if msp.cfg.MountErr == nil {
 		msp.Lock()
-		defer msp.Unlock()
-		msp.cfg.isMounted[target] = true
+		msp.isMounted.Set(target, true)
+		msp.Unlock()
 	}
 	return msp.cfg.MountErr
 }
@@ -75,8 +104,8 @@ func (msp *MockSysProvider) Mount(_, target, _ string, _ uintptr, _ string) erro
 func (msp *MockSysProvider) Unmount(target string, _ int) error {
 	if msp.cfg.UnmountErr == nil {
 		msp.Lock()
-		defer msp.Unlock()
-		msp.cfg.isMounted[target] = false
+		msp.isMounted.Set(target, false)
+		msp.Unlock()
 	}
 	return msp.cfg.UnmountErr
 }
@@ -90,7 +119,12 @@ func (msp *MockSysProvider) Getfs(_ string) (string, error) {
 }
 
 func (msp *MockSysProvider) GetfsUsage(_ string) (uint64, uint64, error) {
-	return msp.cfg.GetfsUsageTotal, msp.cfg.GetfsUsageAvail, msp.cfg.GetfsUsageErr
+	msp.cfg.getfsIndex += 1
+	if len(msp.cfg.GetfsUsageResps) < msp.cfg.getfsIndex {
+		return 0, 0, nil
+	}
+	resp := msp.cfg.GetfsUsageResps[msp.cfg.getfsIndex-1]
+	return resp.Total, resp.Avail, resp.Err
 }
 
 func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
@@ -106,23 +140,26 @@ func (msp *MockSysProvider) Stat(path string) (os.FileInfo, error) {
 	return nil, msp.cfg.statErrors[path]
 }
 
-func NewMockSysProvider(cfg *MockSysConfig) *MockSysProvider {
+func NewMockSysProvider(log logging.Logger, cfg *MockSysConfig) *MockSysProvider {
 	if cfg == nil {
 		cfg = &MockSysConfig{}
-	}
-	if cfg.isMounted == nil {
-		cfg.isMounted = make(map[string]bool)
 	}
 	if cfg.statErrors == nil {
 		cfg.realStat = true
 	}
-	return &MockSysProvider{
+	msp := &MockSysProvider{
+		log: log,
 		cfg: *cfg,
+		isMounted: mountMap{
+			mounted: make(map[string]bool),
+		},
 	}
+	log.Debugf("creating MockSysProvider with cfg: %+v", msp.cfg)
+	return msp
 }
 
-func DefaultMockSysProvider() *MockSysProvider {
-	return NewMockSysProvider(nil)
+func DefaultMockSysProvider(log logging.Logger) *MockSysProvider {
+	return NewMockSysProvider(log, nil)
 }
 
 // MockBackendConfig specifies behavior for a mock SCM backend
@@ -208,9 +245,9 @@ func DefaultMockBackend() *MockBackend {
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig, msc *MockSysConfig) *Provider {
-	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(msc))
+	return NewProvider(log, NewMockBackend(mbc), NewMockSysProvider(log, msc))
 }
 
 func DefaultMockProvider(log logging.Logger) *Provider {
-	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider())
+	return NewProvider(log, DefaultMockBackend(), DefaultMockSysProvider(log))
 }

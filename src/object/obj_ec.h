@@ -249,6 +249,7 @@ struct obj_ec_fail_info {
 	 * it contains ((k + p) * cell_byte_size) memory.
 	 */
 	d_sg_list_t			*efi_stripe_sgls;
+	uint32_t			efi_stripe_sgls_nr;
 	/* For each daos_recx_ep in efi_stripe_lists will create one recovery
 	 * task to fetch the data from servers.
 	 */
