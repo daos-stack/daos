@@ -9,7 +9,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 800
+timeout: 700
 server_config:
     name: daos_server
     servers:
@@ -36,7 +36,7 @@ container:
     properties: cksum:crc16,cksum_size:16384,srv_cksum:on
     control_method: daos
 ior:
-    ior_timeout: 90
+    ior_timeout: 60
     client_processes:
         np_16:
             np: 16
