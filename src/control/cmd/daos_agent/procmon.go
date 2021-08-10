@@ -238,7 +238,7 @@ func (p *procMon) cleanupLeakedHandles(ctx context.Context, info *procInfo) {
 		p.log.Debugf("Cleaning up %d leaked handles from Pool UUID: %s\n", len(element), poolUUID)
 
 		handles := handleMapToList(info.handles[poolUUID])
-		req := &control.PoolEvictReq{UUID: poolUUID, Handles: handles}
+		req := &control.PoolEvictReq{ID: poolUUID, Handles: handles}
 		req.SetSystem(p.systemName)
 
 		err := control.PoolEvict(ctx, p.ctlInvoker, req)

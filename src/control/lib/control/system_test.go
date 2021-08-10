@@ -643,7 +643,10 @@ func TestControl_SystemQuery(t *testing.T) {
 				return
 			}
 
-			cmpOpts := []cmp.Option{cmpopts.IgnoreUnexported(SystemQueryResp{}, system.Member{})}
+			cmpOpts := []cmp.Option{
+				cmpopts.IgnoreUnexported(SystemQueryResp{}, system.Member{}),
+				cmpopts.IgnoreFields(system.Member{}, "LastUpdate"),
+			}
 			if diff := cmp.Diff(tc.expResp, gotResp, cmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
 			}
