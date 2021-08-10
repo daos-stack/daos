@@ -268,7 +268,7 @@ print_usage_msg(const char *msg)
 	printf("-m 'log_message'\n");
 	printf("\tSpecify log message to be sent to remote server\n");
 	printf("--use-daos-agent-env\n");
-        printf("\tSet OFI and CRT_* vars through daos_agent\n");
+	printf("\tSet OFI and CRT_* vars through daos_agent\n");
 }
 
 static int
