@@ -1984,6 +1984,9 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 			if (rc != 0)
 				return rc;
 
+			if (iod->iod_nr == 0)
+				continue;
+
 			/* After convert to DAOS offset, there might be
 			 * some duplicate recxs due to replication/parity
 			 * space. let's remove them.

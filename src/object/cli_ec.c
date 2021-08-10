@@ -2776,9 +2776,9 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
 	int		cell_nr = obj_ec_cell_rec_nr(oca);
 	int		stripe_nr = obj_ec_stripe_rec_nr(oca);
 	daos_recx_t	*recxs = *recxs_p;
-	daos_recx_t	*tgt_recxs;
+	daos_recx_t	*tgt_recxs = NULL;
 	int		tgt_idx;
-	unsigned int	total;
+	int		total = 0;
 	int		idx;
 	int		i;
 
@@ -2814,6 +2814,13 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
 			 cell_nr;
 	}
 
+	if (total == 0) {
+		for (i = 0; i < *nr; i++)
+			D_DEBUG(DB_IO, "%d zero recxs "DF_U64"/"DF_U64"\n",
+				i, recxs[i].rx_idx, recxs[i].rx_nr);
+		goto out;
+	}
+
 	D_ALLOC_ARRAY(tgt_recxs, total);
 	if (tgt_recxs == NULL)
 		return -DER_NOMEM;
@@ -2826,20 +2833,23 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
 			daos_size_t daos_size;
 			daos_off_t  daos_off;
 
-			daos_off = obj_ec_idx_vos2daos(offset, stripe_nr,
-						       cell_nr, tgt_idx);
-			daos_size = min(roundup(offset + 1, cell_nr) - offset,
-					size);
-			D_ASSERT(idx < total);
+			daos_off = obj_ec_idx_vos2daos(offset, stripe_nr, cell_nr, tgt_idx);
+			daos_size = min(roundup(offset + 1, cell_nr) - offset, size);
+			D_ASSERTF(idx < total, "idx %d total %d recxs "DF_U64"/"DF_U64"\n",
+				  idx, total, recxs[i].rx_idx, recxs[i].rx_nr);
 			tgt_recxs[idx].rx_idx = daos_off;
 			tgt_recxs[idx].rx_nr = daos_size;
 			offset += daos_size;
-			size -= daos_size;
+			if (size > daos_size)
+				size -= daos_size;
+			else
+				break;
 			idx++;
 		}
 	}
 
 	D_FREE(*recxs_p);
+out:
 	*recxs_p = tgt_recxs;
 	*nr = total;
 	return 0;
