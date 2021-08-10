@@ -447,6 +447,8 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, scriptCall script
 		resp.VMDPrepared = true
 	}
 
+	// Prepare non-VMD devices.
+	req.EnableVMD = false
 	if err := scriptCall(&req); err != nil {
 		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
 	}

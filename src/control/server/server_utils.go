@@ -193,6 +193,8 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		}
 	}
 
+	// Run prepare with reset first to release resources.
+	//
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
