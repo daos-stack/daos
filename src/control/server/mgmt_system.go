@@ -906,8 +906,9 @@ func (svc *mgmtSvc) SystemCleanup(ctx context.Context, req *mgmtpb.SystemCleanup
 		if res.Status != int32(drpc.DaosSuccess) {
 			return nil, errors.Errorf("Unable to clean up handles for machine %s on pool %s", evictReq.Machine, evictReq.Id)
 		}
+		svc.log.Debugf("Response from pool evict in cleanup: %+v", res)
 		resp.Pools = append(resp.Pools, &mgmtpb.SystemCleanupResp_Pool{
-			Uuid:  evictReq.Id,
+			Id:    evictReq.Id,
 			Count: uint32(res.Count),
 		})
 	}
