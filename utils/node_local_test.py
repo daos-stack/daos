@@ -3130,6 +3130,8 @@ class AllocFailTestRun():
         if not self.aft.check_stderr:
             return
 
+        print('Loc is {}'.format(self.fi_loc))
+
         # Check stderr from a daos command.
         # These should mostly be from the DH_PERROR_SYS or DH_PERROR_DER macros so check for
         # this format.  There may be multiple lines and the two styles may be mixed.
@@ -3158,6 +3160,7 @@ class AllocFailTestRun():
                                     mtype='Invalid error code used')
                     continue
 
+                print(line)
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
                                 "Unexpected stderr '{}'".format(line),
