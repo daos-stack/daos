@@ -3178,6 +3178,8 @@ class AllocFailTest():
         else:
             max_child = int(num_cores / 4 * 3)
 
+        print('Maximum number of spawned tests will be {}'.format(max_child))
+
         active = []
         fid = 1
         max_count = 0
