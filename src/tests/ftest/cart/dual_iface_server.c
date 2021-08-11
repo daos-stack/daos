@@ -17,16 +17,16 @@
 #include <semaphore.h>
 #include <cart/api.h>
 #include <cart/types.h>
+#include "crt_utils.h"
 #include <signal.h>
-#include "tests_common.h"
 
 #define MY_BASE 0x010000000
 #define MY_VER  0
 
 #define NUM_SERVER_CTX 8
 
-#define RPC_DECLARE(name)						\
-	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
+#define RPC_DECLARE(name)					\
+	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)	\
 	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)
 
 enum {
@@ -210,7 +210,7 @@ static int
 handler_shutdown(crt_rpc_t *rpc)
 {
 	crt_reply_send(rpc);
-	tc_progress_stop();
+	crtu_progress_stop();
 	return 0;
 }
 
@@ -249,7 +249,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 	setenv("D_LOG_MASK", "ERR", 1);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(my_rank, 20, true, true);
+	crtu_test_init(my_rank, 20, true, true);
 
 	rc = d_log_init();
 	if (rc != 0)
@@ -292,7 +292,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		}
 
 		rc = pthread_create(&progress_thread[i], 0,
-				    tc_progress_fn, &crt_ctx[i]);
+				    crtu_progress_fn, &crt_ctx[i]);
 		if (rc != 0) {
 			D_ERROR("pthread_create() ctx=%d failed; rc=%d\n",
 				i, rc);
@@ -329,6 +329,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	/* Read each others URIs from the file */
 	memset(other_server_uri, 0x0, MAX_URI);
+	other_server_uri[MAX_URI - 1] = '\0';
 	lseek(fd_read, 0, SEEK_SET);
 	rc = read(fd_read, other_server_uri, MAX_URI);
 	if (rc < 0) {
@@ -418,7 +419,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		error_exit();
 	}
 
-	tc_sem_timedwait(&sem, 10, __LINE__);
+	crtu_sem_timedwait(&sem, 10, __LINE__);
 	DBG_PRINT("Ping successful to rank=%d tag=%d\n", other_rank, tag);
 
 	if (mmap_file) {
@@ -450,7 +451,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 		error_exit();
 	}
 
-	tc_sem_timedwait(&sem, 10, __LINE__);
+	crtu_sem_timedwait(&sem, 10, __LINE__);
 
 	/* Wait until shutdown is issued and progress threads exit */
 	for (i = 0; i < NUM_SERVER_CTX; i++)
@@ -575,6 +576,7 @@ int main(int argc, char **argv)
 	printf("----------------------------------------\n\n");
 
 	/* Spawn 2 servers, each one reads and writes URIs into diff file */
+	umask(S_IWGRP | S_IWOTH);
 	fd0 = mkstemp(tmp_file0);
 	fd1 = mkstemp(tmp_file1);
 

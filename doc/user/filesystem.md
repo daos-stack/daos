@@ -331,10 +331,10 @@ The following types of data will be cached by default.
 * Readahead in dfuse and inserting data into kernel cache
 * MMAP write optimization
 
-!!! note
+!!! warning
     Caching is enabled by default in dfuse. This might cause some parallel
-    applications to fail. Please disable caching if you experience this or want
-    up to date data sharing between nodes.
+    applications to fail. Please disable caching (--disable-caching option) if
+    you experience this or want up to date data sharing between nodes.
 
 To selectively control caching within a container the following container
 attributes should be used, if any attribute is set then the rest are assumed

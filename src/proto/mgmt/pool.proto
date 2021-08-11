@@ -45,7 +45,7 @@ message PoolCreateResp {
 // PoolDestroyReq supplies pool identifier and force flag.
 message PoolDestroyReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // uuid of pool to destroy
+	string id = 2; // uuid or label of pool to destroy
 	bool force = 3; // destroy regardless of active connections
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }
@@ -58,7 +58,7 @@ message PoolDestroyResp {
 // PoolEvictReq supplies pool identifier.
 message PoolEvictReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // uuid of pool to evict
+	string id = 2; // uuid or label of pool to evict
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 	repeated string handles = 4; // Optional list of handles to evict
 }
@@ -71,7 +71,7 @@ message PoolEvictResp {
 // PoolExcludeReq supplies pool identifier, rank, and target_idxs.
 message PoolExcludeReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // uuid of pool to add target up to
+	string id = 2; // uuid or label of pool to add target up to
 	uint32 rank = 3; // target to move to the up state
 	repeated uint32 targetidx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
@@ -85,7 +85,7 @@ message PoolExcludeResp {
 // PoolDrainReq supplies pool identifier, rank, and target_idxs.
 message PoolDrainReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // uuid of pool to add target up to
+	string id = 2; // uuid or label of pool to add target up to
 	uint32 rank = 3; // rank to move to the up state
 	repeated uint32 targetidx = 4; // rank targets
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
@@ -99,7 +99,7 @@ message PoolDrainResp {
 // PoolExtendReq supplies pool identifier and rank list.
 message PoolExtendReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // uuid of pool to add target up to
+	string id = 2; // uuid or label of pool to add target up to
 	repeated uint32 ranks = 3; // ranks
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 	repeated uint64 tierbytes = 5; // Size in bytes of storage tiers
@@ -115,7 +115,7 @@ message PoolExtendResp {
 // PoolReintegrateReq supplies pool identifier, rank, and target_idxs.
 message PoolReintegrateReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // uuid of pool to add target up to
+	string id = 2; // uuid or label of pool to add target up to
 	uint32 rank = 3; // target to move to the up state
 	repeated uint32 targetidx = 4; // target ranks
 	repeated uint32 svc_ranks = 5; // List of pool service ranks
@@ -142,24 +142,12 @@ message ListPoolsResp {
 	repeated Pool pools = 2; // pools list
 }
 
-// PoolResolveIDReq contains the parameters to resolve a user-friendly pool ID
-// to a UUID for use in API requests.
-message PoolResolveIDReq {
-	string sys = 1; // DAOS system identifier
-	string humanID = 2; // Unique pool identifier
-}
-
-// PoolResolveIDResp returns the pool UUID resolved from the request parameters.
-message PoolResolveIDResp {
-	string uuid = 1; // Pool UUID to be used for API requests
-}
-
 // ListContainers
 // Initial implementation differs from C API
 // (numContainers not provided in request - get whole list)
 message ListContReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // uuid of pool
+	string id = 2; // uuid or label of pool
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
@@ -174,7 +162,7 @@ message ListContResp {
 // PoolQueryReq represents a pool query request.
 message PoolQueryReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2;
+	string id = 2;
 	repeated uint32 svc_ranks = 3; // List of pool service ranks
 }
 
@@ -226,7 +214,7 @@ message PoolProperty {
 // PoolSetPropReq represents a request to set pool properties.
 message PoolSetPropReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // uuid of pool to modify
+	string id = 2; // uuid or label of pool to modify
 	repeated PoolProperty properties = 3;
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }
@@ -239,7 +227,7 @@ message PoolSetPropResp {
 // PoolGetPropReq represents a request to get pool properties.
 message PoolGetPropReq {
 	string sys = 1; // DAOS system identifier
-	string uuid = 2; // uuid of pool to query
+	string id = 2; // uuid or label of pool to query
 	repeated PoolProperty properties = 3;
 	repeated uint32 svc_ranks = 4; // List of pool service ranks
 }

@@ -51,7 +51,7 @@ type Server struct {
 	BdevInclude         []string         `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool             `yaml:"disable_vfio"`
-	DisableVMD          bool             `yaml:"disable_vmd"`
+	EnableVMD           bool             `yaml:"enable_vmd"`
 	NrHugepages         int              `yaml:"nr_hugepages"`
 	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
 	ControlLogFile      string           `yaml:"control_log_file"`
@@ -245,10 +245,10 @@ func (cfg *Server) WithDisableVFIO(disabled bool) *Server {
 	return cfg
 }
 
-// WithDisableVMD indicates that vmd devices should not be used even if they
-// exist.
-func (cfg *Server) WithDisableVMD(disabled bool) *Server {
-	cfg.DisableVMD = disabled
+// WithEnableVMD can be used to set the state of VMD functionality,
+// if enabled then VMD devices will be used if they exist.
+func (cfg *Server) WithEnableVMD(enabled bool) *Server {
+	cfg.EnableVMD = enabled
 	return cfg
 }
 
@@ -315,7 +315,7 @@ func DefaultServer() *Server {
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
 		GetDeviceClassFn:   netdetect.GetDeviceClass,
-		DisableVMD:         true, // support currently unstable
+		EnableVMD:          false, // disabled by default
 	}
 }
 
@@ -449,7 +449,18 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 						WithScmRamdiskSize(ec.LegacyStorage.RamdiskSize),
 				)
 			}
-			if ec.LegacyStorage.BdevClass != storage.ClassNone {
+
+			// Do not add bdev tier if cls is none or nvme has no
+			// devices to maintain backward compatible behavior.
+			bc := ec.LegacyStorage.BdevClass
+			switch {
+			case bc == storage.ClassNvme && len(ec.LegacyStorage.BdevConfig.DeviceList) == 0:
+				log.Debugf("legacy storage config conversion skipped for class %s with empty bdev_list",
+					storage.ClassNvme)
+			case bc == storage.ClassNone:
+				log.Debugf("legacy storage config conversion skipped for class %s",
+					storage.ClassNone)
+			default:
 				tierCfgs = append(tierCfgs,
 					storage.NewTierConfig().
 						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
@@ -502,9 +513,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
-	case len(cfg.AccessPoints) > 1:
-		// temporary notification while the feature is still being polished.
-		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
 	}
 
 	for i, engine := range cfg.Engines {

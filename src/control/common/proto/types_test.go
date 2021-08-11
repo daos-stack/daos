@@ -7,6 +7,7 @@
 package proto
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -116,6 +117,35 @@ func TestProto_ConvertScmModules(t *testing.T) {
 	if diff := cmp.Diff(pbs,
 		([]*ctlpb.ScmModule)(convertedNatives), opts...); diff != "" {
 
+		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+	}
+}
+
+func TestProto_ConvertScmMountPoint(t *testing.T) {
+	a := storage.MockScmMountPoint()
+	resA, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var b storage.ScmMountPoint
+	if err := json.Unmarshal(resA, &b); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := common.DefaultCmpOpts()
+	if diff := cmp.Diff(a, &b, opts...); diff != "" {
+		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
+	}
+
+	pb := MockScmMountPoint()
+	native, err := (*ScmMountPoint)(pb).ToNative()
+	if err != nil {
+		t.Fatal(err)
+	}
+	expNative := storage.MockScmMountPoint()
+
+	if diff := cmp.Diff(expNative, native, opts...); diff != "" {
 		t.Fatalf("unexpected result (-want, +got):\n%s\n", diff)
 	}
 }

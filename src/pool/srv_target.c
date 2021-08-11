@@ -26,6 +26,7 @@
 
 #include <daos_srv/pool.h>
 
+#include <gurt/telemetry_producer.h>
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/pool.h>
@@ -33,7 +34,6 @@
 #include <daos_srv/daos_mgmt_srv.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/rebuild.h>
-#include <gurt/telemetry_producer.h>
 #include "rpc.h"
 #include "srv_internal.h"
 
@@ -189,10 +189,8 @@ pool_child_add_one(void *varg)
 
 	rc = ds_mgmt_tgt_file(arg->pla_uuid, VOS_FILE, &info->dmi_tgt_id,
 			      &path);
-	if (rc != 0) {
-		D_FREE(path);
+	if (rc != 0)
 		goto out_free;
-	}
 
 	rc = vos_pool_open(path, arg->pla_uuid, 0, &child->spc_hdl);
 
@@ -1353,4 +1351,56 @@ ds_pool_tgt_prop_update(struct ds_pool *pool, struct pool_iv_prop *iv_prop)
 	pool->sp_ec_cell_sz = iv_prop->pip_ec_cell_sz;
 	pool->sp_reclaim = iv_prop->pip_reclaim;
 	return 0;
+}
+
+/**
+ * Query the cached pool map. If the cached version is <= in->tmi_map_version,
+ * the pool map will not be transferred to the client.
+ */
+void
+ds_pool_tgt_query_map_handler(crt_rpc_t *rpc)
+{
+	struct pool_tgt_query_map_in   *in = crt_req_get(rpc);
+	struct pool_tgt_query_map_out  *out = crt_reply_get(rpc);
+	struct ds_pool_hdl	       *hdl;
+	struct ds_pool		       *pool;
+	struct pool_buf		       *buf;
+	unsigned int			version;
+	int				rc;
+
+	D_DEBUG(DB_TRACE, DF_UUID": handling rpc %p\n",
+		DP_UUID(in->tmi_op.pi_uuid), rpc);
+
+	hdl = ds_pool_hdl_lookup(in->tmi_op.pi_hdl);
+	if (hdl == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
+
+	/* Inefficient; better invent some zero-copy IV APIs. */
+	pool = hdl->sph_pool;
+	ABT_rwlock_rdlock(pool->sp_lock);
+	version = (pool->sp_map == NULL ? 0 : pool_map_get_version(pool->sp_map));
+	if (version <= in->tmi_map_version) {
+		rc = 0;
+		ABT_rwlock_unlock(pool->sp_lock);
+		goto out_hdl;
+	}
+	rc = pool_buf_extract(pool->sp_map, &buf);
+	ABT_rwlock_unlock(pool->sp_lock);
+	if (rc != 0)
+		goto out_hdl;
+
+	rc = ds_pool_transfer_map_buf(buf, version, rpc, in->tmi_map_bulk,
+				      &out->tmo_map_buf_size);
+
+	D_FREE(buf);
+out_hdl:
+	out->tmo_op.po_map_version = version;
+	ds_pool_hdl_put(hdl);
+out:
+	out->tmo_op.po_rc = rc;
+	D_DEBUG(DB_TRACE, DF_UUID": replying rpc %p: "DF_RC"\n",
+		DP_UUID(in->tmi_op.pi_uuid), rpc, DP_RC(out->tmo_op.po_rc));
+	crt_reply_send(rpc);
 }
