@@ -1497,6 +1497,9 @@ get_num_prop_entries_to_add(struct cmd_args_s *ap)
 		nr++;
 	if (ap->group)
 		nr++;
+	if (ap->type != DAOS_PROP_CO_LAYOUT_POSIX &&
+	    ap->type != DAOS_PROP_CO_LAYOUT_UNKNOWN)
+		nr++;
 
 	return nr;
 }
@@ -1546,7 +1549,7 @@ get_first_empty_prop_entry(struct cmd_args_s *ap,
 }
 
 static int
-update_props_for_access_control(struct cmd_args_s *ap)
+update_props_for_create(struct cmd_args_s *ap)
 {
 	int			rc = 0;
 	struct daos_acl		*acl = NULL;
@@ -1615,6 +1618,14 @@ update_props_for_access_control(struct cmd_args_s *ap)
 		entry++;
 	}
 
+	if (ap->type != DAOS_PROP_CO_LAYOUT_POSIX &&
+	    ap->type != DAOS_PROP_CO_LAYOUT_UNKNOWN) {
+		entry->dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
+		entry->dpe_val = ap->type;
+
+		entry++;
+	}
+
 	return 0;
 }
 
@@ -1655,7 +1666,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 {
 	int rc;
 
-	rc = update_props_for_access_control(ap);
+	rc = update_props_for_create(ap);
 	if (rc != 0)
 		return rc;
 
@@ -1705,7 +1716,7 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	 */
 	ARGS_VERIFY_PATH_CREATE(ap, err_rc, rc = RC_PRINT_HELP);
 
-	rc = update_props_for_access_control(ap);
+	rc = update_props_for_create(ap);
 	if (rc != 0)
 		return rc;
 
