@@ -49,7 +49,7 @@ class RbldContRedundancyFactorEnforce(RbldContRedundancyFactor):
             except DaosTestError as error:
                 self.log.info(error)
                 if der_inval in str(error):
-                    self.log.info("==Negative test, excepting DaosApiError "
+                    self.log.info("==Negative test, expecting DaosApiError "
                                   "RC: -1003 found.")
                 else:
                     self.fail("#Negative test, container redundancy factor "
@@ -88,20 +88,20 @@ class RbldContRedundancyFactorEnforce(RbldContRedundancyFactor):
         if negative_test:
             self.log.info("Negative test passed")
         else:
-        # Verify the rank to be excluded has at least one object
+            # Verify the rank to be excluded has at least one object
             self.verify_rank_has_objects()
-        # Start the rebuild process
+            # Start the rebuild process
             self.start_rebuild_cont_rf(rf)
-        # Execute the test steps during rebuild
+            # Execute the test steps during rebuild
             self.execute_during_rebuild_cont_rf(rf, expect_cont_status)
-        # Refresh local pool and container
+            # Refresh local pool and container
             self.log.info(
                 "==>(6)Check for pool and container info after rebuild.")
             self.pool.check_pool_info()
             self.container.check_container_info()
-        # Verify the excluded rank is no longer used with the objects
+            # Verify the excluded rank is no longer used with the objects
             self.verify_rank_has_no_objects()
-        # Verify the pool information after rebuild
+            # Verify the pool information after rebuild
             if expect_cont_status == "HEALTHY":
                 self.update_pool_verify()
                 self.execute_pool_verify(" after rebuild")
