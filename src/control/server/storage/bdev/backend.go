@@ -186,11 +186,28 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 	// Prepare non-VMD devices.
 	req.EnableVMD = false
 	sb.log.Debugf("provider backend prepare %+v", req)
-	if err := sb.script.Prepare(&req); err != nil {
-		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
+	return resp, errors.Wrap(sb.script.Prepare(&req), "re-binding ssds to attach with spdk")
+}
+
+// reset receives function pointers for external interfaces.
+func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn) error {
+	// If VMD has been explicitly enabled and there are VMD enabled
+	// NVMe devices on the host, attempt to prepare them first.
+	vmdReq, err := getVMDPrepReq(sb.log, &req, vmdDetect)
+	if err != nil {
+		return err
+	}
+	if vmdReq != nil {
+		sb.log.Debugf("provider backend reset %+v", vmdReq)
+		if err := sb.script.Reset(vmdReq); err != nil {
+			return errors.Wrap(err, "un-binding vmd ssds")
+		}
 	}
 
-	return resp, nil
+	// Reset non-VMD devices.
+	req.EnableVMD = false
+	sb.log.Debugf("provider backend reset %+v", req)
+	return errors.Wrap(sb.script.Reset(&req), "un-binding vmd ssds")
 }
 
 // Reset will perform a lookup on the requested target user to validate existence
@@ -201,7 +218,7 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // bdev_include and bdev_exclude list filters provided in the server config file.
 func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
-	return sb.script.Reset(&req)
+	return sb.reset(req, detectVMD)
 }
 
 // Prepare will perform a lookup on the requested target user to validate existence

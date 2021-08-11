@@ -729,7 +729,6 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
-					Args: []string{},
 				},
 			},
 		},

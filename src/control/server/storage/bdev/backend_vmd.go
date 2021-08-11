@@ -230,7 +230,7 @@ func getVMDPrepReq(log logging.Logger, req *storage.BdevPrepareRequest, vmdDetec
 		log.Debugf("vmd prep: %v devices blocked", vmdPCIAddrs)
 		return nil, nil
 	}
-	log.Debugf("volume management devices selected: %v", req.PCIAllowList)
+	log.Debugf("volume management devices selected: %v", vmdReq.PCIAllowList)
 
 	return &vmdReq, nil
 }
