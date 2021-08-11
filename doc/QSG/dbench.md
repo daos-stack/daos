@@ -7,9 +7,9 @@
 From one of the client node:
 
 	dbench --clients-per-process 10 --directory /tmp/daos_dfuse/ --loadfile /usr/share/dbench/client.txt --timelimit 10 10
-	 
+
 	dbench version 4.00 - Copyright Andrew Tridgell 1999-2004
-	 
+
 	Running for 10 seconds with load '/usr/share/dbench/client.txt' and minimum warmup 2 secs
 	failed to create barrier semaphore
 	9 of 10 processes prepared for launch   0 sec
@@ -34,14 +34,14 @@ From one of the client node:
 	  35  cleanup  15 sec
 	  20  cleanup  16 sec
 	   0  cleanup  17 sec
-	 
+
 	 Operation      Count    AvgLat    MaxLat
 	 ----------------------------------------
 	 NTCreateX       3877    24.215   170.761
 	 Close           3800     0.004     0.022
 	 Qfileinfo       3110     1.488     4.579
 	 WriteX         18750     0.274     6.484
-	 
+
 	Throughput 104.568 MB/sec  100 clients  10 procs  max_latency=285.639 ms
 
 
@@ -64,7 +64,7 @@ Remove dfuse mountpoint:
 
 	# unmount dfuse
 	pdsh -w $CLIENT_NODES 'fusermount3 -uz /tmp/daos_dfuse'
-	 
+
 	# remove mount dir
 	pdsh -w $CLIENT_NODES rm -rf /tmp/daos_dfuse
 
@@ -74,7 +74,7 @@ List containers to be destroyed:
 
 	# list containers
 	daos pool list-containers --pool $DAOS_POOL  # sample output
-	 
+
 	# sample output
 	cd46cf6e-f886-4682-8077-e3cbcd09b43a
 	caf0135c-def8-45a5-bac3-d0b969e67c8b
@@ -83,7 +83,7 @@ Destroy Containers:
 
 	# destroy container1
 	daos container destroy --pool $DAOS_POOL --cont $DAOS_CONT
-	 
+
 	# destroy container2
 	daos container destroy --pool $DAOS_POOL --cont $DAOS_CONT2
 
@@ -93,7 +93,7 @@ List Pools to be destroyed:
 
 	# list pool
 	dmg pool list
-	 
+
 	# sample output
 	Pool UUID                            Svc Replicas
 	---------                            ------------
