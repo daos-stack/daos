@@ -3343,17 +3343,22 @@ def run(wf, args):
     conf = load_conf(args)
 
     wf_server = WarningsFactory('nlt-server-leaks.json', post=True, check='Server leak checking')
-    wf_client = WarningsFactory('nlt-client-leaks.json')
 
     conf.set_wf(wf)
     conf.set_args(args)
     setup_log_test(conf)
 
-    server = DaosServer(conf, test_class='first')
-    server.start()
+    fi_test = False
+    start_server = True
+
+    if args.mode == 'fi':
+        start_server = False
+
+    if start_server:
+        server = DaosServer(conf, test_class='first')
+        server.start()
 
     fatal_errors = BoolRatchet()
-    fi_test = False
 
     if args.mode == 'launch':
         run_in_fg(server, conf)
@@ -3368,7 +3373,6 @@ def run(wf, args):
     elif args.mode == 'fi':
         fi_test = True
     elif args.mode == 'all':
-        fi_test = True
         fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
@@ -3385,8 +3389,9 @@ def run(wf, args):
         fatal_errors.add_result(run_dfuse(server, conf))
         fatal_errors.add_result(set_server_fi(server))
 
-    if server.stop(wf_server) != 0:
-        fatal_errors.fail()
+    if start_server:
+        if server.stop(wf_server) != 0:
+            fatal_errors.fail()
 
     if args.mode == 'all':
         server = DaosServer(conf)
@@ -3417,11 +3422,11 @@ def run(wf, args):
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
-#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
-#                                                         wf_client))
-            fatal_errors.add_result(test_alloc_fail_cat(server,
-                                                        conf, wf_client))
+            wf_client = WarningsFactory('nlt-client-leaks.json')
+            fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+            fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
             fatal_errors.add_result(test_alloc_fail(server, conf))
+            wf_client.close()
         if args.perf_check:
             check_readdir_perf(server, conf)
         if server.stop(wf_server) != 0:
@@ -3437,7 +3442,6 @@ def run(wf, args):
         fatal_errors.add_result(True)
 
     wf_server.close()
-    wf_client.close()
     return fatal_errors
 
 def main():

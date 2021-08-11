@@ -735,14 +735,6 @@ pipeline {
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
-                            recordIssues enabledForFailure: true,
-                                         failOnError: false,
-                                         ignoreFailedBuilds: false,
-                                         ignoreQualityGate: true,
-                                         name: "NLT client leaks",
-                                         tool: issues(pattern: 'nlt-client-leaks.json',
-                                           name: 'NLT client results',
-                                           id: 'NLT_client')
                         }
                     }
                 }
@@ -943,6 +935,46 @@ pipeline {
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
+                stage('Fault injection testing') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'utils/docker/Dockerfile.centos.7'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
+                                                                deps_build: true)
+                            args '--tmpfs /mnt/daos_0'
+                        }
+                    }
+                    steps {
+                        sconsBuild parallel_build: true,
+                                   scons_exe: 'scons-3',
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   build_deps: "no"
+                        sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
+                            label: 'Run NLT smoke test')
+                    }
+                    post {
+                        always {
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         tools: [issues(pattern: 'nlt-errors.json',
+                                                        name: 'Fault injection issues',
+                                                        id: 'NLT_fi_server'),
+                                                 issues(pattern: 'nlt-client-leaks.json',
+                                                        name: 'NLT client results',
+                                                        id: 'NLT_client')]
+                            junit testResults: 'nlt-junit.xml'
+                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/',
+                                             allowEmptyArchive: true
+                        }
+                    }
+                }
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep') {
