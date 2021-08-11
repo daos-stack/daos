@@ -898,7 +898,7 @@ dfs_setup(void **state)
 
 	if (arg->myrank == 0) {
 		dfs_attr_t	attr = {};
-		
+
 		d_getenv_bool("DFS_NO_DTX", &no_dtx);
 		if (no_dtx) {
 			print_message("Testing DFS in Relaxed mode\n");
