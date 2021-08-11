@@ -596,6 +596,30 @@ class TestContainer(TestDaosApiBase):
             if key != "self" and val is not None]
         return self._check_info(checks)
 
+    def write_objects_no_except(self, rank=None, obj_class=None):
+        """Write objects to the container without fail_on DaosTestError,
+           for negative test on container write_objects.
+
+        Args:
+            rank (int, optional): server rank. Defaults to None.
+            obj_class (int, optional): daos object class. Defaults to None.
+
+        """
+        self.open()
+        self.log.info(
+            "Writing %s object(s), with %s record(s) of %s bytes(s) each, in "
+            "container %s%s%s",
+            self.object_qty.value, self.record_qty.value, self.data_size.value,
+            self.uuid, " on rank {}".format(rank) if rank is not None else "",
+            " with object class {}".format(obj_class)
+            if obj_class is not None else "")
+        for _ in range(self.object_qty.value):
+            self.written_data.append(TestContainerData(self.debug.value))
+            self.written_data[-1].write_object(
+                self, self.record_qty.value, self.akey_size.value,
+                self.dkey_size.value, self.data_size.value, rank, obj_class,
+                self.data_array_size.value)
+
     @fail_on(DaosTestError)
     def write_objects(self, rank=None, obj_class=None):
         """Write objects to the container.

@@ -11,13 +11,13 @@ import re
 
 class RbldContRedundancyFactor(RebuildTestBase):
     # pylint: disable=too-many-ancestors
-    """Test cascading failures during rebuild.
+    """Test Container Redundancy Factor with rebuild.
 
     :avocado: recursive
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize a CascadingFailures object."""
+        """Initialize a RbldContRedundancyFactor object."""
         super().__init__(*args, **kwargs)
         self.mode = None
         self.daos_cmd = None
