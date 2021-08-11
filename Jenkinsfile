@@ -952,7 +952,7 @@ pipeline {
                     steps {
                         sconsBuild parallel_build: true,
                                    scons_exe: 'scons-3',
-                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
+                                   scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
                         sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
                             label: 'Run NLT smoke test')
