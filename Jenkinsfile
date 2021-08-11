@@ -965,9 +965,9 @@ pipeline {
                                          ignoreQualityGate: true,
                                          tools: [issues(pattern: 'nlt-errors.json',
                                                         name: 'Fault injection issues',
-                                                        id: 'NLT_fi_server'),
+                                                        id: 'Fault_Injection'),
                                                  issues(pattern: 'nlt-client-leaks.json',
-                                                        name: 'NLT client results',
+                                                        name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
                             archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/',

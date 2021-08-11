@@ -3424,7 +3424,7 @@ def run(wf, args):
         if fi_test:
             wf_client = WarningsFactory('nlt-client-leaks.json')
             fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
-            fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
+#            fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
             fatal_errors.add_result(test_alloc_fail(server, conf))
             wf_client.close()
         if args.perf_check:
