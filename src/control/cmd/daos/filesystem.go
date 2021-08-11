@@ -80,6 +80,7 @@ func (cmd *fsAttrCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
+	flags := C.uint(C.DAOS_COO_RW)
 	op := os.Args[2]
 	switch op {
 	case "set-attr":
@@ -92,6 +93,7 @@ func (cmd *fsAttrCmd) Execute(_ []string) error {
 		}
 	case "get-attr":
 		ap.fs_op = C.FS_GET_ATTR
+		flags = C.DAOS_COO_RO
 	case "reset-attr":
 		ap.fs_op = C.FS_RESET_ATTR
 	case "reset-chunk-size":
@@ -110,7 +112,7 @@ func (cmd *fsAttrCmd) Execute(_ []string) error {
 		return errors.Errorf("unknown fs op %q", op)
 	}
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(flags, ap)
 	if err != nil {
 		return err
 	}
