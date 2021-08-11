@@ -476,6 +476,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %changelog
 * Thu Apr 22 2021 Steve Bollinger <stevenx.bollinger@intel.com> - 1.3.0-14
 - Add selftest configuration files
+
 * Thu Aug 05 2021 Christopher Hoffman <christopherx.hoffman@intel.com> 1.3.104-4
 - Update conditional statement to include checking for distributions to
   determine which unit files to use for daos-server and daos-agent
