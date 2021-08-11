@@ -936,10 +936,10 @@ pipeline {
                     }
                 } // stage('Scan CentOS 7 RPMs')
                 stage('Fault injection testing') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
+//                    when {
+//                        beforeAgent true
+//                        expression { ! skipStage() }
+//                    }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
