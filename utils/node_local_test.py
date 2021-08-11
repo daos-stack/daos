@@ -77,6 +77,7 @@ class NLTConf():
         self.args = None
         self.max_log_size = None
         self.valgrind_errors = False
+        self.lt = CulmTimer()
         self.dfuse_parent_dir = tempfile.mkdtemp(dir=args.dfuse_dir,
                                                  prefix='dnt_dfuse_')
         self.tmp_dir = None
@@ -112,6 +113,21 @@ class NLTConf():
 
     def __getitem__(self, key):
         return self.bc[key]
+
+class CulmTimer():
+    """Class to keep track of elapsed time so we know where to focus performance tuning"""
+
+    def __init__(self):
+        self.total = 0
+        self._start = None
+
+    def start(self):
+        """Start the timer"""
+        self._start = time.time()
+
+    def stop(self):
+        """Stop the timer, and add elapsed to total"""
+        self.total += time.time() - self._start
 
 class BoolRatchet():
     """Used for saving test results"""
@@ -282,8 +298,9 @@ class WarningsFactory():
         if cat:
             entry['category'] = cat
         entry['lineStart'] = line.lineno
+        # Jenkins no longer seems to display the description.
         entry['description'] = message
-        entry['message'] = line.get_anon_msg()
+        entry['message'] = '{}\n{}'.format(line.get_anon_msg(), message)
         entry['severity'] = sev
         self.issues.append(entry)
         if self.pending and self.pending[0][0].pid != line.pid:
@@ -815,6 +832,16 @@ class DaosServer():
             self._make_pool()
 
         return self.test_pool.uuid
+
+    def get_test_pool_id(self):
+        """Return a pool uuid to be used for testing
+
+        Create a pool as required"""
+
+        if self.test_pool is None:
+            self._make_pool()
+
+        return self.test_pool.id()
 
 def il_cmd(dfuse, cmd, check_read=True, check_write=True, check_fstat=True):
     """Run a command under the interception library
@@ -2315,6 +2342,24 @@ def sizeof_fmt(num, suffix='B'):
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
+def log_timer(func):
+    """Wrapper around the log_test function to measure how long it takes"""
+
+    def log_timer_wrapper(*args, **kwargs):
+        """Do the actual wrapping"""
+
+        conf = args[0]
+        conf.lt.start()
+        try:
+            func(*args, **kwargs)
+        except NLTestFail:
+            conf.lt.stop()
+            raise
+        conf.lt.stop()
+
+    return log_timer_wrapper
+
+@log_timer
 def log_test(conf,
              filename,
              show_memleaks=True,
@@ -2964,9 +3009,10 @@ class AllocFailTestRun():
         self.fault_injected = None
         self.loc = loc
 
-        prefix = 'dnt_fi_check_{}_'.format(get_inc_id())
+        prefix = 'dnt_fi_{}_{}_'.format(aft.description, loc)
         self.log_file = tempfile.NamedTemporaryFile(prefix=prefix,
                                                     suffix='.log',
+                                                    dir=self.aft.conf.tmp_dir,
                                                     delete=False).name
         self.env['D_LOG_FILE'] = self.log_file
 
@@ -3041,6 +3087,8 @@ class AllocFailTestRun():
         This is where all the checks are performed.
         """
 
+        # Put in a new-line.
+        print()
         self.returncode = rc
         self.stdout = self._sp.stdout.read()
         self.stderr = self._sp.stderr.read()
@@ -3141,12 +3189,13 @@ class AllocFailTestRun():
 class AllocFailTest():
     """Class to describe fault injection command"""
 
-    def __init__(self, conf, cmd):
+    def __init__(self, conf, desc, cmd):
         self.conf = conf
         self.cmd = cmd
+        self.description = desc
         self.prefix = True
         # Check stderr from commands where faults were injected.
-        self.check_stderr = False
+        self.check_stderr = True
         # Check stdout/error from commands where faults were not injected
         self.check_post_stdout = True
         # Check stderr conforms to daos_hdlr.c style
@@ -3190,17 +3239,25 @@ class AllocFailTest():
 
         fatal_errors = False
 
+        # Now run all iterations in parallel up to max_child.  Iterations will be launched
+        # in order but may not finish in order, rather they are processed in the order they
+        # finish.  After each repetition completes then check for re-launch new processes
+        # to keep the pipeline full.
         while not finished or active:
-            if len(active) < max_child and not finished:
-                active.append(self._run_cmd(fid))
-                fid += 1
 
-                if len(active) > max_count:
-                    max_count = len(active)
+            if not finished:
+                while len(active) < max_child:
+                    active.append(self._run_cmd(fid))
+                    fid += 1
+
+                    if len(active) > max_count:
+                        max_count = len(active)
 
             # Now complete as many as have finished.
-            while active and active[0].has_finished():
-                ret = active.pop(0)
+            for ret in active:
+                if not ret.has_finished():
+                    continue
+                active.remove(ret)
                 print(ret)
                 if ret.returncode < 0:
                     fatal_errors = True
@@ -3209,6 +3266,7 @@ class AllocFailTest():
                 if not ret.fault_injected:
                     print('Fault injection did not trigger, stopping')
                     finished = True
+                break
 
         print('Completed, fid {}'.format(fid))
         print('Max in flight {}'.format(max_count))
@@ -3227,6 +3285,12 @@ class AllocFailTest():
         """
 
         cmd_env = get_base_env()
+
+        # Debug flags to enable all memory allocation logging, but as little else as possible.
+        # This improves run-time but makes debugging any issues found harder.
+        # cmd_env['D_LOG_MASK'] = 'DEBUG'
+        # cmd_env['DD_MASK'] = 'mem'
+        # del cmd_env['DD_SUBSYS']
 
         if self.use_il:
             cmd_env['LD_PRELOAD'] = os.path.join(self.conf['PREFIX'],
@@ -3278,7 +3342,7 @@ def test_alloc_fail_copy(server, conf, wf):
                'daos://{}/{}'.format(pool, container)]
         return cmd
 
-    test_cmd = AllocFailTest(conf, get_cmd)
+    test_cmd = AllocFailTest(conf, 'filesystem-copy', get_cmd)
     test_cmd.wf = wf
     test_cmd.check_daos_stderr = True
     test_cmd.check_post_stdout = False
@@ -3311,12 +3375,71 @@ def test_alloc_fail_cat(server, conf, wf):
 
     cmd = ['cat', target_file]
 
-    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd = AllocFailTest(conf, 'il-cat', cmd)
     test_cmd.use_il = True
+    test_cmd.check_stderr = False
     test_cmd.wf = wf
 
     rc = test_cmd.launch()
     dfuse.stop()
+    return rc
+
+def test_fi_list_attr(server, conf, wf):
+    """Run daos cont list-attr with fi"""
+
+    pool = server.get_test_pool()
+
+    container = create_cont(conf, pool)
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool, container,
+                  '--attr', 'my-test-attr-1', '--value', 'some-value'])
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool, container,
+                  '--attr', 'my-test-attr-2', '--value', 'some-other-value'])
+
+    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'list-attrs',
+           pool,
+           container]
+
+    test_cmd = AllocFailTest(conf, 'cont-list-attr', cmd)
+    test_cmd.wf = wf
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
+    return rc
+
+def test_fi_get_attr(server, conf, wf):
+    """Run daos cont get-attr with fi"""
+
+    pool = server.get_test_pool_id()
+
+    container = create_cont(conf, pool)
+
+    attr_name = 'my-test-attr'
+
+    run_daos_cmd(conf,
+                 ['container', 'set-attr',
+                  pool, container,
+                  '--attr', attr_name, '--value', 'value'])
+
+    cmd = [os.path.join(conf['PREFIX'], 'bin', 'daos'),
+           'container',
+           'get-attr',
+           pool,
+           container,
+           attr_name]
+
+    test_cmd = AllocFailTest(conf, 'cont-get-attr', cmd)
+    test_cmd.wf = wf
+
+    rc = test_cmd.launch()
+    destroy_container(conf, pool, container)
     return rc
 
 def test_alloc_fail(server, conf):
@@ -3328,12 +3451,11 @@ def test_alloc_fail(server, conf):
            'cont',
            'list',
            pool]
-    test_cmd = AllocFailTest(conf, cmd)
+    test_cmd = AllocFailTest(conf, 'pool-list-containers', cmd)
 
     # Create at least one container, and record what the output should be when
     # the command works.
     container = create_cont(conf, pool)
-    test_cmd.check_stderr = True
 
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)
@@ -3425,9 +3547,19 @@ def run(wf, args):
         server.start()
         if fi_test:
             wf_client = WarningsFactory('nlt-client-leaks.json')
-            fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
-#            fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
+            # list-container test.
             fatal_errors.add_result(test_alloc_fail(server, conf))
+
+            # Read-via-IL test, requires dfuse.
+            # fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
+
+            # Container attribute tests, work but disabled because of runtime concerns.
+            fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+            fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+
+            # filesystem copy test - not complete.
+            fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+
             wf_client.close()
         if args.perf_check:
             check_readdir_perf(server, conf)
@@ -3444,6 +3576,7 @@ def run(wf, args):
         fatal_errors.add_result(True)
 
     wf_server.close()
+    print('Total time in log analysis: {:.2f} seconds'.format(conf.lt.total))
     return fatal_errors
 
 def main():
