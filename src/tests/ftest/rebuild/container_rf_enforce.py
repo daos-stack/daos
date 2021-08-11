@@ -76,9 +76,10 @@ class RbldContRedundancyFactorEnforce(RbldContRedundancyFactor):
         else:
             expect_cont_status = "HEALTHY"
         negative_test = True
-        if ("OC_SX" in oclass and rf_num < 1) or (
-                "OC_RP_2" in oclass and rf_num < 2) or (
-                    "OC_RP_3" in oclass and rf_num < 3):
+        if "OC_SX" in oclass and rf_num < 1:
+            negative_test = False
+        elif ("OC_RP_2" in oclass and rf_num < 2) or (
+            "OC_RP_3" in oclass and rf_num < 3):
             negative_test = False
         # Create a pool and verify the pool information before rebuild
         self.create_test_pool()
