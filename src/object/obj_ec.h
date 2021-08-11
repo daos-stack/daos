@@ -225,7 +225,8 @@ struct obj_ec_recov_task {
 	daos_iod_t		*ert_oiod;
 	d_sg_list_t		ert_sgl;
 	daos_epoch_t		ert_epoch;
-	daos_handle_t		ert_th; /* read-only tx handle */
+	daos_handle_t		ert_th;		/* read-only tx handle */
+	uint32_t		ert_snapshot:1;	/* For snapshot flag */
 };
 
 /** EC obj IO failure information */
@@ -241,16 +242,20 @@ struct obj_ec_fail_info {
 	struct obj_ec_recov_codec	*efi_recov_codec;
 	/* to be recovered full-stripe list */
 	struct daos_recx_ep_list	*efi_stripe_lists;
+	/* parity recx list (to compare parity ext/epoch when data recovery) */
+	struct daos_recx_ep_list	*efi_parity_lists;
 	/* The buffer for all the full-stripes in efi_stripe_lists.
 	 * One iov for each recx_ep (with 1 or more stripes), for each stripe
 	 * it contains ((k + p) * cell_byte_size) memory.
 	 */
 	d_sg_list_t			*efi_stripe_sgls;
+	uint32_t			efi_stripe_sgls_nr;
 	/* For each daos_recx_ep in efi_stripe_lists will create one recovery
 	 * task to fetch the data from servers.
 	 */
 	struct obj_ec_recov_task	*efi_recov_tasks;
 	uint32_t			 efi_recov_ntasks;
+	uint32_t			 efi_parity_list_nr;
 };
 
 struct obj_reasb_req;
@@ -645,6 +650,32 @@ obj_id2ec_codec(daos_obj_id_t id)
 	return obj_ec_codec_get(daos_obj_id2class(id));
 }
 
+static inline bool
+obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
+			  struct daos_recx_ep_list *lists_2,
+			  unsigned int nr)
+{
+	struct daos_recx_ep_list	*list_1, *list_2;
+	unsigned int			 i, j;
+
+	for (i = 0; i < nr; i++) {
+		list_1 = &lists_1[i];
+		list_2 = &lists_2[i];
+		if (list_1->re_nr != list_2->re_nr ||
+		    list_1->re_ep_valid != list_2->re_ep_valid)
+			return false;
+		if (list_1->re_nr == 0)
+			continue;
+		for (j = 0; j < list_1->re_nr; j++) {
+			if (list_1->re_items[j].re_ep !=
+			    list_2->re_items[j].re_ep)
+				return false;
+		}
+	}
+
+	return true;
+}
+
 /* cli_ec.c */
 int obj_ec_req_reasb(daos_iod_t *iods, d_sg_list_t *sgls, daos_obj_id_t oid,
 		     struct daos_oclass_attr *oca,
@@ -662,6 +693,8 @@ void obj_ec_fetch_set_sgl(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 void obj_ec_update_iod_size(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_ec_recov_add(struct obj_reasb_req *reasb_req,
 		     struct daos_recx_ep_list *recx_lists, unsigned int nr);
+int obj_ec_parity_check(struct obj_reasb_req *reasb_req,
+			struct daos_recx_ep_list *recx_lists, unsigned int nr);
 struct obj_ec_fail_info *obj_ec_fail_info_get(struct obj_reasb_req *reasb_req,
 					      bool create, uint16_t p);
 void obj_ec_fail_info_reset(struct obj_reasb_req *reasb_req);

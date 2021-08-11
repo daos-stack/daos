@@ -22,6 +22,7 @@
 #include "../pool.pb-c.h"
 #include "../cont.pb-c.h"
 #include "../svc.pb-c.h"
+#include "../server.pb-c.h"
 #include "../drpc_internal.h"
 #include "mocks.h"
 
@@ -89,6 +90,7 @@ test_mgmt_drpc_handlers_bad_call_payload(void **state)
 	 * to test for proper handling of garbage in the payload
 	 */
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_prep_shutdown);
+	expect_failure_for_bad_call_payload(ds_mgmt_drpc_set_log_masks);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_ping_rank);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_set_rank);
 	expect_failure_for_bad_call_payload(ds_mgmt_drpc_pool_create);
@@ -227,7 +229,7 @@ setup_get_acl_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__GetACLReq acl_req = MGMT__GET_ACLREQ__INIT;
 
-	acl_req.uuid = uuid;
+	acl_req.id = uuid;
 	pack_get_acl_req(call, &acl_req);
 }
 
@@ -374,7 +376,7 @@ setup_modify_acl_drpc_call(Drpc__Call *call, char *uuid, const char **acl,
 {
 	Mgmt__ModifyACLReq req = MGMT__MODIFY_ACLREQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.acl = (char **)acl;
 	req.n_acl = acl_nr;
 
@@ -561,7 +563,7 @@ setup_delete_acl_drpc_call(Drpc__Call *call, char *uuid, char *principal)
 {
 	Mgmt__DeleteACLReq req = MGMT__DELETE_ACLREQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.principal = principal;
 
 	pack_delete_acl_req(call, &req);
@@ -662,7 +664,7 @@ setup_list_cont_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__ListContReq lc_req = MGMT__LIST_CONT_REQ__INIT;
 
-	lc_req.uuid = uuid;
+	lc_req.id = uuid;
 	pack_list_cont_req(call, &lc_req);
 }
 
@@ -879,7 +881,7 @@ test_drpc_pool_set_prop_invalid_value_type(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
 
-	req.uuid = TEST_UUID;
+	req.id = TEST_UUID;
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = 1; /* doesn't matter */
@@ -901,7 +903,7 @@ test_drpc_pool_set_prop_bad_uuid(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
 
-	req.uuid = "wow this won't work";
+	req.id = "wow this won't work";
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = 1; /* doesn't matter */
@@ -942,7 +944,7 @@ test_drpc_pool_set_prop_success(void **state)
 	int			prop_number = DAOS_PROP_PO_MAX;
 	int			val_number = 1;
 
-	req.uuid = TEST_UUID;
+	req.id = TEST_UUID;
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = prop_number;
@@ -1063,7 +1065,7 @@ test_drpc_pool_get_prop_bad_uuid(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolGetPropReq	req = MGMT__POOL_GET_PROP_REQ__INIT;
 
-	req.uuid = "wow this won't work";
+	req.id = "wow this won't work";
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = 1; /* doesn't matter */
@@ -1092,7 +1094,7 @@ test_drpc_pool_get_prop_num_success(void **state)
 	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_type = prop_number;
 	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_val = prop_val;
 
-	req.uuid = TEST_UUID;
+	req.id = TEST_UUID;
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = prop_number;
@@ -1123,7 +1125,7 @@ test_drpc_pool_get_prop_str_success(void **state)
 		    prop_val);
 	assert_non_null(ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_str);
 
-	req.uuid = TEST_UUID;
+	req.id = TEST_UUID;
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = prop_number;
@@ -1173,7 +1175,7 @@ setup_pool_query_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolQueryReq req = MGMT__POOL_QUERY_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	pack_pool_query_req(call, &req);
 }
 
@@ -1309,12 +1311,14 @@ expect_query_resp_with_info(daos_pool_info_t *exp_info,
 	assert_int_equal(pq_resp->active_targets,
 			 exp_info->pi_space.ps_ntargets);
 
-	assert_non_null(pq_resp->scm);
-	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_SCM, pq_resp->scm);
+	assert_int_equal(pq_resp->n_tier_stats, DAOS_MEDIA_MAX);
+	assert_non_null(pq_resp->tier_stats[DAOS_MEDIA_SCM]);
+	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_SCM,
+		pq_resp->tier_stats[DAOS_MEDIA_SCM]);
 
-	assert_non_null(pq_resp->nvme);
+	assert_non_null(pq_resp->tier_stats[DAOS_MEDIA_NVME]);
 	expect_storage_usage(&exp_info->pi_space, DAOS_MEDIA_NVME,
-			     pq_resp->nvme);
+			     pq_resp->tier_stats[DAOS_MEDIA_NVME]);
 
 	assert_non_null(pq_resp->rebuild);
 	expect_rebuild_status(&exp_info->pi_rebuild_st, exp_state,
@@ -1540,7 +1544,7 @@ setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 {
 	Mgmt__PoolExcludeReq req = MGMT__POOL_EXCLUDE_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.n_targetidx = 3;
 	req.rank = rank;
 	req.targetidx = TEST_IDXS;
@@ -1645,7 +1649,7 @@ setup_drain_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 {
 	Mgmt__PoolDrainReq req = MGMT__POOL_DRAIN_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.n_targetidx = 3;
 	req.rank = rank;
 	req.targetidx = TEST_IDXS;
@@ -1749,10 +1753,12 @@ static void
 setup_extend_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolExtendReq req = MGMT__POOL_EXTEND_REQ__INIT;
+	uint64_t tierbytes = 1000000000;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.n_ranks = 3;
-	req.scmbytes = 1000000000;
+	req.n_tierbytes = 1;
+	req.tierbytes = &tierbytes;
 	req.ranks = TEST_RANKS;
 	pack_pool_extend_req(call, &req);
 }
@@ -1844,7 +1850,7 @@ setup_reintegrate_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolReintegrateReq req = MGMT__POOL_REINTEGRATE_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	pack_pool_reintegrate_req(call, &req);
 }
 
@@ -1914,7 +1920,7 @@ setup_evict_drpc_call(Drpc__Call *call, char *uuid, char *sys_name)
 {
 	Mgmt__PoolEvictReq req = MGMT__POOL_EVICT_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.sys = sys_name;
 	pack_pool_evict_req(call, &req);
 }
@@ -2069,6 +2075,59 @@ test_drpc_prep_shutdown_success(void **state)
 	ds_mgmt_drpc_prep_shutdown(&call, &resp);
 
 	expect_daos_resp_with_der(&resp, 0);
+
+	D_FREE(call.body.data);
+	D_FREE(resp.body.data);
+}
+
+/*
+ * dRPC set log masks tests
+ */
+static void
+setup_set_log_masks_call(Drpc__Call *call, Ctl__SetLogMasksReq *req)
+{
+	size_t	len;
+	uint8_t	*body;
+
+	len = ctl__set_log_masks_req__get_packed_size(req);
+	D_ALLOC(body, len);
+	assert_non_null(body);
+
+	ctl__set_log_masks_req__pack(req, body);
+
+	call->body.data = body;
+	call->body.len = len;
+}
+
+static void
+expect_drpc_set_log_masks_resp_with_status(Drpc__Response *resp,
+					   int expected_err)
+{
+	Ctl__SetLogMasksResp *payload_resp = NULL;
+
+	assert_int_equal(resp->status, DRPC__STATUS__SUCCESS);
+	assert_non_null(resp->body.data);
+
+	payload_resp = ctl__set_log_masks_resp__unpack(NULL, resp->body.len,
+							 resp->body.data);
+	assert_non_null(payload_resp);
+	assert_int_equal(payload_resp->status, expected_err);
+
+	ctl__set_log_masks_resp__free_unpacked(payload_resp, NULL);
+}
+
+static void
+test_drpc_set_log_masks_success(void **state)
+{
+	Drpc__Call		call = DRPC__CALL__INIT;
+	Drpc__Response		resp = DRPC__RESPONSE__INIT;
+	Ctl__SetLogMasksReq	req = CTL__SET_LOG_MASKS_REQ__INIT;
+
+	setup_set_log_masks_call(&call, &req);
+
+	ds_mgmt_drpc_set_log_masks(&call, &resp);
+
+	expect_drpc_set_log_masks_resp_with_status(&resp, 0);
 
 	D_FREE(call.body.data);
 	D_FREE(resp.body.data);
@@ -2281,6 +2340,8 @@ test_drpc_cont_set_owner_success(void **state)
 
 #define PREP_SHUTDOWN_TEST(x)	cmocka_unit_test(x)
 
+#define SET_LOG_MASKS_TEST(x)	cmocka_unit_test(x)
+
 #define CONT_SET_OWNER_TEST(x) cmocka_unit_test_setup_teardown(x, \
 						drpc_cont_set_owner_setup, \
 						drpc_cont_set_owner_teardown)
@@ -2338,6 +2399,7 @@ main(void)
 		POOL_EVICT_TEST(test_drpc_pool_evict_success),
 		PING_RANK_TEST(test_drpc_ping_rank_success),
 		PREP_SHUTDOWN_TEST(test_drpc_prep_shutdown_success),
+		SET_LOG_MASKS_TEST(test_drpc_set_log_masks_success),
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_cont_uuid),
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_bad_pool_uuid),
 		CONT_SET_OWNER_TEST(test_drpc_cont_set_owner_failed),

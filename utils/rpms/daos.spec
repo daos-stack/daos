@@ -2,7 +2,7 @@
 %define server_svc_name daos_server.service
 %define agent_svc_name daos_agent.service
 
-%global mercury_version 2.0.1~rc1-1%{?dist}
+%global mercury_version 2.0.1-1%{?dist}
 %global libfabric_version 1.12.0
 %global __python %{__python3}
 
@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.102
-Release:       6%{?relval}%{?dist}
+Version:       1.3.104
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -76,7 +76,7 @@ BuildRequires: liblz4-devel
 BuildRequires: protobuf-c-devel
 BuildRequires: lz4-devel
 %endif
-BuildRequires: spdk-devel >= 21.04
+BuildRequires: spdk-devel >= 21.07
 %if (0%{?rhel} >= 7)
 BuildRequires: libisa-l-devel
 BuildRequires: libisa-l_crypto-devel
@@ -153,7 +153,7 @@ to optimize performance and cost.
 %package server
 Summary: The DAOS server
 Requires: %{name}%{?_isa} = %{version}-%{release}
-Requires: spdk-tools >= 21.04
+Requires: spdk-tools >= 21.07
 Requires: ndctl
 # needed to set PMem configuration goals in BIOS through control-plane
 %if (0%{?suse_version} >= 1500)
@@ -242,6 +242,15 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %description firmware
 This is the package needed to manage server storage firmware on DAOS servers.
 
+%package daos_serialize
+Summary: DAOS serialization library that uses HDF5
+BuildRequires: hdf5-devel
+Requires: hdf5
+
+%description daos_serialize
+This is the package needed to use the DAOS serialization and deserialization
+tools, as well as the preserve option for the filesystem copy tool.
+
 %if (0%{?suse_version} > 0)
 %global __debug_package 1
 %global _debuginfo_subpackages 0
@@ -296,7 +305,7 @@ mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
 install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
-%else
+%else if (0%{?rhel} == 8 or  %{?suse_version} == 1500)
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif
@@ -351,6 +360,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # and/or daos_firmware
 %attr(2755,root,daos_server) %{_bindir}/daos_server
 %{_bindir}/daos_engine
+%{_bindir}/daos_metrics
 %dir %{_libdir}/daos_srv
 %{_libdir}/daos_srv/libcont.so
 %{_libdir}/daos_srv/libdtx.so
@@ -370,11 +380,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_common_pmem.so
 %{conf_dir}/vos_size_input.yaml
 %{_bindir}/daos_storage_estimator.py
-%{_libdir}/python3/site-packages/storage_estimator/*.py
-%dir %{_libdir}/python3/site-packages/storage_estimator
-%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
-%dir %{_libdir}/python3/site-packages/storage_estimator/__pycache__
-%{_libdir}/python3/site-packages/storage_estimator/__pycache__/*.pyc
+%{python3_sitearch}/storage_estimator/*.py
+%dir %{python3_sitearch}/storage_estimator
+%if (0%{?rhel} >= 7)
+%dir %{python3_sitearch}/storage_estimator/__pycache__
+%{python3_sitearch}/storage_estimator/__pycache__/*.pyc
 %endif
 %{_datadir}/%{name}
 %exclude %{_datadir}/%{name}/ioil-ld-opts
@@ -397,17 +407,17 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdfuse.so
 %{_libdir}/libioil.so
 %{_libdir}/libdfs_internal.so
-%dir %{_libdir}/python3/site-packages/pydaos
-%{_libdir}/python3/site-packages/pydaos/*.py
-%dir %{_libdir}/python3/site-packages/pydaos/raw
-%{_libdir}/python3/site-packages/pydaos/raw/*.py
-%if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
-%dir %{_libdir}/python3/site-packages/pydaos/__pycache__
-%{_libdir}/python3/site-packages/pydaos/__pycache__/*.pyc
-%dir %{_libdir}/python3/site-packages/pydaos/raw/__pycache__
-%{_libdir}/python3/site-packages/pydaos/raw/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos
+%{python3_sitearch}/pydaos/*.py
+%dir %{python3_sitearch}/pydaos/raw
+%{python3_sitearch}/pydaos/raw/*.py
+%if (0%{?rhel} >= 7)
+%dir %{python3_sitearch}/pydaos/__pycache__
+%{python3_sitearch}/pydaos/__pycache__/*.pyc
+%dir %{python3_sitearch}/pydaos/raw/__pycache__
+%{python3_sitearch}/pydaos/raw/__pycache__/*.pyc
 %endif
-%{_libdir}/python3/site-packages/pydaos/pydaos_shim.so
+%{python3_sitearch}/pydaos/pydaos_shim.so
 %{_datadir}/%{name}/ioil-ld-opts
 %config(noreplace) %{conf_dir}/daos_agent.yml
 %config(noreplace) %{conf_dir}/daos_control.yml
@@ -438,7 +448,6 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/daos_gen_io_conf
 %{_bindir}/daos_run_io_conf
 %{_bindir}/crt_launch
-%{_bindir}/daos_metrics
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
 %{conf_dir}/fault-inject-cart.yaml
@@ -459,7 +468,38 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # set daos_firmware to be setuid root in order to perform privileged tasks
 %attr(4750,root,daos_server) %{_bindir}/daos_firmware
 
+%files daos_serialize
+%{_libdir}/libdaos_serialize.so
+
 %changelog
+* Thu Aug 05 2021 Christopher Hoffman <christopherx.hoffman@intel.com> 1.3.104-4
+- Update conditional statement to include checking for distributions to
+  determine which unit files to use for daos-server and daos-agent
+
+* Wed Aug 04 2021 Kris Jacque <kristin.jacque@intel.com> 1.3.104-3
+- Move daos_metrics tool from tests package to server package
+
+* Wed Aug 04 2021 Tom Nabarro <tom.nabarro@intel.com> 1.3.104-2
+- Update to spdk 21.07 and (indirectly) dpdk 21.05
+
+* Mon Aug 02 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.104-1
+- Version bump to 1.3.104 for 2.0 test build 4
+
+* Mon Jul 19 2021 Danielle M. Sikich <danielle.sikich@intel.com> 1.3.103-5
+- Add DAOS serialization library that requires hdf5
+
+* Wed Jul 14 2021 Li Wei <wei.g.li@intel.com> 1.3.103-4
+- Update raft to fix slow leader re-elections
+
+* Tue Jul 13 2021  Maureen Jean <maureen.jean@intel.com> 1.3.103-3
+- Add python modules to python3.6 site-packages
+
+* Mon Jul 12 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.103-2
+- Update to mercury release v2.0.1
+
+* Mon Jul 12 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.103-1
+- Version bump to 1.3.103 for 2.0 test build 3
+
 * Wed Jul 7 2021 Phillip Henderson <phillip.henderson@intel.com> 1.3.102-6
 - Update daos-devel to always require the same version daos-client
 
@@ -469,7 +509,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 * Fri Jun 25 2021 Brian J. Murrell <brian.murrell@intel.com> - 1.3.102-4
 - Add libuuid-devel back as a requirement of daos-devel
 
-* Mon Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
+* Wed Jun 23 2021 Li Wei <wei.g.li@intel.com> 1.3.102-3
 - Update raft to pick up Pre-Vote
 
 * Mon Jun 14 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.102-2

@@ -1181,7 +1181,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 		 * path names are printed in each line of output.
 		 */
 		if (format == D_TM_STANDARD)
-			fprintf(stream, "%-20s\n", name);
+			fprintf(stream, "%-8s\n", name);
 		break;
 	case D_TM_COUNTER:
 		rc = d_tm_get_counter(ctx, &val, node);
@@ -1288,11 +1288,11 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 		return;
 	}
 
-	fprintf(stream, ", min: %lu, max: %lu, mean: %lf, sample size: %lu",
-		stats->dtm_min, stats->dtm_max, stats->mean,
-		stats->sample_size);
+	fprintf(stream, " [min: %lu, max: %lu, avg: %.0lf",
+		stats->dtm_min, stats->dtm_max, stats->mean);
 	if (stats->sample_size > 2)
-		fprintf(stream, ", std dev: %lf", stats->std_dev);
+		fprintf(stream, ", stddev: %.0lf", stats->std_dev);
+	fprintf(stream, ", samples: %lu]", stats->sample_size);
 }
 
 /**
@@ -1480,7 +1480,7 @@ d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value)
 	if (value > dtm_stats->dtm_max)
 		dtm_stats->dtm_max = value;
 
-	if (value < dtm_stats->dtm_min)
+	if (dtm_stats->sample_size == 1 || value < dtm_stats->dtm_min)
 		dtm_stats->dtm_min = value;
 }
 
@@ -1941,7 +1941,6 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 			rc = -DER_NO_SHMEM;
 			goto out;
 		}
-		temp->dtn_metric->dtm_stats->dtm_min = UINT64_MAX;
 	}
 
 	buff_len = 0;

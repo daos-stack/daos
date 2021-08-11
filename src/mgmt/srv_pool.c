@@ -89,7 +89,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			opc;
 	struct mgmt_tgt_create_in	*tc_in;
-	struct mgmt_tgt_create_out	*tc_out;
+	struct mgmt_tgt_create_out	*tc_out = NULL;
 	d_rank_t			*tc_out_ranks;
 	uuid_t				*tc_out_uuids;
 	unsigned int			i;
@@ -162,12 +162,14 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 		D_DEBUG(DB_TRACE, "fill ranks %d idx %d "DF_UUID"\n",
 			tc_out_ranks[i], idx, DP_UUID(tc_out_uuids[i]));
 	}
-	D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
-	D_FREE(tc_out->tc_ranks.ca_arrays);
-
 	rc = DER_SUCCESS;
 
 decref:
+	if (tc_out) {
+		D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
+		D_FREE(tc_out->tc_ranks.ca_arrays);
+	}
+
 	crt_req_decref(tc_req);
 	if (rc) {
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,

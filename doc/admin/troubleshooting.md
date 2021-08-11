@@ -69,7 +69,7 @@ server operations:
 |Component|Config Parameter|Example Config Value|
 |-|-|-|
 |Control Plane|control_log_file|/tmp/daos_server.log|
-|Data Plane|log_file|/tmp/daos_engine.*.log|
+|Data Plane|log_file|/tmp/daos_engine.\*.log|
 |[Privileged Helper](https://daos-stack.github.io/admin/deployment/#elevated-privileges)|helper_log_file|/tmp/daos_admin.log|
 |agent|log_file|/tmp/daos_agent.log|
 
@@ -132,23 +132,6 @@ logging. By default all subsystems are enabled ("DD_SUBSYS=all").
     RPC, BULK, CORPC, GRP, LM, HG, ST, IV
 
 ### Priority Logging
-
-All macros that output logs have a priority level, shown in descending
-order below.
-
--   D_FATAL(fmt, ...) FATAL
-
--   D_CRIT(fmt, ...) CRIT
-
--   D_ERROR(fmt, ...) ERR
-
--   D_WARN(fmt, ...) WARN
-
--   D_NOTE(fmt, ...) NOTE
-
--   D_INFO(fmt, ...) INFO
-
--   D_DEBUG(mask, fmt, ...) DEBUG
 
 The priority level that outputs to stderr is set with DD_STDERR. By
 default in DAOS (specific to the project), this is set to CRIT

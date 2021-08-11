@@ -26,6 +26,9 @@ const (
 	// DefaultPoolScmRatio defines the default SCM:NVMe ratio for
 	// requests that do not specify one.
 	DefaultPoolScmRatio = 0.06
+	// DefaultPoolNvmeRatio defines the default NVMe:SCM ratio for
+	// requests that do not specify one.
+	DefaultPoolNvmeRatio = 0.94
 	// DefaultPoolServiceReps defines a default value for pool create
 	// requests that do not specify a value. If there are fewer than this
 	// number of ranks available, then the default falls back to 1.
@@ -37,14 +40,21 @@ const (
 
 type poolServiceReq interface {
 	proto.Message
-	GetUuid() string
+	GetId() string
+	SetUUID(uuid.UUID)
 	GetSvcRanks() []uint32
 	SetSvcRanks(rl []uint32)
 }
 
 func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method, req poolServiceReq) (*drpc.Response, error) {
+	ps, err := svc.getPoolService(req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	req.SetUUID(ps.PoolUUID)
+
 	if len(req.GetSvcRanks()) == 0 {
-		rl, err := svc.getPoolServiceRanks(req.GetUuid())
+		rl, err := svc.getPoolServiceRanks(ps)
 		if err != nil {
 			return nil, err
 		}
@@ -54,11 +64,35 @@ func (svc *mgmtSvc) makePoolServiceCall(ctx context.Context, method drpc.Method,
 	return svc.harness.CallDrpc(ctx, method, req)
 }
 
+// resolvePoolID implements a handler for resolving a user-friendly Pool ID into
+// a UUID.
+func (svc *mgmtSvc) resolvePoolID(id string) (uuid.UUID, error) {
+	if id == "" {
+		return uuid.Nil, errors.New("empty pool id")
+	}
+
+	if out, err := uuid.Parse(id); err == nil {
+		return out, nil
+	}
+
+	type lookupFn func(string) (*system.PoolService, error)
+	// Cycle through a list of lookup functions, returning the first one
+	// that succeeds in finding the pool, or an error if no pool is found.
+	for _, lookup := range []lookupFn{svc.sysdb.FindPoolServiceByLabel} {
+		ps, err := lookup(id)
+		if err == nil {
+			return ps.PoolUUID, nil
+		}
+	}
+
+	return uuid.Nil, errors.Errorf("unable to find pool with label %q", id)
+}
+
 // getPoolService returns the pool service entry for the given UUID.
-func (svc *mgmtSvc) getPoolService(uuidStr string) (*system.PoolService, error) {
-	uuid, err := uuid.Parse(uuidStr)
+func (svc *mgmtSvc) getPoolService(id string) (*system.PoolService, error) {
+	uuid, err := svc.resolvePoolID(id)
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse request uuid %q", uuidStr)
+		return nil, err
 	}
 
 	ps, err := svc.sysdb.FindPoolServiceByUUID(uuid)
@@ -75,23 +109,18 @@ func (svc *mgmtSvc) getPoolService(uuidStr string) (*system.PoolService, error) 
 
 // getPoolServiceStorage returns a slice of values representing the
 // per-rank allocation on each storage tier.
-func (svc *mgmtSvc) getPoolServiceStorage(uuidStr string) ([]uint64, error) {
-	ps, err := svc.getPoolService(uuidStr)
+func (svc *mgmtSvc) getPoolServiceStorage(id string) ([]uint64, error) {
+	ps, err := svc.getPoolService(id)
 	if err != nil {
 		return nil, err
 	}
 
-	return []uint64{ps.Storage.ScmPerRank, ps.Storage.NVMePerRank}, nil
+	return ps.Storage.PerRankTierStorage, nil
 }
 
 // getPoolServiceRanks returns a slice of ranks designated as the
 // pool service hosts.
-func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
-	ps, err := svc.getPoolService(uuidStr)
-	if err != nil {
-		return nil, err
-	}
-
+func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error) {
 	readyRanks := make([]system.Rank, 0, len(ps.Replicas))
 	for _, r := range ps.Replicas {
 		m, err := svc.sysdb.FindMemberByRank(r)
@@ -105,7 +134,7 @@ func (svc *mgmtSvc) getPoolServiceRanks(uuidStr string) ([]uint32, error) {
 	}
 
 	if len(readyRanks) == 0 {
-		return nil, errors.Errorf("unable to find any available service ranks for pool %s", uuidStr)
+		return nil, errors.Errorf("unable to find any available service ranks for pool %s", ps.PoolUUID)
 	}
 
 	return system.RanksToUint32(readyRanks), nil
@@ -123,29 +152,45 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	if len(req.GetRanks()) == 0 {
 		return errors.New("zero ranks in calculateCreateStorage()")
 	}
-	if req.GetScmratio() == 0 {
-		req.Scmratio = DefaultPoolScmRatio
+
+	// the engine will accept only 2 tiers - add missing
+	if len(req.GetTierratio()) == 0 {
+		req.Tierratio = []float64{DefaultPoolScmRatio, DefaultPoolNvmeRatio}
+	} else if len(req.GetTierratio()) == 1 {
+		req.Tierratio = append(req.Tierratio, 0)
 	}
 
 	storagePerRank := func(total uint64) uint64 {
 		return total / uint64(len(req.GetRanks()))
 	}
 
+	if len(req.Tierbytes) == 0 {
+		req.Tierbytes = make([]uint64, len(req.Tierratio))
+	} else if len(req.Tierbytes) == 1 {
+		req.Tierbytes = append(req.Tierbytes, 0)
+	}
+
 	switch {
-	case len(instances[0].bdevConfig().DeviceList) == 0:
+	case !instances[0].HasBlockDevices():
 		svc.log.Info("config has 0 bdevs; excluding NVMe from pool create request")
-		if req.GetScmbytes() == 0 {
-			req.Scmbytes = storagePerRank(req.GetTotalbytes())
+		for tierIdx := range req.Tierbytes {
+			if tierIdx > 0 {
+				req.Tierbytes[tierIdx] = 0
+			} else if req.Tierbytes[0] == 0 {
+				req.Tierbytes[0] = storagePerRank(req.GetTotalbytes())
+			}
 		}
-		req.Nvmebytes = 0
 	case req.GetTotalbytes() > 0:
-		req.Nvmebytes = storagePerRank(req.GetTotalbytes())
-		req.Scmbytes = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.GetScmratio()))
+		for tierIdx := range req.Tierbytes {
+			req.Tierbytes[tierIdx] = storagePerRank(uint64(float64(req.GetTotalbytes()) * req.Tierratio[tierIdx]))
+		}
 	}
 
 	// zero these out as they're not needed anymore
 	req.Totalbytes = 0
-	req.Scmratio = 0
+	for tierIdx := range req.Tierratio {
+		req.Tierratio[tierIdx] = 0
+	}
 
 	targetCount := instances[0].GetTargetCount()
 	if targetCount == 0 {
@@ -153,11 +198,11 @@ func (svc *mgmtSvc) calculateCreateStorage(req *mgmtpb.PoolCreateReq) error {
 	}
 	minNvmeRequired := engine.NvmeMinBytesPerTarget * uint64(targetCount)
 
-	if req.Nvmebytes != 0 && req.Nvmebytes < minNvmeRequired {
-		return FaultPoolNvmeTooSmall(req.Nvmebytes, targetCount)
+	if req.Tierbytes[1] != 0 && req.Tierbytes[1] < minNvmeRequired {
+		return FaultPoolNvmeTooSmall(req.Tierbytes[1], targetCount)
 	}
-	if req.Scmbytes < engine.ScmMinBytesPerTarget*uint64(targetCount) {
-		return FaultPoolScmTooSmall(req.Scmbytes, targetCount)
+	if req.Tierbytes[0] < engine.ScmMinBytesPerTarget*uint64(targetCount) {
+		return FaultPoolScmTooSmall(req.Tierbytes[0], targetCount)
 	}
 
 	return nil
@@ -172,7 +217,8 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if err := svc.checkLeaderRequest(req); err != nil {
 		return nil, err
 	}
-	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%+v\n", req)
+
+	svc.log.Debugf("MgmtSvc.PoolCreate dispatch, req:%s\n", mgmtpb.Debug(req))
 
 	uuid, err := uuid.Parse(req.GetUuid())
 	if err != nil {
@@ -186,6 +232,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		resp.Status = int32(drpc.DaosAlready)
 		if ps.State == system.PoolServiceStateCreating {
 			resp.Status = int32(drpc.DaosTryAgain)
+			return resp, svc.checkPools(ctx)
 		}
 		return resp, nil
 	}
@@ -193,6 +240,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
+	labelExists := false
 	var poolLabel string
 	for _, prop := range req.GetProperties() {
 		if prop.Number != drpc.PoolPropertyLabel {
@@ -204,9 +252,14 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 			break
 		}
 
+		labelExists = true
 		if _, err := svc.sysdb.FindPoolServiceByLabel(poolLabel); err == nil {
 			return nil, FaultPoolDuplicateLabel(poolLabel)
 		}
+	}
+
+	if !labelExists {
+		return nil, FaultPoolNoLabel
 	}
 
 	allRanks, err := svc.sysdb.MemberRanks(system.AvailableMemberFilter)
@@ -288,7 +341,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	ps = system.NewPoolService(uuid, req.GetScmbytes(), req.GetNvmebytes(), system.RanksFromUint32(req.GetRanks()))
+	ps = system.NewPoolService(uuid, req.Tierbytes, system.RanksFromUint32(req.GetRanks()))
 	ps.PoolLabel = poolLabel
 	if err := svc.sysdb.AddPoolService(ps); err != nil {
 		return nil, err
@@ -310,7 +363,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 			var pdResp *mgmtpb.PoolDestroyResp
 			pdResp, cuErr = svc.PoolDestroy(ctx,
 				&mgmtpb.PoolDestroyReq{
-					Uuid:     req.Uuid,
+					Id:       req.Uuid,
 					Sys:      req.Sys,
 					Force:    true,
 					SvcRanks: req.Ranks,
@@ -331,10 +384,23 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		}
 	}()
 
-	svc.log.Debugf("MgmtSvc.PoolCreate forwarding modified req:%+v\n", req)
+	svc.log.Debugf("MgmtSvc.PoolCreate forwarding modified req:%s\n", mgmtpb.Debug(req))
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolCreate, req)
 	if err != nil {
-		return nil, err
+		svc.log.Errorf("pool create dRPC call failed: %s", err)
+		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
+			return nil, err
+		}
+
+		switch errors.Cause(err) {
+		case errInstanceNotReady, FaultDataPlaneNotStarted:
+			// If the pool create failed because there was no available instance
+			// to service the request, signal to the client that it should try again.
+			resp.Status = int32(drpc.DaosTryAgain)
+			return resp, nil
+		default:
+			return nil, err
+		}
 	}
 
 	if err = proto.Unmarshal(dresp.Body, resp); err != nil {
@@ -345,12 +411,14 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		if err := svc.sysdb.RemovePoolService(ps.PoolUUID); err != nil {
 			return nil, err
 		}
+
 		return resp, nil
 	}
 	// let the caller know what was actually created
 	resp.TgtRanks = req.GetRanks()
-	resp.ScmBytes = req.Scmbytes
-	resp.NvmeBytes = req.Nvmebytes
+	resp.TierBytes = make([]uint64, 2)
+	resp.TierBytes[0] = req.Tierbytes[0]
+	resp.TierBytes[1] = req.Tierbytes[1]
 
 	ps.Replicas = system.RanksFromUint32(resp.GetSvcReps())
 	ps.State = system.PoolServiceStateReady
@@ -358,42 +426,58 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 		return nil, err
 	}
 
-	svc.log.Debugf("MgmtSvc.PoolCreate dispatch resp:%+v\n", resp)
+	svc.log.Debugf("MgmtSvc.PoolCreate dispatch resp:%s\n", mgmtpb.Debug(resp))
 
 	return resp, nil
 }
 
-// PoolResolveID implements a handler for resolving a user-friendly Pool ID into
-// a UUID.
-func (svc *mgmtSvc) PoolResolveID(ctx context.Context, req *mgmtpb.PoolResolveIDReq) (*mgmtpb.PoolResolveIDResp, error) {
-	if err := svc.checkReplicaRequest(req); err != nil {
-		return nil, err
+// checkPools iterates over the list of pools in the system to check
+// for any that are in an unexpected state. Pools not in the Ready
+// state will be cleaned up and removed from the system.
+//
+// NB: Care should be taken to avoid calling this when it could race
+// with a PoolCreate request.
+func (svc *mgmtSvc) checkPools(ctx context.Context) error {
+	if err := svc.sysdb.CheckLeader(); err != nil {
+		return err
 	}
-	svc.log.Debugf("MgmtSvc.PoolResolveID dispatch, req:%+v", req)
 
-	if req.HumanID == "" {
-		return nil, errors.New("empty request")
+	psList, err := svc.sysdb.PoolServiceList()
+	if err != nil {
+		return err
 	}
 
-	resp := new(mgmtpb.PoolResolveIDResp)
-	type lookupFn func(string) (*system.PoolService, error)
-	// Cycle through a list of lookup functions, returning the first one
-	// that succeeds in finding the pool, or an error if no pool is found.
-	for _, lookup := range []lookupFn{svc.sysdb.FindPoolServiceByLabel} {
-		ps, err := lookup(req.HumanID)
-		if err == nil {
-			resp.Uuid = ps.PoolUUID.String()
-			break
+	svc.log.Debugf("checking %d pools", len(psList))
+	for _, ps := range psList {
+		if ps.State == system.PoolServiceStateReady {
+			continue
+		}
+
+		svc.log.Errorf("pool %s is in unexpected state %s", ps.PoolUUID, ps.State)
+
+		// Change the pool state to Destroying in order to trigger
+		// the cleanup mode of PoolDestroy(), which will cause the
+		// destroy RPC to be sent to all ranks and then the service
+		// will be removed from the system.
+		ps.State = system.PoolServiceStateDestroying
+		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+			return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
+		}
+
+		// Attempt to destroy the pool.
+		dr := &mgmtpb.PoolDestroyReq{
+			Sys:   svc.sysdb.SystemName(),
+			Force: true,
+			Id:    ps.PoolUUID.String(),
+		}
+
+		_, err := svc.PoolDestroy(ctx, dr)
+		if err != nil {
+			svc.log.Errorf("error while destroying pool %s: %s", ps.PoolUUID, err)
 		}
 	}
 
-	if resp.Uuid == "" {
-		return nil, errors.Errorf("unable to find pool service with human-friendly id %q", req.HumanID)
-	}
-
-	svc.log.Debugf("MgmtSvc.PoolResolveID dispatch, resp:%+v", resp)
-
-	return resp, nil
+	return nil
 }
 
 // PoolDestroy implements the method defined for the Management Service.
@@ -403,7 +487,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 	svc.log.Debugf("MgmtSvc.PoolDestroy dispatch, req:%+v\n", req)
 
-	uuid, err := uuid.Parse(req.GetUuid())
+	uuid, err := svc.resolvePoolID(req.Id)
 	if err != nil {
 		return nil, err
 	}
@@ -412,6 +496,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	if err != nil {
 		return nil, err
 	}
+	req.SetUUID(uuid)
 
 	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
@@ -421,6 +506,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		req.SvcRanks = system.RanksToUint32(ps.Storage.CreationRanks())
 		inCleanupMode = true
 	} else {
+		if req.Force {
+			// If the destroy request is being forced, we should zap
+			// the label so that the entry doesn't prevent a new pool
+			// with the same label from being created.
+			ps.PoolLabel = ""
+		}
+
 		ps.State = system.PoolServiceStateDestroying
 		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
 			return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
@@ -545,12 +637,11 @@ func (svc *mgmtSvc) PoolExtend(ctx context.Context, req *mgmtpb.PoolExtendReq) (
 
 	// Look up the pool service record to find the storage allocations
 	// used at creation.
-	ps, err := svc.getPoolService(req.GetUuid())
+	ps, err := svc.getPoolService(req.GetId())
 	if err != nil {
 		return nil, err
 	}
-	req.Scmbytes = ps.Storage.ScmPerRank
-	req.Nvmebytes = ps.Storage.NVMePerRank
+	req.Tierbytes = ps.Storage.PerRankTierStorage
 
 	svc.log.Debugf("MgmtSvc.PoolExtend forwarding modified req:%+v\n", req)
 
@@ -644,7 +735,7 @@ func (svc *mgmtSvc) updatePoolLabel(ctx context.Context, sys string, uuid uuid.U
 
 	req := &mgmtpb.PoolSetPropReq{
 		Sys:        sys,
-		Uuid:       uuid.String(),
+		Id:         uuid.String(),
 		Properties: []*mgmtpb.PoolProperty{prop},
 	}
 
@@ -676,9 +767,9 @@ func (svc *mgmtSvc) PoolSetProp(ctx context.Context, req *mgmtpb.PoolSetPropReq)
 	}
 	svc.log.Debugf("MgmtSvc.PoolSetProp dispatch, req:%+v", req)
 
-	uuid, err := uuid.Parse(req.GetUuid())
+	uuid, err := svc.resolvePoolID(req.GetId())
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to parse request uuid %q", req.GetUuid())
+		return nil, err
 	}
 
 	if len(req.GetProperties()) == 0 {

@@ -305,6 +305,7 @@ int daos_sgls_copy_all(d_sg_list_t *dst, int dst_nr, d_sg_list_t *src,
 int daos_sgl_copy_data_out(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
 int daos_sgl_alloc_copy_data(d_sg_list_t *dst, d_sg_list_t *src);
+int daos_sgls_alloc(d_sg_list_t *dst, d_sg_list_t *src, int nr);
 int daos_sgl_merge(d_sg_list_t *dst, d_sg_list_t *src);
 daos_size_t daos_sgl_data_len(d_sg_list_t *sgl);
 daos_size_t daos_sgl_buf_size(d_sg_list_t *sgl);
@@ -700,6 +701,15 @@ enum {
  * fetch.
  */
 #define DAOS_FAIL_SHARD_FETCH		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x27)
+/**
+ * This fault simulates the EC aggregation boundary (agg_eph_boundry) moved
+ * ahead, in that case need to redo the degraded fetch.
+ */
+#define DAOS_FAIL_AGG_BOUNDRY_MOVED	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x28)
+/**
+ * This fault simulates the EC parity epoch difference in EC data recovery.
+ */
+#define DAOS_FAIL_PARITY_EPOCH_DIFF	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x29)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)
@@ -727,6 +737,7 @@ enum {
 #define DAOS_DTX_SRV_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x46)
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
 #define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
+#define DAOS_DTX_UNCERTAIN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x49)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
@@ -741,6 +752,7 @@ enum {
 #define DAOS_CONT_CLOSE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x66)
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
 #define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
+#define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
@@ -847,7 +859,6 @@ daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool, bool input);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
 void daos_prop_fini(daos_prop_t *prop);
 
-struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
 daos_recx_t *daos_recx_alloc(uint32_t nr);
@@ -860,8 +871,24 @@ daos_parse_ctype(const char *string, daos_cont_layout_t *type)
 		*type = DAOS_PROP_CO_LAYOUT_HDF5;
 	else if (strcasecmp(string, "POSIX") == 0)
 		*type = DAOS_PROP_CO_LAYOUT_POSIX;
+	else if (strcasecmp(string, "PYTHON") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_PYTHON;
+	else if (strcasecmp(string, "SPARK") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_SPARK;
+	else if (strcasecmp(string, "DATABASE") == 0 ||
+		 strcasecmp(string, "DB") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_DATABASE;
+	else if (strcasecmp(string, "ROOT") == 0 ||
+		 strcasecmp(string, "RNTuple") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_ROOT;
+	else if (strcasecmp(string, "SEISMIC") == 0 ||
+		 strcasecmp(string, "DSG") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_SEISMIC;
+	else if (strcasecmp(string, "METEO") == 0 ||
+		 strcasecmp(string, "FDB") == 0)
+		*type = DAOS_PROP_CO_LAYOUT_METEO;
 	else
-		*type = DAOS_PROP_CO_LAYOUT_UNKOWN;
+		*type = DAOS_PROP_CO_LAYOUT_UNKNOWN;
 }
 
 static inline void
@@ -873,6 +900,24 @@ daos_unparse_ctype(daos_cont_layout_t ctype, char *string)
 		break;
 	case DAOS_PROP_CO_LAYOUT_HDF5:
 		strcpy(string, "HDF5");
+		break;
+	case DAOS_PROP_CO_LAYOUT_PYTHON:
+		strcpy(string, "PYTHON");
+		break;
+	case DAOS_PROP_CO_LAYOUT_SPARK:
+		strcpy(string, "SPARK");
+		break;
+	case DAOS_PROP_CO_LAYOUT_DATABASE:
+		strcpy(string, "DATABASE");
+		break;
+	case DAOS_PROP_CO_LAYOUT_ROOT:
+		strcpy(string, "ROOT");
+		break;
+	case DAOS_PROP_CO_LAYOUT_SEISMIC:
+		strcpy(string, "SEISMIC");
+		break;
+	case DAOS_PROP_CO_LAYOUT_METEO:
+		strcpy(string, "METEO");
 		break;
 	default:
 		strcpy(string, "unknown");

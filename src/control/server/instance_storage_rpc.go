@@ -17,19 +17,18 @@ import (
 	"github.com/daos-stack/daos/src/control/common/proto"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
 	"github.com/daos-stack/daos/src/control/fault"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // newMntRet creates and populates SCM mount result.
 // Currently only used for format operations.
-func (ei *EngineInstance) newMntRet(inErr error) *ctlpb.ScmMountResult {
+func (ei *EngineInstance) newMntRet(mountPoint string, inErr error) *ctlpb.ScmMountResult {
 	var info string
 	if fault.HasResolution(inErr) {
 		info = fault.ShowResolutionFor(inErr)
 	}
 	return &ctlpb.ScmMountResult{
-		Mntpoint:    ei.scmConfig().MountPoint,
+		Mntpoint:    mountPoint,
 		State:       newResponseState(inErr, ctlpb.ResponseStatus_CTL_ERR_SCM, info),
 		Instanceidx: ei.Index(),
 	}
@@ -51,79 +50,68 @@ func (ei *EngineInstance) newCret(pciAddr string, inErr error) *ctlpb.NvmeContro
 }
 
 // scmFormat will return either successful result or error.
-func (ei *EngineInstance) scmFormat(reformat bool) (*ctlpb.ScmMountResult, error) {
-	engineIdx := ei.Index()
-	cfg := ei.scmConfig()
-
-	req, err := scm.CreateFormatRequest(cfg, reformat)
+func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
+	cfg, err := ei.storage.GetScmConfig()
 	if err != nil {
-		return nil, errors.Wrap(err, "generate format request")
-	}
-
-	scmStr := fmt.Sprintf("SCM (%s:%s)", cfg.Class, cfg.MountPoint)
-	ei.log.Infof("Instance %d: starting format of %s", engineIdx, scmStr)
-	res, err := ei.scmProvider.Format(*req)
-	if err == nil && !res.Formatted {
-		err = errors.WithMessage(scm.FaultUnknown, "is still unformatted")
-	}
-
-	if err != nil {
-		ei.log.Errorf("  format of %s failed: %s", scmStr, err)
 		return nil, err
 	}
-	ei.log.Infof("Instance %d: finished format of %s", engineIdx, scmStr)
 
-	return ei.newMntRet(nil), nil
+	err = ei.storage.FormatScm(force)
+	if err != nil {
+		return nil, err
+	}
+
+	return ei.newMntRet(cfg.Scm.MountPoint, nil), nil
 }
 
-func (ei *EngineInstance) bdevFormat(p *bdev.Provider) (results proto.NvmeControllerResults) {
-	engineIdx := ei.Index()
-	cfg := ei.bdevConfig()
-	results = make(proto.NvmeControllerResults, 0, len(cfg.DeviceList))
-
-	ei.log.Infof("Instance %d: starting format of %s block devices %v",
-		engineIdx, cfg.Class, cfg.DeviceList)
-
-	res, err := p.Format(bdev.FormatRequestFromConfig(ei.log, &cfg))
-	if err != nil {
-		results = append(results, ei.newCret("", err))
-		return
-	}
-
-	for dev, status := range res.DeviceResponses {
-		// TODO DAOS-5828: passing status.Error directly triggers segfault
-		var err error
-		if status.Error != nil {
-			err = status.Error
+func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
+	for _, tr := range ei.storage.FormatBdevTiers() {
+		if tr.Error != nil {
+			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
+			continue
 		}
-		results = append(results, ei.newCret(dev, err))
+		for dev, status := range tr.Result.DeviceResponses {
+			// TODO DAOS-5828: passing status.Error directly triggers segfault
+			var err error
+			if status.Error != nil {
+				err = status.Error
+			}
+			results = append(results, ei.newCret(dev, err))
+		}
 	}
-
-	ei.log.Infof("Instance %d: finished format of %s block devices %v",
-		engineIdx, cfg.Class, cfg.DeviceList)
 
 	return
 }
 
+func (ei *EngineInstance) bdevWriteConfig() error {
+	return ei.storage.WriteNvmeConfig()
+}
+
 // StorageFormatSCM performs format on SCM and identifies if superblock needs
 // writing.
-func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, reformat bool) (mResult *ctlpb.ScmMountResult) {
+func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, force bool) (mResult *ctlpb.ScmMountResult) {
 	engineIdx := ei.Index()
-	needsScmFormat := reformat
 
 	ei.log.Infof("Formatting scm storage for %s instance %d (reformat: %t)",
-		build.DataPlaneName, engineIdx, reformat)
+		build.DataPlaneName, engineIdx, force)
 
 	var scmErr error
+	cfg, err := ei.storage.GetScmConfig()
+	if err != nil {
+		scmErr = err
+		cfg = &storage.TierConfig{Scm: storage.ScmConfig{MountPoint: "unknown"}}
+		return
+	}
+
 	defer func() {
 		if scmErr != nil {
 			ei.log.Errorf(msgFormatErr, engineIdx)
-			mResult = ei.newMntRet(scmErr)
+			mResult = ei.newMntRet(cfg.Scm.MountPoint, scmErr)
 		}
 	}()
 
 	if ei.IsStarted() {
-		if !reformat {
+		if !force {
 			scmErr = errors.Errorf("instance %d: can't format storage of running instance",
 				engineIdx)
 			return
@@ -137,29 +125,18 @@ func (ei *EngineInstance) StorageFormatSCM(ctx context.Context, reformat bool) (
 		ei.requestStart(ctx)
 	}
 
-	// If not reformatting, check if SCM is already formatted.
-	if !reformat {
-		needsScmFormat, scmErr = ei.NeedsScmFormat()
-		if scmErr == nil && !needsScmFormat {
-			scmErr = scm.FaultFormatNoReformat
-		}
-		if scmErr != nil {
-			return
-		}
-	}
-
-	if needsScmFormat {
-		mResult, scmErr = ei.scmFormat(true)
-	}
-
+	mResult, scmErr = ei.scmFormat(force)
 	return
 }
 
 // StorageFormatNVMe performs format on NVMe if superblock needs writing.
-func (ei *EngineInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResults proto.NvmeControllerResults) {
+func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResults) {
 	// If no superblock exists, format NVMe and populate response with results.
 	needsSuperblock, err := ei.NeedsSuperblock()
 	if err != nil {
+		ei.log.Errorf("engine storage for %s instance %d: NeedsSuperblock(): %s",
+			build.DataPlaneName, ei.Index(), err)
+
 		return proto.NvmeControllerResults{
 			ei.newCret("", err),
 		}
@@ -168,8 +145,15 @@ func (ei *EngineInstance) StorageFormatNVMe(bdevProvider *bdev.Provider) (cResul
 	if needsSuperblock {
 		ei.log.Infof("Formatting nvme storage for %s instance %d", build.DataPlaneName,
 			ei.Index())
-		cResults = ei.bdevFormat(bdevProvider)
+		cResults = ei.bdevFormat()
 	}
 
 	return
+}
+
+// StorageWriteNvmeConfig writes output NVMe config file used to allocate devices to be used by an
+// engine process.
+func (ei *EngineInstance) StorageWriteNvmeConfig() error {
+	ei.log.Infof("Writing nvme config file for %s instance %d", build.DataPlaneName, ei.Index())
+	return ei.bdevWriteConfig()
 }
