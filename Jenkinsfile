@@ -858,7 +858,7 @@ pipeline {
                         expression { ! skipStage() }
                     }
                     agent {
-                        label 'ci_vm9'
+                        label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
