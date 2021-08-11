@@ -171,8 +171,8 @@ func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(
 	}(prefix)
 
 	return stream, func() {
+		C.fflush(stream)
 		C.fclose(stream)
-		C.sync()
 	}, nil
 }
 
