@@ -11,8 +11,8 @@ submodule.
 ## Design
 
 PyDAOS is a python module primarily written in C. It exposes DAOS key-value
-store object as python dictionary. Other data structures (e.g. Array compatible
-with numpy) are under consideration.
+store objects as a python dictionary. Other data structures (e.g. Array
+compatible with numpy) are under consideration.
 Python objects allocated by PyDAOS are:
 
 - **persistent** and identified by a string name. The namespace is shared
@@ -60,7 +60,7 @@ tank/neo
 The first type of data structures exported by the PyDAOS module is DAOS
 Dictionary (DDict) that aims at mimicking the python dict interface. Leveraging
 mutablemapping and UserDict has been considered during design, but eventually
-ruled out for performance reason. The DDict class is built over DAOS key-value
+ruled out for performance reasons. The DDict class is built over DAOS key-value
 stores and supports all the methods of the regular python dictionary class.
 One limitation is that only strings and bytes can be stored.
 
@@ -139,8 +139,7 @@ methods.
 The key space can be worked through via python iterators.
 
 ```
->>> for key in dd: print(key, dd[key])
->>> for key in dd: print(key, dd[key])
+>>> for key, value in enumerate(dd): print(key, value)
 ...
 Manchester b'Old Trafford'
 Barcelona b'Camp Nou'

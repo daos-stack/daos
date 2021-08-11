@@ -340,7 +340,7 @@ __shim_handle__cont_newobj(PyObject *self, PyObject *args)
 	if (hdl->alloc.hi >= MAX_OID_HI) {
 		rc = daos_cont_alloc_oids(hdl->coh, 1, &hdl->alloc.lo, NULL);
 		if (rc) {
-			D_ERROR("daos_cont_alloc_oids() Failed ("DF_RC")\n",
+			D_ERROR("daos_cont_alloc_oids() Failed "DF_RC"\n",
 				DP_RC(rc));
 			goto out;
 		}
