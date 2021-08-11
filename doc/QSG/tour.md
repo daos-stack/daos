@@ -9,11 +9,11 @@ This documentation provides a general tour to the DAOS management commands
 Help and setup for the following is provided in this chapter:
 
 - Pool and Container create, list, query and destroy on
-DAOS server for daos_admin and daos_client users. 
+DAOS server for daos_admin and daos_client users.
 - Common errors and workarounds for new users when using the dmg and daos tools. 
 - Example runs of data transfer between DAOS file systems, by setting up
 of the DAOS dfuse mount point and run traffic with dfuse fio and mpirun
-mdtest. 
+mdtest.
 - Examples of basic dmg and daos tools run on 2 host DAOS servers
 and 1 host client, and runs of DAOS rebuild over dfuse fio and mpirun mdtest
 on a 4 host DAOS server.
@@ -156,7 +156,7 @@ bring-up DAOS servers and clients.
 		Total Size		: 10 GB
 		SCM				: 10 GB (5.0 GB / rank)
 		NVMe			: 0 B (0 B / rank)
-	
+
 	$ dmg storage query usage
 	Hosts	SCM-Total	SCM-Free	SCM-Used	NVMe-Total	NVMe-Free	NVMe-Used
 	-----	---------	--------	--------	----------	---------	---------
@@ -471,7 +471,7 @@ bring-up DAOS servers and clients.
 			  version          print command version
 			  help             print this message and exit
 	use 'daos help RESOURCE' for resource specifics
- 
+
 	# Invalid sub-command cont-list
 	$ daos pool cont-list --pool=$DAOS_POOL
 	invalid pool command: cont-list
@@ -487,7 +487,7 @@ bring-up DAOS servers and clients.
 			  version          print command version
 			  help             print this message and exit
 	use 'daos help RESOURCE' for resource specifics
-	 
+
 	# Working daos pool command
 	$ daos pool list-cont --pool=$DAOS_POOL
 	bc4fe707-7470-4b7d-83bf-face75cc98fc
@@ -497,24 +497,24 @@ bring-up DAOS servers and clients.
 	$ dmg pool create --size=50G
 	Creating DAOS pool with automatic storage allocation: 50 GB NVMe + 6.00% SCM
 	ERROR: dmg: pool create failed: DER_NOSPACE(-1007): No space on storage target
-	 
+
 	# Workaround: dmg storage query scan to find current available storage
 		dmg storage query usage
 		Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
 		-----  --------- -------- -------- ---------- --------- ---------
-		boro-8 17 GB     6.0 GB   65 %     0 B        0 B       N/A      
-		 
+		boro-8 17 GB     6.0 GB   65 %     0 B        0 B       N/A
+
 		$ dmg pool create --size=2G
 		Creating DAOS pool with automatic storage allocation: 2.0 GB NVMe + 6.00% SCM
 		Pool created with 100.00% SCM/NVMe ratio
 		-----------------------------------------
 		  UUID          : b5ce2954-3f3e-4519-be04-ea298d776132
-		  Service Ranks : 0                                  
-		  Storage Ranks : 0                                  
-		  Total Size    : 2.0 GB                             
-		  SCM           : 2.0 GB (2.0 GB / rank)             
-		  NVMe          : 0 B (0 B / rank)                   
-		 
+		  Service Ranks : 0
+		  Storage Ranks : 0
+		  Total Size    : 2.0 GB
+		  SCM           : 2.0 GB (2.0 GB / rank)
+		  NVMe          : 0 B (0 B / rank)
+
 		$ dmg storage query usage
 		Hosts  SCM-Total SCM-Free SCM-Used NVMe-Total NVMe-Free NVMe-Used
 		-----  --------- -------- -------- ---------- --------- ---------
@@ -524,7 +524,7 @@ bring-up DAOS servers and clients.
 
 	# dmg pool destroy Timeout or failed due to pool has active container(s)
 	# Workaround pool destroy --force option
-	 
+
 		$ dmg pool destroy --pool=$DAOS_POOL --force
 		Pool-destroy command succeeded
 
@@ -584,7 +584,7 @@ bring-up DAOS servers and clients.
 	latency : target=0, window=0, percentile=100.00%, depth=16
 	Run status group 0 (all jobs):
 	WRITE: bw=77.9MiB/s (81.7MB/s), 77.9MiB/s-77.9MiB/s (81.7MB/s-81.7MB/s), io=731MiB (766MB), run=9379-9379msec
-	
+
 	# Data after fio completed
 	$ ll /tmp/daos_test1
 	total 1048396
@@ -624,7 +624,7 @@ bring-up DAOS servers and clients.
 ### unmount
 
 	$ fusermount -u /tmp/daos_test1/
- 
+
 	$ df -h -t fuse.daos
 	df: no file systems processed
 
@@ -679,8 +679,8 @@ bring-up DAOS servers and clients.
 	Operation Max(MiB) Min(MiB) Mean(MiB) StdDev Max(OPs) Min(OPs) Mean(OPs) StdDev Mean(s) Stonewall(s) Stonewall(MiB) Test# #Tasks tPN reps fPP reord reordoff reordrand seed segcnt blksiz xsize aggs(MiB) API RefNum
 	write 1499.68 1499.68 1499.68 0.00 59.99 59.99 59.99 0.00 0.50011 NA NA 0 30 30 1 0 0 1 0 0 1 26214400 26214400 750.0 POSIX 0
 	Finished : Fri Apr 16 18:07:57 2021
- 
- 
+
+
 # Run mpirun mdtest
 
 	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 30 mdtest -a DFS -z 0 -F -C -i 1 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont <container.uuid> --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool <pool_uuid>
@@ -702,7 +702,7 @@ bring-up DAOS servers and clients.
 	Tree creation : 1869.791 1869.791 1869.791 0.000
 	Tree removal : 0.000 0.000 0.000 0.000
 	– finished at 04/16/2021 22:01:58 –
-	 
+
 	$ /usr/lib64/mpich/bin/mpirun -host <host1> -np 50 mdtest -a DFS -z 0 -F -C -i 1 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont 3e661024-2f1f-4d7a-9cd4-1b05601e0789 --dfs.destroy --dfs.dir_oclass SX --dfs.group daos_server --dfs.oclass SX --dfs.pool d546a7f5-586c-4d8f-aecd-372878df7b97
 	– started at 04/16/2021 22:02:21 –
 	mdtest-3.4.0+dev was launched with 50 total task(s) on 1 node(s)
@@ -737,25 +737,25 @@ bring-up DAOS servers and clients.
 	# Bring up 4 hosts server with appropriate daos_server.yml and
 	# access-point, reference to  DAOS Set-Up
 	# After DAOS servers, DAOS admin and client started.
-	 
+
 	$ dmg storage format
 	Format Summary:
 	  Hosts             SCM Devices NVMe Devices
 	  -----             ----------- ------------
-	  boro-[8,35,52-53] 1           0           
-	 
+	  boro-[8,35,52-53] 1           0
+
 	$ dmg pool list
 	Pool UUID Svc Replicas
 	--------- ------------
 	733bee7b-c2af-499e-99dd-313b1ef092a9
 	[1-3]
-	 
+
 	$ daos cont create --pool=$DAOS_POOL --type=POSIX --oclass=RP_3G1 --properties=rf:2
 	Successfully created container 2649aa0f-3ad7-4943-abf5-4343205a637b
-	 
+
 	$ daos pool list-cont --pool=$DAOS_POOL
 	2649aa0f-3ad7-4943-abf5-4343205a637b
-	 
+
 	$ dmg pool query --pool=$DAOS_POOL
 	Pool 733bee7b-c2af-499e-99dd-313b1ef092a9, ntarget=32, disabled=0, leader=2, version=1
 	Pool space info:
@@ -767,18 +767,18 @@ bring-up DAOS servers and clients.
 	  Total size: 0 B
 	  Free: 0 B, min:0 B, max:0 B, mean:0 B
 	Rebuild idle, 0 objs, 0 recs
-	 
+
 	$ df -h -t fuse.daos
 	df: no file systems processed
-	 
+
 	$ mkdir /tmp/daos_test1
-	 
+
 	$ dfuse --mountpoint=/tmp/daos_test1 --pool=$DAOS_POOL --cont=$DAOS_CONT
-	 
+
 	$ df -h -t fuse.daos
 	Filesystem      Size  Used Avail Use% Mounted on
 	dfuse            19G  1.1M   19G   1% /tmp/daos_test1
-	 
+
 	$ fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --directory=/tmp/daos_test1 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting
 	random-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
 	...
@@ -813,7 +813,7 @@ bring-up DAOS servers and clients.
 		 complete  : 0=0.0%, 4=100.0%, 8=0.0%, 16=0.0%, 32=0.0%, 64=0.0%, >=64=0.0%
 		 issued rwts: total=0,1463226,0,0 short=0,0,0,0 dropped=0,0,0,0
 		 latency   : target=0, window=0, percentile=100.00%, depth=16
-	 
+
 	Run status group 0 (all jobs):
 	  WRITE: bw=95.3MiB/s (99.9MB/s), 95.3MiB/s-95.3MiB/s (99.9MB/s-99.9MB/s), io=5716MiB (5993MB), run=60001-60001msec
 
@@ -821,14 +821,14 @@ bring-up DAOS servers and clients.
 
 	# Start dfuse
 	$ fio --name=random-write --ioengine=pvsync --rw=randwrite --bs=4k --size=128M --nrfiles=4 --directory=/tmp/daos_test1 --numjobs=8 --iodepth=16 --runtime=60 --time_based --direct=1 --buffered=0 --randrepeat=0 --norandommap --refill_buffers --group_reporting
-	 
+
 	random-write: (g=0): rw=randwrite, bs=(R) 4096B-4096B, (W) 4096B-4096B, (T) 4096B-4096B, ioengine=pvsync, iodepth=16
 	...
 	fio-3.7
 	Starting 8 processes
 	fio: io_u error on file /tmp/daos_test1/random-write.2.1: Input/output error: write offset=8527872, buflen=4096
 	fio: pid=28242, err=5
-	 
+
 	file:io_u.c:1747
 	bw ( KiB/s): min= 3272, max=12384, per=30.14%, avg=11624.50, stdev=2181.01, samples=128
 	iops : min= 818, max= 3096, avg=2906.12, stdev=545.25, samples=128
@@ -850,10 +850,10 @@ bring-up DAOS servers and clients.
 	Rank Operation Result
 	--------- ------
 	3 stop OK
-	 
+
 	$ daos pool list-cont --pool=$DAOS_POOL
 	cf2a95ce-9910-4d5e-814c-cafb0a7f0944
-	 
+
 	$ dmg pool query --pool=$DAOS_POOL
 	Pool 70f73efc-848e-4f6e-b4fd-909bcf9bd427,
 	ntarget=32,
@@ -869,7 +869,7 @@ bring-up DAOS servers and clients.
 	Total size: 0 B
 	Free: 0 B, min:0 B, max:0 B, mean:0 B
 	Rebuild done, 1 objs, 57 recs
-	 
+
 	# Verify stopped server been evicted
 	$ dmg system query -v
 	Rank UUID Control Address Fault Domain State Reason
@@ -878,7 +878,7 @@ bring-up DAOS servers and clients.
 	1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 boro-35.boro.hpdd.intel.com Joined
 	2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 boro-53.boro.hpdd.intel.com Joined
 	3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 boro-52.boro.hpdd.intel.com Evicted system stop
-	
+
 	# Restart, after evicted server restarted, verify the server joined
 	$ /usr/bin/dmg system query -v
 	Rank UUID Control Address Fault Domain State Reason
@@ -887,7 +887,7 @@ bring-up DAOS servers and clients.
 	1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 /boro-35.boro.hpdd.intel.com Joined
 	2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 /boro-53.boro.hpdd.intel.com Joined
 	3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 /boro-52.boro.hpdd.intel.com Joined
-	 
+
 	# Unmount after test completed
 	$ fusermount -u /tmp/daos_test1/
 	$ df -h -t fuse.daos
@@ -905,12 +905,12 @@ bring-up DAOS servers and clients.
 	 Total Size : 50 GB
 	 SCM : 50 GB (12 GB / rank)
 	 NVMe : 0 B (0 B / rank)
-	 
+
 	$ daos cont create --pool=$DAOS_POOL --type=POSIX --oclass=RP_3G1 --properties=rf:2
 	Successfully created container d71ff6a5-15a5-43fe-b829-bef9c65b9ccb
-	 
+
 	$ /usr/lib64/mpich/bin/mpirun -host boro-8 -np 30 mdtest -a DFS -z 0 -F -C -i 100 -n 1667 -e 4096 -d / -w 4096 --dfs.chunk_size 1048576 --dfs.cont $DAOS_CONT --dfs.destroy --dfs.dir_oclass RP_3G1 --dfs.group daos_server --dfs.oclass RP_3G1 --dfs.pool $DAOS_POOL
-	 
+
 	started at 04/22/2021 17:46:20 –
 	mdtest-3.4.0+dev was launched with 30 total task(s) on 1 node(s)
 	Command line used: mdtest 'a' 'DFS' '-z' '0' '-F' '-C' '-i' '100' '-n' '1667' '-e' '4096' '-d' '/' '-w' '4096' 'dfs.chunk_size' '1048576' 'dfs.cont' 'd71ff6a5-15a5-43fe-b829-bef9c65b9ccb' 'dfs.destroy' 'dfs.dir_oclass' 'RP_3G1' 'dfs.group' 'daos_server' 'dfs.oclass' 'RP_3G1' '-dfs.pool' '4eda8a8c-028c-461c-afd3-704534961572'
@@ -920,13 +920,13 @@ bring-up DAOS servers and clients.
 	Nodemap: 111111111111111111111111111111
 	30 tasks, 50010 files
 	...
-	
+
 	# from daos_admin console, stop a server rank
 	$ dmg system stop --ranks=2
 	Rank Operation Result
 	--------- ------
 	2 stop OK
-	 
+
 	# Verify stopped server been evicted
 	$ dmg system query -v
 	Rank UUID Control Address Fault Domain State Reason
@@ -935,7 +935,7 @@ bring-up DAOS servers and clients.
 	 1 c9ac1dd9-0f9d-4684-90d3-038b720fd26b 10.7.1.35:10001 boro-35.boro.hpdd.intel.com Joined
 	 2 80e44fe9-3a2b-4808-9a0f-88c3cbe7f565 10.7.1.53:10001 boro-53.boro.hpdd.intel.com Evicted system stop
 	 3 a26fd44a-6089-4cc3-a06b-278a85607fd3 10.7.1.52:10001 boro-52.boro.hpdd.intel.com Joined
-	 
+
 	 # Restart, after evicted server restarted, verify the server joined
 	$ /usr/bin/dmg system query -v
 	 Rank UUID Control Address Fault Domain State Reason
@@ -950,22 +950,22 @@ bring-up DAOS servers and clients.
 	# pool reintegrate
 	$ dmg pool reintegrate --pool=$DAOS_POOL --rank=2
 	Reintegration command succeeded
-	 
+
 	# destroy container
 	$ daos container destroy --pool=$DAOS_POOL --cont=$DAOS_CONT
-	 
+
 	# destroy pool
 	$ dmg pool destroy --pool=$DAOS_POOL
 	Pool-destroy command succeeded
-	 
+
 	# stop clients
 	$ pdsh -S -w $CLIENT_NODES "sudo systemctl stop daos_agent.service"
-	 
+
 	# disable clients
 	$ pdsh -S -w $CLIENT_NODES "sudo systemctl disable daos_agent.service"
-	 
+
 	# stop servers
 	$ pdsh -S -w $SERVER_NODES "sudo systemctl stop daos_server.service"
-	 
+
 	# disable servers
 	$ pdsh -S -w $SERVER_NODES "sudo systemctl disable daos_server.service"
