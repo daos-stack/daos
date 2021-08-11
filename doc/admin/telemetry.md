@@ -97,5 +97,12 @@ user's `PATH`.
 The `daos-server` package includes the `daos_metrics` tool. This tool fetches
 metrics from the local host only.
 
-`daos_metrics` displays the metrics in a human-readable tree format, or in CSV
-format.
+`daos_metrics` displays the metrics in a human-readable tree format or CSV
+format (`--csv`).
+
+Each DAOS engine maintains its own metrics.
+The `--srv_idx` parameter can be used to specify which engine to query, if there
+are multiple engines configured per server.
+The default is to query the first engine on the server (index 0).
+
+See `daos_metrics -h` for details on how to filter metrics.
