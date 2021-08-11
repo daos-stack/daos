@@ -29,7 +29,7 @@ func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(nil)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, nil)
 	if err != nil {
 		return err
 	}
@@ -100,7 +100,7 @@ func (cmd *containerSnapshotListCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (cmd *containerSnapshotRollbackCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
