@@ -961,15 +961,18 @@ static struct step steps[] = {
 	{ 20,	"Inserting 1M 128B values",		kv_insert128,	96 },
 	{ 21,	"Reading 128B values back",		kv_read128,	96 },
 	/** { 22,	"Listing keys",				kv_list,	96 },
-	{ 23,	"Punching object",			kv_punch,	96 }, */
+	* { 23,	"Punching object",			kv_punch,	96 },
+	*/
 	{ 24,	"Inserting 1M 4KB values",		kv_insert4k,	96 },
 	{ 25,	"Reading 4KB values back",		kv_read4k,	96 },
 	/** { 26,	"Listing keys",				kv_list,	96 },
-	{ 27,	"Punching object",			kv_punch,	96 }, */
+	* { 27,	"Punching object",			kv_punch,	96 },
+	*/
 	{ 28,	"Inserting 100K 1MB values",		kv_insert1m,	96 },
 	{ 29,	"Reading 1MB values back",		kv_read1m,	96 },
 	/** { 30,	"Listing keys",				kv_list,	96 },
-	{ 31,	"Punching object",			kv_punch,	96 }, */
+	* { 31,	"Punching object",			kv_punch,	96 },
+	*/
 
 	/** Test aux containers */
 	{ 40,	"Inserting into aux cont",		kv_insertaux,	96 },

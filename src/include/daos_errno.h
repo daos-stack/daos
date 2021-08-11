@@ -262,7 +262,7 @@ extern "C" {
 	       TX status is uncertaion)					\
 	/** Communicatin issue with agent. */				\
 	ACTION(DER_AGENT_COMM,		(DER_ERR_DAOS_BASE + 34),	\
-               Agent communication error)
+		Agent communication error)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
