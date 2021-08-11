@@ -86,13 +86,11 @@ class PosixSimul(DfuseTestBase):
         dfuse_hosts = self.agent_managers[0].hosts
 
         if "centos" in host_os:
-            simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul",
-                          }
+            simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul"}
         elif "suse" in host_os:
-            simul_dict = {"openmpi": "/usr/lib64/mpi/gcc/openmpi3/bin/simul",
-                          }
+            simul_dict = {"openmpi": "/usr/lib64/mpi/gcc/openmpi3/bin/simul"}
         else:
-            print(host_os)
+            self.log.error(host_os)
             raise NotImplementedError
 
         dfuse_mount_dir = self.params.get("mount_dir", '/run/dfuse/*')
@@ -157,4 +155,3 @@ class PosixSimul(DfuseTestBase):
                     self.log.info("Expected failure")
                 else:
                     raise exception
-
