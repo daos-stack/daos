@@ -23,11 +23,6 @@ class CartNoPmixOneNodeTest(CartTest):
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=cart,no_pmix,one_node,memcheck
         """
-        crt_phy_addr = os.environ.get("CRT_PHY_ADDR_STR")
-        ofi_interface = os.environ.get("OFI_INTERFACE")
-        ofi_ctx_num = os.environ.get("CRT_CTX_NUM")
-        ofi_share_addr = os.environ.get("CRT_CTX_SHARE_ADDR")
-
         cmd = self.params.get("tst_bin", '/run/tests/*/')
 
         self.print("\nTest cmd : {}\n".format(cmd))
