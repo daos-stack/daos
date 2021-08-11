@@ -82,7 +82,7 @@ func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 	}
 }
 
-func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) error {
 	mb.Lock()
 	if req.EnableVMD {
 		mb.ResetCalls = append(mb.ResetCalls, req)
@@ -91,10 +91,10 @@ func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepa
 	mb.Unlock()
 
 	if mb.cfg.ResetErr != nil {
-		return nil, mb.cfg.ResetErr
+		return mb.cfg.ResetErr
 	}
 
-	return new(storage.BdevPrepareResponse), nil
+	return nil
 }
 
 func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {

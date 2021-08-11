@@ -591,136 +591,6 @@ func TestBackend_cleanHugePagesFn(t *testing.T) {
 	}
 }
 
-func TestBackend_vmdProcessFilters(t *testing.T) {
-	testNrHugePages := 42
-	usrCurrent, _ := user.Current()
-	username := usrCurrent.Username
-
-	for name, tc := range map[string]struct {
-		inReq      *storage.BdevPrepareRequest
-		inVmdAddrs []string
-		expOutReq  storage.BdevPrepareRequest
-	}{
-		"no filters": {
-			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-			},
-			inVmdAddrs: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
-			expOutReq: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-			},
-		},
-		"addresses allowed": {
-			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-			},
-			inVmdAddrs: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
-			expOutReq: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-			},
-		},
-		"addresses not allowed": {
-			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-			},
-			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
-			expOutReq: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-			},
-		},
-		"addresses partially allowed": {
-			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList:  common.MockPCIAddr(1),
-			},
-			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(1)},
-			expOutReq: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList:  common.MockPCIAddr(1),
-			},
-		},
-		"addresses blocked": {
-			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIBlockList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-			},
-			inVmdAddrs: []string{common.MockPCIAddr(1), common.MockPCIAddr(2)},
-			expOutReq: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-			},
-		},
-		"addresses not blocked": {
-			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIBlockList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-			},
-			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(4)},
-			expOutReq: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(3),
-					storage.BdevPciAddrSep, common.MockPCIAddr(4)),
-			},
-		},
-		"addresses partially blocked": {
-			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIBlockList:  common.MockPCIAddr(1),
-			},
-			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(1)},
-			expOutReq: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList:  common.MockPCIAddr(3),
-			},
-		},
-		"addresses partially allowed and partially blocked": {
-			inReq: &storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-					storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-				PCIBlockList: common.MockPCIAddr(1),
-			},
-			inVmdAddrs: []string{common.MockPCIAddr(3), common.MockPCIAddr(2), common.MockPCIAddr(1)},
-			expOutReq: storage.BdevPrepareRequest{
-				HugePageCount: testNrHugePages,
-				TargetUser:    username,
-				PCIAllowList:  common.MockPCIAddr(2),
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			outReq := vmdProcessFilters(tc.inReq, tc.inVmdAddrs)
-			if diff := cmp.Diff(tc.expOutReq, outReq); diff != "" {
-				t.Fatalf("unexpected output request (-want, +got):\n%s\n", diff)
-			}
-		})
-	}
-}
-
 func TestBackend_Prepare(t *testing.T) {
 	const (
 		testNrHugePages       = 42
@@ -1121,12 +991,12 @@ func TestBackend_Prepare(t *testing.T) {
 				return tc.hpCleanErr
 			}
 
-			scriptCall := b.script.Prepare
+			var gotErr error
 			if tc.reset {
-				scriptCall = b.script.Reset
+				gotErr = b.Reset(tc.req)
+			} else {
+				_, gotErr = b.prepare(tc.req, mockUserLookup, mockVmdDetect, mockHpClean)
 			}
-
-			_, gotErr := b.prepare(tc.req, scriptCall, mockUserLookup, mockVmdDetect, mockHpClean)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if gotErr != nil {
 				return
@@ -1136,6 +1006,170 @@ func TestBackend_Prepare(t *testing.T) {
 				t.Fatalf("\nunexpected cmd env (-want, +got):\n%s\n", diff)
 			}
 
+		})
+	}
+}
+
+func TestBackend_checkCfgBdevsExist(t *testing.T) {
+	scanAddrs := []string{
+		"0000:90:00.0", "0000:d8:00.0", "5d0505:01:00.0", "0000:8e:00.0",
+		"0000:8a:00.0", "0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0",
+		"0000:8f:00.0", "5d0505:03:00.0",
+	}
+	scanCtrlrs := make(storage.NvmeControllers, len(scanAddrs))
+	for idx, addr := range scanAddrs {
+		scanCtrlrs[idx] = &storage.NvmeController{PciAddr: addr}
+	}
+
+	for name, tc := range map[string]struct {
+		vmdEnabled    bool
+		inControllers storage.NvmeControllers
+		engineStorage map[uint32]*storage.Config
+		expErr        error
+	}{
+		"vmd in scan but empty cfg bdev list": {
+			inControllers: scanCtrlrs,
+			engineStorage: make(map[uint32]*storage.Config),
+		},
+		"vmd in scan with addr in cfg bdev list but vmd disabled": {
+			inControllers: scanCtrlrs,
+			engineStorage: map[uint32]*storage.Config{
+				0: {
+					Tiers: storage.TierConfigs{
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:5d:05.5"),
+					},
+				},
+			},
+			expErr: FaultBdevNotFound("0000:5d:05.5"),
+		},
+		"vmd in scan with addr in cfg bdev list": {
+			inControllers: scanCtrlrs,
+			vmdEnabled:    true,
+			engineStorage: map[uint32]*storage.Config{
+				0: {
+					Tiers: storage.TierConfigs{
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:5d:05.5"),
+					},
+				},
+			},
+		},
+		//		"vmd in scan with addr in cfg bdev list": {
+		//			vmdEnabled:      true,
+		//			inCfgBdevLists:  [][]string{{"0000:5d:05.5"}},
+		//			expCfgBdevLists: [][]string{{"5d0505:01:00.0", "5d0505:03:00.0"}},
+		//		},
+		//		"vmd with no backing devices with addr in cfg bdev list": {
+		//			vmdEnabled:     true,
+		//			inCfgBdevLists: [][]string{{"0000:d7:05.5"}},
+		//			expErr:         FaultBdevNotFound("0000:d7:05.5"),
+		//		},
+		//		"vmd and non vmd with no backing devices with addr in cfg bdev list": {
+		//			vmdEnabled:     true,
+		//			inCfgBdevLists: [][]string{{"0000:8a:00.0", "0000:d7:05.5"}},
+		//			expErr:         FaultBdevNotFound("0000:d7:05.5"),
+		//		},
+		//		"vmd and non vmd in scan with addr in cfg bdev list": {
+		//			vmdEnabled:     true,
+		//			inCfgBdevLists: [][]string{{"0000:8a:00.0", "0000:8d:00.0", "0000:5d:05.5"}},
+		//			expCfgBdevLists: [][]string{
+		//				{"0000:8a:00.0", "0000:8d:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
+		//			},
+		//		},
+		//		"vmd and non vmd in scan with addr in cfg bdev list on multiple io servers": {
+		//			numEngines: 2,
+		//			vmdEnabled: true,
+		//			inScanResp: &storage.BdevScanResponse{
+		//				Controllers: append(scanCtrlrs,
+		//					&storage.NvmeController{PciAddr: "d70505:01:00.0"},
+		//					&storage.NvmeController{PciAddr: "d70505:02:00.0"}),
+		//			},
+		//			inCfgBdevLists: [][]string{
+		//				{"0000:90:00.0", "0000:d8:00.0", "0000:d7:05.5"},
+		//				{"0000:8a:00.0", "0000:8d:00.0", "0000:5d:05.5"},
+		//			},
+		//			expCfgBdevLists: [][]string{
+		//				{"0000:90:00.0", "0000:d8:00.0", "d70505:01:00.0", "d70505:02:00.0"},
+		//				{"0000:8a:00.0", "0000:8d:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
+		//			},
+		//		},
+		//		"missing ssd in cfg bdev list": {
+		//			numEngines:     2,
+		//			inCfgBdevLists: [][]string{{"0000:90:00.0"}, {"0000:80:00.0"}},
+		//			expErr:         FaultBdevNotFound("0000:80:00.0"),
+		//		},
+		//		"present ssds in cfg bdev list": {
+		//			numEngines: 2,
+		//			inCfgBdevLists: [][]string{
+		//				{"0000:90:00.0", "0000:d8:00.0", "0000:8e:00.0", "0000:8a:00.0"},
+		//				{"0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0", "0000:8f:00.0"},
+		//			},
+		//			expCfgBdevLists: [][]string{
+		//				{"0000:90:00.0", "0000:d8:00.0", "0000:8e:00.0", "0000:8a:00.0"},
+		//				{"0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0", "0000:8f:00.0"},
+		//			},
+		//		},
+		//		"unexpected scan": {
+		//			numEngines: 2,
+		//			inScanResp: &storage.BdevScanResponse{
+		//				Controllers: storage.MockNvmeControllers(3),
+		//			},
+		//			inCfgBdevLists: [][]string{
+		//				{"0000:90:00.0", "0000:d8:00.0", "0000:8e:00.0", "0000:8a:00.0"},
+		//				{"0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0", "0000:8f:00.0"},
+		//			},
+		//			expErr: FaultBdevNotFound(
+		//				"0000:90:00.0", "0000:d8:00.0", "0000:8e:00.0", "0000:8a:00.0",
+		//			),
+		//		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			//			if tc.numEngines == 0 {
+			//				tc.numEngines = 1
+			//			}
+			//			if len(tc.inCfgBdevLists) != tc.numEngines {
+			//				t.Fatal("test params: inCfgBdevLists length incorrect")
+			//			}
+			//
+			//			// set config device lists
+			//			testCfg := config.DefaultServer()
+			//			testCfg.Engines = make([]*engine.Config, tc.numEngines)
+			//			for idx := 0; idx < tc.numEngines; idx++ {
+			//				testCfg.Engines[idx] = engine.NewConfig().
+			//					WithBdevClass("nvme").
+			//					WithBdevDeviceList(tc.inCfgBdevLists[idx]...)
+			//			}
+			//
+			//			mbc := &bdev.MockBackendConfig{VMDEnabled: tc.vmdEnabled}
+			//			cs := mockControlService(t, log, testCfg, mbc, nil, nil)
+			//
+			//			if tc.inScanResp == nil {
+			//				tc.inScanResp = &bdev.ScanResponse{
+			//					Controllers: scanCtrlrs,
+			//				}
+			//			}
+			gotErr := checkCfgBdevsExist(log, tc.inControllers, tc.engineStorage, tc.vmdEnabled)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			//			if len(tc.expCfgBdevLists) != tc.numEngines {
+			//				t.Fatal("test params: expCfgBdevLists length incorrect")
+			//			}
+
+			//			for idx := 0; idx < tc.numEngines; idx++ {
+			//				cfgBdevs := cs.instanceStorage[idx].Bdev.GetNvmeDevs()
+			//			if diff := cmp.Diff(tc.expCfgBdevLists[idx], cfgBdevs); diff != "" {
+			//					t.Fatalf("unexpected device list (-want, +got):\n%s\n", diff)
+			//				}
+			//			}
 		})
 	}
 }
