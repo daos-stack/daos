@@ -70,7 +70,14 @@ class OSAOnlineReintegration(OSAUtils):
             oclass = self.ior_cmd.dfs_oclass.value
         test_seq = self.ior_test_sequence[0]
         # Create a pool
-        label_generator = LabelGenerator()
+        if self.test_oclass and oclass != "RP_2G1":
+            # if we are testing different object class,
+            # create a label_generator for each iteration.
+            index = self.test_oclass.index(oclass)
+            index = index + 1
+            label_generator = LabelGenerator(index)
+        else:
+            label_generator = LabelGenerator()
         pool = {}
         exclude_servers = (len(self.hostlist_servers) * 2) - 1
 
