@@ -23,13 +23,12 @@ container:
 ior:
     api: POSIX
     client_processes:
-        np_16:
-            np: 16
+      np_16:
+        np: 16
     test_file: daos:testFile
     repetitions: 1
     iorflags:
-        ssf:
-            flags: "-v -w -r"
+      flags: "-v -w -r"
     transfer_size: '1M'
     block_size: '100M'
     write_x: 2

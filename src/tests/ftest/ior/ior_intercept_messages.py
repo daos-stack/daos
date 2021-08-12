@@ -39,7 +39,7 @@ class IorInterceptMessages(IorTestBase):
         d_il_report_value = self.params.get("value",
                                             "/run/tests/D_IL_REPORT/*")
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-        summary_pattern = "^\[libioil\] Performed [0-9]+ reads and [0-9]+ " \
+        summary_pattern = r"^\[libioil\] Performed [0-9]+ reads and [0-9]+ " \
                           "writes from [0-9]+ files*"
         # Set the env locally for this test
         # Avoiding any impact to the rest of IOR test cases
@@ -67,7 +67,6 @@ class IorInterceptMessages(IorTestBase):
 
         # Intercept
         match_intercept_results = []
-        # pylint: disable=anomalous-backslash-in-string
         intercept_pattern = "^\[libioil\] Intercepting write*"
         compiled_ip = re.compile(intercept_pattern)
         expected_total_intercepts = self.processes * int(env['D_IL_REPORT'])

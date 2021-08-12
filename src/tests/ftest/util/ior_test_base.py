@@ -240,6 +240,8 @@ class IorTestBase(DfuseTestBase):
         if intercept:
             env['LD_PRELOAD'] = intercept
             env['D_LOG_MASK'] = 'INFO'
+            if env.get('D_IL_REPORT', None) is None:
+                env['D_IL_REPORT'] = '1'
 
             #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
             #env['DD_MASK'] = 'all'
