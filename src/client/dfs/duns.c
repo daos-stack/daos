@@ -857,7 +857,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		} else {
 			D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
 		}
-		goto err_link;
+		goto err_cont;
 	}
 	if (backend_dfuse) {
 		/*
@@ -869,7 +869,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		if (rc) {
 			rc = errno;
 			D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
-			goto err_link;
+			goto err_cont;
 		}
 	}
 
