@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v1.2
+site_name: DAOS v2.0 - dev
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 site_url: http://daos.io
@@ -22,8 +22,9 @@ theme:
         accent: 'blue'
     feature:
         tabs: true
+    logo: graph/logo.png
 
-docs_dir: ./
+docs_dir: doc
 
 markdown_extensions:
     - admonition
@@ -42,11 +43,13 @@ nav:
         - 'Fault Model': 'overview/fault.md'
         - 'Security Model': 'overview/security.md'
     - Installation and Setup:
-        - 'CentOS Setup': 'QSG/setup.md'
-        - 'openSUSE Setup': 'QSG/suse_setup.md'
-        - 'Admin/Client Tools': 'QSG/tour.md'
-        - 'Test and Benchmarking': 'QSG/test_index.md'
+
+        - 'DAOS CentOS Setup': 'QSG/setup.md'
+        - 'DAOS openSUSE Setup': 'QSG/suse_setup.md'
+        - 'DAOS Admin/Client Tools': 'QSG/tour.md'
+        - 'DAOS Test and Benchmarking': 'QSG/test_index.md'
         - 'IO500 Setup': 'https://wiki.hpdd.intel.com/display/DC/DAOS+IO-500+Instructions'
+        
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
         - 'Software Installation': 'admin/installation.md'
@@ -60,13 +63,16 @@ nav:
         - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
     - User Guide:
+        - 'Workflow': 'user/workflow.md'
         - 'Container Management': 'user/container.md'
-        - 'Native Programming Interface': 'user/interface.md'
-        - 'POSIX Namespace': 'user/posix.md'
+        - 'File System': 'user/filesystem.md'
+        
         - 'MPI-IO Support': 'user/mpi-io.md'
         - 'HDF5 Support': 'user/hdf5.md'
         - 'Spark and Hadoop': 'user/spark.md'
-    - Test and Benchmarking:
+        - 'Data Mover': 'user/datamover.md'
+        - 'Native Programming Interface': 'user/interface.md'
+    - DAOS Test and Benchmarking:
         - 'Run DAOS Autotest': 'QSG/autotest.md'
         - 'Run CaRT Self_test': 'QSG/cartselftest.md'
         - 'Run IOR': 'QSG/runior.md'
@@ -74,7 +80,7 @@ nav:
         - 'Run dbench': 'QSG/dbench.md'
         - 'Datamover test': 'QSG/datamover.md'
     - Releases:
-        - 'Release Notes v1.0': 'release/release_notes_v1_0.md'
+        - 'Release Notes v2.0': 'release/release_notes_v2_0.md'
         - 'Support Matrix': 'release/support_matrix.md'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
