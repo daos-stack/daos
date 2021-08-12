@@ -1231,7 +1231,7 @@ def run_daos_cmd(conf,
         rc.json = json.loads(rc.stdout.decode('utf-8'))
     return rc
 
-def _create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valgrind=False):
+def _create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgrind=False):
     """Helper function for create_cont"""
 
     cmd = ['container',
@@ -1241,8 +1241,8 @@ def _create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valg
     if label:
         cmd.extend(['--properties',
                     'label:{}'.format(label)])
-    if posix:
-        cmd.extend(['--type', 'POSIX'])
+    if ctype:
+        cmd.extend(['--type', ctype])
 
     if path:
         cmd.extend(['--path', path])
@@ -1255,15 +1255,15 @@ def _create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valg
     print(rc.json)
     return rc
 
-def create_cont(conf, pool, cont=None, posix=False, label=None, path=None, valgrind=False):
+def create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgrind=False):
     """Create a container and return the uuid"""
 
-    rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
+    rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
 
     if rc.returncode == 1 and \
        rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
         destroy_container(conf, pool, label)
-        rc = _create_cont(conf, pool, cont, posix, label, path, valgrind)
+        rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
 
     assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.json['response']['container_uuid']
@@ -1382,7 +1382,7 @@ class posix_tests():
     def test_cache(self):
         """Test with caching enabled"""
 
-        container = create_cont(self.conf, self.pool.id(), posix=True, label='Cache')
+        container = create_cont(self.conf, self.pool.id(), ctype="POSIX", label='Cache')
         run_daos_cmd(self.conf,
                      ['container', 'query',
                       self.pool.id(), container],
@@ -1687,7 +1687,7 @@ class posix_tests():
     def test_uns_create(self):
         """Simple test to create a container using a path in dfuse"""
         path = os.path.join(self.dfuse.dir, 'mycont')
-        create_cont(self.conf, pool=self.pool.uuid, path=path, posix=True)
+        create_cont(self.conf, pool=self.pool.uuid, path=path, ctype="POSIX")
         stbuf = os.stat(path)
         print(stbuf)
         assert stbuf.st_ino < 100
@@ -1844,7 +1844,7 @@ class posix_tests():
         tmp_dir = tempfile.mkdtemp()
 
         cont_path = os.path.join(tmp_dir, 'my-cont')
-        create_cont(self.conf, self.pool.uuid, posix=True, path=cont_path)
+        create_cont(self.conf, self.pool.uuid, ctype="POSIX", path=cont_path)
 
         dfuse = DFuse(self.server,
                       self.conf,
@@ -1883,7 +1883,7 @@ class posix_tests():
                     pool=pool,
                     cont=uns_container,
                     path=uns_path,
-                    posix=True)
+                    ctype="POSIX")
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
 
@@ -1916,7 +1916,7 @@ class posix_tests():
                     pool=pool,
                     cont=uns_container,
                     path=uns_path,
-                    posix=True)
+                    ctype="POSIX")
 
         # List the root container again.
         print(os.listdir(os.path.join(dfuse.dir, pool, container)))
@@ -1998,7 +1998,7 @@ class posix_tests():
                     pool=pool,
                     cont=uns_container,
                     path=uns_path,
-                    posix=True)
+                    ctype="POSIX")
 
         print(os.stat(uns_path))
         print(os.listdir(dfuse.dir))
@@ -2155,7 +2155,7 @@ def run_posix_tests(server, conf, test=None):
                 # should not reduce coverage.
                 pt.container = create_cont(conf,
                                            pool.id(),
-                                           posix=True,
+                                           ctype="POSIX",
                                            valgrind=False,
                                            label=fn)
                 pt.container_label = fn
@@ -2514,7 +2514,7 @@ def run_duns_overlay_test(server, conf):
 
     uns_dir = os.path.join(parent_dir.name, 'uns_ep')
 
-    create_cont(conf, pool=pool, path=uns_dir, posix=True)
+    create_cont(conf, pool=pool, path=uns_dir, ctype="POSIX")
 
     dfuse = DFuse(server, conf, mount_path=uns_dir, caching=False)
 
@@ -2670,7 +2670,7 @@ def run_in_fg(server, conf):
     dfuse = DFuse(server, conf, pool=pool)
     dfuse.start()
 
-    container = create_cont(conf, pool, posix=True)
+    container = create_cont(conf, pool, ctype="POSIX")
 
     run_daos_cmd(conf,
                  ['container', 'set-attr',
@@ -2890,11 +2890,11 @@ def test_pydaos_kv(server, conf):
 
     pool = server.get_test_pool()
 
-    c_uuid = create_cont(conf, pool)
+    c_uuid = create_cont(conf, pool, ctype="PYTHON")
 
-    container = daos.Cont(pool, c_uuid)
+    container = daos.DCont(pool, c_uuid)
 
-    kv = container.get_kv_by_name('my_test_kv', create=True)
+    kv = container.dict('my_test_kv')
     kv['a'] = 'a'
     kv['b'] = 'b'
     kv['list'] = pickle.dumps(list(range(1, 100000)))
@@ -2934,7 +2934,7 @@ def test_pydaos_kv(server, conf):
 
     kv = None
     print('Closing container and opening new one')
-    kv = container.get_kv_by_name('my_test_kv')
+    kv = container.get('my_test_kv')
     kv = None
     container = None
     daos._cleanup()
