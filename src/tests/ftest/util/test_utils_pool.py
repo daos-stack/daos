@@ -61,6 +61,7 @@ class TestPool(TestDaosApiBase):
         self.properties = BasicParameter(None)      # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
+        self.acl_file = BasicParameter(None)
         self.label = BasicParameter(None, "TestLabel")
         self.label_generator = label_generator
 
@@ -210,6 +211,7 @@ class TestPool(TestDaosApiBase):
             "tier_ratio": self.tier_ratio.value,
             "scm_size": self.scm_size.value,
             "properties": self.properties.value,
+            "acl_file": self.acl_file.value,
             "label": self.label.value
         }
         for key in ("target_list", "svcn", "nvme_size"):
@@ -860,6 +862,7 @@ class TestPool(TestDaosApiBase):
         """Use dmg to reintegrate the rank and targets into this pool.
 
         Only supported with the dmg control method.
+
         Args:
             rank (str): daos server rank to reintegrate
             tgt_idx (string): str of targets to reintegrate on ranks ex: "1,2"
@@ -880,6 +883,7 @@ class TestPool(TestDaosApiBase):
         """Use dmg to drain the rank and targets from this pool.
 
         Only supported with the dmg control method.
+
         Args:
             rank (str): daos server rank to drain
             tgt_idx (string): str of targets to drain on ranks ex: "1,2"
@@ -895,6 +899,51 @@ class TestPool(TestDaosApiBase):
 
         return status
 
+    @fail_on(CommandFailure)
+    def get_acl(self):
+        """Get ACL from a DAOS pool.
+        
+        Returns:
+            str: dmg pool get-acl output.
+
+        """
+        if self.pool:
+            return self.dmg.pool_get_acl(pool=self.identifier)
+
+        return None
+
+    @fail_on(CommandFailure)
+    def update_acl(self, entry=None):
+        """Update ACL for a DAOS pool.
+
+        Args:
+            entry (str, optional): entry to be updated.
+        """
+        if self.pool and self.acl_file:
+            self.dmg.pool_update_acl(
+                pool=self.identifier, acl_file=self.acl_file, entry=entry)
+        else:
+            self.log.error("update_acl failed!")
+
+    @fail_on(CommandFailure)
+    def delete_acl(self, principal):
+        """Delete ACL from a DAOS pool.
+
+        Args:
+            principal (str): principal to be deleted
+        """
+        if self.pool:
+            self.dmg.pool_delete_acl(pool=self.identifier, principal=principal)
+
+    @fail_on(CommandFailure)
+    def overwrite_acl(self):
+        """Overwrite ACL in a DAOS pool."""
+        if self.pool and self.acl_file:
+            self.dmg.pool_overwrite_acl(
+                pool=self.identifier, acl_file=self.acl_file)
+        else:
+            self.log.error("overwrite_acl failed!")
+
 
 class LabelGenerator():
     # pylint: disable=too-few-public-methods
@@ -905,7 +954,6 @@ class LabelGenerator():
 
         Args:
             value (int): Number that's attached after the base_label.
-
         """
         self.value = value
 
