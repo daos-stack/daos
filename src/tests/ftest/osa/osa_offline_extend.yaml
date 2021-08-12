@@ -50,7 +50,7 @@ pool:
   nvme_size: 54000000000
   svcn: 4
   control_method: dmg
-  properties: scrub:run_wait
+  properties: scrub:wait
 container:
   type: POSIX
   control_method: daos
