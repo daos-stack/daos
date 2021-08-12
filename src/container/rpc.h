@@ -24,7 +24,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_CONT_VERSION 4
+#define DAOS_CONT_VERSION 5
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -171,6 +171,7 @@ CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 CRT_RPC_DECLARE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL,
 		DAOS_OSEQ_CONT_DESTROY)
 
+/* FIXME: need way to get nsnapshots and/or snapshots in container open */
 #define DAOS_ISEQ_CONT_OPEN	/* input fields */		 \
 	((struct cont_op_in)	(coi_op)		CRT_VAR) \
 	((uint64_t)		(coi_flags)		CRT_VAR) \
@@ -236,18 +237,24 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 #define DAOS_CO_QUERY_PROP_ALL					\
 	((1ULL << DAOS_CO_QUERY_PROP_BITS_NR) - 1)
 
+/* FIXME? define a query bit for getting snapshot information? */
 /** container query target bit, to satisfy querying of daos_cont_info_t */
 #define DAOS_CO_QUERY_TGT		(1ULL << 31)
 
 #define DAOS_ISEQ_CONT_QUERY	/* input fields */		 \
 	((struct cont_op_in)	(cqi_op)		CRT_VAR) \
-	((uint64_t)		(cqi_bits)		CRT_VAR)
+	((uint64_t)		(cqi_bits)		CRT_VAR) \
+	((crt_bulk_t)		(cqi_bulk)		CRT_VAR)
+
+
 
 /** Add more items to query when needed */
 #define DAOS_OSEQ_CONT_QUERY	/* output fields */		 \
 	((struct cont_op_out)	(cqo_op)		CRT_VAR) \
 	((daos_epoch_t)		(cqo_hae)		CRT_VAR) \
-	((daos_prop_t)		(cqo_prop)		CRT_PTR)
+	((daos_prop_t)		(cqo_prop)		CRT_PTR) \
+	((uint32_t)		(cqo_snap_count)	CRT_VAR) \
+	((uint32_t)		(cqo_pad)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 

@@ -27,6 +27,7 @@ import (
 
 /*
 #include "util.h"
+
 */
 import "C"
 
@@ -115,8 +116,8 @@ func (cmd *containerBaseCmd) closeContainer() error {
 	return daosError(C.daos_cont_close(cmd.cContHandle, nil))
 }
 
-func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
-	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
+func (cmd *containerBaseCmd) queryContainer(verbose bool) (*containerInfo, error) {
+	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID, verbose)
 	var cType [10]C.char
 
 	props, entries, err := allocProps(2)
@@ -317,7 +318,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer cmd.closeContainer()
 
-	ci, err := cmd.queryContainer()
+	ci, err := cmd.queryContainer(false)
 	if err != nil {
 		// Special case for creating a container without permission to query it.
 		if errors.Cause(err) == drpc.DaosNoPermission {
@@ -327,6 +328,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 
 		return errors.Wrapf(err, "failed to query new container %s", co_id)
 	}
+	defer ci.deleteContainerInfo()
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(ci, nil)
@@ -642,9 +644,10 @@ func (cmd *containerStatCmd) Execute(_ []string) error {
 
 func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	epochs := ci.SnapshotEpochs()
-	epochStrs := make([]string, *ci.NumSnapshots)
-	for i := uint32(0); i < *ci.NumSnapshots; i++ {
-		epochStrs[i] = fmt.Sprintf("%d", epochs[i])
+
+	epochStrs := make([]string, len(epochs))
+	for i, e := range epochs {
+		epochStrs[i] = fmt.Sprintf("%d", e)
 	}
 
 	rows := []txtfmt.TableRow{
@@ -688,6 +691,7 @@ type containerInfo struct {
 	Type                   string     `json:"container_type"`
 	ObjectClass            string     `json:"object_class,omitempty"`
 	ChunkSize              uint64     `json:"chunk_size,omitempty"`
+	Verbose                bool
 }
 
 func (ci *containerInfo) SnapshotEpochs() []uint64 {
@@ -712,7 +716,7 @@ func (ci *containerInfo) MarshalJSON() ([]byte, error) {
 
 // as an experiment, try creating a Go struct whose members are
 // pointers into the C struct.
-func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
+func newContainerInfo(poolUUID, contUUID *uuid.UUID, verbose bool) *containerInfo {
 	ci := new(containerInfo)
 
 	ci.PoolUUID = poolUUID
@@ -721,12 +725,26 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
 	ci.HighestAggregatedEpoch = (*uint64)(&ci.dci.ci_hae)
-
+	ci.Verbose = verbose
+	if ci.Verbose {
+		ci.dci.ci_snapshots = (*C.uint64_t)(C.calloc(4096, C.sizeof_uint64_t))
+		ci.dci.ci_nsnapshots = 4096
+	} else {
+		ci.dci.ci_nsnapshots = 0
+	}
 	return ci
+}
+
+func (ci *containerInfo) deleteContainerInfo() {
+	if ci.Verbose {
+		C.free(unsafe.Pointer(ci.dci.ci_snapshots))
+	}
 }
 
 type containerQueryCmd struct {
 	existingContainerCmd
+
+	Verbose bool `long:"verbose" short:"V" description:"Include snapshot epochs"`
 }
 
 func (cmd *containerQueryCmd) Execute(_ []string) error {
@@ -742,18 +760,38 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	ci, err := cmd.queryContainer()
+	// containerInfo is input/output particularly for ci_nsnapshots and ci_snapshots
+	// Scenario 1
+	// if provide ci_snapshots=NULL, ci_nsnapshots will be updated to the number M
+	// returned by the server (actual number of snapshots in the container)
+	// Print routines must not dereference the NULL ci_snapshots pointer
+	//
+	// FIXME / open issue
+	// Scenario 2
+	// if provide ci_snapshots=<ptr_to_allocated_mem_with_N_daos_epoch_t_items> and
+	// ci_nsnapshots=N, server will fill up to N items in ci_snapshots, and will
+	// reply with the value M (causing ci_nsnapshots=M). M may be larger or smaller than N.
+	// Print routines cannot dereference ci_snapshots beyond min(N,M) items.
+	//
+	// something similar would be needed in daos_old cont query if updating that tool
+	// to print the number of snapshots and the snapshots (epoch value)
+
+	// Also to do is adding a placeholder for snapshot names
+
+	ci, err := cmd.queryContainer(cmd.Verbose)
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to query container %s",
 			cmd.contUUID)
 	}
+	defer ci.deleteContainerInfo()
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(ci, nil)
 	}
 
 	var bld strings.Builder
+	// Always print verbose (note this is different than --verbose option that fetches snapshots
 	if err := printContainerInfo(&bld, ci, true); err != nil {
 		return err
 	}

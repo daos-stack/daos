@@ -2367,6 +2367,7 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
 	uint32_t		last_ver = 0;
+	int			snap_count;
 	int			rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
@@ -2375,6 +2376,14 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 
 	if (!hdl_has_query_access(hdl, cont, in->cqi_bits))
 		return -DER_NO_PERM;
+
+	/* Get snapshots. If remote bulk handle does not exist, only aggregate size is sent. */
+	rc = ds_cont_xfer_snap_list(tx, pool_hdl, cont, hdl, rpc, in->cqi_bulk, &snap_count);
+	if (rc)
+		return rc;
+	out->cqo_snap_count = snap_count;
+	D_DEBUG(DF_DSMS, DF_CONT": snap_count=%d\n",
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cqi_op.ci_uuid), snap_count);
 
 	/* need RF to process co_status */
 	if (in->cqi_bits & DAOS_CO_QUERY_PROP_CO_STATUS)
