@@ -3602,31 +3602,19 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 			continue; /* Skip existing removal records */
 		entry.ei_rect.rc_ex = ent->en_ext;
 		entry.ei_bound = entry.ei_rect.rc_epc = ent->en_epoch;
-		entry.ei_rect.rc_minor_epc = ent->en_minor_epc;
-		if ((ent->en_visibility & EVT_PARTIAL) == 0) {
-			D_DEBUG(DB_IO, "Remove "DF_RECT"\n",
-				DP_RECT(&entry.ei_rect));
-			rc = evt_delete_internal(tcx, &entry.ei_rect, NULL,
-						 true);
-			/** If delete fails, go ahead insert a removal
-			 *  record instead.
-			 */
-			if (rc == -DER_INPROGRESS)
-				goto insert_removal;
-			if (rc != 0)
-				break;
-			continue;
-		}
+		entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
 
-		/* It's a partial extent so insert a delete record instead */
+		/** One could make the case for removal for intact extents here but it has the
+		 *  potential for messing with aggregation's implicit assumption that it is the
+		 *  remover of extents.  If the extent is only partially covered, we do need to
+		 *  adjust the bounds before inserting the removal record.
+		 */
 		if (ent->en_ext.ex_lo < ext->ex_lo)
 			entry.ei_rect.rc_ex.ex_lo = ext->ex_lo;
 		if (ent->en_ext.ex_hi > ext->ex_hi)
 			entry.ei_rect.rc_ex.ex_hi = ext->ex_hi;
-insert_removal:
-		entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
-		D_DEBUG(DB_IO, "Insert removal record "DF_RECT"\n",
-			DP_RECT(&entry.ei_rect));
+
+		D_DEBUG(DB_IO, "Insert removal record "DF_RECT"\n", DP_RECT(&entry.ei_rect));
 		BIO_ADDR_SET_HOLE(&entry.ei_addr);
 
 		rc = evt_insert(toh, &entry, NULL);
