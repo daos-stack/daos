@@ -52,6 +52,7 @@ class TestPool(TestDaosApiBase):
         self.name = BasicParameter(None)            # server group name
         self.svcn = BasicParameter(None)
         self.target_list = BasicParameter(None)
+        self.nranks = BasicParameter(None)
         self.size = BasicParameter(None)
         self.tier_ratio = BasicParameter(None)
         self.scm_size = BasicParameter(None)
@@ -209,6 +210,7 @@ class TestPool(TestDaosApiBase):
             "size": self.size.value,
             "tier_ratio": self.tier_ratio.value,
             "scm_size": self.scm_size.value,
+            "nranks": self.nranks.value,
             "properties": self.properties.value,
             "label": self.label.value
         }
