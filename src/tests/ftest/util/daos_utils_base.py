@@ -318,6 +318,7 @@ class DaosCommandBase(CommandWithSubCommand):
                 super().__init__("destroy-snap")
                 self.epc = FormattedParameter("--epc={}")
                 self.epcrange = FormattedParameter("--epcrange={}")
+                self.snap = FormattedParameter("--snap={}")
 
         class GetAclSubCommand(CommonContainerSubCommand):
             """Defines an object for the daos container get-acl command."""
