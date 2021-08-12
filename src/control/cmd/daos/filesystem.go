@@ -41,6 +41,7 @@ type fsCopyCmd struct {
 
 	Source string `long:"src" short:"s" description:"copy source" required:"1"`
 	Dest   string `long:"dst" short:"d" description:"copy destination" required:"1"`
+	Preserve   string `long:"preserve" short:"m" description:"preserve container properties" required:"0"`
 }
 
 func (cmd *fsCopyCmd) Execute(_ []string) error {
@@ -54,6 +55,8 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 	defer freeString(ap.src)
 	ap.dst = C.CString(cmd.Dest)
 	defer freeString(ap.dst)
+	ap.preserve = C.CString(cmd.Preserve)
+	defer freeString(ap.preserve)
 
 	ap.fs_op = C.FS_COPY
 	rc := C.fs_copy_hdlr(ap)

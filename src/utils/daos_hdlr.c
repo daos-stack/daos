@@ -2715,7 +2715,8 @@ dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props, bool get_oid)
 	/* The order of properties MUST match the order expected by
 	 * serialization
 	 */
-	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	//props->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_LAYOUT_VER;
 	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_CSUM;
@@ -2950,17 +2951,17 @@ dm_connect(struct cmd_args_s *ap,
 	/* Retrieve all source cont properties */
 	if (src_file_dfs->type != POSIX) {
 		/* if using DFS do not retrieve the MAX OID property */
-		//if (is_posix_copy) {
-		//	rc = dm_cont_get_all_props(ca->src_coh, &props, false);
-		//} else {
+		if (is_posix_copy) {
+			rc = dm_cont_get_all_props(ca->src_coh, &props, false);
+		} else {
 			rc = dm_cont_get_all_props(ca->src_coh, &props, true);
-		//}
+		}
 		if (rc != 0) {
 			fprintf(stderr, "Failed to set container ACL: "DF_RC,
 				DP_RC(rc));
 			D_GOTO(out, rc);
 		}
-		ca->cont_layout = props->dpp_entries[1].dpe_type;
+		ca->cont_layout = props->dpp_entries[1].dpe_val;
 		if (preserve != NULL && dst_file_dfs->type == POSIX) {
 			rc = dm_serialize_metadata(ca, props, preserve);
 			if (rc != 0) {
