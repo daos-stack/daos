@@ -139,7 +139,7 @@ methods.
 The key space can be worked through via python iterators.
 
 ```
->>> for key, value in enumerate(dd): print(key, value)
+>>> for key in dd: print(key, dd[key])
 ...
 Manchester b'Old Trafford'
 Barcelona b'Camp Nou'
