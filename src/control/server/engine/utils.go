@@ -54,7 +54,7 @@ var logMasksValidLevels = []string{
 
 func isValidLevel(level string) bool {
 	for _, l := range logMasksValidLevels {
-		if level == l {
+		if strings.ToUpper(level) == l {
 			return true
 		}
 	}

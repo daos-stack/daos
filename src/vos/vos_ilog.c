@@ -544,6 +544,13 @@ vos_ilog_fetch_init(struct vos_ilog_info *info)
 	ilog_fetch_init(&info->ii_entries);
 }
 
+void
+vos_ilog_fetch_move(struct vos_ilog_info *dest, struct vos_ilog_info *src)
+{
+	memcpy(dest, src, sizeof(*dest));
+	ilog_fetch_move(&dest->ii_entries, &src->ii_entries);
+}
+
 /** Finalize incarnation log information */
 void
 vos_ilog_fetch_finish(struct vos_ilog_info *info)
