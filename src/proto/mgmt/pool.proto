@@ -173,6 +173,7 @@ message StorageUsageStats {
 	uint64 min = 3;
 	uint64 max = 4;
 	uint64 mean = 5;
+	uint32 media_type = 6;
 }
 
 // PoolRebuildStatus represents a pool's rebuild status.
