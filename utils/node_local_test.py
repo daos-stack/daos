@@ -2350,12 +2350,14 @@ def log_timer(func):
 
         conf = args[0]
         conf.lt.start()
+        rc = None
         try:
-            func(*args, **kwargs)
+            rc = func(*args, **kwargs)
         except NLTestFail:
             conf.lt.stop()
             raise
         conf.lt.stop()
+        return rc
 
     return log_timer_wrapper
 
@@ -3112,6 +3114,7 @@ class AllocFailTestRun():
                                    leak_wf=self.aft.wf,
                                    fi_signal=fi_signal)
             self.fault_injected = True
+            assert self.fi_loc
         except NLTestNoFi:
             # If a fault wasn't injected then check output is as expected.
             # It's not possible to log these as warnings, because there is
@@ -3129,8 +3132,6 @@ class AllocFailTestRun():
             return
         if not self.aft.check_stderr:
             return
-
-        print('Loc is {}'.format(self.fi_loc))
 
         # Check stderr from a daos command.
         # These should mostly be from the DH_PERROR_SYS or DH_PERROR_DER macros so check for
