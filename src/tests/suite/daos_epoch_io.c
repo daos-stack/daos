@@ -497,7 +497,7 @@ cmd_line_get(FILE *fp, char *line)
 
 	D_ASSERT(line != NULL && fp != NULL);
 	do {
-		if (fgets(line, CMD_LINE_LEN_MAX, fp) == NULL)
+		if (fgets(line, CMD_LINE_LEN_MAX - 1, fp) == NULL)
 			return -DER_ENOENT;
 		for (p = line; isspace(*p); p++)
 			;
@@ -1458,7 +1458,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 {
 	struct test_op_record	*op = NULL;
 	FILE			*fp;
-	char			 cmd_line[CMD_LINE_LEN_MAX] = {};
+	char			 cmd_line[CMD_LINE_LEN_MAX - 1] = {};
 	int			 rc = 0;
 	/*Array for snapshot epoch*/
 	daos_epoch_t		sn_epoch[DTS_MAX_EPOCH_TIMES] = {};
@@ -1478,14 +1478,14 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 	do {
 		size_t	cmd_size;
 
-		memset(cmd_line, 0, CMD_LINE_LEN_MAX);
+		memset(cmd_line, 0, CMD_LINE_LEN_MAX - 1);
 		if (cmd_line_get(fp, cmd_line) != 0)
 			break;
 
-		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX);
+		cmd_size = strnlen(cmd_line, CMD_LINE_LEN_MAX - 1);
 		if (cmd_size == 0)
 			continue;
-		if (cmd_size >= CMD_LINE_LEN_MAX) {
+		if (cmd_size >= CMD_LINE_LEN_MAX - 1) {
 			print_message("bad cmd_line, exit.\n");
 			break;
 		}
