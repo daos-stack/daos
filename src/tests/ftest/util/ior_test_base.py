@@ -232,19 +232,18 @@ class IorTestBase(DfuseTestBase):
                 Default is self.pool.
             out_queue (queue, optional): Pass the exception to the queue.
                 Defaults to None.
-             env (EnvironmentVariables, optional): Environment to be used
+            env (EnvironmentVariables, optional): Environment to be used
              when running ior. Defaults to None
         """
         if not env:
             env = self.ior_cmd.get_default_env(str(manager), self.client_log)
-            if intercept:
-                env['LD_PRELOAD'] = intercept
-                env['D_LOG_MASK'] = 'INFO'
-                env['D_IL_REPORT'] = '1'
+        if intercept:
+            env['LD_PRELOAD'] = intercept
+            env['D_LOG_MASK'] = 'INFO'
 
-                #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
-                #env['DD_MASK'] = 'all'
-                #env['DD_SUBSYS'] = 'all'
+            #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+            #env['DD_MASK'] = 'all'
+            #env['DD_SUBSYS'] = 'all'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)

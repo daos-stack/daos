@@ -21,6 +21,7 @@ container:
     type: POSIX
     control_method: daos
 ior:
+    api: POSIX
     client_processes:
         np_16:
             np: 16
@@ -28,18 +29,14 @@ ior:
     repetitions: 1
     iorflags:
         ssf:
-          flags: "-v -D 10 -w -r"
-          ior_api:
-            - POSIX
-          transfersize_blocksize:
-            1M:
-              transfer_size: '1M'
-              block_size: '100M'
-              write_x: 2
-              read_x: 1
-          objectclass:
-            oclass_SX:
-              dfs_oclass: "SX"
+            flags: "-v -w -r"
+    transfer_size: '1M'
+    block_size: '100M'
+    write_x: 2
+    read_x: 1
+    objectclass:
+      oclass_SX:
+        dfs_oclass: "SX"
 dfuse:
     mount_dir: "/tmp/daos_dfuse/"
     disable_caching: True
