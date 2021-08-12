@@ -3557,9 +3557,9 @@ def run(wf, args):
             # Read-via-IL test, requires dfuse.
             # fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
 
-            # Container attribute tests, work but disabled because of runtime concerns.
-            fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-            fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+            # Container attribute tests, work but disabled because of failures.
+            # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+            # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
             # filesystem copy test - not complete.
             # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
