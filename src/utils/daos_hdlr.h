@@ -197,7 +197,7 @@ void dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers,
 int dm_cont_get_usr_attrs(daos_handle_t coh, int *_n, char ***_names,
 			  void ***_buffers, size_t **_sizes);
 int dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props,
-			  bool get_oid);
+			  bool get_oid, bool get_label, bool get_roots);
 int dm_copy_usr_attrs(daos_handle_t src_coh, daos_handle_t dst_coh);
 
 /* filesystem operations */

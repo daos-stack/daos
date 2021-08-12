@@ -2692,20 +2692,36 @@ out:
  * Returns 1 on error, 0 on success.
  */
 int
-dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props, bool get_oid)
+dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props,
+		      bool get_oid, bool get_label, bool get_roots)
 {
 	int		rc;
 	daos_prop_t	*props = NULL;
 	daos_prop_t	*prop_acl = NULL;
 	daos_prop_t	*props_merged = NULL;
-	uint32_t	num_props = 15;
+	uint32_t        total_props = 15;
+	/* minimum number of properties that are always allocated/used to start count */
+	int             prop_index = 15;
 
 	if (get_oid) {
-		num_props++;
+		total_props++;
+	}
+
+	/* container label is required to be unique, so do not
+	 * retrieve it for copies. The label is retrieved for
+	 * serialization, but only deserialized if the label
+	 * no longer exists in the pool
+	 */
+	if (get_label) {
+		total_props++;
+	}
+
+	if (get_roots) {
+		total_props++;
 	}
 
 	/* Allocate space for all props except ACL. */
-	props = daos_prop_alloc(num_props);
+	props = daos_prop_alloc(total_props);
 	if (props == NULL) {
 		fprintf(stderr, "Failed to allocate container properties.");
 		rc = 1;
@@ -2716,7 +2732,6 @@ dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props, bool get_oid)
 	 * serialization
 	 */
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
-	//props->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
 	props->dpp_entries[1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_LAYOUT_VER;
 	props->dpp_entries[3].dpe_type = DAOS_PROP_CO_CSUM;
@@ -2736,7 +2751,17 @@ dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props, bool get_oid)
 	 * Should always be true for serialization.
 	 */
 	if (get_oid) {
-		props->dpp_entries[15].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
+		props->dpp_entries[prop_index].dpe_type = DAOS_PROP_CO_ALLOCED_OID;
+		prop_index++;
+	}
+
+	if (get_label) {
+		props->dpp_entries[prop_index].dpe_type = DAOS_PROP_CO_LABEL;
+		prop_index++;
+	}
+
+	if (get_roots) {
+		props->dpp_entries[prop_index].dpe_type = DAOS_PROP_CO_ROOTS;
 	}
 
 	/* Get all props except ACL first. */
@@ -2766,7 +2791,6 @@ dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props, bool get_oid)
 		rc = 1;
 		D_GOTO(out, rc);
 	}
-
 	rc = 0;
 	*_props = props;
 out:
@@ -2823,13 +2847,13 @@ out:
 
 static int
 dm_deserialize_cont_prop_metadata(struct dm_args *ca, char *preserve,
-				  daos_prop_t **props)
+				  daos_prop_t **props, struct daos_prop_co_roots *roots)
 {
 	int		rc = 0;
 	void		*handle;
 
-	int (*daos_cont_deserialize_props)(daos_handle_t, char *,
-					   daos_prop_t **props, uint64_t *);
+	int (*daos_cont_deserialize_props)(daos_handle_t, char *, daos_prop_t **props,
+					   struct daos_prop_co_roots *roots, uint64_t *);
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
 		rc = EINVAL;
@@ -2837,14 +2861,12 @@ dm_deserialize_cont_prop_metadata(struct dm_args *ca, char *preserve,
 			DP_RC(rc));
 		D_GOTO(out, rc);
 	}
-	daos_cont_deserialize_props = dlsym(handle, "daos_cont_deserialize_"
-					    "props");
+	daos_cont_deserialize_props = dlsym(handle, "daos_cont_deserialize_props");
 	if (daos_cont_deserialize_props == NULL)  {
 		rc = EINVAL;
 		D_GOTO(out, rc);
 	}
-	(*daos_cont_deserialize_props)(ca->dst_poh, preserve, props,
-				       &ca->cont_layout);
+	(*daos_cont_deserialize_props)(ca->dst_poh, preserve, props, roots, &ca->cont_layout);
 out:
 	return rc;
 }
@@ -2913,11 +2935,12 @@ dm_connect(struct cmd_args_s *ap,
 	   daos_cont_info_t *dst_cont_info)
 {
 	/* check source pool/conts */
-	int			rc = 0;
-	struct duns_attr_t	dattr = {0};
-	daos_prop_t		*props = NULL;
-	int			rc2;
-
+	int				rc = 0;
+	struct duns_attr_t		dattr = {0};
+	daos_prop_t			*props = NULL;
+	struct daos_prop_co_roots	*roots = {0};
+	int				rc2;
+	
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
 		rc = daos_pool_connect(ca->src_p_uuid, sysname,
@@ -2950,25 +2973,37 @@ dm_connect(struct cmd_args_s *ap,
 
 	/* Retrieve all source cont properties */
 	if (src_file_dfs->type != POSIX) {
-		/* if using DFS do not retrieve the MAX OID property */
-		if (is_posix_copy) {
-			rc = dm_cont_get_all_props(ca->src_coh, &props, false);
-		} else {
-			rc = dm_cont_get_all_props(ca->src_coh, &props, true);
-		}
-		if (rc != 0) {
-			fprintf(stderr, "Failed to set container ACL: "DF_RC,
-				DP_RC(rc));
-			D_GOTO(out, rc);
-		}
-		ca->cont_layout = props->dpp_entries[1].dpe_val;
+		/* if moving data from POSIX to DAOS and preserve option is on,
+		 * then write container properties to the provided hdf5 filename
+		 */
 		if (preserve != NULL && dst_file_dfs->type == POSIX) {
+			/* preserve option is for filesystem copy (which uses DFS API), so do not
+			 * retrieve roots property. It is set and rewritten in dfs_cont_create
+			 */
+			rc = dm_cont_get_all_props(ca->src_coh, &props, true, true, true);
+			if (rc != 0) {
+				DH_PERROR_DER(ap, rc, "Failed to get container properties");
+			}
 			rc = dm_serialize_metadata(ca, props, preserve);
 			if (rc != 0) {
 				fprintf(stderr, "Failed to serialize metadata: "
 					""DF_RC, DP_RC(rc));
 				D_GOTO(out, rc);
 			}
+		} 
+		/* if DAOS -> DAOS copy container properties from src to dst */
+		if (dst_file_dfs->type == DAOS) {
+			/* if using DFS do not retrieve the MAX OID property */
+			if (is_posix_copy) {
+				rc = dm_cont_get_all_props(ca->src_coh, &props, false, false, false);
+			} else {
+				rc = dm_cont_get_all_props(ca->src_coh, &props, true, false, true);
+			}
+			if (rc != 0) {
+				DH_PERROR_DER(ap, rc, "Failed to get container properties");
+				D_GOTO(out, rc);
+			}
+			ca->cont_layout = props->dpp_entries[1].dpe_val;
 		}
 	}
 
@@ -3017,11 +3052,12 @@ dm_connect(struct cmd_args_s *ap,
 		 * is specified before the DAOS destination container is created
 		 */
 		if (preserve != NULL && src_file_dfs->type == POSIX) {
-			rc = dm_deserialize_cont_prop_metadata(ca, preserve,
-							       &props);
+			D_ALLOC(roots, sizeof(struct daos_prop_co_roots));
+			if (roots == NULL)
+				D_GOTO(out, rc = -DER_NOMEM);
+			rc = dm_deserialize_cont_prop_metadata(ca, preserve, &props, roots);
 			if (rc != 0) {
-				fprintf(stderr, "Failed to deserialize "
-					"metadata: "DF_RC, DP_RC(rc));
+				fprintf(stderr, "Failed to deserialize metadata: "DF_RC, DP_RC(rc));
 				D_GOTO(out, rc);
 			}
 		}
@@ -3032,7 +3068,12 @@ dm_connect(struct cmd_args_s *ap,
 		rc = daos_cont_open(ca->dst_poh, ca->dst_c_uuid, DAOS_COO_RW, &ca->dst_coh,
 				    dst_cont_info, NULL);
 		if (rc == -DER_NONEXIST) {
-			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
+			/* only use dfs_cont_create if DFS API is being used
+			 * (i.e. this is a filesystem copy)
+			 */
+			if (is_posix_copy) {
+				//dfs_attr_t attr = {0};
+				//attr.da_props = props;
 				rc = dfs_cont_create(ca->dst_poh, ca->dst_c_uuid, NULL, NULL, NULL);
 				if (rc != 0) {
 					rc = daos_errno2der(rc);
@@ -3123,6 +3164,7 @@ err:
 				      DP_UUID(ca->dst_p_uuid));
 	}
 out:
+	D_FREE(roots);
 	if (props != NULL)
 		daos_prop_free(props);
 	return rc;
