@@ -22,4 +22,4 @@ server:
 
 pool:
   control_method: dmg
-  size: 138000000
+  size: 1GB
