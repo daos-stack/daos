@@ -440,7 +440,7 @@ class PoolSecurityTestBase(TestWithServers):
         self.modify_acl_file_entry(acl_file, grp_entry, new_grp_entry)
 
         # dmg pool overwrite-acl <pool name> --acl-file <file>
-        result = self.pool.overwrite_acl(acl_file)
+        result = self.pool.overwrite_acl()
         self.log.info("  (8-4)dmg= %s", self.pool.dmg)
         self.log.info("  (8-5)dmg.run() result=\n %s", result)
 

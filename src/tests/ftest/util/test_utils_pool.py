@@ -902,7 +902,7 @@ class TestPool(TestDaosApiBase):
     @fail_on(CommandFailure)
     def get_acl(self):
         """Get ACL from a DAOS pool.
-        
+
         Returns:
             str: dmg pool get-acl output.
 
