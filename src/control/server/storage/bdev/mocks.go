@@ -7,25 +7,30 @@
 package bdev
 
 import (
+	"sync"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 type (
 	MockBackendConfig struct {
-		PrepareResetErr error
-		PrepareResp     *storage.BdevPrepareResponse
-		PrepareErr      error
-		FormatRes       *storage.BdevFormatResponse
-		FormatErr       error
-		ScanRes         *storage.BdevScanResponse
-		ScanErr         error
-		VmdEnabled      bool // set disabled by default
-		UpdateErr       error
+		ResetErr    error
+		PrepareResp *storage.BdevPrepareResponse
+		PrepareErr  error
+		FormatRes   *storage.BdevFormatResponse
+		FormatErr   error
+		ScanRes     *storage.BdevScanResponse
+		ScanErr     error
+		VmdEnabled  bool // set disabled by default
+		UpdateErr   error
 	}
 
 	MockBackend struct {
-		cfg MockBackendConfig
+		sync.RWMutex
+		cfg          MockBackendConfig
+		PrepareCalls []storage.BdevPrepareRequest
+		ResetCalls   []storage.BdevPrepareRequest
 	}
 )
 
@@ -59,27 +64,45 @@ func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevForma
 	return mb.cfg.FormatRes, mb.cfg.FormatErr
 }
 
-func (mb *MockBackend) PrepareReset() error {
-	return mb.cfg.PrepareResetErr
-}
+func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	mb.Lock()
+	if req.EnableVMD {
+		mb.PrepareCalls = append(mb.PrepareCalls, req)
+	}
+	mb.PrepareCalls = append(mb.PrepareCalls, req)
+	mb.Unlock()
 
-func (mb *MockBackend) Prepare(_ storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	if mb.cfg.PrepareErr != nil {
+	switch {
+	case mb.cfg.PrepareErr != nil:
 		return nil, mb.cfg.PrepareErr
-	}
-	if mb.cfg.PrepareResp == nil {
+	case mb.cfg.PrepareResp == nil:
 		return new(storage.BdevPrepareResponse), nil
+	default:
+		return mb.cfg.PrepareResp, nil
+	}
+}
+
+func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	mb.Lock()
+	if req.EnableVMD {
+		mb.ResetCalls = append(mb.ResetCalls, req)
+	}
+	mb.ResetCalls = append(mb.ResetCalls, req)
+	mb.Unlock()
+
+	if mb.cfg.ResetErr != nil {
+		return nil, mb.cfg.ResetErr
 	}
 
-	return mb.cfg.PrepareResp, nil
+	return new(storage.BdevPrepareResponse), nil
 }
 
-func (mb *MockBackend) DisableVMD() {
-	mb.cfg.VmdEnabled = false
+func (mb *MockBackend) EnableVMD() {
+	mb.cfg.VmdEnabled = true
 }
 
-func (mb *MockBackend) IsVMDDisabled() bool {
-	return !mb.cfg.VmdEnabled
+func (mb *MockBackend) IsVMDEnabled() bool {
+	return mb.cfg.VmdEnabled
 }
 
 func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {

@@ -1,4 +1,4 @@
-# Native Programming Interface
+# Native Object Interface
 
 ## Building against the DAOS library
 
@@ -13,50 +13,6 @@ files. The Doxygen documentation is available
 [here](https://daos-stack.github.io/html/).
 
 ## Python Bindings
-
-A python module called [PyDAOS](https://github.com/daos-stack/daos/blob/master/src/client/pydaos)
-provides the DAOS API to python users.
-
-### pydaos
-
-[pydaos](https://github.com/daos-stack/daos/blob/master/src/client/pydaos/pydaos_core.py)
-provides a native DAOS python interface exported by a C module. It integrates
-the DAOS key-value store API with python dictionaries. Only strings are
-supported for both the key and value for now.
-
-Key-value pairs can be inserted/looked up one at a time (see put/get) or
-in bulk (see bput/bget), taking a python dict as an input. The bulk
-operations are issued in parallel (up to 16 operations in flight) to
-maximize the operation rate.
-
-Key-value pairs are deleted via the put/bput operations by setting the value
-to either None or the empty string. Once deleted, the key won't be reported
-during iteration. It also supports the del operation via 'del dkv.key'.
-The DAOS KV objects behave like a python dictionary and support:
-
-- 'dkv[key]' which invokes 'dkv.get(key)'
-
-- 'dkv[key] = val' which invokes 'dkv.put(key, val)'
-
-- 'for key in dkv:' allows for walking through the key space via the support of
-  python iterators
-
-- 'if key is in dkv:' allows testing whether a given key is present in the
-  DAOS KV store.
-
-- 'len(dkv)' returns the number of key-value pairs.
-
-- 'bool(dkv)' reports 'False' if there are no key-value pairs in the DAOS KV
-  and 'True' otherwise.
-
-Python iterators are supported, which means that "for key in kvobj:" will
-allow you to walk through the key space.
-For each method, a PyDError exception is raised with a proper DAOS error code
-(in string format) if the operation cannot be completed.
-
-Both Python 2.7 and 3.x is supported.
-
-### pydaos.raw
 
 The pydaos.raw submodule provides access to DAOS API functionality via Ctypes
 and was developed with an emphasis on test use cases. While the majority of unit

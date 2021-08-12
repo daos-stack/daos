@@ -446,6 +446,17 @@ daos_prop_t *
 daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
 
 /**
+ * Search and return a property entry of type \a type in the property list
+ * \a prop
+ * Return NULL if not found.
+ *
+ * \param[in]		prop		Property list
+ * \param[in]		type		Type of property to look for
+ */
+struct daos_prop_entry *
+daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
+
+/**
  * Duplicate a generic pointer value from one DAOS prop entry to another.
  * Convenience function.
  *

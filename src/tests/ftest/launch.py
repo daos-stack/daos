@@ -574,9 +574,9 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
     test_files = [{"py": test, "yaml": None, "env": {}} for test in test_list]
     for test_file in test_files:
         base, _ = os.path.splitext(test_file["py"])
-        yanl_file, env_vars = replace_yaml_file(
+        yaml_file, env_vars = replace_yaml_file(
             "{}.yaml".format(base), args, yaml_dir, vmd_flag)
-        test_file["yaml"] = yanl_file
+        test_file["yaml"] = yaml_file
         test_file["env"] = env_vars
 
     return test_files
@@ -819,11 +819,11 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
         str: the test yaml file; None if the yaml file contains placeholders
             w/o replacements
         env_vars (dict): Returns environment variable dictionary. Presently,
-            returns DAOS_DISABLE_VMD: "False" or "True" dictionary.
+            returns DAOS_ENABLE_VMD: "False" or "True" dictionary.
 
     """
     replacements = {}
-    env_vars = {"DAOS_DISABLE_VMD": "True"}
+    env_vars = {"DAOS_ENABLE_VMD": "False"}
 
     if args.test_servers or args.nvme:
         # Find the test yaml keys and values that match the replaceable fields
@@ -877,9 +877,9 @@ def replace_yaml_file(yaml_file, args, yaml_dir, vmd_flag=False):
                         value_format.format(item)
                         for item in find_pci_address(yaml_find[key])]
                     # if VMD pci address in present under nvme_data,
-                    # set DAOS_DISABLE_VMD to False
+                    # set DAOS_ENABLE_VMD to True
                     if vmd_flag is True:
-                        env_vars["DAOS_DISABLE_VMD"] = "False"
+                        env_vars["DAOS_ENABLE_VMD"] = "True"
 
                 # Add the next user-specified value as a replacement for key
                 for value in values_to_replace:
@@ -2211,6 +2211,14 @@ def main():
         action="store_true",
         help="modify the test yaml files but do not run the tests")
     parser.add_argument(
+        "-mo", "--mode",
+        choices=['normal', 'manual'],
+        default='normal',
+        help="provide the mode of test to be run under. Default is normal, "
+             "in which the final return code of launch.py is still zero if "
+             "any of the tests failed. 'manual' is where the return code is "
+             "non-zero if any of the tests as part of launch.py failed.")
+    parser.add_argument(
         "-n", "--nvme",
         action="store",
         help="comma-separated list of NVMe device PCI addresses to use as "
@@ -2341,6 +2349,8 @@ def main():
     else:
         if status & 1 == 1:
             print("Detected one or more avocado test failures!")
+            if args.mode == 'manual':
+                ret_code = 1
         if status & 8 == 8:
             print("Detected one or more interrupted avocado jobs!")
         if status & 2 == 2:
