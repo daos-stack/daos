@@ -913,6 +913,7 @@ func ValidateProviderStub(ctx context.Context, device string, provider string) e
 	err := ValidateProviderConfig(ctx, device, provider)
 	if err != nil {
 		log.Debugf("ValidateProviderConfig (device: %s, provider %s) returned error: %v", device, provider, err)
+		return err
 	}
 	return nil
 }
