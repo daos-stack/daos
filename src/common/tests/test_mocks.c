@@ -33,6 +33,10 @@ socket(int family, int type, int protocol)
 	socket_family = family;
 	socket_type = type;
 	socket_protocol = protocol;
+	if (socket_return < 0) {
+		errno = -socket_return;
+		return -1;
+	}
 	return socket_return;
 }
 
@@ -61,6 +65,10 @@ connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 				sizeof(struct sockaddr_un));
 	}
 	connect_addrlen = addrlen;
+	if (connect_return < 0) {
+		errno = -connect_return;
+		return -1;
+	}
 	return connect_return;
 }
 
@@ -88,6 +96,10 @@ bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
 				sizeof(struct sockaddr_un));
 	}
 	bind_addrlen = addrlen;
+	if (bind_return < 0) {
+		errno = -bind_return;
+		return -1;
+	}
 	return bind_return;
 }
 
@@ -391,7 +403,6 @@ mock_drpc_handler(Drpc__Call *call, Drpc__Response *resp)
 			memcpy(resp->body.data,
 				mock_drpc_handler_resp_return->body.data, len);
 		}
-
 	}
 }
 

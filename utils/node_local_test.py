@@ -2919,9 +2919,9 @@ def test_pydaos_kv(server, conf):
 
     c_uuid = create_cont(conf, pool, ctype="PYTHON")
 
-    container = daos.Cont(pool, c_uuid)
+    container = daos.DCont(pool, c_uuid)
 
-    kv = container.get_kv_by_name('my_test_kv', create=True)
+    kv = container.dict('my_test_kv')
     kv['a'] = 'a'
     kv['b'] = 'b'
     kv['list'] = pickle.dumps(list(range(1, 100000)))
@@ -2961,7 +2961,7 @@ def test_pydaos_kv(server, conf):
 
     kv = None
     print('Closing container and opening new one')
-    kv = container.get_kv_by_name('my_test_kv')
+    kv = container.get('my_test_kv')
     kv = None
     container = None
     daos._cleanup()

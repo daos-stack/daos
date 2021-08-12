@@ -8,6 +8,7 @@ package control
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -333,11 +334,12 @@ type (
 
 	// StorageUsageStats represents DAOS storage usage statistics.
 	StorageUsageStats struct {
-		Total uint64 `json:"total"`
-		Free  uint64 `json:"free"`
-		Min   uint64 `json:"min"`
-		Max   uint64 `json:"max"`
-		Mean  uint64 `json:"mean"`
+		Total     uint64 `json:"total"`
+		Free      uint64 `json:"free"`
+		Min       uint64 `json:"min"`
+		Max       uint64 `json:"max"`
+		Mean      uint64 `json:"mean"`
+		MediaType string `json:"media_type"`
 	}
 
 	// PoolRebuildState indicates the current state of the pool rebuild process.
@@ -370,6 +372,31 @@ type (
 		PoolInfo
 	}
 )
+
+func (sus *StorageUsageStats) UnmarshalJSON(data []byte) error {
+	type fromJSON StorageUsageStats
+	from := &struct {
+		MediaType uint32 `json:"media_type"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(sus),
+	}
+
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	switch from.MediaType {
+	case drpc.MediaTypeScm:
+		sus.MediaType = "scm"
+	case drpc.MediaTypeNvme:
+		sus.MediaType = "nvme"
+	default:
+		sus.MediaType = "unknown"
+	}
+
+	return nil
+}
 
 const (
 	// PoolRebuildStateIdle indicates that the rebuild process is idle.
