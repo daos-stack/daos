@@ -35,6 +35,7 @@ type Provider struct {
 	Scm           ScmProvider
 	bdev          BdevProvider
 	bdevCache     BdevScanResponse
+	vmdEnabled    bool
 }
 
 // DefaultProvider returns a provider populated with default parameters.
@@ -205,7 +206,13 @@ func (p *Provider) FormatScm(force bool) error {
 
 // PrepareBdevs attempts to configure NVMe devices to be usable by DAOS.
 func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, error) {
-	return p.bdev.Prepare(req)
+	resp, err := p.bdev.Prepare(req)
+
+	p.Lock()
+	defer p.Unlock()
+
+	p.vmdEnabled = resp.VMDPrepared
+	return resp, err
 }
 
 // HasBlockDevices returns true if provider engine storage config has configured
@@ -280,8 +287,11 @@ func (p *Provider) FormatBdevTiers() (results []BdevTierFormatResult) {
 			continue
 		}
 
+		p.RLock()
 		req.BdevCache = &p.bdevCache
+		req.VMDEnabled = p.vmdEnabled
 		results[i].Result, results[i].Error = p.bdev.Format(req)
+		p.RUnlock()
 
 		if err := results[i].Error; err != nil {
 			p.log.Errorf("Instance %d: format failed (%s)", err)
@@ -329,7 +339,11 @@ func (p *Provider) WriteNvmeConfig() error {
 		return err
 	}
 
+	p.RLock()
+	defer p.RUnlock()
+
 	req.BdevCache = &p.bdevCache
+	req.VMDEnabled = p.vmdEnabled
 	_, err = p.bdev.WriteNvmeConfig(req)
 	return err
 }
@@ -357,12 +371,13 @@ func (p *Provider) scanBdevTiers(direct bool, scan scanFn) (results []BdevTierSc
 			continue
 		}
 
+		p.RLock()
 		req := BdevScanRequest{
 			DeviceList:  cfg.Bdev.DeviceList,
 			BypassCache: direct,
+			VMDEnabled:  p.vmdEnabled,
 		}
 
-		p.RLock()
 		bsr, err := scanBdevs(p.log, req, &p.bdevCache, scan)
 		p.RUnlock()
 		if err != nil {
@@ -433,6 +448,7 @@ func (p *Provider) ScanBdevs(req BdevScanRequest) (*BdevScanResponse, error) {
 	p.RLock()
 	defer p.RUnlock()
 
+	req.VMDEnabled = p.vmdEnabled
 	return scanBdevs(p.log, req, &p.bdevCache, p.bdev.Scan)
 }
 
@@ -442,6 +458,7 @@ func (p *Provider) SetBdevCache(resp BdevScanResponse) {
 	defer p.Unlock()
 
 	p.bdevCache = resp
+	p.vmdEnabled = resp.VMDEnabled
 }
 
 // QueryBdevFirmware queries NVMe SSD firmware.

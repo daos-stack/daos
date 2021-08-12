@@ -85,6 +85,8 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 }
 
 func (w *spdkWrapper) init(log logging.Logger, spdkOpts *spdk.EnvOptions) (func(), error) {
+	log.Debug("spdk backend init (bindings call)")
+
 	restore, err := w.suppressOutput()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to suppress spdk output")
@@ -176,7 +178,6 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 		return nil, err
 	}
 	if vmdReq != nil {
-		sb.log.Debugf("provider backend prepare %+v", vmdReq)
 		if err := sb.script.Prepare(vmdReq); err != nil {
 			return nil, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
 		}
@@ -185,7 +186,6 @@ func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLo
 
 	// Prepare non-VMD devices.
 	req.EnableVMD = false
-	sb.log.Debugf("provider backend prepare %+v", req)
 	return resp, errors.Wrap(sb.script.Prepare(&req), "re-binding ssds to attach with spdk")
 }
 
@@ -198,7 +198,6 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 		return err
 	}
 	if vmdReq != nil {
-		sb.log.Debugf("provider backend reset %+v", vmdReq)
 		if err := sb.script.Reset(vmdReq); err != nil {
 			return errors.Wrap(err, "un-binding vmd ssds")
 		}
@@ -206,7 +205,6 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 
 	// Reset non-VMD devices.
 	req.EnableVMD = false
-	sb.log.Debugf("provider backend reset %+v", req)
 	return errors.Wrap(sb.script.Reset(&req), "un-binding vmd ssds")
 }
 
@@ -218,6 +216,7 @@ func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetect
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // bdev_include and bdev_exclude list filters provided in the server config file.
 func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
+	sb.log.Debugf("spdk backend reset (script call): %+v", req)
 	return sb.reset(req, detectVMD)
 }
 
@@ -229,6 +228,7 @@ func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
 // Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
 // bdev_include and bdev_exclude list filters provided in the server config file.
 func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	sb.log.Debugf("spdk backend prepare (script call): %+v", req)
 	return sb.prepare(req, user.Lookup, detectVMD, cleanHugePages)
 }
 
@@ -304,6 +304,8 @@ func checkCfgBdevsExist(log logging.Logger, bdevs storage.NvmeControllers, engin
 
 // Scan discovers NVMe controllers accessible by SPDK.
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
+	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
+
 	restoreOutput, err := sb.binding.init(sb.log, &spdk.EnvOptions{
 		PCIAllowList: req.DeviceList,
 		EnableVMD:    req.VMDEnabled,
@@ -322,7 +324,10 @@ func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 		return nil, errors.Wrap(err, "validate engine config bdevs")
 	}
 
-	return &storage.BdevScanResponse{Controllers: discoveredBdevs}, nil
+	return &storage.BdevScanResponse{
+		Controllers: discoveredBdevs,
+		VMDEnabled:  req.VMDEnabled,
+	}, nil
 }
 
 func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*storage.BdevFormatResponse, error) {
@@ -428,6 +433,7 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 	}
 
 	if req.VMDEnabled {
+		sb.log.Debug("vmd support enabled during nvme format")
 		dl, err := substituteVMDAddresses(sb.log, deviceList, req.BdevCache)
 		if err != nil {
 			return nil, err
@@ -466,6 +472,8 @@ func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.Bdev
 
 // Format delegates to class specific format functions.
 func (sb *spdkBackend) Format(req storage.BdevFormatRequest) (resp *storage.BdevFormatResponse, err error) {
+	sb.log.Debugf("spdk backend format (bindings call): %+v", req)
+
 	// TODO (DAOS-3844): Kick off device formats in parallel?
 	switch req.Properties.Class {
 	case storage.ClassFile:
@@ -480,8 +488,11 @@ func (sb *spdkBackend) Format(req storage.BdevFormatRequest) (resp *storage.Bdev
 }
 
 func (sb *spdkBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error) {
+	sb.log.Debugf("spdk backend write config (system calls): %+v", req)
+
 	// Substitute addresses in bdev tier's DeviceLists if VMD is in use.
 	if req.VMDEnabled {
+		sb.log.Debug("vmd support enabled during nvme config write")
 		for _, props := range req.TierProps {
 			if props.Class != storage.ClassNvme {
 				continue
@@ -505,6 +516,8 @@ func (sb *spdkBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (
 
 // UpdateFirmware uses the SPDK bindings to update an NVMe controller's firmware.
 func (sb *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {
+	sb.log.Debug("spdk backend update firmware")
+
 	if pciAddr == "" {
 		return FaultBadPCIAddr("")
 	}
