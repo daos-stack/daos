@@ -6,7 +6,6 @@
 
 package io.daos.fs.hadoop;
 
-import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
@@ -172,8 +171,7 @@ public class DaosFileSystem extends FileSystem {
     if (!getScheme().equals(name.getScheme())) {
       throw new IllegalArgumentException("schema should be " + getScheme());
     }
-    DunsInfo info = searchUnsPath(name.getPath(),
-        conf.getBoolean(Constants.UNS_PATH_SEARCH_RECURSIVE, Constants.DEFAULT_UNS_PATH_SEARCH_RECURSIVE));
+    DunsInfo info = searchUnsPath(name);
     if (info != null) {
       LOG.info("initializing from uns path, " + name);
       uns = true;
@@ -218,33 +216,33 @@ public class DaosFileSystem extends FileSystem {
   /**
    * search UNS path from given <code>path</code> or its ancestors.
    *
-   * @param path
-   * path of URI
-   * @param recursive
-   * search UNS path recursively?
+   * @param uri
+   * uri
    * @return DunsInfo
    * @throws IOException
    * {@link DaosIOException}
    */
-  private DunsInfo searchUnsPath(String path, boolean recursive) throws IOException {
+  private DunsInfo searchUnsPath(URI uri) throws IOException {
+    String path = uri.getPath();
     if ("/".equals(path) || !path.startsWith("/")) {
       return null;
     }
-    File file = new File(path);
+    // search UUID/Label or from file
     DunsInfo info = null;
-    while (info == null && file != null) {
-      try {
-        info = DaosUns.getAccessInfo(file.getAbsolutePath(), Constants.UNS_ATTR_NAME_HADOOP,
+    try {
+      info = DaosUns.getAccessInfo(uri, Constants.UNS_ATTR_NAME_HADOOP,
           io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT, false);
-        if (info != null || !recursive) {
-          break;
-        }
-      } catch (DaosIOException e) {
-        // ignoring error
+    } catch (DaosIOException e) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("failed to search UNS path " + path, e);
       }
-      file = file.getParentFile();
     }
     return info;
+  }
+
+  private DunsInfo searchFromFile(String path) throws IOException {
+
+    return null;
   }
 
   private void parseUnsConfig(Configuration conf, DunsInfo info) {

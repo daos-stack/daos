@@ -154,6 +154,9 @@ public class DaosClient implements ForceCloseable {
    */
   static native void daosCloseContainer(long contPtr) throws IOException;
 
+  static native void daosSetContAttrs(long contPtr, long memoryAddress);
+  static native void daosGetContAttrs(long contPtr, long memoryAddress);
+
   /**
    * create event queue with given number of events.
    *

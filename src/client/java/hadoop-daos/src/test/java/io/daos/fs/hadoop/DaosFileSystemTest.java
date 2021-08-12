@@ -71,7 +71,7 @@ public class DaosFileSystemTest {
     DunsInfo info = new DunsInfo("123", "56", "POSIX", Constants.DAOS_POOL_SVC + "=0",
         path);
     PowerMockito.mockStatic(DaosUns.class);
-    when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
+    when(DaosUns.getAccessInfo(any(URI.class), eq(Constants.UNS_ATTR_NAME_HADOOP),
         eq(io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
@@ -113,7 +113,7 @@ public class DaosFileSystemTest {
     DunsInfo info = new DunsInfo("123", "56", "POSIX",
         sb.toString(), path);
     PowerMockito.mockStatic(DaosUns.class);
-    when(DaosUns.getAccessInfo(anyString(), eq(Constants.UNS_ATTR_NAME_HADOOP),
+    when(DaosUns.getAccessInfo(any(URI.class), eq(Constants.UNS_ATTR_NAME_HADOOP),
         eq(io.daos.Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT), eq(false))).thenReturn(info);
     URI uri = URI.create("daos://" + unsId.getAndIncrement() + path);
     FileSystem unsFs = FileSystem.get(uri, cfg);
@@ -259,7 +259,7 @@ public class DaosFileSystemTest {
   public void testLoadingConfigFromCoreSite() throws Exception {
     Configuration cfg = new Configuration(true);
     String s = cfg.get("fs.defaultFS");
-    Assert.assertEquals("daos://id:2/", s);
+    Assert.assertEquals("daos:///", s);
     Assert.assertEquals(8388608, cfg.getInt("fs.daos.read.buffer.size", 0));
   }
 

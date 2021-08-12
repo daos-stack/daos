@@ -6,7 +6,9 @@
 
 package io.daos.dfs;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 
 import com.google.protobuf.TextFormat;
 
@@ -135,14 +137,14 @@ public class DaosUns {
    * Some info gets from DAOS extended attribute.
    * The Rest gets from app extended attributes if any.
    *
-   * @param path            OS FS path or path prefixed with the UUIDs
+   * @param uri             URI starts with daos://
    * @param appInfoAttrName app-specific attribute name
    * @return information hold in {@link DunsInfo}
    * @throws IOException
    * {@link DaosIOException}
    */
-  public static DunsInfo getAccessInfo(String path, String appInfoAttrName) throws IOException {
-    return getAccessInfo(path, appInfoAttrName, Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
+  public static DunsInfo getAccessInfo(URI uri, String appInfoAttrName) throws IOException {
+    return getAccessInfo(uri, appInfoAttrName, Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
         false);
   }
 
@@ -152,7 +154,7 @@ public class DaosUns {
    * The Rest gets from app extended attributes. A exception will be thrown if user expect app info and no
    * info gets.
    *
-   * @param path            OS FS path or path prefixed with the UUIDs
+   * @param uri             URI starts with daos://
    * @param appInfoAttrName app-specific attribute name
    * @param maxValueLen     maximum value length
    * @param expectAppInfo   expect app info? true for throwing exception if no value gets, false for ignoring quietly.
@@ -160,34 +162,50 @@ public class DaosUns {
    * @throws IOException
    * {@link DaosIOException}
    */
-  public static DunsInfo getAccessInfo(String path, String appInfoAttrName, int maxValueLen,
+  public static DunsInfo getAccessInfo(URI uri, String appInfoAttrName, int maxValueLen,
                                        boolean expectAppInfo) throws IOException {
+    String fullPath = uri.toString();
+    String path = fullPath;
+    boolean direct = true;
+    if (uri.getAuthority() == null || uri.getAuthority().startsWith(Constants.UNS_ID_PREFIX)) {
+      path = uri.getPath();
+      // make sure path exists
+      File f = new File(path);
+      while (f != null && !f.exists()) {
+        f = f.getParentFile();
+      }
+      if (f == null) {
+        return null;
+      }
+      path = f.getAbsolutePath();
+      direct = false;
+    }
     DunsAttribute attribute = DaosUns.resolvePath(path);
     if (attribute == null) {
-      throw new IOException("no UNS attribute get from " + path);
+      throw new IOException("no UNS attribute get from " + fullPath);
     }
-    String poolId = attribute.getPuuid();
-    String contId = attribute.getCuuid();
+    String poolId = attribute.getPoolId();
+    String contId = attribute.getContId();
     Layout layout = attribute.getLayoutType();
-    String prefix = path;
-    String value = null;
-    String idPrefix = "/" + poolId + "/" + contId;
-    if (path.startsWith(idPrefix)) {
-      prefix = idPrefix;
+    String relPath = attribute.getRelPath();
+    String prefix;
+    // is direct path ?
+    if (direct) {
+      if (!uri.getAuthority().equals(poolId)) {
+        throw new IOException("authority " + uri.getAuthority() + ", should be equal to poolId: " + poolId);
+      }
+      prefix = "/" + contId;
       if (layout == Layout.UNKNOWN) {
         layout = Layout.POSIX; // default to posix
       }
     } else {
-      try {
-        value = DaosUns.getAppInfo(path, appInfoAttrName,
-            maxValueLen);
-      } catch (DaosIOException e) {
-        if (expectAppInfo) {
-          throw e;
-        }
+      int idx = path.indexOf(relPath);
+      if (idx < 0) {
+        throw new IOException("path: " + path + ", should contain real path: " + relPath);
       }
+      prefix = idx > 0 ? path.substring(0, idx) : path;
     }
-    return new DunsInfo(poolId, contId, layout.name(), value, prefix);
+    return new DunsInfo(poolId, contId, layout.name(), null, prefix);
   }
 
   protected DunsAttribute getAttribute() {
@@ -369,9 +387,9 @@ public class DaosUns {
 
     private void buildAttribute(DaosUns duns) {
       DunsAttribute.Builder builder = DunsAttribute.newBuilder();
-      builder.setPuuid(poolUuid);
+      builder.setPoolId(poolUuid);
       if (contUuid != null) {
-        builder.setCuuid(contUuid);
+        builder.setContId(contUuid);
       }
       builder.setLayoutType(layout);
       builder.setObjectType(objectType.nameWithoutOc());

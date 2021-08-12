@@ -39,13 +39,22 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	daos_handle_t poh;
 	int rc;
 
-	uuid_parse(pool_str, pool_uuid);
-	rc = daos_pool_connect(pool_uuid,
-			       server_group,
-			       flags,
-			       &poh /* returned pool handle */,
-			       NULL /* returned pool info */,
-			       NULL /* event */);
+	if (!uuid_parse(pool_str, pool_uuid)) {
+	        rc = daos_pool_connect(pool_uuid,
+                                       server_group,
+                                       flags,
+                                       &poh /* returned pool handle */,
+                                       NULL /* returned pool info */,
+                                       NULL /* event */);
+	} else {
+	        rc = daos_pool_connect(pool_str,
+                                       server_group,
+                                       flags,
+                                       &poh /* returned pool handle */,
+                                       NULL /* returned pool info */,
+                                       NULL /* event */);
+	}
+
 	if (rc) {
 		char *msg = NULL;
 
@@ -101,19 +110,23 @@ JNIEXPORT jlong JNICALL
 Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
 				     jclass clientClass,
 				     jlong poolHandle,
-				     jstring contUuid,
+				     jstring contId,
 				     jint mode)
 {
 	daos_handle_t poh;
 	daos_cont_info_t co_info;
-	const char *cont_str = (*env)->GetStringUTFChars(env, contUuid, NULL);
+	const char *cont_str = (*env)->GetStringUTFChars(env, contId, NULL);
 	uuid_t cont_uuid;
 	daos_handle_t coh;
 	jlong ret = -1;
+	int rc;
 
-	uuid_parse(cont_str, cont_uuid);
-	memcpy(&poh, &poolHandle, sizeof(poh));
-	int rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
+        memcpy(&poh, &poolHandle, sizeof(poh));
+	if (!uuid_parse(cont_str, cont_uuid)) {
+	        rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
+	} else {
+	        rc = daos_cont_open(poh, cont_str, mode, &coh, &co_info, NULL);
+	}
 
 	if (rc) {
 		char *msg = NULL;
@@ -125,7 +138,7 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
 	} else {
 		memcpy(&ret, &coh, sizeof(coh));
 	}
-	(*env)->ReleaseStringUTFChars(env, contUuid, cont_str);
+	(*env)->ReleaseStringUTFChars(env, contId, cont_str);
 	return ret;
 }
 

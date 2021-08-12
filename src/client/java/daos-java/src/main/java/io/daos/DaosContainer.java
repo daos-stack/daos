@@ -18,7 +18,7 @@ public class DaosContainer extends Shareable implements Closeable {
 
   private long contPtr;
 
-  private String uuid;
+  private String id;
 
   // keyed by container UUID
   private static final Map<String, DaosContainer> containerMap = new ConcurrentHashMap<>();
@@ -26,18 +26,18 @@ public class DaosContainer extends Shareable implements Closeable {
   private static final Logger log = LoggerFactory.getLogger(DaosContainer.class);
 
   private DaosContainer(String contUuid) {
-    if (contUuid.length() != Constants.UUID_LENGTH) {
-      throw new IllegalArgumentException("container UUID length should be " + Constants.UUID_LENGTH);
+    if (contUuid.length() > Constants.ID_LENGTH) {
+      throw new IllegalArgumentException("container UUID length should be " + Constants.ID_LENGTH);
     }
-    this.uuid = contUuid;
+    this.id = contUuid;
   }
 
-  protected static DaosContainer getInstance(String contUuid, long poolPtr, int containerFlags) throws IOException {
-    DaosContainer dc = containerMap.get(contUuid);
+  protected static DaosContainer getInstance(String contId, long poolPtr, int containerFlags) throws IOException {
+    DaosContainer dc = containerMap.get(contId);
     if (dc == null) {
-      dc = new DaosContainer(contUuid);
-      containerMap.putIfAbsent(contUuid, dc);
-      dc = containerMap.get(contUuid);
+      dc = new DaosContainer(contId);
+      containerMap.putIfAbsent(contId, dc);
+      dc = containerMap.get(contId);
     }
     synchronized (dc) {
       dc.init(poolPtr, containerFlags);
@@ -50,10 +50,10 @@ public class DaosContainer extends Shareable implements Closeable {
     if (isInited()) {
       return;
     }
-    contPtr = DaosClient.daosOpenCont(poolPtr, uuid, containerFlags);
+    contPtr = DaosClient.daosOpenCont(poolPtr, id, containerFlags);
     setInited(true);
     if (log.isDebugEnabled()) {
-      log.debug("opened container {} with ptr {}", uuid, contPtr);
+      log.debug("opened container {} with ptr {}", id, contPtr);
     }
   }
 
@@ -63,15 +63,15 @@ public class DaosContainer extends Shareable implements Closeable {
     if (isInited() && contPtr != 0 && getRefCnt() <= 0) {
       DaosClient.daosCloseContainer(contPtr);
       if (log.isDebugEnabled()) {
-        log.debug("container {} with ptr {} closed", uuid, contPtr);
+        log.debug("container {} with ptr {} closed", id, contPtr);
       }
       setInited(false);
-      containerMap.remove(uuid);
+      containerMap.remove(id);
     }
   }
 
-  public String getUuid() {
-    return uuid;
+  public String getContainerId() {
+    return id;
   }
 
   public long getContPtr() {

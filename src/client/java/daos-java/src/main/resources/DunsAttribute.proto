@@ -11,13 +11,14 @@ enum Layout {
 }
 
 message DunsAttribute {
-  string puuid = 1;
-  string cuuid = 2;
+  string poolId = 1;
+  string contId = 2;
   Layout layout_type = 3;
   string object_type = 4;
   uint64  chunk_size = 5;
   string rel_path = 6;
   bool   on_lustre  = 7;
   bool no_prefix = 9;
+  uint32 flags = 10;
 }
 
