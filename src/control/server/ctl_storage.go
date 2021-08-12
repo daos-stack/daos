@@ -83,9 +83,6 @@ func (c *StorageControlService) Setup() error {
 	}
 
 	c.storage.SetBdevCache(*nvmeScanResp)
-	c.log.Debugf("set bdev cache after initial scan on start-up: %v",
-		nvmeScanResp.Controllers)
-
 	return nil
 }
 

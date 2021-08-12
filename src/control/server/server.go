@@ -253,7 +253,6 @@ func (srv *server) addEngines(ctx context.Context) error {
 	if nvmeScanResp == nil {
 		return errors.New("nil nvme scan response received")
 	}
-	srv.log.Debugf("set bdev cache when creating engine: %v", nvmeScanResp.Controllers)
 
 	for i, c := range srv.cfg.Engines {
 		engine, err := srv.createEngine(ctx, i, c)
