@@ -827,6 +827,7 @@ class PreReqComponent():
             else:
                 warning_flag = '-Werror'
             self.__env.AppendUnique(CCFLAGS=warning_flag)
+            self.__env.AppendENVPath("CGO_CFLAGS", warning_flag, sep=" ")
 
         env = self.__env.Clone()
         config = Configure(env)
