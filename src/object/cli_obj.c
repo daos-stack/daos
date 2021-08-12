@@ -3788,9 +3788,14 @@ obj_comp_cb(tse_task_t *task, void *data)
 	    DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		obj_auxi->io_retry = 0;
 
+	/* If map_ver_reply == 0, it means the req never get to the server, so
+	 * let's use the current client known pool map version to refresh the
+	 * pool map.
+	 */
 	if (!obj_auxi->no_retry && (pm_stale || obj_auxi->io_retry))
 		obj_retry_cb(task, obj, obj_auxi, pm_stale,
-			     obj_auxi->map_ver_reply);
+			     obj_auxi->map_ver_reply > 0 ? obj_auxi->map_ver_reply :
+							   obj_auxi->map_ver_req);
 
 	if (!obj_auxi->io_retry) {
 		struct obj_ec_fail_info	*fail_info;
