@@ -143,9 +143,7 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
 
-	// Disable DPDK telemetry to avoid socket file clashes and quiet DPDK
-	// logging by setting level to ERROR.
-	envCtx := C.CString("--log-level=lib.eal:4 --log-level=lib.user1:4 --no-telemetry")
+	envCtx := C.dpdk_cli_override_opts
 	defer C.free(unsafe.Pointer(envCtx))
 
 	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(len(opts.PCIAllowList)),
