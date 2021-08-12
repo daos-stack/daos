@@ -97,7 +97,6 @@ test_obj_class:
   oclass:
     - RP_3G6
     - RP_4G1
-    - S1
 loop_test:
   iterations: 3
 aggregation:
