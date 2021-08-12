@@ -231,8 +231,10 @@ get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 	rc = drpc_connect(dc_agent_sockpath, &ctx);
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("failed to connect to %s " DF_RC "\n",
-			dc_agent_sockpath, DP_RC(-DER_AGENT_COMM));
-		D_GOTO(out, rc = -DER_AGENT_COMM);
+			dc_agent_sockpath, DP_RC(rc));
+		if (rc == -DER_NONEXIST)
+			rc = -DER_AGENT_COMM;
+		D_GOTO(out, rc);
 	}
 
 	/* Prepare the GetAttachInfo request. */
