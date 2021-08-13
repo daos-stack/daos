@@ -2846,14 +2846,12 @@ out:
 }
 
 static int
-dm_deserialize_cont_prop_metadata(struct dm_args *ca, char *preserve,
-				  daos_prop_t **props, struct daos_prop_co_roots *roots)
+dm_deserialize_cont_prop_metadata(struct dm_args *ca, char *preserve, daos_prop_t **props)
 {
 	int		rc = 0;
 	void		*handle;
 
-	int (*daos_cont_deserialize_props)(daos_handle_t, char *, daos_prop_t **props,
-					   struct daos_prop_co_roots *roots, uint64_t *);
+	int (*daos_cont_deserialize_props)(daos_handle_t, char *, daos_prop_t **props, uint64_t *);
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
 		rc = EINVAL;
@@ -2866,7 +2864,7 @@ dm_deserialize_cont_prop_metadata(struct dm_args *ca, char *preserve,
 		rc = EINVAL;
 		D_GOTO(out, rc);
 	}
-	(*daos_cont_deserialize_props)(ca->dst_poh, preserve, props, roots, &ca->cont_layout);
+	(*daos_cont_deserialize_props)(ca->dst_poh, preserve, props, &ca->cont_layout);
 out:
 	return rc;
 }
@@ -2937,8 +2935,8 @@ dm_connect(struct cmd_args_s *ap,
 	/* check source pool/conts */
 	int				rc = 0;
 	struct duns_attr_t		dattr = {0};
+	dfs_attr_t			attr = {0};
 	daos_prop_t			*props = NULL;
-	struct daos_prop_co_roots	*roots = {0};
 	int				rc2;
 	
 	/* open src pool, src cont, and mount dfs */
@@ -2978,11 +2976,12 @@ dm_connect(struct cmd_args_s *ap,
 		 */
 		if (preserve != NULL && dst_file_dfs->type == POSIX) {
 			/* preserve option is for filesystem copy (which uses DFS API), so do not
-			 * retrieve roots property. It is set and rewritten in dfs_cont_create
+			 * retrieve roots or max oid property.
 			 */
-			rc = dm_cont_get_all_props(ca->src_coh, &props, true, true, true);
+			rc = dm_cont_get_all_props(ca->src_coh, &props, false,  true, false);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
+				D_GOTO(out, rc);
 			}
 			rc = dm_serialize_metadata(ca, props, preserve);
 			if (rc != 0) {
@@ -2993,12 +2992,13 @@ dm_connect(struct cmd_args_s *ap,
 		} 
 		/* if DAOS -> DAOS copy container properties from src to dst */
 		if (dst_file_dfs->type == DAOS) {
-			/* if using DFS do not retrieve the MAX OID property */
-			if (is_posix_copy) {
+			/* src to dst copies never copy label, and filesystem
+			 * copies use DFS so do not copy roots or max oid prop
+			 */
+			if (is_posix_copy)
 				rc = dm_cont_get_all_props(ca->src_coh, &props, false, false, false);
-			} else {
+			else
 				rc = dm_cont_get_all_props(ca->src_coh, &props, true, false, true);
-			}
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
 				D_GOTO(out, rc);
@@ -3036,8 +3036,12 @@ dm_connect(struct cmd_args_s *ap,
 			}
 			uuid_copy(dattr.da_puuid, ca->dst_p_uuid);
 			uuid_copy(dattr.da_cuuid, ca->dst_c_uuid);
-			dattr.da_type = ca->cont_layout;
-			dattr.da_props = props;
+			if (src_file_dfs->type == POSIX)
+				dattr.da_type = DAOS_PROP_CO_LAYOUT_POSIX;
+			else
+				dattr.da_type = ca->cont_layout;
+			if (props != NULL)
+				dattr.da_props = props;
 			rc = duns_create_path(ca->dst_poh, path, &dattr);
 			if (rc != 0) {
 				rc = daos_errno2der(rc);
@@ -3052,10 +3056,7 @@ dm_connect(struct cmd_args_s *ap,
 		 * is specified before the DAOS destination container is created
 		 */
 		if (preserve != NULL && src_file_dfs->type == POSIX) {
-			D_ALLOC(roots, sizeof(struct daos_prop_co_roots));
-			if (roots == NULL)
-				D_GOTO(out, rc = -DER_NOMEM);
-			rc = dm_deserialize_cont_prop_metadata(ca, preserve, &props, roots);
+			rc = dm_deserialize_cont_prop_metadata(ca, preserve, &props);
 			if (rc != 0) {
 				fprintf(stderr, "Failed to deserialize metadata: "DF_RC, DP_RC(rc));
 				D_GOTO(out, rc);
@@ -3072,9 +3073,9 @@ dm_connect(struct cmd_args_s *ap,
 			 * (i.e. this is a filesystem copy)
 			 */
 			if (is_posix_copy) {
-				//dfs_attr_t attr = {0};
-				//attr.da_props = props;
-				rc = dfs_cont_create(ca->dst_poh, ca->dst_c_uuid, NULL, NULL, NULL);
+				attr.da_props = props;
+				rc = dfs_cont_create(ca->dst_poh, ca->dst_c_uuid, &attr, NULL,
+						     NULL);
 				if (rc != 0) {
 					rc = daos_errno2der(rc);
 					DH_PERROR_DER(ap, rc,
@@ -3164,7 +3165,6 @@ err:
 				      DP_UUID(ca->dst_p_uuid));
 	}
 out:
-	D_FREE(roots);
 	if (props != NULL)
 		daos_prop_free(props);
 	return rc;

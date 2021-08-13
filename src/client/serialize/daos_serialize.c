@@ -613,20 +613,20 @@ out:
 }
 
 static int
-deserialize_roots(hid_t file_id, struct daos_prop_entry *entry,
-		  const char *prop_str, struct daos_prop_co_roots *roots)
+deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_str)
 {
-	hid_t		status = 0;
-	int		rc = 0;
-	int		i = 0;
-	int		ndims = 0;
-	obj_id_t	*root_oids = NULL;
-	htri_t		roots_exist;
-	hid_t		cont_attr = -1;
-	hid_t		attr_dtype = -1;
-	hid_t		attr_dspace = -1;
-	hsize_t		attr_dims[1];
-	size_t		attr_dtype_size;
+	hid_t				status = 0;
+	int				rc = 0;
+	int				i = 0;
+	int				ndims = 0;
+	obj_id_t			*root_oids = NULL;
+	htri_t				roots_exist;
+	hid_t				cont_attr = -1;
+	hid_t				attr_dtype = -1;
+	hid_t				attr_dspace = -1;
+	hsize_t				attr_dims[1];
+	size_t				attr_dtype_size;
+	struct daos_prop_co_roots	*roots = NULL;
 
 	/* First check if the roots attribute exists. */
 	roots_exist = H5Aexists(file_id, prop_str);
@@ -667,20 +667,19 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry,
 	D_ALLOC(root_oids, attr_dims[0] * sizeof(obj_id_t));
 	if (root_oids == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	/* freed ahead of daos_prop_free after props are passed to container to be created */
-	//roots = D_ALLOC(1, sizeof(struct daos_prop_co_roots));
-	//if (roots == NULL)
-	//	D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC(roots, sizeof(struct daos_prop_co_roots));
+	if (root_oids == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 	status = H5Aread(cont_attr, attr_dtype, root_oids);
 	if (status < 0) {
 		D_ERROR("failed to read property attribute %s\n", prop_str);
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	entry->dpe_val_ptr = (void*)roots;
 	for (i = 0; i < 4; i++) {
 		roots->cr_oids[i].hi = root_oids[i].hi;
 		roots->cr_oids[i].lo = root_oids[i].lo;
 	}
+	entry->dpe_val_ptr = roots;
 out:
 	if (cont_attr >= 0)
 		status = H5Aclose(cont_attr);
@@ -777,8 +776,7 @@ out:
 }
 
 static int
-deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
-		  struct daos_prop_co_roots *roots, uint64_t *cont_type)
+deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop, uint64_t *cont_type)
 {
 
 	int			rc = 0;
@@ -1025,7 +1023,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		type = DAOS_PROP_CO_ROOTS;
 		prop->dpp_entries[prop_num].dpe_type = type;
 		entry = &prop->dpp_entries[prop_num];
-		rc = deserialize_roots(file_id, entry, "DAOS_PROP_CO_ROOTS", roots);
+		rc = deserialize_roots(file_id, entry, "DAOS_PROP_CO_ROOTS");
 		if (rc != 0) {
 			D_GOTO(out, rc);
 		}
@@ -1060,7 +1058,7 @@ out:
 
 int
 daos_cont_deserialize_props(daos_handle_t poh, char *filename, daos_prop_t **props,
-			    struct daos_prop_co_roots *roots, uint64_t *cont_type)
+			    uint64_t *cont_type)
 {
 	int	rc = 0;
 	hid_t	file_id = 0;
@@ -1075,7 +1073,7 @@ daos_cont_deserialize_props(daos_handle_t poh, char *filename, daos_prop_t **pro
 		D_ERROR("failed to open metadata file: %s\n", filename);
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	rc = deserialize_props(poh, file_id, props, roots, cont_type);
+	rc = deserialize_props(poh, file_id, props, cont_type);
 	if (rc != 0) {
 		D_ERROR("failed to deserialize cont props "DF_RC"\n",
 			DP_RC(rc));
