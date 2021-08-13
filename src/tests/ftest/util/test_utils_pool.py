@@ -913,15 +913,22 @@ class TestPool(TestDaosApiBase):
         return None
 
     @fail_on(CommandFailure)
-    def update_acl(self, entry=None):
+    def update_acl(self, use_acl, entry=None):
         """Update ACL for a DAOS pool.
 
+        Can't use both ACL file and entry, so use_acl = True and entry != None
+        isn't allowed.
+
         Args:
+            use_acl (bool): Whether to use the ACL file during the update.
             entry (str, optional): entry to be updated.
         """
-        if self.pool and self.acl_file:
+        if self.pool:
+            acl_file = None
+            if use_acl:
+                acl_file = self.acl_file
             self.dmg.pool_update_acl(
-                pool=self.identifier, acl_file=self.acl_file, entry=entry)
+                pool=self.identifier, acl_file=acl_file, entry=entry)
         else:
             self.log.error("update_acl failed!")
 

@@ -90,7 +90,7 @@ class PoolSecurityTestBase(TestWithServers):
         if action == "delete":
             result = self.pool.delete_acl(entry)
         elif action == "update":
-            result = self.pool.update_acl(entry)
+            result = self.pool.update_acl(use_acl=False, entry=entry)
         else:
             self.fail("##update_pool_acl_entry, action: {} is not supported."
                       "\n  supported action: update, delete.".format(action))
