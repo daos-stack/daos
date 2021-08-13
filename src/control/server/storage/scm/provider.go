@@ -125,6 +125,41 @@ func (dsp *defaultSystemProvider) checkDevice(device string) error {
 	return nil
 }
 
+func getDistroArgs() []string {
+	distro := system.GetDistribution()
+
+	switch {
+	case distro.ID == "centos" && distro.Version.Major < 8:
+		return []string{
+			// disable lazy initialization (hurts perf) and discard
+			"-E", "lazy_itable_init=0,lazy_journal_init=0,nodiscard",
+			// enable flex_bg to allow larger contiguous block allocation
+			// disable uninit_bg to initialize everything upfront
+			"-O", "bigalloc,flex_bg,^uninit_bg",
+			// use 16M bigalloc cluster size
+			"-C", "16M",
+		}
+	default:
+		return []string{
+			// use stride option for SCM interleaved mode
+			// disable lazy initialization (hurts perf)
+			// discard is not needed/supported on SCM
+			// packed_meta_blocks allows to group all data blocks
+			"-E",
+			"stride=512,lazy_itable_init=0,lazy_journal_init=0,nodiscard,packed_meta_blocks=1",
+			// disable resize to avoid GDT block allocations
+			// disable extra isize since we really have no use for this
+			// disable csum since we have ECC already for SCM
+			// bigalloc is intentionally not used since some kernels don't support it
+			"-O", "flex_bg,^uninit_bg,^resize_inode,^extra_isize,^metadata_csum",
+			// each ext4 group is of size 32767 x 4KB = 128M
+			// pack 128 groups together to increase ability to use huge
+			// pages for a total virtual group size of 16G
+			"-G", "128",
+		}
+	}
+}
+
 // Mkfs attempts to create a filesystem of the supplied type, on the
 // supplied device.
 func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error {
@@ -155,25 +190,10 @@ func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 		// reduce the inode per bytes ratio
 		// one inode for 64M is more than enough
 		"-i", "67108864",
-		// use stride option for SCM interleaved mode
-		// disable lazy initialization (hurts perf)
-		// discard is not needed/supported on SCM
-		// packed_meta_blocks allows to group all data blocks together
-		"-E",
-		"stride=512,lazy_itable_init=0,lazy_journal_init=0,nodiscard,packed_meta_blocks=1",
-		// enable flex_bg to allow larger contiguous block allocation
-		// disable uninit_bg to initialize everything upfront
-		// disable resize to avoid GDT block allocations
-		// disable extra isize since we really have no use for this
-		// bigalloc is intentionally not used since some kernels don't support it
-		"-O", "flex_bg,^uninit_bg,^resize_inode,^extra_isize",
-		// each ext4 group is of size 32767 x 4KB = 128M
-		// pack 128 groups together to increase ability to use huge
-		// pages for a total virtual group size of 16G
-		"-G", "128",
-		// device always comes last
-		device,
 	}
+	args = append(args, getDistroArgs()...)
+	// string always comes last
+	args = append(args, []string{device}...)
 	if force {
 		args = append([]string{"-F"}, args...)
 	}
