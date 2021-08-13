@@ -165,9 +165,8 @@ func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 		// disable uninit_bg to initialize everything upfront
 		// disable resize to avoid GDT block allocations
 		// disable extra isize since we really have no use for this
-		// disable csum since we have ECC already for SCM
 		// bigalloc is intentionally not used since some kernels don't support it
-		"-O", "flex_bg,^uninit_bg,^resize_inode,^extra_isize,^metadata_csum",
+		"-O", "flex_bg,^uninit_bg,^resize_inode,^extra_isize",
 		// each ext4 group is of size 32767 x 4KB = 128M
 		// pack 128 groups together to increase ability to use huge
 		// pages for a total virtual group size of 16G
