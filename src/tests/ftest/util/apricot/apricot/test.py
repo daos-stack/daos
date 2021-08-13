@@ -407,19 +407,6 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super().setUp()
-        if not load_mpi("openmpi"):
-            self.fail("Failed to load openmpi")
-
-        self.orterun = find_executable('orterun')
-        if self.orterun is None:
-            self.fail("Could not find orterun")
-
-        # hardware tests segfault in MPI_Init without this option
-        self.client_mca = "--mca btl_openib_warn_default_gid_prefix 0"
-        self.client_mca += " --mca pml ob1"
-        self.client_mca += " --mca btl tcp,self"
-        self.client_mca += " --mca oob tcp"
-        self.ompi_prefix = os.path.dirname(os.path.dirname(self.orterun))
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 

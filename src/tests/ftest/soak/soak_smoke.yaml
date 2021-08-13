@@ -7,51 +7,17 @@ hosts:
         - server-D
 # servers if a server partition is defined
     # server_partition: daos_server
-    client_partition: daos_client
-    # client_reservation: daos-test
+    client_partition: normal
+    client_reservation: daos-test
 orterun:
     allow_run_as_root: True
+mpi_module: mpich/gnu-sockets
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 24 Min test
 timeout: 30M
 setup:
-    start_servers: True
-    start_agents: True
-server_config:
-    engines_per_host: 2
-    name: daos_server
-    nr_hugepages: 8192
-    control_log_mask: INFO
-    control_log_file: daos_control0.log
-    servers:
-        0:
-            pinned_numa_node: 0
-            nr_xs_helpers: 1
-            fabric_iface: ib0
-            fabric_iface_port: 31317
-            log_file: daos_server0.log
-            bdev_class: nvme
-            bdev_list: ["aaaa:aa:aa.a"]
-            scm_class: dcpm
-            scm_list: ["/dev/pmem0"]
-            scm_mount: /mnt/daos0
-            log_mask: ERR
-            env_vars:
-                - FI_UNIVERSE_SIZE=2048
-        1:
-            pinned_numa_node: 1
-            nr_xs_helpers: 1
-            fabric_iface: ib1
-            fabric_iface_port: 31417
-            log_file: daos_server1.log
-            bdev_class: nvme
-            bdev_list: ["bbbb:bb:bb.b"]
-            scm_class: dcpm
-            scm_list: ["/dev/pmem1"]
-            scm_mount: /mnt/daos1
-            log_mask: ERR
-            env_vars:
-                - FI_UNIVERSE_SIZE=2048
+    start_servers: False
+    start_agents: False
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server
@@ -93,7 +59,6 @@ smoke:
     joblist:
         - ior_smoke
         - fio_smoke
-        - daos_racer
         - mdtest_smoke
 # Commandline parameters
 # Benchmark and application params
@@ -162,12 +127,6 @@ fio_smoke:
 #            - "EC_16P2GX"
     dfuse:
         mount_dir: "/tmp/daos_dfuse/fio/"
-daos_racer:
-    runtime: 120
-    container:
-        type: POSIX
-        control_method: daos
-        oclass: 'SX'
 mdtest_smoke:
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
