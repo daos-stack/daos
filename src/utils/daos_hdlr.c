@@ -2475,8 +2475,7 @@ set_dm_args_default(struct dm_args *dm)
  * Free the user attribute buffers created by dm_cont_get_usr_attrs.
  */
 void
-dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers,
-		       size_t **_sizes)
+dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers, size_t **_sizes)
 {
 	char	**names = *_names;
 	void	**buffers = *_buffers;
@@ -2501,10 +2500,9 @@ dm_cont_free_usr_attrs(int n, char ***_names, void ***_buffers,
  * Get the user attributes for a container in a format similar
  * to what daos_cont_set_attr expects.
  * cont_free_usr_attrs should be called to free the allocations.
- * Returns 1 on error, 0 on success.
  */
 int
-dm_cont_get_usr_attrs(daos_handle_t coh, int *_n, char ***_names,
+dm_cont_get_usr_attrs(struct cmd_args_s *ap, daos_handle_t coh, int *_n, char ***_names,
 		      void ***_buffers, size_t **_sizes)
 {
 	int		rc = 0;
@@ -2521,9 +2519,7 @@ dm_cont_get_usr_attrs(daos_handle_t coh, int *_n, char ***_names,
 	/* Get the total size needed to store all names */
 	rc = daos_cont_list_attr(coh, NULL, &total_size, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to list user attributes "DF_RC,
-			DP_RC(rc));
-		rc = 1;
+		DH_PERROR_DER(ap, rc, "Failed list user attributes");
 		D_GOTO(out, rc);
 	}
 
@@ -2535,18 +2531,13 @@ dm_cont_get_usr_attrs(daos_handle_t coh, int *_n, char ***_names,
 
 	/* Allocate a buffer to hold all attribute names */
 	name_buf = calloc(total_size, sizeof(char));
-	if (name_buf == NULL) {
-		fprintf(stderr, "failed to allocate user attribute buffer");
-		rc = 1;
-		D_GOTO(out, rc);
-	}
+	if (name_buf == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* Get the attribute names */
 	rc = daos_cont_list_attr(coh, name_buf, &total_size, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to list user attributes "DF_RC,
-			DP_RC(rc));
-		rc = 1;
+		DH_PERROR_DER(ap, rc, "Failed list user attributes");
 		D_GOTO(out, rc);
 	}
 
@@ -2563,30 +2554,20 @@ dm_cont_get_usr_attrs(daos_handle_t coh, int *_n, char ***_names,
 
 	/* Sanity check */
 	if (num_attrs == 0) {
-		fprintf(stderr, "failed to parse user attributes");
-		rc = 1;
-		D_GOTO(out, rc);
+		DH_PERROR_DER(ap, rc, "Failed to parse user attributes");
+		D_GOTO(out, rc = -DER_MISC);
 	}
 
 	/* Allocate arrays for attribute names, buffers, and sizes */
 	names = calloc(num_attrs, sizeof(char *));
-	if (names == NULL) {
-		fprintf(stderr, "failed to allocate user attribute buffer");
-		rc = 1;
-		D_GOTO(out, rc);
-	}
+	if (names == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 	sizes = calloc(num_attrs, sizeof(size_t));
-	if (sizes == NULL) {
-		fprintf(stderr, "failed to allocate user attribute buffer");
-		rc = 1;
-		D_GOTO(out, rc);
-	}
+	if (sizes == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 	buffers = calloc(num_attrs, sizeof(void *));
-	if (buffers == NULL) {
-		fprintf(stderr, "failed to allocate user attribute buffer");
-		rc = 1;
-		D_GOTO(out, rc);
-	}
+	if (buffers == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* Create the array of names */
 	cur_size = 0;
@@ -2601,33 +2582,24 @@ dm_cont_get_usr_attrs(daos_handle_t coh, int *_n, char ***_names,
 	}
 
 	/* Get the buffer sizes */
-	rc = daos_cont_get_attr(coh, num_attrs, (const char * const*)names,
-				NULL, sizes, NULL);
+	rc = daos_cont_get_attr(coh, num_attrs, (const char * const*)names, NULL, sizes, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to get user attribute sizes "DF_RC,
-			DP_RC(rc));
-		rc = 1;
+		DH_PERROR_DER(ap, rc, "Failed to get user attribute sizes");
 		D_GOTO(out, rc);
 	}
 
 	/* Allocate space for each value */
 	for (i = 0; i < num_attrs; i++) {
 		buffers[i] = calloc(sizes[i], sizeof(size_t));
-		if (buffers[i] == NULL) {
-			fprintf(stderr, "failed to allocate user attribute "
-				"buffer");
-			rc = 1;
-			D_GOTO(out, rc);
-		}
+		if (buffers[i] == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	/* Get the attribute values */
 	rc = daos_cont_get_attr(coh, num_attrs, (const char * const*)names,
 				(void * const*)buffers, sizes, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to get user attribute values "DF_RC,
-			DP_RC(rc));
-		rc = 1;
+		DH_PERROR_DER(ap, rc, "Failed to get user attribute values");
 		D_GOTO(out, rc);
 	}
 
@@ -2644,11 +2616,9 @@ out:
 	return rc;
 }
 
-/* Copy all user attributes from one container to another.
- * Returns 1 on error, 0 on success.
- */
+/* Copy all user attributes from one container to another. */
 int
-dm_copy_usr_attrs(daos_handle_t src_coh, daos_handle_t dst_coh)
+dm_copy_usr_attrs(struct cmd_args_s *ap, daos_handle_t src_coh, daos_handle_t dst_coh)
 {
 	int	num_attrs = 0;
 	char	**names = NULL;
@@ -2657,23 +2627,21 @@ dm_copy_usr_attrs(daos_handle_t src_coh, daos_handle_t dst_coh)
 	int	rc;
 
 	/* Get all user attributes */
-	rc = dm_cont_get_usr_attrs(src_coh, &num_attrs,
-				   &names, &buffers, &sizes);
+	rc = dm_cont_get_usr_attrs(ap, src_coh, &num_attrs, &names, &buffers, &sizes);
 	if (rc != 0) {
-		rc = 1;
+		DH_PERROR_DER(ap, rc, "Failed to get user attributes");
 		D_GOTO(out, rc);
 	}
 
-	if (num_attrs == 0) {
-		rc = 0;
-		D_GOTO(out, rc);
-	}
+	/* no attributes to copy */
+	if (num_attrs == 0)
+		D_GOTO(out, rc = 0);
+
 	rc = daos_cont_set_attr(dst_coh, num_attrs, (char const * const*) names,
 				(void const * const*) buffers, sizes, NULL);
 
 	if (rc != 0) {
-		fprintf(stderr, "Failed to set user attrs: "DF_RC, DP_RC(rc));
-		rc = 1;
+		DH_PERROR_DER(ap, rc, "Failed to set user attributes");
 		D_GOTO(out, rc);
 	}
 
@@ -2688,11 +2656,9 @@ out:
  * to what daos_cont_set_prop expects.
  * The last entry is the ACL and is conditionally set only if
  * the user has permissions.
- * The properties need to remain in the order expected by serialization.
- * Returns 1 on error, 0 on success.
  */
 int
-dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props,
+dm_cont_get_all_props(struct cmd_args_s *ap, daos_handle_t coh, daos_prop_t **_props,
 		      bool get_oid, bool get_label, bool get_roots)
 {
 	int		rc;
@@ -2703,30 +2669,24 @@ dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props,
 	/* minimum number of properties that are always allocated/used to start count */
 	int             prop_index = 15;
 
-	if (get_oid) {
+	if (get_oid)
 		total_props++;
-	}
 
 	/* container label is required to be unique, so do not
 	 * retrieve it for copies. The label is retrieved for
 	 * serialization, but only deserialized if the label
 	 * no longer exists in the pool
 	 */
-	if (get_label) {
+	if (get_label)
 		total_props++;
-	}
 
-	if (get_roots) {
+	if (get_roots)
 		total_props++;
-	}
 
 	/* Allocate space for all props except ACL. */
 	props = daos_prop_alloc(total_props);
-	if (props == NULL) {
-		fprintf(stderr, "Failed to allocate container properties.");
-		rc = 1;
-		D_GOTO(out, rc);
-	}
+	if (props == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* The order of properties MUST match the order expected by
 	 * serialization
@@ -2767,8 +2727,7 @@ dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props,
 	/* Get all props except ACL first. */
 	rc = daos_cont_query(coh, NULL, props, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "Failed to query container: "DF_RC, DP_RC(rc));
-		rc = 1;
+		DH_PERROR_DER(ap, rc, "Failed to query container");
 		D_GOTO(out, rc);
 	}
 
@@ -2778,17 +2737,13 @@ dm_cont_get_all_props(daos_handle_t coh, daos_prop_t **_props,
 		/* ACL will be appended to the end */
 		props_merged = daos_prop_merge(props, prop_acl);
 		if (props_merged == NULL) {
-			fprintf(stderr, "Failed to set container ACL: "DF_RC,
-				DP_RC(rc));
-			rc = 1;
-			D_GOTO(out, rc);
+			DH_PERROR_DER(ap, rc, "Failed set container ACL");
+			D_GOTO(out, rc = -DER_INVAL);
 		}
 		daos_prop_free(props);
 		props = props_merged;
 	} else if (rc && rc != -DER_NO_PERM) {
-		fprintf(stderr, "Failed to query container ACL: "DF_RC,
-			DP_RC(rc));
-		rc = 1;
+		DH_PERROR_DER(ap, rc, "Failed to query container ACL");
 		D_GOTO(out, rc);
 	}
 	rc = 0;
@@ -2803,7 +2758,7 @@ out:
 }
 
 static int
-dm_serialize_metadata(struct dm_args *ca, daos_prop_t *props, char *preserve)
+dm_serialize_metadata(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *props, char *preserve)
 {
 	int	rc = 0;
 	int	num_attrs = 0;
@@ -2812,11 +2767,9 @@ dm_serialize_metadata(struct dm_args *ca, daos_prop_t *props, char *preserve)
 	size_t	*sizes = NULL;
 	void	*handle;
 
-	int (*daos_cont_serialize_md)(char *, daos_prop_t *props, int, char **,
-				      char **, size_t *);
+	int (*daos_cont_serialize_md)(char *, daos_prop_t *props, int, char **, char **, size_t *);
 	/* Get all user attributes if any exist */
-	rc = dm_cont_get_usr_attrs(ca->src_coh, &num_attrs, &names,
-				   &buffers, &sizes);
+	rc = dm_cont_get_usr_attrs(ap, ca->src_coh, &num_attrs, &names, &buffers, &sizes);
 	if (rc != 0) {
 		rc = 1;
 		D_GOTO(out, rc);
@@ -2824,20 +2777,15 @@ dm_serialize_metadata(struct dm_args *ca, daos_prop_t *props, char *preserve)
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
-		rc = EINVAL;
-		fprintf(stderr, "libdaos_serialize.so not found "DF_RC,
-			DP_RC(rc));
-		D_GOTO(out, rc);
+		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	daos_cont_serialize_md = dlsym(handle, "daos_cont_serialize_md");
 	if (daos_cont_serialize_md == NULL)  {
-		rc = EINVAL;
-		fprintf(stderr, "failed to lookup daos_cont_serialize_md "DF_RC,
-			DP_RC(rc));
-		D_GOTO(out, rc);
+		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize_md");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
-	(*daos_cont_serialize_md)(preserve, props, num_attrs,
-				   names, (char **)buffers, sizes);
+	(*daos_cont_serialize_md)(preserve, props, num_attrs, names, (char **)buffers, sizes);
 out:
 	if (num_attrs > 0) {
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
@@ -2846,7 +2794,8 @@ out:
 }
 
 static int
-dm_deserialize_cont_prop_metadata(struct dm_args *ca, char *preserve, daos_prop_t **props)
+dm_deserialize_cont_prop_metadata(struct cmd_args_s *ap, struct dm_args *ca, char *preserve,
+				  daos_prop_t **props)
 {
 	int		rc = 0;
 	void		*handle;
@@ -2854,25 +2803,21 @@ dm_deserialize_cont_prop_metadata(struct dm_args *ca, char *preserve, daos_prop_
 	int (*daos_cont_deserialize_props)(daos_handle_t, char *, daos_prop_t **props, uint64_t *);
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
-		rc = EINVAL;
-		fprintf(stderr, "libdaos_serialize.so not found "DF_RC,
-			DP_RC(rc));
-		D_GOTO(out, rc);
+		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	daos_cont_deserialize_props = dlsym(handle, "daos_cont_deserialize_props");
 	if (daos_cont_deserialize_props == NULL)  {
-		rc = EINVAL;
-		D_GOTO(out, rc);
+		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_props");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	(*daos_cont_deserialize_props)(ca->dst_poh, preserve, props, &ca->cont_layout);
 out:
 	return rc;
 }
 
-/* Returns a DAOS error number */
-
 static int
-dm_deserialize_cont_attrs_metadata(struct dm_args *ca, char *preserve)
+dm_deserialize_cont_attrs_metadata(struct cmd_args_s *ap, struct dm_args *ca, char *preserve)
 {
 	int		rc = 0;
 	uint64_t	num_attrs = 0;
@@ -2881,37 +2826,26 @@ dm_deserialize_cont_attrs_metadata(struct dm_args *ca, char *preserve)
 	size_t		*sizes = NULL;
 	void		*handle;
 
-	int (*daos_cont_deserialize_attrs)(char *,
-					   uint64_t *,
-					   char ***,
-					   void ***,
-					   size_t **);
+	int (*daos_cont_deserialize_attrs)(char *, uint64_t *, char ***, void ***, size_t **);
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
-		rc = EINVAL;
-		fprintf(stderr, "libdaos_serialize.so not found "DF_RC,
-			DP_RC(rc));
-		D_GOTO(out, rc);
+		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
-	daos_cont_deserialize_attrs = dlsym(handle,
-					    "daos_cont_deserialize_attrs");
+	daos_cont_deserialize_attrs = dlsym(handle, "daos_cont_deserialize_attrs");
 	if (daos_cont_deserialize_attrs == NULL)  {
-		rc = EINVAL;
-		D_GOTO(out, rc);
+		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_attrs");
+		D_GOTO(out, rc = -DER_INVAL);
 	}
 	(*daos_cont_deserialize_attrs)(preserve, &num_attrs,
 				       &names, &buffers, &sizes);
 
 	if (num_attrs > 0) {
-		rc = daos_cont_set_attr(ca->dst_coh, num_attrs,
-					(const char * const*) names,
-					(const void * const*) buffers,
-					sizes, NULL);
+		rc = daos_cont_set_attr(ca->dst_coh, num_attrs, (const char * const*) names,
+					(const void * const*) buffers, sizes, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "failed to set user attributes "DF_RC,
-				DP_RC(rc));
-			rc = 1;
-			goto out;
+			DH_PERROR_DER(ap, rc, "Failed to set user attributes");
+			D_GOTO(out, rc);
 		}
 	}
 out:
@@ -2965,9 +2899,8 @@ dm_connect(struct cmd_args_s *ap,
 		}
 	}
 
-	if (src_file_dfs->type == POSIX) {
+	if (src_file_dfs->type == POSIX)
 		ca->cont_layout = DAOS_PROP_CO_LAYOUT_POSIX;
-	}
 
 	/* Retrieve all source cont properties */
 	if (src_file_dfs->type != POSIX) {
@@ -2978,15 +2911,14 @@ dm_connect(struct cmd_args_s *ap,
 			/* preserve option is for filesystem copy (which uses DFS API), so do not
 			 * retrieve roots or max oid property.
 			 */
-			rc = dm_cont_get_all_props(ca->src_coh, &props, false,  true, false);
+			rc = dm_cont_get_all_props(ap, ca->src_coh, &props, false,  true, false);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
 				D_GOTO(out, rc);
 			}
-			rc = dm_serialize_metadata(ca, props, preserve);
+			rc = dm_serialize_metadata(ap, ca, props, preserve);
 			if (rc != 0) {
-				fprintf(stderr, "Failed to serialize metadata: "
-					""DF_RC, DP_RC(rc));
+				DH_PERROR_DER(ap, rc, "Failed to serialize metadata");
 				D_GOTO(out, rc);
 			}
 		} 
@@ -2996,9 +2928,11 @@ dm_connect(struct cmd_args_s *ap,
 			 * copies use DFS so do not copy roots or max oid prop
 			 */
 			if (is_posix_copy)
-				rc = dm_cont_get_all_props(ca->src_coh, &props, false, false, false);
+				rc = dm_cont_get_all_props(ap, ca->src_coh, &props,
+							   false, false, false);
 			else
-				rc = dm_cont_get_all_props(ca->src_coh, &props, true, false, true);
+				rc = dm_cont_get_all_props(ap, ca->src_coh, &props,
+							   true, false, true);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
 				D_GOTO(out, rc);
@@ -3056,9 +2990,9 @@ dm_connect(struct cmd_args_s *ap,
 		 * is specified before the DAOS destination container is created
 		 */
 		if (preserve != NULL && src_file_dfs->type == POSIX) {
-			rc = dm_deserialize_cont_prop_metadata(ca, preserve, &props);
+			rc = dm_deserialize_cont_prop_metadata(ap, ca, preserve, &props);
 			if (rc != 0) {
-				fprintf(stderr, "Failed to deserialize metadata: "DF_RC, DP_RC(rc));
+				DH_PERROR_DER(ap, rc, "Failed to deserialize metadata");
 				D_GOTO(out, rc);
 			}
 		}
@@ -3118,10 +3052,9 @@ dm_connect(struct cmd_args_s *ap,
 		 * is specified, and set them in the destination container
 		 */
 		if (preserve != NULL && src_file_dfs->type == POSIX) {
-			rc = dm_deserialize_cont_attrs_metadata(ca, preserve);
+			rc = dm_deserialize_cont_attrs_metadata(ap, ca, preserve);
 			if (rc != 0) {
-				fprintf(stderr, "Failed to deserialize "
-					"metadata: "DF_RC, DP_RC(rc));
+				DH_PERROR_DER(ap, rc, "Failed to deserialize user attributes");
 				D_GOTO(err, rc);
 			}
 		}
@@ -3132,11 +3065,10 @@ dm_connect(struct cmd_args_s *ap,
 	 * DAOS destination container
 	 */
 	if (src_file_dfs->type == DAOS && dst_file_dfs->type == DAOS) {
-		rc = dm_copy_usr_attrs(ca->src_coh, ca->dst_coh);
+		rc = dm_copy_usr_attrs(ap, ca->src_coh, ca->dst_coh);
 		if (rc != 0) {
-			fprintf(stderr, "copying user attributes "
-				"failed: %d\n", rc);
-				D_GOTO(err, rc);
+			DH_PERROR_DER(ap, rc, "Copying user attributs failed");
+			D_GOTO(err, rc);
 		}
 
 	}

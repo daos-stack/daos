@@ -41,7 +41,7 @@ type fsCopyCmd struct {
 
 	Source string `long:"src" short:"s" description:"copy source" required:"1"`
 	Dest   string `long:"dst" short:"d" description:"copy destination" required:"1"`
-	Preserve   string `long:"preserve" short:"m" description:"preserve container properties" required:"0"`
+	Preserve   string `long:"preserve" short:"m" description:"preserve container properties, requires HDF5 library" required:"0"`
 }
 
 func (cmd *fsCopyCmd) Execute(_ []string) error {
