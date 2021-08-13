@@ -15,6 +15,9 @@ mpi_module: mpich/gnu-sockets
 # This timeout must be longer than the test_timeout param (+15minutes)
 # 2 hour test
 timeout: 2H15M
+setup:
+    start_servers: False
+    start_agents: False
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
     name: daos_server
