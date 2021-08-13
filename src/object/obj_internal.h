@@ -50,15 +50,16 @@ extern unsigned int	srv_io_mode;
 struct dc_obj_shard {
 	/** refcount */
 	unsigned int		do_ref;
+	uint32_t		do_target_rank;
 	/** object id */
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
-	uint8_t			do_target_idx;	/* target VOS index in node */
-	uint32_t		do_target_rank;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
 	struct dc_object	*do_obj;
+	uint32_t		do_shard_idx;
+	uint8_t			do_target_idx;	/* target VOS index in node */
 };
 
 #define do_shard	do_pl_shard.po_shard

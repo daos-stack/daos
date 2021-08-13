@@ -7,9 +7,6 @@ PyDAOS Module allowing global access to the DAOS containers and objects.
 """
 
 import enum
-import uuid
-import pickle
-import sys
 
 # pylint: disable=relative-beyond-top-level
 from . import pydaos_shim
@@ -26,209 +23,169 @@ ObjClassID = enum.Enum(
      if key.startswith("OC_")})
 
 
-class KvNotFound(Exception):
-    """Raised by get_kv_by_name if KV does not exist"""
+class DObjNotFound(Exception):
+    """Raised by get if name associated with DAOS object not found """
 
     def __init__(self, name):
         self.name = name
         super().__init__(self)
 
     def __str__(self):
-        return "Failed to create '{}'".format(self.name)
+        return "Failed to open '{}'".format(self.name)
 
-
-class ObjID():
-    # pylint: disable=too-few-public-methods
+class DCont():
     """
-    Class representing of DAOS 128-bit object identifier
-
-    Attributes
-    ----------
-    hi : int
-        high 64 bits of the object identifier
-    lo : int
-        low 64 bits of the object identifier
-
-    Methods
-    -------
-    __str__
-        print object ID in hexa [hi:lo]
-    """
-    def __init__(self, hi, lo):
-        self.hi = hi
-        self.lo = lo
-
-    def __str__(self):
-        return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
-
-
-class Cont():
-    """
-    Class representing of DAOS Container
-    Can be identified via a path or a combination of pool UUID and container
-    UUID. DAOS pool and container are opened during the __init__ phase and
-    closed on __del__.
+    Class representing of DAOS python container
+    Can be identified via a path or a combination of pool label and container
+    label (alternatively, UUID strings are supported too). DAOS pool and
+    container are opened during the __init__ phase and closed on __del__.
 
     Attributes
     ----------
     path : string
         Path for container representation in unified namespace
-    puuid : uuid
-        Pool uuid, parsed via uuid.UUID(puuid)
-    cuuid : uuid
-        Container uuid, parsed via uuid.UUID(cuuid)
+    pool : string
+        Pool label or UUID string
+    cont : string
+        Container label or UUID string
 
     Methods
     -------
-    genoid(cid)
-        Generate a new object ID globally unique for this container.
-        cid must be on type ObjClassID and identify the object class to use for
-        the new object. Upon success, a python object of type ObjID is returned.
-    rootkv(cid = ObjClassID.OC_SX)
-        Open the container root key-value store.
-        Default object class can be modified but should remain always the same.
-        Upon success, a python object of type KVObj is returned.
-    newkv(cid = ObjClassID.OC_SX)
-        Allocate a new key-value store of class cid.
-        Upon success, a python object of type KVObj is returned.
-    kv(oid)
-        Open an already-allocated object identified by oid of type ObjID.
-        Upon success, a python object of type KVObj is returned.
-    __str__
-        print pool and container UUIDs
+    get(name):
+        Return DAOS object (darray or ddict) associated with name.
+        If not found, the DObjNotFound Exception is raised.
+
+    dict(name, kwargs):
+        Create new DDict object.
+
+    array(name, kwargs):
+        Create new DArray object.
     """
-    def __init__(self, puuid=None, cuuid=None, path=None):
-        self._dc = DaosClient()
-        self.coh = None
-        if path is None and (puuid is None or cuuid is None):
+    def __init__(self, pool=None, cont=None, path=None):
+        self._dc   = DaosClient()
+        self._hdl  = None
+        if path is None and (pool is None or cont is None):
             raise PyDError("invalid pool or container UUID",
                            -pydaos_shim.DER_INVAL)
-        if path != None:
-            self.puuid = None
-            self.cuuid = None
-            (ret, poh, coh) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, 0)
+        if path is not None:
+            self.pool  = None
+            self.cont = None
+            (ret, hdl) = pydaos_shim.cont_open_by_path(DAOS_MAGIC, path, 0)
         else:
-            self.puuid = uuid.UUID(puuid)
-            self.cuuid = uuid.UUID(cuuid)
-            (ret, poh, coh) = pydaos_shim.cont_open(DAOS_MAGIC, str(puuid),
-                                                    str(cuuid), 0)
+            self.pool  = pool
+            self.cont  = cont
+            (ret, hdl) = pydaos_shim.cont_open(DAOS_MAGIC, pool, cont, 0)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to access container", ret)
-        self.poh = poh
-        self.coh = coh
-        self._root_kv = None
+        self._hdl = hdl
 
     def __del__(self):
-        if not self.coh:
+        if not self._hdl:
             return
-        self._root_kv = None
-        ret = pydaos_shim.cont_close(DAOS_MAGIC, self.poh, self.coh)
+        ret = pydaos_shim.cont_close(DAOS_MAGIC, self._hdl)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to close container", ret)
 
-    def genoid(self, cid):
-        """Generate a new object ID globally unique for this container."""
+    def get(self, name):
+        """ Look up DAOS object associated with name """
 
-        (ret, hi, lo) = pydaos_shim.obj_idgen(DAOS_MAGIC, self.coh, cid.value)
+        (ret, hi, lo, otype) = pydaos_shim.cont_get(DAOS_MAGIC, self._hdl, name)
+        if ret == pydaos_shim.DER_NONEXIST:
+            raise DObjNotFound(name)
         if ret != pydaos_shim.DER_SUCCESS:
-            raise PyDError("failed to generate object identifier", ret)
-        return ObjID(hi, lo)
+            raise PyDError("failed to look up name", ret)
 
-    def newkv(self, cid=ObjClassID.OC_SX):
-        """Allocate a new key-value store of class cid."""
-        oid = self.genoid(cid)
-        return KVObj(self.coh, oid, self)
+        if otype == pydaos_shim.PYDAOS_DICT:
+            return DDict(name, self._hdl, hi, lo, self)
+        if otype == pydaos_shim.PYDAOS_ARRAY:
+            return DArray(name, self._hdl, hi, lo, self)
 
-    def kv(self, oid):
-        """Open an already-allocated object identified by oid of type ObjID."""
-        return KVObj(self.coh, oid, self)
+        raise DObjNotFound(name)
 
-    def rootkv(self, cid=ObjClassID.OC_SX):
-        """Open the container root key-value store."""
+    def __getitem__(self, name):
+        return self.get(name)
 
-        if self._root_kv:
-            return self._root_kv
-        (ret, hi, lo) = pydaos_shim.obj_idroot(DAOS_MAGIC, self.coh, cid.value)
+    def dict(self, name, v: dict = None):
+        """ Create new DDict object """
+
+        # Insert name into root kv and get back an object ID
+        (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
+                                                pydaos_shim.PYDAOS_DICT)
         if ret != pydaos_shim.DER_SUCCESS:
-            raise PyDError("failed to generate root object identifier", ret)
-        oid = ObjID(hi, lo)
-        self._root_kv = KVObj(self.coh, oid, self)
-        return self._root_kv
+            raise PyDError("failed to create DAOS dict", ret)
 
-    def get_kv_by_name(self, name, root=None, create=False):
-        """Return KV by name.
+        # Instantiate the DDict() object
+        dd = DDict(name, self._hdl, hi, lo, self)
 
-        Allow selection of root (or parent) container, and
-        optionally create kv if not found"""
+        # Insert any records passed in kwargs
+        dd.bput(v)
 
-        if not root:
-            root = self.rootkv()
-        if name in root:
-            object_data = pickle.loads(root[name])
-            return self.kv(object_data['oid'])
+        return dd
 
-        if not create:
-            raise KvNotFound(name)
+    def array(self, name, v: list = None):
+        # pylint: disable=unused-argument
+        """ Create new DArray object """
 
-        new_kv = self.newkv()
-        # Create a new entry in the root kv, where the entry
-        # itself is a dict, and the 'oid' entry is the object
-        # of the new, referenced kv.  This allows for future
-        # expansion of the definition without changing
-        # existing containers.
-        root[name] = pickle.dumps({'oid': new_kv.oid})
-        return new_kv
+        # Insert name into root kv and get back an object ID
+        (ret, hi, lo) = pydaos_shim.cont_newobj(DAOS_MAGIC, self._hdl, name,
+                                                pydaos_shim.PYDAOS_ARRAY)
+        if ret != pydaos_shim.DER_SUCCESS:
+            raise PyDError("failed to create DAOS array", ret)
+
+        # Instantiate the DArray() object
+        da = DArray(name, self._hdl, hi, lo, self)
+
+        # Should eventually populate array with data in input list
+
+        return da
 
     def __str__(self):
-        return '{}@{}'.format(self.cuuid, self.puuid)
+        return '{}/{}'.format(self.pool, self.cont)
 
+    def __repr__(self):
+        return 'daos://{}/{}'.format(self.pool, self.cont)
 
-class _Obj():
-    oh = None
+class _DObj():
+    # pylint: disable=no-member
 
-    def __init__(self, coh, oid, cont):
+    def __init__(self, name, hdl, hi, lo, cont):
         self._dc = DaosClient()
-        self.oid = oid
+        self.hi = hi
+        self.lo = lo
+        self.name = name
         # Set self.oh to None here so it's defined in __del__ if there's
-        # a problem with the kv_open() call.
+        # a problem with the _open() call.
         self.oh = None
         # keep container around until all objects are gone
         self.cont = cont
-        # Open to the object
-        (ret, oh) = pydaos_shim.kv_open(
-            DAOS_MAGIC, coh, self.oid.hi, self.oid.lo, 0)
-        if ret != pydaos_shim.DER_SUCCESS:
-            raise PyDError("failed to open object", ret)
-        self.oh = oh
+        # Open the object
+        self._open(hdl)
 
     def __del__(self):
         if self.oh is None:
             return
-        ret = pydaos_shim.kv_close(DAOS_MAGIC, self.oh)
-        if ret != pydaos_shim.DER_SUCCESS:
-            raise PyDError("failed to close object", ret)
-
-    def getoid(self):
-        """Return the object ID for this object"""
-        return self.oid
+        # close the object
+        self._close()
 
     def __str__(self):
-        return str(self.oid)
+        return self.name
 
+    def __repr__(self):
+        return "[" + hex(self.hi) + ":" + hex(self.lo) + "]"
 
 # pylint: disable=too-few-public-methods
-class KVIter():
+class DDictIter():
 
-    """Iterator class for KVOjb"""
+    """ Iterator class for DDict """
 
-    def __init__(self, kv):
+    def __init__(self, ddict):
         self._dc = DaosClient()
         self._entries = []
         self._nr = 256
         self._size = 4096  # optimized for 16-char strings
         self._anchor = None
         self._done = False
-        self._kv = kv
+        self._kv = ddict
 
     def next(self):
         """for python 2 compatibility"""
@@ -245,7 +202,7 @@ class KVIter():
                                                     self._entries, self._nr,
                                                     self._size, self._anchor)
         if ret != pydaos_shim.DER_SUCCESS:
-            raise PyDError("failed to enumerate KV pair", ret)
+            raise PyDError("failed to enumerate Dictionary", ret)
 
         # save param for next iterations, those have been adjusted already by
         # the shim layer
@@ -258,16 +215,12 @@ class KVIter():
 
         if len(self._entries) != 0:
             return self._entries.pop()
-        else:
-            raise StopIteration()
+        raise StopIteration()
 # pylint: enable=too-few-public-methods
 
-
-class KVObj(_Obj):
+class DDict(_DObj):
     """
-    Class representing of DAOS key-value (KV) store object
-    As all DAOS objects, a KV object is identified by a unique 128-bit
-    identifier represented by the class ObjID.
+    Class representing of DAOS dictionary (i.e. key-value store object).
     Only strings are supported for both the key and value for now.
     Key-value pair can be inserted/looked up once at a time (see put/get) or
     in bulk (see bput/bget) taking a python dict as an input. The bulk
@@ -276,18 +229,18 @@ class KVObj(_Obj):
     Key-value pair are deleted via the put/bput operations by setting the value
     to either None or the empty string. Once deleted, the key won't be reported
     during iteration.
-    The DAOS KV objects behave like a python dictionary and supports:
-    - 'dkv[key]' which invokes 'dkv.get(key)'
-    - 'dkv[key] = val' which invokes 'dkv.put(key, val)'
-    - 'for key in dkv:' allows to walk through the key space via the support of
+    The DAOS dictionaries behave like python dictionaries and support:
+    - 'dd[key]' which invokes 'ddict.get(key)'
+    - 'dd[key] = val' which invokes 'dd.put(key, val)'
+    - 'for key in dd:' allows to walk through the key space via the support of
       python iterators
-    - 'if key is in dkv:' allows to test whether a give key is present in the
-      DAOS KV store.
-    - 'len(dkv)' returns the number of key-value pairs
-    - 'bool(dkv)' reports 'False' if there is no key-value pairs in the DAOS KV
-      and 'True' otherwise.
+    - 'if key is in dd:' allows to test whether a give key is present in the
+      DAOS dictionary.
+    - 'len(dd)' returns the number of key-value pairs
+    - 'bool(dd)' reports 'False' if there is no key-value pairs in the DAOS
+      dictionary and 'True' otherwise.
 
-    Python iterators are supported, which means that "for key in kvobj:" will
+    Python iterators are supported, which means that "for key in dd:" will
     allow you to walk through the key space.
     For each method, a PyDError exception is raised with proper DAOS error code
     (in string format) if the operation cannot be completed.
@@ -308,7 +261,7 @@ class KVObj(_Obj):
         Bulk put all the key-value pairs of the input python dictionary.
         Put operations are issued in parallel over the network.
         If the value is set to None or an empty string, the key is deleted from
-        the DAOS KV store.
+        the DAOS dictionary.
     dump()
         Fetch all the key-value pairs and return them in a python dictionary.
     """
@@ -316,6 +269,17 @@ class KVObj(_Obj):
     # Size of buffer to use for reads.  If the object value is bigger than this
     # then it'll require two round trips rather than one.
     value_size = 1024*1024
+
+    def _open(self, hdl):
+        (ret, oh) = pydaos_shim.kv_open(DAOS_MAGIC, hdl, self.hi, self.lo, 0)
+        if ret != pydaos_shim.DER_SUCCESS:
+            raise PyDError("failed to open object", ret)
+        self.oh = oh
+
+    def _close(self):
+        ret = pydaos_shim.kv_close(DAOS_MAGIC, self.oh)
+        if ret != pydaos_shim.DER_SUCCESS:
+            raise PyDError("failed to close object", ret)
 
     def get(self, key):
         """Retrieve value associated with the key."""
@@ -340,17 +304,26 @@ class KVObj(_Obj):
     def __delitem__(self, key):
         self.put(key, None)
 
-    def bget(self, ddict, value_size=None):
+    def pop(self, key):
+        """Remove key from the dictionary."""
+        self.put(key, None)
+
+    def bget(self, d, value_size=None):
         """Bulk get value for all the keys of the input python dictionary."""
+        if d is None:
+            return d
         if value_size is None:
             value_size = self.value_size
-        ret = pydaos_shim.kv_get(DAOS_MAGIC, self.oh, ddict, value_size)
+        ret = pydaos_shim.kv_get(DAOS_MAGIC, self.oh, d, value_size)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to retrieve KV value", ret)
+        return d
 
-    def bput(self, ddict):
+    def bput(self, d):
         """Bulk put all the key-value pairs of the input python dictionary."""
-        ret = pydaos_shim.kv_put(DAOS_MAGIC, self.oh, ddict)
+        if d is None:
+            return
+        ret = pydaos_shim.kv_put(DAOS_MAGIC, self.oh, d)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to store KV value", ret)
 
@@ -383,5 +356,41 @@ class KVObj(_Obj):
         except KeyError:
             return False
 
+    def __eq__(self, other):
+        # Not efficient for now. Could use the bulk operation.
+        if len(other) != len(self):
+            return False
+        try:
+            for key in other:
+                if not self[key] == other[key]:
+                    return False
+        except KeyError:
+            return False
+
+        return True
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def __iter__(self):
-        return KVIter(self)
+        return DDictIter(self)
+
+# pylint: disable=too-few-public-methods
+class DArray(_DObj):
+    """
+    Class representing of DAOS array leveraging the numpy's dispatch mechanism.
+    See https://numpy.org/doc/stable/user/basics.dispatch.html for more info.
+    Work in progress.
+    """
+
+    def _open(self, hdl):
+        raise NotImplementedError
+
+    def _close(self):
+        raise NotImplementedError
+
+    def ___array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        raise NotImplementedError
+
+    def __array_function__(self, func, types, args, kwargs):
+        raise NotImplementedError

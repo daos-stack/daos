@@ -229,7 +229,7 @@ setup_get_acl_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__GetACLReq acl_req = MGMT__GET_ACLREQ__INIT;
 
-	acl_req.uuid = uuid;
+	acl_req.id = uuid;
 	pack_get_acl_req(call, &acl_req);
 }
 
@@ -376,7 +376,7 @@ setup_modify_acl_drpc_call(Drpc__Call *call, char *uuid, const char **acl,
 {
 	Mgmt__ModifyACLReq req = MGMT__MODIFY_ACLREQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.acl = (char **)acl;
 	req.n_acl = acl_nr;
 
@@ -563,7 +563,7 @@ setup_delete_acl_drpc_call(Drpc__Call *call, char *uuid, char *principal)
 {
 	Mgmt__DeleteACLReq req = MGMT__DELETE_ACLREQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.principal = principal;
 
 	pack_delete_acl_req(call, &req);
@@ -664,7 +664,7 @@ setup_list_cont_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__ListContReq lc_req = MGMT__LIST_CONT_REQ__INIT;
 
-	lc_req.uuid = uuid;
+	lc_req.id = uuid;
 	pack_list_cont_req(call, &lc_req);
 }
 
@@ -881,7 +881,7 @@ test_drpc_pool_set_prop_invalid_value_type(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
 
-	req.uuid = TEST_UUID;
+	req.id = TEST_UUID;
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = 1; /* doesn't matter */
@@ -903,7 +903,7 @@ test_drpc_pool_set_prop_bad_uuid(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolSetPropReq	req = MGMT__POOL_SET_PROP_REQ__INIT;
 
-	req.uuid = "wow this won't work";
+	req.id = "wow this won't work";
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = 1; /* doesn't matter */
@@ -944,7 +944,7 @@ test_drpc_pool_set_prop_success(void **state)
 	int			prop_number = DAOS_PROP_PO_MAX;
 	int			val_number = 1;
 
-	req.uuid = TEST_UUID;
+	req.id = TEST_UUID;
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = prop_number;
@@ -1065,7 +1065,7 @@ test_drpc_pool_get_prop_bad_uuid(void **state)
 	Drpc__Response		resp = DRPC__RESPONSE__INIT;
 	Mgmt__PoolGetPropReq	req = MGMT__POOL_GET_PROP_REQ__INIT;
 
-	req.uuid = "wow this won't work";
+	req.id = "wow this won't work";
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = 1; /* doesn't matter */
@@ -1094,7 +1094,7 @@ test_drpc_pool_get_prop_num_success(void **state)
 	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_type = prop_number;
 	ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_val = prop_val;
 
-	req.uuid = TEST_UUID;
+	req.id = TEST_UUID;
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = prop_number;
@@ -1125,7 +1125,7 @@ test_drpc_pool_get_prop_str_success(void **state)
 		    prop_val);
 	assert_non_null(ds_mgmt_pool_get_prop_out->dpp_entries[0].dpe_str);
 
-	req.uuid = TEST_UUID;
+	req.id = TEST_UUID;
 	req.properties = alloc_prop_msg_list(1);
 	req.n_properties = 1;
 	req.properties[0]->number = prop_number;
@@ -1175,7 +1175,7 @@ setup_pool_query_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolQueryReq req = MGMT__POOL_QUERY_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	pack_pool_query_req(call, &req);
 }
 
@@ -1544,7 +1544,7 @@ setup_exclude_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 {
 	Mgmt__PoolExcludeReq req = MGMT__POOL_EXCLUDE_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.n_targetidx = 3;
 	req.rank = rank;
 	req.targetidx = TEST_IDXS;
@@ -1649,7 +1649,7 @@ setup_drain_drpc_call(Drpc__Call *call, char *uuid, uint32_t rank)
 {
 	Mgmt__PoolDrainReq req = MGMT__POOL_DRAIN_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.n_targetidx = 3;
 	req.rank = rank;
 	req.targetidx = TEST_IDXS;
@@ -1755,7 +1755,7 @@ setup_extend_drpc_call(Drpc__Call *call, char *uuid)
 	Mgmt__PoolExtendReq req = MGMT__POOL_EXTEND_REQ__INIT;
 	uint64_t tierbytes = 1000000000;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.n_ranks = 3;
 	req.n_tierbytes = 1;
 	req.tierbytes = &tierbytes;
@@ -1850,7 +1850,7 @@ setup_reintegrate_drpc_call(Drpc__Call *call, char *uuid)
 {
 	Mgmt__PoolReintegrateReq req = MGMT__POOL_REINTEGRATE_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	pack_pool_reintegrate_req(call, &req);
 }
 
@@ -1920,7 +1920,7 @@ setup_evict_drpc_call(Drpc__Call *call, char *uuid, char *sys_name)
 {
 	Mgmt__PoolEvictReq req = MGMT__POOL_EVICT_REQ__INIT;
 
-	req.uuid = uuid;
+	req.id = uuid;
 	req.sys = sys_name;
 	pack_pool_evict_req(call, &req);
 }
