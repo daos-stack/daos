@@ -11,31 +11,6 @@
 extern "C" {
 #endif
 
-
-/** logic functions */
-#define DAOS_FILTER_FUNC_EQ		0
-#define DAOS_FILTER_FUNC_NE		1
-#define DAOS_FILTER_FUNC_LT		2
-#define DAOS_FILTER_FUNC_LE		3
-#define DAOS_FILTER_FUNC_GE		4
-#define DAOS_FILTER_FUNC_GT		5
-#define DAOS_FILTER_FUNC_LIKE		6
-#define DAOS_FILTER_FUNC_ISNULL		7
-#define DAOS_FILTER_FUNC_ISNOTNULL	8
-#define DAOS_FILTER_FUNC_AND		9
-#define DAOS_FILTER_FUNC_OR		10
-
-/** aggregation functions */
-#define DAOS_FILTER_FUNC_SUM		100
-#define DAOS_FILTER_FUNC_MIN		101
-#define DAOS_FILTER_FUNC_MAX		102
-#define DAOS_FILTER_FUNC_AVG		103
-
-/** keys, constants */
-#define DAOS_FILTER_DKEY		200
-#define DAOS_FILTER_AKEY		201
-#define DAOS_FILTER_CONST		202
-
 /** types used in a filter object */
 #define DAOS_FILTER_TYPE_BINARY		0
 #define DAOS_FILTER_TYPE_STRING		1
@@ -78,7 +53,7 @@ typedef struct {
 	 *   -- constant:
 	 *          DAOS_FILTER_CONST:	Filter object is a constant
 	 */
-	int		filter_type;
+	char		*filter_type;
 	/**
 	 * Type of data. Only relevant for keys and constant filter type objects:
 	 *          DAOS_FILTER_TYPE_BINARY
@@ -88,10 +63,10 @@ typedef struct {
 	 */
 	int		data_type;
 	/**
-	 * Number of parameters for this filter object. For example, for '=='
-	 * we have 2 parameters.
+	 * Number of operands for this filter object. For example, for '=='
+	 * we have 2 operands.
 	 */
-	uint32_t	num_params;
+	uint32_t	num_operands;
 	/**
 	 * If filtering by akey, this tells us which one.
 	 */

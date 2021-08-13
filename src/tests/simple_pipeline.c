@@ -113,33 +113,36 @@ void
 build_filter_one(daos_pipeline_t *pipeline)
 {
 	daos_pipeline_filter_t	akey_ft, eqfunc_ft, const_ft;
+	char			akey_ftype[]    = "DAOS_FILTER_AKEY";
+	char			const_ftype[]   = "DAOS_FILTER_CONST";
+	char			eqfunc_ftype[]  = "DAOS_FILTER_FUNC_EQ";
 	char			constant[STRING_LEN] = "Benny\0";
 	daos_pipeline_node_t	comp_eq_node;
 
 	/** akey for filter */
-	akey_ft.filter_type = DAOS_FILTER_AKEY;
-	akey_ft.data_type   = DAOS_FILTER_TYPE_STRING;
-	akey_ft.num_params  = 0;
+	akey_ft.filter_type  = akey_ftype;
+	akey_ft.data_type    = DAOS_FILTER_TYPE_STRING;
+	akey_ft.num_operands = 0;
 	d_iov_set(&(akey_ft.akey), "Owner", 5);
-	akey_ft.data_offset = 0;
-	akey_ft.data_len    = STRING_LEN;
+	akey_ft.data_offset  = 0;
+	akey_ft.data_len     = STRING_LEN;
 
 	/** constant for filter */
-	const_ft.filter_type   = DAOS_FILTER_CONST;
-	const_ft.data_type     = DAOS_FILTER_TYPE_STRING;
-	const_ft.num_params    = 0;
-	const_ft.num_constants = 1;
-	const_ft.constant      = (d_iov_t *) malloc(sizeof(d_iov_t));
+	const_ft.filter_type     = const_ftype;
+	const_ft.data_type       = DAOS_FILTER_TYPE_STRING;
+	const_ft.num_operands    = 0;
+	const_ft.num_constants   = 1;
+	const_ft.constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
 	d_iov_set(const_ft.constant, constant, STRING_LEN);
 	const_ft.data_offset   = 0;
 	const_ft.data_len      = STRING_LEN;
 
 	/** function for filter */
-	eqfunc_ft.filter_type = DAOS_FILTER_FUNC_EQ;
-	eqfunc_ft.data_type   = DAOS_FILTER_TYPE_STRING;
-	eqfunc_ft.num_params  = 2;
-	eqfunc_ft.data_offset = 0;
-	eqfunc_ft.data_len    = 0;
+	eqfunc_ft.filter_type   = eqfunc_ftype;
+	eqfunc_ft.data_type     = DAOS_FILTER_TYPE_STRING;
+	eqfunc_ft.num_operands  = 2;
+	eqfunc_ft.data_offset   = 0;
+	eqfunc_ft.data_len      = 0;
 
 	/** building pipeline node for the filter:
 	 *    the order of operands is prefix:
