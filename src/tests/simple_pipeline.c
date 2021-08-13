@@ -287,8 +287,7 @@ main(int argc, char **argv)
 	 * program using the daos utility: daos cont create --pool=puuid
 	 * and pass the uuid to the app.
 	 */
-	uuid_generate(co_uuid);
-	rc = daos_cont_create(poh, co_uuid, NULL, NULL);
+	rc = daos_cont_create(poh, &co_uuid, NULL, NULL);
 	ASSERT(rc == 0, "container create failed with %d", rc);
 	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, NULL,
 			    NULL);
