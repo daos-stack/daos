@@ -503,8 +503,10 @@ dc_mgmt_notify_exit(void)
 	rc = drpc_connect(dc_agent_sockpath, &ctx);
 	if (rc != -DER_SUCCESS) {
 		D_ERROR("failed to connect to %s " DF_RC "\n",
-			dc_agent_sockpath, DP_RC(-DER_AGENT_COMM));
-		D_GOTO(out, rc = -DER_AGENT_COMM);
+			dc_agent_sockpath, DP_RC(rc));
+		if (rc == -DER_NONEXIST)
+			rc = -DER_AGENT_COMM;
+		D_GOTO(out, rc);
 	}
 
 	rc = drpc_call_create(ctx, DRPC_MODULE_MGMT,
