@@ -146,6 +146,7 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 	}
 	numAttr := len(names)
 
+	// First, build a slice of C strings for the attribute names.
 	attrNames := make([]*C.char, numAttr)
 	for i, name := range names {
 		attrNames[i] = C.CString(name)
@@ -156,6 +157,9 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 		}
 	}(attrNames)
 
+	// Next, create a slice of C.size_t entries to hold the sizes of the values.
+	// We have to do this first in order to know the buffer sizes to allocate
+	// before fetching the actual values.
 	attrSizes := make([]C.size_t, numAttr)
 	var rc C.int
 	switch at {
@@ -170,6 +174,7 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 		return nil, errors.Wrapf(err, "failed to get attribute sizes: %s...", names[0])
 	}
 
+	// Now, create a slice of buffers to hold the values.
 	attrValues := make([]unsafe.Pointer, numAttr)
 	for i, size := range attrSizes {
 		if size < 1 {
@@ -184,6 +189,7 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 		}
 	}(attrValues)
 
+	// Do the actual fetch of all values in one go.
 	switch at {
 	case poolAttr:
 		rc = C.daos_pool_get_attr(hdl, C.int(numAttr), &attrNames[0], &attrValues[0], &attrSizes[0], nil)
@@ -196,6 +202,10 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 		return nil, errors.Wrapf(err, "failed to get attribute values: %s...", names[0])
 	}
 
+	// Finally, create a slice of attribute structs to hold the results.
+	// Note that we are copying the values into Go-managed byte slices
+	// for safety and simplicity so that we can free the C memory as soon
+	// as this function exits.
 	attrs := make([]*attribute, numAttr)
 	for i, name := range names {
 		attrs[i] = &attribute{
