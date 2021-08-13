@@ -358,6 +358,8 @@ struct daos_prop_entry {
 
 /** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
 #define DAOS_PROP_LABEL_MAX_LEN		(127)
+/** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
+#define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
 
 /**
  * Check if DAOS (pool or container property) label string is valid.
