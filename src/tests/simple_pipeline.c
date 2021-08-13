@@ -258,14 +258,13 @@ run_pipeline(daos_pipeline_t *pipeline)
 int
 main(int argc, char **argv)
 {
-	uuid_t			pool_uuid;
 	uuid_t			co_uuid;
 	daos_obj_id_t		oid;
 	int			rc;
 	daos_pipeline_t		pipeline;
 
 	if (argc != 2) {
-		fprintf(stderr, "args: pool\n");
+		fprintf(stderr, "args: pool_uuid\n");
 		exit(1);
 	}
 
@@ -273,12 +272,8 @@ main(int argc, char **argv)
 	rc = daos_init();
 	ASSERT(rc == 0, "daos_init failed with %d", rc);
 
-	/** Parse the pool information and connect to the pool */
-	rc = uuid_parse(argv[1], pool_uuid);
-	ASSERT(rc == 0, "Failed to parse 'Pool uuid': %s", argv[1]);
-
 	/** Call connect */
-	rc = daos_pool_connect(pool_uuid, NULL, DAOS_PC_RW, &poh, NULL, NULL);
+	rc = daos_pool_connect(argv[1], NULL, DAOS_PC_RW, &poh, NULL, NULL);
 	ASSERT(rc == 0, "pool connect failed with %d", rc);
 
 	/*
