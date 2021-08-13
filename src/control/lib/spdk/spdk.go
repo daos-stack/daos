@@ -168,11 +168,9 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 	log.Debugf("spdk fini go opts: %+v", opts)
 
-	C.spdk_env_fini()
-
 	if opts.EnableVMD {
-		if rc := C.spdk_vmd_fini(); rc != 0 {
-			return Rc2err("spdk_vmd_fini()", rc)
-		}
+		C.spdk_vmd_fini()
 	}
+
+	C.spdk_env_fini()
 }
