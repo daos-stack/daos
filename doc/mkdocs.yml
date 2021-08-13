@@ -54,7 +54,6 @@ nav:
         - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
     - User Guide:
-        - 'Container Management': 'user/container.md'
         - 'Native Programming Interface': 'user/interface.md'
         - 'POSIX Namespace': 'user/posix.md'
         - 'MPI-IO Support': 'user/mpi-io.md'
