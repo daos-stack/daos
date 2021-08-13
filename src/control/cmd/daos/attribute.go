@@ -176,6 +176,11 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 
 	// Now, create a slice of buffers to hold the values.
 	attrValues := make([]unsafe.Pointer, numAttr)
+	defer func(valueSlice []unsafe.Pointer) {
+		for _, value := range valueSlice {
+			C.free(value)
+		}
+	}(attrValues)
 	for i, size := range attrSizes {
 		if size < 1 {
 			return nil, errors.Errorf("failed to get attribute %s: size is %d", names[i], size)
@@ -183,11 +188,6 @@ func getDaosAttributes(hdl C.daos_handle_t, at attrType, names []string) (attrLi
 
 		attrValues[i] = C.malloc(size)
 	}
-	defer func(valueSlice []unsafe.Pointer) {
-		for _, value := range valueSlice {
-			C.free(value)
-		}
-	}(attrValues)
 
 	// Do the actual fetch of all values in one go.
 	switch at {
