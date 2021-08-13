@@ -26,7 +26,6 @@ class DaosServerTest(TestWithServers):
 
         Args:
             reformat (bool): always reformat storage, could be destructive.
-
         """
         self.log.info("=Restart daos_server, server stop().")
         self.server_managers[0].stop()
@@ -47,7 +46,6 @@ class DaosServerTest(TestWithServers):
         Args:
             force (bool): Force to stop the daos engine.
             Defaults to True.
-
         """
         self.server_managers[0].dmg.system_stop(force)
         self.server_managers[0].dmg.system_start()
@@ -114,6 +112,8 @@ class DaosServerTest(TestWithServers):
         self.restart_daos_server()
         self.log.info("(5)Verify after server restarted.")
         self.verify_pool_list()
+
+        self.pool = None
 
     def test_engine_restart(self):
         """JIRA ID: DAOS-3593.
