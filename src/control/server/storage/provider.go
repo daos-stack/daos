@@ -423,7 +423,10 @@ func filterScanResp(log logging.Logger, resp *BdevScanResponse, pciFilter ...str
 			pciFilter)
 	}
 
-	return &BdevScanResponse{Controllers: out}, nil
+	return &BdevScanResponse{
+		Controllers: out,
+		VMDEnabled:  resp.VMDEnabled,
+	}, nil
 }
 
 type scanFn func(BdevScanRequest) (*BdevScanResponse, error)
