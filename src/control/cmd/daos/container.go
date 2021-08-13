@@ -134,8 +134,6 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 		return nil, err
 	}
 
-	ci.ContainerLabel = C.GoString(C.get_dpe_str(&entries[1]))
-
 	lType := C.get_dpe_val(&entries[0])
 	C.daos_unparse_ctype(C.ushort(lType), &cType[0])
 	ci.Type = C.GoString(&cType[0])
