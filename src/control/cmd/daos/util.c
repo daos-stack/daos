@@ -88,17 +88,16 @@ resolve_duns_path(struct cmd_args_s *ap)
 	if (ap->fs_op != -1) {
 		if (name) {
 			if (dattr.da_rel_path) {
-				D_ASPRINTF(ap->dfs_path, "%s/%s",
-					   dattr.da_rel_path, name);
+				asprintf(&ap->dfs_path, "%s/%s",
+					 dattr.da_rel_path, name);
 			} else {
-				D_ASPRINTF(ap->dfs_path, "/%s", name);
+				asprintf(&ap->dfs_path, "/%s", name);
 			}
 		} else {
 			if (dattr.da_rel_path) {
-				D_STRNDUP(ap->dfs_path,
-					  dattr.da_rel_path, PATH_MAX);
+				ap->dfs_path = strndup(dattr.da_rel_path, PATH_MAX);
 			} else {
-				D_STRNDUP(ap->dfs_path, "/", 1);
+				ap->dfs_path = strndup("/", 1);
 			}
 		}
 		if (ap->dfs_path == NULL)
