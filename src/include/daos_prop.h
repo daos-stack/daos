@@ -459,6 +459,36 @@ struct daos_prop_entry *
 daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 
 /**
+ * Set the string value of a property entry in a property. The property type must expect that it's
+ * entry is of a string type. This duplicates the string internally and the entry string is freed
+ * with daos_free_prop(). The user does not need to keep the string buffer around after this
+ * function is called. If the entry already has a string value set, it frees that and overwrites it
+ * with this new string.
+ *
+ * \param[in]		prop		Property list
+ * \param[in]		type		Type of property to look for
+ * \param[in]		str		String value to set in the prop entry
+ * \param[in]           len		Length of \a str
+ */
+int
+daos_prop_entry_set_str(daos_prop_t *prop, uint32_t type, const char *str, daos_size_t len);
+
+/**
+ * Set the pointer value of a property entry in a property. The property type must expect that it's
+ * entry is of a pointer type. This duplicates the buffer internally and the entry string is freed
+ * with daos_free_prop(). The user does not need to keep the string buffer around after this
+ * function is called. If the entry already has a value set, it frees that and overwrites it with
+ * this new value.
+ *
+ * \param[in]		prop		Property list
+ * \param[in]		type		Type of property to look for
+ * \param[in]		ptr		Pointer to value of entry to set
+ * \param[in]           size		Size of value
+ */
+int
+daos_prop_entry_set_ptr(daos_prop_t *prop, uint32_t type, const void *ptr, daos_size_t size);
+
+/**
  * Duplicate a generic pointer value from one DAOS prop entry to another.
  * Convenience function.
  *
