@@ -127,6 +127,16 @@ func (cmd *poolBaseCmd) resolveAndConnect(flags C.uint, ap *C.struct_cmd_args_s)
 			return nil, err
 		}
 		ap.pool = cmd.cPoolHandle
+		switch {
+		case cmd.PoolID().HasLabel():
+			pLabel := C.CString(cmd.PoolID().Label)
+			defer freeString(pLabel)
+			C.strncpy(&ap.pool_str[0], pLabel, C.DAOS_PROP_LABEL_MAX_LEN)
+		case cmd.PoolID().HasUUID():
+			pUUIDstr := C.CString(cmd.poolUUID.String())
+			defer freeString(pUUIDstr)
+			C.strncpy(&ap.pool_str[0], pUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
+		}
 	}
 
 	return func() {

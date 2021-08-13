@@ -140,6 +140,13 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	C.daos_unparse_ctype(C.ushort(lType), &cType[0])
 	ci.Type = C.GoString(&cType[0])
 
+	if C.get_dpe_str(&entries[1]) == nil {
+		ci.ContainerLabel = ""
+	} else {
+		cStr := C.get_dpe_str(&entries[1])
+		ci.ContainerLabel = C.GoString(cStr)
+	}
+
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
 		var dfs *C.dfs_t
 		var attr C.dfs_attr_t
@@ -359,39 +366,31 @@ func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err 
 			return
 		}
 
-		if ap.pool_label != nil {
-			cmd.poolBaseCmd.Args.Pool.Label = C.GoString(ap.pool_label)
-			freeString(ap.pool_label)
-		} else {
-			cmd.poolBaseCmd.Args.Pool.UUID, err = uuidFromC(ap.p_uuid)
-			if err != nil {
-				return
-			}
-		}
-
-		if ap.cont_label != nil {
-			cmd.contLabel = C.GoString(ap.cont_label)
-			freeString(ap.cont_label)
-		} else {
-			cmd.Args.Container.UUID, err = uuidFromC(ap.c_uuid)
-			if err != nil {
-				return
-			}
-		}
+		cmd.poolBaseCmd.Args.Pool.Label = C.GoString(&ap.pool_str[0])
+		cmd.contLabel = C.GoString(&ap.cont_str[0])
 		cmd.contUUID = cmd.Args.Container.UUID
 	} else {
 		switch {
 		case cmd.ContainerID().HasLabel():
 			cmd.contLabel = cmd.ContainerID().Label
+			if ap != nil {
+				cLabel := C.CString(cmd.ContainerID().Label)
+				defer freeString(cLabel)
+				C.strncpy(&ap.cont_str[0], cLabel, C.DAOS_PROP_LABEL_MAX_LEN)
+			}
 		case cmd.ContainerID().HasUUID():
 			cmd.contUUID = cmd.ContainerID().UUID
+			if ap != nil {
+				cUUIDstr := C.CString(cmd.contUUID.String())
+				defer freeString(cUUIDstr)
+				C.strncpy(&ap.cont_str[0], cUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
+			}
 		default:
 			return errors.New("no container label or UUID supplied")
 		}
 	}
 
-	cmd.log.Debugf("pool ID: %s, container ID: %s",
-		cmd.PoolID(), cmd.ContainerID())
+	cmd.log.Debugf("pool ID: %s, container ID: %s", cmd.PoolID(), cmd.ContainerID())
 
 	return nil
 }
@@ -583,7 +582,11 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 			cmd.ContainerID())
 	}
 
-	cmd.log.Infof("Successfully destroyed container %s", cmd.ContainerID())
+	if cmd.ContainerID().Empty() {
+		cmd.log.Infof("Successfully destroyed container %s", cmd.Path)
+	} else {
+		cmd.log.Infof("Successfully destroyed container %s", cmd.ContainerID())
+	}
 
 	return nil
 }
@@ -736,10 +739,6 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 		return errors.Wrapf(err,
 			"failed to query container %s",
 			cmd.contUUID)
-	}
-
-	if cmd.contLabel != "" {
-		ci.ContainerLabel = cmd.contLabel
 	}
 
 	if cmd.jsonOutputEnabled() {
