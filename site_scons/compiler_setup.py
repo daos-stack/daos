@@ -73,7 +73,7 @@ def base_setup(env, prereqs=None):
     env.AppendUnique(CPPDEFINES='_GNU_SOURCE')
 
     cenv = env.Clone()
-    cenv.Append(CFLAGS='-Werror -Wshadow')
+    cenv.Append(CFLAGS='-Werror')
     config = Configure(cenv)
     if config.CheckHeader('stdatomic.h'):
         config.Finish()
