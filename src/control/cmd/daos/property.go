@@ -83,7 +83,7 @@ var propHdlrs = propHdlrMap{
 				return errors.Errorf("invalid label %q", v)
 			}
 			cStr := C.CString(v)
-			C.daos_prop_entry_set_str(e, cStr, C.size_t(len(v)+1))
+			C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
 			freeString(cStr)
 			return nil
 		},

@@ -797,7 +797,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 
 		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-		rc = daos_prop_entry_set_str(prop->dpp_entries[prop_num], group, strlen(group));
+		rc = daos_prop_entry_set_str(&prop->dpp_entries[prop_num], group, strlen(group));
 		if (rc)
 			D_GOTO(out, rc);
 		prop_num++;
