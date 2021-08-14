@@ -317,7 +317,12 @@ class PoolSecurityTestBase(TestWithServers):
         if action.lower() == "write":
             result = daos_cmd.container_create(pool=uuid)
         elif action.lower() == "read":
-            result = daos_cmd.pool_query(pool=uuid)
+            json_result = daos_cmd.pool_query(pool=uuid)
+            # Hack DAOS-8317
+            result = TempCmdResult()
+            result.exit_status = json_result["status"]
+            if json_result["error"]:
+                result.stderr_text = json_result["error"]
         else:
             self.fail(
                 "##In verify_pool_readwrite, invalid action: {}".format(action))
@@ -552,3 +557,12 @@ class PoolSecurityTestBase(TestWithServers):
         self.log.info("  (9)Cleanup users and groups")
         self.cleanup_user_group(num_user, num_group)
         self.pool.destroy()
+
+
+# Hack DAOS-8317. Don't use.
+class TempCmdResult:
+    """Temp Command Result"""
+
+    exit_status = None
+    stderr_text = ""
+    stdout_text = ""
