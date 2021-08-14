@@ -1349,7 +1349,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	/* store SB & root OIDs as container property */
 	roots.cr_oids[2] = roots.cr_oids[3] = DAOS_OBJ_NIL;
 	prop->dpp_entries[prop->dpp_nr - 2].dpe_type = DAOS_PROP_CO_ROOTS;
-	rc = daos_prop_entry_set_ptr(prop, DAOS_PROP_CO_ROOTS, &roots, sizeof(roots));
+	rc = daos_prop_entry_set_ptr(&prop->dpp_entries[prop->dpp_nr - 2], &roots, sizeof(roots));
 	if (rc)
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 

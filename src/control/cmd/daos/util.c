@@ -68,8 +68,7 @@ resolve_duns_path(struct cmd_args_s *ap)
 
 	/** set pool/cont label or uuid */
 	if (dattr.da_pool_label) {
-		D_STRNDUP(ap->pool_label, dattr.da_pool_label,
-			  DAOS_PROP_LABEL_MAX_LEN);
+		D_STRNDUP(ap->pool_label, dattr.da_pool_label, DAOS_PROP_LABEL_MAX_LEN);
 		if (ap->pool_label == NULL)
 			D_GOTO(out, rc = ENOMEM);
 	} else {
@@ -77,8 +76,7 @@ resolve_duns_path(struct cmd_args_s *ap)
 	}
 
 	if (dattr.da_cont_label) {
-		D_STRNDUP(ap->cont_label, dattr.da_cont_label,
-			  DAOS_PROP_LABEL_MAX_LEN);
+		D_STRNDUP(ap->cont_label, dattr.da_cont_label, DAOS_PROP_LABEL_MAX_LEN);
 		if (ap->cont_label == NULL)
 			D_GOTO(out, rc = ENOMEM);
 	} else {
@@ -87,18 +85,15 @@ resolve_duns_path(struct cmd_args_s *ap)
 
 	if (ap->fs_op != -1) {
 		if (name) {
-			if (dattr.da_rel_path) {
-				asprintf(&ap->dfs_path, "%s/%s",
-					 dattr.da_rel_path, name);
-			} else {
+			if (dattr.da_rel_path)
+				asprintf(&ap->dfs_path, "%s/%s", dattr.da_rel_path, name);
+			else
 				asprintf(&ap->dfs_path, "/%s", name);
-			}
 		} else {
-			if (dattr.da_rel_path) {
+			if (dattr.da_rel_path)
 				ap->dfs_path = strndup(dattr.da_rel_path, PATH_MAX);
-			} else {
+			else
 				ap->dfs_path = strndup("/", 1);
-			}
 		}
 		if (ap->dfs_path == NULL)
 			D_GOTO(out, rc = ENOMEM);

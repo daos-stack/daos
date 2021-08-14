@@ -783,7 +783,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 
 		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_OWNER;
-		rc = daos_prop_entry_set_str(prop, DAOS_PROP_CO_OWNER, owner, strlen(owner));
+		rc = daos_prop_entry_set_str(&prop->dpp_entries[prop_num], owner, strlen(owner));
 		if (rc)
 			D_GOTO(out, rc);
 		prop_num++;
@@ -797,7 +797,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		}
 
 		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
-		rc = daos_prop_entry_set_str(prop, DAOS_PROP_CO_OWNER_GROUP, group, strlen(group));
+		rc = daos_prop_entry_set_str(prop->dpp_entries[prop_num], group, strlen(group));
 		if (rc)
 			D_GOTO(out, rc);
 		prop_num++;
@@ -851,7 +851,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 	/* deserialize_label stays false if property doesn't exist above */
 	if (deserialize_label) {
 		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_LABEL;
-		rc = daos_prop_entry_set_str(prop, DAOS_PROP_CO_LABEL, label, strlen(label));
+		rc = daos_prop_entry_set_str(&prop->dpp_entries[prop_num], label, strlen(label));
 		if (rc)
 			D_GOTO(out, rc);
 	}
