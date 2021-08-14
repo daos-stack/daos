@@ -1871,25 +1871,6 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	if (remove) {
-		/** Since this isn't a traditional logical extent, change the
-		 *  lower bound so checks in trigger_flush work
-		 */
-		if (mw->mw_ext.ex_hi >= lgc_ext.ex_lo)
-			lgc_ext.ex_lo = mw->mw_ext.ex_hi + 1;
-	}
-
-	/* Trigger current window flush when reaching threshold */
-	if ((visible || remove) && trigger_flush(mw, &lgc_ext)) {
-		rc = flush_merge_window(ih, mw, false, acts);
-		if (rc) {
-			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
-				DP_EXT(&mw->mw_ext), DP_RC(rc));
-			return rc;
-		}
-		D_ASSERT(merge_window_status(mw) == MW_FLUSHED);
-	}
-
-	if (remove) {
 		struct agg_rmv_ent	*rm_ent;
 
 		/* Enqueue removal record */
@@ -1905,15 +1886,25 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		goto out;
 	}
 
+	/* Trigger current window flush when reaching threshold */
+	if (visible && trigger_flush(mw, &lgc_ext)) {
+		if (!d_list_empty(&mw->mw_rmv_ents)) {
+			/* The window flush doesn't expect holes caused by removal records */
+			mw->mw_ext.ex_hi = lgc_ext.ex_lo - 1;
+		}
+		rc = flush_merge_window(ih, mw, false, acts);
+		if (rc) {
+			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
+				DP_EXT(&mw->mw_ext), DP_RC(rc));
+			return rc;
+		}
+		D_ASSERT(merge_window_status(mw) == MW_FLUSHED);
+	}
+
 	/* Lookup physical entry, enqueue if it doesn't exist */
 	phy_ent = lookup_phy_ent(mw, &phy_ext, entry);
 	if (phy_ent == NULL) {
-		if (phy_ext.ex_lo != lgc_ext.ex_lo) {
-			/** Tail of a physical entry that was already removed */
-			D_ASSERT(!visible);
-			goto out;
-		}
-
+		D_ASSERT(phy_ext.ex_lo == lgc_ext.ex_lo);
 		phy_ent = enqueue_phy_ent(mw, &phy_ext, entry,
 					  &entry->ie_biov.bi_addr,
 					  &entry->ie_csum, entry->ie_ver);

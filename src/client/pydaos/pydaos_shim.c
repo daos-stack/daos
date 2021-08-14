@@ -255,6 +255,7 @@ static PyObject *
 __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 {
 	const char		*path;
+	PyObject		*obj;
 	int			 flags;
 	struct duns_attr_t	 attr = {0};
 	int			 rc;
@@ -269,11 +270,9 @@ __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 	if (attr.da_type != DAOS_PROP_CO_LAYOUT_PYTHON)
 		rc = -DER_INVAL;
 out:
-	/**
-	 * XXX attr.da_pool/cont_label to be replaced by attr.da_pool/cont
-	 * once PR 6333 is landed
-	 */
-	return cont_open(rc, attr.da_pool_label, attr.da_cont_label, flags);
+	obj = cont_open(rc, attr.da_pool, attr.da_cont, flags);
+	duns_destroy_attr(&attr);
+	return obj;
 }
 
 static PyObject *
