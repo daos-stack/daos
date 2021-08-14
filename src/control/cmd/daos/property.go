@@ -82,6 +82,7 @@ var propHdlrs = propHdlrMap{
 			if !drpc.LabelIsValid(v) {
 				return errors.Errorf("invalid label %q", v)
 			}
+			e.dpe_type = C.DAOS_PROP_CO_LABEL
 			cStr := C.CString(v)
 			C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
 			freeString(cStr)
