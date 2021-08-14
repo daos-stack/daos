@@ -16,7 +16,7 @@ class DaosCommand(DaosCommandBase):
 
     METHOD_REGEX = {
         "run": r"(.*)",
-        "container_create": r"container ([0-9a-f-]+)",
+        "container_create": r"\D+:\s+([0-9a-f-]+)",
         "container_query":
             r"Pool UUID:\s+([0-9a-f-]+)\n" +
             r"Container UUID:\s+([0-9a-f-]+)\n" +
