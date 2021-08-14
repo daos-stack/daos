@@ -560,6 +560,7 @@ class PoolSecurityTestBase(TestWithServers):
 
 
 # Hack DAOS-8317. Don't use.
+# pylint: disable=too-few-public-methods
 class TempCmdResult:
     """Temp Command Result"""
 
