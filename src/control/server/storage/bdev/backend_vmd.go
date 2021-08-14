@@ -86,7 +86,7 @@ func substituteVMDAddresses(log logging.Logger, inPCIAddrs []string, bdevCache *
 	if err != nil {
 		return nil, errors.Wrapf(err, msg)
 	}
-	log.Debugf("format nvme: %s: new %s", msg, dl)
+	log.Debugf("%s: new %s", msg, dl)
 
 	return dl, nil
 }

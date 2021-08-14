@@ -7,6 +7,8 @@
 package spdk
 
 import (
+	"sync"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -44,7 +46,9 @@ type MockNvmeCfg struct {
 
 // MockNvmeImpl is an implementation of the Nvme interface.
 type MockNvmeImpl struct {
-	Cfg MockNvmeCfg
+	sync.RWMutex
+	Cfg   MockNvmeCfg
+	Calls []string
 }
 
 // CleanLockfiles removes SPDK lockfiles after binding operations.

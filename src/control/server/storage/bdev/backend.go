@@ -493,6 +493,8 @@ func (sb *spdkBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (
 	// Substitute addresses in bdev tier's DeviceLists if VMD is in use.
 	if req.VMDEnabled {
 		sb.log.Debug("vmd support enabled during nvme config write")
+		tps := make([]storage.BdevTierProperties, 0, len(req.TierProps))
+		copy(req.TierProps, tps)
 		for _, props := range req.TierProps {
 			if props.Class != storage.ClassNvme {
 				continue
@@ -506,6 +508,7 @@ func (sb *spdkBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (
 		}
 	}
 
+	sb.log.Debugf("write conf: %+v", req)
 	if err := sb.writeNvmeConfig(&req); err != nil {
 		return nil, errors.Wrap(err, "write spdk nvme config")
 	}

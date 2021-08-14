@@ -665,7 +665,6 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, defaultNrHugepages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -682,12 +681,11 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
-						fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -703,11 +701,10 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -724,10 +721,10 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
 				},
 			},
@@ -755,12 +752,11 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, fmt.Sprintf("%s %s",
-							common.MockPCIAddr(1), common.MockPCIAddr(2))),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, fmt.Sprintf("%s %s",
+							common.MockPCIAddr(1), common.MockPCIAddr(2))),
 					},
-					Args: []string{},
 				},
 				{
 					Env: []string{
@@ -768,7 +764,6 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -788,7 +783,6 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
-					Args: []string{},
 				},
 			},
 			expErr: errors.New("vmd detect failed"),
@@ -808,7 +802,6 @@ func TestBackend_Prepare(t *testing.T) {
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -825,20 +818,18 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(3)),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(3)),
 					},
-					Args: []string{},
 				},
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -855,20 +846,18 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(5)),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(5)),
 					},
-					Args: []string{},
 				},
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -885,11 +874,10 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -907,21 +895,19 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(2)),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, common.MockPCIAddr(2)),
 					},
-					Args: []string{},
 				},
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -937,12 +923,11 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
-					Args: []string{},
 				},
 			},
 		},
@@ -959,12 +944,11 @@ func TestBackend_Prepare(t *testing.T) {
 				{
 					Env: []string{
 						fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
-						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 						fmt.Sprintf("%s=%d", nrHugepagesEnv, testNrHugePages),
 						fmt.Sprintf("%s=%s", targetUserEnv, username),
+						fmt.Sprintf("%s=%s", pciAllowListEnv, testPCIAllowList),
+						fmt.Sprintf("%s=%s", pciBlockListEnv, testPCIBlockList),
 					},
-					Args: []string{},
 				},
 			},
 			expErr: errors.New("clean failed"),
@@ -1026,11 +1010,11 @@ func TestBackend_checkCfgBdevsExist(t *testing.T) {
 		engineStorage map[uint32]*storage.Config
 		expErr        error
 	}{
-		"vmd in scan but empty cfg bdev list": {
+		"empty cfg bdev list": {
 			inControllers: scanCtrlrs,
 			engineStorage: make(map[uint32]*storage.Config),
 		},
-		"vmd in scan with addr in cfg bdev list but vmd disabled": {
+		"addr in cfg bdev list; vmd disabled": {
 			inControllers: scanCtrlrs,
 			engineStorage: map[uint32]*storage.Config{
 				0: {
@@ -1043,7 +1027,7 @@ func TestBackend_checkCfgBdevsExist(t *testing.T) {
 			},
 			expErr: FaultBdevNotFound("0000:5d:05.5"),
 		},
-		"vmd in scan with addr in cfg bdev list": {
+		"addr in cfg bdev list; vmd enabled": {
 			inControllers: scanCtrlrs,
 			vmdEnabled:    true,
 			engineStorage: map[uint32]*storage.Config{
@@ -1056,119 +1040,92 @@ func TestBackend_checkCfgBdevsExist(t *testing.T) {
 				},
 			},
 		},
-		//		"vmd in scan with addr in cfg bdev list": {
-		//			vmdEnabled:      true,
-		//			inCfgBdevLists:  [][]string{{"0000:5d:05.5"}},
-		//			expCfgBdevLists: [][]string{{"5d0505:01:00.0", "5d0505:03:00.0"}},
-		//		},
-		//		"vmd with no backing devices with addr in cfg bdev list": {
-		//			vmdEnabled:     true,
-		//			inCfgBdevLists: [][]string{{"0000:d7:05.5"}},
-		//			expErr:         FaultBdevNotFound("0000:d7:05.5"),
-		//		},
-		//		"vmd and non vmd with no backing devices with addr in cfg bdev list": {
-		//			vmdEnabled:     true,
-		//			inCfgBdevLists: [][]string{{"0000:8a:00.0", "0000:d7:05.5"}},
-		//			expErr:         FaultBdevNotFound("0000:d7:05.5"),
-		//		},
-		//		"vmd and non vmd in scan with addr in cfg bdev list": {
-		//			vmdEnabled:     true,
-		//			inCfgBdevLists: [][]string{{"0000:8a:00.0", "0000:8d:00.0", "0000:5d:05.5"}},
-		//			expCfgBdevLists: [][]string{
-		//				{"0000:8a:00.0", "0000:8d:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
-		//			},
-		//		},
-		//		"vmd and non vmd in scan with addr in cfg bdev list on multiple io servers": {
-		//			numEngines: 2,
-		//			vmdEnabled: true,
-		//			inScanResp: &storage.BdevScanResponse{
-		//				Controllers: append(scanCtrlrs,
-		//					&storage.NvmeController{PciAddr: "d70505:01:00.0"},
-		//					&storage.NvmeController{PciAddr: "d70505:02:00.0"}),
-		//			},
-		//			inCfgBdevLists: [][]string{
-		//				{"0000:90:00.0", "0000:d8:00.0", "0000:d7:05.5"},
-		//				{"0000:8a:00.0", "0000:8d:00.0", "0000:5d:05.5"},
-		//			},
-		//			expCfgBdevLists: [][]string{
-		//				{"0000:90:00.0", "0000:d8:00.0", "d70505:01:00.0", "d70505:02:00.0"},
-		//				{"0000:8a:00.0", "0000:8d:00.0", "5d0505:01:00.0", "5d0505:03:00.0"},
-		//			},
-		//		},
-		//		"missing ssd in cfg bdev list": {
-		//			numEngines:     2,
-		//			inCfgBdevLists: [][]string{{"0000:90:00.0"}, {"0000:80:00.0"}},
-		//			expErr:         FaultBdevNotFound("0000:80:00.0"),
-		//		},
-		//		"present ssds in cfg bdev list": {
-		//			numEngines: 2,
-		//			inCfgBdevLists: [][]string{
-		//				{"0000:90:00.0", "0000:d8:00.0", "0000:8e:00.0", "0000:8a:00.0"},
-		//				{"0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0", "0000:8f:00.0"},
-		//			},
-		//			expCfgBdevLists: [][]string{
-		//				{"0000:90:00.0", "0000:d8:00.0", "0000:8e:00.0", "0000:8a:00.0"},
-		//				{"0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0", "0000:8f:00.0"},
-		//			},
-		//		},
-		//		"unexpected scan": {
-		//			numEngines: 2,
-		//			inScanResp: &storage.BdevScanResponse{
-		//				Controllers: storage.MockNvmeControllers(3),
-		//			},
-		//			inCfgBdevLists: [][]string{
-		//				{"0000:90:00.0", "0000:d8:00.0", "0000:8e:00.0", "0000:8a:00.0"},
-		//				{"0000:8d:00.0", "0000:8b:00.0", "0000:8c:00.0", "0000:8f:00.0"},
-		//			},
-		//			expErr: FaultBdevNotFound(
-		//				"0000:90:00.0", "0000:d8:00.0", "0000:8e:00.0", "0000:8a:00.0",
-		//			),
-		//		},
+		"no backing devices": {
+			inControllers: scanCtrlrs,
+			vmdEnabled:    true,
+			engineStorage: map[uint32]*storage.Config{
+				0: {
+					Tiers: storage.TierConfigs{
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:d7:05.5"),
+					},
+				},
+			},
+			expErr: FaultBdevNotFound("0000:d7:05.5"),
+		},
+		"vmd and non vmd in scan; addr in cfg bdev list": {
+			inControllers: scanCtrlrs,
+			vmdEnabled:    true,
+			engineStorage: map[uint32]*storage.Config{
+				0: {
+					Tiers: storage.TierConfigs{
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:8a:00.0", "0000:8d:00.0",
+								"0000:5d:05.5"),
+					},
+				},
+			},
+		},
+		"vmd and non vmd in scan; addr in cfg bdev list; multiple io servers": {
+			vmdEnabled: true,
+			inControllers: append(scanCtrlrs,
+				&storage.NvmeController{PciAddr: "d70505:01:00.0"},
+				&storage.NvmeController{PciAddr: "d70505:02:00.0"}),
+			engineStorage: map[uint32]*storage.Config{
+				0: {
+					Tiers: storage.TierConfigs{
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:90:00.0", "0000:d8:00.0",
+								"0000:d7:05.5"),
+					},
+				},
+				1: {
+					Tiers: storage.TierConfigs{
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:8a:00.0", "0000:8d:00.0",
+								"0000:5d:05.5"),
+					},
+				},
+			},
+		},
+		"unexpected scan": {
+			inControllers: storage.MockNvmeControllers(3),
+			engineStorage: map[uint32]*storage.Config{
+				0: {
+					Tiers: storage.TierConfigs{
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:90:00.0", "0000:d8:00.0",
+								"0000:d7:05.5"),
+					},
+				},
+				1: {
+					Tiers: storage.TierConfigs{
+						storage.NewTierConfig().
+							WithBdevClass(storage.ClassNvme.String()).
+							WithBdevDeviceList("0000:8a:00.0", "0000:8d:00.0",
+								"0000:5d:05.5"),
+					},
+				},
+			},
+			expErr: FaultBdevNotFound(
+				"0000:90:00.0", "0000:d8:00.0", "0000:d7:05.5",
+			),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			//			if tc.numEngines == 0 {
-			//				tc.numEngines = 1
-			//			}
-			//			if len(tc.inCfgBdevLists) != tc.numEngines {
-			//				t.Fatal("test params: inCfgBdevLists length incorrect")
-			//			}
-			//
-			//			// set config device lists
-			//			testCfg := config.DefaultServer()
-			//			testCfg.Engines = make([]*engine.Config, tc.numEngines)
-			//			for idx := 0; idx < tc.numEngines; idx++ {
-			//				testCfg.Engines[idx] = engine.NewConfig().
-			//					WithBdevClass("nvme").
-			//					WithBdevDeviceList(tc.inCfgBdevLists[idx]...)
-			//			}
-			//
-			//			mbc := &bdev.MockBackendConfig{VMDEnabled: tc.vmdEnabled}
-			//			cs := mockControlService(t, log, testCfg, mbc, nil, nil)
-			//
-			//			if tc.inScanResp == nil {
-			//				tc.inScanResp = &bdev.ScanResponse{
-			//					Controllers: scanCtrlrs,
-			//				}
-			//			}
 			gotErr := checkCfgBdevsExist(log, tc.inControllers, tc.engineStorage, tc.vmdEnabled)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
-
-			//			if len(tc.expCfgBdevLists) != tc.numEngines {
-			//				t.Fatal("test params: expCfgBdevLists length incorrect")
-			//			}
-
-			//			for idx := 0; idx < tc.numEngines; idx++ {
-			//				cfgBdevs := cs.instanceStorage[idx].Bdev.GetNvmeDevs()
-			//			if diff := cmp.Diff(tc.expCfgBdevLists[idx], cfgBdevs); diff != "" {
-			//					t.Fatalf("unexpected device list (-want, +got):\n%s\n", diff)
-			//				}
-			//			}
 		})
 	}
 }
