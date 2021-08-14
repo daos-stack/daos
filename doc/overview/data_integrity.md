@@ -17,9 +17,6 @@ from the server. There are variations on this approach depending on the type of
 data being protected, but the following diagram shows the basic checksum flow.
 ![Basic Checksum Flow](../graph/data_integrity/basic_checksum_flow.png)
 
-- [ ] Performance Impact
-- [ ] Break up into Overview, Developer Guide, User Guide
-
 # Configuring
 
 Data integrity is configured for each container.
@@ -99,12 +96,10 @@ line) from index 2-6. The fetch is only part of the original extent written.
 ![](../graph/data_integrity/array_example_1.png)
 
 
-
 Many extent updates and different epochs. A fetch from index 2-13 requires parts
 from each extent.
 
 ![Array Example 2](../graph/data_integrity/array_example_2.png)
-
 
 
 The nature of the array type requires that a more sophisticated approach to
