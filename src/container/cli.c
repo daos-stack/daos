@@ -178,7 +178,7 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 		uint64_t rf;
 
 		/**
-		 * If user did not provide his own root object, let's generate
+		 * If user did not provide a root object id, let's generate
 		 * it here. Worst case is that it is not used by the middleware.
 		 */
 

@@ -210,12 +210,10 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	assert(ap->p_op == POOL_GET_PROP);
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-			       DAOS_PC_RO, &ap->pool,
-			       NULL /* info */, NULL /* ev */);
+	rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RO, &ap->pool, NULL, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to connect to pool "DF_UUIDF": %s (%d)\n",
+			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -225,9 +223,8 @@ pool_get_prop_hdlr(struct cmd_args_s *ap)
 
 	rc = daos_pool_query(ap->pool, NULL, NULL, prop_query, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to query properties for pool "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to query properties for pool "DF_UUIDF": %s (%d)\n",
+			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
 		D_GOTO(out_disconnect, rc);
 	}
 
@@ -713,8 +710,7 @@ cont_check_hdlr(struct cmd_args_s *ap)
 
 	begin = time(NULL);
 
-	fprintf(ap->outstream, "check container "DF_UUIDF" started at: %s\n",
-		DP_UUID(ap->c_uuid), ctime(&begin));
+	fprintf(ap->outstream, "check container %s started at: %s\n", ap->cont_str, ctime(&begin));
 
 	while (!daos_anchor_is_eof(&anchor)) {
 		oids_nr = OID_ARR_SIZE;
@@ -759,13 +755,13 @@ cont_check_hdlr(struct cmd_args_s *ap)
 
 	if (rc == 0 || rc == -DER_NOSYS || rc == -DER_MISMATCH) {
 		fprintf(ap->outstream,
-			"check container "DF_UUIDF" completed at: %s\n"
+			"check container %s completed at: %s\n"
 			"checked: %lu\n"
 			"skipped: %lu\n"
 			"inconsistent: %lu\n"
 			"run_time: %lu seconds\n"
 			"scan_speed: %lu objs/sec\n",
-			DP_UUID(ap->c_uuid), ctime(&end), checked, skipped,
+			ap->cont_str, ctime(&end), checked, skipped,
 			inconsistent, duration, (checked + skipped) / duration);
 		rc = 0;
 	}
@@ -802,13 +798,11 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	/* evaluate size for listing */
 	snaps_count = 0;
 	memset(&anchor, 0, sizeof(anchor));
-	rc = daos_cont_list_snap(ap->cont, &snaps_count, NULL, NULL, &anchor,
-				 NULL);
+	rc = daos_cont_list_snap(ap->cont, &snaps_count, NULL, NULL, &anchor, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to retrieve number of snapshots for "
-			"container "DF_UUIDF": %s (%d)\n", DP_UUID(ap->c_uuid),
-			d_errdesc(rc), rc);
+			"failed to retrieve number of snapshots for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -841,9 +835,8 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_list_snap(ap->cont, &snaps_count, epochs, names, &anchor,
 				 NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to list snapshots for container "
-			DF_UUIDF": %s (%d)\n", DP_UUID(ap->c_uuid),
-			d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to list snapshots for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 	if (expected_count < snaps_count)
@@ -894,14 +887,12 @@ cont_create_snap_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_create_snap(ap->cont, &ap->epc, ap->snapname_str, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to create snapshot for container "
-			DF_UUIDF": %s (%d)\n", DP_UUID(ap->c_uuid),
-			d_errdesc(rc), rc);
+			"failed to create snapshot for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
-	fprintf(ap->outstream,
-		"snapshot/epoch "DF_U64" has been created\n", ap->epc);
+	fprintf(ap->outstream, "snapshot/epoch "DF_U64" has been created\n", ap->epc);
 out:
 	return rc;
 }
@@ -936,9 +927,8 @@ cont_destroy_snap_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_destroy_snap(ap->cont, epr, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to destroy snapshots for container "
-			DF_UUIDF": %s (%d)\n", DP_UUID(ap->c_uuid),
-			d_errdesc(rc), rc);
+			"failed to destroy snapshots for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -965,9 +955,8 @@ cont_set_attr_hdlr(struct cmd_args_s *ap)
 				(const size_t *)&value_size, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to set attribute '%s' for container "
-			DF_UUIDF": %s (%d)\n", ap->attrname_str,
-			DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			"failed to set attribute '%s' for container %s: %s (%d)\n",
+			ap->attrname_str, ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -989,9 +978,8 @@ cont_del_attr_hdlr(struct cmd_args_s *ap)
 				(const char * const*)&ap->attrname_str, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to delete attribute '%s' for container "
-			DF_UUIDF": %s (%d)\n", ap->attrname_str,
-			DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			"failed to delete attribute '%s' for container %s: %s (%d)\n",
+			ap->attrname_str, ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1018,9 +1006,8 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 				&attr_size, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to retrieve size of attribute '%s' for "
-			"container "DF_UUIDF": %s (%d)\n", ap->attrname_str,
-			DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			"failed to retrieve size of attribute '%s' for container %s: %s (%d)\n",
+			ap->attrname_str, ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1040,9 +1027,8 @@ cont_get_attr_hdlr(struct cmd_args_s *ap)
 				(void * const*)&buf, &attr_size, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to get attribute '%s' for container "
-			DF_UUIDF": %s (%d)\n", ap->attrname_str,
-			DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			"failed to get attribute '%s' for container %s: %s (%d)\n",
+			ap->attrname_str, ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1074,9 +1060,8 @@ cont_list_attrs_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_list_attr(ap->cont, NULL, &total_size, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to retrieve number of attributes for "
-			"container "DF_UUIDF": %s (%d)\n", DP_UUID(ap->c_uuid),
-			d_errdesc(rc), rc);
+			"failed to retrieve number of attributes for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1093,10 +1078,8 @@ cont_list_attrs_hdlr(struct cmd_args_s *ap)
 	expected_size = total_size;
 	rc = daos_cont_list_attr(ap->cont, buf, &total_size, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream,
-			"failed to list attributes for container "
-			DF_UUIDF": %s (%d)\n", DP_UUID(ap->c_uuid),
-			d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to list attributes for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1421,25 +1404,20 @@ cont_get_prop_hdlr(struct cmd_args_s *ap)
 
 	rc = daos_cont_query(ap->cont, NULL, prop_query, NULL);
 	if (rc) {
-		fprintf(ap->errstream, "failed to query container "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to query container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(err_out, rc);
 	}
 
 	/* Fetch the ACL separately in case user doesn't have access */
 	rc = daos_cont_get_acl(ap->cont, &prop_acl, NULL);
 	if (rc && rc != -DER_NO_PERM) {
-		fprintf(ap->errstream, "failed to query container ACL "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to query ACL for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(err_out, rc);
 	}
 
-	if (ap->cont_label)
-		D_PRINT("Container properties for \"%s\":\n", ap->cont_label);
-	else
-		D_PRINT("Container properties for "DF_UUIDF" :\n",
-			DP_UUID(ap->c_uuid));
-
+	D_PRINT("Container properties for \"%s\":\n", ap->cont_str);
 	rc = cont_decode_props(ap, prop_query, prop_acl);
 
 err_out:
@@ -1474,9 +1452,8 @@ cont_set_prop_hdlr(struct cmd_args_s *ap)
 
 	rc = daos_cont_set_prop(ap->cont, ap->props, NULL);
 	if (rc) {
-		fprintf(ap->errstream, "failed to set properties for container "
-			DF_UUIDF": %s (%d)\n", DP_UUID(ap->c_uuid),
-			d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to set properties for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		D_GOTO(err_out, rc);
 	}
 
@@ -1711,8 +1688,8 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	int			rc;
 	const int		RC_PRINT_HELP = 2;
 
-	/* Required: pool UUID, container type, obj class, chunk_size.
-	 * Optional: user-specified container UUID.
+	/* Required: pool handle, container type, obj class, chunk_size.
+	 * Optional: uuid of pool handle, user-specified container UUID.
 	 */
 	ARGS_VERIFY_PATH_CREATE(ap, err_rc, rc = RC_PRINT_HELP);
 
@@ -1729,16 +1706,13 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 
 	rc = duns_create_path(ap->pool, ap->path, &dattr);
 	if (rc) {
-		fprintf(ap->errstream,
-			"duns_create_path() error: %s\n", strerror(rc));
+		fprintf(ap->errstream, "duns_create_path() error: %s\n", strerror(rc));
 		D_GOTO(err_rc, rc);
 	}
 
-	uuid_copy(ap->c_uuid, dattr.da_cuuid);
+	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 	daos_unparse_ctype(ap->type, type);
-	fprintf(ap->outstream,
-		"Successfully created container "DF_UUIDF" type %s\n",
-		DP_UUID(ap->c_uuid), type);
+	fprintf(ap->outstream, "Successfully created container %s type %s\n", ap->cont_str, type);
 
 	return 0;
 
@@ -1771,7 +1745,7 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	cont_type = prop->dpp_entries[0].dpe_val;
 	daos_prop_free(prop);
 
-	printf("Pool UUID:\t"DF_UUIDF"\n", DP_UUID(ap->p_uuid));
+	printf("Pool UUID:\t%s\n", ap->pool_str);
 	printf("Container UUID:\t"DF_UUIDF"\n", DP_UUID(cont_info.ci_uuid));
 	printf("Number of snapshots: %i\n", (int)cont_info.ci_nsnapshots);
 	printf("Latest Persistent Snapshot: %i\n",
@@ -1794,23 +1768,20 @@ cont_query_hdlr(struct cmd_args_s *ap)
 
 		rc = dfs_mount(ap->pool, ap->cont, O_RDONLY, &dfs);
 		if (rc) {
-			fprintf(ap->errstream, "failed to mount container "
-				DF_UUIDF": %s (%d)\n",
-				DP_UUID(ap->c_uuid), strerror(rc), rc);
+			fprintf(ap->errstream, "failed to mount container %s: %s (%d)\n",
+				ap->cont_str, strerror(rc), rc);
 			D_GOTO(err_out, rc = daos_errno2der(rc));
 		}
 
 		dfs_query(dfs, &attr);
 		daos_oclass_id2name(attr.da_oclass_id, oclass);
 		fprintf(ap->outstream, "Object Class:\t%s\n", oclass);
-		fprintf(ap->outstream,
-			"Chunk Size:\t%zu\n", attr.da_chunk_size);
+		fprintf(ap->outstream, "Chunk Size:\t%zu\n", attr.da_chunk_size);
 
 		rc = dfs_umount(dfs);
 		if (rc) {
-			fprintf(ap->errstream, "failed to unmount container "
-				DF_UUIDF": %s (%d)\n",
-				DP_UUID(ap->c_uuid), strerror(rc), rc);
+			fprintf(ap->errstream, "failed to unmount container %s: %s (%d)\n",
+				ap->cont_str, strerror(rc), rc);
 			D_GOTO(err_out, rc = daos_errno2der(rc));
 		}
 	}
@@ -1828,23 +1799,19 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 	if (ap->path) {
 		rc = duns_destroy_path(ap->pool, ap->path);
 		if (rc)
-			fprintf(ap->errstream,
-				"failed to unlink container path %s:"
-				"%s\n", ap->path, strerror(rc));
+			fprintf(ap->errstream, "failed to unlink container path %s: %s\n",
+				ap->path, strerror(rc));
 		else
-			fprintf(ap->outstream,
-				"Successfully destroyed path %s\n",
-				ap->path);
+			fprintf(ap->outstream, "Successfully destroyed path %s\n", ap->path);
 		return rc;
 	}
 
-	rc = daos_cont_destroy(ap->pool, ap->c_uuid, ap->force, NULL);
+	rc = daos_cont_destroy(ap->pool, ap->cont_str, ap->force, NULL);
 	if (rc != 0)
-		fprintf(ap->errstream, "failed to destroy container "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to destroy container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 	else
-		fprintf(ap->outstream, "Successfully destroyed container "
-				DF_UUIDF"\n", DP_UUID(ap->c_uuid));
+		fprintf(ap->outstream, "Successfully destroyed container %s\n", ap->cont_str);
 
 	return rc;
 }
@@ -2934,8 +2901,7 @@ dm_connect(struct cmd_args_s *ap,
 			uuid_copy(dattr.da_cuuid, ca->dst_c_uuid);
 			dattr.da_type = ca->cont_layout;
 			dattr.da_props = props;
-			rc = duns_create_path(ca->dst_poh, path,
-					      &dattr);
+			rc = duns_create_path(ca->dst_poh, path, &dattr);
 			if (rc != 0) {
 				fprintf(ap->errstream, "provide a destination "
 					"pool or UNS path of the form:\n\t"
@@ -3110,8 +3076,12 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 
 	rc = duns_resolve_path(path, &dattr);
 	if (rc == 0) {
-		uuid_copy(*p_uuid, dattr.da_puuid);
-		uuid_copy(*c_uuid, dattr.da_cuuid);
+		rc = uuid_parse(dattr.da_pool, *p_uuid);
+		if (rc != 0)
+			D_GOTO(out, rc = EINVAL);
+		rc = uuid_parse(dattr.da_cont, *c_uuid);
+		if (rc != 0)
+			D_GOTO(out, rc = EINVAL);
 		if (dattr.da_rel_path == NULL) {
 			strncpy(path, "/", path_len);
 		} else {
@@ -3887,8 +3857,8 @@ cont_get_acl_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_get_acl(ap->cont, &prop, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to get ACL for container "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			"failed to get ACL for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 	} else {
 		rc = print_acl(ap, outstream, prop, ap->verbose);
 		if (rc == 0 && ap->outfile)
@@ -4015,8 +3985,8 @@ cont_overwrite_acl_hdlr(struct cmd_args_s *ap)
 	daos_acl_free(acl);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to overwrite ACL for container "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			"failed to overwrite ACL for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		return rc;
 	}
 
@@ -4076,9 +4046,8 @@ cont_update_acl_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_update_acl(ap->cont, acl, NULL);
 	daos_acl_free(acl);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to update ACL for container "
-			DF_UUIDF": %s (%d)\n", DP_UUID(ap->c_uuid),
-			d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to update ACL for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		return rc;
 	}
 
@@ -4121,9 +4090,8 @@ cont_delete_acl_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_delete_acl(ap->cont, type, name, NULL);
 	D_FREE(name);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to delete ACL for container "
-			DF_UUIDF": %s (%d)\n", DP_UUID(ap->c_uuid),
-			d_errdesc(rc), rc);
+		fprintf(ap->errstream, "failed to delete ACL for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		return rc;
 	}
 
@@ -4155,8 +4123,8 @@ cont_set_owner_hdlr(struct cmd_args_s *ap)
 	rc = daos_cont_set_owner(ap->cont, ap->user, ap->group, NULL);
 	if (rc != 0) {
 		fprintf(ap->errstream,
-			"failed to set owner for container "DF_UUIDF
-			": %s (%d)\n", DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
+			"failed to set owner for container %s: %s (%d)\n",
+			ap->cont_str, d_errdesc(rc), rc);
 		return rc;
 	}
 
@@ -4187,9 +4155,9 @@ cont_rollback_hdlr(struct cmd_args_s *ap)
 	}
 	rc = daos_cont_rollback(ap->cont, ap->epc, NULL);
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to roll back container "DF_UUIDF
-			" to snapshot "DF_U64": %s (%d)\n", DP_UUID(ap->c_uuid),
-			ap->epc, d_errdesc(rc), rc);
+		fprintf(ap->errstream,
+			"failed to roll back container %s to snapshot "DF_U64": %s (%d)\n",
+			ap->cont_str, ap->epc, d_errdesc(rc), rc);
 		return rc;
 	}
 
