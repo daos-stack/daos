@@ -444,7 +444,7 @@ reset:
 }
 
 int
-vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
+vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool gc)
 {
 	struct daos_lru_cache	*occ  = vos_obj_cache_current();
 	struct vos_container	*cont = vos_hdl2cont(coh);
@@ -467,7 +467,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 	if (rc)
 		goto out;
 
-	rc = vos_oi_delete(cont, obj->obj_id);
+	rc = vos_oi_delete(cont, obj->obj_id, gc);
 	if (rc)
 		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
 
@@ -477,6 +477,12 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 out:
 	vos_obj_release(occ, obj, true);
 	return rc;
+}
+
+int
+vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
+{
+	return vos_obj_delete_internal(coh, oid, true);
 }
 
 /* Delete a key in its parent tree.
@@ -580,7 +586,7 @@ out:
 static int
 key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 		 daos_key_t *key, int flags, daos_handle_t *sub_toh,
-		 daos_epoch_range_t *epr, struct vos_punch_record *punched,
+		 daos_epoch_range_t *epr, struct ilog_time_rec *punched,
 		 struct vos_ilog_info *info, struct vos_ts_set *ts_set)
 {
 	struct vos_krec_df	*krec = NULL;
@@ -604,7 +610,7 @@ key_ilog_prepare(struct vos_obj_iter *oiter, daos_handle_t toh, int key_type,
 	if (rc != 0)
 		goto fail;
 
-	if (punched && vos_epc_punched(punched->pr_epc, punched->pr_minor_epc,
+	if (punched && vos_epc_punched(punched->tr_epc, punched->tr_minor_epc,
 				       &info->ii_prior_punch))
 		*punched = info->ii_prior_punch;
 
@@ -724,8 +730,8 @@ key_iter_fetch_root(struct vos_obj_iter *oiter, vos_iter_type_t type,
 	if (rc != 0)
 		return rc;
 
-	if (vos_epc_punched(info->ii_punched.pr_epc,
-			    info->ii_punched.pr_minor_epc,
+	if (vos_epc_punched(info->ii_punched.tr_epc,
+			    info->ii_punched.tr_minor_epc,
 			    &oiter->it_ilog_info.ii_prior_punch))
 		info->ii_punched = oiter->it_ilog_info.ii_prior_punch;
 
@@ -778,6 +784,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 				  DP_RC(rc));
 		return rc;
 	}
+
 
 	if ((oiter->it_iter.it_type == VOS_ITER_AKEY) ||
 	    (oiter->it_akey.iov_buf == NULL)) /* dkey w/o akey as condition */
@@ -1269,8 +1276,8 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	filter.fr_epr.epr_lo = oiter->it_epr.epr_lo;
 	filter.fr_epr.epr_hi = oiter->it_iter.it_bound;
 	filter.fr_epoch = oiter->it_epr.epr_hi;
-	filter.fr_punch_epc = oiter->it_punched.pr_epc;
-	filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
+	filter.fr_punch_epc = oiter->it_punched.tr_epc;
+	filter.fr_punch_minor_epc = oiter->it_punched.tr_minor_epc;
 	options = recx_get_flags(oiter);
 	rc = evt_iter_prepare(rx_toh, options, &filter,
 			      &oiter->it_hdl);
@@ -1607,8 +1614,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		if (rc != 0)
 			goto failed;
 		goto success;
-	case VOS_ITER_AKEY:
 	case VOS_ITER_SINGLE:
+	case VOS_ITER_AKEY:
 		rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma,
 					vos_cont2hdl(obj->obj_cont),
 					vos_obj2pool(obj), &toh);
@@ -1634,8 +1641,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		filter.fr_epr.epr_lo = oiter->it_epr.epr_lo;
 		filter.fr_epr.epr_hi = oiter->it_iter.it_bound;
 		filter.fr_epoch = oiter->it_epr.epr_hi;
-		filter.fr_punch_epc = oiter->it_punched.pr_epc;
-		filter.fr_punch_minor_epc = oiter->it_punched.pr_minor_epc;
+		filter.fr_punch_epc = oiter->it_punched.tr_epc;
+		filter.fr_punch_minor_epc = oiter->it_punched.tr_minor_epc;
 		options = recx_get_flags(oiter);
 		rc = evt_iter_prepare(toh, options, &filter, &oiter->it_hdl);
 		break;
@@ -1806,10 +1813,11 @@ exit:
 }
 
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
+vos_obj_iter_aggregate(daos_handle_t ih, daos_epoch_t discard, const struct ilog_time_rec *update)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
+	daos_epoch_range_t	 epr;
 	struct umem_instance	*umm;
 	struct vos_krec_df	*krec;
 	struct vos_object	*obj;
@@ -1832,14 +1840,16 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 	krec = rbund.rb_krec;
 	umm = vos_obj2umm(oiter->it_obj);
 
+	epr.epr_lo = oiter->it_epr.epr_lo;
+	epr.epr_hi = discard == 0 ? oiter->it_epr.epr_hi : discard;
+
 	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog,
-				&oiter->it_epr, discard,
-				&oiter->it_punched, &oiter->it_ilog_info);
-
+				&epr, discard != 0, &oiter->it_punched, &oiter->it_ilog_info,
+				update);
 	if (rc == 1) {
 		/* Incarnation log is empty so delete the key */
 		reprobe = true;

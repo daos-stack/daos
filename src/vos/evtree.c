@@ -2494,8 +2494,11 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 			rc = evt_desc_log_status(tcx, rtmp.rc_epc, desc,
 						 intent);
 			/* Skip the unavailable record. */
-			if (rc == ALB_UNAVAILABLE)
+			if (rc == ALB_UNAVAILABLE) {
+				D_DEBUG(DB_TRACE, "Skipping unavailable record "DF_RECT"\n",
+					DP_RECT(&rtmp));
 				continue;
+			}
 
 			/* early check */
 			switch (find_opc) {
