@@ -7,7 +7,10 @@ package drpc
 
 import "unsafe"
 
-// #include <daos_prop.h>
+/*
+#include <daos_prop.h>
+#include <daos_pool.h>
+*/
 import "C"
 
 const (
@@ -48,6 +51,13 @@ const (
 	PoolSelfHealingAutoExclude = C.DAOS_SELF_HEAL_AUTO_EXCLUDE
 	// PoolSelfHealingAutoRebuild sets the self-healing strategy to auto-rebuild.
 	PoolSelfHealingAutoRebuild = C.DAOS_SELF_HEAL_AUTO_REBUILD
+)
+
+const (
+	// MediaTypeScm is the media type for SCM.
+	MediaTypeScm = C.DAOS_MEDIA_SCM
+	// MediaTypeNvme is the media type for NVMe.
+	MediaTypeNvme = C.DAOS_MEDIA_NVME
 )
 
 // LabelIsValid checks a label to verify that it meets length/content

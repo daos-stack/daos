@@ -230,10 +230,66 @@ related message will be shown on the leader console. For example:
 ```
 Rebuild [aborted] (pool 8799e471 ver=41, toberb_obj=75, rb_obj=75, rec= 11937, done 1 status 0 duration=10 secs)
 ```
-## Rebuilding with Checksums
-During a rebuild, the server being rebuilt will act as a DAOS Client in the
- sense that it will read the data and checksum from a replica server and verify
- the integrity of the data before it uses it for the rebuild. If corrupted data
- is detected, then the read will fail, and the replica server will be notified
- of the corruption. The rebuild will then attempt to use a different replica.
 
+## Rebuilding with Checksums
+
+During a rebuild, the server being rebuilt will act as a DAOS Client in the
+sense that it will read the data and checksum from a replica server and verify
+the integrity of the data before it uses it for the rebuild. If corrupted data
+is detected, then the read will fail, and the replica server will be notified of
+the corruption. The rebuild will then attempt to use a different replica.
+
+A checksum iov parameter is available for the object list and object fetch task
+API's. This is for rebuild to provide memory that the checksums can be packed
+into. Otherwise, rebuild would have to recalculate the checksums while writing
+to the local VOS instance. If insufficient memory is allocated in the buffer,
+the iov_len will be set to the required capacity and the checksums packed into
+the buffer is truncated.
+
+The following describes "touch points" of the life of a checksum for rebuild.
+The client task APIs and packing/unpacking info is included here because
+rebuild is the primary user of these APIs with checksums.
+
+### Rebuild Touch Points
+
+- migrate_fetch_update_(inline|single|bulk) - the rebuild/migrate functions that
+  write to vos locally must ensure that the checksum is also written. These must
+  use the csum iov param for fetch to get the checksum, then unpack the csums
+  into iod_csum.
+- obj_enum.c is relied on for enumerating the objects to be rebuilt. Because the
+  fetch_update functions will unpack the csums from fetch, it will also unpack
+  the csums for enum, so the unpacking process in obj_enum.c will simply copy
+  the csum_iov to the io (dss_enum_unpack_io) structure in
+  **enum_unpack_recxs()** and then deep copy to the mrone (migrate_one)
+  structure in **migrate_one_insert()**.
+
+### Client Task API Touch Points
+
+- **dc_obj_fetch_task_create**: sets csum iov to daos_obj_fetch_t args. These
+  args are set to the rw_cb_args.shard_args.api_args and accessed through an
+  accessor function (rw_args2csum_iov) in cli_shard.c so that rw_args_store_csum
+  can easily access it. This function, called from dc_rw_cb_csum_verify, will
+  pack the data checksums received from the server into the iov.
+- **dc_obj_list_obj_task_create**: sets csum iov to daos_obj_list_obj_t args.
+  args.csum is then copied to obj_enum_args.csum in dc_obj_shard_list(). On enum
+  callback (dc_enumerate_cb()) the packed csum buffer is copied from the rpc
+  args to obj_enum_args.csum (which points to the same buffer as the caller's)
+
+### Packing/unpacking checksums
+
+When checksums are packed (either for fetch or
+object list) only the data
+checksums are included. For object list, only checksums for data that is inlined
+is included. During a rebuild, if the data is not inlined, then the rebuild
+process will fetch the rest of the data and also get the checksums.
+
+- ci_serialize() - "packs" checksums by appending the struct to an iov and then
+  appending the checksum info buffer to the iov. This puts the actual checksum
+  just after the checksum structure that describes the checksum.
+- ci_cast() - "unpacks" the checksum and describing structure. It does this by
+  casting an iov's buffer to a dcs_csum_info struct and setting the csum_info's
+  checksum pointer to point to the memory just after the structure. It does not
+  copy anything, but really just "casts". To get all dcs_csum_infos, a caller
+  would cast the iov, copy the csum_info to a destination, then move to the next
+  csum_info(ci_move_next_iov) in the iov. Because this process modifies the iov
+  structure it is best to use a copy of the iov as a temp structure.

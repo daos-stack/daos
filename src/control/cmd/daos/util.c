@@ -53,53 +53,39 @@ resolve_duns_path(struct cmd_args_s *ap)
 			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
 			uuid_copy(ap->p_uuid, il_reply.fir_pool);
 			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+
+			/** set pool/cont label or uuid */
+			uuid_unparse(ap->p_uuid, ap->pool_str);
+			uuid_unparse(ap->c_uuid, ap->cont_str);
+
 			ap->oid = il_reply.fir_oid;
 			D_GOTO(out, rc);
 		}
 	}
 
 	if (rc) {
-		fprintf(ap->errstream, "could not resolve pool, container by "
-		"path: %d %s %s\n", rc, strerror(rc), ap->path);
+		fprintf(ap->errstream, "could not resolve pool, container by path %s: %s (%d)\n",
+			ap->path, strerror(rc), rc);
 		D_GOTO(out, rc);
 	}
 
 	ap->type = dattr.da_type;
 
 	/** set pool/cont label or uuid */
-	if (dattr.da_pool_label) {
-		D_STRNDUP(ap->pool_label, dattr.da_pool_label,
-			  DAOS_PROP_LABEL_MAX_LEN);
-		if (ap->pool_label == NULL)
-			D_GOTO(out, rc = ENOMEM);
-	} else {
-		uuid_copy(ap->p_uuid, dattr.da_puuid);
-	}
-
-	if (dattr.da_cont_label) {
-		D_STRNDUP(ap->cont_label, dattr.da_cont_label,
-			  DAOS_PROP_LABEL_MAX_LEN);
-		if (ap->cont_label == NULL)
-			D_GOTO(out, rc = ENOMEM);
-	} else {
-		uuid_copy(ap->c_uuid, dattr.da_cuuid);
-	}
+	snprintf(ap->pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 
 	if (ap->fs_op != -1) {
 		if (name) {
-			if (dattr.da_rel_path) {
-				D_ASPRINTF(ap->dfs_path, "%s/%s",
-					   dattr.da_rel_path, name);
-			} else {
-				D_ASPRINTF(ap->dfs_path, "/%s", name);
-			}
+			if (dattr.da_rel_path)
+				asprintf(&ap->dfs_path, "%s/%s", dattr.da_rel_path, name);
+			else
+				asprintf(&ap->dfs_path, "/%s", name);
 		} else {
-			if (dattr.da_rel_path) {
-				D_STRNDUP(ap->dfs_path,
-					  dattr.da_rel_path, PATH_MAX);
-			} else {
-				D_STRNDUP(ap->dfs_path, "/", 1);
-			}
+			if (dattr.da_rel_path)
+				ap->dfs_path = strndup(dattr.da_rel_path, PATH_MAX);
+			else
+				ap->dfs_path = strndup("/", 1);
 		}
 		if (ap->dfs_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
