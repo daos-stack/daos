@@ -440,6 +440,21 @@ void
 daos_prop_free(daos_prop_t *prop);
 
 /**
+ * Allocate a new property from a string buffer of property entries and values. That buffer has to
+ * be of the format:
+ * prop_entry_name1:value1;prop_entry_name2:value2;prop_entry_name3:value3;
+ * \a prop must be freed with daos_prop_free() to release allocated space.
+ * This supports properties that can be modified on container creation only:
+ * label, cksum, cksum_size, srv_cksum, dedup, dedup_threshold, compression, encryption, rf, ec_cell
+ *
+ * \param[in]	str	Serialized string of property entries and their values
+ * \param[in]	len	Serialized string length
+ * \param[out]	prop	Property that is created
+ */
+int
+daos_prop_alloc_and_set(const char *str, daos_size_t len, daos_prop_t **prop);
+
+/**
  * Merge a set of new DAOS properties into a set of existing DAOS properties.
  *
  * \param[in]	old_prop	Existing set of properties
