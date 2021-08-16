@@ -884,8 +884,6 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		return -DER_INVAL;
 	}
 
-	D_ASSERT(!lctx->ic_in_txn);
-
 	root = lctx->ic_root;
 
 	version = ilog_mag2ver(root->lr_magic);
@@ -1275,6 +1273,8 @@ struct agg_arg {
 	int32_t				 aa_prev;
 	int32_t				 aa_prior_punch;
 	daos_epoch_t			 aa_punched;
+	daos_epoch_t			 aa_max;
+	bool				 aa_max_is_punch;
 	bool				 aa_discard;
 	uint16_t			 aa_punched_minor;
 };
@@ -1404,6 +1404,37 @@ done:
 	return rc;
 }
 
+static inline void
+set_update_max_entry(struct agg_arg *agg_arg, const struct ilog_entry *entry)
+{
+	if (entry->ie_id.id_epoch <= agg_arg->aa_max)
+		return;
+
+	if (ilog_is_punch(entry)) {
+		/** Last entry is a punch, if it holds, we will not need to
+		 *  insert any ilog
+		 */
+		agg_arg->aa_max_is_punch = true;
+	} else {
+		agg_arg->aa_max_is_punch = false;
+	}
+
+	agg_arg->aa_max = entry->ie_id.id_epoch;
+}
+
+static inline void
+set_update_max(struct agg_arg *agg_arg, const struct ilog_entries *entries, int32_t idx)
+{
+	struct ilog_entry	entry;
+
+	if (idx < 0)
+		return;
+
+	ilog_cache_entry(entries, &entry, idx);
+
+	set_update_max_entry(agg_arg, &entry);
+}
+
 static int
 collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache, struct ilog_priv *priv,
 	      int removed)
@@ -1479,11 +1510,12 @@ int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
 	       bool discard, daos_epoch_t punched_major, uint16_t punched_minor,
-	       struct ilog_entries *entries)
+	       struct ilog_entries *entries, const struct ilog_time_rec *update)
 {
 	struct ilog_priv	*priv = ilog_ent2priv(entries);
 	struct ilog_context	*lctx;
 	struct ilog_entry	 entry;
+	struct ilog_entry	 tmp;
 	struct agg_arg		 agg_arg;
 	struct ilog_root	*root;
 	struct ilog_array_cache	 cache;
@@ -1492,11 +1524,13 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 	int			 removed = 0;
 
 	D_ASSERT(epr != NULL);
-	D_ASSERT(punched_major <= epr->epr_hi);
-
 	D_DEBUG(DB_TRACE, "%s incarnation log: epr: "DF_X64"-"DF_X64" punched="
 		DF_X64".%d\n", discard ? "Discard" : "Aggregate", epr->epr_lo,
 		epr->epr_hi, punched_major, punched_minor);
+
+	D_ASSERT(punched_major <= epr->epr_hi);
+
+	lctx = &priv->ip_lctx;
 
 	/* This can potentially be optimized but using ilog_fetch gets some code
 	 * reuse.
@@ -1507,8 +1541,6 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 		/* Log is empty */
 		return 1;
 	}
-
-	lctx = &priv->ip_lctx;
 
 	root = lctx->ic_root;
 
@@ -1524,6 +1556,11 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			return -DER_NOMEM;
 	}
 
+	agg_arg.aa_max = 0;
+	/** If the max is a punch, nothing to do.  This is true if we don't find any
+	 *  updates so set the default to true
+	 */
+	agg_arg.aa_max_is_punch = true;
 	agg_arg.aa_epr = epr;
 	agg_arg.aa_prev = -1;
 	agg_arg.aa_prior_punch = -1;
@@ -1543,11 +1580,13 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			agg_arg.aa_prev = entry.ie_idx;
 			break;
 		case AGG_RC_REMOVE_PREV:
+			set_update_max(&agg_arg, entries, agg_arg.aa_prev);
 			priv->ip_removals[agg_arg.aa_prev] = true;
 			removed++;
 			agg_arg.aa_prev = agg_arg.aa_prior_punch;
 			/* Fall through */
 		case AGG_RC_REMOVE:
+			set_update_max_entry(&agg_arg, &entry);
 			priv->ip_removals[entry.ie_idx] = true;
 			removed++;
 			break;
@@ -1563,13 +1602,29 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 collapse:
 	rc = collapse_tree(lctx, &cache, priv, removed);
 
+	if (rc == 0 && update != NULL && update->tr_epc != 0 && !agg_arg.aa_max_is_punch) {
+		daos_epoch_range_t	range	= {update->tr_epc, update->tr_epc};
+		struct ilog_id		id = {
+			.id_tx_id = 0,
+			.id_epoch = update->tr_epc,
+			.id_update_minor_eph = update->tr_minor_epc,
+			.id_punch_minor_eph = 0,
+		};
+		D_DEBUG(DB_TRACE, "INSERT ILOG ENTRY FOR update = "DF_X64"\n", update->tr_epc);
+
+		/* Were moved a creation entry, so need to add the new one */
+		lctx->ic_cbs.dc_log_add_cb = NULL;
+		rc = ilog_modify(ilog_lctx2hdl(lctx), &id, &range, ILOG_OP_UPDATE);
+		if (rc != 0)
+			goto done;
+	}
 	empty = ilog_empty(root);
 done:
 	rc = ilog_tx_end(lctx, rc);
 	D_DEBUG(DB_TRACE, "%s in incarnation log epr:"DF_X64"-"DF_X64
-		" status: "DF_RC", removed %d entries\n",
+		" status: "DF_RC", removed %d entries, %s\n",
 		discard ? "Discard" : "Aggregation", epr->epr_lo,
-		epr->epr_hi, DP_RC(rc), removed);
+		epr->epr_hi, DP_RC(rc), removed, empty ? "empty" : "not empty");
 	if (rc)
 		return rc;
 

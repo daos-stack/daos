@@ -203,9 +203,12 @@ vos_oi_punch(struct vos_container *cont, daos_unit_oid_t oid,
 	     struct vos_obj_df *obj, struct vos_ilog_info *info,
 	     struct vos_ts_set *ts_set);
 
+/** delete object */
+int
+vos_obj_delete_internal(daos_handle_t coh, daos_unit_oid_t oid, bool gc);
 
 /** delete an object from OI table */
 int
-vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid);
+vos_oi_delete(struct vos_container *cont, daos_unit_oid_t oid, bool gc);
 
 #endif
