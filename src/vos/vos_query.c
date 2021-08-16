@@ -31,11 +31,13 @@ struct open_query {
 	struct btr_root		*qt_akey_root;
 	daos_handle_t		 qt_akey_toh;
 	struct evt_root		*qt_recx_root;
-	uint32_t		 qt_flags;
 	struct vos_pool		*qt_pool;
 	daos_handle_t		 qt_coh;
 	daos_anchor_t		 qt_dkey_anchor;
 	daos_anchor_t		 qt_akey_anchor;
+	uint64_t		 qt_stripe_size;
+	uint32_t		 qt_flags;
+	unsigned int		 qt_cell_size;
 };
 
 static int
@@ -147,7 +149,8 @@ out:
 }
 
 static int
-query_recx(struct open_query *query, daos_recx_t *recx)
+_query_recx(struct open_query *query, daos_recx_t *recx, struct evt_extent *filter_extent,
+	    int opc)
 {
 	struct evt_desc_cbs	cbs;
 	struct evt_entry	entry;
@@ -156,11 +159,10 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 	struct evt_filter	filter = {0};
 	int			rc;
 	int			close_rc;
-	int			opc;
 	uint32_t		inob;
-	bool			re_itered = false;
+	uint64_t		start = 0;
+	uint64_t		end = 0;
 	bool			exist = false;
-	bool			for_ec_recx;
 
 	recx->rx_idx = 0;
 	recx->rx_nr = 0;
@@ -170,23 +172,16 @@ query_recx(struct open_query *query, daos_recx_t *recx)
 	if (rc != 0)
 		return rc;
 
-	opc = EVT_ITER_EMBEDDED | EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES;
 	if (query->qt_flags & VOS_GET_MAX)
 		opc |= EVT_ITER_REVERSE;
 
-	for_ec_recx = (query->qt_flags & VOS_GET_RECX_EC);
-	filter.fr_ex.ex_lo = 0;
-	if (for_ec_recx)
-		filter.fr_ex.ex_hi = DAOS_EC_PARITY_BIT - 1;
-	else
-		filter.fr_ex.ex_hi = ~(uint64_t)0;
+	filter.fr_ex = *filter_extent;
 	filter.fr_punch_epc = query->qt_punch.pr_epc;
 	filter.fr_punch_minor_epc = query->qt_punch.pr_minor_epc;
 	filter.fr_epr.epr_hi = query->qt_bound;
 	filter.fr_epr.epr_lo = query->qt_epr.epr_lo;
 	filter.fr_epoch = query->qt_epr.epr_hi;
 
-re_iter:
 	rc = evt_iter_prepare(toh, opc, &filter, &ih);
 	if (rc != 0)
 		goto out;
@@ -203,9 +198,46 @@ re_iter:
 	if (rc != 0)
 		goto fini;
 
-	recx->rx_idx = entry.en_sel_ext.ex_lo;
-	recx->rx_nr = entry.en_sel_ext.ex_hi - entry.en_sel_ext.ex_lo + 1;
+	if (opc & EVT_ITER_SKIP_HOLES) {
+		if (entry.en_visibility & EVT_VISIBLE) {
+			recx->rx_idx = entry.en_sel_ext.ex_lo;
+			recx->rx_nr = entry.en_sel_ext.ex_hi - entry.en_sel_ext.ex_lo + 1;
+		} else {
+			rc = -DER_NONEXIST;
+		}
+		D_GOTO(fini, rc);
+	}
+
+	/* The following only supports MAX recx query at the moment */
+	if (!(query->qt_flags & VOS_GET_MAX))
+		D_GOTO(fini, rc = -DER_INVAL);
+
+	/* Check if these extents can be merged */
+	D_ASSERT(bio_addr_is_hole(&entry.en_addr));
+	end = entry.en_sel_ext.ex_hi;
+	start = entry.en_sel_ext.ex_lo;
+	while (1) {
+		rc = evt_iter_next(ih);
+		if (rc)
+			break;
+
+		rc = evt_iter_fetch(ih, &inob, &entry, NULL);
+		if (rc != 0)
+			break;
+
+		D_ASSERT(bio_addr_is_hole(&entry.en_addr));
+		if (entry.en_sel_ext.ex_hi == start - 1)
+			start = entry.en_sel_ext.ex_lo;
+		else
+			break;
+	}
+
+	recx->rx_idx = start;
+	recx->rx_nr = end - start + 1;
+
 fini:
+	D_DEBUG(DB_TRACE, "query recx "DF_U64"/"DF_U64" : "DF_RC"\n", recx->rx_idx,
+		recx->rx_nr, DP_RC(rc));
 	if (rc == 0)
 		exist = true;
 	if (rc == -DER_NONEXIST)
@@ -213,21 +245,119 @@ fini:
 	close_rc = evt_iter_finish(ih);
 	if (rc == 0)
 		rc = close_rc;
-	if (rc == 0 && !re_itered && for_ec_recx) {
-		re_itered = true;
-		filter.fr_ex.ex_lo = DAOS_EC_PARITY_BIT;
-		filter.fr_ex.ex_hi = ~(uint64_t)0;
-		recx++;
-		recx->rx_idx = 0;
-		recx->rx_nr = 0;
-		goto re_iter;
-	}
 out:
 	close_rc = evt_close(toh);
 	if (rc == 0 && !exist)
 		rc = -DER_NONEXIST;
 	if (rc == 0)
 		rc = close_rc;
+
+	return rc;
+}
+
+static int
+query_normal_recx(struct open_query *query, daos_recx_t *recx)
+{
+	struct evt_extent filter_ex;
+	int		  opc;
+
+	memset(recx, 0, sizeof(*recx));
+	/* query visible last recx */
+	opc = EVT_ITER_EMBEDDED | EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES;
+	if (query->qt_flags & VOS_GET_MAX)
+		opc |= EVT_ITER_REVERSE;
+
+	filter_ex.ex_lo = 0;
+	filter_ex.ex_hi = ~(uint64_t)0;
+
+	return _query_recx(query, recx, &filter_ex, opc);
+}
+
+static int
+query_ec_normal_recx(struct open_query *query, daos_recx_t *recx,
+		     struct evt_extent *filter_ex, bool skip_hole)
+{
+	struct evt_extent tmp_ex;
+	int		  opc;
+
+	memset(recx, 0, sizeof(*recx));
+	/* query visible last recx */
+	opc = EVT_ITER_EMBEDDED | EVT_ITER_VISIBLE;
+	if (query->qt_flags & VOS_GET_MAX)
+		opc |= EVT_ITER_REVERSE;
+
+	if (skip_hole)
+		opc |= EVT_ITER_SKIP_HOLES;
+	else /* otherwise skip DATA */
+		opc |= EVT_ITER_SKIP_DATA;
+
+	if (filter_ex) {
+		tmp_ex = *filter_ex;
+	} else {
+		tmp_ex.ex_lo = 0;
+		tmp_ex.ex_hi = DAOS_EC_PARITY_BIT - 1;
+	}
+	D_DEBUG(DB_TRACE, "search opc %x ["DF_U64"-"DF_U64"]\n", opc,
+		tmp_ex.ex_lo, tmp_ex.ex_hi);
+	return _query_recx(query, recx, &tmp_ex, opc);
+}
+
+static int
+query_ec_parity_recx(struct open_query *query, daos_recx_t *recx)
+{
+	struct evt_extent filter_ex;
+	int		  opc;
+
+	memset(recx, 0, sizeof(*recx));
+	/* query visible last recx */
+	opc = EVT_ITER_EMBEDDED | EVT_ITER_VISIBLE | EVT_ITER_SKIP_HOLES;
+	if (query->qt_flags & VOS_GET_MAX)
+		opc |= EVT_ITER_REVERSE;
+
+	filter_ex.ex_lo = DAOS_EC_PARITY_BIT;
+	filter_ex.ex_hi = ~(uint64_t)0;
+
+	return _query_recx(query, recx, &filter_ex, opc);
+}
+
+static int
+query_recx(struct open_query *query, daos_recx_t *recxs)
+{
+	struct evt_extent filter_ex;
+	int		  rc;
+
+	if (!(query->qt_flags & VOS_GET_RECX_EC))
+		return query_normal_recx(query, &recxs[0]);
+
+	/* visible recxs */
+	rc = query_ec_normal_recx(query, &recxs[0], NULL, true);
+	if (rc && rc != -DER_NONEXIST)
+		return rc;
+
+	/* visible parity recxs */
+	rc = query_ec_parity_recx(query, &recxs[1]);
+	if (rc) {
+		if (rc == -DER_NONEXIST)
+			rc = 0;
+		return rc;
+	}
+
+	/* possible punched recxs within this parity recx */
+	filter_ex.ex_lo = recxs[1].rx_idx;
+	D_ASSERT((filter_ex.ex_lo & DAOS_EC_PARITY_BIT) != 0);
+	filter_ex.ex_lo &= ~DAOS_EC_PARITY_BIT;
+	D_ASSERT(filter_ex.ex_lo % query->qt_cell_size == 0);
+	filter_ex.ex_hi = (((filter_ex.ex_lo + recxs[1].rx_nr) / query->qt_cell_size) *
+			   query->qt_stripe_size);
+	filter_ex.ex_lo = ((filter_ex.ex_lo / query->qt_cell_size) *
+			   query->qt_stripe_size);
+
+	rc = query_ec_normal_recx(query, &recxs[2], &filter_ex, false);
+	if (rc == -DER_NONEXIST)
+		rc = 0;
+
+	D_DEBUG(DB_TRACE, "get punched recxs "DF_U64"/"DF_U64"\n", recxs[2].rx_idx,
+		recxs[2].rx_nr);
 
 	return rc;
 }
@@ -315,7 +445,8 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx, struct dtx_handle *dth)
+		  daos_recx_t *recx, unsigned int cell_size, uint64_t stripe_size,
+		  struct dtx_handle *dth)
 {
 	struct vos_container	*cont;
 	struct vos_object	*obj = NULL;
@@ -439,6 +570,8 @@ vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 	query->qt_dkey_root  = &obj->obj_df->vo_tree;
 	query->qt_coh	    = coh;
 	query->qt_pool	    = vos_obj2pool(obj);
+	query->qt_cell_size = cell_size;
+	query->qt_stripe_size = stripe_size;
 
 	/** We may read a dkey/akey that has no valid akey/recx and will need to
 	 *  reset the timestamp cache state to cache the new dkey/akey
