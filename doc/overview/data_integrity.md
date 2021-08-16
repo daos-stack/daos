@@ -1,67 +1,38 @@
 # Data Integrity
 
-Arguably, one of the worst things a data storage system can do is to return
-incorrect data without the requester knowing. While each component in the
-system (network layer, storage devices) may offer protection against silent
-data corruption, DAOS provides end-to-end data integrity using checksums to
-better ensure that user data is not corrupted silently.
+DAOS uses checksums internally to discover silent data corruption. While each
+component in a system (network layer, storage devices) may offer protection
+against silent data corruption, DAOS provides end-to-end data integrity to
+better protect user data. If silent data corruption is detected, DAOS will
+attempt to recover the corrupted data using data redundancy mechanisms
+(Replication or Erasure Code).
 
-For DAOS, end-to-end means that the client will calculate and verify checksums,
-providing protection for data through the entire I/O stack. During a write or
-update, the DAOS Client library (libdaos.so) calculates a checksum and appends
-it to the RPC message before transferred over the network.
-Depending on the configuration, the DAOS Server may or may not calculate checksums
-to verify the data on receipt. On a fetch, the DAOS Server will send a known
-good checksum with the requested data to the DAOS Client, which will calculate
-checksums on the data received and verify.
+## End-to-end Data Integrity
 
-## Requirements
+In simple terms, end-to-end means that the DAOS Client library will calculate a
+checksum for data that is being sent to the DAOS Server. The DAOS Server will
+store the checksum and return it upon data retrieval. Then the client verifies
+the data by calculating a new checksum and comparing to the checksum received
+from the server. There are variations on this approach depending on the type of
+data being protected, but the following diagram shows the basic checksum flow.
+![Basic Checksum Flow](../graph/data_integrity/basic_checksum_flow.png)
 
-### Key Requirements
+- [ ] Performance Impact
+- [ ] Break up into Overview, Developer Guide, User Guide
 
-There are two key requirements that DAOS will support.
+# Configuring
 
-1. Detect silent data corruption - Corruption will be detected on the
-   distribution and attribute keys and records within a DAOS object. At a minimum,
-   when corruption is detected, an error will be reported.
-1. Correct data corruption - When data corruption is detected, an attempt will
-   be made to recover the data using data redundancy mechanisms.
-
-### Supportive/Additional Requirements
-
-Additionally, DAOS will support:
-
-1. End to End Data Integrity as a Quality of Service Attribute - Container
-   properties are used to enable/disable the use of checksums for data integrity
-   as well as define specific attributes of data integrity feature.  Refer to
-   [Data Integrity Readme](https://daos-stack.github.io/user/container/#data-integrity)
-   for details on configuring a container with checksums enabled.
-
-1. Minimize Performance Impact - When there is no data corruption, the End to
-   End Data Integrity feature should have minimal performance impacted. If data
-   corruption is detected, performance can be impacted to correct the data.
-   Work is ongoing to minimize performance impact.
-1. Inject Errors - The ability to corrupt data within a specific record, key,
-   or checksum will be necessary for testing purposes. Fault injection is used to
-   simulate corruption over the network and on disk. The `DAOS_CSUM_CORRUPT_*`
-   flags used for data corruption are defined in `src/include/daos/common.h`.
-1. Logging - When data corruption is detected, error logs are captured in
-   the client and server logs.
-
-Features not yet supported:
-
-1. Event Logging - When silent data corruption is discovered, an event should
-   be logged in such a way that it can be retrieved with other system health and
-   diagnostic information.
-1. Proactive background service task - A background task on
-   the server which scans for and detects (audits checksums) silent data
-   corruption and corrects.
+Data integrity is configured for each container.
+See [Storage Model](./storage.md) for more information about how data is
+organized in DAOS. See the Data Integrity in
+the [Container User Guide](../user/container.md#data-integrity) for details on
+how to setup a container with data integrity.
 
 # Keys and Value Objects
+
 Because DAOS is a key/value store, the data for both keys and values is
-protected, however, the approach for both is slightly different. For the two
-different value types, single and array, the approach is also slightly
-different.
+protected, however, the approach is slightly different. For the two different
+value types, single and array, the approach is also slightly different.
 
 ## Keys
 On an update and fetch, the client calculates a checksum for the data used
@@ -147,8 +118,9 @@ The gray boxes around the extents represent the chunks.
 
 ![](../graph/data_integrity/array_with_chunks.png)
 
-(See [Object Layer](https://github.com/daos-stack/daos/blob/master/src/object/README.md) for more details about the
-checksum process on object update and fetch)
+(
+See [Object Layer](https://github.com/daos-stack/daos/blob/master/src/object/README.md)
+for more details about the checksum process on object update and fetch)
 
 # Checksum calculations
 The actual checksum calculations are done by the
@@ -189,86 +161,6 @@ export DAOS_CSUM_TEST_ALL_TYPE=1
 ./daos_server -i --csum_type crc64
 ```
 
-# Life of a checksum (WIP)
-## Rebuild
-In order for rebuild/migrate process to get checksums so it doesn't have to
-recalculate them, the object list and object fetch task api's provide a checksum
-iov parameter. If memory is allocated for the iov, then the daos client will
-pack the checksums into the it. If insufficient memory is allocated in the
-buffer, the iov_len will be set to the required capacity and the checksums
-packed into the buffer is truncated.
-
-### Client Task API Touch Points
-- **dc_obj_fetch_task_create**: sets csum iov to daos_obj_fetch_t args. These
-  args are set to the rw_cb_args.shard_args.api_args and accessed through an
-  accessor function (rw_args2csum_iov) in cli_shard.c so that rw_args_store_csum
-  can easily access it. This function, called from dc_rw_cb_csum_verify, will
-  pack the data checksums received from the server into the iov.
-- **dc_obj_list_obj_task_create**: sets csum iov to daos_obj_list_obj_t args.
-  args.csum is then copied to obj_enum_args.csum in dc_obj_shard_list(). On enum
-  callback (dc_enumerate_cb()) the packed csum buffer is copied from the rpc
-  args to obj_enum_args.csum (which points to the same buffer as the caller's)
-
-### Rebuild Touch Points
-- migrate_fetch_update_(inline|single|bulk) - the rebuild/migrate functions that
-  write to vos locally must ensure that the checksum is also written. These must
-  use the csum iov param for fetch to get the checksum, then unpack the csums
-  into iod_csum.
-- obj_enum.c is relied on for enumerating the objects to be rebuilt. Because the
-  fetch_update functions will unpack the csums from fetch, it will also unpack
-  the csums for enum, so the unpacking process in obj_enum.c will simply copy
-  the csum_iov to the io (dss_enum_unpack_io) structure in
-  **enum_unpack_recxs()** and then deep copy to the mrone (migrate_one)
-  structure in **migrate_one_insert()**.
-
-### Packing/unpacking checksums
-When checksums are packed (either for fetch or object list) only the data
-checksums are included. For object list, only checksums for data that is inlined
-is included. During a rebuild, if the data is not inlined, then the rebuild
-process will fetch the rest of the data and also get the checksums.
-
-- ci_serialize() - "packs" checksums by appending the struct to an iov and then
-  appending the checksum info buffer to the iov. This puts the actual checksum
-  just after the checksum structure that describes the checksum.
-- ci_cast() - "unpacks" the checksum and describing structure. It does this by
-  casting an iov's buffer to a dcs_csum_info struct and setting the csum_info's
-  checksum pointer to point to the memory just after the structure. It does not
-  copy anything, but really just "casts". To get all dcs_csum_infos, a caller
-  would cast the iov, copy the csum_info to a destination, then move to the next
-  csum_info(ci_move_next_iov) in the iov. Because this process modifies the iov
-  structure it is best to use a copy of the iov as a temp structure.
-
-## VOS
-- akey_update_begin - determines how much extra space needs to be allocated in
-  SCM to account for the checksum
-### Arrays
-- evt_root_activate - evtree root is activated. If has a csum them the root csum
-  properties are set (csum_len, csum_type, csum_chunk_size)
-- *evt_desc_csum_fill* - if root was activated with a punched record then it
-  won't have had the csum fields set correctly so set them here. Main purpose is
-  to copy the csum to the end of persistent evt record (evt_desc). Enough SCM
-  should have been reserved in akey_update_begin.
-- *evt_entry_csum_fill* - Copy the csum from the persistent memory to the
-  evt_entry returned. Also copy the csum fields from the evtree root to complete
-  the csum_info structure in the evt_entry.
-- akey_fetch_recx - checksums are saved to the ioc for each found extent. Will
-  be used to be added to to the result later.
-
-### Update/Fetch (copied from vos/README.md)
-- SV Update: vos_update_end -> akey_update_single -> svt_rec_store
-- Sv Fetch: vos_fetch_begin -> akey_fetch_single -> svt_rec_load
-- EV Update: vos_update_end -> akey_update_recx -> evt_insert
-- EV Fetch: vos_fetch_begin -> akey_fetch_recx -> evt_fill_entry
-
-## Enumeration
-For enumeration the csums for the keys and values are packed into an iov
-dedicated to csums.
-- fill_key_csum - Checksum is calcuated for the key and packed into the iov
-- fill_data_csum - pack/serialize the csum_info structure into the iov.
-
-## Aggregation
-- srv_csum_recalc.c - the checksum verification and calculations occur here
-
 ---
 
 # Checksum Scrubbing (In Development)
@@ -294,13 +186,13 @@ detected. See [Corrective Actions](#corrective-actions)
 - Per Pool ULT (I/O xstream) that will iterate containers. If checksums and
   scrubber is enabled then iterate the object tree. If a record value (SV or
   array) is not marked corrupted then scan.
-    - Fetch the data.
-    - Create new ULTs (helper xstream) to calculate checksum for data
-    - Compare calculated checksum with stored checksum.
-    - After every checksum is calculated, determine if need to
-      [sleep or yield](#sleep-or-yield).
-    - If checksums don't match confirm record is still there (not deleted by
-      aggregation) then update record as corrupted
+  - Fetch the data.
+  - Create new ULTs (helper xstream) to calculate checksum for data
+  - Compare calculated checksum with stored checksum.
+  - After every checksum is calculated, determine if need to
+    [sleep or yield](#sleep-or-yield).
+  - If checksums don't match confirm record is still there (not deleted by
+    aggregation) then update record as corrupted
 - After each object scanned yield to allow the server scheduler to reschedule
   the next appropriate I/O.
 
@@ -341,23 +233,23 @@ also be able to update them. When updated, they should be active right away.
 - **Pool Scrubber Schedule** - How the scrubber will run at the pool
   level. The  container configuration can disable scrubbing for the
   container, but it cannot alter the type of schedule.
-    - **OFF**
-    - **Run & Wait** - Will run the scrubber to completion, yielding
-      after consuming configured "credits". Then, if completed before
-      configured frequency, will sleep until it's time to start again.
-    - **Continuous** - Will run the scanner, sleeping in between
-      object scrubs so that the duration of the scrubber takes whole
-      frequency time and will start again as soon as it completes. Knowing
-      how many objects are in the system is required for this approach to
-      work. The scrubber will use the previous scrubber count of objects as
-      best guess for current.
-    - **Run Once** - Run the scrubber once then turn off. Useful for  better
-      control by external scripts to control the schedule. Will still yield
-      after consuming "credits".
-    - **Run Once Fast** - Run the scrubber once, without yielding,
-      then turn off. Useful for better control by external scripts to
-      control the schedule. Maybe want to get it done really fast and don't
-      care about I/O at this time.
+  - **OFF**
+  - **Run & Wait** - Will run the scrubber to completion, yielding
+    after consuming configured "credits". Then, if completed before
+    configured frequency, will sleep until it's time to start again.
+  - **Continuous** - Will run the scanner, sleeping in between
+    object scrubs so that the duration of the scrubber takes whole
+    frequency time and will start again as soon as it completes. Knowing
+    how many objects are in the system is required for this approach to
+    work. The scrubber will use the previous scrubber count of objects as
+    best guess for current.
+  - **Run Once** - Run the scrubber once then turn off. Useful for  better
+    control by external scripts to control the schedule. Will still yield
+    after consuming "credits".
+  - **Run Once Fast** - Run the scrubber once, without yielding,
+    then turn off. Useful for better control by external scripts to
+    control the schedule. Maybe want to get it done really fast and don't
+    care about I/O at this time.
 - **Pool Scrubber Frequency** - How frequently the scrubber should run in
   number of seconds. If a scan takes longer than frequency, it would start
   again as soon as the previous scan completes.

@@ -619,6 +619,28 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 	return 0;
 }
 
+/* TODO: replace all rsvc_complete_rpc() calls in this file with pool_rsvc_complete_rpc() */
+
+/*
+ * Returns:
+ *
+ *   RSVC_CLIENT_RECHOOSE	Instructs caller to retry RPC starting from rsvc_client_choose()
+ *   RSVC_CLIENT_PROCEED	OK; proceed to process the reply
+ */
+static int
+pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
+			      int rc_crt, struct pool_op_out *out)
+{
+	int rc;
+
+	rc = rsvc_client_complete_rpc(client, ep, rc_crt, out->po_rc, &out->po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE ||
+	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->po_rc))) {
+		return RSVC_CLIENT_RECHOOSE;
+	}
+	return RSVC_CLIENT_PROCEED;
+}
+
 /**
  * Create a (combined) pool(/container) service. This method shall be called on
  * a single storage node in the pool. "target_uuids" shall be an array of the
@@ -2199,8 +2221,11 @@ ds_pool_connect_handler(crt_rpc_t *rpc)
 
 	rc = pool_connect_iv_dist(svc, in->pci_op.pi_hdl, in->pci_flags,
 				  sec_capas, &in->pci_cred);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC))
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_CONNECT_FAIL_CORPC)) {
+		D_DEBUG(DF_DSMS, DF_UUID": fault injected: DAOS_POOL_CONNECT_FAIL_CORPC\n",
+			DP_UUID(in->pci_op.pi_uuid));
 		rc = -DER_TIMEDOUT;
+	}
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed to connect to targets: "DF_RC"\n",
 			DP_UUID(in->pci_op.pi_uuid), DP_RC(rc));
@@ -2271,8 +2296,11 @@ pool_disconnect_bcast(crt_context_t ctx, struct pool_svc *svc,
 	in->tdi_hdls.ca_arrays = pool_hdls;
 	in->tdi_hdls.ca_count = n_pool_hdls;
 	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DISCONNECT_FAIL_CORPC))
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_DISCONNECT_FAIL_CORPC)) {
+		D_DEBUG(DF_DSMS, DF_UUID": fault injected: DAOS_POOL_DISCONNECT_FAIL_CORPC\n",
+			DP_UUID(svc->ps_uuid));
 		rc = -DER_TIMEDOUT;
+	}
 	if (rc != 0)
 		D_GOTO(out_rpc, rc);
 
@@ -2426,8 +2454,11 @@ pool_space_query_bcast(crt_context_t ctx, struct pool_svc *svc, uuid_t pool_hdl,
 	uuid_copy(in->tqi_op.pi_uuid, svc->ps_uuid);
 	uuid_copy(in->tqi_op.pi_hdl, pool_hdl);
 	rc = dss_rpc_send(rpc);
-	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC))
+	if (rc == 0 && DAOS_FAIL_CHECK(DAOS_POOL_QUERY_FAIL_CORPC)) {
+		D_DEBUG(DF_DSMS, DF_UUID": fault injected: DAOS_POOL_QUERY_FAIL_CORPC\n",
+			DP_UUID(svc->ps_uuid));
 		rc = -DER_TIMEDOUT;
+	}
 	if (rc != 0)
 		goto out_rpc;
 
@@ -3140,9 +3171,7 @@ realloc:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->pqo_op.po_rc,
-				      &out->pqo_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pqo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		map_bulk_destroy(in->pqi_map_bulk, map_buf);
 		crt_req_decref(rpc);

@@ -51,7 +51,7 @@ struct pool_iv_map {
 
 /* The structure to serialize the prop for IV */
 struct pool_iv_prop {
-	char		pip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char		pip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		pip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		pip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	uint64_t	pip_space_rb;
