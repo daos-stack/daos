@@ -22,8 +22,8 @@ type (
 		Reset(storage.BdevPrepareRequest) error
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
-		WriteNvmeConfig(storage.BdevWriteConfigRequest) error
 		UpdateFirmware(pciAddr string, path string, slot int32) error
+		WriteConfig(storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error)
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -78,7 +78,7 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 	return p.backend.Format(req)
 }
 
-// WriteNvmeConfig calls into the bdev backend to create an nvme config file.
-func (p *Provider) WriteNvmeConfig(req storage.BdevWriteConfigRequest) error {
-	return p.backend.WriteNvmeConfig(req)
+// WriteConfig calls into the bdev backend to create an nvme config file.
+func (p *Provider) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {
+	return p.backend.WriteConfig(req)
 }

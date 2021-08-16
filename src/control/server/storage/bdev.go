@@ -226,7 +226,7 @@ type (
 		Prepare(BdevPrepareRequest) (*BdevPrepareResponse, error)
 		Scan(BdevScanRequest) (*BdevScanResponse, error)
 		Format(BdevFormatRequest) (*BdevFormatResponse, error)
-		WriteNvmeConfig(BdevWriteConfigRequest) error
+		WriteConfig(BdevWriteConfigRequest) (*BdevWriteConfigResponse, error)
 		QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error)
 		UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error)
 	}
@@ -294,6 +294,9 @@ type (
 		Hostname         string
 		BdevCache        *BdevScanResponse
 	}
+
+	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
+	BdevWriteConfigResponse struct{}
 
 	// BdevDeviceFormatRequest designs the parameters for a device-specific format.
 	BdevDeviceFormatRequest struct {
@@ -413,14 +416,15 @@ func (f *BdevAdminForwarder) Format(req BdevFormatRequest) (*BdevFormatResponse,
 	return res, nil
 }
 
-func (f *BdevAdminForwarder) WriteNvmeConfig(req BdevWriteConfigRequest) error {
+func (f *BdevAdminForwarder) WriteConfig(req BdevWriteConfigRequest) (*BdevWriteConfigResponse, error) {
 	req.Forwarded = true
 
-	if err := f.SendReq("BdevWriteNvmeConfig", req, nil); err != nil {
-		return err
+	res := new(BdevWriteConfigResponse)
+	if err := f.SendReq("BdevWriteConfig", req, res); err != nil {
+		return nil, err
 	}
 
-	return nil
+	return res, nil
 }
 
 const (

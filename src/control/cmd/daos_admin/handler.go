@@ -230,11 +230,11 @@ func (h *bdevFormatHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.
 	return pbin.NewResponseWithPayload(fRes)
 }
 
-type bdevWriteNvmeConfigHandler struct {
+type bdevWriteConfigHandler struct {
 	bdevHandler
 }
 
-func (h *bdevWriteNvmeConfigHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
+func (h *bdevWriteConfigHandler) Handle(log logging.Logger, req *pbin.Request) *pbin.Response {
 	if req == nil {
 		return getNilRequestResp()
 	}
@@ -246,10 +246,10 @@ func (h *bdevWriteNvmeConfigHandler) Handle(log logging.Logger, req *pbin.Reques
 
 	h.setupProvider(log)
 
-	err := h.bdevProvider.WriteNvmeConfig(fReq)
+	fRes, err := h.bdevProvider.WriteConfig(fReq)
 	if err != nil {
 		return pbin.NewResponseWithError(err)
 	}
 
-	return pbin.NewResponseWithPayload(nil)
+	return pbin.NewResponseWithPayload(fRes)
 }

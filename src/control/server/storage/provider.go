@@ -346,7 +346,9 @@ func (p *Provider) WriteNvmeConfig() error {
 
 	req.BdevCache = &p.bdevCache
 	req.VMDEnabled = p.vmdEnabled
-	return p.bdev.WriteNvmeConfig(req)
+
+	_, err = p.bdev.WriteConfig(req)
+	return err
 }
 
 // BdevTierScanResult contains details of a scan operation result.
