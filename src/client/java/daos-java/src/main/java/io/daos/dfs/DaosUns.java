@@ -135,35 +135,15 @@ public class DaosUns {
   /**
    * get information from extended attributes of UNS path.
    * Some info gets from DAOS extended attribute.
-   * The Rest gets from app extended attributes if any.
-   *
-   * @param uri             URI starts with daos://
-   * @param appInfoAttrName app-specific attribute name
-   * @return information hold in {@link DunsInfo}
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  public static DunsInfo getAccessInfo(URI uri, String appInfoAttrName) throws IOException {
-    return getAccessInfo(uri, appInfoAttrName, Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
-        false);
-  }
-
-  /**
-   * get information from extended attributes of UNS path.
-   * Some info gets from DAOS extended attribute.
    * The Rest gets from app extended attributes. A exception will be thrown if user expect app info and no
    * info gets.
    *
    * @param uri             URI starts with daos://
-   * @param appInfoAttrName app-specific attribute name
-   * @param maxValueLen     maximum value length
-   * @param expectAppInfo   expect app info? true for throwing exception if no value gets, false for ignoring quietly.
    * @return information hold in {@link DunsInfo}
    * @throws IOException
    * {@link DaosIOException}
    */
-  public static DunsInfo getAccessInfo(URI uri, String appInfoAttrName, int maxValueLen,
-                                       boolean expectAppInfo) throws IOException {
+  public static DunsInfo getAccessInfo(URI uri) throws IOException {
     String fullPath = uri.toString();
     String path = fullPath;
     boolean direct = true;
@@ -205,7 +185,7 @@ public class DaosUns {
       }
       prefix = idx > 0 ? path.substring(0, idx) : path;
     }
-    return new DunsInfo(poolId, contId, layout.name(), null, prefix);
+    return new DunsInfo(poolId, contId, layout.name(), prefix);
   }
 
   protected DunsAttribute getAttribute() {

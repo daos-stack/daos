@@ -24,7 +24,7 @@ public class DaosFSFactory {
   public final static String poolLabel = System.getProperty("pool_label", defaultPoolLabel);
   public final static String contLabel = System.getProperty("cont_label", defaultContLabel);
 
-  public final static String svc = "0";
+  public static final String DAOS_URI = "daos://" + DaosFSFactory.getPooluuid() + "/" + DaosFSFactory.getContuuid();
 
   private static FileSystem createFS() throws IOException {
     Configuration conf = new Configuration();
@@ -37,9 +37,8 @@ public class DaosFSFactory {
   }
 
   public static void config(Configuration conf, boolean async) {
-    conf.set(Constants.DAOS_POOL_UUID, pooluuid);
-    conf.set(Constants.DAOS_CONTAINER_UUID, contuuid);
-    conf.set(Constants.DAOS_POOL_SVC, svc);
+    conf.set(Constants.DAOS_POOL_ID, pooluuid);
+    conf.set(Constants.DAOS_CONTAINER_ID, contuuid);
     conf.set(Constants.DAOS_IO_ASYNC, String.valueOf(async));
   }
 

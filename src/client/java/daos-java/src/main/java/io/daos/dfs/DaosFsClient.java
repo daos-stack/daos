@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import io.daos.*;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1057,6 +1058,7 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
         }
         if (contId == null) {
           contId = ROOT_CONT_UUID;
+          builder.containerId(contId);
         }
         String key = poolId + contId;
         fsClient = pcFsMap.get(key);

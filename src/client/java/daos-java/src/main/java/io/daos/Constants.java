@@ -40,7 +40,6 @@ public final class Constants {
   public static final int KEY_LIST_MAX_BUF_PER_CALL = 64 * 1024;
 
   public static final String POOL_DEFAULT_SERVER_GROUP = "daos_server";
-  public static final String POOL_DEFAULT_RANKS = "0";
 
   public static final String DUNS_XATTR_NAME = "user.daos";
   public static final String DUNS_XATTR_FMT = "DAOS.%s://%36s/%36s";

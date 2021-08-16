@@ -7,6 +7,7 @@
 package io.daos;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * An abstract class for sharing client per pool/container and JVM. It uses {@link DaosClient} for
@@ -60,6 +61,10 @@ public abstract class ShareableClient extends Shareable implements ForceCloseabl
 
   protected void setBuilder(DaosClient.DaosClientBuilder builder) {
     this.builder = builder;
+  }
+
+  public Map<String, String> getUserDefAttributes() {
+    return client.getUserDefAttrMap();
   }
 
   /**

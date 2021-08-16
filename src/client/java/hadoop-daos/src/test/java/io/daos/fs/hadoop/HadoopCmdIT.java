@@ -25,9 +25,8 @@ public class HadoopCmdIT {
   @BeforeClass
   public static void setup() throws Exception {
     conf = new Configuration();
-    conf.set(Constants.DAOS_POOL_UUID, DaosFSFactory.pooluuid);
-    conf.set(Constants.DAOS_CONTAINER_UUID, DaosFSFactory.contuuid);
-    FileSystem.get(new URI((conf.get("fs.defaultFS"))), conf);
+    FileSystem.get(new URI(DaosFSFactory.DAOS_URI), conf);
+    conf.set(Constants.DAOS_DEFAULT_FS, DaosFSFactory.DAOS_URI);
   }
 
   private int run(String argv[]) throws Exception {
