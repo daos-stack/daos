@@ -2812,8 +2812,10 @@ dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
 		if (rc != 0)
 			D_GOTO(out, rc = EINVAL);
 		rc = uuid_parse(dattr.da_cont, *c_uuid);
-		if (rc != 0)
-			D_GOTO(out, rc = EINVAL);
+		if (rc != 0) {
+			uuid_clear(*c_uuid);
+			rc = 0;
+		}
 		if (dattr.da_rel_path == NULL) {
 			strncpy(path, "/", path_len);
 		} else {
