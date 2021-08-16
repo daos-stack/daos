@@ -145,7 +145,7 @@ func getDistroArgs() []string {
 		// the oldest distribution we support
 	default:
 		// packed_meta_blocks allows to group all data blocks together
-		opts + = ",packed_meta_blocks=1"
+		opts += ",packed_meta_blocks=1"
 		// enable sparse_super2 since 2x superblock copies are enough
 		// disable csum since we have ECC already for SCM
 		// bigalloc is intentionally not used since some kernels don't support it
