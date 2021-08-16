@@ -128,35 +128,37 @@ func (dsp *defaultSystemProvider) checkDevice(device string) error {
 func getDistroArgs() []string {
 	distro := system.GetDistribution()
 
+	// use stride option for SCM interleaved mode
+	// disable lazy initialization (hurts perf)
+	// discard is not needed/supported on SCM
+	opts := "stride=512,lazy_itable_init=0,lazy_journal_init=0,nodiscard"
+
+	// enable flex_bg to allow larger contiguous block allocation
+	// disable uninit_bg to initialize everything upfront
+	// disable resize to avoid GDT block allocations
+	// disable extra isize since we really have no use for this
+	feat := "flex_bg,^uninit_bg,^resize_inode,^extra_isize"
+
 	switch {
 	case distro.ID == "centos" && distro.Version.Major < 8:
-		return []string{
-			// disable lazy initialization (hurts perf) and discard
-			"-E", "lazy_itable_init=0,lazy_journal_init=0,nodiscard",
-			// enable flex_bg to allow larger contiguous block allocation
-			// disable uninit_bg to initialize everything upfront
-			"-O", "bigalloc,flex_bg,^uninit_bg",
-			// use 16M bigalloc cluster size
-			"-C", "16M",
-		}
+		// use strict minimum listed above here since that's
+		// the oldest distribution we support
 	default:
-		return []string{
-			// use stride option for SCM interleaved mode
-			// disable lazy initialization (hurts perf)
-			// discard is not needed/supported on SCM
-			// packed_meta_blocks allows to group all data blocks
-			"-E",
-			"stride=512,lazy_itable_init=0,lazy_journal_init=0,nodiscard,packed_meta_blocks=1",
-			// disable resize to avoid GDT block allocations
-			// disable extra isize since we really have no use for this
-			// disable csum since we have ECC already for SCM
-			// bigalloc is intentionally not used since some kernels don't support it
-			"-O", "flex_bg,^uninit_bg,^resize_inode,^extra_isize,^metadata_csum",
-			// each ext4 group is of size 32767 x 4KB = 128M
-			// pack 128 groups together to increase ability to use huge
-			// pages for a total virtual group size of 16G
-			"-G", "128",
-		}
+		// packed_meta_blocks allows to group all data blocks together
+		opts + = ",packed_meta_blocks=1"
+		// enable sparse_super2 since 2x superblock copies are enough
+		// disable csum since we have ECC already for SCM
+		// bigalloc is intentionally not used since some kernels don't support it
+		feat += ",sparse_super2,^metadata_csum"
+	}
+
+	return []string{
+		"-E", opts,
+		"-O", feat,
+		// each ext4 group is of size 32767 x 4KB = 128M
+		// pack 128 groups together to increase ability to use huge
+		// pages for a total virtual group size of 16G
+		"-G", "128",
 	}
 }
 
@@ -176,6 +178,8 @@ func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	// callback so that the user has some visibility into long-running
 	// format operations (very large devices).
 	args := []string{
+		// use quiet mode
+		"-q",
 		// use direct i/o to avoid polluting page cache
 		"-D",
 		// use DAOS label
