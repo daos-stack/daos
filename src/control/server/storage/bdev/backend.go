@@ -46,6 +46,7 @@ type (
 	userLookupFn func(string) (*user.User, error)
 	vmdDetectFn  func() ([]string, error)
 	hpCleanFn    func(string, string, string) error
+	writeConfFn  func(logging.Logger, *storage.BdevWriteConfigRequest) error
 )
 
 // suppressOutput is a horrible, horrible hack necessitated by the fact that
@@ -487,7 +488,7 @@ func (sb *spdkBackend) Format(req storage.BdevFormatRequest) (resp *storage.Bdev
 	}
 }
 
-func (sb *spdkBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error) {
+func (sb *spdkBackend) writeNVMEConf(req storage.BdevWriteConfigRequest, confWriter writeConfFn) error {
 	sb.log.Debugf("spdk backend write config (system calls): %+v", req)
 
 	// Substitute addresses in bdev tier's DeviceLists if VMD is in use.
@@ -502,19 +503,19 @@ func (sb *spdkBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (
 
 			dl, err := substituteVMDAddresses(sb.log, props.DeviceList, req.BdevCache)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			props.DeviceList = dl
+			tps = append(tps, props)
 		}
+		req.TierProps = tps
 	}
 
-	sb.log.Debugf("write conf: %+v", req)
-	if err := sb.writeNvmeConfig(&req); err != nil {
-		return nil, errors.Wrap(err, "write spdk nvme config")
-	}
-	res := new(storage.BdevWriteNvmeConfigResponse)
+	return errors.Wrap(confWriter(sb.log, &req), "write spdk nvme config")
+}
 
-	return res, nil
+func (sb *spdkBackend) WriteNvmeConfig(req storage.BdevWriteConfigRequest) error {
+	return sb.writeNVMEConf(req, writeJSONConf)
 }
 
 // UpdateFirmware uses the SPDK bindings to update an NVMe controller's firmware.

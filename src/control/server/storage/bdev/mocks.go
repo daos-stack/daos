@@ -15,22 +15,24 @@ import (
 
 type (
 	MockBackendConfig struct {
-		ResetErr    error
-		PrepareResp *storage.BdevPrepareResponse
-		PrepareErr  error
-		FormatRes   *storage.BdevFormatResponse
-		FormatErr   error
-		ScanRes     *storage.BdevScanResponse
-		ScanErr     error
-		VMDEnabled  bool // set disabled by default
-		UpdateErr   error
+		VMDEnabled   bool // VMD is disabled by default
+		ResetErr     error
+		PrepareResp  *storage.BdevPrepareResponse
+		PrepareErr   error
+		ScanRes      *storage.BdevScanResponse
+		ScanErr      error
+		FormatRes    *storage.BdevFormatResponse
+		FormatErr    error
+		WriteConfErr error
+		UpdateErr    error
 	}
 
 	MockBackend struct {
 		sync.RWMutex
-		cfg          MockBackendConfig
-		PrepareCalls []storage.BdevPrepareRequest
-		ResetCalls   []storage.BdevPrepareRequest
+		cfg            MockBackendConfig
+		PrepareCalls   []storage.BdevPrepareRequest
+		ResetCalls     []storage.BdevPrepareRequest
+		WriteConfCalls []storage.BdevWriteConfigRequest
 	}
 )
 
@@ -66,9 +68,6 @@ func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevForma
 
 func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	mb.Lock()
-	if req.EnableVMD {
-		mb.PrepareCalls = append(mb.PrepareCalls, req)
-	}
 	mb.PrepareCalls = append(mb.PrepareCalls, req)
 	mb.Unlock()
 
@@ -84,9 +83,6 @@ func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 
 func (mb *MockBackend) Reset(req storage.BdevPrepareRequest) error {
 	mb.Lock()
-	if req.EnableVMD {
-		mb.ResetCalls = append(mb.ResetCalls, req)
-	}
 	mb.ResetCalls = append(mb.ResetCalls, req)
 	mb.Unlock()
 
@@ -101,8 +97,12 @@ func (mb *MockBackend) UpdateFirmware(_ string, _ string, _ int32) error {
 	return mb.cfg.UpdateErr
 }
 
-func (mb *MockBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error) {
-	return &storage.BdevWriteNvmeConfigResponse{}, nil
+func (mb *MockBackend) WriteNvmeConfig(req storage.BdevWriteConfigRequest) error {
+	mb.Lock()
+	mb.WriteConfCalls = append(mb.WriteConfCalls, req)
+	mb.Unlock()
+
+	return mb.cfg.WriteConfErr
 }
 
 func NewMockProvider(log logging.Logger, mbc *MockBackendConfig) *Provider {

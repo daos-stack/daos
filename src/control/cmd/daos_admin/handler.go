@@ -239,7 +239,7 @@ func (h *bdevWriteNvmeConfigHandler) Handle(log logging.Logger, req *pbin.Reques
 		return getNilRequestResp()
 	}
 
-	var fReq storage.BdevWriteNvmeConfigRequest
+	var fReq storage.BdevWriteConfigRequest
 	if err := json.Unmarshal(req.Payload, &fReq); err != nil {
 		return pbin.NewResponseWithError(err)
 	}

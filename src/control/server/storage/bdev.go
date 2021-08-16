@@ -223,27 +223,12 @@ func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
 type (
 	// BdevProvider defines an interface to be implemented by a Block Device provider.
 	BdevProvider interface {
-		Scan(BdevScanRequest) (*BdevScanResponse, error)
 		Prepare(BdevPrepareRequest) (*BdevPrepareResponse, error)
+		Scan(BdevScanRequest) (*BdevScanResponse, error)
 		Format(BdevFormatRequest) (*BdevFormatResponse, error)
-		WriteNvmeConfig(BdevWriteNvmeConfigRequest) (*BdevWriteNvmeConfigResponse, error)
+		WriteNvmeConfig(BdevWriteConfigRequest) error
 		QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error)
 		UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error)
-	}
-
-	// BdevScanRequest defines the parameters for a Scan operation.
-	BdevScanRequest struct {
-		pbin.ForwardableRequest
-		DeviceList    []string
-		EngineStorage map[uint32]*Config // to validate against
-		VMDEnabled    bool
-		BypassCache   bool
-	}
-
-	// BdevScanResponse contains information gleaned during a successful Scan operation.
-	BdevScanResponse struct {
-		Controllers NvmeControllers
-		VMDEnabled  bool
 	}
 
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
@@ -262,6 +247,21 @@ type (
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
 		VMDPrepared bool
+	}
+
+	// BdevScanRequest defines the parameters for a Scan operation.
+	BdevScanRequest struct {
+		pbin.ForwardableRequest
+		DeviceList    []string
+		EngineStorage map[uint32]*Config // to validate against
+		VMDEnabled    bool
+		BypassCache   bool
+	}
+
+	// BdevScanResponse contains information gleaned during a successful Scan operation.
+	BdevScanResponse struct {
+		Controllers NvmeControllers
+		VMDEnabled  bool
 	}
 
 	// BdevTierProperties contains basic configuration properties of a bdev tier.
@@ -283,8 +283,8 @@ type (
 		BdevCache  *BdevScanResponse
 	}
 
-	// BdevWriteNvmeConfigRequest defines the parameters for a WriteConfig operation.
-	BdevWriteNvmeConfigRequest struct {
+	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
+	BdevWriteConfigRequest struct {
 		pbin.ForwardableRequest
 		ConfigOutputPath string
 		OwnerUID         int
@@ -293,10 +293,6 @@ type (
 		VMDEnabled       bool
 		Hostname         string
 		BdevCache        *BdevScanResponse
-	}
-
-	// BdevWriteNvmeConfigResponse contains the result of a WriteConfig operation.
-	BdevWriteNvmeConfigResponse struct {
 	}
 
 	// BdevDeviceFormatRequest designs the parameters for a device-specific format.
@@ -417,15 +413,14 @@ func (f *BdevAdminForwarder) Format(req BdevFormatRequest) (*BdevFormatResponse,
 	return res, nil
 }
 
-func (f *BdevAdminForwarder) WriteNvmeConfig(req BdevWriteNvmeConfigRequest) (*BdevWriteNvmeConfigResponse, error) {
+func (f *BdevAdminForwarder) WriteNvmeConfig(req BdevWriteConfigRequest) error {
 	req.Forwarded = true
 
-	res := new(BdevWriteNvmeConfigResponse)
-	if err := f.SendReq("BdevWriteNvmeConfig", req, res); err != nil {
-		return nil, err
+	if err := f.SendReq("BdevWriteNvmeConfig", req, nil); err != nil {
+		return err
 	}
 
-	return res, nil
+	return nil
 }
 
 const (

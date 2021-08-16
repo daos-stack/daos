@@ -171,7 +171,7 @@ func getAioKdevCreateMethod(name, path string) *SpdkSubsystemConfig {
 	}
 }
 
-func getSpdkConfigMethods(req *storage.BdevWriteNvmeConfigRequest) (sscs []*SpdkSubsystemConfig) {
+func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubsystemConfig) {
 	for _, tier := range req.TierProps {
 		var f configMethodGetter
 
@@ -209,8 +209,8 @@ func (sc *SpdkConfig) WithVMDEnabled() *SpdkConfig {
 }
 
 // WithBdevConfigs adds config methods derived from the input
-// BdevWriteNvmeConfigRequest to the bdev subsystem of an SpdkConfig.
-func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWriteNvmeConfigRequest) *SpdkConfig {
+// BdevWriteConfigRequest to the bdev subsystem of an SpdkConfig.
+func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWriteConfigRequest) *SpdkConfig {
 	for _, ss := range sc.Subsystems {
 		if ss.Name != "bdev" {
 			continue
@@ -225,13 +225,15 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWrite
 	return sc
 }
 
-func newSpdkConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteNvmeConfigRequest) (*SpdkConfig, error) {
+func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
-	for _, tp := range req.TierProps {
-		if enableVmd && tp.Class == storage.ClassNvme {
-			sc.WithVMDEnabled()
-			break
+	if req.VMDEnabled {
+		for _, tp := range req.TierProps {
+			if tp.Class == storage.ClassNvme {
+				sc.WithVMDEnabled()
+				break
+			}
 		}
 	}
 
