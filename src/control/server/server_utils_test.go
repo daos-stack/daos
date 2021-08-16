@@ -314,15 +314,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
 					PCIBlockList: common.MockPCIAddr(1),
 				},
-				{
-					Reset_:        true,
-					EnableVMD:     true,
-					HugePageCount: minHugePageCount,
-					TargetUser:    username,
-					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PCIBlockList: common.MockPCIAddr(1),
-				},
 			},
 			expPrepCalls: []storage.BdevPrepareRequest{
 				{
@@ -333,15 +324,6 @@ func TestServer_prepBdevStorage(t *testing.T) {
 						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
 					PCIBlockList: common.MockPCIAddr(1),
 				},
-				// TODO: is this correct?
-				//				{
-				//					EnableVMD:     true,
-				//					HugePageCount: minHugePageCount,
-				//					TargetUser:    username,
-				//					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-				//						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-				//					PCIBlockList: common.MockPCIAddr(1),
-				//				},
 			},
 		},
 	} {
