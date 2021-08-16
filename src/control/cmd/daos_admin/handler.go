@@ -246,10 +246,10 @@ func (h *bdevWriteNvmeConfigHandler) Handle(log logging.Logger, req *pbin.Reques
 
 	h.setupProvider(log)
 
-	fRes, err := h.bdevProvider.WriteNvmeConfig(fReq)
+	err := h.bdevProvider.WriteNvmeConfig(fReq)
 	if err != nil {
 		return pbin.NewResponseWithError(err)
 	}
 
-	return pbin.NewResponseWithPayload(fRes)
+	return pbin.NewResponseWithPayload(nil)
 }
