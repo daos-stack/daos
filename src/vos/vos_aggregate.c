@@ -150,6 +150,8 @@ struct vos_agg_param {
 	void			*ap_yield_arg;
 	/* SV tree: Max epoch in specified iterate epoch range */
 	daos_epoch_t		 ap_max_epoch;
+	/* Discard high epoch */
+	daos_epoch_t		 ap_discard_hi;
 	/* EV tree: Merge window for evtree aggregation */
 	struct agg_merge_window	 ap_window;
 	bool			 ap_skip_akey;
@@ -425,8 +427,11 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_ASSERT(entry->ie_epoch != 0);
 
 	/* Discard */
-	if (agg_param->ap_discard)
+	if (agg_param->ap_discard) {
+		if (entry->ie_epoch > agg_param->ap_discard_hi)
+			return 0;
 		goto delete;
+	}
 
 	/* If entry is covered, the key or object is punched */
 	if (entry->ie_vis_flags & VOS_VIS_FLAG_COVERED)
@@ -2001,19 +2006,16 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	/* Discard */
 	if (agg_param->ap_discard) {
-		struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
+		if (entry->ie_epoch > agg_param->ap_discard_hi)
+			return 0;
 
-		/*
-		 * Delete the physical entry when iterating to the first
-		 * logical entry
-		 */
-		if (phy_ext.ex_lo == lgc_ext.ex_lo)
-			rc = delete_evt_entry(oiter, entry, acts, "discarded");
+		D_DEBUG(DB_TRACE, DF_EXT"@"DF_X64".%d is being discarded\n", DP_EXT(&lgc_ext),
+			entry->ie_epoch, entry->ie_minor_epc);
 
-		/*
-		 * Sorted iteration doesn't support tree empty check, so we
-		 * always inform vos_iterate() to check if subtree is empty.
-		 */
+		/** Discard iterates unsorted entries.   It may visit entries more than once */
+		D_ASSERT(phy_ext.ex_lo == lgc_ext.ex_lo);
+		rc = vos_iter_delete(ih, NULL);
+
 		if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST) {
 			/* Trigger re-probe in akey iteration */
 			*acts |= VOS_ITER_CB_YIELD;
@@ -2178,7 +2180,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_obj = false;
 			break;
 		}
-		rc = oi_iter_aggregate(ih, agg_param->ap_discard);
+		rc = oi_iter_aggregate(ih, agg_param->ap_discard_hi);
 		break;
 	case VOS_ITER_DKEY:
 		if (agg_param->ap_skip_dkey) {
@@ -2190,7 +2192,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_akey = false;
 			break;
 		}
-		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard);
+		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard_hi);
 		break;
 	case VOS_ITER_SINGLE:
 		return 0;
@@ -2426,14 +2428,11 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;
 	ad->ad_iter_param.ip_epr = *epr;
-	if (epr->epr_lo == epr->epr_hi)
-		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_EQ;
-	else if (epr->epr_hi != DAOS_EPOCH_MAX)
-		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_RR;
-	else
-		ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_GE;
+	ad->ad_iter_param.ip_epr.epr_lo = epr->epr_lo;
+	ad->ad_iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_GE;
 	/* EV tree iterator returns all sorted logical rectangles */
-	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_COVERED;
+	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED;
 
 	/* Set aggregation parameters */
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
@@ -2441,6 +2440,7 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	ad->ad_agg_param.ap_credits = 0;
 	ad->ad_agg_param.ap_discard = true;
+	ad->ad_agg_param.ap_discard_hi = epr->epr_hi;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
 

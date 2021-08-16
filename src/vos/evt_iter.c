@@ -400,6 +400,12 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 	switch (opc) {
 	default:
 		D_GOTO(out, rc = -DER_NOSYS);
+	case EVT_ITER_FIND:
+		/** There is really no reliable usage of EVT_ITER_FIND with unsorted iterator.
+		 *  Always start over rather than starting from where we left off.  The issue
+		 *  is the evtree is unsorted so starting from an anchor is no guarantee we
+		 *  will visit every entry.
+		 */
 	case EVT_ITER_FIRST:
 		fopc = EVT_FIND_FIRST;
 		/* An extent that covers everything */
@@ -408,19 +414,6 @@ evt_iter_probe(daos_handle_t ih, enum evt_iter_opc opc,
 		rtmp.rc_epc = DAOS_EPOCH_MAX;
 		rtmp.rc_minor_epc = EVT_MINOR_EPC_MAX;
 		break;
-
-	case EVT_ITER_FIND:
-		if (!rect && !anchor)
-			D_GOTO(out, rc = -DER_INVAL);
-
-		/* Requires the exactly same extent, we require user to
-		 * start over if anything changed (clipped, aggregated).
-		 */
-		fopc = EVT_FIND_SAME;
-		if (rect == NULL)
-			rect = (struct evt_rect *)&anchor->da_buf[0];
-
-		rtmp = *rect;
 	}
 
 	rc = evt_ent_array_fill(tcx, fopc, vos_iter_intent(oiter),
