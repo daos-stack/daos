@@ -54,7 +54,7 @@ func (r *httpReq) canRetry(err error, cur uint) bool {
 		return false
 	}
 
-	if err.Error() == HTTPReqTimedOut(r.getURL().String()).Error() {
+	if errors.Cause(err).Error() == HTTPReqTimedOut(r.getURL().String()).Error() {
 		return true
 	}
 
@@ -146,7 +146,7 @@ func httpGetBody(ctx context.Context, url *url.URL, get httpGetFn, timeout time.
 
 	select {
 	case <-httpCtx.Done():
-		if errors.Is(httpCtx.Err(), context.DeadlineExceeded) {
+		if httpCtx.Err() == context.DeadlineExceeded {
 			return nil, HTTPReqTimedOut(url.String())
 		}
 		return nil, httpCtx.Err()
