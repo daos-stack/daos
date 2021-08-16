@@ -1628,10 +1628,6 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		break;
 
 	case VOS_ITER_RECX:
-		if (info->ii_flags & VOS_IT_RECX_FUTURE) {
-			oiter->it_epr.epr_hi = DAOS_EPOCH_MAX;
-			oiter->it_iter.it_bound = DAOS_EPOCH_MAX;
-		}
 		vos_evt_desc_cbs_init(&cbs, vos_obj2pool(obj),
 				      vos_cont2hdl(obj->obj_cont));
 		rc = evt_open(info->ii_evt, info->ii_uma, &cbs, &toh);

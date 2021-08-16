@@ -322,13 +322,8 @@ enum {
 	VOS_IT_PUNCHED		= (1 << 6),
 	/** Cleanup stale DTX entry. */
 	VOS_IT_CLEANUP_DTX	= (1 << 7),
-	/** Include all array extents after epoch range in the scan.  Note, the visibility
-	 *  algorithm will view objects from DAOS_EPOCH_MAX.  Since the primary use case
-	 *  is discard, this doesn't really matter.
-	 */
-	VOS_IT_RECX_FUTURE	= (1 << 8),
 	/** Mask for all flags */
-	VOS_IT_MASK		= (1 << 9) - 1,
+	VOS_IT_MASK		= (1 << 8) - 1,
 };
 
 /**
