@@ -33,16 +33,6 @@ enum {
 
 struct vos_container;
 
-#define DF_PUNCH DF_X64".%d"
-#define DP_PUNCH(punch) (punch)->pr_epc, (punch)->pr_minor_epc
-
-struct vos_punch_record {
-	/** Major epoch of punch */
-	daos_epoch_t	pr_epc;
-	/** Minor epoch of punch */
-	uint16_t	pr_minor_epc;
-};
-
 struct vos_ilog_info {
 	struct ilog_entries	 ii_entries;
 	/** Visible uncommitted epoch */
@@ -50,14 +40,14 @@ struct vos_ilog_info {
 	/** If non-zero, earliest creation timestamp in current incarnation. */
 	daos_epoch_t		 ii_create;
 	/** If non-zero, prior committed punch */
-	struct vos_punch_record	 ii_prior_punch;
+	struct ilog_time_rec	 ii_prior_punch;
 	/** If non-zero, prior committed or uncommitted punch */
-	struct vos_punch_record	 ii_prior_any_punch;
+	struct ilog_time_rec	 ii_prior_any_punch;
 	/** If non-zero, subsequent committed punch.  Minor epoch not used for
 	 *  subsequent punch as it does not need replay if it's intermediate
 	 */
 	daos_epoch_t		 ii_next_punch;
-	/** True if there is an uncertain update.  If a punch is uncertain,
+	/** Set if there is an uncertain update.  If a punch is uncertain,
 	 *  it should always cause a failure in vos_ilog_fetch.  But update
 	 *  conflict depends on the operation doing the check.
 	 */
@@ -108,7 +98,7 @@ vos_ilog_fetch_finish(struct vos_ilog_info *info);
 int
 vos_ilog_fetch_(struct umem_instance *umm, daos_handle_t coh, uint32_t intent,
 		struct ilog_df *ilog, daos_epoch_t epoch, daos_epoch_t bound,
-		const struct vos_punch_record *punched,
+		const struct ilog_time_rec *punched,
 		const struct vos_ilog_info *parent, struct vos_ilog_info *info);
 
 /**
@@ -194,6 +184,8 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
  * \param	discard[IN]	Discard all entries in range
  * \param	punched[IN]	Highest epoch where parent is punched
  * \param	info[IN]	Incarnation log info
+ * \param	update[IN]	Optional lowest update after the
+ *				epoch range.
  *
  * \return	0		Success
  *		1		Indicates log is empty
@@ -203,8 +195,9 @@ vos_ilog_desc_cbs_init(struct ilog_desc_cbs *cbs, daos_handle_t coh);
 int
 vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 		   const daos_epoch_range_t *epr, bool discard,
-		   const struct vos_punch_record *parent_punch,
-		   struct vos_ilog_info *info);
+		   const struct ilog_time_rec *parent_punch,
+		   struct vos_ilog_info *info,
+		   const struct ilog_time_rec *update);
 
 /* #define ILOG_TRACE */
 #ifdef ILOG_TRACE
@@ -227,10 +220,10 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	__rc = vos_ilog_fetch_(umm, coh, intent, ilog, epoch, bound,	\
 			       punched,	parent, info);			\
 	D_DEBUG(DB_TRACE, "vos_ilog_fetch: returned "DF_RC" create="	\
-		DF_X64" pp="DF_PUNCH" pap="DF_PUNCH" np="DF_X64	\
+		DF_X64" pp="DF_TREC" pap="DF_TREC" np="DF_X64	\
 		" %s\n", DP_RC(__rc), (info)->ii_create,		\
-		DP_PUNCH(&(info)->ii_prior_punch),			\
-		DP_PUNCH(&(info)->ii_prior_any_punch),			\
+		DP_TREC(&(info)->ii_prior_punch),			\
+		DP_TREC(&(info)->ii_prior_any_punch),			\
 		(info)->ii_next_punch,					\
 		(info)->ii_empty ? "is empty" : "");			\
 	__rc;								\
@@ -249,9 +242,9 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	__rc = vos_ilog_update_(cont, ilog, epr, bound, parent, info,	\
 				cond, ts_set);				\
 	D_DEBUG(DB_TRACE, "vos_ilog_update: returned "DF_RC" create="	\
-		DF_X64" pap="DF_X64".%d\n", DP_RC(__rc),		\
+		DF_X64" pap="DF_TREC"\n", DP_RC(__rc),			\
 		(info)->ii_create,					\
-		DP_PUNCH(&(info)->ii_prior_any_punch));			\
+		DP_TREC(&(info)->ii_prior_any_punch));			\
 	__rc;								\
 })
 

@@ -2406,6 +2406,7 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		     daos_unit_oid_t *oid, uuid_t cont_uuid)
 {
 	struct ds_cont_child *cont;
+	daos_epoch_range_t   epr;
 	int rc;
 
 	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont);
@@ -2422,7 +2423,9 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		return rc;
 	}
 
-	rc = vos_obj_delete(cont->sc_hdl, *oid);
+	epr.epr_hi = tls->mpt_max_eph;
+	epr.epr_lo = 0;
+	rc = vos_discard(cont->sc_hdl, oid, &epr, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Migrate failed to destroy object prior to "
 			"reintegration: pool/object "DF_UUID"/"DF_UOID
