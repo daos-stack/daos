@@ -52,7 +52,7 @@ func DefaultMockBackend() *MockBackend {
 
 func (mb *MockBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
 	if mb.cfg.ScanRes == nil {
-		mb.cfg.ScanRes = new(storage.BdevScanResponse)
+		mb.cfg.ScanRes = &storage.BdevScanResponse{}
 	}
 
 	return mb.cfg.ScanRes, mb.cfg.ScanErr
@@ -60,7 +60,7 @@ func (mb *MockBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanRespo
 
 func (mb *MockBackend) Format(req storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
 	if mb.cfg.FormatRes == nil {
-		mb.cfg.FormatRes = new(storage.BdevFormatResponse)
+		mb.cfg.FormatRes = &storage.BdevFormatResponse{}
 	}
 
 	return mb.cfg.FormatRes, mb.cfg.FormatErr
@@ -75,7 +75,7 @@ func (mb *MockBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPre
 	case mb.cfg.PrepareErr != nil:
 		return nil, mb.cfg.PrepareErr
 	case mb.cfg.PrepareResp == nil:
-		return new(storage.BdevPrepareResponse), nil
+		return &storage.BdevPrepareResponse{}, nil
 	default:
 		return mb.cfg.PrepareResp, nil
 	}
