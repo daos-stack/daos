@@ -211,7 +211,9 @@ func (p *Provider) PrepareBdevs(req BdevPrepareRequest) (*BdevPrepareResponse, e
 	p.Lock()
 	defer p.Unlock()
 
-	p.vmdEnabled = resp.VMDPrepared
+	if err == nil && resp != nil {
+		p.vmdEnabled = resp.VMDPrepared
+	}
 	return resp, err
 }
 
