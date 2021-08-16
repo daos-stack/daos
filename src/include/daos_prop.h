@@ -358,6 +358,8 @@ struct daos_prop_entry {
 
 /** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
 #define DAOS_PROP_LABEL_MAX_LEN		(127)
+/** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
+#define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
 
 /**
  * Check if DAOS (pool or container property) label string is valid.
@@ -444,6 +446,17 @@ daos_prop_free(daos_prop_t *prop);
  */
 daos_prop_t *
 daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
+
+/**
+ * Search and return a property entry of type \a type in the property list
+ * \a prop
+ * Return NULL if not found.
+ *
+ * \param[in]		prop		Property list
+ * \param[in]		type		Type of property to look for
+ */
+struct daos_prop_entry *
+daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 
 /**
  * Duplicate a generic pointer value from one DAOS prop entry to another.

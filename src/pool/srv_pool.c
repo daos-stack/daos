@@ -586,6 +586,28 @@ select_svc_ranks(int nreplicas, const d_rank_list_t *target_addrs,
 	return 0;
 }
 
+/* TODO: replace all rsvc_complete_rpc() calls in this file with pool_rsvc_complete_rpc() */
+
+/*
+ * Returns:
+ *
+ *   RSVC_CLIENT_RECHOOSE	Instructs caller to retry RPC starting from rsvc_client_choose()
+ *   RSVC_CLIENT_PROCEED	OK; proceed to process the reply
+ */
+static int
+pool_rsvc_client_complete_rpc(struct rsvc_client *client, const crt_endpoint_t *ep,
+			      int rc_crt, struct pool_op_out *out)
+{
+	int rc;
+
+	rc = rsvc_client_complete_rpc(client, ep, rc_crt, out->po_rc, &out->po_hint);
+	if (rc == RSVC_CLIENT_RECHOOSE ||
+	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->po_rc))) {
+		return RSVC_CLIENT_RECHOOSE;
+	}
+	return RSVC_CLIENT_PROCEED;
+}
+
 /**
  * Create a (combined) pool(/container) service. This method shall be called on
  * a single storage node in the pool. "target_uuids" shall be an array of the
@@ -3073,9 +3095,7 @@ realloc:
 	out = crt_reply_get(rpc);
 	D_ASSERT(out != NULL);
 
-	rc = rsvc_client_complete_rpc(&client, &ep, rc,
-				      out->pqo_op.po_rc,
-				      &out->pqo_op.po_hint);
+	rc = pool_rsvc_client_complete_rpc(&client, &ep, rc, &out->pqo_op);
 	if (rc == RSVC_CLIENT_RECHOOSE) {
 		map_bulk_destroy(in->pqi_map_bulk, map_buf);
 		crt_req_decref(rpc);
