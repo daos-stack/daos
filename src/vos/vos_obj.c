@@ -1816,10 +1816,11 @@ exit:
 }
 
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard, const struct ilog_time_rec *update)
+vos_obj_iter_aggregate(daos_handle_t ih, daos_epoch_t discard, const struct ilog_time_rec *update)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
+	daos_epoch_range_t	 epr;
 	struct umem_instance	*umm;
 	struct vos_krec_df	*krec;
 	struct vos_object	*obj;
@@ -1842,13 +1843,15 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard, const struct ilog_time_re
 	krec = rbund.rb_krec;
 	umm = vos_obj2umm(oiter->it_obj);
 
+	epr.epr_lo = oiter->it_epr.epr_lo;
+	epr.epr_hi = discard == 0 ? oiter->it_epr.epr_hi : discard;
+
 	rc = umem_tx_begin(umm, NULL);
 	if (rc != 0)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog,
-				&oiter->it_epr, discard,
-				&oiter->it_punched, &oiter->it_ilog_info,
+				&epr, discard != 0, &oiter->it_punched, &oiter->it_ilog_info,
 				update);
 
 	if (rc == 1) {

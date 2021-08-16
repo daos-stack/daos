@@ -2041,7 +2041,8 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	/* Discard */
 	if (agg_param->ap_discard) {
-		struct vos_obj_iter	*oiter = vos_hdl2oiter(ih);
+		if (entry->ie_epoch > agg_param->ap_discard_hi)
+			return 0;
 
 		if (entry->ie_epoch > agg_param->ap_discard_hi) {
 			/** Entry is outside of discard range */
@@ -2051,17 +2052,10 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 			return 0;
 		}
 
-		/*
-		 * Delete the physical entry when iterating to the first
-		 * logical entry
-		 */
-		if (phy_ext.ex_lo == lgc_ext.ex_lo)
-			rc = delete_evt_entry(oiter, entry, acts, "discarded");
+		/** Discard iterates unsorted entries.   It may visit entries more than once */
+		D_ASSERT(phy_ext.ex_lo == lgc_ext.ex_lo);
+		rc = vos_iter_delete(ih, NULL);
 
-		/*
-		 * Sorted iteration doesn't support tree empty check, so we
-		 * always inform vos_iterate() to check if subtree is empty.
-		 */
 		if (entry->ie_vis_flags & VOS_VIS_FLAG_LAST) {
 			/* Trigger re-probe in akey iteration */
 			*acts |= VOS_ITER_CB_YIELD;
@@ -2227,7 +2221,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_obj = false;
 			break;
 		}
-		rc = oi_iter_aggregate(ih, agg_param->ap_discard, &agg_param->ap_dkey_min);
+		rc = oi_iter_aggregate(ih, agg_param->ap_discard_hi, &agg_param->ap_dkey_min);
 		break;
 	case VOS_ITER_DKEY:
 		if (agg_param->ap_skip_dkey) {
@@ -2507,16 +2501,17 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;
-	ad->ad_iter_param.ip_epr = *epr;
 	if (oid != NULL) {
 		type = VOS_ITER_DKEY;
 		ad->ad_iter_param.ip_oid = *oid;
 	}
 
 	/** Return every single value above epr_lo */
+	ad->ad_iter_param.ip_epr.epr_lo = epr->epr_lo;
+	ad->ad_iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	ad->ad_iter_param.ip_epc_expr = VOS_IT_EPC_GE;
 	/* EV tree iterator returns all sorted logical rectangles */
-	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED | VOS_IT_RECX_COVERED;
+	ad->ad_iter_param.ip_flags = VOS_IT_PUNCHED;
 
 	/* Set aggregation parameters */
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
@@ -2524,12 +2519,13 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	ad->ad_agg_param.ap_credits = 0;
 	ad->ad_agg_param.ap_discard = true;
+	ad->ad_agg_param.ap_discard_hi = epr->epr_hi;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
 	/* Keep the hi epoch handy so we can track the minimum later epoch */
 	ad->ad_agg_param.ap_discard_hi = epr->epr_hi;
 
-	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE | VOS_IT_RECX_FUTURE;
+	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
 	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);

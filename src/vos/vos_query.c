@@ -176,8 +176,8 @@ _query_recx(struct open_query *query, daos_recx_t *recx, struct evt_extent *filt
 		opc |= EVT_ITER_REVERSE;
 
 	filter.fr_ex = *filter_extent;
-	filter.fr_punch_epc = query->qt_punch.pr_epc;
-	filter.fr_punch_minor_epc = query->qt_punch.pr_minor_epc;
+	filter.fr_punch_epc = query->qt_punch.tr_epc;
+	filter.fr_punch_minor_epc = query->qt_punch.tr_minor_epc;
 	filter.fr_epr.epr_hi = query->qt_bound;
 	filter.fr_epr.epr_lo = query->qt_epr.epr_lo;
 	filter.fr_epoch = query->qt_epr.epr_hi;

@@ -3509,6 +3509,7 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	struct evt_filter	 filter = {0};
 	int			 rc;
 
+	D_DEBUG(DB_TRACE, "Remove "DF_RECT"\n", DP_RECT(rect));
 	/* NB: This function presently only supports exact match on extent. */
 	evt_ent_array_init(ent_array, 1);
 
@@ -3543,6 +3544,7 @@ evt_delete_internal(struct evt_context *tcx, const struct evt_rect *rect,
 	if (rc == -DER_NONEXIST)
 		rc = 0;
 
+	D_DEBUG(DB_TRACE, "Remove "DF_RECT" rc = "DF_RC"\n", DP_RECT(rect), DP_RC(rc));
 	/* No need for evt_ent_array_fini as there will be no allocations
 	 * with 1 entry in the list
 	 */

@@ -2511,6 +2511,8 @@ agg_tst_teardown(void **state)
 }
 
 static const struct CMUnitTest discard_tests[] = {
+	{ "VOS458: Discard EV with confined epr",
+	  discard_8, NULL, agg_tst_teardown },
 	{ "VOS451: Discard SV with specified epoch",
 	  discard_1, NULL, agg_tst_teardown },
 	{ "VOS452: Discard SV with confined epr",
@@ -2525,8 +2527,6 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_6, NULL, agg_tst_teardown },
 	{ "VOS457: Discard EV with specified epoch",
 	  discard_7, NULL, agg_tst_teardown },
-	{ "VOS458: Discard EV with confined epr",
-	  discard_8, NULL, agg_tst_teardown },
 	{ "VOS459: Discard EV with epr [0, DAOS_EPOCH_MAX]",
 	  discard_9, NULL, agg_tst_teardown },
 	{ "VOS460: Discard EV with punch records",

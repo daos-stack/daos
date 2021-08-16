@@ -647,10 +647,11 @@ exit:
 }
 
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard, const struct ilog_time_rec *update)
+oi_iter_aggregate(daos_handle_t ih, daos_epoch_t discard, const struct ilog_time_rec *update)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_oi_iter	*oiter = iter2oiter(iter);
+	daos_epoch_range_t	 epr;
 	struct vos_obj_df	*obj;
 	daos_unit_oid_t		 oid;
 	d_iov_t			 rec_iov;
@@ -669,13 +670,15 @@ oi_iter_aggregate(daos_handle_t ih, bool discard, const struct ilog_time_rec *up
 	obj = (struct vos_obj_df *)rec_iov.iov_buf;
 	oid = obj->vo_id;
 
+	epr.epr_lo = oiter->oit_epr.epr_lo;
+	epr.epr_hi = discard == 0 ? oiter->oit_epr.epr_hi : discard;
+
 	rc = umem_tx_begin(vos_cont2umm(oiter->oit_cont), NULL);
 	if (rc != 0)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(oiter->oit_cont), &obj->vo_ilog,
-				&oiter->oit_epr, discard, NULL,
-				&oiter->oit_ilog_info, update);
+				&epr, discard != 0, NULL, &oiter->oit_ilog_info, update);
 	if (rc == 1) {
 		/* Incarnation log is empty, delete the object */
 		D_DEBUG(DB_IO, "Removing object "DF_UOID" from tree\n",
