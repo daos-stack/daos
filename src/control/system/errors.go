@@ -23,6 +23,12 @@ var (
 	ErrUninitialized = errors.New("system is uninitialized (storage format required?)")
 )
 
+// IsNotReady is a convenience function for checking if an error
+// indicates that the system is not ready to serve requests.
+func IsNotReady(err error) bool {
+	return IsUninitialized(err) || IsUnavailable(err)
+}
+
 // IsUnavailable returns a boolean indicating whether or not the
 // supplied error corresponds to some unavailability state.
 func IsUnavailable(err error) bool {
