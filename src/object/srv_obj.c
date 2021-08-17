@@ -1372,10 +1372,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		D_ASSERTF(ec_recov == false || ec_deg_fetch == false,
 			  "ec_recov %d, ec_deg_fetch %d.\n",
 			  ec_recov, ec_deg_fetch);
-		is_parity_shard = orw->orw_oid.id_shard >=
-				  obj_ec_data_tgt_nr(&ioc->ioc_oca);
-		get_parity_list = ec_recov && is_parity_shard &&
-				  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
+		if (ec_recov) {
+			D_ASSERT(obj_ec_tgt_nr(&ioc->ioc_oca) > 0);
+			is_parity_shard = (orw->orw_oid.id_shard % obj_ec_tgt_nr(&ioc->ioc_oca)) >=
+					  obj_ec_data_tgt_nr(&ioc->ioc_oca);
+			get_parity_list = ec_recov && is_parity_shard &&
+					  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
+		}
 		if (get_parity_list) {
 			D_ASSERT(!ec_deg_fetch);
 			fetch_flags |= VOS_OF_FETCH_RECX_LIST;
@@ -1440,6 +1443,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (get_parity_list) {
 			parity_list = vos_ioh2recx_list(ioh);
 			if (parity_list != NULL) {
+				daos_recx_ep_list_set(parity_list, orw->orw_nr, 0, 0);
 				orwo->orw_rels.ca_arrays = parity_list;
 				orwo->orw_rels.ca_count = orw->orw_nr;
 			}

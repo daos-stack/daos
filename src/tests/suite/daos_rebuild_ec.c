@@ -163,15 +163,17 @@ rebuild_mixed_stripes(void **state)
 static void
 rebuild_ec_multi_stripes(void **state)
 {
-#define TEST_STRIPE_NR	(4)
+#define TEST_STRIPE_NR	(2)
 	test_arg_t	*arg = *state;
 	daos_obj_id_t	oid;
 	struct ioreq	req;
+	char		*whole_data;
 	char		*data[TEST_STRIPE_NR];
 	char		*verify_data[TEST_STRIPE_NR];
-	daos_recx_t	recxs[2];
+	daos_recx_t	recxs[2 * TEST_STRIPE_NR];
 	d_rank_t	rank = 0;
 	uint64_t	start;
+	uint16_t	fail_shards[2];
 	int		i, size = 8 * CELL_SIZE;
 
 	if (!test_runable(arg, 7))
@@ -181,10 +183,10 @@ rebuild_ec_multi_stripes(void **state)
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
 	for (i = 0; i < TEST_STRIPE_NR; i++) {
-		start = i * 4 * CELL_SIZE * 100;
+		start = i * 4 * CELL_SIZE;
 		recxs[0].rx_idx = start;
 		recxs[0].rx_nr = 4 * CELL_SIZE;
-		recxs[1].rx_idx = start + 16 * CELL_SIZE;
+		recxs[1].rx_idx = start + 80 * CELL_SIZE;
 		recxs[1].rx_nr = 4 * CELL_SIZE;
 
 		data[i] = (char *)malloc(size);
@@ -194,18 +196,52 @@ rebuild_ec_multi_stripes(void **state)
 
 		req.iod_type = DAOS_IOD_ARRAY;
 		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, recxs, 2, data[i], size, &req);
+		free(data[i]);
 	}
 
+	ioreq_fini(&req);
+
+	/* test EC degraded fetch and verify data */
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	fail_shards[0] = 2;
+	fail_shards[1] = 1;
+	daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
+	daos_fail_loc_set(DAOS_FAIL_SHARD_FETCH | DAOS_FAIL_ALWAYS);
+	for (i = 0; i < TEST_STRIPE_NR; i++) {
+		start = i * 4 * CELL_SIZE;
+		recxs[i * 2].rx_idx = start;
+		recxs[i * 2].rx_nr = 4 * CELL_SIZE;
+		recxs[i * 2 + 1].rx_idx = start + 80 * CELL_SIZE;
+		recxs[i * 2 + 1].rx_nr = 4 * CELL_SIZE;
+	}
+
+	whole_data  = (char *)malloc(size * TEST_STRIPE_NR);
+	memset(whole_data, 0, size * TEST_STRIPE_NR);
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, recxs, 2 * TEST_STRIPE_NR,
+		     whole_data, size * TEST_STRIPE_NR, &req);
+
+	for (i = 0; i < TEST_STRIPE_NR; i++) {
+		data[i] = whole_data + size * i;
+		assert_memory_equal(data[i], verify_data[i], size);
+	}
+	free(whole_data);
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+	ioreq_fini(&req);
+
+	/* test fetch after EC rebuild and verify data */
 	rank = get_rank_by_oid_shard(arg, oid, 0);
 	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
 
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 	for (i = 0; i < TEST_STRIPE_NR; i++) {
-		start = i * 4 * CELL_SIZE * 100;
+		start = i * 4 * CELL_SIZE;
 		recxs[0].rx_idx = start;
 		recxs[0].rx_nr = 4 * CELL_SIZE;
-		recxs[1].rx_idx = start + 16 * CELL_SIZE;
+		recxs[1].rx_idx = start + 80 * CELL_SIZE;
 		recxs[1].rx_nr = 4 * CELL_SIZE;
 
+		data[i] = (char *)malloc(size);
 		memset(data[i], 0, size);
 		lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, recxs, 2, data[i], size, &req);
 		assert_memory_equal(data[i], verify_data[i], size);

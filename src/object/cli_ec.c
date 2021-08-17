@@ -1915,13 +1915,17 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		goto out;
 	}
 
-	if (!obj_ec_parity_lists_match(parity_lists, recx_lists, nr) ||
-	    DAOS_FAIL_CHECK(DAOS_FAIL_PARITY_EPOCH_DIFF)) {
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FAIL_PARITY_EPOCH_DIFF))) {
 		rc = -DER_FETCH_AGAIN;
-		D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));
-		daos_recx_ep_list_dump(parity_lists, nr);
-		daos_recx_ep_list_dump(recx_lists, nr);
-		goto out;
+		D_ERROR("simulate parity list mismatch, "DF_RC"\n", DP_RC(rc));
+	} else {
+		rc = obj_ec_parity_lists_match(parity_lists, recx_lists, nr);
+		if (rc) {
+			D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));
+			daos_recx_ep_list_dump(parity_lists, nr);
+			daos_recx_ep_list_dump(recx_lists, nr);
+			goto out;
+		}
 	}
 
 out:
