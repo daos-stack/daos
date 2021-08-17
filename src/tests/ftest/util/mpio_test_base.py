@@ -25,41 +25,6 @@ class MpiioTests(TestWithServers):
         super().__init__(*args, **kwargs)
         self.hostfile_clients_slots = None
         self.mpio = None
-        self.daos_cmd = None
-        self.cont_uuid = None
-
-    def setUp(self):
-        """Initialization function for MpiioTests."""
-        super().setUp()
-
-        # initialize daos_cmd
-        self.daos_cmd = DaosCommand(self.bin)
-
-        self.add_pool(connect=False)
-
-    def _create_cont(self):
-        """Create a container.
-
-        Args:
-            daos_cmd (DaosCommand): daos command to issue the container
-                create
-
-        Returns:
-            str: UUID of the created container
-
-        """
-        cont_type = self.params.get("type", "/run/container/*")
-        result = self.daos_cmd.container_create(
-            pool=self.pool.uuid, cont_type=cont_type)
-
-        # Extract the container UUID from the daos container create output
-        cont_uuid = re.findall(
-            r"created\s+container\s+([0-9a-f-]+)", result.stdout_text)
-        if not cont_uuid:
-            self.fail(
-                "Error obtaining the container uuid from: {}".format(
-                    result.stdout_text))
-        self.cont_uuid = cont_uuid[0]
 
     def run_test(self, test_repo, test_name):
         """Execute function to be used by test functions below.
@@ -71,8 +36,11 @@ class MpiioTests(TestWithServers):
         # Required to run daos command
         load_mpi("openmpi")
 
+        # Create pool
+        self.add_pool(connect=False)
+
         # create container
-        self._create_cont()
+        self.add_container(self.pool)
 
         # initialize MpioUtils
         self.mpio = MpioUtils()
@@ -90,7 +58,7 @@ class MpiioTests(TestWithServers):
             # running tests
             result = self.mpio.run_mpiio_tests(
                 self.hostfile_clients, self.pool.uuid, test_repo, test_name,
-                client_processes, self.cont_uuid)
+                client_processes, self.container.uuid)
         except MpioFailed as excep:
             self.fail("<{0} Test Failed> \n{1}".format(test_name, excep))
 

@@ -356,8 +356,11 @@ class TestContainer(TestDaosApiBase):
             }
 
             self._log_method("daos.container_create", kwargs)
-            uuid = self.daos.get_output("container_create", **kwargs)[0]
-
+            try:
+                uuid = self.daos.container_create(**kwargs)["results"]["uuid"]
+            except KeyError:
+                raise CommandFailure(
+                    "Error: Unexpected daos container create output")
             # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)

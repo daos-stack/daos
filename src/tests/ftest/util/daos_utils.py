@@ -16,7 +16,6 @@ class DaosCommand(DaosCommandBase):
 
     METHOD_REGEX = {
         "run": r"(.*)",
-        "container_create": r"\D+:\s+([0-9a-f-]+)",
         "container_query":
             r"Pool UUID:\s+([0-9a-f-]+)\n" +
             r"Container UUID:\s+([0-9a-f-]+)\n" +
@@ -84,14 +83,13 @@ class DaosCommand(DaosCommandBase):
             acl_file (str, optional): ACL file. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container create command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("container", "create"), pool=pool, sys_name=sys_name,
             cont=cont, path=path, type=cont_type, oclass=oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file)
