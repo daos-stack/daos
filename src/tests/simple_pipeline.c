@@ -107,55 +107,57 @@ insert_example_records(void)
 }
 
 /**
- * Build filter "Owner == Benny"
+ * Build pipeline filtering by "Owner == Benny"
  */
 void
-build_filter_one(daos_pipeline_t *pipeline)
+build_pipeline_one(daos_pipeline_t *pipeline)
 {
-	daos_pipeline_filter_t	akey_ft, eqfunc_ft, const_ft;
-	char			akey_ftype[]    = "DAOS_FILTER_AKEY";
-	char			const_ftype[]   = "DAOS_FILTER_CONST";
-	char			eqfunc_ftype[]  = "DAOS_FILTER_FUNC_EQ";
-	char			constant[STRING_LEN] = "Benny\0";
-	daos_pipeline_node_t	comp_eq_node;
+	daos_filter_part_t	akey_ft, eqfunc_ft, const_ft;
+	char			akey_ftype[]        = "DAOS_FILTER_AKEY";
+	char			const_ftype[]       = "DAOS_FILTER_CONST";
+	char			eqfunc_ftype[]      = "DAOS_FILTER_FUNC_EQ";
+	char			str_type[]          = "DAOS_FILTER_TYPE_STRING";
+	char			pipe_cond_type[]    = "DAOS_PIPELINE_CONDITION";
+	char			constant[STRING_LEN]= "Benny\0";
+	daos_filter_t		comp_eq;
 
 	/** akey for filter */
-	akey_ft.filter_type  = akey_ftype;
-	akey_ft.data_type    = DAOS_FILTER_TYPE_STRING;
+	akey_ft.part_type    = akey_ftype;
+	akey_ft.data_type    = str_type;
 	akey_ft.num_operands = 0;
 	d_iov_set(&(akey_ft.akey), "Owner", 5);
 	akey_ft.data_offset  = 0;
 	akey_ft.data_len     = STRING_LEN;
 
 	/** constant for filter */
-	const_ft.filter_type     = const_ftype;
-	const_ft.data_type       = DAOS_FILTER_TYPE_STRING;
+	const_ft.part_type       = const_ftype;
+	const_ft.data_type       = str_type;
 	const_ft.num_operands    = 0;
 	const_ft.num_constants   = 1;
 	const_ft.constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
 	d_iov_set(const_ft.constant, constant, STRING_LEN);
-	const_ft.data_offset   = 0;
-	const_ft.data_len      = STRING_LEN;
+	const_ft.data_offset     = 0;
+	const_ft.data_len        = STRING_LEN;
 
 	/** function for filter */
-	eqfunc_ft.filter_type   = eqfunc_ftype;
-	eqfunc_ft.data_type     = DAOS_FILTER_TYPE_STRING;
+	eqfunc_ft.part_type     = eqfunc_ftype;
+	eqfunc_ft.data_type     = NULL;
 	eqfunc_ft.num_operands  = 2;
 	eqfunc_ft.data_offset   = 0;
 	eqfunc_ft.data_len      = 0;
 
-	/** building pipeline node for the filter:
+	/** building a pipeline condition filter:
 	 *    the order of operands is prefix:
 	 *         "Owner == Benny"  ->  |(func=eq)|(akey=Owner)|(const=Benny)|
 	 */
-	comp_eq_node.node_type   = DAOS_PIPELINE_CONDITION;
-	comp_eq_node.num_filters = 3;
-	daos_pipeline_node_push(&comp_eq_node, &eqfunc_ft);
-	daos_pipeline_node_push(&comp_eq_node, &akey_ft);
-	daos_pipeline_node_push(&comp_eq_node, &const_ft);
+	comp_eq.filter_type   = pipe_cond_type;
+	daos_filter_add(&comp_eq, &eqfunc_ft);
+	daos_filter_add(&comp_eq, &akey_ft);
+	daos_filter_add(&comp_eq, &const_ft);
 
-	/** adding the node to the pipeline */
-	daos_pipeline_push(pipeline, &comp_eq_node);
+	/** adding the filter to the pipeline. This pipeline has only one
+	 *  filter  */
+	daos_pipeline_add(pipeline, &comp_eq);
 }
 
 void
@@ -226,8 +228,8 @@ run_pipeline(daos_pipeline_t *pipeline)
 	printf("records:\n");
 	while (!daos_anchor_is_eof(&anchor)) {
 		nr_kds = 64; /** trying to read 64 at a time */
-		rc = daos_pipeline_run(oh, *pipeline, DAOS_TX_NONE, 0, NULL,
-				       &nr_iods, iods, &anchor, &nr_kds,
+		rc = daos_pipeline_run(coh, oh, *pipeline, DAOS_TX_NONE, 0,
+				       NULL, &nr_iods, iods, &anchor, &nr_kds,
 				       kds, sgl_keys, sgl_recx, NULL,
 				       NULL);
 		ASSERT(rc == 0, "Pipeline run failed with %d", rc);
@@ -299,7 +301,7 @@ main(int argc, char **argv)
 	insert_example_records();
 
 	/** Get records filtering by "Owner == Benny" */
-	build_filter_one(&pipeline);
+	build_pipeline_one(&pipeline);
 
 	/** checking that the pipe is well constructed */
 	rc = daos_pipeline_check(&pipeline);
