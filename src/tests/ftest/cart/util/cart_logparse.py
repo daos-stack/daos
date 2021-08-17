@@ -504,7 +504,7 @@ class LogIter():
 
         # Force check encoding for smaller files.
         i = os.stat(fname)
-        if i.st_size < (1024*1024*20):
+        if i.st_size < (1024*1024*5):
             check_encoding = True
 
         if fname.endswith('.bz2'):
@@ -537,7 +537,7 @@ class LogIter():
         self._data = []
 
         i = os.fstat(self._fd.fileno())
-        self.__from_file = bool(i.st_size > (1024*1024*50)) or self.bz2
+        self.__from_file = bool(i.st_size > (1024*1024*100)) or self.bz2
 
         if self.__from_file:
             self._load_pids()

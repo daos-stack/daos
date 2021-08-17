@@ -3180,7 +3180,6 @@ class AllocFailTestRun():
                                     mtype='Invalid error code used')
                     continue
 
-                print(line)
                 self.aft.wf.add(self.fi_loc,
                                 'NORMAL',
                                 "Unexpected stderr '{}'".format(line),
