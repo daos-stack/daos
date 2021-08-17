@@ -9,6 +9,7 @@ package control
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -48,9 +49,10 @@ type (
 	// MockInvoker implements the Invoker interface in order
 	// to enable unit testing of API functions.
 	MockInvoker struct {
-		log         debugLogger
-		cfg         MockInvokerConfig
-		invokeCount int
+		log              debugLogger
+		cfg              MockInvokerConfig
+		invokeCount      int
+		invokeCountMutex sync.RWMutex
 	}
 )
 
@@ -93,9 +95,11 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	responses := make(HostResponseChan)
 
 	ur := mi.cfg.UnaryResponse
+	mi.invokeCountMutex.RLock()
 	if len(mi.cfg.UnaryResponseSet) > mi.invokeCount {
 		ur = mi.cfg.UnaryResponseSet[mi.invokeCount]
 	}
+	mi.invokeCountMutex.RUnlock()
 	if ur == nil {
 		// If the config didn't define a response, just dummy one up for
 		// tests that don't care.
@@ -110,7 +114,9 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 		}
 	}
 
+	mi.invokeCountMutex.Lock()
 	mi.invokeCount++
+	mi.invokeCountMutex.Unlock()
 	go func() {
 		for _, hr := range ur.Responses {
 			select {
