@@ -1033,8 +1033,7 @@ class DmgCommand(DmgCommandBase):
         try:
             if key:
                 return [pool[key] for pool in pool_list["response"]["pools"]]
-            else:
-                return [pool for pool in pool_list["response"]["pools"]]
+            return pool_list["response"]["pools"]
         except KeyError:
             return []
 
