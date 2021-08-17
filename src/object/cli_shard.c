@@ -14,6 +14,7 @@
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
 #include <daos/checksum.h>
+#include <daos/metrics.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
 
@@ -715,15 +716,48 @@ dc_shard_update_size(struct rw_cb_args *rw_args)
 	}
 }
 
+static daos_size_t
+dc_get_fetch_size(struct obj_rw_out *orwo)
+{
+	daos_size_t net_size = 0;
+	int i, j;
+
+	if (orwo->orw_sgls.ca_count > 0) {
+		for (i = 0; i < orwo->orw_sgls.ca_count; i++) {
+			for (j = 0; j < orwo->orw_sgls.ca_arrays[i].sg_nr_out; j++)
+				net_size += orwo->orw_sgls.ca_arrays[i].sg_iovs[j].iov_len;
+		}
+	} else {
+		for (i = 0; i < orwo->orw_nrs.ca_count; i++)
+			net_size += orwo->orw_data_sizes.ca_arrays[i];
+	}
+	return net_size;
+}
+
+static daos_size_t
+dc_get_update_size(daos_iod_t *iods, int nr)
+{
+	daos_size_t net_size = 0, len;
+	int i;
+
+	for (i = 0; i < nr; i++) {
+		len = daos_iods_len(&iods[i], 1);
+		if (len == (daos_size_t)-1)
+			continue;
+		net_size += len;
+	}
+	return net_size;
+}
+
 static int
 dc_rw_cb(tse_task_t *task, void *arg)
 {
 	struct rw_cb_args	*rw_args = arg;
 	struct obj_rw_in	*orw;
-	struct obj_rw_out	*orwo;
+	struct obj_rw_out	*orwo = NULL;
 	daos_handle_t		th;
-	struct obj_reasb_req	*reasb_req;
-	bool			 is_ec_obj;
+	struct obj_reasb_req	*reasb_req = NULL;
+	bool			 is_ec_obj = 0;
 	int			 opc;
 	int			 ret = task->dt_result;
 	int			 i;
@@ -1014,6 +1048,22 @@ out:
 
 	if (ret == 0 || obj_retry_error(rc))
 		ret = rc;
+	dc_obj_metrics_incr_completecntr(opc, ret);
+	if (ret == 0) {
+		daos_size_t size;
+		int is_full_stripe;
+		struct daos_oclass_attr *oca = &rw_args->shard_args->auxi.obj->cob_oca;
+
+		if (opc == DAOS_OBJ_RPC_UPDATE) {
+			size = dc_get_update_size(rw_args->shard_args->api_args->iods,
+					rw_args->shard_args->api_args->nr);
+		} else {
+			size = dc_get_fetch_size(orwo);
+		}
+		is_full_stripe = is_ec_obj ? reasb_req->orr_full_stripe_only : 0;
+		dc_metrics_update_iostats((opc == DAOS_OBJ_RPC_UPDATE), size);
+		dc_metrics_update_iodist((opc == DAOS_OBJ_RPC_UPDATE), size, oca, is_full_stripe);
+	}
 	return ret;
 }
 
@@ -1217,6 +1267,7 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 			/* RPC (from client to server) timeout is 3 seconds. */
 			rc = crt_req_set_timeout(req, 3);
 
+		dc_obj_metrics_incr_inflightcntr(req->cr_opc);
 		rc = daos_rpc_send(req, task);
 	}
 
@@ -1252,6 +1303,7 @@ obj_shard_punch_cb(tse_task_t *task, void *data)
 	}
 
 	crt_req_decref(rpc);
+	dc_obj_metrics_incr_completecntr(rpc->cr_opc, task->dt_result);
 	return task->dt_result;
 }
 
@@ -1326,6 +1378,7 @@ dc_obj_shard_punch(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	opi->opi_dti_cos.ca_count = 0;
 	opi->opi_dti_cos.ca_arrays = NULL;
 
+	dc_obj_metrics_incr_inflightcntr(req->cr_opc);
 	rc = daos_rpc_send(req, task);
 	dc_pool_put(pool);
 	return rc;
@@ -1675,6 +1728,7 @@ out:
 
 	if (ret == 0 || obj_retry_error(rc))
 		ret = rc;
+	dc_obj_metrics_incr_completecntr(opc, ret);
 	return ret;
 }
 
@@ -1824,6 +1878,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	if (rc != 0)
 		D_GOTO(out_eaa, rc);
 
+	dc_obj_metrics_incr_inflightcntr(req->cr_opc);
 	return daos_rpc_send(req, task);
 
 out_eaa:
@@ -2110,6 +2165,7 @@ out:
 	crt_req_decref(rpc);
 	if (ret == 0 || obj_retry_error(rc))
 		ret = rc;
+	dc_obj_metrics_incr_completecntr(opc, ret);
 	return ret;
 }
 
@@ -2189,6 +2245,7 @@ dc_obj_shard_query_key(struct dc_obj_shard *shard, struct dtx_epoch *epoch,
 	uuid_copy(okqi->okqi_co_uuid, cont_uuid);
 	daos_dti_copy(&okqi->okqi_dti, dti);
 
+	dc_obj_metrics_incr_inflightcntr(req->cr_opc);
 	rc = daos_rpc_send(req, task);
 	dc_pool_put(pool);
 	return rc;
@@ -2252,6 +2309,7 @@ obj_shard_sync_cb(tse_task_t *task, void *data)
 
 out:
 	crt_req_decref(rpc);
+	dc_obj_metrics_incr_completecntr(rpc->cr_opc, ret);
 	return rc;
 }
 
@@ -2311,6 +2369,7 @@ dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 	osi->osi_epoch		= args->sa_auxi.epoch.oe_value;
 	osi->osi_map_ver	= args->sa_auxi.map_ver;
 
+	dc_obj_metrics_incr_inflightcntr(req->cr_opc);
 	rc = daos_rpc_send(req, task);
 	dc_pool_put(pool);
 	return rc;

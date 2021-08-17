@@ -15,6 +15,23 @@
 #include <daos/tse.h>
 #include <daos_types.h>
 #include "checksum.h"
+#include <daos/metrics.h>
+
+extern daos_metrics_cntr_t   *cont_rpc_cntrs;
+
+static inline int
+dc_cont_metrics_incr_inflightcntr(int opc) {
+	if (cont_rpc_cntrs)
+		return dc_metrics_incr_inflightcntr(&cont_rpc_cntrs[opc_get(opc)]);
+	return 0;
+}
+
+static inline int
+dc_cont_metrics_incr_completecntr(int opc, int rc) {
+	if (cont_rpc_cntrs)
+		return dc_metrics_incr_completecntr(&cont_rpc_cntrs[opc_get(opc)], rc);
+	return 0;
+}
 
 int dc_cont_init(void);
 void dc_cont_fini(void);
@@ -53,4 +70,8 @@ int dc_cont_list_snap(tse_task_t *task);
 int dc_cont_create_snap(tse_task_t *task);
 int dc_cont_destroy_snap(tse_task_t *task);
 
+int dc_cont_metrics_init(void);
+void dc_cont_metrics_fini(void);
+int dc_cont_metrics_get_rpccntrs(daos_metrics_cont_rpc_cntrs_t *cntrs);
+int dc_cont_metrics_reset(void);
 #endif /* __DD_CONT_H__ */

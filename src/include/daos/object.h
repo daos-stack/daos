@@ -9,6 +9,7 @@
 #include <daos/common.h>
 #include <daos/tse.h>
 #include <daos_obj.h>
+#include <daos/metrics.h>
 
 /* EC parity is stored in a private address range that is selected by setting
  * the most-significant bit of the offset (an unsigned long). This effectively
@@ -719,4 +720,24 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 	}
 }
 
+extern daos_metrics_cntr_t   *obj_rpc_cntrs;
+
+static inline int
+dc_obj_metrics_incr_inflightcntr(int opc) {
+	if (obj_rpc_cntrs)
+		return dc_metrics_incr_inflightcntr(&obj_rpc_cntrs[opc_get(opc)]);
+	return 0;
+}
+
+static inline int
+dc_obj_metrics_incr_completecntr(int opc, int rc) {
+	if (obj_rpc_cntrs)
+		return dc_metrics_incr_completecntr(&obj_rpc_cntrs[opc_get(opc)], rc);
+	return 0;
+}
+
+int dc_obj_metrics_init(void);
+void dc_obj_metrics_fini(void);
+int dc_obj_metrics_get_rpccntrs(daos_metrics_obj_rpc_cntrs_t *cntrs);
+int dc_obj_metrics_reset(void);
 #endif /* __DD_OBJ_H__ */

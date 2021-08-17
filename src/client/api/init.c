@@ -23,6 +23,7 @@
 #include <daos/btree_class.h>
 #include <daos/placement.h>
 #include <daos/job.h>
+#include <daos/metrics.h>
 #include "task_internal.h"
 #include <pthread.h>
 
@@ -198,9 +199,16 @@ daos_init(void)
 	if (rc != 0)
 		D_GOTO(out_co, rc);
 
+	/** set up client metrics */
+	rc = dc_metrics_init();
+	if (rc != 0)
+		D_GOTO(out_obj, rc);
+
 	module_initialized++;
 	D_GOTO(unlock, rc = 0);
 
+out_obj:
+	dc_obj_fini();
 out_co:
 	dc_cont_fini();
 out_pool:
@@ -251,6 +259,7 @@ daos_fini(void)
 		D_GOTO(unlock, rc);
 	}
 
+	dc_metrics_fini();
 	dc_obj_fini();
 	dc_cont_fini();
 	dc_pool_fini();

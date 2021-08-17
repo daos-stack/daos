@@ -17,7 +17,7 @@
  * all will be run if no test is specified. Tests will be run in order
  * so tests that kill nodes must be last.
  */
-#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBI"
+#define TESTS "mpcetTViADKCoRvSXbOzZUdrNbBIM"
 
 /**
  * These tests will only be run if explicitly specified. They don't get
@@ -70,6 +70,7 @@ print_usage(int rank)
 	print_message("daos_test -b|--drain_simple\n");
 	print_message("daos_test -B|--extend_simple\n");
 	print_message("daos_test -N|--nvme_recovery\n");
+	print_message("daos_test -M|--client_metrics\n");
 	print_message("daos_test -a|--all\n");
 	print_message("Default <daos_tests> runs all tests\n=============\n");
 	print_message("Options: Use one of these arg(s) to modify the "
@@ -288,6 +289,14 @@ run_specified_tests(const char *tests, int rank, int size,
 								     sub_tests,
 								sub_tests_size);
 			break;
+		case 'M':
+			daos_test_print(rank, "\n\n=================");
+			daos_test_print(rank, "DAOS client metrics tests..");
+			daos_test_print(rank, "=================");
+			nr_failed += run_daos_client_metrics_test(rank, size,
+								     sub_tests,
+								sub_tests_size);
+			break;
 		default:
 			D_ASSERT(0);
 		}
@@ -355,6 +364,7 @@ main(int argc, char **argv)
 		{"degrade_ec",	no_argument,		NULL,	'X'},
 		{"drain_simple",	no_argument,	NULL,	'b'},
 		{"nvme_recovery",	no_argument,	NULL,	'N'},
+		{"client_metrics",	no_argument,	NULL,	'M'},
 		{"group",	required_argument,	NULL,	'g'},
 		{"csum_type",	required_argument,	NULL,
 						CHECKSUM_ARG_VAL_TYPE},
@@ -384,7 +394,7 @@ main(int argc, char **argv)
 
 	while ((opt =
 		getopt_long(argc, argv,
-			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:",
+			    "ampcCdtTViIzUZxADKeoROg:n:s:u:E:f:w:W:hrNvbBSXl:M",
 			     long_options, &index)) != -1) {
 		if (strchr(all_tests_defined, opt) != NULL) {
 			tests[ntests] = opt;

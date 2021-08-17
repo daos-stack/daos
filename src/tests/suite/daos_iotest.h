@@ -120,6 +120,11 @@ punch_akey_with_flags(const char *dkey, const char *akey, daos_handle_t th,
 void
 punch_recxs(const char *dkey, const char *akey, daos_recx_t *recxs,
 	    int nr, daos_handle_t th, struct ioreq *req);
+
+void
+punch_rec_with_rxnr(const char *dkey, const char *akey, uint64_t idx, int rx_nr,
+		    daos_handle_t th, struct ioreq *req);
+
 void
 punch_single(const char *dkey, const char *akey, uint64_t idx,
 	     daos_handle_t th, struct ioreq *req);

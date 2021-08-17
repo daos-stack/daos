@@ -423,6 +423,7 @@ obj_ec_recx_scan(daos_iod_t *iod, d_sg_list_t *sgl,
 	if (update && full_stripe_only) {
 		D_ASSERT(tgt_nr == obj_ec_tgt_nr(oca));
 		oiod_flags = OBJ_SIOD_EVEN_DIST;
+		reasb_req->orr_full_stripe_only = 1;
 	}
 	rc = obj_io_desc_init(&reasb_req->orr_oiods[iod_idx], tgt_nr,
 			      oiod_flags);

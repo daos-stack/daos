@@ -995,6 +995,7 @@ out:
 	/* -1 for dc_tx_commit() held */
 	dc_tx_decref(tx);
 
+	dc_obj_metrics_incr_completecntr(DAOS_OBJ_RPC_CPD, task->dt_result);
 	return 0;
 }
 
@@ -1823,6 +1824,7 @@ dc_tx_commit_trigger(tse_task_t *task, struct dc_tx *tx, daos_tx_commit_t *args)
 	tx->tx_status = TX_COMMITTING;
 	D_MUTEX_UNLOCK(&tx->tx_lock);
 
+	dc_obj_metrics_incr_inflightcntr(req->cr_opc);
 	return daos_rpc_send(req, task);
 
 out_req:

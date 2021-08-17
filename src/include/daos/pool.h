@@ -19,6 +19,7 @@
 #include <daos/tse.h>
 #include <daos_types.h>
 #include <daos_pool.h>
+#include <daos/metrics.h>
 
 /** pool query request bits */
 #define DAOS_PO_QUERY_SPACE		(1ULL << 0)
@@ -83,6 +84,22 @@ dc_pool_get_version(struct dc_pool *pool)
 	return ver;
 }
 
+extern daos_metrics_cntr_t   *pool_rpc_cntrs;
+
+static inline int
+dc_pool_metrics_incr_inflightcntr(int opc) {
+	if (pool_rpc_cntrs)
+		return dc_metrics_incr_inflightcntr(&pool_rpc_cntrs[opc_get(opc)]);
+	return 0;
+}
+
+static inline int
+dc_pool_metrics_incr_completecntr(int opc, int rc) {
+	if (pool_rpc_cntrs)
+		return dc_metrics_incr_completecntr(&pool_rpc_cntrs[opc_get(opc)], rc);
+	return 0;
+}
+
 struct dc_pool *dc_hdl2pool(daos_handle_t hdl);
 void dc_pool_get(struct dc_pool *pool);
 void dc_pool_put(struct dc_pool *pool);
@@ -113,4 +130,8 @@ int dc_pool_create_map_refresh_task(struct dc_pool *pool, uint32_t map_version,
 				    tse_sched_t *sched, tse_task_t **task);
 void dc_pool_abandon_map_refresh_task(tse_task_t *task);
 
+int dc_pool_metrics_init(void);
+void dc_pool_metrics_fini(void);
+int dc_pool_metrics_get_rpccntrs(daos_metrics_pool_rpc_cntrs_t *cntrs);
+int dc_pool_metrics_reset(void);
 #endif /* __DD_POOL_H__ */

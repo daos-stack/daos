@@ -20,6 +20,7 @@
 #include <daos_obj.h>
 #include "obj_rpc.h"
 #include "obj_internal.h"
+#include <daos/metrics.h>
 
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
@@ -112,6 +113,9 @@ struct obj_auxi_args {
 		struct shard_sync_args	 s_args;
 	};
 };
+
+/** DAOS metrics obj rpc counters */
+daos_metrics_cntr_t   *obj_rpc_cntrs;
 
 /**
  * task memory space should enough to use -
@@ -5738,4 +5742,63 @@ daos_obj_get_oclass(daos_handle_t coh, daos_ofeat_t ofeats,
 		return 0;
 
 	return cid;
+}
+
+int
+dc_obj_metrics_init()
+{
+	int rc = 0;
+
+	D_ALLOC_ARRAY(obj_rpc_cntrs, OBJ_PROTO_CLI_COUNT);
+	if (obj_rpc_cntrs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+out:
+	return rc;
+}
+
+void
+dc_obj_metrics_fini()
+{
+	D_FREE(obj_rpc_cntrs);
+}
+
+int
+dc_obj_metrics_get_rpccntrs(daos_metrics_obj_rpc_cntrs_t *cntrs)
+{
+	int rc = 0;
+
+	if (cont_rpc_cntrs == NULL)
+		D_GOTO(out, rc = -DER_UNINIT);
+
+	dc_metrics_cntr_copy(&cntrs->orc_update_cnt, &obj_rpc_cntrs[DAOS_OBJ_RPC_UPDATE]);
+	dc_metrics_cntr_copy(&cntrs->orc_fetch_cnt, &obj_rpc_cntrs[DAOS_OBJ_RPC_FETCH]);
+	dc_metrics_cntr_copy(&cntrs->orc_dkey_enum_cnt,
+				&obj_rpc_cntrs[DAOS_OBJ_DKEY_RPC_ENUMERATE]);
+	dc_metrics_cntr_copy(&cntrs->orc_akey_enum_cnt,
+				&obj_rpc_cntrs[DAOS_OBJ_AKEY_RPC_ENUMERATE]);
+	dc_metrics_cntr_copy(&cntrs->orc_recx_enum_cnt,
+				&obj_rpc_cntrs[DAOS_OBJ_RECX_RPC_ENUMERATE]);
+	dc_metrics_cntr_copy(&cntrs->orc_obj_enum_cnt, &obj_rpc_cntrs[DAOS_OBJ_RPC_ENUMERATE]);
+	dc_metrics_cntr_copy(&cntrs->orc_obj_punch_cnt, &obj_rpc_cntrs[DAOS_OBJ_RPC_PUNCH]);
+	dc_metrics_cntr_copy(&cntrs->orc_dkey_punch_cnt, &obj_rpc_cntrs[DAOS_OBJ_RPC_PUNCH_DKEYS]);
+	dc_metrics_cntr_copy(&cntrs->orc_akey_punch_cnt, &obj_rpc_cntrs[DAOS_OBJ_RPC_PUNCH_AKEYS]);
+	dc_metrics_cntr_copy(&cntrs->orc_querykey_cnt, &obj_rpc_cntrs[DAOS_OBJ_RPC_QUERY_KEY]);
+	dc_metrics_cntr_copy(&cntrs->orc_sync_cnt, &obj_rpc_cntrs[DAOS_OBJ_RPC_SYNC]);
+	dc_metrics_cntr_copy(&cntrs->orc_cpd_cnt, &obj_rpc_cntrs[DAOS_OBJ_RPC_CPD]);
+out:
+	return rc;
+}
+
+int
+dc_obj_metrics_reset()
+{
+	int i;
+	int rc = 0;
+
+	if (obj_rpc_cntrs == NULL)
+		D_GOTO(out, rc = -DER_UNINIT);
+	for (i = 0; i < OBJ_PROTO_CLI_COUNT; i++)
+		dc_metrics_clr_cntr(&obj_rpc_cntrs[i]);
+out:
+	return rc;
 }
