@@ -56,20 +56,20 @@ struct file_dfs {
 };
 
 struct dm_args {
-	char *src;
-	char *dst;
-	uuid_t src_p_uuid;
-	uuid_t src_c_uuid;
-	uuid_t dst_p_uuid;
-	uuid_t dst_c_uuid;
-	daos_handle_t src_poh;
-	daos_handle_t src_coh;
-	daos_handle_t dst_poh;
-	daos_handle_t dst_coh;
-	uint32_t cont_prop_oid;
-	uint32_t cont_prop_layout;
-	uint64_t cont_layout;
-	uint64_t cont_oid;
+	char		*src;
+	char		*dst;
+	char		src_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		src_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		dst_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
+	char		dst_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
+	daos_handle_t	src_poh;
+	daos_handle_t	src_coh;
+	daos_handle_t	dst_poh;
+	daos_handle_t	dst_coh;
+	uint32_t	cont_prop_oid;
+	uint32_t	cont_prop_layout;
+	uint64_t	cont_layout;
+	uint64_t	cont_oid;
 
 };
 
@@ -2717,10 +2717,6 @@ set_dm_args_default(struct dm_args *dm)
 {
 	dm->src = NULL;
 	dm->dst = NULL;
-	uuid_clear(dm->src_p_uuid);
-	uuid_clear(dm->src_c_uuid);
-	uuid_clear(dm->dst_p_uuid);
-	uuid_clear(dm->dst_c_uuid);
 	dm->src_poh = DAOS_HDL_INVAL;
 	dm->src_coh = DAOS_HDL_INVAL;
 	dm->dst_poh = DAOS_HDL_INVAL;
@@ -2796,14 +2792,13 @@ dm_connect(struct cmd_args_s *ap,
 
 	/* open src pool, src cont, and mount dfs */
 	if (src_file_dfs->type == DAOS) {
-		rc = daos_pool_connect(ca->src_p_uuid, sysname,
-				       DAOS_PC_RW, &ca->src_poh, NULL, NULL);
+		rc = daos_pool_connect(ca->src_pool, sysname, DAOS_PC_RW, &ca->src_poh, NULL, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to connect to source pool");
 			D_GOTO(out, rc);
 		}
-		rc = daos_cont_open(ca->src_poh, ca->src_c_uuid, DAOS_COO_RW,
-				    &ca->src_coh, src_cont_info, NULL);
+		rc = daos_cont_open(ca->src_poh, ca->src_cont, DAOS_COO_RW, &ca->src_coh,
+				    src_cont_info, NULL);
 		if (rc != 0) {
 			DH_PERROR_DER(ap, rc, "failed to open source container\n");
 			D_GOTO(err_src_root, rc);
@@ -2847,8 +2842,7 @@ dm_connect(struct cmd_args_s *ap,
 		rc = dm_get_cont_prop(ap, ca->src_coh, sysname, src_cont_info,
 				      size, dpe_types, dpe_vals);
 		if (rc != 0) {
-			fprintf(ap->errstream, "failed to query source "
-				"container: %d\n", rc);
+			fprintf(ap->errstream, "failed to query source container: %d\n", rc);
 			D_GOTO(err_src, rc);
 		}
 
@@ -2871,34 +2865,31 @@ dm_connect(struct cmd_args_s *ap,
 
 	/* open dst pool, dst cont, and mount dfs */
 	if (dst_file_dfs->type == DAOS) {
+		bool dst_cont_passed = strlen(ca->dst_cont) ? true : false;
+
 		/* only connect if destination pool wasn't already opened */
-		if (!uuid_is_null(ca->dst_p_uuid)) {
+		if (strlen(ca->dst_pool) != 0) {
 			if (!daos_handle_is_valid(ca->dst_poh)) {
-				rc = daos_pool_connect(ca->dst_p_uuid, sysname,
-						       DAOS_PC_RW, &ca->dst_poh,
-						       NULL, NULL);
+				rc = daos_pool_connect(ca->dst_pool, sysname, DAOS_PC_RW,
+						       &ca->dst_poh, NULL, NULL);
 				if (rc != 0) {
 					DH_PERROR_DER(ap, rc,
 						      "failed to connect to destination pool");
 					D_GOTO(err_src, rc);
 				}
 			}
-		/* if the dst pool uuid is null that means that this
-		 * is a UNS destination path, so we copy the source
-		 * pool uuid into the destination and try to connect
-		 * again
+		/* if the dst pool uuid is null that means that this is a UNS destination path, so
+		 * we copy the source pool uuid into the destination and try to connect again
 		 */
 		} else {
-			uuid_copy(ca->dst_p_uuid, ca->src_p_uuid);
-			rc = daos_pool_connect(ca->dst_p_uuid, sysname,
-					       DAOS_PC_RW, &ca->dst_poh,
+			strcpy(ca->dst_pool, ca->src_pool);
+			rc = daos_pool_connect(ca->dst_pool, sysname, DAOS_PC_RW, &ca->dst_poh,
 					       NULL, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "failed to connect to destination pool");
 				D_GOTO(err_src, rc);
 			}
-			uuid_copy(dattr.da_puuid, ca->dst_p_uuid);
-			uuid_copy(dattr.da_cuuid, ca->dst_c_uuid);
+
 			dattr.da_type = ca->cont_layout;
 			dattr.da_props = props;
 			rc = duns_create_path(ca->dst_poh, path, &dattr);
@@ -2908,52 +2899,67 @@ dm_connect(struct cmd_args_s *ap,
 					"--dst </$pool> | </path/to/uns>\n");
 				D_GOTO(err_dst_root, rc = daos_errno2der(rc));
 			}
-			uuid_copy(ca->dst_c_uuid, dattr.da_cuuid);
+			snprintf(ca->dst_cont, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 		}
-		/* try to open container if this is a filesystem copy,
-		 * and if it fails try to create a destination,
-		 * then attempt to open again
+
+		/* try to open container if this is a filesystem copy, and if it fails try to create
+		 * a destination, then attempt to open again
 		 */
-		rc = daos_cont_open(ca->dst_poh, ca->dst_c_uuid,
-				    DAOS_COO_RW, &ca->dst_coh,
-				    dst_cont_info, NULL);
+		if (dst_cont_passed)
+			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
+					    dst_cont_info, NULL);
+		else
+			rc = -DER_NONEXIST;
 		if (rc == -DER_NONEXIST) {
+			uuid_t cuuid;
+
 			if (ca->cont_layout == DAOS_PROP_CO_LAYOUT_POSIX) {
-				rc = dfs_cont_create(ca->dst_poh,
-						     ca->dst_c_uuid,
-						     &attr, NULL, NULL);
+				if (dst_cont_passed) {
+					rc = uuid_parse(ca->dst_cont, cuuid);
+					if (rc)
+						D_GOTO(err_dst_root, rc);
+					rc = dfs_cont_create(ca->dst_poh, cuuid, &attr, NULL, NULL);
+				} else {
+					rc = dfs_cont_create(ca->dst_poh, &cuuid, &attr,
+							     NULL, NULL);
+					uuid_unparse(cuuid, ca->dst_cont);
+				}
 				if (rc != 0) {
 					DH_PERROR_SYS(ap, rc,
 						      "failed to create destination container");
 					D_GOTO(err_dst_root, rc = daos_errno2der(rc));
 				}
 			} else {
-				rc = daos_cont_create(ca->dst_poh,
-						      ca->dst_c_uuid,
-						      props, NULL);
+				if (dst_cont_passed) {
+					rc = uuid_parse(ca->dst_cont, cuuid);
+					if (rc == 0)
+						rc = daos_cont_create(ca->dst_poh, cuuid, props,
+								      NULL);
+					else
+						rc = daos_cont_create_with_label(ca->dst_poh,
+										 ca->dst_cont,
+										 props, NULL, NULL);
+				} else {
+					rc = daos_cont_create(ca->dst_poh, &cuuid, props, NULL);
+					uuid_unparse(cuuid, ca->dst_cont);
+				}
 				if (rc != 0) {
 					DH_PERROR_DER(ap, rc,
 						      "failed to create destination container");
 					D_GOTO(err_dst_root, rc);
 				}
 			}
-			rc = daos_cont_open(ca->dst_poh, ca->dst_c_uuid,
-					    DAOS_COO_RW, &ca->dst_coh,
+
+			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "failed to open container");
 				D_GOTO(err_dst_root, rc);
 			}
-			fprintf(ap->outstream,
-				"Successfully created container "
-				""DF_UUIDF"\n", DP_UUID(ca->dst_c_uuid));
-		} else if (rc != 0) {
-			DH_PERROR_DER(ap, rc, "failed to open container");
-			D_GOTO(err_dst_root, rc);
+			fprintf(ap->outstream, "Successfully created container %s\n", ca->dst_cont);
 		}
 		if (is_posix_copy) {
-			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR,
-				       &dst_file_dfs->dfs);
+			rc = dfs_mount(ca->dst_poh, ca->dst_coh, O_RDWR, &dst_file_dfs->dfs);
 			if (rc != 0) {
 				DH_PERROR_SYS(ap, rc, "dfs_mount on destination failed");
 				D_GOTO(err_dst, rc = daos_errno2der(rc));
@@ -2968,9 +2974,8 @@ err_dst:
 err_dst_root:
 	rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
 	if (rc2 != 0)
-		DH_PERROR_DER(ap, rc2,
-			"failed to disconnect from destination pool "DF_UUIDF,
-			DP_UUID(ca->dst_p_uuid));
+		DH_PERROR_DER(ap, rc2, "failed to disconnect from destination pool %s\n",
+			      ca->dst_pool);
 err_src:
 	if (daos_handle_is_valid(ca->src_coh)) {
 		rc2 = daos_cont_close(ca->src_coh, NULL);
@@ -2982,9 +2987,8 @@ err_src_root:
 		rc2 = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc2 != 0)
 			fprintf(ap->errstream,
-				"failed to disconnect from source pool "DF_UUIDF": "DF_RC"\n",
-				DP_UUID(ca->src_p_uuid),
-				DP_RC(rc2));
+				"failed to disconnect from source pool %s: "DF_RC"\n",
+				ca->src_pool, DP_RC(rc2));
 	}
 out:
 	if (props != NULL)
@@ -3029,9 +3033,8 @@ dm_disconnect(struct cmd_args_s *ap,
 		rc = daos_pool_disconnect(ca->src_poh, NULL);
 		if (rc != 0) {
 			fprintf(ap->errstream,
-				"failed to disconnect from source "
-				"pool "DF_UUIDF ": %s (%d)\n",
-				DP_UUID(ca->src_p_uuid), d_errdesc(rc), rc);
+				"failed to disconnect from source pool %s: %s (%d)\n",
+				ca->src_pool, d_errdesc(rc), rc);
 			D_GOTO(out, rc);
 		}
 	}
@@ -3051,9 +3054,8 @@ err_src:
 		}
 		rc2 = daos_pool_disconnect(ca->dst_poh, NULL);
 		if (rc2 != 0) {
-			DH_PERROR_DER(ap, rc2,
-				"failed to disconnect from destination pool "DF_UUIDF,
-				DP_UUID(ca->dst_p_uuid));
+			DH_PERROR_DER(ap, rc2, "failed to disconnect from destination pool %s",
+				      ca->dst_pool);
 			D_GOTO(out, rc = rc2);
 		}
 	}
@@ -3068,20 +3070,28 @@ out:
 * Returns 0 if a daos path was successfully parsed, a error number if not.
 */
 static int
-dm_parse_path(struct file_dfs *file, char *path, size_t path_len,
-	      uuid_t *p_uuid, uuid_t *c_uuid)
+dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_str)[],
+	      char (*cont_str)[])
 {
 	struct duns_attr_t	dattr = {0};
 	int			rc = 0;
 
 	rc = duns_resolve_path(path, &dattr);
 	if (rc == 0) {
-		rc = uuid_parse(dattr.da_pool, *p_uuid);
-		if (rc != 0)
-			D_GOTO(out, rc = EINVAL);
-		rc = uuid_parse(dattr.da_cont, *c_uuid);
-		if (rc != 0)
-			D_GOTO(out, rc = EINVAL);
+		snprintf(*pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+		snprintf(*cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
+#if 0
+		pool_str = D_STRNDUP(dattr.da_pool, DAOS_PROP_LABEL_MAX_LEN);
+		if (pool_str == NULL)
+			D_GOTO(out, rc = ENOMEM);
+		if (strlen(cont_str)) {
+			cont_str = D_STRNDUP(dattr.da_cont, DAOS_PROP_LABEL_MAX_LEN);
+			if (cont_str == NULL) {
+				D_FREE(pool_str);
+				D_GOTO(out, rc = ENOMEM);
+			}
+		}
+#endif
 		if (dattr.da_rel_path == NULL) {
 			strncpy(path, "/", path_len);
 		} else {
@@ -3134,12 +3144,10 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 	}
 	D_STRNDUP(src_str, ap->src, src_str_len);
 	if (src_str == NULL) {
-		fprintf(ap->errstream,
-			"Unable to allocate memory for source path.");
+		fprintf(ap->errstream, "Unable to allocate memory for source path.");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
-	rc = dm_parse_path(&src_file_dfs, src_str, src_str_len,
-			   &ca.src_p_uuid, &ca.src_c_uuid);
+	rc = dm_parse_path(&src_file_dfs, src_str, src_str_len, &ca.src_pool, &ca.src_cont);
 	if (rc != 0) {
 		DH_PERROR_SYS(ap, rc, "failed to parse source path");
 		D_GOTO(out, rc = daos_errno2der(rc));
@@ -3156,17 +3164,12 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 			"Unable to allocate memory for destination path.");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
-	rc = dm_parse_path(&dst_file_dfs, dst_str, dst_str_len,
-			   &ca.dst_p_uuid, &ca.dst_c_uuid);
+	rc = dm_parse_path(&dst_file_dfs, dst_str, dst_str_len, &ca.dst_pool, &ca.dst_cont);
 	if (rc != 0) {
 		DH_PERROR_SYS(ap, rc, "failed to parse destination path");
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
-	/* if container UUID has not been provided generate one */
-	if (uuid_is_null(ca.dst_c_uuid)) {
-		uuid_generate(ca.dst_c_uuid);
-	}
 	rc = dm_connect(ap, is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
 			ap->sysname, ap->dst, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
@@ -3174,25 +3177,21 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		D_GOTO(out, rc);
 	}
 
-	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs,
-		     src_str, dst_str, &num_dirs, &num_files);
+	rc = fs_copy(ap, &src_file_dfs, &dst_file_dfs, src_str, dst_str, &num_dirs, &num_files);
 	if (rc != 0)
 		D_GOTO(out_disconnect, rc = daos_errno2der(rc));
 
 	if (dst_file_dfs.type == DAOS) {
-		fprintf(ap->outstream, "Successfully copied to DAOS: %s\n",
-			dst_str);
+		fprintf(ap->outstream, "Successfully copied to DAOS: %s\n", dst_str);
 	} else if (dst_file_dfs.type == POSIX) {
-		fprintf(ap->outstream, "Successfully copied to POSIX: %s\n",
-			dst_str);
+		fprintf(ap->outstream, "Successfully copied to POSIX: %s\n", dst_str);
 	}
 	fprintf(ap->outstream, "    Directories: %lu\n", num_dirs);
 	fprintf(ap->outstream, "    Files:       %lu\n", num_files);
 
 out_disconnect:
 	/* umount dfs, close conts, and disconnect pools */
-	rc = dm_disconnect(ap, is_posix_copy, &ca,
-			   &src_file_dfs, &dst_file_dfs);
+	rc = dm_disconnect(ap, is_posix_copy, &ca, &src_file_dfs, &dst_file_dfs);
 	if (rc != 0)
 		DH_PERROR_DER(ap, rc, "failed to disconnect");
 out:
@@ -3611,8 +3610,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 			"Unable to allocate memory for source path.");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
-	rc = dm_parse_path(&src_cp_type, src_str, src_str_len,
-			   &ca.src_p_uuid, &ca.src_c_uuid);
+	rc = dm_parse_path(&src_cp_type, src_str, src_str_len, &ca.src_pool, &ca.src_cont);
 	if (rc != 0) {
 		fprintf(ap->errstream, "failed to parse source path: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(rc));
@@ -3621,24 +3619,21 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	dst_str_len = strlen(ap->dst);
 	D_STRNDUP(dst_str, ap->dst, dst_str_len);
 	if (dst_str == NULL) {
-		fprintf(ap->errstream,
-			"Unable to allocate memory for dest path.");
+		fprintf(ap->errstream, "Unable to allocate memory for dest path.");
 		D_GOTO(out, rc = -DER_NOMEM);
 	}
-	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len,
-			   &ca.dst_p_uuid, &ca.dst_c_uuid);
+	rc = dm_parse_path(&dst_cp_type, dst_str, dst_str_len, &ca.dst_pool, &ca.dst_cont);
 	if (rc != 0) {
 		fprintf(ap->errstream,
 			"failed to parse destination path: %d\n", rc);
 		D_GOTO(out, rc = daos_errno2der(rc));
 	}
 
-	if (!uuid_is_null(ca.dst_c_uuid)) {
-		/* make sure destination container does not already exist
-		 * for object level copies
+	if (strlen(ca.dst_cont) != 0) {
+		/* make sure destination container does not already exist for object level copies
 		 */
-		rc = daos_pool_connect(ca.dst_p_uuid, ap->sysname,
-				       DAOS_PC_RW, &ca.dst_poh, NULL, NULL);
+		rc = daos_pool_connect(ca.dst_pool, ap->sysname, DAOS_PC_RW, &ca.dst_poh,
+				       NULL, NULL);
 		if (rc != 0) {
 			fprintf(ap->errstream,
 				"failed to connect to destination pool: "DF_RC"\n", DP_RC(rc));
@@ -3647,8 +3642,8 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 		/* make sure this destination container doesn't exist already,
 		 * if it does, exit
 		 */
-		rc = daos_cont_open(ca.dst_poh, ca.dst_c_uuid, DAOS_COO_RW,
-				    &ca.dst_coh, &dst_cont_info, NULL);
+		rc = daos_cont_open(ca.dst_poh, ca.dst_cont, DAOS_COO_RW, &ca.dst_coh,
+				    &dst_cont_info, NULL);
 		if (rc == 0) {
 			fprintf(ap->errstream,
 				"This destination container already "
@@ -3668,28 +3663,20 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 			rc = daos_pool_disconnect(ca.dst_poh, NULL);
 			if (rc != 0) {
 				fprintf(ap->errstream,
-					"failed to disconnect from "
-					"destination pool "DF_UUIDF ": %s "
-					"(%d)\n", DP_UUID(ca.dst_p_uuid),
-					d_errdesc(rc), rc);
+					"failed to disconnect from destination pool %s: %s (%d)\n",
+					ca.dst_pool, d_errdesc(rc), rc);
 				D_GOTO(out, rc);
 			}
 			D_GOTO(out, rc = 1);
 		}
-	} else {
-		/* if container UUID has not been provided generate one */
-		uuid_generate(ca.dst_c_uuid);
 	}
 
-	rc = dm_connect(ap, is_posix_copy, &dst_cp_type, &src_cp_type,
-			&ca, ap->sysname, ap->dst, &src_cont_info,
-			&dst_cont_info);
-	if (rc != 0) {
+	rc = dm_connect(ap, is_posix_copy, &dst_cp_type, &src_cp_type, &ca, ap->sysname, ap->dst,
+			&src_cont_info, &dst_cont_info);
+	if (rc != 0)
 		D_GOTO(out_disconnect, rc);
-	}
-	rc = daos_cont_create_snap_opt(ca.src_coh,
-				       &epoch, NULL,
-			       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT, NULL);
+	rc = daos_cont_create_snap_opt(ca.src_coh, &epoch, NULL,
+				       DAOS_SNAP_OPT_CR | DAOS_SNAP_OPT_OIT, NULL);
 	if (rc) {
 		fprintf(ap->errstream, "failed to create snapshot: %d\n", rc);
 		D_GOTO(out_disconnect, rc);
@@ -3780,8 +3767,8 @@ out_disconnect:
 	}
 out:
 	if (rc == 0) {
-		fprintf(ap->outstream, "Successfully copied to destination "
-			"container "DF_UUIDF "\n", DP_UUID(ca.dst_c_uuid));
+		fprintf(ap->outstream, "Successfully copied to destination container %s\n",
+			ca.dst_cont);
 	}
 	D_FREE(src_str);
 	D_FREE(dst_str);
