@@ -97,7 +97,7 @@ func PrintPoolCreateResponse(pcr *control.PoolCreateResp, out io.Writer, opts ..
 			title += ","
 			tierName = "NVMe"
 		}
-		title += fmt.Sprintf("%0.2f%%%%", tierRatio*100)
+		title += fmt.Sprintf("%0.2f%%", tierRatio*100)
 		fmtName := fmt.Sprintf("Storage tier %d (%s)", tierIdx, tierName)
 		fmtArgs = append(fmtArgs, txtfmt.TableRow{fmtName: fmt.Sprintf("%s (%s / rank)", humanize.Bytes(pcr.TierBytes[tierIdx]*numRanks), humanize.Bytes(pcr.TierBytes[tierIdx]))})
 	}

@@ -34,25 +34,29 @@ func TestValidateLogMasks(t *testing.T) {
 		"single level; single assignment": {
 			masks: "ERR,mgmt=DEBUG",
 		},
+		"single level; single assignment; mixed caae": {
+			masks: "err,mgmt=debuG",
+		},
 		"single level; single assignment; with space": {
 			masks:  "ERR, mgmt=DEBUG",
 			expErr: errors.New("illegal characters"),
 		},
 		"single level; single assignment; bad level": {
-			masks: "ERR,mgmt=DEBUG",
+			masks:  "ERR,mgmt=DEG",
+			expErr: errors.New("unknown log level"),
 		},
 		"single assignment; single level": {
 			masks:  "mgmt=DEBUG,ERR",
 			expErr: errors.New("want PREFIX=LEVEL"),
 		},
-		"multiple assignment": {
+		"multiple assignments": {
 			masks: "mgmt=DEBUG,bio=ERR",
 		},
-		"multiple assignment; bad format": {
+		"multiple assignments; bad format": {
 			masks:  "mgmt=DEBUG,bio=ERR=",
 			expErr: errors.New("want PREFIX=LEVEL"),
 		},
-		"multiple assignment; bad chars": {
+		"multiple assignments; bad chars": {
 			masks:  "mgmt=DEBUG,bio!=ERR",
 			expErr: errors.New("illegal characters"),
 		},
