@@ -25,7 +25,8 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
-    create_mdtest_cmdline, reserved_file_copy, cleanup_dfuse
+    create_mdtest_cmdline, reserved_file_copy, cleanup_dfuse, \
+    run_telemetry_check
 
 
 class SoakTestBase(TestWithServers):
@@ -62,6 +63,7 @@ class SoakTestBase(TestWithServers):
         self.all_failed_harassers = None
         self.soak_errors = None
         self.check_errors = None
+        self.telemetry = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -355,6 +357,8 @@ class SoakTestBase(TestWithServers):
         if self.harasser_loop_time and self.harassers:
             harasser_interval = self.harasser_loop_time / (
                 len(self.harassers) + 1)
+        # Baseline telemetry data
+        run_telemetry_check(self)
         # If there is nothing to do; exit
         if job_id_list:
             # wait for all the jobs to finish
@@ -395,6 +399,8 @@ class SoakTestBase(TestWithServers):
             event_check_messages = run_event_check(self, since, until)
             self.check_errors.extend(event_check_messages)
             run_monitor_check(self)
+            # Telemetry data after jobs complete
+            run_telemetry_check(self)
             # init harasser list when all jobs are done
             self.harassers = []
             self.offline_harassers = []
