@@ -11,25 +11,15 @@
 extern "C" {
 #endif
 
-/** types used in a filter object */
-#define DAOS_FILTER_TYPE_BINARY		0
-#define DAOS_FILTER_TYPE_STRING		1
-#define DAOS_FILTER_TYPE_INTEGER	2
-#define DAOS_FILTER_TYPE_REAL		3
-
-/** types of pipeline nodes */
-#define DAOS_PIPELINE_CONDITION		0
-#define DAOS_PIPELINE_AGGREGATION	1
-
 
 /**
- * A filter object, used to build operations for a pipeline node.
+ * A filter part object, used to build a filter object for a pipeline.
  *
  */
 typedef struct {
 	/**
-	 * filter type can be any of the following:
-	 *   -- functions:
+	 *  Part type can be any of the following:
+	 *   -- function:
 	 *      - logical functions:
 	 *          DAOS_FILTER_FUNC_EQ:		==
 	 *          DAOS_FILTER_FUNC_NE:		!=
@@ -48,22 +38,24 @@ typedef struct {
 	 *          DAOS_FILTER_FUNC_MAX:		MAX()
 	 *          DAOS_FILTER_FUNC_AVG:		AVG()
 	 *   -- key:
-	 *          DAOS_FILTER_DKEY:	Filter object represents dkey
-	 *          DAOS_FILTER_AKEY	Filter object represents akey
+	 *          DAOS_FILTER_OID:	Filter part object represents object id
+	 *          DAOS_FILTER_DKEY:	Filter part object represents dkey
+	 *          DAOS_FILTER_AKEY	Filter part object represents akey
 	 *   -- constant:
-	 *          DAOS_FILTER_CONST:	Filter object is a constant
+	 *          DAOS_FILTER_CONST:	Filter part object is a constant
 	 */
-	char		*filter_type;
+	char		*part_type;
 	/**
-	 * Type of data. Only relevant for keys and constant filter type objects:
+	 * Type of data. Only relevant for keys and constant filter part type
+	 * objects:
 	 *          DAOS_FILTER_TYPE_BINARY
 	 *          DAOS_FILTER_TYPE_STRING
 	 *          DAOS_FILTER_TYPE_INTEGER
 	 *          DAOS_FILTER_TYPE_REAL
 	 */
-	int		data_type;
+	char		*data_type;
 	/**
-	 * Number of operands for this filter object. For example, for '=='
+	 * Number of operands for this filter part object. For example, for '=='
 	 * we have 2 operands.
 	 */
 	uint32_t	num_operands;
@@ -87,33 +79,42 @@ typedef struct {
 	 * Size of the data to be filtered.
 	 */
 	size_t		data_len;
-} daos_pipeline_filter_t;
+} daos_filter_part_t;
 
 /**
- * A pipeline node, used to build a pipeline.
+ * A filter object, used to build a pipeline.
  */
 typedef struct {
 	/**
-	 * Node type can be any of the following:
-	 *   -- DAOS_PIPELINE_CONDITION:
+	 * Filter type can be any of the following:
+	 *   -- DAOS_FILTER_CONDITION:
 	 *          Records in, and records (meeting condition) out
-	 *   -- DAOS_PIPELINE_AGGREGATION:
+	 *   -- DAOS_FILTER_AGGREGATION:
 	 *          Records in, a single value out
 	 *
 	 * NOTE: Pipeline nodes can only be chained the following way:
 	 *             (condition) --> (condition)
 	 *             (condition) --> (aggregation)
+	 *             (aggregation) --> (aggregation)*
+	 *
+	 *       *chained aggragations are actually done in parallel. For
+	 *        example, the following pipeline:
+	 *            (condition) --> (aggregation1) --> (aggregation2)
+	 *        is actually exectuted as:
+	 *                          -> (aggregation1)
+	 *            (condition) -|
+	 *                          -> (aggregation2)
 	 */
-	int			node_type;
+	char			*filter_type;
 	/**
-	 * Number of filters inside this pipeline node
+	 * Number of filter parts inside this pipeline filter
 	 */
-	size_t			num_filters;
+	size_t			num_parts;
 	/**
-	 * Array of filters for this node
+	 * Array of filter parts for this filter object
 	 */
-	daos_pipeline_filter_t	*filters;
-} daos_pipeline_node_t;
+	daos_filter_part_t	*parts;
+} daos_filter_t;
 
 /**
  * A pipeline.
@@ -124,37 +125,39 @@ typedef struct {
 	 */
 	uint64_t		version;
 	/**
-	 * Number of nodes chained in this pipeline
+	 * Number of filters chained in this pipeline
 	 */
-	size_t			num_nodes;
+	size_t			num_filters;
 	/**
-	 * Array of nodes for this pipeline
+	 * Array of filters for this pipeline
 	 */
-	daos_pipeline_node_t	*nodes;
+	daos_filter_t		*filters;
 } daos_pipeline_t;
 
 
 /**
- * Adds a new pipeline node to the pipeline 'pipeline' object. The effect of
- * this function is to "push back" the new node at the end of the pipeline.
+ * Adds a new filter object to the pipeline \a pipeline object. The effect of
+ * this function is equivalent to "pushing back" the new filter at the end of
+ * the pipeline.
  *
  * \param[in,out]	pipeline	Pipeline object.
  *
- * \param[in]		node		Node object to be added to the pipeline.
+ * \param[in]		filter		Filter object to be added to the pipeline.
 */
 int
-daos_pipeline_push(daos_pipeline_t *pipeline, daos_pipeline_node_t *node);
+daos_pipeline_add(daos_pipeline_t *pipeline, daos_filter_t *filter);
 
 /**
- * Adds a new filter object to the pipeline node object 'node'.
+ * Adds a new filter part object to the filter object \a filter. The effect of
+ * this function is equivalent to "pushing back" the new filter part at the end
+ * of the filter stack.
  *
- * \param[in,out]	node	Pipeline node object.
+ * \param[in,out]	filter	Filter object.
  *
- * \param[in]		filter	Filter object to be added to a pipeline node.
+ * \param[in]		part	Filter part object to be added to a filter.
  */
 int
-daos_pipeline_node_push(daos_pipeline_node_t *node,
-			daos_pipeline_filter_t *filter);
+daos_filter_add(daos_filter_t *filter, daos_filter_part_t *part);
 
 /**
  * Checks that a pipeline object is well built. If the pipeline object is well
@@ -168,7 +171,9 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
 /**
  * Runs a pipeline on DAOS, returning objects and/or aggregated results.
  *
- * \param[in]		oh		Object open handle.
+ * \params[in]		coh		Container open handle.
+ *
+ * \param[in]		oh		Optional object open handle.
  *
  * \param[in]		pipeline	Pipeline object.
  *
@@ -179,7 +184,7 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  * \param[in]		flags		Conditional operations.
  *
  * \param[in]		dkey		Optional dkey. When passed, no iteration
- *					is done and processing isonly performed
+ *					is done and processing is only performed
  *					on this specific dkey.
  *
  * \param[in,out]	nr_iods		[in]: Number of I/O descriptors in the
@@ -222,10 +227,10 @@ daos_pipeline_check(daos_pipeline_t *pipeline);
  *					\a ev is NULL.
  */
 int
-daos_pipeline_run(daos_handle_t oh, daos_pipeline_t pipeline, daos_handle_t th,
-		  uint64_t flags, daos_key_t *dkey, uint32_t *nr_iods,
-		  daos_iod_t *iods, daos_anchor_t *anchor, uint32_t *nr_kds,
-		  daos_key_desc_t *kds, d_sg_list_t *sgl_keys,
+daos_pipeline_run(daos_handle_t coh, daos_handle_t *oh, daos_pipeline_t pipeline,
+		  daos_handle_t *th, uint64_t flags, daos_key_t *dkey,
+		  uint32_t *nr_iods, daos_iod_t *iods, daos_anchor_t *anchor,
+		  uint32_t *nr_kds, daos_key_desc_t *kds, d_sg_list_t *sgl_keys,
 		  d_sg_list_t *sgl_recx, d_sg_list_t *sgl_agg,
 		  daos_event_t *ev);
 
