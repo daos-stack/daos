@@ -112,14 +112,14 @@ insert_example_records(void)
 void
 build_pipeline_one(daos_pipeline_t *pipeline)
 {
-	daos_filter_part_t	akey_ft, eqfunc_ft, const_ft;
-	char			akey_ftype[]        = "DAOS_FILTER_AKEY";
-	char			const_ftype[]       = "DAOS_FILTER_CONST";
-	char			eqfunc_ftype[]      = "DAOS_FILTER_FUNC_EQ";
-	char			str_type[]          = "DAOS_FILTER_TYPE_STRING";
-	char			pipe_cond_type[]    = "DAOS_PIPELINE_CONDITION";
-	char			constant[STRING_LEN]= "Benny\0";
-	daos_filter_t		comp_eq;
+	daos_filter_part_t   akey_ft, eqfunc_ft, const_ft;
+	char		     akey_ftype[]         = "DAOS_FILTER_AKEY";
+	char		     const_ftype[]        = "DAOS_FILTER_CONST";
+	char		     eqfunc_ftype[]       = "DAOS_FILTER_FUNC_EQ";
+	char		     str_type[]           = "DAOS_FILTER_TYPE_STRING";
+	char		     pipe_cond_type[]     = "DAOS_PIPELINE_CONDITION";
+	char		     constant[STRING_LEN] = "Benny\0";
+	daos_filter_t	     comp_eq;
 
 	/** akey for filter */
 	akey_ft.part_type    = akey_ftype;
@@ -155,8 +155,7 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	daos_filter_add(&comp_eq, &akey_ft);
 	daos_filter_add(&comp_eq, &const_ft);
 
-	/** adding the filter to the pipeline. This pipeline has only one
-	 *  filter  */
+	/** adding the filter to the pipeline. This pipe has only one filter */
 	daos_pipeline_add(pipeline, &comp_eq);
 }
 
