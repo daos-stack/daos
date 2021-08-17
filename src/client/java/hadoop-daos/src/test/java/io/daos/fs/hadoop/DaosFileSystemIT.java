@@ -103,7 +103,7 @@ public class DaosFileSystemIT {
       DaosFileSystem dfs = (DaosFileSystem)fs;
       Assert.assertEquals(prefix, dfs.getUnsPrefix());
       // create and delete file with full path
-      Path newFilePath = new Path(prefix + "/12345" + (new Random().nextInt(100)));
+      Path newFilePath = new Path(prefix + "/12345" + (new Random().nextInt(10000)));
       Assert.assertTrue(fs.createNewFile(newFilePath));
       fs.delete(newFilePath, true);
       // create and delete file with relative path
