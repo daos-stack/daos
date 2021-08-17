@@ -50,17 +50,11 @@ class DaosServerTest(TestWithServers):
         self.server_managers[0].dmg.system_stop(force)
         self.server_managers[0].dmg.system_start()
 
-    def get_pool_list(self):
-        """Get the pool list contents."""
-        pool_list = sorted(self.get_dmg_command().pool_list())
-        self.log.info("get_pool-list: %s", pool_list)
-        return pool_list
-
     def verify_pool_list(self, expected_pool_list=None):
         """Verify the pool list."""
         if expected_pool_list is None:
             expected_pool_list = []
-        pool_list = self.get_pool_list()
+        pool_list = self.get_dmg_command().get_pool_list_uuids()
         self.log.info(
             "\n===Current pool-list:  %s\n===Expected pool-list: %s\n",
             pool_list, expected_pool_list)
@@ -148,7 +142,7 @@ class DaosServerTest(TestWithServers):
             "(2)Shutdown and restart the daos engine with pools "
             "and containers created.")
         self.create_pool_and_container()
-        pool_list = self.get_pool_list()
+        pool_list = self.get_dmg_command().get_pool_list_uuids()
         self.restart_engine()
         self.log.info(
             "(3)Force shutdown and restart the daos engine.")

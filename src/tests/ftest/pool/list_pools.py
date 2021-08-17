@@ -46,7 +46,7 @@ class ListPoolsTest(TestWithServers):
         # information.  The DmgCommand.pool_info() method returns the command
         # output as a dictionary of pool UUID keys with service replica list
         # values.
-        detected_uuids = self.get_dmg_command().pool_list()
+        detected_uuids = self.get_dmg_command().get_pool_list_uuids()
         self.log.info("Expected pool info: %s", str(expected_uuids))
         self.log.info("Detected pool info: %s", str(detected_uuids))
 

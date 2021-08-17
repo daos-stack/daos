@@ -77,7 +77,7 @@ class DmgSystemReformatTest(PoolTestBase):
         self.server_managers[-1].detect_engine_start(host_qty=2)
 
         # Check that we have cleared storage by checking pool list
-        if self.get_dmg_command().pool_list():
+        if self.get_dmg_command().get_pool_list_uuids():
             self.fail("Detected pools in storage after reformat: {}".format(
                 self.get_dmg_command().result.stdout_text))
 
@@ -85,5 +85,5 @@ class DmgSystemReformatTest(PoolTestBase):
         self.add_pool_qty(1)
 
         # Lastly, verify that last created pool is in the list
-        pool_info = self.get_dmg_command().pool_list()
-        self.assertEqual(list(pool_info)[0], self.pool[-1].uuid)
+        pool_uuids = self.get_dmg_command().get_pool_list_uuids()
+        self.assertEqual(pool_uuids[0], self.pool[-1].uuid)
