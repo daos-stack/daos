@@ -195,12 +195,15 @@ duns_destroy_path(daos_handle_t poh, const char *path);
 int
 duns_parse_attr(char *str, daos_size_t len, struct duns_attr_t *attr);
 
+int
+duns_create_attr(char *type, uuid_t pool, uuid_t cont, char **_value, daos_size_t *_out_size);
+
 /**
  * Set the system name in the duns struct in case it was obtained in a different way than
  * using duns_resolve_path().
  *
  * \param[in]	attrp	Attr pointer
- * \param[in]   sys	DAOS System name
+ * \param[in]	sys	DAOS System name
  *
  * \return              0 on Success. errno code on failure.
  */

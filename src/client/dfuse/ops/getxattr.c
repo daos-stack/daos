@@ -7,6 +7,8 @@
 #include "dfuse_common.h"
 #include "dfuse.h"
 
+#include "daos_uns.h"
+
 void
 dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		  const char *name, size_t size)
@@ -16,6 +18,17 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	int rc;
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
+
+	if (inode->ie_root) {
+		if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
+			rc = duns_create_attr("POSIX", inode->ie_dfs->dfs_dfp->dfp_pool,
+					      inode->ie_dfs->dfs_cont, &value, &out_size);
+			if (rc != 0)
+				goto err;
+
+			goto reply;
+		}
+	}
 
 	rc = dfs_getxattr(inode->ie_dfs->dfs_ns, inode->ie_obj, name, NULL,
 			  &out_size);
@@ -39,6 +52,7 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 	if (rc != 0)
 		D_GOTO(free, rc);
 
+reply:
 	DFUSE_REPLY_BUF(inode, req, value, out_size);
 	D_FREE(value);
 	return;
