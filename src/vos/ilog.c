@@ -1601,7 +1601,7 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 collapse:
 	rc = collapse_tree(lctx, &cache, priv, removed);
 
-	if (update != NULL && !agg_arg.aa_max_is_punch) {
+	if (update != NULL && update->tr_epc != 0 && !agg_arg.aa_max_is_punch) {
 		daos_epoch_range_t	range	= {update->tr_epc, update->tr_epc};
 		struct ilog_id		id = {
 			.id_tx_id = 0,
@@ -1609,6 +1609,7 @@ collapse:
 			.id_update_minor_eph = update->tr_minor_epc,
 			.id_punch_minor_eph = 0,
 		};
+		D_DEBUG(DB_TRACE, "INSERT ILOG ENTRY FOR update = "DF_X64"\n", update->tr_epc);
 
 		/* Were moved a creation entry, so need to add the new one */
 		lctx->ic_cbs.dc_log_add_cb = NULL;
@@ -1620,9 +1621,9 @@ collapse:
 done:
 	rc = ilog_tx_end(lctx, rc);
 	D_DEBUG(DB_TRACE, "%s in incarnation log epr:"DF_X64"-"DF_X64
-		" status: "DF_RC", removed %d entries\n",
+		" status: "DF_RC", removed %d entries, %s\n",
 		discard ? "Discard" : "Aggregation", epr->epr_lo,
-		epr->epr_hi, DP_RC(rc), removed);
+		epr->epr_hi, DP_RC(rc), removed, empty ? "empty" : "not empty");
 	if (rc)
 		return rc;
 

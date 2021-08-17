@@ -2369,8 +2369,9 @@ vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		return -DER_IO;
 
 	D_DEBUG(DB_TRACE, "Prepare IOC for "DF_UOID", iod_nr %d, epc "DF_X64
-		", flags="DF_X64"\n", DP_UOID(oid), iod_nr,
-		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags);
+		", flags="DF_X64"%s\n", DP_UOID(oid), iod_nr,
+		dtx_is_valid_handle(dth) ? dth->dth_epoch :  epoch, flags,
+		dtx_is_valid_handle(dth) ? " in DTX" : "");
 
 	rc = vos_check_akeys(iod_nr, iods);
 	if (rc != 0) {

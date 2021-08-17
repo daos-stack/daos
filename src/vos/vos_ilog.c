@@ -28,8 +28,10 @@ vos_ilog_status_get(struct umem_instance *umm, uint32_t tx_id,
 
 	switch (rc) {
 	case ALB_UNAVAILABLE:
-	case ALB_AVAILABLE_DIRTY:
 		return ILOG_UNCOMMITTED;
+	case ALB_AVAILABLE_DIRTY:
+		D_ASSERT(intent == DAOS_INTENT_PURGE);
+		/** If purging, we need to see the keys so we can see the records */
 	case ALB_AVAILABLE_CLEAN:
 		return ILOG_COMMITTED;
 	case ALB_AVAILABLE_ABORTED:
@@ -156,6 +158,11 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 
 		entry_epc = entry.ie_id.id_epoch;
 		if (entry_epc > epoch) {
+			if (entry.ie_status == -DER_INPROGRESS ||
+			    entry.ie_status == ILOG_UNCOMMITTED)
+				info->ii_future_inprogress = true;
+			else
+				info->ii_future_inprogress = false;
 			if (ilog_has_punch(&entry)) {
 				/** Entry is punched within uncertainty range,
 				 * so restart the transaction.
@@ -165,8 +172,14 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 
 				if (entry.ie_status == ILOG_COMMITTED)
 					info->ii_next_punch = entry_epc;
-			} else if (entry_epc <= bound) {
-				info->ii_uncertain_create = entry_epc;
+				info->ii_future_create.tr_epc = 0;
+				info->ii_future_create.tr_minor_epc = 0;
+			} else {
+				if (entry_epc <= bound)
+					info->ii_uncertain_create = entry_epc;
+				info->ii_future_create.tr_epc = entry_epc;
+				info->ii_future_create.tr_minor_epc =
+					entry.ie_id.id_update_minor_eph;
 			}
 			continue;
 		}
@@ -521,11 +534,14 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	struct ilog_time_rec	 punch_rec = {0, 0};
 	int			 rc;
 
+
 	if (parent_punch)
 		punch_rec = *parent_punch;
 
 	vos_ilog_desc_cbs_init(&cbs, coh);
-	D_DEBUG(DB_TRACE, "log="DF_X64"\n", umem_ptr2off(umm, ilog));
+	D_DEBUG(DB_TRACE, "log="DF_X64" epr="DF_X64"-"DF_X64" %s parent_punch="DF_TREC" update="
+		DF_TREC"\n", umem_ptr2off(umm, ilog), epr->epr_lo, epr->epr_hi,
+		discard ? "discard" : "aggregate", DP_TREC(&punch_rec), DP_TREC(update));
 
 	rc = ilog_aggregate(umm, ilog, &cbs, epr, discard, punch_rec.tr_epc,
 			    punch_rec.tr_minor_epc, &info->ii_entries, update);

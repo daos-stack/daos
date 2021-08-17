@@ -47,11 +47,15 @@ struct vos_ilog_info {
 	 *  subsequent punch as it does not need replay if it's intermediate
 	 */
 	daos_epoch_t		 ii_next_punch;
-	/** True if there is an uncertain update.  If a punch is uncertain,
+	/** Set if there is an uncertain update.  If a punch is uncertain,
 	 *  it should always cause a failure in vos_ilog_fetch.  But update
 	 *  conflict depends on the operation doing the check.
 	 */
 	daos_epoch_t		 ii_uncertain_create;
+	/** Tracks lowest committed update after the epoch range */
+	struct ilog_time_rec	 ii_future_create;
+	/** indicates the future update is uncommitted */
+	bool			 ii_future_inprogress;
 	/** The entity has no valid log entries */
 	bool			 ii_empty;
 };

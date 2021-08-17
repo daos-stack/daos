@@ -693,6 +693,9 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
 	ent->ie_obj_punch = oiter->it_obj->obj_ilog_info.ii_next_punch;
 	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
+	ent->ie_future_create = oiter->it_ilog_info.ii_future_create.tr_epc;
+	ent->ie_future_minor_epc = oiter->it_ilog_info.ii_future_create.tr_minor_epc;
+	ent->ie_future_inprogress = oiter->it_ilog_info.ii_future_inprogress;
 	if (oiter->it_ilog_info.ii_create == 0) {
 		/* The key has no visible subtrees so mark it covered */
 		ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;
@@ -784,6 +787,7 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 				  DP_RC(rc));
 		return rc;
 	}
+
 
 	if ((oiter->it_iter.it_type == VOS_ITER_AKEY) ||
 	    (oiter->it_akey.iov_buf == NULL)) /* dkey w/o akey as condition */
@@ -1613,8 +1617,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		if (rc != 0)
 			goto failed;
 		goto success;
-	case VOS_ITER_AKEY:
 	case VOS_ITER_SINGLE:
+	case VOS_ITER_AKEY:
 		rc = dbtree_open_inplace_ex(info->ii_btr, info->ii_uma,
 					vos_cont2hdl(obj->obj_cont),
 					vos_obj2pool(obj), &toh);

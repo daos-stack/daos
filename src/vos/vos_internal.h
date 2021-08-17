@@ -1097,10 +1097,10 @@ gc_reserve_space(daos_size_t *rsrvd);
  * \param discard[IN]	Discard epoch or 0 if not discard
  * \param update[IN]	Optional epoch of lowest update after the epoch range
  *
- * \return		Zero on Success
- *			1 if a reprobe is needed (entry is removed or not
- *			visible)
- *			negative value otherwise
+ * \return			Zero on Success
+ *				1 if a reprobe is needed (entry is removed or not
+ *				visible)
+ *				negative value otherwise
  */
 int
 oi_iter_aggregate(daos_handle_t ih, daos_epoch_t discard, const struct ilog_time_rec *update);
@@ -1113,10 +1113,10 @@ oi_iter_aggregate(daos_handle_t ih, daos_epoch_t discard, const struct ilog_time
  * \param discard[IN]	Discard epoch or 0 if not discard
  * \param update[IN]	Optional epoch of lowest update after the range
  *
- * \return		Zero on Success
- *			1 if a reprobe is needed (entry is removed or not
- *			visible)
- *			negative value otherwise
+ * \return			Zero on Success
+ *				1 if a reprobe is needed (entry is removed or not
+ *				visible)
+ *				negative value otherwise
  */
 int
 vos_obj_iter_aggregate(daos_handle_t ih, daos_epoch_t discard, const struct ilog_time_rec *update);

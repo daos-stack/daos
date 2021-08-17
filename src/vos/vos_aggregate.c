@@ -162,25 +162,31 @@ struct vos_agg_param {
 };
 
 static inline void
-set_update_min(const vos_iter_entry_t *entry, struct ilog_time_rec *trec)
+set_update_min_epc(struct ilog_time_rec *trec, daos_epoch_t epoch, uint16_t minor_epc)
 {
 	if (trec->tr_epc == 0) {
-		trec->tr_epc = entry->ie_epoch;
-		trec->tr_minor_epc = entry->ie_minor_epc;
+		trec->tr_epc = epoch;
+		trec->tr_minor_epc = minor_epc;
 		return;
 	}
 
-	if (trec->tr_epc < entry->ie_epoch)
+	if (trec->tr_epc < epoch)
 		return;
 
-	if (trec->tr_epc > entry->ie_epoch) {
-		trec->tr_epc = entry->ie_epoch;
-		trec->tr_minor_epc = entry->ie_minor_epc;
+	if (trec->tr_epc > epoch) {
+		trec->tr_epc = epoch;
+		trec->tr_minor_epc = minor_epc;
 		return;
 	}
 
-	if (trec->tr_minor_epc > entry->ie_minor_epc)
-		trec->tr_minor_epc = entry->ie_minor_epc;
+	if (trec->tr_minor_epc > minor_epc)
+		trec->tr_minor_epc = minor_epc;
+}
+
+static inline void
+set_update_min(const vos_iter_entry_t *entry, struct ilog_time_rec *trec)
+{
+	set_update_min_epc(trec, entry->ie_epoch, entry->ie_minor_epc);
 }
 
 static inline void
@@ -237,16 +243,19 @@ reset_agg_pos(vos_iter_type_t type, struct vos_agg_param *agg_param)
 {
 	switch (type) {
 	case VOS_ITER_OBJ:
+		D_DEBUG(DB_TRACE, "Reset object\n");
 		memset(&agg_param->ap_oid, 0, sizeof(agg_param->ap_oid));
 		agg_param->ap_dkey_min.tr_epc = 0;
 		agg_param->ap_dkey_min.tr_minor_epc = 0;
 		break;
 	case VOS_ITER_DKEY:
+		D_DEBUG(DB_TRACE, "Reset dkey\n");
 		memset(&agg_param->ap_dkey, 0, sizeof(agg_param->ap_dkey));
 		agg_param->ap_akey_min.tr_epc = 0;
 		agg_param->ap_akey_min.tr_minor_epc = 0;
 		break;
 	case VOS_ITER_AKEY:
+		D_DEBUG(DB_TRACE, "Reset akey\n");
 		memset(&agg_param->ap_akey, 0, sizeof(agg_param->ap_akey));
 		agg_param->ap_value_min.tr_epc = 0;
 		agg_param->ap_value_min.tr_minor_epc = 0;
@@ -458,6 +467,8 @@ vos_agg_sv(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	/* Discard */
 	if (agg_param->ap_discard) {
+		D_DEBUG(DB_TRACE, "Checking discarded entry "DF_X64" against "DF_X64"\n",
+			entry->ie_epoch, agg_param->ap_discard_hi);
 		if (entry->ie_epoch > agg_param->ap_discard_hi) {
 			/** Entry is outside of discard range */
 			set_update_min(entry, &agg_param->ap_dkey_min);
@@ -2044,6 +2055,8 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (entry->ie_epoch > agg_param->ap_discard_hi)
 			return 0;
 
+		D_DEBUG(DB_TRACE, "Checking discarded entry "DF_X64" against "DF_X64"\n",
+			entry->ie_epoch, agg_param->ap_discard_hi);
 		if (entry->ie_epoch > agg_param->ap_discard_hi) {
 			/** Entry is outside of discard range */
 			set_update_min(entry, &agg_param->ap_dkey_min);
@@ -2457,6 +2470,7 @@ vos_obj_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_
 	if (rc != 0)
 		return rc;
 
+	D_DEBUG(DB_TRACE, "discard object, update="DF_TREC"\n", DP_TREC(update));
 	obj_df = obj->obj_df;
 	rc = vos_ilog_aggregate(coh, &obj_df->vo_ilog, epr, true, NULL, &obj->obj_ilog_info,
 				update);
@@ -2496,11 +2510,18 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 	if (rc != 0)
 		goto free_agg_data;
 
-	D_DEBUG(DB_EPC, "Discard epr "DF_U64"-"DF_U64"\n",
-		epr->epr_lo, epr->epr_hi);
+	if (oid != NULL) {
+		D_DEBUG(DB_EPC, "Discard "DF_UOID" epr "DF_X64"-"DF_X64"\n", DP_UOID(*oid),
+			epr->epr_lo, epr->epr_hi);
+	} else {
+		D_DEBUG(DB_EPC, "Discard epr "DF_X64"-"DF_X64"\n", epr->epr_lo, epr->epr_hi);
 
+	}
+retry:
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;
+	ad->ad_iter_param.ip_epr.epr_lo = epr->epr_lo;
+	ad->ad_iter_param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	if (oid != NULL) {
 		type = VOS_ITER_DKEY;
 		ad->ad_iter_param.ip_oid = *oid;
@@ -2530,9 +2551,16 @@ vos_discard(daos_handle_t coh, const daos_unit_oid_t *oid, daos_epoch_range_t *e
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);
 
-	if (rc == 0 && oid != NULL)
+	if (oid != NULL) {
+		if (rc == -DER_INPROGRESS) {
+			/** Yield so progress can be made, then try again */
+			memset(ad, 0, sizeof(*ad));
+			bio_yield();
+			goto retry;
+		}
 		rc = vos_obj_discard(coh, oid, epr, &ad->ad_agg_param,
 				     &ad->ad_agg_param.ap_dkey_min);
+	}
 	aggregate_exit(cont, true);
 
 free_agg_data:
