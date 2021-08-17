@@ -344,7 +344,7 @@ class PoolSecurityTestBase(TestWithServers):
         daos_cmd = DaosCommand(self.bin)
         daos_cmd.exit_status_exception = False
         if action.lower() == "write":
-            # pylint: disable=method-hidden
+            # pylint: disable=protected-access
             result = daos_cmd._get_result(("container", "create"), pool=uuid)
         elif action.lower() == "read":
             result = daos_cmd.pool_query(pool=uuid)

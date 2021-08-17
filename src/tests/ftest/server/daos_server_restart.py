@@ -70,10 +70,11 @@ class DaosServerTest(TestWithServers):
 
     def create_pool_and_container(self):
         """Create pool and container."""
+        self.pool = []
+        self.container = []
         num_of_pool = self.params.get("num_of_pool", "/run/server/*/", 3)
         container_per_pool = self.params.get(
             "container_per_pool", "/run/server/*/", 2)
-
         for _ in range(num_of_pool):
             self.pool.append(self.get_pool(connect=False))
             for _ in range(container_per_pool):
