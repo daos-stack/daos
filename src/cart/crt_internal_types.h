@@ -56,6 +56,7 @@ struct crt_prov_gdata {
 
 };
 
+
 /* CaRT global data */
 struct crt_gdata {
 	/** Provider initialized at crt_init() time */
@@ -127,7 +128,7 @@ struct crt_event_cb_priv {
 
 /* TODO may use a RPC to query server-side context number */
 #ifndef CRT_SRV_CONTEXT_NUM
-# define CRT_SRV_CONTEXT_NUM		(16)
+# define CRT_SRV_CONTEXT_NUM		(256)
 #endif
 
 #ifndef CRT_PROGRESS_NUM
@@ -283,6 +284,7 @@ struct crt_opc_map {
 	d_list_t		com_coq_list;
 	struct crt_opc_map_L2	*com_map;
 };
+
 
 int crt_na_ofi_config_init(int provider);
 void crt_na_ofi_config_fini(int provider);
