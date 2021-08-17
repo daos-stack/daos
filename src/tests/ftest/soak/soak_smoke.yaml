@@ -208,3 +208,4 @@ monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
     - "ps -C daos_engine -o %mem,%cpu,cmd"
+enable_telemetry: True

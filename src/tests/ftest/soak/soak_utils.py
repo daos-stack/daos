@@ -21,6 +21,7 @@ from general_utils import get_host_data, get_random_string, \
 import slurm_utils
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
+from telemetry_utils import TelemetryUtils
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
@@ -235,6 +236,22 @@ def run_monitor_check(self):
         for cmd in monitor_cmds:
             command = "sudo {}".format(cmd)
             pcmd(hosts, command, timeout=30)
+
+
+def run_telemetry_check(self):
+    """Monitor telemetry data.
+
+    Args:
+        self (obj): soak obj
+
+    """
+    enable_telemetry = self.params.get("enable_telemetry", "/run/*")
+    if enable_telemetry:
+        if not self.telemetry:
+            self.telemetry = TelemetryUtils(
+                self.get_dmg_command(), self.hostlist_servers)
+        # List all of the telemetry metrics
+        self.telemetry.list_metrics()
 
 
 def get_harassers(harasser):
