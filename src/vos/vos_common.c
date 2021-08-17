@@ -583,7 +583,7 @@ vos_self_init(const char *db_path)
 		return rc;
 	}
 
-	rc = ABT_init(0, NULL);
+	//rc = ABT_init(0, NULL);
 	if (rc != 0) {
 		D_MUTEX_UNLOCK(&self_mode.self_lock);
 		return rc;

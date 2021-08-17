@@ -417,7 +417,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 		    "Discard" : "Aggregate", epr_a->epr_lo, epr_a->epr_hi);
 
 	if (ds->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
+		rc = vos_discard(arg->ctx.tc_co_hdl, NULL, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
 				   ds_csum_agg_recalc, NULL, NULL, false);
@@ -603,7 +603,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		    "Discard" : "Aggregate");
 
 	if (ds_sample->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
+		rc = vos_discard(arg->ctx.tc_co_hdl, NULL, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL,
 				   false);
@@ -1096,7 +1096,7 @@ do_punch(struct io_test_args *arg, int type, daos_unit_oid_t oid,
 
 #define NUM_INTERNAL 200
 static void
-agg_punches_test_helper(void **state, int record_type, int type, bool discard,
+agg_punches_test_helper(void **state, bool one, int record_type, int type, bool discard,
 			int first, int last)
 {
 	struct io_test_args	*arg = *state;
@@ -1155,7 +1155,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 
 	for (i = 0; i < 2; i++) {
 		if (discard)
-			rc = vos_discard(arg->ctx.tc_co_hdl, &epr, NULL, NULL);
+			rc = vos_discard(arg->ctx.tc_co_hdl, one ? &oid : NULL, &epr, NULL, NULL);
 		else
 			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
 					   NULL, NULL, false);
@@ -1226,7 +1226,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 
 /** Do a punch aggregation test */
 static void
-agg_punches_test(void **state, int record_type, bool discard)
+agg_punches_test(void **state, bool one, int record_type, bool discard)
 {
 	int	first, last, type;
 	int	lstart;
@@ -1237,7 +1237,7 @@ agg_punches_test(void **state, int record_type, bool discard)
 		for (last = lstart; last <= AGG_UPDATE; last++) {
 			for (type = AGG_OBJ_TYPE; type <= AGG_AKEY_TYPE;
 			     type++) {
-				agg_punches_test_helper(state, record_type,
+				agg_punches_test_helper(state, one, record_type,
 							type, discard, first,
 							last);
 			}
@@ -1247,14 +1247,28 @@ agg_punches_test(void **state, int record_type, bool discard)
 static void
 discard_14(void **state)
 {
-	agg_punches_test(state, DAOS_IOD_SINGLE, true);
+	agg_punches_test(state, false, DAOS_IOD_SINGLE, true);
 	cleanup();
 }
 
 static void
 discard_15(void **state)
 {
-	agg_punches_test(state, DAOS_IOD_ARRAY, true);
+	agg_punches_test(state, false, DAOS_IOD_ARRAY, true);
+	cleanup();
+}
+
+static void
+discard_16(void **state)
+{
+	agg_punches_test(state, true, DAOS_IOD_ARRAY, true);
+	cleanup();
+}
+
+static void
+discard_17(void **state)
+{
+	agg_punches_test(state, true, DAOS_IOD_ARRAY, true);
 	cleanup();
 }
 
@@ -1891,14 +1905,14 @@ aggregate_14(void **state)
 static void
 aggregate_15(void **state)
 {
-	agg_punches_test(state, DAOS_IOD_SINGLE, false);
+	agg_punches_test(state, false, DAOS_IOD_SINGLE, false);
 	cleanup();
 }
 
 static void
 aggregate_16(void **state)
 {
-	agg_punches_test(state, DAOS_IOD_ARRAY, false);
+	agg_punches_test(state, false, DAOS_IOD_ARRAY, false);
 	cleanup();
 }
 
@@ -2527,6 +2541,10 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_14, NULL, agg_tst_teardown },
 	{ "VOS465: Discard object/key punches array",
 	  discard_15, NULL, agg_tst_teardown },
+	{ "VOS466: Discard single object sv",
+	  discard_16, NULL, agg_tst_teardown },
+	{ "VOS467: Discard single object array",
+	  discard_17, NULL, agg_tst_teardown },
 };
 
 static const struct CMUnitTest aggregate_tests[] = {

@@ -320,6 +320,7 @@ entries_set(struct entries *entries, enum entries_op op, ...)
 		entries->entry_count++;
 	}
 	va_end(ap);
+	fflush(stdout);
 
 	return 0;
 }
@@ -401,6 +402,7 @@ entries_check(struct umem_instance *umm, struct ilog_df *root,
 
 finish:
 	ilog_fetch_finish(&ilog_entries);
+	fflush(stdout);
 	return rc;
 }
 
@@ -869,7 +871,7 @@ ilog_test_aggregate(void **state)
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
-			    &ilents);
+			    &ilents, NULL);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
 
@@ -893,7 +895,7 @@ ilog_test_aggregate(void **state)
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
-			    &ilents);
+			    &ilents, NULL);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
 	rc = entries_set(entries, ENTRY_NEW, 6, false, ENTRIES_END);
@@ -908,7 +910,7 @@ ilog_test_aggregate(void **state)
 	commit_all();
 	epr.epr_hi = 7;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, false, 0, 0,
-			    &ilents);
+			    &ilents, NULL);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate log entry\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -937,6 +939,7 @@ ilog_test_discard(void **state)
 	struct ilog_df		*ilog;
 	struct version_cache	 version_cache;
 	struct ilog_entries	 ilents;
+	struct ilog_time_rec	 min_update;
 	struct entries		*entries = args->custom;
 	struct ilog_id		 id;
 	daos_epoch_range_t	 epr = {0, DAOS_EPOCH_MAX};
@@ -984,11 +987,14 @@ ilog_test_discard(void **state)
 	commit_all();
 	epr.epr_lo = 2;
 	epr.epr_hi = 4;
+	min_update.tr_epc = 5;
+	min_update.tr_minor_epc = 5;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
-			    &ilents);
+			    &ilents, &min_update);
 	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
 
+	/* Should not have added min_update, because epoch 1 is in history */
 	rc = entries_set(entries, ENTRY_NEW, 1, false, ENTRIES_END);
 	assert_rc_equal(rc, 0);
 	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
@@ -1007,26 +1013,26 @@ ilog_test_discard(void **state)
 	commit_all();
 	epr.epr_lo = 0;
 	epr.epr_hi = 6;
+	min_update.tr_epc = 7;
+	min_update.tr_minor_epc = 1;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
-			    &ilents);
-	/* 1 means empty */
-	LOG_FAIL(rc, 1, "Failed to aggregate ilog\n");
+			    &ilents, &min_update);
+	LOG_FAIL(rc, 0, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
-	rc = entries_set(entries, ENTRY_NEW, ENTRIES_END);
+	rc = entries_set(entries, ENTRY_NEW, 7, false, ENTRIES_END);
 	assert_rc_equal(rc, 0);
-	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, -DER_NONEXIST,
-			   entries);
+	rc = entries_check(umm, ilog, &ilog_callbacks, NULL, 0, entries);
 	assert_rc_equal(rc, 0);
 
-	id.id_epoch = 7;
-	rc = ilog_update(loh, NULL, id.id_epoch, 1, false);
+	id.id_epoch = 8;
+	rc = ilog_update(loh, NULL, id.id_epoch, 1, true);
 	LOG_FAIL(rc, 0, "Failed to insert log entry\n");
 	version_cache_fetch(&version_cache, loh, true);
 	commit_all();
 
-	epr.epr_hi = 7;
+	epr.epr_hi = 8;
 	rc = ilog_aggregate(umm, ilog, &ilog_callbacks, &epr, true, 0, 0,
-			    &ilents);
+			    &ilents, NULL);
 	/* 1 means empty */
 	LOG_FAIL(rc, 1, "Failed to aggregate ilog\n");
 	version_cache_fetch(&version_cache, loh, true);
@@ -1045,6 +1051,7 @@ ilog_test_discard(void **state)
 	ilog_free_root(umm, ilog);
 	ilog_fetch_finish(&ilents);
 }
+
 
 static const struct CMUnitTest inc_tests[] = {
 	{ "VOS500.1: VOS incarnation log UPDATE", ilog_test_update, NULL,
