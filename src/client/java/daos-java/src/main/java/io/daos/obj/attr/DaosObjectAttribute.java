@@ -18,14 +18,14 @@ private static final long serialVersionUID = 0L;
   private DaosObjectAttribute() {
   }
 
-  @Override
+  @java.lang.Override
   @SuppressWarnings({"unused"})
-  protected Object newInstance(
+  protected java.lang.Object newInstance(
       UnusedPrivateParameter unused) {
     return new DaosObjectAttribute();
   }
 
-  @Override
+  @java.lang.Override
   public final com.google.protobuf.UnknownFieldSet
   getUnknownFields() {
     return this.unknownFields;
@@ -36,7 +36,7 @@ private static final long serialVersionUID = 0L;
       throws com.google.protobuf.InvalidProtocolBufferException {
     this();
     if (extensionRegistry == null) {
-      throw new NullPointerException();
+      throw new java.lang.NullPointerException();
     }
     com.google.protobuf.UnknownFieldSet.Builder unknownFields =
         com.google.protobuf.UnknownFieldSet.newBuilder();
@@ -54,11 +54,11 @@ private static final long serialVersionUID = 0L;
             break;
           }
           case 18: {
-            DaosOclassAttr.Builder subBuilder = null;
+            io.daos.obj.attr.DaosOclassAttr.Builder subBuilder = null;
             if (oaOa_ != null) {
               subBuilder = oaOa_.toBuilder();
             }
-            oaOa_ = input.readMessage(DaosOclassAttr.parser(), extensionRegistry);
+            oaOa_ = input.readMessage(io.daos.obj.attr.DaosOclassAttr.parser(), extensionRegistry);
             if (subBuilder != null) {
               subBuilder.mergeFrom(oaOa_);
               oaOa_ = subBuilder.buildPartial();
@@ -87,15 +87,15 @@ private static final long serialVersionUID = 0L;
   }
   public static final com.google.protobuf.Descriptors.Descriptor
       getDescriptor() {
-    return DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_descriptor;
+    return io.daos.obj.attr.DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_descriptor;
   }
 
-  @Override
-  protected FieldAccessorTable
+  @java.lang.Override
+  protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
       internalGetFieldAccessorTable() {
-    return DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_fieldAccessorTable
+    return io.daos.obj.attr.DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_fieldAccessorTable
         .ensureFieldAccessorsInitialized(
-            DaosObjectAttribute.class, Builder.class);
+            io.daos.obj.attr.DaosObjectAttribute.class, io.daos.obj.attr.DaosObjectAttribute.Builder.class);
   }
 
   public static final int OA_RANK_FIELD_NUMBER = 1;
@@ -104,18 +104,18 @@ private static final long serialVersionUID = 0L;
    * <code>uint32 oa_rank = 1;</code>
    * @return The oaRank.
    */
-  @Override
+  @java.lang.Override
   public int getOaRank() {
     return oaRank_;
   }
 
   public static final int OA_OA_FIELD_NUMBER = 2;
-  private DaosOclassAttr oaOa_;
+  private io.daos.obj.attr.DaosOclassAttr oaOa_;
   /**
    * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
    * @return Whether the oaOa field is set.
    */
-  @Override
+  @java.lang.Override
   public boolean hasOaOa() {
     return oaOa_ != null;
   }
@@ -123,20 +123,20 @@ private static final long serialVersionUID = 0L;
    * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
    * @return The oaOa.
    */
-  @Override
-  public DaosOclassAttr getOaOa() {
-    return oaOa_ == null ? DaosOclassAttr.getDefaultInstance() : oaOa_;
+  @java.lang.Override
+  public io.daos.obj.attr.DaosOclassAttr getOaOa() {
+    return oaOa_ == null ? io.daos.obj.attr.DaosOclassAttr.getDefaultInstance() : oaOa_;
   }
   /**
    * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
    */
-  @Override
-  public DaosOclassAttrOrBuilder getOaOaOrBuilder() {
+  @java.lang.Override
+  public io.daos.obj.attr.DaosOclassAttrOrBuilder getOaOaOrBuilder() {
     return getOaOa();
   }
 
   private byte memoizedIsInitialized = -1;
-  @Override
+  @java.lang.Override
   public final boolean isInitialized() {
     byte isInitialized = memoizedIsInitialized;
     if (isInitialized == 1) return true;
@@ -146,7 +146,7 @@ private static final long serialVersionUID = 0L;
     return true;
   }
 
-  @Override
+  @java.lang.Override
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
     if (oaRank_ != 0) {
@@ -158,7 +158,7 @@ private static final long serialVersionUID = 0L;
     unknownFields.writeTo(output);
   }
 
-  @Override
+  @java.lang.Override
   public int getSerializedSize() {
     int size = memoizedSize;
     if (size != -1) return size;
@@ -177,15 +177,15 @@ private static final long serialVersionUID = 0L;
     return size;
   }
 
-  @Override
-  public boolean equals(final Object obj) {
+  @java.lang.Override
+  public boolean equals(final java.lang.Object obj) {
     if (obj == this) {
      return true;
     }
-    if (!(obj instanceof DaosObjectAttribute)) {
+    if (!(obj instanceof io.daos.obj.attr.DaosObjectAttribute)) {
       return super.equals(obj);
     }
-    DaosObjectAttribute other = (DaosObjectAttribute) obj;
+    io.daos.obj.attr.DaosObjectAttribute other = (io.daos.obj.attr.DaosObjectAttribute) obj;
 
     if (getOaRank()
         != other.getOaRank()) return false;
@@ -198,7 +198,7 @@ private static final long serialVersionUID = 0L;
     return true;
   }
 
-  @Override
+  @java.lang.Override
   public int hashCode() {
     if (memoizedHashCode != 0) {
       return memoizedHashCode;
@@ -216,69 +216,69 @@ private static final long serialVersionUID = 0L;
     return hash;
   }
 
-  public static DaosObjectAttribute parseFrom(
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static DaosObjectAttribute parseFrom(
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(
       java.nio.ByteBuffer data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static DaosObjectAttribute parseFrom(
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(
       com.google.protobuf.ByteString data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static DaosObjectAttribute parseFrom(
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(
       com.google.protobuf.ByteString data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static DaosObjectAttribute parseFrom(byte[] data)
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(byte[] data)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data);
   }
-  public static DaosObjectAttribute parseFrom(
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(
       byte[] data,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws com.google.protobuf.InvalidProtocolBufferException {
     return PARSER.parseFrom(data, extensionRegistry);
   }
-  public static DaosObjectAttribute parseFrom(java.io.InputStream input)
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
-  public static DaosObjectAttribute parseFrom(
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
-  public static DaosObjectAttribute parseDelimitedFrom(java.io.InputStream input)
+  public static io.daos.obj.attr.DaosObjectAttribute parseDelimitedFrom(java.io.InputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input);
   }
-  public static DaosObjectAttribute parseDelimitedFrom(
+  public static io.daos.obj.attr.DaosObjectAttribute parseDelimitedFrom(
       java.io.InputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseDelimitedWithIOException(PARSER, input, extensionRegistry);
   }
-  public static DaosObjectAttribute parseFrom(
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(
       com.google.protobuf.CodedInputStream input)
       throws java.io.IOException {
     return com.google.protobuf.GeneratedMessageV3
         .parseWithIOException(PARSER, input);
   }
-  public static DaosObjectAttribute parseFrom(
+  public static io.daos.obj.attr.DaosObjectAttribute parseFrom(
       com.google.protobuf.CodedInputStream input,
       com.google.protobuf.ExtensionRegistryLite extensionRegistry)
       throws java.io.IOException {
@@ -286,23 +286,23 @@ private static final long serialVersionUID = 0L;
         .parseWithIOException(PARSER, input, extensionRegistry);
   }
 
-  @Override
+  @java.lang.Override
   public Builder newBuilderForType() { return newBuilder(); }
   public static Builder newBuilder() {
     return DEFAULT_INSTANCE.toBuilder();
   }
-  public static Builder newBuilder(DaosObjectAttribute prototype) {
+  public static Builder newBuilder(io.daos.obj.attr.DaosObjectAttribute prototype) {
     return DEFAULT_INSTANCE.toBuilder().mergeFrom(prototype);
   }
-  @Override
+  @java.lang.Override
   public Builder toBuilder() {
     return this == DEFAULT_INSTANCE
         ? new Builder() : new Builder().mergeFrom(this);
   }
 
-  @Override
+  @java.lang.Override
   protected Builder newBuilderForType(
-      BuilderParent parent) {
+      com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
     Builder builder = new Builder(parent);
     return builder;
   }
@@ -312,18 +312,18 @@ private static final long serialVersionUID = 0L;
   public static final class Builder extends
       com.google.protobuf.GeneratedMessageV3.Builder<Builder> implements
       // @@protoc_insertion_point(builder_implements:objattr.DaosObjectAttribute)
-      DaosObjectAttributeOrBuilder {
+      io.daos.obj.attr.DaosObjectAttributeOrBuilder {
     public static final com.google.protobuf.Descriptors.Descriptor
         getDescriptor() {
-      return DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_descriptor;
+      return io.daos.obj.attr.DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_descriptor;
     }
 
-    @Override
-    protected FieldAccessorTable
+    @java.lang.Override
+    protected com.google.protobuf.GeneratedMessageV3.FieldAccessorTable
         internalGetFieldAccessorTable() {
-      return DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_fieldAccessorTable
+      return io.daos.obj.attr.DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_fieldAccessorTable
           .ensureFieldAccessorsInitialized(
-              DaosObjectAttribute.class, Builder.class);
+              io.daos.obj.attr.DaosObjectAttribute.class, io.daos.obj.attr.DaosObjectAttribute.Builder.class);
     }
 
     // Construct using io.daos.obj.attr.DaosObjectAttribute.newBuilder()
@@ -332,7 +332,7 @@ private static final long serialVersionUID = 0L;
     }
 
     private Builder(
-        BuilderParent parent) {
+        com.google.protobuf.GeneratedMessageV3.BuilderParent parent) {
       super(parent);
       maybeForceBuilderInitialization();
     }
@@ -341,7 +341,7 @@ private static final long serialVersionUID = 0L;
               .alwaysUseFieldBuilders) {
       }
     }
-    @Override
+    @java.lang.Override
     public Builder clear() {
       super.clear();
       oaRank_ = 0;
@@ -355,29 +355,29 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    @Override
+    @java.lang.Override
     public com.google.protobuf.Descriptors.Descriptor
         getDescriptorForType() {
-      return DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_descriptor;
+      return io.daos.obj.attr.DaosObjAttrClasses.internal_static_objattr_DaosObjectAttribute_descriptor;
     }
 
-    @Override
-    public DaosObjectAttribute getDefaultInstanceForType() {
-      return DaosObjectAttribute.getDefaultInstance();
+    @java.lang.Override
+    public io.daos.obj.attr.DaosObjectAttribute getDefaultInstanceForType() {
+      return io.daos.obj.attr.DaosObjectAttribute.getDefaultInstance();
     }
 
-    @Override
-    public DaosObjectAttribute build() {
-      DaosObjectAttribute result = buildPartial();
+    @java.lang.Override
+    public io.daos.obj.attr.DaosObjectAttribute build() {
+      io.daos.obj.attr.DaosObjectAttribute result = buildPartial();
       if (!result.isInitialized()) {
         throw newUninitializedMessageException(result);
       }
       return result;
     }
 
-    @Override
-    public DaosObjectAttribute buildPartial() {
-      DaosObjectAttribute result = new DaosObjectAttribute(this);
+    @java.lang.Override
+    public io.daos.obj.attr.DaosObjectAttribute buildPartial() {
+      io.daos.obj.attr.DaosObjectAttribute result = new io.daos.obj.attr.DaosObjectAttribute(this);
       result.oaRank_ = oaRank_;
       if (oaOaBuilder_ == null) {
         result.oaOa_ = oaOa_;
@@ -388,50 +388,50 @@ private static final long serialVersionUID = 0L;
       return result;
     }
 
-    @Override
+    @java.lang.Override
     public Builder clone() {
       return super.clone();
     }
-    @Override
+    @java.lang.Override
     public Builder setField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return super.setField(field, value);
     }
-    @Override
+    @java.lang.Override
     public Builder clearField(
         com.google.protobuf.Descriptors.FieldDescriptor field) {
       return super.clearField(field);
     }
-    @Override
+    @java.lang.Override
     public Builder clearOneof(
         com.google.protobuf.Descriptors.OneofDescriptor oneof) {
       return super.clearOneof(oneof);
     }
-    @Override
+    @java.lang.Override
     public Builder setRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        int index, Object value) {
+        int index, java.lang.Object value) {
       return super.setRepeatedField(field, index, value);
     }
-    @Override
+    @java.lang.Override
     public Builder addRepeatedField(
         com.google.protobuf.Descriptors.FieldDescriptor field,
-        Object value) {
+        java.lang.Object value) {
       return super.addRepeatedField(field, value);
     }
-    @Override
+    @java.lang.Override
     public Builder mergeFrom(com.google.protobuf.Message other) {
-      if (other instanceof DaosObjectAttribute) {
-        return mergeFrom((DaosObjectAttribute)other);
+      if (other instanceof io.daos.obj.attr.DaosObjectAttribute) {
+        return mergeFrom((io.daos.obj.attr.DaosObjectAttribute)other);
       } else {
         super.mergeFrom(other);
         return this;
       }
     }
 
-    public Builder mergeFrom(DaosObjectAttribute other) {
-      if (other == DaosObjectAttribute.getDefaultInstance()) return this;
+    public Builder mergeFrom(io.daos.obj.attr.DaosObjectAttribute other) {
+      if (other == io.daos.obj.attr.DaosObjectAttribute.getDefaultInstance()) return this;
       if (other.getOaRank() != 0) {
         setOaRank(other.getOaRank());
       }
@@ -443,21 +443,21 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    @Override
+    @java.lang.Override
     public final boolean isInitialized() {
       return true;
     }
 
-    @Override
+    @java.lang.Override
     public Builder mergeFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
         throws java.io.IOException {
-      DaosObjectAttribute parsedMessage = null;
+      io.daos.obj.attr.DaosObjectAttribute parsedMessage = null;
       try {
         parsedMessage = PARSER.parsePartialFrom(input, extensionRegistry);
       } catch (com.google.protobuf.InvalidProtocolBufferException e) {
-        parsedMessage = (DaosObjectAttribute) e.getUnfinishedMessage();
+        parsedMessage = (io.daos.obj.attr.DaosObjectAttribute) e.getUnfinishedMessage();
         throw e.unwrapIOException();
       } finally {
         if (parsedMessage != null) {
@@ -472,7 +472,7 @@ private static final long serialVersionUID = 0L;
      * <code>uint32 oa_rank = 1;</code>
      * @return The oaRank.
      */
-    @Override
+    @java.lang.Override
     public int getOaRank() {
       return oaRank_;
     }
@@ -482,7 +482,7 @@ private static final long serialVersionUID = 0L;
      * @return This builder for chaining.
      */
     public Builder setOaRank(int value) {
-
+      
       oaRank_ = value;
       onChanged();
       return this;
@@ -492,15 +492,15 @@ private static final long serialVersionUID = 0L;
      * @return This builder for chaining.
      */
     public Builder clearOaRank() {
-
+      
       oaRank_ = 0;
       onChanged();
       return this;
     }
 
-    private DaosOclassAttr oaOa_;
+    private io.daos.obj.attr.DaosOclassAttr oaOa_;
     private com.google.protobuf.SingleFieldBuilderV3<
-        DaosOclassAttr, DaosOclassAttr.Builder, DaosOclassAttrOrBuilder> oaOaBuilder_;
+        io.daos.obj.attr.DaosOclassAttr, io.daos.obj.attr.DaosOclassAttr.Builder, io.daos.obj.attr.DaosOclassAttrOrBuilder> oaOaBuilder_;
     /**
      * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
      * @return Whether the oaOa field is set.
@@ -512,9 +512,9 @@ private static final long serialVersionUID = 0L;
      * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
      * @return The oaOa.
      */
-    public DaosOclassAttr getOaOa() {
+    public io.daos.obj.attr.DaosOclassAttr getOaOa() {
       if (oaOaBuilder_ == null) {
-        return oaOa_ == null ? DaosOclassAttr.getDefaultInstance() : oaOa_;
+        return oaOa_ == null ? io.daos.obj.attr.DaosOclassAttr.getDefaultInstance() : oaOa_;
       } else {
         return oaOaBuilder_.getMessage();
       }
@@ -522,7 +522,7 @@ private static final long serialVersionUID = 0L;
     /**
      * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
      */
-    public Builder setOaOa(DaosOclassAttr value) {
+    public Builder setOaOa(io.daos.obj.attr.DaosOclassAttr value) {
       if (oaOaBuilder_ == null) {
         if (value == null) {
           throw new NullPointerException();
@@ -539,7 +539,7 @@ private static final long serialVersionUID = 0L;
      * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
      */
     public Builder setOaOa(
-        DaosOclassAttr.Builder builderForValue) {
+        io.daos.obj.attr.DaosOclassAttr.Builder builderForValue) {
       if (oaOaBuilder_ == null) {
         oaOa_ = builderForValue.build();
         onChanged();
@@ -552,11 +552,11 @@ private static final long serialVersionUID = 0L;
     /**
      * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
      */
-    public Builder mergeOaOa(DaosOclassAttr value) {
+    public Builder mergeOaOa(io.daos.obj.attr.DaosOclassAttr value) {
       if (oaOaBuilder_ == null) {
         if (oaOa_ != null) {
           oaOa_ =
-            DaosOclassAttr.newBuilder(oaOa_).mergeFrom(value).buildPartial();
+            io.daos.obj.attr.DaosOclassAttr.newBuilder(oaOa_).mergeFrom(value).buildPartial();
         } else {
           oaOa_ = value;
         }
@@ -584,31 +584,31 @@ private static final long serialVersionUID = 0L;
     /**
      * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
      */
-    public DaosOclassAttr.Builder getOaOaBuilder() {
-
+    public io.daos.obj.attr.DaosOclassAttr.Builder getOaOaBuilder() {
+      
       onChanged();
       return getOaOaFieldBuilder().getBuilder();
     }
     /**
      * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
      */
-    public DaosOclassAttrOrBuilder getOaOaOrBuilder() {
+    public io.daos.obj.attr.DaosOclassAttrOrBuilder getOaOaOrBuilder() {
       if (oaOaBuilder_ != null) {
         return oaOaBuilder_.getMessageOrBuilder();
       } else {
         return oaOa_ == null ?
-            DaosOclassAttr.getDefaultInstance() : oaOa_;
+            io.daos.obj.attr.DaosOclassAttr.getDefaultInstance() : oaOa_;
       }
     }
     /**
      * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
      */
     private com.google.protobuf.SingleFieldBuilderV3<
-        DaosOclassAttr, DaosOclassAttr.Builder, DaosOclassAttrOrBuilder>
+        io.daos.obj.attr.DaosOclassAttr, io.daos.obj.attr.DaosOclassAttr.Builder, io.daos.obj.attr.DaosOclassAttrOrBuilder> 
         getOaOaFieldBuilder() {
       if (oaOaBuilder_ == null) {
         oaOaBuilder_ = new com.google.protobuf.SingleFieldBuilderV3<
-            DaosOclassAttr, DaosOclassAttr.Builder, DaosOclassAttrOrBuilder>(
+            io.daos.obj.attr.DaosOclassAttr, io.daos.obj.attr.DaosOclassAttr.Builder, io.daos.obj.attr.DaosOclassAttrOrBuilder>(
                 getOaOa(),
                 getParentForChildren(),
                 isClean());
@@ -616,13 +616,13 @@ private static final long serialVersionUID = 0L;
       }
       return oaOaBuilder_;
     }
-    @Override
+    @java.lang.Override
     public final Builder setUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
       return super.setUnknownFields(unknownFields);
     }
 
-    @Override
+    @java.lang.Override
     public final Builder mergeUnknownFields(
         final com.google.protobuf.UnknownFieldSet unknownFields) {
       return super.mergeUnknownFields(unknownFields);
@@ -633,18 +633,18 @@ private static final long serialVersionUID = 0L;
   }
 
   // @@protoc_insertion_point(class_scope:objattr.DaosObjectAttribute)
-  private static final DaosObjectAttribute DEFAULT_INSTANCE;
+  private static final io.daos.obj.attr.DaosObjectAttribute DEFAULT_INSTANCE;
   static {
-    DEFAULT_INSTANCE = new DaosObjectAttribute();
+    DEFAULT_INSTANCE = new io.daos.obj.attr.DaosObjectAttribute();
   }
 
-  public static DaosObjectAttribute getDefaultInstance() {
+  public static io.daos.obj.attr.DaosObjectAttribute getDefaultInstance() {
     return DEFAULT_INSTANCE;
   }
 
   private static final com.google.protobuf.Parser<DaosObjectAttribute>
       PARSER = new com.google.protobuf.AbstractParser<DaosObjectAttribute>() {
-    @Override
+    @java.lang.Override
     public DaosObjectAttribute parsePartialFrom(
         com.google.protobuf.CodedInputStream input,
         com.google.protobuf.ExtensionRegistryLite extensionRegistry)
@@ -657,13 +657,13 @@ private static final long serialVersionUID = 0L;
     return PARSER;
   }
 
-  @Override
+  @java.lang.Override
   public com.google.protobuf.Parser<DaosObjectAttribute> getParserForType() {
     return PARSER;
   }
 
-  @Override
-  public DaosObjectAttribute getDefaultInstanceForType() {
+  @java.lang.Override
+  public io.daos.obj.attr.DaosObjectAttribute getDefaultInstanceForType() {
     return DEFAULT_INSTANCE;
   }
 
