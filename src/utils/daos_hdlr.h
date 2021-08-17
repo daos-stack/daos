@@ -69,56 +69,56 @@ enum sh_op {
  */
 
 struct cmd_args_s {
-	enum pool_op		p_op;		/* pool sub-command */
-	enum cont_op		c_op;		/* cont sub-command */
-	enum obj_op		o_op;		/* obj sub-command */
-	enum fs_op		fs_op;		/* filesystem sub-command */
-	enum sh_op		sh_op;		/* DAOS shell sub-command */
-	char			*sysname;	/* --sys-name or --sys */
-	uuid_t			p_uuid;		/* --pool */
-	char			pool_str[DAOS_PROP_LABEL_MAX_LEN + 1]; /* pool label or uuid */
+	enum pool_op		p_op;			/* pool sub-command */
+	enum cont_op		c_op;			/* cont sub-command */
+	enum obj_op		o_op;			/* obj sub-command */
+	enum fs_op		fs_op;			/* filesystem sub-command */
+	enum sh_op		sh_op;			/* DAOS shell sub-command */
+	char			*sysname;		/* --sys-name or --sys */
+	uuid_t			p_uuid;			/* --pool */
+	char			*pool_label;		/* pool label */
 	daos_handle_t		pool;
-	uuid_t			c_uuid;		/* --cont */
-	char			cont_str[DAOS_PROP_LABEL_MAX_LEN + 1]; /* container label or uuid */
+	uuid_t			c_uuid;			/* --cont */
+	char			*cont_label;		/* container label */
 	daos_handle_t		cont;
-	int			force;		/* --force */
-	char			*attrname_str;	/* --attr attribute name */
-	char			*value_str;	/* --value attribute value */
+	int			force;			/* --force */
+	char			*attrname_str;		/* --attr attribute name */
+	char			*value_str;		/* --value attribute value */
 
 	/* Container unified namespace (path) related */
-	char			*path;		/* --path cont namespace */
-	char			*src;		/* --src path for fs copy */
-	char			*dst;		/* --dst path for fs copy */
-	char			*preserve;	/* --path to metadata file */
-	daos_cont_layout_t	type;		/* --type cont type */
-	daos_oclass_id_t	oclass;		/* --oclass object class */
-	uint32_t		mode;		/* --posix consistency mode */
-	daos_size_t		chunk_size;	/* --chunk_size of cont objs */
+	char			*path;			/* --path cont namespace */
+	char			*src;			/* --src path for fs copy */
+	char			*dst;			/* --dst path for fs copy */
+	char			*preserve_props;	/* --path to metadata file */
+	daos_cont_layout_t	type;			/* --type cont type */
+	daos_oclass_id_t	oclass;			/* --oclass object class */
+	uint32_t		mode;			/* --posix consistency mode */
+	daos_size_t		chunk_size;		/* --chunk_size of cont objs */
 
 	/* Container snapshot/rollback related */
-	char			*snapname_str;	/* --snap cont snapshot name */
-	daos_epoch_t		epc;		/* --epc cont epoch */
-	char			*epcrange_str;	/* --epcrange cont epochs */
+	char			*snapname_str;		/* --snap cont snapshot name */
+	daos_epoch_t		epc;			/* --epc cont epoch */
+	char			*epcrange_str;		/* --epcrange cont epochs */
 	daos_epoch_t		epcrange_begin;
 	daos_epoch_t		epcrange_end;
 	daos_obj_id_t		oid;
-	daos_prop_t		*props;		/* --properties cont create */
+	daos_prop_t		*props;			/* --properties cont create */
 
-	FILE			*outstream;	/* normal output stream */
-	FILE			*errstream;	/* errors stream */
+	FILE			*outstream;		/* normal output stream */
+	FILE			*errstream;		/* errors stream */
 
 	/* DFS related */
-	char			*dfs_prefix;	/* --dfs-prefix name */
-	char			*dfs_path;	/* --dfs-path file/dir */
+	char			*dfs_prefix;		/* --dfs-prefix name */
+	char			*dfs_path;		/* --dfs-path file/dir */
 
-	FILE			*ostream;	/* help_hdlr() stream */
-	char			*outfile;	/* --outfile path */
-	char			*aclfile;	/* --acl-file path */
-	char			*user;		/* --user name */
-	char			*group;		/* --group name */
-	bool			verbose;	/* --verbose mode */
-	char			*entry;		/* --entry for ACL */
-	char			*principal;	/* --principal for ACL */
+	FILE			*ostream;		/* help_hdlr() stream */
+	char			*outfile;		/* --outfile path */
+	char			*aclfile;		/* --acl-file path */
+	char			*user;			/* --user name */
+	char			*group;			/* --group name */
+	bool			verbose;		/* --verbose mode */
+	char			*entry;			/* --entry for ACL */
+	char			*principal;		/* --principal for ACL */
 };
 
 #define ARGS_VERIFY_PUUID(ap, label, rcexpr)			\

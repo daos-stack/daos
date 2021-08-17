@@ -2758,7 +2758,8 @@ out:
 }
 
 static int
-dm_serialize_metadata(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *props, char *preserve)
+dm_serialize_metadata(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *props,
+		      char *preserve_props)
 {
 	int	rc = 0;
 	int	num_attrs = 0;
@@ -2785,7 +2786,7 @@ dm_serialize_metadata(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *pr
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize_md");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	(*daos_cont_serialize_md)(preserve, props, num_attrs, names, (char **)buffers, sizes);
+	(*daos_cont_serialize_md)(preserve_props, props, num_attrs, names, (char **)buffers, sizes);
 out:
 	if (num_attrs > 0) {
 		dm_cont_free_usr_attrs(num_attrs, &names, &buffers, &sizes);
@@ -2794,7 +2795,7 @@ out:
 }
 
 static int
-dm_deserialize_cont_prop_metadata(struct cmd_args_s *ap, struct dm_args *ca, char *preserve,
+dm_deserialize_cont_prop_metadata(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props,
 				  daos_prop_t **props)
 {
 	int		rc = 0;
@@ -2811,13 +2812,13 @@ dm_deserialize_cont_prop_metadata(struct cmd_args_s *ap, struct dm_args *ca, cha
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_props");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	(*daos_cont_deserialize_props)(ca->dst_poh, preserve, props, &ca->cont_layout);
+	(*daos_cont_deserialize_props)(ca->dst_poh, preserve_props, props, &ca->cont_layout);
 out:
 	return rc;
 }
 
 static int
-dm_deserialize_cont_attrs_metadata(struct cmd_args_s *ap, struct dm_args *ca, char *preserve)
+dm_deserialize_cont_attrs_metadata(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props)
 {
 	int		rc = 0;
 	uint64_t	num_attrs = 0;
@@ -2837,7 +2838,7 @@ dm_deserialize_cont_attrs_metadata(struct cmd_args_s *ap, struct dm_args *ca, ch
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_attrs");
 		D_GOTO(out, rc = -DER_INVAL);
 	}
-	(*daos_cont_deserialize_attrs)(preserve, &num_attrs,
+	(*daos_cont_deserialize_attrs)(preserve_props, &num_attrs,
 				       &names, &buffers, &sizes);
 
 	if (num_attrs > 0) {
@@ -2862,7 +2863,7 @@ dm_connect(struct cmd_args_s *ap,
 	   struct dm_args *ca,
 	   char *sysname,
 	   char *path,
-	   char *preserve,
+	   char *preserve_props,
 	   daos_cont_info_t *src_cont_info,
 	   daos_cont_info_t *dst_cont_info)
 {
@@ -2904,19 +2905,19 @@ dm_connect(struct cmd_args_s *ap,
 
 	/* Retrieve all source cont properties */
 	if (src_file_dfs->type != POSIX) {
-		/* if moving data from POSIX to DAOS and preserve option is on,
+		/* if moving data from POSIX to DAOS and preserve_props option is on,
 		 * then write container properties to the provided hdf5 filename
 		 */
-		if (preserve != NULL && dst_file_dfs->type == POSIX) {
-			/* preserve option is for filesystem copy (which uses DFS API), so do not
-			 * retrieve roots or max oid property.
+		if (preserve_props != NULL && dst_file_dfs->type == POSIX) {
+			/* preserve_props option is for filesystem copy (which uses DFS API),
+			 * so do not retrieve roots or max oid property.
 			 */
 			rc = dm_cont_get_all_props(ap, ca->src_coh, &props, false,  true, false);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to get container properties");
 				D_GOTO(out, rc);
 			}
-			rc = dm_serialize_metadata(ap, ca, props, preserve);
+			rc = dm_serialize_metadata(ap, ca, props, preserve_props);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to serialize metadata");
 				D_GOTO(out, rc);
@@ -2985,12 +2986,12 @@ dm_connect(struct cmd_args_s *ap,
 			}
 			uuid_copy(ca->dst_c_uuid, dattr.da_cuuid);
 		}
-		/* check preserve, if source is from POSIX and destination is
+		/* check preserve_props, if source is from POSIX and destination is
 		 * DAOS we need to read container properties from the file that
 		 * is specified before the DAOS destination container is created
 		 */
-		if (preserve != NULL && src_file_dfs->type == POSIX) {
-			rc = dm_deserialize_cont_prop_metadata(ap, ca, preserve, &props);
+		if (preserve_props != NULL && src_file_dfs->type == POSIX) {
+			rc = dm_deserialize_cont_prop_metadata(ap, ca, preserve_props, &props);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to deserialize metadata");
 				D_GOTO(out, rc);
@@ -3047,12 +3048,12 @@ dm_connect(struct cmd_args_s *ap,
 			}
 		}
 
-		/* check preserve, if source is from POSIX and destination is
+		/* check preserve_props, if source is from POSIX and destination is
 		 * DAOS we need to read user attributes from the file that
 		 * is specified, and set them in the destination container
 		 */
-		if (preserve != NULL && src_file_dfs->type == POSIX) {
-			rc = dm_deserialize_cont_attrs_metadata(ap, ca, preserve);
+		if (preserve_props != NULL && src_file_dfs->type == POSIX) {
+			rc = dm_deserialize_cont_attrs_metadata(ap, ca, preserve_props);
 			if (rc != 0) {
 				DH_PERROR_DER(ap, rc, "Failed to deserialize user attributes");
 				D_GOTO(err, rc);
@@ -3286,7 +3287,7 @@ fs_copy_hdlr(struct cmd_args_s *ap)
 		uuid_generate(ca.dst_c_uuid);
 	}
 	rc = dm_connect(ap, is_posix_copy, &src_file_dfs, &dst_file_dfs, &ca,
-			ap->sysname, ap->dst, ap->preserve, &src_cont_info, &dst_cont_info);
+			ap->sysname, ap->dst, ap->preserve_props, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
 		DH_PERROR_DER(ap, rc, "fs copy failed to connect");
 		D_GOTO(out, rc);
@@ -3761,7 +3762,7 @@ cont_clone_hdlr(struct cmd_args_s *ap)
 	}
 
 	rc = dm_connect(ap, is_posix_copy, &dst_cp_type, &src_cp_type,
-			&ca, ap->sysname, ap->dst, ap->preserve, &src_cont_info, &dst_cont_info);
+			&ca, ap->sysname, ap->dst, ap->preserve_props, &src_cont_info, &dst_cont_info);
 	if (rc != 0) {
 		D_GOTO(out_disconnect, rc);
 	}
