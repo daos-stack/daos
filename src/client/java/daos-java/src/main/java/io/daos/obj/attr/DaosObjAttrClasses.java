@@ -42,7 +42,7 @@ public final class DaosObjAttrClasses {
   private static  com.google.protobuf.Descriptors.FileDescriptor
       descriptor;
   static {
-    String[] descriptorData = {
+    java.lang.String[] descriptorData = {
       "\n\031DaosObjectAttribute.proto\022\007objattr\",\n\n" +
       "DaosRpAttr\022\017\n\007r_proto\030\001 \001(\r\022\r\n\005r_num\030\002 \001" +
       "(\r\"5\n\nDaosEcAttr\022\013\n\003e_k\030\001 \001(\r\022\013\n\003e_p\030\002 \001" +
@@ -70,25 +70,25 @@ public final class DaosObjAttrClasses {
     internal_static_objattr_DaosRpAttr_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_objattr_DaosRpAttr_descriptor,
-        new String[] { "RProto", "RNum", });
+        new java.lang.String[] { "RProto", "RNum", });
     internal_static_objattr_DaosEcAttr_descriptor =
       getDescriptor().getMessageTypes().get(1);
     internal_static_objattr_DaosEcAttr_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_objattr_DaosEcAttr_descriptor,
-        new String[] { "EK", "EP", "ELen", });
+        new java.lang.String[] { "EK", "EP", "ELen", });
     internal_static_objattr_DaosOclassAttr_descriptor =
       getDescriptor().getMessageTypes().get(2);
     internal_static_objattr_DaosOclassAttr_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_objattr_DaosOclassAttr_descriptor,
-        new String[] { "CaSchema", "CaResil", "CaResilDegree", "CaGrpNr", "Rp", "Ec", "U", });
+        new java.lang.String[] { "CaSchema", "CaResil", "CaResilDegree", "CaGrpNr", "Rp", "Ec", "U", });
     internal_static_objattr_DaosObjectAttribute_descriptor =
       getDescriptor().getMessageTypes().get(3);
     internal_static_objattr_DaosObjectAttribute_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_objattr_DaosObjectAttribute_descriptor,
-        new String[] { "OaRank", "OaOa", });
+        new java.lang.String[] { "OaRank", "OaOa", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)

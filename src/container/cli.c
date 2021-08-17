@@ -17,6 +17,7 @@
 #include <daos/event.h>
 #include <daos/mgmt.h>
 #include <daos/pool.h>
+#include <daos/object.h>
 #include <daos/rsvc.h>
 #include <daos_types.h>
 #include "cli_internal.h"
@@ -76,9 +77,9 @@ cont_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 }
 
 struct cont_args {
-	struct dc_pool		*pool;
-	crt_rpc_t		*rpc;
-	daos_prop_t		*prop;
+	struct dc_pool			*pool;
+	crt_rpc_t			*rpc;
+	daos_prop_t			*prop;
 };
 
 static int
@@ -134,19 +135,22 @@ daos_prop_has_entry(daos_prop_t *prop, uint32_t entry_type)
 /*
  * If no owner/group prop was supplied, translates euid/egid to user and group
  * names, and adds them as owners to a new copy of the daos_prop_t passed in.
+ * Allocate root objid if not specified by the caller.
  * The newly allocated prop is expected to be freed by the cont create callback.
  */
 static int
-dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
+dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
+		      daos_prop_t *prop_in)
 {
-	char	       *owner = NULL;
-	char	       *owner_grp = NULL;
-	daos_prop_t    *final_prop = NULL;
-	uint32_t	idx = 0;
-	uint32_t	entries;
-	int		rc = 0;
-	uid_t		uid = geteuid();
-	gid_t		gid = getegid();
+	char				*owner = NULL;
+	char				*owner_grp = NULL;
+	struct daos_prop_co_roots	*roots = NULL;
+	daos_prop_t			*final_prop = NULL;
+	uint32_t			idx = 0;
+	uint32_t			entries;
+	int				rc = 0;
+	uid_t				uid = geteuid();
+	gid_t				gid = getegid();
 
 	entries = (prop_in == NULL) ? 0 : prop_in->dpp_nr;
 
@@ -166,6 +170,40 @@ dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
 			D_ERROR("Failed to parse gid "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err_out, rc);
 		}
+
+		entries++;
+	}
+
+	if (!daos_prop_has_entry(prop_in, DAOS_PROP_CO_ROOTS)) {
+		uint64_t rf;
+
+		/**
+		 * If user did not provide a root object id, let's generate
+		 * it here. Worst case is that it is not used by the middleware.
+		 */
+
+		D_ALLOC_PTR(roots);
+		if (roots == NULL) {
+			D_ERROR("Failed to allocate structure for root objid\n");
+			D_GOTO(err_out, rc = -DER_NOMEM);
+		}
+
+		/** allocate objid according to the redundancy factor */
+		roots->cr_oids[0].lo = 0;
+		roots->cr_oids[0].hi = 0;
+		rf = daos_cont_prop2redunfac(prop_in);
+		rc = daos_obj_generate_oid_by_rf(poh, rf, &roots->cr_oids[0], 0,
+						 0, 0, 0);
+		if (rc) {
+			D_ERROR("Failed to generate root OID "DF_RC"\n",
+				DP_RC(rc));
+			D_GOTO(err_out, rc);
+		}
+
+		/** only one root oid is needed in the common case */
+		roots->cr_oids[1] = DAOS_OBJ_NIL;
+		roots->cr_oids[2] = DAOS_OBJ_NIL;
+		roots->cr_oids[3] = DAOS_OBJ_NIL;
 
 		entries++;
 	}
@@ -198,6 +236,14 @@ dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
 			owner_grp = NULL; /* prop is responsible for it now */
 			idx++;
 		}
+
+		if (roots != NULL) {
+			final_prop->dpp_entries[idx].dpe_type =
+				DAOS_PROP_CO_ROOTS;
+			final_prop->dpp_entries[idx].dpe_val_ptr = roots;
+			roots = NULL; /* prop is responsible for it now */
+			idx++;
+		}
 	}
 
 	*prop_out = final_prop;
@@ -206,6 +252,7 @@ dup_with_default_ownership_props(daos_prop_t **prop_out, daos_prop_t *prop_in)
 
 err_out:
 	daos_prop_free(final_prop);
+	D_FREE(roots);
 	D_FREE(owner);
 	D_FREE(owner_grp);
 	return rc;
@@ -220,7 +267,7 @@ dc_cont_create(tse_task_t *task)
 	struct dc_pool	       *pool;
 	crt_endpoint_t		ep;
 	crt_rpc_t	       *rpc;
-	struct cont_args	arg;
+	struct cont_args	arg = {0, };
 	int			rc;
 	daos_prop_t	       *rpc_prop = NULL;
 
@@ -241,7 +288,8 @@ dc_cont_create(tse_task_t *task)
 	if (pool == NULL)
 		D_GOTO(err_task, rc = -DER_NO_HDL);
 
-	rc = dup_with_default_ownership_props(&rpc_prop, args->prop);
+	/** duplicate properties and add extra ones (e.g. ownership) */
+	rc = dup_cont_create_props(args->poh, &rpc_prop, args->prop);
 	if (rc != 0)
 		D_GOTO(err_pool, rc);
 
