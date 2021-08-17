@@ -334,8 +334,7 @@ parse_path(const char *path, size_t path_len, size_t *cur_end_idx,
 }
 
 static int
-resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix,
-		    bool pool_only)
+resolve_direct_path(const char *path, struct duns_attr_t *attr, bool no_prefix, bool pool_only)
 {
 	char	*saveptr, *t;
 	char	*dir;
@@ -602,7 +601,7 @@ err:
 }
 
 static int
-create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
+create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label)
 {
 	int rc;
 
@@ -614,7 +613,10 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
 		dfs_attr.da_oclass_id = attrp->da_oclass_id;
 		dfs_attr.da_chunk_size = attrp->da_chunk_size;
 		dfs_attr.da_props = attrp->da_props;
-		if (!uuid_is_null(attrp->da_cuuid))
+		if (create_with_label)
+			rc = dfs_cont_create_with_label(poh, attrp->da_cont, &dfs_attr,
+							&attrp->da_cuuid, NULL, NULL);
+		else if (!uuid_is_null(attrp->da_cuuid))
 			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr, NULL, NULL);
 		else
 			rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, NULL, NULL);
@@ -640,6 +642,9 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
 		}
 		prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 		prop->dpp_entries[prop->dpp_nr - 1].dpe_val = attrp->da_type;
+		if (create_with_label)
+			rc = daos_cont_create_with_label(poh, attrp->da_cont, prop,
+							 &attrp->da_cuuid, NULL);
 		if (!uuid_is_null(attrp->da_cuuid))
 			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
 		else
@@ -648,7 +653,7 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp)
 			rc = daos_der2errno(rc);
 		daos_prop_free(prop);
 	}
-	if (rc == 0)
+	if (rc == 0 && !create_with_label)
 		uuid_unparse(attrp->da_cuuid, attrp->da_cont);
 	return rc;
 }
@@ -677,7 +682,7 @@ duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *pa
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/* create container */
-	rc = create_cont(poh, attrp);
+	rc = create_cont(poh, attrp, false);
 	if (rc) {
 		D_ERROR("Failed to create container (%s)\n", strerror(rc));
 		D_GOTO(err, rc);
@@ -749,7 +754,10 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			return rc;
 		}
 
-		rc = create_cont(poh, attrp);
+		if (daos_label_is_valid(attrp->da_cont))
+			rc = create_cont(poh, attrp, true);
+		else
+			rc = create_cont(poh, attrp, false);
 		if (rc)
 			D_ERROR("Failed to create container (%d)\n", rc);
 		return rc;
@@ -835,7 +843,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/** Create container */
-	rc = create_cont(poh, attrp);
+	rc = create_cont(poh, attrp, false);
 	if (rc) {
 		D_ERROR("Failed to create container (%s)\n", strerror(rc));
 		D_GOTO(err_link, rc);
