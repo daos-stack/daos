@@ -349,12 +349,11 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos container query command fails.
+            dict: the dmg json command output converted to a python dictionary
 
         """
-        return self._get_result(
-            ("container", "query"), pool=pool, cont=cont,
-            sys_name=sys_name)
+        return self._get_json_result(
+            ("container", "query"), pool=pool, cont=cont, sys_name=sys_name)
 
     def container_set_prop(self, pool, cont, prop, value):
         """Call daos container set-prop.
@@ -452,8 +451,7 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: the dmg json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos get-attr command fails.
@@ -473,8 +471,7 @@ class DaosCommand(DaosCommandBase):
             verbose (bool, optional): True - fetch values of all attributes.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: the dmg json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container list-attrs command fails.

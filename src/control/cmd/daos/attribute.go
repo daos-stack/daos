@@ -38,6 +38,14 @@ func (al attrList) asMap() map[string][]byte {
 	return m
 }
 
+func (al attrList) asList() []string {
+	names := make([]string, len(al))
+	for i, a := range al {
+		names[i] = a.Name
+	}
+	return names
+}
+
 func printAttributes(out io.Writer, header string, attrs ...*attribute) {
 	fmt.Fprintf(out, "%s\n", header)
 
@@ -238,18 +246,20 @@ func setDaosAttribute(hdl C.daos_handle_t, at attrType, attr *attribute) error {
 
 	attrName := C.CString(attr.Name)
 	defer freeString(attrName)
-	attrValue := C.CString(string(attr.Value))
-	defer freeString(attrValue)
-	valueLen := C.uint64_t(len(attr.Value) + 1)
+
+	// NB: We are copying the value into C memory for safety and simplicity.
+	valLen := C.uint64_t(len(attr.Value))
+	valBuf := C.malloc(valLen)
+	valSlice := (*[1 << 30]byte)(valBuf)
+	copy(valSlice[:], attr.Value)
+	defer C.free(valBuf)
 
 	var rc C.int
 	switch at {
 	case poolAttr:
-		rc = C.daos_pool_set_attr(hdl, 1, &attrName,
-			(*unsafe.Pointer)(unsafe.Pointer(&attrValue)), &valueLen, nil)
+		rc = C.daos_pool_set_attr(hdl, 1, &attrName, &valBuf, &valLen, nil)
 	case contAttr:
-		rc = C.daos_cont_set_attr(hdl, 1, &attrName,
-			(*unsafe.Pointer)(unsafe.Pointer(&attrValue)), &valueLen, nil)
+		rc = C.daos_cont_set_attr(hdl, 1, &attrName, &valBuf, &valLen, nil)
 	default:
 		return errors.Errorf("unknown attr type %d", at)
 	}
