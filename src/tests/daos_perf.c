@@ -821,7 +821,7 @@ objects_query(struct pf_param *param)
 		rc = vos_obj_query_key(ts_ctx.tsc_coh, ts_uoids[i],
 				       DAOS_GET_MAX | DAOS_GET_DKEY |
 				       DAOS_GET_RECX, epoch, &dkey_iov,
-				       &akey_iov, &recx, NULL);
+				       &akey_iov, &recx, 0, 0, NULL);
 		if (rc != 0 && rc != -DER_NONEXIST)
 			break;
 		if (param->pa_verbose) {

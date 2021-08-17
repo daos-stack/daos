@@ -6,7 +6,7 @@
 """
 import string
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
 from general_utils import report_errors, get_random_string
 from command_utils_base import CommandFailure
@@ -99,14 +99,12 @@ class Label(TestWithServers):
 
         return errors
 
-    @skipForTicket("DAOS-8183")
     def test_valid_labels(self):
         """Test ID: DAOS-7942
 
         Test Description: Create and destroy pool with the following labels.
         * Random alpha numeric string of length 126.
         * Random alpha numeric string of length 127.
-        * Random alpha numeric string of length 128.
         * Random upper case string of length 50.
         * Random lower case string of length 50.
         * Random number string of length 50.
@@ -120,7 +118,6 @@ class Label(TestWithServers):
         labels = [
             get_random_string(126),
             get_random_string(127),
-            get_random_string(128),
             get_random_string(length=50, include=string.ascii_uppercase),
             get_random_string(length=50, include=string.ascii_lowercase),
             get_random_string(length=50, include=string.digits)
@@ -137,7 +134,7 @@ class Label(TestWithServers):
 
         Test Description: Create pool with following invalid labels.
         * UUID format string: 23ab123e-5296-4f95-be14-641de40b4d5a
-        * Long label - 129 random chars.
+        * Long label - 128 random chars.
 
         :avocado: tags=all,full_regression
         :avocado: tags=small
@@ -147,7 +144,7 @@ class Label(TestWithServers):
         errors = []
         label_outs = [
             ("23ab123e-5296-4f95-be14-641de40b4d5a", "invalid label"),
-            (get_random_string(129), "value too long")
+            (get_random_string(128), "invalid label")
         ]
 
         for label_out in label_outs:

@@ -598,8 +598,6 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->user);
 	D_FREE(ap->group);
 	D_FREE(ap->principal);
-	D_FREE(ap->pool_label);
-	D_FREE(ap->cont_label);
 }
 
 static int
@@ -1077,90 +1075,43 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			ap->type = dattr.da_type;
 
 			/** set pool/cont label or uuid */
-			if (dattr.da_pool_label) {
-				D_STRNDUP(ap->pool_label, dattr.da_pool_label,
-					  DAOS_PROP_LABEL_MAX_LEN);
-				if (ap->pool_label == NULL)
-					D_GOTO(out, rc = ENOMEM);
-			} else {
-				uuid_copy(ap->p_uuid, dattr.da_puuid);
-			}
-
-			if (dattr.da_cont_label) {
-				D_STRNDUP(ap->cont_label, dattr.da_cont_label,
-					  DAOS_PROP_LABEL_MAX_LEN);
-				if (ap->cont_label == NULL)
-					D_GOTO(out, rc = ENOMEM);
-			} else {
-				uuid_copy(ap->c_uuid, dattr.da_cuuid);
-			}
+			snprintf(ap->pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+			snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 
 			if (name) {
-				if (dattr.da_rel_path) {
-					D_ASPRINTF(ap->dfs_path, "%s/%s",
-						   dattr.da_rel_path, name);
-				} else {
+				if (dattr.da_rel_path)
+					D_ASPRINTF(ap->dfs_path, "%s/%s", dattr.da_rel_path, name);
+				else
 					D_ASPRINTF(ap->dfs_path, "/%s", name);
-				}
 			} else {
-				if (dattr.da_rel_path) {
-					D_STRNDUP(ap->dfs_path,
-						  dattr.da_rel_path, PATH_MAX);
-				} else {
+				if (dattr.da_rel_path)
+					D_STRNDUP(ap->dfs_path, dattr.da_rel_path, PATH_MAX);
+				else
 					D_STRNDUP_S(ap->dfs_path, "/");
-				}
 			}
 			if (ap->dfs_path == NULL)
 				D_GOTO(out, rc = ENOMEM);
 		} else {
 			ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+			uuid_unparse(ap->p_uuid, ap->pool_str);
 			ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+			uuid_unparse(ap->c_uuid, ap->cont_str);
 		}
 
-		if (ap->pool_label) {
-			rc = daos_pool_connect(ap->pool_label,
-					       ap->sysname,
-					       DAOS_PC_RW, &ap->pool,
-					       NULL, NULL);
-			if (rc != 0) {
-				fprintf(stderr,
-					"failed to connect to pool "
-					"%s: %s (%d)\n",
-					ap->pool_label, d_errdesc(rc), rc);
-				D_GOTO(out, rc);
-			}
-		} else {
-			rc = daos_pool_connect(ap->p_uuid, ap->sysname,
-					       DAOS_PC_RW, &ap->pool,
-					       NULL, NULL);
-			if (rc != 0) {
-				fprintf(stderr,
-					"failed to connect to pool "
-					""DF_UUIDF": %s (%d)\n",
-					DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-				D_GOTO(out, rc);
-			}
+		rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RW, &ap->pool,
+				       NULL, NULL);
+		if (rc) {
+			fprintf(stderr, "failed to connect to pool %s: %s (%d)\n", ap->pool_str,
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
 		}
 
-		if (ap->cont_label) {
-			rc = daos_cont_open(ap->pool, ap->cont_label,
-					    DAOS_COO_RW | DAOS_COO_FORCE,
-					    &ap->cont, NULL, NULL);
-			fprintf(stderr,
-				"failed to open container %s: %s (%d)\n",
-				ap->cont_label, d_errdesc(rc), rc);
+		rc = daos_cont_open(ap->pool, ap->cont_str, DAOS_COO_RW | DAOS_COO_FORCE, &ap->cont,
+				    NULL, NULL);
+		if (rc) {
+			fprintf(stderr, "failed to open container %s: %s (%d)\n", ap->cont_str,
+				d_errdesc(rc), rc);
 			D_GOTO(out_disconnect, rc);
-		} else {
-			rc = daos_cont_open(ap->pool, ap->c_uuid, DAOS_COO_RW |
-					    DAOS_COO_FORCE, &ap->cont,
-					    NULL, NULL);
-			if (rc != 0) {
-				fprintf(stderr,
-					"failed to open container "
-					""DF_UUIDF ": %s (%d)\n",
-					DP_UUID(ap->c_uuid), d_errdesc(rc), rc);
-				D_GOTO(out_disconnect, rc);
-			}
 		}
 
 		rc = fs_dfs_hdlr(ap);
@@ -1206,11 +1157,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	op = ap->c_op;
 
-	/* cont_clone uses its own src and dst variables, and does
-	 * not use the regular pool and cont ones stored in the
-	 * ap struct. This is because for a clone it is necessary
-	 * to explicitly specify whether a container is a src or
-	 * dst
+	/* cont_clone uses its own src and dst variables, and does not use the regular pool and cont
+	 * ones stored in the ap struct. This is because for a clone it is necessary to explicitly
+	 * specify whether a container is a src or dst
 	 */
 	if (op == CONT_CLONE) {
 		if (ap->src != NULL && ap->dst != NULL) {
@@ -1221,22 +1170,18 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		return rc;
 	}
 
-	/* All container operations require a pool handle, connect
-	 * here. Take specified pool UUID or look up through unified
-	 * namespace.
+	/* All container operations require a pool handle, connect here. Take specified pool UUID or
+	 * look up through unified namespace.
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 		struct dfuse_il_reply il_reply = {0};
 
-		ARGS_VERIFY_PATH_NON_CREATE(ap, out,
-					    rc = RC_PRINT_HELP);
+		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
-		/* Resolve pool, container UUIDs from path if needed
-		 * Firtly check for a unified namespace entry point,
-		 * then if that isn't detected then check for dfuse
-		 * backing the path, and print pool/container/oid
-		 * for the path.
+		/* Resolve pool, container UUIDs from path if needed Firtly check for a unified
+		 * namespace entry point, then if that isn't detected then check for dfuse backing
+		 * the path, and print pool/container/oid for the path.
 		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
@@ -1257,53 +1202,20 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			ap->type = dattr.da_type;
 
 			/** set pool/cont label or uuid */
-			if (dattr.da_pool_label) {
-				D_STRNDUP(ap->pool_label, dattr.da_pool_label,
-					  DAOS_PROP_LABEL_MAX_LEN);
-				if (ap->pool_label == NULL) {
-					duns_destroy_attr(&dattr);
-					D_GOTO(out, rc = ENOMEM);
-				}
-			} else {
-				uuid_copy(ap->p_uuid, dattr.da_puuid);
-			}
-
-			if (dattr.da_cont_label) {
-				D_STRNDUP(ap->cont_label, dattr.da_cont_label,
-					  DAOS_PROP_LABEL_MAX_LEN);
-				if (ap->cont_label == NULL) {
-					duns_destroy_attr(&dattr);
-					D_GOTO(out, rc = ENOMEM);
-				}
-			} else {
-				uuid_copy(ap->c_uuid, dattr.da_cuuid);
-			}
+			snprintf(ap->pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+			snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 		}
 		duns_destroy_attr(&dattr);
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+		uuid_unparse(ap->p_uuid, ap->pool_str);
 	}
 
-	if (ap->pool_label) {
-		rc = daos_pool_connect(ap->pool_label, ap->sysname,
-				       DAOS_PC_RW, &ap->pool,
-				       NULL, NULL);
-		if (rc != 0) {
-			fprintf(stderr, "failed to connect to "
-				"pool %s: %s (%d)\n",
-				ap->pool_label, d_errdesc(rc), rc);
-			D_GOTO(out, rc);
-		}
-	} else {
-		rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
-				       &ap->pool, NULL /* info */,
-				       NULL /* ev */);
-		if (rc != 0) {
-			fprintf(stderr, "failed to connect to "
-				"pool "DF_UUIDF ": %s (%d)\n",
-				DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
-			D_GOTO(out, rc);
-		}
+	rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RW, &ap->pool, NULL, NULL);
+	if (rc != 0) {
+		fprintf(stderr, "failed to connect to pool %s: %s (%d)\n", ap->pool_str,
+			d_errdesc(rc), rc);
+		D_GOTO(out, rc);
 	}
 
 	/* container UUID: user-provided, generated here or by uns
@@ -1313,8 +1225,10 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* for container lookup ops: if no path specified,
 	 * require --cont
 	 */
-	if ((op != CONT_CREATE) && (ap->path == NULL))
+	if ((op != CONT_CREATE) && (ap->path == NULL)) {
 		ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+		uuid_unparse(ap->c_uuid, ap->cont_str);
+	}
 
 	/* container create scenarios (generate UUID if necessary):
 	 * 1) both --cont, --path : uns library will use specified c_uuid.
@@ -1323,32 +1237,16 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 *			    (currently c_uuid null / clear).
 	 * 4) neither specified   : create a UUID in c_uuid.
 	 */
-	if ((op == CONT_CREATE) && (ap->path == NULL) &&
-	    (uuid_is_null(ap->c_uuid)))
+	if ((op == CONT_CREATE) && (ap->path == NULL) && (uuid_is_null(ap->c_uuid)))
 		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
-		if (ap->cont_label) {
-			rc = daos_cont_open(ap->pool, ap->cont_label,
-					    DAOS_COO_RW | DAOS_COO_FORCE,
-					    &ap->cont, &cont_info, NULL);
-			if (rc != 0) {
-				fprintf(stderr, "failed to open "
-					"container %s: %s (%d)\n",
-					ap->cont_label, d_errdesc(rc), rc);
-				D_GOTO(out_disconnect, rc);
-			}
-		} else {
-			rc = daos_cont_open(ap->pool, ap->c_uuid,
-					    DAOS_COO_RW | DAOS_COO_FORCE,
-					    &ap->cont, &cont_info, NULL);
-			if (rc != 0) {
-				fprintf(stderr, "failed to open "
-					"container "DF_UUIDF
-					": %s (%d)\n", DP_UUID(ap->c_uuid),
-					d_errdesc(rc), rc);
-				D_GOTO(out_disconnect, rc);
-			}
+		rc = daos_cont_open(ap->pool, ap->cont_str, DAOS_COO_RW | DAOS_COO_FORCE, &ap->cont,
+				    &cont_info, NULL);
+		if (rc != 0) {
+			fprintf(stderr, "failed to open container %s: %s (%d)\n", ap->cont_str,
+				d_errdesc(rc), rc);
+			D_GOTO(out_disconnect, rc);
 		}
 	}
 

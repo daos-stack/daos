@@ -4,164 +4,10 @@ option java_package = "io.daos.dfs.uns";
 option java_outer_classname = "DunsClasses";
 option java_multiple_files = true;
 
-/* property types of pool and container */
-enum PropType {
-  /* pool property types */
-  DAOS_PROP_PO_MIN = 0;
-  /**
-   * Label - a string that a user can associated with a pool.
-   * default = ""
-   */
-  DAOS_PROP_PO_LABEL = 1;
-  /**
-   * ACL: access control list for pool
-   * An ordered list of access control entries detailing user and group
-   * access privileges.
-   * Expected to be in the order: Owner, User(s), Group(s), Everyone
-   */
-  DAOS_PROP_PO_ACL = 2;
-  /**
-   * Reserve space ratio: amount of space to be reserved on each target
-   * for rebuild purpose. default = 0%.
-   */
-  DAOS_PROP_PO_SPACE_RB = 3;
-  /**
-   * Automatic/manual self-healing. default = auto
-   * auto/manual exclusion
-   * auto/manual rebuild
-   */
-  DAOS_PROP_PO_SELF_HEAL = 4;
-  /**
-   * Space reclaim strategy = time|batched|snapshot. default = snapshot
-   * time interval
-   * batched commits
-   * snapshot creation
-   */
-  DAOS_PROP_PO_RECLAIM = 5;
-  /**
-   * The user who acts as the owner of the pool.
-   * Format: user@[domain]
-   */
-  DAOS_PROP_PO_OWNER = 6;
-  /**
-   * The group that acts as the owner of the pool.
-   * Format: group@[domain]
-   */
-  DAOS_PROP_PO_OWNER_GROUP = 7;
-  /**
-   * The pool svc rank list.
-   */
-  DAOS_PROP_PO_SVC_LIST = 8;
-  DAOS_PROP_PO_MAX = 9;
-
-  /* container property types */
-  DAOS_PROP_CO_MIN = 0x1000;
-  /**
-   * Label - a string that a user can associated with a container.
-   * default = ""
-   */
-  DAOS_PROP_CO_LABEL = 0x1001;
-  /**
-   * Layout type: unknown, POSIX, MPI-IO, HDF5, Apache Arrow, ...
-   * default value = DAOS_PROP_CO_LAYOUT_UNKNOWN
-   */
-  DAOS_PROP_CO_LAYOUT_TYPE = 0x1002;
-  /**
-   * Layout version: specific to middleware for interop.
-   * default = 1
-   */
-  DAOS_PROP_CO_LAYOUT_VER = 0x1003;
-  /**
-   * Checksum on/off + checksum type (CRC16, CRC32, SHA-1 & SHA-2).
-   * default = DAOS_PROP_CO_CSUM_OFF
-   */
-  DAOS_PROP_CO_CSUM = 0x1004;
-  /**
-   * Checksum chunk size
-   * default = 32K
-   */
-  DAOS_PROP_CO_CSUM_CHUNK_SIZE = 0x1005;
-  /**
-  * Checksum verification on server. Value = ON/OFF
-  * default = DAOS_PROP_CO_CSUM_SV_OFF
-  */
-  DAOS_PROP_CO_CSUM_SERVER_VERIFY = 0x1006;
-  /**
-   * Redundancy factor:
-   * RF(n): Container I/O restricted after n faults.
-   * default = RF1 (DAOS_PROP_CO_REDUN_RF1)
-   */
-  DAOS_PROP_CO_REDUN_FAC = 0x1007;
-  /**
-   * Redundancy level: default fault domain level for placement.
-   * default = rack (DAOS_PROP_CO_REDUN_NODE)
-   */
-  DAOS_PROP_CO_REDUN_LVL = 0x1008;
-  /**
-   * Maximum number of snapshots to retain.
-   */
-  DAOS_PROP_CO_SNAPSHOT_MAX = 0x1009;
-  /**
-   * ACL: access control list for container
-   * An ordered list of access control entries detailing user and group
-   * access privileges.
-   * Expected to be in the order: Owner, User(s), Group(s), Everyone
-   */
-  DAOS_PROP_CO_ACL = 0x100A;
-  /** Compression on/off + compression type */
-  DAOS_PROP_CO_COMPRESS = 0x100B;
-  /** Encryption on/off + encryption type */
-  DAOS_PROP_CO_ENCRYPT = 0x100C;
-  /**
-   * The user who acts as the owner of the container.
-   * Format: user@[domain]
-   */
-  DAOS_PROP_CO_OWNER = 0x100D;
-  /**
-   * The group that acts as the owner of the container.
-   * Format: group@[domain]
-   */
-  DAOS_PROP_CO_OWNER_GROUP = 0x100E;
-  DAOS_PROP_CO_MAX = 0x100F;
-}
-
 enum Layout {
   UNKNOWN = 0;
   POSIX = 1;
   HDF5 = 2;
-}
-
-message DaosAce {
-  uint32 access_types = 1;
-  uint32 principal_type = 2;
-  uint32 principal_len = 3;
-  uint32 access_flags = 4;
-  uint32 reserved = 5;
-  uint32 allow_perms = 6;
-  uint32 audit_perms = 7;
-  uint32 alarm_perms = 8;
-  string principal = 9;
-}
-
-message DaosAcl {
-  uint32 ver = 1;
-  uint32 reserv = 2;
-  repeated DaosAce aces = 4;
-}
-
-message Entry {
-  PropType type = 1;
-  uint32 reserved = 2;
-  oneof value {
-    uint64 val = 3;
-    string str = 4;
-    DaosAcl pval = 5;
-  }
-}
-
-message Properties {
-  uint32 reserved = 1;
-  repeated Entry entries = 2;
 }
 
 message DunsAttribute {
@@ -172,7 +18,6 @@ message DunsAttribute {
   uint64  chunk_size = 5;
   string rel_path = 6;
   bool   on_lustre  = 7;
-  Properties properties = 8;
   bool no_prefix = 9;
 }
 

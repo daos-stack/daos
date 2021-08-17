@@ -159,6 +159,9 @@ check_for_uns_ep(struct dfuse_projection_info *fs_handle,
 	if (rc)
 		return rc;
 
+	/** TODO: should switch dfuse to use da_pool and da_cont instead of the uuids. */
+	duns_destroy_attr(&dattr);
+
 	if (dattr.da_type != DAOS_PROP_CO_LAYOUT_POSIX)
 		return ENOTSUP;
 
