@@ -8,6 +8,7 @@ import os
 from apricot import TestWithServers
 import check_for_pool
 
+
 RESULT_PASS = "PASS" # nosec
 RESULT_FAIL = "FAIL"
 
@@ -33,12 +34,6 @@ class MultiServerCreateDeleteTest(TestWithServers):
         :avocado: tags=pool,multitarget
         :avocado: tags=multiserver_create_delete
         """
-        # Create a dmg command object
-        dmg = self.get_dmg_command()
-
-        # Disable raising an exception if the dmg command fails
-        dmg.exit_status_exception = False
-
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
         # expected result of the test
@@ -64,49 +59,63 @@ class MultiServerCreateDeleteTest(TestWithServers):
         host1 = self.hostlist_servers[0]
         host2 = self.hostlist_servers[1]
         test_destroy = True
-        data = dmg.pool_create(
-            "1GB", user, group, None, tgtlist, None)
-        if dmg.result.exit_status == 0:
+
+        self.add_pool(create=False)
+        self.pool.uid = user
+        self.pool.gid = group
+        self.pool.target_list.update(tgtlist)
+
+        # Disable raising an exception if the dmg command fails
+        self.pool.dmg.exit_status_exception = False
+
+        self.pool.create()
+
+        if self.pool.dmg.result.exit_status == 0:
             if expected_result == RESULT_FAIL:
                 self.fail(
                     "Test was expected to fail but it passed at pool create.")
             if '0' in tgtlist:
                 # check_for_pool checks if the uuid directory exists in host1
-                exists = check_for_pool.check_for_pool(host1, data["uuid"])
+                exists = check_for_pool.check_for_pool(host1, self.pool.uuid)
                 if exists != 0:
                     self.fail(
                         "Pool {0} not found on host {1}.\n".format(
-                            data["uuid"], host1))
+                            self.pool.uuid, host1))
             if '1' in tgtlist:
-                exists = check_for_pool.check_for_pool(host2, data["uuid"])
+                exists = check_for_pool.check_for_pool(host2, self.pool.uuid)
                 if exists != 0:
                     self.fail(
                         "Pool {0} not found on host {1}.\n".format(
-                            data["uuid"], host2))
+                            self.pool.uuid, host2))
         else:
             test_destroy = False
+            self.pool.dmg.exit_status_exception = True
+
             if expected_result == RESULT_PASS:
                 self.fail(
                     "Test was expected to pass but it failed at pool create.")
 
+        self.pool.dmg.exit_status_exception = True
+
         if test_destroy:
-            destroy_result = dmg.pool_destroy(data["uuid"])
-            if destroy_result.exit_status == 0:
+            uuid = self.pool.uuid
+            destroy_result = self.pool.destroy()
+            if destroy_result:
                 if expected_result == RESULT_FAIL:
                     self.fail("Test was expected to fail but it passed at " +
                               "pool create.")
                 if '0' in tgtlist:
-                    exists = check_for_pool.check_for_pool(host1, data["uuid"])
+                    exists = check_for_pool.check_for_pool(host1, uuid)
                     if exists == 0:
                         self.fail(
                             "Pool {0} found on host {1} after destroy.".format(
-                                data["uuid"], host1))
+                                uuid, host1))
                 if '1' in tgtlist:
-                    exists = check_for_pool.check_for_pool(host2, data["uuid"])
+                    exists = check_for_pool.check_for_pool(host2, uuid)
                     if exists == 0:
                         self.fail(
                             "Pool {0} found on host {1} after destroy.".format(
-                                data["uuid"], host2))
+                                uuid, host2))
             else:
                 if expected_result == RESULT_PASS:
                     self.fail("Test was expected to pass but it failed at " +
