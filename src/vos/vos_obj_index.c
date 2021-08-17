@@ -613,9 +613,6 @@ oi_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 	it_entry->ie_obj_punch = it_entry->ie_punch;
 	it_entry->ie_epoch = epr.epr_hi;
 	it_entry->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-	it_entry->ie_future_create = oiter->oit_ilog_info.ii_future_create.tr_epc;
-	it_entry->ie_future_minor_epc = oiter->oit_ilog_info.ii_future_create.tr_minor_epc;
-	it_entry->ie_future_inprogress = oiter->oit_ilog_info.ii_future_inprogress;
 	if (oiter->oit_ilog_info.ii_create == 0) {
 		/** Object isn't visible so mark covered */
 		it_entry->ie_vis_flags = VOS_VIS_FLAG_COVERED;

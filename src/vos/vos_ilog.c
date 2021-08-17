@@ -158,11 +158,6 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 
 		entry_epc = entry.ie_id.id_epoch;
 		if (entry_epc > epoch) {
-			if (entry.ie_status == -DER_INPROGRESS ||
-			    entry.ie_status == ILOG_UNCOMMITTED)
-				info->ii_future_inprogress = true;
-			else
-				info->ii_future_inprogress = false;
 			if (ilog_has_punch(&entry)) {
 				/** Entry is punched within uncertainty range,
 				 * so restart the transaction.
@@ -172,14 +167,9 @@ vos_parse_ilog(struct vos_ilog_info *info, daos_epoch_t epoch,
 
 				if (entry.ie_status == ILOG_COMMITTED)
 					info->ii_next_punch = entry_epc;
-				info->ii_future_create.tr_epc = 0;
-				info->ii_future_create.tr_minor_epc = 0;
 			} else {
 				if (entry_epc <= bound)
 					info->ii_uncertain_create = entry_epc;
-				info->ii_future_create.tr_epc = entry_epc;
-				info->ii_future_create.tr_minor_epc =
-					entry.ie_id.id_update_minor_eph;
 			}
 			continue;
 		}

@@ -693,9 +693,6 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 	ent->ie_punch = oiter->it_ilog_info.ii_next_punch;
 	ent->ie_obj_punch = oiter->it_obj->obj_ilog_info.ii_next_punch;
 	ent->ie_vis_flags = VOS_VIS_FLAG_VISIBLE;
-	ent->ie_future_create = oiter->it_ilog_info.ii_future_create.tr_epc;
-	ent->ie_future_minor_epc = oiter->it_ilog_info.ii_future_create.tr_minor_epc;
-	ent->ie_future_inprogress = oiter->it_ilog_info.ii_future_inprogress;
 	if (oiter->it_ilog_info.ii_create == 0) {
 		/* The key has no visible subtrees so mark it covered */
 		ent->ie_vis_flags = VOS_VIS_FLAG_COVERED;

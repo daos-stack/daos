@@ -392,12 +392,6 @@ typedef struct {
 				/** oid */
 				daos_unit_oid_t	ie_oid;
 			};
-			/** VOS_IT_FUTURE only, the next update, if applicable */
-			daos_epoch_t		ie_future_create;
-			/** VOS_IT_FUTURE only, the next update is inprogress */
-			bool			ie_future_inprogress;
-			/** VOS_IT_FUTURE only, the minor epoch of next update, if applicable */
-			uint16_t		ie_future_minor_epc;
 		};
 		/** Array or SV entry */
 		struct {

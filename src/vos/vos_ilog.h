@@ -52,10 +52,6 @@ struct vos_ilog_info {
 	 *  conflict depends on the operation doing the check.
 	 */
 	daos_epoch_t		 ii_uncertain_create;
-	/** Tracks lowest committed update after the epoch range */
-	struct ilog_time_rec	 ii_future_create;
-	/** indicates the future update is uncommitted */
-	bool			 ii_future_inprogress;
 	/** The entity has no valid log entries */
 	bool			 ii_empty;
 };
