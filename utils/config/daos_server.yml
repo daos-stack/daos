@@ -73,7 +73,7 @@
 ## Force a specific provider to be used by all the engines.
 ## The default provider depends on the interfaces that will be auto-detected:
 ##  ofi+verbs;ofi_rxm for Infiniband/RoCE and
-##  ofi+socket for non-RDMA-capable Ethernet.
+##  ofi+sockets for non-RDMA-capable Ethernet.
 #
 #provider: ofi+verbs;ofi_rxm
 #
