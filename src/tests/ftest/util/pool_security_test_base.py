@@ -8,6 +8,7 @@ import os
 import random
 import grp
 import re
+
 from apricot import TestWithServers
 from daos_utils import DaosCommand
 import agent_utils as agu
@@ -34,10 +35,6 @@ class PoolSecurityTestBase(TestWithServers):
             file_name (str): file name.
             entry (str): acl entry to be modified.
             new_entry (str): new acl entry.
-
-        Return:
-            none.
-
         """
         acl_file = open(file_name, "r+")
         new_permissions = ""
@@ -58,7 +55,7 @@ class PoolSecurityTestBase(TestWithServers):
     def get_pool_acl_list(self):
         """Get daos pool acl list by dmg get-acl.
 
-        Return:
+        Returns:
             list: daos pool acl list.
 
         """
@@ -82,10 +79,6 @@ class PoolSecurityTestBase(TestWithServers):
         Args:
             action (str): update-acl or delete-acl.
             entry (str): pool acl entry or principal to be updated.
-
-        Return:
-            none.
-
         """
         if action == "delete":
             result = self.pool.delete_acl(entry)
@@ -104,30 +97,50 @@ class PoolSecurityTestBase(TestWithServers):
             action (str): daos pool read or write.
             expect (str): expecting pass or deny.
             err_code (str): expecting deny of RC code.
-
-        Return:
-            none.
-
         """
-        if expect.lower() == 'pass':
-            if result.exit_status != 0 or result.stderr_text != "":
+        if isinstance(result, dict):
+            # result is JSON.
+            if expect.lower() == 'pass':
+                if result["status"] != 0 or result["error"] != None:
+                    self.fail(
+                        "##Test Fail on verify_daos_pool {}, expected Pass, " +
+                        "but Failed.".format(action))
+                else:
+                    self.log.info(
+                        " =Test Passed on verify_daos_pool %s, Succeed.\n",
+                        action)
+
+            elif err_code not in result["error"]:
                 self.fail(
-                    "##Test Fail on verify_daos_pool {}, expected Pass, but "
-                    "Failed.".format(action))
+                    "##Test Fail on verify_daos_pool {}, expected Failure of " +
+                    "{}, but Passed.".format(action, expect))
             else:
                 self.log.info(
-                    " =Test Passed on verify_daos_pool %s, Succeed.\n", action)
-        # Remove "and err_code not in result.stdout_text" on the next statement
-        # elif after DAOS-5635 resolved.
-        elif (err_code not in result.stderr_text and
-                err_code not in result.stdout_text):
-            self.fail(
-                "##Test Fail on verify_daos_pool {}, expected Failure of {}, "
-                "but Passed.".format(action, expect))
+                    " =Test Passed on verify_daos_pool %s expected error of " +
+                    "%s.\n", action, expect)
+
         else:
-            self.log.info(
-                " =Test Passed on verify_daos_pool %s expected error of %s.\n",
-                action, expect)
+            # result is CmdResult. Should be removed. DAOS-8317
+            if expect.lower() == 'pass':
+                if result.exit_status != 0 or result.stderr_text != "":
+                    self.fail(
+                        "##Test Fail on verify_daos_pool {}, expected Pass, " +
+                        "but Failed.".format(action))
+                else:
+                    self.log.info(
+                        " =Test Passed on verify_daos_pool %s, Succeed.\n",
+                        action)
+            # Remove "and err_code not in result.stdout_text" on the next
+            # statement elif after DAOS-5635 resolved.
+            elif (err_code not in result.stderr_text and
+                    err_code not in result.stdout_text):
+                self.fail(
+                    "##Test Fail on verify_daos_pool {}, expected Failure of " +
+                    "{}, but Passed.".format(action, expect))
+            else:
+                self.log.info(
+                    " =Test Passed on verify_daos_pool %s expected error of " +
+                    "%s.\n", action, expect)
 
     def verify_cont_rw_attribute(self, action, expect, attribute, value=None):
         """verify container rw attribute.
@@ -137,7 +150,6 @@ class PoolSecurityTestBase(TestWithServers):
             expect (str): expecting pass or deny.
             attribute (str): Container attribute to be verified.
             value (str optional): Container attribute value to write.
-
         """
         if action.lower() == "write":
             result = self.set_container_attribute(
@@ -163,7 +175,6 @@ class PoolSecurityTestBase(TestWithServers):
             expect (str): expecting pass or deny.
             cont_property (str optional): Container property to be verified.
             value (str optional): Container property value to write.
-
         """
         if action.lower() == "write":
             result = self.set_container_property(
@@ -187,7 +198,6 @@ class PoolSecurityTestBase(TestWithServers):
             expect (str): expecting pass or deny.
             user (str): New user to be set.
             group (str): New group to be set.
-
         """
         action = "set"
         result = self.set_container_owner(
@@ -204,7 +214,6 @@ class PoolSecurityTestBase(TestWithServers):
             action (str): daos container read or write.
             expect (str): expecting pass or deny.
             entry (str optional): New ace entry to be write.
-
         """
         if action.lower() == "write":
             result = self.update_container_acl(entry)
@@ -229,7 +238,6 @@ class PoolSecurityTestBase(TestWithServers):
         Args:
             result (str): daos container cmd result to be verified.
             expect (str): expecting pass or deny.
-
         """
         if expect.lower() == 'pass':
             if DENY_ACCESS in result:
@@ -253,7 +261,6 @@ class PoolSecurityTestBase(TestWithServers):
 
         Args:
             expect (str): expecting pass or deny.
-
         """
         action = "cont_delete"
         result = self.destroy_test_container(self.pool.uuid, self.container)
@@ -307,7 +314,7 @@ class PoolSecurityTestBase(TestWithServers):
             action (str): read or write on pool.
             expect (str): expecting behavior pass or deny with RC -1001.
 
-        Return:
+        Returns:
             bool: pass or fail.
 
         """
@@ -317,12 +324,7 @@ class PoolSecurityTestBase(TestWithServers):
         if action.lower() == "write":
             result = daos_cmd.container_create(pool=uuid)
         elif action.lower() == "read":
-            json_result = daos_cmd.pool_query(pool=uuid)
-            # Hack DAOS-8317
-            result = TempCmdResult()
-            result.exit_status = json_result["status"]
-            if json_result["error"]:
-                result.stderr_text = json_result["error"]
+            result = daos_cmd.pool_query(pool=uuid)
         else:
             self.fail(
                 "##In verify_pool_readwrite, invalid action: {}".format(action))
@@ -343,7 +345,7 @@ class PoolSecurityTestBase(TestWithServers):
             current_user_acl (list): acl entries on current user to be created.
             acl_file (str): acl file to be created.
 
-        Return:
+        Returns:
             list: acl permission list on the acl_file.
 
         """
@@ -373,10 +375,6 @@ class PoolSecurityTestBase(TestWithServers):
         Args:
             num_user (int): number of user to be cleaned.
             num_group (int): number of group name to be cleaned.
-
-        Return:
-            none.
-
         """
         user_prefix = self.params.get("user_prefix", "/run/pool_acl/*")
         for uid in range(num_user):
@@ -395,10 +393,6 @@ class PoolSecurityTestBase(TestWithServers):
         Args:
             pool_acl_list (list): pool acl entry list.
             acl_file (str): acl file to be used.
-
-        Return:
-            None.
-
         """
         sec_group = self.params.get("secondary_group_name", "/run/pool_acl/*")
         sec_group_perm = self.params.get("sg_permission", "/run/pool_acl/*")
@@ -483,10 +477,6 @@ class PoolSecurityTestBase(TestWithServers):
             current_user_acl (str): acl with read write access credential.
             read (str): expecting read permission.
             write (str): expecting write permission.
-
-        Return:
-            None: pass to continue; fail to report the testlog and stop.
-
         """
         # (1)Create dmg command
         scm_size = self.params.get("scm_size", "/run/pool_acl/*")
@@ -557,13 +547,3 @@ class PoolSecurityTestBase(TestWithServers):
         self.log.info("  (9)Cleanup users and groups")
         self.cleanup_user_group(num_user, num_group)
         self.pool.destroy()
-
-
-# Hack DAOS-8317. Don't use.
-# pylint: disable=too-few-public-methods
-class TempCmdResult:
-    """Temp Command Result"""
-
-    exit_status = None
-    stderr_text = ""
-    stdout_text = ""
