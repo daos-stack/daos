@@ -43,7 +43,7 @@ class DmgPoolEvictTest(TestWithServers):
             self.container.append(self.get_container(self.pool[-1]))
 
         # Call dmg pool evict on the second pool.
-        self.get_dmg_command().pool_evict(pool=self.pool[1].uuid)
+        self.pool[-1].evict()
 
         daos_cmd = self.get_daos_command()
 

@@ -37,15 +37,18 @@ class ListContainerTest(TestWithServers):
                 It should contain all the container UUIDs for the given pool.
         """
         # Create containers and store the container UUIDs into expected_uuids.
-        kwargs = {"pool": pool_uuid}
         for _ in range(count):
             expected_uuids.append(
-                self.daos_cmd.get_output("container_create", **kwargs)[0])
+                self.daos_cmd.get_output("container_create", pool=pool_uuid)[0])
         expected_uuids.sort()
-        # daos pool list-cont returns container UUIDs as a list.
-        data = self.daos_cmd.container_list(**kwargs)
-        actual_uuids = [uuid_label["UUID"] for uuid_label in data["response"]]
+
+        # Call container list and collect the UUIDs.
+        data = self.daos_cmd.container_list(pool=pool_uuid)
+        actual_uuids = []
+        for uuid_label in data["response"]:
+            actual_uuids.append(uuid_label["UUID"])
         actual_uuids.sort()
+
         self.assertEqual(expected_uuids, actual_uuids)
 
     def test_list_container(self):
@@ -62,25 +65,27 @@ class ListContainerTest(TestWithServers):
         :avocado: tags=container,list_containers
         """
         expected_uuids1 = []
-        data1 = self.get_dmg_command().pool_create(scm_size="150MB")
+        self.pool = []
+        self.pool.append(self.get_pool(connect=False))
         self.daos_cmd = DaosCommand(self.bin)
 
         # 1. Create 1 container and list.
-        self.create_list(1, data1["uuid"], expected_uuids1)
+        self.create_list(1, self.pool[0].uuid, expected_uuids1)
 
         # 2. Create 1 more container and list; 2 total.
-        self.create_list(1, data1["uuid"], expected_uuids1)
+        self.create_list(1, self.pool[0].uuid, expected_uuids1)
 
         # 3. Create 98 more containers and list; 100 total.
-        self.create_list(98, data1["uuid"], expected_uuids1)
+        self.create_list(98, self.pool[0].uuid, expected_uuids1)
 
         # 4. Create 2 additional pools and create 10 containers in each pool.
-        data2 = self.get_dmg_command().pool_create(scm_size="150MB")
-        data3 = self.get_dmg_command().pool_create(scm_size="150MB")
+        self.pool.append(self.get_pool(connect=False))
+        self.pool.append(self.get_pool(connect=False))
 
         # Create 10 containers in pool 2 and verify.
         expected_uuids2 = []
-        self.create_list(10, data2["uuid"], expected_uuids2)
+        self.create_list(10, self.pool[1].uuid, expected_uuids2)
+
         # Create 10 containers in pool 3 and verify.
         expected_uuids3 = []
-        self.create_list(10, data3["uuid"], expected_uuids3)
+        self.create_list(10, self.pool[2].uuid, expected_uuids3)

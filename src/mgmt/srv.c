@@ -184,6 +184,9 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 
 	ps_in = crt_req_get(rpc);
 	D_ASSERT(ps_in != NULL);
+	D_DEBUG(DB_MGMT, "ps_rank=%u, key_id=0x%x, value=0x%"PRIx64", extra=0x%"PRIx64"\n",
+		ps_in->ps_rank, ps_in->ps_key_id, ps_in->ps_value, ps_in->ps_value_extra);
+
 	if (ps_in->ps_rank != -1) {
 		/* Only set local parameter */
 		rc = dss_parameters_set(ps_in->ps_key_id, ps_in->ps_value);

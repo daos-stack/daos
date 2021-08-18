@@ -76,10 +76,10 @@ struct cmd_args_s {
 	enum sh_op		sh_op;		/* DAOS shell sub-command */
 	char			*sysname;	/* --sys-name or --sys */
 	uuid_t			p_uuid;		/* --pool */
-	char			*pool_label;	/* pool label */
+	char			pool_str[DAOS_PROP_LABEL_MAX_LEN + 1]; /* pool label or uuid */
 	daos_handle_t		pool;
 	uuid_t			c_uuid;		/* --cont */
-	char			*cont_label;	/* container label */
+	char			cont_str[DAOS_PROP_LABEL_MAX_LEN + 1]; /* container label or uuid */
 	daos_handle_t		cont;
 	int			force;		/* --force */
 	char			*attrname_str;	/* --attr attribute name */
