@@ -15,15 +15,6 @@ group_repo_post() {
 }
 
 distro_custom() {
-    # force install of avocado 69.x
-    dnf -y erase avocado{,-common}                                              \
-                 python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
-                 python3-pyyaml
-    pip3 install "avocado-framework<70.0"
-    pip3 install "avocado-framework-plugin-result-html<70.0"
-    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
-    pip3 install clustershell
-
     if ! rpm -q nfs-utils; then
         dnf -y install nfs-utils
     fi
