@@ -314,10 +314,11 @@ class CartTest(TestWithoutServers):
         tst_vgd = " valgrind --xml=yes " + \
                   "--xml-file={}/".format(daos_test_shared_dir) + \
                   r"valgrind.%q\{PMIX_ID\}.memcheck " + \
-                  "--fair-sched=try --partial-loads-ok=yes " + \
-                  "--leak-check=yes --gen-suppressions=all " + \
+                  "--fair-sched=yes --partial-loads-ok=yes " + \
+                  "--leak-check=full --show-leak-kinds=all " + \
+                  " --gen-suppressions=all " + \
                   "--suppressions=" + self.supp_file + " " + \
-                  "--show-reachable=yes "
+                  "--error-exitcode=42 --show-reachable=yes "
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
@@ -384,53 +385,6 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
-    def log_check_valgrind_memcheck(self):
-        """Check valgrind memcheck log files for errors."""
-
-        memcheck_errors = 0
-
-        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
-                                         os.getenv('HOME'))
-
-        self.log.info("Parsing log path %s", daos_test_shared_dir)
-        if not os.path.exists(daos_test_shared_dir):
-            self.log.info("Path does not exist")
-            return 1
-
-        xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
-        memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
-                                os.listdir(daos_test_shared_dir)))
-
-        for filename in memcheck_files:
-
-            log_file = os.path.join(daos_test_shared_dir, filename)
-
-            file1 = open(log_file, 'r')
-            lines = file1.readlines()
-
-            for line in lines:
-                if line.find('<error>') != -1:
-                    memcheck_errors += 1
-
-            try:
-                saved_cwd = os.getcwd()
-                os.chdir(daos_test_shared_dir)
-                os.rename(filename, filename + "-checked")
-                os.chdir(saved_cwd)
-            except OSError as e:
-                print("Problem with getcwd, chdir, rename, chdir: ", e)
-
-        if memcheck_errors > 0:
-            # Temporarily pass memcheck errors (while suppression file is in progress)
-            # self.fail( ... )
-            self.log.info(
-                "Failed, found %s  <error> element(s) in the " +
-                " memcheck XML log file(s): [%s]",
-                str(memcheck_errors),
-                ", ".join(memcheck_files))
-
-        return 0
-
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
         srv_rtn = self.launch_cmd_bg(srvcmd)
@@ -447,8 +401,6 @@ class CartTest(TestWithoutServers):
             self.fail(
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
-
-        self.log_check_valgrind_memcheck()
 
         return 0
 
@@ -467,8 +419,6 @@ class CartTest(TestWithoutServers):
                 self.stop_process(srv2)
             self.fail("Failed, return codes {}".format(rtn))
 
-        self.log_check_valgrind_memcheck()
-
         return rtn
 
     def launch_cmd_bg(self, cmd):
@@ -481,8 +431,6 @@ class CartTest(TestWithoutServers):
         if rtn is None:
             self.fail("Failed to start command\n")
             return -1
-
-        self.log_check_valgrind_memcheck()
 
         return rtn
 
