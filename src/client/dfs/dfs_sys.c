@@ -456,23 +456,24 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 		rc = d_hash_table_destroy(dfs_sys->hash, false);
 		if (rc) {
 			D_DEBUG(DB_TRACE, "failed to destroy hash table: "DF_RC"\n", DP_RC(rc));
-			D_GOTO(out, rc);
+			return rc;
 		}
 		dfs_sys->hash = NULL;
 	}
 
-	rc = dfs_umount(dfs_sys->dfs);
-	if (rc) {
-		D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", rc);
-		D_GOTO(out, rc);
+	if (dfs_sys->dfs != NULL) {
+		rc = dfs_umount(dfs_sys->dfs);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", rc);
+			return rc;
+		}
+		dfs_sys->dfs = NULL;
 	}
-	dfs_sys->dfs = NULL;
 
 	/* Only free if umount was successful */
 	D_FREE(dfs_sys);
 
-out:
-	return rc;
+	return 0;
 }
 
 int
