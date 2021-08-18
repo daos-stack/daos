@@ -357,7 +357,8 @@ class TestContainer(TestDaosApiBase):
 
             self._log_method("daos.container_create", kwargs)
             try:
-                uuid = self.daos.container_create(**kwargs)["results"]["uuid"]
+                uuid = self.daos.container_create(
+                    **kwargs)["response"]["container_uuid"]
             except KeyError as error:
                 raise CommandFailure(
                     "Error: Unexpected daos container create output") from error
