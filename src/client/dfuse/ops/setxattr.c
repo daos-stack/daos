@@ -26,7 +26,7 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		rc = duns_parse_attr((char *)value, size, &dattr);
 		if (rc)
 			D_GOTO(err, rc);
-
+		duns_destroy_attr(&dattr);
 		duns_attr = true;
 	}
 
