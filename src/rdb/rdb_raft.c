@@ -113,15 +113,18 @@ rdb_raft_fini_ae(msg_appendentries_t *ae)
 }
 
 static int
-rdb_raft_clone_ae(const msg_appendentries_t *ae, msg_appendentries_t *ae_new)
+rdb_raft_clone_ae(struct rdb *db, const msg_appendentries_t *ae, msg_appendentries_t *ae_new)
 {
-	int i;
+	size_t	size = 0;
+	int	i;
 
 	*ae_new = *ae;
 	ae_new->entries = NULL;
 	D_ASSERTF(ae_new->n_entries >= 0, "%d\n", ae_new->n_entries);
 	if (ae_new->n_entries == 0)
 		return 0;
+	else if (ae_new->n_entries > db->d_ae_max_entries)
+		ae_new->n_entries = db->d_ae_max_entries;
 
 	D_ALLOC_ARRAY(ae_new->entries, ae_new->n_entries);
 	if (ae_new->entries == NULL)
@@ -132,8 +135,19 @@ rdb_raft_clone_ae(const msg_appendentries_t *ae, msg_appendentries_t *ae_new)
 
 		*e_new = *e;
 		e_new->data.buf = NULL;
-		if (e_new->data.len == 0)
+		D_ASSERTF(e_new->data.len >= 0, "%u\n", e_new->data.len);
+		if (e_new->data.len == 0) {
 			continue;
+		} else if (i > 0 && size + e_new->data.len > db->d_ae_max_size) {
+			/*
+			 * If this is not the first entry, and we are going to
+			 * exceed the size limit, then stop and return what we
+			 * have cloned. If this _is_ the first entry, we have
+			 * to ignore the size limit in order to make progress.
+			 */
+			ae_new->n_entries = i;
+			break;
+		}
 
 		D_ALLOC(e_new->data.buf, e_new->data.len);
 		if (e_new->data.buf == NULL) {
@@ -141,6 +155,7 @@ rdb_raft_clone_ae(const msg_appendentries_t *ae, msg_appendentries_t *ae_new)
 			return -DER_NOMEM;
 		}
 		memcpy(e_new->data.buf, e->data.buf, e_new->data.len);
+		size += e_new->data.len;
 	}
 	return 0;
 }
@@ -171,7 +186,7 @@ rdb_raft_cb_send_appendentries(raft_server_t *raft, void *arg,
 	}
 	in = crt_req_get(rpc);
 	uuid_copy(in->aei_op.ri_uuid, db->d_uuid);
-	rc = rdb_raft_clone_ae(msg, &in->aei_msg);
+	rc = rdb_raft_clone_ae(db, msg, &in->aei_msg);
 	if (rc != 0) {
 		D_ERROR(DF_DB": failed to allocate entry array\n", DP_DB(db));
 		D_GOTO(err_rpc, rc);
@@ -702,6 +717,10 @@ rdb_raft_exec_unpack_io(struct dss_enum_unpack_io *io, void *arg)
 		D_ASSERT(io->ui_sgls[i].sg_iovs[0].iov_len > 0);
 	}
 #endif
+
+	if (io->ui_iods_top == -1)
+		return 0;
+
 	return vos_obj_update(unpack_arg->slc, io->ui_oid, unpack_arg->eph,
 			      io->ui_version, VOS_OF_CRIT /* flags */,
 			      &io->ui_dkey, io->ui_iods_top + 1, io->ui_iods,
@@ -945,13 +964,16 @@ rdb_raft_cb_recv_installsnapshot_resp(raft_server_t *raft, void *arg,
 		return 0;
 	}
 
-	/* If this chunk isn't successfully stored, ignore this response. */
+	/*
+	 * If this chunk isn't successfully stored, return a generic error so
+	 * that raft will not retry too eagerly.
+	 */
 	if (!out->iso_success) {
 		D_DEBUG(DB_TRACE,
 			DF_DB": rank %u: unsuccessful chunk %ld/"DF_U64"("
 			DF_U64")\n", DP_DB(db), rdb_node->dn_rank,
 			resp->last_idx, out->iso_seq, is->dis_seq);
-		return 0;
+		return -DER_MISC;
 	}
 
 	/* Ignore this stale response. */
@@ -2356,6 +2378,24 @@ rdb_raft_get_compact_thres(void)
 	return i;
 }
 
+static unsigned int
+rdb_raft_get_ae_max_entries(void)
+{
+	unsigned int n = 32;
+
+	d_getenv_int("RDB_AE_MAX_ENTRIES", &n);
+	return n;
+}
+
+static size_t
+rdb_raft_get_ae_max_size(void)
+{
+	uint64_t size = (1ULL << 20);
+
+	d_getenv_uint64_t("RDB_AE_MAX_SIZE", &size);
+	return size;
+}
+
 int
 rdb_raft_start(struct rdb *db)
 {
@@ -2369,6 +2409,8 @@ rdb_raft_start(struct rdb *db)
 	D_INIT_LIST_HEAD(&db->d_requests);
 	D_INIT_LIST_HEAD(&db->d_replies);
 	db->d_compact_thres = rdb_raft_get_compact_thres();
+	db->d_ae_max_size = rdb_raft_get_ae_max_size();
+	db->d_ae_max_entries = rdb_raft_get_ae_max_entries();
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_NOLOCK, 4 /* bits */,
 					 NULL /* priv */,
