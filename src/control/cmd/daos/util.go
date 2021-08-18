@@ -185,8 +185,6 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 
 	C.free(unsafe.Pointer(ap.dfs_path))
 	C.free(unsafe.Pointer(ap.dfs_prefix))
-	C.free_daos_alloc(unsafe.Pointer(ap.pool_label))
-	C.free_daos_alloc(unsafe.Pointer(ap.cont_label))
 
 	if ap.props != nil {
 		C.daos_prop_free(ap.props)
