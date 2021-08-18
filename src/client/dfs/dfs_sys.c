@@ -437,14 +437,12 @@ err_dfs_sys:
 int
 dfs_sys_umount(dfs_sys_t *dfs_sys)
 {
-	int		hash_rc;
-	int		umount_rc;
+	int		rc;
 	d_list_t	*rlink;
 
 	if (dfs_sys == NULL)
 		return EINVAL;
 
-	hash_rc = 0;
 	if (dfs_sys->hash != NULL) {
 		/* Decrease each reference by one. */
 		while (1) {
@@ -455,24 +453,26 @@ dfs_sys_umount(dfs_sys_t *dfs_sys)
 			d_hash_rec_decref(dfs_sys->hash, rlink);
 		}
 
-		hash_rc = d_hash_table_destroy(dfs_sys->hash, false);
-		if (hash_rc != 0) {
-			D_DEBUG(DB_TRACE, "failed to destroy hash table: "
-				DF_RC"\n", DP_RC(hash_rc));
+		rc = d_hash_table_destroy(dfs_sys->hash, false);
+		if (rc) {
+			D_DEBUG(DB_TRACE, "failed to destroy hash table: "DF_RC"\n", DP_RC(rc));
+			D_GOTO(out, rc);
 		}
+		dfs_sys->hash = NULL;
 	}
 
-	umount_rc = dfs_umount(dfs_sys->dfs);
-	if (umount_rc != 0) {
-		D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", umount_rc);
+	rc = dfs_umount(dfs_sys->dfs);
+	if (rc) {
+		D_DEBUG(DB_TRACE, "dfs_umount() failed (%d)\n", rc);
+		D_GOTO(out, rc);
 	}
+	dfs_sys->dfs = NULL;
 
+	/* Only free if umount was successful */
 	D_FREE(dfs_sys);
 
-	/** Try to return the rc of whichever call failed */
-	if (hash_rc != 0)
-		return hash_rc;
-	return umount_rc;
+out:
+	return rc;
 }
 
 int
