@@ -287,6 +287,19 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 	d_iov_set(&val_iov, &val, sizeof(struct rebuild_obj_val));
 	oid.id_shard = shard; /* Convert the OID to rebuilt one */
 	rc = obj_tree_insert(tls->rebuild_tree_hdl, co_uuid, oid, &val_iov);
+	if (rc == -DER_EXIST) {
+		/* If there is reintegrate being restarted due to the failure, then
+		 * it might put multiple shards into the same VOS target, because
+		 * reclaim is not being scheduled in the previous failure reintegration,
+		 * so let's ignore duplicate shards(DER_EXIST) in this case.
+		 */
+		if (rpt->rt_rebuild_op == RB_OP_REINT) {
+			D_DEBUG(DB_REBUILD, DF_UUID" found duplicate "DF_UOID" %d\n",
+				DP_UUID(co_uuid), DP_UOID(oid), tgt_id);
+			rc = 0;
+		}
+
+	}
 	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u: "DF_RC"\n",
 		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, DP_RC(rc));
 

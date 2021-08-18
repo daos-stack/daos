@@ -132,6 +132,9 @@ class DaosServerYamlParameters(YamlParameters):
         # the self.engines_per_host.value.
         self.engine_params = [self.PerEngineYamlParameters()]
 
+        self.fault_path = BasicParameter(None)
+
+
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
