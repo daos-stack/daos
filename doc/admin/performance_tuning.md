@@ -263,10 +263,10 @@ Parameters :
 Running test=UPDATE
 Running UPDATE test (iteration=1)
 UPDATE successfully completed:
-        duration : 124.478568 sec
-        bandwith : 313.809    MB/sec
-        rate     : 80335.11   IO/sec
-        latency  : 12.448     us (nonsense if credits > 1)
+        duration  : 124.478568 sec
+        bandwidth : 313.809    MB/sec
+        rate      : 80335.11   IO/sec
+        latency   : 12.448     us (nonsense if credits > 1)
 Duration across processes:
         MAX duration : 124.478568 sec
         MIN duration : 124.478568 sec
@@ -275,10 +275,10 @@ Completed test=UPDATE
 Running test=FETCH
 Running FETCH test (iteration=1)
 FETCH successfully completed:
-        duration : 23.884087  sec
-        bandwith : 1635.503   MB/sec
-        rate     : 418688.81  IO/sec
-        latency  : 2.388      us (nonsense if credits > 1)
+        duration  : 23.884087  sec
+        bandwidth : 1635.503   MB/sec
+        rate      : 418688.81  IO/sec
+        latency   : 2.388      us (nonsense if credits > 1)
 Duration across processes:
         MAX duration : 23.884087  sec
         MIN duration : 23.884087  sec
@@ -289,7 +289,7 @@ Taskset is used to change the CPU affinity of the daos\_perf process.
 
 !!! warning
     Performance of persistent memory may be impacted by NUMA affinity. It is
-    thus recommanded to set the affinity of daos\_perf to a CPU core locally
+    thus recommended to set the affinity of daos\_perf to a CPU core locally
     attached to the persistent memory device.
 
 The same test can be performed on the 2nd pmem device to compare the
@@ -319,10 +319,10 @@ Parameters :
 Running test=UPDATE
 Running UPDATE test (iteration=1)
 UPDATE successfully completed:
-        duration : 123.389467 sec
-        bandwith : 316.579    MB/sec
-        rate     : 81044.19   IO/sec
-        latency  : 12.339     us (nonsense if credits > 1)
+        duration  : 123.389467 sec
+        bandwidth : 316.579    MB/sec
+        rate      : 81044.19   IO/sec
+        latency   : 12.339     us (nonsense if credits > 1)
 Duration across processes:
         MAX duration : 123.389467 sec
         MIN duration : 123.389467 sec
@@ -331,10 +331,10 @@ Completed test=UPDATE
 Running test=FETCH
 Running FETCH test (iteration=1)
 FETCH successfully completed:
-        duration : 24.114830  sec
-        bandwith : 1619.854   MB/sec
-        rate     : 414682.58  IO/sec
-        latency  : 2.411      us (nonsense if credits > 1)
+        duration  : 24.114830  sec
+        bandwidth : 1619.854   MB/sec
+        rate      : 414682.58  IO/sec
+        latency   : 2.411      us (nonsense if credits > 1)
 Duration across processes:
         MAX duration : 24.114830  sec
         MIN duration : 24.114830  sec
@@ -365,10 +365,10 @@ Parameters :
 Running test=UPDATE
 Running UPDATE test (iteration=1)
 UPDATE successfully completed:
-        duration : 21.247287  sec
-        bandwith : 1882.593   MB/sec
-        rate     : 1882.59    IO/sec
-        latency  : 531.182    us (nonsense if credits > 1)
+        duration  : 21.247287  sec
+        bandwidth : 1882.593   MB/sec
+        rate      : 1882.59    IO/sec
+        latency   : 531.182    us (nonsense if credits > 1)
 Duration across processes:
         MAX duration : 21.247287  sec
         MIN duration : 21.247287  sec
@@ -377,10 +377,10 @@ Completed test=UPDATE
 Running test=FETCH
 Running FETCH test (iteration=1)
 FETCH successfully completed:
-        duration : 10.133850  sec
-        bandwith : 3947.167   MB/sec
-        rate     : 3947.17    IO/sec
-        latency  : 253.346    us (nonsense if credits > 1)
+        duration  : 10.133850  sec
+        bandwidth : 3947.167   MB/sec
+        rate      : 3947.17    IO/sec
+        latency   : 253.346    us (nonsense if credits > 1)
 Duration across processes:
         MAX duration : 10.133850  sec
         MIN duration : 10.133850  sec
@@ -395,7 +395,7 @@ Completed test=FETCH
 
 In DAOS mode, daos\_perf can be used as an MPI application like IOR.
 Parameters are the same, except that `-T daos` can be used to select the daos
-mode. This option can be ommitted too since this is the default.
+mode. This option can be omitted too since this is the default.
 
 ## Client Performance Tuning
 
