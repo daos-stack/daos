@@ -24,6 +24,7 @@ import signal
 import stat
 import argparse
 import tabulate
+import errno
 import functools
 import traceback
 import subprocess
@@ -1247,7 +1248,7 @@ def create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgri
         destroy_container(conf, pool, label)
         rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
 
-    assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
+    assert rc.returncode == 0, rc
     return rc.json['response']['container_uuid']
 
 def destroy_container(conf, pool, container, valgrind=True):
@@ -1323,6 +1324,22 @@ def needs_dfuse_with_cache(method):
         self.dfuse = DFuse(self.server,
                            self.conf,
                            caching=True,
+                           pool=self.pool.dfuse_mount_name(),
+                           container=self.container)
+        self.dfuse.start(v_hint=method.__name__)
+        rc = method(self)
+        if self.dfuse.stop():
+            self.fatal_errors = True
+        return rc
+    return _helper
+
+def needs_dfuse_no_cache(method):
+    """Decorator function for starting dfuse under posix_tests class"""
+    @functools.wraps(method)
+    def _helper(self):
+        self.dfuse = DFuse(self.server,
+                           self.conf,
+                           caching=False,
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
@@ -1843,6 +1860,34 @@ class posix_tests():
 
         if dfuse.stop():
             self.fatal_errors = True
+
+    @needs_dfuse_no_cache
+    def test_file_nospace(self):
+        filename = os.path.join(self.dfuse.dir, 'new_file')
+
+        fd = open(filename, 'wb')
+        data = bytearray(1024*1024*64)
+        while True:
+            try:
+                stat = os.fstat(fd.fileno())
+                fd.write(data)
+            except OSError as e:
+                if e.errno != errno.ENOSPC:
+                    raise
+                print('File write returned ENOSPACE')
+                stat_post = os.fstat(fd.fileno())
+                print(stat)
+                print(stat_post)
+                break
+
+        stat = os.fstat(fd.fileno())
+        print(stat)
+        try:
+            fd.close()
+            os.unlink(filename)
+        except OSError as e:
+            if e.errno != errno.ENOSPC:
+                raise
 
     def test_uns_basic(self):
         """Create a UNS entry point and access it via both EP and path"""
