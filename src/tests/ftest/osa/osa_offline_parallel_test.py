@@ -110,7 +110,10 @@ class OSAOfflineParallelTest(OSAUtils):
             pool[val].create()
             self.pool = pool[val]
             pool_uuid.append(self.pool.uuid)
+            # Use only pool UUID while running the test.
+            self.pool.use_label = False
             self.pool.set_property("reclaim", "disabled")
+
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
                 if oclass != "S1":
