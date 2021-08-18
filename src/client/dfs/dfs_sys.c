@@ -126,10 +126,13 @@ static void
 hash_rec_free(struct d_hash_table *htable, d_list_t *rlink)
 {
 	struct hash_hdl *hdl = hash_hdl_obj(rlink);
+	int		rc = 0;
 
 	D_DEBUG(DB_TRACE, "name=%s\n", hdl->name);
 
-	dfs_release(hdl->obj);
+	rc = dfs_release(hdl->obj);
+	if (rc == ENOMEM)
+		dfs_release(hdl->obj);
 	D_FREE(hdl->name);
 	D_FREE(hdl);
 }
@@ -213,7 +216,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	hdl->name_len = sys_path->dir_name_len;
 	D_STRNDUP(hdl->name, sys_path->dir_name, sys_path->dir_name_len);
 	if (hdl->name == NULL)
-		D_GOTO(free_hdl, ENOMEM);
+		D_GOTO(free_hdl, rc = ENOMEM);
 
 	/* Start with 2 so we have exactly 1 reference left
 	 * when dfs_sys_umount is called.
@@ -224,8 +227,7 @@ hash_lookup(dfs_sys_t *dfs_sys, struct sys_path *sys_path)
 	rc = dfs_lookup(dfs_sys->dfs, sys_path->dir_name, O_RDWR, &hdl->obj,
 			&mode, NULL);
 	if (rc != 0) {
-		D_ERROR("dfs_lookup() %s failed: %s\n",
-			sys_path->dir_name, strerror(rc));
+		D_DEBUG(DB_TRACE, "failed to lookup %s: (%d)\n", sys_path->dir_name, rc);
 		D_GOTO(free_hdl_name, rc);
 	}
 
@@ -1129,7 +1131,12 @@ out_free_path:
 int
 dfs_sys_close(dfs_obj_t *obj)
 {
-	return dfs_release(obj);
+	int rc = 0;
+
+	rc = dfs_release(obj);
+	if (rc == ENOMEM)
+		dfs_release(obj);
+	return rc;
 }
 
 int
@@ -1393,6 +1400,8 @@ dfs_sys_closedir(DIR *dirp)
 	sys_dir = (struct dfs_sys_dir *)dirp;
 
 	rc = dfs_release(sys_dir->obj);
+	if (rc == ENOMEM)
+		dfs_release(sys_dir->obj);
 
 	D_FREE(sys_dir);
 

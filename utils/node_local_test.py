@@ -3580,7 +3580,7 @@ def run(wf, args):
             # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
             # filesystem copy test - not complete.
-            # fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
+            fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
             wf_client.close()
         if args.perf_check:
