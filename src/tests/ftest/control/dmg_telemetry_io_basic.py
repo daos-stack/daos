@@ -8,7 +8,7 @@ from avocado.core.exceptions import TestFail
 
 from ior_test_base import IorTestBase
 from telemetry_test_base import TestWithTelemetry
-
+from telemetry_utils import TelemetryUtils
 
 class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
     # pylint: disable=too-many-ancestors
@@ -88,7 +88,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                 metrics_data[key])
 
 
-    def test_telmetry_metrics(self):
+    def test_io_telmetry_metrics_basic(self):
         """JIRA ID: DAOS-5241
 
             Create files of 500M and 1M with transfer size 1M to verify the
@@ -103,15 +103,17 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
         """
         block_sizes = self.params.get("block_sizes", "/run/*")
         transfer_sizes = self.params.get("transfer_sizes", "/run/*")
-        test_metrics = self.params.get("io_test_metrics", "/run/*")
         threshold = self.params.get("io_test_metrics_valid", "/run/*")
+        test_metrics = TelemetryUtils.ENGINE_IO_DTX_COMMITTED_METRICS +\
+                       TelemetryUtils.ENGINE_IO_OPS_FETCH_ACTIVE_METRICS +\
+                       TelemetryUtils.ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
         i = 0
         self.add_pool(connect=False)
         self.add_container(pool=self.pool)
         metrics_data = {}
         for block_size in block_sizes:
             for transfer_size in transfer_sizes:
-                metrics_data[i] = self.telemetry.get_io_metrics()
+                metrics_data[i] = self.telemetry.get_io_metrics(test_metrics)
                 i += 1
                 self.log.info("==Start ior testloop: %s, Block Size = %s, "
                               "transfer_size =  %s", i, block_size,
@@ -126,7 +128,7 @@ class TestWithTelemetryIOBasic(IorTestBase,TestWithTelemetry):
                         test_file_suffix=test_file_suffix)
                 except TestFail:
                     self.log.info("#ior command failed!")
-        metrics_data[i] = self.telemetry.get_io_metrics()
+        metrics_data[i] = self.telemetry.get_io_metrics(test_metrics)
         self.display_io_test_metrics(metrics_data)
         self.verify_io_test_metrics(test_metrics, metrics_data, threshold)
         self.log.info("------Test passed------")

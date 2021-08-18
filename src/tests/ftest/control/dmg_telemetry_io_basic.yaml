@@ -17,23 +17,8 @@ container:
   type: POSIX
   control_method: daos
 block_sizes: [10M, 500M]
-transfer_sizes: [1M]
+transfer_sizes: [256K, 1M]
 telemetry_metrics:
-  io_test_metrics: [
-    "engine_io_dtx_committed",
-    "engine_io_dtx_committed_max",
-    "engine_io_dtx_committed_mean",
-    "engine_io_dtx_committed_min",
-    "engine_io_dtx_committed_stddev",
-    "engine_io_ops_fetch_active_max",
-    "engine_io_ops_fetch_active_mean",
-    "engine_io_ops_fetch_active_min",
-    "engine_io_ops_fetch_active_stddev",
-    "engine_io_ops_update_active_max",
-    "engine_io_ops_update_active_mean",
-    "engine_io_ops_update_active_min",
-    "engine_io_ops_update_active_stddev"
-    ]
   io_test_metrics_valid: [0, 18446744073709552000]
 ior:
   api: POSIX
