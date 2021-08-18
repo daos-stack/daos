@@ -289,7 +289,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if cmd.Path != "" {
 		ap.path = C.CString(cmd.Path)
 		defer freeString(ap.path)
-
 		rc = C.cont_create_uns_hdlr(ap)
 	} else {
 		rc = C.cont_create_hdlr(ap)
