@@ -8,7 +8,7 @@ server_config:
     0:
       pinned_numa_node: 0
       nr_xs_helpers: 1
-      fabric_iface: eth0
+      fabric_iface: ib0
       fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
@@ -16,6 +16,17 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+    1:
+      pinned_numa_node: 1
+      nr_xs_helpers: 1
+      fabric_iface: ib1
+      fabric_iface_port: 31417
+      log_file: daos_server1.log
+      bdev_class: nvme
+      bdev_list: ["bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: ["/dev/pmem1"]
+      scm_mount: /mnt/daos1
   transport_config:
     allow_insecure: True
 agent_config:

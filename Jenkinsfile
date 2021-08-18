@@ -735,6 +735,7 @@ pipeline {
                                          ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
                                          name: "NLT server leaks",
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
                                          tool: issues(pattern: 'nlt-server-leaks.json',
                                            name: 'NLT server results',
                                            id: 'NLT_server')
@@ -743,6 +744,7 @@ pipeline {
                                          ignoreFailedBuilds: false,
                                          ignoreQualityGate: true,
                                          name: "NLT client leaks",
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
                                          tool: issues(pattern: 'nlt-client-leaks.json',
                                            name: 'NLT client results',
                                            id: 'NLT_client')
