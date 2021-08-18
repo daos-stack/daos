@@ -1,5 +1,5 @@
 # Project Information
-site_name: DAOS v1.0
+site_name: DAOS v1.2
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
 site_url: http://daos.io
@@ -41,6 +41,12 @@ nav:
         - 'Transaction Model': 'overview/transaction.md'
         - 'Fault Model': 'overview/fault.md'
         - 'Security Model': 'overview/security.md'
+    - Installation and Setup:
+        - 'CentOS Setup': 'QSG/setup.md'
+        - 'openSUSE Setup': 'QSG/suse_setup.md'
+        - 'Admin/Client Tools': 'QSG/tour.md'
+        - 'Test and Benchmarking': 'QSG/test_index.md'
+        - 'IO500 Setup': 'https://wiki.hpdd.intel.com/display/DC/DAOS+IO-500+Instructions'
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
         - 'Software Installation': 'admin/installation.md'
@@ -60,6 +66,13 @@ nav:
         - 'MPI-IO Support': 'user/mpi-io.md'
         - 'HDF5 Support': 'user/hdf5.md'
         - 'Spark and Hadoop': 'user/spark.md'
+    - Test and Benchmarking:
+        - 'Run DAOS Autotest': 'QSG/autotest.md'
+        - 'Run CaRT Self_test': 'QSG/cartselftest.md'
+        - 'Run IOR': 'QSG/runior.md'
+        - 'Run mdtest': 'QSG/mdtest.md'
+        - 'Run dbench': 'QSG/dbench.md'
+        - 'Datamover test': 'QSG/datamover.md'
     - Releases:
         - 'Release Notes v1.0': 'release/release_notes_v1_0.md'
         - 'Support Matrix': 'release/support_matrix.md'
