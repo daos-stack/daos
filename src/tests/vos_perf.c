@@ -651,8 +651,6 @@ const struct option perf_vos_opts[] = {
 
 const char perf_vos_optstr[] = "f:ziIx";
 
-extern struct io_engine vos_engine;
-
 int
 main(int argc, char **argv)
 {

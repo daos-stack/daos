@@ -370,8 +370,6 @@ static struct option ctl_ops[] = {
 	{ NULL,		0,			NULL,	0	},
 };
 
-extern struct io_engine vos_engine;
-
 int
 main(int argc, char *argv[])
 {

@@ -121,4 +121,6 @@ int credit_drain(struct credit_context *tsc);
 /** return an unused credit */
 void credit_return(struct credit_context *tsc, struct io_credit *cred);
 
+extern struct io_engine vos_engine;
+
 #endif /* __CREDIT_H__ */
