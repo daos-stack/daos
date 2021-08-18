@@ -916,9 +916,9 @@ class TestPool(TestDaosApiBase):
             if self.dmg and self.control_method.value == self.USE_DMG:
                 return self.dmg.pool_get_acl(pool=self.identifier)
 
-            elif self.control_method.value == self.USE_API:
+            if self.control_method.value == self.USE_API:
                 raise CommandFailure(
-                    "Error: control method {} not supported for " +
+                    "Error: control method {} not supported for " +\
                     "get_acl()".format(self.control_method.value))
 
         return None
@@ -948,7 +948,7 @@ class TestPool(TestDaosApiBase):
 
             elif self.control_method.value == self.USE_API:
                 raise CommandFailure(
-                    "Error: control method {} not supported for " +
+                    "Error: control method {} not supported for " +\
                     "update_acl()".format(self.control_method.value))
 
             else:
@@ -970,7 +970,7 @@ class TestPool(TestDaosApiBase):
 
             elif self.control_method.value == self.USE_API:
                 raise CommandFailure(
-                    "Error: control method {} not supported for " +
+                    "Error: control method {} not supported for " +\
                     "delete_acl()".format(self.control_method.value))
 
             else:
@@ -983,10 +983,10 @@ class TestPool(TestDaosApiBase):
             if self.dmg and self.control_method.value == self.USE_DMG:
                 self.dmg.pool_overwrite_acl(
                     pool=self.identifier, acl_file=self.acl_file.value)
-            
+
             elif self.control_method.value == self.USE_API:
                 raise CommandFailure(
-                    "Error: control method {} not supported for " +
+                    "Error: control method {} not supported for " +\
                     "overwrite_acl()".format(self.control_method.value))
 
         else:

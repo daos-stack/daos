@@ -101,9 +101,9 @@ class PoolSecurityTestBase(TestWithServers):
         if isinstance(result, dict):
             # result is JSON.
             if expect.lower() == 'pass':
-                if result["status"] != 0 or result["error"] != None:
+                if result["status"] != 0 or result["error"] is not None:
                     self.fail(
-                        "##Test Fail on verify_daos_pool {}, expected Pass, " +
+                        "##Test Fail on verify_daos_pool {}, expected Pass, " +\
                         "but Failed.".format(action))
                 else:
                     self.log.info(
@@ -112,8 +112,8 @@ class PoolSecurityTestBase(TestWithServers):
 
             elif err_code not in result["error"]:
                 self.fail(
-                    "##Test Fail on verify_daos_pool {}, expected Failure of " +
-                    "{}, but Passed.".format(action, expect))
+                    "##Test Fail on verify_daos_pool {}, expected Failure " +\
+                    "of {}, but Passed.".format(action, expect))
             else:
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s expected error of " +
@@ -124,7 +124,7 @@ class PoolSecurityTestBase(TestWithServers):
             if expect.lower() == 'pass':
                 if result.exit_status != 0 or result.stderr_text != "":
                     self.fail(
-                        "##Test Fail on verify_daos_pool {}, expected Pass, " +
+                        "##Test Fail on verify_daos_pool {}, expected Pass, " +\
                         "but Failed.".format(action))
                 else:
                     self.log.info(
@@ -135,8 +135,8 @@ class PoolSecurityTestBase(TestWithServers):
             elif (err_code not in result.stderr_text and
                     err_code not in result.stdout_text):
                 self.fail(
-                    "##Test Fail on verify_daos_pool {}, expected Failure of " +
-                    "{}, but Passed.".format(action, expect))
+                    "##Test Fail on verify_daos_pool {}, expected Failure " +\
+                    "of {}, but Passed.".format(action, expect))
             else:
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s expected error of " +
