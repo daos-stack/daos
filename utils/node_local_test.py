@@ -3436,8 +3436,8 @@ def run(wf, args):
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
-#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
-#                                                         wf_client))
+            #fatal_errors.add_result(test_alloc_fail_copy(server, conf,
+            #                                             wf_client))
             fatal_errors.add_result(test_alloc_fail_cat(server,
                                                         conf, wf_client))
             fatal_errors.add_result(test_alloc_fail(server, conf))
