@@ -358,6 +358,8 @@ struct daos_prop_entry {
 
 /** max length for pool/container label - NB: POOL_LIST_CONT RPC wire format */
 #define DAOS_PROP_LABEL_MAX_LEN		(127)
+/** DAOS_PROP_LABEL_MAX_LEN including NULL terminator */
+#define DAOS_PROP_MAX_LABEL_BUF_LEN	(DAOS_PROP_LABEL_MAX_LEN + 1)
 
 /**
  * Check if DAOS (pool or container property) label string is valid.
@@ -455,6 +457,58 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop);
  */
 struct daos_prop_entry *
 daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
+
+/**
+ * Set the string value of a property entry in a property. The property type must expect that it's
+ * entry is of a string type. This duplicates the string internally and the entry string is freed
+ * with daos_free_prop(). The user does not need to keep the string buffer around after this
+ * function is called. If the entry already has a string value set, it frees that and overwrites it
+ * with this new string.
+ *
+ * \param[in]		prop		Property list
+ * \param[in]		type		Type of property to look for
+ * \param[in]		str		String value to set in the prop entry
+ * \param[in]           len		Length of \a str
+ */
+int
+daos_prop_set_str(daos_prop_t *prop, uint32_t type, const char *str, daos_size_t len);
+
+/**
+ * Set the entry string value with the provided \a str.
+ * Convenience Function.
+ *
+ * \param[in,out]	entry		Entry where to duplicate the str into.
+ * \param[in]		str		String value to set in the prop entry
+ * \param[in]           len		Length of \a str
+ */
+int
+daos_prop_entry_set_str(struct daos_prop_entry *entry, const char *str, daos_size_t len);
+
+/**
+ * Set the pointer value of a property entry in a property. The property type must expect that it's
+ * entry is of a pointer type. This duplicates the buffer internally and the entry buffer is freed
+ * with daos_free_prop(). The user does not need to keep the string buffer around after this
+ * function is called. If the entry already has a value set, it frees that and overwrites it with
+ * this new value.
+ *
+ * \param[in]		prop		Property list
+ * \param[in]		type		Type of property to look for
+ * \param[in]		ptr		Pointer to value of entry to set
+ * \param[in]           size		Size of value
+ */
+int
+daos_prop_set_ptr(daos_prop_t *prop, uint32_t type, const void *ptr, daos_size_t size);
+
+/**
+ * Set the entry pointer value with the provided \a ptr.
+ * Convenience Function.
+ *
+ * \param[in,out]	entry		Entry where to copy the value.
+ * \param[in]		ptr             Pointer to value of entry to set
+ * \param[in]           size            Size of value
+ */
+int
+daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_size_t size);
 
 /**
  * Duplicate a generic pointer value from one DAOS prop entry to another.

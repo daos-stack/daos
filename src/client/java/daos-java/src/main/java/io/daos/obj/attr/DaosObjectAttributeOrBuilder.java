@@ -22,9 +22,9 @@ public interface DaosObjectAttributeOrBuilder extends
    * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
    * @return The oaOa.
    */
-  DaosOclassAttr getOaOa();
+  io.daos.obj.attr.DaosOclassAttr getOaOa();
   /**
    * <code>.objattr.DaosOclassAttr oa_oa = 2;</code>
    */
-  DaosOclassAttrOrBuilder getOaOaOrBuilder();
+  io.daos.obj.attr.DaosOclassAttrOrBuilder getOaOaOrBuilder();
 }
