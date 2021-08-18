@@ -2524,7 +2524,7 @@ evt_ent_array_fill(struct evt_context *tcx, enum evt_find_opc find_opc,
 					if (rect->rc_minor_epc ==
 					    EVT_MINOR_EPC_MAX)
 						break; /* Need to adjust it */
-					D_DEBUG(DB_IO, "Same epoch partial "
+					D_ERROR("Same epoch partial "
 						"overwrite not supported:"
 						DF_RECT" overlaps with "DF_RECT
 						"\n", DP_RECT(rect),

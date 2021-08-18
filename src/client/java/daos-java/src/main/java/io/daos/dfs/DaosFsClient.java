@@ -852,26 +852,6 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
   static native void dfsUnmountFs(long dfsPtr) throws IOException;
 
   /**
-   * create UNS path with given data in <code>bufferAddress</code> in pool <code>poolHandle</code>.
-   * A new container will be created with some properties from <code>attribute</code>.
-   * Object type, pool UUID and container UUID are set to extended attribute of <code>path</code>.
-   *
-   * @param poolHandle
-   * handle of pool
-   * @param path
-   * OS file path to set duns attributes. make sure file not existing
-   * @param bufferAddress
-   * buffer memory address of direct buffer which holds <code>DunsAttribute</code> data serialized by
-   *     protocol buffer
-   * @param buffLen
-   * length of buffer
-   * @return UUID of container
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native String dunsCreatePath(long poolHandle, String path, long bufferAddress, int buffLen) throws IOException;
-
-  /**
    * extract and parse extended attributes from given <code>path</code>.
    *
    * @param path
@@ -911,18 +891,6 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
    * {@link DaosIOException}
    */
   static native void dunsSetAppInfo(String path, String attrName, String value) throws IOException;
-
-  /**
-   * Destroy a container and remove the path associated with it in the UNS.
-   *
-   * @param poolHandle
-   * pool handle
-   * @param path
-   * OS file path
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native void dunsDestroyPath(long poolHandle, String path) throws IOException;
 
   /**
    * parse input string to UNS attribute.
