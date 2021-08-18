@@ -1497,7 +1497,7 @@ dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *att
 	label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
 	rc = daos_prop_entry_set_str(&label_prop->dpp_entries[0], label, DAOS_PROP_LABEL_MAX_LEN);
 	if (rc)
-		D_GOTO(out_prop, rc);
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
 
 	if (attr == NULL)
 		attr = &local;

@@ -1649,7 +1649,6 @@ cont_create_hdlr(struct cmd_args_s *ap)
 
 	cmd_args_print(ap);
 
-	/** allow creating a POSIX container without a link in the UNS path */
 	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		dfs_attr_t attr;
 
@@ -1658,21 +1657,26 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_chunk_size = ap->chunk_size;
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
-		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+
+		if (uuid_is_null(ap->c_uuid))
+			rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
+		else
+			rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
 		if (rc)
 			rc = daos_errno2der(rc);
 	} else {
-		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
+		if (uuid_is_null(ap->c_uuid))
+			rc = daos_cont_create(ap->pool, &ap->c_uuid, ap->props, NULL);
+		else
+			rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
 	}
 
 	if (rc != 0) {
-		fprintf(ap->errstream, "failed to create container: "DF_RC"\n",
-			DP_RC(rc));
+		fprintf(ap->errstream, "failed to create container: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
 
-	fprintf(ap->outstream, "Successfully created container "DF_UUIDF"\n",
-		DP_UUID(ap->c_uuid));
+	fprintf(ap->outstream, "Successfully created container "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
 
 	return rc;
 }
@@ -1711,6 +1715,8 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	}
 
 	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
+	if (uuid_is_null(ap->c_uuid))
+		uuid_parse(ap->cont_str, ap->c_uuid);
 	daos_unparse_ctype(ap->type, type);
 	fprintf(ap->outstream, "Successfully created container %s type %s\n", ap->cont_str, type);
 
@@ -2130,9 +2136,8 @@ readdir_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, DIR *_dirp)
 	int	rc = 0;
 	struct	fs_copy_dirent *dirp = (struct fs_copy_dirent *)_dirp;
 
-	if (dirp->num_ents) {
+	if (dirp->num_ents)
 		goto ret;
-	}
 	dirp->num_ents = NUM_DIRENTS;
 	while (!daos_anchor_is_eof(&dirp->anchor)) {
 		rc = dfs_readdir(file_dfs->dfs, dirp->dir,
@@ -2145,9 +2150,8 @@ readdir_dfs(struct cmd_args_s *ap, struct file_dfs *file_dfs, DIR *_dirp)
 			errno = rc;
 			return NULL;
 		}
-		if (dirp->num_ents == 0) {
+		if (dirp->num_ents == 0)
 			continue;
-		}
 		goto ret;
 	}
 	return NULL;
@@ -2222,9 +2226,8 @@ file_lstat(struct cmd_args_s *ap, struct file_dfs *file_dfs,
 		/* POSIX returns -1 on error and sets errno
 		 * to the error code
 		 */
-		if (rc != 0) {
+		if (rc != 0)
 			rc = errno;
-		}
 	} else if (file_dfs->type == DAOS) {
 		rc = stat_dfs(ap, file_dfs, path, buf);
 	} else {
@@ -3768,21 +3771,18 @@ out_snap:
 	epr.epr_lo = epoch;
 	epr.epr_hi = epoch;
 	rc = daos_cont_destroy_snap(ca.src_coh, epr, NULL);
-	if (rc != 0) {
+	if (rc != 0)
 		fprintf(ap->errstream, "failed to destroy snapshot: %d\n", rc);
-	}
 out_disconnect:
 	/* close src and dst pools, conts */
 	rc = dm_disconnect(ap, is_posix_copy, &ca, &src_cp_type,
 			   &dst_cp_type);
-	if (rc != 0) {
+	if (rc != 0)
 		fprintf(ap->errstream, "failed to disconnect: "DF_RC"\n", DP_RC(rc));
-	}
 out:
-	if (rc == 0) {
+	if (rc == 0)
 		fprintf(ap->outstream, "Successfully copied to destination "
 			"container "DF_UUIDF "\n", DP_UUID(ca.dst_c_uuid));
-	}
 	D_FREE(src_str);
 	D_FREE(dst_str);
 	D_FREE(ca.src);

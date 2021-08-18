@@ -216,17 +216,18 @@ func (cmd *containerCreateCmd) getUserUUID() uuid.UUID {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
-	if cu := cmd.getUserUUID(); cu != uuid.Nil {
-		cmd.contUUID = cu
-	} else {
-		cmd.contUUID = uuid.New()
-	}
-
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
+
+	if cu := cmd.getUserUUID(); cu != uuid.Nil {
+		cmd.contUUID = cu
+		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
+			return err
+		}
+	}
 
 	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
 	if err != nil {
@@ -234,9 +235,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer disconnectPool()
 
-	if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
-		return err
-	}
 	ap.c_op = C.CONT_CREATE
 
 	if cmd.User != "" {
@@ -261,6 +259,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if err := cmd.Properties.AddPropVal("label", cmd.Label); err != nil {
 			return err
 		}
+		cmd.contLabel = cmd.Label
 	}
 
 	if cmd.Properties.props != nil {
@@ -290,6 +289,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if cmd.Path != "" {
 		ap.path = C.CString(cmd.Path)
 		defer freeString(ap.path)
+
 		rc = C.cont_create_uns_hdlr(ap)
 	} else {
 		rc = C.cont_create_hdlr(ap)
@@ -297,6 +297,15 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err := daosError(rc); err != nil {
 		return errors.Wrap(err, "failed to create container")
 	}
+
+	cmd.contUUID, err = uuidFromC(ap.c_uuid)
+	if err != nil {
+		return err
+	}
+	if cmd.contUUID == uuid.Nil {
+		cmd.contLabel = C.GoString(&ap.cont_str[0])
+	}
+
 	cmd.log.Debugf("created container: %s", cmd.contUUID)
 
 	if err := cmd.openContainer(C.DAOS_COO_RO); err != nil {
