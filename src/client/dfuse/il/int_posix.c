@@ -482,12 +482,11 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 		errno = 0;
 		rc = ioctl(fd, cmd, fname);
 		if (rc != 0) {
-			int err = errno;
+			rc = errno;
 
 			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-					  err, strerror(err));
-			D_FREE(iov.iov_buf);
-			return err;
+					  rc, strerror(rc));
+			goto out;
 		}
 		errno = 0;
 		fd = __real_open(fname, O_RDONLY);
@@ -504,11 +503,11 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 		errno = 0;
 		rc = ioctl(fd, cmd, iov.iov_buf);
 		if (rc != 0) {
-			int err = errno;
+			rc = errno;
 
 			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-					  err, strerror(err));
-			D_GOTO(out, rc = err);
+					  rc, strerror(rc));
+			goto out;
 		}
 	}
 
@@ -519,7 +518,7 @@ ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
 	if (rc) {
 		DFUSE_LOG_WARNING("Failed to use pool handle "DF_RC,
 				  DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(out, rc = daos_der2errno(rc));
 	}
 out:
 	D_FREE(iov.iov_buf);
