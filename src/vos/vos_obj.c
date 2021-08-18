@@ -168,7 +168,9 @@ key_punch(struct vos_object *obj, daos_epoch_t epoch, daos_epoch_t bound,
 	rbund.rb_csum	= &csum;
 	ci_set_null(&csum);
 
-	if (!akeys)
+	/*if (!akeys)*/
+	/* flat key */
+	if (!akeys || obj_is_flat(obj)) 
 		goto punch_dkey;
 
 	rc = key_tree_prepare(obj, obj->obj_toh, VOS_BTR_DKEY,
@@ -644,7 +646,11 @@ key_iter_fetch(struct vos_obj_iter *oiter, vos_iter_entry_t *ent,
 		return rc;
 
 	D_ASSERT(rbund.rb_krec);
+	/*
 	if (oiter->it_iter.it_type == VOS_ITER_AKEY) {
+	*/
+	if (oiter->it_iter.it_type == VOS_ITER_AKEY ||
+	    obj_is_flat(oiter->it_obj)) {
 		if (rbund.rb_krec->kr_bmap & KREC_BF_EVT) {
 			ent->ie_child_type = VOS_ITER_RECX;
 		} else if (rbund.rb_krec->kr_bmap & KREC_BF_BTR) {
@@ -761,8 +767,12 @@ key_iter_match(struct vos_obj_iter *oiter, vos_iter_entry_t *ent)
 	}
 
 	if ((oiter->it_iter.it_type == VOS_ITER_AKEY) ||
-	    (oiter->it_akey.iov_buf == NULL)) /* dkey w/o akey as condition */
-		return IT_OPC_NOOP;
+	    /* flat key
+		(oiter->it_akey.iov_buf == NULL))  dkey w/o akey as condition 
+		*/
+	    (oiter->it_akey.iov_buf == NULL) || /* dkey w/o akey as condition */
+	    (obj_is_flat(obj)))
+			return IT_OPC_NOOP;
 
 	/* else: has akey as condition */
 	if (epr->epr_lo != epr->epr_hi || (oiter->it_flags & VOS_IT_PUNCHED)) {
@@ -936,21 +946,29 @@ singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 		   daos_key_t *akey)
 {
 	struct vos_object	*obj = oiter->it_obj;
-	daos_handle_t		 ak_toh;
-	daos_handle_t		 sv_toh;
-	int			 rc;
+	/* flat key */
+	daos_handle_t		 ak_toh = DAOS_HDL_INVAL;
+	daos_handle_t		 sv_toh = DAOS_HDL_INVAL;
+	bool			 	flat = obj_is_flat(obj);
+	int			 		rc;
 
 	rc = key_ilog_prepare(oiter, obj->obj_toh, VOS_BTR_DKEY, dkey, 0,
-			      &ak_toh, &oiter->it_epr, &oiter->it_punched,
+			      /* &ak_toh, &oiter->it_epr, &oiter->it_punched,
 			      &oiter->it_ilog_info, NULL);
+				  */
+  			      flat ? &sv_toh : &ak_toh, &oiter->it_epr,
+			      &oiter->it_punched, &oiter->it_ilog_info, NULL);
+
 	if (rc != 0)
 		return rc;
-
-	rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey, 0, &sv_toh,
-			      &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info, NULL);
-	if (rc != 0)
-		D_GOTO(failed_1, rc);
+	/* flat key */
+	if (!flat) {
+		rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey, 0,
+				      &sv_toh, &oiter->it_epr,
+				      &oiter->it_punched, &oiter->it_ilog_info, NULL);
+		if (rc != 0)
+			D_GOTO(failed_1, rc);
+	}
 
 	/* see BTR_ITER_EMBEDDED for the details */
 	rc = dbtree_iter_prepare(sv_toh, BTR_ITER_EMBEDDED, &oiter->it_hdl);
@@ -959,7 +977,9 @@ singv_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 			DP_RC(rc));
 	key_tree_release(sv_toh, false);
  failed_1:
-	key_tree_release(ak_toh, false);
+ 	/* flat key*/
+	if (!flat)
+		key_tree_release(ak_toh, false);
 	return rc;
 }
 
@@ -972,8 +992,8 @@ singv_iter_probe_fetch(struct vos_obj_iter *oiter, dbtree_probe_opc_t opc,
 		       vos_iter_entry_t *entry)
 {
 	struct vos_svt_key	key;
-	d_iov_t			kiov;
-	int			rc;
+	d_iov_t				kiov;
+	int					rc;
 
 	d_iov_set(&kiov, &key, sizeof(key));
 	key.sk_epoch = entry->ie_epoch;
@@ -1234,22 +1254,30 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 {
 	struct vos_object	*obj = oiter->it_obj;
 	struct evt_filter	 filter = {0};
-	daos_handle_t		 ak_toh;
-	daos_handle_t		 rx_toh;
-	int			 rc;
-	uint32_t		 options;
+	/* flat key */
+	daos_handle_t		 ak_toh = DAOS_HDL_INVAL;
+	daos_handle_t		 rx_toh = DAOS_HDL_INVAL;
+	bool			 	 flat = obj_is_flat(obj);
+	int					 rc;
+	uint32_t			 options;
 
 	rc = key_ilog_prepare(oiter, obj->obj_toh, VOS_BTR_DKEY, dkey, 0,
-			      &ak_toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info, ts_set);
+			    /* &ak_toh, &oiter->it_epr, &oiter->it_punched,
+			       &oiter->it_ilog_info, ts_set);
+				   */
+  			      flat ? &rx_toh : &ak_toh, &oiter->it_epr,
+			      &oiter->it_punched, &oiter->it_ilog_info, NULL);
+
 	if (rc != 0)
 		return rc;
-
-	rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey, SUBTR_EVT,
-			      &rx_toh, &oiter->it_epr, &oiter->it_punched,
-			      &oiter->it_ilog_info, ts_set);
-	if (rc != 0)
-		D_GOTO(failed, rc);
+	/* flat key */
+	if (!flat) {
+		rc = key_ilog_prepare(oiter, ak_toh, VOS_BTR_AKEY, akey,
+				      SUBTR_EVT, &rx_toh, &oiter->it_epr,
+				      &oiter->it_punched, &oiter->it_ilog_info, NULL);
+		if (rc != 0)
+			D_GOTO(failed, rc);
+	}
 
 	recx2filter(&filter, &oiter->it_recx);
 	filter.fr_epr.epr_lo = oiter->it_epr.epr_lo;
@@ -1266,7 +1294,9 @@ recx_iter_prepare(struct vos_obj_iter *oiter, daos_key_t *dkey,
 	}
 	key_tree_release(rx_toh, true);
  failed:
-	key_tree_release(ak_toh, false);
+	/* flat key */
+	if (!flat)
+		key_tree_release(ak_toh, false);
 	return rc;
 }
 static int

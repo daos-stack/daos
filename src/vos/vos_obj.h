@@ -111,6 +111,15 @@ vos_obj_refcount(struct vos_object *obj)
 
 /** Evict an object reference from the cache */
 void vos_obj_evict(struct daos_lru_cache *occ, struct vos_object *obj);
+static inline bool
+obj_is_flat(struct vos_object *obj)
+{
+	daos_ofeat_t	feats;
+
+	feats = daos_obj_id2feat(obj->obj_id.id_pub);
+	return (feats & DAOS_OF_KV_FLAT);
+}
+
 
 int vos_obj_evict_by_oid(struct daos_lru_cache *occ, struct vos_container *cont,
 			 daos_unit_oid_t oid);

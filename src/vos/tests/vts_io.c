@@ -547,7 +547,7 @@ io_test_obj_update(struct io_test_args *arg, daos_epoch_t epoch, uint64_t flags,
 	struct bio_iov		*biov;
 	struct dcs_iod_csums	*iod_csums = NULL;
 	struct daos_csummer	*csummer = NULL;
-	d_iov_t			*srv_iov;
+	d_iov_t				*srv_iov;
 	daos_handle_t		ioh;
 	unsigned int		off;
 	int			i, rc = 0;

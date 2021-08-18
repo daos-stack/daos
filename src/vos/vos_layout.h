@@ -289,6 +289,9 @@ enum vos_krec_bf {
 	KREC_BF_BTR			= (1 << 1),
 	/* it's a dkey, otherwise is akey */
 	KREC_BF_DKEY			= (1 << 2),
+	/* it's a flat dkey (no akey) */
+	KREC_BF_FLAT			= (1 << 3),
+
 };
 
 /* The following information required by a block-object only */

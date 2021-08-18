@@ -592,6 +592,8 @@ struct vos_rec_bundle {
 	enum vos_tree_class	 rb_tclass;
 	/** DTX state */
 	unsigned int		 rb_dtx_state;
+	/* flat key*/
+	bool			 rb_flat;
 };
 
 #define VOS_SIZE_ROUND		8

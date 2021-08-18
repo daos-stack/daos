@@ -69,6 +69,8 @@ uint64_t		*ts_indices;
 
 struct dts_context	 ts_ctx;
 bool			 ts_nest_iterator;
+/* flat key patch*/
+bool			ts_flat_obj = false;
 
 /* test inside ULT */
 bool			ts_in_ult;
@@ -623,7 +625,10 @@ objects_open(void)
 {
 	int	i;
 	int	rc;
-
+	/* flat key*/
+	if (ts_flat_obj)
+		ts_ofeat = DAOS_OF_KV_FLAT;
+	/**/
 	for (i = 0; i < ts_obj_p_cont; i++) {
 		if (!ts_oid_init) {
 			if (ts_ofeat & DAOS_OF_BLOCK) {
@@ -634,7 +639,7 @@ objects_open(void)
 			} else {
 				ts_oids[i] = daos_test_oid_gen(
 				ts_mode == TS_MODE_VOS ? DAOS_HDL_INVAL :
-				ts_ctx.tsc_coh, ts_class, 0, 0,
+				ts_ctx.tsc_coh, ts_class, ts_ofeat, 0,
 				ts_ctx.tsc_mpi_rank);
 			}
 			if (ts_class == DAOS_OC_R2S_SPEC_RANK)
@@ -1650,6 +1655,9 @@ static struct option ts_ops[] = {
 	{ "obj",	required_argument,	NULL,	'o' },
 	{ "dkey",	required_argument,	NULL,	'd' },
 	{ "akey",	required_argument,	NULL,	'a' },
+	/* flat key*/
+	{ "flat",	no_argument,		NULL,	'l' },
+	/**/
 	{ "num",	required_argument,	NULL,	'n' },
 	{ "stride",	required_argument,	NULL,	's' },
 	{ "array",	optional_argument,	NULL,	'A' },
@@ -1749,7 +1757,8 @@ main(int argc, char **argv)
 
 	memset(ts_pmem_file, 0, sizeof(ts_pmem_file));
 	while ((rc = getopt_long(argc, argv,
-				 "P:N:T:C:c:o:d:a:n:s:b:R:g:G:zf:hwxpA::",
+				 /*"P:N:T:C:c:o:d:a:n:s:b:R:g:G:zf:hwxpA::", * flat key*/
+				 "P:N:T:C:c:o:d:a:l:n:s:b:R:g:G:zf:hwxpA::",
 				 ts_ops, NULL)) != -1) {
 		char	*endp;
 
@@ -1808,6 +1817,9 @@ main(int argc, char **argv)
 			ts_akey_p_dkey = strtoul(optarg, &endp, 0);
 			ts_akey_p_dkey = val_unit(ts_akey_p_dkey, *endp);
 			break;
+		case 'l':
+			ts_flat_obj = true;
+			break;
 		case 'n':
 			ts_recx_p_akey = strtoul(optarg, &endp, 0);
 			ts_recx_p_akey = val_unit(ts_recx_p_akey, *endp);
@@ -1857,7 +1869,12 @@ main(int argc, char **argv)
 			return 0;
 		}
 	}
-
+	/* flat key*/
+	if (ts_flat_obj && ts_akey_p_dkey != 1) {
+		fprintf(stderr, "flat object has no akey, akey_per_dkey=%d\n",
+			ts_akey_p_dkey);
+		return -1;
+	}
 	if (!cmds) {
 		D_PRINT("Please provide command string\n");
 		ts_print_usage();
