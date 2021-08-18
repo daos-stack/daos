@@ -43,6 +43,7 @@ import daos_build
 SIMPLE_TEST_SRC = ['threaded_client.c', 'dual_iface_server.c',
                    'no_pmix_multi_ctx.c', 'threaded_server.c',
                    'test_corpc_prefwd.c',
+                   'cart_server.c', 'cart_client.c',
                    'test_corpc_exclusive.c',
                    'test_proto_server.c', 'test_proto_client.c',
                    'test_no_timeout.c', 'test_ep_cred_server.c',
