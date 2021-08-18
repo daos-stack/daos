@@ -9,6 +9,27 @@
 
 #include "daos_uns.h"
 
+static int
+_dfuse_attr_create(char *type, uuid_t pool, uuid_t cont, char **_value, daos_size_t *_out_size)
+{
+	char *value;
+	char pool_str[37];
+	char cont_str[37];
+
+	uuid_unparse(pool, pool_str);
+	uuid_unparse(cont, cont_str);
+
+	D_ASPRINTF(value, DUNS_XATTR_FMT, type, pool_str, cont_str);
+	if (value == NULL)
+		return ENOMEM;
+
+	*_out_size = strnlen(value, DUNS_MAX_XATTR_LEN);
+
+	*_value = value;
+
+	return 0;
+}
+
 void
 dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 		  const char *name, size_t size)
@@ -21,8 +42,8 @@ dfuse_cb_getxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	if (inode->ie_root) {
 		if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
-			rc = duns_create_attr("POSIX", inode->ie_dfs->dfs_dfp->dfp_pool,
-					      inode->ie_dfs->dfs_cont, &value, &out_size);
+			rc = _dfuse_attr_create("POSIX", inode->ie_dfs->dfs_dfp->dfp_pool,
+						inode->ie_dfs->dfs_cont, &value, &out_size);
 			if (rc != 0)
 				goto err;
 

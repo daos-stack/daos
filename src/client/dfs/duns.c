@@ -30,8 +30,6 @@
 #include "daos_fs.h"
 #include "daos_uns.h"
 
-#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
-
 #ifndef FUSE_SUPER_MAGIC
 #define FUSE_SUPER_MAGIC	0x65735546
 #endif
@@ -712,27 +710,6 @@ err:
 	return rc;
 }
 #endif
-
-int
-duns_create_attr(char *type, uuid_t pool, uuid_t cont, char **_value, daos_size_t *_out_size)
-{
-	char *value;
-	char pool_str[37];
-	char cont_str[37];
-
-	uuid_unparse(pool, pool_str);
-	uuid_unparse(cont, cont_str);
-
-	D_ASPRINTF(value, DUNS_XATTR_FMT, type, pool_str, cont_str);
-	if (value == NULL)
-		return ENOMEM;
-
-	*_out_size = strnlen(value, DUNS_MAX_XATTR_LEN);
-
-	*_value = value;
-
-	return 0;
-}
 
 int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
