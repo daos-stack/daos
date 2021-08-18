@@ -102,18 +102,18 @@ class PoolSecurityTestBase(TestWithServers):
             # result is JSON.
             if expect.lower() == 'pass':
                 if result["status"] != 0 or result["error"] is not None:
-                    self.fail(
-                        "##Test Fail on verify_daos_pool {}, expected Pass, " +\
-                        "but Failed.".format(action))
+                    msg = ("##Test Fail on verify_daos_pool {}, expected " +
+                           "Pass, but Failed.".format(action))
+                    self.fail(msg)
                 else:
                     self.log.info(
                         " =Test Passed on verify_daos_pool %s, Succeed.\n",
                         action)
 
             elif err_code not in result["error"]:
-                self.fail(
-                    "##Test Fail on verify_daos_pool {}, expected Failure " +\
-                    "of {}, but Passed.".format(action, expect))
+                msg = ("##Test Fail on verify_daos_pool {}, expected Failure " +
+                       "of {}, but Passed.".format(action, expect))
+                self.fail(msg)
             else:
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s expected error of " +
@@ -123,9 +123,9 @@ class PoolSecurityTestBase(TestWithServers):
             # result is CmdResult. Should be removed. DAOS-8317
             if expect.lower() == 'pass':
                 if result.exit_status != 0 or result.stderr_text != "":
-                    self.fail(
-                        "##Test Fail on verify_daos_pool {}, expected Pass, " +\
-                        "but Failed.".format(action))
+                    msg = ("##Test Fail on verify_daos_pool {}, expected " +
+                           "Pass, but Failed.".format(action))
+                    self.fail(msg)
                 else:
                     self.log.info(
                         " =Test Passed on verify_daos_pool %s, Succeed.\n",
@@ -134,9 +134,9 @@ class PoolSecurityTestBase(TestWithServers):
             # statement elif after DAOS-5635 resolved.
             elif (err_code not in result.stderr_text and
                     err_code not in result.stdout_text):
-                self.fail(
-                    "##Test Fail on verify_daos_pool {}, expected Failure " +\
-                    "of {}, but Passed.".format(action, expect))
+                    msg = ("##Test Fail on verify_daos_pool {}, expected " + 
+                           "Failure of {}, but Passed.".format(action, expect))
+                    self.fail(msg)
             else:
                 self.log.info(
                     " =Test Passed on verify_daos_pool %s expected error of " +

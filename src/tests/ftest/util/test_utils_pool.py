@@ -917,9 +917,9 @@ class TestPool(TestDaosApiBase):
                 return self.dmg.pool_get_acl(pool=self.identifier)
 
             if self.control_method.value == self.USE_API:
-                raise CommandFailure(
-                    "Error: control method {} not supported for " +\
-                    "get_acl()".format(self.control_method.value))
+                msg = ("Error: control method {} not supported for " +
+                       "get_acl()".format(self.control_method.value))
+                raise CommandFailure(msg)
 
         return None
 
@@ -947,9 +947,9 @@ class TestPool(TestDaosApiBase):
                     pool=self.identifier, acl_file=acl_file, entry=entry)
 
             elif self.control_method.value == self.USE_API:
-                raise CommandFailure(
-                    "Error: control method {} not supported for " +\
-                    "update_acl()".format(self.control_method.value))
+                msg = ("Error: control method {} not supported for " +
+                       "update_acl()".format(self.control_method.value))
+                raise CommandFailure(msg)
 
             else:
                 self.log.error("update_acl failed!")
@@ -969,9 +969,9 @@ class TestPool(TestDaosApiBase):
                     pool=self.identifier, principal=principal)
 
             elif self.control_method.value == self.USE_API:
-                raise CommandFailure(
-                    "Error: control method {} not supported for " +\
-                    "delete_acl()".format(self.control_method.value))
+                msg = ("Error: control method {} not supported for " +
+                       "delete_acl()".format(self.control_method.value))
+                raise CommandFailure(msg)
 
             else:
                 self.log.error("delete_acl failed!")
@@ -985,9 +985,9 @@ class TestPool(TestDaosApiBase):
                     pool=self.identifier, acl_file=self.acl_file.value)
 
             elif self.control_method.value == self.USE_API:
-                raise CommandFailure(
-                    "Error: control method {} not supported for " +\
-                    "overwrite_acl()".format(self.control_method.value))
+                msg = ("Error: control method {} not supported for " +
+                       "overwrite_acl()".format(self.control_method.value))
+                raise CommandFailure(msg)
 
         else:
             self.log.error("overwrite_acl failed!")
