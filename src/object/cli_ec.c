@@ -1904,12 +1904,12 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		return 0;
 
 	D_MUTEX_LOCK(&reasb_req->orr_mutex);
-	parity_lists = reasb_req->orr_fail->efi_parity_lists;
+	parity_lists = reasb_req->orr_parity_lists;
 	if (parity_lists == NULL) {
-		reasb_req->orr_fail->efi_parity_lists =
+		reasb_req->orr_parity_lists =
 			daos_recx_ep_lists_dup(recx_lists, nr);
-		reasb_req->orr_fail->efi_parity_list_nr = nr;
-		parity_lists = reasb_req->orr_fail->efi_parity_lists;
+		reasb_req->orr_parity_list_nr = nr;
+		parity_lists = reasb_req->orr_parity_lists;
 		if (parity_lists == NULL)
 			rc = -DER_NOMEM;
 		goto out;
@@ -1978,10 +1978,10 @@ obj_ec_fail_info_reset(struct obj_reasb_req *reasb_req)
 	fail_info->efi_recx_lists = NULL;
 	fail_info->efi_stripe_lists = NULL;
 	fail_info->efi_nrecx_lists = 0;
-	daos_recx_ep_list_free(fail_info->efi_parity_lists,
-			       fail_info->efi_parity_list_nr);
-	fail_info->efi_parity_lists = NULL;
-	fail_info->efi_parity_list_nr = 0;
+	daos_recx_ep_list_free(reasb_req->orr_parity_lists,
+			       reasb_req->orr_parity_list_nr);
+	reasb_req->orr_parity_lists = NULL;
+	reasb_req->orr_parity_list_nr = 0;
 }
 
 static bool
@@ -2390,12 +2390,14 @@ obj_ec_fail_info_free(struct obj_reasb_req *reasb_req)
 			       fail_info->efi_nrecx_lists);
 	daos_recx_ep_list_free(fail_info->efi_stripe_lists,
 			       fail_info->efi_nrecx_lists);
-	daos_recx_ep_list_free(fail_info->efi_parity_lists,
-			       fail_info->efi_parity_list_nr);
+	daos_recx_ep_list_free(reasb_req->orr_parity_lists,
+			       reasb_req->orr_parity_list_nr);
 	D_FREE(fail_info->efi_tgt_list);
 	D_FREE(fail_info);
 	reasb_req->orr_fail = NULL;
 	reasb_req->orr_fail_alloc = 0;
+	reasb_req->orr_parity_lists = NULL;
+	reasb_req->orr_parity_list_nr = 0;
 }
 
 int
