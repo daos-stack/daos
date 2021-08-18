@@ -110,7 +110,7 @@ ioil_shrink_pool(struct ioil_pool *pool)
 }
 
 static int
-ioil_shrink_cont(struct ioil_cont *cont)
+ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool)
 {
 	struct ioil_pool	*pool;
 	int			rc;
@@ -142,6 +142,9 @@ ioil_shrink_cont(struct ioil_cont *cont)
 	d_list_del(&cont->ioc_containers);
 	D_FREE(cont);
 
+	if (!shrink_pool)
+		return 0;
+
 	if (!d_list_empty(&pool->iop_container_head))
 		return 0;
 
@@ -165,7 +168,7 @@ entry_array_close(void *arg) {
 
 	/* Do not close container/pool handles at this point
 	 * to allow for re-use.
-	 * ioil_shrink_cont(entry->fd_cont);
+	 * ioil_shrink_cont(entry->fd_cont, true);
 	*/
 }
 
@@ -357,24 +360,21 @@ ioil_fini(void)
 
 	ioil_show_summary();
 
-	/* Tidy up any remaining open connections */
+	/* Tidy up any open connections */
 	d_list_for_each_entry_safe(pool, pnext,
 				   &ioil_iog.iog_pools_head, iop_pools) {
 		d_list_for_each_entry_safe(cont, cnext,
 					   &pool->iop_container_head,
 					   ioc_containers) {
-			/* Retry disconnect on out of memory errors, this is
-			 * mainly for fault injection testing.
+			/* Retry disconnect on out of memory errors, this is mainly for fault
+			 * injection testing.  Do not attempt to shrink the pool here as that
+			 * is tried later, and if the container close succeeds but pool close
+			 * fails the cont may not be valid afterwards.
 			 */
-			rc = ioil_shrink_cont(cont);
+			rc = ioil_shrink_cont(cont, false);
 			if (rc == -DER_NOMEM)
-				ioil_shrink_cont(cont);
+				ioil_shrink_cont(cont, false);
 		}
-	}
-
-	/* Tidy up any pools which do not have open containers */
-	d_list_for_each_entry_safe(pool, pnext,
-				   &ioil_iog.iog_pools_head, iop_pools) {
 		rc = ioil_shrink_pool(pool);
 		if (rc == -DER_NOMEM)
 			ioil_shrink_pool(pool);
@@ -815,7 +815,7 @@ obj_close:
 	dfs_release(entry->fd_dfsoh);
 
 shrink:
-	ioil_shrink_cont(cont);
+	ioil_shrink_cont(cont, true);
 
 err:
 	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);
