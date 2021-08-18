@@ -2007,6 +2007,25 @@ class posix_tests():
         output = rc.stdout.decode('utf-8')
         assert check_dfs_tool_output(output, 'S1', '1048576')
 
+        # run same command using pool, container, dfs-path, and dfs-prefix
+        cmd = ['fs', 'get-attr', '--pool', pool, '--cont', uns_container, '--dfs-path', dir1,
+               '--dfs-prefix', uns_path]
+        print('get-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '1048576')
+
+        # run same command using pool, container, dfs-path
+        cmd = ['fs', 'get-attr', '--pool', pool, '--cont', uns_container, '--dfs-path', '/d1']
+        print('get-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '1048576')
+
         cmd = ['fs', 'get-attr', '--path', file1]
         print('get-attr of d1/f1')
         rc = run_daos_cmd(conf, cmd)
@@ -2874,9 +2893,9 @@ def test_pydaos_kv(server, conf):
 
     c_uuid = create_cont(conf, pool, ctype="PYTHON")
 
-    container = daos.Cont(pool, c_uuid)
+    container = daos.DCont(pool, c_uuid)
 
-    kv = container.get_kv_by_name('my_test_kv', create=True)
+    kv = container.dict('my_test_kv')
     kv['a'] = 'a'
     kv['b'] = 'b'
     kv['list'] = pickle.dumps(list(range(1, 100000)))
@@ -2916,7 +2935,7 @@ def test_pydaos_kv(server, conf):
 
     kv = None
     print('Closing container and opening new one')
-    kv = container.get_kv_by_name('my_test_kv')
+    kv = container.get('my_test_kv')
     kv = None
     container = None
     daos._cleanup()
@@ -3417,8 +3436,8 @@ def run(wf, args):
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
-#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
-#                                                         wf_client))
+            #fatal_errors.add_result(test_alloc_fail_copy(server, conf,
+            #                                             wf_client))
             fatal_errors.add_result(test_alloc_fail_cat(server,
                                                         conf, wf_client))
             fatal_errors.add_result(test_alloc_fail(server, conf))
