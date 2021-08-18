@@ -1419,7 +1419,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 		rc = daos_cont_close(coh, NULL);
 		if (rc) {
 			D_ERROR("daos_cont_close() failed "DF_RC"\n", DP_RC(rc));
-			D_GOTO(err_destroy, rc = daos_der2errno(rc));
+			D_GOTO(err_close, rc = daos_der2errno(rc));
 		}
 	}
 	daos_prop_free(prop);
