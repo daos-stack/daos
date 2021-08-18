@@ -25,6 +25,9 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
           fio patchutils ior           \
           romio-tests                  \
           testmpio                     \
+          python$pyver-avocado         \
+          python$pyver-avocado-plugins-varianter-yaml-to-mux \
+          python$pyver-avocado-plugins-output-html \
           python$pyver-mpi4py-tests    \
           hdf5-mpich-tests             \
           hdf5-$openmpi-tests          \
