@@ -94,15 +94,6 @@ func (s *spdkSetupScript) prepare(req *storage.BdevPrepareRequest, op string, ex
 	env := []string{
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 	}
-	if req.PCIAllowList != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))
-	}
-	if req.PCIBlockList != "" {
-		env = append(env, fmt.Sprintf("%s=%s", pciBlockListEnv, req.PCIBlockList))
-	}
-	if req.DisableVFIO {
-		env = append(env, fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver))
-	}
 	env = append(env, extraEnvs...)
 
 	args := []string{}
@@ -130,10 +121,26 @@ func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 		nrHugepages = defaultNrHugepages
 	}
 
-	return s.prepare(req, "setup", []string{
+	env := []string{
+		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 		fmt.Sprintf("%s=%d", nrHugepagesEnv, nrHugepages),
 		fmt.Sprintf("%s=%s", targetUserEnv, req.TargetUser),
-	})
+	}
+	if req.PCIAllowList != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))
+	}
+	if req.PCIBlockList != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciBlockListEnv, req.PCIBlockList))
+	}
+	if req.DisableVFIO {
+		env = append(env, fmt.Sprintf("%s=%s", driverOverrideEnv, vfioDisabledDriver))
+	}
+
+	s.log.Debugf("spdk setup env: %v", env)
+	out, err := s.runCmd(s.log, env, s.scriptPath)
+	s.log.Debugf("spdk setup stdout:\n%s\n", out)
+
+	return errors.Wrapf(err, "spdk setup failed (%s)", out)
 }
 
 // Reset executes setup script to reset hugepage allocations and unbind PCI devices
@@ -144,5 +151,19 @@ func (s *spdkSetupScript) Prepare(req *storage.BdevPrepareRequest) error {
 //
 // NOTE: will make the controller reappear in /dev.
 func (s *spdkSetupScript) Reset(req *storage.BdevPrepareRequest) error {
-	return s.prepare(req, "reset", []string{})
+	env := []string{
+		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
+	}
+	if req.PCIAllowList != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciAllowListEnv, req.PCIAllowList))
+	}
+	if req.PCIBlockList != "" {
+		env = append(env, fmt.Sprintf("%s=%s", pciBlockListEnv, req.PCIBlockList))
+	}
+
+	s.log.Debugf("spdk reset env: %v", env)
+	out, err := s.runCmd(s.log, env, s.scriptPath, "reset")
+	s.log.Debugf("spdk reset stdout:\n%s\n", out)
+
+	return errors.Wrapf(err, "spdk reset failed (%s)", out)
 }
