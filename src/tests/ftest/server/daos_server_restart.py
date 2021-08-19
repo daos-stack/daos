@@ -66,13 +66,16 @@ class DaosServerTest(TestWithServers):
 
         return pool_list.sort()
 
-    def verify_pool_list(self, expected_pool_list=[]):
+    def verify_pool_list(self, expected_pool_list=None):
         """Verify the pool list.
 
         Args:
             expected_pool_list (list, optional): Expected list of UUIDs.
-                Defaults to an empty list.
+                Defaults to None.
         """
+        if expected_pool_list is None:
+            expected_pool_list = []
+
         pool_list = self.get_pool_list()
         self.log.info(
             "\n===Current pool-list:  %s\n===Expected pool-list: %s\n",
