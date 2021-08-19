@@ -13,6 +13,7 @@
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
 //@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@fi-test") _
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -937,10 +938,10 @@ pipeline {
                     }
                 } // stage('Scan CentOS 7 RPMs')
                 stage('Fault injection testing') {
-//                    when {
-//                        beforeAgent true
-//                        expression { ! skipStage() }
-//                    }
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
                     agent {
                         dockerfile {
                             filename 'utils/docker/Dockerfile.centos.7'
