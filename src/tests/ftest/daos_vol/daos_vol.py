@@ -6,7 +6,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from vol_test_base import VolTestBase
 from general_utils import get_job_manager_class
-from apricot import skipForTicket
 
 class DaosVol(VolTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
