@@ -109,7 +109,7 @@ class DaosServerTest(TestWithServers):
            fresh installation.
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=vm
         :avocado: tags=server_test,server_reformat,DAOS_5610
         """
         self.pool = []
@@ -145,7 +145,7 @@ class DaosServerTest(TestWithServers):
            daos cluster is incomplete (i.e. 1 of the 2 servers is down).
 
         :avocado: tags=all,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=vm
         :avocado: tags=server_test,server_restart,DAOS_5610
         """
         self.pool = []
