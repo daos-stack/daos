@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import traceback
 import uuid
 import threading
@@ -16,7 +14,6 @@ from pydaos.raw import DaosContainer, DaosApiError
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
-from test_utils_pool import TestPool
 
 # Rough maximum number of containers that can be created
 # Determined experimentally with DAOS_MD_CAP=128
@@ -29,6 +26,7 @@ from test_utils_pool import TestPool
 # (installsnapshot RPC handling in raft)
 #NO_OF_MAX_CONTAINER = 4150
 NO_OF_MAX_CONTAINER = 3465
+
 
 def ior_runner_thread(manager, uuids, results):
     """IOR run thread method.
@@ -72,9 +70,7 @@ class ObjectMetadata(TestWithServers):
         super().setUp()
 
         # Create a pool
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
+        self.add_pool(connect=False)
         self.log.info("Created pool %s: svcranks:",
                       self.pool.pool.get_uuid_str())
         for r in range(len(self.pool.svc_ranks)):
@@ -112,10 +108,10 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=all,metadata,large,metadatafill,hw
-        :avocado: tags=full_regression
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=metadata,metadata_fill
         """
-
         # 3 Phases in nested try/except blocks below
         # Phase 1: overload pool metadata with a container create loop
         #          DaosApiError expected here (otherwise fail test)
@@ -199,8 +195,9 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_free_space,nvme,large,hw
-        :avocado: tags=full_regression
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,metadata,metadata_free_space
         """
         self.pool.pool.connect(2)
         for k in range(10):
@@ -237,7 +234,9 @@ class ObjectMetadata(TestWithServers):
         Use Cases:
             ?
 
-        :avocado: tags=metadata,metadata_ior,nvme,large
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,metadata,metadata_ior
         """
         files_per_thread = 400
         total_ior_threads = 5
@@ -315,8 +314,9 @@ class ObjectMetadata(TestWithServers):
            Verify container can be successfully deleted when the storage pool
            is full ACL grant/remove modification.
 
-        :avocado: tags=metadata,metadata_der_nospace,nvme,large,hw
-        :avocado: tags=full_regression,der_nospace
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,metadata,der_nospace,metadata_der_nospace
         """
         self.pool.pool.connect(2)
         init_container = NO_OF_MAX_CONTAINER

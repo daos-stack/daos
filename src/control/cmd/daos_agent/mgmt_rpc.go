@@ -7,6 +7,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"strings"
 
@@ -146,6 +147,11 @@ func (mod *mgmtModule) getAttachInfo(ctx context.Context, numaNode int, sys stri
 	resp.ClientNetHint.Interface = fabricIF.Name
 	resp.ClientNetHint.Domain = fabricIF.Name
 	if strings.HasPrefix(resp.ClientNetHint.Provider, verbsProvider) {
+		if fabricIF.Domain == "" {
+			mod.log.Errorf("domain is required for verbs provider, none found on interface %s", fabricIF.Name)
+			return nil, fmt.Errorf("no domain on interface %s", fabricIF.Name)
+		}
+
 		resp.ClientNetHint.Domain = fabricIF.Domain
 		mod.log.Debugf("OFI_DOMAIN for %s has been detected as: %s",
 			resp.ClientNetHint.Interface, resp.ClientNetHint.Domain)
@@ -165,7 +171,7 @@ func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys 
 	}
 
 	mod.attachInfo.Cache(ctx, resp)
-	return resp, nil
+	return mod.attachInfo.GetAttachInfoResp()
 }
 
 func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
@@ -206,7 +212,7 @@ func (mod *mgmtModule) getFabricInterface(ctx context.Context, numaNode int, net
 	if err != nil {
 		return nil, err
 	}
-	mod.fabricInfo.CacheScan(ctx, result)
+	mod.fabricInfo.CacheScan(netCtx, result)
 
 	return mod.fabricInfo.GetDevice(numaNode, netDevClass)
 }

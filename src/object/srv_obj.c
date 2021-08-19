@@ -2055,6 +2055,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	struct obj_io_context	 ioc;
 	daos_handle_t		 ioh = DAOS_HDL_INVAL;
 	int			 rc;
+	int			 rc1;
 
 	D_ASSERT(oea != NULL);
 	D_ASSERT(oeao != NULL);
@@ -2105,24 +2106,38 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 				DP_UOID(oea->ea_oid), DP_RC(rc));
 			goto out;
 		}
+
 		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc,
 				    &ioc.ioc_io_size, NULL);
 		if (rc) {
-			D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
-				DP_UOID(oea->ea_oid), DP_RC(rc));
-			goto out;
+			if (rc == -DER_NO_PERM) {
+				/* Parity already exists, May need a
+				 * different error code.
+				 */
+				D_DEBUG(DB_EPC, DF_UOID" parity already"
+					" exists\n", DP_UOID(oea->ea_oid));
+				rc = 0;
+			} else {
+				D_ERROR(DF_UOID" vos_update_end failed: "
+					DF_RC".\n", DP_UOID(oea->ea_oid),
+					DP_RC(rc));
+				D_GOTO(out, rc);
+			}
 		}
 	}
 
+	/* Since parity update has succeed, so let's ignore the failure
+	 * of replica remove, otherwise it will cause the leader not
+	 * updating its parity, then the parity will not be consistent.
+	 */
 	recx.rx_idx = oea->ea_stripenum * obj_ioc2ec_ss(&ioc);
 	recx.rx_nr = obj_ioc2ec_ss(&ioc);
-	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
+	rc1 = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 				  &oea->ea_epoch_range, dkey,
 				  &iod->iod_name, &recx);
-	if (rc) {
+	if (rc1)
 		D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc));
-	}
+			DP_UOID(oea->ea_oid), DP_RC(rc1));
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);
@@ -3536,7 +3551,9 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct dtx_handle		 dth = {0};
 	struct dtx_epoch		 epoch = {0};
 	uint32_t			 query_flags;
-	daos_recx_t			 ec_recx[2] = {0};
+	unsigned int			 cell_size = 0;
+	uint64_t			 stripe_size = 0;
+	daos_recx_t			 ec_recx[3] = {0};
 	daos_recx_t			*query_recx;
 	int				 retry = 0;
 	int				 rc;
@@ -3585,16 +3602,20 @@ again:
 	    (okqi->okqi_api_flags & DAOS_GET_RECX)) {
 		query_flags |= VOS_GET_RECX_EC;
 		query_recx = ec_recx;
+		cell_size = obj_ec_cell_rec_nr(&ioc.ioc_oca);
+		stripe_size = obj_ec_stripe_rec_nr(&ioc.ioc_oca);
 	} else {
 		query_recx = &okqo->okqo_recx;
 	}
 
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
-			       okqi->okqi_epoch, dkey, akey, query_recx, &dth);
+			       okqi->okqi_epoch, dkey, akey, query_recx,
+			       cell_size, stripe_size, &dth);
 	if (rc == 0 && (query_flags & VOS_GET_RECX_EC)) {
 		okqo->okqo_recx = ec_recx[0];
 		okqo->okqo_recx_parity = ec_recx[1];
+		okqo->okqo_recx_punched = ec_recx[2];
 	} else if (obj_dtx_need_refresh(&dth, rc)) {
 		rc = dtx_refresh(&dth, ioc.ioc_coc);
 		if (rc == -DER_AGAIN)

@@ -168,7 +168,8 @@ ll_loop_fn(struct dfuse_info *dfuse_info)
 		ret = fuse_session_loop(dfuse_info->di_session);
 	if (ret != 0)
 		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d", ret);
+				"Fuse loop exited with return code: %d %s",
+				ret, strerror(ret));
 
 	return ret;
 }
@@ -242,6 +243,8 @@ show_help(char *name)
 		"	-S --singlethread	Single threaded\n"
 		"	-t --thread-count=count	Number of fuse threads to use\n"
 		"	-f --foreground		Run in foreground\n"
+		"	   --enable-caching	Enable all caching (default)\n"
+		"	   --enable-wb-cache	Use write-back cache rather than write-through (default)\n"
 		"	   --disable-caching	Disable all caching\n"
 		"	   --disable-wb-cache	Use write-through rather than write-back cache\n"
 		"\n"
@@ -306,6 +309,8 @@ main(int argc, char **argv)
 		{"singlethread",	no_argument,	   0, 'S'},
 		{"thread-count",	required_argument, 0, 't'},
 		{"foreground",		no_argument,	   0, 'f'},
+		{"enable-caching",	no_argument,	   0, 'E'},
+		{"enable-wb-cache",	no_argument,	   0, 'F'},
 		{"disable-caching",	no_argument,	   0, 'A'},
 		{"disable-wb-cache",	no_argument,	   0, 'B'},
 		{"version",		no_argument,	   0, 'v'},
@@ -341,6 +346,13 @@ main(int argc, char **argv)
 			break;
 		case 'G':
 			dfuse_info->di_group = optarg;
+			break;
+		case 'E':
+			dfuse_info->di_caching = true;
+			dfuse_info->di_wb_cache = true;
+			break;
+		case 'F':
+			dfuse_info->di_wb_cache = true;
 			break;
 		case 'A':
 			dfuse_info->di_caching = false;
@@ -451,8 +463,7 @@ main(int argc, char **argv)
 
 		path_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 		rc = duns_resolve_path(path, &path_attr);
-		DFUSE_TRA_INFO(dfuse_info,
-			       "duns_resolve_path() on path returned %d %s",
+		DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on path returned %d %s",
 			       rc, strerror(rc));
 		if (rc == ENOENT) {
 			printf("Attr path does not exist\n");
@@ -462,20 +473,12 @@ main(int argc, char **argv)
 			 * because the path is supposed to provide
 			 * pool/container details and it's an error if it can't.
 			 */
-			printf("Error reading attr from path %d %s\n",
-				rc, strerror(rc));
+			printf("Error reading attr from path %d %s\n", rc, strerror(rc));
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 
-		if (path_attr.da_pool_label)
-			pool_name = path_attr.da_pool_label;
-		else
-			uuid_copy(pool_uuid, path_attr.da_puuid);
-
-		if (path_attr.da_cont_label)
-			cont_name = path_attr.da_cont_label;
-		else
-			uuid_copy(cont_uuid, path_attr.da_cuuid);
+		pool_name = path_attr.da_pool;
+		cont_name = path_attr.da_cont;
 	}
 
 	/* Check for attributes on the mount point itself to use.
@@ -485,8 +488,7 @@ main(int argc, char **argv)
 	 */
 	duns_attr.da_flags = DUNS_NO_REVERSE_LOOKUP;
 	rc = duns_resolve_path(dfuse_info->di_mountpoint, &duns_attr);
-	DFUSE_TRA_INFO(dfuse_info,
-		       "duns_resolve_path() on mountpoint returned %d %s",
+	DFUSE_TRA_INFO(dfuse_info, "duns_resolve_path() on mountpoint returned %d %s",
 		       rc, strerror(rc));
 	if (rc == 0) {
 		if (pool_name) {
@@ -500,15 +502,8 @@ main(int argc, char **argv)
 			D_GOTO(out_daos, rc = -DER_INVAL);
 		}
 
-		if (duns_attr.da_pool_label)
-			pool_name = duns_attr.da_pool_label;
-		else
-			uuid_copy(pool_uuid, duns_attr.da_puuid);
-
-		if (duns_attr.da_cont_label)
-			cont_name = duns_attr.da_cont_label;
-		else
-			uuid_copy(cont_uuid, duns_attr.da_cuuid);
+		pool_name = duns_attr.da_pool;
+		cont_name = duns_attr.da_cont;
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
@@ -518,37 +513,29 @@ main(int argc, char **argv)
 	}
 
 	/* Connect to a pool.
-	 * At this point if a pool is chosen by another means then pool_uuid
-	 * is already set, so try and parse pool_name, if that's not a uuid
-	 * then try it as a label, else try it as a uuid.
+	 * At this point if a pool is chosen by another means then pool_uuid is already set, so try
+	 * and parse pool_name, if that's not a uuid then try it as a label, else try it as a uuid.
 	 */
-	if (pool_name && (uuid_parse(pool_name, pool_uuid) < 0))
-		rc = dfuse_pool_connect_by_label(fs_handle,
-						 pool_name,
-						 &dfp);
+	if (pool_name && uuid_parse(pool_name, pool_uuid) < 0)
+		rc = dfuse_pool_connect_by_label(fs_handle, pool_name, &dfp);
 	else
 		rc = dfuse_pool_connect(fs_handle, &pool_uuid, &dfp);
 	if (rc != 0) {
-		printf("Failed to connect to pool (%d) %s\n",
-			rc, strerror(rc));
+		printf("Failed to connect to pool (%d) %s\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	if (cont_name && (uuid_parse(cont_name, cont_uuid) < 0))
-		rc = dfuse_cont_open_by_label(fs_handle,
-					      dfp,
-					      cont_name,
-					      &dfs);
+	if (cont_name && uuid_parse(cont_name, cont_uuid) < 0)
+		rc = dfuse_cont_open_by_label(fs_handle, dfp, cont_name, &dfs);
 	else
 		rc = dfuse_cont_open(fs_handle, dfp, &cont_uuid, &dfs);
 	if (rc != 0) {
-		printf("Failed to connect to container (%d) %s\n",
-			rc, strerror(rc));
+		printf("Failed to connect to container (%d) %s\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 
-	/* The container created by dfuse_cont_open() will have taken a ref
-	 * on the pool, so drop the initial one.
+	/* The container created by dfuse_cont_open() will have taken a ref on the pool, so drop the
+	 * initial one.
 	 */
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfp->dfp_entry);
 

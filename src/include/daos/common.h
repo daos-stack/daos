@@ -437,7 +437,8 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
- *  * struct) @type, return pointer to the embedding instance of @type. */
+ *  * struct) @type, return pointer to the embedding instance of @type.
+ */
 # define container_of(ptr, type, member)		\
 	 ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
@@ -495,6 +496,11 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 static inline int
 daos_errno2der(int err)
 {
+	if (err < 0) {
+		D_ERROR("error < 0 (%d)\n", err);
+		return -DER_UNKNOWN;
+	}
+
 	switch (err) {
 	case 0:			return -DER_SUCCESS;
 	case EPERM:
@@ -533,6 +539,11 @@ daos_errno2der(int err)
 static inline int
 daos_der2errno(int err)
 {
+	if (err > 0) {
+		D_ERROR("error > 0 (%d)\n", err);
+		return EINVAL;
+	}
+
 	switch (err) {
 	case -DER_SUCCESS:	return 0;
 	case -DER_NO_PERM:
@@ -737,6 +748,7 @@ enum {
 #define DAOS_DTX_SRV_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x46)
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
 #define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
+#define DAOS_DTX_UNCERTAIN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x49)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
@@ -751,6 +763,7 @@ enum {
 #define DAOS_CONT_CLOSE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x66)
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
 #define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
+#define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
@@ -857,7 +870,6 @@ daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool, bool input);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
 void daos_prop_fini(daos_prop_t *prop);
 
-struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
 daos_recx_t *daos_recx_alloc(uint32_t nr);
