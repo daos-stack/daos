@@ -21,7 +21,6 @@ from general_utils import get_host_data, get_random_string, \
 import slurm_utils
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
-from telemetry_utils import TelemetryUtils
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
 from pydaos.raw import DaosSnapshot, DaosApiError
