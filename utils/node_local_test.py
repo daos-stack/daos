@@ -3373,7 +3373,7 @@ def test_alloc_fail_copy(server, conf, wf):
     rc = test_cmd.launch()
     return rc
 
-def test_alloc_fail_cat(server, conf, wf):
+def test_alloc_fail_cat(server, conf):
     """Run the Interception library with fault injection
 
     Start dfuse for this test, and do not do output checking on the command
@@ -3400,7 +3400,7 @@ def test_alloc_fail_cat(server, conf, wf):
     test_cmd = AllocFailTest(conf, 'il-cat', cmd)
     test_cmd.use_il = True
     test_cmd.check_stderr = False
-    test_cmd.wf = wf
+    test_cmd.wf = conf.wf
 
     rc = test_cmd.launch()
     dfuse.stop()
@@ -3495,6 +3495,7 @@ def run(wf, args):
     setup_log_test(conf)
 
     fi_test = False
+    fi_test_dfuse = False
     start_server = True
 
     if args.mode == 'fi':
@@ -3519,6 +3520,7 @@ def run(wf, args):
     elif args.mode == 'fi':
         fi_test = True
     elif args.mode == 'all':
+        fi_test_dfuse = True
         fatal_errors.add_result(run_posix_tests(server, conf))
         fatal_errors.add_result(run_il_test(server, conf))
         fatal_errors.add_result(run_dfuse(server, conf))
@@ -3561,19 +3563,19 @@ def run(wf, args):
     # If the perf-check option is given then re-start everything without much
     # debugging enabled and run some microbenchmarks to give numbers for use
     # as a comparison against other builds.
-    if args.perf_check or fi_test:
+    if args.perf_check or fi_test or fi_test_dfuse:
         args.server_debug = 'INFO'
         args.memcheck = 'no'
         args.dfuse_debug = 'WARN'
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
+            # Most of the fault injection tests go here, they are then run on docker containers
+            # so can be performed in parallel.
+
             wf_client = WarningsFactory('nlt-client-leaks.json')
             # list-container test.
             fatal_errors.add_result(test_alloc_fail(server, conf))
-
-            # Read-via-IL test, requires dfuse.
-            # fatal_errors.add_result(test_alloc_fail_cat(server, conf, wf_client))
 
             # Container attribute tests, work but disabled because of failures.
             # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
@@ -3583,6 +3585,14 @@ def run(wf, args):
             fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
 
             wf_client.close()
+
+        if fi_test_dfuse:
+            # We cannot yet run dfuse inside docker containers and some of the failure modes aren't
+            # well handled so continue to run the dfuse fault injection test on real hardware.
+
+            # Read-via-IL test, requires dfuse.
+            fatal_errors.add_result(test_alloc_fail_cat(server, conf))
+
         if args.perf_check:
             check_readdir_perf(server, conf)
         if server.stop(wf_server) != 0:
