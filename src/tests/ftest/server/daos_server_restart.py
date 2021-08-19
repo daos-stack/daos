@@ -90,7 +90,6 @@ class DaosServerTest(TestWithServers):
 
     def create_pool_and_container(self):
         """Create pool and container."""
-        scm_size = self.params.get("scm_size", "/run/server/*/", 138000000)
         num_of_pool = self.params.get("num_of_pool", "/run/server/*/", 3)
         container_per_pool = self.params.get(
             "container_per_pool", "/run/server/*/", 2)
