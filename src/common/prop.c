@@ -873,7 +873,9 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 static int
 parse_entry(char *str, struct daos_prop_entry *entry)
 {
-	char	*name, *val, *end_token;
+	char	*name;
+	char	*val;
+	char	*end_token;
 	int	rc = 0;
 
 	/** get prop_name */
@@ -881,20 +883,20 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 	/** get prop value */
 	val = strtok_r(NULL, ";", &end_token);
 
-	if (strcmp(name, "label") == 0) {
+	if (strcmp(name, DAOS_PROP_ENTRY_LABEL) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
-		rc = daos_prop_entry_set_str(entry, val, strlen(val));
-	} else if (strcmp(name, "cksum") == 0) {
+		rc = daos_prop_entry_set_str(entry, val, DAOS_PROP_LABEL_MAX_LEN);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_CKSUM) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_CSUM;
 		rc = daos_str2csumcontprop(val);
 		if (rc < 0)
 			return rc;
 		entry->dpe_val = rc;
 		rc = 0;
-	} else if (strcmp(name, "cksum_size") == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_CKSUM_SIZE) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 		entry->dpe_val = strtoull(val, NULL, 0);
-	} else if (strcmp(name, "srv_cksum") == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_SRV_CKSUM) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
 		if (strcmp(val, "on") == 0)
 			entry->dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
@@ -902,7 +904,7 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 			entry->dpe_val = DAOS_PROP_CO_CSUM_SV_OFF;
 		else
 			rc = -DER_INVAL;
-	} else if (strcmp(name, "dedup") == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_DEDUP) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_DEDUP;
 		if (strcmp(val, "off") == 0)
 			entry->dpe_val = DAOS_PROP_CO_DEDUP_OFF;
@@ -912,24 +914,24 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 			entry->dpe_val = DAOS_PROP_CO_DEDUP_HASH;
 		else
 			rc = -DER_INVAL;
-	} else if (strcmp(name, "dedup_threshold") == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_DEDUP_THRESHOLD) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
 		entry->dpe_val = strtoull(val, NULL, 0);
-	} else if (strcmp(name, "compression") == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_COMPRESS) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_COMPRESS;
 		rc = daos_str2compresscontprop(val);
 		if (rc < 0)
 			return rc;
 		entry->dpe_val = rc;
 		rc = 0;
-	} else if (strcmp(name, "encryption") == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_ENCRYPT) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_ENCRYPT;
 		rc = daos_str2encryptcontprop(val);
 		if (rc < 0)
 			return rc;
 		entry->dpe_val = rc;
 		rc = 0;
-	} else if (strcmp(name, "rf") == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		if (!strcmp(val, "0"))
 			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
@@ -945,13 +947,17 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 			D_ERROR("presently supported redundancy factors (rf) are [0-4]\n");
 			rc = -DER_INVAL;
 		}
-	} else if (strcmp(name, "ec_cell") == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_EC_CELL_SZ) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 		entry->dpe_val = strtoull(val, NULL, 0);
-	} else if (strcmp(name, "layout_type") == 0 || strcmp(name, "layout_version") == 0 ||
-		   strcmp(name, "rf_lvl") == 0 || strcmp(name, "max_snapshot") == 0 ||
-		   strcmp(name, "alloc_oid") == 0 || strcmp(name, "owner") == 0 ||
-		   strcmp(name, "group") == 0) {
+	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_SNAPSHOT_MAX) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_ALLOCED_OID) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_STATUS) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_OWNER) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0) {
 		D_ERROR("Property %s is read only\n", name);
 		rc = -DER_INVAL;
 	} else {
@@ -963,10 +969,12 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 }
 
 int
-daos_prop_alloc_and_set(const char *str, daos_size_t len, daos_prop_t **_prop)
+daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **_prop)
 {
 	daos_prop_t	*prop = NULL;
-	char		*save_prop = NULL, *t, *local;
+	char		*save_prop = NULL;
+	char		*t;
+	char		*local;
 	uint32_t	n;
 	int		rc = 0;
 

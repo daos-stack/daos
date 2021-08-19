@@ -452,7 +452,7 @@ daos_prop_free(daos_prop_t *prop);
  * \param[out]	prop	Property that is created
  */
 int
-daos_prop_alloc_and_set(const char *str, daos_size_t len, daos_prop_t **prop);
+daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **prop);
 
 /**
  * Merge a set of new DAOS properties into a set of existing DAOS properties.

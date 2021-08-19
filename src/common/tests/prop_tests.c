@@ -187,8 +187,7 @@ test_daos_prop_merge_subset_update(void **state)
 	/* Expecting only one prop to be overwritten */
 	exp_result = daos_prop_dup(prop1, false /* pool */, true /* input */);
 	entry = daos_prop_entry_get(exp_result, prop2->dpp_entries[0].dpe_type);
-	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[0], entry),
-			 0);
+	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[0], entry), 0);
 
 	expect_merge_result(prop1, prop2, exp_result);
 
@@ -253,7 +252,7 @@ test_daos_prop_merge_add_and_update(void **state)
 }
 
 static void
-test_daos_prop_alloc_and_set(void **state)
+test_daos_prop_from_str(void **state)
 {
 	/** Valid prop entries & values */
 	char		*LABEL		= "label:hello";
@@ -277,39 +276,72 @@ test_daos_prop_alloc_and_set(void **state)
 	/** Invalid prop entries */
 	char		*PROP_INV	= "hello:world";
 
-	char		buf[1024] = {0};
-	daos_prop_t	*prop;
-	int		rc;
+	char			buf[1024] = {0};
+	daos_prop_t		*prop;
+	struct daos_prop_entry  *entry;
+	int			rc;
 
-	rc = daos_prop_alloc_and_set(NULL, sizeof(buf), &prop);
+	rc = daos_prop_from_str(NULL, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
-	rc = daos_prop_alloc_and_set(buf, sizeof(buf), NULL);
+	rc = daos_prop_from_str(buf, sizeof(buf), NULL);
 	assert_int_equal(rc, -DER_INVAL);
-	rc = daos_prop_alloc_and_set(buf, 0, &prop);
+	rc = daos_prop_from_str(buf, 0, &prop);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/** Buffer containing read only entries should fail */
-	sprintf(buf, "%s;%s;%s", CSUM, OID, LAYOUT);
-	rc = daos_prop_alloc_and_set(buf, sizeof(buf), &prop);
+	sprintf(buf, "%s;%s", CSUM, OID);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s", CSUM, LAYOUT);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/** Buffer containing invalid entries should fail */
 	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV);
-	rc = daos_prop_alloc_and_set(buf, sizeof(buf), &prop);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
 
 	/** Buffer containing invalid values should fail */
 	sprintf(buf, "%s;%s", CSUM_INV, RF);
-	rc = daos_prop_alloc_and_set(buf, sizeof(buf), &prop);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
 	sprintf(buf, "%s;%s", CSUM, RF_INV);
-	rc = daos_prop_alloc_and_set(buf, sizeof(buf), &prop);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
 
 	sprintf(buf, "%s;%s;%s;%s;%s;%s;%s;%s;%s",
 		LABEL, CSUM, CSUM_SIZE, DEDUP, DEDUP_TH, COMP, ENC, RF, EC_CELL);
-	rc = daos_prop_alloc_and_set(buf, sizeof(buf), &prop);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, 0);
+
+	/** verify entry values */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
+	assert_string_equal(entry->dpe_str, "hello");
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_CSUM);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_CSUM_CRC64);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
+	assert_int_equal(entry->dpe_val, 1048576);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_DEDUP);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_DEDUP_HASH);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_DEDUP_THRESHOLD);
+	assert_int_equal(entry->dpe_val, 8192);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_COMPRESS);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_COMPRESS_LZ4);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ENCRYPT);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_ENCRYPT_AES_XTS128);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_REDUN_RF2);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_CELL_SZ);
+	assert_int_equal(entry->dpe_val, 2021);
+
 	daos_prop_free(prop);
 }
 
@@ -323,7 +355,7 @@ main(void)
 		cmocka_unit_test(test_daos_prop_merge_total_update),
 		cmocka_unit_test(test_daos_prop_merge_subset_update),
 		cmocka_unit_test(test_daos_prop_merge_add_and_update),
-		cmocka_unit_test(test_daos_prop_alloc_and_set),
+		cmocka_unit_test(test_daos_prop_from_str),
 	};
 
 	return cmocka_run_group_tests_name("common_prop", tests, NULL, NULL);
