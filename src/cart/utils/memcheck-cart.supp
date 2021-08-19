@@ -199,6 +199,11 @@
 }
 {
    <insert_a_suppression_name_here>
+   Memcheck:Addr2
+   fun:runtime.memmove
+}
+{
+   <insert_a_suppression_name_here>
    Memcheck:Addr16
    fun:runtime.memmove
 }
@@ -241,6 +246,16 @@
    <insert_a_suppression_name_here>
    Memcheck:Cond
    fun:runtime.deductSweepCredit
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr1
+   fun:*protobuf*
+}
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Addr8
+   fun:*protobuf*
 }
 {
    <insert_a_suppression_name_here>

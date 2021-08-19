@@ -193,15 +193,17 @@ func prepBdevStorage(srv *server, iommuEnabled bool, hpiGetter common.GetHugePag
 		}
 	}
 
+	// Run prepare with reset first to release resources.
+	//
 	// TODO: should be passing root context into prepare request to
 	//       facilitate cancellation.
+	prepReq.Reset_ = true
 	if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-		srv.log.Errorf("automatic NVMe prepare reset failed (check configuration?)\n%s", err)
+		srv.log.Errorf("automatic NVMe prepare reset failed: %s", err)
 	} else {
 		prepReq.Reset_ = false
-		srv.log.Debugf("automatic NVMe prepare req: %+v", prepReq)
 		if _, err := srv.ctlSvc.NvmePrepare(prepReq); err != nil {
-			srv.log.Errorf("automatic NVMe prepare failed (check configuration?)\n%s", err)
+			srv.log.Errorf("automatic NVMe prepare failed: %s", err)
 		}
 	}
 
