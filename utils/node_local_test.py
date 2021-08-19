@@ -1412,6 +1412,21 @@ class posix_tests():
 
         destroy_container(self.conf, self.pool.id(), container)
 
+    @needs_dfuse
+    def test_truncate(self):
+        """Test file read after truncate"""
+
+        filename = os.path.join(self.dfuse.dir, 'myfile')
+
+        with open(filename, 'w') as fd:
+            fd.write('hello')
+
+        os.truncate(filename, 1024*1024*4)
+        with  open(filename, 'r') as fd:
+            data = fd.read(5)
+            print('_{}_'.format(data))
+            assert data == 'hello'
+
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one
         can be read from the other"""
