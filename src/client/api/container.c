@@ -116,11 +116,9 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 		return -DER_NOMEM;
 	}
 	label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(label_prop->dpp_entries[0].dpe_str, label, DAOS_PROP_LABEL_MAX_LEN);
-	if (label_prop->dpp_entries[0].dpe_str == NULL) {
-		rc = -DER_NOMEM;
+	rc = daos_prop_entry_set_str(&label_prop->dpp_entries[0], label, DAOS_PROP_LABEL_MAX_LEN);
+	if (rc)
 		goto out_prop;
-	}
 
 	if (cont_prop) {
 		merged_props = daos_prop_merge(cont_prop, label_prop);
