@@ -5,10 +5,8 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-import os
 from ior_test_base import IorTestBase
 from avocado.core.exceptions import TestFail
-from general_utils import get_random_string
 
 
 class IorSmall(IorTestBase):
@@ -41,11 +39,10 @@ class IorSmall(IorTestBase):
         """
         results = []
         cncl_tickets = []
-        dfuse_mount_dir = None
         ior_timeout = self.params.get("ior_timeout", '/run/ior/*')
         flags = self.params.get("ior_flags", '/run/ior/iorflags/*')
         apis = self.params.get("ior_api", '/run/ior/iorflags/*')
-        mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
+        dfuse_mount_dir = self.params.get("mount_dir", "/run/dfuse/*")
         transfer_block_size = self.params.get("transfer_block_size",
                                               '/run/ior/iorflags/*')
         obj_class = self.params.get("obj_class", '/run/ior/iorflags/*')
@@ -69,9 +66,6 @@ class IorSmall(IorTestBase):
                     self.ior_cmd.transfer_size.update(test[0])
                     self.ior_cmd.block_size.update(test[1])
                     # run ior
-                    if api == "HDF5-VOL":
-                        sub_dir = get_random_string(5)
-                        dfuse_mount_dir = os.path.join(mount_dir, sub_dir)
                     try:
                         self.run_ior_with_pool(
                             plugin_path=hdf5_plugin_path, timeout=ior_timeout,
