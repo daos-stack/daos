@@ -703,6 +703,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             result = pcmd(hosts, "; ".join(commands_part1), verbose, timeout,
                           None)
 
+        # in case dump of ULT stacks is still running it may be interrupted
         commands_part2 = [
             "rc=0",
             "if " + ps_cmd,
