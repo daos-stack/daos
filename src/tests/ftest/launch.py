@@ -733,7 +733,7 @@ def get_vmd_replacement(args):
     for index, filter in enumerate(args.nvme.split(":")):
         if index < len(command_list):
             command_list[index].append("grep '{}'".format(filter))
-    command = ";".join(command_list)
+    command = ";".join([" | ".join(commands) for commands in command_list])
 
     task = get_remote_output(host_list, command)
 
