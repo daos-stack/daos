@@ -19,7 +19,6 @@ class DmgSystemReformatTest(PoolTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-6004")
     def test_dmg_system_reformat(self):
         """
         JIRA ID: DAOS-5415
