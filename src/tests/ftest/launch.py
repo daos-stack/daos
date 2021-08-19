@@ -657,44 +657,31 @@ def get_nvme_replacement(args):
 
 
 def get_vmd_replacement(args):
-    """Determine the value to use for the '--nvme=auto_vmd*' command line argument.
+    """Determine which values to use for the '--nvme=auto_vmd*' argument.
 
-    Parse the lspci output for any VMD devices, (e.g. --nvme=auto_vmd)
-        $ lspci -D | grep Volume
-        0000:5d:05.5 RAID bus controller:
-            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
+    Supported 'auto_vmd*' options:
+        Keyword             Keyword is replaced by
+        ---------------     ---------------------------------------------------
+        auto_vmd            a list of VMD controller PCI address
 
-    Other command line options which will be supported are:
-    (e.g. '--nvme=auto_vmd_disks') [Use all NVME devices behind the VMD
-    controller]
-        $ lspci | grep 'Non-Volatile memory controller:' | grep '10001'
-        10001:01:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
+        auto_vmd_disks      a list of VMD controlled NVMe device addresses
 
-    (e.g. '--name=auto_vmd_mixed) [Use the NVME devices and VMD controller PCI
-    address]
-        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
-        0000:5d:05.5 RAID bus controller:
-            Intel Corporation Volume Management Device NVMe RAID Controller (rev 06)
-        0000:da:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
+        auto_vmd_mixed      a list of non-VMD NVMe device addresses +
+                            a list of VMD controller PCI address
 
-    (e.g. '--name=auto_vmd_nvme) [Use the NVME devices and NVME devices behind
-    VMD controller]
-        $ lspci | grep 'Non-Volatile memory controller: \\| Volume'
-        0000:da:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
-        10001:01:00.0 Non-Volatile memory controller:
-            Intel Corporation NVMe Datacenter SSD [Optane]
+        auto_vmd_nvme       a list of non-VMD NVMe device addresses +
+                            a list of VMD controlled NVMe device addresses
 
     Args:
         args (argparse.Namespace): command line arguments for this program
 
     Returns:
-        str: a comma-separated list of vmd,nvme device pci addresses available
-        on all of the specified test servers
-        bool: VMD PCI address included in the pci address string (True)
-              VMD PCI address not included in the pci address string (False)
+        tuple: (str, bool)
+            str: a comma-separated list of vmd,nvme device pci addresses
+                 available on all of the specified test servers
+            bool: VMD PCI address included in the pci address string (True)
+                  VMD PCI address not included in the pci address string (False)
+
     """
     # A list of server host is required to able to auto-detect NVMe devices
     if not args.test_servers:
@@ -709,44 +696,44 @@ def get_vmd_replacement(args):
     host_list = list(args.test_servers)
     vmd_include_flag = False
 
-    if args.nvme == "auto_vmd":
+    if args.nvme.startswith("auto_vmd_mixed"):
+        # Use the non-VMD NVMe devices and VMD controller PCI address
         command_list = [
-            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
+            ["/sbin/lspci -D",
+             "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+             "Non-Volatile memory controller:'"],
+            ["/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]]
         vmd_include_flag = True
-    elif args.nvme == "auto_vmd_disks":
+
+    elif args.nvme.startswith("auto_vmd_nvme"):
+        # Use the non-VMD NVMe devices and NVMe devices behind VMD controller
         command_list = [
-            "/sbin/lspci -D",
-            "grep -E '^[0-9a-f]{5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
-            "Non-Volatile memory controller:'"]
-    elif args.nvme == "auto_vmd_nvme":
+            ["/sbin/lspci -D",
+             "grep -E '^[0-9a-f]{4,5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+             "Non-Volatile memory controller:'"]]
+
+    elif args.nvme.startswith("auto_vmd_disks"):
+        # Use only the NVMe devices behind the VMD controller
         command_list = [
-            "/sbin/lspci -D",
-            "grep -E '^[0-9a-f]{4,5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
-            "Non-Volatile memory controller:'"]
-    elif args.nvme == "auto_vmd_mixed":
-        command_list1 = [
-            "/sbin/lspci -D",
-            "grep -E '^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
-            "Non-Volatile memory controller:'"]
-        command_list2 = [
-            "/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]
+            ["/sbin/lspci -D",
+             "grep -E '^[0-9a-f]{5}:[0-9a-f]{2}:[0-9a-f]{2}.[0-9a-f] "
+             "Non-Volatile memory controller:'"]]
+
+    elif args.nvme.startswith("auto_vmd"):
+        # Use the VMD controller PCI address
+        command_list = [
+            ["/sbin/lspci -D", "grep 'Volume Management Device NVMe'"]]
         vmd_include_flag = True
+
     else:
         print("ERROR: Invalid --nvme argument")
         sys.exit(1)
 
-    if ":" in args.nvme and args.nvme != "auto_vmd_mixed":
-        command_list.append("grep '{}'".format(args.nvme.split(":")[1]))
-    elif ":" in args.nvme and args.nvme == "auto_vmd_mixed":
-        command_list1.append("grep '{}'".format(args.nvme.split(":")[1]))
-        command_list2.append("grep '{}'".format(args.nvme.split(":")[1]))
-
-    if args.nvme != "auto_vmd_mixed":
-        command = " | ".join(command_list)
-    else:
-        command1 = " | ".join(command_list1)
-        command2 = " | ".join(command_list2)
-        command = command1 + ";" + command2
+    # Apply any specified filters
+    for index, filter in enumerate(args.nvme.split(":")):
+        if index < len(command_list):
+            command_list[index].append("grep '{}'".format(filter))
+    command = ";".join(command_list)
 
     task = get_remote_output(host_list, command)
 
