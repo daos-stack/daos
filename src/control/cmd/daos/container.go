@@ -301,15 +301,19 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err != nil {
 		return err
 	}
+
+	var co_id string
 	if cmd.contUUID == uuid.Nil {
 		cmd.contLabel = C.GoString(&ap.cont_str[0])
+		co_id = cmd.contLabel
+	} else {
+		co_id = cmd.contUUID.String()
 	}
 
-	cmd.log.Debugf("created container: %s", cmd.contUUID)
+	cmd.log.Debugf("created container: %s", co_id)
 
 	if err := cmd.openContainer(C.DAOS_COO_RO); err != nil {
-		return errors.Wrapf(err,
-			"failed to open new container %s", cmd.contUUID)
+		return errors.Wrapf(err, "failed to open new container %s", co_id)
 	}
 	defer cmd.closeContainer()
 
@@ -317,13 +321,11 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err != nil {
 		// Special case for creating a container without permission to query it.
 		if errors.Cause(err) == drpc.DaosNoPermission {
-			cmd.log.Errorf("container %s was created, but query failed", cmd.contUUID)
+			cmd.log.Errorf("container %s was created, but query failed", co_id)
 			return nil
 		}
 
-		return errors.Wrapf(err,
-			"failed to query new container %s",
-			cmd.contUUID)
+		return errors.Wrapf(err, "failed to query new container %s", co_id)
 	}
 
 	if cmd.jsonOutputEnabled() {
