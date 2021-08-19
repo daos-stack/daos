@@ -22,7 +22,11 @@ pool:
   pool_query_timeout: 30
 container:
   control_method: daos
-  properties: rf:2
+  cont_prop: !mux
+    rf_0:
+      properties: rf:0
+    rf_2:
+      properties: rf:2
   akey_size: 5
   dkey_size: 5
   data_size: 5
