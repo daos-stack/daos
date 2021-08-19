@@ -7,6 +7,8 @@
 package spdk
 
 import (
+	"sync"
+
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
@@ -18,7 +20,9 @@ type MockEnvCfg struct {
 
 // MockEnvImpl is a mock implementation of the Env interface.
 type MockEnvImpl struct {
-	Cfg MockEnvCfg
+	sync.RWMutex
+	Cfg      MockEnvCfg
+	CallOpts []*EnvOptions
 }
 
 // InitSPDKEnv initializes the SPDK environment.
@@ -26,6 +30,11 @@ func (e *MockEnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	if e.Cfg.InitErr == nil {
 		log.Debugf("mock spdk init go opts: %+v", opts)
 	}
+
+	e.Lock()
+	e.CallOpts = append(e.CallOpts, opts)
+	e.Unlock()
+
 	return e.Cfg.InitErr
 }
 

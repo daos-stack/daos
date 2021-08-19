@@ -31,15 +31,24 @@ clock_t	start;
 clock_t	end;
 
 /** generated container UUID */
-uuid_t		cuuid;
+const char	*cuuid;
+
+/** generated label for aux containers */
+const char	*cuuid2;
+const char	*cuuid3;
+
 /** initial object ID */
 uint64_t	oid_hi = 1;
 daos_obj_id_t	oid = { .hi = 1, .lo = 1 }; /** object ID */
+daos_obj_id_t	oid2 = { .hi = 1, .lo = 1 }; /** object ID */
+daos_obj_id_t	oid3 = { .hi = 1, .lo = 1 }; /** object ID */
 
 /** pool handle */
 daos_handle_t	poh = DAOS_HDL_INVAL;
 /** container handle */
 daos_handle_t	coh = DAOS_HDL_INVAL;
+daos_handle_t	coh2 = DAOS_HDL_INVAL;
+daos_handle_t	coh3 = DAOS_HDL_INVAL;
 
 /** force cleanup */
 int force;
@@ -49,6 +58,20 @@ new_oid(void)
 {
 	oid.hi = ++oid_hi;
 	oid.lo = 1;
+}
+
+static inline void
+new_oid2(void)
+{
+	oid2.hi = ++oid_hi;
+	oid2.lo = 1;
+}
+
+static inline void
+new_oid3(void)
+{
+	oid3.hi = ++oid_hi;
+	oid3.lo = 1;
 }
 
 static inline float
@@ -149,15 +172,41 @@ ccreate(void)
 	int rc;
 
 	/** Create container */
-	uuid_generate(cuuid);
-	rc = daos_cont_create(poh, cuuid, NULL, NULL);
-	if (rc) {
-		step_fail(d_errdesc(rc));
-		return -1;
-	}
+	cuuid = "autotest_cont_def";
+	rc = daos_cont_create_with_label(poh, cuuid, NULL, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
 
-	step_success("uuid = "DF_UUIDF, DP_UUID(cuuid));
+	/** Create container with RF=1 */
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+
+	cuuid2 = "autotest_cont_rf1";
+	rc = daos_cont_create_with_label(poh, cuuid2, prop, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	/** Create container with RF=2 */
+	daos_prop_t	*prop2;
+
+	prop2 = daos_prop_alloc(1);
+	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop2->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+
+	cuuid3 = "autotest_cont_rf2";
+	rc = daos_cont_create_with_label(poh, cuuid3, prop2, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	step_success("");
 	return 0;
+
+fail:
+	step_fail(d_errdesc(rc));
+	return -1;
 }
 
 static int
@@ -167,13 +216,23 @@ copen(void)
 
 	/** Open container */
 	rc = daos_cont_open(poh, cuuid, DAOS_COO_RW, &coh, NULL, NULL);
-	if (rc) {
-		step_fail(d_errdesc(rc));
-		return -1;
-	}
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_open(poh, cuuid2, DAOS_COO_RW, &coh2, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_open(poh, cuuid3, DAOS_COO_RW, &coh3, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
 
 	step_success("");
 	return 0;
+
+fail:
+	step_fail(d_errdesc(rc));
+	return -1;
 }
 
 static int
@@ -184,7 +243,7 @@ oS1(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, 0, OC_S1, 0, 0);
+	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
 	for (i = 0; i < 1000000; i++) {
 
@@ -213,7 +272,7 @@ oSX(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, 0, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
 	for (i = 0; i < 10000; i++) {
 
@@ -479,7 +538,7 @@ kv_insert128(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -521,7 +580,7 @@ kv_read128(void)
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
-		step_fail("failed to insert: %s", d_errdesc(get_rc));
+		step_fail("failed to read: %s", d_errdesc(get_rc));
 		return -1;
 	}
 
@@ -578,7 +637,7 @@ kv_insert4k(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
@@ -620,7 +679,7 @@ kv_read4k(void)
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
-		step_fail("failed to insert: %s", d_errdesc(get_rc));
+		step_fail("failed to read: %s", d_errdesc(get_rc));
 		return -1;
 	}
 
@@ -641,7 +700,7 @@ kv_insert1m(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -697,17 +756,134 @@ kv_read1m(void)
 }
 
 static int
+kv_insertaux(void)
+{
+	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	int		put_rc;
+	int		rc;
+
+	new_oid2();
+	daos_obj_generate_oid(coh2, &oid2, DAOS_OF_KV_FLAT, 0, 0, 0);
+
+	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
+	if (rc)
+		D_GOTO(fail_open, rc);
+
+	put_rc = kv_put(oh, 128, 1000000);
+	rc = daos_kv_close(oh, NULL);
+
+	if (put_rc)
+		D_GOTO(fail_insert, put_rc);
+
+	if (rc)
+		D_GOTO(fail_close, rc);
+
+	oh = DAOS_HDL_INVAL;
+	new_oid3();
+	daos_obj_generate_oid(coh3, &oid3, DAOS_OF_KV_FLAT, 0, 0, 0);
+
+	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
+	if (rc)
+		D_GOTO(fail_open, rc);
+
+	put_rc = kv_put(oh, 128, 1000000);
+	rc = daos_kv_close(oh, NULL);
+
+	if (put_rc)
+		D_GOTO(fail_insert, put_rc);
+
+	if (rc)
+		D_GOTO(fail_close, rc);
+
+	step_success("");
+	return 0;
+
+fail_open:
+	step_fail("failed to open object: %s", d_errdesc(rc));
+	return -1;
+
+fail_insert:
+	step_fail("failed to insert: %s", d_errdesc(put_rc));
+	return -1;
+
+fail_close:
+	step_fail("failed to close object: %s", d_errdesc(rc));
+	return -1;
+}
+
+static int
+kv_readaux(void)
+{
+	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	int		get_rc;
+	int		rc;
+
+	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
+	if (rc)
+		D_GOTO(fail_open, rc);
+
+	get_rc = kv_get(oh, 128, 1000000);
+	rc = daos_kv_close(oh, NULL);
+
+	if (get_rc)
+		D_GOTO(fail_read, get_rc);
+
+	if (rc)
+		D_GOTO(fail_close, rc);
+
+	oh = DAOS_HDL_INVAL;
+	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
+	if (rc)
+		D_GOTO(fail_open, rc);
+
+	get_rc = kv_get(oh, 128, 1000000);
+	rc = daos_kv_close(oh, NULL);
+
+	if (get_rc)
+		D_GOTO(fail_read, get_rc);
+
+	if (rc)
+		D_GOTO(fail_close, rc);
+
+	step_success("");
+	return 0;
+
+fail_open:
+	step_fail("failed to open object: %s", d_errdesc(rc));
+	return -1;
+
+fail_read:
+	step_fail("failed to read: %s", d_errdesc(get_rc));
+	return -1;
+
+fail_close:
+	step_fail("failed to close object: %s", d_errdesc(rc));
+	return -1;
+}
+
+static int
 cclose(void)
 {
 	int rc;
 
 	rc = daos_cont_close(coh, NULL);
-	if (rc) {
-		step_fail(d_errdesc(rc));
-		return -1;
-	}
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_close(coh2, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_close(coh3, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
 	step_success("");
 	return 0;
+
+fail:
+	step_fail(d_errdesc(rc));
+	return -1;
 }
 
 static int
@@ -716,12 +892,23 @@ cdestroy(void)
 	int rc;
 
 	rc = daos_cont_destroy(poh, cuuid, force, NULL);
-	if (rc) {
-		step_fail(d_errdesc(rc));
-		return -1;
-	}
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_destroy(poh, cuuid2, force, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_destroy(poh, cuuid3, force, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
 	step_success("");
 	return 0;
+
+fail:
+	step_fail(d_errdesc(rc));
+	return -1;
 }
 
 static int
@@ -761,37 +948,44 @@ struct step {
 
 static struct step steps[] = {
 	/** Set up */
-	{ 0,	"Initializing DAOS",		init ,		100 },
-	{ 1,	"Connecting to pool",		pconnect,	99 },
-	{ 2,	"Creating container",		ccreate,	98 },
-	{ 3,	"Opening container",		copen,		97 },
+	{ 0,	"Initializing DAOS",			init,		100 },
+	{ 1,	"Connecting to pool",			pconnect,	99 },
+	{ 2,	"Creating containers",			ccreate,	98 },
+	{ 3,	"Opening container",			copen,		97 },
 
 	/** Layout generation tests */
-	{ 10,	"Generating 1M S1 layouts",	oS1,		96 },
-	{ 11,	"Generating 10K SX layouts",	oSX,		96 },
+	{ 10,	"Generating 1M S1 layouts",		oS1,		96 },
+	{ 11,	"Generating 10K SX layouts",		oSX,		96 },
 
 	/** KV tests */
-	{ 20,	"Inserting 1M 128B values",	kv_insert128,	96 },
-	{ 21,	"Reading 128B values back",	kv_read128,	96 },
-	//{ 22,	"Listing keys",			kv_list,	96 },
-	//{ 23,	"Punching object",		kv_punch,	96 },
-	{ 24,	"Inserting 1M 4KB values",	kv_insert4k,	96 },
-	{ 25,	"Reading 4KB values back",	kv_read4k,	96 },
-	//{ 26,	"Listing keys",			kv_list,	96 },
-	//{ 27,	"Punching object",		kv_punch,	96 },
-	{ 28,	"Inserting 100K 1MB values",	kv_insert1m,	96 },
-	{ 29,	"Reading 1MB values back",	kv_read1m,	96 },
-	//{ 30,	"Listing keys",			kv_list,	96 },
-	//{ 31,	"Punching object",		kv_punch,	96 },
+	{ 20,	"Inserting 1M 128B values",		kv_insert128,	96 },
+	{ 21,	"Reading 128B values back",		kv_read128,	96 },
+	/** { 22,	"Listing keys",				kv_list,	96 },
+	* { 23,	"Punching object",			kv_punch,	96 },
+	*/
+	{ 24,	"Inserting 1M 4KB values",		kv_insert4k,	96 },
+	{ 25,	"Reading 4KB values back",		kv_read4k,	96 },
+	/** { 26,	"Listing keys",				kv_list,	96 },
+	* { 27,	"Punching object",			kv_punch,	96 },
+	*/
+	{ 28,	"Inserting 100K 1MB values",		kv_insert1m,	96 },
+	{ 29,	"Reading 1MB values back",		kv_read1m,	96 },
+	/** { 30,	"Listing keys",				kv_list,	96 },
+	* { 31,	"Punching object",			kv_punch,	96 },
+	*/
+
+	/** Test aux containers */
+	{ 40,	"Inserting into aux cont",		kv_insertaux,	96 },
+	{ 41,	"Reading values back",			kv_readaux,	96 },
 
 	/** Array tests */
 
 	/** Tear down */
-	{ 96,	"Closing container",		cclose,		97 },
-	{ 97,	"Destroying container",		cdestroy,	98 },
-	{ 98,	"Disconnecting from pool",	pdisconnect,	99 },
-	{ 99,	"Tearing down DAOS",		fini,		100 },
-	{ 100,	"",				NULL,		100 }
+	{ 96,	"Closing containers",			cclose,		97 },
+	{ 97,	"Destroying containers",		cdestroy,	98 },
+	{ 98,	"Disconnecting from pool",		pdisconnect,	99 },
+	{ 99,	"Tearing down DAOS",			fini,		100 },
+	{ 100,	"",					NULL,		100 }
 };
 
 int
