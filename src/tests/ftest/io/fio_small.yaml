@@ -47,8 +47,14 @@ pool:
   control_method: dmg
 container:
   type: POSIX
-  properties: cksum:crc16,cksum_size:16384,srv_cksum:on
   control_method: daos
+  rf_properties: !mux
+    rf0:
+        properties: cksum:crc16,cksum_size:16384,srv_cksum:on
+    rf1:
+        properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
+    rf2:
+        properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:2
 fio:
   names:
     - global

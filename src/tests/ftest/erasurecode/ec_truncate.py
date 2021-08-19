@@ -11,6 +11,7 @@ from general_utils import run_pcmd, get_remote_file_size
 
 class Ecodtruncate(FioBase):
     # pylint: disable=too-many-ancestors
+    # pylint: disable=protected-access
     """Test class Description: Runs Fio with EC object type over POSIX and
         verify truncate file does not corrupt the data.
 
