@@ -308,7 +308,7 @@ oS1(void)
 	total_nr = 1000000;
 	setup_progress();
 
-	for (i = 0; i < 1000000; i++) {
+	for (i = 0; i < total_nr; i++) {
 
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 		if (rc) {
@@ -342,7 +342,7 @@ oSX(void)
 	total_nr = 10000;
 	setup_progress();
 
-	for (i = 0; i < 10000; i++) {
+	for (i = 0; i < total_nr; i++) {
 
 		rc = daos_obj_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 		if (rc) {
