@@ -14,7 +14,6 @@ class DaosVol(VolTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-8207")
     def test_daos_vol_mpich(self):
         """Jira ID: DAOS-3656.
 
@@ -43,7 +42,6 @@ class DaosVol(VolTestBase):
         self.run_test(
             "/usr/lib64/mpich/lib", "/usr/lib64/hdf5_vol_daos/mpich/tests")
 
-    @skipForTicket("DAOS-8207")
     def test_daos_vol_openmpi(self):
         """Jira ID: DAOS-3656.
 
