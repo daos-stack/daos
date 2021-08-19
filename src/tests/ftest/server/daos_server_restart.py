@@ -57,14 +57,18 @@ class DaosServerTest(TestWithServers):
             list: List of UUIDs.
 
         """
+        pool_list = []
         output = self.get_dmg_command().pool_list()
 
-        pool_list = []
-        for pool in output["response"]["pools"]:
-            pool_list.append(pool["uuid"])
+        pools = output["response"]["pools"]
+        if pools:
+            for pool in pools:
+                pool_list.append(pool["uuid"])
+
+        pool_list.sort()
         self.log.info("get_pool-list: %s", pool_list)
 
-        return pool_list.sort()
+        return pool_list
 
     def verify_pool_list(self, expected_pool_list=None):
         """Verify the pool list.
