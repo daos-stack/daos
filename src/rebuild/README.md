@@ -34,7 +34,7 @@ Initially, the leader will propagate the failure notification
 to all other surviving targets by a collective RPC. Any target
 that receives this RPC will start to scan its object table
 to determine the objects lost data redundancy on the faulty
-target If it does, send their IDs and related metadata
+target. If it does, send their IDs and related metadata
 to the rebuild targets(rebuild initiator). As for how to choose
 the rebuild target for faulty target, it will be described in
 placement/README.md
