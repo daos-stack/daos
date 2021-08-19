@@ -315,12 +315,15 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 
 	ci, err := cmd.queryContainer()
 	if err != nil {
+		// Special case for creating a container without permission to query it.
+		if errors.Cause(err) == drpc.DaosNoPermission {
+			cmd.log.Errorf("container %s was created, but query failed", cmd.contUUID)
+			return nil
+		}
+
 		return errors.Wrapf(err,
 			"failed to query new container %s",
 			cmd.contUUID)
-	}
-	if label, set := cmd.Properties.ParsedProps["label"]; set {
-		ci.ContainerLabel = label
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -645,7 +648,7 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	rows := []txtfmt.TableRow{
 		{"Container UUID": ci.ContainerUUID.String()},
 	}
-	if ci.ContainerLabel != "" && ci.ContainerLabel != "container_label_not_set" {
+	if ci.ContainerLabel != "" && ci.ContainerLabel != labelNotSetStr {
 		rows = append(rows, txtfmt.TableRow{"Container Label": ci.ContainerLabel})
 	}
 	rows = append(rows, txtfmt.TableRow{"Container Type": ci.Type})
@@ -854,7 +857,7 @@ func (cmd *containerListAttributesCmd) Execute(args []string) error {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attrs, nil)
+		return cmd.outputJSON(attrs.asMap(), nil)
 	}
 
 	var bld strings.Builder
@@ -869,12 +872,20 @@ func (cmd *containerListAttributesCmd) Execute(args []string) error {
 type containerDeleteAttributeCmd struct {
 	existingContainerCmd
 
-	Args struct {
-		Name string `positional-arg-name:"<attribute name>"`
-	} `positional-args:"yes" required:"yes"`
+	FlagAttr string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	Args     struct {
+		Attr string `positional-arg-name:"<attribute name>"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerDeleteAttributeCmd) Execute(args []string) error {
+	if cmd.FlagAttr != "" {
+		cmd.Args.Attr = cmd.FlagAttr
+	}
+	if cmd.Args.Attr == "" {
+		return errors.New("attribute name is required")
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
@@ -887,10 +898,10 @@ func (cmd *containerDeleteAttributeCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	if err := delDaosAttribute(cmd.cContHandle, contAttr, cmd.Args.Name); err != nil {
+	if err := delDaosAttribute(cmd.cContHandle, contAttr, cmd.Args.Attr); err != nil {
 		return errors.Wrapf(err,
 			"failed to delete attribute %q on container %s",
-			cmd.Args.Name, cmd.ContainerID())
+			cmd.Args.Attr, cmd.ContainerID())
 	}
 
 	return nil
@@ -899,12 +910,20 @@ func (cmd *containerDeleteAttributeCmd) Execute(args []string) error {
 type containerGetAttributeCmd struct {
 	existingContainerCmd
 
-	Args struct {
-		Name string `positional-arg-name:"<attribute name>"`
-	} `positional-args:"yes" required:"yes"`
+	FlagAttr string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	Args     struct {
+		Attr string `positional-arg-name:"<attribute name>"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerGetAttributeCmd) Execute(args []string) error {
+	if cmd.FlagAttr != "" {
+		cmd.Args.Attr = cmd.FlagAttr
+	}
+	if cmd.Args.Attr == "" {
+		return errors.New("attribute name is required")
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
@@ -917,11 +936,11 @@ func (cmd *containerGetAttributeCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	attr, err := cmd.getAttr(cmd.Args.Name)
+	attr, err := cmd.getAttr(cmd.Args.Attr)
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to get attribute %q from container %s",
-			cmd.Args.Name, cmd.ContainerID())
+			cmd.Args.Attr, cmd.ContainerID())
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -940,12 +959,12 @@ func (cmd *containerGetAttributeCmd) Execute(args []string) error {
 type containerSetAttributeCmd struct {
 	existingContainerCmd
 
-	Args struct {
+	FlagAttr  string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	FlagValue string `long:"value" short:"v" description:"attribute value (deprecated; use positional argument)"`
+	Args      struct {
 		Attr  string `positional-arg-name:"<attribute name>"`
 		Value string `positional-arg-name:"<attribute value>"`
 	} `positional-args:"yes"`
-	FlagAttr  string `long:"attr" short:"a" description:"attribute name"`
-	FlagValue string `long:"value" short:"v" description:"attribute value"`
 }
 
 func (cmd *containerSetAttributeCmd) Execute(args []string) error {
@@ -954,6 +973,13 @@ func (cmd *containerSetAttributeCmd) Execute(args []string) error {
 	}
 	if cmd.FlagValue != "" {
 		cmd.Args.Value = cmd.FlagValue
+	}
+
+	if cmd.Args.Attr == "" {
+		return errors.New("attribute name is required")
+	}
+	if cmd.Args.Value == "" {
+		return errors.New("attribute value is required")
 	}
 
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
@@ -970,7 +996,7 @@ func (cmd *containerSetAttributeCmd) Execute(args []string) error {
 
 	if err := setDaosAttribute(cmd.cContHandle, contAttr, &attribute{
 		Name:  cmd.Args.Attr,
-		Value: cmd.Args.Value,
+		Value: []byte(cmd.Args.Value),
 	}); err != nil {
 		return errors.Wrapf(err,
 			"failed to set attribute %q on container %s",
