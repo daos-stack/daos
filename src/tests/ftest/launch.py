@@ -585,7 +585,7 @@ def get_test_files(test_list, args, yaml_dir, vmd_flag=False):
 def get_nvme_replacement(args):
     """Determine the value to use for the '--nvme' command line argument.
 
-    Parse the lspci output for any NMVe devices, e.g.
+    Parse the lspci output for any non-VMD NMVe devices, e.g.
         $ lspci | grep 'Non-Volatile memory controller:'
         5e:00.0 Non-Volatile memory controller:
             Intel Corporation NVMe Datacenter SSD [3DNAND, Beta Rock Controller]
@@ -610,9 +610,6 @@ def get_nvme_replacement(args):
     Returns:
         str: a comma-separated list of nvme device pci addresses available on
             all of the specified test servers
-        bool: VMD PCI address included in the pci address string (True)
-              VMD PCI address not included in the pci address string (False)
-              Defaults to False (For NVME only)
 
     """
     # A list of server host is required to able to auto-detect NVMe devices
@@ -672,6 +669,12 @@ def get_vmd_replacement(args):
         auto_vmd_nvme       a list of non-VMD NVMe device addresses +
                             a list of VMD controlled NVMe device addresses
 
+    Optionally any keyword above can be specified with a filter to further
+    reduce the matched options by adding ":<filter>" to the end of the keyword
+    (e.g. '--nvme=auto_vmd_mixed:Optane'). Keywords that yield multiple groups
+    of replacements (e.g. 'auto_vmd_mixed' and 'auto_vmd_nvme') support two
+    filters - one for each group (e.g. '--nvme=auto_vmd_nvme:Optane:Optane').
+
     Args:
         args (argparse.Namespace): command line arguments for this program
 
@@ -730,10 +733,10 @@ def get_vmd_replacement(args):
         sys.exit(1)
 
     # Apply any specified filters
-    for index, filter in enumerate(args.nvme.split(":")):
+    for index, filter in enumerate(args.nvme.split(":")[1:]):
         if index < len(command_list):
             command_list[index].append("grep '{}'".format(filter))
-    command = ";".join([" | ".join(commands) for commands in command_list])
+    command = "; ".join([" | ".join(commands) for commands in command_list])
 
     task = get_remote_output(host_list, command)
 
