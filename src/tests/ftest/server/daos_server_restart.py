@@ -51,15 +51,28 @@ class DaosServerTest(TestWithServers):
         self.server_managers[0].dmg.system_start()
 
     def get_pool_list(self):
-        """Get the pool list contents."""
-        pool_list = sorted(self.get_dmg_command().pool_list())
-        self.log.info("get_pool-list: %s", pool_list)
-        return pool_list
+        """Get the sorted pool UUID list.
 
-    def verify_pool_list(self, expected_pool_list=None):
-        """Verify the pool list."""
-        if expected_pool_list is None:
-            expected_pool_list = []
+        Returns:
+            list: List of UUIDs.
+
+        """
+        output = self.get_dmg_command().pool_list()
+
+        pool_list = []
+        for pool in output["response"]["pools"]:
+            pool_list.append(pool["uuid"])
+        self.log.info("get_pool-list: %s", pool_list)
+
+        return pool_list.sort()
+
+    def verify_pool_list(self, expected_pool_list=[]):
+        """Verify the pool list.
+
+        Args:
+            expected_pool_list (list, optional): Expected list of UUIDs.
+                Defaults to an empty list.
+        """
         pool_list = self.get_pool_list()
         self.log.info(
             "\n===Current pool-list:  %s\n===Expected pool-list: %s\n",
