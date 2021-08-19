@@ -39,6 +39,8 @@ type (
 		Version DistributionVersion `json:"version"`
 		Kernel  KernelVersion       `json:"kernel"`
 	}
+
+	openFunc func(string) (*os.File, error)
 )
 
 func (dv DistributionVersion) String() string {
@@ -100,8 +102,8 @@ func parseMajorMinorPatch(version string) (maj int, min int, pat int) {
 	return
 }
 
-func getKernelVersion(kernel *KernelVersion, openFunc func(string) (*os.File, error)) {
-	f, err := openFunc("/proc/version")
+func getKernelVersion(kernel *KernelVersion, open openFunc) {
+	f, err := open("/proc/version")
 	if err != nil {
 		return
 	}
@@ -120,8 +122,8 @@ func getKernelVersion(kernel *KernelVersion, openFunc func(string) (*os.File, er
 	}
 }
 
-func getDistributionRelease(fileName string, dv *DistributionVersion, openFunc func(string) (*os.File, error)) {
-	f, err := openFunc(fileName)
+func getDistributionRelease(fileName string, dv *DistributionVersion, open openFunc) {
+	f, err := open(fileName)
 	if err != nil {
 		return
 	}
@@ -143,13 +145,13 @@ func getDistributionRelease(fileName string, dv *DistributionVersion, openFunc f
 	}
 }
 
-func getDistribution(openFunc func(string) (*os.File, error)) Distribution {
+func getDistribution(open openFunc) Distribution {
 	defaultDistro := Distribution{
 		ID:   "unknown",
 		Name: "unknown",
 	}
 
-	f, err := openFunc("/etc/os-release")
+	f, err := open("/etc/os-release")
 	if err != nil {
 		return defaultDistro
 	}
@@ -160,13 +162,13 @@ func getDistribution(openFunc func(string) (*os.File, error)) Distribution {
 		return defaultDistro
 	}
 
-	getKernelVersion(&dist.Kernel, openFunc)
+	getKernelVersion(&dist.Kernel, open)
 
 	switch dist.ID {
 	case "centos":
-		getDistributionRelease("/etc/centos-release", &dist.Version, openFunc)
+		getDistributionRelease("/etc/centos-release", &dist.Version, open)
 	case "redhat":
-		getDistributionRelease("/etc/redhat-release", &dist.Version, openFunc)
+		getDistributionRelease("/etc/redhat-release", &dist.Version, open)
 	default:
 		fields := strings.Fields(dist.Version.StringVersion)
 		if len(fields) > 0 {
