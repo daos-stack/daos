@@ -247,11 +247,7 @@ def run_telemetry_check(self):
     """
     enable_telemetry = self.params.get("enable_telemetry", "/run/*")
     if enable_telemetry:
-        if not self.telemetry:
-            self.telemetry = TelemetryUtils(
-                self.get_dmg_command(), self.hostlist_servers)
-        # List all of the telemetry metrics
-        self.telemetry.list_metrics()
+        self.dmg_command.telemetry_metrics_query(self.hostlist_servers)
 
 
 def get_harassers(harasser):
