@@ -55,8 +55,6 @@ handle_size_ioctl(struct dfuse_obj_hdl *oh, fuse_req_t req)
 		D_GOTO(err, rc = daos_der2errno(rc));
 
 	hs_reply.fsr_pool_size = iov.iov_buf_len;
-	if (hs_reply.fsr_pool_size > MAX_IOCTL_SIZE)
-		D_GOTO(err, rc = EOVERFLOW);
 
 	rc = daos_cont_local2global(oh->doh_ie->ie_dfs->dfs_coh, &iov);
 	if (rc)
