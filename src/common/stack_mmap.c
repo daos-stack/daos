@@ -13,7 +13,6 @@
  */
 
 #ifdef ULT_MMAP_STACK
-#include <gurt/atomic.h>
 #include <daos/common.h>
 #include <daos/stack_mmap.h>
 #include <errno.h>
@@ -48,7 +47,7 @@ void free_stack(void *arg)
 	D_MUTEX_LOCK(&stack_free_list_lock);
 	shadow_alloced_stacks = alloced_stacks;
 	shadow_free_stacks = free_stacks;
-	if (free_stack > MAX_NUMBER_FREE_STACKS &&
+	if (free_stacks > MAX_NUMBER_FREE_STACKS &&
 	    free_stacks/alloced_stacks * 100 > MAX_PERCENT_FREE_STACKS) {
 		do_munmap = true;
 		--alloced_stacks;
@@ -60,7 +59,7 @@ void free_stack(void *arg)
 	if (do_munmap) {
 		int rc;
 
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack of size %zd is beeing munmap()'ed, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
+		D_DEBUG(DB_MEM, "%p mmap()'ed stack of size %zd is being munmap()'ed, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
 			desc->stack, desc->stack_size, shadow_alloced_stacks,
 			shadow_free_stacks);
 		rc = munmap(desc->stack, desc->stack_size);
