@@ -26,8 +26,8 @@ extern "C" {
 #include <daos_fs.h>
 
 /** Mount flags for dfs_sys_mount. By default, mount with caching and locking turned on. */
-#define DFS_SYS_NO_CACHE 1 /** Turn off directory caching */
-#define DFS_SYS_NO_LOCK 2  /** Turn off locking. Useful for single-threaded applications. */
+#define DFS_SYS_NO_CACHE 1 /**< Turn off directory caching */
+#define DFS_SYS_NO_LOCK 2  /**< Turn off locking. Useful for single-threaded applications. */
 
 /** struct holding attributes for the dfs_sys calls */
 typedef struct dfs_sys dfs_sys_t;
