@@ -44,7 +44,7 @@ public class DaosFsConfig {
       String line;
       StringBuilder sb = new StringBuilder();
       while ((line = reader.readLine()) != null) {
-        sb.append(line);
+        sb.append(line).append("\n");
       }
       configHelp = sb.toString();
     } catch (Exception e) {
