@@ -41,19 +41,19 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	int rc;
 
 	if (!uuid_parse(pool_str, pool_uuid)) {
-	        rc = daos_pool_connect(pool_uuid,
-                                       server_group,
-                                       flags,
-                                       &poh /* returned pool handle */,
-                                       NULL /* returned pool info */,
-                                       NULL /* event */);
+		rc = daos_pool_connect(pool_uuid,
+				       server_group,
+				       flags,
+				       &poh /* returned pool handle */,
+				       NULL /* returned pool info */,
+				       NULL /* event */);
 	} else {
-	        rc = daos_pool_connect(pool_str,
-                                       server_group,
-                                       flags,
-                                       &poh /* returned pool handle */,
-                                       NULL /* returned pool info */,
-                                       NULL /* event */);
+		rc = daos_pool_connect(pool_str,
+				       server_group,
+				       flags,
+				       &poh /* returned pool handle */,
+				       NULL /* returned pool info */,
+				       NULL /* event */);
 	}
 
 	if (rc) {
@@ -122,11 +122,11 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
 	jlong ret = -1;
 	int rc;
 
-        memcpy(&poh, &poolHandle, sizeof(poh));
+	memcpy(&poh, &poolHandle, sizeof(poh));
 	if (!uuid_parse(cont_str, cont_uuid)) {
-	        rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
+		rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
 	} else {
-	        rc = daos_cont_open(poh, cont_str, mode, &coh, &co_info, NULL);
+		rc = daos_cont_open(poh, cont_str, mode, &coh, &co_info, NULL);
 	}
 
 	if (rc) {
@@ -168,171 +168,171 @@ Java_io_daos_DaosClient_daosCloseContainer(JNIEnv *env,
 
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosListContAttrs(JNIEnv *env,
-                                         jclass clientClass,
-                                         jlong contHandle,
-                                         jlong address)
+					  jclass clientClass,
+					  jlong contHandle,
+					  jlong address)
 {
-        daos_handle_t coh;
-        char *buffer = (char *)address;
-        int buffer_size;
-        int rc;
+	daos_handle_t coh;
+	char *buffer = (char *)address;
+	int buffer_size;
+	int rc;
 
-        memcpy(&buffer_size, buffer, 4);
-        buffer += 4;
-        memcpy(&coh, &contHandle, sizeof(coh));
-        rc = daos_cont_list_attr(coh, buffer, &buffer_size, NULL);
-        if (rc) {
-                throw_base(env, "Failed to list attributes from container", rc, 0, 0);
-        } else {
-                buffer -= 4;
-                memcpy(buffer, &buffer_size, 4);
-        }
+	memcpy(&buffer_size, buffer, 4);
+	buffer += 4;
+	memcpy(&coh, &contHandle, sizeof(coh));
+	rc = daos_cont_list_attr(coh, buffer, &buffer_size, NULL);
+	if (rc) {
+		throw_base(env, "Failed to list attributes from container", rc, 0, 0);
+	} else {
+		buffer -= 4;
+		memcpy(buffer, &buffer_size, 4);
+	}
 }
 
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosGetContAttrs(JNIEnv *env,
-                                         jclass clientClass,
-                                         jlong contHandle,
-                                         jlong address)
+					 jclass clientClass,
+					 jlong contHandle,
+					 jlong address)
 {
-        daos_handle_t coh;
-        char *buffer = (char *)address;
-        int n;
-        int total_size;
-        int max_value_size;
-        int tmpLen;
-        int count = 0;
-        char **names;
-        char **values;
-        size_t *sizes;
-        int rc;
-        int i;
+	daos_handle_t coh;
+	char *buffer = (char *)address;
+	int n;
+	int total_size;
+	int max_value_size;
+	int tmpLen;
+	int count = 0;
+	char **names;
+	char **values;
+	size_t *sizes;
+	int rc;
+	int i;
 
-        memcpy(&n, buffer, 4);
-        buffer += 4;
-        memcpy(&total_size, buffer, 4);
-        buffer += 4;
-        memcpy(&max_value_size, buffer, 4);
-        buffer += 4;
-        names = (char **)malloc(n * sizeof(char *));
-        values = (char **)malloc(n * sizeof(char *));
-        sizes = (size_t *)malloc(n * sizeof(size_t));
-        for (i = 0; i < n; i++) {
-                memcpy(&tmpLen, buffer, 4);
-                buffer += 4;
-                names[i] = (char *)buffer;
-                buffer += (tmpLen + 1);
-                count += tmpLen;
-                buffer += (1 + 4); // truncated + length
-                values[i] = (char *)buffer;
-                sizes[i] = (size_t)max_value_size;
-                buffer += max_value_size;
-        }
+	memcpy(&n, buffer, 4);
+	buffer += 4;
+	memcpy(&total_size, buffer, 4);
+	buffer += 4;
+	memcpy(&max_value_size, buffer, 4);
+	buffer += 4;
+	names = (char **)malloc(n * sizeof(char *));
+	values = (char **)malloc(n * sizeof(char *));
+	sizes = (size_t *)malloc(n * sizeof(size_t));
+	for (i = 0; i < n; i++) {
+		memcpy(&tmpLen, buffer, 4);
+		buffer += 4;
+		names[i] = (char *)buffer;
+		buffer += (tmpLen + 1);
+		count += tmpLen;
+		buffer += (1 + 4); // truncated + length
+		values[i] = (char *)buffer;
+		sizes[i] = (size_t)max_value_size;
+		buffer += max_value_size;
+	}
 
-        if (count != total_size) {
-                char *msg = NULL;
+	if (count != total_size) {
+		char *msg = NULL;
 
-                asprintf(&msg, "total names size mismatch. expect: %d, actual: %d",
-                         total_size, count);
-                throw_base(env, msg, rc, 1, 0);
-                goto rel;
-        }
+		asprintf(&msg, "total names size mismatch. expect: %d, actual: %d",
+			 total_size, count);
+		throw_base(env, msg, rc, 1, 0);
+		goto rel;
+	}
 
-        memcpy(&coh, &contHandle, sizeof(coh));
-        rc = daos_cont_get_attr(coh, n, names, values, sizes, NULL);
-        if (rc) {
-                throw_base(env, "Failed to get attributes from container", rc, 0, 0);
-                goto rel;
-        }
-        uint8_t truncated = (uint8_t)1;
-        uint8_t not_truncated = (uint8_t)0;
-        for (i = 0; i < n; i++) {
-                buffer = values[i] - (1 + 4); // truncated + length
-                if (sizes[i] > max_value_size) {
-                        memcpy(buffer, &truncated, 1);
-                } else {
-                        memcpy(buffer, &not_truncated, 1);
-                }
-                buffer += 1;
-                tmpLen = (int)sizes[i];
-                memcpy(buffer, &tmpLen, 4);
-        }
+	memcpy(&coh, &contHandle, sizeof(coh));
+	rc = daos_cont_get_attr(coh, n, names, values, sizes, NULL);
+	if (rc) {
+		throw_base(env, "Failed to get attributes from container", rc, 0, 0);
+		goto rel;
+	}
+	uint8_t truncated = (uint8_t)1;
+	uint8_t not_truncated = (uint8_t)0;
+	for (i = 0; i < n; i++) {
+		buffer = values[i] - (1 + 4); // truncated + length
+		if (sizes[i] > max_value_size) {
+			memcpy(buffer, &truncated, 1);
+		} else {
+			memcpy(buffer, &not_truncated, 1);
+		}
+		buffer += 1;
+		tmpLen = (int)sizes[i];
+		memcpy(buffer, &tmpLen, 4);
+	}
 rel:
-        if (names) {
-                free(names);
-        }
-        if (values) {
-                free(values);
-        }
-        if (sizes) {
-                free(sizes);
-        }
+	if (names) {
+		free(names);
+	}
+	if (values) {
+		free(values);
+	}
+	if (sizes) {
+		free(sizes);
+	}
 }
 
 JNIEXPORT void JNICALL
 Java_io_daos_DaosClient_daosSetContAttrs(JNIEnv *env,
-                                         jclass clientClass,
-                                         jlong contHandle,
-                                         jlong address)
+					 jclass clientClass,
+					 jlong contHandle,
+					 jlong address)
 {
-        daos_handle_t coh;
-        char *buffer = (char *)address;
-        int n;
-        int total_size;
-        int tmpLen;
-        int count = 0;
-        char **names;
-        char **values;
-        size_t *sizes;
-        int rc;
-        int i;
+	daos_handle_t coh;
+	char *buffer = (char *)address;
+	int n;
+	int total_size;
+	int tmpLen;
+	int count = 0;
+	char **names;
+	char **values;
+	size_t *sizes;
+	int rc;
+	int i;
 
-        memcpy(&n, buffer, 4);
-        buffer += 4;
-        memcpy(&total_size, buffer, 4);
-        buffer += 4;
-        names = (char **)malloc(n * sizeof(char *));
-        values = (char **)malloc(n * sizeof(char *));
-        sizes = (size_t *)malloc(n * sizeof(size_t));
-        for (i = 0; i < n; i++) {
-                memcpy(&tmpLen, buffer, 4);
-                buffer += 4;
-                names[i] = (char *)buffer;
-                buffer += (tmpLen + 1);
-                count += tmpLen;
-                memcpy(&tmpLen, buffer, 4);
-                buffer += 4;
-                values[i] = (char *)buffer;
-                sizes[i] = (size_t)tmpLen;
-                buffer += tmpLen;
-                count += tmpLen;
-        }
+	memcpy(&n, buffer, 4);
+	buffer += 4;
+	memcpy(&total_size, buffer, 4);
+	buffer += 4;
+	names = (char **)malloc(n * sizeof(char *));
+	values = (char **)malloc(n * sizeof(char *));
+	sizes = (size_t *)malloc(n * sizeof(size_t));
+	for (i = 0; i < n; i++) {
+		memcpy(&tmpLen, buffer, 4);
+		buffer += 4;
+		names[i] = (char *)buffer;
+		buffer += (tmpLen + 1);
+		count += tmpLen;
+		memcpy(&tmpLen, buffer, 4);
+		buffer += 4;
+		values[i] = (char *)buffer;
+		sizes[i] = (size_t)tmpLen;
+		buffer += tmpLen;
+		count += tmpLen;
+	}
 
-        if (count != total_size) {
-                char *msg = NULL;
+	if (count != total_size) {
+		char *msg = NULL;
 
-                asprintf(&msg, "total attributes size mismatch. expect: %d, actual: %d",
-                         total_size, count);
-                throw_base(env, msg, rc, 1, 0);
-                goto rel;
-        }
+		asprintf(&msg, "total attributes size mismatch. expect: %d, actual: %d",
+			 total_size, count);
+		throw_base(env, msg, rc, 1, 0);
+		goto rel;
+	}
 
-        memcpy(&coh, &contHandle, sizeof(coh));
-        rc = daos_cont_set_attr(coh, n, names, values, sizes, NULL);
-        if (rc) {
-                throw_base(env, "Failed to set attributes to container", rc, 0, 0);
-        }
+	memcpy(&coh, &contHandle, sizeof(coh));
+	rc = daos_cont_set_attr(coh, n, names, values, sizes, NULL);
+	if (rc) {
+		throw_base(env, "Failed to set attributes to container", rc, 0, 0);
+	}
 
 rel:
-        if (names) {
-                free(names);
-        }
-        if (values) {
-                free(values);
-        }
-        if (sizes) {
-                free(sizes);
-        }
+	if (names) {
+		free(names);
+	}
+	if (values) {
+		free(values);
+	}
+	if (sizes) {
+		free(sizes);
+	}
 }
 
 JNIEXPORT jlong JNICALL

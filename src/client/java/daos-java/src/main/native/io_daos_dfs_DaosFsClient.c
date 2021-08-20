@@ -1473,11 +1473,11 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 		goto out;
 	}
 
-        if (strlen(attr.da_puuid) > 0) {
+	if (strlen(attr.da_puuid) > 0) {
 		uuid_unparse(attr.da_puuid, pool_str);
 		attribute.poolid = pool_str;
 	} else if (strlen(attr.da_pool_label) > 0) {
-	        attribute.poolid = attr.da_pool_label;
+		attribute.poolid = attr.da_pool_label;
 	} else {
 		attribute.poolid = NULL;
 	}
@@ -1485,8 +1485,8 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 		uuid_unparse(attr.da_cuuid, cont_str);
 		attribute.contid = cont_str;
 	} else if (strlen(attr.da_cont_label) > 0) {
-                attribute.contid = attr.da_cont_label;
-        } else {
+		attribute.contid = attr.da_cont_label;
+	} else {
 		attribute.contid = NULL;
 	}
 
@@ -1680,16 +1680,16 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 		uuid_unparse(attr.da_puuid, pool_str);
 		attribute.poolid = pool_str;
 	} else if (strlen(attr.da_pool_label) > 0) {
-                attribute.poolid = attr.da_pool_label;
-        } else {
+		attribute.poolid = attr.da_pool_label;
+	} else {
 		attribute.poolid = NULL;
 	}
 	if (strlen(attr.da_cuuid)) {
 		uuid_unparse(attr.da_cuuid, cont_str);
 		attribute.contid = cont_str;
 	} else if (strlen(attr.da_cont_label) > 0) {
-                attribute.contid = attr.da_cont_label;
-        } else {
+		attribute.contid = attr.da_cont_label;
+	} else {
 		attribute.contid = NULL;
 	}
 
