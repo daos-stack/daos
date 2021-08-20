@@ -1896,8 +1896,8 @@ class posix_tests():
                 assert stat_pre.st_size == stat_post.st_size
                 break
 
-        stat = os.fstat(fd.fileno())
-        print(stat)
+        my_stat = os.fstat(fd.fileno())
+        print(my_stat)
 
         # larger pools should be able to handle this by reserving space, however NLT runs with
         # smaller pools so the close and unlink can both fail with ENOSPACE, so guard against
