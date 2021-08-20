@@ -13,9 +13,6 @@ import java.net.URI;
 import io.daos.*;
 import io.daos.dfs.uns.*;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * A wrapper class of DAOS Unified Namespace. There are four DAOS UNS methods,
  * {@link #resolvePath(String)} and {@link #parseAttribute(String)}, wrapped in this class.
@@ -39,8 +36,6 @@ public class DaosUns {
   private DaosUnsBuilder builder;
 
   private DunsAttribute attribute;
-
-  private static final Logger log = LoggerFactory.getLogger(DaosUns.class);
 
   private DaosUns() {
   }

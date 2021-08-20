@@ -500,16 +500,16 @@ public class DaosFileSystem extends FileSystem {
     if (LOG.isDebugEnabled()) {
       LOG.debug("DaosFileSystem:   delete  path = {} - recursive = {}", f.toUri().getPath(), recursive);
     }
-    DaosFile file = daos.getFile(f.toUri().getPath());
-
     FileStatus[] statuses;
-
     // indicating root directory "/".
     if (f.toUri().getPath().equals("/")) {
       statuses = listStatus(f);
       boolean isEmptyDir = statuses.length <= 0;
       return rejectRootDirectoryDelete(isEmptyDir, recursive);
     }
+
+    DaosFile file = daos.getFile(getDaosRelativePath(f));
+
     if (!file.exists()) {
       if (LOG.isDebugEnabled()) {
         LOG.debug(String.format(
@@ -523,14 +523,14 @@ public class DaosFileSystem extends FileSystem {
       }
       if (recursive) {
         // delete the dir and all files in the dir
-        return file.delete(recursive);
+        return file.delete(true);
       } else {
         statuses = listStatus(f);
         if (statuses != null && statuses.length > 0) {
           throw new IOException("DaosFileSystem delete : There are files in dir ");
         } else if (statuses != null && statuses.length == 0) {
           // delete empty dir
-          return file.delete(recursive);
+          return file.delete(false);
         }
       }
     }
