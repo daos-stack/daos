@@ -1,7 +1,9 @@
 #!/bin/bash
 
+cversion=$(cut -d ' ' -f4 /etc/centos-release)
+version=${cversion%.*}
 REPOS_DIR=/etc/yum.repos.d
-DISTRO_NAME=centos8
+DISTRO_NAME="centos-${version}"
 LSB_RELEASE=redhat-lsb-core
 EXCLUDE_UPGRADE=dpdk,fuse,mercury,daos,daos-\*
 

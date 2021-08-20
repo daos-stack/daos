@@ -1,7 +1,8 @@
 #!/bin/bash
 
+version="$(grep VERSION= /etc/os-release | cut -f2 -d\" | cut -f1 -d\" )"
 REPOS_DIR=/etc/dnf/repos.d
-DISTRO_NAME=leap15
+DISTRO_NAME="opensuse-${version}"
 EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 
 bootstrap_dnf() {
@@ -10,10 +11,7 @@ bootstrap_dnf() {
 }
 
 group_repo_post() {
-    if [ -n "$DAOS_STACK_GROUP_REPO" ]; then
-        rpm --import \
-            "${REPOSITORY_URL}${DAOS_STACK_GROUP_REPO%/*}/opensuse-15.2-devel-languages-go-x86_64-proxy/repodata/repomd.xml.key"
-    fi
+    : # Nothing to do
 }
 
 distro_custom() {
