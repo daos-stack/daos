@@ -94,7 +94,7 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			if C.get_dpe_str(e) == nil {
-				return "container_label_not_set"
+				return labelNotSetStr
 			}
 			return strValStringer(e, name)
 		},
@@ -496,8 +496,9 @@ var propHdlrs = propHdlrMap{
 // below.
 
 const (
-	maxNameLen  = 20 // arbitrary; came from C code
-	maxValueLen = C.DAOS_PROP_LABEL_MAX_LEN
+	maxNameLen     = 20 // arbitrary; came from C code
+	maxValueLen    = C.DAOS_PROP_LABEL_MAX_LEN
+	labelNotSetStr = "container_label_not_set"
 )
 
 type entryHdlr func(*propHdlr, *C.struct_daos_prop_entry, string) error
