@@ -1,0 +1,28 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+  test_clients:
+    - client-A
+timeout: 150
+server_config:
+  name: daos_server
+  servers:
+    targets: 2
+pool:
+  name: daos_server
+  scm_size: 1G
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+block_sizes: [10M, 500M]
+transfer_sizes: [256K, 1M]
+telemetry_metrics:
+  io_test_metrics_valid: [0, 18446744073709552000]
+ior:
+  api: POSIX
+  flags: "-v -w -k"
+  max_duration: 10
+dfuse:
+  mount_dir: "/tmp/daos_dfuse"
