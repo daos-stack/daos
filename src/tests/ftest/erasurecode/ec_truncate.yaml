@@ -79,4 +79,8 @@ fio:
   truncate_size: '26214400' #25Mb
 dfuse:
   mount_dir: "/tmp/daos_dfuse"
-  disable_caching: True
+  caching: !mux
+   disable:
+    disable_caching: True
+   enable:
+    enable_caching: True

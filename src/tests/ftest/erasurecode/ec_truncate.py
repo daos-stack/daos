@@ -18,6 +18,9 @@ class Ecodtruncate(FioBase):
     :avocado: recursive
     """
 
+    # Cancel test with enable caching due to DAOS-8233
+    CANCEL_FOR_TICKET = [["DAOS-8333", "enable_caching", True]]
+
     def test_ec_truncate(self):
         """Jira ID: DAOS-7328.
 
