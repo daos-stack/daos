@@ -15,8 +15,8 @@ import java.io.IOException;
  *
  */
 public class DaosFSFactory {
-  public final static String defaultPoolId = "bce96e2f-5a52-4aeb-b0b4-8994eee79a5f";
-  public final static String defaultContId = "e7814443-c8a1-4014-b94b-571ac7f5cff3";
+  public final static String defaultPoolId = "23a6ef16-5d09-4889-b31b-0b7f7217af52";
+  public final static String defaultContId = "964be573-4ff7-4cad-a6ad-ed4057b99756";
   public final static String pooluuid = System.getProperty("pool_id", defaultPoolId);
   public final static String contuuid = System.getProperty("cont_id", defaultContId);
   public static final String defaultPoolLabel = "pool1";

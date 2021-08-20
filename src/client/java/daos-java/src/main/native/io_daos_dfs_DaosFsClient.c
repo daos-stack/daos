@@ -1451,8 +1451,6 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
 	struct duns_attr_t attr = {0};
 	Uns__DunsAttribute attribute = UNS__DUNS_ATTRIBUTE__INIT;
-	char pool_str[37] = "";
-	char cont_str[37] = "";
 	char object_type[40] = "";
 	int len;
 	void *buf = NULL;
@@ -1473,22 +1471,8 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 		goto out;
 	}
 
-	if (strlen(attr.da_puuid) > 0) {
-		uuid_unparse(attr.da_puuid, pool_str);
-		attribute.poolid = pool_str;
-	} else if (strlen(attr.da_pool_label) > 0) {
-		attribute.poolid = attr.da_pool_label;
-	} else {
-		attribute.poolid = NULL;
-	}
-	if (strlen(attr.da_cuuid) > 0) {
-		uuid_unparse(attr.da_cuuid, cont_str);
-		attribute.contid = cont_str;
-	} else if (strlen(attr.da_cont_label) > 0) {
-		attribute.contid = attr.da_cont_label;
-	} else {
-		attribute.contid = NULL;
-	}
+	attribute.poolid = attr.da_pool;
+	attribute.contid = attr.da_cont;
 
 	if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		attribute.layout_type = UNS__LAYOUT__POSIX;
@@ -1658,8 +1642,6 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 	int len = strlen(input);
 	struct duns_attr_t attr = {0};
 	Uns__DunsAttribute attribute = UNS__DUNS_ATTRIBUTE__INIT;
-	char pool_str[37] = "";
-	char cont_str[37] = "";
 	char object_type[40] = "";
 	void *buf = NULL;
 	jbyteArray barray = NULL;
@@ -1676,22 +1658,8 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 		goto out;
 	}
 
-	if (strlen(attr.da_puuid)) {
-		uuid_unparse(attr.da_puuid, pool_str);
-		attribute.poolid = pool_str;
-	} else if (strlen(attr.da_pool_label) > 0) {
-		attribute.poolid = attr.da_pool_label;
-	} else {
-		attribute.poolid = NULL;
-	}
-	if (strlen(attr.da_cuuid)) {
-		uuid_unparse(attr.da_cuuid, cont_str);
-		attribute.contid = cont_str;
-	} else if (strlen(attr.da_cont_label) > 0) {
-		attribute.contid = attr.da_cont_label;
-	} else {
-		attribute.contid = NULL;
-	}
+	attribute.poolid = attr.da_pool;
+	attribute.contid = attr.da_cont;
 
 	if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		attribute.layout_type = UNS__LAYOUT__POSIX;

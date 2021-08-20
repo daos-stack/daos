@@ -44,6 +44,21 @@ public class DaosUnsIT {
   }
 
   @Test
+  public void testResolveUnsLabelPath() throws Exception {
+    String path = "daos://pool_label/cont_label/abc/123";
+    DunsAttribute attribute = DaosUns.resolvePath(path);
+    Assert.assertEquals("pool_label", attribute.getPoolId());
+    Assert.assertEquals("cont_label", attribute.getContId());
+    Assert.assertEquals("/abc/123", attribute.getRelPath());
+  }
+
+  @Test(expected = DaosIOException.class)
+  public void testResolveBadUnsPath() throws Exception {
+    String path = "daos:///bad_url/abc";
+    DunsAttribute attribute = DaosUns.resolvePath(path);
+  }
+
+  @Test
   public void testResolveDirectPathWithUuidsRootPath() throws Exception {
     String path = "daos://" + poolUuid + "/" + contUuid;
     DunsAttribute attribute = DaosUns.resolvePath(path);
