@@ -85,6 +85,9 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 		}
 	}
 
+	if (len + position > oh->doh_ie->ie_stat.st_size)
+		oh->doh_ie->ie_stat.st_size = len + position;
+
 	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl,
 		       position, &ev->de_ev);
 	if (rc != 0)
