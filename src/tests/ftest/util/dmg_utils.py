@@ -1024,10 +1024,11 @@ class DmgCommand(DmgCommandBase):
         """Parse the dmg pool list json output for the requested information.
 
         Args:
-            key (str, optional): [description]. Defaults to None.
+            key (str, optional): pool list json dictionary key in
+                ["response"]["pools"]. Defaults to None.
 
         Raises:
-            CommandFailure: if the dmg pool pool list command fails.
+            CommandFailure: if the dmg pool list command fails.
 
         Returns:
             list: list of all the pool items in the dmg pool list json output
@@ -1048,7 +1049,7 @@ class DmgCommand(DmgCommandBase):
         """Get a list of all the pool information from dmg pool list.
 
         Raises:
-            CommandFailure: if the dmg pool pool list command fails.
+            CommandFailure: if the dmg pool list command fails.
 
         Returns:
             list: a list of dictionaries containing information for each pool
@@ -1061,7 +1062,7 @@ class DmgCommand(DmgCommandBase):
         """Get a list of pool UUIDs from dmg pool list.
 
         Raises:
-            CommandFailure: if the dmg pool pool list command fails.
+            CommandFailure: if the dmg pool list command fails.
 
         Returns:
             list: a sorted list of UUIDs for each pool from the dmg pool list
@@ -1074,7 +1075,7 @@ class DmgCommand(DmgCommandBase):
         """Get a list of pool labels from dmg pool list.
 
         Raises:
-            CommandFailure: if the dmg pool pool list command fails.
+            CommandFailure: if the dmg pool list command fails.
 
         Returns:
             list: a sorted list of labels for each pool from the dmg pool list
@@ -1087,7 +1088,7 @@ class DmgCommand(DmgCommandBase):
         """Get a list of lists of pool svc_reps from dmg pool list.
 
         Raises:
-            CommandFailure: if the dmg pool pool list command fails.
+            CommandFailure: if the dmg pool list command fails.
 
         Returns:
             list: a list of lists of pool svc_reps for each pool from the dmg
