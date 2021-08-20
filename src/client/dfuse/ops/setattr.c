@@ -111,6 +111,9 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	attr->st_ino = ie->ie_stat.st_ino;
 
+	/* Update the size as dfuse knows about it for future use */
+	ie->ie_stat.st_size = attr->st_size;
+
 	DFUSE_REPLY_ATTR(ie, req, attr);
 	return;
 err:

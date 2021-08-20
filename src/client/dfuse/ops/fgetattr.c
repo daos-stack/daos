@@ -10,7 +10,7 @@
 void
 dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 {
-	struct stat	stat = {};
+	struct stat	attr = {};
 	int		rc;
 
 	if (ie->ie_unlinked) {
@@ -19,16 +19,16 @@ dfuse_cb_getattr(fuse_req_t req, struct dfuse_inode_entry *ie)
 		return;
 	}
 
-	rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &stat);
+	rc = dfs_ostat(ie->ie_dfs->dfs_ns, ie->ie_obj, &attr);
 	if (rc != 0)
 		D_GOTO(err, rc);
 
-	/* Copy the inode number from the inode struct, to avoid having to
-	 * recompute it each time.
-	 */
+	attr.st_ino = ie->ie_stat.st_ino;
 
-	stat.st_ino = ie->ie_stat.st_ino;
-	DFUSE_REPLY_ATTR(ie, req, &stat);
+	/* Update the size as dfuse knows about it for future use */
+	ie->ie_stat.st_size = attr.st_size;
+
+	DFUSE_REPLY_ATTR(ie, req, &attr);
 
 	return;
 err:
