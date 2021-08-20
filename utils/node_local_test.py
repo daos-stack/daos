@@ -1904,12 +1904,13 @@ class posix_tests():
 
         filename = os.path.join(self.dfuse.dir, 'new_file')
 
-        fd = open(filename, 'wb')
+        fd = open(filename, 'wb', buffering=0)
         write_size = 1024 * 128
         data = bytearray(write_size)
         file_size = 0
         while True:
             stat_pre = os.fstat(fd.fileno())
+            print(stat_pre)
             assert stat_pre.st_size == file_size
             try:
                 fd.write(data)
@@ -1921,6 +1922,7 @@ class posix_tests():
                 stat_post = os.fstat(fd.fileno())
                 print(stat_pre)
                 print(stat_post)
+                print(file_size)
                 # Check that the failed write didn't change the file size.
                 assert stat_pre.st_size == stat_post.st_size
                 break
