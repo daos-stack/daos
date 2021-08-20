@@ -202,6 +202,8 @@ Java_io_daos_DaosClient_daosGetContAttrs(JNIEnv *env,
 	int max_value_size;
 	int tmpLen;
 	int count = 0;
+	uint8_t truncated = (uint8_t)1;
+	uint8_t not_truncated = (uint8_t)0;
 	char **names;
 	char **values;
 	size_t *sizes;
@@ -223,7 +225,7 @@ Java_io_daos_DaosClient_daosGetContAttrs(JNIEnv *env,
 		names[i] = (char *)buffer;
 		buffer += (tmpLen + 1);
 		count += tmpLen;
-		buffer += (1 + 4); // truncated + length
+		buffer += (1 + 4); /* truncated + length */
 		values[i] = (char *)buffer;
 		sizes[i] = (size_t)max_value_size;
 		buffer += max_value_size;
@@ -244,10 +246,8 @@ Java_io_daos_DaosClient_daosGetContAttrs(JNIEnv *env,
 		throw_base(env, "Failed to get attributes from container", rc, 0, 0);
 		goto rel;
 	}
-	uint8_t truncated = (uint8_t)1;
-	uint8_t not_truncated = (uint8_t)0;
 	for (i = 0; i < n; i++) {
-		buffer = values[i] - (1 + 4); // truncated + length
+		buffer = values[i] - (1 + 4); /* truncated + length */
 		if (sizes[i] > max_value_size) {
 			memcpy(buffer, &truncated, 1);
 		} else {
