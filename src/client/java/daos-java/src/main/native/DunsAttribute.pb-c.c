@@ -188,7 +188,7 @@ const ProtobufCMessageDescriptor uns__duns_attribute__descriptor =
   "Uns__DunsAttribute",
   "uns",
   sizeof(Uns__DunsAttribute),
-  9,
+  8,
   uns__duns_attribute__field_descriptors,
   uns__duns_attribute__field_indices_by_name,
   2,  uns__duns_attribute__number_ranges,

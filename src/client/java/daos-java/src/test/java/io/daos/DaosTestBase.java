@@ -4,8 +4,8 @@ public class DaosTestBase {
   public static final String DEFAULT_POOL_ID = "bce96e2f-5a52-4aeb-b0b4-8994eee79a5f";
   public static final String DEFAULT_CONT_ID = "e7814443-c8a1-4014-b94b-571ac7f5cff3";
 
-  public static final String DEFAULT_POOL_LABEL = "pool1";
-  public static final String DEFAULT_CONT_LABEL = "cont1";
+  public static final String DEFAULT_POOL_LABEL = "pool2";
+  public static final String DEFAULT_CONT_LABEL = "cont2";
 
   public static final String DEFAULT_OBJECT_CONT_ID = "734a0588-da98-4be2-9555-93703a6b69a9";
 

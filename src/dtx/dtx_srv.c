@@ -235,8 +235,10 @@ out:
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
 
-	dpm = cont->sc_pool->spc_metrics[DAOS_DTX_MODULE];
-	d_tm_inc_counter(dpm->dpm_total[opc], 1);
+	if (likely(cont != NULL)) {
+		dpm = cont->sc_pool->spc_metrics[DAOS_DTX_MODULE];
+		d_tm_inc_counter(dpm->dpm_total[opc], 1);
+	}
 
 	if (opc == DTX_REFRESH && rc1 > 0) {
 		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };

@@ -36,6 +36,7 @@ operation.
 
 * DaosUns
 
+<<<<<<< HEAD
 It wraps some DAOS UNS APIs, like resolving UNS path, as well as parsing DAOS UNS string attribute.
 
 #### DAOS Object (obj)
@@ -146,7 +147,7 @@ application > Hadoop config files > DAOS container. The items from 1st to 5th ar
         9. fs.daos.write.buffer.size    1048576                 size of direct buffer for writing data to DAOS. Default
                                                                 is 1m. Value range is 64k - 2g
 
-        10. fs.daos.block.size           134217728               size for splitting large file into blocks when read by
+        10. fs.daos.block.size          134217728               size for splitting large file into blocks when read by
                                                                 Hadoop. Default is 128m. Value range is 16m - 2m.
 
         11. fs.daos.chunk.size          1048576                 size of DAOS file chunk. Default is 1m. Value range is

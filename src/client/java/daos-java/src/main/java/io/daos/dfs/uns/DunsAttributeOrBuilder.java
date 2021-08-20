@@ -18,7 +18,6 @@ public interface DunsAttributeOrBuilder extends
    */
   com.google.protobuf.ByteString
       getPoolIdBytes();
-
   /**
    * <code>string contId = 2;</code>
    * @return The contId.

@@ -834,7 +834,7 @@ private static final long serialVersionUID = 0L;
       if (value == null) {
     throw new NullPointerException();
   }
-  
+
       poolId_ = value;
       onChanged();
       return this;
@@ -860,7 +860,7 @@ private static final long serialVersionUID = 0L;
     throw new NullPointerException();
   }
   checkByteStringIsUtf8(value);
-      
+
       poolId_ = value;
       onChanged();
       return this;
@@ -910,7 +910,7 @@ private static final long serialVersionUID = 0L;
       if (value == null) {
     throw new NullPointerException();
   }
-  
+
       contId_ = value;
       onChanged();
       return this;
@@ -936,7 +936,7 @@ private static final long serialVersionUID = 0L;
     throw new NullPointerException();
   }
   checkByteStringIsUtf8(value);
-      
+
       contId_ = value;
       onChanged();
       return this;
