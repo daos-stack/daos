@@ -86,7 +86,7 @@ exit:
 static void
 prov_data_init(struct crt_prov_gdata *prov_data, int provider,
 	       bool sep_mode, int max_ctx_num,
-	       int max_exp_size, int max_unexp_size)
+	       uint32_t max_exp_size, uint32_t max_unexp_size)
 {
 	prov_data->cpg_inited = true;
 	prov_data->cpg_provider = provider;

@@ -69,8 +69,8 @@ typedef struct crt_init_options {
 	 * Hints to mercury/ofi to use for expected/unexpected
 	 * maximum sizes of messages.
 	 */
-	int		cio_max_expected_size;
-	int		cio_max_unexpected_size;
+	uint32_t	cio_max_expected_size;
+	uint32_t	cio_max_unexpected_size;
 } crt_init_options_t;
 
 typedef int		crt_status_t;

@@ -50,8 +50,8 @@ struct crt_prov_gdata {
 	uint32_t		cpg_ctx_max_num;
 
 	/** Hints to mercury/ofi for max expected/unexp sizes */
-	int32_t			cpg_max_exp_size;
-	int32_t			cpg_max_unexp_size;
+	uint32_t		cpg_max_exp_size;
+	uint32_t		cpg_max_unexp_size;
 
 	/** Set of flags */
 	unsigned int		cpg_sep_mode		: 1,
