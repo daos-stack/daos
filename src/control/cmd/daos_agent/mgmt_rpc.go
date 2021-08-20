@@ -171,7 +171,7 @@ func (mod *mgmtModule) getAttachInfoResp(ctx context.Context, numaNode int, sys 
 	}
 
 	mod.attachInfo.Cache(ctx, resp)
-	return resp, nil
+	return mod.attachInfo.GetAttachInfoResp()
 }
 
 func (mod *mgmtModule) getAttachInfoRemote(ctx context.Context, numaNode int, sys string) (*mgmtpb.GetAttachInfoResp, error) {
