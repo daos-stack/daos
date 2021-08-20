@@ -573,6 +573,73 @@ daos_prop_entry_get(daos_prop_t *prop, uint32_t type)
 	return NULL;
 }
 
+int
+daos_prop_set_str(daos_prop_t *prop, uint32_t type, const char *str, daos_size_t len)
+{
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(prop, type);
+	if (entry == NULL)
+		return -DER_NONEXIST;
+
+	return daos_prop_entry_set_str(entry, str, len);
+}
+
+int
+daos_prop_entry_set_str(struct daos_prop_entry *entry, const char *str, daos_size_t len)
+{
+	if (entry == NULL)
+		return -DER_INVAL;
+	if (!daos_prop_has_str(entry)) {
+		D_ERROR("Entry type does not expect a string value\n");
+		return -DER_INVAL;
+	}
+	if (entry->dpe_str != NULL)
+		D_FREE(entry->dpe_str);
+	if (str == NULL || len == 0)
+		return 0;
+
+	D_STRNDUP(entry->dpe_str, str, len);
+	if (entry->dpe_str == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+int
+daos_prop_set_ptr(daos_prop_t *prop, uint32_t type, const void *ptr, daos_size_t size)
+{
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(prop, type);
+	if (entry == NULL)
+		return -DER_NONEXIST;
+
+	return daos_prop_entry_set_ptr(entry, ptr, size);
+}
+
+int
+daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_size_t size)
+{
+	if (entry == NULL)
+		return -DER_INVAL;
+	if (!daos_prop_has_ptr(entry)) {
+		D_ERROR("Entry type does not expect a ptr value\n");
+		return -DER_INVAL;
+	}
+	if (entry->dpe_val_ptr != NULL)
+		D_FREE(entry->dpe_val_ptr);
+	if (ptr == NULL || size == 0)
+		return 0;
+
+	D_ALLOC(entry->dpe_val_ptr, size);
+	if (entry->dpe_val_ptr == NULL)
+		return -DER_NOMEM;
+	memcpy(entry->dpe_val_ptr, ptr, size);
+
+	return 0;
+}
+
 static void
 free_str_prop_entry(daos_prop_t *prop, uint32_t type)
 {

@@ -7,10 +7,8 @@
 package bdev
 
 import (
-	"bufio"
-	"bytes"
+	"fmt"
 	"os"
-	"os/exec"
 	"os/user"
 	"path/filepath"
 	"sort"
@@ -20,7 +18,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/spdk"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
@@ -46,10 +43,10 @@ type (
 	}
 
 	removeFn     func(string) error
-	scriptCallFn func(*storage.BdevPrepareRequest) error
 	userLookupFn func(string) (*user.User, error)
 	vmdDetectFn  func() ([]string, error)
 	hpCleanFn    func(string, string, string) error
+	writeConfFn  func(logging.Logger, *storage.BdevWriteConfigRequest) error
 )
 
 // suppressOutput is a horrible, horrible hack necessitated by the fact that
@@ -89,6 +86,8 @@ func (w *spdkWrapper) suppressOutput() (restore func(), err error) {
 }
 
 func (w *spdkWrapper) init(log logging.Logger, spdkOpts *spdk.EnvOptions) (func(), error) {
+	log.Debug("spdk backend init (bindings call)")
+
 	restore, err := w.suppressOutput()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to suppress spdk output")
@@ -114,33 +113,222 @@ func defaultBackend(log logging.Logger) *spdkBackend {
 	return newBackend(log, defaultScriptRunner(log))
 }
 
-//// EnableVMD turns on VMD device awareness.
-//func (sb *spdkBackend) EnableVMD() {
-// sb.binding.vmdEnabled = true
-//}
+// hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
+// name begins with prefix and owner has uid equal to tgtUID.
+func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn) filepath.WalkFunc {
+	return func(path string, info os.FileInfo, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case info == nil:
+			return errors.New("nil fileinfo")
+		case info.IsDir():
+			if path == hugePageDir {
+				return nil
+			}
+			return filepath.SkipDir // skip subdirectories
+		case !strings.HasPrefix(info.Name(), prefix):
+			return nil // skip files without prefix
+		}
 
-//// IsVMDEnabled checks for VMD device awareness.
-//func (sb *spdkBackend) IsVMDEnabled() bool {
-// return sb.binding.vmdEnabled
-//}
+		stat, ok := info.Sys().(*syscall.Stat_t)
+		if !ok || stat == nil {
+			return errors.New("stat missing for file")
+		}
+		if strconv.Itoa(int(stat.Uid)) != tgtUID {
+			return nil // skip not owned by target user
+		}
+
+		if err := remove(path); err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+// cleanHugePages removes hugepage files with pathPrefix that are owned by the
+// user with username tgtUsr by processing directory tree with filepath.WalkFunc
+// returned from hugePageWalkFunc.
+func cleanHugePages(hugePageDir, prefix, tgtUID string) error {
+	return filepath.Walk(hugePageDir,
+		hugePageWalkFunc(hugePageDir, prefix, tgtUID, os.Remove))
+}
+
+// prepare receives function pointers for external interfaces.
+func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, userLookup userLookupFn, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
+	resp := &storage.BdevPrepareResponse{}
+
+	usr, err := userLookup(req.TargetUser)
+	if err != nil {
+		return nil, errors.Wrapf(err, "lookup on local host")
+	}
+
+	if !req.DisableCleanHugePages {
+		// remove hugepages matching /dev/hugepages/spdk* owned by target user
+		err := hpClean(hugePageDir, hugePagePrefix, usr.Uid)
+		if err != nil {
+			return nil, errors.Wrapf(err, "clean spdk hugepages")
+		}
+	}
+
+	// If VMD has been explicitly enabled and there are VMD enabled
+	// NVMe devices on the host, attempt to prepare them first.
+	vmdReq, err := getVMDPrepReq(sb.log, &req, vmdDetect)
+	if err != nil {
+		return nil, err
+	}
+	if vmdReq != nil {
+		if err := sb.script.Prepare(vmdReq); err != nil {
+			return nil, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
+		}
+		resp.VMDPrepared = true
+	}
+
+	// Prepare non-VMD devices.
+	req.EnableVMD = false
+	return resp, errors.Wrap(sb.script.Prepare(&req), "re-binding ssds to attach with spdk")
+}
+
+// reset receives function pointers for external interfaces.
+func (sb *spdkBackend) reset(req storage.BdevPrepareRequest, vmdDetect vmdDetectFn) error {
+	// If VMD has been explicitly enabled and there are VMD enabled
+	// NVMe devices on the host, attempt to prepare them first.
+	vmdReq, err := getVMDPrepReq(sb.log, &req, vmdDetect)
+	if err != nil {
+		return err
+	}
+	if vmdReq != nil {
+		if err := sb.script.Reset(vmdReq); err != nil {
+			return errors.Wrap(err, "un-binding vmd ssds")
+		}
+	}
+
+	// Reset non-VMD devices.
+	req.EnableVMD = false
+	return errors.Wrap(sb.script.Reset(&req), "un-binding vmd ssds")
+}
+
+// Reset will perform a lookup on the requested target user to validate existence
+// then reset non-VMD NVMe devices for use by the OS/kernel.
+// If EnableVmd is true in request then attempt to use VMD NVMe devices.
+// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
+// owned by the target user.
+// Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
+// bdev_include and bdev_exclude list filters provided in the server config file.
+func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) error {
+	sb.log.Debugf("spdk backend reset (script call): %+v", req)
+	return sb.reset(req, detectVMD)
+}
+
+// Prepare will perform a lookup on the requested target user to validate existence
+// then prepare non-VMD NVMe devices for use with SPDK.
+// If EnableVmd is true in request then attempt to use VMD NVMe devices.
+// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
+// owned by the target user.
+// Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
+// bdev_include and bdev_exclude list filters provided in the server config file.
+func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
+	sb.log.Debugf("spdk backend prepare (script call): %+v", req)
+	return sb.prepare(req, user.Lookup, detectVMD, cleanHugePages)
+}
+
+// canAccessBdevs evaluates if any specified Bdevs are not accessible.
+//
+// Specified Bdevs can be VMD addresses.
+//
+// Return any device addresses missing from the discovered bdevs and ok set to true
+// if no devices are missing.
+func canAccessBdevs(cfgBdevs []string, discoveredBdevs storage.NvmeControllers) ([]string, bool) {
+	var missing []string
+
+	for _, pciAddr := range cfgBdevs {
+		var found bool
+
+		for _, ctrlr := range discoveredBdevs {
+			if ctrlr.PciAddr == pciAddr {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missing = append(missing, pciAddr)
+		}
+	}
+
+	return missing, len(missing) == 0
+}
+
+// checkCfgBdevsExist performs validation on NVMe returned from initial scan.
+func checkCfgBdevsExist(log logging.Logger, bdevs storage.NvmeControllers, engineStorage map[uint32]*storage.Config, vmdEnabled bool) error {
+	if len(engineStorage) == 0 {
+		return nil
+	}
+
+	for idx, storageCfg := range engineStorage {
+		for _, tierCfg := range storageCfg.Tiers {
+			if !tierCfg.IsBdev() || len(tierCfg.Bdev.DeviceList) == 0 {
+				continue
+			}
+			cfgBdevs := tierCfg.Bdev.DeviceList
+
+			// If VMD devices have been prepared, enabled will be set in the scanRequest by
+			// the BdevAdminForwarder.
+			if vmdEnabled {
+				msg := fmt.Sprintf("vmd detected, checking addresses (input %v, existing %v)",
+					cfgBdevs, bdevs)
+
+				dl, err := substVMDAddrs(cfgBdevs, bdevs)
+				if err != nil {
+					return err
+				}
+				log.Debugf("check bdev cfg for engine-%d: %s: new %s", idx, msg, dl)
+				cfgBdevs = dl
+			}
+
+			// fail if config specified nvme devices are inaccessible
+			missing, ok := canAccessBdevs(cfgBdevs, bdevs)
+			if !ok {
+				if vmdEnabled {
+					log.Debugf("bdevs %v specified in config not found, "+
+						"check vmd addresses have associated backing devices",
+						missing)
+				}
+
+				return FaultBdevNotFound(missing...)
+			}
+		}
+	}
+
+	return nil
+}
 
 // Scan discovers NVMe controllers accessible by SPDK.
 func (sb *spdkBackend) Scan(req storage.BdevScanRequest) (*storage.BdevScanResponse, error) {
+	sb.log.Debugf("spdk backend scan (bindings discover call): %+v", req)
+
 	restoreOutput, err := sb.binding.init(sb.log, &spdk.EnvOptions{
 		PCIAllowList: req.DeviceList,
-		//		EnableVMD:    sb.IsVMDEnabled(),
+		EnableVMD:    req.VMDEnabled,
 	})
 	if err != nil {
 		return nil, err
 	}
 	defer restoreOutput()
 
-	cs, err := sb.binding.Discover(sb.log)
+	discoveredBdevs, err := sb.binding.Discover(sb.log)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to discover nvme")
 	}
 
-	return &storage.BdevScanResponse{Controllers: cs}, nil
+	if err := checkCfgBdevsExist(sb.log, discoveredBdevs, req.EngineStorage, req.VMDEnabled); err != nil {
+		return nil, errors.Wrap(err, "validate engine config bdevs")
+	}
+
+	return &storage.BdevScanResponse{
+		Controllers: discoveredBdevs,
+		VMDEnabled:  req.VMDEnabled,
+	}, nil
 }
 
 func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*storage.BdevFormatResponse, error) {
@@ -202,41 +390,6 @@ func (sb *spdkBackend) formatRespFromResults(results []*spdk.FormatResult) (*sto
 	return resp, nil
 }
 
-func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
-	if len(req.Properties.DeviceList) == 0 {
-		sb.log.Debug("skip nvme format as bdev device list is empty")
-		return &storage.BdevFormatResponse{}, nil
-	}
-
-	spdkOpts := &spdk.EnvOptions{
-		PCIAllowList: req.Properties.DeviceList,
-		// EnableVMD:    sb.IsVMDEnabled(),
-	}
-
-	restoreOutput, err := sb.binding.init(sb.log, spdkOpts)
-	if err != nil {
-		return nil, err
-	}
-	defer restoreOutput()
-	defer sb.binding.FiniSPDKEnv(sb.log, spdkOpts)
-	defer func() {
-		if err := sb.binding.CleanLockfiles(sb.log, req.Properties.DeviceList...); err != nil {
-			sb.log.Errorf("cleanup failed after format: %s", err)
-		}
-	}()
-
-	results, err := sb.binding.Format(sb.log)
-	if err != nil {
-		return nil, errors.Wrapf(err, "spdk format %v", req.Properties.DeviceList)
-	}
-
-	if len(results) == 0 {
-		return nil, errors.New("empty results from spdk binding format request")
-	}
-
-	return sb.formatRespFromResults(results)
-}
-
 func (sb *spdkBackend) formatAioFile(req *storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
 	resp := &storage.BdevFormatResponse{
 		DeviceResponses: make(storage.BdevDeviceFormatResponses),
@@ -273,9 +426,56 @@ func (sb *spdkBackend) formatKdev(req *storage.BdevFormatRequest) (*storage.Bdev
 	return resp, nil
 }
 
+func (sb *spdkBackend) formatNvme(req *storage.BdevFormatRequest) (*storage.BdevFormatResponse, error) {
+	deviceList := req.Properties.DeviceList
+	if len(deviceList) == 0 {
+		sb.log.Debug("skip nvme format as bdev device list is empty")
+		return &storage.BdevFormatResponse{}, nil
+	}
+
+	if req.VMDEnabled {
+		sb.log.Debug("vmd support enabled during nvme format")
+		dl, err := substituteVMDAddresses(sb.log, deviceList, req.BdevCache)
+		if err != nil {
+			return nil, err
+		}
+		deviceList = dl
+	}
+
+	spdkOpts := &spdk.EnvOptions{
+		PCIAllowList: deviceList,
+		EnableVMD:    req.VMDEnabled,
+	}
+
+	restoreOutput, err := sb.binding.init(sb.log, spdkOpts)
+	if err != nil {
+		return nil, err
+	}
+	defer restoreOutput()
+	defer sb.binding.FiniSPDKEnv(sb.log, spdkOpts)
+	defer func() {
+		if err := sb.binding.CleanLockfiles(sb.log, deviceList...); err != nil {
+			sb.log.Errorf("cleanup failed after format: %s", err)
+		}
+	}()
+
+	results, err := sb.binding.Format(sb.log)
+	if err != nil {
+		return nil, errors.Wrapf(err, "spdk format %v", deviceList)
+	}
+
+	if len(results) == 0 {
+		return nil, errors.New("empty results from spdk binding format request")
+	}
+
+	return sb.formatRespFromResults(results)
+}
+
 // Format delegates to class specific format functions.
 func (sb *spdkBackend) Format(req storage.BdevFormatRequest) (resp *storage.BdevFormatResponse, err error) {
-	// TODO (DAOS-3844): Kick off device formats parallel?
+	sb.log.Debugf("spdk backend format (bindings call): %+v", req)
+
+	// TODO (DAOS-3844): Kick off device formats in parallel?
 	switch req.Properties.Class {
 	case storage.ClassFile:
 		return sb.formatAioFile(&req)
@@ -288,261 +488,40 @@ func (sb *spdkBackend) Format(req storage.BdevFormatRequest) (resp *storage.Bdev
 	}
 }
 
-func (sb *spdkBackend) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error) {
-	if err := sb.writeNvmeConfig(&req); err != nil {
-		return nil, errors.Wrap(err, "write spdk nvme config")
-	}
-	res := new(storage.BdevWriteNvmeConfigResponse)
-	return res, nil
-}
+func (sb *spdkBackend) writeNVMEConf(req storage.BdevWriteConfigRequest, confWriter writeConfFn) error {
+	sb.log.Debugf("spdk backend write config (system calls): %+v", req)
 
-// hugePageWalkFunc returns a filepath.WalkFunc that will remove any file whose
-// name begins with prefix and owner has uid equal to tgtUID.
-func hugePageWalkFunc(hugePageDir, prefix, tgtUID string, remove removeFn) filepath.WalkFunc {
-	return func(path string, info os.FileInfo, err error) error {
-		switch {
-		case err != nil:
-			return err
-		case info == nil:
-			return errors.New("nil fileinfo")
-		case info.IsDir():
-			if path == hugePageDir {
-				return nil
+	// Substitute addresses in bdev tier's DeviceLists if VMD is in use.
+	if req.VMDEnabled {
+		sb.log.Debug("vmd support enabled during nvme config write")
+		tps := make([]storage.BdevTierProperties, 0, len(req.TierProps))
+		copy(req.TierProps, tps)
+		for _, props := range req.TierProps {
+			if props.Class != storage.ClassNvme {
+				continue
 			}
-			return filepath.SkipDir // skip subdirectories
-		case !strings.HasPrefix(info.Name(), prefix):
-			return nil // skip files without prefix
-		}
 
-		stat, ok := info.Sys().(*syscall.Stat_t)
-		if !ok || stat == nil {
-			return errors.New("stat missing for file")
-		}
-		if strconv.Itoa(int(stat.Uid)) != tgtUID {
-			return nil // skip not owned by target user
-		}
-
-		if err := remove(path); err != nil {
-			return err
-		}
-
-		return nil
-	}
-}
-
-// cleanHugePages removes hugepage files with pathPrefix that are owned by the
-// user with username tgtUsr by processing directory tree with filepath.WalkFunc
-// returned from hugePageWalkFunc.
-func cleanHugePages(hugePageDir, prefix, tgtUID string) error {
-	return filepath.Walk(hugePageDir,
-		hugePageWalkFunc(hugePageDir, prefix, tgtUID, os.Remove))
-}
-
-// detectVMD returns whether VMD devices have been found and a slice of VMD
-// PCI addresses if found.
-func detectVMD() ([]string, error) {
-	// Check available VMD devices with command:
-	// "$lspci | grep  -i -E "201d | Volume Management Device"
-	lspciCmd := exec.Command("lspci")
-	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
-	var cmdOut bytes.Buffer
-	var prefixIncluded bool
-
-	vmdCmd.Stdin, _ = lspciCmd.StdoutPipe()
-	vmdCmd.Stdout = &cmdOut
-	_ = lspciCmd.Start()
-	_ = vmdCmd.Run()
-	_ = lspciCmd.Wait()
-
-	if cmdOut.Len() == 0 {
-		return []string{}, nil
-	}
-
-	vmdCount := bytes.Count(cmdOut.Bytes(), []byte("0000:"))
-	if vmdCount == 0 {
-		// sometimes the output may not include "0000:" prefix
-		// usually when muliple devices are in PCI_ALLOWED
-		vmdCount = bytes.Count(cmdOut.Bytes(), []byte("Volume"))
-		if vmdCount == 0 {
-			vmdCount = bytes.Count(cmdOut.Bytes(), []byte("201d"))
-		}
-	} else {
-		prefixIncluded = true
-	}
-	vmdAddrs := make([]string, 0, vmdCount)
-
-	i := 0
-	scanner := bufio.NewScanner(&cmdOut)
-	for scanner.Scan() {
-		if i == vmdCount {
-			break
-		}
-		s := strings.Split(scanner.Text(), " ")
-		if !prefixIncluded {
-			s[0] = "0000:" + s[0]
-		}
-		vmdAddrs = append(vmdAddrs, strings.TrimSpace(s[0]))
-		i++
-	}
-
-	if len(vmdAddrs) == 0 {
-		return nil, errors.New("error parsing cmd output")
-	}
-
-	return vmdAddrs, nil
-}
-
-// vmdProcessFilters takes an input request and a list of discovered VMD addresses.
-// The VMD addresses are validated against the input request allow and block lists.
-// The output allow list will only contain VMD addresses if either both input allow
-// and block lists are empty or if included in allow and not included in block lists.
-func vmdProcessFilters(inReq *storage.BdevPrepareRequest, vmdPCIAddrs []string) storage.BdevPrepareRequest {
-	var outAllowList []string
-	outReq := *inReq
-
-	if inReq.PCIAllowList == "" && inReq.PCIBlockList == "" {
-		outReq.PCIAllowList = strings.Join(vmdPCIAddrs, storage.BdevPciAddrSep)
-		outReq.PCIBlockList = ""
-		return outReq
-	}
-
-	if inReq.PCIAllowList != "" {
-		allowed := strings.Split(inReq.PCIAllowList, storage.BdevPciAddrSep)
-		for _, addr := range vmdPCIAddrs {
-			if common.Includes(allowed, addr) {
-				outAllowList = append(outAllowList, addr)
+			dl, err := substituteVMDAddresses(sb.log, props.DeviceList, req.BdevCache)
+			if err != nil {
+				return err
 			}
+			props.DeviceList = dl
+			tps = append(tps, props)
 		}
-		if len(outAllowList) == 0 {
-			// no allowed vmd addresses
-			outReq.PCIAllowList = ""
-			outReq.PCIBlockList = ""
-			return outReq
-		}
+		req.TierProps = tps
 	}
 
-	if inReq.PCIBlockList != "" {
-		var outList []string
-		inList := outAllowList // in case vmdPCIAddrs list has already been filtered
-		if len(inList) == 0 {
-			inList = vmdPCIAddrs
-		}
-		blocked := strings.Split(inReq.PCIBlockList, storage.BdevPciAddrSep)
-		for _, addr := range inList {
-			if !common.Includes(blocked, addr) {
-				outList = append(outList, addr)
-			}
-		}
-		outAllowList = outList
-		if len(outAllowList) == 0 {
-			// no allowed vmd addresses
-			outReq.PCIAllowList = ""
-			outReq.PCIBlockList = ""
-			return outReq
-		}
-	}
-
-	outReq.PCIAllowList = strings.Join(outAllowList, storage.BdevPciAddrSep)
-	outReq.PCIBlockList = ""
-	return outReq
+	return errors.Wrap(confWriter(sb.log, &req), "write spdk nvme config")
 }
 
-// getVMDPrepReq determines if VMD devices are going to be used and returns a
-// bdev prepare request with the VMD addresses explicitly set in PCI_ALLOWED list.
-//
-// If VMD is not to be prepared, a nil request is returned.
-func getVMDPrepReq(log logging.Logger, req *storage.BdevPrepareRequest, vmdDetect vmdDetectFn) (*storage.BdevPrepareRequest, error) {
-	if !req.EnableVMD {
-		return nil, nil
-	}
-
-	vmdPCIAddrs, err := vmdDetect()
-	if err != nil {
-		return nil, errors.Wrap(err, "VMD could not be enabled")
-	}
-
-	if len(vmdPCIAddrs) == 0 {
-		log.Debug("vmd prep: no vmd devices found")
-		return nil, nil
-	}
-	log.Debugf("volume management devices detected: %v", vmdPCIAddrs)
-
-	vmdReq := vmdProcessFilters(req, vmdPCIAddrs)
-
-	if req.PCIAllowList != "" && vmdReq.PCIAllowList == "" {
-		log.Debugf("vmd prep: %v devices not allowed", vmdPCIAddrs)
-		return nil, nil
-	}
-	if req.PCIBlockList != "" && vmdReq.PCIAllowList == "" {
-		log.Debugf("vmd prep: %v devices blocked", vmdPCIAddrs)
-		return nil, nil
-	}
-	log.Debugf("volume management devices selected: %v", req.PCIAllowList)
-
-	return &vmdReq, nil
+func (sb *spdkBackend) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {
+	return &storage.BdevWriteConfigResponse{}, sb.writeNVMEConf(req, writeJSONConf)
 }
 
-// prepare receives function pointers for external interfaces.
-func (sb *spdkBackend) prepare(req storage.BdevPrepareRequest, scriptCall scriptCallFn, userLookup userLookupFn, vmdDetect vmdDetectFn, hpClean hpCleanFn) (*storage.BdevPrepareResponse, error) {
-	sb.log.Debugf("provider backend prepare %+v", req)
-	resp := &storage.BdevPrepareResponse{}
-
-	usr, err := userLookup(req.TargetUser)
-	if err != nil {
-		return nil, errors.Wrapf(err, "lookup on local host")
-	}
-
-	// If VMD has been explicitly enabled and there are VMD enabled
-	// NVMe devices on the host, attempt to prepare them first.
-	vmdReq, err := getVMDPrepReq(sb.log, &req, vmdDetect)
-	if err != nil {
-		return nil, err
-	}
-	if vmdReq != nil {
-		if err := scriptCall(vmdReq); err != nil {
-			return nil, errors.Wrap(err, "re-binding vmd ssds to attach with spdk")
-		}
-		resp.VMDPrepared = true
-	}
-
-	if err := scriptCall(&req); err != nil {
-		return nil, errors.Wrap(err, "re-binding ssds to attach with spdk")
-	}
-
-	if !req.DisableCleanHugePages {
-		// remove hugepages matching /dev/hugepages/spdk* owned by target user
-		err := hpClean(hugePageDir, hugePagePrefix, usr.Uid)
-		if err != nil {
-			return nil, errors.Wrapf(err, "clean spdk hugepages")
-		}
-	}
-
-	return resp, nil
-}
-
-// Prepare will perform a lookup on the requested target user to validate existence
-// then prepare non-VMD NVMe devices for use with SPDK.
-// If EnableVmd is true in request then attempt to use VMD NVMe devices.
-// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
-// owned by the target user.
-// Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
-// bdev_include and bdev_exclude list filters provided in the server config file.
-func (sb *spdkBackend) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	return sb.prepare(req, sb.script.Prepare, user.Lookup, detectVMD, cleanHugePages)
-}
-
-// Reset will perform a lookup on the requested target user to validate existence
-// then reset non-VMD NVMe devices for use by the OS/kernel.
-// If EnableVmd is true in request then attempt to use VMD NVMe devices.
-// If DisableCleanHugePages is false in request then cleanup any leftover hugepages
-// owned by the target user.
-// Backend call executes the SPDK setup.sh script to rebind PCI devices as selected by
-// bdev_include and bdev_exclude list filters provided in the server config file.
-func (sb *spdkBackend) Reset(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
-	return sb.prepare(req, sb.script.Reset, user.Lookup, detectVMD, cleanHugePages)
-}
-
+// UpdateFirmware uses the SPDK bindings to update an NVMe controller's firmware.
 func (sb *spdkBackend) UpdateFirmware(pciAddr string, path string, slot int32) error {
+	sb.log.Debug("spdk backend update firmware")
+
 	if pciAddr == "" {
 		return FaultBadPCIAddr("")
 	}

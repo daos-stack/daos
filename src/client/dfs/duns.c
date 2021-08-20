@@ -30,8 +30,6 @@
 #include "daos_fs.h"
 #include "daos_uns.h"
 
-#define DUNS_XATTR_FMT		"DAOS.%s://%36s/%36s"
-
 #ifndef FUSE_SUPER_MAGIC
 #define FUSE_SUPER_MAGIC	0x65735546
 #endif
@@ -860,15 +858,18 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		goto err_cont;
 	}
 	if (backend_dfuse) {
+		struct stat finfo;
 		/*
-		 * This next setxattr will cause dfuse to lookup the entry point and perform a
-		 * container connect, therefore this xattr will be set in the root of the new
+		 * This next stat will cause dfuse to lookup the entry point and perform a
+		 * container connect, therefore this data will be read from root of the new
 		 * container, not the directory.
+		 *
+		 * TODO: This could call getxattr to verify success.
 		 */
-		rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, XATTR_CREATE);
+		rc = stat(path, &finfo);
 		if (rc) {
 			rc = errno;
-			D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
+			D_ERROR("Failed to stat new container: %s\n", strerror(rc));
 			goto err_cont;
 		}
 	}

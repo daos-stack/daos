@@ -19,8 +19,13 @@ dfuse_cb_setxattr(fuse_req_t req, struct dfuse_inode_entry *inode,
 
 	DFUSE_TRA_DEBUG(inode, "Attribute '%s'", name);
 
-	if (strcmp(name, DUNS_XATTR_NAME) == 0) {
+	if (strncmp(name, DUNS_XATTR_NAME, sizeof(DUNS_XATTR_NAME)) == 0) {
 		struct duns_attr_t	dattr = {};
+
+		if (inode->ie_root) {
+			DFUSE_TRA_WARNING(inode, "Attempt to set duns attr on container root");
+			D_GOTO(err, rc = EINVAL);
+		}
 
 		/* Just check this is valid, but don't do anything with it */
 		rc = duns_parse_attr((char *)value, size, &dattr);

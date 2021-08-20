@@ -1903,10 +1903,10 @@ re_check:
 				shard, punched_recx->rx_idx, punched_recx->rx_nr);
 			D_ASSERT(DAOS_RECX_END(*punched_recx) >= tmp_recx->rx_idx);
 			if (DAOS_RECX_END(*punched_recx) < DAOS_RECX_END(*tmp_recx)) {
-				uint64_t end = DAOS_RECX_END(*tmp_recx);
+				uint64_t r_end = DAOS_RECX_END(*tmp_recx);
 
 				tmp_recx->rx_idx = DAOS_RECX_END(*punched_recx);
-				tmp_recx->rx_nr = end - tmp_recx->rx_idx;
+				tmp_recx->rx_nr = r_end - tmp_recx->rx_idx;
 			} else if (punched_recx->rx_idx > tmp_recx->rx_idx) {
 				tmp_recx->rx_nr = min(punched_recx->rx_idx,
 						      DAOS_RECX_END(*tmp_recx)) - tmp_recx->rx_idx;
