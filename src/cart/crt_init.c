@@ -439,8 +439,8 @@ do_init:
 			max_num_ctx = ctx_num;
 		}
 
-		int32_t max_expect_size = -1;
-		int32_t max_unexpect_size = -1;
+		uint32_t max_expect_size = 0;
+		uint32_t max_unexpect_size = 0;
 
 		if (opt && opt->cio_use_expected_size)
 			max_expect_size = opt->cio_max_expected_size;
