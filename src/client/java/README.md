@@ -36,7 +36,6 @@ operation.
 
 * DaosUns
 
-<<<<<<< HEAD
 It wraps some DAOS UNS APIs, like resolving UNS path, as well as parsing DAOS UNS string attribute.
 
 #### DAOS Object (obj)
