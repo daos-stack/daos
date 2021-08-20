@@ -1079,7 +1079,7 @@ class DFuse():
 
         run_log_test = True
         try:
-            ret = self._sp.wait(timeout=20)
+            ret = self._sp.wait(timeout=30)
             print('rc from dfuse {}'.format(ret))
             if ret != 0:
                 fatal_errors = True
@@ -1293,9 +1293,11 @@ def needs_dfuse(method):
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container_label)
         self.dfuse.start(v_hint=self.test_name)
-        rc = method(self)
-        if self.dfuse.stop():
-            self.fatal_errors = True
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
         return rc
 
     return _helper
@@ -1311,9 +1313,11 @@ def needs_dfuse_single(method):
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__, single_threaded=True)
-        rc = method(self)
-        if self.dfuse.stop():
-            self.fatal_errors = True
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
         return rc
     return _helper
 
@@ -1327,9 +1331,11 @@ def needs_dfuse_with_cache(method):
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
-        rc = method(self)
-        if self.dfuse.stop():
-            self.fatal_errors = True
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
         return rc
     return _helper
 
@@ -1343,9 +1349,11 @@ def needs_dfuse_no_cache(method):
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
-        rc = method(self)
-        if self.dfuse.stop():
-            self.fatal_errors = True
+        try:
+            rc = method(self)
+        finally:
+            if self.dfuse.stop():
+                self.fatal_errors = True
         return rc
     return _helper
 
@@ -1863,25 +1871,37 @@ class posix_tests():
 
     @needs_dfuse_no_cache
     def test_file_nospace(self):
+        """Test for file size accounting a correct ENOSPACE handling"""
+
         filename = os.path.join(self.dfuse.dir, 'new_file')
 
         fd = open(filename, 'wb')
-        data = bytearray(1024*1024*64)
+        write_size = 1024 * 1024 * 64
+        data = bytearray(write_size)
+        file_size = 0
         while True:
+            stat_pre = os.fstat(fd.fileno())
+            assert stat_pre.st_size == file_size
             try:
-                stat = os.fstat(fd.fileno())
                 fd.write(data)
+                file_size += write_size
             except OSError as e:
                 if e.errno != errno.ENOSPC:
                     raise
                 print('File write returned ENOSPACE')
                 stat_post = os.fstat(fd.fileno())
-                print(stat)
+                print(stat_pre)
                 print(stat_post)
+                # Check that the failed write didn't change the file size.
+                assert stat_pre.st_size == stat_post.st_size
                 break
 
         stat = os.fstat(fd.fileno())
         print(stat)
+
+        # larger pools should be able to handle this by reserving space, however NLT runs with
+        # smaller pools so the close and unlink can both fail with ENOSPACE, so guard against
+        # that.  The container will be destroyed after the test anyway.
         try:
             fd.close()
             os.unlink(filename)
@@ -3419,38 +3439,39 @@ def run(wf, args):
     fatal_errors = BoolRatchet()
     fi_test = False
 
-    if args.mode == 'launch':
-        run_in_fg(server, conf)
-    elif args.mode == 'il':
-        fatal_errors.add_result(run_il_test(server, conf))
-    elif args.mode == 'kv':
-        test_pydaos_kv(server, conf)
-    elif args.mode == 'overlay':
-        fatal_errors.add_result(run_duns_overlay_test(server, conf))
-    elif args.mode == 'set-fi':
-        fatal_errors.add_result(set_server_fi(server))
-    elif args.mode == 'fi':
-        fi_test = True
-    elif args.mode == 'all':
-        fi_test = True
-        fatal_errors.add_result(run_posix_tests(server, conf))
-        fatal_errors.add_result(run_il_test(server, conf))
-        fatal_errors.add_result(run_dfuse(server, conf))
-        fatal_errors.add_result(run_duns_overlay_test(server, conf))
-        test_pydaos_kv(server, conf)
-        fatal_errors.add_result(set_server_fi(server))
-    elif args.test == 'all':
-        fatal_errors.add_result(run_posix_tests(server, conf))
-    elif args.test:
-        fatal_errors.add_result(run_posix_tests(server, conf, args.test))
-    else:
-        fatal_errors.add_result(run_posix_tests(server, conf))
-        fatal_errors.add_result(run_il_test(server, conf))
-        fatal_errors.add_result(run_dfuse(server, conf))
-        fatal_errors.add_result(set_server_fi(server))
-
-    if server.stop(wf_server) != 0:
-        fatal_errors.fail()
+    try:
+        if args.mode == 'launch':
+            run_in_fg(server, conf)
+        elif args.mode == 'il':
+            fatal_errors.add_result(run_il_test(server, conf))
+        elif args.mode == 'kv':
+            test_pydaos_kv(server, conf)
+        elif args.mode == 'overlay':
+            fatal_errors.add_result(run_duns_overlay_test(server, conf))
+        elif args.mode == 'set-fi':
+            fatal_errors.add_result(set_server_fi(server))
+        elif args.mode == 'fi':
+            fi_test = True
+        elif args.mode == 'all':
+            fi_test = True
+            fatal_errors.add_result(run_posix_tests(server, conf))
+            fatal_errors.add_result(run_il_test(server, conf))
+            fatal_errors.add_result(run_dfuse(server, conf))
+            fatal_errors.add_result(run_duns_overlay_test(server, conf))
+            test_pydaos_kv(server, conf)
+            fatal_errors.add_result(set_server_fi(server))
+        elif args.test == 'all':
+            fatal_errors.add_result(run_posix_tests(server, conf))
+        elif args.test:
+            fatal_errors.add_result(run_posix_tests(server, conf, args.test))
+        else:
+            fatal_errors.add_result(run_posix_tests(server, conf))
+            fatal_errors.add_result(run_il_test(server, conf))
+            fatal_errors.add_result(run_dfuse(server, conf))
+            fatal_errors.add_result(set_server_fi(server))
+    finally:
+        if server.stop(wf_server) != 0:
+            fatal_errors.fail()
 
     if args.mode == 'all':
         server = DaosServer(conf)
