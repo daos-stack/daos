@@ -68,6 +68,7 @@ class ManagementServiceResilience(TestWithServers):
 
         Returns:
             str: hostname of the MS leader, or None
+
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
         l_addr = sys_leader_info["response"]["CurrentLeader"]
@@ -241,8 +242,9 @@ class ManagementServiceResilience(TestWithServers):
         Test Description:
             Test N=1 management service is accessible after 1 instance is removed.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_retained_quorum_N_1
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_retained_quorum_N_1
         """
         # Run test cases
         self.verify_retained_quorum(1)
@@ -254,8 +256,9 @@ class ManagementServiceResilience(TestWithServers):
         Test Description:
             Test N=2 management service is accessible after 2 instances are removed.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_retained_quorum_N_2
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_retained_quorum_N_2
         """
         # Run test cases
         self.verify_retained_quorum(2)
@@ -269,8 +272,9 @@ class ManagementServiceResilience(TestWithServers):
             lost (degraded mode), and then test that quorum can be regained for
             full functionality.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_regained_quorum_N_1
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_regained_quorum_N_1
         """
         # Run test case
         self.verify_regained_quorum(1)
@@ -284,8 +288,9 @@ class ManagementServiceResilience(TestWithServers):
             lost (degraded mode), and then test that quorum can be regained for
             full functionality.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_regained_quorum_N_2
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_regained_quorum_N_2
         """
         # Run test case
         self.verify_regained_quorum(2)

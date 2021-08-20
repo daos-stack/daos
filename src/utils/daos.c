@@ -1043,6 +1043,7 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			D_GOTO(out, rc = RC_PRINT_HELP);
 		} else {
 			rc = fs_copy_hdlr(ap);
+			D_GOTO(out, rc);
 		}
 		break;
 	case FS_SET_ATTR:

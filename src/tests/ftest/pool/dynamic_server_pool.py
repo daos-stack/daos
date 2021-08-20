@@ -98,7 +98,9 @@ class DynamicServerPool(TestWithServers):
 
         Test Description: See class description.
 
-        :avocado: tags=all,medium,control,full_regression,dynamic_server_pool
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=control,dynamic_server_pool
         """
         # Create a pool on rank0.
         self.create_pool_with_ranks(ranks=[0], tl_update=True)

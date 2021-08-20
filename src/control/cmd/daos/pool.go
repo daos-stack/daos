@@ -150,6 +150,7 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 
 type poolCmd struct {
 	Query     poolQueryCmd     `command:"query" description:"query pool info"`
+	ListConts containerListCmd `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
 	ListAttrs poolListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
 	GetAttr   poolGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
 	SetAttr   poolSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
@@ -291,7 +292,7 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attrs, nil)
+		return cmd.outputJSON(attrs.asMap(), nil)
 	}
 
 	var bld strings.Builder
@@ -356,7 +357,7 @@ func (cmd *poolSetAttrCmd) Execute(_ []string) error {
 
 	if err := setDaosAttribute(cmd.cPoolHandle, poolAttr, &attribute{
 		Name:  cmd.Args.Name,
-		Value: cmd.Args.Value,
+		Value: []byte(cmd.Args.Value),
 	}); err != nil {
 		return errors.Wrapf(err,
 			"failed to set attribute %q on pool %s",

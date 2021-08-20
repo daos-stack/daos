@@ -700,18 +700,6 @@ migrate_fetch_update_inline(struct migrate_one *mrone, daos_handle_t oh,
 	}
 
 	if (iod_cnt > 0) {
-		rc = daos_csummer_alloc_iods_csums_with_packed(
-			csummer,
-			&mrone->mo_iods[start],
-			iod_cnt,
-			&tmp_csum_iov, &iod_csums);
-		if (rc != 0) {
-			D_ERROR("failed to alloc iod csums: "DF_RC". "
-				"csum_iov was '%s'\n",
-				DP_RC(rc), fetch ? "FETCHED" : "INLINE");
-			D_GOTO(out, rc);
-		}
-
 		if (daos_oclass_is_ec(&mrone->mo_oca)) {
 			rc = daos_csummer_calc_iods(csummer,
 					&sgls[start],  &mrone->mo_iods[start],
