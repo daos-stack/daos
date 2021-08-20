@@ -16,6 +16,14 @@ fi
 # The fetch of $TARGET_BRANCH gets the branch for the compare as a commit hash
 # with the temporary name FETCH_HEAD.
 git fetch origin "${TARGET_BRANCH}"
+
+# Need to use a local temporary directory to avoid colliions from
+# temporary files with the same commit hash.
+rm -rf "${WORKSPACE}/git_doc_temp"
+mkdir -p "${WORKSPACE}/git_doc_temp"
+TMPDIR="${WORKSPACE}/git_doc_temp"
+export TMPDIR
+
 git diff-tree --no-commit-id --name-only                                \
   "$(git merge-base "FETCH_HEAD" HEAD)" HEAD | \
   grep -v -e "^doc$"

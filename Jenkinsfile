@@ -334,7 +334,7 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on CentOS 8') {
+                stage('Build RPM on CentOS 8.3') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -349,27 +349,32 @@ pipeline {
                         }
                     }
                     steps {
-                        buildRpm()
+                        buildRpm target: 'centos-8.3'
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            buildRpmPost condition: 'success',
+                                         target: 'centos-8.3'
                         }
                         unstable {
-                            buildRpmPost condition: 'unstable'
+                            buildRpmPost condition: 'unstable',
+                                         target: 'centos-8.3'
                         }
                         failure {
-                            buildRpmPost condition: 'failure'
+                            buildRpmPost condition: 'failure',
+                                         target: 'centos-8.3'
                         }
                         unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
+                            buildRpmPost condition: 'unsuccessful',
+                                         target: 'centos-8.3'
                         }
                         cleanup {
-                            buildRpmPost condition: 'cleanup'
+                            buildRpmPost condition: 'cleanup',
+                                         target: 'centos-8.3'
                         }
                     }
-                }
-                stage('Build RPM on Leap 15') {
+                } // stage('Build RPM on CentOS 8.3')
+                stage('Build RPM on CentOS 8.4') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -384,26 +389,111 @@ pipeline {
                         }
                     }
                     steps {
-                        buildRpm()
+                        buildRpm target: 'centos-8.4'
                     }
                     post {
                         success {
-                            buildRpmPost condition: 'success'
+                            buildRpmPost condition: 'success',
+                                         target: 'centos-8.4'
                         }
                         unstable {
-                            buildRpmPost condition: 'unstable'
+                            buildRpmPost condition: 'unstable',
+                                         target: 'centos-8.4'
                         }
                         failure {
-                            buildRpmPost condition: 'failure'
+                            buildRpmPost condition: 'failure',
+                                         target: 'centos-8.4'
                         }
                         unsuccessful {
-                            buildRpmPost condition: 'unsuccessful'
+                            buildRpmPost condition: 'unsuccessful',
+                                         target: 'centos-8.4'
                         }
                         cleanup {
-                            buildRpmPost condition: 'cleanup'
+                            buildRpmPost condition: 'cleanup',
+                                         target: 'centos-8.4'
                         }
                     }
-                }
+                } //stage('Build RPM on CentOS 8.4')
+                stage('Build RPM on Leap 15.2') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.mockbuild'
+                            dir 'utils/rpms/packaging'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs()
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                        }
+                    }
+                    steps {
+                        buildRpm target: 'opensuse-15.2'
+                    }
+                    post {
+                        success {
+                            buildRpmPost condition: 'success',
+                                         target: 'opensuse-15.2'
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable',
+                                         target: 'opensuse-15.2'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure',
+                                         target: 'opensuse-15.2'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful',
+                                         target: 'opensuse-15.2'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup',
+                                         target: 'opensuse-15.2'
+                        }
+                    }
+                } //stage('Build RPM on Leap 15.2')
+                stage('Build RPM on Leap 15.3') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.mockbuild'
+                            dir 'utils/rpms/packaging'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs()
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                        }
+                    }
+                    steps {
+                        buildRpm target: 'opensuse-15.3'
+                    }
+                    post {
+                        success {
+                            buildRpmPost condition: 'success',
+                                         target: 'opensuse-15.3'
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable',
+                                         target: 'opensuse-15.3'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure',
+                                         target: 'opensuse-15.3'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful',
+                                         target: 'opensuse-15.3'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup',
+                                         target: 'opensuse-15.3'
+                        }
+                    }
+                } // stage('Build RPM on Leap 15.3')
                 stage('Build DEB on Ubuntu 20.04') {
                     when {
                         beforeAgent true
@@ -864,7 +954,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages('centos-8', 1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -883,7 +973,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages('opensuse-15', 1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {

@@ -47,6 +47,7 @@ RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf
 
 ARG JENKINS_URL
 ARG REPOS
+ARG PR_DISTRO=opensuse-15.2
 RUN for repo in $REPOS; do                                                                                 \
         branch="master";                                                                                   \
         build_number="lastSuccessfulBuild";                                                                \
@@ -59,7 +60,7 @@ RUN for repo in $REPOS; do                                                      
             fi;                                                                                            \
         fi;                                                                                                \
         zypper --non-interactive addrepo --no-gpgcheck                                                     \
-               ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/leap15/ \
+               ${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/$PR_DISTRO/ \
                $repo:$branch:$build_number;                                                                \
     done
 
