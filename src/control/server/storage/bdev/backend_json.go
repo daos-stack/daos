@@ -171,7 +171,7 @@ func getAioKdevCreateMethod(name, path string) *SpdkSubsystemConfig {
 	}
 }
 
-func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubsystemConfig) {
+func getSpdkConfigMethods(req *storage.BdevWriteNvmeConfigRequest) (sscs []*SpdkSubsystemConfig) {
 	for _, tier := range req.TierProps {
 		var f configMethodGetter
 
@@ -193,8 +193,8 @@ func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubs
 	return
 }
 
-// WithVMDEnabled adds vmd subsystem with enable method to an SpdkConfig.
-func (sc *SpdkConfig) WithVMDEnabled() *SpdkConfig {
+// WithVmdEnabled adds vmd subsystem with enable method to an SpdkConfig.
+func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
 	sc.Subsystems = append(sc.Subsystems, &SpdkSubsystem{
 		Name: "vmd",
 		Configs: []*SpdkSubsystemConfig{
@@ -209,8 +209,8 @@ func (sc *SpdkConfig) WithVMDEnabled() *SpdkConfig {
 }
 
 // WithBdevConfigs adds config methods derived from the input
-// BdevWriteConfigRequest to the bdev subsystem of an SpdkConfig.
-func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWriteConfigRequest) *SpdkConfig {
+// BdevWriteNvmeConfigRequest to the bdev subsystem of an SpdkConfig.
+func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWriteNvmeConfigRequest) *SpdkConfig {
 	for _, ss := range sc.Subsystems {
 		if ss.Name != "bdev" {
 			continue
@@ -225,15 +225,13 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWrite
 	return sc
 }
 
-func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*SpdkConfig, error) {
+func newSpdkConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteNvmeConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
-	if req.VMDEnabled {
-		for _, tp := range req.TierProps {
-			if tp.Class == storage.ClassNvme {
-				sc.WithVMDEnabled()
-				break
-			}
+	for _, tp := range req.TierProps {
+		if enableVmd && tp.Class == storage.ClassNvme {
+			sc.WithVmdEnabled()
+			break
 		}
 	}
 

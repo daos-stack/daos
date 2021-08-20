@@ -24,9 +24,9 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-// TestBackend_writeJSONConf verifies config parameters for bdev get
+// TestBackend_writeJsonConfig verifies config parameters for bdev get
 // converted into nvme config files that can be consumed by spdk.
-func TestBackend_writeJSONConf(t *testing.T) {
+func TestBackend_writeJsonConfig(t *testing.T) {
 	mockMntpt := "/mock/mnt/daos"
 	tierId := 84
 	host, _ := os.Hostname()
@@ -193,12 +193,9 @@ func TestBackend_writeJSONConf(t *testing.T) {
 			}
 			cfg = engineConfig.Storage.Tiers.BdevConfigs()[0] // refer to validated config
 
-			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(log, &engineConfig.Storage)
-			if tc.enableVmd {
-				writeReq.VMDEnabled = true
-			}
+			writeReq, _ := storage.BdevWriteNvmeConfigRequestFromConfig(log, &engineConfig.Storage)
 
-			gotCfg, gotErr := newSpdkConfig(log, &writeReq)
+			gotCfg, gotErr := newSpdkConfig(log, tc.enableVmd, &writeReq)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
@@ -499,12 +496,9 @@ func TestBackend_createJsonFile(t *testing.T) {
 					&tc.confIn,
 				).WithStorageConfigOutputPath(cfgOutputPath)
 
-			req, _ := storage.BdevWriteConfigRequestFromConfig(log, &engineConfig.Storage)
-			if tc.enableVmd {
-				req.VMDEnabled = true
-			}
+			req, _ := storage.BdevWriteNvmeConfigRequestFromConfig(log, &engineConfig.Storage)
 
-			gotErr := writeJSONConf(log, &req)
+			gotErr := writeJsonConfig(log, tc.enableVmd, &req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

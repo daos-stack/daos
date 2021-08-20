@@ -65,8 +65,6 @@ func (ei *EngineInstance) scmFormat(force bool) (*ctlpb.ScmMountResult, error) {
 }
 
 func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
-	ei.log.Debugf("instance %d: calling into storage provider to format tiers", ei.Index())
-
 	for _, tr := range ei.storage.FormatBdevTiers() {
 		if tr.Error != nil {
 			results = append(results, ei.newCret(fmt.Sprintf("tier %d", tr.Tier), tr.Error))
@@ -85,7 +83,7 @@ func (ei *EngineInstance) bdevFormat() (results proto.NvmeControllerResults) {
 	return
 }
 
-func (ei *EngineInstance) bdevWriteNvmeConfig() error {
+func (ei *EngineInstance) bdevWriteConfig() error {
 	return ei.storage.WriteNvmeConfig()
 }
 
@@ -157,5 +155,5 @@ func (ei *EngineInstance) StorageFormatNVMe() (cResults proto.NvmeControllerResu
 // engine process.
 func (ei *EngineInstance) StorageWriteNvmeConfig() error {
 	ei.log.Infof("Writing nvme config file for %s instance %d", build.DataPlaneName, ei.Index())
-	return ei.bdevWriteNvmeConfig()
+	return ei.bdevWriteConfig()
 }

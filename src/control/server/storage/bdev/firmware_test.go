@@ -293,7 +293,7 @@ func TestProvider_UpdateFirmware(t *testing.T) {
 			backendCfg: &MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{Controllers: defaultDevs},
 			},
-			expErr: FaultBdevNotFound("fake"),
+			expErr: FaultPCIAddrNotFound("fake"),
 		},
 		"request duplicates": {
 			input: storage.NVMeFirmwareUpdateRequest{
