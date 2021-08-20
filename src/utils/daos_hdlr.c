@@ -1650,7 +1650,6 @@ cont_create_hdlr(struct cmd_args_s *ap)
 
 	cmd_args_print(ap);
 
-	/** allow creating a POSIX container without a link in the UNS path */
 	if (ap->type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		dfs_attr_t attr;
 
@@ -1659,11 +1658,18 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		attr.da_chunk_size = ap->chunk_size;
 		attr.da_props = ap->props;
 		attr.da_mode = ap->mode;
-		rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
+
+		if (uuid_is_null(ap->c_uuid))
+			rc = dfs_cont_create(ap->pool, &ap->c_uuid, &attr, NULL, NULL);
+		else
+			rc = dfs_cont_create(ap->pool, ap->c_uuid, &attr, NULL, NULL);
 		if (rc)
 			rc = daos_errno2der(rc);
 	} else {
-		rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
+		if (uuid_is_null(ap->c_uuid))
+			rc = daos_cont_create(ap->pool, &ap->c_uuid, ap->props, NULL);
+		else
+			rc = daos_cont_create(ap->pool, ap->c_uuid, ap->props, NULL);
 	}
 
 	if (rc != 0) {
@@ -1671,8 +1677,7 @@ cont_create_hdlr(struct cmd_args_s *ap)
 		return rc;
 	}
 
-	fprintf(ap->outstream, "Successfully created container "DF_UUIDF"\n",
-		DP_UUID(ap->c_uuid));
+	fprintf(ap->outstream, "Successfully created container "DF_UUIDF"\n", DP_UUID(ap->c_uuid));
 
 	return rc;
 }
@@ -1710,6 +1715,8 @@ cont_create_uns_hdlr(struct cmd_args_s *ap)
 	}
 
 	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
+	if (uuid_is_null(ap->c_uuid))
+		uuid_parse(ap->cont_str, ap->c_uuid);
 	daos_unparse_ctype(ap->type, type);
 	fprintf(ap->outstream, "Successfully created container %s type %s\n", ap->cont_str, type);
 
@@ -3462,10 +3469,9 @@ out_disconnect:
 		DH_PERROR_DER(ap, rc2, "Failed to disconnect");
 	}
 out:
-	if (rc == 0) {
+	if (rc == 0)
 		fprintf(ap->outstream, "Successfully copied to destination "
 			"container "DF_UUIDF "\n", DP_UUID(ca.dst_c_uuid));
-	}
 	D_FREE(src_str);
 	D_FREE(dst_str);
 	D_FREE(ca.src);

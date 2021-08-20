@@ -31,10 +31,8 @@ dfs_test_mount(void **state)
 	uuid_generate(cuuid);
 	rc = daos_cont_create(arg->pool.poh, cuuid, NULL, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("Created non-POSIX Container "DF_UUIDF"\n",
-		      DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+	print_message("Created non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** try to mount DFS on it, should fail. */
@@ -45,15 +43,41 @@ dfs_test_mount(void **state)
 	assert_rc_equal(rc, 0);
 	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
 	assert_rc_equal(rc, 0);
-	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n",
-		      DP_UUID(cuuid));
+	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
+
+	/** create a DFS container with an invalid label */
+	rc = dfs_cont_create_with_label(arg->pool.poh, "invalid:-/label", NULL, &cuuid, NULL, NULL);
+	assert_int_equal(rc, EINVAL);
+
+	/** create a DFS container with a valid label */
+	rc = dfs_cont_create_with_label(arg->pool.poh, "label1", NULL, &cuuid, NULL, NULL);
+	assert_int_equal(rc, 0);
+	/** open with label */
+	rc = daos_cont_open(arg->pool.poh, "label1", DAOS_COO_RW, &coh, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	/** mount */
+	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
+	assert_rc_equal(rc, 0);
+	rc = dfs_umount(dfs);
+	assert_int_equal(rc, 0);
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	/** destroy with uuid */
+	rc = daos_cont_destroy(arg->pool.poh, cuuid, 0, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** create a DFS container with a valid label, no uuid out */
+	rc = dfs_cont_create_with_label(arg->pool.poh, "label1", NULL, NULL, NULL, NULL);
+	assert_int_equal(rc, 0);
+	/** destroy with label */
+	rc = daos_cont_destroy(arg->pool.poh, "label1", 0, NULL);
+	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with POSIX layout */
 	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
-			    &coh, &co_info, NULL);
+	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
