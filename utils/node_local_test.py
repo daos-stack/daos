@@ -1876,7 +1876,7 @@ class posix_tests():
         filename = os.path.join(self.dfuse.dir, 'new_file')
 
         fd = open(filename, 'wb')
-        write_size = 1024 * 1024 * 64
+        write_size = 1024 * 128
         data = bytearray(write_size)
         file_size = 0
         while True:
