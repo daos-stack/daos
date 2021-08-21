@@ -175,6 +175,39 @@ class TestPool(TestDaosApiBase):
         return identifier
 
     @fail_on(CommandFailure)
+    def _dmg_ready(self, subcommand):
+        """Check if it's ready to call dmg command.
+
+        Args:
+            subcommand (str): Method name in this class.
+
+        Raises:
+            CommandFailure: If the control method is API.
+
+        Returns:
+            bool: True if the control method is dmg and self.dmg is defined.
+                False otherwise.
+
+        """
+        if self.control_method.value == self.USE_API:
+            raise CommandFailure(
+                "Error: control method {} not supported for {}".format(
+                    self.control_method.value, subcommand))
+
+        if self.control_method.value == self.USE_DMG and self.dmg:
+            return True
+
+        elif self.control_method.value == self.USE_DMG:
+            self.log.error("Error: Undefined dmg command")
+
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
+
+        return False
+
+    @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def create(self):
         """Create a pool with dmg.
@@ -901,29 +934,21 @@ class TestPool(TestDaosApiBase):
 
         return status
 
-    @fail_on(CommandFailure)
     def get_acl(self):
         """Get ACL from a DAOS pool.
-
-        Returns:
-            str: dmg pool get-acl output.
 
         Raises:
             CommandFailure: if the control method is API.
 
-        """
-        if self.pool:
-            if self.dmg and self.control_method.value == self.USE_DMG:
-                return self.dmg.pool_get_acl(pool=self.identifier)
+        Returns:
+            str: dmg pool get-acl output.
 
-            if self.control_method.value == self.USE_API:
-                msg = ("Error: control method {} not supported for "
-                       "get_acl()".format(self.control_method.value))
-                raise CommandFailure(msg)
+        """
+        if self._dmg_ready("get_acl()"):
+            return self.dmg.pool_get_acl(pool=self.identifier)
 
         return None
 
-    @fail_on(CommandFailure)
     def update_acl(self, use_acl, entry=None):
         """Update ACL for a DAOS pool.
 
@@ -938,59 +963,31 @@ class TestPool(TestDaosApiBase):
             CommandFailure: if the control method is API.
 
         """
-        if self.pool:
-            if self.dmg and self.control_method.value == self.USE_DMG:
-                acl_file = None
-                if use_acl:
-                    acl_file = self.acl_file.value
-                self.dmg.pool_update_acl(
-                    pool=self.identifier, acl_file=acl_file, entry=entry)
+        if self._dmg_ready("update_acl()"):
+            acl_file = None
+            if use_acl:
+                acl_file = self.acl_file.value
+            self.dmg.pool_update_acl(
+                pool=self.identifier, acl_file=acl_file, entry=entry)
 
-            elif self.control_method.value == self.USE_API:
-                msg = ("Error: control method {} not supported for "
-                       "update_acl()".format(self.control_method.value))
-                raise CommandFailure(msg)
-
-            else:
-                self.log.error("update_acl failed!")
-        else:
-            self.log.error("self.pool isn't defined. update_acl failed!")
-
-    @fail_on(CommandFailure)
     def delete_acl(self, principal):
         """Delete ACL from a DAOS pool.
 
         Args:
             principal (str): principal to be deleted
         """
-        if self.pool:
-            if self.dmg and self.control_method.value == self.USE_DMG:
-                self.dmg.pool_delete_acl(
-                    pool=self.identifier, principal=principal)
+        if self._dmg_ready("delete_acl()"):
+            self.dmg.pool_delete_acl(pool=self.identifier, principal=principal)
 
-            elif self.control_method.value == self.USE_API:
-                msg = ("Error: control method {} not supported for "
-                       "delete_acl()".format(self.control_method.value))
-                raise CommandFailure(msg)
-
-            else:
-                self.log.error("delete_acl failed!")
-
-    @fail_on(CommandFailure)
     def overwrite_acl(self):
         """Overwrite ACL in a DAOS pool."""
-        if self.pool and self.acl_file.value:
-            if self.dmg and self.control_method.value == self.USE_DMG:
+
+        if self._dmg_ready("overwrite_acl()"):
+            if self.acl_file.value:
                 self.dmg.pool_overwrite_acl(
                     pool=self.identifier, acl_file=self.acl_file.value)
-
-            elif self.control_method.value == self.USE_API:
-                msg = ("Error: control method {} not supported for "
-                       "overwrite_acl()".format(self.control_method.value))
-                raise CommandFailure(msg)
-
-        else:
-            self.log.error("overwrite_acl failed!")
+            else:
+                self.log.error("self.acl_file isn't defined!")
 
 
 class LabelGenerator():

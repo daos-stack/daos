@@ -89,58 +89,64 @@ class PoolSecurityTestBase(TestWithServers):
                       "\n  supported action: update, delete.".format(action))
         self.log.info(" At update_pool_acl_entry, dmg.run result=\n %s", result)
 
+    @staticmethod
+    def _command_failed(result):
+        """Check whether the given command result had failed.
+
+        Args:
+            result (CmdResult or dict): dmg command output.
+        """
+        if isinstance(result, dict):
+            # Result is JSON.
+            return result["status"] != 0 or result["error"] is not None
+        else:
+            # Result is CmdResult.
+            return result.exit_status != 0 or result.stderr_text != ""
+
+    @staticmethod
+    def _command_missing_err_code(result, err_code):
+        """Check whether the given command result has given error code.
+
+        Args:
+            result (CmdResult or dict): dmg command output.
+            err_code (str): Error code to look for in result.
+        """
+        if isinstance(result, dict):
+            # Result is JSON.
+            return err_code not in result["error"]
+        else:
+            # Result is CmdResult.
+            return (err_code not in result.stderr_text
+                    and err_code not in result.stdout_text)
+
     def verify_daos_pool_cont_result(self, result, action, expect, err_code):
         """Verify the daos pool read or write action result.
 
         Args:
-            result (CmdResult): handle for daos pool action.
+            result (CmdResult or dict): dmg command output.
             action (str): daos pool read or write.
             expect (str): expecting pass or deny.
             err_code (str): expecting deny of RC code.
         """
-        if isinstance(result, dict):
-            # result is JSON.
-            if expect.lower() == 'pass':
-                if result["status"] != 0 or result["error"] is not None:
-                    msg = ("##Test Fail on verify_daos_pool {}, expected "
-                           "Pass, but Failed.".format(action))
-                    self.fail(msg)
-                else:
-                    self.log.info(
-                        " =Test Passed on verify_daos_pool %s, Succeed.\n",
-                        action)
-
-            elif err_code not in result["error"]:
-                msg = ("##Test Fail on verify_daos_pool {}, expected Failure "
-                       "of {}, but Passed.".format(action, expect))
-                self.fail(msg)
+        if expect.lower() == 'pass':
+            #if result.exit_status != 0 or result.stderr_text != "":
+            if self._command_failed(result):
+                self.fail(
+                    "##Test Fail on verify_daos_pool {}, expected Pass, but "
+                    "Failed.".format(action))
             else:
                 self.log.info(
-                    " =Test Passed on verify_daos_pool %s expected error of "
-                    "%s.\n", action, expect)
-
+                    " =Test Passed on verify_daos_pool %s, Succeed.\n", action)
+        # Remove "and err_code not in result.stdout_text" on the next statement
+        # elif after DAOS-5635 resolved.
+        elif self._command_missing_err_code(result, err_code):
+            self.fail(
+                "##Test Fail on verify_daos_pool {}, expected Failure of {}, "
+                "but Passed.".format(action, expect))
         else:
-            # result is CmdResult. Should be removed. DAOS-8317
-            if expect.lower() == 'pass':
-                if result.exit_status != 0 or result.stderr_text != "":
-                    msg = ("##Test Fail on verify_daos_pool {}, expected "
-                           "Pass, but Failed.".format(action))
-                    self.fail(msg)
-                else:
-                    self.log.info(
-                        " =Test Passed on verify_daos_pool %s, Succeed.\n",
-                        action)
-            # Remove "and err_code not in result.stdout_text" on the next
-            # statement elif after DAOS-5635 resolved.
-            elif (err_code not in result.stderr_text and
-                    err_code not in result.stdout_text):
-                msg = ("##Test Fail on verify_daos_pool {}, expected "
-                       "Failure of {}, but Passed.".format(action, expect))
-                self.fail(msg)
-            else:
-                self.log.info(
-                    " =Test Passed on verify_daos_pool %s expected error of "
-                    "%s.\n", action, expect)
+            self.log.info(
+                " =Test Passed on verify_daos_pool %s expected error of %s.\n",
+                action, expect)
 
     def verify_cont_rw_attribute(self, action, expect, attribute, value=None):
         """verify container rw attribute.
