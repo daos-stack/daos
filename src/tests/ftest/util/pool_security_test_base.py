@@ -81,13 +81,16 @@ class PoolSecurityTestBase(TestWithServers):
             entry (str): pool acl entry or principal to be updated.
         """
         if action == "delete":
-            result = self.pool.delete_acl(entry)
+            self.pool.delete_acl(entry)
         elif action == "update":
-            result = self.pool.update_acl(use_acl=False, entry=entry)
+            self.pool.update_acl(use_acl=False, entry=entry)
         else:
             self.fail("##update_pool_acl_entry, action: {} is not supported."
                       "\n  supported action: update, delete.".format(action))
-        self.log.info(" At update_pool_acl_entry, dmg.run result=\n %s", result)
+
+        self.log.info(
+            " At update_pool_acl_entry, dmg.run result=\n %s",
+            self.pool.dmg.result.stdout)
 
     @staticmethod
     def _command_failed(result):
@@ -99,9 +102,9 @@ class PoolSecurityTestBase(TestWithServers):
         if isinstance(result, dict):
             # Result is JSON.
             return result["status"] != 0 or result["error"] is not None
-        else:
-            # Result is CmdResult.
-            return result.exit_status != 0 or result.stderr_text != ""
+
+        # Result is CmdResult.
+        return result.exit_status != 0 or result.stderr_text != ""
 
     @staticmethod
     def _command_missing_err_code(result, err_code):
@@ -114,10 +117,10 @@ class PoolSecurityTestBase(TestWithServers):
         if isinstance(result, dict):
             # Result is JSON.
             return err_code not in result["error"]
-        else:
-            # Result is CmdResult.
-            return (err_code not in result.stderr_text
-                    and err_code not in result.stdout_text)
+
+        # Result is CmdResult.
+        return (err_code not in result.stderr_text
+                and err_code not in result.stdout_text)
 
     def verify_daos_pool_cont_result(self, result, action, expect, err_code):
         """Verify the daos pool read or write action result.
@@ -445,9 +448,11 @@ class PoolSecurityTestBase(TestWithServers):
         self.modify_acl_file_entry(acl_file, grp_entry, new_grp_entry)
 
         # dmg pool overwrite-acl <pool name> --acl-file <file>
-        result = self.pool.overwrite_acl()
+        self.pool.overwrite_acl()
         self.log.info("  (8-4)dmg= %s", self.pool.dmg)
-        self.log.info("  (8-5)dmg.run() result=\n %s", result)
+        self.log.info(
+            "  (8-5)dmg.run() result=\n %s",
+            self.pool.dmg.result.stdout)
 
         # Verify pool read operation
         # daos pool query <pool name>

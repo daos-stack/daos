@@ -197,7 +197,7 @@ class TestPool(TestDaosApiBase):
         if self.control_method.value == self.USE_DMG and self.dmg:
             return True
 
-        elif self.control_method.value == self.USE_DMG:
+        if self.control_method.value == self.USE_DMG:
             self.log.error("Error: Undefined dmg command")
 
         else:
