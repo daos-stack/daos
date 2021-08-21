@@ -31,6 +31,9 @@ class CartTest(TestWithoutServers):
         self.provider = None
         self.module = lambda *x: False
         self.supp_file = "/etc/daos/memcheck-cart.supp"
+        self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(
+                       os.path.dirname(os.path.dirname(os.path.dirname(
+                       os.path.dirname(os.path.abspath(__file__))))))))
 
     def setUp(self):
         """Set up the test case."""
@@ -318,7 +321,8 @@ class CartTest(TestWithoutServers):
                   "--leak-check=full --show-leak-kinds=all " + \
                   " --gen-suppressions=all " + \
                   "--suppressions=" + self.supp_file + " " + \
-                  "--error-exitcode=42 --show-reachable=yes "
+                  "--track-origins=yes --error-exitcode=42 " + \
+                  "--show-reachable=yes "
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
@@ -385,6 +389,37 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
+    def convert_xml(self, xml_file):
+        """Modify the xml file"""
+
+        fd = open(xml_file, 'r')
+        ofd = open('{}.xml'.format(xml_file), 'w')
+        for line in fd:
+            if self.src_dir in line:
+                L = re.sub('<dir>\/*' + self.src_dir + '\/*', '<dir>', line)
+                ofd.write(L)
+            else:
+                ofd.write(line)
+        os.unlink(xml_file)
+
+    def convert_xml_files(self):
+        """Check valgrind memcheck log files for errors."""
+
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
+
+        self.log.info("Parsing log path %s", daos_test_shared_dir)
+        if not os.path.exists(daos_test_shared_dir):
+            self.log.info("Path does not exist")
+            return 1
+
+        xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
+        memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
+                                os.listdir(daos_test_shared_dir)))
+
+        for filename in memcheck_files:
+            self.convert_xml(daos_test_shared_dir + "/" + filename)
+
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
         srv_rtn = self.launch_cmd_bg(srvcmd)
@@ -401,6 +436,8 @@ class CartTest(TestWithoutServers):
             self.fail(
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
+
+        self.convert_xml_files()
 
         return 0
 
@@ -419,6 +456,8 @@ class CartTest(TestWithoutServers):
                 self.stop_process(srv2)
             self.fail("Failed, return codes {}".format(rtn))
 
+        self.convert_xml_files()
+
         return rtn
 
     def launch_cmd_bg(self, cmd):
@@ -431,6 +470,8 @@ class CartTest(TestWithoutServers):
         if rtn is None:
             self.fail("Failed to start command\n")
             return -1
+
+        self.convert_xml_files()
 
         return rtn
 
