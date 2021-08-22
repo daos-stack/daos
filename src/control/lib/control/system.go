@@ -136,7 +136,7 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 	req.retryTimeout = SystemJoinRetryTimeout
 	req.retryTestFn = func(err error, _ uint) bool {
 		switch {
-		case IsConnectionError(err), system.IsUnavailable(err):
+		case IsRetryableConnErr(err), system.IsNotReady(err):
 			return true
 		}
 		if err == errNoMsResponse {
@@ -148,6 +148,7 @@ func SystemJoin(ctx context.Context, rpcClient UnaryInvoker, req *SystemJoinReq)
 
 	ur, err := rpcClient.InvokeUnaryRPC(ctx, req)
 	if err != nil {
+		rpcClient.Debugf("failed to invoke system join RPC: %s", err)
 		return nil, err
 	}
 
@@ -226,7 +227,7 @@ func SystemQuery(ctx context.Context, rpcClient UnaryInvoker, req *SystemQueryRe
 		// retry behavior, return true for specific errors in order
 		// to implement our own retry behavior.
 		return req.FailOnUnavailable &&
-			(system.IsUnavailable(err) || IsConnectionError(err) ||
+			(system.IsUnavailable(err) || IsRetryableConnErr(err) ||
 				system.IsNotLeader(err) || system.IsNotReplica(err))
 	}
 	req.retryFn = func(_ context.Context, _ uint) error {
