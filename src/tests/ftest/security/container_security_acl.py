@@ -9,6 +9,7 @@ import security_test_base as secTestBase
 from cont_security_test_base import ContSecurityTestBase
 from pool_security_test_base import PoolSecurityTestBase
 
+
 class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
     """Test daos_container user acls.
@@ -52,8 +53,9 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
             (7)Verify container permission d, delete
             (8)Cleanup
 
-        :avocado: tags=all,full_regression,security,container_acl,
-        :avocado: tags=cont_user_sec,cont_group_sec,cont_sec
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=security,container_acl,cont_user_sec,cont_group_seccont_sec
         """
 
         #(1)Setup
@@ -87,7 +89,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         #(2)Create pool and container with acl
         self.log.info("(2)==>Create a pool and a container with acl\n"
                       "   base_acl_entries= %s\n", base_acl_entries)
-        self.pool_uuid = self.create_pool_with_dmg()
+        self.add_pool()
         secTestBase.create_acl_file(acl_file_name, base_acl_entries)
         self.container_uuid = self.create_container_with_daos(
             self.pool, None, acl_file_name)
@@ -190,11 +192,8 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         self.update_container_acl(secTestBase.acl_entry(test_user_type,
                                                         test_user,
                                                         c_permission))
-        self.update_pool_acl_entry(self.pool_uuid,
-                                   "update",
-                                   secTestBase.acl_entry("user",
-                                                         "OWNER",
-                                                         p_permission))
+        self.update_pool_acl_entry(
+            "update", secTestBase.acl_entry("user", "OWNER", p_permission))
         self.verify_cont_delete(expect)
 
         #(8)Cleanup
