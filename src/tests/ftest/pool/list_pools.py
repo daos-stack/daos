@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from avocado.core.exceptions import TestFail
 from command_utils_base import CommandFailure
 
 
@@ -17,6 +16,10 @@ class ListPoolsTest(TestWithServers):
 
     :avocado: recursive
     """
+    def __init__(self, *args, **kwargs):
+        """Inititialize a ListPoolsTest object."""
+        super().__init__(*args, **kwargs)
+        self.pool = []
 
     def run_case(self, rank_lists, sr=None):
         """Run test case.
@@ -25,40 +28,85 @@ class ListPoolsTest(TestWithServers):
         the UUIDs and service replicas returned at create time.
 
         Args:
-            rank_lists (List of list of integer): Rank lists.
-            sr (String, optional): Service replicas. Defaults to None.
+            rank_lists (list): Rank lists. List of list of int.
+            sr (str, optional): Service replicas. Defaults to None.
 
         Raises:
             CommandFailure: if there was an error destoying pools
-            TestFail: if there was an error verifying the created pools
+
+        Returns:
+            list: Error list.
 
         """
-        # Iterate rank lists to create pools. Store the created pool information
-        # as a dictionary of pool UUID keys with a service replica list value.
-        expected_uuids = {}
+        expected_data = {}
+
+        # Iterate rank lists to create pools. Store the created pool
+        # information.
         for rank_list in rank_lists:
-            data = self.get_dmg_command().pool_create(
-                scm_size="1G", target_list=rank_list, svcn=sr)
-            expected_uuids[data["uuid"]] = [
-                int(svc) for svc in data["svc"].split(",")]
+            self.pool.append(self.get_pool(create=False))
+            self.pool[-1].target_list.update(rank_list)
+            self.pool[-1].svcn.update(sr)
+            self.pool[-1].create()
 
-        # Verify the 'dmg pool info' command lists the correct created pool
-        # information.  The DmgCommand.pool_info() method returns the command
-        # output as a dictionary of pool UUID keys with service replica list
-        # values.
-        detected_uuids = self.get_dmg_command().pool_list()
-        self.log.info("Expected pool info: %s", str(expected_uuids))
-        self.log.info("Detected pool info: %s", str(detected_uuids))
+            # Key is UUID and value is a dictionary that follows the same
+            # pattern as the JSON output.
+            expected_data[self.pool[-1].uuid.lower()] = {
+                "label": self.pool[-1].label.value,
+                "svc_reps": self.pool[-1].svc_ranks
+            }
 
-        # Destroy all the pools
-        for uuid in expected_uuids:
-            self.get_dmg_command().pool_destroy(uuid)
+        # Call dmg pool list.
+        actual_pools = self.pool[-1].dmg.get_pool_list_all()
 
-        # Compare the expected and detected pool information
-        self.assertEqual(
-            expected_uuids, detected_uuids,
-            "dmg pool info does not list all expected pool UUIDs and their "
-            "service replicas")
+        errors = []
+
+        # Verify the number of pools.
+        expected_count = 0
+        for _ in expected_data:
+            expected_count += 1
+
+        actual_count = 0
+        for _ in actual_pools:
+            actual_count += 1
+
+        if expected_count != actual_count:
+            msg = ("Unexpected number of pools! Expected = {}; "
+                   "Actual = {}".format(expected_count, actual_count))
+            self.log.error(msg)
+            errors.append(msg)
+
+        # Verify UUID, label, and svc_reps.
+        for actual_pool in actual_pools:
+            actual_uuid = actual_pool["uuid"]
+
+            if actual_uuid in expected_data:
+                if actual_pool["label"] != expected_data[actual_uuid]["label"]:
+                    msg = ("Unexpected label! Expected = {}; "
+                           "Actual = {}".format(
+                               expected_data[actual_uuid]["label"],
+                               actual_pool["label"]))
+                    self.log.error(msg)
+                    errors.append(msg)
+
+                if actual_pool["svc_reps"] != expected_data[
+                    actual_uuid]["svc_reps"]:
+                    msg = ("Unexpected svc_reps! Expected = {}; "
+                           "Actual = {}".format(
+                               expected_data[actual_uuid]["svc_reps"],
+                               actual_pool["svc_reps"]))
+                    self.log.error(msg)
+                    errors.append(msg)
+            else:
+                msg = ("Unexpected UUID returned from dmg pool list! "
+                       "{}".format(actual_uuid))
+                self.log.error(msg)
+                errors.append(msg)
+
+        # Destroy all the pools to prepare for the next test case.
+        for pool in self.pool:
+            pool.destroy()
+
+        return errors
 
     def test_list_pools(self):
         """JIRA ID: DAOS-3459.
@@ -68,7 +116,9 @@ class ListPoolsTest(TestWithServers):
             output list matches the output returned when the pools were
             created.
 
-        :avocado: tags=all,large,pool,full_regression,list_pools
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=pool,list_pools
         """
         ranks = list(range(len(self.hostlist_servers)))
 
@@ -97,21 +147,17 @@ class ListPoolsTest(TestWithServers):
             (
                 "Create 3 pools using all ranks with --nsvc=3",
                 {"rank_lists": [None for _ in ranks[:3]], "sr": 3}
-            ),
+            )
         ]
+
         errors = []
+
         for test_case, kwargs in test_cases:
             self.log.info("%s", "-" * 80)
             self.log.info("Running test case: %s", test_case)
             self.log.info("%s", "-" * 80)
             try:
-                self.run_case(**kwargs)
-
-            except TestFail as error:
-                message = "Error: {}: {}".format(test_case, error)
-                self.log.info(message)
-                errors.append(message)
-
+                errors.extend(self.run_case(**kwargs))
             except CommandFailure as error:
                 self.fail(
                     "Fatal test error detected during: {}: {}".format(

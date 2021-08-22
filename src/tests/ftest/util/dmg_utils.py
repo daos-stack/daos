@@ -1018,6 +1018,83 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("telemetry", "metrics", "query"), host=host, metrics=metrics)
 
+    def _parse_pool_list(self, key=None):
+        """Parse the dmg pool list json output for the requested information.
+
+        Args:
+            key (str, optional): pool list json dictionary key in
+                ["response"]["pools"]. Defaults to None.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: list of all the pool items in the dmg pool list json output
+                for the requested json dictionary key. This will be an empty
+                list if the key does not exist or the json output was not in
+                the expected format.
+
+        """
+        pool_list = self.pool_list()
+        try:
+            if key:
+                return [pool[key] for pool in pool_list["response"]["pools"]]
+            return pool_list["response"]["pools"]
+        except KeyError:
+            return []
+
+    def get_pool_list_all(self):
+        """Get a list of all the pool information from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a list of dictionaries containing information for each pool
+                from the dmg pool list json output
+
+        """
+        return self._parse_pool_list()
+
+    def get_pool_list_uuids(self):
+        """Get a list of pool UUIDs from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a sorted list of UUIDs for each pool from the dmg pool list
+                json output
+
+        """
+        return sorted(self._parse_pool_list("uuid"))
+
+    def get_pool_list_labels(self):
+        """Get a list of pool labels from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a sorted list of labels for each pool from the dmg pool list
+                json output
+
+        """
+        return sorted(self._parse_pool_list("label"))
+
+    def get_pool_list_svc_reps(self):
+        """Get a list of lists of pool svc_reps from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a list of lists of pool svc_reps for each pool from the dmg
+                pool list json output
+
+        """
+        return self._parse_pool_list("svc_reps")
+
 
 def check_system_query_status(data):
     """Check if any server crashed.
