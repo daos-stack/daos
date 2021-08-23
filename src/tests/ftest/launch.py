@@ -2211,6 +2211,14 @@ def main():
         action="store_true",
         help="modify the test yaml files but do not run the tests")
     parser.add_argument(
+        "-mo", "--mode",
+        choices=['normal', 'manual'],
+        default='normal',
+        help="provide the mode of test to be run under. Default is normal, "
+             "in which the final return code of launch.py is still zero if "
+             "any of the tests failed. 'manual' is where the return code is "
+             "non-zero if any of the tests as part of launch.py failed.")
+    parser.add_argument(
         "-n", "--nvme",
         action="store",
         help="comma-separated list of NVMe device PCI addresses to use as "
@@ -2341,6 +2349,8 @@ def main():
     else:
         if status & 1 == 1:
             print("Detected one or more avocado test failures!")
+            if args.mode == 'manual':
+                ret_code = 1
         if status & 8 == 8:
             print("Detected one or more interrupted avocado jobs!")
         if status & 2 == 2:

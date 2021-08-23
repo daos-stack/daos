@@ -223,6 +223,180 @@ VOS. For a full description of `daos_perf` usage, run:
 $ daos_perf --help
 ```
 
+The `-R` option is used to define the operation to be performanced:
+
+- `U` for `update` (i.e. write) operation
+- `F` for `fetch` (i.e. read) operation
+- `P` for `punch` (i.e. truncate) operation
+- `p` to display the performance result for the previous operation.
+
+For instance, -R "U;p F;P" means update the keys, print the update rate/bandwidth,
+fetch the keys and then print the fetch rate/bandwidth. The number of
+object/dkey/akey/value can be passed via respectively the -o, -d, -a and -n
+options. The value size is specified via the -s parameter (e.g. -s 4K for 4K
+value).
+
+For instance, to measure rate for 10M update & fetch operation in VOS mode,
+mount the pmem device and then run:
+
+```bash
+$ cd /mnt/daos0
+$ df .
+Filesystem      1K-blocks  Used  Available Use% Mounted on
+/dev/pmem0     4185374720 49152 4118216704   1% /mnt/daos0
+$ taskset -c 1 daos_perf -T vos -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
+Test :
+        VOS (storage only)
+Pool :
+        a3b7ff28-56ff-4974-9283-62990dd770ad
+Parameters :
+        pool size     : SCM: 102400 MB, NVMe: 0 MB
+        credits       : -1 (sync I/O for -ve)
+        obj_per_cont  : 1 x 1 (procs)
+        dkey_per_obj  : 10000000 (buf)
+        akey_per_dkey : 1
+        recx_per_akey : 1
+        value type    : single
+        stride size   : 4096
+        zero copy     : yes
+        VOS file      : ./vos0
+Running test=UPDATE
+Running UPDATE test (iteration=1)
+UPDATE successfully completed:
+        duration  : 124.478568 sec
+        bandwidth : 313.809    MB/sec
+        rate      : 80335.11   IO/sec
+        latency   : 12.448     us (nonsense if credits > 1)
+Duration across processes:
+        MAX duration : 124.478568 sec
+        MIN duration : 124.478568 sec
+        Average duration : 124.478568 sec
+Completed test=UPDATE
+Running test=FETCH
+Running FETCH test (iteration=1)
+FETCH successfully completed:
+        duration  : 23.884087  sec
+        bandwidth : 1635.503   MB/sec
+        rate      : 418688.81  IO/sec
+        latency   : 2.388      us (nonsense if credits > 1)
+Duration across processes:
+        MAX duration : 23.884087  sec
+        MIN duration : 23.884087  sec
+        Average duration : 23.884087  sec
+```
+
+Taskset is used to change the CPU affinity of the daos\_perf process.
+
+!!! warning
+    Performance of persistent memory may be impacted by NUMA affinity. It is
+    thus recommended to set the affinity of daos\_perf to a CPU core locally
+    attached to the persistent memory device.
+
+The same test can be performed on the 2nd pmem device to compare the
+performance.
+
+```
+$ cd /mnt/daos1/
+$ df .
+Filesystem      1K-blocks   Used  Available Use% Mounted on
+/dev/pmem1     4185374720 262144 4118003712   1% /mnt/daos1
+$ taskset -c 36 daos_perf -T vos -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
+Test :
+        VOS (storage only)
+Pool :
+        9d6c3fbd-a4f1-47d2-92a9-6112feb52e74
+Parameters :
+        pool size     : SCM: 102400 MB, NVMe: 0 MB
+        credits       : -1 (sync I/O for -ve)
+        obj_per_cont  : 1 x 1 (procs)
+        dkey_per_obj  : 10000000 (buf)
+        akey_per_dkey : 1
+        recx_per_akey : 1
+        value type    : single
+        stride size   : 4096
+        zero copy     : yes
+        VOS file      : ./vos0
+Running test=UPDATE
+Running UPDATE test (iteration=1)
+UPDATE successfully completed:
+        duration  : 123.389467 sec
+        bandwidth : 316.579    MB/sec
+        rate      : 81044.19   IO/sec
+        latency   : 12.339     us (nonsense if credits > 1)
+Duration across processes:
+        MAX duration : 123.389467 sec
+        MIN duration : 123.389467 sec
+        Average duration : 123.389467 sec
+Completed test=UPDATE
+Running test=FETCH
+Running FETCH test (iteration=1)
+FETCH successfully completed:
+        duration  : 24.114830  sec
+        bandwidth : 1619.854   MB/sec
+        rate      : 414682.58  IO/sec
+        latency   : 2.411      us (nonsense if credits > 1)
+Duration across processes:
+        MAX duration : 24.114830  sec
+        MIN duration : 24.114830  sec
+        Average duration : 24.114830  sec
+Completed test=FETCH
+```
+
+Bandwidth can be tested by using a larger record size (i.e. -s option). For
+instance:
+
+```
+$ taskset -c 36 daos_perf -T vos -f ./vos -P 100G -d 40000 -a 1 -n 1 -s 1M -z -R "U;p F;p"
+Test :
+        VOS (storage only)
+Pool :
+        dc44f0dd-930e-43b1-b599-5cc141c868d9
+Parameters :
+        pool size     : SCM: 102400 MB, NVMe: 0 MB
+        credits       : -1 (sync I/O for -ve)
+        obj_per_cont  : 1 x 1 (procs)
+        dkey_per_obj  : 40000 (buf)
+        akey_per_dkey : 1
+        recx_per_akey : 1
+        value type    : single
+        stride size   : 1048576
+        zero copy     : yes
+        VOS file      : ./vos0
+Running test=UPDATE
+Running UPDATE test (iteration=1)
+UPDATE successfully completed:
+        duration  : 21.247287  sec
+        bandwidth : 1882.593   MB/sec
+        rate      : 1882.59    IO/sec
+        latency   : 531.182    us (nonsense if credits > 1)
+Duration across processes:
+        MAX duration : 21.247287  sec
+        MIN duration : 21.247287  sec
+        Average duration : 21.247287  sec
+Completed test=UPDATE
+Running test=FETCH
+Running FETCH test (iteration=1)
+FETCH successfully completed:
+        duration  : 10.133850  sec
+        bandwidth : 3947.167   MB/sec
+        rate      : 3947.17    IO/sec
+        latency   : 253.346    us (nonsense if credits > 1)
+Duration across processes:
+        MAX duration : 10.133850  sec
+        MIN duration : 10.133850  sec
+        Average duration : 10.133850  sec
+Completed test=FETCH
+```
+
+!!! note
+    With 3rd Gen Intel® Xeon® Scalable processors (ICX), the PMEM_NO_FLUSH
+    environment variable can be set to 1 to take advantage of the extended
+    asynchronous DRAM refresh (eADR) feature
+
+In DAOS mode, daos\_perf can be used as an MPI application like IOR.
+Parameters are the same, except that `-T daos` can be used to select the daos
+mode. This option can be omitted too since this is the default.
+
 ## Client Performance Tuning
 
 For best performance, a DAOS client should specifically bind itself to a NUMA

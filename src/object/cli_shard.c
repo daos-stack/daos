@@ -1882,6 +1882,8 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	tmp_recx = &recx[0];
 re_check:
 	if (reply_recx->rx_idx & PARITY_INDICATOR) {
+		daos_recx_t *punched_recx = &okqo->okqo_recx_punched;
+
 		D_ASSERT(!from_data_tgt);
 		rx_idx = (reply_recx->rx_idx & (~PARITY_INDICATOR));
 		D_ASSERTF(rx_idx % cell_rec_nr == 0, "rx_idx "DF_X64
@@ -1895,6 +1897,24 @@ re_check:
 		tmp_recx->rx_idx = rx_idx;
 		tmp_recx->rx_nr = stripe_rec_nr *
 				     (reply_recx->rx_nr / cell_rec_nr);
+
+		if (DAOS_RECX_END(*punched_recx) > 0) {
+			D_DEBUG(DB_IO, "shard %d punched extent "DF_U64" "DF_U64"\n",
+				shard, punched_recx->rx_idx, punched_recx->rx_nr);
+			D_ASSERT(DAOS_RECX_END(*punched_recx) >= tmp_recx->rx_idx);
+			if (DAOS_RECX_END(*punched_recx) < DAOS_RECX_END(*tmp_recx)) {
+				uint64_t r_end = DAOS_RECX_END(*tmp_recx);
+
+				tmp_recx->rx_idx = DAOS_RECX_END(*punched_recx);
+				tmp_recx->rx_nr = r_end - tmp_recx->rx_idx;
+			} else if (punched_recx->rx_idx > tmp_recx->rx_idx) {
+				tmp_recx->rx_nr = min(punched_recx->rx_idx,
+						      DAOS_RECX_END(*tmp_recx)) - tmp_recx->rx_idx;
+			} else {
+				tmp_recx->rx_nr = 0;
+				tmp_recx->rx_idx = 0;
+			}
+		}
 		D_DEBUG(DB_IO, "shard %d get recx "DF_U64" "DF_U64"\n",
 			shard, tmp_recx->rx_idx, tmp_recx->rx_nr);
 	} else {

@@ -27,12 +27,14 @@ class SnapshotAggregation(IorTestBase):
         self.free_space = {"scm": [], "nvme": []}
 
     def update_free_space(self):
-        """Append the free space list with the current pool capacities."""
+        """Append to the free space list with the current pool capacities."""
         for index, name in enumerate(("scm", "nvme")):
-            self.free_space[name].append({
-                "dmg": self.pool.query_data["response"][name]["free"],
-                "api": int(self.pool.info.pi_space.ps_space.s_free[index])
-            })
+            for tier in self.pool.query_data["response"]["tier_stats"]:
+                if tier["media_type"] == name:
+                    self.free_space[name].append({
+                        "dmg": tier["free"],
+                        "api": int(self.pool.info.pi_space.ps_space.s_free[index])
+                    })
 
     def test_snapshot_aggregation(self):
         """JIRA ID: DAOS-3751.

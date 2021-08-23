@@ -4,7 +4,6 @@
 
 The DAOS tier can be tightly integrated with the Lustre parallel filesystem,
 in which DAOS containers will be represented through the Lustre namespace.
-This capability is under development and is scheduled for DAOS v1.2.
 
 The current state of work can be summarized as follows :
 
@@ -79,10 +78,10 @@ To allow non-root/admin users to use the llapi_set_dirstripe()
 ### Migration to/from a POSIX filesystem
 
 A dataset mover tool is under development to move a snapshot of a DAOS POSIX
-container or DAOS HDF5 container to a POSIX filesystem and vice versa. 
-The copy will be performed at the POSIX or HDF5 level. 
+container or DAOS HDF5 container to a POSIX filesystem and vice versa.
+The copy will be performed at the POSIX or HDF5 level.
 (The MPI-IO ROMIO ADIO driver for DAOS also uses DAOS POSIX containers.)
-For DAOS HDF5 containers, the resulting HDF5 file in the POSIX filesystem 
+For DAOS HDF5 containers, the resulting HDF5 file in the POSIX filesystem
 will be accessible through the native HDF5 connector with the POSIX VFD.
 
 The first version of the data mover tool is currently scheduled for DAOS v1.4.

@@ -171,8 +171,8 @@ func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(
 	}(prefix)
 
 	return stream, func() {
+		C.fflush(stream)
 		C.fclose(stream)
-		C.sync()
 	}, nil
 }
 
@@ -182,9 +182,9 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	}
 
 	freeString(ap.sysname)
-	C.free_daos_alloc(unsafe.Pointer(ap.dfs_path))
-	C.free_daos_alloc(unsafe.Pointer(ap.pool_label))
-	C.free_daos_alloc(unsafe.Pointer(ap.cont_label))
+
+	C.free(unsafe.Pointer(ap.dfs_path))
+	C.free(unsafe.Pointer(ap.dfs_prefix))
 
 	if ap.props != nil {
 		C.daos_prop_free(ap.props)

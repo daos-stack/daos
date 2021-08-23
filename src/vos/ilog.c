@@ -1270,36 +1270,6 @@ ilog_fetch_finish(struct ilog_entries *entries)
 	D_FREE(priv->ip_removals);
 }
 
-static int
-remove_ilog_entry(struct ilog_context *lctx, struct ilog_entries *entries,
-		  int idx, int *removed)
-{
-	const struct ilog_id	*id = &entries->ie_ids[idx];
-	struct ilog_priv	*priv = ilog_ent2priv(entries);
-	int			 rc;
-
-	rc = ilog_tx_begin(lctx);
-	if (rc != 0)
-		return rc;
-	D_DEBUG(DB_TRACE, "Removing ilog entry at "DF_X64"\n",
-		id->id_epoch);
-
-	rc = ilog_log_del(lctx, id, true);
-	if (rc != 0) {
-		D_ERROR("Could not remove entry from tree: "DF_RC"\n",
-			DP_RC(rc));
-		return rc;
-	}
-	D_DEBUG(DB_TRACE, "Removed ilog entry at "DF_X64"\n",
-		id->id_epoch);
-
-	priv->ip_removals[idx] = true;
-
-	(*removed)++;
-
-	return 0;
-}
-
 struct agg_arg {
 	const daos_epoch_range_t	*aa_epr;
 	int32_t				 aa_prev;
@@ -1441,12 +1411,35 @@ collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache, struct 
 	struct ilog_id		*dest;
 	struct ilog_array	*array;
 	int			 rc;
-	int			 nr = 0;
+	uint32_t		 nr = 0;
 	int			 i;
 
 	if (removed == 0)
 		return 0;
 
+	rc = ilog_tx_begin(lctx);
+	if (rc != 0)
+		return rc;
+
+	array = cache->ac_array;
+
+	for (i = 0; i < cache->ac_nr; i++) {
+		if (!priv->ip_removals[i])
+			continue;
+
+		dest = &cache->ac_entries[i];
+		D_DEBUG(DB_TRACE, "Removing ilog entry at "DF_X64"\n",
+			dest->id_epoch);
+
+		rc = ilog_log_del(lctx, dest, true);
+		if (rc != 0) {
+			D_ERROR("Could not remove entry from tree: "DF_RC"\n",
+				DP_RC(rc));
+			return rc;
+		}
+		D_DEBUG(DB_TRACE, "Removed ilog entry at "DF_X64"\n",
+			dest->id_epoch);
+	}
 	if (cache->ac_nr == removed)
 		return reset_root(lctx, cache, -1);
 
@@ -1459,10 +1452,8 @@ collapse_tree(struct ilog_context *lctx, struct ilog_array_cache *cache, struct 
 		D_ASSERT(0);
 	}
 
-	array = cache->ac_array;
-
 	rc = umem_tx_add_ptr(&lctx->ic_umm, array,
-			     sizeof(array) + sizeof(array->ia_id[0]) * (cache->ac_nr - removed));
+			     sizeof(*array) + sizeof(array->ia_id[0]) * (cache->ac_nr - removed));
 	if (rc != 0)
 		return rc;
 
@@ -1552,16 +1543,13 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *ilog,
 			agg_arg.aa_prev = entry.ie_idx;
 			break;
 		case AGG_RC_REMOVE_PREV:
-			rc = remove_ilog_entry(lctx, entries, agg_arg.aa_prev, &removed);
-			if (rc != 0)
-				goto done;
-
+			priv->ip_removals[agg_arg.aa_prev] = true;
+			removed++;
 			agg_arg.aa_prev = agg_arg.aa_prior_punch;
 			/* Fall through */
 		case AGG_RC_REMOVE:
-			rc = remove_ilog_entry(lctx, entries, entry.ie_idx, &removed);
-			if (rc != 0)
-				goto done;
+			priv->ip_removals[entry.ie_idx] = true;
+			removed++;
 			break;
 		case AGG_RC_ABORT:
 			rc = -DER_TX_BUSY;

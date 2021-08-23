@@ -119,6 +119,8 @@ struct dc_object {
  *    it, create oiod/siod to specify each shard/tgt's IO req.
  */
 struct obj_reasb_req {
+	/* object ID */
+	daos_obj_id_t			 orr_oid;
 	/* epoch for IO (now only used for fetch */
 	struct dtx_epoch		 orr_epoch;
 	/* original user input iods/sgls */
@@ -149,8 +151,9 @@ struct obj_reasb_req {
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
-	/* object ID */
-	daos_obj_id_t			 orr_oid;
+	/* parity recx list (to compare parity ext/epoch when data recovery) */
+	struct daos_recx_ep_list	*orr_parity_lists;
+	uint32_t			 orr_parity_list_nr;
 	/* #iods of IO req */
 	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */

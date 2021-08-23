@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 from avocado import fail_on
 from apricot import TestWithServers
 from daos_utils import DaosCommand
@@ -21,7 +19,6 @@ class DaosServerTest(TestWithServers):
 
     :avocado: recursive
     """
-
     @fail_on(ServerFailed)
     @fail_on(CommandFailure)
     def restart_daos_server(self, reformat=True):
@@ -29,7 +26,6 @@ class DaosServerTest(TestWithServers):
 
         Args:
             reformat (bool): always reformat storage, could be destructive.
-
         """
         self.log.info("=Restart daos_server, server stop().")
         self.server_managers[0].stop()
@@ -50,7 +46,6 @@ class DaosServerTest(TestWithServers):
         Args:
             force (bool): Force to stop the daos engine.
             Defaults to True.
-
         """
         self.server_managers[0].dmg.system_stop(force)
         self.server_managers[0].dmg.system_start()
@@ -79,13 +74,12 @@ class DaosServerTest(TestWithServers):
         num_of_pool = self.params.get("num_of_pool", "/run/server/*/", 3)
         container_per_pool = self.params.get(
             "container_per_pool", "/run/server/*/", 2)
+
         for _ in range(num_of_pool):
-            dmg = self.get_dmg_command()
-            result = dmg.pool_create(scm_size)
-            uuid = result['uuid']
+            self.pool.append(self.get_pool(connect=False))
             daos_cmd = DaosCommand(self.bin)
             for _ in range(container_per_pool):
-                result = daos_cmd.container_create(pool=uuid)
+                result = daos_cmd.container_create(pool=self.pool[-1].uuid)
                 self.log.info("container create status: %s", result)
 
     def test_daos_server_reformat(self):
@@ -101,9 +95,12 @@ class DaosServerTest(TestWithServers):
         (5)Verify after DAOS server restarted, it should appear as an empty
            fresh installation.
 
-        :avocado: tags=all,daily_regression,hw,large,server_test
-        :avocado: tags=server_reformat,DAOS_5610
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server_test,server_reformat,DAOS_5610
         """
+        self.pool = []
+
         self.log.info("(1)Verify daos server pool list after started.")
         self.verify_pool_list()
         self.log.info("(2)Restart server without pool created and verify.")
@@ -115,6 +112,8 @@ class DaosServerTest(TestWithServers):
         self.restart_daos_server()
         self.log.info("(5)Verify after server restarted.")
         self.verify_pool_list()
+
+        self.pool = None
 
     def test_engine_restart(self):
         """JIRA ID: DAOS-3593.
@@ -132,9 +131,12 @@ class DaosServerTest(TestWithServers):
         (5)Use the cmd line to perform a controlled shutdown when the
            daos cluster is incomplete (i.e. 1 of the 2 servers is down).
 
-        :avocado: tags=all,daily_regression,hw,large,server_test
-        :avocado: tags=server_restart,DAOS_5610
+        :avocado: tags=all,daily_regression
+        :avocado: tags=hw,large
+        :avocado: tags=server_test,server_restart,DAOS_5610
         """
+        self.pool = []
+
         self.log.info(
             "(1)Shutdown and restart the daos engine "
             "from a quiescent state.")

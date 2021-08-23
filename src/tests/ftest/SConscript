@@ -11,8 +11,8 @@ def scons():
 
     dirs = ['aggregation', 'checksum', 'container', 'control',
             'daos_perf', 'daos_racer', 'daos_vol',
-            'ior', 'mdtest',
-            'daos_test', 'data', 'io', 'network', 'nvme',
+            'daos_test', 'data', 'fault_domain', 'io', 'ior',
+            'mdtest', 'network', 'nvme',
             'object', 'osa', 'pool', 'rebuild', 'security',
             'server', 'soak', 'unittest', 'erasurecode',
             'datamover', 'scripts', 'dbench', 'harness']

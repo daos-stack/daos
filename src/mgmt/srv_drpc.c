@@ -1528,6 +1528,7 @@ storage_usage_stats_from_pool_space(Mgmt__StorageUsageStats *stats,
 {
 	D_ASSERT(media_type < DAOS_MEDIA_MAX);
 
+	stats->media_type = media_type;
 	stats->total = space->ps_space.s_total[media_type];
 	stats->free = space->ps_space.s_free[media_type];
 	stats->min = space->ps_free_min[media_type];
