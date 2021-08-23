@@ -9,7 +9,9 @@ package control
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -38,19 +40,21 @@ type (
 	// MockInvokerConfig defines the configured responses
 	// for a MockInvoker.
 	MockInvokerConfig struct {
-		Sys              string
-		UnaryError       error
-		UnaryResponse    *UnaryResponse
-		UnaryResponseSet []*UnaryResponse
-		HostResponses    HostResponseChan
+		Sys                 string
+		UnaryError          error
+		UnaryResponse       *UnaryResponse
+		UnaryResponseSet    []*UnaryResponse
+		UnaryResponseDelays [][]time.Duration
+		HostResponses       HostResponseChan
 	}
 
 	// MockInvoker implements the Invoker interface in order
 	// to enable unit testing of API functions.
 	MockInvoker struct {
-		log         debugLogger
-		cfg         MockInvokerConfig
-		invokeCount int
+		log              debugLogger
+		cfg              MockInvokerConfig
+		invokeCount      int
+		invokeCountMutex sync.RWMutex
 	}
 )
 
@@ -93,9 +97,11 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	responses := make(HostResponseChan)
 
 	ur := mi.cfg.UnaryResponse
+	mi.invokeCountMutex.RLock()
 	if len(mi.cfg.UnaryResponseSet) > mi.invokeCount {
 		ur = mi.cfg.UnaryResponseSet[mi.invokeCount]
 	}
+	mi.invokeCountMutex.RUnlock()
 	if ur == nil {
 		// If the config didn't define a response, just dummy one up for
 		// tests that don't care.
@@ -110,9 +116,22 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 		}
 	}
 
+	mi.invokeCountMutex.Lock()
 	mi.invokeCount++
+	mi.invokeCountMutex.Unlock()
 	go func() {
-		for _, hr := range ur.Responses {
+		for idx, hr := range ur.Responses {
+			var delay time.Duration
+			mi.invokeCountMutex.RLock()
+			if len(mi.cfg.UnaryResponseDelays) > mi.invokeCount &&
+				len(mi.cfg.UnaryResponseDelays[mi.invokeCount]) > idx {
+				delay = mi.cfg.UnaryResponseDelays[mi.invokeCount][idx]
+			}
+			mi.invokeCountMutex.RUnlock()
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+
 			select {
 			case <-ctx.Done():
 				return

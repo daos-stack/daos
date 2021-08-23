@@ -1226,6 +1226,9 @@ obj_tree_init(struct vos_object *obj)
 					    vos_cont2hdl(obj->obj_cont),
 					    vos_obj2pool(obj), &obj->obj_toh);
 	}
+
+	if (rc)
+		D_ERROR("obj_tree_init failed, "DF_RC"\n", DP_RC(rc));
 	return rc;
 }
 

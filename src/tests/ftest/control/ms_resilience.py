@@ -40,8 +40,14 @@ class ManagementServiceResilience(TestWithServers):
 
         Returns:
             Pool entry, if found, or None.
+
         """
-        for pool_uuid in self.get_dmg_command().pool_list(no_query=True):
+        output = self.get_dmg_command().pool_list(no_query=True)
+        uuids = []
+        for pool in output["response"]["pools"]:
+            uuids.append(pool["uuid"])
+
+        for pool_uuid in uuids:
             if pool_uuid.lower() == search_uuid.lower():
                 return pool_uuid
         return None
@@ -56,16 +62,20 @@ class ManagementServiceResilience(TestWithServers):
         self.log.info("Pool UUID %s on server group: %s",
                         self.pool.uuid, self.server_group)
         # Verify that the pool persisted.
-        if self.find_pool(self.pool.uuid):
-            self.log.info("Found pool in system.")
-        else:
-            self.fail("No pool found in system.")
+        while not self.find_pool(self.pool.uuid):
+            # Occasionally the pool may not be found
+            # immediately after creation if the read
+            # is serviced by a non-leader replica.
+            self.log.info("Pool %s not found yet.", self.pool.uuid)
+            time.sleep(1)
+        self.log.info("Found pool in system.")
 
     def get_leader(self):
         """Fetch the current system leader.
 
         Returns:
             str: hostname of the MS leader, or None
+
         """
         sys_leader_info = self.get_dmg_command().system_leader_query()
         l_addr = sys_leader_info["response"]["CurrentLeader"]
@@ -239,8 +249,9 @@ class ManagementServiceResilience(TestWithServers):
         Test Description:
             Test N=1 management service is accessible after 1 instance is removed.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_retained_quorum_N_1
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_retained_quorum_N_1
         """
         # Run test cases
         self.verify_retained_quorum(1)
@@ -252,8 +263,9 @@ class ManagementServiceResilience(TestWithServers):
         Test Description:
             Test N=2 management service is accessible after 2 instances are removed.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_retained_quorum_N_2
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_retained_quorum_N_2
         """
         # Run test cases
         self.verify_retained_quorum(2)
@@ -267,8 +279,9 @@ class ManagementServiceResilience(TestWithServers):
             lost (degraded mode), and then test that quorum can be regained for
             full functionality.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_regained_quorum_N_1
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_regained_quorum_N_1
         """
         # Run test case
         self.verify_regained_quorum(1)
@@ -282,8 +295,9 @@ class ManagementServiceResilience(TestWithServers):
             lost (degraded mode), and then test that quorum can be regained for
             full functionality.
 
-        :avocado: tags=all,pr,daily_regression,control,ms_resilience
-        :avocado: tags=ms_regained_quorum_N_2
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=vm
+        :avocado: tags=control,ms_resilience,ms_regained_quorum_N_2
         """
         # Run test case
         self.verify_regained_quorum(2)
