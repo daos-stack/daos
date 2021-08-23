@@ -25,8 +25,8 @@ class ListPoolsTest(TestWithServers):
         the UUIDs and service replicas returned at create time.
 
         Args:
-            rank_lists (List of list of integer): Rank lists.
-            sr (String, optional): Service replicas. Defaults to None.
+            rank_lists (list): Rank lists. List of list of int.
+            sr (str, optional): Service replicas. Defaults to None.
 
         Raises:
             CommandFailure: if there was an error destoying pools
@@ -37,10 +37,11 @@ class ListPoolsTest(TestWithServers):
         # as a dictionary of pool UUID keys with a service replica list value.
         expected_uuids = {}
         for rank_list in rank_lists:
-            data = self.get_dmg_command().pool_create(
-                scm_size="1G", target_list=rank_list, svcn=sr)
-            expected_uuids[data["uuid"]] = [
-                int(svc) for svc in data["svc"].split(",")]
+            self.pool.append(self.get_pool(create=False))
+            self.pool[-1].target_list.update(rank_list)
+            self.pool[-1].svcn.update(sr)
+            self.pool[-1].create()
+            expected_uuids[self.pool[-1].uuid.lower()] = self.pool[-1].svc_ranks
 
         # Verify the 'dmg pool info' command lists the correct created pool
         # information.  The DmgCommand.pool_info() method returns the command
@@ -70,6 +71,7 @@ class ListPoolsTest(TestWithServers):
 
         :avocado: tags=all,large,pool,full_regression,list_pools
         """
+        self.pool = []
         ranks = list(range(len(self.hostlist_servers)))
 
         # Create pools with different ranks:

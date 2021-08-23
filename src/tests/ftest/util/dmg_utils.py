@@ -1020,7 +1020,7 @@ class DmgCommand(DmgCommandBase):
         return self._get_json_result(
             ("telemetry", "metrics", "query"), host=host, metrics=metrics)
 
-    def _parse_pool_list(self, key=None):
+    def _parse_pool_list(self, key=None, **kwargs):
         """Parse the dmg pool list json output for the requested information.
 
         Args:
@@ -1037,15 +1037,17 @@ class DmgCommand(DmgCommandBase):
                 the expected format.
 
         """
-        pool_list = self.pool_list()
+        pool_list = self.pool_list(**kwargs)
         try:
+            if pool_list["response"]["pools"] is None:
+                return []
             if key:
                 return [pool[key] for pool in pool_list["response"]["pools"]]
             return pool_list["response"]["pools"]
         except KeyError:
             return []
 
-    def get_pool_list_all(self):
+    def get_pool_list_all(self, **kwargs):
         """Get a list of all the pool information from dmg pool list.
 
         Raises:
@@ -1056,9 +1058,9 @@ class DmgCommand(DmgCommandBase):
                 from the dmg pool list json output
 
         """
-        return self._parse_pool_list()
+        return self._parse_pool_list(**kwargs)
 
-    def get_pool_list_uuids(self):
+    def get_pool_list_uuids(self, **kwargs):
         """Get a list of pool UUIDs from dmg pool list.
 
         Raises:
@@ -1069,9 +1071,9 @@ class DmgCommand(DmgCommandBase):
                 json output
 
         """
-        return sorted(self._parse_pool_list("uuid"))
+        return sorted(self._parse_pool_list("uuid", **kwargs))
 
-    def get_pool_list_labels(self):
+    def get_pool_list_labels(self, **kwargs):
         """Get a list of pool labels from dmg pool list.
 
         Raises:
@@ -1082,9 +1084,9 @@ class DmgCommand(DmgCommandBase):
                 json output
 
         """
-        return sorted(self._parse_pool_list("label"))
+        return sorted(self._parse_pool_list("label", **kwargs))
 
-    def get_pool_list_svc_reps(self):
+    def get_pool_list_svc_reps(self, **kwargs):
         """Get a list of lists of pool svc_reps from dmg pool list.
 
         Raises:
@@ -1095,7 +1097,7 @@ class DmgCommand(DmgCommandBase):
                 pool list json output
 
         """
-        return self._parse_pool_list("svc_reps")
+        return self._parse_pool_list("svc_reps", **kwargs)
 
 
 def check_system_query_status(data):
