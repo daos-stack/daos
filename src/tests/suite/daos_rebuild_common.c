@@ -615,6 +615,13 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 
 	for (i = 0; i < KEY_NR; i++) {
 		req->iod_type = DAOS_IOD_ARRAY;
+
+		sprintf(key, "dkey_small_%d", index);
+		recx.rx_nr = 5;
+		recx.rx_idx = off + i * 10485760;
+		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, size, req);
+
 		sprintf(key, "dkey_%d", index);
 		recx.rx_nr = size;
 		recx.rx_idx = off + i * 10485760;
@@ -659,8 +666,18 @@ verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
 		daos_size_t	single_data_size;
 		daos_size_t	iod3_datasize = IOD3_DATA_SIZE * 3;
 		daos_size_t	datasize = size;
+		daos_size_t	small_size = 5;
 
 		req->iod_type = DAOS_IOD_ARRAY;
+
+		sprintf(key, "dkey_small_%d", index);
+		sprintf(key_buf, "a_key");
+		memset(read_data, 0, 5);
+		lookup(key, 1, &akey, &offset, &iod_size,
+		       &read_data, &small_size, DAOS_TX_NONE, req, false);
+		assert_memory_equal(read_data, verify_data, small_size);
+		assert_int_equal(iod_size, 1);
+
 		sprintf(key, "dkey_%d", index);
 		sprintf(key_buf, "a_key");
 		memset(read_data, 0, size);

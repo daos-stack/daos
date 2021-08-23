@@ -9,11 +9,22 @@
 from grp import getgrgid
 from pwd import getpwuid
 import re
+import time
 
+from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
 
+RETRYABLE_POOL_CREATE_ERRORS = [
+    -1006, # -DER_UNREACH: Can happen after ranks are killed but before
+           #               SWIM has noticed and excluded them.
+    -1019, # -DER_OOG: Can happen after restart.
+]
+POOL_RETRY_INTERVAL = 1 # seconds
+
+class DmgJsonCommandFailure(CommandFailure):
+    """Exception raised when a dmg --json command fails."""
 
 def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
     """Get a dmg command object.
@@ -369,7 +380,7 @@ class DmgCommand(DmgCommandBase):
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
                     target_list=None, svcn=None, acl_file=None, size=None,
-                    tier_ratio=None, properties=None, label=None):
+                    tier_ratio=None, properties=None, label=None, nranks=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -393,6 +404,7 @@ class DmgCommand(DmgCommandBase):
             properties (str, optional): Comma separated name:value string
                 Defaults to None
             label (str, optional): Pool label. Defaults to None.
+            nranks (str, optional): Number of ranks to use. Defaults to None
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -413,8 +425,10 @@ class DmgCommand(DmgCommandBase):
             "nsvc": svcn,
             "acl_file": acl_file,
             "properties": properties,
-            "label": label
+            "label": label,
+            "nranks": nranks
         }
+
         if target_list is not None:
             kwargs["ranks"] = ",".join([str(target) for target in target_list])
 
@@ -435,7 +449,24 @@ class DmgCommand(DmgCommandBase):
         # },
         # "error": null,
         # "status": 0
-        output = self._get_json_result(("pool", "create"), **kwargs)
+        output = self._get_json_result(("pool", "create"),
+                                       json_err=True, **kwargs)
+        if output["error"] is not None:
+            self.log.error(output["error"])
+            if output["status"] in RETRYABLE_POOL_CREATE_ERRORS:
+                time.sleep(POOL_RETRY_INTERVAL)
+                return self.pool_create(scm_size, uid=uid, gid=gid,
+                                        nvme_size=nvme_size,
+                                        target_list=target_list,
+                                        svcn=svcn,
+                                        acl_file=acl_file,
+                                        size=size,
+                                        tier_ratio=tier_ratio,
+                                        properties=properties,
+                                        label=label)
+            if self.exit_status_exception:
+                raise DmgJsonCommandFailure(output["error"])
+
         if output["response"] is None:
             return data
 
@@ -587,55 +618,57 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "delete-acl"), pool=pool, principal=principal)
 
-    def pool_list(self):
+    def pool_list(self, no_query=False, verbose=False):
         """List pools.
+
+        Args:
+            no_query (bool, optional): If True, do not query for pool stats.
+            verbose (bool, optional): If True, use verbose mode.
 
         Raises:
             CommandFailure: if the dmg pool pool list command fails.
 
         Returns:
-            dict: a dictionary of pool UUID keys and svc replica values
+            dict: JSON output dictionary
 
         """
-        # Sample JSON Output:
+        # Sample verbose JSON Output:
         # {
-        #    "response": {
-        #        "status": 0,
-        #        "pools": [
-        #        {
-        #            "uuid": "3dd3f313-6e37-4890-9e64-93a34d04e9f5",
-        #            "label": "foobar",
-        #            "svc_reps": [
-        #            0
-        #            ]
-        #        },
-        #        {
-        #            "uuid": "6871d543-9a12-4530-b704-d937197c131c",
-        #            "label": "foobaz",
-        #            "svc_reps": [
-        #            0
-        #            ]
-        #        },
-        #        {
-        #            "uuid": "aa503e26-e974-4634-ac5a-738ee00f0c39",
-        #            "svc_reps": [
-        #            0
-        #            ]
-        #        }
-        #        ]
-        #    },
-        #    "error": null,
-        #    "status": 0
+        #     "response": {
+        #         "status": 0,
+        #         "pools": [
+        #         {
+        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #             "label": "mkp1",
+        #             "svc_reps": [
+        #             0
+        #             ],
+        #             "targets_total": 8,
+        #             "targets_disabled": 0,
+        #             "query_error_msg": "",
+        #             "query_status_msg": "",
+        #             "usage": [
+        #             {
+        #                 "tier_name": "SCM",
+        #                 "size": 3000000000,
+        #                 "free": 2995801112,
+        #                 "imbalance": 0
+        #             },
+        #             {
+        #                 "tier_name": "NVME",
+        #                 "size": 47000000000,
+        #                 "free": 26263322624,
+        #                 "imbalance": 36
+        #             }
+        #             ]
+        #         }
+        #         ]
+        #     },
+        #     "error": null,
+        #     "status": 0
         # }
-        output = self._get_json_result(("pool", "list"))
-
-        data = {}
-        if output["response"] is None or output["response"]["pools"] is None:
-            return data
-
-        for pool in output["response"]["pools"]:
-            data[pool["uuid"]] = pool["svc_reps"]
-        return data
+        return self._get_json_result(
+            ("pool", "list"), no_query=no_query, verbose=verbose)
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.

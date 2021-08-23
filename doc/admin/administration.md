@@ -2,12 +2,12 @@
 
 ## System RAS Events
 
-Reliability, Availability and Serviceability (RAS) related events are
+Reliability, Availability, and Serviceability (RAS) related events are
 communicated and logged within DAOS.
 
 ### RAS Event Structure
 
-The following table describes the structure of a DAOS RAS event including
+The following table describes the structure of a DAOS RAS event, including
 descriptions of mandatory and optional fields.
 
 
@@ -18,7 +18,7 @@ descriptions of mandatory and optional fields.
 | Timestamp         | Mandatory            | Resolution at the microseconds and include the timezone offset to avoid locality issues.                |
 | Severity          | Mandatory            | Indicates event severity, Error/Warning/Notice.          |
 | Msg               | Mandatory            | Human readable message.                                  |
-| HID               | Optional             | Identify hardware component involved in the event. E.g. PCI address for SSD, network interface              |
+| HID               | Optional             | Identify hardware components involved in the event. E.g., PCI address for SSD, network interface              |
 | Rank              | Optional             | DAOS rank involved in the event.                         |
 | PID               | Optional             | Identifier of the process involved in the RAS event      |
 | TID               | Optional             | Identifier of the thread involved in the RAS event.      |
@@ -33,18 +33,18 @@ descriptions of mandatory and optional fields.
 
 ### RAS Event IDs
 
-The following table lists supported DAOS RAS events including IDs, type,
-severity, message, description and cause.
+The following table lists supported DAOS RAS events, including IDs, type,
+severity, message, description, and cause.
 
 |Event|Event type|Severity|Message|Description|Cause|
 |:----|:----|:----|:----|:----|:----|
-|engine\_format required|INFO\_ONLY|NOTICE|DAOS engine <idx\> requires a <type\> format|Indicates engine is waiting for allocated storage to be formatted on formatted on instance <idx\> with dmg tool. <type\> can be either SCM or Metadata.|DAOS server attempts to bring-up an engine which has unformatted storage.|
+|engine\_format required|INFO\_ONLY|NOTICE|DAOS engine <idx\> requires a <type\> format|Indicates engine is waiting for allocated storage to be formatted on formatted on instance <idx\> with dmg tool. <type\> can be either SCM or Metadata.|DAOS server attempts to bring-up an engine that has unformatted storage.|
 | engine\_died| STATE\_CHANGE| ERROR| DAOS engine <idx\> exited exited unexpectedly: <error\> | Indicates engine instance <idx\> unexpectedly. <error> describes the exit state returned from exited daos\_engine process.| N/A                          |
 | engine\_asserted| STATE\_CHANGE| ERROR| TBD| Indicates engine instance <idx> threw a runtime assertion, causing a crash. | An unexpected internal state resulted in assert failure. |
 | engine\_clock\_drift| INFO\_ONLY   | ERROR| clock drift detected| Indicates CART comms layer has detected clock skew between engines.| NTP may not be syncing clocks across DAOS system.      |
-| pool\_rebuild\_started| INFO\_ONLY| NOTICE   | Pool rebuild started.| Indicates a pool rebuild has started. Event data field contains pool map version and pool operation identifier. | When a pool rank becomes unavailable a rebuild will be triggered.   |
-| pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. Event data field includes the pool map version and pool operation identifier.  | N/A|
-| pool\_rebuild\_failed| INFO\_ONLY| ERROR| Pool rebuild failed: <rc\>.| Indicates a pool rebuild has failed. Event data field includes the pool map version and pool operation identifier. <rc\> provides a string representation of DER code.| N/A                          |
+| pool\_rebuild\_started| INFO\_ONLY| NOTICE   | Pool rebuild started.| Indicates a pool rebuild has started. The event data field contains pool map version and pool operation identifier. | When a pool rank becomes unavailable a rebuild will be triggered.   |
+| pool\_rebuild\_finished| INFO\_ONLY| NOTICE| Pool rebuild finished.| Indicates a pool rebuild has finished successfully. The event data field includes the pool map version and pool operation identifier.  | N/A|
+| pool\_rebuild\_failed| INFO\_ONLY| ERROR| Pool rebuild failed: <rc\>.| Indicates a pool rebuild has failed. The event data field includes the pool map version and pool operation identifier. <rc\> provides a string representation of DER code.| N/A                          |
 | pool\_replicas\_updated| STATE\_CHANGE| NOTICE| List of pool service replica ranks has been updated.| Indicates a pool service replica list has changed. The event contains the new service replica list in a custom payload. | When a pool service replica rank becomes unavailable a new rank is selected to replace it (if available). |
 | pool\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version: <current\> not in [<min\>, <max\>]| Indicates the given pool's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with pool data in local storage that has an incompatible layout version. |
 | container\_durable\_format\_incompat| INFO\_ONLY| ERROR| incompatible layout version[: <current\> not in [<min\>, <max\>\]| Indicates the given container's layout version does not match any of the versions supported by the currently running DAOS software.| DAOS engine is started with container data in local storage that has an incompatible layout version.|
@@ -55,10 +55,144 @@ severity, message, description and cause.
 | system\_stop\_failed| INFO\_ONLY| ERROR| System shutdown failed during <action\> action, <errors\>  | Indicates that a user initiated controlled shutdown failed. <action\> identifies the failing shutdown action and <errors\> shows which ranks failed.| Ranks failed to stop.|
 
 
+## System Logging
+
+Engine logging is initially configured by setting the `log_file` and `log_mask`
+parameters in the server config file. Logging is described in detail in the
+[`Debugging System`](https://daos-stack.github.io/admin/troubleshooting/#debugging-system)
+section.
+
+Engine log levels can be changed dynamically (at runtime) by setting log masks
+for a set of facilities to a given level.
+Settings will be applied to all running DAOS I/O Engines present in the configured
+dmg hostlist using the command `dmg server set-logmasks [<masks>]`.
+The command accepts 0-1 positional arguments.
+If no args are passed, then the log masks for each running engine will be reset
+to the value of engine "log\_mask" parameter in the server config file (as set
+at the time of daos\_server startup).
+If a single arg is passed, then this will be used as the log masks setting.
+
+Example usage:
+`dmg server set-logmasks ERR,mgmt=DEBUG`
+
+The input string should look like PREFIX1=LEVEL1,PREFIX2=LEVEL2,... where the
+syntax is identical to what is expected by the 'D_LOG_MASK' environment variable.
+If the 'PREFIX=' part is omitted, then the level applies to all defined
+facilities (e.g., a value of 'WARN' sets everything to WARN).
+
+Supported priority levels for engine logging are FATAL, CRIT, ERR, WARN, NOTE,
+INFO, DEBUG.
+
+
 ## System Monitoring
 
-System monitoring and telemetry data will be provided as part of the
-control plane and will be documented in a future revision.
+DAOS maintains a set of metrics on I/O and internal state. Each DAOS server can
+be configured to provide an HTTP endpoint for metrics collection. This
+endpoint presents the data in a format compatible with
+[Prometheus](https://prometheus.io).
+
+### Configuration
+
+To enable remote telemetry collection, update your DAOS server configuration
+file:
+
+```
+telemetry_port: 9191
+```
+
+The default port number is 9191. Each control plane server will present its
+local metrics via the endpoint: `http://<host>:<port>/metrics`
+
+### Collection
+
+There are several different methods available for collecting DAOS metrics.
+
+#### DMG
+
+The `dmg` administrative tool provides commands to query an individual DAOS
+server for metrics.
+
+The metrics have the same names as seen on the telemetry web endpoint. Only one
+DAOS host may be queried at a time.
+
+The output of these commands is available in JSON by using the `-j` option.
+
+##### List Metrics
+
+To list all metrics for the server with descriptions:
+
+```
+dmg telemetry [-l <host>] [-p <telemetry-port>] metrics list
+```
+
+If no host is provided, the default is localhost. The default port is 9191.
+
+##### Query Metrics
+
+To query the values of one or more metrics on the server:
+
+```
+dmg telemetry [-l <host>] [-p <telemetry-port>] metrics query [-m <metric_name>]
+```
+
+If no host is provided, the default is localhost. The default port is 9191.
+
+Metric names may be provided in a comma-separated list. If no metric names are
+provided, all metrics are queried.
+
+#### Prometheus Integration
+
+Prometheus is the preferred way to collect metrics from multiple DAOS servers
+at the same time.
+
+To integrate with Prometheus, add a new job to your Prometheus server's
+configuration file, with the `targets` set to the hosts and telemetry ports of
+your DAOS servers:
+
+```
+scrape_configs:
+- job_name: daos
+  scrape_interval: 5s
+  static_configs:
+  - targets: ['<host>:<telemetry-port>']
+```
+
+If there is not already a Prometheus server set up, DMG offers quick setup
+options for DAOS.
+
+To install and configure Prometheus on the local machine:
+
+```
+dmg telemetry config [-i <install-dir>]
+```
+
+If no `install-dir` is provided, DMG will attempt to install Prometheus in the
+first writable directory found in the user's `PATH`.
+
+The Prometheus configuration file will be populated based on the DAOS server
+list in your `dmg` configuration file. The Prometheus configuration will be
+written to `$HOME/.prometheus.yml`.
+
+To start the Prometheus server with the configuration file generated by `dmg`:
+
+```
+prometheus --config-file=$HOME/.prometheus.yml
+```
+
+#### daos_metrics
+
+The `daos-server` package includes the `daos_metrics` tool. This tool fetches
+metrics from the local host only.
+
+`daos_metrics` displays the metrics in a human-readable tree format or CSV
+format (`--csv`).
+
+Each DAOS engine maintains its own metrics.
+The `--srv_idx` parameter can be used to specify which engine to query, if there
+are multiple engines configured per server.
+The default is to query the first engine on the server (index 0).
+
+See `daos_metrics -h` for details on how to filter metrics.
 
 ## Storage Operations
 
@@ -90,7 +224,7 @@ configuration file
 then the values supplied to `dmg pool create` should be
 a maximum of the SCM/NVMe free space divided by the number of ranks per host.
 
-For example if 2.0 TB SCM and 10.0 TB NVMe free space is reported by
+For example, if 2.0 TB SCM and 10.0 TB NVMe free space is reported by
 `dmg storage query usage` and the server configuration file used to start the
 system specifies 2 I/O processes (2 "server" sections), the maximum pool size
 that can be specified is approximately `dmg pool create -s 1T -n 5T` (may need to
@@ -114,14 +248,14 @@ Useful admin dmg commands to query NVMe SSD health:
   - `dmg storage scan --nvme-meta` shows mapping of metadata to NVMe controllers
 
 The NVMe storage query list-devices and list-pools commands query the persistently
-stored SMD device and pool tables respectively. The device table maps the internal
+stored SMD device and pool tables, respectively. The device table maps the internal
 device UUID to attached VOS target IDs. The rank number of the server where the device
 is located is also listed, along with the current device state. The current device
 states are the following:
-  - NORMAL: a fully, functional device in-use by DAOS
+  - NORMAL: a fully functional device in-use by DAOS
   - EVICTED: the device is no longer in-use by DAOS
   - UNPLUGGED: the device is currently unplugged from the system (may or not be evicted)
-  - NEW: the device is plugged and available, and not currently in-use by DAOS
+  - NEW: the device is plugged and available and not currently in-use by DAOS
 
 The transport address is also listed for the device. This is either the PCIe address
 for normal NVMe SSDs, or the BDF format address of the backing NVMe SSDs behind a
@@ -226,7 +360,7 @@ boro-11
     UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 Targets:[] Rank:1 State:FAULTY
 ```
 The device state will transition from "NORMAL" to "FAULTY" (shown above), which will
-trigger the faulty device reaction (all targets on the SSD will be rebuilt and the SSD
+trigger the faulty device reaction (all targets on the SSD will be rebuilt, and the SSD
 will remain evicted until device replacement occurs).
 
 !!! note
@@ -263,7 +397,7 @@ boro-11
 ```
 The FAULTY device will transition from an "EVICTED" state back to a "NORMAL" state,
 and will again be available for use with DAOS. The use case of this command will mainly
-be for testing, or for accidental device eviction.
+be for testing or for accidental device eviction.
 
 #### Identification
 
@@ -326,7 +460,7 @@ specified when starting `daos_server` instances.
 
 !!! warning
     Controlled start/stop/reformat have some known limitations.
-    Whilst individual system instances can be stopped, if a subset is restarted,
+    While individual system instances can be stopped, if a subset is restarted,
     existing pools will not be automatically integrated with restarted instances.
 
 ### Membership
@@ -340,8 +474,8 @@ The system membership can be queried using the command:
 storagehost[0,5-10],10.8.1.[20-100]
 - `--verbose` flag gives more information on each rank
 
-Output table will provide system rank mappings to host address and instance
-UUID, in addition to rank state.
+The output table will provide system rank mappings to host address and instance
+UUID, in addition to the rank state.
 
 ### Shutdown
 
@@ -353,7 +487,7 @@ When up and running, the entire system can be shutdown with the command:
 - `<hostset>` is a pattern describing host ranges e.g.
 storagehost[0,5-10],10.8.1.[20-100]
 
-Output table will indicate action and result.
+The output table will indicate action and result.
 
 DAOS Control Servers will continue to operate and listen on the management
 network.
@@ -368,7 +502,7 @@ To start the system after a controlled shutdown run the command:
 - `<hostset>` is a pattern describing host ranges e.g.
 storagehost[0,5-10],10.8.1.[20-100]
 
-Output table will indicate action and result.
+The output table will indicate action and result.
 
 DAOS I/O Engines will be started.
 
@@ -385,9 +519,9 @@ performed on hosts in dmg config file hostlist
 - if system membership has records of previously running ranks, storage
 allocated to those ranks will be formatted
 
-Output table will indicate action and result.
+The output table will indicate action and result.
 
-DAOS I/O Engines will be started and all DAOS pools will have been removed.
+DAOS I/O Engines will be started, and all DAOS pools will have been removed.
 
 ### Manual Fresh Start
 

@@ -18,8 +18,8 @@ from avocado.utils import process
 from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, ObjectWithParameters, \
-    CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
+    CommandFailure, BasicParameter, CommandWithParameters, \
+    EnvironmentVariables, LogParameter
 from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
     distribute_files, change_file_owner, get_file_listing, run_pcmd, \
@@ -34,7 +34,8 @@ class ExecutableCommand(CommandWithParameters):
     # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
-    def __init__(self, namespace, command, path="", subprocess=False):
+    def __init__(self, namespace, command, path="", subprocess=False,
+                 check_results=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -46,6 +47,9 @@ class ExecutableCommand(CommandWithParameters):
                 Defaults to "".
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
+            check_results (list, optional): list of words used to mark the
+                command as failed if any are found in the command output.
+                Defaults to None.
         """
         super().__init__(namespace, command, path)
         self._process = None
@@ -67,6 +71,25 @@ class ExecutableCommand(CommandWithParameters):
         # list is used to generate the 'command_regex' property, which can be
         # used to check on the progress or terminate the command.
         self._exe_names = [self.command]
+
+        # Define an attribute to store the CmdResult from the last run() call.
+        # A CmdResult object has the following properties:
+        #   command         - command string
+        #   exit_status     - exit_status of the command
+        #   stdout          - the stdout
+        #   stderr          - the stderr
+        #   duration        - command execution time
+        #   interrupted     - whether the command completed within timeout
+        #   pid             - command's pid
+        self.result = None
+
+        # Optional list of words used to to mark the command as failed if any of
+        # the words are found in the command output (self.result.stdout_text and
+        # self.result.stderr_text).  Useful for detecting a command failure that
+        # may not be caught through the command exit status.
+        self.check_results_list = []
+        if check_results:
+            self.check_results_list = list(check_results)
 
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
@@ -116,17 +139,54 @@ class ExecutableCommand(CommandWithParameters):
         Raises:
             CommandFailure: if there is an error running the command
 
+        Returns:
+            CmdResult: result of the command
+
         """
+        # Clear any previous run results
+        self.result = None
         command = self.__str__()
         try:
             # Block until the command is complete or times out
-            return run_command(
+            self.result = run_command(
                 command, self.timeout, self.verbose, self.exit_status_exception,
                 self.output_check, env=self.env)
 
         except DaosTestError as error:
             # Command failed or possibly timed out
             raise CommandFailure from error
+
+        if self.exit_status_exception and not self.check_results():
+            # Command failed if its output contains bad keywords
+            raise CommandFailure(
+                "<{}> command failed: Error messages detected in output".format(
+                    self.command))
+
+        return self.result
+
+    def check_results(self):
+        """Check the command result for any bad keywords.
+
+        Returns:
+            bool: True if either there were no items from self.check_result_list
+                to verify or if none of the items were found in the command
+                output; False if a item was found in the command output.
+
+        """
+        status = True
+        if self.result and self.check_results_list:
+            regex = r"({})".format("|".join(self.check_results_list))
+            for output in (self.result.stdout_text, self.result.stderr_text):
+                match = re.findall(regex, output)
+                if match:
+                    self.log.info(
+                        "The following error messages have been detected in "
+                        "the %s output:", self.command)
+                    for item in match:
+                        self.log.info("  %s", item)
+                    status = False
+                    break
+        return status
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -411,17 +471,6 @@ class CommandWithSubCommand(ExecutableCommand):
         #
         self.sub_command_class = None
 
-        # Define an attribute to store the CmdResult from the last run() call.
-        # A CmdResult object has the following properties:
-        #   command         - command string
-        #   exit_status     - exit_status of the command
-        #   stdout          - the stdout
-        #   stderr          - the stderr
-        #   duration        - command execution time
-        #   interrupted     - whether the command completed within timeout
-        #   pid             - command's pid
-        self.result = None
-
         self.json = None
 
     def get_param_names(self):
@@ -506,7 +555,8 @@ class CommandWithSubCommand(ExecutableCommand):
 
         """
         try:
-            self.result = super().run()
+            # This assigns self.result
+            super().run()
         except CommandFailure as error:
             raise CommandFailure(
                 "<{}> command failed: {}".format(
@@ -552,11 +602,13 @@ class CommandWithSubCommand(ExecutableCommand):
         # Issue the command and store the command result
         return self.run()
 
-    def _get_json_result(self, sub_command_list=None, **kwargs):
+    def _get_json_result(self, sub_command_list=None, json_err=False, **kwargs):
         """Wrap the base _get_result method to force JSON output.
 
         Args:
             sub_command_list (list): List of subcommands.
+            json_err (bool, optional): If True, return JSON
+                even if the command fails.
             kwargs (dict): Parameters for the command.
         """
         if self.json is None:
@@ -566,11 +618,16 @@ class CommandWithSubCommand(ExecutableCommand):
         self.json.update(True)
         prev_output_check = self.output_check
         self.output_check = "both"
+        if json_err:
+            prev_exit_exception = self.exit_status_exception
+            self.exit_status_exception = False
         try:
             self._get_result(sub_command_list, **kwargs)
         finally:
             self.json.update(prev_json_val)
             self.output_check = prev_output_check
+            if json_err:
+                self.exit_status_exception = prev_exit_exception
         return json.loads(self.result.stdout)
 
 
@@ -1141,13 +1198,15 @@ class SubprocessManager():
                     self._expected_states[rank]["state"], state)
                 self._expected_states[rank]["state"] = state
 
-    def verify_expected_states(self, set_expected=False):
+    def verify_expected_states(self, set_expected=False, show_logs=True):
         """Verify that the expected job process states match the current states.
 
         Args:
             set_expected (bool, optional): option to update the expected job
                 process states to the current states prior to verification.
                 Defaults to False.
+            show_logs (bool, optional): Show log entries for hosts not in
+                expected states.
 
         Returns:
             dict: a dictionary of whether or not any of the job process states
@@ -1259,7 +1318,7 @@ class SubprocessManager():
                 "%Y-%m-%d %H:%M:%S")
 
         # Dump the server logs for any identified server
-        if show_log_hosts:
+        if show_logs and show_log_hosts:
             self.log.info(
                 "<SERVER> logs for ranks in the errored state since start "
                 "detection or detected in an unexpected state")

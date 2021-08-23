@@ -242,19 +242,17 @@ struct obj_ec_fail_info {
 	struct obj_ec_recov_codec	*efi_recov_codec;
 	/* to be recovered full-stripe list */
 	struct daos_recx_ep_list	*efi_stripe_lists;
-	/* parity recx list (to compare parity ext/epoch when data recovery) */
-	struct daos_recx_ep_list	*efi_parity_lists;
 	/* The buffer for all the full-stripes in efi_stripe_lists.
 	 * One iov for each recx_ep (with 1 or more stripes), for each stripe
 	 * it contains ((k + p) * cell_byte_size) memory.
 	 */
 	d_sg_list_t			*efi_stripe_sgls;
+	uint32_t			efi_stripe_sgls_nr;
 	/* For each daos_recx_ep in efi_stripe_lists will create one recovery
 	 * task to fetch the data from servers.
 	 */
 	struct obj_ec_recov_task	*efi_recov_tasks;
 	uint32_t			 efi_recov_ntasks;
-	uint32_t			 efi_parity_list_nr;
 };
 
 struct obj_reasb_req;

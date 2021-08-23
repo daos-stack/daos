@@ -21,14 +21,15 @@ message RASEvent {
 	uint32 severity = 5;	// Event severity.
 	string hostname = 6;	// (optional) Hostname of node involved in event.
 	uint32 rank = 7;	// (optional) DAOS rank involved in event.
-	string hw_id = 8;	// (optional) Hardware component involved in event.
-	uint64 proc_id = 9;	// (optional) Process involved in event.
-	uint64 thread_id = 10;	// (optional) Thread involved in event.
-	string job_id = 11;	// (optional) Job involved in event.
-	string pool_uuid = 12;	// (optional) Pool UUID involved in event.
-	string cont_uuid = 13;	// (optional) Container UUID involved in event.
-	string obj_id = 14;	// (optional) Object involved in event.
-	string ctl_op = 15;	// (optional) Recommended automatic action.
+	uint64 incarnation = 8; // (optional) Incarnation of DAOS rank involved in event.
+	string hw_id = 9;	// (optional) Hardware component involved in event.
+	uint64 proc_id = 10;	// (optional) Process involved in event.
+	uint64 thread_id = 11;	// (optional) Thread involved in event.
+	string job_id = 12;	// (optional) Job involved in event.
+	string pool_uuid = 13;	// (optional) Pool UUID involved in event.
+	string cont_uuid = 14;	// (optional) Container UUID involved in event.
+	string obj_id = 15;	// (optional) Object involved in event.
+	string ctl_op = 16;	// (optional) Recommended automatic action.
 	// EngineStateEventInfo defines extended fields for state change events.
 	message EngineStateEventInfo {
 		uint32 instance = 1;	// Control-plane harness instance index.
@@ -41,9 +42,9 @@ message RASEvent {
 		uint64 version = 2;		// Raft leadership term.
 	}
 	oneof extended_info {	// Data specific to a given event ID.
-		string str_info = 16;	// Opaque data blob.
-		EngineStateEventInfo engine_state_info = 17;
-		PoolSvcEventInfo pool_svc_info = 18;
+		string str_info = 17;	// Opaque data blob.
+		EngineStateEventInfo engine_state_info = 18;
+		PoolSvcEventInfo pool_svc_info = 19;
 	}
 }
 

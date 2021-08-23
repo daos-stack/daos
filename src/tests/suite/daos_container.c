@@ -333,11 +333,18 @@ co_properties(void **state)
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
+	/** setting the label on entries with no type should fail */
+	rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label, strlen(label));
+	assert_rc_equal(rc, -DER_NONEXIST);
+
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	prop->dpp_entries[0].dpe_str = strdup(label);
+	/** setting the label as a pointer should fail */
+	rc = daos_prop_set_ptr(prop, DAOS_PROP_CO_LABEL, label, strlen(label));
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label, strlen(label));
+	assert_rc_equal(rc, 0);
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	prop->dpp_entries[1].dpe_val = snapshot_max;
-	D_STRNDUP(arg->cont_label, label, DAOS_PROP_LABEL_MAX_LEN);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
@@ -436,8 +443,8 @@ co_properties(void **state)
 		/* Create container: same UUID, different label - fail */
 		print_message("Checking create: same UUID, different label "
 			      "(will fail)\n");
-		free(prop->dpp_entries[0].dpe_str);
-		prop->dpp_entries[0].dpe_str = strdup(label2);
+		rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label2, strlen(label2));
+		assert_rc_equal(rc, 0);
 		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
 		assert_rc_equal(rc, -DER_INVAL);
 
@@ -448,8 +455,8 @@ co_properties(void **state)
 
 		/* Create container C2: no UUID specified, new label - pass */
 		print_message("Checking create: different UUID and label\n");
-		rc = daos_cont_create_by_label(arg->pool.poh, label2, NULL,
-					       NULL, NULL /* ev */);
+		rc = daos_cont_create_with_label(arg->pool.poh, label2, NULL,
+						 NULL, NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		print_message("created container C2: %s\n", label2);
 		/* Open by label, and immediately close */
@@ -479,9 +486,9 @@ co_properties(void **state)
 		 */
 		print_message("Checking set-prop and create label conflict "
 			      "(will fail)\n");
-		rc = daos_cont_create_by_label(arg->pool.poh, foo_label,
-					       NULL /* prop */, &cuuid3,
-					       NULL /* ev */);
+		rc = daos_cont_create_with_label(arg->pool.poh, foo_label,
+						 NULL /* prop */, &cuuid3,
+						 NULL /* ev */);
 		assert_rc_equal(rc, 0);
 		print_message("step1: created container C3: %s : "
 			      "UUID:"DF_UUIDF"\n", foo_label, DP_UUID(cuuid3));
@@ -502,14 +509,14 @@ co_properties(void **state)
 		 * container 1 set-prop label2 - pass
 		 */
 		print_message("Checking label rename and reuse\n");
-		free(prop->dpp_entries[0].dpe_str);
-		prop->dpp_entries[0].dpe_str = strdup(label2_v2);
+		rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label2_v2, strlen(label2_v2));
+		assert_rc_equal(rc, 0);
 		print_message("step: C3 set-prop change FROM %s TO %s\n",
 			      label2, label2_v2);
 		rc = daos_cont_set_prop(coh3, prop, NULL);
 		assert_rc_equal(rc, 0);
-		free(prop->dpp_entries[0].dpe_str);
-		prop->dpp_entries[0].dpe_str = strdup(label2);
+		rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label2, strlen(label2));
+		assert_rc_equal(rc, 0);
 		print_message("step: C1 set-prop change FROM %s TO %s\n",
 			      label, label2);
 		rc = daos_cont_set_prop(arg->coh, prop, NULL);
@@ -2449,6 +2456,70 @@ delet_container_during_aggregation(void **state)
 	pool_storage_info(state, &pinfo);
 }
 
+static void
+co_api_compat(void **state)
+{
+	test_arg_t		*arg = *state;
+	uuid_t			uuid1;
+	uuid_t			uuid2;
+	char			*label = "test_api_compat_label1";
+	daos_handle_t		coh;
+	daos_cont_info_t	info;
+	int			rc;
+
+	if (arg->myrank != 0)
+		return;
+
+	uuid_generate(uuid1);
+	uuid_clear(uuid2);
+
+	print_message("creating container with uuid specified ... ");
+	rc = daos_cont_create(arg->pool.poh, uuid1, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("creating container with a uuid pointer ... ");
+	rc = daos_cont_create(arg->pool.poh, &uuid2, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("creating container with a NULL pointer ... ");
+	rc = daos_cont_create(arg->pool.poh, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("creating container with a Label ... ");
+	rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("opening container using uuid ... ");
+	rc = daos_cont_open(arg->pool.poh, uuid1, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("opening container using Label ... ");
+	rc = daos_cont_open(arg->pool.poh, label, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+
+	print_message("destroying container using uuid ... ");
+	rc = daos_cont_destroy(arg->pool.poh, uuid1, 0, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, uuid2, 0, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+
+	print_message("destroying container using label ... ");
+	rc = daos_cont_destroy(arg->pool.poh, label, 0, NULL);
+	assert_rc_equal(rc, 0);
+	print_message("success\n");
+}
+
 static int
 co_setup_sync(void **state)
 {
@@ -2524,6 +2595,8 @@ static const struct CMUnitTest co_tests[] = {
 	{ "CONT25: Delete Container during Aggregation",
 	  delet_container_during_aggregation, co_setup_async,
 	  test_case_teardown},
+	{ "CONT26: container API compat",
+	  co_api_compat, NULL, test_case_teardown},
 };
 
 int

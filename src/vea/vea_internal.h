@@ -175,8 +175,9 @@ void migrate_free_exts(struct vea_space_info *vsi, bool add_tx_cb);
 void hint_get(struct vea_hint_context *hint, uint64_t *off);
 void hint_update(struct vea_hint_context *hint, uint64_t off, uint64_t *seq);
 int hint_cancel(struct vea_hint_context *hint, uint64_t off, uint64_t seq_min,
-		uint64_t seq_max);
+		uint64_t seq_max, unsigned int seq_cnt);
 int hint_tx_publish(struct umem_instance *umm, struct vea_hint_context *hint,
-		    uint64_t off, uint64_t seq_min, uint64_t seq_max);
+		    uint64_t off, uint64_t seq_min, uint64_t seq_max,
+		    unsigned int seq_cnt);
 
 #endif /* __VEA_INTERNAL_H__ */

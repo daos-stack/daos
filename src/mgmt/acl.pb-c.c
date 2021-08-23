@@ -279,12 +279,12 @@ static const ProtobufCFieldDescriptor mgmt__get_aclreq__field_descriptors[3] =
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "uuid",
+    "id",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__GetACLReq, uuid),
+    offsetof(Mgmt__GetACLReq, id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -304,9 +304,9 @@ static const ProtobufCFieldDescriptor mgmt__get_aclreq__field_descriptors[3] =
   },
 };
 static const unsigned mgmt__get_aclreq__field_indices_by_name[] = {
+  1,   /* field[1] = id */
   2,   /* field[2] = svc_ranks */
   0,   /* field[0] = sys */
-  1,   /* field[1] = uuid */
 };
 static const ProtobufCIntRange mgmt__get_aclreq__number_ranges[1 + 1] =
 {
@@ -343,12 +343,12 @@ static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[4] 
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "uuid",
+    "id",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__ModifyACLReq, uuid),
+    offsetof(Mgmt__ModifyACLReq, id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -381,9 +381,9 @@ static const ProtobufCFieldDescriptor mgmt__modify_aclreq__field_descriptors[4] 
 };
 static const unsigned mgmt__modify_aclreq__field_indices_by_name[] = {
   2,   /* field[2] = ACL */
+  1,   /* field[1] = id */
   3,   /* field[3] = svc_ranks */
   0,   /* field[0] = sys */
-  1,   /* field[1] = uuid */
 };
 static const ProtobufCIntRange mgmt__modify_aclreq__number_ranges[1 + 1] =
 {
@@ -420,12 +420,12 @@ static const ProtobufCFieldDescriptor mgmt__delete_aclreq__field_descriptors[4] 
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "uuid",
+    "id",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__DeleteACLReq, uuid),
+    offsetof(Mgmt__DeleteACLReq, id),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -457,10 +457,10 @@ static const ProtobufCFieldDescriptor mgmt__delete_aclreq__field_descriptors[4] 
   },
 };
 static const unsigned mgmt__delete_aclreq__field_indices_by_name[] = {
+  1,   /* field[1] = id */
   2,   /* field[2] = principal */
   3,   /* field[3] = svc_ranks */
   0,   /* field[0] = sys */
-  1,   /* field[1] = uuid */
 };
 static const ProtobufCIntRange mgmt__delete_aclreq__number_ranges[1 + 1] =
 {

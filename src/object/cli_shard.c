@@ -21,7 +21,7 @@ static inline struct dc_obj_layout *
 obj_shard2layout(struct dc_obj_shard *shard)
 {
 	return container_of(shard, struct dc_obj_layout,
-			    do_shards[shard->do_shard]);
+			    do_shards[shard->do_shard_idx]);
 }
 
 void
@@ -80,7 +80,7 @@ dc_obj_shard_open(struct dc_object *obj, daos_unit_oid_t oid,
 	shard->do_target_idx = map_tgt->ta_comp.co_index;
 	shard->do_obj = obj;
 	shard->do_co_hdl = obj->cob_coh;
-	obj_shard_addref(shard);
+	obj_shard_addref(shard); /* release this until obj_layout_free */
 
 	D_SPIN_LOCK(&obj->cob_spin);
 	obj->cob_shards->do_open_count++;
@@ -1543,7 +1543,8 @@ dc_enumerate_copy_csum(d_iov_t *dst, const d_iov_t *src)
 			   src->iov_len));
 		dst->iov_len = src->iov_len;
 		if (dst->iov_len > dst->iov_buf_len) {
-			D_DEBUG(DB_CSUM, "Checksum buffer truncated");
+			D_DEBUG(DB_CSUM, "Checksum buffer truncated %d > %d\n",
+				(int)dst->iov_len, (int)dst->iov_buf_len);
 			return -DER_TRUNC;
 		}
 	}
@@ -1881,6 +1882,8 @@ obj_shard_query_recx_post(struct obj_query_key_cb_args *cb_args, uint32_t shard,
 	tmp_recx = &recx[0];
 re_check:
 	if (reply_recx->rx_idx & PARITY_INDICATOR) {
+		daos_recx_t *punched_recx = &okqo->okqo_recx_punched;
+
 		D_ASSERT(!from_data_tgt);
 		rx_idx = (reply_recx->rx_idx & (~PARITY_INDICATOR));
 		D_ASSERTF(rx_idx % cell_rec_nr == 0, "rx_idx "DF_X64
@@ -1894,6 +1897,24 @@ re_check:
 		tmp_recx->rx_idx = rx_idx;
 		tmp_recx->rx_nr = stripe_rec_nr *
 				     (reply_recx->rx_nr / cell_rec_nr);
+
+		if (DAOS_RECX_END(*punched_recx) > 0) {
+			D_DEBUG(DB_IO, "shard %d punched extent "DF_U64" "DF_U64"\n",
+				shard, punched_recx->rx_idx, punched_recx->rx_nr);
+			D_ASSERT(DAOS_RECX_END(*punched_recx) >= tmp_recx->rx_idx);
+			if (DAOS_RECX_END(*punched_recx) < DAOS_RECX_END(*tmp_recx)) {
+				uint64_t r_end = DAOS_RECX_END(*tmp_recx);
+
+				tmp_recx->rx_idx = DAOS_RECX_END(*punched_recx);
+				tmp_recx->rx_nr = r_end - tmp_recx->rx_idx;
+			} else if (punched_recx->rx_idx > tmp_recx->rx_idx) {
+				tmp_recx->rx_nr = min(punched_recx->rx_idx,
+						      DAOS_RECX_END(*tmp_recx)) - tmp_recx->rx_idx;
+			} else {
+				tmp_recx->rx_nr = 0;
+				tmp_recx->rx_idx = 0;
+			}
+		}
 		D_DEBUG(DB_IO, "shard %d get recx "DF_U64" "DF_U64"\n",
 			shard, tmp_recx->rx_idx, tmp_recx->rx_nr);
 	} else {

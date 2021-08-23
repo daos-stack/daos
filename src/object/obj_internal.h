@@ -50,15 +50,16 @@ extern unsigned int	srv_io_mode;
 struct dc_obj_shard {
 	/** refcount */
 	unsigned int		do_ref;
+	uint32_t		do_target_rank;
 	/** object id */
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
-	uint8_t			do_target_idx;	/* target VOS index in node */
-	uint32_t		do_target_rank;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
 	struct dc_object	*do_obj;
+	uint32_t		do_shard_idx;
+	uint8_t			do_target_idx;	/* target VOS index in node */
 };
 
 #define do_shard	do_pl_shard.po_shard
@@ -118,6 +119,8 @@ struct dc_object {
  *    it, create oiod/siod to specify each shard/tgt's IO req.
  */
 struct obj_reasb_req {
+	/* object ID */
+	daos_obj_id_t			 orr_oid;
 	/* epoch for IO (now only used for fetch */
 	struct dtx_epoch		 orr_epoch;
 	/* original user input iods/sgls */
@@ -148,8 +151,9 @@ struct obj_reasb_req {
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
-	/* object ID */
-	daos_obj_id_t			 orr_oid;
+	/* parity recx list (to compare parity ext/epoch when data recovery) */
+	struct daos_recx_ep_list	*orr_parity_lists;
+	uint32_t			 orr_parity_list_nr;
 	/* #iods of IO req */
 	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */
@@ -514,7 +518,7 @@ int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
 int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
 int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
-			tse_task_t **taskp);
+			unsigned int map_ver, tse_task_t **taskp);
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 

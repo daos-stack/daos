@@ -1264,9 +1264,9 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 	return 0;
 }
 
-int
-dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
-		daos_handle_t *_coh, dfs_t **_dfs)
+static int
+dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t in_uuid,
+		    dfs_attr_t *attr, daos_handle_t *_coh, dfs_t **_dfs)
 {
 	daos_handle_t		coh, super_oh;
 	struct dfs_entry	entry = {0};
@@ -1278,6 +1278,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	struct daos_prop_co_roots roots;
 	int			rc;
 
+	if (cuuid == NULL)
+		return EINVAL;
 	if (_dfs && _coh == NULL) {
 		D_ERROR("Should pass a valid container handle pointer\n");
 		return EINVAL;
@@ -1331,7 +1333,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 					 0, dattr.da_oclass_id, 0, 0);
 	if (rc) {
 		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
 	/* select oclass and generate ROOT OID */
@@ -1341,26 +1343,29 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 					 0, dattr.da_oclass_id, 0, 0);
 	if (rc) {
 		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
 	/* store SB & root OIDs as container property */
 	roots.cr_oids[2] = roots.cr_oids[3] = DAOS_OBJ_NIL;
 	prop->dpp_entries[prop->dpp_nr - 2].dpe_type = DAOS_PROP_CO_ROOTS;
-	prop->dpp_entries[prop->dpp_nr - 2].dpe_val_ptr = &roots;
+	rc = daos_prop_entry_set_ptr(&prop->dpp_entries[prop->dpp_nr - 2], &roots, sizeof(roots));
+	if (rc)
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
 
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
 
-	rc = daos_cont_create(poh, co_uuid, prop, NULL);
-	/* should not be freed by daos_prop_free */
-	prop->dpp_entries[prop->dpp_nr - 2].dpe_val_ptr = NULL;
+	if (uuid_is_set)
+		rc = daos_cont_create(poh, in_uuid, prop, NULL);
+	else
+		rc = daos_cont_create(poh, cuuid, prop, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_create() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
-	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	rc = daos_cont_open(poh, *cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
@@ -1414,7 +1419,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		rc = daos_cont_close(coh, NULL);
 		if (rc) {
 			D_ERROR("daos_cont_close() failed "DF_RC"\n", DP_RC(rc));
-			D_GOTO(err_destroy, rc = daos_der2errno(rc));
+			D_GOTO(err_close, rc = daos_der2errno(rc));
 		}
 	}
 	daos_prop_free(prop);
@@ -1431,9 +1436,93 @@ err_destroy:
 	 * process might have created it.
 	 */
 	if (rc != EEXIST)
-		daos_cont_destroy(poh, co_uuid, 1, NULL);
+		daos_cont_destroy(poh, *cuuid, 1, NULL);
 err_prop:
 	daos_prop_free(prop);
+	return rc;
+}
+
+/** Disable backward compat code */
+#undef dfs_cont_create
+
+/** Kept for backward ABI compatibility when a UUID is provided by the caller */
+int
+dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs)
+{
+	const unsigned char     *uuid = (const unsigned char *) cuuid;
+	uuid_t			co_uuid;
+
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
+
+	uuid_copy(co_uuid, uuid);
+	return dfs_cont_create_int(poh, cuuid, true, co_uuid, attr, coh, dfs);
+}
+
+/** API version for when the uuid is required to be passed in. */
+int
+dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		 dfs_t **dfs)
+{
+	uuid_t *u = (uuid_t *)((unsigned char *)cuuid);
+
+	return dfs_cont_create(poh, u, attr, coh, dfs);
+}
+
+/*
+ * Real latest & greatest implementation of container create. Used by anyone including the
+ * daos_fs.h header file.
+ */
+int
+dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		 dfs_t **dfs)
+{
+	return dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
+}
+
+int
+dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
+			   uuid_t *cuuid, daos_handle_t *coh, dfs_t **dfs)
+{
+	daos_prop_t		*label_prop;
+	daos_prop_t		*merged_props = NULL;
+	daos_prop_t		*orig = NULL;
+	dfs_attr_t		local = {};
+	int			rc;
+
+	label_prop = daos_prop_alloc(1);
+	if (label_prop == NULL)
+		return ENOMEM;
+
+	label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	rc = daos_prop_entry_set_str(&label_prop->dpp_entries[0], label, DAOS_PROP_LABEL_MAX_LEN);
+	if (rc)
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+
+	if (attr == NULL)
+		attr = &local;
+
+	if (attr->da_props) {
+		merged_props = daos_prop_merge(attr->da_props, label_prop);
+		if (merged_props == NULL)
+			D_GOTO(out_prop, rc = ENOMEM);
+		orig = attr->da_props;
+		attr->da_props = merged_props;
+	} else {
+		attr->da_props = label_prop;
+	}
+
+	if (cuuid == NULL) {
+		uuid_t u;
+
+		rc = dfs_cont_create_int(poh, &u, false, NULL, attr, coh, dfs);
+	} else {
+		rc = dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
+	}
+	attr->da_props = orig;
+	daos_prop_free(merged_props);
+out_prop:
+	daos_prop_free(label_prop);
 	return rc;
 }
 
@@ -4827,7 +4916,7 @@ dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs)
 	}
 	/* If NOEXIST we create it */
 	if (rc == -DER_NONEXIST) {
-		rc = dfs_cont_create(poh, co_uuid, NULL, &coh, dfs);
+		rc = dfs_cont_create(poh, &co_uuid, NULL, &coh, dfs);
 		if (rc)
 			D_ERROR("dfs_cont_create failed (%d)\n", rc);
 		return rc;

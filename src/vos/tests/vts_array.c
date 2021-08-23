@@ -413,7 +413,7 @@ vts_array_get_size(daos_handle_t aoh, daos_epoch_t epoch, daos_size_t *size)
 	rc = vos_obj_query_key(array->va_coh, array->va_oid,
 			       DAOS_GET_DKEY | DAOS_GET_RECX | DAOS_GET_MAX,
 			       epoch, &dkey, &array->va_iod.iod_name,
-			       &recx, NULL);
+			       &recx, 0, 0, NULL);
 
 	if (rc == -DER_NONEXIST) {
 		*size = 0;

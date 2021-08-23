@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -20,10 +19,6 @@ import (
 	pclient "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 )
-
-// httpScrapeFn is the function that is used to scrape content from an HTTP
-// endpoint.
-var httpScrapeFn = httpGetBody
 
 // pbMetricMap is the map returned by the prometheus scraper.
 type pbMetricMap map[string]*pclient.MetricFamily
@@ -38,15 +33,18 @@ func (m pbMetricMap) Keys() []string {
 	return keys
 }
 
-// scrapeMetrics fetches the metrics published by the DAOS server in the
-// Prometheus-compatible endpoint.
-func scrapeMetrics(ctx context.Context, host string, port uint32) (pbMetricMap, error) {
-	addr := &url.URL{
+func getMetricsURL(host string, port uint32) *url.URL {
+	return &url.URL{
 		Scheme: "http",
 		Host:   fmt.Sprintf("%s:%d", host, port),
 		Path:   "metrics",
 	}
-	body, err := httpScrapeFn(ctx, addr, http.Get)
+}
+
+// scrapeMetrics fetches the metrics published by the DAOS server in the
+// Prometheus-compatible endpoint.
+func scrapeMetrics(ctx context.Context, req httpGetter) (pbMetricMap, error) {
+	body, err := httpGetBodyRetry(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -358,6 +356,7 @@ func (ms *MetricSet) UnmarshalJSON(data []byte) error {
 type (
 	// MetricsListReq is used to request the list of metrics.
 	MetricsListReq struct {
+		httpReq
 		Host string // Host to query for telemetry data
 		Port uint32 // Port to use for collecting telemetry data
 	}
@@ -382,7 +381,9 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 		return nil, errors.New("port must be specified")
 	}
 
-	scraped, err := scrapeMetrics(ctx, req.Host, req.Port)
+	req.url = getMetricsURL(req.Host, req.Port)
+
+	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to list metrics")
 	}
@@ -407,6 +408,7 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 type (
 	// MetricsQueryReq is used to query telemetry values.
 	MetricsQueryReq struct {
+		httpReq
 		Host        string   // host to query for telemetry data
 		Port        uint32   // port to use for collecting telemetry data
 		MetricNames []string // if empty, collects all metrics
@@ -432,7 +434,9 @@ func MetricsQuery(ctx context.Context, req *MetricsQueryReq) (*MetricsQueryResp,
 		return nil, errors.New("port must be specified")
 	}
 
-	scraped, err := scrapeMetrics(ctx, req.Host, req.Port)
+	req.url = getMetricsURL(req.Host, req.Port)
+
+	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to query metrics")
 	}
