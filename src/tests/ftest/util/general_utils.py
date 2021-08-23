@@ -703,6 +703,7 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             result = pcmd(hosts, "; ".join(commands_part1), verbose, timeout,
                           None)
 
+        # in case dump of ULT stacks is still running it may be interrupted
         commands_part2 = [
             "rc=0",
             "if " + ps_cmd,
@@ -710,10 +711,10 @@ def stop_processes(hosts, pattern, verbose=True, timeout=60, added_filter=None,
             "sudo /usr/bin/pkill {}".format(pattern),
             "sleep 5",
             "if " + ps_cmd,
-            "then /usr/bin/pkill --signal ABRT {}".format(pattern),
+            "then sudo /usr/bin/pkill --signal ABRT {}".format(pattern),
             "sleep 1",
             "if " + ps_cmd,
-            "then /usr/bin/pkill --signal KILL {}".format(pattern),
+            "then sudo /usr/bin/pkill --signal KILL {}".format(pattern),
             "fi",
             "fi",
             "fi",
