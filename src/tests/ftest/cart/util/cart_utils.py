@@ -322,7 +322,7 @@ class CartTest(TestWithoutServers):
                   " --gen-suppressions=all " + \
                   "--suppressions=" + self.supp_file + " " + \
                   "--track-origins=yes --error-exitcode=42 " + \
-                  "--show-reachable=yes "
+                  "--show-reachable=yes --trace-children=yes"
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
