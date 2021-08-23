@@ -52,7 +52,7 @@ class DaosServerTest(TestWithServers):
 
     def get_pool_list(self):
         """Get the pool list contents."""
-        pool_list = sorted(self.get_dmg_command().pool_list())
+        pool_list = sorted(self.get_dmg_command().pool_list()["response"]["pools"])
         self.log.info("get_pool-list: %s", pool_list)
         return pool_list
 
