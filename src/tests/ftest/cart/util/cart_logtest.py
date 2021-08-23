@@ -39,6 +39,7 @@
 This provides consistency checking for CaRT log files.
 """
 
+import re
 import sys
 import time
 import argparse
