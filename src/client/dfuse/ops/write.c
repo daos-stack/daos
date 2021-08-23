@@ -13,8 +13,7 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 	if (ev->de_ev.ev_error == 0)
 		DFUSE_REPLY_WRITE(ev, ev->de_req, ev->de_len);
 	else
-		DFUSE_REPLY_ERR_RAW(ev, ev->de_req,
-				    daos_der2errno(ev->de_ev.ev_error));
+		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
 	D_FREE(ev->de_iov.iov_buf);
 }
 
