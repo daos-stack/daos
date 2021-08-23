@@ -35,6 +35,9 @@ Environment variables in this section only apply to the server side.
 |----------------------|-----------|
 |RDB\_ELECTION\_TIMEOUT|Raft election timeout used by RDBs in milliseconds. INTEGER. Default to 7000 ms.|
 |RDB\_REQUEST\_TIMEOUT |Raft request timeout used by RDBs in milliseconds. INTEGER. Default to 3000 ms.|
+|RDB\_COMPACT\_THRESHOLD|Raft log compaction threshold in applied entries. INTEGER. Default to 256 entries.|
+|RDB\_AE\_MAX\_ENTRIES |Maximum number of entries in a Raft AppendEntries request. INTEGER. Default to 32.|
+|RDB\_AE\_MAX\_SIZE    |Maximum total size in bytes of all entries in a Raft AppendEntries request. INTEGER. Default to 1 MB.|
 |DAOS\_REBUILD         |Determines whether to start rebuilds when excluding targets. BOOL2. Default to true.|
 |DAOS\_MD\_CAP         |Size of a metadata pmem pool/file in MBs. INTEGER. Default to 128 MB.|
 |DAOS\_START\_POOL\_SVC|Determines whether to start existing pool services when starting a daos\_server. BOOL. Default to true.|

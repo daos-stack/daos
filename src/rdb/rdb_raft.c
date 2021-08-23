@@ -2344,56 +2344,78 @@ rdb_raft_unload_lc(struct rdb *db)
 static int
 rdb_raft_get_election_timeout(void)
 {
-	const char     *s;
-	int		t;
+	char	       *name = "RDB_ELECTION_TIMEOUT";
+	unsigned int	default_value = 7000;
+	unsigned int	value = default_value;
 
-	s = getenv("RDB_ELECTION_TIMEOUT");
-	if (s == NULL)
-		t = 7000;
-	else
-		t = atoi(s);
-	return t;
+	d_getenv_int(name, &value);
+	if (value == 0 || value > INT_MAX) {
+		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
+		value = default_value;
+	}
+	return value;
 }
 
 static int
 rdb_raft_get_request_timeout(void)
 {
-	const char     *s;
-	int		t;
+	char	       *name = "RDB_REQUEST_TIMEOUT";
+	unsigned int	default_value = 3000;
+	unsigned int	value = default_value;
 
-	s = getenv("RDB_REQUEST_TIMEOUT");
-	if (s == NULL)
-		t = 3000;
-	else
-		t = atoi(s);
-	return t;
+	d_getenv_int(name, &value);
+	if (value == 0 || value > INT_MAX) {
+		D_WARN("%s not in (0, %d] (defaulting to %u)\n", name, INT_MAX, default_value);
+		value = default_value;
+	}
+	return value;
 }
 
 static uint64_t
-rdb_raft_get_compact_thres(void)
+rdb_raft_get_compact_thres()
 {
-	unsigned int i = 256;
+	char	       *name = "RDB_COMPACT_THRESHOLD";
+	unsigned int	default_value = 256;
+	unsigned int	value = default_value;
 
-	d_getenv_int("RDB_COMPACT_THRESHOLD", &i);
-	return i;
+	d_getenv_int(name, &value);
+	if (value == 0) {
+		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
+		value = default_value;
+	}
+	return value;
 }
 
 static unsigned int
-rdb_raft_get_ae_max_entries(void)
+rdb_raft_get_ae_max_entries()
 {
-	unsigned int n = 32;
+	char	       *name = "RDB_AE_MAX_ENTRIES";
+	unsigned int	default_value = 32;
+	unsigned int	value = default_value;
 
-	d_getenv_int("RDB_AE_MAX_ENTRIES", &n);
-	return n;
+	d_getenv_int(name, &value);
+	if (value == 0) {
+		D_WARN("%s not in (0, %u] (defaulting to %u)\n", name, UINT_MAX, default_value);
+		value = default_value;
+	}
+	return value;
 }
 
 static size_t
 rdb_raft_get_ae_max_size(void)
 {
-	uint64_t size = (1ULL << 20);
+	char	       *name = "RDB_AE_MAX_SIZE";
+	uint64_t	default_value = (1ULL << 20);
+	uint64_t	value = default_value;
+	int		rc;
 
-	d_getenv_uint64_t("RDB_AE_MAX_SIZE", &size);
-	return size;
+	rc = d_getenv_uint64_t(name, &value);
+	if ((rc != -DER_NONEXIST && rc != 0) || value == 0) {
+		D_WARN("%s not in (0, "DF_U64"] (defaulting to "DF_U64")\n", name, UINT64_MAX,
+		       default_value);
+		value = default_value;
+	}
+	return value;
 }
 
 int
@@ -2511,9 +2533,11 @@ rdb_raft_start(struct rdb *db)
 	if (rc != 0)
 		goto err_callbackd;
 
-	D_DEBUG(DB_MD, DF_DB": raft started: election_timeout=%dms "
-		"request_timeout=%dms compact_thres="DF_U64"\n", DP_DB(db),
-		election_timeout, request_timeout, db->d_compact_thres);
+	D_DEBUG(DB_MD,
+		DF_DB": raft started: election_timeout=%dms request_timeout=%dms "
+		"compact_thres="DF_U64" ae_max_entries=%u ae_max_size="DF_U64"\n", DP_DB(db),
+		election_timeout, request_timeout, db->d_compact_thres, db->d_ae_max_entries,
+		db->d_ae_max_size);
 	return 0;
 
 err_callbackd:
