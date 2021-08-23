@@ -9,6 +9,7 @@ package control
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -1282,6 +1283,100 @@ func TestControl_SystemErase(t *testing.T) {
 			})
 
 			gotResp, gotErr := SystemErase(context.TODO(), mi, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_SystemJoin_RetryableErrors(t *testing.T) {
+	for name, testErr := range map[string]error{
+		"system not formatted": system.ErrUninitialized,
+		"system unavailable":   system.ErrRaftUnavail,
+		"connection closed":    FaultConnectionClosed(""),
+		"connection refused":   FaultConnectionRefused(""),
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			client := NewMockInvoker(log, &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					MockMSResponse("", testErr, nil),
+					MockMSResponse("", nil, &mgmtpb.JoinResp{Rank: 42}),
+				},
+			})
+
+			gotResp, gotErr := SystemJoin(context.TODO(), client, &SystemJoinReq{})
+			if gotErr != nil {
+				t.Fatalf("unexpected error: %v", gotErr)
+			}
+
+			expResp := &SystemJoinResp{Rank: 42}
+			if diff := cmp.Diff(expResp, gotResp, defResCmpOpts()...); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestControl_SystemJoin_Timeouts(t *testing.T) {
+	for name, tc := range map[string]struct {
+		outerTimeout time.Duration
+		mic          *MockInvokerConfig
+		expResp      *SystemJoinResp
+		expErr       error
+	}{
+		"outer context is canceled": {
+			outerTimeout: 1 * time.Nanosecond,
+			expErr:       context.DeadlineExceeded,
+		},
+		"inner context is canceled": {
+			mic: &MockInvokerConfig{
+				UnaryResponseSet: []*UnaryResponse{
+					{
+						fromMS: true,
+						Responses: []*HostResponse{
+							{
+								Error: FaultConnectionClosed(""),
+							},
+							{
+								Error: FaultConnectionRefused(""),
+							},
+							{
+								Error: context.DeadlineExceeded,
+							},
+						},
+					},
+					MockMSResponse("", nil, &mgmtpb.JoinResp{Rank: 42}),
+				},
+				UnaryResponseDelays: [][]time.Duration{
+					{},
+					{0, 0, SystemJoinRetryTimeout + time.Millisecond},
+				},
+			},
+			expResp: &SystemJoinResp{Rank: 42},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			ctx := context.Background()
+			if tc.outerTimeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.outerTimeout)
+				defer cancel()
+			}
+
+			client := NewMockInvoker(log, tc.mic)
+			gotResp, gotErr := SystemJoin(ctx, client, &SystemJoinReq{})
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return

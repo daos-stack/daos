@@ -114,4 +114,7 @@ public final class Constants {
 
   public static final int DEFAULT_NUMBER_OF_EVENTS_PER_EQ = 128;
   public static final String CFG_NUMBER_OF_EVENTS_PER_EQ = "eq.events";
+
+  public static final String CFG_DAOS_TIMEOUT = "daos.timeout";
+  public static final String DEFAULT_DAOS_TIMEOUT_MS = "60000";
 }
