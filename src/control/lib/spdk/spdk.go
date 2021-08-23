@@ -75,7 +75,7 @@ type EnvOptions struct {
 }
 
 func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
-	if !o.EnableVMD {
+	if o.EnableVMD {
 		// DPDK will not accept VMD backing device addresses
 		// so convert to VMD address
 		newAllowList, err := revertBackingToVmd(log, o.PCIAllowList)
@@ -155,14 +155,11 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	}
 	clean(retPtr)
 
-	// TODO DAOS-8040: re-enable VMD
-	//	if !opts.EnableVMD {
-	//		return nil
-	//	}
-	//
-	//	if rc := C.spdk_vmd_init(); rc != 0 {
-	//		return Rc2err("spdk_vmd_init()", rc)
-	//	}
+	if opts.EnableVMD {
+		if rc := C.spdk_vmd_init(); rc != 0 {
+			return Rc2err("spdk_vmd_init()", rc)
+		}
+	}
 
 	return nil
 }
@@ -171,14 +168,9 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 	log.Debugf("spdk fini go opts: %+v", opts)
 
-	C.spdk_env_fini()
+	if opts.EnableVMD {
+		C.spdk_vmd_fini()
+	}
 
-	// TODO: enable when vmd_fini supported in daos spdk version
-	//	if !opts.EnableVMD {
-	//		return nil
-	//	}
-	//
-	//	if rc := C.spdk_vmd_fini(); rc != 0 {
-	//		return Rc2err("spdk_vmd_fini()", rc)
-	//	}
+	C.spdk_env_fini()
 }

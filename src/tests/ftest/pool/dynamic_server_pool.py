@@ -42,7 +42,12 @@ class DynamicServerPool(TestWithServers):
         """Call dmg pool list to get the list of UUIDs and verify against the
         expected UUIDs.
         """
-        actual_uuids = sorted(self.get_dmg_command().pool_list())
+        actual_uuids = []
+        output = self.get_dmg_command().pool_list()
+        for pool in output["response"]["pools"]:
+            actual_uuids.append(pool["uuid"])
+        actual_uuids.sort()
+
         self.expected_uuids.sort()
         self.assertEqual(self.expected_uuids, actual_uuids)
 
@@ -98,7 +103,9 @@ class DynamicServerPool(TestWithServers):
 
         Test Description: See class description.
 
-        :avocado: tags=all,medium,control,full_regression,dynamic_server_pool
+        :avocado: tags=all,full_regression
+        :avocado: tags=vm
+        :avocado: tags=control,dynamic_server_pool
         """
         # Create a pool on rank0.
         self.create_pool_with_ranks(ranks=[0], tl_update=True)
