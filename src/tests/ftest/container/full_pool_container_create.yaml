@@ -3,13 +3,18 @@
 hosts:
   test_servers:
     - server-A
+  test_clients:
+    - client-B
 server_config:
    name: daos_server
    servers:
+     log_mask: INFO
      targets: 2
-timeout: 150
+timeout: 200
 pool:
   control_method: dmg
   mode: 511
   scm_size: 134217728 # 16 mb pool, minimum size currently possible
   threshold_percent: 0.001 # 0.1%
+container:
+  control_method: daos

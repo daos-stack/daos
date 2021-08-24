@@ -4,9 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 from apricot import TestWithServers
-from pydaos.raw import DaosContainer, DaosApiError
-from general_utils import get_random_bytes
+from general_utils import get_random_bytes, DaosTestError
+from test_utils_container import TestContainerData
 
 class FullPoolContainerCreate(TestWithServers):
     """
@@ -15,9 +16,29 @@ class FullPoolContainerCreate(TestWithServers):
     """
 
     def test_no_space_cont_create(self):
+        """JIRA ID: DAOS-1169 DAOS-7374
+
+        Test Description:
+            Purpose of the test is to verify pool and container behave as
+            expected in the completely filled scenario.
+
+        Use Case:
+            Create Pool and Container.
+            Fill the pool completely with different object sizes.
+            Verify return code is as expected (-1007) when no more
+            data can be written to the a container.
+            Once Pool is completely filled, destroy the container
+            and verify container can be destroyed in filled state.
+            After deleting the container and when aggregation is
+            complete, verify the returned space is close enough to
+            the original free space.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=tiny
+        :avocado: tags=container
+        :avocado: tags=fullpoolcontcreate
         """
-        :avocado: tags=all,container,tiny,full_regression,fullpoolcontcreate
-        """
+
         # full storage rc
         err = "-1007"
 
@@ -34,18 +55,12 @@ class FullPoolContainerCreate(TestWithServers):
             "Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
 
         # create a container
-        try:
-            self.log.info("creating container 1")
-            cont = DaosContainer(self.context)
-            cont.create(self.pool.pool.handle)
-            self.log.info("created container 1")
-        except DaosApiError as excep:
-            self.log.error("caught exception creating container: "
-                           "%s", excep)
-            self.fail("caught exception creating container: {}".format(excep))
+        self.add_container(self.pool)
+        self.container.open()
 
-        self.log.info("opening container 1")
-        cont.open()
+        # get free space before write
+        free_space_before = self.pool.get_pool_free_space()
+        self.log.info("Pool free space before write: %s", free_space_before)
 
         # generate random dkey, akey each time
         # write 1mb until no space, then 1kb, etc. to fill pool quickly
@@ -55,20 +70,20 @@ class FullPoolContainerCreate(TestWithServers):
                 self.d_log.debug("writing obj {0} sz {1} to "
                                  "container".format(write_count, obj_sz))
                 my_str = b"a" * obj_sz
-                my_str_sz = obj_sz
                 dkey = get_random_bytes(5)
                 akey = get_random_bytes(5)
                 try:
-                    dummy_oid = cont.write_an_obj(
-                        my_str, my_str_sz, dkey, akey, obj_cls="OC_SX")
+                    self.container.written_data.append(TestContainerData(False))
+                    self.container.written_data[-1].write_record(
+                        self.container, akey, dkey, my_str, obj_class='OC_SX')
                     self.d_log.debug("wrote obj {0}, sz {1}".format(write_count,
                                                                     obj_sz))
                     write_count += 1
-                except DaosApiError as excep:
+                except DaosTestError as excep:
                     if not err in repr(excep):
                         self.log.error("caught exception while writing "
                                        "object: %s", repr(excep))
-                        cont.close()
+                        self.container.close()
                         self.fail("caught exception while writing "
                                   "object: {}".format(repr(excep)))
                     else:
@@ -76,66 +91,27 @@ class FullPoolContainerCreate(TestWithServers):
                                       "objects", obj_sz)
                         break
 
-        self.log.info("closing container")
-        cont.close()
-
         # query the pool
         self.log.info("Pool Query after filling")
         self.pool.set_query_data()
         self.log.info(
             "Pool %s query data: %s\n", self.pool.uuid, self.pool.query_data)
 
-        # create a 2nd container now that pool is full
-        # try writing to this second container which should
-        # fail after writing a few Kb of data as there should
-        # be some space emptied up due to aggregation and
-        # rdb log compression
-        self.log.info("creating 2nd container")
-        cont2 = DaosContainer(self.context)
-        cont2.create(self.pool.pool.handle)
-        self.log.info("created 2nd container")
-        self.log.info("opening container 2")
-        cont2.open()
+        # destroy container
+        self.container.destroy()
 
-        written_data_cont2 = 0
-        self.log.info("writing more objects, write expected to fail "
-                      "after writing a few Kb")
-        for obj_sz in [10, 1]:
-            write_count = 0
-            threshold_value = (threshold_percent *
-                               self.pool.scm_size.value)
-            while True:
-                try:
-                    # write to second container
-                    cont2.write_an_obj(my_str, obj_sz, dkey, akey,
-                                       obj_cls="OC_SX")
-                    write_count += 1
-
-                except DaosApiError as excep:
-                    if not err in repr(excep):
-                        self.log.error("caught unexpected exception while "
-                                       "writing object: %s", repr(excep))
-                        self.log.info("closing container")
-                        cont2.close()
-                        self.fail("caught unexpected exception while writing "
-                                  "object: {}".format(repr(excep)))
-                    else:
-                        # calculate the data written to second container
-                        # and verify it is under the threshold of 0.1%
-                        # of pool size
-                        written_data_cont2 = (written_data_cont2 +
-                                              (write_count * obj_sz))
-                        if written_data_cont2 > threshold_value:
-                            cont2.close()
-                            self.fail("Written {} bytes to container2 which is "
-                                      "more than 0.1% of pool "
-                                      "size".format(written_data_cont2))
-                        else:
-                            break
-
-        self.log.info("Total data written to container2 "
-                      "{} bytes".format(written_data_cont2))
-        self.log.info("correctly caught -1007 while attempting "
-                      "to write object to a full pool")
-        self.log.info("closing container")
-        cont2.close()
+        # check for free space to be returned back once aggregation is complete
+        # checking for a closer returned space value instead of exact value
+        # as the test is using scm only
+        counter = 1
+        threshold_value = free_space_before - (free_space_before *
+                                               threshold_percent)
+        while self.pool.get_pool_free_space() < threshold_value:
+            # try to wait for 3 x 60 secs for aggregation to be completed or
+            # else exit the test with a failure.
+            if counter > 3:
+                self.log.info("Free space when test terminated: %s",
+                              self.pool.get_pool_free_space())
+                self.fail("Aggregation did not complete as expected")
+            time.sleep(60)
+            counter += 1
