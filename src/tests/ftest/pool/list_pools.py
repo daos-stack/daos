@@ -35,6 +35,7 @@ class ListPoolsTest(TestWithServers):
         """
         # Iterate rank lists to create pools. Store the created pool information
         # as a dictionary of pool UUID keys with a service replica list value.
+        self.pool = []
         expected_uuids = {}
         for rank_list in rank_lists:
             self.pool.append(self.get_pool(create=False))
@@ -58,8 +59,9 @@ class ListPoolsTest(TestWithServers):
         self.log.info("Detected pool info: %s", str(detected_uuids))
 
         # Destroy all the pools
-        for uuid in expected_uuids:
-            self.get_dmg_command().pool_destroy(uuid)
+        if self.destroy_pools(self.pool):
+            self.fail("Error destroying pools")
+        self.pool = []
 
         # Compare the expected and detected pool information
         self.assertEqual(
@@ -77,7 +79,6 @@ class ListPoolsTest(TestWithServers):
 
         :avocado: tags=all,large,pool,full_regression,list_pools
         """
-        self.pool = []
         ranks = list(range(len(self.hostlist_servers)))
 
         # Create pools with different ranks:
