@@ -2,6 +2,11 @@
 
 set -eux
 
+: "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
+: "${DAOS_STACK_RETRY_COUNT:=3}"
+: "${BUILD_URL:=Not_in_jenkins}"
+: "${OPERATIONS_EMAIL:=$USER@localhost}"
+
 # functions common to more than one distro specific provisioning
 url_to_repo() {
     local url="$1"
@@ -74,31 +79,33 @@ dump_repos() {
 }
 
 retry_cmd() {
-    local timeout="$1"
-    shift
-
-    # Issue the specified command with a timeout and retry due to timeout.
-    local tries=${DAOS_STACK_RETRY_COUNT:-3}
-    local rc=1
-    while [ "$tries" -gt 0 ]; do
-        if time timeout "$timeout" "$@"; then
-            # command succeeded, return with success
+    local tries=$DAOS_STACK_RETRY_COUNT
+    while [ $tries -gt 0 ]; do
+        if time "$@"; then
+            # succeeded, return with success
             return 0
         fi
-        rc=${PIPESTATUS[0]}
-        if [ "${rc}" = "124" ]; then
-            # command timed out, try again after a delay
-            (( tries-- ))
-            if [ "$tries" -gt 0 ]; then
-                sleep "${DAOS_STACK_RETRY_DELAY_SECONDS:-60}"
-            fi
-            continue
-        fi
-        # command failed for something other than timeout
-        break
-    done
+        # We hit an error
+        (( tries-- ))
+        {
+          echo "Command $@ failed on $HOSTNAME for $BUILD_URL"
+          echo "Command status was ${PIPESTATUS[0]}"
+          echo "Will retry $tries before giving up."
+        } 2>&1 | mail -s "Command failed in $BUILD_URL" \
+                      -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
 
-    return "${rc}"
+        if [ $tries -gt 0 ]; then
+          sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
+        fi
+        continue
+    done
+    return 1
+}
+
+timeout_cmd() {
+    local timeout="$1"
+    shift
+    retry_cmd timeout "$timeout" "$@"
 }
 
 env > /root/last_run-env.txt

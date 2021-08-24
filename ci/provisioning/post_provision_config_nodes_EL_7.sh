@@ -6,7 +6,7 @@ LSB_RELEASE=redhat-lsb-core
 EXCLUDE_UPGRADE=fuse,mercury,daos,daos-\*
 
 bootstrap_dnf() {
-    retry_cmd 5m yum -y install dnf 'dnf-command(config-manager)'
+    timeout_cmd 5m yum -y install dnf 'dnf-command(config-manager)'
 }
 
 group_repo_post() {
@@ -123,7 +123,7 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    retry_cmd 5m dnf -y install $LSB_RELEASE
+    timeout_cmd 5m dnf -y install $LSB_RELEASE
 
     if lspci | grep "ConnectX-6"; then
         # No openmpi3 or MACSio-openmpi3 can be installed currently
@@ -134,7 +134,7 @@ post_provision_config_nodes() {
 
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! retry_cmd 5m dnf -y install $INST_RPMS; then
+       ! timeout_cmd 5m dnf -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
@@ -143,7 +143,7 @@ post_provision_config_nodes() {
     distro_custom
 
     # now make sure everything is fully up-to-date
-    if ! retry_cmd 5m dnf -y upgrade \
+    if ! timeout_cmd 5m dnf -y upgrade \
                   --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
