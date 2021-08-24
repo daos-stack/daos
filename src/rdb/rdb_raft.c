@@ -2372,7 +2372,7 @@ rdb_raft_get_request_timeout(void)
 }
 
 static uint64_t
-rdb_raft_get_compact_thres()
+rdb_raft_get_compact_thres(void)
 {
 	char	       *name = "RDB_COMPACT_THRESHOLD";
 	unsigned int	default_value = 256;
@@ -2387,7 +2387,7 @@ rdb_raft_get_compact_thres()
 }
 
 static unsigned int
-rdb_raft_get_ae_max_entries()
+rdb_raft_get_ae_max_entries(void)
 {
 	char	       *name = "RDB_AE_MAX_ENTRIES";
 	unsigned int	default_value = 32;
