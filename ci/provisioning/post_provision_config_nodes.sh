@@ -73,6 +73,34 @@ dump_repos() {
         done
 }
 
+retry_cmd() {
+    local timeout="$1"
+    shift
+
+    # Issue the specified command with a timeout and retry due to timeout.
+    local tries=${DAOS_STACK_RETRY_COUNT:-3}
+    local rc=1
+    while [ "$tries" -gt 0 ]; do
+        if time timeout "$timeout" "$@"; then
+            # command succeeded, return with success
+            return 0
+        fi
+        rc=${PIPESTATUS[0]}
+        if [ "${rc}" = "124" ]; then
+            # command timed out, try again after a delay
+            (( tries-- ))
+            if [ "$tries" -gt 0 ]; then
+                sleep "${DAOS_STACK_RETRY_DELAY_SECONDS:-60}"
+            fi
+            continue
+        fi
+        # command failed for something other than timeout
+        break
+    done
+
+    return "${rc}"
+}
+
 env > /root/last_run-env.txt
 if ! grep ":$MY_UID:" /etc/group; then
   groupadd -g "$MY_UID" jenkins
