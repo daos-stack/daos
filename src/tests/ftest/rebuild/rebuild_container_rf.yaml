@@ -23,8 +23,8 @@ pool:
 container:
   control_method: daos
   cont_prop: !mux
-    rf_0:
-      properties: rf:0
+    rf_1:
+      properties: rf:1
     rf_2:
       properties: rf:2
   akey_size: 5
@@ -35,12 +35,15 @@ container:
 rebuild:
   object_class: OC_RP_3G1
   cont_rf: !mux
-    negative_test:
+    rbld_1:
       rank:
         - 3
+    rbld_2:
+      rank:
         - 4
         - 5
-    positive_test:
+    rbld_3:
       rank:
+        - 3
         - 4
         - 5

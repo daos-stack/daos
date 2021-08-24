@@ -7,7 +7,7 @@
 from container_rf_test_base import RbldContRedundancyFactor
 
 
-class RbldContRedundancyFactorrr(RbldContRedundancyFactor):
+class RbldContRedundancyFactor(RbldContRedundancyFactor):
     # pylint: disable=too-many-ancestors
     """Test container redundancy factor with various rebuilds.
 
