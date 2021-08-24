@@ -846,7 +846,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		peerReq.AddHost(peer.String())
 
 		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
-			if control.IsConnectionError(err) {
+			if control.IsRetryableConnErr(err) {
 				continue
 			}
 			return nil, err

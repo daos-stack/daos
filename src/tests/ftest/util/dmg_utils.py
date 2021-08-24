@@ -618,58 +618,57 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "delete-acl"), pool=pool, principal=principal)
 
-    def pool_list(self, no_query=False):
+    def pool_list(self, no_query=False, verbose=False):
         """List pools.
 
         Args:
             no_query (bool, optional): If True, do not query for pool stats.
+            verbose (bool, optional): If True, use verbose mode.
 
         Raises:
             CommandFailure: if the dmg pool pool list command fails.
 
         Returns:
-            dict: a dictionary of pool UUID keys and svc replica values
+            dict: JSON output dictionary
 
         """
-        # Sample JSON Output:
+        # Sample verbose JSON Output:
         # {
-        #    "response": {
-        #        "status": 0,
-        #        "pools": [
-        #        {
-        #            "uuid": "3dd3f313-6e37-4890-9e64-93a34d04e9f5",
-        #            "label": "foobar",
-        #            "svc_reps": [
-        #            0
-        #            ]
-        #        },
-        #        {
-        #            "uuid": "6871d543-9a12-4530-b704-d937197c131c",
-        #            "label": "foobaz",
-        #            "svc_reps": [
-        #            0
-        #            ]
-        #        },
-        #        {
-        #            "uuid": "aa503e26-e974-4634-ac5a-738ee00f0c39",
-        #            "svc_reps": [
-        #            0
-        #            ]
-        #        }
-        #        ]
-        #    },
-        #    "error": null,
-        #    "status": 0
+        #     "response": {
+        #         "status": 0,
+        #         "pools": [
+        #         {
+        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #             "label": "mkp1",
+        #             "svc_reps": [
+        #             0
+        #             ],
+        #             "targets_total": 8,
+        #             "targets_disabled": 0,
+        #             "query_error_msg": "",
+        #             "query_status_msg": "",
+        #             "usage": [
+        #             {
+        #                 "tier_name": "SCM",
+        #                 "size": 3000000000,
+        #                 "free": 2995801112,
+        #                 "imbalance": 0
+        #             },
+        #             {
+        #                 "tier_name": "NVME",
+        #                 "size": 47000000000,
+        #                 "free": 26263322624,
+        #                 "imbalance": 36
+        #             }
+        #             ]
+        #         }
+        #         ]
+        #     },
+        #     "error": null,
+        #     "status": 0
         # }
-        output = self._get_json_result(("pool", "list"), no_query=no_query)
-
-        data = {}
-        if output["response"] is None or output["response"]["pools"] is None:
-            return data
-
-        for pool in output["response"]["pools"]:
-            data[pool["uuid"]] = pool["svc_reps"]
-        return data
+        return self._get_json_result(
+            ("pool", "list"), no_query=no_query, verbose=verbose)
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.
