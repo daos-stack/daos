@@ -31,6 +31,7 @@ import (
 #include <daos/compression.h>
 #include <daos/cipher.h>
 #include <daos/object.h>
+#include <daos/cont_props.h>
 */
 import "C"
 
@@ -75,15 +76,16 @@ type propHdlr struct {
 //		bool,			   // if true, property may not be set
 // 	},
 var propHdlrs = propHdlrMap{
-	"label": {
+	C.DAOS_PROP_ENTRY_LABEL: {
 		C.DAOS_PROP_CO_LABEL,
 		"Label",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
 			if !drpc.LabelIsValid(v) {
 				return errors.Errorf("invalid label %q", v)
 			}
+			e.dpe_type = C.DAOS_PROP_CO_LABEL
 			cStr := C.CString(v)
-			C.set_dpe_dupe_str(e, cStr, C.size_t(len(v)+1))
+			C.daos_prop_entry_set_str(e, cStr, C.strlen(cStr))
 			freeString(cStr)
 			return nil
 		},
@@ -93,13 +95,13 @@ var propHdlrs = propHdlrMap{
 				return propNotFound(name)
 			}
 			if C.get_dpe_str(e) == nil {
-				return "container_label_not_set"
+				return labelNotSetStr
 			}
 			return strValStringer(e, name)
 		},
 		false,
 	},
-	"cksum": {
+	C.DAOS_PROP_ENTRY_CKSUM: {
 		C.DAOS_PROP_CO_CSUM,
 		"Checksum",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -139,7 +141,7 @@ var propHdlrs = propHdlrMap{
 		},
 		false,
 	},
-	"cksum_size": {
+	C.DAOS_PROP_ENTRY_CKSUM_SIZE: {
 		C.DAOS_PROP_CO_CSUM_CHUNK_SIZE,
 		"Checksum Chunk Size",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -155,7 +157,7 @@ var propHdlrs = propHdlrMap{
 		humanSizeStringer,
 		false,
 	},
-	"srv_cksum": {
+	C.DAOS_PROP_ENTRY_SRV_CKSUM: {
 		C.DAOS_PROP_CO_CSUM_SERVER_VERIFY,
 		"Server Checksumming",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -185,7 +187,7 @@ var propHdlrs = propHdlrMap{
 		},
 		false,
 	},
-	"dedup": {
+	C.DAOS_PROP_ENTRY_DEDUP: {
 		C.DAOS_PROP_CO_DEDUP,
 		"Deduplication",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -218,7 +220,7 @@ var propHdlrs = propHdlrMap{
 		},
 		false,
 	},
-	"dedup_threshold": {
+	C.DAOS_PROP_ENTRY_DEDUP_THRESHOLD: {
 		C.DAOS_PROP_CO_DEDUP_THRESHOLD,
 		"Dedupe Threshold",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -234,7 +236,7 @@ var propHdlrs = propHdlrMap{
 		humanSizeStringer,
 		false,
 	},
-	"compression": {
+	C.DAOS_PROP_ENTRY_COMPRESS: {
 		C.DAOS_PROP_CO_COMPRESS,
 		"Compression",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -274,7 +276,7 @@ var propHdlrs = propHdlrMap{
 		},
 		false,
 	},
-	"encryption": {
+	C.DAOS_PROP_ENTRY_ENCRYPT: {
 		C.DAOS_PROP_CO_ENCRYPT,
 		"Encryption",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -314,7 +316,7 @@ var propHdlrs = propHdlrMap{
 		},
 		false,
 	},
-	"rf": {
+	C.DAOS_PROP_ENTRY_REDUN_FAC: {
 		C.DAOS_PROP_CO_REDUN_FAC,
 		"Redundancy Factor",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -353,7 +355,7 @@ var propHdlrs = propHdlrMap{
 		},
 		false,
 	},
-	"status": {
+	C.DAOS_PROP_ENTRY_STATUS: {
 		C.DAOS_PROP_CO_STATUS,
 		"Health",
 		func(h *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -386,7 +388,7 @@ var propHdlrs = propHdlrMap{
 		},
 		false,
 	},
-	"ec_cell": {
+	C.DAOS_PROP_ENTRY_EC_CELL_SZ: {
 		C.DAOS_PROP_CO_EC_CELL_SZ,
 		"EC Cell Size",
 		func(_ *propHdlr, e *C.struct_daos_prop_entry, v string) error {
@@ -418,7 +420,7 @@ var propHdlrs = propHdlrMap{
 		false,
 	},
 	// Read-only properties here for use by get-property.
-	"layout_type": {
+	C.DAOS_PROP_ENTRY_LAYOUT_TYPE: {
 		C.DAOS_PROP_CO_LAYOUT_TYPE,
 		"Layout Type",
 		nil, nil,
@@ -435,14 +437,14 @@ var propHdlrs = propHdlrMap{
 		},
 		true,
 	},
-	"layout_version": {
+	C.DAOS_PROP_ENTRY_LAYOUT_VER: {
 		C.DAOS_PROP_CO_LAYOUT_VER,
 		"Layout Version",
 		nil, nil,
 		uintStringer,
 		true,
 	},
-	"rf_lvl": {
+	C.DAOS_PROP_ENTRY_REDUN_LVL: {
 		C.DAOS_PROP_CO_REDUN_LVL,
 		"Redundancy Level",
 		nil, nil,
@@ -461,28 +463,28 @@ var propHdlrs = propHdlrMap{
 		},
 		true,
 	},
-	"max_snapshot": {
+	C.DAOS_PROP_ENTRY_SNAPSHOT_MAX: {
 		C.DAOS_PROP_CO_SNAPSHOT_MAX,
 		"Max Snapshot",
 		nil, nil,
 		uintStringer,
 		true,
 	},
-	"alloc_oid": {
+	C.DAOS_PROP_ENTRY_ALLOCED_OID: {
 		C.DAOS_PROP_CO_ALLOCED_OID,
 		"Highest Allocated OID",
 		nil, nil,
 		uintStringer,
 		true,
 	},
-	"owner": {
+	C.DAOS_PROP_ENTRY_OWNER: {
 		C.DAOS_PROP_CO_OWNER,
 		"Owner",
 		nil, nil,
 		strValStringer,
 		true,
 	},
-	"group": {
+	C.DAOS_PROP_ENTRY_GROUP: {
 		C.DAOS_PROP_CO_OWNER_GROUP,
 		"Group",
 		nil, nil,
@@ -495,8 +497,9 @@ var propHdlrs = propHdlrMap{
 // below.
 
 const (
-	maxNameLen  = 20 // arbitrary; came from C code
-	maxValueLen = C.DAOS_PROP_LABEL_MAX_LEN
+	maxNameLen     = 20 // arbitrary; came from C code
+	maxValueLen    = C.DAOS_PROP_LABEL_MAX_LEN
+	labelNotSetStr = "container_label_not_set"
 )
 
 type entryHdlr func(*propHdlr, *C.struct_daos_prop_entry, string) error
