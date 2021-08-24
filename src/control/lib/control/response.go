@@ -204,7 +204,7 @@ func (ur *UnaryResponse) getMSResponse() (proto.Message, error) {
 func convertMSResponse(ur *UnaryResponse, out interface{}) error {
 	msResp, err := ur.getMSResponse()
 	if err != nil {
-		if IsConnectionError(err) {
+		if IsConnErr(err) {
 			return errMSConnectionFailure
 		}
 		return err
