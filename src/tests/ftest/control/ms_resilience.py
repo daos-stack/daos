@@ -62,10 +62,13 @@ class ManagementServiceResilience(TestWithServers):
         self.log.info("Pool UUID %s on server group: %s",
                         self.pool.uuid, self.server_group)
         # Verify that the pool persisted.
-        if self.find_pool(self.pool.uuid):
-            self.log.info("Found pool in system.")
-        else:
-            self.fail("No pool found in system.")
+        while not self.find_pool(self.pool.uuid):
+            # Occasionally the pool may not be found
+            # immediately after creation if the read
+            # is serviced by a non-leader replica.
+            self.log.info("Pool %s not found yet.", self.pool.uuid)
+            time.sleep(1)
+        self.log.info("Found pool in system.")
 
     def get_leader(self):
         """Fetch the current system leader.
