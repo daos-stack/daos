@@ -209,6 +209,7 @@ test_snapshots(void **argp)
 	daos_epoch_t		snaps_out[snap_count];
 	daos_handle_t		*ths = NULL;
 	daos_anchor_t		anchor;
+	daos_cont_info_t	cinfo;
 
 	MUST(cont_create(arg, co_uuid));
 	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
@@ -255,8 +256,43 @@ test_snapshots(void **argp)
 				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(snap_count_out, snap_count);
-	for (i = 0; i < snap_count; i++)
+	for (i = 0; i < snap_count; i++) {
 		assert_int_not_equal(snaps_out[i], garbage);
+		assert_int_equal(snaps_out[i], snaps[i]);
+	}
+
+	print_message("Container query snapshots shall succeed with no buffer\n");
+	cinfo.ci_nsnapshots = snap_count * 10;	/* should be ignored on input */
+	cinfo.ci_snapshots = NULL;
+	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nsnapshots, snap_count);
+
+	/* Get subset of snapshots when providing a small buffer */
+	print_message("Container query snapshots shall succeed with a small buffer\n");
+	cinfo.ci_nsnapshots = snap_split_index;
+	cinfo.ci_snapshots = snaps_out;
+	memset(cinfo.ci_snapshots, 0xAA, snap_count * sizeof(daos_epoch_t));
+	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nsnapshots, snap_count);
+	for (i = 0; i < snap_split_index; i++)
+		assert_int_equal(cinfo.ci_snapshots[i], snaps[i]);
+	for (i = snap_split_index; i < snap_count; i++)
+		assert_int_equal(cinfo.ci_snapshots[i], garbage);
+
+	/* Get all snapshots when providing exact-sized buffer */
+	print_message("Container query snapshots shall succeed with a large buffer\n");
+	cinfo.ci_nsnapshots = snap_count;
+	cinfo.ci_snapshots = snaps_out;
+	memset(cinfo.ci_snapshots, 0xAA, snap_count * sizeof(daos_epoch_t));
+	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nsnapshots, snap_count);
+	for (i = 0; i < snap_count; i++) {
+		assert_int_not_equal(cinfo.ci_snapshots[i], garbage);
+		assert_int_equal(cinfo.ci_snapshots[i], snaps[i]);
+	}
 
 	/*
 	 * FIXME: I'm not able to understand following testing code, let's just

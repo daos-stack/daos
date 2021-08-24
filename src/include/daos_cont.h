@@ -53,6 +53,8 @@ typedef struct {
 	daos_epoch_t	       *ci_snapshots;
 	/** The minimal "Highest aggregated epoch" among all targets */
 	daos_epoch_t		ci_hae;
+	/* snapshot names */
+	char		      **ci_snapshot_names;
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 

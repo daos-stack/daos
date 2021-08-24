@@ -221,11 +221,13 @@ int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
 			 crt_rpc_t *rpc);
-int
-ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
-		      daos_epoch_t **snapshots, int *snap_count);
-void
-ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
+int ds_cont_read_snap_list(struct rdb_tx *tx, struct cont *cont, daos_epoch_t **buf, int *count);
+int ds_cont_xfer_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
+			   struct container_hdl *hdl, crt_rpc_t *rpc, crt_bulk_t *bulk,
+			   int *snap_countp);
+int ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid, daos_epoch_t **snapshots,
+			  int *snap_count);
+void ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
 
 /**
  * srv_target.c

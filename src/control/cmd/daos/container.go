@@ -27,6 +27,7 @@ import (
 
 /*
 #include "util.h"
+
 */
 import "C"
 
@@ -115,9 +116,12 @@ func (cmd *containerBaseCmd) closeContainer() error {
 	return daosError(C.daos_cont_close(cmd.cContHandle, nil))
 }
 
-func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
-	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
+func (cmd *containerBaseCmd) queryContainer(verbose bool) (*containerInfo, error) {
 	var cType [10]C.char
+	var NumSnapshotsAlloced uint32 = 0
+	if verbose {
+		NumSnapshotsAlloced = 128
+	}
 
 	props, entries, err := allocProps(2)
 	if err != nil {
@@ -129,9 +133,22 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	props.dpp_nr++
 	defer func() { C.daos_prop_free(props) }()
 
+	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID, NumSnapshotsAlloced)
 	rc := C.daos_cont_query(cmd.cContHandle, &ci.dci, props, nil)
 	if err := daosError(rc); err != nil {
+		ci.deleteContainerInfo()
 		return nil, err
+	}
+	// Re-run query with sufficient ci_snapshots space if needed
+	if verbose && *ci.NumSnapshots > ci.NumSnapshotsAlloced {
+		NumSnapshotsAlloced = *ci.NumSnapshots
+		ci.deleteContainerInfo()
+		ci = newContainerInfo(&cmd.poolUUID, &cmd.contUUID, NumSnapshotsAlloced)
+		rc = C.daos_cont_query(cmd.cContHandle, &ci.dci, props, nil)
+		if err = daosError(rc); err != nil {
+			ci.deleteContainerInfo()
+			return nil, err
+		}
 	}
 
 	lType := C.get_dpe_val(&entries[0])
@@ -317,7 +334,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer cmd.closeContainer()
 
-	ci, err := cmd.queryContainer()
+	ci, err := cmd.queryContainer(false)
 	if err != nil {
 		// Special case for creating a container without permission to query it.
 		if errors.Cause(err) == drpc.DaosNoPermission {
@@ -327,6 +344,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 
 		return errors.Wrapf(err, "failed to query new container %s", co_id)
 	}
+	defer ci.deleteContainerInfo()
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(ci, nil)
@@ -642,9 +660,10 @@ func (cmd *containerStatCmd) Execute(_ []string) error {
 
 func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	epochs := ci.SnapshotEpochs()
-	epochStrs := make([]string, *ci.NumSnapshots)
-	for i := uint32(0); i < *ci.NumSnapshots; i++ {
-		epochStrs[i] = fmt.Sprintf("%d", epochs[i])
+
+	epochStrs := make([]string, len(epochs))
+	for i, e := range epochs {
+		epochStrs[i] = fmt.Sprintf("%d", e)
 	}
 
 	rows := []txtfmt.TableRow{
@@ -656,13 +675,17 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	rows = append(rows, txtfmt.TableRow{"Container Type": ci.Type})
 
 	if verbose {
+		SnapEpochsTitle := "Snapshot Epochs"
+		if ci.NumSnapshotsAlloced == 0 {
+			SnapEpochsTitle = "Snapshot Epochs (use --verbose for list)"
+		}
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
 			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
 			{"Latest Persistent Snapshot": fmt.Sprintf("%d", *ci.LatestSnapshot)},
 			{"Highest Aggregated Epoch": fmt.Sprintf("%d", *ci.HighestAggregatedEpoch)},
 			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
-			{"Snapshot Epochs": strings.Join(epochStrs, ",")},
+			{SnapEpochsTitle: strings.Join(epochStrs, ",")},
 		}...)
 
 		if ci.ObjectClass != "" {
@@ -688,6 +711,7 @@ type containerInfo struct {
 	Type                   string     `json:"container_type"`
 	ObjectClass            string     `json:"object_class,omitempty"`
 	ChunkSize              uint64     `json:"chunk_size,omitempty"`
+	NumSnapshotsAlloced    uint32
 }
 
 func (ci *containerInfo) SnapshotEpochs() []uint64 {
@@ -696,7 +720,11 @@ func (ci *containerInfo) SnapshotEpochs() []uint64 {
 	}
 
 	// return a Go slice backed by the C array of snapshot epochs
-	return (*[1 << 30]uint64)(unsafe.Pointer(ci.dci.ci_snapshots))[:*ci.NumSnapshots:*ci.NumSnapshots]
+	NumSnapshots := *ci.NumSnapshots
+	if NumSnapshots > ci.NumSnapshotsAlloced {
+		NumSnapshots = ci.NumSnapshotsAlloced
+	}
+	return (*[1 << 30]uint64)(unsafe.Pointer(ci.dci.ci_snapshots))[:NumSnapshots:NumSnapshots]
 }
 
 func (ci *containerInfo) MarshalJSON() ([]byte, error) {
@@ -712,7 +740,7 @@ func (ci *containerInfo) MarshalJSON() ([]byte, error) {
 
 // as an experiment, try creating a Go struct whose members are
 // pointers into the C struct.
-func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
+func newContainerInfo(poolUUID, contUUID *uuid.UUID, NumSnapshotsAlloced uint32) *containerInfo {
 	ci := new(containerInfo)
 
 	ci.PoolUUID = poolUUID
@@ -721,12 +749,26 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
 	ci.HighestAggregatedEpoch = (*uint64)(&ci.dci.ci_hae)
+	*ci.NumSnapshots = 0
+	ci.NumSnapshotsAlloced = NumSnapshotsAlloced
+	if NumSnapshotsAlloced > 0 {
+		ci.dci.ci_snapshots = (*C.uint64_t)(C.calloc(C.size_t(NumSnapshotsAlloced), C.sizeof_uint64_t))
+		*ci.NumSnapshots = NumSnapshotsAlloced
+	}
 
 	return ci
 }
 
+func (ci *containerInfo) deleteContainerInfo() {
+	if ci.NumSnapshotsAlloced > 0 {
+		C.free(unsafe.Pointer(ci.dci.ci_snapshots))
+	}
+}
+
 type containerQueryCmd struct {
 	existingContainerCmd
+
+	Verbose bool `long:"verbose" short:"V" description:"Include snapshot epochs"`
 }
 
 func (cmd *containerQueryCmd) Execute(_ []string) error {
@@ -742,18 +784,20 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 	}
 	defer cleanup()
 
-	ci, err := cmd.queryContainer()
+	ci, err := cmd.queryContainer(cmd.Verbose)
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to query container %s",
 			cmd.contUUID)
 	}
+	defer ci.deleteContainerInfo()
 
 	if cmd.jsonOutputEnabled() {
 		return cmd.outputJSON(ci, nil)
 	}
 
 	var bld strings.Builder
+	// Always print verbose (note this is different than --verbose option that fetches snapshots
 	if err := printContainerInfo(&bld, ci, true); err != nil {
 		return err
 	}

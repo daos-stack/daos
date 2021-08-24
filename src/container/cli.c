@@ -1114,6 +1114,7 @@ struct cont_query_args {
 	daos_prop_t		*cqa_prop;
 	crt_rpc_t		*rpc;
 	daos_handle_t		hdl;
+	crt_bulk_t		*cqa_bulk;
 };
 
 static int
@@ -1160,12 +1161,14 @@ cont_query_complete(tse_task_t *task, void *data)
 	arg->cqa_info->ci_hae = out->cqo_hae;
 	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
+	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
+	/* arg->cqa_info->ci_snapshots if provided was filled by bulk xfer */
 	/* TODO */
-	arg->cqa_info->ci_nsnapshots = 0;
-	arg->cqa_info->ci_snapshots = NULL;
 	arg->cqa_info->ci_lsnapshot = 0;
 
 out:
+	if (arg->cqa_bulk)
+		crt_bulk_free(arg->cqa_bulk);
 	crt_req_decref(arg->rpc);
 	dc_cont_put(cont);
 	dc_pool_put(pool);
@@ -1303,12 +1306,36 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
 	in->cqi_bits = cont_query_bits(args->prop);
 	if (args->info != NULL)
+		D_DEBUG(DF_DSMC, DF_CONT": ci_snapshots=%p, ci_nsnapshots=%u\n",
+			DP_CONT(pool->dp_pool, cont->dc_uuid), args->info->ci_snapshots,
+			args->info->ci_nsnapshots);
+	if (args->info && args->info->ci_snapshots && (args->info->ci_nsnapshots > 0)) {
+		d_iov_t			iov;
+		d_sg_list_t		sgl = {
+			.sg_nr_out = 0,
+			.sg_nr	   = 1,
+			.sg_iovs   = &iov
+		};
+
+		iov.iov_buf = args->info->ci_snapshots;
+		iov.iov_buf_len = args->info->ci_nsnapshots * sizeof(daos_epoch_t);
+		iov.iov_len = 0;
+
+		/* TODO: iovs for args->info->ci_snapshot_names[] and query bulk create function */
+
+		rc = crt_bulk_create(daos_task2ctx(task), &sgl, CRT_BULK_RW, &in->cqi_bulk);
+		if (rc != 0) {
+			D_GOTO(err_rpc, rc);
+		}
+
 		in->cqi_bits |= DAOS_CO_QUERY_TGT;
+	}
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
 	arg.cqa_info = args->info;
 	arg.cqa_prop = args->prop;
+	arg.cqa_bulk = in->cqi_bulk;
 	arg.rpc	     = rpc;
 	arg.hdl	     = args->coh;
 	crt_req_addref(rpc);
@@ -1316,10 +1343,13 @@ dc_cont_query(tse_task_t *task)
 	rc = tse_task_register_comp_cb(task, cont_query_complete, &arg,
 				       sizeof(arg));
 	if (rc != 0)
-		D_GOTO(err_rpc, rc);
+		D_GOTO(err_bulk, rc);
 
 	return daos_rpc_send(rpc, task);
 
+err_bulk:
+	if (arg.cqa_bulk)
+		crt_bulk_free(arg.cqa_bulk);
 err_rpc:
 	crt_req_decref(rpc);
 	crt_req_decref(rpc);
@@ -2949,6 +2979,9 @@ dc_cont_list_snap(tse_task_t *task)
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
+
+		/* TODO: iovs for names[] and list_snap bulk create function */
+
 		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->sli_bulk);
 		if (rc != 0) {
