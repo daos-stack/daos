@@ -82,7 +82,7 @@ const (
 	BdevFormatUnknownClass
 	BdevFormatFailure
 	BdevBadPCIAddress
-	BdevPCIAddressNotFound
+	BdevNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
 )
@@ -110,7 +110,6 @@ const (
 const (
 	ServerUnknown Code = iota + 600
 	ServerScmUnmanaged
-	ServerBdevNotFound
 	ServerIommuDisabled
 	ServerWrongSystem
 	ServerPoolScmTooSmall

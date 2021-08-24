@@ -6,7 +6,7 @@
 """
 from apricot import TestWithServers
 from daos_utils import DaosCommand
-
+import base64
 
 class ContainerQueryAttributeTest(TestWithServers):
     # pylint: disable=anomalous-backslash-in-string
@@ -65,9 +65,9 @@ class ContainerQueryAttributeTest(TestWithServers):
             "pool": self.pool.uuid,
             "cont": self.expected_cont_uuid
         }
-        query_output = self.daos_cmd.get_output("container_query", **kwargs)[0]
-        actual_pool_uuid = query_output[0]
-        actual_cont_uuid = query_output[1]
+        data = self.daos_cmd.container_query(**kwargs)['response']
+        actual_pool_uuid = data['pool_uuid']
+        actual_cont_uuid = data['container_uuid']
         self.assertEqual(actual_pool_uuid, self.pool.uuid.lower())
         self.assertEqual(actual_cont_uuid, self.expected_cont_uuid)
 
@@ -114,8 +114,8 @@ class ContainerQueryAttributeTest(TestWithServers):
                 pool=actual_pool_uuid, cont=actual_cont_uuid,
                 attr=attr_value[0], val=attr_value[1])
             kwargs["attr"] = attr_value[0]
-            output = self.daos_cmd.container_get_attr(**kwargs)
-            actual_val = output["value"]
+            data = self.daos_cmd.container_get_attr(**kwargs)['response']
+            actual_val = base64.b64decode(data["value"]).decode()
             if attr_value[1] in escape_to_not:
                 # Special character string.
                 if actual_val != escape_to_not[attr_value[1]]:
@@ -141,8 +141,8 @@ class ContainerQueryAttributeTest(TestWithServers):
             "pool": actual_pool_uuid,
             "cont": actual_cont_uuid
         }
-        data = self.daos_cmd.container_list_attrs(**kwargs)
-        actual_attrs = data["attrs"]
+        data = self.daos_cmd.container_list_attrs(**kwargs)['response']
+        actual_attrs = list(data.keys())
         actual_attrs.sort()
         self.log.debug(str(actual_attrs))
         self.assertEqual(actual_attrs, expected_attrs)
@@ -173,8 +173,8 @@ class ContainerQueryAttributeTest(TestWithServers):
             "pool": self.pool.uuid,
             "cont": self.expected_cont_uuid
         }
-        data = self.daos_cmd.container_list_attrs(**kwargs)
-        actual_attrs = data["attrs"]
+        data = self.daos_cmd.container_list_attrs(**kwargs)['response']
+        actual_attrs = list(data.keys())
         actual_attrs.sort()
         self.assertEqual(
             expected_attrs, actual_attrs, "Unexpected output from list_attrs")

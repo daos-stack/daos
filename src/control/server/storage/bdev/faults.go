@@ -9,6 +9,7 @@ package bdev
 import (
 	"fmt"
 
+	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 )
@@ -30,16 +31,6 @@ var (
 		"adjust or relax the filters and try again")
 )
 
-// FaultPCIAddrNotFound creates a Fault for the case where no NVMe storage devices
-// match a given PCI address.
-func FaultPCIAddrNotFound(pciAddr string) *fault.Fault {
-	return bdevFault(
-		code.BdevPCIAddressNotFound,
-		fmt.Sprintf("request contains NVMe PCI address %q that can't be found", pciAddr),
-		"check your configuration is correct and devices with given PCI addresses exist on server host",
-	)
-}
-
 // FaultBadPCIAddr creates a Fault for the case where a user-provided PCI address
 // was invalid.
 func FaultBadPCIAddr(pciAddr string) *fault.Fault {
@@ -47,6 +38,16 @@ func FaultBadPCIAddr(pciAddr string) *fault.Fault {
 		code.BdevBadPCIAddress,
 		fmt.Sprintf("request contains invalid NVMe PCI address %q", pciAddr),
 		"check your configuration, restart the server, and retry the operation",
+	)
+}
+
+// FaultBdevNotFound creates a Fault for the case where no NVMe storage devices
+// match a given PCI address.
+func FaultBdevNotFound(bdevs ...string) *fault.Fault {
+	return bdevFault(
+		code.BdevNotFound,
+		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
+		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
 	)
 }
 

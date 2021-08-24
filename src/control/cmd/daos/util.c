@@ -95,5 +95,5 @@ out:
 	duns_destroy_attr(&dattr);
 	D_FREE(dir_name);
 	D_FREE(name);
-	return rc;
+	return daos_errno2der(rc);
 }
