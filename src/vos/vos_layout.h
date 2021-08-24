@@ -88,7 +88,7 @@ enum vos_gc_type {
 #define POOL_DF_MAGIC				0x5ca1ab1e
 
 /** Lowest supported durable format version */
-#define POOL_DF_VER_1				19
+#define POOL_DF_VER_1				20
 /** Current durable format version */
 #define POOL_DF_VERSION				POOL_DF_VER_1
 
@@ -147,6 +147,8 @@ struct vos_dtx_cmt_ent_df {
 	struct dtx_id			dce_xid;
 	/** The epoch# for the DTX. */
 	daos_epoch_t			dce_epoch;
+	/** The time of the DTX being handled on the server. */
+	daos_epoch_t			dce_handle_time;
 };
 
 /** Active DTX entry on-disk layout in both SCM and DRAM. */

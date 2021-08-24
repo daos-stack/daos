@@ -36,7 +36,7 @@ operation.
 
 * DaosUns
 
-It wraps some DAOS UNS APIs, like creating, resolving and destroying UNS path, as well as parsing DAOS UNS string
+It wraps some DAOS UNS APIs, like resolving UNS path, as well as parsing DAOS UNS string
 attribute. Besides, this class can be run from command line in which you can call all DAOS UNS APIs with different
 parameters. Use below command to show its usage in details.
 
