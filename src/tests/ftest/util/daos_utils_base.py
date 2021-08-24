@@ -548,3 +548,54 @@ class DaosCommandBase(CommandWithSubCommand):
                 #   --src=<type>:<pool/cont | path>
                 #   supported types are daos, posix
                 self.dst = FormattedParameter("--dst={}")
+
+        class GetAttrSubCommand(CommonFilesystemSubCommand):
+            """Defines an object for the daos filesystem get-attr command."""
+
+            def __init__(self):
+                """Create a daos filesystem get-attr command object."""
+                super().__init__("get-attr")
+                self.dfs_path = FormattedParameter("--dfs-path={}")
+                self.dfs_prefix = FormattedParameter("--dfs-prefix={}")
+
+        class SetAttrSubCommand(CommonFilesystemSubCommand):
+            """Defines an object for the daos filesystem set-attr command."""
+
+            def __init__(self):
+                """Create a daos filesystem set-attr command object."""
+                super().__init__("set-attr")
+                self.dfs_path = FormattedParameter("--dfs-path={}")
+                self.dfs_prefix = FormattedParameter("--dfs-prefix={}")
+                self.oclass = FormattedParameter("--oclass={}")
+                self.chunk_size = FormattedParameter("--chunk-size={}")
+
+        class ResetAttrSubCommand(CommonFilesystemSubCommand):
+            """Defines an object for the daos filesystem reset-attr command."""
+
+            def __init__(self):
+                """Create a daos filesystem reset-attr command object."""
+                super().__init__("reset-attr")
+                self.dfs_path = FormattedParameter("--dfs-path={}")
+                self.dfs_prefix = FormattedParameter("--dfs-prefix={}")
+
+        class ResetOclassSubCommand(CommonFilesystemSubCommand):
+            """
+            Defines an object for the daos filesystem reset-oclass command.
+            """
+
+            def __init__(self):
+                """Create a daos filesystem reset-oclass command object."""
+                super().__init__("reset-oclass")
+                self.dfs_path = FormattedParameter("--dfs-path={}")
+                self.dfs_prefix = FormattedParameter("--dfs-prefix={}")
+
+        class ResetChunkSizeSubCommand(CommonFilesystemSubCommand):
+            """
+            Defines an object for the daos filesystem reset-chunk-size command.
+            """
+
+            def __init__(self):
+                """Create a daos filesystem reset-chunk-size command object."""
+                super().__init__("reset-chunk-size")
+                self.dfs_path = FormattedParameter("--dfs-path={}")
+                self.dfs_prefix = FormattedParameter("--dfs-prefix={}")

@@ -269,3 +269,90 @@ func resolveDunsPath(path string, ap *C.struct_cmd_args_s) error {
 
 	return nil
 }
+
+func mountDFS(ap *C.struct_cmd_args_s, flags C.int) (*C.dfs_t, func(), error) {
+	var dfs *C.dfs_t
+	rc := C.dfs_mount(ap.pool, ap.cont, flags, &dfs)
+	if rc != 0 {
+		return nil, nil, errors.Wrapf(dfsError(rc), "failed to mount container %s",
+			C.GoString(&ap.cont_str[0]))
+	}
+
+	if ap.dfs_prefix != nil {
+		rc = C.dfs_set_prefix(dfs, ap.dfs_prefix)
+		if rc != 0 {
+			unmountDFS(dfs)
+			return nil, nil, errors.Wrapf(dfsError(rc), "failed to set DFS prefix %s", 
+				C.GoString(ap.dfs_prefix))
+		}
+
+	}
+
+	return dfs, func() {
+		unmountDFS(dfs)
+	}, nil
+}
+
+func unmountDFS(dfs *C.dfs_t) {
+	_ = C.dfs_umount(dfs)
+}
+
+func createDFSObj(ap *C.struct_cmd_args_s, dfs *C.dfs_t) (*C.dfs_obj_t, func(), error) {
+	var name *C.char
+	var dirName *C.char
+
+	C.parse_filename_dfs(ap.dfs_path, &name, &dirName)
+
+	parent, releaseObj, err := lookupDFSObj(dirName, dfs, C.O_RDWR)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer releaseObj()
+
+	var obj *C.dfs_obj_t
+	rc := C.dfs_open(dfs, parent, name,
+		C.S_IFREG|C.S_IWUSR|C.S_IRUSR|C.S_IRGRP|C.S_IWGRP|C.S_IROTH,
+		C.O_CREAT|C.O_EXCL|C.O_RDONLY, ap.oclass, ap.chunk_size,
+		nil, &obj)
+	if rc != 0 {
+		return nil, nil, errors.Wrap(dfsError(rc), "dfs_open failed")
+	}
+
+	return obj, func() {
+		_ = C.dfs_release(obj)
+	}, nil
+}
+
+func lookupDFSObj(dfsPath *C.char, dfs *C.dfs_t, flags C.int) (*C.dfs_obj_t, func(), error) {
+	var obj *C.dfs_obj_t
+	rc := C.dfs_lookup(dfs, dfsPath, flags, &obj, nil, nil)
+	if rc != 0 {
+		return nil, nil, errors.Wrapf(dfsError(rc), "failed to lookup %s",
+			C.GoString(dfsPath))
+	}
+
+	return obj, func() {
+		_ = C.dfs_release(obj)
+	}, nil
+}
+
+type DFSObjInfo struct {
+	ObjClass  string `json:"obj_class"`
+	ChunkSize uint64 `json:"chunk_size"`
+}
+
+func getDFSObjInfo(ap *C.struct_cmd_args_s, dfs *C.dfs_t, obj *C.dfs_obj_t) (*DFSObjInfo, error) {
+	info := new(C.dfs_obj_info_t)
+	rc := C.dfs_obj_get_info(dfs, obj, info)
+	if rc != 0 {
+		return nil, errors.Wrapf(dfsError(rc), "failed to lookup %s", C.GoString(ap.dfs_path))
+	}
+
+	var cOclassName [16]C.char
+	C.daos_oclass_id2name(info.doi_oclass_id, &cOclassName[0])
+
+	return &DFSObjInfo{
+		ObjClass:  C.GoString(&cOclassName[0]),
+		ChunkSize: uint64(info.doi_chunk_size),
+	}, nil
+}
