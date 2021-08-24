@@ -186,6 +186,9 @@ class CartTest(TestWithoutServers):
         """Get the basic env setting in yaml."""
         env_CCSA = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
+        env_phy_addr_str = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
+
+        os.environ["CRT_PHY_ADDR_STR"] = env_phy_addr_str
 
         if env_CCSA is not None:
             log_dir = "{}-{}".format(test_name, env_CCSA)
