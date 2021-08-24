@@ -6,7 +6,7 @@ LSB_RELEASE=redhat-lsb-core
 EXCLUDE_UPGRADE=fuse,mercury,daos,daos-\*
 
 bootstrap_dnf() {
-    retry_cmd 5m yum install dnf 'dnf-command(config-manager)'
+    retry_cmd 5m yum -y install dnf 'dnf-command(config-manager)'
 }
 
 group_repo_post() {
