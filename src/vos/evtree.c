@@ -2179,16 +2179,19 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 			memcpy(&ent_cpy, entry, sizeof(*entry));
 			entryp = &ent_cpy;
 			/** We need to edit the existing extent */
-			if (ent->en_ext.ex_lo < ent_cpy.ei_rect.rc_ex.ex_lo)
-				ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_lo;
-			if (ent->en_ext.ex_hi > ent_cpy.ei_rect.rc_ex.ex_hi)
-				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_hi;
+			if (entry->ei_rect.rc_ex.ex_lo < ent->en_ext.ex_lo) {
+				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_lo - 1;
+				if (entry->ei_rect.rc_ex.ex_hi <= ent->en_ext.ex_hi)
+					goto insert;
+				/* There is also a suffix, so insert the prefix */
+				rc = evt_insert_entry(tcx, entryp, csum_bufp);
+				if (rc != 0)
+					goto out;
+			}
 
-			/** Remove the existing node */
-			rc = evt_node_delete(tcx);
-
-			if (rc != 0)
-				goto out;
+			D_ASSERT(entry->ei_rect.rc_ex.ex_hi > ent->en_ext.ex_hi);
+			ent_cpy.ei_rect.rc_ex.ex_hi = entry->ei_rect.rc_ex.ex_hi;
+			ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_hi + 1;
 
 			/* Now insert the merged one */
 			goto insert;
