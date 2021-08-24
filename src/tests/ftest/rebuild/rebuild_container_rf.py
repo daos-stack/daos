@@ -7,7 +7,7 @@
 from container_rf_test_base import RbldContRedundancyFactor
 
 
-class RbldContRedundancyFactor(RbldContRedundancyFactor):
+class RbldContRedundancyFactorTest(RbldContRedundancyFactor):
     # pylint: disable=too-many-ancestors
     """Test container redundancy factor with various rebuilds.
 
@@ -19,7 +19,7 @@ class RbldContRedundancyFactor(RbldContRedundancyFactor):
         super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
-    def test_rebuild_with_container_redundancy_factor(self):
+    def test_rebuild_with_container_rf(self):
         """Jira ID:
         DAOS-6270: container with RF 2 can lose up to 2 concurrent
                    servers without err.
