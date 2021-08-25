@@ -72,6 +72,10 @@ D_CASSERT(VOS_MINOR_EPC_MAX == EVT_MINOR_EPC_MAX);
 #define DTX_BTREE_ORDER	23	/* Order for DTX tree */
 #define VEA_TREE_ODR		20	/* Order of a VEA tree */
 
+#define DTX_BLOB_ORDER_MAX	20
+#define DTX_BLOB_ORDER_MIN	14
+#define DTX_BLOB_ORDER_DEF	17
+
 extern struct dss_module_key vos_module_key;
 
 #define VOS_POOL_HHASH_BITS 10 /* Up to 1024 pools */

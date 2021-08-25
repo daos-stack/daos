@@ -233,7 +233,8 @@ struct vos_cont_df {
 	uuid_t				cd_id;
 	uint64_t			cd_nobjs;
 	uint32_t			cd_ts_idx;
-	uint32_t			cd_pad;
+	/** To calculate committed DTX blob size: size = 1 << order. */
+	uint32_t			cd_dtx_cmt_blob_order;
 	daos_size_t			cd_used;
 	daos_epoch_t			cd_hae;
 	struct btr_root			cd_obj_root;

@@ -16,11 +16,10 @@
 #include "vos_layout.h"
 #include "vos_internal.h"
 
-/* 128 KB per SCM blob */
-#define DTX_BLOB_SIZE		(1 << 17)
+#define DTX_ACT_BLOB_SIZE	(1 << DTX_BLOB_ORDER_DEF)
+
 /** Ensure 16-bit signed int is sufficient to store record index */
-D_CASSERT((DTX_BLOB_SIZE / sizeof(struct vos_dtx_act_ent_df)) <  (1 << 15));
-D_CASSERT((DTX_BLOB_SIZE / sizeof(struct vos_dtx_cmt_ent_df)) <  (1 << 15));
+D_CASSERT((DTX_ACT_BLOB_SIZE / sizeof(struct vos_dtx_act_ent_df)) <  (1 << 15));
 
 #define DTX_ACT_BLOB_MAGIC	0x14130a2b
 #define DTX_CMT_BLOB_MAGIC	0x2502191c
@@ -1029,7 +1028,7 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 	umem_off_t			 dbd_off;
 	int				 rc;
 
-	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
+	dbd_off = umem_zalloc(umm, DTX_ACT_BLOB_SIZE);
 	if (umoff_is_null(dbd_off)) {
 		D_ERROR("No space when create actvie DTX table.\n");
 		return -DER_NOSPACE;
@@ -1037,7 +1036,7 @@ vos_dtx_extend_act_table(struct vos_container *cont)
 
 	dbd = umem_off2ptr(umm, dbd_off);
 	dbd->dbd_magic = DTX_ACT_BLOB_MAGIC;
-	dbd->dbd_cap = (DTX_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
+	dbd->dbd_cap = (DTX_ACT_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
 			sizeof(struct vos_dtx_act_ent_df);
 
 	tmp = umem_off2ptr(umm, cont_df->cd_dtx_active_tail);
@@ -2032,7 +2031,7 @@ again:
 new_blob:
 	dbd_prev = dbd;
 	/* Need new @dbd */
-	dbd_off = umem_zalloc(umm, DTX_BLOB_SIZE);
+	dbd_off = umem_zalloc(umm, (1 << cont_df->cd_dtx_cmt_blob_order));
 	if (umoff_is_null(dbd_off)) {
 		D_ERROR("No space to store committed DTX %d "DF_DTI"\n",
 			count, DP_DTI(&dtis[cur]));
@@ -2042,7 +2041,8 @@ new_blob:
 
 	dbd = umem_off2ptr(umm, dbd_off);
 	dbd->dbd_magic = DTX_CMT_BLOB_MAGIC;
-	dbd->dbd_cap = (DTX_BLOB_SIZE - sizeof(struct vos_dtx_blob_df)) /
+	dbd->dbd_cap = ((1 << cont_df->cd_dtx_cmt_blob_order) -
+			sizeof(struct vos_dtx_blob_df)) /
 		       sizeof(struct vos_dtx_cmt_ent_df);
 	dbd->dbd_prev = umem_ptr2off(umm, dbd_prev);
 

@@ -74,6 +74,8 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 	struct cont_df_args	*args;
 	struct d_uuid		*ukey;
 	struct vos_cont_df	*cont_df;
+	const char		*str;
+	int			 order = DTX_BLOB_ORDER_DEF;
 	daos_handle_t		 hdl;
 	umem_off_t		 offset;
 	int			 rc = 0;
@@ -91,6 +93,23 @@ cont_df_rec_alloc(struct btr_instance *tins, d_iov_t *key_iov,
 
 	cont_df = umem_off2ptr(&tins->ti_umm, offset);
 	uuid_copy(cont_df->cd_id, ukey->uuid);
+
+	str = getenv("DTX_CMT_BLOB_ORDER");
+	if (str != NULL) {
+		order = atoi(str);
+		if (order < DTX_BLOB_ORDER_MIN || order > DTX_BLOB_ORDER_MAX) {
+			D_WARN("Invalid DTX committed blob order %d, the valid "
+			       "range [%d, %d], use default value %d\n", order,
+			       DTX_BLOB_ORDER_MIN, DTX_BLOB_ORDER_MAX,
+			       DTX_BLOB_ORDER_DEF);
+			order = DTX_BLOB_ORDER_DEF;
+		}
+	}
+
+	cont_df->cd_dtx_cmt_blob_order = order;
+
+	D_INFO("Set DTX committed table blob order for container "
+	       DF_UUID" as %d\n", DP_UUID(cont_df->cd_id), order);
 
 	rc = dbtree_create_inplace_ex(VOS_BTR_OBJ_TABLE, 0, VOS_OBJ_ORDER,
 				      &pool->vp_uma, &cont_df->cd_obj_root,
@@ -119,6 +138,11 @@ cont_df_rec_fetch(struct btr_instance *tins, struct btr_record *rec,
 	struct cont_df_args		*args = NULL;
 
 	cont_df = umem_off2ptr(&tins->ti_umm, rec->rec_off);
+
+	/* Old container, which DTX committed blob order is default. */
+	if (cont_df->cd_dtx_cmt_blob_order == 0)
+		cont_df->cd_dtx_cmt_blob_order = DTX_BLOB_ORDER_DEF;
+
 	args = (struct cont_df_args *)val_iov->iov_buf;
 	args->ca_cont_df = cont_df;
 	val_iov->iov_len = sizeof(struct cont_df_args);
