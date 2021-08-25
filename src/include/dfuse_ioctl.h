@@ -25,6 +25,7 @@
 #define DFUSE_IOCTL_REPLY_DOOH (DFUSE_IOCTL_REPLY_BASE + 5)
 #define DFUSE_IOCTL_REPLY_SIZE (DFUSE_IOCTL_REPLY_BASE + 6)
 #define DFUSE_IOCTL_REPLY_DSIZE (DFUSE_IOCTL_REPLY_BASE + 7)
+#define DFUSE_IOCTL_REPLY_PFILE (DFUSE_IOCTL_REPLY_BASE + 8)
 
 /** Metadada caching is enabled for this file */
 #define DFUSE_IOCTL_FLAGS_MCACHE (0x1)
@@ -56,16 +57,13 @@ struct dfuse_hsd_reply {
 #define DFUSE_IOCTL_IL ((int)_IOR(DFUSE_IOCTL_TYPE, DFUSE_IOCTL_REPLY_CORE, \
 				  struct dfuse_il_reply))
 
-/* Defined the IOCTL command to get the pool/container handle sizes for a
- * open file
- */
+/* Defines the IOCTL command to get the pool/container handle sizes for a open file */
+
 #define DFUSE_IOCTL_IL_SIZE ((int)_IOR(DFUSE_IOCTL_TYPE,		\
 				       DFUSE_IOCTL_REPLY_SIZE,		\
 				       struct dfuse_hs_reply))
 
-/* Defined the IOCTL command to get the dfs/object handle sizes for a
- * open file
- */
+/* Defines the IOCTL command to get the dfs/object handle sizes for a open file */
 #define DFUSE_IOCTL_IL_DSIZE ((int)_IOR(DFUSE_IOCTL_TYPE,		\
 				       DFUSE_IOCTL_REPLY_DSIZE,		\
 				       struct dfuse_hsd_reply))

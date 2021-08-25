@@ -342,6 +342,11 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 			return false
 		}
 
+		// This helper checks for errors returned during the process of
+		// invoking the RPC, rather than from the RPC itself (i.e. internal
+		// errors). As such, the set of errors that can cause the entire
+		// request to fail without a retry should be pretty small.
+
 		switch errors.Cause(err) {
 		// These may be retryable.
 		case context.DeadlineExceeded, context.Canceled:
@@ -423,6 +428,14 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 				req.SetHostList(e.Replicas)
 			}
 		default:
+			// If the inner context has timed out, we should retry the
+			// request as long as the outer context hasn't been canceled.
+			if err != nil && errors.Cause(err) == tryCtx.Err() {
+				if reqCtx.Err() == nil {
+					break
+				}
+			}
+
 			// In the case that the request specifies that the error
 			// is retryable, but doesn't define its own retry logic,
 			// just break out so it can be tried again as usual.

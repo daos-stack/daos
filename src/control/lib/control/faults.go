@@ -38,7 +38,24 @@ var (
 	)
 )
 
-func IsConnectionError(err error) bool {
+// IsRetryableConnErr indicates whether the error is a connection error that
+// can be retried.
+func IsRetryableConnErr(err error) bool {
+	if !IsConnErr(err) {
+		return false
+	}
+
+	f, ok := errors.Cause(err).(*fault.Fault)
+	if !ok {
+		return false
+	}
+
+	return f.Code == code.ClientConnectionRefused ||
+		f.Code == code.ClientConnectionClosed
+}
+
+// IsConnErr indicates whether the error is a connection error.
+func IsConnErr(err error) bool {
 	f, ok := errors.Cause(err).(*fault.Fault)
 	if !ok {
 		return false

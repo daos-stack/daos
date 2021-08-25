@@ -49,11 +49,14 @@ struct crt_prov_gdata {
 	/** maximum number of contexts user wants to create */
 	uint32_t		cpg_ctx_max_num;
 
+	/** Hints to mercury/ofi for max expected/unexp sizes */
+	uint32_t		cpg_max_exp_size;
+	uint32_t		cpg_max_unexp_size;
+
 	/** Set of flags */
 	unsigned int		cpg_sep_mode		: 1,
 				cpg_contig_ports	: 1,
 				cpg_inited		: 1;
-
 };
 
 
