@@ -16,7 +16,7 @@ public interface DaosOclassAttrOrBuilder extends
    * <code>.objattr.DaosObjSchema ca_schema = 1;</code>
    * @return The caSchema.
    */
-  DaosObjSchema getCaSchema();
+  io.daos.obj.attr.DaosObjSchema getCaSchema();
 
   /**
    * <code>.objattr.DaosObjResil ca_resil = 2;</code>
@@ -27,7 +27,7 @@ public interface DaosOclassAttrOrBuilder extends
    * <code>.objattr.DaosObjResil ca_resil = 2;</code>
    * @return The caResil.
    */
-  DaosObjResil getCaResil();
+  io.daos.obj.attr.DaosObjResil getCaResil();
 
   /**
    * <code>uint32 ca_resil_degree = 3;</code>
@@ -50,11 +50,11 @@ public interface DaosOclassAttrOrBuilder extends
    * <code>.objattr.DaosRpAttr rp = 5;</code>
    * @return The rp.
    */
-  DaosRpAttr getRp();
+  io.daos.obj.attr.DaosRpAttr getRp();
   /**
    * <code>.objattr.DaosRpAttr rp = 5;</code>
    */
-  DaosRpAttrOrBuilder getRpOrBuilder();
+  io.daos.obj.attr.DaosRpAttrOrBuilder getRpOrBuilder();
 
   /**
    * <code>.objattr.DaosEcAttr ec = 6;</code>
@@ -65,11 +65,11 @@ public interface DaosOclassAttrOrBuilder extends
    * <code>.objattr.DaosEcAttr ec = 6;</code>
    * @return The ec.
    */
-  DaosEcAttr getEc();
+  io.daos.obj.attr.DaosEcAttr getEc();
   /**
    * <code>.objattr.DaosEcAttr ec = 6;</code>
    */
-  DaosEcAttrOrBuilder getEcOrBuilder();
+  io.daos.obj.attr.DaosEcAttrOrBuilder getEcOrBuilder();
 
-  public DaosOclassAttr.UCase getUCase();
+  public io.daos.obj.attr.DaosOclassAttr.UCase getUCase();
 }
