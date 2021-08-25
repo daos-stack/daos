@@ -875,13 +875,17 @@ parse_entry(char *str, struct daos_prop_entry *entry)
 {
 	char	*name;
 	char	*val;
-	char	*end_token;
+	char	*end_token = NULL;
 	int	rc = 0;
 
 	/** get prop_name */
 	name = strtok_r(str, ":", &end_token);
+	if (name == NULL)
+		return -DER_INVAL;
 	/** get prop value */
 	val = strtok_r(NULL, ";", &end_token);
+	if (val == NULL)
+		return -DER_INVAL;
 
 	if (strcmp(name, DAOS_PROP_ENTRY_LABEL) == 0) {
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
