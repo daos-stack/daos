@@ -191,15 +191,8 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 			prepCmd:   bdevPrepCmd,
 			enableVmd: true,
 			expPrepCalls: []storage.BdevPrepareRequest{
-				// as above but second call (setup) fails
-				{
-					EnableVMD:     true,
-					HugePageCount: testNrHugePages,
-					TargetUser:    username,
-					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PCIBlockList: common.MockPCIAddr(1),
-				},
+				// backend will call spdk script twice, first time for VMD and
+				// second time for non-VMD devices
 				{
 					EnableVMD:     true,
 					HugePageCount: testNrHugePages,
@@ -244,15 +237,8 @@ func TestDaosServer_StoragePrepare(t *testing.T) {
 			prepCmd:   bdevResetCmd,
 			enableVmd: true,
 			expResetCalls: []storage.BdevPrepareRequest{
-				{
-					EnableVMD:     true,
-					Reset_:        true,
-					HugePageCount: testNrHugePages,
-					TargetUser:    username,
-					PCIAllowList: fmt.Sprintf("%s%s%s", common.MockPCIAddr(1),
-						storage.BdevPciAddrSep, common.MockPCIAddr(2)),
-					PCIBlockList: common.MockPCIAddr(1),
-				},
+				// backend will call spdk script twice, first time for VMD and
+				// second time for non-VMD devices
 				{
 					EnableVMD:     true,
 					Reset_:        true,

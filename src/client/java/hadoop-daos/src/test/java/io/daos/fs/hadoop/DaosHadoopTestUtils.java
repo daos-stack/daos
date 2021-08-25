@@ -34,7 +34,7 @@ public class DaosHadoopTestUtils {
 
   private static URI getURI(Configuration conf) {
     String fsname = conf.getTrimmed(
-        DaosHadoopTestUtils.TEST_FS_DAOS_NAME, "daos://192.168.2.1:23456/");
+        DaosHadoopTestUtils.TEST_FS_DAOS_NAME, DaosFSFactory.DAOS_URI);
 
     boolean liveTest = !DaosUtils.isEmptyStr(fsname);
     URI testURI = null;

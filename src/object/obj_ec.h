@@ -647,7 +647,7 @@ obj_id2ec_codec(daos_obj_id_t id)
 	return obj_ec_codec_get(daos_obj_id2class(id));
 }
 
-static inline bool
+static inline int
 obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 			  struct daos_recx_ep_list *lists_2,
 			  unsigned int nr)
@@ -659,18 +659,26 @@ obj_ec_parity_lists_match(struct daos_recx_ep_list *lists_1,
 		list_1 = &lists_1[i];
 		list_2 = &lists_2[i];
 		if (list_1->re_nr != list_2->re_nr ||
-		    list_1->re_ep_valid != list_2->re_ep_valid)
-			return false;
+		    list_1->re_ep_valid != list_2->re_ep_valid) {
+			D_ERROR("got different parity recx in EC data recovery\n");
+			return -DER_IO;
+		}
 		if (list_1->re_nr == 0)
 			continue;
 		for (j = 0; j < list_1->re_nr; j++) {
-			if (list_1->re_items[j].re_ep !=
-			    list_2->re_items[j].re_ep)
-				return false;
+			if ((list_1->re_items[j].re_recx.rx_idx !=
+			     list_2->re_items[j].re_recx.rx_idx) ||
+			    (list_1->re_items[j].re_recx.rx_nr !=
+			     list_2->re_items[j].re_recx.rx_nr)) {
+				D_ERROR("got different parity recx in EC data recovery\n");
+				return -DER_IO;
+			}
+			if (list_1->re_items[j].re_ep != list_2->re_items[j].re_ep)
+				return -DER_FETCH_AGAIN;
 		}
 	}
 
-	return true;
+	return 0;
 }
 
 /* cli_ec.c */
