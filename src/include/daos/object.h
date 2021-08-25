@@ -711,9 +711,8 @@ daos_recx_ep_list_dump(struct daos_recx_ep_list *lists, unsigned int nr)
 			list->re_snapshot);
 		for (j = 0; j < list->re_nr; j++) {
 			recx_ep = &list->re_items[j];
-			D_ERROR("[["DF_X64","DF_X64"], "DF_X64"]  ",
-				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr,
-				recx_ep->re_ep);
+			D_ERROR("[type %d, ["DF_X64","DF_X64"], "DF_X64"]  ", recx_ep->re_type,
+				recx_ep->re_recx.rx_idx, recx_ep->re_recx.rx_nr, recx_ep->re_ep);
 		}
 		D_ERROR("\n");
 	}

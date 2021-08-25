@@ -90,7 +90,7 @@ static inline void
 sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
 {
 	sgl_idx->iov_offset += bytes;
-	D_DEBUG(DB_TRACE, "Moving sgl index formward by %lu bytes."
+	D_DEBUG(DB_TRACE, "Moving sgl index forward by %lu bytes."
 			  "Idx: "DF_SGL_IDX"\n",
 		bytes, DP_SGL_IDX(sgl_idx));
 

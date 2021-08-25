@@ -274,7 +274,10 @@ test_daos_prop_from_str(void **state)
 	char		*LAYOUT		= "layout_type:posix";
 
 	/** Invalid prop entries */
-	char		*PROP_INV	= "hello:world";
+	char		*PROP_INV1	= "hello:world";
+	char		*PROP_INV2	= "helloworld";
+	char		*PROP_INV3	= ":helloworld";
+	char		*PROP_INV4	= "helloworld:";
 
 	char			buf[1024] = {0};
 	daos_prop_t		*prop;
@@ -297,7 +300,16 @@ test_daos_prop_from_str(void **state)
 	assert_int_equal(rc, -DER_INVAL);
 
 	/** Buffer containing invalid entries should fail */
-	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV);
+	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV1);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV2);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV3);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV4);
 	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
 	assert_int_equal(rc, -DER_INVAL);
 

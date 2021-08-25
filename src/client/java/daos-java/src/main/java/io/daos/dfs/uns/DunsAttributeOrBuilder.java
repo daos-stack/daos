@@ -8,28 +8,27 @@ public interface DunsAttributeOrBuilder extends
     com.google.protobuf.MessageOrBuilder {
 
   /**
-   * <code>string puuid = 1;</code>
-   * @return The puuid.
+   * <code>string poolId = 1;</code>
+   * @return The poolId.
    */
-  java.lang.String getPuuid();
+  java.lang.String getPoolId();
   /**
-   * <code>string puuid = 1;</code>
-   * @return The bytes for puuid.
+   * <code>string poolId = 1;</code>
+   * @return The bytes for poolId.
    */
   com.google.protobuf.ByteString
-      getPuuidBytes();
-
+      getPoolIdBytes();
   /**
-   * <code>string cuuid = 2;</code>
-   * @return The cuuid.
+   * <code>string contId = 2;</code>
+   * @return The contId.
    */
-  java.lang.String getCuuid();
+  java.lang.String getContId();
   /**
-   * <code>string cuuid = 2;</code>
-   * @return The bytes for cuuid.
+   * <code>string contId = 2;</code>
+   * @return The bytes for contId.
    */
   com.google.protobuf.ByteString
-      getCuuidBytes();
+      getContIdBytes();
 
   /**
    * <code>.uns.Layout layout_type = 3;</code>
@@ -83,4 +82,10 @@ public interface DunsAttributeOrBuilder extends
    * @return The noPrefix.
    */
   boolean getNoPrefix();
+
+  /**
+   * <code>uint32 flags = 10;</code>
+   * @return The flags.
+   */
+  int getFlags();
 }
