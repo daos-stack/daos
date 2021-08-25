@@ -26,7 +26,7 @@
 #include "perf_internal.h"
 #ifdef ULT_MMAP_STACK
 #include <daos/stack_mmap.h>
-endif
+#endif
 
 uint64_t	ts_flags;
 
