@@ -780,7 +780,7 @@ process_physical:
 		io->ic_seg_cnt++;
 		D_ASSERT(io->ic_seg_cnt <= io->ic_seg_max);
 	}
-	if (mw->mw_csum_support) {
+	if (mw->mw_csum_support && io->ic_seg_cnt > 0) {
 		D_ASSERT(first != NULL);
 		cs_len = first->pe_csum_info.cs_len;
 		cs_type = first->pe_csum_info.cs_type;
