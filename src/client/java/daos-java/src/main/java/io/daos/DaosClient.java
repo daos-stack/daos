@@ -285,6 +285,10 @@ public class DaosClient implements ForceCloseable {
     return Collections.emptyMap();
   }
 
+  public void refreshUserDefAttrs() throws IOException {
+    attrMap = retrieveUserDefinedAttrs();
+  }
+
   public Map<String, String> getUserDefAttrMap() {
     return attrMap;
   }

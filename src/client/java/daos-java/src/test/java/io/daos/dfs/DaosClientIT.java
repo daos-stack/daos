@@ -109,6 +109,7 @@ public class DaosClientIT {
       map.put("to-list2", "2");
       map.put("to-list3", "3");
       client.setAttributes(map);
+      client.refreshUserDefAttrs();
       Map<String, String> attrMap = client.getUserDefAttrMap();
       for (Map.Entry<String, String> entry : map.entrySet()) {
         Assert.assertEquals(entry.getValue(), attrMap.get(entry.getKey()));
