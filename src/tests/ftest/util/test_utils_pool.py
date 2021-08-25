@@ -15,6 +15,7 @@ from pydaos.raw import (DaosApiError, DaosPool, c_uuid_to_str, daos_cref)
 from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 from server_utils_base import ServerFailed, AutosizeCancel
+from dmg_utils import DmgCommand
 
 
 class TestPool(TestDaosApiBase):
@@ -81,8 +82,7 @@ class TestPool(TestDaosApiBase):
         # to destroy the pool with UUID, set this to False, then call destroy().
         self.use_label = True
 
-        if dmg_command is None:
-            raise TypeError("dmg_command is None at TestPool init!")
+        self._dmg = None
         self.dmg = dmg_command
 
         self.query_data = []
@@ -175,6 +175,31 @@ class TestPool(TestDaosApiBase):
             identifier = self.label.value
         return identifier
 
+    @property
+    def dmg(self):
+        """Get the DmgCommand object.
+
+        Returns:
+            DmgCommand: the dmg command object assigned to this class
+
+        """
+        return self._dmg
+
+    @dmg.setter
+    def dmg(self, value):
+        """Set the DmgCommand object.
+
+        Args:
+            value (DmgCommand): dmg command object to use with this class
+
+        Raises:
+            TypeError: Raised if value is not DmgCommand object.
+
+        """
+        if not isinstance(value, DmgCommand):
+            raise TypeError("Invalid 'dmg' object type: {}".format(type(value)))
+        self._dmg = value
+
     @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def create(self):
@@ -233,7 +258,7 @@ class TestPool(TestDaosApiBase):
             service_replicas = [
                 int(value) for value in data["svc"].split(",")]
             rank_t = ctypes.c_uint * len(service_replicas)
-            rank = rank_t(*list([svc for svc in service_replicas]))
+            rank = rank_t(*service_replicas)
             rl_ranks = ctypes.POINTER(ctypes.c_uint)(rank)
             self.pool.svc = daos_cref.RankList(
                 rl_ranks, len(service_replicas))
@@ -804,8 +829,8 @@ class TestPool(TestDaosApiBase):
 
         Args:
             rank (str): daos server rank to reintegrate
-            tgt_idx (string): str of targets to reintegrate on ranks ex: "1,2"
-                Defaults to None.
+            tgt_idx (string, optional): str of targets to reintegrate on ranks
+            ex: "1,2". Defaults to None.
         """
         self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
 
@@ -817,8 +842,8 @@ class TestPool(TestDaosApiBase):
 
         Args:
             rank (str): daos server rank to drain
-            tgt_idx (string): str of targets to drain on ranks ex: "1,2".
-                Defaults to None.
+            tgt_idx (string, optional): str of targets to drain on ranks
+                ex: "1,2". Defaults to None.
         """
         self.dmg.pool_drain(self.identifier, rank, tgt_idx)
 
