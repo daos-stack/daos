@@ -54,10 +54,9 @@ type containerCmd struct {
 	DeleteACL    containerDeleteACLCmd    `command:"delete-acl" description:"delete a container's ACL"`
 	SetOwner     containerSetOwnerCmd     `command:"set-owner" alias:"chown" description:"change ownership for a container"`
 
-	CreateSnapshot   containerSnapshotCreateCmd   `command:"create-snap" alias:"snap" description:"create container snapshot"`
-	DestroySnapshot  containerSnapshotDestroyCmd  `command:"destroy-snap" description:"destroy container snapshot"`
-	ListSnapshots    containerSnapshotListCmd     `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
-	RollbackSnapshot containerSnapshotRollbackCmd `command:"rollback" description:"roll back container to specified snapshot"`
+	CreateSnapshot  containerSnapshotCreateCmd  `command:"create-snap" alias:"snap" description:"create container snapshot"`
+	DestroySnapshot containerSnapshotDestroyCmd `command:"destroy-snap" description:"destroy container snapshot"`
+	ListSnapshots   containerSnapshotListCmd    `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
 }
 
 type containerBaseCmd struct {
@@ -216,17 +215,18 @@ func (cmd *containerCreateCmd) getUserUUID() uuid.UUID {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
-	if cu := cmd.getUserUUID(); cu != uuid.Nil {
-		cmd.contUUID = cu
-	} else {
-		cmd.contUUID = uuid.New()
-	}
-
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
+
+	if cu := cmd.getUserUUID(); cu != uuid.Nil {
+		cmd.contUUID = cu
+		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
+			return err
+		}
+	}
 
 	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
 	if err != nil {
@@ -234,9 +234,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer disconnectPool()
 
-	if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
-		return err
-	}
 	ap.c_op = C.CONT_CREATE
 
 	if cmd.User != "" {
@@ -261,6 +258,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if err := cmd.Properties.AddPropVal("label", cmd.Label); err != nil {
 			return err
 		}
+		cmd.contLabel = cmd.Label
 	}
 
 	if cmd.Properties.props != nil {
@@ -297,11 +295,24 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err := daosError(rc); err != nil {
 		return errors.Wrap(err, "failed to create container")
 	}
-	cmd.log.Debugf("created container: %s", cmd.contUUID)
+
+	cmd.contUUID, err = uuidFromC(ap.c_uuid)
+	if err != nil {
+		return err
+	}
+
+	var co_id string
+	if cmd.contUUID == uuid.Nil {
+		cmd.contLabel = C.GoString(&ap.cont_str[0])
+		co_id = cmd.contLabel
+	} else {
+		co_id = cmd.contUUID.String()
+	}
+
+	cmd.log.Debugf("created container: %s", co_id)
 
 	if err := cmd.openContainer(C.DAOS_COO_RO); err != nil {
-		return errors.Wrapf(err,
-			"failed to open new container %s", cmd.contUUID)
+		return errors.Wrapf(err, "failed to open new container %s", co_id)
 	}
 	defer cmd.closeContainer()
 
@@ -309,13 +320,11 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err != nil {
 		// Special case for creating a container without permission to query it.
 		if errors.Cause(err) == drpc.DaosNoPermission {
-			cmd.log.Errorf("container %s was created, but query failed", cmd.contUUID)
+			cmd.log.Errorf("container %s was created, but query failed", co_id)
 			return nil
 		}
 
-		return errors.Wrapf(err,
-			"failed to query new container %s",
-			cmd.contUUID)
+		return errors.Wrapf(err, "failed to query new container %s", co_id)
 	}
 
 	if cmd.jsonOutputEnabled() {
