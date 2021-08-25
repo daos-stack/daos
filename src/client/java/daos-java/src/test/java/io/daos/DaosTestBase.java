@@ -1,10 +1,13 @@
 package io.daos;
 
 public class DaosTestBase {
-  public static final String DEFAULT_POOL_ID = "bce96e2f-5a52-4aeb-b0b4-8994eee79a5f";
-  public static final String DEFAULT_CONT_ID = "e7814443-c8a1-4014-b94b-571ac7f5cff3";
+  public static final String DEFAULT_POOL_ID = "fa659243-b141-4dc8-8487-13d8fbd54010";
+  public static final String DEFAULT_CONT_ID = "b72e068f-ba04-4546-b05c-2de9d936895e";
 
-  public static final String DEFAULT_OBJECT_CONT_ID = "734a0588-da98-4be2-9555-93703a6b69a9";
+  public static final String DEFAULT_POOL_LABEL = "pool1";
+  public static final String DEFAULT_CONT_LABEL = "cont1";
+
+  public static final String DEFAULT_OBJECT_CONT_ID = "70be2f5e-5117-41e5-84b7-dba0c9f3601a";
 
   public static String getPoolId() {
     return System.getProperty("pool_id", DaosTestBase.DEFAULT_POOL_ID);
@@ -12,6 +15,14 @@ public class DaosTestBase {
 
   public static String getContId() {
     return System.getProperty("cont_id", DaosTestBase.DEFAULT_CONT_ID);
+  }
+
+  public static String getPoolLabel() {
+    return System.getProperty("pool_label", DaosTestBase.DEFAULT_POOL_LABEL);
+  }
+
+  public static String getContLabel() {
+    return System.getProperty("cont_label", DaosTestBase.DEFAULT_CONT_LABEL);
   }
 
   public static String getObjectContId() {
