@@ -97,7 +97,6 @@ retry_cmd() {
         if [ $tries -gt 0 ]; then
           sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
         fi
-        continue
     done
     return 1
 }
