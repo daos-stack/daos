@@ -14,6 +14,11 @@ import "unsafe"
 import "C"
 
 const (
+	// MaxLabelLength is the maximum length of a label.
+	MaxLabelLength = C.DAOS_PROP_LABEL_MAX_LEN
+)
+
+const (
 	// PoolPropertyLabel is a string that a user can associate with a pool.
 	PoolPropertyLabel = C.DAOS_PROP_PO_LABEL
 	// PoolPropertyACL is the Access Control List for a pool.

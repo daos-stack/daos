@@ -60,11 +60,8 @@ class PoolCreateTests(PoolTestBase):
         self.dmg.timeout = 360
 
         # Verify all the pools exists after the restart
-        output = self.dmg.pool_list(no_query=True)
-        detected_pools = []
-        for pool in output["response"]["pools"]:
-            detected_pools.append(pool["uuid"].lower())
-
+        pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
+        detected_pools = [uuid.lower() for uuid in pool_uuids]
         missing_pools = []
         for pool in self.pool:
             pool_uuid = pool.uuid.lower()

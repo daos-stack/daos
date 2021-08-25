@@ -52,8 +52,7 @@ ior:
             - MPIIO
             - POSIX
             - HDF5
-# Skip for DAOS-8207
-#            - HDF5-VOL
+            - HDF5-VOL
           transfer_block_size:
             - [256B, 2M]
             - [1M, 32M]
