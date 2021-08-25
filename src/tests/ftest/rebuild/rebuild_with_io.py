@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 
 
 class RbldWithIO(TestWithServers):
@@ -17,7 +17,6 @@ class RbldWithIO(TestWithServers):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5611")
     def test_rebuild_with_io(self):
         """JIRA ID: Rebuild-003.
 
