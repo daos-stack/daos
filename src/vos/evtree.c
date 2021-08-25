@@ -2144,8 +2144,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX) {
 			/** Special case.   This is an overlapping delete record
 			 *  which can happen when there are minor epochs
-			 *  involved.   Rather than rejecting, we can delete the
-			 *  old record and insert a merged  one
+			 *  involved.   Rather than rejecting, insert prefix
+			 *  and/or suffix extents.
 			 */
 			ent = evt_ent_array_get(ent_array, 0);
 			if (ent->en_ext.ex_lo <= entry->ei_rect.rc_ex.ex_lo &&
@@ -2193,7 +2193,7 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 			ent_cpy.ei_rect.rc_ex.ex_hi = entry->ei_rect.rc_ex.ex_hi;
 			ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_hi + 1;
 
-			/* Now insert the merged one */
+			/* Now insert the suffix */
 			goto insert;
 		}
 		/*
