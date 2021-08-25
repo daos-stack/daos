@@ -1,6 +1,7 @@
 # Container Management
 
-DAOS containers (not to be confused with Linux containers) are datasets managed
+DAOS containers (not to be confused with Linux containers) are datasets (or
+buckets if you are more familiar with cloud object stores) managed
 by the users. A container is the unit of snapshot and has a type. It can be a
 POSIX namespace, an HDF5 file or any other application-specific data model.
 The chapter explains how to manage a container, while the subsequent ones detail
@@ -222,7 +223,7 @@ The table below summarizes the different container properties available.
 | rf                      | Yes             | The redundancy factor that drives the minimal data protection required for objects stored in the container. e.g., RF1 means no data protection, RF3 only allows 3-way replication or erasure code N+2.|
 | rf\_lvl                 | Yes             | The fault domain level to use for data redundancy placement. This is used to determine object placement.|
 | ec\_cell                | Yes             | Erasure code cell size for erasure-coded objects.|
-| cksum                   | Yes             | Checksum off, or algorithm to use (adler32, crc[16|32|64] or sha[1|256|512]).|
+| cksum                   | Yes             | Checksum off, or algorithm to use (adler32, crc[16,32,64] or sha[1,256,512]).|
 | cksum\_size             | Yes             | Checksum chunk size.|
 | srv\_cksum              | Yes             | Perform additional checksum verification on server (default: off).|
 | max\_snapshot           | No              | Impose a upper limit on number of snapshots to retain (default: 0, no limitation).|
@@ -230,7 +231,7 @@ The table below summarizes the different container properties available.
 | compression             | Yes             | Whether online compression is enabled (off, lz4, deflate[1-4])|
 | dedup                   | Yes             | Inline deduplication off, hash based (hash) or using memory compare (memcmp)|
 | dedup\_threshold        | Yes             | Minimum I/O size to consider for deduplication|
-| encryption              | Yes             | Inline encryption off, or algorithm to use (XTS[128\|256], CBC[128\|192\|256] or GCM[128\|256])|
+| encryption              | Yes             | Inline encryption off, or algorithm to use (XTS[128,256], CBC[128,192,256] or GCM[128,256])|
 | status                  | No              | Current state of the container|
 | alloc\_oid              | No              | Maximum allocated object ID by container allocator|
 

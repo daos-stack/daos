@@ -24,7 +24,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	11
+#define OBJ_TGT_INLINE_NR	10
 #define OBJ_INLINE_BTIMAP	4
 
 struct obj_req_tgts {

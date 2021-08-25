@@ -6,6 +6,7 @@
 #ifndef __TELEMETRY_CONSUMER_H__
 #define __TELEMETRY_CONSUMER_H__
 
+#include <gurt/telemetry_common.h>
 
 /* Developer facing client API to read data */
 char *d_tm_get_name(struct d_tm_context *ctx, struct d_tm_node_t *node);

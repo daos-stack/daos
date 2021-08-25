@@ -426,8 +426,8 @@ public class DaosObjectIT {
     completedList.clear();
     IOSimpleDDAsync failed = null;
     int failedCnt = 0;
-    int count = eq.pollCompleted(completedList, nbr, 5000);
-    if (count == 0) {
+    eq.pollCompleted(completedList, IOSimpleDDAsync.class, null, nbr, 5000);
+    if (completedList.isEmpty()) {
       throw new TimedOutException("failed to poll completed");
     }
     for (DaosEventQueue.Attachment attachment : completedList) {
@@ -465,7 +465,8 @@ public class DaosObjectIT {
       buffer2.writeBytes(bytes);
       desc.addEntryForUpdate("akey1", 0, buffer1);
       desc.addEntryForUpdate("akey2", 0, buffer2);
-      desc.setEvent(eq.acquireEventBlocking(100, null));
+      desc.setEvent(eq.acquireEventBlocking(100, completeList, IOSimpleDDAsync.class, null));
+      completeList.clear();
       try {
         object.updateAsync(desc);
         progress(eq, 1, completeList);
@@ -476,7 +477,8 @@ public class DaosObjectIT {
       IOSimpleDDAsync desc2 = object.createAsyncDataDescForFetch("dkey1", eq.getEqWrapperHdl());
       IOSimpleDDAsync.AsyncEntry entry = desc2.addEntryForFetch("akey1", 0, 80);
       byte[] actualBytes;
-      desc2.setEvent(eq.acquireEventBlocking(100, null));
+      desc2.setEvent(eq.acquireEventBlocking(100, completeList, IOSimpleDDAsync.class, null));
+      completeList.clear();
       try {
         object.fetchAsync(desc2);
         progress(eq, 1, completeList);
@@ -489,7 +491,8 @@ public class DaosObjectIT {
       }
       // fetch akey2
       desc2 = object.createAsyncDataDescForFetch("dkey1", eq.getEqWrapperHdl());
-      desc2.setEvent(eq.acquireEventBlocking(100, null));
+      completeList.clear();
+      desc2.setEvent(eq.acquireEventBlocking(100, completeList, IOSimpleDDAsync.class, null));
       entry = desc2.addEntryForFetch("akey2", 0, 30);
       try {
         object.fetchAsync(desc2);
@@ -502,7 +505,8 @@ public class DaosObjectIT {
       }
       // fetch both
       desc2 = object.createAsyncDataDescForFetch("dkey1", eq.getEqWrapperHdl());
-      desc2.setEvent(eq.acquireEventBlocking(100, null));
+      completeList.clear();
+      desc2.setEvent(eq.acquireEventBlocking(100, completeList, IOSimpleDDAsync.class, null));
       IOSimpleDDAsync.AsyncEntry entry1 = desc2.addEntryForFetch("akey1", 0, 50);
       IOSimpleDDAsync.AsyncEntry entry2 = desc2.addEntryForFetch("akey2", 0, 50);
       try {
@@ -1440,14 +1444,14 @@ public class DaosObjectIT {
       for (int i = 0; i < reduces; i++) {
         for (int j = 0; j < maps; j++) {
           compList.clear();
-          e = dq.acquireEventBlocking(1000, compList);
+          e = dq.acquireEventBlocking(1000, compList, IOSimpleDataDesc.class, null);
           for (DaosEventQueue.Attachment d : compList) {
             Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
           }
           desc = (IOSimpleDataDesc) e.getAttachment();
           desc.reuse();
           desc.setDkey(String.valueOf(i));
-          entry = (IOSimpleDataDesc.SimpleEntry)desc.getEntry(0);
+          entry = desc.getEntry(0);
           buf = entry.reuseBuffer();
           buf.writerIndex(buf.capacity());
           entry.setEntryForUpdate(String.valueOf(j), 0, buf);
@@ -1455,7 +1459,7 @@ public class DaosObjectIT {
         }
       }
       compList.clear();
-      dq.waitForCompletion(5000, compList);
+      dq.waitForCompletion(5000, IOSimpleDataDesc.class, compList);
       for (DaosEventQueue.Attachment d : compList) {
         Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
       }
@@ -1468,7 +1472,7 @@ public class DaosObjectIT {
         for (int j = 0; j < maps; j++) {
 //          System.out.println(i + "-" +j);
           compList.clear();
-          e = dq.acquireEventBlocking(1000, compList);
+          e = dq.acquireEventBlocking(1000, compList, IOSimpleDataDesc.class, null);
           for (DaosEventQueue.Attachment d : compList) {
             Assert.assertEquals(bufLen, ((IOSimpleDataDesc)d).getEntry(0).getActualSize());
           }
@@ -1484,7 +1488,7 @@ public class DaosObjectIT {
       }
 //      System.out.println("waiting");
       compList.clear();
-      dq.waitForCompletion(5000, compList);
+      dq.waitForCompletion(5000, IOSimpleDataDesc.class, compList);
       for (DaosEventQueue.Attachment d : compList) {
         Assert.assertTrue(((IOSimpleDataDesc)d).isSucceeded());
         Assert.assertEquals(bufLen, ((IOSimpleDataDesc)d).getEntry(0).getActualSize());

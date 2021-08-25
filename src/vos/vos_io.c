@@ -1692,8 +1692,11 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
 			      &krec, &toh, ioc->ic_ts_set);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("akey "DF_KEY" update, key_tree_prepare failed, "DF_RC"\n",
+			DP_KEY(&iod->iod_name), DP_RC(rc));
 		return rc;
+	}
 
 	if (ioc->ic_ts_set) {
 		uint64_t akey_flags;
@@ -1740,6 +1743,9 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 						   (uintptr_t)iod->iod_recxs;
 		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc,
 					minor_epc);
+		if (rc)
+			D_ERROR("akey "DF_KEY" update, akey_update_single failed, "DF_RC"\n",
+				DP_KEY(&iod->iod_name), DP_RC(rc));
 		goto out;
 	} /* else: array */
 
@@ -1760,8 +1766,11 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
 				      recx_csum, iod->iod_size, ioc,
 				      minor_epc);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("akey "DF_KEY" update, akey_update_recx failed, "DF_RC"\n",
+				DP_KEY(&iod->iod_name), DP_RC(rc));
 			goto out;
+		}
 	}
 
 out:
