@@ -26,7 +26,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
     create_mdtest_cmdline, reserved_file_copy, cleanup_dfuse, \
-    run_telemetry_check
+    run_metrics_check
 
 
 class SoakTestBase(TestWithServers):
@@ -63,7 +63,6 @@ class SoakTestBase(TestWithServers):
         self.all_failed_harassers = None
         self.soak_errors = None
         self.check_errors = None
-        self.telemetry = None
 
     def setUp(self):
         """Define test setup to be done."""
@@ -125,6 +124,8 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info("<<preTearDown Started>> at %s", time.ctime())
         errors = []
+        # display final metrics
+        run_metrics_check(self, prefix="final")
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
             job_id = " ".join([str(job) for job in self.failed_job_id_list])
@@ -357,8 +358,6 @@ class SoakTestBase(TestWithServers):
         if self.harasser_loop_time and self.harassers:
             harasser_interval = self.harasser_loop_time / (
                 len(self.harassers) + 1)
-        # Baseline telemetry data
-        run_telemetry_check(self)
         # If there is nothing to do; exit
         if job_id_list:
             # wait for all the jobs to finish
@@ -394,8 +393,8 @@ class SoakTestBase(TestWithServers):
                                 offline_harasser, self.pool)
                             # wait 2 minutes to issue next harasser
                             time.sleep(120)
-            # Telemetry data after jobs complete
-            run_telemetry_check(self)
+            # Gather metrics data after jobs complete
+            run_metrics_check(self)
             # check journalctl for events;
             until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             event_check_messages = run_event_check(self, since, until)
@@ -546,7 +545,8 @@ class SoakTestBase(TestWithServers):
                 raise SoakTestError(
                     "<<FAILED: Soak directory {} was not removed>>".format(
                         log_dir)) from error
-
+        # Baseline metrics data
+        run_metrics_check(self, prefix="initial")
         # Initialize time
         start_time = time.time()
         self.test_timeout = int(3600 * test_to)
