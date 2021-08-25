@@ -132,7 +132,6 @@ class PoolSecurityTestBase(TestWithServers):
             err_code (str): expecting deny of RC code.
         """
         if expect.lower() == 'pass':
-            #if result.exit_status != 0 or result.stderr_text != "":
             if self._command_failed(result):
                 self.fail(
                     "##Test Fail on verify_daos_pool {}, expected Pass, but "
@@ -332,7 +331,7 @@ class PoolSecurityTestBase(TestWithServers):
         daos_cmd.exit_status_exception = False
         if action.lower() == "write":
             # pylint: disable=protected-access
-            result = daos_cmd._get_result(("container", "create"), pool=uuid)
+            result = daos_cmd.container_create(pool=uuid)
         elif action.lower() == "read":
             result = daos_cmd.pool_query(pool=uuid)
         else:
