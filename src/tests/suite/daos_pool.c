@@ -1118,6 +1118,9 @@ label_strings_test(void **state)
 					     "0b101010",
 					     /* len=DAOS_PROP_LABEL_MAX_LEN */
 					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDE",
+					     "a-b-cde",
+					     "thiswoul-dntp-arse-asau-uidsoitsfine",
+					     "g006b637-c63a-4734-99bc-a71298597de1",
 	};
 	const char	*invalid_labels[] = {
 					     "",
@@ -1127,8 +1130,8 @@ label_strings_test(void **state)
 					     "No{brackets}",
 					     "Whatsup?",
 					     "'MyLabel'",
-					     "a-b-cde",
 					     "MyPool!",
+					     "0006b637-c63a-4734-99bc-a71298597de1",
 					     "cae61c0]7-52f5-4874-ad21-3c0ec43005cb",
 					     /* len=DAOS_PROP_LABEL_MAX_LEN+1 */
 					     "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
@@ -1159,16 +1162,16 @@ label_strings_test(void **state)
 		for (i = 0; i < n_valid; i++) {
 			const char *lbl = valid_labels[i];
 
+			print_message("%s should be valid\n", lbl);
 			assert_true(daos_label_is_valid(lbl));
-			print_message("confirmed valid: %s\n", lbl);
 		}
 
 		print_message("Verify %zu INvalid labels\n", n_invalid);
 		for (i = 0; i < n_invalid; i++) {
 			const char *lbl = invalid_labels[i];
 
+			print_message("%s should not be valid\n", lbl);
 			assert_false(daos_label_is_valid(lbl));
-			print_message("confirmed NOT valid: %s\n", lbl);
 		}
 	}
 }

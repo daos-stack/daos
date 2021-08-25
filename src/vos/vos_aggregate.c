@@ -648,8 +648,7 @@ prepare_segments(struct agg_merge_window *mw)
 	 * segments (at most mw_lgc_cnt) and truncated segments (at most
 	 * mw_phy_cnt).
 	 */
-	D_ASSERT(mw->mw_lgc_cnt > 0 || mw->mw_rmv_cnt > 0);
-	D_ASSERT(mw->mw_phy_cnt > 0);
+	D_ASSERT(mw->mw_rmv_cnt > 0 || (mw->mw_phy_cnt > 0 && mw->mw_lgc_cnt > 0));
 	io->ic_seg_cnt = 0;
 	if (mw->mw_lgc_cnt == 0)
 		goto process_physical;

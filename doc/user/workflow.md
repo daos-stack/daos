@@ -17,9 +17,9 @@ project and set relevant ACL to grant access to project members.
 * Administrators notify the project members that the pool has been created and
 provide the pool label to the users.
 
-Users can then create datasets (i.e. containers) in the pool. Containers
-will share the pool space and have their own ACL to be managed by the container
-owner.
+Users can then create containers (i.e. datasets or buckets) in their pool.
+Containers will share the pool space and have their own ACL to be managed by
+the container owner.
 
 Since pool creation is relatively fast, it is also possible to integrate it
 with the resource manager to create and ingest data into an ephemeral pool for
@@ -99,6 +99,7 @@ All steps passed.
 !!! note
     The command is executed in a development environment,
     performance differences will vary, based on your system.
+
 !!! warning
     Smaller pools may show DER_NOSPACE(-1007): 'No space
     on storage target'
