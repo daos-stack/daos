@@ -692,6 +692,24 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "set-prop"), pool=pool, name=name, value=value)
 
+    def pool_get_prop(self, pool, name):
+        """Get the Property for a given pool.
+
+        Args:
+            pool (str): Pool for which to get the property.
+            name (str): Get the Property value based on name.
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        Raises:
+            CommandFailure: if the dmg pool get-prop command fails.
+
+        """
+        return self._get_json_result(
+            ("pool", "get-prop {} {}".format(pool, name)))
+
     def pool_exclude(self, pool, rank, tgt_idx=None):
         """Exclude a daos_server from the pool.
 
