@@ -88,7 +88,7 @@ retry_cmd() {
         # We hit an error
         (( tries-- ))
         {
-          echo "Command $@ failed on $HOSTNAME for $BUILD_URL"
+          echo "Command $* failed on $HOSTNAME for $BUILD_URL"
           echo "Command status was ${PIPESTATUS[0]}"
           echo "Will retry $tries before giving up."
         } 2>&1 | mail -s "Command failed in $BUILD_URL" \
