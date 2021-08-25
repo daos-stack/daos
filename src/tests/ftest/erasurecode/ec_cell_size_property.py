@@ -9,6 +9,7 @@ from itertools import product
 from ior_test_base import IorTestBase
 from daos_utils import DaosCommand
 from general_utils import human_to_bytes
+from apricot import skipForTicket
 
 class EcodCellSizeProperty(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -49,6 +50,8 @@ class EcodCellSizeProperty(IorTestBase):
         cont_cell_size = (human_to_bytes(cell_size.replace(" ", "")))
         self.assertEqual(expected_size, cont_cell_size)
 
+
+    @skipForTicket("DAOS-8051")
     def test_ec_pool_property(self):
         """Jira ID: DAOS-7321.
 
