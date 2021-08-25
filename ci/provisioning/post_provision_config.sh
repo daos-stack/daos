@@ -36,8 +36,8 @@ retry_cmd() {
         } 2>&1 | mail -s "Command failed in $BUILD_URL" \
                       -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
 
-        sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
-        continue
+        if [ $tries -gt 0 ]; then
+            sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
     done
     return 1
 }
