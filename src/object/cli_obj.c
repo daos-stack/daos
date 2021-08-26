@@ -1795,8 +1795,8 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	crt_bulk_perm_t		bulk_perm;
 	int			rc = 0;
 
-	if ((obj_auxi->io_retry && !obj_auxi->reasb_req.orr_size_fetched) ||
-	    obj_auxi->reasb_req.orr_size_fetch)
+	if ((obj_auxi->io_retry && !obj_auxi->reasb_req.orr_size_fetched &&
+	     obj_auxi->bulks != NULL) || obj_auxi->reasb_req.orr_size_fetch)
 		return 0;
 
 	/* inline fetch needs to pack sgls buffer into RPC so uses it to check
@@ -2857,6 +2857,7 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			tgt += req_tgts->ort_grp_size;
 		else
 			tgt++;
+		obj_auxi->new_shard_tasks = 1;
 	}
 
 	obj_auxi->args_initialized = 1;
