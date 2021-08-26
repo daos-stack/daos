@@ -2,45 +2,61 @@
 site_name: DAOS v2.0 - dev
 site_description: Distributed Asynchronous Object Storage
 site_author: DAOS Project
-site_url: http://daos.io
-site_dir: ../site
 
 # Repository
 repo_name: daos-stack/daos
-repo_url: https://github.com/daos-stack/daos
-edit_url: ""
+repo_url: https://github.com/daos-stack/daos/doc
+copyright: Copyright &copy; 2016 - 2021 Intel Corporation
 
 # Theme
 theme:
     name: 'material'
+    logo: daos_logo_wh.png
     font:
-        text: 'Ubuntu'
-        code: 'Ubuntu Mono'
+        text: Ubuntu
+        code: Roboto Mono
     language: en
     palette:
-        primary: 'blue grey'
-        accent: 'blue'
-    feature:
-        tabs: true
+        scheme:  'slate'
+        primary: 'light blue'
+        accent:  'blue'
+    features:
+        - navigation.tabs
+        - navigation.tabs.sticky
+        - navigation.instant
+        - navigation.top
+        - toc.integrate
+        - navigation.indexes
 
-docs_dir: ./
+extra:
+    homepage: http://daos.io
 
 markdown_extensions:
     - admonition
     - footnotes
     - toc:
         permalink: true
+        toc_depth: 3
 
 # Page tree
 nav:
-    - Home: 'index.md'
-    - Architecture Overview:
-        - 'Terminology': 'overview/terminology.md'
+    - Intro:
+        - 'Welcome': 'index.md'
+        - 'Community Wiki': 'http://wiki.daos.io'
+        - 'Community Roadmap': 'https://daosio.atlassian.net/wiki/spaces/DC/pages/4836661105/Roadmap'
+        - 'Community Mailing list': 'https://daos.groups.io/g/daos'
+        - 'Issue tracker': 'http://jira.daos.io'
+    - Overview:
         - 'Architecture': 'overview/architecture.md'
         - 'Storage Model': 'overview/storage.md'
         - 'Transaction Model': 'overview/transaction.md'
         - 'Fault Model': 'overview/fault.md'
         - 'Security Model': 'overview/security.md'
+        - 'Terminology': 'overview/terminology.md'
+    - Installation and Setup:
+        - 'CentOS': 'QSG/setup.md'
+        - 'openSUSE': 'QSG/suse_setup.md'
+        - 'Admin/Client Tools': 'QSG/tour.md'
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
         - 'Software Installation': 'admin/installation.md'
@@ -53,6 +69,14 @@ nav:
         - 'Troubleshooting': 'admin/troubleshooting.md'
         - 'Utilities and Usage Examples': 'admin/utilities_examples.md'
         - 'Environment Variables': 'admin/env_variables.md'
+    - Test and Benchmarking:
+        - 'Run DAOS Autotest': 'QSG/autotest.md'
+        - 'Run CaRT Self_test': 'QSG/cartselftest.md'
+        - 'Run IOR': 'QSG/runior.md'
+        - 'Run mdtest': 'QSG/mdtest.md'
+        - 'Run dbench': 'QSG/dbench.md'
+        - 'Datamover test': 'QSG/datamover.md'
+        - 'IO500 Setup': 'https://daosio.atlassian.net/wiki/spaces/DC/pages/4873388103/DAOS+IO-500+Instructions'
     - User Guide:
         - 'Workflow': 'user/workflow.md'
         - 'Container Management': 'user/container.md'
@@ -65,12 +89,9 @@ nav:
     - Releases:
         - 'Release Notes v2.0': 'release/release_notes_v2_0.md'
         - 'Support Matrix': 'release/support_matrix.md'
+        - 'Roadmap': 'https://daosio.atlassian.net/wiki/spaces/DC/pages/4836661105/Roadmap'
     - Developer Zone:
         - 'Dev Environment': 'dev/development.md'
         - 'Contributing': 'dev/contributing.md'
         - 'DAOS Internals': 'https://github.com/daos-stack/daos/blob/master/src/README.md'
         - 'DAOS API Documentation': 'html/index.html'
-    - Community Wiki: 'https://wiki.hpdd.intel.com'
-    - Roadmap: 'https://wiki.hpdd.intel.com/display/DC/Roadmap/'
-    - Mailing list: 'https://daos.groups.io/g/daos'
-    - Issue tracker: 'https://jira.hpdd.intel.com/projects/DAOS'
