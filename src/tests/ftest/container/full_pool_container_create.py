@@ -15,6 +15,9 @@ class FullPoolContainerCreate(TestWithServers):
     :avocado: recursive
     """
 
+    # Cancel test for small pool size due to DAOS-8400
+    CANCEL_FOR_TICKET = [["DAOS-8400", "size", 134217728]]
+
     def test_no_space_cont_create(self):
         """JIRA ID: DAOS-1169 DAOS-7374
 
@@ -63,8 +66,8 @@ class FullPoolContainerCreate(TestWithServers):
         self.log.info("Pool free space before write: %s", free_space_before)
 
         # generate random dkey, akey each time
-        # write 1mb until no space, then 1kb, etc. to fill pool quickly
-        for obj_sz in [1048576, 10240, 10, 1]:
+        # write 1G until no space, then 100M, etc. to fill pool quickly
+        for obj_sz in [1073741824, 104857600, 1048576, 10240, 10, 1]:
             write_count = 0
             while True:
                 self.d_log.debug("writing obj {0} sz {1} to "
@@ -106,12 +109,16 @@ class FullPoolContainerCreate(TestWithServers):
         counter = 1
         threshold_value = free_space_before - (free_space_before *
                                                threshold_percent)
-        while self.pool.get_pool_free_space() < threshold_value:
-            # try to wait for 3 x 60 secs for aggregation to be completed or
+        free_space = self.pool.get_pool_free_space()
+        while free_space < threshold_value:
+            # try to wait for 4 x 30 secs for aggregation to be completed or
             # else exit the test with a failure.
-            if counter > 3:
+            if counter > 4:
                 self.log.info("Free space when test terminated: %s",
-                              self.pool.get_pool_free_space())
+                              free_space)
+                self.log.info("Threshold value when test terminated: %s",
+                              threshold_value)
                 self.fail("Aggregation did not complete as expected")
-            time.sleep(60)
+            time.sleep(30)
+            free_space = self.pool.get_pool_free_space()
             counter += 1
