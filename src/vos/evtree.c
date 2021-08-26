@@ -2144,8 +2144,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX) {
 			/** Special case.   This is an overlapping delete record
 			 *  which can happen when there are minor epochs
-			 *  involved.   Rather than rejecting, we can delete the
-			 *  old record and insert a merged  one
+			 *  involved.   Rather than rejecting, insert prefix
+			 *  and/or suffix extents.
 			 */
 			ent = evt_ent_array_get(ent_array, 0);
 			if (ent->en_ext.ex_lo <= entry->ei_rect.rc_ex.ex_lo &&
@@ -2179,18 +2179,21 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 			memcpy(&ent_cpy, entry, sizeof(*entry));
 			entryp = &ent_cpy;
 			/** We need to edit the existing extent */
-			if (ent->en_ext.ex_lo < ent_cpy.ei_rect.rc_ex.ex_lo)
-				ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_lo;
-			if (ent->en_ext.ex_hi > ent_cpy.ei_rect.rc_ex.ex_hi)
-				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_hi;
+			if (entry->ei_rect.rc_ex.ex_lo < ent->en_ext.ex_lo) {
+				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_lo - 1;
+				if (entry->ei_rect.rc_ex.ex_hi <= ent->en_ext.ex_hi)
+					goto insert;
+				/* There is also a suffix, so insert the prefix */
+				rc = evt_insert_entry(tcx, entryp, csum_bufp);
+				if (rc != 0)
+					goto out;
+			}
 
-			/** Remove the existing node */
-			rc = evt_node_delete(tcx);
+			D_ASSERT(entry->ei_rect.rc_ex.ex_hi > ent->en_ext.ex_hi);
+			ent_cpy.ei_rect.rc_ex.ex_hi = entry->ei_rect.rc_ex.ex_hi;
+			ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_hi + 1;
 
-			if (rc != 0)
-				goto out;
-
-			/* Now insert the merged one */
+			/* Now insert the suffix */
 			goto insert;
 		}
 		/*
