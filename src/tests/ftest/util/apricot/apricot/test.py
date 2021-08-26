@@ -1202,19 +1202,13 @@ class TestWithServers(TestWithoutServers):
         self._teardown_errors.extend(self.destroy_containers(self.container))
 
         # Destroy any pools next
-        pool_destroy_errors = self.destroy_pools(self.pool)
-        self._teardown_errors.extend(pool_destroy_errors)
+        self._teardown_errors.extend(self.destroy_pools(self.pool))
 
         # Stop the agents
         self._teardown_errors.extend(self.stop_agents())
 
         # Stop the servers
-        force_server_stop = False
-        if pool_destroy_errors:
-            force_server_stop = True
-            self.log.info(
-                "** FORCING SERVER STOP DUE TO POOL DESTROY ERRORS **")
-        self._teardown_errors.extend(self.stop_servers(force_server_stop))
+        self._teardown_errors.extend(self.stop_servers())
 
         super().tearDown()
 
@@ -1321,8 +1315,6 @@ class TestWithServers(TestWithoutServers):
                         error_list.append(
                             "Error destroying pool: {}".format(error))
 
-        # Check for any pools not accounted for by the pool list
-        error_list.extend(self.search_and_destroy_pools())
 
         return error_list
 
@@ -1382,27 +1374,31 @@ class TestWithServers(TestWithoutServers):
             errors.extend(self._stop_managers(self.agent_managers, "agents"))
         return errors
 
-    def stop_servers(self, force=False):
+    def stop_servers(self):
         """Stop the daos server and I/O Engines.
-
-        Args:
-            force (bool): whether to stop the servers regardless of whether or
-                not they are in a state or mode which would normally keep them
-                running. Defaults to False
 
         Returns:
             list: a list of exceptions raised stopping the servers
 
         """
+        force_stop = False
         self.log.info("-" * 100)
         self.log.info("--- STOPPING SERVERS ---")
         errors = []
         status = self.check_running("servers", self.server_managers)
-        if self.start_servers_once and not status["restart"] and not force:
-            self.log.info(
-                "Servers are configured to run across multiple test variants, "
-                "not stopping")
-        else:
+        if self.start_servers_once and not status["restart"]:
+            # Check for any pools not accounted for by the pool list
+            pool_destroy_errors = self.search_and_destroy_pools()
+            if pool_destroy_errors:
+                errors.extend(pool_destroy_errors)
+                force_stop = True
+                self.log.info(
+                    "* FORCING SERVER STOP DUE TO POOL DESTROY ERRORS *")
+            else:
+                self.log.info(
+                    "Servers are configured to run across multiple test "
+                    "variants, not stopping")
+        if not self.start_servers_once or status["restart"] or force_stop:
             if not status["expected"]:
                 errors.append(
                     "ERROR: At least one multi-variant server was not found in "
