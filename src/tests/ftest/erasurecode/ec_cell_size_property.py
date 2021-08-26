@@ -21,18 +21,6 @@ class EcodCellSizeProperty(IorTestBase):
 
     :avocado: recursive
     """
-    def __init__(self, *args, **kwargs):
-        """Initialize a EcodCellSizeProperty object."""
-        super().__init__(*args, **kwargs)
-        self.daos_cmd = None
-
-    def setUp(self):
-        """Set up test case."""
-        super().setUp()
-
-        # initialize daos command
-        self.daos_cmd = DaosCommand(self.bin)
-
     def verify_cont_ec_cell_size(self, expected_size):
         """
         Verify the container EC cell size property.
@@ -40,8 +28,9 @@ class EcodCellSizeProperty(IorTestBase):
         Args:
             expected_size (int): expected container cell size
         """
-        cont_prop = self.daos_cmd.container_get_prop(self.pool.uuid,
-                                                     self.container.uuid)
+        daos_cmd = self.get_daos_command()      
+        cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
+                                                self.container.uuid)
         cont_prop_stdout = cont_prop.stdout_text
         prop_list = cont_prop_stdout.split('\n')[1:]
         cont_index = [i for i, word in enumerate(prop_list)
@@ -49,7 +38,6 @@ class EcodCellSizeProperty(IorTestBase):
         cell_size = (prop_list[cont_index].split('EC Cell Size')[1].strip())
         cont_cell_size = (human_to_bytes(cell_size.replace(" ", "")))
         self.assertEqual(expected_size, cont_cell_size)
-
 
     @skipForTicket("DAOS-8051")
     def test_ec_pool_property(self):
@@ -89,7 +77,7 @@ class EcodCellSizeProperty(IorTestBase):
         for tx_size, cont_cell in product(ior_transfer_size,
                                           cont_cell_size):
             # Initial container
-            self.add_container(self.pool)
+            self.add_container(self.pool, create=False)
 
             # Use the default pool property for container and do not update
             if cont_cell != pool_prop_expected:
