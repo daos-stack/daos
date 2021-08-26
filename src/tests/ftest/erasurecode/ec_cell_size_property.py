@@ -27,7 +27,7 @@ class EcodCellSizeProperty(IorTestBase):
         Args:
             expected_size (int): expected container cell size
         """
-        daos_cmd = self.get_daos_command()      
+        daos_cmd = self.get_daos_command()
         cont_prop = daos_cmd.container_get_prop(self.pool.uuid,
                                                 self.container.uuid)
         cont_prop_stdout = cont_prop.stdout_text
