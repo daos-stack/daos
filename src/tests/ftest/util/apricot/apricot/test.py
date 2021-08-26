@@ -1260,7 +1260,7 @@ class TestWithServers(TestWithoutServers):
             self.test_log.info("Destroying containers")
             for container in containers:
                 # Ensure exceptions are raised for any failed command
-                if container.daos is not None:
+                if hasattr(container, "daos") and container.daos is not None:
                     container.daos.exit_status_exception = True
 
                 # Only close a container that has been opened by the test
