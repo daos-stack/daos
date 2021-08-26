@@ -6,15 +6,12 @@
 
 package io.daos.dfs;
 
+import java.io.File;
 import java.io.IOException;
-
-import com.google.protobuf.TextFormat;
+import java.net.URI;
 
 import io.daos.*;
 import io.daos.dfs.uns.*;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A wrapper class of DAOS Unified Namespace. There are four DAOS UNS methods,
@@ -39,8 +36,6 @@ public class DaosUns {
   private DaosUnsBuilder builder;
 
   private DunsAttribute attribute;
-
-  private static final Logger log = LoggerFactory.getLogger(DaosUns.class);
 
   private DaosUns() {
   }
@@ -133,61 +128,57 @@ public class DaosUns {
   /**
    * get information from extended attributes of UNS path.
    * Some info gets from DAOS extended attribute.
-   * The Rest gets from app extended attributes if any.
-   *
-   * @param path            OS FS path or path prefixed with the UUIDs
-   * @param appInfoAttrName app-specific attribute name
-   * @return information hold in {@link DunsInfo}
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  public static DunsInfo getAccessInfo(String path, String appInfoAttrName) throws IOException {
-    return getAccessInfo(path, appInfoAttrName, Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT,
-        false);
-  }
-
-  /**
-   * get information from extended attributes of UNS path.
-   * Some info gets from DAOS extended attribute.
    * The Rest gets from app extended attributes. A exception will be thrown if user expect app info and no
    * info gets.
    *
-   * @param path            OS FS path or path prefixed with the UUIDs
-   * @param appInfoAttrName app-specific attribute name
-   * @param maxValueLen     maximum value length
-   * @param expectAppInfo   expect app info? true for throwing exception if no value gets, false for ignoring quietly.
+   * @param uri             URI starts with daos://
    * @return information hold in {@link DunsInfo}
    * @throws IOException
    * {@link DaosIOException}
    */
-  public static DunsInfo getAccessInfo(String path, String appInfoAttrName, int maxValueLen,
-                                       boolean expectAppInfo) throws IOException {
+  public static DunsInfo getAccessInfo(URI uri) throws IOException {
+    String fullPath = uri.toString();
+    String path = fullPath;
+    boolean direct = true;
+    if (uri.getAuthority() == null || uri.getAuthority().startsWith(Constants.UNS_ID_PREFIX)) {
+      path = uri.getPath();
+      // make sure path exists
+      File f = new File(path);
+      while (f != null && !f.exists()) {
+        f = f.getParentFile();
+      }
+      if (f == null) {
+        return null;
+      }
+      path = f.getAbsolutePath();
+      direct = false;
+    }
     DunsAttribute attribute = DaosUns.resolvePath(path);
     if (attribute == null) {
-      throw new IOException("no UNS attribute get from " + path);
+      throw new IOException("no UNS attribute get from " + fullPath);
     }
-    String poolId = attribute.getPuuid();
-    String contId = attribute.getCuuid();
+    String poolId = attribute.getPoolId();
+    String contId = attribute.getContId();
     Layout layout = attribute.getLayoutType();
-    String prefix = path;
-    String value = null;
-    String idPrefix = "/" + poolId + "/" + contId;
-    if (path.startsWith(idPrefix)) {
-      prefix = idPrefix;
+    String relPath = attribute.getRelPath();
+    String prefix;
+    // is direct path ?
+    if (direct) {
+      if (!uri.getAuthority().equals(poolId)) {
+        throw new IOException("authority " + uri.getAuthority() + ", should be equal to poolId: " + poolId);
+      }
+      prefix = "/" + contId;
       if (layout == Layout.UNKNOWN) {
         layout = Layout.POSIX; // default to posix
       }
     } else {
-      try {
-        value = DaosUns.getAppInfo(path, appInfoAttrName,
-            maxValueLen);
-      } catch (DaosIOException e) {
-        if (expectAppInfo) {
-          throw e;
-        }
+      int idx = path.indexOf(relPath);
+      if (idx < 0) {
+        throw new IOException("path: " + path + ", should contain real path: " + relPath);
       }
+      prefix = idx > 0 ? path.substring(0, idx) : path;
     }
-    return new DunsInfo(poolId, contId, layout.name(), value, prefix);
+    return new DunsInfo(poolId, contId, layout.name(), prefix);
   }
 
   protected DunsAttribute getAttribute() {
@@ -369,9 +360,9 @@ public class DaosUns {
 
     private void buildAttribute(DaosUns duns) {
       DunsAttribute.Builder builder = DunsAttribute.newBuilder();
-      builder.setPuuid(poolUuid);
+      builder.setPoolId(poolUuid);
       if (contUuid != null) {
-        builder.setCuuid(contUuid);
+        builder.setContId(contUuid);
       }
       builder.setLayoutType(layout);
       builder.setObjectType(objectType.nameWithoutOc());
@@ -379,165 +370,5 @@ public class DaosUns {
       builder.setOnLustre(onLustre);
       duns.attribute = builder.build();
     }
-  }
-
-  /**
-   * Main function to be called from command line.
-   *
-   * @param args
-   * command line arguments.
-   * @throws Exception
-   * any exception during execution
-   */
-  public static void main(String[] args) throws Exception {
-    if (needUsage(args)) {
-      String usage = getUsage();
-      log.info(usage);
-      return;
-    }
-    if (args.length < 1) {
-      throw new IllegalArgumentException("need one of commands" +
-          " [create|resolve|destroy|parse|util]\n" + getUsage());
-    }
-    switch (args[0]) {
-      case "resolve":
-        resolve();
-        return;
-      case "parse":
-        parse();
-        return;
-      case "setappinfo":
-        setAppInfoCommand();
-        return;
-      case "getappinfo":
-        getAppInfoCommand();
-        return;
-      case "util":
-        util();
-        return;
-      default:
-        throw new IllegalArgumentException("not supported command, " + args[0]);
-    }
-  }
-
-  private static void setAppInfoCommand() {
-    String path = System.getProperty("path");
-    String attr = System.getProperty("attr");
-    String value = System.getProperty("value");
-    try {
-      setAppInfo(path, attr, value);
-      log.info("attribute({}) = value({}) is set on path({})", attr, value, path);
-    } catch (Exception e) {
-      log.error("failed to set app info. ", e);
-    }
-  }
-
-  private static void getAppInfoCommand() {
-    String path = System.getProperty("path");
-    String attr = System.getProperty("attr");
-    String maxLen = System.getProperty("maxlen");
-    try {
-      String value = getAppInfo(path, attr, maxLen == null ? Constants.UNS_ATTR_VALUE_MAX_LEN_DEFAULT :
-          Integer.valueOf(maxLen));
-      log.info("attribute({}) = value({}) get from path({})", attr, value, path);
-    } catch (Exception e) {
-      log.error("failed to get app info. ", e);
-    }
-  }
-
-  private static void util() {
-    String op = System.getProperty("op");
-    if (DaosUtils.isBlankStr(op)) {
-      throw new IllegalArgumentException("need operation type.\n" + getUsage());
-    }
-    switch (op) {
-      case "list-object-types":
-        listObjectTypes();
-        return;
-      case "escape-app-value":
-        escapeAppValue();
-        return;
-      default:
-        throw new IllegalArgumentException("not supported operation, " + op);
-    }
-  }
-
-  private static void listObjectTypes() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("object types:\n");
-    for (DaosObjectType type : DaosObjectType.values()) {
-      sb.append(type).append("\n");
-    }
-    log.info(sb.toString());
-  }
-
-  private static void escapeAppValue() {
-    String input = System.getProperty("input");
-    if (DaosUtils.isBlankStr(input)) {
-      throw new IllegalArgumentException("need input.\n" + getUsage());
-    }
-    log.info("escaped value is: " + DaosUtils.escapeUnsValue(input));
-  }
-
-  private static String escapeDoubleQuote(String str) {
-    return str.replaceAll("\"", "\\\\\"");
-  }
-
-  private static void parse() {
-    String input = System.getProperty("input");
-    try {
-      DunsAttribute attribute = DaosUns.parseAttribute(input);
-      log.info("parsed attributes from string: " + input);
-      log.info(TextFormat.printer().printToString(attribute));
-    } catch (Exception e) {
-      log.error("failed to parse attribute string.", e);
-    }
-  }
-
-  private static void resolve() {
-    String path = System.getProperty("path");
-    try {
-      DunsAttribute attribute = DaosUns.resolvePath(path);
-      log.info("resolved attributes from UNS path: " + path);
-      log.info(TextFormat.printer().printToString(attribute));
-    } catch (Exception e) {
-      log.error("failed to resolve path. ", e);
-    }
-  }
-
-  private static boolean needUsage(String[] args) {
-    for (String arg : args) {
-      if ("--help".equals(arg) || "-h".equals(arg)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private static String getUsage() {
-    String usage = "===================================================\n" +
-        "resolve/parse UNS path associated with DAOS.\n" +
-        "Usage java [-options] <-jar jarfile | -cp classpath> io.daos.dfs.DaosUns <command>\n" +
-        "see following commands and their options:\n" +
-        "command: [resolve|parse|setappinfo|getappinfo|util]\n" +
-        "=>resolve:\n" +
-        "   -Dpath=, required, OS file path. The file should exist.\n" +
-        "=>parse:\n" +
-        "   -Dinput=, required, attribute string.\n" +
-        "=>setappinfo:\n" +
-        "   -Dpath=, required, OS file path. The file should exist.\n" +
-        "   -Dattr=, required, attribute name.\n" +
-        "   -Dvalue=, optional, attribute value. The attribute will be removed if value is not specified.\n" +
-        "=>getappinfo:\n" +
-        "   -Dpath=, required, OS file path. The file should exist.\n" +
-        "   -Dattr=, required, attribute name.\n" +
-        "   -Dmaxlen=, optional, maximum length of value to be get. Default is 1024\n" +
-        "=>util\n" +
-        "   -Dop=, required, operation types. [list-object-types|escape-app-value]\n" +
-        "   -Dinput=, required when op=escape-app-value\n" +
-        "===================================================\n" +
-        "examples: java -Dpath=/tmp/uns io.daos.dfs.DaosUns resolve\n" +
-        "===================================================";
-    return usage;
   }
 }

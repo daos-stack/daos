@@ -8,6 +8,9 @@
 #define __CMD_DAOS_UTIL_H__
 
 #define D_LOGFAC	DD_FAC(client)
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>

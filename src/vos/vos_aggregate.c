@@ -648,8 +648,7 @@ prepare_segments(struct agg_merge_window *mw)
 	 * segments (at most mw_lgc_cnt) and truncated segments (at most
 	 * mw_phy_cnt).
 	 */
-	D_ASSERT(mw->mw_lgc_cnt > 0 || mw->mw_rmv_cnt > 0);
-	D_ASSERT(mw->mw_phy_cnt > 0);
+	D_ASSERT(mw->mw_rmv_cnt > 0 || (mw->mw_phy_cnt > 0 && mw->mw_lgc_cnt > 0));
 	io->ic_seg_cnt = 0;
 	if (mw->mw_lgc_cnt == 0)
 		goto process_physical;
@@ -781,7 +780,7 @@ process_physical:
 		io->ic_seg_cnt++;
 		D_ASSERT(io->ic_seg_cnt <= io->ic_seg_max);
 	}
-	if (mw->mw_csum_support) {
+	if (mw->mw_csum_support && io->ic_seg_cnt > 0) {
 		D_ASSERT(first != NULL);
 		cs_len = first->pe_csum_info.cs_len;
 		cs_type = first->pe_csum_info.cs_type;

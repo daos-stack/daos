@@ -212,15 +212,19 @@ a good practice to start fio with a first write phase.
 FIO can also be used to benchmark DAOS performance using dfuse and the
 interception library with all the POSIX based engines like sync and libaio.
 
-### daos_perf
+### daos_perf & vos_perf
 
 Finally, DAOS provides a tool called `daos_perf` which allows benchmarking to the
-DAOS object API directly or to the internal VOS API, which bypasses the client
-and network stack and reports performance accessing the storage directly using
-VOS. For a full description of `daos_perf` usage, run:
+DAOS object API directly and a tool called 'vos_perf' to benchmark the internal
+VOS API, which bypasses the client and network stack and reports performance
+accessing the storage directly using VOS. For a full description of `daos_perf` or
+`vos_perf` usage, run:
 
 ```bash
 $ daos_perf --help
+```
+```bash
+$ vos_perf --help
 ```
 
 The `-R` option is used to define the operation to be performanced:
@@ -244,7 +248,7 @@ $ cd /mnt/daos0
 $ df .
 Filesystem      1K-blocks  Used  Available Use% Mounted on
 /dev/pmem0     4185374720 49152 4118216704   1% /mnt/daos0
-$ taskset -c 1 daos_perf -T vos -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
+$ taskset -c 1 vos_perf -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
 Test :
         VOS (storage only)
 Pool :
@@ -300,7 +304,7 @@ $ cd /mnt/daos1/
 $ df .
 Filesystem      1K-blocks   Used  Available Use% Mounted on
 /dev/pmem1     4185374720 262144 4118003712   1% /mnt/daos1
-$ taskset -c 36 daos_perf -T vos -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
+$ taskset -c 36 vos_perf -f ./vos -P 100G -d 10000000 -a 1 -n 1 -s 4K -z -R "U;p F;p"
 Test :
         VOS (storage only)
 Pool :
@@ -346,7 +350,7 @@ Bandwidth can be tested by using a larger record size (i.e. -s option). For
 instance:
 
 ```
-$ taskset -c 36 daos_perf -T vos -f ./vos -P 100G -d 40000 -a 1 -n 1 -s 1M -z -R "U;p F;p"
+$ taskset -c 36 vos_perf -f ./vos -P 100G -d 40000 -a 1 -n 1 -s 1M -z -R "U;p F;p"
 Test :
         VOS (storage only)
 Pool :
