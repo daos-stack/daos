@@ -7,7 +7,6 @@
 from itertools import product
 
 from ior_test_base import IorTestBase
-from daos_utils import DaosCommand
 from general_utils import human_to_bytes
 from apricot import skipForTicket
 
