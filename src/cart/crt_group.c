@@ -2467,6 +2467,7 @@ crt_rank_self_set(d_rank_t rank)
 	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		hg_class =  ctx->cc_hg_ctx.chc_hgcla;
 
+		size = CRT_ADDR_STR_MAX_LEN;
 		rc = crt_hg_get_addr(hg_class, uri_addr, &size);
 		if (rc != 0) {
 			D_ERROR("crt_hg_get_addr() failed; rc=%d\n", rc);

@@ -1,5 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
@@ -9,6 +7,8 @@ timeout: 600
 server_config:
   name: daos_server
   port: 10001
+pool:
+  control_method: dmg
 # Uncomment following to force the use of certificates
 # regardless of the launch.py --insecure setting.
 #   transport_config:
