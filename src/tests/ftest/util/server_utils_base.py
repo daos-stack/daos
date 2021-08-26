@@ -514,10 +514,11 @@ class DaosServerInformation():
             # Get the NVMe storage configuration for this engine
             bdev_list = engine_param.get_value("bdev_list")
             storage_capacity["nvme"].append(0)
-            for device in bdev_list:
-                if device in device_capacity["nvme"]:
-                    storage_capacity["nvme"][-1] += min(
-                        device_capacity["nvme"][device])
+            if bdev_list:
+                for device in bdev_list:
+                    if device in device_capacity["nvme"]:
+                        storage_capacity["nvme"][-1] += min(
+                            device_capacity["nvme"][device])
 
             # Get the SCM storage configuration for this engine
             scm_size = engine_param.get_value("scm_size")

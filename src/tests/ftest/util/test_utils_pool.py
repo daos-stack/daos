@@ -789,10 +789,21 @@ class TestPool(TestDaosApiBase):
 
         """
         daos_space = self.get_pool_daos_space()
-        pool_percent = {'scm': round(float(daos_space["s_free"][0]) /
-                                     float(daos_space["s_total"][0]) * 100, 2),
-                        'nvme': round(float(daos_space["s_free"][1]) /
-                                      float(daos_space["s_total"][1]) * 100, 2)}
+
+        try:
+            scm_percentage = round(float(daos_space["s_free"][0]) /
+                                   float(daos_space["s_total"][0]) * 100, 2)
+        except ZeroDivisionError:
+            scm_percentage = 0
+
+        try:
+            nvme_percentage = round(float(daos_space["s_free"][1]) /
+                                    float(daos_space["s_total"][1]) * 100, 2)
+        except ZeroDivisionError:
+            nvme_percentage = 0
+
+        pool_percent = {'scm': scm_percentage,
+                        'nvme': nvme_percentage}
         return pool_percent
 
     def get_pool_rebuild_status(self):

@@ -5,22 +5,37 @@ hosts:
     - server-A
     - server-B
     - server-C
-    - server-D
-    - server-E
-    - server-F
   test_clients:
     - client-H
-timeout: 120
+timeout: 600
 server_config:
   name: daos_server
   servers:
-    targets: 8
+    targets: 4
+  bdev_class: nvme
+  bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
 pool:
   mode: 511
   name: daos_server
-  scm_size: 16777216
+  scm_size: 4294967296
+  nvme_size: 12884901888
   control_method: dmg
   pool_query_timeout: 30
+  rebuild_timeout: 120
 testparams:
-  ranks:
-    rank_to_kill: 0
+  rank_to_kill: 0
+  capacity: 50
+ior:
+  api: "POSIX"
+  client_processes:
+    np: 16
+  dfs_destroy: True
+  test_file: /testFile
+  repetitions: 1
+  transfer_size: '1048576'
+  block_size: '10485760'
+dfuse:
+  mount_dir: "/tmp/daos_dfuse/"
+container:
+  type: POSIX
+  control_method: daos
