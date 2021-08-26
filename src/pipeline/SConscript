@@ -1,0 +1,21 @@
+"""Build objects"""
+import daos_build
+Import('env', 'prereqs')
+
+def scons():
+    """Execute build"""
+
+    env.AppendUnique(LIBPATH=[Dir('.')])
+
+    denv = env.Clone()
+    prereqs.require(denv, 'argobots', 'protobufc', 'hwloc')
+
+    # Object client library
+    dc_pipeline_tgts = denv.SharedObject(['cli_pipeline.c'])
+    Export('dc_pipeline_tgts')
+
+    if not prereqs.server_requested():
+        return
+
+if __name__ == "SCons.Script":
+    scons()

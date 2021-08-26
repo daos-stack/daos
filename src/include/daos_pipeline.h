@@ -11,6 +11,10 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
+#include <daos_types.h>
+#include <daos_obj.h>
+
 
 /**
  * A filter part object, used to build a filter object for a pipeline.
@@ -27,16 +31,22 @@ typedef struct {
 	 *          DAOS_FILTER_FUNC_LE:		<=
 	 *          DAOS_FILTER_FUNC_GE:		>=
 	 *          DAOS_FILTER_FUNC_GT:		>
+	 *          DAOS_FILTER_FUNC_IN:		IN (const1, const2, ...)
 	 *          DAOS_FILTER_FUNC_LIKE:		== (reg exp.)
 	 *          DAOS_FILTER_FUNC_ISNULL:		==NULL
 	 *          DAOS_FILTER_FUNC_ISNOTNULL:		!=NULL
 	 *          DAOS_FILTER_FUNC_AND:		&&
 	 *          DAOS_FILTER_FUNC_OR:		||
+	 *      - artihmetic functions:
+	 *          DAOS_FILTER_FUNC_ADD:		+
+	 *          DAOS_FILTER_FUNC_SUB:		-
+	 *          DAOS_FILTER_FUNC_MUL:		*
+	 *          DAOS_FILTER_FUNC_DIV:		/
 	 *      - aggeration functions:
-	 *          DAOS_FILTER_FUNC_SUM:		SUM()
-	 *          DAOS_FILTER_FUNC_MIN:		MIN()
-	 *          DAOS_FILTER_FUNC_MAX:		MAX()
-	 *          DAOS_FILTER_FUNC_AVG:		AVG()
+	 *          DAOS_FILTER_FUNC_SUM:		SUM(a1, a2, ..., an)
+	 *          DAOS_FILTER_FUNC_MIN:		MIN(a1, a2, ..., an)
+	 *          DAOS_FILTER_FUNC_MAX:		MAX(a1, a2, ..., an)
+	 *          DAOS_FILTER_FUNC_AVG:		AVG(a1, a2, ..., an)
 	 *   -- key:
 	 *          DAOS_FILTER_OID:	Filter part object represents object id
 	 *          DAOS_FILTER_DKEY:	Filter part object represents dkey
@@ -50,8 +60,12 @@ typedef struct {
 	 * objects:
 	 *          DAOS_FILTER_TYPE_BINARY
 	 *          DAOS_FILTER_TYPE_STRING
-	 *          DAOS_FILTER_TYPE_INTEGER
-	 *          DAOS_FILTER_TYPE_REAL
+	 *          DAOS_FILTER_TYPE_INTEGER1
+	 *          DAOS_FILTER_TYPE_INTEGER2
+	 *          DAOS_FILTER_TYPE_INTEGER4
+	 *          DAOS_FILTER_TYPE_INTEGER8
+	 *          DAOS_FILTER_TYPE_REAL4
+	 *          DAOS_FILTER_TYPE_REAL8
 	 */
 	char		*data_type;
 	/**
@@ -62,7 +76,7 @@ typedef struct {
 	/**
 	 * If filtering by akey, this tells us which one.
 	 */
-	d_iov_t		akey;
+	daos_key_t	akey;
 	/**
 	 * How many constants we have in \a constant
 	 */
@@ -90,7 +104,8 @@ typedef struct {
 	 *   -- DAOS_FILTER_CONDITION:
 	 *          Records in, and records (meeting condition) out
 	 *   -- DAOS_FILTER_AGGREGATION:
-	 *          Records in, a single value out
+	 *          Records in, a single value out (see aggregation functions
+	 *          above)
 	 *
 	 * NOTE: Pipeline nodes can only be chained the following way:
 	 *             (condition) --> (condition)
@@ -109,11 +124,11 @@ typedef struct {
 	/**
 	 * Number of filter parts inside this pipeline filter
 	 */
-	size_t			num_parts;
+	uint32_t		num_parts;
 	/**
 	 * Array of filter parts for this filter object
 	 */
-	daos_filter_part_t	*parts;
+	daos_filter_part_t	**parts;
 } daos_filter_t;
 
 /**
@@ -123,17 +138,52 @@ typedef struct {
 	/**
 	 * Version number of the data structure.
 	 */
-	uint64_t		version;
+	uint64_t	version;
 	/**
-	 * Number of filters chained in this pipeline
+	 * Number of total filters chained in this pipeline.
 	 */
-	size_t			num_filters;
+	uint32_t	num_filters;
 	/**
-	 * Array of filters for this pipeline
+	 * Array of filters for this pipeline.
 	 */
-	daos_filter_t		*filters;
+	daos_filter_t	**filters;
+	/**
+	 * Number of aggregation filters chained in this pipeline.
+	 */
+	uint32_t	num_aggr_filters;
+	/**
+	 * Pointer to the first aggregation filter in the array of filters.
+	 */
+	daos_filter_t	**aggr_filters;
 } daos_pipeline_t;
 
+
+/**
+ * Initializes a new pipeline object.
+ *
+ * \param[in,out]	pipeline	Pipeline object.
+ */
+void
+daos_pipeline_init(daos_pipeline_t *pipeline);
+
+/**
+ * Initializes a new filter object.
+ *
+ * \param[in,out]	filter		Filter object.
+ */
+void
+daos_filter_init(daos_filter_t *filter);
+
+/**
+ * Destroys all memory allocated under a pipeline object. If the pipeline
+ * object \a pipeline was dynamically allocated, it has to be freed outside
+ * of this function (this function doesn't call free() on the object
+ * \a pipeline).
+ *
+ * \param[in]		pipeline	Pipeline object.
+ */
+void
+daos_pipeline_destroy(daos_pipeline_t *pipeline);
 
 /**
  * Adds a new filter object to the pipeline \a pipeline object. The effect of
