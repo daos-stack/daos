@@ -128,6 +128,7 @@ class DaosServerTest(TestWithServers):
         :avocado: tags=server_test,server_restart,DAOS_5610
         """
         self.pool = []
+        self.container = []
 
         self.log.info(
             "(1)Shutdown and restart the daos engine "
