@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.104
-Release:       5%{?relval}%{?dist}
+Version:       1.3.105
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -480,6 +480,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Tue Aug 24 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.105-1
+- Version bump to 1.3.105 for 2.0 test build 5
+
 * Mon Aug 09 2021 Yawei <yawei.niu@intel.com> 1.3.104-5
 - Fix duplicates
 - Add vos_perf
