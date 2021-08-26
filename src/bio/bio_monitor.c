@@ -94,7 +94,9 @@ bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 {
 	struct media_error_msg	*mem;
 
-	D_ALLOC_PTR(mem);
+	if (bxc->bxc_blobstore == NULL)
+		return;
+	D_ALLOC_PTR(mem); /* mem is freed in bio_media_error */
 	if (mem == NULL)
 		return;
 	mem->mem_bs		= bxc->bxc_blobstore;
