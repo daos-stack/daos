@@ -4,11 +4,9 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from os import error, stat
 import traceback
 import uuid
 import threading
-import avocado
 import queue
 
 from avocado.core.exceptions import TestFail
@@ -91,17 +89,18 @@ class ObjectMetadata(TestWithServers):
             try:
                 self.container[-1].create()
             except TestFail as error:
-                if "RC: -1007" in error:
-                    self.log.info(
-                        "Created %s containers before running out of space",
-                        len(self.container))
+                self.log.info(
+                    "  Failed to create container %s: %s",
+                    index + 1, str(error))
+                if "RC: -1007" in str(error):
                     status = True
-                else:
-                    self.log.error(error)
-                    self.log.error(
-                        "Unexpected error creating %d containers",
-                        len(self.container) + 1)
-                break
+                    break
+                self.fail(
+                    "Unexpected error detected creating container %d",
+                    index + 1)
+        self.log.info(
+            "Created %s containers before running out of space",
+            len(self.container))
 
         # Safety check to avoid test timeout - should hit an exception first
         if len(self.container) >= self.CREATED_CONTAINERS_LIMIT:
@@ -154,10 +153,10 @@ class ObjectMetadata(TestWithServers):
         """
         self.create_pool()
         self.d_log.debug("IOR {0} Threads Started -----".format(operation))
-        for thrd in threads:
-            thrd.start()
-        for thrd in threads:
-            thrd.join()
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
 
         while not self.out_queue.empty():
             if self.out_queue.get() == "FAIL":
@@ -242,6 +241,7 @@ class ObjectMetadata(TestWithServers):
         self.log.info(
             "Phase 3: passed (created %d / %d containers)",
             len(self.container), 30000)
+        self.log.info("Test passed")
 
     def test_metadata_addremove(self):
         """JIRA ID: DAOS-1512.
@@ -267,6 +267,7 @@ class ObjectMetadata(TestWithServers):
             self.log.info("Container Remove Iteration %d / 9", loop)
             if not self.destroy_all_containers():
                 self.fail(f"Errors during remove iteration {loop} / 9")
+        self.log.info("Test passed")
 
     def test_metadata_server_restart(self):
         """JIRA ID: DAOS-1512.
@@ -355,8 +356,10 @@ class ObjectMetadata(TestWithServers):
                 # Start the servers
                 self.start_server_managers()
 
+        self.log.info("Test passed")
+
     def test_container_removal_after_der_nospace(self):
-        """JIRA ID: DAOS-4858
+        """JIRA ID: DAOS-4858.
 
         Test Description:
            Verify container can be successfully deleted when the storage pool
@@ -413,3 +416,5 @@ class ObjectMetadata(TestWithServers):
         self.log.info(
             "(3.1) Create %d containers succeed after cleanup.",
             len(self.container))
+
+        self.log.info("Test passed")
