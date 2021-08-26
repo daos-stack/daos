@@ -102,6 +102,26 @@ int
 dfs_cont_create(daos_handle_t poh, uuid_t *uuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs);
 
 /**
+ * Create a DFS container with label \a label. This is the same as dfs_container_create() with the
+ * label property set in \a attr->da_props.
+ *
+ * \param[in]	poh	Pool open handle.
+ * \param[in]	label	Required, label property of the new container.
+ *			Supersedes any label specified in \a cont_prop.
+ * \param[in]	attr	Optional set of properties and attributes to set on the container.
+ *			Pass NULL if none.
+ * \param[out]	uuid	Optional pointer to uuid_t to hold the implementation-generated container
+ *			UUID.
+ * \param[out]	coh	Optionally leave the container open and return its hdl.
+ * \param[out]	dfs	Optionally mount DFS on the container and return the dfs handle.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
+			   uuid_t *uuid, daos_handle_t *coh, dfs_t **dfs);
+
+/**
  * Mount a file system over DAOS. The pool and container handle must remain
  * connected/open until after dfs_umount() is called; otherwise access to the
  * dfs namespace will fail.

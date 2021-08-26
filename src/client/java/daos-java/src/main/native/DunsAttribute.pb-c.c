@@ -52,27 +52,27 @@ void   uns__duns_attribute__free_unpacked
   assert(message->base.descriptor == &uns__duns_attribute__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
-static const ProtobufCFieldDescriptor uns__duns_attribute__field_descriptors[8] =
+static const ProtobufCFieldDescriptor uns__duns_attribute__field_descriptors[9] =
 {
   {
-    "puuid",
+    "poolId",
     1,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Uns__DunsAttribute, puuid),
+    offsetof(Uns__DunsAttribute, poolid),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "cuuid",
+    "contId",
     2,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_STRING,
     0,   /* quantifier_offset */
-    offsetof(Uns__DunsAttribute, cuuid),
+    offsetof(Uns__DunsAttribute, contid),
     NULL,
     &protobuf_c_empty_string,
     0,             /* flags */
@@ -150,22 +150,35 @@ static const ProtobufCFieldDescriptor uns__duns_attribute__field_descriptors[8] 
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "flags",
+    10,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Uns__DunsAttribute, flags),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned uns__duns_attribute__field_indices_by_name[] = {
   4,   /* field[4] = chunk_size */
-  1,   /* field[1] = cuuid */
+  1,   /* field[1] = contId */
+  8,   /* field[8] = flags */
   2,   /* field[2] = layout_type */
   7,   /* field[7] = no_prefix */
   3,   /* field[3] = object_type */
   6,   /* field[6] = on_lustre */
-  0,   /* field[0] = puuid */
+  0,   /* field[0] = poolId */
   5,   /* field[5] = rel_path */
 };
 static const ProtobufCIntRange uns__duns_attribute__number_ranges[2 + 1] =
 {
   { 1, 0 },
   { 9, 7 },
-  { 0, 8 }
+  { 0, 9 }
 };
 const ProtobufCMessageDescriptor uns__duns_attribute__descriptor =
 {
