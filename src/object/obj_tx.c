@@ -1060,7 +1060,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		 * dc_tx_cleanup().
 		 */
 		dcsr->dcsr_reasb = reasb_req;
-		rc = obj_reasb_req_init(dcsr->dcsr_reasb,
+		rc = obj_reasb_req_init(dcsr->dcsr_reasb, obj,
 					dcu->dcu_iod_array.oia_iods,
 					dcsr->dcsr_nr, oca);
 		if (rc != 0)
