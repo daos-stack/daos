@@ -47,4 +47,4 @@ test:
       rank: 4
   containers: 70
   container_obj_class: "OC_RP_3GX"
-  use_ior: True
+  use_ior: False
