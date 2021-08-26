@@ -64,8 +64,6 @@ class DaosServerTest(TestWithServers):
 
     def create_pool_and_container(self):
         """Create pool and container."""
-        self.pool = []
-        self.container = []
         num_of_pool = self.params.get("num_of_pool", "/run/server/*/", 3)
         container_per_pool = self.params.get(
             "container_per_pool", "/run/server/*/", 2)
@@ -92,6 +90,7 @@ class DaosServerTest(TestWithServers):
         :avocado: tags=server_test,server_reformat,DAOS_5610
         """
         self.pool = []
+        self.container = []
 
         self.log.info("(1)Verify daos server pool list after started.")
         self.verify_pool_list()
@@ -106,6 +105,7 @@ class DaosServerTest(TestWithServers):
         self.verify_pool_list()
 
         self.pool = None
+        self.container = None
 
     def test_engine_restart(self):
         """JIRA ID: DAOS-3593.
