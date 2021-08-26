@@ -85,10 +85,14 @@ public class DaosFileSourceAsync extends DaosFileSource {
 
   private void waitForCompletion() throws IOException {
     completed.clear();
-    eq.pollCompleted(completed, IODfsDesc.class, candidates, 1, TIMEOUT_MS);
+    long start = System.currentTimeMillis();
+    long dur;
+    while (completed.isEmpty() & ((dur = (System.currentTimeMillis() - start)) < TIMEOUT_MS)) {
+      eq.pollCompleted(completed, IODfsDesc.class, candidates, 1, TIMEOUT_MS - dur);
+    }
     if (completed.isEmpty()) {
-      throw new DaosIOException("failed to get expected return after waiting " + TIMEOUT_MS + " ms");
+      throw new DaosIOException("failed to get expected return after waiting " + TIMEOUT_MS + " ms. desc: " + desc +
+          ", candidates size: " + candidates.size() + ", dur: " + (System.currentTimeMillis() - start));
     }
   }
 }
-
