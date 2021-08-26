@@ -979,8 +979,9 @@ pipeline {
                         label params.CI_NVME_VMD_LABEL
                     }
                     steps {
-                        functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                        functionalTest target: "leap15",
+                                       inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages('leap15', 1, next_version),
                                        test_function: 'runTestFunctionalV2',
                                        node_count: 2
                     }
