@@ -25,9 +25,8 @@ public class HadoopCmdIT {
   @BeforeClass
   public static void setup() throws Exception {
     conf = new Configuration();
-    conf.set(Constants.DAOS_POOL_UUID, DaosFSFactory.pooluuid);
-    conf.set(Constants.DAOS_CONTAINER_UUID, DaosFSFactory.contuuid);
-    FileSystem.get(new URI((conf.get("fs.defaultFS"))), conf);
+    FileSystem.get(new URI(DaosFSFactory.DAOS_URI), conf);
+    conf.set(Constants.DAOS_DEFAULT_FS, DaosFSFactory.DAOS_URI);
   }
 
   private int run(String argv[]) throws Exception {
@@ -68,14 +67,16 @@ public class HadoopCmdIT {
 
   @Test
   public void testMkdir() throws Exception {
-    String filePath = "/job_1581472776049_0003-1581473346405-" +
+    String filePath = DaosFSFactory.DAOS_URI +"/zjf/job_1581472776049_0003-1581473346405-" +
         "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependencies.jar-" +
         "1581473454525-16-1-SUCCEEDED-default-1581473439146.jhist_tmp";
     String[] argv = new String[]{"-rm", "-r", filePath};
     int res = run(argv);
-//    Assert.assertTrue(res == 0);
 
-    argv = new String[]{"-mkdir", filePath};
+    String[] argv2 = new String[]{"-mkdir", "-p", filePath};
+    res = run(argv2);
+    Assert.assertTrue(res == 0);
+
     res = run(argv);
     Assert.assertTrue(res == 0);
   }

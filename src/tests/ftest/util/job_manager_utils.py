@@ -63,7 +63,8 @@ class JobManager(ExecutableCommand):
             value (ExecutableCommand): the command to be managed by this class
         """
         self._job = value
-        if self._job and self._job.check_results_list:
+        if (self._job and hasattr(self._job, "check_results_list")
+                and self._job.check_results_list):
             self.check_results_list.extend(self._job.check_results_list)
 
     def __str__(self):

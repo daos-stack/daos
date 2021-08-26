@@ -303,6 +303,7 @@ class DmgCommandBase(YamlCommand):
                 """Create a dmg pool list command object."""
                 super().__init__("/run/dmg/pool/list/*", "list")
                 self.no_query = FormattedParameter("--no-query", False)
+                self.verbose = FormattedParameter("--verbose", False)
 
         class OverwriteAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool overwrite-acl command."""

@@ -260,9 +260,12 @@ extern "C" {
 	/** Hit uncertain DTX, may need to try with other replica. */	\
 	ACTION(DER_TX_UNCERTAIN,	(DER_ERR_DAOS_BASE + 33),	\
 	       TX status is uncertaion)					\
+	/** Communicatin issue with agent. */				\
+	ACTION(DER_AGENT_COMM,		(DER_ERR_DAOS_BASE + 34),	\
+		Agent communication error)				\
 	/** Division by zero. */					\
-	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 34),	\
-	       Divison by zero)						\
+	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 35),	\
+	       Divison by zero)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\
