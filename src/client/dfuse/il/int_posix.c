@@ -716,6 +716,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 			DFUSE_LOG_DEBUG("daos_init() failed, "DF_RC,
 					DP_RC(rc));
 			ioil_iog.iog_no_daos = true;
+			pthread_mutex_unlock(&ioil_iog.iog_lock);
 			return false;
 		}
 		ioil_iog.iog_daos_init = true;
