@@ -13,6 +13,8 @@
 #include <daos_srv/vos.h>
 #include "srv_internal.h"
 
+ABT_thread_attr sched_ult_attr_deep_stack = ABT_THREAD_ATTR_NULL;
+
 struct sched_req_info {
 	d_list_t		sri_req_list;
 	/* Total request count in 'sri_req_list' */
@@ -554,11 +556,14 @@ static inline int
 req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 		     void (*func)(void *), void *arg)
 {
+	ABT_thread_attr		abt_attr = ABT_THREAD_ATTR_NULL;
+
 	D_ASSERT(attr && func && arg);
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
+	//if (attr->sra_type == SCHED_REQ_UPDATE)
+		abt_attr = sched_ult_attr_deep_stack;
 
-	return sched_create_thread(dx, func, arg, ABT_THREAD_ATTR_NULL, NULL,
-				   0);
+	return sched_create_thread(dx, func, arg, abt_attr, NULL, 0);
 }
 
 static int

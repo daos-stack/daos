@@ -289,6 +289,7 @@ int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
 
 int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
+int cont_iv_entry_delete(void *ns, uuid_t cont_uuid);
 
 /** srv_metrics.c*/
 void *ds_cont_metrics_alloc(const char *path, int tgt_id);

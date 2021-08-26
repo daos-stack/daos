@@ -1093,6 +1093,7 @@ static void
 cont_hdl_put_internal(struct d_hash_table *hash,
 		      struct ds_cont_hdl *hdl)
 {
+	D_DEBUG(DB_TRACE, "put hdl %p\n", hdl);
 	d_hash_rec_decref(hash, &hdl->sch_entry);
 }
 
@@ -1100,6 +1101,7 @@ static void
 cont_hdl_get_internal(struct d_hash_table *hash,
 		      struct ds_cont_hdl *hdl)
 {
+	D_DEBUG(DB_TRACE, "get hdl %p\n", hdl);
 	d_hash_rec_addref(hash, &hdl->sch_entry);
 }
 
@@ -1247,14 +1249,25 @@ cont_delete_ec_agg(uuid_t pool_uuid, uuid_t cont_uuid);
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
+	struct ds_pool	*pool;
 	struct cont_tgt_destroy_in in;
 	int rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
 	cont_delete_ec_agg(pool_uuid, cont_uuid);
+	cont_iv_entry_delete(pool->sp_iv_ns, cont_uuid);
+	ds_pool_put(pool);
+
 	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
+out:
 	return rc;
 }
 
@@ -1359,6 +1372,7 @@ ds_cont_local_close(uuid_t cont_hdl_uuid)
 	if (hdl == NULL)
 		return 0;
 
+	D_DEBUG(DB_TRACE, "cont local close %p\n", hdl);
 	cont_hdl_delete(&tls->dt_cont_hdl_hash, hdl);
 
 	ds_cont_hdl_put(hdl);
@@ -1738,6 +1752,7 @@ ds_cont_tgt_close(uuid_t hdl_uuid)
 {
 	struct coll_close_arg arg;
 
+	D_DEBUG(DB_TRACE, "close hdl uuid "DF_UUID"\n", DP_UUID(hdl_uuid));
 	uuid_copy(arg.uuid, hdl_uuid);
 	return dss_thread_collective(cont_close_one_hdl, &arg, 0);
 }

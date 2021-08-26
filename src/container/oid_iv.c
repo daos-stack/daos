@@ -54,8 +54,7 @@ oid_iv_key_cmp(void *key1, void *key2)
 	struct oid_iv_key *oid_key2 = key2;
 
 	if (uuid_compare(oid_key1->key_id, oid_key2->key_id) == 0 &&
-	    uuid_compare(oid_key1->poh_uuid, oid_key2->poh_uuid) == 0 &&
-	    uuid_compare(oid_key1->coh_uuid, oid_key2->coh_uuid) == 0)
+	    uuid_compare(oid_key1->poh_uuid, oid_key2->poh_uuid) == 0)
 		return true;
 
 	return false;
@@ -78,6 +77,12 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	struct oid_iv_entry	*entry;
 	struct oid_iv_range	*oids;
 	struct oid_iv_range	*avail;
+
+	if (src == NULL) {
+		D_DEBUG(DB_TRACE, "delte entry iv_entry %p\n", iv_entry);
+		iv_entry->iv_to_delete = 1;
+		return 0;
+	}
 
 	D_ASSERT(priv);
 	num_oids = priv->num_oids;
@@ -140,7 +145,7 @@ oid_iv_ent_update(struct ds_iv_entry *ns_entry, struct ds_iv_key *iv_key,
 
 		key = key2priv(&ns_entry->iv_key);
 		rc = ds_cont_oid_fetch_add(key->poh_uuid, key->key_id,
-					   key->coh_uuid, num_oids,
+					   key->key_id, num_oids,
 					   &avail->oid);
 		if (rc) {
 			D_ERROR("failed to fetch and update max_oid "DF_RC"\n",
