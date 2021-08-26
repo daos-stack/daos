@@ -426,7 +426,7 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				      entry->ie_minor_epc)) {
 			*acts |= VOS_ITER_CB_SKIP;
 			ctx->sc_epoch = 0;
-			entry->ie_minor_epc = 0;
+			ctx->sc_minor_epoch = 0;
 		} else {
 			C_TRACE("Scrubbing akey: "DF_KEY", type: %s, rec size: "
 					DF_U64", extent: "DF_RECX"\n",
