@@ -438,7 +438,7 @@ class TestPool(TestDaosApiBase):
             if self.control_method.value == self.USE_DMG and self.dmg:
                 # If specific property are not provided, get all the property
                 self.dmg.pool_get_prop(self.identifier, prop_name)
-                
+
                 if self.dmg.result.exit_status == 0:
                     prop_value = json.loads(
                         self.dmg.result.stdout)['response'][0]['value']
