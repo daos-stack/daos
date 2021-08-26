@@ -540,7 +540,20 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
 		flags |= DIOF_TO_LEADER;
 
-	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL,
+	if (daos_oclass_is_ec(&mrone->mo_oca)) {
+		unsigned int shard = mrone->mo_oid.id_shard %
+			     daos_oclass_grp_size(&mrone->mo_oca);
+
+		/* For EC data migration, let's force it to do degraded fetch,
+		 * make sure reintegration will not fetch from the original
+		 * shard, which might cause parity corruption.
+		 */
+		if (shard < obj_ec_data_tgt_nr(&mrone->mo_oca))
+			flags |= DIOF_FOR_FORCE_DEGRADE;
+	}
+
+	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+			   mrone->mo_iod_num, mrone->mo_iods, sgls, NULL,
 			   flags, NULL, csum_iov_fetch);
 	if (rc != 0)
 		return rc;
