@@ -344,6 +344,7 @@ sc_obj_val_setup(struct scrub_ctx *ctx, vos_iter_entry_t *entry,
 	ctx->sc_cur_oid = param->ip_oid;
 	ctx->sc_dkey = param->ip_dkey;
 	ctx->sc_epoch = entry->ie_epoch;
+	ctx->sc_minor_epoch = entry->ie_minor_epc;
 
 	ctx->sc_iod.iod_size = entry->ie_rsize;
 	ctx->sc_iod.iod_nr = 1;
@@ -420,9 +421,12 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	case VOS_ITER_SINGLE:
 	case VOS_ITER_RECX: {
-		if (epoch_is_same(ctx->sc_epoch, entry->ie_epoch)) {
+		if (epoch_is_same(ctx->sc_epoch, entry->ie_epoch) &&
+			epoch_is_same(ctx->sc_minor_epoch,
+				      entry->ie_minor_epc)) {
 			*acts |= VOS_ITER_CB_SKIP;
 			ctx->sc_epoch = 0;
+			entry->ie_minor_epc = 0;
 		} else {
 			C_TRACE("Scrubbing akey: "DF_KEY", type: %s, rec size: "
 					DF_U64", extent: "DF_RECX"\n",

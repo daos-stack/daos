@@ -147,6 +147,7 @@ struct scrub_ctx {
 	daos_key_t		 sc_dkey;
 	struct dcs_csum_info	*sc_csum_to_verify;
 	daos_epoch_t		 sc_epoch;
+	uint16_t 		 sc_minor_epoch;
 	daos_iod_t		 sc_iod;
 
 	/* Current vos object iterator */
