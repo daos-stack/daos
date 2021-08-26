@@ -92,6 +92,7 @@ class ObjectMetadata(TestWithServers):
                 self.log.info(
                     "  Failed to create container %s: %s",
                     index + 1, str(error))
+                del self.container[-1]
                 if "RC: -1007" in str(error):
                     status = True
                     break
@@ -131,7 +132,7 @@ class ObjectMetadata(TestWithServers):
                 False otherwise
 
         """
-        errors = self.destroy_containers()
+        errors = self.destroy_containers(self.container)
         if errors:
             self.log.error(
                 "Errors detected destroying %d containers: %d",
