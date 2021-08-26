@@ -174,11 +174,11 @@ dtx_handler(crt_rpc_t *rpc)
 		d_tm_inc_counter(dpm->dpm_batched_total,
 				 din->di_dtx_array.ca_count);
 		rc1 = d_tm_get_counter(NULL, &ent_cnt,
-				       dpm->dpm_batched_total, true);
+				       dpm->dpm_batched_total);
 		D_ASSERT(rc1 == 0);
 
 		rc1 = d_tm_get_counter(NULL, &opc_cnt,
-				       dpm->dpm_total[opc], true);
+				       dpm->dpm_total[opc]);
 		D_ASSERT(rc1 == 0);
 
 		d_tm_set_counter(dpm->dpm_batched_degree,

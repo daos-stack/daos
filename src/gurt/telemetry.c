@@ -1184,7 +1184,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			fprintf(stream, "%-8s\n", name);
 		break;
 	case D_TM_COUNTER:
-		rc = d_tm_get_counter(ctx, &val, node, false);
+		rc = d_tm_get_counter(ctx, &val, node);
 		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on counter read: %d\n", rc);
 			break;
@@ -2639,6 +2639,17 @@ validate_node_ptr(struct d_tm_context *ctx, struct d_tm_node_t *node,
 	return 0;
 }
 
+static int
+get_value_direct(uint64_t *val, struct d_tm_node_t *node) {
+	if (!is_initialized())
+		return -DER_INVAL;
+
+	d_tm_node_lock(node);
+	*val = node->dtn_metric->dtm_data.value;
+	d_tm_node_unlock(node);
+	return DER_SUCCESS;
+}
+
 /**
  * Retrieves the histogram creation data for the given node, which includes
  * the number of buckets, initial width and multiplier used to create the
@@ -2763,10 +2774,10 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 /**
  * Client function to read the specified counter.
  *
- * \param[in]	ctx	Client context
+ * \param[in]	ctx	Client context. If NULL, the caller must also be the
+ *			telemetry producer.
  * \param[out]	val	The value of the counter is stored here
  * \param[in]	node	Pointer to the stored metric node
- * \param[in]	for_srv	Server side fast version to read the counter.
  *
  * \return	DER_SUCCESS		Success
  *		-DER_INVAL		Invalid input
@@ -2775,27 +2786,20 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
  */
 int
 d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
-		 struct d_tm_node_t *node, bool for_srv)
+		 struct d_tm_node_t *node)
 {
 	struct d_tm_metric_t	*metric_data = NULL;
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	int			 rc;
 
-	if (val == NULL || node == NULL)
+	if (val == NULL || node == NULL || node->dtn_metric == NULL)
 		return -DER_INVAL;
 
 	if (node->dtn_type != D_TM_COUNTER)
 		return -DER_OP_NOT_PERMITTED;
 
-	if (for_srv) {
-		d_tm_node_lock(node);
-		*val = node->dtn_metric->dtm_data.value;
-		d_tm_node_unlock(node);
-		return DER_SUCCESS;
-	}
-
 	if (ctx == NULL)
-		return -DER_INVAL;
+		return get_value_direct(val, node);
 
 	rc = validate_node_ptr(ctx, node, &shmem);
 	if (rc != 0)
@@ -2803,11 +2807,9 @@ d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
 	if (metric_data != NULL) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
+		d_tm_node_lock(node);
 		*val = metric_data->dtm_data.value;
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
+		d_tm_node_unlock(node);
 	} else {
 		return -DER_METRIC_NOT_FOUND;
 	}
