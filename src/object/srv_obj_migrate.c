@@ -864,7 +864,7 @@ migrate_update_parity(struct migrate_one *mrone, daos_epoch_t parity_eph,
 
 		tmp_sgl.sg_iovs = &tmp_iov;
 		iod->iod_recxs = &tmp_recx;
-
+		iod->iod_nr = 1;
 		rc = daos_csummer_csum_init_with_packed(&csummer, csum_iov);
 		if (rc != 0) {
 			D_ERROR("Error initializing csummer");
@@ -965,7 +965,6 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 				continue;
 			}
 
-			tmp_iod.iod_nr = 1;
 			rc = migrate_update_parity(mrone, parity_eph, ds_cont, ptr, offset,
 						   size, &tmp_iod, p_bufs, &tmp_csum_iov_fetch);
 			if (rc)
@@ -1770,6 +1769,8 @@ migrate_insert_recxs_sgl(daos_iod_t *iods, daos_epoch_t **iods_ephs, uint32_t *i
 			}
 
 			for (j = 0; j < new_recxs_nr; j++) {
+				D_ASSERTF((new_recxs[j].rx_idx & PARITY_INDICATOR) == 0,
+					  DF_U64"/"DF_U64, new_recxs[j].rx_idx, new_recxs[j].rx_nr);
 				iods[i].iod_recxs[j] = new_recxs[j];
 				if (iods_ephs != NULL)
 					iods_ephs[i][j] = new_ephs[j];
@@ -1919,6 +1920,7 @@ static int
 punch_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, daos_epoch_t eph)
 {
 	int idx = mrone->mo_punch_iod_num;
+	int i;
 	int rc;
 
 	D_ASSERT(iod->iod_size == 0);
@@ -1927,6 +1929,12 @@ punch_iod_pack(struct migrate_one *mrone, daos_iod_t *iod, daos_epoch_t eph)
 		D_ALLOC_ARRAY(mrone->mo_punch_iods, mrone->mo_iod_alloc_num);
 		if (mrone->mo_punch_iods == NULL)
 			return -DER_NOMEM;
+	}
+
+	for (i = 0; i < iod->iod_nr; i++) {
+		if (iod->iod_recxs[i].rx_idx & PARITY_INDICATOR)
+			iod->iod_recxs[i].rx_idx = iod->iod_recxs[i].rx_idx &
+						    ~PARITY_INDICATOR;
 	}
 
 	rc = migrate_insert_recxs_sgl(mrone->mo_punch_iods, NULL, &mrone->mo_punch_iod_num,
