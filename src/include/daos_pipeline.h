@@ -175,17 +175,6 @@ void
 daos_filter_init(daos_filter_t *filter);
 
 /**
- * Destroys all memory allocated under a pipeline object. If the pipeline
- * object \a pipeline was dynamically allocated, it has to be freed outside
- * of this function (this function doesn't call free() on the object
- * \a pipeline).
- *
- * \param[in]		pipeline	Pipeline object.
- */
-void
-daos_pipeline_destroy(daos_pipeline_t *pipeline);
-
-/**
  * Adds a new filter object to the pipeline \a pipeline object. The effect of
  * this function is equivalent to "pushing back" the new filter at the end of
  * the pipeline.

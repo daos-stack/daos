@@ -19,12 +19,6 @@ daos_pipeline_init(daos_pipeline_t *pipeline)
 }
 
 void
-daos_pipeline_destroy(daos_pipeline_t *pipeline)
-{
-	return;
-}
-
-void
 daos_filter_init(daos_filter_t *filter)
 {
 	bzero((void *) filter, sizeof(daos_filter_t));

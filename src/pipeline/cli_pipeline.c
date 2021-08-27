@@ -42,7 +42,7 @@ pipeline_filter_get_data(daos_filter_part_t *part, d_iov_t *dkey,
 }
 
 static int
-pipeline_filter_like (d_iov_t *left, d_iov_t *right)
+pipeline_filter_like(d_iov_t *left, d_iov_t *right)
 {
 	char *left_val, *right_val;
 	size_t left_data_size, right_data_size;
@@ -442,7 +442,7 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
-					       &total_rec)) < 0)
+					       &total_rec)))
 		{
 			return rc; /** error */
 		}
@@ -456,7 +456,7 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 		pipeline_filter_get_data(part, dkey, *nr_iods, iods, akeys, 0,
 					 &data);
 		if ((rc = read_iov_as_double(data->iov_buf,
-					     part->part_type, total)) < 0)
+					     part->part_type, total)))
 		{
 			return rc; /** error */
 		}
@@ -467,14 +467,14 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
-					       &total_left_rec)) < 0)
+					       &total_left_rec)))
 		{
 			return rc; /** error */
 		}
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
-					       &total_right_rec)) < 0)
+					       &total_right_rec)))
 		{
 			return rc; /** error */
 		}
@@ -486,14 +486,14 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
-					       &total_left_rec)) < 0)
+					       &total_left_rec)))
 		{
 			return rc; /** error */
 		}
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
-					       &total_right_rec)) < 0)
+					       &total_right_rec)))
 		{
 			return rc; /** error */
 		}
@@ -505,14 +505,14 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
-					       &total_left_rec)) < 0)
+					       &total_left_rec)))
 		{
 			return rc; /** error */
 		}
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
-					       &total_right_rec)) < 0)
+					       &total_right_rec)))
 		{
 			return rc; /** error */
 		}
@@ -524,14 +524,14 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
-					       &total_left_rec)) < 0)
+					       &total_left_rec)))
 		{
 			return rc; /** error */
 		}
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
-					       &total_right_rec)) < 0)
+					       &total_right_rec)))
 		{
 			return rc; /** error */
 		}
