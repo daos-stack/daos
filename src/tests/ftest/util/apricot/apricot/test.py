@@ -1387,9 +1387,12 @@ class TestWithServers(TestWithoutServers):
         errors = []
         status = self.check_running("servers", self.server_managers)
         if self.start_servers_once and not status["restart"]:
-            # Check for any pools not accounted for by the pool list
+            # Destroy any remaining pools on the continuously running servers.
             pool_destroy_errors = self.search_and_destroy_pools()
             if pool_destroy_errors:
+                # Force a server stop if there were errors detroying or listing
+                # the pools. This will cuase the next test variant/method to
+                # format and restart the servers.
                 errors.extend(pool_destroy_errors)
                 force_stop = True
                 self.log.info(
@@ -1398,7 +1401,12 @@ class TestWithServers(TestWithoutServers):
                 self.log.info(
                     "Servers are configured to run across multiple test "
                     "variants, not stopping")
+
         if not self.start_servers_once or status["restart"] or force_stop:
+            # Stop the servers under the following conditions:
+            #   - servers are not being run continously across variants/methods
+            #   - engines were found stopped or in an unexpected state
+            #   - errors destroying pools require a forced server stop
             if not status["expected"]:
                 errors.append(
                     "ERROR: At least one multi-variant server was not found in "
