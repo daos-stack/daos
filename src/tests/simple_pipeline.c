@@ -187,16 +187,152 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 
 	rc = daos_filter_add(comp_eq, eqfunc_ft);
 	ASSERT(rc == 0, "Filter add failed with %d", rc);
-
 	rc = daos_filter_add(comp_eq, akey_ft);
 	ASSERT(rc == 0, "Filter add failed with %d", rc);
-
 	rc = daos_filter_add(comp_eq, const_ft);
 	ASSERT(rc == 0, "Filter add failed with %d", rc);
 
 	/** adding the filter to the pipeline. This pipeline has only one
 	 *  filter  */
 	rc = daos_pipeline_add(pipeline, comp_eq);
+	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
+}
+
+/**
+ * Build pipeline filtering by "Owner == Benny AND Species=dog"
+ */
+void
+build_pipeline_two(daos_pipeline_t *pipeline)
+{
+	daos_filter_part_t	*akey1_ft, *eqfunc1_ft, *const1_ft;
+	daos_filter_part_t	*akey2_ft, *eqfunc2_ft, *const2_ft;
+	daos_filter_part_t	*andfunc_ft;
+	char			*akey_ftype, *const_ftype;
+	char			*eqfunc_ftype, *andfunc_ftype;
+	char			*str_type, *pipe_cond_type;
+	char			*constant1, *akey1, *constant2, *akey2;
+	daos_filter_t		*comp_and;
+	int			rc;
+
+	/** mem allocation */
+	akey_ftype = (char *) malloc(strlen("DAOS_FILTER_AKEY")+1);
+	akey1      = (char *) malloc(STRING_LEN);
+	akey2      = (char *) malloc(STRING_LEN);
+	strcpy(akey_ftype, "DAOS_FILTER_AKEY");
+	strcpy(akey1, "Owner");
+	strcpy(akey2, "Species");
+
+	str_type    = (char *) malloc(strlen("DAOS_FILTER_TYPE_STRING")+1);
+	strcpy(str_type, "DAOS_FILTER_TYPE_STRING");
+
+	const_ftype = (char *) malloc(strlen("DAOS_FILTER_CONST")+1);
+	constant1    = (char *) malloc(STRING_LEN);
+	constant2    = (char *) malloc(STRING_LEN);
+	strcpy(const_ftype, "DAOS_FILTER_CONST");
+	bzero((void *) constant1, STRING_LEN);
+	bzero((void *) constant2, STRING_LEN);
+	strcpy(constant1, "Benny");
+	strcpy(constant2, "dog");
+
+	eqfunc_ftype = (char *) malloc(strlen("DAOS_FILTER_FUNC_EQ")+1);
+	strcpy(eqfunc_ftype, "DAOS_FILTER_FUNC_EQ");
+	andfunc_ftype = (char *) malloc(strlen("DAOS_FILTER_FUNC_AND")+1);
+	strcpy(andfunc_ftype, "DAOS_FILTER_FUNC_AND");
+	pipe_cond_type = (char *) malloc(strlen("DAOS_FILTER_CONDITION")+1);
+	strcpy(pipe_cond_type, "DAOS_FILTER_CONDITION");
+
+
+	/** akey1 for filter */
+	akey1_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
+	akey1_ft->part_type    = akey_ftype;
+	akey1_ft->data_type    = str_type;
+	akey1_ft->num_operands = 0;
+	d_iov_set(&(akey1_ft->akey), akey1, STRING_LEN);
+	akey1_ft->data_offset  = 0;
+	akey1_ft->data_len     = STRING_LEN;
+
+	/** akey2 for filter */
+	akey2_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
+	akey2_ft->part_type    = akey_ftype;
+	akey2_ft->data_type    = str_type;
+	akey2_ft->num_operands = 0;
+	d_iov_set(&(akey2_ft->akey), akey2, STRING_LEN);
+	akey2_ft->data_offset  = 0;
+	akey2_ft->data_len     = STRING_LEN;
+
+	/** constant1 for filter */
+	const1_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
+	const1_ft->part_type       = const_ftype;
+	const1_ft->data_type       = str_type;
+	const1_ft->num_operands    = 0;
+	const1_ft->num_constants   = 1;
+	const1_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
+	d_iov_set(const1_ft->constant, constant1, STRING_LEN);
+	const1_ft->data_offset     = 0;
+	const1_ft->data_len        = STRING_LEN;
+
+	/** constant2 for filter */
+	const2_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
+	const2_ft->part_type       = const_ftype;
+	const2_ft->data_type       = str_type;
+	const2_ft->num_operands    = 0;
+	const2_ft->num_constants   = 1;
+	const2_ft->constant        = (d_iov_t *) malloc(sizeof(d_iov_t));
+	d_iov_set(const2_ft->constant, constant2, STRING_LEN);
+	const2_ft->data_offset     = 0;
+	const2_ft->data_len        = STRING_LEN;
+
+	/** function1 for filter (=) */
+	eqfunc1_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
+	eqfunc1_ft->part_type     = eqfunc_ftype;
+	eqfunc1_ft->data_type     = str_type;
+	eqfunc1_ft->num_operands  = 2;
+	eqfunc1_ft->data_offset   = 0;
+	eqfunc1_ft->data_len      = 0;
+
+	/** function2 for filter (=) */
+	eqfunc2_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
+	eqfunc2_ft->part_type     = eqfunc_ftype;
+	eqfunc2_ft->data_type     = str_type;
+	eqfunc2_ft->num_operands  = 2;
+	eqfunc2_ft->data_offset   = 0;
+	eqfunc2_ft->data_len      = 0;
+
+	/** function3 for filter (and) */
+	andfunc_ft = (daos_filter_part_t *) malloc(sizeof(daos_filter_part_t));
+	andfunc_ft->part_type     = andfunc_ftype;
+	andfunc_ft->data_type     = NULL;
+	andfunc_ft->num_operands  = 2;
+	andfunc_ft->data_offset   = 0;
+	andfunc_ft->data_len      = 0;
+
+	/** building a pipeline condition filter:
+	 *    the order of operands is prefix:
+	 *         "Owner == Benny AND Species == dog"  ->
+* |(func=and)|(func=eq)|(akey=Owner)|(const=Benny)|(func=eq)|(akey=Species)|(const=dog)|
+	 */
+	comp_and = (daos_filter_t *) malloc(sizeof(daos_filter_t));
+	daos_filter_init(comp_and);
+	comp_and->filter_type   = pipe_cond_type;
+
+	rc = daos_filter_add(comp_and, andfunc_ft);
+	ASSERT(rc == 0, "Filter add failed with %d", rc);
+	rc = daos_filter_add(comp_and, eqfunc1_ft);
+	ASSERT(rc == 0, "Filter add failed with %d", rc);
+	rc = daos_filter_add(comp_and, akey1_ft);
+	ASSERT(rc == 0, "Filter add failed with %d", rc);
+	rc = daos_filter_add(comp_and, const1_ft);
+	ASSERT(rc == 0, "Filter add failed with %d", rc);
+	rc = daos_filter_add(comp_and, eqfunc2_ft);
+	ASSERT(rc == 0, "Filter add failed with %d", rc);
+	rc = daos_filter_add(comp_and, akey2_ft);
+	ASSERT(rc == 0, "Filter add failed with %d", rc);
+	rc = daos_filter_add(comp_and, const2_ft);
+	ASSERT(rc == 0, "Filter add failed with %d", rc);
+
+	/** adding the filter to the pipeline. This pipeline has only one
+	 *  filter  */
+	rc = daos_pipeline_add(pipeline, comp_and);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 }
 
@@ -307,7 +443,7 @@ main(int argc, char **argv)
 	uuid_t			co_uuid;
 	daos_obj_id_t		oid;
 	int			rc;
-	daos_pipeline_t		pipeline;
+	daos_pipeline_t		pipeline1, pipeline2;
 
 	if (argc != 2) {
 		fprintf(stderr, "args: pool_uuid\n");
@@ -346,23 +482,31 @@ main(int argc, char **argv)
 	/** Insert some example records */
 	insert_example_records();
 
-	/** init pipeline object */
-	daos_pipeline_init(&pipeline);
-
-	/** Get records filtering by "Owner == Benny" */
-	build_pipeline_one(&pipeline);
-
+	/** init pipeline1 object */
+	daos_pipeline_init(&pipeline1);
+	/** FILTER "Owner == Benny" */
+	build_pipeline_one(&pipeline1);
 	/** checking that the pipe is well constructed */
-	rc = daos_pipeline_check(&pipeline);
+	rc = daos_pipeline_check(&pipeline1);
 	ASSERT(rc == 0, "Pipeline check failed with %d", rc);
-
 	printf("filtering by (Owner=Benny):\n");
-
 	/** Running pipeline */
-	run_pipeline(&pipeline);
+	run_pipeline(&pipeline1);
+
+	/** init pipeline2 object */
+	daos_pipeline_init(&pipeline2);
+	/** FILTER "Owner == Benny AND Species == dog" */
+	build_pipeline_two(&pipeline2);
+	/** checking that the pipe is well constructed */
+	rc = daos_pipeline_check(&pipeline2);
+	ASSERT(rc == 0, "Pipeline check failed with %d", rc);
+	printf("filtering by (Owner=Benny AND Species=dog):\n");
+	/** Running pipeline */
+	run_pipeline(&pipeline2);
 
 	/** Freeing used memory */
-	daos_pipeline_destroy(&pipeline);
+	daos_pipeline_destroy(&pipeline1);
+	daos_pipeline_destroy(&pipeline2);
 
 	return 0;
 }
