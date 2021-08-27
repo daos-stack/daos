@@ -260,12 +260,14 @@ class ObjectMetadata(TestWithServers):
 
                 if status and in_failure:
                     self.log.info(
-                        "Phase 3: nospace -> available transition, cont %d",
+                        "Phase 3: nospace -> available transition - "
+                        "container: %d, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = False
                 elif not status and not in_failure:
                     self.log.info(
-                        "Phase 3: available -> nospace transition, cont %d",
+                        "Phase 3: available -> nospace transition - "
+                        "container: %d, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = True
 
@@ -291,9 +293,10 @@ class ObjectMetadata(TestWithServers):
         :avocado: tags=server,metadata,metadata_free_space,nvme
         """
         self.create_pool()
+        self.container = []
 
         test_failed = False
-        containers_created =[]
+        containers_created = []
         for loop in range(10):
             self.log.info("Container Create Iteration %d / 9", loop)
             if not self.create_all_containers(len(self.container)):

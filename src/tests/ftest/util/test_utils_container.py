@@ -374,7 +374,8 @@ class TestContainer(TestDaosApiBase):
                 self.control_method.value)
 
         self.uuid = self.container.get_uuid_str()
-        self.log.info("  Container created with uuid %s", self.uuid)
+        if not self.silent:
+            self.log.info("  Container created with uuid %s", self.uuid)
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
