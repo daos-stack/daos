@@ -243,7 +243,9 @@ public class DaosFileSystemIT {
       String uri = "daos://" + io.daos.Constants.UNS_ID_PREFIX + unsId.getAndIncrement();
       String uriStr = uri + path;
       Path uriPath = new Path(uriStr);
-      FileSystem fs = uriPath.getFileSystem(new Configuration());
+      Configuration conf = new Configuration();
+      conf.setBoolean(Constants.DAOS_WITH_UNS_PREFIX, false);
+      FileSystem fs = uriPath.getFileSystem(conf);
       Assert.assertNotNull(fs);
       Assert.assertEquals(originPath, ((DaosFileSystem) fs).getUnsPrefix());
       fs.mkdirs(uriPath);
@@ -273,7 +275,9 @@ public class DaosFileSystemIT {
       String uri = "daos://" + io.daos.Constants.UNS_ID_PREFIX + unsId.getAndIncrement();
       String uriStr = uri + path;
       Path uriPath = new Path(uriStr);
-      FileSystem fs = uriPath.getFileSystem(new Configuration());
+      Configuration conf = new Configuration();
+      conf.setBoolean(Constants.DAOS_WITH_UNS_PREFIX, false);
+      FileSystem fs = uriPath.getFileSystem(conf);
       Assert.assertNotNull(fs);
       Assert.assertEquals(originPath, ((DaosFileSystem) fs).getUnsPrefix());
 

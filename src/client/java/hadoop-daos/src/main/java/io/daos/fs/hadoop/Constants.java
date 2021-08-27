@@ -61,4 +61,7 @@ public final class Constants {
   public static final int MINIMUM_DAOS_BLOCK_SIZE = 16 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_BLOCK_SIZE = Integer.MAX_VALUE;
 
+  public static final String DAOS_WITH_UNS_PREFIX = "fs.daos.with-uns-prefix";
+  public static final boolean DEFAULT_DAOS_WITH_UNS_PREFIX = true;
+
 }
