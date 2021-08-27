@@ -109,7 +109,6 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
 	size_t cmp_size;
 
 	/** Typed comparison */
-
 	if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER1"))
 	{
 		signed char *left_i, *right_i;
@@ -119,7 +118,7 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
 		else if (*left_i == *right_i) return 0;
 		else                          return 1;
 	}
-	if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER2"))
+	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER2"))
 	{
 		short int *left_i, *right_i;
 		left_i  = (short int *) d_left->iov_buf;
@@ -128,7 +127,7 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
 		else if (*left_i == *right_i) return 0;
 		else                          return 1;
 	}
-	if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER4"))
+	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER4"))
 	{
 		int *left_i, *right_i;
 		left_i  = (int *) d_left->iov_buf;
@@ -137,7 +136,7 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
 		else if (*left_i == *right_i) return 0;
 		else                          return 1;
 	}
-	if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER8"))
+	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER8"))
 	{
 		long long int *left_i, *right_i;
 		left_i  = (long long int *) d_left->iov_buf;
@@ -146,7 +145,7 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
 		else if (*left_i == *right_i) return 0;
 		else                          return 1;
 	}
-	if (!strcmp(data_type, "DAOS_FILTER_TYPE_REAL4"))
+	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_REAL4"))
 	{
 		float *left_i, *right_i;
 		left_i  = (float *) d_left->iov_buf;
@@ -155,7 +154,7 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
 		else if (*left_i == *right_i) return 0;
 		else                          return 1;
 	}
-	if (!strcmp(data_type, "DAOS_FILTER_TYPE_REAL8"))
+	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_REAL8"))
 	{
 		double *left_i, *right_i;
 		left_i  = (double *) d_left->iov_buf;
@@ -199,7 +198,6 @@ pipeline_filter_func(daos_filter_t *filter, d_iov_t *dkey, uint32_t nr_iods,
 	}
 
 	pipeline_filter_get_data(left, dkey, nr_iods, iods, akeys, 0, &d_left);
-
 	for (i = 0; i < comparisons; i++)
 	{
 		pipeline_filter_get_data(right, dkey, nr_iods, iods, akeys,
@@ -308,8 +306,8 @@ pipeline_filter(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 	{
 		int rc;
 		*part_idx += 1;
-		if ((rc = pipeline_filter_isnull(filter, dkey, *nr_iods, iods, akeys,
-					    part_idx)) < 0)
+		if ((rc = pipeline_filter_isnull(filter, dkey, *nr_iods, iods,
+						 akeys, part_idx)) < 0)
 		{
 			return rc; /** error */
 		}
@@ -370,7 +368,6 @@ pipeline_filters(daos_pipeline_t *pipeline, d_iov_t *dkey, uint32_t *nr_iods,
 {
 	int		rc;
 	uint32_t	part_idx;
-	uint32_t	iters;
 	uint32_t 	i;
 
 	if (pipeline->num_filters == 0)
@@ -378,8 +375,7 @@ pipeline_filters(daos_pipeline_t *pipeline, d_iov_t *dkey, uint32_t *nr_iods,
 		return 0; /** No filters means all records pass */
 	}
 
-	iters = pipeline->num_filters;
-	for (i = 0; i < iters; i++)
+	for (i = 0; i < pipeline->num_filters; i++)
 	{
 		part_idx = 0;
 		if ((rc = pipeline_filter(pipeline->filters[i], dkey, nr_iods,
@@ -665,7 +661,7 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 		}
 		for (p = 0; p < ftr->num_parts; p++) {
 			/**
-			 * -- Check 3: Check that all parts have a correct
+			 * -- Check 2: Check that all parts have a correct
 			 *             number of operands and also that the
 			 *             number of total parts is correct.
 			 */
@@ -797,7 +793,7 @@ dc_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 	}
 
 	/**
-	 * -- Seeting all aggregation counters to zero.
+	 * -- Seting all aggregation counters to zero.
 	 */
 
 	for (i = 0; i < pipeline.num_aggr_filters; i++)
@@ -916,7 +912,7 @@ dc_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 			}
 		}
 	}
-	
+
 	if (*nr_kds != 0 && pipeline.num_aggr_filters == 0)
 	{
 		*nr_kds = nr_kds_pass; /** returning passing rcx */
@@ -928,6 +924,7 @@ dc_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 
 	rc = 0;
 exit:
+
 	/** -- Freeing allocated memory for temporary buffers */
 
 	for (i = 0; i < nr_kds_param; i++)
