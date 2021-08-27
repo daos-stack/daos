@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
 
+#define D_LOGFAC	DD_FAC(client)
+
 #include <common.h>
 #include <daos_metrics.h>
 #include <daos/pool.h>
@@ -38,37 +40,33 @@ dc_metrics_tls_init()
 
 	rc = pthread_key_create(&metrics_tls_key, dc_metrics_tls_cleanup);
 	if (rc)
-		D_GOTO(out, rc = -DER_NOMEM);
+		return -DER_NOMEM;
+
 	metrics_tls_agg.update_stat.st_min = ULONG_MAX;
 	metrics_tls_agg.fetch_stat.st_min = ULONG_MAX;
 	D_MUTEX_LOCK(&metrics_tls_lock);
 	d_list_add(&metrics_tls_agg.list, &metrics_list);
 	D_MUTEX_UNLOCK(&metrics_tls_lock);
-out:
-	return rc;
+	return 0;
 }
 
 int
 dc_metrics_tls_alloc()
 {
-	int rc = 0;
-
 	if (metrics_tls != NULL)
-		goto out;
+		return 0;
 
 	D_ALLOC_PTR(metrics_tls);
-	if (metrics_tls == NULL) {
-		rc = -DER_NOMEM;
-		goto out;
-	}
+	if (metrics_tls == NULL)
+		return -DER_NOMEM;
+
 	metrics_tls->update_stat.st_min = ULONG_MAX;
 	metrics_tls->fetch_stat.st_min = ULONG_MAX;
 	D_MUTEX_LOCK(&metrics_tls_lock);
 	d_list_add(&metrics_tls->list, &metrics_list);
 	pthread_setspecific(metrics_tls_key, metrics_tls);
 	D_MUTEX_UNLOCK(&metrics_tls_lock);
-out:
-	return rc;
+	return 0;
 }
 
 static void
@@ -131,27 +129,25 @@ static void
 dc_metrics_tls_cleanup(void *value)
 {
 	if (metrics_tls == NULL)
-		goto out;
+		return;
 
 	D_MUTEX_LOCK(&metrics_tls_lock);
 	d_list_del(&metrics_tls->list);
 	dc_metrics_tls_aggr((dc_metrics_tls_data_t *)value);
 	D_MUTEX_UNLOCK(&metrics_tls_lock);
-	free(metrics_tls);
+	D_FREE(metrics_tls);
 	metrics_tls = NULL;
-out:
-	return;
 }
 
 
 int
 dc_metrics_init()
 {
-	char *env;
 	int rc, i;
+	bool val;
 
-	env = getenv("DAOS_METRICS");
-	if ((env != NULL) && (strncmp(env, "OFF", strlen("OFF")) == 0))
+	d_getenv_bool("DAOS_CLI_METRICS_DISABLE", &val);
+	if (val)
 		is_metrics_enabled = 0;
 	else
 		is_metrics_enabled = 1;
@@ -217,18 +213,20 @@ out:
 void
 dc_metrics_fini()
 {
-	char *env;
+	bool val;
 
 	if (is_metrics_enabled == 0)
 		return;
 
-	env = getenv("DAOS_METRICS_DUMP");
-	if ((env != NULL) && (strncmp(env, "ON", strlen("ON")) == 0))
+	d_getenv_bool("DAOS_CLI_METRICS_DUMP", &val);
+	if (val)
 		daos_metrics_dump(stderr);
 
 	dc_pool_metrics_fini();
 	dc_cont_metrics_fini();
 	dc_obj_metrics_fini();
+	if (metrics_tls)
+		dc_metrics_tls_cleanup(metrics_tls);
 }
 
 int
@@ -608,6 +606,9 @@ dump_cont_rpccntrs(FILE *fp)
 	fprintf(fp, "%-16s\t%12lu\t%12lu\t%12lu\n", "cont snapshot",
 			ccntrs->crc_snapshot_cnt.mc_inflight, ccntrs->crc_snapshot_cnt.mc_success,
 			ccntrs->crc_snapshot_cnt.mc_failure);
+	fprintf(fp, "%-16s\t%12lu\t%12lu\t%12lu\n", "cont snaplist",
+			ccntrs->crc_snaplist_cnt.mc_inflight, ccntrs->crc_snaplist_cnt.mc_success,
+			ccntrs->crc_snaplist_cnt.mc_failure);
 	fprintf(fp, "%-16s\t%12lu\t%12lu\t%12lu\n", "cont snapdestroy",
 			ccntrs->crc_snapdel_cnt.mc_inflight, ccntrs->crc_snapdel_cnt.mc_success,
 			ccntrs->crc_snapdel_cnt.mc_failure);

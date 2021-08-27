@@ -15,6 +15,7 @@
 #include <daos_types.h>
 #include <daos/checksum.h>
 #include <daos/placement.h>
+#include <daos_metrics.h>
 
 static int mdts_obj_class	= OC_RP_2G1;
 
@@ -191,6 +192,7 @@ compare_cont_counters()
 	COMPARE_COUNTER(cont_act, cont_cal, crc_open_cnt);
 	COMPARE_COUNTER(cont_act, cont_cal, crc_close_cnt);
 	COMPARE_COUNTER(cont_act, cont_cal, crc_snapshot_cnt);
+	COMPARE_COUNTER(cont_act, cont_cal, crc_snaplist_cnt);
 	COMPARE_COUNTER(cont_act, cont_cal, crc_snapdel_cnt);
 	COMPARE_COUNTER(cont_act, cont_cal, crc_attr_cnt);
 	COMPARE_COUNTER(cont_act, cont_cal, crc_acl_cnt);
@@ -351,6 +353,54 @@ test_metrics_compare()
 	assert_rc_equal(rc, 0);
 	rc = compare_obj_iodist();
 	assert_rc_equal(rc, 0);
+}
+
+static void
+acct_obj_update(int cnt, daos_size_t size, int ptype)
+{
+	int bkt;
+
+	cal_obj_cntrs->u.arc_obj_cntrs.orc_update_cnt.mc_success += cnt;
+
+	cal_obj_up_stat->u.st_obj_update.st_value += cnt;
+	if (cal_obj_up_stat->u.st_obj_update.st_min > size)
+		cal_obj_up_stat->u.st_obj_update.st_min = size;
+	else if (cal_obj_up_stat->u.st_obj_update.st_value == 1)
+		cal_obj_up_stat->u.st_obj_update.st_min = size;
+	if (cal_obj_up_stat->u.st_obj_update.st_max < size)
+		cal_obj_up_stat->u.st_obj_update.st_max = size*cnt;
+	cal_obj_up_stat->u.st_obj_update.st_sum += size*cnt;
+	cal_obj_up_stat->u.st_obj_update.st_sum_of_squares += size*size*cnt*cnt;
+
+	cal_obj_iodbz->u.dt_bsz.ids_updatesz += size*cnt;
+	bkt = get_io_bktbsz(size);
+	cal_obj_iodbz->u.dt_bsz.ids_updatecnt_bkt[bkt] += cnt;
+
+	cal_obj_iodbp->u.dt_bpt.idp_updatesz += size;
+	cal_obj_iodbp->u.dt_bpt.idp_updatecnt_bkt[ptype] += cnt;
+	cal_obj_iodbp->u.dt_bpt.idp_updatesz_bkt[ptype] += size*cnt;
+}
+
+static void
+acct_obj_fetch(int cnt, daos_size_t size, int ptype)
+{
+	int bkt;
+
+	cal_obj_cntrs->u.arc_obj_cntrs.orc_fetch_cnt.mc_success += cnt;
+
+	cal_obj_fh_stat->u.st_obj_fetch.st_value += cnt;
+	if (cal_obj_fh_stat->u.st_obj_fetch.st_min > size)
+		cal_obj_fh_stat->u.st_obj_fetch.st_min = size;
+	else if (cal_obj_fh_stat->u.st_obj_fetch.st_value == 1)
+		cal_obj_fh_stat->u.st_obj_fetch.st_min = size;
+	if (cal_obj_fh_stat->u.st_obj_fetch.st_max < size)
+		cal_obj_fh_stat->u.st_obj_fetch.st_max = size*cnt;
+	cal_obj_fh_stat->u.st_obj_fetch.st_sum += size*cnt;
+	cal_obj_fh_stat->u.st_obj_fetch.st_sum_of_squares += size*size*cnt;
+
+	cal_obj_iodbz->u.dt_bsz.ids_fetchsz += size*cnt;
+	bkt = get_io_bktbsz(size);
+	cal_obj_iodbz->u.dt_bsz.ids_fetchcnt_bkt[bkt] += cnt;
 }
 
 /** Pool Tests */
@@ -1892,53 +1942,89 @@ co_modify_acl_access(void **state)
 	test_teardown((void **)&arg);
 }
 
-
 static void
-acct_obj_update(int cnt, daos_size_t size, int ptype)
+co_snapshot(void **state)
 {
-	int bkt;
+	test_arg_t	*arg0 = *state;
+	test_arg_t	*arg = NULL;
+	struct ioreq	 req;
+	int		 rc, i, snap_cnt;
+	uint64_t	noid;
+	daos_obj_id_t	oid;
+	daos_epoch_t epoch_in[5], epoch_out[5];
+	daos_epoch_range_t epr;
+	daos_anchor_t anchor;
 
-	cal_obj_cntrs->u.arc_obj_cntrs.orc_update_cnt.mc_success += cnt;
+	if (metrics_disabled)
+		skip();
+	if (arg0->myrank != 0)
+		return;
 
-	cal_obj_up_stat->u.st_obj_update.st_value += cnt;
-	if (cal_obj_up_stat->u.st_obj_update.st_min > size)
-		cal_obj_up_stat->u.st_obj_update.st_min = size;
-	else if (cal_obj_up_stat->u.st_obj_update.st_value == 1)
-		cal_obj_up_stat->u.st_obj_update.st_min = size;
-	if (cal_obj_up_stat->u.st_obj_update.st_max < size)
-		cal_obj_up_stat->u.st_obj_update.st_max = size*cnt;
-	cal_obj_up_stat->u.st_obj_update.st_sum += size*cnt;
-	cal_obj_up_stat->u.st_obj_update.st_sum_of_squares += size*size*cnt*cnt;
+	rc = test_setup((void **)&arg, SETUP_CONT_CONNECT, arg0->multi_rank,
+			SMALL_POOL_SIZE, 0, NULL);
+	assert_rc_equal(rc, 0);
 
-	cal_obj_iodbz->u.dt_bsz.ids_updatesz += size*cnt;
-	bkt = get_io_bktbsz(size);
-	cal_obj_iodbz->u.dt_bsz.ids_updatecnt_bkt[bkt] += cnt;
+	oid = daos_test_oid_gen(arg->coh, mdts_obj_class, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
 
-	cal_obj_iodbp->u.dt_bpt.idp_updatesz += size;
-	cal_obj_iodbp->u.dt_bpt.idp_updatecnt_bkt[ptype] += cnt;
-	cal_obj_iodbp->u.dt_bpt.idp_updatesz_bkt[ptype] += size*cnt;
-}
+	test_metrics_snapshot();
+	for (i = 0; i < 5; i++) {
+		printf("Creating snap %d\n", i);
+		insert_single("dkey1", "akey1", 0, "data",
+		       strlen("data") + 1, DAOS_TX_NONE, &req);
+		acct_obj_update(1, strlen("data")+1, DAOS_METRICS_IO_RP2);
+		if (i & 0x1) {
+			rc = daos_cont_create_snap(arg->coh, &epoch_in[i], NULL, NULL);
+			assert_rc_equal(rc, 0);
+		} else {
+			rc = daos_cont_create_snap_opt(arg->coh, &epoch_in[i], NULL,
+							DAOS_SNAP_OPT_CR, NULL);
+			assert_rc_equal(rc, 0);
+		}
+		cal_cont_cntrs->u.arc_cont_cntrs.crc_snapshot_cnt.mc_success += 1;
+		sleep(1);
+	}
+	insert_single("dkey1", "akey1", 0, "data",
+	       strlen("DATA") + 1, DAOS_TX_NONE, &req);
+	acct_obj_update(1, strlen("data")+1, DAOS_METRICS_IO_RP2);
 
-static void
-acct_obj_fetch(int cnt, daos_size_t size, int ptype)
-{
-	int bkt;
+	epr.epr_lo = epoch_in[2];
+	epr.epr_hi = epoch_in[2];
+	rc = daos_cont_destroy_snap(arg->coh,  epr, NULL);
+	cal_cont_cntrs->u.arc_cont_cntrs.crc_snapdel_cnt.mc_success += 1;
+	assert_rc_equal(rc, 0);
+	memset(epoch_out, 0xAA, 5 * sizeof(daos_epoch_t));
+	memset(&anchor, 0, sizeof(anchor));
+	snap_cnt = 5;
 
-	cal_obj_cntrs->u.arc_obj_cntrs.orc_fetch_cnt.mc_success += cnt;
+	rc = daos_cont_list_snap(arg->coh, &snap_cnt, epoch_out, NULL, &anchor, NULL);
+	cal_cont_cntrs->u.arc_cont_cntrs.crc_snaplist_cnt.mc_success += 1;
 
-	cal_obj_fh_stat->u.st_obj_fetch.st_value += cnt;
-	if (cal_obj_fh_stat->u.st_obj_fetch.st_min > size)
-		cal_obj_fh_stat->u.st_obj_fetch.st_min = size;
-	else if (cal_obj_fh_stat->u.st_obj_fetch.st_value == 1)
-		cal_obj_fh_stat->u.st_obj_fetch.st_min = size;
-	if (cal_obj_fh_stat->u.st_obj_fetch.st_max < size)
-		cal_obj_fh_stat->u.st_obj_fetch.st_max = size*cnt;
-	cal_obj_fh_stat->u.st_obj_fetch.st_sum += size*cnt;
-	cal_obj_fh_stat->u.st_obj_fetch.st_sum_of_squares += size*size*cnt;
+	assert_rc_equal(rc, 0);
+	assert_int_equal(snap_cnt, 4);
 
-	cal_obj_iodbz->u.dt_bsz.ids_fetchsz += size*cnt;
-	bkt = get_io_bktbsz(size);
-	cal_obj_iodbz->u.dt_bsz.ids_fetchcnt_bkt[bkt] += cnt;
+	for (i = 0; i < 5; i++) {
+		printf("Destroying snap %d\n", i);
+		epr.epr_lo = epoch_in[i];
+		epr.epr_hi = epoch_in[i];
+		rc = daos_cont_destroy_snap(arg->coh,  epr, NULL);
+		assert_rc_equal(rc, 0);
+		cal_cont_cntrs->u.arc_cont_cntrs.crc_snapdel_cnt.mc_success += 1;
+	}
+
+	daos_cont_aggregate(arg->coh, epoch_in[4], NULL);
+	assert_rc_equal(rc, 0);
+	cal_cont_cntrs->u.arc_cont_cntrs.crc_aggregate_cnt.mc_success += 1;
+
+	rc = daos_cont_alloc_oids(arg->coh, 1, &noid, NULL);
+	assert_rc_equal(rc, 0);
+	printf("oid returned by daos_cont_alloc_oids - %lu\n", noid);
+	cal_cont_cntrs->u.arc_cont_cntrs.crc_oidalloc_cnt.mc_success += 1;
+
+	test_metrics_compare();
+
+	ioreq_fini(&req);
+	test_teardown((void **)&arg);
 }
 
 /** i/o to variable idx offset */
@@ -2808,6 +2894,40 @@ io_obj_key_query(void **state)
 	print_message("all good\n");
 }
 
+static void
+io_obj_sync(void **state)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	struct ioreq	 req;
+	int rc;
+
+	if (metrics_disabled)
+		skip();
+	if (arg->myrank != 0)
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_S1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	test_metrics_snapshot();
+
+	insert_single("dkey1", "akey1", 0, "data",
+	       strlen("data") + 1, DAOS_TX_NONE, &req);
+
+	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
+	assert_rc_equal(rc, 0);
+	cal_obj_cntrs->u.arc_obj_cntrs.orc_sync_cnt.mc_success += 1;
+	/**
+	 * daos_obj_verify() does more rpc calls than just obj sync.
+	 * Hence just check whether the obj sync call is made or not.
+	 */
+	rc = daos_metrics_get_cntrs(DAOS_METRICS_OBJ_RPC_CNTR, act_obj_cntrs);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(cal_obj_cntrs->u.arc_obj_cntrs.orc_sync_cnt.mc_success,
+	    act_obj_cntrs->u.arc_obj_cntrs.orc_sync_cnt.mc_success);
+	ioreq_fini(&req);
+}
+
 static const struct CMUnitTest cm_tests[] = {
 	{ "M_POOL1: connect/disconnect to pool (async)",
 	  pool_connect, async_enable, test_case_teardown},
@@ -2835,6 +2955,8 @@ static const struct CMUnitTest cm_tests[] = {
 	  co_get_acl_access, NULL, test_case_teardown},
 	{ "M_CONT8: container overwrite/update/delete ACL access by ACL",
 	  co_modify_acl_access, NULL, test_case_teardown},
+	{ "M_CONT9: container snapshot",
+	  co_snapshot, NULL, test_case_teardown},
 	{ "M_IO1: simple update/fetch/verify",
 	  io_simple, async_disable, test_case_teardown},
 	{ "M_IO2: i/o with variable rec size(async)",
@@ -2849,6 +2971,8 @@ static const struct CMUnitTest cm_tests[] = {
 	  io_manyrec, async_disable, test_case_teardown},
 	{ "M_IO7: basic object key query testing",
 	  io_obj_key_query, async_disable, test_case_teardown},
+	{ "M_IO8: testing object sync ",
+	  io_obj_sync, async_disable, test_case_teardown},
 };
 
 static int

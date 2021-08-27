@@ -2772,12 +2772,10 @@ static int
 cont_epoch_op_req_complete(tse_task_t *task, void *data)
 {
 	struct epoch_op_arg *arg = data;
-	crt_rpc_t           *rpc = arg->eoa_req.cra_rpc;
 	struct cont_epoch_op_out *op_out;
 	int rc;
 
 	rc = cont_req_complete(task, &arg->eoa_req);
-	dc_cont_metrics_incr_completecntr(rpc->cr_opc, rc);
 	if (rc)
 		return rc;
 
@@ -3195,6 +3193,7 @@ dc_cont_metrics_get_rpccntrs(daos_metrics_cont_rpc_cntrs_t *cntrs)
 	dc_metrics_cntr_copy(&cntrs->crc_oidalloc_cnt, &cont_rpc_cntrs[CONT_OID_ALLOC]);
 	dc_metrics_cntr_copy(&cntrs->crc_query_cnt, &cont_rpc_cntrs[CONT_QUERY]);
 	dc_metrics_cntr_copy(&cntrs->crc_snapshot_cnt, &cont_rpc_cntrs[CONT_SNAP_CREATE]);
+	dc_metrics_cntr_copy(&cntrs->crc_snaplist_cnt, &cont_rpc_cntrs[CONT_SNAP_LIST]);
 	dc_metrics_cntr_copy(&cntrs->crc_snapdel_cnt, &cont_rpc_cntrs[CONT_SNAP_DESTROY]);
 	dc_metrics_cntr_copy(&cntrs->crc_aggregate_cnt, &cont_rpc_cntrs[CONT_EPOCH_AGGREGATE]);
 	dc_metrics_cntr_copy(&cntrs->crc_query_cnt, &cont_rpc_cntrs[CONT_QUERY]);

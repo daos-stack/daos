@@ -63,6 +63,8 @@ typedef struct {
 	daos_metrics_cntr_t crc_close_cnt;
 	/** Counter for container snapshot create rpc calls */
 	daos_metrics_cntr_t crc_snapshot_cnt;
+	/** Counter for container snapshot list rpc calls */
+	daos_metrics_cntr_t crc_snaplist_cnt;
 	/** Counter for container snapshot destroy rpc calls */
 	daos_metrics_cntr_t crc_snapdel_cnt;
 	/** Counter for container attribute rpc calls */
