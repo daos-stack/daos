@@ -82,23 +82,10 @@ class ObjectMetadata(TestWithServers):
         self.container = []
         for index in range(self.CREATED_CONTAINERS_LIMIT):
             # Continue to create containers until there is not enough space
-            self.log.info("Creating container %d", index + 1)
-            self.container.append(self.get_container(self.pool, create=False))
-            if self.container[-1].daos:
-                self.container[-1].daos.verbose = False
-            try:
-                self.container[-1].create()
-            except TestFail as error:
-                self.log.info(
-                    "  Failed to create container %s: %s",
-                    index + 1, str(error))
-                del self.container[-1]
-                if "RC: -1007" in str(error):
-                    status = True
-                    break
-                self.fail(
-                    "Unexpected error detected creating container %d",
-                    index + 1)
+            if not self._create_single_container(index):
+                status = True
+                break
+
         self.log.info(
             "Created %s containers before running out of space",
             len(self.container))
@@ -122,6 +109,35 @@ class ObjectMetadata(TestWithServers):
                 len(self.container), expected)
             status = False
 
+        return status
+
+    def _create_single_container(self, index):
+        """Create a single container.
+
+        Args:
+            index (int): container count
+
+        Returns:
+            bool: was a container created successfully
+
+        """
+        status = False
+        self.log.info("Creating container %d", index + 1)
+        self.container.append(self.get_container(self.pool, create=False))
+        if self.container[-1].daos:
+            self.container[-1].daos.verbose = False
+        try:
+            self.container[-1].create()
+            status = True
+        except TestFail as error:
+            self.log.info(
+                "  Failed to create container %s: %s",
+                index + 1, str(error))
+            del self.container[-1]
+            if "RC: -1007" not in str(error):
+                self.fail(
+                    "Unexpected error detected creating container %d",
+                    index + 1)
         return status
 
     def destroy_all_containers(self):
@@ -221,24 +237,20 @@ class ObjectMetadata(TestWithServers):
         in_failure = False
         for loop in range(30000):
             try:
-                self.container.append(self.get_container(self.pool))
-                if in_failure:
+                status = self._create_single_container(loop)
+                if status and in_failure:
                     self.log.info(
                         "Phase 3: nospace -> available transition, cont %d",
                         loop)
                     in_failure = False
-            except TestFail as error:
-                if "RC: -1007" in error:
-                    if not in_failure:
-                        self.log.info(
-                            "Phase 3: available -> nospace transition, cont %d",
-                            loop)
+                elif not status and not in_failure:
+                    self.log.info(
+                        "Phase 3: available -> nospace transition, cont %d",
+                        loop)
                     in_failure = True
-                else:
-                    self.log.error(
-                        "Unexpected container create error: %s", error)
-                    self.fail(
-                        "Phase 3: fail (unexpected container create error)")
+            except TestFail as error:
+                self.log.error(str(error))
+                self.fail("Phase 3: fail (unexpected container create error)")
         self.log.info(
             "Phase 3: passed (created %d / %d containers)",
             len(self.container), 30000)
@@ -386,7 +398,7 @@ class ObjectMetadata(TestWithServers):
                 self.container.append(self.get_container(self.pool))
             except TestFail as error:
                 self.log.info("(1.3) Expected create failure: %s", error)
-                if "RC: -1007" in error:
+                if "RC: -1007" in str(error):
                     self.log.info(traceback.format_exc())
                     self.log.info(
                         "(1.4) No space error shown with additional %d "
