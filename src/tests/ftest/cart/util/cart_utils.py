@@ -306,6 +306,22 @@ class CartTest(TestWithoutServers):
     # pylint: disable=too-many-locals
     def build_cmd(self, env, host, **kwargs):
         """Build a command string."""
+
+        env_CCSA = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
+        test_name = self.params.get("name", "/run/tests/*/")
+
+        # Write memcheck result file(s) to $HOME or DAOS_TEST_SHARED_DIR.
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
+
+        if env_CCSA is None:
+            env_CCSA = ""
+
+        f = r"{}/valgrind.%q\{{PMIX_ID\}}_{}-{}.memcheck"
+        memcheck_xml = f.format(daos_test_shared_dir,
+                                test_name,
+                                env_CCSA)
+
         tst_cmd = ""
         tst_cont = None
 
@@ -315,8 +331,7 @@ class CartTest(TestWithoutServers):
                                          os.getenv('HOME'))
 
         tst_vgd = " valgrind --xml=yes " + \
-                  "--xml-file={}/".format(daos_test_shared_dir) + \
-                  r"valgrind.%q\{PMIX_ID\}.memcheck " + \
+                  "--xml-file={}".format(memcheck_xml) + " " + \
                   "--fair-sched=yes --partial-loads-ok=yes " + \
                   "--leak-check=full --show-leak-kinds=all " + \
                   " --gen-suppressions=all " + \
