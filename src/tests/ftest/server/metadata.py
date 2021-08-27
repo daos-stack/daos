@@ -80,6 +80,9 @@ class ObjectMetadata(TestWithServers):
         """
         status = False
         self.container = []
+        self.log.info(
+            "Attempting to create up to %d containers",
+            self.CREATED_CONTAINERS_LIMIT)
         for index in range(self.CREATED_CONTAINERS_LIMIT):
             # Continue to create containers until there is not enough space
             if not self._create_single_container(index):
@@ -122,7 +125,7 @@ class ObjectMetadata(TestWithServers):
 
         """
         status = False
-        self.log.info("Creating container %d", index + 1)
+        # self.log.info("Creating container %d", index + 1)
         self.container.append(self.get_container(self.pool, create=False))
         if self.container[-1].daos:
             self.container[-1].daos.verbose = False
@@ -148,6 +151,7 @@ class ObjectMetadata(TestWithServers):
                 False otherwise
 
         """
+        self.log.info("Destroying %d containers", len(self.container))
         errors = self.destroy_containers(self.container)
         if errors:
             self.log.error(
@@ -155,6 +159,7 @@ class ObjectMetadata(TestWithServers):
                 len(self.container), len(errors))
             for error in errors:
                 self.log.error("  %s", error)
+        self.container = []
         return len(errors) == 0
 
     def thread_control(self, threads, operation):
@@ -234,20 +239,36 @@ class ObjectMetadata(TestWithServers):
         self.log.info(
             "Phase 3: sustained container creates: to nospace and beyond")
         self.container = []
+        sequential_fail_counter = 0
+        sequential_fail_max = 1000
         in_failure = False
         for loop in range(30000):
             try:
                 status = self._create_single_container(loop)
+
+                # Keep track of the number of sequential no space container
+                # create errors.  Once the max has been reached stop the loop.
+                if status:
+                    sequential_fail_counter = 0
+                else:
+                    sequential_fail_counter += 1
+                if sequential_fail_counter >= sequential_fail_max:
+                    self.log.info(
+                        "Phase 3: %d/%d sequential no space container create "
+                        "errors", sequential_fail_counter, sequential_fail_max)
+                    break
+
                 if status and in_failure:
                     self.log.info(
                         "Phase 3: nospace -> available transition, cont %d",
-                        loop)
+                        loop, sequential_fail_counter)
                     in_failure = False
                 elif not status and not in_failure:
                     self.log.info(
                         "Phase 3: available -> nospace transition, cont %d",
-                        loop)
+                        loop, sequential_fail_counter)
                     in_failure = True
+
             except TestFail as error:
                 self.log.error(str(error))
                 self.fail("Phase 3: fail (unexpected container create error)")
@@ -271,15 +292,29 @@ class ObjectMetadata(TestWithServers):
         """
         self.create_pool()
 
-        self.container = []
+        test_failed = False
+        containers_created =[]
         for loop in range(10):
             self.log.info("Container Create Iteration %d / 9", loop)
             if not self.create_all_containers(len(self.container)):
-                self.fail(f"Errors during create iteration {loop} / 9")
+                self.log.error("Errors during create iteration %d/9", loop)
+                test_failed = True
+
+            containers_created.append(len(self.container))
 
             self.log.info("Container Remove Iteration %d / 9", loop)
             if not self.destroy_all_containers():
-                self.fail(f"Errors during remove iteration {loop} / 9")
+                self.log.error("Errors during remove iteration %d/9", loop)
+                test_failed = True
+
+        self.log.info("Summary")
+        self.log.info("  Loop  Containers Created")
+        self.log.info("  ----  ------------------")
+        for loop, quantity in enumerate(containers_created):
+            self.log.info("  %-4d  %d", loop, quantity)
+
+        if test_failed:
+            self.fail("Errors verifying metadata space release")
         self.log.info("Test passed")
 
     def test_metadata_server_restart(self):
