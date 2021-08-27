@@ -11,7 +11,6 @@ ENV:
     - test_clients_CRT_CTX_NUM: "0"
 env_CRT_PHY_ADDR_STR: !mux
   ofi_sockets:
-    env: ofi_sockets
     CRT_PHY_ADDR_STR: "ofi+sockets"
 env_CRT_CTX_SHARE_ADDR: !mux
   no_sep:

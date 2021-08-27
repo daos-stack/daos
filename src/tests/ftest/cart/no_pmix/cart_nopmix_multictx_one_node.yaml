@@ -11,10 +11,8 @@ ENV:
     - CRT_CTX_SHARE_ADDR: "0"
 env_CRT_PHY_ADDR_STR: !mux
   sm:
-    env: sm
     CRT_PHY_ADDR_STR: "sm"
   ofi_sockets:
-    env: ofi_sockets
     CRT_PHY_ADDR_STR: "ofi+sockets"
 tests: !mux
   no_pmix_multi_ctx:
