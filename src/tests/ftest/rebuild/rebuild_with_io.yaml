@@ -18,7 +18,7 @@ pool:
   name: daos_server
   scm_size: 1073741824
   control_method: dmg
-  pool_query_timeout: 30
+  pool_query_timeout: 80
 container:
   akey_size: 5
   dkey_size: 5
@@ -27,4 +27,4 @@ testparams:
   ranks:
     rank0:
       rank: 0
-  object_class: DAOS_OC_R3_RW
+  object_class: "OC_RP_3G1" #DAOS_OC_R3_RW

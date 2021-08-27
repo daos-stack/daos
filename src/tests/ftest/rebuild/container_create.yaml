@@ -10,10 +10,12 @@ hosts:
 timeout: 700
 server_config:
   name: daos_server
+  servers:
+    targets: 2
 pool:
   mode: 511
   name: daos_server
-  scm_size: 8589934592
+  scm_size: 8G
 #  svcn: 3
   control_method: dmg
   pool_query_timeout: 30
@@ -48,5 +50,5 @@ test:
     last_rank:
       rank: 4
   containers: 70
-  container_obj_class: "OC_RP_3GX"
+  container_obj_class: "OC_RP_3G1"
   use_ior: False
