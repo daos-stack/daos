@@ -8,9 +8,9 @@ hosts:
 server_config:
    name: daos_server
    servers:
-     scm_size: 12
-     targets: 2
-timeout: 240
+     scm_class: dcpm
+     scm_list: ["/dev/pmem0"]
+timeout: 900
 pool:
   control_method: dmg
   mode: 511
@@ -18,7 +18,7 @@ pool:
     small_pool:
       size: 134217728 # 128Mb
     larger_pool:
-      size: 10737418240 # 10 Gb
+      size: 53687091200  # 50G
   threshold_percent: 0.1 # 10%
 container:
   control_method: daos

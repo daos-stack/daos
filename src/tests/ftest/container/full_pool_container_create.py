@@ -37,7 +37,7 @@ class FullPoolContainerCreate(TestWithServers):
             the original free space.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=tiny
+        :avocado: tags=hw,small
         :avocado: tags=container
         :avocado: tags=fullpoolcontcreate
         """
@@ -66,8 +66,8 @@ class FullPoolContainerCreate(TestWithServers):
         self.log.info("Pool free space before write: %s", free_space_before)
 
         # generate random dkey, akey each time
-        # write 1G until no space, then 100M, etc. to fill pool quickly
-        for obj_sz in [1073741824, 104857600, 1048576, 10240, 10, 1]:
+        # write 1M until no space, then 10K, etc. to fill pool quickly
+        for obj_sz in [1048576, 10240, 10, 1]:
             write_count = 0
             while True:
                 self.d_log.debug("writing obj {0} sz {1} to "
