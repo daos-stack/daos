@@ -12,7 +12,7 @@ server_config:
       fabric_iface_port: 31317
       log_file: daos_server0.log
       bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a"]
+      bdev_list: ["0000:5d:05.5"]
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
