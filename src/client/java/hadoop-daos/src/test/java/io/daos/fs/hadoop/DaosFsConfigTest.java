@@ -25,7 +25,7 @@ public class DaosFsConfigTest {
   @Test
   public void testFsConfigNamesSize() throws Exception {
     DaosFsConfig cf = DaosFsConfig.getInstance();
-    Assert.assertEquals(11, cf.getFsConfigNames().size());
+    Assert.assertEquals(12, cf.getFsConfigNames().size());
   }
 
   @Test
@@ -38,7 +38,7 @@ public class DaosFsConfigTest {
   @Test
   public void testConfigItemExistence() throws Exception {
     for (String name : DaosFsConfig.getInstance().getFsConfigNames()) {
-      Assert.assertTrue(help.contains(name));
+      Assert.assertTrue(Constants.DAOS_WITH_UNS_PREFIX.equals(name) || help.contains(name));
     }
   }
 
