@@ -8,7 +8,7 @@ client_ver="$2"
 if [[ $distro = ubuntu20* ]]; then
     pkgs="openmpi-bin ndctl fio"
 elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
-     [[ $distro = leap* ]]; then
+     [[ $distro = leap* ]] || [[ $distro = opensuse* ]]; then
     openmpi="openmpi"
     pyver="3"
     prefix=""
@@ -17,7 +17,7 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
         pyver="36"
         openmpi="openmpi3"
         prefix="--exclude ompi"
-    elif [[ $distro = leap15* ]]; then
+    elif [[ $distro = leap15* ]] || [[ $distro = opensuse* ]]; then
         openmpi="openmpi3"
     fi
 
