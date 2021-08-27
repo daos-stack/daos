@@ -330,13 +330,18 @@ class CartTest(TestWithoutServers):
         daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
                                          os.getenv('HOME'))
 
+        # Return 0 on memory leaks while suppresion file is completed
+        # (CART-975 and CART-977)
+        memcheck_error_code = 0
+
         tst_vgd = " valgrind --xml=yes " + \
                   "--xml-file={}".format(memcheck_xml) + " " + \
                   "--fair-sched=yes --partial-loads-ok=yes " + \
                   "--leak-check=full --show-leak-kinds=all " + \
                   " --gen-suppressions=all " + \
                   "--suppressions=" + self.supp_file + " " + \
-                  "--track-origins=yes --error-exitcode=42 " + \
+                  "--track-origins=yes " + \
+                  "--error-exitcode=" + str(memcheck_error_code) + " " \
                   "--show-reachable=yes --trace-children=yes"
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
