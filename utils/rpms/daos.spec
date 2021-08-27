@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.104
-Release:       4%{?relval}%{?dist}
+Version:       1.3.105
+Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -428,11 +428,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %files tests
 %dir %{_prefix}/lib/daos
 %{_prefix}/lib/daos/TESTING
-%{_prefix}/lib/daos/TESTING/ftest/list_tests.py
 %{_bindir}/hello_drpc
-%{_bindir}/*_test*
 %{_bindir}/jobtest
-%{_bindir}/self_test
 %{_libdir}/libdaos_tests.so
 %{_bindir}/jump_pl_map
 %{_bindir}/ring_pl_map
@@ -440,6 +437,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
 %{_bindir}/daos_perf
+%{_bindir}/vos_perf
 %{_bindir}/daos_racer
 %{_bindir}/evt_ctl
 %{_bindir}/io_conf
@@ -450,6 +448,16 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/crt_launch
 %{_bindir}/daos_test
 %{_bindir}/dfs_test
+%{_bindir}/common_test
+%{_bindir}/acl_dump_test
+%{_bindir}/agent_tests
+%{_bindir}/drpc_engine_test
+%{_bindir}/drpc_test
+%{_bindir}/eq_tests
+%{_bindir}/job_tests
+%{_bindir}/security_test
+%{_bindir}/srv_checksum_tests
+%{_bindir}/vos_tests
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status
 # For avocado tests
@@ -472,6 +480,13 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Tue Aug 24 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.105-1
+- Version bump to 1.3.105 for 2.0 test build 5
+
+* Mon Aug 09 2021 Yawei <yawei.niu@intel.com> 1.3.104-5
+- Fix duplicates
+- Add vos_perf
+
 * Thu Aug 05 2021 Christopher Hoffman <christopherx.hoffman@intel.com> 1.3.104-4
 - Update conditional statement to include checking for distributions to
   determine which unit files to use for daos-server and daos-agent
