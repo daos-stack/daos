@@ -1110,7 +1110,8 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	tcx->tc_ref	 = 1; /* for the caller */
 	tcx->tc_magic	 = EVT_HDL_ALIVE;
 	tcx->tc_root	 = root;
-	tcx->tc_desc_cbs = *cbs;
+	if (cbs != NULL)
+		tcx->tc_desc_cbs = *cbs;
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
@@ -2741,6 +2742,44 @@ evt_open(struct evt_root *root, struct umem_attr *uma,
 	*toh = evt_tcx2hdl(tcx);
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
 	return 0;
+}
+
+int
+evt_has_data(struct evt_root *root, struct umem_attr *uma)
+{
+	struct evt_entry	*ent;
+	struct evt_context	*tcx;
+	struct evt_rect		 rect;
+	int			 rc;
+
+	if (evt_is_empty(root))
+		return 0;
+
+	rc = evt_tcx_create(root, -1, -1, uma, NULL, &tcx);
+	if (rc != 0)
+		return rc;
+
+	rect.rc_ex.ex_lo = 0;
+	rect.rc_ex.ex_hi = -1ULL;
+	rect.rc_epc = DAOS_EPOCH_MAX;
+	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, 0 /* DTX check disabled */, NULL, &rect,
+				tcx->tc_iter.it_entries);
+	if (rc != 0)
+		goto out;
+
+	rc = 0; /* Assume there is no data */
+	evt_ent_array_for_each(ent, tcx->tc_iter.it_entries) {
+		if (ent->en_minor_epc != EVT_MINOR_EPC_MAX) {
+			rc = 1;
+			break;
+		}
+	}
+out:
+	evt_tcx_decref(tcx); /* -1 for tcx_create */
+	evt_tcx_decref(tcx); /* -1 for open */
+	return rc;
 }
 
 /**
