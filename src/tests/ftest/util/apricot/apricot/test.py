@@ -1390,8 +1390,8 @@ class TestWithServers(TestWithoutServers):
             # Destroy any remaining pools on the continuously running servers.
             pool_destroy_errors = self.search_and_destroy_pools()
             if pool_destroy_errors:
-                # Force a server stop if there were errors detroying or listing
-                # the pools. This will cuase the next test variant/method to
+                # Force a server stop if there were errors destroying or listing
+                # the pools. This will cause the next test variant/method to
                 # format and restart the servers.
                 errors.extend(pool_destroy_errors)
                 force_stop = True
@@ -1404,7 +1404,7 @@ class TestWithServers(TestWithoutServers):
 
         if not self.start_servers_once or status["restart"] or force_stop:
             # Stop the servers under the following conditions:
-            #   - servers are not being run continously across variants/methods
+            #   - servers are not being run continuously across variants/methods
             #   - engines were found stopped or in an unexpected state
             #   - errors destroying pools require a forced server stop
             if not status["expected"]:
