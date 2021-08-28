@@ -25,8 +25,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
-    create_mdtest_cmdline, reserved_file_copy, cleanup_dfuse, \
-    run_metrics_check
+    create_mdtest_cmdline, reserved_file_copy, run_metrics_check
 
 
 class SoakTestBase(TestWithServers):
@@ -290,8 +289,7 @@ class SoakTestBase(TestWithServers):
                         # commands = create_racer_cmdline(self, job, pool)
                     else:
                         raise SoakTestError(
-                            "<<FAILED: Job {} is not supported. ".format(
-                                self.job))
+                            "<<FAILED: Job {} is not supported. ".format(job))
                     jobscript = build_job_script(self, commands, job, npj)
                     job_cmdlist.extend(jobscript)
         return job_cmdlist

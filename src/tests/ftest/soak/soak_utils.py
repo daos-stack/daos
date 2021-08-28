@@ -201,7 +201,7 @@ def write_logfile(data, name, destination):
     with open(scriptfile, 'w') as script_file:
         # identify what be used to run this script
         if isinstance(data, list):
-            text = "\n".join([line for line in data])
+            text = "\n".join(data)
             script_file.write(text)
         else:
             script_file.write(str(data))
@@ -325,11 +325,13 @@ def wait_for_pool_rebuild(self, pool, name):
         rebuild_status = True
     except DaosTestError as error:
         self.log.error(
-            "<<<FAILED:{} rebuild timed out".format(name), exc_info=error)
+            "<<<FAILED:{} rebuild timed out: {}".format(
+                name, error), exc_info=error)
         rebuild_status = False
     except TestFail as error1:
-        self.log.error("<<<FAILED:{} rebuild failed due to test issue".format(
-            name), exc_info=error1)
+        self.log.error(
+            "<<<FAILED:{} rebuild failed due to test issue: {}".format(
+                name, error1), exc_info=error1)
     return rebuild_status
 
 
@@ -883,7 +885,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.flags.update(flag)
                         mdtest_cmd.num_of_files_dirs.update(
                             num_of_files_dirs)
-                        if ("POSIX" in api):
+                        if "POSIX" in api:
                             mdtest_cmd.dfs_oclass.update(None)
                             mdtest_cmd.dfs_dir_oclass.update(None)
                         else:
