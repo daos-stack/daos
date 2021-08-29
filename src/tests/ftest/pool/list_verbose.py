@@ -101,6 +101,26 @@ class ListVerboseTest(IorTestBase):
                 "NVMe free too small! Expected at least {}; Actual {}".format(
                     expected_nvme_free_min, actual_nvme_free))
 
+        # Disable target 7 in rank 1.
+        status = self.pool.exclude(ranks=[1], tgt_idx="7")
+        if status:
+            # Verify disabled is 1.
+            output = self.pool.dmg.get_pool_list_all(verbose=True)
+            targets_disabled = output[0]["targets_disabled"]
+            targets_total = output[0]["targets_total"]
+            if targets_disabled != 1:
+                errors.append(
+                    "Unexpected targets_disabled! {}".format(targets_disabled))
+
+            # Also verify total is still 8.
+            expected_target = self.params.get(
+                "targets", "/run/server_config/servers/*")
+            if targets_total != expected_target:
+                errors.append(
+                    "Unexpected targets_total! {}".format(targets_total))
+        else:
+            errors.append("dmg pool exclude failed!")
+
         if errors:
             self.fail("\n----- Errors detected! -----\n{}".format(
                 "\n".join(errors)))
