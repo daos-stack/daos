@@ -75,55 +75,6 @@ Java_io_daos_dfs_DaosFsClient_dfsUnmountFs(JNIEnv *env,
 }
 
 /**
- * JNI method to mount FS on root container of given pool denoted by
- * \a poolHandle.
- *
- * \param[in]	env		JNI environment
- * \param[in]	clientClass	class of DaosFsClient
- * \param[in]	poolHandle	pool handle
- *
- * \return	address of dfs object
- */
-JNIEXPORT jlong JNICALL
-Java_io_daos_dfs_DaosFsClient_dfsMountFsOnRoot(JNIEnv *env,
-		jclass clientClass, jlong poolHandle)
-{
-	dfs_t *dfsPtr;
-	daos_handle_t poh;
-
-	memcpy(&poh, &poolHandle, sizeof(poh));
-	int rc = dfs_mount_root_cont(poh, &dfsPtr);
-
-	if (rc) {
-		char *msg = "Failed to mount fs on root container";
-
-		throw_const(env, msg, rc);
-		return -1;
-	}
-	return *(jlong *)&dfsPtr;
-}
-
-/**
- * JNI method to unmount FS denoted by \a dfsPtr from root container.
- *
- * \param[in]	env		JNI environment
- * \param[in]	clientClass	class of DaosFsClient
- * \param[in]	dfsPtr		address of dfs object
- */
-JNIEXPORT void JNICALL
-Java_io_daos_dfs_DaosFsClient_dfsUnmountFsOnRoot(JNIEnv *env,
-		jclass clientClass, jlong dfsPtr)
-{
-	dfs_t *dfs = *(dfs_t **)&dfsPtr;
-	int rc = dfs_umount_root_cont(dfs);
-
-	if (rc) {
-		printf("Failed to unmount fs on root container rc: %d\n", rc);
-		printf("error msg: %.256s\n", strerror(rc));
-	}
-}
-
-/**
  * JNI method to move file from \a srcPath to \a destPath.
  *
  * \param[in]	env		JNI environment
@@ -1451,8 +1402,6 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 	const char *path = (*env)->GetStringUTFChars(env, pathStr, NULL);
 	struct duns_attr_t attr = {0};
 	Uns__DunsAttribute attribute = UNS__DUNS_ATTRIBUTE__INIT;
-	char pool_str[37] = "";
-	char cont_str[37] = "";
 	char object_type[40] = "";
 	int len;
 	void *buf = NULL;
@@ -1473,18 +1422,8 @@ Java_io_daos_dfs_DaosFsClient_dunsResolvePath(JNIEnv *env, jclass clientClass,
 		goto out;
 	}
 
-	if (strlen(attr.da_puuid) > 0) {
-		uuid_unparse(attr.da_puuid, pool_str);
-		attribute.puuid = pool_str;
-	} else {
-		attribute.puuid = NULL;
-	}
-	if (strlen(attr.da_cuuid) > 0) {
-		uuid_unparse(attr.da_cuuid, cont_str);
-		attribute.cuuid = cont_str;
-	} else {
-		attribute.cuuid = NULL;
-	}
+	attribute.poolid = attr.da_pool;
+	attribute.contid = attr.da_cont;
 
 	if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		attribute.layout_type = UNS__LAYOUT__POSIX;
@@ -1654,8 +1593,6 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 	int len = strlen(input);
 	struct duns_attr_t attr = {0};
 	Uns__DunsAttribute attribute = UNS__DUNS_ATTRIBUTE__INIT;
-	char pool_str[37] = "";
-	char cont_str[37] = "";
 	char object_type[40] = "";
 	void *buf = NULL;
 	jbyteArray barray = NULL;
@@ -1672,18 +1609,8 @@ Java_io_daos_dfs_DaosFsClient_dunsParseAttribute(JNIEnv *env,
 		goto out;
 	}
 
-	if (strlen(attr.da_puuid)) {
-		uuid_unparse(attr.da_puuid, pool_str);
-		attribute.puuid = pool_str;
-	} else {
-		attribute.puuid = NULL;
-	}
-	if (strlen(attr.da_cuuid)) {
-		uuid_unparse(attr.da_cuuid, cont_str);
-		attribute.cuuid = cont_str;
-	} else {
-		attribute.cuuid = NULL;
-	}
+	attribute.poolid = attr.da_pool;
+	attribute.contid = attr.da_cont;
 
 	if (attr.da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		attribute.layout_type = UNS__LAYOUT__POSIX;

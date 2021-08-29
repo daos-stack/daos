@@ -28,14 +28,14 @@ public final class DunsClasses {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023DunsAttribute.proto\022\003uns\"\260\001\n\rDunsAttri" +
-      "bute\022\r\n\005puuid\030\001 \001(\t\022\r\n\005cuuid\030\002 \001(\t\022 \n\013la" +
-      "yout_type\030\003 \001(\0162\013.uns.Layout\022\023\n\013object_t" +
-      "ype\030\004 \001(\t\022\022\n\nchunk_size\030\005 \001(\004\022\020\n\010rel_pat" +
-      "h\030\006 \001(\t\022\021\n\ton_lustre\030\007 \001(\010\022\021\n\tno_prefix\030" +
-      "\t \001(\010**\n\006Layout\022\013\n\007UNKNOWN\020\000\022\t\n\005POSIX\020\001\022" +
-      "\010\n\004HDF5\020\002B \n\017io.daos.dfs.unsB\013DunsClasse" +
-      "sP\001b\006proto3"
+      "\n\023DunsAttribute.proto\022\003uns\"\301\001\n\rDunsAttri" +
+      "bute\022\016\n\006poolId\030\001 \001(\t\022\016\n\006contId\030\002 \001(\t\022 \n\013" +
+      "layout_type\030\003 \001(\0162\013.uns.Layout\022\023\n\013object" +
+      "_type\030\004 \001(\t\022\022\n\nchunk_size\030\005 \001(\004\022\020\n\010rel_p" +
+      "ath\030\006 \001(\t\022\021\n\ton_lustre\030\007 \001(\010\022\021\n\tno_prefi" +
+      "x\030\t \001(\010\022\r\n\005flags\030\n \001(\r**\n\006Layout\022\013\n\007UNKN" +
+      "OWN\020\000\022\t\n\005POSIX\020\001\022\010\n\004HDF5\020\002B \n\017io.daos.df" +
+      "s.unsB\013DunsClassesP\001b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -46,7 +46,7 @@ public final class DunsClasses {
     internal_static_uns_DunsAttribute_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessageV3.FieldAccessorTable(
         internal_static_uns_DunsAttribute_descriptor,
-        new java.lang.String[] { "Puuid", "Cuuid", "LayoutType", "ObjectType", "ChunkSize", "RelPath", "OnLustre", "NoPrefix", });
+        new java.lang.String[] { "PoolId", "ContId", "LayoutType", "ObjectType", "ChunkSize", "RelPath", "OnLustre", "NoPrefix", "Flags", });
   }
 
   // @@protoc_insertion_point(outer_class_scope)

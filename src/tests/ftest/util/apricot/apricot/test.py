@@ -689,11 +689,23 @@ class TestWithServers(TestWithoutServers):
 
         # If there's no server started, then there's no server log to write to.
         if self.setup_start_servers:
-
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
             self.write_string_to_logfile(id_str)
+
+        if self.start_servers_once and not force_agent_start:
+            # Check for any existing pools that may still exist in each
+            # continually running server group.  Pools may still exists if a
+            # previous test method/varaint's tearDown was unable to complete.
+            # This will hopefully ensure these errors do not affect the next
+            # test.  Since the storage is reformatted and the pool metadata is
+            # erased when the servers are restarted this check is only needed
+            # when the servers are left continually running.
+            if self.search_and_destroy_pools():
+                self.fail(
+                    "Errors detected attempting to ensure all pools had been "
+                    "removed from continually running servers.")
 
         # Setup a job manager command for running the test command
         manager_class_name = self.params.get(
@@ -1149,6 +1161,9 @@ class TestWithServers(TestWithoutServers):
             if prepare_dmg and hasattr(manager, "prepare_dmg"):
                 manager.prepare_dmg()
 
+                # Ensure exceptions are raised for any failed command
+                manager.dmg.exit_status_exception = True
+
             # Verify the current states match the expected states
             manager_status = manager.verify_expected_states(set_expected)
             status["expected"] &= manager_status["expected"]
@@ -1238,6 +1253,10 @@ class TestWithServers(TestWithoutServers):
                 containers = [containers]
             self.test_log.info("Destroying containers")
             for container in containers:
+                # Ensure exceptions are raised for any failed command
+                if hasattr(container, "daos") and container.daos is not None:
+                    container.daos.exit_status_exception = True
+
                 # Only close a container that has been opened by the test
                 if not hasattr(container, "opened") or container.opened:
                     try:
@@ -1274,6 +1293,10 @@ class TestWithServers(TestWithoutServers):
                 pools = [pools]
             self.test_log.info("Destroying pools")
             for pool in pools:
+                # Ensure exceptions are raised for any failed command
+                if pool.dmg is not None:
+                    pool.dmg.exit_status_exception = True
+
                 # Only disconnect a pool that has been connected by the test
                 if not hasattr(pool, "connected") or pool.connected:
                     try:
@@ -1291,6 +1314,39 @@ class TestWithServers(TestWithoutServers):
                         self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error destroying pool: {}".format(error))
+
+
+        return error_list
+
+    def search_and_destroy_pools(self):
+        """Search for any pools in each server and destroy each one found.
+
+        Returns:
+            list: a list of errors detected when searching for and destroying
+                the pools
+
+        """
+        error_list = []
+        self.test_log.info("Searching for any existing pools")
+        for manager in self.server_managers:
+            # Ensure exceptions are raised for any failed command
+            manager.dmg.exit_status_exception = True
+
+            # Get a list of remaining pool labels for this server group
+            try:
+                labels = manager.dmg.get_pool_list_labels()
+            except CommandFailure as error:
+                error_list.append("Error listing pools: {}".format(error))
+                labels = []
+
+            # Destroy each pool found
+            for label in labels:
+                try:
+                    manager.dmg.pool_destroy(pool=label, force=True)
+
+                except CommandFailure as error:
+                    error_list.append("Error destroying pool: {}".format(error))
+
         return error_list
 
     def stop_agents(self):
@@ -1325,15 +1381,32 @@ class TestWithServers(TestWithoutServers):
             list: a list of exceptions raised stopping the servers
 
         """
+        force_stop = False
         self.log.info("-" * 100)
         self.log.info("--- STOPPING SERVERS ---")
         errors = []
         status = self.check_running("servers", self.server_managers)
         if self.start_servers_once and not status["restart"]:
-            self.log.info(
-                "Servers are configured to run across multiple test variants, "
-                "not stopping")
-        else:
+            # Destroy any remaining pools on the continuously running servers.
+            pool_destroy_errors = self.search_and_destroy_pools()
+            if pool_destroy_errors:
+                # Force a server stop if there were errors destroying or listing
+                # the pools. This will cause the next test variant/method to
+                # format and restart the servers.
+                errors.extend(pool_destroy_errors)
+                force_stop = True
+                self.log.info(
+                    "* FORCING SERVER STOP DUE TO POOL DESTROY ERRORS *")
+            else:
+                self.log.info(
+                    "Servers are configured to run across multiple test "
+                    "variants, not stopping")
+
+        if not self.start_servers_once or status["restart"] or force_stop:
+            # Stop the servers under the following conditions:
+            #   - servers are not being run continuously across variants/methods
+            #   - engines were found stopped or in an unexpected state
+            #   - errors destroying pools require a forced server stop
             if not status["expected"]:
                 errors.append(
                     "ERROR: At least one multi-variant server was not found in "
