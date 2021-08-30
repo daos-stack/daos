@@ -463,6 +463,7 @@ ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
 	rc = cont_lookup(&tx, svc, cont_uuid, &cont);
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
+
 	rc = read_snap_list(&tx, cont, snapshots, snap_count);
 	cont_put(cont);
 	if (rc != 0)

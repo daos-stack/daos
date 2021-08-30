@@ -3355,13 +3355,7 @@ cont_op_with_cont(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 		/* Look up the container handle. */
 		d_iov_set(&key, in->ci_hdl, sizeof(uuid_t));
 		d_iov_set(&value, &hdl, sizeof(hdl));
-		D_DEBUG(DF_DSMS, DF_CONT": lookup hdl "DF_UUID", len before=%lu\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_UUID(in->ci_hdl),
-			sizeof(hdl));
 		rc = rdb_tx_lookup(tx, &cont->c_svc->cs_hdls, &key, &value);
-		D_DEBUG(DF_DSMS, DF_CONT": lookup hdl "DF_UUID", after len=%lu, buf_len=%lu\n",
-			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_UUID(in->ci_hdl),
-			value.iov_len, value.iov_buf_len);
 		if (rc != 0) {
 			if (rc == -DER_NONEXIST) {
 				D_ERROR(DF_CONT": rejecting unauthorized "
