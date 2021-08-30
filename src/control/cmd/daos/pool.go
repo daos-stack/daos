@@ -393,6 +393,9 @@ func (cmd *poolDelAttrCmd) Execute(_ []string) error {
 
 type poolAutoTestCmd struct {
 	poolBaseCmd
+
+	SkipBig       C.bool `long:"skip-big" short:"S" description:"skip big tests"`
+	DeadlineLimit C.int  `long:"deadline-limit" short:"D" description:"deadline limit for test (seconds)"`
 }
 
 func (cmd *poolAutoTestCmd) Execute(_ []string) error {
@@ -419,6 +422,10 @@ func (cmd *poolAutoTestCmd) Execute(_ []string) error {
 	if err != nil {
 		return err
 	}
+
+	ap.skip_big = C.bool(cmd.SkipBig)
+
+	ap.deadline_limit = C.int(cmd.DeadlineLimit)
 
 	rc := C.pool_autotest_hdlr(ap)
 	if err := daosError(rc); err != nil {

@@ -110,6 +110,10 @@ struct cmd_args_s {
 	char			*dfs_prefix;	/* --dfs-prefix name */
 	char			*dfs_path;	/* --dfs-path file/dir */
 
+	/* autotest related */
+	bool			skip_big;	/* skip big tests */
+	int			deadline_limit;	/* deadline limit for tests */
+
 	FILE			*ostream;	/* help_hdlr() stream */
 	char			*outfile;	/* --outfile path */
 	char			*aclfile;	/* --acl-file path */
