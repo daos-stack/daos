@@ -11,7 +11,7 @@ import queue
 
 from avocado.core.exceptions import TestFail
 
-from apricot import TestWithServers
+from metadata_test_base import MetadataTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Orterun
@@ -39,7 +39,7 @@ def ior_runner_thread(manager, uuids, results):
             results.put("FAIL")
 
 
-class ObjectMetadata(TestWithServers):
+class ObjectMetadata(MetadataTestBase):
     """Test class for metadata testing.
 
     Test Class Description:
@@ -48,119 +48,10 @@ class ObjectMetadata(TestWithServers):
     :avocado: recursive
     """
 
-    # Minimum number of containers that should be able to be created
-    CREATED_CONTAINERS_MIN = 3000
-
-    # Number of created containers that should not be possible
-    CREATED_CONTAINERS_LIMIT = 3500
-
     def __init__(self, *args, **kwargs):
         """Initialize a ObjectMetadata object."""
         super().__init__(*args, **kwargs)
         self.out_queue = None
-
-    def create_pool(self):
-        """Create a pool and display the svc ranks."""
-        self.add_pool()
-        self.log.info("Created pool %s: svc ranks:", self.pool.uuid)
-        for index, rank in enumerate(self.pool.svc_ranks):
-            self.log.info("[%d]: %d", index, rank)
-
-    def create_all_containers(self, expected=None):
-        """Create the maximum number of supported containers.
-
-        Args:
-            expected (int, optional): number of containers expected to be
-                created. Defaults to None.
-
-        Returns:
-            bool: True if all of the expected number of containers were created
-                successfully; False otherwise
-
-        """
-        status = False
-        self.container = []
-        self.log.info(
-            "Attempting to create up to %d containers",
-            self.CREATED_CONTAINERS_LIMIT)
-        for index in range(self.CREATED_CONTAINERS_LIMIT):
-            # Continue to create containers until there is not enough space
-            if not self._create_single_container(index):
-                status = True
-                break
-
-        self.log.info(
-            "Created %s containers before running out of space",
-            len(self.container))
-
-        # Safety check to avoid test timeout - should hit an exception first
-        if len(self.container) >= self.CREATED_CONTAINERS_LIMIT:
-            self.log.error(
-                "Created too many containers: %d", len(self.container))
-
-        # Verify that at least MIN_CREATED_CONTAINERS have been created
-        if status and len(self.container) < self.CREATED_CONTAINERS_MIN:
-            self.log.error(
-                "Only %d containers created; expected %d",
-                len(self.container), self.CREATED_CONTAINERS_MIN)
-            status = False
-
-        # Verify that the expected number of containers were created
-        if status and expected and len(self.container) != expected:
-            self.log.error(
-                "Unexpected created container quantity: %d/%d",
-                len(self.container), expected)
-            status = False
-
-        return status
-
-    def _create_single_container(self, index):
-        """Create a single container.
-
-        Args:
-            index (int): container count
-
-        Returns:
-            bool: was a container created successfully
-
-        """
-        status = False
-        # self.log.info("Creating container %d", index + 1)
-        self.container.append(self.get_container(self.pool, create=False))
-        if self.container[-1].daos:
-            self.container[-1].daos.verbose = False
-        try:
-            self.container[-1].create()
-            status = True
-        except TestFail as error:
-            self.log.info(
-                "  Failed to create container %s: %s",
-                index + 1, str(error))
-            del self.container[-1]
-            if "RC: -1007" not in str(error):
-                self.fail(
-                    "Unexpected error detected creating container %d",
-                    index + 1)
-        return status
-
-    def destroy_all_containers(self):
-        """Destroy all of the created containers.
-
-        Returns:
-            bool: True if all of the containers were destroyed successfully;
-                False otherwise
-
-        """
-        self.log.info("Destroying %d containers", len(self.container))
-        errors = self.destroy_containers(self.container)
-        if errors:
-            self.log.error(
-                "Errors detected destroying %d containers: %d",
-                len(self.container), len(errors))
-            for error in errors:
-                self.log.error("  %s", error)
-        self.container = []
-        return len(errors) == 0
 
     def thread_control(self, threads, operation):
         """Start threads and wait until all threads are finished.
@@ -254,20 +145,21 @@ class ObjectMetadata(TestWithServers):
                     sequential_fail_counter += 1
                 if sequential_fail_counter >= sequential_fail_max:
                     self.log.info(
-                        "Phase 3: %d/%d sequential no space container create "
-                        "errors", sequential_fail_counter, sequential_fail_max)
+                        "Phase 3: container %d - %d/%d sequential no space "
+                        "container create errors", sequential_fail_counter,
+                        sequential_fail_max, loop)
                     break
 
                 if status and in_failure:
                     self.log.info(
-                        "Phase 3: nospace -> available transition - "
-                        "container: %d, sequential no space failures: %d",
+                        "Phase 3: container: %d - nospace -> available "
+                        "transition, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = False
                 elif not status and not in_failure:
                     self.log.info(
-                        "Phase 3: available -> nospace transition - "
-                        "container: %d, sequential no space failures: %d",
+                        "Phase 3: container: %d - available -> nospace "
+                        "transition, sequential no space failures: %d",
                         loop, sequential_fail_counter)
                     in_failure = True
 
@@ -276,48 +168,7 @@ class ObjectMetadata(TestWithServers):
                 self.fail("Phase 3: fail (unexpected container create error)")
         self.log.info(
             "Phase 3: passed (created %d / %d containers)",
-            len(self.container), 30000)
-        self.log.info("Test passed")
-
-    def test_metadata_addremove(self):
-        """JIRA ID: DAOS-1512.
-
-        Test Description:
-            Verify metadata release the space after container delete.
-
-        Use Cases:
-            ?
-
-        :avocado: tags=all,full_regression
-        :avocado: tags=hw,large
-        :avocado: tags=server,metadata,metadata_free_space,nvme
-        """
-        self.create_pool()
-        self.container = []
-
-        test_failed = False
-        containers_created = []
-        for loop in range(10):
-            self.log.info("Container Create Iteration %d / 9", loop)
-            if not self.create_all_containers(len(self.container)):
-                self.log.error("Errors during create iteration %d/9", loop)
-                test_failed = True
-
-            containers_created.append(len(self.container))
-
-            self.log.info("Container Remove Iteration %d / 9", loop)
-            if not self.destroy_all_containers():
-                self.log.error("Errors during remove iteration %d/9", loop)
-                test_failed = True
-
-        self.log.info("Summary")
-        self.log.info("  Loop  Containers Created")
-        self.log.info("  ----  ------------------")
-        for loop, quantity in enumerate(containers_created):
-            self.log.info("  %-4d  %d", loop, quantity)
-
-        if test_failed:
-            self.fail("Errors verifying metadata space release")
+            len(self.container), loop)
         self.log.info("Test passed")
 
     def test_metadata_server_restart(self):

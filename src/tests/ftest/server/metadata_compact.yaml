@@ -1,6 +1,3 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
-
 hosts:
   test_servers:
     - server-A
@@ -9,10 +6,7 @@ hosts:
     - server-D
   test_clients:
     - client-C
-timeouts:
-  test_metadata_fillup: 300
-  test_metadata_server_restart: 900
-  test_container_removal_after_der_nospace: 180
+timeout: 900
 server_config:
   name: daos_server
   engines_per_host: 2
@@ -33,6 +27,7 @@ server_config:
       env_vars:
         - DAOS_MD_CAP=128
         - DD_MASK=mgmt,md,dsms,any
+        - RDB_COMPACT_THRESHOLD=1
     1:
       targets: 8
       first_core: 0
@@ -49,6 +44,7 @@ server_config:
       env_vars:
         - DAOS_MD_CAP=128
         - DD_MASK=mgmt,md,dsms,any
+        - RDB_COMPACT_THRESHOLD=1
 pool:
   name: daos_server
   svcn: 3
@@ -58,14 +54,3 @@ pool:
 container:
   control_method: API
   silent: True
-ior:
-  clientslots:
-    slots: 1
-  repetitions: 1
-  dfs_destroy: False
-  iorwriteflags:
-    F: "-w -W -k -G 1"
-  iorreadflags:
-    F: "-r -R -G 1"
-  objectclass:
-    dfs_oclass: "SX"
