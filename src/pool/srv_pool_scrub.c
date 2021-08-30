@@ -16,7 +16,6 @@ static void
 sc_csum_calc_inc(struct scrub_ctx *ctx)
 {
 	ctx->sc_pool_csum_calcs++;
-	ctx->sc_cont_csum_calcs++;
 }
 
 /* Telemetry Metrics */
@@ -39,41 +38,19 @@ sc_m_pool_stop(struct scrub_ctx *ctx)
 
 }
 
-static void
-sc_m_cont_start(struct scrub_ctx *ctx)
-{
-	d_tm_record_timestamp(ctx->sc_metrics.scm_cont_metrics.sm_start);
-	d_tm_mark_duration_start(
-		ctx->sc_metrics.scm_cont_metrics.sm_last_duration,
-		D_TM_CLOCK_REALTIME);
-}
 
 static void
-sc_m_cont_stop(struct scrub_ctx *ctx)
-{
-	d_tm_mark_duration_end(
-		ctx->sc_metrics.scm_cont_metrics.sm_last_duration);
-	d_tm_set_counter(ctx->sc_metrics.scm_cont_metrics.sm_last_csum_calcs,
-			 ctx->sc_cont_csum_calcs);
-	ctx->sc_cont_csum_calcs = 0;
-}
-
-static void
-sc_m_pool_cont_csum_inc(struct scrub_ctx *ctx)
+sc_m_pool_csum_inc(struct scrub_ctx *ctx)
 {
 	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_csum_calcs);
 	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_total_csum_calcs);
-	m_inc_counter(ctx->sc_metrics.scm_cont_metrics.sm_csum_calcs);
-	m_inc_counter(ctx->sc_metrics.scm_cont_metrics.sm_total_csum_calcs);
 }
 
 static void
-sc_m_pool_cont_corr_inc(struct scrub_ctx *ctx)
+sc_m_pool_corr_inc(struct scrub_ctx *ctx)
 {
 	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_corruption);
 	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_total_corruption);
-	m_inc_counter(ctx->sc_metrics.scm_cont_metrics.sm_corruption);
-	m_inc_counter(ctx->sc_metrics.scm_cont_metrics.sm_total_corruption);
 }
 
 
@@ -81,13 +58,6 @@ static void
 sc_m_pool_csum_reset(struct scrub_ctx *ctx)
 {
 	m_reset_counter(ctx->sc_metrics.scm_pool_metrics.sm_csum_calcs);
-	m_reset_counter(ctx->sc_metrics.scm_pool_metrics.sm_corruption);
-}
-
-static void
-sc_m_cont_csum_reset(struct scrub_ctx *ctx)
-{
-	m_reset_counter(ctx->sc_metrics.scm_cont_metrics.sm_csum_calcs);
 	m_reset_counter(ctx->sc_metrics.scm_pool_metrics.sm_corruption);
 }
 
@@ -148,7 +118,7 @@ static void
 sc_verify_finish(struct scrub_ctx *ctx)
 {
 	sc_csum_calc_inc(ctx);
-	sc_m_pool_cont_csum_inc(ctx);
+	sc_m_pool_csum_inc(ctx);
 	ds_scrub_sched_control(ctx);
 }
 
@@ -325,7 +295,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx)
 	if (rc == -DER_CSUM) {
 		D_WARN("Checksum scrubber found corruption");
 		sc_raise_ras(ctx);
-		sc_m_pool_cont_corr_inc(ctx);
+		sc_m_pool_corr_inc(ctx);
 		rc = sc_mark_corrupt(ctx);
 	}
 
@@ -465,47 +435,6 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return 0;
 }
 
-static void
-sc_add_cont_metrics(struct scrub_ctx *ctx)
-{
-	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_last_duration,
-			D_TM_DURATION,
-			"How long the previous scrub took", "ms",
-			DF_CONT_DIR"/"M_LAST_DURATION,
-			DP_UUID((ctx)->sc_pool_uuid),
-			(ctx)->sc_dmi->dmi_tgt_id,
-			DP_UUID(ctx->sc_cont.scs_cont_uuid));
-	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_start,
-			D_TM_TIMESTAMP,
-			"When the current scrubbing started", NULL,
-			DF_CONT_DIR"/"M_STARTED, DP_CONT_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_csum_calcs,
-			D_TM_COUNTER, "Number of checksums calculated for "
-				      "current scan",
-			NULL,
-			DF_CONT_DIR"/"M_CSUM_COUNTER, DP_CONT_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_last_csum_calcs,
-			D_TM_COUNTER, "Number of checksums calculated in last "
-				      "scan", NULL,
-			DF_CONT_DIR"/"M_CSUM_PREV_COUNTER,
-			DP_CONT_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_total_csum_calcs,
-			D_TM_COUNTER, "Total number of checksums calculated",
-			NULL,
-			DF_CONT_DIR"/"M_CSUM_TOTAL_COUNTER, DP_CONT_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_corruption,
-			D_TM_COUNTER, "Number of silent data corruption "
-				      "detected during current scan",
-			NULL,
-			DF_CONT_DIR"/"M_CSUM_CORRUPTION, DP_CONT_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_cont_metrics.sm_total_corruption,
-			D_TM_COUNTER, "Total number of silent data corruption "
-				      "detected",
-			NULL,
-			DF_CONT_DIR"/"M_CSUM_TOTAL_CORRUPTION,
-			DP_CONT_DIR(ctx));
-}
-
 static int
 sc_scrub_cont(struct scrub_ctx *ctx)
 {
@@ -579,13 +508,8 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	D_DEBUG(DB_CSUM, "Scrubbing container: "DF_UUID"\n",
 		DP_UUID(ctx->sc_cont.scs_cont_uuid));
 
-	sc_add_cont_metrics(ctx);
-	sc_m_cont_start(ctx);
-
 	rc = sc_scrub_cont(ctx);
 
-	sc_m_cont_stop(ctx);
-	sc_m_cont_csum_reset(ctx);
 	sc_cont_teardown(ctx);
 
 	return rc;
@@ -694,6 +618,15 @@ sc_control_in_between(struct scrub_ctx *ctx)
 		C_TRACE("Still have %d credits\n", ctx->sc_credits_left);
 		return;
 	}
+
+	/* [todo-ryon]: Issues with schedule:
+	 *   - what to do in the case that there is nothing to
+	 *     scrub ... how long to wait until try again. How to know that there
+	 *     is nothing? sc_pool_last_csum_calcs could be 0 because of first
+	 *     time? Maybe need a flag is_first_time?
+	 *   - Issue when there's only 1. What's "in between"?
+	 *
+	 */
 
 	C_TRACE("Credits expired, will yield/sleep\n");
 

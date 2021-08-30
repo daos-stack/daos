@@ -74,13 +74,15 @@ enum scrub_status {
 	SCRUB_STATUS_NOT_RUNNING = 2,
 };
 
-/* telemetry metrics for the scrubber */
-#define DF_POOL_DIR "scrub/pool:"DF_UUID"[%d]"
-#define DP_POOL_DIR(ctx) DP_UUID((ctx)->sc_pool_uuid), \
+/*
+ * telemetry metrics for the scrubber
+ * The target must be parsed out by
+ * lib/telemetry/promexp/collector.go:extractLabels(). If the format here
+ * changes, extractLabels() must be updated as well.
+ */
+#define DF_POOL_DIR "%s/target:%d/scrubber"
+#define DP_POOL_DIR(ctx) (ctx)->sc_pool->sp_path, \
 			(ctx)->sc_dmi->dmi_tgt_id
-
-#define DF_CONT_DIR DF_POOL_DIR "/cont:"DF_UUID
-#define DP_CONT_DIR(ctx) DP_POOL_DIR(ctx) , DP_UUID(ctx->sc_cont.scs_cont_uuid)
 
 #define M_CSUM_COUNTER "csums/current"
 #define M_CSUM_TOTAL_COUNTER "csums/total"
@@ -107,7 +109,6 @@ struct scrub_ctx_metrics {
 	struct d_tm_node_t	*scm_pool_ult_start;
 	struct d_tm_node_t	*scm_pool_ult_wait_time;
 	struct scrub_metrics	 scm_pool_metrics;
-	struct scrub_metrics	 scm_cont_metrics;
 };
 
 /* Scrub the pool */
@@ -135,7 +136,6 @@ struct scrub_ctx {
 	/* callback function that will provide the csummer for the container */
 	ds_get_cont_fn_t	 sc_cont_lookup_fn;
 	struct cont_scrub	 sc_cont;
-	int			 sc_cont_csum_calcs;
 
 	/** Number of msec between checksum calculations */
 	daos_size_t		 sc_msec_between_calcs;
@@ -147,7 +147,7 @@ struct scrub_ctx {
 	daos_key_t		 sc_dkey;
 	struct dcs_csum_info	*sc_csum_to_verify;
 	daos_epoch_t		 sc_epoch;
-	uint16_t 		 sc_minor_epoch;
+	uint16_t		 sc_minor_epoch;
 	daos_iod_t		 sc_iod;
 
 	/* Current vos object iterator */

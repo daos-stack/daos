@@ -169,6 +169,11 @@ func extractLabels(in string) (labels labelMap, name string) {
 		func(labels labelMap, matches []string) {
 			labels["pool"] = strings.Replace(matches[1], "_", "-", -1)
 		})
+
+	name = parseNameSubstr(labels, name, `target_+(\d+)`, "target",
+		func(labels labelMap, matches []string) {
+			labels["target"] = matches[1]
+		})
 	return
 }
 
