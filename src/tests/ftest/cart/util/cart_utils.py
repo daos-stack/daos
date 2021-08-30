@@ -442,6 +442,8 @@ class CartTest(TestWithoutServers):
         for filename in memcheck_files:
             self.convert_xml(daos_test_shared_dir + "/" + filename)
 
+         return 0
+
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
         srv_rtn = self.launch_cmd_bg(srvcmd)
