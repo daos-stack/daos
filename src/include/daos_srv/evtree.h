@@ -255,8 +255,23 @@ static inline int
 evt_is_empty(struct evt_root *root)
 {
 	D_ASSERT(root != NULL);
+
 	return root->tr_depth == 0;
 }
+
+/** Return true if the tree has any data.   Removal records are
+ *  not considered data.  This is needed for assurance that
+ *  aggregation is not removing any orphaned data.
+ *
+ *  \param root[in]	Tree root
+ *  \param uma[in]	Memory attributes
+ *
+ *  \return		1 if it has data
+ *			0 if it is is empty or has only has removal records
+ *			negative error code on error
+ */
+int
+evt_has_data(struct evt_root *root, struct umem_attr *uma);
 
 enum evt_feats {
 	/** rectangles are Sorted by their Start Offset */
