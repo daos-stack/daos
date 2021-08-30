@@ -267,7 +267,7 @@ print_usage_msg(const char *msg)
 	printf("\tdon't perform 'wait for ranks' sync\n");
 	printf("-m 'log_message'\n");
 	printf("\tSpecify log message to be sent to remote server\n");
-	printf("--use-daos-agent-env\n");
+	printf("--use_daos_agent_env\n");
 	printf("\tSet OFI and CRT_* vars through daos_agent\n");
 }
 

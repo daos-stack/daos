@@ -13,6 +13,8 @@
 
 #include <cart/api.h>
 #include <unistd.h>
+#include <daos/mgmt.h>
+#include <daos/event.h>
 
 #include "crt_internal.h"
 #include "crt_utils.h"
@@ -45,6 +47,7 @@ crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
 	opts.assert_on_error	= assert_on_error;
 	opts.shutdown		= 0;
 	opts.is_swim_enabled	= false;
+	opts.use_daos_agent_env	= false;
 
 	/* Use 2 second delay as a default for all tests for now */
 	opts.delay_shutdown_sec	= 2;
@@ -348,7 +351,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     crt_group_t **grp, d_rank_list_t **rank_list,
 		     crt_context_t *crt_ctx, pthread_t *progress_thread,
 		     unsigned int total_srv_ctx, bool use_cfg,
-		     crt_init_options_t *init_opt)
+		     crt_init_options_t *init_opt, bool use_daos_agent_env)
 {
 	char		*grp_cfg_file;
 	uint32_t	 grp_size;
