@@ -829,7 +829,7 @@ class TestPool(TestDaosApiBase):
 
         Args:
             rank (str): daos server rank to reintegrate
-            tgt_idx (string, optional): str of targets to reintegrate on ranks
+            tgt_idx (str, optional): string of targets to reintegrate on ranks
             ex: "1,2". Defaults to None.
         """
         self.dmg.pool_reintegrate(self.identifier, rank, tgt_idx)
@@ -842,7 +842,7 @@ class TestPool(TestDaosApiBase):
 
         Args:
             rank (str): daos server rank to drain
-            tgt_idx (string, optional): str of targets to drain on ranks
+            tgt_idx (str, optional): string of targets to drain on ranks
                 ex: "1,2". Defaults to None.
         """
         self.dmg.pool_drain(self.identifier, rank, tgt_idx)
