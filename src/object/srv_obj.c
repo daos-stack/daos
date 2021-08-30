@@ -1678,7 +1678,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	     struct obj_io_context *ioc)
 {
 	struct ds_cont_hdl   *coh;
-	struct ds_cont_child *coc;
+	struct ds_cont_child *coc = NULL;
 	int		      rc;
 
 	D_ASSERT(ioc != NULL);
@@ -1737,6 +1737,8 @@ out:
 	ioc->ioc_coh	 = coh;
 	return 0;
 failed:
+	if (coc != NULL)
+		ds_cont_child_put(coc);
 	ds_cont_hdl_put(coh);
 	return rc;
 }

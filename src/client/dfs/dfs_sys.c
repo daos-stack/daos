@@ -816,10 +816,8 @@ dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list,
 
 listxattr:
 	rc = dfs_listxattr(dfs_sys->dfs, obj, list, &got_size);
-	if (rc != 0) {
-		*size = -1;
+	if (rc != 0)
 		D_GOTO(out_free_obj, rc);
-	}
 
 	if (*size < got_size)
 		rc = ERANGE;
@@ -872,10 +870,8 @@ dfs_sys_getxattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
 
 getxattr:
 	rc = dfs_getxattr(dfs_sys->dfs, obj, name, value, &got_size);
-	if (rc != 0) {
-		*size = -1;
+	if (rc != 0)
 		D_GOTO(out_free_obj, rc);
-	}
 
 	if (*size < got_size)
 		rc = ERANGE;
@@ -1013,8 +1009,6 @@ dfs_sys_readlink(dfs_sys_t *dfs_sys, const char *path, char *buf,
 	}
 
 	rc = dfs_get_symlink_value(obj, buf, size);
-	if (rc != 0)
-		*size = -1;
 
 	dfs_release(obj);
 
@@ -1144,7 +1138,6 @@ int
 dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 	     daos_size_t *size, daos_event_t *ev)
 {
-	int		rc;
 	d_iov_t		iov;
 	d_sg_list_t	sgl;
 
@@ -1160,18 +1153,13 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr_out = 1;
 
-	rc = dfs_read(dfs_sys->dfs, obj, &sgl, off, size, ev);
-	if (rc != 0)
-		*size = -1;
-
-	return rc;
+	return dfs_read(dfs_sys->dfs, obj, &sgl, off, size, ev);
 }
 
 int
 dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	      daos_off_t off, daos_size_t *size, daos_event_t *ev)
 {
-	int		rc;
 	d_iov_t		iov;
 	d_sg_list_t	sgl;
 
@@ -1187,11 +1175,7 @@ dfs_sys_write(dfs_sys_t *dfs_sys, dfs_obj_t *obj, const void *buf,
 	sgl.sg_iovs = &iov;
 	sgl.sg_nr_out = 1;
 
-	rc = dfs_write(dfs_sys->dfs, obj, &sgl, off, ev);
-	if (rc != 0)
-		*size = -1;
-
-	return rc;
+	return dfs_write(dfs_sys->dfs, obj, &sgl, off, ev);
 }
 
 int
