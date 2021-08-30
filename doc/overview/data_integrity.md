@@ -226,10 +226,10 @@ scanning anything on that SSD.
 These properties are provided when a pool is created, but should
 also be able to update them. When updated, they should be active right away.
 
-- **Pool Scrubber Schedule** - How the scrubber will run at the pool level. The
+- **Pool Scrubber Mode** - How the scrubber will run for each pool target. The
   container configuration can disable scrubbing for the container, but it cannot
-  alter the type of schedule.
-    - **OFF**
+  alter the mode.
+    - **OFF** - The Scrubber will not run. 
     - **Run & Wait** - Will run the scrubber to completion, yielding after
       consuming configured "credits". Then, if completed before configured
       frequency, will sleep until it's time to start again.
@@ -241,9 +241,6 @@ also be able to update them. When updated, they should be active right away.
     - **Run Once** - Run the scrubber once then turn off. Useful for better
       control by external scripts to control the schedule. Will still yield after
       consuming "credits".
-    - **Run Once Fast** - Run the scrubber once, without yielding, then turn off.
-      Useful for better control by external scripts to control the schedule. Maybe
-      want to get it done really fast and don't care about I/O at this time.
 - **Pool Scrubber Frequency** - How frequently the scrubber should run in
   number of seconds. If a scan takes longer than frequency, it would start
   again as soon as the previous scan completes.

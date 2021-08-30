@@ -126,7 +126,6 @@ func PoolProperties() PoolPropertyMap {
 				"wait":       drpc.PoolScrubSchedWait,
 				"continuous": drpc.PoolScrubSchedContinuous,
 				"run_once":   drpc.PoolScrubSchedRunOnce,
-				"no_yield":   drpc.PoolScrubSchedNoYield,
 			},
 		},
 		"scrub-freq": {

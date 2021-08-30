@@ -216,7 +216,6 @@ each_schedule__credits_are_consumed_and_wrap(void **state)
 		DAOS_SCRUB_SCHED_RUN_WAIT,
 		DAOS_SCRUB_SCHED_CONTINUOUS,
 		DAOS_SCRUB_SCHED_RUN_ONCE,
-		DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD,
 	};
 
 	for (i = 0; i < ARRAY_SIZE(scheds); i++) {
@@ -352,27 +351,6 @@ when_sched_off__should_sleep_5_sec(void **state)
 	free_ctx(&ctx);
 }
 
-static void
-when_sched_is_no_yield__should_not_sleep_or_yield(void **state)
-{
-	struct scrub_ctx	ctx = {0};
-
-	INIT_CTX_FOR_TESTS(&ctx, {
-		.tst_scrub_sched = DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD,
-		.tst_scrub_status = SCRUB_STATUS_RUNNING,
-		.tst_scrub_freq_sec = 10,
-		.tst_scrub_cred = 1,
-		.tst_pool_last_csum_calcs = 10,
-		});
-
-	run_sched_control(&ctx);
-
-	assert_int_equal(0, test_yield_fn_call_count);
-	assert_int_equal(0, test_sleep_fn_call_count);
-
-	free_ctx(&ctx);
-}
-
 static int scrub_test_setup(void **state)
 {
 	test_yield_fn_call_count = 0;
@@ -401,7 +379,6 @@ static const struct CMUnitTest scrubbing_sched_tests[] = {
 	TS(when_sched_continuous_credits_1__sleeps_and_yield_appropriately),
 	TS(when_sched_continuous_have_run_half_freq__should_sleep),
 	TS(when_sched_continuous_past_freq__should_yield),
-	TS(when_sched_is_no_yield__should_not_sleep_or_yield),
 };
 
 int

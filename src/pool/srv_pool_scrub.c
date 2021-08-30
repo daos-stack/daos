@@ -597,12 +597,6 @@ sc_credit_reset(struct scrub_ctx *ctx)
 
 }
 
-static bool
-sc_no_yield(struct scrub_ctx *ctx)
-{
-	return sc_schedule(ctx) == DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD;
-}
-
 static void
 sc_control_in_between(struct scrub_ctx *ctx)
 {
@@ -640,13 +634,11 @@ sc_control_in_between(struct scrub_ctx *ctx)
 			       msec_between);
 	}
 
-	if (!sc_no_yield(ctx)) {
-		if (msec_between == 0)
-			sc_yield(ctx);
-		else
-			sc_sleep(ctx, msec_between);
+	if (msec_between == 0)
+		sc_yield(ctx);
+	else
+		sc_sleep(ctx, msec_between);
 
-	}
 
 	sc_credit_reset(ctx);
 }
