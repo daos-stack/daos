@@ -2428,6 +2428,7 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 			"reintegration: pool/object "DF_UUID"/"DF_UOID
 			" rc: "DF_RC"\n", DP_UUID(tls->mpt_pool_uuid),
 			DP_UOID(*oid), DP_RC(rc));
+		ds_cont_child_put(cont);
 		return rc;
 	}
 
