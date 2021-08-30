@@ -519,6 +519,8 @@ enum daos_io_flags {
 	DIOF_FOR_EC_AGG		= 0x80,
 	/* The operation is for EC snapshot recovering */
 	DIOF_EC_RECOV_SNAP	= 0x100,
+	/* Only recover from parity */
+	DIOF_EC_RECOV_FROM_PARITY = 0x200,
 };
 
 /**
