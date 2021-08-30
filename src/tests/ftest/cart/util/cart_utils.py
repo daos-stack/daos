@@ -412,15 +412,17 @@ class CartTest(TestWithoutServers):
     def convert_xml(self, xml_file):
         """Modify the xml file"""
 
-        fd = open(xml_file, 'r')
-        ofd = open('{}.xml'.format(xml_file), 'w')
-        for line in fd:
-            if self.src_dir in line:
-                L = re.sub('<dir>\/*' + self.src_dir + '\/*', '<dir>', line)
-                ofd.write(L)
-            else:
-                ofd.write(line)
-        os.unlink(xml_file)
+        with open(xml_file, 'r') as fd:
+           with open('{}.xml'.format(xml_file), 'w') as ofd:
+              for line in fd:
+                  if self.src_dir in line:
+                      L = re.sub('<dir>\/*' + self.src_dir + '\/*',
+                                 '<dir>',
+                                 line)
+                      ofd.write(L)
+                  else:
+                      ofd.write(line)
+              os.unlink(xml_file)
 
     def convert_xml_files(self):
         """Check valgrind memcheck log files for errors."""
