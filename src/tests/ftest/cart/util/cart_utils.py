@@ -424,6 +424,8 @@ class CartTest(TestWithoutServers):
                       ofd.write(line)
               os.unlink(xml_file)
 
+         return 0
+
     def convert_xml_files(self):
         """Check valgrind memcheck log files for errors."""
 
