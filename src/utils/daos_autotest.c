@@ -58,7 +58,7 @@ int skip_steps[] = {28, 29};
 
 /** deadline/time limit */
 uint64_t	deadline_count;
-clock_t 	deadline_limit = 360 * CLOCKS_PER_SEC;
+clock_t		deadline_limit = 360 * CLOCKS_PER_SEC;
 
 static inline void
 new_oid(void)
@@ -109,7 +109,7 @@ step_success(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;32mOK\033[0m",comment, ap);
+	step_print("\033[0;32mOK\033[0m", comment, ap);
 	va_end(ap);
 }
 
@@ -119,7 +119,7 @@ step_fail(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;31mKO\033[0m",comment, ap);
+	step_print("\033[0;31mKO\033[0m", comment, ap);
 	va_end(ap);
 }
 
@@ -129,7 +129,7 @@ step_skip(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;37mSK\033[0m",comment, ap);
+	step_print("\033[0;37mSK\033[0m", comment, ap);
 	va_end(ap);
 }
 
@@ -387,7 +387,7 @@ kv_put(daos_handle_t oh, daos_size_t size)
 		rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_cur, size, val_cur,
 				evp);
 
-		if (start + deadline_limit <= clock()){
+		if (start + deadline_limit <= clock()) {
 			break;
 		}
 
@@ -1035,6 +1035,7 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 
 		int	i;
 		bool	found = false;
+
 		if (ap->skip_big) {
 			for (i = 0; i < sizeof(skip_steps) / sizeof(int); i++) {
 				if (s->id == skip_steps[i]){
