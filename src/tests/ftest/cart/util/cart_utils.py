@@ -416,8 +416,8 @@ class CartTest(TestWithoutServers):
            with open('{}.xml'.format(xml_file), 'w') as ofd:
               for line in fd:
                   if self.src_dir in line:
-                      L = re.sub('<dir>\/*' + self.src_dir + '\/*',
-                                 '<dir>',
+                      L = re.sub(r'<dir>\/*' + self.src_dir + '\/*',
+                                 r'<dir>',
                                  line)
                       ofd.write(L)
                   else:
