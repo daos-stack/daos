@@ -84,7 +84,8 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         rf = 'rf:{}'.format(str(redundancy_factor))
     properties = self.container[-1].properties.value
     cont_properties = (",").join(filter(None, [properties, rf]))
-    self.container[-1].properties.update(cont_properties)
+    if cont_properties is not None:
+        self.container[-1].properties.update(cont_properties)
     self.container[-1].create()
 
 
@@ -889,13 +890,12 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
-def create_racer_cmdline(self, job_spec, pool):
+def create_racer_cmdline(self, job_spec):
     """Create the srun cmdline to run daos_racer.
 
     Args:
         self (obj): soak obj
         job_spec (str): fio job in yaml to run
-        pool (obj):   TestPool obj
     Returns:
         cmd(list): list of cmdlines
 
@@ -912,9 +912,6 @@ def create_racer_cmdline(self, job_spec, pool):
         "${SLURM_JOB_ID}_" + "racer_log")
     env = daos_racer.get_environment(self.server_managers[0], racer_log)
     daos_racer.set_environment(env)
-    daos_racer.pool_uuid.update(pool.uuid)
-    add_containers(self, pool, path=racer_namespace)
-    daos_racer.cont_uuid.update(self.container[-1].uuid)
     log_name = job_spec
     srun_cmds = []
     srun_cmds.append(str(daos_racer.__str__()))
