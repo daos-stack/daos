@@ -1425,12 +1425,14 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				goto out;
 			}
 			iod_converted = true;
+
+			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY)
+				fetch_flags |= VOS_OF_SKIP_FETCH;
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
 				     orw->orw_epoch, dkey, orw->orw_nr, iods,
-				     cond_flags | fetch_flags, shadows, &ioh,
-				     dth);
+				     cond_flags | fetch_flags, shadows, &ioh, dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
@@ -1465,6 +1467,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (rc)
 				goto out;
 		}
+
 		if (ec_deg_fetch) {
 			D_ASSERT(!get_parity_list);
 			recov_lists = vos_ioh2recx_list(ioh);
@@ -1678,7 +1681,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	     struct obj_io_context *ioc)
 {
 	struct ds_cont_hdl   *coh;
-	struct ds_cont_child *coc;
+	struct ds_cont_child *coc = NULL;
 	int		      rc;
 
 	D_ASSERT(ioc != NULL);
@@ -1737,6 +1740,8 @@ out:
 	ioc->ioc_coh	 = coh;
 	return 0;
 failed:
+	if (coc != NULL)
+		ds_cont_child_put(coc);
 	ds_cont_hdl_put(coh);
 	return rc;
 }
