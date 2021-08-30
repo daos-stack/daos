@@ -439,6 +439,7 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 	if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_SUM"))
 	{
 		double total_rec;
+
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
@@ -453,10 +454,11 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 		 !strcmp(part->part_type, "DAOS_FILTER_CONST"))
 	{
 		d_iov_t *data;
+
 		pipeline_filter_get_data(part, dkey, *nr_iods, iods, akeys, 0,
 					 &data);
 		if ((rc = read_iov_as_double(data->iov_buf,
-					     part->part_type, total)))
+					     part->data_type, total)))
 		{
 			return rc; /** error */
 		}
@@ -562,7 +564,6 @@ pipeline_aggregations(daos_pipeline_t *pipeline, d_iov_t *dkey,
 	{
 		return 0; /** No filters means no aggregation */
 	}
-
 	for (i = 0; i < pipeline->num_aggr_filters; i++)
 	{
 		part_idx = 0;
@@ -822,7 +823,6 @@ dc_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 		{
 			nr_kds_iter = nr_kds_param;
 		}
-
 		if ((rc = daos_obj_list_dkey(oh, DAOS_TX_NONE, &nr_kds_iter,
 					kds_iter, sgl_keys_iter, anchor, NULL)))
 		{
