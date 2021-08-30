@@ -1038,7 +1038,7 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 
 		if (ap->skip_big) {
 			for (i = 0; i < sizeof(skip_steps) / sizeof(int); i++) {
-				if (s->id == skip_steps[i]){
+				if (s->id == skip_steps[i]) {
 					found = true;
 					break;
 				}
