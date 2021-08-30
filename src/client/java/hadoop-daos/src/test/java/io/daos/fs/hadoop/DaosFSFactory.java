@@ -40,6 +40,7 @@ public class DaosFSFactory {
     conf.set(Constants.DAOS_POOL_ID, pooluuid);
     conf.set(Constants.DAOS_CONTAINER_ID, contuuid);
     conf.set(Constants.DAOS_IO_ASYNC, String.valueOf(async));
+    conf.setBoolean(Constants.DAOS_WITH_UNS_PREFIX, false);
   }
 
   public synchronized static FileSystem getFS() throws IOException {

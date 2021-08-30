@@ -2943,3 +2943,66 @@ pool_target_id_list_free(struct pool_target_id_list *id_list)
 	if (id_list->pti_ids)
 		D_FREE(id_list->pti_ids);
 }
+
+int
+pool_target_addr_list_alloc(unsigned int num,
+			    struct pool_target_addr_list *addr_list)
+{
+	D_ALLOC_ARRAY(addr_list->pta_addrs, num);
+	if (addr_list->pta_addrs == NULL)
+		return -DER_NOMEM;
+
+	addr_list->pta_number = num;
+
+	return 0;
+}
+
+void
+pool_target_addr_list_free(struct pool_target_addr_list *addr_list)
+{
+	if (addr_list == NULL)
+		return;
+
+	D_FREE(addr_list->pta_addrs);
+}
+
+static bool
+pool_target_addr_equal(struct pool_target_addr *addr1,
+		       struct pool_target_addr *addr2)
+{
+	return addr1->pta_rank == addr2->pta_rank &&
+	       addr1->pta_target == addr2->pta_target;
+}
+
+static bool
+pool_target_addr_found(struct pool_target_addr_list *addr_list,
+		       struct pool_target_addr *tgt)
+{
+	int i;
+
+	for (i = 0; i < addr_list->pta_number; i++)
+		if (pool_target_addr_equal(&addr_list->pta_addrs[i], tgt))
+			return true;
+	return false;
+}
+
+int
+pool_target_addr_list_append(struct pool_target_addr_list *addr_list,
+			     struct pool_target_addr *addr)
+{
+	struct pool_target_addr	*new_addrs;
+
+	if (pool_target_addr_found(addr_list, addr))
+		return 0;
+
+	D_REALLOC_ARRAY(new_addrs, addr_list->pta_addrs,
+			addr_list->pta_number, addr_list->pta_number + 1);
+	if (new_addrs == NULL)
+		return -DER_NOMEM;
+
+	new_addrs[addr_list->pta_number] = *addr;
+	addr_list->pta_addrs = new_addrs;
+	addr_list->pta_number++;
+
+	return 0;
+}
