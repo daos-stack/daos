@@ -46,6 +46,3 @@ rebuild:
       object_class: OC_RP_2G1
     object_class_rp_3g1:
       object_class: OC_RP_3G1
-  cont_rf:
-      rank:
-        - 3

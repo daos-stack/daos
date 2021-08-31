@@ -35,22 +35,15 @@ class RbldContRedundancyFactorEnforce(RbldContRedundancyFactor):
                    traffic.
                    Continue following steps for the positive testcases.
                 (2)Check for container initial rf and health-status.
-                (3)Rank rebuild start.
-                (4)Check for container rf and health-status after the
-                   rebuild started.
-                (5)Check for container rf and health-status after the
-                   rebuild completed.
-                (6)Check for pool and container info after rebuild.
-                (7)Verify container io object write if the container is
-                   healthy.
         Use Cases:
             Verify container RF enforcement with different object class
             traffic, positive test of rebuild with server failure and read
             write io verification.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=container,rebuild
+        :avocado: tags=container
         :avocado: tags=container_rf
         :avocado: tags=cont_rf_oclass_enforcement
         """
-        self.execute_rebuild_test()
+        self.mode = "cont_rf_enforcement"
+        self.execute_cont_rf_test()

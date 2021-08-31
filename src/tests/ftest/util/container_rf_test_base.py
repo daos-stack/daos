@@ -20,6 +20,7 @@ class RbldContRedundancyFactor(RebuildTestBase):
     def __init__(self, *args, **kwargs):
         """Initialize a CascadingFailures object."""
         super().__init__(*args, **kwargs)
+        self.mode = None
         self.daos_cmd = None
 
     def create_test_container(self):
@@ -147,7 +148,7 @@ class RbldContRedundancyFactor(RebuildTestBase):
                     self.fail("#Negative test, container redundancy factor "
                               "test failed, return error RC: -1003 not found")
 
-    def execute_rebuild_test(self, create_container=True):
+    def execute_cont_rf_test(self, create_container=True):
         """Execute the rebuild test steps for container rf test.
 
         Args:
@@ -178,9 +179,7 @@ class RbldContRedundancyFactor(RebuildTestBase):
         self.create_test_pool()
         # Create a container and write objects
         self.create_test_container_and_write_obj(negative_test)
-        if negative_test:
-            self.log.info("Negative test passed")
-        else:
+        if self.mode is "cont_rf_with_rebuild":
             # Verify the rank to be excluded has at least one object
             self.verify_rank_has_objects()
             # Start the rebuild process
@@ -203,3 +202,7 @@ class RbldContRedundancyFactor(RebuildTestBase):
                     " is healthy.")
                 self.verify_container_data()
             self.log.info("Test passed")
+        elif self.mode is "cont_rf_enforcement":
+            self.log.info("Container rf test passed")
+        else:
+            self.fail("#Unsupported container_rf test mode")

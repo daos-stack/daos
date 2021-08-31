@@ -46,4 +46,5 @@ class RbldContRedundancyFactorTest(RbldContRedundancyFactor):
         :avocado: tags=container_rf
         :avocado: tags=rebuild_container_rf
         """
-        self.execute_rebuild_test()
+        self.mode = "cont_rf_with_rebuild"
+        self.execute_cont_rf_test()
