@@ -116,7 +116,7 @@ class TestDaosApiBase(ObjectWithParameters):
             method(**kwargs)
         except DaosApiError as error:
             # Log the exception to obtain additional trace information
-            if not self.silent:
+            if not self.silent.value:
                 self.log.debug(
                     "Exception raised by %s.%s(%s)",
                     method.__module__, method.__name__,

@@ -315,7 +315,7 @@ class TestContainer(TestDaosApiBase):
             acl_file (str, optional): path of the ACL file. Defaults to None.
         """
         self.destroy()
-        if not self.silent:
+        if not self.silent.value:
             self.log.info(
                 "Creating a container with pool handle %s",
                 self.pool.pool.handle.value)
@@ -374,7 +374,7 @@ class TestContainer(TestDaosApiBase):
                 self.control_method.value)
 
         self.uuid = self.container.get_uuid_str()
-        if not self.silent:
+        if not self.silent.value:
             self.log.info("  Container created with uuid %s", self.uuid)
 
     @fail_on(DaosApiError)
@@ -513,7 +513,7 @@ class TestContainer(TestDaosApiBase):
         status = False
         if self.container:
             self.close()
-            if not self.silent:
+            if not self.silent.value:
                 self.log.info("Destroying container %s", self.uuid)
             if self.container.attached:
                 kwargs = {"force": force}
