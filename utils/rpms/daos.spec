@@ -305,7 +305,7 @@ mkdir -p %{buildroot}/%{_unitdir}
 %if (0%{?rhel} == 7)
 install -m 644 utils/systemd/%{server_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{server_svc_name}
 install -m 644 utils/systemd/%{agent_svc_name}.pre230 %{buildroot}/%{_unitdir}/%{agent_svc_name}
-%else if (0%{?rhel} == 8 or  %{?suse_version} == 1500)
+%else
 install -m 644 utils/systemd/%{server_svc_name} %{buildroot}/%{_unitdir}
 install -m 644 utils/systemd/%{agent_svc_name} %{buildroot}/%{_unitdir}
 %endif

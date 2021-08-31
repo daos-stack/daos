@@ -334,11 +334,14 @@ pipeline {
                         }
                     }
                 }
-                stage('Build RPM on CentOS 8') {
+                stage('Build RPM on CentOS 8.4.2105') {
+                    /* can't have an empty when {}
                     when {
                         beforeAgent true
-                        expression { ! skipStage() }
+                        // needs to be supported for 8.4.2105
+                        // expression { ! skipStage() }
                     }
+                    */
                     agent {
                         dockerfile {
                             filename 'Dockerfile.mockbuild'
