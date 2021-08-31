@@ -229,14 +229,22 @@ struct  _Mgmt__PoolEvictReq
   size_t n_svc_ranks;
   uint32_t *svc_ranks;
   /*
-   * Optional list of handles to evict
+   * Optional list of handles to evict (Mutually exclusive with destroy/force)
    */
   size_t n_handles;
   char **handles;
+  /*
+   * If true, evict is first step of a pool destroy operation
+   */
+  protobuf_c_boolean destroy;
+  /*
+   * If true and destroy=true, forcibly closes open pool handles
+   */
+  protobuf_c_boolean force;
 };
 #define MGMT__POOL_EVICT_REQ__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__pool_evict_req__descriptor) \
-    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL }
+    , (char *)protobuf_c_empty_string, (char *)protobuf_c_empty_string, 0,NULL, 0,NULL, 0, 0 }
 
 
 /*

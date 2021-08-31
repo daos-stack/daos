@@ -300,15 +300,6 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		return -DER_INVAL;
 	}
 
-	/* Check active pool connections, evict only if force */
-	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, NULL, 0, true,
-				     force);
-	if (rc != 0) {
-		D_ERROR("Failed to check/evict pool handles " DF_UUID ", "
-			DF_RC "\n",  DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
-	}
-
 	/* Ask PS for list of storage ranks (tgt corpc destinations) */
 	rc = ds_pool_svc_ranks_get(pool_uuid, svc_ranks, &ranks);
 	if (rc) {
@@ -392,16 +383,15 @@ out:
 }
 
 int
-ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		   uuid_t *handles, size_t n_handles, const char *group)
+ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, size_t n_handles,
+		   uint32_t destroy, uint32_t force, const char *group)
 {
 	int		 rc;
 
 	D_DEBUG(DB_MGMT, "evict pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	/* Evict active pool connections if they exist*/
-	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles,
-				     false, false);
+	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles, destroy, force);
 	if (rc != 0) {
 		D_ERROR("Failed to evict pool handles"DF_UUID" rc: %d\n",
 			DP_UUID(pool_uuid), rc);

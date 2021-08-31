@@ -1620,7 +1620,7 @@ const ProtobufCMessageDescriptor mgmt__pool_destroy_resp__descriptor =
   (ProtobufCMessageInit) mgmt__pool_destroy_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[4] =
+static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[6] =
 {
   {
     "sys",
@@ -1670,8 +1670,34 @@ static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[4]
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "destroy",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolEvictReq, destroy),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "force",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_BOOL,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__PoolEvictReq, force),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__pool_evict_req__field_indices_by_name[] = {
+  4,   /* field[4] = destroy */
+  5,   /* field[5] = force */
   3,   /* field[3] = handles */
   1,   /* field[1] = id */
   2,   /* field[2] = svc_ranks */
@@ -1680,7 +1706,7 @@ static const unsigned mgmt__pool_evict_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__pool_evict_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 4 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor =
 {
@@ -1690,7 +1716,7 @@ const ProtobufCMessageDescriptor mgmt__pool_evict_req__descriptor =
   "Mgmt__PoolEvictReq",
   "mgmt",
   sizeof(Mgmt__PoolEvictReq),
-  4,
+  6,
   mgmt__pool_evict_req__field_descriptors,
   mgmt__pool_evict_req__field_indices_by_name,
   1,  mgmt__pool_evict_req__number_ranges,
