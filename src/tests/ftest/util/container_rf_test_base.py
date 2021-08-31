@@ -162,13 +162,6 @@ class ContRedundancyFactor(RebuildTestBase):
         if create_container:
             self.setup_test_container()
         oclass = self.inputs.object_class.value
-        num_of_ranks = len(self.inputs.rank.value)
-        rf = ''.join(self.container.properties.value.split(":"))
-        rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
-        if num_of_ranks > rf_num:
-            expect_cont_status = "UNCLEAN"
-        else:
-            expect_cont_status = "HEALTHY"
         negative_test = True
         if "OC_SX" in oclass and rf_num < 1:
             negative_test = False
@@ -180,6 +173,13 @@ class ContRedundancyFactor(RebuildTestBase):
         # Create a container and write objects
         self.create_test_container_and_write_obj(negative_test)
         if self.mode is "cont_rf_with_rebuild":
+            num_of_ranks = len(self.inputs.rank.value)
+            rf = ''.join(self.container.properties.value.split(":"))
+            rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
+            if num_of_ranks > rf_num:
+                expect_cont_status = "UNCLEAN"
+            else:
+                expect_cont_status = "HEALTHY"
             # Verify the rank to be excluded has at least one object
             self.verify_rank_has_objects()
             # Start the rebuild process
