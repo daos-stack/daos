@@ -6,8 +6,8 @@ hosts:
     - server-D
     - server-E
     - server-F
-    - server-G
   test_clients:
+    - client-G
     - client-H
 timeout: 1800
 server_config:

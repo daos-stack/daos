@@ -36,8 +36,9 @@ class DaosRacerTest(TestWithServers):
         dmg = self.get_dmg_command()
         self.assertGreater(
             len(self.hostlist_clients), 0,
-            "This test requires one client: {}".format(self.hostlist_clients))
-        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], dmg)
+            "This test requires two clients: {}".format(self.hostlist_clients))
+        daos_racer = DaosRacerCommand(
+            self.bin, self.hostlist_clients[0],self.hostlist_clients[1], dmg)
         daos_racer.get_params(self)
         daos_racer.set_environment(
             daos_racer.get_environment(self.server_managers[0]))
