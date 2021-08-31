@@ -70,7 +70,7 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		.dpe_val	= DAOS_EC_CELL_MAX,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_SCHED,
-		.dpe_val	= DAOS_SCRUB_SCHED_OFF,
+		.dpe_val	= DAOS_SCRUB_SCHED_CONTINUOUS,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_FREQ,
 		.dpe_val	= 604800,
