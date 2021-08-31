@@ -31,6 +31,14 @@ type FabricInterface struct {
 	NetDevClass uint32
 }
 
+func (f *FabricInterface) String() string {
+	var dom string
+	if f.Domain != "" {
+		dom = "/" + f.Domain
+	}
+	return fmt.Sprintf("%s%s (%s)", f.Name, dom, netdetect.DevClassName(f.NetDevClass))
+}
+
 // DefaultFabricInterface is the one used if no devices are found on the system.
 var DefaultFabricInterface = &FabricInterface{
 	Name:   "lo",

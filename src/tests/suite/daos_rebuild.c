@@ -22,7 +22,6 @@
 #define OBJ_CLS		OC_RP_3G1
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
-#define REBUILD_POOL_SIZE	(4ULL << 30)
 
 /* Destroy the pool for the sub test */
 static void

@@ -329,6 +329,7 @@ server_main(d_rank_t my_rank, const char *str_port, const char *str_interface,
 
 	/* Read each others URIs from the file */
 	memset(other_server_uri, 0x0, MAX_URI);
+	other_server_uri[MAX_URI - 1] = '\0';
 	lseek(fd_read, 0, SEEK_SET);
 	rc = read(fd_read, other_server_uri, MAX_URI);
 	if (rc < 0) {
@@ -575,6 +576,7 @@ int main(int argc, char **argv)
 	printf("----------------------------------------\n\n");
 
 	/* Spawn 2 servers, each one reads and writes URIs into diff file */
+	umask(S_IWGRP | S_IWOTH);
 	fd0 = mkstemp(tmp_file0);
 	fd1 = mkstemp(tmp_file1);
 

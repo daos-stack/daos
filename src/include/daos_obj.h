@@ -312,8 +312,8 @@ typedef struct {
 } daos_key_desc_t;
 
 /**
- * Generate a DAOS object ID by encoding the private DAOS bits of the object
- * address space.
+ * Deprecated - use daos_obj_generate_oid()
+ * Generate a DAOS object ID by encoding the private DAOS bits of the object address space.
  *
  * \param[in,out]
  *		oid	[in]: Object ID with low 96 bits set and unique inside

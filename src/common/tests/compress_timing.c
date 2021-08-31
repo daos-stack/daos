@@ -327,6 +327,7 @@ run_timings(struct compress_ft *fts[],
 	size_t	nsec;
 	int	rc;
 	FILE	*fp;
+	long int lifile_size;
 	size_t	file_sz, total_sz;
 	int	offset;
 	float	mbs, compr_ratio;
@@ -343,7 +344,9 @@ run_timings(struct compress_ft *fts[],
 		return -1;
 	}
 	fseek(fp, 0L, SEEK_END);
-	file_sz = ftell(fp);
+	lifile_size = ftell(fp);
+	D_ASSERT(lifile_size >= 0);
+	file_sz = lifile_size;
 	fseek(fp, 0L, SEEK_SET);
 
 	D_ALLOC(f_buf, file_sz);
@@ -465,6 +468,7 @@ run_timings(struct compress_ft *fts[],
 					 * Compress ratio - less is better
 					 *  = (compressed size / origin size)
 					 */
+					D_ASSERT(total_sz != 0);
 					compr_ratio = (float)rc / total_sz;
 					printf("\t%s:      \t%s\t%s\t"
 						"%.1f MB/s\t%.2f%%\n",

@@ -24,7 +24,7 @@
 #define CLI_OBJ_IO_PARMS	8
 #define NIL_BITMAP		(NULL)
 
-#define OBJ_TGT_INLINE_NR	11
+#define OBJ_TGT_INLINE_NR	10
 #define OBJ_INLINE_BTIMAP	4
 
 struct obj_req_tgts {
@@ -318,14 +318,14 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 	}
 
 	map = pl_map_find(pool->dp_pool, obj->cob_md.omd_id);
-	dc_pool_put(pool);
-
 	if (map == NULL) {
 		D_DEBUG(DB_PL, "Cannot find valid placement map\n");
+		dc_pool_put(pool);
 		D_GOTO(out, rc = -DER_INVAL);
 	}
 
 	obj->cob_md.omd_ver = dc_pool_get_version(pool);
+	dc_pool_put(pool);
 	rc = pl_obj_place(map, &obj->cob_md, NULL, &layout);
 	pl_map_decref(map);
 	if (rc != 0) {
@@ -367,6 +367,7 @@ obj_layout_create(struct dc_object *obj, bool refresh)
 
 		obj_shard = &obj->cob_shards->do_shards[i];
 		obj_shard->do_shard = layout->ol_shards[i].po_shard;
+		obj_shard->do_shard_idx = i;
 		obj_shard->do_target_id = layout->ol_shards[i].po_target;
 		obj_shard->do_fseq = layout->ol_shards[i].po_fseq;
 		obj_shard->do_rebuilding = layout->ol_shards[i].po_rebuilding;
@@ -895,7 +896,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 
 	if (obj_auxi->is_ec_obj &&
 	    (obj_auxi->csum_retry || obj_auxi->tx_uncertain ||
-	     DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))) {
+	     DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE) ||
+	     obj_auxi->flags & ORF_EC_RECOV_FROM_PARITY)) {
 		if (obj_auxi->tx_uncertain) {
 			tx_uncertain = true;
 			obj_auxi->tx_uncertain = 0;
@@ -1181,66 +1183,70 @@ obj_ptr2pm_ver(struct dc_object *obj, unsigned int *map_ver)
 	return 0;
 }
 
+struct obj_pool_query_arg {
+	struct dc_pool		*oqa_pool;
+	struct dc_object	*oqa_obj;
+};
+
 static int
 obj_pool_query_cb(tse_task_t *task, void *data)
 {
-	struct dc_object	*obj = *((struct dc_object **)data);
-	daos_pool_query_t	*args;
-
-	args = dc_task_get_args(task);
+	struct obj_pool_query_arg *arg = data;
 
 	if (task->dt_result != 0) {
 		D_DEBUG(DB_IO, "obj_pool_query_cb task=%p result=%d\n",
 			task, task->dt_result);
 	} else {
-		D_ASSERT(args->info != NULL);
-		if (obj->cob_version < args->info->pi_map_ver)
-			obj_layout_refresh(obj);
+		if (arg->oqa_obj->cob_version <
+		    dc_pool_get_version(arg->oqa_pool))
+			obj_layout_refresh(arg->oqa_obj);
 	}
-	obj_decref(obj);
 
-	D_FREE(args->info);
+	obj_decref(arg->oqa_obj);
+	dc_pool_put(arg->oqa_pool);
 	return 0;
 }
 
 int
 obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
-		    tse_task_t **taskp)
+		    unsigned int map_ver, tse_task_t **taskp)
 {
-	tse_task_t		*task;
-	daos_pool_query_t	*args;
-	daos_handle_t		 ph;
-	int			 rc = 0;
+	tse_task_t		       *task;
+	daos_handle_t			ph;
+	struct dc_pool		       *pool;
+	struct obj_pool_query_arg	arg;
+	int				rc = 0;
 
 	rc = obj_ptr2poh(obj, &ph);
 	if (rc != 0)
 		return rc;
 
-	rc = dc_task_create(dc_pool_query, sched, NULL, &task);
-	if (rc != 0)
-		return rc;
+	pool = dc_hdl2pool(ph);
+	if (pool == NULL)
+		return -DER_NO_HDL;
 
-	args = dc_task_get_args(task);
-	args->poh = ph;
-	D_ALLOC_PTR(args->info);
-	if (args->info == NULL)
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	obj_addref(obj);
-	rc = dc_task_reg_comp_cb(task, obj_pool_query_cb, &obj, sizeof(obj));
+	rc = dc_pool_create_map_refresh_task(pool, map_ver, sched, &task);
 	if (rc != 0) {
-		obj_decref(obj);
-		D_GOTO(err, rc);
+		dc_pool_put(pool);
+		return rc;
+	}
+
+	arg.oqa_pool = pool;
+	pool = NULL;
+	obj_addref(obj);
+	arg.oqa_obj = obj;
+
+	rc = tse_task_register_comp_cb(task, obj_pool_query_cb, &arg,
+				       sizeof(arg));
+	if (rc != 0) {
+		obj_decref(arg.oqa_obj);
+		dc_pool_put(arg.oqa_pool);
+		dc_pool_abandon_map_refresh_task(task);
+		return rc;
 	}
 
 	*taskp = task;
 	return 0;
-err:
-	dc_task_decref(task);
-	if (args->info)
-		D_FREE(args->info);
-
-	return rc;
 }
 
 int
@@ -1512,6 +1518,7 @@ dc_obj_layout_get(daos_handle_t oh, struct daos_obj_layout **p_layout)
 	}
 	*p_layout = layout;
 out:
+	obj_decref(obj);
 	if (rc && layout != NULL)
 		daos_obj_layout_free(layout);
 	return rc;
@@ -1546,7 +1553,8 @@ dc_obj_layout_refresh(daos_handle_t oh)
 
 static int
 obj_retry_cb(tse_task_t *task, struct dc_object *obj,
-	     struct obj_auxi_args *obj_auxi, bool pmap_stale)
+	     struct obj_auxi_args *obj_auxi, bool pmap_stale,
+	     unsigned int srv_pmap_ver)
 {
 	tse_sched_t	 *sched = tse_task2sched(task);
 	tse_task_t	 *pool_task = NULL;
@@ -1555,7 +1563,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	bool		  keep_result = false;
 
 	if (pmap_stale) {
-		rc = obj_pool_query_task(sched, obj, &pool_task);
+		rc = obj_pool_query_task(sched, obj, srv_pmap_ver, &pool_task);
 		if (rc != 0)
 			D_GOTO(err, rc);
 	}
@@ -1587,7 +1595,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 
 	if (pool_task != NULL)
 		/* ignore returned value, error is reported by comp_cb */
-		dc_task_schedule(pool_task, obj_auxi->io_retry);
+		tse_task_schedule(pool_task, obj_auxi->io_retry);
 
 	if (keep_result)
 		task->dt_result = result;
@@ -1598,7 +1606,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	return 0;
 err:
 	if (pool_task)
-		dc_task_decref(pool_task);
+		dc_pool_abandon_map_refresh_task(pool_task);
 
 	task->dt_result = result; /* restore the original error */
 	obj_auxi->io_retry = 0;
@@ -1659,12 +1667,12 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 			goto out;
 		}
 		recov_task->ert_th = th;
-		D_DEBUG(DB_REBUILD, DF_C_OID_DKEY" Fetching to recover\n",
-			DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey));
+		D_DEBUG(DB_REBUILD, DF_C_OID_DKEY" Fetching to recover epoch "DF_X64"\n",
+			DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey), recov_task->ert_epoch);
 		extra_flags = DIOF_EC_RECOV;
 		if (recov_task->ert_snapshot)
 			extra_flags |= DIOF_EC_RECOV_SNAP;
-		if ((obj_auxi->flags & ORF_FOR_MIGRATION) != 0)
+		if (obj_auxi->flags & ORF_FOR_MIGRATION)
 			extra_flags |= DIOF_FOR_MIGRATION;
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
 					      extra_flags,
@@ -2928,7 +2936,7 @@ struct comp_iter_arg {
 };
 
 static int
-merge_recx_insert(d_list_t *prev, uint64_t offset, uint64_t size)
+merge_recx_insert(d_list_t *prev, uint64_t offset, uint64_t size, daos_epoch_t eph)
 {
 	struct obj_auxi_list_recx *new;
 
@@ -2938,13 +2946,14 @@ merge_recx_insert(d_list_t *prev, uint64_t offset, uint64_t size)
 
 	new->recx.rx_idx = offset;
 	new->recx.rx_nr = size;
+	new->recx_eph = eph;
 	D_INIT_LIST_HEAD(&new->recx_list);
 	d_list_add(&new->recx_list, prev);
 	return 0;
 }
 
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size)
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
 {
 	struct obj_auxi_list_recx	*recx;
 	struct obj_auxi_list_recx	*new_recx = NULL;
@@ -2957,13 +2966,14 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size)
 	d_list_for_each_entry_safe(recx, tmp, head, recx_list) {
 		daos_off_t recx_start = recx->recx.rx_idx;
 		daos_off_t recx_end = recx->recx.rx_idx + recx->recx.rx_nr;
+		daos_epoch_t recx_eph = recx->recx_eph;
 
 		D_DEBUG(DB_TRACE, "current "DF_U64"/"DF_U64"\n", recx_start, recx_end);
 		if (end < recx_start) {
 			if (!inserted) {
 				rc = merge_recx_insert(prev == NULL ?
 						       head : &prev->recx_list,
-						       offset, size);
+						       offset, size, eph);
 				inserted = true;
 			}
 			break;
@@ -2971,14 +2981,20 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size)
 
 		/* merge with current recx, and try to merge with next recxs */
 		if (max(recx_start, offset) <= min(recx_end, end)) {
-			if (new_recx == NULL)
+			if (new_recx == NULL) {
 				new_recx = recx;
+				new_recx->recx_eph = max(eph, new_recx->recx_eph);
+			}
 
 			new_recx->recx.rx_idx = min(recx_start, offset);
 			new_recx->recx.rx_nr = max(recx_end, end) -
 					       new_recx->recx.rx_idx;
-			D_DEBUG(DB_TRACE, "new "DF_U64"/"DF_U64"\n",
-				new_recx->recx.rx_idx, new_recx->recx.rx_nr);
+
+			new_recx->recx_eph = max(recx_eph, new_recx->recx_eph);
+
+			D_DEBUG(DB_TRACE, "new "DF_U64"/"DF_U64" "DF_U64"\n",
+				new_recx->recx.rx_idx, new_recx->recx.rx_nr,
+				new_recx->recx_eph);
 			offset = new_recx->recx.rx_idx;
 			end = offset + new_recx->recx.rx_nr;
 			D_DEBUG(DB_TRACE, "offset "DF_U64"/"DF_U64"\n", offset, end);
@@ -2994,7 +3010,7 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size)
 
 	if (!inserted)
 		rc = merge_recx_insert(prev == NULL ? head : &prev->recx_list,
-				       offset, size);
+				       offset, size, eph);
 
 	return rc;
 }
@@ -3019,6 +3035,7 @@ obj_ec_recxs_convert(d_list_t *merge_list, daos_recx_t *recx,
 	struct daos_oclass_attr	*oca;
 	uint64_t		total_size = recx->rx_nr;
 	uint64_t		cur_off = recx->rx_idx & ~PARITY_INDICATOR;
+	uint32_t		shard;
 	int			rc = 0;
 	int			cell_nr;
 	int			stripe_nr;
@@ -3036,6 +3053,7 @@ obj_ec_recxs_convert(d_list_t *merge_list, daos_recx_t *recx,
 
 	cell_nr = obj_ec_cell_rec_nr(oca);
 	stripe_nr = obj_ec_stripe_rec_nr(oca);
+	shard = shard_auxi->shard % obj_ec_tgt_nr(oca);
 	/* If all parity nodes are down(degraded mode), then
 	 * the enumeration is sent to all data nodes.
 	 */
@@ -3043,11 +3061,10 @@ obj_ec_recxs_convert(d_list_t *merge_list, daos_recx_t *recx,
 		uint64_t daos_off;
 		uint64_t data_size;
 
-		daos_off = obj_ec_idx_vos2daos(cur_off, stripe_nr, cell_nr,
-					       shard_auxi->shard);
+		daos_off = obj_ec_idx_vos2daos(cur_off, stripe_nr, cell_nr, shard);
 		data_size = min(roundup(cur_off + 1, cell_nr) - cur_off,
 				total_size);
-		rc = merge_recx(merge_list, daos_off, data_size);
+		rc = merge_recx(merge_list, daos_off, data_size, 0);
 		if (rc)
 			break;
 		D_DEBUG(DB_IO, "total "DF_U64" merge "DF_U64"/"DF_U64"\n",
@@ -3782,7 +3799,8 @@ obj_comp_cb(tse_task_t *task, void *data)
 		obj_auxi->io_retry = 0;
 
 	if (!obj_auxi->no_retry && (pm_stale || obj_auxi->io_retry))
-		obj_retry_cb(task, obj, obj_auxi, pm_stale);
+		obj_retry_cb(task, obj, obj_auxi, pm_stale,
+			     obj_auxi->map_ver_reply);
 
 	if (!obj_auxi->io_retry) {
 		struct obj_ec_fail_info	*fail_info;
@@ -4278,6 +4296,9 @@ dc_obj_fetch_task(tse_task_t *task)
 	}
 	if (args->extra_flags & DIOF_FOR_EC_AGG)
 		obj_auxi->flags |= ORF_FOR_EC_AGG;
+
+	if (args->extra_flags & DIOF_EC_RECOV_FROM_PARITY)
+		obj_auxi->flags |= ORF_EC_RECOV_FROM_PARITY;
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
 		obj_auxi->flags |= ORF_CHECK_EXISTENCE;
@@ -5604,6 +5625,8 @@ out:
 			if (dova[i].list_buf != dova[i].inline_buf)
 				D_FREE(dova[i].list_buf);
 
+			daos_iov_free(&dova[i].cursor.dkey);
+			daos_iov_free(&dova[i].cursor.iod.iod_name);
 			D_FREE(dova[i].fetch_buf);
 		}
 

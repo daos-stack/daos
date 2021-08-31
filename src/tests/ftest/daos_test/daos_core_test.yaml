@@ -80,7 +80,34 @@ dmg:
   transport_config:
     allow_insecure: True
 daos_tests:
-  num_clients: 1
+  num_clients:
+    test_daos_degraded_mode: 1
+    test_daos_management: 1
+    test_daos_pool: 2
+    test_daos_container: 1
+    test_daos_epoch: 1
+    test_daos_single_rdg_tx: 1
+    test_daos_distributed_tx: 1
+    test_daos_verify_consistency: 1
+    test_daos_io: 1
+    test_daos_ec_io: 1
+    test_daos_ec_obj: 1
+    test_daos_object_array: 1
+    test_daos_array: 1
+    test_daos_kv: 1
+    test_daos_capability: 1
+    test_daos_epoch_recovery: 1
+    test_daos_md_replication: 2
+    test_daos_rebuild_simple: 1
+    test_daos_drain_simple: 1
+    test_daos_extend_simple: 1
+    test_daos_oid_allocator: 1
+    test_daos_checksum: 1
+    test_daos_rebuild_ec: 1
+    test_daos_aggregate_ec: 1
+    test_daos_degraded_ec_0to6: 1
+    test_daos_degraded_ec_8to23: 1
+    test_daos_dedup: 1
   test_name:
     test_daos_degraded_mode: DAOS_Degraded_Mode
     test_daos_management: DAOS_Management

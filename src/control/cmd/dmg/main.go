@@ -151,14 +151,15 @@ func (c *cfgCmd) setConfig(cfg *control.Config) {
 
 type cliOptions struct {
 	AllowProxy     bool          `long:"allow-proxy" description:"Allow proxy configuration via environment"`
-	HostList       string        `short:"l" long:"host-list" description:"comma separated list of addresses <ipv4addr/hostname>"`
-	Insecure       bool          `short:"i" long:"insecure" description:"have dmg attempt to connect without certificates"`
-	Debug          bool          `short:"d" long:"debug" description:"enable debug output"`
+	HostList       string        `short:"l" long:"host-list" description:"A comma separated list of addresses <ipv4addr/hostname> to connect to"`
+	Insecure       bool          `short:"i" long:"insecure" description:"Have dmg attempt to connect without certificates"`
+	Debug          bool          `short:"d" long:"debug" description:"Enable debug output"`
 	JSON           bool          `short:"j" long:"json" description:"Enable JSON output"`
 	JSONLogs       bool          `short:"J" long:"json-logging" description:"Enable JSON-formatted log output"`
 	ConfigPath     string        `short:"o" long:"config-path" description:"Client config file path"`
+	Server         serverCmd     `command:"server" alias:"srv" description:"Perform tasks related to remote servers"`
 	Storage        storageCmd    `command:"storage" alias:"sto" description:"Perform tasks related to storage attached to remote servers"`
-	Config         configCmd     `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware remote servers"`
+	Config         configCmd     `command:"config" alias:"cfg" description:"Perform tasks related to configuration of hardware on remote servers"`
 	System         SystemCmd     `command:"system" alias:"sys" description:"Perform distributed tasks related to DAOS system"`
 	Network        NetCmd        `command:"network" alias:"net" description:"Perform tasks related to network devices attached to remote servers"`
 	Pool           PoolCmd       `command:"pool" description:"Perform tasks related to DAOS pools"`
@@ -255,15 +256,16 @@ and access control settings, along with system wide operations.`
 		invoker.SetConfig(ctlCfg)
 		if ctlCmd, ok := cmd.(ctlInvoker); ok {
 			ctlCmd.setInvoker(invoker)
-			if opts.HostList != "" {
-				if hlCmd, ok := cmd.(hostListSetter); ok {
-					hl := strings.Split(opts.HostList, ",")
-					hlCmd.setHostList(hl)
-					ctlCfg.HostList = hl
-				} else {
-					return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
-						control.UserConfigPath(), control.SystemConfigPath())
-				}
+		}
+
+		if opts.HostList != "" {
+			if hlCmd, ok := cmd.(hostListSetter); ok {
+				hl := strings.Split(opts.HostList, ",")
+				hlCmd.setHostList(hl)
+				ctlCfg.HostList = hl
+			} else {
+				return errors.Errorf("this command does not accept a hostlist parameter (set it in %s or %s)",
+					control.UserConfigPath(), control.SystemConfigPath())
 			}
 		}
 

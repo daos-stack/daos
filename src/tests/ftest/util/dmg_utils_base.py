@@ -228,6 +228,7 @@ class DmgCommandBase(YamlCommand):
                 self.sys = FormattedParameter("--sys={}", None)
                 self.properties = FormattedParameter("--properties={}", None)
                 self.label = FormattedParameter("--label={}", None)
+                self.nranks = FormattedParameter("--nranks={}", None)
 
         class ExcludeSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool exclude command."""
@@ -301,6 +302,8 @@ class DmgCommandBase(YamlCommand):
             def __init__(self):
                 """Create a dmg pool list command object."""
                 super().__init__("/run/dmg/pool/list/*", "list")
+                self.no_query = FormattedParameter("--no-query", False)
+                self.verbose = FormattedParameter("--verbose", False)
 
         class OverwriteAclSubCommand(CommandWithParameters):
             """Defines an object for the dmg pool overwrite-acl command."""
@@ -595,7 +598,7 @@ class DmgCommandBase(YamlCommand):
                     """Create a dmg telemetry metrics list object."""
                     super().__init__(
                         "/run/dmg/telemetry/metrics/list/*", "list")
-                    self.host = FormattedParameter("--host={}", None)
+                    self.host = FormattedParameter("--host-list={}", None)
                     self.port = FormattedParameter("--port={}", None)
 
             class QuerySubCommand(CommandWithParameters):
@@ -605,6 +608,6 @@ class DmgCommandBase(YamlCommand):
                     """Create a dmg telemetry metrics query object."""
                     super().__init__(
                         "/run/dmg/telemetry/metrics/query/*", "query")
-                    self.host = FormattedParameter("--host={}", None)
+                    self.host = FormattedParameter("--host-list={}", None)
                     self.port = FormattedParameter("--port={}", None)
                     self.metrics = FormattedParameter("--metrics={}", None)

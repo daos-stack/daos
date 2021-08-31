@@ -1,0 +1,46 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+    - server-E
+  test_clients:
+    - client-A
+timeout: 600
+fault_path:
+  - /fault1
+  - /fault2
+  - /fault2
+  - /fault3
+  - /fault1
+server_config:
+  name: daos_server
+  servers:
+    scm_size: 10
+number_pools: 5
+pool_0:
+  name: daos_server
+  size: 1G
+  nranks: 1
+  control_method: dmg
+pool_1:
+  name: daos_server
+  size: 3G
+  nranks: 3
+  control_method: dmg
+pool_2:
+  name: daos_server
+  smc_size: 3G
+  nranks: 3
+  control_method: dmg
+pool_3:
+  name: daos_server
+  scm_size: 2G
+  nranks: 2
+  control_method: dmg
+pool_4:
+  name: daos_server
+  scm_size: 2G
+  nranks: 2
+  control_method: dmg

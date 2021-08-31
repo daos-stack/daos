@@ -14,6 +14,8 @@ def scons():
 
     Import('base_env', 'env', 'prereqs', 'CART_VERSION')
 
+    daos_build.add_build_rpath(base_env)
+    daos_build.add_build_rpath(env)
     base_env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])

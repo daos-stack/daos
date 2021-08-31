@@ -603,7 +603,7 @@ NVMe PCI     Model                FW Revision Socket ID Capacity
 0000:da:00.0 INTEL SSDPED1K750GA  E2010325    1         750.00GB
 ```
 
-In this situation, the configuration file `servers` section could be
+In this situation, the configuration file `engines` section could be
 populated as follows:
 
 ```yaml

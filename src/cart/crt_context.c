@@ -196,7 +196,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	    cur_ctx_num >= max_ctx_num) {
 		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
 			cur_ctx_num, max_ctx_num);
-		D_GOTO(out, -DER_AGAIN);
+		D_GOTO(out, rc = -DER_AGAIN);
 	}
 
 	D_ALLOC_PTR(ctx);

@@ -177,6 +177,7 @@ func (c *localFabricCache) setCache(nf *NUMAFabric) {
 	c.localNUMAFabric = nf
 
 	c.initialized.SetTrue()
+	c.log.Debugf("cached:\n%+v", c.localNUMAFabric.numaMap)
 }
 
 // GetDevices fetches an appropriate fabric device from the cache.

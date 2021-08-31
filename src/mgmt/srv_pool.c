@@ -89,7 +89,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			opc;
 	struct mgmt_tgt_create_in	*tc_in;
-	struct mgmt_tgt_create_out	*tc_out;
+	struct mgmt_tgt_create_out	*tc_out = NULL;
 	d_rank_t			*tc_out_ranks;
 	uuid_t				*tc_out_uuids;
 	unsigned int			i;
@@ -162,12 +162,14 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 		D_DEBUG(DB_TRACE, "fill ranks %d idx %d "DF_UUID"\n",
 			tc_out_ranks[i], idx, DP_UUID(tc_out_uuids[i]));
 	}
-	D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
-	D_FREE(tc_out->tc_ranks.ca_arrays);
-
 	rc = DER_SUCCESS;
 
 decref:
+	if (tc_out) {
+		D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
+		D_FREE(tc_out->tc_ranks.ca_arrays);
+	}
+
 	crt_req_decref(tc_req);
 	if (rc) {
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
@@ -414,8 +416,7 @@ out:
 
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-				 uint32_t rank,
-				 struct pool_target_id_list *target_list,
+				 struct pool_target_addr_list *target_addrs,
 				 pool_comp_state_t state)
 {
 	int			rc;
@@ -431,7 +432,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		 * than allocating an actual list array and populating it
 		 */
 		reint_ranks.rl_nr = 1;
-		reint_ranks.rl_ranks = &rank;
+		reint_ranks.rl_ranks = &target_addrs->pta_addrs[0].pta_rank;
 
 		/* TODO: The size information and "pmem" type need to be
 		 * determined automatically, perhaps by querying the pool leader
@@ -453,8 +454,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, rank,
-					 target_list, state);
+	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, target_addrs, state);
 
 	return rc;
 }

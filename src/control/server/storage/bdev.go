@@ -8,6 +8,7 @@ package storage
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -18,6 +19,9 @@ import (
 	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/system"
 )
+
+// BdevPciAddrSep defines the separator used between PCI addresses in string lists.
+const BdevPciAddrSep = " "
 
 type (
 	// NvmeHealth represents a set of health statistics for a NVMe device
@@ -153,6 +157,14 @@ func (nc NvmeController) Free() (tb uint64) {
 	return
 }
 
+func (ncs NvmeControllers) String() string {
+	var ss []string
+	for _, c := range ncs {
+		ss = append(ss, c.PciAddr)
+	}
+	return strings.Join(ss, ", ")
+}
+
 // Capacity returns the cumulative total bytes of all controller capacities.
 func (ncs NvmeControllers) Capacity() (tb uint64) {
 	for _, c := range ncs {
@@ -211,25 +223,12 @@ func (ncs NvmeControllers) Update(ctrlrs ...*NvmeController) NvmeControllers {
 type (
 	// BdevProvider defines an interface to be implemented by a Block Device provider.
 	BdevProvider interface {
-		Scan(BdevScanRequest) (*BdevScanResponse, error)
 		Prepare(BdevPrepareRequest) (*BdevPrepareResponse, error)
+		Scan(BdevScanRequest) (*BdevScanResponse, error)
 		Format(BdevFormatRequest) (*BdevFormatResponse, error)
+		WriteConfig(BdevWriteConfigRequest) (*BdevWriteConfigResponse, error)
 		QueryFirmware(NVMeFirmwareQueryRequest) (*NVMeFirmwareQueryResponse, error)
 		UpdateFirmware(NVMeFirmwareUpdateRequest) (*NVMeFirmwareUpdateResponse, error)
-		WriteNvmeConfig(BdevWriteNvmeConfigRequest) (*BdevWriteNvmeConfigResponse, error)
-	}
-
-	// BdevScanRequest defines the parameters for a Scan operation.
-	BdevScanRequest struct {
-		pbin.ForwardableRequest
-		DeviceList []string
-		DisableVMD bool
-		NoCache    bool
-	}
-
-	// BdevScanResponse contains information gleaned during a successful Scan operation.
-	BdevScanResponse struct {
-		Controllers NvmeControllers
 	}
 
 	// BdevPrepareRequest defines the parameters for a Prepare operation.
@@ -237,17 +236,32 @@ type (
 		pbin.ForwardableRequest
 		HugePageCount         int
 		DisableCleanHugePages bool
-		PCIAllowlist          string
-		PCIBlocklist          string
+		PCIAllowList          string
+		PCIBlockList          string
 		TargetUser            string
-		ResetOnly             bool
+		Reset_                bool
 		DisableVFIO           bool
-		DisableVMD            bool
+		EnableVMD             bool
 	}
 
 	// BdevPrepareResponse contains the results of a successful Prepare operation.
 	BdevPrepareResponse struct {
-		VmdDetected bool
+		VMDPrepared bool
+	}
+
+	// BdevScanRequest defines the parameters for a Scan operation.
+	BdevScanRequest struct {
+		pbin.ForwardableRequest
+		DeviceList    []string
+		EngineStorage map[uint32]*Config // to validate against
+		VMDEnabled    bool
+		BypassCache   bool
+	}
+
+	// BdevScanResponse contains information gleaned during a successful Scan operation.
+	BdevScanResponse struct {
+		Controllers NvmeControllers
+		VMDEnabled  bool
 	}
 
 	// BdevTierProperties contains basic configuration properties of a bdev tier.
@@ -264,23 +278,25 @@ type (
 		Properties BdevTierProperties
 		OwnerUID   int
 		OwnerGID   int
-		DisableVMD bool
+		VMDEnabled bool
 		Hostname   string
+		BdevCache  *BdevScanResponse
 	}
 
-	// BdevWriteNvmeConfigRequest defines the parameters for a WriteConfig operation.
-	BdevWriteNvmeConfigRequest struct {
+	// BdevWriteConfigRequest defines the parameters for a WriteConfig operation.
+	BdevWriteConfigRequest struct {
 		pbin.ForwardableRequest
 		ConfigOutputPath string
 		OwnerUID         int
 		OwnerGID         int
 		TierProps        []BdevTierProperties
+		VMDEnabled       bool
 		Hostname         string
+		BdevCache        *BdevScanResponse
 	}
 
-	// BdevWriteNvmeConfigResponse contains the result of a WriteConfig operation.
-	BdevWriteNvmeConfigResponse struct {
-	}
+	// BdevWriteConfigResponse contains the result of a WriteConfig operation.
+	BdevWriteConfigResponse struct{}
 
 	// BdevDeviceFormatRequest designs the parameters for a device-specific format.
 	BdevDeviceFormatRequest struct {
@@ -400,12 +416,14 @@ func (f *BdevAdminForwarder) Format(req BdevFormatRequest) (*BdevFormatResponse,
 	return res, nil
 }
 
-func (f *BdevAdminForwarder) WriteNvmeConfig(req BdevWriteNvmeConfigRequest) (*BdevWriteNvmeConfigResponse, error) {
+func (f *BdevAdminForwarder) WriteConfig(req BdevWriteConfigRequest) (*BdevWriteConfigResponse, error) {
 	req.Forwarded = true
-	res := new(BdevWriteNvmeConfigResponse)
-	if err := f.SendReq("BdevWriteNvmeConfig", req, res); err != nil {
+
+	res := new(BdevWriteConfigResponse)
+	if err := f.SendReq("BdevWriteConfig", req, res); err != nil {
 		return nil, err
 	}
+
 	return res, nil
 }
 

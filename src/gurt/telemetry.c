@@ -1480,7 +1480,7 @@ d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value)
 	if (value > dtm_stats->dtm_max)
 		dtm_stats->dtm_max = value;
 
-	if (value < dtm_stats->dtm_min)
+	if (dtm_stats->sample_size == 1 || value < dtm_stats->dtm_min)
 		dtm_stats->dtm_min = value;
 }
 
@@ -1941,7 +1941,6 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 			rc = -DER_NO_SHMEM;
 			goto out;
 		}
-		temp->dtn_metric->dtm_stats->dtm_min = UINT64_MAX;
 	}
 
 	buff_len = 0;
