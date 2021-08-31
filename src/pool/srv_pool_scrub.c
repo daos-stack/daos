@@ -344,9 +344,36 @@ keys_are_same(daos_key_t key1, daos_key_t key2)
 }
 
 static bool
-epoch_is_same(daos_epoch_t a, daos_epoch_t b)
+epoch_eq(daos_epoch_t a, daos_epoch_t b)
 {
 	return a == b;
+}
+
+static bool
+recx_eq(const daos_recx_t *a, const daos_recx_t *b)
+{
+	if (a == NULL || b == NULL)
+		return false;
+
+	return a->rx_nr == b->rx_nr && a->rx_idx == b->rx_idx;
+}
+
+static bool
+sc_value_has_been_seen(struct scrub_ctx *ctx, vos_iter_entry_t *entry,
+		       vos_iter_type_t type)
+{
+	if (VOS_ITER_RECX == type &&
+	    !recx_eq(ctx->sc_iod.iod_recxs, &entry->ie_recx))
+		return false;
+	return epoch_eq(ctx->sc_epoch, entry->ie_epoch) &&
+	       epoch_eq(ctx->sc_minor_epoch, entry->ie_minor_epc);
+}
+
+static void
+sc_obj_value_reset(struct  scrub_ctx *ctx)
+{
+	ctx->sc_epoch = 0;
+	ctx->sc_minor_epoch = 0;
 }
 
 /** vos_iter_cb_t */
@@ -360,8 +387,7 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (ctx->sc_pool->sp_scrub_sched == DAOS_SCRUB_SCHED_OFF) {
 		C_TRACE("scrubbing is off now, aborting ...");
-		*acts |= VOS_ITER_CB_ABORT;
-		return 0;
+		return 1;
 	}
 
 	switch (type) {
@@ -391,12 +417,8 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		break;
 	case VOS_ITER_SINGLE:
 	case VOS_ITER_RECX: {
-		if (epoch_is_same(ctx->sc_epoch, entry->ie_epoch) &&
-			epoch_is_same(ctx->sc_minor_epoch,
-				      entry->ie_minor_epc)) {
-			*acts |= VOS_ITER_CB_SKIP;
-			ctx->sc_epoch = 0;
-			ctx->sc_minor_epoch = 0;
+		if (sc_value_has_been_seen(ctx, entry, type)) {
+			sc_obj_value_reset(ctx);
 		} else {
 			C_TRACE("Scrubbing akey: "DF_KEY", type: %s, rec size: "
 					DF_U64", extent: "DF_RECX"\n",
@@ -406,12 +428,6 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				DP_RECX(entry->ie_orig_recx)
 			);
 
-			ctx->sc_iod.iod_size = entry->ie_rsize;
-			ctx->sc_iod.iod_nr = 1;
-			ctx->sc_iod.iod_recxs = &entry->ie_recx;
-			ctx->sc_iod.iod_type = type == VOS_ITER_RECX ?
-					       DAOS_IOD_ARRAY :
-					       DAOS_IOD_SINGLE;
 			sc_obj_val_setup(ctx, entry, type, param, ih);
 
 			rc = sc_verify_obj_value(ctx);
