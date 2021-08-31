@@ -896,7 +896,8 @@ obj_shard_tgts_query(struct dc_object *obj, uint32_t map_ver, uint32_t shard,
 
 	if (obj_auxi->is_ec_obj &&
 	    (obj_auxi->csum_retry || obj_auxi->tx_uncertain ||
-	     DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE))) {
+	     DAOS_FAIL_CHECK(DAOS_OBJ_FORCE_DEGRADE) ||
+	     obj_auxi->flags & ORF_EC_RECOV_FROM_PARITY)) {
 		if (obj_auxi->tx_uncertain) {
 			tx_uncertain = true;
 			obj_auxi->tx_uncertain = 0;
@@ -1666,12 +1667,12 @@ obj_ec_recov_cb(tse_task_t *task, struct dc_object *obj,
 			goto out;
 		}
 		recov_task->ert_th = th;
-		D_DEBUG(DB_REBUILD, DF_C_OID_DKEY" Fetching to recover\n",
-			DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey));
+		D_DEBUG(DB_REBUILD, DF_C_OID_DKEY" Fetching to recover epoch "DF_X64"\n",
+			DP_C_OID_DKEY(obj->cob_md.omd_id, args->dkey), recov_task->ert_epoch);
 		extra_flags = DIOF_EC_RECOV;
 		if (recov_task->ert_snapshot)
 			extra_flags |= DIOF_EC_RECOV_SNAP;
-		if ((obj_auxi->flags & ORF_FOR_MIGRATION) != 0)
+		if (obj_auxi->flags & ORF_FOR_MIGRATION)
 			extra_flags |= DIOF_FOR_MIGRATION;
 		rc = dc_obj_fetch_task_create(args->oh, th, 0, args->dkey, 1,
 					      extra_flags,
@@ -2935,7 +2936,7 @@ struct comp_iter_arg {
 };
 
 static int
-merge_recx_insert(d_list_t *prev, uint64_t offset, uint64_t size)
+merge_recx_insert(d_list_t *prev, uint64_t offset, uint64_t size, daos_epoch_t eph)
 {
 	struct obj_auxi_list_recx *new;
 
@@ -2945,13 +2946,14 @@ merge_recx_insert(d_list_t *prev, uint64_t offset, uint64_t size)
 
 	new->recx.rx_idx = offset;
 	new->recx.rx_nr = size;
+	new->recx_eph = eph;
 	D_INIT_LIST_HEAD(&new->recx_list);
 	d_list_add(&new->recx_list, prev);
 	return 0;
 }
 
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size)
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph)
 {
 	struct obj_auxi_list_recx	*recx;
 	struct obj_auxi_list_recx	*new_recx = NULL;
@@ -2964,13 +2966,14 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size)
 	d_list_for_each_entry_safe(recx, tmp, head, recx_list) {
 		daos_off_t recx_start = recx->recx.rx_idx;
 		daos_off_t recx_end = recx->recx.rx_idx + recx->recx.rx_nr;
+		daos_epoch_t recx_eph = recx->recx_eph;
 
 		D_DEBUG(DB_TRACE, "current "DF_U64"/"DF_U64"\n", recx_start, recx_end);
 		if (end < recx_start) {
 			if (!inserted) {
 				rc = merge_recx_insert(prev == NULL ?
 						       head : &prev->recx_list,
-						       offset, size);
+						       offset, size, eph);
 				inserted = true;
 			}
 			break;
@@ -2978,14 +2981,20 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size)
 
 		/* merge with current recx, and try to merge with next recxs */
 		if (max(recx_start, offset) <= min(recx_end, end)) {
-			if (new_recx == NULL)
+			if (new_recx == NULL) {
 				new_recx = recx;
+				new_recx->recx_eph = max(eph, new_recx->recx_eph);
+			}
 
 			new_recx->recx.rx_idx = min(recx_start, offset);
 			new_recx->recx.rx_nr = max(recx_end, end) -
 					       new_recx->recx.rx_idx;
-			D_DEBUG(DB_TRACE, "new "DF_U64"/"DF_U64"\n",
-				new_recx->recx.rx_idx, new_recx->recx.rx_nr);
+
+			new_recx->recx_eph = max(recx_eph, new_recx->recx_eph);
+
+			D_DEBUG(DB_TRACE, "new "DF_U64"/"DF_U64" "DF_U64"\n",
+				new_recx->recx.rx_idx, new_recx->recx.rx_nr,
+				new_recx->recx_eph);
 			offset = new_recx->recx.rx_idx;
 			end = offset + new_recx->recx.rx_nr;
 			D_DEBUG(DB_TRACE, "offset "DF_U64"/"DF_U64"\n", offset, end);
@@ -3001,7 +3010,7 @@ merge_recx(d_list_t *head, uint64_t offset, uint64_t size)
 
 	if (!inserted)
 		rc = merge_recx_insert(prev == NULL ? head : &prev->recx_list,
-				       offset, size);
+				       offset, size, eph);
 
 	return rc;
 }
@@ -3026,6 +3035,7 @@ obj_ec_recxs_convert(d_list_t *merge_list, daos_recx_t *recx,
 	struct daos_oclass_attr	*oca;
 	uint64_t		total_size = recx->rx_nr;
 	uint64_t		cur_off = recx->rx_idx & ~PARITY_INDICATOR;
+	uint32_t		shard;
 	int			rc = 0;
 	int			cell_nr;
 	int			stripe_nr;
@@ -3043,6 +3053,7 @@ obj_ec_recxs_convert(d_list_t *merge_list, daos_recx_t *recx,
 
 	cell_nr = obj_ec_cell_rec_nr(oca);
 	stripe_nr = obj_ec_stripe_rec_nr(oca);
+	shard = shard_auxi->shard % obj_ec_tgt_nr(oca);
 	/* If all parity nodes are down(degraded mode), then
 	 * the enumeration is sent to all data nodes.
 	 */
@@ -3050,11 +3061,10 @@ obj_ec_recxs_convert(d_list_t *merge_list, daos_recx_t *recx,
 		uint64_t daos_off;
 		uint64_t data_size;
 
-		daos_off = obj_ec_idx_vos2daos(cur_off, stripe_nr, cell_nr,
-					       shard_auxi->shard);
+		daos_off = obj_ec_idx_vos2daos(cur_off, stripe_nr, cell_nr, shard);
 		data_size = min(roundup(cur_off + 1, cell_nr) - cur_off,
 				total_size);
-		rc = merge_recx(merge_list, daos_off, data_size);
+		rc = merge_recx(merge_list, daos_off, data_size, 0);
 		if (rc)
 			break;
 		D_DEBUG(DB_IO, "total "DF_U64" merge "DF_U64"/"DF_U64"\n",
@@ -4286,6 +4296,9 @@ dc_obj_fetch_task(tse_task_t *task)
 	}
 	if (args->extra_flags & DIOF_FOR_EC_AGG)
 		obj_auxi->flags |= ORF_FOR_EC_AGG;
+
+	if (args->extra_flags & DIOF_EC_RECOV_FROM_PARITY)
+		obj_auxi->flags |= ORF_EC_RECOV_FROM_PARITY;
 
 	if (args->extra_flags & DIOF_CHECK_EXISTENCE) {
 		obj_auxi->flags |= ORF_CHECK_EXISTENCE;

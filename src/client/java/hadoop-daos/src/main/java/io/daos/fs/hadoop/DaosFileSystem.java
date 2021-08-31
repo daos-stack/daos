@@ -41,9 +41,12 @@ public class DaosFileSystem extends FileSystem {
   private int minReadSize;
   private String bucket;
   private String unsPrefix;
-  private String qualifiedUriNoLastSlash;
+  private String qualifiedUriNoPrefix;
+  private String qualifiedUriPath;
   private String qualifiedUnsWorkPath;
   private String workPath;
+
+  private boolean withUnsPrefix;
 
   private boolean async = Constants.DEFAULT_DAOS_IO_ASYNC;
 
@@ -54,7 +57,7 @@ public class DaosFileSystem extends FileSystem {
         LOG.debug("daos finalizer relocated to hadoop ShutdownHookManager");
       }
     } else {
-      LOG.error("failed to relocate daos finalizer");
+      LOG.warn("failed to relocate daos finalizer");
     }
   }
 
@@ -99,6 +102,10 @@ public class DaosFileSystem extends FileSystem {
       throw new IllegalArgumentException("expect POSIX file system, but " + unsInfo.getLayout());
     }
     unsPrefix = unsInfo.getPrefix();
+    withUnsPrefix = conf.getBoolean(Constants.DAOS_WITH_UNS_PREFIX, Constants.DEFAULT_DAOS_WITH_UNS_PREFIX);
+    if (!withUnsPrefix) {
+      LOG.warn("withUnsPrefix is set to false from Hadoop configuration. You may not be able to connect to DAOS");
+    }
     conf.set(Constants.DAOS_POOL_ID, unsInfo.getPoolId());
     conf.set(Constants.DAOS_CONTAINER_ID, unsInfo.getContId());
     super.initialize(name, conf);
@@ -119,10 +126,11 @@ public class DaosFileSystem extends FileSystem {
     }
     try {
       this.daos = builder.build();
-      qualifiedUriNoLastSlash = name.getScheme() + "://" + (name.getAuthority() == null ? "" : name.getAuthority());
+      qualifiedUriNoPrefix = name.getScheme() + "://" + (name.getAuthority() == null ? "" : name.getAuthority());
+      qualifiedUriPath = qualifiedUriNoPrefix + "/" + unsPrefix;
       workPath = "/user/" + System.getProperty("user.name");
-      this.uri = URI.create(qualifiedUriNoLastSlash + "/");
-      qualifiedUnsWorkPath = qualifiedUriNoLastSlash + workPath;
+      this.uri = URI.create(qualifiedUriPath + "/");
+      qualifiedUnsWorkPath = withUnsPrefix ? qualifiedUriPath + workPath : qualifiedUriNoPrefix + workPath;
       workingDir = new Path(qualifiedUnsWorkPath);
       // mkdir workingDir in DAOS
       daos.mkdir(workPath, true);
@@ -256,25 +264,38 @@ public class DaosFileSystem extends FileSystem {
       return p;
     }
     String path = puri.getPath();
-    if (!path.startsWith(unsPrefix)) {
-      path = path.startsWith("/") ? (qualifiedUriNoLastSlash + path) : (qualifiedUnsWorkPath + "/" + path);
-    } else {
-      boolean truncated = false;
-      if (path.length() > unsPrefix.length()) {
-        path = path.substring(unsPrefix.length());
-        truncated = true;
+    if (withUnsPrefix) {
+      if (!path.startsWith(unsPrefix)) {
+        path = path.startsWith("/") ? (qualifiedUriPath + path) : (qualifiedUnsWorkPath + "/" + path);
       } else {
-        path = "/";
+        path = qualifiedUriNoPrefix + path;
       }
-      if (!path.startsWith("/")) {
-        if (truncated) { // ensure correct uns prefix, counter example, <unsPrefix>abc, is not on uns path
-          path = qualifiedUriNoLastSlash + puri.getPath();
-        } else {
-          path = (qualifiedUnsWorkPath + "/" + path);
-        }
-      }
+    } else {
+      path = removeUnsPrefix(puri);
     }
     return new Path(path);
+  }
+
+  private String removeUnsPrefix(URI puri) {
+    String path = puri.getPath();
+    if (!path.startsWith(unsPrefix)) {
+      return path.startsWith("/") ? (qualifiedUriNoPrefix + path) : (qualifiedUnsWorkPath + "/" + path);
+    }
+    boolean truncated = false;
+    if (path.length() > unsPrefix.length()) {
+      path = path.substring(unsPrefix.length());
+      truncated = true;
+    } else {
+      path = "/";
+    }
+    if (!path.startsWith("/")) {
+      if (truncated) { // ensure correct uns prefix, counter example, <unsPrefix>abc, is not on uns path
+        path = qualifiedUriNoPrefix + puri.getPath();
+      } else {
+        path = (qualifiedUnsWorkPath + "/" + path);
+      }
+    }
+    return path;
   }
 
   private String getDaosRelativePath(Path path) {
