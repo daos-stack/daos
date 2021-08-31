@@ -59,11 +59,11 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 	 * verify degrade fetch is correct.
 	 */
 	if (oclass == OC_EC_2P1G1) {
-		get_killing_rank_by_oid(arg, oid, 2, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1, false);
+		get_killing_rank_by_oid(arg, oid, 1, 0, extra_kill_ranks, NULL);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, false);
 	} else { /* oclass OC_EC_4P2G1 */
-		get_killing_rank_by_oid(arg, oid, 4, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2, false);
+		get_killing_rank_by_oid(arg, oid, 2, 0, extra_kill_ranks, NULL);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, false);
 	}
 
 	if (write_type == PARTIAL_UPDATE)
@@ -262,7 +262,7 @@ rebuild_ec_setup(void  **state, int number)
 
 	save_group_state(state);
 	rc = test_setup(state, SETUP_POOL_CONNECT, true,
-			REBUILD_SMALL_POOL_SIZE, number, NULL);
+			REBUILD_POOL_SIZE, number, NULL);
 	if (rc) {
 		/* Let's skip for this case, since it is possible there
 		 * is not enough ranks here.
