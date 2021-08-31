@@ -49,10 +49,7 @@ typedef struct {
 	uint32_t		ci_redun_fac;
 	/** Number of snapshots */
 	uint32_t		ci_nsnapshots;
-	/** Epochs of returns snapshots */
-	daos_epoch_t	       *ci_snapshots;
-	/** The minimal "Highest aggregated epoch" among all targets */
-	daos_epoch_t		ci_hae;
+	uint64_t		ci_pad[2];
 	/* TODO: add more members, e.g., size, # objects, uid, gid... */
 } daos_cont_info_t;
 
@@ -248,10 +245,6 @@ daos_cont_destroy(daos_handle_t poh, const char *cont, int force, daos_event_t *
  *
  * \param[in]	coh	Container open handle.
  * \param[out]	info	Returned container information.
- *			If \a info::ci_snapshots is not NULL, epochs of
- *			snapshots will be stored in it.
- *			If \a info::ci_snapshots is NULL, number of snapshots
- *			will be returned by \a info::ci_nsnapshots.
  * \param[out]	cont_prop
  *			Optional, returned container properties
  *			If it is NULL, then needs not query the properties.
