@@ -163,6 +163,8 @@ class ContRedundancyFactor(RebuildTestBase):
             self.setup_test_container()
         oclass = self.inputs.object_class.value
         negative_test = True
+        rf = ''.join(self.container.properties.value.split(":"))
+        rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
         if "OC_SX" in oclass and rf_num < 1:
             negative_test = False
         elif ("OC_RP_2" in oclass and rf_num < 2) or (
@@ -174,8 +176,6 @@ class ContRedundancyFactor(RebuildTestBase):
         self.create_test_container_and_write_obj(negative_test)
         if self.mode is "cont_rf_with_rebuild":
             num_of_ranks = len(self.inputs.rank.value)
-            rf = ''.join(self.container.properties.value.split(":"))
-            rf_num = int(re.search(r"rf([0-9]+)", rf).group(1))
             if num_of_ranks > rf_num:
                 expect_cont_status = "UNCLEAN"
             else:
