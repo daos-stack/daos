@@ -19,14 +19,11 @@ type (
 	// Backend defines a set of methods to be implemented by a Block Device backend.
 	Backend interface {
 		Prepare(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
-		Reset(storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error)
+		Reset(storage.BdevPrepareRequest) error
 		Scan(storage.BdevScanRequest) (*storage.BdevScanResponse, error)
 		Format(storage.BdevFormatRequest) (*storage.BdevFormatResponse, error)
-		// TODO DAOS-8040: re-enable VMD
-		//		EnableVMD()
-		//		IsVMDEnabled() bool
 		UpdateFirmware(pciAddr string, path string, slot int32) error
-		WriteNvmeConfig(storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error)
+		WriteConfig(storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error)
 	}
 
 	// Provider encapsulates configuration and logic for interacting with a Block
@@ -51,25 +48,9 @@ func NewProvider(log logging.Logger, backend Backend) *Provider {
 	return p
 }
 
-// TODO DAOS-8040: re-enable VMD
-//func (p *Provider) enableVMD() {
-//	p.backend.EnableVMD()
-//}
-
-// IsVMDEnabled returns true if provider has enabled VMD device awareness.
-//func (p *Provider) IsVMDEnabled() bool {
-//	return p.backend.IsVMDEnabled()
-//}
-
 // Scan calls into the backend to discover NVMe components in the
 // system.
 func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResponse, err error) {
-	// TODO DAOS-8040: re-enable VMD
-	// set vmd state on remote provider in forwarded request
-	//	if req.IsForwarded() && req.EnableVMD {
-	//		p.enableVMD()
-	//	}
-
 	return p.backend.Scan(req)
 }
 
@@ -80,7 +61,7 @@ func (p *Provider) Scan(req storage.BdevScanRequest) (resp *storage.BdevScanResp
 func (p *Provider) Prepare(req storage.BdevPrepareRequest) (*storage.BdevPrepareResponse, error) {
 	if req.Reset_ {
 		p.log.Debug("run bdev storage provider prepare reset")
-		return p.backend.Reset(req)
+		return &storage.BdevPrepareResponse{}, p.backend.Reset(req)
 	}
 
 	p.log.Debug("run bdev storage provider prepare setup")
@@ -94,16 +75,10 @@ func (p *Provider) Format(req storage.BdevFormatRequest) (*storage.BdevFormatRes
 		return nil, errors.New("empty DeviceList in FormatRequest")
 	}
 
-	// TODO DAOS-8040: re-enable VMD
-	// set vmd state on remote provider in forwarded request
-	//	if req.IsForwarded() && req.EnableVMD {
-	//		p.enableVMD()
-	//	}
-
 	return p.backend.Format(req)
 }
 
-// WriteNvmeConfig calls into the bdev backend to create an nvme config file.
-func (p *Provider) WriteNvmeConfig(req storage.BdevWriteNvmeConfigRequest) (*storage.BdevWriteNvmeConfigResponse, error) {
-	return p.backend.WriteNvmeConfig(req)
+// WriteConfig calls into the bdev backend to create an nvme config file.
+func (p *Provider) WriteConfig(req storage.BdevWriteConfigRequest) (*storage.BdevWriteConfigResponse, error) {
+	return p.backend.WriteConfig(req)
 }
