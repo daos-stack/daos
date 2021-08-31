@@ -457,7 +457,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/job_tests
 %{_bindir}/security_test
 %{_bindir}/srv_checksum_tests
-%{_bindir}/srv_scrubbing_tests
+%{_bindir}/pool_scrubbing_tests
 %{_bindir}/vos_tests
 %{conf_dir}/fault-inject-cart.yaml
 %{_bindir}/fault_status

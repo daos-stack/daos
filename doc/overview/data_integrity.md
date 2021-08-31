@@ -148,7 +148,7 @@ Unit and functional testing is performed at many layers.
 ./commont_test
 ./vos_test -z
 ./srv_checksum_tests
-./srv_scrubbing_tests
+./pool_scrubbing_tests
 ```
 **With daos_server running**
 ```
@@ -320,7 +320,7 @@ ds_start_scrubbing_ult ~> scrubbing_ult -> scrub_pool ~> cont_iter_scrub_cb ->
   corruption (note: need something so extents aren't double verified?)
 
 ## Testing
-- srv_scrubbing_tests
+- pool_scrubbing_tests
 - Add scrubbing status to daos_pool_info_t so it can be queried
 
 

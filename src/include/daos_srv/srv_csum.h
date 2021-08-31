@@ -165,6 +165,7 @@ struct scrub_ctx {
 	void			*sc_sched_arg;
 
 	enum scrub_status	 sc_status;
+	bool			 sc_did_yield;
 };
 
 /*

@@ -199,6 +199,12 @@ sts_ctx_cont_fini(struct sts_context *ctx)
 
 static struct daos_csummer *test_csummer;
 
+static int
+fake_yield(void *arg)
+{
+	return 0;
+}
+
 static void
 sts_ctx_init(struct sts_context *ctx)
 {
@@ -218,6 +224,7 @@ sts_ctx_init(struct sts_context *ctx)
 	sts_ctx_pool_init(ctx);
 	sts_ctx_cont_init(ctx);
 
+	ctx->tsc_yield_fn = fake_yield;
 	assert_success(
 		daos_csummer_init_with_type(&test_csummer,
 					    HASH_TYPE_CRC16,
@@ -231,6 +238,15 @@ sts_ctx_fini(struct sts_context *ctx)
 	daos_csummer_destroy(&ctx->tsc_csummer);
 	sts_ctx_cont_fini(ctx);
 	sts_ctx_pool_fini(ctx);
+}
+
+static void
+set_test_oid(daos_unit_oid_t *oid, uint64_t oid_lo)
+{
+	oid->id_shard	= 1;
+	oid->id_pad_32	= 0;
+	oid->id_pub.lo = oid_lo;
+	daos_obj_set_oid(&oid->id_pub, 0, OC_SX, 0);
 }
 
 static int
@@ -250,10 +266,7 @@ sts_ctx_fetch(struct sts_context *ctx, int oid_lo, int iod_type,
 	D_ALLOC(data, data_len);
 	assert_non_null(data);
 
-	oid.id_shard	= 1;
-	oid.id_pad_32	= 0;
-	oid.id_pub.lo	= oid_lo;
-	daos_obj_set_oid(&oid.id_pub, 0, OC_SX, 0);
+	set_test_oid(&oid, oid_lo);
 
 	iov_alloc_str(&iod.iod_name, akey_str);
 	setup_iod_type(&iod, iod_type, data_len, recx);
@@ -274,15 +287,6 @@ sts_ctx_fetch(struct sts_context *ctx, int oid_lo, int iod_type,
 	D_FREE(data);
 
 	return rc;
-}
-
-static void
-set_test_oid(daos_unit_oid_t *oid, uint64_t oid_lo)
-{
-	oid->id_shard	= 1;
-	oid->id_pad_32	= 0;
-	oid->id_pub.lo = oid_lo;
-	daos_obj_set_oid(&oid->id_pub, 0, OC_SX, 0);
 }
 
 static void
@@ -383,6 +387,7 @@ sts_ctx_do_scrub(struct sts_context *ctx)
 	s_ctx.sc_pool = &ctx->tsc_pool;
 	s_ctx.sc_dmi = &ctx->tsc_dmi;
 	s_ctx.sc_credits_left = 1;
+
 	assert_success(ds_scrub_pool(&s_ctx));
 }
 

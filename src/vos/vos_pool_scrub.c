@@ -8,7 +8,7 @@
 
 #include <daos_srv/vos.h>
 #include <daos_srv/srv_csum.h>
-#include "srv_internal.h"
+#include "vos_internal.h"
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 
@@ -38,7 +38,6 @@ sc_m_pool_stop(struct scrub_ctx *ctx)
 
 }
 
-
 static void
 sc_m_pool_csum_inc(struct scrub_ctx *ctx)
 {
@@ -52,7 +51,6 @@ sc_m_pool_corr_inc(struct scrub_ctx *ctx)
 	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_corruption);
 	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_total_corruption);
 }
-
 
 static void
 sc_m_pool_csum_reset(struct scrub_ctx *ctx)
@@ -81,17 +79,21 @@ sc_schedule(const struct scrub_ctx *ctx)
 }
 
 static inline void
-sc_yield(const struct scrub_ctx *ctx)
+sc_yield(struct scrub_ctx *ctx)
 {
-	if (ctx->sc_yield_fn)
+	if (ctx->sc_yield_fn) {
 		ctx->sc_yield_fn(ctx->sc_sched_arg);
+		ctx->sc_did_yield = true;
+	}
 }
 
 static inline void
-sc_sleep(const struct scrub_ctx *ctx, uint32_t ms)
+sc_sleep(struct scrub_ctx *ctx, uint32_t ms)
 {
-	if (ctx->sc_sleep_fn)
+	if (ctx->sc_sleep_fn) {
 		ctx->sc_sleep_fn(ctx->sc_sched_arg, ms);
+		ctx->sc_did_yield = true;
+	}
 }
 
 static bool
@@ -136,11 +138,10 @@ sc_verify_finish(struct scrub_ctx *ctx)
  * calculation.
  */
 static int
-sc_verify_recx(struct scrub_ctx *ctx, d_sg_list_t *sgl)
+sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 {
 	daos_key_t		 chunk_iov = {0};
 	uint8_t			*csum_buf = NULL;
-	d_iov_t			*data;
 	daos_recx_t		*recx;
 	daos_size_t		 rec_len;
 	daos_size_t		 processed_bytes = 0;
@@ -151,10 +152,9 @@ sc_verify_recx(struct scrub_ctx *ctx, d_sg_list_t *sgl)
 	uint16_t		 csum_len;
 
 	D_ASSERT(ctx->sc_iod.iod_nr == 1);
-	D_ASSERT(sgl != NULL && sgl->sg_nr_out == 1);
+	D_ASSERT(data != NULL);
 	D_ASSERT(ctx->sc_iod.iod_recxs != NULL);
 
-	data = &sgl->sg_iovs[0];
 	recx = &ctx->sc_iod.iod_recxs[0];
 	rec_len = ctx->sc_iod.iod_size;
 	chunksize = sc_chunksize(ctx);
@@ -212,11 +212,11 @@ done:
 }
 
 static int
-sc_verify_sv(struct scrub_ctx *ctx, d_sg_list_t *sgl)
+sc_verify_sv(struct scrub_ctx *ctx, d_iov_t *data)
 {
 	int rc;
 
-	rc = daos_csummer_verify_key(sc_csummer(ctx), &sgl->sg_iovs[0],
+	rc = daos_csummer_verify_key(sc_csummer(ctx), data,
 				     ctx->sc_csum_to_verify);
 	sc_verify_finish(ctx);
 
@@ -256,12 +256,16 @@ sc_mark_corrupt(struct scrub_ctx *ctx)
 }
 
 static int
-sc_verify_obj_value(struct scrub_ctx *ctx)
+sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov,
+		    daos_handle_t ih)
 {
-	d_sg_list_t	 sgl;
-	daos_iod_t	*iod = &ctx->sc_iod;
-	uint64_t	 data_len;
-	int		 rc;
+	d_iov_t			 data;
+	daos_iod_t		*iod = &ctx->sc_iod;
+	uint64_t		 data_len;
+	struct bio_io_context	*bio_ctx;
+	struct vos_iterator	*iter;
+	struct vos_obj_iter	*oiter;
+	int			 rc;
 
 	D_DEBUG(DB_CSUM, "Scrubbing iod: "DF_C_IOD"\n", DP_C_IOD(iod));
 	/*
@@ -273,15 +277,19 @@ sc_verify_obj_value(struct scrub_ctx *ctx)
 		   iod->iod_recxs[0].rx_nr * iod->iod_size :
 		   iod->iod_size;
 	/* allocate memory to fetch data into */
-	d_sgl_init(&sgl, 1);
-	D_ALLOC(sgl.sg_iovs[0].iov_buf, data_len);
-	sgl.sg_iovs[0].iov_buf_len = data_len;
-	sgl.sg_iovs[0].iov_len = data_len;
+	D_ALLOC(data.iov_buf, data_len);
+	data.iov_buf_len = data_len;
+	data.iov_len = data_len;
 
 	/* Fetch data */
-	rc = vos_obj_fetch(sc_cont_hdl(ctx), ctx->sc_cur_oid,
-			   ctx->sc_epoch, 0,
-			   &ctx->sc_dkey, 1, iod, &sgl);
+	iter = vos_hdl2iter(ih);
+	oiter = vos_iter2oiter(iter);
+	bio_ctx = oiter->it_obj->obj_cont->vc_pool->vp_io_ctxt;
+	rc = bio_read(bio_ctx, biov->bi_addr, &data);
+
+	/* if bio_read of NVME then it might have yielded */
+	if (bio_iov2media(biov) == DAOS_MEDIA_NVME)
+		ctx->sc_did_yield = true;
 
 	if (rc == -DER_CSUM) {
 		/* Already know this is corrupt so just return */
@@ -291,16 +299,9 @@ sc_verify_obj_value(struct scrub_ctx *ctx)
 		D_GOTO(out, rc);
 	}
 
-	/*
-	 * if value was deleted while scrubbing, fetch will return no data.
-	 * Just skip it
-	 */
-	if (sgl.sg_nr_out == 0)
-		D_GOTO(out, rc);
-
 	rc = iod->iod_type == DAOS_IOD_ARRAY ?
-	     sc_verify_recx(ctx, &sgl) :
-	     sc_verify_sv(ctx, &sgl);
+	     sc_verify_recx(ctx, &data) :
+	     sc_verify_sv(ctx, &data);
 
 	if (rc == -DER_CSUM) {
 		D_WARN("Checksum scrubber found corruption");
@@ -310,8 +311,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx)
 	}
 
 out:
-	D_FREE(sgl.sg_iovs[0].iov_buf);
-	d_sgl_fini(&sgl, true);
+	D_FREE(data.iov_buf);
 
 	return rc;
 }
@@ -435,7 +435,7 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (sc_value_has_been_seen(ctx, entry, type)) {
 			sc_obj_value_reset(ctx);
 		} else {
-			D_PRINT("Scrubbing akey: "DF_KEY", type: %s, rec size: "
+			C_TRACE("Scrubbing akey: "DF_KEY", type: %s, rec size: "
 					DF_U64", extent: "DF_RECX"\n",
 				DP_KEY(&param->ip_akey),
 				(type == VOS_ITER_RECX) ? "ARRAY" : "SV",
@@ -445,8 +445,11 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 			sc_obj_val_setup(ctx, entry, type, param, ih);
 
-			rc = sc_verify_obj_value(ctx);
-			*acts |= VOS_ITER_CB_YIELD;
+			rc = sc_verify_obj_value(ctx, &entry->ie_biov, ih);
+			if (ctx->sc_did_yield) {
+				*acts |= VOS_ITER_CB_YIELD;
+				ctx->sc_did_yield = false;
+			}
 
 			if (rc != 0) {
 				D_ERROR("Error Verifying:"DF_RC"\n", DP_RC(rc));
