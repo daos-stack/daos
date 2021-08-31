@@ -52,6 +52,7 @@ def build_dts_library(env):
     denv.AppendUnique(LIBPATH=["../bio"])
 
     denv.AppendUnique(CPPPATH=["../tests/suite"])
+    denv.AppendUnique(CPPPATH=["../mgmt"])
 
     denv.Replace(SHOBJPREFIX='mpi_')
     mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])

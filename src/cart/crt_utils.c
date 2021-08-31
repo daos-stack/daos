@@ -346,6 +346,121 @@ out:
 	return rc;
 }
 
+#define SYS_INFO_BUF_SIZE 16
+
+int
+crt_dc_mgmt_net_cfg(const char *name, crt_group_t *group,
+		    crt_context_t *context)
+{
+	int rc;
+	char buf[SYS_INFO_BUF_SIZE];
+	char *crt_timeout;
+	char *ofi_interface;
+	char *ofi_domain;
+	char *cli_srx_set;
+	struct dc_mgmt_sys_info info;
+	Mgmt__GetAttachInfoResp *resp;
+	int		i;
+
+	/* Query the agent for the CaRT network configuration parameters */
+	rc = get_attach_info(name, true /* all_ranks */, &info, &resp);
+	if (rc != 0)
+		return rc;
+
+	for (i = 0; i < resp->n_rank_uris; i++) {
+
+		Mgmt__GetAttachInfoResp__RankUri *rank_uri = resp->rank_uris[i];
+
+		/* Init eq to 1 */
+		daos_eq_lib_init();
+
+		rc = crt_group_primary_rank_add(daos_get_crt_ctx(), group,
+						rank_uri->rank, rank_uri->uri);
+		if (rc != 0) {
+			D_ERROR("failed to add rank %u URI %s to group %s: "
+				DF_RC"\n", rank_uri->rank, rank_uri->uri, name,
+				DP_RC(rc));
+			goto err_group;
+		}
+	}
+
+	/* These two are always set */
+	rc = setenv("CRT_PHY_ADDR_STR", info.provider, 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	sprintf(buf, "%d", info.crt_ctx_share_addr);
+	rc = setenv("CRT_CTX_SHARE_ADDR", buf, 1);
+	if (rc != 0)
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+
+	/* If the server has set this, the client must use the same value. */
+	if (info.srv_srx_set != -1) {
+
+		sprintf(buf, "%d", info.srv_srx_set);
+		rc = setenv("FI_OFI_RXM_USE_SRX", buf, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+		D_INFO("Using server's value for FI_OFI_RXM_USE_SRX: %s\n",
+		       buf);
+	} else {
+		/* Client may not set it if the server hasn't. */
+		cli_srx_set = getenv("FI_OFI_RXM_USE_SRX");
+		if (cli_srx_set) {
+			D_ERROR("Client set FI_OFI_RXM_USE_SRX to %s, "
+				"but server is unset!\n", cli_srx_set);
+			D_GOTO(cleanup, rc = -DER_INVAL);
+		}
+	}
+
+	/* Allow client env overrides for these three */
+	crt_timeout = getenv("CRT_TIMEOUT");
+	if (!crt_timeout) {
+		sprintf(buf, "%d", info.crt_timeout);
+		rc = setenv("CRT_TIMEOUT", buf, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided CRT_TIMEOUT: %s\n",
+			crt_timeout);
+	}
+
+	ofi_interface = getenv("OFI_INTERFACE");
+	if (!ofi_interface) {
+		rc = setenv("OFI_INTERFACE", info.interface, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided OFI_INTERFACE: %s\n",
+			ofi_interface);
+	}
+
+	ofi_domain = getenv("OFI_DOMAIN");
+	if (!ofi_domain) {
+		rc = setenv("OFI_DOMAIN", info.domain, 1);
+		if (rc != 0)
+			D_GOTO(cleanup, rc = d_errno2der(errno));
+	} else {
+		D_INFO("Using client provided OFI_DOMAIN: %s\n", ofi_domain);
+	}
+
+	D_DEBUG(DB_MGMT,
+		"CaRT initialization with:\n"
+		"\tOFI_INTERFACE=%s, OFI_DOMAIN: %s, CRT_PHY_ADDR_STR: %s, "
+		"CRT_CTX_SHARE_ADDR: %s, CRT_TIMEOUT: %s\n",
+		getenv("OFI_INTERFACE"), getenv("OFI_DOMAIN"),
+		getenv("CRT_PHY_ADDR_STR"),
+		getenv("CRT_CTX_SHARE_ADDR"), getenv("CRT_TIMEOUT"));
+
+cleanup:
+	put_attach_info(&info, resp);
+err_group:
+	if (rc != 0)
+		crt_group_view_destroy(group);
+
+	return rc;
+}
+
 void
 crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     crt_group_t **grp, d_rank_list_t **rank_list,
@@ -375,31 +490,44 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 	rc = pthread_create(progress_thread, NULL, crtu_progress_fn, crt_ctx);
 	D_ASSERTF(rc == 0, "pthread_create() failed; rc=%d\n", rc);
 
-	if (use_cfg) {
-		while (attach_retries-- > 0) {
-			rc = crt_group_attach(srv_group_name, grp);
-			if (rc == 0)
+	if (! use_daos_agent_env) {
+		D_ERROR("TRACE");
+		if (use_cfg) {
+			D_ERROR("TRACE");
+			while (attach_retries-- > 0) {
+				rc = crt_group_attach(srv_group_name, grp);
+				if (rc == 0)
 				break;
-			sleep(1);
+				sleep(1);
+			}
+			D_ASSERTF(rc == 0, "crt_group_attach failed, rc: %d\n", rc);
+			D_ASSERTF(*grp != NULL, "NULL attached remote grp\n");
+		} else {
+			D_ERROR("TRACE");
+			rc = crt_group_view_create(srv_group_name, grp);
+			if (!*grp || rc != 0) {
+				D_ERROR("Failed to create group view; rc=%d\n", rc);
+				assert(0);
+			}
+
+			grp_cfg_file = getenv("CRT_L_GRP_CFG");
+
+			/* load group info from a config file and
+			 * delete file upon return
+			 */
+			rc = crtu_load_group_from_file(grp_cfg_file, *crt_ctx, *grp,
+						 -1, true);
+			D_ASSERTF(rc == 0, "crtu_load_group_from_file() failed;"
+				"rc=%d\n", rc);
 		}
-		D_ASSERTF(rc == 0, "crt_group_attach failed, rc: %d\n", rc);
-		D_ASSERTF(*grp != NULL, "NULL attached remote grp\n");
 	} else {
+		D_ERROR("TRACE");
 		rc = crt_group_view_create(srv_group_name, grp);
 		if (!*grp || rc != 0) {
 			D_ERROR("Failed to create group view; rc=%d\n", rc);
 			assert(0);
 		}
-
-		grp_cfg_file = getenv("CRT_L_GRP_CFG");
-
-		/* load group info from a config file and
-		 * delete file upon return
-		 */
-		rc = crtu_load_group_from_file(grp_cfg_file, *crt_ctx, *grp,
-					       -1, true);
-		D_ASSERTF(rc == 0, "crtu_load_group_from_file() failed;"
-			  "rc=%d\n", rc);
+		crt_dc_mgmt_net_cfg(srv_group_name, *grp, *crt_ctx);
 	}
 
 	rc = crt_group_size(*grp, &grp_size);

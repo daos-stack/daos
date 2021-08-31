@@ -724,16 +724,11 @@ class TestWithServers(TestWithoutServers):
             cart_ctl = CartCtl()
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
-            cart_ctl.cfg_path.value = "."
             cart_ctl.m.value = message
             cart_ctl.n.value = None
             cart_ctl.use_daos_agent_env.value = "--use_daos_agent_env"
 
             for manager in self.agent_managers:
-                # Fetch attachinfo data from server via the agent
-                attachinfo_file = manager.get_attachinfo_file()
-                cp_command = "sudo cp {} {}".format(attachinfo_file, ".")
-                run_command(cp_command, verbose=True, raise_exception=False)
                 cart_ctl.group_name.value = manager.get_config_value("name")
                 cart_ctl.run()
         else:

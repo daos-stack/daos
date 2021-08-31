@@ -197,7 +197,7 @@ free_get_attach_info_resp(Mgmt__GetAttachInfoResp *resp)
 	mgmt__get_attach_info_resp__free_unpacked(resp, &alloc.alloc);
 }
 
-static void
+void
 put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 {
 	if (resp != NULL)
@@ -210,7 +210,7 @@ put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
  * rank URIs, we return the GetAttachInfo response directly. Callers are
  * responsible for finalizing info and respp using put_attach_info.
  */
-static int
+int
 get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 		Mgmt__GetAttachInfoResp **respp)
 {

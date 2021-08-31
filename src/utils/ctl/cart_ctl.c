@@ -21,6 +21,8 @@
 
 #include <daos/agent.h>
 #include <daos/mgmt.h>
+#include "svc.pb-c.h"
+
 
 /* max number of ranks that can be queried at once */
 #define CRT_CTL_MAX		1024
@@ -596,7 +598,8 @@ ctl_init()
 
 	crtu_cli_start_basic("crt_ctl", ctl_gdata.cg_group_name, &grp,
 			     &rank_list, &ctl_gdata.cg_crt_ctx,
-			     &ctl_gdata.cg_tid, 1, true, NULL);
+			     &ctl_gdata.cg_tid, 1, true, NULL,
+			     ctl_gdata.cg_use_daos_agent_env);
 
 	rc = sem_init(&ctl_gdata.cg_num_reply, 0, 0);
 	D_ASSERTF(rc == 0, "Could not initialize semaphore. rc %d\n", rc);

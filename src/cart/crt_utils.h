@@ -11,6 +11,7 @@
 #include <semaphore.h>
 #include <cart/api.h>
 #include "crt_internal.h"
+#include "svc.pb-c.h"
 
 #define DBG_PRINT(x...)							\
 	do {								\
@@ -38,6 +39,7 @@ struct test_options {
 	volatile int	shutdown;
 	int		delay_shutdown_sec;
 	bool		is_swim_enabled;
+	bool		use_daos_agent_env;
 
 };
 
@@ -74,7 +76,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     crt_group_t **grp, d_rank_list_t **rank_list,
 		     crt_context_t *crt_ctx, pthread_t *progress_thread,
 		     unsigned int total_srv_ctx, bool use_cfg,
-		     crt_init_options_t *init_opt);
+		     crt_init_options_t *init_opt, bool use_daos_agent_env);
 void
 crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 		     pthread_t *progress_thread, crt_group_t **grp,

@@ -16,6 +16,8 @@ def scons():
 
     tenv = env.Clone(LIBS=[])
     tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'daos', 'daos_common'])
+    tenv.AppendUnique(CPPPATH=[Dir('../../../src/mgmt').srcnode()])
+
     prereqs.require(tenv, 'mercury', 'protobufc')
 
     ctl = daos_build.program(tenv, [SRC, cart_utils_objs])
