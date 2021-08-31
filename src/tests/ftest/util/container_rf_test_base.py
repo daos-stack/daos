@@ -10,7 +10,7 @@ from daos_utils import DaosCommand
 import re
 
 
-class RbldContRedundancyFactor(RebuildTestBase):
+class ContRedundancyFactor(RebuildTestBase):
     # pylint: disable=too-many-ancestors
     """Test cascading failures during rebuild.
 

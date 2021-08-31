@@ -4,10 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from container_rf_test_base import RbldContRedundancyFactor
+from container_rf_test_base import ContRedundancyFactor
 
 
-class RbldContRedundancyFactorTest(RbldContRedundancyFactor):
+class RbldContRfTest(ContRedundancyFactor):
     # pylint: disable=too-many-ancestors
     """Test container redundancy factor with various rebuilds.
 
