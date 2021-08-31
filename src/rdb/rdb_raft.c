@@ -135,7 +135,6 @@ rdb_raft_clone_ae(struct rdb *db, const msg_appendentries_t *ae, msg_appendentri
 
 		*e_new = *e;
 		e_new->data.buf = NULL;
-		D_ASSERTF(e_new->data.len >= 0, "%u\n", e_new->data.len);
 		if (e_new->data.len == 0) {
 			continue;
 		} else if (i > 0 && size + e_new->data.len > db->d_ae_max_size) {
