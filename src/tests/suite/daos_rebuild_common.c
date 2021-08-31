@@ -1006,12 +1006,10 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	while (parity_nr-- > 0)
 		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard--);
 
-	shard = 0;
+	shard = rand() % oca->u.ec.e_k;
 	while (data_nr-- > 0) {
 		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
-		shard = shard + 2;
-		if (shard > oca->u.ec.e_k)
-			break;
+		shard = (shard + 2) % oca->u.ec.e_k;
 	}
 
 	if (ranks_num)
@@ -1065,7 +1063,7 @@ rebuild_small_sub_setup(void **state)
 
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_SMALL_POOL_SIZE, 0, NULL);
+			REBUILD_POOL_SIZE, 0, NULL);
 	if (rc)
 		return rc;
 

@@ -486,7 +486,7 @@ example_daos_array()
 	 * daos_obj_generate_oid() that adds the required feature flags for an
 	 * array: DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY
 	 */
-	daos_array_generate_id(&oid, OC_SX, true, 0);
+	daos_array_generate_oid(coh, &oid, true, 0, 0, 0);
 
 	/*
 	 * Create the array object with cell size 1 (byte array) and 1m chunk
