@@ -94,6 +94,14 @@ sc_sleep(const struct scrub_ctx *ctx, uint32_t ms)
 		ctx->sc_sleep_fn(ctx->sc_sched_arg, ms);
 }
 
+static bool
+sc_cont_is_stopping(struct scrub_ctx *ctx)
+{
+	if (ctx->sc_cont_is_stopping_fn == NULL)
+		return false;
+	return ctx->sc_cont_is_stopping_fn(ctx->sc_cont.scs_cont_src);
+}
+
 /**
  * Get the number of records in the chunk at index 'i' of the current recx
  * set within the scrubbing context
@@ -187,6 +195,8 @@ sc_verify_recx(struct scrub_ctx *ctx, d_sg_list_t *sgl)
 		if (!match) {
 			D_ERROR("Corruption found for chunk #%d of recx: "
 					DF_RECX"\n", i, DP_RECX(*recx));
+			sc_verify_finish(ctx);
+
 			D_GOTO(done, rc = -DER_CSUM);
 		}
 
@@ -385,8 +395,13 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	struct scrub_ctx	*ctx = cb_arg;
 	int			 rc;
 
+	if (sc_cont_is_stopping(ctx)) {
+		C_TRACE("Container is stopping.");
+		return 1;
+	}
+
 	if (ctx->sc_pool->sp_scrub_sched == DAOS_SCRUB_SCHED_OFF) {
-		C_TRACE("scrubbing is off now, aborting ...");
+		C_TRACE("scrubbing is off now");
 		return 1;
 	}
 
@@ -420,7 +435,7 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (sc_value_has_been_seen(ctx, entry, type)) {
 			sc_obj_value_reset(ctx);
 		} else {
-			C_TRACE("Scrubbing akey: "DF_KEY", type: %s, rec size: "
+			D_PRINT("Scrubbing akey: "DF_KEY", type: %s, rec size: "
 					DF_U64", extent: "DF_RECX"\n",
 				DP_KEY(&param->ip_akey),
 				(type == VOS_ITER_RECX) ? "ARRAY" : "SV",
@@ -503,6 +518,8 @@ sc_cont_setup(struct scrub_ctx *ctx, vos_iter_param_t *param,
 static void
 sc_cont_teardown(struct scrub_ctx *ctx)
 {
+	if (ctx->sc_cont_put_fn != NULL)
+		ctx->sc_cont_put_fn(ctx->sc_cont.scs_cont_src);
 	memset(&ctx->sc_cont, 0, sizeof(ctx->sc_cont));
 }
 

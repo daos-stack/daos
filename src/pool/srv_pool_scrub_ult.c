@@ -135,10 +135,25 @@ cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	cont->scs_cont_csummer = cont_child->sc_csummer;
 	cont->scs_cont_hdl = cont_child->sc_hdl;
 	uuid_copy(cont->scs_cont_uuid, cont_uuid);
-
-	ds_cont_child_put(cont_child);
+	cont->scs_cont_src = cont_child;
 
 	return 0;
+}
+
+static void
+cont_put_cb(void *cont)
+{
+	struct ds_cont_child *cont_child = cont;
+
+	ds_cont_child_put(cont_child);
+}
+
+static bool
+cont_is_stopping_cb(void *cont)
+{
+	struct ds_cont_child *cont_child = cont;
+
+	return cont_child->sc_stopping == 1;
 }
 
 static void
@@ -215,6 +230,8 @@ scrubbing_ult(void *arg)
 	ctx.sc_sched_arg = child->spc_scrubbing_req;
 	ctx.sc_pool = child->spc_pool;
 	ctx.sc_cont_lookup_fn = cont_lookup_cb;
+	ctx.sc_cont_put_fn = cont_put_cb;
+	ctx.sc_cont_is_stopping_fn = cont_is_stopping_cb;
 	ctx.sc_status = SCRUB_STATUS_NOT_RUNNING;
 	ctx.sc_credits_left = ctx.sc_pool->sp_scrub_cred;
 	ctx.sc_dmi =  dss_get_module_info();

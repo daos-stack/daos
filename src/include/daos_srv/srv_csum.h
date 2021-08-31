@@ -42,6 +42,7 @@ ds_csum_add2iod(daos_iod_t *iod, struct daos_csummer *csummer,
 
 struct cont_scrub {
 	struct daos_csummer	*scs_cont_csummer;
+	void			*scs_cont_src;
 	daos_handle_t		 scs_cont_hdl;
 	uuid_t			 scs_cont_uuid;
 };
@@ -52,6 +53,8 @@ struct cont_scrub {
  */
 typedef int(*ds_get_cont_fn_t)(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 			    struct cont_scrub *cont);
+typedef void(*ds_put_cont_fn_t)(void *cont);
+typedef bool(*ds_cont_is_stopping_fn_t)(void *cont);
 
 /*
  * handler for scrubber progress. will get called after each checksum is
@@ -135,6 +138,8 @@ struct scrub_ctx {
 	 **/
 	/* callback function that will provide the csummer for the container */
 	ds_get_cont_fn_t	 sc_cont_lookup_fn;
+	ds_put_cont_fn_t	 sc_cont_put_fn;
+	ds_cont_is_stopping_fn_t sc_cont_is_stopping_fn;
 	struct cont_scrub	 sc_cont;
 
 	/** Number of msec between checksum calculations */

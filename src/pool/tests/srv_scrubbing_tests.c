@@ -277,6 +277,15 @@ sts_ctx_fetch(struct sts_context *ctx, int oid_lo, int iod_type,
 }
 
 static void
+set_test_oid(daos_unit_oid_t *oid, uint64_t oid_lo)
+{
+	oid->id_shard	= 1;
+	oid->id_pad_32	= 0;
+	oid->id_pub.lo = oid_lo;
+	daos_obj_set_oid(&oid->id_pub, 0, OC_SX, 0);
+}
+
+static void
 sts_ctx_update(struct sts_context *ctx, int oid_lo, int iod_type,
 	       const char *dkey_str, const char *akey_str,
 	       int epoch, bool corrupt_it)
@@ -291,10 +300,7 @@ sts_ctx_update(struct sts_context *ctx, int oid_lo, int iod_type,
 	char			*data = NULL;
 	int			 rc;
 
-	oid.id_shard	= 1;
-	oid.id_pad_32	= 0;
-	oid.id_pub.lo = oid_lo;
-	daos_obj_set_oid(&oid.id_pub, 0, OC_SX, 0);
+	set_test_oid(&oid, oid_lo);
 
 	data_len = ctx->tsc_data_len;
 	D_ALLOC(data, data_len);
@@ -346,6 +352,24 @@ sts_ctx_update(struct sts_context *ctx, int oid_lo, int iod_type,
 }
 
 static void
+sts_ctx_punch_dkey(struct sts_context *ctx, int oid_lo, const char *dkey_str,
+		   int epoch)
+{
+	daos_unit_oid_t		 oid = {0};
+	daos_key_t		 dkey;
+	int			 rc;
+
+	set_test_oid(&oid, oid_lo);
+
+	iov_alloc_str(&dkey, dkey_str);
+	rc = vos_obj_punch(ctx->tsc_coh, oid, epoch, 0, 0, &dkey, 0,
+			   NULL, NULL);
+	assert_success(rc);
+
+	D_FREE(dkey.iov_buf);
+}
+
+static void
 sts_ctx_do_scrub(struct sts_context *ctx)
 {
 	struct scrub_ctx s_ctx = {0};
@@ -358,6 +382,7 @@ sts_ctx_do_scrub(struct sts_context *ctx)
 	s_ctx.sc_cont_lookup_fn = ctx->tsc_get_cont_fn;
 	s_ctx.sc_pool = &ctx->tsc_pool;
 	s_ctx.sc_dmi = &ctx->tsc_dmi;
+	s_ctx.sc_credits_left = 1;
 	assert_success(ds_scrub_pool(&s_ctx));
 }
 
@@ -583,6 +608,84 @@ extent_deleted_by_aggregation(void **state)
 
 }
 
+static int
+test_yield_deletes_dkey(void *arg)
+{
+	struct sts_context	*ctx = arg;
+	int			 rc;
+	daos_epoch_range_t	 epr = {.epr_lo = 0,
+		.epr_hi = DAOS_EPOCH_MAX - 1};
+
+	sts_ctx_punch_dkey(ctx, 1, "dkey", 2);
+
+	rc = vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL, NULL, true);
+	assert_success(rc);
+
+	return 0;
+}
+
+static void
+dkey_deleted_by_aggregation_with_multiple_extents(void **state)
+{
+	struct sts_context *ctx = *state;
+
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_4, "dkey", "akey",
+		       1, false);
+
+	ctx->tsc_yield_fn = test_yield_deletes_dkey;
+	ctx->tsc_sched_arg = ctx;
+
+	sts_ctx_do_scrub(ctx);
+}
+
+static void
+dkey_deleted_by_aggregation_with_multiple_akeys(void **state)
+{
+	struct sts_context *ctx = *state;
+
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey1",
+		       1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey2",
+		       1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey3",
+		       1, false);
+
+	ctx->tsc_yield_fn = test_yield_deletes_dkey;
+	ctx->tsc_sched_arg = ctx;
+
+	sts_ctx_do_scrub(ctx);
+}
+
+static int
+test_yield_deletes_container(void *arg)
+{
+	struct sts_context	*ctx = arg;
+	int			 rc;
+
+	rc = vos_cont_destroy(ctx->tsc_poh, ctx->tsc_cont_uuid);
+	assert_rc_equal(-DER_BUSY, rc);
+
+	return 0;
+}
+
+static void
+container_deleted(void **state)
+{
+	struct sts_context *ctx = *state;
+
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey1",
+		       1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey2",
+		       1, false);
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey3",
+		       1, false);
+
+	ctx->tsc_yield_fn = test_yield_deletes_container;
+	ctx->tsc_sched_arg = ctx;
+
+	sts_ctx_do_scrub(ctx);
+}
+
 static void
 multiple_objects(void **state)
 {
@@ -657,7 +760,16 @@ static const struct CMUnitTest scrubbing_tests[] = {
 	   scrubbing_with_good_akey_then_bad_akey),
 	TS("CSUM_SCRUBBING_08: Extent is deleted during scrub while yielding",
 	   extent_deleted_by_aggregation),
-	TS("CSUM_SCRUBBING_09: Scrubbing multiple objects",
+	TS("CSUM_SCRUBBING_09.1: whole dkey is deleted during scrub while "
+	   "yielding",
+	   dkey_deleted_by_aggregation_with_multiple_extents),
+	TS("CSUM_SCRUBBING_09.2: whole dkey is deleted during scrub while "
+	   "yielding",
+	   dkey_deleted_by_aggregation_with_multiple_akeys),
+	TS("CSUM_SCRUBBING_09.3: Scrubbing has reference to container so "
+	   "vos_cont_destroy will return DER_BUSY.",
+	   container_deleted),
+	TS("CSUM_SCRUBBING_10: Scrubbing multiple objects",
 	   multiple_objects),
 };
 
