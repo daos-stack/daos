@@ -122,7 +122,7 @@ struct cont_iv_capa {
 
 /* flattened container properties */
 struct cont_iv_prop {
-	char		cip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char		cip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		cip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		cip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	uint64_t	cip_layout_type;
@@ -221,11 +221,9 @@ int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
 			 crt_rpc_t *rpc);
-int
-ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
-		      daos_epoch_t **snapshots, int *snap_count);
-void
-ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
+int ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid, daos_epoch_t **snapshots,
+			  int *snap_count);
+void ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
 
 /**
  * srv_target.c

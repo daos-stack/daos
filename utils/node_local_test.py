@@ -1244,8 +1244,12 @@ def create_cont(conf, pool, cont=None, ctype=None, label=None, path=None, valgri
 
     if rc.returncode == 1 and \
        rc.json['error'] == 'failed to create container: DER_EXIST(-1004): Entity already exists':
-        destroy_container(conf, pool, label)
-        rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
+
+        # If a path is set DER_EXIST may refer to the path, not a container so do not attempt to
+        # remove and retry in this case.
+        if path is None:
+            destroy_container(conf, pool, label)
+            rc = _create_cont(conf, pool, cont, ctype, label, path, valgrind)
 
     assert rc.returncode == 0, "rc {} != 0".format(rc.returncode)
     return rc.json['response']['container_uuid']
@@ -1411,6 +1415,31 @@ class posix_tests():
             self.fatal_errors = True
 
         destroy_container(self.conf, self.pool.id(), container)
+
+    @needs_dfuse
+    def test_cont_info(self):
+        """Check that daos container info and fs get-attr works on container roots"""
+
+        def _check_cmd(check_path):
+            rc = run_daos_cmd(self.conf,
+                              ['container', 'query', '--path', check_path],
+                              use_json=True)
+            print(rc)
+            assert rc.returncode == 0, rc
+            # Don't use JSON here because of https://jira.hpdd.intel.com/browse/DAOS-8330
+            rc = run_daos_cmd(self.conf,
+                              ['fs', 'get-attr', '--path', check_path])
+            print(rc)
+            assert rc.returncode == 0, rc
+
+        child_path = os.path.join(self.dfuse.dir, 'new_cont')
+        new_cont = create_cont(self.conf, self.pool.uuid, path=child_path, ctype="POSIX")
+        print(new_cont)
+        _check_cmd(child_path)
+        _check_cmd(self.dfuse.dir)
+
+        # Do not destroy the container at this point as dfuse will be holding a reference to it.
+        # destroy_container(self.conf, self.pool.id(), new_cont)
 
     def test_two_mounts(self):
         """Create two mounts, and check that a file created in one
@@ -2000,6 +2029,25 @@ class posix_tests():
 
         # Run a command to get attr of new dir and file
         cmd = ['fs', 'get-attr', '--path', dir1]
+        print('get-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '1048576')
+
+        # run same command using pool, container, dfs-path, and dfs-prefix
+        cmd = ['fs', 'get-attr', '--pool', pool, '--cont', uns_container, '--dfs-path', dir1,
+               '--dfs-prefix', uns_path]
+        print('get-attr of d1')
+        rc = run_daos_cmd(conf, cmd)
+        assert rc.returncode == 0
+        print('rc is {}'.format(rc))
+        output = rc.stdout.decode('utf-8')
+        assert check_dfs_tool_output(output, 'S1', '1048576')
+
+        # run same command using pool, container, dfs-path
+        cmd = ['fs', 'get-attr', '--pool', pool, '--cont', uns_container, '--dfs-path', '/d1']
         print('get-attr of d1')
         rc = run_daos_cmd(conf, cmd)
         assert rc.returncode == 0
@@ -2874,9 +2922,9 @@ def test_pydaos_kv(server, conf):
 
     c_uuid = create_cont(conf, pool, ctype="PYTHON")
 
-    container = daos.Cont(pool, c_uuid)
+    container = daos.DCont(pool, c_uuid)
 
-    kv = container.get_kv_by_name('my_test_kv', create=True)
+    kv = container.dict('my_test_kv')
     kv['a'] = 'a'
     kv['b'] = 'b'
     kv['list'] = pickle.dumps(list(range(1, 100000)))
@@ -2916,7 +2964,7 @@ def test_pydaos_kv(server, conf):
 
     kv = None
     print('Closing container and opening new one')
-    kv = container.get_kv_by_name('my_test_kv')
+    kv = container.get('my_test_kv')
     kv = None
     container = None
     daos._cleanup()
@@ -3417,8 +3465,8 @@ def run(wf, args):
         server = DaosServer(conf, test_class='no-debug')
         server.start()
         if fi_test:
-#            fatal_errors.add_result(test_alloc_fail_copy(server, conf,
-#                                                         wf_client))
+            #fatal_errors.add_result(test_alloc_fail_copy(server, conf,
+            #                                             wf_client))
             fatal_errors.add_result(test_alloc_fail_cat(server,
                                                         conf, wf_client))
             fatal_errors.add_result(test_alloc_fail(server, conf))

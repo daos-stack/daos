@@ -82,7 +82,7 @@ const (
 	BdevFormatUnknownClass
 	BdevFormatFailure
 	BdevBadPCIAddress
-	BdevPCIAddressNotFound
+	BdevNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
 )
@@ -110,7 +110,6 @@ const (
 const (
 	ServerUnknown Code = iota + 600
 	ServerScmUnmanaged
-	ServerBdevNotFound
 	ServerIommuDisabled
 	ServerWrongSystem
 	ServerPoolScmTooSmall
@@ -164,4 +163,6 @@ const (
 // security fault codes
 const (
 	SecurityUnknown Code = iota + 900
+	SecurityMissingCertFile
+	SecurityUnreadableCertFile
 )

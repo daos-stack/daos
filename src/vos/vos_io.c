@@ -74,7 +74,8 @@ struct vos_io_context {
 				 ic_dedup_verify:1,
 				 ic_read_ts_only:1,
 				 ic_check_existence:1,
-				 ic_remove:1;
+				 ic_remove:1,
+				 ic_skip_fetch:1;
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -652,6 +653,7 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_save_recx = ((vos_flags & VOS_OF_FETCH_RECX_LIST) != 0);
 	ioc->ic_dedup = ((vos_flags & VOS_OF_DEDUP) != 0);
 	ioc->ic_dedup_verify = ((vos_flags & VOS_OF_DEDUP_VERIFY) != 0);
+	ioc->ic_skip_fetch = ((vos_flags & VOS_OF_SKIP_FETCH) != 0);
 	ioc->ic_dedup_th = dedup_th;
 	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
 		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
@@ -979,8 +981,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	filter.fr_punch_epc = ioc->ic_akey_info.ii_prior_punch.pr_epc;
 	filter.fr_punch_minor_epc =
 		ioc->ic_akey_info.ii_prior_punch.pr_minor_epc;
-
 	evt_ent_array_init(ioc->ic_ent_array, 0);
+
 	rc = evt_find(toh, &filter, ioc->ic_ent_array);
 	if (rc != 0 || vos_dtx_hit_inprogress())
 		D_GOTO(failed, rc = (rc == 0 ? -DER_INPROGRESS : rc));
@@ -988,6 +990,9 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	holes = 0;
 	rsize = 0;
 	inob = ioc->ic_ent_array->ea_inob;
+	if (ioc->ic_skip_fetch)
+		goto fill;
+
 	evt_ent_array_for_each(ent, ioc->ic_ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
@@ -1060,6 +1065,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		index = lo + nr;
 	}
 
+fill:
 	D_ASSERT(index <= end);
 	if (index < end)
 		holes += end - index;
@@ -1692,8 +1698,11 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	rc = key_tree_prepare(obj, ak_toh, VOS_BTR_AKEY,
 			      &iod->iod_name, flags, DAOS_INTENT_UPDATE,
 			      &krec, &toh, ioc->ic_ts_set);
-	if (rc != 0)
+	if (rc != 0) {
+		D_ERROR("akey "DF_KEY" update, key_tree_prepare failed, "DF_RC"\n",
+			DP_KEY(&iod->iod_name), DP_RC(rc));
 		return rc;
+	}
 
 	if (ioc->ic_ts_set) {
 		uint64_t akey_flags;
@@ -1740,6 +1749,9 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 						   (uintptr_t)iod->iod_recxs;
 		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc,
 					minor_epc);
+		if (rc)
+			D_ERROR("akey "DF_KEY" update, akey_update_single failed, "DF_RC"\n",
+				DP_KEY(&iod->iod_name), DP_RC(rc));
 		goto out;
 	} /* else: array */
 
@@ -1760,8 +1772,11 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 		rc = akey_update_recx(toh, pm_ver, &iod->iod_recxs[i],
 				      recx_csum, iod->iod_size, ioc,
 				      minor_epc);
-		if (rc != 0)
+		if (rc != 0) {
+			D_ERROR("akey "DF_KEY" update, akey_update_recx failed, "DF_RC"\n",
+				DP_KEY(&iod->iod_name), DP_RC(rc));
 			goto out;
+		}
 	}
 
 out:
