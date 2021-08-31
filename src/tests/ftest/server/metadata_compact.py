@@ -4,7 +4,7 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from .metadata_test_base import MetadataTestBase
+from metadata_test_base import MetadataTestBase
 
 
 class MetadataCompact(MetadataTestBase):
