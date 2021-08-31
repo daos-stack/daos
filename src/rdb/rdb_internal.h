@@ -80,6 +80,8 @@ struct rdb {
 	ABT_thread		d_callbackd;
 	ABT_thread		d_recvd;
 	ABT_thread		d_compactd;
+	size_t			d_ae_max_size;
+	unsigned int		d_ae_max_entries;
 };
 
 /* thresholds of free space for a leader to avoid appending new log entries

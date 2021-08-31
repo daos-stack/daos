@@ -1187,6 +1187,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		if (args->reasb_req->orr_recov_snap)
 			orw->orw_flags |= ORF_EC_RECOV_SNAP;
 	} else {
+		if (api_args->extra_flags & DIOF_EC_RECOV_FROM_PARITY)
+			orw->orw_flags |= ORF_EC_RECOV_FROM_PARITY;
 		rw_args.maps = args->api_args->ioms;
 	}
 	if (opc == DAOS_OBJ_RPC_FETCH) {

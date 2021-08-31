@@ -13,7 +13,7 @@ from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
-from general_utils import pcmd
+from general_utils import pcmd, get_random_string
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
 from test_utils_container import TestContainer
@@ -64,6 +64,10 @@ class IorTestBase(DfuseTestBase):
             self.pool, daos_command=DaosCommand(self.bin))
         self.container.get_params(self)
 
+        # update container oclass
+        if self.ior_cmd.dfs_oclass:
+            self.container.oclass.update(self.ior_cmd.dfs_oclass.value)
+
         # create container
         self.container.create()
 
@@ -88,7 +92,7 @@ class IorTestBase(DfuseTestBase):
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
-                          mount_dir=None, out_queue=None):
+                          mount_dir=None, out_queue=None, env=None):
         # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -116,6 +120,8 @@ class IorTestBase(DfuseTestBase):
             mount_dir (str, optional): Create specific mount point
             out_queue (queue, optional): Pass the exception to the queue.
                 Defaults to None
+            env (EnvironmentVariables, optional): Pass the environment to be
+                used when calling run_ior. Defaults to None
 
         Returns:
             CmdResult: result of the ior command execution
@@ -126,6 +132,10 @@ class IorTestBase(DfuseTestBase):
 
         # start dfuse if api is POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
+            # add a substring in case of HDF5-VOL
+            if plugin_path:
+                sub_dir = get_random_string(5)
+                mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self.start_dfuse(
@@ -144,7 +154,7 @@ class IorTestBase(DfuseTestBase):
             out = self.run_ior(job_manager, self.processes,
                                intercept, plugin_path=plugin_path,
                                fail_on_warning=fail_on_warning,
-                               out_queue=out_queue)
+                               out_queue=out_queue, env=env)
         finally:
             if stop_dfuse:
                 self.stop_dfuse()
@@ -212,7 +222,7 @@ class IorTestBase(DfuseTestBase):
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
                 plugin_path=None, fail_on_warning=False, pool=None,
-                out_queue=None):
+                out_queue=None, env=None):
         """Run the IOR command.
 
         Args:
@@ -230,12 +240,17 @@ class IorTestBase(DfuseTestBase):
                 Default is self.pool.
             out_queue (queue, optional): Pass the exception to the queue.
                 Defaults to None.
+            env (EnvironmentVariables, optional): Environment to be used
+             when running ior. Defaults to None
         """
-        env = self.ior_cmd.get_default_env(str(manager), self.client_log)
+        if not env:
+            env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env['LD_PRELOAD'] = intercept
             env['D_LOG_MASK'] = 'INFO'
-            env['D_IL_REPORT'] = '1'
+            if env.get('D_IL_REPORT', None) is None:
+                env['D_IL_REPORT'] = '1'
+
             #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
             #env['DD_MASK'] = 'all'
             #env['DD_SUBSYS'] = 'all'

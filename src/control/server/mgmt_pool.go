@@ -442,7 +442,7 @@ func (svc *mgmtSvc) checkPools(ctx context.Context) error {
 		return err
 	}
 
-	psList, err := svc.sysdb.PoolServiceList()
+	psList, err := svc.sysdb.PoolServiceList(true)
 	if err != nil {
 		return err
 	}
@@ -943,7 +943,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	}
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", req)
 
-	psList, err := svc.sysdb.PoolServiceList()
+	psList, err := svc.sysdb.PoolServiceList(false)
 	if err != nil {
 		return nil, err
 	}

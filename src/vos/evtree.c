@@ -1110,7 +1110,8 @@ evt_tcx_create(struct evt_root *root, uint64_t feats, unsigned int order,
 	tcx->tc_ref	 = 1; /* for the caller */
 	tcx->tc_magic	 = EVT_HDL_ALIVE;
 	tcx->tc_root	 = root;
-	tcx->tc_desc_cbs = *cbs;
+	if (cbs != NULL)
+		tcx->tc_desc_cbs = *cbs;
 
 	rc = umem_class_init(uma, &tcx->tc_umm);
 	if (rc != 0) {
@@ -2144,8 +2145,8 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 		if (entry->ei_rect.rc_minor_epc == EVT_MINOR_EPC_MAX) {
 			/** Special case.   This is an overlapping delete record
 			 *  which can happen when there are minor epochs
-			 *  involved.   Rather than rejecting, we can delete the
-			 *  old record and insert a merged  one
+			 *  involved.   Rather than rejecting, insert prefix
+			 *  and/or suffix extents.
 			 */
 			ent = evt_ent_array_get(ent_array, 0);
 			if (ent->en_ext.ex_lo <= entry->ei_rect.rc_ex.ex_lo &&
@@ -2179,18 +2180,21 @@ evt_insert(daos_handle_t toh, const struct evt_entry_in *entry,
 			memcpy(&ent_cpy, entry, sizeof(*entry));
 			entryp = &ent_cpy;
 			/** We need to edit the existing extent */
-			if (ent->en_ext.ex_lo < ent_cpy.ei_rect.rc_ex.ex_lo)
-				ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_lo;
-			if (ent->en_ext.ex_hi > ent_cpy.ei_rect.rc_ex.ex_hi)
-				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_hi;
+			if (entry->ei_rect.rc_ex.ex_lo < ent->en_ext.ex_lo) {
+				ent_cpy.ei_rect.rc_ex.ex_hi = ent->en_ext.ex_lo - 1;
+				if (entry->ei_rect.rc_ex.ex_hi <= ent->en_ext.ex_hi)
+					goto insert;
+				/* There is also a suffix, so insert the prefix */
+				rc = evt_insert_entry(tcx, entryp, csum_bufp);
+				if (rc != 0)
+					goto out;
+			}
 
-			/** Remove the existing node */
-			rc = evt_node_delete(tcx);
+			D_ASSERT(entry->ei_rect.rc_ex.ex_hi > ent->en_ext.ex_hi);
+			ent_cpy.ei_rect.rc_ex.ex_hi = entry->ei_rect.rc_ex.ex_hi;
+			ent_cpy.ei_rect.rc_ex.ex_lo = ent->en_ext.ex_hi + 1;
 
-			if (rc != 0)
-				goto out;
-
-			/* Now insert the merged one */
+			/* Now insert the suffix */
 			goto insert;
 		}
 		/*
@@ -2738,6 +2742,46 @@ evt_open(struct evt_root *root, struct umem_attr *uma,
 	*toh = evt_tcx2hdl(tcx);
 	evt_tcx_decref(tcx); /* -1 for tcx_create */
 	return 0;
+}
+
+int
+evt_has_data(struct evt_root *root, struct umem_attr *uma)
+{
+	struct evt_entry	*ent;
+	struct evt_context	*tcx;
+	struct evt_rect		 rect;
+	int			 rc;
+
+	if (evt_is_empty(root))
+		return 0;
+
+	rc = evt_tcx_create(root, -1, -1, uma, NULL, &tcx);
+	if (rc != 0)
+		return rc;
+
+	rect.rc_ex.ex_lo = 0;
+	rect.rc_ex.ex_hi = -1ULL;
+	rect.rc_epc = DAOS_EPOCH_MAX;
+	rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
+
+	rc = evt_ent_array_fill(tcx, EVT_FIND_ALL, 0 /* DTX check disabled */, NULL, &rect,
+				tcx->tc_iter.it_entries);
+	if (rc != 0)
+		goto out;
+
+	rc = 0; /* Assume there is no data */
+	evt_ent_array_for_each(ent, tcx->tc_iter.it_entries) {
+		if (ent->en_minor_epc != EVT_MINOR_EPC_MAX) {
+			D_DEBUG(DB_IO, "Found "DF_ENT", stopping search\n", DP_ENT(ent));
+			rc = 1;
+			break;
+		}
+		D_DEBUG(DB_IO, "Ignoring "DF_ENT"\n", DP_ENT(ent));
+	}
+out:
+	evt_tcx_decref(tcx); /* -1 for tcx_create */
+	evt_tcx_decref(tcx); /* -1 for open */
+	return rc;
 }
 
 /**
@@ -3602,31 +3646,19 @@ evt_remove_all(daos_handle_t toh, const struct evt_extent *ext,
 			continue; /* Skip existing removal records */
 		entry.ei_rect.rc_ex = ent->en_ext;
 		entry.ei_bound = entry.ei_rect.rc_epc = ent->en_epoch;
-		entry.ei_rect.rc_minor_epc = ent->en_minor_epc;
-		if ((ent->en_visibility & EVT_PARTIAL) == 0) {
-			D_DEBUG(DB_IO, "Remove "DF_RECT"\n",
-				DP_RECT(&entry.ei_rect));
-			rc = evt_delete_internal(tcx, &entry.ei_rect, NULL,
-						 true);
-			/** If delete fails, go ahead insert a removal
-			 *  record instead.
-			 */
-			if (rc == -DER_INPROGRESS)
-				goto insert_removal;
-			if (rc != 0)
-				break;
-			continue;
-		}
+		entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
 
-		/* It's a partial extent so insert a delete record instead */
+		/** One could make the case for removal for intact extents here but it has the
+		 *  potential for messing with aggregation's implicit assumption that it is the
+		 *  remover of extents.  If the extent is only partially covered, we do need to
+		 *  adjust the bounds before inserting the removal record.
+		 */
 		if (ent->en_ext.ex_lo < ext->ex_lo)
 			entry.ei_rect.rc_ex.ex_lo = ext->ex_lo;
 		if (ent->en_ext.ex_hi > ext->ex_hi)
 			entry.ei_rect.rc_ex.ex_hi = ext->ex_hi;
-insert_removal:
-		entry.ei_rect.rc_minor_epc = EVT_MINOR_EPC_MAX;
-		D_DEBUG(DB_IO, "Insert removal record "DF_RECT"\n",
-			DP_RECT(&entry.ei_rect));
+
+		D_DEBUG(DB_IO, "Insert removal record "DF_RECT"\n", DP_RECT(&entry.ei_rect));
 		BIO_ADDR_SET_HOLE(&entry.ei_addr);
 
 		rc = evt_insert(toh, &entry, NULL);

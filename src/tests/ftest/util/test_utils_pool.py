@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+# pylint: disable=too-many-lines
 import os
 from time import sleep, time
 import ctypes
@@ -62,6 +63,7 @@ class TestPool(TestDaosApiBase):
         self.properties = BasicParameter(None)      # string of cs name:value
         self.rebuild_timeout = BasicParameter(None)
         self.pool_query_timeout = BasicParameter(None)
+        self.acl_file = BasicParameter(None)
         self.label = BasicParameter(None, "TestLabel")
         self.label_generator = label_generator
 
@@ -174,6 +176,39 @@ class TestPool(TestDaosApiBase):
         return identifier
 
     @fail_on(CommandFailure)
+    def _dmg_ready(self, subcommand):
+        """Check if it's ready to call dmg command.
+
+        Args:
+            subcommand (str): Method name in this class.
+
+        Raises:
+            CommandFailure: If the control method is API.
+
+        Returns:
+            bool: True if the control method is dmg and self.dmg is defined.
+                False otherwise.
+
+        """
+        if self.control_method.value == self.USE_API:
+            raise CommandFailure(
+                "Error: control method {} not supported for {}".format(
+                    self.control_method.value, subcommand))
+
+        if self.control_method.value == self.USE_DMG and self.dmg:
+            return True
+
+        if self.control_method.value == self.USE_DMG:
+            self.log.error("Error: Undefined dmg command")
+
+        else:
+            self.log.error(
+                "Error: Undefined control_method: %s",
+                self.control_method.value)
+
+        return False
+
+    @fail_on(CommandFailure)
     @fail_on(DaosApiError)
     def create(self):
         """Create a pool with dmg.
@@ -212,6 +247,7 @@ class TestPool(TestDaosApiBase):
             "scm_size": self.scm_size.value,
             "nranks": self.nranks.value,
             "properties": self.properties.value,
+            "acl_file": self.acl_file.value,
             "label": self.label.value
         }
         for key in ("target_list", "svcn", "nvme_size"):
@@ -862,6 +898,7 @@ class TestPool(TestDaosApiBase):
         """Use dmg to reintegrate the rank and targets into this pool.
 
         Only supported with the dmg control method.
+
         Args:
             rank (str): daos server rank to reintegrate
             tgt_idx (string): str of targets to reintegrate on ranks ex: "1,2"
@@ -882,6 +919,7 @@ class TestPool(TestDaosApiBase):
         """Use dmg to drain the rank and targets from this pool.
 
         Only supported with the dmg control method.
+
         Args:
             rank (str): daos server rank to drain
             tgt_idx (string): str of targets to drain on ranks ex: "1,2"
@@ -897,6 +935,61 @@ class TestPool(TestDaosApiBase):
 
         return status
 
+    def get_acl(self):
+        """Get ACL from a DAOS pool.
+
+        Raises:
+            CommandFailure: if the control method is API.
+
+        Returns:
+            str: dmg pool get-acl output.
+
+        """
+        if self._dmg_ready("get_acl()"):
+            return self.dmg.pool_get_acl(pool=self.identifier)
+
+        return None
+
+    def update_acl(self, use_acl, entry=None):
+        """Update ACL for a DAOS pool.
+
+        Can't use both ACL file and entry, so use_acl = True and entry != None
+        isn't allowed.
+
+        Args:
+            use_acl (bool): Whether to use the ACL file during the update.
+            entry (str, optional): entry to be updated.
+
+        Raises:
+            CommandFailure: if the control method is API.
+
+        """
+        if self._dmg_ready("update_acl()"):
+            acl_file = None
+            if use_acl:
+                acl_file = self.acl_file.value
+            self.dmg.pool_update_acl(
+                pool=self.identifier, acl_file=acl_file, entry=entry)
+
+    def delete_acl(self, principal):
+        """Delete ACL from a DAOS pool.
+
+        Args:
+            principal (str): principal to be deleted
+        """
+        if self._dmg_ready("delete_acl()"):
+            self.dmg.pool_delete_acl(pool=self.identifier, principal=principal)
+
+    def overwrite_acl(self):
+        """Overwrite ACL in a DAOS pool."""
+
+        if self._dmg_ready("overwrite_acl()"):
+            if self.acl_file.value:
+                self.dmg.pool_overwrite_acl(
+                    pool=self.identifier, acl_file=self.acl_file.value)
+            else:
+                self.log.error("self.acl_file isn't defined!")
+
 
 class LabelGenerator():
     # pylint: disable=too-few-public-methods
@@ -907,7 +1000,6 @@ class LabelGenerator():
 
         Args:
             value (int): Number that's attached after the base_label.
-
         """
         self.value = value
 
