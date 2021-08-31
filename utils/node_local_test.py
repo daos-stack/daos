@@ -1070,6 +1070,7 @@ class DFuse():
             return fatal_errors
 
         print('Stopping fuse')
+        self._close_files()
         ret = umount(self.dir)
         if ret:
             umount(self.dir, bg=True)
@@ -1079,7 +1080,7 @@ class DFuse():
 
         run_log_test = True
         try:
-            ret = self._sp.wait(timeout=30)
+            ret = self._sp.wait(timeout=20)
             print('rc from dfuse {}'.format(ret))
             if ret != 0:
                 fatal_errors = True
