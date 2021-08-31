@@ -333,11 +333,18 @@ co_properties(void **state)
 	assert_int_equal(rc, 0);
 
 	prop = daos_prop_alloc(2);
+	/** setting the label on entries with no type should fail */
+	rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label, strlen(label));
+	assert_rc_equal(rc, -DER_NONEXIST);
+
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	prop->dpp_entries[0].dpe_str = strdup(label);
+	/** setting the label as a pointer should fail */
+	rc = daos_prop_set_ptr(prop, DAOS_PROP_CO_LABEL, label, strlen(label));
+	assert_rc_equal(rc, -DER_INVAL);
+	rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label, strlen(label));
+	assert_rc_equal(rc, 0);
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_CO_SNAPSHOT_MAX;
 	prop->dpp_entries[1].dpe_val = snapshot_max;
-	D_STRNDUP(arg->cont_label, label, DAOS_PROP_LABEL_MAX_LEN);
 
 	while (!rc && arg->setup_state != SETUP_CONT_CONNECT)
 		rc = test_setup_next_step((void **)&arg, NULL, NULL, prop);
@@ -436,8 +443,8 @@ co_properties(void **state)
 		/* Create container: same UUID, different label - fail */
 		print_message("Checking create: same UUID, different label "
 			      "(will fail)\n");
-		free(prop->dpp_entries[0].dpe_str);
-		prop->dpp_entries[0].dpe_str = strdup(label2);
+		rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label2, strlen(label2));
+		assert_rc_equal(rc, 0);
 		rc = daos_cont_create(arg->pool.poh, arg->co_uuid, prop, NULL);
 		assert_rc_equal(rc, -DER_INVAL);
 
@@ -502,14 +509,14 @@ co_properties(void **state)
 		 * container 1 set-prop label2 - pass
 		 */
 		print_message("Checking label rename and reuse\n");
-		free(prop->dpp_entries[0].dpe_str);
-		prop->dpp_entries[0].dpe_str = strdup(label2_v2);
+		rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label2_v2, strlen(label2_v2));
+		assert_rc_equal(rc, 0);
 		print_message("step: C3 set-prop change FROM %s TO %s\n",
 			      label2, label2_v2);
 		rc = daos_cont_set_prop(coh3, prop, NULL);
 		assert_rc_equal(rc, 0);
-		free(prop->dpp_entries[0].dpe_str);
-		prop->dpp_entries[0].dpe_str = strdup(label2);
+		rc = daos_prop_set_str(prop, DAOS_PROP_CO_LABEL, label2, strlen(label2));
+		assert_rc_equal(rc, 0);
 		print_message("step: C1 set-prop change FROM %s TO %s\n",
 			      label, label2);
 		rc = daos_cont_set_prop(arg->coh, prop, NULL);

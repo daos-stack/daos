@@ -17,7 +17,7 @@ from data_mover_utils import FsCopy
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from general_utils import get_host_data, get_random_string, \
-    run_command, DaosTestError, pcmd, get_random_bytes
+    run_command, DaosTestError, pcmd, get_random_bytes, run_pcmd
 import slurm_utils
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
@@ -187,6 +187,26 @@ def get_remote_logs(self):
             "from clients>>: {}".format(self.hostlist_clients))
 
 
+def write_logfile(data, name, destination):
+    """Write date to the local destination file.
+
+    Args:
+        self (obj): soak obj
+        data (str): data to write to file
+        destination (str): local avocado directory
+    """
+    if not os.path.exists(destination):
+        os.makedirs(destination)
+    scriptfile = destination + "/" + str(name)
+    with open(scriptfile, 'w') as script_file:
+        # identify what be used to run this script
+        if isinstance(data, list):
+            text = "\n".join(data)
+            script_file.write(text)
+        else:
+            script_file.write(str(data))
+
+
 def run_event_check(self, since, until):
     """Run a check on specific events in journalctl.
 
@@ -237,6 +257,32 @@ def run_monitor_check(self):
             pcmd(hosts, command, timeout=30)
 
 
+def run_metrics_check(self, logging=True, prefix=None):
+    """Monitor telemetry data.
+
+    Args:
+        self (obj): soak obj
+        logging (bool): If True; output is logged to file
+        prefix (str): add prefix to name; ie initial or final
+    """
+    enable_telemetry = self.params.get("enable_telemetry", "/run/*")
+    if enable_telemetry:
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        for engine in range(engine_count):
+            name = "pass" + str(self.loop) + "_metrics_{}.csv".format(engine)
+            if prefix:
+                name = prefix + "_metrics_{}.csv".format(engine)
+            destination = self.outputsoakdir
+            output = run_pcmd(hosts=self.hostlist_servers,
+                              command="sudo daos_metrics -S {} --csv".format(
+                                  engine),
+                              verbose=(not logging),
+                              timeout=60)
+            if logging:
+                write_logfile(output[0]["stdout"], name, destination)
+
+
 def get_harassers(harasser):
     """Create a valid harasserlist from the yaml job harassers.
 
@@ -279,11 +325,13 @@ def wait_for_pool_rebuild(self, pool, name):
         rebuild_status = True
     except DaosTestError as error:
         self.log.error(
-            "<<<FAILED:{} rebuild timed out".format(name), exc_info=error)
+            "<<<FAILED:{} rebuild timed out: {}".format(
+                name, error), exc_info=error)
         rebuild_status = False
     except TestFail as error1:
-        self.log.error("<<<FAILED:{} rebuild failed due to test issue".format(
-            name), exc_info=error1)
+        self.log.error(
+            "<<<FAILED:{} rebuild failed due to test issue: {}".format(
+                name, error1), exc_info=error1)
     return rebuild_status
 
 
@@ -837,7 +885,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.flags.update(flag)
                         mdtest_cmd.num_of_files_dirs.update(
                             num_of_files_dirs)
-                        if ("POSIX" in api):
+                        if "POSIX" in api:
                             mdtest_cmd.dfs_oclass.update(None)
                             mdtest_cmd.dfs_dir_oclass.update(None)
                         else:

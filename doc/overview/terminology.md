@@ -40,10 +40,9 @@
 |RDG|Redundancy Group|
 |RPC|Remote Procedure Call|
 |SCM|Storage-Class Memory|
-|[SWIM](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914)|Scalable Weakly-consistent Infection-style process group Membership|
 |[SPDK](https://spdk.io/)|Storage Performance Development Kit|
 |SSD|Solid State Drive|
-|SWIM|Scalable Weakly-consistent Infection-style process group Membership protocol|
+|[SWIM](http://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1028914)|Scalable Weakly-consistent Infection-style process group Membership Protocol|
 |[ULT](https://github.com/pmodels/argobots/wiki/User-level-Thread-(ULT))|User Level Thread|
 |UPI|Intel Ultra Path Interconnect|
 |UUID|Universal Unique Identifier|

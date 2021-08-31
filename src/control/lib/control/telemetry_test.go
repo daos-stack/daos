@@ -117,10 +117,10 @@ func newTestPBHistogram(numBuckets int) *pclient.Metric {
 	return metric
 }
 
-func mockScrapeFnSuccess(t *testing.T, metricFam ...*pclient.MetricFamily) func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
+func mockScrapeFnSuccess(t *testing.T, metricFam ...*pclient.MetricFamily) func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 	t.Helper()
 
-	return func(_ context.Context, _ *url.URL, _ httpGetFn) ([]byte, error) {
+	return func(_ context.Context, _ *url.URL, _ httpGetFn, _ time.Duration) ([]byte, error) {
 		var b strings.Builder
 		for _, mf := range metricFam {
 			_, err := expfmt.MetricFamilyToText(&b, mf)
@@ -135,42 +135,49 @@ func mockScrapeFnSuccess(t *testing.T, metricFam ...*pclient.MetricFamily) func(
 func TestControl_scrapeMetrics(t *testing.T) {
 	testHost := "dontcare"
 	testPort := uint32(1234)
+	testURL := &url.URL{
+		Scheme: "http",
+		Host:   fmt.Sprintf("%s:%d", testHost, testPort),
+		Path:   "testpath",
+	}
 
 	testMetricFam := newTestMetricFamily("test_name", "This is the help text", pclient.MetricType_GAUGE)
 	addTestMetric(testMetricFam)
 
 	for name, tc := range map[string]struct {
-		scrapeFn  func(context.Context, *url.URL, httpGetFn) ([]byte, error)
+		req       httpGetter
+		scrapeFn  func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
 		expResult pbMetricMap
 		expErr    error
 	}{
 		"check scrape params": {
-			scrapeFn: func(_ context.Context, url *url.URL, getter httpGetFn) ([]byte, error) {
-				common.AssertEqual(t, "http", url.Scheme, "")
-				common.AssertEqual(t, fmt.Sprintf("%s:%d", testHost, testPort), url.Host, "")
-				common.AssertEqual(t, "metrics", url.Path, "")
+			scrapeFn: func(_ context.Context, url *url.URL, getter httpGetFn, timeout time.Duration) ([]byte, error) {
+				common.AssertEqual(t, testURL.Scheme, url.Scheme, "")
+				common.AssertEqual(t, testURL.Host, url.Host, "")
+				common.AssertEqual(t, testURL.Path, url.Path, "")
 
 				if getter == nil {
 					t.Fatal("http getter was not set")
 				}
+				common.AssertEqual(t, httpReqTimeout, timeout, "")
 				return nil, nil
 			},
 			expResult: pbMetricMap{},
 		},
 		"HTTP scrape error": {
-			scrapeFn: func(_ context.Context, _ *url.URL, _ httpGetFn) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return nil, errors.New("mock scrape")
 			},
 			expErr: errors.New("mock scrape"),
 		},
 		"scrape returns no content": {
-			scrapeFn: func(_ context.Context, _ *url.URL, _ httpGetFn) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte{}, nil
 			},
 			expResult: pbMetricMap{},
 		},
 		"scrape returns bad content": {
-			scrapeFn: func(_ context.Context, _ *url.URL, _ httpGetFn) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte("<h1>Hello world</h1>"), nil
 			},
 			expErr: errors.New("parsing error"),
@@ -183,12 +190,13 @@ func TestControl_scrapeMetrics(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			oldScrapeFn := httpScrapeFn
-			httpScrapeFn = tc.scrapeFn
+			req := &httpReq{
+				url:       testURL,
+				getBodyFn: tc.scrapeFn,
+			}
 
-			result, err := scrapeMetrics(context.TODO(), testHost, testPort)
+			result, err := scrapeMetrics(context.TODO(), req)
 
-			httpScrapeFn = oldScrapeFn
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResult, result); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -208,7 +216,7 @@ func TestControl_MetricsList(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		scrapeFn func(context.Context, *url.URL, httpGetFn) ([]byte, error)
+		scrapeFn func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
 		req      *MetricsListReq
 		expResp  *MetricsListResp
 		expErr   error
@@ -231,7 +239,7 @@ func TestControl_MetricsList(t *testing.T) {
 				Host: "host1",
 				Port: 1066,
 			},
-			scrapeFn: func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return nil, errors.New("mock scrape")
 			},
 			expErr: errors.New("mock scrape"),
@@ -241,7 +249,7 @@ func TestControl_MetricsList(t *testing.T) {
 				Host: "host1",
 				Port: 8888,
 			},
-			scrapeFn: func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte{}, nil
 			},
 			expResp: &MetricsListResp{
@@ -271,17 +279,17 @@ func TestControl_MetricsList(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			oldScrapeFn := httpScrapeFn
-			httpScrapeFn = tc.scrapeFn
-			if httpScrapeFn == nil {
-				httpScrapeFn = func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
+			if tc.scrapeFn == nil {
+				tc.scrapeFn = func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 					return nil, nil
 				}
+			}
+			if tc.req != nil {
+				tc.req.getBodyFn = tc.scrapeFn
 			}
 
 			resp, err := MetricsList(context.TODO(), tc.req)
 
-			httpScrapeFn = oldScrapeFn
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
@@ -420,7 +428,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 	}
 
 	for name, tc := range map[string]struct {
-		scrapeFn func(context.Context, *url.URL, httpGetFn) ([]byte, error)
+		scrapeFn func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error)
 		req      *MetricsQueryReq
 		expResp  *MetricsQueryResp
 		expErr   error
@@ -443,7 +451,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 				Host: "host1",
 				Port: 1066,
 			},
-			scrapeFn: func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return nil, errors.New("mock scrape")
 			},
 			expErr: errors.New("mock scrape"),
@@ -453,7 +461,7 @@ func TestControl_MetricsQuery(t *testing.T) {
 				Host: "host1",
 				Port: 8888,
 			},
-			scrapeFn: func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
+			scrapeFn: func(context.Context, *url.URL, httpGetFn, time.Duration) ([]byte, error) {
 				return []byte{}, nil
 			},
 			expResp: &MetricsQueryResp{
@@ -560,17 +568,12 @@ func TestControl_MetricsQuery(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			oldScrapeFn := httpScrapeFn
-			httpScrapeFn = tc.scrapeFn
-			if httpScrapeFn == nil {
-				httpScrapeFn = func(context.Context, *url.URL, httpGetFn) ([]byte, error) {
-					return nil, nil
-				}
+			if tc.req != nil {
+				tc.req.getBodyFn = tc.scrapeFn
 			}
 
 			resp, err := MetricsQuery(context.TODO(), tc.req)
 
-			httpScrapeFn = oldScrapeFn
 			common.CmpErr(t, tc.expErr, err)
 			if diff := cmp.Diff(tc.expResp, resp); diff != "" {
 				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)

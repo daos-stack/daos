@@ -13,13 +13,14 @@
 static int
 evt_validate_options(unsigned int options)
 {
-	if ((options & EVT_ITER_SKIP_HOLES) == 0)
+	if ((options & (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_DATA)) == 0)
 		return 0;
+
 	if ((options & EVT_ITER_COVERED) == EVT_ITER_VISIBLE)
 		return 0;
 
 	/* EVT_ITER_SKIP* should be used only with EVT_ITER_VISIBLE */
-	D_ERROR("Misuse of EVT_ITER_SKIP_HOLES\n");
+	D_ERROR("Misuse of EVT_ITER_SKIP_\n");
 	return -DER_INVAL;
 }
 
@@ -199,16 +200,15 @@ evt_iter_intent(struct evt_iterator *iter)
 static inline bool
 should_skip(struct evt_entry *entry, struct evt_iterator *iter)
 {
-	if ((iter->it_options & EVT_ITER_SKIP_HOLES) == 0)
+	if ((iter->it_options & (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_DATA)) == 0)
 		return false;
 
-	if (bio_addr_is_hole(&entry->en_addr)) {
-		if ((iter->it_options & EVT_ITER_SKIP_HOLES) ||
-		    entry->en_minor_epc == EVT_MINOR_EPC_MAX)
-			return true;
-	}
-
-	return false;
+	/* Discard/removal record should not be shown with skip option */
+	D_ASSERT(entry->en_minor_epc != EVT_MINOR_EPC_MAX);
+	if (bio_addr_is_hole(&entry->en_addr))
+		return (iter->it_options & EVT_ITER_SKIP_HOLES) == EVT_ITER_SKIP_HOLES;
+	else
+		return (iter->it_options & EVT_ITER_SKIP_DATA) == EVT_ITER_SKIP_DATA;
 }
 
 static int
@@ -288,12 +288,12 @@ ready:
 }
 
 static int
-evt_iter_skip_holes(struct evt_context *tcx, struct evt_iterator *iter)
+evt_iter_skip(struct evt_context *tcx, struct evt_iterator *iter)
 {
 	struct evt_entry_array	*enta;
 	struct evt_entry	*entry;
 
-	if (iter->it_options & EVT_ITER_SKIP_HOLES) {
+	if (iter->it_options & (EVT_ITER_SKIP_HOLES | EVT_ITER_SKIP_DATA)) {
 		enta = iter->it_entries;
 		entry = evt_ent_array_get(enta, iter->it_index);
 
@@ -359,7 +359,7 @@ evt_iter_probe_sorted(struct evt_context *tcx, struct evt_iterator *iter,
 	iter->it_index = index;
 out:
 	iter->it_state = EVT_ITER_READY;
-	return evt_iter_skip_holes(tcx, iter);
+	return evt_iter_skip(tcx, iter);
 }
 
 static void

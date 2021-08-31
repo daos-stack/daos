@@ -101,7 +101,7 @@ func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
 		return errors.New("must specify one of snapshot name or epoch or epoch range")
 	}
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, nil)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
