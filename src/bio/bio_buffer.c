@@ -590,7 +590,6 @@ iod_expand_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg,
 	uint64_t		cur_pg, prev_pg_start, prev_pg_end;
 	unsigned int		chk_pg_idx;
 	struct bio_dma_chunk	*chk = last_rg->brr_chk;
-	bool			forward = true;
 
 	chk_pg_idx = last_rg->brr_pg_idx;
 	D_ASSERT(chk_pg_idx < bio_chk_sz);
@@ -609,37 +608,25 @@ iod_expand_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg,
 	if (cur_pg != prev_pg_end)
 		return false;
 
-	if (last_rg->brr_off < off) {		/* Forward merge */
-		if (last_rg->brr_end <= off) {
-			chk_pg_idx += (prev_pg_end - prev_pg_start);
-			goto reserve;
-		}
-		/* Overlapping */
-	} else if (last_rg->brr_off > off) {	/* Backward merge */
-		if (end <= last_rg->brr_off) {
-			/* Two regions must be covered by same page */
-			D_ASSERT(pg_cnt == 1 && prev_pg_end == prev_pg_start);
-			forward = false;
-			goto reserve;
-		}
-		/* Overlapping */
-	}
-
-	D_DEBUG(DB_IO, "overlapping IOVs: ["DF_U64", "DF_U64"), ["DF_U64", "DF_U64")\n",
+	D_DEBUG(DB_TRACE, "merging IOVs: ["DF_U64", "DF_U64"), ["DF_U64", "DF_U64")\n",
 		last_rg->brr_off, last_rg->brr_end, off, end);
-	return false;
-reserve:
+
+	if (last_rg->brr_off < off)
+		chk_pg_idx += (prev_pg_end - prev_pg_start);
+	else
+		/* Two regions must be covered by same page */
+		D_ASSERT(pg_cnt == 1 && prev_pg_end == prev_pg_start);
+
 	bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
 	if (bio_iov2raw_buf(biov) == NULL)
 		return false;
 
-	if (forward)
-		last_rg->brr_end = end;
-	else
+	if (off < last_rg->brr_off)
 		last_rg->brr_off = off;
+	if (end > last_rg->brr_end)
+		last_rg->brr_end = end;
 
-	D_DEBUG(DB_TRACE, "%s consecutive reserve %p.\n",
-		forward ? "Forward" : "Backward", bio_iov2raw_buf(biov));
+	D_DEBUG(DB_TRACE, "Consecutive reserve %p.\n", bio_iov2raw_buf(biov));
 	return true;
 }
 
