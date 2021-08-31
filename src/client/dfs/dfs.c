@@ -4889,62 +4889,6 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid)
 	return 0;
 }
 
-#define DFS_ROOT_UUID "ffffffff-ffff-ffff-ffff-ffffffffffff"
-
-int
-dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs)
-{
-	uuid_t			co_uuid;
-	daos_cont_info_t	co_info;
-	daos_handle_t		coh;
-	int			rc;
-
-	/** Use special UUID for root container */
-	rc = uuid_parse(DFS_ROOT_UUID, co_uuid);
-	if (rc) {
-		D_ERROR("Invalid Container uuid\n");
-		return EINVAL;
-	}
-
-	/** Try to open the DAOS container first (the mountpoint) */
-	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
-	if (rc == 0) {
-		rc = dfs_mount(poh, coh, O_RDWR, dfs);
-		if (rc)
-			D_ERROR("dfs_mount failed (%d)\n", rc);
-		return rc;
-	}
-	/* If NOEXIST we create it */
-	if (rc == -DER_NONEXIST) {
-		rc = dfs_cont_create(poh, &co_uuid, NULL, &coh, dfs);
-		if (rc)
-			D_ERROR("dfs_cont_create failed (%d)\n", rc);
-		return rc;
-	}
-
-	/** COH is tracked in dfs and closed in dfs_umount_root_cont() */
-	return rc;
-}
-
-int
-dfs_umount_root_cont(dfs_t *dfs)
-{
-	daos_handle_t	coh;
-	int		rc;
-
-	if (dfs == NULL)
-		return EINVAL;
-
-	coh.cookie = dfs->coh.cookie;
-
-	rc = dfs_umount(dfs);
-	if (rc)
-		return rc;
-
-	rc = daos_cont_close(coh, NULL);
-	return daos_der2errno(rc);
-}
-
 int
 dfs_obj_anchor_split(dfs_obj_t *obj, uint32_t *nr, daos_anchor_t *anchors)
 {
