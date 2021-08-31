@@ -362,7 +362,7 @@ static bool
 sc_value_has_been_seen(struct scrub_ctx *ctx, vos_iter_entry_t *entry,
 		       vos_iter_type_t type)
 {
-	if (VOS_ITER_RECX == type &&
+	if (type == VOS_ITER_RECX &&
 	    !recx_eq(ctx->sc_iod.iod_recxs, &entry->ie_recx))
 		return false;
 	return epoch_eq(ctx->sc_epoch, entry->ie_epoch) &&

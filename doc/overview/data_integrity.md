@@ -229,7 +229,7 @@ also be able to update them. When updated, they should be active right away.
 - **Pool Scrubber Mode** - How the scrubber will run for each pool target. The
   container configuration can disable scrubbing for the container, but it cannot
   alter the mode.
-    - **OFF** - The Scrubber will not run. 
+    - **OFF** - The Scrubber will not run.
     - **Run & Wait** - Will run the scrubber to completion, yielding after
       consuming configured "credits". Then, if completed before configured
       frequency, will sleep until it's time to start again.
