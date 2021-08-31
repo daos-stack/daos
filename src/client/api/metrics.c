@@ -144,7 +144,7 @@ int
 dc_metrics_init()
 {
 	int rc, i;
-	bool val;
+	bool val = false;
 
 	d_getenv_bool("DAOS_CLI_METRICS_DISABLE", &val);
 	if (val)
@@ -157,22 +157,22 @@ dc_metrics_init()
 
 	rc = dc_pool_metrics_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize metrics for pool, rc = %d\n", rc);
+		D_ERROR("Failed to initialize metrics for pool: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 	rc = dc_cont_metrics_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize metrics for container, rc = %d\n", rc);
+		D_ERROR("Failed to initialize metrics for container: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_cont, rc);
 	}
 	rc = dc_obj_metrics_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize metrics for object, rc = %d\n", rc);
+		D_ERROR("Failed to initialize metrics for object: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_obj, rc);
 	}
 	rc = dc_metrics_tls_init();
 	if (rc != 0) {
-		D_ERROR("Failed to initialize metrics TLS, rc = %d\n", rc);
+		D_ERROR("Failed to initialize metrics TLS: "DF_RC"\n", DP_RC(rc));
 		D_GOTO(out_tls, rc);
 	}
 
@@ -213,7 +213,7 @@ out:
 void
 dc_metrics_fini()
 {
-	bool val;
+	bool val = false;
 
 	if (is_metrics_enabled == 0)
 		return;

@@ -1061,8 +1061,13 @@ out:
 			size = dc_get_fetch_size(orwo);
 		}
 		is_full_stripe = is_ec_obj ? reasb_req->orr_full_stripe_only : 0;
-		dc_metrics_update_iostats((opc == DAOS_OBJ_RPC_UPDATE), size);
-		dc_metrics_update_iodist((opc == DAOS_OBJ_RPC_UPDATE), size, oca, is_full_stripe);
+		ret = dc_metrics_update_iostats((opc == DAOS_OBJ_RPC_UPDATE), size);
+		if (ret)
+			return ret;
+		ret = dc_metrics_update_iodist((opc == DAOS_OBJ_RPC_UPDATE), size, oca,
+					       is_full_stripe);
+		if (ret)
+			return ret;
 	}
 	return ret;
 }
