@@ -191,6 +191,9 @@ class CartTest(TestWithoutServers):
         """Get the basic env setting in yaml."""
         env_CCSA = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
+        env_PHY_ADDR_STR = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
+
+        os.environ["CRT_PHY_ADDR_STR"] = env_PHY_ADDR_STR
 
         if env_CCSA is not None:
             log_dir = "{}-{}".format(test_name, env_CCSA)
@@ -206,7 +209,9 @@ class CartTest(TestWithoutServers):
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_file = os.path.join(log_path, log_dir,
-                                test_name + "_" + env_CCSA + "_cart.log")
+                                test_name + "_" + \
+                                env_CCSA + "_" + \
+                                env_PHY_ADDR_STR + "_cart.log")
 
         # Default env vars for orterun to None
         log_mask = None
@@ -232,7 +237,11 @@ class CartTest(TestWithoutServers):
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        log_filename = test_name + "_" + env_CCSA + "_output.orterun_log"
+        log_filename = test_name + "_" + \
+                       env_CCSA + "_" + \
+                       env_PHY_ADDR_STR + "_" + \
+                       "output.orterun_log"
+
         output_filename_path = os.path.join(log_path, log_dir, log_filename)
         env = " --output-filename {!s}".format(output_filename_path)
         env += " -x D_LOG_FILE={!s}".format(log_file)
