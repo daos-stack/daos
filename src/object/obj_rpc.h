@@ -166,6 +166,8 @@ enum obj_rpc_flags {
 	ORF_EC_RECOV		= (1 << 17),
 	/* EC data recovery from snapshot */
 	ORF_EC_RECOV_SNAP	= (1 << 18),
+	/* EC data recovery from parity */
+	ORF_EC_RECOV_FROM_PARITY = (1 << 19),
 };
 
 /* common for update/fetch */

@@ -90,7 +90,7 @@ public class DaosFileSystemTest {
     PowerMockito.mockStatic(DaosUns.class);
     when(DaosUns.getAccessInfo(any(URI.class))).thenReturn(info);
     fs.initialize(URI.create("daos://123/123/abc"), cfg);
-    Assert.assertEquals("daos://123/user/" + System.getProperty("user.name"),
+    Assert.assertEquals("daos://123/123/user/" + System.getProperty("user.name"),
         fs.getWorkingDirectory().toString());
     verify(client, times(1))
         .mkdir("/user/" + System.getProperty("user.name"), true);
