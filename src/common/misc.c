@@ -658,9 +658,9 @@ daos_crt_init_opt_get(bool server, int ctx_nr)
 	daos_crt_init_opt.cio_use_sensors = server;
 
 	/** configure cart for maximum bulk threshold */
-	daos_crt_init_opt.cio_use_expected_size = true;
+	daos_crt_init_opt.cio_use_expected_size = 1;
 	daos_crt_init_opt.cio_max_expected_size = DAOS_RPC_SIZE;
-	daos_crt_init_opt.cio_use_unexpected_size = true;
+	daos_crt_init_opt.cio_use_unexpected_size = 1;
 	daos_crt_init_opt.cio_max_unexpected_size = DAOS_RPC_SIZE;
 
 	/** Scalable EndPoint-related settings */
