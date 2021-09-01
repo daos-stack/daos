@@ -314,10 +314,32 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 	return 0;
 }
 
+bool
+crt_rpc_completed(struct crt_rpc_priv *rpc_priv)
+{
+	bool	rc = false;
+
+	D_SPIN_LOCK(&rpc_priv->crp_lock);
+	if (rpc_priv->crp_completed) {
+		rc = true;
+	} else {
+		rpc_priv->crp_completed = 1;
+		rc = false;
+	}
+	D_SPIN_UNLOCK(&rpc_priv->crp_lock);
+
+	return rc;
+}
+
 void
 crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
 	D_ASSERT(rpc_priv != NULL);
+
+	if (crt_rpc_completed(rpc_priv)) {
+		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
+		return;
+	}
 
 	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
