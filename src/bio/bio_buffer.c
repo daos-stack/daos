@@ -614,8 +614,9 @@ iod_expand_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg,
 	if (last_rg->brr_off < off)
 		chk_pg_idx += (prev_pg_end - prev_pg_start);
 	else
-		/* Two regions must be covered by same page */
-		D_ASSERT(pg_cnt == 1 && prev_pg_end == prev_pg_start);
+		/* The prev region must be covered by one page */
+		D_ASSERTF(prev_pg_end == prev_pg_start,
+			  ""DF_U64" != "DF_U64"\n", prev_pg_end, prev_pg_start);
 
 	bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
 	if (bio_iov2raw_buf(biov) == NULL)
