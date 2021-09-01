@@ -38,15 +38,6 @@ DIST        := $(shell rpm $(COMMON_RPM_ARGS) --eval %{?dist})
 VERSION_ID  := 8
 DISTRO_ID   := el8
 DISTRO_BASE := EL_8
-ifeq ($(RELEASEVER),8.3.2011)
-DAOS_REPO_TYPE ?= STABLE
-else
-ifeq ($(RELEASEVER),8.4.2105)
-DAOS_REPO_TYPE ?= DEV
-else
-$(error No support for CentOS $(RELEASEVER))
-endif
-endif
 SED_EXPR    := 1s/$(DIST)//p
 endif
 ifeq ($(CHROOT_NAME),opensuse-leap-15.2-x86_64)

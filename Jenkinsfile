@@ -333,8 +333,43 @@ pipeline {
                             buildRpmPost condition: 'cleanup'
                         }
                     }
+                stage('Build RPM on CentOS 8') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        dockerfile {
+                            filename 'Dockerfile.mockbuild'
+                            dir 'utils/rpms/packaging'
+                            label 'docker_runner'
+                            additionalBuildArgs dockerBuildArgs()
+                            args  '--group-add mock --cap-add=SYS_ADMIN --privileged=true'
+                        }
+                    }
+                    steps {
+                        buildRpm()
+                    }
+                    post {
+                        success {
+                            buildRpmPost condition: 'success'
+                        }
+                        unstable {
+                            buildRpmPost condition: 'unstable'
+                        }
+                        failure {
+                            buildRpmPost condition: 'failure'
+                        }
+                        unsuccessful {
+                            buildRpmPost condition: 'unsuccessful'
+                        }
+                        cleanup {
+                            buildRpmPost condition: 'cleanup'
+                        }
+                    }
                 }
-                stage('Build RPM on CentOS 8.4.2105') {
+                }
+                stage('Build RPM on CentOS 8.3.2011') {
                     /* can't have an empty when {}
                     when {
                         beforeAgent true
@@ -857,7 +892,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 8.4.2105') {
+                stage('Functional on CentOS 8') {
                     /*
                     when {
                         beforeAgent true
@@ -878,7 +913,29 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8.4.2105')
+                } // stage('Functional on CentOS 8')
+                stage('Functional on CentOS 8.3.2011') {
+                    /*
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    */
+                    agent {
+                        label params.CI_FUNCTIONAL_VM9_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       target: 'el8.3',
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional on CentOS 8.3.2011')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true

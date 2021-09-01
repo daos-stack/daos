@@ -20,11 +20,7 @@ ln -sf /etc/mock/logging.ini "$mock_config_dir/"
 cp "$original_cfg_file" "$cfg_file"
 
 if [ "${CHROOT_NAME}" == "epel-8-x86_64" ]; then
-  if [ -n "${RELEASEVER}" ]; then
-    echo -e "config_opts['releasever'] = '${RELEASEVER}'" >> "$cfg_file"
-    MAJ_MIN=${RELEASEVER%.*}
-    DISTRO_BASE_LOCAL_REPOS=${DISTRO_BASE_LOCAL_REPOS//8.3/$MAJ_MIN}
-  fi
+  echo -e "config_opts['releasever'] = '${RELEASEVER}'" >> "$cfg_file"
 fi
 # shellcheck disable=SC2153
 IFS=\| read -r -a distro_base_local_repos <<< "$DISTRO_BASE_LOCAL_REPOS"

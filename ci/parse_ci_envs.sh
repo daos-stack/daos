@@ -14,7 +14,8 @@ if [ -n "${STAGE_NAME:?}" ]; then
     *CentOS\ 8*|*el8*|*centos8*)
       : "${CHROOT_NAME:=epel-8-x86_64}"
       : "${TARGET:=centos8}"
-      CENTOS_VER_MINOR=${STAGE_NAME##Build RPM on CentOS 8.}
+      RELEASEVER=${STAGE_NAME##Build RPM on CentOS }
+      export RELEASEVER
       ;;
     *Leap\ 15*|*leap15*|*opensuse15*|*sles15*)
       : "${CHROOT_NAME:=opensuse-leap-15.2-x86_64}"
@@ -28,7 +29,3 @@ if [ -n "${STAGE_NAME:?}" ]; then
 fi
 export CHROOT_NAME
 export TARGET
-export RELEASEVER=""
-if [ -n "${CENTOS_VER_MINOR:-}" ]; then
-    export RELEASEVER=8.$CENTOS_VER_MINOR
-fi
