@@ -333,6 +333,7 @@ pipeline {
                             buildRpmPost condition: 'cleanup'
                         }
                     }
+                }
                 stage('Build RPM on CentOS 8') {
                     when {
                         beforeAgent true
@@ -367,7 +368,6 @@ pipeline {
                             buildRpmPost condition: 'cleanup'
                         }
                     }
-                }
                 }
                 stage('Build RPM on CentOS 8.3.2011') {
                     /* can't have an empty when {}
