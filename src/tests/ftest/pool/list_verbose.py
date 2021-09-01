@@ -170,7 +170,7 @@ class ListVerboseTest(IorTestBase):
         11. Verify that the list is empty.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=pool,list_verbose,list_verbose_basic
         """
         self.maxDiff = None
@@ -318,7 +318,7 @@ class ListVerboseTest(IorTestBase):
         9. Repeat above steps with SCM-only pool.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=pool,list_verbose,list_verbose_imbalance
         """
         errors = []
