@@ -375,6 +375,7 @@ struct shard_list_args {
 
 struct obj_auxi_list_recx {
 	daos_recx_t	recx;
+	daos_epoch_t	recx_eph;
 	d_list_t	recx_list;
 };
 
@@ -392,7 +393,7 @@ struct obj_auxi_list_obj_enum {
 };
 
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size);
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph);
 
 struct ec_bulk_spec {
 	uint64_t is_skip:	1;
@@ -503,8 +504,9 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
-int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
-		      daos_recx_t **recxs_p, unsigned int *nr);
+int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
+		      daos_epoch_t **recx_ephs_p, unsigned int *nr, bool convert_parity);
+
 int obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
 		       uint32_t iod_nr, struct daos_oclass_attr *oca);
 void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
@@ -523,8 +525,8 @@ bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
-int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
-			   daos_recx_t **recxs_p, unsigned int *iod_nr);
+int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
+			   daos_epoch_t **recx_ephs_p, unsigned int *iod_nr);
 int obj_ec_singv_encode_buf(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 			    daos_iod_t *iod, d_sg_list_t *sgl, d_iov_t *e_iov);
 int obj_ec_singv_split(daos_unit_oid_t oid, struct daos_oclass_attr *oca,

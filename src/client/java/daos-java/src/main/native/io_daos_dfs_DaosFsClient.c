@@ -1048,8 +1048,8 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 		int i;
 
 		for (i = 0; i < nr; i++) {
-			/* exactly 1 for each file because ',' and \0 */
-			acc += strlen(entries[i].d_name) + 1;
+			/* exactly 1 for each file because of separator // and \0 */
+			acc += strlen(entries[i].d_name) + 2;
 			if (acc >= size) {
 				size += READ_DIR_INITIAL_BUFFER_SIZE;
 				buffer = realloc(buffer, size);
@@ -1064,7 +1064,7 @@ Java_io_daos_dfs_DaosFsClient_dfsReadDir(JNIEnv *env, jobject client,
 					break;
 				}
 			}
-			if (buffer[0]) strcat(buffer, ",");
+			if (buffer[0]) strcat(buffer, "//");
 			strcat(buffer, entries[i].d_name);
 		}
 	}
