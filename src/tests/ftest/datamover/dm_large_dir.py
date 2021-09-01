@@ -99,11 +99,11 @@ class DmvrLargeDir(DataMoverTestBase):
         # the result is that a NEW directory is created in the destination
         #daos_path = "/" + basename(posix_path) + self.mdtest_cmd.test_dir.value
 
-        # update mdtest params, read back and verify data from cont4
-        #self.mdtest_cmd.read_bytes.update(file_size)
-        #self.run_mdtest_with_params(
-        #    "DAOS", daos_path, self.pool[0], self.container[3],
-        #    flags=mdtest_flags[1])
+        # update mdtest params, read back and verify data from cont2
+        self.mdtest_cmd.read_bytes.update(file_size)
+        self.run_mdtest_with_params(
+            "DAOS", "/", self.pool[0], self.container[1],
+            flags=mdtest_flags[1])
 
     def test_dm_large_dir_dcp(self):
         """Jira ID: DAOS-4782.

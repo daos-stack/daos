@@ -70,11 +70,6 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
             self.dfuse.mount_dir.value, pool1.uuid, cont1.uuid, daos_src_path)
         self.create_data(dfuse_src_path)
 
-        # Create a container to emulate a POSIX filesystem
-        posix_cont = self.create_cont(pool1)
-        posix_root = "{}/{}/{}".format(
-            self.dfuse.mount_dir.value, pool1.uuid, posix_cont.uuid)
-
         # Create 1 source posix path with test data
         posix_src_path = self.new_posix_test_path(parent=self.workdir)
         self.create_data(posix_src_path)
@@ -95,13 +90,13 @@ class DmvrPosixMetaEntry(DataMoverTestBase):
             cmp_times=preserve_on, cmp_xattr=preserve_on)
 
         # DAOS -> POSIX
-        posix_dst_path = self.new_posix_test_path(parent=self.workdir)
+        posix_dst_path = self.new_posix_test_path(create=False, parent=self.workdir)
         self.run_datamover(
             test_desc + "(DAOS->POSIX)",
             "DAOS", daos_src_path, pool1, cont1,
             "POSIX", posix_dst_path)
         self.compare_data(
-            dfuse_src_path, posix_dst_path + daos_src_path,
+            dfuse_src_path, posix_dst_path,
             cmp_times=preserve_on, cmp_xattr=preserve_on)
 
         # POSIX -> DAOS
