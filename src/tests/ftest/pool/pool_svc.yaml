@@ -7,6 +7,10 @@ hosts:
     - server-E
 server_config:
     name: daos_server
+    servers:
+        log_mask: DEBUG
+        env_vars:
+            - D_LOG_MASK=DEBUG
 timeout: 150
 pool:
     control_method: dmg
