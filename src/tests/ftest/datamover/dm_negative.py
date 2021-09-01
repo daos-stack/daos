@@ -279,11 +279,14 @@ class DmvrNegativeTest(DataMoverTestBase):
         # Start dfuse on pool2/cont2
         self.start_dfuse(self.dfuse_hosts, pool2, cont2)
 
+        # create posix destination path in self.tmp 
+        posix_dst_path = self.new_posix_test_path()
+
         # Try to copy. For now, we expect this to just abort.
         self.run_datamover(
             self.test_id + " (dst posix out of space)",
             "POSIX", self.posix_test_paths[0], None, None,
-            "POSIX", self.dfuse.mount_dir.value,
+            "POSIX", posix_dst_path,
             expected_rc=255,
             expected_err=["errno=28"])
 
