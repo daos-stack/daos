@@ -40,6 +40,7 @@ RDB_STRING_KEY(ds_cont_prop_, owner);
 RDB_STRING_KEY(ds_cont_prop_, owner_group);
 RDB_STRING_KEY(ds_cont_prop_, lres);
 RDB_STRING_KEY(ds_cont_prop_, lhes);
+RDB_STRING_KEY(ds_cont_prop_, nsnapshots);
 RDB_STRING_KEY(ds_cont_prop_, snapshots);
 RDB_STRING_KEY(ds_cont_prop_, co_status);
 RDB_STRING_KEY(ds_cont_attr_, user);

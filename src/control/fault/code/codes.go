@@ -163,4 +163,6 @@ const (
 // security fault codes
 const (
 	SecurityUnknown Code = iota + 900
+	SecurityMissingCertFile
+	SecurityUnreadableCertFile
 )
