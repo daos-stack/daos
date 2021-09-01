@@ -209,9 +209,13 @@ test_snapshots(void **argp)
 	daos_epoch_t		snaps_out[snap_count];
 	daos_handle_t		*ths = NULL;
 	daos_anchor_t		anchor;
+	daos_cont_info_t	cinfo;
+	int			rc;
 
 	MUST(cont_create(arg, co_uuid));
+	print_message("Initial container open after create, nsnapshots=0\n");
 	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
+	assert_int_equal(arg->co_info.ci_nsnapshots, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
@@ -219,12 +223,24 @@ test_snapshots(void **argp)
 	D_ALLOC_ARRAY(ths, num_records);
 	assert_non_null(ths);
 
+	if (arg->async)
+		MUST(daos_event_init(&ev, arg->eq, NULL));
+
+	print_message("Container query nsnapshots=0 (before snapshots created)\n");
+	cinfo.ci_nsnapshots = 10;	/* should be ignored on input */
+	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nsnapshots, 0);
+
 	io_for_aggregation(arg, coh, ths, num_records, oid,
 			   /* update */ true, snaps_in, snaps,
 			   /* verification data */ NULL);
 
-	if (arg->async)
-		MUST(daos_event_init(&ev, arg->eq, NULL));
+	print_message("Container query nsnapshots=%d (after snapshots created)\n", snap_count);
+	cinfo.ci_nsnapshots = snap_count * 10;	/* should be ignored on input */
+	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nsnapshots, snap_count);
 
 	print_message("Snapshot listing shall succeed with no buffer\n");
 	snap_count_out = 0;
@@ -255,8 +271,10 @@ test_snapshots(void **argp)
 				 arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(snap_count_out, snap_count);
-	for (i = 0; i < snap_count; i++)
+	for (i = 0; i < snap_count; i++) {
 		assert_int_not_equal(snaps_out[i], garbage);
+		assert_int_equal(snaps_out[i], snaps[i]);
+	}
 
 	/*
 	 * FIXME: I'm not able to understand following testing code, let's just
@@ -294,6 +312,22 @@ test_snapshots(void **argp)
 	MUST(daos_cont_destroy_snap(coh, epr, arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 
+	print_message("Snapshot deletion of nonexistent shall fail\n");
+	epr.epr_hi = epr.epr_lo = 42;
+	rc = daos_cont_destroy_snap(coh, epr, arg->async ? &ev : NULL);
+	if (arg->async) {
+		assert_int_equal(rc, 0);
+		WAIT_ON_ASYNC_ERR(arg, ev, -DER_NONEXIST);
+	} else {
+		assert_int_equal(rc, -DER_NONEXIST);
+	}
+
+	print_message("Container query nsnapshots=%d (after 1 snapshot deleted)\n", (snap_count-1));
+	cinfo.ci_nsnapshots = 10;	/* should be ignored on input */
+	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
+	WAIT_ON_ASYNC(arg, ev);
+	assert_int_equal(cinfo.ci_nsnapshots, (snap_count-1));
+
 	if (arg->async)
 		MUST(daos_event_fini(&ev));
 	for (i = 0 ; i < 100; i++)
@@ -301,6 +335,13 @@ test_snapshots(void **argp)
 
 	D_FREE(ths);
 	MUST(cont_close(arg, coh));
+
+	/* Reopen container, verify number of snapshots */
+	print_message("Container (re)open nsnapshots=%d\n", (snap_count-1));
+	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
+	assert_int_equal(arg->co_info.ci_nsnapshots, (snap_count-1));
+	MUST(cont_close(arg, coh));
+
 	MUST(cont_destroy(arg, co_uuid));
 }
 

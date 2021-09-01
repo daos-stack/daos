@@ -7,13 +7,6 @@ server_config:
   servers:
     targets: 1
 pool:
-  createmode: !mux
-    mode_all:
-      mode: 511
-    mode_ex:
-      mode: 292
-    mode_rw:
-      mode: 146
   createset:
     name: daos_server
   control_method: dmg

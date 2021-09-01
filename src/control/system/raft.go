@@ -292,6 +292,7 @@ func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
 	if err != nil {
 		return err
 	}
+	db.log.Debugf("pool %s updated @ %s", ps.PoolUUID, ps.LastUpdate)
 	return db.submitRaftUpdate(data)
 }
 
