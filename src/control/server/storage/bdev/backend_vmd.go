@@ -95,9 +95,9 @@ func substituteVMDAddresses(log logging.Logger, inPCIAddrs []string, bdevCache *
 // PCI addresses if found.
 func detectVMD() ([]string, error) {
 	// Check available VMD devices with command:
-	// "$lspci | grep  -i -E "201d | Volume Management Device"
-	lspciCmd := exec.Command("lspci")
-	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
+	// "$lspci | grep  -i -E "Volume Management Device"
+	lspciCmd := exec.Command("sudo", "lspci")
+	vmdCmd := exec.Command("grep", "-i", "-E", "Volume Management Device")
 	var cmdOut bytes.Buffer
 	var prefixIncluded bool
 
@@ -116,9 +116,6 @@ func detectVMD() ([]string, error) {
 		// sometimes the output may not include "0000:" prefix
 		// usually when muliple devices are in PCI_ALLOWED
 		vmdCount = bytes.Count(cmdOut.Bytes(), []byte("Volume"))
-		if vmdCount == 0 {
-			vmdCount = bytes.Count(cmdOut.Bytes(), []byte("201d"))
-		}
 	} else {
 		prefixIncluded = true
 	}
