@@ -857,16 +857,19 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 8') {
+                stage('Functional on CentOS 8.4.2105') {
+                    /*
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
                     }
+                    */
                     agent {
                         label params.CI_FUNCTIONAL_VM9_LABEL
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
+                                       target: 'el8.4',
                                        inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
@@ -875,7 +878,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 8')
+                } // stage('Functional on CentOS 8.4.2105')
                 stage('Functional on Leap 15') {
                     when {
                         beforeAgent true
