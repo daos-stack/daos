@@ -304,6 +304,11 @@ struct obj_reasb_req;
 /** Alignment size of sing value local size */
 #define OBJ_EC_SINGV_CELL_ALIGN			(8)
 
+#define is_ec_data_shard(shard, oca)					\
+		((shard % obj_ec_tgt_nr(oca)) < obj_ec_data_tgt_nr(oca))
+#define is_ec_parity_shard(shard, oca)					\
+		((shard % obj_ec_tgt_nr(oca)) >= obj_ec_data_tgt_nr(oca))
+
 /** Local rec size, padding bytes and offset in the global record */
 struct obj_ec_singv_local {
 	uint64_t	esl_off;
@@ -630,10 +635,7 @@ obj_shard_is_ec_parity(daos_unit_oid_t oid, struct daos_oclass_attr *attr)
 	if (!daos_oclass_is_ec(attr))
 		return false;
 
-	if ((oid.id_shard % obj_ec_tgt_nr(attr)) < obj_ec_data_tgt_nr(attr))
-		return false;
-
-	return true;
+	return is_ec_parity_shard(oid.id_shard, attr);
 }
 
 /* obj_class.c */

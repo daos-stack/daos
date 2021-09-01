@@ -349,6 +349,7 @@ ds_cont_init_metadata(struct rdb_tx *tx, const rdb_path_t *kvs,
 		return rc;
 	}
 
+
 	attr.dsa_class = RDB_KVS_GENERIC;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, kvs, &ds_cont_prop_cont_handles, &attr);
@@ -728,6 +729,7 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	struct daos_prop_entry *lbl_ent;
 	struct daos_prop_entry *def_lbl_ent;
 	d_string_t		lbl = NULL;
+	uint32_t		nsnapshots = 0;
 	int			rc;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p\n",
@@ -861,14 +863,19 @@ cont_create(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	}
 
 	/* Create the snapshot KVS. */
+	d_iov_set(&value, &nsnapshots, sizeof(nsnapshots));
+	rc = rdb_tx_update(tx, &kvs, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to update nsnapshots, "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), DP_RC(rc));
+		D_GOTO(out_kvs, rc);
+	}
 	attr.dsa_class = RDB_KVS_INTEGER;
 	attr.dsa_order = 16;
 	rc = rdb_tx_create_kvs(tx, &kvs, &ds_cont_prop_snapshots, &attr);
 	if (rc != 0) {
-		D_ERROR(DF_CONT" failed to create container snapshots KVS: "
-			""DF_RC"\n",
-			DP_CONT(pool_hdl->sph_pool->sp_uuid,
-				in->cci_op.ci_uuid), DP_RC(rc));
+		D_ERROR(DF_CONT" failed to create container snapshots KVS: "DF_RC"\n",
+			DP_CONT(pool_hdl->sph_pool->sp_uuid, in->cci_op.ci_uuid), DP_RC(rc));
 	}
 
 	/* Create the user attribute KVS. */
@@ -1643,6 +1650,7 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	bool			cont_hdl_opened = false;
 	uint32_t		stat_pm_ver = 0;
 	uint64_t		sec_capas = 0;
+	uint32_t		snap_count;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID" flags="
 		DF_X64"\n",
@@ -1769,6 +1777,18 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	rc = rdb_tx_update(tx, &cont->c_hdls, &key, &value);
 	if (rc != 0)
 		goto out;
+
+	/* Get nsnapshots */
+	d_iov_set(&value, &snap_count, sizeof(snap_count));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup nsnapshots, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		goto out;
+	}
+	out->coo_snap_count = snap_count;
+	D_DEBUG(DF_DSMS, DF_CONT": got nsnapshots=%u on open\n",
+		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), snap_count);
 
 out:
 	if (rc == 0) {
@@ -1967,6 +1987,9 @@ out:
 	return rc;
 }
 
+/* TODO: decide if tqo_hae is needed at all; and query for more information.
+ * Currently this does not do much and is not used. Kept for future expansion.
+ */
 static int
 cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 		 const uuid_t cont_hdl, struct cont_query_out *query_out)
@@ -2004,7 +2027,7 @@ cont_query_bcast(crt_context_t ctx, struct cont *cont, const uuid_t pool_hdl,
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
 		D_GOTO(out_rpc, rc = -DER_IO);
 	} else {
-		query_out->cqo_hae = out->tqo_hae;
+		/* cqo_hae removed: query_out->cqo_hae = out->tqo_hae; */
 	}
 
 out_rpc:
@@ -2389,6 +2412,8 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	struct cont_query_out  *out = crt_reply_get(rpc);
 	daos_prop_t	       *prop = NULL;
 	uint32_t		last_ver = 0;
+	d_iov_t			value;
+	int			snap_count;
 	int			rc = 0;
 
 	D_DEBUG(DF_DSMS, DF_CONT": processing rpc %p: hdl="DF_UUID"\n",
@@ -2398,10 +2423,21 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	if (!hdl_has_query_access(hdl, cont, in->cqi_bits))
 		return -DER_NO_PERM;
 
+	/* Get nsnapshots */
+	d_iov_set(&value, &snap_count, sizeof(snap_count));
+	rc = rdb_tx_lookup(tx, &cont->c_prop, &ds_cont_prop_nsnapshots, &value);
+	if (rc != 0) {
+		D_ERROR(DF_CONT": failed to lookup nsnapshots, "DF_RC"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+		return rc;
+	}
+	out->cqo_snap_count = snap_count;
+
 	/* need RF to process co_status */
 	if (in->cqi_bits & DAOS_CO_QUERY_PROP_CO_STATUS)
 		in->cqi_bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
 
+	/* Currently DAOS_CO_QUERY_TGT not used; code kept for future expansion. */
 	if (in->cqi_bits & DAOS_CO_QUERY_TGT) {
 		/* need RF if user query cont_info */
 		in->cqi_bits |= DAOS_CO_QUERY_PROP_REDUN_FAC;
