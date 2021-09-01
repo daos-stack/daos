@@ -105,6 +105,18 @@ func FaultConnectionClosed(srvAddr string) *fault.Fault {
 	)
 }
 
+func FaultRpcTimeout(req deadliner) *fault.Fault {
+	timeout := req.getTimeout()
+	if timeout == 0 {
+		timeout = defaultRequestTimeout
+	}
+	return clientFault(
+		code.ClientRpcTimeout,
+		fmt.Sprintf("the %T request timed out after %s", req, timeout),
+		"retry the request or check server logs for more information",
+	)
+}
+
 func clientFault(code code.Code, desc, res string) *fault.Fault {
 	return &fault.Fault{
 		Domain:      "client",
