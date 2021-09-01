@@ -713,6 +713,29 @@ multiple_objects(void **state)
 					"akey", 1));
 }
 
+static void
+multiple_overlapping_extents(void **state)
+{
+	struct sts_context *ctx = *state;
+
+	/*
+	 * this will create 3 overlapping extents all starting at idx 0
+	 * but different lengths
+	 */
+	ctx->tsc_data_len = 2048;
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 1, false);
+	ctx->tsc_data_len = 1024;
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 2, false);
+	ctx->tsc_data_len = 512;
+	sts_ctx_update(ctx, 1, TEST_IOD_ARRAY_1, "dkey", "akey", 3, false);
+
+	sts_ctx_do_scrub(ctx);
+
+	ctx->tsc_data_len = 2048;
+	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey",
+				     "akey", 3));
+}
+
 static int
 sts_setup(void **state)
 {
@@ -776,6 +799,8 @@ static const struct CMUnitTest scrubbing_tests[] = {
 	   container_deleted),
 	TS("CSUM_SCRUBBING_10: Scrubbing multiple objects",
 	   multiple_objects),
+	TS("CSUM_SCRUBBING_11: Scrubbing multiple overlapping extents",
+	   multiple_overlapping_extents),
 };
 
 extern int run_scrubbing_sched_tests(void);
