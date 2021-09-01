@@ -83,7 +83,8 @@ class ListVerboseTest(IorTestBase):
             ]
         }
 
-    def get_scm_nvme_free(self, pool_list_out):
+    @staticmethod
+    def get_scm_nvme_free(pool_list_out):
         """Get SCM and NVMe free values.
 
         Args:
@@ -257,7 +258,7 @@ class ListVerboseTest(IorTestBase):
         cmd_result = self.run_ior_with_pool()
         metrics = IorCommand.get_ior_metrics(cmd_result)
         ior_write_size = int(metrics[0][22])
-        self.log.info("IOR metrics = %s".format(metrics))
+        self.log.info("IOR metrics = %s", metrics)
         self.log.info("ior_write_size = %d", ior_write_size)
 
         # Obtain the new free and imblanace.
