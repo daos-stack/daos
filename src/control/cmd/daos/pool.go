@@ -127,6 +127,16 @@ func (cmd *poolBaseCmd) resolveAndConnect(flags C.uint, ap *C.struct_cmd_args_s)
 			return nil, err
 		}
 		ap.pool = cmd.cPoolHandle
+		switch {
+		case cmd.PoolID().HasLabel():
+			pLabel := C.CString(cmd.PoolID().Label)
+			defer freeString(pLabel)
+			C.strncpy(&ap.pool_str[0], pLabel, C.DAOS_PROP_LABEL_MAX_LEN)
+		case cmd.PoolID().HasUUID():
+			pUUIDstr := C.CString(cmd.poolUUID.String())
+			defer freeString(pUUIDstr)
+			C.strncpy(&ap.pool_str[0], pUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
+		}
 	}
 
 	return func() {
@@ -140,6 +150,7 @@ func (cmd *poolBaseCmd) getAttr(name string) (*attribute, error) {
 
 type poolCmd struct {
 	Query     poolQueryCmd     `command:"query" description:"query pool info"`
+	ListConts containerListCmd `command:"list-containers" alias:"list-cont" description:"list all containers in pool"`
 	ListAttrs poolListAttrsCmd `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list pool user-defined attributes"`
 	GetAttr   poolGetAttrCmd   `command:"get-attr" alias:"getattr" description:"get pool user-defined attribute"`
 	SetAttr   poolSetAttrCmd   `command:"set-attr" alias:"setattr" description:"set pool user-defined attribute"`
@@ -281,7 +292,7 @@ func (cmd *poolListAttrsCmd) Execute(_ []string) error {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attrs, nil)
+		return cmd.outputJSON(attrs.asMap(), nil)
 	}
 
 	var bld strings.Builder
@@ -346,7 +357,7 @@ func (cmd *poolSetAttrCmd) Execute(_ []string) error {
 
 	if err := setDaosAttribute(cmd.cPoolHandle, poolAttr, &attribute{
 		Name:  cmd.Args.Name,
-		Value: cmd.Args.Value,
+		Value: []byte(cmd.Args.Value),
 	}); err != nil {
 		return errors.Wrapf(err,
 			"failed to set attribute %q on pool %s",

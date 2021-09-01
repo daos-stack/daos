@@ -616,10 +616,11 @@ struct  _Mgmt__StorageUsageStats
   uint64_t min;
   uint64_t max;
   uint64_t mean;
+  uint32_t media_type;
 };
 #define MGMT__STORAGE_USAGE_STATS__INIT \
  { PROTOBUF_C_MESSAGE_INIT (&mgmt__storage_usage_stats__descriptor) \
-    , 0, 0, 0, 0, 0 }
+    , 0, 0, 0, 0, 0, 0 }
 
 
 /*

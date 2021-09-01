@@ -178,7 +178,7 @@ dup_cont_create_props(daos_handle_t poh, daos_prop_t **prop_out,
 		uint64_t rf;
 
 		/**
-		 * If user did not provide his own root object, let's generate
+		 * If user did not provide a root object id, let's generate
 		 * it here. Worst case is that it is not used by the middleware.
 		 */
 
@@ -770,9 +770,8 @@ cont_open_complete(tse_task_t *task, void *data)
 	uuid_copy(arg->coa_info->ci_uuid, cont->dc_uuid);
 	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
+	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
 	/* TODO */
-	arg->coa_info->ci_nsnapshots = 0;
-	arg->coa_info->ci_snapshots = NULL;
 	arg->coa_info->ci_lsnapshot = 0;
 
 out:
@@ -1157,12 +1156,10 @@ cont_query_complete(tse_task_t *task, void *data)
 
 	uuid_copy(arg->cqa_info->ci_uuid, cont->dc_uuid);
 
-	arg->cqa_info->ci_hae = out->cqo_hae;
 	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
+	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
 	/* TODO */
-	arg->cqa_info->ci_nsnapshots = 0;
-	arg->cqa_info->ci_snapshots = NULL;
 	arg->cqa_info->ci_lsnapshot = 0;
 
 out:
@@ -1302,8 +1299,6 @@ dc_cont_query(tse_task_t *task)
 	uuid_copy(in->cqi_op.ci_uuid, cont->dc_uuid);
 	uuid_copy(in->cqi_op.ci_hdl, cont->dc_cont_hdl);
 	in->cqi_bits = cont_query_bits(args->prop);
-	if (args->info != NULL)
-		in->cqi_bits |= DAOS_CO_QUERY_TGT;
 
 	arg.cqa_pool = pool;
 	arg.cqa_cont = cont;
@@ -2949,6 +2944,9 @@ dc_cont_list_snap(tse_task_t *task)
 			.sg_nr	   = 1,
 			.sg_iovs   = &iov
 		};
+
+		/* TODO: iovs for names[] and list_snap bulk create function */
+
 		rc = crt_bulk_create(daos_task2ctx(task), &sgl,
 				     CRT_BULK_RW, &in->sli_bulk);
 		if (rc != 0) {

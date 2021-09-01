@@ -1904,24 +1904,28 @@ obj_ec_parity_check(struct obj_reasb_req *reasb_req,
 		return 0;
 
 	D_MUTEX_LOCK(&reasb_req->orr_mutex);
-	parity_lists = reasb_req->orr_fail->efi_parity_lists;
+	parity_lists = reasb_req->orr_parity_lists;
 	if (parity_lists == NULL) {
-		reasb_req->orr_fail->efi_parity_lists =
+		reasb_req->orr_parity_lists =
 			daos_recx_ep_lists_dup(recx_lists, nr);
-		reasb_req->orr_fail->efi_parity_list_nr = nr;
-		parity_lists = reasb_req->orr_fail->efi_parity_lists;
+		reasb_req->orr_parity_list_nr = nr;
+		parity_lists = reasb_req->orr_parity_lists;
 		if (parity_lists == NULL)
 			rc = -DER_NOMEM;
 		goto out;
 	}
 
-	if (!obj_ec_parity_lists_match(parity_lists, recx_lists, nr) ||
-	    DAOS_FAIL_CHECK(DAOS_FAIL_PARITY_EPOCH_DIFF)) {
+	if (unlikely(DAOS_FAIL_CHECK(DAOS_FAIL_PARITY_EPOCH_DIFF))) {
 		rc = -DER_FETCH_AGAIN;
-		D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));
-		daos_recx_ep_list_dump(parity_lists, nr);
-		daos_recx_ep_list_dump(recx_lists, nr);
-		goto out;
+		D_ERROR("simulate parity list mismatch, "DF_RC"\n", DP_RC(rc));
+	} else {
+		rc = obj_ec_parity_lists_match(parity_lists, recx_lists, nr);
+		if (rc) {
+			D_ERROR("got different parity lists, "DF_RC"\n", DP_RC(rc));
+			daos_recx_ep_list_dump(parity_lists, nr);
+			daos_recx_ep_list_dump(recx_lists, nr);
+			goto out;
+		}
 	}
 
 out:
@@ -1978,10 +1982,10 @@ obj_ec_fail_info_reset(struct obj_reasb_req *reasb_req)
 	fail_info->efi_recx_lists = NULL;
 	fail_info->efi_stripe_lists = NULL;
 	fail_info->efi_nrecx_lists = 0;
-	daos_recx_ep_list_free(fail_info->efi_parity_lists,
-			       fail_info->efi_parity_list_nr);
-	fail_info->efi_parity_lists = NULL;
-	fail_info->efi_parity_list_nr = 0;
+	daos_recx_ep_list_free(reasb_req->orr_parity_lists,
+			       reasb_req->orr_parity_list_nr);
+	reasb_req->orr_parity_lists = NULL;
+	reasb_req->orr_parity_list_nr = 0;
 }
 
 static bool
@@ -2390,12 +2394,14 @@ obj_ec_fail_info_free(struct obj_reasb_req *reasb_req)
 			       fail_info->efi_nrecx_lists);
 	daos_recx_ep_list_free(fail_info->efi_stripe_lists,
 			       fail_info->efi_nrecx_lists);
-	daos_recx_ep_list_free(fail_info->efi_parity_lists,
-			       fail_info->efi_parity_list_nr);
+	daos_recx_ep_list_free(reasb_req->orr_parity_lists,
+			       reasb_req->orr_parity_list_nr);
 	D_FREE(fail_info->efi_tgt_list);
 	D_FREE(fail_info);
 	reasb_req->orr_fail = NULL;
 	reasb_req->orr_fail_alloc = 0;
+	reasb_req->orr_parity_lists = NULL;
+	reasb_req->orr_parity_list_nr = 0;
 }
 
 int
@@ -2770,13 +2776,14 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 
 /* Get all of recxs of the specific target from the daos offset */
 int
-obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
-		  daos_recx_t **recxs_p, unsigned int *nr)
+obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
+		  daos_epoch_t **recx_ephs_p, unsigned int *nr, bool convert_parity)
 {
 	int		cell_nr = obj_ec_cell_rec_nr(oca);
 	int		stripe_nr = obj_ec_stripe_rec_nr(oca);
 	daos_recx_t	*recxs = *recxs_p;
 	daos_recx_t	*tgt_recxs;
+	daos_epoch_t	*recx_ephs = NULL;
 	int		tgt_idx;
 	unsigned int	total;
 	int		idx;
@@ -2787,7 +2794,7 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
 
 	tgt_idx = shard % obj_ec_tgt_nr(oca);
 	/* parity shard conversion */
-	if (tgt_idx >= obj_ec_data_tgt_nr(oca)) {
+	if (is_ec_parity_shard(tgt_idx, oca)) {
 		for (i = 0; i < *nr; i++) {
 			daos_off_t offset = recxs[i].rx_idx;
 
@@ -2797,9 +2804,8 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
 			offset &= ~PARITY_INDICATOR;
 			D_ASSERT(offset % cell_nr == 0);
 			D_ASSERT(recxs[i].rx_nr % cell_nr == 0);
-			recxs[i].rx_idx = obj_ec_idx_parity2daos(offset,
-								 cell_nr,
-								 stripe_nr);
+			offset = obj_ec_idx_parity2daos(offset, cell_nr, stripe_nr);
+			recxs[i].rx_idx = convert_parity ? offset : PARITY_INDICATOR | offset;
 			recxs[i].rx_nr *= obj_ec_data_tgt_nr(oca);
 		}
 		return 0;
@@ -2817,6 +2823,13 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
 	D_ALLOC_ARRAY(tgt_recxs, total);
 	if (tgt_recxs == NULL)
 		return -DER_NOMEM;
+	if (recx_ephs_p != NULL) {
+		D_ALLOC_ARRAY(recx_ephs, total);
+		if (recx_ephs == NULL) {
+			D_FREE(tgt_recxs);
+			return -DER_NOMEM;
+		}
+	}
 
 	for (i = 0, idx = 0; i < *nr; i++) {
 		daos_off_t offset = recxs[i].rx_idx;
@@ -2833,10 +2846,17 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
 			D_ASSERT(idx < total);
 			tgt_recxs[idx].rx_idx = daos_off;
 			tgt_recxs[idx].rx_nr = daos_size;
+			if (recx_ephs != NULL)
+				recx_ephs[idx] = (*recx_ephs_p)[i];
 			offset += daos_size;
 			size -= daos_size;
 			idx++;
 		}
+	}
+
+	if (recx_ephs_p) {
+		D_FREE(*recx_ephs_p);
+		*recx_ephs_p = recx_ephs;
 	}
 
 	D_FREE(*recxs_p);
@@ -2847,10 +2867,11 @@ obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
 
 /* Convert DAOS offset to specific data target daos offset */
 int
-obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
-		       daos_recx_t **recxs_p, unsigned int *iod_nr)
+obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
+		       daos_epoch_t **recx_ephs_p, unsigned int *iod_nr)
 {
 	daos_recx_t	*recx = *recxs_p;
+	daos_epoch_t	*new_ephs = NULL;
 	int		nr = *iod_nr;
 	int		cell_nr = obj_ec_cell_rec_nr(oca);
 	int		stripe_nr = obj_ec_stripe_rec_nr(oca);
@@ -2862,7 +2883,7 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 
 	D_ASSERT(shard_idx < obj_ec_data_tgt_nr(oca));
 	for (i = 0, total = 0; i < nr; i++) {
-		uint64_t offset = recx[i].rx_idx;
+		uint64_t offset = recx[i].rx_idx & ~PARITY_INDICATOR;
 		uint64_t end = offset + recx[i].rx_nr;
 
 		while (offset < end) {
@@ -2880,6 +2901,10 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 
 	if (total == 0) {
 		D_FREE(*recxs_p);
+		if (recx_ephs_p) {
+			D_FREE(*recx_ephs_p);
+			*recx_ephs_p = NULL;
+		}
 		*iod_nr = 0;
 		return 0;
 	}
@@ -2888,8 +2913,17 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 	if (tgt_recxs == NULL)
 		return -DER_NOMEM;
 
+	if (recx_ephs_p != NULL) {
+		D_ALLOC_ARRAY(new_ephs, total);
+		if (new_ephs == NULL) {
+			D_FREE(tgt_recxs);
+			return -DER_NOMEM;
+		}
+	}
+
 	for (i = 0, idx = 0; i < nr; i++) {
-		uint64_t offset = recx[i].rx_idx;
+		uint64_t parity_indicator = recx[i].rx_idx & PARITY_INDICATOR;
+		uint64_t offset = recx[i].rx_idx & ~PARITY_INDICATOR;
 		uint64_t end = offset + recx[i].rx_nr;
 
 		while (offset < end) {
@@ -2905,8 +2939,10 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 			/* Intersect with the shard cell */
 			D_ASSERT(idx < total);
 			tgt_recxs[idx].rx_idx = max(shard_start, offset);
-			tgt_recxs[idx].rx_nr = min(shard_end, end) -
-					       tgt_recxs[idx].rx_idx;
+			tgt_recxs[idx].rx_nr = min(shard_end, end) - tgt_recxs[idx].rx_idx;
+			tgt_recxs[idx].rx_idx |= parity_indicator;
+			if (new_ephs)
+				new_ephs[idx] = (*recx_ephs_p)[i];
 			idx++;
 			offset = roundup(offset + 1, stripe_nr);
 		}
@@ -2914,6 +2950,10 @@ obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
 
 	D_FREE(*recxs_p);
 	*recxs_p = tgt_recxs;
+	if (recx_ephs_p != NULL) {
+		D_FREE(*recx_ephs_p);
+		*recx_ephs_p = new_ephs;
+	}
 	*iod_nr = total;
 
 	return 0;
