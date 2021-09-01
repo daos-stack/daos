@@ -174,7 +174,7 @@ class ContRedundancyFactor(RebuildTestBase):
         self.create_test_pool()
         # Create a container and write objects
         self.create_test_container_and_write_obj(negative_test)
-        if self.mode is "cont_rf_with_rebuild":
+        if self.mode == "cont_rf_with_rebuild":
             num_of_ranks = len(self.inputs.rank.value)
             if num_of_ranks > rf_num:
                 expect_cont_status = "UNCLEAN"
@@ -202,7 +202,7 @@ class ContRedundancyFactor(RebuildTestBase):
                     " is healthy.")
                 self.verify_container_data()
             self.log.info("Test passed")
-        elif self.mode is "cont_rf_enforcement":
+        elif self.mode == "cont_rf_enforcement":
             self.log.info("Container rf test passed")
         else:
             self.fail("#Unsupported container_rf test mode")
