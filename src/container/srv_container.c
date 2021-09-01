@@ -3539,16 +3539,13 @@ out:
 }
 
 int
-ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
-		      uint64_t num_oids, uint64_t *oid)
+ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_t *oid)
 {
 	struct ds_pool_hdl	*pool_hdl;
 	struct cont_svc		*svc;
 	struct rdb_tx		tx;
 	struct cont		*cont = NULL;
-	d_iov_t		key;
-	d_iov_t		value;
-	struct container_hdl	hdl;
+	d_iov_t			value;
 	uint64_t		alloced_oid;
 	int			rc;
 
@@ -3575,20 +3572,9 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	/* Look up the container handle. */
-	d_iov_set(&key, coh_uuid, sizeof(uuid_t));
-	d_iov_set(&value, &hdl, sizeof(hdl));
-	rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_hdls, &key, &value);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			rc = -DER_NO_HDL;
-		D_GOTO(out_cont, rc);
-	}
-
 	/* Read the max OID from the container metadata */
 	d_iov_set(&value, &alloced_oid, sizeof(alloced_oid));
-	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
-			   &value);
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to lookup alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -3601,8 +3587,7 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	alloced_oid += num_oids;
 
 	/* Update the max OID */
-	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
-			   &value);
+	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to update alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
