@@ -46,73 +46,6 @@ sleep_fn(void *arg, uint32_t msec)
 	return 0;
 }
 
-struct set_schedule_args {
-	struct scrub_ctx	*ssa_ctx;
-	uint32_t		 ssa_sched;
-	int			 ssa_rc;
-};
-
-static void
-sc_set_schedule_ult(void *arg)
-{
-	struct set_schedule_args	*ssa = arg;
-	struct daos_prop_entry		*prop_entry;
-	daos_prop_t			*props = NULL;
-
-	ds_pool_prop_fetch(ssa->ssa_ctx->sc_pool, DAOS_PO_QUERY_PROP_ALL,
-			   &props);
-	if (props == NULL) {
-		ssa->ssa_rc = -DER_NOMEM;
-		return;
-	}
-
-	prop_entry = daos_prop_entry_get(props, DAOS_PROP_PO_SCRUB_SCHED);
-
-	if (prop_entry->dpe_val != ssa->ssa_sched) {
-		prop_entry->dpe_val = ssa->ssa_sched;
-		ssa->ssa_rc = ds_pool_iv_prop_update(ssa->ssa_ctx->sc_pool,
-						     props);
-	}
-	daos_prop_free(props);
-}
-
-static int
-sc_set_schedule_off(struct scrub_ctx *ctx)
-{
-	struct set_schedule_args ssa = {0};
-	ABT_thread		 thread = ABT_THREAD_NULL;
-	int			 rc;
-
-	/*
-	 * Sleep for a few seconds to make sure that all pool targets
-	 * have had a chance to start scrubbing before turning back
-	 * off. Because each pool target shares the same pool
-	 * properties, if one pool target doesn't have anything to scrub
-	 * and finishes very quickly, it could turn off scrubbing even
-	 * before the other targets could start. This helps prevent that
-	 * situation.
-	 */
-	sched_req_sleep(ctx->sc_sched_arg, 5000);
-	D_DEBUG(DB_CSUM, DF_PTGT": Turning off scrubbing.\n",
-		DP_PTGT(ctx->sc_pool_uuid, dss_get_module_info()->dmi_tgt_id));
-
-	ssa.ssa_ctx = ctx;
-	ssa.ssa_sched = DAOS_SCRUB_SCHED_OFF;
-
-	/* Create a ULT to call ds_pool_iv_prop_update() in xstream 0. */
-	rc = dss_ult_create(sc_set_schedule_ult, &ssa, DSS_XS_SYS, 0, 0,
-			    &thread);
-	if (rc != 0)
-		return rc;
-
-	ABT_thread_join(thread);
-	ABT_thread_free(&thread);
-	if (ssa.ssa_rc != 0)
-		D_WARN("Pool property DAOS_PROP_PO_SCRUB_SCHED was not "
-		       "updated. Error: "DF_RC"\n", DP_RC(ssa.ssa_rc));
-	return ssa.ssa_rc;
-}
-
 static int
 sc_schedule(struct scrub_ctx *ctx)
 {
@@ -248,8 +181,6 @@ scrubbing_ult(void *arg)
 			C_TRACE(DF_PTGT": Pool Scrubbing started\n",
 				DP_PTGT(pool_uuid, tgt_id));
 			ds_scrub_pool(&ctx);
-			if (schedule == DAOS_SCRUB_SCHED_RUN_ONCE)
-				sc_set_schedule_off(&ctx);
 		}
 
 		ds_scrub_sched_control(&ctx);

@@ -84,5 +84,4 @@ const (
 	PoolScrubSchedOff        = C.DAOS_SCRUB_SCHED_OFF
 	PoolScrubSchedWait       = C.DAOS_SCRUB_SCHED_RUN_WAIT
 	PoolScrubSchedContinuous = C.DAOS_SCRUB_SCHED_CONTINUOUS
-	PoolScrubSchedRunOnce    = C.DAOS_SCRUB_SCHED_RUN_ONCE
 )

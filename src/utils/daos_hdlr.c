@@ -202,7 +202,7 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SCRUB_SCHED);
 	bool scrubbing_enabled =
 		entry->dpe_val > DAOS_SCRUB_SCHED_OFF &&
-		entry->dpe_val <= DAOS_SCRUB_SCHED_RUN_ONCE;
+		entry->dpe_val < DAOS_SCRUB_SCHED_INVALID;
 	if (entry == NULL) {
 		fprintf(stderr, "scrubbing schedule property not found\n");
 		rc = -DER_INVAL;
@@ -217,9 +217,6 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 			break;
 		case DAOS_SCRUB_SCHED_CONTINUOUS:
 			D_PRINT("Continuous\n");
-			break;
-		case DAOS_SCRUB_SCHED_RUN_ONCE:
-			D_PRINT("Run-Once\n");
 			break;
 		default:
 			D_PRINT("UNKNOWN\n");

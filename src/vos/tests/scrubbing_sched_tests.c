@@ -214,8 +214,7 @@ each_schedule__credits_are_consumed_and_wrap(void **state)
 	uint32_t		i;
 	uint32_t		scheds[] = {
 		DAOS_SCRUB_SCHED_RUN_WAIT,
-		DAOS_SCRUB_SCHED_CONTINUOUS,
-		DAOS_SCRUB_SCHED_RUN_ONCE,
+		DAOS_SCRUB_SCHED_CONTINUOUS
 	};
 
 	for (i = 0; i < ARRAY_SIZE(scheds); i++) {
