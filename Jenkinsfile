@@ -889,6 +889,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
+                                       target: 'leap15.3',
                                        inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
