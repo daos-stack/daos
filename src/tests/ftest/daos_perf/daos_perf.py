@@ -18,7 +18,6 @@ class DaosPerf(DaosPerfBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-7256")
     def test_small(self):
         """Jira ID: DAOS-1714.
 
