@@ -1683,12 +1683,12 @@ static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[6]
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "force",
+    "force_destroy",
     6,
     PROTOBUF_C_LABEL_NONE,
     PROTOBUF_C_TYPE_BOOL,
     0,   /* quantifier_offset */
-    offsetof(Mgmt__PoolEvictReq, force),
+    offsetof(Mgmt__PoolEvictReq, force_destroy),
     NULL,
     NULL,
     0,             /* flags */
@@ -1697,7 +1697,7 @@ static const ProtobufCFieldDescriptor mgmt__pool_evict_req__field_descriptors[6]
 };
 static const unsigned mgmt__pool_evict_req__field_indices_by_name[] = {
   4,   /* field[4] = destroy */
-  5,   /* field[5] = force */
+  5,   /* field[5] = force_destroy */
   3,   /* field[3] = handles */
   1,   /* field[1] = id */
   2,   /* field[2] = svc_ranks */

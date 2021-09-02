@@ -384,14 +384,15 @@ out:
 
 int
 ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, size_t n_handles,
-		   uint32_t destroy, uint32_t force, const char *group)
+		   uint32_t destroy, uint32_t force_destroy, const char *group)
 {
 	int		 rc;
 
 	D_DEBUG(DB_MGMT, "evict pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
 	/* Evict active pool connections if they exist*/
-	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles, destroy, force);
+	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles,
+				     destroy, force_destroy);
 	if (rc != 0) {
 		D_ERROR("Failed to evict pool handles"DF_UUID" rc: %d\n",
 			DP_UUID(pool_uuid), rc);

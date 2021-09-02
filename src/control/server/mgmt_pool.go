@@ -498,6 +498,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 	req.SetUUID(uuid)
 
+	ds := drpc.DaosSuccess
 	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
 		// If we already tried to destroy the pool but it failed for some
@@ -507,67 +508,62 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		inCleanupMode = true
 	} else {
 		req.SvcRanks = system.RanksToUint32(ps.Replicas)
-	}
 
-	// Pool handle eviction step: perform separate drpc.MethodPoolEvict.
-	// Do this _before_ transitioning the pool to PoolServiceStateDestroying.
-	// Upon -DER_BUSY, keep pool in its current state and reply with the error immediately.
-	evreq := &mgmtpb.PoolEvictReq{}
-	evreq.Sys = req.Sys
-	evreq.Id = req.Id
-	evreq.SvcRanks = req.SvcRanks
-	evreq.Destroy = true
-	evreq.Force = req.Force
-	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolEvict, evreq:%+v\n", evreq)
-	dresp, err := svc.makePoolServiceCall(ctx, drpc.MethodPoolEvict, evreq)
-	if err != nil {
-		return nil, err
-	}
-
-	evresp := &mgmtpb.PoolEvictResp{}
-	if err = proto.Unmarshal(dresp.Body, evresp); err != nil {
-		return nil, errors.Wrap(err, "unmarshal PoolEvict response")
-	}
-
-	svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
-
-	ds := drpc.DaosStatus(evresp.Status)
-	switch ds {
-	case drpc.DaosSuccess:
-		break
-	case drpc.DaosNotLeader, drpc.DaosNotReplica:
-		if !inCleanupMode {
-			// If we're not cleaning up, then this is an error.
-			svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
+		// Pool handle eviction step: perform separate drpc.MethodPoolEvict.
+		// Do this _before_ transitioning the pool to PoolServiceStateDestroying.
+		// Upon -DER_BUSY, keep pool in its current state and reply with the error immediately.
+		evreq := &mgmtpb.PoolEvictReq{}
+		evreq.Sys = req.Sys
+		evreq.Id = req.Id
+		evreq.SvcRanks = req.SvcRanks
+		evreq.Destroy = true
+		evreq.ForceDestroy = req.Force
+		svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolEvict, evreq:%+v\n", evreq)
+		evresp, err := svc.PoolEvict(ctx, evreq)
+		if err != nil {
+			svc.log.Debugf("svc.PoolEvict failed\n")
+			return nil, err
 		}
-		break
-	default:
+		ds = drpc.DaosStatus(evresp.Status)
+		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
+	}
+
+	if ds != drpc.DaosSuccess {
 		svc.log.Errorf("PoolEvict (first step of destroy) dRPC call failed: %s", ds)
 	}
 
-	resp := &mgmtpb.PoolDestroyResp{}
-	if ds != drpc.DaosSuccess {
-		resp.Status = int32(ds)
-		return resp, nil
-	}
-
-	// Now on to the rest of the pool destroy, set state and issue drpc.MethodPoolDestroy.
+	// If evict failed because of open handles (DER_BUSY) leave pool in operational state.
+	// If evict succeeded, or evict otherwise failed, transition pool to destroying state.
 	if ps.State != system.PoolServiceStateDestroying {
 		if req.Force {
 			// If the destroy request is being forced, we should zap
 			// the label so that the entry doesn't prevent a new pool
 			// with the same label from being created.
 			ps.PoolLabel = ""
-		}
 
-		ps.State = system.PoolServiceStateDestroying
-		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-			return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+			ps.State = system.PoolServiceStateDestroying
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+			}
+		} else if ds != drpc.DaosBusy {
+			ps.State = system.PoolServiceStateDestroying
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+			}
 		}
 	}
 
+	resp := &mgmtpb.PoolDestroyResp{}
+	if ds == drpc.DaosBusy {
+		resp.Status = int32(ds)
+		svc.log.Debugf("MgmtSvc.PoolDestroy NOT issuing drpc.MethodPoolDestroy, req:%+v\n", req)
+		return resp, nil
+	}
+
+	// Now on to the rest of the pool destroy, issue drpc.MethodPoolDestroy.
+
 	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy, req:%+v\n", req)
-	dresp, err = svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
+	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
 		return nil, err
 	}

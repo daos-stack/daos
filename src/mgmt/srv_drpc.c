@@ -551,7 +551,7 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	uint8_t			*body;
 	size_t			 len;
 	uint32_t		 destroy = 0;
-	uint32_t		 force = 0;
+	uint32_t		 force_destroy = 0;
 	int			 rc;
 	int			 i;
 
@@ -599,13 +599,14 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		handles = NULL;
 		n_handles = 0;
 		destroy = 1;
-		force = (req->force ? 1 : 0);
+		force_destroy = (req->force_destroy ? 1 : 0);
 	} else {
 		handles = NULL;
 		n_handles = 0;
 	}
 
-	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, destroy, force, req->sys);
+	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, destroy, force_destroy,
+				req->sys);
 	if (rc != 0)
 		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n", req->id, DP_RC(rc));
 
