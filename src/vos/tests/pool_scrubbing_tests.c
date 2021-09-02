@@ -118,8 +118,8 @@ struct sts_context {
 	daos_handle_t		 tsc_coh;
 	struct daos_csummer	*tsc_csummer;
 	int			 tsc_fd;
-	ds_get_cont_fn_t	 tsc_get_cont_fn;
-	ds_yield_fn_t		 tsc_yield_fn;
+	sc_get_cont_fn_t	 tsc_get_cont_fn;
+	sc_yield_fn_t		 tsc_yield_fn;
 	void			*tsc_sched_arg;
 };
 
@@ -388,7 +388,7 @@ sts_ctx_do_scrub(struct sts_context *ctx)
 	s_ctx.sc_dmi = &ctx->tsc_dmi;
 	s_ctx.sc_credits_left = 1;
 
-	assert_success(ds_scrub_pool(&s_ctx));
+	assert_success(vos_scrub_pool(&s_ctx));
 }
 
 /**

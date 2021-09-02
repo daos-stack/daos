@@ -12,6 +12,9 @@
 
 #define C_TRACE(...) D_DEBUG(DB_CSUM, __VA_ARGS__)
 
+#define SCRUB_POOL_OFF 1
+#define SCRUB_CONT_STOPPING 2
+
 static void
 sc_csum_calc_inc(struct scrub_ctx *ctx)
 {
@@ -129,7 +132,7 @@ sc_verify_finish(struct scrub_ctx *ctx)
 {
 	sc_csum_calc_inc(ctx);
 	sc_m_pool_csum_inc(ctx);
-	ds_scrub_sched_control(ctx);
+	sc_scrub_sched_control(ctx);
 }
 
 /**
@@ -397,12 +400,12 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	if (sc_cont_is_stopping(ctx)) {
 		C_TRACE("Container is stopping.");
-		return 1;
+		return SCRUB_CONT_STOPPING;
 	}
 
 	if (ctx->sc_pool->sp_scrub_sched == DAOS_SCRUB_SCHED_OFF) {
 		C_TRACE("scrubbing is off now");
-		return 1;
+		return SCRUB_POOL_OFF;
 	}
 
 	switch (type) {
@@ -455,7 +458,7 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				D_ERROR("Error Verifying:"DF_RC"\n", DP_RC(rc));
 				return rc;
 			}
-			ds_scrub_sched_control(ctx);
+			sc_scrub_sched_control(ctx);
 		}
 		break;
 	}
@@ -485,16 +488,31 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 
 	param.ip_hdl = sc_cont_hdl(ctx);
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
+	/*
+	 * FIXME: Improve iteration by only iterating over visible
+	 * recxs (set param.ip_flags = VOS_IT_RECX_VISIBLE). Will have to be
+	 * smarter about checksum handling of visible recxs because potential of
+	 * partial extents. Unit test multiple_overlapping_extents() verifies
+	 * this case. srv_csum.c has some logic that might be useful/reused.
+	 */
 	rc = vos_iterate(&param, VOS_ITER_OBJ, true, &anchor,
-			 obj_iter_scrub_pre_cb,
-			 NULL, ctx, NULL);
+			 obj_iter_scrub_pre_cb, NULL, ctx, NULL);
 
 	if (rc != DER_SUCCESS) {
-		D_ERROR("Object scrub failed: "DF_RC"\n", DP_RC(rc));
-		return rc;
+		if (rc < 0) {
+			D_ERROR("Object scrub failed: "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+		if (rc == SCRUB_POOL_OFF) {
+			C_TRACE("Scrubbing is stopping for pool.");
+			return SCRUB_POOL_OFF;
+		} else if (rc == SCRUB_CONT_STOPPING) {
+			C_TRACE("Container is stopping.");
+			/* Just fall through to return 0 */
+		}
 	}
 
-	ds_scrub_sched_control(ctx);
+	sc_scrub_sched_control(ctx);
 
 	return 0;
 }
@@ -565,7 +583,7 @@ sc_pool_start(struct scrub_ctx *ctx)
 }
 
 int
-ds_scrub_pool(struct scrub_ctx *ctx)
+vos_scrub_pool(struct scrub_ctx *ctx)
 {
 	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors	anchor = {0};
@@ -589,8 +607,8 @@ ds_scrub_pool(struct scrub_ctx *ctx)
 
 /* How many ms to wait between checksum calculations (for continuous spacing) */
 uint64_t
-ds_scrub_wait_between_msec(uint32_t sched, struct timespec start_time,
-			   uint64_t last_csum_calcs, uint64_t freq_seconds)
+vos_scrub_wait_between_msec(uint32_t sched, struct timespec start_time,
+			    uint64_t last_csum_calcs, uint64_t freq_seconds)
 {
 	struct timespec	elapsed;
 	uint64_t	elapsed_sec;
@@ -662,7 +680,7 @@ sc_control_in_between(struct scrub_ctx *ctx)
 
 	if (sc_schedule(ctx) == DAOS_SCRUB_SCHED_CONTINUOUS &&
 	    ctx->sc_pool_last_csum_calcs > ctx->sc_pool_csum_calcs) {
-		msec_between = ds_scrub_wait_between_msec(
+		msec_between = vos_scrub_wait_between_msec(
 			sc_schedule(ctx), ctx->sc_pool_start_scrub,
 			ctx->sc_pool_last_csum_calcs - ctx->sc_pool_csum_calcs,
 			ctx->sc_pool->sp_scrub_freq_sec);
@@ -711,7 +729,7 @@ sc_control_when_complete(struct scrub_ctx *ctx)
 }
 
 void
-ds_scrub_sched_control(struct scrub_ctx *ctx)
+sc_scrub_sched_control(struct scrub_ctx *ctx)
 {
 	uint32_t disabled_wait_sec = seconds_to_wait_while_disabled();
 

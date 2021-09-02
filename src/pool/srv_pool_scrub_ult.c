@@ -22,7 +22,7 @@
  * DAOS_CSUM_SCRUB_DISABLED can be set in the server config to disable the
  * scrubbing ULT completely for the engine.
  */
-static bool
+static inline bool
 scrubbing_is_enabled()
 {
 	char *disabled = getenv("DAOS_CSUM_SCRUB_DISABLED");
@@ -30,7 +30,7 @@ scrubbing_is_enabled()
 	return disabled == NULL;
 }
 
-static int
+static inline int
 yield_fn(void *arg)
 {
 	sched_req_yield(arg);
@@ -38,7 +38,7 @@ yield_fn(void *arg)
 	return 0;
 }
 
-static int
+static inline int
 sleep_fn(void *arg, uint32_t msec)
 {
 	sched_req_sleep(arg, msec);
@@ -46,7 +46,7 @@ sleep_fn(void *arg, uint32_t msec)
 	return 0;
 }
 
-static int
+static inline int
 sc_schedule(struct scrub_ctx *ctx)
 {
 	return ctx->sc_pool->sp_scrub_sched;
@@ -73,7 +73,7 @@ cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	return 0;
 }
 
-static void
+static inline void
 cont_put_cb(void *cont)
 {
 	struct ds_cont_child *cont_child = cont;
@@ -81,7 +81,7 @@ cont_put_cb(void *cont)
 	ds_cont_child_put(cont_child);
 }
 
-static bool
+static inline bool
 cont_is_stopping_cb(void *cont)
 {
 	struct ds_cont_child *cont_child = cont;
@@ -147,6 +147,7 @@ scrubbing_ult(void *arg)
 	daos_handle_t		 poh;
 	int			 schedule;
 	int			 tgt_id;
+	int			 rc;
 
 	poh = child->spc_hdl;
 	uuid_copy(pool_uuid, child->spc_uuid);
@@ -173,17 +174,22 @@ scrubbing_ult(void *arg)
 		DP_UUID(pool_uuid), ctx.sc_dmi->dmi_tgt_id);
 	sc_add_pool_metrics(&ctx);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
-		if (dss_ult_exiting(child->spc_scrubbing_req))
-			break;
-
 		schedule = sc_schedule(&ctx);
 		if (schedule != DAOS_SCRUB_SCHED_OFF) {
 			C_TRACE(DF_PTGT": Pool Scrubbing started\n",
 				DP_PTGT(pool_uuid, tgt_id));
-			ds_scrub_pool(&ctx);
+			rc = vos_scrub_pool(&ctx);
+			if (rc != DER_SUCCESS) {
+				D_ERROR("Scrubbing failed. "DF_RC"\n",
+					DP_RC(rc));
+				/* wait a minute before trying again */
+				sched_req_sleep(child->spc_scrubbing_req,
+						60 * 1000);
+			}
 		}
-
-		ds_scrub_sched_control(&ctx);
+		if (dss_ult_exiting(child->spc_scrubbing_req))
+			break;
+		sc_scrub_sched_control(&ctx);
 	}
 }
 
@@ -192,7 +198,7 @@ int
 ds_start_scrubbing_ult(struct ds_pool_child *child)
 {
 	struct dss_module_info	*dmi = dss_get_module_info();
-	struct sched_req_attr	 attr;
+	struct sched_req_attr	 attr = {0};
 	ABT_thread		 thread = ABT_THREAD_NULL;
 	int			 rc;
 
@@ -220,7 +226,6 @@ ds_start_scrubbing_ult(struct ds_pool_child *child)
 	D_ASSERT(thread != ABT_THREAD_NULL);
 
 	sched_req_attr_init(&attr, SCHED_REQ_SCRUB, &child->spc_uuid);
-	attr.sra_flags = SCHED_REQ_FL_NO_DELAY;
 	child->spc_scrubbing_req = sched_req_get(&attr, thread);
 	if (child->spc_scrubbing_req == NULL) {
 		D_CRIT(DF_PTGT": Failed to get req for Scrubbing ULT\n",

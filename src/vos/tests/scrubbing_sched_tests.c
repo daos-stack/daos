@@ -24,10 +24,10 @@ off_always_returns_0(void **state)
 
 	d_gettime(&start_time);
 
-	assert_int_equal(0, ds_scrub_wait_between_msec(DAOS_SCRUB_SCHED_OFF,
-						       start_time, 0, 0));
-	assert_int_equal(0, ds_scrub_wait_between_msec(DAOS_SCRUB_SCHED_OFF,
-						       start_time, 100, 100));
+	assert_int_equal(0, vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_OFF,
+							start_time, 0, 0));
+	assert_int_equal(0, vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_OFF,
+							start_time, 100, 100));
 
 }
 
@@ -39,16 +39,16 @@ wait_always_returns_0(void **state)
 	d_gettime(&start_time);
 
 	assert_int_equal(0,
-			 ds_scrub_wait_between_msec(DAOS_SCRUB_SCHED_RUN_WAIT,
-						    start_time, 0, 0));
+			 vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_RUN_WAIT,
+						     start_time, 0, 0));
 	assert_int_equal(0,
-			 ds_scrub_wait_between_msec(DAOS_SCRUB_SCHED_RUN_WAIT,
-						    start_time, 100, 100));
+			 vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_RUN_WAIT,
+						     start_time, 100, 100));
 }
 
 #define assert_continuous(expected, st, csum_count, freq) \
 	assert_int_equal(expected, \
-		ds_scrub_wait_between_msec(DAOS_SCRUB_SCHED_CONTINUOUS, \
+		vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_CONTINUOUS, \
 				st, csum_count, freq))
 static void
 continuous_start_now_calcs_ms(void **state)
@@ -176,7 +176,7 @@ free_ctx(struct scrub_ctx *ctx)
 
 void run_sched_control(struct scrub_ctx *ctx)
 {
-	ds_scrub_sched_control(ctx);
+	sc_scrub_sched_control(ctx);
 }
 
 static void
