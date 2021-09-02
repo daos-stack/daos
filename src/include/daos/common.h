@@ -245,6 +245,22 @@ daos_getntime_coarse(void)
 }
 
 static inline uint64_t
+daos_wallclock_secs(void)
+{
+	struct timespec         now;
+	int                     rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc) {
+		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n",
+			rc, errno, strerror(errno));
+		return 0;
+	}
+
+	return now.tv_sec;
+}
+
+static inline uint64_t
 daos_getmtime_coarse(void)
 {
 	return daos_getntime_coarse() / NSEC_PER_MSEC;
