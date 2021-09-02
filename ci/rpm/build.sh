@@ -47,9 +47,6 @@ mkdir -p "artifacts/${TARGET}/"
 # shellcheck disable=SC2086
 DEBEMAIL="$DAOS_EMAIL" DEBFULLNAME="$DAOS_FULLNAME" \
 
-# ugly hack to escape $ in environment variables as make cannot deal with them
-# hopefully we can have make deal with this
-DAOS_STACK_EL_8_DOCKER_REPO="${DAOS_STACK_EL_8_DOCKER_REPO//$/\$\$}"
 TOPDIR=$PWD make RELEASEVER="${RELEASEVER:-}" CHROOT_NAME="${CHROOT_NAME}" \
     ${JOB_REPOS} EXTERNAL_RPM_BUILD_OPTIONS="${EXTERNAL_RPM_BUILD_OPTIONS}" \
     SCONS_ARGS="${SCONS_ARGS}" -C utils/rpms chrootbuild
