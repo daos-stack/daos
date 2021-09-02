@@ -139,8 +139,8 @@ class ObjectMetadata(TestWithServers):
             del self.container[-1]
             if "RC: -1007" not in str(error):
                 self.fail(
-                    "Unexpected error detected creating container %d",
-                    index + 1)
+                    "Unexpected error detected creating container {}".format(
+                        index + 1))
         return status
 
     def destroy_all_containers(self):
@@ -326,8 +326,9 @@ class ObjectMetadata(TestWithServers):
                     sequential_negative_count += 1
                     if sequential_negative_count > 2:
                         test_failed = True
-                        variation = "{}  **FAIL: 3 sequential decreases".format(
-                            variation, sequential_negative_count)
+                        variation = \
+                            "{}  **FAIL: {} sequential decreases".format(
+                                variation, sequential_negative_count)
                 else:
                     sequential_negative_count = 0
             self.log.info("  %-4d  %-18d  %s", loop + 1, quantity, variation)
