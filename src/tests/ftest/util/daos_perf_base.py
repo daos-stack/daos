@@ -39,7 +39,7 @@ class DaosPerfBase(TestWithServers):
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
         self.job_manager.assign_processes(processes)
         self.job_manager.assign_environment(daos_perf_env)
-        self.log.info("orterun command: %s", str(orterun))
+        self.log.info("orterun command: %s", str(self.job_manager))
 
         # Run the daos_perf command and check for errors
         result = self.job_manager.run()
