@@ -281,6 +281,20 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 			crt_context_destroy(ctx, true);
 			D_GOTO(out, rc);
 		}
+
+		if (provider == CRT_NA_OFI_SOCKETS || provider == CRT_NA_OFI_TCP_RXM) {
+			struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+
+			D_DEBUG(DB_TRACE, "Slow network provider is detected, "
+					  "increase SWIM timeouts by twice.\n");
+
+			swim_suspect_timeout_set(swim_suspect_timeout_get() * 2);
+			swim_ping_timeout_set(swim_ping_timeout_get() * 2);
+			swim_period_set(swim_period_get() * 2);
+			csm->csm_ctx->sc_default_ping_timeout *= 2;
+		}
+
 	}
 
 	*crt_ctx = (crt_context_t)ctx;
