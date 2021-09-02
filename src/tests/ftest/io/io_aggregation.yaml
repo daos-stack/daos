@@ -30,7 +30,6 @@ pool:
   createsvc:
     svcn: 1
   control_method: dmg
-  nranks: 3
 container:
   type: POSIX
   control_method: daos
