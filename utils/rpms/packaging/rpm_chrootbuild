@@ -67,7 +67,7 @@ cat "$cfg_file"
 # shellcheck disable=SC2086
 eval mock --configdir "$mock_config_dir" -r "${CHROOT_NAME}_daos" \
      "${repo_dels[*]}" "${repo_adds[*]}" \
-     $MOCK_OPTIONS $RPM_BUILD_OPTIONS $ZSTREAMOPT "$TARGET"
+     $MOCK_OPTIONS $RPM_BUILD_OPTIONS ${ZSTREAMOPT:-} "$TARGET"
 
 # For now just do an advisory check
 rpmlint "/var/lib/mock/${CHROOT_NAME}/result/"*.rpm || true
