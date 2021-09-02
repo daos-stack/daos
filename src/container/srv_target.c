@@ -2201,7 +2201,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns, in->coai_op.ci_pool_hdl,
+	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns, pool_hdl->sph_pool->sp_uuid,
 			    in->coai_op.ci_uuid, in->num_oids, &sgl);
 	if (rc)
 		D_GOTO(out, rc);

@@ -198,6 +198,73 @@ out:
 	return rc;
 }
 
+#define NUM_OIDS 20
+
+static void
+oid_allocator_mult_hdls(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*label = "oid_test_mult_hdls";
+	uint64_t	oids[NUM_OIDS];
+	int		num_oids[NUM_OIDS];
+	daos_handle_t	coh1, coh2;
+	daos_handle_t	poh1, poh2;
+	int		i = 0;
+	int		rc = 0;
+
+	srand(time(NULL));
+	if (arg->myrank == 0) {
+		rc = daos_cont_create_with_label(arg->pool.poh, label, NULL, NULL, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	while (i < NUM_OIDS) {
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW,
+				       &poh1, NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group, DAOS_PC_RW,
+				       &poh2, NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_cont_open(poh1, label, DAOS_COO_RW, &coh1, NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		rc = daos_cont_open(poh2, label, DAOS_COO_RW, &coh2, NULL, NULL);
+		assert_rc_equal(rc, 0);
+
+		num_oids[i] = rand() % 256 + 1;
+		rc = daos_cont_alloc_oids(coh1, num_oids[i], &oids[i], NULL);
+		assert_rc_equal(rc, 0);
+		i++;
+
+		num_oids[i] = rand() % 256 + 1;
+		rc = daos_cont_alloc_oids(coh2, num_oids[i], &oids[i], NULL);
+		assert_rc_equal(rc, 0);
+		i++;
+
+		rc = daos_cont_close(coh1, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_cont_close(coh2, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_pool_disconnect(poh1, NULL);
+		assert_rc_equal(rc, 0);
+		rc = daos_pool_disconnect(poh2, NULL);
+		assert_rc_equal(rc, 0);
+	}
+
+	rc = check_ranges(num_oids, oids, NUM_OIDS, arg);
+	assert_int_equal(rc, 0);
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank == 0) {
+		rc = daos_cont_destroy(arg->pool.poh, label, 0, NULL);
+		assert_rc_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+}
+
 #define NUM_RGS 1000
 
 static void
@@ -331,7 +398,9 @@ static const struct CMUnitTest oid_alloc_tests[] = {
 	 multi_cont_oid_allocator, async_disable, NULL},
 	{"OID_ALLOC3: Fetch / Set MAX OID",
 	 cont_oid_prop, async_disable, NULL},
-	{"OID_ALLOC4: OID Allocator check (blocking)",
+	{"OID_ALLOC4: OID allocator with Multiple pool & cont handles",
+	 oid_allocator_mult_hdls, async_disable, NULL},
+	{"OID_ALLOC5: OID Allocator check (blocking)",
 	 oid_allocator_checker, async_disable, NULL},
 };
 
