@@ -98,7 +98,7 @@ func TestControl_StorageMap(t *testing.T) {
 					NvmeDevices: storage.NvmeControllers{
 						&storage.NvmeController{
 							Namespaces: []*storage.NvmeNamespace{
-								&storage.NvmeNamespace{
+								{
 									Size: uint64(humanize.TByte),
 								},
 							},
@@ -110,7 +110,7 @@ func TestControl_StorageMap(t *testing.T) {
 					NvmeDevices: storage.NvmeControllers{
 						&storage.NvmeController{
 							Namespaces: []*storage.NvmeNamespace{
-								&storage.NvmeNamespace{
+								{
 									Size: uint64(humanize.TByte * 2),
 								},
 							},
@@ -775,6 +775,12 @@ func TestControl_checkFormatReq(t *testing.T) {
 				MockMSResponse("replica", nil, &mgmtpb.SystemQueryResp{}),
 			},
 			expErr: FaultFormatRunningSystem,
+		},
+		"system unformatted": {
+			reqHosts: reqHosts("replica"),
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", system.ErrUninitialized, nil),
+			},
 		},
 		"system query fails": {
 			reqHosts: reqHosts("replica"),

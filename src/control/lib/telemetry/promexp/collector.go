@@ -18,6 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/telemetry"
 	"github.com/daos-stack/daos/src/control/logging"
 )
@@ -35,9 +36,10 @@ type (
 	}
 
 	EngineSource struct {
-		ctx   context.Context
-		Index uint32
-		Rank  uint32
+		ctx     context.Context
+		Index   uint32
+		Rank    uint32
+		enabled atm.Bool
 	}
 
 	labelMap map[string]string
@@ -54,9 +56,10 @@ func NewEngineSource(parent context.Context, idx uint32, rank uint32) (*EngineSo
 	}
 
 	return &EngineSource{
-		ctx:   ctx,
-		Index: idx,
-		Rank:  rank,
+		ctx:     ctx,
+		Index:   idx,
+		Rank:    rank,
+		enabled: atm.NewBool(true),
 	}, cleanupFn, nil
 }
 
@@ -113,7 +116,22 @@ func sanitizeMetricName(in string) string {
 	}, strings.TrimLeft(in, "/"))
 }
 
-func fixPath(in string) (labels labelMap, name string) {
+func parseNameSubstr(labels labelMap, name string, matchRE string, replacement string, assignLabels func(labelMap, []string)) string {
+	re := regexp.MustCompile(matchRE)
+	matches := re.FindStringSubmatch(name)
+	if len(matches) > 0 {
+		assignLabels(labels, matches)
+
+		if strings.HasSuffix(matches[0], "_") {
+			replacement += "_"
+		}
+		name = re.ReplaceAllString(name, replacement)
+	}
+
+	return name
+}
+
+func extractLabels(in string) (labels labelMap, name string) {
 	name = sanitizeMetricName(in)
 
 	labels = make(labelMap)
@@ -123,65 +141,90 @@ func fixPath(in string) (labels labelMap, name string) {
 	ID_re := regexp.MustCompile(`ID_+(\d+)_?`)
 	name = ID_re.ReplaceAllString(name, "")
 
-	io_re := regexp.MustCompile(`io_+(\d+)_?`)
-	io_matches := io_re.FindStringSubmatch(name)
-	if len(io_matches) > 0 {
-		labels["target"] = io_matches[1]
-		replacement := "io"
-		if strings.HasSuffix(io_matches[0], "_") {
-			replacement += "_"
-		}
-		name = io_re.ReplaceAllString(name, replacement)
-	}
+	name = extractLatencySize(labels, name, "fetch")
+	name = extractLatencySize(labels, name, "update")
 
-	net_re := regexp.MustCompile(`net_+(\d+)_+(\d+)_?`)
-	net_matches := net_re.FindStringSubmatch(name)
-	if len(net_matches) > 0 {
-		labels["rank"] = net_matches[1]
-		labels["context"] = net_matches[2]
+	name = parseNameSubstr(labels, name, `_?tgt_(\d+)`, "",
+		func(labels labelMap, matches []string) {
+			labels["target"] = matches[1]
+		})
 
-		replacement := "net"
-		if strings.HasSuffix(net_matches[0], "_") {
-			replacement += "_"
-		}
-		name = net_re.ReplaceAllString(name, replacement)
-	}
+	name = parseNameSubstr(labels, name, `_?ctx_(\d+)`, "",
+		func(labels labelMap, matches []string) {
+			labels["context"] = matches[1]
+		})
+
+	name = parseNameSubstr(labels, name, `net_+(\d+)`, "net",
+		func(labels labelMap, matches []string) {
+			labels["rank"] = matches[1]
+		})
 
 	getHexRE := func(numDigits int) string {
 		return strings.Repeat(`[[:xdigit:]]`, numDigits)
 	}
 	uuid_re := fmt.Sprintf("%s_%s_%s_%s_%s", getHexRE(8), getHexRE(4), getHexRE(4),
 		getHexRE(4), getHexRE(12))
-	pool_re := regexp.MustCompile(`pool_current_+(` + uuid_re + `)`)
-	pool_matches := pool_re.FindStringSubmatch(name)
-	if len(pool_matches) > 0 {
-		labels["pool"] = strings.Replace(pool_matches[1], "_", "-", -1)
-		replacement := "pool"
-		name = pool_re.ReplaceAllString(name, replacement)
-	}
+
+	name = parseNameSubstr(labels, name, `pool_+(`+uuid_re+`)`, "pool",
+		func(labels labelMap, matches []string) {
+			labels["pool"] = strings.Replace(matches[1], "_", "-", -1)
+		})
 	return
 }
 
+func extractLatencySize(labels labelMap, name, latencyType string) string {
+	return parseNameSubstr(labels, name, `_+latency_+`+latencyType+`_+((?:GT)?[0-9]+[A-Z]?B)`,
+		"_latency_"+latencyType,
+		func(labels labelMap, matches []string) {
+			labels["size"] = matches[1]
+		})
+}
+
 func (es *EngineSource) Collect(log logging.Logger, ch chan<- *rankMetric) {
+	if es == nil {
+		log.Error("nil engine source")
+		return
+	}
+	if ch == nil {
+		log.Error("nil channel")
+		return
+	}
 	metrics := make(chan telemetry.Metric)
 	go func() {
-		if err := telemetry.CollectMetrics(es.ctx, "", metrics); err != nil {
+		if err := telemetry.CollectMetrics(es.ctx, metrics); err != nil {
 			log.Errorf("failed to collect metrics for engine rank %d: %s", es.Rank, err)
 			return
 		}
 	}()
 
 	for metric := range metrics {
-		ch <- &rankMetric{
-			r: es.Rank,
-			m: metric,
+		if es.IsEnabled() {
+			ch <- &rankMetric{
+				rank:   es.Rank,
+				metric: metric,
+			}
 		}
 	}
 }
 
+// IsEnabled checks if the engine source is enabled.
+func (es *EngineSource) IsEnabled() bool {
+	return es.enabled.IsTrue()
+}
+
+// Enable enables the engine source.
+func (es *EngineSource) Enable() {
+	es.enabled.SetTrue()
+}
+
+// Disable disables the engine source.
+func (es *EngineSource) Disable() {
+	es.enabled.SetFalse()
+}
+
 type rankMetric struct {
-	r uint32
-	m telemetry.Metric
+	rank   uint32
+	metric telemetry.Metric
 }
 
 func (c *Collector) isIgnored(name string) bool {
@@ -248,10 +291,6 @@ func getMetricStats(baseName, desc string, m telemetry.Metric) (stats []*metricS
 		return
 	}
 
-	if ms.SampleSize() == 0 {
-		return
-	}
-
 	for name, s := range map[string]struct {
 		fn   func() float64
 		desc string
@@ -284,6 +323,14 @@ func getMetricStats(baseName, desc string, m telemetry.Metric) (stats []*metricS
 }
 
 func (c *Collector) Collect(ch chan<- prometheus.Metric) {
+	if c == nil {
+		return
+	}
+	if ch == nil {
+		c.log.Error("passed a nil channel")
+		return
+	}
+
 	rankMetrics := make(chan *rankMetric)
 	go func(sources []*EngineSource) {
 		for _, source := range c.sources {
@@ -296,37 +343,37 @@ func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	counters := make(cvMap)
 
 	for rm := range rankMetrics {
-		labels, path := fixPath(rm.m.Path())
-		labels["rank"] = fmt.Sprintf("%d", rm.r)
+		labels, name := extractLabels(rm.metric.FullPath())
+		labels["rank"] = fmt.Sprintf("%d", rm.rank)
 
-		name := sanitizeMetricName(rm.m.Name())
+		baseName := strings.Join([]string{"engine", name}, "_")
+		desc := rm.metric.Desc()
 
-		baseName := prometheus.BuildFQName("engine", path, name)
-		desc := rm.m.Desc()
+		if c.isIgnored(baseName) {
+			continue
+		}
 
-		switch rm.m.Type() {
+		switch rm.metric.Type() {
 		case telemetry.MetricTypeGauge:
-			if c.isIgnored(baseName) {
-				continue
-			}
-
-			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
-			for _, ms := range getMetricStats(baseName, desc, rm.m) {
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
+		case telemetry.MetricTypeStatsGauge:
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
+			for _, ms := range getMetricStats(baseName, desc, rm.metric) {
 				gauges.add(ms.name, ms.desc, ms.value, labels)
 			}
 		case telemetry.MetricTypeCounter:
-			if c.isIgnored(baseName) {
-				break
-			}
-
-			counters.add(baseName, desc, rm.m.FloatValue(), labels)
+			counters.add(baseName, desc, rm.metric.FloatValue(), labels)
 		case telemetry.MetricTypeTimestamp:
-			if c.isIgnored(baseName) {
-				break
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
+		case telemetry.MetricTypeSnapshot:
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
+		case telemetry.MetricTypeDuration:
+			gauges.add(baseName, desc, rm.metric.FloatValue(), labels)
+			for _, ms := range getMetricStats(baseName, desc, rm.metric) {
+				gauges.add(ms.name, ms.desc, ms.value, labels)
 			}
-			gauges.add(baseName, desc, rm.m.FloatValue(), labels)
 		default:
-			c.log.Errorf("[%s]: metric type %d not supported", name, rm.m.Type())
+			c.log.Errorf("[%s]: metric type %d not supported", name, rm.metric.Type())
 		}
 	}
 

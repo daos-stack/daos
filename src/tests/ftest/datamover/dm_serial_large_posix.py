@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 
 
 # pylint: disable=too-many-ancestors
-class DmSerialLargePosix(DataMoverTestBase):
+class DmvrSerialLargePosix(DataMoverTestBase):
     """Object Data Mover validation for serializing/deserializing
        POSIX containers at the object level.
 
@@ -80,7 +80,7 @@ class DmSerialLargePosix(DataMoverTestBase):
             DAOS-7432: Verify serializing a large POSIX container.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,dserialize
+        :avocado: tags=datamover,dserialize,dfuse
         :avocado: tags=dm_serial_large_posix,dm_serial_large_posix_dserialize
         """
         self.run_dm_serial_large_posix("DSERIAL")

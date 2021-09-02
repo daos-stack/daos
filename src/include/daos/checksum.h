@@ -539,9 +539,11 @@ static inline bool
 csum_iod_is_supported(daos_iod_t *iod)
 {
 	/**
-	 * iod_size must be greater than 1
+	 * Needs to have something to actually checksum
+	 * iod_size must be greater than 1 and have records if it's an array
 	 */
-	return iod->iod_size > 0;
+	return iod->iod_size > 0 &&
+	       !(iod->iod_type == DAOS_IOD_ARRAY && iod->iod_nr == 0);
 }
 
 /**

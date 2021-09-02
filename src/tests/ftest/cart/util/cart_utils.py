@@ -13,6 +13,7 @@ import cart_logparse
 import cart_logtest
 import socket
 import re
+import glob
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
@@ -105,6 +106,36 @@ class CartTest(TestWithoutServers):
             i = i - 1
         return return_code
 
+    def check_files(self, glob_pattern, count=1, retries=10):
+        """Check for files."""
+
+        file_list = glob.glob(glob_pattern)
+        found_files = False
+
+        retry = 0
+        while retry < retries:
+            retry += 1
+            file_list = glob.glob(glob_pattern)
+
+            self.log.info("Found completion files: [%s]\n",
+                          ", ".join(file_list))
+
+            if len(file_list) == count:
+                found_files = True
+                break
+
+            time.sleep(1)
+
+        if not found_files:
+            self.log.info("Expected %d completion files, ", count)
+            self.log.info("but only found %d.\n", len(file_list))
+
+        # Clean up completion file(s) for next test for next runrun
+        for _file in file_list:
+            os.unlink(_file)
+
+        return found_files
+
     def cleanup_processes(self):
         """Clean up cart processes, in case avocado/apricot does not."""
         error_list = []
@@ -155,6 +186,9 @@ class CartTest(TestWithoutServers):
         """Get the basic env setting in yaml."""
         env_CCSA = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
+        env_PHY_ADDR_STR = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
+
+        os.environ["CRT_PHY_ADDR_STR"] = env_PHY_ADDR_STR
 
         if env_CCSA is not None:
             log_dir = "{}-{}".format(test_name, env_CCSA)
@@ -171,7 +205,9 @@ class CartTest(TestWithoutServers):
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_file = os.path.join(log_path, log_dir,
-                                test_name + "_" + env_CCSA + "_cart.log")
+                                test_name + "_" + \
+                                env_CCSA + "_" + \
+                                env_PHY_ADDR_STR + "_cart.log")
 
         # Default env vars for orterun to None
         log_mask = None
@@ -197,7 +233,11 @@ class CartTest(TestWithoutServers):
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        log_filename = test_name + "_" + env_CCSA + "_output.orterun_log"
+        log_filename = test_name + "_" + \
+                       env_CCSA + "_" + \
+                       env_PHY_ADDR_STR + "_" + \
+                       "output.orterun_log"
+
         output_filename_path = os.path.join(log_path, log_dir, log_filename)
         env = " --output-filename {!s}".format(output_filename_path)
         env += " -x D_LOG_FILE={!s}".format(log_file)
@@ -222,6 +262,7 @@ class CartTest(TestWithoutServers):
             env += " -x CRT_CTX_SHARE_ADDR={!s}".format(ofi_share_addr)
 
         env += " -x CRT_ATTACH_INFO_PATH={!s}".format(daos_test_shared_dir)
+        env += " -x DAOS_TEST_SHARED_DIR={!s}".format(daos_test_shared_dir)
         env += " -x COVFILE=/tmp/test.cov"
 
         self.log_path = log_path

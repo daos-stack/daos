@@ -8,6 +8,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/user"
 	"strings"
 
@@ -16,10 +17,10 @@ import (
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
 	"github.com/daos-stack/daos/src/control/common"
 	commands "github.com/daos-stack/daos/src/control/common/storage"
+	"github.com/daos-stack/daos/src/control/pbin"
 	"github.com/daos-stack/daos/src/control/server"
 	"github.com/daos-stack/daos/src/control/server/config"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 type storageCmd struct {
@@ -31,6 +32,8 @@ type storagePrepareCmd struct {
 	scs *server.StorageControlService
 	logCmd
 	commands.StoragePrepareCmd
+	HelperLogFile string `short:"l" long:"helper-log-file" description:"Log debug from daos_admin binary."`
+	EnableVMD     bool   `long:"enable-vmd" description:"Additionally try to prepare any discovered VMD NVMe devices."`
 }
 
 func (cmd *storagePrepareCmd) Execute(args []string) error {
@@ -39,13 +42,18 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		return err
 	}
 
+	if cmd.HelperLogFile != "" {
+		if err := os.Setenv(pbin.DaosAdminLogFileEnvVar, cmd.HelperLogFile); err != nil {
+			cmd.log.Errorf("unable to configure privileged helper logging: %s", err)
+		}
+	}
+
 	// This is a little ugly, but allows for easier unit testing.
 	// FIXME: With the benefit of hindsight, it seems apparent
 	// that we should have made these Execute() methods thin
 	// wrappers around more easily-testable functions.
 	if cmd.scs == nil {
-		cmd.scs = server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-			scm.DefaultProvider(cmd.log), config.DefaultServer().Engines)
+		cmd.scs = server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
 	}
 
 	op := "Preparing"
@@ -67,17 +75,19 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 		}
 
 		// Prepare NVMe access through SPDK
-		if _, err := cmd.scs.NvmePrepare(bdev.PrepareRequest{
+		if _, err := cmd.scs.NvmePrepare(storage.BdevPrepareRequest{
 			HugePageCount: cmd.NrHugepages,
 			TargetUser:    cmd.TargetUser,
-			PCIAllowlist:  cmd.PCIAllowList,
-			ResetOnly:     cmd.Reset,
+			PCIAllowList:  cmd.PCIAllowList,
+			PCIBlockList:  cmd.PCIBlockList,
+			Reset_:        cmd.Reset,
+			EnableVMD:     cmd.EnableVMD,
 		}); err != nil {
 			scanErrors = append(scanErrors, err)
 		}
 	}
 
-	scmScan, err := cmd.scs.ScmScan(scm.ScanRequest{})
+	scmScan, err := cmd.scs.ScmScan(storage.ScmScanRequest{})
 	if err != nil {
 		return common.ConcatErrors(scanErrors, err)
 	}
@@ -91,12 +101,12 @@ func (cmd *storagePrepareCmd) Execute(args []string) error {
 
 		// Prepare SCM modules to be presented as pmem device files.
 		// Pass evaluated state to avoid running GetScmState() twice.
-		resp, err := cmd.scs.ScmPrepare(scm.PrepareRequest{Reset: cmd.Reset})
+		resp, err := cmd.scs.ScmPrepare(storage.ScmPrepareRequest{Reset: cmd.Reset})
 		if err != nil {
 			return common.ConcatErrors(scanErrors, err)
 		}
 		if resp.RebootRequired {
-			cmd.log.Info(scm.MsgRebootRequired)
+			cmd.log.Info(storage.ScmMsgRebootRequired)
 		} else if len(resp.Namespaces) > 0 {
 			var bld strings.Builder
 			if err := pretty.PrintScmNamespaces(resp.Namespaces, &bld); err != nil {
@@ -122,15 +132,14 @@ type storageScanCmd struct {
 }
 
 func (cmd *storageScanCmd) Execute(args []string) error {
-	svc := server.NewStorageControlService(cmd.log, bdev.DefaultProvider(cmd.log),
-		scm.DefaultProvider(cmd.log), config.DefaultServer().Engines)
+	svc := server.NewStorageControlService(cmd.log, config.DefaultServer().Engines)
 
 	cmd.log.Info("Scanning locally-attached storage...")
 
 	var bld strings.Builder
 	scanErrors := make([]error, 0, 2)
 
-	nvmeResp, err := svc.NvmeScan(bdev.ScanRequest{})
+	nvmeResp, err := svc.NvmeScan(storage.BdevScanRequest{})
 	if err != nil {
 		scanErrors = append(scanErrors, err)
 	} else {
@@ -143,7 +152,7 @@ func (cmd *storageScanCmd) Execute(args []string) error {
 		}
 	}
 
-	scmResp, err := svc.ScmScan(scm.ScanRequest{})
+	scmResp, err := svc.ScmScan(storage.ScmScanRequest{})
 	switch {
 	case err != nil:
 		scanErrors = append(scanErrors, err)

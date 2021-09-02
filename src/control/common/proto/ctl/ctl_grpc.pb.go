@@ -18,8 +18,6 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CtlSvcClient interface {
-	// Prepare nonvolatile storage devices for use with DAOS
-	StoragePrepare(ctx context.Context, in *StoragePrepareReq, opts ...grpc.CallOption) (*StoragePrepareResp, error)
 	// Retrieve details of nonvolatile storage on server, including health info
 	StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
@@ -32,6 +30,8 @@ type CtlSvcClient interface {
 	FirmwareUpdate(ctx context.Context, in *FirmwareUpdateReq, opts ...grpc.CallOption) (*FirmwareUpdateResp, error)
 	// Query the per-server metadata
 	SmdQuery(ctx context.Context, in *SmdQueryReq, opts ...grpc.CallOption) (*SmdQueryResp, error)
+	// Set log level for DAOS I/O Engines on a host.
+	SetEngineLogMasks(ctx context.Context, in *SetLogMasksReq, opts ...grpc.CallOption) (*SetLogMasksResp, error)
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)
 	PrepShutdownRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error)
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)
@@ -50,15 +50,6 @@ type ctlSvcClient struct {
 
 func NewCtlSvcClient(cc grpc.ClientConnInterface) CtlSvcClient {
 	return &ctlSvcClient{cc}
-}
-
-func (c *ctlSvcClient) StoragePrepare(ctx context.Context, in *StoragePrepareReq, opts ...grpc.CallOption) (*StoragePrepareResp, error) {
-	out := new(StoragePrepareResp)
-	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/StoragePrepare", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *ctlSvcClient) StorageScan(ctx context.Context, in *StorageScanReq, opts ...grpc.CallOption) (*StorageScanResp, error) {
@@ -115,6 +106,15 @@ func (c *ctlSvcClient) SmdQuery(ctx context.Context, in *SmdQueryReq, opts ...gr
 	return out, nil
 }
 
+func (c *ctlSvcClient) SetEngineLogMasks(ctx context.Context, in *SetLogMasksReq, opts ...grpc.CallOption) (*SetLogMasksResp, error) {
+	out := new(SetLogMasksResp)
+	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/SetEngineLogMasks", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *ctlSvcClient) PrepShutdownRanks(ctx context.Context, in *RanksReq, opts ...grpc.CallOption) (*RanksResp, error) {
 	out := new(RanksResp)
 	err := c.cc.Invoke(ctx, "/ctl.CtlSvc/PrepShutdownRanks", in, out, opts...)
@@ -164,8 +164,6 @@ func (c *ctlSvcClient) StartRanks(ctx context.Context, in *RanksReq, opts ...grp
 // All implementations must embed UnimplementedCtlSvcServer
 // for forward compatibility
 type CtlSvcServer interface {
-	// Prepare nonvolatile storage devices for use with DAOS
-	StoragePrepare(context.Context, *StoragePrepareReq) (*StoragePrepareResp, error)
 	// Retrieve details of nonvolatile storage on server, including health info
 	StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error)
 	// Format nonvolatile storage devices for use with DAOS
@@ -178,6 +176,8 @@ type CtlSvcServer interface {
 	FirmwareUpdate(context.Context, *FirmwareUpdateReq) (*FirmwareUpdateResp, error)
 	// Query the per-server metadata
 	SmdQuery(context.Context, *SmdQueryReq) (*SmdQueryResp, error)
+	// Set log level for DAOS I/O Engines on a host.
+	SetEngineLogMasks(context.Context, *SetLogMasksReq) (*SetLogMasksResp, error)
 	// Prepare DAOS I/O Engines on a host for controlled shutdown. (gRPC fanout)
 	PrepShutdownRanks(context.Context, *RanksReq) (*RanksResp, error)
 	// Stop DAOS I/O Engines on a host. (gRPC fanout)
@@ -195,9 +195,6 @@ type CtlSvcServer interface {
 type UnimplementedCtlSvcServer struct {
 }
 
-func (UnimplementedCtlSvcServer) StoragePrepare(context.Context, *StoragePrepareReq) (*StoragePrepareResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method StoragePrepare not implemented")
-}
 func (UnimplementedCtlSvcServer) StorageScan(context.Context, *StorageScanReq) (*StorageScanResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StorageScan not implemented")
 }
@@ -215,6 +212,9 @@ func (UnimplementedCtlSvcServer) FirmwareUpdate(context.Context, *FirmwareUpdate
 }
 func (UnimplementedCtlSvcServer) SmdQuery(context.Context, *SmdQueryReq) (*SmdQueryResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SmdQuery not implemented")
+}
+func (UnimplementedCtlSvcServer) SetEngineLogMasks(context.Context, *SetLogMasksReq) (*SetLogMasksResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetEngineLogMasks not implemented")
 }
 func (UnimplementedCtlSvcServer) PrepShutdownRanks(context.Context, *RanksReq) (*RanksResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PrepShutdownRanks not implemented")
@@ -242,24 +242,6 @@ type UnsafeCtlSvcServer interface {
 
 func RegisterCtlSvcServer(s grpc.ServiceRegistrar, srv CtlSvcServer) {
 	s.RegisterService(&CtlSvc_ServiceDesc, srv)
-}
-
-func _CtlSvc_StoragePrepare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(StoragePrepareReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CtlSvcServer).StoragePrepare(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ctl.CtlSvc/StoragePrepare",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CtlSvcServer).StoragePrepare(ctx, req.(*StoragePrepareReq))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _CtlSvc_StorageScan_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -370,6 +352,24 @@ func _CtlSvc_SmdQuery_Handler(srv interface{}, ctx context.Context, dec func(int
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CtlSvc_SetEngineLogMasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetLogMasksReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CtlSvcServer).SetEngineLogMasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ctl.CtlSvc/SetEngineLogMasks",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CtlSvcServer).SetEngineLogMasks(ctx, req.(*SetLogMasksReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CtlSvc_PrepShutdownRanks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RanksReq)
 	if err := dec(in); err != nil {
@@ -468,10 +468,6 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*CtlSvcServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "StoragePrepare",
-			Handler:    _CtlSvc_StoragePrepare_Handler,
-		},
-		{
 			MethodName: "StorageScan",
 			Handler:    _CtlSvc_StorageScan_Handler,
 		},
@@ -494,6 +490,10 @@ var CtlSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SmdQuery",
 			Handler:    _CtlSvc_SmdQuery_Handler,
+		},
+		{
+			MethodName: "SetEngineLogMasks",
+			Handler:    _CtlSvc_SetEngineLogMasks_Handler,
 		},
 		{
 			MethodName: "PrepShutdownRanks",

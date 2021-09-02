@@ -227,3 +227,17 @@
    fun:__run_exit_handlers
    ...
 }
+{
+   <insert_a_suppression_name_here>
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:hg_dlog_mkcount32
+   fun:na_ofi_domain_open
+   fun:na_ofi_initialize
+   fun:NA_Initialize_opt
+   fun:hg_core_init
+   fun:HG_Core_init_opt
+   fun:HG_Init_opt
+   ...
+}

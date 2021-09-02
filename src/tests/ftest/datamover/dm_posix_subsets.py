@@ -7,7 +7,7 @@
 from data_mover_test_base import DataMoverTestBase
 
 
-class DmPosixSubsetsTest(DataMoverTestBase):
+class DmvrPosixSubsets(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """POSIX Data Mover validation for container subsets using
        "dcp" and "daos filesystem copy" with POSIX containers.
@@ -135,7 +135,7 @@ class DmPosixSubsetsTest(DataMoverTestBase):
             Tests copying POSIX container subsets with dcp.
             DAOS-5512: Verify ability to copy container subsets
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_dcp
         """
         self.run_dm_posix_subsets("DCP")
@@ -146,7 +146,7 @@ class DmPosixSubsetsTest(DataMoverTestBase):
         Tests copying POSIX container subsets with fs copy.
             DAOS-6752: daos fs copy improvements
         :avocado: tags=all,daily_regression
-        :avocado: tags=datamover,fs_copy
+        :avocado: tags=datamover,fs_copy,dfuse
         :avocado: tags=dm_posix_subsets,dm_posix_subsets_fs_copy
         """
         self.run_dm_posix_subsets("FS_COPY")

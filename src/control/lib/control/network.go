@@ -209,17 +209,22 @@ type (
 		Uri  string
 	}
 
-	GetAttachInfoResp struct {
-		ServiceRanks []*PrimaryServiceRank `json:"rank_uris"`
+	ClientNetworkHint struct {
 		// These CaRT settings are shared with the
 		// libdaos client to aid in CaRT initialization.
-		Provider        string   `json:"provider"`
-		Interface       string   `json:"interface"`
-		Domain          string   `json:"domain"`
-		CrtCtxShareAddr uint32   `json:"crt_ctx_share_addr"`
-		CrtTimeout      uint32   `json:"crt_timeout"`
-		NetDevClass     uint32   `json:"net_dev_class"`
-		MSRanks         []uint32 `json:"ms_ranks"`
+		Provider        string `json:"provider"`
+		Interface       string `json:"interface"`
+		Domain          string `json:"domain"`
+		CrtCtxShareAddr uint32 `json:"crt_ctx_share_addr"`
+		CrtTimeout      uint32 `json:"crt_timeout"`
+		NetDevClass     uint32 `json:"net_dev_class"`
+		SrvSrxSet       int32  `json:"srv_srx_set"`
+	}
+
+	GetAttachInfoResp struct {
+		ServiceRanks  []*PrimaryServiceRank `json:"rank_uris"`
+		MSRanks       []uint32              `json:"ms_ranks"`
+		ClientNetHint ClientNetworkHint     `json:"client_net_hint"`
 	}
 )
 
@@ -229,9 +234,10 @@ func (gair *GetAttachInfoResp) String() string {
 	rankURI := fmt.Sprintf("%d:%s", gair.ServiceRanks[0].Rank, gair.ServiceRanks[0].Uri)
 
 	// Condensed format for debugging...
-	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d, rus(%d)=%s, mss=%v",
-		gair.Provider, gair.Interface, gair.Domain,
-		gair.CrtCtxShareAddr, gair.CrtTimeout, gair.NetDevClass,
+	ch := gair.ClientNetHint
+	return fmt.Sprintf("p=%s i=%s d=%s a=%d t=%d c=%d x=%d, rus(%d)=%s, mss=%v",
+		ch.Provider, ch.Interface, ch.Domain,
+		ch.CrtCtxShareAddr, ch.CrtTimeout, ch.NetDevClass, ch.SrvSrxSet,
 		len(gair.ServiceRanks), rankURI, gair.MSRanks,
 	)
 }

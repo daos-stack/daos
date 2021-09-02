@@ -18,6 +18,7 @@ import "C"
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -69,5 +70,9 @@ func GetTimestamp(ctx context.Context, name string) (*Timestamp, error) {
 		return nil, err
 	}
 
-	return newTimestamp(hdl, "", &name, node), nil
+	if node.dtn_type != C.D_TM_TIMESTAMP {
+		return nil, fmt.Errorf("metric %q is not a timestamp", name)
+	}
+	n, p := splitFullName(name)
+	return newTimestamp(hdl, p, &n, node), nil
 }

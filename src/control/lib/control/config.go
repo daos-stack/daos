@@ -74,9 +74,17 @@ func LoadConfig(cfgPath string) (*Config, error) {
 		}
 	}
 
+	// If we still don't have a config file, return an error.
+	if cfgPath == "" {
+		return nil, ErrNoConfigFile
+	}
+
 	data, err := ioutil.ReadFile(cfgPath)
 	if err != nil {
 		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty config file: %s", cfgPath)
 	}
 
 	cfg := DefaultConfig()

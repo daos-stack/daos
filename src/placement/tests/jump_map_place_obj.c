@@ -90,7 +90,6 @@ object_class_is_verified(void **state)
 	struct pool_map		*po_map;
 	struct pl_map		*pl_map;
 
-#define DAOS_6295 0
 	/*
 	 * ---------------------------------------------------------
 	 * with a single target
@@ -108,13 +107,10 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_RP_4G1);
 	assert_invalid_param(pl_map, OC_RP_8G1);
 
-#if DAOS_6295
 	/* Multiple groups should fail because there's only 1 target */
-	print_message("Skipping rest until DAOS-XXXX is resolved");
 	assert_invalid_param(pl_map, OC_S2);
 	assert_invalid_param(pl_map, OC_S4);
 	assert_invalid_param(pl_map, OC_S512);
-#endif
 	free_pool_and_placement_map(po_map, pl_map);
 
 
@@ -138,11 +134,9 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_RP_3G1);
 	assert_invalid_param(pl_map, OC_RP_4G1);
 	assert_invalid_param(pl_map, OC_RP_8G1);
-#if DAOS_6295
 	/* The following require more targets than available. */
 	assert_invalid_param(pl_map, OC_S4);
 	assert_invalid_param(pl_map, OC_S512);
-#endif
 	free_pool_and_placement_map(po_map, pl_map);
 
 	/*
@@ -155,10 +149,8 @@ object_class_is_verified(void **state)
 	assert_placement_success(pl_map, OC_S1);
 	assert_placement_success(pl_map, OC_RP_2G1);
 	assert_placement_success(pl_map, OC_RP_2GX);
-#if DAOS_6295
 	assert_invalid_param(pl_map, OC_RP_2G2);
 	assert_invalid_param(pl_map, OC_RP_2G4);
-#endif
 
 	assert_invalid_param(pl_map, OC_RP_2G512);
 	assert_invalid_param(pl_map, OC_RP_3G1);
@@ -172,9 +164,7 @@ object_class_is_verified(void **state)
 	 */
 	gen_maps(2, 1, 2, &po_map, &pl_map);
 	assert_placement_success(pl_map, OC_RP_2G2);
-#if DAOS_6295
 	assert_invalid_param(pl_map, OC_RP_2G4);
-#endif
 
 	free_pool_and_placement_map(po_map, pl_map);
 
@@ -184,9 +174,7 @@ object_class_is_verified(void **state)
 	 * ---------------------------------------------------------
 	 */
 	gen_maps(2, 1, 4, &po_map, &pl_map);
-#if DAOS_6295
 	assert_placement_success(pl_map, OC_RP_2G4);
-#endif
 	/* even though it's 8 total, still need a domain for each replica */
 	assert_invalid_param(pl_map, OC_RP_4G2);
 
@@ -203,7 +191,6 @@ object_class_is_verified(void **state)
 	free_pool_and_placement_map(po_map, pl_map);
 
 	/* The End */
-	skip_msg("DAOS-6295: a bunch commented out in this test. ");
 }
 
 /*
@@ -400,6 +387,9 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	uuid_t		target_uuids[] = {"12345678", "23456789",
 					  "34567890", "4567890a" };
 
+	/* Only support add same node/target domain for the moment */
+	assert_int_equal(ctx->target_nr, target_count);
+	assert_int_equal(ctx->node_nr, node_count);
 	if (domain_count > max_domains)
 		fail_msg("Only %lu domains can be added", max_domains);
 
@@ -453,8 +443,6 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	assert_success(rc);
 
 	ctx->domain_nr += domain_count;
-	ctx->target_nr += target_count;
-	ctx->node_nr += node_count;
 
 	jtc_print_pool(ctx);
 
@@ -991,7 +979,7 @@ all_healthy(void **state)
 		int	grp_nr;
 
 		gen_oid(&oid, 0, 0, object_classes[i]);
-		oa = daos_oclass_attr_find(oid);
+		oa = daos_oclass_attr_find(oid, NULL);
 		grp_sz = daos_oclass_grp_size(oa);
 		grp_nr = daos_oclass_grp_nr(oa, NULL);
 
@@ -1557,7 +1545,7 @@ one_server_is_added(void **state)
 
 	jtc_init(&ctx, 4, 1, 3, OC_UNKNOWN, g_verbose);
 	/* set oid so that it would place a shard in one of the last targets */
-	assert_success(jtc_pool_map_extend(&ctx, 1, 1, 4));
+	assert_success(jtc_pool_map_extend(&ctx, 1, 1, 3));
 
 	/* Make sure that the oid will place on the added target ids */
 	is_true(jtc_set_oid_with_shard_in_targets(&ctx, new_target_ids,
@@ -1694,19 +1682,18 @@ placement_handles_multiple_states_with_addition(void **state)
 {
 	struct jm_test_ctx	 ctx;
 
-	jtc_init_with_layout(&ctx, 3, 1, 8, OC_RP_2G1, g_verbose);
+	jtc_init_with_layout(&ctx, 3, 1, 4, OC_RP_3G1, g_verbose);
 	/* first shard goes down, rebuilt, then back up */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 0);
 	jtc_set_status_on_shard_target(&ctx, DOWNOUT, 0);
 	jtc_set_status_on_shard_target(&ctx, UP, 0);
+
+	/* a new domain is added */
+	jtc_pool_map_extend(&ctx, 1, 1, 4);
+
 	/* second shard goes down */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 1);
 
-	/* a new domain is added */
-	jtc_pool_map_extend(&ctx, 1, 1, 1);
-
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6301: Hits D_ASSERT(original->ol_nr == new->ol_nr)");
 	assert_success(jtc_create_layout(&ctx));
 
 	is_false(jtc_layout_has_duplicate(&ctx));
@@ -1715,11 +1702,14 @@ placement_handles_multiple_states_with_addition(void **state)
 	uint32_t rebuilding = jtc_get_layout_rebuild_count(&ctx);
 
 	/* 1 each for down, up, new ... maybe? */
-	assert_int_equal(3, rebuilding);
+	assert_true(rebuilding == 2 || rebuilding == 3);
 
-	assert_int_equal(ctx.rebuild.out_nr, 1);
+	/* Both DOWN and UP target will be remapped during remap */
+	assert_int_equal(ctx.rebuild.out_nr, 2);
 	assert_int_equal(ctx.reint.out_nr, 1);
-	assert_int_equal(ctx.new.out_nr, 1);
+
+	/* JCH might cause multiple shards remap to the new target */
+	assert_true(ctx.new.out_nr >= 1);
 
 	jtc_fini(&ctx);
 }
@@ -1799,8 +1789,6 @@ unbalanced_config(void **state)
 	TEST_NON_STANDARD_SYSTEMS(domain_targets_nr, domain_targets,
 				  OC_RP_3G2, 6);
 
-	skip_msg("DAOS-6348: The following two tests have duplicate targets "
-		 "picked");
 	TEST_NON_STANDARD_SYSTEMS(domain_targets_nr, domain_targets,
 				  OC_RP_3GX, (total_targets / 3) * 3);
 
@@ -1811,6 +1799,87 @@ unbalanced_config(void **state)
 	domain_targets[1] = 5;
 	domain_targets[2] = 5;
 	TEST_NON_STANDARD_SYSTEMS(3, domain_targets, OC_RP_2G2, 4);
+}
+
+static void
+same_group_shards_not_in_same_domain(void **state)
+{
+	struct jm_test_ctx	ctx;
+	int	tgt;
+	int	other_tgt;
+	int	miss_cnt = 0;
+	int	i;
+	int	j;
+	int	k;
+
+	jtc_init_with_layout(&ctx, 32, 2, 4, OC_EC_2P1G64, g_verbose);
+	for (i = 0; i < 64; i++) {
+		for (j = 0; j < 3; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, 3 * i + j);
+			for (k = j + 1; k < 3; k++) {
+				other_tgt = jtc_layout_shard_tgt(&ctx, 3 * i + k);
+				if (tgt/4 == other_tgt/4)
+					miss_cnt++;
+			}
+		}
+	}
+	jtc_fini(&ctx);
+	assert_rc_equal(miss_cnt, 0);
+
+	jtc_init_with_layout(&ctx, 18, 1, 512, OC_EC_16P2G512, g_verbose);
+	for (i = 0; i < 512; i++) {
+		for (j = 0; j < 18; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
+			for (k = j + 1; k < 18; k++) {
+				other_tgt = jtc_layout_shard_tgt(&ctx, 18 * i + k);
+				if (tgt/512 == other_tgt/512)
+					miss_cnt++;
+			}
+		}
+	}
+	jtc_fini(&ctx);
+	assert_rc_equal(miss_cnt, 0);
+
+	jtc_init_with_layout(&ctx, 512, 1, 18, OC_EC_16P2G512, g_verbose);
+	for (i = 0; i < 512; i++) {
+		for (j = 0; j < 18; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
+			for (k = j + 1; k < 18; k++) {
+				other_tgt = jtc_layout_shard_tgt(&ctx, 18 * i + k);
+				if (tgt/18 == other_tgt/18)
+					miss_cnt++;
+			}
+		}
+	}
+	jtc_fini(&ctx);
+	assert_true(miss_cnt < 2);
+}
+
+static void
+large_shards_over_limited_targets(void **state)
+{
+	struct jm_test_ctx	ctx;
+	int i;
+
+	D_DEBUG(DB_TRACE, "shards over limit\n");
+	jtc_init_with_layout(&ctx, 4, 1, 8, OC_RP_2G8, g_verbose);
+	for (i = 0; i < 8; i++) {
+		jtc_set_status_on_target(&ctx, DOWN, i);
+		jtc_scan(&ctx);
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+	}
+
+	assert_success(jtc_create_layout(&ctx));
+
+	for (i = 24; i < 32; i++) {
+		jtc_set_status_on_target(&ctx, DOWN, i);
+		jtc_scan(&ctx);
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+	}
+
+	assert_success(jtc_create_layout(&ctx));
+
+	jtc_fini(&ctx);
 }
 
 /*
@@ -1893,6 +1962,10 @@ static const struct CMUnitTest tests[] = {
 	/* Non-standard system setups*/
 	T("Non-standard system configurations. All healthy",
 	  unbalanced_config),
+	T("shards in the same group not in the same domain",
+	  same_group_shards_not_in_same_domain),
+	T("large shards over limited targets",
+	  large_shards_over_limited_targets),
 };
 
 int

@@ -248,20 +248,3 @@ func AccessControlListFromPB(pbACL *mgmtpb.ACLResp) *common.AccessControlList {
 		OwnerGroup: pbACL.OwnerGroup,
 	}
 }
-
-// PoolDiscoveriesFromPB converts the protobuf ListPoolsResp_Pool structures to
-// PoolDiscovery structures.
-func PoolDiscoveriesFromPB(pbPools []*mgmtpb.ListPoolsResp_Pool) []*common.PoolDiscovery {
-	pools := make([]*common.PoolDiscovery, 0, len(pbPools))
-	for _, pbPool := range pbPools {
-		svcReps := make([]uint32, 0, len(pbPool.SvcReps))
-		svcReps = append(svcReps, pbPool.SvcReps...)
-
-		pools = append(pools, &common.PoolDiscovery{
-			UUID:        pbPool.Uuid,
-			SvcReplicas: svcReps,
-		})
-	}
-
-	return pools
-}

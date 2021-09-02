@@ -173,18 +173,18 @@ Unknown 3 ranks: 7-9
 					MockMember(t, 0, MemberStateJoined),
 					MockMember(t, 1, MemberStateJoined),
 					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateEvicted),
+					MockMember(t, 3, MemberStateExcluded),
 					MockMember(t, 4, MemberStateStopped),
 					MockMember(t, 5, MemberStateJoined),
 					MockMember(t, 6, MemberStateJoined),
 				},
 			},
 			expPrintStr: `
-Rank      State   
-----      -----   
-[0-1,5-6] Joined  
-[2,4]     Stopped 
-3         Evicted 
+Rank      State    
+----      -----    
+[0-1,5-6] Joined   
+[2,4]     Stopped  
+3         Excluded 
 
 `,
 		},
@@ -194,7 +194,7 @@ Rank      State
 					MockMember(t, 0, MemberStateJoined),
 					MockMember(t, 1, MemberStateJoined),
 					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateEvicted),
+					MockMember(t, 3, MemberStateExcluded),
 					MockMember(t, 4, MemberStateStopped),
 					MockMember(t, 5, MemberStateJoined),
 					MockMember(t, 6, MemberStateJoined),
@@ -202,11 +202,11 @@ Rank      State
 			},
 			absentHosts: "foo[7,8,9]",
 			expPrintStr: `
-Rank      State   
-----      -----   
-[0-1,5-6] Joined  
-[2,4]     Stopped 
-3         Evicted 
+Rank      State    
+----      -----    
+[0-1,5-6] Joined   
+[2,4]     Stopped  
+3         Excluded 
 
 Unknown 3 hosts: foo[7-9]
 `,
@@ -217,7 +217,7 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 0, MemberStateJoined),
 					MockMember(t, 1, MemberStateJoined),
 					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateEvicted),
+					MockMember(t, 3, MemberStateExcluded),
 					MockMember(t, 4, MemberStateStopped),
 					MockMember(t, 5, MemberStateJoined),
 					MockMember(t, 6, MemberStateJoined),
@@ -230,7 +230,7 @@ Rank      State
 [0-1,5-6] Joined       
 [7-9]     Unknown Rank 
 [2,4]     Stopped      
-3         Evicted      
+3         Excluded     
 
 `,
 		},
@@ -240,7 +240,7 @@ Rank      State
 					MockMember(t, 0, MemberStateJoined),
 					MockMember(t, 1, MemberStateJoined),
 					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateEvicted),
+					MockMember(t, 3, MemberStateExcluded),
 					MockMember(t, 4, MemberStateStopped),
 					MockMember(t, 5, MemberStateJoined),
 					MockMember(t, 6, MemberStateJoined),
@@ -254,7 +254,7 @@ Rank      State
 [0-1,5-6] Joined       
 [7-9]     Unknown Rank 
 [2,4]     Stopped      
-3         Evicted      
+3         Excluded     
 
 Unknown 3 hosts: foo[7-9]
 `,
@@ -265,7 +265,7 @@ Unknown 3 hosts: foo[7-9]
 					MockMember(t, 0, MemberStateJoined),
 					MockMember(t, 1, MemberStateJoined),
 					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateEvicted),
+					MockMember(t, 3, MemberStateExcluded),
 					MockMember(t, 4, MemberStateStopped),
 					MockMember(t, 5, MemberStateJoined),
 					MockMember(t, 6, MemberStateJoined),
@@ -273,15 +273,15 @@ Unknown 3 hosts: foo[7-9]
 			},
 			verbose: true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State   Reason 
----- ----                                 --------------- ------------ -----   ------ 
-0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined         
-1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 /            Joined         
-2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 /            Stopped        
-3    00000003-0003-0003-0003-000000000003 127.0.0.3:10001 /            Evicted        
-4    00000004-0004-0004-0004-000000000004 127.0.0.4:10001 /            Stopped        
-5    00000005-0005-0005-0005-000000000005 127.0.0.5:10001 /            Joined         
-6    00000006-0006-0006-0006-000000000006 127.0.0.6:10001 /            Joined         
+Rank UUID                                 Control Address Fault Domain State    Reason 
+---- ----                                 --------------- ------------ -----    ------ 
+0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined          
+1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 /            Joined          
+2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 /            Stopped         
+3    00000003-0003-0003-0003-000000000003 127.0.0.3:10001 /            Excluded        
+4    00000004-0004-0004-0004-000000000004 127.0.0.4:10001 /            Stopped         
+5    00000005-0005-0005-0005-000000000005 127.0.0.5:10001 /            Joined          
+6    00000006-0006-0006-0006-000000000006 127.0.0.6:10001 /            Joined          
 
 `,
 		},
@@ -291,7 +291,7 @@ Rank UUID                                 Control Address Fault Domain State   R
 					MockMember(t, 0, MemberStateJoined),
 					MockMember(t, 1, MemberStateJoined),
 					MockMember(t, 2, MemberStateStopped),
-					MockMember(t, 3, MemberStateEvicted),
+					MockMember(t, 3, MemberStateExcluded),
 					MockMember(t, 4, MemberStateStopped),
 					MockMember(t, 5, MemberStateJoined),
 					MockMember(t, 6, MemberStateJoined),
@@ -301,15 +301,15 @@ Rank UUID                                 Control Address Fault Domain State   R
 			absentRanks: "7-9",
 			verbose:     true,
 			expPrintStr: `
-Rank UUID                                 Control Address Fault Domain State   Reason 
----- ----                                 --------------- ------------ -----   ------ 
-0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined         
-1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 /            Joined         
-2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 /            Stopped        
-3    00000003-0003-0003-0003-000000000003 127.0.0.3:10001 /            Evicted        
-4    00000004-0004-0004-0004-000000000004 127.0.0.4:10001 /            Stopped        
-5    00000005-0005-0005-0005-000000000005 127.0.0.5:10001 /            Joined         
-6    00000006-0006-0006-0006-000000000006 127.0.0.6:10001 /            Joined         
+Rank UUID                                 Control Address Fault Domain State    Reason 
+---- ----                                 --------------- ------------ -----    ------ 
+0    00000000-0000-0000-0000-000000000000 127.0.0.0:10001 /            Joined          
+1    00000001-0001-0001-0001-000000000001 127.0.0.1:10001 /            Joined          
+2    00000002-0002-0002-0002-000000000002 127.0.0.2:10001 /            Stopped         
+3    00000003-0003-0003-0003-000000000003 127.0.0.3:10001 /            Excluded        
+4    00000004-0004-0004-0004-000000000004 127.0.0.4:10001 /            Stopped         
+5    00000005-0005-0005-0005-000000000005 127.0.0.5:10001 /            Joined          
+6    00000006-0006-0006-0006-000000000006 127.0.0.6:10001 /            Joined          
 
 Unknown 3 hosts: foo[7-9]
 Unknown 3 ranks: 7-9

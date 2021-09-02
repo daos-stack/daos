@@ -5,6 +5,9 @@ def scons():
     """Execute build"""
     Import('env', 'prereqs')
 
+    if not prereqs.server_requested():
+        return
+
     # rsvc-specific env
     denv = env.Clone()
 

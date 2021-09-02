@@ -99,12 +99,8 @@ enum {
 	IOBP_TARGET		= (1 << 2),
 	/** server does not store bulk data in NVMe (drop it) */
 	IOBP_NVME		= (1 << 3),
-	/** metadata and small I/O are stored in DRAM */
-	IOBP_PM			= (1 << 4),
-	/** no PMDK snapshot (PMDK transaction will be broken) */
-	IOBP_PM_SNAP		= (1 << 5),
 	/** bypass bulk handle cache */
-	IOBP_SRV_BULK_CACHE	= (1 << 6),
+	IOBP_SRV_BULK_CACHE	= (1 << 4),
 };
 
 /**
@@ -117,8 +113,6 @@ enum {
 #define IOBP_ENV_SRV_BULK	"srv_bulk"
 #define IOBP_ENV_TARGET		"target"
 #define IOBP_ENV_NVME		"nvme"
-#define IOBP_ENV_PM		"pm"
-#define IOBP_ENV_PM_SNAP	"pm_snap"
 #define IOBP_ENV_SRV_BULK_CACHE	"srv_bulk_cache"
 
 extern unsigned int daos_io_bypass;

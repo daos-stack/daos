@@ -6,9 +6,9 @@
 int main(void)
 {
 #if FAULT_INJECTION
-    return 0;
+	return 0;
 #else
-    return 1;
+	return 1;
 #endif
 }
 

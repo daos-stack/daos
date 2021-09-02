@@ -17,6 +17,7 @@ message NotifyReadyReq {
 	string drpcListenerSock = 3; // Path to I/O Engine's dRPC listener socket
 	uint32 instanceIdx = 4; // I/O Engine instance index
 	uint32 ntgts = 5; // number of VOS targets allocated in I/O Engine
+	uint64 incarnation = 6; // HLC incarnation number
 }
 
 // NotifyReadyResp is nil.
@@ -40,4 +41,14 @@ message GetPoolSvcReq {
 message GetPoolSvcResp {
 	int32 status = 1; // DAOS error code
 	repeated uint32 svcreps = 2; // Pool service replica ranks
+}
+
+message PoolFindByLabelReq {
+	string label = 1; // Pool label
+}
+
+message PoolFindByLabelResp {
+	int32 status = 1; // DAOS error code
+	string uuid = 2; // Pool UUID
+	repeated uint32 svcreps = 3; // Pool service replica ranks
 }

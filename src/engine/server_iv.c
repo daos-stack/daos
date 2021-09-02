@@ -682,15 +682,9 @@ static void
 iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 {
 	struct ds_iv_ns		*ns = arg;
-	struct ds_iv_entry	*entry;
-	struct ds_iv_entry	*tmp;
 
+	D_ASSERT(d_list_empty(&ns->iv_entry_list));
 	d_list_del(&ns->iv_ns_link);
-	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
-		d_list_del(&entry->iv_link);
-		iv_entry_free(entry);
-	}
-
 	ABT_eventual_free(&ns->iv_done_eventual);
 	D_FREE(ns);
 }
@@ -816,6 +810,9 @@ ds_iv_ns_leader_stop(struct ds_iv_ns *ns)
 void
 ds_iv_ns_stop(struct ds_iv_ns *ns)
 {
+	struct ds_iv_entry *entry;
+	struct ds_iv_entry *tmp;
+
 	ns->iv_stop = 1;
 	ds_iv_ns_put(ns);
 	if (ns->iv_refcount > 1) {
@@ -827,6 +824,11 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 		D_ASSERT(rc == ABT_SUCCESS);
 		D_DEBUG(DB_MGMT, DF_UUID" ns stopped\n",
 			DP_UUID(ns->iv_pool_uuid));
+	}
+
+	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
+		d_list_del(&entry->iv_link);
+		iv_entry_free(entry);
 	}
 }
 

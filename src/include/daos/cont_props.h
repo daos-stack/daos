@@ -9,6 +9,26 @@
 
 #include <daos_prop.h>
 
+/** DAOS container property entry names used to set properties using the daos tool */
+#define DAOS_PROP_ENTRY_LABEL		"label"
+#define DAOS_PROP_ENTRY_CKSUM		"cksum"
+#define DAOS_PROP_ENTRY_CKSUM_SIZE	"cksum_size"
+#define DAOS_PROP_ENTRY_SRV_CKSUM	"srv_cksum"
+#define DAOS_PROP_ENTRY_DEDUP		"dedup"
+#define DAOS_PROP_ENTRY_DEDUP_THRESHOLD	"dedup_threshold"
+#define DAOS_PROP_ENTRY_COMPRESS	"compression"
+#define DAOS_PROP_ENTRY_ENCRYPT		"encryption"
+#define DAOS_PROP_ENTRY_REDUN_FAC	"rf"
+#define DAOS_PROP_ENTRY_STATUS		"status"
+#define DAOS_PROP_ENTRY_EC_CELL_SZ	"ec_cell"
+#define DAOS_PROP_ENTRY_LAYOUT_TYPE	"layout_type"
+#define DAOS_PROP_ENTRY_LAYOUT_VER	"layout_version"
+#define DAOS_PROP_ENTRY_REDUN_LVL	"rf_lvl"
+#define DAOS_PROP_ENTRY_SNAPSHOT_MAX	"max_snapshot"
+#define DAOS_PROP_ENTRY_ALLOCED_OID	"alloc_oid"
+#define DAOS_PROP_ENTRY_OWNER		"owner"
+#define DAOS_PROP_ENTRY_GROUP		"group"
+
 struct cont_props {
 	uint32_t	 dcp_chunksize;
 	uint32_t	 dcp_dedup_size;
@@ -21,6 +41,7 @@ struct cont_props {
 	uint16_t	 dcp_csum_type;
 	uint16_t	 dcp_encrypt_type;
 	uint32_t	 dcp_redun_fac;
+	uint32_t	 dcp_ec_cell_sz;
 	uint32_t	 dcp_csum_enabled:1,
 			 dcp_srv_verify:1,
 			 dcp_dedup_enabled:1,
@@ -93,6 +114,9 @@ daos_cont_prop2redunlvl(daos_prop_t *props);
 
 int
 daos_cont_rf2allowedfailures(int rf);
+
+uint32_t
+daos_cont_prop2ec_cell_sz(daos_prop_t *props);
 
 /*
  * alloc'ed oid property

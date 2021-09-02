@@ -34,112 +34,10 @@ typedef struct {
 } daos_mgmt_pool_info_t;
 
 /**
- * Currently, the following methods are mostly for dmg and tests.
- */
-
-/**
- * Exclude a set of storage targets from a pool.
- *
- * \param uuid	[IN]	UUID of the pool
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param tgts	[IN]	Target to be excluded from the pool.
- *			Now can-only exclude one target per API calling. If
- *			tl_tgts = -1, it means it will exclude all targets
- *			on the rank.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NONEXIST	Pool is nonexistent
- */
-int
-daos_pool_tgt_exclude(const uuid_t uuid, const char *grp,
-		      struct d_tgt_list *tgts,
-		      daos_event_t *ev);
-
-/**
- * reintegrate a set of storage targets from a pool.
- *
- * \param uuid	[IN]	UUID of the pool
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param tgts	[IN]	Target array to be reintegrated from the pool.  If
- *			tl_tgts = -1, it means it will reintegrate all targets
- *			on the rank.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- */
-int
-daos_pool_reint_tgt(const uuid_t uuid, const char *grp,
-		    struct d_tgt_list *tgts,
-		    daos_event_t *ev);
-
-/**
- * drain a set of storage targets from a pool.
- *
- * \param uuid	[IN]	UUID of the pool
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param tgts	[IN]	Target array to be added from the pool.  If
- *			tl_tgts = -1, it means it will add all targets
- *			on the rank.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- */
-int
-daos_pool_drain_tgt(const uuid_t uuid, const char *grp,
-		    struct d_tgt_list *tgts,
-		    daos_event_t *ev);
-
-
-/**
- * Exclude completely a set of storage targets from a pool. Compared with
- * daos_pool_tgt_exclude(), this API will mark the targets to be DOWNOUT, i.e.
- * the rebuilding for this target is done, while daos_pool_tgt_exclude() only
- * mark the target to be DOWN, i.e. the rebuilding might not finished yet.
- *
- * \param uuid	[IN]	UUID of the pool
- * \param grp	[IN]	process set name of the DAOS servers managing the pool
- * \param tgts	[IN]	Target array to be excluded from the pool.
- *			Now can-only exclude out one target per API calling. If
- *			tl_tgts = -1, it means it will exclude out all targets
- *			on the rank.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
- *			The function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		Success
- *			-DER_INVAL	Invalid parameter
- *			-DER_UNREACH	Network is unreachable
- *			-DER_NO_PERM	Permission denied
- */
-int
-daos_pool_tgt_exclude_out(const uuid_t uuid, const char *grp,
-			  struct d_tgt_list *tgts,
-			  daos_event_t *ev);
-
-/**
  * Stop the current pool service leader.
  *
- * \param poh	[IN]	Pool connection handle
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in] poh	Pool connection handle
+ * \param[in] ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -168,15 +66,15 @@ enum {
 /**
  * Set parameter on servers.
  *
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
- * \param key_id [IN]	key ID of the parameter.
- * \param value [IN]	value of the parameter.
- * \param value_extra [IN]
+ * \param[in] grp	Process set name of the DAOS servers managing the pool
+ * \param[in] rank	Ranks to set parameter. -1 means setting on all servers.
+ * \param[in] key_id	key ID of the parameter.
+ * \param[in] value	value of the parameter.
+ * \param[in] value_extra
  *			optional extra value to set the fail value when
  *			\a key_id is DMG_CMD_FAIL_LOC and \a value is in
  *			DAOS_FAIL_VALUE mode.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in] ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -186,7 +84,7 @@ daos_debug_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 /**
  * Add mark to servers.
  *
- * \param mark	[IN]	mark to add to the debug log.
+ * \param[in] mark	mark to add to the debug log.
  */
 int
 daos_debug_add_mark(const char *mark);
@@ -195,12 +93,12 @@ daos_debug_add_mark(const char *mark);
  * Query internal blobstore state for given blobstore uuid in the specified
  * DAOS system.
  *
- * \param group		  [IN]	Name of DAOS system managing the service.
- * \param blobstore_uuid  [IN]	UUID of the blobstore to query.
- * \param blobstore_state [OUT] Will return an enum integer that will
+ * \param[in] group		Name of DAOS system managing the service.
+ * \param[in] blobstore_uuid	UUID of the blobstore to query.
+ * \param[out] blobstore_state	Will return an enum integer that will
  *				later be converted to a blobstore state:
  *				SETUP, NORMAL, FAULTY, TEARDOWN, or OUT
- * \param ev		  [IN]  Completion event. Optional and can be NULL.
+ * \param[in] ev		Completion event. Optional and can be NULL.
  *				The function will run in blocking mode
  *				if \a ev is NULL.
  *
@@ -210,7 +108,6 @@ daos_debug_add_mark(const char *mark);
 int
 daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 		       int *blobstore_state, daos_event_t *ev);
-
 
 #if defined(__cplusplus)
 }

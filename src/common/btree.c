@@ -477,6 +477,12 @@ static int
 btr_rec_alloc(struct btr_context *tcx, d_iov_t *key, d_iov_t *val,
 	       struct btr_record *rec)
 {
+	if (btr_is_direct_key(tcx) && (key->iov_len > EMBEDDED_KEY_MAX)) {
+		D_ERROR("Key size (%zd) > Anchor size (%u)\n",
+			key->iov_len, EMBEDDED_KEY_MAX);
+		return -DER_KEY2BIG;
+	}
+
 	return btr_ops(tcx)->to_rec_alloc(&tcx->tc_tins, key, val, rec);
 }
 
@@ -720,7 +726,7 @@ static int
 btr_root_free(struct btr_context *tcx)
 {
 	struct btr_instance	*tins = &tcx->tc_tins;
-	int			 rc = 0;
+	int			 rc;
 
 	if (UMOFF_IS_NULL(tins->ti_root_off)) {
 		struct btr_root *root = tins->ti_root;
@@ -729,8 +735,14 @@ btr_root_free(struct btr_context *tcx)
 			return 0;
 
 		D_DEBUG(DB_TRACE, "Destroy inplace created tree root\n");
-		if (btr_has_tx(tcx))
-			btr_root_tx_add(tcx);
+		if (btr_has_tx(tcx)) {
+			rc = btr_root_tx_add(tcx);
+			if (rc != 0) {
+				D_ERROR("Failed to add root into TX: %s\n",
+					strerror(errno));
+				return rc;
+			}
+		}
 
 		memset(root, 0, sizeof(*root));
 	} else {
@@ -796,7 +808,7 @@ static int
 btr_root_tx_add(struct btr_context *tcx)
 {
 	struct btr_instance	*tins = &tcx->tc_tins;
-	int			 rc = 0;
+	int			 rc;
 
 	if (!UMOFF_IS_NULL(tins->ti_root_off)) {
 		rc = umem_tx_add(btr_umm(tcx), tcx->tc_tins.ti_root_off,
@@ -839,8 +851,14 @@ btr_root_start(struct btr_context *tcx, struct btr_record *rec)
 	rec_dst = btr_node_rec_at(tcx, nd_off, 0);
 	btr_rec_copy(tcx, rec_dst, rec, 1);
 
-	if (btr_has_tx(tcx))
-		btr_root_tx_add(tcx); /* XXX check error */
+	if (btr_has_tx(tcx)) {
+		rc = btr_root_tx_add(tcx);
+		if (rc != 0) {
+			D_ERROR("Failed to add root into TX: %s\n",
+				strerror(errno));
+			return rc;
+		}
+	}
 
 	root->tr_node = nd_off;
 	root->tr_depth = 1;
@@ -895,8 +913,14 @@ btr_root_grow(struct btr_context *tcx, umem_off_t off_left,
 	at = !btr_node_is_equal(tcx, off_left, tcx->tc_trace->tr_node);
 
 	/* replace the root offset, increase tree level */
-	if (btr_has_tx(tcx))
-		btr_root_tx_add(tcx); /* XXX check error */
+	if (btr_has_tx(tcx)) {
+		rc = btr_root_tx_add(tcx); /* XXX check error */
+		if (rc != 0) {
+			D_ERROR("Failed to add root into TX: %s\n",
+				strerror(errno));
+			return rc;
+		}
+	}
 
 	root->tr_node = nd_off;
 	root->tr_depth++;
@@ -1330,8 +1354,6 @@ btr_probe(struct btr_context *tcx, dbtree_probe_opc_t probe_opc,
 	bool			 next_level;
 	struct btr_node		*nd;
 	struct btr_check_alb	 alb;
-	struct btr_trace	 traces[BTR_TRACE_MAX];
-	struct btr_trace	*trace = NULL;
 	umem_off_t		 nd_off;
 
 	if (!btr_probe_valid(probe_opc)) {
@@ -1519,13 +1541,7 @@ again:
 				saved = at + 1;
 		}
 
-		/* backup the probe trace because probe_next will change it */
-		if (trace == NULL)
-			memcpy(traces, tcx->tc_trace,
-			       sizeof(*trace) * tcx->tc_depth);
-
 		if (btr_probe_next(tcx)) {
-			trace = traces;
 			cmp = BTR_CMP_UNKNOWN;
 			break;
 		}
@@ -2246,6 +2262,17 @@ btr_node_del_leaf(struct btr_context *tcx,
 		if (rc != 0)
 			return rc;
 
+		if (tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL) {
+			struct btr_node	*nd;
+
+			nd = btr_off2ptr(tcx, cur_tr->tr_node);
+			/* Current leaf node become empty,
+			 * will be removed from parent node.
+			 */
+			if (nd->tn_keyn == 0)
+				return 0;
+		}
+
 		return 1;
 	}
 
@@ -2565,12 +2592,12 @@ btr_node_del_rec(struct btr_context *tcx, struct btr_trace *par_tr,
 		is_leaf ? "record" : "child", is_leaf ? "leaf" : "non-leaf",
 		cur_nd->tn_keyn);
 
-	if (cur_nd->tn_keyn > 1) {
+	if (cur_nd->tn_keyn > 1 ||
+	    (is_leaf && tcx->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)) {
 		/* OK to delete record without doing any extra work */
 		D_DEBUG(DB_TRACE, "Straight away deletion, no rebalance.\n");
 		sib_off	= BTR_NODE_NULL;
-		sib_on_right	= false; /* whatever... */
-
+		sib_on_right = false; /* whatever... */
 	} else { /* needs to rebalance or merge nodes */
 		D_DEBUG(DB_TRACE, "Parent trace at=%d, key_nr=%d\n",
 			par_tr->tr_at, par_nd->tn_keyn);
@@ -3270,6 +3297,7 @@ btr_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
 {
 	struct btr_root *root;
 	bool		 empty = true;
+	int		 rc = 0;
 
 	D_DEBUG(DB_TRACE, "Destroy "DF_X64", order %d\n",
 		tcx->tc_tins.ti_root_off, tcx->tc_order);
@@ -3277,13 +3305,13 @@ btr_tree_destroy(struct btr_context *tcx, void *args, bool *destroyed)
 	root = tcx->tc_tins.ti_root;
 	if (root && !UMOFF_IS_NULL(root->tr_node)) {
 		/* destroy the root and all descendants */
-		btr_node_destroy(tcx, root->tr_node, args, &empty);
+		rc = btr_node_destroy(tcx, root->tr_node, args, &empty);
 	}
 	*destroyed = empty;
-	if (empty)
-		btr_root_free(tcx);
+	if (!rc && empty)
+		rc = btr_root_free(tcx);
 
-	return 0;
+	return rc;
 }
 
 static int
@@ -3836,6 +3864,9 @@ btr_class_init(umem_off_t root_off, struct btr_root *root,
 
 	if (tc->tc_feats & BTR_FEAT_DYNAMIC_ROOT)
 		*tree_feats |= BTR_FEAT_DYNAMIC_ROOT;
+
+	if (tc->tc_feats & BTR_FEAT_SKIP_LEAF_REBAL)
+		*tree_feats |= BTR_FEAT_SKIP_LEAF_REBAL;
 
 	if ((*tree_feats & tc->tc_feats) != *tree_feats) {
 		D_ERROR("Unsupported features "DF_X64"/"DF_X64"\n",

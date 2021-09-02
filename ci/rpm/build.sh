@@ -10,7 +10,7 @@
 # Default is to build for CentOS 7.
 # Fault injection will be enabled by default in CI unless a pragma has
 # has disabled fault injection or this is a Release build
-set -ex
+set -uex
 
 mydir="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 ci_envs="$mydir/../parse_ci_envs.sh"
@@ -19,11 +19,13 @@ if [ -e "${ci_envs}" ]; then
   source "${ci_envs}"
 fi
 
+: "${SCONS_FAULTS_ARGS:=BUILD_TYPE=dev}"
 SCONS_ARGS="${SCONS_FAULTS_ARGS}"
 
 : "${CHROOT_NAME:='epel-7-x86_64'}"
 : "${TARGET:='centos7'}"
 
+: "${COVFN_DISABLED:=true}"
 if $COVFN_DISABLED; then
   JOB_REPOS=""
   EXTERNAL_COMPILER_OPT=""

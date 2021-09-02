@@ -191,7 +191,7 @@ ih_free(struct d_hash_table *htable, d_list_t *rlink)
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
-	DFUSE_TRA_DEBUG(ie, "parent %lu", ie->ie_parent);
+	DFUSE_TRA_DEBUG(ie, "parent %#lx", ie->ie_parent);
 	dfuse_ie_close(fs_handle, ie);
 }
 
@@ -381,6 +381,78 @@ d_hash_table_ops_t cont_hops = {
 	.hop_rec_free		= ch_free,
 };
 
+/* Return a pool connection by label.
+ *
+ * Only used for command line parsing, so does not check for existing pools
+ *
+ * Return code is a system errno.
+ */
+int
+dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
+			const char *label,
+			struct dfuse_pool **_dfp)
+{
+	struct dfuse_pool	*dfp;
+	daos_pool_info_t        p_info = {};
+	d_list_t		*rlink;
+	int			rc;
+
+	D_ALLOC_PTR(dfp);
+	if (dfp == NULL)
+		D_GOTO(err, rc = ENOMEM);
+
+	atomic_store_relaxed(&dfp->dfp_ref, 1);
+
+	DFUSE_TRA_UP(dfp, fs_handle, "dfp");
+
+	rc = daos_pool_connect(label, fs_handle->dpi_info->di_group,
+			       DAOS_PC_RW, &dfp->dfp_poh, &p_info, NULL);
+	if (rc) {
+		if (rc == -DER_NO_PERM)
+			DFUSE_TRA_INFO(dfp,
+				"daos_pool_connect() failed, "
+				DF_RC, DP_RC(rc));
+		else
+			DFUSE_TRA_ERROR(dfp,
+					"daos_pool_connect() failed, "
+					DF_RC, DP_RC(rc));
+		D_GOTO(err_free, rc = daos_der2errno(rc));
+	}
+
+	uuid_copy(dfp->dfp_pool, p_info.pi_uuid);
+
+	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
+					 3, fs_handle, &cont_hops,
+					 &dfp->dfp_cont_table);
+	if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(dfp, "Failed to create hash table: "DF_RC,
+				DP_RC(rc));
+		D_GOTO(err_disconnect, rc = daos_der2errno(rc));
+	}
+
+	rlink = d_hash_rec_find_insert(&fs_handle->dpi_pool_table,
+				       &dfp->dfp_pool, sizeof(dfp->dfp_pool),
+				       &dfp->dfp_entry);
+
+	if (rlink != &dfp->dfp_entry) {
+		DFUSE_TRA_DEBUG(dfp, "Found existing pool, reusing");
+		_ph_free(dfp);
+		dfp = container_of(rlink, struct dfuse_pool, dfp_entry);
+	}
+
+	DFUSE_TRA_DEBUG(dfp, "Returning dfp for "DF_UUID,
+			DP_UUID(dfp->dfp_pool));
+
+	*_dfp = dfp;
+	return rc;
+err_disconnect:
+	daos_pool_disconnect(dfp->dfp_poh, NULL);
+err_free:
+	D_FREE(dfp);
+err:
+	return rc;
+}
+
 /* Return a pool connection by uuid.
  *
  * Re-use an existing connection if possible, otherwise open new connection.
@@ -390,8 +462,8 @@ d_hash_table_ops_t cont_hops = {
  * Return code is a system errno.
  */
 int
-dfuse_pool_open(struct dfuse_projection_info *fs_handle, uuid_t *pool,
-		struct dfuse_pool **_dfp)
+dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
+		   struct dfuse_pool **_dfp)
 {
 	struct dfuse_pool	*dfp;
 	d_list_t		*rlink;
@@ -532,6 +604,16 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 		}
 		have_attr = true;
 
+		/* Ensure the character after the fetched string is zero in case
+		 * of non-null terminated strings.  size always refers to the
+		 * number of non-null characters in this case, regardless of if
+		 * the attribute is null terminated or not.
+		 */
+		if (buff[size - 1] == '\0')
+			size--;
+		else
+			buff[size] = '\0';
+
 		if (i == ATTR_DATA_CACHE_INDEX) {
 			if (strncmp(buff, "on", size) == 0) {
 				dfc->dfc_data_caching = true;
@@ -560,11 +642,6 @@ dfuse_cont_get_cache(struct dfuse_cont *dfc)
 			}
 			continue;
 		}
-
-		/* Ensure the character after the fetch string is zero, in case
-		 * of non-null terminated strings.
-		 */
-		buff[size] = '\0';
 
 		rc = dfuse_parse_time(buff, size, &value);
 		if (rc != 0) {
@@ -621,7 +698,7 @@ out:
  * dentries which represent directories and are therefore referenced much
  * more often during path-walk activities are set to five seconds.
  */
-static void
+void
 dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 {
 	dfc->dfc_attr_timeout = 1;
@@ -630,6 +707,83 @@ dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc)
 	dfc->dfc_ndentry_timeout = 1;
 	dfc->dfc_data_caching = true;
 	dfc->dfc_direct_io_disable = false;
+}
+
+/* Open a cont by label.
+ *
+ * Only used for command line labels, not for paths in dfuse.
+ */
+int
+dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
+			struct dfuse_pool *dfp,
+			const char *label,
+			struct dfuse_cont **_dfc)
+{
+	struct dfuse_cont *dfc;
+	daos_cont_info_t c_info = {};
+	int rc;
+
+	D_ALLOC_PTR(dfc);
+	if (dfc == NULL)
+		D_GOTO(err_free, rc = ENOMEM);
+
+	DFUSE_TRA_UP(dfc, dfp, "dfc");
+
+	rc = daos_cont_open(dfp->dfp_poh, label, DAOS_COO_RW, &dfc->dfs_coh,
+			    &c_info, NULL);
+	if (rc == -DER_NONEXIST) {
+		DFUSE_TRA_INFO(dfc,
+			"daos_cont_open() failed: "
+			DF_RC, DP_RC(rc));
+		D_GOTO(err_free, rc = daos_der2errno(rc));
+	} else if (rc != -DER_SUCCESS) {
+		DFUSE_TRA_ERROR(dfc,
+				"daos_cont_open() failed: "
+				DF_RC, DP_RC(rc));
+		D_GOTO(err_free, rc = daos_der2errno(rc));
+	}
+
+	uuid_copy(dfc->dfs_cont, c_info.ci_uuid);
+
+	rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR, &dfc->dfs_ns);
+	if (rc) {
+		DFUSE_TRA_ERROR(dfc,
+				"dfs_mount() failed: (%s)",
+				strerror(rc));
+		D_GOTO(err_close, rc);
+	}
+
+	if (fs_handle->dpi_info->di_caching) {
+		rc = dfuse_cont_get_cache(dfc);
+		if (rc == ENODATA) {
+			/* If there is no container specific
+			 * attributes then use defaults
+			 */
+			DFUSE_TRA_INFO(dfc,
+				"Using default caching values");
+			dfuse_set_default_cont_cache_values(dfc);
+			rc = 0;
+		} else if (rc != 0) {
+			D_GOTO(err_close, rc);
+		}
+	} else {
+		DFUSE_TRA_INFO(dfc,
+			"Caching disabled");
+	}
+
+	rc = dfuse_cont_open(fs_handle, dfp, &c_info.ci_uuid, &dfc);
+	if (rc) {
+		D_FREE(dfc);
+		return rc;
+	}
+	*_dfc = dfc;
+	return 0;
+
+err_close:
+	daos_cont_close(dfc->dfs_coh, NULL);
+err_free:
+	D_FREE(dfc);
+	return rc;
 }
 
 /*
@@ -672,13 +826,13 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		D_ALLOC_PTR(dfc);
 		if (!dfc)
 			D_GOTO(err, rc = ENOMEM);
+
+		DFUSE_TRA_UP(dfc, dfp, "dfc");
 	}
 
 	/* No existing container found, so setup dfs and connect to one */
 
 	atomic_store_relaxed(&dfc->dfs_ref, 1);
-
-	DFUSE_TRA_UP(dfc, dfp, "dfc");
 
 	DFUSE_TRA_DEBUG(dfp, "New cont "DF_UUIDF" in pool "DF_UUIDF,
 			DP_UUID(cont), DP_UUID(dfp->dfp_pool));
@@ -696,57 +850,55 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		dfc->dfc_dentry_dir_timeout = 5;
 		dfc->dfc_ndentry_timeout = 5;
 
-	} else {
+	} else if (*_dfc == NULL) {
 		dfc->dfs_ops = &dfuse_dfs_ops;
-
 		uuid_copy(dfc->dfs_cont, *cont);
+		rc = daos_cont_open(dfp->dfp_poh, dfc->dfs_cont,
+				    DAOS_COO_RW, &dfc->dfs_coh,
+				    NULL, NULL);
+		if (rc == -DER_NONEXIST) {
+			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: "DF_RC,
+				       DP_RC(rc));
+			D_GOTO(err_free, rc = daos_der2errno(rc));
+		} else if (rc != -DER_SUCCESS) {
+			DFUSE_TRA_ERROR(dfc, "daos_cont_open() failed: "
+					DF_RC, DP_RC(rc));
+			D_GOTO(err_free, rc = daos_der2errno(rc));
+		}
 
-		if (*_dfc == NULL) {
-			rc = daos_cont_open(dfp->dfp_poh, dfc->dfs_cont,
-					    DAOS_COO_RW, &dfc->dfs_coh,
-					    NULL, NULL);
-			if (rc == -DER_NONEXIST) {
+		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR,
+			       &dfc->dfs_ns);
+		if (rc) {
+			DFUSE_TRA_ERROR(dfc,
+					"dfs_mount() failed: (%s)",
+					strerror(rc));
+			D_GOTO(err_close, rc);
+		}
+
+		if (fs_handle->dpi_info->di_caching) {
+			rc = dfuse_cont_get_cache(dfc);
+			if (rc == ENODATA) {
+				/* If there is no container specific
+				 * attributes then use defaults
+				 */
 				DFUSE_TRA_INFO(dfc,
-					       "daos_cont_open() failed: "
-					       DF_RC, DP_RC(rc));
-				D_GOTO(err_free, rc = daos_der2errno(rc));
-			} else if (rc != -DER_SUCCESS) {
-				DFUSE_TRA_ERROR(dfc,
-						"daos_cont_open() failed: "
-						DF_RC, DP_RC(rc));
-				D_GOTO(err_free, rc = daos_der2errno(rc));
-			}
-
-			rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh,
-				       O_RDWR, &dfc->dfs_ns);
-			if (rc) {
-				DFUSE_TRA_ERROR(dfc,
-						"dfs_mount() failed: (%s)",
-						strerror(rc));
+					"Using default caching values");
+				dfuse_set_default_cont_cache_values(dfc);
+				rc = 0;
+			} else if (rc != 0) {
 				D_GOTO(err_close, rc);
 			}
-
-			if (fs_handle->dpi_info->di_caching) {
-				rc = dfuse_cont_get_cache(dfc);
-				if (rc == ENODATA) {
-					/* If there is no container specific
-					 * attributes then use defaults
-					 */
-					DFUSE_TRA_INFO(dfc,
-						       "Using default caching values");
-					dfuse_set_default_cont_cache_values(dfc);
-					rc = 0;
-				} else if (rc != 0) {
-					D_GOTO(err_close, rc);
-				}
-			} else {
-				DFUSE_TRA_INFO(dfc,
-					"Caching disabled");
-			}
 		} else {
-			/* Set attributes for containers created via mkdir */
-			dfuse_set_default_cont_cache_values(dfc);
+			DFUSE_TRA_INFO(dfc,
+				"Caching disabled");
 		}
+	} else {
+		/* This is either a container where a label is set on the
+		 * command line, or one created through mkdir, in either case
+		 * the container will be mounted, and caching etc already
+		 * setup.
+		 */
+		dfc->dfs_ops = &dfuse_dfs_ops;
 	}
 
 	dfc->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
@@ -800,12 +952,6 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 	DFUSE_TRA_UP(fs_handle, dfuse_info, "fs_handle");
 
 	fs_handle->dpi_info = dfuse_info;
-
-	/* Max read and max write are handled differently because of the way
-	 * the interception library handles reads vs writes
-	 */
-	fs_handle->dpi_max_read = 1024 * 1024 * 4;
-	fs_handle->dpi_max_write = 1024 * 1024;
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
 					 3, fs_handle, &pool_hops,
@@ -888,7 +1034,7 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	struct dfuse_inode_entry	*ie = NULL;
 	int				rc;
 
-	args.argc = 5;
+	args.argc = 4;
 
 	/* These allocations are freed later by libfuse so do not use the
 	 * standard allocation macros
@@ -898,24 +1044,20 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	if (!args.argv)
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	args.argv[0] = strndup("", 1);
+	args.argv[0] = strdup("");
 	if (!args.argv[0])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	args.argv[1] = strndup("-ofsname=dfuse", 32);
+	args.argv[1] = strdup("-ofsname=dfuse");
 	if (!args.argv[1])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	args.argv[2] = strndup("-osubtype=daos", 32);
+	args.argv[2] = strdup("-osubtype=daos");
 	if (!args.argv[2])
 		D_GOTO(err, rc = -DER_NOMEM);
 
-	rc = asprintf(&args.argv[3], "-omax_read=%u", fs_handle->dpi_max_read);
-	if (rc < 0 || !args.argv[3])
-		D_GOTO(err, rc = -DER_NOMEM);
-
-	args.argv[4] = strndup("-odefault_permissions", 32);
-	if (!args.argv[4])
+	args.argv[3] = strdup("-odefault_permissions");
+	if (!args.argv[3])
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	fuse_ops = dfuse_get_fuse_ops();
@@ -967,19 +1109,21 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
-	if (!dfuse_launch_fuse(fs_handle, fuse_ops, &args)) {
-		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
-		D_GOTO(err_ie_remove, rc = -DER_INVAL);
-	}
-
+	rc = dfuse_launch_fuse(fs_handle, fuse_ops, &args);
 	D_FREE(fuse_ops);
+	if (!rc) {
+		(void)dfuse_fs_fini(fs_handle);
+		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
+		return -DER_INVAL;
+	}
 
 	return -DER_SUCCESS;
 
 err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
 err:
-	DFUSE_TRA_ERROR(fs_handle, "Failed to start dfuse, rc: %d", rc);
+	DFUSE_TRA_ERROR(fs_handle,
+			"Failed to start dfuse, rc: "DF_RC, DP_RC(rc));
 	D_FREE(fuse_ops);
 	D_FREE(ie);
 	return rc;

@@ -810,7 +810,7 @@ uri_lookup_cb(const struct crt_cb_info *cb_info)
 	char *fill_uri = NULL;
 
 	if (ul_in->ul_tag != ul_out->ul_tag) {
-		if (crt_provider_is_contig_ep(ctx->cc_provider) == false) {
+		if (!crt_provider_is_contig_ep(ctx->cc_hg_ctx.chc_provider)) {
 			rc = crt_issue_uri_lookup(lookup_rpc->cr_ctx,
 						  lookup_rpc->cr_ep.ep_grp,
 						  ul_in->ul_rank, 0,
@@ -1216,6 +1216,9 @@ finish_rpc:
 	if (rc != 0) {
 		crt_context_req_untrack(rpc_priv);
 		crt_rpc_complete(rpc_priv, rc);
+
+		/* Do not propagate error further as we've completed the rpc */
+		rc = DER_SUCCESS;
 	}
 
 out:
@@ -1580,6 +1583,7 @@ crt_rpc_priv_init(struct crt_rpc_priv *rpc_priv, crt_context_t crt_ctx,
 	D_INIT_LIST_HEAD(&rpc_priv->crp_parent_link);
 	rpc_priv->crp_complete_cb = NULL;
 	rpc_priv->crp_arg = NULL;
+	rpc_priv->crp_completed = 0;
 	if (!srv_flag) {
 		/* avoid checksum warning */
 		crt_common_hdr_init(rpc_priv, opc);

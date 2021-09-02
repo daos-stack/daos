@@ -15,6 +15,7 @@ timeout: 1000
 timeouts:
   test_daos_dfs_unit: 1000
   test_daos_dfs_parallel: 200
+  test_daos_dfs_sys: 60
 pool:
   scm_size: 8G
 server_config:
@@ -51,9 +52,12 @@ daos_tests:
   test_name:
     test_daos_dfs_unit: DAOS_DFS_Unit
     test_daos_dfs_parallel: DAOS_DFS_Parallel
+    test_daos_dfs_sys: DAOS_DFS_Sys
   daos_test:
     test_daos_dfs_unit: u
     test_daos_dfs_parallel: p
+    test_daos_dfs_sys: s
   num_clients:
     test_daos_dfs_unit: 1
     test_daos_dfs_parallel: 32
+    test_daos_dfs_sys: 1

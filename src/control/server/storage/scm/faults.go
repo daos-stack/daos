@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
 //
+
 package scm
 
 import (
@@ -98,6 +99,8 @@ var (
 		"adjust or relax the filters and try again")
 )
 
+// FaultIpmctlBadVersion represents an error where an incompatible version of
+// ipmctl is installed.
 func FaultIpmctlBadVersion(version string) *fault.Fault {
 	return scmFault(
 		code.BadVersionSoftwareDependency,
@@ -113,6 +116,16 @@ func FaultFormatMissingDevice(device string) *fault.Fault {
 		code.ScmFormatMissingDevice,
 		fmt.Sprintf("configured SCM device %s does not exist", device),
 		"check the configured value and/or perform the SCM preparation procedure",
+	)
+}
+
+// FaultPathAccessDenied represents an error where a mount point or device path for
+// a SCM storage target is inaccessible because of a permissions issue.
+func FaultPathAccessDenied(path string) *fault.Fault {
+	return scmFault(
+		code.ScmPathAccessDenied,
+		fmt.Sprintf("path %q has incompatible access permissions", path),
+		"verify the path is accessible by the user running daos_server and try again",
 	)
 }
 

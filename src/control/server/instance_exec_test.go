@@ -68,7 +68,7 @@ func TestIOEngineInstance_exit(t *testing.T) {
 
 			runner := engine.NewTestRunner(tc.trc, &engine.Config{})
 
-			engine := NewEngineInstance(log, nil, nil, nil, runner)
+			engine := NewEngineInstance(log, nil, nil, runner)
 			engine.setIndex(tc.instanceIdx)
 
 			if tc.rankInSuperblock {
@@ -80,8 +80,8 @@ func TestIOEngineInstance_exit(t *testing.T) {
 				tc.expExPid = uint64(os.Getpid())
 			}
 
-			engine.OnInstanceExit(publishInstanceExitFn(fakePublish,
-				hostname()))
+			hn, _ := os.Hostname()
+			engine.OnInstanceExit(publishInstanceExitFn(fakePublish, hn))
 
 			engine.exit(context.Background(), exitErr)
 

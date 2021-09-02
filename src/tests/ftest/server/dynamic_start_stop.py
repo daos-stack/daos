@@ -34,7 +34,7 @@ class DynamicStartStop(TestWithServers):
         for member in output["response"]["members"]:
             if member["rank"] in self.stopped_ranks:
                 self.assertIn(
-                    member["state"], ["stopped", "evicted"],
+                    member["state"], ["stopped", "excluded"],
                     "State isn't stopped! Actual: {}".format(member["state"]))
                 self.assertEqual(
                     member["info"], "system stop",
@@ -57,7 +57,7 @@ class DynamicStartStop(TestWithServers):
 
         # Mark which ranks are now stopped
         for manager in self.server_managers:
-            manager.update_expected_states(ranks, ["stopped", "evicted"])
+            manager.update_expected_states(ranks, ["stopped", "excluded"])
         for rank in ranks:
             self.stopped_ranks.add(rank)
 

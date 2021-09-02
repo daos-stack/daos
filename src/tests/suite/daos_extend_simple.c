@@ -45,7 +45,7 @@ extend_dkeys(void **state)
 		print_message("Insert %d kv record in object "DF_OID"\n",
 			      KEY_NR, DP_OID(oids[i]));
 		for (j = 0; j < KEY_NR; j++) {
-			char	key[16];
+			char	key[32] = {0};
 
 			sprintf(key, "dkey_0_%d", j);
 			insert_single(key, "a_key", 0, "data",
@@ -126,7 +126,7 @@ extend_indexes(void **state)
 			      KEY_NR, DP_OID(oids[i]));
 
 		for (j = 0; j < KEY_NR; j++) {
-			char	key[16];
+			char	key[32] = {0};
 
 			sprintf(key, "dkey_2_%d", j);
 			for (k = 0; k < 20; k++)
@@ -168,7 +168,7 @@ extend_large_rec(void **state)
 		print_message("Insert %d kv record in object "DF_OID"\n",
 			      KEY_NR, DP_OID(oids[i]));
 		for (j = 0; j < KEY_NR; j++) {
-			char	key[16];
+			char	key[32] = {0};
 
 			sprintf(key, "dkey_3_%d", j);
 			insert_single(key, "a_key", 0, buffer, 5000,

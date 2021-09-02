@@ -29,20 +29,24 @@ agent_config:
 dmg:
   transport_config:
     allow_insecure: True
-pool:
-  createmode:
-    mode: 511
-  createset:
-    group: daos_server
-  createsize:
-    scm_size: 4000000000
-    size:
-      - 20000000000
-      - 100000000000
-      - 800000000000
-  createsvc:
-    svcn: 1
+pool_1:
   control_method: dmg
+  name: daos_server
+  scm_size: 4000000000
+  nvme_size: 20000000000
+  svcn: 1
+pool_2:
+  control_method: dmg
+  name: daos_server
+  scm_size: 4000000000
+  nvme_size: 100000000000
+  svcn: 1
+pool_3:
+  control_method: dmg
+  name: daos_server
+  scm_size: 4000000000
+  nvme_size: 800000000000
+  svcn: 1
 container:
   object_qty: 10
   record_size:

@@ -166,7 +166,7 @@ example_daos_key_array()
 	daos_obj_id_t	oid;
 	d_iov_t		dkey;
 	int		total_nr = 0;
-	char		dkey_str[10];
+	char		dkey_str[32] = {0};
 	int		i, rc;
 
 	if (rank == 0)
@@ -327,8 +327,8 @@ example_daos_key_sv()
 	daos_obj_id_t	oid;
 	d_iov_t		dkey;
 	int		total_nr = 0;
-	char		dkey_str[10];
-	char		akey_str[10];
+	char		dkey_str[32] = {0};
+	char		akey_str[32] = {0};
 	int		i, rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -486,7 +486,7 @@ example_daos_array()
 	 * daos_obj_generate_oid() that adds the required feature flags for an
 	 * array: DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT | DAOS_OF_ARRAY
 	 */
-	daos_array_generate_id(&oid, OC_SX, true, 0);
+	daos_array_generate_oid(coh, &oid, true, 0, 0, 0);
 
 	/*
 	 * Create the array object with cell size 1 (byte array) and 1m chunk
@@ -594,7 +594,7 @@ example_daos_kv()
 	daos_handle_t	oh;
 	char		buf[BUFLEN], rbuf[BUFLEN];
 	daos_obj_id_t	oid;
-	char		key[10];
+	char		key[32] = {0};
 	int		i, rc;
 
 	MPI_Barrier(MPI_COMM_WORLD);

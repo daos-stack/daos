@@ -9,7 +9,6 @@
 #include <daos/common.h>
 #include <daos/job.h>
 
-
 char *dc_jobid_env;
 char *dc_jobid;
 
@@ -42,8 +41,7 @@ dc_job_init(void)
 	int   err = 0;
 
 	if (jobid_env == NULL) {
-		D_STRNDUP(jobid_env, DEFAULT_JOBID_ENV,
-			  sizeof(DEFAULT_JOBID_ENV));
+		D_STRNDUP_S(jobid_env, DEFAULT_JOBID_ENV);
 	} else {
 		char *tmp_env = jobid_env;
 
@@ -75,7 +73,6 @@ dc_job_init(void)
 
 out_env:
 	D_FREE(dc_jobid_env);
-	dc_jobid_env = NULL;
 out_err:
 	return err;
 }

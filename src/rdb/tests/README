@@ -1,7 +1,3 @@
-The rdb_test_runner.py script is now out of date and will be
-removed at a future time when this rdbt test will be converted
-to an automated unit test.
-
 Manual execution instructions:
 
 From the command line the tests are run with:

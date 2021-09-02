@@ -4,15 +4,19 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from getpass import getuser
+# pylint: disable=too-many-lines
+
 from grp import getgrgid
 from pwd import getpwuid
 import re
-import json
 
+from command_utils_base import CommandFailure
 from dmg_utils_base import DmgCommandBase
 from general_utils import get_numeric_list
 from dmg_utils_params import DmgYamlParameters, DmgTransportCredentials
+
+class DmgJsonCommandFailure(CommandFailure):
+    """Exception raised when a dmg --json command fails."""
 
 
 def get_dmg_command(group, cert_dir, bin_dir, config_file, config_temp=None):
@@ -52,9 +56,6 @@ class DmgCommand(DmgCommandBase):
     METHOD_REGEX = {
         "run":
             r"(.*)",
-        "network_scan":
-            r"[-]+(?:\n|\n\r)([a-z0-9-]+)(?:\n|\n\r)[-]+|NUMA\s+"
-            r"Socket\s+(\d+)|(ofi\+[a-z0-9;_]+)\s+([a-z0-9, ]+)",
         "storage_query_list_pools":
             r"[-]+\s+([a-z0-9-]+)\s+[-]+|(?:UUID:([a-z0-9-]+)\s+Rank:([0-9]+)"
             r"\s+Targets:\[([0-9 ]+)\])(?:\s+Blobs:\[([0-9 ]+)\]\s+?$)",
@@ -80,127 +81,165 @@ class DmgCommand(DmgCommandBase):
             r"Targets:\[[0-9 ]+\]\s+Rank:\d+\s+State:(\w+))",
     }
 
-    def _get_json_result(self, sub_command_list=None, **kwargs):
-        """Wrap the base _get_result method to force JSON output."""
-        prev_json_val = self.json.value
-        self.json.update(True)
-        prev_output_check = self.output_check
-        self.output_check = "both"
-        try:
-            self._get_result(sub_command_list, **kwargs)
-        finally:
-            self.json.update(prev_json_val)
-            self.output_check = prev_output_check
-        return json.loads(self.result.stdout)
-
-    def network_scan(self, provider=None, all_devs=False):
+    def network_scan(self, provider=None):
         """Get the result of the dmg network scan command.
 
         Args:
             provider (str): name of network provider tied to the device
-            all_devs (bool, optional): Show all device info. Defaults to False.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage scan command fails.
+            CommandFailure: if the dmg network scan command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
 
         """
-        return self._get_result(
-            ("network", "scan"), provider=provider, all=all_devs)
+        # Sample json output for --provider=all. Output is abbreviated.
+        # {
+        #   "response": {
+        #     "host_errors": {},
+        #     "HostFabrics": {
+        #     "7046809990821404843": {
+        #         "HostFabric": {
+        #           "Interfaces": [
+        #             {
+        #               "Provider": "ofi+psm2",
+        #               "Device": "ib1",
+        #               "NumaNode": 1,
+        #               "Priority": 0,
+        #               "NetDevClass": 32
+        #             },
+        #             {
+        #               "Provider": "ofi+psm2",
+        #               "Device": "ib0",
+        #               "NumaNode": 0,
+        #               "Priority": 1,
+        #               "NetDevClass": 32
+        #             },
+        #             {
+        #               "Provider": "ofi+verbs;ofi_rxm",
+        #               "Device": "ib0",
+        #               "NumaNode": 0,
+        #               "Priority": 2,
+        #               "NetDevClass": 32
+        #             },
+        #             {
+        #               "Provider": "ofi+verbs;ofi_rxm",
+        #               "Device": "ib1",
+        #               "NumaNode": 1,
+        #               "Priority": 3,
+        #               "NetDevClass": 32
+        #             }
+        #           ],
+        #           "Providers": [
+        #             "ofi+psm2",
+        #             "ofi+verbs;ofi_rxm",
+        #             "ofi+tcp;ofi_rxm",
+        #             "ofi+verbs",
+        #             "ofi+tcp",
+        #             "ofi+sockets"
+        #           ],
+        #           "NumaCount": 2,
+        #           "CoresPerNuma": 24
+        #         },
+        #         "HostSet": "localhost:10001"
+        #       }
+        #     }
+        #   },
+        #   "error": null,
+        #   "status": 0
+        # }
+        return self._get_json_result(("network", "scan"), provider=provider)
 
     def storage_scan(self, verbose=False):
-        # pylint: disable=pointless-string-statement
         """Get the result of the dmg storage scan command.
 
         Args:
             verbose (bool, optional): create verbose output. Defaults to False.
 
-        Returns:
-            dict: Values obtained from stdout in dictionary. Most of the values
-                are in list.
-
         Raises:
             CommandFailure: if the dmg storage scan command fails.
 
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
         """
-        self._get_result(("storage", "scan"), verbose=verbose)
+        # Sample json output. --verbose and non-verbose combined. Output is
+        # abbreviated.
+        # {
+        #     "response": {
+        #         "host_errors": {},
+        #         "HostStorage": {
+        #         "5044895924483624073": {
+        #             "storage": {
+        #             "nvme_devices": [
+        #                 {
+        #                     "info": "",
+        #                     "model": "INTEL SSDPED1K750GA",
+        #                     "serial": "PHKS750500GU750BGN",
+        #                     "pci_addr": "0000:90:00.0",
+        #                     "fw_rev": "E2010435",
+        #                     "socket_id": 1,
+        #                     "health_stats": null,
+        #                     "namespaces": [
+        #                       {
+        #                         "id": 1 ,
+        #                         "size": 750156374016
+        #                       }
+        #                     ],
+        #                   "smd_devices": null
+        #                 },
+        #                 {
+        #                     "info": "",
+        #                     "model": "",
+        #                     "serial": "",
+        #                     "pci_addr": "0000:da:00.0",
+        #                     "fw_rev": "",
+        #                     "socket_id": 1,
+        #                     "health_stats": null,
+        #                     "namespaces": [
+        #                       {
+        #                         "id": 1,
+        #                         "size": 750156374016
+        #                       }
+        #                   ],
+        #                   "smd_devices": null
+        #                 }
+        #             ],
+        #             "scm_modules": null,
+        #             "scm_namespaces": [
+        #                 {
+        #                     "uuid": "2270f4a6-b24b-4dba-a450-6f2d5d688708",
+        #                     "blockdev": "pmem1",
+        #                     "dev": "namespace1.0",
+        #                     "numa_node": 1,
+        #                     "size": 3183575302144,
+        #                     "mount": null
+        #                 },
+        #                 {
+        #                     "uuid": "7963f81a-0a6b-4cca-9845-bb68f0e81c46",
+        #                     "blockdev": "pmem0",
+        #                     "dev": "namespace0.0",
+        #                     "numa_node": 0,
+        #                     "size": 3183575302144,
+        #                     "mount": null
+        #                 }
+        #             ],
+        #             "scm_mount_points": null,
+        #             "smd_info": null,
+        #             "reboot_required": false
+        #           },
+        #           "hosts": "localhost:10001"
+        #         }
+        #       }
+        #     },
+        #     "error": null,
+        #     "status": 0
+        # }
+        return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-        data = {}
-        if verbose:
-            # Sample dmg storage scan verbose output. Don't delete this sample
-            # because it helps to develop and debug the regex.
-            """
-            --------
-            wolf-130
-            --------
-            SCM Namespace Socket ID Capacity
-            ------------- --------- --------
-            pmem0         0         3.2 TB
-            pmem1         0         3.2 TB
-
-            NVMe PCI     Model                FW Revision Socket ID Capacity
-            --------     -----                ----------- --------- --------
-            0000:5e:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
-            0000:5f:00.0 INTEL SSDPE2KE016T8  VDV10170    0         1.6 TB
-            0000:81:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
-            0000:da:00.0 INTEL SSDPED1K750GA  E2010475    1         750 GB
-            """
-            match = re.findall(
-                r"(?:([a-zA-Z0-9]+-[0-9]+)|"
-                r"(?:([0-9a-fA-F:.]+)\s+([a-zA-Z0-9 ]+)\s+"
-                r"([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+))|"
-                r"(?:([a-zA-Z0-9]+)\s+(\d+)\s+([0-9\.]+\s+[A-Z]+)))",
-                self.result.stdout_text)
-            host = ""
-            for item in match:
-                if item[0]:
-                    host = item[0]
-                    data[host] = {"scm": {}, "nvme": {}}
-                elif item[1]:
-                    data[host]["nvme"][item[1]] = {
-                        "model": item[2],
-                        "fw": item[3],
-                        "socket": item[4],
-                        "capacity": item[5],
-                    }
-                elif item[6]:
-                    data[host]["scm"][item[6]] = {
-                        "socket": item[7],
-                        "capacity": item[8],
-                    }
-        else:
-            # Sample dmg storage scan non-verbose output. Don't delete this
-            # sample because it helps to develop and debug the regex.
-            """
-            Hosts    SCM Total             NVMe Total
-            -----    ---------             ----------
-            wolf-130 6.4 TB (2 namespaces) 4.7 TB (4 controllers)
-            """
-            values = re.findall(
-                r"([a-z0-9-\[\]]+)\s+([\d.]+)\s+([A-Z]+)\s+"
-                r"\(([\w\s]+)\)\s+([\d.]+)\s+([A-Z]+)\s+\(([\w\s]+)",
-                self.result.stdout_text)
-            self.log.info("--- Non-verbose output parse result ---")
-            self.log.info(values)
-
-            data = {}
-            for row in values:
-                host = row[0]
-                data[host] = {
-                    "scm": {"capacity": None, "details": None},
-                    "nvme": {"capacity": None, "details": None}}
-                data[host]["scm"]["capacity"] = " ".join(row[1:3])
-                data[host]["scm"]["details"] = row[3]
-                data[host]["nvme"]["capacity"] = " ".join(row[4:6])
-                data[host]["nvme"]["details"] = row[6]
-
-        self.log.info("storage_scan data: %s", str(data))
-        return data
-
-    def storage_format(self, reformat=False, timeout=30, verbose=False):
+    def storage_format(self, reformat=False, timeout=30, verbose=False,
+                       force=False):
         """Get the result of the dmg storage format command.
 
         Args:
@@ -212,6 +251,9 @@ class DmgCommand(DmgCommandBase):
                 times out.
             verbose (bool): show results of each SCM & NVMe device format
                 operation.
+            force (bool, optional): force storage format on a host, stopping any
+                running engines (CAUTION: destructive operation). Defaults to
+                False.
 
         Returns:
             CmdResult: an avocado CmdResult object containing the dmg command
@@ -224,31 +266,10 @@ class DmgCommand(DmgCommandBase):
         saved_timeout = self.timeout
         self.timeout = timeout
         self._get_result(
-            ("storage", "format"), reformat=reformat, verbose=verbose)
+            ("storage", "format"), reformat=reformat, verbose=verbose,
+            force=force)
         self.timeout = saved_timeout
         return self.result
-
-    def storage_prepare(self, user=None, hugepages="4096", nvme=False,
-                        scm=False, reset=False, force=True):
-        """Get the result of the dmg storage format command.
-
-        Returns:
-            CmdResult: an avocado CmdResult object containing the dmg command
-                information, e.g. exit status, stdout, stderr, etc.
-
-        Raises:
-            CommandFailure: if the dmg storage prepare command fails.
-
-        """
-        kwargs = {
-            "nvme_only": nvme,
-            "scm_only": scm,
-            "target_user": getuser() if user is None else user,
-            "hugepages": hugepages,
-            "reset": reset,
-            "force": force
-        }
-        return self._get_result(("storage", "prepare"), **kwargs)
 
     def storage_set_faulty(self, uuid, force=True):
         """Get the result of the 'dmg storage set nvme-faulty' command.
@@ -275,7 +296,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -295,7 +316,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -313,7 +334,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -331,7 +352,7 @@ class DmgCommand(DmgCommandBase):
                 information, e.g. exit status, stdout, stderr, etc.
 
         Raises:
-            CommandFailure: if the dmg storage prepare command fails.
+            CommandFailure: if the dmg storage query command fails.
 
         """
         return self._get_result(
@@ -351,7 +372,8 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(("storage", "scan"), nvme_health=True)
 
     def pool_create(self, scm_size, uid=None, gid=None, nvme_size=None,
-                    target_list=None, svcn=None, acl_file=None):
+                    target_list=None, svcn=None, acl_file=None, size=None,
+                    tier_ratio=None, properties=None, label=None, nranks=None):
         """Create a pool with the dmg command.
 
         The uid and gid method arguments can be specified as either an integer
@@ -368,6 +390,14 @@ class DmgCommand(DmgCommandBase):
             svcn (str, optional): Number of pool service replicas. Defaults to
                 None, in which case the default value is set by the server.
             acl_file (str, optional): ACL file. Defaults to None.
+            size (str, optional): NVMe pool size to create with tier_ratio.
+                Defaults to None.
+            tier_ratio (str, optional): SCM pool size to create as a ratio of
+                size. Defaults to None.
+            properties (str, optional): Comma separated name:value string
+                Defaults to None
+            label (str, optional): Pool label. Defaults to None.
+            nranks (str, optional): Number of ranks to use. Defaults to None
 
         Raises:
             CommandFailure: if the 'dmg pool create' command fails and
@@ -381,11 +411,17 @@ class DmgCommand(DmgCommandBase):
         kwargs = {
             "user": getpwuid(uid).pw_name if isinstance(uid, int) else uid,
             "group": getgrgid(gid).gr_name if isinstance(gid, int) else gid,
+            "size": size,
+            "tier_ratio": tier_ratio,
             "scm_size": scm_size,
             "nvme_size": nvme_size,
             "nsvc": svcn,
-            "acl_file": acl_file
+            "acl_file": acl_file,
+            "properties": properties,
+            "label": label,
+            "nranks": nranks
         }
+
         if target_list is not None:
             kwargs["ranks"] = ",".join([str(target) for target in target_list])
 
@@ -406,7 +442,13 @@ class DmgCommand(DmgCommandBase):
         # },
         # "error": null,
         # "status": 0
-        output = self._get_json_result(("pool", "create"), **kwargs)
+        output = self._get_json_result(("pool", "create"),
+                                       json_err=True, **kwargs)
+        if output["error"] is not None:
+            self.log.error(output["error"])
+            if self.exit_status_exception:
+                raise DmgJsonCommandFailure(output["error"])
+
         if output["response"] is None:
             return data
 
@@ -415,8 +457,8 @@ class DmgCommand(DmgCommandBase):
             [str(svc) for svc in output["response"]["svc_reps"]])
         data["ranks"] = ",".join(
             [str(r) for r in output["response"]["tgt_ranks"]])
-        data["scm_per_rank"] = output["response"]["scm_bytes"]
-        data["nvme_per_rank"] = output["response"]["nvme_bytes"]
+        data["scm_per_rank"] = output["response"]["tier_bytes"][0]
+        data["nvme_per_rank"] = output["response"]["tier_bytes"][1]
 
         return data
 
@@ -430,9 +472,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg pool query command fails.
 
         Returns:
-            dict: dictionary of output in JSON format if use_json is set to
-                True. Otherwise, CmdResult that contains exit status, stdout,
-                and other information.
+            dict: the dmg json command output converted to a python dictionary
 
         """
         # Sample JSON output
@@ -560,31 +600,57 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "delete-acl"), pool=pool, principal=principal)
 
-    def pool_list(self):
+    def pool_list(self, no_query=False, verbose=False):
         """List pools.
+
+        Args:
+            no_query (bool, optional): If True, do not query for pool stats.
+            verbose (bool, optional): If True, use verbose mode.
 
         Raises:
             CommandFailure: if the dmg pool pool list command fails.
 
         Returns:
-            dict: a dictionary of pool UUID keys and svc replica values
+            dict: the dmg json command output converted to a python dictionary
 
         """
-        self._get_result(("pool", "list"))
-
-        # Populate a dictionary with svc replicas for each pool UUID key listed
-        # Sample dmg pool list output:
-        #    Pool UUID                            Svc Replicas
-        #    ---------                            ------------
-        #    43bf2fe8-cb92-46ec-b9e9-9b056725092a 0
-        #    98736dfe-cb92-12cd-de45-9b09875092cd 1
-        data = {}
-        match = re.findall(
-            r"(?:([0-9a-fA-F][0-9a-fA-F-]+)\W+([0-9][0-9,-]*))",
-            self.result.stdout_text)
-        for info in match:
-            data[info[0]] = get_numeric_list(info[1])
-        return data
+        # Sample verbose JSON Output:
+        # {
+        #     "response": {
+        #         "status": 0,
+        #         "pools": [
+        #         {
+        #             "uuid": "517217db-47c4-4bb9-aae5-e38ca7b3dafc",
+        #             "label": "mkp1",
+        #             "svc_reps": [
+        #             0
+        #             ],
+        #             "targets_total": 8,
+        #             "targets_disabled": 0,
+        #             "query_error_msg": "",
+        #             "query_status_msg": "",
+        #             "usage": [
+        #             {
+        #                 "tier_name": "SCM",
+        #                 "size": 3000000000,
+        #                 "free": 2995801112,
+        #                 "imbalance": 0
+        #             },
+        #             {
+        #                 "tier_name": "NVME",
+        #                 "size": 47000000000,
+        #                 "free": 26263322624,
+        #                 "imbalance": 36
+        #             }
+        #             ]
+        #         }
+        #         ]
+        #     },
+        #     "error": null,
+        #     "status": 0
+        # }
+        return self._get_json_result(
+            ("pool", "list"), no_query=no_query, verbose=verbose)
 
     def pool_set_prop(self, pool, name, value):
         """Set property for a given Pool.
@@ -625,14 +691,12 @@ class DmgCommand(DmgCommandBase):
         return self._get_result(
             ("pool", "exclude"), pool=pool, rank=rank, tgt_idx=tgt_idx)
 
-    def pool_extend(self, pool, ranks, scm_size, nvme_size):
+    def pool_extend(self, pool, ranks):
         """Extend the daos_server pool.
 
         Args:
             pool (str): Pool uuid.
             ranks (int): Ranks of the daos_server to extend
-            scm_size (int): SCM pool size to extend
-            nvme_size (int): NVME pool size to extend
 
         Returns:
             CmdResult: Object that contains exit status, stdout, and other
@@ -643,8 +707,7 @@ class DmgCommand(DmgCommandBase):
 
         """
         return self._get_result(
-            ("pool", "extend"), pool=pool, ranks=ranks,
-            scm_size=scm_size, nvme_size=nvme_size)
+            ("pool", "extend"), pool=pool, ranks=ranks)
 
     def pool_drain(self, pool, rank, tgt_idx=None):
         """Drain a daos_server from the pool.
@@ -717,7 +780,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system query command fails.
 
         Returns:
-            dict: a dictionary of host ranks and their unique states.
+            dict: the dmg json command output converted to a python dictionary
 
         """
         # Sample output:
@@ -736,7 +799,7 @@ class DmgCommand(DmgCommandBase):
         #     },
         #     {
         #         "addr": "10.8.1.74:10001",
-        #         "state": "evicted",
+        #         "state": "excluded",
         #         "fault_domain": "/wolf-74.wolf.hpdd.intel.com",
         #         "rank": 1,
         #         "uuid": "db36ab28-fdb0-4822-97e6-89547393ed03",
@@ -759,7 +822,7 @@ class DmgCommand(DmgCommandBase):
             CommandFailure: if the dmg system query command fails.
 
         Returns:
-            dictionary of output in JSON format
+            dict: the dmg json command output converted to a python dictionary
 
         """
         # Example JSON output:
@@ -774,6 +837,18 @@ class DmgCommand(DmgCommandBase):
         #   "status": 0
         # }
         return self._get_json_result(("system", "leader-query"))
+
+    def system_erase(self):
+        """Erase system metadata prior to reformat.
+
+        Raises:
+            CommandFailure: if the dmg system erase command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(("system", "erase"))
 
     def system_start(self, ranks=None):
         """Start the system.
@@ -848,6 +923,162 @@ class DmgCommand(DmgCommandBase):
         """
         return self._get_result(("pool", "evict"), pool=pool)
 
+    def config_generate(self, access_points, num_engines=None, min_ssds=None,
+                        net_class=None):
+        """Produce a server configuration.
+
+        Args:
+            access_points (str): Comma separated list of access point addresses.
+            num_pmem (int): Number of SCM (pmem) devices required per
+                storage host in DAOS system. Defaults to None.
+            num_nvme (int): Minimum number of NVMe devices required per storage
+                host in DAOS system. Defaults to None.
+            net_class (str): Network class preferred. Defaults to None.
+                i.e. "best-available"|"ethernet"|"infiniband"
+
+        Returns:
+            CmdResult: Object that contains exit status, stdout, and other
+                information.
+
+        """
+        return self._get_result(
+            ("config", "generate"), access_points=access_points,
+            num_engines=num_engines, min_ssds=min_ssds, net_class=net_class)
+
+    def telemetry_metrics_list(self, host):
+        """List telemetry metrics.
+
+        Args:
+            host (str): Server host from which to obtain the metrics
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        return self._get_json_result(
+            ("telemetry", "metrics", "list"), host=host)
+
+    def telemetry_metrics_query(self, host, metrics=None):
+        """Query telemetry metrics.
+
+        Args:
+            host (str): Server host from which to obtain the metrics
+            metrics (str, None): Comma-separated list of metric names to query.
+                Defaults to None which will query all metric names.
+
+        Raises:
+            CommandFailure: if the dmg system query command fails.
+
+        Returns:
+            dict: the dmg json command output converted to a python dictionary
+
+        """
+        # Sample output (metric="process_start_time_seconds"):
+        # {
+        # "response": {
+        #   "metric_sets": [
+        #     {
+        #       "name": "process_start_time_seconds",
+        #       "description": "Start time of the process since unix epoch in
+        #                       seconds.",
+        #       "type": 3,
+        #       "metrics": [
+        #         {
+        #           "labels": {},
+        #           "value": 1622576326.6
+        #         }
+        #       ]
+        #     }
+        #   ]
+        # },
+        # "error": null,
+        # "status": 0
+        # }
+        return self._get_json_result(
+            ("telemetry", "metrics", "query"), host=host, metrics=metrics)
+
+    def _parse_pool_list(self, key=None, **kwargs):
+        """Parse the dmg pool list json output for the requested information.
+
+        Args:
+            key (str, optional): pool list json dictionary key in
+                ["response"]["pools"]. Defaults to None.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: list of all the pool items in the dmg pool list json output
+                for the requested json dictionary key. This will be an empty
+                list if the key does not exist or the json output was not in
+                the expected format.
+
+        """
+        pool_list = self.pool_list(**kwargs)
+        try:
+            if pool_list["response"]["pools"] is None:
+                return []
+            if key:
+                return [pool[key] for pool in pool_list["response"]["pools"]]
+            return pool_list["response"]["pools"]
+        except KeyError:
+            return []
+
+    def get_pool_list_all(self, **kwargs):
+        """Get a list of all the pool information from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a list of dictionaries containing information for each pool
+                from the dmg pool list json output
+
+        """
+        return self._parse_pool_list(**kwargs)
+
+    def get_pool_list_uuids(self, **kwargs):
+        """Get a list of pool UUIDs from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a sorted list of UUIDs for each pool from the dmg pool list
+                json output
+
+        """
+        return sorted(self._parse_pool_list("uuid", **kwargs))
+
+    def get_pool_list_labels(self, **kwargs):
+        """Get a list of pool labels from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a sorted list of labels for each pool from the dmg pool list
+                json output
+
+        """
+        return sorted(self._parse_pool_list("label", **kwargs))
+
+    def get_pool_list_svc_reps(self, **kwargs):
+        """Get a list of lists of pool svc_reps from dmg pool list.
+
+        Raises:
+            CommandFailure: if the dmg pool list command fails.
+
+        Returns:
+            list: a list of lists of pool svc_reps for each pool from the dmg
+                pool list json output
+
+        """
+        return self._parse_pool_list("svc_reps", **kwargs)
+
 
 def check_system_query_status(data):
     """Check if any server crashed.
@@ -860,7 +1091,7 @@ def check_system_query_status(data):
         bool: True if no server crashed, False otherwise.
 
     """
-    failed_states = ("unknown", "evicted", "errored", "unresponsive")
+    failed_states = ("unknown", "excluded", "errored", "unresponsive")
     failed_rank_list = {}
 
     # Check the state of each rank.

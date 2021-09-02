@@ -19,17 +19,21 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
+	"github.com/daos-stack/daos/src/control/common"
 	. "github.com/daos-stack/daos/src/control/common"
-	"github.com/daos-stack/daos/src/control/lib/control"
-
 	"github.com/daos-stack/daos/src/control/drpc"
+	"github.com/daos-stack/daos/src/control/lib/atm"
+	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/server/storage/bdev"
 	"github.com/daos-stack/daos/src/control/server/storage/scm"
+
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -189,9 +193,12 @@ func TestServer_Harness_Start(t *testing.T) {
 			engineCfgs := make([]*engine.Config, maxEngines)
 			for i := 0; i < maxEngines; i++ {
 				engineCfgs[i] = engine.NewConfig().
-					WithScmClass("ram").
-					WithScmRamdiskSize(1).
-					WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i)))
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass("ram").
+							WithScmRamdiskSize(1).
+							WithScmMountPoint(filepath.Join(testDir, strconv.Itoa(i))),
+					)
 			}
 			config := config.DefaultServer().
 				WithEngines(engineCfgs...).
@@ -203,7 +210,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			var instanceStarts uint32
 			harness := NewEngineHarness(log)
 			for i, engineCfg := range config.Engines {
-				if err := os.MkdirAll(engineCfg.Storage.SCM.MountPoint, 0777); err != nil {
+				if err := os.MkdirAll(engineCfg.Storage.Tiers[0].Scm.MountPoint, 0777); err != nil {
 					t.Fatal(err)
 				}
 
@@ -217,12 +224,15 @@ func TestServer_Harness_Start(t *testing.T) {
 					}
 				}
 				runner := engine.NewTestRunner(tc.trc, engineCfg)
-				bdevProvider, err := bdev.NewClassProvider(log,
-					engineCfg.Storage.SCM.MountPoint, &engineCfg.Storage.Bdev)
-				if err != nil {
-					t.Fatal(err)
-				}
-				scmProvider := scm.NewMockProvider(log, nil, &scm.MockSysConfig{IsMountedBool: true})
+
+				msc := scm.MockSysConfig{IsMountedBool: true}
+				sysp := scm.NewMockSysProvider(log, &msc)
+				provider := storage.MockProvider(
+					log, 0, &engineCfg.Storage,
+					sysp,
+					scm.NewMockProvider(log, nil, &msc),
+					bdev.NewMockProvider(log, &bdev.MockBackendConfig{}),
+				)
 
 				idx := uint32(i)
 				joinFn := func(_ context.Context, req *control.SystemJoinReq) (*control.SystemJoinResp, error) {
@@ -235,7 +245,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					}, nil
 				}
 
-				ei := NewEngineInstance(log, bdevProvider, scmProvider, joinFn, runner)
+				ei := NewEngineInstance(log, provider, joinFn, runner)
 				var isAP bool
 				if tc.isAP && i == 0 { // first instance will be AP & bootstrap MS
 					isAP = true
@@ -264,7 +274,8 @@ func TestServer_Harness_Start(t *testing.T) {
 			instances := harness.Instances()
 
 			// set mock dRPC client to record call details
-			for _, ei := range instances {
+			for _, e := range instances {
+				ei := e.(*EngineInstance)
 				ei.setDrpcClient(newMockDrpcClient(&mockDrpcClientConfig{
 					SendMsgResponse: &drpc.Response{},
 				}))
@@ -281,7 +292,7 @@ func TestServer_Harness_Start(t *testing.T) {
 			membership, sysdb := system.MockMembership(t, log, mockTCPResolver)
 			done := make(chan struct{})
 			go func(ctxIn context.Context) {
-				gotErr = harness.Start(ctxIn, sysdb, nil, config)
+				gotErr = harness.Start(ctxIn, sysdb, config)
 				close(done)
 			}(ctx)
 
@@ -291,7 +302,7 @@ func TestServer_Harness_Start(t *testing.T) {
 				for {
 					ready := true
 					for _, ei := range instances {
-						if ei.waitDrpc.IsFalse() {
+						if ei.(*EngineInstance).waitDrpc.IsFalse() {
 							ready = false
 						}
 					}
@@ -337,7 +348,7 @@ func TestServer_Harness_Start(t *testing.T) {
 					case i.drpcReady <- req:
 					case <-ctxIn.Done():
 					}
-				}(ctx, ei)
+				}(ctx, ei.(*EngineInstance))
 				t.Logf("sent drpc ready to instance %d", ei.Index())
 			}
 
@@ -383,7 +394,8 @@ func TestServer_Harness_Start(t *testing.T) {
 			defer joinMu.Unlock()
 			// verify expected RPCs were made, ranks allocated and
 			// members added to membership
-			for _, ei := range instances {
+			for _, e := range instances {
+				ei := e.(*EngineInstance)
 				dc, err := ei.getDrpcClient()
 				if err != nil {
 					t.Fatal(err)
@@ -431,4 +443,147 @@ func TestServer_Harness_WithFaultDomain(t *testing.T) {
 	}
 	// updatedHarness is the same as harness
 	AssertEqual(t, updatedHarness, harness, "not the same structure")
+}
+
+type mockdb struct {
+	isLeader    bool
+	shutdown    bool
+	shutdownErr error
+}
+
+func (db *mockdb) IsLeader() bool {
+	return db.isLeader
+}
+
+func (db *mockdb) ShutdownRaft() error {
+	db.shutdown = true
+	return db.shutdownErr
+}
+
+func TestServer_Harness_CallDrpc(t *testing.T) {
+	for name, tc := range map[string]struct {
+		mics        []*MockInstanceConfig
+		method      drpc.Method
+		body        proto.Message
+		notStarted  bool
+		notLeader   bool
+		resignCause error
+		expShutdown bool
+		expErr      error
+	}{
+		"success": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready: atm.NewBool(true),
+				},
+			},
+		},
+		"one not ready, one ready": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errDRPCNotReady,
+				},
+				{
+					Ready: atm.NewBool(true),
+				},
+			},
+		},
+		"one not ready, one fails": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errDRPCNotReady,
+				},
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errors.New("whoops"),
+				},
+			},
+			expErr: errors.New("whoops"),
+		},
+		"instance not ready": {
+			mics: []*MockInstanceConfig{
+				{
+					Started: atm.NewBool(true),
+				},
+			},
+			expErr: errInstanceNotReady,
+		},
+		"harness not started": {
+			mics:       []*MockInstanceConfig{},
+			notStarted: true,
+			expErr:     FaultHarnessNotStarted,
+		},
+		"first fails (other)": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errors.New("whoops"),
+				},
+				{
+					Ready: atm.NewBool(true),
+				},
+			},
+			expErr: errors.New("whoops"),
+		},
+		"none available": {
+			mics: []*MockInstanceConfig{
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: errDRPCNotReady,
+				},
+				{
+					Ready:       atm.NewBool(true),
+					CallDrpcErr: FaultDataPlaneNotStarted,
+				},
+			},
+			expShutdown: true,
+			expErr:      FaultDataPlaneNotStarted,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(name)
+			defer common.ShowBufferOnFailure(t, buf)
+
+			h := NewEngineHarness(log)
+			for _, mic := range tc.mics {
+				h.AddInstance(NewMockInstance(mic))
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			db := &mockdb{
+				isLeader: !tc.notLeader,
+			}
+
+			startErr := make(chan error)
+			go func() {
+				if err := h.Start(ctx, db, config.DefaultServer()); err != nil {
+					startErr <- err
+				}
+				close(startErr)
+			}()
+			for {
+				if h.isStarted() {
+					break
+				}
+			}
+			defer func() {
+				if err := <-startErr; err != nil {
+					if err != context.Canceled {
+						t.Fatal(err)
+					}
+				}
+			}()
+			defer cancel()
+
+			if tc.notStarted {
+				h.started.SetFalse()
+			}
+
+			_, gotErr := h.CallDrpc(ctx, tc.method, tc.body)
+			common.CmpErr(t, tc.expErr, gotErr)
+			common.AssertEqual(t, db.shutdown, tc.expShutdown, "unexpected shutdown state")
+		})
+	}
 }

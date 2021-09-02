@@ -98,66 +98,6 @@ func TestStorageCommands(t *testing.T) {
 			errors.New("cannot use --nvme-health and --nvme-meta"),
 		},
 		{
-			"Prepare without force",
-			"storage prepare",
-			"",
-			errors.New("consent not given"),
-		},
-		{
-			"Prepare with nvme-only and scm-only",
-			"storage prepare --force --nvme-only --scm-only",
-			"",
-			errors.New("nvme-only and scm-only options should not be set together"),
-		},
-		{
-			"Prepare with scm-only",
-			"storage prepare --force --scm-only",
-			strings.Join([]string{
-				printRequest(t, &control.StoragePrepareReq{
-					SCM: &control.ScmPrepareReq{},
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Prepare with nvme-only",
-			"storage prepare --force --nvme-only",
-			strings.Join([]string{
-				printRequest(t, &control.StoragePrepareReq{
-					NVMe: &control.NvmePrepareReq{},
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Prepare with non-existent option",
-			"storage prepare --force --nvme",
-			"",
-			errors.New("unknown flag `nvme'"),
-		},
-		{
-			"Prepare with force and reset",
-			"storage prepare --force --reset",
-			strings.Join([]string{
-				printRequest(t, &control.StoragePrepareReq{
-					NVMe: &control.NvmePrepareReq{Reset: true},
-					SCM:  &control.ScmPrepareReq{Reset: true},
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Prepare with force",
-			"storage prepare --force",
-			strings.Join([]string{
-				printRequest(t, &control.StoragePrepareReq{
-					NVMe: &control.NvmePrepareReq{Reset: false},
-					SCM:  &control.ScmPrepareReq{Reset: false},
-				}),
-			}, " "),
-			nil,
-		},
-		{
 			"Set FAULTY device status (force)",
 			"storage set nvme-faulty --uuid 842c739b-86b5-462f-a7ba-b4a91b674f3d -f",
 			printRequest(t, &control.SmdQueryReq{

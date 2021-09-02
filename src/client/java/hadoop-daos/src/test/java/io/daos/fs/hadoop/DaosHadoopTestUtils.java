@@ -4,7 +4,7 @@
 
 package io.daos.fs.hadoop;
 
-import org.apache.commons.lang.StringUtils;
+import io.daos.DaosUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.junit.internal.AssumptionViolatedException;
 
@@ -34,9 +34,9 @@ public class DaosHadoopTestUtils {
 
   private static URI getURI(Configuration conf) {
     String fsname = conf.getTrimmed(
-        DaosHadoopTestUtils.TEST_FS_DAOS_NAME, "daos://192.168.2.1:23456/");
+        DaosHadoopTestUtils.TEST_FS_DAOS_NAME, DaosFSFactory.DAOS_URI);
 
-    boolean liveTest = !StringUtils.isEmpty(fsname);
+    boolean liveTest = !DaosUtils.isEmptyStr(fsname);
     URI testURI = null;
     if (liveTest) {
       testURI = URI.create(fsname);

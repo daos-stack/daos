@@ -33,7 +33,8 @@ class CartCtlFiveNodeTest(CartTest):
             procrtn = self.stop_process(srv_rtn)
             self.fail("Server did not launch, return code {}".format(procrtn))
 
-        for index in range(3):
+        test_clients_arg = self.params.get("test_clients_arg", "/run/tests/*/")
+        for index in range(len(test_clients_arg)):
             clicmd = self.build_cmd(self.env, "test_clients", index=index)
             self.launch_test(clicmd, srv_rtn)
 

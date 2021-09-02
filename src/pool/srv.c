@@ -18,6 +18,7 @@
 #include "rpc.h"
 #include "srv_internal.h"
 #include "srv_layout.h"
+bool ec_agg_disabled;
 
 static int
 init(void)
@@ -40,10 +41,10 @@ init(void)
 	if (rc)
 		D_GOTO(err_pool_iv, rc);
 
-	rc = ds_pool_metrics_init();
-	if (rc)
-		D_WARN("Unable to initialize pool metrics, " DF_RC "\n",
-		       DP_RC(rc));
+	ec_agg_disabled = false;
+	d_getenv_bool("DAOS_EC_AGG_DISABLE", &ec_agg_disabled);
+	if (unlikely(ec_agg_disabled))
+		D_WARN("EC aggregation is disabled.\n");
 
 	ds_pool_rsvc_class_register();
 
@@ -68,7 +69,6 @@ fini(void)
 	ds_pool_iv_fini();
 	ds_pool_cache_fini();
 	ds_pool_prop_default_fini();
-	ds_pool_metrics_fini();
 	return 0;
 }
 
@@ -161,6 +161,12 @@ struct dss_module_key pool_module_key = {
 	.dmk_fini = pool_tls_fini,
 };
 
+struct dss_module_metrics pool_metrics = {
+	.dmm_tags = DAOS_SYS_TAG,
+	.dmm_init = ds_pool_metrics_alloc,
+	.dmm_fini = ds_pool_metrics_free,
+};
+
 struct dss_module pool_module =  {
 	.sm_name	= "pool",
 	.sm_mod_id	= DAOS_POOL_MODULE,
@@ -173,4 +179,5 @@ struct dss_module pool_module =  {
 	.sm_cli_count	= POOL_PROTO_CLI_COUNT,
 	.sm_handlers	= pool_handlers,
 	.sm_key		= &pool_module_key,
+	.sm_metrics	= &pool_metrics,
 };

@@ -40,6 +40,7 @@ struct daos_task_args {
 		daos_pool_get_attr_t	pool_get_attr;
 		daos_pool_set_attr_t	pool_set_attr;
 		daos_pool_stop_svc_t	pool_stop_svc;
+		daos_pool_list_cont_t	pool_list_cont;
 
 		/** Container */
 		daos_cont_create_t	cont_create;

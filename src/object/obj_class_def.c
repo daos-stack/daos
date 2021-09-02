@@ -203,7 +203,8 @@
 		.ca_ec_k	= k,			\
 		.ca_ec_p	= p,			\
 		.ca_ec_cell	= (1 << 15),		\
-	}						\
+	},						\
+	.oc_private	= true,				\
 }
 
 /* EC(k+p), 32K cell size and specified rank, this is for debugging */

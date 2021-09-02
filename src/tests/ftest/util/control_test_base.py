@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+from ClusterShell.NodeSet import NodeSet
 
 from avocado import fail_on
 from collections import defaultdict
@@ -94,3 +95,28 @@ class ControlTestBase(TestWithServers):
         kwargs = {"uuid": uuid, "rank": rank, "verbose": verbose}
         return cleanup_output(
             self.get_dmg_output("storage_query_list_pools", **kwargs))
+
+    def verify_dmg_storage_scan(self, verify_method):
+        """Call dmg storage scan and run the given method with the output.
+
+        Args:
+            verify_method (method): Method that uses the generated output. Must
+                return list of errors.
+        """
+        errors = []
+
+        for manager in self.server_managers:
+            data = manager.dmg.storage_scan(verbose=True)
+
+            if manager.dmg.result.exit_status == 0:
+                expected_hosts = NodeSet().fromlist(manager.hosts)
+                for struct_hash in data["response"]["HostStorage"]:
+                    hash_dict = data["response"]["HostStorage"][struct_hash]
+                    hosts = NodeSet(hash_dict["hosts"].split(":")[0])
+                    if hosts in expected_hosts:
+                        errors.extend(verify_method(hash_dict["storage"]))
+            else:
+                errors.append("dmg storage scan failed!")
+
+        if errors:
+            self.fail("\n--- Errors found! ---\n{}".format("\n".join(errors)))

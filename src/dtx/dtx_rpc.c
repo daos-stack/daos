@@ -52,9 +52,7 @@ struct dtx_req_args {
 	uuid_t				 dra_po_uuid;
 	/* container UUID */
 	uuid_t				 dra_co_uuid;
-	/* Pointer to the global list head for all the dtx_req_rec. */
-	d_list_t			*dra_list;
-	/* The length of aobve global list. */
+	/* The count of sub requests. */
 	int				 dra_length;
 	/* The collective RPC result. */
 	int				 dra_result;
@@ -125,7 +123,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 		goto out;
 
 	dout = crt_reply_get(req);
-	if (dra->dra_opc != DTX_REFRESH)
+	if (dout->do_status != 0 || dra->dra_opc != DTX_REFRESH)
 		D_GOTO(out, rc = dout->do_status);
 
 	if (din->di_dtx_array.ca_count != dout->do_sub_rets.ca_count)
@@ -178,6 +176,34 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			D_FREE(dsp);
 			D_GOTO(out, rc = -DER_DATA_LOSS);
 		case -DER_NONEXIST:
+			if (dtx_hlc_age2sec(dsp->dsp_epoch) >
+			    DTX_AGG_THD_AGE_LO ||
+			    DAOS_FAIL_CHECK(DAOS_DTX_UNCERTAIN)) {
+
+				/* Related DTX entry on leader does not exist.
+				 * We do not know whether it has been aborted
+				 * or committed (then aggregated). Then has to
+				 * mark it as 'orphan' that will be handled via
+				 * some special DAOS tools in the future.
+				 */
+
+				rc = vos_dtx_set_flags(dra->dra_cont->sc_hdl,
+						       &dsp->dsp_xid, 1,
+						       DTE_ORPHAN);
+
+				D_ERROR("Hit uncertain leaked DTX "DF_DTI
+					", mark it as orphan: %d\n",
+					DP_DTI(&dsp->dsp_xid), rc);
+
+				if (rc == -DER_NONEXIST)
+					rc = 0;
+				else
+					rc = -DER_TX_UNCERTAIN;
+
+				D_FREE(dsp);
+				break;
+			}
+
 			/* The leader does not have related DTX info,
 			 * we may miss related DTX abort request, so
 			 * let's abort it locally.
@@ -223,7 +249,7 @@ dtx_req_send(struct dtx_req_rec *drr, daos_epoch_t epoch)
 
 	tgt_ep.ep_grp = NULL;
 	tgt_ep.ep_rank = drr->drr_rank;
-	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_DTX, drr->drr_tag);
+	tgt_ep.ep_tag = daos_rpc_tag(DAOS_REQ_TGT, drr->drr_tag);
 	opc = DAOS_RPC_OPCODE(dra->dra_opc, DAOS_DTX_MODULE, DAOS_DTX_VERSION);
 
 	rc = crt_req_create(dss_get_module_info()->dmi_ctx, &tgt_ep, opc, &req);
@@ -273,8 +299,8 @@ dtx_req_list_cb(void **args)
 					"on %d/%d.\n", DP_DTI(drr->drr_dti),
 					drr->drr_rank, drr->drr_tag);
 				return;
-			case -DER_EVICTED:
-				/* If non-leader is evicted, handle it
+			case -DER_EXCLUDED:
+				/* If non-leader is excluded, handle it
 				 * as 'prepared'. If other non-leaders
 				 * also 'prepared' then related DTX is
 				 * committable. Fall through.
@@ -348,7 +374,6 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 	dra->dra_opc = opc;
 	uuid_copy(dra->dra_po_uuid, po_uuid);
 	uuid_copy(dra->dra_co_uuid, co_uuid);
-	dra->dra_list = head;
 	dra->dra_length = len;
 	dra->dra_result = 0;
 	dra->dra_cont = cont;
@@ -497,11 +522,17 @@ dtx_dti_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 		d_iov_t			 kiov;
 		d_iov_t			 riov;
 
-		ABT_rwlock_wrlock(pool->sp_lock);
+		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
+		if (rc != 1) {
+			D_WARN("Cannot find target %u at %d/%d, flags %x\n",
+			       mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
+			       mbs->dm_flags);
+			ABT_rwlock_unlock(pool->sp_lock);
+			return -DER_UNINIT;
+		}
 		ABT_rwlock_unlock(pool->sp_lock);
-		D_ASSERT(rc == 1);
 
 		/* Skip the target that (re-)joined the system after the DTX. */
 		if (target->ta_comp.co_ver > dte->dte_ver)
@@ -532,34 +563,77 @@ dtx_dti_classify_one(struct ds_pool *pool, daos_handle_t tree, d_list_t *head,
 
 static int
 dtx_dti_classify(struct ds_pool *pool, daos_handle_t tree,
-		 struct dtx_entry **dtes, int count,
-		 d_list_t *head, struct dtx_id **dtis)
+		 d_list_t *head, struct dtx_id *dtis,
+		 struct dtx_entry **dtes, int count)
 {
-	struct dtx_id		*dti = NULL;
-	int			 length = 0;
-	int			 rc = 0;
-	int			 i;
+	int	length = 0;
+	int	rc = 0;
+	int	i;
 
-	D_ALLOC_ARRAY(dti, count);
-	if (dti != NULL) {
-		for (i = 0; i < count; i++) {
-			rc = dtx_dti_classify_one(pool, tree, head, &length,
-						  dtes[i], count);
-			if (rc < 0)
-				break;
+	for (i = 0; i < count; i++) {
+		rc = dtx_dti_classify_one(pool, tree, head, &length,
+					  dtes[i], count);
+		if (rc < 0)
+			break;
 
-			dti[i] = dtes[i]->dte_xid;
-		}
-
-		if (rc >= 0)
-			*dtis = dti;
-		else if (dti != NULL)
-			D_FREE(dti);
-	} else {
-		rc = -DER_NOMEM;
+		if (dtis != NULL)
+			dtis[i] = dtes[i]->dte_xid;
 	}
 
 	return rc < 0 ? rc : length;
+}
+
+struct dtx_commit_args {
+	struct ds_cont_child	 *dca_cont;
+	d_list_t		 *dca_head;
+	struct btr_root		 *dca_tree_root;
+	daos_handle_t		 *dca_tree_hdl;
+	struct dtx_req_args	 *dca_dra;
+	struct dtx_entry	**dca_dtes;
+	int			  dca_count;
+};
+
+static int
+dtx_commit_internal(struct ds_cont_child *cont, d_list_t *head,
+		    struct btr_root *tree_root, daos_handle_t *tree_hdl,
+		    struct dtx_req_args *dra, struct dtx_id *dtis,
+		    struct dtx_entry **dtes, int count)
+{
+	struct umem_attr	 uma = { 0 };
+	int			 length;
+	int			 rc;
+
+	uma.uma_id = UMEM_CLASS_VMEM;
+	rc = dbtree_create_inplace(DBTREE_CLASS_DTX_CF, 0, DTX_CF_BTREE_ORDER,
+				   &uma, tree_root, tree_hdl);
+	if (rc != 0)
+		return rc;
+
+	length = dtx_dti_classify(cont->sc_pool->spc_pool, *tree_hdl,
+				  head, dtis, dtes, count);
+	if (length < 0)
+		return length;
+
+	if (d_list_empty(head))
+		return 0;
+
+	D_ASSERT(length > 0);
+
+	return dtx_req_list_send(dra, DTX_COMMIT, head, length,
+				 cont->sc_pool->spc_pool->sp_uuid,
+				 cont->sc_uuid, 0, NULL, NULL, NULL, NULL);
+}
+
+static void
+dtx_commit_helper(void *arg)
+{
+	struct dtx_commit_args	*dca = arg;
+
+	dtx_commit_internal(dca->dca_cont, dca->dca_head, dca->dca_tree_root,
+			    dca->dca_tree_hdl, dca->dca_dra, NULL,
+			    dca->dca_dtes, dca->dca_count);
+
+	D_FREE(dca);
 }
 
 /**
@@ -578,65 +652,88 @@ dtx_dti_classify(struct ds_pool *pool, daos_handle_t tree,
  */
 int
 dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	   int count, bool drop_cos)
+	   struct dtx_cos_key *dcks, int count, bool helper)
 {
 	struct dtx_req_args	 dra;
-	struct ds_pool		*pool = cont->sc_pool->spc_pool;
-	struct dtx_id		*dti = NULL;
-	struct dtx_cos_key	*dcks = NULL;
-	struct umem_attr	 uma;
+	struct dtx_req_rec	*drr;
+	struct dtx_id		*dtis = NULL;
+	bool			*rm_cos = NULL;
 	struct btr_root		 tree_root = { 0 };
 	daos_handle_t		 tree_hdl = DAOS_HDL_INVAL;
 	d_list_t		 head;
-	int			 length;
+	ABT_thread		 child = ABT_THREAD_NULL;
+	struct dtx_commit_args	*cmt_arg = NULL;
 	int			 rc;
 	int			 rc1 = 0;
 	int			 rc2 = 0;
+	int			 i;
 
-	D_INIT_LIST_HEAD(&head);
-	memset(&uma, 0, sizeof(uma));
-	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create_inplace(DBTREE_CLASS_DTX_CF, 0, DTX_CF_BTREE_ORDER,
-				   &uma, &tree_root, &tree_hdl);
-	if (rc != 0)
-		goto out;
-
-	length = dtx_dti_classify(pool, tree_hdl, dtes, count, &head, &dti);
-	if (length < 0)
-		D_GOTO(out, rc = length);
+	D_ASSERT(count >= 1);
 
 	dra.dra_future = ABT_FUTURE_NULL;
-	if (!d_list_empty(&head)) {
-		rc = dtx_req_list_send(&dra, DTX_COMMIT, &head, length,
-				       pool->sp_uuid, cont->sc_uuid, 0,
-				       NULL, NULL, NULL, NULL);
+	D_INIT_LIST_HEAD(&head);
+
+	D_ALLOC_ARRAY(dtis, count);
+	if (dtis == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
+	if (helper) {
+		D_ALLOC_PTR(cmt_arg);
+		if (cmt_arg == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
+
+		cmt_arg->dca_cont = cont;
+		cmt_arg->dca_head = &head;
+		cmt_arg->dca_tree_root = &tree_root;
+		cmt_arg->dca_tree_hdl = &tree_hdl;
+		cmt_arg->dca_dra = &dra;
+		cmt_arg->dca_dtes = dtes;
+		cmt_arg->dca_count = count;
+
+		rc = dss_ult_create(dtx_commit_helper, cmt_arg, DSS_XS_IOFW,
+				    dss_get_module_info()->dmi_tgt_id,
+				    DSS_DEEP_STACK_SZ, &child);
+		if (rc != 0) {
+			D_FREE(cmt_arg);
+			goto out;
+		}
+
+		for (i = 0; i < count; i++)
+			dtis[i] = dtes[i]->dte_xid;
+	} else {
+		rc = dtx_commit_internal(cont, &head, &tree_root, &tree_hdl,
+					 &dra, dtis, dtes, count);
 		if (rc != 0)
 			goto out;
 	}
 
-	if (drop_cos) {
-		D_ALLOC_ARRAY(dcks, count);
-		if (dcks == NULL)
+	if (dcks != NULL) {
+		D_ALLOC_ARRAY(rm_cos, count);
+		if (rm_cos == NULL)
 			D_GOTO(out, rc1 = -DER_NOMEM);
 	}
 
-	rc1 = vos_dtx_commit(cont->sc_hdl, dti, count, dcks);
-
-	if (rc1 >= 0 && drop_cos) {
-		int	i;
-
+	rc1 = vos_dtx_commit(cont->sc_hdl, dtis, count, rm_cos);
+	if (rc1 >= 0 && rm_cos != NULL) {
 		for (i = 0; i < count; i++) {
-			if (!daos_oid_is_null(dcks[i].oid.id_pub))
-				dtx_del_cos(cont, &dti[i], &dcks[i].oid,
+			if (rm_cos[i]) {
+				D_ASSERT(!daos_oid_is_null(dcks[i].oid.id_pub));
+
+				dtx_del_cos(cont, &dtis[i], &dcks[i].oid,
 					    dcks[i].dkey_hash);
+			}
 		}
 	}
 
-	D_FREE(dcks);
+	D_FREE(rm_cos);
 
+out:
 	/* -DER_NONEXIST may be caused by race or repeated commit, ignore it. */
 	if (rc1 == -DER_NONEXIST)
 		rc1 = 0;
+
+	if (child != ABT_THREAD_NULL)
+		ABT_thread_join(child);
 
 	if (dra.dra_future != ABT_FUTURE_NULL) {
 		rc2 = dtx_req_wait(&dra);
@@ -644,17 +741,21 @@ dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
 			rc2 = 0;
 	}
 
-out:
 	D_CDEBUG(rc < 0 || rc1 < 0 || rc2 < 0, DLOG_ERR, DB_IO,
 		 "Commit DTXs "DF_DTI", count %d: rc %d %d %d\n",
 		 DP_DTI(&dtes[0]->dte_xid), count, rc, rc1, rc2);
 
-	D_FREE(dti);
+	D_FREE(dtis);
 
 	if (daos_handle_is_valid(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
 
-	D_ASSERT(d_list_empty(&head));
+	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec,
+				       drr_link)) != NULL) {
+		D_FREE(drr->drr_cb_args);
+		D_FREE(drr->drr_dti);
+		D_FREE(drr);
+	}
 
 	return rc < 0 ? rc : (rc1 < 0 ? rc1 : (rc2 < 0 ? rc2 : 0));
 }
@@ -664,31 +765,42 @@ dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 	  struct dtx_entry **dtes, int count)
 {
 	struct dtx_req_args	 dra;
+	struct dtx_req_rec	*drr;
 	struct ds_pool		*pool = cont->sc_pool->spc_pool;
-	struct dtx_id		*dti = NULL;
-	struct umem_attr	 uma;
+	struct dtx_id		*dtis = NULL;
+	struct umem_attr	 uma = { 0 };
 	struct btr_root		 tree_root = { 0 };
 	daos_handle_t		 tree_hdl = DAOS_HDL_INVAL;
 	d_list_t		 head;
 	int			 length;
 	int			 rc;
 
+	D_ASSERT(count >= 1);
+
+	dra.dra_future = ABT_FUTURE_NULL;
 	D_INIT_LIST_HEAD(&head);
-	memset(&uma, 0, sizeof(uma));
+
+	D_ALLOC_ARRAY(dtis, count);
+	if (dtis == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	uma.uma_id = UMEM_CLASS_VMEM;
 	rc = dbtree_create_inplace(DBTREE_CLASS_DTX_CF, 0, DTX_CF_BTREE_ORDER,
 				   &uma, &tree_root, &tree_hdl);
 	if (rc != 0)
 		goto out;
 
-	length = dtx_dti_classify(pool, tree_hdl, dtes, count, &head, &dti);
+	length = dtx_dti_classify(pool, tree_hdl, &head, dtis, dtes, count);
 	if (length < 0)
 		D_GOTO(out, rc = length);
 
-	D_ASSERT(dti != NULL);
-
 	/* Local abort firstly. */
-	rc = vos_dtx_abort(cont->sc_hdl, epoch, dti, count);
+	if (epoch != 0)
+		rc = vos_dtx_abort(cont->sc_hdl, epoch, dtis, count);
+	else
+		rc = vos_dtx_set_flags(cont->sc_hdl, dtis, count,
+				       DTE_CORRUPTED);
+
 	if (rc > 0 || rc == -DER_NONEXIST)
 		rc = 0;
 
@@ -709,12 +821,17 @@ out:
 		 "Abort DTXs "DF_DTI", count %d: rc %d\n",
 		 DP_DTI(&dtes[0]->dte_xid), count, rc);
 
-	D_FREE(dti);
+	D_FREE(dtis);
 
 	if (daos_handle_is_valid(tree_hdl))
 		dbtree_destroy(tree_hdl, NULL);
 
-	D_ASSERT(d_list_empty(&head));
+	while ((drr = d_list_pop_entry(&head, struct dtx_req_rec,
+				       drr_link)) != NULL) {
+		D_FREE(drr->drr_cb_args);
+		D_FREE(drr->drr_dti);
+		D_FREE(drr);
+	}
 
 	return rc < 0 ? rc : 0;
 }
@@ -747,11 +864,17 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	for (i = 0; i < mbs->dm_tgt_cnt; i++) {
 		struct pool_target	*target;
 
-		ABT_rwlock_wrlock(pool->sp_lock);
+		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map,
 					  mbs->dm_tgts[i].ddt_id, &target);
+		if (rc != 1) {
+			D_WARN("Cannot find target %u at %d/%d, flags %x\n",
+			       mbs->dm_tgts[i].ddt_id, i, mbs->dm_tgt_cnt,
+			       mbs->dm_flags);
+			ABT_rwlock_unlock(pool->sp_lock);
+			D_GOTO(out, rc = -DER_UNINIT);
+		}
 		ABT_rwlock_unlock(pool->sp_lock);
-		D_ASSERT(rc == 1);
 
 		/* Skip the target that (re-)joined the system after the DTX. */
 		if (target->ta_comp.co_ver > dte->dte_ver)
@@ -868,10 +991,15 @@ again:
 			leader_tgt = dsp->dsp_mbs.dm_tgts[0].ddt_id;
 		}
 
-		ABT_rwlock_wrlock(pool->sp_lock);
+		ABT_rwlock_rdlock(pool->sp_lock);
 		rc = pool_map_find_target(pool->sp_map, leader_tgt, &target);
+		if (rc != 1) {
+			D_WARN("Cannot find target %u, flags %x\n",
+			       leader_tgt, dsp->dsp_mbs.dm_flags);
+			ABT_rwlock_unlock(pool->sp_lock);
+			D_GOTO(out, rc = -DER_UNINIT);
+		}
 		ABT_rwlock_unlock(pool->sp_lock);
-		D_ASSERT(rc == 1);
 
 		/* If current server is the leader, then two possible cases:
 		 *
@@ -889,7 +1017,7 @@ again:
 		}
 
 		/* Usually, we will not elect in-rebuilding server as DTX
-		 * leader. But we may be blocked by the ABT_rwlock_wrlock,
+		 * leader. But we may be blocked by the ABT_rwlock_rdlock,
 		 * then pool map may be refreshed during that. Let's retry
 		 * to find out the new leader.
 		 */
@@ -951,7 +1079,7 @@ next:
 
 	/* Handle the entries whose leaders are on current server. */
 	d_list_for_each_entry_safe(dsp, tmp, &self, dsp_link) {
-		struct dtx_entry	 dte;
+		struct dtx_entry	dte;
 
 		d_list_del(&dsp->dsp_link);
 
@@ -965,8 +1093,11 @@ next:
 		switch (rc) {
 		case DSHR_NEED_COMMIT: {
 			struct dtx_entry	*pdte = &dte;
+			struct dtx_cos_key	 dck;
 
-			rc = dtx_commit(cont, &pdte, 1, true);
+			dck.oid = dsp->dsp_oid;
+			dck.dkey_hash = dsp->dsp_dkey_hash;
+			rc = dtx_commit(cont, &pdte, &dck, 1, false);
 			if (rc < 0 && rc != -DER_NONEXIST && cmt_list != NULL)
 				d_list_add_tail(&dsp->dsp_link, cmt_list);
 			else

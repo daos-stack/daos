@@ -21,6 +21,7 @@
 #include <daos_srv/vos_types.h>
 #include <daos_pool.h>
 #include <daos_security.h>
+#include <gurt/telemetry_common.h>
 
 /*
  * Pool object
@@ -33,6 +34,7 @@ struct ds_pool {
 	ABT_rwlock		sp_lock;
 	struct pool_map	       *sp_map;
 	uint32_t		sp_map_version;	/* temporary */
+	uint32_t		sp_ec_cell_sz;
 	uint64_t		sp_reclaim;
 	crt_group_t	       *sp_group;
 	ABT_mutex		sp_mutex;
@@ -54,6 +56,17 @@ struct ds_pool {
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1;
+
+	/** path to ephemeral metrics */
+	char			sp_path[D_TM_MAX_NAME_LEN];
+
+	/**
+	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
+	 * actual structure. Initialized only for modules that specified a
+	 * set of handlers via dss_module::sm_metrics handlers and reported
+	 * DAOS_SYS_TAG.
+	 */
+	void			*sp_metrics[DAOS_NR_MODULE];
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -107,6 +120,14 @@ struct ds_pool_child {
 	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
+
+	/**
+	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
+	 * actual structure. Initialized only for modules that specified a
+	 * set of handlers via dss_module::sm_metrics handlers and reported
+	 * DAOS_TGT_TAG.
+	 */
+	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
@@ -141,8 +162,7 @@ int ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const d_rank_list_t *rank_list, int ndomains,
 		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
-				uint32_t rank,
-				struct pool_target_id_list *target_list,
+				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,
@@ -237,6 +257,8 @@ int ds_pool_svc_check_evict(uuid_t pool_uuid, d_rank_list_t *ranks,
 void ds_pool_disable_exclude(void);
 void ds_pool_enable_exclude(void);
 
+extern bool ec_agg_disabled;
+
 int ds_pool_svc_ranks_get(uuid_t uuid, d_rank_list_t *svc_ranks,
 			  d_rank_list_t **ranks);
 
@@ -253,10 +275,11 @@ int dsc_pool_close(daos_handle_t ph);
 static inline int
 ds_pool_rf_verify(struct ds_pool *pool, uint32_t last_ver, uint32_t rf)
 {
-	int	rc;
+	int	rc = 0;
 
 	ABT_rwlock_rdlock(pool->sp_lock);
-	rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
+	if (last_ver < pool_map_get_version(pool->sp_map))
+		rc = pool_map_rf_verify(pool->sp_map, last_ver, rf);
 	ABT_rwlock_unlock(pool->sp_lock);
 
 	return rc;

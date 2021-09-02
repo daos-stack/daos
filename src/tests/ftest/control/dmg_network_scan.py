@@ -4,8 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
-
 import os
 import re
 import socket
@@ -218,31 +216,34 @@ class DmgNetworkScanTest(TestWithServers):
         dmg_net_devs = []
 
         # Get dmg info
-        scan_info = self.dmg.get_output("network_scan")
+        network_out = self.dmg.network_scan()
 
-        # Get index range to break up information by hostname
-        r = [idx for idx, info in enumerate(scan_info) if info[0] != ""]
-        r = r[1] - r[0] if len(r) > 1 else len(scan_info)
+        # Get devices divided into dictionaries, with iface being the key. e.g.,
+        # temp_net_devs =
+        # [
+        #     {
+        #         'ib0': [['ofi+sockets'], 'wolf-154', '0'],
+        #         'ib1': [['ofi+sockets'], 'wolf-154', '1'],
+        #         'eth0': [['ofi+sockets'], 'wolf-154', '0']
+        #     }
+        # ]
+        host_fabrics = network_out["response"]["HostFabrics"]
+        struct_hash = list(host_fabrics.keys())[0]
+        interfaces = host_fabrics[struct_hash]["HostFabric"]["Interfaces"]
 
-        # Clean up the output, i.e. remove empty string items from lists
-        for idx, info in enumerate(scan_info):
-            scan_info[idx] = [i for i in info if i]
+        # Fill in the dictionary.
+        parsed_devs = {}
+        for interface in interfaces:
+            device = interface["Device"]
+            provider = interface["Provider"]
+            if device in parsed_devs:
+                parsed_devs[device][0].append(provider)
+            else:
+                host = host_fabrics[struct_hash]["HostSet"].split(":")[0]
+                parsed_devs[device] = [
+                    [provider], host, str(interface["NumaNode"])]
 
-        # Get devices divided into dictionaries, with iface being the key
-        info = [scan_info[dev:(dev + r)] for dev in range(0, len(scan_info), r)]
-        for host_info in info:
-            parsed_devs = {}
-            host = host_info[0][0]
-            for dev_info in host_info[1:]:
-                if len(dev_info) == 1:
-                    numa = dev_info[0]
-                    continue
-                for iface in dev_info[1].replace(" ", "").split(","):
-                    if iface in parsed_devs:
-                        parsed_devs[iface][0].extend(dev_info[0].split())
-                    else:
-                        parsed_devs[iface] = [dev_info[0].split(), host, numa]
-            temp_net_devs.append(parsed_devs)
+        temp_net_devs.append(parsed_devs)
 
         # Create NetDev objects
         for d in temp_net_devs:

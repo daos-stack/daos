@@ -28,14 +28,12 @@ struct ds_pool;
 struct ds_pool_hdl;
 
 /* Container metrics */
-struct cont_metrics {
-	struct d_tm_node_t	*op_open_ctr;
-	struct d_tm_node_t	*op_close_ctr;
-	struct d_tm_node_t	*op_destroy_ctr;
-	struct d_tm_node_t	*open_cont_gauge;
+struct cont_pool_metrics {
+	struct d_tm_node_t	*cpm_open_count;
+	struct d_tm_node_t	*cpm_close_count;
+	struct d_tm_node_t	*cpm_destroy_count;
+	struct d_tm_node_t	*cpm_open_cont_gauge;
 };
-
-extern struct cont_metrics ds_cont_metrics;
 
 /* ds_cont thread local storage structure */
 struct dsm_tls {
@@ -56,6 +54,7 @@ dsm_tls_get()
 	return tls;
 }
 
+extern bool ec_agg_disabled;
 /*
  * Container service
  *
@@ -82,6 +81,7 @@ struct cont_svc {
 	struct ds_rsvc	       *cs_rsvc;
 	ABT_rwlock		cs_lock;
 	rdb_path_t		cs_root;	/* root KVS */
+	rdb_path_t		cs_uuids;	/* container UUIDs KVS */
 	rdb_path_t		cs_conts;	/* container KVS */
 	rdb_path_t		cs_hdls;	/* container handle KVS */
 	struct ds_pool	       *cs_pool;
@@ -116,11 +116,13 @@ struct cont_iv_snapshot {
 struct cont_iv_capa {
 	uint64_t	flags;
 	uint64_t	sec_capas;
+	/* the pool map_ver of updating DAOS_PROP_CO_STATUS property */
+	uint32_t	status_pm_ver;
 };
 
 /* flattened container properties */
 struct cont_iv_prop {
-	char		cip_label[DAOS_PROP_LABEL_MAX_LEN];
+	char		cip_label[DAOS_PROP_MAX_LABEL_BUF_LEN];
 	char		cip_owner[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	char		cip_owner_grp[DAOS_ACL_MAX_PRINCIPAL_BUF_LEN];
 	uint64_t	cip_layout_type;
@@ -136,6 +138,7 @@ struct cont_iv_prop {
 	uint64_t	cip_snap_max;
 	uint64_t	cip_compress;
 	uint64_t	cip_encrypt;
+	uint64_t	cip_ec_cell_sz;
 	struct daos_prop_co_roots	cip_roots;
 	struct daos_co_status		cip_co_status;
 	/* MUST be the last member */
@@ -218,11 +221,9 @@ int ds_cont_snap_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 int ds_cont_snap_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			 struct cont *cont, struct container_hdl *hdl,
 			 crt_rpc_t *rpc);
-int
-ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid,
-		      daos_epoch_t **snapshots, int *snap_count);
-void
-ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
+int ds_cont_get_snapshots(uuid_t pool_uuid, uuid_t cont_uuid, daos_epoch_t **snapshots,
+			  int *snap_count);
+void ds_cont_update_snap_iv(struct cont_svc *svc, uuid_t cont_uuid);
 
 /**
  * srv_target.c
@@ -250,13 +251,16 @@ void ds_cont_hdl_hash_destroy(struct d_hash_table *hash);
 void ds_cont_oid_alloc_handler(crt_rpc_t *rpc);
 
 int ds_cont_tgt_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid,
-		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas);
+		     uuid_t cont_uuid, uint64_t flags, uint64_t sec_capas,
+		     uint32_t status_pm_ver);
 int ds_cont_tgt_snapshots_update(uuid_t pool_uuid, uuid_t cont_uuid,
 				 uint64_t *snapshots, int snap_count);
 int ds_cont_tgt_snapshots_refresh(uuid_t pool_uuid, uuid_t cont_uuid);
 int ds_cont_tgt_close(uuid_t cont_hdl_uuid);
 int ds_cont_tgt_refresh_agg_eph(uuid_t pool_uuid, uuid_t cont_uuid,
 				daos_epoch_t eph);
+int ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
+				 uint32_t pm_ver);
 /**
  * oid_iv.c
  */
@@ -269,7 +273,8 @@ int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 int ds_cont_iv_init(void);
 int ds_cont_iv_fini(void);
 int cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
-			      uint64_t flags, uint64_t sec_capas);
+			      uint64_t flags, uint64_t sec_capas,
+			      uint32_t pm_ver);
 int cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid,
 				  int sync_mode);
 int cont_iv_prop_fetch(uuid_t pool_uuid, uuid_t cont_uuid,
@@ -285,8 +290,8 @@ int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
 int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 
-/* srv_metrics.c */
-int ds_cont_metrics_init(void);
-int ds_cont_metrics_fini(void);
+/** srv_metrics.c*/
+void *ds_cont_metrics_alloc(const char *path, int tgt_id);
+void ds_cont_metrics_free(void *data);
 
 #endif /* __CONTAINER_SRV_INTERNAL_H__ */

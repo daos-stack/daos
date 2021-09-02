@@ -156,9 +156,12 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		test_rebuild_wait(args, args_cnt);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	for (i = 0; i < args_cnt; i++)
+	for (i = 0; i < args_cnt; i++) {
+		daos_cont_status_clear(args[i]->coh, NULL);
+
 		if (args[i]->rebuild_post_cb)
 			args[i]->rebuild_post_cb(args[i]);
+	}
 }
 
 
@@ -166,6 +169,12 @@ void
 rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
 {
 	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, kill, RB_OP_TYPE_FAIL);
+}
+
+void
+reintegrate_single_pool_rank_no_disconnect(test_arg_t *arg, d_rank_t failed_rank)
+{
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, RB_OP_TYPE_REINT);
 }
 
 void
@@ -559,6 +568,9 @@ rebuild_io_verify(test_arg_t *arg, daos_obj_id_t *oids, int oids_nr)
 	int	rc;
 	int	i;
 
+	rc = daos_cont_status_clear(arg->coh, NULL);
+	assert_rc_equal(rc, 0);
+
 	print_message("rebuild io verify obj %d\n", oids_nr);
 	for (i = 0; i < oids_nr; i++) {
 		/* XXX: skip punch object. */
@@ -603,6 +615,13 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 
 	for (i = 0; i < KEY_NR; i++) {
 		req->iod_type = DAOS_IOD_ARRAY;
+
+		sprintf(key, "dkey_small_%d", index);
+		recx.rx_nr = 5;
+		recx.rx_idx = off + i * 10485760;
+		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, size, req);
+
 		sprintf(key, "dkey_%d", index);
 		recx.rx_nr = size;
 		recx.rx_idx = off + i * 10485760;
@@ -647,8 +666,18 @@ verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
 		daos_size_t	single_data_size;
 		daos_size_t	iod3_datasize = IOD3_DATA_SIZE * 3;
 		daos_size_t	datasize = size;
+		daos_size_t	small_size = 5;
 
 		req->iod_type = DAOS_IOD_ARRAY;
+
+		sprintf(key, "dkey_small_%d", index);
+		sprintf(key_buf, "a_key");
+		memset(read_data, 0, 5);
+		lookup(key, 1, &akey, &offset, &iod_size,
+		       &read_data, &small_size, DAOS_TX_NONE, req, false);
+		assert_memory_equal(read_data, verify_data, small_size);
+		assert_int_equal(iod_size, 1);
+
 		sprintf(key, "dkey_%d", index);
 		sprintf(key_buf, "a_key");
 		memset(read_data, 0, size);
@@ -825,6 +854,7 @@ dfs_ec_rebuild_io(void **state, int *shards, int shards_nr)
 		idx++;
 	}
 	rebuild_pools_ranks(&arg, 1, ranks, idx, false);
+	daos_cont_status_clear(co_hdl, NULL);
 
 	/* Verify full stripe */
 	d_iov_set(&iov, buf, buf_size);
@@ -914,6 +944,45 @@ get_rank_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
 	return rank;
 }
 
+uint32_t
+get_tgt_idx_by_oid_shard(test_arg_t *arg, daos_obj_id_t oid,
+			 uint32_t shard)
+{
+	struct daos_obj_layout	*layout;
+	uint32_t		grp_idx;
+	uint32_t		idx;
+	uint32_t		tgt_idx;
+
+	daos_obj_layout_get(arg->coh, oid, &layout);
+	grp_idx = shard / layout->ol_shards[0]->os_replica_nr;
+	idx = shard % layout->ol_shards[0]->os_replica_nr;
+	tgt_idx = layout->ol_shards[grp_idx]->os_shard_loc[idx].sd_tgt_idx;
+
+	print_message("idx %u grp %u tgt_idx %d\n", idx, grp_idx, tgt_idx);
+	daos_obj_layout_free(layout);
+	return tgt_idx;
+}
+
+int
+ec_data_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid, NULL);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_k;
+}
+
+int
+ec_parity_nr_get(daos_obj_id_t oid)
+{
+	struct daos_oclass_attr *oca;
+
+	oca = daos_oclass_attr_find(oid, NULL);
+	assert_true(oca->ca_resil == DAOS_RES_EC);
+	return oca->u.ec.e_p;
+}
+
 void
 get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 			int parity_nr, d_rank_t *ranks, int *ranks_num)
@@ -922,7 +991,7 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	uint32_t		shard;
 	int			idx = 0;
 
-	oca = daos_oclass_attr_find(oid);
+	oca = daos_oclass_attr_find(oid, NULL);
 	if (oca->ca_resil == DAOS_RES_REPL) {
 		ranks[0] = get_rank_by_oid_shard(arg, oid, 0);
 		if (ranks_num)
@@ -937,12 +1006,10 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	while (parity_nr-- > 0)
 		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard--);
 
-	shard = 0;
+	shard = rand() % oca->u.ec.e_k;
 	while (data_nr-- > 0) {
 		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
-		shard = shard + 2;
-		if (shard > oca->u.ec.e_k)
-			break;
+		shard = (shard + 2) % oca->u.ec.e_k;
 	}
 
 	if (ranks_num)
@@ -996,7 +1063,7 @@ rebuild_small_sub_setup(void **state)
 
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_SMALL_POOL_SIZE, 0, NULL);
+			REBUILD_POOL_SIZE, 0, NULL);
 	if (rc)
 		return rc;
 

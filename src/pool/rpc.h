@@ -28,7 +28,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_POOL_VERSION 2
+#define DAOS_POOL_VERSION 4
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -92,7 +92,10 @@
 		ds_pool_replicas_update_handler, NULL),			\
 	X(POOL_LIST_CONT,						\
 		0, &CQF_pool_list_cont,					\
-		ds_pool_list_cont_handler, NULL)
+		ds_pool_list_cont_handler, NULL),			\
+	X(POOL_TGT_QUERY_MAP,						\
+		0, &CQF_pool_tgt_query_map,				\
+		ds_pool_tgt_query_map_handler, NULL)
 
 #define POOL_PROTO_SRV_RPC_LIST						\
 	X(POOL_TGT_DISCONNECT,						\
@@ -215,6 +218,7 @@ CRT_RPC_DECLARE(pool_query, DAOS_ISEQ_POOL_QUERY, DAOS_OSEQ_POOL_QUERY)
 	((struct pool_op_out)	  (pqio_op)		CRT_VAR) \
 	((d_rank_t)		  (pqio_rank)		CRT_VAR) \
 	((uint32_t)		  (pqio_tgt)		CRT_VAR) \
+	((struct daos_space)	  (pqio_space)		CRT_RAW) \
 	((daos_target_state_t)	  (pqio_state)		CRT_VAR)
 
 CRT_RPC_DECLARE(pool_query_info, DAOS_ISEQ_POOL_QUERY_INFO,
@@ -269,19 +273,6 @@ CRT_RPC_DECLARE(pool_replicas_add, DAOS_ISEQ_POOL_MEMBERSHIP,
 CRT_RPC_DECLARE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,
 		DAOS_OSEQ_POOL_MEMBERSHIP)
 
-/** Target address for each pool target */
-struct pool_target_addr {
-	/** rank of the node where the target resides */
-	d_rank_t	pta_rank;
-	/** target index in each node */
-	uint32_t	pta_target;
-};
-
-struct pool_target_addr_list {
-	int			 pta_number;
-	struct pool_target_addr	*pta_addrs;
-};
-
 #define DAOS_ISEQ_POOL_TGT_UPDATE /* input fields */		 \
 	((struct pool_op_in)	(pti_op)		CRT_VAR) \
 	((struct pool_target_addr) (pti_addr_list)	CRT_ARRAY)
@@ -292,9 +283,9 @@ struct pool_target_addr_list {
 
 #define DAOS_ISEQ_POOL_EXTEND /* input fields */		 \
 	((struct pool_op_in)	(pei_op)		CRT_VAR) \
-	((uint32_t)		(pei_ntgts)		CRT_VAR) \
 	((uuid_t)		(pei_tgt_uuids)		CRT_ARRAY) \
 	((d_rank_list_t)	(pei_tgt_ranks)		CRT_PTR) \
+	((uint32_t)		(pei_ntgts)		CRT_VAR) \
 	((uint32_t)		(pei_ndomains)		CRT_VAR) \
 	((uint32_t)		(pei_domains)		CRT_ARRAY)
 
@@ -396,8 +387,8 @@ CRT_RPC_DECLARE(pool_acl_update, DAOS_ISEQ_POOL_ACL_UPDATE,
 
 #define DAOS_ISEQ_POOL_ACL_DELETE	/* input fields */	 \
 	((struct pool_op_in)	(pdi_op)		CRT_VAR) \
-	((uint8_t)		(pdi_type)		CRT_VAR) \
-	((d_const_string_t)	(pdi_principal)		CRT_VAR)
+	((d_const_string_t)	(pdi_principal)		CRT_VAR) \
+	((uint8_t)		(pdi_type)		CRT_VAR)
 
 #define DAOS_OSEQ_POOL_ACL_DELETE	/* output fields */	 \
 	((struct pool_op_out)	(pdo_op)		CRT_VAR)
@@ -429,6 +420,19 @@ CRT_RPC_DECLARE(pool_list_cont, DAOS_ISEQ_POOL_LIST_CONT,
 CRT_RPC_DECLARE(pool_ranks_get, DAOS_ISEQ_POOL_RANKS_GET,
 		DAOS_OSEQ_POOL_RANKS_GET)
 
+#define DAOS_ISEQ_POOL_TGT_QUERY_MAP	/* input fields */	 \
+	((struct pool_op_in)	(tmi_op)		CRT_VAR) \
+	((crt_bulk_t)		(tmi_map_bulk)		CRT_VAR) \
+	((uint32_t)		(tmi_map_version)	CRT_VAR)
+
+#define DAOS_OSEQ_POOL_TGT_QUERY_MAP	/* output fields */	 \
+	((struct pool_op_out)	(tmo_op)		CRT_VAR) \
+	/* only set on -DER_TRUNC */				 \
+	((uint32_t)		(tmo_map_buf_size)	CRT_VAR)
+
+CRT_RPC_DECLARE(pool_tgt_query_map, DAOS_ISEQ_POOL_TGT_QUERY_MAP,
+		DAOS_OSEQ_POOL_TGT_QUERY_MAP)
+
 static inline int
 pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 		crt_rpc_t **req)
@@ -441,15 +445,6 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
 }
-
-int
-pool_target_addr_list_alloc(unsigned int num,
-			    struct pool_target_addr_list *list);
-int
-pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
-			     struct pool_target_addr *src);
-void
-pool_target_addr_list_free(struct pool_target_addr_list *list);
 
 uint64_t
 pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop);

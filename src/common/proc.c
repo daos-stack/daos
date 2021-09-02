@@ -177,6 +177,7 @@ crt_proc_daos_prop_t(crt_proc_t proc, crt_proc_op_t proc_op, daos_prop_t **data)
 		prop->dpp_reserv = tmp;
 		rc = crt_proc_prop_entries(proc, proc_op, prop);
 		if (rc) {
+			crt_proc_prop_entries(proc, CRT_PROC_FREE, prop);
 			D_FREE(prop->dpp_entries);
 			D_FREE(prop);
 			return rc;

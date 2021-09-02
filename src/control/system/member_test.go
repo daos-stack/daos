@@ -26,9 +26,10 @@ func TestSystem_Member_Stringify(t *testing.T) {
 		MemberStateJoined,
 		MemberStateStopping,
 		MemberStateStopped,
-		MemberStateEvicted,
+		MemberStateExcluded,
 		MemberStateErrored,
 		MemberStateUnresponsive,
+		MemberStateAdminExcluded,
 	}
 
 	strs := []string{
@@ -39,9 +40,10 @@ func TestSystem_Member_Stringify(t *testing.T) {
 		"Joined",
 		"Stopping",
 		"Stopped",
-		"Evicted",
+		"Excluded",
 		"Errored",
 		"Unresponsive",
+		"AdminExcluded",
 	}
 
 	for i, state := range states {
@@ -100,7 +102,10 @@ func TestSystem_Member_Convert(t *testing.T) {
 	if err := convert.Types(membersIn, &membersOut); err != nil {
 		t.Fatal(err)
 	}
-	AssertEqual(t, membersIn, membersOut, "")
+
+	if diff := cmp.Diff(membersIn, membersOut, memberCmpOpts...); diff != "" {
+		t.Fatalf("unexpected members: (-want, +got)\n%s\n", diff)
+	}
 }
 
 func TestSystem_MemberResult_Convert(t *testing.T) {

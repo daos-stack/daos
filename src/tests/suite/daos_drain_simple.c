@@ -50,7 +50,7 @@ drain_dkeys(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      KEY_NR, DP_OID(oid));
 	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		char	key[32] = {0};
 
 		sprintf(key, "dkey_0_%d", i);
 		insert_single(key, "a_key", 0, "data", strlen("data") + 1,
@@ -60,8 +60,8 @@ drain_dkeys(void **state)
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 
 	for (i = 0; i < KEY_NR; i++) {
-		char key[16];
-		char buf[16];
+		char key[32] = {0};
+		char buf[16] = {0};
 
 		sprintf(key, "dkey_0_%d", i);
 		/** Lookup */
@@ -106,7 +106,7 @@ drain_akeys(void **state)
 
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	for (i = 0; i < KEY_NR; i++) {
-		char akey[16];
+		char akey[32] = {0};
 		char buf[16];
 
 		sprintf(akey, "%d", i);
@@ -145,7 +145,7 @@ drain_indexes(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      2000, DP_OID(oid));
 	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		char	key[32] = {0};
 
 		sprintf(key, "dkey_2_%d", i);
 		for (j = 0; j < 20; j++)
@@ -156,7 +156,7 @@ drain_indexes(void **state)
 	/* Drain rank 1 */
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		char	key[32] = {0};
 		char	buf[16];
 
 		sprintf(key, "dkey_2_%d", i);
@@ -356,11 +356,11 @@ drain_multiple(void **state)
 	print_message("Insert %d kv record in object "DF_OID"\n",
 		      1000, DP_OID(oid));
 	for (i = 0; i < 10; i++) {
-		char	dkey[16];
+		char	dkey[32] = {0};
 
 		sprintf(dkey, "dkey_3_%d", i);
 		for (j = 0; j < 10; j++) {
-			char	akey[16];
+			char	akey[32] = {0};
 
 			sprintf(akey, "akey_%d", j);
 			for (k = 0; k < 10; k++)
@@ -372,11 +372,11 @@ drain_multiple(void **state)
 
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	for (i = 0; i < 10; i++) {
-		char	dkey[16];
+		char	dkey[32] = {0};
 
 		sprintf(dkey, "dkey_3_%d", i);
 		for (j = 0; j < 10; j++) {
-			char	akey[16];
+			char	akey[32] = {0};
 			char	buf[10];
 
 			memset(buf, 0, 10);
@@ -420,7 +420,7 @@ drain_large_rec(void **state)
 		      KEY_NR, DP_OID(oid));
 	memset(buffer, 'a', 5000);
 	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		char	key[32] = {0};
 
 		sprintf(key, "dkey_4_%d", i);
 		insert_single(key, "a_key", 0, buffer, 5000, DAOS_TX_NONE,
@@ -430,7 +430,7 @@ drain_large_rec(void **state)
 	drain_single_pool_target(arg, ranks_to_kill[0], tgt, false);
 	memset(v_buffer, 'a', 5000);
 	for (i = 0; i < KEY_NR; i++) {
-		char	key[16];
+		char	key[32] = {0};
 
 		sprintf(key, "dkey_4_%d", i);
 		memset(buffer, 0, 5000);

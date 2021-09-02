@@ -44,14 +44,12 @@ dmg:
       allow_insecure: True
 # pool_params - attributes of the pools to create; Currently only create one
 pool_jobs:
-    mode: 146
     name: daos_server
     scm_size: 40GB
     nvme_size: 200GB
-    svcn: 1
+    properties: reclaim:time,ec_cell_sz:64KiB
     control_method: dmg
 pool_reserved:
-    mode: 511
     name: daos_server
     scm_size: 3GB
     nvme_size: 50GB
@@ -113,6 +111,9 @@ ior_stress:
         - '64k'
     dfs_oclass:
         - 'SX'
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/ior/"
+        disable_caching: True
 mdtest_stress:
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
@@ -137,3 +138,6 @@ mdtest_stress:
     dfs_oclass: 'SX'
     dfs_dir_oclass: 'S1'
     dfs_destroy: False
+    dfuse:
+        mount_dir: "/tmp/daos_dfuse/mdtest/"
+        disable_caching: True

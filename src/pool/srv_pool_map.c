@@ -119,7 +119,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			D_DEBUG(DF_DSMS, "change "DF_TARGET" to UP %p\n",
 				DP_TARGET(target), map);
 			target->ta_comp.co_status = PO_COMP_ST_UP;
-			++(*version);
+			target->ta_comp.co_in_ver = ++(*version);
 			if (print_changes)
 				D_PRINT(DF_TARGET " start reintegration.\n",
 					DP_TARGET(target));
@@ -160,7 +160,7 @@ update_one_tgt(struct pool_map *map, struct pool_target *target,
 			rc = pool_map_activate_new_target(map,
 						target->ta_comp.co_id);
 			D_ASSERT(rc != 0); /* This target must be findable */
-			(*version)++;
+			target->ta_comp.co_in_ver = ++(*version);
 			break;
 		}
 		break;

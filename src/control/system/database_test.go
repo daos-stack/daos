@@ -64,7 +64,7 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	memberStates := []MemberState{
 		MemberStateUnknown, MemberStateAwaitFormat, MemberStateStarting,
 		MemberStateReady, MemberStateJoined, MemberStateStopping, MemberStateStopped,
-		MemberStateEvicted, MemberStateErrored, MemberStateUnresponsive,
+		MemberStateExcluded, MemberStateErrored, MemberStateUnresponsive,
 	}
 
 	for i, ms := range memberStates {
@@ -141,9 +141,9 @@ func TestSystem_Database_Cancel(t *testing.T) {
 		return nil
 	})
 
-	waitForLeadership(ctx, t, db, true, 10*time.Second)
+	waitForLeadership(ctx, t, db, true, 15*time.Second)
 	dbCancel()
-	waitForLeadership(ctx, t, db, false, 10*time.Second)
+	waitForLeadership(ctx, t, db, false, 15*time.Second)
 
 	if atomic.LoadUint32(&onGainedCalled) != 1 {
 		t.Fatal("OnLeadershipGained callbacks didn't execute")
@@ -270,10 +270,9 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 			State:     PoolServiceStateReady,
 			Replicas:  <-replicas,
 			Storage: &PoolServiceStorage{
-				CreationRankStr: fmt.Sprintf("[0-%d]", maxRanks),
-				CurrentRankStr:  fmt.Sprintf("[0-%d]", maxRanks),
-				ScmPerRank:      1,
-				NVMePerRank:     2,
+				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),
+				CurrentRankStr:     fmt.Sprintf("[0-%d]", maxRanks),
+				PerRankTierStorage: []uint64{1, 2},
 			},
 		}
 		data, err := createRaftUpdate(raftOpAddPoolService, ps)
@@ -642,40 +641,44 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 		"pool svc replicas update miss": {
 			poolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 			event: events.NewPoolSvcReplicasUpdateEvent(
 				"foo", 1, puuidAnother.String(), []uint32{2, 3, 5, 6, 7}, 1),
 			expPoolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 		},
 		"pool svc replicas update hit": {
 			poolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 			event: events.NewPoolSvcReplicasUpdateEvent(
 				"foo", 1, puuid.String(), []uint32{2, 3, 5, 6, 7}, 1),
 			expPoolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{2, 3, 5, 6, 7},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{2, 3, 5, 6, 7},
+					LastUpdate: time.Now(),
 				},
 			},
 		},
@@ -703,13 +706,85 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 
 			<-ctx.Done()
 
-			poolSvcs, err := db.PoolServiceList()
+			poolSvcs, err := db.PoolServiceList(false)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(PoolService{}),
+				cmpopts.EquateApproxTime(time.Second),
+			}
+			if diff := cmp.Diff(tc.expPoolSvcs, poolSvcs, cmpOpts...); diff != "" {
+				t.Errorf("unexpected pool service replicas (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystemDatabase_PoolServiceList(t *testing.T) {
+	ready := &PoolService{
+		PoolUUID:   uuid.New(),
+		PoolLabel:  "pool0001",
+		State:      PoolServiceStateReady,
+		Replicas:   []Rank{1, 2, 3, 4, 5},
+		LastUpdate: time.Now(),
+	}
+	creating := &PoolService{
+		PoolUUID:   uuid.New(),
+		PoolLabel:  "pool0002",
+		State:      PoolServiceStateCreating,
+		Replicas:   []Rank{1, 2, 3, 4, 5},
+		LastUpdate: time.Now(),
+	}
+	destroying := &PoolService{
+		PoolUUID:   uuid.New(),
+		PoolLabel:  "pool0003",
+		State:      PoolServiceStateDestroying,
+		Replicas:   []Rank{1, 2, 3, 4, 5},
+		LastUpdate: time.Now(),
+	}
+
+	for name, tc := range map[string]struct {
+		poolSvcs    []*PoolService
+		all         bool
+		expPoolSvcs []*PoolService
+	}{
+		"empty": {
+			expPoolSvcs: []*PoolService{},
+		},
+		"all: false": {
+			poolSvcs:    []*PoolService{creating, ready, destroying},
+			expPoolSvcs: []*PoolService{ready},
+		},
+		"all: true": {
+			poolSvcs:    []*PoolService{creating, ready, destroying},
+			all:         true,
+			expPoolSvcs: []*PoolService{creating, ready, destroying},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			for _, ps := range tc.poolSvcs {
+				if err := db.AddPoolService(ps); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			poolSvcs, err := db.PoolServiceList(tc.all)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.SortSlices(func(x, y *PoolService) bool {
+					return x.PoolLabel < y.PoolLabel
+				}),
+				cmpopts.IgnoreUnexported(PoolService{}),
+				cmpopts.EquateApproxTime(time.Second),
 			}
 			if diff := cmp.Diff(tc.expPoolSvcs, poolSvcs, cmpOpts...); diff != "" {
 				t.Errorf("unexpected pool service replicas (-want, +got):\n%s\n", diff)
@@ -741,17 +816,17 @@ func TestSystem_Database_GroupMap(t *testing.T) {
 			// This is a bit fragile, but I don't see a better way to maintain
 			// this list. We'll just need to keep it updated as the states change.
 			members: membersWithStates(
-				MemberStateUnknown,      // rank 0
-				MemberStateAwaitFormat,  // rank 1, excluded
-				MemberStateStarting,     // rank 2
-				MemberStateReady,        // rank 3
-				MemberStateJoined,       // rank 4
-				MemberStateStopping,     // rank 5
-				MemberStateStopped,      // rank 6
-				MemberStateEvicted,      // rank 7, excluded
-				MemberStateExcluded,     // rank 8, excluded
-				MemberStateErrored,      // rank 9
-				MemberStateUnresponsive, // rank 10
+				MemberStateUnknown,       // rank 0
+				MemberStateAwaitFormat,   // rank 1, excluded
+				MemberStateStarting,      // rank 2
+				MemberStateReady,         // rank 3
+				MemberStateJoined,        // rank 4
+				MemberStateStopping,      // rank 5
+				MemberStateStopped,       // rank 6
+				MemberStateExcluded,      // rank 7, excluded
+				MemberStateAdminExcluded, // rank 8, excluded
+				MemberStateErrored,       // rank 9
+				MemberStateUnresponsive,  // rank 10
 			),
 			expGroupMap: &GroupMap{
 				Version: 11,

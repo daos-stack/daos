@@ -183,6 +183,8 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	uint32_t			 addr_buf_len;
 	int				 count;
 	struct crt_context		*ctx = NULL;
+	d_list_t			*ctx_list;
+	int				 provider;
 	int				 rc = 0;
 
 	D_ASSERTF(crt_is_service(), "Must be called in a service process\n");
@@ -198,9 +200,15 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 	addr_buf_len = 0;
 
 	D_RWLOCK_RDLOCK(&crt_gdata.cg_rwlock);
-	out_args->cel_ctx_num = crt_gdata.cg_ctx_num;
 
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+	/* TODO: Need to derive provider from rpc struct */
+	provider = crt_gdata.cg_init_prov;
+
+	ctx_list = crt_provider_get_ctx_list(provider);
+
+	out_args->cel_ctx_num = crt_provider_get_cur_ctx_num(provider);
+
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		str_size = CRT_ADDR_STR_MAX_LEN;
 
 		D_MUTEX_LOCK(&ctx->cc_mutex);
@@ -223,7 +231,7 @@ crt_hdlr_ctl_ls(crt_rpc_t *rpc_req)
 
 	count = 0;
 
-	d_list_for_each_entry(ctx, &crt_gdata.cg_ctx_list, cc_link) {
+	d_list_for_each_entry(ctx, ctx_list, cc_link) {
 		str_size = CRT_ADDR_STR_MAX_LEN;
 		rc = 0;
 
