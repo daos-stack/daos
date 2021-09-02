@@ -23,12 +23,40 @@ import (
 )
 
 func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
-	testResp := &mgmtpb.GetAttachInfoResp{
-		MsRanks: []uint32{0, 1, 3},
-		ClientNetHint: &mgmtpb.ClientNetHint{
-			Provider:    "ofi+sockets",
-			NetDevClass: netdetect.Ether,
+	testResps := []*mgmtpb.GetAttachInfoResp{
+		{
+			MsRanks: []uint32{0, 1, 3},
+			ClientNetHint: &mgmtpb.ClientNetHint{
+				Provider:    "ofi+sockets",
+				NetDevClass: netdetect.Ether,
+			},
 		},
+		{
+			MsRanks: []uint32{0},
+			ClientNetHint: &mgmtpb.ClientNetHint{
+				Provider:    "ofi+sockets",
+				NetDevClass: netdetect.Ether,
+			},
+		},
+		{
+			MsRanks: []uint32{2, 3},
+			ClientNetHint: &mgmtpb.ClientNetHint{
+				Provider:    "ofi+sockets",
+				NetDevClass: netdetect.Ether,
+			},
+		},
+	}
+
+	hostResps := func(resps []*mgmtpb.GetAttachInfoResp) []*control.HostResponse {
+		result := []*control.HostResponse{}
+
+		for _, r := range resps {
+			result = append(result, &control.HostResponse{
+				Message: r,
+			})
+		}
+
+		return result
 	}
 
 	testFI := &FabricInterface{
@@ -37,22 +65,36 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 		NetDevClass: netdetect.Ether,
 	}
 
-	testRespWithHint := new(mgmtpb.GetAttachInfoResp)
-	*testRespWithHint = *testResp
-	testRespWithHint.ClientNetHint.Interface = testFI.Name
-	testRespWithHint.ClientNetHint.Domain = testFI.Name
+	hintResp := func(resp *mgmtpb.GetAttachInfoResp) *mgmtpb.GetAttachInfoResp {
+		withHint := new(mgmtpb.GetAttachInfoResp)
+		*withHint = *testResps[0]
+		withHint.ClientNetHint.Interface = testFI.Name
+		withHint.ClientNetHint.Domain = testFI.Name
+
+		return withHint
+	}
 
 	for name, tc := range map[string]struct {
 		cacheDisabled bool
-		expErr        error
-		expResp       *mgmtpb.GetAttachInfoResp
+		rpcResps      []*control.HostResponse
+		expResps      []*mgmtpb.GetAttachInfoResp
 	}{
 		"cache disabled": {
 			cacheDisabled: true,
-			expResp:       testRespWithHint,
+			rpcResps:      hostResps(testResps),
+			expResps: []*mgmtpb.GetAttachInfoResp{
+				hintResp(testResps[0]),
+				hintResp(testResps[1]),
+				hintResp(testResps[2]),
+			},
 		},
-		"success": {
-			expResp: testRespWithHint,
+		"cached": {
+			rpcResps: hostResps(testResps),
+			expResps: []*mgmtpb.GetAttachInfoResp{
+				hintResp(testResps[0]),
+				hintResp(testResps[0]),
+				hintResp(testResps[0]),
+			},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -75,21 +117,19 @@ func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
 				ctlInvoker: control.NewMockInvoker(log, &control.MockInvokerConfig{
 					Sys: sysName,
 					UnaryResponse: &control.UnaryResponse{
-						Responses: []*control.HostResponse{
-							{
-								Message: testResp,
-							},
-						},
+						Responses: tc.rpcResps,
 					},
 				}),
 			}
 
-			resp, err := mod.getAttachInfo(context.Background(), 0, sysName)
+			for _, expResp := range tc.expResps {
+				resp, err := mod.getAttachInfo(context.Background(), 0, sysName)
 
-			common.CmpErr(t, tc.expErr, err)
+				common.CmpErr(t, nil, err)
 
-			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.GetAttachInfoResp{}, mgmtpb.ClientNetHint{})); diff != "" {
-				t.Fatalf("-want, +got:\n%s", diff)
+				if diff := cmp.Diff(expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.GetAttachInfoResp{}, mgmtpb.ClientNetHint{})); diff != "" {
+					t.Fatalf("-want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
