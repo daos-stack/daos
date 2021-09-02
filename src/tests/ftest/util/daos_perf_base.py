@@ -26,7 +26,7 @@ class DaosPerfBase(TestWithServers):
         # Obtain the number of processes listed with the daos_perf options
         processes = self.params.get("processes", "/run/daos_perf/*")
         # Use the dmg_control yaml
-        dmg_config_file = get_default_config_file("control")
+        dmg_config_file = self.get_dmg_command().yaml.filename
         # Create the daos_perf command from the test yaml file
         daos_perf = DaosPerfCommand(self.bin)
         daos_perf.get_params(self)
@@ -35,14 +35,14 @@ class DaosPerfBase(TestWithServers):
         daos_perf_env = daos_perf.get_environment(self.server_managers[0])
 
         # Create the orterun command
-        orterun = Orterun(daos_perf)
-        orterun.assign_hosts(self.hostlist_clients, self.workdir, None)
-        orterun.assign_processes(processes)
-        orterun.assign_environment(daos_perf_env)
+        self.job_manager = Orterun(daos_perf)
+        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        self.job_manager.assign_processes(processes)
+        self.job_manager.assign_environment(daos_perf_env)
         self.log.info("orterun command: %s", str(orterun))
 
         # Run the daos_perf command and check for errors
-        result = orterun.run()
+        result = self.job_manager.run()
         errors = re.findall(
             r"(.*(?:non-zero exit code|errors|failed|Failed).*)",
             result.stdout_text)
