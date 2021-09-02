@@ -1401,7 +1401,12 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 	d_list_for_each_entry_safe(dtr, next, dtr_list, dtr_link) {
 		if (dc_tx_same_rdg(&leader->dtr_group, &dtr->dtr_group)) {
 			d_list_del(&dtr->dtr_link);
-			D_FREE(dtr);
+			if (leader->dtr_group.drg_flags & DGF_RDONLY) {
+				D_FREE(leader);
+				leader = dtr;
+			} else {
+				D_FREE(dtr);
+			}
 		}
 	}
 
@@ -1619,7 +1624,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		if (!obj_is_ec(obj))
+		if (!obj_is_ec(obj) && act_grp_cnt == 1)
 			mbs->dm_flags |= DMF_SRDG_REP;
 
 		/* If there is only one redundancy group to be modified,
