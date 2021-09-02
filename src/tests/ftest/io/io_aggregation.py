@@ -43,8 +43,8 @@ class IoAggregation(IorTestBase):
           Highest epoch value for a given container.
 
         """
-        highest_epoch = self.daos_cmd.get_output(
-            "container_query", **kwargs)[0][4]
+        query = self.daos_cmd.container_query(**kwargs)
+        highest_epoch = query["response"]["highest_aggregated_epoch"]
 
         return highest_epoch
 
@@ -75,7 +75,7 @@ class IoAggregation(IorTestBase):
             for 4 attempts.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,small
+        :avocado: tags=hw,medium
         :avocado: tags=daosio,ioaggregation,tx
         """
         # update ior signature option
