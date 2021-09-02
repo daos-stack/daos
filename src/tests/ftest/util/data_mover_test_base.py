@@ -84,6 +84,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
 
+	# path to read and write container properties to/from hdf5 file
+        self.preserve_props_path = None
+
         # List of test paths to create and remove
         self.posix_test_paths = []
 
@@ -770,6 +773,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # First, initialize a new fs copy command
         self.fs_copy_cmd = FsCopy(self.daos_cmd, self.log)
+
+	# set preserve-props path if it was used in test case
+        if self.preserve_props_path:
+            self.fs_copy_cmd.set_fs_copy_params(preserve_props=self.preserve_props_path)
 
         # Set the source params
         if src_type == "POSIX":

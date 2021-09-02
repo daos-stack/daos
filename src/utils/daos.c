@@ -586,6 +586,7 @@ args_free(struct cmd_args_s *ap)
 	D_FREE(ap->dfs_prefix);
 	D_FREE(ap->src);
 	D_FREE(ap->dst);
+	D_FREE(ap->preserve_props);
 	D_FREE(ap->snapname_str);
 	D_FREE(ap->epcrange_str);
 
@@ -606,35 +607,36 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 	/* Note: will rely on getopt_long() substring matching for shorter
 	 * option variants. Specifically --sys= for --sys-name=
 	 */
-	struct option		options[] = {
-		{"sys-name",	required_argument,	NULL,	'G'},
-		{"pool",	required_argument,	NULL,	'p'},
-		{"cont",	required_argument,	NULL,	'c'},
-		{"attr",	required_argument,	NULL,	'a'},
-		{"value",	required_argument,	NULL,	'v'},
-		{"path",	required_argument,	NULL,	'd'},
-		{"src",		required_argument,	NULL,	'S'},
-		{"dst",		required_argument,	NULL,	'D'},
-		{"type",	required_argument,	NULL,	't'},
-		{"mode",	required_argument,	NULL,	'M'},
-		{"oclass",	required_argument,	NULL,	'o'},
-		{"chunk-size",	required_argument,	NULL,	'z'},
-		{"dfs-prefix",	required_argument,	NULL,	'I'},
-		{"dfs-path",	required_argument,	NULL,	'H'},
-		{"snap",	required_argument,	NULL,	's'},
-		{"epc",		required_argument,	NULL,	'e'},
-		{"epcrange",	required_argument,	NULL,	'r'},
-		{"oid",		required_argument,	NULL,	'i'},
-		{"force",	no_argument,		NULL,	'f'},
-		{"properties",	required_argument,	NULL,	DAOS_PROPERTIES_OPTION},
-		{"outfile",	required_argument,	NULL,	'O'},
-		{"verbose",	no_argument,		NULL,	'V'},
-		{"acl-file",	required_argument,	NULL,	'A'},
-		{"entry",	required_argument,	NULL,	'E'},
-		{"user",	required_argument,	NULL,	'u'},
-		{"group",	required_argument,	NULL,	'g'},
-		{"principal",	required_argument,	NULL,	'P'},
-		{NULL,		0,			NULL,	0}
+	struct option			options[] = {
+		{"sys-name",		required_argument,	NULL,	'G'},
+		{"pool",		required_argument,	NULL,	'p'},
+		{"cont",		required_argument,	NULL,	'c'},
+		{"attr",		required_argument,	NULL,	'a'},
+		{"value",		required_argument,	NULL,	'v'},
+		{"path",		required_argument,	NULL,	'd'},
+		{"src",			required_argument,	NULL,	'S'},
+		{"dst",			required_argument,	NULL,	'D'},
+		{"preserve-props",	required_argument,	NULL,	'm'},
+		{"type",		required_argument,	NULL,	't'},
+		{"mode",		required_argument,	NULL,	'M'},
+		{"oclass",		required_argument,	NULL,	'o'},
+		{"chunk-size",		required_argument,	NULL,	'z'},
+		{"dfs-prefix",		required_argument,	NULL,	'I'},
+		{"dfs-path",		required_argument,	NULL,	'H'},
+		{"snap",		required_argument,	NULL,	's'},
+		{"epc",			required_argument,	NULL,	'e'},
+		{"epcrange",		required_argument,	NULL,	'r'},
+		{"oid",			required_argument,	NULL,	'i'},
+		{"force",		no_argument,		NULL,	'f'},
+		{"properties",		required_argument,	NULL,	DAOS_PROPERTIES_OPTION},
+		{"outfile",		required_argument,	NULL,	'O'},
+		{"verbose",		no_argument,		NULL,	'V'},
+		{"acl-file",		required_argument,	NULL,	'A'},
+		{"entry",		required_argument,	NULL,	'E'},
+		{"user",		required_argument,	NULL,	'u'},
+		{"group",		required_argument,	NULL,	'g'},
+		{"principal",		required_argument,	NULL,	'P'},
+		{NULL,			0,			NULL,	0}
 	};
 	bool			posix_mode_set = false;
 	int			rc;
@@ -772,6 +774,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		case 'H':
 			D_STRNDUP(ap->dfs_path, optarg, strlen(optarg));
 			if (ap->dfs_path == NULL)
+				D_GOTO(out_free, rc = RC_NO_HELP);
+			break;
+		case 'm':
+			D_STRNDUP(ap->preserve_props, optarg, strlen(optarg));
+			if (ap->preserve_props == NULL)
 				D_GOTO(out_free, rc = RC_NO_HELP);
 			break;
 		case 't':
@@ -1484,6 +1491,7 @@ do { \
 	" filesystem copy options (copy):\n" \
 	"	--src=daos://<pool/cont> | <path>\n" \
 	"	--dst=daos://<pool/cont> | <path>\n" \
+	"	--preserve-props=<filename>\n" \
 	"	\t type is daos, only specified if pool/cont used\n"); \
 	fprintf(stream, "\n"); \
 } while (0)
