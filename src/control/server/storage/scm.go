@@ -430,6 +430,9 @@ func (f *ScmAdminForwarder) CheckFormat(req ScmFormatRequest) (*ScmFormatRespons
 
 // Scan forwards an SCM scan request.
 func (f *ScmAdminForwarder) Scan(req ScmScanRequest) (*ScmScanResponse, error) {
+	// Make Scan a no-op on Endeavour
+	return &ScmScanResponse{}, nil
+
 	req.Forwarded = true
 
 	res := new(ScmScanResponse)
@@ -451,6 +454,9 @@ func (f *ScmAdminForwarder) GetPmemState() (ScmState, error) {
 
 // Prepare forwards a request to prep the SCM.
 func (f *ScmAdminForwarder) Prepare(req ScmPrepareRequest) (*ScmPrepareResponse, error) {
+	// Make Prepare a no-op on Endeavour
+	return &ScmPrepareResponse{}, nil
+
 	req.Forwarded = true
 
 	res := new(ScmPrepareResponse)

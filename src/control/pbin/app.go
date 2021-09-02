@@ -178,6 +178,9 @@ func (a *App) isCallerPermitted(callerName string) bool {
 }
 
 func (a *App) checkPrivileges() error {
+	// Disable privilege checks for endeavour.
+	return nil
+
 	if !a.process.IsPrivileged() {
 		return PrivilegedHelperNotPrivileged(a.Name())
 	}
