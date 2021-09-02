@@ -63,6 +63,7 @@ def scons():
     Export('env', 'CART_VERSION')
 
     SConscript('gurt/SConscript')
+    SConscript('cart/SConscript')
     Default('gurt')
     # Generate the common libraries used by more than one component
     SConscript('common/SConscript')
@@ -81,8 +82,8 @@ def scons():
     SConscript('rebuild/SConscript')
     SConscript('security/SConscript')
 
-    # Build CaRT libraries
-    SConscript('cart/SConscript')
+    # Build cart utilities library
+    SConscript('cart/utils/SConscript')
 
     # Build DAOS client libraries
     SConscript('client/SConscript')

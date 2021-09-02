@@ -368,7 +368,6 @@ crt_dc_mgmt_net_cfg(const char *name, crt_group_t *group,
 		return rc;
 
 	for (i = 0; i < resp->n_rank_uris; i++) {
-
 		Mgmt__GetAttachInfoResp__RankUri *rank_uri = resp->rank_uris[i];
 
 		/* Init eq to 1 */
@@ -396,7 +395,6 @@ crt_dc_mgmt_net_cfg(const char *name, crt_group_t *group,
 
 	/* If the server has set this, the client must use the same value. */
 	if (info.srv_srx_set != -1) {
-
 		sprintf(buf, "%d", info.srv_srx_set);
 		rc = setenv("FI_OFI_RXM_USE_SRX", buf, 1);
 		if (rc != 0)
