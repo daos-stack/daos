@@ -9,7 +9,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 960
+timeout: 480 
 server_config:
   name: daos_server
   servers:

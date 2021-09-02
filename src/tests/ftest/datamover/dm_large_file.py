@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
+from os.path import basename
 
 # pylint: disable=too-many-ancestors
 class DmvrPosixLargeFile(DataMoverTestBase):
@@ -94,7 +95,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
 
         # update ior params, read back and verify data from cont2
         self.run_ior_with_params(
-            "DAOS", "/", self.pool[0], self.container[1],
+            "DAOS", self.ior_cmd.test_file.value, self.pool[0], self.container[1],
             flags="-r -R")
 
     def test_dm_large_file_dcp(self):
