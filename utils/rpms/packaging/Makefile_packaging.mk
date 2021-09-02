@@ -291,9 +291,6 @@ debs: $(DEBS)
 ls: $(TARGETS)
 	ls -ld $^
 
-# some hackery until we get jenkins variables in place
-DAOS_STACK_EL_8_DOCKER_REPO = repository/daos-stack-docker-centos-8-x86_64-$$releasever-group
-
 # *_LOCAL_* repos are locally built packages.
 # *_GROUP_* repos are a local mirror of a group of upstream repos.
 # *_GROUP_* repos may not supply a repomd.xml.key.
@@ -327,6 +324,7 @@ endif
 endif
 endif
 endif
+
 ifeq ($(ID_LIKE),debian)
 chrootbuild: $(DEB_TOP)/$(DEB_DSC)
 	$(call distro_map)                                      \

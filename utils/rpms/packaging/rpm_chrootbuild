@@ -22,8 +22,12 @@ cp "$original_cfg_file" "$cfg_file"
 if [ "${CHROOT_NAME}" == "epel-8-x86_64" ]; then
   echo -e "config_opts['releasever'] = '${RELEASEVER}'" >> "$cfg_file"
 fi
+# escape any $s (i.e. for $releasever)
+DISTRO_BASE_LOCAL_REPOS="${DISTRO_BASE_LOCAL_REPOS//$/\\$}"
+echo "DISTRO_BASE_LOCAL_REPOS=$DISTRO_BASE_LOCAL_REPOS"
+
 # shellcheck disable=SC2153
-IFS=\| read -r -a distro_base_local_repos <<< "${DISTRO_BASE_LOCAL_REPOS//$/\\$}"
+IFS=\| read -r -a distro_base_local_repos <<< "${DISTRO_BASE_LOCAL_REPOS}"
 echo -e "config_opts['yum.conf'] += \"\"\"\n" >> "$cfg_file"
 for repo in $DISTRO_BASE_PR_REPOS $PR_REPOS; do
     branch="master"
