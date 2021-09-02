@@ -318,4 +318,4 @@ attached to the ticket.
 To avoid problems with attaching large files, please attach the logs
 in a compressed container format, such as .zip or .tar.bz2.
 
-[^1]: https://jira.hpdd.intel.com
+[^1]: http://jira.daos.io
