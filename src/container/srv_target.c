@@ -2004,10 +2004,11 @@ cont_snap_notify_one(void *vin)
 		rc = cont_child_gather_oids(cont, args->coh_uuid,
 					    args->snap_epoch);
 		if (rc)
-			return rc;
+			goto out_cont;
 	}
 
 	cont->sc_aggregation_max = crt_hlc_get();
+out_cont:
 	ds_cont_child_put(cont);
 	return rc;
 }
