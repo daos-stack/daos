@@ -8,9 +8,9 @@ hosts:
 server_config:
     name: daos_server
     servers:
-        log_mask: DEBUG
+        log_mask: DEBUG,MEM=ERR
         env_vars:
-            - D_LOG_MASK=DEBUG
+            - DD_MASK=mgmt,md,dsms,any
 timeout: 150
 pool:
     control_method: dmg
