@@ -354,7 +354,7 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	DISTRO_BASE_PR_REPOS="$($(DISTRO_BASE)_PR_REPOS)"                          \
 	JENKINS_URL="$${JENKINS_URL}"                                              \
 	JOB_REPOS="$(JOB_REPOS)"                                                   \
-	DISTRO_BASE_LOCAL_REPOS="$(subst $$,\$$,$($(DISTRO_BASE)_LOCAL_REPOS))" \
+	DISTRO_BASE_LOCAL_REPOS="$($(DISTRO_BASE)_LOCAL_REPOS)" \
 	MOCK_OPTIONS="$(MOCK_OPTIONS)"                                             \
 	RPM_BUILD_OPTIONS='$(RPM_BUILD_OPTIONS)'                                   \
 	DISTRO_REPOS='$(DISTRO_REPOS)'                                             \
