@@ -50,7 +50,8 @@ done
 for repo in $JOB_REPOS "${distro_base_local_repos[@]}"; do
     repo_name=${repo##*://}
     repo_name=${repo_name//\//_}
-    repo_adds+=("--enablerepo ${repo_name//$/\\$}")
+    repo_name=${repo_name//-\$releasever/}
+    repo_adds+=("--enablerepo ${repo_name}")
     echo -e "[${repo_name//@/_}]\n\
 name=${repo_name}\n\
 baseurl=${repo}\n\
