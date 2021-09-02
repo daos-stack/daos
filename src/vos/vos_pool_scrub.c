@@ -229,7 +229,7 @@ sc_verify_sv(struct scrub_ctx *ctx, d_iov_t *data)
 static uuid_t *
 sc_cont_uuid(struct scrub_ctx *ctx)
 {
-	return &ctx->sc_cont.scs_cont_uuid;
+	return &ctx->sc_cont_uuid;
 }
 
 static daos_handle_t
@@ -341,13 +341,13 @@ sc_obj_val_setup(struct scrub_ctx *ctx, vos_iter_entry_t *entry,
 	ctx->sc_vos_iter_handle = ih;
 }
 
-static bool
+static inline bool
 oids_are_same(daos_unit_oid_t a, daos_unit_oid_t b)
 {
 	return daos_unit_oid_compare(a, b) == 0;
 }
 
-static bool
+static inline bool
 keys_are_same(daos_key_t key1, daos_key_t key2)
 {
 	if (key1.iov_len != key2.iov_len)
@@ -356,13 +356,19 @@ keys_are_same(daos_key_t key1, daos_key_t key2)
 	return memcmp(key1.iov_buf, key2.iov_buf, key1.iov_len) == 0;
 }
 
-static bool
+static inline bool
+uuids_are_same(uuid_t a, uuid_t b)
+{
+	return uuid_compare(a, b) == 0;
+}
+
+static inline bool
 epoch_eq(daos_epoch_t a, daos_epoch_t b)
 {
 	return a == b;
 }
 
-static bool
+static inline bool
 recx_eq(const daos_recx_t *a, const daos_recx_t *b)
 {
 	if (a == NULL || b == NULL)
@@ -518,8 +524,7 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 }
 
 static int
-sc_cont_setup(struct scrub_ctx *ctx, vos_iter_param_t *param,
-	      vos_iter_entry_t *entry)
+sc_cont_setup(struct scrub_ctx *ctx, vos_iter_entry_t *entry)
 {
 	int			 rc;
 
@@ -527,6 +532,7 @@ sc_cont_setup(struct scrub_ctx *ctx, vos_iter_param_t *param,
 		return -DER_NOSYS;
 	rc = ctx->sc_cont_lookup_fn(ctx->sc_pool_uuid, entry->ie_couuid,
 				    ctx->sc_sched_arg, &ctx->sc_cont);
+	uuid_copy(ctx->sc_cont_uuid, entry->ie_couuid);
 
 	if (rc != 0) {
 		D_ERROR("Error opening vos container: "DF_RC"\n", DP_RC(rc));
@@ -541,7 +547,6 @@ sc_cont_teardown(struct scrub_ctx *ctx)
 {
 	if (ctx->sc_cont_put_fn != NULL)
 		ctx->sc_cont_put_fn(ctx->sc_cont.scs_cont_src);
-	memset(&ctx->sc_cont, 0, sizeof(ctx->sc_cont));
 }
 
 /** vos_iter_cb_t */
@@ -555,16 +560,22 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 
 	D_ASSERT(type == VOS_ITER_COUUID);
 
-	rc = sc_cont_setup(ctx, param, entry);
-	if (rc != 0)
-		return rc;
+	if (uuids_are_same(*sc_cont_uuid(ctx), entry->ie_couuid)) {
+		*acts = VOS_ITER_CB_SKIP;
+		uuid_clear(ctx->sc_cont_uuid);
+	} else {
+		rc = sc_cont_setup(ctx, entry);
+		if (rc != 0)
+			return rc;
 
-	D_DEBUG(DB_CSUM, "Scrubbing container: "DF_UUID"\n",
-		DP_UUID(ctx->sc_cont.scs_cont_uuid));
+		D_DEBUG(DB_CSUM, "Scrubbing container: "DF_UUID"\n",
+			DP_UUID(ctx->sc_cont.scs_cont_uuid));
 
-	rc = sc_scrub_cont(ctx);
+		rc = sc_scrub_cont(ctx);
 
-	sc_cont_teardown(ctx);
+		sc_cont_teardown(ctx);
+		*acts = VOS_ITER_CB_YIELD;
+	}
 
 	return rc;
 }

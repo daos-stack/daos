@@ -218,6 +218,7 @@ sts_ctx_init(struct sts_context *ctx)
 		ctx->tsc_data_len = 1024;
 
 	uuid_parse("12345678-1234-1234-1234-123456789012", ctx->tsc_pool_uuid);
+	uuid_parse("87654321-4321-4321-4321-210987654321", ctx->tsc_cont_uuid);
 	sprintf(ctx->tsc_pmem_file, "/mnt/daos/vos_scrubbing.pmem");
 
 

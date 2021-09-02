@@ -1247,6 +1247,7 @@ struct scrub_ctx {
 	sc_put_cont_fn_t	 sc_cont_put_fn;
 	sc_cont_is_stopping_fn_t sc_cont_is_stopping_fn;
 	struct cont_scrub	 sc_cont;
+	uuid_t			 sc_cont_uuid;
 
 	/** Number of msec between checksum calculations */
 	daos_size_t		 sc_msec_between_calcs;
