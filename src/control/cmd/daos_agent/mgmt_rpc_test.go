@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
@@ -19,6 +21,80 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 )
+
+func TestAgent_mgmtModule_getAttachInfo(t *testing.T) {
+	testResp := &mgmtpb.GetAttachInfoResp{
+		MsRanks: []uint32{0, 1, 3},
+		ClientNetHint: &mgmtpb.ClientNetHint{
+			Provider:    "ofi+sockets",
+			NetDevClass: netdetect.Ether,
+		},
+	}
+
+	testFI := &FabricInterface{
+		Name:        "test0",
+		Domain:      "",
+		NetDevClass: netdetect.Ether,
+	}
+
+	testRespWithHint := new(mgmtpb.GetAttachInfoResp)
+	*testRespWithHint = *testResp
+	testRespWithHint.ClientNetHint.Interface = testFI.Name
+	testRespWithHint.ClientNetHint.Domain = testFI.Name
+
+	for name, tc := range map[string]struct {
+		cacheDisabled bool
+		expErr        error
+		expResp       *mgmtpb.GetAttachInfoResp
+	}{
+		"cache disabled": {
+			cacheDisabled: true,
+			expResp:       testRespWithHint,
+		},
+		"success": {
+			expResp: testRespWithHint,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			sysName := "dontcare"
+			mod := &mgmtModule{
+				log: log,
+				sys: sysName,
+				fabricInfo: newTestFabricCache(t, log, &NUMAFabric{
+					log: log,
+					numaMap: map[int][]*FabricInterface{
+						0: {
+							testFI,
+						},
+					},
+				}),
+				attachInfo: newAttachInfoCache(log, !tc.cacheDisabled),
+				ctlInvoker: control.NewMockInvoker(log, &control.MockInvokerConfig{
+					Sys: sysName,
+					UnaryResponse: &control.UnaryResponse{
+						Responses: []*control.HostResponse{
+							{
+								Message: testResp,
+							},
+						},
+					},
+				}),
+			}
+
+			resp, err := mod.getAttachInfo(context.Background(), 0, sysName)
+
+			common.CmpErr(t, tc.expErr, err)
+
+			if diff := cmp.Diff(tc.expResp, resp, cmpopts.IgnoreUnexported(mgmtpb.GetAttachInfoResp{}, mgmtpb.ClientNetHint{})); diff != "" {
+				t.Fatalf("-want, +got:\n%s", diff)
+			}
+		})
+	}
+
+}
 
 func TestAgent_mgmtModule_getAttachInfo_Parallel(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
