@@ -26,15 +26,18 @@ pool_basic_2:
   control_method: dmg
   scm_size: 20000000000  # 20 GB
   nvme_size: 200000000000  # 200 GB
+  target_list: [0, 1]
 
 pool_both:
   control_method: dmg
-  scm_size: 10GB  # arbitrary
-  nvme_size: 80GB
+  scm_size: 10000000000  # 10 GB, arbitrary
+  nvme_size: 80000000000  # 80 GB
+  target_list: [0]
 
 pool_scm_only:
   control_method: dmg
-  scm_size: 80GB
+  scm_size: 80000000000  # 80 GB
+  target_list: [0]
 
 container:
   control_method: daos
