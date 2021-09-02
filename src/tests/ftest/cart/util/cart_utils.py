@@ -422,16 +422,16 @@ class CartTest(TestWithoutServers):
         """Modify the xml file"""
 
         with open(xml_file, 'r') as fd:
-           with open('{}.xml'.format(xml_file), 'w') as ofd:
-              for line in fd:
-                  if self.src_dir in line:
-                      L = re.sub(r'<dir>\/*' + self.src_dir + '\/*',
-                                 r'<dir>',
-                                 line)
-                      ofd.write(L)
-                  else:
-                      ofd.write(line)
-              os.unlink(xml_file)
+            with open('{}.xml'.format(xml_file), 'w') as ofd:
+                for line in fd:
+                    if self.src_dir in line:
+                        L = re.sub(r'<dir>\/*' + self.src_dir + r'\/*',
+                                   r'<dir>',
+                                   line)
+                        ofd.write(L)
+                    else:
+                        ofd.write(line)
+                os.unlink(xml_file)
 
         return 0
 
