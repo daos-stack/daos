@@ -833,6 +833,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # First, initialize a new fs copy command
         self.fs_copy_cmd = FsCopy(self.daos_cmd, self.log)
 
+	# set preserve-props path if it was used in test case
+        if self.preserve_props_path:
+            self.fs_copy_cmd.set_fs_copy_params(preserve_props=self.preserve_props_path)
+
         # Set the source params
         if src_type == "POSIX":
             self.fs_copy_cmd.set_fs_copy_params(
