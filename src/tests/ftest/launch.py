@@ -153,59 +153,13 @@ def set_test_environment(args):
 
     if not args.list:
         # Get the default interface to use if OFI_INTERFACE is not set
-        interface = os.environ.get("OFI_INTERFACE")
-        if interface is None:
-            # Find all the /sys/class/net interfaces on the launch node
-            # (excluding lo)
-            print("Detecting network devices - OFI_INTERFACE not set")
-            available_interfaces = {}
-            net_path = os.path.join(os.path.sep, "sys", "class", "net")
-            net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
-            for device in sorted(net_list):
-                if device == "bonding_masters":
-                    continue
-                # Get the interface state - only include active (up) interfaces
-                device_operstate = os.path.join(net_path, device, "operstate")
-                with open(device_operstate, "r") as file_handle:
-                    state = file_handle.read().strip()
-                # Only include interfaces that are up
-                if state.lower() == "up":
-                    # Get the interface speed - used to select the fastest
-                    # available
-                    device_speed = os.path.join(net_path, device, "speed")
-                    with open(device_speed, "r") as file_handle:
-                        try:
-                            speed = int(file_handle.read().strip())
-                            # KVM/Qemu/libvirt returns an EINVAL
-                        except IOError as ioerror:
-                            if ioerror.errno == errno.EINVAL:
-                                speed = 1000
-                            else:
-                                raise
-                    print(
-                        "  - {0:<5} (speed: {1:>6} state: {2})".format(
-                            device, speed, state))
-                    # Only include the first active interface for each speed -
-                    # first is determined by an alphabetic sort: ib0 will be
-                    # checked before ib1
-                    if speed not in available_interfaces:
-                        available_interfaces[speed] = device
-            print("Available interfaces: {}".format(available_interfaces))
-            try:
-                # Select the fastest active interface available by sorting
-                # the speed
-                interface = \
-                    available_interfaces[sorted(available_interfaces)[-1]]
-            except IndexError:
-                print(
-                    "Error obtaining a default interface from: {}".format(
-                        os.listdir(net_path)))
-                sys.exit(1)
-        print("Using {} as the default interface".format(interface))
+        set_interface_environment()
 
-        # Update env definitions
+        # Get the default provider if CRT_PHY_ADDR_STR is not set
+        set_provider_environment(os.environ["OFI_INTERFACE"])
+
+        # Update other env definitions
         os.environ["CRT_CTX_SHARE_ADDR"] = "0"
-        os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
 
         # Set the default location for daos log files written during testing
         # if not already defined.
@@ -228,6 +182,115 @@ def set_test_environment(args):
         print("ENVIRONMENT VARIABLES")
         for key in sorted(os.environ):
             print("  {}: {}".format(key, os.environ[key]))
+
+
+def set_interface_environment():
+    """Set up the interface environment variables.
+
+    Use the existing OFI_INTERFACE setting if already defined, otherwise
+    select the fastest, active interface on this host.
+    """
+    # Get the default interface to use if OFI_INTERFACE is not set
+    interface = os.environ.get("OFI_INTERFACE")
+    if interface is None:
+        # Find all the /sys/class/net interfaces on the launch node
+        # (excluding lo)
+        print("Detecting network devices - OFI_INTERFACE not set")
+        available_interfaces = {}
+        net_path = os.path.join(os.path.sep, "sys", "class", "net")
+        net_list = [dev for dev in os.listdir(net_path) if dev != "lo"]
+        for device in sorted(net_list):
+            if device == "bonding_masters":
+                continue
+            # Get the interface state - only include active (up) interfaces
+            device_operstate = os.path.join(net_path, device, "operstate")
+            with open(device_operstate, "r") as file_handle:
+                state = file_handle.read().strip()
+            # Only include interfaces that are up
+            if state.lower() == "up":
+                # Get the interface speed - used to select the fastest
+                # available
+                device_speed = os.path.join(net_path, device, "speed")
+                with open(device_speed, "r") as file_handle:
+                    try:
+                        speed = int(file_handle.read().strip())
+                        # KVM/Qemu/libvirt returns an EINVAL
+                    except IOError as ioerror:
+                        if ioerror.errno == errno.EINVAL:
+                            speed = 1000
+                        else:
+                            raise
+                print(
+                    "  - {0:<5} (speed: {1:>6} state: {2})".format(
+                        device, speed, state))
+                # Only include the first active interface for each speed -
+                # first is determined by an alphabetic sort: ib0 will be
+                # checked before ib1
+                if speed not in available_interfaces:
+                    available_interfaces[speed] = device
+        print("Available interfaces: {}".format(available_interfaces))
+        try:
+            # Select the fastest active interface available by sorting
+            # the speed
+            interface = \
+                available_interfaces[sorted(available_interfaces)[-1]]
+        except IndexError:
+            print(
+                "Error obtaining a default interface from: {}".format(
+                    os.listdir(net_path)))
+            sys.exit(1)
+
+    # Update env definitions
+    print("Using {} as the default interface".format(interface))
+    os.environ["CRT_CTX_SHARE_ADDR"] = "0"
+    os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
+
+
+def set_provider_environment(interface):
+    """Set up the provider environment variables.
+
+    Use the existing CRT_PHY_ADDR_STR setting if already defined, otherwise
+    select the appropriate provider based upon the interface driver.
+
+    Args:
+        interface (str): the current interface being used.
+    """
+    # Detect the provider and domain for the specified interface
+    # Use the OFI_INTERFACE device driver to choose between the following
+    # providers:
+    #   - ofi+verbs;ofi_rxm
+    #   - ofi+sockets
+    detected_provider = "ofi+sockets"
+    detected_domain = None
+    driver_path = os.path.join(
+        os.path.sep, "sys", "class", "net", interface, "device", "infiniband")
+    try:
+        with os.scandir(driver_path) as entries:
+            for entry in entries:
+                if not entry.name.startswith("mlx") and entry.is_file():
+                    # Use the verbs provider with Mellanox drivers
+                    detected_provider = "ofi+verbs;ofi_rxm"
+                    detected_domain = entry.name
+                    break
+    except FileNotFoundError:
+        pass
+
+    # Use the detected provider if one is not set
+    name = "CRT_PHY_ADDR_STR"
+    if os.environ.get(name) is None:
+        print("Detecting provider for {} - {} not set".format(interface, name))
+        os.environ[name] = detected_provider
+
+    # OFI_DOMAIN needs to be set for the verbs provider
+    if "verbs" in os.environ[name] and detected_domain is not None:
+        os.environ["OFI_DOMAIN"] = os.environ.get("OFI_DOMAIN", detected_domain)
+    elif "OFI_DOMAIN" in os.environ:
+        del os.environ["OFI_DOMAIN"]
+
+    # Update env definitions
+    print(
+        "Using {} as the provider for the {} interface (OFI_DOMAIN={})".format(
+            os.environ[name], interface, os.environ.get("OFI_DOMAIN", None)))
 
 
 def set_python_environment():
