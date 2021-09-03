@@ -794,6 +794,8 @@ def get_vmd_address_backed_nvme(host_list, value):
 
     # Verify each server host has the same NVMe device behind VMD addresses.
     output_data = list(task.iter_buffers())
+    print("------------SAMIR-------- {}\n".format(output_data))
+    print("------------SAMIR-------- len = {}\n".format(len(output_data)))
     if len(output_data) > 1:
         print("ERROR: Non-homogeneous NVMe device behind VMD addresses.")
         sys.exit(1)

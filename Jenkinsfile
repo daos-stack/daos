@@ -983,7 +983,7 @@ pipeline {
                                        inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages('leap15', 1, next_version),
                                        test_function: 'runTestFunctionalV2',
-                                       node_count: 2
+                                       node_count: 3
                     }
                     post {
                         always {
