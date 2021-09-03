@@ -59,11 +59,11 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 	 * verify degrade fetch is correct.
 	 */
 	if (oclass == OC_EC_2P1G1) {
-		get_killing_rank_by_oid(arg, oid, 2, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1, false);
+		get_killing_rank_by_oid(arg, oid, 1, 0, extra_kill_ranks, NULL);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, false);
 	} else { /* oclass OC_EC_4P2G1 */
-		get_killing_rank_by_oid(arg, oid, 4, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2, false);
+		get_killing_rank_by_oid(arg, oid, 2, 0, extra_kill_ranks, NULL);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, false);
 	}
 
 	if (write_type == PARTIAL_UPDATE)
@@ -262,7 +262,7 @@ rebuild_ec_setup(void  **state, int number)
 
 	save_group_state(state);
 	rc = test_setup(state, SETUP_POOL_CONNECT, true,
-			REBUILD_SMALL_POOL_SIZE, number, NULL);
+			REBUILD_POOL_SIZE, number, NULL);
 	if (rc) {
 		/* Let's skip for this case, since it is possible there
 		 * is not enough ranks here.
@@ -844,6 +844,37 @@ rebuild_ec_dkey_enumeration(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+rebuild_ec_parity_multi_group(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G8, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 100; i++) {
+		char dkey[32];
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		sprintf(dkey, "dkey_%d", i);
+		insert_single(dkey, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+	}
+
+	rank = get_rank_by_oid_shard(arg, oid, 9);
+	rebuild_single_pool_rank(arg, rank, false);
+
+	reintegrate_single_pool_rank(arg, rank);
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -954,6 +985,9 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD38: rebuild EC multi-stripes @ different epochs",
 	 rebuild_ec_multi_stripes, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD39: rebuild EC parity with multiple group",
+	 rebuild_ec_parity_multi_group, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 

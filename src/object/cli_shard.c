@@ -1187,6 +1187,8 @@ dc_obj_shard_rw(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 		if (args->reasb_req->orr_recov_snap)
 			orw->orw_flags |= ORF_EC_RECOV_SNAP;
 	} else {
+		if (api_args->extra_flags & DIOF_EC_RECOV_FROM_PARITY)
+			orw->orw_flags |= ORF_EC_RECOV_FROM_PARITY;
 		rw_args.maps = args->api_args->ioms;
 	}
 	if (opc == DAOS_OBJ_RPC_FETCH) {
@@ -1776,7 +1778,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	if (sgl != NULL) {
 		oei->oei_sgl = *sgl;
 		sgl_size = daos_sgls_packed_size(sgl, 1, NULL);
-		if (sgl_size >= OBJ_BULK_LIMIT) {
+		if (sgl_size >= DAOS_BULK_LIMIT) {
 			/* Create bulk */
 			rc = crt_bulk_create(daos_task2ctx(task),
 					     sgl, CRT_BULK_RW,
@@ -1828,7 +1830,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 out_eaa:
 	crt_req_decref(req);
-	if (sgl != NULL && sgl_size >= OBJ_BULK_LIMIT)
+	if (sgl != NULL && sgl_size >= DAOS_BULK_LIMIT)
 		crt_bulk_free(oei->oei_bulk);
 out_req:
 	crt_req_decref(req);
