@@ -398,7 +398,7 @@ static const struct CMUnitTest oid_alloc_tests[] = {
 	 multi_cont_oid_allocator, async_disable, NULL},
 	{"OID_ALLOC3: Fetch / Set MAX OID",
 	 cont_oid_prop, async_disable, NULL},
-	{"OID_ALLOC4: OID allocator with Multiple pool & cont handles",
+	{"OID_ALLOC4: OID allocator with Multiple pool and cont handles",
 	 oid_allocator_mult_hdls, async_disable, NULL},
 	{"OID_ALLOC5: OID Allocator check (blocking)",
 	 oid_allocator_checker, async_disable, NULL},
