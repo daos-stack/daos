@@ -1865,7 +1865,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 				ap->path, strerror(rc));
 		else
 			fprintf(ap->outstream, "Successfully destroyed path %s\n", ap->path);
-		return rc;
+		return daos_errno2der(rc);
 	}
 
 	rc = daos_cont_destroy(ap->pool, ap->cont_str, ap->force, NULL);

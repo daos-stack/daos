@@ -595,7 +595,7 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 
 	/* Store device health info in in-memory health state log. */
-	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
+	dev_health->bdh_health_state.timestamp = daos_wallclock_secs();
 	populate_health_stats(dev_health);
 
 	/* Prep NVMe command to get SPDK Intel NVMe SSD Smart Attributes */
