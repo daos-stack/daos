@@ -50,7 +50,9 @@ print_usage(const char *prog_name)
 	       "--snapshot, -s\n"
 	       "\tInclude timer snapshots\n"
 	       "--gauge, -g\n"
-	       "\tInclude gauges\n",
+	       "\tInclude gauges\n"
+	       "--read, -r\n"
+	       "\tInclude timestamp of when metric was read\n",
 	       prog_name);
 }
 
