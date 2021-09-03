@@ -563,7 +563,7 @@ class LogIter():
 
         index = 0
         for line in self._fd:
-            fields = line.split()
+            fields = line.split(None, 8)
             index += 1
             l_pid = None
             if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
@@ -588,7 +588,7 @@ class LogIter():
         index = 0
         position = 0
         for line in self._fd:
-            fields = line.split()
+            fields = line.split(None, 8)
             index += 1
             l_pid = None
             if len(fields) < 6 or len(fields[0]) != 17:
@@ -669,7 +669,7 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            fields = line.split()
+            fields = line.split(None, 8)
             if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 return LogRaw(line)
             return LogLine(line)
