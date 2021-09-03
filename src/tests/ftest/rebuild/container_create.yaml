@@ -10,11 +10,13 @@ hosts:
 timeout: 700
 server_config:
   name: daos_server
+  servers:
+    targets: 2
 pool:
   mode: 511
   name: daos_server
-  scm_size: 8589934592
-  svcn: 3
+  scm_size: 8G
+#  svcn: 3
   control_method: dmg
   pool_query_timeout: 30
 container:
@@ -25,6 +27,8 @@ container:
   akey_size: 4
   dkey_size: 4
   data_size: 64
+  properties: rf:1
+  debug: True
 ior:
   api: DFS
   block_size: 16m
@@ -40,11 +44,11 @@ test:
   pool_quantity: !mux
     one_pool:
       pools: 1
-    two_pools:
-      pools: 2
+#    two_pools:
+#      pools: 2
   exclude_rank: !mux
     last_rank:
       rank: 4
   containers: 70
-  container_obj_class: "OC_RP_3GX"
-  use_ior: True
+  container_obj_class: "OC_RP_3G1"
+  use_ior: False

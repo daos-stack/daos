@@ -4,7 +4,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from avocado.core.exceptions import TestFail
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand
@@ -21,11 +21,6 @@ class RbldContainerCreate(TestWithServers):
     :avocado: recursive
     """
 
-    # Cancel any tests with tickets already assigned
-    CANCEL_FOR_TICKET = [
-        ["DAOS-2434", "rank", 1],
-        ["DAOS-2434", "rank", 2],
-    ]
 
     def add_containers_during_rebuild(self, loop_id, qty, pool1, pool2):
         """Add containers to a pool while rebuild is still in progress.
@@ -44,11 +39,11 @@ class RbldContainerCreate(TestWithServers):
             self.log.info(
                 "%s: Creating container %s/%s in pool %s during rebuild",
                 loop_id, count, qty, pool2.uuid)
-            self.container.append(TestContainer(pool2))
+            self.container.append(self.get_container(pool2))
+            self.container[-1].close()
             self.container[-1].get_params(self)
             self.container[-1].create()
             self.container[-1].write_objects()
-
         if count < qty:
             self.fail(
                 "{}: Rebuild completed with only {}/{} containers "
@@ -101,7 +96,7 @@ class RbldContainerCreate(TestWithServers):
 
         return status
 
-    @skipForTicket("DAOS-3550")
+#    @skipForTicket("DAOS-3550")
     def test_rebuild_container_create(self):
         """Jira ID: DAOS-1168.
 
@@ -150,6 +145,7 @@ class RbldContainerCreate(TestWithServers):
             self.job_manager.assign_processes(len(self.hostlist_clients))
             self.job_manager.assign_environment(
                 self.job_manager.job.get_default_env("mpirun"))
+
 
         errors = [0 for _ in range(loop_qty)]
         for loop in range(loop_qty):
@@ -208,7 +204,7 @@ class RbldContainerCreate(TestWithServers):
                     self.job_manager.job.dfs_cont.value)
                 self.run_ior(loop_id, self.job_manager)
             else:
-                self.container.append(TestContainer(self.pool[0]))
+                self.container.append(self.get_container(self.pool[0]))
                 self.container[-1].get_params(self)
                 self.container[-1].create()
                 self.log.info(
@@ -216,7 +212,7 @@ class RbldContainerCreate(TestWithServers):
                     loop_id, self.pool[0].uuid, self.container[-1].uuid)
                 self.container[-1].object_qty.value = 8
                 self.container[-1].record_qty.value = 64
-                self.container[-1].data_size.value = 1024 * 1024
+                self.container[-1].data_size.value = 1024  #DH 1024 * 1024
                 self.container[-1].write_objects(rank, cont_obj_cls)
                 rank_list = self.container[-1].get_target_rank_lists(
                     " after writing data")
