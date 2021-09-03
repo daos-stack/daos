@@ -20,14 +20,6 @@ server_config:
       scm_class: dcpm
       scm_list: [ "/dev/pmem0" ]
       scm_mount: /mnt/daos0
-    transport_config:
-      allow_insecure: True
-agent_config:
-    transport_config:
-      allow_insecure: True
-dmg:
-    transport_config:
-      allow_insecure: True
 daos_perf:
   pool_scm_size: 10G
   pool_nvme_size: 60G
