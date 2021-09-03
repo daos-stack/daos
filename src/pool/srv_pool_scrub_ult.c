@@ -108,8 +108,6 @@ sc_add_pool_metrics(struct scrub_ctx *ctx)
 	d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_wait_time, D_TM_GAUGE,
 			"How long waiting between checksum calculations", "ms",
 			DF_POOL_DIR"/wait_gauge", DP_POOL_DIR(ctx));
-	d_tm_record_timestamp((ctx->sc_metrics.scm_pool_ult_start));
-
 	d_tm_add_metric(&ctx->sc_metrics.scm_pool_metrics.sm_last_duration,
 			D_TM_DURATION,
 			"How long the previous scrub took", "ms",
@@ -182,6 +180,7 @@ scrubbing_ult(void *arg)
 	C_TRACE("Scrubbing ULT started for pool: "DF_UUID"[%d]\n",
 		DP_UUID(pool_uuid), ctx.sc_dmi->dmi_tgt_id);
 	sc_add_pool_metrics(&ctx);
+	d_tm_record_timestamp(ctx.sc_metrics.scm_pool_ult_start);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
 		schedule = sc_schedule(&ctx);
 		if (schedule != DAOS_SCRUB_SCHED_OFF) {

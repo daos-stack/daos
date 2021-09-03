@@ -1189,7 +1189,7 @@ enum scrub_status {
  * lib/telemetry/promexp/collector.go:extractLabels(). If the format here
  * changes, extractLabels() must be updated as well.
  */
-#define DF_POOL_DIR "%s/target:%d/scrubber"
+#define DF_POOL_DIR "%s/tgt_%d/scrubber"
 #define DP_POOL_DIR(ctx) (ctx)->sc_pool->sp_path, \
 			(ctx)->sc_dmi->dmi_tgt_id
 
