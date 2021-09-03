@@ -489,7 +489,7 @@ ds_pool_lookup(const uuid_t uuid)
 
 	pool = pool_obj(llink);
 	if (pool->sp_stopping) {
-		D_ERROR(DF_UUID": is in stopping\n", DP_UUID(uuid));
+		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
 		ds_pool_put(pool);
 		return NULL;
 	}
