@@ -345,4 +345,5 @@ type Config struct {
 	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool        `yaml:"-"`
 }

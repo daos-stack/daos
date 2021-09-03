@@ -52,6 +52,7 @@ type Server struct {
 	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool             `yaml:"disable_vfio"`
 	EnableVMD           bool             `yaml:"enable_vmd"`
+	EnableHotplug       bool             `yaml:"enable_hotplug"`
 	NrHugepages         int              `yaml:"nr_hugepages"`
 	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
 	ControlLogFile      string           `yaml:"control_log_file"`
@@ -316,6 +317,7 @@ func DefaultServer() *Server {
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
 		GetDeviceClassFn:   netdetect.GetDeviceClass,
 		EnableVMD:          false, // disabled by default
+		EnableHotplug:      false, // disabled by default
 	}
 }
 

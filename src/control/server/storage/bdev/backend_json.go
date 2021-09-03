@@ -237,5 +237,24 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 		}
 	}
 
+	if req.HotplugEnabled {
+		for _, ss := range sc.Subsystems {
+			if ss.Name != "bdev" {
+				continue
+			}
+
+			for _, bsc := range ss.Configs {
+				if bsc.Method == SpdkBdevNvmeSetHotplug {
+					bsc.Params = NvmeSetHotplugParams{
+						Enable: true,
+						PeriodUsec: 10 * 1000 * 1000,
+					}
+					break
+				}
+			}
+			break
+		}
+	}
+
 	return sc.WithBdevConfigs(log, req), nil
 }
