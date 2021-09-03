@@ -47,7 +47,8 @@ int
 obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 		    uint32_t iod_nr, uint32_t start_shard, uint32_t max_shard,
 		    uint32_t leader_id, void *tgt_map, uint32_t map_size,
-		    uint32_t tgt_nr, struct daos_shard_tgt *tgts,
+		    struct daos_oclass_attr *oca, uint32_t tgt_nr,
+		    struct daos_shard_tgt *tgts,
 		    struct obj_ec_split_req **split_req)
 {
 	daos_iod_t		*iod;
@@ -117,6 +118,7 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 			if (tgt_max_idx < tgt_idx)
 				tgt_max_idx = tgt_idx;
 		} else {
+			D_ASSERT(tgts[i].st_shard >= start_shard);
 			tgt_idx = tgts[i].st_shard - start_shard;
 			D_ASSERT(tgt_idx <= tgt_max_idx);
 		}
@@ -138,7 +140,8 @@ obj_ec_rw_req_split(daos_unit_oid_t oid, struct obj_iod_array *iod_array,
 	} else {
 		D_ASSERT(leader_id == PO_COMP_ID_ALL);
 
-		leader = oid.id_shard - start_shard;
+		D_ASSERT(oca != NULL);
+		leader = oid.id_shard % obj_ec_tgt_nr(oca);
 		setbit(tgt_bit_map, leader);
 		count++;
 	}

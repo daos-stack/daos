@@ -845,8 +845,7 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		rc = daos_csummer_verify_key(csummer, dkey, dkey_csum);
 		if (rc != 0) {
 			D_ERROR("daos_csummer_verify_key error for dkey: "
-					DF_RC"\n",
-				DP_RC(rc));
+				DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 	}
@@ -2551,7 +2550,8 @@ again2:
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
-					 NULL, 0, orw->orw_shard_tgts.ca_count,
+					 NULL, 0, &ioc.ioc_oca,
+					 orw->orw_shard_tgts.ca_count,
 					 orw->orw_shard_tgts.ca_arrays,
 					 &split_req);
 		if (rc != 0) {
@@ -4354,7 +4354,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
 					 ddt->ddt_id,
 					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
-					 tgt_cnt, tgts, &dcu->dcu_ec_split_req);
+					 NULL, tgt_cnt, tgts, &dcu->dcu_ec_split_req);
 		if (rc != 0) {
 			D_ERROR("obj_ec_rw_req_split failed for obj "
 				DF_UOID", DTX "DF_DTI": "DF_RC"\n",
