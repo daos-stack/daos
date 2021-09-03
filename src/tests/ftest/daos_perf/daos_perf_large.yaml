@@ -11,7 +11,16 @@ hosts:
     - client-H
 # some run can take long to run, but needs to be verified
 # by running consecutively for accurate time.
-timeout: 2000
+timeout: 7200
+job_manager_class_name: Orterun
+job_manager_mpi_type: openmpi
+job_manager_timeout: 1900
+pool:
+    size: 2TB
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
 server_config:
     name: daos_server
     servers:
@@ -21,27 +30,11 @@ server_config:
       scm_list: [ "/dev/pmem0" ]
       scm_mount: /mnt/daos0
 daos_perf:
-  pool_scm_size: 10G
-  pool_nvme_size: 60G
   test_command: 'U;p F;p V O;p'
   test_type: daos
   processes: 64
   test_type: daos
-  akey_use_array: False
-  object_mux: !mux
-    object_1:
-      objects: 1
-    object_8:
-      objects: 8
+  akey_use_array: True
   dkeys: 4k
   akeys: 1k
-  object_class_mux: !mux
-    R2S_value:
-      object_class: R2S
-    EC2P1_value:
-      object_class: EC2P1
-    EC2P2_value:
-      object_class: EC2P2
-
-
-
+  object_class: EC2P1

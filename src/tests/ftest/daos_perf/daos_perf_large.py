@@ -15,7 +15,6 @@ class DaosPerfLarge(DaosPerfBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-7256")
     def test_large(self):
         """Jira ID: DAOS-1714.
 
