@@ -100,6 +100,12 @@ dss_ctx_nr_get(void)
 	return DSS_CTX_NR_TOTAL;
 }
 
+int
+dss_ctx_get_swim_ctx(void)
+{
+	return 1;
+}
+
 #define DSS_SYS_XS_NAME_FMT	"daos_sys_%d"
 #define DSS_IO_XS_NAME_FMT	"daos_io_%d"
 #define DSS_OFFLOAD_XS_NAME_FMT	"daos_off_%d"
@@ -389,22 +395,22 @@ dss_srv_handler(void *arg)
 		} else {
 			if (dx->dx_main_xs) {
 				D_ASSERTF(dx->dx_ctx_id ==
-					  dx->dx_tgt_id + dss_sys_xs_nr -
-					  DRPC_XS_NR,
-					  "incorrect ctx_id %d for xs_id %d\n",
-					  dx->dx_ctx_id, dx->dx_xs_id);
+					  (dx->dx_tgt_id + dss_sys_xs_nr - DRPC_XS_NR),
+					  "incorrect ctx_id %d for xs_id %d tgt_id %d\n",
+					  dx->dx_ctx_id, dx->dx_xs_id, dx->dx_tgt_id);
 			} else {
 				if (dss_helper_pool)
-					D_ASSERTF(dx->dx_ctx_id ==
-						  (dx->dx_xs_id - DRPC_XS_NR),
-					"incorrect ctx_id %d for xs_id %d\n",
-					dx->dx_ctx_id, dx->dx_xs_id);
+					D_ASSERTF(dx->dx_ctx_id == (dx->dx_xs_id - DRPC_XS_NR),
+						  "incorrect ctx_id %d for xs_id %d tgt_id %d\n",
+						  dx->dx_ctx_id, dx->dx_xs_id, dx->dx_tgt_id);
 				else
 					D_ASSERTF(dx->dx_ctx_id ==
-						(dss_sys_xs_nr + dss_tgt_nr +
-						 dx->dx_tgt_id - DRPC_XS_NR),
-					"incorrect ctx_id %d for xs_id %d\n",
-					dx->dx_ctx_id, dx->dx_xs_id);
+						  (dx->dx_tgt_id + dss_sys_xs_nr - DRPC_XS_NR +
+						   dss_tgt_nr),
+						  "incorrect ctx_id %d for xs_id %d "
+						  "tgt_id %d tgt_nr %d\n",
+						  dx->dx_ctx_id, dx->dx_xs_id,
+						  dx->dx_tgt_id, dss_tgt_nr);
 			}
 		}
 	}
@@ -602,27 +608,38 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 * as it is only for EC/checksum/compress offloading.
 	 */
 	if (dss_helper_pool) {
-		comm = (xs_id == 0) || (xs_id >= dss_sys_xs_nr &&
-				xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr));
+		comm =  (xs_id == 0) || /* DSS_XS_SYS */
+			(xs_id == 1) || /* DSS_XS_SWIM */
+			(xs_id >= dss_sys_xs_nr &&
+			 xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr));
 	} else {
 		int	helper_per_tgt;
 
 		helper_per_tgt = dss_tgt_offload_xs_nr / dss_tgt_nr;
-		D_ASSERT(helper_per_tgt == 0 || helper_per_tgt == 1 ||
+		D_ASSERT(helper_per_tgt == 0 ||
+			 helper_per_tgt == 1 ||
 			 helper_per_tgt == 2);
-		xs_offset = xs_id < dss_sys_xs_nr ? -1 :
-				(((xs_id) - dss_sys_xs_nr) %
-				 (helper_per_tgt + 1));
-		comm = (xs_id == 0) || xs_offset == 0 || xs_offset == 1;
+
+		if ((xs_id >= dss_sys_xs_nr) &&
+		    (xs_id < (dss_sys_xs_nr + dss_tgt_nr + dss_tgt_offload_xs_nr)))
+			xs_offset = (xs_id - dss_sys_xs_nr) % (helper_per_tgt + 1);
+		else
+			xs_offset = -1;
+
+		comm =  (xs_id == 0) ||		/* DSS_XS_SYS */
+			(xs_id == 1) ||		/* DSS_XS_SWIM */
+			(xs_offset == 0) ||	/* main XS */
+			(xs_offset == 1);	/* first offload XS */
 	}
+
 	dx->dx_xs_id	= xs_id;
 	dx->dx_ctx_id	= -1;
 	dx->dx_comm	= comm;
 	if (dss_helper_pool) {
-		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr &&
-				  xs_id < (dss_sys_xs_nr + dss_tgt_nr);
+		dx->dx_main_xs	= (xs_id >= dss_sys_xs_nr) &&
+				  (xs_id < (dss_sys_xs_nr + dss_tgt_nr));
 	} else {
-		dx->dx_main_xs	= xs_id >= dss_sys_xs_nr && xs_offset == 0;
+		dx->dx_main_xs	= (xs_id >= dss_sys_xs_nr) && (xs_offset == 0);
 	}
 	dx->dx_dsc_started = false;
 
@@ -935,28 +952,28 @@ dss_xstreams_init(void)
 	}
 
 	/* start offload XS if any */
-	if (dss_tgt_offload_xs_nr == 0)
-		D_GOTO(out, rc);
-	if (dss_helper_pool) {
-		for (i = 0; i < dss_tgt_offload_xs_nr; i++) {
-			xs_id = dss_sys_xs_nr + dss_tgt_nr + i;
-			rc = dss_start_xs_id(xs_id);
-			if (rc)
-				D_GOTO(out, rc);
-		}
-	} else {
-		D_ASSERTF(dss_tgt_offload_xs_nr % dss_tgt_nr == 0,
-			  "bad dss_tgt_offload_xs_nr %d, dss_tgt_nr %d\n",
-			  dss_tgt_offload_xs_nr, dss_tgt_nr);
-		for (i = 0; i < dss_tgt_nr; i++) {
-			int j;
-
-			for (j = 0; j < dss_tgt_offload_xs_nr / dss_tgt_nr;
-			     j++) {
-				xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+	if (dss_tgt_offload_xs_nr > 0) {
+		if (dss_helper_pool) {
+			for (i = 0; i < dss_tgt_offload_xs_nr; i++) {
+				xs_id = dss_sys_xs_nr + dss_tgt_nr + i;
 				rc = dss_start_xs_id(xs_id);
 				if (rc)
 					D_GOTO(out, rc);
+			}
+		} else {
+			D_ASSERTF(dss_tgt_offload_xs_nr % dss_tgt_nr == 0,
+				  "dss_tgt_offload_xs_nr %d, dss_tgt_nr %d\n",
+				  dss_tgt_offload_xs_nr, dss_tgt_nr);
+			for (i = 0; i < dss_tgt_nr; i++) {
+				int j;
+
+				for (j = 0; j < dss_tgt_offload_xs_nr /
+						dss_tgt_nr; j++) {
+					xs_id = DSS_MAIN_XS_ID(i) + j + 1;
+					rc = dss_start_xs_id(xs_id);
+					if (rc)
+						D_GOTO(out, rc);
+				}
 			}
 		}
 	}

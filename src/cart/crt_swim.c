@@ -695,6 +695,7 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct swim_context	*ctx = csm->csm_ctx;
 	swim_id_t		 self_id = swim_self_get(ctx);
+	int64_t			 timeout = csm->csm_crt_ctx_idx ? CRT_SWIM_PROGRESS_TIMEOUT : 0;
 	int			 rc;
 
 	if (self_id == SWIM_ID_INVALID)
@@ -706,7 +707,7 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 		D_EMIT("SWIM id=%lu should fail\n", crt_swim_fail_id);
 	}
 
-	rc = swim_progress(ctx, CRT_SWIM_PROGRESS_TIMEOUT);
+	rc = swim_progress(ctx, timeout);
 	if (rc == -DER_SHUTDOWN) {
 		if (grp_priv->gp_size > 1)
 			D_ERROR("SWIM shutdown\n");

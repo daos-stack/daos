@@ -310,59 +310,54 @@ sched_ult2xs(int xs_type, int tgt_id)
 	switch (xs_type) {
 	case DSS_XS_SELF:
 		return DSS_XS_SELF;
+	case DSS_XS_SYS:
+		return 0;
+	case DSS_XS_SWIM:
+		return 1;
+	case DSS_XS_DRPC:
+		return 2;
 	case DSS_XS_IOFW:
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
 				xs_id = DSS_MAIN_XS_ID(tgt_id) + 1;
 			else
-				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) %
-						       dss_tgt_nr);
-			D_ASSERT(xs_id < DSS_XS_NR_TOTAL &&
-				 xs_id >= dss_sys_xs_nr);
-			return xs_id;
+				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) % dss_tgt_nr);
+			break;
 		}
 
 		if (dss_tgt_offload_xs_nr >= dss_tgt_nr)
-			return (dss_sys_xs_nr + dss_tgt_nr + tgt_id);
+			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id;
 		if (dss_tgt_offload_xs_nr > 0)
-			return (dss_sys_xs_nr + dss_tgt_nr +
-				tgt_id % dss_tgt_offload_xs_nr);
+			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id % dss_tgt_offload_xs_nr;
 		else
-			return ((DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr +
-				dss_sys_xs_nr);
+			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
+		break;
 	case DSS_XS_OFFLOAD:
 		if (!dss_helper_pool) {
 			if (dss_tgt_offload_xs_nr > 0)
-				xs_id = DSS_MAIN_XS_ID(tgt_id) +
-					dss_tgt_offload_xs_nr / dss_tgt_nr;
+				xs_id = DSS_MAIN_XS_ID(tgt_id) + dss_tgt_offload_xs_nr / dss_tgt_nr;
 			else
-				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) %
-						       dss_tgt_nr);
-			D_ASSERT(xs_id < DSS_XS_NR_TOTAL &&
-				 xs_id >= dss_sys_xs_nr);
-			return xs_id;
+				xs_id = DSS_MAIN_XS_ID((tgt_id + 1) % dss_tgt_nr);
+			break;
 		}
 
 		if (dss_tgt_offload_xs_nr > dss_tgt_nr)
-			return (dss_sys_xs_nr + 2 * dss_tgt_nr +
-				(tgt_id % (dss_tgt_offload_xs_nr -
-					   dss_tgt_nr)));
+			xs_id = dss_sys_xs_nr + 2 * dss_tgt_nr +
+				(tgt_id % (dss_tgt_offload_xs_nr - dss_tgt_nr));
 		if (dss_tgt_offload_xs_nr > 0)
-			return (dss_sys_xs_nr + dss_tgt_nr +
-				tgt_id % dss_tgt_offload_xs_nr);
+			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id % dss_tgt_offload_xs_nr;
 		else
-			return (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr +
-			       dss_sys_xs_nr;
-	case DSS_XS_SYS:
-		return 0;
-	case DSS_XS_DRPC:
-		return 1;
+			xs_id = (DSS_MAIN_XS_ID(tgt_id) + 1) % dss_tgt_nr;
+		break;
 	case DSS_XS_VOS:
-		return DSS_MAIN_XS_ID(tgt_id);
+		xs_id = DSS_MAIN_XS_ID(tgt_id);
+		break;
 	default:
 		D_ASSERTF(0, "Invalid xstream type %d.\n", xs_type);
 		return -DER_INVAL;
 	}
+	D_ASSERT(xs_id < DSS_XS_NR_TOTAL && xs_id >= dss_sys_xs_nr);
+	return xs_id;
 }
 
 static int

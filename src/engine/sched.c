@@ -1593,8 +1593,8 @@ struct sched_unit {
 static inline bool
 watchdog_enabled(struct dss_xstream *dx)
 {
-	/* Enable watchdog for sys xstream only */
-	return sched_unit_runtime_max != 0 && dx->dx_xs_id == 0;
+	/* Enable watchdog for SYSTEM xstream */
+	return (sched_unit_runtime_max != 0) && (dx->dx_xs_id == 0);
 }
 
 static void
