@@ -256,6 +256,7 @@ vos_agg_dkey(daos_handle_t ih, vos_iter_entry_t *entry,
 			DP_KEY(&entry->ie_key));
 		*acts |= VOS_ITER_CB_SKIP;
 	}
+	agg_param->ap_max_epoch = 0;
 
 	return 0;
 }
