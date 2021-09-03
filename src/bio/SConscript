@@ -17,6 +17,14 @@ def scons():
     denv.AppendUnique(LIBPATH=['smd'])
     denv.AppendUnique(OBJPREFIX='b_')
 
+    denv.AppendUnique(LINKFLAGS=['-Wl,--whole-archive', \
+            '-lrte_mempool', '-lrte_mempool_ring', '-lrte_bus_pci', \
+            '-lrte_pci', '-lrte_ring', '-lrte_mbuf', '-lrte_eal', \
+            '-lrte_kvargs', \
+            '-Wl,--no-whole-archive'])
+
+    denv.AppendUnique(CPPPATH=['/usr/include/dpdk'])
+
     # SPDK related libs
     libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'spdk_copy']
     libs += ['rte_mempool', 'rte_mempool_ring', 'rte_bus_pci']

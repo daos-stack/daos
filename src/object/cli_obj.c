@@ -1730,6 +1730,8 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	daos_size_t		sgls_size;
 	crt_bulk_perm_t		bulk_perm;
 	int			rc = 0;
+	int			i;
+	int			j;
 
 	if ((obj_auxi->io_retry && !obj_auxi->reasb_req.orr_size_fetched) ||
 	    obj_auxi->reasb_req.orr_size_fetch)
@@ -1743,7 +1745,17 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 		bulk_perm = update ? CRT_BULK_RO : CRT_BULK_RW;
 		rc = obj_bulk_prep(sgls, nr, bulk_bind, bulk_perm, task,
 				   &obj_auxi->bulks);
+
+	} else if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH) {
+			/* unset data len for inline fetch */
+			for (i = 0; i < nr; i++) {
+				d_sg_list_t *sgl = &sgls[i];
+
+				for (j = 0; sgl->sg_iovs && j < sgl->sg_nr; j++)
+					sgl->sg_iovs[j].iov_len = 0;
+			}
 	}
+	
 	obj_auxi->reasb_req.orr_size_fetched = 0;
 
 	return rc;
