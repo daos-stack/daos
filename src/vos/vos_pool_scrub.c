@@ -532,12 +532,12 @@ sc_cont_setup(struct scrub_ctx *ctx, vos_iter_entry_t *entry)
 		return -DER_NOSYS;
 	rc = ctx->sc_cont_lookup_fn(ctx->sc_pool_uuid, entry->ie_couuid,
 				    ctx->sc_sched_arg, &ctx->sc_cont);
-	uuid_copy(ctx->sc_cont_uuid, entry->ie_couuid);
-
 	if (rc != 0) {
 		D_ERROR("Error opening vos container: "DF_RC"\n", DP_RC(rc));
 		return rc;
 	}
+
+	uuid_copy(ctx->sc_cont_uuid, entry->ie_couuid);
 
 	return 0;
 }
@@ -564,9 +564,14 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		*acts = VOS_ITER_CB_SKIP;
 		uuid_clear(ctx->sc_cont_uuid);
 	} else {
+
 		rc = sc_cont_setup(ctx, entry);
-		if (rc != 0)
-			return rc;
+		if (rc != 0) {
+			/* log error for container, but then keep going */
+			D_ERROR("Unable to setup the container.\n");
+			sc_cont_teardown(ctx);
+			return 0;
+		}
 
 		D_DEBUG(DB_CSUM, "Scrubbing container: "DF_UUID"\n",
 			DP_UUID(ctx->sc_cont.scs_cont_uuid));

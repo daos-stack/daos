@@ -70,6 +70,10 @@ cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	uuid_copy(cont->scs_cont_uuid, cont_uuid);
 	cont->scs_cont_src = cont_child;
 
+	ABT_mutex_lock(cont_child->sc_mutex);
+	cont_child->sc_scrubbing = 1;
+	ABT_mutex_unlock(cont_child->sc_mutex);
+
 	return 0;
 }
 
@@ -77,6 +81,11 @@ static inline void
 cont_put_cb(void *cont)
 {
 	struct ds_cont_child *cont_child = cont;
+
+	ABT_mutex_lock(cont_child->sc_mutex);
+	cont_child->sc_scrubbing = 0;
+	ABT_cond_broadcast(cont_child->sc_scrub_cond);
+	ABT_mutex_unlock(cont_child->sc_mutex);
 
 	ds_cont_child_put(cont_child);
 }
