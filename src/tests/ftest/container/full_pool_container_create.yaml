@@ -3,10 +3,22 @@
 hosts:
   test_servers:
     - server-A
+  test_clients:
+    - client-B
 server_config:
    name: daos_server
-timeout: 150
+   servers:
+     scm_class: dcpm
+     scm_list: ["/dev/pmem0"]
+timeout: 900
 pool:
   control_method: dmg
   mode: 511
-  scm_size: 134217728 # 16 mb pool, minimum size currently possible
+  pool_size: !mux
+    small_pool:
+      size: 134217728 # 128Mb
+    larger_pool:
+      size: 53687091200  # 50G
+  threshold_percent: 0.1 # 10%
+container:
+  control_method: daos
