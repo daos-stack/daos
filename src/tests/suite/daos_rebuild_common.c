@@ -105,7 +105,21 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		int *tgts, int rank_nr, bool kill,
 		enum REBUILD_TEST_OP_TYPE op_type)
 {
-	int i;
+	int   i;
+	int   rc;
+
+	for (i = 0; i < args_cnt; i++) {
+		daos_pool_info_t	pool_info;
+
+		/* refresh the pool information */
+		rc = test_pool_get_info(args[i], &pool_info);
+		if (rc) {
+			print_message("get pool "DF_UUIDF" info failed: %d\n",
+				      DP_UUID(args[i]->pool.pool_uuid), rc);
+			return;
+		}
+		args[i]->rebuild_pre_pool_ver = pool_info.pi_map_ver;
+	}
 
 	for (i = 0; i < args_cnt; i++)
 		if (args[i]->rebuild_pre_cb)
@@ -151,7 +165,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		if (args[i]->rebuild_cb)
 			args[i]->rebuild_cb(args[i]);
 
-	sleep(10); /* make sure the rebuild happens after exclude/add/kill */
 	if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 		test_rebuild_wait(args, args_cnt);
 

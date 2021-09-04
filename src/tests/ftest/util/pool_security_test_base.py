@@ -132,7 +132,6 @@ class PoolSecurityTestBase(TestWithServers):
             err_code (str): expecting deny of RC code.
         """
         if expect.lower() == 'pass':
-            #if result.exit_status != 0 or result.stderr_text != "":
             if self._command_failed(result):
                 self.fail(
                     "##Test Fail on verify_daos_pool {}, expected Pass, but "

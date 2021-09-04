@@ -104,6 +104,7 @@ const (
 	ClientConnectionRefused
 	ClientConnectionClosed
 	ClientFormatRunningSystem
+	ClientRpcTimeout
 )
 
 // server fault codes
