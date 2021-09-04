@@ -82,7 +82,7 @@ def scons():
     denv = env.Clone(LIBS=[])
 
     denv.AppendUnique(LIBS=['gurt'])
-    prereqs.require(denv, 'mercury', 'protobufc')
+    prereqs.require(denv, 'mercury')
 
     cart_targets = denv.SharedObject(SRC)
 

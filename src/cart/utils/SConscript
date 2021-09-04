@@ -18,17 +18,18 @@ LIB_SRC = ['crt_utils.c']
 ####################################
 # Create cart utility share objects
 ####################################
-def build_utility_shared_obj(denv):
+def build_utility_shared_obj(env):
     """Build cart utility library"""
     Import('dc_mgmt_tgts')
-    cart_utils_objs  = denv.SharedObject(LIB_SRC, SHOBJPREFIX='s_')
+    cart_utils_objs  = env.SharedObject(LIB_SRC, SHOBJPREFIX='s_')
     Export('cart_utils_objs')
 
 def scons():
     """Scons function"""
 
-    Import('env', 'prereqs', 'swim_targets', 'gurt_lib', 'CART_VERSION')
-    Import('conf_dir', 'base_env')
+    Import('env', 'base_env', 'prereqs')
+
+    prereqs.require(env, 'protobufc')
 
     daos_build.add_build_rpath(base_env)
     daos_build.add_build_rpath(env)
@@ -42,12 +43,8 @@ def scons():
     env.AppendUnique(CPPPATH=[Dir('include').srcnode()])
     env.AppendUnique(CPPPATH=[Dir('../../mgmt').srcnode()])
 
-    prereqs.require(env, 'mercury', headers_only=True)
-
-    denv = env.Clone(LIBS=[])
-
     # Generate cart utility shared objects
-    build_utility_shared_obj(denv)
+    build_utility_shared_obj(env)
 
 if __name__ == "SCons.Script":
     scons()
