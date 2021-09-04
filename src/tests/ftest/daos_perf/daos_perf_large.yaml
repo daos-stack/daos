@@ -16,7 +16,7 @@ job_manager_class_name: Orterun
 job_manager_mpi_type: openmpi
 job_manager_timeout: 1900
 pool:
-    size: 2TB
+    size: 1TB
     control_method: dmg
 container:
     type: POSIX
@@ -34,7 +34,7 @@ daos_perf:
   test_type: daos
   processes: 64
   test_type: daos
-  akey_use_array: True
+  akey_use_array: False
   dkeys: 4k
   akeys: 1k
   object_class: EC2P1
