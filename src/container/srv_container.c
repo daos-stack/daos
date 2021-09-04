@@ -1099,6 +1099,9 @@ out:
 	return rc;
 }
 
+static void
+cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid);
+
 static int
 cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	     struct cont *cont, crt_rpc_t *rpc)
@@ -1148,6 +1151,8 @@ cont_destroy(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 	rc = cont_destroy_bcast(rpc->cr_ctx, cont->c_svc, cont->c_uuid);
 	if (rc != 0)
 		goto out_prop;
+
+	cont_ec_agg_delete(cont->c_svc, cont->c_uuid);
 
 	/* Destroy the handle index KVS. */
 	rc = rdb_tx_destroy_kvs(tx, &cont->c_prop, &ds_cont_prop_handles);
@@ -1260,6 +1265,18 @@ cont_ec_agg_destroy(struct cont_ec_agg *ec_agg)
 	d_list_del(&ec_agg->ea_list);
 	D_FREE(ec_agg->ea_server_ephs);
 	D_FREE(ec_agg);
+}
+
+static void
+cont_ec_agg_delete(struct cont_svc *svc, uuid_t cont_uuid)
+{
+	struct cont_ec_agg	*ec_agg;
+
+	ec_agg = cont_ec_agg_lookup(svc, cont_uuid);
+	if (ec_agg == NULL)
+		return;
+
+	cont_ec_agg_destroy(ec_agg);
 }
 
 /**
