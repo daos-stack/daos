@@ -488,7 +488,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 	rc = pthread_create(progress_thread, NULL, crtu_progress_fn, crt_ctx);
 	D_ASSERTF(rc == 0, "pthread_create() failed; rc=%d\n", rc);
 
-	if (! use_daos_agent_env) {
+	if (!use_daos_agent_env) {
 		D_ERROR("TRACE");
 		if (use_cfg) {
 			D_ERROR("TRACE");
