@@ -156,7 +156,7 @@ def set_test_environment(args):
         set_interface_environment()
 
         # Get the default provider if CRT_PHY_ADDR_STR is not set
-        set_provider_environment(os.environ["OFI_INTERFACE"])
+        set_provider_environment(os.environ["OFI_INTERFACE"], args)
 
         # Update other env definitions
         os.environ["CRT_CTX_SHARE_ADDR"] = "0"
@@ -246,7 +246,7 @@ def set_interface_environment():
     os.environ["OFI_INTERFACE"] = os.environ.get("OFI_INTERFACE", interface)
 
 
-def set_provider_environment(interface):
+def set_provider_environment(interface, args):
     """Set up the provider environment variables.
 
     Use the existing CRT_PHY_ADDR_STR setting if already defined, otherwise
@@ -263,17 +263,25 @@ def set_provider_environment(interface):
     detected_provider = "ofi+sockets"
     detected_domain = None
     driver_path = os.path.join(
-        os.path.sep, "sys", "class", "net", interface, "device", "infiniband")
-    try:
-        with os.scandir(driver_path) as entries:
-            for entry in entries:
-                if not entry.name.startswith("mlx") and entry.is_file():
+        os.path.sep, "sys", "class", "net", interface, "device", "driver")
+    command = "readlink -f {}".format(driver_path)
+    print("Searching {} for the {} driver".format(driver_path, interface))
+    task = get_remote_output(list(args.test_servers), command)
+    if check_remote_output(task, command):
+        # Verify each server host has the same interface driver
+        output_data = list(task.iter_buffers())
+        if len(output_data) > 1:
+            print("ERROR: Non-homogeneous drivers detected.")
+            sys.exit(1)
+        for line in output_data[0][0]:
+            directory = line.decode("utf-8")
+            if "drivers" in directory:
+                driver = os.path.basename(directory)
+                print("  Found driver {} for {}".format(driver, interface))
+                if driver.startswith("mlx"):
                     # Use the verbs provider with Mellanox drivers
                     detected_provider = "ofi+verbs;ofi_rxm"
-                    detected_domain = entry.name
-                    break
-    except FileNotFoundError:
-        pass
+                    detected_domain = driver
 
     # Use the detected provider if one is not set
     name = "CRT_PHY_ADDR_STR"
