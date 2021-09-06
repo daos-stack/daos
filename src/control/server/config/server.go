@@ -253,6 +253,12 @@ func (cfg *Server) WithEnableVMD(enabled bool) *Server {
 	return cfg
 }
 
+// WithEnableHotplug can be used to enable hotplug
+func (cfg *Server) WithEnableHotplug(enabled bool) *Server {
+	cfg.EnableHotplug = enabled
+	return cfg
+}
+
 // WithHyperthreads enables or disables hyperthread support.
 func (cfg *Server) WithHyperthreads(enabled bool) *Server {
 	cfg.Hyperthreads = enabled

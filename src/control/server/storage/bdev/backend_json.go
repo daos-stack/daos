@@ -250,7 +250,7 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 			for _, bsc := range ss.Configs {
 				if bsc.Method == SpdkBdevNvmeSetHotplug {
 					bsc.Params = NvmeSetHotplugParams{
-						Enable: true,
+						Enable:     true,
 						PeriodUsec: HotplugPeriod,
 					}
 					break

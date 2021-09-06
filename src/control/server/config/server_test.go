@@ -217,9 +217,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithControlPort(10001).
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
-		WithDisableVFIO(true). // vfio enabled by default
-		WithEnableVMD(true).   // vmd disabled by default
-		WithEnableHotplug(true).  // hotplug disabled by default
+		WithDisableVFIO(true).   // vfio enabled by default
+		WithEnableVMD(true).     // vmd disabled by default
+		WithEnableHotplug(true). // hotplug disabled by default
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
