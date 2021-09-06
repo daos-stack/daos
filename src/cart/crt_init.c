@@ -45,18 +45,6 @@ mem_pin_workaround(void)
 	struct rlimit	rlim;
 	int		rc = 0;
 
-	/* Note: mallopt() returns 1 on success */
-	/* Prevent malloc from releasing memory via sbrk syscall */
-	rc = mallopt(M_TRIM_THRESHOLD, -1);
-	if (rc != 1)
-		D_WARN("Failed to disable malloc trim: %d\n", errno);
-
-	/* Disable fastbins; this option is not available on all systems */
-	rc = mallopt(M_MXFAST, 0);
-	if (rc != 1)
-		D_WARN("Failed to disable malloc fastbins: %d (%s)\n",
-		       errno, strerror(errno));
-
 	rc = getrlimit(RLIMIT_MEMLOCK, &rlim);
 	if (rc != 0) {
 		D_WARN("getrlimit() failed; errno=%d (%s)\n",
@@ -174,7 +162,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
 	if (fi_univ_size == 0) {
-		D_WARN("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
+		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
 
@@ -472,12 +460,18 @@ do_init:
 
 		if (prov == CRT_NA_OFI_VERBS_RXM ||
 		    prov == CRT_NA_OFI_TCP_RXM) {
-			char *srx_env;
+			char *env;
 
-			srx_env = getenv("FI_OFI_RXM_USE_SRX");
-			if (srx_env == NULL) {
-				D_WARN("FI_OFI_RXM_USE_SRX not set, set=1\n");
+			env = getenv("FI_OFI_RXM_USE_SRX");
+			if (env == NULL) {
+				D_INFO("FI_OFI_RXM_USE_SRX not set, set=1\n");
 				setenv("FI_OFI_RXM_USE_SRX", "1", true);
+			}
+
+			env = getenv("FI_OFI_RXM_ENABLE_DIRECT_SEND");
+			if (env == 0) {
+				D_INFO("FI_OFI_RXM_ENABLE_DIRECT_SEND was not set; set=1\n");
+				setenv("FI_OFI_RXM_ENABLE_DIRECT_SEND", "1", true);
 			}
 		}
 
