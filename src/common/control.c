@@ -15,8 +15,8 @@
  * logging by setting specific facility masks.
  */
 const char *
-dpdk_cli_override_opts = "--log-level=pmd:1 --log-level=lib.eal:4 "
-			 "--log-level=user1:4 --no-telemetry";
+spdk_cli_override_opts = "--log-level=pmd:3 --no-telemetry "
+			 "--log-level=lib.eal:4";
 
 int
 copy_ascii(char *dst, size_t dst_sz, const void *src, size_t src_sz)
