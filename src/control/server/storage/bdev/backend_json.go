@@ -15,6 +15,10 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
+const (
+	HotplugPeriod = 5 * 1000 * 1000
+)
+
 // SPDK bdev subsystem configuration method name definitions.
 const (
 	SpdkBdevSetOptions           = "bdev_set_options"
@@ -120,7 +124,7 @@ func defaultSpdkConfig() *SpdkConfig {
 		{
 			Method: SpdkBdevNvmeSetHotplug,
 			Params: NvmeSetHotplugParams{
-				PeriodUsec: 10 * 1000 * 1000,
+				PeriodUsec: HotplugPeriod,
 			},
 		},
 	}
@@ -247,7 +251,7 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 				if bsc.Method == SpdkBdevNvmeSetHotplug {
 					bsc.Params = NvmeSetHotplugParams{
 						Enable: true,
-						PeriodUsec: 10 * 1000 * 1000,
+						PeriodUsec: HotplugPeriod,
 					}
 					break
 				}
