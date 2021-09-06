@@ -568,8 +568,8 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		rc = sc_cont_setup(ctx, entry);
 		if (rc != 0) {
 			/* log error for container, but then keep going */
-			D_ERROR("Unable to setup the container.\n");
-			sc_cont_teardown(ctx);
+			D_ERROR("Unable to setup the container. "DF_RC"\n",
+				DP_RC(rc));
 			return 0;
 		}
 
