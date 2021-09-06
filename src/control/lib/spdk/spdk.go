@@ -45,7 +45,6 @@ import "C"
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/pkg/errors"
 
@@ -144,7 +143,6 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	}
 
 	envCtx := C.dpdk_cli_override_opts
-	defer C.free(unsafe.Pointer(envCtx))
 
 	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(len(opts.PCIAllowList)),
 		cAllowList)
