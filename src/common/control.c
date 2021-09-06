@@ -15,7 +15,7 @@
  * logging by setting specific facility masks.
  */
 const char *
-dpdk_cli_override_opts = "--log-level=lib.eal:4 --log-level=pmd:3 "
+dpdk_cli_override_opts = "--log-level=pmd:1 --log-level=lib.eal:4 "
 			 "--log-level=user1:4 --no-telemetry";
 
 int
