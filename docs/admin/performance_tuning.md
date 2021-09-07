@@ -472,12 +472,12 @@ please refer to the [System Deployment: Agent Startup][6] documentation
 section.
 
 [1]: <https://github.com/daos-stack/daos/tree/master/src/cart> (Collective and RPC Transport)
-[2]: <https://github.com/daos-stack/daos/blob/master/doc/admin/installation.md#distribution-packages> (DAOS distribution packages)
-[3]: <https://github.com/daos-stack/daos/blob/master/doc/admin/installation.md#building-daos--dependencies> (DAOS build documentation)
-[4]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#server-startup> (DAOS server startup documentation)
+[2]: <https://github.com/daos-stack/daos/blob/master/docs/admin/installation.md#distribution-packages> (DAOS distribution packages)
+[3]: <https://github.com/daos-stack/daos/blob/master/docs/admin/installation.md#building-daos--dependencies> (DAOS build documentation)
+[4]: <https://github.com/daos-stack/daos/blob/master/docs/admin/deployment.md#server-startup> (DAOS server startup documentation)
 [5]: <https://www.open-mpi.org/faq/?category=running#mpirun-hostfile> (mpirun hostfile)
-[6]: <https://github.com/daos-stack/daos/blob/master/doc/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
+[6]: <https://github.com/daos-stack/daos/blob/master/docs/admin/deployment.md#disable-agent-cache-optional> (System Deployment Agent Startup)
 [7]: <https://daos-stack.github.io/user/posix/#dfuse>
-[8]: <https://github.com/daos-stack/daos/blob/master/doc/user/mpi-io.md>
-[9]: <https://github.com/daos-stack/daos/blob/master/doc/user/hdf5.md>
+[8]: <https://github.com/daos-stack/daos/blob/master/docs/user/mpi-io.md>
+[9]: <https://github.com/daos-stack/daos/blob/master/docs/user/hdf5.md>
 [10]: <https://github.com/hpc/ior/blob/main/README_DAOS>
