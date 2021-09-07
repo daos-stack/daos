@@ -506,9 +506,8 @@ int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
 int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
 		      daos_epoch_t **recx_ephs_p, unsigned int *nr, bool convert_parity);
-
-int obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
-		       uint32_t iod_nr, struct daos_oclass_attr *oca);
+int obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj,
+		       daos_iod_t *iods, uint32_t iod_nr, struct daos_oclass_attr *oca);
 void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
