@@ -176,6 +176,9 @@ sc_verify_recx(struct scrub_ctx *ctx, d_iov_t *data)
 		bool		 match;
 		daos_size_t	 rec_in_chunk;
 
+		if (sc_cont_is_stopping(ctx))
+			return 0;
+
 		orig_csum = ci_idx2csum(ctx->sc_csum_to_verify, i);
 		rec_in_chunk = sc_get_rec_in_chunk_at_idx(ctx, i);
 
@@ -218,6 +221,9 @@ static int
 sc_verify_sv(struct scrub_ctx *ctx, d_iov_t *data)
 {
 	int rc;
+
+	if (sc_cont_is_stopping(ctx))
+		return 0;
 
 	rc = daos_csummer_verify_key(sc_csummer(ctx), data,
 				     ctx->sc_csum_to_verify);
@@ -564,7 +570,6 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		*acts = VOS_ITER_CB_SKIP;
 		uuid_clear(ctx->sc_cont_uuid);
 	} else {
-
 		rc = sc_cont_setup(ctx, entry);
 		if (rc != 0) {
 			/* log error for container, but then keep going */
@@ -704,11 +709,10 @@ sc_control_in_between(struct scrub_ctx *ctx)
 			       msec_between);
 	}
 
-	if (msec_between == 0)
+	if (msec_between == 0 || sc_cont_is_stopping(ctx))
 		sc_yield(ctx);
 	else
 		sc_sleep(ctx, msec_between);
-
 
 	sc_credit_reset(ctx);
 }

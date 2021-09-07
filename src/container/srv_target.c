@@ -1213,8 +1213,10 @@ cont_child_destroy_one(void *vin)
 
 		/* Make sure checksum scrubbing has stopped */
 		ABT_mutex_lock(cont->sc_mutex);
-		if (cont->sc_scrubbing)
+		if (cont->sc_scrubbing) {
+			sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
 			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
+		}
 		ABT_mutex_unlock(cont->sc_mutex);
 		/*
 		 * If this is the last user, ds_cont_child will be removed from
