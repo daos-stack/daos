@@ -16,5 +16,6 @@ pool:
     control_method: dmg
 container:
     type: POSIX
+    control_method: daos
 romio:
     romio_repo: "romio/test/"

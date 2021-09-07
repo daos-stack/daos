@@ -521,6 +521,8 @@ enum daos_io_flags {
 	DIOF_EC_RECOV_SNAP	= 0x100,
 	/* Only recover from parity */
 	DIOF_EC_RECOV_FROM_PARITY = 0x200,
+	/* Force fetch/list to do degraded enumeration/fetch */
+	DIOF_FOR_FORCE_DEGRADE = 0x400,
 };
 
 /**

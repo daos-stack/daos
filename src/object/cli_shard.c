@@ -1778,7 +1778,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 	if (sgl != NULL) {
 		oei->oei_sgl = *sgl;
 		sgl_size = daos_sgls_packed_size(sgl, 1, NULL);
-		if (sgl_size >= OBJ_BULK_LIMIT) {
+		if (sgl_size >= DAOS_BULK_LIMIT) {
 			/* Create bulk */
 			rc = crt_bulk_create(daos_task2ctx(task),
 					     sgl, CRT_BULK_RW,
@@ -1830,7 +1830,7 @@ dc_obj_shard_list(struct dc_obj_shard *obj_shard, enum obj_rpc_opc opc,
 
 out_eaa:
 	crt_req_decref(req);
-	if (sgl != NULL && sgl_size >= OBJ_BULK_LIMIT)
+	if (sgl != NULL && sgl_size >= DAOS_BULK_LIMIT)
 		crt_bulk_free(oei->oei_bulk);
 out_req:
 	crt_req_decref(req);
