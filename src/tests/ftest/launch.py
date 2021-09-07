@@ -261,15 +261,7 @@ def set_provider_environment(interface, args):
     if os.environ.get(name) is None:
         # Detect the provider for the specified interface
         print("Detecting provider for {} - {} not set".format(interface, name))
-
-        # Use the OFI_INTERFACE device driver to choose between the following
-        # providers:
-        #   - ofi+verbs;ofi_rxm
-        #   - ofi+sockets
-        driver_path = os.path.join(
-            os.path.sep, "sys", "class", "net", interface, "device", "driver")
-        command = "readlink -f {}".format(driver_path)
-        print("Searching {} for the {} driver".format(driver_path, interface))
+        command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
         task = get_remote_output(list(args.test_servers), command)
         if check_remote_output(task, command):
             # Verify each server host has the same interface driver
@@ -278,15 +270,14 @@ def set_provider_environment(interface, args):
                 print("ERROR: Non-homogeneous drivers detected.")
                 sys.exit(1)
             for line in output_data[0][0]:
-                directory = line.decode("utf-8")
-                if "drivers" in directory:
-                    driver = os.path.basename(directory)
-                    print("  Found driver {} for {}".format(driver, interface))
-                    if driver.startswith("mlx"):
-                        # Use the verbs provider with Mellanox drivers
-                        detected_provider = "ofi+verbs;ofi_rxm"
-                        detected_domain = driver
-                        break
+                provider = line.decode("utf-8").replace(":", "")
+                if "verbs" in provider:
+                    detected_provider = "ofi+verbs;ofi_rxm"
+                    break
+                if "sockets" in provider:
+                    detected_provider = "ofi+sockets"
+                    break
+        print("  Found {} provider for {}".format(detected_provider, interface))
 
     # Update env definitions
     os.environ[name] = detected_provider
