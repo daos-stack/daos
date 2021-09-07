@@ -328,7 +328,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "enable": false,
-            "period_us": 10000000
+            "period_us": 5000000
           },
           "method": "bdev_nvme_set_hotplug"
         },
@@ -380,7 +380,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "enable": false,
-            "period_us": 10000000
+            "period_us": 5000000
           },
           "method": "bdev_nvme_set_hotplug"
         },
@@ -441,7 +441,7 @@ func TestBackend_createJsonFile(t *testing.T) {
         {
           "params": {
             "enable": false,
-            "period_us": 10000000
+            "period_us": 5000000
           },
           "method": "bdev_nvme_set_hotplug"
         },
