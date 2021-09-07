@@ -37,4 +37,4 @@ daos_perf:
   akey_use_array: False
   dkeys: 4k
   akeys: 1k
-  object_class: EC2P1
+  object_class: R2S
