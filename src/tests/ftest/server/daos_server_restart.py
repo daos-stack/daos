@@ -64,17 +64,13 @@ class DaosServerTest(TestWithServers):
 
     def create_pool_and_container(self):
         """Create pool and container."""
-        scm_size = self.params.get("scm_size", "/run/server/*/", 138000000)
         num_of_pool = self.params.get("num_of_pool", "/run/server/*/", 3)
         container_per_pool = self.params.get(
             "container_per_pool", "/run/server/*/", 2)
-
         for _ in range(num_of_pool):
             self.pool.append(self.get_pool(connect=False))
-            daos_cmd = DaosCommand(self.bin)
             for _ in range(container_per_pool):
-                result = daos_cmd.container_create(pool=self.pool[-1].uuid)
-                self.log.info("container create status: %s", result)
+                self.container.append(self.get_container(self.pool[-1]))
 
     def test_daos_server_reformat(self):
         """JIRA ID: DAOS-3596.
@@ -94,6 +90,7 @@ class DaosServerTest(TestWithServers):
         :avocado: tags=server_test,server_reformat,DAOS_5610
         """
         self.pool = []
+        self.container = []
 
         self.log.info("(1)Verify daos server pool list after started.")
         self.verify_pool_list()
@@ -108,6 +105,7 @@ class DaosServerTest(TestWithServers):
         self.verify_pool_list()
 
         self.pool = None
+        self.container = None
 
     def test_engine_restart(self):
         """JIRA ID: DAOS-3593.
@@ -130,6 +128,7 @@ class DaosServerTest(TestWithServers):
         :avocado: tags=server_test,server_restart,DAOS_5610
         """
         self.pool = []
+        self.container = []
 
         self.log.info(
             "(1)Shutdown and restart the daos engine "
