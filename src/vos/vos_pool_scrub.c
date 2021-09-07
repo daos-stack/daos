@@ -248,7 +248,7 @@ static void
 sc_raise_ras(struct scrub_ctx *ctx)
 {
 	if (ds_notify_ras_event != NULL) {
-		ds_notify_ras_event(RAS_CORRUPTION_DETECTED,
+		ds_notify_ras_event(RAS_POOL_CORRUPTION_DETECTED,
 				    "Data corruption detected",
 				    RAS_TYPE_INFO,
 				    RAS_SEV_ERROR, NULL, NULL, NULL, NULL,
