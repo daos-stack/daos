@@ -579,7 +579,7 @@ class DaosServer():
         if self.dfuse_cores:
             first_core = self.dfuse_cores
         else:
-            first_core = 24
+            first_core = 0
         server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
         for idx in range(self.engines):
             engine = copy.deepcopy(ref_engine)
