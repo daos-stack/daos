@@ -255,50 +255,44 @@ def set_provider_environment(interface, args):
     Args:
         interface (str): the current interface being used.
     """
-    # Detect the provider and domain for the specified interface
-    # Use the OFI_INTERFACE device driver to choose between the following
-    # providers:
-    #   - ofi+verbs;ofi_rxm
-    #   - ofi+sockets
-    detected_provider = "ofi+sockets"
-    detected_domain = None
-    driver_path = os.path.join(
-        os.path.sep, "sys", "class", "net", interface, "device", "driver")
-    command = "readlink -f {}".format(driver_path)
-    print("Searching {} for the {} driver".format(driver_path, interface))
-    task = get_remote_output(list(args.test_servers), command)
-    if check_remote_output(task, command):
-        # Verify each server host has the same interface driver
-        output_data = list(task.iter_buffers())
-        if len(output_data) > 1:
-            print("ERROR: Non-homogeneous drivers detected.")
-            sys.exit(1)
-        for line in output_data[0][0]:
-            directory = line.decode("utf-8")
-            if "drivers" in directory:
-                driver = os.path.basename(directory)
-                print("  Found driver {} for {}".format(driver, interface))
-                if driver.startswith("mlx"):
-                    # Use the verbs provider with Mellanox drivers
-                    detected_provider = "ofi+verbs;ofi_rxm"
-                    detected_domain = driver
-
     # Use the detected provider if one is not set
     name = "CRT_PHY_ADDR_STR"
+    detected_provider = "ofi+sockets"
     if os.environ.get(name) is None:
+        # Detect the provider for the specified interface
         print("Detecting provider for {} - {} not set".format(interface, name))
-        os.environ[name] = detected_provider
 
-    # OFI_DOMAIN needs to be set for the verbs provider
-    if "verbs" in os.environ[name] and detected_domain is not None:
-        os.environ["OFI_DOMAIN"] = os.environ.get("OFI_DOMAIN", detected_domain)
-    elif "OFI_DOMAIN" in os.environ:
-        del os.environ["OFI_DOMAIN"]
+        # Use the OFI_INTERFACE device driver to choose between the following
+        # providers:
+        #   - ofi+verbs;ofi_rxm
+        #   - ofi+sockets
+        driver_path = os.path.join(
+            os.path.sep, "sys", "class", "net", interface, "device", "driver")
+        command = "readlink -f {}".format(driver_path)
+        print("Searching {} for the {} driver".format(driver_path, interface))
+        task = get_remote_output(list(args.test_servers), command)
+        if check_remote_output(task, command):
+            # Verify each server host has the same interface driver
+            output_data = list(task.iter_buffers())
+            if len(output_data) > 1:
+                print("ERROR: Non-homogeneous drivers detected.")
+                sys.exit(1)
+            for line in output_data[0][0]:
+                directory = line.decode("utf-8")
+                if "drivers" in directory:
+                    driver = os.path.basename(directory)
+                    print("  Found driver {} for {}".format(driver, interface))
+                    if driver.startswith("mlx"):
+                        # Use the verbs provider with Mellanox drivers
+                        detected_provider = "ofi+verbs;ofi_rxm"
+                        detected_domain = driver
+                        break
 
     # Update env definitions
+    os.environ[name] = detected_provider
     print(
-        "Using {} as the provider for the {} interface (OFI_DOMAIN={})".format(
-            os.environ[name], interface, os.environ.get("OFI_DOMAIN", None)))
+        "Using {}={} as the provider for the {} interface".format(
+            name, os.environ[name], interface))
 
 
 def set_python_environment():

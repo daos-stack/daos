@@ -732,6 +732,11 @@ class TestWithServers(TestWithoutServers):
         Args:
             message (str): message to write to log file.
         """
+        # Hack until CART-974 lands
+        key = "CRT_PHY_ADDR_STR"
+        if key in os.environ and "verbs" in os.environ[key]:
+            os.environ["OFI_INTERFACE"] = "mlx5_0"
+
         if self.server_managers and self.agent_managers:
             temp_dir = TemporaryDirectory()
 
