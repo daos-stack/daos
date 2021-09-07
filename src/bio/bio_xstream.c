@@ -81,7 +81,14 @@ bio_spdk_env_init(void)
 	D_ASSERT(nvme_glb.bd_nvme_conf != NULL);
 
 	spdk_env_opts_init(&opts);
-	opts.name = "daos";
+	opts.name = "daos_engine";
+
+	rc = bio_add_allowed_devices(nvme_glb.bd_nvme_conf, &opts);
+	if (rc != 0) {
+		D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
+			DP_RC(rc));
+		return rc;
+	}
 
 	/*
 	 * TODO: Set opts.mem_size to nvme_glb.bd_mem_size

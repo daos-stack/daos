@@ -11,6 +11,7 @@
 #include <daos_srv/bio.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
+#include <spdk/env.h>
 #include <spdk/bdev.h>
 #include <spdk/thread.h>
 
@@ -600,4 +601,7 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
+/* b<o_config.c */
+int bio_add_allowed_devices(const char *json_config_file,
+			    struct spdk_env_opts *opts);
 #endif /* __BIO_INTERNAL_H__ */
