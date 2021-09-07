@@ -276,7 +276,6 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov,
 	struct vos_obj_iter	*oiter;
 	int			 rc;
 
-	D_DEBUG(DB_CSUM, "Scrubbing iod: "DF_C_IOD"\n", DP_C_IOD(iod));
 	/*
 	 * Know that there will always only be 1 recx because verifying a
 	 * single extent at a time so use first recx in iod for data_len
@@ -450,14 +449,6 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (sc_value_has_been_seen(ctx, entry, type)) {
 			sc_obj_value_reset(ctx);
 		} else {
-			C_TRACE("Scrubbing akey: "DF_KEY", type: %s, rec size: "
-					DF_U64", extent: "DF_RECX"\n",
-				DP_KEY(&param->ip_akey),
-				(type == VOS_ITER_RECX) ? "ARRAY" : "SV",
-				entry->ie_rsize,
-				DP_RECX(entry->ie_orig_recx)
-			);
-
 			sc_obj_val_setup(ctx, entry, type, param, ih);
 
 			rc = sc_verify_obj_value(ctx, &entry->ie_biov, ih);
@@ -494,9 +485,6 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 	/* not all containers in the pool will have checksums enabled */
 	if (!daos_csummer_initialized(sc_csummer(ctx)))
 		return 0;
-
-	C_TRACE("Scrubbing container '"DF_UUIDF"'\n",
-		DP_UUID(*sc_cont_uuid(ctx)));
 
 	param.ip_hdl = sc_cont_hdl(ctx);
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
@@ -578,9 +566,6 @@ cont_iter_scrub_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			return 0;
 		}
 
-		D_DEBUG(DB_CSUM, "Scrubbing container: "DF_UUID"\n",
-			DP_UUID(ctx->sc_cont.scs_cont_uuid));
-
 		rc = sc_scrub_cont(ctx);
 
 		sc_cont_teardown(ctx);
@@ -660,7 +645,6 @@ static void
 sc_credit_decrement(struct scrub_ctx *ctx)
 {
 	ctx->sc_credits_left--;
-	C_TRACE("credits now: %d\n", ctx->sc_credits_left);
 }
 
 static void
@@ -668,8 +652,6 @@ sc_credit_reset(struct scrub_ctx *ctx)
 {
 	if (ctx->sc_credits_left == 0)
 		ctx->sc_credits_left = ctx->sc_pool->sp_scrub_cred;
-	C_TRACE("credits now: %d\n", ctx->sc_credits_left);
-
 }
 
 static void
@@ -684,7 +666,6 @@ sc_control_in_between(struct scrub_ctx *ctx)
 
 	sc_credit_decrement(ctx);
 	if (ctx->sc_credits_left > 0) {
-		C_TRACE("Still have %d credits\n", ctx->sc_credits_left);
 		return;
 	}
 
@@ -696,8 +677,6 @@ sc_control_in_between(struct scrub_ctx *ctx)
 	 *   - Issue when there's only 1. What's "in between"?
 	 *
 	 */
-
-	C_TRACE("Credits expired, will yield/sleep\n");
 
 	if (sc_schedule(ctx) == DAOS_SCRUB_SCHED_CONTINUOUS &&
 	    ctx->sc_pool_last_csum_calcs > ctx->sc_pool_csum_calcs) {
@@ -740,10 +719,8 @@ sc_control_when_complete(struct scrub_ctx *ctx)
 
 	if (diff.tv_sec < ctx->sc_pool->sp_scrub_freq_sec) {
 		left_sec = ctx->sc_pool->sp_scrub_freq_sec - diff.tv_sec;
-		C_TRACE("Sleep for %d sec\n", left_sec);
 		sc_sleep(ctx, left_sec * 1000);
 	} else {
-		C_TRACE("Yield\n");
 		sc_yield(ctx);
 	}
 }
@@ -755,8 +732,6 @@ sc_scrub_sched_control(struct scrub_ctx *ctx)
 
 	if (ctx->sc_pool->sp_scrub_sched == DAOS_SCRUB_SCHED_OFF ||
 	    ctx->sc_pool->sp_scrub_freq_sec == 0) {
-		C_TRACE("Scrubbing not set to run. Sleeping %d sec.\n",
-			disabled_wait_sec);
 		sc_sleep(ctx, disabled_wait_sec * 1000);
 		return;
 	}

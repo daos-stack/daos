@@ -177,15 +177,11 @@ scrubbing_ult(void *arg)
 	ctx.sc_credits_left = ctx.sc_pool->sp_scrub_cred;
 	ctx.sc_dmi =  dss_get_module_info();
 
-	C_TRACE("Scrubbing ULT started for pool: "DF_UUID"[%d]\n",
-		DP_UUID(pool_uuid), ctx.sc_dmi->dmi_tgt_id);
 	sc_add_pool_metrics(&ctx);
 	d_tm_record_timestamp(ctx.sc_metrics.scm_pool_ult_start);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
 		schedule = sc_schedule(&ctx);
 		if (schedule != DAOS_SCRUB_SCHED_OFF) {
-			C_TRACE(DF_PTGT": Pool Scrubbing started\n",
-				DP_PTGT(pool_uuid, tgt_id));
 			rc = vos_scrub_pool(&ctx);
 			if (rc != DER_SUCCESS) {
 				D_ERROR("Scrubbing failed. "DF_RC"\n",
