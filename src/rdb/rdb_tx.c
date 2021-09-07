@@ -987,6 +987,9 @@ rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
 	rc = rdb_lc_lookup(db->d_lc, db->d_applied, s->de_object,
 			   (d_iov_t *)key, value);
 	rdb_tx_query_post(tx, s);
+	if (rc != 0) {
+
+	}
 	return rc;
 }
 
@@ -1019,6 +1022,28 @@ rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
 		return rc;
 	rc = rdb_lc_iter_fetch(db->d_lc, db->d_applied, s->de_object, opc,
 			       (d_iov_t *)key_in, key_out, value);
+	rdb_tx_query_post(tx, s);
+	return rc;
+}
+
+/* Find the largest integer key in \a kvs
+ *
+ */
+int
+rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key)
+{
+	struct rdb     *db = tx->dt_db;
+	struct rdb_kvs *s;
+	int		rc;
+
+	rc = rdb_tx_query_pre(tx, kvs, &s);
+	if (rc != 0)
+		return rc;
+	rc = rdb_lc_query_key_max(db->d_lc, db->d_applied, s->de_object, key);
+	if (rc != 0) {
+		D_ERROR(DF_DB": rdb_lc_query_key_max d_applied="DF_U64", rdb_oid="DF_U64"\n",
+			DP_DB(db), db->d_applied, s->de_object);
+	}
 	rdb_tx_query_post(tx, s);
 	return rc;
 }

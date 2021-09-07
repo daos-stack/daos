@@ -993,7 +993,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * object. If object does not have an array value, 0 is returned in extent. User
  * has to specify what is being queried (dkey, akey, and/or recx) along with the
  * query type (max or min) in flags. If one of those is not provided the
- * function will fail. If the dkey or akey are not being queried, there value
+ * function will fail. If the dkey or akey are not being queried, their values
  * must be provided by the user.
  *
  * If searching in a particular dkey for the max akey and max offset in that
