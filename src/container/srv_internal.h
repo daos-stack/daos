@@ -177,8 +177,7 @@ void ds_cont_op_handler(crt_rpc_t *rpc);
 void ds_cont_set_prop_handler(crt_rpc_t *rpc);
 int ds_cont_bcast_create(crt_context_t ctx, struct cont_svc *svc,
 			 crt_opcode_t opcode, crt_rpc_t **rpc);
-int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
-			  uint64_t num_oids, uint64_t *oid);
+int ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_t *oid);
 int cont_svc_lookup_leader(uuid_t pool_uuid, uint64_t id,
 			   struct cont_svc **svcp, struct rsvc_hint *hint);
 int cont_lookup(struct rdb_tx *tx, const struct cont_svc *svc,
@@ -266,8 +265,8 @@ int ds_cont_status_pm_ver_update(uuid_t pool_uuid, uuid_t cont_uuid,
  */
 int ds_oid_iv_init(void);
 int ds_oid_iv_fini(void);
-int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
-		   uint64_t num_oids, d_sg_list_t *value);
+int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids,
+		   d_sg_list_t *value);
 
 /* container_iv.c */
 int ds_cont_iv_init(void);

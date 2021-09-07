@@ -3539,31 +3539,23 @@ out:
 }
 
 int
-ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
-		      uint64_t num_oids, uint64_t *oid)
+ds_cont_oid_fetch_add(uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_t *oid)
 {
-	struct ds_pool_hdl	*pool_hdl;
 	struct cont_svc		*svc;
 	struct rdb_tx		tx;
 	struct cont		*cont = NULL;
-	d_iov_t		key;
-	d_iov_t		value;
-	struct container_hdl	hdl;
+	d_iov_t			value;
 	uint64_t		alloced_oid;
 	int			rc;
-
-	pool_hdl = ds_pool_hdl_lookup(poh_uuid);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
 
 	/*
 	 * TODO: How to map to the correct container service among those
 	 * running of this storage node? (Currently, there is only one, with ID
 	 * 0, colocated with the pool service.)
 	 */
-	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0, &svc, NULL);
+	rc = cont_svc_lookup_leader(po_uuid, 0, &svc, NULL);
 	if (rc != 0)
-		D_GOTO(out_pool_hdl, rc);
+		return rc;
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -3575,20 +3567,9 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	/* Look up the container handle. */
-	d_iov_set(&key, coh_uuid, sizeof(uuid_t));
-	d_iov_set(&value, &hdl, sizeof(hdl));
-	rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_hdls, &key, &value);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			rc = -DER_NO_HDL;
-		D_GOTO(out_cont, rc);
-	}
-
 	/* Read the max OID from the container metadata */
 	d_iov_set(&value, &alloced_oid, sizeof(alloced_oid));
-	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
-			   &value);
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to lookup alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -3601,8 +3582,7 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	alloced_oid += num_oids;
 
 	/* Update the max OID */
-	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
-			   &value);
+	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to update alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -3618,9 +3598,6 @@ out_lock:
 	rdb_tx_end(&tx);
 out_svc:
 	cont_svc_put_leader(svc);
-out_pool_hdl:
-	ds_pool_hdl_put(pool_hdl);
-out:
 	return rc;
 }
 
