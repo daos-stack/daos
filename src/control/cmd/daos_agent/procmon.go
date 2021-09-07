@@ -76,7 +76,7 @@ const MonWaitTime = 3 * time.Second
 // monitorProcess is used by procMon to kick off monitoring individual processes
 // under their own child context to allow for terminating individual monitoring routines.
 func (p *procInfo) monitorProcess(ctx context.Context) {
-	Ino, err := getProcPidInode(p.pid)
+	_, err := getProcPidInode(p.pid)
 	if err != nil {
 		p.sendResponse(ctx, p.pid, err)
 		return
@@ -88,17 +88,13 @@ func (p *procInfo) monitorProcess(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(MonWaitTime):
-			newIno, newErr := getProcPidInode(p.pid)
+			_, newErr := getProcPidInode(p.pid)
 			if newErr != nil {
 				if os.IsNotExist(newErr) {
 					p.sendResponse(ctx, p.pid, fmt.Errorf("Pid %d terminated unexpectedly", p.pid))
 				} else {
 					p.sendResponse(ctx, p.pid, newErr)
 				}
-				return
-			}
-			if newIno != Ino {
-				p.sendResponse(ctx, p.pid, fmt.Errorf("Pid %d terminated but another processes took its place %d:%d", p.pid, Ino, newIno))
 				return
 			}
 		}
