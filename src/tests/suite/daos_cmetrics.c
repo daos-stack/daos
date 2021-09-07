@@ -17,25 +17,75 @@
 #include <daos/placement.h>
 #include <daos_metrics.h>
 
-static int mdts_obj_class	= OC_RP_2G1;
+static int mdts_obj_class = OC_RP_2G1;
+static int metrics_disabled = 1;
+
+static pthread_barrier_t	bar;
+static int			total_nodes;
 
 /** Metrics */
 daos_metrics_ucntrs_t   *cal_pool_cntrs;
-daos_metrics_ucntrs_t   *act_pool_cntrs;
 daos_metrics_ucntrs_t   *cal_cont_cntrs;
-daos_metrics_ucntrs_t   *act_cont_cntrs;
 daos_metrics_ucntrs_t   *cal_obj_cntrs;
-daos_metrics_ucntrs_t   *act_obj_cntrs;
 daos_metrics_ustats_t   *cal_obj_up_stat;
-daos_metrics_ustats_t   *act_obj_up_stat;
 daos_metrics_ustats_t   *cal_obj_fh_stat;
-daos_metrics_ustats_t   *act_obj_fh_stat;
 daos_metrics_udists_t   *cal_obj_iodbz;
-daos_metrics_udists_t   *act_obj_iodbz;
 daos_metrics_udists_t   *cal_obj_iodbp;
+
+daos_metrics_ucntrs_t   *act_pool_cntrs;
+daos_metrics_ucntrs_t   *act_cont_cntrs;
+daos_metrics_ucntrs_t   *act_obj_cntrs;
+daos_metrics_ustats_t   *act_obj_up_stat;
+daos_metrics_ustats_t   *act_obj_fh_stat;
+daos_metrics_udists_t   *act_obj_iodbz;
 daos_metrics_udists_t   *act_obj_iodbp;
 
-static int metrics_disabled = 1;
+struct prot_info {
+	int oclass;
+	int mclass;
+	int num_nodes;
+};
+
+struct prot_info prot_rp[] = {
+	{ OC_SX, DAOS_METRICS_IO_NO_PROT, 1 },
+	{ OC_RP_2GX, DAOS_METRICS_IO_RP2, 2 },
+	{ OC_RP_3GX, DAOS_METRICS_IO_RP3, 3 },
+	{ OC_RP_4GX, DAOS_METRICS_IO_RP4, 4 },
+	{ OC_RP_6GX, DAOS_METRICS_IO_RP6, 6 },
+	{ OC_RP_8GX, DAOS_METRICS_IO_RP8, 8 },
+	{ OC_RP_12G1, DAOS_METRICS_IO_RP12, 12 },
+	{ OC_RP_16G1, DAOS_METRICS_IO_RP16, 16 },
+	{ OC_RP_24G1, DAOS_METRICS_IO_RP24, 24 },
+	{ OC_RP_32G1, DAOS_METRICS_IO_RP32, 32 },
+	{ OC_RP_48G1, DAOS_METRICS_IO_RP48, 48 },
+	{ OC_RP_64G1, DAOS_METRICS_IO_RP64, 64 },
+	{ OC_RP_128G1, DAOS_METRICS_IO_RP128, 128 }
+};
+#define N_RP		(sizeof(prot_rp)/sizeof(struct prot_info))
+
+struct prot_info prot_ec_fstripe[] = {
+	{ OC_EC_2P1GX, DAOS_METRICS_IO_EC2P1_FULL, 3 },
+	{ OC_EC_2P2GX, DAOS_METRICS_IO_EC2P2_FULL, 4 },
+	{ OC_EC_4P1GX, DAOS_METRICS_IO_EC4P1_FULL, 5 },
+	{ OC_EC_4P2GX, DAOS_METRICS_IO_EC4P2_FULL, 6 },
+	{ OC_EC_8P1GX, DAOS_METRICS_IO_EC8P1_FULL, 9 },
+	{ OC_EC_8P2GX, DAOS_METRICS_IO_EC8P2_FULL, 10 },
+	{ OC_EC_16P1GX, DAOS_METRICS_IO_EC16P1_FULL, 17 },
+	{ OC_EC_16P2GX, DAOS_METRICS_IO_EC16P2_FULL, 18 }
+};
+#define N_EC_FULL	(sizeof(prot_ec_fstripe)/sizeof(struct prot_info))
+
+struct prot_info prot_ec_pstripe[] = {
+	{ OC_EC_2P1GX, DAOS_METRICS_IO_EC2P1_PART, 3 },
+	{ OC_EC_2P2GX, DAOS_METRICS_IO_EC2P2_PART, 4 },
+	{ OC_EC_4P1GX, DAOS_METRICS_IO_EC4P1_PART, 5 },
+	{ OC_EC_4P2GX, DAOS_METRICS_IO_EC4P2_PART, 6 },
+	{ OC_EC_8P1GX, DAOS_METRICS_IO_EC8P1_PART, 9 },
+	{ OC_EC_8P2GX, DAOS_METRICS_IO_EC8P2_PART, 10 },
+	{ OC_EC_16P1GX, DAOS_METRICS_IO_EC16P1_PART, 17 },
+	{ OC_EC_16P2GX, DAOS_METRICS_IO_EC16P2_PART, 18 }
+};
+#define N_EC_PART	(sizeof(prot_ec_pstripe)/sizeof(struct prot_info))
 
 static int
 is_metrics_enabled()
@@ -355,10 +405,49 @@ test_metrics_compare()
 	assert_rc_equal(rc, 0);
 }
 
+static int
+get_rp_factor(int ptype)
+{
+	assert_int_equal(ptype == DAOS_METRICS_IO_RPU, 0);
+	switch (ptype) {
+
+	case DAOS_METRICS_IO_RP2:
+		return 2;
+	case DAOS_METRICS_IO_RP3:
+		return 3;
+	case DAOS_METRICS_IO_RP4:
+		return 4;
+	case DAOS_METRICS_IO_RP6:
+		return 6;
+	case DAOS_METRICS_IO_RP8:
+		return 8;
+	case DAOS_METRICS_IO_RP12:
+		return 12;
+	case DAOS_METRICS_IO_RP16:
+		return 16;
+	case DAOS_METRICS_IO_RP24:
+		return 24;
+	case DAOS_METRICS_IO_RP32:
+		return 32;
+	case DAOS_METRICS_IO_RP48:
+		return 48;
+	case DAOS_METRICS_IO_RP64:
+		return 64;
+	case DAOS_METRICS_IO_RP128:
+		return 128;
+	default:
+		break;
+
+	}
+	return 1;
+}
+
 static void
 acct_obj_update(int cnt, daos_size_t size, int ptype)
 {
 	int bkt;
+
+	size *= get_rp_factor(ptype);
 
 	cal_obj_cntrs->u.arc_obj_cntrs.orc_update_cnt.mc_success += cnt;
 
@@ -2008,8 +2097,13 @@ co_snapshot(void **state)
 		epr.epr_lo = epoch_in[i];
 		epr.epr_hi = epoch_in[i];
 		rc = daos_cont_destroy_snap(arg->coh,  epr, NULL);
-		assert_rc_equal(rc, 0);
-		cal_cont_cntrs->u.arc_cont_cntrs.crc_snapdel_cnt.mc_success += 1;
+		if (i != 2) {
+			assert_rc_equal(rc, 0);
+			cal_cont_cntrs->u.arc_cont_cntrs.crc_snapdel_cnt.mc_success += 1;
+		} else {
+			/** Already destroyed */
+			cal_cont_cntrs->u.arc_cont_cntrs.crc_snapdel_cnt.mc_failure += 1;
+		}
 	}
 
 	daos_cont_aggregate(arg->coh, epoch_in[4], NULL);
@@ -2171,12 +2265,10 @@ mio_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 
 	/** Insert */
 	insert_single(dkey, akey, 0, update_buf, size, DAOS_TX_NONE, &req);
-	acct_obj_update(1, size, DAOS_METRICS_IO_RP2);
 
 	/** Lookup */
 	memset(fetch_buf, 0, size);
 	lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE, &req);
-	acct_obj_fetch(1, size, DAOS_METRICS_IO_RP2);
 
 	/** Verify data consistency */
 	if (!daos_obj_is_echo(oid)) {
@@ -2184,11 +2276,22 @@ mio_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 		assert_memory_equal(update_buf, fetch_buf, size);
 	}
 	punch_dkey(dkey, DAOS_TX_NONE, &req);
-	cal_obj_cntrs->u.arc_obj_cntrs.orc_dkey_punch_cnt.mc_success += 1;
 
 	D_FREE(update_buf);
 	D_FREE(fetch_buf);
 	ioreq_fini(&req);
+}
+
+static void
+mio_simple_internal_acct(unsigned int size)
+{
+	int ptype = DAOS_METRICS_IO_RP2;
+
+	if (mdts_obj_class == OC_S1)
+		ptype = DAOS_METRICS_IO_NO_PROT;
+	acct_obj_update(1, size, ptype);
+	acct_obj_fetch(1, size, ptype);
+	cal_obj_cntrs->u.arc_obj_cntrs.orc_dkey_punch_cnt.mc_success += 1;
 }
 
 /**
@@ -2216,18 +2319,22 @@ io_simple(void **state)
 	mio_simple_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_ARRAY,
 			   "io_simple_scm_array dkey",
 			   "io_simple_scm_array akey");
+	mio_simple_internal_acct(IO_SIZE_SCM);
 	print_message("DAOS_IOD_ARRAY:NVMe\n");
 	mio_simple_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_ARRAY,
 			   "io_simple_nvme_array dkey",
 			   "io_simple_nvme_array akey");
+	mio_simple_internal_acct(IO_SIZE_NVME);
 	print_message("DAOS_IOD_SINGLE:SCM\n");
 	mio_simple_internal(state, oid, IO_SIZE_SCM, DAOS_IOD_SINGLE,
 			   "io_simple_scm_single dkey",
 			   "io_simple_scm_single akey");
+	mio_simple_internal_acct(IO_SIZE_SCM);
 	print_message("DAOS_IOD_SINGLE:NVMe\n");
 	mio_simple_internal(state, oid, IO_SIZE_NVME, DAOS_IOD_SINGLE,
 			   "io_simple_nvme_single dkey",
 			   "io_simple_nvme_single akey");
+	mio_simple_internal_acct(IO_SIZE_NVME);
 	print_message("Comparing Metrics values\n");
 	test_metrics_compare();
 }
@@ -2928,6 +3035,150 @@ io_obj_sync(void **state)
 	ioreq_fini(&req);
 }
 
+static void *
+io_thrd(void *state)
+{
+	test_arg_t	*arg = state;
+	daos_obj_id_t	 oid;
+
+	oid = daos_test_oid_gen(arg->coh, mdts_obj_class, 0, 0, arg->myrank);
+	pthread_barrier_wait(&bar);
+	/** Test first for SCM, then on NVMe with record size > 4k */
+	print_message("DAOS_IOD_ARRAY:SCM\n");
+	mio_simple_internal(&state, oid, IO_SIZE_SCM, DAOS_IOD_ARRAY,
+			   "io_simple_scm_array dkey",
+			   "io_simple_scm_array akey");
+	print_message("DAOS_IOD_ARRAY:NVMe\n");
+	mio_simple_internal(&state, oid, IO_SIZE_NVME, DAOS_IOD_ARRAY,
+			   "io_simple_nvme_array dkey",
+			   "io_simple_nvme_array akey");
+	print_message("DAOS_IOD_SINGLE:SCM\n");
+	mio_simple_internal(&state, oid, IO_SIZE_SCM, DAOS_IOD_SINGLE,
+			   "io_simple_scm_single dkey",
+			   "io_simple_scm_single akey");
+	print_message("DAOS_IOD_SINGLE:NVMe\n");
+	mio_simple_internal(&state, oid, IO_SIZE_NVME, DAOS_IOD_SINGLE,
+			   "io_simple_nvme_single dkey",
+			   "io_simple_nvme_single akey");
+	print_message("Comparing Metrics values\n");
+	pthread_barrier_wait(&bar);
+	pthread_barrier_wait(&bar);
+	pthread_exit(NULL);
+}
+
+#define NUM_THRDS	5
+static void
+io_obj_mt(void **state)
+{
+	test_arg_t		*arg = *state;
+	int			 i, rc;
+	pthread_t		 tid[NUM_THRDS];
+	daos_metrics_ucntrs_t    pool_cntrs;
+	daos_metrics_ucntrs_t    cont_cntrs;
+	daos_metrics_ucntrs_t    obj_cntrs;
+	daos_metrics_ustats_t    obj_up_stat;
+	daos_metrics_ustats_t    obj_fh_stat;
+	daos_metrics_udists_t    obj_iodbz;
+	daos_metrics_udists_t    obj_iodbp;
+
+	if (metrics_disabled)
+		skip();
+	if (arg->myrank != 0)
+		return;
+
+	test_metrics_snapshot();
+	pthread_barrier_init(&bar, NULL, NUM_THRDS+1);
+	print_message("Creating threads\n");
+	for (i = 0; i < NUM_THRDS ; i++) {
+		rc = pthread_create(&tid[i], NULL, io_thrd, (void *)*state);
+		assert_rc_equal(rc, 0);
+		/** Add the accounting information */
+		mio_simple_internal_acct(IO_SIZE_SCM);
+		mio_simple_internal_acct(IO_SIZE_NVME);
+		mio_simple_internal_acct(IO_SIZE_SCM);
+		mio_simple_internal_acct(IO_SIZE_NVME);
+	}
+	pthread_barrier_wait(&bar);
+	pthread_barrier_wait(&bar);
+	print_message("Snapshot the metrics data while threads are active\n");
+	memcpy(&pool_cntrs, cal_pool_cntrs, sizeof(daos_metrics_ucntrs_t));
+	memcpy(&cont_cntrs, cal_cont_cntrs, sizeof(daos_metrics_ucntrs_t));
+	memcpy(&obj_cntrs, cal_obj_cntrs, sizeof(daos_metrics_ucntrs_t));
+	memcpy(&obj_up_stat, cal_obj_up_stat, sizeof(daos_metrics_ustats_t));
+	memcpy(&obj_fh_stat, cal_obj_fh_stat, sizeof(daos_metrics_ustats_t));
+	memcpy(&obj_iodbz, cal_obj_iodbz, sizeof(daos_metrics_udists_t));
+	memcpy(&obj_iodbp, cal_obj_iodbp, sizeof(daos_metrics_udists_t));
+	test_metrics_snapshot();
+	pthread_barrier_wait(&bar);
+	print_message("Waiting for threads to exit\n");
+	for (i = 0; i < NUM_THRDS ; i++) {
+		rc = pthread_join(tid[i], NULL);
+		assert_rc_equal(rc, 0);
+	}
+	print_message("Comparing the metrics\n");
+	/** Check whether metrics data is preserved across thread exit */
+	test_metrics_compare();
+	/** Check whether the metrics data matches the calculated data */
+	memcpy(cal_pool_cntrs, &pool_cntrs, sizeof(daos_metrics_ucntrs_t));
+	memcpy(cal_cont_cntrs, &cont_cntrs, sizeof(daos_metrics_ucntrs_t));
+	memcpy(cal_obj_cntrs, &obj_cntrs, sizeof(daos_metrics_ucntrs_t));
+	memcpy(cal_obj_up_stat, &obj_up_stat, sizeof(daos_metrics_ustats_t));
+	memcpy(cal_obj_fh_stat, &obj_fh_stat, sizeof(daos_metrics_ustats_t));
+	memcpy(cal_obj_iodbz, &obj_iodbz, sizeof(daos_metrics_udists_t));
+	memcpy(cal_obj_iodbp, &obj_iodbp, sizeof(daos_metrics_udists_t));
+	test_metrics_compare();
+}
+
+void
+io_obj_rp(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	 req;
+	int		 i;
+	char		*fetch_buf;
+	char		*update_buf;
+	char		*akey = "akey";
+	char		*dkey = "dkey";
+	daos_size_t	 size;
+	daos_obj_id_t	 oid;
+
+	for (i = 0; i < N_RP; i++) {
+		test_metrics_snapshot();
+		if (prot_rp[i].num_nodes > total_nodes)
+			break;
+		print_message("Testing io with RP nodes set to %d\n", prot_rp[i].num_nodes);
+		size = IO_SIZE_NVME + random()%IO_SIZE_NVME;
+		oid = daos_test_oid_gen(arg->coh, prot_rp[i].oclass, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+		D_ALLOC(fetch_buf, size);
+		assert_non_null(fetch_buf);
+		D_ALLOC(update_buf, size);
+		assert_non_null(update_buf);
+		dts_buf_render(update_buf, size);
+
+		/** Insert */
+		insert_single(dkey, akey, 0, update_buf, size, DAOS_TX_NONE, &req);
+		acct_obj_update(1, size, prot_rp[i].mclass);
+
+		/** Lookup */
+		memset(fetch_buf, 0, size);
+		lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE, &req);
+		acct_obj_fetch(1, size, prot_rp[i].mclass);
+
+		/** Verify data consistency */
+		if (!daos_obj_is_echo(oid)) {
+			assert_int_equal(req.iod[0].iod_size, size);
+			assert_memory_equal(update_buf, fetch_buf, size);
+		}
+
+		D_FREE(update_buf);
+		D_FREE(fetch_buf);
+		ioreq_fini(&req);
+		test_metrics_compare();
+	}
+}
+
 static const struct CMUnitTest cm_tests[] = {
 	{ "M_POOL1: connect/disconnect to pool (async)",
 	  pool_connect, async_enable, test_case_teardown},
@@ -2973,6 +3224,10 @@ static const struct CMUnitTest cm_tests[] = {
 	  io_obj_key_query, async_disable, test_case_teardown},
 	{ "M_IO8: testing object sync ",
 	  io_obj_sync, async_disable, test_case_teardown},
+	{ "M_IO9: testing io multithreaded ",
+	  io_obj_mt, async_disable, test_case_teardown},
+	{ "M_IO10: testing io stats with rp",
+	  io_obj_rp, async_disable, test_case_teardown}
 };
 
 static int
@@ -2988,6 +3243,7 @@ setup_internal(void **state)
 	 * else if (arg->obj_class != OC_UNKNOWN)
 	 *   mdts_obj_class = arg->obj_class;
 	 */
+	total_nodes = arg->pool.pool_info.pi_nnodes;
 
 	return 0;
 }

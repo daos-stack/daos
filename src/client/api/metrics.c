@@ -229,21 +229,11 @@ dc_metrics_fini()
 		dc_metrics_tls_cleanup(metrics_tls);
 }
 
-int
+static void
 dc_metrics_update_iostats(int is_update, size_t size)
 {
-	int rc = 0;
 	dc_metrics_tls_data_t *ptr;
 	daos_metrics_stat_t *iostat;
-
-	if (is_metrics_enabled == 0)
-		D_GOTO(out, rc = 0);
-
-	if (metrics_tls == NULL) {
-		rc = dc_metrics_tls_alloc();
-		if (rc != 0)
-			D_GOTO(out, rc);
-	}
 
 	ptr = metrics_tls;
 	if (is_update)
@@ -257,22 +247,16 @@ dc_metrics_update_iostats(int is_update, size_t size)
 		iostat->st_max = size;
 	iostat->st_sum += size;
 	iostat->st_sum_of_squares += size*size;
-out:
-	return rc;
 }
 
-int
+static void
 dc_metrics_update_iodist(int is_update, size_t size, struct daos_oclass_attr *ptype,
 				int is_full_stripe)
 {
-	int rc = 0, idx, num, dcells, kcells;
-	size_t bsize;
+	int idx, num, dcells, kcells;
 	dc_metrics_tls_data_t *ptr = metrics_tls;
+	size_t bsize = 4*1024*1024;
 
-	if (is_metrics_enabled == 0)
-		D_GOTO(out, rc = 0);
-
-	bsize = 4*1024*1024;
 	idx = DAOS_METRICS_IO_BYSIZE_COUNT-1;
 	while ((size < bsize) && (idx > 0)) {
 		idx--;
@@ -315,10 +299,28 @@ dc_metrics_update_iodist(int is_update, size_t size, struct daos_oclass_attr *pt
 			}
 		}
 	}
+}
+
+int
+dc_metrics_update_ioinfo(int is_update, size_t size, struct daos_oclass_attr *ptype,
+				int is_full_stripe)
+{
+	int rc = 0;
+
+	if (is_metrics_enabled == 0)
+		D_GOTO(out, rc);
+
+	if (metrics_tls == NULL) {
+		rc = dc_metrics_tls_alloc();
+		if (rc != 0)
+			D_GOTO(out, rc);
+	}
+	dc_metrics_update_iostats(is_update, size);
+	dc_metrics_update_iodist(is_update, size, ptype, is_full_stripe);
+
 out:
 	return rc;
 }
-
 
 int
 daos_metrics_get_version(int *major, int *minor)
@@ -824,10 +826,6 @@ const char * const distname_byptype[] = {
 	"IO_EC16P2_PART",
 	"IO_EC16P1_FULL",
 	"IO_EC16P2_FULL",
-	"IO_EC32P1_PART",
-	"IO_EC32P2_PART",
-	"IO_EC32P1_FULL",
-	"IO_EC32P2_FULL",
 	"IO_ECU_PART",
 	"IO_ECU_FULL",
 };

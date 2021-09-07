@@ -71,8 +71,7 @@ dc_metrics_cntr_merge(daos_metrics_cntr_t *dst, daos_metrics_cntr_t *src) {
 
 int dc_metrics_init(void);
 void dc_metrics_fini(void);
-int dc_metrics_update_iostats(int is_update, size_t size);
-int dc_metrics_update_iodist(int is_update, size_t size, struct daos_oclass_attr *ptype,
+int dc_metrics_update_ioinfo(int is_update, size_t size, struct daos_oclass_attr *ptype,
 		int is_full_stripe);
 
 #endif

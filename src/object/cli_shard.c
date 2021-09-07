@@ -735,7 +735,7 @@ dc_get_fetch_size(struct obj_rw_out *orwo)
 }
 
 static daos_size_t
-dc_get_update_size(daos_iod_t *iods, int nr)
+dc_get_update_size(daos_iod_t *iods, int nr, struct daos_oclass_attr *oclass)
 {
 	daos_size_t net_size = 0, len;
 	int i;
@@ -746,6 +746,9 @@ dc_get_update_size(daos_iod_t *iods, int nr)
 			continue;
 		net_size += len;
 	}
+	if (oclass->ca_resil == DAOS_RES_REPL)
+		net_size *= oclass->u.rp.r_num;
+
 	return net_size;
 }
 
@@ -1056,18 +1059,12 @@ out:
 
 		if (opc == DAOS_OBJ_RPC_UPDATE) {
 			size = dc_get_update_size(rw_args->shard_args->api_args->iods,
-					rw_args->shard_args->api_args->nr);
+					rw_args->shard_args->api_args->nr, oca);
 		} else {
 			size = dc_get_fetch_size(orwo);
 		}
 		is_full_stripe = is_ec_obj ? reasb_req->orr_full_stripe_only : 0;
-		ret = dc_metrics_update_iostats((opc == DAOS_OBJ_RPC_UPDATE), size);
-		if (ret)
-			return ret;
-		ret = dc_metrics_update_iodist((opc == DAOS_OBJ_RPC_UPDATE), size, oca,
-					       is_full_stripe);
-		if (ret)
-			return ret;
+		dc_metrics_update_ioinfo((opc == DAOS_OBJ_RPC_UPDATE), size, oca, is_full_stripe);
 	}
 	return ret;
 }
