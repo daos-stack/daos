@@ -168,6 +168,7 @@ typedef struct {
 	 */
 	int			(*rebuild_cb)(void *test_arg);
 	void			*rebuild_cb_arg;
+	uint32_t		rebuild_pre_pool_ver;
 	/* The callback is called after pool rebuild, used for validating IO
 	 * after rebuild
 	 */
