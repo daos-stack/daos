@@ -985,6 +985,9 @@ struct recs_buf {
 	int				rb_nrecs;
 };
 
+/* Number of recs per yield when growing a recs_buf. See close_iter_cb. */
+#define RECS_BUF_RECS_PER_YIELD 128
+
 static int
 recs_buf_init(struct recs_buf *buf)
 {
@@ -1034,11 +1037,17 @@ recs_buf_grow(struct recs_buf *buf)
 	return 0;
 }
 
+struct find_hdls_by_cont_arg {
+	struct rdb_tx	       *fha_tx;
+	struct recs_buf		fha_buf;
+};
+
 static int
-find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
+find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
-	struct recs_buf	       *buf = arg;
-	int			rc;
+	struct find_hdls_by_cont_arg   *arg = varg;
+	struct recs_buf		       *buf = &arg->fha_buf;
+	int				rc;
 
 	if (key->iov_len != sizeof(uuid_t) || val->iov_len != sizeof(char)) {
 		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
@@ -1053,6 +1062,15 @@ find_hdls_by_cont_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *arg)
 	uuid_copy(buf->rb_recs[buf->rb_nrecs].tcr_hdl, key->iov_buf);
 	buf->rb_recs[buf->rb_nrecs].tcr_hce = 0 /* unused */;
 	buf->rb_nrecs++;
+
+	if (buf->rb_nrecs % RECS_BUF_RECS_PER_YIELD == 0) {
+		ABT_thread_yield();
+		rc = rdb_tx_revalidate(arg->fha_tx);
+		if (rc != 0) {
+			D_WARN("revalidate RDB TX: "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	}
 	return 0;
 }
 
@@ -1063,19 +1081,20 @@ static int cont_close_hdls(struct cont_svc *svc,
 static int
 evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
 {
-	struct recs_buf	buf;
-	int		rc;
+	struct find_hdls_by_cont_arg	arg;
+	int				rc;
 
-	rc = recs_buf_init(&buf);
+	arg.fha_tx = tx;
+	rc = recs_buf_init(&arg.fha_buf);
 	if (rc != 0)
 		return rc;
 
 	rc = rdb_tx_iterate(tx, &cont->c_hdls, false /* !backward */,
-			    find_hdls_by_cont_cb, &buf);
+			    find_hdls_by_cont_cb, &arg);
 	if (rc != 0)
 		goto out;
 
-	if (buf.rb_nrecs == 0)
+	if (arg.fha_buf.rb_nrecs == 0)
 		goto out;
 
 	if (!force) {
@@ -1083,10 +1102,10 @@ evict_hdls(struct rdb_tx *tx, struct cont *cont, bool force, crt_context_t ctx)
 		goto out;
 	}
 
-	rc = cont_close_hdls(cont->c_svc, buf.rb_recs, buf.rb_nrecs, ctx);
+	rc = cont_close_hdls(cont->c_svc, arg.fha_buf.rb_recs, arg.fha_buf.rb_nrecs, ctx);
 
 out:
-	recs_buf_fini(&buf);
+	recs_buf_fini(&arg.fha_buf);
 	return rc;
 }
 
@@ -1761,10 +1780,6 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 	chdl.ch_flags = in->coi_flags;
 	chdl.ch_sec_capas = sec_capas;
 
-	rc = ds_cont_epoch_init_hdl(tx, cont, in->coi_op.ci_hdl, &chdl);
-	if (rc != 0)
-		D_GOTO(out, rc);
-
 	rc = rdb_tx_update(tx, &cont->c_svc->cs_hdls, &key, &value);
 	if (rc != 0)
 		D_GOTO(out, rc);
@@ -1871,10 +1886,6 @@ cont_close_one_hdl(struct rdb_tx *tx, struct cont_svc *svc,
 	if (rc != 0)
 		return rc;
 
-	rc = ds_cont_epoch_fini_hdl(tx, cont, ctx, &chdl);
-	if (rc != 0)
-		goto out;
-
 	rc = rdb_tx_delete(tx, &cont->c_hdls, &key);
 	if (rc != 0)
 		goto out;
@@ -1891,8 +1902,9 @@ static int
 cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 		int nrecs, crt_context_t ctx)
 {
-	int	i;
-	int	rc;
+	struct rdb_tx	tx;
+	int		i;
+	int		rc;
 
 	D_ASSERTF(nrecs > 0, "%d\n", nrecs);
 	D_DEBUG(DF_DSMS, DF_CONT": closing %d recs: recs[0].hdl="DF_UUID
@@ -1903,34 +1915,38 @@ cont_close_hdls(struct cont_svc *svc, struct cont_tgt_close_rec *recs,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	/*
-	 * Use one TX per handle to avoid calling ds_cont_epoch_fini_hdl() more
-	 * than once in a TX, in which case we would be attempting to query
-	 * uncommitted updates. This could be optimized by adding container
-	 * UUIDs into recs[i] and sorting recs[] by container UUIDs. Then we
-	 * could maintain a list of deleted LREs and a list of deleted LHEs for
-	 * each container while looping, and use the lists to update the GHCE
-	 * once for each container. This approach enables us to commit only
-	 * once (or when a TX becomes too big).
-	 */
-	for (i = 0; i < nrecs; i++) {
-		struct rdb_tx tx;
+	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+	if (rc != 0)
+		goto out;
 
-		rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term,
-				  &tx);
-		if (rc != 0)
-			break;
+	for (i = 0; i < nrecs; i++) {
 		rc = cont_close_one_hdl(&tx, svc, ctx, recs[i].tcr_hdl);
-		if (rc != 0) {
-			rdb_tx_end(&tx);
-			break;
-		}
-		rc = rdb_tx_commit(&tx);
-		rdb_tx_end(&tx);
 		if (rc != 0)
-			break;
+			goto out_tx;
+
+		/*
+		 * Yield frequently, in order to cope with the slow
+		 * vos_obj_punch operations invoked by rdb_tx_commit for
+		 * deleting the handles. (If there is no other RDB replica, the
+		 * TX operations will not yield, and this loop would occupy the
+		 * xstream for too long.)
+		 */
+		if ((i + 1) % 32 == 0) {
+			rc = rdb_tx_commit(&tx);
+			if (rc != 0)
+				goto out_tx;
+			rdb_tx_end(&tx);
+			ABT_thread_yield();
+			rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
+			if (rc != 0)
+				goto out;
+		}
 	}
 
+	rc = rdb_tx_commit(&tx);
+
+out_tx:
+	rdb_tx_end(&tx);
 out:
 	D_DEBUG(DF_DSMS, DF_CONT": leaving: %d\n",
 		DP_CONT(svc->cs_pool_uuid, NULL), rc);
@@ -3063,6 +3079,7 @@ cont_attr_list(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 }
 
 struct close_iter_arg {
+	struct rdb_tx  *cia_tx;
 	struct recs_buf	cia_buf;
 	uuid_t	       *cia_pool_hdls;
 	int		cia_n_pool_hdls;
@@ -3108,6 +3125,15 @@ close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 	uuid_copy(buf->rb_recs[buf->rb_nrecs].tcr_hdl, key->iov_buf);
 	buf->rb_recs[buf->rb_nrecs].tcr_hce = hdl->ch_hce;
 	buf->rb_nrecs++;
+
+	if (buf->rb_nrecs % RECS_BUF_RECS_PER_YIELD == 0) {
+		ABT_thread_yield();
+		rc = rdb_tx_revalidate(arg->cia_tx);
+		if (rc != 0) {
+			D_WARN("revalidate RDB TX: "DF_RC"\n", DP_RC(rc));
+			return rc;
+		}
+	}
 	return 0;
 }
 
@@ -3140,6 +3166,7 @@ ds_cont_close_by_pool_hdls(uuid_t pool_uuid, uuid_t *pool_hdls, int n_pool_hdls,
 
 	ABT_rwlock_wrlock(svc->cs_lock);
 
+	arg.cia_tx = &tx;
 	rc = recs_buf_init(&arg.cia_buf);
 	if (rc != 0)
 		goto out_lock;
@@ -3562,31 +3589,23 @@ out:
 }
 
 int
-ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
-		      uint64_t num_oids, uint64_t *oid)
+ds_cont_oid_fetch_add(uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, uint64_t *oid)
 {
-	struct ds_pool_hdl	*pool_hdl;
 	struct cont_svc		*svc;
 	struct rdb_tx		tx;
 	struct cont		*cont = NULL;
-	d_iov_t		key;
-	d_iov_t		value;
-	struct container_hdl	hdl;
+	d_iov_t			value;
 	uint64_t		alloced_oid;
 	int			rc;
-
-	pool_hdl = ds_pool_hdl_lookup(poh_uuid);
-	if (pool_hdl == NULL)
-		D_GOTO(out, rc = -DER_NO_HDL);
 
 	/*
 	 * TODO: How to map to the correct container service among those
 	 * running of this storage node? (Currently, there is only one, with ID
 	 * 0, colocated with the pool service.)
 	 */
-	rc = cont_svc_lookup_leader(pool_hdl->sph_pool->sp_uuid, 0, &svc, NULL);
+	rc = cont_svc_lookup_leader(po_uuid, 0, &svc, NULL);
 	if (rc != 0)
-		D_GOTO(out_pool_hdl, rc);
+		return rc;
 
 	rc = rdb_tx_begin(svc->cs_rsvc->s_db, svc->cs_rsvc->s_term, &tx);
 	if (rc != 0)
@@ -3598,20 +3617,9 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	if (rc != 0)
 		D_GOTO(out_lock, rc);
 
-	/* Look up the container handle. */
-	d_iov_set(&key, coh_uuid, sizeof(uuid_t));
-	d_iov_set(&value, &hdl, sizeof(hdl));
-	rc = rdb_tx_lookup(&tx, &cont->c_svc->cs_hdls, &key, &value);
-	if (rc != 0) {
-		if (rc == -DER_NONEXIST)
-			rc = -DER_NO_HDL;
-		D_GOTO(out_cont, rc);
-	}
-
 	/* Read the max OID from the container metadata */
 	d_iov_set(&value, &alloced_oid, sizeof(alloced_oid));
-	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
-			   &value);
+	rc = rdb_tx_lookup(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to lookup alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -3624,8 +3632,7 @@ ds_cont_oid_fetch_add(uuid_t poh_uuid, uuid_t co_uuid, uuid_t coh_uuid,
 	alloced_oid += num_oids;
 
 	/* Update the max OID */
-	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid,
-			   &value);
+	rc = rdb_tx_update(&tx, &cont->c_prop, &ds_cont_prop_alloced_oid, &value);
 	if (rc != 0) {
 		D_ERROR(DF_CONT": failed to update alloced_oid: %d\n",
 			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), rc);
@@ -3641,9 +3648,6 @@ out_lock:
 	rdb_tx_end(&tx);
 out_svc:
 	cont_svc_put_leader(svc);
-out_pool_hdl:
-	ds_pool_hdl_put(pool_hdl);
-out:
 	return rc;
 }
 
