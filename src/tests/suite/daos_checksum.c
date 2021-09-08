@@ -2722,7 +2722,7 @@ static const struct CMUnitTest csum_tests[] = {
 		  "running very frequently",
 		  scrubbing_a_lot),
 	CSUM_TEST("DAOS_SCRUBBING01: A basic scrubbing test with a long wait "
-		  "in between. Should still be able to destroy cont && pool",
+		  "in between. Should still be able to destroy cont and pool",
 		  scrubbing_with_large_sleep)
 };
 
