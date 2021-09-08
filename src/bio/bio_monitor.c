@@ -94,7 +94,9 @@ bio_log_csum_err(struct bio_xs_context *bxc, int tgt_id)
 {
 	struct media_error_msg	*mem;
 
-	D_ALLOC_PTR(mem);
+	if (bxc->bxc_blobstore == NULL)
+		return;
+	D_ALLOC_PTR(mem); /* mem is freed in bio_media_error */
 	if (mem == NULL)
 		return;
 	mem->mem_bs		= bxc->bxc_blobstore;
@@ -593,7 +595,7 @@ get_spdk_health_info_completion(struct spdk_bdev_io *bdev_io, bool success,
 	D_ASSERT(bdev != NULL);
 
 	/* Store device health info in in-memory health state log. */
-	dev_health->bdh_health_state.timestamp = dev_health->bdh_stat_age;
+	dev_health->bdh_health_state.timestamp = daos_wallclock_secs();
 	populate_health_stats(dev_health);
 
 	/* Prep NVMe command to get SPDK Intel NVMe SSD Smart Attributes */

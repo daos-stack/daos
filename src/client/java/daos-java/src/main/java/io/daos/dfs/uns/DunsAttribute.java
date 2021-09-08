@@ -16,8 +16,8 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private DunsAttribute() {
-    puuid_ = "";
-    cuuid_ = "";
+    poolId_ = "";
+    contId_ = "";
     layoutType_ = 0;
     objectType_ = "";
     relPath_ = "";
@@ -56,13 +56,13 @@ private static final long serialVersionUID = 0L;
           case 10: {
             java.lang.String s = input.readStringRequireUtf8();
 
-            puuid_ = s;
+            poolId_ = s;
             break;
           }
           case 18: {
             java.lang.String s = input.readStringRequireUtf8();
 
-            cuuid_ = s;
+            contId_ = s;
             break;
           }
           case 24: {
@@ -98,6 +98,11 @@ private static final long serialVersionUID = 0L;
             noPrefix_ = input.readBool();
             break;
           }
+          case 80: {
+
+            flags_ = input.readUInt32();
+            break;
+          }
           default: {
             if (!parseUnknownField(
                 input, unknownFields, extensionRegistry, tag)) {
@@ -130,76 +135,76 @@ private static final long serialVersionUID = 0L;
             io.daos.dfs.uns.DunsAttribute.class, io.daos.dfs.uns.DunsAttribute.Builder.class);
   }
 
-  public static final int PUUID_FIELD_NUMBER = 1;
-  private volatile java.lang.Object puuid_;
+  public static final int POOLID_FIELD_NUMBER = 1;
+  private volatile java.lang.Object poolId_;
   /**
-   * <code>string puuid = 1;</code>
-   * @return The puuid.
+   * <code>string poolId = 1;</code>
+   * @return The poolId.
    */
   @java.lang.Override
-  public java.lang.String getPuuid() {
-    java.lang.Object ref = puuid_;
+  public java.lang.String getPoolId() {
+    java.lang.Object ref = poolId_;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
       com.google.protobuf.ByteString bs = 
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
-      puuid_ = s;
+      poolId_ = s;
       return s;
     }
   }
   /**
-   * <code>string puuid = 1;</code>
-   * @return The bytes for puuid.
+   * <code>string poolId = 1;</code>
+   * @return The bytes for poolId.
    */
   @java.lang.Override
   public com.google.protobuf.ByteString
-      getPuuidBytes() {
-    java.lang.Object ref = puuid_;
+      getPoolIdBytes() {
+    java.lang.Object ref = poolId_;
     if (ref instanceof java.lang.String) {
       com.google.protobuf.ByteString b = 
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
-      puuid_ = b;
+      poolId_ = b;
       return b;
     } else {
       return (com.google.protobuf.ByteString) ref;
     }
   }
 
-  public static final int CUUID_FIELD_NUMBER = 2;
-  private volatile java.lang.Object cuuid_;
+  public static final int CONTID_FIELD_NUMBER = 2;
+  private volatile java.lang.Object contId_;
   /**
-   * <code>string cuuid = 2;</code>
-   * @return The cuuid.
+   * <code>string contId = 2;</code>
+   * @return The contId.
    */
   @java.lang.Override
-  public java.lang.String getCuuid() {
-    java.lang.Object ref = cuuid_;
+  public java.lang.String getContId() {
+    java.lang.Object ref = contId_;
     if (ref instanceof java.lang.String) {
       return (java.lang.String) ref;
     } else {
       com.google.protobuf.ByteString bs = 
           (com.google.protobuf.ByteString) ref;
       java.lang.String s = bs.toStringUtf8();
-      cuuid_ = s;
+      contId_ = s;
       return s;
     }
   }
   /**
-   * <code>string cuuid = 2;</code>
-   * @return The bytes for cuuid.
+   * <code>string contId = 2;</code>
+   * @return The bytes for contId.
    */
   @java.lang.Override
   public com.google.protobuf.ByteString
-      getCuuidBytes() {
-    java.lang.Object ref = cuuid_;
+      getContIdBytes() {
+    java.lang.Object ref = contId_;
     if (ref instanceof java.lang.String) {
       com.google.protobuf.ByteString b = 
           com.google.protobuf.ByteString.copyFromUtf8(
               (java.lang.String) ref);
-      cuuid_ = b;
+      contId_ = b;
       return b;
     } else {
       return (com.google.protobuf.ByteString) ref;
@@ -334,6 +339,17 @@ private static final long serialVersionUID = 0L;
     return noPrefix_;
   }
 
+  public static final int FLAGS_FIELD_NUMBER = 10;
+  private int flags_;
+  /**
+   * <code>uint32 flags = 10;</code>
+   * @return The flags.
+   */
+  @java.lang.Override
+  public int getFlags() {
+    return flags_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -348,11 +364,11 @@ private static final long serialVersionUID = 0L;
   @java.lang.Override
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
-    if (!getPuuidBytes().isEmpty()) {
-      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, puuid_);
+    if (!getPoolIdBytes().isEmpty()) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 1, poolId_);
     }
-    if (!getCuuidBytes().isEmpty()) {
-      com.google.protobuf.GeneratedMessageV3.writeString(output, 2, cuuid_);
+    if (!getContIdBytes().isEmpty()) {
+      com.google.protobuf.GeneratedMessageV3.writeString(output, 2, contId_);
     }
     if (layoutType_ != io.daos.dfs.uns.Layout.UNKNOWN.getNumber()) {
       output.writeEnum(3, layoutType_);
@@ -372,6 +388,9 @@ private static final long serialVersionUID = 0L;
     if (noPrefix_ != false) {
       output.writeBool(9, noPrefix_);
     }
+    if (flags_ != 0) {
+      output.writeUInt32(10, flags_);
+    }
     unknownFields.writeTo(output);
   }
 
@@ -381,11 +400,11 @@ private static final long serialVersionUID = 0L;
     if (size != -1) return size;
 
     size = 0;
-    if (!getPuuidBytes().isEmpty()) {
-      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, puuid_);
+    if (!getPoolIdBytes().isEmpty()) {
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(1, poolId_);
     }
-    if (!getCuuidBytes().isEmpty()) {
-      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, cuuid_);
+    if (!getContIdBytes().isEmpty()) {
+      size += com.google.protobuf.GeneratedMessageV3.computeStringSize(2, contId_);
     }
     if (layoutType_ != io.daos.dfs.uns.Layout.UNKNOWN.getNumber()) {
       size += com.google.protobuf.CodedOutputStream
@@ -409,6 +428,10 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeBoolSize(9, noPrefix_);
     }
+    if (flags_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(10, flags_);
+    }
     size += unknownFields.getSerializedSize();
     memoizedSize = size;
     return size;
@@ -424,10 +447,10 @@ private static final long serialVersionUID = 0L;
     }
     io.daos.dfs.uns.DunsAttribute other = (io.daos.dfs.uns.DunsAttribute) obj;
 
-    if (!getPuuid()
-        .equals(other.getPuuid())) return false;
-    if (!getCuuid()
-        .equals(other.getCuuid())) return false;
+    if (!getPoolId()
+        .equals(other.getPoolId())) return false;
+    if (!getContId()
+        .equals(other.getContId())) return false;
     if (layoutType_ != other.layoutType_) return false;
     if (!getObjectType()
         .equals(other.getObjectType())) return false;
@@ -439,6 +462,8 @@ private static final long serialVersionUID = 0L;
         != other.getOnLustre()) return false;
     if (getNoPrefix()
         != other.getNoPrefix()) return false;
+    if (getFlags()
+        != other.getFlags()) return false;
     if (!unknownFields.equals(other.unknownFields)) return false;
     return true;
   }
@@ -450,10 +475,10 @@ private static final long serialVersionUID = 0L;
     }
     int hash = 41;
     hash = (19 * hash) + getDescriptor().hashCode();
-    hash = (37 * hash) + PUUID_FIELD_NUMBER;
-    hash = (53 * hash) + getPuuid().hashCode();
-    hash = (37 * hash) + CUUID_FIELD_NUMBER;
-    hash = (53 * hash) + getCuuid().hashCode();
+    hash = (37 * hash) + POOLID_FIELD_NUMBER;
+    hash = (53 * hash) + getPoolId().hashCode();
+    hash = (37 * hash) + CONTID_FIELD_NUMBER;
+    hash = (53 * hash) + getContId().hashCode();
     hash = (37 * hash) + LAYOUT_TYPE_FIELD_NUMBER;
     hash = (53 * hash) + layoutType_;
     hash = (37 * hash) + OBJECT_TYPE_FIELD_NUMBER;
@@ -469,6 +494,8 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + NO_PREFIX_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
         getNoPrefix());
+    hash = (37 * hash) + FLAGS_FIELD_NUMBER;
+    hash = (53 * hash) + getFlags();
     hash = (29 * hash) + unknownFields.hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -602,9 +629,9 @@ private static final long serialVersionUID = 0L;
     @java.lang.Override
     public Builder clear() {
       super.clear();
-      puuid_ = "";
+      poolId_ = "";
 
-      cuuid_ = "";
+      contId_ = "";
 
       layoutType_ = 0;
 
@@ -617,6 +644,8 @@ private static final long serialVersionUID = 0L;
       onLustre_ = false;
 
       noPrefix_ = false;
+
+      flags_ = 0;
 
       return this;
     }
@@ -644,14 +673,15 @@ private static final long serialVersionUID = 0L;
     @java.lang.Override
     public io.daos.dfs.uns.DunsAttribute buildPartial() {
       io.daos.dfs.uns.DunsAttribute result = new io.daos.dfs.uns.DunsAttribute(this);
-      result.puuid_ = puuid_;
-      result.cuuid_ = cuuid_;
+      result.poolId_ = poolId_;
+      result.contId_ = contId_;
       result.layoutType_ = layoutType_;
       result.objectType_ = objectType_;
       result.chunkSize_ = chunkSize_;
       result.relPath_ = relPath_;
       result.onLustre_ = onLustre_;
       result.noPrefix_ = noPrefix_;
+      result.flags_ = flags_;
       onBuilt();
       return result;
     }
@@ -700,12 +730,12 @@ private static final long serialVersionUID = 0L;
 
     public Builder mergeFrom(io.daos.dfs.uns.DunsAttribute other) {
       if (other == io.daos.dfs.uns.DunsAttribute.getDefaultInstance()) return this;
-      if (!other.getPuuid().isEmpty()) {
-        puuid_ = other.puuid_;
+      if (!other.getPoolId().isEmpty()) {
+        poolId_ = other.poolId_;
         onChanged();
       }
-      if (!other.getCuuid().isEmpty()) {
-        cuuid_ = other.cuuid_;
+      if (!other.getContId().isEmpty()) {
+        contId_ = other.contId_;
         onChanged();
       }
       if (other.layoutType_ != 0) {
@@ -727,6 +757,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getNoPrefix() != false) {
         setNoPrefix(other.getNoPrefix());
+      }
+      if (other.getFlags() != 0) {
+        setFlags(other.getFlags());
       }
       this.mergeUnknownFields(other.unknownFields);
       onChanged();
@@ -757,154 +790,154 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
-    private java.lang.Object puuid_ = "";
+    private java.lang.Object poolId_ = "";
     /**
-     * <code>string puuid = 1;</code>
-     * @return The puuid.
+     * <code>string poolId = 1;</code>
+     * @return The poolId.
      */
-    public java.lang.String getPuuid() {
-      java.lang.Object ref = puuid_;
+    public java.lang.String getPoolId() {
+      java.lang.Object ref = poolId_;
       if (!(ref instanceof java.lang.String)) {
         com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        puuid_ = s;
+        poolId_ = s;
         return s;
       } else {
         return (java.lang.String) ref;
       }
     }
     /**
-     * <code>string puuid = 1;</code>
-     * @return The bytes for puuid.
+     * <code>string poolId = 1;</code>
+     * @return The bytes for poolId.
      */
     public com.google.protobuf.ByteString
-        getPuuidBytes() {
-      java.lang.Object ref = puuid_;
+        getPoolIdBytes() {
+      java.lang.Object ref = poolId_;
       if (ref instanceof String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
-        puuid_ = b;
+        poolId_ = b;
         return b;
       } else {
         return (com.google.protobuf.ByteString) ref;
       }
     }
     /**
-     * <code>string puuid = 1;</code>
-     * @param value The puuid to set.
+     * <code>string poolId = 1;</code>
+     * @param value The poolId to set.
      * @return This builder for chaining.
      */
-    public Builder setPuuid(
+    public Builder setPoolId(
         java.lang.String value) {
       if (value == null) {
     throw new NullPointerException();
   }
-  
-      puuid_ = value;
+
+      poolId_ = value;
       onChanged();
       return this;
     }
     /**
-     * <code>string puuid = 1;</code>
+     * <code>string poolId = 1;</code>
      * @return This builder for chaining.
      */
-    public Builder clearPuuid() {
+    public Builder clearPoolId() {
       
-      puuid_ = getDefaultInstance().getPuuid();
+      poolId_ = getDefaultInstance().getPoolId();
       onChanged();
       return this;
     }
     /**
-     * <code>string puuid = 1;</code>
-     * @param value The bytes for puuid to set.
+     * <code>string poolId = 1;</code>
+     * @param value The bytes for poolId to set.
      * @return This builder for chaining.
      */
-    public Builder setPuuidBytes(
+    public Builder setPoolIdBytes(
         com.google.protobuf.ByteString value) {
       if (value == null) {
     throw new NullPointerException();
   }
   checkByteStringIsUtf8(value);
-      
-      puuid_ = value;
+
+      poolId_ = value;
       onChanged();
       return this;
     }
 
-    private java.lang.Object cuuid_ = "";
+    private java.lang.Object contId_ = "";
     /**
-     * <code>string cuuid = 2;</code>
-     * @return The cuuid.
+     * <code>string contId = 2;</code>
+     * @return The contId.
      */
-    public java.lang.String getCuuid() {
-      java.lang.Object ref = cuuid_;
+    public java.lang.String getContId() {
+      java.lang.Object ref = contId_;
       if (!(ref instanceof java.lang.String)) {
         com.google.protobuf.ByteString bs =
             (com.google.protobuf.ByteString) ref;
         java.lang.String s = bs.toStringUtf8();
-        cuuid_ = s;
+        contId_ = s;
         return s;
       } else {
         return (java.lang.String) ref;
       }
     }
     /**
-     * <code>string cuuid = 2;</code>
-     * @return The bytes for cuuid.
+     * <code>string contId = 2;</code>
+     * @return The bytes for contId.
      */
     public com.google.protobuf.ByteString
-        getCuuidBytes() {
-      java.lang.Object ref = cuuid_;
+        getContIdBytes() {
+      java.lang.Object ref = contId_;
       if (ref instanceof String) {
         com.google.protobuf.ByteString b = 
             com.google.protobuf.ByteString.copyFromUtf8(
                 (java.lang.String) ref);
-        cuuid_ = b;
+        contId_ = b;
         return b;
       } else {
         return (com.google.protobuf.ByteString) ref;
       }
     }
     /**
-     * <code>string cuuid = 2;</code>
-     * @param value The cuuid to set.
+     * <code>string contId = 2;</code>
+     * @param value The contId to set.
      * @return This builder for chaining.
      */
-    public Builder setCuuid(
+    public Builder setContId(
         java.lang.String value) {
       if (value == null) {
     throw new NullPointerException();
   }
-  
-      cuuid_ = value;
+
+      contId_ = value;
       onChanged();
       return this;
     }
     /**
-     * <code>string cuuid = 2;</code>
+     * <code>string contId = 2;</code>
      * @return This builder for chaining.
      */
-    public Builder clearCuuid() {
+    public Builder clearContId() {
       
-      cuuid_ = getDefaultInstance().getCuuid();
+      contId_ = getDefaultInstance().getContId();
       onChanged();
       return this;
     }
     /**
-     * <code>string cuuid = 2;</code>
-     * @param value The bytes for cuuid to set.
+     * <code>string contId = 2;</code>
+     * @param value The bytes for contId to set.
      * @return This builder for chaining.
      */
-    public Builder setCuuidBytes(
+    public Builder setContIdBytes(
         com.google.protobuf.ByteString value) {
       if (value == null) {
     throw new NullPointerException();
   }
   checkByteStringIsUtf8(value);
-      
-      cuuid_ = value;
+
+      contId_ = value;
       onChanged();
       return this;
     }
@@ -1203,6 +1236,37 @@ private static final long serialVersionUID = 0L;
     public Builder clearNoPrefix() {
       
       noPrefix_ = false;
+      onChanged();
+      return this;
+    }
+
+    private int flags_ ;
+    /**
+     * <code>uint32 flags = 10;</code>
+     * @return The flags.
+     */
+    @java.lang.Override
+    public int getFlags() {
+      return flags_;
+    }
+    /**
+     * <code>uint32 flags = 10;</code>
+     * @param value The flags to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFlags(int value) {
+      
+      flags_ = value;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 flags = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFlags() {
+      
+      flags_ = 0;
       onChanged();
       return this;
     }

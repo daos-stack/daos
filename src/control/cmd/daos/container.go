@@ -27,6 +27,7 @@ import (
 
 /*
 #include "util.h"
+
 */
 import "C"
 
@@ -54,10 +55,9 @@ type containerCmd struct {
 	DeleteACL    containerDeleteACLCmd    `command:"delete-acl" description:"delete a container's ACL"`
 	SetOwner     containerSetOwnerCmd     `command:"set-owner" alias:"chown" description:"change ownership for a container"`
 
-	CreateSnapshot   containerSnapshotCreateCmd   `command:"create-snap" alias:"snap" description:"create container snapshot"`
-	DestroySnapshot  containerSnapshotDestroyCmd  `command:"destroy-snap" description:"destroy container snapshot"`
-	ListSnapshots    containerSnapshotListCmd     `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
-	RollbackSnapshot containerSnapshotRollbackCmd `command:"rollback" description:"roll back container to specified snapshot"`
+	CreateSnapshot  containerSnapshotCreateCmd  `command:"create-snap" alias:"snap" description:"create container snapshot"`
+	DestroySnapshot containerSnapshotDestroyCmd `command:"destroy-snap" description:"destroy container snapshot"`
+	ListSnapshots   containerSnapshotListCmd    `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
 }
 
 type containerBaseCmd struct {
@@ -216,17 +216,18 @@ func (cmd *containerCreateCmd) getUserUUID() uuid.UUID {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
-	if cu := cmd.getUserUUID(); cu != uuid.Nil {
-		cmd.contUUID = cu
-	} else {
-		cmd.contUUID = uuid.New()
-	}
-
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
+
+	if cu := cmd.getUserUUID(); cu != uuid.Nil {
+		cmd.contUUID = cu
+		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
+			return err
+		}
+	}
 
 	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
 	if err != nil {
@@ -234,9 +235,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer disconnectPool()
 
-	if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
-		return err
-	}
 	ap.c_op = C.CONT_CREATE
 
 	if cmd.User != "" {
@@ -261,6 +259,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if err := cmd.Properties.AddPropVal("label", cmd.Label); err != nil {
 			return err
 		}
+		cmd.contLabel = cmd.Label
 	}
 
 	if cmd.Properties.props != nil {
@@ -297,11 +296,24 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err := daosError(rc); err != nil {
 		return errors.Wrap(err, "failed to create container")
 	}
-	cmd.log.Debugf("created container: %s", cmd.contUUID)
+
+	cmd.contUUID, err = uuidFromC(ap.c_uuid)
+	if err != nil {
+		return err
+	}
+
+	var co_id string
+	if cmd.contUUID == uuid.Nil {
+		cmd.contLabel = C.GoString(&ap.cont_str[0])
+		co_id = cmd.contLabel
+	} else {
+		co_id = cmd.contUUID.String()
+	}
+
+	cmd.log.Debugf("created container: %s", co_id)
 
 	if err := cmd.openContainer(C.DAOS_COO_RO); err != nil {
-		return errors.Wrapf(err,
-			"failed to open new container %s", cmd.contUUID)
+		return errors.Wrapf(err, "failed to open new container %s", co_id)
 	}
 	defer cmd.closeContainer()
 
@@ -309,13 +321,11 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err != nil {
 		// Special case for creating a container without permission to query it.
 		if errors.Cause(err) == drpc.DaosNoPermission {
-			cmd.log.Errorf("container %s was created, but query failed", cmd.contUUID)
+			cmd.log.Errorf("container %s was created, but query failed", co_id)
 			return nil
 		}
 
-		return errors.Wrapf(err,
-			"failed to query new container %s",
-			cmd.contUUID)
+		return errors.Wrapf(err, "failed to query new container %s", co_id)
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -602,7 +612,7 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -631,12 +641,6 @@ func (cmd *containerStatCmd) Execute(_ []string) error {
 }
 
 func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
-	epochs := ci.SnapshotEpochs()
-	epochStrs := make([]string, *ci.NumSnapshots)
-	for i := uint32(0); i < *ci.NumSnapshots; i++ {
-		epochStrs[i] = fmt.Sprintf("%d", epochs[i])
-	}
-
 	rows := []txtfmt.TableRow{
 		{"Container UUID": ci.ContainerUUID.String()},
 	}
@@ -650,9 +654,7 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 			{"Pool UUID": ci.PoolUUID.String()},
 			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
 			{"Latest Persistent Snapshot": fmt.Sprintf("%d", *ci.LatestSnapshot)},
-			{"Highest Aggregated Epoch": fmt.Sprintf("%d", *ci.HighestAggregatedEpoch)},
 			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
-			{"Snapshot Epochs": strings.Join(epochStrs, ",")},
 		}...)
 
 		if ci.ObjectClass != "" {
@@ -667,36 +669,24 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 }
 
 type containerInfo struct {
-	dci                    C.daos_cont_info_t
-	PoolUUID               *uuid.UUID `json:"pool_uuid"`
-	ContainerUUID          *uuid.UUID `json:"container_uuid"`
-	ContainerLabel         string     `json:"container_label,omitempty"`
-	LatestSnapshot         *uint64    `json:"latest_snapshot"`
-	RedundancyFactor       *uint32    `json:"redundancy_factor"`
-	NumSnapshots           *uint32    `json:"num_snapshots"`
-	HighestAggregatedEpoch *uint64    `json:"highest_aggregated_epoch"`
-	Type                   string     `json:"container_type"`
-	ObjectClass            string     `json:"object_class,omitempty"`
-	ChunkSize              uint64     `json:"chunk_size,omitempty"`
-}
-
-func (ci *containerInfo) SnapshotEpochs() []uint64 {
-	if ci.dci.ci_snapshots == nil {
-		return nil
-	}
-
-	// return a Go slice backed by the C array of snapshot epochs
-	return (*[1 << 30]uint64)(unsafe.Pointer(ci.dci.ci_snapshots))[:*ci.NumSnapshots:*ci.NumSnapshots]
+	dci              C.daos_cont_info_t
+	PoolUUID         *uuid.UUID `json:"pool_uuid"`
+	ContainerUUID    *uuid.UUID `json:"container_uuid"`
+	ContainerLabel   string     `json:"container_label,omitempty"`
+	LatestSnapshot   *uint64    `json:"latest_snapshot"`
+	RedundancyFactor *uint32    `json:"redundancy_factor"`
+	NumSnapshots     *uint32    `json:"num_snapshots"`
+	Type             string     `json:"container_type"`
+	ObjectClass      string     `json:"object_class,omitempty"`
+	ChunkSize        uint64     `json:"chunk_size,omitempty"`
 }
 
 func (ci *containerInfo) MarshalJSON() ([]byte, error) {
 	type toJSON containerInfo
 	return json.Marshal(&struct {
-		SnapshotEpochs []uint64 `json:"snapshot_epochs"`
 		*toJSON
 	}{
-		SnapshotEpochs: ci.SnapshotEpochs(),
-		toJSON:         (*toJSON)(ci),
+		toJSON: (*toJSON)(ci),
 	})
 }
 
@@ -710,7 +700,6 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.LatestSnapshot = (*uint64)(&ci.dci.ci_lsnapshot)
 	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
-	ci.HighestAggregatedEpoch = (*uint64)(&ci.dci.ci_hae)
 
 	return ci
 }

@@ -90,7 +90,7 @@ static inline void
 sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
 {
 	sgl_idx->iov_offset += bytes;
-	D_DEBUG(DB_TRACE, "Moving sgl index formward by %lu bytes."
+	D_DEBUG(DB_TRACE, "Moving sgl index forward by %lu bytes."
 			  "Idx: "DF_SGL_IDX"\n",
 		bytes, DP_SGL_IDX(sgl_idx));
 
@@ -242,6 +242,22 @@ daos_getntime_coarse(void)
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
 	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+}
+
+static inline uint64_t
+daos_wallclock_secs(void)
+{
+	struct timespec         now;
+	int                     rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc) {
+		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n",
+			rc, errno, strerror(errno));
+		return 0;
+	}
+
+	return now.tv_sec;
 }
 
 static inline uint64_t
@@ -855,6 +871,16 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 /* NVMe shared constants */
 #define DAOS_NVME_SHMID_NONE	-1
 #define DAOS_NVME_MEM_PRIMARY	0
+
+/** Size of (un)expected Mercury buffers */
+#define DAOS_RPC_SIZE  (20480) /* 20KiB */
+/**
+ * Threshold for inline vs bulk transfer
+ * If the data size is smaller or equal to this limit, it will be transferred
+ * inline in the request/reply. Otherwise, a RDMA transfer will be used.
+ * Based on RPC size above and reserve 1KiB for RPC fields and cart/HG headers.
+ */
+#define DAOS_BULK_LIMIT	(DAOS_RPC_SIZE - 1024) /* Reserve 1KiB for headers */
 
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 

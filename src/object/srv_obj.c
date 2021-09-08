@@ -1372,10 +1372,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		D_ASSERTF(ec_recov == false || ec_deg_fetch == false,
 			  "ec_recov %d, ec_deg_fetch %d.\n",
 			  ec_recov, ec_deg_fetch);
-		is_parity_shard = orw->orw_oid.id_shard >=
-				  obj_ec_data_tgt_nr(&ioc->ioc_oca);
-		get_parity_list = ec_recov && is_parity_shard &&
-				  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
+		if (ec_recov) {
+			D_ASSERT(obj_ec_tgt_nr(&ioc->ioc_oca) > 0);
+			is_parity_shard = (orw->orw_oid.id_shard % obj_ec_tgt_nr(&ioc->ioc_oca)) >=
+					  obj_ec_data_tgt_nr(&ioc->ioc_oca);
+			get_parity_list = ec_recov && is_parity_shard &&
+					  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
+		}
 		if (get_parity_list) {
 			D_ASSERT(!ec_deg_fetch);
 			fetch_flags |= VOS_OF_FETCH_RECX_LIST;
@@ -1422,12 +1425,14 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				goto out;
 			}
 			iod_converted = true;
+
+			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY)
+				fetch_flags |= VOS_OF_SKIP_FETCH;
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
 				     orw->orw_epoch, dkey, orw->orw_nr, iods,
-				     cond_flags | fetch_flags, shadows, &ioh,
-				     dth);
+				     cond_flags | fetch_flags, shadows, &ioh, dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
@@ -1440,6 +1445,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (get_parity_list) {
 			parity_list = vos_ioh2recx_list(ioh);
 			if (parity_list != NULL) {
+				daos_recx_ep_list_set(parity_list, orw->orw_nr, 0, 0);
 				orwo->orw_rels.ca_arrays = parity_list;
 				orwo->orw_rels.ca_count = orw->orw_nr;
 			}
@@ -1461,6 +1467,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (rc)
 				goto out;
 		}
+
 		if (ec_deg_fetch) {
 			D_ASSERT(!get_parity_list);
 			recov_lists = vos_ioh2recx_list(ioh);
@@ -1674,7 +1681,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	     struct obj_io_context *ioc)
 {
 	struct ds_cont_hdl   *coh;
-	struct ds_cont_child *coc;
+	struct ds_cont_child *coc = NULL;
 	int		      rc;
 
 	D_ASSERT(ioc != NULL);
@@ -1733,6 +1740,8 @@ out:
 	ioc->ioc_coh	 = coh;
 	return 0;
 failed:
+	if (coc != NULL)
+		ds_cont_child_put(coc);
 	ds_cont_hdl_put(coh);
 	return rc;
 }

@@ -42,12 +42,8 @@ class ManagementServiceResilience(TestWithServers):
             Pool entry, if found, or None.
 
         """
-        output = self.get_dmg_command().pool_list(no_query=True)
-        uuids = []
-        for pool in output["response"]["pools"]:
-            uuids.append(pool["uuid"])
-
-        for pool_uuid in uuids:
+        pool_uuids = self.get_dmg_command().get_pool_list_uuids(no_query=True)
+        for pool_uuid in pool_uuids:
             if pool_uuid.lower() == search_uuid.lower():
                 return pool_uuid
         return None
@@ -62,10 +58,13 @@ class ManagementServiceResilience(TestWithServers):
         self.log.info("Pool UUID %s on server group: %s",
                         self.pool.uuid, self.server_group)
         # Verify that the pool persisted.
-        if self.find_pool(self.pool.uuid):
-            self.log.info("Found pool in system.")
-        else:
-            self.fail("No pool found in system.")
+        while not self.find_pool(self.pool.uuid):
+            # Occasionally the pool may not be found
+            # immediately after creation if the read
+            # is serviced by a non-leader replica.
+            self.log.info("Pool %s not found yet.", self.pool.uuid)
+            time.sleep(1)
+        self.log.info("Found pool in system.")
 
     def get_leader(self):
         """Fetch the current system leader.

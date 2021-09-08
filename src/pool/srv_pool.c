@@ -3338,26 +3338,23 @@ out_client:
 
 int
 ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
-		uint32_t rank, struct pool_target_id_list *target_list,
-		pool_comp_state_t state)
+			    struct pool_target_addr_list *target_addrs,
+			    pool_comp_state_t state)
 {
 	int				rc;
 	struct rsvc_client		client;
 	crt_endpoint_t			ep;
 	struct dss_module_info		*info = dss_get_module_info();
 	crt_rpc_t			*rpc;
-	struct pool_target_addr_list	list = { 0 };
 	struct pool_add_in		*in;
 	struct pool_add_out		*out;
 	crt_opcode_t			opcode;
-	int i = 0;
 
 	rc = rsvc_client_init(&client, ranks);
 	if (rc != 0)
 		return rc;
 
 rechoose:
-
 	ep.ep_grp = NULL; /* primary group */
 	rsvc_client_choose(&client, &ep);
 
@@ -3385,21 +3382,8 @@ rechoose:
 	in = crt_req_get(rpc);
 	uuid_copy(in->pti_op.pi_uuid, pool_uuid);
 
-	rc = pool_target_addr_list_alloc(target_list->pti_number, &list);
-	if (rc) {
-		D_ERROR(DF_UUID": pool_target_addr_list_alloc failed, rc %d.\n",
-			DP_UUID(pool_uuid), rc);
-		D_GOTO(out_rpc, rc);
-	}
-
-	/* pool_update rpc requires an addr list. */
-	for (i = 0; i < target_list->pti_number; i++) {
-		list.pta_addrs[i].pta_target = target_list->pti_ids[i].pti_id;
-		list.pta_addrs[i].pta_rank = rank;
-	}
-
-	in->pti_addr_list.ca_arrays = list.pta_addrs;
-	in->pti_addr_list.ca_count = (size_t)list.pta_number;
+	in->pti_addr_list.ca_arrays = target_addrs->pta_addrs;
+	in->pti_addr_list.ca_count = (size_t)target_addrs->pta_number;
 
 	rc = dss_rpc_send(rpc);
 	out = crt_reply_get(rpc);
@@ -3425,7 +3409,6 @@ rechoose:
 out_rpc:
 	crt_req_decref(rpc);
 out_client:
-	pool_target_addr_list_free(&list);
 	rsvc_client_fini(&client);
 	return rc;
 }
@@ -4540,7 +4523,7 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID": failed to commit: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
-			D_GOTO(out_map, rc);
+		D_GOTO(out_map, rc);
 	}
 
 	updated = true;
@@ -4565,7 +4548,6 @@ out_map:
 		else
 			*map_version_p = pool_map_get_version(map);
 	}
-	rdb_tx_end(tx);
 
 out_map_buf:
 	if (map_buf != NULL)
@@ -4629,6 +4611,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
 
 out_svc:
 	pool_target_id_list_free(&tgts);
