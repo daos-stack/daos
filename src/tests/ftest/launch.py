@@ -792,16 +792,8 @@ def get_vmd_address_backed_nvme(host_list, value):
         print("ERROR: Issuing commands ls -l /sys/block/")
         sys.exit(1)
 
-    # Verify each server host has the same NVMe device behind VMD addresses.
     output_data = list(task.iter_buffers())
-    print("------------SAMIR-------- {}\n".format(output_data))
-    print("------------SAMIR-------- len = {}\n".format(len(output_data)))
-    if len(output_data) > 1:
-        print("ERROR: Non-homogeneous NVMe device behind VMD addresses.")
-        sys.exit(1)
-
     output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
-
     # Remove the VMD PCI address if no NVMe is backed-up and connected.
     for device in value:
         if device not in output_str:
