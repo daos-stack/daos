@@ -2366,7 +2366,7 @@ exit:
 			D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
 			D_FREE(iv_sync_cb);
 		}
-}
+	}
 	return rc;
 }
 
@@ -2584,9 +2584,9 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 						iv_info->uci_user_priv);
 			if (iv_info->uci_sync_type.ivs_comp_cb)
 				iv_info->uci_sync_type.ivs_comp_cb(iv_info->
-				                               uci_sync_type.
-							       ivs_comp_cb_arg,
-							       rc);
+								   uci_sync_type.
+								   ivs_comp_cb_arg,
+								   rc);
 		}
 	}
 
