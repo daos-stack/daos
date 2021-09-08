@@ -13,7 +13,6 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/build"
-	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/fault"
 	"github.com/daos-stack/daos/src/control/fault/code"
 	"github.com/daos-stack/daos/src/control/server/engine"
@@ -45,6 +44,11 @@ var (
 		code.ServerDataPlaneNotStarted,
 		fmt.Sprintf("%s instance not started or not responding on dRPC", build.DataPlaneName),
 		"retry the operation or check server logs for more details",
+	)
+	FaultPoolNoLabel = serverFault(
+		code.ServerPoolNoLabel,
+		"cannot create a pool without a pool label",
+		"retry the operation with a label set",
 	)
 )
 
@@ -121,14 +125,6 @@ func FaultScmUnmanaged(mntPoint string) *fault.Fault {
 		code.ServerScmUnmanaged,
 		fmt.Sprintf("the SCM mountpoint at %s is unavailable and can't be created/mounted", mntPoint),
 		fmt.Sprintf("manually create %s or remove --recreate-superblocks from the server arguments", mntPoint),
-	)
-}
-
-func FaultBdevNotFound(bdevs []string) *fault.Fault {
-	return serverFault(
-		code.ServerBdevNotFound,
-		fmt.Sprintf("NVMe SSD%s %v not found", common.Pluralise("", len(bdevs)), bdevs),
-		fmt.Sprintf("check SSD%s %v that are specified in server config exist", common.Pluralise("", len(bdevs)), bdevs),
 	)
 }
 

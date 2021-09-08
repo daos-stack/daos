@@ -10,7 +10,7 @@ Build-Depends: debhelper (>= 10),
                libopenmpi-dev,
                libssl-dev,
                libyaml-dev,
-               libmercury-dev (= 2.0.1~rc1-1),
+               libmercury-dev (= 2.0.1-1),
                scons,
                uuid-dev,
                pkg-config,
@@ -28,7 +28,7 @@ Build-Depends: debhelper (>= 10),
                libboost-dev,
                libspdk-dev,
                libipmctl-dev,
-               libraft-dev (= 0.8.0-1386.g7509891),
+               libraft-dev (= 0.8.0-1387.g3b0f9f0),
                python3-tabulate,
                liblz4-dev
 Standards-Version: 4.1.2
@@ -92,7 +92,7 @@ Description: The Distributed Asynchronous Object Storage (DAOS) is an open-sourc
 Package: daos-tests
 Architecture: any
 Multi-Arch: same
-Depends: python (>=2.7), python3, python-yaml, python3-yaml,
+Depends: python (>=3.8), python3, python-yaml, python3-yaml,
          ${shlibs:Depends}, ${misc:Depends}
 Description: The Distributed Asynchronous Object Storage (DAOS) is an open-source
  software-defined object store designed from the ground up for

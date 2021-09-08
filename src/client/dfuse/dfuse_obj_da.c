@@ -113,6 +113,7 @@ obj_da_destroy(obj_da_t *da)
 	struct da_entry *block;
 	struct tpv_data *tpv;
 	struct obj_da *real_da = (struct obj_da *)da;
+	int		rc;
 
 	if (da == NULL)
 		return -DER_INVAL;
@@ -141,7 +142,9 @@ obj_da_destroy(obj_da_t *da)
 		D_FREE(tpv);
 	}
 
-	pthread_mutex_destroy(&real_da->lock);
+	rc = pthread_mutex_destroy(&real_da->lock);
+	if (rc != 0)
+		D_ERROR("Failed to destroy lock %d %s", rc, strerror(rc));
 
 	return -DER_SUCCESS;
 }

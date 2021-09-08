@@ -466,8 +466,8 @@ chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_dma_chunk **chk_ptr)
 		/* Try grow buffer first */
 		if (bdb->bdb_tot_cnt < bio_chk_cnt_max) {
 			rc = dma_buffer_grow(bdb, 1);
-			if (rc != 0)
-				return rc;
+			if (rc == 0)
+				goto done;
 		}
 
 		/* Try to reclaim an unused chunk from bulk groups */
@@ -475,7 +475,7 @@ chunk_get_idle(struct bio_dma_buffer *bdb, struct bio_dma_chunk **chk_ptr)
 		if (rc)
 			return rc;
 	}
-
+done:
 	D_ASSERT(!d_list_empty(&bdb->bdb_idle_list));
 	chk = d_list_entry(bdb->bdb_idle_list.next, struct bio_dma_chunk,
 			   bdc_link);
@@ -583,6 +583,54 @@ direct_scm_access(struct bio_desc *biod, struct bio_iov *biov)
 	return false;
 }
 
+static bool
+iod_expand_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg,
+		  uint64_t off, uint64_t end, unsigned int pg_cnt, unsigned int pg_off)
+{
+	uint64_t		cur_pg, prev_pg_start, prev_pg_end;
+	unsigned int		chk_pg_idx;
+	struct bio_dma_chunk	*chk = last_rg->brr_chk;
+
+	chk_pg_idx = last_rg->brr_pg_idx;
+	D_ASSERT(chk_pg_idx < bio_chk_sz);
+
+	prev_pg_start = last_rg->brr_off >> BIO_DMA_PAGE_SHIFT;
+	prev_pg_end = last_rg->brr_end >> BIO_DMA_PAGE_SHIFT;
+	cur_pg = off >> BIO_DMA_PAGE_SHIFT;
+	D_ASSERT(prev_pg_start <= prev_pg_end);
+
+	/* Only merge NVMe regions */
+	if (bio_iov2media(biov) == DAOS_MEDIA_SCM ||
+	    bio_iov2media(biov) != last_rg->brr_media)
+		return false;
+
+	/* Not consecutive with prev rg */
+	if (cur_pg != prev_pg_end)
+		return false;
+
+	D_DEBUG(DB_TRACE, "merging IOVs: ["DF_U64", "DF_U64"), ["DF_U64", "DF_U64")\n",
+		last_rg->brr_off, last_rg->brr_end, off, end);
+
+	if (last_rg->brr_off < off)
+		chk_pg_idx += (prev_pg_end - prev_pg_start);
+	else
+		/* The prev region must be covered by one page */
+		D_ASSERTF(prev_pg_end == prev_pg_start,
+			  ""DF_U64" != "DF_U64"\n", prev_pg_end, prev_pg_start);
+
+	bio_iov_set_raw_buf(biov, chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
+	if (bio_iov2raw_buf(biov) == NULL)
+		return false;
+
+	if (off < last_rg->brr_off)
+		last_rg->brr_off = off;
+	if (end > last_rg->brr_end)
+		last_rg->brr_end = end;
+
+	D_DEBUG(DB_TRACE, "Consecutive reserve %p.\n", bio_iov2raw_buf(biov));
+	return true;
+}
+
 /* Convert offset of @biov into memory pointer */
 int
 dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
@@ -612,12 +660,7 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	D_ASSERT(!BIO_ADDR_IS_DEDUP(&biov->bi_addr));
 
 	bdb = iod_dma_buf(biod);
-	off = bio_iov2raw_off(biov);
-	end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
-	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
-			(off >> BIO_DMA_PAGE_SHIFT);
-	D_ASSERT(pg_cnt > 0);
-	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
+	dma_biov2pg(biov, &off, &end, &pg_cnt, &pg_off);
 
 	/*
 	 * For huge IOV, we'll bypass our per-xstream DMA buffer cache and
@@ -650,36 +693,16 @@ dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
 	last_rg = iod_last_region(biod);
 
 	/* First, try consecutive reserve from the last reserved region */
-	if (last_rg && bio_iov2media(biov) != DAOS_MEDIA_SCM &&
-	    bio_iov2media(biov) == last_rg->brr_media) {
-		uint64_t cur_pg, prev_pg_start, prev_pg_end;
-
+	if (last_rg) {
 		D_DEBUG(DB_TRACE, "Last region %p:%d ["DF_U64","DF_U64")\n",
 			last_rg->brr_chk, last_rg->brr_pg_idx,
 			last_rg->brr_off, last_rg->brr_end);
 
 		chk = last_rg->brr_chk;
 		D_ASSERT(biod->bd_chk_type == chk->bdc_type);
-		chk_pg_idx = last_rg->brr_pg_idx;
-		D_ASSERT(chk_pg_idx < bio_chk_sz);
 
-		prev_pg_start = last_rg->brr_off >> BIO_DMA_PAGE_SHIFT;
-		prev_pg_end = last_rg->brr_end >> BIO_DMA_PAGE_SHIFT;
-		cur_pg = off >> BIO_DMA_PAGE_SHIFT;
-		D_ASSERT(prev_pg_start <= prev_pg_end);
-
-		/* Consecutive in page */
-		if (cur_pg == prev_pg_end) {
-			chk_pg_idx += (prev_pg_end - prev_pg_start);
-			bio_iov_set_raw_buf(biov,
-				chunk_reserve(chk, chk_pg_idx, pg_cnt, pg_off));
-			if (bio_iov2raw_buf(biov) != NULL) {
-				D_DEBUG(DB_TRACE, "Consecutive reserve %p.\n",
-					bio_iov2raw_buf(biov));
-				last_rg->brr_end = end;
-				return 0;
-			}
-		}
+		if (iod_expand_region(biov, last_rg, off, end, pg_cnt, pg_off))
+			return 0;
 	}
 
 	/* Try to reserve from the last DMA chunk in io descriptor */
@@ -841,17 +864,14 @@ scm_rw(struct bio_desc *biod, struct bio_rsrvd_region *rg)
 {
 	struct umem_instance	*umem = biod->bd_ctxt->bic_umem;
 	void			*payload;
-	unsigned int		 pg_off;
 
 	D_ASSERT(biod->bd_rdma);
 	D_ASSERT(!bio_scm_rdma);
 
 	payload = rg->brr_chk->bdc_ptr + (rg->brr_pg_idx << BIO_DMA_PAGE_SHIFT);
-	pg_off = rg->brr_off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
-	payload += pg_off;
 
-	D_DEBUG(DB_IO, "SCM RDMA, type:%d payload:%p pg_off:%u\n",
-		biod->bd_type, payload, pg_off);
+	D_DEBUG(DB_IO, "SCM RDMA, type:%d payload:%p len:"DF_U64"\n",
+		biod->bd_type, payload, rg->brr_end - rg->brr_off);
 
 	bio_memcpy(biod, DAOS_MEDIA_SCM, umem_off2ptr(umem, rg->brr_off),
 		   payload, rg->brr_end - rg->brr_off);

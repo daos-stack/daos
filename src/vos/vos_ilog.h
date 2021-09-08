@@ -74,6 +74,10 @@ vos_ilog_init(void);
 void
 vos_ilog_fetch_init(struct vos_ilog_info *info);
 
+/** Move ilog information from src to dest, clearing src */
+void
+vos_ilog_fetch_move(struct vos_ilog_info *dest, struct vos_ilog_info *src);
+
 /** Finalize incarnation log information */
 void
 vos_ilog_fetch_finish(struct vos_ilog_info *info);

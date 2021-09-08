@@ -1,6 +1,6 @@
 """Build DAOS utilities"""
 import daos_build
-Import('env', 'prereqs')
+Import('env', 'base_env', 'prereqs')
 
 def scons():
     """Execute build"""
@@ -10,7 +10,8 @@ def scons():
 
     libs = ['daos', 'daos_common', 'uuid', 'dfs', 'duns', 'gurt', 'cart']
 
-    Import('env', 'API_VERSION')
+    daos_build.add_build_rpath(env)
+    daos_build.add_build_rpath(base_env)
     env.AppendUnique(LIBPATH=[Dir('.')])
 
     denv = env.Clone()

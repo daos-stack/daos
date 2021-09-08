@@ -372,8 +372,8 @@ bulk_grp_grow(struct bio_dma_buffer *bdb, struct bio_bulk_group *bbg,
 	/* Grow DMA buffer when not reaching DMA upper bound */
 	if (bdb->bdb_tot_cnt < bio_chk_cnt_max) {
 		rc = dma_buffer_grow(bdb, 1);
-		if (rc != 0)
-			return rc;
+		if (rc == 0)
+			goto populate;
 	}
 
 	/* Try to evict an unused chunk from other bulk group */
@@ -558,13 +558,7 @@ bulk_map_one(struct bio_desc *biod, struct bio_iov *biov, void *data)
 		if (rc)
 			return rc;
 	}
-
-	off = bio_iov2raw_off(biov);
-	end = bio_iov2raw_off(biov) + bio_iov2raw_len(biov);
-	pg_cnt = ((end + BIO_DMA_PAGE_SZ - 1) >> BIO_DMA_PAGE_SHIFT) -
-			(off >> BIO_DMA_PAGE_SHIFT);
-	D_ASSERT(pg_cnt > 0);
-	pg_off = off & ((uint64_t)BIO_DMA_PAGE_SZ - 1);
+	dma_biov2pg(biov, &off, &end, &pg_cnt, &pg_off);
 
 	if (bypass_bulk_cache(biod, biov, pg_cnt)) {
 		rc = dma_map_one(biod, biov, NULL);

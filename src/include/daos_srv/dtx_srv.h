@@ -83,6 +83,8 @@ struct dtx_handle {
 					 dth_for_migration:1,
 					 /* Force refresh for non-committed */
 					 dth_force_refresh:1,
+					 /* Has prepared locally, for resend. */
+					 dth_prepared:1,
 					 /* Ignore other uncommitted DTXs. */
 					 dth_ignore_uncommitted:1;
 
@@ -161,9 +163,15 @@ struct dtx_leader_handle {
 struct dtx_stat {
 	uint64_t	dtx_committable_count;
 	uint64_t	dtx_oldest_committable_time;
-	uint64_t	dtx_committed_count;
-	uint64_t	dtx_oldest_committed_time;
 	uint64_t	dtx_oldest_active_time;
+	/* The epoch for the oldest entry in the 1st committed blob. */
+	uint64_t	dtx_first_cmt_blob_time_up;
+	/* The epoch for the newest entry in the 1st committed blob. */
+	uint64_t	dtx_first_cmt_blob_time_lo;
+	/* container-based committed DTX entries count. */
+	uint32_t	dtx_cont_cmt_count;
+	/* pool-based committed DTX entries count. */
+	uint32_t	dtx_pool_cmt_count;
 };
 
 enum dtx_flags {
@@ -181,6 +189,8 @@ enum dtx_flags {
 	DTX_RESEND		= (1 << 5),
 	/** Force DTX refresh if hit non-committed DTX on non-leader. */
 	DTX_FORCE_REFRESH	= (1 << 6),
+	/** Transaction has been prepared locally. */
+	DTX_PREPARED		= (1 << 7),
 };
 
 int

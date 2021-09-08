@@ -7,6 +7,8 @@
 #include <spdk/stdinc.h>
 #include <spdk/nvme.h>
 #include <spdk/env.h>
+#include <spdk/nvme_intel.h>
+#include <spdk/pci_ids.h>
 
 #include "nvme_control.h"
 #include "nvme_control_common.h"
@@ -29,7 +31,7 @@ get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 	struct health_entry *entry = cb_arg;
 
 	if (spdk_nvme_cpl_is_error(cpl))
-		fprintf(stderr, "Error with SPDK health log page\n");
+		fprintf(stderr, "Error with SPDK log page\n");
 
 	entry->inflight--;
 }
@@ -37,8 +39,12 @@ get_spdk_log_page_completion(void *cb_arg, const struct spdk_nvme_cpl *cpl)
 static int
 get_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct health_entry *health)
 {
-	struct spdk_nvme_health_information_page hp;
-	int					 rc = 0;
+	struct spdk_nvme_health_information_page	hp;
+	struct spdk_nvme_intel_smart_information_page	isp;
+	const struct spdk_nvme_ctrlr_data		*cdata;
+	int						rc = 0;
+
+	cdata = spdk_nvme_ctrlr_get_data(ctrlr);
 
 	/** NVMe SSDs on GCP do not support this */
 	if (!spdk_nvme_ctrlr_is_log_page_supported(ctrlr,
@@ -61,6 +67,31 @@ get_health_logs(struct spdk_nvme_ctrlr *ctrlr, struct health_entry *health)
 		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
 
 	health->page = hp;
+
+	/* Non-Intel SSDs do not support this */
+	if (cdata->vid != SPDK_PCI_VID_INTEL)
+		return 0;
+	if (!spdk_nvme_ctrlr_is_log_page_supported(ctrlr,
+					SPDK_NVME_INTEL_LOG_SMART))
+		/** not much we can do, just skip */
+		return 0;
+
+	health->inflight++;
+	rc = spdk_nvme_ctrlr_cmd_get_log_page(ctrlr,
+					      SPDK_NVME_INTEL_LOG_SMART,
+					      SPDK_NVME_GLOBAL_NS_TAG,
+					      &isp,
+					      sizeof(isp),
+					      0, get_spdk_log_page_completion,
+					      health);
+	if (rc != 0)
+		return rc;
+
+	while (health->inflight)
+		spdk_nvme_ctrlr_process_admin_completions(ctrlr);
+
+	health->intel_smart_page = isp;
+
 	return rc;
 }
 
@@ -396,8 +427,8 @@ nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot)
 }
 
 static int
-is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
-		     int num_whitelist_devices)
+is_addr_in_allowlist(char *pci_addr, const struct spdk_pci_addr *allowlist,
+		     int num_allowlist_devices)
 {
 	int			i;
 	struct spdk_pci_addr    tmp;
@@ -407,8 +438,8 @@ is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
 		return -EINVAL;
 	}
 
-	for (i = 0; i < num_whitelist_devices; i++) {
-		if (spdk_pci_addr_compare(&tmp, &whitelist[i]) == 0) {
+	for (i = 0; i < num_allowlist_devices; i++) {
+		if (spdk_pci_addr_compare(&tmp, &allowlist[i]) == 0) {
 			return 1;
 		}
 	}
@@ -416,7 +447,7 @@ is_addr_in_whitelist(char *pci_addr, const struct spdk_pci_addr *whitelist,
 	return 0;
 }
 
-/** Add PCI address to spdk_env_opts whitelist, ignoring any duplicates. */
+/** Add PCI address to spdk_env_opts allowlist, ignoring any duplicates. */
 static int
 opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 		  char *traddr)
@@ -425,7 +456,7 @@ opts_add_pci_addr(struct spdk_env_opts *opts, struct spdk_pci_addr **list,
 	size_t			count = opts->num_pci_addr;
 	struct spdk_pci_addr   *tmp = *list;
 
-	rc = is_addr_in_whitelist(traddr, *list, count);
+	rc = is_addr_in_allowlist(traddr, *list, count);
 	if (rc < 0)
 		return rc;
 	if (rc == 1)

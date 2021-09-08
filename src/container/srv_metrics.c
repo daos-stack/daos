@@ -13,56 +13,56 @@
 #include "srv_internal.h"
 #include <gurt/telemetry_producer.h>
 
-/* Global container metrics */
-struct cont_metrics ds_cont_metrics;
-
 /**
  * Initialize global metrics used in the server container module.
  */
-int
-ds_cont_metrics_init(void)
+
+void *
+ds_cont_metrics_alloc(const char *path, int tgt_id)
 {
-	int rc;
+	struct cont_pool_metrics	*metrics;
+	int				 rc;
 
-	memset(&ds_cont_metrics, 0, sizeof(ds_cont_metrics));
+	D_ASSERT(tgt_id < 0);
 
-	rc = d_tm_add_metric(&ds_cont_metrics.op_open_ctr, D_TM_COUNTER,
-			     "Number of times cont_open has been called", "",
-			     "container/ops/open/total");
+	D_ALLOC_PTR(metrics);
+	if (metrics == NULL)
+		return NULL;
+
+	rc = d_tm_add_metric(&metrics->cpm_open_count, D_TM_COUNTER,
+			     "Number of times cont_open has been called",
+			     "ops", "%s/ops/cont_open", path);
 	if (rc != 0)
-		D_ERROR("failed to add open counter: "
-			DF_RC "\n", DP_RC(rc));
+		D_ERROR("failed to add open counter: " DF_RC "\n", DP_RC(rc));
 
-	rc = d_tm_add_metric(&ds_cont_metrics.open_cont_gauge, D_TM_GAUGE,
-			     "Number of open container handles", "",
-			     "container/ops/open/active");
+	rc = d_tm_add_metric(&metrics->cpm_open_cont_gauge, D_TM_GAUGE,
+			     "Number of open container handles", "hdls",
+			     "%s/container_handles", path);
 	if (rc != 0)
-		D_ERROR("failed to add open cont gauge: "
-			DF_RC "\n", DP_RC(rc));
+		D_ERROR("failed to add open cont gauge: " DF_RC "\n",
+			DP_RC(rc));
 
-	rc = d_tm_add_metric(&ds_cont_metrics.op_close_ctr, D_TM_COUNTER,
-			     "Number of times cont_close has been called", "",
-			     "container/ops/close/total");
-	if (rc != 0)
-		D_ERROR("failed to add close counter: "
-			DF_RC "\n", DP_RC(rc));
-
-	rc = d_tm_add_metric(&ds_cont_metrics.op_destroy_ctr, D_TM_COUNTER,
-			     "Number of times cont_destroy has been called", "",
-			     "container/ops/destroy/total");
+	rc = d_tm_add_metric(&metrics->cpm_close_count, D_TM_COUNTER,
+			     "Number of times cont_close has been called",
+			     "ops", "%s/ops/cont_close", path);
 	if (rc != 0)
 		D_ERROR("failed to add close counter: "
 			DF_RC "\n", DP_RC(rc));
 
-	return 0;
+	rc = d_tm_add_metric(&metrics->cpm_destroy_count, D_TM_COUNTER,
+			     "Number of times cont_destroy has been called",
+			     "ops", "%s/ops/cont_destroy", path);
+	if (rc != 0)
+		D_ERROR("failed to add close counter: " DF_RC "\n", DP_RC(rc));
+
+	return metrics;
 }
 
 /**
  * Finalize global metrics used in the server container module.
  */
-int
-ds_cont_metrics_fini(void)
+void
+ds_cont_metrics_free(void *data)
 {
-	/* nothing to do - shared memory will be cleaned up automatically */
-	return 0;
+	D_FREE(data);
 }

@@ -103,7 +103,7 @@ next:
 	}
 
 	if (j > 0) {
-		rc = dtx_commit(cont, dtes, dcks, j);
+		rc = dtx_commit(cont, dtes, dcks, j, true);
 		if (rc < 0)
 			D_ERROR("Failed to commit the DTXs: rc = "DF_RC"\n",
 				DP_RC(rc));
@@ -456,6 +456,10 @@ dtx_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 
 	/* Skip corrupted entry that will be handled via other special tool. */
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
+		return 0;
+
+	/* Skip orphan entry that will be handled via other special tool. */
+	if (ent->ie_dtx_flags & DTE_ORPHAN)
 		return 0;
 
 	if (dra->resync_all) {

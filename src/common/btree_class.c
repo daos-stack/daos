@@ -338,7 +338,9 @@ nv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		r->nr_value = voff;
 		r->nr_value_buf_size = val->iov_len;
 	} else {
-		umem_tx_add(&tins->ti_umm, r->nr_value, val->iov_len);
+		rc = umem_tx_add(&tins->ti_umm, r->nr_value, val->iov_len);
+		if (rc != 0)
+			return rc;
 	}
 
 	v = umem_off2ptr(&tins->ti_umm, r->nr_value);
@@ -674,7 +676,9 @@ uv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		r->ur_value = voff;
 		r->ur_value_buf_size = val->iov_len;
 	} else {
-		umem_tx_add(&tins->ti_umm, r->ur_value, val->iov_len);
+		rc = umem_tx_add(&tins->ti_umm, r->ur_value, val->iov_len);
+		if (rc != 0)
+			return rc;
 	}
 
 	v = umem_off2ptr(&tins->ti_umm, r->ur_value);
@@ -1210,7 +1214,9 @@ kv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		r->kr_value = voff;
 		r->kr_value_cap = val->iov_len;
 	} else {
-		umem_tx_add(&tins->ti_umm, r->kr_value, val->iov_len);
+		rc = umem_tx_add(&tins->ti_umm, r->kr_value, val->iov_len);
+		if (rc != 0)
+			return rc;
 	}
 	v = umem_off2ptr(&tins->ti_umm, r->kr_value);
 
@@ -1392,7 +1398,9 @@ iv_rec_update(struct btr_instance *tins, struct btr_record *rec,
 		r->ir_value = voff;
 		r->ir_value_cap = val->iov_len;
 	} else {
-		umem_tx_add(&tins->ti_umm, r->ir_value, val->iov_len);
+		rc = umem_tx_add(&tins->ti_umm, r->ir_value, val->iov_len);
+		if (rc != 0)
+			return rc;
 	}
 	v = umem_off2ptr(&tins->ti_umm, r->ir_value);
 	memcpy(v, val->iov_buf, val->iov_len);

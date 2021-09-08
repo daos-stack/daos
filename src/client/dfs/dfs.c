@@ -849,8 +849,8 @@ restart:
 					       DAOS_OO_RW, 1, chunk_size,
 					       &file->oh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_array_open_with_attr() failed (%d)\n",
-				rc);
+			D_ERROR("daos_array_open_with_attr() failed "DF_RC"\n",
+				DP_RC(rc));
 			D_GOTO(out, rc = daos_der2errno(rc));
 		}
 
@@ -1194,7 +1194,7 @@ open_sb(daos_handle_t coh, bool create, daos_obj_id_t super_oid,
 		rc = daos_obj_update(*oh, DAOS_TX_NONE, DAOS_COND_DKEY_INSERT,
 				     &dkey, SB_AKEYS, iods, sgls, NULL);
 		if (rc) {
-			D_ERROR("Failed to create DFS superblock (%d)\n", rc);
+			D_ERROR("Failed to create DFS superblock "DF_RC"\n", DP_RC(rc));
 			D_GOTO(err, rc = daos_der2errno(rc));
 		}
 
@@ -1264,9 +1264,9 @@ dfs_get_sb_layout(daos_key_t *dkey, daos_iod_t *iods[], int *akey_count,
 	return 0;
 }
 
-int
-dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
-		daos_handle_t *_coh, dfs_t **_dfs)
+static int
+dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t in_uuid,
+		    dfs_attr_t *attr, daos_handle_t *_coh, dfs_t **_dfs)
 {
 	daos_handle_t		coh, super_oh;
 	struct dfs_entry	entry = {0};
@@ -1278,6 +1278,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	struct daos_prop_co_roots roots;
 	int			rc;
 
+	if (cuuid == NULL)
+		return EINVAL;
 	if (_dfs && _coh == NULL) {
 		D_ERROR("Should pass a valid container handle pointer\n");
 		return EINVAL;
@@ -1287,10 +1289,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 		prop = daos_prop_alloc(attr->da_props->dpp_nr + 2);
 	else
 		prop = daos_prop_alloc(2);
-	if (prop == NULL) {
-		D_ERROR("Failed to allocate container prop.");
+	if (prop == NULL)
 		return ENOMEM;
-	}
 
 	if (attr != NULL && attr->da_props != NULL) {
 		rc = daos_prop_copy(prop, attr->da_props);
@@ -1333,7 +1333,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 					 0, dattr.da_oclass_id, 0, 0);
 	if (rc) {
 		D_ERROR("Failed to generate SB OID "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
 	/* select oclass and generate ROOT OID */
@@ -1343,28 +1343,31 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 					 0, dattr.da_oclass_id, 0, 0);
 	if (rc) {
 		D_ERROR("Failed to generate ROOT OID "DF_RC"\n", DP_RC(rc));
-		return daos_der2errno(rc);
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
 	/* store SB & root OIDs as container property */
 	roots.cr_oids[2] = roots.cr_oids[3] = DAOS_OBJ_NIL;
 	prop->dpp_entries[prop->dpp_nr - 2].dpe_type = DAOS_PROP_CO_ROOTS;
-	prop->dpp_entries[prop->dpp_nr - 2].dpe_val_ptr = &roots;
+	rc = daos_prop_entry_set_ptr(&prop->dpp_entries[prop->dpp_nr - 2], &roots, sizeof(roots));
+	if (rc)
+		D_GOTO(err_prop, rc = daos_der2errno(rc));
 
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 	prop->dpp_entries[prop->dpp_nr - 1].dpe_val = DAOS_PROP_CO_LAYOUT_POSIX;
 
-	rc = daos_cont_create(poh, co_uuid, prop, NULL);
-	/* should not be freed by daos_prop_free */
-	prop->dpp_entries[prop->dpp_nr - 2].dpe_val_ptr = NULL;
+	if (uuid_is_set)
+		rc = daos_cont_create(poh, in_uuid, prop, NULL);
+	else
+		rc = daos_cont_create(poh, cuuid, prop, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_create() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
-	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	rc = daos_cont_open(poh, *cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
 	if (rc) {
-		D_ERROR("daos_cont_open() failed (%d)\n", rc);
+		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
 	}
 
@@ -1396,7 +1399,7 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 
 	rc = daos_obj_close(super_oh, NULL);
 	if (rc) {
-		D_ERROR("Failed to close SB object\n");
+		D_ERROR("Failed to close SB object "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_close, rc = daos_der2errno(rc));
 	}
 
@@ -1415,8 +1418,8 @@ dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
 	} else {
 		rc = daos_cont_close(coh, NULL);
 		if (rc) {
-			D_ERROR("daos_cont_close() failed (%d)\n", rc);
-			D_GOTO(err_destroy, rc = daos_der2errno(rc));
+			D_ERROR("daos_cont_close() failed "DF_RC"\n", DP_RC(rc));
+			D_GOTO(err_close, rc = daos_der2errno(rc));
 		}
 	}
 	daos_prop_free(prop);
@@ -1433,9 +1436,93 @@ err_destroy:
 	 * process might have created it.
 	 */
 	if (rc != EEXIST)
-		daos_cont_destroy(poh, co_uuid, 1, NULL);
+		daos_cont_destroy(poh, *cuuid, 1, NULL);
 err_prop:
 	daos_prop_free(prop);
+	return rc;
+}
+
+/** Disable backward compat code */
+#undef dfs_cont_create
+
+/** Kept for backward ABI compatibility when a UUID is provided by the caller */
+int
+dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs)
+{
+	const unsigned char     *uuid = (const unsigned char *) cuuid;
+	uuid_t			co_uuid;
+
+	if (!daos_uuid_valid(uuid))
+		return -DER_INVAL;
+
+	uuid_copy(co_uuid, uuid);
+	return dfs_cont_create_int(poh, cuuid, true, co_uuid, attr, coh, dfs);
+}
+
+/** API version for when the uuid is required to be passed in. */
+int
+dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		 dfs_t **dfs)
+{
+	uuid_t *u = (uuid_t *)((unsigned char *)cuuid);
+
+	return dfs_cont_create(poh, u, attr, coh, dfs);
+}
+
+/*
+ * Real latest & greatest implementation of container create. Used by anyone including the
+ * daos_fs.h header file.
+ */
+int
+dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		 dfs_t **dfs)
+{
+	return dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
+}
+
+int
+dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
+			   uuid_t *cuuid, daos_handle_t *coh, dfs_t **dfs)
+{
+	daos_prop_t		*label_prop;
+	daos_prop_t		*merged_props = NULL;
+	daos_prop_t		*orig = NULL;
+	dfs_attr_t		local = {};
+	int			rc;
+
+	label_prop = daos_prop_alloc(1);
+	if (label_prop == NULL)
+		return ENOMEM;
+
+	label_prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
+	rc = daos_prop_entry_set_str(&label_prop->dpp_entries[0], label, DAOS_PROP_LABEL_MAX_LEN);
+	if (rc)
+		D_GOTO(out_prop, rc = daos_der2errno(rc));
+
+	if (attr == NULL)
+		attr = &local;
+
+	if (attr->da_props) {
+		merged_props = daos_prop_merge(attr->da_props, label_prop);
+		if (merged_props == NULL)
+			D_GOTO(out_prop, rc = ENOMEM);
+		orig = attr->da_props;
+		attr->da_props = merged_props;
+	} else {
+		attr->da_props = label_prop;
+	}
+
+	if (cuuid == NULL) {
+		uuid_t u;
+
+		rc = dfs_cont_create_int(poh, &u, false, NULL, attr, coh, dfs);
+	} else {
+		rc = dfs_cont_create_int(poh, cuuid, false, NULL, attr, coh, dfs);
+	}
+	attr->da_props = orig;
+	daos_prop_free(merged_props);
+out_prop:
+	daos_prop_free(label_prop);
 	return rc;
 }
 
@@ -2952,7 +3039,6 @@ dfs_open_stat(dfs_t *dfs, dfs_obj_t *parent, const char *name, mode_t mode,
 	daos_size_t		file_size = 0;
 	int			rc;
 
-
 	if (dfs == NULL || !dfs->mounted)
 		return EINVAL;
 	if ((dfs->amode != O_RDWR) && (flags & O_CREAT))
@@ -3288,9 +3374,9 @@ dfs_release(dfs_obj_t *obj)
 	}
 
 	if (rc)
-		D_ERROR("daos_obj_close() failed, "DF_RC"\n", DP_RC(rc));
-
-	D_FREE(obj);
+		D_ERROR("Failed to close DFS object, "DF_RC"\n", DP_RC(rc));
+	else
+		D_FREE(obj);
 	return daos_der2errno(rc);
 }
 
@@ -3573,6 +3659,17 @@ dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name)
 	}
 
 	return 0;
+}
+
+/* Update a in-memory object to a new parent, taking the parent directly */
+void
+dfs_update_parentfd(dfs_obj_t *obj, dfs_obj_t *new_parent, const char *name)
+{
+	oid_cp(&obj->parent_oid, new_parent->oid);
+
+	D_ASSERT(name);
+	strncpy(obj->name, name, DFS_MAX_NAME);
+	obj->name[DFS_MAX_NAME] = '\0';
 }
 
 int
@@ -4164,9 +4261,10 @@ out:
 	return rc;
 }
 
+/* Returns oids for both moved and clobbered files, but does not check either of them */
 int
-dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
-	 char *new_name, daos_obj_id_t *oid)
+dfs_move_internal(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent, char *new_name,
+		  daos_obj_id_t *moid, daos_obj_id_t *oid)
 {
 	struct dfs_entry	entry = {0}, new_entry = {0};
 	daos_handle_t		th = DAOS_TX_NONE;
@@ -4218,6 +4316,9 @@ restart:
 	}
 	if (exists == false)
 		D_GOTO(out, rc = ENOENT);
+
+	if (moid)
+		oid_cp(moid, entry.oid);
 
 	rc = fetch_entry(new_parent->oh, th, new_name, new_len, true, &exists,
 			 &new_entry, 0, NULL, NULL, NULL);
@@ -4344,6 +4445,14 @@ out:
 		D_FREE(new_entry.value);
 	}
 	return rc;
+}
+
+/* Wrapper function, only permit oid as a input parameter and return if it has data */
+int
+dfs_move(dfs_t *dfs, dfs_obj_t *parent, char *name, dfs_obj_t *new_parent,
+	 char *new_name, daos_obj_id_t *oid)
+{
+	return dfs_move_internal(dfs, parent, name, new_parent, new_name, NULL, oid);
 }
 
 int
@@ -4778,62 +4887,6 @@ dfs_obj2id(dfs_obj_t *obj, daos_obj_id_t *oid)
 		return EINVAL;
 	oid_cp(oid, obj->oid);
 	return 0;
-}
-
-#define DFS_ROOT_UUID "ffffffff-ffff-ffff-ffff-ffffffffffff"
-
-int
-dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs)
-{
-	uuid_t			co_uuid;
-	daos_cont_info_t	co_info;
-	daos_handle_t		coh;
-	int			rc;
-
-	/** Use special UUID for root container */
-	rc = uuid_parse(DFS_ROOT_UUID, co_uuid);
-	if (rc) {
-		D_ERROR("Invalid Container uuid\n");
-		return EINVAL;
-	}
-
-	/** Try to open the DAOS container first (the mountpoint) */
-	rc = daos_cont_open(poh, co_uuid, DAOS_COO_RW, &coh, &co_info, NULL);
-	if (rc == 0) {
-		rc = dfs_mount(poh, coh, O_RDWR, dfs);
-		if (rc)
-			D_ERROR("dfs_mount failed (%d)\n", rc);
-		return rc;
-	}
-	/* If NOEXIST we create it */
-	if (rc == -DER_NONEXIST) {
-		rc = dfs_cont_create(poh, co_uuid, NULL, &coh, dfs);
-		if (rc)
-			D_ERROR("dfs_cont_create failed (%d)\n", rc);
-		return rc;
-	}
-
-	/** COH is tracked in dfs and closed in dfs_umount_root_cont() */
-	return rc;
-}
-
-int
-dfs_umount_root_cont(dfs_t *dfs)
-{
-	daos_handle_t	coh;
-	int		rc;
-
-	if (dfs == NULL)
-		return EINVAL;
-
-	coh.cookie = dfs->coh.cookie;
-
-	rc = dfs_umount(dfs);
-	if (rc)
-		return rc;
-
-	rc = daos_cont_close(coh, NULL);
-	return daos_der2errno(rc);
 }
 
 int

@@ -27,11 +27,13 @@ import (
 
 /*
 #include "util.h"
+
 */
 import "C"
 
 type containerCmd struct {
 	Create      containerCreateCmd      `command:"create" description:"create a container"`
+	List        containerListCmd        `command:"list" alias:"ls" description:"list all containers in pool"`
 	Destroy     containerDestroyCmd     `command:"destroy" description:"destroy a container"`
 	ListObjects containerListObjectsCmd `command:"list-objects" alias:"list-obj" description:"list all objects in container"`
 	Query       containerQueryCmd       `command:"query" description:"query a container"`
@@ -39,24 +41,23 @@ type containerCmd struct {
 	Clone       containerCloneCmd       `command:"clone" description:"clone a container"`
 	Check       containerCheckCmd       `command:"check" description:"check objects' consistency in a container"`
 
-	ListAttributes  containerListAttributesCmd  `command:"list-attributes" alias:"list-attrs" description:"list container user-defined attributes"`
-	DeleteAttribute containerDeleteAttributeCmd `command:"delete-attribute" alias:"del-attr" description:"delete container user-defined attribute"`
-	GetAttribute    containerGetAttributeCmd    `command:"get-attribute" alias:"get-attr" description:"get container user-defined attribute"`
-	SetAttribute    containerSetAttributeCmd    `command:"set-attribute" alias:"set-attr" description:"set container user-defined attribute"`
+	ListAttributes  containerListAttributesCmd  `command:"list-attr" alias:"list-attrs" alias:"lsattr" description:"list container user-defined attributes"`
+	DeleteAttribute containerDeleteAttributeCmd `command:"del-attr" alias:"delattr" description:"delete container user-defined attribute"`
+	GetAttribute    containerGetAttributeCmd    `command:"get-attr" alias:"getattr" description:"get container user-defined attribute"`
+	SetAttribute    containerSetAttributeCmd    `command:"set-attr" alias:"setattr" description:"set container user-defined attribute"`
 
-	GetProperty containerGetPropertyCmd `command:"get-property" alias:"get-prop" description:"get container user-defined attribute"`
-	SetProperty containerSetPropertyCmd `command:"set-property" alias:"set-prop" description:"set container user-defined attribute"`
+	GetProperty containerGetPropertyCmd `command:"get-prop" alias:"getprop" description:"get container user-defined attribute"`
+	SetProperty containerSetPropertyCmd `command:"set-prop" alias:"setprop" description:"set container user-defined attribute"`
 
 	GetACL       containerGetACLCmd       `command:"get-acl" description:"get a container's ACL"`
 	OverwriteACL containerOverwriteACLCmd `command:"overwrite-acl" alias:"replace" description:"replace a container's ACL"`
 	UpdateACL    containerUpdateACLCmd    `command:"update-acl" description:"update a container's ACL"`
 	DeleteACL    containerDeleteACLCmd    `command:"delete-acl" description:"delete a container's ACL"`
-	SetOwner     containerSetOwnerCmd     `command:"set-owner" description:"change ownership for a container"`
+	SetOwner     containerSetOwnerCmd     `command:"set-owner" alias:"chown" description:"change ownership for a container"`
 
-	CreateSnapshot   containerSnapshotCreateCmd   `command:"create-snapshot" alias:"create-snap" description:"create container snapshot"`
-	DestroySnapshot  containerSnapshotDestroyCmd  `command:"destroy-snapshot" alias:"destroy-snap" description:"destroy container snapshot"`
-	ListSnapshots    containerSnapshotListCmd     `command:"list-snapshots" alias:"list-snaps" description:"list container snapshots"`
-	RollbackSnapshot containerSnapshotRollbackCmd `command:"rollback" alias:"rb" description:"roll back container to specified snapshot"`
+	CreateSnapshot  containerSnapshotCreateCmd  `command:"create-snap" alias:"snap" description:"create container snapshot"`
+	DestroySnapshot containerSnapshotDestroyCmd `command:"destroy-snap" description:"destroy container snapshot"`
+	ListSnapshots   containerSnapshotListCmd    `command:"list-snap" alias:"list-snaps" description:"list container snapshots"`
 }
 
 type containerBaseCmd struct {
@@ -75,8 +76,8 @@ func (cmd *containerBaseCmd) contUUIDPtr() *C.uchar {
 	return (*C.uchar)(unsafe.Pointer(&cmd.contUUID[0]))
 }
 
-func (cmd *containerBaseCmd) openContainer() error {
-	openFlags := C.uint(C.DAOS_COO_RW | C.DAOS_COO_FORCE)
+func (cmd *containerBaseCmd) openContainer(openFlags C.uint) error {
+	openFlags |= C.DAOS_COO_FORCE
 
 	var rc C.int
 	switch {
@@ -86,8 +87,8 @@ func (cmd *containerBaseCmd) openContainer() error {
 		defer freeString(cLabel)
 
 		cmd.log.Debugf("opening container: %s", cmd.contLabel)
-		rc = C.daos_cont_open_by_label(cmd.cPoolHandle, cLabel,
-			openFlags, &cmd.cContHandle, &contInfo, nil)
+		rc = C.daos_cont_open2(cmd.cPoolHandle, cLabel, openFlags,
+			&cmd.cContHandle, &contInfo, nil)
 		if rc == 0 {
 			var err error
 			cmd.contUUID, err = uuidFromC(contInfo.ci_uuid)
@@ -98,7 +99,9 @@ func (cmd *containerBaseCmd) openContainer() error {
 		}
 	case cmd.contUUID != uuid.Nil:
 		cmd.log.Debugf("opening container: %s", cmd.contUUID)
-		rc = C.daos_cont_open(cmd.cPoolHandle, cmd.contUUIDPtr(),
+		cUUIDstr := C.CString(cmd.contUUID.String())
+		defer freeString(cUUIDstr)
+		rc = C.daos_cont_open2(cmd.cPoolHandle, cUUIDstr,
 			openFlags, &cmd.cContHandle, nil, nil)
 	default:
 		return errors.New("no container UUID or label supplied")
@@ -116,11 +119,13 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	ci := newContainerInfo(&cmd.poolUUID, &cmd.contUUID)
 	var cType [10]C.char
 
-	props, entries, err := allocProps(1)
+	props, entries, err := allocProps(2)
 	if err != nil {
 		return nil, err
 	}
 	entries[0].dpe_type = C.DAOS_PROP_CO_LAYOUT_TYPE
+	props.dpp_nr++
+	entries[1].dpe_type = C.DAOS_PROP_CO_LABEL
 	props.dpp_nr++
 	defer func() { C.daos_prop_free(props) }()
 
@@ -132,6 +137,13 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	lType := C.get_dpe_val(&entries[0])
 	C.daos_unparse_ctype(C.ushort(lType), &cType[0])
 	ci.Type = C.GoString(&cType[0])
+
+	if C.get_dpe_str(&entries[1]) == nil {
+		ci.ContainerLabel = ""
+	} else {
+		cStr := C.get_dpe_str(&entries[1])
+		ci.ContainerLabel = C.GoString(cStr)
+	}
 
 	if lType == C.DAOS_PROP_CO_LAYOUT_POSIX {
 		var dfs *C.dfs_t
@@ -159,8 +171,8 @@ func (cmd *containerBaseCmd) queryContainer() (*containerInfo, error) {
 	return ci, nil
 }
 
-func (cmd *containerBaseCmd) connectPool(ap *C.struct_cmd_args_s) (func(), error) {
-	if err := cmd.poolBaseCmd.connectPool(); err != nil {
+func (cmd *containerBaseCmd) connectPool(flags C.uint, ap *C.struct_cmd_args_s) (func(), error) {
+	if err := cmd.poolBaseCmd.connectPool(flags); err != nil {
 		return nil, err
 	}
 
@@ -178,16 +190,17 @@ func (cmd *containerBaseCmd) connectPool(ap *C.struct_cmd_args_s) (func(), error
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	Type        string         `long:"type" short:"t" description:"container type" choice:"POSIX" choice:"HDF5"`
-	Path        string         `long:"path" short:"d" description:"container namespace path"`
-	ChunkSize   ChunkSizeFlag  `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass ObjClassFlag   `long:"oclass" short:"o" description:"default object class"`
-	Properties  PropertiesFlag `long:"properties" description:"container properties"`
-	Mode        ConsModeFlag   `long:"mode" short:"M" description:"DFS consistency mode"`
-	ACLFile     string         `long:"acl-file" short:"A" description:"input file containing ACL"`
-	User        string         `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
-	Group       string         `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
-	ContFlag    ContainerID    `long:"cont" short:"c" description:"container UUID (optional)"`
+	Type        string               `long:"type" short:"t" description:"container type"`
+	Path        string               `long:"path" short:"d" description:"container namespace path"`
+	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
+	Properties  CreatePropertiesFlag `long:"properties" description:"container properties"`
+	Label       string               `long:"label" short:"l" description:"container label"`
+	Mode        ConsModeFlag         `long:"mode" short:"M" description:"DFS consistency mode"`
+	ACLFile     string               `long:"acl-file" short:"A" description:"input file containing ACL"`
+	User        string               `long:"user" short:"u" description:"user who will own the container (username@[domain])"`
+	Group       string               `long:"group" short:"g" description:"group who will own the container (group@[domain])"`
+	ContFlag    ContainerID          `long:"cont" short:"c" description:"container UUID (optional)"`
 	Args        struct {
 		Container ContainerID `positional-arg-name:"<container UUID (optional)>"`
 	} `positional-args:"yes"`
@@ -203,27 +216,25 @@ func (cmd *containerCreateCmd) getUserUUID() uuid.UUID {
 }
 
 func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
-	if cu := cmd.getUserUUID(); cu != uuid.Nil {
-		cmd.contUUID = cu
-	} else {
-		cmd.contUUID = uuid.New()
-	}
-
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
 
-	disconnectPool, err := cmd.connectPool(ap)
+	if cu := cmd.getUserUUID(); cu != uuid.Nil {
+		cmd.contUUID = cu
+		if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
+			return err
+		}
+	}
+
+	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer disconnectPool()
 
-	if err := copyUUID(&ap.c_uuid, cmd.contUUID); err != nil {
-		return err
-	}
 	ap.c_op = C.CONT_CREATE
 
 	if cmd.User != "" {
@@ -238,14 +249,31 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		ap.aclfile = C.CString(cmd.ACLFile)
 		defer freeString(ap.aclfile)
 	}
+
+	if cmd.Label != "" {
+		for key := range cmd.Properties.ParsedProps {
+			if key == "label" {
+				return errors.New("can't use both --label and --properties label:")
+			}
+		}
+		if err := cmd.Properties.AddPropVal("label", cmd.Label); err != nil {
+			return err
+		}
+		cmd.contLabel = cmd.Label
+	}
+
 	if cmd.Properties.props != nil {
 		ap.props = cmd.Properties.props
 	}
 
+	// convert the container type string to a DAOS_PROP_CO_LAYOUT_* value
+	cType := C.CString(cmd.Type)
+	defer freeString(cType)
+	C.daos_parse_ctype(cType, &ap._type)
+
 	switch cmd.Type {
 	case "POSIX":
-		ap._type = C.DAOS_PROP_CO_LAYOUT_POSIX
-
+		// POSIX containers have extra attributes
 		if cmd.ChunkSize.Set {
 			ap.chunk_size = cmd.ChunkSize.Size
 		}
@@ -255,8 +283,6 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		if cmd.Mode.Set {
 			ap.mode = cmd.Mode.Mode
 		}
-	case "HDF5":
-		ap._type = C.DAOS_PROP_CO_LAYOUT_HDF5
 	}
 
 	var rc C.int
@@ -270,19 +296,36 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	if err := daosError(rc); err != nil {
 		return errors.Wrap(err, "failed to create container")
 	}
-	cmd.log.Debugf("created container: %s", cmd.contUUID)
 
-	if err := cmd.openContainer(); err != nil {
-		return errors.Wrapf(err,
-			"failed to open new container %s", cmd.contUUID)
+	cmd.contUUID, err = uuidFromC(ap.c_uuid)
+	if err != nil {
+		return err
+	}
+
+	var co_id string
+	if cmd.contUUID == uuid.Nil {
+		cmd.contLabel = C.GoString(&ap.cont_str[0])
+		co_id = cmd.contLabel
+	} else {
+		co_id = cmd.contUUID.String()
+	}
+
+	cmd.log.Debugf("created container: %s", co_id)
+
+	if err := cmd.openContainer(C.DAOS_COO_RO); err != nil {
+		return errors.Wrapf(err, "failed to open new container %s", co_id)
 	}
 	defer cmd.closeContainer()
 
 	ci, err := cmd.queryContainer()
 	if err != nil {
-		return errors.Wrapf(err,
-			"failed to query new container %s",
-			cmd.contUUID)
+		// Special case for creating a container without permission to query it.
+		if errors.Cause(err) == drpc.DaosNoPermission {
+			cmd.log.Errorf("container %s was created, but query failed", co_id)
+			return nil
+		}
+
+		return errors.Wrapf(err, "failed to query new container %s", co_id)
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -290,7 +333,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 
 	var bld strings.Builder
-	if err := printContainerInfo(&bld, ci); err != nil {
+	if err := printContainerInfo(&bld, ci, false); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -331,55 +374,47 @@ func (cmd *existingContainerCmd) resolveContainer(ap *C.struct_cmd_args_s) (err 
 			return
 		}
 
-		if ap.pool_label != nil {
-			cmd.poolBaseCmd.Args.Pool.Label = C.GoString(ap.pool_label)
-			freeString(ap.pool_label)
-		} else {
-			cmd.poolBaseCmd.Args.Pool.UUID, err = uuidFromC(ap.p_uuid)
-			if err != nil {
-				return
-			}
-		}
-
-		if ap.cont_label != nil {
-			cmd.contLabel = C.GoString(ap.cont_label)
-			freeString(ap.cont_label)
-		} else {
-			cmd.Args.Container.UUID, err = uuidFromC(ap.c_uuid)
-			if err != nil {
-				return
-			}
-		}
+		cmd.poolBaseCmd.Args.Pool.Label = C.GoString(&ap.pool_str[0])
+		cmd.contLabel = C.GoString(&ap.cont_str[0])
 		cmd.contUUID = cmd.Args.Container.UUID
 	} else {
 		switch {
 		case cmd.ContainerID().HasLabel():
 			cmd.contLabel = cmd.ContainerID().Label
+			if ap != nil {
+				cLabel := C.CString(cmd.ContainerID().Label)
+				defer freeString(cLabel)
+				C.strncpy(&ap.cont_str[0], cLabel, C.DAOS_PROP_LABEL_MAX_LEN)
+			}
 		case cmd.ContainerID().HasUUID():
 			cmd.contUUID = cmd.ContainerID().UUID
+			if ap != nil {
+				cUUIDstr := C.CString(cmd.contUUID.String())
+				defer freeString(cUUIDstr)
+				C.strncpy(&ap.cont_str[0], cUUIDstr, C.DAOS_PROP_LABEL_MAX_LEN)
+			}
 		default:
 			return errors.New("no container label or UUID supplied")
 		}
 	}
 
-	cmd.log.Debugf("pool ID: %s, container ID: %s",
-		cmd.PoolID(), cmd.ContainerID())
+	cmd.log.Debugf("pool ID: %s, container ID: %s", cmd.PoolID(), cmd.ContainerID())
 
 	return nil
 }
 
-func (cmd *existingContainerCmd) resolveAndConnect(ap *C.struct_cmd_args_s) (cleanFn func(), err error) {
+func (cmd *existingContainerCmd) resolveAndConnect(contFlags C.uint, ap *C.struct_cmd_args_s) (cleanFn func(), err error) {
 	if err = cmd.resolveContainer(ap); err != nil {
 		return
 	}
 
 	var cleanupPool func()
-	cleanupPool, err = cmd.connectPool(ap)
+	cleanupPool, err = cmd.connectPool(C.DAOS_PC_RO, ap)
 	if err != nil {
 		return
 	}
 
-	if err = cmd.openContainer(); err != nil {
+	if err = cmd.openContainer(contFlags); err != nil {
 		return
 	}
 
@@ -400,6 +435,103 @@ func (cmd *existingContainerCmd) getAttr(name string) (*attribute, error) {
 	return getDaosAttribute(cmd.cContHandle, contAttr, name)
 }
 
+type containerListCmd struct {
+	poolBaseCmd
+}
+
+func listContainers(hdl C.daos_handle_t) ([]*ContainerID, error) {
+	extra_cont_margin := C.size_t(16)
+
+	// First call gets the current number of containers.
+	var ncont C.daos_size_t
+	rc := C.daos_pool_list_cont(hdl, &ncont, nil, nil)
+	if err := daosError(rc); err != nil {
+		return nil, errors.Wrap(err, "pool list containers failed")
+	}
+
+	// No containers.
+	if ncont == 0 {
+		return nil, nil
+	}
+
+	var cConts *C.struct_daos_pool_cont_info
+	// Extend ncont with a safety margin to account for containers
+	// that might have been created since the first API call.
+	ncont += extra_cont_margin
+	cConts = (*C.struct_daos_pool_cont_info)(C.calloc(C.sizeof_struct_daos_pool_cont_info, ncont))
+	if cConts == nil {
+		return nil, errors.New("calloc() for containers failed")
+	}
+	dpciSlice := (*[1 << 30]C.struct_daos_pool_cont_info)(
+		unsafe.Pointer(cConts))[:ncont:ncont]
+	cleanup := func() {
+		C.free(unsafe.Pointer(cConts))
+	}
+
+	rc = C.daos_pool_list_cont(hdl, &ncont, cConts, nil)
+	if err := daosError(rc); err != nil {
+		cleanup()
+		return nil, err
+	}
+
+	out := make([]*ContainerID, ncont)
+	for i := range out {
+		out[i] = new(ContainerID)
+		out[i].UUID = uuid.Must(uuidFromC(dpciSlice[i].pci_uuid))
+		out[i].Label = C.GoString(&dpciSlice[i].pci_label[0])
+	}
+
+	return out, nil
+}
+
+func printContainers(out io.Writer, contIDs []*ContainerID) {
+	if len(contIDs) == 0 {
+		fmt.Fprintf(out, "No containers.\n")
+		return
+	}
+
+	uuidTitle := "UUID"
+	labelTitle := "Label"
+	titles := []string{uuidTitle, labelTitle}
+
+	table := []txtfmt.TableRow{}
+	for _, id := range contIDs {
+		table = append(table,
+			txtfmt.TableRow{
+				uuidTitle:  id.UUID.String(),
+				labelTitle: id.Label,
+			})
+	}
+
+	tf := txtfmt.NewTableFormatter(titles...)
+	tf.InitWriter(out)
+	tf.Format(table)
+}
+
+func (cmd *containerListCmd) Execute(_ []string) error {
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_PC_RO, nil)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	contIDs, err := listContainers(cmd.cPoolHandle)
+	if err != nil {
+		return errors.Wrapf(err,
+			"unable to list containers for pool %s", cmd.PoolID())
+	}
+
+	if cmd.jsonOutputEnabled() {
+		return cmd.outputJSON(contIDs, nil)
+	}
+
+	var bld strings.Builder
+	printContainers(&bld, contIDs)
+	cmd.log.Info(bld.String())
+
+	return nil
+}
+
 type containerDestroyCmd struct {
 	existingContainerCmd
 
@@ -417,9 +549,15 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 		return err
 	}
 
-	cleanup, err := cmd.connectPool(ap)
+	var cleanup func()
+	cleanup, err = cmd.connectPool(C.DAOS_COO_RW, ap)
 	if err != nil {
-		return err
+		// Even if we don't have pool-level write permissions, we may
+		// have delete permissions at the container level.
+		cleanup, err = cmd.connectPool(C.DAOS_COO_RO, ap)
+		if err != nil {
+			return err
+		}
 	}
 	defer cleanup()
 
@@ -428,22 +566,34 @@ func (cmd *containerDestroyCmd) Execute(_ []string) error {
 
 	var rc C.int
 	switch {
+	case cmd.Path != "":
+		cPath := C.CString(cmd.Path)
+		defer freeString(cPath)
+		rc = C.duns_destroy_path(cmd.cPoolHandle, cPath)
 	case cmd.ContainerID().HasUUID():
-		rc = C.daos_cont_destroy(cmd.cPoolHandle,
-			cmd.contUUIDPtr(), goBool2int(cmd.Force), nil)
+		cUUIDstr := C.CString(cmd.contUUID.String())
+		defer freeString(cUUIDstr)
+		rc = C.daos_cont_destroy2(cmd.cPoolHandle, cUUIDstr,
+			goBool2int(cmd.Force), nil)
 	case cmd.ContainerID().Label != "":
 		cLabel := C.CString(cmd.ContainerID().Label)
 		defer freeString(cLabel)
-		rc = C.daos_cont_destroy_by_label(cmd.cPoolHandle,
+		rc = C.daos_cont_destroy2(cmd.cPoolHandle,
 			cLabel, goBool2int(cmd.Force), nil)
 	default:
-		return errors.New("no UUID or label for container")
+		return errors.New("no UUID or label or path for container")
 	}
 
 	if err := daosError(rc); err != nil {
 		return errors.Wrapf(err,
 			"failed to destroy container %s",
 			cmd.ContainerID())
+	}
+
+	if cmd.ContainerID().Empty() {
+		cmd.log.Infof("Successfully destroyed container %s", cmd.Path)
+	} else {
+		cmd.log.Infof("Successfully destroyed container %s", cmd.ContainerID())
 	}
 
 	return nil
@@ -462,7 +612,7 @@ func (cmd *containerListObjectsCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -490,65 +640,53 @@ func (cmd *containerStatCmd) Execute(_ []string) error {
 	return nil
 }
 
-func printContainerInfo(out io.Writer, ci *containerInfo) error {
-	epochs := ci.SnapshotEpochs()
-	epochStrs := make([]string, *ci.NumSnapshots)
-	for i := uint32(0); i < *ci.NumSnapshots; i++ {
-		epochStrs[i] = fmt.Sprintf("%d", epochs[i])
-	}
-
+func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 	rows := []txtfmt.TableRow{
-		{"Pool UUID": ci.PoolUUID.String()},
 		{"Container UUID": ci.ContainerUUID.String()},
-		{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
-		{"Latest Persistent Snapshot": fmt.Sprintf("%d", *ci.LatestSnapshot)},
-		{"Highest Aggregated Epoch": fmt.Sprintf("%d", *ci.HighestAggregatedEpoch)},
-		{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
-		{"Snapshot Epochs": strings.Join(epochStrs, ",")},
-		{"Container Type": ci.Type},
 	}
+	if ci.ContainerLabel != "" && ci.ContainerLabel != labelNotSetStr {
+		rows = append(rows, txtfmt.TableRow{"Container Label": ci.ContainerLabel})
+	}
+	rows = append(rows, txtfmt.TableRow{"Container Type": ci.Type})
 
-	if ci.ObjectClass != "" {
-		rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
-	}
-	if ci.ChunkSize > 0 {
-		rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
-	}
+	if verbose {
+		rows = append(rows, []txtfmt.TableRow{
+			{"Pool UUID": ci.PoolUUID.String()},
+			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
+			{"Latest Persistent Snapshot": fmt.Sprintf("%d", *ci.LatestSnapshot)},
+			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
+		}...)
 
+		if ci.ObjectClass != "" {
+			rows = append(rows, txtfmt.TableRow{"Object Class": ci.ObjectClass})
+		}
+		if ci.ChunkSize > 0 {
+			rows = append(rows, txtfmt.TableRow{"Chunk Size": humanize.IBytes(ci.ChunkSize)})
+		}
+	}
 	_, err := fmt.Fprintln(out, txtfmt.FormatEntity("", rows))
 	return err
 }
 
 type containerInfo struct {
-	dci                    C.daos_cont_info_t
-	PoolUUID               *uuid.UUID `json:"pool_uuid"`
-	ContainerUUID          *uuid.UUID `json:"container_uuid"`
-	LatestSnapshot         *uint64    `json:"latest_snapshot"`
-	RedundancyFactor       *uint32    `json:"redundancy_factor"`
-	NumSnapshots           *uint32    `json:"num_snapshots"`
-	HighestAggregatedEpoch *uint64    `json:"highest_aggregated_epoch"`
-	Type                   string     `json:"container_type"`
-	ObjectClass            string     `json:"object_class,omitempty"`
-	ChunkSize              uint64     `json:"chunk_size,omitempty"`
-}
-
-func (ci *containerInfo) SnapshotEpochs() []uint64 {
-	if ci.dci.ci_snapshots == nil {
-		return nil
-	}
-
-	// return a Go slice backed by the C array of snapshot epochs
-	return (*[1 << 30]uint64)(unsafe.Pointer(ci.dci.ci_snapshots))[:*ci.NumSnapshots:*ci.NumSnapshots]
+	dci              C.daos_cont_info_t
+	PoolUUID         *uuid.UUID `json:"pool_uuid"`
+	ContainerUUID    *uuid.UUID `json:"container_uuid"`
+	ContainerLabel   string     `json:"container_label,omitempty"`
+	LatestSnapshot   *uint64    `json:"latest_snapshot"`
+	RedundancyFactor *uint32    `json:"redundancy_factor"`
+	NumSnapshots     *uint32    `json:"num_snapshots"`
+	Type             string     `json:"container_type"`
+	ObjectClass      string     `json:"object_class,omitempty"`
+	ChunkSize        uint64     `json:"chunk_size,omitempty"`
 }
 
 func (ci *containerInfo) MarshalJSON() ([]byte, error) {
 	type toJSON containerInfo
 	return json.Marshal(&struct {
-		SnapshotEpochs []uint64 `json:"snapshot_epochs"`
 		*toJSON
 	}{
-		SnapshotEpochs: ci.SnapshotEpochs(),
-		toJSON:         (*toJSON)(ci),
+		toJSON: (*toJSON)(ci),
 	})
 }
 
@@ -562,7 +700,6 @@ func newContainerInfo(poolUUID, contUUID *uuid.UUID) *containerInfo {
 	ci.LatestSnapshot = (*uint64)(&ci.dci.ci_lsnapshot)
 	ci.RedundancyFactor = (*uint32)(&ci.dci.ci_redun_fac)
 	ci.NumSnapshots = (*uint32)(&ci.dci.ci_nsnapshots)
-	ci.HighestAggregatedEpoch = (*uint64)(&ci.dci.ci_hae)
 
 	return ci
 }
@@ -578,7 +715,7 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}
@@ -596,7 +733,7 @@ func (cmd *containerQueryCmd) Execute(_ []string) error {
 	}
 
 	var bld strings.Builder
-	if err := printContainerInfo(&bld, ci); err != nil {
+	if err := printContainerInfo(&bld, ci, true); err != nil {
 		return err
 	}
 	cmd.log.Info(bld.String())
@@ -654,7 +791,7 @@ func (cmd *containerCheckCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -687,7 +824,7 @@ func (cmd *containerListAttributesCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}
@@ -701,7 +838,7 @@ func (cmd *containerListAttributesCmd) Execute(args []string) error {
 	}
 
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(attrs, nil)
+		return cmd.outputJSON(attrs.asMap(), nil)
 	}
 
 	var bld strings.Builder
@@ -716,28 +853,36 @@ func (cmd *containerListAttributesCmd) Execute(args []string) error {
 type containerDeleteAttributeCmd struct {
 	existingContainerCmd
 
-	Args struct {
-		Name string `positional-arg-name:"<attribute name>"`
-	} `positional-args:"yes" required:"yes"`
+	FlagAttr string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	Args     struct {
+		Attr string `positional-arg-name:"<attribute name>"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerDeleteAttributeCmd) Execute(args []string) error {
+	if cmd.FlagAttr != "" {
+		cmd.Args.Attr = cmd.FlagAttr
+	}
+	if cmd.Args.Attr == "" {
+		return errors.New("attribute name is required")
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	if err := delDaosAttribute(cmd.cContHandle, contAttr, cmd.Args.Name); err != nil {
+	if err := delDaosAttribute(cmd.cContHandle, contAttr, cmd.Args.Attr); err != nil {
 		return errors.Wrapf(err,
 			"failed to delete attribute %q on container %s",
-			cmd.Args.Name, cmd.ContainerID())
+			cmd.Args.Attr, cmd.ContainerID())
 	}
 
 	return nil
@@ -746,29 +891,37 @@ func (cmd *containerDeleteAttributeCmd) Execute(args []string) error {
 type containerGetAttributeCmd struct {
 	existingContainerCmd
 
-	Args struct {
-		Name string `positional-arg-name:"<attribute name>"`
-	} `positional-args:"yes" required:"yes"`
+	FlagAttr string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	Args     struct {
+		Attr string `positional-arg-name:"<attribute name>"`
+	} `positional-args:"yes"`
 }
 
 func (cmd *containerGetAttributeCmd) Execute(args []string) error {
+	if cmd.FlagAttr != "" {
+		cmd.Args.Attr = cmd.FlagAttr
+	}
+	if cmd.Args.Attr == "" {
+		return errors.New("attribute name is required")
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	attr, err := cmd.getAttr(cmd.Args.Name)
+	attr, err := cmd.getAttr(cmd.Args.Attr)
 	if err != nil {
 		return errors.Wrapf(err,
 			"failed to get attribute %q from container %s",
-			cmd.Args.Name, cmd.ContainerID())
+			cmd.Args.Attr, cmd.ContainerID())
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -787,12 +940,12 @@ func (cmd *containerGetAttributeCmd) Execute(args []string) error {
 type containerSetAttributeCmd struct {
 	existingContainerCmd
 
-	Args struct {
+	FlagAttr  string `long:"attr" short:"a" description:"attribute name (deprecated; use positional argument)"`
+	FlagValue string `long:"value" short:"v" description:"attribute value (deprecated; use positional argument)"`
+	Args      struct {
 		Attr  string `positional-arg-name:"<attribute name>"`
 		Value string `positional-arg-name:"<attribute value>"`
 	} `positional-args:"yes"`
-	FlagAttr  string `long:"attr" short:"a" description:"attribute name"`
-	FlagValue string `long:"value" short:"v" description:"attribute value"`
 }
 
 func (cmd *containerSetAttributeCmd) Execute(args []string) error {
@@ -803,13 +956,20 @@ func (cmd *containerSetAttributeCmd) Execute(args []string) error {
 		cmd.Args.Value = cmd.FlagValue
 	}
 
+	if cmd.Args.Attr == "" {
+		return errors.New("attribute name is required")
+	}
+	if cmd.Args.Value == "" {
+		return errors.New("attribute value is required")
+	}
+
 	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
 	if err != nil {
 		return err
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -817,7 +977,7 @@ func (cmd *containerSetAttributeCmd) Execute(args []string) error {
 
 	if err := setDaosAttribute(cmd.cContHandle, contAttr, &attribute{
 		Name:  cmd.Args.Attr,
-		Value: cmd.Args.Value,
+		Value: []byte(cmd.Args.Value),
 	}); err != nil {
 		return errors.Wrapf(err,
 			"failed to set attribute %q on container %s",
@@ -840,7 +1000,7 @@ func (cmd *containerGetPropertyCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}
@@ -898,7 +1058,7 @@ func (cmd *containerSetPropertyCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -966,13 +1126,13 @@ func (f *ContainerID) Complete(match string) (comps []flags.Completion) {
 	}
 	defer fini()
 
-	cleanup, err := pf.resolveAndConnect(nil)
+	cleanup, err := pf.resolveAndConnect(C.DAOS_PC_RO, nil)
 	if err != nil {
 		return
 	}
 	defer cleanup()
 
-	contIDs, err := poolListContainers(pf.cPoolHandle)
+	contIDs, err := listContainers(pf.cPoolHandle)
 	if err != nil {
 		return
 	}

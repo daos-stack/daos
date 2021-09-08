@@ -28,6 +28,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -70,7 +71,6 @@ func checkUnorderedRankResults(t *testing.T, expResults, gotResults []*sharedpb.
 
 func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
-		setupAP          bool
 		missingSB        bool
 		instancesStopped bool
 		req              *ctlpb.RanksReq
@@ -254,7 +254,6 @@ func TestServer_CtlSvc_PrepShutdownRanks(t *testing.T) {
 
 func TestServer_CtlSvc_StopRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
-		setupAP          bool
 		missingSB        bool
 		engineCount      int
 		instancesStopped bool
@@ -433,7 +432,6 @@ func TestServer_CtlSvc_StopRanks(t *testing.T) {
 
 func TestServer_CtlSvc_PingRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
-		setupAP          bool
 		missingSB        bool
 		instancesStopped bool
 		req              *ctlpb.RanksReq
@@ -643,7 +641,6 @@ func TestServer_CtlSvc_PingRanks(t *testing.T) {
 
 func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
-		setupAP          bool
 		missingSB        bool
 		engineCount      int
 		instancesStarted bool
@@ -707,8 +704,18 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 			ctx := context.Background()
 
 			cfg := config.DefaultServer().WithEngines(
-				engine.NewConfig().WithTargetCount(1),
-				engine.NewConfig().WithTargetCount(1),
+				engine.NewConfig().
+					WithTargetCount(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass("ram"),
+					),
+				engine.NewConfig().
+					WithTargetCount(1).
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass("ram"),
+					),
 			)
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 
@@ -719,9 +726,11 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 					continue
 				}
 
+				engineCfg := cfg.Engines[i]
+
 				testDir, cleanup := common.CreateTestDir(t)
 				defer cleanup()
-				engineCfg := engine.NewConfig().WithScmMountPoint(testDir)
+				engineCfg.Storage.Tiers[0].Scm.MountPoint = testDir
 
 				trc := &engine.TestRunnerConfig{}
 				if tc.instancesStarted {
@@ -731,7 +740,11 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 				srv.runner = engine.NewTestRunner(trc, engineCfg)
 				srv.setIndex(uint32(i))
 
-				t.Logf("scm dir: %s", srv.scmConfig().MountPoint)
+				cfg, err := srv.storage.GetScmConfig()
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("scm dir: %s", cfg.Scm.MountPoint)
 				superblock := &Superblock{
 					Version: superblockVersion,
 					UUID:    common.MockUUID(),
@@ -777,7 +790,6 @@ func TestServer_CtlSvc_ResetFormatRanks(t *testing.T) {
 
 func TestServer_CtlSvc_StartRanks(t *testing.T) {
 	for name, tc := range map[string]struct {
-		setupAP          bool
 		missingSB        bool
 		engineCount      int
 		instancesStopped bool
@@ -902,6 +914,147 @@ func TestServer_CtlSvc_StartRanks(t *testing.T) {
 
 			if diff := cmp.Diff(tc.expResults, gotResp.Results, defRankCmpOpts...); diff != "" {
 				t.Fatalf("unexpected response (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestServer_CtlSvc_SetEngineLogMasks(t *testing.T) {
+	for name, tc := range map[string]struct {
+		missingRank      bool
+		instancesStopped bool
+		cfgLogMask       string
+		req              *ctlpb.SetLogMasksReq
+		drpcRet          error
+		junkResp         bool
+		drpcResps        []proto.Message
+		responseDelay    time.Duration
+		ctxTimeout       time.Duration
+		ctxCancel        time.Duration
+		expResp          *ctlpb.SetLogMasksResp
+		expErr           error
+	}{
+		"nil request": {
+			expErr: errors.New("nil request"),
+		},
+		"empty masks string in request; no configured log mask": {
+			req:    &ctlpb.SetLogMasksReq{},
+			expErr: errors.New("no log_mask set in engine config"),
+		},
+		"empty masks string in request; configured log mask": {
+			cfgLogMask: "DEBUG",
+			req:        &ctlpb.SetLogMasksReq{},
+			expErr:     errors.New("dRPC returned no response"),
+		},
+		"instances stopped": {
+			req:              &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			instancesStopped: true,
+			expErr:           errors.New("not ready"),
+		},
+		"dRPC resp fails": {
+			req:     &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			drpcRet: errors.New("call failed"),
+			drpcResps: []proto.Message{
+				&ctlpb.SetLogMasksResp{Status: 0},
+				&ctlpb.SetLogMasksResp{Status: 0},
+			},
+			expErr: errors.New("bad dRPC response"),
+		},
+		"dRPC resp junk": {
+			req:      &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			junkResp: true,
+			expErr:   errors.New("invalid wire-format data"),
+		},
+		"missing superblock": { // shouldn't matter in this case
+			req:         &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			missingRank: true,
+			drpcResps: []proto.Message{
+				&ctlpb.SetLogMasksResp{Status: 0},
+				&ctlpb.SetLogMasksResp{Status: 0},
+			},
+			expResp: &ctlpb.SetLogMasksResp{},
+		},
+		"successful call": {
+			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			drpcResps: []proto.Message{
+				&ctlpb.SetLogMasksResp{Status: 0},
+				&ctlpb.SetLogMasksResp{Status: 0},
+			},
+			expResp: &ctlpb.SetLogMasksResp{},
+		},
+		"unsuccessful call": {
+			req: &ctlpb.SetLogMasksReq{Masks: "ERR,mgmt=DEBUG"},
+			drpcResps: []proto.Message{
+				&ctlpb.SetLogMasksResp{Status: -1},
+				&ctlpb.SetLogMasksResp{Status: -1},
+			},
+			expErr: errors.New("DER_UNKNOWN(-1): Unknown error code -1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			cfg := config.DefaultServer().WithEngines(
+				engine.NewConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
+				engine.NewConfig().WithTargetCount(1).WithLogMask(tc.cfgLogMask),
+			)
+			svc := mockControlService(t, log, cfg, nil, nil, nil)
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
+
+				trc := &engine.TestRunnerConfig{}
+				if !tc.instancesStopped {
+					trc.Running.SetTrue()
+					srv.ready.SetTrue()
+				}
+				srv.runner = engine.NewTestRunner(trc, engine.NewConfig())
+				srv.setIndex(uint32(i))
+
+				if !tc.missingRank {
+					srv._superblock.Rank = new(system.Rank)
+					*srv._superblock.Rank = system.Rank(i + 1)
+				}
+
+				cfg := new(mockDrpcClientConfig)
+				if tc.drpcRet != nil {
+					cfg.setSendMsgResponse(drpc.Status_FAILURE, nil, nil)
+				} else if tc.junkResp {
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
+				} else if len(tc.drpcResps) > i {
+					rb, _ := proto.Marshal(tc.drpcResps[i])
+					cfg.setSendMsgResponse(drpc.Status_SUCCESS, rb, tc.expErr)
+
+					if tc.responseDelay != time.Duration(0) {
+						cfg.setResponseDelay(tc.responseDelay)
+					}
+				}
+				srv.setDrpcClient(newMockDrpcClient(cfg))
+			}
+
+			svc.harness.rankReqTimeout = 50 * time.Millisecond
+
+			var cancel context.CancelFunc
+			ctx := context.Background()
+			if tc.ctxTimeout != 0 {
+				ctx, cancel = context.WithTimeout(ctx, tc.ctxTimeout)
+				defer cancel()
+			} else if tc.ctxCancel != 0 {
+				ctx, cancel = context.WithCancel(ctx)
+				go func() {
+					<-time.After(tc.ctxCancel)
+					cancel()
+				}()
+			}
+
+			gotResp, gotErr := svc.SetEngineLogMasks(ctx, tc.req)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expResp, gotResp, defRankCmpOpts...); diff != "" {
+				t.Fatalf("unexpected results: %s", diff)
 			}
 		})
 	}

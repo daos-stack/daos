@@ -112,7 +112,7 @@ rebuild:
   test_with_rebuild: True
 checksum:
   test_with_checksum: False
+snapshot:
+  test_with_snapshot: True
 test_ranks:
   rank_list: ["2","5"]
-
-

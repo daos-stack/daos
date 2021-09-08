@@ -34,11 +34,16 @@ class analyzer():
                             help="string to match indicating a directory to include")
         parser.add_argument('-c', '--cutoff', dest='cutoff', default=100, type=int,
                             help="Lower bound cutoff for entries to print")
+        parser.add_argument('-e', '--exit', dest='exit', default=False, action="store_true",
+                            help="Do not wait for build. Run the analysis immediately and exit.")
         args = parser.parse_args(arg_str.split())
         self.dir_exclusions = args.xdirs
         self.dir_inclusions = args.dirs
         self.file_inclusions = args.files
         self.cutoff = args.cutoff
+        if args.exit:
+            self.analyze()
+            Exit(0)
 
     @staticmethod
     def included(name, inclusions):

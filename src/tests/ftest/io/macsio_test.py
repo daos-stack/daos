@@ -31,8 +31,8 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=io,macsio
-        :avocado: tags=DAOS_5610
+        :avocado: tags=io,DAOS_5610,dfuse
+        :avocado: tags=macsio
         """
         # Create a pool
         self.add_pool()
@@ -63,8 +63,8 @@ class MacsioTest(DfuseTestBase, MacsioTestBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large
-        :avocado: tags=io,macsio_daos_vol
-        :avocado: tags=DAOS_5610
+        :avocado: tags=io,DAOS_5610,dfuse
+        :avocado: tags=macsio_daos_vol
         """
         plugin_path = self.params.get("plugin_path")
 

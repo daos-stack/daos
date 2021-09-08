@@ -85,7 +85,7 @@ oclass_get(unsigned int random)
 	case EC_4P1G1:
 		return OC_EC_4P1G1;
 	case EC_4P2G2:
-		return OC_EC_4P2G1;
+		return OC_EC_4P2G2;
 	case EC_4P2GX:
 		return OC_EC_4P2GX;
 	default:
@@ -436,6 +436,14 @@ racer_valid_oid(daos_obj_id_t oid, daos_pool_info_t *pinfo)
 		required_node = 3;
 		required_tgt = 6;
 		break;
+	case OC_EC_4P1G1:
+		required_node = 5;
+		required_tgt = 5;
+		break;
+	case OC_EC_4P2G2:
+		required_node = 6;
+		required_tgt = 12;
+		break;
 	default:
 		return false;
 	}
@@ -548,7 +556,7 @@ main(int argc, char **argv)
 			(unsigned int)(nvme_size >> 20));
 	}
 
-	rc = dts_ctx_init(&ts_ctx);
+	rc = dts_ctx_init(&ts_ctx, NULL);
 	if (rc)
 		D_GOTO(out, rc);
 
