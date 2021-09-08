@@ -386,7 +386,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 {
 	struct crt_ep_inflight	*epi;
 	struct crt_context	*ctx;
-	struct crt_rpc_priv	*rpc_priv;
+	struct crt_rpc_priv	*rpc_priv, *rpc_next;;
 	bool			 msg_logged;
 	int			 flags, force, wait;
 	uint64_t		 ts_start, ts_now;
@@ -426,8 +426,8 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	/* abort RPCs in waitq */
 	msg_logged = false;
 
-
-	d_list_for_each_entry(rpc_priv, &epi->epi_req_waitq, crp_epi_link) {
+	d_list_for_each_entry_safe(rpc_priv, rpc_next, &epi->epi_req_waitq,
+				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_wait_num > 0);
 		if (msg_logged == false) {
 			D_DEBUG(DB_NET, "destroy context (idx %d, rank %d, "
@@ -445,7 +445,8 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 
 	/* abort RPCs in inflight queue */
 	msg_logged = false;
-	d_list_for_each_entry(rpc_priv, &epi->epi_req_q, crp_epi_link) {
+	d_list_for_each_entry_safe(rpc_priv, rpc_next, &epi->epi_req_q,
+				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_num > epi->epi_reply_num);
 		if (msg_logged == false) {
 			D_DEBUG(DB_NET,
