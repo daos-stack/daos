@@ -790,36 +790,28 @@ kv_insertrf1(void)
 	daos_obj_generate_oid(coh2, &oid2, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		D_GOTO(fail_open, rc);
-
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return -1;
+	}
 	put_rc = kv_put(oh, 128, 1000000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (put_rc)
-		D_GOTO(fail_insert, put_rc);
+	if (put_rc) {
+		step_fail("failed to insert: %s", d_errdesc(put_rc));
+		return -1;
+	}
 
-	if (rc)
-		D_GOTO(fail_close, rc);
-
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return -1;
+	}
 	step_success("");
 	return 0;
 
 skip_step:
 	step_skip("Group size(2) is larger than domain_nr(%d)", domain_nr);
 	return 0;
-
-fail_open:
-	step_fail("failed to open object: %s", d_errdesc(rc));
-	return -1;
-
-fail_insert:
-	step_fail("failed to insert: %s", d_errdesc(put_rc));
-	return -1;
-
-fail_close:
-	step_fail("failed to close object: %s", d_errdesc(rc));
-	return -1;
 }
 
 static int
@@ -833,17 +825,23 @@ kv_readrf1(void)
 		D_GOTO(skip_step, rc = -DER_INVAL);
 
 	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		D_GOTO(fail_open, rc);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return -1;
+	}
 
 	get_rc = kv_get(oh, 128, 1000000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (get_rc)
-		D_GOTO(fail_read, get_rc);
+	if (get_rc) {
+		step_fail("failed to read: %s", d_errdesc(get_rc));
+		return -1;
+	}
 
-	if (rc)
-		D_GOTO(fail_close, rc);
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return -1;
+	}
 
 	step_success("");
 	return 0;
@@ -851,18 +849,6 @@ kv_readrf1(void)
 skip_step:
 	step_skip("Group size(2) is larger than domain_nr(%d)", domain_nr);
 	return 0;
-
-fail_open:
-	step_fail("failed to open object: %s", d_errdesc(rc));
-	return -1;
-
-fail_read:
-	step_fail("failed to read: %s", d_errdesc(get_rc));
-	return -1;
-
-fail_close:
-	step_fail("failed to close object: %s", d_errdesc(rc));
-	return -1;
 }
 
 static int
@@ -879,17 +865,23 @@ kv_insertrf2(void)
 	daos_obj_generate_oid(coh3, &oid3, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		D_GOTO(fail_open, rc);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return -1;
+	}
 
 	put_rc = kv_put(oh, 128, 1000000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (put_rc)
-		D_GOTO(fail_insert, put_rc);
+	if (put_rc) {
+		step_fail("failed to insert: %s", d_errdesc(put_rc));
+		return -1;
+	}
 
-	if (rc)
-		D_GOTO(fail_close, rc);
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return -1;
+	}
 
 	step_success("");
 	return 0;
@@ -897,18 +889,6 @@ kv_insertrf2(void)
 skip_step:
 	step_skip("Group size(3) is larger than domain_nr(%d)", domain_nr);
 	return 0;
-
-fail_open:
-	step_fail("failed to open object: %s", d_errdesc(rc));
-	return -1;
-
-fail_insert:
-	step_fail("failed to insert: %s", d_errdesc(put_rc));
-	return -1;
-
-fail_close:
-	step_fail("failed to close object: %s", d_errdesc(rc));
-	return -1;
 }
 
 static int
@@ -922,17 +902,23 @@ kv_readrf2(void)
 		D_GOTO(skip_step, rc = -DER_INVAL);
 
 	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
-	if (rc)
-		D_GOTO(fail_open, rc);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return -1;
+	}
 
 	get_rc = kv_get(oh, 128, 1000000);
 	rc = daos_kv_close(oh, NULL);
 
-	if (get_rc)
-		D_GOTO(fail_read, get_rc);
+	if (get_rc) {
+		step_fail("failed to read: %s", d_errdesc(get_rc));
+		return -1;
+	}
 
-	if (rc)
-		D_GOTO(fail_close, rc);
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return -1;
+	}
 
 	step_success("");
 	return 0;
@@ -940,18 +926,6 @@ kv_readrf2(void)
 skip_step:
 	step_skip("Group size(3) is larger than domain_nr(%d)", domain_nr);
 	return 0;
-
-fail_open:
-	step_fail("failed to open object: %s", d_errdesc(rc));
-	return -1;
-
-fail_read:
-	step_fail("failed to read: %s", d_errdesc(get_rc));
-	return -1;
-
-fail_close:
-	step_fail("failed to close object: %s", d_errdesc(rc));
-	return -1;
 }
 
 static int
