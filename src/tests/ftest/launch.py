@@ -269,6 +269,7 @@ def set_provider_environment(interface, args):
             if len(output_data) > 1:
                 print("ERROR: Non-homogeneous drivers detected.")
                 sys.exit(1)
+            # Select the provider - currently use verbs or sockets
             for line in output_data[0][0]:
                 provider = line.decode("utf-8").replace(":", "")
                 if "verbs" in provider:
@@ -281,9 +282,7 @@ def set_provider_environment(interface, args):
 
     # Update env definitions
     os.environ[name] = detected_provider
-    print(
-        "Using {}={} as the provider for the {} interface".format(
-            name, os.environ[name], interface))
+    print("Using {}={}".format(name, os.environ[name]))
 
 
 def set_python_environment():
