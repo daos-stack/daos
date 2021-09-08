@@ -386,7 +386,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 {
 	struct crt_ep_inflight	*epi;
 	struct crt_context	*ctx;
-	struct crt_rpc_priv	*rpc_priv, *rpc_next;;
+	struct crt_rpc_priv	*rpc_priv, *rpc_next;
 	bool			 msg_logged;
 	int			 flags, force, wait;
 	uint64_t		 ts_start, ts_now;
