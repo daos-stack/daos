@@ -255,8 +255,6 @@ func (srv *server) addEngines(ctx context.Context) error {
 	}
 
 	for i, c := range srv.cfg.Engines {
-		c.Storage.EnableHotplug = srv.cfg.EnableHotplug
-
 		engine, err := srv.createEngine(ctx, i, c)
 		if err != nil {
 			return err

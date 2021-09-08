@@ -8,6 +8,7 @@ package bdev
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dustin/go-humanize"
 
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	HotplugPeriod = 5 * 1000 * 1000
+	hotplugPeriod = 5 * time.Second
 )
 
 // SPDK bdev subsystem configuration method name definitions.
@@ -123,9 +124,7 @@ func defaultSpdkConfig() *SpdkConfig {
 		},
 		{
 			Method: SpdkBdevNvmeSetHotplug,
-			Params: NvmeSetHotplugParams{
-				PeriodUsec: HotplugPeriod,
-			},
+			Params: NvmeSetHotplugParams{},
 		},
 	}
 
@@ -242,6 +241,7 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 	}
 
 	if req.HotplugEnabled {
+		var found bool
 		for _, ss := range sc.Subsystems {
 			if ss.Name != "bdev" {
 				continue
@@ -251,12 +251,17 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 				if bsc.Method == SpdkBdevNvmeSetHotplug {
 					bsc.Params = NvmeSetHotplugParams{
 						Enable:     true,
-						PeriodUsec: HotplugPeriod,
+						PeriodUsec: uint64(hotplugPeriod.Microseconds()),
 					}
+					found = true
+
 					break
 				}
 			}
-			break
+
+			if found {
+				break
+			}
 		}
 	}
 
