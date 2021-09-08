@@ -85,12 +85,13 @@ fi
 
 function export_pythonpath()
 {
-  PYTHON_VERSION="${1}"
-
-  if [ "${PYTHON_VERSION}" -eq 3 ]; then
-    PYTHONPATH=${SL_PREFIX}/lib64/python3/site-packages:${PYTHONPATH}
+  MAJOR="${1}"
+  MINOR="$(python3 -c 'import sys; print(sys.version_info.minor)')"
+  VERSION="${MAJOR}.${MINOR}"
+  if [ "${MAJOR}" -eq 3 ]; then
+    PYTHONPATH=${SL_PREFIX}/lib64/python${VERSION}/site-packages:${PYTHONPATH}
   else
-    echo "unknown Python version: ${PYTHON_VERSION}"
+    echo "unknown Python version: ${VERSION}"
     return 0
   fi
 

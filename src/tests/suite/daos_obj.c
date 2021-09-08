@@ -4667,6 +4667,8 @@ int
 run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 {
 	int rc = 0;
+	char oclass[16] = {0};
+	char buf[32];
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (sub_tests_size == 0) {
@@ -4674,7 +4676,14 @@ run_daos_io_test(int rank, int size, int *sub_tests, int sub_tests_size)
 		sub_tests = NULL;
 	}
 
-	rc = run_daos_sub_tests("DAOS_IO", io_tests,
+	if (dt_obj_class != OC_UNKNOWN) {
+		oclass[0] = '_';
+		daos_oclass_id2name(dt_obj_class, &oclass[1]);
+	}
+	snprintf(buf, sizeof(buf), "DAOS_IO%s", oclass);
+	buf[sizeof(buf) - 1] = 0;
+
+	rc = run_daos_sub_tests(buf, io_tests,
 				ARRAY_SIZE(io_tests), sub_tests, sub_tests_size,
 				obj_setup, test_teardown);
 

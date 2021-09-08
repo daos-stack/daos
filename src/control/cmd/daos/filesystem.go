@@ -7,17 +7,25 @@
 package main
 
 /*
-#include <daos.h>
-
-#include "daos_hdlr.h"
+#include "util.h"
 */
 import "C"
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/pkg/errors"
 )
+
+func dfsError(rc C.int) error {
+	if rc == 0 {
+		return nil
+	}
+
+	strErr := C.strerror(rc)
+	return errors.New(fmt.Sprintf("errno %d (%s)", rc, C.GoString(strErr)))
+}
 
 type fsCmd struct {
 	Copy           fsCopyCmd `command:"copy" description:"copy to and from a POSIX filesystem"`
@@ -61,8 +69,10 @@ func (cmd *fsCopyCmd) Execute(_ []string) error {
 type fsAttrCmd struct {
 	existingContainerCmd
 
-	ChunkSize   chunkSizeFlag `long:"chunk-size" short:"z" description:"container chunk size"`
-	ObjectClass objClassFlag  `long:"oclass" short:"o" description:"default object class"`
+	ChunkSize   ChunkSizeFlag `long:"chunk-size" short:"z" description:"container chunk size"`
+	ObjectClass ObjClassFlag  `long:"oclass" short:"o" description:"default object class"`
+	DfsPath     string        `long:"dfs-path" short:"H" description:"DFS path relative to root of container, when using pool and container instead of --path and the UNS"`
+	DfsPrefix   string        `long:"dfs-prefix" short:"I" description:"Optional prefix path to the root of the DFS container when using pool and container"`
 }
 
 func (cmd *fsAttrCmd) Execute(_ []string) error {
@@ -72,45 +82,59 @@ func (cmd *fsAttrCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
+	if cmd.DfsPath != "" {
+		if cmd.Path != "" {
+			return errors.New("Cannot use both --dfs-path and --path")
+		}
+		ap.dfs_path = C.CString(cmd.DfsPath)
+	}
+	if cmd.DfsPrefix != "" {
+		if cmd.Path != "" {
+			return errors.New("Cannot use both --dfs-prefix and --path")
+		}
+		ap.dfs_prefix = C.CString(cmd.DfsPrefix)
+	}
+
+	flags := C.uint(C.DAOS_COO_RW)
 	op := os.Args[2]
 	switch op {
 	case "set-attr":
 		ap.fs_op = C.FS_SET_ATTR
-		if cmd.ObjectClass.set {
-			ap.oclass = cmd.ObjectClass.class
+		if cmd.ObjectClass.Set {
+			ap.oclass = cmd.ObjectClass.Class
 		}
-		if cmd.ChunkSize.set {
-			ap.chunk_size = cmd.ChunkSize.size
+		if cmd.ChunkSize.Set {
+			ap.chunk_size = cmd.ChunkSize.Size
 		}
 	case "get-attr":
 		ap.fs_op = C.FS_GET_ATTR
+		flags = C.DAOS_COO_RO
 	case "reset-attr":
 		ap.fs_op = C.FS_RESET_ATTR
 	case "reset-chunk-size":
 		ap.fs_op = C.FS_RESET_CHUNK_SIZE
-		if !cmd.ChunkSize.set {
+		if !cmd.ChunkSize.Set {
 			return errors.New("--chunk-size not set")
 		}
-		ap.chunk_size = cmd.ChunkSize.size
+		ap.chunk_size = cmd.ChunkSize.Size
 	case "reset-oclass":
 		ap.fs_op = C.FS_RESET_OCLASS
-		if !cmd.ObjectClass.set {
+		if !cmd.ObjectClass.Set {
 			return errors.New("--oclass not set")
 		}
-		ap.oclass = cmd.ObjectClass.class
+		ap.oclass = cmd.ObjectClass.Class
 	default:
 		return errors.Errorf("unknown fs op %q", op)
 	}
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(flags, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	rc := C.fs_dfs_hdlr(ap)
-	if err := daosError(rc); err != nil {
-		return err
+	if err := dfsError(C.fs_dfs_hdlr(ap)); err != nil {
+		return errors.Wrapf(err, "%s failed", op)
 	}
 
 	return nil

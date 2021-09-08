@@ -8,7 +8,6 @@ from apricot import TestWithServers, skipForTicket
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
 
@@ -122,7 +121,9 @@ class RbldContainerCreate(TestWithServers):
             Basic rebuild of container objects of array values with sufficient
             numbers of rebuild targets and no available rebuild targets.
 
-        :avocado: tags=all,medium,full_regression,rebuild,rebuildcontcreate
+        :avocado: tags=all,full_regression
+        :avocado: tags=medium
+        :avocado: tags=rebuild,rebuild_cont_create
         """
         # Get test params
         targets = self.params.get("targets", "/run/server_config/*")
@@ -137,9 +138,7 @@ class RbldContainerCreate(TestWithServers):
         # Get pool params
         self.pool = []
         for index in range(pool_qty):
-            self.pool.append(
-                TestPool(self.context, self.get_dmg_command()))
-            self.pool[-1].get_params(self)
+            self.pool.append(self.get_pool(create=False))
 
         if use_ior:
             # Get ior params

@@ -1,19 +1,12 @@
 hosts:
   test_servers:
     - server-A
-timeout: 40
+timeout: 90
 server_config:
   name: daos_server
   servers:
     targets: 1
 pool:
-  createmode: !mux
-    mode_all:
-      mode: 511
-    mode_ex:
-      mode: 292
-    mode_rw:
-      mode: 146
   createset:
     name: daos_server
   control_method: dmg

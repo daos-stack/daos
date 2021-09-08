@@ -1,5 +1,6 @@
 """Build daos common tests"""
 import daos_build
+import compiler_setup
 
 def define_checksum_timing(build, env):
     """Define the Checksum Timing build"""
@@ -58,7 +59,7 @@ def scons():
     # Some syscalls are aliased when fortification is enabled, which makes
     # mocking in unit tests into a headache.
     # The compiler decides this on its own, but let's force the issue.
-    unit_env.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
+    compiler_setup.remove_fortify(unit_env)
 
     acl_api = unit_env.Object('../acl_api.c')
 

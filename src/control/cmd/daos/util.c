@@ -3,8 +3,6 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
-#define D_LOGFAC	DD_FAC(client)
-
 #include "util.h"
 
 static int
@@ -42,66 +40,60 @@ resolve_duns_path(struct cmd_args_s *ap)
 	char   *name = NULL, *dir_name = NULL;
 
 	rc = duns_resolve_path(ap->path, &dattr);
-	if (rc == 0) {
-		ap->type = dattr.da_type;
-		uuid_copy(ap->p_uuid, dattr.da_puuid);
-		uuid_copy(ap->c_uuid, dattr.da_cuuid);
-	} else {
-		if (ap->fs_op == -1) {
-			rc = call_dfuse_ioctl(ap->path, &il_reply);
-			if (rc == 0) {
-				ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
-				uuid_copy(ap->p_uuid, il_reply.fir_pool);
-				uuid_copy(ap->c_uuid, il_reply.fir_cont);
-				ap->oid = il_reply.fir_oid;
-			}
-		} else if (rc == ENOENT && ap->fs_op == FS_SET_ATTR) {
-			/** we could be creating a new file, so try dirname */
-			parse_filename_dfs(ap->path, &name,
-				&dir_name);
+	if (rc == ENOENT && ap->fs_op == FS_SET_ATTR) {
+		/** we could be creating a new file, so try dirname */
+		parse_filename_dfs(ap->path, &name, &dir_name);
 
-			rc = duns_resolve_path(dir_name, &dattr);
-			if (rc == 0) {
-				ap->type = dattr.da_type;
-				uuid_copy(ap->p_uuid, dattr.da_puuid);
-				uuid_copy(ap->c_uuid, dattr.da_cuuid);
-			}
+		rc = duns_resolve_path(dir_name, &dattr);
+	}
+
+	if (rc && ap->fs_op == -1) {
+		rc = call_dfuse_ioctl(ap->path, &il_reply);
+		if (rc == 0) {
+			ap->type = DAOS_PROP_CO_LAYOUT_POSIX;
+			uuid_copy(ap->p_uuid, il_reply.fir_pool);
+			uuid_copy(ap->c_uuid, il_reply.fir_cont);
+
+			/** set pool/cont label or uuid */
+			uuid_unparse(ap->p_uuid, ap->pool_str);
+			uuid_unparse(ap->c_uuid, ap->cont_str);
+
+			ap->oid = il_reply.fir_oid;
+			D_GOTO(out, rc);
 		}
 	}
 
-	if (rc != 0) {
-		fprintf(ap->errstream, "could not resolve "
-		"pool, container by "
-		"path: %d %s %s\n",
-		rc, strerror(rc), ap->path);
-
+	if (rc) {
+		fprintf(ap->errstream, "could not resolve pool, container by path %s: %s (%d)\n",
+			ap->path, strerror(rc), rc);
 		D_GOTO(out, rc);
 	}
 
+	ap->type = dattr.da_type;
+
+	/** set pool/cont label or uuid */
+	snprintf(ap->pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+	snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
+
 	if (ap->fs_op != -1) {
 		if (name) {
-			if (dattr.da_rel_path) {
-				D_ASPRINTF(ap->dfs_path, "%s/%s",
-						dattr.da_rel_path, name);
-				free(dattr.da_rel_path);
-			} else {
-				D_ASPRINTF(ap->dfs_path, "/%s", name);
-			}
+			if (dattr.da_rel_path)
+				asprintf(&ap->dfs_path, "%s/%s", dattr.da_rel_path, name);
+			else
+				asprintf(&ap->dfs_path, "/%s", name);
 		} else {
-			if (dattr.da_rel_path) {
-				D_STRNDUP(ap->dfs_path,
-						dattr.da_rel_path, PATH_MAX);
-				free(dattr.da_rel_path);
-			} else {
-				D_STRNDUP(ap->dfs_path, "/", 1);
-			}
+			if (dattr.da_rel_path)
+				ap->dfs_path = strndup(dattr.da_rel_path, PATH_MAX);
+			else
+				ap->dfs_path = strndup("/", 1);
 		}
 		if (ap->dfs_path == NULL)
 			D_GOTO(out, rc = ENOMEM);
 	}
 
 out:
+	duns_destroy_attr(&dattr);
 	D_FREE(dir_name);
 	D_FREE(name);
-	return rc;
+	return daos_errno2der(rc);
 }

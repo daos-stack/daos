@@ -25,6 +25,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/security"
 	"github.com/daos-stack/daos/src/control/server/engine"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -38,15 +39,6 @@ type networkProviderValidation func(context.Context, string, string) error
 type networkNUMAValidation func(context.Context, string, uint) error
 type networkDeviceClass func(string) (uint32, error)
 
-// ClientNetworkCfg elements are used by the libdaos clients to help initialize CaRT.
-// These settings bring coherence between the client and server network configuration.
-type ClientNetworkCfg struct {
-	Provider        string
-	CrtCtxShareAddr uint32
-	CrtTimeout      uint32
-	NetDevClass     uint32
-}
-
 // Server describes configuration options for DAOS control plane.
 // See utils/config/daos_server.yml for parameter descriptions.
 type Server struct {
@@ -59,7 +51,7 @@ type Server struct {
 	BdevInclude         []string         `yaml:"bdev_include,omitempty"`
 	BdevExclude         []string         `yaml:"bdev_exclude,omitempty"`
 	DisableVFIO         bool             `yaml:"disable_vfio"`
-	DisableVMD          bool             `yaml:"disable_vmd"`
+	EnableVMD           bool             `yaml:"enable_vmd"`
 	NrHugepages         int              `yaml:"nr_hugepages"`
 	ControlLogMask      ControlLogLevel  `yaml:"control_log_mask"`
 	ControlLogFile      string           `yaml:"control_log_file"`
@@ -203,18 +195,6 @@ func (cfg *Server) WithEngines(engineList ...*engine.Config) *Server {
 	return cfg
 }
 
-// WithScmMountPoint sets the SCM mountpoint for the first I/O Engine.
-//
-// Deprecated: This function exists to ease transition away from
-// specifying the SCM mountpoint via daos_server CLI flag. Future
-// versions will require the mountpoint to be set via configuration.
-func (cfg *Server) WithScmMountPoint(mp string) *Server {
-	if len(cfg.Engines) > 0 {
-		cfg.Engines[0].WithScmMountPoint(mp)
-	}
-	return cfg
-}
-
 // WithAccessPoints sets the access point list.
 func (cfg *Server) WithAccessPoints(aps ...string) *Server {
 	cfg.AccessPoints = aps
@@ -265,10 +245,10 @@ func (cfg *Server) WithDisableVFIO(disabled bool) *Server {
 	return cfg
 }
 
-// WithDisableVMD indicates that vmd devices should not be used even if they
-// exist.
-func (cfg *Server) WithDisableVMD(disabled bool) *Server {
-	cfg.DisableVMD = disabled
+// WithEnableVMD can be used to set the state of VMD functionality,
+// if enabled then VMD devices will be used if they exist.
+func (cfg *Server) WithEnableVMD(enabled bool) *Server {
+	cfg.EnableVMD = enabled
 	return cfg
 }
 
@@ -335,7 +315,7 @@ func DefaultServer() *Server {
 		validateProviderFn: netdetect.ValidateProviderStub,
 		validateNUMAFn:     netdetect.ValidateNUMAStub,
 		GetDeviceClassFn:   netdetect.GetDeviceClass,
-		DisableVMD:         true, // support currently unstable
+		EnableVMD:          false, // disabled by default
 	}
 }
 
@@ -456,6 +436,44 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return errors.New("\"servers\" server config file parameter is deprecated, use \"engines\" instead")
 	}
 
+	for idx, ec := range cfg.Engines {
+		if ec.LegacyStorage.WasDefined() {
+			log.Infof("engine %d: Legacy storage configuration detected. Please migrate to new-style storage configuration.", idx)
+			var tierCfgs storage.TierConfigs
+			if ec.LegacyStorage.ScmClass != storage.ClassNone {
+				tierCfgs = append(tierCfgs,
+					storage.NewTierConfig().
+						WithScmClass(ec.LegacyStorage.ScmClass.String()).
+						WithScmDeviceList(ec.LegacyStorage.ScmConfig.DeviceList...).
+						WithScmMountPoint(ec.LegacyStorage.MountPoint).
+						WithScmRamdiskSize(ec.LegacyStorage.RamdiskSize),
+				)
+			}
+
+			// Do not add bdev tier if cls is none or nvme has no
+			// devices to maintain backward compatible behavior.
+			bc := ec.LegacyStorage.BdevClass
+			switch {
+			case bc == storage.ClassNvme && len(ec.LegacyStorage.BdevConfig.DeviceList) == 0:
+				log.Debugf("legacy storage config conversion skipped for class %s with empty bdev_list",
+					storage.ClassNvme)
+			case bc == storage.ClassNone:
+				log.Debugf("legacy storage config conversion skipped for class %s",
+					storage.ClassNone)
+			default:
+				tierCfgs = append(tierCfgs,
+					storage.NewTierConfig().
+						WithBdevClass(ec.LegacyStorage.BdevClass.String()).
+						WithBdevDeviceCount(ec.LegacyStorage.DeviceCount).
+						WithBdevDeviceList(ec.LegacyStorage.BdevConfig.DeviceList...).
+						WithBdevFileSize(ec.LegacyStorage.FileSize),
+				)
+			}
+			ec.WithStorage(tierCfgs...)
+			ec.LegacyStorage = engine.LegacyStorage{}
+		}
+	}
+
 	// A config without engines is valid when initially discovering hardware
 	// prior to adding per-engine sections with device allocations.
 	if len(cfg.Engines) == 0 {
@@ -495,9 +513,6 @@ func (cfg *Server) Validate(log logging.Logger) (err error) {
 		return FaultConfigBadAccessPoints
 	case len(cfg.AccessPoints)%2 == 0:
 		return FaultConfigEvenAccessPoints
-	case len(cfg.AccessPoints) > 1:
-		// temporary notification while the feature is still being polished.
-		log.Info("\n*******\nNOTICE: Support for multiple access points is an alpha feature and is not well-tested!\n*******\n\n")
 	}
 
 	for i, engine := range cfg.Engines {
@@ -550,29 +565,33 @@ func (cfg *Server) validateMultiServerConfig(log logging.Logger) error {
 			seenValues[logConfig] = idx
 		}
 
-		scmConf := engine.Storage.SCM
-		mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.MountPoint)
-		if seenIn, exists := seenValues[mountConfig]; exists {
-			log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
-			return FaultConfigDuplicateScmMount(idx, seenIn)
-		}
-		seenValues[mountConfig] = idx
-
-		for _, dev := range scmConf.DeviceList {
-			if seenIn, exists := seenScmSet[dev]; exists {
-				log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
-				return FaultConfigDuplicateScmDeviceList(idx, seenIn)
+		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+			mountConfig := fmt.Sprintf("scm_mount:%s", scmConf.Scm.MountPoint)
+			if seenIn, exists := seenValues[mountConfig]; exists {
+				log.Debugf("%s in %d duplicates %d", mountConfig, idx, seenIn)
+				return FaultConfigDuplicateScmMount(idx, seenIn)
 			}
-			seenScmSet[dev] = idx
+			seenValues[mountConfig] = idx
 		}
 
-		bdevConf := engine.Storage.Bdev
-		for _, dev := range bdevConf.DeviceList {
-			if seenIn, exists := seenBdevSet[dev]; exists {
-				log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
-				return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
+		for _, scmConf := range engine.Storage.Tiers.ScmConfigs() {
+			for _, dev := range scmConf.Scm.DeviceList {
+				if seenIn, exists := seenScmSet[dev]; exists {
+					log.Debugf("scm_list entry %s in %d duplicates %d", dev, idx, seenIn)
+					return FaultConfigDuplicateScmDeviceList(idx, seenIn)
+				}
+				seenScmSet[dev] = idx
 			}
-			seenBdevSet[dev] = idx
+		}
+
+		for _, bdevConf := range engine.Storage.Tiers.BdevConfigs() {
+			for _, dev := range bdevConf.Bdev.DeviceList {
+				if seenIn, exists := seenBdevSet[dev]; exists {
+					log.Debugf("bdev_list entry %s in %d overlaps %d", dev, idx, seenIn)
+					return FaultConfigOverlappingBdevDeviceList(idx, seenIn)
+				}
+				seenBdevSet[dev] = idx
+			}
 		}
 	}
 

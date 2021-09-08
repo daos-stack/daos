@@ -414,7 +414,7 @@ public class ReusableDescMain {
 
   private static DaosObjClient getObjClient(String pid, String cid, String svc) throws IOException {
     DaosObjClient objClient = new DaosObjClient.DaosObjClientBuilder()
-        .poolId(pid).containerId(cid).ranks(svc)
+        .poolId(pid).containerId(cid)
         .build();
     return objClient;
   }

@@ -154,6 +154,7 @@ scp_files() {
         if scp -r "${file}" "${2}"/"${archive_name}"; then
             copied+=("${file}")
             if [[ ! "${file}" =~ /etc/daos/ ]] && \
+               [[ ! "${file}" =~ daos_dump ]] && \
                [[ ! "${file}" =~ test.cov ]]; then
                 if ! rm -fr "${file}"; then
                     echo "  Error removing ${file}"
@@ -162,7 +163,8 @@ scp_files() {
                 fi
             fi
         else
-            echo "  Failed to archive ${file} to ${2}"
+            ec=${PIPESTATUS[0]}
+            echo "  Failed to archive ${file} to ${2} (error code: $ec)"
             rc=1
         fi
     done

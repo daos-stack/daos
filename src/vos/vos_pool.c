@@ -449,7 +449,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
 
 	/* NVMe device is configured */
-	if (bio_nvme_configured()) {
+	if (bio_nvme_configured() && xs_ctxt) {
 		D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
 		rc = bio_blob_delete(uuid, xs_ctxt);
@@ -696,6 +696,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		D_GOTO(failed, rc);
 	}
 
+	pool->vp_dtx_committed_count = 0;
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);

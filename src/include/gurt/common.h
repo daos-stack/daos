@@ -125,6 +125,23 @@ char *d_realpath(const char *path, char *resolved_path);
 			      strnlen(s, n) + 1, 0, #ptr, 0);		\
 	} while (0)
 
+/* This can be used for duplicating static strings, it will work for strings
+ * which are defined in-place or through #define but it will not work with
+ * strings which are defined as a char * variable as in that case it'll copy
+ * the first 8 bytes.  To avoid this case add a static assert on the size,
+ * so code that tries to mis-use this macro will fail at compile time.
+ */
+
+#define D_STRNDUP_S(ptr, s)						\
+	do {								\
+		_Static_assert(sizeof(s) != sizeof(void *) ||		\
+			__builtin_types_compatible_p(typeof(s), typeof("1234567")), \
+	"D_STRNDUP_S cannot be used with this type");			\
+		(ptr) = d_strndup(s, sizeof(s));			\
+		D_CHECK_ALLOC(strndup, true, ptr, #ptr,			\
+			sizeof(s), 0, #ptr, 0);				\
+	} while (0)
+
 #define D_ASPRINTF(ptr, ...)						\
 	do {								\
 		int _rc;						\
@@ -411,6 +428,7 @@ d_sgl_fini(d_sg_list_t *sgl, bool free_iovs)
 
 void d_getenv_bool(const char *env, bool *bool_val);
 void d_getenv_int(const char *env, unsigned int *int_val);
+int d_getenv_uint64_t(const char *env, uint64_t *val);
 int  d_write_string_buffer(struct d_string_buffer_t *buf, const char *fmt, ...);
 void d_free_string(struct d_string_buffer_t *buf);
 

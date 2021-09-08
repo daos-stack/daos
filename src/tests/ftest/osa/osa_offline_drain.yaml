@@ -7,7 +7,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 1000
+timeout: 1100
 setup:
   start_servers_once: False
 server_config:
@@ -112,7 +112,7 @@ rebuild:
   test_with_rebuild: True
 checksum:
   test_with_checksum: False
+snapshot:
+  test_with_snapshot: True
 test_ranks:
   rank_list: ["2","5"]
-
-

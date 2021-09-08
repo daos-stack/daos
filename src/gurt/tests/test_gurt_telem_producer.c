@@ -231,16 +231,22 @@ test_gauge_stats(void **state)
 						 16, 18, 20, 2, 4, 6, 8,
 						 10, 12, 14, 16, 18, 20};
 	struct d_tm_node_t	*gauge;
+	struct d_tm_node_t	*gauge_no_stats;
 	char			*path = "gurt/tests/telem/gauge-stats";
 	struct d_tm_stats_t	stats;
 	uint64_t		val;
 
-	rc = d_tm_add_metric(&gauge, D_TM_GAUGE, NULL, NULL, path);
+	rc = d_tm_add_metric(&gauge, D_TM_STATS_GAUGE, NULL, NULL, path);
+	assert_rc_equal(rc, 0);
+
+	rc = d_tm_add_metric(&gauge_no_stats, D_TM_GAUGE, NULL, NULL,
+			     "gurt/tests/telem/gauge-no-stats");
 	assert_rc_equal(rc, 0);
 
 	len =  (int)(sizeof(test_values) / sizeof(int));
 	for (i = 0; i < len; i++) {
 		d_tm_set_gauge(gauge, test_values[i]);
+		d_tm_set_gauge(gauge_no_stats, test_values[i]);
 	}
 
 	rc = d_tm_get_gauge(cli_ctx, &val, &stats, srv_to_cli_node(gauge));
@@ -251,6 +257,18 @@ test_gauge_stats(void **state)
 	assert_int_equal(stats.dtm_max, 20);
 	assert_true(stats.mean - 11.0 < STATS_EPSILON);
 	assert_true(stats.std_dev - 5.89379 < STATS_EPSILON);
+
+	/* No stats collected in regular gauge type */
+	memset(&stats, 0, sizeof(stats));
+
+	rc = d_tm_get_gauge(cli_ctx, &val, &stats,
+			    srv_to_cli_node(gauge_no_stats));
+	assert_rc_equal(rc, DER_SUCCESS);
+
+	assert_int_equal(stats.dtm_min, 0);
+	assert_int_equal(stats.dtm_max, 0);
+	assert_int_equal(stats.mean, 0);
+	assert_int_equal(stats.std_dev, 0);
 }
 
 static void
@@ -446,7 +464,7 @@ test_gauge_with_histogram_multiplier_1(void **state)
 
 	path = "gurt/tests/telem/test_gauge_m1";
 
-	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
+	rc = d_tm_add_metric(&gauge, D_TM_STATS_GAUGE,
 			     "A gauge with a histogram multiplier 1",
 			     D_TM_GIGABYTE, path);
 	assert_rc_equal(rc, DER_SUCCESS);
@@ -559,7 +577,7 @@ test_gauge_with_histogram_multiplier_2(void **state)
 
 	path = "gurt/tests/telem/test_gauge_m2";
 
-	rc = d_tm_add_metric(&gauge, D_TM_GAUGE,
+	rc = d_tm_add_metric(&gauge, D_TM_STATS_GAUGE,
 			     "A gauge with a histogram multiplier 2",
 			     D_TM_TERABYTE, path);
 	assert_rc_equal(rc, DER_SUCCESS);
@@ -1119,7 +1137,8 @@ test_verify_object_count(void **state)
 	struct d_tm_node_t	*node;
 	int			num;
 	int			exp_num_ctr = 20;
-	int			exp_num_gauge = 5;
+	int			exp_num_gauge = 3;
+	int			exp_num_gauge_stats = 3;
 	int			exp_num_dur = 2;
 	int			exp_num_timestamp = 2;
 	int			exp_num_snap = 2;
@@ -1137,6 +1156,9 @@ test_verify_object_count(void **state)
 
 	num = d_tm_count_metrics(cli_ctx, node, D_TM_GAUGE);
 	assert_int_equal(num, exp_num_gauge);
+
+	num = d_tm_count_metrics(cli_ctx, node, D_TM_STATS_GAUGE);
+	assert_int_equal(num, exp_num_gauge_stats);
 
 	num = d_tm_count_metrics(cli_ctx, node, D_TM_DURATION);
 	assert_int_equal(num, exp_num_dur);

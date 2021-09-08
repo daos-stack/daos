@@ -14,6 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/daos-stack/daos/src/control/common"
 	nd "github.com/daos-stack/daos/src/control/lib/netdetect"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/config"
@@ -30,7 +31,8 @@ const (
 	defaultEngineLogFile  = "/tmp/daos_engine"
 	defaultControlLogFile = "/tmp/daos_server.log"
 	// NetDevAny matches any netdetect network device class
-	NetDevAny = math.MaxUint32
+	NetDevAny    = math.MaxUint32
+	minDMABuffer = 1024
 
 	errNoNuma            = "zero numa nodes reported on hosts %s"
 	errUnsupNetDevClass  = "unsupported net dev class in request: %s"
@@ -548,10 +550,7 @@ func getCPUDetails(log logging.Logger, numaSSDs numaSSDsMap, coresPerNuma int) (
 func defaultEngineCfg(idx int) *engine.Config {
 	return engine.NewConfig().
 		WithTargetCount(defaultTargetCount).
-		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx)).
-		WithScmClass(storage.ScmClassDCPM.String()).
-		WithBdevClass(storage.BdevClassNvme.String()).
-		WithBdevDeviceList([]string{}...)
+		WithLogFile(fmt.Sprintf("%s.%d.log", defaultEngineLogFile, idx))
 }
 
 // genConfig generates server config file from details of available network,
@@ -569,7 +568,7 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		return nil, errors.Errorf(errInsufNrPMemGroups, sd.numaPMems, nd.engineCount,
 			len(sd.numaPMems))
 	}
-	if len(sd.numaSSDs) < nd.engineCount {
+	if len(sd.numaSSDs) > 0 && (len(sd.numaSSDs) < nd.engineCount) {
 		return nil, errors.New("invalid number of ssd groups") // shouldn't happen
 	}
 	if len(ccs) < nd.engineCount {
@@ -579,11 +578,23 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 	engines := make([]*engine.Config, 0, nd.engineCount)
 	for nn := 0; nn < nd.engineCount; nn++ {
 		engineCfg := defaultEngineCfg(nn).
-			WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
-			WithScmDeviceList(sd.numaPMems[nn][0]).
-			WithBdevDeviceList(sd.numaSSDs[nn]...).
 			WithTargetCount(ccs[nn].nrTgts).
 			WithHelperStreamCount(ccs[nn].nrHlprs)
+		if len(sd.numaPMems) > 0 {
+			engineCfg.WithStorage(
+				storage.NewTierConfig().
+					WithScmClass(storage.ClassDcpm.String()).
+					WithScmMountPoint(fmt.Sprintf("%s%d", scmMountPrefix, nn)).
+					WithScmDeviceList(sd.numaPMems[nn][0]),
+			)
+		}
+		if len(sd.numaSSDs) > 0 {
+			engineCfg.WithStorage(
+				storage.NewTierConfig().
+					WithBdevClass(storage.ClassNvme.String()).
+					WithBdevDeviceList(sd.numaSSDs[nn]...),
+			)
+		}
 
 		pnn := uint(nn)
 		engineCfg.Fabric = engine.FabricConfig{
@@ -596,11 +607,29 @@ func genConfig(log logging.Logger, accessPoints []string, nd *networkDetails, sd
 		engines = append(engines, engineCfg)
 	}
 
+	// determine a reasonable amount of hugepages to use
+	hugepage_info, err := common.GetHugePageInfo()
+	if err != nil {
+		return nil, errors.New("unable to read system hugepage info")
+	}
+	hugepage_size := hugepage_info.PageSizeKb >> 10
+	if hugepage_size == 0 {
+		return nil, errors.New("unable to read system hugepage size")
+	}
+	max_nrTgts := 0
+	for i := 0; i < nd.engineCount; i++ {
+		if ccs[i].nrTgts > max_nrTgts {
+			max_nrTgts = ccs[i].nrTgts
+		}
+	}
+	nr_hugepages := (minDMABuffer * max_nrTgts) / hugepage_size
+
 	cfg := config.DefaultServer().
 		WithAccessPoints(accessPoints...).
 		WithFabricProvider(engines[0].Fabric.Provider).
 		WithEngines(engines...).
-		WithControlLogFile(defaultControlLogFile)
+		WithControlLogFile(defaultControlLogFile).
+		WithNrHugePages(nr_hugepages)
 
 	return cfg, cfg.Validate(log)
 }

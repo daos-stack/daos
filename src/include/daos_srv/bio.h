@@ -405,11 +405,13 @@ void bio_register_bulk_ops(int (*bulk_create)(void *ctxt, d_sg_list_t *sgl,
  * \param[IN] hugepage_size	Configured hugepage size on system
  * \paran[IN] tgt_nr		Number of targets
  * \param[IN] db		persistent database to store SMD data
+ * \param[IN] bypass		Set to bypass health data collection
  *
  * \return		Zero on success, negative value on error
  */
 int bio_nvme_init(const char *nvme_conf, int shm_id, int mem_size,
-		  int hugepage_size, int tgt_nr, struct sys_db *db);
+		  int hugepage_size, int tgt_nr, struct sys_db *db,
+		  bool bypass);
 
 /**
  * Global NVMe finilization.
@@ -461,13 +463,12 @@ void bio_xsctxt_free(struct bio_xs_context *ctxt);
  * NVMe poller to poll NVMe I/O completions.
  *
  * \param[IN] ctxt	Per-xstream NVMe context
- * \param[IN] bypass	Set to bypass the health check
  *
  * \return		0: If no work was done
  *			1: If work was done
  *			-1: If thread has exited
  */
-int bio_nvme_poll(struct bio_xs_context *ctxt,  bool bypass);
+int bio_nvme_poll(struct bio_xs_context *ctxt);
 
 /*
  * Create per VOS instance blob.
@@ -583,17 +584,25 @@ int bio_readv(struct bio_io_context *ioctxt, struct bio_sglist *bsgl,
  */
 int bio_write_blob_hdr(struct bio_io_context *ctxt, struct bio_blob_hdr *hdr);
 
+/* Note: Do NOT change the order of these types */
+enum bio_iod_type {
+	BIO_IOD_TYPE_UPDATE = 0,	/* For update request */
+	BIO_IOD_TYPE_FETCH,		/* For fetch request */
+	BIO_IOD_TYPE_GETBUF,		/* For get buf request */
+	BIO_IOD_TYPE_MAX,
+};
+
 /**
  * Allocate & initialize an io descriptor
  *
  * \param ctxt       [IN]	I/O context
  * \param sgl_cnt    [IN]	SG list count
- * \param update     [IN]	update or fetch operation?
+ * \param type       [IN]	IOD type
  *
  * \return			Opaque io descriptor or NULL on error
  */
 struct bio_desc *bio_iod_alloc(struct bio_io_context *ctxt,
-			       unsigned int sgl_cnt, bool update);
+			       unsigned int sgl_cnt, unsigned int type);
 /**
  * Free an io descriptor
  *
@@ -764,4 +773,48 @@ int bio_replace_dev(struct bio_xs_context *xs, uuid_t old_dev_id,
  */
 int bio_set_led_state(struct bio_xs_context *xs, uuid_t devid,
 		      const char *led_state, bool reset);
+
+/*
+ * Allocate DMA buffer, the buffer could be from bulk cache if bulk context
+ * if specified.
+ *
+ * \param ioctxt	[IN]	I/O context
+ * \param len		[IN]	Requested buffer length
+ * \param bulk_ctxt	[IN]	Bulk context
+ * \param bulk_perm	[IN]	Bulk permission
+ *
+ * \return			Buffer descriptor on success, NULL on error
+ */
+struct bio_desc *bio_buf_alloc(struct bio_io_context *ioctxt,
+			       unsigned int len, void *bulk_ctxt,
+			       unsigned int bulk_perm);
+
+/*
+ * Free allocated DMA buffer.
+ *
+ * \param biod		[IN]	Buffer descriptor
+ *
+ * \return			N/A
+ */
+void bio_buf_free(struct bio_desc *biod);
+
+/*
+ * Get the bulk handle of DMA buffer.
+ *
+ * \param biod		[IN]	Buffer descriptor
+ * \param bulk_off	[OUT]	Bulk offset
+ *
+ * \return			Bulk handle
+ */
+void *bio_buf_bulk(struct bio_desc *biod, unsigned int *bulk_off);
+
+/*
+ * Get the address of DMA buffer.
+ *
+ * \param biod		[IN]	Buffer descriptor
+ *
+ * \return			Buffer address
+ */
+void *bio_buf_addr(struct bio_desc *biod);
+
 #endif /* __BIO_API_H__ */

@@ -27,11 +27,6 @@ import (
 #cgo CFLAGS: -I${SRCDIR}/../../../utils
 #cgo LDFLAGS: -lgurt -lcart -ldaos -ldaos_common -lduns -ldfs -luuid -ldaos_cmd_hdlrs
 
-#define D_LOGFAC	DD_FAC(client)
-
-#include <daos.h>
-#include <daos/common.h>
-
 #include "util.h"
 
 void
@@ -176,8 +171,8 @@ func createWriteStream(prefix string, printLn func(line string)) (*C.FILE, func(
 	}(prefix)
 
 	return stream, func() {
+		C.fflush(stream)
 		C.fclose(stream)
-		C.sync()
 	}, nil
 }
 
@@ -187,10 +182,11 @@ func freeCmdArgs(ap *C.struct_cmd_args_s) {
 	}
 
 	freeString(ap.sysname)
-	C.free_daos_alloc(unsafe.Pointer(ap.dfs_path))
+
+	C.free(unsafe.Pointer(ap.dfs_path))
+	C.free(unsafe.Pointer(ap.dfs_prefix))
 
 	if ap.props != nil {
-		ap.props.dpp_nr = C.DAOS_PROP_ENTRIES_MAX_NR
 		C.daos_prop_free(ap.props)
 	}
 }

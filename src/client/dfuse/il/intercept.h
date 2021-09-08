@@ -48,8 +48,9 @@
 	ACTION(int,     fdatasync, (int))                                     \
 	ACTION(int,     dup,       (int))                                     \
 	ACTION(int,     dup2,      (int, int))                                \
-	ACTION(int,     fcntl,     (int fd, int cmd, ...))                    \
-	ACTION(FILE *,  fdopen,    (int, const char *))
+	ACTION(int,     fcntl,     (int, int, ...))                           \
+	ACTION(FILE *,  fdopen,    (int, const char *))                       \
+	ACTION(int,     __fxstat,   (int, int, struct stat *))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \

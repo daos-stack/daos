@@ -122,10 +122,8 @@ static int
 local_name_to_principal_name(const char *local_name, char **name)
 {
 	D_ASPRINTF(*name, "%s@", local_name);
-	if (*name == NULL) {
-		D_ERROR("Failed to allocate string for name\n");
+	if (*name == NULL)
 		return -DER_NOMEM;
-	}
 
 	return 0;
 }

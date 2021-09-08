@@ -24,7 +24,7 @@
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_CONT_VERSION 3
+#define DAOS_CONT_VERSION 5
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -37,9 +37,6 @@
 		ds_cont_op_handler, NULL),				\
 	X(CONT_OPEN,							\
 		0, &CQF_cont_open,					\
-		ds_cont_op_handler, NULL),				\
-	X(CONT_OPEN_BYLABEL,						\
-		0, &CQF_cont_open_bylabel,				\
 		ds_cont_op_handler, NULL),				\
 	X(CONT_CLOSE,							\
 		0, &CQF_cont_close,					\
@@ -82,6 +79,12 @@
 		ds_cont_op_handler, NULL),				\
 	X(CONT_ACL_DELETE,						\
 		0, &CQF_cont_acl_delete,				\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_OPEN_BYLABEL,						\
+		0, &CQF_cont_open_bylabel,				\
+		ds_cont_op_handler, NULL),				\
+	X(CONT_DESTROY_BYLABEL,						\
+		0, &CQF_cont_destroy_bylabel,				\
 		ds_cont_op_handler, NULL)
 
 #define CONT_PROTO_SRV_RPC_LIST						\
@@ -155,6 +158,19 @@ CRT_RPC_DECLARE(cont_create, DAOS_ISEQ_CONT_CREATE, DAOS_OSEQ_CONT_CREATE)
 
 CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 
+/* Container destroy bylabel input
+ * Must begin with what DAOS_ISEQ_CONT_DESTROY has, for reusing cont_destroy_in
+ * in the common code. cdi_op.ci_uuid is ignored.
+ */
+#define DAOS_ISEQ_CONT_DESTROY_BYLABEL	/* input fields */	 \
+	DAOS_ISEQ_CONT_DESTROY					 \
+	((uint32_t)		(cdli_pad32)		CRT_VAR) \
+	((d_const_string_t)	(cdli_label)		CRT_VAR)
+
+/* Container destroy bylabel output same as destroy by uuid. */
+CRT_RPC_DECLARE(cont_destroy_bylabel, DAOS_ISEQ_CONT_DESTROY_BYLABEL,
+		DAOS_OSEQ_CONT_DESTROY)
+
 #define DAOS_ISEQ_CONT_OPEN	/* input fields */		 \
 	((struct cont_op_in)	(coi_op)		CRT_VAR) \
 	((uint64_t)		(coi_flags)		CRT_VAR) \
@@ -163,7 +179,9 @@ CRT_RPC_DECLARE(cont_destroy, DAOS_ISEQ_CONT_DESTROY, DAOS_OSEQ_CONT_DESTROY)
 
 #define DAOS_OSEQ_CONT_OPEN	/* output fields */		 \
 	((struct cont_op_out)	(coo_op)		CRT_VAR) \
-	((daos_prop_t)		(coo_prop)		CRT_PTR)
+	((daos_prop_t)		(coo_prop)		CRT_PTR) \
+	((uint32_t)		(coo_snap_count)	CRT_VAR) \
+	((uint32_t)		(coo_pad)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_open, DAOS_ISEQ_CONT_OPEN, DAOS_OSEQ_CONT_OPEN)
 
@@ -230,8 +248,9 @@ CRT_RPC_DECLARE(cont_close, DAOS_ISEQ_CONT_CLOSE, DAOS_OSEQ_CONT_CLOSE)
 /** Add more items to query when needed */
 #define DAOS_OSEQ_CONT_QUERY	/* output fields */		 \
 	((struct cont_op_out)	(cqo_op)		CRT_VAR) \
-	((daos_epoch_t)		(cqo_hae)		CRT_VAR) \
-	((daos_prop_t)		(cqo_prop)		CRT_PTR)
+	((daos_prop_t)		(cqo_prop)		CRT_PTR) \
+	((uint32_t)		(cqo_snap_count)	CRT_VAR) \
+	((uint32_t)		(cqo_pad)		CRT_VAR)
 
 CRT_RPC_DECLARE(cont_query, DAOS_ISEQ_CONT_QUERY, DAOS_OSEQ_CONT_QUERY)
 
@@ -330,6 +349,9 @@ struct cont_tgt_close_rec {
 	daos_epoch_t	tcr_hce;
 };
 
+/* TODO: more tgt query information ; and decide if tqo_hae is needed at all
+ * (e.g., CONT_QUERY cqo_hae has been removed).
+ */
 #define DAOS_ISEQ_TGT_QUERY	/* input fields */		 \
 	((uuid_t)		(tqi_pool_uuid)		CRT_VAR) \
 	((uuid_t)		(tqi_cont_uuid)		CRT_VAR)

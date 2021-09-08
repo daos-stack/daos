@@ -12,5 +12,7 @@ server_config:
     bdev_class: nvme
     bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
 pool:
-  control_method: dmg
   name: daos_server
+  control_method: dmg
+  scm_size: 90%
+  nvme_size: 90%

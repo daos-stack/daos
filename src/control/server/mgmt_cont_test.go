@@ -35,8 +35,8 @@ func makeBadBytes(count int) (badBytes []byte) {
 
 func newTestListContReq() *mgmtpb.ListContReq {
 	return &mgmtpb.ListContReq{
-		Sys:  build.DefaultSystemName,
-		Uuid: "12345678-1234-1234-1234-123456789abc",
+		Sys: build.DefaultSystemName,
+		Id:  "12345678-1234-1234-1234-123456789abc",
 	}
 }
 

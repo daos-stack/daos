@@ -35,7 +35,7 @@ class RbldPoolDestroyWithIO(IorTestBase):
 
         :avocado: tags=all,pr,hw
         :avocado: tags=medium,ib2
-        :avocado: tags=pool,rebuild,mpich
+        :avocado: tags=pool,rebuild,ior
         :avocado: tags=pooldestroywithio
         """
         # set params

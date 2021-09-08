@@ -199,29 +199,25 @@ pool_iv_prop_g2l(struct pool_iv_prop *iv_prop, daos_prop_t *prop)
 				 DAOS_PROP_LABEL_MAX_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_label,
 				  DAOS_PROP_LABEL_MAX_LEN);
-			if (prop_entry->dpe_str)
-				label_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			label_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_PO_OWNER:
 			D_ASSERT(strlen(iv_prop->pip_owner) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			owner_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_PO_OWNER_GROUP:
 			D_ASSERT(strlen(iv_prop->pip_owner_grp) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->pip_owner_grp,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_grp_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
 			break;
 		case DAOS_PROP_PO_SPACE_RB:
@@ -274,12 +270,9 @@ out:
 	if (rc) {
 		if (acl_alloc)
 			daos_acl_free(acl_alloc);
-		if (label_alloc)
-			D_FREE(label_alloc);
-		if (owner_alloc)
-			D_FREE(owner_alloc);
-		if (owner_grp_alloc)
-			D_FREE(owner_grp_alloc);
+		D_FREE(label_alloc);
+		D_FREE(owner_alloc);
+		D_FREE(owner_grp_alloc);
 		if (svc_list)
 			d_rank_list_free(dst_list);
 	}
@@ -1216,7 +1209,7 @@ out:
 		ds_pool_put(pool);
 	if (iv_arg->iua_eventual)
 		ABT_eventual_set(iv_arg->iua_eventual, (void *)&rc, sizeof(rc));
-	D_FREE_PTR(iv_arg);
+	D_FREE(iv_arg);
 }
 
 int
@@ -1498,8 +1491,7 @@ ds_pool_iv_prop_fetch(struct ds_pool *pool, daos_prop_t *prop)
 	}
 
 out:
-	if (iv_entry)
-		D_FREE(iv_entry);
+	D_FREE(iv_entry);
 	if (prop_fetch)
 		daos_prop_free(prop_fetch);
 	return rc;

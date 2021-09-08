@@ -31,15 +31,11 @@ class DmvrDstCreate(DataMoverTestBase):
         self.ior_flags = self.params.get(
             "ior_flags", "/run/ior/*")
         self.test_file = self.ior_cmd.test_file.value
-        self.cont_type = self.params.get(
-            "cont_type", "/run/dcp/*")
-        self.daos_api = self.params.get(
-            "daos_api", "/run/dcp/*")
 
         # For dataset_gen and dataset_verify
         self.obj_list = []
 
-    def run_dm_dst_create(self, tool):
+    def run_dm_dst_create(self, tool, cont_type, api, check_props):
         """
         Test Description:
             Tests Data Mover destination container creation.
@@ -58,12 +54,15 @@ class DmvrDstCreate(DataMoverTestBase):
         # Set the tool to use
         self.set_tool(tool)
 
+        # Set the api to use
+        self.set_api(api)
+
         # Create 1 pool
         pool1 = self.create_pool()
         pool1.connect(2)
 
         # Create a source cont
-        cont1 = self.create_cont(pool1, cont_type=self.cont_type)
+        cont1 = self.create_cont(pool1, cont_type=cont_type)
 
         # Create source data
         src_props = self.write_cont(cont1)
@@ -75,7 +74,7 @@ class DmvrDstCreate(DataMoverTestBase):
             "DAOS", "/", pool1, cont2_uuid)
         cont2 = self.get_cont(pool1, cont2_uuid)
         cont2.type.update(cont1.type.value, "type")
-        self.verify_cont(cont2, True, src_props)
+        self.verify_cont(cont2, api, check_props, src_props)
 
         result = self.run_datamover(
             self.test_id + " cont1 to cont3 (same pool) (empty cont)",
@@ -84,7 +83,7 @@ class DmvrDstCreate(DataMoverTestBase):
         cont3_uuid = self.parse_create_cont_uuid(result.stdout_text)
         cont3 = self.get_cont(pool1, cont3_uuid)
         cont3.type.update(cont1.type.value, "type")
-        self.verify_cont(cont3, True, src_props)
+        self.verify_cont(cont3, api, check_props, src_props)
 
         # Create another pool
         pool2 = self.create_pool()
@@ -97,7 +96,7 @@ class DmvrDstCreate(DataMoverTestBase):
             "DAOS", "/", pool2, cont4_uuid)
         cont4 = self.get_cont(pool2, cont4_uuid)
         cont4.type.update(cont1.type.value, "type")
-        self.verify_cont(cont4, True, src_props)
+        self.verify_cont(cont4, api, check_props, src_props)
 
         result = self.run_datamover(
             self.test_id + " cont1 to cont5 (different pool) (empty cont)",
@@ -106,10 +105,10 @@ class DmvrDstCreate(DataMoverTestBase):
         cont5_uuid = self.parse_create_cont_uuid(result.stdout_text)
         cont5 = self.get_cont(pool2, cont5_uuid)
         cont5.type.update(cont1.type.value, "type")
-        self.verify_cont(cont5, True, src_props)
+        self.verify_cont(cont5, api, check_props, src_props)
 
         # Only test POSIX paths with DFS API
-        if self.daos_api == "DFS":
+        if api == "DFS":
             # Create a posix source path
             posix_path = join(self.new_posix_test_path(), self.test_file)
             self.run_ior_with_params(
@@ -122,7 +121,7 @@ class DmvrDstCreate(DataMoverTestBase):
                 "DAOS", "/", pool1, cont6_uuid)
             cont6 = self.get_cont(pool1, cont6_uuid)
             cont6.type.update(cont1.type.value, "type")
-            self.verify_cont(cont6, False)
+            self.verify_cont(cont6, api, False)
 
             result = self.run_datamover(
                 self.test_id + " posix to cont7 (empty cont)",
@@ -131,7 +130,7 @@ class DmvrDstCreate(DataMoverTestBase):
             cont7_uuid = self.parse_create_cont_uuid(result.stdout_text)
             cont7 = self.get_cont(pool1, cont7_uuid)
             cont7.type.update(cont1.type.value, "type")
-            self.verify_cont(cont7, False)
+            self.verify_cont(cont7, api, False)
 
         pool1.disconnect()
         pool2.disconnect()
@@ -162,7 +161,7 @@ class DmvrDstCreate(DataMoverTestBase):
         # Return existing cont properties
         return self.get_cont_prop(cont)
 
-    def verify_cont(self, cont, check_attr_prop=True, prop_list=None):
+    def verify_cont(self, cont, api, check_attr_prop=True, prop_list=None):
         """Read-verify test data using either ior or the obj API.
 
         Args:
@@ -177,7 +176,7 @@ class DmvrDstCreate(DataMoverTestBase):
         # mounts DFS the alloc'ed OID might be incremented.
         if check_attr_prop:
             cont.open()
-            self.verify_cont_prop(cont, prop_list)
+            self.verify_cont_prop(cont, prop_list, api)
             self.verify_usr_attr(cont)
             cont.close()
 
@@ -206,7 +205,7 @@ class DmvrDstCreate(DataMoverTestBase):
         prop_list = prop_text.split('\n')[1:]
         return prop_list
 
-    def verify_cont_prop(self, cont, prop_list):
+    def verify_cont_prop(self, cont, prop_list, api):
         """Verify container properties against an input list.
         Expects the container to be open.
 
@@ -226,7 +225,7 @@ class DmvrDstCreate(DataMoverTestBase):
         # Make sure each property matches
         for prop_idx, prop in enumerate(prop_list):
             # This one is not set
-            if self.daos_api == "DFS" and "OID" in prop_list[prop_idx]:
+            if api == "DFS" and "OID" in prop_list[prop_idx]:
                 continue
             if prop != actual_list[prop_idx]:
                 self.log.info("Expected\n%s\nbut got\n%s\n",
@@ -274,14 +273,57 @@ class DmvrDstCreate(DataMoverTestBase):
                       len(attrs.keys()), attrs.items())
 
     @avocado.fail_on(DaosApiError)
-    def test_dm_dst_create_dcp(self):
+    def test_dm_dst_create_dcp_posix_dfs(self):
         """
         Test Description:
-            Verifies destination container creation, including
+            Verifies destination container creation
+            for DFS API, including
             container properties and user attributes.
 
         :avocado: tags=all,full_regression
         :avocado: tags=datamover,dcp
-        :avocado: tags=dm_dst_create,dm_dst_create_dcp
+        :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_dfs
         """
-        self.run_dm_dst_create("DCP")
+        self.run_dm_dst_create("DCP", "POSIX", "DFS", True)
+
+    @avocado.fail_on(DaosApiError)
+    def test_dm_dst_create_dcp_posix_daos(self):
+        """
+        Test Description:
+            Verifies destination container creation
+            for POSIX containers using OBJ API, including
+            container properties and user attributes.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=datamover,dcp
+        :avocado: tags=dm_dst_create,dm_dst_create_dcp_posix_daos
+        """
+        self.run_dm_dst_create("DCP", "POSIX", "DAOS", True)
+
+    @avocado.fail_on(DaosApiError)
+    def test_dm_dst_create_dcp_unknown_daos(self):
+        """
+        Test Description:
+            Verifies destination container creation
+            when API is unknown, including
+            container properties and user attributes.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=datamover,dcp
+        :avocado: tags=dm_dst_create,dm_dst_create_dcp_unknown_daos
+        """
+        self.run_dm_dst_create("DCP", None, "DAOS", True)
+
+    @avocado.fail_on(DaosApiError)
+    def test_dm_dst_create_fs_copy_posix_dfs(self):
+        """
+        Test Description:
+            Verifies destination container creation
+            when API is unknown, including
+            container properties and user attributes.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=datamover,fs_copy
+        :avocado: tags=dm_dst_create,dm_dst_create_fs_copy_posix_dfs
+        """
+        self.run_dm_dst_create("FS_COPY", "POSIX", "DFS", False)

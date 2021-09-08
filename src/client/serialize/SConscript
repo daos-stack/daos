@@ -1,0 +1,29 @@
+"""Build DAOS Serialize Library"""
+import daos_build
+
+def scons():
+    """Execute build"""
+    Import('env')
+
+    denv = env.Clone()
+
+    have_hdf5 = True
+
+    # If hdf5 installed build DAOS serialization library
+    conf = Configure(denv)
+    if not conf.CheckLibWithHeader('hdf5', 'hdf5.h', 'c'):
+        have_hdf5 = False
+    conf.Finish()
+
+    libraries = ['daos', 'hdf5']
+
+    src = ['daos_serialize.c']
+    if have_hdf5 is True:
+        print("Building with hdf5 bindings.")
+        daos_serialize = daos_build.library(denv, 'daos_serialize', src,
+                                           LIBS=libraries)
+        denv.Install('$PREFIX/lib64/', daos_serialize)
+    else:
+        print("No installed hdf5 detected, DAOS serialization is not enabled")
+if __name__ == "SCons.Script":
+    scons()

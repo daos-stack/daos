@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -20,10 +19,6 @@ import (
 	pclient "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 )
-
-// httpScrapeFn is the function that is used to scrape content from an HTTP
-// endpoint.
-var httpScrapeFn = httpGetBody
 
 // pbMetricMap is the map returned by the prometheus scraper.
 type pbMetricMap map[string]*pclient.MetricFamily
@@ -38,15 +33,18 @@ func (m pbMetricMap) Keys() []string {
 	return keys
 }
 
-// scrapeMetrics fetches the metrics published by the DAOS server in the
-// Prometheus-compatible endpoint.
-func scrapeMetrics(ctx context.Context, host string, port uint32) (pbMetricMap, error) {
-	addr := &url.URL{
+func getMetricsURL(host string, port uint32) *url.URL {
+	return &url.URL{
 		Scheme: "http",
 		Host:   fmt.Sprintf("%s:%d", host, port),
 		Path:   "metrics",
 	}
-	body, err := httpScrapeFn(ctx, addr, http.Get)
+}
+
+// scrapeMetrics fetches the metrics published by the DAOS server in the
+// Prometheus-compatible endpoint.
+func scrapeMetrics(ctx context.Context, req httpGetter) (pbMetricMap, error) {
+	body, err := httpGetBodyRetry(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -70,23 +68,30 @@ const (
 	MetricTypeGauge
 	MetricTypeSummary
 	MetricTypeHistogram
+
+	metricTypeUnknownStr   = "Unknown"
+	metricTypeGenericStr   = "Generic"
+	metricTypeCounterStr   = "Counter"
+	metricTypeGaugeStr     = "Gauge"
+	metricTypeSummaryStr   = "Summary"
+	metricTypeHistogramStr = "Histogram"
 )
 
 func (t MetricType) String() string {
 	switch t {
 	case MetricTypeGeneric:
-		return "Generic"
+		return metricTypeGenericStr
 	case MetricTypeCounter:
-		return "Counter"
+		return metricTypeCounterStr
 	case MetricTypeGauge:
-		return "Gauge"
+		return metricTypeGaugeStr
 	case MetricTypeSummary:
-		return "Summary"
+		return metricTypeSummaryStr
 	case MetricTypeHistogram:
-		return "Histogram"
+		return metricTypeHistogramStr
 	}
 
-	return "Unknown"
+	return metricTypeUnknownStr
 }
 
 func metricTypeFromPrometheus(pType pclient.MetricType) MetricType {
@@ -103,6 +108,23 @@ func metricTypeFromPrometheus(pType pclient.MetricType) MetricType {
 		return MetricTypeGeneric
 	}
 
+	return MetricTypeUnknown
+}
+
+func metricTypeFromString(typeStr string) MetricType {
+	// normalize the strings for comparison
+	switch strings.ToLower(typeStr) {
+	case strings.ToLower(metricTypeCounterStr):
+		return MetricTypeCounter
+	case strings.ToLower(metricTypeGaugeStr):
+		return MetricTypeGauge
+	case strings.ToLower(metricTypeSummaryStr):
+		return MetricTypeSummary
+	case strings.ToLower(metricTypeHistogramStr):
+		return MetricTypeHistogram
+	case strings.ToLower(metricTypeGenericStr):
+		return MetricTypeGeneric
+	}
 	return MetricTypeUnknown
 }
 
@@ -157,10 +179,10 @@ type (
 )
 
 // IsMetric identifies SimpleMetric as a Metric.
-func (_ *SimpleMetric) IsMetric() {}
+func (*SimpleMetric) IsMetric() {}
 
 // IsMetric identifies SummaryMetric as a Metric.
-func (_ *SummaryMetric) IsMetric() {}
+func (*SummaryMetric) IsMetric() {}
 
 // UnmarshalJSON unmarshals a SummaryMetric from JSON.
 func (m *SummaryMetric) UnmarshalJSON(data []byte) error {
@@ -168,38 +190,21 @@ func (m *SummaryMetric) UnmarshalJSON(data []byte) error {
 		return errors.New("nil SummaryMetric")
 	}
 
-	type Alias SummaryMetric
-	aux := &struct {
-		StrQuantiles map[string]string `json:"quantiles"`
-		*Alias
-	}{
-		Alias: (*Alias)(m),
+	if m.Quantiles == nil {
+		m.Quantiles = make(QuantileMap)
 	}
+
+	type Alias SummaryMetric
+	aux := (*Alias)(m)
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
-	}
-
-	// Translate from strings to floats
-	m.Quantiles = make(QuantileMap)
-	for key, val := range aux.StrQuantiles {
-		floatKey, err := strconv.ParseFloat(key, 64)
-		if err != nil {
-			return errors.Wrapf(err, "key %q can't be converted to float", key)
-		}
-
-		floatVal, err := strconv.ParseFloat(val, 64)
-		if err != nil {
-			return errors.Wrapf(err, "value %q can't be converted to float", val)
-		}
-
-		m.Quantiles[floatKey] = floatVal
 	}
 
 	return nil
 }
 
 // IsMetric identifies HistogramMetric as a Metric.
-func (_ *HistogramMetric) IsMetric() {}
+func (*HistogramMetric) IsMetric() {}
 
 // Keys gets the sorted list of label keys.
 func (m LabelMap) Keys() []string {
@@ -236,9 +241,122 @@ func (m QuantileMap) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&strMap)
 }
 
+// UnmarshalJSON unmarshals the QuantileMap from JSON.
+func (m QuantileMap) UnmarshalJSON(data []byte) error {
+	if m == nil {
+		return errors.New("QuantileMap is nil")
+	}
+
+	fromJSON := make(map[string]string)
+
+	if err := json.Unmarshal(data, &fromJSON); err != nil {
+		return nil
+	}
+
+	for key, val := range fromJSON {
+		floatKey, err := strconv.ParseFloat(key, 64)
+		if err != nil {
+			return errors.Wrapf(err, "QuantileMap key %q", key)
+		}
+
+		floatVal, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return errors.Wrapf(err, "QuantileMap value %q for key %q", val, key)
+		}
+
+		m[floatKey] = floatVal
+	}
+	return nil
+}
+
+// MarshalJSON marshals the MetricSet to JSON.
+func (ms *MetricSet) MarshalJSON() ([]byte, error) {
+	type toJSON MetricSet
+	return json.Marshal(&struct {
+		Type string `json:"type"`
+		*toJSON
+	}{
+		Type:   strings.ToLower(ms.Type.String()),
+		toJSON: (*toJSON)(ms),
+	})
+}
+
+// jsonMetric serves as a universal metric representation for unmarshaling from
+// JSON. It covers all possible fields of Metric types.
+type jsonMetric struct {
+	Labels      LabelMap        `json:"labels"`
+	Value       float64         `json:"value"`
+	SampleCount uint64          `json:"sample_count"`
+	SampleSum   float64         `json:"sample_sum"`
+	Quantiles   QuantileMap     `json:"quantiles"`
+	Buckets     []*MetricBucket `json:"buckets"`
+}
+
+// UnmarshalJSON unmarshals a Metric into the jsonMetric type.
+func (jm *jsonMetric) UnmarshalJSON(data []byte) error {
+	if jm == nil {
+		return errors.New("nil jsonMetric")
+	}
+
+	if jm.Quantiles == nil {
+		jm.Quantiles = make(QuantileMap)
+	}
+
+	type Alias jsonMetric
+	aux := (*Alias)(jm)
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// UnmarshalJSON unmarshals the MetricSet from JSON.
+func (ms *MetricSet) UnmarshalJSON(data []byte) error {
+	if ms == nil {
+		return errors.New("nil MetricSet")
+	}
+
+	type fromJSON MetricSet
+	from := &struct {
+		Type    string        `json:"type"`
+		Metrics []*jsonMetric `json:"metrics"`
+		*fromJSON
+	}{
+		fromJSON: (*fromJSON)(ms),
+	}
+	if err := json.Unmarshal(data, from); err != nil {
+		return err
+	}
+
+	ms.Type = metricTypeFromString(from.Type)
+	for _, m := range from.Metrics {
+		switch ms.Type {
+		case MetricTypeSummary:
+			ms.Metrics = append(ms.Metrics, &SummaryMetric{
+				Labels:      m.Labels,
+				SampleCount: m.SampleCount,
+				SampleSum:   m.SampleSum,
+				Quantiles:   m.Quantiles,
+			})
+		case MetricTypeHistogram:
+			ms.Metrics = append(ms.Metrics, &HistogramMetric{
+				Labels:      m.Labels,
+				SampleCount: m.SampleCount,
+				SampleSum:   m.SampleSum,
+				Buckets:     m.Buckets,
+			})
+		default:
+			ms.Metrics = append(ms.Metrics, newSimpleMetric(m.Labels, m.Value))
+		}
+	}
+	return nil
+}
+
 type (
 	// MetricsListReq is used to request the list of metrics.
 	MetricsListReq struct {
+		httpReq
 		Host string // Host to query for telemetry data
 		Port uint32 // Port to use for collecting telemetry data
 	}
@@ -263,7 +381,9 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 		return nil, errors.New("port must be specified")
 	}
 
-	scraped, err := scrapeMetrics(ctx, req.Host, req.Port)
+	req.url = getMetricsURL(req.Host, req.Port)
+
+	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to list metrics")
 	}
@@ -288,6 +408,7 @@ func MetricsList(ctx context.Context, req *MetricsListReq) (*MetricsListResp, er
 type (
 	// MetricsQueryReq is used to query telemetry values.
 	MetricsQueryReq struct {
+		httpReq
 		Host        string   // host to query for telemetry data
 		Port        uint32   // port to use for collecting telemetry data
 		MetricNames []string // if empty, collects all metrics
@@ -313,7 +434,9 @@ func MetricsQuery(ctx context.Context, req *MetricsQueryReq) (*MetricsQueryResp,
 		return nil, errors.New("port must be specified")
 	}
 
-	scraped, err := scrapeMetrics(ctx, req.Host, req.Port)
+	req.url = getMetricsURL(req.Host, req.Port)
+
+	scraped, err := scrapeMetrics(ctx, req)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to query metrics")
 	}

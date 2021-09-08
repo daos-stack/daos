@@ -12,9 +12,9 @@ CRT_LAUNCH = 'crt_launch.c'
 
 def scons():
     """scons function"""
-    Import('env', 'prereqs')
+    Import('base_env', 'prereqs')
 
-    tenv = env.Clone()
+    tenv = base_env.Clone()
 
     libs = ['cart', 'gurt', 'pthread', 'm']
     if not GetOption('help') and not GetOption('clean'):

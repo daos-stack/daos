@@ -12,8 +12,11 @@ SRC = ['debug.c', 'dlog.c', 'hash.c', 'misc.c', 'heap.c', 'errno.c',
 def scons():
     """Scons function"""
 
-    Import('env', 'prereqs', 'CART_VERSION')
+    Import('base_env', 'env', 'prereqs', 'CART_VERSION')
 
+    daos_build.add_build_rpath(base_env)
+    daos_build.add_build_rpath(env)
+    base_env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(LIBPATH=[Dir('.')])
     env.AppendUnique(CPPPATH=[Dir('.').srcnode()])
 

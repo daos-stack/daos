@@ -529,7 +529,7 @@ set_reprobe(vos_iter_type_t type, unsigned int acts,
 			anchors->ia_reprobe_sv = 1;
 		/* fallthrough */
 	case VOS_ITER_RECX:
-		sorted = flags & (VOS_IT_RECX_VISIBLE | VOS_IT_RECX_COVERED);
+		sorted = flags & VOS_IT_RECX_VISIBLE;
 		/* evtree only need reprobe on yield for unsorted iteration */
 		if (!sorted && yield && (type == VOS_ITER_RECX))
 			anchors->ia_reprobe_ev = 1;
@@ -800,8 +800,13 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 		const daos_epoch_range_t *epr, bool ignore_inprogress,
 		vos_iter_cb_t cb, void *arg, struct dtx_handle *dth)
 {
+	struct vos_iter_anchors	*anchors = NULL;
 	vos_iter_param_t	 param = {0};
-	struct vos_iter_anchors	 anchors = {0};
+	int			 rc;
+
+	D_ALLOC_PTR(anchors);
+	if (anchors == NULL)
+		return -DER_NOMEM;
 
 	D_ASSERT(type == VOS_ITER_DKEY || type == VOS_ITER_AKEY);
 	D_ASSERT(daos_handle_is_valid(toh));
@@ -812,9 +817,12 @@ vos_iterate_key(struct vos_object *obj, daos_handle_t toh, vos_iter_type_t type,
 	param.ip_flags = VOS_IT_KEY_TREE;
 	param.ip_dkey.iov_buf = obj;
 
+	rc = vos_iterate_internal(&param, type, false, ignore_inprogress,
+				  anchors, cb, NULL, arg, dth);
 
-	return vos_iterate_internal(&param, type, false, ignore_inprogress,
-				    &anchors, cb, NULL, arg, dth);
+	D_FREE(anchors);
+
+	return rc;
 }
 
 /**

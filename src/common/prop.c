@@ -10,6 +10,9 @@
 #define D_LOGFAC	DD_FAC(common)
 
 #include <daos/common.h>
+#include <daos/cipher.h>
+#include <daos/compression.h>
+#include <daos/multihash.h>
 #include <daos/dtx.h>
 #include <daos_security.h>
 #include <daos/cont_props.h>
@@ -40,8 +43,8 @@ daos_prop_alloc(uint32_t entries_nr)
 	return prop;
 }
 
-static void
-daos_prop_entry_free_value(struct daos_prop_entry *entry)
+bool
+daos_prop_has_str(struct daos_prop_entry *entry)
 {
 	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_LABEL:
@@ -50,21 +53,40 @@ daos_prop_entry_free_value(struct daos_prop_entry *entry)
 	case DAOS_PROP_CO_OWNER:
 	case DAOS_PROP_PO_OWNER_GROUP:
 	case DAOS_PROP_CO_OWNER_GROUP:
-		D_FREE(entry->dpe_str);
-		break;
+		return true;
+	}
+	return false;
+}
+
+bool
+daos_prop_has_ptr(struct daos_prop_entry *entry)
+{
+	switch (entry->dpe_type) {
 	case DAOS_PROP_PO_ACL:
 	case DAOS_PROP_CO_ACL:
 	case DAOS_PROP_CO_ROOTS:
+		return true;
+	}
+	return false;
+}
+
+static void
+daos_prop_entry_free_value(struct daos_prop_entry *entry)
+{
+	if (daos_prop_has_str(entry)) {
+		D_FREE(entry->dpe_str);
+		return;
+	}
+
+	if (daos_prop_has_ptr(entry)) {
 		D_FREE(entry->dpe_val_ptr);
-		break;
-	case DAOS_PROP_PO_SVC_LIST:
+		return;
+	}
+
+	if (entry->dpe_type == DAOS_PROP_PO_SVC_LIST)
 		if (entry->dpe_val_ptr)
 			d_rank_list_free(
 				(d_rank_list_t *)entry->dpe_val_ptr);
-		break;
-	default:
-		break;
-	};
 }
 
 void
@@ -162,21 +184,22 @@ err:
 }
 
 static bool
-daos_prop_str_valid(d_string_t str, const char *prop_name, size_t max_len)
+str_valid(const char *str, const char *prop_name, size_t max_len)
 {
 	size_t len;
 
-	if (str == NULL) {
+	if (unlikely(str == NULL)) {
 		D_ERROR("invalid NULL %s\n", prop_name);
 		return false;
 	}
 	/* Detect if it's longer than max_len */
 	len = strnlen(str, max_len + 1);
 	if (len == 0 || len > max_len) {
-		D_ERROR("invalid %s len=%lu, max=%lu\n",
-			prop_name, len, max_len);
+		D_ERROR("invalid %s len=%lu, max=%lu\n", prop_name, len,
+			max_len);
 		return false;
 	}
+
 	return true;
 }
 
@@ -184,22 +207,14 @@ static bool
 daos_prop_owner_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
-	return daos_prop_str_valid(owner, "owner",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
+	return str_valid(owner, "owner", DAOS_ACL_MAX_PRINCIPAL_LEN);
 }
 
 static bool
 daos_prop_owner_group_valid(d_string_t owner)
 {
 	/* Max length passed in doesn't include the null terminator */
-	return daos_prop_str_valid(owner, "owner-group",
-				   DAOS_ACL_MAX_PRINCIPAL_LEN);
-}
-
-static bool
-daos_prop_label_valid(d_string_t label)
-{
-	return daos_prop_str_valid(label, "label", DAOS_PROP_LABEL_MAX_LEN);
+	return str_valid(owner, "owner-group", DAOS_ACL_MAX_PRINCIPAL_LEN);
 }
 
 /**
@@ -261,9 +276,12 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 		/* pool properties */
 		case DAOS_PROP_PO_LABEL:
 		case DAOS_PROP_CO_LABEL:
-			if (!daos_prop_label_valid(
-				prop->dpp_entries[i].dpe_str))
+			if (!daos_label_is_valid(
+						prop->dpp_entries[i].dpe_str)) {
+				D_ERROR("invalid label \"%s\"\n",
+					prop->dpp_entries[i].dpe_str);
 				return false;
+			}
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
@@ -309,9 +327,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val != DAOS_PROP_CO_LAYOUT_UNKOWN &&
-			    val != DAOS_PROP_CO_LAYOUT_POSIX &&
-			    val != DAOS_PROP_CO_LAYOUT_HDF5) {
+			if (val >= DAOS_PROP_CO_LAYOUT_MAX) {
 				D_ERROR("invalid layout type "DF_U64".\n", val);
 				return false;
 			}
@@ -426,6 +442,7 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 					co_status.dcs_status);
 				return false;
 			}
+			break;
 		case DAOS_PROP_CO_SNAPSHOT_MAX:
 		case DAOS_PROP_CO_ROOTS:
 		case DAOS_PROP_CO_EC_CELL_SZ:
@@ -514,14 +531,14 @@ daos_prop_entry_copy(struct daos_prop_entry *entry,
  * \a pool true for pool properties, false for container properties.
  */
 daos_prop_t *
-daos_prop_dup(daos_prop_t *prop, bool pool)
+daos_prop_dup(daos_prop_t *prop, bool pool, bool input)
 {
 	daos_prop_t		*prop_dup;
 	struct daos_prop_entry	*entry, *entry_dup;
 	int			 i;
 	int			 rc;
 
-	if (!daos_prop_valid(prop, pool, true))
+	if (!daos_prop_valid(prop, pool, input))
 		return NULL;
 
 	prop_dup = daos_prop_alloc(prop->dpp_nr);
@@ -557,6 +574,73 @@ daos_prop_entry_get(daos_prop_t *prop, uint32_t type)
 			return &prop->dpp_entries[i];
 	}
 	return NULL;
+}
+
+int
+daos_prop_set_str(daos_prop_t *prop, uint32_t type, const char *str, daos_size_t len)
+{
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(prop, type);
+	if (entry == NULL)
+		return -DER_NONEXIST;
+
+	return daos_prop_entry_set_str(entry, str, len);
+}
+
+int
+daos_prop_entry_set_str(struct daos_prop_entry *entry, const char *str, daos_size_t len)
+{
+	if (entry == NULL)
+		return -DER_INVAL;
+	if (!daos_prop_has_str(entry)) {
+		D_ERROR("Entry type does not expect a string value\n");
+		return -DER_INVAL;
+	}
+	if (entry->dpe_str != NULL)
+		D_FREE(entry->dpe_str);
+	if (str == NULL || len == 0)
+		return 0;
+
+	D_STRNDUP(entry->dpe_str, str, len);
+	if (entry->dpe_str == NULL)
+		return -DER_NOMEM;
+
+	return 0;
+}
+
+int
+daos_prop_set_ptr(daos_prop_t *prop, uint32_t type, const void *ptr, daos_size_t size)
+{
+	struct daos_prop_entry	*entry;
+
+	entry = daos_prop_entry_get(prop, type);
+	if (entry == NULL)
+		return -DER_NONEXIST;
+
+	return daos_prop_entry_set_ptr(entry, ptr, size);
+}
+
+int
+daos_prop_entry_set_ptr(struct daos_prop_entry *entry, const void *ptr, daos_size_t size)
+{
+	if (entry == NULL)
+		return -DER_INVAL;
+	if (!daos_prop_has_ptr(entry)) {
+		D_ERROR("Entry type does not expect a ptr value\n");
+		return -DER_INVAL;
+	}
+	if (entry->dpe_val_ptr != NULL)
+		D_FREE(entry->dpe_val_ptr);
+	if (ptr == NULL || size == 0)
+		return 0;
+
+	D_ALLOC(entry->dpe_val_ptr, size);
+	if (entry->dpe_val_ptr == NULL)
+		return -DER_NOMEM;
+	memcpy(entry->dpe_val_ptr, ptr, size);
+
+	return 0;
 }
 
 static void
@@ -784,4 +868,166 @@ daos_prop_entry_cmp_acl(struct daos_prop_entry *entry1,
 	}
 
 	return 0;
+}
+
+static int
+parse_entry(char *str, struct daos_prop_entry *entry)
+{
+	char	*name;
+	char	*val;
+	char	*end_token = NULL;
+	int	rc = 0;
+
+	/** get prop_name */
+	name = strtok_r(str, ":", &end_token);
+	if (name == NULL)
+		return -DER_INVAL;
+	/** get prop value */
+	val = strtok_r(NULL, ";", &end_token);
+	if (val == NULL)
+		return -DER_INVAL;
+
+	if (strcmp(name, DAOS_PROP_ENTRY_LABEL) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_LABEL;
+		rc = daos_prop_entry_set_str(entry, val, DAOS_PROP_LABEL_MAX_LEN);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_CKSUM) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_CSUM;
+		rc = daos_str2csumcontprop(val);
+		if (rc < 0)
+			return rc;
+		entry->dpe_val = rc;
+		rc = 0;
+	} else if (strcmp(name, DAOS_PROP_ENTRY_CKSUM_SIZE) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
+		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_SRV_CKSUM) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_CSUM_SERVER_VERIFY;
+		if (strcmp(val, "on") == 0)
+			entry->dpe_val = DAOS_PROP_CO_CSUM_SV_ON;
+		else if (strcmp(val, "off") == 0)
+			entry->dpe_val = DAOS_PROP_CO_CSUM_SV_OFF;
+		else
+			rc = -DER_INVAL;
+	} else if (strcmp(name, DAOS_PROP_ENTRY_DEDUP) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_DEDUP;
+		if (strcmp(val, "off") == 0)
+			entry->dpe_val = DAOS_PROP_CO_DEDUP_OFF;
+		else if (strcmp(val, "memcmp") == 0)
+			entry->dpe_val = DAOS_PROP_CO_DEDUP_MEMCMP;
+		else if (strcmp(val, "hash") == 0)
+			entry->dpe_val = DAOS_PROP_CO_DEDUP_HASH;
+		else
+			rc = -DER_INVAL;
+	} else if (strcmp(name, DAOS_PROP_ENTRY_DEDUP_THRESHOLD) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_DEDUP_THRESHOLD;
+		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_COMPRESS) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_COMPRESS;
+		rc = daos_str2compresscontprop(val);
+		if (rc < 0)
+			return rc;
+		entry->dpe_val = rc;
+		rc = 0;
+	} else if (strcmp(name, DAOS_PROP_ENTRY_ENCRYPT) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_ENCRYPT;
+		rc = daos_str2encryptcontprop(val);
+		if (rc < 0)
+			return rc;
+		entry->dpe_val = rc;
+		rc = 0;
+	} else if (strcmp(name, DAOS_PROP_ENTRY_REDUN_FAC) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_REDUN_FAC;
+		if (!strcmp(val, "0"))
+			entry->dpe_val = DAOS_PROP_CO_REDUN_RF0;
+		else if (!strcmp(val, "1"))
+			entry->dpe_val = DAOS_PROP_CO_REDUN_RF1;
+		else if (!strcmp(val, "2"))
+			entry->dpe_val = DAOS_PROP_CO_REDUN_RF2;
+		else if (!strcmp(val, "3"))
+			entry->dpe_val = DAOS_PROP_CO_REDUN_RF3;
+		else if (!strcmp(val, "4"))
+			entry->dpe_val = DAOS_PROP_CO_REDUN_RF4;
+		else {
+			D_ERROR("presently supported redundancy factors (rf) are [0-4]\n");
+			rc = -DER_INVAL;
+		}
+	} else if (strcmp(name, DAOS_PROP_ENTRY_EC_CELL_SZ) == 0) {
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+		entry->dpe_val = strtoull(val, NULL, 0);
+	} else if (strcmp(name, DAOS_PROP_ENTRY_LAYOUT_TYPE) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_LAYOUT_VER) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_REDUN_LVL) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_SNAPSHOT_MAX) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_ALLOCED_OID) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_STATUS) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_OWNER) == 0 ||
+		   strcmp(name, DAOS_PROP_ENTRY_GROUP) == 0) {
+		D_ERROR("Property %s is read only\n", name);
+		rc = -DER_INVAL;
+	} else {
+		D_ERROR("Property %s is invalid\n", name);
+		rc = -DER_INVAL;
+	}
+
+	return rc;
+}
+
+int
+daos_prop_from_str(const char *str, daos_size_t len, daos_prop_t **_prop)
+{
+	daos_prop_t	*prop = NULL;
+	char		*save_prop = NULL;
+	char		*t;
+	char		*local;
+	uint32_t	n;
+	int		rc = 0;
+
+	if (str == NULL || len == 0 || _prop == NULL)
+		return -DER_INVAL;
+
+	/** count how many properties we have in str */
+	D_STRNDUP(local, str, len);
+	if (!local)
+		return -DER_NOMEM;
+	n = 0;
+	if (strtok_r(local, ";", &save_prop) != NULL) {
+		n++;
+		while (strtok_r(NULL, ";", &save_prop) != NULL)
+			n++;
+	}
+	D_FREE(local);
+
+	if (n == 0) {
+		D_ERROR("Invalid property format %s\n", str);
+		return -DER_INVAL;
+	}
+
+	/** allocate a property with the number of entries needed */
+	prop = daos_prop_alloc(n);
+	if (prop == NULL)
+		return -DER_NOMEM;
+
+	D_STRNDUP(local, str, len);
+	if (!local)
+		D_GOTO(err_prop, rc = -DER_NOMEM);
+
+	/** get a prop_name:value pair */
+	t = strtok_r(local, ";", &save_prop);
+
+	n = 0;
+	while (t != NULL) {
+		rc = parse_entry(t, &prop->dpp_entries[n]);
+		if (rc)
+			D_GOTO(err_prop, rc);
+		t = strtok_r(NULL, ";", &save_prop);
+		n++;
+	}
+
+	*_prop = prop;
+out:
+	D_FREE(local);
+	return rc;
+err_prop:
+	daos_prop_free(prop);
+	goto out;
 }
