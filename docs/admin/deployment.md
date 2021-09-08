@@ -888,6 +888,39 @@ Refer to the example configuration file (
 [`daos_agent.yml`](https://github.com/daos-stack/daos/blob/master/utils/config/daos_agent.yml)
 ) for latest information and examples.
 
+#### Defining fabric interfaces manually
+
+By default, the DAOS agent automatically detects all fabric interfaces on the
+client node. It selects an appropriate one for DAOS I/O based on the NUMA node
+of the client request and the interface type preferences reported by the DAOS
+management service.
+
+If the DAOS agent does not detect the fabric interfaces correctly, the
+administrator may define them manually in the agent configuration. They must be
+organized by NUMA node. If using the verbs provider, the interface domain is
+also required.
+
+Example:
+```
+fabric_ifaces:
+  - numa_node: 0
+    devices:
+    -
+      - iface: ib0
+      - domain: mlx5_0
+    -
+      - iface: ib1
+      - domain: mlx5_1
+  - numa_node: 1
+    devices:
+    -
+      - iface: ib2
+      - domain: mlx5_2
+    -
+      - iface: ib3
+      - domain: mlx5_3
+```
+
 ### Agent Startup
 
 DAOS Agent is a standalone application to be run on each compute node.
