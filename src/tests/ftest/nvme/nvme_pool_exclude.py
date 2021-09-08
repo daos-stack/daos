@@ -79,6 +79,11 @@ class NvmePoolExclude(OSAUtils):
             self.add_container(self.pool)
             self.cont_list.append(self.container)
             for test in self.ior_test_sequence:
+                # Set chunksize for EC object class.
+                # Blocksize and Transfer size are updated under osa_utils.py.
+                if oclass.startswith("EC") and test[4] is not None:
+                    self.ior_cmd.get_params(self)
+                    self.ior_cmd.dfs_chunk.update(test[4])
                 threads = []
                 threads.append(threading.Thread(target=self.run_ior_thread,
                                                 kwargs={"action": "Write",
@@ -133,3 +138,19 @@ class NvmePoolExclude(OSAUtils):
         :avocado: tags=nvme_pool_exclude
         """
         self.run_nvme_pool_exclude(1)
+
+    def test_nvme_pool_exclude_with_ec_class(self):
+        """Test ID: DAOS-7338
+        Test Description: This method is called from
+        the avocado test infrastructure. This method invokes
+        NVME pool exclude testing on multiple pools.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,checksum,nvme_osa
+        :avocado: tags=nvme_pool_exclude_with_ec_class
+        """
+        self.log.info("NVME Pool Exclude : EC Object Class")
+        test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        for oclass in test_oclass:
+            self.run_nvme_pool_exclude(1, oclass=oclass)

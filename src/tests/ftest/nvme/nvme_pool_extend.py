@@ -10,7 +10,7 @@ import threading
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
 from dmg_utils import check_system_query_status
-from apricot import skipForTicket
+# from apricot import skipForTicket
 
 
 class NvmePoolExtend(OSAUtils):
@@ -33,6 +33,8 @@ class NvmePoolExtend(OSAUtils):
         self.daos_command = self.get_daos_command()
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
+        self.ec_ior_test_sequence = self.params.get("ec_ior_test_sequence",
+                                                    '/run/ior/iorflags/*')
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
                                              "/run/extra_servers/*")
@@ -63,7 +65,12 @@ class NvmePoolExtend(OSAUtils):
         # On each pool (max 3), extend the ranks
         # eg: ranks : 4,5 ; 6,7; 8,9.
         for val in range(0, num_pool):
-            test = self.ior_test_sequence[val]
+            if oclass.startswith("EC"):
+                test = self.ec_ior_test_sequence[val]
+                self.ior_cmd.get_params(self)
+                self.ior_cmd.dfs_chunk.update(test[4])
+            else:
+                test = self.ior_test_sequence[val]
             threads = []
             threads.append(threading.Thread(target=self.run_ior_thread,
                                             kwargs={"action": "Write",
@@ -118,7 +125,7 @@ class NvmePoolExtend(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7195")
+    # @skipForTicket("DAOS-7195")
     def test_nvme_pool_extend(self):
         """Test ID: DAOS-2086
         Test Description: NVME Pool Extend
@@ -129,3 +136,17 @@ class NvmePoolExtend(OSAUtils):
         :avocado: tags=nvme_pool_extend
         """
         self.run_nvme_pool_extend(3)
+
+    def test_nvme_pool_extend_with_ec_class(self):
+        """Test ID: DAOS-2086
+        Test Description: NVME Pool Extend
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=nvme,checksum,nvme_osa
+        :avocado: tags=nvme_pool_extend_with_ec_class
+        """
+        self.log.info("NVME Pool Extend : EC Object Class")
+        test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        for oclass in test_oclass:
+            self.run_nvme_pool_extend(2, oclass=oclass)
