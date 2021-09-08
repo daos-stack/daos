@@ -1341,6 +1341,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				cond_flags |= VOS_OF_DEDUP_VERIFY;
 		}
 
+		if (orw->orw_flags & ORF_EC)
+			cond_flags |= VOS_OF_EC;
+
 		rc = vos_update_begin(ioc->ioc_vos_coh, orw->orw_oid,
 			      orw->orw_epoch, cond_flags, dkey,
 			      orw->orw_nr, iods, iod_csums,
@@ -3940,6 +3943,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			if (ioc->ioc_coc->sc_props.dcp_dedup_verify)
 				update_flags |= VOS_OF_DEDUP_VERIFY;
 		}
+		if (dcu->dcu_flags & ORF_EC)
+			update_flags |= VOS_OF_EC;
 
 		rc = vos_update_begin(ioc->ioc_vos_coh,
 				dcsr->dcsr_oid, dcsh->dcsh_epoch.oe_value,
