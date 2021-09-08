@@ -89,6 +89,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # List of local test paths to create and remove
         self.posix_local_test_paths = []
 
+        # path to read and write container properties to/from hdf5 file
+        self.preserve_props_path = None
+
         # List of shared test paths to create and remove
         self.posix_shared_test_paths = []
 
@@ -833,7 +836,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # First, initialize a new fs copy command
         self.fs_copy_cmd = FsCopy(self.daos_cmd, self.log)
 
-	# set preserve-props path if it was used in test case
+        # set preserve-props path if it was used in test case
         if self.preserve_props_path:
             self.fs_copy_cmd.set_fs_copy_params(preserve_props=self.preserve_props_path)
 

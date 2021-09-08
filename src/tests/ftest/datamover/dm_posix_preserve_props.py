@@ -57,14 +57,14 @@ class DmvrPreserveProps(DataMoverTestBase):
         pool1 = self.create_pool()
         pool1.connect(2)
 
-	# set the path to read and write container properties
+        # set the path to read and write container properties
         self.preserve_props_path = self.tmp + "/cont_props.h5"
 
         # Create a source cont
         cont1 = self.create_cont(pool1, cont_type=cont_type)
 
         # Create source data
-        self.write_cont(cont1)
+        src_props = self.write_cont(cont1)
 
         # Create a posix source path
         posix_path = join(self.new_posix_test_path(), self.test_file)
@@ -84,7 +84,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         cont2_uuid = self.parse_create_cont_uuid(result.stdout_text)
         cont2 = self.get_cont(pool1, cont2_uuid)
         cont2.type.update(cont1.type.value, "type")
-        self.verify_cont(cont2, api, False)
+        self.verify_cont(cont2, api, True, src_props)
 
         pool1.disconnect()
 
@@ -178,7 +178,7 @@ class DmvrPreserveProps(DataMoverTestBase):
         # Make sure each property matches
         for prop_idx, prop in enumerate(prop_list):
             # This one is not set
-            if api == "DFS" and "OID" in prop_list[prop_idx]:
+            if api == "DFS" and ("OID" or "ROOTS") in prop_list[prop_idx]:
                 continue
             if prop != actual_list[prop_idx]:
                 self.log.info("Expected\n%s\nbut got\n%s\n",

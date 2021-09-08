@@ -8,18 +8,8 @@
 
 /* for user attr dataset */
 struct usr_attr {
-    char    *attr_name;
-    hvl_t   attr_val;
-};
-
-/* struct obj_id type defined for hdf5 attribute. The DAOS_PROP_CO_ROOTS
- * points to an array of daos_obj_id_t, which is a struct that contains
- * hi, lo uint64_t's. In order to write these to an hdf5 file a similar
- * type has to be defined to describe/store it to hdf5
- */
-struct obj_id {
-    uint64_t hi;
-    uint64_t lo;
+	char *attr_name;
+	hvl_t attr_val;
 };
 
 int
@@ -28,13 +18,11 @@ serialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_s
 	int				rc = 0;
 	hid_t				status = 0;
 	struct daos_prop_co_roots	*roots;
-	struct obj_id			root_oids[4];
 	hsize_t				attr_dims[1];
 	/* HDF5 returns non-negative identifiers if successfully opened/created */
 	hid_t				attr_dtype = -1;
 	hid_t				attr_dspace = -1;
 	hid_t				usr_attr = -1;
-	int				i = 0;
 
 	if (entry == NULL || entry->dpe_val_ptr == NULL)
 		D_GOTO(out, rc = -DER_INVAL);
@@ -42,30 +30,25 @@ serialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_s
 	roots = entry->dpe_val_ptr;
 	attr_dims[0] = 4;
 
-	for (i = 0; i < 4; i++) {
-		root_oids[i].hi = roots->cr_oids[i].hi;
-		root_oids[i].lo = roots->cr_oids[i].lo;
-	}
-
-	attr_dtype = H5Tcreate(H5T_COMPOUND, sizeof(struct obj_id));
+	attr_dtype = H5Tcreate(H5T_COMPOUND, sizeof(daos_obj_id_t));
 	if (attr_dtype < 0) {
 		D_ERROR("failed to create attribute datatype");
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	status = H5Tinsert(attr_dtype, "hi", HOFFSET(struct obj_id, hi), H5T_NATIVE_UINT64);
-	if (status < 0) {
-		D_ERROR("failed to insert oid hi");
-		D_GOTO(out, rc = -DER_MISC);
-	}
-	status = H5Tinsert(attr_dtype, "lo", HOFFSET(struct obj_id, lo), H5T_NATIVE_UINT64);
+	status = H5Tinsert(attr_dtype, "lo", HOFFSET(daos_obj_id_t, lo), H5T_NATIVE_UINT64);
 	if (status < 0) {
 		D_ERROR("failed to insert oid low");
+		D_GOTO(out, rc = -DER_MISC);
+	}
+	status = H5Tinsert(attr_dtype, "hi", HOFFSET(daos_obj_id_t, hi), H5T_NATIVE_UINT64);
+	if (status < 0) {
+		D_ERROR("failed to insert oid high");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 
 	attr_dspace = H5Screate_simple(1, attr_dims, NULL);
 	if (attr_dspace < 0) {
-		D_ERROR("failed to create version attribute");
+		D_ERROR("failed to create attribute dataspace");
 		D_GOTO(out, rc = -DER_MISC);
 	}
 	usr_attr = H5Acreate2(file_id, prop_str, attr_dtype, attr_dspace, H5P_DEFAULT, H5P_DEFAULT);
@@ -73,7 +56,7 @@ serialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop_s
 		D_ERROR("failed to create attribute");
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	status = H5Awrite(usr_attr, attr_dtype, root_oids);
+	status = H5Awrite(usr_attr, attr_dtype, roots->cr_oids);
 	if (status < 0) {
 		D_ERROR("failed to write attribute");
 		D_GOTO(out, rc = -DER_MISC);
@@ -614,9 +597,7 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 {
 	hid_t				status = 0;
 	int				rc = 0;
-	int				i = 0;
 	int				ndims = 0;
-	struct obj_id			*root_oids = NULL;
 	htri_t				roots_exist;
 	hid_t				cont_attr = -1;
 	hid_t				attr_dtype = -1;
@@ -661,30 +642,24 @@ deserialize_roots(hid_t file_id, struct daos_prop_entry *entry, const char *prop
 		D_ERROR("failed to get dimensions of dataspace\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	D_ALLOC(root_oids, attr_dims[0] * sizeof(struct obj_id));
-	if (root_oids == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
 	D_ALLOC(roots, sizeof(struct daos_prop_co_roots));
-	if (root_oids == NULL)
+	if (roots == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	status = H5Aread(cont_attr, attr_dtype, root_oids);
+	status = H5Aread(cont_attr, attr_dtype, roots->cr_oids);
 	if (status < 0) {
 		D_ERROR("failed to read property attribute %s\n", prop_str);
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	for (i = 0; i < 4; i++) {
-		roots->cr_oids[i].hi = root_oids[i].hi;
-		roots->cr_oids[i].lo = root_oids[i].lo;
-	}
-	entry->dpe_val_ptr = roots;
+	entry->dpe_val_ptr = (void *)roots;
 out:
+	if (rc != 0)
+		D_FREE(roots);
 	if (cont_attr >= 0)
 		status = H5Aclose(cont_attr);
 	if (attr_dtype >= 0)
 		status = H5Tclose(attr_dtype);
 	if (attr_dspace >= 0)
 		status = H5Sclose(attr_dspace);
-	D_FREE(root_oids);
 	return rc;
 }
 
