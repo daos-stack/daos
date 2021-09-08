@@ -1665,8 +1665,11 @@ obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 		return -DER_NO_PERM;
 	}
 
-	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled)
+	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled) {
+		D_ERROR("cont hdl "DF_UUID" exceeds rf\n",
+			DP_UUID(coh->sch_uuid));
 		return -DER_RF;
+	}
 
 	return 0;
 }
