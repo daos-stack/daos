@@ -5,7 +5,7 @@
  */
 #include <semaphore.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 #include "test_ep_cred_common.h"
 
 static void
@@ -22,8 +22,8 @@ test_run(d_rank_t my_rank)
 	opt.cio_use_credits = 1;
 	opt.cio_ep_credits = test.tg_credits;
 
-	tc_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx,
-			   &test.tg_tid, &grp, &grp_size, &opt);
+	crtu_srv_start_basic(test.tg_local_group_name, &test.tg_crt_ctx,
+			     &test.tg_tid, &grp, &grp_size, &opt);
 
 	DBG_PRINT("Server started, grp_size = %d\n", grp_size);
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
@@ -76,7 +76,7 @@ main(int argc, char **argv)
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(my_rank, 40, true, true);
+	crtu_test_init(my_rank, 40, true, true);
 
 	test_run(my_rank);
 

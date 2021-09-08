@@ -26,7 +26,7 @@ func TestTelemetry_GetTimestamp(t *testing.T) {
 	if !ok {
 		t.Fatal("real timestamp not in metrics set")
 	}
-	timeName := realTime.Name
+	timeName := realTime.FullPath()
 
 	for name, tc := range map[string]struct {
 		ctx        context.Context
@@ -46,7 +46,7 @@ func TestTelemetry_GetTimestamp(t *testing.T) {
 		},
 		"bad type": {
 			ctx:        testCtx,
-			metricName: testMetrics[MetricTypeGauge].Name,
+			metricName: testMetrics[MetricTypeGauge].FullPath(),
 			expErr:     errors.New("not a timestamp"),
 		},
 		"success": {
@@ -71,8 +71,8 @@ func TestTelemetry_GetTimestamp(t *testing.T) {
 				// guarantee it's in a reasonable range
 				val := result.Value()
 				createTime := time.Unix(int64(tc.expResult.Cur), 0)
-				common.AssertTrue(t, val == createTime || val.After(createTime), fmt.Sprintf("value %v too early", val))
-				common.AssertTrue(t, val == time.Now() || val.Before(time.Now()), fmt.Sprintf("value %v too late", val))
+				common.AssertTrue(t, val.Equal(createTime) || val.After(createTime), fmt.Sprintf("value %v too early", val))
+				common.AssertTrue(t, val.Equal(time.Now()) || val.Before(time.Now()), fmt.Sprintf("value %v too late", val))
 
 				common.AssertEqual(t, float64(val.Unix()), result.FloatValue(), "expected float value and time value equal")
 			} else {

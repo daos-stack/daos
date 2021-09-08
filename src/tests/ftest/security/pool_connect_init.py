@@ -4,13 +4,11 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
 import os
 import traceback
 
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from test_utils_pool import TestPool
 
 
 class PoolSecurityTest(TestWithServers):
@@ -20,7 +18,7 @@ class PoolSecurityTest(TestWithServers):
     :avocado: recursive
     """
 
-    def test_poolconnect(self):
+    def test_pool_connect(self):
         """
         Test basic pool security in pool creation and connect.
         DAOS-2930: DAOS security: initial tests pool creation with default
@@ -32,15 +30,15 @@ class PoolSecurityTest(TestWithServers):
                                       (permission denied with error -1001)
            Above 3 testcases are defined in the yaml file.
 
-        :avocado: tags=all,daily_regression,full_regression,small,pool
-        :avocado: tags=sec_basic,security
+        :avocado: tags=all,daily_regression
+        :avocado: tags=small
+        :avocado: tags=pool,sec_basic,security
         """
         der_no_permission = "RC: -1001"
         user_uid = os.geteuid()
         user_gid = os.getegid()
 
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
 
         uid, gid, expected = self.params.get("ids", "/run/pool/tests/*")
 

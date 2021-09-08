@@ -112,7 +112,7 @@ class LogLine():
     re_pid = re.compile(r"pid=(\d+)")
 
     # Match a truncated uuid from DF_UUID
-    re_uuid = re.compile(r"[0-9a-f]{8}(:?)")
+    re_uuid = re.compile(r"[0-9a-f]{8}(:|\,?)")
     # Match a truncated uuid[rank] from DF_DB
     re_uuid_rank = re.compile(r"[0-9,a-f]{8}\[\d+\](:?)")
     # Match from DF_UIOD
@@ -187,13 +187,13 @@ class LogLine():
             try:
                 (filename, _) = self._fields[0].split(':')
                 return filename
-            except ValueError:
+            except (IndexError, ValueError):
                 pass
         elif attr == 'lineno':
             try:
                 (_, lineno) = self._fields[0].split(':')
                 return int(lineno)
-            except ValueError:
+            except (IndexError, ValueError):
                 pass
         raise AttributeError
 
@@ -563,7 +563,7 @@ class LogIter():
 
         index = 0
         for line in self._fd:
-            fields = line.split(' ', 8)
+            fields = line.split(None, 8)
             index += 1
             l_pid = None
             if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
@@ -588,7 +588,7 @@ class LogIter():
         index = 0
         position = 0
         for line in self._fd:
-            fields = line.split(' ', 8)
+            fields = line.split(None, 8)
             index += 1
             l_pid = None
             if len(fields) < 6 or len(fields[0]) != 17:
@@ -669,7 +669,7 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            fields = line.split(' ', 8)
+            fields = line.split(None, 8)
             if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 return LogRaw(line)
             return LogLine(line)

@@ -1181,7 +1181,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 		 * path names are printed in each line of output.
 		 */
 		if (format == D_TM_STANDARD)
-			fprintf(stream, "%-20s\n", name);
+			fprintf(stream, "%-8s\n", name);
 		break;
 	case D_TM_COUNTER:
 		rc = d_tm_get_counter(ctx, &val, node);
@@ -1288,11 +1288,11 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 		return;
 	}
 
-	fprintf(stream, ", min: %lu, max: %lu, mean: %lf, sample size: %lu",
-		stats->dtm_min, stats->dtm_max, stats->mean,
-		stats->sample_size);
+	fprintf(stream, " [min: %lu, max: %lu, avg: %.0lf",
+		stats->dtm_min, stats->dtm_max, stats->mean);
 	if (stats->sample_size > 2)
-		fprintf(stream, ", std dev: %lf", stats->std_dev);
+		fprintf(stream, ", stddev: %.0lf", stats->std_dev);
+	fprintf(stream, ", samples: %lu]", stats->sample_size);
 }
 
 /**
@@ -1475,7 +1475,7 @@ d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value)
 	if (value > dtm_stats->dtm_max)
 		dtm_stats->dtm_max = value;
 
-	if (value < dtm_stats->dtm_min)
+	if (dtm_stats->sample_size == 1 || value < dtm_stats->dtm_min)
 		dtm_stats->dtm_min = value;
 }
 
@@ -1936,7 +1936,6 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 			rc = -DER_NO_SHMEM;
 			goto out;
 		}
-		temp->dtn_metric->dtm_stats->dtm_min = UINT64_MAX;
 	}
 
 	buff_len = 0;
@@ -2757,9 +2756,10 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 }
 
 /**
- * Client function to read the specified counter.
+ * Read the specified counter.
  *
- * \param[in]	ctx	Client context
+ * \param[in]	ctx	The context, indicate whether it is for client
+ *			side use case (non-NULL) or server side (NULL).
  * \param[out]	val	The value of the counter is stored here
  * \param[in]	node	Pointer to the stored metric node
  *
@@ -2776,26 +2776,28 @@ d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	int			 rc;
 
-	if (ctx == NULL || val == NULL || node == NULL)
+	if (val == NULL || node == NULL || node->dtn_metric == NULL)
 		return -DER_INVAL;
-
-	rc = validate_node_ptr(ctx, node, &shmem);
-	if (rc != 0)
-		return rc;
 
 	if (node->dtn_type != D_TM_COUNTER)
 		return -DER_OP_NOT_PERMITTED;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
-	if (metric_data != NULL) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		*val = metric_data->dtm_data.value;
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
+	/* "ctx == NULL" is server side fast version to read the counter. */
+	if (ctx == NULL) {
+		metric_data = node->dtn_metric;
 	} else {
-		return -DER_METRIC_NOT_FOUND;
+		rc = validate_node_ptr(ctx, node, &shmem);
+		if (rc != 0)
+			return rc;
+
+		metric_data = conv_ptr(shmem, node->dtn_metric);
+		if (metric_data == NULL)
+			return -DER_METRIC_NOT_FOUND;
 	}
+
+	d_tm_node_lock(node);
+	*val = metric_data->dtm_data.value;
+	d_tm_node_unlock(node);
 	return DER_SUCCESS;
 }
 

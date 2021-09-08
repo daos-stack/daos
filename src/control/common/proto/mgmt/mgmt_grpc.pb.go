@@ -28,8 +28,6 @@ type MgmtSvcClient interface {
 	LeaderQuery(ctx context.Context, in *LeaderQueryReq, opts ...grpc.CallOption) (*LeaderQueryResp, error)
 	// Create a DAOS pool allocated across a number of ranks
 	PoolCreate(ctx context.Context, in *PoolCreateReq, opts ...grpc.CallOption) (*PoolCreateResp, error)
-	// Resolve a user-friendly DAOS pool id to a UUID.
-	PoolResolveID(ctx context.Context, in *PoolResolveIDReq, opts ...grpc.CallOption) (*PoolResolveIDResp, error)
 	// Destroy a DAOS pool allocated across a number of ranks.
 	PoolDestroy(ctx context.Context, in *PoolDestroyReq, opts ...grpc.CallOption) (*PoolDestroyResp, error)
 	// Evict a DAOS pool's connections.
@@ -112,15 +110,6 @@ func (c *mgmtSvcClient) LeaderQuery(ctx context.Context, in *LeaderQueryReq, opt
 func (c *mgmtSvcClient) PoolCreate(ctx context.Context, in *PoolCreateReq, opts ...grpc.CallOption) (*PoolCreateResp, error) {
 	out := new(PoolCreateResp)
 	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolCreate", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *mgmtSvcClient) PoolResolveID(ctx context.Context, in *PoolResolveIDReq, opts ...grpc.CallOption) (*PoolResolveIDResp, error) {
-	out := new(PoolResolveIDResp)
-	err := c.cc.Invoke(ctx, "/mgmt.MgmtSvc/PoolResolveID", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -329,8 +318,6 @@ type MgmtSvcServer interface {
 	LeaderQuery(context.Context, *LeaderQueryReq) (*LeaderQueryResp, error)
 	// Create a DAOS pool allocated across a number of ranks
 	PoolCreate(context.Context, *PoolCreateReq) (*PoolCreateResp, error)
-	// Resolve a user-friendly DAOS pool id to a UUID.
-	PoolResolveID(context.Context, *PoolResolveIDReq) (*PoolResolveIDResp, error)
 	// Destroy a DAOS pool allocated across a number of ranks.
 	PoolDestroy(context.Context, *PoolDestroyReq) (*PoolDestroyResp, error)
 	// Evict a DAOS pool's connections.
@@ -391,9 +378,6 @@ func (UnimplementedMgmtSvcServer) LeaderQuery(context.Context, *LeaderQueryReq) 
 }
 func (UnimplementedMgmtSvcServer) PoolCreate(context.Context, *PoolCreateReq) (*PoolCreateResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolCreate not implemented")
-}
-func (UnimplementedMgmtSvcServer) PoolResolveID(context.Context, *PoolResolveIDReq) (*PoolResolveIDResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PoolResolveID not implemented")
 }
 func (UnimplementedMgmtSvcServer) PoolDestroy(context.Context, *PoolDestroyReq) (*PoolDestroyResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PoolDestroy not implemented")
@@ -539,24 +523,6 @@ func _MgmtSvc_PoolCreate_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MgmtSvcServer).PoolCreate(ctx, req.(*PoolCreateReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _MgmtSvc_PoolResolveID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PoolResolveIDReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MgmtSvcServer).PoolResolveID(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/mgmt.MgmtSvc/PoolResolveID",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MgmtSvcServer).PoolResolveID(ctx, req.(*PoolResolveIDReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -961,10 +927,6 @@ var MgmtSvc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PoolCreate",
 			Handler:    _MgmtSvc_PoolCreate_Handler,
-		},
-		{
-			MethodName: "PoolResolveID",
-			Handler:    _MgmtSvc_PoolResolveID_Handler,
 		},
 		{
 			MethodName: "PoolDestroy",

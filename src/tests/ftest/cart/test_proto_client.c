@@ -5,7 +5,7 @@
  */
 #include <semaphore.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 #include "test_proto_common.h"
 
 static void
@@ -29,7 +29,7 @@ rpc_cb_common(const struct crt_cb_info *cb_info)
 		sem_post(&test.tg_token_to_proceed);
 		break;
 	case OPC_SHUTDOWN:
-		tc_progress_stop();
+		crtu_progress_stop();
 		sem_post(&test.tg_token_to_proceed);
 		break;
 	default:
@@ -74,11 +74,11 @@ test_run()
 		D_ASSERTF(rc == 0, "crt_group_config_path_set failed %d\n", rc);
 	}
 
-	tc_cli_start_basic(test.tg_local_group_name,
-			   test.tg_remote_group_name,
-			   &grp, &rank_list, &test.tg_crt_ctx,
-			   &test.tg_tid, 1,
-			   test.tg_use_cfg, NULL);
+	crtu_cli_start_basic(test.tg_local_group_name,
+			     test.tg_remote_group_name,
+			     &grp, &rank_list, &test.tg_crt_ctx,
+			     &test.tg_tid, 1,
+			     test.tg_use_cfg, NULL);
 
 	rc = sem_init(&test.tg_token_to_proceed, 0, 0);
 	D_ASSERTF(rc == 0, "sem_init() failed.\n");
@@ -146,7 +146,7 @@ test_run()
 	rc = crt_req_send(rpc_req, rpc_cb_common, NULL);
 	D_ASSERTF(rc == 0, "crt_req_send() failed. rc: %d\n", rc);
 
-	tc_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
+	crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 
 	if (test.tg_my_rank == 0) {
 		rc = crt_req_create(test.tg_crt_ctx, &server_ep,
@@ -157,7 +157,7 @@ test_run()
 		rc = crt_req_send(rpc_req, rpc_cb_common, NULL);
 		D_ASSERTF(rc == 0,
 			  "crt_req_send() failed. rc: %d\n", rc);
-		tc_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
+		crtu_sem_timedwait(&test.tg_token_to_proceed, 61, __LINE__);
 	}
 
 	d_rank_list_free(rank_list);
@@ -172,7 +172,7 @@ test_run()
 			  "crt_group_view_destroy() failed; rc=%d\n", rc);
 	}
 
-	tc_progress_stop();
+	crtu_progress_stop();
 
 	rc = pthread_join(test.tg_tid, NULL);
 	D_ASSERTF(rc == 0, "pthread_join failed. rc: %d\n", rc);
@@ -200,7 +200,7 @@ main(int argc, char **argv)
 	}
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(0, 40, false, true);
+	crtu_test_init(0, 40, false, true);
 
 	test_run();
 

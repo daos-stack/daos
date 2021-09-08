@@ -7,17 +7,19 @@ name: foo
 socket_dir: /foo/bar
 log_mask: DD_DEBUG
 log_file: /path/to/log
-scm_mount: /mnt/daostest
-scm_class: ram
-scm_size: 42
-scm_list:
-- /dev/a
-- /dev/b
-bdev_class: kdev
-bdev_list:
-- /dev/c
-- /dev/d
-bdev_size: 20
+storage:
+- class: ram
+  scm_mount: /mnt/daostest
+  scm_size: 42
+  scm_list:
+  - /dev/a
+  - /dev/b
+- class: kdev
+  bdev_list:
+  - /dev/c
+  - /dev/d
+  bdev_number: 2
+  bdev_size: 20
 provider: foo+bar
 fabric_iface: qib42
 fabric_iface_port: 100

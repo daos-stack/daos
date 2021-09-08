@@ -105,7 +105,21 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		int *tgts, int rank_nr, bool kill,
 		enum REBUILD_TEST_OP_TYPE op_type)
 {
-	int i;
+	int   i;
+	int   rc;
+
+	for (i = 0; i < args_cnt; i++) {
+		daos_pool_info_t	pool_info;
+
+		/* refresh the pool information */
+		rc = test_pool_get_info(args[i], &pool_info);
+		if (rc) {
+			print_message("get pool "DF_UUIDF" info failed: %d\n",
+				      DP_UUID(args[i]->pool.pool_uuid), rc);
+			return;
+		}
+		args[i]->rebuild_pre_pool_ver = pool_info.pi_map_ver;
+	}
 
 	for (i = 0; i < args_cnt; i++)
 		if (args[i]->rebuild_pre_cb)
@@ -151,7 +165,6 @@ rebuild_targets(test_arg_t **args, int args_cnt, d_rank_t *ranks,
 		if (args[i]->rebuild_cb)
 			args[i]->rebuild_cb(args[i]);
 
-	sleep(10); /* make sure the rebuild happens after exclude/add/kill */
 	if (args[0]->myrank == 0 && !args[0]->no_rebuild)
 		test_rebuild_wait(args, args_cnt);
 
@@ -169,6 +182,12 @@ void
 rebuild_single_pool_rank(test_arg_t *arg, d_rank_t failed_rank, bool kill)
 {
 	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, kill, RB_OP_TYPE_FAIL);
+}
+
+void
+reintegrate_single_pool_rank_no_disconnect(test_arg_t *arg, d_rank_t failed_rank)
+{
+	rebuild_targets(&arg, 1, &failed_rank, NULL, 1, false, RB_OP_TYPE_REINT);
 }
 
 void
@@ -609,6 +628,13 @@ write_ec(struct ioreq *req, int index, char *data, daos_off_t off, int size)
 
 	for (i = 0; i < KEY_NR; i++) {
 		req->iod_type = DAOS_IOD_ARRAY;
+
+		sprintf(key, "dkey_small_%d", index);
+		recx.rx_nr = 5;
+		recx.rx_idx = off + i * 10485760;
+		insert_recxs(key, "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, size, req);
+
 		sprintf(key, "dkey_%d", index);
 		recx.rx_nr = size;
 		recx.rx_idx = off + i * 10485760;
@@ -653,8 +679,18 @@ verify_ec(struct ioreq *req, int index, char *verify_data, daos_off_t off,
 		daos_size_t	single_data_size;
 		daos_size_t	iod3_datasize = IOD3_DATA_SIZE * 3;
 		daos_size_t	datasize = size;
+		daos_size_t	small_size = 5;
 
 		req->iod_type = DAOS_IOD_ARRAY;
+
+		sprintf(key, "dkey_small_%d", index);
+		sprintf(key_buf, "a_key");
+		memset(read_data, 0, 5);
+		lookup(key, 1, &akey, &offset, &iod_size,
+		       &read_data, &small_size, DAOS_TX_NONE, req, false);
+		assert_memory_equal(read_data, verify_data, small_size);
+		assert_int_equal(iod_size, 1);
+
 		sprintf(key, "dkey_%d", index);
 		sprintf(key_buf, "a_key");
 		memset(read_data, 0, size);
@@ -983,12 +1019,10 @@ get_killing_rank_by_oid(test_arg_t *arg, daos_obj_id_t oid, int data_nr,
 	while (parity_nr-- > 0)
 		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard--);
 
-	shard = 0;
+	shard = rand() % oca->u.ec.e_k;
 	while (data_nr-- > 0) {
 		ranks[idx++] = get_rank_by_oid_shard(arg, oid, shard);
-		shard = shard + 2;
-		if (shard > oca->u.ec.e_k)
-			break;
+		shard = (shard + 2) % oca->u.ec.e_k;
 	}
 
 	if (ranks_num)
@@ -1042,7 +1076,7 @@ rebuild_small_sub_setup(void **state)
 
 	save_group_state(state);
 	rc = test_setup(state, SETUP_CONT_CONNECT, true,
-			REBUILD_SMALL_POOL_SIZE, 0, NULL);
+			REBUILD_POOL_SIZE, 0, NULL);
 	if (rc)
 		return rc;
 

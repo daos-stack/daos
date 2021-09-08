@@ -8,6 +8,7 @@
 #include <grp.h>
 #include <linux/limits.h>
 #include <json-c/json.h>
+#include <stdlib.h>
 
 #include <daos/common.h>
 #include <daos/tests_lib.h>
@@ -396,6 +397,7 @@ dmg_pool_create(const char *dmg_config_file,
 	FILE			*tmp_file = NULL;
 	daos_mgmt_pool_info_t	pool_info = {};
 	struct json_object	*dmg_out = NULL;
+	bool			 has_label = false;
 	int			fd = -1, rc = 0;
 
 	if (grp != NULL) {
@@ -487,7 +489,28 @@ dmg_pool_create(const char *dmg_config_file,
 					    entry->dpe_str);
 			if (args == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			has_label = true;
 		}
+	}
+
+	if (!has_label) {
+		char	 path[] = "/tmp/test_XXXXXX";
+		int	 tmp_fd;
+		char	*label = &path[5];
+
+		/* pool label is required, generate a unique one randomly */
+		tmp_fd = mkstemp(path);
+		if (tmp_fd < 0) {
+			D_ERROR("failed to generate unique label: %s\n",
+				strerror(errno));
+			D_GOTO(out, rc = d_errno2der(errno));
+		}
+		close(tmp_fd);
+		unlink(path);
+
+		args = cmd_push_arg(args, &argcount, "--label=%s ", label);
+		if (args == NULL)
+			D_GOTO(out, rc = -DER_NOMEM);
 	}
 
 	if (svc != NULL) {
@@ -635,7 +658,8 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 	struct json_object	*targets;
 	int			tgts_len;
 	int			i, j;
-	char		*tmp_var;
+	int			rc;
+	char			*tmp_var;
 
 	for (i = 0; i < dev_length; i++) {
 		dev = json_object_array_get_idx(smd_dev, i);
@@ -653,8 +677,12 @@ parse_device_info(struct json_object *smd_dev, device_list *devices,
 			D_ERROR("unable to extract uuid from JSON\n");
 			return -DER_INVAL;
 		}
-		uuid_parse(json_object_get_string(tmp),
-			   devices[*disks].device_id);
+
+		rc = uuid_parse(json_object_get_string(tmp), devices[*disks].device_id);
+		if (rc != 0) {
+			D_ERROR("failed parsing uuid_str\n");
+			return -DER_INVAL;
+		}
 
 		if (!json_object_object_get_ex(dev, "tgt_ids",
 					       &targets)) {

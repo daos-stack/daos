@@ -120,6 +120,8 @@ struct agg_merge_window {
 	daos_size_t			 mw_flush_thresh;
 	/* Merge window extent */
 	struct evt_extent		 mw_ext;
+	/** Real merge window upper bound */
+	uint64_t			 mw_alloc_hi;
 	/* Physical entries in merge window */
 	d_list_t			 mw_phy_ents;
 	unsigned int			 mw_phy_cnt;
@@ -603,11 +605,31 @@ enqueue:
 	return rm_ent;
 }
 
+static inline bool
+phy_ent_is_removed(struct agg_merge_window *mw, const struct evt_extent *phy_ext,
+		   daos_epoch_t epoch)
+{
+	struct agg_rmv_ent	*rm_ent;
+
+	d_list_for_each_entry(rm_ent, &mw->mw_rmv_ents,
+			      re_link) {
+		struct evt_rect	*rm_rect = &rm_ent->re_rect;
+
+		if (rm_rect->rc_epc == epoch &&
+		    rm_rect->rc_ex.ex_lo <= phy_ext->ex_hi &&
+		    rm_rect->rc_ex.ex_hi >= phy_ext->ex_hi)
+			return true;
+	}
+
+	return false;
+}
+
 static int
 prepare_segments(struct agg_merge_window *mw)
 {
 	struct agg_io_context	*io = &mw->mw_io_ctxt;
 	struct agg_phy_ent	*phy_ent = NULL;
+	struct agg_phy_ent	*first = NULL;
 	struct agg_phy_ent	*temp = NULL;
 	struct agg_lgc_ent	*lgc_ent;
 	struct agg_lgc_seg	*lgc_seg;
@@ -626,8 +648,7 @@ prepare_segments(struct agg_merge_window *mw)
 	 * segments (at most mw_lgc_cnt) and truncated segments (at most
 	 * mw_phy_cnt).
 	 */
-	D_ASSERT(mw->mw_lgc_cnt > 0 || mw->mw_rmv_cnt > 0);
-	D_ASSERT(mw->mw_phy_cnt > 0);
+	D_ASSERT(mw->mw_rmv_cnt > 0 || (mw->mw_phy_cnt > 0 && mw->mw_lgc_cnt > 0));
 	io->ic_seg_cnt = 0;
 	if (mw->mw_lgc_cnt == 0)
 		goto process_physical;
@@ -697,15 +718,10 @@ prepare_segments(struct agg_merge_window *mw)
 	D_ASSERT(io->ic_seg_cnt < io->ic_seg_max);
 
 process_physical:
-	if (mw->mw_csum_support) {
-		cs_len = phy_ent->pe_csum_info.cs_len;
-		cs_type = phy_ent->pe_csum_info.cs_type;
-		chunksize = phy_ent->pe_csum_info.cs_chunksize;
-	}
-
 	/* Generate truncated segments according to physical entries */
 	d_list_for_each_entry_safe(phy_ent, temp, &mw->mw_phy_ents, pe_link) {
-		struct agg_rmv_ent	*rm_ent;
+		if (first == NULL)
+			first = phy_ent; /* Save the first one */
 
 		lgc_seg = &io->ic_segs[io->ic_seg_cnt];
 		ent_in = &lgc_seg->ls_ent_in;
@@ -719,30 +735,15 @@ process_physical:
 		D_ASSERT(ext.ex_lo <= ext.ex_hi);
 		phy_ent->pe_remove = false;
 		if (ext.ex_hi > mw->mw_ext.ex_hi) {
-			/** If a record is covered by a removal record and is
-			 *  contained in the current merge window, it will be
-			 *  removed by aggregation algorithm.  If it extends
-			 *  into next window, and the tail is fully covered
-			 *  by a removal entry, we need to mark the record for
-			 *  removal.
-			 */
-			d_list_for_each_entry(rm_ent, &mw->mw_rmv_ents,
-					      re_link) {
-				struct evt_rect	*rect = &rm_ent->re_rect;
-
-				if (rect->rc_epc != phy_ent->pe_rect.rc_epc ||
-				    rect->rc_ex.ex_lo > ext.ex_hi ||
-				    rect->rc_ex.ex_lo > ext.ex_hi)
-					continue;
-
-				if (rect->rc_ex.ex_hi >= ext.ex_hi) {
-					/** The extent is fully covered after
-					 *  the current merge window, so
-					 *  mark for removal
-					 */
-					phy_ent->pe_remove = true;
-					break;
-				}
+			if (phy_ent_is_removed(mw, &ext, phy_ent->pe_rect.rc_epc)) {
+				/** If a record is covered by a removal record and is
+				 *  contained in the current merge window, it will be
+				 *  removed by aggregation algorithm.  If it extends
+				 *  into next window, and the tail is fully covered
+				 *  by a removal entry, we need to mark the record for
+				 *  removal.
+				 */
+				phy_ent->pe_remove = true;
 			}
 		}
 
@@ -779,7 +780,12 @@ process_physical:
 		io->ic_seg_cnt++;
 		D_ASSERT(io->ic_seg_cnt <= io->ic_seg_max);
 	}
-	if (mw->mw_csum_support) {
+	if (mw->mw_csum_support && io->ic_seg_cnt > 0) {
+		D_ASSERT(first != NULL);
+		cs_len = first->pe_csum_info.cs_len;
+		cs_type = first->pe_csum_info.cs_type;
+		chunksize = first->pe_csum_info.cs_chunksize;
+
 		for (i = 0; i < io->ic_seg_cnt; i++) {
 			lgc_seg = &io->ic_segs[i];
 			ent_in = &lgc_seg->ls_ent_in;
@@ -836,9 +842,13 @@ reserve_segment(struct vos_object *obj, struct agg_io_context *io,
 static inline daos_size_t
 merge_window_size(struct agg_merge_window *mw)
 {
+	struct evt_extent ext;
 	D_ASSERT(mw->mw_ext.ex_hi >= mw->mw_ext.ex_lo);
+	D_ASSERT(mw->mw_alloc_hi >= mw->mw_ext.ex_lo);
 	D_ASSERT(mw->mw_rsize != 0);
-	return evt_extent_width(&mw->mw_ext) * mw->mw_rsize;
+	ext.ex_hi = mw->mw_alloc_hi;
+	ext.ex_lo = mw->mw_ext.ex_lo;
+	return evt_extent_width(&ext) * mw->mw_rsize;
 }
 
 /* Widen biov entry for read extents to range required to verify checksums. */
@@ -1207,7 +1217,7 @@ fill_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	int			 rc = 0;
 
 	if (io->ic_seg_cnt == 0) {
-		/** No logical extents to handle (only removals) */
+		/** No logical extent or truncated physical extent (only removals) */
 		return 0;
 	}
 
@@ -1416,7 +1426,7 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	/* Clear window size */
-	mw->mw_ext.ex_lo = mw->mw_ext.ex_hi = 0;
+	mw->mw_ext.ex_lo = mw->mw_ext.ex_hi = mw->mw_alloc_hi = 0;
 
 	/* Publish NVMe reservations */
 	rc = vos_publish_blocks(obj->obj_cont, &io->ic_nvme_exts, true,
@@ -1462,7 +1472,7 @@ clear_merge_window(struct agg_merge_window *mw)
 {
 	struct agg_phy_ent *phy_ent, *tmp;
 
-	mw->mw_ext.ex_lo = mw->mw_ext.ex_hi = 0;
+	mw->mw_ext.ex_lo = mw->mw_ext.ex_hi = mw->mw_alloc_hi = 0;
 	mw->mw_lgc_cnt = 0;
 	d_list_for_each_entry_safe(phy_ent, tmp, &mw->mw_phy_ents, pe_link) {
 		d_list_del(&phy_ent->pe_link);
@@ -1692,7 +1702,7 @@ enqueue_lgc_ent(struct agg_merge_window *mw, struct evt_extent *lgc_ext,
 	 */
 	if (mw->mw_lgc_cnt == 1)
 		mw->mw_ext.ex_lo = lgc_ext->ex_lo;
-	mw->mw_ext.ex_hi = lgc_ext->ex_hi;
+	mw->mw_ext.ex_hi = mw->mw_alloc_hi = lgc_ext->ex_hi;
 
 	D_DEBUG(DB_EPC, "lgc_ext:"DF_EXT", phy_ext:"DF_RECT", mw:"DF_EXT", "
 		"index:%u\n", DP_EXT(lgc_ext), DP_RECT(&phy_ent->pe_rect),
@@ -1866,25 +1876,6 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 	}
 
 	if (remove) {
-		/** Since this isn't a traditional logical extent, change the
-		 *  lower bound so checks in trigger_flush work
-		 */
-		if (mw->mw_ext.ex_hi >= lgc_ext.ex_lo)
-			lgc_ext.ex_lo = mw->mw_ext.ex_hi + 1;
-	}
-
-	/* Trigger current window flush when reaching threshold */
-	if ((visible || remove) && trigger_flush(mw, &lgc_ext)) {
-		rc = flush_merge_window(ih, mw, false, acts);
-		if (rc) {
-			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
-				DP_EXT(&mw->mw_ext), DP_RC(rc));
-			return rc;
-		}
-		D_ASSERT(merge_window_status(mw) == MW_FLUSHED);
-	}
-
-	if (remove) {
 		struct agg_rmv_ent	*rm_ent;
 
 		/* Enqueue removal record */
@@ -1900,11 +1891,26 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		goto out;
 	}
 
+	/* Trigger current window flush when reaching threshold */
+	if (visible && trigger_flush(mw, &lgc_ext)) {
+		/* The window flush doesn't expect holes caused by removal records */
+		mw->mw_ext.ex_hi = lgc_ext.ex_lo - 1;
+		rc = flush_merge_window(ih, mw, false, acts);
+		if (rc) {
+			D_ERROR("Flush window "DF_EXT" error: "DF_RC"\n",
+				DP_EXT(&mw->mw_ext), DP_RC(rc));
+			return rc;
+		}
+		D_ASSERT(merge_window_status(mw) == MW_FLUSHED);
+	}
+
 	/* Lookup physical entry, enqueue if it doesn't exist */
 	phy_ent = lookup_phy_ent(mw, &phy_ext, entry);
 	if (phy_ent == NULL) {
-		D_ASSERT(phy_ext.ex_lo == lgc_ext.ex_lo);
-
+		if (phy_ext.ex_lo != lgc_ext.ex_lo) {
+			D_ASSERT(!visible && phy_ent_is_removed(mw, &phy_ext, entry->ie_epoch));
+			goto out;
+		}
 		phy_ent = enqueue_phy_ent(mw, &phy_ext, entry,
 					  &entry->ie_biov.bi_addr,
 					  &entry->ie_csum, entry->ie_ver);

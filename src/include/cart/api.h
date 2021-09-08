@@ -1760,8 +1760,18 @@ enum crt_event_type {
 	CRT_EVT_DEAD,
 };
 
+/**
+ * Event handler callback.
+ *
+ * \param[in] rank             rank this event is about
+ * \param[in] incarnation      rank incarnation if \a src is CRT_EVS_SWIM
+ * \param[in] src              event source
+ * \param[in] type             event type
+ * \param[in] arg              arg passed to crt_register_event_cb with this
+ *                             callback
+ */
 typedef void
-(*crt_event_cb) (d_rank_t rank, enum crt_event_source src,
+(*crt_event_cb) (d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		 enum crt_event_type type, void *arg);
 
 /**
@@ -1988,6 +1998,16 @@ crt_group_rank_remove(crt_group_t *group, d_rank_t rank);
  *                              on failure.
  */
 int crt_self_uri_get(int tag, char **uri);
+
+/**
+ * Retrieve incarnation of self.
+ *
+ * \param[out] incarnation      Returned incarnation
+ *
+ * \return                      DER_SUCCESS on success, negative value
+ *                              on failure.
+ */
+int crt_self_incarnation_get(uint64_t *incarnation);
 
 /**
  * Retrieve group information containing ranks and associated uris

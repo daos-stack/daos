@@ -27,7 +27,10 @@ def configure_lustre(denv):
 
 def scons():
     """Execute build"""
-    Import('env')
+    Import('env base_env')
+
+    daos_build.add_build_rpath(base_env)
+    daos_build.add_build_rpath(env)
 
     denv = env.Clone()
 

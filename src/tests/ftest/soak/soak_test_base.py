@@ -25,7 +25,7 @@ from soak_utils import DDHHMMSS_format, add_pools, get_remote_logs, \
     create_ior_cmdline, cleanup_dfuse, create_fio_cmdline, \
     build_job_script, SoakTestError, launch_server_stop_start, get_harassers, \
     create_racer_cmdline, run_event_check, run_monitor_check, \
-    create_mdtest_cmdline, reserved_file_copy, cleanup_dfuse
+    create_mdtest_cmdline, reserved_file_copy, run_metrics_check
 
 
 class SoakTestBase(TestWithServers):
@@ -67,12 +67,6 @@ class SoakTestBase(TestWithServers):
         """Define test setup to be done."""
         self.log.info("<<setUp Started>> at %s", time.ctime())
         super().setUp()
-        # Log the version of rpms being used for this test
-        cmd = "sudo dnf list daos-client"
-        try:
-            _ = run_command(cmd, timeout=30)
-        except DaosTestError as error:
-            self.log.info("No daos rpm package info available %s", error)
         self.username = getuser()
         # Initialize loop param for all tests
         self.loop = 1
@@ -129,6 +123,8 @@ class SoakTestBase(TestWithServers):
         """
         self.log.info("<<preTearDown Started>> at %s", time.ctime())
         errors = []
+        # display final metrics
+        run_metrics_check(self, prefix="final")
         # clear out any jobs in squeue;
         if self.failed_job_id_list:
             job_id = " ".join([str(job) for job in self.failed_job_id_list])
@@ -151,11 +147,7 @@ class SoakTestBase(TestWithServers):
         if self.check_errors:
             errors.extend(self.check_errors)
         # Check if any dfuse mount points need to be cleaned
-        try:
-            cleanup_dfuse(self)
-        except SoakTestError as error:
-            self.log.info("Dfuse cleanup failed with %s", error)
-
+        cleanup_dfuse(self)
         # daos_agent is always started on this node when start agent is false
         if not self.setup_start_agents:
             self.hostlist_clients = [socket.gethostname().split('.', 1)[0]]
@@ -291,14 +283,10 @@ class SoakTestBase(TestWithServers):
                         commands = create_mdtest_cmdline(
                             self, job, pool, ppn, npj)
                     elif "daos_racer" in job:
-                        self.add_cancel_ticket(
-                            "DAOS-7436", "daos_racer pool issue")
-                        # Uncomment the following when DAOS-7436 is fixed
-                        # commands = create_racer_cmdline(self, job, pool)
+                        commands = create_racer_cmdline(self, job)
                     else:
                         raise SoakTestError(
-                            "<<FAILED: Job {} is not supported. ".format(
-                                self.job))
+                            "<<FAILED: Job {} is not supported. ".format(job))
                     jobscript = build_job_script(self, commands, job, npj)
                     job_cmdlist.extend(jobscript)
         return job_cmdlist
@@ -400,6 +388,8 @@ class SoakTestBase(TestWithServers):
                                 offline_harasser, self.pool)
                             # wait 2 minutes to issue next harasser
                             time.sleep(120)
+            # Gather metrics data after jobs complete
+            run_metrics_check(self)
             # check journalctl for events;
             until = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             event_check_messages = run_event_check(self, since, until)
@@ -504,9 +494,6 @@ class SoakTestBase(TestWithServers):
         self.test_name = self.params.get("name", test_param + "*")
         single_test_pool = self.params.get(
             "single_test_pool", test_param + "*", True)
-        self.dmg_command.copy_certificates(
-            get_log_file("daosCA/certs"), self.hostlist_clients)
-        self.dmg_command.copy_configuration(self.hostlist_clients)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
         if harassers:
@@ -553,7 +540,8 @@ class SoakTestBase(TestWithServers):
                 raise SoakTestError(
                     "<<FAILED: Soak directory {} was not removed>>".format(
                         log_dir)) from error
-
+        # Baseline metrics data
+        run_metrics_check(self, prefix="initial")
         # Initialize time
         start_time = time.time()
         self.test_timeout = int(3600 * test_to)

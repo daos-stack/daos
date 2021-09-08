@@ -71,6 +71,8 @@ type fsAttrCmd struct {
 
 	ChunkSize   ChunkSizeFlag `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass ObjClassFlag  `long:"oclass" short:"o" description:"default object class"`
+	DfsPath     string        `long:"dfs-path" short:"H" description:"DFS path relative to root of container, when using pool and container instead of --path and the UNS"`
+	DfsPrefix   string        `long:"dfs-prefix" short:"I" description:"Optional prefix path to the root of the DFS container when using pool and container"`
 }
 
 func (cmd *fsAttrCmd) Execute(_ []string) error {
@@ -80,6 +82,20 @@ func (cmd *fsAttrCmd) Execute(_ []string) error {
 	}
 	defer deallocCmdArgs()
 
+	if cmd.DfsPath != "" {
+		if cmd.Path != "" {
+			return errors.New("Cannot use both --dfs-path and --path")
+		}
+		ap.dfs_path = C.CString(cmd.DfsPath)
+	}
+	if cmd.DfsPrefix != "" {
+		if cmd.Path != "" {
+			return errors.New("Cannot use both --dfs-prefix and --path")
+		}
+		ap.dfs_prefix = C.CString(cmd.DfsPrefix)
+	}
+
+	flags := C.uint(C.DAOS_COO_RW)
 	op := os.Args[2]
 	switch op {
 	case "set-attr":
@@ -92,6 +108,7 @@ func (cmd *fsAttrCmd) Execute(_ []string) error {
 		}
 	case "get-attr":
 		ap.fs_op = C.FS_GET_ATTR
+		flags = C.DAOS_COO_RO
 	case "reset-attr":
 		ap.fs_op = C.FS_RESET_ATTR
 	case "reset-chunk-size":
@@ -110,7 +127,7 @@ func (cmd *fsAttrCmd) Execute(_ []string) error {
 		return errors.Errorf("unknown fs op %q", op)
 	}
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(flags, ap)
 	if err != nil {
 		return err
 	}

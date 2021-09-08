@@ -86,6 +86,28 @@ struct nvme_stats {
 	bool		 dev_reliability_warn;
 	bool		 read_only_warn;
 	bool		 volatile_mem_warn; /*volatile memory backup*/
+	/* Intel vendor unique SMART attributes */
+	/* normalized value, percent remaining of allowable program fails */
+	uint8_t     program_fail_cnt_norm;
+	/* current raw value, total count of program fails */
+	uint64_t    program_fail_cnt_raw;
+	uint8_t     erase_fail_cnt_norm;    /* erase fail count */
+	uint64_t    erase_fail_cnt_raw;
+	uint8_t     wear_leveling_cnt_norm; /* wear leveling count */
+	uint16_t    wear_leveling_cnt_min;
+	uint16_t    wear_leveling_cnt_max;
+	uint16_t    wear_leveling_cnt_avg;
+	uint64_t    endtoend_err_cnt_raw; /* end-to-end error count */
+	uint64_t    crc_err_cnt_raw;      /* CRC error count */
+	uint64_t    media_wear_raw;       /* timed workload, media wear */
+	uint64_t    host_reads_raw;       /* timed workload, host reads */
+	uint64_t    workload_timer_raw;   /* timed workload, timer */
+	uint8_t	    thermal_throttle_status; /* thermal throttle status */
+	uint64_t    thermal_throttle_event_cnt;
+	uint64_t    retry_buffer_overflow_cnt; /* Retry Buffer overflow count */
+	uint64_t    pll_lock_loss_cnt;	  /* PCIe Refclock PLL unlocj count */
+	uint64_t    nand_bytes_written;	/* NAND bytes written, 1count=32MiB) */
+	uint64_t    host_bytes_written; /* Host bytes written, 1count=32MiB) */
 };
 
 /**
