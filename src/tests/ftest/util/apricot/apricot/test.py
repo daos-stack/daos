@@ -743,6 +743,11 @@ class TestWithServers(TestWithoutServers):
             cart_ctl.m.value = message
             cart_ctl.n.value = None
 
+            # Temporary solution until CART-974 lands
+            name = "CRT_PHY_ADDR_STR"
+            if name in os.environ and "verbs" in os.environ["CRT_PHY_ADDR_STR"]:
+                cart_ctl.env = {"OFI_DOMAIN": "mlx5_0"}
+
             for manager in self.agent_managers:
                 # Fetch attachinfo data from server via the agent
                 attachinfo_file = manager.get_attachinfo_file()
