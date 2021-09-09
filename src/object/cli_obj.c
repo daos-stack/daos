@@ -2683,6 +2683,7 @@ shard_task_reset_param(tse_task_t *shard_task, void *arg)
 		tgt = req_tgts->ort_shard_tgts + reset_arg->index;
 		reset_arg->index++;
 	}
+	shard_arg->start_shard = req_tgts->ort_start_shard;
 	shard_auxi_set_param(shard_arg, obj_auxi->map_ver_req,
 			     tgt->st_shard, tgt->st_tgt_id,
 			     &reset_arg->epoch, tgt->st_ec_tgt);
@@ -2788,6 +2789,7 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			shard_auxi_set_param(shard_auxi, map_ver, tgt->st_shard,
 					     tgt->st_tgt_id, epoch,
 					     tgt->st_ec_tgt);
+			shard_auxi->start_shard = req_tgts->ort_start_shard;
 			shard_auxi->shard_io_cb = io_cb;
 			rc = shard_io(obj_task, shard_auxi);
 			return rc;
@@ -4106,6 +4108,11 @@ obj_csum_update(struct dc_object *obj, daos_obj_update_t *args,
 	if (!obj_csum_dedup_candidate(&cont_props, args->iods, args->nr))
 		return 0;
 
+	if (obj_auxi->rw_args.dkey_csum != NULL) {
+		/** already calculated - don't need to do it again */
+		return 0;
+	}
+
 	/** Used to do actual checksum calculations. This prevents conflicts
 	 * between tasks
 	 */
@@ -4407,16 +4414,29 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 			      obj_auxi->reasb_req.tgt_bitmap, map_ver, false,
 			      false, obj_auxi);
 	if (rc != 0) {
-		if (rc == -DER_SHARDS_OVERLAP)
-			obj_addref(obj);
-		obj_comp_cb(task, NULL);
-		if (rc != -DER_SHARDS_OVERLAP)
+		if (rc != -DER_SHARDS_OVERLAP) {
+			int rc1;
+
+			task->dt_result = rc;
+			/* If the task needs to retry, it has to go through registered
+			 * object completion callback, otherwise tse_task_complete()
+			 * will complete the retry task, instead of retrying it.
+			 */
+			rc1 = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
+			if (rc1 != 0) {
+				D_ERROR("update task %p, register_comp_cb "DF_RC"\n",
+					task, DP_RC(rc1));
+				obj_comp_cb(task, NULL);
+			}
 			goto out_task;
+		}
 
 		/* For OSA case, 2 or more shards locate on the same
 		 * VOS target. We will handle such case via internal
 		 * transaction.
 		 */
+		obj_addref(obj);
+		obj_comp_cb(task, NULL);
 		return dc_tx_convert(obj, DAOS_OBJ_RPC_UPDATE, task);
 	}
 
@@ -4428,12 +4448,10 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 		goto out_task;
 	}
 
-	if (!obj_auxi->io_retry) {
-		rc = obj_csum_update(obj, args, obj_auxi);
-		if (rc) {
-			D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
-			goto out_task;
-		}
+	rc = obj_csum_update(obj, args, obj_auxi);
+	if (rc) {
+		D_ERROR("obj_csum_update error: "DF_RC"\n", DP_RC(rc));
+		goto out_task;
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_COMMIT_SYNC))
@@ -5068,17 +5086,30 @@ dc_obj_punch(tse_task_t *task, struct dc_object *obj, struct dtx_epoch *epoch,
 	rc = obj_req_get_tgts(obj, NULL, api_args->dkey, dkey_hash, NIL_BITMAP,
 			      map_ver, false, false, obj_auxi);
 	if (rc != 0) {
-		if (rc == -DER_SHARDS_OVERLAP)
-			obj_addref(obj);
-		obj_comp_cb(task, NULL);
-		if (rc != -DER_SHARDS_OVERLAP)
+		if (rc != -DER_SHARDS_OVERLAP) {
+			int rc1;
+
+			/* If the task needs to retry, it has to go through registered
+			 * object completion callback, otherwise tse_task_complete()
+			 * will complete the retry task, instead of retrying it.
+			 */
+			task->dt_result = rc;
+			rc1 = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
+			if (rc1 != 0) {
+				D_ERROR("update task %p, register_comp_cb "DF_RC"\n",
+					task, DP_RC(rc1));
+				obj_comp_cb(task, NULL);
+			}
 			goto out_task;
+		}
 
 		/* For OSA case, 2 or more shards locate on the same
 		 * VOS target. We will handle such case via internal
 		 * transaction.
 		 */
-		return dc_tx_convert(obj, opc, task);
+		obj_addref(obj);
+		obj_comp_cb(task, NULL);
+		return dc_tx_convert(obj, DAOS_OBJ_RPC_UPDATE, task);
 	}
 
 	rc = tse_task_register_comp_cb(task, obj_comp_cb, NULL, 0);
