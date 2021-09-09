@@ -2578,10 +2578,12 @@ basic_scrubbing_test(void **state, char *scrub_freq)
 	 */
 	setup_from_test_args(&ctx, (test_arg_t *)*state);
 	/* Make scrubbing is running a lot */
-	dmg_pool_set_prop(dmg_config_file, "scrub", "continuous",
-			  ctx.test_arg->pool.pool_uuid);
-	dmg_pool_set_prop(dmg_config_file, "scrub-freq", scrub_freq,
-			  ctx.test_arg->pool.pool_uuid);
+	rc = dmg_pool_set_prop(dmg_config_file, "scrub", "freq",
+			       ctx.test_arg->pool.pool_uuid);
+	assert_success(rc);
+	rc = dmg_pool_set_prop(dmg_config_file, "scrub-freq", scrub_freq,
+			       ctx.test_arg->pool.pool_uuid);
+	assert_success(rc);
 
 	setup_simple_data(&ctx);
 	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC32, false, 1024, oc);
@@ -2609,6 +2611,11 @@ basic_scrubbing_test(void **state, char *scrub_freq)
 	cleanup_data(&ctx);
 }
 
+/*
+ * These scrubbing tests mostly verify that the scrubber can run and
+ * the pool and container can still be destroyed and that nothing catastrophic
+ * happens.
+ */
 static void
 scrubbing_a_lot(void **state)
 {
@@ -2618,7 +2625,7 @@ scrubbing_a_lot(void **state)
 static void
 scrubbing_with_large_sleep(void **state)
 {
-	basic_scrubbing_test(state, "100000");
+	basic_scrubbing_test(state, "1d");
 }
 
 static int
@@ -2725,7 +2732,7 @@ static const struct CMUnitTest csum_tests[] = {
 		  scrubbing_a_lot),
 	CSUM_TEST("DAOS_SCRUBBING01: A basic scrubbing test with a long wait "
 		  "in between. Should still be able to destroy cont and pool",
-		  scrubbing_with_large_sleep)
+		  scrubbing_with_large_sleep),
 };
 
 static int

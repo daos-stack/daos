@@ -450,7 +450,7 @@ require such.  Conditional operations are implemented using a combination of
 existence checks and read timestamps.   The read timestamps enable limited
 MVCC to prevent read/write races and provide serializability guarantees.
 
-<a id="821"><a>
+<a id="821"></a>
 ### VOS Timestamp Cache
 
 VOS maintains an in-memory cache of read and write timestamps in order to
@@ -760,6 +760,25 @@ objects, the vos_iter API is used to mark objects as corrupt. The
 vos_iter_process() will take the iter handle that the corruptions was discovered
 on and will call into the btree/evtree to update the durable format structure
 that contains the bio_addr.
+
+### Checksum Scrubbing
+
+The main pool target scrubbing functionality is in VOS and relies heavily on
+vos_iterate. The reason it is currently in VOS is so that it can use
+the bio_read function. Getting the bio context for bio_read is currently
+internal to VOS, but if this changes, then this module might be removed from
+VOS into the pool layer as there are no other dependencies to VOS internals.
+
+There are two layers of vos iteration. First is to iterate over each container.
+Then, for each container and if checksums is enabled, vos_iterate is used again
+to iterate over all objects in the container recursively. When the sv or ev
+trees are reached, the scrubber will read the data (using bio_read),
+calculate a checksum using the injected daos_csummer (via the scrub_ctx),
+and compare to the checksum stored in the entry of the iterator.
+
+Yield, sleep, and drain are other callbacks injected from the server so that
+the scrubber can yield/sleep as necessary, and if corruption is detected,
+drain the target.
 
 <a id="80"></a>
 

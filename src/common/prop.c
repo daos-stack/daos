@@ -324,16 +324,19 @@ daos_prop_valid(daos_prop_t *prop, bool pool, bool input)
 			break;
 		case DAOS_PROP_PO_SVC_LIST:
 			break;
-		case DAOS_PROP_PO_SCRUB_SCHED:
+		case DAOS_PROP_PO_SCRUB_MODE:
 			val = prop->dpp_entries[i].dpe_val;
-			if (val >= DAOS_SCRUB_SCHED_INVALID)
+			if (val >= DAOS_SCRUB_MODE_INVALID)
 				return false;
 			break;
 		case DAOS_PROP_PO_SCRUB_FREQ:
 			/* accepting any number of seconds for now */
 			break;
-		case DAOS_PROP_PO_SCRUB_CREDITS:
-			/* accepting any number of credits for now */
+		case DAOS_PROP_PO_SCRUB_RATE:
+			/* accepting any number of milliseconds for now */
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			/* accepting any number of events for now */
 			break;
 		/* container-only properties */
 		case DAOS_PROP_CO_LAYOUT_TYPE:

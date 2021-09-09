@@ -524,8 +524,8 @@ pool_properties(void **state)
 	D_STRNDUP(arg->pool_label, label, DAOS_PROP_LABEL_MAX_LEN);
 	assert_ptr_not_equal(arg->pool_label, NULL);
 
-	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SCRUB_SCHED;
-	prop->dpp_entries[1].dpe_val = DAOS_SCRUB_SCHED_CONTINUOUS;
+	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_SCRUB_MODE;
+	prop->dpp_entries[1].dpe_val = DAOS_SCRUB_MODE_FREQ;
 
 #if 0 /* DAOS-5456 space_rb props not supported with dmg pool create */
 	/* change daos_prop_alloc() above, specify 2 entries not 1 */
@@ -607,8 +607,8 @@ pool_properties(void **state)
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 
-	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_SCHED);
-	if (entry == NULL || entry->dpe_val != DAOS_SCRUB_SCHED_OFF)
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_MODE);
+	if (entry == NULL || entry->dpe_val != DAOS_SCRUB_MODE_OFF)
 		fail_msg("scrubber sched verification failed.\n");
 
 	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_FREQ);
@@ -617,9 +617,15 @@ pool_properties(void **state)
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 
-	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_CREDITS);
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_RATE);
 	if (entry == NULL) {
-		print_message("scrubber credits verification failed.\n");
+		print_message("scrubber padding verification failed.\n");
+		assert_int_equal(rc, 1); /* fail the test */
+	}
+
+	entry = daos_prop_entry_get(prop_query, DAOS_PROP_PO_SCRUB_THRESH);
+	if (entry == NULL) {
+		print_message("scrubber threshold verification failed.\n");
 		assert_int_equal(rc, 1); /* fail the test */
 	}
 

@@ -191,14 +191,17 @@ pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop)
 		case DAOS_PROP_PO_OWNER_GROUP:
 			bits |= DAOS_PO_QUERY_PROP_OWNER_GROUP;
 			break;
-		case DAOS_PROP_PO_SCRUB_SCHED:
-			bits |= DAOS_PO_QUERY_PROP_SCRUB_SCHED;
+		case DAOS_PROP_PO_SCRUB_MODE:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_MODE;
 			break;
 		case DAOS_PROP_PO_SCRUB_FREQ:
 			bits |= DAOS_PO_QUERY_PROP_SCRUB_FREQ;
 			break;
-		case DAOS_PROP_PO_SCRUB_CREDITS:
-			bits |= DAOS_PO_QUERY_PROP_SCRUB_CRED;
+		case DAOS_PROP_PO_SCRUB_RATE:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_RATE;
+			break;
+		case DAOS_PROP_PO_SCRUB_THRESH:
+			bits |= DAOS_PO_QUERY_PROP_SCRUB_THRESH;
 			break;
 		default:
 			D_ERROR("ignore bad dpt_type %d.\n", entry->dpe_type);

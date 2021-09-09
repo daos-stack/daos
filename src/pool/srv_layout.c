@@ -27,9 +27,10 @@ RDB_STRING_KEY(ds_pool_prop_, owner);
 RDB_STRING_KEY(ds_pool_prop_, owner_group);
 RDB_STRING_KEY(ds_pool_prop_, connectable);
 RDB_STRING_KEY(ds_pool_prop_, nhandles);
-RDB_STRING_KEY(ds_pool_prop_, scrub_sched);
+RDB_STRING_KEY(ds_pool_prop_, scrub_mode);
 RDB_STRING_KEY(ds_pool_prop_, scrub_freq);
-RDB_STRING_KEY(ds_pool_prop_, scrub_cred);
+RDB_STRING_KEY(ds_pool_prop_, scrub_rate);
+RDB_STRING_KEY(ds_pool_prop_, scrub_thresh);
 /** pool handle KVS */
 RDB_STRING_KEY(ds_pool_prop_, handles);
 RDB_STRING_KEY(ds_pool_prop_, ec_cell_sz);
@@ -69,14 +70,17 @@ struct daos_prop_entry pool_prop_entries_default[DAOS_PROP_PO_NUM] = {
 		/* TODO: change it to DAOS_EC_CELL_DEF in a separate patch */
 		.dpe_val	= DAOS_EC_CELL_MAX,
 	}, {
-		.dpe_type	= DAOS_PROP_PO_SCRUB_SCHED,
-		.dpe_val	= DAOS_SCRUB_SCHED_OFF,
+		.dpe_type	= DAOS_PROP_PO_SCRUB_MODE,
+		.dpe_val	= DAOS_SCRUB_MODE_OFF,
 	}, {
 		.dpe_type	= DAOS_PROP_PO_SCRUB_FREQ,
 		.dpe_val	= 604800,
 	}, {
-		.dpe_type	= DAOS_PROP_PO_SCRUB_CREDITS,
-		.dpe_val	= 1,
+		.dpe_type	= DAOS_PROP_PO_SCRUB_RATE,
+		.dpe_val	= 0,
+	}, {
+		.dpe_type	= DAOS_PROP_PO_SCRUB_THRESH,
+		.dpe_val	= 10,
 	}
 };
 

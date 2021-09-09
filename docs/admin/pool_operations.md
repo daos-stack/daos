@@ -285,11 +285,28 @@ applications.
 This property defines the default erasure code cell size inherited to DAOS
 containers. The value is typically between 32K and 1MB.
 
+### Scrubbing Mode (scrub)
+
+This property defines if the checksum scrubber is enabled and how it will run.
+Values are ```off```, ```pause```, ```freq```, or ```rate```. See
+the [data integrity](../overview/data_integrity.md) docs for more details.
+Default is ```freq```.
+
+### Scrubbing Frequency (scrub\_freq)
+
+This property defines how frequently the checksum scrubber runs if enabled.
+Value is defined in number of seconds. Default is 1 week.
+
+### Scrubbing Rate (scrub\_rate)
+
+This property defines the rate at which checksums are scrubbed, defined in
+milliseconds.
+
 ## Access Control Lists
 
 Client user and group access for pools are controlled by
-[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists).
-Most pool-related tasks are performed using the DMG administrative tool, which
+[Access Control Lists (ACLs)](https://daos-stack.github.io/overview/security/#access-control-lists)
+. Most pool-related tasks are performed using the DMG administrative tool, which
 is authenticated by the administrative certificate rather than user-specific
 credentials.
 

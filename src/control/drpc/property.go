@@ -36,12 +36,14 @@ const (
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
 	// PoolPropertyECCellSize is the EC Cell size.
 	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
-	// PoolPropertyScrubSched Checksum scrubbing schedule
-	PoolPropertyScrubSched = C.DAOS_PROP_PO_SCRUB_SCHED
+	// PoolPropertyScrubMode Checksum scrubbing schedule
+	PoolPropertyScrubMode = C.DAOS_PROP_PO_SCRUB_MODE
 	// PoolPropertyScrubFreq Checksum scrubbing frequency
 	PoolPropertyScrubFreq = C.DAOS_PROP_PO_SCRUB_FREQ
-	// PoolPropertyScrubCred Checksum scrubbing credits
-	PoolPropertyScrubCred = C.DAOS_PROP_PO_SCRUB_CREDITS
+	// PoolPropertyScrubPad Checksum scrubbing padding
+	PoolPropertyScrubPad = C.DAOS_PROP_PO_SCRUB_RATE
+	// PoolPropertyScrubThresh Checksum scrubbing threshold
+	PoolPropertyScrubThresh = C.DAOS_PROP_PO_SCRUB_THRESH
 )
 
 const (
@@ -81,7 +83,8 @@ func LabelIsValid(label string) bool {
 }
 
 const (
-	PoolScrubSchedOff        = C.DAOS_SCRUB_SCHED_OFF
-	PoolScrubSchedWait       = C.DAOS_SCRUB_SCHED_RUN_WAIT
-	PoolScrubSchedContinuous = C.DAOS_SCRUB_SCHED_CONTINUOUS
+	PoolScrubModeOff        = C.DAOS_SCRUB_MODE_OFF
+	PoolScrubModePause      = C.DAOS_SCRUB_MODE_PAUSE
+	PoolScrubModeRate       = C.DAOS_SCRUB_MODE_RATE
+	PoolScrubModeFreq       = C.DAOS_SCRUB_MODE_FREQ
 )

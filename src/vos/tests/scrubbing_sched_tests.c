@@ -127,7 +127,6 @@ struct test_ctx_args {
 	uint32_t		tst_scrub_sched;
 	uint32_t		tst_scrub_freq_sec;
 	uint32_t		tst_scrub_cred;
-	enum scrub_status	tst_scrub_status;
 };
 
 #define INIT_CTX_FOR_TESTS(ctx, ...) \
@@ -147,7 +146,6 @@ init_ctx_for_tests(struct scrub_ctx *ctx, struct test_ctx_args *args)
 	/* set some defaults if not set */
 	DEFAULT_SET(args->tst_scrub_cred, 1);
 	DEFAULT_SET(args->tst_scrub_freq_sec, 10); /* 10 seconds */
-	DEFAULT_SET(args->tst_scrub_status, SCRUB_STATUS_RUNNING);
 
 	D_ALLOC_PTR(pool);
 	assert_non_null(pool);
@@ -159,12 +157,8 @@ init_ctx_for_tests(struct scrub_ctx *ctx, struct test_ctx_args *args)
 	ctx->sc_pool_last_csum_calcs = args->tst_pool_last_csum_calcs;
 	ctx->sc_pool_csum_calcs = args->tst_pool_csum_calcs;
 	ctx->sc_pool_start_scrub.tv_sec -= args->tst_already_run_sec;
-	ctx->sc_status = args->tst_scrub_status;
-	pool->sp_scrub_sched = args->tst_scrub_sched;
-	pool->sp_scrub_cred = args->tst_scrub_cred;
+	pool->sp_scrub_mode = args->tst_scrub_sched;
 	pool->sp_scrub_freq_sec = args->tst_scrub_freq_sec;
-
-	ctx->sc_credits_left = ctx->sc_pool->sp_scrub_cred;
 }
 
 static void
@@ -192,7 +186,7 @@ when_sched_run_wait_credits_are_consumed__should_yield(void **state)
 	const uint32_t		orig_credits = 2;
 
 	INIT_CTX_FOR_TESTS(&ctx, {
-		.tst_scrub_sched = DAOS_SCRUB_SCHED_RUN_WAIT,
+		.tst_scrub_sched = DAOS_SCRUB_MODE_RATE,
 		.tst_pool_last_csum_calcs = 10,
 		.tst_pool_csum_calcs = 0,
 		.tst_already_run_sec = 0,
@@ -201,49 +195,14 @@ when_sched_run_wait_credits_are_consumed__should_yield(void **state)
 
 	run_yield_or_sleep_while_running(&ctx);
 	/* don't yield until all credits are consumed */
-	assert_int_equal(1, ctx.sc_credits_left);
 	assert_int_equal(0, test_yield_fn_call_count);
 
 	/* credits are consumed */
 	run_yield_or_sleep_while_running(&ctx);
 	/* yielded and reset credits */
 	assert_int_equal(1, test_yield_fn_call_count);
-	assert_int_equal(orig_credits, ctx.sc_credits_left);
 
 	free_ctx(&ctx);
-}
-
-static void
-each_schedule__credits_are_consumed_and_wrap(void **state)
-{
-	struct scrub_ctx	ctx = {0};
-	uint32_t		i;
-	uint32_t		scheds[] = {
-		DAOS_SCRUB_SCHED_RUN_WAIT,
-		DAOS_SCRUB_SCHED_CONTINUOUS
-	};
-
-	for (i = 0; i < ARRAY_SIZE(scheds); i++) {
-		test_yield_fn_call_count = 0;
-		INIT_CTX_FOR_TESTS(&ctx, {
-			.tst_scrub_sched = scheds[i],
-			.tst_scrub_cred = 3,
-			.tst_pool_last_csum_calcs = 10,
-			.tst_pool_csum_calcs = 0,
-			.tst_already_run_sec = 0,
-		});
-
-		run_yield_or_sleep_while_running(&ctx);
-		assert_int_equal(2, ctx.sc_credits_left);
-
-		run_yield_or_sleep_while_running(&ctx);
-		assert_int_equal(1, ctx.sc_credits_left);
-
-		run_yield_or_sleep_while_running(&ctx);
-		assert_int_equal(3, ctx.sc_credits_left);
-
-		free_ctx(&ctx);
-	}
 }
 
 static void
@@ -252,7 +211,7 @@ when_sched_continuous_credits_1__sleeps_and_yield_appropriately(void **state)
 	struct scrub_ctx	ctx = {0};
 
 	INIT_CTX_FOR_TESTS(&ctx, {
-		.tst_scrub_sched = DAOS_SCRUB_SCHED_CONTINUOUS,
+		.tst_scrub_sched = DAOS_SCRUB_MODE_FREQ,
 		.tst_scrub_cred = 1,
 		.tst_pool_last_csum_calcs = 10,
 		.tst_pool_csum_calcs = 0,
@@ -260,6 +219,7 @@ when_sched_continuous_credits_1__sleeps_and_yield_appropriately(void **state)
 		.tst_scrub_freq_sec = 10,
 		});
 
+	ctx.sc_pool_csum_calcs = 1;
 	run_yield_or_sleep_while_running(&ctx);
 	assert_int_equal(1, test_sleep_fn_call_count);
 
@@ -294,12 +254,11 @@ when_sched_continuous_have_run_half_freq__should_sleep(void **state)
 	struct scrub_ctx	ctx = {0};
 
 	INIT_CTX_FOR_TESTS(&ctx, {
-		.tst_scrub_sched = DAOS_SCRUB_SCHED_CONTINUOUS,
+		.tst_scrub_sched = DAOS_SCRUB_MODE_FREQ,
 		.tst_pool_last_csum_calcs = 10,
 		.tst_pool_csum_calcs = 10,
 		.tst_already_run_sec = 5,
 		.tst_scrub_freq_sec = 10,
-		.tst_scrub_status = SCRUB_STATUS_NOT_RUNNING
 		});
 
 	run_yield_or_sleep(&ctx);
@@ -317,12 +276,11 @@ when_sched_continuous_past_freq__should_yield(void **state)
 	struct scrub_ctx	ctx = {0};
 
 	INIT_CTX_FOR_TESTS(&ctx, {
-		.tst_scrub_sched = DAOS_SCRUB_SCHED_CONTINUOUS,
+		.tst_scrub_sched = DAOS_SCRUB_MODE_FREQ,
 		.tst_pool_last_csum_calcs = 10,
 		.tst_pool_csum_calcs = 10,
 		.tst_already_run_sec = 15,
 		.tst_scrub_freq_sec = 10,
-		.tst_scrub_status = SCRUB_STATUS_NOT_RUNNING
 		});
 
 	run_yield_or_sleep(&ctx);
@@ -351,7 +309,6 @@ static int scrub_test_setup(void **state)
 static const struct CMUnitTest scrubbing_sched_tests[] = {
 	TS(ms_between_periods_tests),
 	TS(when_sched_run_wait_credits_are_consumed__should_yield),
-	TS(each_schedule__credits_are_consumed_and_wrap),
 	TS(when_sched_continuous_credits_1__sleeps_and_yield_appropriately),
 	TS(when_sched_continuous_have_run_half_freq__should_sleep),
 	TS(when_sched_continuous_past_freq__should_yield),
