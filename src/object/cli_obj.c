@@ -90,7 +90,8 @@ struct obj_auxi_args {
 					 ec_in_recov:1,
 					 new_shard_tasks:1,
 					 reset_param:1,
-					 force_degraded:1;
+					 force_degraded:1,
+					 shards_scheded:1;
 	/* request flags. currently only: ORF_RESEND */
 	uint32_t			 flags;
 	uint32_t			 specified_shard;
@@ -1801,8 +1802,8 @@ obj_rw_bulk_prep(struct dc_object *obj, daos_iod_t *iods, d_sg_list_t *sgls,
 	crt_bulk_perm_t		bulk_perm;
 	int			rc = 0;
 
-	if ((obj_auxi->io_retry && !obj_auxi->reasb_req.orr_size_fetched) ||
-	    obj_auxi->reasb_req.orr_size_fetch)
+	if ((obj_auxi->io_retry && !obj_auxi->reasb_req.orr_size_fetched &&
+	     obj_auxi->bulks != NULL) || obj_auxi->reasb_req.orr_size_fetch)
 		return 0;
 
 	/* inline fetch needs to pack sgls buffer into RPC so uses it to check
@@ -2494,7 +2495,7 @@ shard_task_sched(tse_task_t *task, void *arg)
 	obj_auxi = shard_auxi->obj_auxi;
 	map_ver = obj_auxi->map_ver_req;
 	obj_task = obj_auxi->obj_task;
-	if (obj_auxi->io_retry && !obj_auxi->new_shard_tasks) {
+	if (obj_auxi->shards_scheded && !obj_auxi->new_shard_tasks) {
 		/* For retried IO, check if the shard's target changed after
 		 * pool map query. If match then need not do anything, if
 		 * mismatch then need to re-schedule the shard IO on the new
@@ -2559,6 +2560,7 @@ obj_shard_task_sched(struct obj_auxi_args *obj_auxi, struct dtx_epoch *epoch)
 	 * the IO involved shards' targets not changed. No any shard task
 	 * re-scheduled for this case, can complete the obj IO task.
 	 */
+	obj_auxi->shards_scheded = 1;
 	if (sched_arg.tsa_scheded == false)
 		tse_task_complete(obj_auxi->obj_task, 0);
 }

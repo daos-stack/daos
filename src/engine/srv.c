@@ -1153,6 +1153,9 @@ dss_srv_fini(bool force)
 			D_FREE(xstream_data.xd_xs_ptrs);
 		D_DEBUG(DB_TRACE, "Finalized everything\n");
 	}
+
+	if (sched_ult_attr_deep_stack != ABT_THREAD_ATTR_NULL)
+		ABT_thread_attr_free(&sched_ult_attr_deep_stack);
 	return 0;
 }
 
@@ -1234,6 +1237,20 @@ dss_srv_init(void)
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_DRPC;
+
+	/* init the global ABT_thread_attr */
+	rc = ABT_thread_attr_create(&sched_ult_attr_deep_stack);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("Create ABT thread attr failed. %d\n", rc);
+		D_GOTO(failed, rc = dss_abterr2der(rc));
+	}
+
+	rc = ABT_thread_attr_set_stacksize(sched_ult_attr_deep_stack,
+					   DSS_DEEP_STACK_SZ);
+	if (rc != ABT_SUCCESS) {
+		D_ERROR("Set ABT stack size failed. %d\n", rc);
+		D_GOTO(failed, rc = dss_abterr2der(rc));
+	}
 
 	return 0;
 failed:

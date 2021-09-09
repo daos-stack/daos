@@ -493,7 +493,7 @@ degrade_ec_partial_update_agg(void **state)
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
 				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      DAOS_TX_NONE, true);
 	}
 	free(data);
 	free(verify_data);
@@ -559,7 +559,7 @@ degrade_ec_agg(void **state)
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
 				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      DAOS_TX_NONE, true);
 	}
 	free(data);
 	free(verify_data);

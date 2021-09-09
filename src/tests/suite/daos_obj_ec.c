@@ -403,7 +403,7 @@ trigger_and_wait_ec_aggreation(test_arg_t *arg, daos_obj_id_t *oids,
 void
 ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 		      daos_off_t offset, daos_size_t size,
-		      char *verify_data, daos_handle_t th)
+		      char *verify_data, daos_handle_t th, bool degraded)
 {
 	daos_recx_t	recx;
 	char		*data;
@@ -415,7 +415,9 @@ ec_verify_parity_data(struct ioreq *req, char *dkey, char *akey,
 	req->iod_type = DAOS_IOD_ARRAY;
 	recx.rx_nr = size;
 	recx.rx_idx = offset;
-	daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
+	if (degraded)
+		daos_fail_loc_set(DAOS_OBJ_FORCE_DEGRADE | DAOS_FAIL_ONCE);
+
 	lookup_recxs(dkey, akey, 1, th, &recx, 1, data, size, req);
 	assert_memory_equal(data, verify_data, size);
 	daos_fail_loc_set(0);
@@ -463,7 +465,7 @@ ec_partial_update_agg(void **state)
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
 				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      DAOS_TX_NONE, true);
 	}
 	ioreq_fini(&req);
 	free(data);
@@ -512,7 +514,7 @@ ec_cross_cell_partial_update_agg(void **state)
 
 		memset(verify_data, c, update_size);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
-				      update_size, verify_data, DAOS_TX_NONE);
+				      update_size, verify_data, DAOS_TX_NONE, true);
 	}
 
 	ioreq_fini(&req);
@@ -578,7 +580,7 @@ ec_full_partial_update_agg(void **state)
 				       full_update_size, DAOS_FORCE_EC_AGG);
 
 	ec_verify_parity_data(&req, "d_key", "a_key", (daos_size_t)0,
-			      full_update_size, verify_data, DAOS_TX_NONE);
+			      full_update_size, verify_data, DAOS_TX_NONE, true);
 	free(data);
 	free(verify_data);
 }
@@ -641,7 +643,7 @@ ec_partial_full_update_agg(void **state)
 				       full_update_size, DAOS_FORCE_EC_AGG);
 
 	ec_verify_parity_data(&req, "d_key", "a_key", (daos_size_t)0,
-			      full_update_size, verify_data, DAOS_TX_NONE);
+			      full_update_size, verify_data, DAOS_TX_NONE, true);
 
 	ioreq_fini(&req);
 	free(data);
@@ -812,7 +814,7 @@ ec_fail_agg_internal(void **state, unsigned fail_loc)
 		memset(verify_data, 'a' + i, EC_CELL_SIZE);
 		ec_verify_parity_data(&req, "d_key", "a_key", offset,
 				      (daos_size_t)EC_CELL_SIZE, verify_data,
-				      DAOS_TX_NONE);
+				      DAOS_TX_NONE, true);
 	}
 	ioreq_fini(&req);
 	free(data);
@@ -926,7 +928,7 @@ ec_singv_array_mixed_io(void **state)
 	}
 }
 
-#define SNAP_CNT 5
+#define SNAP_CNT 3
 static void
 ec_full_stripe_snapshot(void **state)
 {
@@ -964,13 +966,21 @@ ec_full_stripe_snapshot(void **state)
 	}
 
 	for (i = 0; i < SNAP_CNT; i++) {
-		daos_handle_t	th_open;
+		daos_handle_t		th_open;
+		daos_epoch_range_t	epr;
+		int			rc;
 
 		daos_tx_open_snap(arg->coh, snap_epoch[i], &th_open, NULL);
 		memset(verify_data, 'a' + i, stripe_size);
 		ec_verify_parity_data(&req, "d_key", "a_key", 0, stripe_size,
-				      verify_data, th_open);
+				      verify_data, th_open, false);
 		daos_tx_close(th_open, NULL);
+
+		epr.epr_hi = epr.epr_lo = snap_epoch[i];
+		trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+					       stripe_size, DAOS_FORCE_EC_AGG);
+		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
+		assert_int_equal(rc, 0);
 	}
 
 	ioreq_fini(&req);
@@ -1020,13 +1030,22 @@ ec_partial_stripe_snapshot_internal(void **state, int data_size)
 				       ec_data_nr_get(oid) * EC_CELL_SIZE,
 				       DAOS_FORCE_EC_AGG);
 	for (i = 0; i < SNAP_CNT; i++) {
-		daos_handle_t	th_open;
+		daos_handle_t		th_open;
+		daos_epoch_range_t	epr;
+		int			rc;
 
 		daos_tx_open_snap(arg->coh, snap_epoch[i], &th_open, NULL);
 		memset(verify_data, 'a' + i, stripe_size);
 		ec_verify_parity_data(&req, "d_key", "a_key", 0, stripe_size,
-				      verify_data, th_open);
+				      verify_data, th_open, true);
 		daos_tx_close(th_open, NULL);
+
+		trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+					       ec_data_nr_get(oid) * EC_CELL_SIZE,
+					       DAOS_FORCE_EC_AGG);
+		epr.epr_hi = epr.epr_lo = snap_epoch[i];
+		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
+		assert_int_equal(rc, 0);
 	}
 
 	free(data);

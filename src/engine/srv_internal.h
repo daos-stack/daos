@@ -185,6 +185,7 @@ extern unsigned int sched_stats_intvl;
 extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;
 extern unsigned int sched_unit_runtime_max;
+extern ABT_thread_attr sched_ult_attr_deep_stack;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);

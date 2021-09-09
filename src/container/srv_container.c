@@ -3672,6 +3672,7 @@ out_lock:
 	rdb_tx_end(&tx);
 out_svc:
 	cont_svc_put_leader(svc);
+
 	return rc;
 }
 
