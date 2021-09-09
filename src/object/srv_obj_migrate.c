@@ -1012,6 +1012,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	struct daos_csummer	*csummer = NULL;
 	d_iov_t			 tmp_csum_iov;
 	struct dcs_iod_csums	*iod_csums = NULL;
+	uint64_t		 update_flags = 0;
 
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -1142,9 +1143,13 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		D_ERROR("unable to allocate iod csums: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+
+	if (daos_oclass_is_ec(&mrone->mo_oca))
+		update_flags |= VOS_OF_EC;
+
 	rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 			    mrone->mo_min_epoch, mrone->mo_version,
-			    0, &mrone->mo_dkey, mrone->mo_iod_num,
+			    update_flags, &mrone->mo_dkey, mrone->mo_iod_num,
 			    mrone->mo_iods, iod_csums, sgls);
 out:
 	for (i = 0; i < mrone->mo_iod_num; i++) {
