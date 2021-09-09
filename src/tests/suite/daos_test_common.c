@@ -688,18 +688,21 @@ rebuild_pool_wait(test_arg_t *arg)
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	rst = &pinfo.pi_rebuild_st;
-	if ((rst->rs_done || rc != 0) && rst->rs_version != 0) {
-		print_message("Rebuild "DF_UUIDF" (ver=%d) is done %d/%d, "
+	if ((rst->rs_done || rc != 0) && rst->rs_version != 0 &&
+	     rst->rs_version != arg->rebuild_pre_pool_ver) {
+		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
 			      "obj="DF_U64", rec="DF_U64".\n",
 			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			       arg->rebuild_pre_pool_ver,
 			       rc, rst->rs_errno, rst->rs_obj_nr,
 			       rst->rs_rec_nr);
 		done = true;
 	} else {
-		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u), "
+		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u orig_ver=%u), "
 			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="
 			      DF_U64", rec="DF_U64"\n",
 			      DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			      arg->rebuild_pre_pool_ver,
 			      rst->rs_toberb_obj_nr, rst->rs_obj_nr,
 			      rst->rs_rec_nr);
 	}

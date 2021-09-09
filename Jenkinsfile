@@ -81,7 +81,7 @@ pipeline {
                             'parameter.')
         booleanParam(name: 'CI_BUILD_PACKAGES_ONLY',
                      defaultValue: false,
-                     description: 'Only build RPM and DEB packages')
+                     description: 'Only build RPM and DEB packages, Skip unit tests.')
         string(name: 'CI_RPM_TEST_VERSION',
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
@@ -129,13 +129,16 @@ pipeline {
                      description: 'Enable more distros for functional CI tests')
         booleanParam(name: 'CI_FUNCTIONAL_el8_TEST',
                      defaultValue: true,
-                     description: 'Run the functional CentOS 8 CI tests')
+                     description: 'Run the functional CentOS 8 CI tests' +
+                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_leap15_TEST',
                      defaultValue: true,
-                     description: 'Run the functional OpenSUSE Leap 15 CI tests')
+                     description: 'Run the functional OpenSUSE Leap 15 CI tests' +
+                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_FUNCTIONAL_ubuntu20_TEST',
                      defaultValue: false,
-                     description: 'Run the functional Ubuntu 20 CI tests')
+                     description: 'Run the functional Ubuntu 20 CI tests' +
+                                  '  Requires CI_MORE_FUNCTIONAL_PR_TESTS')
         booleanParam(name: 'CI_RPMS_el7_TEST',
                      defaultValue: true,
                      description: 'Run the CentOS 7 RPM CI tests')
@@ -854,6 +857,25 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
+                stage('Functional on CentOS 7 with Valgrind') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_FUNCTIONAL_VM9_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional on CentOS 7 with Valgrind')
                 stage('Functional on CentOS 8') {
                     when {
                         beforeAgent true

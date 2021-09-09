@@ -77,6 +77,7 @@ class TestDaosApiBase(ObjectWithParameters):
         super().__init__(namespace)
         self.cb_handler = cb_handler
         self.debug = BasicParameter(None, False)
+        self.silent = BasicParameter(None, False)
 
         # Test yaml parameter used to define the control method:
         #   USE_API    - use the API methods to create/destroy containers
@@ -115,13 +116,14 @@ class TestDaosApiBase(ObjectWithParameters):
             method(**kwargs)
         except DaosApiError as error:
             # Log the exception to obtain additional trace information
-            self.log.debug(
-                "Exception raised by %s.%s(%s)",
-                method.__module__, method.__name__,
-                ", ".join(
-                    ["{}={}".format(key, val) for key, val in list(
-                        kwargs.items())]),
-                exc_info=error)
+            if not self.silent.value:
+                self.log.debug(
+                    "Exception raised by %s.%s(%s)",
+                    method.__module__, method.__name__,
+                    ", ".join(
+                        ["{}={}".format(key, val) for key, val in list(
+                            kwargs.items())]),
+                    exc_info=error)
             # Raise the exception so it can be handled by the caller
             raise error
 
