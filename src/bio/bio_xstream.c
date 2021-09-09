@@ -93,12 +93,7 @@ bio_spdk_env_init(void)
 	if (nvme_glb.bd_shm_id != DAOS_NVME_SHMID_NONE)
 		opts.shm_id = nvme_glb.bd_shm_id;
 
-	/*
-	 * Disable DPDK telemetry to avoid socket file clashes and quiet DPDK
-	 * logging by setting level to ERROR.
-	 */
-	opts.env_context = "--log-level=lib.eal:4 --log-level=lib.user1:4"
-		" --no-telemetry";
+	opts.env_context = (char *)dpdk_cli_override_opts;
 
 	rc = spdk_env_init(&opts);
 	if (rc != 0) {

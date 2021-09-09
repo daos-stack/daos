@@ -46,4 +46,4 @@
 |[ULT](https://github.com/pmodels/argobots/wiki/User-level-Thread-(ULT))|User Level Thread|
 |UPI|Intel Ultra Path Interconnect|
 |UUID|Universal Unique Identifier|
-|[VOS](/doc/vos/README.md)|Versioning Object Store|
+|[VOS](/docs/vos/README.md)|Versioning Object Store|
