@@ -1,6 +1,6 @@
 # DAOS Pool
 
-A pool is a set of targets spread across different storage nodes over which data and metadata are distributed to achieve horizontal scalability, and replicated or erasure-coded to ensure durability and availability (see: <a href="/doc/overview/storage.md#daos-pool">Storage Model: DAOS Pool</a>).
+A pool is a set of targets spread across different storage nodes over which data and metadata are distributed to achieve horizontal scalability, and replicated or erasure-coded to ensure durability and availability (see: <a href="/docs/overview/storage.md#daos-pool">Storage Model: DAOS Pool</a>).
 
 <a id="9.1"></a>
 
@@ -12,7 +12,7 @@ The Pool Service (`pool_svc`) stores the metadata for pools, and provides an API
 
 #### Metadata Layout
 
-![Pool Service Layout](/doc/graph/Fig_072.png "Pool Service Layout")
+![Pool Service Layout](/docs/graph/Fig_072.png "Pool Service Layout")
 
 The top-level KVS stores the pool map, security attributes such as the UID, GID and mode, information related to space management and self-healing (see: <a href="/src/rebuild/README.md">Rebuild</a>) as well as a second-level KVS containing user-defined attributes (see: <a href="/src/container/README.md#metadata-layout">Container Service: Metadata Layout</a>). In addition, it also stores information on pool connections, represented by a pool handle and identified by a client-generated handle UUID. The terms "pool connection" and "pool handle" may be used interchangeably.
 
@@ -39,6 +39,6 @@ At this point, the Pool Service checks for existing pool handles:
 
 If everything goes well, the pool service sends a collective `POOL_TGT_CONNECT` request to all targets in the pool with the pool handle UUID. The Target Service creates and caches the local pool objects and opens the local VOS pool for access.
 
-A group of peer application processes may share a single pool connection handle (see: <a href="/doc/overview/storage.md#daos-pool">Storage Model: DAOS Pool</a> and <a href="/doc/overview/use_cases.md#storage-management--workflow-integration">Use Cases: Storage Management and Workflow Integration</a>).
+A group of peer application processes may share a single pool connection handle (see: <a href="/docs/overview/storage.md#daos-pool">Storage Model: DAOS Pool</a> and <a href="/docs/overview/use_cases.md#storage-management--workflow-integration">Use Cases: Storage Management and Workflow Integration</a>).
 
 To close a pool connection, a client process calls the `daos_pool_disconnect` method in the client library with the pool handle, triggering a `POOL_DISCONNECT` request to the Pool Service, which sends a collective `POOL_TGT_DISCONNECT` request to all targets in the pool. These steps destroy all state associated with the connection, including all container handles. Other client processes sharing this connection should destroy their copies of the pool handle locally, preferably before the disconnect method is called on behalf of everyone. If a group of client processes terminate prematurely, before having a chance to call the pool disconnect method, their pool connection will eventually be evicted once the pool service learns about the event from the run-time environment.

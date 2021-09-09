@@ -15,6 +15,13 @@
 #include <stdbool.h>
 #include <assert.h>
 
+/*
+ * Space separated string of CLI options to pass to DPDK when started during
+ * spdk_env_init(). These options will override the DPDK defaults.
+ */
+extern const char *
+dpdk_cli_override_opts;
+
 enum {
 	/* Device is plugged */
 	NVME_DEV_FL_PLUGGED	= 0x1,
