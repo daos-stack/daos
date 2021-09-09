@@ -3533,50 +3533,45 @@ def run(wf, args):
 
     fi_test = False
     fi_test_dfuse = False
-    start_server = True
-
-    if args.mode == 'fi':
-        start_server = False
-
-    if start_server:
-        server = DaosServer(conf, test_class='first')
-        server.start()
 
     fatal_errors = BoolRatchet()
 
-    if args.mode == 'launch':
-        run_in_fg(server, conf)
-    elif args.mode == 'il':
-        fatal_errors.add_result(run_il_test(server, conf))
-    elif args.mode == 'kv':
-        test_pydaos_kv(server, conf)
-    elif args.mode == 'overlay':
-        fatal_errors.add_result(run_duns_overlay_test(server, conf))
-    elif args.mode == 'set-fi':
-        fatal_errors.add_result(set_server_fi(server))
-    elif args.mode == 'fi':
-        fi_test = True
-    elif args.mode == 'all':
-        fi_test_dfuse = True
-        fatal_errors.add_result(run_posix_tests(server, conf))
-        fatal_errors.add_result(run_il_test(server, conf))
-        fatal_errors.add_result(run_dfuse(server, conf))
-        fatal_errors.add_result(run_duns_overlay_test(server, conf))
-        test_pydaos_kv(server, conf)
-        fatal_errors.add_result(set_server_fi(server))
-    elif args.test == 'all':
-        fatal_errors.add_result(run_posix_tests(server, conf))
-    elif args.test:
-        fatal_errors.add_result(run_posix_tests(server, conf, args.test))
-    else:
-        fatal_errors.add_result(run_posix_tests(server, conf))
-        fatal_errors.add_result(run_il_test(server, conf))
-        fatal_errors.add_result(run_dfuse(server, conf))
-        fatal_errors.add_result(set_server_fi(server))
-
-    if start_server:
-        if server.stop(wf_server) != 0:
-            fatal_errors.fail()
+    if args.mode != 'fi':
+        server = DaosServer(conf, test_class='first')
+        server.start()
+        try:
+            if args.mode == 'launch':
+                run_in_fg(server, conf)
+            elif args.mode == 'il':
+                fatal_errors.add_result(run_il_test(server, conf))
+            elif args.mode == 'kv':
+                test_pydaos_kv(server, conf)
+            elif args.mode == 'overlay':
+                fatal_errors.add_result(run_duns_overlay_test(server, conf))
+            elif args.mode == 'set-fi':
+                fatal_errors.add_result(set_server_fi(server))
+            elif args.mode == 'fi':
+                fi_test = True
+            elif args.mode == 'all':
+                fi_test_dfuse = True
+                fatal_errors.add_result(run_posix_tests(server, conf))
+                fatal_errors.add_result(run_il_test(server, conf))
+                fatal_errors.add_result(run_dfuse(server, conf))
+                fatal_errors.add_result(run_duns_overlay_test(server, conf))
+                test_pydaos_kv(server, conf)
+                fatal_errors.add_result(set_server_fi(server))
+            elif args.test == 'all':
+                fatal_errors.add_result(run_posix_tests(server, conf))
+            elif args.test:
+                fatal_errors.add_result(run_posix_tests(server, conf, args.test))
+            else:
+                fatal_errors.add_result(run_posix_tests(server, conf))
+                fatal_errors.add_result(run_il_test(server, conf))
+                fatal_errors.add_result(run_dfuse(server, conf))
+                fatal_errors.add_result(set_server_fi(server))
+        finally:
+            if server.stop(wf_server) != 0:
+                fatal_errors.fail()
 
     if args.mode == 'all':
         server = DaosServer(conf)
