@@ -32,9 +32,9 @@ server_config:
 daos_perf:
   test_command: 'U;p F;p V O;p'
   test_type: daos
-  processes: 32
+  processes: 64
   test_type: daos
   akey_use_array: False
-  dkeys: 4k
-  akeys: 1k
-  object_class: LARGE
+  dkeys: 256
+  akeys: 64
+  object_class: EC2P1
