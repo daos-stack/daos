@@ -2351,11 +2351,11 @@ exit:
 	if (delay_completion == false || rc != 0) {
 		if (rc != 0)
 			update_rc = rc;
-
+		
 		update_comp_cb(ivns_internal, class_id, iv_key, NULL, iv_value,
 			       update_rc, cb_arg);
-	} else if (delay_completion == false) {
-		iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
+		if (delay_completion == false && rc == 0)
+			iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
 	}
 
 	if (rc != 0) {
