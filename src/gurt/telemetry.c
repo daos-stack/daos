@@ -3162,8 +3162,8 @@ out:
  *					from this node.
  * \param[in,out]	num_dirs	Optional pointer to storage for the
  *					number of directories found.
- * \param[in]		max_depth	The maximum depth of the listing, including
- *					the root node.
+ * \param[in]		max_depth	The maximum depth below the root of
+ *					the listing.
  *
  * \return		DER_SUCCESS		Success
  *			-DER_NOMEM		Out of global heap
@@ -3178,7 +3178,8 @@ d_tm_list_subdirs(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	uint64_t		 dir_count = 0;
 	struct d_tm_nodeList_t	*cur_head = NULL;
 
-	rc = list_children(ctx, head, node, D_TM_DIRECTORY, 0, max_depth, 1);
+	/** add +1 to max_depth to account for the root node */
+	rc = list_children(ctx, head, node, D_TM_DIRECTORY, 0, max_depth+1, 1);
 	if (rc != DER_SUCCESS)
 		return rc;
 
@@ -3186,9 +3187,6 @@ d_tm_list_subdirs(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	while (cur_head != NULL && cur_head->dtnl_node != NULL) {
 		if (cur_head->dtnl_node->dtn_type == D_TM_DIRECTORY)
 			dir_count++;
-
-		if (cur_head->dtnl_next == NULL)
-			break;
 
 		cur_head = cur_head->dtnl_next;
 	}
