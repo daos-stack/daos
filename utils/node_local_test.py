@@ -460,6 +460,14 @@ class DaosServer():
         self._io_server_dir = None
         self.test_pool = None
 
+        # Detect the number of cores for dfuse and do something sensible, if there are
+        # more than 32 on the node then use 12, otherwise use the whole node.
+        num_cores = len(os.sched_getaffinity(0))
+        if num_cores > 32:
+            self.dfuse_cores = 12
+        else:
+            self.dfuse_cores = None
+
     def __del__(self):
         if self._agent:
             self._stop_agent()
@@ -575,6 +583,8 @@ class DaosServer():
             scyaml['engines'][0]['log_mask'] = self.conf.args.server_debug
         scyaml['control_log_file'] = self.control_log.name
 
+        scyaml['socket_dir'] = self.agent_dir
+
         for (key, value) in server_env.items():
             scyaml['engines'][0]['env_vars'].append('{}={}'.format(key, value))
 
@@ -582,11 +592,16 @@ class DaosServer():
         ref_engine['storage'][0]['scm_size'] = int(
             ref_engine['storage'][0]['scm_size'] / self.engines)
         scyaml['engines'] = []
+        # Leave some cores for dfuse, and start the daos server after these.
+        if self.dfuse_cores:
+            first_core = self.dfuse_cores
+        else:
+            first_core = 0
         server_port_count = int(server_env['FI_UNIVERSE_SIZE'])
         for idx in range(self.engines):
             engine = copy.deepcopy(ref_engine)
             engine['log_file'] = self.server_logs[idx].name
-            engine['first_core'] = ref_engine['targets'] * idx
+            engine['first_core'] = first_core + (ref_engine['targets'] * idx)
             engine['fabric_iface_port'] += server_port_count * idx
             engine['storage'][0]['scm_mount'] = '{}_{}'.format(
                 ref_engine['storage'][0]['scm_mount'], idx)
@@ -598,8 +613,7 @@ class DaosServer():
         self._yaml_file.write(yaml.dump(scyaml, encoding='utf-8'))
         self._yaml_file.flush()
 
-        cmd = [daos_server, '--config={}'.format(self._yaml_file.name),
-               'start', '-t', '4', '--insecure', '-d', self.agent_dir]
+        cmd = [daos_server, '--config={}'.format(self._yaml_file.name), 'start', '--insecure']
 
         if self.conf.args.no_root:
             cmd.append('--recreate-superblocks')
@@ -974,13 +988,7 @@ class DFuse():
         self.uns_path = uns_path
         self.container = container
         self.conf = conf
-        # Detect the number of cores and do something sensible, if there are
-        # more than 32 on the node then use 12, otherwise use the whole node.
-        num_cores = len(os.sched_getaffinity(0))
-        if num_cores > 32:
-            self.cores = 12
-        else:
-            self.cores = None
+        self.cores = daos.dfuse_cores
         self._daos = daos
         self.caching = caching
         self.use_valgrind = True
