@@ -39,7 +39,7 @@ largefilecount:
     - DFS
     - POSIX
   object_class:
-    - SX
+    - EC_4P1G1
     - RP_3GX
 ior:
   np: 30

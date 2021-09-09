@@ -42,7 +42,7 @@ ior:
             transfer_size: '4m'
     objectclass: !mux
         SX:
-            dfs_oclass: "SX"
+            dfs_oclass: "EC_4P2GX"
         2-way_Replication:
             dfs_oclass: "RP_2GX"
 
