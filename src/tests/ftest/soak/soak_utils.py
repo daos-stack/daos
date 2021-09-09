@@ -283,7 +283,7 @@ def run_metrics_check(self, logging=True, prefix=None):
             if logging:
                 for result in results:
                     hosts = result["hosts"]
-                    log_name = name + "-" + hosts
+                    log_name = name + "-" + str(hosts)
                     write_logfile(result["stdout"], log_name, destination)
 
 
