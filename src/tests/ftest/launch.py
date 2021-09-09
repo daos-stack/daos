@@ -776,6 +776,7 @@ def get_vmd_address_backed_nvme(host_list, value):
     """Find valid VMD address which has backing NVMe.
 
     Args:
+        host_list (list): list of hosts 
         value (list): list of all PCI address.
 
     Returns:
