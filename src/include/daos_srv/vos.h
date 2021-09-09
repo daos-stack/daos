@@ -520,7 +520,10 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -555,7 +558,10 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -716,6 +722,10 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.

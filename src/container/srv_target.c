@@ -1261,14 +1261,25 @@ cont_delete_ec_agg(uuid_t pool_uuid, uuid_t cont_uuid);
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
+	struct ds_pool	*pool;
 	struct cont_tgt_destroy_in in;
 	int rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
 	cont_delete_ec_agg(pool_uuid, cont_uuid);
+	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
+	ds_pool_put(pool);
+
 	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
+out:
 	return rc;
 }
 
