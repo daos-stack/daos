@@ -474,6 +474,7 @@ rdb_stop(struct rdb *db)
 	ABT_cond_free(&db->d_ref_cv);
 	ABT_mutex_free(&db->d_raft_mutex);
 	ABT_mutex_free(&db->d_mutex);
+	D_DEBUG(DB_MD, DF_DB": stopped db %p\n", DP_DB(db), db);
 	D_FREE(db);
 }
 

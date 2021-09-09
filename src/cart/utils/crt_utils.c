@@ -59,6 +59,8 @@ crtu_drain_queue(crt_context_t ctx)
 	int	rc;
 	int	i;
 
+	crt_rank_abort_all(NULL);
+
 	/* TODO: Need better mechanism for tests to drain all queues */
 	for (i = 0; i < 1000; i++)
 		crt_progress(ctx, 1000);

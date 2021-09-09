@@ -126,7 +126,8 @@ struct ec_agg_param {
 	void			*ap_yield_arg;   /* yield argument            */
 	uint32_t		 ap_credits_max; /* # of tight loops to yield */
 	uint32_t		 ap_credits;     /* # of tight loops          */
-	uint32_t		 ap_initialized:1; /* initialized flag */
+	uint32_t		 ap_initialized:1, /* initialized flag */
+				 ap_yielded:1;	   /* yielded */
 };
 
 /* Struct used to drive offloaded stripe update.
@@ -981,7 +982,7 @@ agg_diff_preprocess(struct ec_agg_entry *entry, unsigned char *diff,
 	uint64_t		 hole_off, hole_end;
 
 	ss = k * len * entry->ae_cur_stripe.as_stripenum;
-	cell_start = cell_idx * len;
+	cell_start = (uint64_t)cell_idx * len;
 	cell_end = cell_start + len;
 	hole_off = 0;
 	d_list_for_each_entry(extent, &entry->ae_cur_stripe.as_dextents,
@@ -1138,6 +1139,7 @@ static int
 agg_process_partial_stripe(struct ec_agg_entry *entry)
 {
 	struct ec_agg_stripe_ud	 stripe_ud = { 0 };
+	struct ec_agg_param	*agg_param;
 	struct ec_agg_extent	*extent;
 	int			*status;
 	uint8_t			*bit_map = NULL;
@@ -1227,6 +1229,8 @@ agg_process_partial_stripe(struct ec_agg_entry *entry)
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	agg_param->ap_yielded = 1;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1456,6 +1460,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
+	agg_param->ap_yielded = 1;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1520,7 +1525,7 @@ agg_process_holes_ult(void *arg)
 		}
 		last_ext_end = agg_extent->ae_recx.rx_idx +
 			agg_extent->ae_recx.rx_nr - ss;
-		if (last_ext_end >= k * len)
+		if (last_ext_end >= (uint64_t)k * len)
 			break;
 	}
 
@@ -1728,6 +1733,9 @@ agg_process_holes(struct ec_agg_entry *entry)
 	rc = agg_prep_sgl(entry);
 	if (rc)
 		goto out;
+
+	agg_param = container_of(entry, struct ec_agg_param,
+				 ap_agg_entry);
 	rc = ABT_eventual_create(sizeof(*status), &stripe_ud.asu_eventual);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1738,6 +1746,7 @@ agg_process_holes(struct ec_agg_entry *entry)
 			    DSS_XS_IOFW, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
+	agg_param->ap_yielded = 1;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
@@ -1748,8 +1757,6 @@ agg_process_holes(struct ec_agg_entry *entry)
 
 	/* Update local vos with replicate */
 	entry->ae_sgl.sg_nr = 1;
-	agg_param = container_of(entry, struct ec_agg_param,
-				 ap_agg_entry);
 	if (iod->iod_nr) {
 		/* write the reps to vos */
 		rc = vos_obj_update(agg_param->ap_cont_handle, entry->ae_oid,
@@ -2027,8 +2034,11 @@ agg_akey_post(daos_handle_t ih, struct ec_agg_param *agg_param,
 		agg_entry->ae_cur_stripe.as_hi_epoch	= 0UL;
 		agg_entry->ae_cur_stripe.as_stripe_fill = 0UL;
 		agg_entry->ae_cur_stripe.as_offset	= 0U;
+	}
 
+	if (agg_param->ap_yielded) {
 		*acts |= VOS_ITER_CB_YIELD;
+		agg_param->ap_yielded = 0;
 	}
 
 	return rc;
@@ -2377,6 +2387,7 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_hoextents);
+	agg_param->ap_yielded = 0;
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
