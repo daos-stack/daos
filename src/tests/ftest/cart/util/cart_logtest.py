@@ -250,7 +250,7 @@ class LogTest():
         if self.quiet:
             return
         self.log_count += 1
-        function = getattr(line, 'filename', None)
+        function = getattr(line, 'function', None)
         if function:
             loc = '{}:{}'.format(line.filename, line.lineno)
         else:

@@ -188,13 +188,13 @@ class LogLine():
                 (filename, _) = self._fields[0].split(':')
                 return filename
             except (IndexError, ValueError):
-                return 'Unknown'
+                pass
         elif attr == 'lineno':
             try:
                 (_, lineno) = self._fields[0].split(':')
                 return int(lineno)
             except (IndexError, ValueError):
-                return 0
+                pass
         raise AttributeError
 
     def get_msg(self):
