@@ -73,7 +73,7 @@ ior:
    - [32M, 128M, 8M]       #Full Striped
    #- [32M, 128M, 2K]       #Patrtial Striped
   objectclass:
-   dfs_oclass:
+   dfs_oclass_list:
     #- [EC_Object_Class, Minimum number of servers]
     - ["EC_2P1G1", 4]
     - ["EC_4P1G1", 6]
