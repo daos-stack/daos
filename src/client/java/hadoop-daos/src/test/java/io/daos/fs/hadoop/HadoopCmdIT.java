@@ -66,17 +66,42 @@ public class HadoopCmdIT {
   }
 
   @Test
-  public void testMkdir() throws Exception {
+  public void testMkdirSpecialLongPath() throws Exception {
     String filePath = DaosFSFactory.DAOS_URI +"/zjf/job_1581472776049_0003-1581473346405-" +
         "root-autogen%2D7.1%2DSNAPSHOT%2Djar%2Dwith%2Ddependencies.jar-" +
         "1581473454525-16-1-SUCCEEDED-default-1581473439146.jhist_tmp";
     String[] argv = new String[]{"-rm", "-r", filePath};
-    int res = run(argv);
+    run(argv);
 
     String[] argv2 = new String[]{"-mkdir", "-p", filePath};
-    res = run(argv2);
+    int res = run(argv2);
     Assert.assertTrue(res == 0);
 
+    res = run(argv);
+    Assert.assertTrue(res == 0);
+  }
+
+  @Test
+  public void testMkdirSpecialEqualAndComma() throws Exception {
+    String filePath = DaosFSFactory.DAOS_URI +"/zjf/useDecimal=true,xyz=1";
+    String filePath2 = DaosFSFactory.DAOS_URI +"/zjf/normal";
+    String[] argv = new String[]{"-rm", "-r", filePath};
+    run(argv);
+
+    String[] argv0 = new String[]{"-rm", "-r", filePath2};
+    run(argv0);
+
+    String[] argv2 = new String[]{"-mkdir", "-p", filePath};
+    int res = run(argv2);
+    Assert.assertTrue(res == 0);
+
+    String[] argv20 = new String[]{"-mkdir", "-p", filePath2};
+    res = run(argv20);
+    Assert.assertTrue(res == 0);
+
+    String[] argv3 = new String[]{"-ls", DaosFSFactory.DAOS_URI +"/zjf"};
+    res = run(argv3);
+    Assert.assertTrue(res == 0);
     res = run(argv);
     Assert.assertTrue(res == 0);
   }

@@ -14,7 +14,7 @@ The <a href="#f8.1">figure</a> below shows the modules constituting a service re
 <a id="f8.1"></a>
 **Service replication modules**
 
-![../../doc/graph/Fig_041.png](../../doc/graph/Fig_041.png "Service replication modules")
+![../../docs/graph/Fig_041.png](../../docs/graph/Fig_041.png "Service replication modules")
 
 <a id="8.3.2"></a>
 ## RPC Handling

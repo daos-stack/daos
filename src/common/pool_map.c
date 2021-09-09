@@ -1440,6 +1440,7 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
 		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
+		map_comp.co_padding = 0;
 
 		if (map != NULL) {
 			struct pool_domain	*current;

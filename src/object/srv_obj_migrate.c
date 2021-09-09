@@ -287,6 +287,8 @@ obj_tree_insert(daos_handle_t toh, uuid_t co_uuid, daos_unit_oid_t oid,
 void
 migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 {
+	if (!tls)
+		return;
 	D_DEBUG(DB_REBUILD, "TLS destroy for "DF_UUID" ver %d\n",
 		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version);
 	if (tls->mpt_pool)
@@ -310,12 +312,16 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls)
 void
 migrate_pool_tls_get(struct migrate_pool_tls *tls)
 {
+	if (!tls)
+		return;
 	tls->mpt_refcount++;
 }
 
 void
 migrate_pool_tls_put(struct migrate_pool_tls *tls)
 {
+	if (!tls)
+		return;
 	tls->mpt_refcount--;
 	if (tls->mpt_fini && tls->mpt_refcount == 1)
 		ABT_eventual_set(tls->mpt_done_eventual, NULL, 0);
@@ -540,7 +546,21 @@ mrone_obj_fetch(struct migrate_one *mrone, daos_handle_t oh, d_sg_list_t *sgls,
 	if (daos_oclass_grp_size(&mrone->mo_oca) > 1)
 		flags |= DIOF_TO_LEADER;
 
-	rc = dsc_obj_fetch(oh, eph, &mrone->mo_dkey, iod_num, iods, sgls, NULL,
+	if (daos_oclass_is_ec(&mrone->mo_oca) &&
+	    iods[0].iod_type != DAOS_IOD_SINGLE) {
+		unsigned int shard = mrone->mo_oid.id_shard %
+			     daos_oclass_grp_size(&mrone->mo_oca);
+
+		/* For EC data migration, let's force it to do degraded fetch,
+		 * make sure reintegration will not fetch from the original
+		 * shard, which might cause parity corruption.
+		 */
+		if (shard < obj_ec_data_tgt_nr(&mrone->mo_oca))
+			flags |= DIOF_FOR_FORCE_DEGRADE;
+	}
+
+	rc = dsc_obj_fetch(oh, mrone->mo_epoch, &mrone->mo_dkey,
+			   iod_num, iods, sgls, NULL,
 			   flags, NULL, csum_iov_fetch);
 	if (rc != 0)
 		return rc;
@@ -992,6 +1012,7 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 	struct daos_csummer	*csummer = NULL;
 	d_iov_t			 tmp_csum_iov;
 	struct dcs_iod_csums	*iod_csums = NULL;
+	uint64_t		 update_flags = 0;
 
 	D_ASSERT(mrone->mo_iod_num <= DSS_ENUM_UNPACK_MAX_IODS);
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -1122,9 +1143,13 @@ migrate_fetch_update_single(struct migrate_one *mrone, daos_handle_t oh,
 		D_ERROR("unable to allocate iod csums: "DF_RC"\n", DP_RC(rc));
 		goto out;
 	}
+
+	if (daos_oclass_is_ec(&mrone->mo_oca))
+		update_flags |= VOS_OF_EC;
+
 	rc = vos_obj_update(ds_cont->sc_hdl, mrone->mo_oid,
 			    mrone->mo_min_epoch, mrone->mo_version,
-			    0, &mrone->mo_dkey, mrone->mo_iod_num,
+			    update_flags, &mrone->mo_dkey, mrone->mo_iod_num,
 			    mrone->mo_iods, iod_csums, sgls);
 out:
 	for (i = 0; i < mrone->mo_iod_num; i++) {
@@ -2631,7 +2656,7 @@ migrate_obj_ult(void *data)
 	if (tls == NULL || tls->mpt_fini) {
 		D_WARN("some one abort the rebuild "DF_UUID"\n",
 		       DP_UUID(arg->pool_uuid));
-		D_GOTO(free, rc = 0);
+		D_GOTO(free_notls, rc = 0);
 	}
 
 	if (tls->mpt_del_local_objs) {
@@ -2704,6 +2729,7 @@ free:
 		DP_UUID(tls->mpt_pool_uuid), tls->mpt_version,
 		DP_UOID(arg->oid), arg->shard, tls->mpt_obj_executed_ult,
 		DP_RC(rc));
+free_notls:
 	D_FREE(arg->snaps);
 	D_FREE(arg);
 	migrate_pool_tls_put(tls);
