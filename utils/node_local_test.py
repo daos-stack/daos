@@ -3536,7 +3536,9 @@ def run(wf, args):
 
     fatal_errors = BoolRatchet()
 
-    if args.mode != 'fi':
+    if args.mode == 'fi':
+        fi_test = True
+    else:
         server = DaosServer(conf, test_class='first')
         server.start()
         try:
@@ -3550,8 +3552,6 @@ def run(wf, args):
                 fatal_errors.add_result(run_duns_overlay_test(server, conf))
             elif args.mode == 'set-fi':
                 fatal_errors.add_result(set_server_fi(server))
-            elif args.mode == 'fi':
-                fi_test = True
             elif args.mode == 'all':
                 fi_test_dfuse = True
                 fatal_errors.add_result(run_posix_tests(server, conf))
