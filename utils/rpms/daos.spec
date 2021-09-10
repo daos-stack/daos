@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.0.1-1%{?dist}
-%global libfabric_version 1.12.0
+%global libfabric_version 1.11.1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -30,7 +30,7 @@ BuildRequires: python36-scons >= 2.4
 %else
 BuildRequires: scons >= 2.4
 %endif
-BuildRequires: libfabric-devel >= %{libfabric_version}
+BuildRequires: libfabric-devel = %{libfabric_version}
 BuildRequires: mercury-devel = %{mercury_version}
 %if (0%{?rhel} < 8) || (0%{?suse_version} > 0)
 BuildRequires: openpa-devel
@@ -167,7 +167,7 @@ Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
-Requires: libfabric >= %{libfabric_version}
+Requires: libfabric = %{libfabric_version}
 %{?systemd_requires}
 Obsoletes: cart < 1000
 
@@ -178,7 +178,7 @@ This is the package needed to run a DAOS server
 Summary: The DAOS client
 Requires: %{name}%{?_isa} = %{version}-%{release}
 Requires: mercury = %{mercury_version}
-Requires: libfabric >= %{libfabric_version}
+Requires: libfabric = %{libfabric_version}
 %if (0%{?rhel} >= 8)
 Requires: fuse3 >= 3
 %else

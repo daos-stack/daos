@@ -560,8 +560,8 @@ req_kickoff_internal(struct dss_xstream *dx, struct sched_req_attr *attr,
 
 	D_ASSERT(attr && func && arg);
 	D_ASSERT(attr->sra_type < SCHED_REQ_MAX);
-	//if (attr->sra_type == SCHED_REQ_UPDATE)
-		abt_attr = sched_ult_attr_deep_stack;
+	/* if (attr->sra_type == SCHED_REQ_UPDATE) */
+	abt_attr = sched_ult_attr_deep_stack;
 
 	return sched_create_thread(dx, func, arg, abt_attr, NULL, 0);
 }
