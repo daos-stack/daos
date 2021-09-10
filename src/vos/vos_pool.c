@@ -121,6 +121,9 @@ pool_hop_free(struct d_ulink *hlink)
 	if (daos_handle_is_valid(pool->vp_cont_th))
 		dbtree_close(pool->vp_cont_th);
 
+	if (pool->vp_uma.uma_pool)
+		vos_pmemobj_close(pool->vp_uma.uma_pool);
+
 	vos_dedup_fini(pool);
 
 	D_FREE(pool);
@@ -243,7 +246,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	daos_handle_t		 hdl;
 	struct d_uuid		 ukey;
 	struct vos_pool		*pool = NULL;
-	int			 rc = 0, enabled = 1;
+	int			 rc = 0, rc_pool_open = 0, enabled = 1;
 
 	if (!path || uuid_is_null(uuid))
 		return -DER_INVAL;
@@ -387,16 +390,18 @@ open:
 		goto close;
 
 	/* Create a VOS pool handle using ph. */
-	rc = pool_open(ph, pool_df, uuid, flags, poh);
-	if (rc != 0)
+	rc_pool_open = pool_open(ph, pool_df, uuid, flags, poh);
+	if (rc_pool_open != 0)
 		goto close;
 	ph = NULL;
 
 close:
-	/* Close this local handle, if it hasn't been consumed by pool_open. */
-	if (ph != NULL)
+	/* Close this local handle, if it hasn't been consumed by pool_open
+	 * nor already been closed by pool_open upon error.
+	 */
+	if (ph != NULL && rc_pool_open == 0)
 		vos_pmemobj_close(ph);
-	return rc;
+	return rc ? rc : rc_pool_open;
 }
 
 /**
@@ -716,7 +721,7 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	struct vos_pool		*pool = NULL;
 	struct d_uuid		 ukey;
 	PMEMobjpool		*ph;
-	int			 rc, enabled = 1;
+	int			 rc, rc_pool_open = 0, enabled = 1;
 
 	if (path == NULL || poh == NULL) {
 		D_ERROR("Invalid parameters.\n");
@@ -784,16 +789,18 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 		goto out;
 	}
 
-	rc = pool_open(ph, pool_df, uuid, flags, poh);
-	if (rc != 0)
+	rc_pool_open = pool_open(ph, pool_df, uuid, flags, poh);
+	if (rc_pool_open != 0)
 		goto out;
 	ph = NULL;
 
 out:
-	/* Close this local handle, if it hasn't been consumed by pool_open. */
-	if (ph != NULL)
+	/* Close this local handle, if it hasn't been consumed by pool_open
+	 * nor already been closed by pool_open upon error.
+	 */
+	if (ph != NULL && rc_pool_open == 0)
 		vos_pmemobj_close(ph);
-	return rc;
+	return rc ? rc : rc_pool_open;
 }
 
 /**
