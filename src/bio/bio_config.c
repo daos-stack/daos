@@ -335,7 +335,7 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 		if (spdk_json_strequal(key, "traddr")) {
 			traddr = spdk_json_strdup(json_value(key));
 
-			D_INFO("Transport address found in JSON config: %s", traddr);
+			D_INFO("Adding transport address '%s' to SPDK allowed list", traddr);
 
 			if (vmd_enabled) {
 				if (strncmp(traddr, "0", 1) != 0) {
@@ -353,7 +353,8 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 						goto err;
 					}
 
-					D_INFO("\tVMD backing address translated to: %s", traddr);
+					D_INFO("\t- VMD backing address reverted to '%s'",
+						traddr);
 				}
 			}
 
@@ -380,20 +381,13 @@ err:
 }
 
 static int
-add_bdevs_to_opts(struct spdk_json_val *bdev_ss, bool vmd_enabled, struct spdk_env_opts *opts)
+add_bdevs_to_opts(struct json_config_ctx *ctx, struct spdk_json_val *bdev_ss, bool vmd_enabled,
+		  struct spdk_env_opts *opts)
 {
-	struct json_config_ctx	*ctx;
-	int			 rc = 0;
+	int	rc = 0;
 
 	D_ASSERT(bdev_ss != NULL);
 	D_ASSERT(opts != NULL);
-
-	D_ALLOC(ctx, sizeof(*ctx));
-	if (!ctx) {
-		rc = -DER_NOMEM;
-		D_ERROR("Failed to allocate context, "DF_RC"", DP_RC(rc));
-		return rc;
-	}
 
 	/* Capture subsystem name and config array */
 	if (spdk_json_decode_object(bdev_ss, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
@@ -419,24 +413,13 @@ add_bdevs_to_opts(struct spdk_json_val *bdev_ss, bool vmd_enabled, struct spdk_e
 		ctx->config_it = spdk_json_next(ctx->config_it);
 	}
 out:
-	free(ctx->json_data);
-	free(ctx->values);
-	D_FREE(ctx);
 	return rc;
 }
 
 static int
-check_vmd_status(struct spdk_json_val *vmd_ss, bool *vmd_enabled)
+check_vmd_status(struct json_config_ctx *ctx, struct spdk_json_val *vmd_ss, bool *vmd_enabled)
 {
-	struct json_config_ctx	*ctx;
-	int			 rc = 0;
-
-	D_ALLOC(ctx, sizeof(*ctx));
-	if (!ctx) {
-		rc = -DER_NOMEM;
-		D_ERROR("Failed to allocate context, "DF_RC"", DP_RC(rc));
-		return rc;
-	}
+	int	rc = 0;
 
 	if (vmd_ss == NULL) {
 		goto out;
@@ -467,9 +450,6 @@ check_vmd_status(struct spdk_json_val *vmd_ss, bool *vmd_enabled)
 		ctx->config_it = spdk_json_next(ctx->config_it);
 	}
 out:
-	free(ctx->json_data);
-	free(ctx->values);
-	D_FREE(ctx);
 	return rc;
 }
 
@@ -538,12 +518,12 @@ bio_add_allowed_devices(const char *json_config_file, struct spdk_env_opts *opts
 		goto out;
 	}
 
-	rc = check_vmd_status(vmd_ss, &vmd_enabled);
+	rc = check_vmd_status(ctx, vmd_ss, &vmd_enabled);
 	if (rc) {
 		goto out;
 	}
 
-	rc = add_bdevs_to_opts(bdev_ss, vmd_enabled, opts);
+	rc = add_bdevs_to_opts(ctx, bdev_ss, vmd_enabled, opts);
 out:
 	free(ctx->json_data);
 	free(ctx->values);
