@@ -81,7 +81,7 @@ bio_spdk_env_init(void)
 
 	D_ASSERT(nvme_glb.bd_nvme_conf != NULL);
 
-	// Only print error and more severe to stderr.
+	/* Only print error and more severe to stderr. */
 	spdk_log_set_print_level(SPDK_LOG_ERROR);
 
 	spdk_env_opts_init(&opts);
