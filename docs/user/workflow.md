@@ -1,6 +1,6 @@
 # Workflow
 
-# Use Cases
+## Use Cases
 
 A DAOS pool is a persistent storage reservation that is allocated to a
 project or specific job. Pools are allocated, shrunk, grown and destroyed by

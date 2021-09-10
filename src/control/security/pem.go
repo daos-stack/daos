@@ -50,17 +50,38 @@ func checkMaxPermissions(filePath string, mode os.FileMode, modeMax os.FileMode)
 func loadCertWithCustomCA(caRootPath, certPath, keyPath string) (*tls.Certificate, *x509.CertPool, error) {
 	caPEM, err := LoadPEMData(caRootPath, MaxCertPerm)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "could not load caRoot")
+		switch {
+		case os.IsNotExist(err):
+			return nil, nil, FaultMissingCertFile(caRootPath)
+		case os.IsPermission(err):
+			return nil, nil, FaultUnreadableCertFile(caRootPath)
+		default:
+			return nil, nil, errors.Wrapf(err, "could not load caRoot")
+		}
 	}
 
 	certPEM, err := LoadPEMData(certPath, MaxCertPerm)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "could not load cert")
+		switch {
+		case os.IsNotExist(err):
+			return nil, nil, FaultMissingCertFile(certPath)
+		case os.IsPermission(err):
+			return nil, nil, FaultUnreadableCertFile(certPath)
+		default:
+			return nil, nil, errors.Wrapf(err, "could not load cert")
+		}
 	}
 
 	keyPEM, err := LoadPEMData(keyPath, MaxKeyPerm)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "could not load key")
+		switch {
+		case os.IsNotExist(err):
+			return nil, nil, FaultMissingCertFile(keyPath)
+		case os.IsPermission(err):
+			return nil, nil, FaultUnreadableCertFile(keyPath)
+		default:
+			return nil, nil, errors.Wrapf(err, "could not load key")
+		}
 	}
 
 	certificate, err := tls.X509KeyPair(certPEM, keyPEM)
