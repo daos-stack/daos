@@ -1,6 +1,8 @@
 hosts:
   test_servers:
     - server-A
+    - server-B
+    - server-C
   test_clients:
     - client-B
 timeout: 240
@@ -12,8 +14,8 @@ server_config:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 1000000000
-  nvme_size: 10000000000
+  scm_size: 20%
+  nvme_size: 50%
   svcn: 1
   control_method: dmg
 container:
@@ -36,4 +38,4 @@ ior:
       block_size: '268435456'  # 256M
   objectclass:
     SX:
-      dfs_oclass: "SX"
+      dfs_oclass: "EC_2P1G1"
