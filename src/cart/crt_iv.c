@@ -2351,7 +2351,7 @@ exit:
 	if (delay_completion == false || rc != 0) {
 		if (rc != 0)
 			update_rc = rc;
-		
+
 		update_comp_cb(ivns_internal, class_id, iv_key, NULL, iv_value,
 			       update_rc, cb_arg);
 		if (rc == 0)
