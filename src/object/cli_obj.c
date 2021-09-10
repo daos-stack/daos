@@ -2857,7 +2857,6 @@ obj_req_fanout(struct dc_object *obj, struct obj_auxi_args *obj_auxi,
 			tgt += req_tgts->ort_grp_size;
 		else
 			tgt++;
-		obj_auxi->new_shard_tasks = 1;
 	}
 
 	obj_auxi->args_initialized = 1;
