@@ -74,10 +74,10 @@ The following details how the object class is chosen when no default or hints ar
   - no feats type: OC_RP_6G1
 
 In addition, the oid generation API provides an optional mechanism for users to provide hints to the
-DAOS libary to control what redundancy method is chosen and what scale of groups to use for the
+DAOS library to control what redundancy method is chosen and what scale of groups to use for the
 oclass without needing to specify the oclass itself. Those hints will override the auto class
 selection for that particular setting. For example, one could set a redundancy hint for replication
-on an Array object, and DAOS in thise case will select the proper replicated object class instead of
+on an Array object, and DAOS in this case will select the proper replicated object class instead of
 the default EC one.
 
 The user can specify any of the following redundancy hints:
