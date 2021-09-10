@@ -44,4 +44,4 @@ More information can also be found on the [wiki](http://wiki.daos.io).
 
 For any questions, please post to our [user forum](https://daos.groups.io/g/daos).
 Bugs should be reported through our [issue tracker](http://jira.daos.io)
-with a test case to reproduce the issue (when applicable) and [debug logs](./doc/debugging.md).
+with a test case to reproduce the issue (when applicable) and [debug logs](./docs/debugging.md).
