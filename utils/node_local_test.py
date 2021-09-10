@@ -1849,6 +1849,33 @@ class posix_tests():
 
         ofd.close()
 
+    @needs_dfuse
+    def test_chmod_ro(self):
+        """Test that chmod and fchmod work correctly with files created read-only
+
+        DAOS-6238"""
+
+        path = self.dfuse.dir
+        fname = os.path.join(path, 'test_file1')
+        ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
+        ns = os.stat(fname)
+        print(ns)
+        os.close(ofd)
+        os.chmod(fname, stat.S_IRUSR)
+        ns = os.stat(fname)
+        print(ns)
+        assert stat.S_IMODE(ns.st_mode) == stat.S_IRUSR
+
+        fname = os.path.join(path, 'test_file2')
+        ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
+        ns = os.stat(fname)
+        print(ns)
+        os.fchmod(ofd, stat.S_IRUSR)
+        os.close(ofd)
+        ns = os.stat(fname)
+        print(ns)
+        assert stat.S_IMODE(ns.st_mode) == stat.S_IRUSR
+
     def test_with_path(self):
         """Test that dfuse starts with path option."""
 
@@ -2282,13 +2309,6 @@ def run_tests(dfuse):
     except FileExistsError:
         pass
     os.unlink(fname)
-
-    # DAOS-6238
-    fname = os.path.join(path, 'test_file4')
-    ofd = os.open(fname, os.O_CREAT | os.O_RDONLY | os.O_EXCL)
-    assert_file_size_fd(ofd, 0)
-    os.close(ofd)
-    os.chmod(fname, stat.S_IRUSR)
 
 def stat_and_check(dfuse, pre_stat):
     """Check that dfuse started"""
