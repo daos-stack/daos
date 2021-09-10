@@ -27,6 +27,8 @@ class TestWithScrubber(IorTestBase):
         self.scrubber = ScrubberUtils(
             self.get_dmg_command(), self.server_managers[0].hosts)
         self.daos_cmd = self.get_daos_command()
+        self.sc_pool = None
+        self.sc_container = None
 
     def create_pool_cont_with_scrubber(self, pool_prop=None, cont_prop=None):
         self.add_pool()
@@ -42,9 +44,15 @@ class TestWithScrubber(IorTestBase):
                 self.pool.set_property(value[0], value[1])
         self.container.properties.value = cont_prop
         self.container.create()
+        self.sc_pool = self.pool
+        self.sc_container = self.container
+        values = "Pool : {} Container: {}".format(self.sc_pool, self.sc_container)
+        self.log.info(values)
 
-    def run_ior_and_check_scruber_status(self, fail_on_warning=True):
+    def run_ior_and_check_scruber_status(self, pool, cont, fail_on_warning=True):
         self.scrubber.get_csum_total_metrics()
+        self.pool = pool
+        self.container = cont
         # Add a thread for these IOR arguments
         process = threading.Thread(target=self.run_ior_with_pool,
                                    kwargs={"create_pool": True,

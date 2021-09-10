@@ -6,9 +6,10 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
 from ClusterShell.NodeSet import NodeSet
+from telemetry_utils import TelemetryUtils
 
 
-class ScrubberUtils():
+class ScrubberUtils(TelemetryUtils):
     def __init__(self, dmg, servers):
         """Create a ScrubberUtils object.
 
@@ -22,33 +23,33 @@ class ScrubberUtils():
         self.hosts = NodeSet.fromlist(servers)
 
     def is_scrubber_started(self, host=None):
-        TEST_METRICS = ["pool_target_scrubber_scrubber_started",
-                        "pool_target_scrubber_csums_total"]
+        TEST_METRICS = ["engine_pool_scrubber_scrubber_started",
+                        "engine_pool_scrubber_csums_total"]
         if host is None:
             # Use the first host
             host = self.hosts[0]
         else:
             host = host
-            info = self.get_metrics(",".join(TEST_METRICS))
-            self.log.info(info)
+        info = self.get_metrics(TEST_METRICS)
+        self.log.info(info)
 
     def get_scrub_corrupt_metrics(self, host=None):
-        CORRUPT_METRICS = "pool_target_scrubber_corruption_current"
+        CORRUPT_METRICS = "engine_pool_scrubber_corruption_current"
         if host is None:
             # Use the first host
             host = self.hosts[0]
         else:
             host = host
-            info = self.get_metrics(",".join(CORRUPT_METRICS))
-            self.log.info(info)
+        info = self.get_metrics(CORRUPT_METRICS)
+        self.log.info(info)
 
     def get_csum_total_metrics(self, host=None):
-        CSUM_METRICS = "pool_target_scrubber_csums_total"
+        CSUM_METRICS = "engine_pool_scrubber_csums_total"
         if host is None:
             # Use the first host
             host = self.hosts[0]
         else:
             host = host
-            info = self.get_metrics(",".join(CSUM_METRICS))
-            self.log.info(info)
+        info = self.get_metrics(CSUM_METRICS)
+        self.log.info(info)
 
