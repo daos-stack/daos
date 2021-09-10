@@ -134,7 +134,6 @@ def define_mercury(reqs):
                           './configure --prefix=$OFI_PREFIX ' +
                           '--disable-efa ' +
                           '--disable-psm3 ' +
-                          '--without-gdrcopy ' +
                           OFI_DEBUG +
                           include(reqs, 'psm2',
                                   '--enable-psm2' +
