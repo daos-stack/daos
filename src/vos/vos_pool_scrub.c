@@ -25,9 +25,9 @@ sc_csum_calc_inc(struct scrub_ctx *ctx)
 static void
 sc_m_pool_start(struct scrub_ctx *ctx)
 {
-	d_tm_record_timestamp(ctx->sc_metrics.scm_pool_metrics.sm_start);
+	d_tm_record_timestamp(ctx->sc_metrics.scm_start);
 	d_tm_mark_duration_start(
-		ctx->sc_metrics.scm_pool_metrics.sm_last_duration,
+		ctx->sc_metrics.scm_last_duration,
 		D_TM_CLOCK_REALTIME);
 }
 
@@ -35,8 +35,8 @@ static void
 sc_m_pool_stop(struct scrub_ctx *ctx)
 {
 	d_tm_mark_duration_end(
-		ctx->sc_metrics.scm_pool_metrics.sm_last_duration);
-	d_tm_set_counter(ctx->sc_metrics.scm_pool_metrics.sm_last_csum_calcs,
+		ctx->sc_metrics.scm_last_duration);
+	d_tm_set_counter(ctx->sc_metrics.scm_last_csum_calcs,
 			 ctx->sc_pool_last_csum_calcs);
 
 }
@@ -44,22 +44,22 @@ sc_m_pool_stop(struct scrub_ctx *ctx)
 static void
 sc_m_pool_csum_inc(struct scrub_ctx *ctx)
 {
-	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_csum_calcs);
-	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_total_csum_calcs);
+	m_inc_counter(ctx->sc_metrics.scm_csum_calcs);
+	m_inc_counter(ctx->sc_metrics.scm_total_csum_calcs);
 }
 
 static void
 sc_m_pool_corr_inc(struct scrub_ctx *ctx)
 {
-	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_corruption);
-	m_inc_counter(ctx->sc_metrics.scm_pool_metrics.sm_total_corruption);
+	m_inc_counter(ctx->sc_metrics.scm_corruption);
+	m_inc_counter(ctx->sc_metrics.scm_total_corruption);
 }
 
 static void
 sc_m_pool_csum_reset(struct scrub_ctx *ctx)
 {
-	m_reset_counter(ctx->sc_metrics.scm_pool_metrics.sm_csum_calcs);
-	m_reset_counter(ctx->sc_metrics.scm_pool_metrics.sm_corruption);
+	m_reset_counter(ctx->sc_metrics.scm_csum_calcs);
+	m_reset_counter(ctx->sc_metrics.scm_corruption);
 }
 
 static inline struct daos_csummer *
@@ -79,6 +79,12 @@ static inline int
 sc_schedule(const struct scrub_ctx *ctx)
 {
 	return ctx->sc_pool->sp_scrub_sched;
+}
+
+static inline int
+sc_freq(const struct scrub_ctx *ctx)
+{
+	return ctx->sc_pool->sp_scrub_freq_sec;
 }
 
 static inline void
@@ -128,11 +134,91 @@ sc_get_rec_in_chunk_at_idx(const struct scrub_ctx *ctx, uint32_t i)
 }
 
 static void
+sc_credit_decrement(struct scrub_ctx *ctx)
+{
+	if (ctx->sc_credits_left == 0)
+		return;
+	ctx->sc_credits_left--;
+}
+
+static void
+sc_credit_reset(struct scrub_ctx *ctx)
+{
+	if (ctx->sc_credits_left == 0)
+		ctx->sc_credits_left = ctx->sc_pool->sp_scrub_cred;
+}
+
+void
+sc_yield_sleep_while_running(struct scrub_ctx *ctx)
+{
+	uint64_t msec_between = 0;
+	struct timespec now;
+
+	/* must have a frequency set */
+	D_ASSERT(ctx->sc_pool->sp_scrub_freq_sec > 0);
+
+	d_gettime(&now);
+	sc_credit_decrement(ctx);
+	if (ctx->sc_credits_left > 0)
+		return;
+
+	if (sc_schedule(ctx) == DAOS_SCRUB_SCHED_CONTINUOUS) {
+		msec_between = get_ms_between_periods(ctx->sc_pool_start_scrub,
+			now, ctx->sc_pool->sp_scrub_freq_sec,
+			ctx->sc_pool_last_csum_calcs, ctx->sc_pool_csum_calcs);
+		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time,
+			       msec_between);
+	}
+
+	if (msec_between == 0)
+		sc_yield(ctx);
+	else
+		sc_sleep(ctx, msec_between);
+
+	sc_credit_reset(ctx);
+}
+
+/*
+ * DAOS_CSUM_SCRUB_DISABLED_WAIT_SEC can be set in the server config to change
+ * how long to wait before checking again if the scrubber is enabled.
+ */
+static uint32_t
+seconds_to_wait_while_disabled()
+{
+	char *sec = getenv("DAOS_CSUM_SCRUB_DISABLED_WAIT_SEC");
+
+	return sec != NULL ? atoll(sec) : 5;
+}
+
+void
+sc_yield_or_sleep(struct scrub_ctx *ctx)
+{
+	struct timespec	now, diff;
+	uint32_t	left_sec;
+
+	d_gettime(&now);
+	diff = d_timediff(ctx->sc_pool_start_scrub, now);
+
+	if (diff.tv_sec < sc_freq(ctx)) {
+		left_sec = sc_freq(ctx) - diff.tv_sec;
+		sc_sleep(ctx, left_sec * 1000);
+	} else {
+		sc_yield(ctx);
+	}
+}
+
+static bool
+sc_scrub_enabled(struct scrub_ctx *ctx)
+{
+	return sc_schedule(ctx) != DAOS_SCRUB_SCHED_OFF && sc_freq(ctx) > 0;
+}
+
+static void
 sc_verify_finish(struct scrub_ctx *ctx)
 {
 	sc_csum_calc_inc(ctx);
 	sc_m_pool_csum_inc(ctx);
-	sc_scrub_sched_control(ctx);
+	sc_yield_sleep_while_running(ctx);
 }
 
 /**
@@ -461,7 +547,6 @@ obj_iter_scrub_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 				D_ERROR("Error Verifying:"DF_RC"\n", DP_RC(rc));
 				return rc;
 			}
-			sc_scrub_sched_control(ctx);
 		}
 		break;
 	}
@@ -512,7 +597,6 @@ sc_scrub_cont(struct scrub_ctx *ctx)
 		}
 	}
 
-	sc_scrub_sched_control(ctx);
 
 	return 0;
 }
@@ -588,16 +672,29 @@ sc_pool_start(struct scrub_ctx *ctx)
 	sc_m_pool_start(ctx);
 }
 
+static void
+sc_pool_stop(struct scrub_ctx *ctx)
+{
+	ctx->sc_status = SCRUB_STATUS_NOT_RUNNING;
+
+	sc_m_pool_stop(ctx);
+}
+
 int
 vos_scrub_pool(struct scrub_ctx *ctx)
 {
 	vos_iter_param_t	param = {0};
 	struct vos_iter_anchors	anchor = {0};
-	int			rc;
+	int			rc = 0;
 
 	if (daos_handle_is_inval(ctx->sc_vos_pool_hdl)) {
 		D_ERROR("vos_iter_handle is invalid.\n");
 		return -DER_INVAL;
+	}
+
+	if (!sc_scrub_enabled(ctx)) {
+		sc_sleep(ctx, seconds_to_wait_while_disabled());
+		return 0;
 	}
 
 	sc_pool_start(ctx);
@@ -606,143 +703,44 @@ vos_scrub_pool(struct scrub_ctx *ctx)
 	param.ip_epr.epr_hi = DAOS_EPOCH_MAX;
 	rc = vos_iterate(&param, VOS_ITER_COUUID, false, &anchor,
 			 NULL, cont_iter_scrub_cb, ctx, NULL);
-	sc_m_pool_stop(ctx);
+
+	sc_pool_stop(ctx);
+	if (rc != 0) {
+		/*
+		 * If scrubbing failed for some reason, wait a minute
+		 * before trying again
+		 */
+		D_ERROR("Scrubbing failed. "DF_RC"\n", DP_RC(rc));
+		sc_sleep(ctx, 1000 * 60);
+	} else {
+		sc_yield_or_sleep(ctx);
+	}
 
 	return rc;
 }
 
-/* How many ms to wait between checksum calculations (for continuous spacing) */
-uint64_t
-vos_scrub_wait_between_msec(uint32_t sched, struct timespec start_time,
-			    uint64_t last_csum_calcs, uint64_t freq_seconds)
-{
-	struct timespec	elapsed;
-	uint64_t	elapsed_sec;
+#define SEC2NS(s) (s * 1e+9)
 
-	if (sched != DAOS_SCRUB_SCHED_CONTINUOUS)
+uint64_t
+get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
+		       uint64_t duration_seconds, uint64_t periods_nr,
+		       uint64_t per_idx)
+{
+	uint64_t	exp_per_sec; /* seconds per period */
+	struct timespec exp_curr_end; /* current period's expected finish */
+
+	if (periods_nr == 0 || duration_seconds == 0)
 		return 0;
 
-	elapsed = d_time_elapsed(start_time);
+	if (per_idx > periods_nr - 1)
+		per_idx = periods_nr - 1;
+	exp_per_sec = duration_seconds / periods_nr;
+	exp_curr_end = start_time;
+	d_timeinc(&exp_curr_end, SEC2NS((exp_per_sec * (per_idx + 1))));
 
-	elapsed_sec = d_time2s(elapsed);
+	/* already past current period? */
+	if (d_time2us(exp_curr_end) <= d_time2us(cur_time))
+		return 0;
 
-	if (elapsed_sec >= freq_seconds)
-		return 0; /* don't wait in between anymore */
-
-	freq_seconds -= elapsed_sec;
-
-	/*
-	 * overflow protection - if freq seconds is this large just assume
-	 * it's infinite anyway and don't really need to convert to ms
-	 */
-	if (freq_seconds * 1000 > freq_seconds)
-		freq_seconds *= 1000;
-
-	return freq_seconds / last_csum_calcs;
-}
-
-static void
-sc_credit_decrement(struct scrub_ctx *ctx)
-{
-	ctx->sc_credits_left--;
-}
-
-static void
-sc_credit_reset(struct scrub_ctx *ctx)
-{
-	if (ctx->sc_credits_left == 0)
-		ctx->sc_credits_left = ctx->sc_pool->sp_scrub_cred;
-}
-
-static void
-sc_control_in_between(struct scrub_ctx *ctx)
-{
-	uint64_t msec_between = 0;
-
-	if (ctx->sc_credits_left == 0) {
-		sc_credit_reset(ctx);
-		return;
-	}
-
-	sc_credit_decrement(ctx);
-	if (ctx->sc_credits_left > 0) {
-		return;
-	}
-
-	/* [todo-ryon]: Issues with schedule:
-	 *   - what to do in the case that there is nothing to
-	 *     scrub ... how long to wait until try again. How to know that there
-	 *     is nothing? sc_pool_last_csum_calcs could be 0 because of first
-	 *     time? Maybe need a flag is_first_time?
-	 *   - Issue when there's only 1. What's "in between"?
-	 *
-	 */
-
-	if (sc_schedule(ctx) == DAOS_SCRUB_SCHED_CONTINUOUS &&
-	    ctx->sc_pool_last_csum_calcs > ctx->sc_pool_csum_calcs) {
-		msec_between = vos_scrub_wait_between_msec(
-			sc_schedule(ctx), ctx->sc_pool_start_scrub,
-			ctx->sc_pool_last_csum_calcs - ctx->sc_pool_csum_calcs,
-			ctx->sc_pool->sp_scrub_freq_sec);
-		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time,
-			       msec_between);
-	}
-
-	if (msec_between == 0 || sc_cont_is_stopping(ctx))
-		sc_yield(ctx);
-	else
-		sc_sleep(ctx, msec_between);
-
-	sc_credit_reset(ctx);
-}
-
-/*
- * DAOS_CSUM_SCRUB_DISABLED_WAIT_SEC can be set in the server config to change
- * how long to wait before checking again if the scrubber is enabled.
- */
-static uint32_t
-seconds_to_wait_while_disabled()
-{
-	char *sec = getenv("DAOS_CSUM_SCRUB_DISABLED_WAIT_SEC");
-
-	return sec != NULL ? atoll(sec) : 5;
-}
-
-static void
-sc_control_when_complete(struct scrub_ctx *ctx)
-{
-	struct timespec	now, diff;
-	uint32_t	left_sec;
-
-	d_gettime(&now);
-	diff = d_timediff(ctx->sc_pool_start_scrub, now);
-
-	if (diff.tv_sec < ctx->sc_pool->sp_scrub_freq_sec) {
-		left_sec = ctx->sc_pool->sp_scrub_freq_sec - diff.tv_sec;
-		sc_sleep(ctx, left_sec * 1000);
-	} else {
-		sc_yield(ctx);
-	}
-}
-
-void
-sc_scrub_sched_control(struct scrub_ctx *ctx)
-{
-	uint32_t disabled_wait_sec = seconds_to_wait_while_disabled();
-
-	if (ctx->sc_pool->sp_scrub_sched == DAOS_SCRUB_SCHED_OFF ||
-	    ctx->sc_pool->sp_scrub_freq_sec == 0) {
-		sc_sleep(ctx, disabled_wait_sec * 1000);
-		return;
-	}
-
-	if (ctx->sc_status == SCRUB_STATUS_RUNNING) {
-		sc_control_in_between(ctx);
-		return;
-	}
-	if (ctx->sc_status == SCRUB_STATUS_NOT_RUNNING) {
-		sc_control_when_complete(ctx);
-		return;
-	}
-	D_ASSERTF(false, "Should not get here.");
+	return d_time2ms(d_timediff(cur_time, exp_curr_end));
 }

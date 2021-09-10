@@ -1214,20 +1214,16 @@ enum scrub_status {
 #define m_inc_counter(m) d_tm_inc_counter((m), 1)
 #define m_reset_counter(m) d_tm_set_counter((m), 0)
 
-struct scrub_metrics {
-	struct d_tm_node_t *sm_start;
-	struct d_tm_node_t *sm_last_duration;
-	struct d_tm_node_t *sm_csum_calcs;
-	struct d_tm_node_t *sm_total_csum_calcs;
-	struct d_tm_node_t *sm_last_csum_calcs;
-	struct d_tm_node_t *sm_corruption;
-	struct d_tm_node_t *sm_total_corruption;
-};
-
 struct scrub_ctx_metrics {
-	struct d_tm_node_t	*scm_pool_ult_start;
-	struct d_tm_node_t	*scm_pool_ult_wait_time;
-	struct scrub_metrics	 scm_pool_metrics;
+	struct d_tm_node_t *scm_pool_ult_start;
+	struct d_tm_node_t *scm_pool_ult_wait_time;
+	struct d_tm_node_t *scm_start;
+	struct d_tm_node_t *scm_last_duration;
+	struct d_tm_node_t *scm_csum_calcs;
+	struct d_tm_node_t *scm_total_csum_calcs;
+	struct d_tm_node_t *scm_last_csum_calcs;
+	struct d_tm_node_t *scm_corruption;
+	struct d_tm_node_t *scm_total_corruption;
 };
 
 /* Scrub the pool */
@@ -1295,12 +1291,22 @@ struct scrub_ctx {
 int vos_scrub_pool(struct scrub_ctx *ctx);
 
 /*
- * Based on the schedule type, calculate the number of msec to wait between
- * checksum calculations.
+ * A generic utility function that, given a start time, duration, number of
+ * periods that can be processed, and the current period index, calculate how
+ * long the caller should wait/sleep in order to fill the space of the current
+ * period.
+ *
+ * Returns number of milliseconds to wait
  */
 uint64_t
-vos_scrub_wait_between_msec(uint32_t sched, struct timespec start_time,
-			    uint64_t last_csum_calcs, uint64_t freq_seconds);
+get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
+		       uint64_t duration_seconds, uint64_t periods_nr,
+		       uint64_t per_idx);
+
+void
+sc_yield_or_sleep(struct scrub_ctx *ctx);
+void
+sc_yield_sleep_while_running(struct scrub_ctx *ctx);
 
 /*
  * Based on the schedule type, number of checksums already calculated, credits

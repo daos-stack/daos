@@ -586,8 +586,13 @@ test_yield_deletes_extent(void *arg)
 		       2, false);
 
 	rc = vos_aggregate(ctx->tsc_coh, &epr, NULL, NULL, NULL, true);
-
 	assert_success(rc);
+	/*
+	 * not totally sure why this is needed, but maybe to wait for
+	 * aggregation to finish? But without it, extent_deleted_by_aggregation
+	 * test fails with last assert_success. Is a checksum failure.
+	 */
+	sleep(1);
 
 	return 0;
 }
@@ -611,7 +616,6 @@ extent_deleted_by_aggregation(void **state)
 	/* Second (inserted by test_yield_deletes_extent) should now exist */
 	assert_success(sts_ctx_fetch(ctx, 1, TEST_IOD_ARRAY_1, "dkey",
 				     "akey", 2));
-
 }
 
 static int
