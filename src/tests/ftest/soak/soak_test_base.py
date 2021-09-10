@@ -82,6 +82,7 @@ class SoakTestBase(TestWithServers):
         self.sharedsoakdir = self.sharedlog_dir + "/pass" + str(self.loop)
         # Initialize dmg cmd
         self.dmg_command = self.get_dmg_command()
+        self.dmg_command.get_params()
         # Fail if slurm partition is not defined
         # NOTE: Slurm reservation and partition are created before soak runs.
         # CI uses partition=daos_client and no reservation.

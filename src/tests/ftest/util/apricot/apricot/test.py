@@ -32,8 +32,6 @@ from general_utils import \
 from logger_utils import TestLogger
 from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
-from env_modules import load_mpi
-from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
 
@@ -408,19 +406,6 @@ class TestWithoutServers(Test):
     def setUp(self):
         """Set up run before each test."""
         super().setUp()
-        if not load_mpi("openmpi"):
-            self.fail("Failed to load openmpi")
-
-        self.orterun = find_executable('orterun')
-        if self.orterun is None:
-            self.fail("Could not find orterun")
-
-        # hardware tests segfault in MPI_Init without this option
-        self.client_mca = "--mca btl_openib_warn_default_gid_prefix 0"
-        self.client_mca += " --mca pml ob1"
-        self.client_mca += " --mca btl tcp,self"
-        self.client_mca += " --mca oob tcp"
-        self.ompi_prefix = os.path.dirname(os.path.dirname(self.orterun))
         self.bin = os.path.join(self.prefix, 'bin')
         self.daos_test = os.path.join(self.prefix, 'bin', 'daos_test')
 
@@ -553,6 +538,7 @@ class TestWithServers(TestWithoutServers):
         # self.config = None
         self.job_manager = None
         self.label_generator = LabelGenerator()
+        self._dmg = None
 
     def setUp(self):
         """Set up each test case."""
@@ -1314,8 +1300,6 @@ class TestWithServers(TestWithoutServers):
                         self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error destroying pool: {}".format(error))
-
-
         return error_list
 
     def search_and_destroy_pools(self):
@@ -1484,22 +1468,25 @@ class TestWithServers(TestWithoutServers):
 
         """
         if self.server_managers:
+            self.log.info("get_dmg_command(): returning server manager dmg")
             return self.server_managers[index].dmg
 
-        if self.server_manager_class == "Systemctl":
-            dmg_config_file = get_default_config_file("control")
-            dmg_config_temp = self.get_config_file("daos", "dmg", self.test_dir)
-            dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
-        else:
-            dmg_config_file = self.get_config_file("daos", "dmg")
-            dmg_config_temp = None
-            dmg_cert_dir = self.workdir
+        if self._dmg is None:
+            if self.server_manager_class == "Systemctl":
+                dmg_config_file = get_default_config_file("control")
+                dmg_config_temp = self.get_config_file(
+                    "daos", "dmg", self.test_dir)
+                dmg_cert_dir = os.path.join(os.sep, "etc", "daos", "certs")
+            else:
+                dmg_config_file = self.get_config_file("daos", "dmg")
+                dmg_config_temp = None
+                dmg_cert_dir = self.workdir
 
-        dmg_cmd = get_dmg_command(
-            self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
-            dmg_config_temp)
-        dmg_cmd.hostlist = self.access_points
-        return dmg_cmd
+            self._dmg = get_dmg_command(
+                self.server_group, dmg_cert_dir, self.bin, dmg_config_file,
+                dmg_config_temp)
+            self._dmg.hostlist = self.access_points
+        return self._dmg
 
     def get_daos_command(self):
         """Get a DaosCommand object.
