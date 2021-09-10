@@ -35,8 +35,9 @@ $ daos cont query tank mycont
   Snapshot Epochs            :
 ```
 
-The label can be up to 127 characters long and must only include
-alphanumeric characters, colon (':'), period ('.') or underscore ('\_').
+Like pools, container labels can be up to 127 characters long and must only include
+alphanumeric characters, colon (':'), period ('.'), hyphen ('-') or underscore ('\_').
+Labels that can be parsed as UUID are not allowed.
 
 The container type (i.e., POSIX or HDF5) can be passed via the --type option.
 As shown below, the pool UUID, container UUID, and container attributes can be
