@@ -424,6 +424,10 @@ class YamlParameters(ObjectWithParameters):
             if value is not None:
                 yaml_data[name] = value
 
+        # Remove the "generate_config" BasicParameter as it is not an actual
+        # yaml configuration file parameter
+        yaml_data.pop("generate_config", None)
+
         return yaml_data if self.title is None else {self.title: yaml_data}
 
     def is_yaml_data_updated(self):
