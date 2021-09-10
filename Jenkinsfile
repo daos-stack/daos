@@ -387,7 +387,7 @@ pipeline {
                         }
                     }
                     steps {
-                        buildRpm()
+                        buildRpm target: 'leap15.3'
                     }
                     post {
                         success {
@@ -836,6 +836,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
+                                       target: 'el8.4',
                                        inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
@@ -920,6 +921,7 @@ pipeline {
                     }
                     steps {
                         testRpm inst_repos: daosRepos(),
+                                target: 'leap15.3',
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test Leap 15 RPMs')
