@@ -81,14 +81,20 @@ mkdir -p /localhome
 if ! grep ":$MY_UID:$MY_UID:" /etc/passwd; then
   useradd -b /localhome -g "$MY_UID" -u "$MY_UID" -s /bin/bash jenkins
 fi
-mkdir -p /localhome/jenkins/.ssh
-cat /tmp/ci_key.pub >> /localhome/jenkins/.ssh/authorized_keys
-cat /tmp/ci_key.pub >> /root/.ssh/authorized_keys
-mv /tmp/ci_key.pub /localhome/jenkins/.ssh/id_rsa.pub
-mv /tmp/ci_key /localhome/jenkins/.ssh/id_rsa
-mv /tmp/ci_key_ssh_config /localhome/jenkins/.ssh/config
-chmod 700 /localhome/jenkins/.ssh
-chmod 600 /localhome/jenkins/.ssh/{authorized_keys,id_rsa*,config}
+jenkins_ssh=/localhome/jenkins/.ssh
+mkdir -p "${jenkins_ssh}"
+if ! grep -q -s -f /tmp/ci_key.pub "${jenkins_ssh}/authorized_keys"; then
+  cat /tmp/ci_key.pub >> "${jenkins_ssh}/authorized_keys"
+fi
+root_ssh=/root/.ssh
+if ! grep -q -f /tmp/ci_key.pub "${root_ssh}/authorized_keys"; then
+  cat /tmp/ci_key.pub >> "${root_ssh}/authorized_keys"
+fi
+cp /tmp/ci_key.pub "${jenkins_ssh}/id_rsa.pub"
+cp /tmp/ci_key "${jenkins_ssh}/id_rsa"
+cp /tmp/ci_key_ssh_config "${jenkins_ssh}/config"
+chmod 700 "${jenkins_ssh}"
+chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
 chown -R jenkins.jenkins /localhome/jenkins/
 echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
 

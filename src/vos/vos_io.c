@@ -74,7 +74,9 @@ struct vos_io_context {
 				 ic_dedup_verify:1,
 				 ic_read_ts_only:1,
 				 ic_check_existence:1,
-				 ic_remove:1;
+				 ic_remove:1,
+				 ic_skip_fetch:1,
+				 ic_ec:1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -653,13 +655,14 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 	ioc->ic_save_recx = ((vos_flags & VOS_OF_FETCH_RECX_LIST) != 0);
 	ioc->ic_dedup = ((vos_flags & VOS_OF_DEDUP) != 0);
 	ioc->ic_dedup_verify = ((vos_flags & VOS_OF_DEDUP_VERIFY) != 0);
+	ioc->ic_skip_fetch = ((vos_flags & VOS_OF_SKIP_FETCH) != 0);
 	ioc->ic_dedup_th = dedup_th;
 	if (vos_flags & VOS_OF_FETCH_CHECK_EXISTENCE)
 		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
 	else if (vos_flags & VOS_OF_FETCH_SET_TS_ONLY)
 		ioc->ic_read_ts_only = 1;
-	ioc->ic_remove =
-		((vos_flags & VOS_OF_REMOVE) != 0);
+	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
+	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->ic_iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
@@ -985,8 +988,8 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	filter.fr_punch_epc = ioc->ic_akey_info.ii_prior_punch.pr_epc;
 	filter.fr_punch_minor_epc =
 		ioc->ic_akey_info.ii_prior_punch.pr_minor_epc;
-
 	evt_ent_array_init(ioc->ic_ent_array, 0);
+
 	rc = evt_find(toh, &filter, ioc->ic_ent_array);
 	if (rc != 0 || vos_dtx_hit_inprogress())
 		D_GOTO(failed, rc = (rc == 0 ? -DER_INPROGRESS : rc));
@@ -994,6 +997,9 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 	holes = 0;
 	rsize = 0;
 	inob = ioc->ic_ent_array->ea_inob;
+	if (ioc->ic_skip_fetch)
+		goto fill;
+
 	evt_ent_array_for_each(ent, ioc->ic_ent_array) {
 		daos_off_t	 lo = ent->en_sel_ext.ex_lo;
 		daos_off_t	 hi = ent->en_sel_ext.ex_hi;
@@ -1073,6 +1079,7 @@ akey_fetch_recx(daos_handle_t toh, const daos_epoch_range_t *epr,
 		index = lo + nr;
 	}
 
+fill:
 	D_ASSERT(index <= end);
 	if (index < end)
 		holes += end - index;
@@ -1751,10 +1758,12 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		uint64_t	gsize;
+		uint64_t	gsize = iod->iod_size;
 
-		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
-						   (uintptr_t)iod->iod_recxs;
+		/* See obj_singv_ec_rw_filter. */
+		if (ioc->ic_ec && iod->iod_recxs != NULL)
+			gsize = (uintptr_t)iod->iod_recxs;
+
 		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc,
 					minor_epc);
 		if (rc)

@@ -507,8 +507,12 @@ main(int argc, char **argv)
 	} else if (rc == ENOENT) {
 		printf("Mount point does not exist\n");
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
+	} else if (rc == ENOTCONN) {
+		printf("Stale mount point, run fusermount3 and retry\n");
+		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	} else if (rc != ENODATA && rc != ENOTSUP) {
-		/* Other errors from DUNS, it should have logged them already */
+		/* DUNS may have logged this already but won't have printed anything */
+		printf("Error resolving mount point (%d) %s\n", rc, strerror(rc));
 		D_GOTO(out_daos, rc = daos_errno2der(rc));
 	}
 

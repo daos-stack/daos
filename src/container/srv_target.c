@@ -698,6 +698,11 @@ cont_child_alloc_ref(void *co_uuid, unsigned int ksize, void *po_uuid,
 		rc = dss_abterr2der(rc);
 		goto out_mutex;
 	}
+	rc = ABT_cond_create(&cont->sc_scrub_cond);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto out_mutex;
+	}
 
 	cont->sc_pool = ds_pool_child_lookup(po_uuid);
 	if (cont->sc_pool == NULL) {
@@ -751,6 +756,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	daos_csummer_destroy(&cont->sc_csummer);
 	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
+	ABT_cond_free(&cont->sc_scrub_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
 }
@@ -1204,6 +1210,14 @@ cont_child_destroy_one(void *vin)
 		if (cont->sc_dtx_resyncing)
 			ABT_cond_wait(cont->sc_dtx_resync_cond, cont->sc_mutex);
 		ABT_mutex_unlock(cont->sc_mutex);
+
+		/* Make sure checksum scrubbing has stopped */
+		ABT_mutex_lock(cont->sc_mutex);
+		if (cont->sc_scrubbing) {
+			sched_req_wakeup(cont->sc_pool->spc_scrubbing_req);
+			ABT_cond_wait(cont->sc_scrub_cond, cont->sc_mutex);
+		}
+		ABT_mutex_unlock(cont->sc_mutex);
 		/*
 		 * If this is the last user, ds_cont_child will be removed from
 		 * hash & freed on put.
@@ -1247,14 +1261,25 @@ cont_delete_ec_agg(uuid_t pool_uuid, uuid_t cont_uuid);
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
+	struct ds_pool	*pool;
 	struct cont_tgt_destroy_in in;
 	int rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
 	cont_delete_ec_agg(pool_uuid, cont_uuid);
+	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
+	ds_pool_put(pool);
+
 	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
+out:
 	return rc;
 }
 
@@ -2004,10 +2029,11 @@ cont_snap_notify_one(void *vin)
 		rc = cont_child_gather_oids(cont, args->coh_uuid,
 					    args->snap_epoch);
 		if (rc)
-			return rc;
+			goto out_cont;
 	}
 
 	cont->sc_aggregation_max = crt_hlc_get();
+out_cont:
 	ds_cont_child_put(cont);
 	return rc;
 }
@@ -2201,9 +2227,8 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns,
-			    in->coai_op.ci_pool_hdl, in->coai_op.ci_uuid,
-			    in->coai_op.ci_hdl, in->num_oids, &sgl);
+	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns, pool_hdl->sph_pool->sp_uuid,
+			    in->coai_op.ci_uuid, in->num_oids, &sgl);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -2212,8 +2237,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 out:
 	out->coao_op.co_rc = rc;
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
-		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid), rpc, DP_RC(rc));
 
 	return rc;
 }

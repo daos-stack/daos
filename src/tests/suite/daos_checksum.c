@@ -454,7 +454,7 @@ test_server_data_corruption(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*8, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*64, oc);
 
 	/**1. Simple server data corruption after RDMA */
 	setup_multiple_extent_data(&ctx);
@@ -2425,7 +2425,7 @@ test_enumerate_object2(void **state)
 	assert_rc_equal(0, rc);
 
 	d_sgl_init(&list_sgl, 1);
-	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 10);
+	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 64);
 	/** Sanity check that no failure still returns success */
 	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX};
 
@@ -2561,6 +2561,64 @@ ec_two_chunk_plus_one(void **state)
 	});
 }
 
+static void
+basic_scrubbing_test(void **state, char *scrub_freq)
+{
+	struct csum_test_ctx	 ctx = {0};
+	daos_oclass_id_t	 oc = dts_csum_oc;
+	int			 rc;
+
+	if (csum_ec_enabled() && !test_runable(*state, csum_ec_grp_size()))
+		skip();
+
+	/**
+	 * Setup
+	 */
+	setup_from_test_args(&ctx, (test_arg_t *)*state);
+	/* Make scrubbing is running a lot */
+	dmg_pool_set_prop(dmg_config_file, "scrub", "continuous",
+			  ctx.test_arg->pool.pool_uuid);
+	dmg_pool_set_prop(dmg_config_file, "scrub-freq", scrub_freq,
+			  ctx.test_arg->pool.pool_uuid);
+
+	setup_simple_data(&ctx);
+	setup_cont_obj(&ctx, DAOS_PROP_CO_CSUM_CRC32, false, 1024, oc);
+
+	/**
+	 * Act
+	 */
+	rc = daos_obj_update(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			     &ctx.update_iod, &ctx.update_sgl, NULL);
+	assert_success(rc);
+
+	rc = daos_obj_fetch(ctx.oh, DAOS_TX_NONE, 0, &ctx.dkey, 1,
+			    &ctx.fetch_iod, &ctx.fetch_sgl, NULL, NULL);
+	assert_success(rc);
+	assert_memory_equal(ctx.update_sgl.sg_iovs->iov_buf,
+			    ctx.fetch_sgl.sg_iovs->iov_buf,
+			    ctx.update_sgl.sg_iovs->iov_buf_len);
+
+	/**
+	 * Clean up
+	 */
+
+	sleep(5); /* Make sure scrubber has had time to start running */
+	cleanup_cont_obj(&ctx);
+	cleanup_data(&ctx);
+}
+
+static void
+scrubbing_a_lot(void **state)
+{
+	basic_scrubbing_test(state, "1");
+}
+
+static void
+scrubbing_with_large_sleep(void **state)
+{
+	basic_scrubbing_test(state, "100000");
+}
+
 static int
 setup(void **state)
 {
@@ -2660,6 +2718,12 @@ static const struct CMUnitTest csum_tests[] = {
 		  "EC chunk", ec_chunk_plus_one),
 	CSUM_TEST("DAOS_EC_CSUM04: Single extent that is 1 byte larger than "
 		  "2 EC chunks", ec_two_chunk_plus_one),
+	CSUM_TEST("DAOS_SCRUBBING00: A basic scrubbing test with scrubbing "
+		  "running very frequently",
+		  scrubbing_a_lot),
+	CSUM_TEST("DAOS_SCRUBBING01: A basic scrubbing test with a long wait "
+		  "in between. Should still be able to destroy cont and pool",
+		  scrubbing_with_large_sleep)
 };
 
 static int

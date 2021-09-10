@@ -18,6 +18,8 @@ class TelemetryUtils():
         "engine_pool_ops_cont_destroy",
         "engine_pool_ops_cont_open"]
     ENGINE_POOL_METRICS = [
+        "engine_pool_entries_dtx_batched_degree",
+        "engine_pool_entries_dtx_batched_total",
         "engine_pool_ops_akey_enum",
         "engine_pool_ops_akey_punch",
         "engine_pool_ops_compound",
@@ -46,7 +48,21 @@ class TelemetryUtils():
         "engine_pool_restarted",
         "engine_pool_started_at",
         "engine_pool_xferred_fetch",
-        "engine_pool_xferred_update"]
+        "engine_pool_xferred_update",
+        'engine_pool_target_scrub_corruption_current',
+        'engine_pool_target_scrub_corruption_total',
+        'engine_pool_target_scrub_csums_current',
+        'engine_pool_target_scrub_csums_prev',
+        'engine_pool_target_scrub_csums_total',
+        'engine_pool_target_scrub_last_duration',
+        'engine_pool_target_scrub_last_duration_max',
+        'engine_pool_target_scrub_last_duration_mean',
+        'engine_pool_target_scrub_last_duration_min',
+        'engine_pool_target_scrub_last_duration_stddev',
+        'engine_pool_target_scrub_scrubber_started',
+        'engine_pool_target_scrub_ult_start',
+        'engine_pool_target_scrub_wait_gauge',
+    ]
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",

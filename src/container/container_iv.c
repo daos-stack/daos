@@ -1013,23 +1013,61 @@ cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	return rc;
 }
 
-int
-cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid, int mode)
+static int
+cont_iv_invalidate(void *ns, uint32_t class_id, uuid_t cont_uuid, int mode)
 {
 	struct ds_iv_key	key = { 0 };
 	struct cont_iv_key	*civ_key;
 	int			rc;
 
+	key.class_id = class_id;
 	civ_key = key2priv(&key);
-	uuid_copy(civ_key->cont_uuid, cont_hdl_uuid);
-	civ_key->class_id = IV_CONT_CAPA;
+	uuid_copy(civ_key->cont_uuid, cont_uuid);
+	civ_key->class_id = class_id;
+	civ_key->entry_size = 0;
 
-	key.class_id = IV_CONT_CAPA;
-	rc = ds_iv_invalidate(ns, &key, 0, mode, 0, false /* retry */);
+	rc = ds_iv_invalidate(ns, &key, 0, mode, 0, false);
 	if (rc)
-		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
+		D_ERROR(DF_UUID" iv invalidate failed "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
 
 	return rc;
+}
+
+int
+cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	int rc;
+
+	/* delete all entries for this container */
+	rc = oid_iv_invalidate(ns, pool_uuid, cont_uuid);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete snap "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	/* delete all entries for this container */
+	rc = cont_iv_invalidate(ns, IV_CONT_SNAP, cont_uuid, CRT_IV_SYNC_NONE);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete snap "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	rc = cont_iv_invalidate(ns, IV_CONT_PROP, cont_uuid, CRT_IV_SYNC_NONE);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete prop "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	rc = cont_iv_invalidate(ns, IV_CONT_AGG_EPOCH_REPORT, cont_uuid, CRT_IV_SYNC_NONE);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete agg epoch report "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	rc = cont_iv_invalidate(ns, IV_CONT_AGG_EPOCH_BOUNDRY, cont_uuid, CRT_IV_SYNC_NONE);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete agg epoch boundary "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	return 0;
+}
+
+int
+cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid, int mode)
+{
+	return cont_iv_invalidate(ns, IV_CONT_CAPA, cont_hdl_uuid, mode);
 }
 
 static int

@@ -202,7 +202,7 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 	entry = daos_prop_entry_get(props, DAOS_PROP_PO_SCRUB_SCHED);
 	bool scrubbing_enabled =
 		entry->dpe_val > DAOS_SCRUB_SCHED_OFF &&
-		entry->dpe_val <= DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD;
+		entry->dpe_val < DAOS_SCRUB_SCHED_INVALID;
 	if (entry == NULL) {
 		fprintf(stderr, "scrubbing schedule property not found\n");
 		rc = -DER_INVAL;
@@ -217,12 +217,6 @@ pool_decode_props(struct cmd_args_s *ap, daos_prop_t *props)
 			break;
 		case DAOS_SCRUB_SCHED_CONTINUOUS:
 			D_PRINT("Continuous\n");
-			break;
-		case DAOS_SCRUB_SCHED_RUN_ONCE:
-			D_PRINT("Run-Once\n");
-			break;
-		case DAOS_SCRUB_SCHED_RUN_ONCE_NO_YIELD:
-			D_PRINT("Run-Once-No-Yield\n");
 			break;
 		default:
 			D_PRINT("UNKNOWN\n");
@@ -1815,12 +1809,9 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	printf("Number of snapshots: %i\n", (int)cont_info.ci_nsnapshots);
 	printf("Latest Persistent Snapshot: %i\n",
 		(int)cont_info.ci_lsnapshot);
-	printf("Highest Aggregated Epoch: "DF_U64"\n", cont_info.ci_hae);
 	printf("Container redundancy factor: %d\n", cont_info.ci_redun_fac);
 	daos_unparse_ctype(cont_type, type);
 	printf("Container Type:\t%s\n", type);
-
-	/* TODO: list snapshot epoch numbers, including ~80 column wrap. */
 
 	if (ap->oid.hi || ap->oid.lo) {
 		printf("Path is within container, oid: " DF_OID "\n",
@@ -1868,7 +1859,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 				ap->path, strerror(rc));
 		else
 			fprintf(ap->outstream, "Successfully destroyed path %s\n", ap->path);
-		return rc;
+		return daos_errno2der(rc);
 	}
 
 	rc = daos_cont_destroy(ap->pool, ap->cont_str, ap->force, NULL);
