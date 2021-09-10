@@ -101,7 +101,7 @@ func checkSocketDir(sockDir string) error {
 type drpcServerSetupReq struct {
 	log     logging.Logger
 	sockDir string
-	engines []*EngineInstance
+	engines []Engine
 	tc      *security.TransportConfig
 	sysdb   *system.Database
 	events  *events.PubSub

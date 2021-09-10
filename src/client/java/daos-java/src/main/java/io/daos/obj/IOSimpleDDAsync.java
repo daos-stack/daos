@@ -6,12 +6,9 @@
 
 package io.daos.obj;
 
-import io.daos.BufferAllocator;
-import io.daos.Constants;
-import io.daos.DaosEventQueue;
-import io.daos.DaosIOException;
+import io.daos.*;
 import io.netty.buffer.ByteBuf;
-import org.apache.commons.lang3.StringUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -361,7 +358,7 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
      */
     private AsyncEntry(String key, long offset, int dataSize)
         throws IOException {
-      if (StringUtils.isBlank(key)) {
+      if (DaosUtils.isBlankStr(key)) {
         throw new IllegalArgumentException("key is blank");
       }
       this.key = key;

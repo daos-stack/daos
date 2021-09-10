@@ -23,7 +23,16 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
-pool:
+pool_1:
   name: daos_server
   control_method: dmg
-  quantity: 200
+  scm_size: 90%
+  svcn: 1
+  quantity: 1
+pool_2:
+  name: daos_server
+  control_method: dmg
+  scm_size: 90%
+  nvme_size: 90%
+  svcn: 1
+  quantity: 1

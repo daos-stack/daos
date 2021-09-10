@@ -414,8 +414,14 @@ vos_db_fini(void)
 		ABT_mutex_free(&vos_db.db_lock);
 
 	if (vos_db.db_file) {
-		if (vos_db.db_vos_self)
-			vos_pool_destroy(vos_db.db_file, vos_db.db_pool);
+		if (vos_db.db_vos_self) {
+			int rc;
+
+			rc = vos_pool_destroy(vos_db.db_file, vos_db.db_pool);
+			if (rc != 0)
+				D_ERROR(DF_UUID": failed to destroy %s: %d\n",
+					DP_UUID(vos_db.db_pool), vos_db.db_file, rc);
+		}
 		free(vos_db.db_file);
 	}
 

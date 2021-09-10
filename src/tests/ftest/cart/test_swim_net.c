@@ -100,7 +100,7 @@ static void swim_srv_cb(crt_rpc_t *rpc_req)
 	dbg("receive RPC %u <== %lu", global_srv.my_rank, rpc_cli_input->src);
 	if (global_srv.my_rank != FAILED_MEMBER &&
 	    rpc_cli_input->src != FAILED_MEMBER) {
-		rc = swim_parse_message(global_srv.swim_ctx, rpc_cli_input->src,
+		rc = swim_updates_parse(global_srv.swim_ctx, rpc_cli_input->src,
 					rpc_cli_input->upds.ca_arrays,
 					rpc_cli_input->upds.ca_count);
 		D_ASSERTF(rc == 0, "swim_parse_rpc() failed rc=%d", rc);
@@ -127,8 +127,9 @@ static void swim_cli_cb(const struct crt_cb_info *cb_info)
 	dbg("<---%s---", __func__);
 }
 
-static int swim_send_message(struct swim_context *ctx, swim_id_t to,
-			     struct swim_member_update *upds, size_t nupds)
+static int swim_send_message(struct swim_context *ctx, swim_id_t id,
+			     swim_id_t to, struct swim_member_update *upds,
+			     size_t nupds)
 {
 	struct swim_global_srv *srv = swim_data(ctx);
 	struct crt_rpc_swim_in *swim_rpc_input;
@@ -146,6 +147,7 @@ static int swim_send_message(struct swim_context *ctx, swim_id_t to,
 	ep.ep_rank = to;
 	ep.ep_tag  = 0;
 
+	/* FIXME: not adopted yet to new two-ways RPC */
 	/* get the opcode of the first RPC in version 0 of OPC_SWIM_PROTO */
 	opc = CRT_PROTO_OPC(CRT_OPC_SWIM_PROTO, 0, 0);
 	rc = crt_req_create(srv->crt_ctx, &ep, opc, &rpc_req);
@@ -164,6 +166,13 @@ static int swim_send_message(struct swim_context *ctx, swim_id_t to,
 
 	dbg("<---%s---", __func__);
 	return rc;
+}
+
+static int swim_send_reply(struct swim_context *ctx, swim_id_t from,
+			      swim_id_t to, int ret_rc, void *args)
+{
+	/* FIXME: not adopted yet to new two-ways RPC */
+	return 0;
 }
 
 static swim_id_t swim_get_dping_target(struct swim_context *ctx)
@@ -315,7 +324,8 @@ static void srv_fini(void)
 }
 
 static struct swim_ops swim_ops = {
-	.send_message     = &swim_send_message,
+	.send_request     = &swim_send_message,
+	.send_reply       = &swim_send_reply,
 	.get_dping_target = &swim_get_dping_target,
 	.get_iping_target = &swim_get_iping_target,
 	.get_member_state = &swim_get_member_state,

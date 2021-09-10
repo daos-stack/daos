@@ -776,6 +776,12 @@ func TestControl_checkFormatReq(t *testing.T) {
 			},
 			expErr: FaultFormatRunningSystem,
 		},
+		"system unformatted": {
+			reqHosts: reqHosts("replica"),
+			responses: []*UnaryResponse{
+				MockMSResponse("replica", system.ErrUninitialized, nil),
+			},
+		},
 		"system query fails": {
 			reqHosts: reqHosts("replica"),
 			responses: []*UnaryResponse{

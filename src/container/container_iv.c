@@ -303,6 +303,9 @@ cont_iv_prop_l2g(daos_prop_t *prop, struct cont_iv_prop *iv_prop)
 		case DAOS_PROP_CO_ENCRYPT:
 			iv_prop->cip_encrypt = prop_entry->dpe_val;
 			break;
+		case DAOS_PROP_CO_EC_CELL_SZ:
+			iv_prop->cip_ec_cell_sz = prop_entry->dpe_val;
+			break;
 		case DAOS_PROP_CO_ACL:
 			acl = prop_entry->dpe_val_ptr;
 			if (acl != NULL)
@@ -1007,23 +1010,61 @@ cont_iv_capability_update(void *ns, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 	return rc;
 }
 
-int
-cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid, int mode)
+static int
+cont_iv_invalidate(void *ns, uint32_t class_id, uuid_t cont_uuid, int mode)
 {
 	struct ds_iv_key	key = { 0 };
 	struct cont_iv_key	*civ_key;
 	int			rc;
 
+	key.class_id = class_id;
 	civ_key = key2priv(&key);
-	uuid_copy(civ_key->cont_uuid, cont_hdl_uuid);
-	civ_key->class_id = IV_CONT_CAPA;
+	uuid_copy(civ_key->cont_uuid, cont_uuid);
+	civ_key->class_id = class_id;
+	civ_key->entry_size = 0;
 
-	key.class_id = IV_CONT_CAPA;
-	rc = ds_iv_invalidate(ns, &key, 0, mode, 0, false /* retry */);
+	rc = ds_iv_invalidate(ns, &key, 0, mode, 0, false);
 	if (rc)
-		D_ERROR("iv invalidate failed "DF_RC"\n", DP_RC(rc));
+		D_ERROR(DF_UUID" iv invalidate failed "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
 
 	return rc;
+}
+
+int
+cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	int rc;
+
+	/* delete all entries for this container */
+	rc = oid_iv_invalidate(ns, pool_uuid, cont_uuid);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete snap "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	/* delete all entries for this container */
+	rc = cont_iv_invalidate(ns, IV_CONT_SNAP, cont_uuid, CRT_IV_SYNC_NONE);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete snap "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	rc = cont_iv_invalidate(ns, IV_CONT_PROP, cont_uuid, CRT_IV_SYNC_NONE);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete prop "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	rc = cont_iv_invalidate(ns, IV_CONT_AGG_EPOCH_REPORT, cont_uuid, CRT_IV_SYNC_NONE);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete agg epoch report "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	rc = cont_iv_invalidate(ns, IV_CONT_AGG_EPOCH_BOUNDRY, cont_uuid, CRT_IV_SYNC_NONE);
+	if (rc != 0)
+		D_DEBUG(DB_MD, "delete agg epoch boundary "DF_UUID"\n", DP_UUID(cont_uuid));
+
+	return 0;
+}
+
+int
+cont_iv_capability_invalidate(void *ns, uuid_t cont_hdl_uuid, int mode)
+{
+	return cont_iv_invalidate(ns, IV_CONT_CAPA, cont_hdl_uuid, mode);
 }
 
 static int
@@ -1049,10 +1090,9 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 				 DAOS_PROP_LABEL_MAX_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_label,
 				  DAOS_PROP_LABEL_MAX_LEN);
-			if (prop_entry->dpe_str)
-				label_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			label_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_CO_LAYOUT_TYPE:
 			prop_entry->dpe_val = iv_prop->cip_layout_type;
@@ -1093,6 +1133,9 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 		case DAOS_PROP_CO_ENCRYPT:
 			prop_entry->dpe_val = iv_prop->cip_encrypt;
 			break;
+		case DAOS_PROP_CO_EC_CELL_SZ:
+			prop_entry->dpe_val = iv_prop->cip_ec_cell_sz;
+			break;
 		case DAOS_PROP_CO_ACL:
 			acl = &iv_prop->cip_acl;
 			if (acl->dal_ver != 0) {
@@ -1111,20 +1154,18 @@ cont_iv_prop_g2l(struct cont_iv_prop *iv_prop, daos_prop_t *prop)
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			owner_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_CO_OWNER_GROUP:
 			D_ASSERT(strlen(iv_prop->cip_owner_grp) <=
 				 DAOS_ACL_MAX_PRINCIPAL_LEN);
 			D_STRNDUP(prop_entry->dpe_str, iv_prop->cip_owner_grp,
 				  DAOS_ACL_MAX_PRINCIPAL_LEN);
-			if (prop_entry->dpe_str)
-				owner_grp_alloc = prop_entry->dpe_str;
-			else
+			if (prop_entry->dpe_str == NULL)
 				D_GOTO(out, rc = -DER_NOMEM);
+			owner_grp_alloc = prop_entry->dpe_str;
 			break;
 		case DAOS_PROP_CO_ROOTS:
 			roots = &iv_prop->cip_roots;
@@ -1237,8 +1278,7 @@ cont_iv_prop_fetch_ult(void *data)
 out:
 	if (pool != NULL)
 		ds_pool_put(pool);
-	if (iv_entry != NULL)
-		D_FREE(iv_entry);
+	D_FREE(iv_entry);
 	if (prop_fetch != NULL)
 		daos_prop_free(prop_fetch);
 	ABT_eventual_set(arg->eventual, (void *)&rc, sizeof(rc));

@@ -50,4 +50,17 @@ nvme_format(char *ctrlr_pci_addr);
 struct ret_t *
 nvme_fwupdate(char *ctrlr_pci_addr, char *path, unsigned int slot);
 
+/**
+ * Initialize SPDK environment.
+ *
+ * \param mem_sz size of memory allocated to environment (mb).
+ * \param env_ctx environment context string (DPDK).
+ * \param nr_pcil size of pcil.
+ * \param pcil list of allowed PCI addresses of NVMe controllers.
+ *
+ * \return a pointer to a return struct (ret_t).
+ */
+struct ret_t *
+daos_spdk_init(int mem_sz, char *env_ctx, size_t nr_pcil, char **pcil);
+
 #endif

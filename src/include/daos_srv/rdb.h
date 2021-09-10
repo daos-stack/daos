@@ -249,6 +249,10 @@ enum rdb_probe_opc {
  *   - if rc == 0, rdb_tx_iterate() continues;
  *   - if rc == 1, rdb_tx_iterate() stops and returns 0;
  *   - otherwise, rdb_tx_iterate() stops and returns rc.
+ *
+ * If a callback yields (e.g., via ABT_thread_yield), it must call
+ * rdb_tx_revalidate after the yield and return the return value of
+ * rdb_tx_revalidate.
  */
 typedef int (*rdb_iterate_cb_t)(daos_handle_t ih, d_iov_t *key,
 				d_iov_t *val, void *arg);
@@ -261,5 +265,6 @@ int rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs,
 		 d_iov_t *key_out, d_iov_t *value);
 int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 		   rdb_iterate_cb_t cb, void *arg);
+int rdb_tx_revalidate(struct rdb_tx *tx);
 
 #endif /* DAOS_SRV_RDB_H */

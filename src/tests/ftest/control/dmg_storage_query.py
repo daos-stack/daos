@@ -77,7 +77,7 @@ class DmgStorageQuery(ControlTestBase):
         :avocado: tags=all,daily_regression,hw,small,storage_query_pools,basic
         :avocado: tags=dmg
         """
-        # Create pool and get the storage smd information, then verfify info
+        # Create pool and get the storage smd information, then verify info
         self.prepare_pool()
         pools_info = self.get_pool_info(verbose=True)
 

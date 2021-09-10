@@ -40,6 +40,26 @@ message NvmeController {
 		bool dev_reliability_warn = 18;
 		bool read_only_warn = 19;
 		bool volatile_mem_warn = 20; // volatile memory backup
+		// Intel vendor SMART attributes
+		uint32 program_fail_cnt_norm = 21;
+		uint64 program_fail_cnt_raw = 22;
+		uint32 erase_fail_cnt_norm = 23;
+		uint64 erase_fail_cnt_raw = 24;
+		uint32 wear_leveling_cnt_norm = 25;
+		uint32 wear_leveling_cnt_min = 26;
+		uint32 wear_leveling_cnt_max = 27;
+		uint32 wear_leveling_cnt_avg = 28;
+		uint64 endtoend_err_cnt_raw = 29;
+		uint64 crc_err_cnt_raw = 30;
+		uint64 media_wear_raw = 31;
+		uint64 host_reads_raw = 32;
+		uint64 workload_timer_raw = 33;
+		uint32 thermal_throttle_status = 34;
+		uint64 thermal_throttle_event_cnt = 35;
+		uint64 retry_buffer_overflow_cnt = 36;
+		uint64 pll_lock_loss_cnt = 37;
+		uint64 nand_bytes_written = 38;
+		uint64 host_bytes_written = 39;
 	}
 
 	// Namespace represents a namespace created on an NvmeController.

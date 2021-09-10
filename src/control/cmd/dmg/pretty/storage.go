@@ -120,35 +120,6 @@ func PrintHostStorageUsageMap(hsm control.HostStorageMap, out io.Writer) error {
 	return nil
 }
 
-// PrintScmPrepareMap generates a human-readable representation of the supplied
-// HostStorageMap which is populated in response to a StoragePrepare operation.
-func PrintScmPrepareMap(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
-	if len(hsm) == 0 {
-		return nil
-	}
-
-	hostsTitle := "Hosts"
-	scmTitle := "SCM Namespaces"
-	rebootTitle := "Reboot Required"
-
-	fmt.Fprintln(out, "Prepare Results:")
-	tablePrint := txtfmt.NewTableFormatter(hostsTitle, scmTitle, rebootTitle)
-	tablePrint.InitWriter(txtfmt.NewIndentWriter(out))
-	table := []txtfmt.TableRow{}
-
-	for _, key := range hsm.Keys() {
-		hss := hsm[key]
-		hosts := getPrintHosts(hss.HostSet.RangedString(), opts...)
-		row := txtfmt.TableRow{hostsTitle: hosts}
-		row[scmTitle] = hss.HostStorage.ScmNamespaces.Summary()
-		row[rebootTitle] = fmt.Sprintf("%t", hss.HostStorage.RebootRequired)
-		table = append(table, row)
-	}
-
-	tablePrint.Format(table)
-	return nil
-}
-
 func printStorageFormatMapVerbose(hsm control.HostStorageMap, out io.Writer, opts ...PrintConfigOption) error {
 	for _, key := range hsm.Keys() {
 		hss := hsm[key]

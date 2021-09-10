@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import join
 
 
-class DmPosixSymlinks(DataMoverTestBase):
+class DmvrPosixSymlinks(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover symlink validation
 
@@ -22,7 +22,7 @@ class DmPosixSymlinks(DataMoverTestBase):
         Test Description:
             Tests copying POSIX symlinks with dcp.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp
+        :avocado: tags=datamover,dcp,dfuse
         :avocado: tags=dm_posix_symlinks,dm_posix_symlinks_dcp
         """
         self.run_dm_posix_symlinks("DCP")

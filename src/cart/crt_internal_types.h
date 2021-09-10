@@ -35,7 +35,7 @@ struct crt_na_ofi_config {
 };
 
 struct crt_prov_gdata {
-	/** NA pluging type */
+	/** NA plugin type */
 	int			cpg_provider;
 
 	struct crt_na_ofi_config cpg_na_ofi_config;
@@ -49,11 +49,14 @@ struct crt_prov_gdata {
 	/** maximum number of contexts user wants to create */
 	uint32_t		cpg_ctx_max_num;
 
+	/** Hints to mercury/ofi for max expected/unexp sizes */
+	uint32_t		cpg_max_exp_size;
+	uint32_t		cpg_max_unexp_size;
+
 	/** Set of flags */
 	unsigned int		cpg_sep_mode		: 1,
 				cpg_contig_ports	: 1,
 				cpg_inited		: 1;
-
 };
 
 
@@ -186,6 +189,8 @@ struct crt_context {
 
 	/** timeout per-context */
 	uint32_t		 cc_timeout_sec;
+	/** HLC time of last received RPC */
+	uint64_t		 cc_last_unpack_hlc;
 
 	/** Per-context statistics (server-side only) */
 	/** Total number of timed out requests, of type counter */

@@ -15,7 +15,7 @@
   <packaging>jar</packaging>
 
   <properties>
-    <hadoop.version>3.3.0</hadoop.version>
+    <hadoop.version>3.3.1</hadoop.version>
     <native.build.path>${project.basedir}/build</native.build.path>
     <daos.install.path>${project.basedir}/install</daos.install.path>
   </properties>
@@ -66,6 +66,12 @@
       <artifactId>hadoop-common</artifactId>
       <version>${hadoop.version}</version>
       <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <version>3.19.0</version>
       <scope>test</scope>
     </dependency>
     <dependency>

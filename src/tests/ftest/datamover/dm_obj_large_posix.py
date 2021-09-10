@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 
 
 # pylint: disable=too-many-ancestors
-class DmObjLargePosix(DataMoverTestBase):
+class DmvrObjLargePosix(DataMoverTestBase):
     """Test class Description:
        Verify cloning a large POSIX container at the object level (non-DFS)
        using dcp.

@@ -36,7 +36,7 @@ class FioSmall(FioBase):
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=fio,checksum
+        :avocado: tags=fio,checksum,tx,dfuse
         :avocado: tags=fiosmall
         """
         self.execute_fio()

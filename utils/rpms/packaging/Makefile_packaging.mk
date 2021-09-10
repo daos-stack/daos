@@ -28,6 +28,11 @@ RPM_BUILD_OPTIONS += $(EXTERNAL_RPM_BUILD_OPTIONS)
 # some defaults the caller can override
 PACKAGING_CHECK_DIR ?= ../packaging
 LOCAL_REPOS ?= true
+ifeq ($(ID_LIKE),debian)
+DAOS_REPO_TYPE ?= LOCAL
+else
+DAOS_REPO_TYPE ?= STABLE
+endif
 TEST_PACKAGES ?= ${NAME}
 
 # unfortunately we cannot always name the repo the same as the project
@@ -291,17 +296,26 @@ ls: $(TARGETS)
 # *_GROUP_* repos may not supply a repomd.xml.key.
 ifeq ($(LOCAL_REPOS),true)
 ifneq ($(REPOSITORY_URL),)
-ifneq ($(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO),)
+ifneq ($(DAOS_STACK_$(DISTRO_BASE)_$(DAOS_REPO_TYPE)_REPO),)
 ifeq ($(ID_LIKE),debian)
 # $(DISTRO_BASE)_LOCAL_REPOS is a list separated by | because you cannot pass lists
 # of values with spaces as environment variables
 $(DISTRO_BASE)_LOCAL_REPOS := [trusted=yes]
 endif
-$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS) $(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_LOCAL_REPO)/
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS) $(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_$(DAOS_REPO_TYPE)_REPO)/
 endif
 $(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)|
-ifneq ($(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO),)
-$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_GROUP_REPO)/|
+ifneq ($(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO),)
+DISTRO_REPOS = $(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)/|
+endif
+ifneq ($(DAOS_STACK_$(DISTRO_BASE)_APPSTREAM_REPO),)
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_APPSTREAM_REPO)|
+endif
+ifneq ($(ID_LIKE),debian)
+ifneq ($(DAOS_STACK_INTEL_ONEAPI_REPO),)
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(DAOS_STACK_INTEL_ONEAPI_REPO)|
+endif
 endif
 endif
 endif
@@ -331,6 +345,7 @@ chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
 	DISTRO_BASE_LOCAL_REPOS="$($(DISTRO_BASE)_LOCAL_REPOS)" \
 	MOCK_OPTIONS="$(MOCK_OPTIONS)"                          \
 	RPM_BUILD_OPTIONS='$(RPM_BUILD_OPTIONS)'                \
+	DISTRO_REPOS='$(DISTRO_REPOS)'                          \
 	TARGET="$<"                                             \
 	packaging/rpm_chrootbuild
 endif

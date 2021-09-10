@@ -11,6 +11,7 @@
 
 #include <math.h>
 #include <float.h>
+#include <pthread.h>
 #include <gurt/common.h>
 #include <gurt/list.h>
 #include <sys/shm.h>
@@ -69,6 +70,7 @@ static struct d_tm_shmem {
 	pthread_mutex_t		 add_lock; /** for synchronized access */
 	bool			 sync_access; /** whether to sync access */
 	bool			 retain; /** retain shmem region on exit */
+	int			 id; /** Instance ID */
 } tm_shmem;
 
 /* Internal helper functions */
@@ -249,6 +251,7 @@ track_open_shmem(struct d_tm_context *ctx, struct d_tm_shmem_hdr *shmem,
 	new->region = shmem;
 	new->shmid = shmid;
 	new->key = key;
+
 	d_list_add(&new->link, &ctx->open_shmem);
 
 	return 0;
@@ -302,7 +305,7 @@ get_shmem_entry_for_key(struct d_tm_context *ctx, key_t key)
 static struct d_tm_shmem_hdr *
 get_shmem_for_key(struct d_tm_context *ctx, key_t key)
 {
-	struct local_shmem_list *entry;
+	struct local_shmem_list	*entry;
 
 	D_ASSERT(ctx != NULL && ctx->shmem_root != NULL);
 
@@ -355,6 +358,7 @@ close_all_shmem(struct d_tm_context *ctx, bool destroy)
 	}
 
 	close_shmem(ctx->shmem_root);
+	ctx->shmem_root = NULL;
 	if (destroy)
 		destroy_shmem(ctx->shmid_root);
 }
@@ -419,7 +423,7 @@ d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 	link_key = (key_t)metric->dtm_data.value;
 	shmem = get_shmem_for_key(ctx, link_key);
 	if (shmem == NULL) {
-		D_ERROR("couldn't follow link to shmem key %d\n", link_key);
+		D_ERROR("couldn't follow link to shmem key 0x%x\n", link_key);
 		return NULL;
 	}
 
@@ -430,7 +434,8 @@ d_tm_follow_link(struct d_tm_context *ctx, struct d_tm_node_t *link)
 		close_shmem_for_key(ctx, link_key, false);
 		shmem = get_shmem_for_key(ctx, link_key);
 		if (shmem == NULL) {
-			D_ERROR("couldn't reopen shmem key %d\n", link_key);
+			D_DEBUG(DB_TRACE, "couldn't reopen shmem key 0x%x\n",
+				link_key);
 			return NULL;
 		}
 	}
@@ -480,13 +485,17 @@ find_child(struct d_tm_context *ctx, struct d_tm_node_t *parent,
 		return NULL;
 
 	client_name = conv_ptr(shmem, child->dtn_name);
-	while ((child != NULL) && (client_name != NULL) &&
-	       strncmp(client_name, name, D_TM_MAX_NAME_LEN) != 0) {
+
+	/*
+	 * cleared links don't have names but we still want to traverse
+	 * their siblings
+	 */
+	while ((child != NULL) && (client_name == NULL ||
+		strncmp(client_name, name, D_TM_MAX_NAME_LEN) != 0)) {
 		child = conv_ptr(shmem, child->dtn_sibling);
 		client_name = NULL;
 		if (child == NULL)
 			break;
-
 		client_name = conv_ptr(shmem, child->dtn_name);
 	}
 
@@ -742,6 +751,7 @@ d_tm_init(int id, uint64_t mem_size, int flags)
 		D_INFO("Retaining shared memory for id %d\n", id);
 	}
 
+	tm_shmem.id = id;
 	snprintf(tmp, sizeof(tmp), "ID: %d", id);
 	key = d_tm_get_srv_key(id);
 	rc = create_shmem(tmp, key, mem_size, &shmid, &new_shmem);
@@ -1131,9 +1141,9 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 	if (node == NULL)
 		return;
 
-	name = d_tm_conv_ptr(ctx, node, node->dtn_name);
+	name = d_tm_get_name(ctx, node);
 	if (name == NULL)
-		return;
+		name = "(null)";
 
 	show_meta = opt_fields & D_TM_INCLUDE_METADATA;
 	show_timestamp = opt_fields & D_TM_INCLUDE_TIMESTAMP;
@@ -1151,7 +1161,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			fprintf(stream, "%s/", path);
 	} else {
 		for (i = 0; i < level; i++)
-			fprintf(stream, "%20s", " ");
+			fprintf(stream, "%4s", " ");
 		if ((show_timestamp) && (node->dtn_type != D_TM_DIRECTORY))
 			fprintf(stream, "%s, ", timestamp);
 	}
@@ -1171,7 +1181,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 		 * path names are printed in each line of output.
 		 */
 		if (format == D_TM_STANDARD)
-			fprintf(stream, "%-20s\n", name);
+			fprintf(stream, "%-8s\n", name);
 		break;
 	case D_TM_COUNTER:
 		rc = d_tm_get_counter(ctx, &val, node);
@@ -1218,6 +1228,7 @@ d_tm_print_node(struct d_tm_context *ctx, struct d_tm_node_t *node, int level,
 			stats_printed = true;
 		break;
 	case D_TM_GAUGE:
+	case D_TM_STATS_GAUGE:
 		rc = d_tm_get_gauge(ctx, &val, &stats, node);
 		if (rc != DER_SUCCESS) {
 			fprintf(stream, "Error on gauge read: %d\n", rc);
@@ -1277,11 +1288,11 @@ d_tm_print_stats(FILE *stream, struct d_tm_stats_t *stats, int format)
 		return;
 	}
 
-	fprintf(stream, ", min: %lu, max: %lu, mean: %lf, sample size: %lu",
-		stats->dtm_min, stats->dtm_max, stats->mean,
-		stats->sample_size);
+	fprintf(stream, " [min: %lu, max: %lu, avg: %.0lf",
+		stats->dtm_min, stats->dtm_max, stats->mean);
 	if (stats->sample_size > 2)
-		fprintf(stream, ", std dev: %lf", stats->std_dev);
+		fprintf(stream, ", stddev: %.0lf", stats->std_dev);
+	fprintf(stream, ", samples: %lu]", stats->sample_size);
 }
 
 /**
@@ -1311,7 +1322,6 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 {
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	char			*fullpath = NULL;
-	char			*node_name = NULL;
 	char			*parent_name = NULL;
 
 	if ((node == NULL) || (stream == NULL))
@@ -1337,10 +1347,6 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		return;
 
 	while (node != NULL) {
-		node_name = conv_ptr(shmem, node->dtn_name);
-		if (node_name == NULL)
-			break;
-
 		if ((path == NULL) ||
 		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0))
 			D_ASPRINTF(fullpath, "%s", parent_name);
@@ -1469,7 +1475,7 @@ d_tm_compute_stats(struct d_tm_node_t *node, uint64_t value)
 	if (value > dtm_stats->dtm_max)
 		dtm_stats->dtm_max = value;
 
-	if (value < dtm_stats->dtm_min)
+	if (dtm_stats->sample_size == 1 || value < dtm_stats->dtm_min)
 		dtm_stats->dtm_min = value;
 }
 
@@ -1669,6 +1675,26 @@ d_tm_mark_duration_end(struct d_tm_node_t *metric)
 	d_tm_node_unlock(metric);
 }
 
+static bool
+is_gauge(struct d_tm_node_t *metric)
+{
+	if (metric == NULL)
+		return false;
+
+	return (metric->dtn_type == D_TM_GAUGE ||
+		metric->dtn_type == D_TM_STATS_GAUGE);
+}
+
+static bool
+has_stats(struct d_tm_node_t *metric)
+{
+	if (metric == NULL)
+		return false;
+
+	return (metric->dtn_type & D_TM_DURATION ||
+		metric->dtn_type == D_TM_STATS_GAUGE);
+}
+
 /**
  * Set an arbitrary \a value for the gauge.
  *
@@ -1681,7 +1707,7 @@ d_tm_set_gauge(struct d_tm_node_t *metric, uint64_t value)
 	if (metric == NULL)
 		return;
 
-	if (metric->dtn_type != D_TM_GAUGE) {
+	if (!is_gauge(metric)) {
 		D_ERROR("Failed to set gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
@@ -1690,8 +1716,10 @@ d_tm_set_gauge(struct d_tm_node_t *metric, uint64_t value)
 
 	d_tm_node_lock(metric);
 	metric->dtn_metric->dtm_data.value = value;
-	d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
-	d_tm_compute_histogram(metric, value);
+	if (has_stats(metric)) {
+		d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
+		d_tm_compute_histogram(metric, value);
+	}
 	d_tm_node_unlock(metric);
 }
 
@@ -1707,7 +1735,7 @@ d_tm_inc_gauge(struct d_tm_node_t *metric, uint64_t value)
 	if (metric == NULL)
 		return;
 
-	if (metric->dtn_type != D_TM_GAUGE) {
+	if (!is_gauge(metric)) {
 		D_ERROR("Failed to increment gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
@@ -1716,8 +1744,10 @@ d_tm_inc_gauge(struct d_tm_node_t *metric, uint64_t value)
 
 	d_tm_node_lock(metric);
 	metric->dtn_metric->dtm_data.value += value;
-	d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
-	d_tm_compute_histogram(metric, value);
+	if (has_stats(metric)) {
+		d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
+		d_tm_compute_histogram(metric, value);
+	}
 	d_tm_node_unlock(metric);
 }
 
@@ -1733,7 +1763,7 @@ d_tm_dec_gauge(struct d_tm_node_t *metric, uint64_t value)
 	if (metric == NULL)
 		return;
 
-	if (metric->dtn_type != D_TM_GAUGE) {
+	if (!is_gauge(metric)) {
 		D_ERROR("Failed to decrement gauge [%s] on item "
 			"not a gauge.  Operation mismatch: " DF_RC "\n",
 			metric->dtn_name, DP_RC(-DER_OP_NOT_PERMITTED));
@@ -1742,8 +1772,10 @@ d_tm_dec_gauge(struct d_tm_node_t *metric, uint64_t value)
 
 	d_tm_node_lock(metric);
 	metric->dtn_metric->dtm_data.value -= value;
-	d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
-	d_tm_compute_histogram(metric, value);
+	if (has_stats(metric)) {
+		d_tm_compute_stats(metric, metric->dtn_metric->dtm_data.value);
+		d_tm_compute_histogram(metric, value);
+	}
 	d_tm_node_unlock(metric);
 }
 
@@ -1897,14 +1929,13 @@ add_metric(struct d_tm_context *ctx, struct d_tm_node_t **node, int metric_type,
 	}
 
 	temp->dtn_metric->dtm_stats = NULL;
-	if ((metric_type == D_TM_GAUGE) || (metric_type & D_TM_DURATION)) {
+	if (has_stats(temp)) {
 		temp->dtn_metric->dtm_stats =
 			shmalloc(shmem, sizeof(struct d_tm_stats_t));
 		if (temp->dtn_metric->dtm_stats == NULL) {
 			rc = -DER_NO_SHMEM;
 			goto out;
 		}
-		temp->dtn_metric->dtm_stats->dtm_min = UINT64_MAX;
 	}
 
 	buff_len = 0;
@@ -2147,12 +2178,12 @@ parse_path_fmt(char *path, size_t path_size, const char *fmt, va_list args)
 }
 
 static key_t
-get_unique_shmem_key(const char *path)
+get_unique_shmem_key(const char *path, int id)
 {
 	char	salted[D_TM_MAX_NAME_LEN + 64] = {0};
 
 	/* salt to avoid conflicts with other processes */
-	snprintf(salted, sizeof(salted) - 1, "%s%d", path, getpid());
+	snprintf(salted, sizeof(salted) - 1, "%s-id%d", path, id);
 	return (key_t)d_hash_string_u32(salted, sizeof(salted));
 }
 
@@ -2247,7 +2278,7 @@ d_tm_add_ephemeral_dir(struct d_tm_node_t **node, size_t size_bytes,
 		D_GOTO(fail_unlock, rc = -DER_EXIST);
 	}
 
-	key = get_unique_shmem_key(path);
+	key = get_unique_shmem_key(path, tm_shmem.id);
 	rc = create_shmem(get_last_token(path), key, size_bytes, &new_shmid,
 			  &new_shmem);
 	if (rc != 0)
@@ -2309,11 +2340,15 @@ clear_region_entry_for_key(struct d_tm_shmem_hdr *shmem, key_t key)
 
 	d_list_for_each_entry(tmp, &shmem->sh_subregions, rl_link) {
 		if (tmp->rl_key == key) {
+			D_DEBUG(DB_TRACE,
+				"cleared shmem metadata for key 0x%x\n", key);
 			tmp->rl_link_node = NULL;
 			tmp->rl_key = 0;
 			return;
 		}
 	}
+
+	D_WARN("shmem metadata not found for key 0x%x\n", key);
 }
 
 static int
@@ -2342,8 +2377,10 @@ rm_ephemeral_dir(struct d_tm_context *ctx, struct d_tm_node_t *link)
 	}
 
 	node = d_tm_follow_link(ctx, link);
-	if (node == NULL)
+	if (node == NULL) {
+		D_WARN("got NULL after following link [%s]\n", link->dtn_name);
 		D_GOTO(out_link, rc = 0);
+	}
 	key = node->dtn_shmem_key;
 
 	shmem = get_shmem_for_key(ctx, key);
@@ -2486,8 +2523,7 @@ d_tm_init_histogram(struct d_tm_node_t *node, char *path, int num_buckets,
 	if (multiplier < 1)
 		return -DER_INVAL;
 
-	if (!((node->dtn_type == D_TM_GAUGE) ||
-	      (node->dtn_type & D_TM_DURATION)))
+	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
 	shmem = get_shmem_for_key(tm_shmem.ctx, node->dtn_shmem_key);
@@ -2636,8 +2672,7 @@ d_tm_get_num_buckets(struct d_tm_context *ctx,
 	if (rc != 0)
 		return rc;
 
-	if (!((node->dtn_type == D_TM_GAUGE) ||
-	      (node->dtn_type & D_TM_DURATION)))
+	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
@@ -2696,8 +2731,7 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 	if (rc != 0)
 		return rc;
 
-	if (!((node->dtn_type == D_TM_GAUGE) ||
-	      (node->dtn_type & D_TM_DURATION)))
+	if (!has_stats(node))
 		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
@@ -2722,9 +2756,10 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 }
 
 /**
- * Client function to read the specified counter.
+ * Read the specified counter.
  *
- * \param[in]	ctx	Client context
+ * \param[in]	ctx	The context, indicate whether it is for client
+ *			side use case (non-NULL) or server side (NULL).
  * \param[out]	val	The value of the counter is stored here
  * \param[in]	node	Pointer to the stored metric node
  *
@@ -2741,26 +2776,28 @@ d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	int			 rc;
 
-	if (ctx == NULL || val == NULL || node == NULL)
+	if (val == NULL || node == NULL || node->dtn_metric == NULL)
 		return -DER_INVAL;
-
-	rc = validate_node_ptr(ctx, node, &shmem);
-	if (rc != 0)
-		return rc;
 
 	if (node->dtn_type != D_TM_COUNTER)
 		return -DER_OP_NOT_PERMITTED;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
-	if (metric_data != NULL) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		*val = metric_data->dtm_data.value;
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
+	/* "ctx == NULL" is server side fast version to read the counter. */
+	if (ctx == NULL) {
+		metric_data = node->dtn_metric;
 	} else {
-		return -DER_METRIC_NOT_FOUND;
+		rc = validate_node_ptr(ctx, node, &shmem);
+		if (rc != 0)
+			return rc;
+
+		metric_data = conv_ptr(shmem, node->dtn_metric);
+		if (metric_data == NULL)
+			return -DER_METRIC_NOT_FOUND;
 	}
+
+	d_tm_node_lock(node);
+	*val = metric_data->dtm_data.value;
+	d_tm_node_unlock(node);
 	return DER_SUCCESS;
 }
 
@@ -2948,7 +2985,7 @@ d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
 	if (rc != 0)
 		return rc;
 
-	if (node->dtn_type != D_TM_GAUGE)
+	if (!is_gauge(node))
 		return -DER_OP_NOT_PERMITTED;
 
 	metric_data = conv_ptr(shmem, node->dtn_metric);
@@ -2956,7 +2993,7 @@ d_tm_get_gauge(struct d_tm_context *ctx, uint64_t *val,
 		dtm_stats = conv_ptr(shmem, metric_data->dtm_stats);
 		d_tm_node_lock(node);
 		*val = metric_data->dtm_data.value;
-		if ((stats != NULL) && (dtm_stats != NULL)) {
+		if (has_stats(node) && stats != NULL && dtm_stats != NULL) {
 			stats->dtm_min = dtm_stats->dtm_min;
 			stats->dtm_max = dtm_stats->dtm_max;
 			stats->dtm_sum = dtm_stats->dtm_sum;
@@ -3082,7 +3119,7 @@ d_tm_list(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
 	int			 rc = DER_SUCCESS;
 	struct d_tm_shmem_hdr	*shmem;
 
-	if ((head == NULL) || (node == NULL)) {
+	if ((ctx == NULL) || (head == NULL) || (node == NULL)) {
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -3279,6 +3316,28 @@ d_tm_close(struct d_tm_context **ctx)
 
 	close_all_shmem(*ctx, false);
 	D_FREE(*ctx);
+}
+
+/**
+ * Releases deleted resources cached by the context.
+ *
+ * Not thread safe. Recommended as a periodic task for telemetry clients.
+ *
+ * \param[in]	ctx	Context to be garbage collected
+ */
+void
+d_tm_gc_ctx(struct d_tm_context *ctx)
+{
+	struct local_shmem_list	*cur = NULL;
+	struct local_shmem_list	*next = NULL;
+
+	if (ctx == NULL)
+		return;
+
+	d_list_for_each_entry_safe(cur, next, &ctx->open_shmem, link) {
+		if (cur->region == NULL || cur->region->sh_deleted)
+			close_local_shmem_entry(cur, false);
+	}
 }
 
 /**

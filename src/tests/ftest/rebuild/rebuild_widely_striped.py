@@ -14,7 +14,7 @@ from mdtest_test_base import MdtestBase
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 # pylint: disable=attribute-defined-outside-init
-class RebuildWidelyStriped(MdtestBase):
+class RbldWidelyStriped(MdtestBase):
     """Rebuild test cases featuring mdtest.
 
     This class contains tests for pool rebuild that feature I/O going on

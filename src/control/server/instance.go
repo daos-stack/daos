@@ -21,8 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/lib/control"
 	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/server/storage"
 	"github.com/daos-stack/daos/src/control/system"
 )
 
@@ -44,8 +43,7 @@ type (
 type EngineInstance struct {
 	log             logging.Logger
 	runner          EngineRunner
-	bdevProvider    *bdev.Provider
-	scmProvider     *scm.Provider
+	storage         *storage.Provider
 	waitFormat      atm.Bool
 	storageReady    chan bool
 	waitDrpc        atm.Bool
@@ -71,15 +69,12 @@ type EngineInstance struct {
 
 // NewEngineInstance returns an *EngineInstance initialized with
 // its dependencies.
-func NewEngineInstance(log logging.Logger, bp *bdev.Provider, sp *scm.Provider,
-	joinFn systemJoinFn, r EngineRunner) *EngineInstance {
-
+func NewEngineInstance(l logging.Logger, p *storage.Provider, jf systemJoinFn, r EngineRunner) *EngineInstance {
 	return &EngineInstance{
-		log:            log,
+		log:            l,
 		runner:         r,
-		bdevProvider:   bp,
-		scmProvider:    sp,
-		joinSystem:     joinFn,
+		storage:        p,
+		joinSystem:     jf,
 		drpcReady:      make(chan *srvpb.NotifyReadyReq),
 		storageReady:   make(chan bool),
 		startRequested: make(chan bool),
@@ -99,17 +94,17 @@ func (ei *EngineInstance) isAwaitingFormat() bool {
 	return ei.waitFormat.Load()
 }
 
-// isStarted indicates whether EngineInstance is in a running state.
-func (ei *EngineInstance) isStarted() bool {
+// IsStarted indicates whether EngineInstance is in a running state.
+func (ei *EngineInstance) IsStarted() bool {
 	return ei.runner.IsRunning()
 }
 
-// isReady indicates whether the EngineInstance is in a ready state.
+// IsReady indicates whether the EngineInstance is in a ready state.
 //
 // If true indicates that the instance is fully setup, distinct from
 // drpc and storage ready states, and currently active.
-func (ei *EngineInstance) isReady() bool {
-	return ei.ready.Load() && ei.isStarted()
+func (ei *EngineInstance) IsReady() bool {
+	return ei.ready.Load() && ei.IsStarted()
 }
 
 // OnAwaitFormat adds a list of callbacks to invoke when the instance
@@ -140,9 +135,9 @@ func (ei *EngineInstance) OnInstanceExit(fns ...onInstanceExitFn) {
 // (doesn't consider state info held by the global system membership).
 func (ei *EngineInstance) LocalState() system.MemberState {
 	switch {
-	case ei.isReady():
+	case ei.IsReady():
 		return system.MemberStateReady
-	case ei.isStarted():
+	case ei.IsStarted():
 		return system.MemberStateStarting
 	case ei.isAwaitingFormat():
 		return system.MemberStateAwaitFormat
@@ -200,8 +195,10 @@ func (ei *EngineInstance) determineRank(ctx context.Context, ready *srvpb.Notify
 		NumContexts: ready.GetNctxs(),
 		FaultDomain: ei.hostFaultDomain,
 		InstanceIdx: ei.Index(),
+		Incarnation: ready.GetIncarnation(),
 	})
 	if err != nil {
+		ei.log.Errorf("join failed: %s", err)
 		return system.NilRank, false, err
 	} else if resp.State == system.MemberStateExcluded {
 		return system.NilRank, resp.LocalJoin, errors.Errorf("rank %d excluded", resp.Rank)
@@ -270,14 +267,19 @@ func (ei *EngineInstance) handleReady(ctx context.Context, ready *srvpb.NotifyRe
 		return nil
 	}
 
-	if err := ei.callSetRank(ctx, r); err != nil {
-		return err
+	return ei.SetupRank(ctx, r)
+}
+
+func (ei *EngineInstance) SetupRank(ctx context.Context, rank system.Rank) error {
+	if err := ei.callSetRank(ctx, rank); err != nil {
+		return errors.Wrap(err, "SetRank failed")
 	}
 
 	if err := ei.callSetUp(ctx); err != nil {
-		return err
+		return errors.Wrap(err, "SetUp failed")
 	}
 
+	ei.ready.SetTrue()
 	return nil
 }
 

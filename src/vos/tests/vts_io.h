@@ -53,6 +53,7 @@ enum vts_test_flags {
 	IF_USE_ARRAY		= (1 << 6),
 	TF_USE_VAL		= (1 << 7),
 	TF_USE_CSUMS		= (1 << 8),
+	TF_DELETE		= (1 << 9),
 	IF_DISABLED		= (1 << 30),
 };
 
@@ -65,6 +66,7 @@ struct io_test_args {
 	uuid_t			 addn_co_uuid;
 	daos_handle_t		 addn_co;
 	/* testing flags, see vts_test_flags */
+	daos_epoch_t		 epr_lo;
 	unsigned long		 ta_flags;
 	const char		*dkey;
 	const char		*akey;

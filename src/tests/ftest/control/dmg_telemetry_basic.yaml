@@ -1,0 +1,21 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+  test_clients:
+    - client-A
+timeouts:
+  test_telemetry_list: 60
+  test_container_telemetry: 230
+server_config:
+  name: daos_server
+  servers:
+    scm_size: 16
+pool:
+  scm_size: 8G
+  control_method: dmg
+container:
+  control_method: daos
+test:
+  container_qty: 5
+  open_close_qty: 3

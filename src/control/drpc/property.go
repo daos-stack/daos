@@ -5,8 +5,18 @@
 //
 package drpc
 
-// #include <daos_prop.h>
+import "unsafe"
+
+/*
+#include <daos_prop.h>
+#include <daos_pool.h>
+*/
 import "C"
+
+const (
+	// MaxLabelLength is the maximum length of a label.
+	MaxLabelLength = C.DAOS_PROP_LABEL_MAX_LEN
+)
 
 const (
 	// PoolPropertyLabel is a string that a user can associate with a pool.
@@ -24,6 +34,8 @@ const (
 	PoolPropertyOwner = C.DAOS_PROP_PO_OWNER
 	// PoolPropertyOwnerGroup is the group that acts as the owner of the pool.
 	PoolPropertyOwnerGroup = C.DAOS_PROP_PO_OWNER_GROUP
+	// PoolPropertyECCellSize is the EC Cell size.
+	PoolPropertyECCellSize = C.DAOS_PROP_PO_EC_CELL_SZ
 )
 
 const (
@@ -45,3 +57,19 @@ const (
 	// PoolSelfHealingAutoRebuild sets the self-healing strategy to auto-rebuild.
 	PoolSelfHealingAutoRebuild = C.DAOS_SELF_HEAL_AUTO_REBUILD
 )
+
+const (
+	// MediaTypeScm is the media type for SCM.
+	MediaTypeScm = C.DAOS_MEDIA_SCM
+	// MediaTypeNvme is the media type for NVMe.
+	MediaTypeNvme = C.DAOS_MEDIA_NVME
+)
+
+// LabelIsValid checks a label to verify that it meets length/content
+// requirements.
+func LabelIsValid(label string) bool {
+	cLabel := C.CString(label)
+	defer C.free(unsafe.Pointer(cLabel))
+
+	return bool(C.daos_label_is_valid(cLabel))
+}

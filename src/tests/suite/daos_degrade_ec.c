@@ -169,12 +169,6 @@ degrade_full_partial_fail_2data(void **state)
 {
 	int shards[2];
 
-	/*
-	 * Skipping test because of DAOS-6755, which seems to be related to EC
-	 * aggregation
-	 */
-	skip();
-
 	shards[0] = 0;
 	shards[1] = 3;
 	degrade_ec_internal(state, shards, 2, FULL_PARTIAL_UPDATE);
@@ -363,12 +357,15 @@ degrade_multi_conts_agg(void **state)
 	daos_obj_id_t	 oids[CONT_PER_POOL] = { 0 };
 	int		 fail_shards[2];
 	d_rank_t	 fail_ranks[4] = { -1 };
+	bool		 parity_checked = false;
 	int		 shards_nr = 2;
 	int		 i;
 	int		 rc;
 
 	if (!test_runable(arg, DEGRADE_RANK_SIZE))
 		return;
+
+	FAULT_INJECTION_REQUIRED();
 
 	fail_shards[0] = 0;
 	fail_shards[1] = 2;
@@ -383,6 +380,7 @@ degrade_multi_conts_agg(void **state)
 			goto out;
 		}
 
+		daos_pool_set_prop(args[i]->pool.pool_uuid, "reclaim", "time");
 		args[i]->index = arg->index;
 		assert_int_equal(args[i]->pool.slave, 1);
 		/* XXX to temporarily workaround DAOS-7350, we need better
@@ -407,15 +405,23 @@ degrade_multi_conts_agg(void **state)
 	}
 
 	/* sleep a while to make aggregation triggered */
-	print_message("sleep about 25 second to wait aggregation ...\n");
-	sleep(25);
+	trigger_and_wait_ec_aggreation(arg, oids, CONT_PER_POOL, NULL, NULL, 0,
+				       0, DAOS_FORCE_EC_AGG);
 
 	for (i = 0; i < shards_nr; i++)
 		fail_ranks[i] = get_rank_by_oid_shard(args[0], oids[0],
 						      fail_shards[i]);
 	rebuild_pools_ranks(&args[0], 1, fail_ranks, shards_nr, false);
 
+re_test:
+	if (!parity_checked)
+		daos_debug_set_params(args[0]->group, -1, DMG_KEY_FAIL_LOC,
+			DAOS_FAIL_AGG_BOUNDRY_MOVED | DAOS_FAIL_ONCE, 0, NULL);
+
 	for (i = 0; i < CONT_PER_POOL; i++) {
+		if (parity_checked)
+			args[i]->fail_loc = DAOS_FAIL_PARITY_EPOCH_DIFF |
+					    DAOS_FAIL_ONCE;
 		if ((i % 3) == 0)
 			degrade_ec_verify(args[i], oids[i],
 					  FULL_PARTIAL_UPDATE);
@@ -426,9 +432,137 @@ degrade_multi_conts_agg(void **state)
 					  PARTIAL_FULL_UPDATE);
 	}
 
+	if (!parity_checked) {
+		daos_debug_set_params(args[0]->group, -1, DMG_KEY_FAIL_LOC, 0,
+				      0, NULL);
+		parity_checked = true;
+		goto re_test;
+	}
+	daos_fail_loc_set(0);
+
 out:
 	for (i = CONT_PER_POOL - 1; i >= 0; i--)
 		test_teardown((void **)&args[i]);
+}
+
+#define EC_CELL_SIZE	1048576
+static void
+degrade_ec_partial_update_agg(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+	char		*data;
+	char		*verify_data;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	data = (char *)malloc(EC_CELL_SIZE);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(EC_CELL_SIZE);
+	assert_true(verify_data != NULL);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 10; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = EC_CELL_SIZE;
+		recx.rx_idx = i * EC_CELL_SIZE;
+		memset(data, 'a' + i, EC_CELL_SIZE);
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, EC_CELL_SIZE, &req);
+	}
+
+	/* Kill the last parity shard, which is the aggregate leader to verify
+	 * aggregate works in degraded mode.
+	 */
+	rank = get_rank_by_oid_shard(arg, oid, 5);
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+
+	/* Trigger aggregation */
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, "d_key", "a_key", 0,
+				       8 * EC_CELL_SIZE, DAOS_FORCE_EC_AGG);
+	for (i = 0; i < 10; i++) {
+		daos_off_t offset = i * EC_CELL_SIZE;
+
+		memset(verify_data, 'a' + i, EC_CELL_SIZE);
+		ec_verify_parity_data(&req, "d_key", "a_key", offset,
+				      (daos_size_t)EC_CELL_SIZE, verify_data,
+				      DAOS_TX_NONE);
+	}
+	free(data);
+	free(verify_data);
+}
+
+static void
+degrade_ec_agg(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+	char		*data;
+	char		*verify_data;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	data = (char *)malloc(EC_CELL_SIZE);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(EC_CELL_SIZE);
+	assert_true(verify_data != NULL);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 4; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = EC_CELL_SIZE;
+		recx.rx_idx = i * EC_CELL_SIZE;
+		memset(data, 'a' + i, EC_CELL_SIZE);
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, EC_CELL_SIZE, &req);
+	}
+
+	for (i = 7; i >= 4; i--) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = EC_CELL_SIZE;
+		recx.rx_idx = i * EC_CELL_SIZE;
+		memset(data, 'a' + i, EC_CELL_SIZE);
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, EC_CELL_SIZE, &req);
+	}
+
+
+	/* Degrade EC aggregation. */
+	rank = get_rank_by_oid_shard(arg, oid, 2);
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+	print_message("sleep 30 seconds");
+	sleep(30);
+
+	/* Trigger VOS aggregation */
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	trigger_and_wait_ec_aggreation(arg, &oid, 1, NULL, NULL, 0, 0,
+				       DAOS_FORCE_EC_AGG);
+
+	for (i = 0; i < 8; i++) {
+		daos_off_t offset = i * EC_CELL_SIZE;
+
+		memset(verify_data, 'a' + i, EC_CELL_SIZE);
+		ec_verify_parity_data(&req, "d_key", "a_key", offset,
+				      (daos_size_t)EC_CELL_SIZE, verify_data,
+				      DAOS_TX_NONE);
+	}
+	free(data);
+	free(verify_data);
 }
 
 /** create a new pool/container for each test */
@@ -500,6 +634,10 @@ static const struct CMUnitTest degrade_tests[] = {
 	 test_teardown},
 	{"DEGRADE23: degrade io with multi-containers and aggregation",
 	 degrade_multi_conts_agg, degrade_sub_setup, test_teardown},
+	{"DEGRADE24: degrade ec aggregation partial update",
+	 degrade_ec_partial_update_agg, degrade_sub_setup, test_teardown},
+	{"DEGRADE25: degrade ec aggregation",
+	 degrade_ec_agg, degrade_sub_setup, test_teardown},
 };
 
 int

@@ -1,6 +1,5 @@
 package io.daos;
 
-import org.apache.commons.lang3.StringEscapeUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -128,6 +127,6 @@ public class DaosUtilsTest {
     String value = "ab:c=:def=";
     String evalue = DaosUtils.escapeUnsValue(value);
     Assert.assertEquals("ab\\u003ac\\u003d\\u003adef\\u003d", evalue);
-    Assert.assertEquals(value, StringEscapeUtils.unescapeJava(evalue));
+    Assert.assertEquals(value, DaosUtils.unEscapeUnsValue(evalue));
   }
 }

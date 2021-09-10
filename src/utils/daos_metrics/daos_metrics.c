@@ -50,7 +50,9 @@ print_usage(const char *prog_name)
 	       "--snapshot, -s\n"
 	       "\tInclude timer snapshots\n"
 	       "--gauge, -g\n"
-	       "\tInclude gauges\n",
+	       "\tInclude gauges\n"
+	       "--read, -r\n"
+	       "\tInclude timestamp of when metric was read\n",
 	       prog_name);
 }
 
@@ -90,11 +92,12 @@ main(int argc, char **argv)
 			{"delay", required_argument, NULL, 'D'},
 			{"meta", no_argument, NULL, 'M'},
 			{"type", no_argument, NULL, 'T'},
+			{"read", no_argument, NULL, 'r'},
 			{"help", no_argument, NULL, 'h'},
 			{NULL, 0, NULL, 0}
 		};
 
-		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MTh",
+		opt = getopt_long_only(argc, argv, "S:cCdtsgi:p:D:MTrh",
 				       long_options, NULL);
 		if (opt == -1)
 			break;
@@ -119,7 +122,7 @@ main(int argc, char **argv)
 			filter |= D_TM_TIMER_SNAPSHOT;
 			break;
 		case 'g':
-			filter |= D_TM_GAUGE;
+			filter |= D_TM_GAUGE | D_TM_STATS_GAUGE;
 			break;
 		case 'i':
 			num_iter = atoi(optarg);
@@ -132,6 +135,9 @@ main(int argc, char **argv)
 			break;
 		case 'T':
 			show_type = true;
+			break;
+		case 'r':
+			show_when_read = true;
 			break;
 		case 'D':
 			delay = atoi(optarg);
@@ -146,7 +152,7 @@ main(int argc, char **argv)
 
 	if (filter == 0)
 		filter = D_TM_COUNTER | D_TM_DURATION | D_TM_TIMESTAMP |
-			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE;
+			 D_TM_TIMER_SNAPSHOT | D_TM_GAUGE | D_TM_STATS_GAUGE;
 
 	ctx = d_tm_open(srv_idx);
 	if (!ctx)

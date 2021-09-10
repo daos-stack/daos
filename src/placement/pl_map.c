@@ -153,7 +153,7 @@ pl_obj_find_rebuild(struct pl_map *map, struct daos_obj_md *md,
 
 	D_ASSERT(map->pl_ops != NULL);
 
-	oc_attr = daos_oclass_attr_find(md->omd_id);
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
 	if (daos_oclass_grp_size(oc_attr) == 1)
 		return 0;
 
@@ -189,7 +189,7 @@ pl_obj_find_reint(struct pl_map *map, struct daos_obj_md *md,
 
 	D_ASSERT(map->pl_ops != NULL);
 
-	oc_attr = daos_oclass_attr_find(md->omd_id);
+	oc_attr = daos_oclass_attr_find(md->omd_id, NULL);
 	if (daos_oclass_grp_size(oc_attr) == 1)
 		return 0;
 
@@ -342,7 +342,7 @@ static pthread_rwlock_t		pl_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 static struct d_hash_table	pl_htable;
 
 /** XXX should be fetched from property */
-#define PL_DEFAULT_DOMAIN	PO_COMP_TP_NODE
+#define PL_DEFAULT_DOMAIN	PO_COMP_TP_RANK
 
 static void
 pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
@@ -350,7 +350,7 @@ pl_map_attr_init(struct pool_map *po_map, pl_map_type_t type,
 {
 	switch (type) {
 	default:
-		D_ASSERTF(0, "Unknown placemet map type: %d.\n", type);
+		D_ASSERTF(0, "Unknown placement map type: %d.\n", type);
 		break;
 
 	case PL_TYPE_RING:
@@ -618,11 +618,13 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 	int                              replica_idx;
 	int                              i;
 
-	oc_attr = daos_oclass_attr_find(oid);
+	oc_attr = daos_oclass_attr_find(oid, NULL);
 	if (oc_attr->ca_resil != DAOS_RES_REPL) {
 		int tgt_nr = oc_attr->u.ec.e_k + oc_attr->u.ec.e_p;
 		int fail_cnt = 0;
-		int idx = grp_idx * tgt_nr + tgt_nr - 1;
+		int idx = grp_idx * grp_size + tgt_nr - 1;
+		bool parity_rebuilding = false;
+		int leader_shard_idx;
 
 		/* For EC object, elect last shard in the group (must to be
 		 * a parity node) as leader.
@@ -631,8 +633,19 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 		while (shard->po_rebuilding || shard->po_shard == -1 ||
 		       shard->po_target == -1) {
 			idx--;
-			if (++fail_cnt >= oc_attr->u.ec.e_p)
-				return -DER_IO;
+			if (shard->po_rebuilding)
+				parity_rebuilding = true;
+
+			if (++fail_cnt >= oc_attr->u.ec.e_p) {
+				/* If parity is rebuilding, let's return DER_STALE,
+				 * so object I/O might refresh the pool map and layout
+				 * until parity rebuilt finish.
+				 */
+				if (parity_rebuilding)
+					return -DER_STALE;
+				else
+					return -DER_IO;
+			}
 			shard = pl_get_shard(data, idx);
 		}
 
@@ -643,7 +656,12 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 			*tgt_id = shard->po_target;
 		}
 
-		return shard->po_shard == -1 ? -DER_IO : shard->po_shard;
+		if (shard->po_shard == -1)
+			return -DER_IO;
+
+		leader_shard_idx = (shard->po_shard / tgt_nr) * grp_size +
+				    shard->po_shard % tgt_nr;
+		return leader_shard_idx;
 	}
 
 	replicas = oc_attr->u.rp.r_num;

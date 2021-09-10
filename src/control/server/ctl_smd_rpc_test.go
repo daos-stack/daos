@@ -595,7 +595,8 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			svc := mockControlService(t, log, cfg, nil, nil, nil)
 			svc.harness.started.SetTrue()
 
-			for i, srv := range svc.harness.instances {
+			for i, e := range svc.harness.instances {
+				srv := e.(*EngineInstance)
 				cfg := new(mockDrpcClientConfig)
 				if tc.junkResp {
 					cfg.setSendMsgResponse(drpc.Status_SUCCESS, makeBadBytes(42), nil)
@@ -612,7 +613,7 @@ func TestServer_CtlSvc_SmdQuery(t *testing.T) {
 			}
 			if tc.ioStopped {
 				for _, srv := range svc.harness.instances {
-					srv.ready.SetFalse()
+					srv.(*EngineInstance).ready.SetFalse()
 				}
 			}
 

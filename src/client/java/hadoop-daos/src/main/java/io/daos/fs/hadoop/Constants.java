@@ -13,9 +13,7 @@ public final class Constants {
 
   public static final String DAOS_SCHEMA = "daos";
 
-  public static final String UNS_ATTR_NAME_HADOOP = "user.daos.hadoop";
-
-  public static final String DAOS_CONFIG_FILE_NAME = "daos-site.xml";
+  public static final String DAOS_CONFIG_CHOICE = "fs.daos.choice";
 
   public static final String DAOS_DEFAULT_FS = "fs.defaultFS";
 
@@ -25,13 +23,10 @@ public final class Constants {
 
   public static final String DAOS_POOL_FLAGS = "fs.daos.pool.flags";
   // daos pool
-  public static final String DAOS_POOL_UUID = "fs.daos.pool.uuid";
-
-  // daos svc
-  public static final String DAOS_POOL_SVC = "fs.daos.pool.svc";
+  public static final String DAOS_POOL_ID = "fs.daos.pool.id";
 
   // daos container
-  public static final String DAOS_CONTAINER_UUID = "fs.daos.container.uuid";
+  public static final String DAOS_CONTAINER_ID = "fs.daos.container.id";
 
   public static final String DAOS_IO_ASYNC = "fs.daos.io.async";
   public static final boolean DEFAULT_DAOS_IO_ASYNC = true;
@@ -66,7 +61,7 @@ public final class Constants {
   public static final int MINIMUM_DAOS_BLOCK_SIZE = 16 * 1024 * 1024;
   public static final int MAXIMUM_DAOS_BLOCK_SIZE = Integer.MAX_VALUE;
 
-  public static final String UNS_PATH_SEARCH_RECURSIVE = "fs.daos.uns.search.recursive";
-  public static final boolean DEFAULT_UNS_PATH_SEARCH_RECURSIVE = false;
+  public static final String DAOS_WITH_UNS_PREFIX = "fs.daos.with-uns-prefix";
+  public static final boolean DEFAULT_DAOS_WITH_UNS_PREFIX = true;
 
 }

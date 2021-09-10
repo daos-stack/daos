@@ -7,7 +7,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from vol_test_base import VolTestBase
 from general_utils import get_job_manager_class
 
-
 class DaosVol(VolTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
     """Runs HDF5 test suites with daos vol connector.
@@ -35,7 +34,7 @@ class DaosVol(VolTestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
-        :avocado: tags=hdf5,vol,volunit,volmpich,mpich
+        :avocado: tags=hdf5,vol,volunit,volmpich
         :avocado: tags=DAOS_5610
         """
         self.job_manager = get_job_manager_class("Mpirun", None, False, "mpich")

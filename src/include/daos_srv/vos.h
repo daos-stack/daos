@@ -66,7 +66,8 @@ vos_dtx_validation(struct dtx_handle *dth);
  *				 if the DTX exists, then the DTX's epoch will
  *				 be saved in it.
  * \param pm_ver	[OUT]	Hold the DTX's pool map version.
- * \param mbs		[OUT	Pointer to the DTX participants information.]
+ * \param mbs		[OUT]	Pointer to the DTX participants information.
+ * \param dck		[OUT]	Pointer to the key for CoS cache.
  * \param for_resent	[IN]	The check is for check resent or not.
  *
  * \return		DTX_ST_PREPARED	means that the DTX has been 'prepared',
@@ -85,7 +86,8 @@ vos_dtx_validation(struct dtx_handle *dth);
  */
 int
 vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
-	      uint32_t *pm_ver, struct dtx_memberships **mbs, bool for_resent);
+	      uint32_t *pm_ver, struct dtx_memberships **mbs,
+	      struct dtx_cos_key *dck, bool for_resent);
 
 /**
  * Commit the specified DTXs.
@@ -93,15 +95,14 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
  * \param coh	[IN]	Container open handle.
  * \param dtis	[IN]	The array for DTX identifiers to be committed.
  * \param count [IN]	The count of DTXs to be committed.
- * \param dcks	[OUT]	The array to hold the OID and dkey hash corresponding to
- *			the committed DTXs array for subsequent CoS handling.
+ * \param rm_cos [OUT]	The array for whether remove entry from CoS cache.
  *
  * \return		Negative value if error.
  * \return		Others are for the count of committed DTXs.
  */
 int
 vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
-	       struct dtx_cos_key *dcks);
+	       bool *rm_cos);
 
 /**
  * Abort the specified DTXs.
@@ -117,6 +118,21 @@ vos_dtx_commit(daos_handle_t coh, struct dtx_id *dtis, int count,
 int
 vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 	      int count);
+
+/**
+ * Set flags on the active DTXs.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dtis	[IN]	The array for DTX identifiers to be handled.
+ * \param count [IN]	The count of DTXs to be handled.
+ * \param flags [IN]	The flags for the DTXs.
+ *
+ * \return		Negative value if error.
+ * \return		Others are for the count of handled DTXs.
+ */
+int
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dtis, int count,
+		  uint32_t flags);
 
 /**
  * Aggregate the committed DTXs.
@@ -504,7 +520,10 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -539,7 +558,10 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -700,10 +722,13 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
- * \param dedup [IN]	Whether deduplication is enabled for this I/O
  * \param dedup_th [IN]	Deduplication threshold size
  * \param ioh	[OUT]	The returned handle for the I/O.
  * \param dth	[IN]	Pointer to the DTX handle.
@@ -714,8 +739,7 @@ int
 vos_update_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		 uint64_t flags, daos_key_t *dkey, unsigned int iod_nr,
 		 daos_iod_t *iods, struct dcs_iod_csums *iods_csums,
-		 bool dedup, uint32_t dedup_th, daos_handle_t *ioh,
-		 struct dtx_handle *dth);
+		 uint32_t dedup_th, daos_handle_t *ioh, struct dtx_handle *dth);
 
 /**
  * Finish the current update and release the responding resources.
@@ -772,6 +796,20 @@ vos_ioh2ci_nr(daos_handle_t ioh);
  */
 struct bio_sglist *
 vos_iod_sgl_at(daos_handle_t ioh, unsigned int idx);
+
+/**
+ * Get the bulk handle associated with a given I/O descriptor.
+ *
+ * \param ioh		[IN]	The I/O handle
+ * \param sgl_idx	[IN]	SGL index
+ * \param iov_idx	[IN]	IOV index within the SGL
+ * \param bulk_off	[OUT]	Bulk offset
+ *
+ * \return			Bulk handle
+ */
+void *
+vos_iod_bulk_at(daos_handle_t ioh, unsigned int sgl_idx, unsigned int iov_idx,
+		unsigned int *bulk_off);
 
 void
 vos_set_io_csum(daos_handle_t ioh, struct dcs_iod_csums *csums);
@@ -998,6 +1036,10 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx	max or min offset in dkey/akey, and the size of the
  *			extent at the offset. If there are no visible array
  *			records, the size in the recx returned will be 0.
+ * \param[in]	cell_size cell size for EC object, used to calculated the replicated
+ *                      space address on parity shard.
+ * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
+ *                      space address on parity shard.
  * \param[in]	dth	Pointer to the DTX handle.
  *
  * \return
@@ -1009,7 +1051,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx, struct dtx_handle *dth);
+		  daos_recx_t *recx, unsigned int cell_size, uint64_t stripe_size,
+		  struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.
@@ -1087,15 +1130,13 @@ void
 vos_profile_stop(void);
 
 /**
- * Helper functions to create/free duplicated bsgl for dedup verify.
+ * Helper functions for dedup verify.
  */
 int
-vos_dedup_dup_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl,
-		   struct bio_sglist *bsgl_dup);
-void
-vos_dedup_free_bsgl(daos_handle_t ioh, struct bio_sglist *bsgl);
+vos_dedup_verify_init(daos_handle_t ioh, void *bulk_ctxt,
+		      unsigned int bulk_perm);
 int
-vos_dedup_verify(daos_handle_t ioh, struct bio_sglist *bsgls_dup);
+vos_dedup_verify(daos_handle_t ioh);
 
 /** Raise a RAS event on incompatible durable format
  *

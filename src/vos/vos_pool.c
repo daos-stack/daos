@@ -30,6 +30,22 @@
 /* NB: None of pmemobj_create/open/close is thread-safe */
 pthread_mutex_t vos_pmemobj_lock = PTHREAD_MUTEX_INITIALIZER;
 
+int
+vos_pool_settings_init(void)
+{
+	int					rc;
+	enum pobj_arenas_assignment_type	atype;
+
+	atype = POBJ_ARENAS_ASSIGNMENT_GLOBAL;
+
+	rc = pmemobj_ctl_set(NULL, "heap.arenas_assignment_type", &atype);
+	if (rc != 0)
+		D_ERROR("Could not configure PMDK for global arena: %s\n",
+			strerror(errno));
+
+	return rc;
+}
+
 static inline PMEMobjpool *
 vos_pmemobj_create(const char *path, const char *layout, size_t poolsize,
 		   mode_t mode)
@@ -433,7 +449,7 @@ vos_pool_kill(uuid_t uuid, bool force)
 	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
 
 	/* NVMe device is configured */
-	if (bio_nvme_configured()) {
+	if (bio_nvme_configured() && xs_ctxt) {
 		D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
 			xs_ctxt, DP_UUID(uuid));
 		rc = bio_blob_delete(uuid, xs_ctxt);
@@ -680,6 +696,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		D_GOTO(failed, rc);
 	}
 
+	pool->vp_dtx_committed_count = 0;
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);

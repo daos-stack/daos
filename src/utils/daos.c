@@ -30,6 +30,7 @@
 #include <daos/object.h>
 #include "daos_types.h"
 #include "daos_api.h"
+#include "daos_fs.h"
 #include "daos_uns.h"
 #include "daos_fs.h"
 #include "daos_hdlr.h"
@@ -40,6 +41,18 @@ const char		*default_sysname = DAOS_DEFAULT_SYS_NAME;
 
 #define RC_PRINT_HELP	2
 #define RC_NO_HELP	-2
+
+static inline int
+daos_parse_cmode(const char *string, uint32_t *mode)
+{
+	if (strcasecmp(string, "relaxed") == 0)
+		*mode = DFS_RELAXED;
+	else if (strcasecmp(string, "balanced") == 0)
+		*mode = DFS_BALANCED;
+	else
+		return -1;
+	return 0;
+}
 
 static enum fs_op
 filesystem_op_parse(const char *str)
@@ -258,7 +271,6 @@ tobytes(const char *str)
 	return size;
 }
 
-
 static int
 epoch_range_parse(struct cmd_args_s *ap)
 {
@@ -306,7 +318,7 @@ daos_obj_id_parse(const char *oid_str, daos_obj_id_t *oid)
 	if (*end != '.')
 		return -1;
 
-	ptr = end+1;
+	ptr = end + 1;
 
 	lo = strtoull(ptr, &end, 10);
 	if (ptr[0] == '-')
@@ -341,7 +353,7 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_LABEL;
-		entry->dpe_str = strdup(value);
+		D_STRNDUP(entry->dpe_str, value, len);
 	} else if (!strcmp(name, "cksum")) {
 		int csum_type = daos_str2csumcontprop(value);
 
@@ -472,6 +484,15 @@ daos_parse_property(char *name, char *value, daos_prop_t *props)
 			return -DER_INVAL;
 		}
 		entry->dpe_type = DAOS_PROP_CO_STATUS;
+
+	} else if (!strcmp(name, "ec_cell")) {
+		entry->dpe_val = strtol(value, NULL, 0);
+		if (!daos_ec_cs_valid(entry->dpe_val)) {
+			fprintf(stderr, "Invalid EC cell size = %u\n",
+				(uint32_t)entry->dpe_val);
+			return -DER_INVAL;
+		}
+		entry->dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
 	} else {
 		fprintf(stderr, "supported prop names are label/cksum/cksum_size/srv_cksum/dedup/dedup_th/rf\n");
 		return -DER_INVAL;
@@ -595,6 +616,7 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"src",		required_argument,	NULL,	'S'},
 		{"dst",		required_argument,	NULL,	'D'},
 		{"type",	required_argument,	NULL,	't'},
+		{"mode",	required_argument,	NULL,	'M'},
 		{"oclass",	required_argument,	NULL,	'o'},
 		{"chunk-size",	required_argument,	NULL,	'z'},
 		{"dfs-prefix",	required_argument,	NULL,	'I'},
@@ -614,18 +636,24 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		{"principal",	required_argument,	NULL,	'P'},
 		{NULL,		0,			NULL,	0}
 	};
+	bool			posix_mode_set = false;
 	int			rc;
 	char			*cmdname = NULL;
 
 	assert(ap != NULL);
+
 	ap->p_op  = -1;
 	ap->c_op  = -1;
 	ap->o_op  = -1;
 	ap->fs_op = -1;
 	ap->sh_op = -1;
+	ap->mode  = 0;
 	D_STRNDUP(ap->sysname, default_sysname, strlen(default_sysname));
 	if (ap->sysname == NULL)
 		return RC_NO_HELP;
+
+	ap->outstream = stdout;
+	ap->errstream = stderr;
 
 	if ((strcmp(argv[1], "container") == 0) ||
 	    (strcmp(argv[1], "cont") == 0)) {
@@ -754,6 +782,15 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 				D_GOTO(out_free, rc = RC_PRINT_HELP);
 			}
 			break;
+		case 'M':
+			posix_mode_set = true;
+			if (daos_parse_cmode(optarg, &ap->mode) != 0) {
+				fprintf(stderr,
+					"Invalid POSIX consistency mode: %s\n",
+					optarg);
+				D_GOTO(out_free, rc = RC_PRINT_HELP);
+			}
+			break;
 		case 'o':
 			ap->oclass = daos_oclass_name2id(optarg);
 			if (ap->oclass == OC_UNKNOWN) {
@@ -870,6 +907,11 @@ common_op_parse_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 
 	cmd_args_print(ap);
 
+	if (posix_mode_set && ap->type != DAOS_PROP_CO_LAYOUT_POSIX) {
+		fprintf(stderr, "--mode is valid only for a POSIX container\n");
+		D_GOTO(out_free, rc = RC_NO_HELP);
+	}
+
 	/* Check for any unimplemented commands, print help */
 	if (ap->p_op != -1 &&
 	    (ap->p_op == POOL_STAT)) {
@@ -985,9 +1027,10 @@ call_dfuse_ioctl(const char *path, struct dfuse_il_reply *reply)
 static int
 fs_op_hdlr(struct cmd_args_s *ap)
 {
-	enum fs_op	op;
-	char		*name = NULL, *dir_name = NULL;
-	int		rc = 0;
+	enum fs_op		op;
+	char			*name = NULL, *dir_name = NULL;
+	struct duns_attr_t	dattr = {0};
+	int			rc, rc2;
 
 	assert(ap != NULL);
 	op = ap->fs_op;
@@ -1000,6 +1043,7 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			D_GOTO(out, rc = RC_PRINT_HELP);
 		} else {
 			rc = fs_copy_hdlr(ap);
+			D_GOTO(out, rc);
 		}
 		break;
 	case FS_SET_ATTR:
@@ -1008,8 +1052,6 @@ fs_op_hdlr(struct cmd_args_s *ap)
 	case FS_RESET_CHUNK_SIZE:
 	case FS_RESET_OCLASS:
 		if (ap->path != NULL) {
-			struct duns_attr_t      dattr = {0};
-
 			if (ap->dfs_path) {
 				fprintf(stderr, "can't specify file or dir in "
 					"path and dfs_path at the same time\n");
@@ -1032,41 +1074,74 @@ fs_op_hdlr(struct cmd_args_s *ap)
 			}
 
 			ap->type = dattr.da_type;
-			uuid_copy(ap->p_uuid, dattr.da_puuid);
-			uuid_copy(ap->c_uuid, dattr.da_cuuid);
+
+			/** set pool/cont label or uuid */
+			snprintf(ap->pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+			snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 
 			if (name) {
-				if (dattr.da_rel_path) {
-					D_ASPRINTF(ap->dfs_path, "%s/%s",
-						   dattr.da_rel_path, name);
-					free(dattr.da_rel_path);
-				} else {
+				if (dattr.da_rel_path)
+					D_ASPRINTF(ap->dfs_path, "%s/%s", dattr.da_rel_path, name);
+				else
 					D_ASPRINTF(ap->dfs_path, "/%s", name);
-				}
 			} else {
-				if (dattr.da_rel_path) {
-					D_STRNDUP(ap->dfs_path,
-						  dattr.da_rel_path, PATH_MAX);
-					free(dattr.da_rel_path);
-				} else {
-					D_STRNDUP(ap->dfs_path, "/", 1);
-				}
+				if (dattr.da_rel_path)
+					D_STRNDUP(ap->dfs_path, dattr.da_rel_path, PATH_MAX);
+				else
+					D_STRNDUP_S(ap->dfs_path, "/");
 			}
 			if (ap->dfs_path == NULL)
 				D_GOTO(out, rc = ENOMEM);
 		} else {
 			ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+			uuid_unparse(ap->p_uuid, ap->pool_str);
 			ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+			uuid_unparse(ap->c_uuid, ap->cont_str);
 		}
+
+		rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RW, &ap->pool,
+				       NULL, NULL);
+		if (rc) {
+			fprintf(stderr, "failed to connect to pool %s: %s (%d)\n", ap->pool_str,
+				d_errdesc(rc), rc);
+			D_GOTO(out, rc);
+		}
+
+		rc = daos_cont_open(ap->pool, ap->cont_str, DAOS_COO_RW | DAOS_COO_FORCE, &ap->cont,
+				    NULL, NULL);
+		if (rc) {
+			fprintf(stderr, "failed to open container %s: %s (%d)\n", ap->cont_str,
+				d_errdesc(rc), rc);
+			D_GOTO(out_disconnect, rc);
+		}
+
 		rc = fs_dfs_hdlr(ap);
 		if (rc)
-			D_GOTO(out, rc);
+			D_GOTO(out_close, rc);
 		break;
 	default:
-		break;
+		fprintf(stderr, "Invalid FS operation\n");
+		return -1;
 	}
 
+out_close:
+	rc2 = daos_cont_close(ap->cont, NULL);
+	if (rc2 != 0)
+		fprintf(stderr,
+			"failed to close container "DF_UUIDF ": %s (%d)\n",
+			DP_UUID(ap->c_uuid), d_errdesc(rc2), rc2);
+	if (rc == 0)
+		rc = rc2;
+out_disconnect:
+	rc2 = daos_pool_disconnect(ap->pool, NULL);
+	if (rc2 != 0)
+		fprintf(stderr,
+			"failed to disconnect from pool "DF_UUIDF": %s (%d)\n",
+			DP_UUID(ap->p_uuid), d_errdesc(rc2), rc2);
+	if (rc == 0)
+		rc = rc2;
 out:
+	duns_destroy_attr(&dattr);
 	D_FREE(dir_name);
 	D_FREE(name);
 	return rc;
@@ -1083,11 +1158,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	assert(ap != NULL);
 	op = ap->c_op;
 
-	/* cont_clone uses its own src and dst variables, and does
-	 * not use the regular pool and cont ones stored in the
-	 * ap struct. This is because for a clone it is necessary
-	 * to explicitly specify whether a container is a src or
-	 * dst
+	/* cont_clone uses its own src and dst variables, and does not use the regular pool and cont
+	 * ones stored in the ap struct. This is because for a clone it is necessary to explicitly
+	 * specify whether a container is a src or dst
 	 */
 	if (op == CONT_CLONE) {
 		if (ap->src != NULL && ap->dst != NULL) {
@@ -1098,22 +1171,18 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		return rc;
 	}
 
-	/* All container operations require a pool handle, connect
-	 * here. Take specified pool UUID or look up through unified
-	 * namespace.
+	/* All container operations require a pool handle, connect here. Take specified pool UUID or
+	 * look up through unified namespace.
 	 */
 	if ((op != CONT_CREATE) && (ap->path != NULL)) {
 		struct duns_attr_t dattr = {0};
 		struct dfuse_il_reply il_reply = {0};
 
-		ARGS_VERIFY_PATH_NON_CREATE(ap, out,
-					    rc = RC_PRINT_HELP);
+		ARGS_VERIFY_PATH_NON_CREATE(ap, out, rc = RC_PRINT_HELP);
 
-		/* Resolve pool, container UUIDs from path if needed
-		 * Firtly check for a unified namespace entry point,
-		 * then if that isn't detected then check for dfuse
-		 * backing the path, and print pool/container/oid
-		 * for the path.
+		/* Resolve pool, container UUIDs from path if needed Firtly check for a unified
+		 * namespace entry point, then if that isn't detected then check for dfuse backing
+		 * the path, and print pool/container/oid for the path.
 		 */
 		rc = duns_resolve_path(ap->path, &dattr);
 		if (rc) {
@@ -1132,22 +1201,21 @@ cont_op_hdlr(struct cmd_args_s *ap)
 			ap->oid = il_reply.fir_oid;
 		} else {
 			ap->type = dattr.da_type;
-			uuid_copy(ap->p_uuid, dattr.da_puuid);
-			uuid_copy(ap->c_uuid, dattr.da_cuuid);
-			if (dattr.da_rel_path)
-				free(dattr.da_rel_path);
+
+			/** set pool/cont label or uuid */
+			snprintf(ap->pool_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_pool);
+			snprintf(ap->cont_str, DAOS_PROP_LABEL_MAX_LEN + 1, "%s", dattr.da_cont);
 		}
+		duns_destroy_attr(&dattr);
 	} else {
 		ARGS_VERIFY_PUUID(ap, out, rc = RC_PRINT_HELP);
+		uuid_unparse(ap->p_uuid, ap->pool_str);
 	}
 
-	rc = daos_pool_connect(ap->p_uuid, ap->sysname, DAOS_PC_RW,
-			       &ap->pool, NULL /* info */,
-			       NULL /* ev */);
+	rc = daos_pool_connect(ap->pool_str, ap->sysname, DAOS_PC_RW, &ap->pool, NULL, NULL);
 	if (rc != 0) {
-		fprintf(stderr, "failed to connect to "
-			"pool "DF_UUIDF ": %s (%d)\n",
-			DP_UUID(ap->p_uuid), d_errdesc(rc), rc);
+		fprintf(stderr, "failed to connect to pool %s: %s (%d)\n", ap->pool_str,
+			d_errdesc(rc), rc);
 		D_GOTO(out, rc);
 	}
 
@@ -1158,8 +1226,10 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	/* for container lookup ops: if no path specified,
 	 * require --cont
 	 */
-	if ((op != CONT_CREATE) && (ap->path == NULL))
+	if ((op != CONT_CREATE) && (ap->path == NULL)) {
 		ARGS_VERIFY_CUUID(ap, out, rc = RC_PRINT_HELP);
+		uuid_unparse(ap->c_uuid, ap->cont_str);
+	}
 
 	/* container create scenarios (generate UUID if necessary):
 	 * 1) both --cont, --path : uns library will use specified c_uuid.
@@ -1168,18 +1238,14 @@ cont_op_hdlr(struct cmd_args_s *ap)
 	 *			    (currently c_uuid null / clear).
 	 * 4) neither specified   : create a UUID in c_uuid.
 	 */
-	if ((op == CONT_CREATE) && (ap->path == NULL) &&
-	    (uuid_is_null(ap->c_uuid)))
+	if ((op == CONT_CREATE) && (ap->path == NULL) && (uuid_is_null(ap->c_uuid)))
 		uuid_generate(ap->c_uuid);
 
 	if (op != CONT_CREATE && op != CONT_DESTROY) {
-		rc = daos_cont_open(ap->pool, ap->c_uuid,
-				    DAOS_COO_RW | DAOS_COO_FORCE,
-				    &ap->cont, &cont_info, NULL);
+		rc = daos_cont_open(ap->pool, ap->cont_str, DAOS_COO_RW | DAOS_COO_FORCE, &ap->cont,
+				    &cont_info, NULL);
 		if (rc != 0) {
-			fprintf(stderr, "failed to open "
-				"container "DF_UUIDF
-				": %s (%d)\n", DP_UUID(ap->c_uuid),
+			fprintf(stderr, "failed to open container %s: %s (%d)\n", ap->cont_str,
 				d_errdesc(rc), rc);
 			D_GOTO(out_disconnect, rc);
 		}
@@ -1229,7 +1295,9 @@ cont_op_hdlr(struct cmd_args_s *ap)
 		rc = cont_create_snap_hdlr(ap);
 		break;
 	case CONT_LIST_SNAPS:
-		rc = cont_list_snaps_hdlr(ap, NULL, NULL);
+		ap->snapname_str = NULL;
+		ap->epc = 0;
+		rc = cont_list_snaps_hdlr(ap);
 		break;
 	case CONT_DESTROY_SNAP:
 		rc = cont_destroy_snap_hdlr(ap);
@@ -1486,7 +1554,6 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 		DAOS_VERSION, DAOS_API_VERSION_MAJOR,
 		DAOS_API_VERSION_MINOR, DAOS_API_VERSION_FIX);
 
-
 	if (argc <= 2) {
 		FIRST_LEVEL_HELP();
 	} else if (strcmp(argv[2], "filesystem") == 0 ||
@@ -1530,6 +1597,9 @@ help_hdlr(int argc, char *argv[], struct cmd_args_s *ap)
 			"	--path=PATHSTR     container namespace path\n"
 			"container create common optional options:\n"
 			"	--type=CTYPESTR    container type (HDF5, POSIX)\n"
+			"	--mode=FLAG        In case of POSIX type, select consistency mode:\n"
+			"			   relaxed (default): weaker consistency semantics.\n"
+			"			   balanced: stronger consistency semantics.\n"
 			"	--oclass=OCLSSTR   container object class\n"
 			"			   (");
 			/* vs hardcoded list like "tiny, small, large, R2, R2S, repl_max" */

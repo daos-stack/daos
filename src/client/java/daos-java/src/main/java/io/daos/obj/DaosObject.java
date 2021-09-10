@@ -7,13 +7,9 @@
 package io.daos.obj;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.daos.BufferAllocator;
-import io.daos.Constants;
-import io.daos.DaosEventQueue;
-import io.daos.DaosIOException;
+import io.daos.*;
 import io.daos.obj.attr.DaosObjectAttribute;
 import io.netty.buffer.ByteBuf;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -124,7 +120,7 @@ public class DaosObject {
     int bufferLen = 0;
     List<byte[]> keyBytesList = new ArrayList<>(keys.size());
     for (String key : keys) {
-      if (StringUtils.isBlank(key)) {
+      if (DaosUtils.isBlankStr(key)) {
         throw new IllegalArgumentException("one of akey is blank");
       }
       byte bytes[];
@@ -469,7 +465,7 @@ public class DaosObject {
    */
   public List<String> listAkeys(IOKeyDesc desc) throws DaosObjectException {
     checkOpen();
-    if (StringUtils.isBlank(desc.getDkey())) {
+    if (DaosUtils.isBlankStr(desc.getDkey())) {
       throw new DaosObjectException(oid, "dkey is needed when list akeys");
     }
     desc.encode();
@@ -503,10 +499,10 @@ public class DaosObject {
    */
   public int getRecordSize(String dkey, String akey) throws DaosObjectException {
     checkOpen();
-    if (StringUtils.isBlank(dkey)) {
+    if (DaosUtils.isBlankStr(dkey)) {
       throw new IllegalArgumentException("dkey is blank");
     }
-    if (StringUtils.isBlank(akey)) {
+    if (DaosUtils.isBlankStr(akey)) {
       throw new IllegalArgumentException("akey is blank");
     }
     byte dkeyBytes[];

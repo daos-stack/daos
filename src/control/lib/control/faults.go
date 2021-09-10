@@ -38,7 +38,24 @@ var (
 	)
 )
 
-func IsConnectionError(err error) bool {
+// IsRetryableConnErr indicates whether the error is a connection error that
+// can be retried.
+func IsRetryableConnErr(err error) bool {
+	if !IsConnErr(err) {
+		return false
+	}
+
+	f, ok := errors.Cause(err).(*fault.Fault)
+	if !ok {
+		return false
+	}
+
+	return f.Code == code.ClientConnectionRefused ||
+		f.Code == code.ClientConnectionClosed
+}
+
+// IsConnErr indicates whether the error is a connection error.
+func IsConnErr(err error) bool {
 	f, ok := errors.Cause(err).(*fault.Fault)
 	if !ok {
 		return false
@@ -85,6 +102,18 @@ func FaultConnectionClosed(srvAddr string) *fault.Fault {
 		code.ClientConnectionClosed,
 		fmt.Sprintf("the server at %s closed the connection without accepting a request", srvAddr),
 		"verify that the configured address and your TLS configuration are correct (or disable transport security)",
+	)
+}
+
+func FaultRpcTimeout(req deadliner) *fault.Fault {
+	timeout := req.getTimeout()
+	if timeout == 0 {
+		timeout = defaultRequestTimeout
+	}
+	return clientFault(
+		code.ClientRpcTimeout,
+		fmt.Sprintf("the %T request timed out after %s", req, timeout),
+		"retry the request or check server logs for more information",
 	)
 }
 

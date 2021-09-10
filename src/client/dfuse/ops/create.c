@@ -45,6 +45,7 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 		fs_handle->dpi_info->di_wb_cache &&
 		(fi->flags & O_ACCMODE) == O_WRONLY) {
 		DFUSE_TRA_INFO(parent, "Upgrading fd to O_RDRW");
+		fi->flags &= ~O_ACCMODE;
 		fi->flags |= O_RDWR;
 	}
 

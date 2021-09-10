@@ -68,7 +68,7 @@ class GetContainerACLTest(ContSecurityTestBase):
                     outfile=path_to_file)
                 test_errs.extend(
                     self.error_handling(
-                        self.daos_cmd.result, "File exists"))
+                        self.daos_cmd.result, "ile exists"))
 
         if test_errs:
             self.fail("container get-acl command expected to fail: \

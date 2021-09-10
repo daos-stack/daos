@@ -21,6 +21,7 @@ import (
 	"github.com/daos-stack/daos/src/control/build"
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/events"
+	"github.com/daos-stack/daos/src/control/lib/atm"
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
@@ -82,6 +83,7 @@ type (
 		sync.Mutex
 		log                logging.Logger
 		cfg                *DatabaseConfig
+		initialized        atm.Bool
 		replicaAddr        *syncTCPAddr
 		raft               syncRaft
 		raftTransport      raft.Transport
@@ -301,6 +303,10 @@ func (db *Database) CheckReplica() error {
 		return &ErrNotReplica{db.cfg.stringReplicas(nil)}
 	}
 
+	if db.initialized.IsFalse() {
+		return ErrUninitialized
+	}
+
 	return db.raft.withReadLock(func(_ raftService) error { return nil })
 }
 
@@ -387,6 +393,10 @@ func (db *Database) Start(parent context.Context) error {
 		return errors.Wrap(err, "unable to configure raft service")
 	}
 
+	// Set this before starting raft so that we can distinguish between
+	// an unformatted system and one where raft isn't started.
+	db.initialized.SetTrue()
+
 	if err := db.startRaft(newDB); err != nil {
 		return errors.Wrap(err, "unable to start raft service")
 	}
@@ -469,6 +479,15 @@ func (db *Database) monitorLeadershipState(parent context.Context) {
 
 		}
 	}
+}
+
+// IncMapVer forces the system database to increment the map version.
+func (db *Database) IncMapVer() error {
+	if err := db.CheckLeader(); err != nil {
+		return err
+	}
+
+	return db.submitIncMapVer()
 }
 
 func newGroupMap(version uint32) *GroupMap {
@@ -790,8 +809,9 @@ func copyPoolService(in *PoolService) *PoolService {
 }
 
 // PoolServiceList returns a list of pool services registered
-// with the system.
-func (db *Database) PoolServiceList() ([]*PoolService, error) {
+// with the system. If the all parameter is not true, only
+// pool services in the "Ready" state are returned.
+func (db *Database) PoolServiceList(all bool) ([]*PoolService, error) {
 	if err := db.CheckReplica(); err != nil {
 		return nil, err
 	}
@@ -801,11 +821,12 @@ func (db *Database) PoolServiceList() ([]*PoolService, error) {
 	// NB: This is expensive! We make a copy of the
 	// pool services to ensure that they can't be changed
 	// elsewhere.
-	dbCopy := make([]*PoolService, len(db.data.Pools.Uuids))
-	copyIdx := 0
+	dbCopy := make([]*PoolService, 0, len(db.data.Pools.Uuids))
 	for _, ps := range db.data.Pools.Uuids {
-		dbCopy[copyIdx] = copyPoolService(ps)
-		copyIdx++
+		if ps.State != PoolServiceStateReady && !all {
+			continue
+		}
+		dbCopy = append(dbCopy, copyPoolService(ps))
 	}
 	return dbCopy, nil
 }

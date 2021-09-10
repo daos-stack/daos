@@ -11,7 +11,7 @@ hosts:
     - client-H
 timeouts:
     test_dm_obj_large_posix_dcp: 180
-    test_dm_obj_large_posix_cont_clone: 420
+    test_dm_obj_large_posix_cont_clone: 540
 server_config:
   name: daos_server
   servers:
