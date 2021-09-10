@@ -4,7 +4,7 @@ DAOS object stores user's data, it is identified by object ID which is unique
 within the DAOS container it belongs to. Objects can be distributed across any
 target of the pool for both performance and resilience.
 DAOS object in DAOS storage model is shown in the diagram -
-![/doc/graph/Fig_002.png](/doc/graph/Fig_002.png "object in storage model")
+![/docs/graph/Fig_002.png](/docs/graph/Fig_002.png "object in storage model")
 The object module implements the object I/O stack.
 
 ## KV store, dkey and akey
@@ -114,7 +114,7 @@ The checksum feature attempts to provide end-to-end data integrity. On an update
  the DAOS client calculates checksums for user data and sends with the RPC to
  the DAOS server. The DAOS server returns the checksum with the data on a fetch
  so the DAOS client can verify the integrity of the data. See [End-to-end Data
- Integrity Overiew](../../doc/overview/data_integrity.md) for more information.
+ Integrity Overiew](../../docs/overview/data_integrity.md) for more information.
 
 Checksums are configured at the container level and when a client opens a
  container, the checksum properties will be queried automatically, and, if

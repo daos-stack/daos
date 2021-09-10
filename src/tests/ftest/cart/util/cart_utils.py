@@ -30,6 +30,10 @@ class CartTest(TestWithoutServers):
         self.module_init = False
         self.provider = None
         self.module = lambda *x: False
+        self.supp_file = "/etc/daos/memcheck-cart.supp"
+        self.src_dir = os.path.dirname(os.path.dirname(os.path.dirname(
+                       os.path.dirname(os.path.dirname(os.path.dirname(
+                       os.path.dirname(os.path.abspath(__file__))))))))
 
     def setUp(self):
         """Set up the test case."""
@@ -53,6 +57,7 @@ class CartTest(TestWithoutServers):
                     self.print("\nAdding {} to PATH\n".format(added_path))
                     found_path = True
                 elif os.path.basename(path_dirname) == "install":
+                    self.supp_file = path_dirname + "/etc/memcheck-cart.supp"
                     added_path = os.path.join(path_dirname,
                                               test_dirs["install"])
                     if os.path.isdir(added_path):
@@ -186,6 +191,9 @@ class CartTest(TestWithoutServers):
         """Get the basic env setting in yaml."""
         env_CCSA = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
         test_name = self.params.get("name", "/run/tests/*/")
+        env_PHY_ADDR_STR = self.params.get("CRT_PHY_ADDR_STR", "/run/env_CRT_PHY_ADDR_STR/*/")
+
+        os.environ["CRT_PHY_ADDR_STR"] = env_PHY_ADDR_STR
 
         if env_CCSA is not None:
             log_dir = "{}-{}".format(test_name, env_CCSA)
@@ -196,13 +204,14 @@ class CartTest(TestWithoutServers):
 
         # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
         # (It can't be '.' or cwd(), it must be some place writable.)
-        daos_test_shared_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
         log_file = os.path.join(log_path, log_dir,
-                                test_name + "_" + env_CCSA + "_cart.log")
+                                test_name + "_" + \
+                                env_CCSA + "_" + \
+                                env_PHY_ADDR_STR + "_cart.log")
 
         # Default env vars for orterun to None
         log_mask = None
@@ -228,7 +237,11 @@ class CartTest(TestWithoutServers):
 
         # Do not use the standard .log file extension, otherwise it'll get
         # removed (cleaned up for disk space savings) before we can archive it.
-        log_filename = test_name + "_" + env_CCSA + "_output.orterun_log"
+        log_filename = test_name + "_" + \
+                       env_CCSA + "_" + \
+                       env_PHY_ADDR_STR + "_" + \
+                       "output.orterun_log"
+
         output_filename_path = os.path.join(log_path, log_dir, log_filename)
         env = " --output-filename {!s}".format(output_filename_path)
         env += " -x D_LOG_FILE={!s}".format(log_file)
@@ -302,18 +315,43 @@ class CartTest(TestWithoutServers):
     # pylint: disable=too-many-locals
     def build_cmd(self, env, host, **kwargs):
         """Build a command string."""
+
+        env_CCSA = self.params.get("env", "/run/env_CRT_CTX_SHARE_ADDR/*/")
+        test_name = self.params.get("name", "/run/tests/*/")
+
+        # Write memcheck result file(s) to $HOME or DAOS_TEST_SHARED_DIR.
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
+
+        if env_CCSA is None:
+            env_CCSA = ""
+
+        f = r"{}/valgrind.%q\{{PMIX_ID\}}_{}-{}.memcheck"
+        memcheck_xml = f.format(daos_test_shared_dir,
+                                test_name,
+                                env_CCSA)
+
         tst_cmd = ""
         tst_cont = None
 
         index = kwargs.get('index', None)
 
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
+
+        # Return 0 on memory leaks while suppresion file is completed
+        # (CART-975 and CART-977)
+        memcheck_error_code = 0
+
         tst_vgd = " valgrind --xml=yes " + \
-                  "--xml-file={}/".format(self.log_path) + \
-                  r"valgrind.%q\{PMIX_ID\}.memcheck " + \
-                  "--fair-sched=try  --partial-loads-ok=yes " + \
-                  "--leak-check=yes --gen-suppressions=all " + \
-                  "--suppressions=../etc/memcheck-cart.supp " + \
-                  "--show-reachable=yes "
+                  "--xml-file={}".format(memcheck_xml) + " " + \
+                  "--fair-sched=yes --partial-loads-ok=yes " + \
+                  "--leak-check=full --show-leak-kinds=all " + \
+                  " --gen-suppressions=all " + \
+                  "--suppressions=" + self.supp_file + " " + \
+                  "--track-origins=yes " + \
+                  "--error-exitcode=" + str(memcheck_error_code) + " " \
+                  "--show-reachable=yes --trace-children=yes"
 
         _tst_bin = self.params.get("{}_bin".format(host), "/run/tests/*/")
         _tst_arg = self.params.get("{}_arg".format(host), "/run/tests/*/")
@@ -334,16 +372,14 @@ class CartTest(TestWithoutServers):
         tst_ppn = self.params.get("{}_ppn".format(host), "/run/tests/*/")
         logparse = self.params.get("logparse", "/run/tests/*/")
 
-        # Write group attach info file(s) to HOME or DAOS_TEST_SHARED_DIR.
-        # (It can't be '.' or cwd(), it must be some place writable.)
-        daos_test_shared_dir = os.environ['HOME']
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            daos_test_shared_dir = os.environ['DAOS_TEST_SHARED_DIR']
-
         if tst_slt is not None:
-            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_slt)
+            hostfile = write_host_file(tst_host,
+                                       daos_test_shared_dir,
+                                       tst_slt)
         else:
-            hostfile = write_host_file(tst_host, daos_test_shared_dir, tst_ppn)
+            hostfile = write_host_file(tst_host,
+                                       daos_test_shared_dir,
+                                       tst_ppn)
 
         mca_flags = "--mca btl self,tcp "
 
@@ -369,7 +405,8 @@ class CartTest(TestWithoutServers):
         if logparse:
             tst_cmd += " -x D_LOG_FILE_APPEND_PID=1"
 
-        tst_mod = os.getenv("CART_TEST_MODE", "native")
+        tst_mod = os.getenv("WITH_VALGRIND", "native")
+
         if tst_mod == "memcheck":
             tst_cmd += tst_vgd
 
@@ -380,6 +417,43 @@ class CartTest(TestWithoutServers):
             tst_cmd += " " + tst_arg
 
         return tst_cmd
+
+    def convert_xml(self, xml_file):
+        """Modify the xml file"""
+
+        with open(xml_file, 'r') as fd:
+            with open('{}.xml'.format(xml_file), 'w') as ofd:
+                for line in fd:
+                    if self.src_dir in line:
+                        L = re.sub(r'<dir>\/*' + self.src_dir + r'\/*',
+                                   r'<dir>',
+                                   line)
+                        ofd.write(L)
+                    else:
+                        ofd.write(line)
+                os.unlink(xml_file)
+
+        return 0
+
+    def convert_xml_files(self):
+        """Check valgrind memcheck log files for errors."""
+
+        daos_test_shared_dir = os.getenv('DAOS_TEST_SHARED_DIR',
+                                         os.getenv('HOME'))
+
+        self.log.info("Parsing log path %s", daos_test_shared_dir)
+        if not os.path.exists(daos_test_shared_dir):
+            self.log.info("Path does not exist")
+            return 1
+
+        xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
+        memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
+                                os.listdir(daos_test_shared_dir)))
+
+        for filename in memcheck_files:
+            self.convert_xml(daos_test_shared_dir + "/" + filename)
+
+        return 0
 
     def launch_srv_cli_test(self, srvcmd, clicmd):
         """Launch a sever in the background and client in the foreground."""
@@ -398,6 +472,8 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
+        self.convert_xml_files()
+
         return 0
 
     def launch_test(self, cmd, srv1=None, srv2=None):
@@ -415,6 +491,8 @@ class CartTest(TestWithoutServers):
                 self.stop_process(srv2)
             self.fail("Failed, return codes {}".format(rtn))
 
+        self.convert_xml_files()
+
         return rtn
 
     def launch_cmd_bg(self, cmd):
@@ -427,6 +505,8 @@ class CartTest(TestWithoutServers):
         if rtn is None:
             self.fail("Failed to start command\n")
             return -1
+
+        self.convert_xml_files()
 
         return rtn
 

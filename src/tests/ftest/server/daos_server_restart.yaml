@@ -16,10 +16,12 @@ server_config:
   name: daos_server
 
 server:
-  scm_size: 138000000
   num_of_pool: 3
   container_per_pool: 2
 
 pool:
   control_method: dmg
   size: 1GB
+
+container:
+  control_method: daos
