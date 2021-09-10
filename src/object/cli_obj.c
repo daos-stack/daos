@@ -3647,12 +3647,30 @@ out:
 	return rc;
 }
 
+/*
+ * Remove current shard tasks (attached to obj_auxi->shard_task_head), and set
+ * obj_auxi->new_shard_tasks flag, so when retrying that obj IO task, it will
+ * re-create new shard task. This helper function can be used before retry IO
+ * and the retried IO possibly with different targets or parameters.
+ */
+static void
+obj_io_set_new_shard_task(struct obj_auxi_args *obj_auxi)
+{
+	d_list_t	*head;
+
+	head = &obj_auxi->shard_task_head;
+	if (head != NULL) {
+		tse_task_list_traverse(head, shard_task_remove, NULL);
+		D_ASSERT(d_list_empty(head));
+	}
+	obj_auxi->new_shard_tasks = 1;
+}
+
 static void
 obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 {
 	daos_iod_t	*uiods, *iods;
 	d_sg_list_t	*usgls;
-	d_list_t	*head;
 	unsigned int     iod_nr, i;
 	bool		 size_all_zero = true;
 
@@ -3687,15 +3705,7 @@ obj_size_fetch_cb(const struct dc_object *obj, struct obj_auxi_args *obj_auxi)
 	} else {
 		D_DEBUG(DB_IO, DF_OID" retrying IO after size fetch.\n",
 			DP_OID(obj->cob_md.omd_id));
-		/* remove the original shard fetch tasks and will
-		 * recreate new shard fetch tasks with new parameters.
-		 */
-		head = &obj_auxi->shard_task_head;
-		if (head != NULL) {
-			tse_task_list_traverse(head, shard_task_remove, NULL);
-			D_ASSERT(d_list_empty(head));
-		}
-		obj_auxi->new_shard_tasks = 1;
+		obj_io_set_new_shard_task(obj_auxi);
 		obj_auxi->io_retry = 1;
 	}
 }
@@ -3780,7 +3790,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 			obj_auxi->to_leader = 1;
 	} else if (obj_auxi->ec_wait_recov &&
 		   task->dt_result == -DER_FETCH_AGAIN) {
-		obj_auxi->new_shard_tasks = 1;
+		/* Remove the original shard fetch tasks and will recreate new shard fetch tasks
+		 * with new parameters.
+		 */
+		D_DEBUG(DB_IO, DF_OID" retrying enumeration.\n",
+			DP_OID(obj->cob_md.omd_id));
+		obj_io_set_new_shard_task(obj_auxi);
 		obj_auxi->io_retry = 1;
 		pm_stale = 1;
 		obj_auxi->ec_wait_recov = 0;
@@ -4934,20 +4949,13 @@ obj_list_common(tse_task_t *task, int opc, daos_obj_list_t *args)
 	if (obj_is_ec(obj)) {
 		obj_auxi->is_ec_obj = 1;
 		if (obj_auxi->io_retry) {
-			d_list_t *head = NULL;
-
 			/* Since enumeration retry might retry to send multiple
 			 * shards, remove the original shard fetch tasks and will
 			 * recreate new shard fetch tasks with new parameters.
 			 */
 			D_DEBUG(DB_IO, DF_OID" retrying enumeration.\n",
 				DP_OID(obj->cob_md.omd_id));
-			head = &obj_auxi->shard_task_head;
-			if (head != NULL) {
-				tse_task_list_traverse(head, shard_task_remove, NULL);
-				D_ASSERT(d_list_empty(head));
-			}
-			obj_auxi->new_shard_tasks = 1;
+			obj_io_set_new_shard_task(obj_auxi);
 		}
 	}
 
