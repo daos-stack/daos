@@ -984,8 +984,10 @@ cleanup:
 	/* Tell the progress thread to abort and exit */
 	g_shutdown_flag = 1;
 
-	if (pthread_join(tid, NULL))
+	if (pthread_join(tid, NULL)) {
 		D_ERROR("Could not join progress thread");
+		ret = -1;
+	}
 
 cleanup_nothread:
 	if (latencies_bulk_hdl != NULL) {
