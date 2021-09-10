@@ -11,9 +11,6 @@ ENV:
     - test_clients_CRT_CTX_NUM: "2"
     - CRT_TEST_CONT: "1"
 env_CRT_CTX_SHARE_ADDR: !mux
-  sep:
-    env: sep
-    CRT_CTX_SHARE_ADDR: "1"
   no_sep:
     env: no_sep
     CRT_CTX_SHARE_ADDR: "0"
