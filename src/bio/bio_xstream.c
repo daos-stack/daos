@@ -106,7 +106,7 @@ bio_spdk_env_init(void)
 	if (rc != 0) {
 		rc = -DER_INVAL; /* spdk_env_init() returns -1 */
 		D_ERROR("Failed to initialize SPDK env, "DF_RC"\n", DP_RC(rc));
-		return rc;
+		goto out;
 	}
 
 	spdk_unaffinitize_thread();
@@ -116,9 +116,9 @@ bio_spdk_env_init(void)
 		rc = -DER_INVAL;
 		D_ERROR("Failed to init SPDK thread lib, "DF_RC"\n", DP_RC(rc));
 		spdk_env_fini();
-		return rc;
 	}
-
+out:
+	D_FREE(opts.pci_allowed);
 	return rc;
 }
 

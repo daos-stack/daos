@@ -93,7 +93,8 @@ config_entry {
 	struct spdk_json_val	*params;
 };
 
-static struct spdk_json_object_decoder jsonrpc_cmd_decoders[] = {
+static struct spdk_json_object_decoder
+jsonrpc_cmd_decoders[] = {
 	{"method", offsetof(struct config_entry, method), spdk_json_decode_string},
 	{"params", offsetof(struct config_entry, params), cap_object, true}
 };
@@ -106,7 +107,7 @@ is_addr_in_allowlist(char *pci_addr, const struct spdk_pci_addr *allowlist,
 	struct spdk_pci_addr    tmp;
 
 	if (spdk_pci_addr_parse(&tmp, pci_addr) != 0) {
-		D_ERROR("invalid transport address %s\n", pci_addr);
+		D_ERROR("invalid transport address %s", pci_addr);
 		return -DER_INVAL;
 	}
 
@@ -140,14 +141,14 @@ traddr_to_vmd(char *dst, const char *src)
 
 	n = snprintf(traddr_tmp, SPDK_NVMF_TRADDR_MAX_LEN, "%s", src);
 	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
-		D_ERROR("snprintf failed\n");
+		D_ERROR("snprintf failed");
 		return -DER_INVAL;
 	}
 
 	/* Only the first chunk of data from the traddr is useful */
 	ptr = strchr(traddr_tmp, ch);
 	if (ptr == NULL) {
-		D_ERROR("Transport id not valid\n");
+		D_ERROR("Transport id not valid");
 		return -DER_INVAL;
 	}
 	position = ptr - traddr_tmp;
@@ -158,7 +159,7 @@ traddr_to_vmd(char *dst, const char *src)
 	while (*ptr != '\0') {
 		n = snprintf(addr_split, sizeof(addr_split), "%s", ptr);
 		if (n < 0) {
-			D_ERROR("snprintf failed\n");
+			D_ERROR("snprintf failed");
 			return -DER_INVAL;
 		}
 		strcat(vmd_addr, addr_split);
@@ -180,7 +181,7 @@ traddr_to_vmd(char *dst, const char *src)
 	}
 	n = snprintf(dst, SPDK_NVMF_TRADDR_MAX_LEN, "%s", vmd_addr);
 	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
-		D_ERROR("snprintf failed\n");
+		D_ERROR("snprintf failed");
 		return -DER_INVAL;
 	}
 
@@ -191,7 +192,7 @@ static int
 opts_add_pci_addr(struct spdk_env_opts *opts, char *traddr)
 {
 	struct spdk_pci_addr	**list = &opts->pci_allowed;
-	struct spdk_pci_addr     *tmp = *list;
+	struct spdk_pci_addr     *tmp1 = *list, *tmp2;
 	size_t			  count = opts->num_pci_addr;
 	int			  rc;
 
@@ -201,15 +202,15 @@ opts_add_pci_addr(struct spdk_env_opts *opts, char *traddr)
 	if (rc == 1)
 		return 0;
 
-	tmp = realloc(tmp, sizeof(*tmp) * (count + 1));
-	if (tmp == NULL) {
-		D_ERROR("realloc error\n");
+	D_REALLOC_ARRAY(tmp2, tmp1, count, count + 1);
+	if (tmp2 == NULL) {
+		D_ERROR("realloc error");
 		return -DER_NOMEM;
 	}
 
-	*list = tmp;
+	*list = tmp2;
 	if (spdk_pci_addr_parse(*list + count, traddr) < 0) {
-		D_ERROR("Invalid address %s\n", traddr);
+		D_ERROR("Invalid address %s", traddr);
 		return -DER_INVAL;
 	}
 
@@ -243,7 +244,7 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 
 	json = read_file(config_file, &json_size);
 	if (!json) {
-		D_ERROR("Read JSON configuration file %s failed, rc: %d\n",
+		D_ERROR("Read JSON configuration file %s failed, rc: %d",
 			config_file, errno);
 		return -DER_INVAL;
 	}
@@ -251,15 +252,15 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 	rc = spdk_json_parse(json, json_size, NULL, 0, &end,
 			     SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
 	if (rc < 0) {
-		D_ERROR("Parsing JSON configuration failed (%zd)\n", rc);
+		D_ERROR("Parsing JSON configuration failed (%zd)", rc);
 		rc = -DER_INVAL;
 		goto err;
 	}
 
 	values_cnt = rc;
-	values = calloc(values_cnt, sizeof(struct spdk_json_val));
+	D_ALLOC_ARRAY(values, values_cnt);
 	if (values == NULL) {
-		D_ERROR("Out of memory\n");
+		D_ERROR("Out of memory");
 		rc = -DER_NOMEM;
 		goto err;
 	}
@@ -267,7 +268,7 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 	rc = spdk_json_parse(json, json_size, values, values_cnt, &end,
 			     SPDK_JSON_PARSE_FLAG_ALLOW_COMMENTS);
 	if (rc != values_cnt) {
-		D_ERROR("Parsing JSON configuration failed (%zd)\n", rc);
+		D_ERROR("Parsing JSON configuration failed (%zd)", rc);
 		rc = -DER_INVAL;
 		goto err;
 	}
@@ -280,7 +281,7 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 
 	return 0;
 err:
-	D_FREE(json);
+	free(json);
 	D_FREE(values);
 	return rc;
 }
@@ -295,14 +296,14 @@ load_vmd_subsystem_config(struct json_config_ctx *ctx, bool *vmd_enabled)
 
 	if (spdk_json_decode_object(ctx->config_it, jsonrpc_cmd_decoders,
 				    SPDK_COUNTOF(jsonrpc_cmd_decoders), &cfg)) {
-		D_ERROR("Failed to decode config entry\n");
+		D_ERROR("Failed to decode config entry");
 		return -DER_INVAL;
 	}
 
 	if (strcmp(cfg.method, "enable_vmd") == 0)
 		*vmd_enabled = true;
 
-	D_FREE(cfg.method);
+	free(cfg.method);
 	return 0;
 }
 
@@ -319,7 +320,9 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 
 	if (spdk_json_decode_object(ctx->config_it, jsonrpc_cmd_decoders,
 				    SPDK_COUNTOF(jsonrpc_cmd_decoders), &cfg)) {
-		D_ERROR("Failed to decode config entry\n");
+		D_ERROR("Failed to decode config entry");
+		if (opts->pci_allowed != NULL)
+			D_FREE(opts->pci_allowed);
 		return -DER_INVAL;
 	}
 
@@ -327,10 +330,12 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 		goto out;
 
 	key = spdk_json_object_first(cfg.params);
+
 	while (key != NULL) {
 		if (spdk_json_strequal(key, "traddr")) {
 			traddr = spdk_json_strdup(json_value(key));
-			D_INFO("Transport address found in JSON config: %s\n", traddr);
+
+			D_INFO("Transport address found in JSON config: %s", traddr);
 
 			if (vmd_enabled) {
 				if (strncmp(traddr, "0", 1) != 0) {
@@ -342,52 +347,63 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 					 */
 					rc = traddr_to_vmd(traddr, traddr);
 					if (rc != 0) {
-						D_ERROR("Invalid traddr=%s\n", traddr);
+						D_ERROR("Invalid traddr: %s", traddr);
 						rc = -DER_INVAL;
-						goto out;
+						free(traddr);
+						goto err;
 					}
-					D_INFO("\tVMD backing address translated to: %s\n", traddr);
+
+					D_INFO("\tVMD backing address translated to: %s", traddr);
 				}
 			}
 
 			rc = opts_add_pci_addr(opts, traddr);
 			if (rc != 0) {
-				D_ERROR("spdk env add pci: %d\n", rc);
-				goto out;
+				D_ERROR("spdk env add pci: %d", rc);
+				free(traddr);
+				goto err;
 			}
+
+			free(traddr);
 		}
 
 		key = spdk_json_next(key);
 	}
 out:
-	D_FREE(cfg.method);
+	free(cfg.method);
+	return rc;
+err:
+	free(cfg.method);
+	if (opts->pci_allowed != NULL)
+		D_FREE(opts->pci_allowed);
 	return rc;
 }
 
 static int
 add_bdevs_to_opts(struct spdk_json_val *bdev_ss, bool vmd_enabled, struct spdk_env_opts *opts)
 {
-	struct json_config_ctx	*ctx = calloc(1, sizeof(*ctx));
+	struct json_config_ctx	*ctx;
 	int			 rc = 0;
 
 	D_ASSERT(bdev_ss != NULL);
 	D_ASSERT(opts != NULL);
 
+	D_ALLOC(ctx, sizeof(*ctx));
 	if (!ctx) {
 		rc = -DER_NOMEM;
-		D_ERROR("Failed to allocate context, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to allocate context, "DF_RC"", DP_RC(rc));
 		return rc;
 	}
 
 	/* Capture subsystem name and config array */
 	if (spdk_json_decode_object(bdev_ss, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
 				    ctx)) {
-		D_ERROR("Failed to parse subsystem configuration\n");
+		D_ERROR("Failed to parse subsystem configuration");
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "subsystem '%.*s': found in JSON config\n", ctx->subsystem_name->len,
+	D_DEBUG(DB_MGMT, "subsystem '%.*s': found in JSON config", ctx->subsystem_name->len,
 		(char *)ctx->subsystem_name->start);
 
 	/* Get 'config' array first configuration entry */
@@ -403,8 +419,8 @@ add_bdevs_to_opts(struct spdk_json_val *bdev_ss, bool vmd_enabled, struct spdk_e
 		ctx->config_it = spdk_json_next(ctx->config_it);
 	}
 out:
-	D_FREE(ctx->json_data);
-	D_FREE(ctx->values);
+	free(ctx->json_data);
+	free(ctx->values);
 	D_FREE(ctx);
 	return rc;
 }
@@ -412,29 +428,30 @@ out:
 static int
 check_vmd_status(struct spdk_json_val *vmd_ss, bool *vmd_enabled)
 {
-	struct json_config_ctx	*ctx = calloc(1, sizeof(*ctx));
+	struct json_config_ctx	*ctx;
 	int			 rc = 0;
 
-	if (vmd_ss == NULL) {
-		return 0;
-	}
-	D_ASSERT(vmd_enabled != NULL);
-
+	D_ALLOC(ctx, sizeof(*ctx));
 	if (!ctx) {
 		rc = -DER_NOMEM;
-		D_ERROR("Failed to allocate context, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to allocate context, "DF_RC"", DP_RC(rc));
 		return rc;
 	}
+
+	if (vmd_ss == NULL) {
+		goto out;
+	}
+	D_ASSERT(vmd_enabled != NULL);
 
 	/* Capture subsystem name and config array */
 	if (spdk_json_decode_object(vmd_ss, subsystem_decoders, SPDK_COUNTOF(subsystem_decoders),
 				    ctx)) {
-		D_ERROR("Failed to parse subsystem configuration\n");
+		D_ERROR("Failed to parse subsystem configuration");
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "subsystem '%.*s': found in JSON config\n", ctx->subsystem_name->len,
+	D_DEBUG(DB_MGMT, "subsystem '%.*s': found in JSON config", ctx->subsystem_name->len,
 		(char *)ctx->subsystem_name->start);
 
 	/* Get 'config' array first configuration entry */
@@ -450,8 +467,8 @@ check_vmd_status(struct spdk_json_val *vmd_ss, bool *vmd_enabled)
 		ctx->config_it = spdk_json_next(ctx->config_it);
 	}
 out:
-	D_FREE(ctx->json_data);
-	D_FREE(ctx->values);
+	free(ctx->json_data);
+	free(ctx->values);
 	D_FREE(ctx);
 	return rc;
 }
@@ -459,28 +476,31 @@ out:
 int
 bio_add_allowed_devices(const char *json_config_file, struct spdk_env_opts *opts)
 {
-	struct json_config_ctx	*ctx = calloc(1, sizeof(*ctx));
+	struct json_config_ctx	*ctx;
 	struct spdk_json_val	*bdev_ss = NULL, *vmd_ss = NULL;
 	bool			 vmd_enabled = false;
 	int			 rc = 0;
 
+	D_ASSERT(json_config_file != NULL);
+	D_ASSERT(opts != NULL);
+
+	D_ALLOC(ctx, sizeof(*ctx));
 	if (!ctx) {
 		rc = -DER_NOMEM;
-		D_ERROR("Failed to allocate context, "DF_RC"\n", DP_RC(rc));
+		D_ERROR("Failed to allocate context, "DF_RC"", DP_RC(rc));
 		return rc;
 	}
 
-	D_ASSERT(json_config_file);
 	rc = read_config(json_config_file, ctx);
 	if (rc) {
 		D_ERROR("config read failed");
-		return rc;
+		goto out;
 	}
 
 	/* Capture subsystems array */
 	rc = spdk_json_find_array(ctx->values, "subsystems", NULL, &ctx->subsystems);
 	if (rc) {
-		D_ERROR("No 'subsystems' key JSON configuration file.\n");
+		D_ERROR("No 'subsystems' key JSON configuration file.");
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -488,7 +508,7 @@ bio_add_allowed_devices(const char *json_config_file, struct spdk_env_opts *opts
 	/* Get first subsystem */
 	ctx->subsystems_it = spdk_json_array_first(ctx->subsystems);
 	if (ctx->subsystems_it == NULL) {
-		D_ERROR("'subsystems' configuration is empty\n");
+		D_ERROR("Empty 'subsystems' section in JSON configuration file");
 		rc = -DER_INVAL;
 		goto out;
 	}
@@ -497,7 +517,7 @@ bio_add_allowed_devices(const char *json_config_file, struct spdk_env_opts *opts
 		/* Capture subsystem name and config array */
 		if (spdk_json_decode_object(ctx->subsystems_it, subsystem_decoders,
 					    SPDK_COUNTOF(subsystem_decoders), ctx)) {
-			D_ERROR("Failed to parse subsystem configuration\n");
+			D_ERROR("Failed to parse subsystem configuration");
 			rc = -DER_INVAL;
 			goto out;
 		}
@@ -513,7 +533,8 @@ bio_add_allowed_devices(const char *json_config_file, struct spdk_env_opts *opts
 	};
 
 	if (bdev_ss == NULL) {
-		D_WARN("JSON config missing bdev subsystem\n");
+		D_ERROR("JSON config missing bdev subsystem");
+		rc = -DER_INVAL;
 		goto out;
 	}
 
@@ -524,8 +545,8 @@ bio_add_allowed_devices(const char *json_config_file, struct spdk_env_opts *opts
 
 	rc = add_bdevs_to_opts(bdev_ss, vmd_enabled, opts);
 out:
-	D_FREE(ctx->json_data);
-	D_FREE(ctx->values);
+	free(ctx->json_data);
+	free(ctx->values);
 	D_FREE(ctx);
 	return rc;
 }
