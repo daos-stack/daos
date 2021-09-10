@@ -987,9 +987,6 @@ rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs, const d_iov_t *key,
 	rc = rdb_lc_lookup(db->d_lc, db->d_applied, s->de_object,
 			   (d_iov_t *)key, value);
 	rdb_tx_query_post(tx, s);
-	if (rc != 0) {
-
-	}
 	return rc;
 }
 
@@ -1027,7 +1024,12 @@ rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs, enum rdb_probe_opc opc,
 }
 
 /* Find the largest integer key in \a kvs
+ * \param[in]		tx	transaction
+ * \param[in]		kvs	path to a KVS with an integer key
+ * \param[out]		key_out	output maximum key
  *
+ * \retval -DER_NOTLEADER	not current leader
+ * \retval -DER_NONEXIST	no keys (KVS is empty)
  */
 int
 rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key)
