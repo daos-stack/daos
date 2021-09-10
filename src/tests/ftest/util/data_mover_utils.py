@@ -72,9 +72,9 @@ class MfuCommandBase(ExecutableCommand):
             kwargs: name, value pairs of class Parameters
 
         """
-        for a in kwargs:
-            attr = getattr(self, a)
-            attr.update(kwargs[a], a)
+        for k, v in kwargs.items():
+            attr = getattr(self, k)
+            attr.update(v, k)
 
     @staticmethod
     def __param_sort(k):
