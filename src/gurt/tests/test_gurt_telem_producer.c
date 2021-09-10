@@ -1067,8 +1067,8 @@ test_list_subdirs(void **state)
 	char			*subdir_name;
 	char			 new_path[D_TM_MAX_NAME_LEN];
 	struct d_tm_node_t	*dir_node;
-	struct d_tm_nodeList_t	*list = NULL;
 	struct d_tm_nodeList_t	*head = NULL;
+	struct d_tm_nodeList_t	*cur = NULL;
 	uint64_t		 num_subdirs = 0;
 	int			 expected_subdirs = 0;
 	int			 i, rc;
@@ -1097,18 +1097,18 @@ test_list_subdirs(void **state)
 	dir_node = d_tm_find_metric(cli_ctx, root_dir);
 	assert_non_null(dir_node);
 
-	rc = d_tm_list_subdirs(cli_ctx, &list, dir_node, &num_subdirs, 1);
+	rc = d_tm_list_subdirs(cli_ctx, &head, dir_node, &num_subdirs, 1);
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(num_subdirs, expected_subdirs);
 
-	for (head = list, i = 0; head && i < num_subdirs; i++) {
-		subdir_name = d_tm_get_name(cli_ctx, head->dtnl_node);
+	for (cur = head, i = 0; cur && i < num_subdirs; i++) {
+		subdir_name = d_tm_get_name(cli_ctx, cur->dtnl_node);
 
 		assert_string_equal(subdir_name, subdirs[i]);
-		head = head->dtnl_next;
+		cur = cur->dtnl_next;
 	}
 
-	d_tm_list_free(list);
+	d_tm_list_free(head);
 }
 
 static void
