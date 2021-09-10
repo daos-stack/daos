@@ -1068,6 +1068,7 @@ test_list_subdirs(void **state)
 	char			 new_path[D_TM_MAX_NAME_LEN];
 	struct d_tm_node_t	*dir_node;
 	struct d_tm_nodeList_t	*list = NULL;
+	struct d_tm_nodeList_t	*head = NULL;
 	uint64_t		 num_subdirs = 0;
 	int			 expected_subdirs = 0;
 	int			 i, rc;
@@ -1100,12 +1101,14 @@ test_list_subdirs(void **state)
 	assert_rc_equal(rc, DER_SUCCESS);
 	assert_int_equal(num_subdirs, expected_subdirs);
 
-	for (i = 0; list && i < num_subdirs; i++) {
-		subdir_name = d_tm_get_name(cli_ctx, list->dtnl_node);
+	for (head = list, i = 0; head && i < num_subdirs; i++) {
+		subdir_name = d_tm_get_name(cli_ctx, head->dtnl_node);
 
 		assert_string_equal(subdir_name, subdirs[i]);
-		list = list->dtnl_next;
+		head = head->dtnl_next;
 	}
+
+	d_tm_list_free(list);
 }
 
 static void

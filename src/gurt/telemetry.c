@@ -3171,24 +3171,24 @@ out:
  *						\a node
  */
 int
-d_tm_list_subdirs(struct d_tm_context *ctx, struct d_tm_nodeList_t **head,
+d_tm_list_subdirs(struct d_tm_context *ctx, struct d_tm_nodeList_t **list,
 		  struct d_tm_node_t *node, uint64_t *num_dirs, int max_depth)
 {
 	int			 rc = DER_SUCCESS;
 	uint64_t		 dir_count = 0;
-	struct d_tm_nodeList_t	*cur_head = NULL;
+	struct d_tm_nodeList_t	*head = NULL;
 
 	/** add +1 to max_depth to account for the root node */
-	rc = list_children(ctx, head, node, D_TM_DIRECTORY, 0, max_depth+1, 1);
+	rc = list_children(ctx, list, node, D_TM_DIRECTORY, 0, max_depth+1, 1);
 	if (rc != DER_SUCCESS)
 		return rc;
 
-	cur_head = *head;
-	while (cur_head != NULL && cur_head->dtnl_node != NULL) {
-		if (cur_head->dtnl_node->dtn_type == D_TM_DIRECTORY)
+	head = *list;
+	while (head != NULL && head->dtnl_node != NULL) {
+		if (head->dtnl_node->dtn_type == D_TM_DIRECTORY)
 			dir_count++;
 
-		cur_head = cur_head->dtnl_next;
+		head = head->dtnl_next;
 	}
 
 	if (num_dirs != NULL)
