@@ -18,6 +18,7 @@ import (
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
+	"github.com/daos-stack/daos/src/control/provider/system"
 )
 
 // findPciAddrsWithDomain returns controllers that match the input prefix in the
@@ -94,9 +95,18 @@ func substituteVMDAddresses(log logging.Logger, inPCIAddrs []string, bdevCache *
 // detectVMD returns whether VMD devices have been found and a slice of VMD
 // PCI addresses if found.
 func detectVMD() ([]string, error) {
+	distro := system.GetDistribution()
+	var lspciCmd *exec.Cmd
+
 	// Check available VMD devices with command:
 	// "$lspci | grep  -i -E "Volume Management Device"
-	lspciCmd := exec.Command("sudo", "lspci")
+	switch {
+	case distro.ID == "opensuse-leap" || distro.ID == "opensuse" || distro.ID == "sles":
+		lspciCmd = exec.Command("/sbin/lspci")
+	default:
+		lspciCmd = exec.Command("lspci")
+	}
+
 	vmdCmd := exec.Command("grep", "-i", "-E", "Volume Management Device")
 	var cmdOut bytes.Buffer
 	var prefixIncluded bool
