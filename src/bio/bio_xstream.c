@@ -83,10 +83,12 @@ bio_spdk_env_init(void)
 	spdk_env_opts_init(&opts);
 	opts.name = "daos_engine";
 
-	rc = bio_add_allowed_devices(nvme_glb.bd_nvme_conf, &opts);
+	rc = bio_add_allowed_alloc(nvme_glb.bd_nvme_conf, &opts);
 	if (rc != 0) {
 		D_ERROR("Failed to add allowed devices to SPDK env, "DF_RC"\n",
 			DP_RC(rc));
+		if (opts.pci_allowed != NULL)
+			D_FREE(opts.pci_allowed);
 		return rc;
 	}
 
@@ -118,7 +120,8 @@ bio_spdk_env_init(void)
 		spdk_env_fini();
 	}
 out:
-	D_FREE(opts.pci_allowed);
+	if (opts.pci_allowed != NULL)
+		D_FREE(opts.pci_allowed);
 	return rc;
 }
 

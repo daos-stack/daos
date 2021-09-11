@@ -131,16 +131,17 @@ is_addr_in_allowlist(char *pci_addr, const struct spdk_pci_addr *allowlist,
 static int
 traddr_to_vmd(char *dst, const char *src)
 {
-	char traddr_tmp[SPDK_NVMF_TRADDR_MAX_LEN + 1];
-	char vmd_addr[SPDK_NVMF_TRADDR_MAX_LEN + 1] = "0000:";
-	char *ptr;
-	const char ch = ':';
-	char addr_split[3];
-	int position, iteration;
-	int n;
+	char		 traddr_tmp[SPDK_NVMF_TRADDR_MAX_LEN + 1];
+	char		 vmd_addr[SPDK_NVMF_TRADDR_MAX_LEN + 1] = "0000:";
+	char		*ptr;
+	const char	 ch = ':';
+	char		 addr_split[3];
+	int		 position;
+	int		 iteration;
+	int		 n;
 
 	n = snprintf(traddr_tmp, SPDK_NVMF_TRADDR_MAX_LEN, "%s", src);
-	if (n < 0 || n > SPDK_NVMF_TRADDR_MAX_LEN) {
+	if (n < 0) {
 		D_ERROR("snprintf failed");
 		return -DER_INVAL;
 	}
@@ -162,20 +163,20 @@ traddr_to_vmd(char *dst, const char *src)
 			D_ERROR("snprintf failed");
 			return -DER_INVAL;
 		}
-		strcat(vmd_addr, addr_split);
+		strncat(vmd_addr, addr_split, SPDK_NVMF_TRADDR_MAX_LEN);
 
 		if (iteration != 0) {
-			strcat(vmd_addr, ".");
+			strncat(vmd_addr, ".", SPDK_NVMF_TRADDR_MAX_LEN);
 			ptr = ptr + 3;
 			/** Hack alert!  Reuse existing buffer to ensure new
 			 *  string is null terminated.
 			 */
 			addr_split[0] = ptr[0];
 			addr_split[1] = '\0';
-			strcat(vmd_addr, addr_split);
+			strncat(vmd_addr, addr_split, SPDK_NVMF_TRADDR_MAX_LEN);
 			break;
 		}
-		strcat(vmd_addr, ":");
+		strncat(vmd_addr, ":", SPDK_NVMF_TRADDR_MAX_LEN);
 		ptr = ptr + 2;
 		iteration++;
 	}
@@ -192,7 +193,8 @@ static int
 opts_add_pci_addr(struct spdk_env_opts *opts, char *traddr)
 {
 	struct spdk_pci_addr	**list = &opts->pci_allowed;
-	struct spdk_pci_addr     *tmp1 = *list, *tmp2;
+	struct spdk_pci_addr	 *tmp1 = *list;
+	struct spdk_pci_addr     *tmp2;
 	size_t			  count = opts->num_pci_addr;
 	int			  rc;
 
@@ -204,7 +206,6 @@ opts_add_pci_addr(struct spdk_env_opts *opts, char *traddr)
 
 	D_REALLOC_ARRAY(tmp2, tmp1, count, count + 1);
 	if (tmp2 == NULL) {
-		D_ERROR("realloc error");
 		return -DER_NOMEM;
 	}
 
@@ -237,15 +238,17 @@ read_file(const char *filename, size_t *size)
 static int
 read_config(const char *config_file, struct json_config_ctx *ctx)
 {
-	struct spdk_json_val *values = NULL;
-	void *json = NULL, *end;
-	ssize_t values_cnt, rc;
-	size_t json_size;
+	struct spdk_json_val	*values = NULL;
+	void			*json = NULL;
+	void			*end;
+	ssize_t			 values_cnt;
+	ssize_t			 rc;
+	size_t			 json_size;
 
 	json = read_file(config_file, &json_size);
 	if (!json) {
-		D_ERROR("Read JSON configuration file %s failed, rc: %d",
-			config_file, errno);
+		D_ERROR("Read JSON configuration file %s failed: '%s'",
+			config_file, strerror(errno));
 		return -DER_INVAL;
 	}
 
@@ -260,7 +263,6 @@ read_config(const char *config_file, struct json_config_ctx *ctx)
 	values_cnt = rc;
 	D_ALLOC_ARRAY(values, values_cnt);
 	if (values == NULL) {
-		D_ERROR("Out of memory");
 		rc = -DER_NOMEM;
 		goto err;
 	}
@@ -321,8 +323,6 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 	if (spdk_json_decode_object(ctx->config_it, jsonrpc_cmd_decoders,
 				    SPDK_COUNTOF(jsonrpc_cmd_decoders), &cfg)) {
 		D_ERROR("Failed to decode config entry");
-		if (opts->pci_allowed != NULL)
-			D_FREE(opts->pci_allowed);
 		return -DER_INVAL;
 	}
 
@@ -350,7 +350,7 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 						D_ERROR("Invalid traddr: %s", traddr);
 						rc = -DER_INVAL;
 						free(traddr);
-						goto err;
+						goto out;
 					}
 
 					D_INFO("\t- VMD backing address reverted to '%s'",
@@ -362,7 +362,7 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 			if (rc != 0) {
 				D_ERROR("spdk env add pci: %d", rc);
 				free(traddr);
-				goto err;
+				goto out;
 			}
 
 			free(traddr);
@@ -372,11 +372,6 @@ load_bdev_subsystem_config(struct json_config_ctx *ctx, bool vmd_enabled,
 	}
 out:
 	free(cfg.method);
-	return rc;
-err:
-	free(cfg.method);
-	if (opts->pci_allowed != NULL)
-		D_FREE(opts->pci_allowed);
 	return rc;
 }
 
@@ -454,21 +449,20 @@ out:
 }
 
 int
-bio_add_allowed_devices(const char *json_config_file, struct spdk_env_opts *opts)
+bio_add_allowed_alloc(const char *json_config_file, struct spdk_env_opts *opts)
 {
 	struct json_config_ctx	*ctx;
-	struct spdk_json_val	*bdev_ss = NULL, *vmd_ss = NULL;
+	struct spdk_json_val	*bdev_ss = NULL;
+	struct spdk_json_val	*vmd_ss = NULL;
 	bool			 vmd_enabled = false;
 	int			 rc = 0;
 
 	D_ASSERT(json_config_file != NULL);
 	D_ASSERT(opts != NULL);
 
-	D_ALLOC(ctx, sizeof(*ctx));
+	D_ALLOC_PTR(ctx);
 	if (!ctx) {
-		rc = -DER_NOMEM;
-		D_ERROR("Failed to allocate context, "DF_RC"", DP_RC(rc));
-		return rc;
+		return -DER_NOMEM;
 	}
 
 	rc = read_config(json_config_file, ctx);
