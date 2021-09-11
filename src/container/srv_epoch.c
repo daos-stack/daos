@@ -93,20 +93,6 @@ read_snap_list(struct rdb_tx *tx, struct cont *cont, daos_epoch_t **buf, int *co
 }
 
 int
-ds_cont_epoch_init_hdl(struct rdb_tx *tx, struct cont *cont, uuid_t c_hdl,
-		       struct container_hdl *hdl)
-{
-	return 0;
-}
-
-int
-ds_cont_epoch_fini_hdl(struct rdb_tx *tx, struct cont *cont,
-		       crt_context_t ctx, struct container_hdl *hdl)
-{
-	return 0;
-}
-
-int
 ds_cont_epoch_aggregate(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl,
 			struct cont *cont, struct container_hdl *hdl,
 			crt_rpc_t *rpc)
