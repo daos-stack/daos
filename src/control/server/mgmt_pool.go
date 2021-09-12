@@ -509,9 +509,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	} else {
 		req.SvcRanks = system.RanksToUint32(ps.Replicas)
 
-		// Pool handle eviction step: perform separate drpc.MethodPoolEvict.
-		// Do this _before_ transitioning the pool to PoolServiceStateDestroying.
-		// Upon -DER_BUSY, keep pool in its current state and reply with the error immediately.
+		// Pool handle eviction step (first try only): perform separate PoolEvict _before_ transitioning to destroying state (see below)
 		evreq := &mgmtpb.PoolEvictReq{}
 		evreq.Sys = req.Sys
 		evreq.Id = req.Id
@@ -526,10 +524,9 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		}
 		ds = drpc.DaosStatus(evresp.Status)
 		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
-	}
-
-	if ds != drpc.DaosSuccess {
-		svc.log.Errorf("PoolEvict (first step of destroy) dRPC call failed: %s", ds)
+		if ds != drpc.DaosSuccess {
+			svc.log.Errorf("PoolEvict (first step of destroy) dRPC call failed: %s", ds)
+		}
 	}
 
 	// If evict failed because of open handles (DER_BUSY) leave pool in operational state.
@@ -554,14 +551,13 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	}
 
 	resp := &mgmtpb.PoolDestroyResp{}
-	if ds == drpc.DaosBusy {
+	if ds != drpc.DaosSuccess {
 		resp.Status = int32(ds)
 		svc.log.Debugf("MgmtSvc.PoolDestroy NOT issuing drpc.MethodPoolDestroy, req:%+v\n", req)
 		return resp, nil
 	}
 
 	// Now on to the rest of the pool destroy, issue drpc.MethodPoolDestroy.
-
 	svc.log.Debugf("MgmtSvc.PoolDestroy issuing drpc.MethodPoolDestroy, req:%+v\n", req)
 	dresp, err := svc.harness.CallDrpc(ctx, drpc.MethodPoolDestroy, req)
 	if err != nil {
@@ -579,6 +575,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	case drpc.DaosSuccess, drpc.DaosNotLeader, drpc.DaosNotReplica:
 		if ds == drpc.DaosNotLeader || ds == drpc.DaosNotReplica {
 			// If we're not cleaning up, then this is an error.
+			// Note: Unlikely to see !inCleanupMode (evict would have seen first?)
 			if !inCleanupMode {
 				svc.log.Errorf("PoolDestroy dRPC call failed due to %s in non-cleanup path", ds)
 				break
