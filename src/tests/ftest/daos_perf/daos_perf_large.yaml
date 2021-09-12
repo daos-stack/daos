@@ -16,7 +16,7 @@ job_manager_class_name: Orterun
 job_manager_mpi_type: openmpi
 job_manager_timeout: 3600
 pool:
-    size: 1TB
+    scm_size: 3TB
     control_method: dmg
 container:
     type: POSIX
@@ -24,8 +24,6 @@ container:
 server_config:
     name: daos_server
     servers:
-      bdev_class: nvme
-      bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
       scm_class: dcpm
       scm_list: [ "/dev/pmem0" ]
       scm_mount: /mnt/daos0
@@ -35,6 +33,6 @@ daos_perf:
   processes: 64
   test_type: daos
   akey_use_array: False
-  dkeys: 1k
-  akeys: 256
+  dkeys: 4k
+  akeys: 1k
   object_class: EC2P1
