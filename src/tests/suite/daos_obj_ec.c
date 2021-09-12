@@ -1142,6 +1142,162 @@ ec_punch_check_size(void **state)
 	assert_rc_equal(rc, 0);
 }
 
+static void
+ec_singv_overwrite_oc(void **state, unsigned int ec_oc)
+{
+#define NUM_AKEYS	6
+#define SMALL_SIZE	32
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl[NUM_AKEYS];
+	d_iov_t	 sg_iov[NUM_AKEYS];
+	daos_iod_t	 iod[NUM_AKEYS];
+	char		*buf[NUM_AKEYS];
+	char		*akey[NUM_AKEYS];
+	char		*fetch_buf[NUM_AKEYS];
+	const char	*akey_fmt = "akey%d";
+	int		 i, rc;
+	daos_size_t	 size;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** update record */
+	for (i = 0; i < NUM_AKEYS; i++) {
+		D_ALLOC(akey[i], strlen(akey_fmt) + 1);
+		sprintf(akey[i], akey_fmt, i);
+
+		if (i % 2 == 0)
+			size = SMALL_SIZE;
+		else
+			size = SMALL_SIZE + i * 8192;
+		D_ALLOC(buf[i], size);
+		assert_non_null(buf[i]);
+
+		dts_buf_render(buf[i], size);
+
+		/** init scatter/gather */
+		d_iov_set(&sg_iov[i], buf[i], size);
+		sgl[i].sg_nr		= 1;
+		sgl[i].sg_nr_out	= 0;
+		sgl[i].sg_iovs		= &sg_iov[i];
+
+		/** init I/O descriptor */
+		d_iov_set(&iod[i].iod_name, akey[i], strlen(akey[i]));
+		iod[i].iod_nr		= 1;
+		iod[i].iod_size		= size;
+		iod[i].iod_recxs	= NULL;
+		iod[i].iod_type		= DAOS_IOD_SINGLE;
+
+		D_FREE(buf[i]);
+	}
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
+	/** overwrite record with different size (smaller or larger) */
+	for (i = 0; i < NUM_AKEYS; i++) {
+		D_ALLOC(akey[i], strlen(akey_fmt) + 1);
+		sprintf(akey[i], akey_fmt, i);
+
+		if (i % 2 == 1)
+			size = SMALL_SIZE;
+		else
+			size = SMALL_SIZE + i * 8192;
+		D_ALLOC(buf[i], size);
+		assert_non_null(buf[i]);
+
+		dts_buf_render(buf[i], size);
+
+		/** init scatter/gather */
+		d_iov_set(&sg_iov[i], buf[i], size);
+		sgl[i].sg_nr		= 1;
+		sgl[i].sg_nr_out	= 0;
+		sgl[i].sg_iovs		= &sg_iov[i];
+
+		/** init I/O descriptor */
+		d_iov_set(&iod[i].iod_name, akey[i], strlen(akey[i]));
+		iod[i].iod_nr		= 1;
+		iod[i].iod_size		= size;
+		iod[i].iod_recxs	= NULL;
+		iod[i].iod_type		= DAOS_IOD_SINGLE;
+	}
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			     NULL);
+	assert_rc_equal(rc, 0);
+
+	/** fetch record size */
+	for (i = 0; i < NUM_AKEYS; i++)
+		iod[i].iod_size	= DAOS_REC_ANY;
+
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, NULL,
+			    NULL, NULL);
+	assert_rc_equal(rc, 0);
+	for (i = 0; i < NUM_AKEYS; i++) {
+		if (i % 2 == 1)
+			assert_int_equal(iod[i].iod_size, SMALL_SIZE);
+		else
+			assert_int_equal(iod[i].iod_size, SMALL_SIZE + i * 8192);
+	}
+
+	/** fetch record and compare */
+	for (i = 0; i < NUM_AKEYS; i++) {
+		if (i % 2 == 1)
+			size = SMALL_SIZE;
+		else
+			size = SMALL_SIZE + i * 8192;
+
+		D_ALLOC(fetch_buf[i], size);
+		assert_non_null(fetch_buf[i]);
+		d_iov_set(&sg_iov[i], fetch_buf[i], size);
+	}
+
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
+			    NULL, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < NUM_AKEYS; i++) {
+		if (i % 2 == 1)
+			size = SMALL_SIZE;
+		else
+			size = SMALL_SIZE + i * 8192;
+		assert_memory_equal(buf[i], fetch_buf[i], size);
+	}
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < NUM_AKEYS; i++) {
+		D_FREE(akey[i]);
+		D_FREE(buf[i]);
+		D_FREE(fetch_buf[i]);
+	}
+}
+
+static void
+ec_singv_overwrite(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	ec_singv_overwrite_oc(state, OC_EC_2P1G1);
+	ec_singv_overwrite_oc(state, OC_EC_2P1G2);
+	ec_singv_overwrite_oc(state, OC_EC_4P2G1);
+}
+
 static int
 ec_setup(void  **state)
 {
@@ -1197,6 +1353,8 @@ static const struct CMUnitTest ec_tests[] = {
 	 ec_partial_stripe_cross_boundry_snapshot, async_disable,
 	 test_case_teardown},
 	{"EC15: ec punch and check_size", ec_punch_check_size, async_disable,
+	 test_case_teardown},
+	{"EC16: ec single-value overwrite", ec_singv_overwrite, async_disable,
 	 test_case_teardown},
 };
 

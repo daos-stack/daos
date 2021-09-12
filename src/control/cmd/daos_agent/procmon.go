@@ -10,7 +10,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"syscall"
 	"time"
 
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -45,19 +44,10 @@ type procInfo struct {
 	handles   map[string]map[string]struct{}
 }
 
-func getProcPidInode(pid int32) (uint64, error) {
+func checkProcPidExists(pid int32) error {
 	pidPath := fmt.Sprintf("/proc/%d", pid)
-	info, err := os.Stat(pidPath)
-	if err != nil {
-		return 0, err
-	}
-
-	// Make sure info's underlying interface is correct.
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok {
-		return 0, fmt.Errorf("Underlying type of FileInfo.Sys() is not Stat_t")
-	}
-	return stat.Ino, nil
+	_, err := os.Stat(pidPath)
+	return err
 }
 
 func (p *procInfo) sendResponse(ctx context.Context, pid int32, err error) {
@@ -76,7 +66,7 @@ const MonWaitTime = 3 * time.Second
 // monitorProcess is used by procMon to kick off monitoring individual processes
 // under their own child context to allow for terminating individual monitoring routines.
 func (p *procInfo) monitorProcess(ctx context.Context) {
-	Ino, err := getProcPidInode(p.pid)
+	err := checkProcPidExists(p.pid)
 	if err != nil {
 		p.sendResponse(ctx, p.pid, err)
 		return
@@ -88,17 +78,13 @@ func (p *procInfo) monitorProcess(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(MonWaitTime):
-			newIno, newErr := getProcPidInode(p.pid)
-			if newErr != nil {
-				if os.IsNotExist(newErr) {
+			err = checkProcPidExists(p.pid)
+			if err != nil {
+				if os.IsNotExist(err) {
 					p.sendResponse(ctx, p.pid, fmt.Errorf("Pid %d terminated unexpectedly", p.pid))
 				} else {
-					p.sendResponse(ctx, p.pid, newErr)
+					p.sendResponse(ctx, p.pid, err)
 				}
-				return
-			}
-			if newIno != Ino {
-				p.sendResponse(ctx, p.pid, fmt.Errorf("Pid %d terminated but another processes took its place %d:%d", p.pid, Ino, newIno))
 				return
 			}
 		}

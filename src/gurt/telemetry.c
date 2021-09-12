@@ -1322,7 +1322,6 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 {
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	char			*fullpath = NULL;
-	char			*node_name = NULL;
 	char			*parent_name = NULL;
 
 	if ((node == NULL) || (stream == NULL))
@@ -1348,10 +1347,6 @@ d_tm_print_my_children(struct d_tm_context *ctx, struct d_tm_node_t *node,
 		return;
 
 	while (node != NULL) {
-		node_name = conv_ptr(shmem, node->dtn_name);
-		if (node_name == NULL)
-			node_name = "(null)";
-
 		if ((path == NULL) ||
 		    (strncmp(path, "/", D_TM_MAX_NAME_LEN) == 0))
 			D_ASPRINTF(fullpath, "%s", parent_name);
@@ -2761,9 +2756,10 @@ d_tm_get_bucket_range(struct d_tm_context *ctx, struct d_tm_bucket_t *bucket,
 }
 
 /**
- * Client function to read the specified counter.
+ * Read the specified counter.
  *
- * \param[in]	ctx	Client context
+ * \param[in]	ctx	The context, indicate whether it is for client
+ *			side use case (non-NULL) or server side (NULL).
  * \param[out]	val	The value of the counter is stored here
  * \param[in]	node	Pointer to the stored metric node
  *
@@ -2780,26 +2776,28 @@ d_tm_get_counter(struct d_tm_context *ctx, uint64_t *val,
 	struct d_tm_shmem_hdr	*shmem = NULL;
 	int			 rc;
 
-	if (ctx == NULL || val == NULL || node == NULL)
+	if (val == NULL || node == NULL || node->dtn_metric == NULL)
 		return -DER_INVAL;
-
-	rc = validate_node_ptr(ctx, node, &shmem);
-	if (rc != 0)
-		return rc;
 
 	if (node->dtn_type != D_TM_COUNTER)
 		return -DER_OP_NOT_PERMITTED;
 
-	metric_data = conv_ptr(shmem, node->dtn_metric);
-	if (metric_data != NULL) {
-		if (node->dtn_protect)
-			D_MUTEX_LOCK(&node->dtn_lock);
-		*val = metric_data->dtm_data.value;
-		if (node->dtn_protect)
-			D_MUTEX_UNLOCK(&node->dtn_lock);
+	/* "ctx == NULL" is server side fast version to read the counter. */
+	if (ctx == NULL) {
+		metric_data = node->dtn_metric;
 	} else {
-		return -DER_METRIC_NOT_FOUND;
+		rc = validate_node_ptr(ctx, node, &shmem);
+		if (rc != 0)
+			return rc;
+
+		metric_data = conv_ptr(shmem, node->dtn_metric);
+		if (metric_data == NULL)
+			return -DER_METRIC_NOT_FOUND;
 	}
+
+	d_tm_node_lock(node);
+	*val = metric_data->dtm_data.value;
+	d_tm_node_unlock(node);
 	return DER_SUCCESS;
 }
 

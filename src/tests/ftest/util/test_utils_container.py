@@ -315,9 +315,10 @@ class TestContainer(TestDaosApiBase):
             acl_file (str, optional): path of the ACL file. Defaults to None.
         """
         self.destroy()
-        self.log.info(
-            "Creating a container with pool handle %s",
-            self.pool.pool.handle.value)
+        if not self.silent.value:
+            self.log.info(
+                "Creating a container with pool handle %s",
+                self.pool.pool.handle.value)
         self.container = DaosContainer(self.pool.context)
 
         if self.control_method.value == self.USE_API:
@@ -356,8 +357,12 @@ class TestContainer(TestDaosApiBase):
             }
 
             self._log_method("daos.container_create", kwargs)
-            uuid = self.daos.get_output("container_create", **kwargs)[0]
-
+            try:
+                uuid = self.daos.container_create(
+                    **kwargs)["response"]["container_uuid"]
+            except KeyError as error:
+                raise CommandFailure(
+                    "Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
@@ -373,7 +378,8 @@ class TestContainer(TestDaosApiBase):
                 self.control_method.value)
 
         self.uuid = self.container.get_uuid_str()
-        self.log.info("  Container created with uuid %s", self.uuid)
+        if not self.silent.value:
+            self.log.info("  Container created with uuid %s", self.uuid)
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
@@ -511,7 +517,8 @@ class TestContainer(TestDaosApiBase):
         status = False
         if self.container:
             self.close()
-            self.log.info("Destroying container %s", self.uuid)
+            if not self.silent.value:
+                self.log.info("Destroying container %s", self.uuid)
             if self.container.attached:
                 kwargs = {"force": force}
 
