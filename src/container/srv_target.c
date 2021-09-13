@@ -356,7 +356,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-		rc = agg_cb(cont, &epoch_range, full_scan, param);
+		rc = agg_cb(cont, &epoch_range, full_scan, param, msecs);
 		if (rc)
 			D_GOTO(free, rc);
 		epoch_range.epr_lo = epoch_range.epr_hi + 1;
@@ -371,7 +371,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 		tgt_id, epoch_range.epr_lo, epoch_range.epr_hi);
 
-	rc = agg_cb(cont, &epoch_range, full_scan, param);
+	rc = agg_cb(cont, &epoch_range, full_scan, param, msecs);
 out:
 	if (rc == 0 && epoch_min == 0)
 		param->ap_full_scan_hlc = hlc;
@@ -482,7 +482,7 @@ cont_stop_agg_ult(struct ds_cont_child *cont, struct sched_request *req)
 
 static int
 cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		      bool full_scan, struct agg_param *param)
+		      bool full_scan, struct agg_param *param, uint64_t *msecs)
 {
 	int rc;
 
