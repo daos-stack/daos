@@ -260,7 +260,7 @@ def set_provider_environment(interface, args):
     detected_provider = "ofi+sockets"
     if os.environ.get(name) is None:
         # Confirm the interface is a Mellanox device - verbs did not work with OPA devices.
-        command = "mst status -v"
+        command = "sudo mst status -v"
         task = get_remote_output(list(args.test_servers), command)
         if check_remote_output(task, command):
             # Detect the provider for the specified interface
