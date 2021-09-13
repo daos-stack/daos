@@ -14,6 +14,8 @@ if [ -n "${STAGE_NAME:?}" ]; then
     *CentOS\ 8*|*el8*|*centos8*)
       : "${CHROOT_NAME:=epel-8-x86_64}"
       : "${TARGET:=centos8}"
+      RELEASEVER=${STAGE_NAME##Build RPM on CentOS }
+      export RELEASEVER
       ;;
     *Leap\ 15*|*leap15*|*opensuse15*|*sles15*)
       : "${CHROOT_NAME:=opensuse-leap-15.2-x86_64}"

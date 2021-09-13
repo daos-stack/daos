@@ -305,12 +305,23 @@ endif
 $(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS) $(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_$(DAOS_REPO_TYPE)_REPO)/
 endif
 $(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)|
+ifneq ($(DAOS_STACK_$(DISTRO_BASE)_DOCKER_REPO),)
+$(info debug: $(DAOS_STACK_$(DISTRO_BASE)_DOCKER_REPO))
+$(info debug: $(value DAOS_STACK_$(DISTRO_BASE)_DOCKER_REPO))
+DISTRO_REPOS = $(DAOS_STACK_$(DISTRO_BASE)_DOCKER_REPO)
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(value DAOS_STACK_$(DISTRO_BASE)_DOCKER_REPO)/|
+else
 ifneq ($(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO),)
 DISTRO_REPOS = $(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)
 $(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_DOCKER_$(DAOS_REPO_TYPE)_REPO)/|
 endif
+endif
+ifneq ($(DAOS_STACK_$(DISTRO_BASE)_RELEASEVER_APPSTREAM_REPO),)
+$(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(value DAOS_STACK_$(DISTRO_BASE)_RELEASEVER_APPSTREAM_REPO)|
+else
 ifneq ($(DAOS_STACK_$(DISTRO_BASE)_APPSTREAM_REPO),)
 $(DISTRO_BASE)_LOCAL_REPOS := $($(DISTRO_BASE)_LOCAL_REPOS)$(REPOSITORY_URL)$(DAOS_STACK_$(DISTRO_BASE)_APPSTREAM_REPO)|
+endif
 endif
 ifneq ($(ID_LIKE),debian)
 ifneq ($(DAOS_STACK_INTEL_ONEAPI_REPO),)
@@ -319,34 +330,35 @@ endif
 endif
 endif
 endif
+
 ifeq ($(ID_LIKE),debian)
 chrootbuild: $(DEB_TOP)/$(DEB_DSC)
-	$(call distro_map)                                      \
-	DISTRO="$$distro"                                       \
-	PR_REPOS="$(PR_REPOS)"                                  \
-	DISTRO_BASE_PR_REPOS="$($(DISTRO_BASE)_PR_REPOS)"       \
-	JENKINS_URL="$${JENKINS_URL}"                           \
-	JOB_REPOS="$(JOB_REPOS)"                                \
-	DISTRO_BASE_LOCAL_REPOS="$($(DISTRO_BASE)_LOCAL_REPOS)" \
-	VERSION_CODENAME="$(VERSION_CODENAME)"                  \
-	DEB_TOP="$(DEB_TOP)"                                    \
-	DEB_DSC="$(DEB_DSC)"                                    \
-	DISTRO_ID_OPT="$(DISTRO_ID_OPT)"                        \
+	$(call distro_map)                                                         \
+	DISTRO="$$distro"                                                          \
+	PR_REPOS="$(PR_REPOS)"                                                     \
+	DISTRO_BASE_PR_REPOS="$($(DISTRO_BASE)_PR_REPOS)"                          \
+	JENKINS_URL="$${JENKINS_URL}"                                              \
+	JOB_REPOS="$(JOB_REPOS)"                                                   \
+	DISTRO_BASE_LOCAL_REPOS="$(subst $$,\$$,$($(DISTRO_BASE)_LOCAL_REPOS))" \
+	VERSION_CODENAME="$(VERSION_CODENAME)"                                     \
+	DEB_TOP="$(DEB_TOP)"                                                       \
+	DEB_DSC="$(DEB_DSC)"                                                       \
+	DISTRO_ID_OPT="$(DISTRO_ID_OPT)"                                           \
 	packaging/debian_chrootbuild
 else
 chrootbuild: $(SRPM) $(CALLING_MAKEFILE)
-	$(call distro_map)                                      \
-	DISTRO="$$distro"                                       \
-	CHROOT_NAME="$(CHROOT_NAME)"                            \
-	PR_REPOS="$(PR_REPOS)"                                  \
-	DISTRO_BASE_PR_REPOS="$($(DISTRO_BASE)_PR_REPOS)"       \
-	JENKINS_URL="$${JENKINS_URL}"                           \
-	JOB_REPOS="$(JOB_REPOS)"                                \
-	DISTRO_BASE_LOCAL_REPOS="$($(DISTRO_BASE)_LOCAL_REPOS)" \
-	MOCK_OPTIONS="$(MOCK_OPTIONS)"                          \
-	RPM_BUILD_OPTIONS='$(RPM_BUILD_OPTIONS)'                \
-	DISTRO_REPOS='$(DISTRO_REPOS)'                          \
-	TARGET="$<"                                             \
+	$(call distro_map)                                                         \
+	DISTRO="$$distro"                                                          \
+	CHROOT_NAME="$(CHROOT_NAME)"                                               \
+	PR_REPOS="$(PR_REPOS)"                                                     \
+	DISTRO_BASE_PR_REPOS="$($(DISTRO_BASE)_PR_REPOS)"                          \
+	JENKINS_URL="$${JENKINS_URL}"                                              \
+	JOB_REPOS="$(JOB_REPOS)"                                                   \
+	DISTRO_BASE_LOCAL_REPOS="$(subst $$,\$$,$($(DISTRO_BASE)_LOCAL_REPOS))" \
+	MOCK_OPTIONS="$(MOCK_OPTIONS)"                                             \
+	RPM_BUILD_OPTIONS='$(RPM_BUILD_OPTIONS)'                                   \
+	DISTRO_REPOS='$(DISTRO_REPOS)'                                             \
+	TARGET="$<"                                                                \
 	packaging/rpm_chrootbuild
 endif
 
