@@ -282,7 +282,9 @@ daos_lru_ref_flush(struct daos_lru_cache *lcache)
 void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
-	D_ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
+	D_ASSERTF(lcache != NULL && llink != NULL && llink->ll_ref > 1,
+		  "lcache: %p, llink: %p, ll_ref: %u\n",
+		  lcache, llink, llink ? llink->ll_ref : 0);
 
 	llink->ll_ref--;
 	if (llink->ll_ref == 1) { /* the last refcount */
