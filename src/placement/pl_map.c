@@ -636,28 +636,33 @@ pl_select_leader(daos_obj_id_t oid, uint32_t grp_idx, uint32_t grp_size,
 			if (shard->po_rebuilding)
 				parity_rebuilding = true;
 
-			if (++fail_cnt >= oc_attr->u.ec.e_p) {
-				/* If parity is rebuilding, let's return DER_STALE,
-				 * so object I/O might refresh the pool map and layout
-				 * until parity rebuilt finish.
-				 */
-				if (parity_rebuilding)
-					return -DER_STALE;
-				else
-					return -DER_IO;
+			fail_cnt++;
+			if (fail_cnt > oc_attr->u.ec.e_p) {
+				D_ERROR(DF_OID" fail_cnt %d, exceed e_p %d, "DF_RC"\n",
+					DP_OID(oid), fail_cnt, oc_attr->u.ec.e_p, DP_RC(-DER_IO));
+				return -DER_IO;
 			}
+
 			shard = pl_get_shard(data, idx);
 		}
 
-		if (tgt_id != NULL) {
-			if (shard->po_target == -1)
+		if (fail_cnt == oc_attr->u.ec.e_p) {
+			/* If parity is rebuilding, let's return DER_STALE,
+			 * so object I/O might refresh the pool map and layout
+			 * until parity rebuilt finish.
+			 */
+			if (parity_rebuilding)
+				return -DER_STALE;
+			else
 				return -DER_IO;
-
-			*tgt_id = shard->po_target;
 		}
 
-		if (shard->po_shard == -1)
-			return -DER_IO;
+		D_ASSERT(shard->po_target != -1);
+		D_ASSERT(shard->po_shard != -1);
+		D_ASSERT(!shard->po_rebuilding);
+
+		if (tgt_id != NULL)
+			*tgt_id = shard->po_target;
 
 		leader_shard_idx = (shard->po_shard / tgt_nr) * grp_size +
 				    shard->po_shard % tgt_nr;
