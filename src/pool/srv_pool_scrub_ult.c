@@ -101,21 +101,19 @@ cont_is_stopping_cb(void *cont)
 static void
 sc_add_pool_metrics(struct scrub_ctx *ctx)
 {
-	d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_start, D_TM_TIMESTAMP,
-			"Timestamp when the Scrubber ULT started on the "
-			"pool target",
-			NULL,  DF_POOL_DIR"/ult_start", DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_wait_time, D_TM_GAUGE,
-			"How long waiting between checksum calculations", "ms",
-			DF_POOL_DIR"/wait_gauge", DP_POOL_DIR(ctx));
-	d_tm_add_metric(&ctx->sc_metrics.scm_last_duration,
-			D_TM_DURATION,
-			"How long the previous scrub took", "ms",
-			DF_POOL_DIR"/"M_LAST_DURATION, DP_POOL_DIR(ctx));
 	d_tm_add_metric(&ctx->sc_metrics.scm_start,
 			D_TM_TIMESTAMP,
 			"When the current scrubbing started", NULL,
 			DF_POOL_DIR"/"M_STARTED, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_end, D_TM_TIMESTAMP, "", "",
+			DF_POOL_DIR"/"M_ENDED, DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_pool_ult_wait_time, D_TM_GAUGE,
+			"How long waiting between checksum calculations", "ms",
+			DF_POOL_DIR"/sleep", DP_POOL_DIR(ctx));
+	d_tm_add_metric(&ctx->sc_metrics.scm_last_duration,
+			D_TM_DURATION,
+			"How long the previous scrub took", "ms",
+			DF_POOL_DIR"/"M_LAST_DURATION, DP_POOL_DIR(ctx));
 	d_tm_add_metric(&ctx->sc_metrics.scm_csum_calcs,
 			D_TM_COUNTER, "Number of checksums calculated for "
 				      "current scan",
@@ -176,7 +174,6 @@ scrubbing_ult(void *arg)
 	ctx.sc_dmi =  dss_get_module_info();
 
 	sc_add_pool_metrics(&ctx);
-	d_tm_record_timestamp(ctx.sc_metrics.scm_pool_ult_start);
 	while (!dss_ult_exiting(child->spc_scrubbing_req)) {
 		vos_scrub_pool(&ctx);
 	}

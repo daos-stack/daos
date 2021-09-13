@@ -1209,15 +1209,16 @@ enum scrub_status {
 #define M_CSUM_CORRUPTION "corruption/current"
 #define M_CSUM_TOTAL_CORRUPTION "corruption/total"
 #define M_STARTED "scrubber_started"
+#define M_ENDED "scrubber_finished"
 #define M_LAST_DURATION "last_duration"
 
 #define m_inc_counter(m) d_tm_inc_counter((m), 1)
 #define m_reset_counter(m) d_tm_set_counter((m), 0)
 
 struct scrub_ctx_metrics {
-	struct d_tm_node_t *scm_pool_ult_start;
 	struct d_tm_node_t *scm_pool_ult_wait_time;
 	struct d_tm_node_t *scm_start;
+	struct d_tm_node_t *scm_end;
 	struct d_tm_node_t *scm_last_duration;
 	struct d_tm_node_t *scm_csum_calcs;
 	struct d_tm_node_t *scm_total_csum_calcs;

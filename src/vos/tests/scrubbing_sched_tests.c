@@ -87,6 +87,9 @@ ms_between_periods_tests(void **state)
 
 	/* What should wait be if duration isn't set and periods are not set */
 	assert_ms_eq(0, 0, 0, 0, 0);
+
+	/* periods is larger than duration in seconds */
+	assert_ms_eq(908, 10, 11, 0, 1);
 }
 
 static uint32_t test_sleep_fn_call_count;

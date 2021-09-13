@@ -15,7 +15,7 @@
 #define SCRUB_POOL_OFF 1
 #define SCRUB_CONT_STOPPING 2
 
-static void
+static inline void
 sc_csum_calc_inc(struct scrub_ctx *ctx)
 {
 	ctx->sc_pool_csum_calcs++;
@@ -39,6 +39,7 @@ sc_m_pool_stop(struct scrub_ctx *ctx)
 	d_tm_set_counter(ctx->sc_metrics.scm_last_csum_calcs,
 			 ctx->sc_pool_last_csum_calcs);
 
+	d_tm_record_timestamp(ctx->sc_metrics.scm_end);
 }
 
 static void
@@ -91,6 +92,7 @@ static inline void
 sc_yield(struct scrub_ctx *ctx)
 {
 	if (ctx->sc_yield_fn) {
+		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time, 0);
 		ctx->sc_yield_fn(ctx->sc_sched_arg);
 		ctx->sc_did_yield = true;
 	}
@@ -100,8 +102,10 @@ static inline void
 sc_sleep(struct scrub_ctx *ctx, uint32_t ms)
 {
 	if (ctx->sc_sleep_fn) {
+		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time, ms);
 		ctx->sc_sleep_fn(ctx->sc_sched_arg, ms);
 		ctx->sc_did_yield = true;
+		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time, 0);
 	}
 }
 
@@ -165,9 +169,9 @@ sc_yield_sleep_while_running(struct scrub_ctx *ctx)
 	if (sc_schedule(ctx) == DAOS_SCRUB_SCHED_CONTINUOUS) {
 		msec_between = get_ms_between_periods(ctx->sc_pool_start_scrub,
 			now, ctx->sc_pool->sp_scrub_freq_sec,
-			ctx->sc_pool_last_csum_calcs, ctx->sc_pool_csum_calcs);
-		d_tm_set_gauge(ctx->sc_metrics.scm_pool_ult_wait_time,
-			       msec_between);
+			ctx->sc_pool_last_csum_calcs,
+			/* -1 to convert to index (from count) */
+			ctx->sc_pool_csum_calcs - 1);
 	}
 
 	if (msec_between == 0)
@@ -385,7 +389,7 @@ sc_verify_obj_value(struct scrub_ctx *ctx, struct bio_iov *biov,
 	if (bio_iov2media(biov) == DAOS_MEDIA_NVME)
 		ctx->sc_did_yield = true;
 
-	if (rc == -DER_CSUM) {
+	if (BIO_ADDR_IS_CORRUPTED(&biov->bi_addr)) {
 		/* Already know this is corrupt so just return */
 		D_GOTO(out, rc = DER_SUCCESS);
 	} else if (rc != 0) {
@@ -719,14 +723,14 @@ vos_scrub_pool(struct scrub_ctx *ctx)
 	return rc;
 }
 
-#define SEC2NS(s) (s * 1e+9)
+#define MS2NS(s) (s * 1000000)
 
 uint64_t
 get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
 		       uint64_t duration_seconds, uint64_t periods_nr,
 		       uint64_t per_idx)
 {
-	uint64_t	exp_per_sec; /* seconds per period */
+	uint64_t	exp_per_ms; /* seconds per period */
 	struct timespec exp_curr_end; /* current period's expected finish */
 
 	if (periods_nr == 0 || duration_seconds == 0)
@@ -734,9 +738,9 @@ get_ms_between_periods(struct timespec start_time, struct timespec cur_time,
 
 	if (per_idx > periods_nr - 1)
 		per_idx = periods_nr - 1;
-	exp_per_sec = duration_seconds / periods_nr;
+	exp_per_ms = duration_seconds * 1000 / periods_nr;
 	exp_curr_end = start_time;
-	d_timeinc(&exp_curr_end, SEC2NS((exp_per_sec * (per_idx + 1))));
+	d_timeinc(&exp_curr_end, MS2NS(exp_per_ms * (per_idx + 1)));
 
 	/* already past current period? */
 	if (d_time2us(exp_curr_end) <= d_time2us(cur_time))
