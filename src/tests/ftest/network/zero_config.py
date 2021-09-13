@@ -54,7 +54,7 @@ class ZeroConfigTest(TestWithServers):
         #   DEVICE_TYPE        MST   PCI       RDMA     NET       NUMA
         #   ConnectX6(rev:0)   NA    86:00.0   mlx5_1   net-ib1   1
         #   ConnectX6(rev:0)   NA    37:00.0   mlx5_0   net-ib0   0
-        command = "mst status -v"
+        command = "sudo mst status -v"
         results = run_pcmd(self.hostlist_servers, command)
         try:
             if results[0]["exit_status"] == 0:
