@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor, check_aggregation_status
+from apricot import skipForTicket
 
 class EcodAggregationOffRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -13,6 +14,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
                         with different Aggregation mode for Partial strip data.
     :avocado: recursive
     """
+    @skipForTicket("DAOS-8502")
     def test_ec_offline_rebuild_agg_disabled(self):
         """Jira ID: DAOS-7313.
 
@@ -72,6 +74,7 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         # data set
         self.ior_read_dataset(parity=2)
 
+    @skipForTicket("DAOS-8502")
     def test_ec_offline_rebuild_agg_default(self):
         """Jira ID: DAOS-7313.
 
