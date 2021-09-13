@@ -259,25 +259,31 @@ def set_provider_environment(interface, args):
     name = "CRT_PHY_ADDR_STR"
     detected_provider = "ofi+sockets"
     if os.environ.get(name) is None:
-        # Detect the provider for the specified interface
-        print("Detecting provider for {} - {} not set".format(interface, name))
-        command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
+        # Confirm the interface is a Mellanox device - verbs did not work with OPA devices.
+        command = "mst status -v"
         task = get_remote_output(list(args.test_servers), command)
         if check_remote_output(task, command):
-            # Verify each server host has the same interface driver
-            output_data = list(task.iter_buffers())
-            if len(output_data) > 1:
-                print("ERROR: Non-homogeneous drivers detected.")
-                sys.exit(1)
-            # Select the provider - currently use verbs or sockets
-            for line in output_data[0][0]:
-                provider = line.decode("utf-8").replace(":", "")
-                if "verbs" in provider:
-                    detected_provider = "ofi+verbs;ofi_rxm"
-                    break
-                if "sockets" in provider:
-                    detected_provider = "ofi+sockets"
-                    break
+            # Detect the provider for the specified interface
+            print("Detecting provider for {} - {} not set".format(interface, name))
+            command = "fi_info -d {} -l | grep -v 'version:'".format(interface)
+            task = get_remote_output(list(args.test_servers), command)
+            if check_remote_output(task, command):
+                # Verify each server host has the same interface driver
+                output_data = list(task.iter_buffers())
+                if len(output_data) > 1:
+                    print("ERROR: Non-homogeneous drivers detected.")
+                    sys.exit(1)
+                # Select the provider - currently use verbs or sockets
+                for line in output_data[0][0]:
+                    provider = line.decode("utf-8").replace(":", "")
+                    if "verbs" in provider:
+                        detected_provider = "ofi+verbs;ofi_rxm"
+                        break
+                    if "sockets" in provider:
+                        detected_provider = "ofi+sockets"
+                        break
+        else:
+            print("No Infiniband devices found - using sockets")
         print("  Found {} provider for {}".format(detected_provider, interface))
 
     # Update env definitions
