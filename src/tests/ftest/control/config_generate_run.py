@@ -80,7 +80,7 @@ class ConfigGenerateRun(TestWithServers):
         try:
             agent_force = self.start_server_managers(force=True)
         except ServerFailed as error:
-            self.fail("Restarting server failed! %s", error)
+            self.fail("Restarting server failed! {}".format(error))
 
         # We don't need agent for this test. However, when we stop the server,
         # agent is also stopped. Then the harness checks that the agent is
