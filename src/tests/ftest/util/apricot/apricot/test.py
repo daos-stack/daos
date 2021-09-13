@@ -386,8 +386,6 @@ class TestWithoutServers(Test):
         super().__init__(*args, **kwargs)
 
         self.client_mca = None
-        self.orterun = None
-        self.ompi_prefix = None
         self.bin = None
         self.daos_test = None
         self.cart_prefix = None

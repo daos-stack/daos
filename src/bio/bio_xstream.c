@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <uuid/uuid.h>
 #include <abt.h>
+#include <spdk/log.h>
 #include <spdk/env.h>
 #include <spdk/init.h>
 #include <spdk/nvme.h>
@@ -79,6 +80,9 @@ bio_spdk_env_init(void)
 	int			 rc;
 
 	D_ASSERT(nvme_glb.bd_nvme_conf != NULL);
+
+	/* Only print error and more severe to stderr. */
+	spdk_log_set_print_level(SPDK_LOG_ERROR);
 
 	spdk_env_opts_init(&opts);
 	opts.name = "daos";

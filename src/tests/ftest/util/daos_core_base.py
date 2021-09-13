@@ -15,6 +15,7 @@ from env_modules import load_mpi
 from general_utils import get_log_file
 from command_utils import CommandFailure
 from agent_utils import include_local_host
+from job_manager_utils import Orterun
 
 
 class DaosCoreBase(TestWithServers):
@@ -124,10 +125,6 @@ class DaosCoreBase(TestWithServers):
 
         cmd = " ".join(
             [
-                self.orterun,
-                self.client_mca,
-                "-n", str(num_clients),
-                "--hostfile", self.hostfile_clients,
                 "-x", "=".join(["D_LOG_FILE", get_log_file(self.client_log)]),
                 "--map-by node", "-x", "D_LOG_MASK=DEBUG",
                 "-x", "DD_MASK=mgmt,io,md,epc,rebuild",
@@ -138,6 +135,12 @@ class DaosCoreBase(TestWithServers):
                 str(args)
             ]
         )
+
+        job = Orterun(cmd)
+        job.mca.update(self.client_mca)
+        job.hostfile.update(self.hostfile_clients)
+        job.processes.update(num_clients)
+        job_str = str(job)
 
         env = {}
         env['CMOCKA_XML_FILE'] = os.path.join(self.outputdir,
@@ -166,14 +169,14 @@ class DaosCoreBase(TestWithServers):
                         rank, ["Stopped", "Excluded"])
 
         try:
-            process.run(cmd, env=env)
+            process.run(job_str, env=env)
         except process.CmdError as result:
             if result.result.exit_status != 0:
                 # fake a JUnit failure output
                 self.create_results_xml(self.subtest_name, result)
                 self.fail(
                     "{0} failed with return code={1}.\n".format(
-                        cmd, result.result.exit_status))
+                        job_str, result.result.exit_status))
 
     def create_results_xml(self, testname, result):
         """Create a JUnit result.xml file for the failed command.

@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
+from daos.src.tests.ftest.util.job_manager_utils import Orterun
 import time
 import os
 import shlex
@@ -386,10 +387,7 @@ class CartTest(TestWithoutServers):
         if self.provider == "ofi+psm2":
             mca_flags += "--mca pml ob1 "
 
-        tst_cmd = "{} {} -N {} --hostfile {} ".format(
-            self.orterun, mca_flags, tst_ppn, hostfile)
-
-        tst_cmd += env
+        tst_cmd = env
 
         tst_cont = os.getenv("CRT_TEST_CONT", "0")
         if tst_cont is not None:
@@ -416,7 +414,11 @@ class CartTest(TestWithoutServers):
         if tst_arg is not None:
             tst_cmd += " " + tst_arg
 
-        return tst_cmd
+        job = Orterun(tst_cmd)
+        job.mca.update(mca_flags)
+        job.hostfile.update(hostfile)
+        job.pprnode.update(tst_ppn)
+        return str(job)
 
     def convert_xml(self, xml_file):
         """Modify the xml file"""

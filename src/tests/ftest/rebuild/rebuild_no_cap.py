@@ -43,9 +43,7 @@ class RbldNoCapacity(TestWithServers):
 
         # Write enough data to the pool that will not be able to be rebuilt
         data = self.pool.scm_size.value * (targets - 1)
-        self.pool.write_file(
-            self.orterun, len(self.hostlist_clients), self.hostfile_clients,
-            data)
+        self.pool.write_file(data)
 
         # Display pool size after write
         self.pool.display_pool_daos_space("after write")

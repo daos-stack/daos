@@ -17,6 +17,7 @@ from general_utils import check_pool_files, DaosTestError, run_command
 from env_modules import load_mpi
 from server_utils_base import ServerFailed, AutosizeCancel
 from dmg_utils import DmgCommand
+from job_manager_utils import Orterun
 
 
 class TestPool(TestDaosApiBase):
@@ -668,13 +669,10 @@ class TestPool(TestDaosApiBase):
         """
         return check_pool_files(self.log, hosts, self.uuid.lower())
 
-    def write_file(self, orterun, processes, hostfile, size, timeout=60):
+    def write_file(self, size, timeout=60):
         """Write a file to the pool.
 
         Args:
-            orterun (str): full path to the orterun command
-            processes (int): number of processes to launch
-            hosts (list): list of clients from which to write the file
             size (int): size of the file to create in bytes
             timeout (int, optional): number of seconds before timing out the
                 command. Defaults to 60 seconds.
@@ -688,14 +686,15 @@ class TestPool(TestDaosApiBase):
             "DAOS_POOL": self.uuid,
             "PYTHONPATH": os.getenv("PYTHONPATH", "")
         }
-        if not load_mpi("openmpi"):
-            raise CommandFailure("Failed to load openmpi")
 
         current_path = os.path.dirname(os.path.abspath(__file__))
-        command = "{} --np {} --hostfile {} {} {} testfile".format(
-            orterun, processes, hostfile,
+        command = "{} {} testfile".format(
             os.path.join(current_path, "write_some_data.py"), size)
-        return run_command(command, timeout, True, env=env)
+        job = Orterun(command)
+        job.hostfile.update(self.hostfile_clients)
+        job.processes.update(len(self.hostlist_client))
+        cmd_str = str(job)
+        return run_command(cmd_str, timeout, True, env=env)
 
     def get_pool_daos_space(self):
         """Get the pool info daos space attributes as a dictionary.
@@ -848,8 +847,8 @@ class TestPool(TestDaosApiBase):
                                     "timeout can be adjusted via the "
                                     "'pool/pool_query_timeout' test yaml "
                                     "parameter.".format(
-                                        self.identifier,
-                                        self.pool_query_timeout.value)) \
+                                        self.pool_query_timeout.value,
+                                        self.identifier)) \
                                             from error
                         else:
                             raise CommandFailure(error) from error
