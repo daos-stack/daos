@@ -79,25 +79,26 @@ class DmvrLargeDir(DataMoverTestBase):
         # dcp treats a trailing slash on the source as /*
         # so strip trailing slash from posix path so dcp
         # behaves similar to "cp"
+        posix_path = os.environ['DAOS_TEST_SHARED_DIR'].rstrip("/")
         #posix_path = self.dfuse.mount_dir.value.rstrip("/")
 
         # copy from daos cont2 to posix file system (dfuse)
-        #self.run_datamover(
-        #    self.test_id + " (cont2 to posix)",
-        #    "DAOS", "/", self.pool[0], self.container[1],
-        #    "POSIX", posix_path)
+        self.run_datamover(
+            self.test_id + " (cont2 to posix)",
+            "DAOS", "/", self.pool[0], self.container[1],
+            "POSIX", posix_path)
 
         # create cont4
-        #self.create_cont(self.pool[0])
+        self.create_cont(self.pool[0])
 
         # copy from posix file system to daos cont4
-        #self.run_datamover(
-        #    self.test_id + " (posix to cont4)",
-        #    "POSIX", posix_path, None, None,
-        #    "DAOS", "/", self.pool[0], self.container[3])
+        self.run_datamover(
+            self.test_id + " (posix to cont4)",
+            "POSIX", posix_path, None, None,
+            "DAOS", "/", self.pool[0], self.container[3])
 
         # the result is that a NEW directory is created in the destination
-        #daos_path = "/" + basename(posix_path) + self.mdtest_cmd.test_dir.value
+        daos_path = "/" + basename(posix_path) + self.mdtest_cmd.test_dir.value
 
         # update mdtest params, read back and verify data from cont2
         self.mdtest_cmd.read_bytes.update(file_size)
