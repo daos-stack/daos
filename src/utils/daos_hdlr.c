@@ -2201,13 +2201,15 @@ dm_serialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, daos_prop_t *pro
 	}
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
+		rc = -DER_INVAL;
 		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc);
 	}
 	daos_cont_serialize_md = dlsym(handle, "daos_cont_serialize_md");
 	if (daos_cont_serialize_md == NULL)  {
+		rc = -DER_INVAL;
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_serialize_md");
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc);
 	}
 	(*daos_cont_serialize_md)(preserve_props, props, num_attrs, names, (char **)buffers, sizes);
 out:
@@ -2227,13 +2229,15 @@ dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
+		rc = -DER_INVAL;
 		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc);
 	}
 	daos_cont_deserialize_props = dlsym(handle, "daos_cont_deserialize_props");
 	if (daos_cont_deserialize_props == NULL)  {
+		rc = -DER_INVAL;
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_props");
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc);
 	}
 	(*daos_cont_deserialize_props)(ca->dst_poh, preserve_props, props, &ca->cont_layout);
 out:
@@ -2253,13 +2257,15 @@ dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *prese
 
 	handle = dlopen(LIBSERIALIZE, RTLD_NOW);
 	if (handle == NULL) {
+		rc = -DER_INVAL;
 		DH_PERROR_DER(ap, rc, "libdaos_serialize.so not found");
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc);
 	}
 	daos_cont_deserialize_attrs = dlsym(handle, "daos_cont_deserialize_attrs");
 	if (daos_cont_deserialize_attrs == NULL)  {
+		rc = -DER_INVAL;
 		DH_PERROR_DER(ap, rc, "Failed to lookup daos_cont_deserialize_attrs");
-		D_GOTO(out, rc = -DER_INVAL);
+		D_GOTO(out, rc);
 	}
 	(*daos_cont_deserialize_attrs)(preserve_props, &num_attrs, &names, &buffers, &sizes);
 	if (num_attrs > 0) {
