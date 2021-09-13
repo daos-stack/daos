@@ -38,11 +38,12 @@ class ZeroConfigTest(TestWithServers):
     def get_device_info(self):
         """Get the available device names, their numa nodes, and their domains."""
         self.dev_info = {}
-        command = "ls -1 {}".format(os.path.join(os.path.sep, "sys", "class", "net", "ib*"))
+        command = "ls -1 {}".format(os.path.join(os.path.sep, "sys", "class", "net"))
         results = run_pcmd(self.hostlist_servers, command)
         if len(results) != 1:
             self.fail("Error obtaining interfaces - non-homogeneous config")
         try:
+            # Find any ib* device in the listing and initially use default numa and domain values
             for index, interface in enumerate(re.findall(r"ib\d", "\n".join(results[0]["stdout"]))):
                 self.dev_info[interface] = {"numa": index, "domain": "hfi1_{}".format(index)}
         except (IndexError, KeyError) as error:
