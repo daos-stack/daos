@@ -67,5 +67,6 @@ dnf -y install \
     sg3_utils \
     sudo \
     valgrind-devel \
-    yasm
+    yasm \
+    zip
 dnf clean all

@@ -1,12 +1,12 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of CentOS 7 based
+# 'recipe' for Docker to build an image of Fedora based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-FROM centos:centos7
+FROM fedora:34
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -17,9 +17,9 @@ ARG CB0
 # The Docker image starts out with the DISTRO provided GPG keys
 # on the disk, but not installed.  These must be installed before
 # adding any repo that needs GPG keys but does not provide meta
-# data for installing those keys.  Then the epel-release package
-# version from the extras repository must be installed and the
-# GPG key it provides must be installed.
+# data for installing those keys.  Then the epel-release
+# package must be installed and the GPG key it provides must be
+# installed.
 ARG REPO_URL
 ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                              \
@@ -33,19 +33,36 @@ baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
 gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
+      dnf -y install --disablerepo extras --disablerepo baseos  \
+          epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
+      rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
+      dnf config-manager --assumeyes --quiet --disable          \
+          baseos powertools epel epel-modular extras;           \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
-          -i /etc/yum.conf;                                     \
-      yum -y install --disablerepo=base,extras,updates          \
-             dnf dnf-plugins-core epel-release-7-11;            \
-      rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-7;         \
-      dnf config-manager --assumeyes --quiet                    \
-          --disable base epel extras updates;                   \
+          -i /etc/dnf/dnf.conf;                                 \
+      dnf -y upgrade epel-release;                              \
     else                                                        \
-      yum -y install dnf dnf-plugins-core epel-release-7-11;    \
+      dnf -y install epel-release dnf-plugins-core &&           \
+      dnf config-manager --assumeyes --set-enabled powertools;  \
     fi;                                                         \
-    dnf -y upgrade epel-release;                                \
-    yum clean all;                                              \
     dnf clean all
+
+# Currently the appstream REPO can not be part of a repo group
+ARG REPO_APSTREAM
+RUN if [ -n "$REPO_APPSTREAM" ]; then                           \
+      rpm --import /etc/pki/rpm-gpg/*;                          \
+      MY_REPO="${REPO_URL}${REPO_APPSTREAM}/";                  \
+      MY_NAME="${MY_REPO#*//}";                                 \
+      MY_NAME="${MY_NAME//\//_}";                               \
+      echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=1\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
+      dnf config-manager --assumeyes --quiet --disable          \
+          appstream;                                            \
+    fi
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
@@ -59,7 +76,6 @@ name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-exclude=fuse-3* fuse-devel-3* fuse-libs-3* fuse-debuginfo-3* ompi*\n\
 gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
     fi
 
@@ -78,7 +94,7 @@ RUN for repo in $REPOS; do                                                \
         fi;                                                               \
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/fedora/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
@@ -87,9 +103,70 @@ gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
     done
 
 # Install OS updates and package.  Include basic tools and daos dependencies
-COPY ./utils/scripts/install-centos7.sh /tmp/install.sh
-RUN chmod +x /tmp/install.sh
-RUN /tmp/install.sh
+# that come from the core repo.
+# Clean up any repos afterwards to save space.
+# Switch to dnf as it seems a bit faster.
+# libatomic should be in this list, but can not for now due to CI
+# post provisioning issue.
+# *** Keep these in as much alphbetical order as possible ***
+RUN dnf -y upgrade && \
+    dnf -y install \
+        boost-python3-devel \
+        clang-analyzer \
+        cmake \
+        CUnit-devel \
+        e2fsprogs \
+        file \
+        flex \
+        fuse3 \
+        fuse3-devel \
+        gcc \
+        gcc-c++ \
+        git \
+        glibc-langpack-en \
+        golang \
+        graphviz \
+        hwloc-devel \
+        ipmctl \
+        java-1.8.0-openjdk \
+        json-c-devel \
+        libaio-devel \
+        libcmocka-devel \
+        libevent-devel \
+        libipmctl-devel \
+        libiscsi-devel \
+        libtool \
+        libtool-ltdl-devel \
+        libunwind-devel \
+        libuuid-devel \
+        libyaml-devel \
+        Lmod \
+        lz4-devel \
+        make \
+        maven \
+        meson \
+        ndctl \
+        ninja-build \
+        numactl \
+        numactl-devel \
+        openmpi-devel \
+        openssl-devel \
+        patch \
+        patchelf \
+        pciutils \
+        python3-devel \
+        python3-distro \
+        python3-junit_xml \
+        python3-pip \
+        python3-pyxattr \
+        python3-tabulate \
+        python3-scons \
+        python3-yaml \
+        sg3_utils \
+        sudo \
+        valgrind-devel \
+        yasm && \
+    dnf clean all
 
 ARG UID=1000
 

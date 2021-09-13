@@ -8,9 +8,11 @@ quick_build="${2:-false}"
 if [[ "$distro" = *7 ]]; then
     OPENMPI_VER="3"
     PY_MINOR_VER="6"
+    PROTOBUF_C_DEBUGINFO="protobuf-c-debuginfo"
 elif [[ "$distro" = *8 ]]; then
     OPENMPI_VER=""
     PY_MINOR_VER=""
+    PROTOBUF_C_DEBUGINFO=""
 fi
 pkgs="gotestsum openmpi$OPENMPI_VER                \
       hwloc-devel argobots                         \
@@ -28,9 +30,9 @@ pkgs="gotestsum openmpi$OPENMPI_VER                \
 
 if $quick_build; then
     read -r mercury_version < "$distro"-required-mercury-rpm-version
-    pkgs="$pkgs spdk-tools mercury-$mercury_version         \
-          libisa-l_crypto libfabric-debuginfo   \
-          argobots-debuginfo protobuf-c-debuginfo"
+    pkgs="$pkgs spdk-tools mercury-$mercury_version \
+          libisa-l_crypto libfabric-debuginfo       \
+          argobots-debuginfo $PROTOBUF_C_DEBUGINFO"
 fi
 
 echo "$pkgs"

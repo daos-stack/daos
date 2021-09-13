@@ -20,27 +20,27 @@ ARG CB0
 # data for installing those keys.
 ARG REPO_URL
 ARG REPO_DISTRO
-RUN if [ -n "${REPO_DISTRO}" ]; then                                           \
-      rm -f /etc/zypp/repos.d/*.repo &&                                        \
-      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
-            ${REPO_URL}${REPO_DISTRO}/ daos-stack-distro-group-repo &&         \
-      zypper --non-interactive modifyrepo --gpgcheck-allow-unsigned-repo       \
-             daos-stack-distro-group-repo &&                                   \
-      zypper clean --all;                                                      \
+RUN if [ -n "${REPO_DISTRO}" ]; then                                                                                                         \
+      rm -f /etc/zypp/repos.d/*.repo &&                                                                                                      \
+      for repo in opensuse-15.3-{update-oss-x86_64-provo-mirror-proxy,update-non-oss-x86_64-proxy,oss-x86_64-proxy,non-oss-x86_64-proxy}; do \
+          zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo ${REPO_URL}repository/$repo/ $repo;                                \
+      done;                                                                                                                                  \
+      zypper clean --all;                                                                                                                    \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
 ARG REPO_DAOS
-RUN if [ -n "$REPO_DAOS" ]; then                                \
-      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
-             ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&             \
-      zypper --non-interactive modifyrepo --no-gpgcheck                        \
-             daos-stack-daos-group-repo &&                                     \
-      zypper addlock --repo daos-stack-daos-group-repo                         \
-             'fuse<3' 'libfuse-devel<3' 'fuse-libs<3'                          \
-             'fuse-debuginfo<3' 'ompi' &&                                      \
-      zypper clean --all;                                                      \
+RUN if [ -n "$REPO_DAOS" ]; then                                         \
+      REPO_DAOS="repository/daos-stack-leap-15-x86_64-stable-local";     \
+      zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo    \
+             ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&       \
+      zypper --non-interactive modifyrepo --no-gpgcheck                  \
+             daos-stack-daos-group-repo &&                               \
+      zypper addlock --repo daos-stack-daos-group-repo                   \
+             'fuse<3' 'libfuse-devel<3' 'fuse-libs<3'                    \
+             'fuse-debuginfo<3' 'ompi' &&                                \
+      zypper clean --all;                                                \
     fi
 # Allow packages to change vendors
 RUN echo "solver.allowVendorChange = true" >> /etc/zypp/zypp.conf

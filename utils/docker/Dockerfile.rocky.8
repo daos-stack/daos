@@ -1,12 +1,12 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of CentOS 8 based
+# 'recipe' for Docker to build an image of RockyLinux 8 based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-FROM centos:8.4.2105
+FROM rockylinux/rockylinux:8
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -24,7 +24,7 @@ ARG REPO_URL
 ARG REPO_DISTRO
 RUN if [ -n "$REPO_DISTRO" ]; then                            \
       rpm --import /etc/pki/rpm-gpg/*;                        \
-      for repo in centos-8.4-{base,extras,powertools}; do     \
+      for repo in rocky-8.4-{base,extras,powertools}; do      \
           MY_REPO="${REPO_URL}repository/$repo-x86_64-proxy"; \
           MY_NAME="${MY_REPO#*//}";                           \
           MY_NAME="${MY_NAME//\//_}";                         \
@@ -33,7 +33,7 @@ name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;    \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-rocky-$repo.repo;     \
       done;                                                   \
       dnf -y --disablerepo=baseos,powertools,extras           \
           install dnf-plugins-core dnf-utils;                 \
@@ -52,7 +52,7 @@ name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;      \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-rocky-$repo.repo;       \
       done;                                                     \
       sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
           -i /etc/dnf/dnf.conf;                                 \
@@ -65,18 +65,18 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;      \
 
 # Currently the appstream REPO can not be part of a repo group
 ARG REPO_APPSTREAM
-RUN if [ -n "$REPO_APPSTREAM" ]; then                          \
-      MY_REPO="${REPO_URL}${REPO_APPSTREAM/8.?/8.4}";          \
-      MY_NAME="${MY_REPO#*//}";                                \
-      MY_NAME="${MY_NAME//\//_}";                              \
+RUN if [ -n "$REPO_APPSTREAM" ]; then                         \
+      MY_REPO="${REPO_URL}${REPO_APPSTREAM/8.?/8.4}";         \
+      MY_NAME="${MY_REPO#*//}";                               \
+      MY_NAME="${MY_NAME//\//_}";                             \
       echo -e "[${MY_NAME}]\n\
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo; \
-      dnf -y --quiet config-manager --assumeyes --disable      \
-          appstream;                                           \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-rocky-appstream.repo; \
+      dnf -y --quiet config-manager --assumeyes --disable     \
+          appstream;                                          \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
@@ -110,7 +110,7 @@ RUN for repo in $REPOS; do                                              \
         fi;                                                             \
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos8/\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/rocky8/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo; \
     done
