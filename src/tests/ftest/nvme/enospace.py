@@ -70,6 +70,11 @@ class NvmeEnospace(ServerFillUp):
         data = self.daos_cmd.container_list(**kwargs)
         containers = [uuid_label["UUID"] for uuid_label in data["response"]]
 
+        # Note: avoid race between daos_agent cleaning up open pool (and container) handles
+        # from a crashed client, and the container destroy (without --force).
+        # TODO: use container destroy --force when possible. See DAOS-7112 + other issues.
+        time.sleep(2)
+
         #Destroy all the containers
         for _cont in containers:
             kwargs["cont"] = _cont
@@ -212,7 +217,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7018")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -274,7 +278,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7018")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -354,7 +357,6 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
-    @skipForTicket("DAOS-7018")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 

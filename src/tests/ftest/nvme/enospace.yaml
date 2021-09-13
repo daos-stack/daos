@@ -23,6 +23,9 @@ server_config:
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
       targets: 1
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,io,md,epc,rebuild,any
     1:
       pinned_numa_node: 1
       nr_xs_helpers: 1
@@ -34,6 +37,9 @@ server_config:
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
       targets: 1
+      log_mask: DEBUG,MEM=ERR
+      env_vars:
+        - DD_MASK=mgmt,io,md,epc,rebuild,any
   transport_config:
     allow_insecure: True
 agent_config:
