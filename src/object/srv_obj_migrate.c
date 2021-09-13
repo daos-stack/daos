@@ -864,7 +864,7 @@ migrate_update_parity(struct migrate_one *mrone, daos_epoch_t parity_eph,
 
 		tmp_sgl.sg_iovs = &tmp_iov;
 		iod->iod_recxs = &tmp_recx;
-
+		iod->iod_nr = 1;
 		rc = daos_csummer_csum_init_with_packed(&csummer, csum_iov);
 		if (rc != 0) {
 			D_ERROR("Error initializing csummer");
@@ -965,7 +965,6 @@ migrate_fetch_update_parity(struct migrate_one *mrone, daos_handle_t oh,
 				continue;
 			}
 
-			tmp_iod.iod_nr = 1;
 			rc = migrate_update_parity(mrone, parity_eph, ds_cont, ptr, offset,
 						   size, &tmp_iod, p_bufs, &tmp_csum_iov_fetch);
 			if (rc)
