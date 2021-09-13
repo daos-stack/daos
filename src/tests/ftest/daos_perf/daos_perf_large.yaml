@@ -33,6 +33,6 @@ daos_perf:
   processes: 64
   test_type: daos
   akey_use_array: False
-  dkeys: 4k
-  akeys: 1k
+  dkeys: 1k
+  akeys: 256
   object_class: EC2P1
