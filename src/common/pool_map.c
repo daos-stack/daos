@@ -2455,6 +2455,8 @@ pmap_fail_node_add_tgt(struct pmap_fail_stat *fstat,
 	}
 	if (comp->co_fseq > fstat->pf_last_ver)
 		fnode->pf_new_fail = 1;
+	else
+		fnode->pf_new_fail = 0;
 
 	for (i = 0; i < fnode->pf_ver_nr; i++) {
 		tmp = &fnode->pf_vers[i];
@@ -2528,7 +2530,7 @@ pmap_node_check(struct pool_domain *node_dom, struct pmap_fail_stat *fstat)
 		fstat->pf_newfail_nr++;
 	if ((fstat->pf_down_nr > fstat->pf_rf) && (fstat->pf_newfail_nr > 0)) {
 		rc = -DER_RF;
-		D_DEBUG(DB_TRACE, "RF broken, found %d DOWN node, "
+		D_ERROR("RF broken, found %d DOWN node, "
 			"newly fail %d, rf %d, "DF_RC"\n", fstat->pf_down_nr,
 			fstat->pf_newfail_nr, fstat->pf_rf, DP_RC(rc));
 	}
@@ -2606,7 +2608,7 @@ pmap_fail_stat_check(struct pmap_fail_stat *fstat)
 
 fail:
 	if (rc == -DER_RF) {
-		D_DEBUG(DB_TRACE, "RF broken, found %d fail, DOWN %d, newly "
+		D_ERROR("RF broken, found %d fail, DOWN %d, newly "
 			"fail %d, max_overlapped %d, rf %d, "DF_RC"\n",
 			fstat->pf_node_nr, fstat->pf_down_nr,
 			fstat->pf_newfail_nr, max_fail_nr,

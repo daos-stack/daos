@@ -31,7 +31,7 @@ server_config:
         scm_class: dcpm
         scm_list: ["/dev/pmem0"]
         scm_mount: /mnt/daos0
-        log_mask: ERR
+        log_mask: DEBUG,MEM=ERR
       1:
         pinned_numa_node: 1
         nr_xs_helpers: 1
@@ -43,7 +43,7 @@ server_config:
         scm_class: dcpm
         scm_list: ["/dev/pmem1"]
         scm_mount: /mnt/daos1
-        log_mask: ERR
+        log_mask: DEBUG,MEM=ERR
 pool:
   mode: 146
   name: daos_server
@@ -56,8 +56,8 @@ pool:
 container:
     type: POSIX
     control_method: daos
-    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
-    oclass: RP_2G8
+    properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:2
+    oclass: RP_3G5
 ior:
   client_processes:
     np: 48
@@ -68,8 +68,8 @@ ior:
     write_flags: "-w -F -k -G 1"
     read_flags: "-F -r -R -k -G 1"
     api: DFS
-    dfs_oclass: RP_2G8
-    dfs_dir_oclass: RP_2G8
+    dfs_oclass: RP_3G5
+    dfs_dir_oclass: RP_3G5
     ior_test_sequence:
     #   - [scm_size, nvme_size, transfersize, blocksize]
     #    The values are set to be in the multiples of 10.
@@ -79,11 +79,10 @@ ior:
         - [50000000000, 300000000000, 1000000000, 8000000000]  #[1G, 8G]
 test_obj_class:
   oclass:
-    - RP_3G6
+    - RP_3G5
     - RP_4G1
-    - S1
 loop_test:
-  iterations: 3
+  iterations: 2
 aggregation:
   test_with_aggregation: True
 rebuild:
