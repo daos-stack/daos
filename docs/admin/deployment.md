@@ -665,7 +665,7 @@ PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
 The next step consists of specifying the devices that should be used by DAOS
 in the server configuration YAML file.
 The `engines` section of the config is a list with details for each DAOS engine
-to be started on the host (currently a maximum of 2 per host is imposed).
+to be started on the host (maximum of 2 per host).
 
 Devices with the same NUMA rating/node/socket should be colocated on a single
 DAOS engine where possible.
@@ -733,7 +733,7 @@ engines:
   -
     class: dcpm               # type of first storage tier (SCM)
     scm_list: [/dev/pmem0]    # <----- updated
-    scm_mount: /mnt/daos      # where to mount SCM
+    scm_mount: /mnt/daos0     # where to mount SCM
   -
     class: nvme               # type of second storage tier (NVMe)
     bdev_list: ["0000:87:00.0"] # <----- updated
@@ -749,7 +749,7 @@ engines:
   -
     class: dcpm               # type of first storage tier (SCM)
     scm_list: [/dev/pmem1]    # <----- updated
-    scm_mount: /mnt/daos      # where to mount SCM
+    scm_mount: /mnt/daos1     # where to mount SCM
   -
     class: nvme               # type of second storage tier (NVMe)
     bdev_list: ["0000:da:00.0"] # <----- updated
