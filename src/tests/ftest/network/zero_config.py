@@ -13,7 +13,7 @@ from avocado import fail_on
 from apricot import TestWithServers
 from daos_racer_utils import DaosRacerCommand
 from command_utils import CommandFailure
-from general_utils import check_file_exists, get_host_data, get_log_file
+from general_utils import check_file_exists, get_host_data, get_log_file, run_pcmd
 
 
 class ZeroConfigTest(TestWithServers):
@@ -26,10 +26,44 @@ class ZeroConfigTest(TestWithServers):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.dev_info = {}
+
     def setUp(self):
         """Set up for zero-config test."""
         self.setup_start_servers = False
         super().setUp()
+
+    def get_device_info(self):
+        """Get the available device names, their numa nodes, and their domains."""
+        self.dev_info = {}
+        command = "ls -1 {}".format(os.path.join(os.path.sep, "sys", "class", "net", "ib*"))
+        results = run_pcmd(self.hostlist_servers, command)
+        if len(results) != 1:
+            self.fail("Error obtaining interfaces - non-homogeneous config")
+        try:
+            for index, interface in enumerate(re.findall(r"ib\d", "\n".join(results[0]["stdout"]))):
+                self.dev_info[interface] = {"numa": index, "domain": "hfi1_{}".format(index)}
+        except (IndexError, KeyError) as error:
+            self.log.error("Error obtaining interfaces: %s", str(error))
+            self.fail("Error obtaining interfaces - unexpected error")
+
+        # Update interface domain and NUMA node settings for Mellanox devices through mst output:
+        #   DEVICE_TYPE        MST   PCI       RDMA     NET       NUMA
+        #   ConnectX6(rev:0)   NA    86:00.0   mlx5_1   net-ib1   1
+        #   ConnectX6(rev:0)   NA    37:00.0   mlx5_0   net-ib0   0
+        command = "mst status -v"
+        results = run_pcmd(self.hostlist_servers, command)
+        try:
+            if results[0]["exit_status"] == 0:
+                regex = r"\.\d+\s+(mlx\d_\d)\s+net-(ib\d)\s+(\d)"
+                for match in re.findall(regex, "\n".join(results[0]["stdout"])):
+                    self.dev_info[match[1]]["numa"] = match[2]
+                    self.dev_info[match[1]]["domain"] = match[0]
+        except (IndexError, KeyError) as error:
+            self.log.error("Error obtaining interfaces: %s", str(error))
+            self.fail("Error obtaining interfaces - unexpected error")
 
     def get_port_cnt(self, hosts, dev, port_counter):
         """Get the port count info for device names specified.
@@ -43,7 +77,7 @@ class ZeroConfigTest(TestWithServers):
             list: a list of the data common to each unique NodeSet of hosts
 
         """
-        b_path = "/sys/class/infiniband/{}".format(dev)
+        b_path = "/sys/class/infiniband/{}".format(self.dev_info[dev]["domain"])
         file = os.path.join(b_path, "ports/1/counters", port_counter)
 
         # Check if if exists for the host
@@ -104,18 +138,14 @@ class ZeroConfigTest(TestWithServers):
             bool: returns status
 
         """
-        hfi_map = {"ib0": "hfi1_0", "ib1": "hfi1_1"}
-
         # Get counter values for hfi devices before and after
-        cnt_before = self.get_port_cnt(
-            self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
+        cnt_before = self.get_port_cnt(self.hostlist_clients, exp_iface, "port_rcv_data")
 
         # get the dmg config file for daos_racer
         dmg = self.get_dmg_command()
 
         # Let's run daos_racer as a client
-        daos_racer = DaosRacerCommand(self.bin,
-                                      self.hostlist_clients[0], dmg)
+        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], dmg)
         daos_racer.get_params(self)
 
         # Update env_name list to add OFI_INTERFACE if needed.
@@ -169,8 +199,10 @@ class ZeroConfigTest(TestWithServers):
         :avocado: tags=all,daily_regression,hw,small,zero_config,env_set
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
-        dev_info = {"ib0": 0, "ib1": 1}
-        exp_iface = random.choice(list(dev_info.keys()))
+
+        # Get the available interfaces and their domains
+        self.get_device_info()
+        exp_iface = random.choice(list(self.dev_info.keys()))
 
         # Configure the daos server
         self.add_server_manager()
@@ -186,7 +218,7 @@ class ZeroConfigTest(TestWithServers):
             "Error updating daos_server 'fabric_iface' config opt")
         self.assertTrue(
             self.server_managers[0].set_config_value(
-                "pinned_numa_node", dev_info[exp_iface]),
+                "pinned_numa_node", self.dev_info[exp_iface]["numa"]),
             "Error updating daos_server 'pinned_numa_node' config opt")
 
         # Start the daos server
