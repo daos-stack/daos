@@ -1,13 +1,12 @@
 # Copyright (C) 2018-2021 Intel Corporation
 # All rights reserved.
 #
-# 'recipe' for Docker to build an image of centOS 8 based
+# 'recipe' for Docker to build an image of CentOS 8 based
 # environment for building the DAOS project.
 #
 
 # Pull base image
-ARG BASE_DISTRO=centos:8
-FROM $BASE_DISTRO
+FROM centos:8
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -18,40 +17,56 @@ ARG CB0
 # The Docker image starts out with the DISTRO provided GPG keys
 # on the disk, but not installed.  These must be installed before
 # adding any repo that needs GPG keys but does not provide meta
-# data for installing those keys.  Then the epel-release
-# package must be installed and the GPG key it provides must be
-# installed.
+# data for installing those keys.  Then the epel-release package
+# must be installed from the extras repository and the GPG key it
+# provides must be installed.
 ARG REPO_URL
 ARG REPO_DISTRO
-RUN if [ -n "$REPO_DISTRO" ]; then                              \
-      rpm --import /etc/pki/rpm-gpg/*;                          \
-      MY_REPO="${REPO_URL}${REPO_DISTRO}/";                     \
-      MY_NAME="${MY_REPO#*//}";                                 \
-      MY_NAME="${MY_NAME//\//_}";                               \
-      echo -e "[${MY_NAME}]\n\
+RUN if [ -n "$REPO_DISTRO" ]; then                               \
+      rpm --import /etc/pki/rpm-gpg/*;                           \
+      for repo in centos-8.4-{base,extras,powertools}; do        \
+          MY_REPO="${REPO_URL}repository/$repo-x86_64-proxy";    \
+          MY_NAME="${MY_REPO#*//}";                              \
+          MY_NAME="${MY_NAME//\//_}";                            \
+          echo -e "[${MY_NAME}]\n\
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-group.repo;      \
-      dnf -y install --disablerepo extras --disablerepo baseos  \
-          epel-release-8-8.el8 dnf-plugins-core dnf-utils;      \
-      rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;         \
-      dnf config-manager --assumeyes --quiet --disable          \
-          baseos powertools epel epel-modular extras;           \
-      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/" \
-          -i /etc/dnf/dnf.conf;                                 \
-      dnf -y upgrade epel-release;                              \
-    else                                                        \
-      dnf -y install epel-release dnf-plugins-core &&           \
-      dnf config-manager --assumeyes --set-enabled powertools;  \
-    fi;                                                         \
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;       \
+      done;                                                      \
+      dnf -y --disablerepo=baseos,powertools,extras              \
+          install dnf-plugins-core dnf-utils;                    \
+      dnf config-manager --assumeyes --quiet --disable           \
+          baseos powertools extras;                              \
+      dnf -y install epel-release;                               \
+      rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-8;          \
+      dnf config-manager --assumeyes --quiet --disable           \
+          epel epel-modular;                                     \
+      for repo in epel-el-8; do                                  \
+          MY_REPO="${REPO_URL}repository/$repo-x86_64-proxy";    \
+          MY_NAME="${MY_REPO#*//}";                              \
+          MY_NAME="${MY_NAME//\//_}";                            \
+          echo -e "[${MY_NAME}]\n\
+name=created from ${MY_REPO}\n\
+baseurl=${MY_REPO}\n\
+enabled=1\n\
+repo_gpgcheck=0\n\
+gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-$repo.repo;       \
+      done;                                                      \
+      sed "s/^mirrorlist_expire=0*/mirrorlist_expire=99999999/"  \
+          -i /etc/dnf/dnf.conf;                                  \
+      dnf -y upgrade epel-release;                               \
+    else                                                         \
+      dnf -y install epel-release dnf-plugins-core &&            \
+      dnf config-manager --assumeyes --set-enabled powertools;   \
+    fi;                                                          \
     dnf clean all
 
 # Currently the appstream REPO can not be part of a repo group
 ARG REPO_APSTREAM
 RUN if [ -n "$REPO_APPSTREAM" ]; then                           \
-      rpm --import /etc/pki/rpm-gpg/*;                          \
+      echo rpm --import /etc/pki/rpm-gpg/*;                          \
       MY_REPO="${REPO_URL}${REPO_APPSTREAM}/";                  \
       MY_NAME="${MY_REPO#*//}";                                 \
       MY_NAME="${MY_NAME//\//_}";                               \
@@ -68,16 +83,17 @@ gpgcheck=1\n" >> /etc/yum.repos.d/local-centos-appstream.repo;  \
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
 ARG REPO_DAOS
-RUN if [ -n "$REPO_DAOS" ]; then                                \
-      MY_REPO="${REPO_URL}${REPO_DAOS}/";                       \
-      MY_NAME="${MY_REPO#*//}";                                 \
-      MY_NAME="${MY_NAME//\//_}";                               \
+RUN if [ -n "$REPO_DAOS" ]; then                                  \
+      REPO_DAOS="repository/daos-stack-el-8-x86_64-stable-local"; \
+      MY_REPO="${REPO_URL}${REPO_DAOS}/";                         \
+      MY_NAME="${MY_REPO#*//}";                                   \
+      MY_NAME="${MY_NAME//\//_}";                                 \
       echo -e "[${MY_NAME}]\n\
 name=created from ${MY_REPO}\n\
 baseurl=${MY_REPO}\n\
 enabled=1\n\
 repo_gpgcheck=0\n\
-gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;        \
+gpgcheck=0\n" >> /etc/yum.repos.d/local-daos-group.repo;          \
     fi
 
 ARG JENKINS_URL
@@ -95,7 +111,7 @@ RUN for repo in $REPOS; do                                                \
         fi;                                                               \
         echo -e "[$repo:$branch:$build_number]\n\
 name=$repo:$branch:$build_number\n\
-baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos7/\n\
+baseurl=${JENKINS_URL}job/daos-stack/job/$repo/job/$branch/$build_number/artifact/artifacts/centos8/\n\
 enabled=1\n\
 gpgcheck=False\n" >> /etc/yum.repos.d/$repo:$branch:$build_number.repo;   \
         cat /etc/yum.repos.d/$repo:$branch:$build_number.repo; \

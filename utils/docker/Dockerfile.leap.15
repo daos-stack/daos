@@ -22,17 +22,17 @@ ARG REPO_URL
 ARG REPO_DISTRO
 RUN if [ -n "${REPO_DISTRO}" ]; then                                           \
       rm -f /etc/zypp/repos.d/*.repo &&                                        \
+      for repo in opensuse-15.3-{update-oss-x86_64-provo-mirror-proxy,update-non-oss-x86_64-proxy,oss-x86_64-proxy,non-oss-x86_64-proxy} ; do        \
       zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
-            ${REPO_URL}${REPO_DISTRO}/ daos-stack-distro-group-repo &&         \
-      zypper --non-interactive modifyrepo --gpgcheck-allow-unsigned-repo       \
-             daos-stack-distro-group-repo &&                                   \
+            ${REPO_URL}$repo/ &&         \
       zypper clean --all;                                                      \
     fi
 
 # If a local DAOS repository is supplied, then we should use it
 # This is mainly for quickbuilds
 ARG REPO_DAOS
-RUN if [ -n "$REPO_DAOS" ]; then                                \
+RUN if [ -n "$REPO_DAOS" ]; then                                               \
+      REPO_DAOS="repository/daos-stack-opensuse-15-x86_64-stable-local";       \
       zypper --non-interactive addrepo --gpgcheck-allow-unsigned-repo          \
              ${REPO_URL}${REPO_DAOS} daos-stack-daos-group-repo &&             \
       zypper --non-interactive modifyrepo --no-gpgcheck                        \

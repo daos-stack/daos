@@ -26,6 +26,11 @@ if [ -d /var/cache/pbuilder/ ]; then
 fi
 
 mockroot="/var/lib/mock/${CHROOT_NAME}"
+
+sudo dnf --installroot $mockroot/root/ repolist || true
+ls -l $mockroot/root/etc/yum.conf || true
+cat $mockroot/root/etc/yum.conf || true
+
 cat "$mockroot"/result/{root,build}.log 2>/dev/null || true
 
 if srpms="$(ls _topdir/SRPMS/*)"; then
