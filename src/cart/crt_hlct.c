@@ -41,6 +41,7 @@
  * heard of. It never generates any new HLC timestamps.
  */
 
+#include <time.h>
 #include "crt_internal.h"
 #include <gurt/atomic.h>
 
@@ -51,8 +52,36 @@ uint64_t crt_hlct_get(void)
 	return crt_hlct;
 }
 
+#define CRT_HLC_NSEC 16ULL
+#define CRT_HLC_START_SEC 1609459200ULL
+#define CRT_HLC_MASK 0x3FFFFULL
+
+/** Get local physical time */
+static inline uint64_t crt_hlc_localtime_get(void)
+{
+	struct timespec now;
+	uint64_t	pt;
+	int		rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	D_ASSERTF(rc == 0, "clock_gettime: %d\n", errno);
+	D_ASSERT(now.tv_sec > CRT_HLC_START_SEC);
+	pt = ((now.tv_sec - CRT_HLC_START_SEC) * NSEC_PER_SEC + now.tv_nsec) *
+	     CRT_HLC_NSEC;
+
+	/** Return the most significant 46 bits of time. */
+	return pt & ~CRT_HLC_MASK;
+}
+
 void crt_hlct_sync(uint64_t msg)
 {
+	uint64_t pt = crt_hlc_localtime_get();
+	uint64_t ml = msg & ~CRT_HLC_MASK;
+	uint64_t off;
+
+	off = ml > pt ? ml - pt : 0;
+	D_ASSERTF(off <= 10 * CRT_HLC_NSEC * 1000 * 1000 * 1000 /* 10 s */, DF_U64" <= 10 s\n", off);
+
 	uint64_t hlct, hlct_new;
 
 	do {
