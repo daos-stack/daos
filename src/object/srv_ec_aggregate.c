@@ -2451,7 +2451,7 @@ out:
  */
 static int
 cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		     bool full_scan, struct agg_param *agg_param)
+		     bool full_scan, struct agg_param *agg_param, uint64_t *msec)
 {
 	struct ec_agg_param	 *ec_agg_param = agg_param->ap_data;
 	vos_iter_param_t	 iter_param = { 0 };
@@ -2521,8 +2521,14 @@ again:
 		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (ec_agg_param->ap_obj_skipped)
-		D_ERROR("with skipped obj during aggregation.\n");
+	if (ec_agg_param->ap_obj_skipped) {
+		D_DEBUG(DB_EPC, "with skipped obj during aggregation.\n");
+		/* There is rebuild going no, and we can proceed EC aggregate boundary,
+		 * Let's wait for 5 seconds for another EC aggregation.
+		 */
+		if (msec)
+			*msec = 5 * 1000;
+	}
 
 	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0)
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
