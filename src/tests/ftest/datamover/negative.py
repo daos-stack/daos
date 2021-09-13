@@ -242,7 +242,6 @@ class DmvrNegativeTest(DataMoverTestBase):
             "POSIX", "/fake/fake/fake",
             expected_rc=1)
 
-    @skipForTicket("DAOS-6871")
     def test_dm_negative_space_dcp(self):
         """Jira ID: DAOS-5515
         Test Description:
@@ -253,6 +252,10 @@ class DmvrNegativeTest(DataMoverTestBase):
         :avocado: tags=dm_negative,dm_negative_space_dcp
         """
         self.set_tool("DCP")
+
+        # mount small tmpfs filesystem on posix path, using size required sudo
+        dst_posix_path = self.new_posix_test_path(mount_dir=True)
+        self.execute_cmd("sudo mount -t tmpfs none '{}' -o size=128M".format(dst_posix_path))
 
         # Create a large test file in POSIX
         block_size_large = self.params.get(
@@ -283,7 +286,7 @@ class DmvrNegativeTest(DataMoverTestBase):
         self.run_datamover(
             self.test_id + " (dst posix out of space)",
             "POSIX", self.posix_test_paths[0], None, None,
-            "POSIX", self.dfuse.mount_dir.value,
+            "POSIX", dst_posix_path,
             expected_rc=255,
             expected_err=["errno=28"])
 
