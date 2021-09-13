@@ -20,12 +20,12 @@ import (
 
 // SystemCmd is the struct representing the top-level system subcommand.
 type SystemCmd struct {
-	LeaderQuery leaderQueryCmd `command:"leader-query" alias:"l" description:"Query for current Management Service leader"`
-	Query       systemQueryCmd `command:"query" alias:"q" description:"Query DAOS system status"`
-	Stop        systemStopCmd  `command:"stop" alias:"s" description:"Perform controlled shutdown of DAOS system"`
-	Start       systemStartCmd `command:"start" alias:"r" description:"Perform start of stopped DAOS system"`
-	Erase       systemEraseCmd `command:"erase" alias:"e" description:"Erase system metadata prior to reformat"`
-	ListPools   PoolListCmd    `command:"list-pools" alias:"p" description:"List all pools in the DAOS system"`
+	LeaderQuery leaderQueryCmd `command:"leader-query" description:"Query for current Management Service leader"`
+	Query       systemQueryCmd `command:"query" description:"Query DAOS system status"`
+	Stop        systemStopCmd  `command:"stop" description:"Perform controlled shutdown of DAOS system"`
+	Start       systemStartCmd `command:"start" description:"Perform start of stopped DAOS system"`
+	Erase       systemEraseCmd `command:"erase" description:"Erase system metadata prior to reformat"`
+	ListPools   PoolListCmd    `command:"list-pools" description:"List all pools in the DAOS system"`
 }
 
 type leaderQueryCmd struct {
