@@ -74,6 +74,7 @@ retry_cmd clush -B -S -l root -w "$NODESTRING" \
            DAOS_STACK_GROUP_REPO=\"${!DSG_REPO_var:-}\"
            DAOS_STACK_EL_8_APPSTREAM_REPO=\"${!DSA_REPO_var:-}\"
            DISTRO=\"$DISTRO\"
+           $(cat ci/stacktrace.sh)
            $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
            $(cat ci/provisioning/post_provision_config_nodes.sh)"
 

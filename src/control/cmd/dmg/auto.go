@@ -20,7 +20,7 @@ import (
 
 // configCmd is the struct representing the top-level config subcommand.
 type configCmd struct {
-	Generate configGenCmd `command:"generate" alias:"g" description:"Generate DAOS server configuration file based on discoverable hardware devices"`
+	Generate configGenCmd `command:"generate" alias:"gen" description:"Generate DAOS server configuration file based on discoverable hardware devices"`
 }
 
 type configGenCmd struct {

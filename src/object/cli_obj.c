@@ -510,6 +510,12 @@ obj_get_grp_size(struct dc_object *obj)
 	return obj->cob_grp_size;
 }
 
+int
+obj_get_grp_nr(struct dc_object *obj)
+{
+	return obj->cob_grp_nr;
+}
+
 /* Get a valid shard from an object group */
 static int
 obj_grp_valid_shard_get(struct dc_object *obj, int grp_idx,
@@ -5270,34 +5276,52 @@ shard_query_key_task(tse_task_t *task)
 	return rc;
 }
 
-struct shard_task_reset_query_target_args {
-	uint32_t	shard;
-	uint32_t	replicas;
-	uint32_t	version;
-	uint32_t	flags;
-};
-
 static int
-shard_task_reset_query_target(tse_task_t *shard_task, void *arg)
+queue_shard_query_key_task(tse_task_t *api_task, struct obj_auxi_args *obj_auxi,
+			   struct dtx_epoch *epoch, int shard, unsigned int map_ver,
+			   struct dc_object *obj, uint64_t dkey_hash, struct dtx_id *dti,
+			   uuid_t coh_uuid, uuid_t cont_uuid)
 {
-	struct shard_task_reset_query_target_args	*reset_arg = arg;
-	struct shard_auxi_args				*auxi_arg;
-	int						 rc;
+	daos_obj_query_key_t		*api_args = dc_task_get_args(api_task);
+	tse_sched_t			*sched = tse_task2sched(api_task);
+	tse_task_t			*task;
+	struct shard_query_key_args	*args;
+	d_list_t			*head = NULL;
+	int				rc;
 
-	auxi_arg = tse_task_buf_embedded(shard_task, sizeof(*auxi_arg));
-	if (reset_arg->flags & DAOS_GET_DKEY) {
-		rc = obj_grp_leader_get(auxi_arg->obj, reset_arg->shard,
-					reset_arg->version);
-		if (rc < 0)
-			return rc;
-		auxi_arg->shard = rc;
-	} else {
-		auxi_arg->shard = reset_arg->shard;
-	}
-	rc = obj_shard2tgtid(auxi_arg->obj, auxi_arg->shard, reset_arg->version,
-			     &auxi_arg->target);
-	reset_arg->shard += reset_arg->replicas;
+	rc = tse_task_create(shard_query_key_task, sched, NULL, &task);
+	if (rc != 0)
+		return rc;
 
+	args = tse_task_buf_embedded(task, sizeof(*args));
+	args->kqa_api_args	= api_args;
+	args->kqa_auxi.epoch	= *epoch;
+	args->kqa_auxi.shard	= shard;
+	args->kqa_auxi.map_ver	= map_ver;
+	args->kqa_auxi.obj	= obj;
+	args->kqa_auxi.obj_auxi	= obj_auxi;
+	args->kqa_dkey_hash	= dkey_hash;
+	args->kqa_dti		= *dti;
+	uuid_copy(args->kqa_coh_uuid, coh_uuid);
+	uuid_copy(args->kqa_cont_uuid, cont_uuid);
+
+	rc = obj_shard2tgtid(obj, shard, map_ver,
+			     &args->kqa_auxi.target);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
+
+	rc = tse_task_register_deps(api_task, 1, &task);
+	if (rc != 0)
+		D_GOTO(out_task, rc);
+
+	head = &obj_auxi->shard_task_head;
+	/* decref and delete from head at shard_task_remove */
+	tse_task_addref(task);
+	tse_task_list_add(task, head);
+
+out_task:
+	if (rc)
+		tse_task_complete(task, rc);
 	return rc;
 }
 
@@ -5305,7 +5329,6 @@ int
 dc_obj_query_key(tse_task_t *api_task)
 {
 	daos_obj_query_key_t	*api_args = dc_task_get_args(api_task);
-	tse_sched_t		*sched = tse_task2sched(api_task);
 	struct obj_auxi_args	*obj_auxi;
 	struct dc_object	*obj;
 	d_list_t		*head = NULL;
@@ -5313,12 +5336,8 @@ dc_obj_query_key(tse_task_t *api_task)
 	uuid_t			coh_uuid;
 	uuid_t			cont_uuid;
 	int			shard_first;
-	unsigned int		replicas, step;
-	unsigned int		query_nr = 0, tgt_nr = 0;
 	unsigned int		map_ver = 0;
 	uint64_t		dkey_hash;
-	bool			is_ec_obj;
-	bool			ec_query_data_tgt = false;
 	struct dtx_epoch	epoch;
 	struct dtx_id		dti;
 	int			i = 0;
@@ -5364,12 +5383,10 @@ dc_obj_query_key(tse_task_t *api_task)
 	D_ASSERTF(api_args->dkey != NULL, "dkey should not be NULL\n");
 	dkey_hash = obj_dkey2hash(obj->cob_md.omd_id, api_args->dkey);
 	if (api_args->flags & DAOS_GET_DKEY) {
-		replicas = obj_get_replicas(obj);
 		shard_first = 0;
 		/** set data len to 0 before retrieving dkey. */
 		api_args->dkey->iov_len = 0;
 	} else {
-		replicas = obj->cob_shards_nr;
 		/* For the specified dkey, only need to query one replica. */
 		shard_first = obj_dkey2shard(obj, dkey_hash, map_ver,
 					     obj_auxi->to_leader,
@@ -5397,113 +5414,57 @@ dc_obj_query_key(tse_task_t *api_task)
 				goto out_task;
 		}
 
-		/* The RPC may need to be resent to (new) leader. */
-		if (srv_io_mode != DIM_CLIENT_DISPATCH) {
-			struct shard_task_reset_query_target_args	arg;
-
-			arg.shard = shard_first;
-			arg.replicas = replicas;
-			arg.version = map_ver;
-			arg.flags = api_args->flags;
-			tse_task_list_traverse(head,
-					shard_task_reset_query_target, &arg);
-		}
-
-		goto task_sched;
+		/* Let's always remove the previous shard tasks for retry, since
+		 * the leader status might change.
+		 */
+		tse_task_list_traverse(head, shard_task_remove, NULL);
+		D_ASSERT(d_list_empty(head));
+		obj_auxi->args_initialized = 0;
 	}
 
 	D_ASSERT(!obj_auxi->args_initialized);
 	D_ASSERT(d_list_empty(head));
 
-	step = replicas;
-	is_ec_obj = obj_is_ec(obj);
-	for (i = 0; i < obj->cob_shards_nr; i += step) {
-		tse_task_t			*task;
-		struct shard_query_key_args	*args;
-		struct daos_oclass_attr		*oca;
-		int				 shard;
+	for (i = 0; i < obj_get_grp_nr(obj); i++) {
+		int start_shard;
+		int j;
 
-		if (api_args->flags & DAOS_GET_DKEY) {
-			/* for EC obj, will query from all data shards if
-			 * obj_grp_leader_get failed (no parity available).
-			 */
-			if (ec_query_data_tgt) {
-				shard = i;
-				query_nr++;
-				D_ASSERT(query_nr <= tgt_nr);
-				if (query_nr == tgt_nr) {
-					i -= (tgt_nr - 1);
-					D_ASSERT(i >= 0 && (i % replicas == 0));
-					step = replicas;
-					ec_query_data_tgt = false;
-				}
-				goto shard_task_create;
-			}
-			/* Send to leader replica directly for reducing
-			 * retry because some potential 'prepared' DTX.
-			 */
-			shard = obj_grp_leader_get(obj, i, map_ver);
-			if (shard < 0 ||
-			    unlikely(DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
-				if (!is_ec_obj) {
-					rc = shard;
-					D_ERROR(DF_OID" no valid shard, rc "
-						DF_RC"\n",
-						DP_OID(obj->cob_md.omd_id),
-						DP_RC(rc));
+		/* Try leader for current group */
+		start_shard = i * obj_get_grp_size(obj);
+		if (!obj_is_ec(obj) || likely(!DAOS_FAIL_CHECK(DAOS_OBJ_SKIP_PARITY))) {
+			int leader;
+
+			leader = obj_grp_leader_get(obj, start_shard, map_ver);
+			if (leader >= 0) {
+				rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, leader,
+								map_ver, obj, dkey_hash, &dti,
+								coh_uuid, cont_uuid);
+				if (rc)
 					D_GOTO(out_task, rc);
-				}
-				oca = obj_get_oca(obj);
-				D_ASSERT(shard_first == 0 &&
-					 (i % replicas == 0));
-				shard = i;
-				tgt_nr = obj_ec_data_tgt_nr(oca);
-				query_nr = 1;
-				step = 1;
-				ec_query_data_tgt = true;
+				continue;
 			}
-		} else {
-			shard = shard_first + i;
+
+			if (!obj_is_ec(obj)) {
+				/* There has to be a leader for non-EC object */
+				D_ERROR(DF_OID" no valid shard, rc " DF_RC"\n",
+					DP_OID(obj->cob_md.omd_id), DP_RC(leader));
+				D_GOTO(out_task, rc = leader);
+			}
 		}
 
-shard_task_create:
-		rc = tse_task_create(shard_query_key_task, sched, NULL, &task);
-		if (rc != 0)
-			D_GOTO(out_task, rc);
-
-		args = tse_task_buf_embedded(task, sizeof(*args));
-		args->kqa_api_args	= api_args;
-		args->kqa_auxi.epoch	= epoch;
-		args->kqa_auxi.shard	= shard;
-		args->kqa_auxi.map_ver	= map_ver;
-		args->kqa_auxi.obj	= obj;
-		args->kqa_auxi.obj_auxi	= obj_auxi;
-		args->kqa_dkey_hash	= dkey_hash;
-		args->kqa_dti		= dti;
-		uuid_copy(args->kqa_coh_uuid, coh_uuid);
-		uuid_copy(args->kqa_cont_uuid, cont_uuid);
-
-		rc = obj_shard2tgtid(obj, shard, map_ver,
-				     &args->kqa_auxi.target);
-		if (rc != 0) {
-			tse_task_complete(task, rc);
-			D_GOTO(out_task, rc);
+		/* Then Try non-leader shards */
+		D_DEBUG(DB_IO, DF_OID" try non-leader shards for group %d.\n",
+			DP_OID(obj->cob_md.omd_id), i);
+		for (j = start_shard; j < start_shard + obj_ec_data_tgt_nr(&obj->cob_oca); j++) {
+			rc = queue_shard_query_key_task(api_task, obj_auxi, &epoch, j, map_ver,
+							obj, dkey_hash, &dti, coh_uuid, cont_uuid);
+			if (rc)
+				D_GOTO(out_task, rc);
 		}
-
-		rc = tse_task_register_deps(api_task, 1, &task);
-		if (rc != 0) {
-			tse_task_complete(task, rc);
-			D_GOTO(out_task, rc);
-		}
-
-		/* decref and delete from head at shard_task_remove */
-		tse_task_addref(task);
-		tse_task_list_add(task, head);
 	}
 
 	obj_auxi->args_initialized = 1;
 
-task_sched:
 	obj_shard_task_sched(obj_auxi, &epoch);
 	return rc;
 
