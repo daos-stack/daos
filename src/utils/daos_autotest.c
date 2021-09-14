@@ -443,7 +443,7 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 				evp);
 		if (rc)
 			break;
-		}
+
 		increment_progress(i);
 	}
 
@@ -851,6 +851,7 @@ kv_insertrf1(void)
 		step_fail("failed to open object: %s", d_errdesc(rc));
 		return -1;
 	}
+
 	put_rc = kv_put(oh, 128, 1000000);
 	rc = daos_kv_close(oh, NULL);
 
