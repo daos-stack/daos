@@ -377,8 +377,7 @@ xs_poll_completion(struct bio_xs_context *ctxt, unsigned int *inflights,
 		if (timeout != 0) {
 			cur_time = daos_getmtime_coarse();
 
-			D_ASSERT(cur_time >= start_time);
-			if (cur_time - start_time > timeout)
+			if (cur_time > (start_time + timeout))
 				return -DER_TIMEDOUT;
 		}
 	}
