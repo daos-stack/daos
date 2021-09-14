@@ -27,8 +27,11 @@ class ZeroConfigTest(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
+        """Initialize the ZeroConfigTest class."""
         super().__init__(*args, **kwargs)
         self.dev_info = {}
+        self.start_agents_once = False
+        self.start_servers_once = False
 
     def setUp(self):
         """Set up for zero-config test."""
@@ -139,14 +142,17 @@ class ZeroConfigTest(TestWithServers):
             bool: returns status
 
         """
+        clients = self.agent_managers[0].hosts
+
         # Get counter values for hfi devices before and after
-        cnt_before = self.get_port_cnt(self.hostlist_clients, exp_iface, "port_rcv_data")
+        cnt_before = self.get_port_cnt(clients, exp_iface, "port_rcv_data")
+        self.log.info("Port [%s] count before: %s", exp_iface, cnt_before)
 
         # get the dmg config file for daos_racer
         dmg = self.get_dmg_command()
 
         # Let's run daos_racer as a client
-        daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], dmg)
+        daos_racer = DaosRacerCommand(self.bin, clients[0], dmg)
         daos_racer.get_params(self)
 
         # Update env_name list to add OFI_INTERFACE if needed.
@@ -154,10 +160,10 @@ class ZeroConfigTest(TestWithServers):
             daos_racer.update_env_names(["OFI_INTERFACE"])
 
         # Setup the environment and logfile
-        logf = "daos_racer_{}_{}.log".format(exp_iface, env)
+        log_file = "daos_racer_{}_{}.log".format(exp_iface, env)
 
         # Add FI_LOG_LEVEL to get more info on device issues
-        racer_env = daos_racer.get_environment(self.server_managers[0], logf)
+        racer_env = daos_racer.get_environment(self.server_managers[0], log_file)
         racer_env["FI_LOG_LEVEL"] = "info"
         racer_env["D_LOG_MASK"] = "INFO,object=ERR,placement=ERR"
         daos_racer.set_environment(racer_env)
@@ -166,8 +172,8 @@ class ZeroConfigTest(TestWithServers):
         daos_racer.run()
 
         # Verify output and port count to check what iface CaRT init with.
-        cnt_after = self.get_port_cnt(
-            self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
+        cnt_after = self.get_port_cnt(clients, exp_iface, "port_rcv_data")
+        self.log.info("Port [%s] count after: %s", exp_iface, cnt_after)
 
         diff = 0
         for cnt_b, cnt_a in zip(cnt_before, cnt_after):
@@ -175,9 +181,7 @@ class ZeroConfigTest(TestWithServers):
             self.log.info("Port [%s] count difference: %s", exp_iface, diff)
 
         # Read daos.log to verify device used and prevent false positives
-        self.assertTrue(
-            self.get_log_info(
-                self.hostlist_clients, exp_iface, env, get_log_file(logf)))
+        self.assertTrue(self.get_log_info(clients, exp_iface, env, get_log_file(log_file)))
 
         # If we don't see data going through the device, fail
         status = True
@@ -222,12 +226,12 @@ class ZeroConfigTest(TestWithServers):
                 "pinned_numa_node", self.dev_info[exp_iface]["numa"]),
             "Error updating daos_server 'pinned_numa_node' config opt")
 
-        # Start the daos server
+        # Start the daos server and daos agents
         self.start_server_managers()
+        self.start_agent_managers()
+        self.write_string_to_logfile('"Test.name: ' + str(self) + '"')
 
         # Verify
-        err = []
         if not self.verify_client_run(exp_iface, env_state):
-            err.append("Failed run with expected dev: {}".format(exp_iface))
-
-        self.assertEqual(len(err), 0, "{}".format("\n".join(err)))
+            self.fail("Failed run with expected dev: {}".format(exp_iface))
+        self.log.info("Test passed!")
