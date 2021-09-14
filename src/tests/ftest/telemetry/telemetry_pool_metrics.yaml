@@ -3,7 +3,7 @@ hosts:
     - server-A
     - server-B
   test_clients:
-    - client-A
+    - client-C
 timeout: 240
 server_config:
   engines_per_host: 2
