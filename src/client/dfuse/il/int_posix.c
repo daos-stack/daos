@@ -871,8 +871,11 @@ dfuse_open(const char *pathname, int flags, ...)
 		mode = 0;
 	}
 
-	if (!ioil_iog.iog_initialized || (fd == -1))
+	if (!ioil_iog.iog_initialized || (fd == -1)) {
+		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring with failure %d %d",
+				pathname, ioil_iog.iog_initialized, fd);
 		return fd;
+	}
 
 	if (!dfuse_check_valid_path(pathname)) {
 		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by path",
