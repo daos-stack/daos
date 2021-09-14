@@ -32,11 +32,8 @@ class ZeroConfigTest(TestWithServers):
         self.dev_info = {}
         self.start_agents_once = False
         self.start_servers_once = False
-
-    def setUp(self):
-        """Set up for zero-config test."""
         self.setup_start_servers = False
-        super().setUp()
+        self.setup_start_agents = False
 
     def get_device_info(self):
         """Get the available device names, their numa nodes, and their domains."""
@@ -210,13 +207,7 @@ class ZeroConfigTest(TestWithServers):
         exp_iface = random.choice(list(self.dev_info.keys()))
 
         # Configure the daos server
-        self.add_server_manager()
-        self.configure_manager(
-            "server",
-            self.server_managers[0],
-            self.hostlist_servers,
-            self.hostfile_servers_slots,
-            self.access_points)
+        self.setup_servers()
         self.assertTrue(
             self.server_managers[0].set_config_value(
                 "fabric_iface", exp_iface),
@@ -228,7 +219,7 @@ class ZeroConfigTest(TestWithServers):
 
         # Start the daos server and daos agents
         self.start_server_managers()
-        self.start_agent_managers()
+        self.start_agents()
         self.write_string_to_logfile('"Test.name: ' + str(self) + '"')
 
         # Verify
