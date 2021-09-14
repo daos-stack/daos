@@ -360,6 +360,11 @@ int sched_req_space_check(struct sched_request *req);
  */
 void sched_cond_wait(ABT_cond cond, ABT_mutex mutex);
 
+/**
+ * Get current monotonic time in milli-seconds.
+ */
+uint64_t sched_cur_msec(void);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
@@ -612,7 +617,7 @@ enum dss_rpc_cntr_id {
 /** RPC counter */
 struct dss_rpc_cntr {
 	/**
-	 * starting wall-clock time, it can be used to calculate average
+	 * starting monotonic time, it can be used to calculate average
 	 * workload.
 	 */
 	uint64_t		rc_stime;
