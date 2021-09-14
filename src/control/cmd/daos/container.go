@@ -653,7 +653,7 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
 			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
-			{"Latest Persistent Snapshot": fmt.Sprintf("%d", *ci.LatestSnapshot)},
+			{"Latest Persistent Snapshot": fmt.Sprintf("%x", *ci.LatestSnapshot)},
 			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
 		}...)
 
