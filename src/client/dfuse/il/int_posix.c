@@ -968,6 +968,8 @@ dfuse_read(int fd, void *buf, size_t len)
 	off_t oldpos;
 	int rc;
 
+	DFUSE_LOG_DEBUG("read(fd=%d) checking file", fd);
+
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_read;
@@ -1000,6 +1002,8 @@ dfuse_pread(int fd, void *buf, size_t count, off_t offset)
 	struct fd_entry *entry;
 	ssize_t bytes_read;
 	int rc;
+
+	DFUSE_LOG_DEBUG("pread(fd=%d) checking file", fd);
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
