@@ -333,6 +333,10 @@ class Snapshot(TestWithServers):
                                     '/run/snapshot/*', default=150)
         snapshot_loop = self.params.get("num_of_snapshot",
                                         '/run/snapshot/*', default=3)
+        if data_size > 1000:
+            display_testdata = False
+        else:
+            display_testdata = True
         #
         # Test loop for creat, modify and snapshot object in the DAOS container.
         #
@@ -404,8 +408,9 @@ class Snapshot(TestWithServers):
             except Exception as error:
                 self.fail("##(3.1)Error when retrieving the snapshot data: {}"
                           .format(str(error)))
-            self.display_snapshot_test_data(test_data, ss_number)
-            self.log.info("  ==thedata3.value= %s", thedata3.value)
+            if display_testdata:
+                self.display_snapshot_test_data(test_data, ss_number)
+                self.log.info("  ==thedata3.value= %s", thedata3.value)
             if thedata3.value != thedata:
                 raise Exception("##(3.2)The data in the snapshot is not the "
                                 "same as the original data")
@@ -430,7 +435,8 @@ class Snapshot(TestWithServers):
             ss_number = ind + 1
             self.log.info("=(5.%s)Verify the snapshot number %s:"
                           , ss_number, ss_number)
-            self.display_snapshot_test_data(test_data, ss_number)
+            if display_testdata:
+                self.display_snapshot_test_data(test_data, ss_number)
             coh = test_data[ind]["coh"]
             current_ss = test_data[ind]["snapshot"]
             obj = test_data[ind]["tst_obj"]
@@ -445,7 +451,8 @@ class Snapshot(TestWithServers):
             except Exception as error:
                 self.fail("##(5.1)Error when retrieving the snapshot data: {}"
                           .format(str(error)))
-            self.log.info("  ==snapshot tst_data =%s", thedata5.value)
+            if display_testdata:
+                self.log.info("  ==snapshot tst_data =%s", thedata5.value)
             if thedata5.value != tst_data:
                 raise Exception("##(5.2)Snapshot #{}, test data Mis-matches"
                                 "the original data written.".format(ss_number))
@@ -475,8 +482,9 @@ class Snapshot(TestWithServers):
         except Exception as error:
             self.fail("##(7)Error when retrieving the snapshot data: {}"
                       .format(str(error)))
-        self.log.info("=(7)=>thedata_after_snapshot.destroyed.value= %s",
-                      thedata7.value)
+        if display_testdata:
+            self.log.info("=(7)=>thedata_after_snapshot.destroyed.value= %s",
+                          thedata7.value)
         self.log.info("  ==>snapshot.epoch=     %s", snapshot.epoch)
 
         # Still able to open the snapshot and read data after destroyed.
