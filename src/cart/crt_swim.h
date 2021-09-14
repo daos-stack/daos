@@ -59,9 +59,11 @@ crt_swim_rpc_timeout(void)
 	uint32_t timeout_sec;
 
 	/*
-	 * Convert SWIM ping timeout from ms to seconds with rounding up
+	 * Convert SWIM ping timeout from ms to seconds with rounding up.
+	 * Increase it by 2 seconds to avoid early expiration by timeout
+	 * in case of network glitches.
 	 */
-	timeout_sec = 1 + swim_ping_timeout_get() / 1000 /* ms per sec */;
+	timeout_sec = 3 + swim_ping_timeout_get() / 1000 /* ms per sec */;
 
 	return timeout_sec;
 }
