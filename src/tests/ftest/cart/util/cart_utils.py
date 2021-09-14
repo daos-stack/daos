@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from daos.src.tests.ftest.util.job_manager_utils import Orterun
 import time
 import os
 import shlex
@@ -18,7 +17,9 @@ import glob
 
 from apricot import TestWithoutServers
 from general_utils import stop_processes
+from job_manager_utils import Orterun
 from write_host_file import write_host_file
+
 
 class CartTest(TestWithoutServers):
     """Define a Cart test case."""
