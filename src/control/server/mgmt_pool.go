@@ -499,6 +499,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	req.SetUUID(uuid)
 
 	ds := drpc.DaosSuccess
+	resp := &mgmtpb.PoolDestroyResp{}
 	inCleanupMode := false
 	if ps.State == system.PoolServiceStateDestroying {
 		// If we already tried to destroy the pool but it failed for some
@@ -509,7 +510,7 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 	} else {
 		req.SvcRanks = system.RanksToUint32(ps.Replicas)
 
-		// Pool handle eviction step (first try only): perform separate PoolEvict _before_ transitioning to destroying state (see below)
+		// Perform separate PoolEvict _before_ possible transition to destroying state.
 		evreq := &mgmtpb.PoolEvictReq{}
 		evreq.Sys = req.Sys
 		evreq.Id = req.Id
@@ -524,37 +525,26 @@ func (svc *mgmtSvc) PoolDestroy(ctx context.Context, req *mgmtpb.PoolDestroyReq)
 		}
 		ds = drpc.DaosStatus(evresp.Status)
 		svc.log.Debugf("MgmtSvc.PoolDestroy drpc.MethodPoolEvict, evresp:%+v\n", evresp)
-		if ds != drpc.DaosSuccess {
-			svc.log.Errorf("PoolEvict (first step of destroy) dRPC call failed: %s", ds)
-		}
-	}
 
-	// If evict failed because of open handles (DER_BUSY) leave pool in operational state.
-	// If evict succeeded, or evict otherwise failed, transition pool to destroying state.
-	if ps.State != system.PoolServiceStateDestroying {
+		// Transition pool state (unless evict returned busy, and not force destroying).
+		if !(ds == drpc.DaosBusy && !req.Force) {
+			ps.State = system.PoolServiceStateDestroying
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
+			}
+		}
+
+		// If the destroy request is being forced, we should additionally zap the label
+		// so the entry doesn't prevent a new pool with the same label from being created.
 		if req.Force {
-			// If the destroy request is being forced, we should zap
-			// the label so that the entry doesn't prevent a new pool
-			// with the same label from being created.
 			ps.PoolLabel = ""
-
-			ps.State = system.PoolServiceStateDestroying
-			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
-			}
-		} else if ds != drpc.DaosBusy {
-			ps.State = system.PoolServiceStateDestroying
-			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-				return nil, errors.Wrapf(err, "failed to update pool %s", uuid)
-			}
 		}
-	}
 
-	resp := &mgmtpb.PoolDestroyResp{}
-	if ds != drpc.DaosSuccess {
-		resp.Status = int32(ds)
-		svc.log.Debugf("MgmtSvc.PoolDestroy NOT issuing drpc.MethodPoolDestroy, req:%+v\n", req)
-		return resp, nil
+		if ds != drpc.DaosSuccess {
+			svc.log.Errorf("PoolEvict (first step of destroy) failed: %s", ds)
+			resp.Status = int32(ds)
+			return resp, nil
+		}
 	}
 
 	// Now on to the rest of the pool destroy, issue drpc.MethodPoolDestroy.
