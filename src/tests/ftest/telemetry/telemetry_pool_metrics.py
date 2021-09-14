@@ -132,7 +132,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             and for RF=2 (with RP_2GX) sum should be double the size of
             workload for write but same for read.
         :avocado: tags=all,daily_regression
-        :avocado: tags=vm
+        :avocado: tags=hw,small
         :avocado: tags=telemetry
         :avocado: tags=telemetry_pool_metrics
 
