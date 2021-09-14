@@ -22,7 +22,7 @@ hosts:
   test_clients:
     - client-A
     - client-B
-timeout: 2500
+timeout: 600
 server_config:
   engines_per_host: 2
   name: daos_server
