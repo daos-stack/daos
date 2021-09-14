@@ -639,7 +639,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				ForceDestroy: false,
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
 					Status: int32(drpc.DaosBusy),
 				}, nil)
 			},
@@ -658,7 +658,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				ForceDestroy: false,
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
 					Status: int32(drpc.DaosMiscError),
 				}, nil)
 			},
@@ -677,7 +677,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				ForceDestroy: true,
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
 					Status: int32(drpc.DaosMiscError),
 				}, nil)
 			},
@@ -745,7 +745,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				ForceDestroy: false,
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
 					Status: int32(drpc.DaosNotLeader),
 				}, nil)
 			},
@@ -787,7 +787,7 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				ForceDestroy: false,
 			},
 			setupMockDrpc: func(svc *mgmtSvc, err error) {
-				setupMockDrpcClient(svc, &mgmtpb.PoolDestroyResp{
+				setupMockDrpcClient(svc, &mgmtpb.PoolEvictResp{
 					Status: int32(drpc.DaosNotReplica),
 				}, nil)
 			},
