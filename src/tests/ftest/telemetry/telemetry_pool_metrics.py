@@ -112,7 +112,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                               "is out of expected {} percent range"
                               .format(final_value[-1], self.threshold_percent))
 
-    def test_telmetry_pool_metrics(self):
+    def test_telemetry_pool_metrics(self):
         """JIRA ID: DAOS-8357
 
             Create files of 500M and 1M with transfer size 1M to verify the
@@ -122,7 +122,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
             Create Container
             Generate deterministic workload. Usinf ior to write 512M
             of data with 1M chunk size and 1M transfer size.
-            Use telemtry command to get values of 4 paramters
+            Use telemetry command to get values of 4 parameters
             "engine_pool_ops_fetch", "engine_pool_ops_update",
             "engine_pool_xferred_fetch", "engine_pool_xferred_update"
             for all targets.
