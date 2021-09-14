@@ -127,7 +127,8 @@ struct ec_agg_param {
 	uint32_t		 ap_credits_max; /* # of tight loops to yield */
 	uint32_t		 ap_credits;     /* # of tight loops          */
 	uint32_t		 ap_initialized:1, /* initialized flag */
-				 ap_yielded:1;	   /* yielded */
+				 ap_yielded:1,	   /* yielded */
+				 ap_obj_skipped:1; /* skipped obj during aggregation */
 };
 
 /* Struct used to drive offloaded stripe update.
@@ -2235,6 +2236,8 @@ agg_object(daos_handle_t ih, vos_iter_entry_t *entry,
 		if (rc < 0) {
 			D_ERROR("oid:"DF_UOID" ds_pool_check_leader failed "
 				DF_RC"\n", DP_UOID(entry->ie_oid), DP_RC(rc));
+			if (rc == -DER_STALE)
+				agg_param->ap_obj_skipped = 1;
 			rc = 0;
 		}
 		*acts |= VOS_ITER_CB_SKIP;
@@ -2488,6 +2491,7 @@ cont_ec_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 	}
 
 	ec_agg_param->ap_dth = &dth;
+	ec_agg_param->ap_obj_skipped = 0;
 
 again:
 	rc = vos_iterate(&iter_param, VOS_ITER_OBJ, true, &anchors,
@@ -2513,7 +2517,10 @@ again:
 		ec_agg_param->ap_agg_entry.ae_obj_hdl = DAOS_HDL_INVAL;
 	}
 
-	if (rc == 0)
+	if (ec_agg_param->ap_obj_skipped)
+		D_ERROR("with skipped obj during aggregation.\n");
+
+	if (rc == 0 && ec_agg_param->ap_obj_skipped == 0)
 		cont->sc_ec_agg_eph = max(cont->sc_ec_agg_eph, epr->epr_hi);
 
 	return rc;

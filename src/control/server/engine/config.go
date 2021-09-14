@@ -304,6 +304,12 @@ func (c *Config) WithStorageVosEnv(ve string) *Config {
 	return c
 }
 
+// WithStorageEnableHotplug sets EnableHotplug in engine storage.
+func (c *Config) WithStorageEnableHotplug(enable bool) *Config {
+	c.Storage.EnableHotplug = enable
+	return c
+}
+
 // WithSocketDir sets the path to the instance's dRPC socket directory.
 func (c *Config) WithSocketDir(dir string) *Config {
 	c.SocketDir = dir

@@ -848,8 +848,8 @@ class TestPool(TestDaosApiBase):
                                     "timeout can be adjusted via the "
                                     "'pool/pool_query_timeout' test yaml "
                                     "parameter.".format(
-                                        self.identifier,
-                                        self.pool_query_timeout.value)) \
+                                        self.pool_query_timeout.value,
+                                        self.identifier)) \
                                             from error
                         else:
                             raise CommandFailure(error) from error
