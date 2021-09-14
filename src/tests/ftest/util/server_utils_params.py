@@ -134,7 +134,6 @@ class DaosServerYamlParameters(YamlParameters):
 
         self.fault_path = BasicParameter(None)
 
-
     def get_params(self, test):
         """Get values for all of the command params from the yaml file.
 
@@ -380,6 +379,8 @@ class DaosServerYamlParameters(YamlParameters):
                     "FI_SOCKETS_CONN_TIMEOUT=2000",
                     "CRT_SWIM_RPC_TIMEOUT=10"
                 ])
+            elif "ofi_rxm" in default_provider:
+                default_env_vars.append("FI_OFI_RXM_USE_SRX=1")
             self.env_vars = BasicParameter(None, default_env_vars)
 
             # global CRT_CTX_SHARE_ADDR shared with client
