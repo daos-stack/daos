@@ -665,7 +665,7 @@ PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
 The next step consists of specifying the devices that should be used by DAOS
 in the server configuration YAML file.
 The `engines` section of the config is a list with details for each DAOS engine
-to be started on the host (maximum of 2 per host).
+to be started on the host (one engine will be created for each entry in list).
 
 Devices with the same NUMA rating/node/socket should be colocated on a single
 DAOS engine where possible.
