@@ -62,7 +62,7 @@ ior:
   chunk_block_transfer_sizes:
    #[ChunkSize, BlocksSize, TransferSize]
    - [8MB, 16MB, 128]
-   - [1MB, 8MB, 1M]
+   - [16MB, 8MB, 1M]
   objectclass:
    dfs_oclass_list:
     #[EC_Object_Class, Minimum number of servers]
