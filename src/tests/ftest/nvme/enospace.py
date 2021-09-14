@@ -52,8 +52,12 @@ class NvmeEnospace(ServerFillUp):
         self.der_nospace_count, self.other_errors_count = error_count(
             "-1007", self.hostlist_clients, self.client_log)
 
-        #Check there are no other errors in log file
-        if self.other_errors_count > 0:
+        #Get the DER_NO_HDL and other error count from log
+        der_nohdl_count, other_nohdl_errors = error_count(
+            "-1002", self.hostlist_clients, self.client_log)
+
+        #Check there are no other errors in log file except DER_NO_HDL
+        if self.other_errors_count != der_nohdl_count:
             self.fail('Found other errors, count {} in client log {}'
                       .format(self.other_errors_count, self.client_log))
         #Check the DER_NOSPACE error count is higher if not test will FAIL
@@ -73,6 +77,7 @@ class NvmeEnospace(ServerFillUp):
         #Destroy all the containers
         for _cont in containers:
             kwargs["cont"] = _cont
+            kwargs["force"] = True
             self.daos_cmd.container_destroy(**kwargs)
 
     def ior_bg_thread(self, results):
@@ -212,7 +217,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7018")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -274,7 +278,6 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
-    @skipForTicket("DAOS-7018")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -302,12 +305,13 @@ class NvmeEnospace(ServerFillUp):
         #Repeat the test in loop.
         for _loop in range(10):
             print("-------enospc_time_fg Loop--------- {}".format(_loop))
+            print(self.pool.pool_percentage_used())
             #Run IOR to fill the pool.
             self.run_enospace_with_bg_job()
             #Delete all the containers
             self.delete_all_containers()
             #Delete container will take some time to release the space
-            time.sleep(60)
+            time.sleep(120)
 
         #Run last IO
         self.start_ior_load(storage='SCM', percent=1)
@@ -354,7 +358,6 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
-    @skipForTicket("DAOS-7018")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 
