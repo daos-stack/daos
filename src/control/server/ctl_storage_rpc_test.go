@@ -316,9 +316,6 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				ei.(*EngineInstance).ready.SetFalse()
 			}
 
-			// TODO DAOS-8040: re-enable VMD
-			// t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
-
 			if tc.req == nil {
 				tc.req = &ctlpb.StorageScanReq{
 					Scm:  new(ctlpb.ScanScmReq),
@@ -975,9 +972,6 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 			sCfg := config.DefaultServer().WithEngines(engineCfgs...)
 			cs := mockControlService(t, log, sCfg, tc.bmbc, tc.smbc, tc.smsc)
 
-			// TODO DAOS-8040: re-enable VMD
-			// t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
-
 			// In production, during server/server.go:srv.addEngines() and after
 			// srv.createEngine(), engine.storage.SetBdevCache() is called to load the
 			// results of the start-up bdev scan from the control service storage
@@ -988,9 +982,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 
 			// This block mimics control service start-up and engine creation where
 			// cache is shared, Setup() runs discovery for nvme & scm.
-			if err := cs.Setup(); err != nil {
-				t.Fatal(err)
-			}
+			cs.Setup()
 			nvmeScanResp, err := cs.NvmeScan(storage.BdevScanRequest{})
 			if err != nil {
 				t.Fatal(err)
@@ -1539,13 +1531,8 @@ func TestServer_CtlSvc_StorageFormat(t *testing.T) {
 			instances := cs.harness.Instances()
 			common.AssertEqual(t, len(tc.sMounts), len(instances), name)
 
-			// TODO DAOS-8040: re-enable VMD
-			// t.Logf("VMD disabled: %v", cs.bdev.IsVMDDisabled())
-
 			// runs discovery for nvme & scm
-			if err := cs.Setup(); err != nil {
-				t.Fatal(err.Error() + name)
-			}
+			cs.Setup()
 
 			for i, e := range instances {
 				ei := e.(*EngineInstance)

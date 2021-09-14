@@ -601,7 +601,7 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
-/* b<o_config.c */
+/* bio_config.c */
 int bio_add_allowed_alloc(const char *json_config_file,
 			  struct spdk_env_opts *opts);
 #endif /* __BIO_INTERNAL_H__ */
