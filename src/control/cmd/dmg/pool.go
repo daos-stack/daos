@@ -25,21 +25,21 @@ import (
 
 // PoolCmd is the struct representing the top-level pool subcommand.
 type PoolCmd struct {
-	Create       PoolCreateCmd       `command:"create" alias:"c" description:"Create a DAOS pool"`
-	Destroy      PoolDestroyCmd      `command:"destroy" alias:"d" description:"Destroy a DAOS pool"`
-	Evict        PoolEvictCmd        `command:"evict" alias:"ev" description:"Evict all pool connections to a DAOS pool"`
+	Create       PoolCreateCmd       `command:"create" description:"Create a DAOS pool"`
+	Destroy      PoolDestroyCmd      `command:"destroy" description:"Destroy a DAOS pool"`
+	Evict        PoolEvictCmd        `command:"evict" description:"Evict all pool connections to a DAOS pool"`
 	List         PoolListCmd         `command:"list" alias:"ls" description:"List DAOS pools"`
-	Extend       PoolExtendCmd       `command:"extend" alias:"ext" description:"Extend a DAOS pool to include new ranks."`
-	Exclude      PoolExcludeCmd      `command:"exclude" alias:"e" description:"Exclude targets from a rank"`
-	Drain        PoolDrainCmd        `command:"drain" alias:"d" description:"Drain targets from a rank"`
-	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"r" description:"Reintegrate targets for a rank"`
-	Query        PoolQueryCmd        `command:"query" alias:"q" description:"Query a DAOS pool"`
-	GetACL       PoolGetACLCmd       `command:"get-acl" alias:"ga" description:"Get a DAOS pool's Access Control List"`
-	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" alias:"oa" description:"Overwrite a DAOS pool's Access Control List"`
-	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" alias:"ua" description:"Update entries in a DAOS pool's Access Control List"`
-	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" alias:"da" description:"Delete an entry from a DAOS pool's Access Control List"`
-	SetProp      PoolSetPropCmd      `command:"set-prop" alias:"sp" description:"Set pool property"`
-	GetProp      PoolGetPropCmd      `command:"get-prop" alias:"gp" description:"Get pool properties"`
+	Extend       PoolExtendCmd       `command:"extend" description:"Extend a DAOS pool to include new ranks."`
+	Exclude      PoolExcludeCmd      `command:"exclude" description:"Exclude targets from a rank"`
+	Drain        PoolDrainCmd        `command:"drain" description:"Drain targets from a rank"`
+	Reintegrate  PoolReintegrateCmd  `command:"reintegrate" alias:"reint" description:"Reintegrate targets for a rank"`
+	Query        PoolQueryCmd        `command:"query" description:"Query a DAOS pool"`
+	GetACL       PoolGetACLCmd       `command:"get-acl" description:"Get a DAOS pool's Access Control List"`
+	OverwriteACL PoolOverwriteACLCmd `command:"overwrite-acl" description:"Overwrite a DAOS pool's Access Control List"`
+	UpdateACL    PoolUpdateACLCmd    `command:"update-acl" description:"Update entries in a DAOS pool's Access Control List"`
+	DeleteACL    PoolDeleteACLCmd    `command:"delete-acl" description:"Delete an entry from a DAOS pool's Access Control List"`
+	SetProp      PoolSetPropCmd      `command:"set-prop" description:"Set pool property"`
+	GetProp      PoolGetPropCmd      `command:"get-prop" description:"Get pool properties"`
 }
 
 // PoolCreateCmd is the struct representing the command to create a DAOS pool.

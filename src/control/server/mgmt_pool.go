@@ -230,7 +230,7 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
 		resp.Status = int32(drpc.DaosAlready)
-		if ps.State == system.PoolServiceStateCreating {
+		if ps.State != system.PoolServiceStateReady {
 			resp.Status = int32(drpc.DaosTryAgain)
 			return resp, svc.checkPools(ctx, ps)
 		}
@@ -459,9 +459,11 @@ func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolServic
 		// the cleanup mode of PoolDestroy(), which will cause the
 		// destroy RPC to be sent to all ranks and then the service
 		// will be removed from the system.
-		ps.State = system.PoolServiceStateDestroying
-		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-			return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
+		if ps.State != system.PoolServiceStateDestroying {
+			ps.State = system.PoolServiceStateDestroying
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
+			}
 		}
 
 		// Attempt to destroy the pool.
