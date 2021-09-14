@@ -7,6 +7,12 @@ hosts:
     - server-E
 server_config:
     name: daos_server
+    servers:
+        log_mask: DEBUG,MEM=ERR
+        env_vars:
+            - DD_MASK=all
+            - D_LOG_FILE_APPEND_PID=1
+            - COVFILE=/tmp/test.cov
 timeout: 150
 pool:
     control_method: dmg
