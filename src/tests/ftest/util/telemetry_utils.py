@@ -41,6 +41,7 @@ class TelemetryUtils():
         "engine_pool_ops_tgt_punch",
         "engine_pool_ops_tgt_update",
         "engine_pool_ops_update",
+        "engine_pool_ops_open_active",
         "engine_pool_pool_handles",
         "engine_pool_resent",
         "engine_pool_restarted",
@@ -330,7 +331,12 @@ class TelemetryUtils():
         "engine_net_ofi_sockets_req_timeout",
         "engine_net_ofi_sockets_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
-        "engine_net_uri_lookup_self"]
+        "engine_net_uri_lookup_self",
+        "engine_net_failed_addr",
+        "engine_net_req_timeout",
+        "engine_net_uri_lookup_other",
+        "engine_net_uri_lookup_self",
+        "engine_net_uri_lookup_timeout"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     GO_METRICS = [
