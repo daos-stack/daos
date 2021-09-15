@@ -226,7 +226,7 @@
           <version>${surefire.version}</version>
           <configuration>
             <argLine>
-              --add-opens java.xml/jdk.xml.internal=ALL-UNNAMED
+              -Dillegal-access=permit
             </argLine>
           </configuration>
         </plugin>
