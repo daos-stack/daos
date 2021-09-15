@@ -429,12 +429,14 @@ open_and_query_key(struct open_query *query, daos_key_t *key,
 			return rc;
 	}
 
-	if (tree_type == VOS_GET_DKEY)
+	if (tree_type == VOS_GET_DKEY) {
 		query->qt_akey_root = &rbund.rb_krec->kr_btr;
-	else if ((rbund.rb_krec->kr_bmap & KREC_BF_EVT) == 0)
-		return -DER_NONEXIST;
-	else
+	} else if ((rbund.rb_krec->kr_bmap & KREC_BF_EVT) == 0) {
+		if (query->qt_flags & VOS_GET_RECX)
+			return -DER_NONEXIST;
+	} else {
 		query->qt_recx_root = &rbund.rb_krec->kr_evt;
+	}
 
 	return 0;
 }

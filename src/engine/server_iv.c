@@ -490,6 +490,10 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		key.class_id, key.rank, dss_self_rank(),
 		invalidate ? "no" : "yes");
 output:
+	/* invalidate entry might require to delete entry after refresh */
+	if (entry && entry->iv_to_delete)
+		entry->iv_ref--; /* destroy in ivc_on_put */
+
 	ds_iv_ns_put(ns);
 	return rc;
 }
@@ -532,13 +536,29 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 static int
 ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 {
-	struct ds_iv_key key;
+	struct ds_iv_ns		*ns = NULL;
+	struct ds_iv_key	key;
+	int			rc;
 
 	iv_key_unpack(&key, iv_key);
 	if (key.rank == ((d_rank_t)-1))
 		return -DER_NOTLEADER;
+
+	/* Check if it matches with current NS master */
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+
+	if (key.rank != ns->iv_master_rank) {
+		D_DEBUG(DB_MD, "key rank %d ns iv master rank %d\n",
+			key.rank, ns->iv_master_rank);
+		D_GOTO(out_put, rc = -DER_NOTLEADER);
+	}
+
 	*root = key.rank;
-	return 0;
+out_put:
+	ds_iv_ns_put(ns);
+	return rc;
 }
 
 static int
@@ -1076,16 +1096,25 @@ retry:
 	rc = iv_op_internal(ns, _key, _value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
-		/* If the IV ns leader has been changed, then it will retry
-		 * in the mean time, it will rely on others to update the
-		 * ns for it.
-		 */
+		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
+		    sync && (sync->ivs_mode == CRT_IV_SYNC_LAZY ||
+			     sync->ivs_mode == CRT_IV_SYNC_EAGER)) {
+			/* If leader has been changed, it does not need to
+			 * retry at all, because IV sync always start from
+			 * the leader.
+			 */
+			D_WARN("sync (class %d) leader changed\n", key->class_id);
+			return rc;
+		}
+
+		/* otherwise retry and wait for others to update the ns. */
 		D_WARN("retry upon %d for class %d opc %d\n", rc,
 		       key->class_id, opc);
 		/* Yield to avoid hijack the cycle if IV RPC is not sent */
 		ABT_thread_yield();
 		goto retry;
 	}
+
 	return rc;
 }
 

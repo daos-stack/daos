@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.105
-Release:       1%{?relval}%{?dist}
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -163,7 +163,6 @@ Requires: libpmemobj1 >= 1.11
 Requires: ipmctl > 02.00.00.3816
 Requires: libpmemobj >= 1.11
 %endif
-Requires: hwloc
 Requires: mercury = %{mercury_version}
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
@@ -480,6 +479,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Fri Sep 03 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.105-2
+- Remove R: hwloc; RPM's auto-requires/provides will take care of this
+
 * Tue Aug 24 2021 Jeff Olivier <jeffrey.v.olivier@intel.com> 1.3.105-1
 - Version bump to 1.3.105 for 2.0 test build 5
 

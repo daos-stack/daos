@@ -250,10 +250,9 @@ class LogTest():
         if self.quiet:
             return
         self.log_count += 1
-        function = getattr(line, 'filename', None)
-        if function:
+        try:
             loc = '{}:{}'.format(line.filename, line.lineno)
-        else:
+        except AttributeError:
             loc = 'Unknown'
         self.log_locs[loc] += 1
         self.log_fac[line.fac] += 1
