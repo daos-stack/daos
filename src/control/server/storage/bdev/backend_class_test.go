@@ -191,7 +191,6 @@ func TestBackend_writeJSONConf(t *testing.T) {
 			if tc.expValidateErr != nil {
 				return
 			}
-			cfg = engineConfig.Storage.Tiers.BdevConfigs()[0] // refer to validated config
 
 			writeReq, _ := storage.BdevWriteConfigRequestFromConfig(log, &engineConfig.Storage)
 			if tc.enableVmd {
@@ -205,12 +204,8 @@ func TestBackend_writeJSONConf(t *testing.T) {
 			}
 
 			expCfg := defaultSpdkConfig()
-			for _, ec := range tc.expExtraBdevCfgs {
-				expCfg.Subsystems[0].Configs = append(expCfg.Subsystems[0].Configs, ec)
-			}
-			for _, ess := range tc.expExtraSubsystems {
-				expCfg.Subsystems = append(expCfg.Subsystems, ess)
-			}
+			expCfg.Subsystems[0].Configs = append(expCfg.Subsystems[0].Configs, tc.expExtraBdevCfgs...)
+			expCfg.Subsystems = append(expCfg.Subsystems, tc.expExtraSubsystems...)
 
 			if diff := cmp.Diff(expCfg, gotCfg); diff != "" {
 				t.Fatalf("(-want, +got):\n%s", diff)

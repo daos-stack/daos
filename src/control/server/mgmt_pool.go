@@ -107,17 +107,6 @@ func (svc *mgmtSvc) getPoolService(id string) (*system.PoolService, error) {
 	return ps, nil
 }
 
-// getPoolServiceStorage returns a slice of values representing the
-// per-rank allocation on each storage tier.
-func (svc *mgmtSvc) getPoolServiceStorage(id string) ([]uint64, error) {
-	ps, err := svc.getPoolService(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return ps.Storage.PerRankTierStorage, nil
-}
-
 // getPoolServiceRanks returns a slice of ranks designated as the
 // pool service hosts.
 func (svc *mgmtSvc) getPoolServiceRanks(ps *system.PoolService) ([]uint32, error) {
