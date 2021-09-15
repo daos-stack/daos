@@ -282,7 +282,7 @@ func mountDFS(ap *C.struct_cmd_args_s, flags C.int) (*C.dfs_t, func(), error) {
 		rc = C.dfs_set_prefix(dfs, ap.dfs_prefix)
 		if rc != 0 {
 			unmountDFS(dfs)
-			return nil, nil, errors.Wrapf(dfsError(rc), "failed to set DFS prefix %s", 
+			return nil, nil, errors.Wrapf(dfsError(rc), "failed to set DFS prefix %s",
 				C.GoString(ap.dfs_prefix))
 		}
 
