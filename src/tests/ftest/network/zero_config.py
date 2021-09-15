@@ -217,10 +217,18 @@ class ZeroConfigTest(TestWithServers):
                 "pinned_numa_node", self.dev_info[exp_iface]["numa"]),
             "Error updating daos_server 'pinned_numa_node' config opt")
 
-        # Start the daos server and daos agents
+        # Start the daos server
         self.start_server_managers()
-        self.start_agents()
+
+        # Start the daos agents - do not start an agent on the local host
+        agent_groups = {
+            self.server_group: {
+                "hosts": self.hostlist_clients,
+                "access_points": self.access_points}
+        }
+        self.start_agents(agent_groups)
         self.write_string_to_logfile('"Test.name: ' + str(self) + '"')
+        self.log.info("-" * 100)
 
         # Verify
         if not self.verify_client_run(exp_iface, env_state):
