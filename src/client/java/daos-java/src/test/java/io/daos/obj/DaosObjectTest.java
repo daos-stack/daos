@@ -15,7 +15,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.util.Collections;
 
 @RunWith(PowerMockRunner.class)
-@PowerMockIgnore("javax.management.*")
+@PowerMockIgnore({"javax.management.*", "javax.xml.*"})
 @PrepareForTest({DaosObject.class, DaosObjClient.class})
 @SuppressStaticInitializationFor("io.daos.DaosClient")
 public class DaosObjectTest {
