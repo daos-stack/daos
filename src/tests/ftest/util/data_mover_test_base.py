@@ -13,6 +13,7 @@ from mdtest_test_base import MdtestBase
 from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
 from data_mover_utils import DserializeCommand, DdeserializeCommand
 from data_mover_utils import format_daos_path, uuid_from_obj
+import os
 from os.path import join
 import uuid
 import re
@@ -80,12 +81,16 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.uuids = []
         self.dfuse_hosts = None
         self.num_run_datamover = 0  # Number of times run_datamover was called
+        self.job_manager = None
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
 
-        # List of test paths to create and remove
-        self.posix_test_paths = []
+        # List of local test paths to create and remove
+        self.posix_local_test_paths = []
+
+        # List of shared test paths to create and remove
+        self.posix_shared_test_paths = []
 
         # paths to unmount in teardown
         self.mounted_posix_test_paths = []
@@ -130,8 +135,21 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of error strings to report at the end of tearDown().
 
         """
+        """ doesn't append to error list because it would report an error if all
+	 processes completed successfully (nothing to stop), but this call is
+	 necessary in the case that mpi processes are ran across multiple nodes
+	 and a timeout occurs. If this happens then cleanup on shared posix
+	 directories causes errors (because an MPI process might still have it open)
+        """
         error_list = []
 
+        if self.job_manager:
+            print("kill job manager\n")
+            self.job_manager.kill()
+        else:
+            print("job manager not defined\n")
+
+        # cleanup mounted paths
         if self.mounted_posix_test_paths:
             path_list = self._get_posix_test_path_list(path_list=self.mounted_posix_test_paths)
             for item in path_list:
@@ -146,12 +164,24 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     self._execute_command(umount_cmd)
                 except CommandFailure as error:
                     error_list.append("Error umounting posix test directory: {}".format(error))
-        if self.posix_test_paths:
+
+        # cleanup local paths
+        if self.posix_local_test_paths:
             command = "rm -rf {}".format(self._get_posix_test_path_string())
             try:
                 self._execute_command(command)
             except CommandFailure as error:
                 error_list.append("Error removing created directories: {}".format(error))
+
+        # cleanup shared paths (only runs on one node in job)
+        if self.posix_shared_test_paths:
+            command = "rm -rf {}".format(self._get_posix_test_path_string(path=self.posix_shared_test_paths))
+            try:
+	        # only call rm on one client since this is cleaning up shared dir
+                self._execute_command(command, hosts=self.hostlist_clients[0:1])
+            except CommandFailure as error:
+                error_list.append(
+                    "Error removing created directories: {}".format(error))
         return error_list
 
     def set_api(self, api):
@@ -186,25 +216,38 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of quoted posix test path strings
 
         """
+<<<<<<< HEAD
         # default
         if path_list == None:
             path_list = self.posix_test_paths
 
         return ["'{}'".format(item) for item in path_list]
+=======
+        if path_list == None:
+            path_list = self.posix_local_test_paths
+>>>>>>> run reduced large file test in VM
 
-    def _get_posix_test_path_string(self):
+        return ["'{}'".format(item) for item in path_list]
+
+    def _get_posix_test_path_string(self, path=None):
         """Get a string of all of the quoted posix test path strings.
 
         Returns:
             str: a string of all of the quoted posix test path strings
 
         """
-        return " ".join(self._get_posix_test_path_list())
+        return " ".join(self._get_posix_test_path_list(path_list=path))
 
+<<<<<<< HEAD
     def new_posix_test_path(self, create=True, parent=None, mount_dir=False):
+=======
+    def new_posix_test_path(self, shared=False, create=True, parent=None):
+>>>>>>> run reduced large file test in VM
         """Generate a new, unique posix path.
 
         Args:
+            shared (bool): Whether to create a directory shared across nodes or local.
+                Defaults to True.
             create (bool): Whether to create the directory.
                 Defaults to True.
             mount_dir (bool): Whether or not posix directory will be manually
@@ -216,7 +259,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             str: the posix path.
 
         """
-        dir_name = "posix_test{}".format(len(self.posix_test_paths))
+        # make dirname unique to datamover test
+        method = self.get_test_info()["method"]
+        #dir_name = "posix_test{}".format(len(self.posix_local_test_paths))
+        dir_name = "{}{}".format(method, len(self.posix_local_test_paths))
 
         if parent:
             path = join(parent, dir_name)
@@ -224,7 +270,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             path = join(self.tmp, dir_name)
 
         # Add to the list of posix paths
-        self.posix_test_paths.append(path)
+        if shared:
+            self.posix_shared_test_paths.append(path)
+        else:
+            self.posix_local_test_paths.append(path)
 
         if create:
             # Create the directory
@@ -1115,21 +1164,21 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                     processes = self.dcp_processes
                 # If we expect an rc other than 0, don't fail
                 self.dcp_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dcp_cmd.run(processes)
+                result = self.dcp_cmd.run(processes, self.job_manager)
             elif self.tool == "DSYNC":
                 if not processes:
                     processes = self.dsync_processes
                 # If we expect an rc other than 0, don't fail
                 self.dsync_cmd.exit_status_exception = (expected_rc == 0)
-                result = self.dsync_cmd.run(processes)
+                result = self.dsync_cmd.run(processes, self.job_manager)
             elif self.tool== "DSERIAL":
                 if processes:
                     processes1 = processes2 = processes
                 else:
                     processes1 = self.dserialize_processes
                     processes2 = self.ddeserialize_processes
-                result = self.dserialize_cmd.run(processes1)
-                result = self.ddeserialize_cmd.run(processes2)
+                result = self.dserialize_cmd.run(processes1, self.job_manager)
+                result = self.ddeserialize_cmd.run(processes2, self.job_manager)
             elif self.tool == "FS_COPY":
                 result = self.fs_copy_cmd.run()
             elif self.tool == "CONT_CLONE":

@@ -106,7 +106,7 @@ class MfuCommandBase(ExecutableCommand):
         param_names.sort(key=self.__param_sort)
         return param_names
 
-    def run(self, processes):
+    def run(self, processes, job_manager):
         # pylint: disable=arguments-differ
         """Run the MpiFileUtils command.
 
@@ -124,13 +124,13 @@ class MfuCommandBase(ExecutableCommand):
         self.log.info('Starting %s', str(self.command).lower())
 
         # Get job manager cmd
-        mpirun = Mpirun(self, mpitype="mpich")
-        mpirun.assign_hosts(self.hosts, self.tmp)
-        mpirun.assign_processes(processes)
-        mpirun.exit_status_exception = self.exit_status_exception
+        job_manager = Mpirun(self, mpitype="mpich")
+        job_manager.assign_hosts(self.hosts, self.tmp)
+        job_manager.assign_processes(processes)
+        job_manager.exit_status_exception = self.exit_status_exception
 
         # Run the command
-        out = mpirun.run()
+        out = job_manager.run()
 
         return out
 

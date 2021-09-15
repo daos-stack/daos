@@ -5,7 +5,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
+from os.path import basename
 import os
+from tempfile import TemporaryDirectory
 
 # pylint: disable=too-many-ancestors
 class DmvrLargeDir(DataMoverTestBase):
@@ -79,7 +81,10 @@ class DmvrLargeDir(DataMoverTestBase):
         # dcp treats a trailing slash on the source as /*
         # so strip trailing slash from posix path so dcp
         # behaves similar to "cp"
-        posix_path = os.environ['DAOS_TEST_SHARED_DIR'].rstrip("/")
+        if 'DAOS_TEST_SHARED_DIR' in os.environ:
+            shared_dir = os.environ['DAOS_TEST_SHARED_DIR'].rstrip("/")
+            posix_path = self.new_posix_test_path(create=True, parent=shared_dir)
+            #posix_path = TemporaryDirectory(shared_dir)
         #posix_path = self.dfuse.mount_dir.value.rstrip("/")
 
         # copy from daos cont2 to posix file system (dfuse)
@@ -88,14 +93,14 @@ class DmvrLargeDir(DataMoverTestBase):
             "DAOS", "/", self.pool[0], self.container[1],
             "POSIX", posix_path)
 
-        # create cont4
+        # create cont3
         self.create_cont(self.pool[0])
 
-        # copy from posix file system to daos cont4
+        # copy from posix file system to daos cont3
         self.run_datamover(
-            self.test_id + " (posix to cont4)",
+            self.test_id + " (posix to cont3)",
             "POSIX", posix_path, None, None,
-            "DAOS", "/", self.pool[0], self.container[3])
+            "DAOS", "/", self.pool[0], self.container[2])
 
         # the result is that a NEW directory is created in the destination
         daos_path = "/" + basename(posix_path) + self.mdtest_cmd.test_dir.value
@@ -103,7 +108,7 @@ class DmvrLargeDir(DataMoverTestBase):
         # update mdtest params, read back and verify data from cont2
         self.mdtest_cmd.read_bytes.update(file_size)
         self.run_mdtest_with_params(
-            "DAOS", "/", self.pool[0], self.container[1],
+            "DAOS", daos_path, self.pool[0], self.container[2],
             flags=mdtest_flags[1])
 
     def test_dm_large_dir_dcp(self):
@@ -113,7 +118,7 @@ class DmvrLargeDir(DataMoverTestBase):
             an external POSIX file system using dcp.
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=datamover,dcp
         :avocado: tags=dm_large_dir,dm_large_dir_dcp
         """
         self.run_dm_large_dir("DCP")
