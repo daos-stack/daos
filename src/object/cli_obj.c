@@ -970,7 +970,7 @@ ec_deg_get:
 		if (obj_auxi->ec_in_recov ||
 		    obj_auxi->reasb_req.orr_singv_only) {
 			D_DEBUG(DB_IO, DF_OID" shard %d failed in recovery(%d) "
-				"or singv fetch(%d).\n",
+				" or singv fetch(%d).\n",
 				DP_OID(obj->cob_md.omd_id), shard,
 				obj_auxi->ec_in_recov,
 				obj_auxi->reasb_req.orr_singv_only);
