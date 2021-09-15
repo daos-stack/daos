@@ -974,7 +974,7 @@ ec_deg_get:
 				DP_OID(obj->cob_md.omd_id), shard,
 				obj_auxi->ec_in_recov,
 				obj_auxi->reasb_req.orr_singv_only);
-			D_GOTO(out, rc = -DER_BAD_TARGET);
+			D_GOTO(out, rc = -DER_TGT_RETRY);
 		}
 		shard = start_shard + ec_deg_tgt;
 		D_DEBUG(DB_IO, DF_OID" shard %d fetch re-direct to shard %d.\n",
@@ -2437,7 +2437,7 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 	rc = obj_shards_2_fwtgts(obj, map_ver, bit_map, shard_idx,
 				 shard_cnt, grp_nr, flags, obj_auxi);
 	if (rc != 0) {
-		if (rc != -DER_SHARDS_OVERLAP && rc != -DER_BAD_TARGET)
+		if (rc != -DER_SHARDS_OVERLAP && rc != -DER_TGT_RETRY)
 			D_ERROR("opc %d "DF_OID", obj_shards_2_fwtgts failed "
 				DF_RC"\n", opc, DP_OID(obj->cob_md.omd_id),
 				DP_RC(rc));
@@ -3321,6 +3321,12 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 		D_DEBUG(DB_IO, "shard %d ret %d.\n", shard_auxi->shard, ret);
 		if (obj_auxi->result == 0)
 			obj_auxi->result = ret;
+	} else if (ret == -DER_TGT_RETRY) {
+		/* some special handing for DER_TGT_RETRY, as we use that errno for
+		 * some retry cases.
+		 */
+		if (obj_auxi->result == 0 || obj_retry_error(obj_auxi->result))
+			obj_auxi->result = ret;
 	} else {
 		/* for un-retryable failure, set the err to whole obj IO */
 		D_DEBUG(DB_IO, "shard %d ret %d.\n", shard_auxi->shard, ret);
@@ -3908,7 +3914,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 		fail_info = obj_auxi->reasb_req.orr_fail;
 		new_tgt_fail = obj_auxi->ec_wait_recov &&
-			       task->dt_result == -DER_BAD_TARGET;
+			       task->dt_result == -DER_TGT_RETRY;
 		/* for original failed EC obj fetch task, try with EC recovery
 		 * 1. create EC recovery task (with ec_in_recov flag) and mark
 		 *    original obj fetch task with ec_wait_recov flag.
@@ -3917,7 +3923,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 */
 		if (fail_info != NULL && !obj_auxi->ec_in_recov &&
 		    ((obj_auxi->reasb_req.orr_singv_only &&
-		     (task->dt_result == -DER_BAD_TARGET ||
+		     (task->dt_result == -DER_TGT_RETRY ||
 		      task->dt_result == 0)) ||
 		     (fail_info->efi_nrecx_lists > 0 &&
 		      (task->dt_result == 0 ||  new_tgt_fail)))) {
