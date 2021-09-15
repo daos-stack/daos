@@ -43,8 +43,8 @@ ior:
       transfer_size: '1M'
       block_size: '5G'        # aggregate of 150G for dcp and 50G for fs_copy
   objectclass:
-    SX:
-      dfs_oclass: "EC_4P1G1"
+    EC_4P1GX:
+      dfs_oclass: "EC_4P1GX"
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
   disable_caching: True
