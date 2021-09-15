@@ -21,5 +21,5 @@ server_config:
 pool:
   mode: 146
   scm_size: 16G
-  nvme_size: 192G
+  nvme_size: 224G
   control_method: dmg
