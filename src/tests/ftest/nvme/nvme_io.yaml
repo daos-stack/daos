@@ -29,7 +29,7 @@ ior:
  repetitions: 1
  test_file: /testFile
  object_type:
-  - "SX"
+  - "EC_2P1GX"
   - "S1"
   - "S4"
   - "RP_2GX"
