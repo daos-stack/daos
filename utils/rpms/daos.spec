@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.105
-Release:       2%{?relval}%{?dist}
+Release:       3%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -84,7 +84,7 @@ BuildRequires: libisa-l_crypto-devel
 BuildRequires: libisal-devel
 BuildRequires: libisal_crypto-devel
 %endif
-BuildRequires: daos-raft-devel = 0.8.0
+BuildRequires: daos-raft-devel = 0.8.1
 BuildRequires: openssl-devel
 BuildRequires: libevent-devel
 BuildRequires: libyaml-devel
@@ -479,6 +479,10 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Wed Sep 15 2021 Li Wei <wei.g.li@intel.com> 1.3.105-3
+- Update raft to fix InstallSnapshot performance as well as to avoid some
+  incorrect 0.8.0 RPMs
+
 * Fri Sep 03 2021 Brian J. Murrell <brian.murrell@intel.com> 1.3.105-2
 - Remove R: hwloc; RPM's auto-requires/provides will take care of this
 
