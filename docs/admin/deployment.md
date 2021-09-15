@@ -423,9 +423,10 @@ allocations.
 
 ### Storage Discovery and Selection
 
-This section covers how to manually detect and select storage devices
-to be used by by DAOS. The server configuration file gives an
-administrator the ability to control storage selection.
+This section covers how to manually detect and select storage devices to be
+used by DAOS.
+The server configuration file gives an administrator the ability to control
+storage selection.
 
 #### Discovery
 
