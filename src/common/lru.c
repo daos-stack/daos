@@ -180,11 +180,22 @@ lru_evict_cb(d_list_t *link, void *arg)
 	if (llink->ll_evicted || cb_arg->cb == NULL ||
 	    cb_arg->cb(llink, cb_arg->arg)) {
 		llink->ll_evicted = 1;
-		if (d_list_empty(&llink->ll_qlink))
-			d_list_add(&llink->ll_qlink, &cb_arg->list);
+		if (llink->ll_ref == 1) /* the last refcount */
+			d_list_move(&llink->ll_qlink, &cb_arg->list);
 	}
 
 	return 0;
+}
+
+static void
+lru_del_evicted(struct daos_lru_cache *lcache,
+		struct daos_llink *llink)
+{
+	D_ASSERT(llink->ll_ref == 1);
+	D_ASSERT(lcache->dlc_count > 0);
+
+	d_hash_rec_delete_at(&lcache->dlc_htable, &llink->ll_link);
+	lcache->dlc_count--;
 }
 
 void
@@ -203,14 +214,9 @@ daos_lru_cache_evict(struct daos_lru_cache *lcache,
 
 	d_list_for_each_entry_safe(llink, tmp, &cb_arg.list, ll_qlink) {
 		d_list_del_init(&llink->ll_qlink);
-		if (llink->ll_ref == 1) { /* the last refcount */
-			D_DEBUG(DB_TRACE, "Remove %p from LRU cache\n",
-				llink);
-			d_hash_rec_delete_at(&lcache->dlc_htable,
-					     &llink->ll_link);
-			lcache->dlc_count--;
-			count++;
-		}
+		D_DEBUG(DB_TRACE, "Remove %p from LRU cache\n", llink);
+		lru_del_evicted(lcache, llink);
+		count++;
 	}
 	D_DEBUG(DB_TRACE, "Evicted %u items, total count %u of %u\n",
 		count, lcache->dlc_count, lcache->dlc_csize);
@@ -232,6 +238,9 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 	link = d_hash_rec_find(&lcache->dlc_htable, key, key_size);
 	if (link != NULL) {
 		llink = link2llink(link);
+		/* remove busy item from LRU */
+		if (!d_list_empty(&llink->ll_qlink))
+			d_list_del_init(&llink->ll_qlink);
 		D_GOTO(found, rc = 0);
 	}
 
@@ -262,38 +271,39 @@ out:
 	return rc;
 }
 
-static bool
-lru_flush_cond(struct daos_llink *llink, void *arg)
-{
-	if (llink->ll_ref == 1) /* the last refcount */
-		llink->ll_evicted = 1;
-
-	return llink->ll_evicted;
-}
-
-void
-daos_lru_ref_flush(struct daos_lru_cache *lcache)
-{
-	D_DEBUG(DB_TRACE, "Flush LRU cache: %d > %d\n",
-		lcache->dlc_count, lcache->dlc_csize);
-	daos_lru_cache_evict(lcache, lru_flush_cond, NULL);
-}
+#define LRU_TOO_OLD	15
 
 void
 daos_lru_ref_release(struct daos_lru_cache *lcache, struct daos_llink *llink)
 {
-	D_ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
+	struct timespec ts;
 
+	D_ASSERT(lcache != NULL && llink != NULL && llink->ll_ref > 1);
+	D_ASSERT(d_list_empty(&llink->ll_qlink));
+
+	d_gettime(&ts);
 	llink->ll_ref--;
 	if (llink->ll_ref == 1) { /* the last refcount */
-		if (llink->ll_evicted || lcache->dlc_csize == 0) {
-			D_DEBUG(DB_TRACE, "Remove %p from LRU cache\n", llink);
-			/* be freed within hash callback */
-			d_hash_rec_delete_at(&lcache->dlc_htable,
-					     &llink->ll_link);
-			lcache->dlc_count--;
+		if (lcache->dlc_csize == 0)
+			llink->ll_evicted = 1;
+
+		if (llink->ll_evicted) {
+			lru_del_evicted(lcache, llink);
+		} else {
+			llink->ll_accessed = ts.tv_sec;
+			D_ASSERT(d_list_empty(&llink->ll_qlink));
+			d_list_add(&llink->ll_qlink, &lcache->dlc_lru);
 		}
 	}
-	if (lcache->dlc_csize && lcache->dlc_count > lcache->dlc_csize)
-		daos_lru_ref_flush(lcache);
+
+	while (!d_list_empty(&lcache->dlc_lru)) {
+		llink = d_list_entry(lcache->dlc_lru.prev, struct daos_llink,
+				     ll_qlink);
+		if (lcache->dlc_count < lcache->dlc_csize &&
+		    llink->ll_accessed + LRU_TOO_OLD >= ts.tv_sec)
+			break; /* within threshold and no old item */
+
+		d_list_del_init(&llink->ll_qlink);
+		lru_del_evicted(lcache, llink);
+	}
 }
