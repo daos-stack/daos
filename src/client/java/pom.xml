@@ -224,6 +224,11 @@
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
           <version>${surefire.version}</version>
+          <configuration>
+            <argLine>
+              --add-opens java.xml/jdk.xml.internal=ALL-UNNAMED
+            </argLine>
+          </configuration>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>

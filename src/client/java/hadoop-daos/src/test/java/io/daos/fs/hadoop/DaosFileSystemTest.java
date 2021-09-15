@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.mockito.Mockito.*;
 
 @RunWith(PowerMockRunner.class)
-@PowerMockIgnore({"javax.management.*", "javax.xml.*"})
+@PowerMockIgnore("javax.management.*")
 @PrepareForTest({DaosFsClient.DaosFsClientBuilder.class, DaosFileSystem.class, DaosUns.class})
 @SuppressStaticInitializationFor({"io.daos.dfs.DaosFsClient", "io.daos.DaosClient"})
 public class DaosFileSystemTest {
