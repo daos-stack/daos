@@ -5,6 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from logging import getLogger
+import re
 from ClusterShell.NodeSet import NodeSet
 
 
@@ -328,9 +329,9 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
-        "engine_net_ofi_<provider>_failed_addr",
-        "engine_net_ofi_<provider>_req_timeout",
-        "engine_net_ofi_<provider>_uri_lookup_timeout",
+        "engine_net_<provider>_failed_addr",
+        "engine_net_<provider>_req_timeout",
+        "engine_net_<provider>_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
@@ -450,9 +451,10 @@ class TelemetryUtils():
             all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)
 
         # Add engine network metrics for the configured provider
-        provider = "sockets"
-        if "verbs" in server.manager.job.get_config_value("provider"):
-            provider = "verbs"
+        try:
+            provider = re.sub("[+;]", "_", server.manager.job.get_config_value("provider"))
+        except TypeError:
+            provider = "ofi_sockets"
         net_metrics = [name.replace("<provider>", provider) for name in self.ENGINE_NET_METRICS]
         all_metrics_names.extend(net_metrics)
 
