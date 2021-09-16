@@ -224,6 +224,7 @@ struct agg_tst_dataset {
 	bool				 td_delete;
 };
 
+#define PARITY_BIT (1ULL << 63)
 static daos_size_t
 get_view_len(struct agg_tst_dataset *ds, daos_recx_t *recx)
 {
@@ -232,11 +233,14 @@ get_view_len(struct agg_tst_dataset *ds, daos_recx_t *recx)
 	if (ds->td_type == DAOS_IOD_SINGLE) {
 		view_len = ds->td_iod_size;
 	} else {
-		uint64_t	start = UINT64_MAX, end = 0, tmp;
+		uint64_t	start = PARITY_BIT - 1, end = 0, tmp;
 		int		i;
 
 		assert_true(ds->td_recx_nr > 0);
 		for (i = 0; i < ds->td_recx_nr; i++) {
+			if (ds->td_recx[i].rx_idx & PARITY_BIT)
+				continue; /* Ignore "parity" for now */
+
 			if (start > ds->td_recx[i].rx_idx)
 				start = ds->td_recx[i].rx_idx;
 			tmp = ds->td_recx[i].rx_idx + ds->td_recx[i].rx_nr;
@@ -294,7 +298,7 @@ verify_view(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	daos_epoch_range_t	*epr_a;
 	char			*buf_f;
 	daos_size_t		 view_len;
-	daos_recx_t		 recx;
+	daos_recx_t		 recx = {0};
 	int			 nr;
 
 	VERBOSE_MSG("Verify logical view\n");
@@ -2403,10 +2407,10 @@ aggregate_29(void **state)
 }
 
 #define MAX_OPS 100
-#define MAX_REMOVE 25
+#define MAX_REMOVE 50
 static void
 removal_stress_case(struct io_test_args *arg, int recx_nr, daos_recx_t *recx_arr, int remove_nr,
-		    daos_epoch_t *remove_epochs, daos_epoch_t *remove_bounds)
+		    daos_epoch_t *remove_epochs, daos_epoch_t *remove_bounds, bool add_parity)
 {
 	struct agg_tst_dataset	 ds = { 0 };
 	int			 iod_size = 1024, end_idx;
@@ -2421,6 +2425,8 @@ removal_stress_case(struct io_test_args *arg, int recx_nr, daos_recx_t *recx_arr
 
 	for (i = 0; i < recx_nr; i++) {
 		recx_arr[i].rx_idx = MAX(0, (i % 7) * end_idx - i);
+		if (add_parity && (i & 1) == 0)
+			recx_arr[i].rx_idx |= PARITY_BIT;
 		recx_arr[i].rx_nr = end_idx + end_idx * (i % 2);
 		if ((i + 1) % (recx_nr / remove_nr) == 0) {
 			remove_epochs[remove] = i + 1;
@@ -2467,24 +2473,114 @@ aggregate_30(void **state)
 	D_ALLOC_ARRAY(remove_bounds, MAX_REMOVE);
 	assert_non_null(remove_bounds);
 
-	removal_stress_case(arg, 10, recx_arr, 2, remove_epochs, remove_bounds);
-	removal_stress_case(arg, 14, recx_arr, 7, remove_epochs, remove_bounds);
-	removal_stress_case(arg, 20, recx_arr, 4, remove_epochs, remove_bounds);
+	removal_stress_case(arg, 10, recx_arr, 2, remove_epochs, remove_bounds, false);
+	removal_stress_case(arg, 14, recx_arr, 7, remove_epochs, remove_bounds, false);
+	removal_stress_case(arg, 20, recx_arr, 4, remove_epochs, remove_bounds, true);
 	if (!DAOS_ON_VALGRIND) {
-		removal_stress_case(arg, 24, recx_arr, 6, remove_epochs, remove_bounds);
-		removal_stress_case(arg, 30, recx_arr, 3, remove_epochs, remove_bounds);
-		removal_stress_case(arg, 40, recx_arr, 4, remove_epochs, remove_bounds);
-		removal_stress_case(arg, 50, recx_arr, 5, remove_epochs, remove_bounds);
-		removal_stress_case(arg, 60, recx_arr, 15, remove_epochs, remove_bounds);
-		removal_stress_case(arg, 75, recx_arr, 25, remove_epochs, remove_bounds);
-		removal_stress_case(arg, 80, recx_arr, 8, remove_epochs, remove_bounds);
-		removal_stress_case(arg, 100, recx_arr, 10, remove_epochs, remove_bounds);
+		removal_stress_case(arg, 24, recx_arr, 6, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 30, recx_arr, 3, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 40, recx_arr, 4, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 50, recx_arr, 5, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 60, recx_arr, 15, remove_epochs, remove_bounds, true);
+		removal_stress_case(arg, 75, recx_arr, 25, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 80, recx_arr, 8, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 100, recx_arr, 10, remove_epochs, remove_bounds, true);
 	}
 
 	D_FREE(recx_arr);
 	D_FREE(remove_epochs);
 	D_FREE(remove_bounds);
 
+	cleanup();
+}
+
+static void
+aggregate_31(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[4];
+	daos_epoch_t		 punch_epochs[] = {4};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = end_idx * 2;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = end_idx;
+	recx_arr[2].rx_idx = end_idx;
+	recx_arr[2].rx_nr = end_idx;
+	recx_arr[3].rx_idx = 0;
+	recx_arr[3].rx_nr = end_idx * 2;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 0;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_32(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[11];
+	daos_epoch_t		 punch_epochs[] = {3, 4, 6, 7, 9, 10, 11};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = end_idx * 2;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = end_idx + 2;
+	recx_arr[2].rx_idx = end_idx;
+	recx_arr[2].rx_nr = end_idx;
+	recx_arr[3].rx_idx = 0;
+	recx_arr[3].rx_nr = end_idx + 2;
+	recx_arr[4].rx_idx = 0;
+	recx_arr[4].rx_nr = end_idx * 2;
+	recx_arr[5].rx_idx = 2;
+	recx_arr[5].rx_nr = end_idx;
+	recx_arr[6].rx_idx = 0;
+	recx_arr[6].rx_nr = end_idx * 2;
+	recx_arr[7].rx_idx = 0;
+	recx_arr[7].rx_nr = end_idx * 2;
+	recx_arr[8].rx_idx = 2;
+	recx_arr[8].rx_nr = end_idx;
+	recx_arr[9].rx_idx = 0;
+	recx_arr[9].rx_nr = 3;
+	recx_arr[10].rx_idx = end_idx - 1;
+	recx_arr[10].rx_nr = end_idx + 1;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 0;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
 	cleanup();
 }
 
@@ -2590,6 +2686,10 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_29, NULL, agg_tst_teardown },
 	{ "VOS430: Removal stress test",
 	  aggregate_30, NULL, agg_tst_teardown },
+	{ "VOS431: Removal spans windows, flush with no physical records",
+	  aggregate_31, NULL, agg_tst_teardown },
+	{ "VOS432: Overlapping removals",
+	  aggregate_32, NULL, agg_tst_teardown },
 };
 
 int

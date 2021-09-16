@@ -8,11 +8,16 @@ package bdev
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+const (
+	hotplugPeriod = 5 * time.Second
 )
 
 // SPDK bdev subsystem configuration method name definitions.
@@ -119,9 +124,7 @@ func defaultSpdkConfig() *SpdkConfig {
 		},
 		{
 			Method: SpdkBdevNvmeSetHotplug,
-			Params: NvmeSetHotplugParams{
-				PeriodUsec: 10 * 1000 * 1000,
-			},
+			Params: NvmeSetHotplugParams{},
 		},
 	}
 
@@ -171,7 +174,7 @@ func getAioKdevCreateMethod(name, path string) *SpdkSubsystemConfig {
 	}
 }
 
-func getSpdkConfigMethods(req *storage.BdevWriteNvmeConfigRequest) (sscs []*SpdkSubsystemConfig) {
+func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubsystemConfig) {
 	for _, tier := range req.TierProps {
 		var f configMethodGetter
 
@@ -193,8 +196,8 @@ func getSpdkConfigMethods(req *storage.BdevWriteNvmeConfigRequest) (sscs []*Spdk
 	return
 }
 
-// WithVmdEnabled adds vmd subsystem with enable method to an SpdkConfig.
-func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
+// WithVMDEnabled adds vmd subsystem with enable method to an SpdkConfig.
+func (sc *SpdkConfig) WithVMDEnabled() *SpdkConfig {
 	sc.Subsystems = append(sc.Subsystems, &SpdkSubsystem{
 		Name: "vmd",
 		Configs: []*SpdkSubsystemConfig{
@@ -209,8 +212,8 @@ func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
 }
 
 // WithBdevConfigs adds config methods derived from the input
-// BdevWriteNvmeConfigRequest to the bdev subsystem of an SpdkConfig.
-func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWriteNvmeConfigRequest) *SpdkConfig {
+// BdevWriteConfigRequest to the bdev subsystem of an SpdkConfig.
+func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWriteConfigRequest) *SpdkConfig {
 	for _, ss := range sc.Subsystems {
 		if ss.Name != "bdev" {
 			continue
@@ -225,13 +228,40 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWrite
 	return sc
 }
 
-func newSpdkConfig(log logging.Logger, enableVmd bool, req *storage.BdevWriteNvmeConfigRequest) (*SpdkConfig, error) {
+func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
-	for _, tp := range req.TierProps {
-		if enableVmd && tp.Class == storage.ClassNvme {
-			sc.WithVmdEnabled()
-			break
+	if req.VMDEnabled {
+		for _, tp := range req.TierProps {
+			if tp.Class == storage.ClassNvme {
+				sc.WithVMDEnabled()
+				break
+			}
+		}
+	}
+
+	if req.HotplugEnabled {
+		var found bool
+		for _, ss := range sc.Subsystems {
+			if ss.Name != "bdev" {
+				continue
+			}
+
+			for _, bsc := range ss.Configs {
+				if bsc.Method == SpdkBdevNvmeSetHotplug {
+					bsc.Params = NvmeSetHotplugParams{
+						Enable:     true,
+						PeriodUsec: uint64(hotplugPeriod.Microseconds()),
+					}
+					found = true
+
+					break
+				}
+			}
+
+			if found {
+				break
+			}
 		}
 	}
 

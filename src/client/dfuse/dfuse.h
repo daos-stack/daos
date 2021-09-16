@@ -530,6 +530,7 @@ struct dfuse_inode_entry {
 	/** file was truncated from 0 to a certain size */
 	bool			ie_truncated;
 
+	/** file is the root of a container */
 	bool			ie_root;
 
 	/** File has been unlinked from daos */

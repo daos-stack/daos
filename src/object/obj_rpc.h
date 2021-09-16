@@ -25,18 +25,13 @@
 
 #include "obj_ec.h"
 
-/* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
- * for other RPC fields and cart/HG headers.
- */
-#define OBJ_BULK_LIMIT	(3584) /* (3K + 512) bytes */
-
 /*
  * RPC operation codes
  *
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See daos_rpc.h.
  */
-#define DAOS_OBJ_VERSION 4
+#define DAOS_OBJ_VERSION 5
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr and name
  */
@@ -166,6 +161,8 @@ enum obj_rpc_flags {
 	ORF_EC_RECOV		= (1 << 17),
 	/* EC data recovery from snapshot */
 	ORF_EC_RECOV_SNAP	= (1 << 18),
+	/* EC data recovery from parity */
+	ORF_EC_RECOV_FROM_PARITY = (1 << 19),
 };
 
 /* common for update/fetch */
@@ -291,10 +288,12 @@ CRT_RPC_DECLARE(obj_punch, DAOS_ISEQ_OBJ_PUNCH, DAOS_OSEQ_OBJ_PUNCH)
 	((uint32_t)		(okqo_pad32_1)		CRT_VAR) \
 	((daos_key_t)		(okqo_dkey)		CRT_VAR) \
 	((daos_key_t)		(okqo_akey)		CRT_VAR) \
-	/* recx for normal data space */			 \
+	/* recx for visible extent */				\
 	((daos_recx_t)		(okqo_recx)		CRT_VAR) \
-	/* recx for EC parity space */				 \
-	((daos_recx_t)		(okqo_recx_parity)	CRT_VAR)
+	/* recx for EC parity space */				\
+	((daos_recx_t)		(okqo_recx_parity)	CRT_VAR) \
+	/* recx for punched EC extents */			\
+	((daos_recx_t)		(okqo_recx_punched)	CRT_VAR)
 
 CRT_RPC_DECLARE(obj_query_key, DAOS_ISEQ_OBJ_QUERY_KEY, DAOS_OSEQ_OBJ_QUERY_KEY)
 
