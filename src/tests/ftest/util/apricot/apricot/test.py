@@ -741,7 +741,7 @@ class TestWithServers(TestWithoutServers):
             cart_ctl.rank.value = "all"
             cart_ctl.m.value = message
             cart_ctl.n.value = None
-            cart_ctl.use_daos_agent_env.value = "--use_daos_agent_env"
+            cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
                 cart_ctl.group_name.value = manager.get_config_value("name")
