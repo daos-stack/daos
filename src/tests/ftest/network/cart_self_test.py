@@ -45,7 +45,6 @@ class CartSelfTest(TestWithServers):
             self.max_inflight_rpcs = FormattedParameter(max_rpc_opt)
 
             self.repetitions = FormattedParameter("--repetitions {0}")
-            self.attach_info = FormattedParameter("--path {0}")
             self.use_daos_agent_env = FormattedParameter("--use-daos-agent-env {0}")
 
     def __init__(self, *args, **kwargs):
@@ -85,12 +84,6 @@ class CartSelfTest(TestWithServers):
 
         # Start the daos server
         self.start_server_managers()
-
-        # Generate a uri file using daos_agent dump-attachinfo
-        attachinfo_file = "{}.attach_info_tmp".format(self.server_group)
-        self.uri_file = get_log_file(attachinfo_file)
-        agent_cmd = self.agent_managers[0].manager.job
-        agent_cmd.dump_attachinfo(self.uri_file)
 
     def test_self_test(self):
         """Run a few CaRT self-test scenarios.

@@ -59,6 +59,12 @@ static unsigned int eq_ref;
  */
 static tse_sched_t daos_sched_g;
 
+void
+daos_eq_ref_set(int value)
+{
+    eq_ref = value;
+}
+
 int
 daos_eq_lib_init()
 {

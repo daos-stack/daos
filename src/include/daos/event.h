@@ -43,6 +43,12 @@ int
 daos_eq_lib_fini(void);
 
 /**
+ * Set event queue ref counter.
+ */
+void
+daos_eq_ref_set(int);
+
+/**
  * Initialize event queue library.
  */
 int

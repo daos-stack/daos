@@ -71,6 +71,12 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 			  crt_group_t *grp, d_rank_t my_rank,
 			  bool delete_file);
 
+int
+crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
+		    crt_context_t *context);
+int
+crtu_dc_mgmt_net_cfg_setenv(const char *name);
+
 void
 crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		     crt_group_t **grp, d_rank_list_t **rank_list,

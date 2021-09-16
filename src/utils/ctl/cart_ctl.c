@@ -746,11 +746,6 @@ main(int argc, char **argv)
 			fprintf(stderr, "dc_agent_init() failed. rc: %d\n", rc);
 			return rc;
 		}
-		rc = dc_mgmt_net_cfg(NULL);
-		if (rc != 0) {
-			fprintf(stderr, "dc_mgmt_net_cfg() failed. rc: %d\n", rc);
-			return rc;
-		}
 	}
 
 	rc = ctl_init();

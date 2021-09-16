@@ -98,18 +98,17 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 	/* rank, num_attach_retries, is_server, assert_on_error */
 	crtu_test_init(0, attach_retries, false, false);
 
-	if (use_daos_agent_vars) {
-		ret = dc_agent_init();
-		if (ret != 0) {
-			fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
-			return ret;
-		}
-		ret = dc_mgmt_net_cfg(NULL);
-		if (ret != 0) {
-			fprintf(stderr, "dc_mgmt_net_cfg() failed. ret: %d\n", ret);
-			return ret;
-		}
+	ret = dc_agent_init();
+	if (ret != 0) {
+		fprintf(stderr, "dc_agent_init() failed. ret: %d\n", ret);
+		return ret;
 	}
+	ret = crtu_dc_mgmt_net_cfg_setenv(dest_name);
+	if (ret != 0) {
+		D_ERROR("crtu_dc_mgmt_net_cfg_setenv() failed; ret = %d\n", ret);
+		return ret;
+	}
+
 
 	if (listen)
 		init_flags |= CRT_FLAG_BIT_SERVER;
@@ -131,11 +130,27 @@ static int self_test_init(char *dest_name, crt_context_t *crt_ctx,
 		return ret;
 	}
 
-	while (attach_retries-- > 0) {
-		ret = crt_group_attach(dest_name, srv_grp);
-		if (ret == 0)
-			break;
-		sleep(1);
+	ret = crt_group_view_create(dest_name, srv_grp);
+	if (!*srv_grp || ret != 0) {
+		D_ERROR("Failed to create group view; ret=%d\n", ret);
+		assert(0);
+	}
+
+	if (use_daos_agent_vars) {
+		ret = crtu_dc_mgmt_net_cfg_rank_add(dest_name, *srv_grp, *crt_ctx);
+		if (ret != 0) {
+			fprintf(stderr, "crtu_dc_mgmt_net_cfg_rank_add() failed. ret: %d\n", ret);
+			return ret;
+		}
+	}
+
+	if (!use_daos_agent_vars) {
+		while (attach_retries-- > 0) {
+			ret = crt_group_attach(dest_name, srv_grp);
+			if (ret == 0)
+				break;
+			sleep(1);
+		}
 	}
 
 	if (ret != 0) {
