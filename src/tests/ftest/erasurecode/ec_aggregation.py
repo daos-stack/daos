@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from ec_utils import ErasureCodeIor, check_aggregation_status
-from apricot import skipForTicket
 
 class EcodAggregationOff(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
@@ -45,7 +44,6 @@ class EcodAggregationOff(ErasureCodeIor):
         # Read IOR data and verify content
         self.ior_read_dataset()
 
-    @skipForTicket("DAOS-7204")
     def test_ec_aggregation_default(self):
         """Jira ID: DAOS-7325.
 
@@ -77,7 +75,6 @@ class EcodAggregationOff(ErasureCodeIor):
                 # Read single IOR
                 self.ior_read_single_dataset(oclass, sizes)
 
-    @skipForTicket("DAOS-7204")
     def test_ec_aggregation_time(self):
         """Jira ID: DAOS-7325.
 

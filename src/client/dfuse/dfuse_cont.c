@@ -61,7 +61,8 @@ dfuse_cont_helper(fuse_req_t req, struct dfuse_inode_entry *parent,
 		}
 
 		uuid_copy(dfc->dfs_cont, cont);
-		dfuse_set_default_cont_cache_values(dfc);
+		if (fs_handle->dpi_info->di_caching)
+			dfuse_set_default_cont_cache_values(dfc);
 	}
 
 	rc = dfuse_cont_open(fs_handle, dfp, &cont, &dfc);

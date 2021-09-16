@@ -41,8 +41,7 @@ dss_engine_metrics_init(void)
 	}
 
 	rc = d_tm_add_metric(&dss_engine_metrics.rank_id, D_TM_COUNTER,
-			     "Rank ID of this engine", "",
-			     "rank");
+			     "Rank ID of this engine", "", "rank");
 	if (rc != 0) {
 		D_ERROR("unable to add metric for rank ID: "
 			DF_RC "\n", DP_RC(rc));
@@ -50,7 +49,7 @@ dss_engine_metrics_init(void)
 	}
 
 	rc = d_tm_add_metric(&dss_engine_metrics.dead_rank_events, D_TM_COUNTER,
-			     "Number of dead rank events received", NULL,
+			     "Number of dead rank events received", "events",
 			     "events/dead_ranks");
 	if (rc != 0) {
 		D_ERROR("unable to add metric for dead ranks: "

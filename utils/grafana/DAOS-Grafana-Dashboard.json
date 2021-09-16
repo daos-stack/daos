@@ -40,7 +40,7 @@
   "links": [],
   "panels": [
     {
-      "collapsed": false,
+      "collapsed": true,
       "datasource": null,
       "gridPos": {
         "h": 1,
@@ -49,154 +49,155 @@
         "y": 0
       },
       "id": 20,
-      "panels": [],
-      "title": "System",
-      "type": "row"
-    },
-    {
-      "datasource": null,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 1
-      },
-      "id": 28,
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true,
-        "text": {}
-      },
-      "pluginVersion": "8.0.3",
-      "targets": [
+      "panels": [
         {
-          "exemplar": true,
-          "expr": "count(engine_rank)",
-          "instant": true,
-          "interval": "",
-          "legendFormat": "",
-          "refId": "A"
-        }
-      ],
-      "title": "Active Ranks",
-      "type": "gauge"
-    },
-    {
-      "datasource": null,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
+          "datasource": null,
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
           },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "left",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 1
+          },
+          "id": 28,
+          "options": {
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
             },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
+            "showThresholdLabels": false,
+            "showThresholdMarkers": true,
+            "text": {}
+          },
+          "pluginVersion": "8.0.3",
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "count(engine_rank)",
+              "instant": true,
+              "interval": "",
+              "legendFormat": "",
+              "refId": "A"
+            }
+          ],
+          "title": "Active Ranks",
+          "type": "gauge"
+        },
+        {
+          "datasource": null,
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "left",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "#EAB839",
+                    "value": 0.01
+                  }
+                ]
+              },
+              "unit": "none"
             },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 1
+          },
+          "id": 24,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom"
             },
-            "thresholdsStyle": {
-              "mode": "off"
+            "tooltip": {
+              "mode": "single"
             }
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "#EAB839",
-                "value": 0.01
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 1
-      },
-      "id": 24,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "pluginVersion": "8.0.3",
-      "targets": [
-        {
-          "exemplar": true,
-          "expr": "sum without (rank) (ceil(rate(engine_events_dead_ranks[15s])))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "legendFormat": "Rank died",
-          "refId": "A"
+          "pluginVersion": "8.0.3",
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum without (rank) (ceil(rate(engine_events_dead_ranks[15s])))",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "Rank died",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "title": "Events",
+          "transformations": [],
+          "type": "timeseries"
         }
       ],
-      "thresholds": [],
-      "title": "Events",
-      "transformations": [],
-      "type": "timeseries"
+      "title": "System",
+      "type": "row"
     },
     {
       "collapsed": false,
@@ -205,7 +206,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 1
       },
       "id": 18,
       "panels": [],
@@ -271,7 +272,7 @@
               "options": {
                 "mode": "exclude",
                 "names": [
-                  "Total"
+                  "Fetch"
                 ],
                 "prefix": "All except:",
                 "readOnly": true
@@ -294,7 +295,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 10
+        "y": 2
       },
       "id": 2,
       "options": {
@@ -310,7 +311,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum without (rank) (rate(engine_io_fetch_bytes[15s]))",
+          "expr": "sum without (rank, pool, target) (rate(engine_pool_xferred_fetch[15s]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -321,7 +322,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum without (rank) (rate(engine_io_update_bytes[15s]))",
+          "expr": "sum without (rank, pool, target) (rate(engine_pool_xferred_update[15s]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -331,7 +332,7 @@
         },
         {
           "exemplar": true,
-          "expr": "sum without (rank) (rate(engine_io_fetch_bytes[15s]) + rate(engine_io_update_bytes[15s]))",
+          "expr": "sum without (rank, pool) (rate(engine_pool_xferred_fetch[15s]) + rate(engine_pool_xferred_update[15s]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Total",
@@ -367,7 +368,7 @@
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -384,10 +385,6 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           }
@@ -398,12 +395,14 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 10
+        "y": 2
       },
       "id": 12,
       "options": {
         "legend": {
-          "calcs": [],
+          "calcs": [
+            "mean"
+          ],
           "displayMode": "list",
           "placement": "bottom"
         },
@@ -414,14 +413,16 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum without (rank) (rate(engine_io_ops_fetch_total[1m]))",
+          "expr": "sum without (rank, pool, target) (rate(engine_pool_ops_fetch[1m]))",
+          "format": "time_series",
+          "instant": false,
           "interval": "",
           "legendFormat": "Fetch",
           "refId": "fetch"
         },
         {
           "exemplar": true,
-          "expr": "sum without (rank) (rate(engine_io_ops_update_total[1m]))",
+          "expr": "sum without (rank, pool, target) (rate(engine_pool_ops_update[1m]))",
           "hide": false,
           "interval": "",
           "legendFormat": "Update",
@@ -484,7 +485,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 20
+        "y": 12
       },
       "id": 14,
       "options": {
@@ -502,7 +503,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "avg without (rank) (engine_io_fetch_latency)",
+          "expr": "avg without (rank, target) (engine_io_latency_fetch_mean)",
           "hide": false,
           "interval": "",
           "legendFormat": "{{size}}",
@@ -547,7 +548,17 @@
               "mode": "off"
             }
           },
-          "mappings": [],
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "index": 0,
+                  "text": "N/A"
+                }
+              },
+              "type": "value"
+            }
+          ],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -565,7 +576,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 20
+        "y": 12
       },
       "id": 26,
       "options": {
@@ -583,7 +594,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "avg without (rank) (engine_io_update_latency)",
+          "expr": "avg without (rank, target) (engine_io_latency_update_mean)",
           "interval": "",
           "legendFormat": "{{size}}",
           "refId": "A"
@@ -599,9 +610,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 28
+        "y": 20
       },
-      "id": 10,
+      "id": 30,
       "panels": [],
       "title": "Pools and Containers",
       "type": "row"
@@ -641,7 +652,6 @@
               "mode": "off"
             }
           },
-          "decimals": 1,
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -649,10 +659,6 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           }
@@ -663,9 +669,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 29
+        "y": 21
       },
-      "id": 6,
+      "id": 34,
       "options": {
         "legend": {
           "calcs": [],
@@ -676,115 +682,13 @@
           "mode": "single"
         }
       },
-      "pluginVersion": "8.0.3",
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum without (rank) (engine_container_ops_open_active)",
-          "instant": false,
+          "expr": "sum without (rank, pool) (engine_pool_pool_handles)",
           "interval": "",
-          "legendFormat": "Current",
-          "refId": "active"
-        },
-        {
-          "exemplar": true,
-          "expr": "sum without (rank) (engine_container_ops_open_active_max)",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "legendFormat": "Max",
-          "refId": "max"
-        }
-      ],
-      "title": "Open Container Handles",
-      "type": "timeseries"
-    },
-    {
-      "datasource": null,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "decimals": 1,
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 29
-      },
-      "id": 4,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "pluginVersion": "8.0.3",
-      "targets": [
-        {
-          "exemplar": true,
-          "expr": "sum without (rank) (engine_pool_ops_open_active)",
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "Current",
-          "refId": "open_active"
-        },
-        {
-          "exemplar": true,
-          "expr": "sum without (rank) (engine_pool_ops_open_active_max)",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "legendFormat": "Max",
-          "refId": "open_max"
+          "legendFormat": "Total",
+          "refId": "A"
         }
       ],
       "title": "Open Pool Handles",
@@ -832,6 +736,83 @@
               {
                 "color": "green",
                 "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 21
+      },
+      "id": 32,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum without (rank, job, instance, pool) (engine_pool_container_handles)",
+          "interval": "",
+          "legendFormat": "Total",
+          "refId": "A"
+        }
+      ],
+      "title": "Open Container Handles",
+      "type": "timeseries"
+    },
+    {
+      "datasource": null,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -846,9 +827,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 37
+        "y": 29
       },
-      "id": 8,
+      "id": 36,
       "options": {
         "legend": {
           "calcs": [],
@@ -862,25 +843,25 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum without (rank) (rate(engine_container_ops_open_total[15s]))",
-          "hide": false,
+          "expr": "sum without (rank, pool) (rate(engine_pool_ops_cont_open[15s]))",
           "interval": "",
-          "legendFormat": "open",
+          "legendFormat": "Open",
           "refId": "open"
         },
         {
           "exemplar": true,
-          "expr": "sum without (rank) (rate(engine_container_ops_close_total[15s]))",
+          "expr": "sum without (rank, pool) (rate(engine_pool_ops_cont_close[15s]))",
+          "hide": false,
           "interval": "",
-          "legendFormat": "close",
+          "legendFormat": "Close",
           "refId": "close"
         },
         {
           "exemplar": true,
-          "expr": "sum without (rank) (rate(engine_container_ops_destroy_total[15s]))",
+          "expr": "sum without (rank, pool) (rate(engine_pool_ops_cont_destroy[15s]))",
           "hide": false,
           "interval": "",
-          "legendFormat": "destroy",
+          "legendFormat": "Destroy",
           "refId": "destroy"
         }
       ],
@@ -896,12 +877,12 @@
     "list": []
   },
   "time": {
-    "from": "now-15m",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "DAOS",
   "uid": "okaW9iknz",
-  "version": 54
+  "version": 65
 }

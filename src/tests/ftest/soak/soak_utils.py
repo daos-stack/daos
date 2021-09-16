@@ -17,10 +17,9 @@ from data_mover_utils import FsCopy
 from dfuse_utils import Dfuse
 from job_manager_utils import Srun
 from general_utils import get_host_data, get_random_string, \
-    run_command, DaosTestError, pcmd, get_random_bytes
+    run_command, DaosTestError, pcmd, get_random_bytes, run_pcmd
 import slurm_utils
 from daos_utils import DaosCommand
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 from ClusterShell.NodeSet import NodeSet
 from avocado.core.exceptions import TestFail
@@ -59,10 +58,7 @@ def add_pools(self, pool_names):
     for pool_name in pool_names:
         path = "".join(["/run/", pool_name, "/*"])
         # Create a pool and add it to the overall list of pools
-        self.pool.append(TestPool(self.context, self.dmg_command))
-        self.pool[-1].namespace = path
-        self.pool[-1].get_params(self)
-        self.pool[-1].create()
+        self.pool.append(self.get_pool(namespace=path, connect=False))
         self.log.info("Valid Pool UUID is %s", self.pool[-1].uuid)
 
 
@@ -73,37 +69,47 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         pool: pool to create container
         oclass: object class of container
 
+
     """
+    rf = None
     # Create a container and add it to the overall list of containers
     self.container.append(
         TestContainer(pool, daos_command=self.get_daos_command()))
     self.container[-1].namespace = path
     self.container[-1].get_params(self)
+    # don't include oclass in daos cont cmd; include rf based on the class
     if oclass:
-        self.container[-1].oclass.update(oclass)
-    parity = get_ec_parity_number(oclass)
-    if parity:
-        rf = 'rf:{}'.format(parity)
-        properties = self.container[-1].properties.value
-        cont_properties = (",").join(filter(None, [properties, rf]))
-        if cont_properties:
-            self.container[-1].properties.update(cont_properties)
+        self.container[-1].oclass.update(None)
+        redundancy_factor = get_rf(oclass)
+        rf = 'rf:{}'.format(str(redundancy_factor))
+    properties = self.container[-1].properties.value
+    cont_properties = (",").join(filter(None, [properties, rf]))
+    if cont_properties is not None:
+        self.container[-1].properties.update(cont_properties)
     self.container[-1].create()
 
 
-def get_ec_parity_number(oclass):
-    """Return EC Object Parity count.
+def get_rf(oclass):
+    """Return redundancy factor based on the oclass.
+
     Args:
-        oclass(string): EC Object type.
+        oclass(string): object class.
 
     return:
-        Parity numbers from object type
+        redundancy factor(int) from object type
     """
-    if 'EC' not in oclass:
-        return 0
-
-    tmp = re.findall(r'\d+', oclass)
-    return tmp[1]
+    rf = 0
+    if "EC" in oclass:
+        tmp = re.findall(r'\d+', oclass)
+        if tmp:
+            rf = int(tmp[1])
+    elif "RP" in oclass:
+        tmp = re.findall(r'\d+', oclass)
+        if tmp:
+            rf = int(tmp[0]) - 1
+    else:
+        rf = 0
+    return rf
 
 
 def reserved_file_copy(self, file, pool, container, num_bytes=None, cmd="read"):
@@ -182,6 +188,26 @@ def get_remote_logs(self):
             "from clients>>: {}".format(self.hostlist_clients))
 
 
+def write_logfile(data, name, destination):
+    """Write date to the local destination file.
+
+    Args:
+        self (obj): soak obj
+        data (str): data to write to file
+        destination (str): local avocado directory
+    """
+    if not os.path.exists(destination):
+        os.makedirs(destination)
+    scriptfile = destination + "/" + str(name)
+    with open(scriptfile, 'w') as script_file:
+        # identify what be used to run this script
+        if isinstance(data, list):
+            text = "\n".join(data)
+            script_file.write(text)
+        else:
+            script_file.write(str(data))
+
+
 def run_event_check(self, since, until):
     """Run a check on specific events in journalctl.
 
@@ -232,6 +258,35 @@ def run_monitor_check(self):
             pcmd(hosts, command, timeout=30)
 
 
+def run_metrics_check(self, logging=True, prefix=None):
+    """Monitor telemetry data.
+
+    Args:
+        self (obj): soak obj
+        logging (bool): If True; output is logged to file
+        prefix (str): add prefix to name; ie initial or final
+    """
+    enable_telemetry = self.params.get("enable_telemetry", "/run/*")
+    if enable_telemetry:
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        for engine in range(engine_count):
+            name = "pass" + str(self.loop) + "_metrics_{}.csv".format(engine)
+            if prefix:
+                name = prefix + "_metrics_{}.csv".format(engine)
+            destination = self.outputsoakdir
+            results = run_pcmd(hosts=self.hostlist_servers,
+                               command="sudo daos_metrics -S {} --csv".format(
+                                   engine),
+                               verbose=(not logging),
+                               timeout=60)
+            if logging:
+                for result in results:
+                    hosts = result["hosts"]
+                    log_name = name + "-" + str(hosts)
+                    write_logfile(result["stdout"], log_name, destination)
+
+
 def get_harassers(harasser):
     """Create a valid harasserlist from the yaml job harassers.
 
@@ -274,11 +329,13 @@ def wait_for_pool_rebuild(self, pool, name):
         rebuild_status = True
     except DaosTestError as error:
         self.log.error(
-            "<<<FAILED:{} rebuild timed out".format(name), exc_info=error)
+            "<<<FAILED:{} rebuild timed out: {}".format(
+                name, error), exc_info=error)
         rebuild_status = False
     except TestFail as error1:
-        self.log.error("<<<FAILED:{} rebuild failed due to test issue".format(
-            name), exc_info=error1)
+        self.log.error(
+            "<<<FAILED:{} rebuild failed due to test issue: {}".format(
+                name, error1), exc_info=error1)
     return rebuild_status
 
 
@@ -667,18 +724,16 @@ def cleanup_dfuse(self):
         slurm_utils.srun(
             NodeSet.fromlist(
                 self.hostlist_clients), "{}".format(
-                    ";".join(cmd)), self.srun_params)
+                    ";".join(cmd)), self.srun_params, timeout=180)
     except slurm_utils.SlurmFailed as error:
-        raise SoakTestError(
-            "<<FAILED: Dfuse processes not stopped>>") from error
+        self.log.info("Dfuse processes not stopped")
     try:
         slurm_utils.srun(
             NodeSet.fromlist(
                 self.hostlist_clients), "{}".format(
-                    ";".join(cmd2)), self.srun_params)
+                    ";".join(cmd2)), self.srun_params, timeout=180)
     except slurm_utils.SlurmFailed as error:
-        raise SoakTestError(
-            "<<FAILED: Dfuse mountpoints not deleted>>") from error
+        self.log.info("Dfuse mountpoints not deleted")
 
 
 def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
@@ -739,8 +794,12 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         ior_cmd.api.update(api)
                     ior_cmd.block_size.update(b_size)
                     ior_cmd.transfer_size.update(t_size)
-                    ior_cmd.dfs_oclass.update(o_type)
-                    ior_cmd.dfs_dir_oclass.update(o_type)
+                    if (api in ["HDF5-VOL", "POSIX"]):
+                        ior_cmd.dfs_oclass.update(None)
+                        ior_cmd.dfs_dir_oclass.update(None)
+                    else:
+                        ior_cmd.dfs_oclass.update(o_type)
+                        ior_cmd.dfs_dir_oclass.update(o_type)
                     if ior_cmd.api.value == "DFS":
                         ior_cmd.test_file.update(
                             os.path.join("/", "testfile"))
@@ -830,12 +889,25 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                         mdtest_cmd.flags.update(flag)
                         mdtest_cmd.num_of_files_dirs.update(
                             num_of_files_dirs)
+                        if "POSIX" in api:
+                            mdtest_cmd.dfs_oclass.update(None)
+                            mdtest_cmd.dfs_dir_oclass.update(None)
+                        else:
+                            mdtest_cmd.dfs_oclass.update(oclass)
+                            mdtest_cmd.dfs_dir_oclass.update(oclass)
+                        if "EC" in oclass:
+                            # oclass_dir can not be EC must be RP based on rf
+                            rf = get_rf(oclass)
+                            if rf >= 2:
+                                mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
+                            elif rf == 1:
+                                mdtest_cmd.dfs_dir_oclass.update("RP_2G1")
+                            else:
+                                mdtest_cmd.dfs_dir_oclass.update("SX")
                         add_containers(self, pool, oclass)
                         mdtest_cmd.set_daos_params(
                             self.server_group, pool,
                             self.container[-1].uuid)
-                        mdtest_cmd.dfs_oclass.update(oclass)
-                        mdtest_cmd.dfs_dir_oclass.update(oclass)
                         env = mdtest_cmd.get_default_env("srun")
                         sbatch_cmds = [
                             "module load -q {}".format(mpi_module)]
@@ -869,13 +941,12 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     return commands
 
 
-def create_racer_cmdline(self, job_spec, pool):
+def create_racer_cmdline(self, job_spec):
     """Create the srun cmdline to run daos_racer.
 
     Args:
         self (obj): soak obj
         job_spec (str): fio job in yaml to run
-        pool (obj):   TestPool obj
     Returns:
         cmd(list): list of cmdlines
 
@@ -892,9 +963,6 @@ def create_racer_cmdline(self, job_spec, pool):
         "${SLURM_JOB_ID}_" + "racer_log")
     env = daos_racer.get_environment(self.server_managers[0], racer_log)
     daos_racer.set_environment(env)
-    daos_racer.pool_uuid.update(pool.uuid)
-    add_containers(self, pool, path=racer_namespace)
-    daos_racer.cont_uuid.update(self.container[-1].uuid)
     log_name = job_spec
     srun_cmds = []
     srun_cmds.append(str(daos_racer.__str__()))

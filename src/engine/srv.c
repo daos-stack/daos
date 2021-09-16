@@ -191,7 +191,7 @@ dss_rpc_cntr_enter(enum dss_rpc_cntr_id id)
 {
 	struct dss_rpc_cntr *cntr = dss_rpc_cntr_get(id);
 
-	daos_gettime_coarse(&cntr->rc_active_time);
+	cntr->rc_active_time = sched_cur_msec();
 	cntr->rc_active++;
 	cntr->rc_total++;
 
@@ -267,7 +267,7 @@ dss_nvme_poll_ult(void *args)
 
 	D_ASSERT(dx->dx_main_xs);
 	while (!dss_xstream_exiting(dx)) {
-		bio_nvme_poll(dmi->dmi_nvme_ctxt, dss_nvme_bypass_health_check);
+		bio_nvme_poll(dmi->dmi_nvme_ctxt);
 		ABT_thread_yield();
 	}
 }
@@ -353,7 +353,8 @@ dss_srv_handler(void *arg)
 	dmi->dmi_xs_id	= dx->dx_xs_id;
 	dmi->dmi_tgt_id	= dx->dx_tgt_id;
 	dmi->dmi_ctx_id	= -1;
-	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_list);
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_cont_list);
+	D_INIT_LIST_HEAD(&dmi->dmi_dtx_batched_pool_list);
 
 	(void)pthread_setname_np(pthread_self(), dx->dx_name);
 
@@ -794,11 +795,11 @@ bool
 dss_xstream_is_busy(void)
 {
 	struct dss_rpc_cntr	*cntr = dss_rpc_cntr_get(DSS_RC_OBJ);
-	uint64_t		 cur_sec = 0;
+	uint64_t		 cur_msec;
 
-	daos_gettime_coarse(&cur_sec);
+	cur_msec = sched_cur_msec();
 	/* No IO requests for more than 5 seconds */
-	return cur_sec < (cntr->rc_active_time + 5);
+	return cur_msec < (cntr->rc_active_time + 5000);
 }
 
 static int
@@ -1210,7 +1211,8 @@ dss_srv_init(void)
 	xstream_data.xd_init_step = XD_INIT_SYS_DB;
 
 	rc = bio_nvme_init(dss_nvme_conf, dss_nvme_shm_id, dss_nvme_mem_size,
-			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get());
+			   dss_nvme_hugepage_size, dss_tgt_nr, vos_db_get(),
+			   dss_nvme_bypass_health_check);
 	if (rc != 0)
 		D_GOTO(failed, rc);
 	xstream_data.xd_init_step = XD_INIT_NVME;

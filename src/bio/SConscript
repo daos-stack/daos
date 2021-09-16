@@ -24,7 +24,7 @@ def scons():
     denv.AppendUnique(OBJPREFIX='b_')
 
     # SPDK related libs
-    libs = ['spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'rte_mempool']
+    libs = ['spdk_log', 'spdk_env_dpdk', 'spdk_thread', 'spdk_bdev', 'rte_mempool']
     libs += ['rte_mempool_ring', 'rte_bus_pci', 'rte_pci', 'rte_ring']
     libs += ['rte_mbuf', 'rte_eal', 'rte_kvargs', 'spdk_bdev_aio']
     libs += ['spdk_bdev_nvme', 'spdk_blob', 'spdk_nvme', 'spdk_util']

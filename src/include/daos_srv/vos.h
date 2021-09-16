@@ -120,6 +120,21 @@ vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 	      int count);
 
 /**
+ * Set flags on the active DTXs.
+ *
+ * \param coh	[IN]	Container open handle.
+ * \param dtis	[IN]	The array for DTX identifiers to be handled.
+ * \param count [IN]	The count of DTXs to be handled.
+ * \param flags [IN]	The flags for the DTXs.
+ *
+ * \return		Negative value if error.
+ * \return		Others are for the count of handled DTXs.
+ */
+int
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dtis, int count,
+		  uint32_t flags);
+
+/**
  * Aggregate the committed DTXs.
  *
  * \param coh	[IN]	Container open handle.
@@ -505,7 +520,10 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -540,7 +558,10 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -701,6 +722,10 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -978,7 +1003,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * object. If object does not have an array value, 0 is returned in extent. User
  * has to specify what is being queried (dkey, akey, and/or recx) along with the
  * query type (max or min) in flags. If one of those is not provided the
- * function will fail. If the dkey or akey are not being queried, there value
+ * function will fail. If the dkey or akey are not being queried, their values
  * must be provided by the user.
  *
  * If searching in a particular dkey for the max akey and max offset in that
@@ -1011,6 +1036,10 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * \param[out]	recx	max or min offset in dkey/akey, and the size of the
  *			extent at the offset. If there are no visible array
  *			records, the size in the recx returned will be 0.
+ * \param[in]	cell_size cell size for EC object, used to calculated the replicated
+ *                      space address on parity shard.
+ * \param[in]	stripe_size stripe size for EC object, used to calculated the replicated
+ *                      space address on parity shard.
  * \param[in]	dth	Pointer to the DTX handle.
  *
  * \return
@@ -1022,7 +1051,8 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
 int
 vos_obj_query_key(daos_handle_t coh, daos_unit_oid_t oid, uint32_t flags,
 		  daos_epoch_t epoch, daos_key_t *dkey, daos_key_t *akey,
-		  daos_recx_t *recx, struct dtx_handle *dth);
+		  daos_recx_t *recx, unsigned int cell_size, uint64_t stripe_size,
+		  struct dtx_handle *dth);
 
 /** Return constants that can be used to estimate the metadata overhead
  *  in persistent memory on-disk format.

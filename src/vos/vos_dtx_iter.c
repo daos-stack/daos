@@ -99,6 +99,8 @@ static int
 dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 {
 	struct vos_dtx_iter	*oiter = iter2oiter(iter);
+	struct vos_dtx_act_ent	*dae;
+	d_iov_t			 rec_iov;
 	int			 rc = 0;
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
@@ -107,20 +109,63 @@ dtx_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 		oiter->oit_linear = true;
 		if (d_list_empty(&oiter->oit_cont->vc_dtx_act_list)) {
 			oiter->oit_cur = NULL;
-			rc = -DER_NONEXIST;
-		} else {
-			oiter->oit_cur =
+			D_GOTO(out, rc = -DER_NONEXIST);
+		}
+
+		dae = oiter->oit_cur =
 			d_list_entry(oiter->oit_cont->vc_dtx_act_list.next,
 				     struct vos_dtx_act_ent, dae_link);
-		}
 	} else {
 		D_ASSERT(!oiter->oit_iter.it_cleanup_stale_dtx);
 
 		oiter->oit_linear = false;
 		rc = dbtree_iter_probe(oiter->oit_hdl, BTR_PROBE_GE,
 				       vos_iter_intent(iter), NULL, anchor);
+		if (rc != 0)
+			goto out;
+
+		d_iov_set(&rec_iov, NULL, 0);
+		rc = dbtree_iter_fetch(oiter->oit_hdl, NULL, &rec_iov, anchor);
+		if (rc != 0) {
+			D_ERROR("Error while fetching DTX info: rc = "DF_RC"\n",
+				DP_RC(rc));
+			goto out;
+		}
+
+		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
+		dae = rec_iov.iov_buf;
 	}
 
+	while (dae->dae_committable || dae->dae_committed ||
+	       dae->dae_aborted || dae->dae_dbd == NULL) {
+		if (oiter->oit_linear) {
+			if (dae->dae_link.next ==
+			    &oiter->oit_cont->vc_dtx_act_list) {
+				oiter->oit_cur = NULL;
+				D_GOTO(out, rc = -DER_NONEXIST);
+			}
+
+			dae = oiter->oit_cur =
+				d_list_entry(dae->dae_link.next,
+					     struct vos_dtx_act_ent, dae_link);
+		} else {
+			rc = dbtree_iter_next(oiter->oit_hdl);
+			if (rc != 0)
+				goto out;
+
+			d_iov_set(&rec_iov, NULL, 0);
+			rc = dbtree_iter_fetch(oiter->oit_hdl, NULL,
+					       &rec_iov, NULL);
+			if (rc != 0)
+				goto out;
+
+			D_ASSERT(rec_iov.iov_len ==
+				 sizeof(struct vos_dtx_act_ent));
+			dae = rec_iov.iov_buf;
+		}
+	}
+
+out:
 	return rc;
 }
 
@@ -134,7 +179,7 @@ dtx_iter_next(struct vos_iterator *iter)
 
 	D_ASSERT(iter->it_type == VOS_ITER_DTX);
 
-	while (1) {
+	do {
 		if (oiter->oit_linear) {
 			if (oiter->oit_cur == NULL)
 				D_GOTO(out, rc = -DER_NONEXIST);
@@ -163,12 +208,8 @@ dtx_iter_next(struct vos_iterator *iter)
 				 sizeof(struct vos_dtx_act_ent));
 			dae = rec_iov.iov_buf;
 		}
-
-		/* Only return prepared ones. */
-		if (!dae->dae_committable && !dae->dae_committed &&
-		    !dae->dae_aborted && dae->dae_dbd != NULL)
-			break;
-	}
+	} while (dae->dae_committable || dae->dae_committed ||
+		 dae->dae_aborted || dae->dae_dbd == NULL);
 
 out:
 	return rc;
@@ -202,6 +243,12 @@ dtx_iter_fetch(struct vos_iterator *iter, vos_iter_entry_t *it_entry,
 		D_ASSERT(rec_iov.iov_len == sizeof(struct vos_dtx_act_ent));
 		dae = rec_iov.iov_buf;
 	}
+
+	/* Only return prepared ones. */
+	D_ASSERT(!dae->dae_committable);
+	D_ASSERT(!dae->dae_committed);
+	D_ASSERT(!dae->dae_aborted);
+	D_ASSERT(dae->dae_dbd != NULL);
 
 	it_entry->ie_epoch = DAE_EPOCH(dae);
 	it_entry->ie_dtx_xid = DAE_XID(dae);

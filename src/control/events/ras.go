@@ -123,6 +123,7 @@ type RASEvent struct {
 	Msg          string          `json:"msg"`
 	Hostname     string          `json:"hostname"`
 	Rank         uint32          `json:"rank"`
+	Incarnation  uint64          `json:"incarnation"`
 	HWID         string          `json:"hw_id"`
 	ProcID       uint64          `json:"proc_id"`
 	ThreadID     uint64          `json:"thread_id"`
@@ -135,6 +136,12 @@ type RASEvent struct {
 
 	forwarded   atm.Bool
 	forwardable atm.Bool
+}
+
+// GetTimestamp returns a time.Time parsed from the event
+// timestamp.
+func (evt *RASEvent) GetTimestamp() (time.Time, error) {
+	return common.ParseTime(evt.Timestamp)
 }
 
 // IsForwarded returns true if event has been forwarded between hosts.
@@ -261,21 +268,22 @@ func (evt *RASEvent) ToProto() (*sharedpb.RASEvent, error) {
 // FromProto initializes a native event from a provided protobuf event.
 func (evt *RASEvent) FromProto(pbEvt *sharedpb.RASEvent) (err error) {
 	*evt = RASEvent{
-		ID:        RASID(pbEvt.Id),
-		Timestamp: pbEvt.Timestamp,
-		Type:      RASTypeID(pbEvt.Type),
-		Severity:  RASSeverityID(pbEvt.Severity),
-		Msg:       pbEvt.Msg,
-		Hostname:  pbEvt.Hostname,
-		Rank:      pbEvt.Rank,
-		HWID:      pbEvt.HwId,
-		ProcID:    pbEvt.ProcId,
-		ThreadID:  pbEvt.ThreadId,
-		JobID:     pbEvt.JobId,
-		PoolUUID:  pbEvt.PoolUuid,
-		ContUUID:  pbEvt.ContUuid,
-		ObjID:     pbEvt.ObjId,
-		CtlOp:     pbEvt.CtlOp,
+		ID:          RASID(pbEvt.Id),
+		Timestamp:   pbEvt.Timestamp,
+		Type:        RASTypeID(pbEvt.Type),
+		Severity:    RASSeverityID(pbEvt.Severity),
+		Msg:         pbEvt.Msg,
+		Hostname:    pbEvt.Hostname,
+		Rank:        pbEvt.Rank,
+		Incarnation: pbEvt.Incarnation,
+		HWID:        pbEvt.HwId,
+		ProcID:      pbEvt.ProcId,
+		ThreadID:    pbEvt.ThreadId,
+		JobID:       pbEvt.JobId,
+		PoolUUID:    pbEvt.PoolUuid,
+		ContUUID:    pbEvt.ContUuid,
+		ObjID:       pbEvt.ObjId,
+		CtlOp:       pbEvt.CtlOp,
 	}
 
 	evt.forwarded.SetFalse()

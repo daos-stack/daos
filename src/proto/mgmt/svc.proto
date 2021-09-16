@@ -39,6 +39,7 @@ message JoinReq {
 	string addr = 6;	// Server management address.
 	string srvFaultDomain = 7; // Fault domain for this instance's server
 	uint32 idx = 8;		// Instance index on server node.
+	uint64 incarnation = 9; // rank incarnation
 }
 
 message JoinResp {

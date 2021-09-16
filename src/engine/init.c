@@ -85,6 +85,11 @@ hwloc_obj_t		numa_obj;
 int			dss_num_cores_numa_node;
 /** Module facility bitmask */
 static uint64_t		dss_mod_facs;
+/** Number of storage tiers: 2 for SCM and NVMe */
+int dss_storage_tiers = 2;
+
+/** Flag to indicate Arbogots is initialized */
+static bool dss_abt_init;
 
 /* stream used to dump ABT infos and ULTs stacks */
 static FILE *abt_infos;
@@ -105,6 +110,42 @@ struct dss_module_info *
 get_module_info(void)
 {
 	return dss_get_module_info();
+}
+
+/* See the comment near where this function is called. */
+static uint64_t
+hlc_recovery_begin(void)
+{
+	return crt_hlc_epsilon_get_bound(crt_hlc_get());
+}
+
+/* See the comment near where this function is called. */
+static void
+hlc_recovery_end(uint64_t bound)
+{
+	int64_t	diff;
+
+	diff = bound - crt_hlc_get();
+	if (diff > 0) {
+		struct timespec	tv;
+
+		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
+		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
+
+		/* XXX: If the server restart so quickly as to all related
+		 *	things are handled within HLC epsilon, then it is
+		 *	possible that current local HLC after restart may
+		 *	be older than some HLC that was generated before
+		 *	server restart because of the clock drift between
+		 *	servers. So here, we control the server (re)start
+		 *	process to guarantee that the restart time window
+		 *	will be longer than the HLC epsilon, then new HLC
+		 *	generated after server restart will not rollback.
+		 */
+		D_INFO("nanosleep %lu:%lu before open external service.\n",
+		       tv.tv_sec, tv.tv_nsec);
+		nanosleep(&tv, NULL);
+	}
 }
 
 /*
@@ -201,7 +242,6 @@ modules_load(void)
 	D_FREE(sep);
 	return rc;
 }
-
 
 /**
  * Get the appropriate number of main XS based on the number of cores and
@@ -450,17 +490,20 @@ abt_init(int argc, char *argv[])
 		return dss_abterr2der(rc);
 	}
 
+	dss_abt_init = true;
+
 	return 0;
 }
 
 static void
 abt_fini(void)
 {
+	dss_abt_init = false;
 	ABT_finalize();
 }
 
 static void
-dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
+dss_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		 enum crt_event_type type, void *arg)
 {
 	int			 rc = 0;
@@ -478,7 +521,7 @@ dss_crt_event_cb(d_rank_t rank, enum crt_event_source src,
 	d_tm_inc_counter(metrics->dead_rank_events, 1);
 	d_tm_record_timestamp(metrics->last_event_time);
 
-	rc = ds_notify_swim_rank_dead(rank);
+	rc = ds_notify_swim_rank_dead(rank, incarnation);
 	if (rc)
 		D_ERROR("failed to handle %u/%u event: "DF_RC"\n",
 			src, type, DP_RC(rc));
@@ -489,7 +532,8 @@ dss_crt_hlc_error_cb(void *arg)
 {
 	/* Rank will be populated automatically */
 	ds_notify_ras_eventf(RAS_ENGINE_CLOCK_DRIFT, RAS_TYPE_INFO,
-			     RAS_SEV_ERROR, NULL /* hwid */, NULL /* rank */,
+			     RAS_SEV_ERROR, NULL /* hwid */,
+			     NULL /* rank */, NULL /* inc */,
 			     NULL /* jobid */, NULL /* pool */,
 			     NULL /* cont */, NULL /* objid */,
 			     NULL /* ctlop */, NULL /* data */,
@@ -499,19 +543,33 @@ dss_crt_hlc_error_cb(void *arg)
 static void
 server_id_cb(uint32_t *tid, uint64_t *uid)
 {
-	if (uid != NULL)
-		ABT_self_get_thread_id(uid);
+
+	if (server_init_state != DSS_INIT_STATE_SET_UP)
+		return;
+
+	if (uid != NULL && dss_abt_init) {
+		ABT_unit_type type = ABT_UNIT_TYPE_EXT;
+		int rc;
+
+		rc = ABT_self_get_type(&type);
+
+		if (rc == 0 && (type == ABT_UNIT_TYPE_THREAD || type == ABT_UNIT_TYPE_TASK))
+			ABT_self_get_thread_id(uid);
+	}
 
 	if (tid != NULL) {
 		struct dss_thread_local_storage *dtc;
 		struct dss_module_info *dmi;
+		int index = daos_srv_modkey.dmk_index;
 
+		/* Avoid assertion in dss_module_key_get() */
 		dtc = dss_tls_get();
-		if (dtc == NULL)
-			return;
-
-		dmi = dss_get_module_info();
-		*tid = dmi->dmi_xs_id;
+		if (dtc != NULL && index >= 0 && index < DAOS_MODULE_KEYS_NR &&
+		    dss_module_keys[index] == &daos_srv_modkey) {
+			dmi = dss_get_module_info();
+			if (dmi != NULL)
+				*tid = dmi->dmi_xs_id;
+		}
 	}
 }
 
@@ -519,12 +577,15 @@ static int
 server_init(int argc, char *argv[])
 {
 	uint64_t		 bound;
-	int64_t			 diff;
 	unsigned int		 ctx_nr;
 	int			 rc;
 	struct engine_metrics	*metrics;
 
-	bound = crt_hlc_epsilon_get_bound(crt_hlc_get());
+	/*
+	 * Begin the HLC recovery as early as possible. Do not read the HLC
+	 * before the hlc_recovery_end call below.
+	 */
+	bound = hlc_recovery_begin();
 
 	gethostname(dss_hostname, DSS_HOSTNAME_MAX_LEN);
 
@@ -571,7 +632,6 @@ server_init(int argc, char *argv[])
 	rc = dss_module_init();
 	if (rc)
 		goto exit_abt_init;
-
 	D_INFO("Module interface successfully initialized\n");
 
 	/* initialize the network layer */
@@ -619,6 +679,14 @@ server_init(int argc, char *argv[])
 		D_GOTO(exit_mod_loaded, rc);
 	D_INFO("Module %s successfully loaded\n", modules);
 
+	/*
+	 * End the HLC recovery so that module init callbacks (e.g.,
+	 * vos_mod_init) invoked by the dss_module_init_all call below can read
+	 * the HLC.
+	 */
+	hlc_recovery_end(bound);
+	dss_set_start_epoch();
+
 	/* init modules */
 	rc = dss_module_init_all(&dss_mod_facs);
 	if (rc)
@@ -635,7 +703,6 @@ server_init(int argc, char *argv[])
 			dss_storage_path);
 		D_GOTO(exit_mod_loaded, rc);
 	}
-
 	D_INFO("Service initialized\n");
 
 	rc = server_init_state_init();
@@ -652,30 +719,6 @@ server_init(int argc, char *argv[])
 	}
 
 	server_init_state_wait(DSS_INIT_STATE_SET_UP);
-
-	diff = bound - crt_hlc_get();
-	if (diff > 0) {
-		struct timespec		tv;
-
-		tv.tv_sec = crt_hlc2nsec(diff) / NSEC_PER_SEC;
-		tv.tv_nsec = crt_hlc2nsec(diff) % NSEC_PER_SEC;
-
-		/* XXX: If the server restart so quickly as to all related
-		 *	things are handled within HLC epsilon, then it is
-		 *	possible that current local HLC after restart may
-		 *	be older than some HLC that was generated before
-		 *	server restart because of the clock drift between
-		 *	servers. So here, we control the server (re)start
-		 *	process to guarantee that the restart time window
-		 *	will be longer than the HLC epsilon, then new HLC
-		 *	generated after server restart will not rollback.
-		 */
-		D_INFO("nanosleep %lu:%lu before open external service.\n",
-		       tv.tv_sec, tv.tv_nsec);
-		nanosleep(&tv, NULL);
-	}
-
-	dss_set_start_epoch();
 
 	rc = dss_module_setup_all();
 	if (rc != 0)
@@ -817,8 +860,10 @@ Options:\n\
       Boolean set to inhibit collection of NVME health data\n\
   --mem_size=mem_size, -r mem_size\n\
       Allocates mem_size MB for SPDK when using primary process mode\n\
-  --hugepage_size = hugepage_size, -H hugepage_size\n\
+  --hugepage_size=hugepage_size, -H hugepage_size\n\
       Passes the configured hugepage size(2MB or 1GB)\n\
+  --storage_tiers=ntiers, -T ntiers\n\
+      Number of storage tiers\n\
   --help, -h\n\
       Print this description\n",
 		prog, prog, modules, daos_sysname, dss_storage_path,
@@ -845,6 +890,7 @@ parse(int argc, char **argv)
 		{ "xshelpernr",		required_argument,	NULL,	'x' },
 		{ "instance_idx",	required_argument,	NULL,	'I' },
 		{ "bypass_health_chk",	no_argument,		NULL,	'b' },
+		{ "storage_tiers",	required_argument,	NULL,	'T' },
 		{ NULL,			0,			NULL,	0}
 	};
 	int	rc = 0;
@@ -852,7 +898,7 @@ parse(int argc, char **argv)
 
 	/* load all of modules by default */
 	sprintf(modules, "%s", MODULE_LIST);
-	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:b",
+	while ((c = getopt_long(argc, argv, "c:d:f:g:hi:m:n:p:r:H:t:s:x:I:bT:",
 				opts, NULL)) != -1) {
 		switch (c) {
 		case 'm':
@@ -914,6 +960,13 @@ parse(int argc, char **argv)
 			break;
 		case 'b':
 			dss_nvme_bypass_health_check = true;
+			break;
+		case 'T':
+			dss_storage_tiers = atoi(optarg);
+			if (dss_storage_tiers < 1 || dss_storage_tiers > 2) {
+				printf("Requires 1 or 2 tiers\n");
+				rc = -DER_INVAL;
+			}
 			break;
 		default:
 			usage(argv[0], stderr);

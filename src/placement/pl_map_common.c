@@ -59,7 +59,7 @@ remap_add_one(d_list_t *remap_list, struct failed_shard *f_new)
    */
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint)
+		struct pool_target *tgt, bool for_reint, void *data)
 {
 	struct failed_shard *f_new;
 
@@ -71,6 +71,7 @@ remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
 	f_new->fs_shard_idx = shard_idx;
 	f_new->fs_fseq = tgt->ta_comp.co_fseq;
 	f_new->fs_status = tgt->ta_comp.co_status;
+	f_new->fs_data = data;
 
 	D_DEBUG(DB_PL, "tgt %u status %u reint %s\n", tgt->ta_comp.co_id,
 		tgt->ta_comp.co_status, for_reint ? "yes" : "no");

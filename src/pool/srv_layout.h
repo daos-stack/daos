@@ -26,10 +26,10 @@
 #include <daos_types.h>
 
 /* Default layout version */
-#define DS_POOL_MD_VERSION 3
+#define DS_POOL_MD_VERSION 4
 
 /* Lowest compatible layout version */
-#define DS_POOL_MD_VERSION_LOW 2
+#define DS_POOL_MD_VERSION_LOW 4
 
 /*
  * Root KVS (RDB_KVS_GENERIC): pool properties

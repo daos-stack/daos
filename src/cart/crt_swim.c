@@ -181,21 +181,31 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 
 	D_ASSERT(crt_is_service());
 
-	rpc_type = (enum swim_rpc_type)(rpc->cr_opc & CRT_PROTO_COUNT_MASK);
+	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
+	from_id  = rpc_priv->crp_req_hdr.cch_src_rank;
 
+	/* Initialize empty array in case of error in reply */
 	rpc_out->upds.ca_arrays = NULL;
 	rpc_out->upds.ca_count  = 0;
 
-	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	from_id = rpc_priv->crp_req_hdr.cch_src_rank;
-	to_id   = rpc_priv->crp_req_hdr.cch_dst_rank;
+	rpc_type = (enum swim_rpc_type)(rpc->cr_opc & CRT_PROTO_COUNT_MASK);
+	switch (rpc_type) {
+	case SWIM_RPC_PING:
+		to_id = rpc->cr_ep.ep_rank;
+		break;
+	case SWIM_RPC_IREQ:
+		to_id = rpc_in->swim_id;
+		break;
+	default:
+		to_id = rpc->cr_ep.ep_rank;
+		D_GOTO(out_reply, rc = -DER_INVAL);
+		break;
+	}
 
 	D_TRACE_DEBUG(DB_TRACE, rpc,
 		      "incoming %s with %zu updates. %lu: %lu <= %lu\n",
 		      SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count,
-		      self_id,
-		      (rpc_type == SWIM_RPC_PING) ? to_id : rpc_in->swim_id,
-		      from_id);
+		      self_id, to_id, from_id);
 
 	if (self_id == SWIM_ID_INVALID)
 		D_GOTO(out_reply, rc = -DER_UNINIT);
@@ -220,9 +230,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 		rc = d_fa_swim_drop_rpc->fa_err_code;
 		D_EMIT("drop %s with %zu updates. %lu: %lu <= %lu "DF_RC"\n",
 			SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count,
-			self_id,
-			(rpc_type == SWIM_RPC_PING) ? to_id : rpc_in->swim_id,
-			from_id, DP_RC(rc));
+			self_id, to_id, from_id, DP_RC(rc));
 	} else {
 		rc = swim_updates_parse(ctx, from_id, rpc_in->upds.ca_arrays,
 					rpc_in->upds.ca_count);
@@ -234,10 +242,7 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 		} else if (rc) {
 			D_TRACE_ERROR(rpc,
 				      "updates parse. %lu: %lu <= %lu failed: "
-				      DF_RC"\n", self_id,
-				      (rpc_type == SWIM_RPC_PING)
-				      ? to_id : rpc_in->swim_id,
-				      from_id, DP_RC(rc));
+				      DF_RC"\n", self_id, to_id, from_id, DP_RC(rc));
 		}
 
 		switch (rpc_type) {
@@ -247,23 +252,20 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 						  &rpc_out->upds.ca_count);
 			break;
 		case SWIM_RPC_IREQ:
-			rc = swim_ipings_suspend(ctx, from_id, rpc_in->swim_id,
-						rpc);
+			rc = swim_ipings_suspend(ctx, from_id, to_id, rpc);
 			if (rc == 0 || rc == -DER_ALREADY) {
 				D_TRACE_DEBUG(DB_TRACE, rpc,
 					      "suspend %s reply. "
 					      "%lu: %lu <= %lu\n",
 					      SWIM_RPC_TYPE_STR[rpc_type],
-					      self_id, rpc_in->swim_id,
-					      from_id);
+					      self_id, to_id, from_id);
 				/* Keep this RPC in ipings queue */
 				RPC_ADDREF(rpc_priv);
 
 				if (rc == -DER_ALREADY)
 					return; /* don't ping second time */
 
-				rc = swim_updates_send(ctx, rpc_in->swim_id,
-						       rpc_in->swim_id);
+				rc = swim_updates_send(ctx, to_id, to_id);
 				if (rc)
 					D_TRACE_ERROR(rpc,
 						      "swim_updates_send(): "
@@ -282,13 +284,12 @@ out_reply:
 	D_TRACE_DEBUG(DB_TRACE, rpc,
 		      "reply %s with %zu updates. %lu: %lu <= %lu "DF_RC"\n",
 		      SWIM_RPC_TYPE_STR[rpc_type], rpc_out->upds.ca_count,
-		      self_id,
-		      (rpc_type == SWIM_RPC_PING) ? to_id : rpc_in->swim_id,
-		      from_id, DP_RC(rc));
+		      self_id, to_id, from_id, DP_RC(rc));
 
 	rpc_out->rc  = rc;
 	rpc_out->pad = 0;
 	rc = crt_reply_send(rpc);
+	D_FREE(rpc_out->upds.ca_arrays);
 	if (rc)
 		D_TRACE_ERROR(rpc, "send reply: "DF_RC" failed: "DF_RC"\n",
 			      DP_RC(rpc_out->rc), DP_RC(rc));
@@ -302,7 +303,6 @@ static int crt_swim_set_member_state(struct swim_context *ctx, swim_id_t id,
 static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
-	struct crt_rpc_priv	*rpc_priv;
 	struct swim_context	*ctx = cb_info->cci_arg;
 	crt_rpc_t		*rpc = cb_info->cci_rpc;
 	struct crt_rpc_swim_in	*rpc_in  = crt_req_get(rpc);
@@ -310,31 +310,40 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 	enum swim_rpc_type	 rpc_type;
 	swim_id_t		 self_id = swim_self_get(ctx);
 	swim_id_t		 from_id;
-	swim_id_t		 to_id;
+	swim_id_t		 to_id = rpc->cr_ep.ep_rank;
 	uint64_t		 now;
+	int			 reply_rc;
 	int			 rc;
 
+	D_FREE(rpc_in->upds.ca_arrays);
+
 	rpc_type = (enum swim_rpc_type)(rpc->cr_opc & CRT_PROTO_COUNT_MASK);
-	rpc_priv = container_of(rpc, struct crt_rpc_priv, crp_pub);
-	from_id  = rpc_priv->crp_req_hdr.cch_src_rank;
-	to_id    = rpc_priv->crp_req_hdr.cch_dst_rank;
+	switch (rpc_type) {
+	case SWIM_RPC_PING:
+		from_id = self_id;
+		break;
+	case SWIM_RPC_IREQ:
+		from_id = rpc_in->swim_id;
+		break;
+	default:
+		D_GOTO(out, rc = -DER_INVAL);
+		break;
+	}
 
 	D_TRACE_DEBUG(DB_TRACE, rpc,
 		      "complete %s with %zu/%zu updates. %lu: %lu => %lu "
 		      DF_RC" remote: "DF_RC"\n",
 		      SWIM_RPC_TYPE_STR[rpc_type], rpc_in->upds.ca_count,
-		      rpc_out->upds.ca_count, self_id,
-		      (rpc_type == SWIM_RPC_PING) ? from_id : rpc_in->swim_id,
-		      to_id, DP_RC(cb_info->cci_rc), DP_RC(rpc_out->rc));
-
-	D_FREE(rpc_in->upds.ca_arrays);
+		      rpc_out->upds.ca_count, self_id, from_id, to_id,
+		      DP_RC(cb_info->cci_rc), DP_RC(rpc_out->rc));
 
 	if (cb_info->cci_rc && to_id == ctx->sc_target)
 		ctx->sc_deadline = 0;
 
-	if (rpc_out->rc && rpc_out->rc != -DER_TIMEDOUT)
+	reply_rc = cb_info->cci_rc ? cb_info->cci_rc : rpc_out->rc;
+	if (reply_rc && reply_rc != -DER_TIMEDOUT && reply_rc != -DER_UNREACH)
 		D_TRACE_ERROR(rpc, "remote %lu failed: "DF_RC"\n", to_id,
-			      DP_RC(rpc_out->rc));
+			      DP_RC(reply_rc));
 
 	now = swim_now_ms();
 	if (cb_info->cci_rc == 0)
@@ -368,17 +377,7 @@ static void crt_swim_cli_cb(const struct crt_cb_info *cb_info)
 			      DF_RC"\n", self_id, from_id, to_id, DP_RC(rc));
 	}
 
-	switch (rpc_type) {
-	case SWIM_RPC_PING:
-	case SWIM_RPC_IREQ:
-		rc = cb_info->cci_rc ? cb_info->cci_rc : rpc_out->rc;
-		break;
-	default:
-		D_GOTO(out, rc = -DER_INVAL);
-		break;
-	}
-
-	rc = swim_ipings_reply(ctx, to_id, rc);
+	rc = swim_ipings_reply(ctx, to_id, reply_rc);
 	if (rc)
 		D_TRACE_ERROR(rpc, "send reply: "DF_RC" failed: "DF_RC"\n",
 			      DP_RC(rpc_out->rc), DP_RC(rc));
@@ -505,6 +504,7 @@ static int crt_swim_send_reply(struct swim_context *ctx, swim_id_t from,
 		      self_id, from, to, DP_RC(rpc_out->rc));
 
 	rc = crt_reply_send(rpc);
+	D_FREE(rpc_out->upds.ca_arrays);
 	if (rc)
 		D_TRACE_ERROR(rpc, "send reply: "DF_RC" failed: "DF_RC"\n",
 			      DP_RC(rpc_out->rc), DP_RC(rc));
@@ -619,7 +619,7 @@ crt_swim_notify_rank_state(d_rank_t rank, struct swim_member_state *state)
 		cb_args = cbs_event[i].cecp_args;
 		/* check for and execute event callbacks here */
 		if (cb_func != NULL)
-			cb_func(rank, CRT_EVS_SWIM, cb_type, cb_args);
+			cb_func(rank, state->sms_incarnation, CRT_EVS_SWIM, cb_type, cb_args);
 	}
 }
 
@@ -671,6 +671,22 @@ static int crt_swim_set_member_state(struct swim_context *ctx,
 		crt_swim_notify_rank_state((d_rank_t)id, state);
 
 	return rc;
+}
+
+static void crt_swim_new_incarnation(struct swim_context *ctx,
+				     swim_id_t id,
+				     struct swim_member_state *state)
+{
+	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	uint64_t		 incarnation = crt_hlc_get();
+
+	D_ASSERTF(id == swim_self_get(ctx), DF_U64" == "DF_U64"\n",
+		  id, swim_self_get(ctx));
+	crt_swim_csm_lock(csm);
+	csm->csm_incarnation = incarnation;
+	crt_swim_csm_unlock(csm);
+	state->sms_incarnation = incarnation;
 }
 
 static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
@@ -729,6 +745,7 @@ static struct swim_ops crt_swim_ops = {
 	.get_iping_target = &crt_swim_get_iping_target,
 	.get_member_state = &crt_swim_get_member_state,
 	.set_member_state = &crt_swim_set_member_state,
+	.new_incarnation  = &crt_swim_new_incarnation,
 };
 
 int crt_swim_init(int crt_ctx_idx)
@@ -746,6 +763,12 @@ int crt_swim_init(int crt_ctx_idx)
 
 	grp_membs = grp_priv_get_membs(grp_priv);
 	csm->csm_crt_ctx_idx = crt_ctx_idx;
+	/*
+	 * Because daos needs to call crt_self_incarnation_get before it calls
+	 * crt_rank_self_set, we choose the self incarnation here instead of in
+	 * crt_swim_rank_add.
+	 */
+	csm->csm_incarnation = crt_hlc_get();
 	csm->csm_ctx = swim_init(SWIM_ID_INVALID, &crt_swim_ops, NULL);
 	if (csm->csm_ctx == NULL) {
 		D_ERROR("swim_init() failed for self=%u, crt_ctx_idx=%d\n",
@@ -1022,7 +1045,7 @@ int crt_swim_rank_add(struct crt_grp_priv *grp_priv, d_rank_t rank)
 	crt_swim_csm_lock(csm);
 	if (D_CIRCLEQ_EMPTY(&csm->csm_head)) {
 		cst->cst_id = (swim_id_t)self;
-		cst->cst_state.sms_incarnation = 0;
+		cst->cst_state.sms_incarnation = csm->csm_incarnation;
 		cst->cst_state.sms_status = SWIM_MEMBER_ALIVE;
 		D_CIRCLEQ_INSERT_HEAD(&csm->csm_head, cst, cst_link);
 		self_in_list = true;
@@ -1179,6 +1202,28 @@ crt_rank_state_get(crt_group_t *grp, d_rank_t rank,
 	csm = &grp_priv->gp_membs_swim;
 	rc = crt_swim_get_member_state(csm->csm_ctx, (swim_id_t)rank, state);
 
+out:
+	return rc;
+}
+
+int
+crt_self_incarnation_get(uint64_t *incarnation)
+{
+	struct crt_grp_priv	*grp_priv = crt_grp_pub2priv(NULL);
+	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+	int			 rc = 0;
+
+	if (incarnation == NULL) {
+		D_ERROR("Passed state pointer is NULL\n");
+		D_GOTO(out, rc = -DER_INVAL);
+	}
+
+	if (!crt_gdata.cg_swim_inited)
+		D_GOTO(out, rc = -DER_UNINIT);
+
+	crt_swim_csm_lock(csm);
+	*incarnation = csm->csm_incarnation;
+	crt_swim_csm_unlock(csm);
 out:
 	return rc;
 }

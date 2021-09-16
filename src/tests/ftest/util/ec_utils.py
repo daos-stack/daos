@@ -12,11 +12,11 @@ import time
 from nvme_utils import ServerFillUp
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
-from test_utils_pool import TestPool
 from apricot import TestWithServers
 from pydaos.raw import DaosApiError
 from command_utils_base import CommandFailure
 from general_utils import DaosTestError
+
 
 def get_data_parity_number(log, oclass):
     """Return EC Object Data and Parity count.
@@ -90,7 +90,7 @@ class ErasureCodeIor(ServerFillUp):
         # Create the Pool
         self.create_pool_max_size()
         self.update_ior_cmd_with_pool()
-        self.obj_class = self.params.get("dfs_oclass",
+        self.obj_class = self.params.get("dfs_oclass_list",
                                          '/run/ior/objectclass/*')
         self.ior_chu_trs_blk_size = self.params.get(
             "chunk_block_transfer_sizes", '/run/ior/*')
@@ -215,15 +215,11 @@ class ErasureCodeSingle(TestWithServers):
         engine_count = self.server_managers[0].get_config_value(
             "engines_per_host")
         self.server_count = len(self.hostlist_servers) * engine_count
-        self.obj_class = self.params.get("dfs_oclass",
+        self.obj_class = self.params.get("dfs_oclass_list",
                                          '/run/objectclass/*')
         self.singledata_set = self.params.get("single_data_set",
                                               '/run/container/*')
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        # Create a pool and connect
-        self.pool.create()
-        self.pool.connect()
+        self.add_pool()
         self.out_queue = queue.Queue()
 
     def ec_container_create(self, index, oclass):

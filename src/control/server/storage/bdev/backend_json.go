@@ -8,11 +8,16 @@ package bdev
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+const (
+	hotplugPeriod = 5 * time.Second
 )
 
 // SPDK bdev subsystem configuration method name definitions.
@@ -119,9 +124,7 @@ func defaultSpdkConfig() *SpdkConfig {
 		},
 		{
 			Method: SpdkBdevNvmeSetHotplug,
-			Params: NvmeSetHotplugParams{
-				PeriodUsec: 10 * 1000 * 1000,
-			},
+			Params: NvmeSetHotplugParams{},
 		},
 	}
 
@@ -171,28 +174,30 @@ func getAioKdevCreateMethod(name, path string) *SpdkSubsystemConfig {
 	}
 }
 
-func getSpdkConfigMethods(req *FormatRequest) (sscs []*SpdkSubsystemConfig) {
-	var f configMethodGetter
+func getSpdkConfigMethods(req *storage.BdevWriteConfigRequest) (sscs []*SpdkSubsystemConfig) {
+	for _, tier := range req.TierProps {
+		var f configMethodGetter
 
-	switch req.Class {
-	case storage.BdevClassNvme:
-		f = getNvmeAttachMethod
-	case storage.BdevClassFile:
-		f = getAioFileCreateMethod
-	case storage.BdevClassKdev:
-		f = getAioKdevCreateMethod
-	}
+		switch tier.Class {
+		case storage.ClassNvme:
+			f = getNvmeAttachMethod
+		case storage.ClassFile:
+			f = getAioFileCreateMethod
+		case storage.ClassKdev:
+			f = getAioKdevCreateMethod
+		}
 
-	for index, dev := range req.DeviceList {
-		name := fmt.Sprintf("%s_%d", req.Hostname, index)
-		sscs = append(sscs, f(name, dev))
+		for index, dev := range tier.DeviceList {
+			name := fmt.Sprintf("%s_%d_%d", req.Hostname, index, tier.Tier)
+			sscs = append(sscs, f(name, dev))
+		}
 	}
 
 	return
 }
 
-// WithVmdEnabled adds vmd subsystem with enable method to an SpdkConfig.
-func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
+// WithVMDEnabled adds vmd subsystem with enable method to an SpdkConfig.
+func (sc *SpdkConfig) WithVMDEnabled() *SpdkConfig {
 	sc.Subsystems = append(sc.Subsystems, &SpdkSubsystem{
 		Name: "vmd",
 		Configs: []*SpdkSubsystemConfig{
@@ -206,9 +211,9 @@ func (sc *SpdkConfig) WithVmdEnabled() *SpdkConfig {
 	return sc
 }
 
-// WithBdevConfigs adds config methods derived from the input FormatRequest to
-// the bdev subsystem of an SpdkConfig.
-func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *FormatRequest) *SpdkConfig {
+// WithBdevConfigs adds config methods derived from the input
+// BdevWriteConfigRequest to the bdev subsystem of an SpdkConfig.
+func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *storage.BdevWriteConfigRequest) *SpdkConfig {
 	for _, ss := range sc.Subsystems {
 		if ss.Name != "bdev" {
 			continue
@@ -223,11 +228,41 @@ func (sc *SpdkConfig) WithBdevConfigs(log logging.Logger, req *FormatRequest) *S
 	return sc
 }
 
-func newSpdkConfig(log logging.Logger, enableVmd bool, req *FormatRequest) (*SpdkConfig, error) {
+func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*SpdkConfig, error) {
 	sc := defaultSpdkConfig()
 
-	if enableVmd && req.Class == storage.BdevClassNvme {
-		sc.WithVmdEnabled()
+	if req.VMDEnabled {
+		for _, tp := range req.TierProps {
+			if tp.Class == storage.ClassNvme {
+				sc.WithVMDEnabled()
+				break
+			}
+		}
+	}
+
+	if req.HotplugEnabled {
+		var found bool
+		for _, ss := range sc.Subsystems {
+			if ss.Name != "bdev" {
+				continue
+			}
+
+			for _, bsc := range ss.Configs {
+				if bsc.Method == SpdkBdevNvmeSetHotplug {
+					bsc.Params = NvmeSetHotplugParams{
+						Enable:     true,
+						PeriodUsec: uint64(hotplugPeriod.Microseconds()),
+					}
+					found = true
+
+					break
+				}
+			}
+
+			if found {
+				break
+			}
+		}
 	}
 
 	return sc.WithBdevConfigs(log, req), nil

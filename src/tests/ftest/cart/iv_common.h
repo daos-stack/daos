@@ -10,7 +10,7 @@
 #include <cart/api.h>
 #include <cart/iv.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 
 /* Describes internal structure of the value */
 #define MAX_DATA_SIZE 1024
@@ -206,7 +206,7 @@ int send_rpc_request(crt_context_t crt_ctx, crt_rpc_t *rpc_req, void **output)
 	rc = crt_req_send(rpc_req, rpc_handle_reply, &resp);
 	assert(rc == 0);
 
-	tc_sem_timedwait(&resp.sem, 30, __LINE__);
+	crtu_sem_timedwait(&resp.sem, 30, __LINE__);
 
 	D_ASSERTF(resp.rc == 0, "rpc send failed: %d\n", resp.rc);
 	*output = crt_reply_get(rpc_req);

@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from daos_utils import DaosCommand
 
 
 class QueryAttributeTest(TestWithServers):
@@ -38,27 +37,41 @@ class QueryAttributeTest(TestWithServers):
         Use Cases:
             Test query, set-attr, list-attr, and get-attr commands.
 
-        :avocado: tags=all,pool,tiny,full_regression,pool_query_attr
+        :avocado: tags=all,full_regression
+        :avocado: tags=small
+        :avocado: tags=pool,pool_query_attr
         """
+        errors = []
+        daos_cmd = self.get_daos_command()
+
         # 1. Test pool query.
-        # Use the same format as pool query.
-        expected_size = "1000000000"
-        expected = self.get_dmg_command().pool_create(scm_size=expected_size)
-        daos_cmd = DaosCommand(self.bin)
+        expected_size = self.params.get("scm_size", "/run/pool/*")
+        self.add_pool()
+
         # Call daos pool query, obtain pool UUID and SCM size, and compare
         # against those used when creating the pool.
-        kwargs = {"pool": expected["uuid"]}
-        query_result = daos_cmd.get_output("pool_query", **kwargs)
-        actual_uuid = query_result[0][0]
-        actual_size = query_result[2][4]
-        self.assertEqual(actual_uuid, expected["uuid"])
-        self.assertEqual(actual_size, expected_size)
+        query_result = daos_cmd.pool_query(pool=self.pool.uuid)
+        actual_uuid = query_result["response"]["uuid"]
+        actual_size = query_result["response"]["tier_stats"][0]["total"]
+
+        expected_uuid = self.pool.uuid.lower()
+        if expected_uuid != actual_uuid:
+            msg = "Unexpected UUID from daos pool query! " +\
+                "Expected = {}; Actual = {}".format(expected_uuid, actual_uuid)
+            errors.append(msg)
+
+        if expected_size != actual_size:
+            msg = "Unexpected Total Storage Tier 0 size from daos pool " +\
+                "query! Expected = {}; Actual = {}".format(
+                    expected_size, actual_size)
+            errors.append(msg)
 
         # 2. Test pool set-attr, get-attr, and list-attrs.
         expected_attrs = []
-        expected_attrs_dict = {}
+        actual_attrs = []
         sample_attrs = []
         sample_vals = []
+
         # Create 5 attributes.
         for i in range(5):
             sample_attr = "attr" + str(i)
@@ -66,20 +79,34 @@ class QueryAttributeTest(TestWithServers):
             sample_attrs.append(sample_attr)
             sample_vals.append(sample_val)
             daos_cmd.pool_set_attr(
-                pool=actual_uuid, attr=sample_attr, value=sample_val)
+                pool=self.pool.uuid, attr=sample_attr, value=sample_val)
             expected_attrs.append(sample_attr)
-            expected_attrs_dict[sample_attr] = sample_val
+
         # List the attribute names and compare against those set.
-        kwargs = {"pool": actual_uuid}
-        actual_attrs = daos_cmd.get_output("pool_list_attrs", **kwargs)
+        attrs = daos_cmd.pool_list_attrs(pool=self.pool.uuid)
+        for attr in attrs["response"]:
+            actual_attrs.append(attr["name"])
+
         actual_attrs.sort()
         expected_attrs.sort()
-        self.assertEqual(actual_attrs, expected_attrs)
+
+        if actual_attrs != expected_attrs:
+            msg = "Unexpected attribute names! " +\
+                "Expected = {}; Actual = {}".format(
+                    expected_attrs, actual_attrs)
+            errors.append(msg)
+
         # Get each attribute's value and compare against those set.
         for i in range(5):
-            kwargs = {
-                "pool": actual_uuid,
-                "attr": sample_attrs[i],
-            }
-            actual_val = daos_cmd.get_output("pool_get_attr", **kwargs)[0]
-            self.assertEqual(sample_vals[i], actual_val)
+            output = daos_cmd.pool_get_attr(
+                pool=self.pool.uuid, attr=sample_attrs[i])
+            actual_val = output["response"]["value"]
+            if sample_vals[i] != actual_val:
+                msg = "Unexpected attribute value! " +\
+                    "Expected = {}; Actual = {}".format(
+                        sample_vals[i], actual_val)
+                errors.append(msg)
+
+        if errors:
+            self.fail("\n----- Errors detected! -----\n{}".format(
+                "\n".join(errors)))

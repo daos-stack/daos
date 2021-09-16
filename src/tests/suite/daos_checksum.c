@@ -454,7 +454,7 @@ test_server_data_corruption(void **state)
 	FAULT_INJECTION_REQUIRED();
 
 	setup_from_test_args(&ctx, *state);
-	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*8, oc);
+	setup_cont_obj(&ctx, dts_csum_prop_type, false, 1024*64, oc);
 
 	/**1. Simple server data corruption after RDMA */
 	setup_multiple_extent_data(&ctx);
@@ -2202,13 +2202,11 @@ test_enum_unpack_cb(struct dss_enum_unpack_io *io, void *arg)
 			continue;
 		}
 
-		daos_csummer_alloc_iods_csums_with_packed(
-			csummer,
-			&io->ui_iods[i], 1,
-			&tmp_iov, &iod_csums);
+		rc = daos_csummer_alloc_iods_csums_with_packed(csummer, &io->ui_iods[i], 1,
+							       &tmp_iov, &iod_csums);
+		assert_success(rc);
 
-		rc = daos_csummer_verify_iod(csummer, &io->ui_iods[i],
-					     &io->ui_sgls[i], iod_csums,
+		rc = daos_csummer_verify_iod(csummer, &io->ui_iods[i], &io->ui_sgls[i], iod_csums,
 					     NULL, 0, NULL);
 
 		assert_success(rc);
@@ -2427,7 +2425,7 @@ test_enumerate_object2(void **state)
 	assert_rc_equal(0, rc);
 
 	d_sgl_init(&list_sgl, 1);
-	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 10);
+	iov_alloc(&list_sgl.sg_iovs[0], 1024 * 64);
 	/** Sanity check that no failure still returns success */
 	daos_epoch_range_t epr = {.epr_lo = 0, .epr_hi = DAOS_EPOCH_MAX};
 

@@ -8,6 +8,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/csv"
 	"fmt"
 	"sort"
 	"strings"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
+	"github.com/dustin/go-humanize"
 )
 
 // hostsByPort takes slice of address patterns and returns a HostGroups mapping
@@ -91,4 +93,20 @@ func errIncompatFlags(key string, incompat ...string) error {
 	}
 
 	return errors.Errorf("%s with --%s", base, strings.Join(incompat, " or --"))
+}
+
+func parseUint64Array(in string) (out []uint64, err error) {
+	arr, err := csv.NewReader(strings.NewReader(in)).Read()
+	if err != nil {
+		return
+	}
+
+	out = make([]uint64, len(arr))
+	for idx, elemStr := range arr {
+		out[idx], err = humanize.ParseBytes(elemStr)
+		if err != nil {
+			return
+		}
+	}
+	return
 }
