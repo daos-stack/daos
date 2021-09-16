@@ -545,17 +545,34 @@ struct dfuse_inode_entry {
  * different parts of the inode, then or in the inode number of the root
  * of this dfs object, to avoid conflicts across containers.
  */
-static inline void
-dfuse_compute_inode(struct dfuse_cont *dfs,
-		    daos_obj_id_t *oid,
-		    ino_t *_ino)
+static inline ino_t
+dfuse_compute_inode(struct dfuse_cont *dfs, daos_obj_id_t *oid, bool dir)
 {
-	uint64_t hi;
+	uint64_t	hi;
+	ino_t		ino;
 
 	hi = (oid->hi & (-1ULL >> 32)) | (dfs->dfs_ino << 48);
 
-	*_ino = hi ^ (oid->lo << 32);
+	ino = (hi << 1) ^ (oid->lo << 32);
+
+	if (dir)
+		ino |= 0x1;
+
+	return ino;
 };
+
+#define DFUSE_INO_IS_DIR(INO) ((INO & 0x1) == 0x1)
+
+#if 0
+static inline void
+dfuse_htable_decref(struct dfuse_projection_info *fs_handle, d_list_t *rlink, ino_t ino)
+{
+	if (DFUSE_INO_IS_DIR(ino))
+		d_hash_rec_decref(&fs_handle->dpi_idt, rlink);
+	else
+		d_hash_rec_decref(&fs_handle->dpi_indt, rlink);
+}
+#endif
 
 extern char *duns_xattr_name;
 

@@ -160,8 +160,7 @@ df_ll_getattr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 	if (handle) {
 		inode = handle->doh_ie;
 	} else {
-		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino,
-					sizeof(ino));
+		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 		if (!rlink) {
 			DFUSE_TRA_ERROR(fs_handle, "Failed to find inode %#lx",
 					ino);

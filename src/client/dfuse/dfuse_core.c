@@ -102,6 +102,9 @@ ih_key_hash(struct d_hash_table *htable, const void *key,
 	ino_t ino = *_ino;
 	uint32_t hash = ino ^ (ino >> 32);
 
+	/* Shift everything left, then use the rightmost bit to embed directory status */
+	hash = hash << 1;
+	hash |= (ino | 0x1);
 	return hash;
 }
 
@@ -902,6 +905,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 	}
 
 	dfc->dfs_ino = atomic_fetch_add_relaxed(&fs_handle->dpi_ino_next, 1);
+	dfc->dfs_ino = (dfc->dfs_ino << 1) | 0x1;
 	D_MUTEX_INIT(&dfc->dfs_read_mutex, NULL);
 
 	/* Take a reference on the pool */
@@ -960,7 +964,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 		D_GOTO(err, 0);
 
 	rc = d_hash_table_create_inplace(D_HASH_FT_LRU | D_HASH_FT_EPHEMERAL,
-					 5, fs_handle, &ie_hops,
+					 10, fs_handle, &ie_hops,
 					 &fs_handle->dpi_iet);
 	if (rc != 0)
 		D_GOTO(err_pt, 0);
@@ -1075,6 +1079,9 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	ie->ie_root = true;
 	ie->ie_parent = 1;
 	atomic_store_relaxed(&ie->ie_ref, 1);
+	/* Use a inode number of 1 here as this is the filesystem root.  This works because the
+	 * bit used for detecting directories is also 1.
+	 */
 	ie->ie_stat.st_ino = 1;
 	ie->ie_stat.st_uid = geteuid();
 	ie->ie_stat.st_gid = getegid();

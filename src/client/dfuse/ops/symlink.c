@@ -38,8 +38,7 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
-	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
-			    &ie->ie_stat.st_ino);
+	ie->ie_stat.st_ino = dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid, false);
 
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 

@@ -22,14 +22,29 @@ dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos
 	int				rc;
 	fuse_ino_t			ino;
 
-	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
+	/* TODO: This checks for the unlinked entry being a file, then a directory however
+	 * the fuse callback knows which is should be, but then this info is lost in the
+	 * dfuse_cb_unlink() function.  We should add a proper rmdir callback, expand
+	 * dfs_remove to take a flag to only remove dirs and pass the value into here
+	 * to know which hash table to lookup the entry in.
+	 *
+	 * For now search both hash tables in turn.
+	 */
+	ino = dfuse_compute_inode(parent->ie_dfs, oid, false);
 
-	DFUSE_TRA_DEBUG(fs_handle, "Unlinked file was %#lx", ino);
+	DFUSE_TRA_DEBUG(fs_handle, "Unlinked entry if not dir %#lx", ino);
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
 	if (!rlink) {
-		DFUSE_REPLY_ZERO(parent, req);
-		return;
+		ino = dfuse_compute_inode(parent->ie_dfs, oid, false);
+
+		DFUSE_TRA_DEBUG(fs_handle, "Unlinked entry if dir %#lx", ino);
+
+		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+		if (!rlink) {
+			DFUSE_REPLY_ZERO(parent, req);
+			return;
+		}
 	}
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
@@ -86,6 +101,5 @@ dfuse_cb_unlink(fuse_req_t req, struct dfuse_inode_entry *parent, const char *na
 
 	D_ASSERT(oid.lo || oid.hi);
 
-	/* TODO: Need to do the first part of this and set ie->ie_unlinked before returning */
 	dfuse_oid_unlinked(fs_handle, req, &oid, parent, name);
 }

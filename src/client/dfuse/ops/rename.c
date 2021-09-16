@@ -22,15 +22,22 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 	struct dfuse_inode_entry	*ie;
 	d_list_t			*rlink;
 	int				rc;
-	ino_t ino;
+	ino_t				ino;
 
-	dfuse_compute_inode(parent->ie_dfs, oid, &ino);
+	ino = dfuse_compute_inode(parent->ie_dfs, oid, false);
 
-	DFUSE_TRA_DEBUG(fs_handle, "Renamed file was %#lx", ino);
+	DFUSE_TRA_DEBUG(fs_handle, "Renamed entry if not dir %#lx", ino);
 
 	rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
-	if (!rlink)
-		return;
+	if (!rlink) {
+		ino = dfuse_compute_inode(parent->ie_dfs, oid, true);
+
+		DFUSE_TRA_DEBUG(fs_handle, "Renamed entry if dir %#lx", ino);
+
+		rlink = d_hash_rec_find(&fs_handle->dpi_iet, &ino, sizeof(ino));
+		if (!rlink)
+			return;
+	}
 
 	ie = container_of(rlink, struct dfuse_inode_entry, ie_htl);
 
