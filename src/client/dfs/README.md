@@ -114,12 +114,15 @@ Object testdir
     ...
 ~~~~~~
 
-Note that with this mapping, the inode information is stored with the entry that
-it corresponds to in the parent directory object. Thus, hard links won't be
-supported, since it won't be possible to create a different entry (dkey) that
-actually points to the same set of akeys that the current ones are stored
-within. This limitation was agreed upon, and makes the representation simple as
-described above.
+By default, all directories are created with an object class with 1 shard. This means, that if the
+container redundancy factor (RF) is 0, OC_S1 oclass will be used; if RF=1 OC_RP_2G1 is used, and so
+on. The user can of course change that when creating the directory and set the desired object class
+manually, or set the default object class when creating the container.
+
+Note that with this mapping, the inode information is stored with the entry that it corresponds to
+in the parent directory object. Thus, hard links won't be supported, since it won't be possible to
+create a different entry (dkey) that actually points to the same set of akeys that the current ones
+are stored within. This limitation makes the representation simple as described above.
 
 ## Files
 
@@ -147,6 +150,11 @@ Object array
 
 For more information about the array object layout, please refer to the
 README.md file for Array Addons.
+
+By default, all files are created with an object class with max sharding. This means, that if the
+container redundancy factor (RF) is 0, OC_SX oclass will be used; if RF=1 an EC oclass OC_EC_nP1GX
+is used, and so on. The user can of course change that when creating the file and set the desired
+object class manually, or set the default object class when creating the container.
 
 Access to that object is done through the DAOS Array API. All read and write
 operations to the file will be translated to DAOS array read and write

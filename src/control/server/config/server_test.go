@@ -217,8 +217,9 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithControlPort(10001).
 		WithBdevInclude("0000:81:00.1", "0000:81:00.2", "0000:81:00.3").
 		WithBdevExclude("0000:81:00.1").
-		WithDisableVFIO(true). // vfio enabled by default
-		WithEnableVMD(true).   // vmd disabled by default
+		WithDisableVFIO(true).   // vfio enabled by default
+		WithEnableVMD(true).     // vmd disabled by default
+		WithEnableHotplug(true). // hotplug disabled by default
 		WithNrHugePages(4096).
 		WithControlLogMask(ControlLogLevelError).
 		WithControlLogFile("/tmp/daos_server.log").
@@ -235,52 +236,71 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithHyperthreads(true). // hyper-threads disabled by default
 		WithProviderValidator(netdetect.ValidateProviderStub).
 		WithNUMAValidator(netdetect.ValidateNUMAStub).
-		WithGetNetworkDeviceClass(getDeviceClassStub).
-		WithEngines(
-			engine.NewConfig().
-				WithRank(0).
-				WithTargetCount(16).
-				WithHelperStreamCount(6).
-				WithServiceThreadCore(0).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmMountPoint("/mnt/daos/1").
-						WithScmClass("ram").
-						WithScmRamdiskSize(16),
-					storage.NewTierConfig().
-						WithBdevClass("nvme").
-						WithBdevDeviceList("0000:81:00.0"),
-				).
-				WithFabricInterface("qib0").
-				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(&numaNode0).
-				WithBypassHealthChk(&bypass).
-				WithEnvVars("CRT_TIMEOUT=30").
-				WithLogFile("/tmp/daos_engine.0.log").
-				WithLogMask("WARN"),
-			engine.NewConfig().
-				WithRank(1).
-				WithTargetCount(16).
-				WithHelperStreamCount(6).
-				WithServiceThreadCore(22).
-				WithStorage(
-					storage.NewTierConfig().
-						WithScmMountPoint("/mnt/daos/2").
-						WithScmClass("dcpm").
-						WithScmDeviceList("/dev/pmem1"),
-					storage.NewTierConfig().
-						WithBdevClass("file").
-						WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
-						WithBdevFileSize(16),
-				).
-				WithFabricInterface("qib1").
-				WithFabricInterfacePort(20000).
-				WithPinnedNumaNode(&numaNode1).
-				WithEnvVars("CRT_TIMEOUT=100").
-				WithLogFile("/tmp/daos_engine.1.log").
-				WithLogMask("WARN"),
-		)
+		WithGetNetworkDeviceClass(getDeviceClassStub)
+
+	// add engines explicitly to test functionality applied in WithEngines()
+	constructed.Engines = []*engine.Config{
+		engine.NewConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("./.daos/daos_server").
+			WithRank(0).
+			WithTargetCount(16).
+			WithHelperStreamCount(6).
+			WithServiceThreadCore(0).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos/1").
+					WithScmClass("ram").
+					WithScmRamdiskSize(16),
+				storage.NewTierConfig().
+					WithBdevClass("nvme").
+					WithBdevDeviceList("0000:81:00.0"),
+			).
+			WithFabricInterface("qib0").
+			WithFabricInterfacePort(20000).
+			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithCrtCtxShareAddr(1).
+			WithCrtTimeout(30).
+			WithPinnedNumaNode(&numaNode0).
+			WithBypassHealthChk(&bypass).
+			WithEnvVars("CRT_TIMEOUT=30").
+			WithLogFile("/tmp/daos_engine.0.log").
+			WithLogMask("WARN").
+			WithStorageEnableHotplug(true),
+		engine.NewConfig().
+			WithSystemName("daos_server").
+			WithSocketDir("./.daos/daos_server").
+			WithRank(1).
+			WithTargetCount(16).
+			WithHelperStreamCount(6).
+			WithServiceThreadCore(22).
+			WithStorage(
+				storage.NewTierConfig().
+					WithScmMountPoint("/mnt/daos/2").
+					WithScmClass("dcpm").
+					WithScmDeviceList("/dev/pmem1"),
+				storage.NewTierConfig().
+					WithBdevClass("file").
+					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
+					WithBdevFileSize(16),
+			).
+			WithFabricInterface("qib1").
+			WithFabricInterfacePort(20000).
+			WithFabricProvider("ofi+verbs;ofi_rxm").
+			WithCrtCtxShareAddr(1).
+			WithCrtTimeout(30).
+			WithPinnedNumaNode(&numaNode1).
+			WithEnvVars("CRT_TIMEOUT=100").
+			WithLogFile("/tmp/daos_engine.1.log").
+			WithLogMask("WARN").
+			WithStorageEnableHotplug(true),
+	}
 	constructed.Path = testFile // just to avoid failing the cmp
+
+	for i := range constructed.Engines {
+		t.Logf("constructed: %+v", constructed.Engines[i])
+		t.Logf("default: %+v", defaultCfg.Engines[i])
+	}
 
 	if diff := cmp.Diff(defaultCfg, constructed, defConfigCmpOpts...); diff != "" {
 		t.Fatalf("(-want, +got): %s", diff)
