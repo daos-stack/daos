@@ -307,6 +307,10 @@ RUN echo -e "<settings>\n\
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
+RUN CHOICE=$(echo "" | sudo alternatives --config java | grep "java-1.8" | tr -cd '[[:digit:]]') && \
+        echo ${CHOICE:0:1} | sudo alternatives --config java
+RUN java -version
+
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 WORKDIR /home/daos

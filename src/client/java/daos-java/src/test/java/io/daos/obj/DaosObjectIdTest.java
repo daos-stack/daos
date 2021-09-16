@@ -27,11 +27,6 @@ public class DaosObjectIdTest {
 //  }
 
   @Test
-  public void testPrintJavaVersion() throws Exception {
-    System.out.println("Java Version: " + System.getProperty("java.version"));
-  }
-
-  @Test
   public void testKeyEncoding() throws Exception {
     String s = "abc" + '\u90ed' + '\u5fb7' + '\u7eb2' + "&";
     byte[] utfBytes = s.getBytes(Constants.KEY_CHARSET);
