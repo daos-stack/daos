@@ -870,6 +870,7 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		nilReq         bool
+		emptyDb        bool
 		ranks          string
 		hosts          string
 		expMembers     []*mgmtpb.SystemMember
@@ -985,6 +986,10 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			expRanks:       "",
 			expAbsentHosts: "10.0.0.[4-5]",
 		},
+		"empty membership": {
+			emptyDb:   true,
+			expErrMsg: system.ErrRaftUnavail.Error(),
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
@@ -1013,9 +1018,11 @@ func TestServer_MgmtSvc_SystemQuery(t *testing.T) {
 			dispatched := &eventsDispatched{cancel: cancel}
 			svc.events.Subscribe(events.RASTypeStateChange, dispatched)
 
-			for _, m := range defaultMembers {
-				if _, err := svc.membership.Add(m); err != nil {
-					t.Fatal(err)
+			if !tc.emptyDb {
+				for _, m := range defaultMembers {
+					if _, err := svc.membership.Add(m); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 
