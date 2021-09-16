@@ -212,8 +212,8 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 
 	if (arg->myrank == 0) {
 		print_message("setup: creating container\n");
-		rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, co_prop,
-				      NULL);
+		rc = daos_cont_create_with_label(arg->pool.poh, "daos_test", co_prop,
+						 &arg->co_uuid, NULL);
 		if (rc) {
 			print_message("daos_cont_create failed, rc: %d\n", rc);
 		} else {

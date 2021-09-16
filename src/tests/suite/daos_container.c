@@ -2440,7 +2440,6 @@ co_api_compat(void **state)
 	uuid_t			uuid1;
 	uuid_t			uuid2;
 	char			*label = "test_api_compat_label1";
-	char			str[37];
 	daos_handle_t		coh;
 	daos_cont_info_t	info;
 	int			rc;
@@ -2448,14 +2447,15 @@ co_api_compat(void **state)
 	if (arg->myrank != 0)
 		return;
 
+	uuid_generate(uuid1);
 	uuid_clear(uuid2);
 
-	print_message("creating container with uuid pointer specified ... ");
-	rc = daos_cont_create(arg->pool.poh, &uuid1, NULL, NULL);
+	print_message("creating container with uuid specified ... ");
+	rc = daos_cont_create(arg->pool.poh, uuid1, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
-	print_message("creating container with a cleared uuid pointer ... ");
+	print_message("creating container with a uuid pointer ... ");
 	rc = daos_cont_create(arg->pool.poh, &uuid2, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
@@ -2471,8 +2471,7 @@ co_api_compat(void **state)
 	print_message("success\n");
 
 	print_message("opening container using uuid ... ");
-	uuid_unparse(uuid1, str);
-	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &info, NULL);
+	rc = daos_cont_open(arg->pool.poh, uuid1, DAOS_COO_RW, &coh, &info, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 	rc = daos_cont_close(coh, NULL);
@@ -2486,11 +2485,9 @@ co_api_compat(void **state)
 	assert_rc_equal(rc, 0);
 
 	print_message("destroying container using uuid ... ");
-	uuid_unparse(uuid1, str);
-	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, uuid1, 0, NULL);
 	assert_rc_equal(rc, 0);
-	uuid_unparse(uuid2, str);
-	rc = daos_cont_destroy(arg->pool.poh, str, 0, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, uuid2, 0, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("success\n");
 
