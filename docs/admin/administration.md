@@ -315,11 +315,9 @@ data can either be queried by device UUID (device-health command) or by VOS targ
 along with the server rank (target-health command). The same device health information
 is displayed with both command options.
 ```bash
-$ dmg -l boro-11 storage query device-health
-  --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
+$ dmg -l boro-11 storage query device-health --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 or
-$ dmg -l boro-11 storage query target-health
-  --rank=0 --tgtid=0
+$ dmg -l boro-11 storage query target-health --rank=0 --tgtid=0
 -------
 boro-11
 -------
@@ -327,6 +325,7 @@ boro-11
     UUID:5bd91603-d3c7-4fb7-9a71-76bc25690c19 [TrAddr:0000:8a:00.0]
       Targets:[0 1 2 3] Rank:0 State:NORMAL
       Health Stats:
+        Timestamp:2021-09-13T11:12:34.000+00:00
         Temperature:289K(15C)
         Controller Busy Time:0s
         Power Cycles:0
@@ -344,6 +343,30 @@ boro-11
         Device Reliability: OK
         Read Only: OK
         Volatile Memory Backup: OK
+      Intel Vendor SMART Attributes:
+        Program Fail Count:
+           Normalized(%%):100
+           Raw:0
+        Erase Fail Count:
+           Normalized(%%):100
+           Raw:0
+        Wear Leveling Count:
+           Normalized(%%):100
+           Min:24
+           Max:25
+           Avg:24
+        End-to-End Error Detection Count:0
+        CRC Error Count:0
+        Timed Workload, Media Wear(%%):63
+        Timed Workload, Host Reads:65535
+        Timed Workload, Timer:65535
+        Thermal Throttle Status(%%):0
+        Thermal Throttle Event Count:0
+        Retry Buffer Overflow Counter:0
+        PLL Lock Loss Count:0
+        NAND Bytes Written:244081
+        Host Bytes Written:52114
+
 ```
 #### Eviction and Hotplug
 
