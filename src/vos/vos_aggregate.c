@@ -146,7 +146,8 @@ struct vos_agg_param {
 	daos_key_t		ap_akey;	/* current akey */
 	unsigned int		ap_discard:1,
 				ap_csum_err:1,
-				ap_full_scan:1;
+				ap_full_scan:1,
+				ap_discard_obj:1;
 	struct umem_instance	*ap_umm;
 	bool			(*ap_yield_func)(void *arg);
 	void			*ap_yield_arg;
@@ -2184,6 +2185,8 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_obj = false;
 			break;
 		}
+		if (agg_param->ap_discard_obj)
+			return 0;
 		rc = oi_iter_aggregate(ih, agg_param->ap_discard);
 		break;
 	case VOS_ITER_DKEY:
@@ -2196,6 +2199,8 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_akey = false;
 			break;
 		}
+		if (agg_param->ap_discard_obj)
+			return 0;
 		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard);
 		break;
 	case VOS_ITER_SINGLE:
@@ -2364,7 +2369,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	ad->ad_agg_param.ap_coh = coh;
 	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
 	ad->ad_agg_param.ap_credits = 0;
-	ad->ad_agg_param.ap_discard = false;
+	ad->ad_agg_param.ap_discard = 0;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
 	merge_window_init(&ad->ad_agg_param.ap_window, csum_func);
@@ -2406,11 +2411,12 @@ free_agg_data:
 }
 
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    bool (*yield_func)(void *arg), void *yield_arg)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
 	struct agg_data		*ad;
+	int			 type = VOS_ITER_OBJ;
 	int			 rc;
 
 	D_ASSERT(epr != NULL);
@@ -2426,8 +2432,17 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	if (rc != 0)
 		goto free_agg_data;
 
-	D_DEBUG(DB_EPC, "Discard epr "DF_U64"-"DF_U64"\n",
-		epr->epr_lo, epr->epr_hi);
+	if (oidp != NULL) {
+		D_DEBUG(DB_EPC, "Discard "DF_UOID" epr "DF_X64"-"DF_X64"\n", DP_UOID(*oidp),
+			epr->epr_lo, epr->epr_hi);
+		type = VOS_ITER_DKEY;
+		ad->ad_iter_param.ip_oid = *oidp;
+		ad->ad_agg_param.ap_discard_obj = 1;
+	} else {
+		ad->ad_agg_param.ap_discard_obj = 0;
+		D_DEBUG(DB_EPC, "Discard epr "DF_X64"-"DF_X64"\n",
+			epr->epr_lo, epr->epr_hi);
+	}
 
 	/* Set iteration parameters */
 	ad->ad_iter_param.ip_hdl = coh;
@@ -2445,13 +2460,13 @@ vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
 	ad->ad_agg_param.ap_umm = &cont->vc_pool->vp_umm;
 	ad->ad_agg_param.ap_coh = coh;
 	ad->ad_agg_param.ap_credits_max = VOS_AGG_CREDITS_MAX;
+	ad->ad_agg_param.ap_discard = 1;
 	ad->ad_agg_param.ap_credits = 0;
-	ad->ad_agg_param.ap_discard = true;
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
 
 	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
-	rc = vos_iterate(&ad->ad_iter_param, VOS_ITER_OBJ, true, &ad->ad_anchors,
+	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);
 
