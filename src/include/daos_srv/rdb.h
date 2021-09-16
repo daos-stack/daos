@@ -263,6 +263,7 @@ int rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs,
 int rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs,
 		 enum rdb_probe_opc opc, const d_iov_t *key_in,
 		 d_iov_t *key_out, d_iov_t *value);
+int rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key);
 int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 		   rdb_iterate_cb_t cb, void *arg);
 int rdb_tx_revalidate(struct rdb_tx *tx);

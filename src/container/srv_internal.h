@@ -252,6 +252,7 @@ int ds_oid_iv_init(void);
 int ds_oid_iv_fini(void);
 int oid_iv_reserve(void *ns, uuid_t poh_uuid, uuid_t co_uuid, uint64_t num_oids,
 		   d_sg_list_t *value);
+int oid_iv_invalidate(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
 
 /* container_iv.c */
 int ds_cont_iv_init(void);
@@ -269,6 +270,7 @@ int cont_iv_snapshots_update(void *ns, uuid_t cont_uuid,
 			     uint64_t *snapshots, int snap_count);
 int cont_iv_ec_agg_eph_update(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
 int cont_iv_ec_agg_eph_refresh(void *ns, uuid_t cont_uuid, daos_epoch_t eph);
+int cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
 
 /* srv_metrics.c*/
 void *ds_cont_metrics_alloc(const char *path, int tgt_id);
