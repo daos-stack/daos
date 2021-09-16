@@ -78,26 +78,32 @@ dump_repos() {
         done
 }
 
+send_mail() {
+    local subject="$1"
+    local message="$2"
+    echo $message 2>&1 | mail -s $subject -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+}
+
 retry_cmd() {
-    local tries=$DAOS_STACK_RETRY_COUNT
-    while [ $tries -gt 0 ]; do
+    local attempt=0
+    local rc=0
+    while [ $attempt -lt $DAOS_STACK_RETRY_COUNT ]; do
         if time "$@"; then
-            # succeeded, return with success
+            # Command succeeded, return with success
+            if [ $attempt -gt 0 ]; then
+                send_mail "Command retry successful after $attempt retries" "Command: time $@"
             return 0
         fi
-        # We hit an error
-        (( tries-- ))
-        {
-          echo "Command $* failed on $HOSTNAME for $BUILD_URL"
-          echo "Command status was ${PIPESTATUS[0]}"
-          echo "Will retry $tries before giving up."
-        } 2>&1 | mail -s "Command failed in $BUILD_URL" \
-                      -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
-
-        if [ $tries -gt 0 ]; then
+        # Command failed, retry
+        rc=${PIPESTATUS[0]}
+        (( attempt++ ))
+        if [ $attempt -gt 0 ]; then
           sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
         fi
     done
+    if [ $rc -ne 0 ]; then
+        send_mail "Command retry failed after $attempt retries" "Command: time $@\nReturn code: $rc"
+    fi
     return 1
 }
 
@@ -115,14 +121,20 @@ mkdir -p /localhome
 if ! grep ":$MY_UID:$MY_UID:" /etc/passwd; then
   useradd -b /localhome -g "$MY_UID" -u "$MY_UID" -s /bin/bash jenkins
 fi
-mkdir -p /localhome/jenkins/.ssh
-cat /tmp/ci_key.pub >> /localhome/jenkins/.ssh/authorized_keys
-cat /tmp/ci_key.pub >> /root/.ssh/authorized_keys
-mv /tmp/ci_key.pub /localhome/jenkins/.ssh/id_rsa.pub
-mv /tmp/ci_key /localhome/jenkins/.ssh/id_rsa
-mv /tmp/ci_key_ssh_config /localhome/jenkins/.ssh/config
-chmod 700 /localhome/jenkins/.ssh
-chmod 600 /localhome/jenkins/.ssh/{authorized_keys,id_rsa*,config}
+jenkins_ssh=/localhome/jenkins/.ssh
+mkdir -p "${jenkins_ssh}"
+if ! grep -q -s -f /tmp/ci_key.pub "${jenkins_ssh}/authorized_keys"; then
+  cat /tmp/ci_key.pub >> "${jenkins_ssh}/authorized_keys"
+fi
+root_ssh=/root/.ssh
+if ! grep -q -f /tmp/ci_key.pub "${root_ssh}/authorized_keys"; then
+  cat /tmp/ci_key.pub >> "${root_ssh}/authorized_keys"
+fi
+cp /tmp/ci_key.pub "${jenkins_ssh}/id_rsa.pub"
+cp /tmp/ci_key "${jenkins_ssh}/id_rsa"
+cp /tmp/ci_key_ssh_config "${jenkins_ssh}/config"
+chmod 700 "${jenkins_ssh}"
+chmod 600 "${jenkins_ssh}"/{authorized_keys,id_rsa*,config}
 chown -R jenkins.jenkins /localhome/jenkins/
 echo "jenkins ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jenkins
 

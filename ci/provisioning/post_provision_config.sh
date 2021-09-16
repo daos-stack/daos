@@ -29,12 +29,15 @@ retry_cmd() {
         fi
         # We hit an error
         (( tries-- ))
+        set +x
         {
-          echo "Command $command $* failed on $HOSTNAME for $BUILD_URL"
+          echo "Command $command failed on $HOSTNAME for $BUILD_URL"
           echo "Command status was ${PIPESTATUS[0]}"
           echo "Will retry $tries before giving up."
+          echo "Command tried was $command $*"
         } 2>&1 | mail -s "Command failed in $BUILD_URL" \
                       -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+        set -x
 
         if [ $tries -gt 0 ]; then
             sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
@@ -75,6 +78,7 @@ retry_cmd clush -B -S -l root -w "$NODESTRING" \
            DAOS_STACK_RETRY_COUNT=\"${DAOS_STACK_RETRY_COUNT}\"
            BUILD_URL=\"${BUILD_URL}\"
            OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL}\"
+           $(cat ci/stacktrace.sh)
            $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
            $(cat ci/provisioning/post_provision_config_nodes.sh)"
 

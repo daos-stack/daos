@@ -29,6 +29,7 @@ distro_custom() {
     fi
 
     # CORCI-1096
+    dnf -y install esmtp
     sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
 
     dnf config-manager --disable powertools

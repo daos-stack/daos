@@ -4523,7 +4523,7 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID": failed to commit: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
-			D_GOTO(out_map, rc);
+		D_GOTO(out_map, rc);
 	}
 
 	updated = true;
@@ -4548,7 +4548,6 @@ out_map:
 		else
 			*map_version_p = pool_map_get_version(map);
 	}
-	rdb_tx_end(tx);
 
 out_map_buf:
 	if (map_buf != NULL)
@@ -4612,6 +4611,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
 
 out_svc:
 	pool_target_id_list_free(&tgts);
