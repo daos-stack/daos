@@ -45,7 +45,8 @@ class CartSelfTest(TestWithServers):
             self.max_inflight_rpcs = FormattedParameter(max_rpc_opt)
 
             self.repetitions = FormattedParameter("--repetitions {0}")
-            self.use_daos_agent_env = FormattedParameter("--use-daos-agent-env {0}")
+            self.use_daos_agent_env = FormattedParameter(
+                "--use-daos-agent-env", True)
 
     def __init__(self, *args, **kwargs):
         """Initialize a CartSelfTest object."""
