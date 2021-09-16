@@ -81,9 +81,10 @@ class NvmePoolExclude(OSAUtils):
             for test in self.ior_test_sequence:
                 # Set chunksize for EC object class.
                 # Blocksize and Transfer size are updated under osa_utils.py.
-                if oclass.startswith("EC") and test[4] is not None:
-                    self.ior_cmd.get_params(self)
-                    self.ior_cmd.dfs_chunk.update(test[4])
+                if oclass.startswith("EC"):
+                    if test[4] is not None:
+                        self.ior_cmd.get_params(self)
+                        self.ior_cmd.dfs_chunk.update(test[4])
                 threads = []
                 threads.append(threading.Thread(target=self.run_ior_thread,
                                                 kwargs={"action": "Write",
@@ -125,6 +126,14 @@ class NvmePoolExclude(OSAUtils):
                           "cont": self.container.uuid}
                 output = self.daos_command.container_check(**kwargs)
                 self.log.info(output)
+                if oclass.startswith("EC"):
+                    # For multiple object class testing, make sure
+                    # the ranks are reintegrated. Otherwise, we will
+                    # not enough ranks to perform testing for other
+                    # object class.
+                    output = self.dmg_command.pool_reintegrate(self.pool.uuid,
+                                                               rank, t_string)
+                    self.print_and_assert_on_rebuild_failure(output)
 
     def test_nvme_pool_excluded(self):
         """Test ID: DAOS-2086
@@ -141,9 +150,9 @@ class NvmePoolExclude(OSAUtils):
 
     def test_nvme_pool_exclude_with_ec_class(self):
         """Test ID: DAOS-7338
-        Test Description: This method is called from
-        the avocado test infrastructure. This method invokes
-        NVME pool exclude testing on multiple pools.
+        Test Description: This test performs
+        NVME pool exclude testing using 
+        different EC object class.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large

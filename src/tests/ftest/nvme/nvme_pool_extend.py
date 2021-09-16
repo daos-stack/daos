@@ -7,6 +7,7 @@
 import time
 import threading
 
+from test_utils_pool import TestPool, LabelGenerator
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
 from dmg_utils import check_system_query_status
@@ -38,6 +39,7 @@ class NvmePoolExtend(OSAUtils):
         # Start an additional server.
         self.extra_servers = self.params.get("test_servers",
                                              "/run/extra_servers/*")
+        self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
             self.hostlist_clients, self.workdir, None)
@@ -51,7 +53,8 @@ class NvmePoolExtend(OSAUtils):
             oclass (str) : object class (eg: RP_2G8,etc)
                            Defaults to None.
         """
-        self.pool = []
+        label_generator = LabelGenerator()
+        pool = {}
         total_servers = len(self.hostlist_servers) * 2
         self.log.info("Total Daos Servers (Initial): %d", total_servers)
         if oclass is None:
@@ -59,16 +62,24 @@ class NvmePoolExtend(OSAUtils):
 
         for val in range(0, num_pool):
             # Create a pool
-            self.pool.append(self.get_pool())
-            self.pool[-1].set_property("reclaim", "disabled")
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.dmg_command,
+                label_generator=label_generator)
+            pool[val].get_params(self)
+            pool[val].create()
 
         # On each pool (max 3), extend the ranks
         # eg: ranks : 4,5 ; 6,7; 8,9.
         for val in range(0, num_pool):
+            self.pool = pool[val]
             if oclass.startswith("EC"):
                 test = self.ec_ior_test_sequence[val]
                 self.ior_cmd.get_params(self)
                 self.ior_cmd.dfs_chunk.update(test[4])
+                if val > 0:
+                    # Each pool will use different object class
+                    # for EC testing.
+                    oclass = self.test_oclass[val]
             else:
                 test = self.ior_test_sequence[val]
             threads = []
@@ -138,8 +149,9 @@ class NvmePoolExtend(OSAUtils):
         self.run_nvme_pool_extend(3)
 
     def test_nvme_pool_extend_with_ec_class(self):
-        """Test ID: DAOS-2086
+        """Test ID: DAOS-7338
         Test Description: NVME Pool Extend
+        with EC object class.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
@@ -147,6 +159,7 @@ class NvmePoolExtend(OSAUtils):
         :avocado: tags=nvme_pool_extend_with_ec_class
         """
         self.log.info("NVME Pool Extend : EC Object Class")
-        test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
-        for oclass in test_oclass:
-            self.run_nvme_pool_extend(2, oclass=oclass)
+        # Each pool will use different object class
+        # in this test.
+        oclass = self.test_oclass[0]
+        self.run_nvme_pool_extend(3, oclass=oclass)
