@@ -282,3 +282,49 @@ func TestFlags_ConsModeFlag(t *testing.T) {
 		})
 	}
 }
+
+func TestFlags_ContTypeFlag(t *testing.T) {
+	for name, tc := range map[string]struct {
+		arg       string
+		expFlag   *ContTypeFlag
+		expString string
+		expErr    error
+	}{
+		"unset": {
+			expErr: errors.New("empty container type"),
+		},
+		"invalid": {
+			arg:    "snausages",
+			expErr: errors.New("unknown container type"),
+		},
+		"valid": {
+			arg: "POSIX",
+			expFlag: &ContTypeFlag{
+				Set:  true,
+				Type: 1,
+			},
+			expString: "POSIX",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := ContTypeFlag{}
+			gotErr := f.UnmarshalFlag(tc.arg)
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			flagTestFini, err := flagTestInit()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer flagTestFini()
+
+			common.AssertEqual(t, tc.expString, f.String(), "unexpected String()")
+
+			if diff := cmp.Diff(tc.expFlag, &f); diff != "" {
+				t.Fatalf("unexpected flag value: (-want, +got)\n%s\n", diff)
+			}
+		})
+	}
+}
