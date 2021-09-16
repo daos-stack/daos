@@ -1247,14 +1247,25 @@ cont_delete_ec_agg(uuid_t pool_uuid, uuid_t cont_uuid);
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
+	struct ds_pool	*pool;
 	struct cont_tgt_destroy_in in;
 	int rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
 	cont_delete_ec_agg(pool_uuid, cont_uuid);
+	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
+	ds_pool_put(pool);
+
 	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
+out:
 	return rc;
 }
 
@@ -2202,9 +2213,8 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns,
-			    in->coai_op.ci_pool_hdl, in->coai_op.ci_uuid,
-			    in->coai_op.ci_hdl, in->num_oids, &sgl);
+	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns, pool_hdl->sph_pool->sp_uuid,
+			    in->coai_op.ci_uuid, in->num_oids, &sgl);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -2213,8 +2223,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 out:
 	out->coao_op.co_rc = rc;
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
-		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid), rpc, DP_RC(rc));
 
 	return rc;
 }
