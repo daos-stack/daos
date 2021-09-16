@@ -29,7 +29,7 @@ class ZeroConfigTest(TestWithServers):
     def __init__(self, *args, **kwargs):
         """Initialize the ZeroConfigTest class."""
         super().__init__(*args, **kwargs)
-        self.dev_info = {}
+        self.interfaces = {}
         self.start_agents_once = False
         self.start_servers_once = False
         self.setup_start_servers = False
@@ -37,7 +37,7 @@ class ZeroConfigTest(TestWithServers):
 
     def get_device_info(self):
         """Get the available device names, their numa nodes, and their domains."""
-        self.dev_info = {}
+        self.interfaces = {}
         command = "ls -1 {}".format(os.path.join(os.path.sep, "sys", "class", "net"))
         results = run_pcmd(self.hostlist_servers, command)
         if len(results) != 1:
@@ -45,7 +45,7 @@ class ZeroConfigTest(TestWithServers):
         try:
             # Find any ib* device in the listing and initially use default numa and domain values
             for index, interface in enumerate(re.findall(r"ib\d", "\n".join(results[0]["stdout"]))):
-                self.dev_info[interface] = {"numa": index, "domain": "hfi1_{}".format(index)}
+                self.interfaces[interface] = {"numa": index, "domain": "hfi1_{}".format(index)}
         except (IndexError, KeyError) as error:
             self.log.error("Error obtaining interfaces: %s", str(error))
             self.fail("Error obtaining interfaces - unexpected error")
@@ -60,37 +60,43 @@ class ZeroConfigTest(TestWithServers):
             if results[0]["exit_status"] == 0:
                 regex = r"(mlx\d_\d)\s+net-(ib\d)\s+(\d)"
                 for match in re.findall(regex, "\n".join(results[0]["stdout"])):
-                    self.dev_info[match[1]]["numa"] = int(match[2])
-                    self.dev_info[match[1]]["domain"] = match[0]
+                    self.interfaces[match[1]]["numa"] = int(match[2])
+                    self.interfaces[match[1]]["domain"] = match[0]
         except (IndexError, KeyError, ValueError) as error:
             self.log.error("Error obtaining interfaces: %s", str(error))
             self.fail("Error obtaining interfaces - unexpected error")
 
-    def get_port_cnt(self, hosts, dev, port_counter):
+        if not self.interfaces:
+            self.fail("No ib* interfaces found!")
+
+    def get_port_cnt(self, hosts, port_counter):
         """Get the port count info for device names specified.
 
         Args:
             hosts (list): list of hosts
-            dev (str): device to get counter information for
-            port_counter (str): port counter to get information from
+            port_counter (str): port counter information to collect
 
         Returns:
-            list: a list of the data common to each unique NodeSet of hosts
+            dict: a dictionary of the requested port data for each interface on each host
 
         """
-        b_path = "/sys/class/infiniband/{}".format(self.dev_info[dev]["domain"])
-        file = os.path.join(b_path, "ports/1/counters", port_counter)
-
-        # Check if if exists for the host
-        check_result = check_file_exists(hosts, file)
-        if not check_result[0]:
-            self.fail("{}: {} not found".format(check_result[1], file))
-
-        cmd = "cat {}".format(file)
-        text = "port_counter"
-        error = "Error obtaining {} info".format(port_counter)
-        all_host_data = get_host_data(hosts, cmd, text, error, 20)
-        return [host_data["data"] for host_data in all_host_data]
+        port_info = {}
+        for interface in self.interfaces:
+            # Check the port counter for each interface on all of the hosts
+            counter_file = os.path.join(
+                os.sep, "sys", "class", "infiniband", self.interfaces[interface]["doamin"], "ports",
+                "1", "counters", port_counter)
+            check_result = check_file_exists(hosts, counter_file)
+            if not check_result[0]:
+                self.fail("{}: {} not found".format(check_result[1], counter_file))
+            all_host_data = get_host_data(
+                hosts, "cat {}".format(counter_file), "port_counter",
+                "Error obtaining {} info".format(port_counter), 20)
+            port_info[interface] = {}
+            for host_data in all_host_data:
+                for host in list(host_data["hosts"]):
+                    port_info[interface][host] = {1: {port_counter: host_data["data"]}}
+        return port_info
 
     def get_log_info(self, hosts, dev, env_state, log_file):
         """Get information from daos.log file to verify device used.
@@ -142,8 +148,7 @@ class ZeroConfigTest(TestWithServers):
         clients = self.agent_managers[0].hosts
 
         # Get counter values for hfi devices before and after
-        cnt_before = self.get_port_cnt(clients, exp_iface, "port_rcv_data")
-        self.log.info("Port [%s] count before: %s", exp_iface, cnt_before)
+        port_info_before = self.get_port_cnt(clients, "port_rcv_data")
 
         # get the dmg config file for daos_racer
         dmg = self.get_dmg_command()
@@ -169,25 +174,34 @@ class ZeroConfigTest(TestWithServers):
         daos_racer.run()
 
         # Verify output and port count to check what iface CaRT init with.
-        cnt_after = self.get_port_cnt(clients, exp_iface, "port_rcv_data")
-        self.log.info("Port [%s] count after: %s", exp_iface, cnt_after)
+        port_info_after = self.get_port_cnt(clients, "port_rcv_data")
 
-        diff = 0
-        for cnt_b, cnt_a in zip(cnt_before, cnt_after):
-            diff = int(cnt_a) - int(cnt_b)
-            self.log.info("Port [%s] count difference: %s", exp_iface, diff)
+        self.log.info("Client interface port_rcv_data counters")
+        msg_format = "%16s  %9s  %-9s  %-9s %-9s"
+        self.log.info(msg_format, "Host(s)", "Interface", "Before", "After", "Difference")
+        self.log.info(msg_format, "-" * 16, "-" * 9, "-" * 9, "-" * 9, "-" * 9)
+        no_traffic = set()
+        for interface in sorted(port_info_before):
+            for host in sorted(port_info_before[interface]):
+                before = port_info_before[interface][host][1]["port_rcv_data"]
+                try:
+                    after = port_info_after[interface][host][1]["port_rcv_data"]
+                    diff = after - before
+                    if diff <= 0:
+                        no_traffic.add(interface)
+                except KeyError:
+                    after = "Error"
+                    diff = "Unknown"
+                    no_traffic.add(interface)
+                self.log.info(msg_format, host, interface, before, after, diff)
 
         # Read daos.log to verify device used and prevent false positives
         self.assertTrue(self.get_log_info(clients, exp_iface, env, get_log_file(log_file)))
 
         # If we don't see data going through the device, fail
-        status = True
-        if diff <= 0:
-            self.log.info("No traffic seen through device: %s", exp_iface)
-            status = False
-        else:
-            status = True
-        return status
+        for interface in no_traffic:
+            self.log.info("No client traffic seen through device: %s", interface)
+        return len(no_traffic) != len(self.interfaces)
 
     def test_env_set_unset(self):
         """JIRA ID: DAOS-4880.
@@ -204,7 +218,7 @@ class ZeroConfigTest(TestWithServers):
 
         # Get the available interfaces and their domains
         self.get_device_info()
-        exp_iface = random.choice(list(self.dev_info.keys()))
+        exp_iface = random.choice(list(self.interfaces.keys()))
 
         # Configure the daos server
         self.setup_servers()
@@ -214,7 +228,7 @@ class ZeroConfigTest(TestWithServers):
             "Error updating daos_server 'fabric_iface' config opt")
         self.assertTrue(
             self.server_managers[0].set_config_value(
-                "pinned_numa_node", self.dev_info[exp_iface]["numa"]),
+                "pinned_numa_node", self.interfaces[exp_iface]["numa"]),
             "Error updating daos_server 'pinned_numa_node' config opt")
 
         # Start the daos server
