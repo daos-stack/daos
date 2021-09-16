@@ -451,8 +451,7 @@ out:
 }
 
 static int
-deserialize_str(hid_t file_id, struct daos_prop_entry *entry,
-		const char *prop_str)
+deserialize_str(hid_t file_id, char **str, const char *prop_str)
 {
 	hid_t	status = 0;
 	int	rc = 0;
@@ -475,15 +474,15 @@ deserialize_str(hid_t file_id, struct daos_prop_entry *entry,
 		D_ERROR("failed to get size of datatype\n");
 		D_GOTO(out, rc = -DER_MISC);
 	}
-	D_ALLOC(entry->dpe_str, buf_size);
-	if (entry->dpe_str == NULL) {
+
+	D_ALLOC(*str, buf_size);
+	if (*str == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
-	}
-	status = H5Aread(cont_attr, attr_dtype, entry->dpe_str);
+
+	status = H5Aread(cont_attr, attr_dtype, *str);
 	if (status < 0) {
 		rc = -DER_IO;
-		D_ERROR("failed to read property attribute %s "DF_RC"\n",
-			entry->dpe_str, DP_RC(rc));
+		D_ERROR("failed to read property attribute %s "DF_RC"\n", *str, DP_RC(rc));
 		D_GOTO(out, rc);
 	}
 out:
@@ -619,10 +618,9 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 	bool			deserialize_label = false;
 	bool			close_cont = true;
 	uint64_t		total_props = 0;
-	daos_prop_t		*label = NULL;
+	char			*label = NULL;
 	daos_prop_t		*prop = NULL;
 	struct daos_prop_entry	*entry;
-	struct daos_prop_entry	*label_entry = NULL;
 	daos_handle_t		coh;
 	daos_cont_info_t	cont_info = {0};
 	int			prop_num = 0;
@@ -633,27 +631,16 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 	 */
 
 	if (H5Aexists(file_id, "DAOS_PROP_CO_LABEL") > 0) {
-		label = daos_prop_alloc(1);
-		if (label == NULL) {
-			return ENOMEM;
-		}
-		label->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-
-		/* read the container label entry to decide if it should be
-		 * added to property list. The container label is required to
-		 * be unique, which is why it is handled differently than the
-		 * other container properties. If the label already exists in
-		 * the pool then this property will be skipped for
-		 * deserialization
+		/* read the container label entry to decide if it should be added to property
+		 * list. The container label is required to be unique, which is why it is handled
+		 * differently than the other container properties. If the label already exists in
+		 * the pool then this property will be skipped for deserialization
 		 */
-		label_entry = &label->dpp_entries[0];
-		rc = deserialize_str(file_id, label_entry,
-				     "DAOS_PROP_CO_LABEL");
+		rc = deserialize_str(file_id, &label, "DAOS_PROP_CO_LABEL");
 		if (rc != 0) {
 			D_GOTO(out, rc);
 		}
-		rc = daos_cont_open(poh, label_entry->dpe_str, DAOS_COO_RW,
-				    &coh, &cont_info, NULL);
+		rc = daos_cont_open(poh, label, DAOS_COO_RW, &coh, &cont_info, NULL);
 		if (rc == -DER_NONEXIST) {
 			/* label doesn't already exist so deserialize */
 			deserialize_label = true;
@@ -661,8 +648,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		} else if (rc != 0) {
 			D_GOTO(out, rc);
 		}  else {
-			D_PRINT("Container label cannot be set, "
-				"the label already exists in pool\n");
+			D_PRINT("Container label already exists in pool and cannot be set\n");
 		}
 	}
 
@@ -789,24 +775,31 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 		prop_num++;
 	}
 	if (H5Aexists(file_id, "DAOS_PROP_CO_OWNER") > 0) {
-		type = DAOS_PROP_CO_OWNER;
-		prop->dpp_entries[prop_num].dpe_type = type;
-		entry = &prop->dpp_entries[prop_num];
-		rc = deserialize_str(file_id, entry, "DAOS_PROP_CO_OWNER");
+		char *owner = NULL;
+
+		rc = deserialize_str(file_id, &owner, "DAOS_PROP_CO_OWNER");
 		if (rc != 0) {
 			D_GOTO(out, rc);
 		}
+
+		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_OWNER;
+		rc = daos_prop_entry_set_str(&prop->dpp_entries[prop_num], owner, strlen(owner));
+		if (rc)
+			D_GOTO(out, rc);
 		prop_num++;
 	}
 	if (H5Aexists(file_id, "DAOS_PROP_CO_OWNER_GROUP") > 0) {
-		type = DAOS_PROP_CO_OWNER_GROUP;
-		prop->dpp_entries[prop_num].dpe_type = type;
-		entry = &prop->dpp_entries[prop_num];
-		rc = deserialize_str(file_id, entry,
-				     "DAOS_PROP_CO_OWNER_GROUP");
+		char *group = NULL;
+
+		rc = deserialize_str(file_id, &group, "DAOS_PROP_CO_OWNER_GROUP");
 		if (rc != 0) {
 			D_GOTO(out, rc);
 		}
+
+		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_OWNER_GROUP;
+		rc = daos_prop_entry_set_str(&prop->dpp_entries[prop_num], group, strlen(group));
+		if (rc)
+			D_GOTO(out, rc);
 		prop_num++;
 	}
 	if (H5Aexists(file_id, "DAOS_PROP_CO_DEDUP") > 0) {
@@ -857,17 +850,17 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 	}
 	/* deserialize_label stays false if property doesn't exist above */
 	if (deserialize_label) {
-		type = DAOS_PROP_CO_LABEL;
-		prop->dpp_entries[prop_num].dpe_type = type;
-		prop->dpp_entries[prop_num].dpe_str =
-						strdup(label_entry->dpe_str);
+		prop->dpp_entries[prop_num].dpe_type = DAOS_PROP_CO_LABEL;
+		rc = daos_prop_entry_set_str(&prop->dpp_entries[prop_num], label, strlen(label));
+		if (rc)
+			D_GOTO(out, rc);
 	}
 	*_prop = prop;
 out:
 	/* close container after checking if label exists in pool */
 	if (close_cont)
 		daos_cont_close(coh, NULL);
-	daos_prop_free(label);
+	D_FREE(label);
 	return rc;
 }
 

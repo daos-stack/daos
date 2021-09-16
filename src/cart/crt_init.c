@@ -85,7 +85,8 @@ exit:
 
 static void
 prov_data_init(struct crt_prov_gdata *prov_data, int provider,
-		bool sep_mode, int max_ctx_num)
+	       bool sep_mode, int max_ctx_num,
+	       uint32_t max_exp_size, uint32_t max_unexp_size)
 {
 	prov_data->cpg_inited = true;
 	prov_data->cpg_provider = provider;
@@ -93,6 +94,11 @@ prov_data_init(struct crt_prov_gdata *prov_data, int provider,
 	prov_data->cpg_sep_mode = sep_mode;
 	prov_data->cpg_contig_ports = true;
 	prov_data->cpg_ctx_max_num = max_ctx_num;
+	prov_data->cpg_max_exp_size = max_exp_size;
+	prov_data->cpg_max_unexp_size = max_unexp_size;
+
+	D_DEBUG(DB_ALL, "Provider (%d), sep_mode (%d), sizes (%d/%d)\n",
+		provider, sep_mode, max_exp_size, max_unexp_size);
 
 	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 }
@@ -425,8 +431,7 @@ do_init:
 			share_addr = false;
 			ctx_num = 0;
 
-			d_getenv_bool("CRT_CTX_SHARE_ADDR",
-				      &share_addr);
+			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
 			if (share_addr)
 				set_sep = true;
 
@@ -434,8 +439,18 @@ do_init:
 			max_num_ctx = ctx_num;
 		}
 
+		uint32_t max_expect_size = 0;
+		uint32_t max_unexpect_size = 0;
+
+		if (opt && opt->cio_use_expected_size)
+			max_expect_size = opt->cio_max_expected_size;
+
+		if (opt && opt->cio_use_unexpected_size)
+			max_unexpect_size = opt->cio_max_unexpected_size;
+
 		prov_data_init(&crt_gdata.cg_prov_gdata[prov],
-			       prov, set_sep, max_num_ctx);
+			       prov, set_sep, max_num_ctx,
+			       max_expect_size, max_unexpect_size);
 
 		/* Print notice that "ofi+verbs" is legacy */
 		if (prov == CRT_NA_OFI_VERBS) {

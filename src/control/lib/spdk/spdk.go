@@ -13,13 +13,14 @@ package spdk
 /*
 #cgo CFLAGS: -I .
 #cgo LDFLAGS: -L . -lnvme_control
-#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
+#cgo LDFLAGS: -lspdk_log -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
 #cgo LDFLAGS: -lrte_mempool_ring -lrte_bus_pci
 
 #include "stdlib.h"
 #include "daos_srv/control.h"
 #include "spdk/stdinc.h"
 #include "spdk/string.h"
+#include "spdk/log.h"
 #include "spdk/env.h"
 #include "spdk/nvme.h"
 #include "spdk/vmd.h"
@@ -45,7 +46,6 @@ import "C"
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/pkg/errors"
 
@@ -75,7 +75,7 @@ type EnvOptions struct {
 }
 
 func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
-	if !o.EnableVMD {
+	if o.EnableVMD {
 		// DPDK will not accept VMD backing device addresses
 		// so convert to VMD address
 		newAllowList, err := revertBackingToVmd(log, o.PCIAllowList)
@@ -131,6 +131,9 @@ func revertBackingToVmd(log logging.Logger, pciAddrs []string) ([]string, error)
 func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	log.Debugf("spdk init go opts: %+v", opts)
 
+	// Only print error and more severe to stderr.
+	C.spdk_log_set_print_level(C.SPDK_LOG_ERROR)
+
 	if err := opts.sanitizeAllowList(log); err != nil {
 		return errors.Wrap(err, "sanitizing PCI include list")
 	}
@@ -143,10 +146,7 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
 
-	// TODO: find a way of passing multiple dpdk commandline opts
-	// envCtx := C.CString("--log-level=lib.eal:4")
-	envCtx := C.CString("--no-telemetry")
-	defer C.free(unsafe.Pointer(envCtx))
+	envCtx := C.dpdk_cli_override_opts
 
 	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(len(opts.PCIAllowList)),
 		cAllowList)
@@ -155,14 +155,11 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	}
 	clean(retPtr)
 
-	// TODO DAOS-8040: re-enable VMD
-	//	if !opts.EnableVMD {
-	//		return nil
-	//	}
-	//
-	//	if rc := C.spdk_vmd_init(); rc != 0 {
-	//		return Rc2err("spdk_vmd_init()", rc)
-	//	}
+	if opts.EnableVMD {
+		if rc := C.spdk_vmd_init(); rc != 0 {
+			return Rc2err("spdk_vmd_init()", rc)
+		}
+	}
 
 	return nil
 }
@@ -171,14 +168,9 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 func (e *EnvImpl) FiniSPDKEnv(log logging.Logger, opts *EnvOptions) {
 	log.Debugf("spdk fini go opts: %+v", opts)
 
-	C.spdk_env_fini()
+	if opts.EnableVMD {
+		C.spdk_vmd_fini()
+	}
 
-	// TODO: enable when vmd_fini supported in daos spdk version
-	//	if !opts.EnableVMD {
-	//		return nil
-	//	}
-	//
-	//	if rc := C.spdk_vmd_fini(); rc != 0 {
-	//		return Rc2err("spdk_vmd_fini()", rc)
-	//	}
+	C.spdk_env_fini()
 }

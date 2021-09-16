@@ -230,9 +230,9 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 	if ps != nil {
 		svc.log.Debugf("found pool %s state=%s", ps.PoolUUID, ps.State)
 		resp.Status = int32(drpc.DaosAlready)
-		if ps.State == system.PoolServiceStateCreating {
+		if ps.State != system.PoolServiceStateReady {
 			resp.Status = int32(drpc.DaosTryAgain)
-			return resp, svc.checkPools(ctx)
+			return resp, svc.checkPools(ctx, ps)
 		}
 		return resp, nil
 	}
@@ -434,17 +434,17 @@ func (svc *mgmtSvc) PoolCreate(ctx context.Context, req *mgmtpb.PoolCreateReq) (
 // checkPools iterates over the list of pools in the system to check
 // for any that are in an unexpected state. Pools not in the Ready
 // state will be cleaned up and removed from the system.
-//
-// NB: Care should be taken to avoid calling this when it could race
-// with a PoolCreate request.
-func (svc *mgmtSvc) checkPools(ctx context.Context) error {
+func (svc *mgmtSvc) checkPools(ctx context.Context, psList ...*system.PoolService) error {
 	if err := svc.sysdb.CheckLeader(); err != nil {
 		return err
 	}
 
-	psList, err := svc.sysdb.PoolServiceList()
-	if err != nil {
-		return err
+	var err error
+	if len(psList) == 0 {
+		psList, err = svc.sysdb.PoolServiceList(true)
+		if err != nil {
+			return errors.Wrap(err, "failed to fetch pool service list")
+		}
 	}
 
 	svc.log.Debugf("checking %d pools", len(psList))
@@ -459,9 +459,11 @@ func (svc *mgmtSvc) checkPools(ctx context.Context) error {
 		// the cleanup mode of PoolDestroy(), which will cause the
 		// destroy RPC to be sent to all ranks and then the service
 		// will be removed from the system.
-		ps.State = system.PoolServiceStateDestroying
-		if err := svc.sysdb.UpdatePoolService(ps); err != nil {
-			return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
+		if ps.State != system.PoolServiceStateDestroying {
+			ps.State = system.PoolServiceStateDestroying
+			if err := svc.sysdb.UpdatePoolService(ps); err != nil {
+				return errors.Wrapf(err, "failed to update pool %s", ps.PoolUUID)
+			}
 		}
 
 		// Attempt to destroy the pool.
@@ -943,7 +945,7 @@ func (svc *mgmtSvc) ListPools(ctx context.Context, req *mgmtpb.ListPoolsReq) (*m
 	}
 	svc.log.Debugf("MgmtSvc.ListPools dispatch, req:%+v\n", req)
 
-	psList, err := svc.sysdb.PoolServiceList()
+	psList, err := svc.sysdb.PoolServiceList(false)
 	if err != nil {
 		return nil, err
 	}

@@ -73,7 +73,7 @@
 ## Force a specific provider to be used by all the engines.
 ## The default provider depends on the interfaces that will be auto-detected:
 ##  ofi+verbs;ofi_rxm for Infiniband/RoCE and
-##  ofi+socket for non-RDMA-capable Ethernet.
+##  ofi+sockets for non-RDMA-capable Ethernet.
 #
 #provider: ofi+verbs;ofi_rxm
 #
@@ -123,6 +123,13 @@
 ## default: false
 #enable_vmd: true
 #
+## Enable NVMe SSD Hotplug
+#
+## When hotplug is enabled, io engine will periodically check device hot
+## plug/remove event, and setup/teardown the device automatically.
+#
+## default: false
+#enable_hotplug: true
 #
 ## Use Hyperthreads
 #

@@ -16,7 +16,6 @@ class DaosCommand(DaosCommandBase):
 
     METHOD_REGEX = {
         "run": r"(.*)",
-        "container_create": r"container ([0-9a-f-]+)",
         "container_query":
             r"Pool UUID:\s+([0-9a-f-]+)\n" +
             r"Container UUID:\s+([0-9a-f-]+)\n" +
@@ -84,14 +83,13 @@ class DaosCommand(DaosCommandBase):
             acl_file (str, optional): ACL file. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container create command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("container", "create"), pool=pool, sys_name=sys_name,
             cont=cont, path=path, type=cont_type, oclass=oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file)
@@ -349,12 +347,11 @@ class DaosCommand(DaosCommandBase):
                 information.
 
         Raises:
-            CommandFailure: if the daos container query command fails.
+            dict: the dmg json command output converted to a python dictionary
 
         """
-        return self._get_result(
-            ("container", "query"), pool=pool, cont=cont,
-            sys_name=sys_name)
+        return self._get_json_result(
+            ("container", "query"), pool=pool, cont=cont, sys_name=sys_name)
 
     def container_set_prop(self, pool, cont, prop, value):
         """Call daos container set-prop.
@@ -452,30 +449,16 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            dict: Dictionary that stores the attribute and value in "attr" and
-                "value" key.
+            dict: the dmg json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos get-attr command fails.
 
         """
-        self._get_result(
-            ("container", "get-attr"), pool=pool, cont=cont,
-            sys_name=sys_name, attr=attr)
+        return self._get_json_result(
+            ("container", "get-attr"), pool=pool, cont=cont, attr=attr, sys_name=sys_name)
 
-        # Sample output.
-        # Container's `&()\;'"!<> attribute value: attr12
-        match = re.findall(
-            r"Container's\s+([\S ]+)\s+attribute\s+value:\s+(.+)$",
-            self.result.stdout_text)
-        data = {}
-        if match:
-            data["attr"] = match[0][0]
-            data["value"] = match[0][1]
-
-        return data
-
-    def container_list_attrs(self, pool, cont, sys_name=None):
+    def container_list_attrs(self, pool, cont, sys_name=None, verbose=False):
         """Call daos container list-attrs.
 
         Args:
@@ -483,26 +466,18 @@ class DaosCommand(DaosCommandBase):
             cont (str): Container UUID.
             sys_name (str, optional): DAOS system name context for servers.
                 Defaults to None.
+            verbose (bool, optional): True - fetch values of all attributes.
 
         Returns:
-            dict: Dictionary that stores the attribute values in the key "attrs"
+            dict: the dmg json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container list-attrs command fails.
 
         """
-        self._get_result(
-            ("container", "list-attrs"), pool=pool, cont=cont,
-            sys_name=sys_name)
-
-        # Sample output.
-        # Container attributes:
-        # attr0
-        # ~@#$%^*-=_+[]{}:/?,.
-        # aa bb
-        # attr48
-        match = re.findall(r"\n([\S ]+)", self.result.stdout_text)
-        return {"attrs": match}
+        return self._get_json_result(
+            ("container", "list-attrs"), pool=pool, cont=cont, sys_name=sys_name,
+            verbose=verbose)
 
     def container_create_snap(self, pool, cont, snap_name=None, epoch=None,
                               sys_name=None):

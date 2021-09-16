@@ -585,6 +585,12 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		Absenthosts: missHosts.String(),
 	}
 	if hitRanks.Count() == 0 {
+		// If the membership is empty, this replica is likely waiting
+		// for logs from peers, so we should indicate to the client
+		// that it should try a different replica.
+		if req.Ranks == "" && req.Hosts == "" {
+			return nil, system.ErrRaftUnavail
+		}
 		return resp, nil
 	}
 
@@ -846,7 +852,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		peerReq.AddHost(peer.String())
 
 		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
-			if control.IsConnectionError(err) {
+			if control.IsRetryableConnErr(err) {
 				continue
 			}
 			return nil, err

@@ -337,27 +337,53 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 	startHostList := make([]string, len(req.getHostList()))
 	copy(startHostList, req.getHostList())
 
+	isTimeout := func(err error) bool {
+		if err == nil {
+			return false
+		}
+
+		// Get the wrapped error.
+		cause := errors.Cause(err)
+		switch {
+		case cause == context.DeadlineExceeded,
+			status.Code(cause) == codes.DeadlineExceeded:
+			return true
+		default:
+			return false
+		}
+	}
+
 	isHardFailure := func(err error, reqCtx context.Context) bool {
 		if err == nil {
 			return false
 		}
 
-		switch errors.Cause(err) {
-		// These may be retryable.
-		case context.DeadlineExceeded, context.Canceled:
-		default:
-			// Check to see if the error contains a gRPC status code.
-			code := status.Code(errors.Cause(err))
-			if code != codes.Canceled && code != codes.DeadlineExceeded {
-				// If the error is not a context error, it's a hard failure.
-				return true
-			}
-		}
+		// Get the wrapped error.
+		cause := errors.Cause(err)
 
 		// If the context error is from the parent request context,
-		// then it's a hard failure. Otherwise, it's a soft failure
-		// and can be retried.
-		return errors.Cause(err) == reqCtx.Err()
+		// then it's a hard failure. Otherwise, it may be a soft failure
+		// that can be retried.
+		if cause == reqCtx.Err() {
+			log.Debugf("outer context failed: %v", err)
+			return true
+		}
+
+		// This helper checks for errors returned during the process of
+		// invoking the RPC, rather than from the RPC itself (i.e. internal
+		// errors). As such, the set of errors that can cause the entire
+		// request to fail without a retry should be pretty small.
+
+		switch {
+		case isTimeout(cause):
+			// The outer context hasn't timed out or been canceled, so
+			// this is a soft failure that can be retried.
+			return false
+		default:
+			// If the error is not an inner timeout, it's a hard failure.
+			log.Debugf("non-retryable error: %v", err)
+			return true
+		}
 	}
 
 	// MS requests are a little more complicated. The general idea here is that
@@ -376,12 +402,18 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 		respChan, err := c.InvokeUnaryRPCAsync(tryCtx, req)
 		if isHardFailure(err, reqCtx) {
+			if isTimeout(err) {
+				return nil, FaultRpcTimeout(req)
+			}
 			return nil, err
 		}
 
 		ur := &UnaryResponse{fromMS: true}
 		err = gatherResponses(tryCtx, respChan, ur)
 		if isHardFailure(err, reqCtx) {
+			if isTimeout(err) {
+				return nil, FaultRpcTimeout(req)
+			}
 			return nil, err
 		}
 
@@ -423,6 +455,12 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 				req.SetHostList(e.Replicas)
 			}
 		default:
+			// As long as the outer context hasn't timed out, we
+			// should always retry an inner timeout.
+			if reqCtx.Err() == nil && isTimeout(err) {
+				break
+			}
+
 			// In the case that the request specifies that the error
 			// is retryable, but doesn't define its own retry logic,
 			// just break out so it can be tried again as usual.
@@ -448,6 +486,9 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		log.Debugf("MS request error: %v; retrying after %s", err, backoff)
 		select {
 		case <-reqCtx.Done():
+			if isTimeout(reqCtx.Err()) {
+				return nil, FaultRpcTimeout(req)
+			}
 			return nil, reqCtx.Err()
 		case <-time.After(backoff):
 		}
