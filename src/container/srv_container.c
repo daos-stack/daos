@@ -3124,21 +3124,23 @@ shall_close(const uuid_t pool_hdl, uuid_t *pool_hdls, int n_pool_hdls)
 static int
 close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 {
-	struct close_iter_arg  *arg = varg;
-	struct recs_buf	       *buf = &arg->cia_buf;
-	struct container_hdl   *hdl;
-	int			rc;
+	struct close_iter_arg		*arg = varg;
+	struct recs_buf			*buf = &arg->cia_buf;
+	struct container_hdl		*cont_hdl;
+	struct ds_pool_hdl		*pool_hdl;
+	struct cont_pool_metrics	*metrics;
+	int				 rc;
 
 	if (key->iov_len != sizeof(uuid_t) ||
-	    val->iov_len != sizeof(*hdl)) {
+	    val->iov_len != sizeof(*cont_hdl)) {
 		D_ERROR("invalid key/value size: key="DF_U64" value="DF_U64"\n",
 			key->iov_len, val->iov_len);
 		return -DER_IO;
 	}
 
-	hdl = val->iov_buf;
+	cont_hdl = val->iov_buf;
 
-	if (!shall_close(hdl->ch_pool_hdl, arg->cia_pool_hdls,
+	if (!shall_close(cont_hdl->ch_pool_hdl, arg->cia_pool_hdls,
 			 arg->cia_n_pool_hdls))
 		return 0;
 
@@ -3147,8 +3149,18 @@ close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 		return rc;
 
 	uuid_copy(buf->rb_recs[buf->rb_nrecs].tcr_hdl, key->iov_buf);
-	buf->rb_recs[buf->rb_nrecs].tcr_hce = hdl->ch_hce;
+	buf->rb_recs[buf->rb_nrecs].tcr_hce = cont_hdl->ch_hce;
 	buf->rb_nrecs++;
+
+	pool_hdl = ds_pool_hdl_lookup(cont_hdl->ch_pool_hdl);
+	if (pool_hdl == NULL) {
+		D_ERROR("failed to find pool hdl: "DF_UUID"\n", DP_UUID(cont_hdl->ch_pool_hdl));
+	} else {
+		metrics = pool_hdl->sph_pool->sp_metrics[DAOS_CONT_MODULE];
+		d_tm_inc_counter(metrics->cpm_close_count, 1);
+		d_tm_dec_gauge(metrics->cpm_open_cont_gauge, 1);
+		ds_pool_hdl_put(pool_hdl);
+	}
 
 	if (buf->rb_nrecs % RECS_BUF_RECS_PER_YIELD == 0) {
 		ABT_thread_yield();
@@ -3158,6 +3170,7 @@ close_iter_cb(daos_handle_t ih, d_iov_t *key, d_iov_t *val, void *varg)
 			return rc;
 		}
 	}
+
 	return 0;
 }
 
