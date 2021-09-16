@@ -733,6 +733,12 @@ class TestWithServers(TestWithoutServers):
             message (str): message to write to log file.
         """
         if self.server_managers and self.agent_managers:
+            # Skip until CART-974 lands
+            name = "CRT_PHY_ADDR_STR"
+            if name in os.environ and "verbs" in os.environ["CRT_PHY_ADDR_STR"]:
+                self.log.info("Skipping writing message to the server log until CART-974 lands.")
+                return
+
             temp_dir = TemporaryDirectory()
 
             # Compose and run cart_ctl command
@@ -742,11 +748,6 @@ class TestWithServers(TestWithoutServers):
             cart_ctl.cfg_path.value = temp_dir.name
             cart_ctl.m.value = message
             cart_ctl.n.value = None
-
-            # Temporary solution until CART-974 lands
-            name = "CRT_PHY_ADDR_STR"
-            if name in os.environ and "verbs" in os.environ["CRT_PHY_ADDR_STR"]:
-                cart_ctl.env = {"OFI_DOMAIN": "mlx5_0"}
 
             for manager in self.agent_managers:
                 # Fetch attachinfo data from server via the agent
