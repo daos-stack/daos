@@ -13,8 +13,7 @@ dfuse_cb_write_complete(struct dfuse_event *ev)
 	if (ev->de_ev.ev_error == 0)
 		DFUSE_REPLY_WRITE(ev, ev->de_req, ev->de_len);
 	else
-		DFUSE_REPLY_ERR_RAW(ev, ev->de_req,
-				    daos_der2errno(ev->de_ev.ev_error));
+		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
 	D_FREE(ev->de_iov.iov_buf);
 }
 
@@ -84,6 +83,9 @@ dfuse_cb_write(fuse_req_t req, fuse_ino_t ino, struct fuse_bufvec *bufv,
 				oh->doh_ie->ie_end_off = position + len;
 		}
 	}
+
+	if (len + position > oh->doh_ie->ie_stat.st_size)
+		oh->doh_ie->ie_stat.st_size = len + position;
 
 	rc = dfs_write(oh->doh_dfs, oh->doh_obj, &ev->de_sgl,
 		       position, &ev->de_ev);

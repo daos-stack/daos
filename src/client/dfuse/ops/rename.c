@@ -48,7 +48,7 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 	}
 
 	/* Update the inode entry data */
-	ie->ie_parent = newparent->ie_parent;
+	ie->ie_parent = newparent->ie_stat.st_ino;
 	strncpy(ie->ie_name, newname, NAME_MAX);
 
 	/* Set the new parent and name */

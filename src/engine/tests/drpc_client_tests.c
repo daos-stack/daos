@@ -86,6 +86,12 @@ sched_req_get(struct sched_req_attr *attr, ABT_thread ult)
 void
 sched_req_sleep(struct sched_request *req, uint32_t msecs)
 {
+	struct timespec ts;
+
+	ts.tv_sec = msecs / 1000;
+	ts.tv_nsec = msecs % 1000;
+	ts.tv_nsec *= (1000 * 1000);
+	nanosleep(&ts, NULL);
 }
 
 void
@@ -314,9 +320,6 @@ test_drpc_verify_notify_pool_svc_update(void **state)
 	uuid_t		 pool_uuid;
 	uint32_t	 svc_reps[4] = {0, 1, 2, 3};
 	d_rank_list_t	*svc_ranks;
-
-	/* Skip for DAOS-7424 */
-	skip();
 
 	mock_valid_drpc_resp_in_recvmsg(DRPC__STATUS__SUCCESS);
 	assert_rc_equal(drpc_init(), 0);

@@ -297,7 +297,9 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 
 	dae = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	rec->rec_off = UMOFF_NULL;
-	d_list_del_init(&dae->dae_link);
+
+	if (dae != NULL)
+		d_list_del_init(&dae->dae_link);
 
 	if (args != NULL) {
 		/* Return the record addreass (offset in DRAM).
@@ -844,7 +846,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 	if (dae != NULL) {
 		DCE_XID(dce) = DAE_XID(dae);
-		DCE_EPOCH(dce) = dae->dae_start_time;
+		DCE_EPOCH(dce) = DAE_EPOCH(dae);
+		DCE_HANDLE_TIME(dce) = dae->dae_start_time;
 		dce->dce_resent = dae->dae_resent;
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
@@ -852,7 +855,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		D_ASSERT(dtx_is_valid_handle(dth));
 
 		DCE_XID(dce) = *dti;
-		DCE_EPOCH(dce) = crt_hlc_get();
+		DCE_EPOCH(dce) = dth->dth_epoch;
+		DCE_HANDLE_TIME(dce) = crt_hlc_get();
 		dce->dce_resent = resent;
 	}
 
@@ -1886,13 +1890,20 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			dck->dkey_hash = DAE_DKEY_HASH(dae);
 		}
 
-		if (dae->dae_committed)
+		if (dae->dae_committed) {
+			if (epoch != NULL)
+				*epoch = DAE_EPOCH(dae);
+
 			return DTX_ST_COMMITTED;
+		}
 
 		if (dae->dae_committable) {
 			if (mbs != NULL)
 				*mbs = vos_dtx_pack_mbs(vos_cont2umm(cont),
 							dae);
+
+			if (epoch != NULL)
+				*epoch = DAE_EPOCH(dae);
 
 			return DTX_ST_COMMITTABLE;
 		}
@@ -1928,6 +1939,9 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			dce = (struct vos_dtx_cmt_ent *)riov.iov_buf;
 			if (dce->dce_invalid)
 				return -DER_NONEXIST;
+
+			if (epoch != NULL)
+				*epoch = DCE_EPOCH(dce);
 
 			return DTX_ST_COMMITTED;
 		}
@@ -2412,9 +2426,9 @@ cmt:
 			dce = &dbd->dbd_committed_data[i];
 
 			if (!daos_is_zero_dti(&dce->dce_xid) &&
-			    dce->dce_epoch != 0) {
+			    dce->dce_handle_time != 0) {
 				stat->dtx_first_cmt_blob_time_up =
-							dce->dce_epoch;
+							dce->dce_handle_time;
 				break;
 			}
 		}
@@ -2423,9 +2437,9 @@ cmt:
 			dce = &dbd->dbd_committed_data[i];
 
 			if (!daos_is_zero_dti(&dce->dce_xid) &&
-			    dce->dce_epoch != 0) {
+			    dce->dce_handle_time != 0) {
 				stat->dtx_first_cmt_blob_time_lo =
-							dce->dce_epoch;
+							dce->dce_handle_time;
 				break;
 			}
 		}

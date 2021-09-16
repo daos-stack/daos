@@ -4,7 +4,7 @@ DAOS object stores user's data, it is identified by object ID which is unique
 within the DAOS container it belongs to. Objects can be distributed across any
 target of the pool for both performance and resilience.
 DAOS object in DAOS storage model is shown in the diagram -
-![/doc/graph/Fig_002.png](/doc/graph/Fig_002.png "object in storage model")
+![/docs/graph/Fig_002.png](/docs/graph/Fig_002.png "object in storage model")
 The object module implements the object I/O stack.
 
 ## KV store, dkey and akey
@@ -34,10 +34,65 @@ In addition user can register customized object class by
 object class is stored as container metadata; it is valid in the lifetime of the
 container.
 
-The object class ID is embedded in object ID. By `daos_obj_generate_id()` user
+The object class ID is embedded in object ID. By `daos_obj_generate_oid()` user
 can generate an object ID for the specific object class ID. DAOS uses this class
 ID to find the corresponding object class, and then distribute and protect
 object data based on algorithm descriptions of this class.
+
+Users can select the object class manually when generating the oid from the list of all object
+classes in [/src/include/daos_obj_class.h]. However manually selecting the object class is not
+encouraged for regular users and should be done by advanced users only who understand all the
+different object classes and the redundancy factor of the container. For most users, passing an
+OC_UNKNOWN (0) object class to `daos_obj_generate_oid()` would allow DAOS to automatically select an
+object class based on the container properties where that object is being accessed such as the
+redundancy factor (RF), the number of domain (server engines) of the pool, and on the type of object
+being accessed (determined by the feats flag).
+
+The following details how the object class is chosen when no default or hints are provided:
+- RF:0
+  - Array, Byte Array, Flat KV object: OC_SX
+  - no feats type: OC_S1
+- RF:1
+  - Array, Byte Array:
+    - domain_nr >= 10 : OC_EC_8P1GX
+    - domain_nr >= 6 : OC_EC_4P1GX
+    - OC_EC_2P1GX
+  - Flat KV object: OC_RP_2GX
+  - no feats type: OC_RP_2G1
+- RF:2
+  - Array, Byte Array:
+    - domain_nr >= 10 : OC_EC_8P2GX
+    - domain_nr >= 6 : OC_EC_4P2GX
+    - OC_EC_2P2GX
+  - Flat KV object: OC_RP_3GX
+  - no feats type: OC_RP_3G1
+- RF:3
+  - Array, Byte Array, Flat KV object: OC_RP_4GX
+  - no feats type: OC_RP_4G1
+- RF:4
+  - Array, Byte Array, Flat KV object: OC_RP_6GX
+  - no feats type: OC_RP_6G1
+
+In addition, the oid generation API provides an optional mechanism for users to provide hints to the
+DAOS library to control what redundancy method is chosen and what scale of groups to use for the
+oclass without needing to specify the oclass itself. Those hints will override the auto class
+selection for that particular setting. For example, one could set a redundancy hint for replication
+on an Array object, and DAOS in this case will select the proper replicated object class instead of
+the default EC one.
+
+The user can specify any of the following redundancy hints:
+- DAOS_OCH_RDD_DEF - Use RF prop (default)
+- DAOS_OCH_RDD_NO  - No redundancy
+- DAOS_OCH_RDD_RP  - Replication
+- DAOS_OCH_RDD_EC  - Erasure Code
+
+and any of the following sharding hints (percentage based on number of targets):
+- DAOS_OCH_SHD_DEF  - use 1 grp (default)
+- DAOS_OCH_SHD_TINY - <= 4 grps
+- DAOS_OCH_SHD_REG  - max(128, 25%)
+- DAOS_OCH_SHD_HI   - max(256, 50%)
+- DAOS_OCH_SHD_EXT  - max(1024, 80%)
+- DAOS_OCH_SHD_MAX  - 100%
 
 ## Data Protection Method
 
@@ -114,7 +169,7 @@ The checksum feature attempts to provide end-to-end data integrity. On an update
  the DAOS client calculates checksums for user data and sends with the RPC to
  the DAOS server. The DAOS server returns the checksum with the data on a fetch
  so the DAOS client can verify the integrity of the data. See [End-to-end Data
- Integrity Overiew](../../doc/overview/data_integrity.md) for more information.
+ Integrity Overiew](../../docs/overview/data_integrity.md) for more information.
 
 Checksums are configured at the container level and when a client opens a
  container, the checksum properties will be queried automatically, and, if

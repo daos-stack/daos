@@ -137,7 +137,6 @@ daos_cont_create_with_label(daos_handle_t poh, const char *label,
 
 out_merged_props:
 	daos_prop_free(merged_props);
-
 out_prop:
 	daos_prop_free(label_prop);
 	return rc;

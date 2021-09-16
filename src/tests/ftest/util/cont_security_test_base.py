@@ -39,7 +39,6 @@ class ContSecurityTestBase(TestWithServers):
         self.user_gid = None
         self.current_user = None
         self.current_group = None
-        self.pool_uuid = None
         self.container_uuid = None
 
     def setUp(self):
@@ -162,7 +161,7 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_overwrite_acl(
-            self.pool_uuid, self.container_uuid, acl_file)
+            self.pool.uuid, self.container_uuid, acl_file)
         return result
 
     def update_container_acl(self, entry):
@@ -176,7 +175,7 @@ class ContSecurityTestBase(TestWithServers):
         """
         self.daos_tool.exit_status_exception = False
         result = self.daos_tool.container_update_acl(
-            self.pool_uuid, self.container_uuid, entry=entry)
+            self.pool.uuid, self.container_uuid, entry=entry)
         return result
 
     def destroy_test_container(self, pool_uuid, container_uuid):

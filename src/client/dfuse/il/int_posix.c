@@ -90,7 +90,7 @@ static const char * const bypass_status[] = {
  * have been left open, for example if there are problems on close.
  */
 
-static void
+static int
 ioil_shrink_pool(struct ioil_pool *pool)
 {
 	if (daos_handle_is_valid(pool->iop_poh)) {
@@ -98,31 +98,32 @@ ioil_shrink_pool(struct ioil_pool *pool)
 
 		rc = daos_pool_disconnect(pool->iop_poh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_pool_disconnect() failed, " DF_RC "\n",
+			D_ERROR("daos_pool_disconnect() failed, "DF_RC"\n",
 				DP_RC(rc));
-			return;
+			return rc;
 		}
 		pool->iop_poh = DAOS_HDL_INVAL;
 	}
 	d_list_del(&pool->iop_pools);
 	D_FREE(pool);
+	return 0;
 }
 
-static void
-ioil_shrink(struct ioil_cont *cont)
+static int
+ioil_shrink_cont(struct ioil_cont *cont, bool shrink_pool)
 {
 	struct ioil_pool	*pool;
 	int			rc;
 
 	if (cont->ioc_open_count != 0)
-		return;
+		return 0;
 
 	if (cont->ioc_dfs != NULL) {
 		DFUSE_TRA_DOWN(cont->ioc_dfs);
 		rc = dfs_umount(cont->ioc_dfs);
 		if (rc != 0) {
 			D_ERROR("dfs_umount() failed, %d\n", rc);
-			return;
+			return rc;
 		}
 		cont->ioc_dfs = NULL;
 	}
@@ -130,9 +131,9 @@ ioil_shrink(struct ioil_cont *cont)
 	if (daos_handle_is_valid(cont->ioc_coh)) {
 		rc = daos_cont_close(cont->ioc_coh, NULL);
 		if (rc != 0) {
-			D_ERROR("daos_cont_close() failed, " DF_RC "\n",
+			D_ERROR("daos_cont_close() failed, "DF_RC"\n",
 				DP_RC(rc));
-			return;
+			return rc;
 		}
 		cont->ioc_coh = DAOS_HDL_INVAL;
 	}
@@ -141,10 +142,13 @@ ioil_shrink(struct ioil_cont *cont)
 	d_list_del(&cont->ioc_containers);
 	D_FREE(cont);
 
-	if (!d_list_empty(&pool->iop_container_head))
-		return;
+	if (!shrink_pool)
+		return 0;
 
-	ioil_shrink_pool(pool);
+	if (!d_list_empty(&pool->iop_container_head))
+		return 0;
+
+	return ioil_shrink_pool(pool);
 }
 
 static void
@@ -162,7 +166,10 @@ entry_array_close(void *arg) {
 
 	entry->fd_cont->ioc_open_count -= 1;
 
-	ioil_shrink(entry->fd_cont);
+	/* Do not close container/pool handles at this point
+	 * to allow for re-use.
+	 * ioil_shrink_cont(entry->fd_cont, true);
+	*/
 }
 
 static int
@@ -174,7 +181,7 @@ ioil_initialize_fd_table(int max_fds)
 			 entry_array_close);
 	if (rc != 0)
 		DFUSE_LOG_ERROR("Could not allocate file descriptor table"
-				", disabling kernel bypass: rc = " DF_RC,
+				", disabling kernel bypass: rc = "DF_RC,
 				DP_RC(rc));
 	return rc;
 }
@@ -344,6 +351,7 @@ ioil_fini(void)
 {
 	struct ioil_pool *pool, *pnext;
 	struct ioil_cont *cont, *cnext;
+	int rc;
 
 	ioil_iog.iog_initialized = false;
 
@@ -352,20 +360,24 @@ ioil_fini(void)
 
 	ioil_show_summary();
 
-	/* Tidy up any remaining open connections */
+	/* Tidy up any open connections */
 	d_list_for_each_entry_safe(pool, pnext,
 				   &ioil_iog.iog_pools_head, iop_pools) {
 		d_list_for_each_entry_safe(cont, cnext,
 					   &pool->iop_container_head,
 					   ioc_containers) {
-			ioil_shrink(cont);
+			/* Retry disconnect on out of memory errors, this is mainly for fault
+			 * injection testing.  Do not attempt to shrink the pool here as that
+			 * is tried later, and if the container close succeeds but pool close
+			 * fails the cont may not be valid afterwards.
+			 */
+			rc = ioil_shrink_cont(cont, false);
+			if (rc == -DER_NOMEM)
+				ioil_shrink_cont(cont, false);
 		}
-	}
-
-	/* Tidy up any pools which do not have open containers */
-	d_list_for_each_entry_safe(pool, pnext,
-				   &ioil_iog.iog_pools_head, iop_pools) {
-		ioil_shrink_pool(pool);
+		rc = ioil_shrink_pool(pool);
+		if (rc == -DER_NOMEM)
+			ioil_shrink_pool(pool);
 	}
 
 	if (ioil_iog.iog_daos_init)
@@ -440,6 +452,79 @@ fetch_dfs_obj_handle(int fd, struct fd_entry *entry)
 	return rc;
 }
 
+#define NAME_LEN 128
+
+/* Connect to a pool, helper function for ioil_fetch_cont_handles().
+ *
+ * Fetch the pool open handle for a pool from a fd, do this either
+ * via ioctl if possible, or if not via a file in /tmp.
+ */
+static int
+ioil_fetch_pool_handle(int fd, struct dfuse_hs_reply *hs_reply,
+		       struct ioil_pool *pool)
+{
+	d_iov_t	iov = {};
+	int	rc;
+	int	cmd;
+	ssize_t	rsize;
+
+	D_ALLOC(iov.iov_buf, hs_reply->fsr_pool_size);
+	if (!iov.iov_buf)
+		return ENOMEM;
+
+	/* Max size of ioctl is 16k */
+	if (hs_reply->fsr_pool_size >= (16 * 1024)) {
+		char fname[NAME_LEN];
+
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
+			   DFUSE_IOCTL_REPLY_PFILE, NAME_LEN);
+
+		errno = 0;
+		rc = ioctl(fd, cmd, fname);
+		if (rc != 0) {
+			rc = errno;
+
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+					  rc, strerror(rc));
+			goto out;
+		}
+		errno = 0;
+		fd = __real_open(fname, O_RDONLY);
+		if (fd == -1)
+			D_GOTO(out, rc = errno);
+		rsize = __real_read(fd, iov.iov_buf, hs_reply->fsr_pool_size);
+		if (rsize != hs_reply->fsr_pool_size)
+			D_GOTO(out, rc = EAGAIN);
+		unlink(fname);
+	} else {
+		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
+			   DFUSE_IOCTL_REPLY_POH, hs_reply->fsr_pool_size);
+
+		errno = 0;
+		rc = ioctl(fd, cmd, iov.iov_buf);
+		if (rc != 0) {
+			rc = errno;
+
+			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
+					  rc, strerror(rc));
+			goto out;
+		}
+	}
+
+	iov.iov_buf_len = hs_reply->fsr_pool_size;
+	iov.iov_len = iov.iov_buf_len;
+
+	rc = daos_pool_global2local(iov, &pool->iop_poh);
+	if (rc) {
+		DFUSE_LOG_WARNING("Failed to use pool handle "DF_RC,
+				  DP_RC(rc));
+		D_GOTO(out, rc = daos_der2errno(rc));
+	}
+out:
+	D_FREE(iov.iov_buf);
+	return rc;
+}
+
 /* Connect to a pool and container
  *
  * Pool and container should already be inserted into the lists,
@@ -481,35 +566,15 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 			hs_reply.fsr_cont_size);
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
-		D_ALLOC(iov.iov_buf, hs_reply.fsr_pool_size);
-		if (!iov.iov_buf)
-			return ENOMEM;
-
-		cmd = _IOC(_IOC_READ, DFUSE_IOCTL_TYPE,
-			   DFUSE_IOCTL_REPLY_POH, hs_reply.fsr_pool_size);
-
-		errno = 0;
-		rc = ioctl(fd, cmd, iov.iov_buf);
-		if (rc != 0) {
-			int err = errno;
-
-			DFUSE_LOG_WARNING("ioctl call on %d failed %d %s", fd,
-					  err, strerror(err));
-
-			D_FREE(iov.iov_buf);
-			return err;
-		}
-
-		iov.iov_buf_len = hs_reply.fsr_pool_size;
-		iov.iov_len = iov.iov_buf_len;
-
-		rc = daos_pool_global2local(iov, &pool->iop_poh);
-		D_FREE(iov.iov_buf);
-		if (rc) {
-			DFUSE_LOG_WARNING("Failed to use pool handle " DF_RC,
-					  DP_RC(rc));
-			return daos_der2errno(rc);
-		}
+		/* Fetch the pool handle via the ioctl or file.  Both dfuse
+		 * and the local code can return EAGAIN if the pool handle
+		 * changes in size during reading so handle this case here.
+		 */
+		rc = ioil_fetch_pool_handle(fd, &hs_reply, pool);
+		if (rc == EAGAIN)
+			rc = ioil_fetch_pool_handle(fd, &hs_reply, pool);
+		if (rc != 0)
+			return rc;
 	}
 
 	D_ALLOC(iov.iov_buf, hs_reply.fsr_cont_size);
@@ -536,7 +601,7 @@ ioil_fetch_cont_handles(int fd, struct ioil_cont *cont)
 
 	rc = daos_cont_global2local(pool->iop_poh, iov, &cont->ioc_coh);
 	if (rc) {
-		DFUSE_LOG_WARNING("Failed to use cont handle " DF_RC,
+		DFUSE_LOG_WARNING("Failed to use cont handle "DF_RC,
 				  DP_RC(rc));
 		D_FREE(iov.iov_buf);
 		return daos_der2errno(rc);
@@ -648,7 +713,7 @@ check_ioctl_on_open(int fd, struct fd_entry *entry, int flags, int status)
 	if (!ioil_iog.iog_daos_init) {
 		rc = daos_init();
 		if (rc) {
-			DFUSE_LOG_DEBUG("daos_init() failed, " DF_RC,
+			DFUSE_LOG_DEBUG("daos_init() failed, "DF_RC,
 					DP_RC(rc));
 			ioil_iog.iog_no_daos = true;
 			return false;
@@ -750,7 +815,7 @@ obj_close:
 	dfs_release(entry->fd_dfsoh);
 
 shrink:
-	ioil_shrink(cont);
+	ioil_shrink_cont(cont, true);
 
 err:
 	rc = pthread_mutex_unlock(&ioil_iog.iog_lock);

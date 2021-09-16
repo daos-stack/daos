@@ -8,11 +8,9 @@
  *
  * DAOS File System "Sys" API
  *
- * The DFS Sys API provides a simplified layer directly on top
- * of the DFS API that is more similar to the equivalent
- * POSIX libraries. While the DFS Sys API stands on its own,
- * the DFS API can be used directly by getting the DFS Object
- * with dfs_sys2base().
+ * The DFS Sys API provides a simplified layer directly on top of the DFS API that is more
+ * similar to the equivalent POSIX libraries. While the DFS Sys API stands on its own,
+ * the DFS API can be used directly by getting the DFS Object with dfs_sys2base().
  */
 
 #ifndef __DAOS_FS_SYS_H__
@@ -27,15 +25,15 @@ extern "C" {
 #include <daos.h>
 #include <daos_fs.h>
 
-#define DFS_SYS_NO_CACHE 1
-#define DFS_SYS_NO_LOCK 2
+/** Mount flags for dfs_sys_mount. By default, mount with caching and locking turned on. */
+#define DFS_SYS_NO_CACHE 1 /**< Turn off directory caching */
+#define DFS_SYS_NO_LOCK 2  /**< Turn off locking. Useful for single-threaded applications. */
 
 /** struct holding attributes for the dfs_sys calls */
 typedef struct dfs_sys dfs_sys_t;
 
 /**
- * Mount a file system with dfs_mount and optionally
- * initialize a cache.
+ * Mount a file system with dfs_mount and optionally initialize a cache.
  *
  * \param[in]	poh	Pool connection handle.
  * \param[in]	coh	Container open handle.
@@ -84,8 +82,7 @@ dfs_sys_local2global(dfs_sys_t *dfs_sys, d_iov_t *glob);
  *			of serialized DFS Sys handle.
  * \param[in]	sflags	Sys flags (DFS_SYS_NO_CACHE or DFS_SYS_NO_LOCK).
  *			This is not inherited from the DFS Sys handle.
- * \param[in]	glob	Global (shared) representation of a collective handle
- *			to be extracted.
+ * \param[in]	glob	Global (shared) representation of a collective handle to be extracted.
  * \param[out]	dfs_sys	Returned dfs_sys mount.
  */
 int
@@ -223,7 +220,6 @@ dfs_sys_mknod(dfs_sys_t *dfs_sys, const char *path, mode_t mode,
  *			[out]: Names placed after each other (null terminated).
  * \param[in,out]
  *		size	[in]: Size of list. [out]: Actual size of list.
- *			On error, this is set to -1.
  * \param[in]	flags	(O_NOFOLLOW)
  *
  * \return		0 on success, errno code on failure.
@@ -243,7 +239,6 @@ dfs_sys_listxattr(dfs_sys_t *dfs_sys, const char *path, char *list,
  * \param[out]	value	Buffer to place value of xattr.
  * \param[in,out]
  *		size	[in]: Size of buffer value. [out]: Actual size of xattr.
- *			On error, this is set to -1.
  * \param[in]	flags	(O_NOFOLLOW)
  *
  * \return		0 on success, errno code on failure.
@@ -300,8 +295,7 @@ dfs_sys_removexattr(dfs_sys_t *dfs_sys, const char *path, const char *name,
  *		buf	[in]: Allocated buffer for value.
  *			[out]: Symlink value.
  * \param[in,out]
- *		size	[in]: Size of buffer passed in. [out]: Actual size of
- *			      value. On error, this is set to -1.
+ *		size	[in]: Size of buffer passed in. [out]: Actual size of value.
  *
  * \return		0 on success, errno code on failure.
  */
@@ -366,8 +360,7 @@ dfs_sys_close(dfs_obj_t *obj);
  *			[out]: Actual data read.
  * \param[in]	off	Offset into the file to read from.
  * \param[in,out]
- *		size	[in]: Size of buffer passed in. [out]: Actual size of
- *			      data read. On error, this is set to -1.
+ *		size	[in]: Size of buffer passed in. [out]: Actual size of data read.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
@@ -385,8 +378,7 @@ dfs_sys_read(dfs_sys_t *dfs_sys, dfs_obj_t *obj, void *buf, daos_off_t off,
  * \param[in]	buf	Data to write.
  * \param[in]	off	Offset into the file to write to.
  * \param[in,out]
- *		size	[in]: Size of buffer passed in. [out]: Actual size of
- *			      data written. On error, this is set to -1.
+ *		size	[in]: Size of buffer passed in. [out]: Actual size of data written.
  * \param[in]	ev	Completion event, it is optional and can be NULL.
  *			Function will run in blocking mode if \a ev is NULL.
  *
