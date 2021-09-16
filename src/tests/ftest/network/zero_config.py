@@ -90,7 +90,7 @@ class ZeroConfigTest(TestWithServers):
             if not check_result[0]:
                 self.fail("{}: {} not found".format(check_result[1], counter_file))
             all_host_data = get_host_data(
-                hosts, "cat {}".format(counter_file), "port_counter",
+                hosts, "cat {}".format(counter_file), "{} port_counter".format(interface),
                 "Error obtaining {} info".format(port_counter), 20)
             port_info[interface] = {}
             for host_data in all_host_data:
@@ -177,7 +177,7 @@ class ZeroConfigTest(TestWithServers):
         port_info_after = self.get_port_cnt(clients, "port_rcv_data")
 
         self.log.info("Client interface port_rcv_data counters")
-        msg_format = "%16s  %9s  %-9s  %-9s %-9s"
+        msg_format = "%16s  %9s  %9s  %9s  %s"
         self.log.info(msg_format, "Host(s)", "Interface", "Before", "After", "Difference")
         self.log.info(msg_format, "-" * 16, "-" * 9, "-" * 9, "-" * 9, "-" * 9)
         no_traffic = set()
@@ -186,12 +186,12 @@ class ZeroConfigTest(TestWithServers):
                 before = port_info_before[interface][host][1]["port_rcv_data"]
                 try:
                     after = port_info_after[interface][host][1]["port_rcv_data"]
-                    diff = after - before
+                    diff = int(after) - int(before)
                     if diff <= 0:
                         no_traffic.add(interface)
-                except KeyError:
+                except (KeyError, ValueError) as error:
                     after = "Error"
-                    diff = "Unknown"
+                    diff = "Unknown - {}".format(error)
                     no_traffic.add(interface)
                 self.log.info(msg_format, host, interface, before, after, diff)
 
