@@ -21,7 +21,7 @@ send_mail() {
     local subject="$1"
     local message="$2"
     set +x
-    echo "$message" 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+    echo -e "$message" 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
     set -x
 }
 
