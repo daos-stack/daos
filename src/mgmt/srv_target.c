@@ -168,9 +168,9 @@ struct tgt_destroy_args {
 static inline int
 tgt_kill_pool(void *args)
 {
-	struct tgt_destroy_args	*tda = args;
+	struct d_uuid	*id = args;
 
-	return vos_pool_kill(tda->tda_id.uuid, tda->tda_rc != 0);
+	return vos_pool_kill(id->uuid);
 }
 
 /**
@@ -262,16 +262,15 @@ struct dead_pool {
 static int
 cleanup_leftover_cb(uuid_t uuid, void *arg)
 {
-	struct tgt_destroy_args	 tda = { };
 	d_list_t		*dead_list = arg;
 	struct dead_pool	*dp;
 	int			 rc;
+	struct d_uuid		 id;
 
 	/* destroy blobIDs */
 	D_DEBUG(DB_MGMT, "Clear SPDK blobs for pool "DF_UUID"\n", DP_UUID(uuid));
-	uuid_copy(tda.tda_id.uuid, uuid);
-	tda.tda_rc = 1;	/* indicates leftover pool cleanup */
-	rc = dss_thread_collective(tgt_kill_pool, &tda, 0);
+	uuid_copy(id.uuid, uuid);
+	rc = dss_thread_collective(tgt_kill_pool, &id, 0);
 	if (rc != 0) {
 		D_ERROR("tgt_kill_pool, rc: "DF_RC"\n", DP_RC(rc));
 		return rc;
@@ -925,7 +924,7 @@ tgt_destroy(uuid_t pool_uuid, char *path)
 
 	/* destroy blobIDs first */
 	uuid_copy(tda.tda_id.uuid, pool_uuid);
-	rc = dss_thread_collective(tgt_kill_pool, &tda, 0);
+	rc = dss_thread_collective(tgt_kill_pool, &tda.tda_id, 0);
 	if (rc && rc != -DER_BUSY)
 		goto out;
 

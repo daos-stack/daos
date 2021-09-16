@@ -429,7 +429,7 @@ close:
  * - detach from GC, delete SPDK blob
  */
 int
-vos_pool_kill(uuid_t uuid, bool from_cleanup)
+vos_pool_kill(uuid_t uuid)
 {
 	struct d_uuid	ukey;
 	int		rc;
@@ -446,18 +446,6 @@ vos_pool_kill(uuid_t uuid, bool from_cleanup)
 		}
 
 		D_ASSERT(pool != NULL);
-		/*
-		 * When this function is called for leftover pools cleanup,
-		 * a new pool with same UUID could have been created, don't
-		 * touch the new pool in this case.
-		 */
-		if (from_cleanup && !pool->vp_dying) {
-			D_WARN("A new pool with same UUID:"DF_UUID"detected\n",
-			       DP_UUID(uuid));
-			vos_pool_decref(pool);
-			return 0;
-		}
-
 		if (gc_have_pool(pool)) {
 			/* still pinned by GC, un-pin it because there is no
 			 * need to run GC for this pool anymore.
@@ -469,7 +457,8 @@ vos_pool_kill(uuid_t uuid, bool from_cleanup)
 		pool->vp_dying = 1;
 		vos_pool_decref(pool); /* -1 for lookup */
 
-		D_ERROR(DF_UUID": Open reference exists, force kill\n", DP_UUID(uuid));
+		D_ERROR(DF_UUID": Open reference exists, pool deletion is deferred\n",
+			DP_UUID(uuid));
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
@@ -490,7 +479,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	D_DEBUG(DB_MGMT, "delete path: %s UUID: "DF_UUID"\n",
 		path, DP_UUID(uuid));
 
-	rc = vos_pool_kill(uuid, false);
+	rc = vos_pool_kill(uuid);
 	if (rc)
 		return rc;
 
