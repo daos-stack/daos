@@ -162,6 +162,9 @@ reply:
 	attr->st_uid = ie->ie_stat.st_uid;
 	attr->st_gid = ie->ie_stat.st_gid;
 	attr->st_ino = ie->ie_stat.st_ino;
+
+	/* Update the size as dfuse knows about it for future use */
+	ie->ie_stat.st_size = attr->st_size;
 	DFUSE_REPLY_ATTR(ie, req, attr);
 	return;
 err:

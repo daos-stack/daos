@@ -520,7 +520,7 @@ ts_list_rect(void)
 	daos_handle_t		 ih;
 	int			 i;
 	char			*arg;
-	int			 rc;
+	int			 rc, rc2;
 	int			 options = 0;
 	bool			 probe = true;
 
@@ -641,8 +641,9 @@ skip_probe:
 		if (rc != 0)
 			D_GOTO(out, rc);
 	}
- out:
-	evt_iter_finish(ih);
+out:
+	rc2 = evt_iter_finish(ih);
+	assert_rc_equal(rc2, 0);
 }
 
 #define TS_VAL_CYCLE	4

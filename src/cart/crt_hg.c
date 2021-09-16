@@ -9,6 +9,7 @@
 #define D_LOGFAC	DD_FAC(hg)
 
 #include "crt_internal.h"
+#include "mercury_util.h"
 
 /*
  * na_dict table should be in the same order of enum crt_na_type, the last one
@@ -497,8 +498,9 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 int
 crt_hg_init(void)
 {
-	int	rc = 0;
-	char	*env;
+	const char	*log_subsys;
+	char		*log_level;
+	int		rc = 0;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -507,14 +509,17 @@ crt_hg_init(void)
 
 	#define EXT_FAC DD_FAC(external)
 
-	/* If mercury log level is not set, set it to warning by default */
-	env = getenv("HG_LOG_LEVEL");
-	if (!env)
-		HG_Set_log_level("warning");
+	log_subsys = getenv("HG_LOG_SUBSYS");
+	log_level = getenv("HG_LOG_LEVEL");
 
-	env = getenv("HG_NA_LOG_LEVEL");
-	if (!env)
-		NA_Set_log_level("warning");
+	if (!log_level)
+		log_level = "warning";
+
+	HG_Set_log_level(log_level);
+
+	/* set default subsystem with the provided log level */
+	if (!log_subsys)
+		HG_Util_set_log_level(log_level);
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
@@ -584,6 +589,12 @@ crt_hg_class_init(int provider, int idx, hg_class_t **ret_hg_class)
 					crt_provider_get_max_ctx_num(provider);
 	else
 		init_info.na_init_info.max_contexts = 1;
+
+	if (prov_data->cpg_max_exp_size > 0)
+		init_info.na_init_info.max_expected_size =  prov_data->cpg_max_exp_size;
+
+	if (prov_data->cpg_max_unexp_size > 0)
+		init_info.na_init_info.max_unexpected_size = prov_data->cpg_max_unexp_size;
 
 	init_info.request_post_incr = 0;
 	hg_class = HG_Init_opt(info_string, crt_is_service(), &init_info);
@@ -1018,6 +1029,11 @@ crt_hg_req_send_cb(const struct hg_cb_info *hg_cbinfo)
 	D_ASSERT(hg_cbinfo->type == HG_CB_FORWARD);
 
 	rpc_pub = &rpc_priv->crp_pub;
+
+	if (crt_rpc_completed(rpc_priv)) {
+		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
+		return rc;
+	}
 
 	RPC_TRACE(DB_TRACE, rpc_priv, "entered, hg_cbinfo->ret %d.\n",
 		  hg_cbinfo->ret);

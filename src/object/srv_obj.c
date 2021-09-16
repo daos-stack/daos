@@ -845,8 +845,7 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		rc = daos_csummer_verify_key(csummer, dkey, dkey_csum);
 		if (rc != 0) {
 			D_ERROR("daos_csummer_verify_key error for dkey: "
-					DF_RC"\n",
-				DP_RC(rc));
+				DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 	}
@@ -1341,6 +1340,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				cond_flags |= VOS_OF_DEDUP_VERIFY;
 		}
 
+		if (orw->orw_flags & ORF_EC)
+			cond_flags |= VOS_OF_EC;
+
 		rc = vos_update_begin(ioc->ioc_vos_coh, orw->orw_oid,
 			      orw->orw_epoch, cond_flags, dkey,
 			      orw->orw_nr, iods, iod_csums,
@@ -1372,10 +1374,13 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		D_ASSERTF(ec_recov == false || ec_deg_fetch == false,
 			  "ec_recov %d, ec_deg_fetch %d.\n",
 			  ec_recov, ec_deg_fetch);
-		is_parity_shard = orw->orw_oid.id_shard >=
-				  obj_ec_data_tgt_nr(&ioc->ioc_oca);
-		get_parity_list = ec_recov && is_parity_shard &&
-				  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
+		if (ec_recov) {
+			D_ASSERT(obj_ec_tgt_nr(&ioc->ioc_oca) > 0);
+			is_parity_shard = (orw->orw_oid.id_shard % obj_ec_tgt_nr(&ioc->ioc_oca)) >=
+					  obj_ec_data_tgt_nr(&ioc->ioc_oca);
+			get_parity_list = ec_recov && is_parity_shard &&
+					  ((orw->orw_flags & ORF_EC_RECOV_SNAP) == 0);
+		}
 		if (get_parity_list) {
 			D_ASSERT(!ec_deg_fetch);
 			fetch_flags |= VOS_OF_FETCH_RECX_LIST;
@@ -1422,12 +1427,14 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				goto out;
 			}
 			iod_converted = true;
+
+			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY)
+				fetch_flags |= VOS_OF_SKIP_FETCH;
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
 				     orw->orw_epoch, dkey, orw->orw_nr, iods,
-				     cond_flags | fetch_flags, shadows, &ioh,
-				     dth);
+				     cond_flags | fetch_flags, shadows, &ioh, dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
@@ -1440,6 +1447,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (get_parity_list) {
 			parity_list = vos_ioh2recx_list(ioh);
 			if (parity_list != NULL) {
+				daos_recx_ep_list_set(parity_list, orw->orw_nr, 0, 0);
 				orwo->orw_rels.ca_arrays = parity_list;
 				orwo->orw_rels.ca_count = orw->orw_nr;
 			}
@@ -1461,6 +1469,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (rc)
 				goto out;
 		}
+
 		if (ec_deg_fetch) {
 			D_ASSERT(!get_parity_list);
 			recov_lists = vos_ioh2recx_list(ioh);
@@ -1632,7 +1641,20 @@ again:
 
 	rc = obj_local_rw_internal(rpc, ioc, split_iods, split_csums,
 				   split_offs, dth);
-	if (obj_dtx_need_refresh(dth, rc)) {
+	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
+		if (!dth->dth_pinned) {
+			int	rc1;
+
+			/* There will be CPU yield during DTX refresh. We need
+			 * to pin current DTX before refreshing other DTX(es),
+			 * that will avoid race with the resent RPC during the
+			 * DTX refresh.
+			 */
+			rc1 = vos_dtx_pin(dth, false);
+			if (rc1 != 0)
+				return -DER_INPROGRESS;
+		}
+
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
@@ -1674,7 +1696,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	     struct obj_io_context *ioc)
 {
 	struct ds_cont_hdl   *coh;
-	struct ds_cont_child *coc;
+	struct ds_cont_child *coc = NULL;
 	int		      rc;
 
 	D_ASSERT(ioc != NULL);
@@ -1733,6 +1755,8 @@ out:
 	ioc->ioc_coh	 = coh;
 	return 0;
 failed:
+	if (coc != NULL)
+		ds_cont_child_put(coc);
 	ds_cont_hdl_put(coh);
 	return rc;
 }
@@ -2055,6 +2079,7 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 	struct obj_io_context	 ioc;
 	daos_handle_t		 ioh = DAOS_HDL_INVAL;
 	int			 rc;
+	int			 rc1;
 
 	D_ASSERT(oea != NULL);
 	D_ASSERT(oeao != NULL);
@@ -2105,24 +2130,38 @@ ds_obj_ec_agg_handler(crt_rpc_t *rpc)
 				DP_UOID(oea->ea_oid), DP_RC(rc));
 			goto out;
 		}
+
 		rc = vos_update_end(ioh, ioc.ioc_map_ver, dkey, rc,
 				    &ioc.ioc_io_size, NULL);
 		if (rc) {
-			D_ERROR(DF_UOID" vos_update_end failed: "DF_RC".\n",
-				DP_UOID(oea->ea_oid), DP_RC(rc));
-			goto out;
+			if (rc == -DER_NO_PERM) {
+				/* Parity already exists, May need a
+				 * different error code.
+				 */
+				D_DEBUG(DB_EPC, DF_UOID" parity already"
+					" exists\n", DP_UOID(oea->ea_oid));
+				rc = 0;
+			} else {
+				D_ERROR(DF_UOID" vos_update_end failed: "
+					DF_RC".\n", DP_UOID(oea->ea_oid),
+					DP_RC(rc));
+				D_GOTO(out, rc);
+			}
 		}
 	}
 
+	/* Since parity update has succeed, so let's ignore the failure
+	 * of replica remove, otherwise it will cause the leader not
+	 * updating its parity, then the parity will not be consistent.
+	 */
 	recx.rx_idx = oea->ea_stripenum * obj_ioc2ec_ss(&ioc);
 	recx.rx_nr = obj_ioc2ec_ss(&ioc);
-	rc = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
+	rc1 = vos_obj_array_remove(ioc.ioc_coc->sc_hdl, oea->ea_oid,
 				  &oea->ea_epoch_range, dkey,
 				  &iod->iod_name, &recx);
-	if (rc) {
+	if (rc1)
 		D_ERROR(DF_UOID"array_remove failed: "DF_RC"\n",
-			DP_UOID(oea->ea_oid), DP_RC(rc));
-	}
+			DP_UOID(oea->ea_oid), DP_RC(rc1));
 out:
 	obj_rw_reply(rpc, rc, 0, &ioc);
 	obj_ioc_end(&ioc, rc);
@@ -2527,7 +2566,8 @@ again2:
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
-					 NULL, 0, orw->orw_shard_tgts.ca_count,
+					 NULL, 0, &ioc.ioc_oca,
+					 orw->orw_shard_tgts.ca_count,
 					 orw->orw_shard_tgts.ca_arrays,
 					 &split_req);
 		if (rc != 0) {
@@ -3139,6 +3179,19 @@ again:
 	}
 
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
+		if (!dth->dth_pinned) {
+			int	rc1;
+
+			/* There will be CPU yield during DTX refresh. We need
+			 * to pin current DTX before refreshing other DTX(es),
+			 * that will avoid race with the resent RPC during the
+			 * DTX refresh.
+			 */
+			rc1 = vos_dtx_pin(dth, false);
+			if (rc1 != 0)
+				return -DER_INPROGRESS;
+		}
+
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
@@ -3536,7 +3589,9 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	struct dtx_handle		 dth = {0};
 	struct dtx_epoch		 epoch = {0};
 	uint32_t			 query_flags;
-	daos_recx_t			 ec_recx[2] = {0};
+	unsigned int			 cell_size = 0;
+	uint64_t			 stripe_size = 0;
+	daos_recx_t			 ec_recx[3] = {0};
 	daos_recx_t			*query_recx;
 	int				 retry = 0;
 	int				 rc;
@@ -3585,16 +3640,20 @@ again:
 	    (okqi->okqi_api_flags & DAOS_GET_RECX)) {
 		query_flags |= VOS_GET_RECX_EC;
 		query_recx = ec_recx;
+		cell_size = obj_ec_cell_rec_nr(&ioc.ioc_oca);
+		stripe_size = obj_ec_stripe_rec_nr(&ioc.ioc_oca);
 	} else {
 		query_recx = &okqo->okqo_recx;
 	}
 
 re_query:
 	rc = vos_obj_query_key(ioc.ioc_vos_coh, okqi->okqi_oid, query_flags,
-			       okqi->okqi_epoch, dkey, akey, query_recx, &dth);
+			       okqi->okqi_epoch, dkey, akey, query_recx,
+			       cell_size, stripe_size, &dth);
 	if (rc == 0 && (query_flags & VOS_GET_RECX_EC)) {
 		okqo->okqo_recx = ec_recx[0];
 		okqo->okqo_recx_parity = ec_recx[1];
+		okqo->okqo_recx_punched = ec_recx[2];
 	} else if (obj_dtx_need_refresh(&dth, rc)) {
 		rc = dtx_refresh(&dth, ioc.ioc_coc);
 		if (rc == -DER_AGAIN)
@@ -3910,6 +3969,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			if (ioc->ioc_coc->sc_props.dcp_dedup_verify)
 				update_flags |= VOS_OF_DEDUP_VERIFY;
 		}
+		if (dcu->dcu_flags & ORF_EC)
+			update_flags |= VOS_OF_EC;
 
 		rc = vos_update_begin(ioc->ioc_vos_coh,
 				dcsr->dcsr_oid, dcsh->dcsh_epoch.oe_value,
@@ -4141,6 +4202,19 @@ again:
 	}
 
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
+	if (!dth->dth_pinned) {
+		int	rc1;
+
+		/* There will be CPU yield during DTX refresh. We need
+		 * to pin current DTX before refreshing other DTX(es),
+		 * that will avoid race with the resent RPC during the
+		 * DTX refresh.
+		 */
+		rc1 = vos_dtx_pin(dth, false);
+		if (rc1 != 0)
+			return -DER_INPROGRESS;
+	}
+
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
@@ -4324,7 +4398,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
 					 ddt->ddt_id,
 					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
-					 tgt_cnt, tgts, &dcu->dcu_ec_split_req);
+					 NULL, tgt_cnt, tgts, &dcu->dcu_ec_split_req);
 		if (rc != 0) {
 			D_ERROR("obj_ec_rw_req_split failed for obj "
 				DF_UOID", DTX "DF_DTI": "DF_RC"\n",

@@ -297,7 +297,9 @@ dtx_act_ent_free(struct btr_instance *tins, struct btr_record *rec,
 
 	dae = umem_off2ptr(&tins->ti_umm, rec->rec_off);
 	rec->rec_off = UMOFF_NULL;
-	d_list_del_init(&dae->dae_link);
+
+	if (dae != NULL)
+		d_list_del_init(&dae->dae_link);
 
 	if (args != NULL) {
 		/* Return the record addreass (offset in DRAM).
@@ -844,7 +846,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 
 	if (dae != NULL) {
 		DCE_XID(dce) = DAE_XID(dae);
-		DCE_EPOCH(dce) = dae->dae_start_time;
+		DCE_EPOCH(dce) = DAE_EPOCH(dae);
+		DCE_HANDLE_TIME(dce) = dae->dae_start_time;
 		dce->dce_resent = dae->dae_resent;
 	} else {
 		struct dtx_handle	*dth = vos_dth_get();
@@ -852,7 +855,8 @@ vos_dtx_commit_one(struct vos_container *cont, struct dtx_id *dti,
 		D_ASSERT(dtx_is_valid_handle(dth));
 
 		DCE_XID(dce) = *dti;
-		DCE_EPOCH(dce) = crt_hlc_get();
+		DCE_EPOCH(dce) = dth->dth_epoch;
+		DCE_HANDLE_TIME(dce) = crt_hlc_get();
 		dce->dce_resent = resent;
 	}
 
@@ -927,47 +931,83 @@ vos_dtx_abort_one(struct vos_container *cont, daos_epoch_t epoch,
 		goto out;
 	}
 
-	/* XXX: If @epoch is zero, then it is a special abort: we will mark
-	 *	related DTX as 'corrupted'. An corrupted DTX entry will not
-	 *	be removed (destroyed) from the system, instead, it will be
-	 *	kept there until related corruption (lost servers) has been
-	 *	recovered or being cleanup via some special tools.
-	 */
-	if (epoch == 0) {
-		struct umem_instance		*umm = vos_cont2umm(cont);
-		struct vos_dtx_act_ent_df	*dae_df;
+	if (DAE_EPOCH(dae) > epoch)
+		D_GOTO(out, rc = -DER_NONEXIST);
 
-		dae_df = umem_off2ptr(umm, dae->dae_df_off);
-		D_ASSERT(dae_df != NULL);
+	rc = dtx_rec_release(cont, dae, true);
+	if (rc != 0) {
+		*fatal = true;
+		goto out;
+	}
 
-		rc = umem_tx_add_ptr(umm, &dae_df->dae_flags,
-				     sizeof(dae_df->dae_flags));
-		if (rc == 0) {
-			dae_df->dae_flags |= DTE_CORRUPTED;
-			DAE_FLAGS(dae) |= DTE_CORRUPTED;
-		}
-	} else {
-		if (DAE_EPOCH(dae) > epoch)
-			D_GOTO(out, rc = -DER_NONEXIST);
+	D_ASSERT(dae_p != NULL);
+	*dae_p = dae;
 
-		rc = dtx_rec_release(cont, dae, true);
-		if (rc != 0) {
-			*fatal = true;
-			goto out;
-		}
+out:
+	D_DEBUG(DB_IO, "Abort the DTX "DF_DTI": rc = "DF_RC"\n",
+		DP_DTI(dti), DP_RC(rc));
 
-		D_ASSERT(dae_p != NULL);
-		*dae_p = dae;
+	return rc;
+}
+
+static inline const char *
+vos_dtx_flags2name(uint32_t flags)
+{
+	switch (flags) {
+	case DTE_CORRUPTED:
+		return "corrupted";
+	case DTE_ORPHAN:
+		return "orphan";
+	default:
+		return "unknown";
+	}
+
+	return NULL;
+}
+
+static int
+vos_dtx_set_flags_one(struct vos_container *cont, struct dtx_id *dti,
+		      uint32_t flags, bool *fatal)
+{
+	struct umem_instance		*umm = vos_cont2umm(cont);
+	struct vos_dtx_act_ent		*dae;
+	struct vos_dtx_act_ent_df	*dae_df;
+	d_iov_t				 riov;
+	d_iov_t				 kiov;
+	int				 rc;
+
+	/* Only allow set single flags. */
+	if (flags != DTE_CORRUPTED && flags != DTE_ORPHAN) {
+		D_ERROR("Try to set unrecognized flags %x on DTX "
+			DF_DTI"\n", flags, DP_DTI(dti));
+		return -DER_INVAL;
+	}
+
+	d_iov_set(&kiov, dti, sizeof(*dti));
+	d_iov_set(&riov, NULL, 0);
+	rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+	if (rc != 0)
+		goto out;
+
+	dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+
+	if (dae->dae_committable || dae->dae_committed || dae->dae_aborted)
+		D_GOTO(out, rc = -DER_NONEXIST);
+
+	dae_df = umem_off2ptr(umm, dae->dae_df_off);
+	D_ASSERT(dae_df != NULL);
+
+	rc = umem_tx_add_ptr(umm, &dae_df->dae_flags,
+			     sizeof(dae_df->dae_flags));
+	if (rc == 0) {
+		dae_df->dae_flags |= flags;
+		DAE_FLAGS(dae) |= flags;
 	}
 
 out:
-	if (epoch == 0)
-		D_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN,
-			 "Mark the DTX entry "DF_DTI" as corrupted: "DF_RC"\n",
-			 DP_DTI(dti), DP_RC(rc));
-	else
-		D_DEBUG(DB_IO, "Abort the DTX "DF_DTI": rc = "DF_RC"\n",
-			DP_DTI(dti), DP_RC(rc));
+	D_CDEBUG(rc != 0, DLOG_ERR, DLOG_WARN,
+		 "Mark the DTX entry "DF_DTI" as %s: "DF_RC"\n",
+		 DP_DTI(dti), vos_dtx_flags2name(flags), DP_RC(rc));
 
 	return rc;
 }
@@ -1247,6 +1287,24 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 			return ALB_UNAVAILABLE;
 
 		return -DER_DATA_LOSS;
+	}
+
+	/* Access orphan DTX entry. */
+	if (DAE_FLAGS(dae) & DTE_ORPHAN) {
+		/* Allow update/punch against orphan SV or EV with new
+		 * epoch. But if the obj/key is orphan, or it is fetch
+		 * operation, then return -DER_TX_UNCERTAIN.
+		 */
+		if ((intent == DAOS_INTENT_UPDATE ||
+		     intent == DAOS_INTENT_PUNCH) &&
+		    (type == DTX_RT_SVT || type == DTX_RT_EVT))
+			return ALB_AVAILABLE_CLEAN;
+
+		/* Orphan DTX is invisible to data migration. */
+		if (intent == DAOS_INTENT_MIGRATION)
+			return ALB_UNAVAILABLE;
+
+		return -DER_TX_UNCERTAIN;
 	}
 
 	if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT) ||
@@ -1821,6 +1879,9 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 		if (DAE_FLAGS(dae) & DTE_CORRUPTED)
 			return DTX_ST_CORRUPTED;
 
+		if (DAE_FLAGS(dae) & DTE_ORPHAN)
+			return -DER_TX_UNCERTAIN;
+
 		if (pm_ver != NULL)
 			*pm_ver = DAE_VER(dae);
 
@@ -1829,13 +1890,20 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			dck->dkey_hash = DAE_DKEY_HASH(dae);
 		}
 
-		if (dae->dae_committed)
+		if (dae->dae_committed) {
+			if (epoch != NULL)
+				*epoch = DAE_EPOCH(dae);
+
 			return DTX_ST_COMMITTED;
+		}
 
 		if (dae->dae_committable) {
 			if (mbs != NULL)
 				*mbs = vos_dtx_pack_mbs(vos_cont2umm(cont),
 							dae);
+
+			if (epoch != NULL)
+				*epoch = DAE_EPOCH(dae);
 
 			return DTX_ST_COMMITTABLE;
 		}
@@ -1871,6 +1939,9 @@ vos_dtx_check(daos_handle_t coh, struct dtx_id *dti, daos_epoch_t *epoch,
 			dce = (struct vos_dtx_cmt_ent *)riov.iov_buf;
 			if (dce->dce_invalid)
 				return -DER_NONEXIST;
+
+			if (epoch != NULL)
+				*epoch = DCE_EPOCH(dce);
 
 			return DTX_ST_COMMITTED;
 		}
@@ -2071,7 +2142,7 @@ vos_dtx_post_handle(struct vos_container *cont,
 				daes[i]->dae_committed = 1;
 				dtx_act_ent_cleanup(cont, daes[i], NULL, false);
 			}
-			DAE_FLAGS(daes[i]) &= ~DTE_CORRUPTED;
+			DAE_FLAGS(daes[i]) &= ~(DTE_CORRUPTED | DTE_ORPHAN);
 		}
 	}
 }
@@ -2164,6 +2235,42 @@ vos_dtx_abort(daos_handle_t coh, daos_epoch_t epoch, struct dtx_id *dtis,
 	D_FREE(daes);
 
 	return rc < 0 ? rc : aborted;
+}
+
+int
+vos_dtx_set_flags(daos_handle_t coh, struct dtx_id *dtis, int count,
+		  uint32_t flags)
+{
+	struct vos_container	*cont;
+	int			 set = 0;
+	int			 rc;
+	int			 i;
+	bool			 fatal = false;
+
+	D_ASSERT(count > 0);
+
+	cont = vos_hdl2cont(coh);
+	D_ASSERT(cont != NULL);
+
+	/* Set multiple DTXs via single PMDK transaction. */
+	rc = umem_tx_begin(vos_cont2umm(cont), NULL);
+	if (rc == 0) {
+		for (i = 0; i < count; i++) {
+			rc = vos_dtx_set_flags_one(cont, &dtis[i],
+						   flags, &fatal);
+			if (fatal) {
+				set = rc;
+				break;
+			}
+
+			if (rc == 0)
+				set++;
+		}
+
+		rc = umem_tx_end(vos_cont2umm(cont), set > 0 ? 0 : rc);
+	}
+
+	return rc < 0 ? rc : set;
 }
 
 int
@@ -2283,7 +2390,7 @@ vos_dtx_stat(daos_handle_t coh, struct dtx_stat *stat, uint32_t flags)
 		dae = d_list_entry(cont->vc_dtx_act_list.next,
 				   struct vos_dtx_act_ent, dae_link);
 		if (flags & DSF_SKIP_BAD) {
-			while (DAE_FLAGS(dae) & DTE_CORRUPTED) {
+			while (DAE_FLAGS(dae) & (DTE_CORRUPTED | DTE_ORPHAN)) {
 				if (dae->dae_link.next ==
 				    &cont->vc_dtx_act_list) {
 					stat->dtx_oldest_active_time = 0;
@@ -2319,9 +2426,9 @@ cmt:
 			dce = &dbd->dbd_committed_data[i];
 
 			if (!daos_is_zero_dti(&dce->dce_xid) &&
-			    dce->dce_epoch != 0) {
+			    dce->dce_handle_time != 0) {
 				stat->dtx_first_cmt_blob_time_up =
-							dce->dce_epoch;
+							dce->dce_handle_time;
 				break;
 			}
 		}
@@ -2330,9 +2437,9 @@ cmt:
 			dce = &dbd->dbd_committed_data[i];
 
 			if (!daos_is_zero_dti(&dce->dce_xid) &&
-			    dce->dce_epoch != 0) {
+			    dce->dce_handle_time != 0) {
 				stat->dtx_first_cmt_blob_time_lo =
-							dce->dce_epoch;
+							dce->dce_handle_time;
 				break;
 			}
 		}
@@ -2348,7 +2455,7 @@ vos_dtx_mark_committable(struct dtx_handle *dth)
 		D_ASSERT(dae != NULL);
 
 		dae->dae_committable = 1;
-		DAE_FLAGS(dae) &= ~DTE_CORRUPTED;
+		DAE_FLAGS(dae) &= ~(DTE_CORRUPTED | DTE_ORPHAN);
 	}
 }
 

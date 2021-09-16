@@ -158,6 +158,8 @@ func newTestFabricCache(t *testing.T, log logging.Logger, cacheMap *NUMAFabric) 
 	cache.localNUMAFabric = cacheMap
 	cache.initialized.SetTrue()
 
+	cache.localNUMAFabric.getAddrInterface = getMockNetInterfaceSuccess
+
 	return cache
 }
 

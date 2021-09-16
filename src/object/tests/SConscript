@@ -9,6 +9,7 @@ def scons():
 
     prereqs.require(unit_env, 'pmdk', headers_only=True)
 
+    unit_env.Append(RPATH_FULL=['$PREFIX/lib64/daos_srv'])
     unit_env.Append(CPPDEFINES=['-DDAOS_PMEM_BUILD'])
     srv_checksum_tests = daos_build.test(unit_env, 'srv_checksum_tests',
                                          ['srv_checksum_tests.c',

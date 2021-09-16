@@ -175,6 +175,10 @@ dtx_cleanup_stale_iter_cb(uuid_t co_uuid, vos_iter_entry_t *ent, void *args)
 	if (ent->ie_dtx_flags & DTE_CORRUPTED)
 		return 0;
 
+	/* Skip orphan entry that will be handled via other special tool. */
+	if (ent->ie_dtx_flags & DTE_ORPHAN)
+		return 0;
+
 	/* Stop the iteration if current DTX is not too old. */
 	if (dtx_hlc_age2sec(ent->ie_dtx_start_time) <=
 	    DTX_CLEANUP_THD_AGE_LO)
@@ -452,6 +456,9 @@ dtx_aggregation_main(void *arg)
 
 		sched_req_sleep(dmi->dmi_dtx_agg_req, sleep_time);
 	}
+
+	sched_req_put(dmi->dmi_dtx_agg_req);
+	dmi->dmi_dtx_agg_req = NULL;
 }
 
 static void
@@ -476,7 +483,7 @@ dtx_batched_commit_one(void *arg)
 		if (cnt <= 0)
 			break;
 
-		rc = dtx_commit(cont, dtes, dcks, cnt);
+		rc = dtx_commit(cont, dtes, dcks, cnt, true);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc != 0)
 			break;
@@ -525,7 +532,7 @@ dtx_batched_commit(void *arg)
 	}
 
 	dtx_init_sched_req(NULL, &dmi->dmi_dtx_agg_req, child);
-	if (dmi->dmi_dtx_cmt_req == NULL) {
+	if (dmi->dmi_dtx_agg_req == NULL) {
 		D_ERROR("Failed to get DTX aggregation sched request.\n");
 		ABT_thread_join(child);
 		goto out;
@@ -1227,7 +1234,7 @@ dtx_leader_end(struct dtx_leader_handle *dlh, struct ds_cont_child *cont,
 sync:
 	if (dth->dth_sync) {
 		dte = &dth->dth_dte;
-		rc = dtx_commit(cont, &dte, NULL, 1);
+		rc = dtx_commit(cont, &dte, NULL, 1, false);
 		if (rc != 0) {
 			D_ERROR(DF_UUID": Fail to sync commit DTX "DF_DTI
 				": "DF_RC"\n", DP_UUID(cont->sc_uuid),
@@ -1419,7 +1426,7 @@ dtx_flush_on_deregister(struct dss_module_info *dmi,
 			  (unsigned long)total,
 			  (unsigned long)stat.dtx_committable_count);
 
-		rc = dtx_commit(cont, dtes, dcks, cnt);
+		rc = dtx_commit(cont, dtes, dcks, cnt, true);
 		dtx_free_committable(dtes, dcks, cnt);
 	}
 
@@ -1777,7 +1784,7 @@ dtx_obj_sync(struct ds_cont_child *cont, daos_unit_oid_t *oid,
 			break;
 		}
 
-		rc = dtx_commit(cont, dtes, dcks, cnt);
+		rc = dtx_commit(cont, dtes, dcks, cnt, true);
 		dtx_free_committable(dtes, dcks, cnt);
 		if (rc < 0) {
 			D_ERROR("Fail to commit dtx: "DF_RC"\n", DP_RC(rc));

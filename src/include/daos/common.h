@@ -90,7 +90,7 @@ static inline void
 sgl_move_forward(d_sg_list_t *sgl, struct daos_sgl_idx *sgl_idx, uint64_t bytes)
 {
 	sgl_idx->iov_offset += bytes;
-	D_DEBUG(DB_TRACE, "Moving sgl index formward by %lu bytes."
+	D_DEBUG(DB_TRACE, "Moving sgl index forward by %lu bytes."
 			  "Idx: "DF_SGL_IDX"\n",
 		bytes, DP_SGL_IDX(sgl_idx));
 
@@ -232,7 +232,7 @@ daos_get_ntime(void)
 	struct timespec	tv;
 
 	d_gettime(&tv);
-	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+	return ((uint64_t)tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec);
 }
 
 static inline uint64_t
@@ -241,13 +241,32 @@ daos_getntime_coarse(void)
 	struct timespec	tv;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
-	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+	return ((uint64_t)tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec);
+}
+
+static inline uint64_t
+daos_wallclock_secs(void)
+{
+	struct timespec         now;
+	int                     rc;
+
+	rc = clock_gettime(CLOCK_REALTIME, &now);
+	if (rc) {
+		D_ERROR("clock_gettime failed, rc: %d, errno %d(%s).\n",
+			rc, errno, strerror(errno));
+		return 0;
+	}
+
+	return now.tv_sec;
 }
 
 static inline uint64_t
 daos_getmtime_coarse(void)
 {
-	return daos_getntime_coarse() / NSEC_PER_MSEC;
+	struct timespec tv;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+	return ((uint64_t)tv.tv_sec * 1000 + tv.tv_nsec / NSEC_PER_MSEC);
 }
 
 static inline uint64_t
@@ -437,7 +456,8 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
- *  * struct) @type, return pointer to the embedding instance of @type. */
+ *  * struct) @type, return pointer to the embedding instance of @type.
+ */
 # define container_of(ptr, type, member)		\
 	 ((type *)((char *)(ptr) - (char *)(&((type *)0)->member)))
 #endif
@@ -495,6 +515,11 @@ void daos_iov_append(d_iov_t *iov, void *buf, uint64_t buf_len);
 static inline int
 daos_errno2der(int err)
 {
+	if (err < 0) {
+		D_ERROR("error < 0 (%d)\n", err);
+		return -DER_UNKNOWN;
+	}
+
 	switch (err) {
 	case 0:			return -DER_SUCCESS;
 	case EPERM:
@@ -533,6 +558,11 @@ daos_errno2der(int err)
 static inline int
 daos_der2errno(int err)
 {
+	if (err > 0) {
+		D_ERROR("error > 0 (%d)\n", err);
+		return EINVAL;
+	}
+
 	switch (err) {
 	case -DER_SUCCESS:	return 0;
 	case -DER_NO_PERM:
@@ -737,6 +767,7 @@ enum {
 #define DAOS_DTX_SRV_RESTART		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x46)
 #define DAOS_DTX_NO_RETRY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x47)
 #define DAOS_DTX_RESEND_DELAY1		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x48)
+#define DAOS_DTX_UNCERTAIN		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x49)
 
 #define DAOS_NVME_FAULTY		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x50)
 #define DAOS_NVME_WRITE_ERR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x51)
@@ -751,6 +782,7 @@ enum {
 #define DAOS_CONT_CLOSE_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x66)
 #define DAOS_CONT_QUERY_FAIL_CORPC	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x67)
 #define DAOS_CONT_OPEN_FAIL		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x68)
+#define DAOS_POOL_FAIL_MAP_REFRESH	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x69)
 
 /** interoperability failure inject */
 #define FLC_SMD_DF_VER			(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x70)
@@ -843,6 +875,16 @@ daos_recx_merge(daos_recx_t *src, daos_recx_t *dst)
 #define DAOS_NVME_SHMID_NONE	-1
 #define DAOS_NVME_MEM_PRIMARY	0
 
+/** Size of (un)expected Mercury buffers */
+#define DAOS_RPC_SIZE  (20480) /* 20KiB */
+/**
+ * Threshold for inline vs bulk transfer
+ * If the data size is smaller or equal to this limit, it will be transferred
+ * inline in the request/reply. Otherwise, a RDMA transfer will be used.
+ * Based on RPC size above and reserve 1KiB for RPC fields and cart/HG headers.
+ */
+#define DAOS_BULK_LIMIT	(DAOS_RPC_SIZE - 1024) /* Reserve 1KiB for headers */
+
 crt_init_options_t *daos_crt_init_opt_get(bool server, int crt_nr);
 
 int crt_proc_struct_dtx_id(crt_proc_t proc, crt_proc_op_t proc_op,
@@ -857,7 +899,6 @@ daos_prop_t *daos_prop_dup(daos_prop_t *prop, bool pool, bool input);
 int daos_prop_copy(daos_prop_t *prop_req, daos_prop_t *prop_reply);
 void daos_prop_fini(daos_prop_t *prop);
 
-struct daos_prop_entry *daos_prop_entry_get(daos_prop_t *prop, uint32_t type);
 int daos_prop_entry_copy(struct daos_prop_entry *entry,
 			 struct daos_prop_entry *entry_dup);
 daos_recx_t *daos_recx_alloc(uint32_t nr);

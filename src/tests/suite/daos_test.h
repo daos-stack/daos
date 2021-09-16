@@ -168,6 +168,7 @@ typedef struct {
 	 */
 	int			(*rebuild_cb)(void *test_arg);
 	void			*rebuild_cb_arg;
+	uint32_t		rebuild_pre_pool_ver;
 	/* The callback is called after pool rebuild, used for validating IO
 	 * after rebuild
 	 */
@@ -220,6 +221,7 @@ enum {
 
 #define SMALL_POOL_SIZE		(1ULL << 30)	/* 1GB */
 #define DEFAULT_POOL_SIZE	(4ULL << 30)	/* 4GB */
+#define REBUILD_POOL_SIZE	(4ULL << 30)
 
 #define REBUILD_SUBTEST_POOL_SIZE (1ULL << 30)
 #define REBUILD_SMALL_POOL_SIZE (1ULL << 28)
@@ -333,7 +335,7 @@ enum {
 };
 
 int run_daos_mgmt_test(int rank, int size, int *sub_tests, int sub_tests_size);
-int run_daos_pool_test(int rank, int size);
+int run_daos_pool_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_cont_test(int rank, int size, int *sub_tests, int sub_tests_size);
 int run_daos_capa_test(int rank, int size);
 int run_daos_io_test(int rank, int size, int *tests, int test_size);

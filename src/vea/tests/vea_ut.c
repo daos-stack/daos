@@ -1026,6 +1026,7 @@ ut_interleaved_ops(void **state)
 	 * 6. reserve A, reserve B, publish B, cancel A
 	 * 7. reserve A, reserve B, cancel A, cancel B
 	 * 8. reserve A, reserve B, cancel B, cancel A
+	 * 9. reserve A, reserve B, reserve C, publish B, publish A & C
 	 **/
 	block_count = 2;
 	r_list_a = &args.vua_resrvd_list[0];
@@ -1128,6 +1129,24 @@ ut_interleaved_ops(void **state)
 	assert_int_equal(rc, 0);
 	rc = vea_cancel(args.vua_vsi, h_ctxt, r_list_a);
 	assert_int_equal(rc, 0);
+
+	/* Case 9 */
+	block_count = 2;
+	/* Reserve A */
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_rc_equal(rc, 0);
+	/* Reserve B */
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_b);
+	assert_rc_equal(rc, 0);
+	/* Reserve C */
+	rc = vea_reserve(args.vua_vsi, block_count, h_ctxt, r_list_a);
+	assert_rc_equal(rc, 0);
+	/* Publish B */
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_b);
+	assert_rc_equal(rc, 0);
+	/* Publish A & C */
+	rc = vea_tx_publish(args.vua_vsi, h_ctxt, r_list_a);
+	assert_rc_equal(rc, 0);
 
 	rc = umem_tx_commit(&args.vua_umm);
 	assert_int_equal(rc, 0);

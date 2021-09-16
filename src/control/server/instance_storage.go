@@ -36,11 +36,11 @@ func (ei *EngineInstance) GetScmUsage() (*storage.ScmMountPoint, error) {
 // at the mountpoint specified in the configuration. If the device is already
 // mounted, the function returns nil, indicating success.
 func (ei *EngineInstance) MountScm() error {
-	isMount, err := ei.storage.ScmIsMounted()
+	isMounted, err := ei.storage.ScmIsMounted()
 	if err != nil && !os.IsNotExist(errors.Cause(err)) {
 		return errors.WithMessage(err, "failed to check SCM mount")
 	}
-	if isMount {
+	if isMounted {
 		return nil
 	}
 
@@ -170,6 +170,13 @@ func (ei *EngineInstance) HasBlockDevices() bool {
 
 // ScanBdevTiers calls in to the private engine storage provider to scan bdev
 // tiers. Scan will avoid using any cached results if direct is set to true.
-func (ei *EngineInstance) ScanBdevTiers(direct bool) ([]storage.BdevTierScanResult, error) {
-	return ei.storage.ScanBdevTiers(direct)
+func (ei *EngineInstance) ScanBdevTiers() ([]storage.BdevTierScanResult, error) {
+	isReady := ei.IsReady()
+	upDn := "down"
+	if isReady {
+		upDn = "up"
+	}
+	ei.log.Debugf("scanning engine-%d bdev tiers while engine is %s", ei.Index(), upDn)
+
+	return ei.storage.ScanBdevTiers(!isReady)
 }

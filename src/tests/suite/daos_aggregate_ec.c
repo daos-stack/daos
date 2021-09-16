@@ -368,7 +368,7 @@ verify_1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
 			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
-						  i * (k * len), k * len, j,
+						  i * ((daos_size_t)k * len), k * len, j,
 						  false, false, 0);
 			ctx->fetch_iom.iom_flags = DAOS_IOMF_DETAIL;
 			rc = dc_obj_fetch_task_create(ctx->oh, DAOS_TX_NONE, 0,
@@ -648,7 +648,7 @@ test_range_punch(struct ec_agg_test_ctx *ctx)
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
 			ec_setup_punch_recx_data(ctx, EC_SPECIFIED,
-						 i * len * k, len, j, 0);
+						 i * len * (daos_size_t)k, len, j, 0);
 			rc = daos_obj_update(ctx->oh, DAOS_TX_NONE, 0,
 					     &ctx->dkey, 1, &ctx->update_iod,
 					     &ctx->update_sgl, NULL);
@@ -690,7 +690,7 @@ verify_rp1p(struct ec_agg_test_ctx *ctx, daos_oclass_id_t ec_agg_oc,
 	for (j = 0; j < NUM_KEYS; j++)
 		for (i = 0; i < NUM_STRIPES; i++) {
 			ec_setup_single_recx_data(ctx, EC_SPECIFIED,
-						  i * len * k + len,
+						  i * len * (daos_size_t)k + len,
 						  len,
 						  j, true, false, 0);
 			memset(&ctx->fetch_iom, 0, sizeof(daos_iom_t));

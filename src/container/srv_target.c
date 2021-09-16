@@ -749,7 +749,7 @@ cont_child_free_ref(struct daos_llink *llink)
 	vos_cont_close(cont->sc_hdl);
 	ds_pool_child_put(cont->sc_pool);
 	daos_csummer_destroy(&cont->sc_csummer);
-
+	D_FREE(cont->sc_snapshots);
 	ABT_cond_free(&cont->sc_dtx_resync_cond);
 	ABT_mutex_free(&cont->sc_mutex);
 	D_FREE(cont);
@@ -1247,14 +1247,25 @@ cont_delete_ec_agg(uuid_t pool_uuid, uuid_t cont_uuid);
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
+	struct ds_pool	*pool;
 	struct cont_tgt_destroy_in in;
 	int rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
 	cont_delete_ec_agg(pool_uuid, cont_uuid);
+	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
+	ds_pool_put(pool);
+
 	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
+out:
 	return rc;
 }
 
@@ -1333,10 +1344,16 @@ cont_child_create_start(uuid_t pool_uuid, uuid_t cont_uuid, uint32_t pm_ver,
 	rc = vos_cont_create(pool_child->spc_hdl, cont_uuid);
 	if (!rc) {
 		rc = cont_child_start(pool_child, cont_uuid, cont_out);
-		if (rc == 0)
+		if (rc == 0) {
 			(*cont_out)->sc_status_pm_ver = pm_ver;
-		else
-			vos_cont_destroy(pool_child->spc_hdl, cont_uuid);
+		} else {
+			int rc_tmp;
+
+			rc_tmp = vos_cont_destroy(pool_child->spc_hdl, cont_uuid);
+			if (rc_tmp != 0)
+				D_ERROR("failed to destroy "DF_UUID": %d\n",
+					DP_UUID(cont_uuid), rc_tmp);
+		}
 	}
 
 	ds_pool_child_put(pool_child);
@@ -1572,6 +1589,8 @@ err_reindex:
 	cont_stop_dtx_reindex_ult(hdl->sch_cont);
 err_cont:
 	if (daos_handle_is_valid(poh)) {
+		int rc_tmp;
+
 		D_DEBUG(DF_DSMS, DF_CONT": destroying new vos container\n",
 			DP_CONT(pool_uuid, cont_uuid));
 
@@ -1582,7 +1601,10 @@ err_cont:
 		D_ASSERT(cont != NULL);
 		cont_child_stop(cont);
 
-		vos_cont_destroy(poh, cont_uuid);
+		rc_tmp = vos_cont_destroy(poh, cont_uuid);
+		if (rc_tmp != 0)
+			D_ERROR("failed to destroy "DF_UUID": %d\n",
+				DP_UUID(cont_uuid), rc_tmp);
 	}
 err_hdl:
 	if (hdl != NULL) {
@@ -1993,10 +2015,11 @@ cont_snap_notify_one(void *vin)
 		rc = cont_child_gather_oids(cont, args->coh_uuid,
 					    args->snap_epoch);
 		if (rc)
-			return rc;
+			goto out_cont;
 	}
 
 	cont->sc_aggregation_max = crt_hlc_get();
+out_cont:
 	ds_cont_child_put(cont);
 	return rc;
 }
@@ -2190,9 +2213,8 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns,
-			    in->coai_op.ci_pool_hdl, in->coai_op.ci_uuid,
-			    in->coai_op.ci_hdl, in->num_oids, &sgl);
+	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns, pool_hdl->sph_pool->sp_uuid,
+			    in->coai_op.ci_uuid, in->num_oids, &sgl);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -2201,8 +2223,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 out:
 	out->coao_op.co_rc = rc;
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
-		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid), rpc, DP_RC(rc));
 
 	return rc;
 }
