@@ -84,7 +84,7 @@ class ZeroConfigTest(TestWithServers):
         for interface in self.interfaces:
             # Check the port counter for each interface on all of the hosts
             counter_file = os.path.join(
-                os.sep, "sys", "class", "infiniband", self.interfaces[interface]["doamin"], "ports",
+                os.sep, "sys", "class", "infiniband", self.interfaces[interface]["domain"], "ports",
                 "1", "counters", port_counter)
             check_result = check_file_exists(hosts, counter_file)
             if not check_result[0]:
