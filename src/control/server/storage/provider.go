@@ -322,6 +322,7 @@ func BdevWriteConfigRequestFromConfig(log logging.Logger, cfg *Config) (BdevWrit
 		return req, err
 	}
 	req.Hostname = hn
+	req.HotplugEnabled = cfg.EnableHotplug
 
 	bdevTiers := cfg.Tiers.BdevConfigs()
 	req.TierProps = make([]BdevTierProperties, 0, len(bdevTiers))

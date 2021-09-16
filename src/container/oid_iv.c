@@ -76,6 +76,12 @@ oid_iv_ent_refresh(struct ds_iv_entry *iv_entry, struct ds_iv_key *key,
 	struct oid_iv_range	*oids;
 	struct oid_iv_range	*avail;
 
+	if (src == NULL) {
+		D_DEBUG(DB_TRACE, "delete entry iv_entry %p\n", iv_entry);
+		iv_entry->iv_to_delete = 1;
+		return 0;
+	}
+
 	D_ASSERT(priv);
 	num_oids = priv->num_oids;
 	D_DEBUG(DB_TRACE, "%u: ON REFRESH %zu\n", dss_self_rank(), num_oids);
@@ -307,8 +313,9 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 	struct oid_iv_range	*oids;
 	int		rc;
 
-	D_DEBUG(DB_TRACE, "%d: OID alloc CUUID "DF_UUIDF" num_oids %"PRIu64"\n",
-		dss_self_rank(), DP_UUID(co_uuid), num_oids);
+	D_DEBUG(DB_TRACE, "%d: OID alloc CUUID "DF_UUIDF"/"DF_UUIDF" num_oids %"
+		PRIu64"\n", dss_self_rank(), DP_UUID(po_uuid), DP_UUID(co_uuid),
+		num_oids);
 
 	memset(&key, 0, sizeof(key));
 	key.class_id = IV_OID;
@@ -326,6 +333,29 @@ oid_iv_reserve(void *ns, uuid_t po_uuid, uuid_t co_uuid, uint64_t num_oids, d_sg
 		D_ERROR("iv update failed "DF_RC"\n", DP_RC(rc));
 
 	return rc;
+}
+
+int
+oid_iv_invalidate(void *ns, uuid_t pool_uuid, uuid_t cont_uuid)
+{
+	struct ds_iv_key	key = { 0 };
+	struct oid_iv_key	*oid_key;
+	int			rc;
+
+	memset(&key, 0, sizeof(key));
+	key.class_id = IV_OID;
+
+	oid_key = (struct oid_iv_key *)key.key_buf;
+	uuid_copy(oid_key->key_id, cont_uuid);
+	uuid_copy(oid_key->po_uuid, pool_uuid);
+
+	rc = ds_iv_invalidate(ns, &key, 0, CRT_IV_SYNC_NONE, 0, false);
+	if (rc)
+		D_ERROR(DF_UUID" iv invalidate failed "DF_RC"\n",
+			DP_UUID(cont_uuid), DP_RC(rc));
+
+	return rc;
+
 }
 
 int

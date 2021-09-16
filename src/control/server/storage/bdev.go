@@ -291,6 +291,7 @@ type (
 		OwnerGID         int
 		TierProps        []BdevTierProperties
 		VMDEnabled       bool
+		HotplugEnabled   bool
 		Hostname         string
 		BdevCache        *BdevScanResponse
 	}
