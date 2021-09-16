@@ -163,7 +163,7 @@ class DestroyTests(TestWithServers):
 
         self.assertEqual(
             exception_detected, exception_expected,
-            "No exception when deleting a pool with invalid server group")
+            "No exception when deleting a pool {}".format(case))
 
     def test_destroy_single(self):
         """Test destroying a pool created on a single server.
@@ -257,6 +257,7 @@ class DestroyTests(TestWithServers):
         valid_uuid = self.pool.uuid
         invalid_uuid = "81ef94d7-a59d-4a5e-935b-abfbd12f2105"
         self.pool.uuid = invalid_uuid
+        self.pool.use_label = False
 
         # Attempt to destroy the pool with an invalid UUID
         self.validate_pool_destroy(
@@ -268,6 +269,36 @@ class DestroyTests(TestWithServers):
         # Restore the valid uuid to allow tearDown() to pass
         self.log.info("Restoring the pool's valid uuid: %s", valid_uuid)
         self.pool.uuid = valid_uuid
+
+    def test_destroy_invalid_label(self):
+        """Test destroying a pool label that doesn't exist.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=pool,destroy,destroy_invalid_label
+        """
+        hostlist_servers = self.hostlist_servers[:1]
+        setid = self.params.get("setname", '/run/setnames/validsetname/')
+
+        # Start servers
+        self.start_servers(self.get_group(setid, hostlist_servers))
+
+        # Create a pool
+        self.validate_pool_creation(hostlist_servers, setid)
+
+        # Change the pool label
+        valid_label = self.pool.label.value
+        invalid_label = "some-invalid-label"
+        self.pool.label.update(invalid_label)
+
+        # Attempt to destroy the pool with an invalid label
+        self.validate_pool_destroy(
+            hosts=hostlist_servers,
+            case="with an invalid label {}".format(valid_label),
+            exception_expected=True)
+
+        # Restore the valid label to allow tearDown() to pass
+        self.log.info("Restoring the pool's valid label: %s", valid_label)
+        self.pool.label.update(valid_label)
 
     def test_destroy_invalid_group(self):
         """Test destroying a pool with invalid server group.
