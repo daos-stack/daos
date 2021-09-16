@@ -97,23 +97,47 @@ it will likely pick up DAOS support in an upcoming release.
 ## Testing MPI-IO with DAOS
 
 Build any client (HDF5, ior, mpi test suites) normally with the mpicc command
-and mpich library installed above (see child pages).
+and mpich library installed above.
 
-To run an example with MPI-IO:
+### Using the UNS
 
-1. Create a DAOS pool on the DAOS server(s).
-   This will return a pool uuid "puuid".
-2. Create a POSIX type container:
-   `daos cont create <pool_label> --type=POSIX`
-   This will return a container uuid "cuuid".
-3. At the client side, the following environment variables need to be set:
-   `export DAOS_POOL=puuid; export DAOS_CONT=cuuid; export DAOS_BYPASS_DUNS=1`.
-   The pool and container UUID can be retrieved via `daos pool/cont query`
-   Alternatively, the unified namespace mode can be used instead.
-3. Run the client application or test.
-   MPI-IO applications should work seamlessly by just prepending `daos:`
-   to the filename/path to use the DAOS ADIO driver.
+DAOS UNS allows encoding pool and container information into a path on the filesystem, so one can
+easily access that container using that path instead of using explicit addressing using the pool and
+container uuids/labels.
 
+Create a container with a path on dfuse or lustre, or any file system that supports extended
+attributes:
+```bash
+daos cont create mypool --path=/mnt/dfuse/ --type=POSIX
+```
+
+Then using that path, one can start creating files using the DAOS MPIIO driver by just appending
+`daos:` to the filename/path. For example:
+`daos:/mnt/dfuse/file`
+`daos:/mnt/dfuse/dir1/file`
+
+### Using a Prefix Environment Variable
+
+Another way to use the DAOS MPIIO driver is using an environment variable to set the prefix itself
+for the file:
+```bash
+export DAOS_UNS_PREFIX="path"
+```
+That prefix path can be:
+1. The UNS prefix if that exists (similar to the UNS mode above): /mnt/dfuse
+2. A direct path using the pool and container label (or uuid): daos://pool/container/
+
+Then one can specify the path to the file relative to the root of the container being set in the
+prefix. So in the example above, if the file to be accessed is under /dir1 in the container, one
+would pass `daos:/dir1/file' to MPI_File_open().
+
+### Using Pool and Container Environment Variables
+
+This mode is meant just for quick testing to use the MPIIO DAOS driver bypassing the UNS and setting
+direct access with pool and container environment variables. At the client side, the following
+environment variables need to be set:
+`export DAOS_POOL=puuid; export DAOS_CONT=cuuid; export DAOS_BYPASS_DUNS=1`.
+The user still need to append the `daos:` prefix to the file being passed to MPI_File_open().
 
 ## Known limitations
 
