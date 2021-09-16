@@ -17,32 +17,38 @@ EOF
 : "${BUILD_URL:=Not_in_jenkins}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
 
+send_mail() {
+    local subject="$1"
+    local message="$2"
+    set +x
+    echo "$message" 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+    set -x
+}
+
 retry_cmd() {
     local command="$1"
     shift
 
-    local tries=$DAOS_STACK_RETRY_COUNT
-    while [ $tries -gt 0 ]; do
+    local attempt=0
+    while [ $attempt -lt $DAOS_STACK_RETRY_COUNT ]; do
         if time $command "$@"; then
             # succeeded, return with success
+            if [ $attempt -gt 0 ]; then
+                send_mail "Command retry successful after $attempt retries" "Command: $command $*"
+            fi
             return 0
         fi
         # We hit an error
-        (( tries-- ))
-        set +x
-        {
-          echo "Command $command failed on $HOSTNAME for $BUILD_URL"
-          echo "Command status was ${PIPESTATUS[0]}"
-          echo "Will retry $tries before giving up."
-          echo "Command tried was $command $*"
-        } 2>&1 | mail -s "Command failed in $BUILD_URL" \
-                      -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
-        set -x
-
+        rc=${PIPESTATUS[0]}
+        (( attempt++ ))
         if [ $tries -gt 0 ]; then
             sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
         fi
     done
+    if [ "$rc" -ne 0 ]; then
+        send_mail "Command retry failed after $attempt retries" \
+            "Command: $command $*\nReturn code: $rc"
+    fi
     return 1
 }
 

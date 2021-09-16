@@ -81,7 +81,9 @@ dump_repos() {
 send_mail() {
     local subject="$1"
     local message="$2"
-    echo $message 2>&1 | mail -s $subject -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+    set +x
+    echo "$message" 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+    set -x
 }
 
 retry_cmd() {
@@ -91,18 +93,19 @@ retry_cmd() {
         if time "$@"; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
-                send_mail "Command retry successful after $attempt retries" "Command: time $@"
+                send_mail "Command retry successful after $attempt retries" "Command: time $*"
+            fi
             return 0
         fi
         # Command failed, retry
         rc=${PIPESTATUS[0]}
         (( attempt++ ))
         if [ $attempt -gt 0 ]; then
-          sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
+            sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
         fi
     done
-    if [ $rc -ne 0 ]; then
-        send_mail "Command retry failed after $attempt retries" "Command: time $@\nReturn code: $rc"
+    if [ "$rc" -ne 0 ]; then
+        send_mail "Command retry failed after $attempt retries" "Command: time $*\nReturn code: $rc"
     fi
     return 1
 }
