@@ -5,6 +5,8 @@ DISTRO_NAME=centos8
 LSB_RELEASE=redhat-lsb-core
 EXCLUDE_UPGRADE=dpdk,fuse,mercury,daos,daos-\*
 
+sleep 600
+
 bootstrap_dnf() {
     :
 }
