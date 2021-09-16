@@ -59,13 +59,21 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 	 * verify degrade fetch is correct.
 	 */
 	if (oclass == OC_EC_2P1G1) {
-		get_killing_rank_by_oid(arg, oid, 2, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1, false);
+		get_killing_rank_by_oid(arg, oid, 1, 0, extra_kill_ranks, NULL);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 1, false);
 	} else { /* oclass OC_EC_4P2G1 */
-		get_killing_rank_by_oid(arg, oid, 4, 0, extra_kill_ranks, NULL);
-		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2, false);
+		get_killing_rank_by_oid(arg, oid, 2, 0, extra_kill_ranks, NULL);
+		rebuild_pools_ranks(&arg, 1, &extra_kill_ranks[0], 2, false);
 	}
 
+	if (write_type == PARTIAL_UPDATE)
+		verify_ec_partial(&req, arg->index, 0);
+	else if (write_type == FULL_UPDATE)
+		verify_ec_full(&req, arg->index, 0);
+	else if (write_type == FULL_PARTIAL_UPDATE)
+		verify_ec_full_partial(&req, arg->index, 0);
+	else if (write_type == PARTIAL_FULL_UPDATE)
+		verify_ec_full(&req, arg->index, 0);
 	ioreq_fini(&req);
 
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
@@ -76,6 +84,18 @@ rebuild_ec_internal(void **state, uint16_t oclass, int kill_data_nr,
 		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[1], 1);
 	else /* oclass OC_EC_4P2G1 */
 		reintegrate_pools_ranks(&arg, 1, &extra_kill_ranks[2], 2);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	if (write_type == PARTIAL_UPDATE)
+		verify_ec_partial(&req, arg->index, 0);
+	else if (write_type == FULL_UPDATE)
+		verify_ec_full(&req, arg->index, 0);
+	else if (write_type == FULL_PARTIAL_UPDATE)
+		verify_ec_full_partial(&req, arg->index, 0);
+	else if (write_type == PARTIAL_FULL_UPDATE)
+		verify_ec_full(&req, arg->index, 0);
+
+	ioreq_fini(&req);
 
 	rc = daos_obj_verify(arg->coh, oid, DAOS_EPOCH_MAX);
 	assert_int_equal(rc, 0);
@@ -133,8 +153,103 @@ rebuild_mixed_stripes(void **state)
 		     data, size, &req);
 	assert_memory_equal(data, verify_data, size);
 
+	free(data);
+	free(verify_data);
 	ioreq_fini(&req);
 
+	reintegrate_pools_ranks(&arg, 1, &rank, 1);
+}
+
+static void
+rebuild_ec_multi_stripes(void **state)
+{
+#define TEST_STRIPE_NR	(2)
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	char		*whole_data;
+	char		*data[TEST_STRIPE_NR];
+	char		*verify_data[TEST_STRIPE_NR];
+	daos_recx_t	recxs[2 * TEST_STRIPE_NR];
+	d_rank_t	rank = 0;
+	uint64_t	start;
+	uint16_t	fail_shards[2];
+	int		i, size = 8 * CELL_SIZE;
+
+	if (!test_runable(arg, 7))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+
+	for (i = 0; i < TEST_STRIPE_NR; i++) {
+		start = i * 4 * CELL_SIZE;
+		recxs[0].rx_idx = start;
+		recxs[0].rx_nr = 4 * CELL_SIZE;
+		recxs[1].rx_idx = start + 80 * CELL_SIZE;
+		recxs[1].rx_nr = 4 * CELL_SIZE;
+
+		data[i] = (char *)malloc(size);
+		verify_data[i] = (char *)malloc(size);
+		make_buffer(data[i], 'a' + i, size);
+		make_buffer(verify_data[i], 'a' + i, size);
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, recxs, 2, data[i], size, &req);
+		free(data[i]);
+	}
+
+	ioreq_fini(&req);
+
+	/* test EC degraded fetch and verify data */
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	fail_shards[0] = 2;
+	fail_shards[1] = 1;
+	daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
+	daos_fail_loc_set(DAOS_FAIL_SHARD_FETCH | DAOS_FAIL_ALWAYS);
+	for (i = 0; i < TEST_STRIPE_NR; i++) {
+		start = i * 4 * CELL_SIZE;
+		recxs[i * 2].rx_idx = start;
+		recxs[i * 2].rx_nr = 4 * CELL_SIZE;
+		recxs[i * 2 + 1].rx_idx = start + 80 * CELL_SIZE;
+		recxs[i * 2 + 1].rx_nr = 4 * CELL_SIZE;
+	}
+
+	whole_data  = (char *)malloc(size * TEST_STRIPE_NR);
+	memset(whole_data, 0, size * TEST_STRIPE_NR);
+	lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, recxs, 2 * TEST_STRIPE_NR,
+		     whole_data, size * TEST_STRIPE_NR, &req);
+
+	for (i = 0; i < TEST_STRIPE_NR; i++) {
+		data[i] = whole_data + size * i;
+		assert_memory_equal(data[i], verify_data[i], size);
+	}
+	free(whole_data);
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+	ioreq_fini(&req);
+
+	/* test fetch after EC rebuild and verify data */
+	rank = get_rank_by_oid_shard(arg, oid, 0);
+	rebuild_pools_ranks(&arg, 1, &rank, 1, false);
+
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < TEST_STRIPE_NR; i++) {
+		start = i * 4 * CELL_SIZE;
+		recxs[0].rx_idx = start;
+		recxs[0].rx_nr = 4 * CELL_SIZE;
+		recxs[1].rx_idx = start + 80 * CELL_SIZE;
+		recxs[1].rx_nr = 4 * CELL_SIZE;
+
+		data[i] = (char *)malloc(size);
+		memset(data[i], 0, size);
+		lookup_recxs("d_key", "a_key", 1, DAOS_TX_NONE, recxs, 2, data[i], size, &req);
+		assert_memory_equal(data[i], verify_data[i], size);
+		free(data[i]);
+		free(verify_data[i]);
+	}
+
+	ioreq_fini(&req);
 	reintegrate_pools_ranks(&arg, 1, &rank, 1);
 }
 
@@ -147,7 +262,7 @@ rebuild_ec_setup(void  **state, int number)
 
 	save_group_state(state);
 	rc = test_setup(state, SETUP_POOL_CONNECT, true,
-			REBUILD_SMALL_POOL_SIZE, number, NULL);
+			REBUILD_POOL_SIZE, number, NULL);
 	if (rc) {
 		/* Let's skip for this case, since it is possible there
 		 * is not enough ranks here.
@@ -729,6 +844,37 @@ rebuild_ec_dkey_enumeration(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+rebuild_ec_parity_multi_group(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G8, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 100; i++) {
+		char dkey[32];
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		sprintf(dkey, "dkey_%d", i);
+		insert_single(dkey, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+	}
+
+	rank = get_rank_by_oid_shard(arg, oid, 9);
+	rebuild_single_pool_rank(arg, rank, false);
+
+	reintegrate_single_pool_rank(arg, rank);
+	ioreq_fini(&req);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -836,6 +982,12 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD37: rebuild EC dkey enumeration",
 	 rebuild_ec_dkey_enumeration, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD38: rebuild EC multi-stripes @ different epochs",
+	 rebuild_ec_multi_stripes, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD39: rebuild EC parity with multiple group",
+	 rebuild_ec_parity_multi_group, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 

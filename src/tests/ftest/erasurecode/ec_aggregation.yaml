@@ -67,7 +67,7 @@ ior:
    - [32MB, 16MB, 128]
    - [32MB, 1GB, 1M]
   objectclass:
-   dfs_oclass:
+   dfs_oclass_list:
     #[EC_Object_Class, Minimum number of servers]
     - ["EC_2P1G1", 4]
     - ["EC_4P1G1", 6]

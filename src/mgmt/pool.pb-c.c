@@ -2643,7 +2643,7 @@ const ProtobufCMessageDescriptor mgmt__pool_query_req__descriptor =
   (ProtobufCMessageInit) mgmt__pool_query_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__storage_usage_stats__field_descriptors[5] =
+static const ProtobufCFieldDescriptor mgmt__storage_usage_stats__field_descriptors[6] =
 {
   {
     "total",
@@ -2705,18 +2705,31 @@ static const ProtobufCFieldDescriptor mgmt__storage_usage_stats__field_descripto
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "media_type",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__StorageUsageStats, media_type),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__storage_usage_stats__field_indices_by_name[] = {
   1,   /* field[1] = free */
   3,   /* field[3] = max */
   4,   /* field[4] = mean */
+  5,   /* field[5] = media_type */
   2,   /* field[2] = min */
   0,   /* field[0] = total */
 };
 static const ProtobufCIntRange mgmt__storage_usage_stats__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 5 }
+  { 0, 6 }
 };
 const ProtobufCMessageDescriptor mgmt__storage_usage_stats__descriptor =
 {
@@ -2726,7 +2739,7 @@ const ProtobufCMessageDescriptor mgmt__storage_usage_stats__descriptor =
   "Mgmt__StorageUsageStats",
   "mgmt",
   sizeof(Mgmt__StorageUsageStats),
-  5,
+  6,
   mgmt__storage_usage_stats__field_descriptors,
   mgmt__storage_usage_stats__field_indices_by_name,
   1,  mgmt__storage_usage_stats__number_ranges,

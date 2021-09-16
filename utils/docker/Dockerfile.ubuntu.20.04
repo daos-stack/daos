@@ -23,6 +23,7 @@ RUN apt-get -y update && \
         build-essential \
         clang \
         cmake \
+	curl \
         fuse3 \
         git \
         golang-go \

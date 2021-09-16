@@ -1,28 +1,28 @@
 # Self-healing (aka Rebuild)
 
 In DAOS, if the data is replicated with multiple copies on different
-targets, once one of the target failed, the data on it will be rebuilt
+targets, once one of the targets fails, it's data will be rebuilt
 on the other targets automatically, so the data redundancy will not be
-impacted due to the target failure. In future, DAOS will also support
-Erasure Coding to protect the data, then the rebuild process might be
+impacted due to the target failure. In future versions, DAOS will also support
+Erasure Coding to protect the data; then the rebuild process might be
 updated accordingly.
 
 ## Rebuild Detection
 
 When a target failed, it should be detected promptly and
-notify the pool (Raft) leader, then the leader will exclude
+notify the pool (Raft) leader, and then the leader will exclude
 the target from the pool and trigger the rebuild process
 immediately.
 
-### Current status and longterm goal
+### Current status and long-term goal
 
 Currently, since the raft leader can not exclude the target
 automatically, the sysadmin has to manually exclude the target
-from the pool, which then trigger the rebuild.
+from the pool, which then triggers the rebuild.
 
-In future, the leader should be able to detect the target failure
+In the future, the leader should be able to detect the target failure
 promptly and then trigger the rebuild automatically by itself,
-without the help of sysadmin.
+without the help of the sysadmin.
 
 ## Rebuild process
 
@@ -32,9 +32,9 @@ The rebuild is divided into 2 phases, scan and pull.
 
 Initially, the leader will propagate the failure notification
 to all other surviving targets by a collective RPC. Any target
-that receives this RPC will start to scan its own object table
-to determine the object losts data redundancy on the faulty
-target, if it does, then send their IDs and related metadata
+that receives this RPC will start to scan its object table
+to determine the objects lost data redundancy on the faulty
+target. If it does, send their IDs and related metadata
 to the rebuild targets(rebuild initiator). As for how to choose
 the rebuild target for faulty target, it will be described in
 placement/README.md
@@ -44,15 +44,15 @@ placement/README.md
 Once the rebuild initiators get the object list from the scanning
 target, it will pull the data of these objects from other
 replicas and then write data locally. Each target will report
-its rebuild status, rebuilding objects, records, is\_finished?
+its rebuild status, rebuilding objects, records, is_finished?
 etc, to the pool leader. Once the leader learned all of targets
 finished its scanning and rebuilding phase, it will notify all targets
 the rebuild has finished, and they can release all of the resources
-hold during rebuild process.
+held during the rebuild process.
 
 <a id="f10.18"></a>
 **Rebuild Protocol**
-![../../doc/graph/Fig_059.png](../../doc/graph/Fig_059.png "Rebuild Protocol")
+![../../docs/graph/Fig_059.png](../../docs/graph/Fig_059.png "Rebuild Protocol")
 
 The <a href="#f10.18">figure</a> above is an example of this process:
 There are five objects in the cluster: object A is 3-way replicated,
@@ -61,10 +61,10 @@ target-0, which is the Raft leader, broadcasted the failure to all
 surviving targets to notify them to enter the degraded mode and scan:
 
 - Target-0 found that object D lost a replica and calculated out target-1 is
-the rebuild target for D, so it sent object Dâs ID and its metadata to
+the rebuild target for D, so it sent object D's ID and its metadata to
 target-1.
 - Target-1 found that object A lost a replica and calculated out target-3 is
-the rebuild target for A, so it sent object Aâs ID and its metadata to
+the rebuild target for A, so it sent object A's ID and its metadata to
 target-3.
 - Target-4 found objects A and C lost replicas and it calculated out target-3
 is the rebuild target for both objects A and C, so it sent IDs for objects A
@@ -92,7 +92,7 @@ the failure, it will switch to other replicas if available.
 - A target in rebuild does not need to re-scan its objects or reset rebuild
 progress for the current failure if another failure has occurred.
 - When there are multiple failures, if the number of failed targets from
-different domains exceeds the fault tolerance level, then there could be
+different domains exceeds the fault tolerance level, there could be
 unrecoverable errors and applications could suffer from data loss. In this
 case, upper layer stack software could see errors while sending I/O to the
 object that could have missing data.
@@ -101,7 +101,7 @@ The following <a href="#f10.20">figure</a> is an example of this protocol.
 
 <a id="f10.20"></a>
 **Multi-failure protocol**
-![../../doc/graph/Fig_061.png](../../doc/graph/Fig_061.png "Multi-failure protocol")
+![../../docs/graph/Fig_061.png](../../docs/graph/Fig_061.png "Multi-failure protocol")
 
 - In this example, object A is 2-way replicated, object B, C and D are 3-way
 replicated.
@@ -230,10 +230,66 @@ related message will be shown on the leader console. For example:
 ```
 Rebuild [aborted] (pool 8799e471 ver=41, toberb_obj=75, rb_obj=75, rec= 11937, done 1 status 0 duration=10 secs)
 ```
-## Rebuilding with Checksums
-During a rebuild, the server being rebuilt will act as a DAOS Client in the
- sense that it will read the data and checksum from a replica server and verify
- the integrity of the data before it uses it for the rebuild. If corrupted data
- is detected, then the read will fail, and the replica server will be notified
- of the corruption. The rebuild will then attempt to use a different replica.
 
+## Rebuilding with Checksums
+
+During a rebuild, the server being rebuilt will act as a DAOS Client in the
+sense that it will read the data and checksum from a replica server and verify
+the integrity of the data before it uses it for the rebuild. If corrupted data
+is detected, then the read will fail, and the replica server will be notified of
+the corruption. The rebuild will then attempt to use a different replica.
+
+A checksum iov parameter is available for the object list and object fetch task
+API's. This is for rebuild to provide memory that the checksums can be packed
+into. Otherwise, rebuild would have to recalculate the checksums while writing
+to the local VOS instance. If insufficient memory is allocated in the buffer,
+the iov_len will be set to the required capacity and the checksums packed into
+the buffer is truncated.
+
+The following describes "touch points" of the life of a checksum for rebuild.
+The client task APIs and packing/unpacking info is included here because
+rebuild is the primary user of these APIs with checksums.
+
+### Rebuild Touch Points
+
+- migrate_fetch_update_(inline|single|bulk) - the rebuild/migrate functions that
+  write to vos locally must ensure that the checksum is also written. These must
+  use the csum iov param for fetch to get the checksum, then unpack the csums
+  into iod_csum.
+- obj_enum.c is relied on for enumerating the objects to be rebuilt. Because the
+  fetch_update functions will unpack the csums from fetch, it will also unpack
+  the csums for enum, so the unpacking process in obj_enum.c will simply copy
+  the csum_iov to the io (dss_enum_unpack_io) structure in
+  **enum_unpack_recxs()** and then deep copy to the mrone (migrate_one)
+  structure in **migrate_one_insert()**.
+
+### Client Task API Touch Points
+
+- **dc_obj_fetch_task_create**: sets csum iov to daos_obj_fetch_t args. These
+  args are set to the rw_cb_args.shard_args.api_args and accessed through an
+  accessor function (rw_args2csum_iov) in cli_shard.c so that rw_args_store_csum
+  can easily access it. This function, called from dc_rw_cb_csum_verify, will
+  pack the data checksums received from the server into the iov.
+- **dc_obj_list_obj_task_create**: sets csum iov to daos_obj_list_obj_t args.
+  args.csum is then copied to obj_enum_args.csum in dc_obj_shard_list(). On enum
+  callback (dc_enumerate_cb()) the packed csum buffer is copied from the rpc
+  args to obj_enum_args.csum (which points to the same buffer as the caller's)
+
+### Packing/unpacking checksums
+
+When checksums are packed (either for fetch or
+object list) only the data
+checksums are included. For object list, only checksums for data that is inlined
+is included. During a rebuild, if the data is not inlined, then the rebuild
+process will fetch the rest of the data and also get the checksums.
+
+- ci_serialize() - "packs" checksums by appending the struct to an iov and then
+  appending the checksum info buffer to the iov. This puts the actual checksum
+  just after the checksum structure that describes the checksum.
+- ci_cast() - "unpacks" the checksum and describing structure. It does this by
+  casting an iov's buffer to a dcs_csum_info struct and setting the csum_info's
+  checksum pointer to point to the memory just after the structure. It does not
+  copy anything, but really just "casts". To get all dcs_csum_infos, a caller
+  would cast the iov, copy the csum_info to a destination, then move to the next
+  csum_info(ci_move_next_iov) in the iov. Because this process modifies the iov
+  structure it is best to use a copy of the iov as a temp structure.

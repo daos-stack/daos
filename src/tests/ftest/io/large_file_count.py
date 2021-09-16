@@ -48,7 +48,7 @@ class LargeFileCount(MdtestBase, IorTestBase):
             Run IOR for 5 mints with DFS and POSIX
             Run MDTEST to create 25K files with DFS and POSIX
         :avocado: tags=all,daosio,full_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,large,dfuse
         :avocado: tags=largefilecount
         """
         apis = self.params.get("api", "/run/largefilecount/*")
@@ -93,7 +93,7 @@ class LargeFileCount(MdtestBase, IorTestBase):
             Run MDTEST to create 25K files with DFS and POSIX
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=daosio
+        :avocado: tags=daosio,dfuse
         :avocado: tags=rc,largefilecount_rc
         """
         apis = self.params.get("api", "/run/largefilecount/*")
