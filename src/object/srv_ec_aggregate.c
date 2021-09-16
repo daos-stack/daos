@@ -672,6 +672,7 @@ static int
 agg_encode_full_stripe(struct ec_agg_entry *entry)
 {
 	struct ec_agg_stripe_ud		stripe_ud = { 0 };
+	struct ec_agg_param		*agg_param;
 	int				*status;
 	int				tid, rc = 0;
 
@@ -686,6 +687,9 @@ agg_encode_full_stripe(struct ec_agg_entry *entry)
 			    DSS_XS_OFFLOAD, tid, 0, NULL);
 	if (rc)
 		goto ev_out;
+
+	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	agg_param->ap_yielded = 1;
 	rc = ABT_eventual_wait(stripe_ud.asu_eventual, (void **)&status);
 	if (rc != ABT_SUCCESS) {
 		rc = dss_abterr2der(rc);
