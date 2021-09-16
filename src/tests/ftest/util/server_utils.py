@@ -288,8 +288,8 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
-        # Additionally try to prepare any discovered VMD NVMe devices. 
-        if os.environ["DAOS_ENABLE_VMD"]:
+        # Additionally try to prepare any discovered VMD NVMe devices.
+        if "True" in os.environ["DAOS_ENABLE_VMD"]:
             cmd.sub_command_class.sub_command_class.enable_vmd.value = True
 
         # Use the configuration file settings if no overrides specified
@@ -394,8 +394,8 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.reset.value = True
         cmd.sub_command_class.sub_command_class.force.value = True
 
-        # Use VMD option when reseting storage if it's prepared with VMD.
-        if os.environ["DAOS_ENABLE_VMD"]:
+        # Use VMD option when resetting storage if it's prepared with VMD.
+        if "True" in os.environ["DAOS_ENABLE_VMD"]:
             cmd.sub_command_class.sub_command_class.enable_vmd.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))

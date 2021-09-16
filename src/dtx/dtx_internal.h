@@ -95,6 +95,8 @@ CRT_RPC_DECLARE(dtx, DAOS_ISEQ_DTX, DAOS_OSEQ_DTX);
 #define DTX_CLEANUP_THD_AGE_LO	45
 
 struct dtx_pool_metrics {
+	struct d_tm_node_t	*dpm_batched_degree;
+	struct d_tm_node_t	*dpm_batched_total;
 	struct d_tm_node_t	*dpm_total[DTX_PROTO_SRV_RPC_COUNT];
 };
 
@@ -135,7 +137,7 @@ uint64_t dtx_cos_oldest(struct ds_cont_child *cont);
 
 /* dtx_rpc.c */
 int dtx_commit(struct ds_cont_child *cont, struct dtx_entry **dtes,
-	       struct dtx_cos_key *dcks, int count);
+	       struct dtx_cos_key *dcks, int count, bool helper);
 int dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte,
 	      daos_epoch_t epoch);
 

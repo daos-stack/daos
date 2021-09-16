@@ -28,8 +28,10 @@ as well as the pool service replica ranks.
     The --scm-size and --nvme-size options still exist, but should be
     considered deprecated and will likely be removed in a future release.
 
-The label must consist of alphanumeric characters, colon (':'), period ('.')
-or underscore ('\_'). The maximum length is set to 127 characters.
+The label must consist of alphanumeric characters, colon (':'), period ('.'),
+hyphen ('-') or underscore ('\_'). The maximum length is set to 127 characters.
+Labels that can be parsed as UUID (e.g. 123e4567-e89b-12d3-a456-426614174000)
+are forbidden.
 
 ```bash
 $ dmg pool create --help

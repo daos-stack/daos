@@ -16,27 +16,35 @@ server_config:
 pool:
   mode: 511
   name: daos_server
-  scm_size: 1073741824
+  scm_size: 1GB
   svcn: 3
   control_method: dmg
   pool_query_timeout: 30
 container:
   control_method: daos
-  properties: rf:2
   akey_size: 5
   dkey_size: 5
   data_size: 5
   object_qty: 10
   record_qty: 10
+  cont_property: !mux
+    rf_0:
+      properties: rf:0
+    rf_1:
+      properties: rf:1
+    rf_2:
+      properties: rf:2
+    rf_3:
+      properties: rf:3
+    rf_4:
+      properties: rf:4
 rebuild:
-  object_class: OC_RP_3G1
-  cont_rf: !mux
-    negative_test:
-      rank:
-        - 3
-        - 4
-        - 5
-    positive_test:
-      rank:
-        - 4
-        - 5
+  traffic_oc: !mux
+    object_class_sx:
+      object_class: OC_SX
+    object_class_rp_2g1:
+      object_class: OC_RP_2G1
+    object_class_rp_3g1:
+      object_class: OC_RP_3G1
+  rank:
+    - 3
