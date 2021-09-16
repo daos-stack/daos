@@ -1809,8 +1809,23 @@ cont_open(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		goto out;
 	}
 	out->coo_snap_count = snap_count;
-	D_DEBUG(DF_DSMS, DF_CONT": got nsnapshots=%u on open\n",
+	D_DEBUG(DF_DSMS, DF_CONT": got nsnapshots=%u\n",
 		DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), snap_count);
+
+	/* Get latest snapshot */
+	if (snap_count > 0) {
+		d_iov_t		key_out;
+
+		rc = rdb_tx_query_key_max(tx, &cont->c_snaps, &key_out);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to query lsnapshot, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto out;
+		}
+		out->coo_lsnapshot = *(uint64_t *)key_out.iov_buf;
+		D_DEBUG(DF_DSMS, DF_CONT": got lsnapshot="DF_X64"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), out->coo_lsnapshot);
+	}
 
 out:
 	if (rc == 0) {
@@ -2443,6 +2458,21 @@ cont_query(struct rdb_tx *tx, struct ds_pool_hdl *pool_hdl, struct cont *cont,
 		return rc;
 	}
 	out->cqo_snap_count = snap_count;
+
+	/* Get latest snapshot */
+	if (snap_count > 0) {
+		d_iov_t		key_out;
+
+		rc = rdb_tx_query_key_max(tx, &cont->c_snaps, &key_out);
+		if (rc != 0) {
+			D_ERROR(DF_CONT": failed to query lsnapshot, "DF_RC"\n",
+				DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), DP_RC(rc));
+			goto out;
+		}
+		out->cqo_lsnapshot = *(uint64_t *)key_out.iov_buf;
+		D_DEBUG(DF_DSMS, DF_CONT": got lsnapshot="DF_X64"\n",
+			DP_CONT(cont->c_svc->cs_pool_uuid, cont->c_uuid), out->cqo_lsnapshot);
+	}
 
 	/* need RF to process co_status */
 	if (in->cqi_bits & DAOS_CO_QUERY_PROP_CO_STATUS)
