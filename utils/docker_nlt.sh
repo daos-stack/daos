@@ -8,6 +8,6 @@ set -e
 
 . utils/sl/setup_local.sh
 
-./utils/setup_daos_admin.sh
+sudo --preserve-env=SL_PREFIX ./utils/setup_daos_admin.sh
 
 ./utils/node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
