@@ -360,7 +360,7 @@ class TestContainer(TestDaosApiBase):
             try:
                 uuid = self.daos.container_create(
                     **kwargs)["response"]["container_uuid"]
-            except KeyError as error:
+            except (KeyError, TypeError) as error:
                 raise CommandFailure(
                     "Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
