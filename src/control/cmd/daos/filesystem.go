@@ -210,11 +210,11 @@ func (cmd *fsGetAttrCmd) Execute(_ []string) error {
 	C.daos_oclass_id2name(attrs.doi_oclass_id, &oclassName[0])
 
 	if cmd.jsonOutputEnabled() {
-		jsonAttrs := &struct{
-			ObjClass string `json:"oclass"`
+		jsonAttrs := &struct {
+			ObjClass  string `json:"oclass"`
 			ChunkSize uint64 `json:"chunk_size"`
 		}{
-			ObjClass: C.GoString(&oclassName[0]),
+			ObjClass:  C.GoString(&oclassName[0]),
 			ChunkSize: uint64(attrs.doi_chunk_size),
 		}
 		return cmd.outputJSON(jsonAttrs, nil)
