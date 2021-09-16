@@ -10,8 +10,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/daos-stack/daos/src/control/build"
 	"github.com/pkg/errors"
+
+	"github.com/daos-stack/daos/src/control/build"
 )
 
 type (
@@ -58,6 +59,7 @@ type (
 	deadliner interface {
 		SetTimeout(time.Duration)
 		getDeadline() time.Time
+		getTimeout() time.Duration
 	}
 
 	// UnaryRequest defines an interface to be implemented by
@@ -70,9 +72,14 @@ type (
 	}
 )
 
+var (
+	errNoRetryHandler = errors.New("request has not set a retry handler")
+)
+
 // request is an embeddable struct to provide basic functionality
 // common to all request types.
 type request struct {
+	timeout  time.Duration
 	deadline time.Time
 	Sys      string // DAOS system name
 	HostList []string
@@ -83,13 +90,17 @@ func (r *request) SetSystem(name string) {
 	r.Sys = name
 }
 
-// getSystem returns the system name set for the request, or
-// the default name.
-func (r *request) getSystem() string {
-	if r.Sys == "" {
+// getSystem returns the system name set on the request or that returned by the
+// supplied sysGetter implementation or the build defined default name.
+func (r *request) getSystem(getter sysGetter) string {
+	switch {
+	case r.Sys != "":
+		return r.Sys
+	case getter.GetSystem() != "":
+		return getter.GetSystem()
+	default:
 		return build.DefaultSystemName
 	}
-	return r.Sys
 }
 
 // getHostList returns the hostlist set for the request, which
@@ -98,10 +109,15 @@ func (r *request) getHostList() []string {
 	return r.HostList
 }
 
-// SetHostList sets the request's hostlist, which may override
-// the configured hostlist.
+// SetHostList sets the request's hostlist to a copy of the
+// supplied hostlist, and will override the configured hostlist.
 func (r *request) SetHostList(hl []string) {
-	r.HostList = hl
+	if len(hl) == 0 {
+		return
+	}
+
+	r.HostList = make([]string, len(hl))
+	copy(r.HostList, hl)
 }
 
 // AddHost appends the given host to the request's hostlist,
@@ -113,6 +129,7 @@ func (r *request) AddHost(hostAddr string) {
 // SetTimeout sets a deadline by which the request must have
 // completed. It is calculated from the supplied time.Duration.
 func (r *request) SetTimeout(timeout time.Duration) {
+	r.timeout = timeout
 	r.deadline = time.Now().Add(timeout)
 }
 
@@ -120,6 +137,14 @@ func (r *request) SetTimeout(timeout time.Duration) {
 // Callers should check the returned time.Time for the zero value.
 func (r *request) getDeadline() time.Time {
 	return r.deadline
+}
+
+// getTimeout returns the timeout set for the request, if any.
+// The primary use case for this method is to provide information
+// about the timeout in the event that the request's deadline
+// is exceeded.
+func (r *request) getTimeout() time.Duration {
+	return r.timeout
 }
 
 // isMSRequest implements part of the targetChooser interface,
@@ -140,7 +165,7 @@ func (r *request) canRetry(_ error, _ uint) bool {
 // calling retry, in order to avoid wasting effort on a request
 // that does not implement its own retry logic.
 func (r *request) onRetry(_ context.Context, _ uint) error {
-	return errors.New("request is not retryable")
+	return errNoRetryHandler
 }
 
 // retryAfter implements the retrier interface and always returns
@@ -182,6 +207,10 @@ type retryableRequest struct {
 	retryFn func(context.Context, uint) error
 }
 
+func (r *retryableRequest) setRetryTimeout(timeout time.Duration) {
+	r.retryTimeout = timeout
+}
+
 func (r *retryableRequest) getRetryTimeout() time.Duration {
 	return r.retryTimeout
 }
@@ -214,5 +243,5 @@ func (r *retryableRequest) onRetry(ctx context.Context, cur uint) error {
 		return r.retryFn(ctx, cur)
 	}
 
-	return nil
+	return errNoRetryHandler
 }

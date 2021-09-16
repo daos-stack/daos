@@ -16,13 +16,8 @@ from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
 from command_utils_base import CommandFailure
 from general_utils import error_count
+import queue
 
-try:
-    # python 3.x
-    import queue
-except ImportError:
-    # python 2.7
-    import Queue as queue
 
 class NvmeEnospace(ServerFillUp):
     # pylint: disable=too-many-ancestors
@@ -33,11 +28,11 @@ class NvmeEnospace(ServerFillUp):
 
     def __init__(self, *args, **kwargs):
         """Initialize a NvmeEnospace object."""
-        super(NvmeEnospace, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.daos_cmd = None
 
     def setUp(self):
-        super(NvmeEnospace, self).setUp()
+        super().setUp()
 
         # initialize daos command
         self.daos_cmd = DaosCommand(self.bin)
@@ -72,8 +67,8 @@ class NvmeEnospace(ServerFillUp):
         """
         #List all the container
         kwargs = {"pool": self.pool.uuid}
-        data = self.daos_cmd.pool_list_cont(**kwargs)
-        containers = data["uuids"]
+        data = self.daos_cmd.container_list(**kwargs)
+        containers = [uuid_label["UUID"] for uuid_label in data["response"]]
 
         #Destroy all the containers
         for _cont in containers:
@@ -208,14 +203,16 @@ class NvmeEnospace(ServerFillUp):
                   capacity is full.One background IO job will be running
                   continuously.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=der_enospace,enospc_lazy,enospc_lazy_bg
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_bg
         """
         print(self.pool.pool_percentage_used())
 
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_lazy_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -231,8 +228,9 @@ class NvmeEnospace(ServerFillUp):
                   capacity is full. Delete all the containers.
                   Do this in loop for 10 times and verify space is released.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=der_enospace,enospc_lazy,enospc_lazy_fg
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_lazy,enospc_lazy_fg
         """
         print(self.pool.pool_percentage_used())
 
@@ -264,8 +262,9 @@ class NvmeEnospace(ServerFillUp):
                   capacity is full.One background IO job will be running
                   continuously.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=der_enospace,enospc_time,enospc_time_bg
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_bg
         """
         print(self.pool.pool_percentage_used())
 
@@ -275,6 +274,7 @@ class NvmeEnospace(ServerFillUp):
         #Run IOR to fill the pool.
         self.run_enospace_with_bg_job()
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_time_with_fg(self):
         """Jira ID: DAOS-4756.
 
@@ -290,8 +290,9 @@ class NvmeEnospace(ServerFillUp):
                   capacity is full. Delete all the containers.
                   Do this in loop for 10 times and verify space is released.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=der_enospace,enospc_time,enospc_time_fg
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_time,enospc_time_fg
         """
         print(self.pool.pool_percentage_used())
 
@@ -323,8 +324,9 @@ class NvmeEnospace(ServerFillUp):
                   Check the IOR baseline read number and make sure it's +- 5%
                   to the number ran prior system storage was full.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=der_enospace,enospc_performance
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_performance
         """
         #Write the IOR Baseline and get the Read BW for later comparison.
         print(self.pool.pool_percentage_used())
@@ -352,6 +354,7 @@ class NvmeEnospace(ServerFillUp):
                       ' Baseline Read MiB = {} and latest IOR Read MiB = {}'
                       .format(max_mib_baseline, max_mib_latest))
 
+    @skipForTicket("DAOS-7018")
     def test_enospace_no_aggregation(self):
         """Jira ID: DAOS-4756.
 
@@ -366,8 +369,9 @@ class NvmeEnospace(ServerFillUp):
                   Do this in loop ~10 times and verify the DER_NOSPACE and SCM
                   free size after container destroy.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=der_enospace,enospc_no_aggregation
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium,ib2
+        :avocado: tags=nvme,der_enospace,enospc_no_aggregation
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches

@@ -13,7 +13,8 @@ from ior_utils import IorCommand, IorMetrics
 
 class IorIntercept(IorTestBase):
     # pylint: disable=too-many-ancestors
-    """Test class Description: Runs IOR with and without interception
+    """Test class Description: Runs IOR with and without interception.
+
        library on a single server and single client setting with
        basic parameters.
 
@@ -40,7 +41,10 @@ class IorIntercept(IorTestBase):
             Compare the results and check whether using interception
                 library provides better performance.
 
-        :avocado: tags=all,full_regression,hw,small,daosio,iorinterceptbasic
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=daosio,dfuse,il
+        :avocado: tags=iorinterceptbasic
         """
         apis = self.params.get("ior_api", '/run/ior/iorflags/ssf/*')
         for api in apis:

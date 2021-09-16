@@ -23,6 +23,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 const (
@@ -95,7 +96,8 @@ func TestRunnerContextExit(t *testing.T) {
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
-	cfg := NewConfig()
+	cfg := NewConfig().
+		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH")
 	cfg.Index = 9
 
 	runner := NewRunner(log, cfg)
@@ -115,24 +117,39 @@ func TestRunnerContextExit(t *testing.T) {
 
 func TestRunnerNormalExit(t *testing.T) {
 	var numaNode uint = 1
+	var bypass bool = false
 	createFakeBinary(t)
 
 	// set this to control the behavior in TestMain()
 	os.Setenv(testModeVar, "RunnerNormalExit")
-	// verify that user env gets overridden by config
+	// verify that bad user env is scrubbed
+	os.Setenv("FI_VERBS_PREFER_XRC", "1")
+	// verify that allowed user env gets overridden by config
 	os.Setenv("OFI_INTERFACE", "bob0")
+	// verify that allowed user env without a config override is passed through
+	allowedUserEnv := "MOOD"
+	allowedUserVal := "happy"
+	os.Setenv(allowedUserEnv, allowedUserVal)
 
 	log, buf := logging.NewTestLogger(t.Name())
 	defer common.ShowBufferOnFailure(t, buf)
 
 	cfg := NewConfig().
+		WithEnvPassThrough(testModeVar, "LD_LIBRARY_PATH",
+			"OFI_INTERFACE", allowedUserEnv).
 		WithTargetCount(42).
 		WithHelperStreamCount(1).
 		WithFabricInterface("qib0").
 		WithLogMask("DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR").
 		WithPinnedNumaNode(&numaNode).
+		WithBypassHealthChk(&bypass).
 		WithCrtCtxShareAddr(1).
-		WithCrtTimeout(30)
+		WithCrtTimeout(30).
+		WithStorage(
+			storage.NewTierConfig().
+				WithScmClass("ram").
+				WithScmMountPoint("/foo/bar"),
+		)
 	runner := NewRunner(log, cfg)
 	errOut := make(chan error)
 
@@ -146,13 +163,14 @@ func TestRunnerNormalExit(t *testing.T) {
 	}
 
 	// Light integration testing of arg/env generation; unit tests elsewhere.
-	wantArgs := "-t 42 -x 1 -p 1 -I 0"
+	wantArgs := "-t 42 -x 1 -T 1 -p 1 -I 0 -r 0 -H 0 -s /foo/bar"
 	var gotArgs string
 	env := []string{
 		"CRT_CTX_SHARE_ADDR=1",
 		"CRT_TIMEOUT=30",
 		"OFI_INTERFACE=qib0",
 		"D_LOG_MASK=DEBUG,MGMT=DEBUG,RPC=ERR,MEM=ERR",
+		allowedUserEnv + "=" + allowedUserVal,
 	}
 	sort.Strings(env)
 	wantEnv := strings.Join(env, " ")

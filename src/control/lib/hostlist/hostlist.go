@@ -17,7 +17,9 @@ import (
 )
 
 var (
-	ErrEmpty    = errors.New("hostlist is empty")
+	// ErrEmpty indicates empty host list
+	ErrEmpty = errors.New("hostlist is empty")
+	// ErrNotFound indicates valid hostname could not be found
 	ErrNotFound = errors.New("hostname not found")
 )
 
@@ -54,8 +56,8 @@ func (hn *hostName) Parse(input string) error {
 	// prefixN (default)
 	re := regexp.MustCompile(`^([a-zA-Z]+)(\d+)?(.*)?`)
 	if strings.Contains(input, "-") {
-		// handle hosts in the format prefixN-N
-		re = regexp.MustCompile(`^(\w+-?)(\d+)?(.*)?`)
+		// handle hosts with one or more hyphens in name
+		re = regexp.MustCompile(`^([a-zA-Z0-9\-]+\-)(\d+)?(.*)?`)
 	}
 
 	matches := re.FindStringSubmatch(input)
@@ -687,7 +689,7 @@ func (hl *HostList) DeleteNth(n int) error {
 		return err
 	}
 
-	hl.hostCount -= 1
+	hl.hostCount--
 
 	if newHr != nil {
 		hl.insertRangeAt(idx+1, newHr)

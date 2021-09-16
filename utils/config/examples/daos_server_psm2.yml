@@ -41,49 +41,40 @@ engines:
   - PSM2_MULTI_EP=1
   - CRT_CTX_SHARE_ADDR=1
   - FI_PSM2_DISCONNECT=1
-  # nvme options
-  # - IO_STAT_PERIOD=10
 
-  # Storage definitions
-  scm_mount: /mnt/daos0
+  # Storage definitions (one per tier)
+  storage:
+  -
+    # When class is set to dcpm, scm_list is the list of device paths for
+    # PMem namespaces (currently only one per engine supported).
+    class: dcpm
+    scm_list: [/dev/pmem0]
+    scm_mount: /mnt/daos0
 
-  # When scm_class is set to ram, tmpfs will be used to emulate SCM.
-  # The size of ram is specified by scm_size in GB units.
-  # scm_class: ram
-  # scm_size: 6
+    # When class is set to ram, tmpfs will be used to emulate SCM.
+    # The size of ram is specified by scm_size in GB units.
+    # class: ram
+    # scm_size: 6
+  -
+    # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
+    # engine with -n <path>).
+    class: nvme
+    bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
 
-  # When scm_class is set to dcpm, scm_list is the list of device paths for
-  # PMem namespaces (currently only one per engine supported).
-  scm_class: dcpm
-  scm_list: [/dev/pmem0]
+    # If emulating NVMe SSD over kernel block device.
+    # class: kdev            # map to VOS_BDEV_CLASS=AIO
+    # bdev_list: [/dev/sdc]       # generate nvme.conf as follows:
+                # [AIO]
+                #   AIO /dev/sdc AIO2
 
-  # If using NVMe SSD (will write /mnt/daos/daos_nvme.conf and start I/O
-  # engine with -n <path>).
-  bdev_class: nvme
-  bdev_list: ["0000:81:00.0"]  # generate regular nvme.conf
-
-  # If emulating NVMe SSD with malloc devices.
-  # bdev_class: malloc          # map to VOS_BDEV_CLASS=MALLOC
-  # bdev_size: 4                # malloc size of each device in GB.
-  # bdev_number: 1              # generate nvme.conf as follows:
-              # [Malloc]
-              #   NumberOfLuns 1
-              #   LunSizeInMB 4000
-
-  # If emulating NVMe SSD over kernel block device.
-  # bdev_class: kdev            # map to VOS_BDEV_CLASS=AIO
-  # bdev_list: [/dev/sdc]       # generate nvme.conf as follows:
-              # [AIO]
-              #   AIO /dev/sdc AIO2
-
-  # When bdev_class is set to file, Linux AIO will be used to emulate NVMe.
-  # The size of file that will be created is specified by bdev_size in GB units.
-  # The location of the files that will be created is specified in bdev_list.
-  # bdev_class: file            # map to VOS_BDEV_CLASS=AIO
-  # bdev_size: 16               # file size in GB. Create file if does not exist.
-  # bdev_list: [/tmp/daos-bdev] # generate nvme.conf as follows:
-              # [AIO]
-              #   AIO /tmp/aiofile AIO1 4096
+    # When class is set to file, Linux AIO will be used to emulate NVMe.
+    # The size of file that will be created is specified by bdev_size in GB units.
+    # The location of the files that will be created is specified in bdev_list.
+    # class: file            # map to VOS_BDEV_CLASS=AIO
+    # bdev_size: 16               # file size in GB. Create file if does not exist.
+    # bdev_list: [/tmp/daos-bdev] # generate nvme.conf as follows:
+                # [AIO]
+                #   AIO /tmp/aiofile AIO1 4096
 -
   targets: 8                # number of I/O service threads per-engine
   first_core: 25            # offset of the first core for service threads
@@ -99,12 +90,12 @@ engines:
   - PSM2_MULTI_EP=1
   - CRT_CTX_SHARE_ADDR=1
   - FI_PSM2_DISCONNECT=1
-  # nvme options
-  # - IO_STAT_PERIOD=10
 
-  scm_mount: /mnt/daos1
-  scm_class: dcpm
-  scm_list: [/dev/pmem1]
-
-  bdev_class: nvme
-  bdev_list: ["0000:82:00.0"]  # generate regular nvme.conf
+  storage:
+  -
+    class: dcpm
+    scm_list: [/dev/pmem1]
+    scm_mount: /mnt/daos1
+  -
+    class: nvme
+    bdev_list: ["0000:82:00.0"]  # generate regular nvme.conf

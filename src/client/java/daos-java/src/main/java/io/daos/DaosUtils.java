@@ -7,7 +7,6 @@
 package io.daos;
 
 import io.daos.dfs.StatAttributes;
-import org.apache.commons.lang.StringUtils;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -103,10 +102,26 @@ public final class DaosUtils {
    * @return escaped value
    */
   public static String escapeUnsValue(String value) {
-    if (StringUtils.isBlank(value)) {
+    if (isBlankStr(value)) {
       return value;
     }
     value = value.replaceAll(":", "\\\\u003a");
     return value.replaceAll("=", "\\\\u003d");
+  }
+
+  public static String unEscapeUnsValue(String value) {
+    if (isBlankStr(value)) {
+      return value;
+    }
+    value = value.replaceAll("\\\\u003a", ":");
+    return value.replaceAll("\\\\u003d", "=");
+  }
+
+  public static boolean isEmptyStr(String value) {
+    return value == null || value.length() == 0;
+  }
+
+  public static boolean isBlankStr(String value) {
+    return value == null || value.trim().length() == 0;
   }
 }

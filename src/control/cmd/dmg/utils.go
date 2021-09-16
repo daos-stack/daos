@@ -8,6 +8,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/csv"
 	"fmt"
 	"sort"
 	"strings"
@@ -16,8 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
-	"github.com/daos-stack/daos/src/control/lib/txtfmt"
-	"github.com/daos-stack/daos/src/control/system"
+	"github.com/dustin/go-humanize"
 )
 
 // hostsByPort takes slice of address patterns and returns a HostGroups mapping
@@ -82,34 +82,6 @@ func formatHostGroups(buf *bytes.Buffer, groups hostlist.HostGroups) string {
 	return buf.String()
 }
 
-// tabulateRankGroups is a helper function representing rankgroups in a tabular form.
-func tabulateRankGroups(groups system.RankGroups, titles ...string) (string, error) {
-	if len(titles) < 2 {
-		return "", errors.New("insufficient number of column titles")
-	}
-	groupTitle := titles[0]
-	columnTitles := titles[1:]
-
-	formatter := txtfmt.NewTableFormatter(titles...)
-	var table []txtfmt.TableRow
-
-	for _, result := range groups.Keys() {
-		row := txtfmt.TableRow{groupTitle: groups[result].RangedString()}
-
-		summary := strings.Split(result, rowFieldSep)
-		if len(summary) != len(columnTitles) {
-			return "", errors.New("unexpected summary format")
-		}
-		for i, title := range columnTitles {
-			row[title] = summary[i]
-		}
-
-		table = append(table, row)
-	}
-
-	return formatter.Format(table), nil
-}
-
 // errIncompatFlags accepts a base flag and a set of incompatible
 // flags in order to generate a user-comprehensible error when an
 // incompatible set of parameters was supplied.
@@ -121,4 +93,20 @@ func errIncompatFlags(key string, incompat ...string) error {
 	}
 
 	return errors.Errorf("%s with --%s", base, strings.Join(incompat, " or --"))
+}
+
+func parseUint64Array(in string) (out []uint64, err error) {
+	arr, err := csv.NewReader(strings.NewReader(in)).Read()
+	if err != nil {
+		return
+	}
+
+	out = make([]uint64, len(arr))
+	for idx, elemStr := range arr {
+		out[idx], err = humanize.ParseBytes(elemStr)
+		if err != nil {
+			return
+		}
+	}
+	return
 }

@@ -9,11 +9,15 @@ package control
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/runtime/protoimpl"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
@@ -28,23 +32,31 @@ type MockMessage struct{}
 func (mm *MockMessage) Reset()         {}
 func (mm *MockMessage) String() string { return "mock" }
 func (mm *MockMessage) ProtoMessage()  {}
+func (mm *MockMessage) ProtoReflect() protoreflect.Message {
+	return (&protoimpl.MessageInfo{}).MessageOf(mm)
+}
 
 type (
 	// MockInvokerConfig defines the configured responses
 	// for a MockInvoker.
 	MockInvokerConfig struct {
-		UnaryError       error
-		UnaryResponse    *UnaryResponse
-		UnaryResponseSet []*UnaryResponse
-		HostResponses    HostResponseChan
+		Sys                 string
+		UnaryError          error
+		UnaryResponse       *UnaryResponse
+		UnaryResponseSet    []*UnaryResponse
+		UnaryResponseDelays [][]time.Duration
+		HostResponses       HostResponseChan
+		ReqTimeout          time.Duration
+		RetryTimeout        time.Duration
 	}
 
 	// MockInvoker implements the Invoker interface in order
 	// to enable unit testing of API functions.
 	MockInvoker struct {
-		log         debugLogger
-		cfg         MockInvokerConfig
-		invokeCount int
+		log              debugLogger
+		cfg              MockInvokerConfig
+		invokeCount      int
+		invokeCountMutex sync.RWMutex
 	}
 )
 
@@ -71,7 +83,20 @@ func (mi *MockInvoker) Debugf(fmtStr string, args ...interface{}) {
 	mi.log.Debugf(fmtStr, args...)
 }
 
+func (mi *MockInvoker) GetSystem() string {
+	return mi.cfg.Sys
+}
+
 func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
+	// Allow the test to override the timeouts set by the caller.
+	if mi.cfg.ReqTimeout > 0 {
+		uReq.SetTimeout(mi.cfg.ReqTimeout)
+	}
+	if mi.cfg.RetryTimeout > 0 {
+		if rReq, ok := uReq.(interface{ setRetryTimeout(time.Duration) }); ok {
+			rReq.setRetryTimeout(mi.cfg.RetryTimeout)
+		}
+	}
 	return invokeUnaryRPC(ctx, mi.log, mi, uReq, nil)
 }
 
@@ -83,9 +108,11 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	responses := make(HostResponseChan)
 
 	ur := mi.cfg.UnaryResponse
+	mi.invokeCountMutex.RLock()
 	if len(mi.cfg.UnaryResponseSet) > mi.invokeCount {
 		ur = mi.cfg.UnaryResponseSet[mi.invokeCount]
 	}
+	mi.invokeCountMutex.RUnlock()
 	if ur == nil {
 		// If the config didn't define a response, just dummy one up for
 		// tests that don't care.
@@ -100,9 +127,23 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 		}
 	}
 
+	var invokeCount int
+	mi.invokeCountMutex.Lock()
 	mi.invokeCount++
-	go func() {
-		for _, hr := range ur.Responses {
+	invokeCount = mi.invokeCount
+	mi.invokeCountMutex.Unlock()
+	go func(invokeCount int) {
+		delayIdx := invokeCount - 1
+		for idx, hr := range ur.Responses {
+			var delay time.Duration
+			if len(mi.cfg.UnaryResponseDelays) > delayIdx &&
+				len(mi.cfg.UnaryResponseDelays[delayIdx]) > idx {
+				delay = mi.cfg.UnaryResponseDelays[delayIdx][idx]
+			}
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+
 			select {
 			case <-ctx.Done():
 				return
@@ -110,7 +151,7 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 			}
 		}
 		close(responses)
-	}()
+	}(invokeCount)
 
 	return responses, nil
 }
@@ -256,6 +297,23 @@ func standardServerScanResponse(t *testing.T) *ctlpb.StorageScanResp {
 // defined by the variant input string parameter.
 func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 	ssr := standardServerScanResponse(t)
+	nss := func(idxs ...int) storage.ScmNamespaces {
+		nss := make(storage.ScmNamespaces, 0, len(idxs))
+		for _, i := range idxs {
+			ns := storage.MockScmNamespace(int32(i))
+			nss = append(nss, ns)
+		}
+		return nss
+	}
+	ctrlrs := func(idxs ...int) storage.NvmeControllers {
+		ncs := make(storage.NvmeControllers, 0, len(idxs))
+		for _, i := range idxs {
+			nc := storage.MockNvmeController(int32(i))
+			ncs = append(ncs, nc)
+		}
+		return ncs
+	}
+
 	switch variant {
 	case "withSpaceUsage":
 		snss := make(storage.ScmNamespaces, 0)
@@ -281,22 +339,11 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
 			t.Fatal(err)
 		}
-	case "withNamespace":
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(0),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+	case "pmemSingle":
+		if err := convert.Types(nss(0), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-	case "withNamespaces":
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(1), // verify out of order works
-			storage.MockScmNamespace(0),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
-			t.Fatal(err)
-		}
-	case "withNamespacesNumaZero":
+	case "pmemDupNuma":
 		ns1 := storage.MockScmNamespace(1)
 		ns1.NumaNode = 0
 		scmNamespaces := storage.ScmNamespaces{
@@ -306,18 +353,68 @@ func MockServerScanResp(t *testing.T, variant string) *ctlpb.StorageScanResp {
 		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-	case "withSingleSSD":
-		scmNamespaces := storage.ScmNamespaces{
-			storage.MockScmNamespace(0),
-			storage.MockScmNamespace(1),
-		}
-		if err := convert.Types(scmNamespaces, &ssr.Scm.Namespaces); err != nil {
+	case "pmemA":
+		// verify out of order namespace ids
+		if err := convert.Types(nss(1, 0), &ssr.Scm.Namespaces); err != nil {
 			t.Fatal(err)
 		}
-		ssr.Nvme.Ctrlrs[0].Socketid = 0
-	case "noNVME":
+	case "pmemB":
+		ns := nss(0, 1)
+		for _, n := range ns {
+			n.Size += uint64(humanize.GByte * 100)
+		}
+		if err := convert.Types(ns, &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeSingle":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ssr.Nvme.Ctrlrs[0].SocketId = 0
+	case "nvmeA":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		if err := convert.Types(ctrlrs(1, 2, 3, 4), &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeB":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		if err := convert.Types(ctrlrs(1, 2, 5, 4), &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeBasicA":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ncs := ctrlrs(1, 4)
+		for _, c := range ncs {
+			c.Model = ""
+			c.FwRev = ""
+			c.Serial = ""
+		}
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "nvmeBasicB":
+		if err := convert.Types(nss(0, 1), &ssr.Scm.Namespaces); err != nil {
+			t.Fatal(err)
+		}
+		ncs := ctrlrs(1, 4)
+		for _, c := range ncs {
+			c.Model = ""
+			c.FwRev = ""
+			c.Serial = ""
+			c.Namespaces[0].Size += uint64(humanize.GByte * 100)
+		}
+		if err := convert.Types(ncs, &ssr.Nvme.Ctrlrs); err != nil {
+			t.Fatal(err)
+		}
+	case "noNvme":
 		ssr.Nvme.Ctrlrs = nil
-	case "noSCM":
+	case "noScm":
 		ssr.Scm.Modules = nil
 	case "noStorage":
 		ssr.Nvme.Ctrlrs = nil

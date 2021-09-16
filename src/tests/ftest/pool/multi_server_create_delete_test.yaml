@@ -1,11 +1,15 @@
-# change host names to your reserved nodes, the
-# required quantity is indicated by the placeholders
 hosts:
   test_servers:
     - server-A
     - server-B
+
 server_config:
   name: daos_server
+
+pool:
+  control_method: dmg
+  size: 1GB
+
 tests:
   users: !mux
     validuser:
@@ -20,6 +24,7 @@ tests:
       user:
         - nfsnobody
         - PASS
+
   groups: !mux
     validgroup:
       group:
@@ -33,17 +38,7 @@ tests:
       group:
         - nfsnobody
         - PASS
-  systemnames: !mux
-    validsystemname:
-      systemname:
-        - daos_server
-        - PASS
-    # This case doesn't work now, but might become necessary in the future. See
-    # DAOS-4057
-    # badsetname:
-    #   setname:
-    #     - complete_rubbish
-    #     - FAIL
+
   tgtlist: !mux
     firsttgt:
       tgt:

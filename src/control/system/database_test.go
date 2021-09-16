@@ -64,7 +64,7 @@ func TestSystem_Database_filterMembers(t *testing.T) {
 	memberStates := []MemberState{
 		MemberStateUnknown, MemberStateAwaitFormat, MemberStateStarting,
 		MemberStateReady, MemberStateJoined, MemberStateStopping, MemberStateStopped,
-		MemberStateEvicted, MemberStateErrored, MemberStateUnresponsive,
+		MemberStateExcluded, MemberStateErrored, MemberStateUnresponsive,
 	}
 
 	for i, ms := range memberStates {
@@ -141,9 +141,9 @@ func TestSystem_Database_Cancel(t *testing.T) {
 		return nil
 	})
 
-	waitForLeadership(ctx, t, db, true, 10*time.Second)
+	waitForLeadership(ctx, t, db, true, 15*time.Second)
 	dbCancel()
-	waitForLeadership(ctx, t, db, false, 10*time.Second)
+	waitForLeadership(ctx, t, db, false, 15*time.Second)
 
 	if atomic.LoadUint32(&onGainedCalled) != 1 {
 		t.Fatal("OnLeadershipGained callbacks didn't execute")
@@ -270,10 +270,9 @@ func TestSystem_Database_SnapshotRestore(t *testing.T) {
 			State:     PoolServiceStateReady,
 			Replicas:  <-replicas,
 			Storage: &PoolServiceStorage{
-				CreationRankStr: fmt.Sprintf("[0-%d]", maxRanks),
-				CurrentRankStr:  fmt.Sprintf("[0-%d]", maxRanks),
-				ScmPerRank:      1,
-				NVMePerRank:     2,
+				CreationRankStr:    fmt.Sprintf("[0-%d]", maxRanks),
+				CurrentRankStr:     fmt.Sprintf("[0-%d]", maxRanks),
+				PerRankTierStorage: []uint64{1, 2},
 			},
 		}
 		data, err := createRaftUpdate(raftOpAddPoolService, ps)
@@ -435,7 +434,7 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 			expMembers: []*Member{
 				testMembers[0],
 			},
-			expFDTree: NewFaultDomainTree(testMembers[0].RankFaultDomain()),
+			expFDTree: NewFaultDomainTree(memberFaultDomain(testMembers[0])),
 		},
 		"update state success": {
 			startingMembers: testMembers,
@@ -459,9 +458,10 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				testMembers[1].RankFaultDomain(),
-				testMembers[2].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(testMembers[1]),
+				memberFaultDomain(testMembers[2]),
+			),
 		},
 		"update fault domain success": {
 			startingMembers: testMembers,
@@ -473,9 +473,10 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[2],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				changedFaultDomainMember.RankFaultDomain(),
-				testMembers[2].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(changedFaultDomainMember),
+				memberFaultDomain(testMembers[2]),
+			),
 		},
 		"remove success": {
 			startingMembers: testMembers,
@@ -486,8 +487,9 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 				testMembers[1],
 			},
 			expFDTree: NewFaultDomainTree(
-				testMembers[0].RankFaultDomain(),
-				testMembers[1].RankFaultDomain()),
+				memberFaultDomain(testMembers[0]),
+				memberFaultDomain(testMembers[1]),
+			),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -552,6 +554,43 @@ func TestSystem_Database_memberRaftOps(t *testing.T) {
 	}
 }
 
+func testMemberWithFaultDomain(rank Rank, fd *FaultDomain) *Member {
+	return NewMember(rank, uuid.New().String(), "dontcare", &net.TCPAddr{},
+		MemberStateJoined).WithFaultDomain(fd)
+}
+
+func TestSystem_Database_memberFaultDomain(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rank        Rank
+		faultDomain *FaultDomain
+		expResult   *FaultDomain
+	}{
+		"nil fault domain": {
+			expResult: MustCreateFaultDomain("rank0"),
+		},
+		"empty fault domain": {
+			rank:        Rank(2),
+			faultDomain: MustCreateFaultDomain(),
+			expResult:   MustCreateFaultDomain("rank2"),
+		},
+		"existing fault domain": {
+			rank:        Rank(1),
+			faultDomain: MustCreateFaultDomain("one", "two"),
+			expResult:   MustCreateFaultDomain("one", "two", "rank1"),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := testMemberWithFaultDomain(tc.rank, tc.faultDomain)
+
+			result := memberFaultDomain(m)
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("unexpected response (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
 func TestSystem_Database_FaultDomainTree(t *testing.T) {
 	for name, tc := range map[string]struct {
 		fdTree *FaultDomainTree
@@ -602,40 +641,44 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 		"pool svc replicas update miss": {
 			poolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 			event: events.NewPoolSvcReplicasUpdateEvent(
 				"foo", 1, puuidAnother.String(), []uint32{2, 3, 5, 6, 7}, 1),
 			expPoolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 		},
 		"pool svc replicas update hit": {
 			poolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{1, 2, 3, 4, 5},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{1, 2, 3, 4, 5},
+					LastUpdate: time.Now(),
 				},
 			},
 			event: events.NewPoolSvcReplicasUpdateEvent(
 				"foo", 1, puuid.String(), []uint32{2, 3, 5, 6, 7}, 1),
 			expPoolSvcs: []*PoolService{
 				{
-					PoolUUID:  puuid,
-					PoolLabel: "pool0001",
-					State:     PoolServiceStateReady,
-					Replicas:  []Rank{2, 3, 5, 6, 7},
+					PoolUUID:   puuid,
+					PoolLabel:  "pool0001",
+					State:      PoolServiceStateReady,
+					Replicas:   []Rank{2, 3, 5, 6, 7},
+					LastUpdate: time.Now(),
 				},
 			},
 		},
@@ -663,16 +706,184 @@ func TestSystem_Database_OnEvent(t *testing.T) {
 
 			<-ctx.Done()
 
-			poolSvcs, err := db.PoolServiceList()
+			poolSvcs, err := db.PoolServiceList(false)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			cmpOpts := []cmp.Option{
 				cmpopts.IgnoreUnexported(PoolService{}),
+				cmpopts.EquateApproxTime(time.Second),
 			}
 			if diff := cmp.Diff(tc.expPoolSvcs, poolSvcs, cmpOpts...); diff != "" {
 				t.Errorf("unexpected pool service replicas (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystemDatabase_PoolServiceList(t *testing.T) {
+	ready := &PoolService{
+		PoolUUID:   uuid.New(),
+		PoolLabel:  "pool0001",
+		State:      PoolServiceStateReady,
+		Replicas:   []Rank{1, 2, 3, 4, 5},
+		LastUpdate: time.Now(),
+	}
+	creating := &PoolService{
+		PoolUUID:   uuid.New(),
+		PoolLabel:  "pool0002",
+		State:      PoolServiceStateCreating,
+		Replicas:   []Rank{1, 2, 3, 4, 5},
+		LastUpdate: time.Now(),
+	}
+	destroying := &PoolService{
+		PoolUUID:   uuid.New(),
+		PoolLabel:  "pool0003",
+		State:      PoolServiceStateDestroying,
+		Replicas:   []Rank{1, 2, 3, 4, 5},
+		LastUpdate: time.Now(),
+	}
+
+	for name, tc := range map[string]struct {
+		poolSvcs    []*PoolService
+		all         bool
+		expPoolSvcs []*PoolService
+	}{
+		"empty": {
+			expPoolSvcs: []*PoolService{},
+		},
+		"all: false": {
+			poolSvcs:    []*PoolService{creating, ready, destroying},
+			expPoolSvcs: []*PoolService{ready},
+		},
+		"all: true": {
+			poolSvcs:    []*PoolService{creating, ready, destroying},
+			all:         true,
+			expPoolSvcs: []*PoolService{creating, ready, destroying},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			for _, ps := range tc.poolSvcs {
+				if err := db.AddPoolService(ps); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			poolSvcs, err := db.PoolServiceList(tc.all)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			cmpOpts := []cmp.Option{
+				cmpopts.SortSlices(func(x, y *PoolService) bool {
+					return x.PoolLabel < y.PoolLabel
+				}),
+				cmpopts.IgnoreUnexported(PoolService{}),
+				cmpopts.EquateApproxTime(time.Second),
+			}
+			if diff := cmp.Diff(tc.expPoolSvcs, poolSvcs, cmpOpts...); diff != "" {
+				t.Errorf("unexpected pool service replicas (-want, +got):\n%s\n", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_Database_GroupMap(t *testing.T) {
+	membersWithStates := func(states ...MemberState) []*Member {
+		members := make([]*Member, len(states))
+
+		for i, ms := range states {
+			members[i] = MockMember(t, uint32(i), ms)
+		}
+
+		return members
+	}
+
+	for name, tc := range map[string]struct {
+		members     []*Member
+		expGroupMap *GroupMap
+		expErr      error
+	}{
+		"empty membership": {
+			expErr: ErrEmptyGroupMap,
+		},
+		"excluded members not included": {
+			// This is a bit fragile, but I don't see a better way to maintain
+			// this list. We'll just need to keep it updated as the states change.
+			members: membersWithStates(
+				MemberStateUnknown,       // rank 0
+				MemberStateAwaitFormat,   // rank 1, excluded
+				MemberStateStarting,      // rank 2
+				MemberStateReady,         // rank 3
+				MemberStateJoined,        // rank 4
+				MemberStateStopping,      // rank 5
+				MemberStateStopped,       // rank 6
+				MemberStateExcluded,      // rank 7, excluded
+				MemberStateAdminExcluded, // rank 8, excluded
+				MemberStateErrored,       // rank 9
+				MemberStateUnresponsive,  // rank 10
+			),
+			expGroupMap: &GroupMap{
+				Version: 11,
+				RankURIs: map[Rank]string{
+					0:  mockControlAddr(t, 0).String(),
+					2:  mockControlAddr(t, 2).String(),
+					3:  mockControlAddr(t, 3).String(),
+					4:  mockControlAddr(t, 4).String(),
+					5:  mockControlAddr(t, 5).String(),
+					6:  mockControlAddr(t, 6).String(),
+					9:  mockControlAddr(t, 9).String(),
+					10: mockControlAddr(t, 10).String(),
+				},
+			},
+		},
+		"MS ranks included": {
+			members: membersWithStates(MemberStateJoined, MemberStateJoined),
+			expGroupMap: &GroupMap{
+				Version: 2,
+				RankURIs: map[Rank]string{
+					0: mockControlAddr(t, 0).String(),
+					1: mockControlAddr(t, 1).String(),
+				},
+				MSRanks: []Rank{1},
+			},
+		},
+		"unset fabric URI skipped": {
+			members: append([]*Member{
+				NewMember(2, common.MockUUID(2), "", mockControlAddr(t, 2), MemberStateJoined),
+			}, membersWithStates(MemberStateJoined)...),
+			expGroupMap: &GroupMap{
+				Version: 2,
+				RankURIs: map[Rank]string{
+					0: mockControlAddr(t, 0).String(),
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, buf := logging.NewTestLogger(t.Name())
+			defer common.ShowBufferOnFailure(t, buf)
+
+			db := MockDatabase(t, log)
+			for _, m := range tc.members {
+				if err := db.AddMember(m); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			gotGroupMap, gotErr := db.GroupMap()
+			common.CmpErr(t, tc.expErr, gotErr)
+			if tc.expErr != nil {
+				return
+			}
+
+			if diff := cmp.Diff(tc.expGroupMap, gotGroupMap); diff != "" {
+				t.Fatalf("unexpected GroupMap (-want, +got):\n%s\n", diff)
 			}
 		})
 	}

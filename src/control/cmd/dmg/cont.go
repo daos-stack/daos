@@ -53,10 +53,6 @@ func (c *ContSetOwnerCmd) Execute(args []string) error {
 		msg = errors.WithMessage(err, "FAILED").Error()
 	}
 
-	if c.jsonOutputEnabled() {
-		return c.errorJSON(err)
-	}
-
 	c.log.Infof("Container-set-owner command %s\n", msg)
 
 	return err

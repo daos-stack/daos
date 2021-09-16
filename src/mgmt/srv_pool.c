@@ -89,7 +89,7 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 	crt_rpc_t			*tc_req;
 	crt_opcode_t			opc;
 	struct mgmt_tgt_create_in	*tc_in;
-	struct mgmt_tgt_create_out	*tc_out;
+	struct mgmt_tgt_create_out	*tc_out = NULL;
 	d_rank_t			*tc_out_ranks;
 	uuid_t				*tc_out_uuids;
 	unsigned int			i;
@@ -162,10 +162,14 @@ ds_mgmt_tgt_pool_create_ranks(uuid_t pool_uuid, char *tgt_dev,
 		D_DEBUG(DB_TRACE, "fill ranks %d idx %d "DF_UUID"\n",
 			tc_out_ranks[i], idx, DP_UUID(tc_out_uuids[i]));
 	}
-
 	rc = DER_SUCCESS;
 
 decref:
+	if (tc_out) {
+		D_FREE(tc_out->tc_tgt_uuids.ca_arrays);
+		D_FREE(tc_out->tc_ranks.ca_arrays);
+	}
+
 	crt_req_decref(tc_req);
 	if (rc) {
 		rc_cleanup = ds_mgmt_tgt_pool_destroy_ranks(pool_uuid,
@@ -182,25 +186,21 @@ static int
 ds_mgmt_pool_svc_create(uuid_t pool_uuid,
 			int ntargets, uuid_t target_uuids[],
 			const char *group, d_rank_list_t *ranks,
-			daos_prop_t *prop, d_rank_list_t *svc_list)
+			daos_prop_t *prop, d_rank_list_t *svc_list,
+			size_t domains_nr, uint32_t *domains)
 {
-	int	doms[ntargets];
 	int	rc;
-	int	i;
 
 	D_DEBUG(DB_MGMT, DF_UUID": all tgts created, setting up pool "
 		"svc\n", DP_UUID(pool_uuid));
-
-	for (i = 0; i < ntargets; i++)
-		doms[i] = 1;
 
 	/**
 	 * TODO: fetch domain list from external source
 	 * Report 1 domain per target for now
 	 */
 	rc = ds_pool_svc_create(pool_uuid, ranks->rl_nr,
-				target_uuids, group, ranks, ARRAY_SIZE(doms),
-				doms, prop, svc_list);
+				target_uuids, group, ranks, domains_nr,
+				domains, prop, svc_list);
 
 	return rc;
 }
@@ -208,7 +208,8 @@ ds_mgmt_pool_svc_create(uuid_t pool_uuid,
 int
 ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    d_rank_list_t *targets, size_t scm_size, size_t nvme_size,
-		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp)
+		    daos_prop_t *prop, uint32_t svc_nr, d_rank_list_t **svcp,
+		    int domains_nr, uint32_t *domains)
 {
 	uuid_t				*tgt_uuids = NULL;
 	d_rank_list_t			*filtered_targets = NULL;
@@ -255,7 +256,8 @@ ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 	}
 
 	rc = ds_mgmt_pool_svc_create(pool_uuid, targets->rl_nr, tgt_uuids,
-				     group, targets, prop, *svcp);
+				     group, targets, prop, *svcp, domains_nr,
+				     domains);
 	if (rc) {
 		D_ERROR("create pool "DF_UUID" svc failed: rc "DF_RC"\n",
 			DP_UUID(pool_uuid), DP_RC(rc));
@@ -356,14 +358,13 @@ out:
 int
 ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		    d_rank_list_t *rank_list,
-		    char *tgt_dev,  size_t scm_size, size_t nvme_size)
+		    char *tgt_dev,  size_t scm_size, size_t nvme_size,
+		    size_t domains_nr, uint32_t *domains)
 {
-	d_rank_list_t			*unique_add_ranks = NULL;
-	uuid_t				*tgt_uuids = NULL;
-	int				doms[rank_list->rl_nr];
-	int				ntargets;
-	int				i;
-	int				rc;
+	d_rank_list_t		*unique_add_ranks = NULL;
+	uuid_t			*tgt_uuids = NULL;
+	int			ntargets;
+	int			rc;
 
 	D_DEBUG(DB_MGMT, "extend pool "DF_UUID"\n", DP_UUID(pool_uuid));
 
@@ -371,7 +372,7 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, rank_list,
+	rc = ds_mgmt_tgt_pool_create_ranks(pool_uuid, tgt_dev, unique_add_ranks,
 					   scm_size, nvme_size, &tgt_uuids);
 	if (rc != 0) {
 		D_ERROR("creating pool on ranks "DF_UUID" failed: rc "DF_RC"\n",
@@ -381,17 +382,12 @@ ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 	/* TODO: Need to make pool service aware of new rank UUIDs */
 
-	ntargets = rank_list->rl_nr;
-	for (i = 0; i < ntargets; ++i)
-		doms[i] = 1;
-
-	rc = ds_pool_extend(pool_uuid, ntargets, tgt_uuids, rank_list,
-			    ARRAY_SIZE(doms), doms, svc_ranks);
-
+	ntargets = unique_add_ranks->rl_nr;
+	rc = ds_pool_extend(pool_uuid, ntargets, tgt_uuids, unique_add_ranks,
+			    domains_nr, domains, svc_ranks);
 out:
-	if (unique_add_ranks != NULL)
-		d_rank_list_free(unique_add_ranks);
-
+	d_rank_list_free(unique_add_ranks);
+	D_FREE(tgt_uuids);
 	return rc;
 }
 
@@ -420,8 +416,7 @@ out:
 
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-				 uint32_t rank,
-				 struct pool_target_id_list *target_list,
+				 struct pool_target_addr_list *target_addrs,
 				 pool_comp_state_t state)
 {
 	int			rc;
@@ -437,7 +432,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		 * than allocating an actual list array and populating it
 		 */
 		reint_ranks.rl_nr = 1;
-		reint_ranks.rl_ranks = &rank;
+		reint_ranks.rl_ranks = &target_addrs->pta_addrs[0].pta_rank;
 
 		/* TODO: The size information and "pmem" type need to be
 		 * determined automatically, perhaps by querying the pool leader
@@ -459,8 +454,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, rank,
-					 target_list, state);
+	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, target_addrs, state);
 
 	return rc;
 }
@@ -624,40 +618,41 @@ out:
 
 int
 ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		      daos_prop_t *prop, daos_prop_t **result)
+		      daos_prop_t *prop)
 {
 	int              rc;
-	size_t           i;
-	daos_prop_t	*res_prop;
 
 	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
-		D_ERROR("invalid property\n");
+		D_ERROR("invalid property list\n");
 		rc = -DER_INVAL;
 		goto out;
 	}
 
-	D_DEBUG(DB_MGMT, "Setting property for pool "DF_UUID"\n",
+	D_DEBUG(DB_MGMT, "Setting properties for pool "DF_UUID"\n",
 		DP_UUID(pool_uuid));
 
 	rc = ds_pool_svc_set_prop(pool_uuid, svc_ranks, prop);
-	if (rc != 0)
-		goto out;
 
-	res_prop = daos_prop_alloc(prop->dpp_nr);
-	if (res_prop == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+out:
+	return rc;
+}
 
-	for (i = 0; i < prop->dpp_nr; i++)
-		res_prop->dpp_entries[i].dpe_type =
-			prop->dpp_entries[i].dpe_type;
+int
+ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		      daos_prop_t *prop)
+{
+	int              rc;
 
-	rc = ds_pool_svc_get_prop(pool_uuid, svc_ranks, res_prop);
-	if (rc != 0) {
-		daos_prop_free(res_prop);
+	if (prop == NULL || prop->dpp_entries == NULL || prop->dpp_nr < 1) {
+		D_ERROR("invalid property list\n");
+		rc = -DER_INVAL;
 		goto out;
 	}
 
-	*result = res_prop;
+	D_DEBUG(DB_MGMT, "Getting properties for pool "DF_UUID"\n",
+		DP_UUID(pool_uuid));
+
+	rc = ds_pool_svc_get_prop(pool_uuid, svc_ranks, prop);
 
 out:
 	return rc;

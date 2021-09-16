@@ -24,12 +24,10 @@ dfuse_cb_read_complete(struct dfuse_event *ev)
 
 		DFUSE_REPLY_BUF(ev, ev->de_req, ev->de_iov.iov_buf, ev->de_len);
 	} else {
-		DFUSE_REPLY_ERR_RAW(ev, ev->de_req,
-				    daos_der2errno(ev->de_ev.ev_error));
+		DFUSE_REPLY_ERR_RAW(ev, ev->de_req, ev->de_ev.ev_error);
 	}
 	D_FREE(ev->de_iov.iov_buf);
 }
-
 
 void
 dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
@@ -74,7 +72,7 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 					pos_ra <= oh->doh_ie->ie_start_off))) {
 			readahead = true;
 		}
-	} else if (oh->doh_ie->ie_dfs->dfs_attr_timeout > 0 &&
+	} else if (oh->doh_caching &&
 		len < (1024 * 1024) &&
 		oh->doh_ie->ie_stat.st_size > (1024 * 1024)) {
 		/* Only do readahead if the requested size is less than 1Mb and
@@ -156,7 +154,9 @@ dfuse_cb_read(fuse_req_t req, fuse_ino_t ino, size_t len, off_t position,
 			DFUSE_TRA_DEBUG(oh, "notify_store returned %d", rc);
 		else
 			DFUSE_TRA_INFO(oh, "notify_store returned %d", rc);
-		pthread_mutex_unlock(&oh->doh_ie->ie_dfs->dfs_read_mutex);
+		rc = pthread_mutex_unlock(&oh->doh_ie->ie_dfs->dfs_read_mutex);
+		if (rc != 0)
+			DFUSE_TRA_ERROR(oh, "Mutex unlock failed");
 	}
 
 	DFUSE_REPLY_BUF(oh, req, buff, len);

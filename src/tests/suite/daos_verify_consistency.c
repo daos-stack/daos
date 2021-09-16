@@ -44,17 +44,17 @@ vc_set_fail_loc(test_arg_t *arg, uint64_t fail_loc, int total, int cur)
 	if (fail_loc == 0 || cur > total || cur < total - 1)
 		return;
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	if (cur == total) {
-		MPI_Barrier(MPI_COMM_WORLD);
 		if (arg->myrank == 0)
 			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-					     0, 0, NULL);
+					      0, 0, NULL);
 	} else {
 		if (arg->myrank == 0)
 			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-					     fail_loc, 0, NULL);
-		MPI_Barrier(MPI_COMM_WORLD);
+					      fail_loc, 0, NULL);
 	}
+	MPI_Barrier(MPI_COMM_WORLD);
 }
 
 static void
@@ -315,6 +315,7 @@ vc_8(void **state)
 
 	vc_gen_modifications(arg, &req, oid, 7, 7, 7, 0, 0, 0);
 
+	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      DAOS_VC_LOST_REPLICA | DAOS_FAIL_ALWAYS,
@@ -327,7 +328,8 @@ vc_8(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				     0, 0, NULL);
+				      0, 0, NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	ioreq_fini(&req);
 }

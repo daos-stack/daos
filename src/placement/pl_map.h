@@ -75,11 +75,16 @@ unsigned int pl_obj_shard2grp_index(struct daos_obj_shard_md *shard_md,
  */
 struct failed_shard {
 	d_list_t        fs_list;
+	void		*fs_data;
 	uint32_t        fs_shard_idx;
 	uint32_t        fs_fseq;
 	uint32_t        fs_tgt_id;
 	uint8_t         fs_status;
 };
+
+#define	DF_FAILEDSHARD "shard_idx: %d, fseq: %d, tgt_id: %d, status: %d"
+#define	DP_FAILEDSHARD(x) (x).fs_shard_idx, (x).fs_fseq, \
+			(x).fs_tgt_id, (x).fs_status
 
 void
 remap_add_one(d_list_t *remap_list, struct failed_shard *f_new);
@@ -88,7 +93,7 @@ reint_add_one(d_list_t *remap_list, struct failed_shard *f_new);
 
 int
 remap_alloc_one(d_list_t *remap_list, unsigned int shard_idx,
-		struct pool_target *tgt, bool for_reint);
+		struct pool_target *tgt, bool for_reint, void *data);
 
 int
 remap_insert_copy_one(d_list_t *remap_list, struct failed_shard *original);
@@ -115,9 +120,9 @@ remap_list_fill(struct pl_map *map, struct daos_obj_md *md,
 void
 determine_valid_spares(struct pool_target *spare_tgt, struct daos_obj_md *md,
 		       bool spare_avail, d_list_t **current,
-		       d_list_t *remap_list, bool for_reint,
+		       d_list_t *remap_list, uint32_t allow_status,
 		       struct failed_shard *f_shard,
-		       struct pl_obj_shard *l_shard);
+		       struct pl_obj_shard *l_shard, bool *extending);
 
 int
 spec_place_rank_get(unsigned int *pos, daos_obj_id_t oid,

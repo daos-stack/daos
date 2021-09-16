@@ -56,7 +56,9 @@ show_help(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
 	int	opt;
+#if CMOCKA_FILTER_SUPPORTED == 1 /** requires cmocka 1.1.5 */
 	char	filter[1024];
+#endif
 
 	if (show_help(argc, argv)) {
 		print_usage(argv[0]);
@@ -86,7 +88,7 @@ int main(int argc, char *argv[])
 			cmocka_set_test_filter(filter);
 		}
 #else
-			D_PRINT("filter not enabled. %s not applied", filter);
+			D_PRINT("filter not enabled");
 #endif
 			break;
 		default:

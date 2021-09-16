@@ -14,19 +14,19 @@ import (
 
 // ScrubEnvironment modifies the environment variables set for
 // this process and any children which inherit its environment
-// by unsetting any variables supplied in the blacklist.
-func ScrubEnvironment(blacklist []string) {
-	for _, key := range blacklist {
+// by unsetting any variables supplied in the blocklist.
+func ScrubEnvironment(blocklist []string) {
+	for _, key := range blocklist {
 		os.Unsetenv(key)
 	}
 }
 
 // ScrubEnvironmentExcept modifies the environment variables set for
 // this process and any children which inherit its environment
-// by unsetting any variables that are not supplied in the whitelist.
-func ScrubEnvironmentExcept(whitelist []string) {
+// by unsetting any variables that are not supplied in the allowlist.
+func ScrubEnvironmentExcept(allowlist []string) {
 	lookup := make(map[string]struct{})
-	for _, key := range whitelist {
+	for _, key := range allowlist {
 		lookup[key] = struct{}{}
 	}
 

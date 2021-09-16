@@ -8,14 +8,18 @@ package common
 
 import (
 	"math/rand"
+	"strings"
 	"time"
 )
 
 const (
 	// Use ISO8601 format for timestamps as it's
 	// widely supported by parsers (e.g. javascript, etc).
-	iso8601NoMicro = "2006-01-02T15:04:05Z0700"
-	iso8601        = "2006-01-02T15:04:05.000000Z0700"
+	//
+	// NB: ISO8601 is very similar to RFC3339 format; the
+	// primary difference is that the UTC zone is represented
+	// as -00:00 instead of Z.
+	iso8601 = "2006-01-02T15:04:05.000-07:00"
 
 	defaultJitter = 500 * time.Millisecond
 )
@@ -26,10 +30,19 @@ func FormatTime(t time.Time) string {
 	return t.Format(iso8601)
 }
 
-// FormatTimeNoMicro returns ISO8601 formatted representation of timestamp with
-// second resolution.
-func FormatTimeNoMicro(t time.Time) string {
-	return t.Format(iso8601NoMicro)
+// ParseTime returns a time.Time object from ISO8601 or RFC3339
+// timestamp strings.
+func ParseTime(ts string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+		return t, nil
+	}
+
+	// The strftime() offset doesn't include a colon. If the normal
+	// format string doesn't work, try this one.
+	idx := strings.LastIndex(time.RFC3339Nano, ":")
+	fmtRunes := []rune(time.RFC3339Nano)
+	fmtStr := string(append(fmtRunes[0:idx], fmtRunes[idx+1:]...))
+	return time.Parse(fmtStr, ts)
 }
 
 // ExpBackoffWithJitter is like ExpBackoff but allows for a custom

@@ -72,7 +72,7 @@ ds_mgmt_pool_overwrite_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	ds_mgmt_pool_overwrite_acl_result_ptr = (void *)result;
 	if (result != NULL)
 		*result = daos_prop_dup(ds_mgmt_pool_overwrite_acl_result,
-					true);
+					true /* pool */, true /* input */);
 	return ds_mgmt_pool_overwrite_acl_return;
 }
 
@@ -107,7 +107,8 @@ ds_mgmt_pool_update_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		ds_mgmt_pool_update_acl_acl = daos_acl_dup(acl);
 	ds_mgmt_pool_update_acl_result_ptr = (void *)result;
 	if (result != NULL)
-		*result = daos_prop_dup(ds_mgmt_pool_update_acl_result, true);
+		*result = daos_prop_dup(ds_mgmt_pool_update_acl_result,
+					true /* pool */, true /* input */);
 	return ds_mgmt_pool_update_acl_return;
 }
 
@@ -141,7 +142,8 @@ ds_mgmt_pool_delete_acl(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 	ds_mgmt_pool_delete_acl_principal = principal;
 	ds_mgmt_pool_delete_acl_result_ptr = (void *)result;
 	if (result != NULL)
-		*result = daos_prop_dup(ds_mgmt_pool_delete_acl_result, true);
+		*result = daos_prop_dup(ds_mgmt_pool_delete_acl_result,
+					true /* pool */, true /* input */);
 	return ds_mgmt_pool_delete_acl_return;
 }
 
@@ -163,23 +165,12 @@ mock_ds_mgmt_pool_delete_acl_teardown(void)
 
 int		ds_mgmt_pool_set_prop_return;
 daos_prop_t	*ds_mgmt_pool_set_prop_prop;
-daos_prop_t	*ds_mgmt_pool_set_prop_result;
-void		*ds_mgmt_pool_set_prop_result_ptr;
 int
 ds_mgmt_pool_set_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		      daos_prop_t *prop,
-		      daos_prop_t **result)
+		      daos_prop_t *prop)
 {
 	if (prop != NULL)
-		ds_mgmt_pool_set_prop_prop = daos_prop_dup(prop, true);
-	ds_mgmt_pool_set_prop_result_ptr = (void *)result;
-
-	if (result != NULL && ds_mgmt_pool_set_prop_result != NULL) {
-		size_t len = ds_mgmt_pool_set_prop_result->dpp_nr;
-
-		*result = daos_prop_alloc(len);
-		daos_prop_copy(*result, ds_mgmt_pool_set_prop_result);
-	}
+		ds_mgmt_pool_set_prop_prop = daos_prop_dup(prop, true, true);
 
 	return ds_mgmt_pool_set_prop_return;
 }
@@ -189,15 +180,46 @@ mock_ds_mgmt_pool_set_prop_setup(void)
 {
 	ds_mgmt_pool_set_prop_return = 0;
 	ds_mgmt_pool_set_prop_prop = NULL;
-	ds_mgmt_pool_set_prop_result = NULL;
-	ds_mgmt_pool_set_prop_result_ptr = NULL;
 }
 
 void
 mock_ds_mgmt_pool_set_prop_teardown(void)
 {
-	daos_prop_free(ds_mgmt_pool_set_prop_result);
 	daos_prop_free(ds_mgmt_pool_set_prop_prop);
+}
+
+int		ds_mgmt_pool_get_prop_return;
+daos_prop_t	*ds_mgmt_pool_get_prop_in;
+daos_prop_t	*ds_mgmt_pool_get_prop_out;
+int
+ds_mgmt_pool_get_prop(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
+		      daos_prop_t *prop)
+{
+	int	rc;
+
+	if (prop != NULL)
+		ds_mgmt_pool_get_prop_in = daos_prop_dup(prop, true, true);
+
+	rc = daos_prop_copy(prop, ds_mgmt_pool_get_prop_out);
+	if (rc != 0)
+		return rc;
+
+	return ds_mgmt_pool_get_prop_return;
+}
+
+void
+mock_ds_mgmt_pool_get_prop_setup(void)
+{
+	ds_mgmt_pool_get_prop_return = 0;
+	ds_mgmt_pool_get_prop_in = NULL;
+	ds_mgmt_pool_get_prop_out = NULL;
+}
+
+void
+mock_ds_mgmt_pool_get_prop_teardown(void)
+{
+	daos_prop_free(ds_mgmt_pool_get_prop_in);
+	daos_prop_free(ds_mgmt_pool_get_prop_out);
 }
 
 /*
@@ -317,8 +339,7 @@ int     ds_mgmt_target_update_return;
 uuid_t  ds_mgmt_target_update_uuid;
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-				 uint32_t rank,
-				 struct pool_target_id_list *target_list,
+				 struct pool_target_addr_list *target_addrs,
 				 pool_comp_state_t state)
 {
 	uuid_copy(ds_mgmt_target_update_uuid, pool_uuid);
@@ -337,7 +358,8 @@ uuid_t  ds_mgmt_pool_extend_uuid;
 int
 ds_mgmt_pool_extend(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		    d_rank_list_t *rank_list,
-		    char *tgt_dev,  size_t scm_size, size_t nvme_size)
+		    char *tgt_dev,  size_t scm_size, size_t nvme_size,
+		    size_t domains_nr, uint32_t *domains)
 {
 	uuid_copy(ds_mgmt_pool_extend_uuid, pool_uuid);
 	return ds_mgmt_pool_extend_return;
@@ -410,7 +432,8 @@ int
 ds_mgmt_create_pool(uuid_t pool_uuid, const char *group, char *tgt_dev,
 		    d_rank_list_t *targets, size_t scm_size,
 		    size_t nvme_size, daos_prop_t *prop, uint32_t svc_nr,
-		    d_rank_list_t **svcp)
+		    d_rank_list_t **svcp, int nr_domains,
+		    uint32_t *domains)
 {
 	return 0;
 }

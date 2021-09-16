@@ -21,7 +21,7 @@ class RootContainerTest(DfuseTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a RootContainerTest object."""
-        super(RootContainerTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.pool = []
         self.container = []
         self.tmp_file_count = self.params.get(
@@ -38,7 +38,7 @@ class RootContainerTest(DfuseTestBase):
     def setUp(self):
         """Set up each test case."""
         # Start the servers and agents
-        super(RootContainerTest, self).setUp()
+        super().setUp()
         self.dfuse_hosts = None
 
     def _create_pool(self):
@@ -86,7 +86,9 @@ class RootContainerTest(DfuseTestBase):
             Test the above procedure with 100 sub containers.
             Test the above procedure with 5 pools and 50 containers
             spread across the pools.
-        :avocado: tags=all,hw,small,full_regression,container
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=container,dfuse
         :avocado: tags=rootcontainer
         """
         # Create a pool and start dfuse.
@@ -212,7 +214,7 @@ class RootContainerTest(DfuseTestBase):
                 error_hosts = NodeSet(
                     ",".join(
                         [str(node_set) for code, node_set in
-                         ret.items() if code != 0]))
+                         list(ret.items()) if code != 0]))
                 raise CommandFailure(
                     "Error running '{}' on the following "
                     "hosts: {}".format(cmd, error_hosts))

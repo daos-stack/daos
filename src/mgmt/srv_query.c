@@ -655,9 +655,10 @@ ds_mgmt_dev_set_faulty(uuid_t dev_uuid, Ctl__DevStateResp *resp)
 			DP_UUID(dev_uuid));
 	}
 
-out:
 	dev_info->sdi_state = SMD_DEV_FAULTY;
 	strncpy(resp->dev_state, smd_dev_stat2str(dev_info->sdi_state), buflen);
+
+out:
 	smd_dev_free_info(dev_info);
 
 	if (rc != 0) {

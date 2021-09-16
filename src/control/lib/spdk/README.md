@@ -8,8 +8,8 @@ installed.
 To install please follow steps in the
 [SPDK github instructions](https://github.com/spdk/spdk).
 
-These bindings are currently working against SPDK 20.01.2 and DPDK 19.11.6
-which are the versions pinned in the DAOS 1.2 release.
+These bindings are currently working against SPDK 21.07-pre and DPDK 21.02.0
+which are the versions pinned in the DAOS 2.0 release.
 
 This is not a general purpose set of SPDK go bindings but provides a set of
 capabilities tailored to the specific needs of DAOS, the NVMe SSD related
@@ -19,9 +19,6 @@ features are as follows:
 * device firmware update
 * VMD enablement and discovery
 * format (wipe) of device namespaces
-
-Functionality is exposed through the package's `Env` and `Nvme` public
-interfaces.
 
 ### How to build these bindings
 
@@ -35,12 +32,13 @@ Setup environment:
     export SPDK_LIB=${DAOS_ROOT}/opt/spdk
     export LD_LIBRARY_PATH=${SPDK_LIB}/build/lib:${SPDK_LIB}/include:${GOSPDK}/spdk:${LD_LIBRARY_PATH}
     export CGO_CFLAGS="-I${SPDK_LIB}/include"
-    export CGO_LDFLAGS="-L${SPDK_LIB}/build/lib -lspdk"
+    LIBS="-lspdk_nvme -lnvme_control -lspdk_env_dpdk -lspdk_vmd -lrte_mempool -lrte_mempool_ring -lrte_bus_pci"
+    export CGO_LDFLAGS="-L${SPDK_LIB}/build/lib ${LIBS}"
 
 Build NVMe libs:
 
     cd ${GOSPDK}
-    gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -Werror -g -Wshadow -Wall -Wno-missing-braces -c -fpic -Iinclude src/*.c -lspdk
+    gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -Werror -g -Wshadow -Wall -Wno-missing-braces -c -fpic -Iinclude src/*.c ${libs}
     gcc ${CGO_LDFLAGS} ${CGO_CFLAGS} -shared -o libnvme_control.so *.o
 
 Build go spdk bindings:

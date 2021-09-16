@@ -1,16 +1,14 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-from __future__ import print_function
-
 import traceback
 import ctypes
 from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
-from test_utils_pool import TestPool
+
 
 class BadConnectTest(TestWithServers):
     """
@@ -22,7 +20,9 @@ class BadConnectTest(TestWithServers):
         """
         Pass bad parameters to pool connect
 
-        :avocado: tags=all,pool,full_regression,tiny,badconnect
+        :avocado: tags=all,full_regression
+        :avocado: tags=tiny
+        :avocado: tags=pool,bad_connect
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -35,7 +35,6 @@ class BadConnectTest(TestWithServers):
 
         setlist = self.params.get("setname",
                                   '/run/connecttests/connectsetnames/*/')
-        connectset = setlist[0]
         expected_for_param.append(setlist[1])
 
         uuidlist = self.params.get("uuid", '/run/connecttests/UUID/*/')
@@ -51,19 +50,11 @@ class BadConnectTest(TestWithServers):
                 break
 
         puuid = (ctypes.c_ubyte * 16)()
-        pgroup = ctypes.create_string_buffer(0)
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
-        self.pool.create()
+        self.add_pool(connect=False)
         # save this uuid since we might trash it as part of the test
         ctypes.memmove(puuid, self.pool.pool.uuid, 16)
-
-        # trash the pool group value
-        pgroup = self.pool.pool.group
-        if connectset == 'NULLPTR':
-            self.pool.pool.group = None
 
         # trash the UUID value in various ways
         if connectuuid == 'NULLPTR':
@@ -87,7 +78,6 @@ class BadConnectTest(TestWithServers):
         finally:
             if self.pool is not None and self.pool.pool.attached == 1:
                 # restore values in case we trashed them during test
-                self.pool.pool.group = pgroup
                 if self.pool.pool.uuid is None:
                     self.pool.pool.uuid = (ctypes.c_ubyte * 16)()
                 ctypes.memmove(self.pool.pool.uuid, puuid, 16)

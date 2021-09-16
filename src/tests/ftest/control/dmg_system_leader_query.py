@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 from control_test_base import ControlTestBase
 
@@ -16,11 +16,11 @@ class DmgSystemLeaderQueryTest(ControlTestBase):
     """
 
     def __init__(self, *args, **kwargs):
-        super(DmgSystemLeaderQueryTest, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.hosts = None
 
     def setUp(self):
-        super(DmgSystemLeaderQueryTest, self).setUp()
+        super().setUp()
         self.hosts = self.dmg.hostlist
 
     def test_dmg_system_leader_query(self):

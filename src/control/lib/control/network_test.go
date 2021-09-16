@@ -310,7 +310,9 @@ func TestControl_GetAttachInfo(t *testing.T) {
 								Uri:  "foo://bar",
 							},
 						},
-						Provider: "cow",
+						ClientNetHint: &mgmtpb.ClientNetHint{
+							Provider: "cow",
+						},
 					}),
 				},
 			},
@@ -321,7 +323,9 @@ func TestControl_GetAttachInfo(t *testing.T) {
 						Uri:  "foo://bar",
 					},
 				},
-				Provider: "cow",
+				ClientNetHint: ClientNetworkHint{
+					Provider: "cow",
+				},
 			},
 		},
 		"success": {
@@ -333,7 +337,9 @@ func TestControl_GetAttachInfo(t *testing.T) {
 							Uri:  "foo://bar",
 						},
 					},
-					Provider: "cow",
+					ClientNetHint: &mgmtpb.ClientNetHint{
+						Provider: "cow",
+					},
 				}),
 			},
 			req: &GetAttachInfoReq{},
@@ -344,7 +350,9 @@ func TestControl_GetAttachInfo(t *testing.T) {
 						Uri:  "foo://bar",
 					},
 				},
-				Provider: "cow",
+				ClientNetHint: ClientNetworkHint{
+					Provider: "cow",
+				},
 			},
 		},
 	} {

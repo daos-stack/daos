@@ -1,10 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2019-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from daos_perf_base import DaosPerfBase
+from apricot import skipForTicket
 
 
 class DaosPerf(DaosPerfBase):
@@ -17,6 +18,7 @@ class DaosPerf(DaosPerfBase):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-7256")
     def test_small(self):
         """Jira ID: DAOS-1714.
 
@@ -30,6 +32,8 @@ class DaosPerf(DaosPerfBase):
             daos_perf using single value type for 'LARGE' and 'R2s' object
             class. Run this config with multiple server/client configuration.
 
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
         :avocado: tags=daosperf,daosperfsmall
         """
         self.run_daos_perf()

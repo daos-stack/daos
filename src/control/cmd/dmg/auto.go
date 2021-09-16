@@ -10,6 +10,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 
 	"github.com/daos-stack/daos/src/control/cmd/dmg/pretty"
@@ -19,7 +20,7 @@ import (
 
 // configCmd is the struct representing the top-level config subcommand.
 type configCmd struct {
-	Generate configGenCmd `command:"generate" alias:"g" description:"Generate DAOS server configuration file based on discoverable hardware devices"`
+	Generate configGenCmd `command:"generate" alias:"gen" description:"Generate DAOS server configuration file based on discoverable hardware devices"`
 }
 
 type configGenCmd struct {
@@ -65,22 +66,23 @@ func (cmd *configGenCmd) Execute(_ []string) error {
 
 	// TODO: decide whether we want meaningful JSON output
 	if cmd.jsonOutputEnabled() {
-		return cmd.outputJSON(new(control.ConfigGenerateResp), nil)
+		return cmd.outputJSON(nil, errors.New("JSON output not supported"))
 	}
 
 	resp, err := control.ConfigGenerate(ctx, req)
-
-	if resp != nil && resp.Errors() != nil {
-		// host level errors e.g. unresponsive daos_server process
-		var bld strings.Builder
-		if err := pretty.PrintResponseErrors(resp, &bld); err != nil {
+	if err != nil {
+		cge, ok := errors.Cause(err).(*control.ConfigGenerateError)
+		if !ok {
+			// includes hardware validation errors e.g. hardware across hostset differs
 			return err
 		}
-		cmd.log.Error(bld.String()) // no-op if no host level errors
-	}
 
-	// includes hardware validation errors e.g. hardware across hostset differs
-	if err != nil {
+		// host level errors e.g. unresponsive daos_server process
+		var bld strings.Builder
+		if err := pretty.PrintResponseErrors(cge, &bld); err != nil {
+			return err
+		}
+		cmd.log.Error(bld.String())
 		return err
 	}
 

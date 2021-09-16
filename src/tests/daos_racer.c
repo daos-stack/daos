@@ -20,6 +20,7 @@
 #include <daos/tests_lib.h>
 #include <daos_test.h>
 #include <daos/dts.h>
+#include <daos/credit.h>
 
 enum {
 	UPDATE,
@@ -35,7 +36,7 @@ enum {
 };
 
 #define MAX_ROUND	10
-#define MAX_REC_SIZE	(4 * 1024)	/* MAX REC */
+#define MAX_REC_SIZE	(8 * 1024)	/* MAX REC */
 #define MAX_KEY_SIZE	32
 #define MAX_KEY_CNT	10
 
@@ -45,10 +46,13 @@ enum {
 	RP_2G2,
 	RP_3G1,
 	RP_3G2,
+	EC_4P1G1,
+	EC_4P2G2,
+	EC_4P2GX,
 	OBJ_CNT
 };
 
-static struct dts_context	ts_ctx;
+static struct credit_context	ts_ctx;
 unsigned		seed;
 int			dkey_cnt = MAX_KEY_CNT;
 int			akey_cnt = MAX_KEY_CNT;
@@ -78,6 +82,12 @@ oclass_get(unsigned int random)
 		return OC_RP_3G1;
 	case RP_3G2:
 		return OC_RP_3G2;
+	case EC_4P1G1:
+		return OC_EC_4P1G1;
+	case EC_4P2G2:
+		return OC_EC_4P2G2;
+	case EC_4P2GX:
+		return OC_EC_4P2GX;
 	default:
 		assert(0);
 	}
@@ -426,6 +436,14 @@ racer_valid_oid(daos_obj_id_t oid, daos_pool_info_t *pinfo)
 		required_node = 3;
 		required_tgt = 6;
 		break;
+	case OC_EC_4P1G1:
+		required_node = 5;
+		required_tgt = 5;
+		break;
+	case OC_EC_4P2G2:
+		required_node = 6;
+		required_tgt = 12;
+		break;
 	default:
 		return false;
 	}
@@ -455,6 +473,7 @@ main(int argc, char **argv)
 	d_rank_t	svc_rank  = 0;	/* pool service rank */
 	unsigned	duration = 60; /* seconds */
 	double		expire = 0;
+	daos_prop_t	*prop;
 	int		idx;
 	struct racer_sub_tests	sub_tests[TEST_SIZE] = { 0 };
 	int		rc;
@@ -500,6 +519,18 @@ main(int argc, char **argv)
 		}
 	}
 
+	/*
+	 * For daos_racer, if pool/cont uuids are supplied as command line
+	 * arguments it's assumed that the pool/cont were created. If only a
+	 * cont uuid is supplied then a pool and container will be created and
+	 * the cont uuid will be used during creation
+	 */
+	if (!uuid_is_null(ts_ctx.tsc_pool_uuid)) {
+		ts_ctx.tsc_skip_pool_create = true;
+		if (!uuid_is_null(ts_ctx.tsc_cont_uuid))
+			ts_ctx.tsc_skip_cont_create = true;
+	}
+
 	if (seed == 0) {
 		gettimeofday(&tv, NULL);
 		seed = tv.tv_usec;
@@ -525,9 +556,15 @@ main(int argc, char **argv)
 			(unsigned int)(nvme_size >> 20));
 	}
 
-	rc = dts_ctx_init(&ts_ctx);
+	rc = dts_ctx_init(&ts_ctx, NULL);
 	if (rc)
 		D_GOTO(out, rc);
+
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	prop->dpp_entries[0].dpe_val = 1024;
+	daos_cont_set_prop(ts_ctx.tsc_coh, prop, NULL);
+	daos_prop_free(prop);
 
 	sub_tests_init(sub_tests, 0xFFFF);
 	expire = dts_time_now() + duration;

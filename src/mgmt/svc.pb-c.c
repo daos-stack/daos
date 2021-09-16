@@ -373,6 +373,51 @@ void   mgmt__get_attach_info_req__free_unpacked
   assert(message->base.descriptor == &mgmt__get_attach_info_req__descriptor);
   protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
 }
+void   mgmt__client_net_hint__init
+                     (Mgmt__ClientNetHint         *message)
+{
+  static const Mgmt__ClientNetHint init_value = MGMT__CLIENT_NET_HINT__INIT;
+  *message = init_value;
+}
+size_t mgmt__client_net_hint__get_packed_size
+                     (const Mgmt__ClientNetHint *message)
+{
+  assert(message->base.descriptor == &mgmt__client_net_hint__descriptor);
+  return protobuf_c_message_get_packed_size ((const ProtobufCMessage*)(message));
+}
+size_t mgmt__client_net_hint__pack
+                     (const Mgmt__ClientNetHint *message,
+                      uint8_t       *out)
+{
+  assert(message->base.descriptor == &mgmt__client_net_hint__descriptor);
+  return protobuf_c_message_pack ((const ProtobufCMessage*)message, out);
+}
+size_t mgmt__client_net_hint__pack_to_buffer
+                     (const Mgmt__ClientNetHint *message,
+                      ProtobufCBuffer *buffer)
+{
+  assert(message->base.descriptor == &mgmt__client_net_hint__descriptor);
+  return protobuf_c_message_pack_to_buffer ((const ProtobufCMessage*)message, buffer);
+}
+Mgmt__ClientNetHint *
+       mgmt__client_net_hint__unpack
+                     (ProtobufCAllocator  *allocator,
+                      size_t               len,
+                      const uint8_t       *data)
+{
+  return (Mgmt__ClientNetHint *)
+     protobuf_c_message_unpack (&mgmt__client_net_hint__descriptor,
+                                allocator, len, data);
+}
+void   mgmt__client_net_hint__free_unpacked
+                     (Mgmt__ClientNetHint *message,
+                      ProtobufCAllocator *allocator)
+{
+  if(!message)
+    return;
+  assert(message->base.descriptor == &mgmt__client_net_hint__descriptor);
+  protobuf_c_message_free_unpacked ((ProtobufCMessage*)message, allocator);
+}
 void   mgmt__get_attach_info_resp__rank_uri__init
                      (Mgmt__GetAttachInfoResp__RankUri         *message)
 {
@@ -782,7 +827,7 @@ const ProtobufCMessageDescriptor mgmt__group_update_resp__descriptor =
   (ProtobufCMessageInit) mgmt__group_update_resp__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[8] =
+static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[9] =
 {
   {
     "sys",
@@ -880,10 +925,23 @@ static const ProtobufCFieldDescriptor mgmt__join_req__field_descriptors[8] =
     0,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "incarnation",
+    9,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT64,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__JoinReq, incarnation),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__join_req__field_indices_by_name[] = {
   5,   /* field[5] = addr */
   7,   /* field[7] = idx */
+  8,   /* field[8] = incarnation */
   4,   /* field[4] = nctxs */
   2,   /* field[2] = rank */
   6,   /* field[6] = srvFaultDomain */
@@ -894,7 +952,7 @@ static const unsigned mgmt__join_req__field_indices_by_name[] = {
 static const ProtobufCIntRange mgmt__join_req__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 8 }
+  { 0, 9 }
 };
 const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
 {
@@ -904,7 +962,7 @@ const ProtobufCMessageDescriptor mgmt__join_req__descriptor =
   "Mgmt__JoinReq",
   "mgmt",
   sizeof(Mgmt__JoinReq),
-  8,
+  9,
   mgmt__join_req__field_descriptors,
   mgmt__join_req__field_indices_by_name,
   1,  mgmt__join_req__number_ranges,
@@ -1169,6 +1227,122 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_req__descriptor =
   (ProtobufCMessageInit) mgmt__get_attach_info_req__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
+static const ProtobufCFieldDescriptor mgmt__client_net_hint__field_descriptors[7] =
+{
+  {
+    "provider",
+    1,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientNetHint, provider),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "interface",
+    2,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientNetHint, interface),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "domain",
+    3,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_STRING,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientNetHint, domain),
+    NULL,
+    &protobuf_c_empty_string,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "crt_ctx_share_addr",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientNetHint, crt_ctx_share_addr),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "crt_timeout",
+    5,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientNetHint, crt_timeout),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "net_dev_class",
+    6,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_UINT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientNetHint, net_dev_class),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+  {
+    "srv_srx_set",
+    7,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_INT32,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__ClientNetHint, srv_srx_set),
+    NULL,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
+};
+static const unsigned mgmt__client_net_hint__field_indices_by_name[] = {
+  3,   /* field[3] = crt_ctx_share_addr */
+  4,   /* field[4] = crt_timeout */
+  2,   /* field[2] = domain */
+  1,   /* field[1] = interface */
+  5,   /* field[5] = net_dev_class */
+  0,   /* field[0] = provider */
+  6,   /* field[6] = srv_srx_set */
+};
+static const ProtobufCIntRange mgmt__client_net_hint__number_ranges[1 + 1] =
+{
+  { 1, 0 },
+  { 0, 7 }
+};
+const ProtobufCMessageDescriptor mgmt__client_net_hint__descriptor =
+{
+  PROTOBUF_C__MESSAGE_DESCRIPTOR_MAGIC,
+  "mgmt.ClientNetHint",
+  "ClientNetHint",
+  "Mgmt__ClientNetHint",
+  "mgmt",
+  sizeof(Mgmt__ClientNetHint),
+  7,
+  mgmt__client_net_hint__field_descriptors,
+  mgmt__client_net_hint__field_indices_by_name,
+  1,  mgmt__client_net_hint__number_ranges,
+  (ProtobufCMessageInit) mgmt__client_net_hint__init,
+  NULL,NULL,NULL    /* reserved[123] */
+};
 static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__rank_uri__field_descriptors[2] =
 {
   {
@@ -1220,7 +1394,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__rank_uri__descripto
   (ProtobufCMessageInit) mgmt__get_attach_info_resp__rank_uri__init,
   NULL,NULL,NULL    /* reserved[123] */
 };
-static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[9] =
+static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descriptors[4] =
 {
   {
     "status",
@@ -1247,80 +1421,8 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
   {
-    "provider",
-    3,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, provider),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "interface",
-    4,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, interface),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "domain",
-    5,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_STRING,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, domain),
-    NULL,
-    &protobuf_c_empty_string,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "crt_ctx_share_addr",
-    6,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, crt_ctx_share_addr),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "crt_timeout",
-    7,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, crt_timeout),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
-    "net_dev_class",
-    8,
-    PROTOBUF_C_LABEL_NONE,
-    PROTOBUF_C_TYPE_UINT32,
-    0,   /* quantifier_offset */
-    offsetof(Mgmt__GetAttachInfoResp, net_dev_class),
-    NULL,
-    NULL,
-    0,             /* flags */
-    0,NULL,NULL    /* reserved1,reserved2, etc */
-  },
-  {
     "ms_ranks",
-    9,
+    3,
     PROTOBUF_C_LABEL_REPEATED,
     PROTOBUF_C_TYPE_UINT32,
     offsetof(Mgmt__GetAttachInfoResp, n_ms_ranks),
@@ -1330,22 +1432,29 @@ static const ProtobufCFieldDescriptor mgmt__get_attach_info_resp__field_descript
     0 | PROTOBUF_C_FIELD_FLAG_PACKED,             /* flags */
     0,NULL,NULL    /* reserved1,reserved2, etc */
   },
+  {
+    "client_net_hint",
+    4,
+    PROTOBUF_C_LABEL_NONE,
+    PROTOBUF_C_TYPE_MESSAGE,
+    0,   /* quantifier_offset */
+    offsetof(Mgmt__GetAttachInfoResp, client_net_hint),
+    &mgmt__client_net_hint__descriptor,
+    NULL,
+    0,             /* flags */
+    0,NULL,NULL    /* reserved1,reserved2, etc */
+  },
 };
 static const unsigned mgmt__get_attach_info_resp__field_indices_by_name[] = {
-  5,   /* field[5] = crt_ctx_share_addr */
-  6,   /* field[6] = crt_timeout */
-  4,   /* field[4] = domain */
-  3,   /* field[3] = interface */
-  8,   /* field[8] = ms_ranks */
-  7,   /* field[7] = net_dev_class */
-  2,   /* field[2] = provider */
+  3,   /* field[3] = client_net_hint */
+  2,   /* field[2] = ms_ranks */
   1,   /* field[1] = rank_uris */
   0,   /* field[0] = status */
 };
 static const ProtobufCIntRange mgmt__get_attach_info_resp__number_ranges[1 + 1] =
 {
   { 1, 0 },
-  { 0, 9 }
+  { 0, 4 }
 };
 const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
 {
@@ -1355,7 +1464,7 @@ const ProtobufCMessageDescriptor mgmt__get_attach_info_resp__descriptor =
   "Mgmt__GetAttachInfoResp",
   "mgmt",
   sizeof(Mgmt__GetAttachInfoResp),
-  9,
+  4,
   mgmt__get_attach_info_resp__field_descriptors,
   mgmt__get_attach_info_resp__field_indices_by_name,
   1,  mgmt__get_attach_info_resp__number_ranges,

@@ -11,9 +11,8 @@ from apricot import TestWithServers
 from command_utils import ExecutableCommand
 from command_utils_base import \
     CommandFailure, BasicParameter, FormattedParameter
-
-from test_utils_pool import TestPool
 from job_manager_utils import Orterun
+
 
 class IoConfGen(ExecutableCommand):
     """Defines an object for the daos_gen_io_conf and daos_run_io_conf commands.
@@ -31,7 +30,7 @@ class IoConfGen(ExecutableCommand):
             path (str, optional): path to location of command binary file.
                 Defaults to ""
         """
-        super(IoConfGen, self).__init__("/run/gen_io_conf/*",
+        super().__init__("/run/gen_io_conf/*",
                                         "daos_gen_io_conf", path)
         self.verbose = True
         self.env = env
@@ -65,11 +64,11 @@ class IoConfGen(ExecutableCommand):
             out = manager.run()
 
             #Return False if "ERROR" in stdout
-            for line in out.stdout.splitlines():
+            for line in out.stdout_text.splitlines():
                 if 'ERROR' in line:
                     return False
             #Return False if not expected message to confirm test completed.
-            if success_msg not in out.stdout.splitlines()[-1]:
+            if success_msg not in out.stdout_text.splitlines()[-1]:
                 return False
 
         #Return False if Command failed.
@@ -115,15 +114,14 @@ class IoConfTestBase(TestWithServers):
     """
     def __init__(self, *args, **kwargs):
         """Initialize a IoConfTestBase object."""
-        super(IoConfTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.testfile = None
         self.dmg = None
         self.dmg_config_file = None
 
     def setup_test_pool(self):
         """Define a TestPool object."""
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
         avocao_tmp_dir = os.environ['AVOCADO_TESTS_COMMON_TMPDIR']
         self.testfile = os.path.join(avocao_tmp_dir, 'testfile')
         self.dmg = self.get_dmg_command()

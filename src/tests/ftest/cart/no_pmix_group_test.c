@@ -16,16 +16,16 @@
 #include <semaphore.h>
 #include <cart/api.h>
 
-#include "tests_common.h"
+#include "crt_utils.h"
 
 #define MY_BASE 0x010000000
 #define MY_VER  0
 
 #define NUM_SERVER_CTX 8
 
-#define RPC_DECLARE(name)						\
-	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)		\
-	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)
+#define RPC_DECLARE(name)					\
+	CRT_RPC_DECLARE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)	\
+	CRT_RPC_DEFINE(name, CRT_ISEQ_##name, CRT_OSEQ_##name)	\
 
 enum {
 	RPC_PING = CRT_PROTO_OPC(MY_BASE, MY_VER, 0),
@@ -113,7 +113,7 @@ handler_shutdown(crt_rpc_t *rpc)
 	DBG_PRINT("Shutdown handler called!\n");
 	crt_reply_send(rpc);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	return 0;
 }
 static int
@@ -196,7 +196,7 @@ __dump_ranklist(const char *msg, d_rank_list_t *rl)
 }
 
 static void
-__verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size)
+__verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size, int line)
 {
 	uint32_t	grp_size;
 	d_rank_list_t	*rank_list;
@@ -217,39 +217,40 @@ __verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size)
 
 	rc = crt_group_size(grp, &grp_size);
 	if (rc != 0) {
-		D_ERROR("crt_group_size() failed; rc=%d\n", rc);
+		D_ERROR("Line:%d crt_group_size() failed; rc=%d\n", line, rc);
 		assert(0);
 	}
 
 	if (grp_size != size) {
-		D_ERROR("group_size expected=%d got=%d\n",
-			size, grp_size);
+		D_ERROR("Line:%d group_size expected=%d got=%d\n",
+			line, size, grp_size);
 		assert(0);
 	}
 
 	rc = crt_group_ranks_get(grp, &rank_list);
 	if (rc != 0) {
-		D_ERROR("crt_group_ranks_get() failed; rc=%d\n", rc);
+		D_ERROR("Line:%d crt_group_ranks_get() failed; rc=%d\n",
+			line, rc);
 		assert(0);
 	}
 
 	if (rank_list->rl_nr != size) {
-		D_ERROR("rank_list size expected=%d got=%d\n",
-			size, rank_list->rl_nr);
-
+		D_ERROR("Line:%d rank_list size expected=%d got=%d\n",
+			line, size, rank_list->rl_nr);
 		assert(0);
 	}
 
 	rc = d_rank_list_dup_sort_uniq(&sorted_list, rank_list);
 	if (rc != 0) {
-		D_ERROR("d_rank_list_dup_sort_uniq() failed; rc=%d\n", rc);
+		D_ERROR("Line:%d d_rank_list_dup_sort_uniq() failed; rc=%d\n",
+			line, rc);
 		assert(0);
 	}
 
 	for (i = 0; i < size; i++) {
 		if (sorted_list->rl_ranks[i] != exp_sorted->rl_ranks[i]) {
-			D_ERROR("rank_list[%d] expected=%d got=%d\n",
-				i, sorted_list->rl_ranks[i],
+			D_ERROR("Line:%d rank_list[%d] expected=%d got=%d\n",
+				line, i, sorted_list->rl_ranks[i],
 				exp_sorted->rl_ranks[i]);
 			__dump_ranklist("Expected\n", exp_sorted);
 			__dump_ranklist("Actual\n", sorted_list);
@@ -266,7 +267,8 @@ __verify_ranks(crt_group_t *grp, d_rank_t *exp_ranks, int size)
 	do {						\
 		d_rank_t __exp[] = {list};		\
 		__verify_ranks(grp, __exp,		\
-				ARRAY_SIZE(__exp));	\
+				ARRAY_SIZE(__exp),	\
+				__LINE__);	\
 	} while (0)
 
 static void
@@ -311,7 +313,7 @@ int main(int argc, char **argv)
 	my_rank = atoi(env_self_rank);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	tc_test_init(my_rank, 20, true, true);
+	crtu_test_init(my_rank, 20, true, true);
 
 	rc = d_log_init();
 	assert(rc == 0);
@@ -336,6 +338,12 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
+	rc = crt_group_auto_rank_remove(grp, true);
+	if (rc != 0) {
+		D_ERROR("crt_group_auto_rank_remove() failed; rc=%d\n", rc);
+		assert(0);
+	}
+
 	for (i = 0; i < NUM_SERVER_CTX; i++) {
 		rc = crt_context_create(&crt_ctx[i]);
 		if (rc != 0) {
@@ -344,7 +352,7 @@ int main(int argc, char **argv)
 		}
 
 		rc = pthread_create(&progress_thread[i], 0,
-				tc_progress_fn, &crt_ctx[i]);
+				    crtu_progress_fn, &crt_ctx[i]);
 		assert(rc == 0);
 	}
 
@@ -364,10 +372,10 @@ int main(int argc, char **argv)
 	}
 
 	/* load group info from a config file and delete file upon return */
-	rc = tc_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
-					true);
+	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], grp, my_rank,
+				       true);
 	if (rc != 0) {
-		D_ERROR("tc_load_group_from_file() failed; rc=%d\n", rc);
+		D_ERROR("crtu_load_group_from_file() failed; rc=%d\n", rc);
 		assert(0);
 	}
 
@@ -424,7 +432,7 @@ int main(int argc, char **argv)
 			assert(0);
 		}
 
-		__verify_ranks(sec_grp1, sec_ranks, i + 1);
+		__verify_ranks(sec_grp1, sec_ranks, i + 1, __LINE__);
 	}
 
 	/* Verify primary to secondary and secondary to primary conversion */
@@ -484,10 +492,10 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	/* Add non-existent primary rank - Negative test */
+	/* Add existing secondary rank with bogus primary one */
 	rc = crt_group_secondary_rank_add(sec_grp1, 50, 15);
-	if (rc != -DER_OOG) {
-		D_ERROR("Expected -DER_OOG got %d\n", rc);
+	if (rc != -DER_EXIST) {
+		D_ERROR("Expected -DER_EXIST got %d\n", rc);
 		assert(0);
 	}
 
@@ -515,8 +523,8 @@ int main(int argc, char **argv)
 		assert(0);
 	}
 
-	rc = tc_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
-			NUM_SERVER_CTX, 10, 100.0);
+	rc = crtu_wait_for_ranks(crt_ctx[0], grp, rank_list, 0,
+				 NUM_SERVER_CTX, 10, 100.0);
 	if (rc != 0) {
 		D_ERROR("wait_for_ranks() failed; rc=%d\n", rc);
 		assert(0);
@@ -568,7 +576,7 @@ int main(int argc, char **argv)
 				D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 				assert(0);
 			}
-			tc_sem_timedwait(&sem, 10, __LINE__);
+			crtu_sem_timedwait(&sem, 10, __LINE__);
 			DBG_PRINT("RPC to rank=%d finished\n", rank);
 		}
 	}
@@ -591,7 +599,7 @@ int main(int argc, char **argv)
 		D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 		assert(0);
 	}
-	tc_sem_timedwait(&sem, 10, __LINE__);
+	crtu_sem_timedwait(&sem, 10, __LINE__);
 	DBG_PRINT("CORRPC to secondary group finished\n");
 
 	/* Send shutdown RPC to all nodes except for self */
@@ -621,7 +629,7 @@ int main(int argc, char **argv)
 			D_ERROR("crt_req_send() failed; rc=%d\n", rc);
 			assert(0);
 		}
-		tc_sem_timedwait(&sem, 10, __LINE__);
+		crtu_sem_timedwait(&sem, 10, __LINE__);
 	}
 	D_FREE(rank_list->rl_ranks);
 	D_FREE(rank_list);
@@ -794,7 +802,7 @@ int main(int argc, char **argv)
 	d_rank_list_free(mod_prim_ranks);
 	d_rank_list_free(mod_sec_ranks);
 
-	tc_progress_stop();
+	crtu_progress_stop();
 	sem_destroy(&sem);
 
 	DBG_PRINT("All tesst succeeded\n");

@@ -1,7 +1,32 @@
 hosts:
   test_servers:
     - server-A
-timeout: 80
+  test_clients:
+    - client-A
+timeout: 130
 server_config:
   servers:
+    # 16 targets and 16 nr_xs_helpers are the requirements.
     targets: 16
+    nr_xs_helpers: 16
+    bdev_class: nvme
+    bdev_list: ["0000:00:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+    scm_mount: /mnt/daos0
+    interface:
+      fabric_iface: ib0
+ior:
+  client_processes:
+    np: 1
+  flags: "-v -D 60 -w -r"
+  transfer_size: 1M
+  block_size: 1G
+pool:
+  scm_size: 10G
+  nvme_size: 100G
+  control_method: dmg
+container:
+  type: POSIX
+  control_method: daos
+usage_limit: 200

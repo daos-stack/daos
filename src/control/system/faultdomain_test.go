@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/daos-stack/daos/src/control/common"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 )
 
 func TestSystem_NewFaultDomain(t *testing.T) {
@@ -1555,105 +1554,12 @@ func TestSystem_FaultDomainTree_String(t *testing.T) {
 	}
 }
 
-func TestSystem_FaultDomainTree_ToProto(t *testing.T) {
-	for name, tc := range map[string]struct {
-		tree      *FaultDomainTree
-		expResult []*mgmtpb.FaultDomain
-	}{
-		"nil": {},
-		"root only": {
-			tree: NewFaultDomainTree(),
-			expResult: []*mgmtpb.FaultDomain{
-				{
-					Domain: "/",
-					Id:     expFaultDomainID(0),
-				},
-			},
-		},
-		"single branch": {
-			tree: NewFaultDomainTree(
-				MustCreateFaultDomain("one", "two", "three"),
-			),
-			expResult: []*mgmtpb.FaultDomain{
-				{
-					Domain:   "/",
-					Id:       expFaultDomainID(0),
-					Children: []uint32{expFaultDomainID(1)},
-				},
-				{
-					Domain:   "/one",
-					Id:       expFaultDomainID(1),
-					Children: []uint32{expFaultDomainID(2)},
-				},
-				{
-					Domain:   "/one/two",
-					Id:       expFaultDomainID(2),
-					Children: []uint32{expFaultDomainID(3)},
-				},
-				{
-					Domain: "/one/two/three",
-					Id:     expFaultDomainID(3),
-				},
-			},
-		},
-		"multi branch": {
-			tree: NewFaultDomainTree(
-				MustCreateFaultDomainFromString("/rack0/pdu0"),
-				MustCreateFaultDomainFromString("/rack0/pdu1"),
-				MustCreateFaultDomainFromString("/rack1/pdu2"),
-				MustCreateFaultDomainFromString("/rack1/pdu3"),
-			),
-			expResult: []*mgmtpb.FaultDomain{
-				{
-					Domain: "/",
-					Id:     expFaultDomainID(0),
-					Children: []uint32{
-						expFaultDomainID(1),
-						expFaultDomainID(4),
-					},
-				},
-				{
-					Domain: "/rack0",
-					Id:     expFaultDomainID(1),
-					Children: []uint32{
-						expFaultDomainID(2),
-						expFaultDomainID(3),
-					},
-				},
-				{
-					Domain: "/rack1",
-					Id:     expFaultDomainID(4),
-					Children: []uint32{
-						expFaultDomainID(5),
-						expFaultDomainID(6),
-					},
-				},
-				{
-					Domain: "/rack0/pdu0",
-					Id:     expFaultDomainID(2),
-				},
-				{
-					Domain: "/rack0/pdu1",
-					Id:     expFaultDomainID(3),
-				},
-				{
-					Domain: "/rack1/pdu2",
-					Id:     expFaultDomainID(5),
-				},
-				{
-					Domain: "/rack1/pdu3",
-					Id:     expFaultDomainID(6),
-				},
-			},
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			result := tc.tree.ToProto()
-
-			if diff := cmp.Diff(tc.expResult, result); diff != "" {
-				t.Fatalf("(-want, +got): %s", diff)
-			}
-		})
+func testVerifyTreeStructure(t *testing.T, tree *FaultDomainTree, level int, expNumChildrenByLevel []int) {
+	// Walk the tree to verify results
+	common.AssertEqual(t, len(tree.Children), expNumChildrenByLevel[level],
+		fmt.Sprintf("mismatch at level %d, %q", level, tree.Domain))
+	for _, c := range tree.Children {
+		testVerifyTreeStructure(t, c, level+1, expNumChildrenByLevel)
 	}
 }
 
@@ -1695,4 +1601,307 @@ func TestSystem_FaultDomainTree_Copy(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSystem_FaultDomain_Depth(t *testing.T) {
+	for name, tc := range map[string]struct {
+		tree     *FaultDomainTree
+		expDepth int
+	}{
+		"nil": {},
+		"empty tree": {
+			tree: NewFaultDomainTree(),
+		},
+		"single node": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomainFromString("/rack0"),
+			),
+			expDepth: 1,
+		},
+		"balanced multi-branch": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomainFromString("/rack0/pdu0"),
+				MustCreateFaultDomainFromString("/rack0/pdu1"),
+				MustCreateFaultDomainFromString("/rack1/pdu2"),
+				MustCreateFaultDomainFromString("/rack1/pdu3"),
+			),
+			expDepth: 2,
+		},
+		"unbalanced": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomainFromString("/rack0/pdu0"),
+				MustCreateFaultDomainFromString("/rack0/pdu1"),
+				MustCreateFaultDomainFromString("/rack1/pdu2/shelf0/node1"),
+				MustCreateFaultDomainFromString("/rack1/pdu3/node0"),
+			),
+			expDepth: 4,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			common.AssertEqual(t, tc.tree.Depth(), tc.expDepth, "")
+		})
+	}
+}
+
+func TestSystem_FaultDomainTree_Domains(t *testing.T) {
+	for name, tc := range map[string]struct {
+		tree       *FaultDomainTree
+		expDomains []*FaultDomain
+	}{
+		"nil": {},
+		"empty": {
+			tree:       NewFaultDomainTree(),
+			expDomains: []*FaultDomain{},
+		},
+		"one leaf": {
+			tree: NewFaultDomainTree(MustCreateFaultDomain("leaf")),
+			expDomains: []*FaultDomain{
+				MustCreateFaultDomain("leaf"),
+			},
+		},
+		"multi-layer": {
+			tree: NewFaultDomainTree(MustCreateFaultDomain("one", "two", "three")),
+			expDomains: []*FaultDomain{
+				MustCreateFaultDomain("one", "two", "three"),
+			},
+		},
+		"multi-branch": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomain("a", "b", "c"),
+				MustCreateFaultDomain("a", "b", "d"),
+				MustCreateFaultDomain("a", "e", "f"),
+				MustCreateFaultDomain("g", "h", "i"),
+				MustCreateFaultDomain("g", "j", "k"),
+			),
+			expDomains: []*FaultDomain{
+				MustCreateFaultDomain("a", "b", "c"),
+				MustCreateFaultDomain("a", "b", "d"),
+				MustCreateFaultDomain("a", "e", "f"),
+				MustCreateFaultDomain("g", "h", "i"),
+				MustCreateFaultDomain("g", "j", "k"),
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			domains := tc.tree.Domains()
+			if diff := cmp.Diff(tc.expDomains, domains); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_FaultDomain_Subtree(t *testing.T) {
+	fullDomains := []*FaultDomain{
+		MustCreateFaultDomain("a", "b", "c"),
+		MustCreateFaultDomain("a", "b", "d"),
+		MustCreateFaultDomain("a", "e", "f"),
+		MustCreateFaultDomain("g", "h", "i"),
+		MustCreateFaultDomain("g", "j", "k"),
+	}
+	fullTree := NewFaultDomainTree(fullDomains...)
+
+	for name, tc := range map[string]struct {
+		tree      *FaultDomainTree
+		domains   []*FaultDomain
+		expResult *FaultDomainTree
+		expErr    error
+	}{
+		"nil": {
+			expErr: errors.New("nil FaultDomainTree"),
+		},
+		"no domains": {
+			tree: NewFaultDomainTree(
+				MustCreateFaultDomain("one"),
+				MustCreateFaultDomain("two"),
+			),
+			expResult: NewFaultDomainTree(
+				MustCreateFaultDomain("one"),
+				MustCreateFaultDomain("two"),
+			),
+		},
+		"empty": {
+			tree:      NewFaultDomainTree(),
+			domains:   []*FaultDomain{MustCreateFaultDomain()},
+			expResult: NewFaultDomainTree(),
+		},
+		"request all domains": {
+			tree:      fullTree,
+			domains:   fullDomains,
+			expResult: fullTree,
+		},
+		"single branch requested": {
+			tree: fullTree,
+			domains: []*FaultDomain{
+				MustCreateFaultDomain("a", "e", "f"),
+			},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     expFaultDomainID(0),
+				Children: []*FaultDomainTree{
+					{
+						Domain: MustCreateFaultDomain("a"),
+						ID:     expFaultDomainID(1),
+						Children: []*FaultDomainTree{
+							{
+								Domain: MustCreateFaultDomain("a", "e"),
+								ID:     expFaultDomainID(5), // preserve IDs from original tree
+								Children: []*FaultDomainTree{
+									{
+										Domain:   MustCreateFaultDomain("a", "e", "f"),
+										ID:       expFaultDomainID(6),
+										Children: []*FaultDomainTree{},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		"domain not a full branch": {
+			tree: fullTree,
+			domains: []*FaultDomain{
+				MustCreateFaultDomain("a", "e"),
+			},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     expFaultDomainID(0),
+				Children: []*FaultDomainTree{
+					{
+						Domain: MustCreateFaultDomain("a"),
+						ID:     expFaultDomainID(1),
+						Children: []*FaultDomainTree{
+							{
+								Domain:   MustCreateFaultDomain("a", "e"),
+								ID:       expFaultDomainID(5), // preserve IDs from original tree
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+				},
+			},
+		},
+		"domain not in tree": {
+			tree: fullTree,
+			domains: []*FaultDomain{
+				MustCreateFaultDomain("a", "e", "f"),
+				MustCreateFaultDomain("a", "e", "notreal"),
+			},
+			expErr: errors.New("domain \"/a/e/notreal\" not found"),
+		},
+		"multiple domains requested": {
+			tree: fullTree,
+			domains: []*FaultDomain{
+				MustCreateFaultDomain("g", "j"),
+				MustCreateFaultDomain("a", "e", "f"),
+				MustCreateFaultDomain("g", "h", "i"),
+			},
+			expResult: &FaultDomainTree{
+				Domain: MustCreateFaultDomain(),
+				ID:     expFaultDomainID(0),
+				Children: []*FaultDomainTree{
+					{
+						Domain: MustCreateFaultDomain("a"),
+						ID:     expFaultDomainID(1),
+						Children: []*FaultDomainTree{
+							{
+								Domain: MustCreateFaultDomain("a", "e"),
+								ID:     expFaultDomainID(5), // preserve IDs from original tree
+								Children: []*FaultDomainTree{
+									{
+										Domain:   MustCreateFaultDomain("a", "e", "f"),
+										ID:       expFaultDomainID(6),
+										Children: []*FaultDomainTree{},
+									},
+								},
+							},
+						},
+					},
+					{
+						Domain: MustCreateFaultDomain("g"),
+						ID:     expFaultDomainID(7),
+						Children: []*FaultDomainTree{
+							{
+								Domain: MustCreateFaultDomain("g", "h"),
+								ID:     expFaultDomainID(8),
+								Children: []*FaultDomainTree{
+									{
+										Domain:   MustCreateFaultDomain("g", "h", "i"),
+										ID:       expFaultDomainID(9),
+										Children: []*FaultDomainTree{},
+									},
+								},
+							},
+							{
+								Domain:   MustCreateFaultDomain("g", "j"),
+								ID:       expFaultDomainID(10),
+								Children: []*FaultDomainTree{},
+							},
+						},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			result, err := tc.tree.Subtree(tc.domains...)
+
+			common.CmpErr(t, tc.expErr, err)
+
+			if diff := cmp.Diff(tc.expResult, result); diff != "" {
+				t.Fatalf("(-want, +got): %s", diff)
+			}
+		})
+	}
+}
+
+func TestSystem_FaultDomainTree_iterative_building(t *testing.T) {
+	mustAddDomain := func(t *FaultDomainTree, d *FaultDomain) {
+		if err := t.AddDomain(d); err != nil {
+			panic(err)
+		}
+	}
+
+	fmtNode := func(prefix string, idx int) string {
+		return fmt.Sprintf("%s%02d", prefix, idx)
+	}
+
+	numPdus := 4
+	racksPerPdu := 8
+	serversPerRack := 8
+	ranksPerServer := 2
+
+	curRack := 0
+	curServer := 0
+	curRank := 0
+
+	tree := NewFaultDomainTree()
+	for p := 0; p < numPdus; p++ {
+		pdu := tree.Domain.MustCreateChild(fmtNode("pdu", p))
+		mustAddDomain(tree, pdu)
+		for pr := 0; pr < racksPerPdu; pr++ {
+			rack := pdu.MustCreateChild(fmtNode("rack", curRack))
+			mustAddDomain(tree, rack)
+			curRack++
+			for rs := 0; rs < serversPerRack; rs++ {
+				srv := rack.MustCreateChild(fmtNode("server", curServer))
+				mustAddDomain(tree, srv)
+				curServer++
+				for sr := 0; sr < ranksPerServer; sr++ {
+					rank := srv.MustCreateChild(fmtNode("rank", curRank))
+					mustAddDomain(tree, rank)
+					curRank++
+				}
+			}
+		}
+	}
+
+	testVerifyTreeStructure(t, tree, 0, []int{
+		numPdus,
+		racksPerPdu,
+		serversPerRack,
+		ranksPerServer,
+		0,
+	})
 }

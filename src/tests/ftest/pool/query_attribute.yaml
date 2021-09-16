@@ -6,3 +6,6 @@ server_config:
   name: daos_server
   servers:
     targets: 8
+pool:
+  scm_size: 1000000000
+  control_method: dmg

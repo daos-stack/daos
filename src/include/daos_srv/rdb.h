@@ -137,11 +137,12 @@ struct rdb_cbs {
 
 /** Database methods */
 int rdb_create(const char *path, const uuid_t uuid, size_t size,
-	       const d_rank_list_t *replicas);
-int rdb_destroy(const char *path, const uuid_t uuid);
+	       const d_rank_list_t *replicas, struct rdb_cbs *cbs, void *arg,
+	       struct rdb **dbp);
 int rdb_start(const char *path, const uuid_t uuid, struct rdb_cbs *cbs,
 	      void *arg, struct rdb **dbp);
 void rdb_stop(struct rdb *db);
+int rdb_destroy(const char *path, const uuid_t uuid);
 void rdb_resign(struct rdb *db, uint64_t term);
 int rdb_campaign(struct rdb *db);
 bool rdb_is_leader(struct rdb *db, uint64_t *term);
@@ -248,6 +249,10 @@ enum rdb_probe_opc {
  *   - if rc == 0, rdb_tx_iterate() continues;
  *   - if rc == 1, rdb_tx_iterate() stops and returns 0;
  *   - otherwise, rdb_tx_iterate() stops and returns rc.
+ *
+ * If a callback yields (e.g., via ABT_thread_yield), it must call
+ * rdb_tx_revalidate after the yield and return the return value of
+ * rdb_tx_revalidate.
  */
 typedef int (*rdb_iterate_cb_t)(daos_handle_t ih, d_iov_t *key,
 				d_iov_t *val, void *arg);
@@ -258,7 +263,9 @@ int rdb_tx_lookup(struct rdb_tx *tx, const rdb_path_t *kvs,
 int rdb_tx_fetch(struct rdb_tx *tx, const rdb_path_t *kvs,
 		 enum rdb_probe_opc opc, const d_iov_t *key_in,
 		 d_iov_t *key_out, d_iov_t *value);
+int rdb_tx_query_key_max(struct rdb_tx *tx, const rdb_path_t *kvs, d_iov_t *key);
 int rdb_tx_iterate(struct rdb_tx *tx, const rdb_path_t *kvs, bool backward,
 		   rdb_iterate_cb_t cb, void *arg);
+int rdb_tx_revalidate(struct rdb_tx *tx);
 
 #endif /* DAOS_SRV_RDB_H */

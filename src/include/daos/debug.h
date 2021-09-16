@@ -84,6 +84,7 @@ DAOS_FOREACH_LOG_FAC(D_LOG_DECLARE_FAC, DAOS_FOREACH_DB);
 
 /** initialize the debug system */
 int  daos_debug_init(char *logfile);
+void daos_debug_set_id_cb(d_log_id_cb_t id_cb);
 /** finalize the debug system */
 void daos_debug_fini(void);
 
@@ -98,10 +99,8 @@ enum {
 	IOBP_TARGET		= (1 << 2),
 	/** server does not store bulk data in NVMe (drop it) */
 	IOBP_NVME		= (1 << 3),
-	/** metadata and small I/O are stored in DRAM */
-	IOBP_PM			= (1 << 4),
-	/** no PMDK snapshot (PMDK transaction will be broken) */
-	IOBP_PM_SNAP		= (1 << 5),
+	/** bypass bulk handle cache */
+	IOBP_SRV_BULK_CACHE	= (1 << 4),
 };
 
 /**
@@ -114,8 +113,7 @@ enum {
 #define IOBP_ENV_SRV_BULK	"srv_bulk"
 #define IOBP_ENV_TARGET		"target"
 #define IOBP_ENV_NVME		"nvme"
-#define IOBP_ENV_PM		"pm"
-#define IOBP_ENV_PM_SNAP	"pm_snap"
+#define IOBP_ENV_SRV_BULK_CACHE	"srv_bulk_cache"
 
 extern unsigned int daos_io_bypass;
 

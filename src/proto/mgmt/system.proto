@@ -20,12 +20,14 @@ message SystemMember {
 	string addr = 1;
 	string uuid = 2;
 	uint32 rank = 3;
-	string state = 4;
-	string fabric_uri = 5;
-	uint32 fabric_contexts = 6;
+	uint64 incarnation = 4;
+	string state = 5;
+	string fabric_uri = 6;
+	uint32 fabric_contexts = 7;
 	// ancillary info e.g. error msg or reason for state change
-	string info = 7;
-	string fault_domain = 8;
+	string info = 8;
+	string fault_domain = 9;
+	string last_update = 10;
 }
 
 // SystemStopReq supplies system shutdown parameters.
@@ -41,21 +43,6 @@ message SystemStopReq {
 // SystemStopResp returns status of shutdown attempt and results
 // of attempts to stop system members.
 message SystemStopResp {
-	repeated shared.RankResult results = 1;
-	string absentranks = 2; // rankset missing from membership
-	string absenthosts = 3; // hostset missing from membership
-}
-
-// SystemResetFormatReq supplies system reset format parameters.
-message SystemResetFormatReq {
-	string sys = 1; // DAOS system name
-	string ranks = 2; // rankset to query
-	string hosts = 3; // hostset to query
-}
-
-// SystemResetFormatResp returns status of reset format attempt and results
-// of attempts to reset format of system members.
-message SystemResetFormatResp {
 	repeated shared.RankResult results = 1;
 	string absentranks = 2; // rankset missing from membership
 	string absenthosts = 3; // hostset missing from membership
@@ -90,3 +77,11 @@ message SystemQueryResp {
 	string absenthosts = 3; // hostset missing from membership
 }
 
+// SystemEraseReq supplies system erase parameters.
+message SystemEraseReq {
+	string sys = 1;
+}
+
+message SystemEraseResp {
+	repeated shared.RankResult results = 1;
+}

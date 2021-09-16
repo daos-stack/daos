@@ -30,6 +30,7 @@ const int max_svc_nreplicas = 13;
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_create_co_ops = {
 	.co_aggregate	= ds_mgmt_tgt_create_aggregator,
 	.co_pre_forward	= NULL,
+	.co_post_reply = ds_mgmt_tgt_create_post_reply,
 };
 
 static struct crt_corpc_ops ds_mgmt_hdlr_tgt_map_update_co_ops = {
@@ -67,6 +68,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 		break;
 	case DRPC_METHOD_MGMT_PING_RANK:
 		ds_mgmt_drpc_ping_rank(drpc_req, drpc_resp);
+		break;
+	case DRPC_METHOD_MGMT_SET_LOG_MASKS:
+		ds_mgmt_drpc_set_log_masks(drpc_req, drpc_resp);
 		break;
 	case DRPC_METHOD_MGMT_SET_RANK:
 		ds_mgmt_drpc_set_rank(drpc_req, drpc_resp);
@@ -134,6 +138,9 @@ process_drpc_request(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	case DRPC_METHOD_MGMT_POOL_SET_PROP:
 		ds_mgmt_drpc_pool_set_prop(drpc_req, drpc_resp);
 		break;
+	case DRPC_METHOD_MGMT_POOL_GET_PROP:
+		ds_mgmt_drpc_pool_get_prop(drpc_req, drpc_resp);
+		break;
 	case DRPC_METHOD_MGMT_POOL_QUERY:
 		ds_mgmt_drpc_pool_query(drpc_req, drpc_resp);
 		break;
@@ -177,6 +184,9 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 
 	ps_in = crt_req_get(rpc);
 	D_ASSERT(ps_in != NULL);
+	D_DEBUG(DB_MGMT, "ps_rank=%u, key_id=0x%x, value=0x%"PRIx64", extra=0x%"PRIx64"\n",
+		ps_in->ps_rank, ps_in->ps_key_id, ps_in->ps_value, ps_in->ps_value_extra);
+
 	if (ps_in->ps_rank != -1) {
 		/* Only set local parameter */
 		rc = dss_parameters_set(ps_in->ps_key_id, ps_in->ps_value);
@@ -205,17 +215,8 @@ ds_mgmt_params_set_hdlr(crt_rpc_t *rpc)
 	tc_in->tps_value_extra = ps_in->ps_value_extra;
 
 	rc = dss_rpc_send(tc_req);
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
 
-	out = crt_reply_get(tc_req);
-	rc = out->srv_rc;
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
+	crt_req_decref(tc_req);
 out:
 	out = crt_reply_get(rpc);
 	out->srv_rc = rc;
@@ -255,20 +256,11 @@ ds_mgmt_profile_hdlr(crt_rpc_t *rpc)
 	tc_in->p_op = in->p_op;
 	tc_in->p_avg = in->p_avg;
 	rc = dss_rpc_send(tc_req);
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
 
-	out = crt_reply_get(tc_req);
-	rc = out->p_rc;
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
+	crt_req_decref(tc_req);
 out:
-	out = crt_reply_get(rpc);
 	D_DEBUG(DB_MGMT, "profile hdlr: rc "DF_RC"\n", DP_RC(rc));
+	out = crt_reply_get(rpc);
 	out->p_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -303,20 +295,11 @@ ds_mgmt_mark_hdlr(crt_rpc_t *rpc)
 
 	tc_in->m_mark = in->m_mark;
 	rc = dss_rpc_send(tc_req);
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
 
-	out = crt_reply_get(tc_req);
-	rc = out->m_rc;
-	if (rc != 0) {
-		crt_req_decref(tc_req);
-		D_GOTO(out, rc);
-	}
+	crt_req_decref(tc_req);
 out:
-	out = crt_reply_get(rpc);
 	D_DEBUG(DB_MGMT, "mark hdlr: rc "DF_RC"\n", DP_RC(rc));
+	out = crt_reply_get(rpc);
 	out->m_rc = rc;
 	crt_reply_send(rpc);
 }
@@ -372,7 +355,10 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 	out = crt_reply_get(rpc);
 
 	rc =  ds_get_pool_svc_ranks(in->gsr_puuid, &out->gsr_ranks);
-	if (rc != 0)
+	if (rc == -DER_NONEXIST) /* not an error */
+		D_DEBUG(DB_MGMT, DF_UUID": get_pool_svc_ranks() upcall failed, "
+			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
+	else if (rc != 0)
 		D_ERROR(DF_UUID": get_pool_svc_ranks() upcall failed, "
 			DF_RC"\n", DP_UUID(in->gsr_puuid), DP_RC(rc));
 	out->gsr_rc = rc;
@@ -383,6 +369,44 @@ void ds_mgmt_pool_get_svcranks_hdlr(crt_rpc_t *rpc)
 			DP_UUID(in->gsr_puuid), DP_RC(rc));
 
 	d_rank_list_free(out->gsr_ranks);
+}
+
+void ds_mgmt_pool_find_hdlr(crt_rpc_t *rpc)
+{
+	struct mgmt_pool_find_in	*in;
+	struct mgmt_pool_find_out	*out;
+	int					 rc;
+
+	in = crt_req_get(rpc);
+	D_ASSERT(in != NULL);
+
+	D_DEBUG(DB_MGMT, "find pool uuid:"DF_UUID", lbl %s\n",
+		DP_UUID(in->pfi_puuid), in->pfi_label);
+
+	out = crt_reply_get(rpc);
+
+	if (in->pfi_bylabel) {
+		rc = ds_pool_find_bylabel(in->pfi_label, out->pfo_puuid,
+					  &out->pfo_ranks);
+	} else {
+		rc = ds_get_pool_svc_ranks(in->pfi_puuid, &out->pfo_ranks);
+	}
+	if (rc == -DER_NONEXIST) /* not an error */
+		D_DEBUG(DB_MGMT, DF_UUID": %s: ds_pool_find() not found, "
+			DF_RC"\n", DP_UUID(in->pfi_puuid), in->pfi_label,
+			DP_RC(rc));
+	else if (rc != 0)
+		D_ERROR(DF_UUID": %s: ds_pool_find_bylabel() upcall failed, "
+			DF_RC"\n", DP_UUID(in->pfi_puuid), in->pfi_label,
+			DP_RC(rc));
+	out->pfo_rc = rc;
+
+	rc = crt_reply_send(rpc);
+	if (rc != 0)
+		D_ERROR(DF_UUID": %s: crt_reply_send() failed, "DF_RC"\n",
+			DP_UUID(in->pfi_puuid), in->pfi_label, DP_RC(rc));
+
+	d_rank_list_free(out->pfo_ranks);
 }
 
 static int

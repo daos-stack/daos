@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
@@ -60,15 +60,9 @@ func TestCheckDrpcClientSocketPath_FileNotSocket(t *testing.T) {
 	tmpDir, tmpCleanup := common.CreateTestDir(t)
 	defer tmpCleanup()
 
-	path := filepath.Join(tmpDir, "drpc_test.sock")
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	f.Close()
-	defer os.Remove(path)
+	path := common.CreateTestFile(t, tmpDir, "")
 
-	err = checkDrpcClientSocketPath(path)
+	err := checkDrpcClientSocketPath(path)
 
 	if err == nil {
 		t.Fatal("Expected an error, got nil")

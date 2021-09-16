@@ -327,7 +327,7 @@ dss_module_cleanup_all(void)
 		if (rc != 0) {
 			D_ERROR("failed to clean up module %s: "DF_RC"\n",
 				m->sm_name, DP_RC(rc));
-			break;
+			/** continue clean-ups regardless ... */
 		}
 		D_INFO("Module %s: cleaned up\n", m->sm_name);
 	}
@@ -369,5 +369,55 @@ dss_module_unload_all(void)
 		d_list_del_init(&mod->lm_lk);
 
 		D_FREE(mod);
+	}
+}
+
+int
+dss_module_init_metrics(enum dss_module_tag tag, void **metrics,
+			const char *path, int tgt_id)
+{
+	struct loaded_mod *mod;
+
+	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
+		struct dss_module_metrics *met = mod->lm_dss_mod->sm_metrics;
+
+		if (met == NULL)
+			continue;
+		if ((met->dmm_tags & tag) == 0)
+			continue;
+		if (met->dmm_init == NULL)
+			continue;
+
+		metrics[mod->lm_dss_mod->sm_mod_id] = met->dmm_init(path,
+								    tgt_id);
+		if (metrics[mod->lm_dss_mod->sm_mod_id] == NULL) {
+			D_ERROR("failed to allocate per-pool metrics for module"
+				" %s\n", mod->lm_dss_mod->sm_name);
+			dss_module_fini_metrics(tag, metrics);
+			return -DER_NOMEM;
+		}
+	}
+
+	return 0;
+}
+
+void
+dss_module_fini_metrics(enum dss_module_tag tag, void **metrics)
+{
+	struct loaded_mod *mod;
+
+	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
+		struct dss_module_metrics *met = mod->lm_dss_mod->sm_metrics;
+
+		if (met == NULL)
+			continue;
+		if ((met->dmm_tags & tag) == 0)
+			continue;
+		if (met->dmm_fini == NULL)
+			continue;
+		if (metrics[mod->lm_dss_mod->sm_mod_id] == NULL)
+			continue;
+
+		met->dmm_fini(metrics[mod->lm_dss_mod->sm_mod_id]);
 	}
 }

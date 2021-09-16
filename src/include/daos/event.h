@@ -87,6 +87,10 @@ daos_event_complete(daos_event_t *ev, int rc);
 int
 daos_event_launch(struct daos_event *ev);
 
+/** convert event error to positive errno instead of -DER on completion */
+void
+daos_event_errno_rc(struct daos_event *ev);
+
 /**
  * Return transport context associated with a particular event
  *

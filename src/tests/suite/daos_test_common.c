@@ -116,6 +116,10 @@ out:
 		if (!rc) {
 			MPI_Bcast(outpool->pool_uuid, 16,
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
+
+			/* TODO: Should we even be broadcasting this now? */
+			if (outpool->svc == NULL)
+				return rc;
 			MPI_Bcast(&outpool->svc->rl_nr,
 				  sizeof(outpool->svc->rl_nr),
 				  MPI_CHAR, 0, MPI_COMM_WORLD);
@@ -146,13 +150,24 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 	}
 
 	if (arg->myrank == 0) {
-		daos_pool_info_t info = {0};
+		daos_pool_info_t	info = {0};
+		uint64_t		flags = arg->pool.pool_connect_flags;
 
-		print_message("setup: connecting to pool\n");
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
-				       arg->pool.pool_connect_flags,
-				       &arg->pool.poh, &arg->pool.pool_info,
-				       NULL /* ev */);
+		if (arg->pool_label) {
+			print_message("setup: connecting to pool by label %s\n",
+				      arg->pool_label);
+			rc = daos_pool_connect(arg->pool_label,
+					       arg->group, flags,
+					       &arg->pool.poh,
+					       &arg->pool.pool_info,
+					       NULL);
+		} else {
+			print_message("setup: connecting to pool "DF_UUID"\n",
+				      DP_UUID(arg->pool.pool_uuid));
+			rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+					       flags, &arg->pool.poh,
+					       &arg->pool.pool_info, NULL);
+		}
 		if (rc)
 			print_message("daos_pool_connect failed, rc: %d\n", rc);
 		else
@@ -221,10 +236,20 @@ test_setup_cont_open(void **state)
 	int rc = 0;
 
 	if (arg->myrank == 0) {
-		print_message("setup: opening container\n");
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
-				    arg->cont_open_flags,
-				    &arg->coh, &arg->co_info, NULL);
+		if (arg->cont_label) {
+			print_message("setup: opening container by label %s\n",
+				      arg->cont_label);
+			rc = daos_cont_open(arg->pool.poh, arg->cont_label,
+					    arg->cont_open_flags,
+					    &arg->coh, &arg->co_info,
+					    NULL);
+		} else {
+			print_message("setup: opening container "DF_UUID"\n",
+				      DP_UUID(arg->co_uuid));
+			rc = daos_cont_open(arg->pool.poh, arg->co_uuid,
+					    arg->cont_open_flags,
+					    &arg->coh, &arg->co_info, NULL);
+		}
 		if (rc)
 			print_message("daos_cont_open failed, rc: %d\n", rc);
 	}
@@ -582,6 +607,12 @@ test_runable(test_arg_t *arg, unsigned int required_nodes)
 	int		 i;
 	static bool	 runable = true;
 
+	if (arg == NULL) {
+		print_message("state not set, likely due to group-setup"
+			      " issue\n");
+		return false;
+	}
+
 	if (arg->myrank == 0) {
 		int			tgts_per_node;
 		int			disable_nodes;
@@ -657,18 +688,21 @@ rebuild_pool_wait(test_arg_t *arg)
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	rst = &pinfo.pi_rebuild_st;
-	if ((rst->rs_done || rc != 0) && rst->rs_version != 0) {
-		print_message("Rebuild "DF_UUIDF" (ver=%d) is done %d/%d, "
+	if ((rst->rs_done || rc != 0) && rst->rs_version != 0 &&
+	     rst->rs_version != arg->rebuild_pre_pool_ver) {
+		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
 			      "obj="DF_U64", rec="DF_U64".\n",
 			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			       arg->rebuild_pre_pool_ver,
 			       rc, rst->rs_errno, rst->rs_obj_nr,
 			       rst->rs_rec_nr);
 		done = true;
 	} else {
-		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u), "
+		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u orig_ver=%u), "
 			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="
 			      DF_U64", rec="DF_U64"\n",
 			      DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			      arg->rebuild_pre_pool_ver,
 			      rst->rs_toberb_obj_nr, rst->rs_obj_nr,
 			      rst->rs_rec_nr);
 	}
@@ -738,40 +772,8 @@ int
 run_daos_sub_tests_only(char *test_name, const struct CMUnitTest *tests,
 			int tests_size, int *sub_tests, int sub_tests_size)
 {
-	int i;
-	int rc = 0;
-
-	if (sub_tests != NULL) {
-		struct CMUnitTest *subtests;
-		int subtestsnb = 0;
-
-		D_ALLOC_ARRAY(subtests, sub_tests_size);
-		if (subtests == NULL) {
-			print_message("failed allocating subtests array\n");
-			return -DER_NOMEM;
-		}
-
-		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] >= tests_size || sub_tests[i] < 0) {
-				print_message("No subtest %d\n", sub_tests[i]);
-				continue;
-			}
-			subtests[i] = tests[sub_tests[i]];
-			subtestsnb++;
-		}
-
-		/* run the sub-tests */
-		if (subtestsnb > 0)
-			rc = _cmocka_run_group_tests(test_name, subtests,
-						     subtestsnb, NULL, NULL);
-		D_FREE(subtests);
-	} else {
-		/* run the full suite */
-		rc = _cmocka_run_group_tests(test_name, tests, tests_size,
-					     NULL, NULL);
-	}
-
-	return rc;
+	return run_daos_sub_tests(test_name, tests, tests_size, sub_tests,
+				  sub_tests_size, NULL, NULL);
 }
 
 int
@@ -793,11 +795,11 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 		}
 
 		for (i = 0; i < sub_tests_size; i++) {
-			if (sub_tests[i] > tests_size || sub_tests[i] < 1) {
+			if (sub_tests[i] > tests_size || sub_tests[i] < 0) {
 				print_message("No subtest %d\n", sub_tests[i]);
 				continue;
 			}
-			subtests[i] = tests[sub_tests[i] - 1];
+			subtests[i] = tests[sub_tests[i]];
 			subtestsnb++;
 		}
 
@@ -819,14 +821,20 @@ run_daos_sub_tests(char *test_name, const struct CMUnitTest *tests,
 static void
 daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 		     const char *grp, const char *dmg_config,
-		     d_rank_t rank, int tgt_idx)
+		     d_rank_t rank, int tgt_idx, daos_size_t scm_size)
 {
 	char		dmg_cmd[DTS_CFG_MAX];
 	int		rc;
 
 	/* build and invoke dmg cmd */
-	dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF " --rank=%d",
-			  sub_cmd, DP_UUID(pool_uuid), rank);
+	if (strncmp(sub_cmd, "extend", strlen("extend")) == 0)
+		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
+				  " --ranks=%d", sub_cmd,
+				  DP_UUID(pool_uuid), rank);
+	else
+		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
+				  " --rank=%d", sub_cmd, DP_UUID(pool_uuid),
+				  rank);
 
 	if (tgt_idx != -1)
 		dts_append_config(dmg_cmd, " --target-idx=%d", tgt_idx);
@@ -838,13 +846,20 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 	assert_int_equal(rc, 0);
 }
 
+int
+daos_pool_set_prop(const uuid_t pool_uuid, const char *name,
+		   const char *value)
+{
+	return dmg_pool_set_prop(dmg_config_file, name, value, pool_uuid);
+}
+
 void
 daos_exclude_target(const uuid_t pool_uuid, const char *grp,
 		    const char *dmg_config,
 		    d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("exclude", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx);
+			     rank, tgt_idx, 0);
 }
 
 void
@@ -852,7 +867,16 @@ daos_reint_target(const uuid_t pool_uuid, const char *grp,
 		  const char *dmg_config, d_rank_t rank, int tgt_idx)
 {
 	daos_dmg_pool_target("reintegrate", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx);
+			     rank, tgt_idx, 0);
+}
+
+void
+daos_extend_target(const uuid_t pool_uuid, const char *grp,
+		   const char *dmg_config, d_rank_t rank, int tgt_idx,
+		   daos_size_t nvme_size)
+{
+	daos_dmg_pool_target("extend", pool_uuid, grp, dmg_config,
+			     rank, tgt_idx, nvme_size);
 }
 
 void
@@ -861,7 +885,7 @@ daos_drain_target(const uuid_t pool_uuid, const char *grp,
 {
 
 	daos_dmg_pool_target("drain", pool_uuid, grp, dmg_config,
-			     rank, tgt_idx);
+			     rank, tgt_idx, 0);
 }
 
 void
@@ -924,7 +948,9 @@ daos_kill_server(test_arg_t *arg, const uuid_t pool_uuid,
 
 	rc = system(dmg_cmd);
 	print_message(" %s rc %#x\n", dmg_cmd, rc);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
+
+	daos_cont_status_clear(arg->coh, NULL);
 }
 
 struct daos_acl *
@@ -1050,6 +1076,7 @@ get_server_config(char *host, char *server_config_file)
 	char    *dpid;
 	int	rc;
 	char    daos_proc[16] = "daos_server";
+	bool	conf = true;
 
 	D_ALLOC(dpid, 16);
 	rc = get_pid_of_process(host, dpid, daos_proc);
@@ -1068,29 +1095,39 @@ get_server_config(char *host, char *server_config_file)
 	while ((read = getline(&line, &len, fp)) != -1) {
 		print_message("line %s", line);
 		if (strstr(line, "--config") != NULL ||
-		    strstr(line, "-o") != NULL)
+		    strstr(line, "-o") != NULL) {
+			conf = false;
 			break;
+		}
 	}
 
-	pch = strtok(line, " ");
-	while (pch != NULL) {
-		if (strstr(pch, "--config") != NULL) {
-			if (strchr(pch, '=') != NULL)
-				strcpy(server_config_file,
-				       strchr(pch, '=') + 1);
-			else {
-				pch = strtok(NULL, " ");
-				strcpy(server_config_file, pch);
+	if (conf)
+		strncpy(server_config_file, DAOS_SERVER_CONF,
+			DAOS_SERVER_CONF_LENGTH);
+	else {
+		pch = strtok(line, " ");
+		while (pch != NULL) {
+			if (strstr(pch, "--config") != NULL) {
+				if (strchr(pch, '=') != NULL)
+					strncpy(server_config_file,
+						strchr(pch, '=') + 1,
+						DAOS_SERVER_CONF_LENGTH);
+				else {
+					pch = strtok(NULL, " ");
+					strncpy(server_config_file, pch,
+						DAOS_SERVER_CONF_LENGTH);
+				}
+				break;
 			}
-			break;
-		}
 
-		if (strstr(pch, "-o") != NULL) {
+			if (strstr(pch, "-o") != NULL) {
+				pch = strtok(NULL, " ");
+				strncpy(server_config_file, pch,
+					DAOS_SERVER_CONF_LENGTH);
+				break;
+			}
 			pch = strtok(NULL, " ");
-			strcpy(server_config_file, pch);
-			break;
 		}
-		pch = strtok(NULL, " ");
 	}
 
 	pclose(fp);

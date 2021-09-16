@@ -14,7 +14,7 @@ import (
 
 	transport "github.com/Jille/raft-grpc-transport"
 	"github.com/hashicorp/raft"
-	boltdb "github.com/hashicorp/raft-boltdb"
+	boltdb "github.com/hashicorp/raft-boltdb/v2"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 
@@ -38,6 +38,7 @@ const (
 	raftOpAddPoolService
 	raftOpUpdatePoolService
 	raftOpRemovePoolService
+	raftOpIncMapVer
 
 	sysDBFile = "daos_system.db"
 )
@@ -95,7 +96,23 @@ func (db *Database) ResignLeadership(cause error) error {
 func (db *Database) ShutdownRaft() error {
 	db.log.Debug("shutting down raft instance")
 	return db.raft.withReadLock(func(svc raftService) error {
-		return svc.Shutdown().Error()
+		// Call the raft implementation's shutdown and block
+		// until it completes.
+		shutdownErr := svc.Shutdown().Error()
+
+		// Try to run all of the defined shutdown callbacks. Logging
+		// any failures is the best we can do, as we really want to
+		// run as many of them as possible in order to clean things
+		// up.
+		if shutdownErr == nil {
+			for _, cb := range db.onRaftShutdown {
+				if cbErr := cb(); cbErr != nil {
+					db.log.Errorf("onRaftShutdown callback failed: %s", cbErr)
+				}
+			}
+		}
+
+		return shutdownErr
 	})
 }
 
@@ -136,6 +153,9 @@ func (db *Database) configureRaft() error {
 	// to peers as they're added. Instead, we just set everyone to start
 	// at rank 1 and increment from there as memberUpdate logs are applied.
 	db.data.NextRank = 1
+	db.OnRaftShutdown(func() error {
+		return boltDB.Close()
+	})
 
 	r, err := raft.NewRaft(rc, (*fsm)(db), boltDB, boltDB, snaps, db.raftTransport)
 	if err != nil {
@@ -243,23 +263,36 @@ func createRaftUpdate(op raftOp, inner interface{}) ([]byte, error) {
 	})
 }
 
-// submitMemberUpdate submits the given member update operation to
-// the raft service.
-func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
-	data, err := createRaftUpdate(op, m)
+// submitMapVerInc submits the map version increment operation to the raft service.
+func (db *Database) submitIncMapVer() error {
+	data, err := createRaftUpdate(raftOpIncMapVer, nil)
 	if err != nil {
 		return err
 	}
 	return db.submitRaftUpdate(data)
 }
 
+// submitMemberUpdate submits the given member update operation to
+// the raft service.
+func (db *Database) submitMemberUpdate(op raftOp, m *memberUpdate) error {
+	m.Member.LastUpdate = time.Now()
+	data, err := createRaftUpdate(op, m)
+	if err != nil {
+		return err
+	}
+	db.log.Debugf("member %d:%x updated @ %s", m.Member.Rank, m.Member.Incarnation, m.Member.LastUpdate)
+	return db.submitRaftUpdate(data)
+}
+
 // submitPoolUpdate submits the given pool service update operation to
 // the raft service.
 func (db *Database) submitPoolUpdate(op raftOp, ps *PoolService) error {
+	ps.LastUpdate = time.Now()
 	data, err := createRaftUpdate(op, ps)
 	if err != nil {
 		return err
 	}
+	db.log.Debugf("pool %s updated @ %s", ps.PoolUUID, ps.LastUpdate)
 	return db.submitRaftUpdate(data)
 }
 
@@ -302,6 +335,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 
 	switch c.Op {
+	case raftOpIncMapVer:
+		f.data.applyMapVersionIncrement()
 	case raftOpAddMember, raftOpUpdateMember, raftOpRemoveMember:
 		f.data.applyMemberUpdate(c.Op, c.Data, f.EmergencyShutdown)
 	case raftOpAddPoolService, raftOpUpdatePoolService, raftOpRemovePoolService:
@@ -312,6 +347,13 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	}
 
 	return nil
+}
+
+// applyMapVersionIncrement is responsible for incrementing the group map version.
+func (d *dbData) applyMapVersionIncrement() {
+	d.Lock()
+	defer d.Unlock()
+	d.MapVersion++
 }
 
 // applyMemberUpdate is responsible for applying the membership update
@@ -405,10 +447,12 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 			db.data.SchemaVersion, CurrentSchemaVersion)
 	}
 
+	f.data.Lock()
 	f.data.Members = db.data.Members
 	f.data.Pools = db.data.Pools
 	f.data.NextRank = db.data.NextRank
 	f.data.MapVersion = db.data.MapVersion
+	f.data.Unlock()
 	f.log.Debugf("db snapshot loaded (map version %d)", db.data.MapVersion)
 	return nil
 }

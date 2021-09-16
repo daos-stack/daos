@@ -42,23 +42,27 @@ func (c *Code) UnmarshalJSON(data []byte) (err error) {
 	return
 }
 
+// general fault codes
 const (
-	// general fault codes
 	Unknown Code = iota
 	MissingSoftwareDependency
 	BadVersionSoftwareDependency
 	PrivilegedHelperNotPrivileged
 	PrivilegedHelperNotAvailable
 	PrivilegedHelperRequestFailed
+)
 
-	// generic storage fault codes
+// generic storage fault codes
+const (
 	StorageUnknown Code = iota + 100
 	StorageAlreadyFormatted
 	StorageFilesystemAlreadyMounted
 	StorageDeviceAlreadyMounted
 	StorageTargetAlreadyMounted
+)
 
-	// SCM fault codes
+// SCM fault codes
+const (
 	ScmUnknown Code = iota + 200
 	ScmFormatInvalidSize
 	ScmFormatInvalidDeviceCount
@@ -66,23 +70,31 @@ const (
 	ScmFormatMissingDevice
 	ScmFormatMissingParam
 	ScmFormatConflictingParam
+	ScmPathAccessDenied
 	ScmDiscoveryFailed
 	ScmDuplicatesInDeviceList
 	ScmNoDevicesMatchFilter
+)
 
-	// Bdev fault codes
+// Bdev fault codes
+const (
 	BdevUnknown Code = iota + 300
 	BdevFormatUnknownClass
 	BdevFormatFailure
 	BdevBadPCIAddress
-	BdevPCIAddressNotFound
+	BdevNotFound
 	BdevDuplicatesInDeviceList
 	BdevNoDevicesMatchFilter
+)
 
-	// DAOS system fault codes
+// DAOS system fault codes
+const (
 	SystemUnknown Code = iota + 400
+	SystemBadFaultDomainDepth
+)
 
-	// client fault codes
+// client fault codes
+const (
 	ClientUnknown Code = iota + 500
 	ClientConfigBadControlPort
 	ClientConfigBadAccessPoints
@@ -91,11 +103,14 @@ const (
 	ClientConnectionNoRoute
 	ClientConnectionRefused
 	ClientConnectionClosed
+	ClientFormatRunningSystem
+	ClientRpcTimeout
+)
 
-	// server fault codes
+// server fault codes
+const (
 	ServerUnknown Code = iota + 600
 	ServerScmUnmanaged
-	ServerBdevNotFound
 	ServerIommuDisabled
 	ServerWrongSystem
 	ServerPoolScmTooSmall
@@ -109,12 +124,16 @@ const (
 	ServerInstancesNotStopped
 	ServerConfigInvalidNetDevClass
 	ServerVfioDisabled
+	ServerPoolNoLabel
+)
 
-	// server config fault codes
+// server config fault codes
+const (
 	ServerConfigUnknown Code = iota + 700
 	ServerBadConfig
 	ServerNoConfigPath
 	ServerConfigBadControlPort
+	ServerConfigBadTelemetryPort
 	ServerConfigBadAccessPoints
 	ServerConfigEvenAccessPoints
 	ServerConfigBadProvider
@@ -126,17 +145,25 @@ const (
 	ServerConfigOverlappingBdevDeviceList
 	ServerConfigFaultDomainInvalid
 	ServerConfigFaultCallbackNotFound
+	ServerConfigFaultCallbackInsecure
 	ServerConfigFaultCallbackBadPerms
 	ServerConfigFaultCallbackFailed
 	ServerConfigBothFaultPathAndCb
 	ServerConfigFaultCallbackEmpty
+	ServerConfigFaultDomainTooManyLayers
+)
 
-	// SPDK library bindings codes
+// SPDK library bindings codes
+const (
 	SpdkUnknown Code = iota + 800
 	SpdkCtrlrNoHealth
 	SpdkBindingRetNull
 	SpdkBindingFailed
+)
 
-	// security fault codes
+// security fault codes
+const (
 	SecurityUnknown Code = iota + 900
+	SecurityMissingCertFile
+	SecurityUnreadableCertFile
 )

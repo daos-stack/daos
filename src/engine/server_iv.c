@@ -166,7 +166,7 @@ void
 ds_iv_ns_get(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount++;
-	D_DEBUG(DB_MGMT, DF_UUID" ns ref %u\n",
+	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 }
 
@@ -174,7 +174,7 @@ void
 ds_iv_ns_put(struct ds_iv_ns *ns)
 {
 	ns->iv_refcount--;
-	D_DEBUG(DB_MGMT, DF_UUID" ns ref %u\n",
+	D_DEBUG(DB_TRACE, DF_UUID" ns ref %u\n",
 		DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
 	if (ns->iv_refcount == 1)
 		ABT_eventual_set(ns->iv_done_eventual, NULL, 0);
@@ -182,23 +182,26 @@ ds_iv_ns_put(struct ds_iv_ns *ns)
 		ds_iv_ns_destroy(ns);
 }
 
-static struct ds_iv_ns *
-iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns)
+static int
+iv_ns_lookup_by_ivns(crt_iv_namespace_t ivns, struct ds_iv_ns **p_ns)
 {
 	struct ds_iv_ns *ns;
 
+	*p_ns = NULL;
 	d_list_for_each_entry(ns, &ds_iv_ns_list, iv_ns_link) {
-		if (ns->iv_ns == ivns) {
-			if (!ns->iv_stop) {
-				ds_iv_ns_get(ns);
-				return ns;
-			}
+		if (ns->iv_ns != ivns)
+			continue;
+
+		if (ns->iv_stop) {
 			D_DEBUG(DB_MD, DF_UUID" stopping\n",
 				DP_UUID(ns->iv_pool_uuid));
-			return NULL;
+			return -DER_SHUTDOWN;
 		}
+		ds_iv_ns_get(ns);
+		*p_ns = ns;
+		return 0;
 	}
-	return NULL;
+	return -DER_NONEXIST;
 }
 
 static bool
@@ -373,16 +376,17 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	     d_sg_list_t *iv_value, void *priv)
 {
 	struct iv_priv_entry	*priv_entry = priv;
-	struct ds_iv_ns		*ns;
+	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_key	key;
 	bool			valid;
 	int			 rc;
 
 	D_ASSERT(iv_value != NULL);
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL) {
@@ -442,15 +446,16 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		      crt_iv_ver_t iv_ver, d_sg_list_t *iv_value,
 		      bool invalidate, bool refresh, int ref_rc, void *priv)
 {
-	struct ds_iv_ns		*ns;
+	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_key	key;
 	struct iv_priv_entry	*priv_entry = priv;
 	int			rc = 0;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL || priv_entry->entry == NULL) {
@@ -485,6 +490,10 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		key.class_id, key.rank, dss_self_rank(),
 		invalidate ? "no" : "yes");
 output:
+	/* invalidate entry might require to delete entry after refresh */
+	if (entry && entry->iv_to_delete)
+		entry->iv_ref--; /* destroy in ivc_on_put */
+
 	ds_iv_ns_put(ns);
 	return rc;
 }
@@ -527,13 +536,29 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 static int
 ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 {
-	struct ds_iv_key key;
+	struct ds_iv_ns		*ns = NULL;
+	struct ds_iv_key	key;
+	int			rc;
 
 	iv_key_unpack(&key, iv_key);
 	if (key.rank == ((d_rank_t)-1))
 		return -DER_NOTLEADER;
+
+	/* Check if it matches with current NS master */
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+
+	if (key.rank != ns->iv_master_rank) {
+		D_DEBUG(DB_MD, "key rank %d ns iv master rank %d\n",
+			key.rank, ns->iv_master_rank);
+		D_GOTO(out_put, rc = -DER_NOTLEADER);
+	}
+
 	*root = key.rank;
-	return 0;
+out_put:
+	ds_iv_ns_put(ns);
+	return rc;
 }
 
 static int
@@ -541,7 +566,7 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	   crt_iv_ver_t iv_ver, crt_iv_perm_t permission,
 	   d_sg_list_t *iv_value, void **priv)
 {
-	struct ds_iv_ns		*ns;
+	struct ds_iv_ns		*ns = NULL;
 	struct ds_iv_entry	*entry;
 	struct ds_iv_class	*class;
 	struct ds_iv_key	key;
@@ -549,9 +574,10 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	bool			alloc_entry = false;
 	int			rc;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	/* find and prepare entry */
@@ -607,7 +633,7 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	D_ASSERT(entry != NULL);
 
 	/* Let's deal with iv_value first */
-	d_sgl_fini(iv_value, false);
+	d_sgl_fini(iv_value, true);
 
 	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
 							priv_entry->priv);
@@ -636,9 +662,10 @@ ivc_pre_sync(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, crt_iv_ver_t iv_ver,
 	struct ds_iv_class	*class;
 	int			rc = 0;
 
-	ns = iv_ns_lookup_by_ivns(ivns);
-	if (!ns)
-		return -DER_NONEXIST;
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	iv_key_unpack(&key, iv_key);
 	if (priv_entry == NULL || priv_entry->entry == NULL) {
@@ -675,15 +702,9 @@ static void
 iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 {
 	struct ds_iv_ns		*ns = arg;
-	struct ds_iv_entry	*entry;
-	struct ds_iv_entry	*tmp;
 
+	D_ASSERT(d_list_empty(&ns->iv_entry_list));
 	d_list_del(&ns->iv_ns_link);
-	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
-		d_list_del(&entry->iv_link);
-		iv_entry_free(entry);
-	}
-
 	ABT_eventual_free(&ns->iv_done_eventual);
 	D_FREE(ns);
 }
@@ -798,16 +819,36 @@ ds_iv_ns_start(struct ds_iv_ns *ns)
 }
 
 void
+ds_iv_ns_leader_stop(struct ds_iv_ns *ns)
+{
+	/* Set iv_stop on the leader, so all arriving IV requests will return
+	 * failure after this.
+	 */
+	ns->iv_stop = 1;
+}
+
+void
 ds_iv_ns_stop(struct ds_iv_ns *ns)
 {
+	struct ds_iv_entry *entry;
+	struct ds_iv_entry *tmp;
+
 	ns->iv_stop = 1;
 	ds_iv_ns_put(ns);
 	if (ns->iv_refcount > 1) {
+		int rc;
+
 		D_DEBUG(DB_MGMT, DF_UUID" ns stop wait ref %u\n",
 			DP_UUID(ns->iv_pool_uuid), ns->iv_refcount);
-		ABT_eventual_wait(ns->iv_done_eventual, NULL);
+		rc = ABT_eventual_wait(ns->iv_done_eventual, NULL);
+		D_ASSERT(rc == ABT_SUCCESS);
 		D_DEBUG(DB_MGMT, DF_UUID" ns stopped\n",
 			DP_UUID(ns->iv_pool_uuid));
+	}
+
+	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
+		d_list_del(&entry->iv_link);
+		iv_entry_free(entry);
 	}
 }
 
@@ -834,6 +875,7 @@ ds_iv_fini(void)
 	struct ds_iv_class	*class_tmp;
 
 	d_list_for_each_entry_safe(ns, tmp, &ds_iv_ns_list, iv_ns_link) {
+		d_list_del_init(&ns->iv_ns_link);
 		iv_ns_destroy_internal(ns);
 	}
 
@@ -989,8 +1031,8 @@ sync_comp_cb(void *arg, int rc)
 		 * in the mean time, it will rely on others to update the
 		 * ns for it.
 		 */
-		D_WARN("retry upon %d for class %d opc %d\n", rc,
-		       cb_arg->iv_key.class_id, IV_UPDATE);
+		D_WARN("retry for class %d opc %d rc "DF_RC"\n",
+			cb_arg->iv_key.class_id, IV_UPDATE, DP_RC(rc));
 		rc1 = iv_op(cb_arg->ns, &cb_arg->iv_key, &cb_arg->iv_value,
 			    &cb_arg->iv_sync, cb_arg->shortcut, cb_arg->retry,
 			    cb_arg->opc);
@@ -1054,16 +1096,25 @@ retry:
 	rc = iv_op_internal(ns, _key, _value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
-		/* If the IV ns leader has been changed, then it will retry
-		 * in the mean time, it will rely on others to update the
-		 * ns for it.
-		 */
+		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
+		    sync && (sync->ivs_mode == CRT_IV_SYNC_LAZY ||
+			     sync->ivs_mode == CRT_IV_SYNC_EAGER)) {
+			/* If leader has been changed, it does not need to
+			 * retry at all, because IV sync always start from
+			 * the leader.
+			 */
+			D_WARN("sync (class %d) leader changed\n", key->class_id);
+			return rc;
+		}
+
+		/* otherwise retry and wait for others to update the ns. */
 		D_WARN("retry upon %d for class %d opc %d\n", rc,
 		       key->class_id, opc);
 		/* Yield to avoid hijack the cycle if IV RPC is not sent */
 		ABT_thread_yield();
 		goto retry;
 	}
+
 	return rc;
 }
 

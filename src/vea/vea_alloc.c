@@ -332,7 +332,7 @@ reserve_vector(struct vea_space_info *vsi, uint32_t blk_cnt,
 int
 persistent_alloc(struct vea_space_info *vsi, struct vea_free_extent *vfe)
 {
-	struct vea_free_extent *found, frag;
+	struct vea_free_extent *found, frag = {0};
 	daos_handle_t btr_hdl;
 	d_iov_t key_in, key_out, val;
 	uint64_t *blk_off, found_end, vfe_end;

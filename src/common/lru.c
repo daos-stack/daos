@@ -251,7 +251,10 @@ daos_lru_ref_hold(struct daos_lru_cache *lcache, void *key,
 
 	rc = d_hash_rec_insert(&lcache->dlc_htable, key, key_size,
 			       &llink->ll_link, true);
-	D_ASSERT(rc == 0);
+	if (rc) {
+		lcache->dlc_ops->lop_free_ref(llink);
+		return rc;
+	}
 	lcache->dlc_count++;
 found:
 	*llink_pp = llink;

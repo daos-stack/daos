@@ -1,1 +1,0 @@
-# DAOS Coding Rules

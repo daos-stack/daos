@@ -1,0 +1,17 @@
+hosts:
+  test_servers:
+    - server-A
+  test_clients:
+    - client-B
+timeout: 360
+server_config:
+  name: daos_server
+  servers:
+    scm_size: 20
+    bdev_class: nvme
+    bdev_list: ["aaaa:aa:aa.a"]
+pool:
+  mode: 146
+  scm_size: 16G
+  nvme_size: 128G
+  control_method: dmg

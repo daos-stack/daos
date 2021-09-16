@@ -188,7 +188,8 @@ lrua_move_to_mru(struct lru_sub *sub, struct lru_entry *entry, uint32_t idx)
 
 /** Internal API to lookup entry from index */
 static inline struct lru_entry *
-lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key)
+lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key,
+		bool touch_mru)
 {
 	struct lru_entry	*entry;
 	struct lru_sub		*sub;
@@ -205,7 +206,7 @@ lrua_lookup_idx(struct lru_array *array, uint32_t idx, uint64_t key)
 
 	entry = &sub->ls_table[ent_idx];
 	if (entry->le_key == key) {
-		if (!array->la_evicting) {
+		if (touch_mru && !array->la_evicting) {
 			/** Only make mru if we are not evicting it */
 			lrua_move_to_mru(sub, entry, ent_idx);
 		}
@@ -237,7 +238,7 @@ lrua_lookupx_(struct lru_array *array, uint32_t idx, uint64_t key,
 
 	*entryp = NULL;
 
-	entry = lrua_lookup_idx(array, idx, key);
+	entry = lrua_lookup_idx(array, idx, key, true);
 	if (entry == NULL)
 		return false;
 
@@ -259,6 +260,52 @@ static inline bool
 lrua_lookup_(struct lru_array *array, const uint32_t *idx, void **entryp)
 {
 	return lrua_lookupx_(array, *idx, (uint64_t)idx, entryp);
+}
+
+/** Peek an entry in the lru array with alternative key.
+ *
+ * \param	array[in]	The lru array
+ * \param	idx[in]		The index of the entry
+ * \param	idx[in]		Unique identifier
+ * \param	entryp[out]	Valid only if function returns true.
+ *
+ * \return true if the entry is in the array and set \p entryp accordingly
+ */
+#define lrua_peekx(array, idx, key, entryp)	\
+	lrua_peekx_(array, idx, key, (void **)entryp)
+static inline bool
+lrua_peekx_(struct lru_array *array, uint32_t idx, uint64_t key,
+	    void **entryp)
+{
+	struct lru_entry	*entry;
+
+	D_ASSERT(array != NULL);
+	D_ASSERT(key != 0);
+
+	*entryp = NULL;
+
+	entry = lrua_lookup_idx(array, idx, key, false);
+	if (entry == NULL)
+		return false;
+
+	*entryp = entry->le_payload;
+	return true;
+}
+
+/** Peek an entry in the lru array.
+ *
+ * \param	array[in]	The lru array
+ * \param	idx[in,out]	Address of the record index.
+ * \param	entryp[out]	Valid only if function returns true.
+ *
+ * \return true if the entry is in the array and set \p entryp accordingly
+ */
+#define lrua_peek(array, idx, entryp)	\
+	lrua_peek_(array, idx, (void **)entryp)
+static inline bool
+lrua_peek_(struct lru_array *array, const uint32_t *idx, void **entryp)
+{
+	return lrua_peekx_(array, *idx, (uint64_t)idx, entryp);
 }
 
 /** Allocate a new entry lru array with alternate key specifier.

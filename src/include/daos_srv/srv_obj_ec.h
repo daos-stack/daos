@@ -9,9 +9,5 @@
 
 #include <daos_srv/container.h>
 
-int
-ds_obj_ec_aggregate(struct ds_cont_child *cont, daos_epoch_range_t *epr,
-		    bool (*yield_func)(void *arg), void *yield_arg,
-		    bool is_current);
-
+void ds_obj_ec_aggregate(void *arg);
 #endif /* __DAOS_SRV_OBJ_EC_H__ */

@@ -90,7 +90,6 @@ object_class_is_verified(void **state)
 	struct pool_map		*po_map;
 	struct pl_map		*pl_map;
 
-#define DAOS_6295 0
 	/*
 	 * ---------------------------------------------------------
 	 * with a single target
@@ -108,13 +107,10 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_RP_4G1);
 	assert_invalid_param(pl_map, OC_RP_8G1);
 
-#if DAOS_6295
 	/* Multiple groups should fail because there's only 1 target */
-	print_message("Skipping rest until DAOS-XXXX is resolved");
 	assert_invalid_param(pl_map, OC_S2);
 	assert_invalid_param(pl_map, OC_S4);
 	assert_invalid_param(pl_map, OC_S512);
-#endif
 	free_pool_and_placement_map(po_map, pl_map);
 
 
@@ -138,11 +134,9 @@ object_class_is_verified(void **state)
 	assert_invalid_param(pl_map, OC_RP_3G1);
 	assert_invalid_param(pl_map, OC_RP_4G1);
 	assert_invalid_param(pl_map, OC_RP_8G1);
-#if DAOS_6295
 	/* The following require more targets than available. */
 	assert_invalid_param(pl_map, OC_S4);
 	assert_invalid_param(pl_map, OC_S512);
-#endif
 	free_pool_and_placement_map(po_map, pl_map);
 
 	/*
@@ -155,10 +149,8 @@ object_class_is_verified(void **state)
 	assert_placement_success(pl_map, OC_S1);
 	assert_placement_success(pl_map, OC_RP_2G1);
 	assert_placement_success(pl_map, OC_RP_2GX);
-#if DAOS_6295
 	assert_invalid_param(pl_map, OC_RP_2G2);
 	assert_invalid_param(pl_map, OC_RP_2G4);
-#endif
 
 	assert_invalid_param(pl_map, OC_RP_2G512);
 	assert_invalid_param(pl_map, OC_RP_3G1);
@@ -172,9 +164,7 @@ object_class_is_verified(void **state)
 	 */
 	gen_maps(2, 1, 2, &po_map, &pl_map);
 	assert_placement_success(pl_map, OC_RP_2G2);
-#if DAOS_6295
 	assert_invalid_param(pl_map, OC_RP_2G4);
-#endif
 
 	free_pool_and_placement_map(po_map, pl_map);
 
@@ -184,9 +174,7 @@ object_class_is_verified(void **state)
 	 * ---------------------------------------------------------
 	 */
 	gen_maps(2, 1, 4, &po_map, &pl_map);
-#if DAOS_6295
 	assert_placement_success(pl_map, OC_RP_2G4);
-#endif
 	/* even though it's 8 total, still need a domain for each replica */
 	assert_invalid_param(pl_map, OC_RP_4G2);
 
@@ -203,7 +191,6 @@ object_class_is_verified(void **state)
 	free_pool_and_placement_map(po_map, pl_map);
 
 	/* The End */
-	skip_msg("DAOS-6295: a bunch commented out in this test. ");
 }
 
 /*
@@ -384,14 +371,51 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	uint32_t	map_version;
 	int		ntargets;
 	int		rc, i;
-	d_rank_list_t		rank_list;
-	int32_t domains[] = {1, 1, 1, 1, 1};
-	uuid_t target_uuids[] = {"12345678", "23456789",
-				 "34567890", "4567890a" };
+	d_rank_list_t	rank_list;
+	uint32_t	domains[] = {255, 0, 5, /* root */
+				     1, 101, 1,
+				     1, 102, 1,
+				     1, 103, 1,
+				     1, 104, 1,
+				     1, 105, 1};
+	const size_t	tuple_size = 3;
+	const size_t	max_domains = 5;
+	uint32_t	domain_tree_len;
+	uint32_t	domains_only_len;
+	uint32_t	ranks_per_domain;
+	uint32_t	*domain_tree;
+	uuid_t		target_uuids[] = {"12345678", "23456789",
+					  "34567890", "4567890a" };
 
-	if (domain_count > ARRAY_SIZE(domains))
-		fail_msg("Only %lu domains can be added",
-			 ARRAY_SIZE(domains));
+	/* Only support add same node/target domain for the moment */
+	assert_int_equal(ctx->target_nr, target_count);
+	assert_int_equal(ctx->node_nr, node_count);
+	if (domain_count > max_domains)
+		fail_msg("Only %lu domains can be added", max_domains);
+
+	/* Build the fault domain tree */
+	ranks_per_domain = node_count / domain_count;
+	/* Update domains array to be consistent with input params */
+	domains[tuple_size - 1] = domain_count; /* root */
+	for (i = 0; i < domain_count; i++) {
+		uint32_t start_idx = (i + 1) * tuple_size;
+
+		domains[start_idx + tuple_size - 1] = ranks_per_domain;
+	}
+
+	domains_only_len = (domain_count + 1) * tuple_size;
+	domain_tree_len = domains_only_len + node_count;
+	D_ALLOC_ARRAY(domain_tree, domain_tree_len);
+	assert_non_null(domain_tree);
+
+	memcpy(domain_tree, domains,
+	       sizeof(uint32_t) * domains_only_len);
+
+	for (i = 0; i < node_count; i++) {
+		uint32_t idx = domains_only_len + i;
+
+		domain_tree[idx] = i;
+	}
 
 	rank_list.rl_nr = node_count;
 	D_ALLOC_ARRAY(rank_list.rl_ranks, node_count);
@@ -406,9 +430,11 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 
 	map_version = pool_map_get_version(ctx->po_map) + 1;
 
-	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version, domain_count,
-			  node_count, ntargets, domains, target_uuids,
+	rc = gen_pool_buf(ctx->po_map, &map_buf, map_version,
+			  domain_tree_len,
+			  node_count, ntargets, domain_tree, target_uuids,
 			  &rank_list, NULL, target_count);
+	D_FREE(domain_tree);
 	assert_success(rc);
 
 	/* Extend the current pool map */
@@ -417,8 +443,6 @@ jtc_pool_map_extend(struct jm_test_ctx *ctx, uint32_t domain_count,
 	assert_success(rc);
 
 	ctx->domain_nr += domain_count;
-	ctx->target_nr += target_count;
-	ctx->node_nr += node_count;
 
 	jtc_print_pool(ctx);
 
@@ -452,6 +476,9 @@ static int
 jtc_create_layout(struct jm_test_ctx *ctx)
 {
 	int rc;
+
+	D_ASSERT(ctx != NULL);
+	D_ASSERT(ctx->pl_map != NULL);
 
 	/* place object will allocate the layout so need to free first
 	 * if already allocated
@@ -584,6 +611,8 @@ jtc_layout_has_duplicate(struct jm_test_ctx *ctx)
 	bool *target_set;
 	bool result = false;
 
+	D_ASSERT(ctx != NULL);
+	D_ASSERT(ctx->po_map != NULL);
 	const uint32_t total_targets = pool_map_target_nr(ctx->po_map);
 
 	D_ALLOC_ARRAY(target_set, total_targets);
@@ -880,6 +909,7 @@ jtc_snapshot_layout_targets(struct jm_test_ctx *ctx)
 	} while (0)
 
 #define UP	POOL_REINT
+#define UPIN	POOL_ADD_IN
 #define DOWN	POOL_EXCLUDE
 #define DOWNOUT	POOL_EXCLUDE_OUT
 #define DRAIN	POOL_DRAIN
@@ -941,17 +971,24 @@ all_healthy(void **state)
 
 	/* Test all object classes */
 	num_test_oc = get_object_classes(&object_classes);
-
-	jtc_init(&ctx, 128, 1, 8, 0, g_verbose);
+	jtc_init(&ctx, (1 << 10), 1, 16, 0, g_verbose);
 	for (i = 0; i < num_test_oc; ++i) {
-		jtc_set_object_meta(&ctx, object_classes[i], 0, 1);
-		JTC_CREATE_AND_ASSERT_HEALTHY_LAYOUT(&ctx);
-	}
-	jtc_fini(&ctx);
+		struct daos_oclass_attr *oa;
+		daos_obj_id_t oid;
+		int	grp_sz;
+		int	grp_nr;
 
-	/* many more domains and targets */
-	jtc_init(&ctx, 1024, 1, 128, 0, g_verbose);
-	for (i = 0; i < num_test_oc; ++i) {
+		gen_oid(&oid, 0, 0, object_classes[i]);
+		oa = daos_oclass_attr_find(oid, NULL);
+		grp_sz = daos_oclass_grp_size(oa);
+		grp_nr = daos_oclass_grp_nr(oa, NULL);
+
+		/* skip those gigantic layouts for saving time */
+		if (grp_sz != DAOS_OBJ_REPL_MAX &&
+		    grp_nr != DAOS_OBJ_GRP_MAX &&
+		    grp_sz * grp_nr > (16 << 10))
+			continue;
+
 		jtc_set_object_meta(&ctx, object_classes[i], 0, 1);
 		JTC_CREATE_AND_ASSERT_HEALTHY_LAYOUT(&ctx);
 	}
@@ -974,10 +1011,9 @@ down_to_target(void **state)
 	assert_success(jtc_create_layout(&ctx));
 	jtc_scan(&ctx);
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6515: Plenty of targets, but not being rebuilt.");
 	assert_int_equal(ctx.rebuild.out_nr, 1);
 	assert_int_equal(0, jtc_get_layout_bad_count(&ctx));
+	jtc_fini(&ctx);
 }
 
 static void
@@ -1202,8 +1238,16 @@ down_back_to_up_in_same_order(void **state)
 	jtc_set_status_on_target(&ctx, UP, orig_shard_targets[0]);
 	jtc_assert_scan_and_layout(&ctx);
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6519: too many things are in the reint scan");
+	/* NOTE: This is a really important test case. Even though this test
+	 * seems like it should only move one shard (because only one target is
+	 * being reintegrated), this particular combination happens to trigger
+	 * extra data movement, resulting in two shards moving - one moving back
+	 * to the reintegrated target, and one moving between two otherwise
+	 * healthy targets because of the retry/collision mechanism of the jump
+	 * map algorithm.
+	 * Due to layout colocation, if the oid has been changed, then it could
+	 * be 2 or even 3 as well, with current oid setting, this is 1.
+	 */
 	assert_int_equal(1, ctx.reint.out_nr);
 	jtc_assert_rebuild_reint_new(ctx, 1, 0, 1, 0);
 
@@ -1336,8 +1380,6 @@ down_up_sequences(void **state)
 	jtc_assert_scan_and_layout(&ctx);
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_1));
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6520: Should only be moving shard to target 1");
 	is_false(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
 	jtc_fini(&ctx);
@@ -1352,7 +1394,6 @@ down_up_sequences1(void **state)
 
 	jtc_init(&ctx, 6, 1, 2, OC_RP_2G2, g_verbose);
 	jtc_print_pool(&ctx);
-	ctx.enable_print_pool = false;
 	ctx.rebuild.skip = true; /* DAOS-6516 */
 
 	jtc_assert_scan_and_layout(&ctx);
@@ -1367,16 +1408,12 @@ down_up_sequences1(void **state)
 
 	jtc_set_status_on_target(&ctx, UP, shard_target_2);
 	jtc_assert_scan_and_layout(&ctx);
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6520: shard_target 2 is not included in placement");
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
 	jtc_set_status_on_target(&ctx, UP, shard_target_1);
 	jtc_assert_scan_and_layout(&ctx);
 	is_true(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_1));
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6520: Should only be moving shard to target 1");
 	is_false(jtc_has_shard_moving_to_target(&ctx, 0, shard_target_2));
 
 	jtc_fini(&ctx);
@@ -1411,8 +1448,6 @@ drain_all_with_extra_domains(void **state)
 	 */
 	assert_int_equal(8, jtc_get_layout_target_count(&ctx));
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6300 - too many are marked as rebuild");
 	assert_int_equal(4, jtc_get_layout_rebuild_count(&ctx));
 	for (i = 0; i < shards_nr; i++) {
 		is_true(jtc_has_shard_with_target_rebuilding(&ctx, i, NULL));
@@ -1443,8 +1478,6 @@ drain_all_with_enough_targets(void **state)
 	 * rebuilding and one not
 	 */
 	for (i = 0; i < shards_nr; i++) {
-		jtc_fini(&ctx);
-		skip_msg("DAOS-6300 - Not drained to other target?");
 		assert_int_equal(0, jtc_get_layout_bad_count(&ctx));
 		is_true(jtc_has_shard_with_target_rebuilding(&ctx, i, NULL));
 		is_true(jtc_has_shard_with_rebuilding_not_set(&ctx, i));
@@ -1475,8 +1508,6 @@ drain_target_same_shard_repeatedly_for_all_shards(void **state)
 			is_true(jtc_has_shard_with_target_rebuilding(&ctx,
 				shard_id, &new_target));
 
-			jtc_fini(&ctx);
-			skip_msg("DAOS-6300: All are marked as rebuilding");
 			is_true(jtc_has_shard_target_not_rebuilding(&ctx,
 				shard_id, target));
 
@@ -1514,7 +1545,7 @@ one_server_is_added(void **state)
 
 	jtc_init(&ctx, 4, 1, 3, OC_UNKNOWN, g_verbose);
 	/* set oid so that it would place a shard in one of the last targets */
-	assert_success(jtc_pool_map_extend(&ctx, 1, 1, 4));
+	assert_success(jtc_pool_map_extend(&ctx, 1, 1, 3));
 
 	/* Make sure that the oid will place on the added target ids */
 	is_true(jtc_set_oid_with_shard_in_targets(&ctx, new_target_ids,
@@ -1529,8 +1560,6 @@ one_server_is_added(void **state)
 	assert_int_equal(0, ctx.rebuild.out_nr);
 	assert_int_equal(0, ctx.reint.out_nr);
 
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6303 - should have targets marked as rebuild");
 	assert_int_equal(ctx.new.out_nr, jtc_get_layout_rebuild_count(&ctx));
 
 	jtc_fini(&ctx);
@@ -1538,27 +1567,133 @@ one_server_is_added(void **state)
 
 /*
  * ------------------------------------------------
- * Leave in multiple states at same time
+ * Leave in multiple states at same time (no addition)
  * ------------------------------------------------
  */
 static void
 placement_handles_multiple_states(void **state)
 {
+	struct jm_test_ctx ctx;
+	int ver_after_reint;
+	int ver_after_fail;
+	int ver_after_drain;
+	int ver_after_reint_complete;
+	uint32_t reint_tgt_id;
+	uint32_t fail_tgt_id;
+	uint32_t rebuilding;
+
+	jtc_init_with_layout(&ctx, 4, 1, 8, OC_RP_3G1, g_verbose);
+
+	/* first shard goes down, rebuilt, then reintegrated */
+	jtc_set_status_on_shard_target(&ctx, DOWN, 0);
+	jtc_set_status_on_shard_target(&ctx, DOWNOUT, 0);
+	jtc_set_status_on_shard_target(&ctx, UP, 0);
+	reint_tgt_id = jtc_layout_shard_tgt(&ctx, 0);
+	assert_success(jtc_create_layout(&ctx));
+
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	/* One thing reintegrating */
+	assert_int_equal(1, rebuilding);
+
+	/*
+	 * Reintegration is now in progress. Grab the version from here
+	 * for find reint count
+	 */
+	ver_after_reint = ctx.ver;
+
+	/* second shard goes down */
+	jtc_set_status_on_shard_target(&ctx, DOWN, 1);
+	fail_tgt_id = jtc_layout_shard_tgt(&ctx, 1);
+	assert_success(jtc_create_layout(&ctx));
+
+	ver_after_fail = ctx.ver;
+
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	/* One reintegrating plus one failure recovery */
+	assert_int_equal(2, rebuilding);
+
+	/* third shard is queued for drain */
+	jtc_set_status_on_shard_target(&ctx, DRAIN, 2);
+	assert_success(jtc_create_layout(&ctx));
+
+	/*
+	 * Reintegration is still running, but these other operations have
+	 * happened too and are now queued.
+	 */
+	ver_after_drain = ctx.ver;
+
+	is_false(jtc_layout_has_duplicate(&ctx));
+
+	/*
+	 * Compute placement in this state. All three shards should
+	 * be moving around
+	 */
+	jtc_scan(&ctx);
+	rebuilding = jtc_get_layout_rebuild_count(&ctx);
+	assert_int_equal(3, rebuilding);
+
+	/*
+	 * Compute find_reint() using the correct version of rebuild which
+	 * would have launched when reintegration started
+	 *
+	 * find_reint() should only be finding the one thing to move at this
+	 * version
+	 */
+	ctx.ver = ver_after_reint;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.reint.out_nr, 1);
+
+	/* Complete the reintegration */
+	ctx.ver = ver_after_drain; /* Restore the version first */
+	jtc_set_status_on_target(&ctx, UPIN, reint_tgt_id);
+	ver_after_reint_complete = ctx.ver;
+
+	/* This would start processing the failure - so check that it'd just
+	 * move one thing
+	 */
+	ctx.ver = ver_after_fail;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.rebuild.out_nr, 1);
+
+	/* Complete the rebuild */
+	ctx.ver = ver_after_reint_complete; /* Restore the version first */
+	jtc_set_status_on_target(&ctx, DOWNOUT, fail_tgt_id);
+
+	/* This would start processing the drain - so check that it'd just
+	 * move one thing
+	 */
+	ctx.ver = ver_after_drain;
+	jtc_scan(&ctx);
+	assert_int_equal(ctx.rebuild.out_nr, 1);
+
+	/* Remainder is simple / out of scope for this test */
+
+	jtc_fini(&ctx);
+}
+
+
+/*
+ * ------------------------------------------------
+ * Leave in multiple states at same time (including addition)
+ * ------------------------------------------------
+ */
+static void
+placement_handles_multiple_states_with_addition(void **state)
+{
 	struct jm_test_ctx	 ctx;
 
-	jtc_init_with_layout(&ctx, 3, 1, 8, OC_RP_2G1, g_verbose);
+	jtc_init_with_layout(&ctx, 3, 1, 4, OC_RP_3G1, g_verbose);
 	/* first shard goes down, rebuilt, then back up */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 0);
 	jtc_set_status_on_shard_target(&ctx, DOWNOUT, 0);
 	jtc_set_status_on_shard_target(&ctx, UP, 0);
+
+	/* a new domain is added */
+	jtc_pool_map_extend(&ctx, 1, 1, 4);
+
 	/* second shard goes down */
 	jtc_set_status_on_shard_target(&ctx, DOWN, 1);
 
-	/* a new domain is added */
-	jtc_pool_map_extend(&ctx, 1, 1, 1);
-
-	jtc_fini(&ctx);
-	skip_msg("DAOS-6301: Hits D_ASSERT(original->ol_nr == new->ol_nr)");
 	assert_success(jtc_create_layout(&ctx));
 
 	is_false(jtc_layout_has_duplicate(&ctx));
@@ -1567,11 +1702,14 @@ placement_handles_multiple_states(void **state)
 	uint32_t rebuilding = jtc_get_layout_rebuild_count(&ctx);
 
 	/* 1 each for down, up, new ... maybe? */
-	assert_int_equal(3, rebuilding);
+	assert_true(rebuilding == 2 || rebuilding == 3);
 
-	assert_int_equal(ctx.rebuild.out_nr, 1);
+	/* Both DOWN and UP target will be remapped during remap */
+	assert_int_equal(ctx.rebuild.out_nr, 2);
 	assert_int_equal(ctx.reint.out_nr, 1);
-	assert_int_equal(ctx.new.out_nr, 1);
+
+	/* JCH might cause multiple shards remap to the new target */
+	assert_true(ctx.new.out_nr >= 1);
 
 	jtc_fini(&ctx);
 }
@@ -1651,8 +1789,6 @@ unbalanced_config(void **state)
 	TEST_NON_STANDARD_SYSTEMS(domain_targets_nr, domain_targets,
 				  OC_RP_3G2, 6);
 
-	skip_msg("DAOS-6348: The following two tests have duplicate targets "
-		 "picked");
 	TEST_NON_STANDARD_SYSTEMS(domain_targets_nr, domain_targets,
 				  OC_RP_3GX, (total_targets / 3) * 3);
 
@@ -1663,6 +1799,87 @@ unbalanced_config(void **state)
 	domain_targets[1] = 5;
 	domain_targets[2] = 5;
 	TEST_NON_STANDARD_SYSTEMS(3, domain_targets, OC_RP_2G2, 4);
+}
+
+static void
+same_group_shards_not_in_same_domain(void **state)
+{
+	struct jm_test_ctx	ctx;
+	int	tgt;
+	int	other_tgt;
+	int	miss_cnt = 0;
+	int	i;
+	int	j;
+	int	k;
+
+	jtc_init_with_layout(&ctx, 32, 2, 4, OC_EC_2P1G64, g_verbose);
+	for (i = 0; i < 64; i++) {
+		for (j = 0; j < 3; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, 3 * i + j);
+			for (k = j + 1; k < 3; k++) {
+				other_tgt = jtc_layout_shard_tgt(&ctx, 3 * i + k);
+				if (tgt/4 == other_tgt/4)
+					miss_cnt++;
+			}
+		}
+	}
+	jtc_fini(&ctx);
+	assert_rc_equal(miss_cnt, 0);
+
+	jtc_init_with_layout(&ctx, 18, 1, 512, OC_EC_16P2G512, g_verbose);
+	for (i = 0; i < 512; i++) {
+		for (j = 0; j < 18; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
+			for (k = j + 1; k < 18; k++) {
+				other_tgt = jtc_layout_shard_tgt(&ctx, 18 * i + k);
+				if (tgt/512 == other_tgt/512)
+					miss_cnt++;
+			}
+		}
+	}
+	jtc_fini(&ctx);
+	assert_rc_equal(miss_cnt, 0);
+
+	jtc_init_with_layout(&ctx, 512, 1, 18, OC_EC_16P2G512, g_verbose);
+	for (i = 0; i < 512; i++) {
+		for (j = 0; j < 18; j++) {
+			tgt = jtc_layout_shard_tgt(&ctx, 18 * i + j);
+			for (k = j + 1; k < 18; k++) {
+				other_tgt = jtc_layout_shard_tgt(&ctx, 18 * i + k);
+				if (tgt/18 == other_tgt/18)
+					miss_cnt++;
+			}
+		}
+	}
+	jtc_fini(&ctx);
+	assert_true(miss_cnt < 2);
+}
+
+static void
+large_shards_over_limited_targets(void **state)
+{
+	struct jm_test_ctx	ctx;
+	int i;
+
+	D_DEBUG(DB_TRACE, "shards over limit\n");
+	jtc_init_with_layout(&ctx, 4, 1, 8, OC_RP_2G8, g_verbose);
+	for (i = 0; i < 8; i++) {
+		jtc_set_status_on_target(&ctx, DOWN, i);
+		jtc_scan(&ctx);
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+	}
+
+	assert_success(jtc_create_layout(&ctx));
+
+	for (i = 24; i < 32; i++) {
+		jtc_set_status_on_target(&ctx, DOWN, i);
+		jtc_scan(&ctx);
+		jtc_set_status_on_target(&ctx, DOWNOUT, i);
+	}
+
+	assert_success(jtc_create_layout(&ctx));
+
+	jtc_fini(&ctx);
 }
 
 /*
@@ -1717,7 +1934,7 @@ static const struct CMUnitTest tests[] = {
 	T("Take a single shard's target down, downout, then again with the "
 	  "new target. Then reintegrate the first downed target, "
 	  "then the second.", down_up_sequences),
-	WIP("Take a single shard's target down, downout, then again with the "
+	T("Take a single shard's target down, downout, then again with the "
 	  "new target. Then reintegrate the second downed target, "
 	  "then the first (Reverse of previous test).", down_up_sequences1),
 	T("multiple shard targets go down, then are reintegrated in the "
@@ -1738,11 +1955,17 @@ static const struct CMUnitTest tests[] = {
 	  "data movement to the new server",
 	  one_server_is_added),
 	/* Multiple */
-	T("Placement can handle multiple states",
+	T("Placement can handle multiple states (excluding addition)",
 	  placement_handles_multiple_states),
+	T("Placement can handle multiple states (including addition)",
+	  placement_handles_multiple_states_with_addition),
 	/* Non-standard system setups*/
 	T("Non-standard system configurations. All healthy",
 	  unbalanced_config),
+	T("shards in the same group not in the same domain",
+	  same_group_shards_not_in_same_domain),
+	T("large shards over limited targets",
+	  large_shards_over_limited_targets),
 };
 
 int

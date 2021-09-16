@@ -14,6 +14,7 @@
 #include <cmocka.h>
 
 #include "../drpc_internal.h"
+#include <daos/tests_lib.h>
 #include <daos/test_mocks.h>
 #include <daos/test_utils.h>
 
@@ -32,7 +33,7 @@ static size_t dss_ult_create_stack_size; /* saved input */
 static ABT_thread *dss_ult_create_ult_ptr; /* saved ptr addr */
 int
 dss_ult_create(void (*func)(void *), void *arg, int ult_type, int tgt_id,
-		size_t stack_size, ABT_thread *ult)
+	       size_t stack_size, ABT_thread *ult)
 {
 	dss_ult_create_func = func;
 	dss_ult_create_arg_ptr = arg;
@@ -168,7 +169,7 @@ test_drpc_listener_init_cant_create_socket(void **state)
 {
 	socket_return = -1; /* Make the drpc_listen call fail */
 
-	assert_int_equal(drpc_listener_init(), -DER_MISC);
+	assert_rc_equal(drpc_listener_init(), -DER_MISC);
 }
 
 static void
@@ -176,7 +177,7 @@ test_drpc_listener_init_success(void **state)
 {
 	char expected_socket_path[256];
 
-	assert_int_equal(drpc_listener_init(), DER_SUCCESS);
+	assert_rc_equal(drpc_listener_init(), DER_SUCCESS);
 
 	/* Created a valid mutex */
 	assert_non_null(ABT_mutex_create_newmutex_ptr);
@@ -202,9 +203,9 @@ test_drpc_listener_init_success(void **state)
 	 */
 	assert_non_null(drpc_progress_context_create_listener_ptr);
 	assert_int_equal(drpc_progress_context_create_listener_fd,
-			listen_sockfd);
+			 listen_sockfd);
 	assert_ptr_equal(drpc_progress_context_create_listener_handler,
-			drpc_hdlr_process_msg);
+			 drpc_hdlr_process_msg);
 
 	/* Created a ULT on xstream 0 */
 	assert_non_null(dss_ult_create_func);
@@ -221,7 +222,7 @@ test_drpc_listener_init_cant_create_prog_ctx(void **state)
 	/* drpc_progress_context_create returns null */
 	mock_drpc_progress_context_create_teardown();
 
-	assert_int_equal(drpc_listener_init(), -DER_NOMEM);
+	assert_rc_equal(drpc_listener_init(), -DER_NOMEM);
 
 	/*
 	 * Listener should have been freed.
@@ -235,7 +236,7 @@ test_drpc_listener_init_cant_create_mutex(void **state)
 {
 	ABT_mutex_create_return = ABT_ERR_MEM;
 
-	assert_int_equal(drpc_listener_init(), -DER_NOMEM);
+	assert_rc_equal(drpc_listener_init(), -DER_NOMEM);
 }
 
 static void
@@ -243,17 +244,17 @@ test_drpc_listener_init_cant_create_ult(void **state)
 {
 	dss_ult_create_return = -DER_MISC;
 
-	assert_int_equal(drpc_listener_init(), dss_ult_create_return);
+	assert_rc_equal(drpc_listener_init(), dss_ult_create_return);
 
 	/* Context that was created was closed after ULT failed */
 	assert_ptr_equal(drpc_progress_context_close_ctx_ptr,
-			drpc_progress_context_create_return);
+			 drpc_progress_context_create_return);
 }
 
 static void
 test_drpc_listener_fini_success(void **state)
 {
-	assert_int_equal(drpc_listener_fini(), DER_SUCCESS);
+	assert_rc_equal(drpc_listener_fini(), DER_SUCCESS);
 
 	/* Joined ABT thread */
 	assert_int_equal(ABT_thread_join_call_count, 1);
@@ -270,7 +271,7 @@ test_drpc_listener_fini_cant_join_thread(void **state)
 {
 	ABT_thread_join_return = ABT_ERR_INV_THREAD;
 
-	assert_int_equal(drpc_listener_fini(), -DER_INVAL);
+	assert_rc_equal(drpc_listener_fini(), -DER_INVAL);
 }
 
 static void
@@ -278,7 +279,7 @@ test_drpc_listener_fini_cant_free_thread(void **state)
 {
 	ABT_thread_free_return = ABT_ERR_INV_THREAD;
 
-	assert_int_equal(drpc_listener_fini(), -DER_INVAL);
+	assert_rc_equal(drpc_listener_fini(), -DER_INVAL);
 }
 
 static void
@@ -286,7 +287,7 @@ test_drpc_listener_fini_cant_free_mutex(void **state)
 {
 	ABT_mutex_free_return = ABT_ERR_INV_MUTEX;
 
-	assert_int_equal(drpc_listener_fini(), -DER_INVAL);
+	assert_rc_equal(drpc_listener_fini(), -DER_INVAL);
 }
 
 /* Convenience macros for unit tests */

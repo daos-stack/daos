@@ -13,6 +13,7 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
+#include <daos/tests_lib.h>
 #include <daos_prop.h>
 #include <daos/common.h>
 
@@ -61,9 +62,9 @@ expect_merge_result(daos_prop_t *old, daos_prop_t *new, daos_prop_t *exp_result)
 			break;
 		case DAOS_PROP_PO_ACL:
 		case DAOS_PROP_CO_ACL:
-			assert_int_equal(daos_prop_entry_cmp_acl(entry,
+			assert_rc_equal(daos_prop_entry_cmp_acl(entry,
 								 exp_entry),
-					 0);
+					0);
 			break;
 		default:
 			assert_int_equal(entry->dpe_val, exp_entry->dpe_val);
@@ -83,8 +84,7 @@ test_daos_prop_merge_empty(void **state)
 	prop_empty = daos_prop_alloc(0);
 	prop = daos_prop_alloc(2);
 	prop->dpp_entries[0].dpe_type = DAOS_PROP_PO_LABEL;
-	D_STRNDUP(prop->dpp_entries[0].dpe_str, "Test",
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop->dpp_entries[0].dpe_str, "Test");
 	prop->dpp_entries[1].dpe_type = DAOS_PROP_PO_RECLAIM;
 	prop->dpp_entries[1].dpe_val = DAOS_RECLAIM_LAZY;
 
@@ -111,15 +111,13 @@ test_daos_prop_merge_add_only(void **state)
 
 	prop1 = daos_prop_alloc(2);
 	prop1->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop1->dpp_entries[0].dpe_str, "Test",
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop1->dpp_entries[0].dpe_str, "Test");
 	prop1->dpp_entries[1].dpe_type = DAOS_PROP_CO_COMPRESS;
 	prop1->dpp_entries[1].dpe_val = 1;
 
 	prop2 = daos_prop_alloc(3);
 	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_OWNER;
-	D_STRNDUP(prop2->dpp_entries[0].dpe_str, "test@",
-		  DAOS_ACL_MAX_PRINCIPAL_LEN);
+	D_STRNDUP_S(prop2->dpp_entries[0].dpe_str, "test@");
 	prop2->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
 	prop2->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
 	prop2->dpp_entries[2].dpe_type = DAOS_PROP_CO_ENCRYPT;
@@ -151,15 +149,13 @@ test_daos_prop_merge_total_update(void **state)
 
 	prop1 = daos_prop_alloc(2);
 	prop1->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop1->dpp_entries[0].dpe_str, "Test",
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop1->dpp_entries[0].dpe_str, "Test");
 	prop1->dpp_entries[1].dpe_type = DAOS_PROP_CO_COMPRESS;
 	prop1->dpp_entries[1].dpe_val = 1;
 
 	prop2 = daos_prop_alloc(2);
 	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop2->dpp_entries[0].dpe_str, "Updated",
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop2->dpp_entries[0].dpe_str, "Updated");
 	prop2->dpp_entries[1].dpe_type = DAOS_PROP_CO_COMPRESS;
 	prop2->dpp_entries[1].dpe_val = 0;
 
@@ -180,21 +176,18 @@ test_daos_prop_merge_subset_update(void **state)
 
 	prop1 = daos_prop_alloc(2);
 	prop1->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop1->dpp_entries[0].dpe_str, "Test",
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop1->dpp_entries[0].dpe_str, "Test");
 	prop1->dpp_entries[1].dpe_type = DAOS_PROP_CO_COMPRESS;
 	prop1->dpp_entries[1].dpe_val = 1;
 
 	prop2 = daos_prop_alloc(1);
 	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop2->dpp_entries[0].dpe_str, "Updated",
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop2->dpp_entries[0].dpe_str, "Updated");
 
 	/* Expecting only one prop to be overwritten */
-	exp_result = daos_prop_dup(prop1, false);
+	exp_result = daos_prop_dup(prop1, false /* pool */, true /* input */);
 	entry = daos_prop_entry_get(exp_result, prop2->dpp_entries[0].dpe_type);
-	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[0], entry),
-			 0);
+	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[0], entry), 0);
 
 	expect_merge_result(prop1, prop2, exp_result);
 
@@ -216,16 +209,14 @@ test_daos_prop_merge_add_and_update(void **state)
 
 	prop1 = daos_prop_alloc(2);
 	prop1->dpp_entries[0].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop1->dpp_entries[0].dpe_str, "Test",
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop1->dpp_entries[0].dpe_str, "Test");
 	prop1->dpp_entries[1].dpe_type = DAOS_PROP_CO_COMPRESS;
 	prop1->dpp_entries[1].dpe_val = 1;
 
 	prop2 = daos_prop_alloc(2);
 	dup_idx = 0; /* duplicate type to what's in prop1 */
 	prop2->dpp_entries[dup_idx].dpe_type = DAOS_PROP_CO_LABEL;
-	D_STRNDUP(prop2->dpp_entries[dup_idx].dpe_str, "Updated",
-		  DAOS_PROP_LABEL_MAX_LEN);
+	D_STRNDUP_S(prop2->dpp_entries[dup_idx].dpe_str, "Updated");
 	new_idx = 1; /* type that isn't in prop1 */
 	prop2->dpp_entries[1].dpe_type = DAOS_PROP_CO_CSUM;
 	prop2->dpp_entries[1].dpe_val = DAOS_PROP_CO_CSUM_CRC32;
@@ -236,28 +227,134 @@ test_daos_prop_merge_add_and_update(void **state)
 	result_i = 0;
 	for (i = 0; i < prop1->dpp_nr; i++, result_i++) {
 		entry = &exp_result->dpp_entries[result_i];
-		assert_int_equal(daos_prop_entry_copy(&prop1->dpp_entries[i],
-						      entry), 0);
+		assert_rc_equal(daos_prop_entry_copy(&prop1->dpp_entries[i],
+						     entry), 0);
 	}
 
 	entry = &exp_result->dpp_entries[result_i];
-	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[new_idx],
-					      entry), 0);
+	assert_rc_equal(daos_prop_entry_copy(&prop2->dpp_entries[new_idx],
+					     entry), 0);
 	result_i++;
 	assert_int_equal(result_i, exp_nr);
 
 	/* Overwrite the entry prop2 is duplicating */
 	entry = daos_prop_entry_get(exp_result,
 				    prop2->dpp_entries[dup_idx].dpe_type);
-	assert_int_equal(daos_prop_entry_copy(&prop2->dpp_entries[dup_idx],
+	assert_rc_equal(daos_prop_entry_copy(&prop2->dpp_entries[dup_idx],
 					      entry),
-			 0);
+			0);
 
 	expect_merge_result(prop1, prop2, exp_result);
 
 	daos_prop_free(prop1);
 	daos_prop_free(prop2);
 	daos_prop_free(exp_result);
+}
+
+static void
+test_daos_prop_from_str(void **state)
+{
+	/** Valid prop entries & values */
+	char		*LABEL		= "label:hello";
+	char		*CSUM		= "cksum:crc64";
+	char		*CSUM_SIZE	= "cksum_size:1048576";
+	char		*DEDUP		= "dedup:hash";
+	char		*DEDUP_TH	= "dedup_threshold:8192";
+	char		*COMP		= "compression:lz4";
+	char		*ENC		= "encryption:aes-xts128";
+	char		*RF		= "rf:2";
+	char		*EC_CELL	= "ec_cell:2021";
+
+	/** Valid prop entries, wrong values */
+	char		*CSUM_INV	= "cksum:crc2000";
+	char            *RF_INV		= "rf:64";
+
+	/** Read only props, that should not be parsed */
+	char		*OID		= "alloc_oid:25";
+	char		*LAYOUT		= "layout_type:posix";
+
+	/** Invalid prop entries */
+	char		*PROP_INV1	= "hello:world";
+	char		*PROP_INV2	= "helloworld";
+	char		*PROP_INV3	= ":helloworld";
+	char		*PROP_INV4	= "helloworld:";
+
+	char			buf[1024] = {0};
+	daos_prop_t		*prop;
+	struct daos_prop_entry  *entry;
+	int			rc;
+
+	rc = daos_prop_from_str(NULL, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	rc = daos_prop_from_str(buf, sizeof(buf), NULL);
+	assert_int_equal(rc, -DER_INVAL);
+	rc = daos_prop_from_str(buf, 0, &prop);
+	assert_int_equal(rc, -DER_INVAL);
+
+	/** Buffer containing read only entries should fail */
+	sprintf(buf, "%s;%s", CSUM, OID);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s", CSUM, LAYOUT);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+
+	/** Buffer containing invalid entries should fail */
+	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV1);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV2);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV3);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s;%s", CSUM, LABEL, PROP_INV4);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+
+	/** Buffer containing invalid values should fail */
+	sprintf(buf, "%s;%s", CSUM_INV, RF);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+	sprintf(buf, "%s;%s", CSUM, RF_INV);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, -DER_INVAL);
+
+	sprintf(buf, "%s;%s;%s;%s;%s;%s;%s;%s;%s",
+		LABEL, CSUM, CSUM_SIZE, DEDUP, DEDUP_TH, COMP, ENC, RF, EC_CELL);
+	rc = daos_prop_from_str(buf, sizeof(buf), &prop);
+	assert_int_equal(rc, 0);
+
+	/** verify entry values */
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_LABEL);
+	assert_string_equal(entry->dpe_str, "hello");
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_CSUM);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_CSUM_CRC64);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_CSUM_CHUNK_SIZE);
+	assert_int_equal(entry->dpe_val, 1048576);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_DEDUP);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_DEDUP_HASH);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_DEDUP_THRESHOLD);
+	assert_int_equal(entry->dpe_val, 8192);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_COMPRESS);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_COMPRESS_LZ4);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_ENCRYPT);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_ENCRYPT_AES_XTS128);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_REDUN_FAC);
+	assert_int_equal(entry->dpe_val, DAOS_PROP_CO_REDUN_RF2);
+
+	entry = daos_prop_entry_get(prop, DAOS_PROP_CO_EC_CELL_SZ);
+	assert_int_equal(entry->dpe_val, 2021);
+
+	daos_prop_free(prop);
 }
 
 int
@@ -270,6 +367,7 @@ main(void)
 		cmocka_unit_test(test_daos_prop_merge_total_update),
 		cmocka_unit_test(test_daos_prop_merge_subset_update),
 		cmocka_unit_test(test_daos_prop_merge_add_and_update),
+		cmocka_unit_test(test_daos_prop_from_str),
 	};
 
 	return cmocka_run_group_tests_name("common_prop", tests, NULL, NULL);

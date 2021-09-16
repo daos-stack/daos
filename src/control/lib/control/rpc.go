@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/lib/hostlist"
@@ -34,8 +34,33 @@ const (
 	maxMSCandidates    = 5
 )
 
+type (
+	safeRandSource struct {
+		sync.Mutex
+		src rand.Source
+	}
+)
+
+func (srs *safeRandSource) Int63() int64 {
+	srs.Lock()
+	defer srs.Unlock()
+	return srs.src.Int63()
+}
+
+func (srs *safeRandSource) Seed(seed int64) {
+	srs.Lock()
+	defer srs.Unlock()
+	srs.src.Seed(seed)
+}
+
+func newSafeRandSource(seed int64) *safeRandSource {
+	return &safeRandSource{
+		src: rand.NewSource(seed),
+	}
+}
+
 var (
-	msCandidateRandSource = rand.NewSource(time.Now().UnixNano())
+	msCandidateRandSource = newSafeRandSource(time.Now().UnixNano())
 )
 
 type (
@@ -43,15 +68,22 @@ type (
 	// a gRPC method and returns a protobuf response or error.
 	unaryRPC func(context.Context, *grpc.ClientConn) (proto.Message, error)
 
-	// unaryRPCGetter defines the interface to be implemented by
-	// requests that can invoke a gRPC method.
+	// unaryRPCGetter defines the interface to be implemented by requests
+	// that can invoke a gRPC method.
 	unaryRPCGetter interface {
 		getRPC() unaryRPC
+	}
+
+	// sysGetter defines an interface to be implemented by clients that can
+	// retrieve the system name field.
+	sysGetter interface {
+		GetSystem() string
 	}
 
 	// UnaryInvoker defines an interface to be implemented by clients
 	// capable of invoking a unary RPC (1 response for 1 request).
 	UnaryInvoker interface {
+		sysGetter
 		debugLogger
 		InvokeUnaryRPC(ctx context.Context, req UnaryRequest) (*UnaryResponse, error)
 		InvokeUnaryRPCAsync(ctx context.Context, req UnaryRequest) (HostResponseChan, error)
@@ -140,6 +172,12 @@ func DefaultClient() *Client {
 // existing Client.
 func (c *Client) SetConfig(cfg *Config) {
 	c.config = cfg
+}
+
+// GetConfig retrieves the system name from the client configuration and
+// implements the sysGetter interface.
+func (c *Client) GetSystem() string {
+	return c.config.SystemName
 }
 
 func (c *Client) Debug(msg string) {
@@ -278,7 +316,13 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		// send the request to a server that can handle the request directly.
 		rnd := rand.New(msCandidateRandSource)
 		msCandidates := hostlist.MustCreateSet("")
-		for i := 0; i < len(defaultHosts) && msCandidates.Count() < maxMSCandidates; i++ {
+
+		numCandidates := maxMSCandidates
+		if len(defaultHosts) < numCandidates {
+			numCandidates = len(defaultHosts)
+		}
+
+		for msCandidates.Count() < numCandidates {
 			if _, err := msCandidates.Insert(defaultHosts[rnd.Intn(len(defaultHosts))]); err != nil {
 				return nil, errors.Wrap(err, "failed to build MS candidates set")
 			}
@@ -289,22 +333,57 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 	}
 
+	// Copy the starting hostlist to use for reset on retry later.
+	startHostList := make([]string, len(req.getHostList()))
+	copy(startHostList, req.getHostList())
+
+	isTimeout := func(err error) bool {
+		if err == nil {
+			return false
+		}
+
+		// Get the wrapped error.
+		cause := errors.Cause(err)
+		switch {
+		case cause == context.DeadlineExceeded,
+			status.Code(cause) == codes.DeadlineExceeded:
+			return true
+		default:
+			return false
+		}
+	}
+
 	isHardFailure := func(err error, reqCtx context.Context) bool {
 		if err == nil {
 			return false
 		}
 
-		// If the error is something other than a context error,
-		// then it's considered a hard failure and not retryable.
-		code := status.Code(errors.Cause(err))
-		if code != codes.Canceled && code != codes.DeadlineExceeded {
+		// Get the wrapped error.
+		cause := errors.Cause(err)
+
+		// If the context error is from the parent request context,
+		// then it's a hard failure. Otherwise, it may be a soft failure
+		// that can be retried.
+		if cause == reqCtx.Err() {
+			log.Debugf("outer context failed: %v", err)
 			return true
 		}
 
-		// If the context error is from the overall request context,
-		// then it's a hard failure. Otherwise, it's a soft failure
-		// and can be retried.
-		return errors.Cause(err) == reqCtx.Err()
+		// This helper checks for errors returned during the process of
+		// invoking the RPC, rather than from the RPC itself (i.e. internal
+		// errors). As such, the set of errors that can cause the entire
+		// request to fail without a retry should be pretty small.
+
+		switch {
+		case isTimeout(cause):
+			// The outer context hasn't timed out or been canceled, so
+			// this is a soft failure that can be retried.
+			return false
+		default:
+			// If the error is not an inner timeout, it's a hard failure.
+			log.Debugf("non-retryable error: %v", err)
+			return true
+		}
 	}
 
 	// MS requests are a little more complicated. The general idea here is that
@@ -323,16 +402,36 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		}
 		respChan, err := c.InvokeUnaryRPCAsync(tryCtx, req)
 		if isHardFailure(err, reqCtx) {
+			if isTimeout(err) {
+				return nil, FaultRpcTimeout(req)
+			}
 			return nil, err
 		}
 
 		ur := &UnaryResponse{fromMS: true}
 		err = gatherResponses(tryCtx, respChan, ur)
 		if isHardFailure(err, reqCtx) {
+			if isTimeout(err) {
+				return nil, FaultRpcTimeout(req)
+			}
 			return nil, err
 		}
 
 		_, err = ur.getMSResponse()
+		// If the request specifies that the error is retryable,
+		// check to see if it also defines its own retry logic
+		// and run that if so. Otherwise, let the usual retry
+		// logic below handle the error.
+		if req.canRetry(err, try) {
+			err := req.onRetry(tryCtx, try)
+			if err == nil {
+				return ur, nil
+			}
+			if err != errNoRetryHandler {
+				return nil, err
+			}
+		}
+
 		switch e := err.(type) {
 		case *system.ErrNotLeader:
 			// If we sent the request to a non-leader MS replica,
@@ -356,12 +455,19 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 				req.SetHostList(e.Replicas)
 			}
 		default:
-			// If the request defines its own retry logic for the error, run
-			// that logic and break out early.
+			// As long as the outer context hasn't timed out, we
+			// should always retry an inner timeout.
+			if reqCtx.Err() == nil && isTimeout(err) {
+				break
+			}
+
+			// In the case that the request specifies that the error
+			// is retryable, but doesn't define its own retry logic,
+			// just break out so it can be tried again as usual.
 			if req.canRetry(err, try) {
-				if err := req.onRetry(tryCtx, try); err != nil {
-					return ur, nil
-				}
+				// Reset the hostlist to the starting hostlist, in order
+				// to restart the search for the current MS leader.
+				req.SetHostList(startHostList)
 				break
 			}
 
@@ -380,6 +486,9 @@ func invokeUnaryRPC(parentCtx context.Context, log debugLogger, c UnaryInvoker, 
 		log.Debugf("MS request error: %v; retrying after %s", err, backoff)
 		select {
 		case <-reqCtx.Done():
+			if isTimeout(reqCtx.Err()) {
+				return nil, FaultRpcTimeout(req)
+			}
 			return nil, reqCtx.Err()
 		case <-time.After(backoff):
 		}

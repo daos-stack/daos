@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -26,10 +26,10 @@ class ContainerAsync(TestWithServers):
     """
 
     def __init__(self, *args, **kwargs):
-        super(ContainerAsync, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.container = []
 
-    def test_createasync(self):
+    def test_create_async(self):
         """Test container create for asynchronous mode.
 
         Test both positive and negative cases. For negative case, RC is -1002,
@@ -39,7 +39,7 @@ class ContainerAsync(TestWithServers):
         The negative case is more like a test of the API implementation rather
         than DAOS itself.
 
-        :avocado: tags=all,small,full_regression,container,cont_create_async
+        :avocado: tags=all,full_regression,container,cont_create_async
         """
         self.add_pool()
         ph = self.pool.pool.handle
@@ -68,20 +68,20 @@ class ContainerAsync(TestWithServers):
                 poh=ph, con_uuid=None, cb_func=cbh2.callback)
             cbh2.wait()
             self.assertTrue(
-                cbh2.ret_code is not None and cbh2.ret_code != 0,
+                cbh2.ret_code is not None and cbh2.ret_code != RC_SUCCESS,
                 "Async create of non-existing container succeeded!")
         except DaosApiError as excep:
             print(excep)
             print(traceback.format_exc())
 
-    def test_destroyasync(self):
+    def test_destroy_async(self):
         """Test container destroy for asynchronous mode.
 
         Test only positive case. We don't test negative case because the API is
         implemented so that it returns the error code before executing the
         callback function, so if we try it as it is, the test hangs.
 
-        :avocado: tags=all,small,full_regression,container,cont_destroy_async
+        :avocado: tags=all,full_regression,container,cont_destroy_async
         """
         self.add_pool()
 
@@ -102,14 +102,14 @@ class ContainerAsync(TestWithServers):
             print(excep)
             print(traceback.format_exc())
 
-    def test_openasync(self):
+    def test_open_async(self):
         """Test container open for asynchronous mode.
 
         Test only positive case. We don't test negative case because the API is
         implemented so that it returns the error code before executing the
         callback function, so if we try it as it is, the test hangs.
 
-        :avocado: tags=all,small,full_regression,container,cont_open_async
+        :avocado: tags=all,full_regression,container,cont_open_async
         """
         self.add_pool()
 
@@ -130,12 +130,12 @@ class ContainerAsync(TestWithServers):
             print(excep)
             print(traceback.format_exc())
 
-    def test_closeasync(self):
+    def test_close_async(self):
         """Test container close for asynchronous mode.
 
         Test both positive and negative cases.
 
-        :avocado: tags=all,small,full_regression,container,cont_close_async
+        :avocado: tags=all,full_regression,container,cont_close_async
         """
         self.add_pool()
 
@@ -174,12 +174,12 @@ class ContainerAsync(TestWithServers):
             print(excep)
             print(traceback.format_exc())
 
-    def test_queryasync(self):
+    def test_query_async(self):
         """Test container query for asynchronous mode.
 
         Test both positive and negative cases.
 
-        :avocado: tags=all,small,full_regression,container,cont_query_async
+        :avocado: tags=all,full_regression,container,cont_query_async
         """
         self.add_pool()
 

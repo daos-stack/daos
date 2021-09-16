@@ -51,4 +51,7 @@ struct cipher_ft {
 	enum DAOS_CIPHER_TYPE	cf_type;
 };
 
+struct cipher_ft *
+daos_cipher_type2algo(enum DAOS_CIPHER_TYPE type);
+
 #endif /** __DAOS_CIPHER_H */

@@ -163,16 +163,19 @@ struct ilog_entry {
 	struct ilog_id	ie_id;
 	/** The status of the incarnation log entry.  See enum ilog_status */
 	int32_t		ie_status;
+	/** Index of the ilog entry */
+	int32_t		ie_idx;
 };
 
-#define ILOG_PRIV_SIZE 456
+#define ILOG_PRIV_SIZE 416
 /** Structure for storing the full incarnation log for ilog_fetch.  The
  * fields shouldn't generally be accessed directly but via the iteration
  * APIs below.
  */
 struct ilog_entries {
 	/** Array of log entries */
-	struct ilog_entry	*ie_entries;
+	struct ilog_id		*ie_ids;
+	uint32_t		*ie_statuses;
 	/** Number of entries in the log */
 	int64_t			 ie_num_entries;
 	/** Private log data */
@@ -190,7 +193,8 @@ struct ilog_entries {
  *				that are provably not needed.  If discard is
  *				set, it will remove everything in the epoch
  *				range.
- *  \param	punched[in]	Max punch of parent incarnation log
+ *  \param	punch_major[in]	Max major epoch punch of parent incarnation log
+ *  \param	punch_major[in]	Max minor epoch punch of parent incarnation log
  *  \param	entries[in]	Used for efficiency since aggregation is used
  *				by vos_iterator
  *
@@ -201,7 +205,7 @@ struct ilog_entries {
 int
 ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
 	       const struct ilog_desc_cbs *cbs, const daos_epoch_range_t *epr,
-	       bool discard, daos_epoch_t punched,
+	       bool discard, daos_epoch_t punch_major, uint16_t punch_minor,
 	       struct ilog_entries *entries);
 
 /** Initialize an ilog_entries struct for fetch
@@ -210,6 +214,15 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
  */
 void
 ilog_fetch_init(struct ilog_entries *entries);
+
+/** Assuming src has already been copied to dest, just fix up internal pointers
+ *  and reset src
+ *
+ *  \param	dest[in]	Destination entries
+ *  \param	src[in]		Source entries
+ */
+void
+ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src);
 
 /** Fetch the entire incarnation log.  This function will refresh only when
  * the underlying log or the intent has changed.  If the struct is shared
@@ -236,21 +249,31 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root,
 void
 ilog_fetch_finish(struct ilog_entries *entries);
 
+/** For internal use by ilog_foreach* */
+static inline bool
+ilog_cache_entry(const struct ilog_entries *entries, struct ilog_entry *entry, int idx)
+{
+	entry->ie_id.id_value = entries->ie_ids[idx].id_value;
+	entry->ie_id.id_epoch = entries->ie_ids[idx].id_epoch;
+	entry->ie_status = entries->ie_statuses[idx];
+	return true;
+}
+
 /** Iterator for fetched incarnation log entries
  *
  *  \param	entries[in]	The fetched entries
  */
-#define ilog_foreach_entry(ents, entry)		\
-	for (entry = &(ents)->ie_entries[0];	\
-	     entry != &(ents)->ie_entries[(ents)->ie_num_entries]; entry++)
+#define ilog_foreach_entry(ents, entry)						\
+	for ((entry)->ie_idx = 0; (entry)->ie_idx < (ents)->ie_num_entries &&	\
+	     ilog_cache_entry(ents, entry, (entry)->ie_idx); (entry)->ie_idx++)
 
 /** Reverse iterator for fetched incarnation log entries
  *
  *  \param	entries[in]	The fetched entries
  */
-#define ilog_foreach_entry_reverse(ents, entry)				\
-	for (entry = &(ents)->ie_entries[(ents)->ie_num_entries - 1];	\
-	     entry != &(ents)->ie_entries[-1]; entry--)
+#define ilog_foreach_entry_reverse(ents, entry)						\
+	for ((entry)->ie_idx = (ents)->ie_num_entries - 1; (entry)->ie_idx >= 0 &&	\
+	     ilog_cache_entry(ents, entry, (entry)->ie_idx); (entry)->ie_idx--)
 
 /** Fetch the address of the timestamp index from the ilog
  *

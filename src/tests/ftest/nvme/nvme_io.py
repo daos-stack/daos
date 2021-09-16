@@ -1,13 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2020-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
-
 from ior_test_base import IorTestBase
-from test_utils_pool import TestPool
 
 
 class NvmeIo(IorTestBase):
@@ -31,7 +28,9 @@ class NvmeIo(IorTestBase):
         Use Cases:
             Running multiple IOR on same server start instance.
 
-        :avocado: tags=all,full_regression,hw,large,daosio,nvme_io
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio,nvme_io
         """
 
         # Test params
@@ -41,17 +40,14 @@ class NvmeIo(IorTestBase):
         # Loop for every IOR object type
         for obj_type in object_type:
             for ior_param in tests:
-                # There is an issue with replication for final test case
-                # in the yaml file. Hence, skip that case for all Replication
-                # object classes.
-                if obj_type.startswith("RP") and ior_param[2] == 33554432:
-                    self.log.warning("Replication test Fails with  DAOS-4738,")
-                    self.log.warning("hence skipping")
+                # There is an issue with 8 bytes transfer size Hence, skip
+                # tests case with 8 bytes Transfer size.
+                if ior_param[2] == 8:
+                    self.log.warning("Skip test because of DAOS-7021")
                     continue
 
                 # Create and connect to a pool
-                self.pool = TestPool(self.context, self.get_dmg_command())
-                self.pool.get_params(self)
+                self.add_pool(create=False)
                 self.pool.scm_size.update(ior_param[0])
                 self.pool.nvme_size.update(ior_param[1])
                 self.pool.create()

@@ -3,8 +3,8 @@ hosts:
         - server-A
     test_clients:
         - client-B
-timeout: 800
-job_manager_timeout: 700
+timeout: 1000
+job_manager_timeout: 900
 server_config:
     name: daos_server
     servers:
@@ -48,3 +48,6 @@ daos_vol_tests:  !mux
     test8:
         testname: h5daos_test_oclass
         client_processes: 1
+    test9:
+        testname: h5daos_test_metadata_parallel -U -u
+        client_processes: 6

@@ -10,7 +10,7 @@ SRC = ['swim.c']
 def scons():
     """Scons function"""
 
-    Import('env', 'gurt_lib')
+    Import('env')
 
     env.AppendUnique(LIBPATH=[Dir('.')])
 
@@ -22,7 +22,6 @@ def scons():
 
     swim_targets = denv.SharedObject(SRC)
     swim_lib = denv.SharedLibrary('libswim', swim_targets)
-    denv.Requires(swim_lib, gurt_lib)
 
     Default(swim_targets)
     Export('swim_lib', 'swim_targets')

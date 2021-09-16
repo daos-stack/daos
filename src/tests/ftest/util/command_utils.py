@@ -6,20 +6,24 @@
 """
 # pylint: disable=too-many-lines
 from logging import getLogger
+from datetime import datetime
 from getpass import getuser
 import re
 import time
 import signal
 import os
+import json
 
 from avocado.utils import process
+from ClusterShell.NodeSet import NodeSet
 
 from command_utils_base import \
-    CommandFailure, BasicParameter, ObjectWithParameters, \
-    CommandWithParameters, YamlParameters, EnvironmentVariables, LogParameter
-from general_utils import check_file_exists, stop_processes, get_log_file, \
+    CommandFailure, BasicParameter, CommandWithParameters, \
+    EnvironmentVariables, LogParameter
+from general_utils import check_file_exists, get_log_file, \
     run_command, DaosTestError, get_job_manager_class, create_directory, \
-    distribute_files, change_file_owner, get_file_listing
+    distribute_files, change_file_owner, get_file_listing, run_pcmd, \
+    get_subprocess_stdout
 
 
 class ExecutableCommand(CommandWithParameters):
@@ -30,7 +34,8 @@ class ExecutableCommand(CommandWithParameters):
     # values from the standard output yielded by the method.
     METHOD_REGEX = {"run": r"(.*)"}
 
-    def __init__(self, namespace, command, path="", subprocess=False):
+    def __init__(self, namespace, command, path="", subprocess=False,
+                 check_results=None):
         """Create a ExecutableCommand object.
 
         Uses Avocado's utils.process module to run a command str provided.
@@ -42,12 +47,16 @@ class ExecutableCommand(CommandWithParameters):
                 Defaults to "".
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
+            check_results (list, optional): list of words used to mark the
+                command as failed if any are found in the command output.
+                Defaults to None.
         """
-        super(ExecutableCommand, self).__init__(namespace, command, path)
+        super().__init__(namespace, command, path)
         self._process = None
         self.run_as_subprocess = subprocess
         self.timeout = None
         self.exit_status_exception = True
+        self.output_check = "both"
         self.verbose = True
         self.env = None
         self.sudo = False
@@ -63,6 +72,25 @@ class ExecutableCommand(CommandWithParameters):
         # used to check on the progress or terminate the command.
         self._exe_names = [self.command]
 
+        # Define an attribute to store the CmdResult from the last run() call.
+        # A CmdResult object has the following properties:
+        #   command         - command string
+        #   exit_status     - exit_status of the command
+        #   stdout          - the stdout
+        #   stderr          - the stderr
+        #   duration        - command execution time
+        #   interrupted     - whether the command completed within timeout
+        #   pid             - command's pid
+        self.result = None
+
+        # Optional list of words used to to mark the command as failed if any of
+        # the words are found in the command output (self.result.stdout_text and
+        # self.result.stderr_text).  Useful for detecting a command failure that
+        # may not be caught through the command exit status.
+        self.check_results_list = []
+        if check_results:
+            self.check_results_list = list(check_results)
+
     def __str__(self):
         """Return the command with all of its defined parameters as a string.
 
@@ -70,7 +98,7 @@ class ExecutableCommand(CommandWithParameters):
             str: the command with all the defined parameters
 
         """
-        value = super(ExecutableCommand, self).__str__()
+        value = super().__str__()
         if self.sudo:
             value = " ".join(["sudo -n", value])
         return value
@@ -111,17 +139,54 @@ class ExecutableCommand(CommandWithParameters):
         Raises:
             CommandFailure: if there is an error running the command
 
+        Returns:
+            CmdResult: result of the command
+
         """
+        # Clear any previous run results
+        self.result = None
         command = self.__str__()
         try:
             # Block until the command is complete or times out
-            return run_command(
+            self.result = run_command(
                 command, self.timeout, self.verbose, self.exit_status_exception,
-                "combined", env=self.env)
+                self.output_check, env=self.env)
 
         except DaosTestError as error:
             # Command failed or possibly timed out
-            raise CommandFailure(error)
+            raise CommandFailure from error
+
+        if self.exit_status_exception and not self.check_results():
+            # Command failed if its output contains bad keywords
+            raise CommandFailure(
+                "<{}> command failed: Error messages detected in output".format(
+                    self.command))
+
+        return self.result
+
+    def check_results(self):
+        """Check the command result for any bad keywords.
+
+        Returns:
+            bool: True if either there were no items from self.check_result_list
+                to verify or if none of the items were found in the command
+                output; False if a item was found in the command output.
+
+        """
+        status = True
+        if self.result and self.check_results_list:
+            regex = r"({})".format("|".join(self.check_results_list))
+            for output in (self.result.stdout_text, self.result.stderr_text):
+                match = re.findall(regex, output)
+                if match:
+                    self.log.info(
+                        "The following error messages have been detected in "
+                        "the %s output:", self.command)
+                    for item in match:
+                        self.log.info("  %s", item)
+                    status = False
+                    break
+        return status
 
     def _run_subprocess(self):
         """Run the command as a sub process.
@@ -178,9 +243,12 @@ class ExecutableCommand(CommandWithParameters):
 
         """
         if self._process is not None:
-            # Send a SIGTERM to the stop the subprocess and if it is still
-            # running after 5 seconds send a SIGKILL and report an error
-            signal_list = [signal.SIGTERM, signal.SIGKILL]
+            # Send a SIGTERM to stop the subprocess and if it is still
+            # running after 5 seconds give it another try. If that doesn't
+            # stop the process send a SIGKILL and report an error.
+            # Sending 2 SIGTERM signals is a known issue based on
+            # DAOS-6850.
+            signal_list = [signal.SIGTERM, signal.SIGTERM, signal.SIGKILL]
 
             # Turn off verbosity to keep the logs clean as the server stops
             self._process.verbose = False
@@ -256,7 +324,7 @@ class ExecutableCommand(CommandWithParameters):
 
             # Get the state of the process from the output
             state = re.findall(
-                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout)
+                r"\d+\s+([DRSTtWXZ<NLsl+]+)\s+\d+", result.stdout_text)
         return state
 
     def get_output(self, method_name, regex_method=None, **kwargs):
@@ -293,7 +361,7 @@ class ExecutableCommand(CommandWithParameters):
         # Parse the output and return
         if not regex_method:
             regex_method = method_name
-        return self.parse_output(result.stdout, regex_method)
+        return self.parse_output(result.stdout_text, regex_method)
 
     def parse_output(self, stdout, regex_method):
         """Parse output using findall() with supplied 'regex_method' as pattern.
@@ -376,7 +444,7 @@ class CommandWithSubCommand(ExecutableCommand):
             subprocess (bool, optional): whether the command is run as a
                 subprocess. Defaults to False.
         """
-        super(CommandWithSubCommand, self).__init__(namespace, command, path)
+        super().__init__(namespace, command, path)
 
         # Define the sub-command parameter whose value is used to assign the
         # sub-command's CommandWithParameters-based class.  Use the command to
@@ -403,16 +471,7 @@ class CommandWithSubCommand(ExecutableCommand):
         #
         self.sub_command_class = None
 
-        # Define an attribute to store the CmdResult from the last run() call.
-        # A CmdResult object has the following properties:
-        #   command         - command string
-        #   exit_status     - exit_status of the command
-        #   stdout          - the stdout
-        #   stderr          - the stderr
-        #   duration        - command execution time
-        #   interrupted     - whether the command completed within timeout
-        #   pid             - command's pid
-        self.result = None
+        self.json = None
 
     def get_param_names(self):
         """Get a sorted list of the names of the BasicParameter attributes.
@@ -438,9 +497,10 @@ class CommandWithSubCommand(ExecutableCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(CommandWithSubCommand, self).get_params(test)
+        super().get_params(test)
         self.get_sub_command_class()
-        if isinstance(self.sub_command_class, ObjectWithParameters):
+        if (self.sub_command_class is not None and
+                hasattr(self.sub_command_class, "get_params")):
             self.sub_command_class.get_params(test)
 
     def get_sub_command_class(self):
@@ -495,10 +555,12 @@ class CommandWithSubCommand(ExecutableCommand):
 
         """
         try:
-            self.result = super(CommandWithSubCommand, self).run()
+            # This assigns self.result
+            super().run()
         except CommandFailure as error:
             raise CommandFailure(
-                "<{}> command failed: {}".format(self.command, error))
+                "<{}> command failed: {}".format(
+                    self.command, error)) from error
         return self.result
 
     def _get_result(self, sub_command_list=None, **kwargs):
@@ -534,11 +596,39 @@ class CommandWithSubCommand(ExecutableCommand):
                 this_command = this_command.sub_command_class
 
         # Set the sub-command arguments
-        for name, value in kwargs.items():
+        for name, value in list(kwargs.items()):
             getattr(this_command, name).value = value
 
         # Issue the command and store the command result
         return self.run()
+
+    def _get_json_result(self, sub_command_list=None, json_err=False, **kwargs):
+        """Wrap the base _get_result method to force JSON output.
+
+        Args:
+            sub_command_list (list): List of subcommands.
+            json_err (bool, optional): If True, return JSON
+                even if the command fails.
+            kwargs (dict): Parameters for the command.
+        """
+        if self.json is None:
+            raise CommandFailure(
+                f"The {self.command} command doesn't have json option defined!")
+        prev_json_val = self.json.value
+        self.json.update(True)
+        prev_output_check = self.output_check
+        self.output_check = "both"
+        if json_err:
+            prev_exit_exception = self.exit_status_exception
+            self.exit_status_exception = False
+        try:
+            self._get_result(sub_command_list, **kwargs)
+        finally:
+            self.json.update(prev_json_val)
+            self.output_check = prev_output_check
+            if json_err:
+                self.exit_status_exception = prev_exit_exception
+        return json.loads(self.result.stdout)
 
 
 class SubProcessCommand(CommandWithSubCommand):
@@ -558,7 +648,7 @@ class SubProcessCommand(CommandWithSubCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
         """
-        super(SubProcessCommand, self).__init__(namespace, command, path, True)
+        super().__init__(namespace, command, path, True)
 
         # Attributes used to determine command success when run as a subprocess
         # See self.check_subprocess_status() for details.
@@ -615,7 +705,7 @@ class SubProcessCommand(CommandWithSubCommand):
             #   - the time out is reached (failure)
             #   - the subprocess is no longer running (failure)
             while not complete and not timed_out and sub_process.poll() is None:
-                output = sub_process.get_stdout()
+                output = get_subprocess_stdout(sub_process)
                 detected = len(re.findall(self.pattern, output))
                 complete = detected == self.pattern_count
                 timed_out = time.time() - start > self.pattern_timeout.value
@@ -636,7 +726,7 @@ class SubProcessCommand(CommandWithSubCommand):
                     runtime = "{} seconds".format(time.time() - start)
                 if not self.verbose:
                     # Include the stdout if verbose is not enabled
-                    details = ":\n{}".format(sub_process.get_stdout())
+                    details = ":\n{}".format(get_subprocess_stdout(sub_process))
                 self.log.info("%s - %s %s%s", reason, msg, runtime, details)
                 if timed_out:
                     self.log.debug(
@@ -675,7 +765,7 @@ class YamlCommand(SubProcessCommand):
             timeout (int, optional): number of seconds to wait for patterns to
                 appear in the subprocess output. Defaults to 10 seconds.
         """
-        super(YamlCommand, self).__init__(namespace, command, path, timeout)
+        super().__init__(namespace, command, path, timeout)
 
         # Command configuration yaml file
         self.yaml = yaml_cfg
@@ -705,8 +795,8 @@ class YamlCommand(SubProcessCommand):
         Args:
             test (Test): avocado Test object
         """
-        super(YamlCommand, self).get_params(test)
-        if isinstance(self.yaml, YamlParameters):
+        super().get_params(test)
+        if self.yaml is not None and hasattr(self.yaml, "get_params"):
             self.yaml.get_params(test)
 
     def create_yaml_file(self):
@@ -723,9 +813,9 @@ class YamlCommand(SubProcessCommand):
                 self.temporary_file_hosts attributes are defined.
 
         """
-        if isinstance(self.yaml, YamlParameters):
-            self.yaml.create_yaml(self.temporary_file)
-            self.copy_configuration(self.temporary_file_hosts)
+        if self.yaml is not None and hasattr(self.yaml, "create_yaml"):
+            if self.yaml.create_yaml(self.temporary_file):
+                self.copy_configuration(self.temporary_file_hosts)
 
     def set_config_value(self, name, value):
         """Set the yaml configuration parameter value.
@@ -739,7 +829,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         status = False
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "set_value"):
             status = self.yaml.set_value(name, value)
         return status
 
@@ -755,7 +845,7 @@ class YamlCommand(SubProcessCommand):
 
         """
         value = None
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "get_value"):
             value = self.yaml.get_value(name)
 
         return value
@@ -778,7 +868,7 @@ class YamlCommand(SubProcessCommand):
         """
         if self.yaml:
             self.create_yaml_file()
-        return super(YamlCommand, self).run()
+        return super().run()
 
     def copy_certificates(self, source, hosts):
         """Copy certificates files from the source to the destination hosts.
@@ -789,7 +879,7 @@ class YamlCommand(SubProcessCommand):
         """
         names = set()
         yaml = self.yaml
-        while isinstance(yaml, YamlParameters):
+        while yaml is not None and hasattr(yaml, "other_params"):
             if hasattr(yaml, "get_certificate_data"):
                 self.log.debug("Copying certificates for %s:", self._command)
                 data = yaml.get_certificate_data(
@@ -817,7 +907,7 @@ class YamlCommand(SubProcessCommand):
             self.log.debug(
                 "Copied certificates for %s (in %s):",
                 self._command, ", ".join(names))
-            for line in get_file_listing(hosts, names).stdout.splitlines():
+            for line in get_file_listing(hosts, names).stdout_text.splitlines():
                 self.log.debug("  %s", line)
 
     def copy_configuration(self, hosts):
@@ -833,7 +923,7 @@ class YamlCommand(SubProcessCommand):
             CommandFailure: if there is an error copying the configuration file
 
         """
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None and hasattr(self.yaml, "filename"):
             if self.temporary_file and hosts:
                 self.log.info(
                     "Copying %s yaml configuration file to %s on %s",
@@ -845,7 +935,7 @@ class YamlCommand(SubProcessCommand):
                 except DaosTestError as error:
                     raise CommandFailure(
                         "ERROR: Copying yaml configuration file to {}: "
-                        "{}".format(hosts, error))
+                        "{}".format(hosts, error)) from error
 
     def verify_socket_directory(self, user, hosts):
         """Verify the domain socket directory is present and owned by this user.
@@ -859,7 +949,7 @@ class YamlCommand(SubProcessCommand):
                 owned by the user and could not be created
 
         """
-        if isinstance(self.yaml, YamlParameters):
+        if self.yaml is not None:
             directory = self.get_user_file()
             self.log.info(
                 "Verifying %s socket directory: %s", self.command, directory)
@@ -875,7 +965,8 @@ class YamlCommand(SubProcessCommand):
                     raise CommandFailure(
                         "{}: error setting up missing socket directory {} for "
                         "user {} on {}:\n{}".format(
-                            self.command, directory, user, nodes, error))
+                            self.command, directory, user, nodes,
+                            error)) from error
 
     def get_user_file(self):
         """Get the file defined in the yaml file that must be owned by the user.
@@ -887,7 +978,7 @@ class YamlCommand(SubProcessCommand):
         return self.get_config_value("socket_dir")
 
 
-class SubprocessManager(object):
+class SubprocessManager():
     """Defines an object that manages a sub process launched with orterun."""
 
     def __init__(self, command, manager="Orterun"):
@@ -903,12 +994,34 @@ class SubprocessManager(object):
 
         # Define the JobManager class used to manage the command as a subprocess
         self.manager = get_job_manager_class(manager, command, True)
+        self._id = self.manager.job.command.replace("daos_", "")
 
         # Define the list of hosts that will execute the daos command
         self._hosts = []
 
         # The socket directory verification is not required with systemctl
         self._verify_socket_dir = manager != "Systemctl"
+
+        # An internal dictionary used to define the expected states of each
+        # job process. It will be populated when any of the following methods
+        # are called:
+        #   - start()
+        #   - verify_expected_states(set_expected=True)
+        # Individual states may also be updated by calling the
+        # update_expected_states() method. This is required to avoid any errors
+        # being raised during tearDown() if a test variant intentional affects
+        # the state of a job process.
+        self._expected_states = {}
+
+        # States for verify_expected_states()
+        self._states = {
+            "all": [
+                "active", "inactive", "activating", "deactivating", "failed",
+                "unknown"],
+            "running": ["active"],
+            "stopped": ["inactive", "deactivating", "failed", "unknown"],
+            "errored": ["failed"],
+        }
 
     def __str__(self):
         """Get the complete manager command string.
@@ -945,7 +1058,7 @@ class SubprocessManager(object):
             path (str): path in which to create the hostfile
             slots (int): number of slots per host to specify in the hostfile
         """
-        self._hosts = hosts
+        self._hosts = list(hosts)
         self.manager.assign_hosts(self._hosts, path, slots)
         self.manager.assign_processes(len(self._hosts))
 
@@ -978,28 +1091,18 @@ class SubprocessManager(object):
         # Start the daos command
         try:
             self.manager.run()
-        except CommandFailure:
+        except CommandFailure as error:
             # Kill the subprocess, anything that might have started
-            self.kill()
+            self.manager.kill()
             raise CommandFailure(
-                "Failed to start {}.".format(str(self.manager.job)))
+                "Failed to start {}.".format(str(self.manager.job))) from error
+        finally:
+            # Define the expected states for each rank
+            self._expected_states = self.get_current_state()
 
     def stop(self):
         """Stop the daos command."""
         self.manager.stop()
-
-    def kill(self):
-        """Forcibly terminate any sub process running on hosts."""
-        regex = self.manager.job.command_regex
-        result = stop_processes(self._hosts, regex)
-        if 0 in result and len(result) == 1:
-            print(
-                "No remote {} processes killed (none found), done.".format(
-                    regex))
-        else:
-            print(
-                "***At least one remote {} process needed to be killed! Please "
-                "investigate/report.***".format(regex))
 
     def verify_socket_directory(self, user):
         """Verify the domain socket directory is present and owned by this user.
@@ -1047,6 +1150,183 @@ class SubprocessManager(object):
             value = self.manager.job.get_config_value(name)
         return value
 
+    def get_current_state(self):
+        """Get the current state of the daos_server ranks.
+
+        Returns:
+            dict: dictionary of server rank keys, each referencing a dictionary
+                of information containing at least the following information:
+                    {"host": <>, "uuid": <>, "state": <>}
+                This will be empty if there was error obtaining the dmg system
+                query output.
+
+        """
+        data = {}
+        ranks = {host: rank for rank, host in enumerate(self._hosts)}
+        if not self._verify_socket_dir:
+            command = "systemctl is-active {}".format(
+                self.manager.job.service_name)
+        else:
+            command = "pgrep {}".format(self.manager.job.command)
+        results = run_pcmd(self._hosts, command, 30)
+        for result in results:
+            for node in result["hosts"]:
+                # expecting single line output from run_pcmd
+                stdout = result["stdout"][-1] if result["stdout"] else "unknown"
+                data[ranks[node]] = {"host": node, "uuid": "-", "state": stdout}
+        return data
+
+    def update_expected_states(self, ranks, state):
+        """Update the expected state of the specified job rank.
+
+        Args:
+            ranks (object): job ranks to update. Can be a single rank (int),
+                multiple ranks (list), or all the ranks (None).
+            state (object): new state to assign as the expected state of this
+                rank. Can be a str or a list of str.
+        """
+        if ranks is None:
+            ranks = list(self._expected_states.keys())
+        elif not isinstance(ranks, (list, tuple)):
+            ranks = [ranks]
+
+        for rank in ranks:
+            if rank in self._expected_states:
+                self.log.info(
+                    "Updating the expected state for rank %s on %s: %s -> %s",
+                    rank, self._expected_states[rank]["host"],
+                    self._expected_states[rank]["state"], state)
+                self._expected_states[rank]["state"] = state
+
+    def verify_expected_states(self, set_expected=False, show_logs=True):
+        """Verify that the expected job process states match the current states.
+
+        Args:
+            set_expected (bool, optional): option to update the expected job
+                process states to the current states prior to verification.
+                Defaults to False.
+            show_logs (bool, optional): Show log entries for hosts not in
+                expected states.
+
+        Returns:
+            dict: a dictionary of whether or not any of the job process states
+                were not 'expected' (which should warrant an error) and whether
+                or not the job process require a 'restart' (either due to any
+                unexpected states or because at least one job process was no
+                longer found to be running)
+
+        """
+        status = {"expected": True, "restart": False}
+        show_log_hosts = []
+
+        # Get the current state of each job process
+        current_states = self.get_current_state()
+        if set_expected:
+            # Assign the expected states to the current job process states
+            self.log.info(
+                "<%s> Assigning expected %s states.",
+                self._id.upper(), self._id)
+            self._expected_states = current_states.copy()
+
+        # Verify the expected states match the current states
+        self.log.info(
+            "<%s> Verifying %s states: group=%s, hosts=%s",
+            self._id.upper(), self._id, self.get_config_value("name"),
+            NodeSet.fromlist(self._hosts))
+        if current_states:
+            log_format = "  %-4s  %-15s  %-36s  %-22s  %-14s  %s"
+            self.log.info(
+                log_format,
+                "Rank", "Host", "UUID", "Expected State", "Current State",
+                "Result")
+            self.log.info(
+                log_format,
+                "-" * 4, "-" * 15, "-" * 36, "-" * 22, "-" * 14, "-" * 6)
+
+            # Verify that each expected rank appears in the current states
+            for rank in sorted(self._expected_states):
+                current_host = self._expected_states[rank]["host"]
+                expected = self._expected_states[rank]["state"]
+                if isinstance(expected, (list, tuple)):
+                    expected = [item.lower() for item in expected]
+                else:
+                    expected = [expected.lower()]
+                try:
+                    current_rank = current_states.pop(rank)
+                    current = current_rank["state"].lower()
+                except KeyError:
+                    current = "not detected"
+
+                # Check if the job's expected state matches the current state
+                result = "PASS" if current in expected else "RESTART"
+                status["expected"] &= current in expected
+
+                # Restart all job processes if the expected rank is not running
+                if current not in self._states["running"]:
+                    status["restart"] = True
+                    result = "RESTART"
+
+                # Keep track of any server in the errored state or in an
+                # unexpected state in order to display its log
+                if (current in self._states["errored"] or
+                        current not in expected):
+                    if current_host not in show_log_hosts:
+                        show_log_hosts.append(current_host)
+
+                self.log.info(
+                    log_format, rank, current_host,
+                    self._expected_states[rank]["uuid"], "|".join(expected),
+                    current, result)
+
+        elif not self._expected_states:
+            # Expected states are populated as part of start() procedure,
+            # so if it is empty there was an error starting the job processes.
+            self.log.info(
+                "  Unable to obtain current %s state.  Undefined expected %s "
+                "states due to a failure starting the %s.",
+                self._id, self._id, self._id,)
+            status["restart"] = True
+
+        else:
+            # Any failure to obtain the current rank information is an error
+            self.log.info(
+                "  Unable to obtain current %s state.  If the %ss are "
+                "not running this is expected.", self._id, self._id)
+
+            # Do not report an error if all servers are expected to be stopped
+            all_stopped = bool(self._expected_states)
+            for rank in sorted(self._expected_states):
+                states = self._expected_states[rank]["state"]
+                if not isinstance(states, (list, tuple)):
+                    states = [states]
+                if "stopped" not in [item.lower() for item in states]:
+                    all_stopped = False
+                    break
+            if all_stopped:
+                self.log.info("  All %s are expected to be stopped.", self._id)
+                status["restart"] = True
+            else:
+                status["expected"] = False
+
+        # Any unexpected state detected warrants a restart of all job processes
+        if not status["expected"]:
+            status["restart"] = True
+
+        # Set the verified timestamp
+        if set_expected and hasattr(self.manager, "timestamps"):
+            self.manager.timestamps["verified"] = datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S")
+
+        # Dump the server logs for any identified server
+        if show_logs and show_log_hosts:
+            self.log.info(
+                "<SERVER> logs for ranks in the errored state since start "
+                "detection or detected in an unexpected state")
+            if hasattr(self.manager, "dump_logs"):
+                self.manager.dump_logs(show_log_hosts)
+
+        return status
+
 
 class SystemctlCommand(ExecutableCommand):
     # pylint: disable=too-few-public-methods
@@ -1054,7 +1334,7 @@ class SystemctlCommand(ExecutableCommand):
 
     def __init__(self):
         """Create a SystemctlCommand object."""
-        super(SystemctlCommand, self).__init__(
+        super().__init__(
             "/run/systemctl/*", "systemctl", subprocess=False)
         self.sudo = True
 
@@ -1074,4 +1354,4 @@ class SystemctlCommand(ExecutableCommand):
 
         """
         return list(
-            reversed(super(SystemctlCommand, self).get_str_param_names()))
+            reversed(super().get_str_param_names()))

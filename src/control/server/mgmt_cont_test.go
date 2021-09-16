@@ -35,8 +35,8 @@ func makeBadBytes(count int) (badBytes []byte) {
 
 func newTestListContReq() *mgmtpb.ListContReq {
 	return &mgmtpb.ListContReq{
-		Sys:  build.DefaultSystemName,
-		Uuid: "12345678-1234-1234-1234-123456789abc",
+		Sys: build.DefaultSystemName,
+		Id:  "12345678-1234-1234-1234-123456789abc",
 	}
 }
 
@@ -108,8 +108,7 @@ func TestListCont_ZeroContSuccess(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(expectedResp, resp, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }
@@ -136,8 +135,7 @@ func TestListCont_ManyContSuccess(t *testing.T) {
 		t.Errorf("Expected no error, got: %v", err)
 	}
 
-	cmpOpts := common.DefaultCmpOpts()
-	if diff := cmp.Diff(expectedResp, resp, cmpOpts...); diff != "" {
+	if diff := cmp.Diff(expectedResp, resp, common.DefaultCmpOpts()...); diff != "" {
 		t.Fatalf("bad response (-want, +got): \n%s\n", diff)
 	}
 }

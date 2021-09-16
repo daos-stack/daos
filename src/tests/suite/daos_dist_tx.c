@@ -1389,9 +1389,10 @@ dtx_24(void **state)
 	sleep(DTX_COMMIT_THRESHOLD_AGE + 3);
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_DTX_NO_INPROGRESS | DAOS_FAIL_ALWAYS,
+				      DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS,
 				      0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1408,6 +1409,7 @@ dtx_24(void **state)
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      0, 0, NULL);
@@ -1567,7 +1569,8 @@ dtx_26(void **state)
 }
 
 static void
-dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort)
+dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort,
+			     bool delay)
 {
 	const char	*dkey1 = "a_dkey_1";
 	const char	*dkey2 = "b_dkey_2";
@@ -1625,28 +1628,61 @@ dtx_uncertainty_miss_request(test_arg_t *arg, uint64_t loc, bool abort)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0)
-		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC, delay ?
+				      (DAOS_DTX_UNCERTAIN | DAOS_FAIL_ALWAYS) :
 				      0, 0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	print_message("Verify transactional update result with loc %lx\n", loc);
 
-	for (i = 0; i < DTX_NC_CNT; i++) {
-		lookup_single(dkey1, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
-			      &reqs[i]);
-		if (abort)
-			assert_int_equal(val, i + 1);
-		else
-			assert_int_equal(val, i + 21);
+	if (delay) {
+		arg->not_check_result = 1;
+		for (i = 0; i < DTX_NC_CNT; i++) {
+			lookup_single(dkey1, akey, 0, &val, sizeof(val),
+				      DAOS_TX_NONE, &reqs[i]);
+			rc = reqs[i].result;
+			lookup_single(dkey2, akey, 0, &val, sizeof(val),
+				      DAOS_TX_NONE, &reqs[i]);
 
-		lookup_single(dkey2, akey, 0, &val, sizeof(val), DAOS_TX_NONE,
-			      &reqs[i]);
-		if (abort)
-			assert_int_equal(val, i + 1);
-		else
-			assert_int_equal(val, i + 21);
+			/* Either the 1st result or the 2nd one must be
+			 * -DER_TX_UNCERTAIN, and only one can be zero,
+			 *  the other is -DER_TX_UNCERTAIN.
+			 */
+			if (rc == 0) {
+				assert_int_equal(reqs[i].result,
+						 -DER_TX_UNCERTAIN);
+			} else {
+				assert_int_equal(rc, -DER_TX_UNCERTAIN);
+				assert_int_equal(reqs[i].result, 0);
+			}
 
-		ioreq_fini(&reqs[i]);
+			ioreq_fini(&reqs[i]);
+		}
+		arg->not_check_result = 0;
+
+		MPI_Barrier(MPI_COMM_WORLD);
+		if (arg->myrank == 0)
+			daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
+					      0, 0, NULL);
+		MPI_Barrier(MPI_COMM_WORLD);
+	} else {
+		for (i = 0; i < DTX_NC_CNT; i++) {
+			lookup_single(dkey1, akey, 0, &val, sizeof(val),
+				      DAOS_TX_NONE, &reqs[i]);
+			if (abort)
+				assert_int_equal(val, i + 1);
+			else
+				assert_int_equal(val, i + 21);
+
+			lookup_single(dkey2, akey, 0, &val, sizeof(val),
+				      DAOS_TX_NONE, &reqs[i]);
+			if (abort)
+				assert_int_equal(val, i + 1);
+			else
+				assert_int_equal(val, i + 21);
+
+			ioreq_fini(&reqs[i]);
+		}
 	}
 }
 
@@ -1657,7 +1693,8 @@ dtx_27(void **state)
 
 	print_message("DTX27: uncertain status check - miss commit\n");
 
-	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_COMMIT, false);
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_COMMIT,
+				     false, false);
 }
 
 static void
@@ -1667,7 +1704,7 @@ dtx_28(void **state)
 
 	print_message("DTX28: uncertain status check - miss abort\n");
 
-	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_ABORT, true);
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_ABORT, true, false);
 }
 
 static void
@@ -1899,7 +1936,7 @@ dtx_30(void **state)
 	daos_iod_type_t	 types[2] = { DAOS_IOD_ARRAY, DAOS_IOD_SINGLE };
 	uint16_t	 ocs[2] = { OC_EC_2P1G1, OC_RP_2G2 };
 	int		 base = 10000;
-	int		 akey_size = 8;
+	int		 akey_size = 32;
 	daos_size_t	 buf_len = DTX_NC_CNT * 2 * akey_size;
 	char		 buf[buf_len];
 	daos_key_desc_t  kds[DTX_NC_CNT * 2];
@@ -2398,9 +2435,10 @@ dtx_35(void **state)
 	MUST(daos_obj_open(arg->coh, oids[0], 0, &reqs[0].oh, NULL));
 	MUST(daos_obj_open(arg->coh, oids[1], 0, &reqs[1].oh, NULL));
 
+	daos_fail_loc_set(DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
-				      DAOS_DTX_NO_INPROGRESS | DAOS_FAIL_ALWAYS,
+				      DAOS_DTX_NO_RETRY | DAOS_FAIL_ALWAYS,
 				      0, NULL);
 	MPI_Barrier(MPI_COMM_WORLD);
 
@@ -2420,6 +2458,7 @@ dtx_35(void **state)
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 
 	MPI_Barrier(MPI_COMM_WORLD);
+	daos_fail_loc_set(0);
 	if (arg->myrank == 0)
 		daos_debug_set_params(arg->group, -1, DMG_KEY_FAIL_LOC,
 				      0, 0, NULL);
@@ -2875,6 +2914,101 @@ dtx_38(void **state)
 	dtx_fini_req_akey(reqs, akeys, 2, DTX_NC_CNT);
 }
 
+static void
+dtx_39(void **state)
+{
+	test_arg_t	*arg = *state;
+	char		*akey1 = "akey_1";
+	char		*akey2 = "akey_2";
+	char		*akey3 = "akey_3";
+	struct ioreq	 req;
+	uint64_t	 val[2];
+	daos_handle_t	 th = { 0 };
+	d_rank_t	 kill_rank = CRT_NO_RANK;
+
+	print_message("DTX39: not restar the transaction with fixed epoch\n");
+
+	if (!test_runable(arg, 3))
+		skip();
+
+	if (arg->myrank == 0) {
+		daos_obj_id_t	oid;
+		daos_epoch_t	epoch;
+
+		oid = daos_test_oid_gen(arg->coh, OC_RP_2G1, 0, 0, arg->myrank);
+		kill_rank = get_rank_by_oid_shard(arg, oid, 0);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+		val[0] = 1;
+		insert_single(dts_dtx_dkey, akey1, 0, &val[0], sizeof(val[0]),
+			      DAOS_TX_NONE, &req);
+		insert_single(dts_dtx_dkey, akey2, 0, &val[0], sizeof(val[0]),
+			      DAOS_TX_NONE, &req);
+
+		MUST(daos_tx_open(arg->coh, &th, 0, NULL));
+		insert_single(dts_dtx_dkey, akey3, 0, &val[0], sizeof(val[0]),
+			      th, &req);
+		MUST(daos_tx_commit(th, NULL));
+		MUST(daos_tx_hdl2epoch(th, &epoch));
+		MUST(daos_tx_close(th, NULL));
+
+		MUST(daos_tx_open_snap(arg->coh, epoch << 1, &th, NULL));
+
+		val[1] = 0;
+		lookup_single(dts_dtx_dkey, akey1, 0, &val[1], sizeof(val[1]),
+			      th, &req);
+		assert_int_equal(val[0], val[1]);
+
+		print_message("Exclude rank %d to trigger rebuild\n",
+			      kill_rank);
+	}
+
+	rebuild_single_pool_rank(arg, kill_rank, false);
+
+	if (arg->myrank == 0) {
+		print_message("Verifying data after rebuild...\n");
+
+		val[1] = 0;
+		/* This fetch will refresh the client side pool map,
+		 * then the TX's pm_ver will become stale.
+		 */
+		lookup_single(dts_dtx_dkey, akey2, 0, &val[1], sizeof(val[1]),
+			      DAOS_TX_NONE, &req);
+		assert_int_equal(val[0], val[1]);
+
+		val[1] = 0;
+		/* NOT restart the TX even if its pm_ver is stale. */
+		lookup_single(dts_dtx_dkey, akey3, 0, &val[1], sizeof(val[1]),
+			      th, &req);
+		assert_int_equal(val[0], val[1]);
+
+		MUST(daos_tx_close(th, NULL));
+		ioreq_fini(&req);
+	}
+
+	reintegrate_single_pool_rank(arg, kill_rank);
+}
+
+static void
+dtx_40(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX40: uncertain check - miss commit with delay\n");
+
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_COMMIT, false, true);
+}
+
+static void
+dtx_41(void **state)
+{
+	FAULT_INJECTION_REQUIRED();
+
+	print_message("DTX41: uncertain check - miss abort with delay\n");
+
+	dtx_uncertainty_miss_request(*state, DAOS_DTX_MISS_ABORT, true, true);
+}
+
 static test_arg_t *saved_dtx_arg;
 
 static int
@@ -2982,6 +3116,13 @@ static const struct CMUnitTest dtx_tests[] = {
 	 dtx_37, dtx_sub_setup, dtx_sub_teardown},
 	{"DTX38: resync - lost whole redundancy groups",
 	 dtx_38, dtx_sub_setup, dtx_sub_teardown},
+	{"DTX39: not restart the transaction with fixed epoch",
+	 dtx_39, dtx_sub_setup, dtx_sub_teardown},
+
+	{"DTX40: uncertain check - miss commit with delay",
+	 dtx_40, NULL, test_case_teardown},
+	{"DTX41: uncertain check - miss abort with delay",
+	 dtx_41, NULL, test_case_teardown},
 };
 
 static int

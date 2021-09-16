@@ -39,24 +39,38 @@ typedef struct crt_init_options {
 	 */
 	uint32_t	cio_sep_override:1,
 			/**
-			* overrides the value of the environment variable
-			* CRT_CTX_SHARE_ADDR
-			*/
+			 * overrides the value of the environment variable
+			 * CRT_CTX_SHARE_ADDR
+			 */
 			cio_use_sep:1,
 			/** whether or not to inject faults */
 			cio_fault_inject:1,
-			/** whether or not to override credits. When set
-			* overrides CRT_CTX_EP_CREDITS envariable
-			*/
-			cio_use_credits:1;
 			/**
-			* overrides the value of the environment variable
-			* CRT_CTX_NUM
-			*/
+			 * whether or not to override credits. When set
+			 * overrides CRT_CTX_EP_CREDITS envariable
+			 */
+			cio_use_credits:1,
+			/** whether or not to enable per-context sensors */
+			cio_use_sensors:1,
+
+			/** whether or not to use expected sizes */
+			cio_use_expected_size:1,
+			cio_use_unexpected_size:1;
+	/**
+	 * overrides the value of the environment variable
+	 * CRT_CTX_NUM
+	 */
 	int		cio_ctx_max_num;
 
-			/** Used with cio_use_credits to set credit limit */
+	/** Used with cio_use_credits to set credit limit */
 	int		cio_ep_credits;
+
+	/**
+	 * Hints to mercury/ofi to use for expected/unexpected
+	 * maximum sizes of messages.
+	 */
+	uint32_t	cio_max_expected_size;
+	uint32_t	cio_max_unexpected_size;
 } crt_init_options_t;
 
 typedef int		crt_status_t;

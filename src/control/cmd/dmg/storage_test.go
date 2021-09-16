@@ -7,28 +7,25 @@
 package main
 
 import (
-	"context"
 	"strings"
 	"testing"
 
 	"github.com/pkg/errors"
 
-	"github.com/daos-stack/daos/src/control/common"
-	mgmtpb "github.com/daos-stack/daos/src/control/common/proto/mgmt"
 	"github.com/daos-stack/daos/src/control/lib/control"
-	"github.com/daos-stack/daos/src/control/logging"
-	"github.com/daos-stack/daos/src/control/system"
 )
 
 func TestStorageCommands(t *testing.T) {
 	storageFormatReq := &control.StorageFormatReq{Reformat: true}
 	storageFormatReq.SetHostList([]string{})
+	systemQueryReq := &control.SystemQueryReq{FailOnUnavailable: true}
 
 	runCmdTests(t, []cmdTest{
 		{
 			"Format",
 			"storage format",
 			strings.Join([]string{
+				printRequest(t, systemQueryReq),
 				printRequest(t, &control.StorageFormatReq{}),
 			}, " "),
 			nil,
@@ -37,14 +34,22 @@ func TestStorageCommands(t *testing.T) {
 			"Format with reformat",
 			"storage format --reformat",
 			strings.Join([]string{
-				printRequest(t, &control.SystemQueryReq{}),
+				printRequest(t, systemQueryReq),
 				printRequest(t, &control.StorageFormatReq{Reformat: true}),
 			}, " "),
 			nil,
 		},
 		{
-			"Scan",
+			"Scan summary",
 			"storage scan",
+			strings.Join([]string{
+				printRequest(t, &control.StorageScanReq{NvmeBasic: true}),
+			}, " "),
+			nil,
+		},
+		{
+			"Scan verbose",
+			"storage scan --verbose",
 			strings.Join([]string{
 				printRequest(t, &control.StorageScanReq{}),
 			}, " "),
@@ -63,6 +68,12 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
+			"Scan NVMe health with verbose",
+			"storage scan --nvme-health --verbose",
+			"",
+			errors.New("cannot use --verbose"),
+		},
+		{
 			"Scan NVMe meta data short",
 			"storage scan -m",
 			printRequest(t, &control.StorageScanReq{NvmeMeta: true}),
@@ -75,64 +86,16 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 		{
-			"Prepare without force",
-			"storage prepare",
+			"Scan NVMe meta with verbose",
+			"storage scan --nvme-meta --verbose",
 			"",
-			errors.New("consent not given"),
+			errors.New("cannot use --verbose"),
 		},
 		{
-			"Prepare with nvme-only and scm-only",
-			"storage prepare --force --nvme-only --scm-only",
+			"Scan NVMe meta and health",
+			"storage scan --nvme-meta --nvme-health --verbose",
 			"",
-			errors.New("nvme-only and scm-only options should not be set together"),
-		},
-		{
-			"Prepare with scm-only",
-			"storage prepare --force --scm-only",
-			strings.Join([]string{
-				printRequest(t, &control.StoragePrepareReq{
-					SCM: &control.ScmPrepareReq{},
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Prepare with nvme-only",
-			"storage prepare --force --nvme-only",
-			strings.Join([]string{
-				printRequest(t, &control.StoragePrepareReq{
-					NVMe: &control.NvmePrepareReq{},
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Prepare with non-existent option",
-			"storage prepare --force --nvme",
-			"",
-			errors.New("unknown flag `nvme'"),
-		},
-		{
-			"Prepare with force and reset",
-			"storage prepare --force --reset",
-			strings.Join([]string{
-				printRequest(t, &control.StoragePrepareReq{
-					NVMe: &control.NvmePrepareReq{Reset: true},
-					SCM:  &control.ScmPrepareReq{Reset: true},
-				}),
-			}, " "),
-			nil,
-		},
-		{
-			"Prepare with force",
-			"storage prepare --force",
-			strings.Join([]string{
-				printRequest(t, &control.StoragePrepareReq{
-					NVMe: &control.NvmePrepareReq{Reset: false},
-					SCM:  &control.ScmPrepareReq{Reset: false},
-				}),
-			}, " "),
-			nil,
+			errors.New("cannot use --nvme-health and --nvme-meta"),
 		},
 		{
 			"Set FAULTY device status (force)",
@@ -203,70 +166,4 @@ func TestStorageCommands(t *testing.T) {
 			nil,
 		},
 	})
-}
-
-func TestDmg_Storage_shouldReformatSystem(t *testing.T) {
-	for name, tc := range map[string]struct {
-		reformat, expSysReformat bool
-		uErr, expErr             error
-		members                  []*mgmtpb.SystemMember
-	}{
-		"no reformat": {},
-		"failed member query": {
-			reformat: true,
-			uErr:     errors.New("system failed"),
-			expErr:   errors.New("system failed"),
-		},
-		"empty membership": {
-			reformat: true,
-		},
-		"rank not stopped": {
-			reformat: true,
-			members: []*mgmtpb.SystemMember{
-				{Rank: 0, State: system.MemberStateStopped.String()},
-				{Rank: 1, State: system.MemberStateJoined.String()},
-			},
-			expErr: errors.New("system reformat requires the following 1 rank to be stopped: 1"),
-		},
-		"ranks not stopped": {
-			reformat: true,
-			members: []*mgmtpb.SystemMember{
-				{Rank: 0, State: system.MemberStateJoined.String()},
-				{Rank: 1, State: system.MemberStateStopped.String()},
-				{Rank: 5, State: system.MemberStateJoined.String()},
-				{Rank: 2, State: system.MemberStateJoined.String()},
-				{Rank: 4, State: system.MemberStateJoined.String()},
-				{Rank: 3, State: system.MemberStateJoined.String()},
-				{Rank: 6, State: system.MemberStateStopped.String()},
-			},
-			expErr: errors.New("system reformat requires the following 5 ranks to be stopped: 0,2-5"),
-		},
-		"system reformat": {
-			reformat: true,
-			members: []*mgmtpb.SystemMember{
-				{Rank: 0, State: system.MemberStateStopped.String()},
-				{Rank: 0, State: system.MemberStateStopped.String()},
-			},
-			expSysReformat: true,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			log, buf := logging.NewTestLogger(t.Name())
-			defer common.ShowBufferOnFailure(t, buf)
-
-			mi := control.NewMockInvoker(log, &control.MockInvokerConfig{
-				UnaryError: tc.uErr,
-				UnaryResponse: control.MockMSResponse("host1", nil,
-					&mgmtpb.SystemQueryResp{Members: tc.members}),
-			})
-			cmd := storageFormatCmd{}
-			cmd.log = log
-			cmd.Reformat = tc.reformat
-			cmd.ctlInvoker = mi
-
-			sysReformat, err := cmd.shouldReformatSystem(context.Background())
-			common.CmpErr(t, tc.expErr, err)
-			common.AssertEqual(t, tc.expSysReformat, sysReformat, name)
-		})
-	}
 }

@@ -23,6 +23,13 @@
 static bool slow_test;
 
 static void
+cleanup(void)
+{
+	daos_fail_loc_set(DAOS_VOS_GC_CONT_NULL | DAOS_FAIL_ALWAYS);
+	gc_wait();
+}
+
+static void
 update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	     uint64_t flags, char *dkey, char *akey, daos_iod_type_t type,
 	     daos_size_t iod_size, daos_recx_t *recx, char *buf)
@@ -42,7 +49,7 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = d_sgl_init(&sgl, 1);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	if (type == DAOS_IOD_SINGLE)
 		buf_len = iod_size;
@@ -69,9 +76,9 @@ update_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 			arg->ta_flags |= TF_ZERO_COPY;
 	}
 
-	rc = io_test_obj_update(arg, epoch, flags, &dkey_iov, &iod, &sgl, NULL,
-				true);
-	assert_int_equal(rc, 0);
+	rc = io_test_obj_update(arg, epoch, flags, &dkey_iov, &iod, &sgl, NULL, true);
+
+	assert_rc_equal(rc, 0);
 
 	d_sgl_fini(&sgl, false);
 	arg->ta_flags &= ~TF_ZERO_COPY;
@@ -97,7 +104,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 	d_iov_set(&akey_iov, akey, strlen(akey));
 
 	rc = d_sgl_init(&sgl, 1);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	if (type == DAOS_IOD_SINGLE)
 		buf_len = iod_size;
@@ -120,7 +127,7 @@ fetch_value(struct io_test_args *arg, daos_unit_oid_t oid, daos_epoch_t epoch,
 		arg->ta_flags |= TF_ZERO_COPY;
 
 	rc = io_test_obj_fetch(arg, epoch, flags, &dkey_iov, &iod, &sgl, true);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	assert_true(iod.iod_size == 0 || iod.iod_size == iod_size);
 
 	d_sgl_fini(&sgl, false);
@@ -180,7 +187,7 @@ phy_recs_nr(struct io_test_args *arg, daos_unit_oid_t oid,
 
 	rc = vos_iterate(&iter_param, iter_type, false, &anchors,
 			 counting_cb, NULL, &nr, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 
 	return nr;
 }
@@ -214,8 +221,10 @@ struct agg_tst_dataset {
 	char				*td_expected_view;
 	int				 td_expected_recs;
 	bool				 td_discard;
+	bool				 td_delete;
 };
 
+#define PARITY_BIT (1ULL << 63)
 static daos_size_t
 get_view_len(struct agg_tst_dataset *ds, daos_recx_t *recx)
 {
@@ -224,11 +233,14 @@ get_view_len(struct agg_tst_dataset *ds, daos_recx_t *recx)
 	if (ds->td_type == DAOS_IOD_SINGLE) {
 		view_len = ds->td_iod_size;
 	} else {
-		uint64_t	start = UINT64_MAX, end = 0, tmp;
+		uint64_t	start = PARITY_BIT - 1, end = 0, tmp;
 		int		i;
 
 		assert_true(ds->td_recx_nr > 0);
 		for (i = 0; i < ds->td_recx_nr; i++) {
+			if (ds->td_recx[i].rx_idx & PARITY_BIT)
+				continue; /* Ignore "parity" for now */
+
 			if (start > ds->td_recx[i].rx_idx)
 				start = ds->td_recx[i].rx_idx;
 			tmp = ds->td_recx[i].rx_idx + ds->td_recx[i].rx_nr;
@@ -286,7 +298,7 @@ verify_view(struct io_test_args *arg, daos_unit_oid_t oid, char *dkey,
 	daos_epoch_range_t	*epr_a;
 	char			*buf_f;
 	daos_size_t		 view_len;
-	daos_recx_t		 recx;
+	daos_recx_t		 recx = {0};
 	int			 nr;
 
 	VERBOSE_MSG("Verify logical view\n");
@@ -346,8 +358,8 @@ generate_akeys(struct io_test_args *arg, daos_unit_oid_t oid, int nr)
 }
 
 static void
-aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
-		int punch_nr, daos_epoch_t punch_epoch[])
+aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int punch_nr,
+		   daos_epoch_t punch_epoch[], daos_epoch_t punch_bound[])
 {
 	daos_unit_oid_t		 oid;
 	char			 dkey[UPDATE_DKEY_SIZE] = { 0 };
@@ -358,6 +370,10 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 	daos_recx_t		 recx = { 0 }, *recx_p;
 	daos_size_t		 view_len;
 	int			 punch_idx = 0, recx_idx = 0, rc;
+	int			 punch_or_delete = TF_PUNCH;
+
+	if (ds->td_delete)
+		punch_or_delete = TF_DELETE;
 
 	if (daos_unit_oid_is_null(ds->td_oid))
 		oid = dts_unit_oid_gen(0, 0, 0);
@@ -377,11 +393,12 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 
 	for (epoch = epr_u->epr_lo; epoch <= epr_u->epr_hi; epoch++) {
 		if (punch_idx < punch_nr && punch_epoch[punch_idx] == epoch) {
-			arg->ta_flags |= TF_PUNCH;
+			arg->ta_flags |= punch_or_delete;
+			arg->epr_lo = punch_bound == NULL ? 0 : punch_bound[punch_idx];
 			punch_idx++;
 		} else if (punch_nr < 0 && (rand() % 2) &&
 			   epoch != epr_u->epr_lo) {
-			arg->ta_flags |= TF_PUNCH;
+			arg->ta_flags |= punch_or_delete;
 		}
 
 		if (ds->td_type == DAOS_IOD_SINGLE) {
@@ -394,7 +411,7 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 
 		update_value(arg, oid, epoch, 0, dkey, akey, ds->td_type,
 			     ds->td_iod_size, recx_p, buf_u);
-		arg->ta_flags &= ~TF_PUNCH;
+		arg->ta_flags &= ~punch_or_delete;
 	}
 	D_FREE(buf_u);
 
@@ -407,11 +424,25 @@ aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
-				   ds_csum_agg_recalc, NULL, NULL);
+				   ds_csum_agg_recalc, NULL, NULL, false);
 	if (rc != -DER_CSUM) {
-		assert_int_equal(rc, 0);
+		/* Skip delete verification for now */
+		assert_rc_equal(rc, 0);
 		verify_view(arg, oid, dkey, akey, ds);
+	} else {
+		/*
+		 * not calling verify_view so must free ds->td_expected_view
+		 * here
+		 */
+		D_FREE(ds->td_expected_view);
 	}
+}
+
+static void
+aggregate_basic(struct io_test_args *arg, struct agg_tst_dataset *ds,
+		int punch_nr, daos_epoch_t punch_epoch[])
+{
+	aggregate_basic_lb(arg, ds, punch_nr, punch_epoch, NULL);
 }
 
 static inline int
@@ -578,8 +609,9 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 	if (ds_sample->td_discard)
 		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
 	else
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL,
+				   false);
+	assert_rc_equal(rc, 0);
 
 	multi_view(arg, oids, dkeys, akeys, AT_OBJ_KEY_NR, ds_arr, true);
 	D_FREE(ds_arr);
@@ -611,6 +643,8 @@ discard_1(void **state)
 			    ds.td_agg_epr.epr_lo, ds.td_iod_size);
 		aggregate_basic(arg, &ds, 0, NULL);
 	}
+
+	cleanup();
 }
 /*
  * Discard on single akey-SV with epr [A, B].
@@ -640,6 +674,8 @@ discard_2(void **state)
 			    ds.td_agg_epr.epr_hi, ds.td_iod_size);
 		aggregate_basic(arg, &ds, 0, NULL);
 	}
+
+	cleanup();
 }
 
 /*
@@ -672,7 +708,9 @@ discard_3(void **state)
 
 	/* Object should have been deleted by discard */
 	rc = lookup_object(arg, arg->oid);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	cleanup();
 }
 
 /*
@@ -707,6 +745,8 @@ discard_4(void **state)
 			    ds.td_iod_size);
 		aggregate_basic(arg, &ds, punch_nr, punch_epoch);
 	}
+
+	cleanup();
 }
 
 /*
@@ -738,7 +778,8 @@ discard_5(void **state)
 			    "iod_size:"DF_U64"\n", ds.td_iod_size);
 		aggregate_basic(arg, &ds, -1, NULL);
 	}
-	daos_fail_loc_set(0);
+
+	cleanup();
 }
 
 /*
@@ -761,6 +802,8 @@ discard_6(void **state)
 	ds.td_discard = true;
 
 	aggregate_multi(arg, &ds);
+
+	cleanup();
 }
 
 /*
@@ -792,6 +835,8 @@ discard_7(void **state)
 
 	VERBOSE_MSG("Discard epoch "DF_U64"\n", ds.td_agg_epr.epr_lo);
 	aggregate_basic(arg, &ds, 0, NULL);
+
+	cleanup();
 }
 
 /*
@@ -825,6 +870,8 @@ discard_8(void **state)
 	VERBOSE_MSG("Discard epr ["DF_U64", "DF_U64"]\n",
 		    ds.td_agg_epr.epr_lo, ds.td_agg_epr.epr_hi);
 	aggregate_basic(arg, &ds, 0, NULL);
+
+	cleanup();
 }
 
 /*
@@ -860,7 +907,9 @@ discard_9(void **state)
 
 	/* Object should have been deleted by discard */
 	rc = lookup_object(arg, arg->oid);
-	assert_int_equal(rc, -DER_NONEXIST);
+	assert_rc_equal(rc, -DER_NONEXIST);
+
+	cleanup();
 }
 
 /*
@@ -899,6 +948,8 @@ discard_10(void **state)
 
 	VERBOSE_MSG("Discard punch records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+
+	cleanup();
 }
 
 /*
@@ -934,7 +985,8 @@ discard_11(void **state)
 
 	daos_fail_loc_set(DAOS_VOS_AGG_RANDOM_YIELD | DAOS_FAIL_ALWAYS);
 	aggregate_basic(arg, &ds, -1, NULL);
-	daos_fail_loc_set(0);
+
+	cleanup();
 }
 
 /*
@@ -962,6 +1014,8 @@ discard_12(void **state)
 	ds.td_discard = true;
 
 	aggregate_multi(arg, &ds);
+
+	cleanup();
 }
 
 /*
@@ -1000,6 +1054,8 @@ discard_13(void **state)
 	ds.td_discard = true;
 
 	aggregate_basic(arg, &ds, -1, NULL);
+
+	cleanup();
 }
 
 enum {
@@ -1039,7 +1095,7 @@ do_punch(struct io_test_args *arg, int type, daos_unit_oid_t oid,
 
 	rc = vos_obj_punch(arg->ctx.tc_co_hdl, oid, epoch, 0, 0,
 			   dkey_ptr, num_akeys, akey_ptr, NULL);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 }
 
 #define NUM_INTERNAL 200
@@ -1106,9 +1162,9 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 			rc = vos_discard(arg->ctx.tc_co_hdl, &epr, NULL, NULL);
 		else
 			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
-					   NULL, NULL);
+					   NULL, NULL, false);
 
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 
 		if (first != AGG_NONE) {
 			/* regardless of aggregate or discard, the first entry
@@ -1191,18 +1247,19 @@ agg_punches_test(void **state, int record_type, bool discard)
 			}
 		}
 	}
-	daos_fail_loc_set(0);
 }
 static void
 discard_14(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_SINGLE, true);
+	cleanup();
 }
 
 static void
 discard_15(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, true);
+	cleanup();
 }
 
 /*
@@ -1234,6 +1291,7 @@ aggregate_1(void **state)
 		aggregate_basic(arg, &ds, 0, NULL);
 	}
 
+	cleanup();
 }
 
 /*
@@ -1268,6 +1326,7 @@ aggregate_2(void **state)
 			    ds.td_iod_size);
 		aggregate_basic(arg, &ds, punch_nr, punch_epoch);
 	}
+	cleanup();
 }
 
 /*
@@ -1298,7 +1357,7 @@ aggregate_3(void **state)
 			    "iod_size:"DF_U64"\n", ds.td_iod_size);
 		aggregate_basic(arg, &ds, -1, NULL);
 	}
-	daos_fail_loc_set(0);
+	cleanup();
 }
 
 /*
@@ -1321,6 +1380,7 @@ aggregate_4(void **state)
 	ds.td_discard = false;
 
 	aggregate_multi(arg, &ds);
+	cleanup();
 }
 
 /*
@@ -1359,6 +1419,7 @@ aggregate_5(void **state)
 		aggregate_basic(arg, &ds, punch_nr,
 				punch_nr ? punch_epoch : NULL);
 	}
+	cleanup();
 }
 
 /*
@@ -1395,6 +1456,7 @@ aggregate_6(void **state)
 
 	VERBOSE_MSG("Aggregate disjoint records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1436,6 +1498,7 @@ aggregate_7(void **state)
 
 	VERBOSE_MSG("Aggregate adjacent records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1477,6 +1540,7 @@ aggregate_8(void **state)
 
 	VERBOSE_MSG("Aggregate overlapped records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1514,6 +1578,7 @@ aggregate_9(void **state)
 
 	VERBOSE_MSG("Aggregate fully covered records\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1573,6 +1638,7 @@ aggregate_10(void **state)
 
 	VERBOSE_MSG("Aggregate records spanning window end.\n");
 	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
 }
 
 /*
@@ -1607,7 +1673,7 @@ aggregate_11(void **state)
 
 	daos_fail_loc_set(DAOS_VOS_AGG_RANDOM_YIELD | DAOS_FAIL_ALWAYS);
 	aggregate_basic(arg, &ds, -1, NULL);
-	daos_fail_loc_set(0);
+	cleanup();
 }
 
 /*
@@ -1643,7 +1709,7 @@ aggregate_12(void **state)
 	daos_fail_loc_set(DAOS_VOS_AGG_MW_THRESH | DAOS_FAIL_ALWAYS);
 	daos_fail_value_set(50);
 	aggregate_basic(arg, &ds, -1, NULL);
-	daos_fail_loc_set(0);
+	cleanup();
 }
 
 /*
@@ -1671,6 +1737,7 @@ aggregate_13(void **state)
 	ds.td_discard = false;
 
 	aggregate_multi(arg, &ds);
+	cleanup();
 }
 
 static void
@@ -1763,7 +1830,7 @@ aggregate_14(void **state)
 	int			 i, repeat_cnt, rc;
 
 	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_space_info(&pool_info, "INIT");
 
 	fill_size = NVME_FREE(vps) ? : SCM_FREE(vps);
@@ -1797,19 +1864,20 @@ aggregate_14(void **state)
 		}
 
 		rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		print_space_info(&pool_info, "FILLED");
 
 		VERBOSE_MSG("Aggregate round: %d\n", i);
 		epr.epr_hi = epc_hi;
-		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
+		rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL,
+				   false);
 		if (rc) {
 			print_error("aggregate %d failed:%d\n", i, rc);
 			break;
 		}
 
 		rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
-		assert_int_equal(rc, 0);
+		assert_rc_equal(rc, 0);
 		print_space_info(&pool_info, "AGGREGATED");
 
 		VERBOSE_MSG("Wait 10 secs for free extents expiring...\n");
@@ -1817,22 +1885,25 @@ aggregate_14(void **state)
 	}
 
 	rc = vos_pool_query(arg->ctx.tc_po_hdl, &pool_info);
-	assert_int_equal(rc, 0);
+	assert_rc_equal(rc, 0);
 	print_space_info(&pool_info, "FINAL");
 
 	assert_int_equal(i, repeat_cnt);
+	cleanup();
 }
 
 static void
 aggregate_15(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_SINGLE, false);
+	cleanup();
 }
 
 static void
 aggregate_16(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, false);
+	cleanup();
 }
 
 /*
@@ -1846,6 +1917,7 @@ aggregate_17(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_6(state);
 	arg->ta_flags &= ~TF_USE_CSUMS;
+	cleanup();
 }
 
 /*
@@ -1859,6 +1931,7 @@ aggregate_18(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_9(state);
 	arg->ta_flags &= ~TF_USE_CSUMS;
+	cleanup();
 }
 
 /*
@@ -1872,6 +1945,7 @@ aggregate_19(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_10(state);
 	arg->ta_flags &= ~TF_USE_CSUMS;
+	cleanup();
 }
 
 /*
@@ -1885,6 +1959,7 @@ aggregate_20(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_11(state);
 	arg->ta_flags &= ~TF_USE_CSUMS;
+	cleanup();
 }
 /*
  * Aggregate on single akey->EV, random punch, small flush threshold.
@@ -1921,7 +1996,7 @@ aggregate_21(void **state)
 	arg->ta_flags |= TF_USE_CSUMS;
 	aggregate_basic(arg, &ds, -1, NULL);
 	arg->ta_flags &= ~TF_USE_CSUMS;
-	daos_fail_loc_set(0);
+	cleanup();
 }
 
 static void
@@ -1985,8 +2060,8 @@ aggregate_22(void **state)
 
 	epr.epr_hi = epoch++;
 
-	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL);
-	assert_int_equal(rc, 0);
+	rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL, NULL, NULL, false);
+	assert_rc_equal(rc, 0);
 
 	fetch_value(arg, oid, epoch++,
 		    VOS_OF_COND_AKEY_FETCH, dkey, akey,
@@ -2018,12 +2093,501 @@ aggregate_22(void **state)
 	update_value(arg, oid, epoch++,
 		     VOS_OF_COND_DKEY_UPDATE, dkey,
 		     akey4, DAOS_IOD_SINGLE, sizeof(buf_u), &recx, buf_u);
+	cleanup();
 }
 
+static void
+aggregate_23(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[8];
+	daos_epoch_t		 punch_epoch[3];
+	int			 iod_size = 1024, punch_nr = 3, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* record in first window */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = 1;
+	/* delete record spans window, fully covered in first window */
+	recx_arr[1].rx_idx = end_idx - 3;
+	recx_arr[1].rx_nr = 5;
+	/* record spans window, fully covered in first window */
+	recx_arr[2].rx_idx = end_idx - 4;
+	recx_arr[2].rx_nr = 6;
+	/* delete record to fill up first window */
+	recx_arr[3].rx_idx = 1;
+	recx_arr[3].rx_nr = end_idx + 1;
+	/* delete record spans window, partial covered in first window */
+	recx_arr[4].rx_idx = end_idx - 5;
+	recx_arr[4].rx_nr = 10;
+	/* delete spans window, partial covered in first window */
+	recx_arr[5].rx_idx = end_idx - 4;
+	recx_arr[5].rx_nr = 10;
+	/* delete in first window */
+	recx_arr[6].rx_idx = end_idx - 3;
+	recx_arr[6].rx_nr = 1;
+	/* delete in the next window */
+	recx_arr[7].rx_idx = end_idx + 3;
+	recx_arr[7].rx_nr = 1;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = 8;
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 4;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 8;
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = 9;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	punch_epoch[0] = 3;
+	punch_epoch[1] = 4;
+	punch_epoch[2] = 6;
+
+	VERBOSE_MSG("Aggregate deleted records spanning window end.\n");
+	aggregate_basic(arg, &ds, punch_nr, punch_epoch);
+	cleanup();
+}
+
+static void
+aggregate_24(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[4];
+	daos_epoch_t		 punch_epochs[] = {2, 3, 4};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = end_idx - 5;
+	recx_arr[0].rx_nr = 25;
+	recx_arr[1].rx_idx = end_idx - 2;
+	recx_arr[1].rx_nr = 4;
+	recx_arr[2].rx_idx = end_idx + 4;
+	recx_arr[2].rx_nr = 4;
+	recx_arr[3].rx_idx = end_idx + 2;
+	recx_arr[3].rx_nr = 2;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 2;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = 4;
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = 5;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Aggregate extents not fully covered by delete record\n");
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_25(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[6];
+	daos_epoch_t		 punch_epochs[] = {2, 5};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = end_idx - 5;
+	recx_arr[0].rx_nr = end_idx + 5;
+	recx_arr[1].rx_idx = end_idx - 2;
+	recx_arr[1].rx_nr = end_idx + 2;
+	recx_arr[2].rx_idx = end_idx - 2;
+	recx_arr[2].rx_nr = 4;
+	recx_arr[3].rx_idx = (end_idx * 5) + end_idx - 5;
+	recx_arr[3].rx_nr = end_idx + 5;
+	recx_arr[4].rx_idx = (end_idx * 5) + end_idx - 2;
+	recx_arr[4].rx_nr = end_idx + 2;
+	recx_arr[5].rx_idx = (end_idx * 5) + end_idx - 2;
+	recx_arr[5].rx_nr = 4;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 2;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Aggregate delete of end of merge window\n")
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_26(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[6];
+	daos_epoch_t		 punch_epochs[] = {2, 3, 4, 5};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = end_idx * 4;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = end_idx;
+	recx_arr[2].rx_idx = end_idx;
+	recx_arr[2].rx_nr = end_idx;
+	recx_arr[3].rx_idx = end_idx * 2;
+	recx_arr[3].rx_nr = end_idx;
+	recx_arr[4].rx_idx = end_idx * 3;
+	recx_arr[4].rx_nr = end_idx;
+	recx_arr[5].rx_idx = end_idx * 12;
+	recx_arr[5].rx_nr = end_idx;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 1;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Consecutive removed extents\n");
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_27(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[5];
+	daos_epoch_t		 punch_epochs[] = {2, 3, 4, 5};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = end_idx * 4;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = end_idx;
+	recx_arr[2].rx_idx = end_idx;
+	recx_arr[2].rx_nr = end_idx;
+	recx_arr[3].rx_idx = end_idx * 2;
+	recx_arr[3].rx_nr = end_idx;
+	recx_arr[4].rx_idx = end_idx * 3;
+	recx_arr[4].rx_nr = end_idx;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 0;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Consecutive removed extents, no logical extents\n");
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_28(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[6];
+	daos_epoch_t		 punch_epochs[] = {3, 4, 5, 6};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = end_idx;
+	recx_arr[1].rx_idx = end_idx;
+	recx_arr[1].rx_nr = end_idx * 4;
+	recx_arr[2].rx_idx = end_idx;
+	recx_arr[2].rx_nr = end_idx;
+	recx_arr[3].rx_idx = end_idx * 2;
+	recx_arr[3].rx_nr = end_idx;
+	recx_arr[4].rx_idx = end_idx * 3;
+	recx_arr[4].rx_nr = end_idx;
+	recx_arr[5].rx_idx = end_idx * 4;
+	recx_arr[5].rx_nr = end_idx;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 1;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Logical extent followed by consecutive removed extents\n");
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_29(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[6];
+	daos_epoch_t		 punch_epochs[] = {3, 4, 5, 6};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = 1;
+	recx_arr[1].rx_idx = end_idx;
+	recx_arr[1].rx_nr = end_idx * 4;
+	recx_arr[2].rx_idx = end_idx;
+	recx_arr[2].rx_nr = end_idx;
+	recx_arr[3].rx_idx = end_idx * 2;
+	recx_arr[3].rx_nr = end_idx;
+	recx_arr[4].rx_idx = end_idx * 3;
+	recx_arr[4].rx_nr = end_idx;
+	recx_arr[5].rx_idx = end_idx * 4;
+	recx_arr[5].rx_nr = end_idx;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 1;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Logical extent followed by disjoint removed extents\n");
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+#define MAX_OPS 100
+#define MAX_REMOVE 50
+static void
+removal_stress_case(struct io_test_args *arg, int recx_nr, daos_recx_t *recx_arr, int remove_nr,
+		    daos_epoch_t *remove_epochs, daos_epoch_t *remove_bounds, bool add_parity)
+{
+	struct agg_tst_dataset	 ds = { 0 };
+	int			 iod_size = 1024, end_idx;
+	int			 i;
+	int			 remove = 0;
+
+	D_ASSERT(recx_nr > remove_nr && (recx_nr % remove_nr) == 0);
+	D_ASSERT(recx_nr <= MAX_OPS);
+	D_ASSERT(remove_nr <= MAX_REMOVE);
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	for (i = 0; i < recx_nr; i++) {
+		recx_arr[i].rx_idx = MAX(0, (i % 7) * end_idx - i);
+		if (add_parity && (i & 1) == 0)
+			recx_arr[i].rx_idx |= PARITY_BIT;
+		recx_arr[i].rx_nr = end_idx + end_idx * (i % 2);
+		if ((i + 1) % (recx_nr / remove_nr) == 0) {
+			remove_epochs[remove] = i + 1;
+			remove_bounds[remove] = MAX(0, (i + 1) - 23);
+			VERBOSE_MSG("delete "DF_U64" records at "DF_X64"@"DF_X64"-"DF_X64"\n",
+				    recx_arr[i].rx_nr, recx_arr[i].rx_idx, remove_bounds[remove],
+			       remove_epochs[remove]);
+			remove++;
+		} else {
+			VERBOSE_MSG("update "DF_U64" records at "DF_X64"@%x\n", recx_arr[i].rx_nr,
+				    recx_arr[i].rx_idx, i + 1);
+		}
+		fflush(stdout);
+	}
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = recx_nr;
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = -1;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = recx_nr;
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = recx_nr + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	VERBOSE_MSG("Stress test recx_nr=%d, remove_nr=%d\n", recx_nr, remove_nr);
+	aggregate_basic_lb(arg, &ds, remove_nr, &remove_epochs[0], &remove_bounds[0]);
+}
+
+static void
+aggregate_30(void **state)
+{
+	struct io_test_args	*arg = *state;
+	daos_recx_t		*recx_arr;
+	daos_epoch_t		*remove_epochs;
+	daos_epoch_t		*remove_bounds;
+
+	D_ALLOC_ARRAY(recx_arr, MAX_OPS);
+	assert_non_null(recx_arr);
+	D_ALLOC_ARRAY(remove_epochs, MAX_REMOVE);
+	assert_non_null(remove_epochs);
+	D_ALLOC_ARRAY(remove_bounds, MAX_REMOVE);
+	assert_non_null(remove_bounds);
+
+	removal_stress_case(arg, 10, recx_arr, 2, remove_epochs, remove_bounds, false);
+	removal_stress_case(arg, 14, recx_arr, 7, remove_epochs, remove_bounds, false);
+	removal_stress_case(arg, 20, recx_arr, 4, remove_epochs, remove_bounds, true);
+	if (!DAOS_ON_VALGRIND) {
+		removal_stress_case(arg, 24, recx_arr, 6, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 30, recx_arr, 3, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 40, recx_arr, 4, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 50, recx_arr, 5, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 60, recx_arr, 15, remove_epochs, remove_bounds, true);
+		removal_stress_case(arg, 75, recx_arr, 25, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 80, recx_arr, 8, remove_epochs, remove_bounds, false);
+		removal_stress_case(arg, 100, recx_arr, 10, remove_epochs, remove_bounds, true);
+	}
+
+	D_FREE(recx_arr);
+	D_FREE(remove_epochs);
+	D_FREE(remove_bounds);
+
+	cleanup();
+}
+
+static void
+aggregate_31(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[4];
+	daos_epoch_t		 punch_epochs[] = {4};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = end_idx * 2;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = end_idx;
+	recx_arr[2].rx_idx = end_idx;
+	recx_arr[2].rx_nr = end_idx;
+	recx_arr[3].rx_idx = 0;
+	recx_arr[3].rx_nr = end_idx * 2;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 0;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
+static void
+aggregate_32(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[11];
+	daos_epoch_t		 punch_epochs[] = {3, 4, 6, 7, 9, 10, 11};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = end_idx * 2;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = end_idx + 2;
+	recx_arr[2].rx_idx = end_idx;
+	recx_arr[2].rx_nr = end_idx;
+	recx_arr[3].rx_idx = 0;
+	recx_arr[3].rx_nr = end_idx + 2;
+	recx_arr[4].rx_idx = 0;
+	recx_arr[4].rx_nr = end_idx * 2;
+	recx_arr[5].rx_idx = 2;
+	recx_arr[5].rx_nr = end_idx;
+	recx_arr[6].rx_idx = 0;
+	recx_arr[6].rx_nr = end_idx * 2;
+	recx_arr[7].rx_idx = 0;
+	recx_arr[7].rx_nr = end_idx * 2;
+	recx_arr[8].rx_idx = 2;
+	recx_arr[8].rx_nr = end_idx;
+	recx_arr[9].rx_idx = 0;
+	recx_arr[9].rx_nr = 3;
+	recx_arr[10].rx_idx = end_idx - 1;
+	recx_arr[10].rx_nr = end_idx + 1;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 0;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
 
 static int
 agg_tst_teardown(void **state)
 {
+	daos_fail_loc_set(0);
 	test_args_reset((struct io_test_args *) *state, VPOOL_SIZE);
 	return 0;
 }
@@ -2106,6 +2670,26 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_21, NULL, agg_tst_teardown },
 	{ "VOS422: Conditional fetch before and after aggregation is same",
 	  aggregate_22, NULL, agg_tst_teardown },
+	{ "VOS423: Aggregate deleted records spanning window end",
+	  aggregate_23, NULL, agg_tst_teardown },
+	{ "VOS424: Aggregate extents not fully covered by delete record",
+	  aggregate_24, NULL, agg_tst_teardown },
+	{ "VOS425: Aggregate delete of end of merge window",
+	  aggregate_25, NULL, agg_tst_teardown },
+	{ "VOS426: Consecutive removed extents",
+	  aggregate_26, NULL, agg_tst_teardown },
+	{ "VOS427: Consecutive removed extents, no logical extents",
+	  aggregate_27, NULL, agg_tst_teardown },
+	{ "VOS428: Logical extent followed by consecutive removed extents",
+	  aggregate_28, NULL, agg_tst_teardown },
+	{ "VOS429: Logical extent followed by disjoint removed extents",
+	  aggregate_29, NULL, agg_tst_teardown },
+	{ "VOS430: Removal stress test",
+	  aggregate_30, NULL, agg_tst_teardown },
+	{ "VOS431: Removal spans windows, flush with no physical records",
+	  aggregate_31, NULL, agg_tst_teardown },
+	{ "VOS432: Overlapping removals",
+	  aggregate_32, NULL, agg_tst_teardown },
 };
 
 int

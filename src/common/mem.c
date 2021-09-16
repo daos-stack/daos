@@ -86,8 +86,13 @@ pmem_tx_free(struct umem_instance *umm, umem_off_t umoff)
 	if (pmemobj_tx_stage() == TX_STAGE_ONABORT)
 		return 0;
 
-	if (!UMOFF_IS_NULL(umoff))
-		return pmemobj_tx_free(umem_off2id(umm, umoff));
+	if (!UMOFF_IS_NULL(umoff)) {
+		int	rc;
+
+		rc = pmemobj_tx_free(umem_off2id(umm, umoff));
+		return rc ? umem_tx_errno(rc) : 0;
+	}
+
 	return 0;
 }
 
@@ -102,22 +107,31 @@ static int
 pmem_tx_add(struct umem_instance *umm, umem_off_t umoff,
 	    uint64_t offset, size_t size)
 {
-	return pmemobj_tx_add_range(umem_off2id(umm, umoff), offset, size);
+	int	rc;
+
+	rc = pmemobj_tx_add_range(umem_off2id(umm, umoff), offset, size);
+	return rc ? umem_tx_errno(rc) : 0;
 }
 
 static int
 pmem_tx_xadd(struct umem_instance *umm, umem_off_t umoff, uint64_t offset,
 	     size_t size, uint64_t flags)
 {
-	return pmemobj_tx_xadd_range(umem_off2id(umm, umoff), offset, size,
-				     flags);
+	int	rc;
+
+	rc = pmemobj_tx_xadd_range(umem_off2id(umm, umoff), offset, size,
+				   flags);
+	return rc ? umem_tx_errno(rc) : 0;
 }
 
 
 static int
 pmem_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
 {
-	return pmemobj_tx_add_range_direct(ptr, size);
+	int	rc;
+
+	rc = pmemobj_tx_add_range_direct(ptr, size);
+	return rc ? umem_tx_errno(rc) : 0;
 }
 
 static int
@@ -268,14 +282,17 @@ pmem_reserve(struct umem_instance *umm, struct pobj_action *act, size_t size,
 static void
 pmem_cancel(struct umem_instance *umm, struct pobj_action *actv, int actv_cnt)
 {
-	return pmemobj_cancel(umm->umm_pool, actv, actv_cnt);
+	pmemobj_cancel(umm->umm_pool, actv, actv_cnt);
 }
 
 static int
 pmem_tx_publish(struct umem_instance *umm, struct pobj_action *actv,
 		int actv_cnt)
 {
-	return pmemobj_tx_publish(actv, actv_cnt);
+	int	rc;
+
+	rc = pmemobj_tx_publish(actv, actv_cnt);
+	return rc ? umem_tx_errno(rc) : 0;
 }
 
 static int
@@ -324,7 +341,7 @@ pmem_tx_add_callback(struct umem_instance *umm, struct umem_tx_stage_data *txd,
 		}
 
 		new_max = min((*cnt_max) << 1, TXD_CB_MAX);
-		D_REALLOC_ARRAY(txi, *pvec, new_max);
+		D_REALLOC_ARRAY(txi, *pvec, *cnt_max, new_max);
 		if (txi == NULL)
 			return -DER_NOMEM;
 
@@ -381,33 +398,6 @@ umem_tx_errno(int err)
 
 	return daos_errno2der(err);
 }
-
-static int
-pmem_no_tx_add(struct umem_instance *umm, umem_off_t umoff,
-	       uint64_t offset, size_t size)
-{
-	return 0;
-}
-
-static int
-pmem_no_tx_add_ptr(struct umem_instance *umm, void *ptr, size_t size)
-{
-	return 0;
-}
-
-static umem_ops_t	pmem_no_snap_ops = {
-	.mo_tx_free		= pmem_tx_free,
-	.mo_tx_alloc		= pmem_tx_alloc,
-	.mo_tx_add		= pmem_no_tx_add,
-	.mo_tx_add_ptr		= pmem_no_tx_add_ptr,
-	.mo_tx_abort		= pmem_tx_abort,
-	.mo_tx_begin		= pmem_tx_begin,
-	.mo_tx_commit		= pmem_tx_commit,
-	.mo_reserve		= pmem_reserve,
-	.mo_cancel		= pmem_cancel,
-	.mo_tx_publish		= pmem_tx_publish,
-	.mo_tx_add_callback	= pmem_tx_add_callback,
-};
 #endif
 
 /* volatile memory operations */
@@ -475,11 +465,6 @@ static struct umem_class umem_class_defined[] = {
 		.umc_id		= UMEM_CLASS_PMEM,
 		.umc_ops	= &pmem_ops,
 		.umc_name	= "pmem",
-	},
-	{
-		.umc_id		= UMEM_CLASS_PMEM_NO_SNAP,
-		.umc_ops	= &pmem_no_snap_ops,
-		.umc_name	= "pmem_no_snap",
 	},
 #endif
 	{

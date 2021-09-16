@@ -21,12 +21,9 @@ import "C"
 type DaosStatus int32
 
 func (ds DaosStatus) Error() string {
-	// NB: Currently, d_errstr() just returns a string of the status
-	// name, e.g. -1007 -> "DER_NOSPACE". This is better than nothing,
-	// but hopefully d_errstr() will be extended to provide better strings
-	// similar to perror().
 	dErrStr := C.GoString(C.d_errstr(C.int(ds)))
-	return fmt.Sprintf("DAOS error (%d): %s", ds, dErrStr)
+	dErrDesc := C.GoString(C.d_errdesc(C.int(ds)))
+	return fmt.Sprintf("%s(%d): %s", dErrStr, ds, dErrDesc)
 }
 
 const (
@@ -94,8 +91,8 @@ const (
 	DaosNotAttached DaosStatus = -C.DER_NOTATTACH
 	// DaosMismatch indicates a version mismatch
 	DaosMismatch DaosStatus = -C.DER_MISMATCH
-	// DaosEvicted indicates that the rank was evicted
-	DaosEvicted DaosStatus = -C.DER_EVICTED
+	// DaosExcluded indicates that the rank was excluded
+	DaosExcluded DaosStatus = -C.DER_EXCLUDED
 	// DaosNoReply indicates that there was no reply to an RPC
 	DaosNoReply DaosStatus = -C.DER_NOREPLY
 	// DaosDenialOfService indicates that there was a denial of service

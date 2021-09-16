@@ -6,7 +6,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 import threading
-import time
 
 from ClusterShell.NodeSet import NodeSet
 
@@ -14,10 +13,9 @@ from dfuse_test_base import DfuseTestBase
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
 from job_manager_utils import Mpirun
-from general_utils import pcmd
+from general_utils import pcmd, get_random_string
 from daos_utils import DaosCommand
 from mpio_utils import MpioUtils
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
 
 
@@ -33,19 +31,18 @@ class IorTestBase(DfuseTestBase):
 
     def __init__(self, *args, **kwargs):
         """Initialize a IorTestBase object."""
-        super(IorTestBase, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.ior_cmd = None
         self.processes = None
         self.hostfile_clients_slots = None
         self.container = None
-        self.lock = None
 
     def setUp(self):
         """Set up each test case."""
         # obtain separate logs
         self.update_log_file_names()
         # Start the servers and agents
-        super(IorTestBase, self).setUp()
+        super().setUp()
 
         # Get the parameters for IOR
         self.ior_cmd = IorCommand()
@@ -53,33 +50,23 @@ class IorTestBase(DfuseTestBase):
         self.processes = self.params.get("np", '/run/ior/client_processes/*')
         self.subprocess = self.params.get("subprocess", '/run/ior/*', False)
 
-        # lock is needed for run_multiple_ior method.
-        self.lock = threading.Lock()
-
     def create_pool(self):
         """Create a TestPool object to use with ior."""
-        # Get the pool params
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        # Get the pool params and create a pool
+        self.add_pool(connect=False)
 
-        # Create a pool
-        self.pool.create()
-
-    def create_cont(self, oclass):
+    def create_cont(self):
         """Create a TestContainer object to be used to create container.
 
-        Args:
-            oclass: Explicitly supply object class for container create
         """
         # Get container params
         self.container = TestContainer(
             self.pool, daos_command=DaosCommand(self.bin))
         self.container.get_params(self)
 
-        # update object class for container create, if supplied
-        # explicitly.
-        if oclass:
-            self.container.oclass.update(oclass)
+        # update container oclass
+        if self.ior_cmd.dfs_oclass:
+            self.container.oclass.update(self.ior_cmd.dfs_oclass.value)
 
         # create container
         self.container.create()
@@ -105,7 +92,8 @@ class IorTestBase(DfuseTestBase):
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
-                          mount_dir=None):
+                          mount_dir=None, out_queue=None, env=None):
+        # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
         If specified the ior flags and ior daos object class parameters will
@@ -130,6 +118,10 @@ class IorTestBase(DfuseTestBase):
             fail_on_warning (bool, optional): Controls whether the test
                 should fail if a 'WARNING' is found. Default is False.
             mount_dir (str, optional): Create specific mount point
+            out_queue (queue, optional): Pass the exception to the queue.
+                Defaults to None
+            env (EnvironmentVariables, optional): Pass the environment to be
+                used when calling run_ior. Defaults to None
 
         Returns:
             CmdResult: result of the ior command execution
@@ -140,6 +132,10 @@ class IorTestBase(DfuseTestBase):
 
         # start dfuse if api is POSIX or HDF5 with vol connector
         if self.ior_cmd.api.value == "POSIX" or plugin_path:
+            # add a substring in case of HDF5-VOL
+            if plugin_path:
+                sub_dir = get_random_string(5)
+                mount_dir = os.path.join(mount_dir, sub_dir)
             # Connect to the pool, create container and then start dfuse
             if not self.dfuse:
                 self.start_dfuse(
@@ -157,19 +153,19 @@ class IorTestBase(DfuseTestBase):
         try:
             out = self.run_ior(job_manager, self.processes,
                                intercept, plugin_path=plugin_path,
-                               fail_on_warning=fail_on_warning)
+                               fail_on_warning=fail_on_warning,
+                               out_queue=out_queue, env=env)
         finally:
             if stop_dfuse:
                 self.stop_dfuse()
 
         return out
 
-    def update_ior_cmd_with_pool(self, create_cont=True, oclass=None):
+    def update_ior_cmd_with_pool(self, create_cont=True):
         """Update ior_cmd with pool.
 
         Args:
           create_cont (bool, optional): create a container. Defaults to True.
-          oclass (string, optional): Specify object class
         """
         # Create a pool if one does not already exist
         if self.pool is None:
@@ -179,13 +175,17 @@ class IorTestBase(DfuseTestBase):
         # It will not enable checksum feature
         if create_cont:
             self.pool.connect()
-            self.create_cont(oclass)
+            self.create_cont()
         # Update IOR params with the pool and container params
         self.ior_cmd.set_daos_params(self.server_group, self.pool,
                                      self.container.uuid)
 
-    def get_ior_job_manager_command(self):
+    def get_ior_job_manager_command(self, custom_ior_cmd=None):
         """Get the MPI job manager command for IOR.
+
+        Args:
+            custom_ior_cmd (IorCommand): Custom IorCommand instance to create
+            job_manager with.
 
         Returns:
             str: the path for the mpi job manager command
@@ -199,7 +199,10 @@ class IorTestBase(DfuseTestBase):
         else:
             self.fail("Unsupported IOR API")
 
-        self.job_manager = Mpirun(self.ior_cmd, self.subprocess, "mpich")
+        if custom_ior_cmd:
+            self.job_manager = Mpirun(custom_ior_cmd, self.subprocess, "mpich")
+        else:
+            self.job_manager = Mpirun(self.ior_cmd, self.subprocess, "mpich")
 
         return self.job_manager
 
@@ -218,7 +221,8 @@ class IorTestBase(DfuseTestBase):
             self.fail("Exiting Test: Subprocess not running")
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
-                plugin_path=None, fail_on_warning=False, pool=None):
+                plugin_path=None, fail_on_warning=False, pool=None,
+                out_queue=None, env=None):
         """Run the IOR command.
 
         Args:
@@ -234,10 +238,22 @@ class IorTestBase(DfuseTestBase):
                 should fail if a 'WARNING' is found. Default is False.
             pool (TestPool, optional): The pool for which to display space.
                 Default is self.pool.
+            out_queue (queue, optional): Pass the exception to the queue.
+                Defaults to None.
+            env (EnvironmentVariables, optional): Environment to be used
+             when running ior. Defaults to None
         """
-        env = self.ior_cmd.get_default_env(str(manager), self.client_log)
+        if not env:
+            env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
-            env["LD_PRELOAD"] = intercept
+            env['LD_PRELOAD'] = intercept
+            env['D_LOG_MASK'] = 'INFO'
+            if env.get('D_IL_REPORT', None) is None:
+                env['D_IL_REPORT'] = '1'
+
+            #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
+            #env['DD_MASK'] = 'all'
+            #env['DD_SUBSYS'] = 'all'
         if plugin_path:
             env["HDF5_VOL_CONNECTOR"] = "daos"
             env["HDF5_PLUGIN_PATH"] = str(plugin_path)
@@ -263,12 +279,16 @@ class IorTestBase(DfuseTestBase):
             else:
                 report_warning = self.log.warning
 
-            for line in out.stdout.splitlines():
+            for line in out.stdout_text.splitlines():
                 if 'WARNING' in line:
                     report_warning("IOR command issued warnings.\n")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
+            # Queue is used when we use a thread to call
+            # ior thread (eg: thread1 --> thread2 --> ior)
+            if out_queue is not None:
+                out_queue.put("IOR Failed")
             self.fail("Test was expected to pass but it failed.\n")
         finally:
             if not self.subprocess and display_space:
@@ -292,96 +312,114 @@ class IorTestBase(DfuseTestBase):
         finally:
             self.display_pool_space()
 
-    def run_multiple_ior_with_pool(self, results, intercept=None):
-        """Execute ior with optional overrides for ior flags and object_class.
-
-        If specified the ior flags and ior daos object class parameters will
-        override the values read from the yaml file.
+    def run_ior_threads_il(self, results, intercept, with_clients,
+                           without_clients):
+        """Execute 2 IOR threads in parallel. One thread with interception
+        library (IL) and one without.
 
         Args:
-            intercept (str): path to the interception library. Shall be used
-                             only for POSIX through DFUSE.
-            ior_flags (str, optional): ior flags. Defaults to None.
-            object_class (str, optional): daos object class. Defaults to None.
+            results (dict): Dictionary to store the IOR results that gets
+                printed in the IOR output.
+            intercept (str): Path to the interception library. Shall be used
+                only for POSIX through DFUSE.
+            with_clients (list): List of clients that use IL.
+            without_clients (list): List of clients that doesn't use IL.
         """
-        self.update_ior_cmd_with_pool()
+        # We can't use the shared self.ior_cmd, so we need to create the
+        # IorCommand object for each thread.
+        ior_cmd1 = IorCommand()
+        ior_cmd1.get_params(self)
+        # Update IOR params with the pool and container params
+        ior_cmd1.set_daos_params(
+            self.server_group, self.pool, self.container.uuid)
 
-        # start dfuse for POSIX api. This is specific to interception
-        # library test requirements.
+        ior_cmd2 = IorCommand()
+        ior_cmd2.get_params(self)
+        ior_cmd2.set_daos_params(
+            self.server_group, self.pool, self.container.uuid)
+
+        # start dfuse for POSIX api. This is specific to interception library
+        # test requirements.
         self.start_dfuse(self.hostlist_clients, self.pool, self.container)
 
-        # Create two jobs and run in parallel.
-        # Job1 will have 3 client set up to use dfuse + interception
-        # library
-        # Job2 will have 1 client set up to use only dfuse.
-        job1 = self.get_new_job(self.hostlist_clients[:-1], 1,
-                                results, intercept)
-        job2 = self.get_new_job([self.hostlist_clients[-1]], 2,
-                                results, None)
+        # Create two threads and run in parallel.
+        thread1 = self.create_ior_thread(
+            ior_cmd1, with_clients, 1, results, intercept)
+        thread2 = self.create_ior_thread(
+            ior_cmd2, without_clients, 2, results, None)
 
-        job1.start()
-        # Since same ior_cmd is used to trigger the MPIRUN
-        # with different parameters, pausing for 2 seconds to
-        # avoid data collisions.
-        time.sleep(2)
-        job2.start()
-        job1.join()
-        job2.join()
+        thread1.start()
+        thread2.start()
+        thread1.join()
+        thread2.join()
+
         self.stop_dfuse()
 
-    def get_new_job(self, clients, job_num, results, intercept=None):
+    def create_ior_thread(self, ior_command, clients, job_num, results,
+                          intercept=None):
         """Create a new thread for ior run.
 
         Args:
+            ior_command (IorCommand): IOR command instance.
             clients (list): hosts on which to run ior
             job_num (int): Assigned job number
             results (dict): A dictionary object to store the ior metrics
             intercept (path): Path to interception library
         """
-        job = threading.Thread(target=self.run_multiple_ior, args=[
-            clients, results, job_num, intercept])
+        job = threading.Thread(
+            target=self.run_custom_ior_cmd,
+            args=[ior_command, clients, results, job_num, intercept])
         return job
 
-    def run_multiple_ior(self, clients, results, job_num, intercept=None):
-        """Run the IOR command.
+    def run_custom_ior_cmd(self, ior_command, clients, results, job_num,
+                           intercept=None):
+        """Run customized IOR command, not self.ior_cmd.
+
+        Expected to be used with a threaded code where multiple IOR commands are
+        executed in parallel.
+
+        Display pool space before running it for a reference.
 
         Args:
+            ior_command (IorCommand): Custom IOR command instance.
             clients (list): hosts on which to run ior
             results (dict): A dictionary object to store the ior metrics
             job_num (int): Assigned job number
             intercept (str, optional): path to interception library. Defaults to
                 None.
         """
-        self.lock.acquire(True)
-        tsize = self.ior_cmd.transfer_size.value
-        testfile = os.path.join(self.dfuse.mount_dir.value,
-                                "testfile{}{}".format(tsize, job_num))
+        self.log.info("--- IOR Thread %d: Start ---", job_num)
+        tsize = ior_command.transfer_size.value
+        testfile = os.path.join(
+            self.dfuse.mount_dir.value, "testfile{}{}".format(tsize, job_num))
         if intercept:
             testfile += "intercept"
-        self.ior_cmd.test_file.update(testfile)
-        manager = self.get_ior_job_manager_command()
+        ior_command.test_file.update(testfile)
+
+        # Get the custom job manager that's associated with this thread.
+        manager = self.get_ior_job_manager_command(custom_ior_cmd=ior_command)
+
         procs = (self.processes // len(self.hostlist_clients)) * len(clients)
-        env = self.ior_cmd.get_default_env(str(manager), self.client_log)
+        env = ior_command.get_default_env(str(manager), self.client_log)
         if intercept:
             env["LD_PRELOAD"] = intercept
         manager.assign_hosts(
-            clients,
-            self.workdir,
-            self.hostfile_clients_slots)
+            clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(procs)
         manager.assign_environment(env)
-        self.lock.release()
+        self.display_pool_space()
+
+        self.log.info("--- IOR Thread %d: Starting IOR ---", job_num)
         try:
-            self.display_pool_space()
-            out = manager.run()
-            self.lock.acquire(True)
-            results[job_num] = IorCommand.get_ior_metrics(out)
-            self.lock.release()
+            ior_output = manager.run()
+            results[job_num] = IorCommand.get_ior_metrics(ior_output)
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
-            self.fail("Test was expected to pass but it failed.\n")
+            self.fail("IOR thread failed!")
         finally:
             self.display_pool_space()
+
+        self.log.info("--- IOR Thread %d: End ---", job_num)
 
     def verify_pool_size(self, original_pool_info, processes):
         """Validate the pool size.
@@ -463,7 +501,9 @@ class IorTestBase(DfuseTestBase):
         result = pcmd(
             self.hostlist_clients, command, verbose=display_output, timeout=300)
         if 0 not in result and fail_on_err:
-            hosts = [str(nodes) for code, nodes in result.items() if code != 0]
+            hosts = [str(
+                nodes) for code, nodes in list(
+                    result.items()) if code != 0]
             raise CommandFailure(
                 "Error running '{}' on the following hosts: {}".format(
                     command, NodeSet(",".join(hosts))))

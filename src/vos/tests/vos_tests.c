@@ -62,7 +62,6 @@ static int akey_feats[] = {
 static inline int
 run_all_tests(int keys, bool nest_iterators)
 {
-	const char	*bypass = getenv("DAOS_IO_BYPASS");
 	const char	*it;
 	char		 cfg_desc_io[DTS_CFG_MAX];
 	int		 failed = 0;
@@ -70,16 +69,13 @@ run_all_tests(int keys, bool nest_iterators)
 	int		 i;
 	int		 j;
 
-	if (!bypass) {
-		if (!nest_iterators) {
-			dts_create_config(cfg_desc_io, "keys=%d", keys);
-			failed += run_ts_tests(cfg_desc_io);
-			failed += run_mvcc_tests(cfg_desc_io);
-		}
-		bypass = "none";
+	if (!nest_iterators) {
+		dts_create_config(cfg_desc_io, "keys=%d", keys);
+		failed += run_ts_tests(cfg_desc_io);
+		failed += run_mvcc_tests(cfg_desc_io);
 	}
 
-	dts_create_config(cfg_desc_io, "keys=%d bypass=%s", keys, bypass);
+	dts_create_config(cfg_desc_io, "keys=%d", keys);
 
 	if (nest_iterators == false) {
 		failed += run_pm_tests(cfg_desc_io);
@@ -96,8 +92,7 @@ run_all_tests(int keys, bool nest_iterators)
 	} else {
 		it = "nested";
 	}
-	dts_create_config(cfg_desc_io, "keys=%d bypass=%s iterator=%s", keys,
-		      bypass, it);
+	dts_create_config(cfg_desc_io, "keys=%d iterator=%s", keys, it);
 
 	for (i = 0; dkey_feats[i] >= 0; i++) {
 		for (j = 0; akey_feats[j] >= 0; j++) {

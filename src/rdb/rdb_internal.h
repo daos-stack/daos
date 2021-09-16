@@ -80,6 +80,8 @@ struct rdb {
 	ABT_thread		d_callbackd;
 	ABT_thread		d_recvd;
 	ABT_thread		d_compactd;
+	size_t			d_ae_max_size;
+	unsigned int		d_ae_max_entries;
 };
 
 /* thresholds of free space for a leader to avoid appending new log entries
@@ -102,7 +104,7 @@ DP_RANK(void)
 }
 
 #define DF_DB		DF_UUID"["DF_RANK"]"
-#define DP_DB(db)	DP_UUID(db->d_uuid), DP_RANK()
+#define DP_DB(db)	DP_UUID((db)->d_uuid), DP_RANK()
 
 /* Number of "base" references that the rdb_stop() path expects to remain */
 #define RDB_BASE_REFS 1
@@ -162,7 +164,7 @@ void rdb_raft_free_request(struct rdb *db, crt_rpc_t *rpc);
  * These are for daos_rpc::dr_opc and DAOS_RPC_OPCODE(opc, ...) rather than
  * crt_req_create(..., opc, ...). See src/include/daos/rpc.h.
  */
-#define DAOS_RDB_VERSION 2
+#define DAOS_RDB_VERSION 3
 /* LIST of internal RPCS in form of:
  * OPCODE, flags, FMT, handler, corpc_hdlr,
  */
@@ -241,7 +243,6 @@ struct rdb_local {
 #define DAOS_OSEQ_RDB_INSTALLSNAPSHOT /* output fields */	 \
 	((struct rdb_op_out)	(iso_op)		CRT_VAR) \
 	((msg_installsnapshot_response_t) (iso_msg)	CRT_VAR) \
-	((uint32_t)		(iso_padding)		CRT_VAR) \
 	/* chunk saved? */					 \
 	((uint64_t)		(iso_success)		CRT_VAR) \
 	/* last seq number */					 \
@@ -290,9 +291,6 @@ int rdb_path_pop(rdb_path_t *path);
 
 /* rdb_util.c *****************************************************************/
 
-#define DF_IOV		"<%p,"DF_U64">"
-#define DP_IOV(iov)	(iov)->iov_buf, (iov)->iov_len
-
 extern const daos_size_t rdb_iov_max;
 size_t rdb_encode_iov(const d_iov_t *iov, void *buf);
 ssize_t rdb_decode_iov(const void *buf, size_t len, d_iov_t *iov);
@@ -318,6 +316,7 @@ int rdb_vos_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		  daos_key_t *akey, d_iov_t *value);
 int rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		       daos_key_t *akey, d_iov_t *value);
+int rdb_vos_query_key_max(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, daos_key_t *akey);
 int rdb_vos_iter_fetch(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 		       enum rdb_probe_opc opc, daos_key_t *akey_in,
 		       daos_key_t *akey_out, d_iov_t *value);
@@ -433,6 +432,12 @@ rdb_lc_iter_fetch(daos_handle_t lc, uint64_t index, rdb_oid_t oid,
 		value == NULL ? 0 : value->iov_len);
 	return rdb_vos_iter_fetch(lc, index, oid, opc, akey_in, akey_out,
 				  value);
+}
+
+static inline int
+rdb_lc_query_key_max(daos_handle_t lc, uint64_t index, rdb_oid_t oid, d_iov_t *akey)
+{
+	return rdb_vos_query_key_max(lc, index, oid, akey);
 }
 
 static inline int

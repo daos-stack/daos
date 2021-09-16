@@ -76,6 +76,20 @@ func (ll *LeveledLogger) Level() LogLevel {
 	return ll.level.Get()
 }
 
+// ClearLevel clears all loggers for the specified level.
+func (ll *LeveledLogger) ClearLevel(level LogLevel) {
+	switch level {
+	case LogLevelDebug:
+		ll.debugLoggers = nil
+	case LogLevelInfo:
+		ll.infoLoggers = nil
+	case LogLevelError:
+		ll.errorLoggers = nil
+	default:
+		ll.Errorf("unable to clear level %s", level)
+	}
+}
+
 // WithLogLevel allows the logger's LogLevel to be set
 // as part of a chained method call.
 func (ll *LeveledLogger) WithLogLevel(level LogLevel) *LeveledLogger {
@@ -114,7 +128,7 @@ func (ll *LeveledLogger) AddDebugLogger(newLogger DebugLogger) {
 // Debug emits an unformatted message at Debug level, if
 // the logger is configured to do so.
 func (ll *LeveledLogger) Debug(msg string) {
-	ll.Debugf(msg)
+	ll.Debugf("%s", msg)
 }
 
 // Debugf emits a formatted message at Debug level, if
@@ -143,7 +157,7 @@ func (ll *LeveledLogger) AddInfoLogger(newLogger InfoLogger) {
 // Info emits an unformatted message at Info level, if
 // the logger is configured to do so.
 func (ll *LeveledLogger) Info(msg string) {
-	ll.Infof(msg)
+	ll.Infof("%s", msg)
 }
 
 // Infof emits a formatted message at Info level, if
@@ -172,7 +186,7 @@ func (ll *LeveledLogger) AddErrorLogger(newLogger ErrorLogger) {
 // Error emits an unformatted message at Error level, if
 // the logger is configured to do so.
 func (ll *LeveledLogger) Error(msg string) {
-	ll.Errorf(msg)
+	ll.Errorf("%s", msg)
 }
 
 // Errorf emits a formatted message at Error level, if

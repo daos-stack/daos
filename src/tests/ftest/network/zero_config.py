@@ -4,7 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import os
 import re
@@ -29,7 +29,7 @@ class ZeroConfigTest(TestWithServers):
     def setUp(self):
         """Set up for zero-config test."""
         self.setup_start_servers = False
-        super(ZeroConfigTest, self).setUp()
+        super().setUp()
 
     def get_port_cnt(self, hosts, dev, port_counter):
         """Get the port count info for device names specified.
@@ -40,7 +40,7 @@ class ZeroConfigTest(TestWithServers):
             port_counter (str): port counter to get information from
 
         Returns:
-            dict: a dictionary of data values for each NodeSet key
+            list: a list of the data common to each unique NodeSet of hosts
 
         """
         b_path = "/sys/class/infiniband/{}".format(dev)
@@ -54,7 +54,8 @@ class ZeroConfigTest(TestWithServers):
         cmd = "cat {}".format(file)
         text = "port_counter"
         error = "Error obtaining {} info".format(port_counter)
-        return get_host_data(hosts, cmd, text, error, 20)
+        all_host_data = get_host_data(hosts, cmd, text, error, 20)
+        return [host_data["data"] for host_data in all_host_data]
 
     def get_log_info(self, hosts, dev, env_state, log_file):
         """Get information from daos.log file to verify device used.
@@ -76,8 +77,8 @@ class ZeroConfigTest(TestWithServers):
         pattern = r"Using\s+client\s+provided\s+OFI_INTERFACE:\s+{}".format(dev)
 
         detected = 0
-        for output in get_host_data(hosts, cmd, log_file, err).values():
-            detected = len(re.findall(pattern, output))
+        for host_data in get_host_data(hosts, cmd, log_file, err):
+            detected = len(re.findall(pattern, host_data["data"]))
         self.log.info(
             "Found %s instances of client setting up OFI_INTERFACE=%s",
             detected, dev)
@@ -138,7 +139,7 @@ class ZeroConfigTest(TestWithServers):
             self.hostlist_clients, hfi_map[exp_iface], "port_rcv_data")
 
         diff = 0
-        for cnt_b, cnt_a in zip(cnt_before.values(), cnt_after.values()):
+        for cnt_b, cnt_a in zip(cnt_before, cnt_after):
             diff = int(cnt_a) - int(cnt_b)
             self.log.info("Port [%s] count difference: %s", exp_iface, diff)
 
@@ -169,7 +170,7 @@ class ZeroConfigTest(TestWithServers):
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
         dev_info = {"ib0": 0, "ib1": 1}
-        exp_iface = random.choice(dev_info.keys())
+        exp_iface = random.choice(list(dev_info.keys()))
 
         # Configure the daos server
         self.add_server_manager()

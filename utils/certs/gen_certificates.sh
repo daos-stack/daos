@@ -120,7 +120,7 @@ function generate_ca_cert () {
         -key "${PRIVATE}/daosCA.key" \
         -out "${CERTS}/daosCA.crt" -batch
     [[ $EUID -eq 0 ]] && chown root.root "${CERTS}/daosCA.crt" 2>/dev/null
-    chmod 0664 "${CERTS}/daosCA.crt"
+    chmod 0644 "${CERTS}/daosCA.crt"
     # Reset the the CA index
     rm -f "${CA_HOME}/index.txt" "${CA_HOME}/serial.txt"
     touch "${CA_HOME}/index.txt"
@@ -145,7 +145,7 @@ function generate_agent_cert () {
         -outdir "${CERTS}" -in "${CA_HOME}/agent.csr" -batch
     [[ $EUID -eq 0 ]] \
         && chown daos_agent.daos_agent "${CERTS}/agent.crt" 2>/dev/null
-    chmod 0664 "${CERTS}/agent.crt"
+    chmod 0644 "${CERTS}/agent.crt"
 
     echo "Required Agent Certificate Files:
     ${CERTS}/daosCA.crt

@@ -9,19 +9,20 @@
 #include "rpc.h"
 
 static int
-crt_proc_struct_rsvc_hint(crt_proc_t proc, struct rsvc_hint *hint)
+crt_proc_struct_rsvc_hint(crt_proc_t proc, crt_proc_op_t proc_op,
+			  struct rsvc_hint *hint)
 {
 	int rc;
 
-	rc = crt_proc_uint32_t(proc, &hint->sh_flags);
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_flags);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint32_t(proc, &hint->sh_rank);
+	rc = crt_proc_uint32_t(proc, proc_op, &hint->sh_rank);
 	if (rc != 0)
 		return -DER_HG;
 
-	rc = crt_proc_uint64_t(proc, &hint->sh_term);
+	rc = crt_proc_uint64_t(proc, proc_op, &hint->sh_term);
 	if (rc != 0)
 		return -DER_HG;
 

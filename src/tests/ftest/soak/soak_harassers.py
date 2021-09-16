@@ -24,7 +24,9 @@ class SoakHarassers(SoakTestBase):
         This test will run for the time specififed in
         /run/test_timeout.
 
-        :avocado: tags=soak,soak_harassers
+        :avocado: tags=hw,large
+        :avocado: tags=soak
+        :avocado: tags=soak_harassers
         """
         test_param = "/run/soak_harassers/"
         self.run_soak(test_param)

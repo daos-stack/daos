@@ -1,10 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
     SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-from __future__ import print_function
+
 
 import threading
 import time
@@ -14,7 +14,7 @@ from mdtest_test_base import MdtestBase
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
 # pylint: disable=attribute-defined-outside-init
-class RebuildWidelyStriped(MdtestBase):
+class RbldWidelyStriped(MdtestBase):
     """Rebuild test cases featuring mdtest.
 
     This class contains tests for pool rebuild that feature I/O going on

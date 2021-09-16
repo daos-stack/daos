@@ -21,7 +21,7 @@ class UpdateContainerACLTest(ContSecurityTestBase):
     """
     def setUp(self):
         """Set up each test case."""
-        super(UpdateContainerACLTest, self).setUp()
+        super().setUp()
         self.acl_filename = "test_acl_file.txt"
         self.daos_cmd = self.get_daos_command()
         self.prepare_pool()

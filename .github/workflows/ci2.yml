@@ -1,0 +1,137 @@
+name: Build
+
+on:
+   pull_request:
+
+concurrency:
+  group: ci2-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # Build a base Docker image, and save it with a key based on the
+  # hash.
+  # If the source hasn't changed then this will be a cache-read, followed
+  # by a cache-write which will fail as the cache exists, but the read will
+  # put it to the front of the LRU queue.
+  # If the source has changed then the cache-read will fail, a new build will
+  # be performed and saved to the cache with a new key.
+  Prepare:
+    name: Build docker images
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu.20.04, centos.8, leap.15]
+    steps:
+    - uses: actions/checkout@v2
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      continue-on-error: true
+      with:
+        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-{hash}
+        restore-keys: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-
+    - name: Prepare base image in Docker
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_DEPS_BUILD=no --build-arg UID
+                          --build-arg DEPS_JOBS=10
+    - name: Build dependencies in Docker
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_BUILD=no
+                          --build-arg DEPS_JOBS=10
+    - name: Prune images not required for build.
+      run: docker images --all --filter label=DAOS=true --quiet | xargs docker rmi --no-prune
+    - name: Prune images not required for build.
+      run: docker images --all --filter label=DAOS=stage1 --quiet | xargs docker rmi --no-prune
+
+  Build-and-test:
+    name: Run DAOS/NLT tests
+    needs: Prepare
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Only run on Ubuntu for now, centos 8 just isn't very stable.
+        distro: [ubuntu.20.04]
+        # ubuntu/gcc is broken right now DAOS-7601
+        compiler: [clang]
+    env:
+      COMPILER: ${{ matrix.compiler }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+    # https://github.com/marketplace/actions/docker-layer-caching
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      continue-on-error: true
+      with:
+        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-{hash}
+        restore-keys: docker-${{ matrix.distro }}-
+        skip-save: true
+    - name: Update dependencies in image.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --tag build-image
+    - name: Build and Test
+      run: ./utils/run_in_ga_wrapper.sh
+    - name: Dmesg
+      # Always save dmesg, to be able to check for DAOS-7764 or other critical issues.
+      if: always()
+      run: sudo dmesg
+    - name: Publish NLT test results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v1.17
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        files: nlt-junit.xml
+        comment_mode: off
+        fail_on: nothing
+
+  Build:
+    name: Build DAOS
+    needs: Prepare
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # Run this on distros where we don't run the ci1 Workflow.
+        distro: [ubuntu.20.04, centos.8, leap.15]
+        compiler: [clang, gcc]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+      with:
+        submodules: true
+    # https://github.com/marketplace/actions/docker-layer-caching
+    - uses: satackey/action-docker-layer-caching@v0.0.11
+      continue-on-error: true
+      with:
+        key: docker-${{ matrix.distro }}-${{ hashFiles('site_scons', 'utils/docker', 'utils/build.config', 'SConstruct', '.github', '.dockerignore') }}-{hash}
+        restore-keys: docker-${{ matrix.distro }}-
+        skip-save: true
+    - name: Update dependencies in image.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_BUILD=no
+                          --build-arg DEPS_JOBS=10
+    - name: Build in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build Java in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DEPS_JOBS=10
+                          --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build debug in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg DAOS_BUILD_TYPE=debug
+                          --build-arg COMPILER=${{ matrix.compiler }}
+    - name: Build devel in docker.
+      run: docker build . --file utils/docker/Dockerfile.${{ matrix.distro }}
+                          --build-arg DAOS_JAVA_BUILD=no
+                          --build-arg DEPS_JOBS=10
+                          --build-arg DAOS_BUILD_TYPE=dev
+                          --build-arg COMPILER=${{ matrix.compiler }}

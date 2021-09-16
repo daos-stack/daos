@@ -7,6 +7,8 @@
 package events
 
 import (
+	"math"
+
 	sharedpb "github.com/daos-stack/daos/src/control/common/proto/shared"
 )
 
@@ -46,4 +48,16 @@ func StrInfoToProto(si *StrInfo) (*sharedpb.RASEvent_StrInfo, error) {
 	}
 
 	return pbInfo, nil
+}
+
+// NewGenericEvent returns a generic RAS event with supplied ID.
+func NewGenericEvent(id RASID, sev RASSeverityID, msg, info string) *RASEvent {
+	return fill(&RASEvent{
+		ID:           id,
+		Type:         RASTypeInfoOnly,
+		Severity:     sev,
+		Msg:          msg,
+		Rank:         math.MaxUint32,
+		ExtendedInfo: NewStrInfo(info),
+	})
 }

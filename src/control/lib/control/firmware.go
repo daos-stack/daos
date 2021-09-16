@@ -2,7 +2,7 @@
 // (C) Copyright 2020-2021 Intel Corporation.
 //
 // SPDX-License-Identifier: BSD-2-Clause-Patent
-// +build firmware
+//
 
 package control
 
@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"

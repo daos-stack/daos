@@ -54,6 +54,8 @@ struct daos_event_private {
 	unsigned int		evx_nchild_comp;
 	/** flag to indicate whether event is a barrier event */
 	unsigned int		is_barrier:1;
+	/** flag to indicate whether to convert DER to errno */
+	unsigned int		is_errno:1;
 
 	unsigned int		evx_flags;
 	daos_ev_status_t	evx_status;

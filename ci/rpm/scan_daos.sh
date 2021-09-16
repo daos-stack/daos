@@ -20,6 +20,7 @@ scp -i ci_key "${lmd_tarball}" "jenkins@${nodelist[0]}:/var/tmp"
 ssh "$SSH_KEY_ARGS" jenkins@"${nodelist[0]}" \
   "NODE=${nodelist[0]}                       \
    DAOS_PKG_VERSION=$DAOS_PKG_VERSION        \
+   JENKINS_URL=$JENKINS_URL                  \
    $(cat "$mydir/scan_daos_node.sh")"
 
 rm -f "${WORKSPACE}/maldetect.xml"

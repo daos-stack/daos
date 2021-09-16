@@ -5,9 +5,12 @@
 """
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
+from apricot import skipForTicket
 
 import write_host_file
 
+
+# pylint: disable=attribute-defined-outside-init
 class LargeFileCount(MdtestBase, IorTestBase):
     """Test class Description: Runs IOR and MDTEST to create large number
                                of files.
@@ -26,6 +29,17 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 self.hostlist_clients, self.workdir,
                 self.hostfile_clients_slots)
 
+    def create_cont(self, oclass):
+        """Override container create method
+
+          Args:
+            oclass(str): Object class type
+        """
+        # create container
+        self.container = self.get_container(self.pool, create=False)
+        self.container.oclass.update(oclass)
+        self.container.create()
+
     def test_largefilecount(self):
         """Jira ID: DAOS-3845.
         Test Description:
@@ -33,7 +47,9 @@ class LargeFileCount(MdtestBase, IorTestBase):
         Use Cases:
             Run IOR for 5 mints with DFS and POSIX
             Run MDTEST to create 25K files with DFS and POSIX
-        :avocado: tags=all,daosio,hw,large,full_regression,largefilecount
+        :avocado: tags=all,daosio,full_regression
+        :avocado: tags=hw,large,dfuse
+        :avocado: tags=largefilecount
         """
         apis = self.params.get("api", "/run/largefilecount/*")
         object_class = self.params.get("object_class", '/run/largefilecount/*')
@@ -54,19 +70,18 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 # with single client node
                 self.single_client(api)
 
-                # create container
-                self.container = self.get_container(self.pool, create=False)
-                self.container.oclass.update(oclass)
-                self.container.create()
+                # create container for mdtest
+                self.create_cont(oclass)
                 # run mdtest and ior
                 self.execute_mdtest()
-                # container destroy
-                self.container.destroy()
-                self.update_ior_cmd_with_pool(oclass=oclass)
+                # create container for ior
+                self.create_cont(oclass)
+                self.update_ior_cmd_with_pool(False)
                 self.run_ior_with_pool(create_pool=False)
                 # container destroy
                 self.container.destroy()
 
+    @skipForTicket("DAOS-7287")
     def test_largefilecount_rc(self):
         """Jira ID: DAOS-3845.
         Test Description:
@@ -76,7 +91,10 @@ class LargeFileCount(MdtestBase, IorTestBase):
         Use Cases:
             Run IOR for 5 mints with DFS and POSIX
             Run MDTEST to create 25K files with DFS and POSIX
-        :avocado: tags=all,daosio,hw,large,rc,largefilecount_rc
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=rc,largefilecount_rc
         """
         apis = self.params.get("api", "/run/largefilecount/*")
         num_of_files_dirs_rc = self.params.get("num_of_files_dirs_rc",
@@ -99,15 +117,13 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 # with single client node
                 self.single_client(api)
 
-                # create container
-                self.container = self.get_container(self.pool, create=False)
-                self.container.oclass.update(oclass)
-                self.container.create()
+                # create container for mdtest
+                self.create_cont(oclass)
                 # run mdtest and ior
                 self.execute_mdtest()
-                # container destroy
-                self.container.destroy()
-                self.update_ior_cmd_with_pool(oclass=oclass)
+                # create container for ior
+                self.create_cont(oclass)
+                self.update_ior_cmd_with_pool(False)
                 self.run_ior_with_pool(create_pool=False)
                 # container destroy
                 self.container.destroy()

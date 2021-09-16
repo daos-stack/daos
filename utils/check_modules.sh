@@ -43,12 +43,12 @@ if [ ! -d "utils/sl" ];then
 fi
 
 /bin/rm -f pylint.log
+TOPDIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd)"
+
+PYTHONPATH=$TOPDIR/site_scons/
+export PYTHONPATH
 
 ./utils/sl/check_script.py -s
-
-# Test the build code with daos_build.
-PYTHONPATH=$PWD/utils
-export PYTHONPATH
 
 ./utils/sl/check_script.py -w SConstruct
 
@@ -65,12 +65,12 @@ fi
 ./utils/sl/check_script.py -w "${sfiles[@]}"
 
 # Set PYTHONPATH for source files not installed files
-PYTHONPATH=$PWD/utils:$PWD/src/tests/ftest/
-PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util
-PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/soak
-PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/cart/util/
-PYTHONPATH=$PYTHONPATH:$PWD/src/tests/ftest/util/apricot/
-PYTHONPATH=$PYTHONPATH:$PWD/src/client/
+PYTHONPATH=$TOPDIR/utils:$TOPDIR/src/tests/ftest
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/util
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/soak
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/cart/util
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/tests/ftest/util/apricot
+PYTHONPATH=$PYTHONPATH:$TOPDIR/src/client
 export PYTHONPATH
 
-./utils/sl/check_script.py -x utils/sl -w "${pfiles[@]}"
+./utils/sl/check_script.py "${pfiles[@]}"

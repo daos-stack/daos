@@ -1,11 +1,18 @@
 """Build daos common tests"""
 import daos_build
+import compiler_setup
 
 def define_checksum_timing(build, env):
     """Define the Checksum Timing build"""
     checksum_timing_libs = ['daos_common', 'gurt']
     build.test(env, 'checksum_timing', 'checksum_timing.c',
                LIBS=checksum_timing_libs)
+
+def define_compress_timing(build, env):
+    """Define the Compress Timing build"""
+    compress_timing_libs = ['daos_common', 'gurt']
+    build.test(env, 'compress_timing', 'compress_timing.c',
+               LIBS=compress_timing_libs)
 
 def scons():
     """Execute build"""
@@ -41,7 +48,10 @@ def scons():
                     LIBS=['daos_common', 'gurt', 'cmocka'])
     daos_build.test(tenv, 'prop_tests', 'prop_tests.c',
                     LIBS=['daos_common', 'gurt', 'cmocka'])
+    daos_build.test(tenv, 'fault_domain_tests', 'fault_domain_tests.c',
+                    LIBS=['daos_common', 'gurt', 'cmocka'])
     define_checksum_timing(daos_build, tenv)
+    define_compress_timing(daos_build, tenv)
 
     tenv.Install('$PREFIX/bin/', [common_test])
 
@@ -49,7 +59,7 @@ def scons():
     # Some syscalls are aliased when fortification is enabled, which makes
     # mocking in unit tests into a headache.
     # The compiler decides this on its own, but let's force the issue.
-    unit_env.Append(CCFLAGS="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0")
+    compiler_setup.remove_fortify(unit_env)
 
     acl_api = unit_env.Object('../acl_api.c')
 

@@ -35,6 +35,12 @@ func (f HandlerFunc) OnEvent(ctx context.Context, evt *RASEvent) {
 	f(ctx, evt)
 }
 
+// Publisher defines an interface to be implemented by event publishers.
+type Publisher interface {
+	// Publish takes an event to be published.
+	Publish(event *RASEvent)
+}
+
 type subscriber struct {
 	topic   RASTypeID
 	handler Handler

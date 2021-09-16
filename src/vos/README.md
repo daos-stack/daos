@@ -1,7 +1,7 @@
 
 # Versioning Object Store
 
-The Versioning Object Store (VOS) is responsible for providing and maintaining a persistent object store that supports byte-granular access and versioning for a single shard in a <a href="/doc/storage_model.md#DAOS_Pool">DAOS pool</a>.
+The Versioning Object Store (VOS) is responsible for providing and maintaining a persistent object store that supports byte-granular access and versioning for a single shard in a <a href="/docs/storage_model.md#DAOS_Pool">DAOS pool</a>.
 It maintains its metadata in persistent memory and may store data either in persistent memory or on block storage, depending on available storage and performance requirements.
 It must provide this functionality with minimum overhead so that performance can approach the theoretical performance of the underlying hardware as closely as possible, both with respect to latency and bandwidth.
 Its internal data structures, in both persistent and non-persistent memory, must also support the highest levels of concurrency so that throughput scales over the cores of modern processor architectures.
@@ -123,7 +123,7 @@ Note that "punch" of an extent of an array object is logged as zeroed extents, r
 This ensures that the full version history of objects remain accessible.   The DAOS api, however, only allows accessing data at snapshots so VOS aggregation can aggressively remove objects, keys, and values that are no longer accessible at a known snapshot.
 
 <a id="7a"></a>
-![../../doc/graph/Fig_067.png](../../doc/graph/Fig_067.png "VOS Pool storage layout")
+![../../docs/graph/Fig_067.png](../../docs/graph/Fig_067.png "VOS Pool storage layout")
 
 When performing lookup on a single value in an object, the object index is traversed to find the index node with the highest epoch number less than or equal to the requested epoch (near-epoch) that matches the key.
 If a value or negative entry is found, it is returned.
@@ -307,7 +307,7 @@ For explanation purposes, representative keys and values are used in the example
 
 <a id="7d"></a>
 
-![../../doc/graph/Fig_011.png](../../doc/graph/Fig_011.png "Red Black Tree based KV Store with Multi-Key")
+![../../docs/graph/Fig_011.png](../../docs/graph/Fig_011.png "Red Black Tree based KV Store with Multi-Key")
 
 The red-black tree, like any traditional binary tree, organizes the keys lesser than the root to the left subtree and keys greater than the root to the right subtree.
 Value pointers are stored along with the keys in each node.
@@ -368,7 +368,7 @@ In this example, the different lines represent the actual data stored in the res
 
 <b>Example of extents and epochs in a Key Array object</b>
 
-![../../doc/graph/Fig_012.png](../../doc/graph/Fig_012.png "Example of extents and epochs in a byte array object")
+![../../docs/graph/Fig_012.png](../../docs/graph/Fig_012.png "Example of extents and epochs in a byte array object")
 
 In the <a href="7f">above</a> example, there is significant overlap between different extent ranges.
 VOS supports nearest-epoch access, which necessitates reading the latest value for any given extent range.
@@ -405,7 +405,7 @@ TODO: Create a new figure
 <a id="7k"></a>
 <b>Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table <a href="#7g">above</a></b>
 
-![../../doc/graph/Fig_016.png](../../doc/graph/Fig_016.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
+![../../docs/graph/Fig_016.png](../../docs/graph/Fig_016.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
 
 The figure <a href="7l">below</a> shows the rectangles constructed with splitting and trimming operations of EV-Tree for the example in the previous <a href="#7g">table</a> with an additional write at offset {0 - 100} introduced to consider the case for extensive splitting.
 The figure <a href="#7k">above</a> shows the EV-Tree construction for the same example.
@@ -414,7 +414,7 @@ The figure <a href="#7k">above</a> shows the EV-Tree construction for the same e
 
 <b>Tree (order - 4) for the example in Table 6 3 (pictorial representation shown in the figure <a href="#7g">above</a></b>
 
-![../../doc/graph/Fig_017.png](../../doc/graph/Fig_017.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
+![../../docs/graph/Fig_017.png](../../docs/graph/Fig_017.png "Rectangles representing extent_range.epoch_validity arranged in 2-D space for an order-4 EV-Tree using input in the table")
 
 Inserts in an EV-Tree locate the appropriate leaf-node to insert, by checking for overlap.
 If multiple bounding boxes overlap, the bounding box with the least enlargement is chosen.
@@ -516,7 +516,7 @@ the corresponding key or object.
 <a id="8a"></a>
 <b>Scenarios illustrating utility of write timestamp cache</b>
 
-![../../doc/graph/uncertainty.png](../../doc/graph/uncertainty.png "Scenarios illustrating utility of write timestamp cache")
+![../../docs/graph/uncertainty.png](../../docs/graph/uncertainty.png "Scenarios illustrating utility of write timestamp cache")
 
 <a id="824"></a>
 ### MVCC Rules
@@ -538,7 +538,8 @@ Trackers that track the highest server HLC timestamps clients have heard of.) A
 transaction performs all operations using its epoch.
 
 The MVCC rules ensure that transactions execute as if they are serialized in
-their epoch order while complying with external consistency, as long as the
+their epoch order while ensuring that every transaction observes all
+conflicting transactions commit before it opens, as long as the
 system clock offsets are always within the expected maximum system clock offset
 (epsilon). For convenience, the rules classify the I/O operations into reads
 and writes:
@@ -718,13 +719,18 @@ The size needed for checksums is included while allocating memory for the persis
 
 The following diagram illustrates the overall VOS layout and where checksums will be stored. Note that the checksum type isn't actually stored in vos_cont_df yet.
 
-![../../doc/graph/Fig_021.png](../../doc/graph/Fig_021.png "How checksum fits into the VOS Layout")
+![../../docs/graph/Fig_021.png](../../docs/graph/Fig_021.png "How checksum fits into the VOS Layout")
 
 
 ### Checksum VOS Flow (vos_obj_update/vos_obj_fetch)
 
-On update, the checksum(s) are part of the I/O Descriptor.
-Then, in akey_update_single/akey_update_recx, the checksum buffer pointer is included in the internal structures used for tree updates (vos_rec_bundle for SV and evt_entry_in for EV). As already mentioned, the size of the persistent structure allocated includes the size of the checksum(s). Finally, while storing the record (svt_rec_store) or extent (evt_insert), the checksum(s) are copied to the end of the persistent structure.
+On update, the checksum(s) are part of the I/O Descriptor. Then, in
+akey_update_single/akey_update_recx, the checksum buffer pointer is included in
+the internal structures used for tree updates (vos_rec_bundle for SV and
+evt_entry_in for EV). As already mentioned, the size of the persistent structure
+allocated includes the size of the checksum(s). Finally, while storing the
+record (svt_rec_store) or extent (evt_insert), the checksum(s) are copied to the
+end of the persistent structure.
 
 On a fetch, the update flow is essentially reversed.
 
@@ -758,45 +764,58 @@ overhead and complexity.  DAOS instead uses an optimized two-phase commit
 transaction to guarantee consistency among replicas.
 
 <a id="811"></a>
-### DAOS Two-Phase Commit (DTX)
+### Single redundancy group based DAOS Two-Phase Commit (DTX)
 
-When an application wants to modify (update or punch) an object with multiple
-replicas, the client sends the modification RPC to the leader replica (Via
-<a href="#812">DTX Leader Election</a> algorithm discussed below).  The leader
-dispatches the RPC to the other replicas, and each replica makes its
-modification in parallel.  Bulk transfers are not forwarded by the leader but
-rather transferred directly from the client, improving load balance and
+When an application wants to modify (update or punch) a multiple replicated
+object or EC object, the client sends the modification RPC to the leader shard
+(via <a href="#812">DTX Leader Election</a> algorithm discussed below). The
+leader dispatches the RPC to the other related shards, and each shard makes
+its modification in parallel.  Bulk transfers are not forwarded by the leader
+but rather transferred directly from the client, improving load balance and
 decreasing latency by utilizing the full client-server bandwidth.
 
-Before modifications are made, a local transaction, called 'DTX', is started on
-each replica with a client selected DTX identifier that is unique for the
-current RPC within the container.  All modifications in a DTX are logged in a
-DTX transaction table and back references to the table are kept in each modified
-record.  After local modifications are done, each non-leader replica marks the
-DTX state as 'prepared' and replies to the leader replica.  The leader sets the
-DTX state to 'committable' as soon as it has completed its modifications and
-has received successful replies from all replicas.  If any replica(s) failed to
-execute the modification, it will reply to the leader with failure, and the
-leader will ask remaining replicas to 'abort' the DTX.   Once the DTX is set
-by the leader to 'committable' or 'abort', it replies to the client with the
-appropriate status.
+Before modifications are made, a local transaction, called 'DTX', is started
+on each related shard (both leader and non-leaders) with a client generated
+DTX identifier that is unique for the modification within the container. All
+the modifications in a DTX are logged in the DTX transaction table and back
+references to the table are kept in related modified record.  After local
+modifications are done, each non-leader marks the DTX state as 'prepared' and
+replies to the leader. The leader sets the DTX state to 'committable' as soon
+as it has completed its modifications and has received successful replies from
+all non-leaders.  If any shard(s) fail to execute the modification, it will
+reply to the leader with failure, and the leader will globally abort the DTX.
+Once the DTX is set by the leader to 'committable' or 'aborted', it replies to
+the client with the appropriate status.
 
 The client may consider a modification complete as soon as it receives a
 successful reply from the leader, regardless of whether the DTX is actually
-'committed' or not.   It is the responsibility of the leader replica to commit
-the 'committable' DTX asynchronously, when the 'committable' DTX count exceeds
-some threshold or piggybacked via dispatched RPCs due to potential conflict with
-subsequent modifications.
+'committed' or not. It is the responsibility of the leader to commit the
+'committable' DTX asynchronously. This can happen if the 'committable' count
+or DTX age exceed some thresholds or the DTX is piggybacked via other
+dispatched RPCs due to potential conflict with subsequent modifications.
 
 When an application wants to read something from an object with multiple
-replicas, the client can send the RPC to any replica.  On the server side, if
-the related DTX has been committed or is committable, the record can be returned to.
-If the DTX state is prepared, and the replica is not the leader, it will reply
-to the client telling it to send the RPC to the leader instead.  If it is the
-leader and is in any state other than 'committed' or 'committable', the entry
-is ignored, and the latest committed modification is returned to the client.
+replicas, the client can send the RPC to any replica.  On the server side,
+if the related DTX has been committed or is committable, the record can be
+returned to. If the DTX state is prepared, and the replica is not the leader,
+it will reply to the client telling it to send the RPC to the leader instead.
+If it is the leader and is in the state 'committed' or 'committable', then
+such entry is visible to the application. Otherwise, if the DTX on the leader
+is also 'prepared', then for transactional read, ask the client to wait and
+retry via returning -DER_INPROGRESS; for non-transactional read, related entry
+is ignored and the latest committed modification is returned to the client.
 
-The DTX model is built inside a DAOS container.  Each container maintains its own
+If the read operation refers to an EC object and the data read from a data
+shard (non-leader) has a 'prepared' DTX, the data may be 'committable' on the
+leader due to the aforementioned asynchronous batched commit mechanism.
+In such case, the non-leader will refresh related DTX status with the leader.
+If the DTX status after refresh is 'committed', then related data can be
+returned to the client; otherwise, if the DTX state is still 'prepared', then
+for transactional read, ask the client to wait and retry via returning
+-DER_INPROGRESS; for non-transactional read, related entry is ignored and the
+latest committed modification is returned to the client.
+
+The DTX model is built inside a DAOS container. Each container maintains its own
 DTX table that is organized as two B+trees in SCM: one for active DTXs and the
 other for committed DTXs.
 The following diagram represents the modification of a replicated object under
@@ -804,24 +823,14 @@ the DTX model.
 
 <b>Modify multiple replicated object under DTX model</b>
 
-![../../doc/graph/Fig_066.png](../../doc/graph/Fig_066.png ">Modify multiple replicated object under DTX model")
+![../../docs/graph/Fig_066.png](../../docs/graph/Fig_066.png ">Modify multiple replicated object under DTX model")
 
 <a id="812"></a>
 
-### DTX Leader Election
+### Single redundancy group based DTX Leader Election
 
-In the DTX model, the leader is a special replica that does more work than other
-replicas, including:
-
-1. All modification RPCs are sent to the leader.  The leader performs necessary
-sanity checks before dispatching modifications to other replicas.
-
-2. Non-leader replicas tell the client to redirect reads in 'prepared' DTX state to
-the leader replica.  The leader, therefore, may handle a heavier load on reads
-than non-leaders.
-
-To avoid general load imbalance, the leader selection is done for each object or
-dkey following these general guidelines:
+In single redundancy group based DTX model, the leader selection is done for
+each object or dkey following these general guidelines:
 
 R1: When different replicated objects share the same redundancy group, the same
 leader should not be used for each object.
@@ -832,3 +841,6 @@ servers.
 
 R3: Servers that fail frequently should be avoided in leader selection to avoid
 frequent leader migration.
+
+R4: For EC object, the leader will be one of the parity nodes within current
+redundancy group.

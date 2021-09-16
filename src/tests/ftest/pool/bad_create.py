@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 '''
   (C) Copyright 2018-2021 Intel Corporation.
 
@@ -8,7 +8,6 @@ import os
 import traceback
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
 
@@ -28,7 +27,9 @@ class BadCreateTest(TestWithServers):
         Test Description:
             Pass bad parameters to pool create.
 
-        :avocado: tags=all,pool,full_regression,tiny,badcreate
+        :avocado: tags=all,full_regression
+        :avocado: tags=tiny
+        :avocado: tags=pool,bad_create
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -52,11 +53,6 @@ class BadCreateTest(TestWithServers):
         expected_for_param.append(gidlist[1])
 
         setidlist = self.params.get("setname", '/run/createtests/setnames/*')
-        if setidlist[0] == 'NULLPTR':
-            group = None
-            self.cancel("skipping this test until DAOS-1991 is fixed")
-        else:
-            group = setidlist[0]
         expected_for_param.append(setidlist[1])
 
         # Uncomment this block when we test targetptr.
@@ -97,14 +93,13 @@ class BadCreateTest(TestWithServers):
 
         # initialize a python pool object then create the underlying
         # daos storage
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
+        self.add_pool(create=False)
+
         # Manually set TestPool members before calling create
         self.pool.mode.value = mode
         self.pool.uid = uid
         self.pool.gid = gid
         self.pool.scm_size.value = size
-        self.pool.name.value = group
 
         try:
             self.pool.create()

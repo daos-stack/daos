@@ -7,7 +7,7 @@
 import numpy as np
 from mpi4py import MPI
 
-class DaosFile(object):
+class DaosFile():
     """ Daos I/O is at the research stage, this class provides an abstract
         interface that hides the underlying details and just does some simple
         I/O for building test cases.

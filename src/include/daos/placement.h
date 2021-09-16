@@ -121,7 +121,8 @@ void pl_obj_layout_free(struct pl_obj_layout *layout);
 int  pl_obj_layout_alloc(unsigned int grp_size, unsigned int grp_nr,
 			 struct pl_obj_layout **layout_pp);
 bool pl_obj_layout_contains(struct pool_map *map, struct pl_obj_layout *layout,
-			    uint32_t rank, uint32_t target_index);
+			    uint32_t rank, uint32_t target_index,
+			    uint32_t shard);
 
 int pl_obj_place(struct pl_map *map,
 		 struct daos_obj_md *md,
@@ -133,6 +134,11 @@ int pl_obj_find_rebuild(struct pl_map *map,
 			struct daos_obj_shard_md *shard_md,
 			uint32_t rebuild_ver, uint32_t *tgt_rank,
 			uint32_t *shard_id, unsigned int array_size);
+
+int pl_obj_find_drain(struct pl_map *map, struct daos_obj_md *md,
+		      struct daos_obj_shard_md *shard_md,
+		      uint32_t rebuild_ver, uint32_t *tgt_rank,
+		      uint32_t *shard_id, unsigned int array_size);
 
 int pl_obj_find_reint(struct pl_map *map,
 			struct daos_obj_md *md,
@@ -157,7 +163,7 @@ pl_obj_get_shard(void *data, int idx)
 }
 
 int pl_select_leader(daos_obj_id_t oid, uint32_t shard_idx, uint32_t grp_size,
-		     bool for_tgt_id, pl_get_shard_t pl_get_shard, void *data);
+		     int *tgt_id, pl_get_shard_t pl_get_shard, void *data);
 
 void obj_layout_dump(daos_obj_id_t oid, struct pl_obj_layout *layout);
 

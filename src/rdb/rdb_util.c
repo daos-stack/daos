@@ -232,6 +232,7 @@ rdb_vos_set_iods(enum rdb_vos_op op, int n, d_iov_t akeys[],
 		iods[i].iod_name = akeys[i];
 		iods[i].iod_type = DAOS_IOD_SINGLE;
 		iods[i].iod_size = 0;
+		iods[i].iod_flags = 0;
 		iods[i].iod_recxs = NULL;
 		if (op == RDB_VOS_UPDATE) {
 			D_ASSERT(values[i].iov_len > 0);
@@ -325,7 +326,7 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	if (rc != 0)
 		return rc;
 
-	rc = bio_iod_prep(vos_ioh2desc(io));
+	rc = bio_iod_prep(vos_ioh2desc(io), BIO_CHK_TYPE_IO, NULL, 0);
 	if (rc) {
 		D_ERROR("prep io descriptor error:"DF_RC"\n", DP_RC(rc));
 		goto out;
@@ -356,10 +357,28 @@ rdb_vos_fetch_addr(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid,
 	rc = bio_iod_post(vos_ioh2desc(io));
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 out:
-	rc = vos_fetch_end(io, 0 /* err */);
+	rc = vos_fetch_end(io, NULL, 0 /* err */);
 	D_ASSERTF(rc == 0, ""DF_RC"\n", DP_RC(rc));
 
 	return rdb_vos_fetch_check(value, &value_orig);
+}
+
+int
+rdb_vos_query_key_max(daos_handle_t cont, daos_epoch_t epoch, rdb_oid_t oid, daos_key_t *akey)
+{
+	daos_unit_oid_t	uoid;
+	int		rc;
+
+	rdb_oid_to_uoid(oid, &uoid);
+	rc = vos_obj_query_key(cont, uoid, DAOS_GET_AKEY|DAOS_GET_MAX, epoch, &rdb_dkey, akey,
+			       NULL /* recx */, 0 /* cell sz */, 0 /* stripe sz */, NULL /* dth */);
+	if (rc != 0) {
+		D_ERROR("vos_obj_query_key((rdb,vos) oids=("DF_U64",lo="DF_U64", hi="DF_U64"), "
+			"epoch="DF_U64" ...) failed, "DF_RC"\n", oid, uoid.id_pub.lo,
+			uoid.id_pub.hi, epoch, DP_RC(rc));
+	}
+
+	return rc;
 }
 
 int
@@ -540,7 +559,7 @@ rdb_vos_aggregate(daos_handle_t cont, daos_epoch_t high)
 	epr.epr_lo = 0;
 	epr.epr_hi = high;
 
-	return vos_aggregate(cont, &epr, NULL, NULL, NULL);
+	return vos_aggregate(cont, &epr, NULL, NULL, NULL, true);
 }
 
 /* Return amount of vos pool SCM memory available accounting for

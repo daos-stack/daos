@@ -53,6 +53,9 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
 
 #define D_LOG_TRUNCATE_ENV		"D_LOG_TRUNCATE"
 
+/**< Env to specify flush priority */
+#define D_LOG_FLUSH_ENV			"D_LOG_FLUSH"
+
 /**< Env to specify stderr merge with logfile*/
 #define D_LOG_STDERR_IN_LOG_ENV	"D_LOG_STDERR_IN_LOG"
 
@@ -60,7 +63,7 @@ extern void (*d_alt_assert)(const int, const char*, const char*, const int);
  * scope.   This enables use of a variable in the macro below and is
  * just good coding practice.
  */
-#pragma GCC diagnostic warning "-Wshadow"
+#pragma GCC diagnostic error "-Wshadow"
 
 /** Internal macro for printing the message using resolved mask */
 #define _D_LOG_NOCHECK(mask, fmt, ...)				\

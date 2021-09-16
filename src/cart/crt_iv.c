@@ -344,7 +344,6 @@ crt_ivf_pending_request_add(struct crt_ivns_internal *ivns_internal,
 	iv_ops->ivo_on_put(ivns_internal, &iv_info->ifc_iv_value,
 			   iv_info->ifc_user_priv);
 
-	IVNS_ADDREF(iv_info->ifc_ivns_internal);
 	pending_fetch->pf_cb_info = iv_info;
 
 	d_list_add_tail(&pending_fetch->pf_link,
@@ -617,7 +616,7 @@ crt_ivns_internal_lookup(struct crt_ivns_id *ivns_id)
 	}
 	D_MUTEX_UNLOCK(&ns_list_lock);
 
-	D_ERROR("Failed to lookup IVNS for %s:%d\n",
+	D_DEBUG(DB_ALL, "Failed to lookup IVNS for %s:%d\n",
 		ivns_id->ii_group_name,
 		ivns_id->ii_nsid);
 
@@ -853,12 +852,11 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns,
 			 void *cb_arg)
 {
 	struct crt_ivns_internal	*ivns_internal;
-	int				rc = 0;
 
 	ivns_internal = crt_ivns_internal_get(ivns);
 	if (ivns_internal == NULL) {
-		D_ERROR("Invalid ivns passed\n");
-		D_GOTO(exit, rc = -DER_INVAL);
+		D_DEBUG(DB_ALL, "ivns does not exist\n");
+		return 0;
 	}
 
 	ivns_internal->cii_destroy_cb = destroy_cb;
@@ -866,8 +864,8 @@ crt_iv_namespace_destroy(crt_iv_namespace_t ivns,
 
 	/* addref done in crt_ivns_internal_get() and at attach/create time  */
 	IVNS_DECREF_N(ivns_internal, 2);
-exit:
-	return rc;
+
+	return 0;
 }
 
 /* Return iv_ops based on class_id passed */
@@ -1203,7 +1201,9 @@ crt_ivf_rpc_issue(d_rank_t dest_node, crt_iv_key_t *iv_key,
 	 * MUST not set it to (could cause a race):
 	 *    input->ifi_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver
 	 */
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	local_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (local_grp_ver == grp_ver) {
 		input->ifi_grp_ver = grp_ver;
 	} else {
@@ -1333,7 +1333,9 @@ crt_hdlr_iv_fetch_aux(void *arg)
 	 * the time it initially received a request to the time it
 	 * is to send the response.
 	 */
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver_entry != input->ifi_grp_ver) {
 		D_DEBUG(DB_ALL,
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
@@ -1513,7 +1515,9 @@ crt_hdlr_iv_fetch(crt_rpc_t *rpc_req)
 	}
 
 	/* Check local group version matching with in coming request */
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 
 	if (grp_ver != input->ifi_grp_ver) {
 		D_DEBUG(DB_ALL,
@@ -1823,7 +1827,9 @@ crt_hdlr_iv_sync_aux(void *arg)
 	}
 
 	/* Check group version match */
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver != input->ivs_grp_ver) {
 		D_DEBUG(DB_ALL,
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
@@ -1964,7 +1970,9 @@ crt_hdlr_iv_sync(crt_rpc_t *rpc_req)
 	}
 
 	/* Check group version match */
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver != input->ivs_grp_ver) {
 		D_DEBUG(DB_ALL,
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
@@ -2291,7 +2299,9 @@ crt_ivsync_rpc_issue(struct crt_ivns_internal *ivns_internal, uint32_t class_id,
 	iv_sync_cb->isc_sync_type = *sync_type;
 	input->ivs_ivns_id = ivns_internal->cii_gns.gn_ivns_id.ii_nsid;
 	input->ivs_ivns_group = ivns_internal->cii_gns.gn_ivns_id.ii_group_name;
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	input->ivs_grp_ver = ivns_internal->cii_grp_priv->gp_membs_ver;
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	d_iov_set(&input->ivs_key, iv_key->iov_buf, iv_key->iov_buf_len);
 	d_iov_set(&input->ivs_sync_type, &iv_sync_cb->isc_sync_type,
 		  sizeof(crt_iv_sync_t));
@@ -2344,9 +2354,8 @@ exit:
 
 		update_comp_cb(ivns_internal, class_id, iv_key, NULL, iv_value,
 			       update_rc, cb_arg);
-
-		/* on_get() done in crt_iv_update_internal */
-		iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
+		if (rc == 0)
+			iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
 	}
 
 	if (rc != 0) {
@@ -2359,8 +2368,6 @@ exit:
 			D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
 			D_FREE(iv_sync_cb);
 		}
-		if (sync_type->ivs_comp_cb)
-			sync_type->ivs_comp_cb(sync_type->ivs_comp_cb_arg, rc);
 	}
 	return rc;
 }
@@ -2573,10 +2580,16 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 					  iv_info->uci_cb_arg,
 					  iv_info->uci_user_priv,
 					  rc);
-		if (rc != 0)
+		if (rc != 0) {
 			rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
 						tmp_iv_value,
 						iv_info->uci_user_priv);
+			if (iv_info->uci_sync_type.ivs_comp_cb)
+				iv_info->uci_sync_type.ivs_comp_cb(iv_info->
+								   uci_sync_type.
+								   ivs_comp_cb_arg,
+								   rc);
+		}
 	}
 
 	if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)
@@ -2652,7 +2665,9 @@ crt_ivu_rpc_issue(d_rank_t dest_rank, crt_iv_key_t *iv_key,
 	 * then the version number does not match that version associated
 	 * with the root rank node we are sending to.
 	 */
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	local_grp_ver =  ivns_internal->cii_grp_priv->gp_membs_ver;
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver != local_grp_ver) {
 		D_DEBUG(DB_ALL,
 			"Group (%s) version mismatch. "
@@ -2684,6 +2699,7 @@ handle_response_internal(void *arg)
 {
 	const struct crt_cb_info *cb_info = arg;
 	crt_rpc_t		 *rpc = cb_info->cci_rpc;
+	void			 *cb_arg = cb_info->cci_arg;
 
 	switch (rpc->cr_opc) {
 	case CRT_OPC_IV_FETCH:
@@ -2700,6 +2716,7 @@ handle_response_internal(void *arg)
 	default:
 		D_ERROR("wrong opc: cb_info %p: rpc %p: opc %#x\n",
 			cb_info, rpc, rpc->cr_opc);
+		D_FREE(cb_arg);
 	}
 }
 
@@ -2864,16 +2881,15 @@ bulk_update_transfer_done_aux(const struct crt_bulk_cb_info *info)
 			D_GOTO(exit, rc);
 		}
 
-		rc = iv_ops->ivo_on_put(ivns_internal,
-					&cb_info->buc_iv_value,
-					cb_info->buc_user_priv);
-		output->rc = rc;
-		crt_reply_send(info->bci_bulk_desc->bd_rpc);
+		output->rc = iv_ops->ivo_on_put(ivns_internal,
+						&cb_info->buc_iv_value,
+						cb_info->buc_user_priv);
 
+		crt_reply_send(info->bci_bulk_desc->bd_rpc);
 		RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
+
 		IVNS_DECREF(update_cb_info->uci_ivns_internal);
 		D_FREE(update_cb_info);
-
 	} else {
 		D_GOTO(send_error, rc = update_rc);
 	}
@@ -2887,16 +2903,16 @@ send_error:
 			   cb_info->buc_user_priv);
 
 	rc = crt_bulk_free(cb_info->buc_bulk_hdl);
+	output->rc = rc;
+
+	crt_reply_send(info->bci_bulk_desc->bd_rpc);
+	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 
 	if (update_cb_info) {
 		IVNS_DECREF(update_cb_info->uci_ivns_internal);
 		D_FREE(update_cb_info);
 	}
 
-	output->rc = rc;
-
-	crt_reply_send(info->bci_bulk_desc->bd_rpc);
-	RPC_PUB_DECREF(info->bci_bulk_desc->bd_rpc);
 	return rc;
 }
 
@@ -3038,7 +3054,9 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 	}
 
 	/* Check group version match with rpc request*/
+	D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	grp_ver_entry = ivns_internal->cii_grp_priv->gp_membs_ver;
+	D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->gp_rwlock);
 	if (grp_ver_entry != input->ivu_grp_ver) {
 		D_DEBUG(DB_ALL,
 			"Group (%s) version mismatch. Local: %d Remote :%d\n",
@@ -3077,8 +3095,12 @@ crt_hdlr_iv_update(crt_rpc_t *rpc_req)
 			 * Check here for change in version prior to getting
 			 * next
 			 */
-			grp_ver_current = ivns_internal->cii_grp_priv->
-							  gp_membs_ver;
+			D_RWLOCK_RDLOCK(&ivns_internal->cii_grp_priv->
+					gp_rwlock);
+			grp_ver_current =
+				ivns_internal->cii_grp_priv->gp_membs_ver;
+			D_RWLOCK_UNLOCK(&ivns_internal->cii_grp_priv->
+					gp_rwlock);
 			if (grp_ver_entry != grp_ver_current) {
 				D_DEBUG(DB_ALL,
 					"Group (%s) version mismatch. "
@@ -3291,6 +3313,7 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 		if (sync_type.ivs_flags & CRT_IV_SYNC_BIDIRECTIONAL) {
 			rc = update_comp_cb(ivns_internal, class_id, iv_key,
 					    NULL, iv_value, rc, cb_arg);
+			D_ASSERT(sync_type.ivs_comp_cb == NULL);
 		} else {
 			/* issue sync. will call completion callback */
 			rc = crt_ivsync_rpc_issue(ivns_internal, class_id,
@@ -3361,7 +3384,8 @@ crt_iv_update_internal(crt_iv_namespace_t ivns, uint32_t class_id,
 
 		D_GOTO(exit, rc);
 	} else {
-		D_CDEBUG(rc == -DER_NONEXIST, DLOG_INFO, DLOG_ERR,
+		D_CDEBUG(rc == -DER_NONEXIST || rc == -DER_NOTLEADER,
+			 DLOG_INFO, DLOG_ERR,
 			 "ivo_on_update failed with rc = "DF_RC"\n",
 			 DP_RC(rc));
 

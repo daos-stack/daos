@@ -7,7 +7,6 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 from vol_test_base import VolTestBase
 from general_utils import get_job_manager_class
 
-
 class DaosVol(VolTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
     """Runs HDF5 test suites with daos vol connector.
@@ -31,6 +30,7 @@ class DaosVol(VolTestBase):
               h5daos_test_map
               h5daos_test_map_parallel
               h5daos_test_oclass
+              h5daos_test_metadata_parallel
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,small
@@ -58,6 +58,7 @@ class DaosVol(VolTestBase):
               h5daos_test_map
               h5daos_test_map_parallel
               h5daos_test_oclass
+              h5daos_test_metadata_parallel
 
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,small

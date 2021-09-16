@@ -1,9 +1,8 @@
 hosts:
   test_servers:
     - server-A
-    - server-B
   test_clients:
-    - client-C
+    - client-B
 timeout: 900
 server_config:
   name: daos_server
@@ -14,7 +13,6 @@ pool:
   mode: 146
   name: daos_server
   scm_size: 1000000000
-  svcn: 1
   control_method: dmg
   pool_count: 5
 container:

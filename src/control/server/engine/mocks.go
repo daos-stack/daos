@@ -20,6 +20,7 @@ type (
 		Running    atm.Bool
 		SignalCb   func(uint32, os.Signal)
 		SignalErr  error
+		LastPid    uint64
 		ErrChanCb  func() error
 		ErrChanErr error
 	}
@@ -76,6 +77,10 @@ func (tr *TestRunner) Signal(sig os.Signal) error {
 
 func (tr *TestRunner) IsRunning() bool {
 	return tr.runnerCfg.Running.IsTrue()
+}
+
+func (tr *TestRunner) GetLastPid() uint64 {
+	return tr.runnerCfg.LastPid
 }
 
 func (tr *TestRunner) GetConfig() *Config {

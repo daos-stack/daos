@@ -508,7 +508,7 @@ setup_dbg_namebit(void)
 
 int
 d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
-	       d_dbug_t def_mask, d_dbug_t err_mask)
+	       d_dbug_t def_mask, d_dbug_t err_mask, d_log_id_cb_t id_cb)
 {
 	int rc = 0;
 
@@ -524,7 +524,8 @@ d_log_init_adv(char *log_tag, char *log_file, unsigned int flavor,
 	if (d_dbglog_data.dd_prio_err != 0)
 		err_mask = d_dbglog_data.dd_prio_err;
 
-	rc = d_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor);
+	rc = d_log_open(log_tag, 0, def_mask, err_mask, log_file, flavor,
+			id_cb);
 	if (rc != 0) {
 		D_PRINT_ERR("d_log_open failed: %d\n", rc);
 		D_GOTO(out, rc = -DER_UNINIT);
@@ -559,7 +560,8 @@ d_log_init(void)
 		log_file = NULL;
 	}
 
-	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG);
+	rc = d_log_init_adv("CaRT", log_file, flags, DLOG_WARN, DLOG_EMERG,
+			    NULL);
 	if (rc != DER_SUCCESS) {
 		D_PRINT_ERR("d_log_init_adv failed, rc: %d.\n", rc);
 		D_GOTO(out, rc);

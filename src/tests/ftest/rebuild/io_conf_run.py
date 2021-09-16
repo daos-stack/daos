@@ -7,14 +7,14 @@
 from daos_io_conf import IoConfTestBase
 from apricot import skipForTicket
 
-class DaosRunIoConf(IoConfTestBase):
+class RbldRunIoConf(IoConfTestBase):
     """Test daos_run_io_conf.
 
     :avocado: recursive
     """
     # pylint: disable=too-many-ancestors
 
-    @skipForTicket("DAOS-3866")
+    @skipForTicket("DAOS-7136")
     def test_daos_run_io_conf(self):
         """Jira ID: DAOS-3150.
 

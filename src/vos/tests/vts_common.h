@@ -48,6 +48,7 @@ extern int gc;
 
 enum vts_ops_type {
 	CREAT,
+	CREAT_OPEN,
 	OPEN,
 	CLOSE,
 	DESTROY,
@@ -92,21 +93,21 @@ vts_ctx_fini(struct vos_test_ctx *tcx);
  * - create and connect to pool based on the input pool uuid and size
  * - create and open container based on the input container uuid
  */
-int dts_ctx_init(struct dts_context *tsc);
+int dts_ctx_init(struct credit_context *tsc);
 /**
  * Finalize I/O test context:
  * - close and destroy the test container
  * - disconnect and destroy the test pool
  */
-void dts_ctx_fini(struct dts_context *tsc);
+void dts_ctx_fini(struct credit_context *tsc);
 
 /**
  * Try to obtain a free credit from the I/O context.
  */
-struct dts_io_credit *dts_credit_take(struct dts_context *tsc);
+struct io_credit *dts_credit_take(struct credit_context *tsc);
 
 /** return the IO credit to the I/O context */
-void dts_credit_return(struct dts_context *tsc, struct dts_io_credit *cred);
+void dts_credit_return(struct credit_context *tsc, struct io_credit *cred);
 
 /**
  * VOS test suite run tests
@@ -148,7 +149,7 @@ vts_dtx_begin_ex(const daos_unit_oid_t *oid, daos_handle_t coh,
 	dth->dth_modification_cnt = nmods;
 
 	/** first call in vts_dtx_begin will have set this to inline */
-	assert_int_equal(vos_dtx_rsrvd_init(dth), 0);
+	assert_rc_equal(vos_dtx_rsrvd_init(dth), 0);
 }
 
 void

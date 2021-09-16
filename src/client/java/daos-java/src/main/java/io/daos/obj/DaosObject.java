@@ -7,13 +7,9 @@
 package io.daos.obj;
 
 import com.google.protobuf.InvalidProtocolBufferException;
-import io.daos.BufferAllocator;
-import io.daos.Constants;
-import io.daos.DaosEventQueue;
-import io.daos.DaosIOException;
+import io.daos.*;
 import io.daos.obj.attr.DaosObjectAttribute;
 import io.netty.buffer.ByteBuf;
-import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,7 +23,7 @@ import java.util.List;
  * {@link DaosObjectId} which is encoded already.<br/>
  * Before doing any update/fetch/list, {@link #open()} method should be called first. After that, you should close this
  * object by calling {@link #close()} method.<br/>
- * For update/fetch methods, {@link IODataDesc} should be created from this object with list of entries to describe
+ * For update/fetch methods, {@link IODataDescSync} should be created from this object with list of entries to describe
  * which akey and which part to be updated/fetched.<br/>
  * For key list methods, {@link IOKeyDesc} should be create from this object. You have several choices to specify
  * parameters, like number of keys to list, key length and batch size. By tuning these parameters, you can list dkeys or
@@ -124,7 +120,7 @@ public class DaosObject {
     int bufferLen = 0;
     List<byte[]> keyBytesList = new ArrayList<>(keys.size());
     for (String key : keys) {
-      if (StringUtils.isBlank(key)) {
+      if (DaosUtils.isBlankStr(key)) {
         throw new IllegalArgumentException("one of akey is blank");
       }
       byte bytes[];
@@ -266,13 +262,13 @@ public class DaosObject {
    * </code>
    *
    * @param desc
-   * {@link IODataDesc} describes list of {@link IODataDesc.Entry} to fetch akeyes' data under dkey.
-   * Check {@link #createDataDescForFetch(String, IODataDesc.IodType, int)} and
-   * {@link IODataDesc#addEntryForFetch(String, int, int)}.
+   * {@link IODataDescSync} describes list of {@link IODataDescSync.Entry} to fetch akeyes' data under dkey.
+   * Check {@link #createDataDescForFetch(String, IODataDescSync.IodType, int)} and
+   * {@link IODataDescSync#addEntryForFetch(String, long, int)}.
    * User should release internal buffer of <code>desc</code> by himself.
    * @throws DaosObjectException
    */
-  public void fetch(IODataDesc desc) throws DaosObjectException {
+  public void fetch(IODataDescSync desc) throws DaosObjectException {
     checkOpen();
     desc.encode();
 
@@ -283,7 +279,7 @@ public class DaosObject {
     try {
       client.fetchObject(objectPtr, 0, desc.getNbrOfEntries(), descBuffer.memoryAddress(),
           descBuffer.capacity());
-      desc.parseResult();
+      desc.parseFetchResult();
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to fetch object with description " +
         desc.toString(MAX_EXCEPTION_SIZE), e);
@@ -293,7 +289,7 @@ public class DaosObject {
   }
 
   /**
-   * Same as {@link #fetch(IODataDesc)}, but fetch object with {@link IOSimpleDataDesc}.
+   * Same as {@link #fetch(IODataDescSync)}, but fetch object with {@link IOSimpleDataDesc}.
    *
    * @param desc
    * request and data description
@@ -310,8 +306,32 @@ public class DaosObject {
       boolean async = desc.isAsync();
       client.fetchObjectSimple(objectPtr, 0, desc.getDescBuffer().memoryAddress(), async);
       if (!async) {
-        desc.parseResult();
+        desc.parseFetchResult();
       }
+    } catch (DaosIOException e) {
+      DaosObjectException de = new DaosObjectException(oid, "failed to fetch object with description " +
+          desc.toString(MAX_EXCEPTION_SIZE), e);
+      desc.setCause(de);
+      throw de;
+    }
+  }
+
+  /**
+   * Same as {@link #fetch(IODataDescSync)}, but fetch object with {@link IOSimpleDDAsync}.
+   *
+   * @param desc
+   * request and data description
+   * @throws DaosObjectException
+   */
+  public void fetchAsync(IOSimpleDDAsync desc) throws DaosObjectException {
+    checkOpen();
+    desc.encode();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " fetch object with description: " + desc.toString(MAX_DEBUG_SIZE));
+    }
+    try {
+      client.fetchObjectAsync(objectPtr, 0, desc.getDescBuffer().memoryAddress());
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to fetch object with description " +
           desc.toString(MAX_EXCEPTION_SIZE), e);
@@ -324,11 +344,11 @@ public class DaosObject {
    * update object with given <code>desc</code>.
    *
    * @param desc
-   * {@link IODataDesc} describes list of {@link IODataDesc.Entry} to update on dkey.
+   * {@link IODataDescSync} describes list of {@link IODataDescSync.Entry} to update on dkey.
    * User should release internal buffer of <code>desc</code> by himself.
    * @throws DaosObjectException
    */
-  public void update(IODataDesc desc) throws DaosObjectException {
+  public void update(IODataDescSync desc) throws DaosObjectException {
     checkOpen();
     desc.encode();
 
@@ -338,7 +358,7 @@ public class DaosObject {
     try {
       client.updateObject(objectPtr, 0, desc.getNbrOfEntries(), desc.getDescBuffer().memoryAddress(),
           desc.getDescBuffer().capacity());
-      desc.succeed();
+      desc.parseUpdateResult();
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
         desc.toString(MAX_EXCEPTION_SIZE), e);
@@ -348,7 +368,7 @@ public class DaosObject {
   }
 
   /**
-   * Same as {@link #fetch(IODataDesc)}, but fetch object with {@link IOSimpleDataDesc}.
+   * Same as {@link #fetch(IODataDescSync)}, but fetch object with {@link IOSimpleDataDesc}.
    *
    * @param desc
    * request and data description
@@ -364,8 +384,32 @@ public class DaosObject {
     try {
       client.updateObjectSimple(objectPtr, 0, desc.getDescBuffer().memoryAddress(), desc.isAsync());
       if (!desc.isAsync()) {
-        desc.succeed();
+        desc.parseUpdateResult();
       }
+    } catch (DaosIOException e) {
+      DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
+          desc.toString(MAX_EXCEPTION_SIZE), e);
+      desc.setCause(de);
+      throw de;
+    }
+  }
+
+  /**
+   * Same as {@link #fetch(IODataDescSync)}, but fetch object with {@link IOSimpleDDAsync}.
+   *
+   * @param desc
+   * request and data description
+   * @throws DaosObjectException
+   */
+  public void updateAsync(IOSimpleDDAsync desc) throws DaosObjectException {
+    checkOpen();
+    desc.encode();
+
+    if (log.isDebugEnabled()) {
+      log.debug(oid + " update object with description: " + desc.toString(MAX_DEBUG_SIZE));
+    }
+    try {
+      client.updateObjectAsync(objectPtr, 0, desc.getDescBuffer().memoryAddress());
     } catch (DaosIOException e) {
       DaosObjectException de = new DaosObjectException(oid, "failed to update object with description " +
           desc.toString(MAX_EXCEPTION_SIZE), e);
@@ -421,7 +465,7 @@ public class DaosObject {
    */
   public List<String> listAkeys(IOKeyDesc desc) throws DaosObjectException {
     checkOpen();
-    if (StringUtils.isBlank(desc.getDkey())) {
+    if (DaosUtils.isBlankStr(desc.getDkey())) {
       throw new DaosObjectException(oid, "dkey is needed when list akeys");
     }
     desc.encode();
@@ -455,10 +499,10 @@ public class DaosObject {
    */
   public int getRecordSize(String dkey, String akey) throws DaosObjectException {
     checkOpen();
-    if (StringUtils.isBlank(dkey)) {
+    if (DaosUtils.isBlankStr(dkey)) {
       throw new IllegalArgumentException("dkey is blank");
     }
-    if (StringUtils.isBlank(akey)) {
+    if (DaosUtils.isBlankStr(akey)) {
       throw new IllegalArgumentException("akey is blank");
     }
     byte dkeyBytes[];
@@ -528,41 +572,69 @@ public class DaosObject {
   }
 
   /**
-   * create a new instance of {@link IODataDesc} for update
+   * create a new instance of {@link IODataDescSync} for update.
    *
    * @param dkey
    * distribution key
    * @param iodType
-   * type from {@link IODataDesc.IodType}
+   * type from {@link IODataDescSync.IodType}
    * @param recordSize
    * record size. Should be same record size as the first update if any. You can call
    * {@link DaosObject#getRecordSize(String, String)} to get correct value if you don't know yet.
-   * @return {@link IODataDesc}
+   * @return {@link IODataDescSync}
    * @throws IOException
    */
-  public IODataDesc createDataDescForUpdate(String dkey, IODataDesc.IodType iodType, int recordSize)
+  public static IODataDescSync createDataDescForUpdate(String dkey, IODataDescSync.IodType iodType, int recordSize)
       throws IOException {
-    IODataDesc desc = new IODataDesc(dkey, iodType, recordSize, true);
+    IODataDescSync desc = new IODataDescSync(dkey, iodType, recordSize, true);
     return desc;
   }
 
   /**
-   * create a new instance of {@link IODataDesc} for fetch
+   * create a new instance of {@link IODataDescSync} for fetch.
    *
    * @param dkey
    * distribution key
    * @param iodType
-   * type from {@link IODataDesc.IodType}
+   * type from {@link IODataDescSync.IodType}
    * @param recordSize
    * record size. Should be same record size as the first update if any. You can call
    * {@link DaosObject#getRecordSize(String, String)} to get correct value if you don't know yet.
-   * @return {@link IODataDesc}
+   * @return {@link IODataDescSync}
    * @throws IOException
    */
-  public IODataDesc createDataDescForFetch(String dkey, IODataDesc.IodType iodType, int recordSize)
+  public IODataDescSync createDataDescForFetch(String dkey, IODataDescSync.IodType iodType, int recordSize)
       throws IOException {
-    IODataDesc desc = new IODataDesc(dkey, iodType, recordSize, false);
+    IODataDescSync desc = new IODataDescSync(dkey, iodType, recordSize, false);
     return desc;
+  }
+
+  /**
+   * create a new instance of {@link IOSimpleDDAsync} for update.
+   *
+   * @param dkey
+   * distribution key
+   * @param eqHandle
+   * handle of event queue
+   * @return {@link IOSimpleDDAsync}
+   * @throws IOException
+   */
+  public IOSimpleDDAsync createAsyncDataDescForUpdate(String dkey, long eqHandle) throws IOException {
+    return new IOSimpleDDAsync(dkey, true, eqHandle);
+  }
+
+  /**
+   * create a new instance of {@link IOSimpleDDAsync} for fetch.
+   *
+   * @param dkey
+   * distribution key
+   * @param eqHandle
+   * handle of event queue
+   * @return {@link IOSimpleDDAsync}
+   * @throws IOException
+   */
+  public IOSimpleDDAsync createAsyncDataDescForFetch(String dkey, long eqHandle) throws IOException {
+    return new IOSimpleDDAsync(dkey, false, eqHandle);
   }
 
   /**
@@ -601,34 +673,34 @@ public class DaosObject {
    * @param entryBufLen
    * entry buffer length
    * @param iodType
-   * type from {@link IODataDesc.IodType}
+   * type from {@link IODataDescSync.IodType}
    * @param recordSize
    * record size
    * @param updateOrFetch
    * true for update. false for fetch
    * @return
    */
-  public IODataDesc createReusableDesc(int maxKeyLen, int nbrOfEntries, int entryBufLen,
-                                      IODataDesc.IodType iodType, int recordSize, boolean updateOrFetch) {
-    return new IODataDesc(maxKeyLen, nbrOfEntries, entryBufLen, iodType, recordSize, updateOrFetch);
+  public static IODataDescSync createReusableDesc(int maxKeyLen, int nbrOfEntries, int entryBufLen,
+                                           IODataDescSync.IodType iodType, int recordSize, boolean updateOrFetch) {
+    return new IODataDescSync(maxKeyLen, nbrOfEntries, entryBufLen, iodType, recordSize, updateOrFetch);
   }
 
   /**
    * create reusable IODataDesc with default maxKeyLen, nbrOfEntries and entryBufLen.
-   * maxKeyLen: {@linkplain IODataDesc#DEFAULT_LEN_REUSE_KEY}
-   * nbrOfEntries: {@linkplain IODataDesc#DEFAULT_NUMBER_OF_ENTRIES}
-   * entryBufLen: {@linkplain IODataDesc#DEFAULT_LEN_REUSE_BUFFER}.
+   * maxKeyLen: {@linkplain IODataDescSync#DEFAULT_LEN_REUSE_KEY}
+   * nbrOfEntries: {@linkplain IODataDescSync#DEFAULT_NUMBER_OF_ENTRIES}
+   * entryBufLen: {@linkplain IODataDescSync#DEFAULT_LEN_REUSE_BUFFER}.
    *
    * @param iodType
-   * type from {@link IODataDesc.IodType}
+   * type from {@link IODataDescSync.IodType}
    * @param recordSize
    * record size
    * @param updateOrFetch
    * true for update. false for fetch
    * @return
    */
-  public IODataDesc createReusableDesc(IODataDesc.IodType iodType, int recordSize, boolean updateOrFetch) {
-    return new IODataDesc(iodType, recordSize, updateOrFetch);
+  public static IODataDescSync createReusableDesc(IODataDescSync.IodType iodType, int recordSize, boolean updateOrFetch) {
+    return new IODataDescSync(iodType, recordSize, updateOrFetch);
   }
 
   /**
@@ -646,7 +718,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKDWithAllParams(String dkey, int nbrOfKeys, int keyLen, int batchSize)
+  public static IOKeyDesc createKDWithAllParams(String dkey, int nbrOfKeys, int keyLen, int batchSize)
                   throws IOException {
     return new IOKeyDesc(dkey, nbrOfKeys, keyLen, batchSize);
   }
@@ -665,7 +737,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKDWithDefaultBs(String dkey, int nbrOfKeys, int keyLen) throws IOException {
+  public static IOKeyDesc createKDWithDefaultBs(String dkey, int nbrOfKeys, int keyLen) throws IOException {
     return new IOKeyDesc(dkey, nbrOfKeys, keyLen);
   }
 
@@ -680,7 +752,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKDWithNbrOfKeys(String dkey, int nbrOfKeys) throws IOException {
+  public static IOKeyDesc createKDWithNbrOfKeys(String dkey, int nbrOfKeys) throws IOException {
     return new IOKeyDesc(dkey, nbrOfKeys);
   }
 
@@ -694,7 +766,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKD(String dkey) throws IOException {
+  public static IOKeyDesc createKD(String dkey) throws IOException {
     return new IOKeyDesc(dkey);
   }
 
@@ -710,7 +782,7 @@ public class DaosObject {
    * @return new instance of IOKeyDesc
    * @throws IOException
    */
-  public IOKeyDesc createKDWithKlAndBs(String dkey, int keyLen, int batchSize) throws IOException {
+  public static IOKeyDesc createKDWithKlAndBs(String dkey, int keyLen, int batchSize) throws IOException {
     return new IOKeyDesc(dkey, Integer.MAX_VALUE, keyLen, batchSize);
   }
 

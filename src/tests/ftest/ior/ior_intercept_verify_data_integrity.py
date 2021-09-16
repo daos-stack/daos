@@ -4,7 +4,6 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import os
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand
@@ -24,7 +23,7 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
 
         Test Description:
             Purpose of this test is to run ior through dfuse with
-            interception library  on 5 clients and without interception
+            interception library on 5 clients and without interception
             library on 1 client for at least 30 minutes and verify the
             data integrity using ior's Read Verify and Write Verify
             options.
@@ -35,14 +34,24 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
             Run ior with read, write, read verify
             write verify for 30 minutes
 
-        :avocado: tags=all,full_regression,hw,large
-        :avocado: tags=daosio,iorinterceptverifydata
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=daosio,ior_intercept_verify_data
         """
-        intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-        with_intercept = dict()
-        self.run_multiple_ior_with_pool(with_intercept, intercept)
+        self.add_pool()
+        self.add_container(self.pool)
 
-        IorCommand.log_metrics(self.log, "5 clients - with " +
-                               "interception library", with_intercept[1])
-        IorCommand.log_metrics(self.log, "1 client - without " +
-                               "interception library", with_intercept[2])
+        intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
+        results = dict()
+        client_count = len(self.hostlist_clients)
+        w_clients = self.hostlist_clients[0:client_count - 1]
+        wo_clients = [self.hostlist_clients[-1]]
+
+        self.run_ior_threads_il(
+            results=results, intercept=intercept, with_clients=w_clients,
+            without_clients=wo_clients)
+
+        IorCommand.log_metrics(
+            self.log, "5 clients - with interception library", results[1])
+        IorCommand.log_metrics(
+            self.log, "1 client - without interception library", results[2])

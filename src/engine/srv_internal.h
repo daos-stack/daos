@@ -7,6 +7,7 @@
 #define __DAOS_SRV_INTERNAL__
 
 #include <daos_srv/daos_engine.h>
+#include <gurt/telemetry_common.h>
 
 /**
  * Argobots ULT pools for different tasks, NET_POLL & NVME_POLL
@@ -28,6 +29,8 @@ struct sched_stats {
 	uint64_t	ss_relax_time;	/* CPU relax time (ms) */
 	uint64_t	ss_busy_ts;	/* Last busy timestamp (ms) */
 	uint64_t	ss_print_ts;	/* Last stats print timestamp (ms) */
+	uint64_t	ss_watchdog_ts;	/* Last watchdog print ts (ms) */
+	void		*ss_last_unit;	/* Last executed unit */
 };
 
 struct sched_info {
@@ -71,6 +74,17 @@ struct dss_xstream {
 	bool			dx_comm;	/* true with cart context */
 	bool			dx_dsc_started;	/* DSC progress ULT started */
 };
+
+/** Engine module's metrics */
+struct engine_metrics {
+	struct d_tm_node_t	*started_time;
+	struct d_tm_node_t	*ready_time;
+	struct d_tm_node_t	*rank_id;
+	struct d_tm_node_t	*dead_rank_events;
+	struct d_tm_node_t	*last_event_time;
+};
+
+extern struct engine_metrics dss_engine_metrics;
 
 #define DSS_HOSTNAME_MAX_LEN	255
 
@@ -123,6 +137,10 @@ void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
 
+/* srv_metrics.c */
+int dss_engine_metrics_init(void);
+int dss_engine_metrics_fini(void);
+
 /* sched.c */
 #define SCHED_RELAX_INTVL_MAX		100 /* msec */
 #define SCHED_RELAX_INTVL_DEFAULT	1 /* msec */
@@ -166,6 +184,7 @@ extern bool sched_prio_disabled;
 extern unsigned int sched_stats_intvl;
 extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;
+extern unsigned int sched_unit_runtime_max;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);

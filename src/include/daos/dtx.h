@@ -189,6 +189,8 @@ enum daos_ops_intent {
  * DAOS two-phase commit transaction status.
  */
 enum dtx_status {
+	/* DTX is pre-allocated, not prepared yet. */
+	DTX_ST_INITED		= 0,
 	/** Local participant has done the modification. */
 	DTX_ST_PREPARED		= 1,
 	/** The DTX has been committed. */

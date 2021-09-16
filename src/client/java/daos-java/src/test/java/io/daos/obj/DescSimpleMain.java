@@ -169,7 +169,7 @@ public class DescSimpleMain {
       for (int i = offset; i < end; i++) {
         for (int j = 0; j < maps; j++) {
           compList.clear();
-          e = dq.acquireEventBlocking(true, 1000, compList);
+          e = dq.acquireEventBlocking(1000, compList, IOSimpleDataDesc.class, null);
           for (DaosEventQueue.Attachment d : compList) {
             if (!((IOSimpleDataDesc)d).isSucceeded()) {
               throw new IOException("failed " + d);
@@ -186,7 +186,7 @@ public class DescSimpleMain {
         }
       }
       compList.clear();
-      dq.waitForCompletion(10000, compList);
+      dq.waitForCompletion(10000, IOSimpleDataDesc.class, compList);
       for (DaosEventQueue.Attachment d : compList) {
         if (!((IOSimpleDataDesc)d).isSucceeded()) {
           throw new IOException("failed " + d);
@@ -339,7 +339,7 @@ public class DescSimpleMain {
           if (idx == 0) {
             // acquire and check
             compList.clear();
-            e = dq.acquireEventBlocking(false, 1000, compList);
+            e = dq.acquireEventBlocking(1000, compList, IOSimpleDataDesc.class, null);
             for (DaosEventQueue.Attachment d : compList) {
               desc = (IOSimpleDataDesc) d;
               for (int k = 0; k < desc.getNbrOfAkeysToRequest(); k++) {
@@ -350,7 +350,7 @@ public class DescSimpleMain {
             desc.reuse();
             desc.setDkey(String.valueOf(i));
           }
-          desc.getEntry(idx++).setEntryForFetch(String.valueOf(j), 0, akeyValLen);
+          ((IOSimpleDataDesc.SimpleEntry)desc.getEntry(idx++)).setEntryForFetch(String.valueOf(j), 0, akeyValLen);
           if (idx == nbrOfEntries) {
             // read
             object.fetchSimple(desc);
@@ -364,7 +364,7 @@ public class DescSimpleMain {
         }
       }
       compList.clear();
-      dq.waitForCompletion(10000, compList);
+      dq.waitForCompletion(10000, IOSimpleDataDesc.class, compList);
       for (DaosEventQueue.Attachment d : compList) {
         desc = (IOSimpleDataDesc) d;
         for (int k = 0; k < desc.getNbrOfAkeysToRequest(); k++) {
@@ -487,7 +487,7 @@ public class DescSimpleMain {
 
   private static DaosObjClient getObjClient(String pid, String cid, String svc) throws IOException {
     DaosObjClient objClient = new DaosObjClient.DaosObjClientBuilder()
-        .poolId(pid).containerId(cid).ranks(svc)
+        .poolId(pid).containerId(cid)
         .build();
     return objClient;
   }

@@ -41,8 +41,9 @@ revive_dev(struct bio_xs_context *xs_ctxt, struct bio_bdev *d_bdev)
 	/* Set the LED of the VMD device to OFF state */
 	rc = bio_set_led_state(xs_ctxt, d_bdev->bb_uuid, "off", false/*reset*/);
 	if (rc != 0)
-		D_ERROR("Error managing LED on device:"DF_UUID"\n",
-			DP_UUID(d_bdev->bb_uuid));
+		D_CDEBUG(rc == -DER_NOSYS, DB_MGMT, DLOG_ERR,
+			 "Set LED on device:"DF_UUID" failed, "DF_RC"\n",
+			 DP_UUID(d_bdev->bb_uuid), DP_RC(rc));
 
 	return 0;
 }
@@ -111,7 +112,7 @@ create_one_blob(struct spdk_blob_store *bs, uint64_t blob_sz,
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 
-	spdk_blob_opts_init(&blob_opts);
+	spdk_blob_opts_init(&blob_opts, sizeof(blob_opts));
 	blob_opts.num_clusters = (blob_sz + cluster_sz - 1) / cluster_sz;
 
 	spdk_bs_create_blob_ext(bs, &blob_opts, blob_create_cp, &boa);
@@ -481,7 +482,7 @@ json_write_cb(void *cb_ctx, const void *data, size_t size)
 	return 0;
 }
 
-static int
+int
 fill_in_traddr(struct bio_dev_info *b_info, char *dev_name)
 {
 	struct spdk_bdev		*bdev;
@@ -734,7 +735,8 @@ skip_led_str:
 
 	if (found) {
 		if (strcmp(spdk_pci_device_get_type(pci_device), "vmd") != 0) {
-			D_ERROR("%s is not a VMD device\n", b_info.bdi_traddr);
+			D_DEBUG(DB_MGMT, "%s is not a VMD device\n",
+				b_info.bdi_traddr);
 			D_GOTO(free_traddr, rc = -DER_NOSYS);
 		}
 	} else {

@@ -107,7 +107,10 @@ recx_key_cmp(struct btr_instance *tins, struct btr_record *rec, d_iov_t *key)
 
 	/* will never return BTR_CMP_EQ */
 	D_ASSERT(r->rr_recx->rx_idx != key_recx->rx_idx);
-	return dbtree_key_cmp_rc(r->rr_recx->rx_idx - key_recx->rx_idx);
+	if (r->rr_recx->rx_idx < key_recx->rx_idx)
+		return BTR_CMP_LT;
+
+	return BTR_CMP_GT;
 }
 
 static int

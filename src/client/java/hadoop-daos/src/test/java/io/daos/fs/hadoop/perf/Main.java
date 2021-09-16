@@ -8,16 +8,17 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.net.InetAddress;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.*;
 
+import io.daos.BufferAllocator;
 import io.daos.dfs.DaosFile;
 import io.daos.dfs.DaosFsClient;
 import io.daos.fs.hadoop.Constants;
-import io.daos.fs.hadoop.DaosConfigFile;
+import io.daos.fs.hadoop.DaosFsConfig;
+import io.netty.buffer.ByteBuf;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -34,17 +35,17 @@ public class Main {
   private static void setDFSArgs(Configuration conf) {
     String pid = System.getProperty("pid");
     if (pid != null) {
-      conf.set(Constants.DAOS_POOL_UUID, pid);
+      conf.set(Constants.DAOS_POOL_ID, pid);
     }
     String uid = System.getProperty("uid");
     if (uid != null) {
-      conf.set(Constants.DAOS_CONTAINER_UUID, uid);
+      conf.set(Constants.DAOS_CONTAINER_ID, uid);
     }
-    String svc = System.getProperty("svc");
-    if (svc != null) {
-      conf.set(Constants.DAOS_POOL_SVC, svc);
+    String async = System.getProperty(Constants.DAOS_IO_ASYNC);
+    if (async != null) {
+      conf.set(Constants.DAOS_IO_ASYNC, async);
     }
-    String defaultURI = System.getProperty("uri", "daos://default:1");
+    String defaultURI = System.getProperty("uri", "daos:///");
     if (defaultURI != null) {
       conf.set("fs.defaultFS", defaultURI);
     }
@@ -84,13 +85,14 @@ public class Main {
 
     if (jvms != null) {
       System.out.println("in jvms mode");
+      String async = System.getProperty(Constants.DAOS_IO_ASYNC, "true");
       if ("write".equalsIgnoreCase(args[0]) || "both".equalsIgnoreCase(args[0])) {
-        Runner runner = new JvmsWriteRunner();
+        Runner runner = new JvmsWriteRunner(async);
         runner.run();
       }
 
       if ("read".equalsIgnoreCase(args[0]) || "both".equalsIgnoreCase(args[0])) {
-        Runner runner = new JvmsReadRunner();
+        Runner runner = new JvmsReadRunner(async);
         runner.run();
       }
     }
@@ -137,8 +139,7 @@ public class Main {
 
     protected void prepare() throws Exception {
       super.prepare();
-      writeSize = Integer.parseInt(DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_WRITE_BUFFER_SIZE,
-          String.valueOf(Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE)));
+      writeSize = Constants.DEFAULT_DAOS_WRITE_BUFFER_SIZE;
       System.out.println("write buffer size: " + writeSize);
       fileSize = Long.valueOf(System.getProperty("fileSize", String.valueOf(1L * 1024L * 1024L * 1024L)));
       System.out.println("file size: " + fileSize);
@@ -179,9 +180,11 @@ public class Main {
   }
 
   static class JvmsWriteRunner extends WriteRunner {
+    private String async;
 
-    protected JvmsWriteRunner() {
+    protected JvmsWriteRunner(String async) {
       super(null);
+      this.async = async;
     }
 
     @Override
@@ -217,6 +220,8 @@ public class Main {
         list.add("-DfileSize=" + fileSize);
         list.add("-Dseq=" + i);
         list.add("-Dapi=" + api);
+	list.add("-DscriptPath=" + scriptPath);
+        list.add("-D" + Constants.DAOS_IO_ASYNC + "=" + async);
         executors.add(new ShellExecutor(i, list, out, err, WRITE_PERF_PREFIX, FINAL_WRITE_PERF_PREFIX));
       }
       for (ShellExecutor executor : executors) {
@@ -302,8 +307,7 @@ public class Main {
     @Override
     protected void prepare() throws Exception {
       super.prepare();
-      readSize = Integer.valueOf(DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_READ_BUFFER_SIZE,
-          String.valueOf(Constants.DEFAULT_DAOS_READ_BUFFER_SIZE)));
+      readSize = Constants.DEFAULT_DAOS_READ_BUFFER_SIZE;
       System.out.println("read buffer size: " + readSize);
       random = "true".equalsIgnoreCase(System.getProperty("random"));
       System.out.println("random: " + random);
@@ -347,9 +351,10 @@ public class Main {
   }
 
   static class JvmsReadRunner extends ReadRunner {
-
-    protected JvmsReadRunner() {
+    private String async;
+    protected JvmsReadRunner(String async) {
       super(null);
+      this.async = async;
     }
 
     @Override
@@ -384,6 +389,8 @@ public class Main {
         list.add("-Dseq=" + i);
         list.add("-Drandom=" + (random ? "true" : "false"));
         list.add("-Dapi=" + api);
+	list.add("-DscriptPath=" + scriptPath);
+        list.add("-D" + Constants.DAOS_IO_ASYNC + "=" + async);
         executors.add(new ShellExecutor(i, list, out, err, READ_PERF_PREFIX, FINAL_READ_PERF_PREFIX));
       }
       for (ShellExecutor executor : executors) {
@@ -480,20 +487,16 @@ public class Main {
       String api = System.getProperty("api", "hadoop-api");
 
       if ("java-api".equalsIgnoreCase(api)) {
-        String poolId = System.getProperty("pid",
-            DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_POOL_UUID));
-        String contId = System.getProperty("uid",
-            DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_CONTAINER_UUID));
-        String svc = System.getProperty("svc",
-            DaosConfigFile.getInstance().getFromDaosFile(Constants.DAOS_POOL_SVC));
+        String poolId = System.getProperty("pid");
+        String contId = System.getProperty("uid");
         DaosFsClient client = new DaosFsClient.DaosFsClientBuilder().poolId(poolId).containerId(contId)
-            .ranks(svc).build();
+            .build();
 
         start = System.currentTimeMillis();
 
         DaosFile file = client.getFile(readPath);
         long size;
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(readSize);
+        ByteBuf byteBuffer = BufferAllocator.directNettyBuf(readSize);
         if (random) {
           Random rd = new Random();
 

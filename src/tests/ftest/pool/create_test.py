@@ -31,7 +31,7 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool_create_tests,create_max_pool_scm_only
         """
         # Create 1 pool using 90% of the available SCM capacity (no NVMe)
-        self.pool = self.get_pool_list(1, 0.9, None, 1)
+        self.add_pool_qty(1, namespace="/run/pool_1/*", create=False)
         self.check_pool_creation(60)
 
     def test_create_max_pool(self):
@@ -48,7 +48,7 @@ class PoolCreateTests(PoolTestBase):
         :avocado: tags=pool_create_tests,create_max_pool
         """
         # Create 1 pool using 90% of the available capacity
-        self.pool = self.get_pool_list(1, 0.9, 0.9, 1)
+        self.add_pool_qty(1, namespace="/run/pool_2/*", create=False)
         self.check_pool_creation(120)
 
     def test_create_no_space(self):
@@ -70,7 +70,7 @@ class PoolCreateTests(PoolTestBase):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        self.pool = self.get_pool_list(3, 0.9, 0.9, 1)
+        self.add_pool_qty(3, namespace="/run/pool_2/*", create=False)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")
@@ -90,7 +90,7 @@ class PoolCreateTests(PoolTestBase):
         self.pool[1].create()
         self.assertTrue(
             self.pool[1].dmg.result.exit_status == 1 and
-            "-1007" in self.pool[1].dmg.result.stdout,
+            "-1007" in self.pool[1].dmg.result.stdout_text,
             "Creating a large capacity pool across all servers should fail "
             "due to an existing pool on one server consuming the required "
             "space."
@@ -123,7 +123,7 @@ class PoolCreateTests(PoolTestBase):
         #   - one pool using 90% of the available capacity of one server
         #   - one pool using 90% of the available capacity of all servers
         #   - one pool using 90% of the available capacity of the other server
-        self.pool = self.get_pool_list(3, 0.9, 0.9, 1)
+        self.add_pool_qty(3, namespace="/run/pool_2/*", create=False)
         ranks = [rank for rank, _ in enumerate(self.hostlist_servers)]
         self.pool[0].target_list.update(ranks[:1], "pool[0].target_list")
         self.pool[1].target_list.update(ranks, "pool[1].target_list")
@@ -146,7 +146,7 @@ class PoolCreateTests(PoolTestBase):
             self.pool[1].create()
             self.assertTrue(
                 self.pool[1].dmg.result.exit_status == 1 and
-                "-1007" in self.pool[1].dmg.result.stdout,
+                "-1007" in self.pool[1].dmg.result.stdout_text,
                 "Creating a large capacity pool across all servers should fail "
                 "due to an existing pool on one server consuming the required "
                 "space."

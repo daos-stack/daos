@@ -36,6 +36,11 @@ dfuse_cb_symlink(fuse_req_t req, const char *link,
 	ie->ie_dfs = parent->ie_dfs;
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
+	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
+
+	dfuse_compute_inode(ie->ie_dfs, &ie->ie_oid,
+			    &ie->ie_stat.st_ino);
+
 	dfuse_reply_entry(fs_handle, ie, NULL, true, req);
 
 	return;

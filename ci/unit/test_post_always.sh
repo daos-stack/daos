@@ -44,7 +44,8 @@ mkdir $test_log_dir
 # all files we want to copy, as it's much more flexible than using
 # standard wildcards.
 rsync -v -dpt -z -e "ssh $SSH_KEY_ARGS" jenkins@"$NODE":/tmp/ \
-      --filter="include daos*.log" --filter="exclude *" "$test_log_dir/"
+      --filter="include daos*.log" --filter="include test.cov" \
+      --filter="exclude *" "$test_log_dir/"
 
 # Note that we are taking advantage of the NFS mount here and if that
 # should ever go away, we need to pull run_test.sh/ from $NODE

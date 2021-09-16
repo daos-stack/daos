@@ -45,7 +45,7 @@ agent_config_val: !mux
     config_val:
       - "name"
       - [amjustin, 12345, abcdef]
-      - "FAIl"
+      - "FAIL"
   access_point_noport:
     config_val:
       - "access_points"

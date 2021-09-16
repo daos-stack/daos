@@ -1,11 +1,10 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
   (C) Copyright 2018-2021 Intel Corporation.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 
 
 class InfoTests(TestWithServers):
@@ -27,17 +26,17 @@ class InfoTests(TestWithServers):
         Use Cases:
             Verify pool query.
 
-        :avocado: tags=all,tiny,daily_regression,pool,smoke,infotest
+        :avocado: tags=all,daily_regression,
+        :avocado: tags=tiny
+        :avocado: tags=pool,smoke,info_test
         """
         # Get the test params
-        self.pool = TestPool(self.context, self.get_dmg_command())
-        self.pool.get_params(self)
         permissions = self.params.get("permissions", "/run/test/*")
         targets = self.params.get("targets", "/run/server_config/*")
         #pool_targets = len(self.hostlist_servers) * targets
 
         # Create a pool
-        self.pool.create()
+        self.add_pool()
 
         # Connect to the pool
         self.pool.connect(1 << permissions)

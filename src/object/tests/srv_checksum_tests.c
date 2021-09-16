@@ -226,7 +226,7 @@ array_test_case_create(struct vos_fetch_test_context *ctx,
 				  rec_size);
 
 		if (l->is_hole) {
-			biov->bi_addr.ba_hole = true;
+			BIO_ADDR_SET_HOLE(&biov->bi_addr);
 			biov->bi_buf = NULL;
 		} else {
 			D_ALLOC(biov->bi_buf, data_len);

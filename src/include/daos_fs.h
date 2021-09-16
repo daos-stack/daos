@@ -22,8 +22,10 @@ extern "C" {
 
 #include <dirent.h>
 
-/** Maximum Path length */
-#define DFS_MAX_PATH		NAME_MAX
+/** Maximum Name length */
+#define DFS_MAX_NAME		NAME_MAX
+/** Maximum PATH length */
+#define DFS_MAX_PATH		PATH_MAX
 /** Maximum file size */
 #define DFS_MAX_FSIZE		(~0ULL)
 
@@ -37,6 +39,19 @@ typedef struct dfs_obj dfs_obj_t;
 /** DFS mount handle struct */
 typedef struct dfs dfs_t;
 
+/*
+ * Consistency modes of the DFS container. A container created with balanced
+ * mode, can only be accessed with balanced mode with dfs_mount. A container
+ * created with relaxed mode, can be accessed with either mode in the future.
+ *
+ * Reserve bit 3 in the access flags for dfs_mount() - bits 1 and 2 are used
+ * for read / write access (O_RDONLY, O_RDRW).
+ */
+#define DFS_BALANCED	4 /** DFS operations using a DTX */
+#define DFS_RELAXED	0 /** DFS operations do not use a DTX (default mode). */
+#define DFS_RDONLY	O_RDONLY
+#define DFS_RDWR	O_RDWR
+
 /** struct holding attributes for a DFS container */
 typedef struct {
 	/** Optional user ID for DFS container. */
@@ -47,6 +62,12 @@ typedef struct {
 	daos_oclass_id_t	da_oclass_id;
 	/** DAOS properties on the DFS container */
 	daos_prop_t		*da_props;
+	/*
+	 * Consistency mode for the DFS container: DFS_RELAXED, DFS_BALANCED.
+	 * If set to 0 or more generally not set to balanced explicitly, relaxed
+	 * mode will be used. In the future, Balanced mode will be the default.
+	 */
+	uint32_t		da_mode;
 } dfs_attr_t;
 
 /** IO descriptor of ranges in a file to access */
@@ -57,22 +78,48 @@ typedef struct {
 	daos_range_t	       *iod_rgs;
 } dfs_iod_t;
 
+typedef struct {
+	/** object class */
+	daos_oclass_id_t	doi_oclass_id;
+	/** chunk size */
+	daos_size_t		doi_chunk_size;
+} dfs_obj_info_t;
+
 /**
- * Create a DFS container with the POSIX property layout set.  Optionally set
- * attributes for hints on the container.
+ * Create a DFS container with the POSIX property layout set.  Optionally set attributes for hints
+ * on the container.
  *
  * \param[in]	poh	Pool open handle.
- * \param[in]	co_uuid	Container UUID.
- * \param[in]	attr	Optional set of attributes to set on the container.
+ * \param[out]	uuid	Pointer to uuid_t to hold the implementation-generated container UUID.
+ * \param[in]	attr	Optional set of properties and attributes to set on the container.
  *			Pass NULL if none.
- * \param[out]	coh	Optionally leave the container open and return it hdl.
- * \param[out]	dfs	Optionally mount DFS on the container and return it.
+ * \param[out]	coh	Optionally leave the container open and return its hdl.
+ * \param[out]	dfs	Optionally mount DFS on the container and return the dfs handle.
  *
  * \return              0 on success, errno code on failure.
  */
 int
-dfs_cont_create(daos_handle_t poh, uuid_t co_uuid, dfs_attr_t *attr,
-		daos_handle_t *coh, dfs_t **dfs);
+dfs_cont_create(daos_handle_t poh, uuid_t *uuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs);
+
+/**
+ * Create a DFS container with label \a label. This is the same as dfs_container_create() with the
+ * label property set in \a attr->da_props.
+ *
+ * \param[in]	poh	Pool open handle.
+ * \param[in]	label	Required, label property of the new container.
+ *			Supersedes any label specified in \a cont_prop.
+ * \param[in]	attr	Optional set of properties and attributes to set on the container.
+ *			Pass NULL if none.
+ * \param[out]	uuid	Optional pointer to uuid_t to hold the implementation-generated container
+ *			UUID.
+ * \param[out]	coh	Optionally leave the container open and return its hdl.
+ * \param[out]	dfs	Optionally mount DFS on the container and return the dfs handle.
+ *
+ * \return              0 on success, errno code on failure.
+ */
+int
+dfs_cont_create_with_label(daos_handle_t poh, const char *label, dfs_attr_t *attr,
+			   uuid_t *uuid, daos_handle_t *coh, dfs_t **dfs);
 
 /**
  * Mount a file system over DAOS. The pool and container handle must remain
@@ -383,9 +430,8 @@ dfs_get_size(dfs_t *dfs, dfs_obj_t *obj, daos_size_t *size);
 
 /**
  * Punch a hole in the file starting at offset to len. If len is set to
- * DFS_MAX_FSIZE, this will be a truncate operation to punch all bytes in the
- * file above offset. If the file size is smaller than offset, the file is
- * extended to offset and len is ignored.
+ * DFS_MAX_FSIZE, this will be equivalent to a truncate operation to shrink or
+ * extend the file to \a offset bytes depending on the file size.
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened file object.
@@ -423,12 +469,12 @@ dfs_readdir(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
  * User callback defined for dfs_readdir_size.
  */
 typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
-			       void *_udata);
+			       void *arg);
 
 /**
  * Same as dfs_readdir, but this also adds a buffer size limitation when
  * enumerating. On every entry, it issues a user defined callback. If size
- * limitation is reached, function returns -DER_KEY2BIG.
+ * limitation is reached, function returns E2BIG
  *
  * \param[in]	dfs	Pointer to the mounted file system.
  * \param[in]	obj	Opened directory object.
@@ -441,13 +487,13 @@ typedef int (*dfs_filler_cb_t)(dfs_t *dfs, dfs_obj_t *obj, const char name[],
  *			[out]: Actual number of entries enumerated.
  * \param[in]	size	Max buffer size to be used internally before breaking.
  * \param[in]	op	Optional callback to be issued on every entry.
- * \param[in]	udata	Pointer to user data to be passed to \a op.
+ * \param[in]	arg	Pointer to user data to be passed to \a op.
  *
  * \return		0 on success, errno code on failure.
  */
 int
 dfs_iterate(dfs_t *dfs, dfs_obj_t *obj, daos_anchor_t *anchor,
-	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *udata);
+	    uint32_t *nr, size_t size, dfs_filler_cb_t op, void *arg);
 
 /**
  * Provide a function for large directories to split an anchor to be able to
@@ -565,6 +611,53 @@ int
 dfs_get_mode(dfs_obj_t *obj, mode_t *mode);
 
 /**
+ * Retrieve some attributes of DFS object. Those include the object class and
+ * the chunk size.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]   obj	Open object handle to query.
+ * \param[out]  info	info object container object class, chunks size, etc.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_get_info(dfs_t *dfs, dfs_obj_t *obj, dfs_obj_info_t *info);
+
+/**
+ * Set the object class on a directory for new files or sub-dirs that are
+ * created in that dir.  This does not change the chunk size for existing files
+ * or dirs in that directory, nor it does change the object class of the
+ * directory itself. Note that this is only supported on directories and will
+ * fail if called on non-directory objects.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]   obj	Open object handle to access.
+ * \param[in]	flags	Flags for setting oclass (currently ignored)
+ * \param[in]   cid	object class.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_set_oclass(dfs_t *dfs, dfs_obj_t *obj, int flags, daos_oclass_id_t cid);
+
+/**
+ * Set the chunk size on a directory for new files or sub-dirs that are created
+ * in that dir.  This does not change the chunk size for existing files or dirs
+ * in that directory. Note that this is only supported on directories and will
+ * fail if called on non-directory objects.
+ *
+ * \param[in]   dfs     Pointer to the mounted file system.
+ * \param[in]   obj	Open object handle to access.
+ * \param[in]	flags	Flags for setting chunk size (currently ignored)
+ * \param[in]   csize	Chunk size to set object to.
+ *
+ * \return		0 on success, errno code on failure.
+ */
+int
+dfs_obj_set_chunk_size(dfs_t *dfs, dfs_obj_t *obj, int flags,
+		       daos_size_t csize);
+
+/**
  * Retrieve the DAOS open handle of a DFS file object. User should not close
  * this handle. This is used in cases like MPI-IO where 1 rank creates the file
  * with dfs, but wants to access the file with the array API directly rather
@@ -614,15 +707,16 @@ dfs_get_symlink_value(dfs_obj_t *obj, char *buf, daos_size_t *size);
  * is a local operation and doesn't change anything on the storage.
  *
  * \param[in]	obj	Open object handle to update.
- * \param[in]	parent_obj
- *			Open object handle of new parent.
+ * \param[in]	src_obj
+ *			Open object handle of the object whose parent will be
+ *			used as the new parent of \a obj.
  * \param[in]	name	Optional new name of entry in parent. Pass NULL to leave
  *			the entry name unchanged.
  *
  * \return		0 on Success. errno code on Failure.
  */
 int
-dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *parent_obj, const char *name);
+dfs_update_parent(dfs_obj_t *obj, dfs_obj_t *src_obj, const char *name);
 
 /**
  * stat attributes of an entry. If object is a symlink, the link itself is
@@ -799,29 +893,49 @@ dfs_removexattr(dfs_t *dfs, dfs_obj_t *obj, const char *name);
 int
 dfs_listxattr(dfs_t *dfs, dfs_obj_t *obj, char *list, daos_size_t *size);
 
-/**
- * Mount a DFS namespace in a special container designated as the root
- * container. If the root container does not exist, this call creates it.
- *
- * \param[in]   poh     Pool connection handle
- * \param[out]  dfs     Pointer to the root DFS created.
- *
- * \return              0 on success, errno code on failure.
- */
 int
-dfs_mount_root_cont(daos_handle_t poh, dfs_t **dfs);
-
-/**
- * Unmount the root DFS.
- *
- * \param[in]	dfs	Pointer to the root DFS file system.
- *
- * \return		0 on success, errno code on failure.
- */
+dfs_cont_create2(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		 dfs_t **dfs);
 int
-dfs_umount_root_cont(dfs_t *dfs);
+dfs_cont_create1(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		 dfs_t **dfs);
 
 #if defined(__cplusplus)
 }
-#endif
+
+#define dfs_cont_create dfs_cont_create_cpp
+static inline int
+dfs_cont_create_cpp(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		    dfs_t **dfs)
+{
+	return dfs_cont_create2(poh, cuuid, attr, coh, dfs);
+}
+
+static inline int
+dfs_cont_create_cpp(daos_handle_t poh, const uuid_t cuuid, dfs_attr_t *attr, daos_handle_t *coh,
+		    dfs_t **dfs)
+{
+	return dfs_cont_create1(poh, cuuid, attr, coh, dfs);
+};
+#else
+/**
+ * for backward compatility, support old api where a const uuid_t was required to be passed in for
+ * the container to be created.
+ */
+#define dfs_cont_create(poh, co, ...)					\
+	({								\
+		int _ret;						\
+		uuid_t *_u;						\
+		if (d_is_uuid(co)) {					\
+			_u = (uuid_t *)((unsigned char *)(co));		\
+			_ret = dfs_cont_create((poh), _u, __VA_ARGS__);	\
+		} else {						\
+			_u = (uuid_t *)(co);				\
+			_ret = dfs_cont_create2((poh), _u, __VA_ARGS__); \
+		}							\
+		_ret;							\
+	})
+
+
+#endif /* __cplusplus */
 #endif /* __DAOS_FS_H__ */

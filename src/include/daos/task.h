@@ -40,6 +40,7 @@ struct daos_task_args {
 		daos_pool_get_attr_t	pool_get_attr;
 		daos_pool_set_attr_t	pool_set_attr;
 		daos_pool_stop_svc_t	pool_stop_svc;
+		daos_pool_list_cont_t	pool_list_cont;
 
 		/** Container */
 		daos_cont_create_t	cont_create;
@@ -209,8 +210,8 @@ int
 dc_obj_fetch_task_create(daos_handle_t oh, daos_handle_t th, uint64_t api_flags,
 			 daos_key_t *dkey, uint32_t nr, uint32_t extra_flags,
 			 daos_iod_t *iods, d_sg_list_t *sgls, daos_iom_t *ioms,
-			 void *extra_arg, daos_event_t *ev, tse_sched_t *tse,
-			 tse_task_t **task);
+			 void *extra_arg, d_iov_t *csum, daos_event_t *ev,
+			 tse_sched_t *tse, tse_task_t **task);
 int
 dc_obj_update_task_create(daos_handle_t oh, daos_handle_t th, uint64_t flags,
 			  daos_key_t *dkey, unsigned int nr,

@@ -9,19 +9,18 @@ package control
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"os"
 	"runtime"
 	"sort"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
@@ -36,6 +35,8 @@ type testRequest struct {
 	toMS     bool
 	HostList []string
 	Deadline time.Time
+	Timeout  time.Duration
+	Sys      string
 }
 
 func (tr *testRequest) isMSRequest() bool {
@@ -51,11 +52,20 @@ func (tr *testRequest) getHostList() []string {
 }
 
 func (tr *testRequest) SetTimeout(to time.Duration) {
+	tr.Timeout = to
 	tr.Deadline = time.Now().Add(to)
 }
 
 func (tr *testRequest) getDeadline() time.Time {
 	return tr.Deadline
+}
+
+func (tr *testRequest) getTimeout() time.Duration {
+	return tr.Timeout
+}
+
+func (tr *testRequest) SetSystem(sys string) {
+	tr.Sys = sys
 }
 
 func (tr *testRequest) getRPC() unaryRPC {
@@ -183,17 +193,29 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 				}
 			}
 
+			testDeadline, ok := t.Deadline()
+			if !ok {
+				panic("no deadline")
+			}
+			// Set a deadline a bit before the overall test deadline so that we can
+			// dump the stack if we have stuck goroutines.
+			checkDeadline := testDeadline.Add(-1 * time.Second)
+
 			// Explicitly clean up before checking for stragglers.
 			cancel()
+
 			// Give things a little bit of time to settle down before checking for
 			// any lingering goroutines.
 			time.Sleep(250 * time.Millisecond)
-			goRoutinesAtEnd := runtime.NumGoroutine()
-			if goRoutinesAtEnd > goRoutinesAtStart {
+			for goRoutinesAtEnd := runtime.NumGoroutine(); goRoutinesAtEnd > goRoutinesAtStart; goRoutinesAtEnd = runtime.NumGoroutine() {
+				time.Sleep(250 * time.Millisecond)
 				t.Errorf("expected final goroutine count to be <= %d, got %d\n", goRoutinesAtStart, goRoutinesAtEnd)
-				// Dump the stack to see which goroutines are lingering
-				if err := unix.Kill(os.Getpid(), unix.SIGABRT); err != nil {
-					t.Fatal(err)
+
+				if time.Now().After(checkDeadline) {
+					// Dump the stack to see which goroutines are lingering
+					if err := unix.Kill(os.Getpid(), unix.SIGABRT); err != nil {
+						t.Fatal(err)
+					}
 				}
 			}
 		})
@@ -202,7 +224,7 @@ func TestControl_InvokeUnaryRPCAsync(t *testing.T) {
 
 func TestControl_InvokeUnaryRPC(t *testing.T) {
 	// make the rand deterministic for testing
-	msCandidateRandSource = rand.NewSource(1)
+	msCandidateRandSource = newSafeRandSource(1)
 
 	clientCfg := DefaultConfig()
 	clientCfg.TransportConfig.AllowInsecure = true
@@ -382,7 +404,7 @@ func TestControl_InvokeUnaryRPC(t *testing.T) {
 					return nil, errNotLeaderNoLeader
 				},
 			},
-			expErr: context.DeadlineExceeded,
+			expErr: FaultRpcTimeout(new(testRequest)),
 		},
 		"request to non-replicas eventually discovers at least one replica": {
 			req: &testRequest{
