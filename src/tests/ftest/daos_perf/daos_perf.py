@@ -25,11 +25,9 @@ class DaosPerf(DaosPerfBase):
             Small daos_perf test
 
         Use cases:
-            Run daos_perf in 'daos' and 'vos' modes.  Run daos_perf using single
-            value and array value types for 'vos' mode. Also run the above
-            config with and without shuffle option '-S' of daos_perf.  Run
-            daos_perf using single value type for 'LARGE' and 'R2s' object
-            class. Run this config with multiple server/client configuration.
+            Run daos_perf in 'daos'.  Run daos_perf using single value type
+            for 'LARGE' and 'R2s' and 'EC2P1' object class. Run this config
+            with multiple server/client configuration.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large

@@ -14,7 +14,7 @@ class DaosPerfLarge(DaosPerfBase):
 
     :avocado: recursive
     """
-
+    @skipForTicket("DAOS-8563")
     def test_large(self):
         """Jira ID: DAOS-1714.
 
@@ -23,10 +23,9 @@ class DaosPerfLarge(DaosPerfBase):
 
         Use Case:
           Run daos_perf for scm and nvme.
-          Run daos_perf for single and multiple number of objects.
-          Run daos_perf with 'LARGE' and 'R2S' object class.
+          Run daos_perf with 'EC2P1' object class.
           Run the combination of above test cases with large number of clients
-            on four servers.
+          on four servers.
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
