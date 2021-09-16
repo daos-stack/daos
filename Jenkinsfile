@@ -585,8 +585,6 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh (script:"""./utils/docker_nlt.sh --class-name centos7.release --test cont_copy""",
-                            label: 'Run NLT smoke test')
                     }
                     post {
                         always {
