@@ -34,20 +34,21 @@ retry_cmd() {
         if time $command "$@"; then
             # succeeded, return with success
             if [ $attempt -gt 0 ]; then
-                send_mail "Command retry successful after $attempt retries" "Command: $command $*"
+                send_mail "Command retry successful in $BUILD_URL after $attempt attempts" \
+                          "Host:    $HOSTNAME\nCommand: $command $*\nStatus:  0"
             fi
             return 0
         fi
         # We hit an error
         rc=${PIPESTATUS[0]}
         (( attempt++ ))
-        if [ $tries -gt 0 ]; then
+        if [ "$attempt" -gt 0 ]; then
             sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
         fi
     done
     if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry failed after $attempt retries" \
-            "Command: $command $*\nReturn code: $rc"
+        send_mail "Command retry failed in $BUILD_URL after $attempt attempts" \
+                  "Host:    $HOSTNAME\nCommand: $command $*\nStatus:  $rc"
     fi
     return 1
 }
