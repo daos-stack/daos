@@ -213,9 +213,10 @@ test_snapshots(void **argp)
 	int			rc;
 
 	MUST(cont_create(arg, co_uuid));
-	print_message("Initial container open after create, nsnapshots=0\n");
+	print_message("Initial container open after create, nsnapshots=0 lsnapshot=0\n");
 	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
 	assert_int_equal(arg->co_info.ci_nsnapshots, 0);
+	assert_int_equal(cinfo.ci_lsnapshot, 0);
 
 	oid = daos_test_oid_gen(arg->coh, OC_RP_XSF, 0, 0, arg->myrank);
 	print_message("OID: "DF_OID"\n", DP_OID(oid));
@@ -226,21 +227,24 @@ test_snapshots(void **argp)
 	if (arg->async)
 		MUST(daos_event_init(&ev, arg->eq, NULL));
 
-	print_message("Container query nsnapshots=0 (before snapshots created)\n");
+	print_message("Container query nsnapshots=0, lsnapshot=0 (before snapshots created)\n");
 	cinfo.ci_nsnapshots = 10;	/* should be ignored on input */
 	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(cinfo.ci_nsnapshots, 0);
+	assert_int_equal(cinfo.ci_lsnapshot, 0);
 
 	io_for_aggregation(arg, coh, ths, num_records, oid,
 			   /* update */ true, snaps_in, snaps,
 			   /* verification data */ NULL);
 
-	print_message("Container query nsnapshots=%d (after snapshots created)\n", snap_count);
+	print_message("Container query nsnapshots=%d lsnapshot="DF_X64
+		      " (after snapshots created)\n", snap_count, snaps[snap_count-1]);
 	cinfo.ci_nsnapshots = snap_count * 10;	/* should be ignored on input */
 	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(cinfo.ci_nsnapshots, snap_count);
+	assert_int_equal(cinfo.ci_lsnapshot, snaps[snap_count-1]);
 
 	print_message("Snapshot listing shall succeed with no buffer\n");
 	snap_count_out = 0;
@@ -322,11 +326,13 @@ test_snapshots(void **argp)
 		assert_int_equal(rc, -DER_NONEXIST);
 	}
 
-	print_message("Container query nsnapshots=%d (after 1 snapshot deleted)\n", (snap_count-1));
+	print_message("Container query nsnapshots=%d lsnapshot="DF_X64
+		      " (after 1 snapshot deleted)\n", (snap_count-1), snaps[snap_count-1]);
 	cinfo.ci_nsnapshots = 10;	/* should be ignored on input */
 	MUST(daos_cont_query(coh, &cinfo, NULL /* prop */, arg->async ? &ev : NULL));
 	WAIT_ON_ASYNC(arg, ev);
 	assert_int_equal(cinfo.ci_nsnapshots, (snap_count-1));
+	assert_int_equal(cinfo.ci_lsnapshot, snaps[snap_count-1]);
 
 	if (arg->async)
 		MUST(daos_event_fini(&ev));
@@ -337,9 +343,11 @@ test_snapshots(void **argp)
 	MUST(cont_close(arg, coh));
 
 	/* Reopen container, verify number of snapshots */
-	print_message("Container (re)open nsnapshots=%d\n", (snap_count-1));
+	print_message("Container (re)open nsnapshots=%d lsnapshot="DF_X64"\n", (snap_count-1),
+		      snaps[snap_count-1]);
 	MUST(cont_open(arg, co_uuid, DAOS_COO_RW | DAOS_COO_NOSLIP, &coh));
 	assert_int_equal(arg->co_info.ci_nsnapshots, (snap_count-1));
+	assert_int_equal(cinfo.ci_lsnapshot, snaps[snap_count-1]);
 	MUST(cont_close(arg, coh));
 
 	MUST(cont_destroy(arg, co_uuid));
