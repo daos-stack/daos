@@ -98,8 +98,6 @@ class CartSelfTest(TestWithServers):
         # Get the self_test command line parameters
         orterun.job.get_params(self)
         orterun.job.group_name.update(self.server_group, "group_name")
-        orterun.job.attach_info.update(
-            os.path.dirname(self.uri_file), "attach_info")
 
         # Setup the environment variables for the self_test orterun command
         orterun.assign_environment(self.cart_env)
