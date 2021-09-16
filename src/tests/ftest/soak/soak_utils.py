@@ -275,13 +275,16 @@ def run_metrics_check(self, logging=True, prefix=None):
             if prefix:
                 name = prefix + "_metrics_{}.csv".format(engine)
             destination = self.outputsoakdir
-            output = run_pcmd(hosts=self.hostlist_servers,
-                              command="sudo daos_metrics -S {} --csv".format(
-                                  engine),
-                              verbose=(not logging),
-                              timeout=60)
+            results = run_pcmd(hosts=self.hostlist_servers,
+                               command="sudo daos_metrics -S {} --csv".format(
+                                   engine),
+                               verbose=(not logging),
+                               timeout=60)
             if logging:
-                write_logfile(output[0]["stdout"], name, destination)
+                for result in results:
+                    hosts = result["hosts"]
+                    log_name = name + "-" + str(hosts)
+                    write_logfile(result["stdout"], log_name, destination)
 
 
 def get_harassers(harasser):

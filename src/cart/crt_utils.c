@@ -56,8 +56,6 @@ crtu_drain_queue(crt_context_t ctx)
 	int	rc;
 	int	i;
 
-	crt_rank_abort_all(NULL);
-
 	/* TODO: Need better mechanism for tests to drain all queues */
 	for (i = 0; i < 1000; i++)
 		crt_progress(ctx, 1000);
@@ -280,6 +278,9 @@ crtu_wait_for_ranks(crt_context_t ctx, crt_group_t *grp,
 			rc = d_gettime(&t2);
 			D_ASSERTF(rc == 0, "d_gettime() failed; rc=%d\n", rc);
 			time_s = d_time2s(d_timediff(t1, t2));
+
+			if (ws.rc != 0 && time_s < total_timeout)
+				sleep(1);
 		}
 
 		if (ws.rc != 0) {

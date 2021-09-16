@@ -10,7 +10,7 @@ SHELL=/bin/bash
 -include Makefile.local
 
 # default to Leap 15 distro for chrootbuild
-CHROOT_NAME ?= opensuse-leap-15.2-x86_64
+CHROOT_NAME ?= opensuse-leap-15.3-x86_64
 include packaging/Makefile_distro_vars.mk
 
 ifeq ($(DEB_NAME),)

@@ -327,8 +327,6 @@ ds_rsvc_get_attr(struct ds_rsvc *svc, struct rdb_tx *tx, rdb_path_t *path,
 	}
 
 	crt_bulk_free(local_bulk);
-	if (rc != 0)
-		goto out_iovs;
 
 out_iovs:
 	for (i = 1; i <= new_index; i++)
