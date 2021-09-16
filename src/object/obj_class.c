@@ -36,8 +36,8 @@ daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv)
 	/* see daos_objid_generate */
 	oc = oclass_ident2cl(daos_obj_id2class(oid));
 	if (!oc) {
-		D_DEBUG(DB_PL, "Unknown object class %d for "DF_OID"\n",
-			daos_obj_id2class(oid), DP_OID(oid));
+		D_DEBUG(DB_PL, "Unknown object class %u for "DF_OID"\n",
+			(unsigned int)daos_obj_id2class(oid), DP_OID(oid));
 		return NULL;
 	}
 	D_DEBUG(DB_PL, "Find class %s for oid "DF_OID"\n",
@@ -45,6 +45,23 @@ daos_oclass_attr_find(daos_obj_id_t oid, bool *is_priv)
 	if (is_priv)
 		*is_priv = oc->oc_private;
 	return &oc->oc_attr;
+}
+
+int
+daos_obj_set_oid_by_class(daos_obj_id_t *oid, daos_otype_t type, daos_oclass_id_t cid,
+			  uint32_t args)
+{
+	struct daos_obj_class	*oc;
+
+	oc = oclass_ident2cl(cid);
+	if (!oc) {
+		D_DEBUG(DB_PL, "Unknown object class %u\n", (unsigned int)cid);
+		return -DER_INVAL;
+	}
+
+	daos_obj_set_oid(oid, type, oc->oc_redun, oc->oc_attr.ca_grp_nr, args);
+
+	return 0;
 }
 
 int
@@ -151,16 +168,20 @@ daos_oclass_grp_nr(struct daos_oclass_attr *oc_attr, struct daos_obj_md *md)
 	return oc_attr->ca_grp_nr;
 }
 
-static struct daos_obj_class *
-oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr)
+int
+daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
+		    enum daos_obj_redun *ord, uint32_t *nr)
 {
 	struct daos_obj_class	*oc;
 	struct daos_oclass_attr	 ca;
-	int grp_size;
+	int			 grp_size;
+
+	D_ASSERT(target_nr > 0);
+	D_ASSERT(domain_nr > 0);
 
 	oc = oclass_ident2cl(oc_id);
 	if (!oc)
-		return NULL;
+		return -DER_INVAL;
 
 	memcpy(&ca, &oc->oc_attr, sizeof(ca));
 	if (oc_id == OC_RP_XSF) {
@@ -171,6 +192,8 @@ oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr)
 		ca.ca_resil_degree = domain_nr - 1;
 		ca.ca_rp_nr = domain_nr;
 		oc = oclass_resil2cl(&ca);
+		*ord = oc->oc_redun;
+		*nr = oc->oc_attr.ca_grp_nr;
 		goto out;
 	}
 
@@ -180,145 +203,23 @@ oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr)
 		/* search for the highest scalability in the allowed range */
 		ca.ca_grp_nr = max(1, (target_nr / grp_size));
 		oc = oclass_scale2cl(&ca);
+		*ord = oc->oc_redun;
+		*nr = oc->oc_grp_nr;
+		oc_id = oc->oc_id;
 		goto out;
 	}
+	*ord = oc->oc_redun;
+	*nr = oc->oc_grp_nr;
+	
 out:
-	D_DEBUG(DB_PL, "matched object class: %s, group: %d, group_nr: %d\n",
-		oc->oc_name, daos_oclass_grp_size(&ca), ca.ca_grp_nr);
-	return oc;
-}
-
-int
-daos_oclass_fit_max(daos_oclass_id_t oc_id, int domain_nr, int target_nr,
-		    daos_oclass_id_t *oc_id_p)
-{
-	struct daos_obj_class	*oc;
-
-	D_ASSERT(target_nr > 0);
-	D_ASSERT(domain_nr > 0);
-
-	oc = oclass_fit_max(oc_id, domain_nr, target_nr);
-	if (oc)
-		*oc_id_p = oc->oc_id;
-
-	return oc ? 0 : -DER_NONEXIST;
-}
-
-int
-dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
-	      daos_ofeat_t ofeats, daos_oclass_hints_t hints,
-	      daos_oclass_id_t *oc_id_p)
-{
-	daos_oclass_id_t	cid = 0;
-	struct daos_obj_class	*oc;
-	struct daos_oclass_attr	ca;
-	uint16_t		shd, rdd;
-	int			grp_size;
-
-	rdd = hints & DAOS_OCH_RDD_MASK;
-	shd = hints & DAOS_OCH_SHD_MASK;
-
-	/** first set a reasonable default based on RF & RDD hint (if set) */
-	switch (rf_factor) {
-	case DAOS_PROP_CO_REDUN_RF0:
-		if (rdd == DAOS_OCH_RDD_RP) {
-			cid = OC_RP_2GX;
-		} else if (rdd == DAOS_OCH_RDD_EC) {
-			if (domain_nr >= 10)
-				cid = OC_EC_8P1GX;
-			else if (domain_nr >= 6)
-				cid = OC_EC_4P1GX;
-			else
-				cid = OC_EC_2P1GX;
-		} else {
-			cid = OC_SX;
-		}
-		break;
-	case DAOS_PROP_CO_REDUN_RF1:
-		if (rdd == DAOS_OCH_RDD_EC || ofeats & DAOS_OF_ARRAY ||
-		    ofeats & DAOS_OF_ARRAY_BYTE) {
-			if (domain_nr >= 10)
-				cid = OC_EC_8P1GX;
-			else if (domain_nr >= 6)
-				cid = OC_EC_4P1GX;
-			else
-				cid = OC_EC_2P1GX;
-		} else {
-			cid = OC_RP_2GX;
-		}
-		break;
-	case DAOS_PROP_CO_REDUN_RF2:
-		if (rdd == DAOS_OCH_RDD_EC || ofeats & DAOS_OF_ARRAY ||
-		    ofeats & DAOS_OF_ARRAY_BYTE) {
-			if (domain_nr >= 10)
-				cid = OC_EC_8P2GX;
-			else if (domain_nr >= 6)
-				cid = OC_EC_4P2GX;
-			else
-				cid = OC_EC_2P2GX;
-		} else {
-			cid = OC_RP_3GX;
-		}
-		break;
-	case DAOS_PROP_CO_REDUN_RF3:
-		/** EC not supported here */
-		cid = OC_RP_4GX;
-		break;
-	case DAOS_PROP_CO_REDUN_RF4:
-		/** EC not supported here */
-		cid = OC_RP_6GX;
-		break;
+	if (oc_id < (OR_RP_1 << 24)) {
+		*ord = 0;
+		*nr = oc_id;
 	}
 
-	/** we have determined the resilience part, now set the grp size */
-
-	oc = oclass_ident2cl(cid);
-	if (!oc)
-		return -DER_INVAL;
-
-	memcpy(&ca, &oc->oc_attr, sizeof(ca));
-	grp_size = daos_oclass_grp_size(&ca);
-
-	/** adjust the group size based on the sharding hint */
-	switch (shd) {
-	case 0:
-	case DAOS_OCH_SHD_DEF:
-		if (ofeats & DAOS_OF_ARRAY || ofeats & DAOS_OF_ARRAY_BYTE ||
-		    ofeats & DAOS_OF_KV_FLAT)
-			ca.ca_grp_nr = DAOS_OBJ_GRP_MAX;
-		else
-			ca.ca_grp_nr = 1;
-		break;
-	case DAOS_OCH_SHD_MAX:
-		ca.ca_grp_nr = DAOS_OBJ_GRP_MAX;
-		break;
-	case DAOS_OCH_SHD_TINY:
-		ca.ca_grp_nr = 4;
-		break;
-	case DAOS_OCH_SHD_REG:
-		ca.ca_grp_nr = max(128, target_nr * 25 / 100);
-		break;
-	case DAOS_OCH_SHD_HI:
-		ca.ca_grp_nr = max(256, target_nr * 50 / 100);
-		break;
-	case DAOS_OCH_SHD_EXT:
-		ca.ca_grp_nr = max(1024, target_nr * 80 / 100);
-		break;
-	default:
-		D_ERROR("Invalid sharding hint\n");
-		return -DER_INVAL;
-	}
-
-	if (ca.ca_grp_nr == DAOS_OBJ_GRP_MAX ||
-	    ca.ca_grp_nr * grp_size > target_nr) {
-		/* search for the highest scalability in the allowed range */
-		ca.ca_grp_nr = max(1, (target_nr / grp_size));
-	}
-	oc = oclass_scale2cl(&ca);
-	if (oc)
-		*oc_id_p = oc->oc_id;
-
-	return oc ? 0 : -DER_NONEXIST;
+	D_DEBUG(DB_PL, "found object class, group_nr: %d, redun: %d\n",
+		*nr, *ord);
+	return 0;
 }
 
 /** a structure to map EC object class to EC codec structure */
@@ -675,6 +576,156 @@ oclass_ident2cl(daos_oclass_id_t oc_id)
 	return oc_ident_array[idx];
 }
 
+int
+dc_set_oclass(uint64_t rf_factor, int domain_nr, int target_nr,
+	      daos_otype_t otype, daos_oclass_hints_t hints,
+	      enum daos_obj_redun *ord, uint32_t *nr)
+{
+	uint16_t shd;
+	uint16_t rdd;
+	uint32_t grp_size;
+	uint32_t grp_nr;
+	int idx;
+
+	rdd = hints & DAOS_OCH_RDD_MASK;
+	shd = hints & DAOS_OCH_SHD_MASK;
+
+	/** first set a reasonable default based on RF & RDD hint (if set) */
+	switch (rf_factor) {
+	default:
+	case DAOS_PROP_CO_REDUN_RF0:
+		if (rdd == DAOS_OCH_RDD_RP) {
+			*ord =  OR_RP_2;
+			grp_size = 2;
+		} else if (rdd == DAOS_OCH_RDD_EC) {
+			if (domain_nr >= 18) {
+				*ord = OR_RS_16P1;
+				grp_size = 17;
+			} else if (domain_nr >= 10) {
+				*ord = OR_RS_8P1;
+				grp_size = 9;
+			} else if (domain_nr >= 6) {
+				*ord = OR_RS_4P1;
+				grp_size = 5;
+			} else {
+				*ord = OR_RS_2P1;
+				grp_size = 3;
+			}
+		} else {
+			*ord = OR_RP_1;
+			grp_size = 1;
+		}
+		break;
+	case DAOS_PROP_CO_REDUN_RF1:
+		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+			if (domain_nr >= 18) {
+				*ord = OR_RS_16P1;
+				grp_size = 17;
+			} else if (domain_nr >= 10) {
+				*ord = OR_RS_8P1;
+				grp_size = 9;
+			} else if (domain_nr >= 6) {
+				*ord = OR_RS_4P1;
+				grp_size = 5;
+			} else {
+				*ord = OR_RS_2P1;
+				grp_size = 3;
+			}
+		} else {
+			*ord = OR_RP_2;
+			grp_size = 2;
+		}
+		break;
+	case DAOS_PROP_CO_REDUN_RF2:
+		if (rdd == DAOS_OCH_RDD_EC || daos_is_array_type(otype)) {
+			if (domain_nr >= 20) {
+				*ord = OR_RS_16P2;
+				grp_size = 18;
+			} else if (domain_nr >= 12) {
+				*ord = OR_RS_8P2;
+				grp_size = 10;
+			} else if (domain_nr >= 8) {
+				*ord = OR_RS_4P2;
+				grp_size = 6;
+			} else {
+				*ord = OR_RS_2P2;
+				grp_size = 4;
+			}
+		} else {
+			*ord = OR_RP_3;
+			grp_size = 3;
+		}
+		break;
+	case DAOS_PROP_CO_REDUN_RF3:
+		/** EC not supported here */
+		*ord = OR_RP_4;
+		grp_size = 4;
+		break;
+	case DAOS_PROP_CO_REDUN_RF4:
+		/** EC not supported here */
+		*ord = OR_RP_5;
+		grp_size = 5;
+		break;
+	}
+
+	if (unlikely(grp_size > domain_nr)) {
+		/** cannot meet redundancy requirement */
+		return -DER_INVAL;
+	}
+
+	/** adjust the group size based on the sharding hint */
+	switch (shd) {
+	case 0:
+	case DAOS_OCH_SHD_DEF:
+		if (daos_is_array_type(otype) || daos_is_kv_type(otype))
+			grp_nr = DAOS_OBJ_GRP_MAX;
+		else
+			grp_nr = 1;
+		break;
+	case DAOS_OCH_SHD_MAX:
+		grp_nr = DAOS_OBJ_GRP_MAX;
+		break;
+	case DAOS_OCH_SHD_TINY:
+		grp_nr = 4;
+		break;
+	case DAOS_OCH_SHD_REG:
+		grp_nr = max(128, target_nr * 25 / 100);
+		break;
+	case DAOS_OCH_SHD_HI:
+		grp_nr = max(256, target_nr * 50 / 100);
+		break;
+	case DAOS_OCH_SHD_EXT:
+		grp_nr = max(1024, target_nr * 80 / 100);
+		break;
+	default:
+		D_ERROR("Invalid sharding hint\n");
+		return -DER_INVAL;
+	}
+
+	if (grp_nr == DAOS_OBJ_GRP_MAX || grp_nr * grp_size > target_nr) {
+		/* search for the highest scalability in the allowed range */
+		*nr = max(1, (target_nr / grp_size));
+	} else {
+		*nr = grp_nr;
+	}
+
+	/* Todo this should be removed */
+	idx = daos_array_find_le(oc_ident_array, oc_ident_array_sz, *ord << 24 | *nr,
+				 &oc_ident_sort_ops);
+	if (idx < 0 || oc_ident_array[idx]->oc_redun != *ord)
+		return -DER_INVAL;
+	*nr = oc_ident_array[idx]->oc_grp_nr;
+
+	return 0;
+}
+
+
+/**
+ * XXX: Function below should not look into the pre-registered list of
+ * class and now just generate it on the fly based on daos_obj_redun
+ * and customer nr_grp now encoded in the objid.
+ */
+
 /* find object class by number of replicas (single group), the returned
  * class should have the same of less number of replicas than ca::ca_rp_nr
  */
@@ -701,7 +752,7 @@ static struct daos_obj_class *
 oclass_scale2cl(struct daos_oclass_attr *ca)
 {
 	struct daos_obj_class *oc;
-	int		       idx;
+	int idx;
 
 	idx = daos_array_find_le(oc_scale_array, oc_scale_array_sz,
 				 (uint64_t)(unsigned long)ca,
@@ -728,9 +779,9 @@ static inline void
 oclass_debug(struct daos_obj_class *oc)
 {
 	D_DEBUG(DB_PL,
-		"ID: %d, name: %s, resil: %s, resil_degree: %d, "
+		"ID: %u, name: %s, resil: %s, resil_degree: %d, "
 		"grp_size: %d, grp_nr: %d\n",
-		oc->oc_id, oc->oc_name, oclass_resil_str(oc),
+		(unsigned int)oc->oc_id, oc->oc_name, oclass_resil_str(oc),
 		oc->oc_resil_degree, daos_oclass_grp_size(&oc->oc_attr),
 		oc->oc_grp_nr);
 }

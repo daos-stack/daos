@@ -504,24 +504,6 @@ main(int argc, char **argv)
 	/** generate objid */
 	daos_obj_generate_oid(coh, &oid, 0, cid, 0, 0);
 
-	if (rank == 0) {
-		struct daos_oclass_attr	cattr = {
-			.ca_schema		= DAOS_OS_STRIPED,
-			.ca_resil_degree	= 0 /* TBD */,
-			.ca_resil		= DAOS_RES_REPL,
-			.ca_grp_nr		= 4,
-			.u.rp			= {
-				.r_proto	= 0 /* TBD */,
-				.r_num		= 2 /* TBD */,
-			},
-		};
-
-		/** register a default object class */
-		rc = daos_obj_register_class(coh, cid, &cattr, NULL);
-		ASSERT(rc == 0, "class register failed with %d", rc);
-
-	}
-
 	/** broadcast current LHE to all peers */
 	rc = MPI_Bcast(&epoch, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
 	ASSERT(rc == MPI_SUCCESS, "LHE broadcast failed with %d", rc);

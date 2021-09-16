@@ -271,28 +271,6 @@ check_tx(daos_handle_t th, int rc)
 	return rc;
 }
 
-int
-dfs_oclass_select(daos_handle_t poh, daos_oclass_id_t oc_id,
-		  daos_oclass_id_t *oc_id_p)
-{
-	struct dc_pool		*pool;
-	struct pl_map_attr	 attr;
-	int			 rc;
-
-	pool = dc_hdl2pool(poh);
-	D_ASSERT(pool);
-
-	rc = pl_map_query(pool->dp_pool, &attr);
-	D_ASSERT(rc == 0);
-	dc_pool_put(pool);
-
-	D_DEBUG(DB_TRACE, "available domain=%d, targets=%d\n",
-		attr.pa_domain_nr, attr.pa_target_nr);
-
-	return daos_oclass_fit_max(oc_id, attr.pa_domain_nr,
-				   attr.pa_target_nr, oc_id_p);
-}
-
 #define MAX_OID_HI ((1UL << 32) - 1)
 
 /*
@@ -307,7 +285,7 @@ dfs_oclass_select(daos_handle_t poh, daos_oclass_id_t oc_id,
 static int
 oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 {
-	daos_ofeat_t	feat = 0;
+	daos_otype_t	type = 0;
 	int		rc;
 
 	D_MUTEX_LOCK(&dfs->lock);
@@ -330,11 +308,10 @@ oid_gen(dfs_t *dfs, daos_oclass_id_t oclass, bool file, daos_obj_id_t *oid)
 
 	/** if a regular file, use UINT64 typed dkeys for the array object */
 	if (file)
-		feat = DAOS_OF_DKEY_UINT64 | DAOS_OF_KV_FLAT |
-			DAOS_OF_ARRAY_BYTE;
+		type = DAOS_OT_ARRAY_BYTE;
 
 	/** generate the daos object ID (set the DAOS owned bits) */
-	rc = daos_obj_generate_oid(dfs->coh, oid, feat, oclass, 0, 0);
+	rc = daos_obj_generate_oid(dfs->coh, oid, type, oclass, 0, 0);
 	if (rc) {
 		D_ERROR("daos_obj_generate_oid() failed "DF_RC"\n", DP_RC(rc));
 		return daos_der2errno(rc);

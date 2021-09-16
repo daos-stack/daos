@@ -11,7 +11,59 @@ extern "C" {
 #endif
 
 /**
- * Predefined object classes
+ * Define the object data redundancy method. Encoded over 8 bits in the object ID.
+ * The number of redundancy groups is encoded separately in the object metadata.
+ */
+enum daos_obj_redun {
+	/**
+	 * No data protection, aka "single replica".
+	 */
+	OR_RP_1		= 1,
+
+	/**
+	 * Static N-way replicated object (OC_RP_N).
+	 * The number of redundancy group is hardcoded in the object metadata.
+	 */
+	OR_RP_2		= 8,
+	OR_RP_3,
+	OR_RP_4,
+	OR_RP_5,
+	OR_RP_6,
+	OR_RP_8,
+	OR_RP_12,
+	OR_RP_16,
+	OR_RP_24,
+	OR_RP_32,
+	OR_RP_48,
+	OR_RP_64,
+	OR_RP_128,
+
+	/**
+	 * N+K reed solomon erasude-coded object (OC_EC_NPK).
+	 * - the first number is data cells number within a redundancy group
+	 * - the number after P is parity cells number within a redundancy group
+	 * C_S1
+	 *
+	 * Examples:
+	 * - 2P1: 2+1 EC object
+	 * - 4P2: 4+2 EC object
+	 * - 8P2: 8+2 EC object
+	 * - 16P2: 16+2 EC object
+	 */
+	OR_RS_2P1	= 32,
+	OR_RS_2P2,
+	OR_RS_4P1,
+	OR_RS_4P2,
+	OR_RS_8P1,
+	OR_RS_8P2,
+	OR_RS_16P1,
+	OR_RS_16P2,
+};
+
+
+#define MAX_NUM_GROUPS ((1 << 16UL) - 1)
+/**
+ * Predefined object classes that can be used directly by the API user.
  * It describes schema of data distribution & protection.
  */
 enum {
@@ -131,7 +183,6 @@ enum {
 	 * based on the current size of the pool.
 	 */
 	OC_EC_MAX,
-
 	/**
 	 * Object classes with explicit layout
 	 */
@@ -141,30 +192,15 @@ enum {
 	 * S1 : shards=1, S2 means shards=2, ...
 	 * SX : spreading across all targets within the pool
 	 */
-	OC_S1		= 200,
-	OC_S2,
-	OC_S4,
-	OC_S6,
-	OC_S8,
-	OC_S12,
-	OC_S16,
-	OC_S24,
-	OC_S32,
-	OC_S48,
-	OC_S64,
-	OC_S96,
-	OC_S128,
-	OC_S192,
-	OC_S256,
-	OC_S384,
-	OC_S512,
-	OC_S768,
-	OC_S1K,
-	OC_S2K,
-	OC_S4K,
-	OC_S6K,
-	OC_S8K,
-	OC_SX,
+	OC_S1		= (OR_RP_1 << 24) | 1UL,
+	OC_S2		= (OR_RP_1 << 24) | 2UL,
+	OC_S4		= (OR_RP_1 << 24) | 4UL,
+	OC_S6		= (OR_RP_1 << 24) | 6UL,
+	OC_S8		= (OR_RP_1 << 24) | 8UL,
+	OC_S12		= (OR_RP_1 << 24) | 12UL,
+	OC_S16		= (OR_RP_1 << 24) | 16UL,
+	OC_S32		= (OR_RP_1 << 24) | 32UL,
+	OC_SX		= (OR_RP_1 << 24) | MAX_NUM_GROUPS,
 
 	/**
 	 * Replicated object with explicit layout
@@ -177,144 +213,69 @@ enum {
 	 * 8GX : 8 replicas, it spreads across all targets within the pool
 	 */
 	/** 2-way replicated object classes */
-	OC_RP_2G1	= 240,
-	OC_RP_2G2,
-	OC_RP_2G4,
-	OC_RP_2G6,
-	OC_RP_2G8,
-	OC_RP_2G12,
-	OC_RP_2G16,
-	OC_RP_2G24,
-	OC_RP_2G32,
-	OC_RP_2G48,
-	OC_RP_2G64,
-	OC_RP_2G96,
-	OC_RP_2G128,
-	OC_RP_2G192,
-	OC_RP_2G256,
-	OC_RP_2G384,
-	OC_RP_2G512,
-	OC_RP_2G768,
-	OC_RP_2G1K,
-	OC_RP_2G2K,
-	OC_RP_2G4K,
-	OC_RP_2G6K,
-	OC_RP_2G8K,
-	OC_RP_2GX,
-	OC_RP_2G3,
+	OC_RP_2G1	= (OR_RP_2 << 24) | 1UL,
+	OC_RP_2G2	= (OR_RP_2 << 24) | 2UL,
+	OC_RP_2G4	= (OR_RP_2 << 24) | 4UL,
+	OC_RP_2G6	= (OR_RP_2 << 24) | 6UL,
+	OC_RP_2G8	= (OR_RP_2 << 24) | 8UL,
+	OC_RP_2G12	= (OR_RP_2 << 24) | 12UL,
+	OC_RP_2G16	= (OR_RP_2 << 24) | 16UL,
+	OC_RP_2G32	= (OR_RP_2 << 24) | 32UL,
+	OC_RP_2GX	= (OR_RP_2 << 24) | MAX_NUM_GROUPS,
 
 	/** 3-way replicated object classes */
-	OC_RP_3G1	= 280,
-	OC_RP_3G2,
-	OC_RP_3G4,
-	OC_RP_3G6,
-	OC_RP_3G8,
-	OC_RP_3G12,
-	OC_RP_3G16,
-	OC_RP_3G24,
-	OC_RP_3G32,
-	OC_RP_3G48,
-	OC_RP_3G64,
-	OC_RP_3G96,
-	OC_RP_3G128,
-	OC_RP_3G192,
-	OC_RP_3G256,
-	OC_RP_3G384,
-	OC_RP_3G512,
-	OC_RP_3G768,
-	OC_RP_3G1K,
-	OC_RP_3G2K,
-	OC_RP_3G4K,
-	OC_RP_3G6K,
-	OC_RP_3G8K,
-	OC_RP_3GX,
+	OC_RP_3G1	= (OR_RP_3 << 24) | 1UL,
+	OC_RP_3G2	= (OR_RP_3 << 24) | 2UL,
+	OC_RP_3G4	= (OR_RP_3 << 24) | 4UL,
+	OC_RP_3G6	= (OR_RP_3 << 24) | 6UL,
+	OC_RP_3G8	= (OR_RP_3 << 24) | 8UL,
+	OC_RP_3G12	= (OR_RP_3 << 24) | 12UL,
+	OC_RP_3G16	= (OR_RP_3 << 24) | 16UL,
+	OC_RP_3G32	= (OR_RP_3 << 24) | 32UL,
+	OC_RP_3GX	= (OR_RP_3 << 24) | MAX_NUM_GROUPS,
 
 	/** 4-way replicated object classes */
-	OC_RP_4G1	= 320,
-	OC_RP_4G2,
-	OC_RP_4G4,
-	OC_RP_4G6,
-	OC_RP_4G8,
-	OC_RP_4G12,
-	OC_RP_4G16,
-	OC_RP_4G24,
-	OC_RP_4G32,
-	OC_RP_4G48,
-	OC_RP_4G64,
-	OC_RP_4G96,
-	OC_RP_4G128,
-	OC_RP_4G192,
-	OC_RP_4G256,
-	OC_RP_4G384,
-	OC_RP_4G512,
-	OC_RP_4G768,
-	OC_RP_4G1K,
-	OC_RP_4G2K,
-	OC_RP_4G4K,
-	OC_RP_4G6K,
-	OC_RP_4G8K,
-	OC_RP_4GX,
+	OC_RP_4G1	= (OR_RP_4 << 24) | 1UL,
+	OC_RP_4G2	= (OR_RP_4 << 24) | 2UL,
+	OC_RP_4G4	= (OR_RP_4 << 24) | 4UL,
+	OC_RP_4G6	= (OR_RP_4 << 24) | 6UL,
+	OC_RP_4G8	= (OR_RP_4 << 24) | 8UL,
+	OC_RP_4G12	= (OR_RP_4 << 24) | 12UL,
+	OC_RP_4G16	= (OR_RP_4 << 24) | 16UL,
+	OC_RP_4G32	= (OR_RP_4 << 24) | 32UL,
+	OC_RP_4GX	= (OR_RP_4 << 24) | MAX_NUM_GROUPS,
+
+	/** 5-way replicated object classes */
+	OC_RP_5G1	= (OR_RP_5 << 24) | 1UL,
+	OC_RP_5G2	= (OR_RP_5 << 24) | 2UL,
+	OC_RP_5G4	= (OR_RP_5 << 24) | 4UL,
+	OC_RP_5G6	= (OR_RP_5 << 24) | 6UL,
+	OC_RP_5G8	= (OR_RP_5 << 24) | 8UL,
+	OC_RP_5G12	= (OR_RP_5 << 24) | 12UL,
+	OC_RP_5G16	= (OR_RP_5 << 24) | 16UL,
+	OC_RP_5G32	= (OR_RP_5 << 24) | 32UL,
+	OC_RP_5GX	= (OR_RP_5 << 24) | MAX_NUM_GROUPS,
 
 	/** 6-way replicated object classes */
-	OC_RP_6G1	= 360,
-	OC_RP_6G2,
-	OC_RP_6G4,
-	OC_RP_6G6,
-	OC_RP_6G8,
-	OC_RP_6G12,
-	OC_RP_6G16,
-	OC_RP_6G24,
-	OC_RP_6G32,
-	OC_RP_6G48,
-	OC_RP_6G64,
-	OC_RP_6G96,
-	OC_RP_6G128,
-	OC_RP_6G192,
-	OC_RP_6G256,
-	OC_RP_6G384,
-	OC_RP_6G512,
-	OC_RP_6G768,
-	OC_RP_6G1K,
-	OC_RP_6G2K,
-	OC_RP_6G4K,
-	OC_RP_6G6K,
-	OC_RP_6G8K,
-	OC_RP_6GX,
-
-	/** 8-way replicated object classes */
-	OC_RP_8G1	= 400,
-	OC_RP_8G2,
-	OC_RP_8G4,
-	OC_RP_8G6,
-	OC_RP_8G8,
-	OC_RP_8G12,
-	OC_RP_8G16,
-	OC_RP_8G24,
-	OC_RP_8G32,
-	OC_RP_8G48,
-	OC_RP_8G64,
-	OC_RP_8G96,
-	OC_RP_8G128,
-	OC_RP_8G192,
-	OC_RP_8G256,
-	OC_RP_8G384,
-	OC_RP_8G512,
-	OC_RP_8G768,
-	OC_RP_8G1K,
-	OC_RP_8G2K,
-	OC_RP_8G4K,
-	OC_RP_8G6K,
-	OC_RP_8G8K,
-	OC_RP_8GX,
+	OC_RP_6G1	= (OR_RP_6 << 24) | 1UL,
+	OC_RP_6G2	= (OR_RP_6 << 24) | 2UL,
+	OC_RP_6G4	= (OR_RP_6 << 24) | 4UL,
+	OC_RP_6G6	= (OR_RP_6 << 24) | 6UL,
+	OC_RP_6G8	= (OR_RP_6 << 24) | 8UL,
+	OC_RP_6G12	= (OR_RP_6 << 24) | 12UL,
+	OC_RP_6G16	= (OR_RP_6 << 24) | 16UL,
+	OC_RP_6G32	= (OR_RP_6 << 24) | 32UL,
+	OC_RP_6GX	= (OR_RP_6 << 24) | MAX_NUM_GROUPS,
 
 	/* OC_XSF will map to one of these */
-	OC_RP_12G1	= 440,
-	OC_RP_16G1,
-	OC_RP_24G1,
-	OC_RP_32G1,
-	OC_RP_48G1,
-	OC_RP_64G1,
-	OC_RP_128G1,
+	OC_RP_12G1	= (OR_RP_12 << 24) | 1UL,
+	OC_RP_16G1	= (OR_RP_16 << 24) | 1UL,
+	OC_RP_24G1	= (OR_RP_24 << 24) | 1UL,
+	OC_RP_32G1	= (OR_RP_32 << 24) | 1UL,
+	OC_RP_48G1	= (OR_RP_48 << 24) | 1UL,
+	OC_RP_64G1	= (OR_RP_64 << 24) | 1UL,
+	OC_RP_128G1	= (OR_RP_128 << 24) | 1UL,
+
 	/**
 	 * Erasure coded object with explicit layout
 	 * - the first number is data cells number within a redundancy group
@@ -328,215 +289,96 @@ enum {
 	 * - 16P2GX: 16+2 EC object spreads across all targets within the pool
 	 */
 	/** EC 2+1 object classes */
-	OC_EC_2P1G1	= 500,
-	OC_EC_2P1G2,
-	OC_EC_2P1G4,
-	OC_EC_2P1G6,
-	OC_EC_2P1G8,
-	OC_EC_2P1G12,
-	OC_EC_2P1G16,
-	OC_EC_2P1G24,
-	OC_EC_2P1G32,
-	OC_EC_2P1G48,
-	OC_EC_2P1G64,
-	OC_EC_2P1G96,
-	OC_EC_2P1G128,
-	OC_EC_2P1G192,
-	OC_EC_2P1G256,
-	OC_EC_2P1G384,
-	OC_EC_2P1G512,
-	OC_EC_2P1G768,
-	OC_EC_2P1G1K,
-	OC_EC_2P1G2K,
-	OC_EC_2P1G4K,
-	OC_EC_2P1G6K,
-	OC_EC_2P1G8K,
-	OC_EC_2P1GX,
+	OC_EC_2P1G1	= (OR_RS_2P1 << 24) | 1UL,
+	OC_EC_2P1G2	= (OR_RS_2P1 << 24) | 2UL,
+	OC_EC_2P1G4	= (OR_RS_2P1 << 24) | 4UL,
+	OC_EC_2P1G6	= (OR_RS_2P1 << 24) | 6UL,
+	OC_EC_2P1G8	= (OR_RS_2P1 << 24) | 8UL,
+	OC_EC_2P1G12	= (OR_RS_2P1 << 24) | 12UL,
+	OC_EC_2P1G16	= (OR_RS_2P1 << 24) | 16UL,
+	OC_EC_2P1G32	= (OR_RS_2P1 << 24) | 32UL,
+	OC_EC_2P1GX	= (OR_RS_2P1 << 24) | MAX_NUM_GROUPS,
 
 	/** EC 2+2 object classes */
-	OC_EC_2P2G1	= 540,
-	OC_EC_2P2G2,
-	OC_EC_2P2G4,
-	OC_EC_2P2G6,
-	OC_EC_2P2G8,
-	OC_EC_2P2G12,
-	OC_EC_2P2G16,
-	OC_EC_2P2G24,
-	OC_EC_2P2G32,
-	OC_EC_2P2G48,
-	OC_EC_2P2G64,
-	OC_EC_2P2G96,
-	OC_EC_2P2G128,
-	OC_EC_2P2G192,
-	OC_EC_2P2G256,
-	OC_EC_2P2G384,
-	OC_EC_2P2G512,
-	OC_EC_2P2G768,
-	OC_EC_2P2G1K,
-	OC_EC_2P2G2K,
-	OC_EC_2P2G4K,
-	OC_EC_2P2G6K,
-	OC_EC_2P2G8K,
-	OC_EC_2P2GX,
+	OC_EC_2P2G1	= (OR_RS_2P2 << 24) | 1UL,
+	OC_EC_2P2G2	= (OR_RS_2P2 << 24) | 2UL,
+	OC_EC_2P2G4	= (OR_RS_2P2 << 24) | 4UL,
+	OC_EC_2P2G6	= (OR_RS_2P2 << 24) | 6UL,
+	OC_EC_2P2G8	= (OR_RS_2P2 << 24) | 8UL,
+	OC_EC_2P2G12	= (OR_RS_2P2 << 24) | 12UL,
+	OC_EC_2P2G16	= (OR_RS_2P2 << 24) | 16UL,
+	OC_EC_2P2G32	= (OR_RS_2P2 << 24) | 32UL,
+	OC_EC_2P2GX	= (OR_RS_2P2 << 24) | MAX_NUM_GROUPS,
 
 	/** EC 4+1 object classes */
-	OC_EC_4P1G1	= 580,
-	OC_EC_4P1G2,
-	OC_EC_4P1G4,
-	OC_EC_4P1G6,
-	OC_EC_4P1G8,
-	OC_EC_4P1G12,
-	OC_EC_4P1G16,
-	OC_EC_4P1G24,
-	OC_EC_4P1G32,
-	OC_EC_4P1G48,
-	OC_EC_4P1G64,
-	OC_EC_4P1G96,
-	OC_EC_4P1G128,
-	OC_EC_4P1G192,
-	OC_EC_4P1G256,
-	OC_EC_4P1G384,
-	OC_EC_4P1G512,
-	OC_EC_4P1G768,
-	OC_EC_4P1G1K,
-	OC_EC_4P1G2K,
-	OC_EC_4P1G4K,
-	OC_EC_4P1G6K,
-	OC_EC_4P1G8K,
-	OC_EC_4P1GX,
+	OC_EC_4P1G1	= (OR_RS_4P1 << 24) | 1UL,
+	OC_EC_4P1G2	= (OR_RS_4P1 << 24) | 2UL,
+	OC_EC_4P1G4	= (OR_RS_4P1 << 24) | 4UL,
+	OC_EC_4P1G6	= (OR_RS_4P1 << 24) | 6UL,
+	OC_EC_4P1G8	= (OR_RS_4P1 << 24) | 8UL,
+	OC_EC_4P1G12	= (OR_RS_4P1 << 24) | 12UL,
+	OC_EC_4P1G16	= (OR_RS_4P1 << 24) | 16UL,
+	OC_EC_4P1G32	= (OR_RS_4P1 << 24) | 32UL,
+	OC_EC_4P1GX	= (OR_RS_4P1 << 24) | MAX_NUM_GROUPS,
 
 	/** EC 4+2 object classes */
-	OC_EC_4P2G1	= 620,
-	OC_EC_4P2G2,
-	OC_EC_4P2G4,
-	OC_EC_4P2G6,
-	OC_EC_4P2G8,
-	OC_EC_4P2G12,
-	OC_EC_4P2G16,
-	OC_EC_4P2G24,
-	OC_EC_4P2G32,
-	OC_EC_4P2G48,
-	OC_EC_4P2G64,
-	OC_EC_4P2G96,
-	OC_EC_4P2G128,
-	OC_EC_4P2G192,
-	OC_EC_4P2G256,
-	OC_EC_4P2G384,
-	OC_EC_4P2G512,
-	OC_EC_4P2G768,
-	OC_EC_4P2G1K,
-	OC_EC_4P2G2K,
-	OC_EC_4P2G4K,
-	OC_EC_4P2G6K,
-	OC_EC_4P2G8K,
-	OC_EC_4P2GX,
+	OC_EC_4P2G1	= (OR_RS_4P2 << 24) | 1UL,
+	OC_EC_4P2G2	= (OR_RS_4P2 << 24) | 2UL,
+	OC_EC_4P2G4	= (OR_RS_4P2 << 24) | 4UL,
+	OC_EC_4P2G6	= (OR_RS_4P2 << 24) | 6UL,
+	OC_EC_4P2G8	= (OR_RS_4P2 << 24) | 8UL,
+	OC_EC_4P2G12	= (OR_RS_4P2 << 24) | 12UL,
+	OC_EC_4P2G16	= (OR_RS_4P2 << 24) | 16UL,
+	OC_EC_4P2G32	= (OR_RS_4P2 << 24) | 32UL,
+	OC_EC_4P2GX	= (OR_RS_4P2 << 24) | MAX_NUM_GROUPS,
 
 	/** EC 8+1 object classes */
-	OC_EC_8P1G1	= 660,
-	OC_EC_8P1G2,
-	OC_EC_8P1G4,
-	OC_EC_8P1G6,
-	OC_EC_8P1G8,
-	OC_EC_8P1G12,
-	OC_EC_8P1G16,
-	OC_EC_8P1G24,
-	OC_EC_8P1G32,
-	OC_EC_8P1G48,
-	OC_EC_8P1G64,
-	OC_EC_8P1G96,
-	OC_EC_8P1G128,
-	OC_EC_8P1G192,
-	OC_EC_8P1G256,
-	OC_EC_8P1G384,
-	OC_EC_8P1G512,
-	OC_EC_8P1G768,
-	OC_EC_8P1G1K,
-	OC_EC_8P1G2K,
-	OC_EC_8P1G4K,
-	OC_EC_8P1G6K,
-	OC_EC_8P1G8K,
-	OC_EC_8P1GX,
+	OC_EC_8P1G1	= (OR_RS_8P1 << 24) | 1UL,
+	OC_EC_8P1G2	= (OR_RS_8P1 << 24) | 2UL,
+	OC_EC_8P1G4	= (OR_RS_8P1 << 24) | 4UL,
+	OC_EC_8P1G6	= (OR_RS_8P1 << 24) | 6UL,
+	OC_EC_8P1G8	= (OR_RS_8P1 << 24) | 8UL,
+	OC_EC_8P1G12	= (OR_RS_8P1 << 24) | 12UL,
+	OC_EC_8P1G16	= (OR_RS_8P1 << 24) | 16UL,
+	OC_EC_8P1G32	= (OR_RS_8P1 << 24) | 32UL,
+	OC_EC_8P1GX	= (OR_RS_8P1 << 24) | MAX_NUM_GROUPS,
 
 	/** EC 8+2 object classes */
-	OC_EC_8P2G1	= 700,
-	OC_EC_8P2G2,
-	OC_EC_8P2G4,
-	OC_EC_8P2G6,
-	OC_EC_8P2G8,
-	OC_EC_8P2G12,
-	OC_EC_8P2G16,
-	OC_EC_8P2G24,
-	OC_EC_8P2G32,
-	OC_EC_8P2G48,
-	OC_EC_8P2G64,
-	OC_EC_8P2G96,
-	OC_EC_8P2G128,
-	OC_EC_8P2G192,
-	OC_EC_8P2G256,
-	OC_EC_8P2G384,
-	OC_EC_8P2G512,
-	OC_EC_8P2G768,
-	OC_EC_8P2G1K,
-	OC_EC_8P2G2K,
-	OC_EC_8P2G4K,
-	OC_EC_8P2G6K,
-	OC_EC_8P2G8K,
-	OC_EC_8P2GX,
+	OC_EC_8P2G1	= (OR_RS_8P2 << 24) | 1UL,
+	OC_EC_8P2G2	= (OR_RS_8P2 << 24) | 2UL,
+	OC_EC_8P2G4	= (OR_RS_8P2 << 24) | 4UL,
+	OC_EC_8P2G6	= (OR_RS_8P2 << 24) | 6UL,
+	OC_EC_8P2G8	= (OR_RS_8P2 << 24) | 8UL,
+	OC_EC_8P2G12	= (OR_RS_8P2 << 24) | 12UL,
+	OC_EC_8P2G16	= (OR_RS_8P2 << 24) | 16UL,
+	OC_EC_8P2G32	= (OR_RS_8P2 << 24) | 32UL,
+	OC_EC_8P2GX	= (OR_RS_8P2 << 24) | MAX_NUM_GROUPS,
 
 	/** EC 16+1 object classes */
-	OC_EC_16P1G1	= 740,
-	OC_EC_16P1G2,
-	OC_EC_16P1G4,
-	OC_EC_16P1G6,
-	OC_EC_16P1G8,
-	OC_EC_16P1G12,
-	OC_EC_16P1G16,
-	OC_EC_16P1G24,
-	OC_EC_16P1G32,
-	OC_EC_16P1G48,
-	OC_EC_16P1G64,
-	OC_EC_16P1G96,
-	OC_EC_16P1G128,
-	OC_EC_16P1G192,
-	OC_EC_16P1G256,
-	OC_EC_16P1G384,
-	OC_EC_16P1G512,
-	OC_EC_16P1G768,
-	OC_EC_16P1G1K,
-	OC_EC_16P1G2K,
-	OC_EC_16P1G4K,
-	OC_EC_16P1G6K,
-	OC_EC_16P1G8K,
-	OC_EC_16P1GX,
+	OC_EC_16P1G1	= (OR_RS_16P1 << 24) | 1UL,
+	OC_EC_16P1G2	= (OR_RS_16P1 << 24) | 2UL,
+	OC_EC_16P1G4	= (OR_RS_16P1 << 24) | 4UL,
+	OC_EC_16P1G6	= (OR_RS_16P1 << 24) | 6UL,
+	OC_EC_16P1G8	= (OR_RS_16P1 << 24) | 8UL,
+	OC_EC_16P1G12	= (OR_RS_16P1 << 24) | 12UL,
+	OC_EC_16P1G16	= (OR_RS_16P1 << 24) | 16UL,
+	OC_EC_16P1G32	= (OR_RS_16P1 << 24) | 32UL,
+	OC_EC_16P1GX	= (OR_RS_16P1 << 24) | MAX_NUM_GROUPS,
 
 	/** EC 16+2 object classes */
-	OC_EC_16P2G1	= 780,
-	OC_EC_16P2G2,
-	OC_EC_16P2G4,
-	OC_EC_16P2G6,
-	OC_EC_16P2G8,
-	OC_EC_16P2G12,
-	OC_EC_16P2G16,
-	OC_EC_16P2G24,
-	OC_EC_16P2G32,
-	OC_EC_16P2G48,
-	OC_EC_16P2G64,
-	OC_EC_16P2G96,
-	OC_EC_16P2G128,
-	OC_EC_16P2G192,
-	OC_EC_16P2G256,
-	OC_EC_16P2G384,
-	OC_EC_16P2G512,
-	OC_EC_16P2G768,
-	OC_EC_16P2G1K,
-	OC_EC_16P2G2K,
-	OC_EC_16P2G4K,
-	OC_EC_16P2G6K,
-	OC_EC_16P2G8K,
-	OC_EC_16P2GX,
+	OC_EC_16P2G1	= (OR_RS_16P2 << 24) | 1UL,
+	OC_EC_16P2G2	= (OR_RS_16P2 << 24) | 2UL,
+	OC_EC_16P2G4	= (OR_RS_16P2 << 24) | 4UL,
+	OC_EC_16P2G6	= (OR_RS_16P2 << 24) | 6UL,
+	OC_EC_16P2G8	= (OR_RS_16P2 << 24) | 8UL,
+	OC_EC_16P2G12	= (OR_RS_16P2 << 24) | 12UL,
+	OC_EC_16P2G16	= (OR_RS_16P2 << 24) | 16UL,
+	OC_EC_16P2G32	= (OR_RS_16P2 << 24) | 32UL,
+	OC_EC_16P2GX	= (OR_RS_16P2 << 24) | MAX_NUM_GROUPS,
 
 	/** Class ID equal or higher than this is reserved */
-	OC_RESERVED		= (1U << 10),
+	OC_RESERVED		= 1 << 30,
+
 };
 
 enum daos_obj_schema {
@@ -584,11 +426,9 @@ struct daos_oclass_attr {
 };
 
 /** object class ID */
-typedef uint16_t		daos_oclass_id_t;
+typedef uint32_t		daos_oclass_id_t;
 /** object class hints */
 typedef uint16_t		daos_oclass_hints_t;
-/** object feature bits */
-typedef uint16_t		daos_ofeat_t;
 
 /** List of object classes, used for class enumeration */
 struct daos_oclass_list {
@@ -645,29 +485,6 @@ daos_oclass_nr(int opts);
  */
 int
 daos_oclass_id2name(daos_oclass_id_t oc_id, char *name);
-
-/**
- * Register a new object class in addition to the default ones (see DAOS_OC_*).
- * An object class cannot be unregistered for the time being.
- *
- * \param[in]	coh	Container open handle.
- * \param[in]	cid	ID for the new object class.
- * \param[in]	attr	Attributes for the new object class.
- * \param[in]	ev	Completion event, it is optional and can be NULL.
- *			Function will run in blocking mode if \a ev is NULL.
- *
- * \return		These values will be returned by \a ev::ev_error in
- *			non-blocking mode:
- *			0		success
- *			-DER_NO_HDL	Invalid container handle
- *			-DER_INVAL	Invalid parameter
- *			-DER_NO_PERM	Permission denied
- *			-DER_UNREACH	Network is unreachable
- *			-DER_EXIST	Object class ID already existed
- */
-int
-daos_obj_register_class(daos_handle_t coh, daos_oclass_id_t cid,
-			struct daos_oclass_attr *attr, daos_event_t *ev);
 
 /**
  * Query attributes of an object class by its ID.

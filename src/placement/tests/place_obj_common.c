@@ -829,12 +829,15 @@ extend_test_pool_map(struct pool_map *map, uint32_t nnodes, d_rank_list_t *rank_
 bool
 is_max_class_obj(daos_oclass_id_t cid)
 {
-	struct daos_oclass_attr *oc_attr;
-	daos_obj_id_t oid;
+	struct daos_oclass_attr	*oc_attr;
+	daos_obj_id_t		oid;
+	int			rc;
 
 	oid.hi = 5;
 	oid.lo = rand();
-	daos_obj_set_oid(&oid, 0, cid, 0);
+	rc = daos_obj_set_oid_by_class(&oid, 0, cid, 0);
+	assert_success(rc == 0);
+
 	oc_attr = daos_oclass_attr_find(oid, NULL);
 
 	if (oc_attr->ca_grp_nr == DAOS_OBJ_GRP_MAX ||
