@@ -50,15 +50,16 @@ extern unsigned int	srv_io_mode;
 struct dc_obj_shard {
 	/** refcount */
 	unsigned int		do_ref;
+	uint32_t		do_target_rank;
 	/** object id */
 	daos_unit_oid_t		do_id;
 	/** container handler of the object */
 	daos_handle_t		do_co_hdl;
-	uint8_t			do_target_idx;	/* target VOS index in node */
-	uint32_t		do_target_rank;
 	struct pl_obj_shard	do_pl_shard;
 	/** point back to object */
 	struct dc_object	*do_obj;
+	uint32_t		do_shard_idx;
+	uint8_t			do_target_idx;	/* target VOS index in node */
 };
 
 #define do_shard	do_pl_shard.po_shard
@@ -118,6 +119,8 @@ struct dc_object {
  *    it, create oiod/siod to specify each shard/tgt's IO req.
  */
 struct obj_reasb_req {
+	/* object ID */
+	daos_obj_id_t			 orr_oid;
 	/* epoch for IO (now only used for fetch */
 	struct dtx_epoch		 orr_epoch;
 	/* original user input iods/sgls */
@@ -140,7 +143,7 @@ struct obj_reasb_req {
 	uint32_t			 orr_iom_nr;
 	struct daos_oclass_attr		*orr_oca;
 	struct obj_ec_codec		*orr_codec;
-	pthread_spinlock_t		 orr_spin;
+	pthread_mutex_t			 orr_mutex;
 	/* target bitmap, one bit for each target (from first data cell to last
 	 * parity cell.
 	 */
@@ -148,8 +151,9 @@ struct obj_reasb_req {
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
-	/* object ID */
-	daos_obj_id_t			 orr_oid;
+	/* parity recx list (to compare parity ext/epoch when data recovery) */
+	struct daos_recx_ep_list	*orr_parity_lists;
+	uint32_t			 orr_parity_list_nr;
 	/* #iods of IO req */
 	uint32_t			 orr_iod_nr;
 	/* for data recovery flag */
@@ -269,6 +273,20 @@ migrate_pool_tls_destroy(struct migrate_pool_tls *tls);
  */
 #define NR_LATENCY_BUCKETS 16
 
+struct obj_pool_metrics {
+	/** Count number of total per-opcode requests (type = counter) */
+	struct d_tm_node_t	*opm_total[OBJ_PROTO_CLI_COUNT];
+	/** Total number of bytes fetched (type = counter) */
+	struct d_tm_node_t	*opm_fetch_bytes;
+	/** Total number of bytes updated (type = counter) */
+	struct d_tm_node_t	*opm_update_bytes;
+
+	/** Total number of silently restarted updates (type = counter) */
+	struct d_tm_node_t	*opm_update_restart;
+	/** Total number of resent update operations (type = counter) */
+	struct d_tm_node_t	*opm_update_resent;
+};
+
 struct obj_tls {
 	d_sg_list_t		ot_echo_sgl;
 	d_list_t		ot_pool_list;
@@ -277,22 +295,10 @@ struct obj_tls {
 	struct d_tm_node_t	*ot_op_lat[OBJ_PROTO_CLI_COUNT];
 	/** Count number of per-opcode active requests (type = gauge) */
 	struct d_tm_node_t	*ot_op_active[OBJ_PROTO_CLI_COUNT];
-	/** Count number of total per-opcode requests (type = counter) */
-	struct d_tm_node_t	*ot_op_total[OBJ_PROTO_CLI_COUNT];
 
 	/** Measure update/fetch latency based on I/O size (type = gauge) */
 	struct d_tm_node_t	*ot_update_lat[NR_LATENCY_BUCKETS];
 	struct d_tm_node_t	*ot_fetch_lat[NR_LATENCY_BUCKETS];
-
-	/** Total number of bytes fetched (type = counter) */
-	struct d_tm_node_t	*ot_fetch_bytes;
-	/** Total number of bytes updated (type = counter) */
-	struct d_tm_node_t	*ot_update_bytes;
-
-	/** Total number of silently restarted updates (type = counter) */
-	struct d_tm_node_t	*ot_update_restart;
-	/** Total number of resent update operations (type = counter) */
-	struct d_tm_node_t	*ot_update_resent;
 };
 
 struct obj_ec_parity {
@@ -369,6 +375,7 @@ struct shard_list_args {
 
 struct obj_auxi_list_recx {
 	daos_recx_t	recx;
+	daos_epoch_t	recx_eph;
 	d_list_t	recx_list;
 };
 
@@ -386,7 +393,7 @@ struct obj_auxi_list_obj_enum {
 };
 
 int
-merge_recx(d_list_t *head, uint64_t offset, uint64_t size);
+merge_recx(d_list_t *head, uint64_t offset, uint64_t size, daos_epoch_t eph);
 
 struct ec_bulk_spec {
 	uint64_t is_skip:	1;
@@ -453,6 +460,7 @@ struct dc_obj_verify_args {
 	char				*list_buf;
 	char				*fetch_buf;
 	char				 inline_buf[DOVA_BUF_LEN];
+	uint32_t			 current_shard;
 	struct dc_obj_verify_cursor	 cursor;
 };
 
@@ -496,10 +504,10 @@ int dc_obj_shard_sync(struct dc_obj_shard *shard, enum obj_rpc_opc opc,
 int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 		      uint32_t rdg_idx, uint32_t reps, daos_epoch_t epoch);
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
-int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard,
-		      daos_recx_t **recxs_p, unsigned int *nr);
-int obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
-		       uint32_t iod_nr, struct daos_oclass_attr *oca);
+int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
+		      daos_epoch_t **recx_ephs_p, unsigned int *nr, bool convert_parity);
+int obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj,
+		       daos_iod_t *iods, uint32_t iod_nr, struct daos_oclass_attr *oca);
 void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,
@@ -511,13 +519,13 @@ int obj_shard_open(struct dc_object *obj, unsigned int shard,
 		   unsigned int map_ver, struct dc_obj_shard **shard_ptr);
 int obj_dkey2grpidx(struct dc_object *obj, uint64_t hash, unsigned int map_ver);
 int obj_pool_query_task(tse_sched_t *sched, struct dc_object *obj,
-			tse_task_t **taskp);
+			unsigned int map_ver, tse_task_t **taskp);
 bool obj_csum_dedup_candidate(struct cont_props *props, daos_iod_t *iods,
 			      uint32_t iod_nr);
 
 #define obj_shard_close(shard)	dc_obj_shard_close(shard)
-int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard,
-			   daos_recx_t **recxs_p, unsigned int *iod_nr);
+int obj_recx_ec_daos2shard(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
+			   daos_epoch_t **recx_ephs_p, unsigned int *iod_nr);
 int obj_ec_singv_encode_buf(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
 			    daos_iod_t *iod, d_sg_list_t *sgl, d_iov_t *e_iov);
 int obj_ec_singv_split(daos_unit_oid_t oid, struct daos_oclass_attr *oca,
@@ -543,7 +551,7 @@ obj_retry_error(int err)
 	return err == -DER_TIMEDOUT || err == -DER_STALE ||
 	       err == -DER_INPROGRESS || err == -DER_GRPVER ||
 	       err == -DER_EXCLUDED || err == -DER_CSUM ||
-	       err == -DER_TX_BUSY ||
+	       err == -DER_TX_BUSY || err == -DER_TX_UNCERTAIN ||
 	       daos_crt_network_error(err);
 }
 

@@ -196,7 +196,7 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	    cur_ctx_num >= max_ctx_num) {
 		D_ERROR("Number of active contexts (%d) reached limit (%d).\n",
 			cur_ctx_num, max_ctx_num);
-		D_GOTO(out, -DER_AGAIN);
+		D_GOTO(out, rc = -DER_AGAIN);
 	}
 
 	D_ALLOC_PTR(ctx);
@@ -242,29 +242,31 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 	/** initialize sensors */
 	if (crt_gdata.cg_use_sensors) {
 		int	ret;
+		char	*prov;
 
+		prov = crt_provider_name_get(ctx->cc_hg_ctx.chc_provider);
 		ret = d_tm_add_metric(&ctx->cc_timedout, D_TM_COUNTER,
 				      "Total number of timed out RPC requests",
-				      "", "net/%d/%u/req_timeout",
-				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
+				      "reqs", "net/%s/req_timeout/ctx_%u",
+				      prov, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create timed out req counter: "DF_RC
 			       "\n", DP_RC(ret));
 
 		ret = d_tm_add_metric(&ctx->cc_timedout_uri, D_TM_COUNTER,
 				      "Total number of timed out URI lookup "
-				      "requests", "",
-				      "net/%d/%u/uri_lookup_timeout",
-				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
+				      "requests", "reqs",
+				      "net/%s/uri_lookup_timeout/ctx_%u",
+				      prov, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create timed out uri req counter: "
 			       DF_RC"\n", DP_RC(ret));
 
 		ret = d_tm_add_metric(&ctx->cc_failed_addr, D_TM_COUNTER,
 				      "Total number of failed address "
-				      "resolution attempts", "",
-				      "net/%d/%u/failed_addr",
-				      ctx->cc_hg_ctx.chc_provider, ctx->cc_idx);
+				      "resolution attempts", "reqs",
+				      "net/%s/failed_addr/ctx_%u",
+				      prov, ctx->cc_idx);
 		if (ret)
 			D_WARN("Failed to create failed addr counter: "DF_RC
 			       "\n", DP_RC(ret));
@@ -279,6 +281,20 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 			crt_context_destroy(ctx, true);
 			D_GOTO(out, rc);
 		}
+
+		if (provider == CRT_NA_OFI_SOCKETS || provider == CRT_NA_OFI_TCP_RXM) {
+			struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
+			struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
+
+			D_DEBUG(DB_TRACE, "Slow network provider is detected, "
+					  "increase SWIM timeouts by twice.\n");
+
+			swim_suspect_timeout_set(swim_suspect_timeout_get() * 2);
+			swim_ping_timeout_set(swim_ping_timeout_get() * 2);
+			swim_period_set(swim_period_get() * 2);
+			csm->csm_ctx->sc_default_ping_timeout *= 2;
+		}
+
 	}
 
 	*crt_ctx = (crt_context_t)ctx;
@@ -312,10 +328,32 @@ crt_context_register_rpc_task(crt_context_t ctx, crt_rpc_task_t process_cb,
 	return 0;
 }
 
+bool
+crt_rpc_completed(struct crt_rpc_priv *rpc_priv)
+{
+	bool	rc = false;
+
+	D_SPIN_LOCK(&rpc_priv->crp_lock);
+	if (rpc_priv->crp_completed) {
+		rc = true;
+	} else {
+		rpc_priv->crp_completed = 1;
+		rc = false;
+	}
+	D_SPIN_UNLOCK(&rpc_priv->crp_lock);
+
+	return rc;
+}
+
 void
 crt_rpc_complete(struct crt_rpc_priv *rpc_priv, int rc)
 {
 	D_ASSERT(rpc_priv != NULL);
+
+	if (crt_rpc_completed(rpc_priv)) {
+		RPC_ERROR(rpc_priv, "already completed, possibly due to duplicated completions.\n");
+		return;
+	}
 
 	if (rc == -DER_CANCELED)
 		rpc_priv->crp_state = RPC_STATE_CANCELED;
@@ -371,6 +409,13 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	D_ASSERT(rlink != NULL);
 	D_ASSERT(arg != NULL);
 	epi = epi_link2ptr(rlink);
+
+	/*
+	 * DAOS-7306: This mutex is needed in order to avoid double
+	 * completions that would happen otherwise. safe list processing
+	 * is not sufficient to avoid the race
+	 */
+	D_MUTEX_LOCK(&epi->epi_mutex);
 	ctx = epi->epi_ctx;
 	D_ASSERT(ctx != NULL);
 
@@ -394,6 +439,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 
 	/* abort RPCs in waitq */
 	msg_logged = false;
+
 	d_list_for_each_entry_safe(rpc_priv, rpc_next, &epi->epi_req_waitq,
 				   crp_epi_link) {
 		D_ASSERT(epi->epi_req_wait_num > 0);
@@ -444,9 +490,11 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 		    d_list_empty(&epi->epi_req_q)) {
 			wait = 0;
 		} else {
+			D_MUTEX_UNLOCK(&epi->epi_mutex);
 			D_MUTEX_UNLOCK(&ctx->cc_mutex);
 			rc = crt_progress(ctx, 1);
 			D_MUTEX_LOCK(&ctx->cc_mutex);
+			D_MUTEX_LOCK(&epi->epi_mutex);
 			if (rc != 0 && rc != -DER_TIMEDOUT) {
 				D_ERROR("crt_progress failed, rc %d.\n", rc);
 				break;
@@ -461,6 +509,7 @@ crt_ctx_epi_abort(d_list_t *rlink, void *arg)
 	}
 
 out:
+	D_MUTEX_UNLOCK(&epi->epi_mutex);
 	return rc;
 }
 

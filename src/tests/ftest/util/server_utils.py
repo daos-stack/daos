@@ -91,6 +91,7 @@ class DaosServerManager(SubprocessManager):
                 manage the YamlCommand defined through the "job" attribute.
                 Defaults to "Orterun".
         """
+        self.group = group
         server_command = get_server_command(
             group, svr_cert_dir, bin_dir, svr_config_file, svr_config_temp)
         super().__init__(server_command, manager)
@@ -287,6 +288,10 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
+        # Additionally try to prepare any discovered VMD NVMe devices.
+        if "True" in os.environ["DAOS_ENABLE_VMD"]:
+            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
+
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
             using_dcpm = self.manager.job.using_dcpm
@@ -389,6 +394,10 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.reset.value = True
         cmd.sub_command_class.sub_command_class.force.value = True
 
+        # Use VMD option when resetting storage if it's prepared with VMD.
+        if "True" in os.environ["DAOS_ENABLE_VMD"]:
+            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
+
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=120)
         if len(result) > 1 or 0 not in result:
@@ -418,6 +427,39 @@ class DaosServerManager(SubprocessManager):
 
         if cmd_list:
             pcmd(self._hosts, "; ".join(cmd_list), verbose)
+
+    def restart(self, hosts, wait=False):
+        """Restart the specified servers after a stop. The servers must
+           have been previously formatted and started.
+
+        Args:
+            hosts (list): List of servers to restart.
+            wait (bool): Whether or not to wait until the servers
+                         have joined.
+        """
+        orig_hosts = self.manager.hosts
+        self.manager.assign_hosts(hosts)
+        orig_pattern = self.manager.job.pattern
+        orig_count = self.manager.job.pattern_count
+        self.manager.job.update_pattern("normal", len(hosts))
+        try:
+            self.manager.run()
+
+            host_ranks = self.get_host_ranks(hosts)
+            self.update_expected_states(host_ranks , ["joined"])
+
+            if not wait:
+                return
+
+            # Loop until we get the expected states or the test times out.
+            while True:
+                status = self.verify_expected_states(show_logs=False)
+                if status["expected"]:
+                    break
+                time.sleep(1)
+        finally:
+            self.manager.assign_hosts(orig_hosts)
+            self.manager.job.update_pattern(orig_pattern, orig_count)
 
     def start(self):
         """Start the server through the job manager."""
@@ -624,6 +666,8 @@ class DaosServerManager(SubprocessManager):
             query_data = {"status": 1}
         if query_data["status"] == 0:
             if "response" in query_data and "members" in query_data["response"]:
+                if query_data["response"]["members"] is None:
+                    return data
                 for member in query_data["response"]["members"]:
                     host = member["fault_domain"].split(".")[0].replace("/", "")
                     if host in self._hosts:

@@ -4,13 +4,10 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
-
-
 import os
 import traceback
 
 from apricot import TestWithServers
-from test_utils_pool import TestPool
 from avocado.core.exceptions import TestFail
 
 
@@ -25,7 +22,9 @@ class SimpleCreateDeleteTest(TestWithServers):
         """
         Test basic pool creation.
 
-        :avocado: tags=all,pool,smoke,full_regression,tiny,simplecreate
+        :avocado: tags=all,full_regression
+        :avocado: tags=tiny
+        :avocado: tags=pool,smoke,simple_create
         """
         # Accumulate a list of pass/fail indicators representing what is
         # expected for each parameter then "and" them to determine the
@@ -47,7 +46,6 @@ class SimpleCreateDeleteTest(TestWithServers):
         expected_for_param.append(gidlist[1])
 
         setidlist = self.params.get("setname", '/run/tests/setnames/*')
-        setid = setidlist[0]
         expected_for_param.append(setidlist[1])
 
         expected_result = 'PASS'
@@ -56,15 +54,14 @@ class SimpleCreateDeleteTest(TestWithServers):
                 expected_result = 'FAIL'
                 break
 
+        self.add_pool(create=False)
+        self.pool.uid = uid
+        self.pool.gid = gid
+
         try:
-            self.pool = TestPool(self.context, self.get_dmg_command())
-            self.pool.get_params(self)
-            self.pool.uid = uid
-            self.pool.gid = gid
             self.pool.create()
             if expected_result == 'FAIL':
                 self.fail("Test was expected to fail but it passed.\n")
-
         except TestFail as exc:
             print(exc)
             print(traceback.format_exc())

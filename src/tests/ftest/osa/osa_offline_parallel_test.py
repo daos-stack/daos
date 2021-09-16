@@ -11,8 +11,8 @@ import copy
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
-from test_utils_pool import TestPool
 from command_utils import CommandFailure
+from test_utils_pool import TestPool, LabelGenerator
 from apricot import skipForTicket
 import queue
 
@@ -85,6 +85,7 @@ class OSAOfflineParallelTest(OSAUtils):
             oclass (str) : Daos object class (RP_2G1,etc)
         """
         # Create a pool
+        label_generator = LabelGenerator()
         pool = {}
         pool_uuid = []
         target_list = []
@@ -102,13 +103,17 @@ class OSAOfflineParallelTest(OSAUtils):
 
         test_seq = self.ior_test_sequence[0]
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context,
-                                 dmg_command=self.get_dmg_command())
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.get_dmg_command(),
+                label_generator=label_generator)
             pool[val].get_params(self)
             pool[val].create()
-            pool_uuid.append(pool[val].uuid)
             self.pool = pool[val]
+            pool_uuid.append(self.pool.uuid)
+            # Use only pool UUID while running the test.
+            self.pool.use_label = False
             self.pool.set_property("reclaim", "disabled")
+
             if data:
                 self.run_ior_thread("Write", oclass, test_seq)
                 if oclass != "S1":
@@ -178,25 +183,34 @@ class OSAOfflineParallelTest(OSAUtils):
                 self.fail("Test failed : {0}".format(failure))
 
         for val in range(0, num_pool):
+            self.pool = pool[val]
             display_string = "Pool{} space at the End".format(val)
-            pool[val].display_pool_daos_space(display_string)
+            self.pool.display_pool_daos_space(display_string)
             self.is_rebuild_done(3)
             self.assert_on_rebuild_failure()
             pver_end = self.get_pool_version()
             self.log.info("Pool Version at the End %s", pver_end)
-            self.assertTrue(pver_end >= 26,
-                            "Pool Version Error:  at the end")
-        if data:
-            self.run_ior_thread("Read", oclass, test_seq)
-            if oclass != "S1":
-                self.run_mdtest_thread()
-            self.container = self.pool_cont_dict[self.pool][0]
-            kwargs = {"pool": self.pool.uuid,
-                      "cont": self.container.uuid}
-            output = self.daos_command.container_check(**kwargs)
-            self.log.info(output)
+            if self.server_boot is True:
+                self.assertTrue(pver_end >= 17,
+                                "Pool Version Error:  at the end")
+            else:
+                self.assertTrue(pver_end >= 25,
+                                "Pool Version Error:  at the end")
 
-    @skipForTicket("DAOS-7247")
+
+        # Finally run IOR to read the data and perform daos_container_check
+        for val in range(0, num_pool):
+            self.pool = pool[val]
+            if data:
+                self.run_ior_thread("Read", oclass, test_seq)
+                if oclass != "S1":
+                    self.run_mdtest_thread()
+                self.container = self.pool_cont_dict[self.pool][0]
+                kwargs = {"pool": self.pool.uuid,
+                          "cont": self.container.uuid}
+                output = self.daos_command.container_check(**kwargs)
+                self.log.info(output)
+
     def test_osa_offline_parallel_test(self):
         """
         JIRA ID: DAOS-4752
@@ -211,7 +225,6 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test: Basic Test")
         self.run_offline_parallel_test(1, data=True)
 
-    @skipForTicket("DAOS-7247")
     def test_osa_offline_parallel_test_without_csum(self):
         """
         JIRA ID: DAOS-7161
@@ -229,7 +242,6 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test: Without Checksum")
         self.run_offline_parallel_test(1, data=True)
 
-    @skipForTicket("DAOS-7247")
     def test_osa_offline_parallel_test_rank_boot(self):
         """
         JIRA ID: DAOS-7161
@@ -267,7 +279,6 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test : Aggregation")
         self.run_offline_parallel_test(1, data=True)
 
-    @skipForTicket("DAOS-7247")
     def test_osa_offline_parallel_test_oclass(self):
         """
         JIRA ID: DAOS-7161

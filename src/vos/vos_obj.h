@@ -41,18 +41,14 @@ struct vos_object {
 	daos_handle_t			obj_toh;
 	/** btree iterator handle */
 	daos_handle_t			obj_ih;
-	/** epoch when the object(cache) is initialized */
-	daos_epoch_t			obj_epoch;
 	/** The latest sync epoch */
 	daos_epoch_t			obj_sync_epoch;
-	/** cached vos_obj_df::vo_incarnation, for revalidation. */
-	uint32_t			obj_incarnation;
-	/** nobody should access this object */
-	bool				obj_zombie;
 	/** Persistent memory address of the object */
 	struct vos_obj_df		*obj_df;
 	/** backref to container */
 	struct vos_container		*obj_cont;
+	/** nobody should access this object */
+	bool				obj_zombie;
 };
 
 enum {

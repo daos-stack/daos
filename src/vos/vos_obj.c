@@ -372,7 +372,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 		rc = vos_dtx_commit_internal(cont, dth->dth_dti_cos,
 					     dth->dth_dti_cos_count,
-					     0, NULL, daes, dces);
+					     0, false, NULL, daes, dces);
 		if (rc <= 0)
 			D_FREE(daes);
 	}
@@ -417,13 +417,14 @@ reset:
 	if (rc == 0) {
 		vos_ts_set_upgrade(ts_set);
 		if (daes != NULL) {
-			vos_dtx_post_handle(cont, daes, NULL,
-					    dth->dth_dti_cos_count, false);
+			vos_dtx_post_handle(cont, daes, dces,
+					    dth->dth_dti_cos_count,
+					    false, false);
 			dth->dth_cos_done = 1;
 		}
 	} else if (daes != NULL) {
-		vos_dtx_post_handle(cont, daes, dces, dth->dth_dti_cos_count,
-				    false);
+		vos_dtx_post_handle(cont, daes, dces,
+				    dth->dth_dti_cos_count, false, true);
 		dth->dth_cos_done = 1;
 	}
 
@@ -1812,6 +1813,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 	struct umem_instance	*umm;
 	struct vos_krec_df	*krec;
 	struct vos_object	*obj;
+	struct umem_attr	 uma;
 	daos_key_t		 key;
 	struct vos_rec_bundle	 rbund;
 	bool			 reprobe = false;
@@ -1854,8 +1856,11 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 				  iter->it_type == VOS_ITER_DKEY ?
 				  "akey" : "single value");
 		} else if (krec->kr_bmap & KREC_BF_EVT) {
-			D_ASSERTF(evt_is_empty(&krec->kr_evt),
-				  "Orphaned array value detected\n");
+			umem_attr_get(umm, &uma);
+			rc = evt_has_data(&krec->kr_evt, &uma);
+			if (rc < 0)
+				goto end;
+			D_ASSERTF(rc == 0, "Orphaned array value detected\n");
 		}
 		rc = dbtree_iter_delete(oiter->it_hdl, NULL);
 		D_ASSERT(rc != -DER_NONEXIST);
@@ -1865,6 +1870,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 		rc = 0;
 	}
 
+end:
 	rc = umem_tx_end(umm, rc);
 
 exit:

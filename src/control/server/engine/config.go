@@ -188,6 +188,10 @@ func (c *Config) Validate() error {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
+	if c.LogMask != "" {
+		return ValidateLogMasks(c.LogMask)
+	}
+
 	return nil
 }
 
@@ -297,6 +301,12 @@ func (c *Config) WithStorageConfigOutputPath(cfgPath string) *Config {
 // WithStorageVosEnv sets the VOS_BDEV_CLASS env variable.
 func (c *Config) WithStorageVosEnv(ve string) *Config {
 	c.Storage.VosEnv = ve
+	return c
+}
+
+// WithStorageEnableHotplug sets EnableHotplug in engine storage.
+func (c *Config) WithStorageEnableHotplug(enable bool) *Config {
+	c.Storage.EnableHotplug = enable
 	return c
 }
 

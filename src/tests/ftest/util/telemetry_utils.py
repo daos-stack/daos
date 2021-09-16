@@ -9,90 +9,330 @@ from ClusterShell.NodeSet import NodeSet
 
 
 class TelemetryUtils():
+    # pylint: disable=too-many-nested-blocks
     """Defines a object used to verify telemetry information."""
 
     ENGINE_CONTAINER_METRICS = [
-        "engine_container_ops_open_total",
-        "engine_container_ops_open_active",
-        "engine_container_ops_close_total",
-        "engine_container_ops_destroy_total"]
+        "engine_pool_container_handles",
+        "engine_pool_ops_cont_close",
+        "engine_pool_ops_cont_destroy",
+        "engine_pool_ops_cont_open"]
+    ENGINE_POOL_METRICS = [
+        "engine_pool_entries_dtx_batched_degree",
+        "engine_pool_entries_dtx_batched_total",
+        "engine_pool_ops_akey_enum",
+        "engine_pool_ops_akey_punch",
+        "engine_pool_ops_compound",
+        "engine_pool_ops_dkey_enum",
+        "engine_pool_ops_dkey_punch",
+        "engine_pool_ops_dtx_abort",
+        "engine_pool_ops_dtx_check",
+        "engine_pool_ops_dtx_commit",
+        "engine_pool_ops_dtx_refresh",
+        "engine_pool_ops_ec_agg",
+        "engine_pool_ops_ec_rep",
+        "engine_pool_ops_fetch",
+        "engine_pool_ops_key_query",
+        "engine_pool_ops_migrate",
+        "engine_pool_ops_obj_enum",
+        "engine_pool_ops_obj_punch",
+        "engine_pool_ops_obj_sync",
+        "engine_pool_ops_recx_enum",
+        "engine_pool_ops_tgt_akey_punch",
+        "engine_pool_ops_tgt_dkey_punch",
+        "engine_pool_ops_tgt_punch",
+        "engine_pool_ops_tgt_update",
+        "engine_pool_ops_update",
+        "engine_pool_pool_handles",
+        "engine_pool_resent",
+        "engine_pool_restarted",
+        "engine_pool_started_at",
+        "engine_pool_xferred_fetch",
+        "engine_pool_xferred_update"]
     ENGINE_EVENT_METRICS = [
         "engine_events_dead_ranks",
         "engine_events_last_event_ts",
         "engine_servicing_at",
         "engine_started_at"]
-    ENGINE_IO_METRICS = [
-        "engine_io_fetch_bytes",
-        "engine_io_fetch_latency",
+    ENGINE_IO_DTX_COMMITTABLE_METRICS = [
+        "engine_io_dtx_committable",
+        "engine_io_dtx_committable_max",
+        "engine_io_dtx_committable_mean",
+        "engine_io_dtx_committable_min",
+        "engine_io_dtx_committable_stddev"]
+    ENGINE_IO_DTX_COMMITTED_METRICS = [
+        "engine_io_dtx_committed",
+        "engine_io_dtx_committed_max",
+        "engine_io_dtx_committed_mean",
+        "engine_io_dtx_committed_min",
+        "engine_io_dtx_committed_stddev"]
+    ENGINE_IO_LATENCY_FETCH_METRICS = [
+        "engine_io_latency_fetch",
+        "engine_io_latency_fetch_max",
+        "engine_io_latency_fetch_mean",
+        "engine_io_latency_fetch_min",
+        "engine_io_latency_fetch_stddev"]
+    ENGINE_IO_LATENCY_UPDATE_METRICS = [
+        "engine_io_latency_update",
+        "engine_io_latency_update_max",
+        "engine_io_latency_update_mean",
+        "engine_io_latency_update_min",
+        "engine_io_latency_update_stddev"]
+    ENGINE_IO_OPS_AKEY_ENUM_METRICS = [
         "engine_io_ops_akey_enum_active",
+        "engine_io_ops_akey_enum_active_max",
+        "engine_io_ops_akey_enum_active_mean",
+        "engine_io_ops_akey_enum_active_min",
+        "engine_io_ops_akey_enum_active_stddev"]
+    ENGINE_IO_OPS_AKEY_ENUM_LATENCY_METRICS = [
         "engine_io_ops_akey_enum_latency",
-        "engine_io_ops_akey_enum_total",
+        "engine_io_ops_akey_enum_latency_max",
+        "engine_io_ops_akey_enum_latency_mean",
+        "engine_io_ops_akey_enum_latency_min",
+        "engine_io_ops_akey_enum_latency_stddev"]
+    ENGINE_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS = [
         "engine_io_ops_akey_punch_active",
+        "engine_io_ops_akey_punch_active_max",
+        "engine_io_ops_akey_punch_active_mean",
+        "engine_io_ops_akey_punch_active_min",
+        "engine_io_ops_akey_punch_active_stddev"]
+    ENGINE_IO_OPS_AKEY_PUNCH_LATENCY_METRICS = [
         "engine_io_ops_akey_punch_latency",
-        "engine_io_ops_akey_punch_total",
+        "engine_io_ops_akey_punch_latency_max",
+        "engine_io_ops_akey_punch_latency_mean",
+        "engine_io_ops_akey_punch_latency_min",
+        "engine_io_ops_akey_punch_latency_stddev"]
+    ENGINE_IO_OPS_COMPOUND_ACTIVE_METRICS = [
         "engine_io_ops_compound_active",
+        "engine_io_ops_compound_active_max",
+        "engine_io_ops_compound_active_mean",
+        "engine_io_ops_compound_active_min",
+        "engine_io_ops_compound_active_stddev"]
+    ENGINE_IO_OPS_COMPOUND_LATENCY_METRICS = [
         "engine_io_ops_compound_latency",
-        "engine_io_ops_compound_total",
+        "engine_io_ops_compound_latency_max",
+        "engine_io_ops_compound_latency_mean",
+        "engine_io_ops_compound_latency_min",
+        "engine_io_ops_compound_latency_stddev"]
+    ENGINE_IO_OPS_DKEY_ENUM_ACTIVE_METRICS = [
         "engine_io_ops_dkey_enum_active",
+        "engine_io_ops_dkey_enum_active_max",
+        "engine_io_ops_dkey_enum_active_mean",
+        "engine_io_ops_dkey_enum_active_min",
+        "engine_io_ops_dkey_enum_active_stddev"]
+    ENGINE_IO_OPS_DKEY_ENUM_LATENCY_METRICS = [
         "engine_io_ops_dkey_enum_latency",
-        "engine_io_ops_dkey_enum_total",
+        "engine_io_ops_dkey_enum_latency_max",
+        "engine_io_ops_dkey_enum_latency_mean",
+        "engine_io_ops_dkey_enum_latency_min",
+        "engine_io_ops_dkey_enum_latency_stddev"]
+    ENGINE_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS = [
         "engine_io_ops_dkey_punch_active",
+        "engine_io_ops_dkey_punch_active_max",
+        "engine_io_ops_dkey_punch_active_mean",
+        "engine_io_ops_dkey_punch_active_min",
+        "engine_io_ops_dkey_punch_active_stddev"]
+    ENGINE_IO_OPS_DKEY_PUNCH_LATENCY_METRICS = [
         "engine_io_ops_dkey_punch_latency",
-        "engine_io_ops_dkey_punch_total",
-        "engine_io_ops_dtx_abort_total_cnt",
-        "engine_io_ops_dtx_check_total_cnt",
-        "engine_io_ops_dtx_commit_total_cnt",
-        "engine_io_ops_dtx_refresh_total_cnt",
+        "engine_io_ops_dkey_punch_latency_max",
+        "engine_io_ops_dkey_punch_latency_mean",
+        "engine_io_ops_dkey_punch_latency_min",
+        "engine_io_ops_dkey_punch_latency_stddev"]
+    ENGINE_IO_OPS_EC_AGG_ACTIVE_METRICS = [
         "engine_io_ops_ec_agg_active",
+        "engine_io_ops_ec_agg_active_max",
+        "engine_io_ops_ec_agg_active_mean",
+        "engine_io_ops_ec_agg_active_min",
+        "engine_io_ops_ec_agg_active_stddev"]
+    ENGINE_IO_OPS_EC_AGG_LATENCY_METRICS = [
         "engine_io_ops_ec_agg_latency",
-        "engine_io_ops_ec_agg_total",
+        "engine_io_ops_ec_agg_latency_max",
+        "engine_io_ops_ec_agg_latency_mean",
+        "engine_io_ops_ec_agg_latency_min",
+        "engine_io_ops_ec_agg_latency_stddev"]
+    ENGINE_IO_OPS_EC_REP_ACTIVE_METRICS = [
         "engine_io_ops_ec_rep_active",
+        "engine_io_ops_ec_rep_active_max",
+        "engine_io_ops_ec_rep_active_mean",
+        "engine_io_ops_ec_rep_active_min",
+        "engine_io_ops_ec_rep_active_stddev"]
+    ENGINE_IO_OPS_EC_REP_LATENCY_METRICS = [
         "engine_io_ops_ec_rep_latency",
-        "engine_io_ops_ec_rep_total",
+        "engine_io_ops_ec_rep_latency_max",
+        "engine_io_ops_ec_rep_latency_mean",
+        "engine_io_ops_ec_rep_latency_min",
+        "engine_io_ops_ec_rep_latency_stddev"]
+    ENGINE_IO_OPS_FETCH_ACTIVE_METRICS = [
         "engine_io_ops_fetch_active",
-        "engine_io_ops_fetch_total",
+        "engine_io_ops_fetch_active_max",
+        "engine_io_ops_fetch_active_mean",
+        "engine_io_ops_fetch_active_min",
+        "engine_io_ops_fetch_active_stddev"]
+    ENGINE_IO_OPS_KEY_QUERY_ACTIVE_METRICS = [
         "engine_io_ops_key_query_active",
+        "engine_io_ops_key_query_active_max",
+        "engine_io_ops_key_query_active_mean",
+        "engine_io_ops_key_query_active_min",
+        "engine_io_ops_key_query_active_stddev"]
+    ENGINE_IO_OPS_KEY_QUERY_LATENCY_METRICS = [
         "engine_io_ops_key_query_latency",
-        "engine_io_ops_key_query_total",
+        "engine_io_ops_key_query_latency_max",
+        "engine_io_ops_key_query_latency_mean",
+        "engine_io_ops_key_query_latency_min",
+        "engine_io_ops_key_query_latency_stddev"]
+    ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS = [
         "engine_io_ops_migrate_active",
+        "engine_io_ops_migrate_active_max",
+        "engine_io_ops_migrate_active_mean",
+        "engine_io_ops_migrate_active_min",
+        "engine_io_ops_migrate_active_stddev"]
+    ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS = [
         "engine_io_ops_migrate_latency",
-        "engine_io_ops_migrate_total",
+        "engine_io_ops_migrate_latency_max",
+        "engine_io_ops_migrate_latency_mean",
+        "engine_io_ops_migrate_latency_min",
+        "engine_io_ops_migrate_latency_stddev"]
+    ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS = [
         "engine_io_ops_obj_enum_active",
+        "engine_io_ops_obj_enum_active_max",
+        "engine_io_ops_obj_enum_active_mean",
+        "engine_io_ops_obj_enum_active_min",
+        "engine_io_ops_obj_enum_active_stddev"]
+    ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS = [
         "engine_io_ops_obj_enum_latency",
-        "engine_io_ops_obj_enum_total",
+        "engine_io_ops_obj_enum_latency_max",
+        "engine_io_ops_obj_enum_latency_mean",
+        "engine_io_ops_obj_enum_latency_min",
+        "engine_io_ops_obj_enum_latency_stddev"]
+    ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS = [
         "engine_io_ops_obj_punch_active",
+        "engine_io_ops_obj_punch_active_max",
+        "engine_io_ops_obj_punch_active_mean",
+        "engine_io_ops_obj_punch_active_min",
+        "engine_io_ops_obj_punch_active_stddev"]
+    ENGINE_IO_OPS_OBJ_PUNCH_LATENCY_METRICS = [
         "engine_io_ops_obj_punch_latency",
-        "engine_io_ops_obj_punch_total",
+        "engine_io_ops_obj_punch_latency_max",
+        "engine_io_ops_obj_punch_latency_mean",
+        "engine_io_ops_obj_punch_latency_min",
+        "engine_io_ops_obj_punch_latency_stddev"]
+    ENGINE_IO_OPS_OBJ_SYNC_ACTIVE_METRICS = [
         "engine_io_ops_obj_sync_active",
+        "engine_io_ops_obj_sync_active_max",
+        "engine_io_ops_obj_sync_active_mean",
+        "engine_io_ops_obj_sync_active_min",
+        "engine_io_ops_obj_sync_active_stddev"]
+    ENGINE_IO_OPS_OBJ_SYNC_LATENCY_METRICS = [
         "engine_io_ops_obj_sync_latency",
-        "engine_io_ops_obj_sync_total",
+        "engine_io_ops_obj_sync_latency_max",
+        "engine_io_ops_obj_sync_latency_mean",
+        "engine_io_ops_obj_sync_latency_min",
+        "engine_io_ops_obj_sync_latency_stddev"]
+    ENGINE_IO_OPS_RECX_ENUM_ACTIVE_METRICS = [
         "engine_io_ops_recx_enum_active",
+        "engine_io_ops_recx_enum_active_max",
+        "engine_io_ops_recx_enum_active_mean",
+        "engine_io_ops_recx_enum_active_min",
+        "engine_io_ops_recx_enum_active_stddev"]
+    ENGINE_IO_OPS_RECX_ENUM_LATENCY_METRICS = [
         "engine_io_ops_recx_enum_latency",
-        "engine_io_ops_recx_enum_total",
+        "engine_io_ops_recx_enum_latency_max",
+        "engine_io_ops_recx_enum_latency_mean",
+        "engine_io_ops_recx_enum_latency_min",
+        "engine_io_ops_recx_enum_latency_stddev"]
+    ENGINE_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS = [
         "engine_io_ops_tgt_akey_punch_active",
+        "engine_io_ops_tgt_akey_punch_active_max",
+        "engine_io_ops_tgt_akey_punch_active_mean",
+        "engine_io_ops_tgt_akey_punch_active_min",
+        "engine_io_ops_tgt_akey_punch_active_stddev"]
+    ENGINE_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS = [
         "engine_io_ops_tgt_akey_punch_latency",
-        "engine_io_ops_tgt_akey_punch_total",
+        "engine_io_ops_tgt_akey_punch_latency_max",
+        "engine_io_ops_tgt_akey_punch_latency_mean",
+        "engine_io_ops_tgt_akey_punch_latency_min",
+        "engine_io_ops_tgt_akey_punch_latency_stddev"]
+    ENGINE_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS = [
         "engine_io_ops_tgt_dkey_punch_active",
+        "engine_io_ops_tgt_dkey_punch_active_max",
+        "engine_io_ops_tgt_dkey_punch_active_mean",
+        "engine_io_ops_tgt_dkey_punch_active_min",
+        "engine_io_ops_tgt_dkey_punch_active_stddev"]
+    ENGINE_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS = [
         "engine_io_ops_tgt_dkey_punch_latency",
-        "engine_io_ops_tgt_dkey_punch_total",
+        "engine_io_ops_tgt_dkey_punch_latency_max",
+        "engine_io_ops_tgt_dkey_punch_latency_mean",
+        "engine_io_ops_tgt_dkey_punch_latency_min",
+        "engine_io_ops_tgt_dkey_punch_latency_stddev"]
+    ENGINE_IO_OPS_TGT_PUNCH_ACTIVE_METRICS = [
         "engine_io_ops_tgt_punch_active",
+        "engine_io_ops_tgt_punch_active_max",
+        "engine_io_ops_tgt_punch_active_mean",
+        "engine_io_ops_tgt_punch_active_min",
+        "engine_io_ops_tgt_punch_active_stddev"]
+    ENGINE_IO_OPS_TGT_PUNCH_LATENCY_METRICS = [
         "engine_io_ops_tgt_punch_latency",
-        "engine_io_ops_tgt_punch_total",
+        "engine_io_ops_tgt_punch_latency_max",
+        "engine_io_ops_tgt_punch_latency_mean",
+        "engine_io_ops_tgt_punch_latency_min",
+        "engine_io_ops_tgt_punch_latency_stddev"]
+    ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS = [
         "engine_io_ops_tgt_update_active",
-        "engine_io_ops_tgt_update_total",
+        "engine_io_ops_tgt_update_active_max",
+        "engine_io_ops_tgt_update_active_mean",
+        "engine_io_ops_tgt_update_active_min",
+        "engine_io_ops_tgt_update_active_stddev"]
+    ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS = [
         "engine_io_ops_update_active",
-        "engine_io_ops_update_resent",
-        "engine_io_ops_update_restarted",
-        "engine_io_ops_update_total",
-        "engine_io_update_bytes",
-        "engine_io_update_latency"]
+        "engine_io_ops_update_active_max",
+        "engine_io_ops_update_active_mean",
+        "engine_io_ops_update_active_min",
+        "engine_io_ops_update_active_stddev"]
+    ENGINE_IO_METRICS = ENGINE_IO_DTX_COMMITTABLE_METRICS +\
+        ENGINE_IO_DTX_COMMITTED_METRICS +\
+        ENGINE_IO_LATENCY_FETCH_METRICS +\
+        ENGINE_IO_LATENCY_UPDATE_METRICS +\
+        ENGINE_IO_OPS_AKEY_ENUM_METRICS +\
+        ENGINE_IO_OPS_AKEY_ENUM_LATENCY_METRICS +\
+        ENGINE_IO_OPS_AKEY_PUNCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_AKEY_PUNCH_LATENCY_METRICS +\
+        ENGINE_IO_OPS_COMPOUND_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_COMPOUND_LATENCY_METRICS +\
+        ENGINE_IO_OPS_DKEY_ENUM_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_DKEY_ENUM_LATENCY_METRICS +\
+        ENGINE_IO_OPS_DKEY_PUNCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_DKEY_PUNCH_LATENCY_METRICS +\
+        ENGINE_IO_OPS_EC_AGG_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_EC_AGG_LATENCY_METRICS +\
+        ENGINE_IO_OPS_EC_REP_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_EC_REP_LATENCY_METRICS +\
+        ENGINE_IO_OPS_FETCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_KEY_QUERY_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_KEY_QUERY_LATENCY_METRICS +\
+        ENGINE_IO_OPS_MIGRATE_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_MIGRATE_LATENCY_METRICS +\
+        ENGINE_IO_OPS_OBJ_ENUM_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_OBJ_ENUM_LATENCY_METRICS +\
+        ENGINE_IO_OPS_OBJ_PUNCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_OBJ_PUNCH_LATENCY_METRICS +\
+        ENGINE_IO_OPS_OBJ_SYNC_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_OBJ_SYNC_LATENCY_METRICS +\
+        ENGINE_IO_OPS_RECX_ENUM_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_RECX_ENUM_LATENCY_METRICS +\
+        ENGINE_IO_OPS_TGT_AKEY_PUNCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_TGT_AKEY_PUNCH_LATENCY_METRICS +\
+        ENGINE_IO_OPS_TGT_DKEY_PUNCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_TGT_DKEY_PUNCH_LATENCY_METRICS +\
+        ENGINE_IO_OPS_TGT_PUNCH_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_TGT_PUNCH_LATENCY_METRICS +\
+        ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
+        ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
-        "engine_net_failed_addr",
-        "engine_net_req_timeout",
+        "engine_net_ofi_sockets_failed_addr",
+        "engine_net_ofi_sockets_req_timeout",
+        "engine_net_ofi_sockets_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
-        "engine_net_uri_lookup_self",
-        "engine_net_uri_lookup_timeout",
-        "engine_pool_ops_open_active"]
+        "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
         "engine_rank"]
     GO_METRICS = [
@@ -189,24 +429,26 @@ class TelemetryUtils():
         self.dmg = dmg
         self.hosts = NodeSet.fromlist(servers)
 
-    def get_all_server_metrics_names(self, server):
+    def get_all_server_metrics_names(self, server, with_pools=False):
         """Get all the telemetry metrics names for this server.
 
         Args:
             server (DaosServerCommand): the server from which to determine what
-                NVMe metrics will be available
+                metrics will be available
 
         Returns:
             list: all of the telemetry metrics names for this server
 
         """
-        all_metrics_names = list(self.ENGINE_CONTAINER_METRICS)
-        all_metrics_names.extend(self.ENGINE_EVENT_METRICS)
+        all_metrics_names = list(self.ENGINE_EVENT_METRICS)
         all_metrics_names.extend(self.ENGINE_IO_METRICS)
         all_metrics_names.extend(self.ENGINE_NET_METRICS)
         all_metrics_names.extend(self.ENGINE_RANK_METRICS)
         all_metrics_names.extend(self.GO_METRICS)
         all_metrics_names.extend(self.PROCESS_METRICS)
+        if with_pools:
+            all_metrics_names.extend(self.ENGINE_POOL_METRICS)
+            all_metrics_names.extend(self.ENGINE_CONTAINER_METRICS)
 
         # Add NVMe metrics for any NVMe devices configured for this server
         for nvme_list in server.manager.job.get_engine_values("bdev_list"):
@@ -287,6 +529,71 @@ class TelemetryUtils():
                         data[host][name] = metric["value"]
         return data
 
+    def get_io_metrics(self, test_metrics=None):
+        """Get the io telemetry metrics.
+
+        Args:
+            test_metrics (str list, optional): Comma-separated list of metric
+                names to query. By default, test_metrics is entire
+                ENGINE_IO_METRICS.
+
+        Returns:
+            dict: dictionary of dictionaries of container metric names and
+                values per server host key
+
+        """
+        data = {}
+        if test_metrics is None:
+            info = self.get_metrics(",".join(self.ENGINE_IO_METRICS))
+        else:
+            info = self.get_metrics(",".join(test_metrics))
+        self.log.info("I/O Telemetry Information")
+        for name in self.ENGINE_IO_METRICS:
+            for index, host in enumerate(info):
+                if name in info[host]:
+                    if index == 0:
+                        self.log.info(
+                            "  %s (%s):",
+                            name, info[host][name]["description"])
+                        self.log.info(
+                            "    %-12s %-4s %-6s %-6s %s",
+                            "Host", "Rank", "Target", "Size", "Value")
+                    if name not in data:
+                        data[name] = {}
+                    if host not in data[name]:
+                        data[name][host] = {}
+                    for metric in info[host][name]["metrics"]:
+                        if "labels" in metric:
+                            if ("rank" in metric["labels"]
+                                    and "target" in metric["labels"]
+                                    and "size" in metric["labels"]):
+                                rank = metric["labels"]["rank"]
+                                target = metric["labels"]["target"]
+                                size = metric["labels"]["size"]
+                                if rank not in data[name][host]:
+                                    data[name][host][rank] = {}
+                                if target not in data[name][host][rank]:
+                                    data[name][host][rank][target] = {}
+                                data[name][host][rank][target][size] = \
+                                    metric["value"]
+                                self.log.info(
+                                    "    %-12s %-4s %-6s %-6s %s",
+                                    host, rank, target, size, metric["value"])
+                            elif ("rank" in metric["labels"]
+                                    and "target" in metric["labels"]):
+                                rank = metric["labels"]["rank"]
+                                target = metric["labels"]["target"]
+                                if rank not in data[name][host]:
+                                    data[name][host][rank] = {}
+                                if target not in data[name][host][rank]:
+                                    data[name][host][rank][target] = {}
+                                data[name][host][rank][target]["-"] = \
+                                    metric["value"]
+                                self.log.info(
+                                    "    %-12s %-4s %-6s %-6s %s",
+                                    host, rank, target, "-", metric["value"])
+        return data
+
     def check_container_metrics(self, open_count=None, active_count=None,
                                 close_count=None, destroy_count=None):
         """Verify the container telemetry metrics.
@@ -307,14 +614,14 @@ class TelemetryUtils():
         """
         errors = []
         expected = {
-            "engine_container_ops_open_total": open_count,
-            "engine_container_ops_open_active": active_count,
-            "engine_container_ops_close_total": close_count,
-            "engine_container_ops_destroy_total": destroy_count,
+            "engine_pool_ops_cont_open": open_count,
+            "engine_pool_container_handles": active_count,
+            "engine_pool_ops_cont_close": close_count,
+            "engine_pool_ops_cont_destroy": destroy_count,
         }
         data = self.get_container_metrics()
         for host in data:
-            for name in self.ENGINE_CONTAINER_METRICS:
+            for name in expected:
                 if name in data[host]:
                     if (expected[name] is not None
                             and host in expected[name]

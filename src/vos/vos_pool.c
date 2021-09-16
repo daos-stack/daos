@@ -696,6 +696,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 		D_GOTO(failed, rc);
 	}
 
+	pool->vp_dtx_committed_count = 0;
 	pool->vp_pool_df = pool_df;
 	pool->vp_opened = 1;
 	pool->vp_excl = !!(flags & VOS_POF_EXCL);

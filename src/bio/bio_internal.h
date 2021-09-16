@@ -11,6 +11,7 @@
 #include <daos_srv/bio.h>
 #include <gurt/telemetry_common.h>
 #include <gurt/telemetry_producer.h>
+#include <spdk/env.h>
 #include <spdk/bdev.h>
 #include <spdk/thread.h>
 
@@ -115,28 +116,28 @@ struct bio_dma_buffer {
 	  "data units", D_TM_COUNTER)					\
 	X(bdh_write_cmds, "commands/host_write_cmds",			\
 	  "number of write commands completed by to the controller",	\
-	  "commands", D_TM_COUNTER)					\
+	  "cmds", D_TM_COUNTER)						\
 	X(bdh_read_cmds, "commands/host_read_cmds",			\
 	  "number of read commands completed by to the controller",	\
-	  "commands", D_TM_COUNTER)					\
+	  "cmds", D_TM_COUNTER)						\
 	X(bdh_ctrl_busy_time, "commands/ctrl_busy_time",		\
 	  "Amount of time the controller is busy with I/O commands",	\
 	  "minutes", D_TM_COUNTER)					\
 	X(bdh_media_errs, "commands/media_errs",			\
 	  "Number of unrecovered data integrity error",			\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_read_errs, "commands/read_errs",				\
-	  "Number of errors reported to the engine on read commands",      \
-	  "errors", D_TM_COUNTER)					\
+	  "Number of errors reported to the engine on read commands",	\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_write_errs, "commands/write_errs",			\
-	  "Number of errors reported to the engine on write commands",     \
-	  "errors", D_TM_COUNTER)					\
+	  "Number of errors reported to the engine on write commands",	\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_unmap_errs, "commands/unmap_errs",			\
 	  "Number of errors reported to the engine on unmap/trim commands",\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_checksum_errs, "commands/checksum_mismatch",		\
 	  "Number of checksum mismatch detected by the engine",		\
-	  "errors", D_TM_COUNTER)					\
+	  "errs", D_TM_COUNTER)						\
 	X(bdh_power_cycles, "power_cycles",				\
 	  "Number of power cycles",					\
 	  "cycles", D_TM_COUNTER)					\
@@ -148,7 +149,7 @@ struct bio_dma_buffer {
 	  "shutdowns", D_TM_COUNTER)					\
 	X(bdh_temp, "temp/current",					\
 	  "Current SSD temperature",					\
-	  "kelvin", D_TM_GAUGE)						\
+	  "kelvins", D_TM_GAUGE)					\
 	X(bdh_temp_warn, "temp/warn",					\
 	  "Set to 1 if temperature is above threshold",			\
 	  "", D_TM_GAUGE)						\
@@ -502,6 +503,7 @@ struct bio_bdev *lookup_dev_by_id(uuid_t dev_id);
 void setup_bio_bdev(void *arg);
 void destroy_bio_bdev(struct bio_bdev *d_bdev);
 void replace_bio_bdev(struct bio_bdev *old_dev, struct bio_bdev *new_dev);
+bool bypass_health_collect(void);
 
 /* bio_buffer.c */
 void dma_buffer_destroy(struct bio_dma_buffer *buf);
@@ -581,7 +583,7 @@ dump_dma_info(struct bio_dma_buffer *bdb)
 /* bio_monitor.c */
 int bio_init_health_monitoring(struct bio_blobstore *bb, char *bdev_name);
 void bio_fini_health_monitoring(struct bio_blobstore *bb);
-void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now, bool bypass);
+void bio_bs_monitor(struct bio_xs_context *ctxt, uint64_t now);
 void bio_media_error(void *msg_arg);
 void bio_export_health_stats(struct bio_blobstore *bb, char *bdev_name);
 void bio_export_vendor_health_stats(struct bio_blobstore *bb, char *bdev_name);
@@ -599,4 +601,7 @@ int bio_bs_state_set(struct bio_blobstore *bbs, enum bio_bs_state new_state);
 void bio_led_event_monitor(struct bio_xs_context *ctxt, uint64_t now);
 int fill_in_traddr(struct bio_dev_info *b_info, char *dev_name);
 
+/* b<o_config.c */
+int bio_add_allowed_alloc(const char *json_config_file,
+			  struct spdk_env_opts *opts);
 #endif /* __BIO_INTERNAL_H__ */

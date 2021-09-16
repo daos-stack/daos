@@ -143,7 +143,6 @@ func parseOpts(args []string, opts *cliOptions, log *logging.LeveledLogger) erro
 	p := flags.NewParser(opts, flags.Default)
 	p.Name = "daos"
 	p.ShortDescription = "Command to manage DAOS pool/container/object"
-	p.Usage = "RESOURCE COMMAND [OPTIONS]"
 	p.LongDescription = `daos is a tool that can be used to manage/query pool content,
 create/query/manage/destroy a container inside a pool, copy data
 between a POSIX container and a POSIX filesystem, clone a DAOS container,

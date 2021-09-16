@@ -256,7 +256,13 @@ extern "C" {
 	       Failures exceed RF)					\
 	/** Re-fetch again, an internal error code used in EC deg-fetch */ \
 	ACTION(DER_FETCH_AGAIN,		(DER_ERR_DAOS_BASE + 32),	\
-	       Fetch again)
+	       Fetch again)						\
+	/** Hit uncertain DTX, may need to try with other replica. */	\
+	ACTION(DER_TX_UNCERTAIN,	(DER_ERR_DAOS_BASE + 33),	\
+	       TX status is uncertaion)					\
+	/** Communicatin issue with agent. */				\
+	ACTION(DER_AGENT_COMM,		(DER_ERR_DAOS_BASE + 34),	\
+		Agent communication error)
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

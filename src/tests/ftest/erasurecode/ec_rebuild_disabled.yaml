@@ -20,7 +20,7 @@ hosts:
     - client-A
     - client-B
     - client-C
-timeout: 900
+timeout: 2500
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -50,8 +50,8 @@ server_config:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 500G
-    nvme_size: 500G
+    scm_size: 25%
+    nvme_size: 93%
     svcn: 1
     control_method: dmg
     pool_query_timeout: 30
@@ -70,10 +70,10 @@ ior:
   repetitions: 1
   chunk_block_transfer_sizes:
    # [ChunkSize, BlocksSize, TransferSize]
-   - [32M, 128M, 8M]       #Full Striped
-   #- [32M, 128M, 2K]       #Patrtial Striped
+   - [32M, 128M, 8M]       # Full Striped
+   - [32M, 128M, 2K]       # Partial Striped
   objectclass:
-   dfs_oclass:
+   dfs_oclass_list:
     #- [EC_Object_Class, Minimum number of servers]
     - ["EC_2P1G1", 4]
     - ["EC_4P1G1", 6]

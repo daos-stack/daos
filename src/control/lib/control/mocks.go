@@ -9,7 +9,9 @@ package control
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
@@ -38,19 +40,23 @@ type (
 	// MockInvokerConfig defines the configured responses
 	// for a MockInvoker.
 	MockInvokerConfig struct {
-		Sys              string
-		UnaryError       error
-		UnaryResponse    *UnaryResponse
-		UnaryResponseSet []*UnaryResponse
-		HostResponses    HostResponseChan
+		Sys                 string
+		UnaryError          error
+		UnaryResponse       *UnaryResponse
+		UnaryResponseSet    []*UnaryResponse
+		UnaryResponseDelays [][]time.Duration
+		HostResponses       HostResponseChan
+		ReqTimeout          time.Duration
+		RetryTimeout        time.Duration
 	}
 
 	// MockInvoker implements the Invoker interface in order
 	// to enable unit testing of API functions.
 	MockInvoker struct {
-		log         debugLogger
-		cfg         MockInvokerConfig
-		invokeCount int
+		log              debugLogger
+		cfg              MockInvokerConfig
+		invokeCount      int
+		invokeCountMutex sync.RWMutex
 	}
 )
 
@@ -82,6 +88,15 @@ func (mi *MockInvoker) GetSystem() string {
 }
 
 func (mi *MockInvoker) InvokeUnaryRPC(ctx context.Context, uReq UnaryRequest) (*UnaryResponse, error) {
+	// Allow the test to override the timeouts set by the caller.
+	if mi.cfg.ReqTimeout > 0 {
+		uReq.SetTimeout(mi.cfg.ReqTimeout)
+	}
+	if mi.cfg.RetryTimeout > 0 {
+		if rReq, ok := uReq.(interface{ setRetryTimeout(time.Duration) }); ok {
+			rReq.setRetryTimeout(mi.cfg.RetryTimeout)
+		}
+	}
 	return invokeUnaryRPC(ctx, mi.log, mi, uReq, nil)
 }
 
@@ -93,9 +108,11 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 	responses := make(HostResponseChan)
 
 	ur := mi.cfg.UnaryResponse
+	mi.invokeCountMutex.RLock()
 	if len(mi.cfg.UnaryResponseSet) > mi.invokeCount {
 		ur = mi.cfg.UnaryResponseSet[mi.invokeCount]
 	}
+	mi.invokeCountMutex.RUnlock()
 	if ur == nil {
 		// If the config didn't define a response, just dummy one up for
 		// tests that don't care.
@@ -110,9 +127,23 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 		}
 	}
 
+	var invokeCount int
+	mi.invokeCountMutex.Lock()
 	mi.invokeCount++
-	go func() {
-		for _, hr := range ur.Responses {
+	invokeCount = mi.invokeCount
+	mi.invokeCountMutex.Unlock()
+	go func(invokeCount int) {
+		delayIdx := invokeCount - 1
+		for idx, hr := range ur.Responses {
+			var delay time.Duration
+			if len(mi.cfg.UnaryResponseDelays) > delayIdx &&
+				len(mi.cfg.UnaryResponseDelays[delayIdx]) > idx {
+				delay = mi.cfg.UnaryResponseDelays[delayIdx][idx]
+			}
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+
 			select {
 			case <-ctx.Done():
 				return
@@ -120,7 +151,7 @@ func (mi *MockInvoker) InvokeUnaryRPCAsync(ctx context.Context, uReq UnaryReques
 			}
 		}
 		close(responses)
-	}()
+	}(invokeCount)
 
 	return responses, nil
 }

@@ -62,7 +62,6 @@ type (
 		system.UnmountProvider
 		Mkfs(fsType, device string, force bool) error
 		Getfs(device string) (string, error)
-		GetfsUsage(string) (uint64, uint64, error)
 		Stat(string) (os.FileInfo, error)
 	}
 
@@ -126,6 +125,43 @@ func (dsp *defaultSystemProvider) checkDevice(device string) error {
 	return nil
 }
 
+func getDistroArgs() []string {
+	distro := system.GetDistribution()
+
+	// use stride option for SCM interleaved mode
+	// disable lazy initialization (hurts perf)
+	// discard is not needed/supported on SCM
+	opts := "stride=512,lazy_itable_init=0,lazy_journal_init=0,nodiscard"
+
+	// enable flex_bg to allow larger contiguous block allocation
+	// disable uninit_bg to initialize everything upfront
+	// disable resize to avoid GDT block allocations
+	// disable extra isize since we really have no use for this
+	feat := "flex_bg,^uninit_bg,^resize_inode,^extra_isize"
+
+	switch {
+	case distro.ID == "centos" && distro.Version.Major < 8:
+		// use strict minimum listed above here since that's
+		// the oldest distribution we support
+	default:
+		// packed_meta_blocks allows to group all data blocks together
+		opts += ",packed_meta_blocks=1"
+		// enable sparse_super2 since 2x superblock copies are enough
+		// disable csum since we have ECC already for SCM
+		// bigalloc is intentionally not used since some kernels don't support it
+		feat += ",sparse_super2,^metadata_csum"
+	}
+
+	return []string{
+		"-E", opts,
+		"-O", feat,
+		// each ext4 group is of size 32767 x 4KB = 128M
+		// pack 128 groups together to increase ability to use huge
+		// pages for a total virtual group size of 16G
+		"-G", "128",
+	}
+}
+
 // Mkfs attempts to create a filesystem of the supplied type, on the
 // supplied device.
 func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error {
@@ -142,6 +178,8 @@ func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 	// callback so that the user has some visibility into long-running
 	// format operations (very large devices).
 	args := []string{
+		// use quiet mode
+		"-q",
 		// use direct i/o to avoid polluting page cache
 		"-D",
 		// use DAOS label
@@ -150,19 +188,16 @@ func (dsp *defaultSystemProvider) Mkfs(fsType, device string, force bool) error 
 		"-m", "0",
 		// use largest possible block size
 		"-b", "4096",
-		// disable lazy initialization (hurts perf) and discard
-		"-E", "lazy_itable_init=0,lazy_journal_init=0,nodiscard",
-		// enable bigalloc to reduce metadata overhead
-		// enable flex_bg to allow larger contiguous block allocation
-		// disable uninit_bg to initialize everything upfront
-		"-O", "bigalloc,flex_bg,^uninit_bg",
-		// use 16M bigalloc cluster size
-		"-C", "16M",
-		// don't need that many inodes
-		"-i", "16777216",
-		// device always comes last
-		device,
+		// don't need large inode, 128B is enough
+		// since we don't use xattr
+		"-I", "128",
+		// reduce the inode per bytes ratio
+		// one inode for 64M is more than enough
+		"-i", "67108864",
 	}
+	args = append(args, getDistroArgs()...)
+	// string always comes last
+	args = append(args, []string{device}...)
 	if force {
 		args = append([]string{"-F"}, args...)
 	}
@@ -503,7 +538,7 @@ func (p *Provider) makeMountPath(path string, tgtUID, tgtGID int) error {
 	return nil
 }
 
-// storage.ScmFormat attempts to fulfill the specified SCM format request.
+// Format attempts to fulfill the specified SCM format request.
 func (p *Provider) Format(req storage.ScmFormatRequest) (*storage.ScmFormatResponse, error) {
 	check, err := p.CheckFormat(req)
 	if err != nil {
@@ -689,18 +724,4 @@ func (p *Provider) IsMounted(target string) (bool, error) {
 	}
 
 	return isMounted, err
-}
-
-// GetfsUsage returns space utilization info for a mount point.
-func (p *Provider) GetfsUsage(target string) (*storage.ScmMountPoint, error) {
-	total, avail, err := p.sys.GetfsUsage(target)
-	if err != nil {
-		return nil, err
-	}
-
-	return &storage.ScmMountPoint{
-		Path:       target,
-		TotalBytes: total,
-		AvailBytes: avail,
-	}, nil
 }

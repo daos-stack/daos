@@ -102,7 +102,10 @@ func TestSystem_Member_Convert(t *testing.T) {
 	if err := convert.Types(membersIn, &membersOut); err != nil {
 		t.Fatal(err)
 	}
-	AssertEqual(t, membersIn, membersOut, "")
+
+	if diff := cmp.Diff(membersIn, membersOut, memberCmpOpts...); diff != "" {
+		t.Fatalf("unexpected members: (-want, +got)\n%s\n", diff)
+	}
 }
 
 func TestSystem_MemberResult_Convert(t *testing.T) {

@@ -29,7 +29,7 @@ func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
@@ -57,6 +57,7 @@ type containerSnapshotDestroyCmd struct {
 
 	Epoch      uint64         `long:"epc" short:"e" description:"snapshot epoch to delete"`
 	EpochRange EpochRangeFlag `long:"epcrange" short:"r" description:"range of snapshot epochs to delete"`
+	Name       string         `long:"snap" short:"s" description:"snapshot name"`
 }
 
 func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
@@ -66,19 +67,45 @@ func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(nil)
+	switch {
+	case cmd.Name != "":
+		if cmd.EpochRange.Set {
+			return errors.New("cannot specify both snapshot name and epoch range")
+		}
+		if cmd.Epoch > 0 {
+			return errors.New("cannot specify both snapshot name and epoch")
+		}
+
+		ap.snapname_str = C.CString(cmd.Name)
+		defer freeString(ap.snapname_str)
+	case cmd.Epoch > 0:
+		if cmd.EpochRange.Set {
+			return errors.New("cannot specify both snapshot epoch and epoch range")
+		}
+		if cmd.Name != "" {
+			return errors.New("cannot specify both snapshot epoch and name")
+		}
+
+		ap.epc = C.uint64_t(cmd.Epoch)
+	case cmd.EpochRange.Set:
+		if cmd.Name != "" {
+			return errors.New("cannot specify both snapshot epoch range and name")
+		}
+		if cmd.Epoch > 0 {
+			return errors.New("cannot specify both snapshot epoch range and epoch")
+		}
+
+		ap.epcrange_begin = cmd.EpochRange.Begin
+		ap.epcrange_end = cmd.EpochRange.End
+	default:
+		return errors.New("must specify one of snapshot name or epoch or epoch range")
+	}
+
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-
-	if cmd.Epoch > 0 {
-		ap.epc = C.uint64_t(cmd.Epoch)
-	}
-	if cmd.EpochRange.Set {
-		ap.epcrange_begin = cmd.EpochRange.Begin
-		ap.epcrange_end = cmd.EpochRange.End
-	}
 
 	rc := C.cont_destroy_snap_hdlr(ap)
 	if err := daosError(rc); err != nil {
@@ -100,7 +127,7 @@ func (cmd *containerSnapshotListCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RO, ap)
 	if err != nil {
 		return err
 	}
@@ -130,7 +157,7 @@ func (cmd *containerSnapshotRollbackCmd) Execute(args []string) error {
 	}
 	defer deallocCmdArgs()
 
-	cleanup, err := cmd.resolveAndConnect(ap)
+	cleanup, err := cmd.resolveAndConnect(C.DAOS_COO_RW, ap)
 	if err != nil {
 		return err
 	}

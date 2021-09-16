@@ -490,6 +490,10 @@ iv_on_update_internal(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 		key.class_id, key.rank, dss_self_rank(),
 		invalidate ? "no" : "yes");
 output:
+	/* invalidate entry might require to delete entry after refresh */
+	if (entry && entry->iv_to_delete)
+		entry->iv_ref--; /* destroy in ivc_on_put */
+
 	ds_iv_ns_put(ns);
 	return rc;
 }
@@ -532,13 +536,29 @@ ivc_pre_cb(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 static int
 ivc_on_hash(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key, d_rank_t *root)
 {
-	struct ds_iv_key key;
+	struct ds_iv_ns		*ns = NULL;
+	struct ds_iv_key	key;
+	int			rc;
 
 	iv_key_unpack(&key, iv_key);
 	if (key.rank == ((d_rank_t)-1))
 		return -DER_NOTLEADER;
+
+	/* Check if it matches with current NS master */
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+
+	if (key.rank != ns->iv_master_rank) {
+		D_DEBUG(DB_MD, "key rank %d ns iv master rank %d\n",
+			key.rank, ns->iv_master_rank);
+		D_GOTO(out_put, rc = -DER_NOTLEADER);
+	}
+
 	*root = key.rank;
-	return 0;
+out_put:
+	ds_iv_ns_put(ns);
+	return rc;
 }
 
 static int
@@ -682,15 +702,9 @@ static void
 iv_ns_destroy_cb(crt_iv_namespace_t iv_ns, void *arg)
 {
 	struct ds_iv_ns		*ns = arg;
-	struct ds_iv_entry	*entry;
-	struct ds_iv_entry	*tmp;
 
+	D_ASSERT(d_list_empty(&ns->iv_entry_list));
 	d_list_del(&ns->iv_ns_link);
-	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
-		d_list_del(&entry->iv_link);
-		iv_entry_free(entry);
-	}
-
 	ABT_eventual_free(&ns->iv_done_eventual);
 	D_FREE(ns);
 }
@@ -816,6 +830,9 @@ ds_iv_ns_leader_stop(struct ds_iv_ns *ns)
 void
 ds_iv_ns_stop(struct ds_iv_ns *ns)
 {
+	struct ds_iv_entry *entry;
+	struct ds_iv_entry *tmp;
+
 	ns->iv_stop = 1;
 	ds_iv_ns_put(ns);
 	if (ns->iv_refcount > 1) {
@@ -827,6 +844,11 @@ ds_iv_ns_stop(struct ds_iv_ns *ns)
 		D_ASSERT(rc == ABT_SUCCESS);
 		D_DEBUG(DB_MGMT, DF_UUID" ns stopped\n",
 			DP_UUID(ns->iv_pool_uuid));
+	}
+
+	d_list_for_each_entry_safe(entry, tmp, &ns->iv_entry_list, iv_link) {
+		d_list_del(&entry->iv_link);
+		iv_entry_free(entry);
 	}
 }
 
@@ -1074,16 +1096,25 @@ retry:
 	rc = iv_op_internal(ns, _key, _value, sync, shortcut, opc);
 	if (retry && !ns->iv_stop &&
 	    (daos_rpc_retryable_rc(rc) || rc == -DER_NOTLEADER)) {
-		/* If the IV ns leader has been changed, then it will retry
-		 * in the mean time, it will rely on others to update the
-		 * ns for it.
-		 */
+		if (rc == -DER_NOTLEADER && key->rank != (d_rank_t)(-1) &&
+		    sync && (sync->ivs_mode == CRT_IV_SYNC_LAZY ||
+			     sync->ivs_mode == CRT_IV_SYNC_EAGER)) {
+			/* If leader has been changed, it does not need to
+			 * retry at all, because IV sync always start from
+			 * the leader.
+			 */
+			D_WARN("sync (class %d) leader changed\n", key->class_id);
+			return rc;
+		}
+
+		/* otherwise retry and wait for others to update the ns. */
 		D_WARN("retry upon %d for class %d opc %d\n", rc,
 		       key->class_id, opc);
 		/* Yield to avoid hijack the cycle if IV RPC is not sent */
 		ABT_thread_yield();
 		goto retry;
 	}
+
 	return rc;
 }
 

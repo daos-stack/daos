@@ -375,7 +375,6 @@ dfs_sys_test_readlink(void **state)
 	/** readlink on non-symlink */
 	rc = dfs_sys_readlink(dfs_sys_mt, file1, buf, &buf_size);
 	assert_int_equal(rc, EINVAL);
-	assert_int_equal(buf_size, -1);
 
 	/** readlink with NULL buffer */
 	rc = dfs_sys_readlink(dfs_sys_mt, sym1, buf, &buf_size);
@@ -508,13 +507,11 @@ dfs_sys_test_read_write(void **state)
 	got_size = buf_size;
 	rc = dfs_sys_write(dfs_sys_mt, obj, write_buf, 0, &got_size, NULL);
 	assert_int_equal(rc, EINVAL);
-	assert_int_equal(got_size, -1);
 
 	/** Try to read a dir*/
 	got_size = buf_size;
 	rc = dfs_sys_read(dfs_sys_mt, obj, read_buf, 0, &got_size, NULL);
 	assert_int_equal(rc, EINVAL);
-	assert_int_equal(got_size, -1);
 
 	/** Try to punch a dir */
 	rc = dfs_sys_punch(dfs_sys_mt, dir1, 0, buf_size);

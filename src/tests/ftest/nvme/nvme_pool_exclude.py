@@ -8,7 +8,7 @@ import time
 import random
 import threading
 
-from test_utils_pool import TestPool
+from test_utils_pool import TestPool, LabelGenerator
 from osa_utils import OSAUtils
 from write_host_file import write_host_file
 
@@ -50,6 +50,7 @@ class NvmePoolExclude(OSAUtils):
                            Defaults to None
         """
         # Create a pool
+        label_generator = LabelGenerator()
         pool = {}
         target_list = []
 
@@ -66,7 +67,9 @@ class NvmePoolExclude(OSAUtils):
         rank_list = list(range(1, exclude_servers))
 
         for val in range(0, num_pool):
-            pool[val] = TestPool(self.context, dmg_command=self.dmg_command)
+            pool[val] = TestPool(
+                context=self.context, dmg_command=self.dmg_command,
+                label_generator=label_generator)
             pool[val].get_params(self)
             pool[val].create()
             pool[val].set_property("reclaim", "disabled")

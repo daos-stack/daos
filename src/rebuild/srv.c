@@ -1726,19 +1726,27 @@ regenerate_task_of_type(struct ds_pool *pool, pool_comp_state_t match_states,
 
 /* Regenerate the rebuild tasks when changing the leader. */
 int
-ds_rebuild_regenerate_task(struct ds_pool *pool)
+ds_rebuild_regenerate_task(struct ds_pool *pool, daos_prop_t *prop)
 {
-	int rc;
+	struct daos_prop_entry	*entry;
+	int			rc = 0;
 
 	rebuild_gst.rg_abort = 0;
 
-	rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN, RB_OP_FAIL);
-	if (rc != 0)
-		return rc;
+	entry = daos_prop_entry_get(prop, DAOS_PROP_PO_SELF_HEAL);
+	D_ASSERT(entry != NULL);
+	if (entry->dpe_val & DAOS_SELF_HEAL_AUTO_REBUILD) {
+		rc = regenerate_task_of_type(pool, PO_COMP_ST_DOWN, RB_OP_FAIL);
+		if (rc != 0)
+			return rc;
 
-	rc = regenerate_task_of_type(pool, PO_COMP_ST_DRAIN, RB_OP_DRAIN);
-	if (rc != 0)
-		return rc;
+		rc = regenerate_task_of_type(pool, PO_COMP_ST_DRAIN, RB_OP_DRAIN);
+		if (rc != 0)
+			return rc;
+	} else {
+		D_DEBUG(DB_REBUILD, DF_UUID" self healing is disabled\n",
+			DP_UUID(pool->sp_uuid));
+	}
 
 	rc = regenerate_task_of_type(pool, PO_COMP_ST_UP, RB_OP_REINT);
 	if (rc != 0)

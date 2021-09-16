@@ -252,6 +252,8 @@ ds_rsvc_lookup(enum ds_rsvc_class_id class, d_iov_t *id,
 	d_list_t       *entry;
 	bool		nonexist = false;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry == NULL) {
 		char	       *path = NULL;
@@ -742,6 +744,8 @@ ds_rsvc_start_nodb(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid)
 	d_list_t		*entry;
 	int			 rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
 	entry = d_hash_rec_find(&rsvc_hash, id->iov_buf, id->iov_len);
 	if (entry != NULL) {
 		svc = rsvc_obj(entry);
@@ -790,6 +794,31 @@ out:
 	return rc;
 }
 
+int
+ds_rsvc_stop_nodb(enum ds_rsvc_class_id class, d_iov_t *id)
+{
+	struct ds_rsvc		*svc;
+	int			 rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
+
+	rc = ds_rsvc_lookup(class, id, &svc);
+	if (rc != 0)
+		return -DER_ALREADY;
+
+	d_hash_rec_delete_at(&rsvc_hash, &svc->s_entry);
+
+	ABT_mutex_lock(svc->s_mutex);
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+		drain_map_distd(svc);
+	ABT_mutex_unlock(svc->s_mutex);
+	if (rsvc_class(svc->s_class)->sc_map_dist != NULL)
+		fini_map_distd(svc);
+
+	ds_rsvc_put(svc);
+	return 0;
+}
+
 /**
  * Start a replicated service. If \a create is false, all remaining input
  * parameters are ignored; otherwise, create the replica first. If \a replicas
@@ -816,6 +845,8 @@ ds_rsvc_start(enum ds_rsvc_class_id class, d_iov_t *id, uuid_t db_uuid,
 	struct ds_rsvc_class	*impl;
 	d_list_t		*entry;
 	int			 rc;
+
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 
 	impl = rsvc_class(class);
 	if (!create) {
@@ -918,6 +949,7 @@ ds_rsvc_stop(enum ds_rsvc_class_id class, d_iov_t *id, bool destroy)
 	struct ds_rsvc		*svc;
 	int			 rc;
 
+	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	rc = ds_rsvc_lookup(class, id, &svc);
 	if (rc != 0)
 		return -DER_ALREADY;
@@ -1380,6 +1412,7 @@ rsvc_module_fini(void)
 	rsvc_hash_fini();
 	return 0;
 }
+
 struct dss_module rsvc_module = {
 	.sm_name	= "rsvc",
 	.sm_mod_id	= DAOS_RSVC_MODULE,

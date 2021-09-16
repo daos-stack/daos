@@ -155,16 +155,11 @@ RUN dnf -y upgrade && \
         patch \
         patchelf \
         pciutils \
-        python3-Cython \
         python3-devel \
         python3-distro \
         python3-junit_xml \
-        python3-numpy \
-        python3-paramiko \
         python3-pip \
-        python3-pylint \
         python3-pyxattr \
-        python3-requests \
         python3-tabulate \
         python3-scons \
         python3-yaml \
@@ -193,7 +188,7 @@ RUN mkdir -p /opt/daos /mnt/daos /var/run/daos_server /var/run/daos_agent &&   \
 # Longer term, we should upload our RPM build of this to the public packaging
 # site and install it by RPM, but for now, we'll just pip install it
 USER daos_server:daos_server
-RUN pip3 --no-cache-dir --disable-pip-version-check install --user pyelftools
+RUN python3 -m pip --no-cache-dir --disable-pip-version-check install --user pyelftools
 USER root:root
 
 ARG QUICKBUILD=false

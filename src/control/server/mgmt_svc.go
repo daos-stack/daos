@@ -30,7 +30,8 @@ type mgmtSvc struct {
 	events            *events.PubSub
 	clientNetworkHint *mgmtpb.ClientNetHint
 	joinReqs          joinReqChan
-	groupUpdateReqs   chan struct{}
+	groupUpdateReqs   chan bool
+	lastMapVer        uint32
 }
 
 func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c control.UnaryInvoker, p *events.PubSub) *mgmtSvc {
@@ -43,7 +44,7 @@ func newMgmtSvc(h *EngineHarness, m *system.Membership, s *system.Database, c co
 		events:            p,
 		clientNetworkHint: new(mgmtpb.ClientNetHint),
 		joinReqs:          make(joinReqChan),
-		groupUpdateReqs:   make(chan struct{}),
+		groupUpdateReqs:   make(chan bool),
 	}
 }
 
