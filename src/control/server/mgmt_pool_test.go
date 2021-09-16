@@ -97,7 +97,7 @@ func TestServer_MgmtSvc_PoolCreateAlreadyExists(t *testing.T) {
 		"destroying": {
 			state: system.PoolServiceStateDestroying,
 			expResp: &mgmtpb.PoolCreateResp{
-				Status: int32(drpc.DaosAlready),
+				Status: int32(drpc.DaosTryAgain),
 			},
 		},
 	} {
