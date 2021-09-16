@@ -7,7 +7,7 @@
 from ec_utils import ErasureCodeIor
 from apricot import skipForTicket
 
-class EcOnlineRebuild(ErasureCodeIor):
+class EcodOnlineRebuild(ErasureCodeIor):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object data after killing
@@ -20,7 +20,7 @@ class EcOnlineRebuild(ErasureCodeIor):
         super().__init__(*args, **kwargs)
         self.set_online_rebuild = True
 
-    @skipForTicket("DAOS-7293")
+    @skipForTicket("DAOS-7378")
     def test_ec_online_rebuild(self):
         """Jira ID: DAOS-5894.
 
@@ -32,7 +32,7 @@ class EcOnlineRebuild(ErasureCodeIor):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_array,ec_online_rebuild
+        :avocado: tags=ec,ec_array,ec_online_rebuild,rebuild
         :avocado: tags=ec_online_rebuild_array
         """
         # Kill last server rank

@@ -17,7 +17,8 @@ class CartCtlFiveNodeTest(CartTest):
     def test_cart_ctl(self):
         """Test CaRT ctl.
 
-        :avocado: tags=all,cart,pr,daily_regression,ctl,five_node
+        :avocado: tags=all,pr,daily_regression
+        :avocado: tags=cart,ctl,five_node,memcheck
         """
         srvcmd = self.build_cmd(self.env, "test_servers")
 
@@ -33,7 +34,8 @@ class CartCtlFiveNodeTest(CartTest):
             procrtn = self.stop_process(srv_rtn)
             self.fail("Server did not launch, return code {}".format(procrtn))
 
-        for index in range(3):
+        test_clients_arg = self.params.get("test_clients_arg", "/run/tests/*/")
+        for index in range(len(test_clients_arg)):
             clicmd = self.build_cmd(self.env, "test_clients", index=index)
             self.launch_test(clicmd, srv_rtn)
 

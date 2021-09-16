@@ -30,7 +30,7 @@ class AggregationPunching(MdtestBase):
 
         :avocado: tags=all,pr,daily_regression
         :avocado: tags=hw,medium,ib2
-        :avocado: tags=aggregation,mdtest,mpich
+        :avocado: tags=aggregation,mdtest,mdtest
         :avocado: tags=aggregatepunching
         """
 

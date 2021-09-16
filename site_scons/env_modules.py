@@ -26,14 +26,14 @@ import errno
 import distro
 import subprocess
 from subprocess import PIPE, Popen
-from distutils.spawn import find_executable
+from SCons.Script import WhereIs
 
 class _env_module(): # pylint: disable=invalid-name
     """Class for utilizing Modules component to load environment modules"""
     env_module_init = None
     _mpi_map = {"mpich":['mpi/mpich-x86_64', 'gnu-mpich'],
-                "openmpi":['mpi/openmpi3-x86_64', 'gnu-openmpi',
-                           'mpi/openmpi-x86_64']}
+                "openmpi":['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
+                           'gnu-openmpi', 'mpi/openmpi-x86_64']}
 
     def __init__(self):
         """Load Modules for initializing envirables"""
@@ -71,10 +71,10 @@ class _env_module(): # pylint: disable=invalid-name
             exec(stdout.decode(), ns) # nosec
 
             return ns['_mlstatus'], stderr.decode()
-        else:
-            exec(stdout.decode()) # nosec
 
-            return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
+        exec(stdout.decode()) # nosec
+
+        return _mlstatus, stderr.decode() # pylint: disable=undefined-variable
         # pylint: enable=exec-used
 
     def _init_mpi_module(self):
@@ -120,7 +120,7 @@ class _env_module(): # pylint: disable=invalid-name
         for to_load in load:
             self._module_func('load', to_load)
             print("Looking for %s" % to_load)
-            if find_executable('mpirun'):
+            if WhereIs('mpirun'):
                 print("Loaded %s" % to_load)
                 return True
         return False
@@ -146,7 +146,7 @@ class _env_module(): # pylint: disable=invalid-name
         if not self._module_load(mpi):
             print("No %s found\n" % mpi)
             return False
-        exe_path = find_executable('mpirun')
+        exe_path = WhereIs('mpirun')
         if not exe_path:
             print("No mpirun found in path. Could not configure %s\n" % mpi)
             return False
@@ -166,7 +166,7 @@ def load_mpi(mpi):
     # On Ubuntu, MPI stacks use alternatives and need root to change their
     # pointer, so just verify that the desired MPI is loaded
     if distro.id() == "ubuntu":
-        updatealternatives = find_executable('update-alternatives')
+        updatealternatives = WhereIs('update-alternatives')
         if not updatealternatives:
             print("No update-alternatives found in path.")
             return False

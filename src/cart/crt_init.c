@@ -85,7 +85,8 @@ exit:
 
 static void
 prov_data_init(struct crt_prov_gdata *prov_data, int provider,
-		bool sep_mode, int max_ctx_num)
+	       bool sep_mode, int max_ctx_num,
+	       uint32_t max_exp_size, uint32_t max_unexp_size)
 {
 	prov_data->cpg_inited = true;
 	prov_data->cpg_provider = provider;
@@ -93,8 +94,13 @@ prov_data_init(struct crt_prov_gdata *prov_data, int provider,
 	prov_data->cpg_sep_mode = sep_mode;
 	prov_data->cpg_contig_ports = true;
 	prov_data->cpg_ctx_max_num = max_ctx_num;
+	prov_data->cpg_max_exp_size = max_exp_size;
+	prov_data->cpg_max_unexp_size = max_unexp_size;
 
-	D_INIT_LIST_HEAD(&(prov_data->cpg_ctx_list));
+	D_DEBUG(DB_ALL, "Provider (%d), sep_mode (%d), sizes (%d/%d)\n",
+		provider, sep_mode, max_exp_size, max_unexp_size);
+
+	D_INIT_LIST_HEAD(&prov_data->cpg_ctx_list);
 }
 
 /* first step init - for initializing crt_gdata */
@@ -192,7 +198,6 @@ static int data_init(int server, crt_init_options_t *opt)
 	}
 	crt_gdata.cg_credit_ep_ctx = credits;
 	D_ASSERT(crt_gdata.cg_credit_ep_ctx <= CRT_MAX_CREDITS_PER_EP_CTX);
-
 
 	/** Enable statistics only for the server side and if requested */
 	if (opt && opt->cio_use_sensors && server) {
@@ -423,8 +428,10 @@ do_init:
 				set_sep = true;
 			max_num_ctx = opt->cio_ctx_max_num;
 		} else {
-			d_getenv_bool("CRT_CTX_SHARE_ADDR",
-				      &share_addr);
+			share_addr = false;
+			ctx_num = 0;
+
+			d_getenv_bool("CRT_CTX_SHARE_ADDR", &share_addr);
 			if (share_addr)
 				set_sep = true;
 
@@ -432,8 +439,18 @@ do_init:
 			max_num_ctx = ctx_num;
 		}
 
+		uint32_t max_expect_size = 0;
+		uint32_t max_unexpect_size = 0;
+
+		if (opt && opt->cio_use_expected_size)
+			max_expect_size = opt->cio_max_expected_size;
+
+		if (opt && opt->cio_use_unexpected_size)
+			max_unexpect_size = opt->cio_max_unexpected_size;
+
 		prov_data_init(&crt_gdata.cg_prov_gdata[prov],
-			       prov, set_sep, max_num_ctx);
+			       prov, set_sep, max_num_ctx,
+			       max_expect_size, max_unexpect_size);
 
 		/* Print notice that "ofi+verbs" is legacy */
 		if (prov == CRT_NA_OFI_VERBS) {
@@ -464,7 +481,9 @@ do_init:
 			}
 		}
 
+		/* Print notice that "ofi+psm2" will be deprecated*/
 		if (prov == CRT_NA_OFI_PSM2) {
+			D_WARN("\"ofi+psm2\" will be deprecated soon.\n");
 			setenv("FI_PSM2_NAME_SERVER", "1", true);
 			D_DEBUG(DB_ALL, "Setting FI_PSM2_NAME_SERVER to 1\n");
 		}
@@ -584,7 +603,7 @@ crt_finalize(void)
 		crt_self_test_fini();
 
 		/* TODO: Needs to happen for every initialized provider */
-		prov_data = &(crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov]);
+		prov_data = &crt_gdata.cg_prov_gdata[crt_gdata.cg_init_prov];
 
 		if (prov_data->cpg_ctx_num > 0) {
 			D_ASSERT(!crt_context_empty(crt_gdata.cg_init_prov,
@@ -593,7 +612,7 @@ crt_finalize(void)
 				prov_data->cpg_ctx_num);
 			crt_gdata.cg_refcount++;
 			D_RWLOCK_UNLOCK(&crt_gdata.cg_rwlock);
-			D_GOTO(out, rc = -DER_NO_PERM);
+			D_GOTO(out, rc = -DER_BUSY);
 		} else {
 			D_ASSERT(crt_context_empty(crt_gdata.cg_init_prov,
 				 CRT_LOCKED));
@@ -644,11 +663,10 @@ direct_out:
 	if (rc == 0)
 		d_log_fini(); /* d_log_fini is reference counted */
 	else
-		D_ERROR("failed, rc: %d.\n", rc);
+		D_ERROR("failed, rc: "DF_RC"\n", DP_RC(rc));
 
 	return rc;
 }
-
 
 static inline na_bool_t is_integer_str(char *str)
 {

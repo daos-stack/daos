@@ -36,8 +36,8 @@ typedef struct {
 /**
  * Stop the current pool service leader.
  *
- * \param poh	[IN]	Pool connection handle
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in] poh	Pool connection handle
+ * \param[in] ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  *
  * \return		These values will be returned by \a ev::ev_error in
@@ -66,15 +66,15 @@ enum {
 /**
  * Set parameter on servers.
  *
- * \param grp	[IN]	Process set name of the DAOS servers managing the pool
- * \param rank	[IN]	Ranks to set parameter. -1 means setting on all servers.
- * \param key_id [IN]	key ID of the parameter.
- * \param value [IN]	value of the parameter.
- * \param value_extra [IN]
+ * \param[in] grp	Process set name of the DAOS servers managing the pool
+ * \param[in] rank	Ranks to set parameter. -1 means setting on all servers.
+ * \param[in] key_id	key ID of the parameter.
+ * \param[in] value	value of the parameter.
+ * \param[in] value_extra
  *			optional extra value to set the fail value when
  *			\a key_id is DMG_CMD_FAIL_LOC and \a value is in
  *			DAOS_FAIL_VALUE mode.
- * \param ev	[IN]	Completion event, it is optional and can be NULL.
+ * \param[in] ev	Completion event, it is optional and can be NULL.
  *			The function will run in blocking mode if \a ev is NULL.
  */
 int
@@ -84,7 +84,7 @@ daos_debug_set_params(const char *grp, d_rank_t rank, unsigned int key_id,
 /**
  * Add mark to servers.
  *
- * \param mark	[IN]	mark to add to the debug log.
+ * \param[in] mark	mark to add to the debug log.
  */
 int
 daos_debug_add_mark(const char *mark);
@@ -93,12 +93,12 @@ daos_debug_add_mark(const char *mark);
  * Query internal blobstore state for given blobstore uuid in the specified
  * DAOS system.
  *
- * \param group		  [IN]	Name of DAOS system managing the service.
- * \param blobstore_uuid  [IN]	UUID of the blobstore to query.
- * \param blobstore_state [OUT] Will return an enum integer that will
+ * \param[in] group		Name of DAOS system managing the service.
+ * \param[in] blobstore_uuid	UUID of the blobstore to query.
+ * \param[out] blobstore_state	Will return an enum integer that will
  *				later be converted to a blobstore state:
  *				SETUP, NORMAL, FAULTY, TEARDOWN, or OUT
- * \param ev		  [IN]  Completion event. Optional and can be NULL.
+ * \param[in] ev		Completion event. Optional and can be NULL.
  *				The function will run in blocking mode
  *				if \a ev is NULL.
  *
@@ -108,7 +108,6 @@ daos_debug_add_mark(const char *mark);
 int
 daos_mgmt_get_bs_state(const char *group, uuid_t blobstore_uuid,
 		       int *blobstore_state, daos_event_t *ev);
-
 
 #if defined(__cplusplus)
 }

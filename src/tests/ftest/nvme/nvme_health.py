@@ -8,7 +8,6 @@ from __future__ import division
 import os
 
 from nvme_utils import ServerFillUp, get_device_ids
-from test_utils_pool import TestPool
 from dmg_utils import DmgCommand
 from command_utils_base import CommandFailure
 
@@ -26,8 +25,9 @@ class NvmeHealth(ServerFillUp):
                   dmg list-pools, device-health and nvme-health works for all
                   pools.
 
-        :avocado: tags=all,hw,medium,nvme,ib2,full_regression
-        :avocado: tags=nvme_health
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,medium
+        :avocado: tags=nvme,ib2,nvme_health
         """
         # pylint: disable=attribute-defined-outside-init
         # pylint: disable=too-many-branches
@@ -44,12 +44,10 @@ class NvmeHealth(ServerFillUp):
         # Create the Large number of pools
         for _pool in range(no_of_pools):
             self.log.info("-- Creating pool number = %s", _pool)
-            pool = TestPool(self.context, self.get_dmg_command())
-            pool.get_params(self)
-            pool.scm_size.update('{}'.format(single_pool_scm_size))
-            pool.nvme_size.update('{}'.format(single_pool_nvme_size))
-            pool.create()
-            self.pool.append(pool)
+            self.pool.append(self.get_pool(create=False))
+            self.pool[-1].scm_size.update(single_pool_scm_size, "scm_size")
+            self.pool[-1].nvme_size.update(single_pool_nvme_size, "nvme_size")
+            self.pool[-1].create()
 
         # initialize the dmg command
         self.dmg = DmgCommand(os.path.join(self.prefix, "bin"))

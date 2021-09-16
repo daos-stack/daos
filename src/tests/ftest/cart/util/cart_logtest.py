@@ -250,10 +250,9 @@ class LogTest():
         if self.quiet:
             return
         self.log_count += 1
-        function = getattr(line, 'filename', None)
-        if function:
+        try:
             loc = '{}:{}'.format(line.filename, line.lineno)
-        else:
+        except AttributeError:
             loc = 'Unknown'
         self.log_locs[loc] += 1
         self.log_fac[line.fac] += 1
@@ -433,8 +432,11 @@ class LogTest():
                     # results.
                     if line.fac == 'external':
                         show = False
-                    elif show and server_shutdown and line.get_msg().endswith(
-                            "DER_SHUTDOWN(-2017): 'Service should shut down'"):
+                    elif show and server_shutdown and \
+                         (line.get_msg().endswith(
+                             "DER_SHUTDOWN(-2017): 'Service should shut down'") or \
+                          line.get_msg().endswith(
+                              "DER_NOTLEADER(-2008): 'Not service leader'")):
                         show = False
                     elif show and line.function == 'rdb_stop':
                         show = False

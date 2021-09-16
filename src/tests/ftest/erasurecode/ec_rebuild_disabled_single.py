@@ -7,7 +7,7 @@
 import time
 from ec_utils import ErasureCodeSingle
 
-class EcDisabledRebuildSingle(ErasureCodeSingle):
+class EcodDisabledRebuildSingle(ErasureCodeSingle):
     # pylint: disable=too-many-ancestors
     """
     Test Class Description: To validate Erasure code object for single data
@@ -25,7 +25,7 @@ class EcDisabledRebuildSingle(ErasureCodeSingle):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large,ib2
-        :avocado: tags=ec,ec_single,ec_disabled_rebuild
+        :avocado: tags=ec,ec_single,ec_disabled_rebuild,rebuild
         :avocado: tags=ec_disabled_rebuild_single
 
         """

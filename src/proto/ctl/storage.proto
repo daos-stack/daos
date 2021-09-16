@@ -15,16 +15,6 @@ import "ctl/storage_scm.proto";
 // Management Service Protobuf Definitions related to interactions between
 // DAOS control server and locally attached storage.
 
-message StoragePrepareReq {
-	PrepareNvmeReq nvme = 1;
-	PrepareScmReq scm = 2;
-}
-
-message StoragePrepareResp {
-	PrepareNvmeResp nvme = 1;
-	PrepareScmResp scm = 2;
-}
-
 message StorageScanReq {
 	ScanNvmeReq nvme = 1;
 	ScanScmReq scm = 2;

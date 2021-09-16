@@ -44,7 +44,15 @@ func (cmd *startCmd) setCLIOverrides() error {
 		cmd.config.ControlPort = int(cmd.Port)
 	}
 	if cmd.MountPath != "" {
-		cmd.config.WithScmMountPoint(cmd.MountPath)
+		cmd.log.Info("NOTICE: -s, --storage is deprecated")
+		if len(cmd.config.Engines) < 1 {
+			return errors.New("config has zero engines")
+		}
+		if len(cmd.config.Engines[0].Storage.Tiers) < 1 ||
+			!cmd.config.Engines[0].Storage.Tiers[0].IsSCM() {
+			return errors.New("first storage tier of engine 0 must be SCM")
+		}
+		cmd.config.Engines[0].Storage.Tiers[0].Scm.MountPoint = cmd.MountPath
 	}
 	if cmd.Group != "" {
 		cmd.config.WithSystemName(cmd.Group)

@@ -29,7 +29,11 @@ class PoolSvc(TestWithServers):
             int: current pool leader rank
 
         """
+        # Test UUID.
+        self.pool.use_label = False
         self.pool.set_query_data()
+        self.pool.use_label = True
+
         try:
             current_leader = int(self.pool.query_data["response"]["leader"])
         except KeyError as error:

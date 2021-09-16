@@ -245,7 +245,7 @@ init_tests(void **state)
 	char		*tmp;
 	unsigned int	 seed;
 
-	D_STRNDUP(__root, "/tmp/XXXXXX", 32);
+	D_STRNDUP_S(__root, "/tmp/XXXXXX");
 	tmp = mkdtemp(__root);
 
 	if (tmp != __root) {
@@ -684,7 +684,7 @@ test_log(void **state)
 	/* Alternatively, a component may have its own mask */
 	logmask = getenv("TEST_LOG_MASK");
 	if (logmask == NULL) {
-		D_STRNDUP(allocated_mask, "ERR,T1=DEBUG,CLOG=DEBUG", 32);
+		D_STRNDUP_S(allocated_mask, "ERR,T1=DEBUG,CLOG=DEBUG");
 		logmask = allocated_mask;
 	}
 	assert_non_null(logmask);
@@ -710,7 +710,7 @@ test_log(void **state)
 	setenv("D_LOG_MASK", "T2=WARN", 1);
 	setenv("DD_MASK", "trace", 1);
 	d_log_sync_mask();
-	D_STRNDUP(logmask, "T2=WARN", 32);
+	D_STRNDUP_S(logmask, "T2=WARN");
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
@@ -725,7 +725,7 @@ test_log(void **state)
 	setenv("D_LOG_MASK", "T1=DEBUG", 1);
 	setenv("DD_MASK", "trace", 1); /* DB_TRACE stream is set */
 	d_log_sync_mask();
-	D_STRNDUP(logmask, "T1=DEBUG", 32);
+	D_STRNDUP_S(logmask, "T1=DEBUG");
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
@@ -743,7 +743,7 @@ test_log(void **state)
 	/* Set test debug mask */
 	setenv("DD_MASK", "test", 1); /* DB_TEST stream is now also set */
 	d_log_sync_mask();
-	D_STRNDUP(logmask, "T1=DEBUG", 32);
+	D_STRNDUP_S(logmask, "T1=DEBUG");
 	assert_non_null(logmask);
 
 	rc = d_log_setmasks(logmask, -1);
@@ -1192,12 +1192,12 @@ test_gurt_alloc(void **state)
 	assert_non_null(path);
 	assert_string_equal(path, "/usr");
 	D_FREE(path);
-	D_STRNDUP(testptr, str1, 32);
+	D_STRNDUP(testptr, str1, 13);
 	assert_non_null(testptr);
 	assert_string_equal(testptr, str1);
 	D_FREE(testptr);
 	assert_null(testptr);
-	D_STRNDUP(testptr, str2, sizeof(str2));
+	D_STRNDUP_S(testptr, str2);
 	assert_non_null(testptr);
 	assert_string_equal(testptr, str2);
 	D_FREE(testptr);
@@ -1310,7 +1310,7 @@ hash_parallel_insert(struct hash_thread_arg *arg)
 	     i++) {
 		rc = d_hash_rec_insert(arg->thtab, arg->entries[i]->tl_key,
 				       TEST_GURT_HASH_KEY_LEN,
-				       &(arg->entries[i]->tl_link), 1);
+				       &arg->entries[i]->tl_link, 1);
 		if (arg->check_result)
 			TEST_THREAD_ASSERT(rc == 0);
 	}
@@ -1367,7 +1367,7 @@ hash_parallel_lookup(struct hash_thread_arg *arg)
 				       TEST_GURT_HASH_KEY_LEN);
 		if (arg->check_result)
 			/* Make sure the returned pointer is the right one */
-			TEST_THREAD_ASSERT(test == &(arg->entries[i]->tl_link));
+			TEST_THREAD_ASSERT(test == &arg->entries[i]->tl_link);
 	}
 
 	return NULL;

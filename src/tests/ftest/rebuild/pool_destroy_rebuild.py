@@ -10,7 +10,7 @@ from ior_test_base import IorTestBase
 
 
 # pylint: disable=too-few-public-methods,too-many-ancestors
-class PoolDestroyWithIO(IorTestBase):
+class RbldPoolDestroyWithIO(IorTestBase):
     """Rebuild test cases featuring IOR.
 
     This class contains tests for pool rebuild that feature I/O going on
@@ -35,7 +35,7 @@ class PoolDestroyWithIO(IorTestBase):
 
         :avocado: tags=all,pr,hw
         :avocado: tags=medium,ib2
-        :avocado: tags=pool,rebuild,mpich
+        :avocado: tags=pool,rebuild,ior
         :avocado: tags=pooldestroywithio
         """
         # set params

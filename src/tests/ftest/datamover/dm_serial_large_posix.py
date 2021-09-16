@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 
 
 # pylint: disable=too-many-ancestors
-class DmSerialLargePosix(DataMoverTestBase):
+class DmvrSerialLargePosix(DataMoverTestBase):
     """Object Data Mover validation for serializing/deserializing
        POSIX containers at the object level.
 

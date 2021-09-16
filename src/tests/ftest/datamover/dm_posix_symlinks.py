@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import join
 
 
-class DmPosixSymlinks(DataMoverTestBase):
+class DmvrPosixSymlinks(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Test class for POSIX DataMover symlink validation
 

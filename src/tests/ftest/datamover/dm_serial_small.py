@@ -9,7 +9,7 @@ from pydaos.raw import DaosApiError
 import avocado
 
 
-class DmSerialSmallTest(DataMoverTestBase):
+class DmvrSerialSmall(DataMoverTestBase):
     # pylint: disable=too-many-ancestors
     """Object Data Mover validation for serializing/deserializing
        generic containers at the object level.

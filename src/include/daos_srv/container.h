@@ -259,4 +259,5 @@ struct daos_csummer *dsc_cont2csummer(daos_handle_t coh);
 int dsc_cont_get_props(daos_handle_t coh, struct cont_props *props);
 
 void ds_cont_tgt_ec_eph_query_ult(void *data);
+
 #endif /* ___DAOS_SRV_CONTAINER_H_ */

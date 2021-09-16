@@ -21,6 +21,7 @@
 #include <daos_srv/vos_types.h>
 #include <daos_pool.h>
 #include <daos_security.h>
+#include <gurt/telemetry_common.h>
 
 /*
  * Pool object
@@ -55,6 +56,17 @@ struct ds_pool {
 	uuid_t			sp_srv_pool_hdl;
 	uint32_t		sp_stopping:1,
 				sp_fetch_hdls:1;
+
+	/** path to ephemeral metrics */
+	char			sp_path[D_TM_MAX_NAME_LEN];
+
+	/**
+	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
+	 * actual structure. Initialized only for modules that specified a
+	 * set of handlers via dss_module::sm_metrics handlers and reported
+	 * DAOS_SYS_TAG.
+	 */
+	void			*sp_metrics[DAOS_NR_MODULE];
 };
 
 struct ds_pool *ds_pool_lookup(const uuid_t uuid);
@@ -108,6 +120,14 @@ struct ds_pool_child {
 	uint64_t	spc_rebuild_end_hlc;
 	uint32_t	spc_map_version;
 	int		spc_ref;
+
+	/**
+	 * Per-pool per-module metrics, see ${modname}_pool_metrics for the
+	 * actual structure. Initialized only for modules that specified a
+	 * set of handlers via dss_module::sm_metrics handlers and reported
+	 * DAOS_TGT_TAG.
+	 */
+	void			*spc_metrics[DAOS_NR_MODULE];
 };
 
 struct ds_pool_child *ds_pool_child_lookup(const uuid_t uuid);
@@ -142,8 +162,7 @@ int ds_pool_extend(uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   const d_rank_list_t *rank_list, int ndomains,
 		   const uint32_t *domains, d_rank_list_t *svc_ranks);
 int ds_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *ranks,
-				uint32_t rank,
-				struct pool_target_id_list *target_list,
+				struct pool_target_addr_list *target_list,
 				pool_comp_state_t state);
 
 int ds_pool_svc_create(const uuid_t pool_uuid, int ntargets,

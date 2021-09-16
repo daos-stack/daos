@@ -20,7 +20,14 @@ import (
 var (
 	ErrEmptyGroupMap = errors.New("empty group map (all ranks excluded?)")
 	ErrRaftUnavail   = errors.New("raft service unavailable (not started yet?)")
+	ErrUninitialized = errors.New("system is uninitialized (storage format required?)")
 )
+
+// IsNotReady is a convenience function for checking if an error
+// indicates that the system is not ready to serve requests.
+func IsNotReady(err error) bool {
+	return IsUninitialized(err) || IsUnavailable(err)
+}
 
 // IsUnavailable returns a boolean indicating whether or not the
 // supplied error corresponds to some unavailability state.
@@ -38,6 +45,15 @@ func IsEmptyGroupMap(err error) bool {
 		return false
 	}
 	return strings.Contains(errors.Cause(err).Error(), ErrEmptyGroupMap.Error())
+}
+
+// IsUninitialized returns a boolean indicating whether or not the
+// supplied error corresponds to an uninitialized system.
+func IsUninitialized(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(errors.Cause(err).Error(), ErrUninitialized.Error())
 }
 
 // ErrNotReplica indicates that a request was made to a control plane

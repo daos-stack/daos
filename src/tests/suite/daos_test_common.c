@@ -156,11 +156,11 @@ test_setup_pool_connect(void **state, struct test_pool *pool)
 		if (arg->pool_label) {
 			print_message("setup: connecting to pool by label %s\n",
 				      arg->pool_label);
-			rc = daos_pool_connect_by_label(arg->pool_label,
-							arg->group, flags,
-							&arg->pool.poh,
-							&arg->pool.pool_info,
-							NULL);
+			rc = daos_pool_connect(arg->pool_label,
+					       arg->group, flags,
+					       &arg->pool.poh,
+					       &arg->pool.pool_info,
+					       NULL);
 		} else {
 			print_message("setup: connecting to pool "DF_UUID"\n",
 				      DP_UUID(arg->pool.pool_uuid));
@@ -239,11 +239,10 @@ test_setup_cont_open(void **state)
 		if (arg->cont_label) {
 			print_message("setup: opening container by label %s\n",
 				      arg->cont_label);
-			rc = daos_cont_open_by_label(arg->pool.poh,
-						     arg->cont_label,
-						     arg->cont_open_flags,
-						     &arg->coh, &arg->co_info,
-						     NULL);
+			rc = daos_cont_open(arg->pool.poh, arg->cont_label,
+					    arg->cont_open_flags,
+					    &arg->coh, &arg->co_info,
+					    NULL);
 		} else {
 			print_message("setup: opening container "DF_UUID"\n",
 				      DP_UUID(arg->co_uuid));
@@ -434,9 +433,7 @@ pool_destroy_safe(test_arg_t *arg, struct test_pool *extpool)
 		break;
 	}
 
-	rc = daos_pool_disconnect(poh, NULL);
-	if (rc)
-		print_message("pool disconnect failed: %d\n", rc);
+	daos_pool_disconnect(poh, NULL);
 
 	rc = dmg_pool_destroy(dmg_config_file,
 			      pool->pool_uuid, arg->group, 1);
@@ -691,18 +688,21 @@ rebuild_pool_wait(test_arg_t *arg)
 	pinfo.pi_bits = DPI_REBUILD_STATUS;
 	rc = test_pool_get_info(arg, &pinfo);
 	rst = &pinfo.pi_rebuild_st;
-	if ((rst->rs_done || rc != 0) && rst->rs_version != 0) {
-		print_message("Rebuild "DF_UUIDF" (ver=%d) is done %d/%d, "
+	if ((rst->rs_done || rc != 0) && rst->rs_version != 0 &&
+	     rst->rs_version != arg->rebuild_pre_pool_ver) {
+		print_message("Rebuild "DF_UUIDF" (ver=%u orig_ver=%u) is done %d/%d, "
 			      "obj="DF_U64", rec="DF_U64".\n",
 			       DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			       arg->rebuild_pre_pool_ver,
 			       rc, rst->rs_errno, rst->rs_obj_nr,
 			       rst->rs_rec_nr);
 		done = true;
 	} else {
-		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u), "
+		print_message("wait for rebuild pool "DF_UUIDF"(ver=%u orig_ver=%u), "
 			      "to-be-rebuilt obj="DF_U64", already rebuilt obj="
 			      DF_U64", rec="DF_U64"\n",
 			      DP_UUID(arg->pool.pool_uuid), rst->rs_version,
+			      arg->rebuild_pre_pool_ver,
 			      rst->rs_toberb_obj_nr, rst->rs_obj_nr,
 			      rst->rs_rec_nr);
 	}
@@ -828,11 +828,11 @@ daos_dmg_pool_target(const char *sub_cmd, const uuid_t pool_uuid,
 
 	/* build and invoke dmg cmd */
 	if (strncmp(sub_cmd, "extend", strlen("extend")) == 0)
-		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
+		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
 				  " --ranks=%d", sub_cmd,
 				  DP_UUID(pool_uuid), rank);
 	else
-		dts_create_config(dmg_cmd, "dmg pool %s --pool=" DF_UUIDF
+		dts_create_config(dmg_cmd, "dmg pool %s " DF_UUIDF
 				  " --rank=%d", sub_cmd, DP_UUID(pool_uuid),
 				  rank);
 

@@ -16,6 +16,26 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 
 	DFUSE_TRA_DEBUG(ie, "flags %#x", to_set);
 
+	if (ie->ie_unlinked) {
+		DFUSE_TRA_DEBUG(ie, "File is unlinked, returning most recent data");
+
+		/* This will happen on close with caching enabled if there are writes through the
+		 * cache so accept these two entries only and reject anything else.  This allows
+		 * the read/write case to work on unlinked files without triggering an error.
+		 */
+		if (to_set & ~(FUSE_SET_ATTR_MTIME | FUSE_SET_ATTR_CTIME))
+			D_GOTO(err, rc = ENOENT);
+
+		if (to_set & FUSE_SET_ATTR_MTIME)
+			ie->ie_stat.st_mtim = attr->st_mtim;
+
+		if (to_set & FUSE_SET_ATTR_CTIME)
+			ie->ie_stat.st_ctim = attr->st_ctim;
+
+		DFUSE_REPLY_ATTR(ie, req, &ie->ie_stat);
+		return;
+	}
+
 	if (to_set & (FUSE_SET_ATTR_UID | FUSE_SET_ATTR_GID)) {
 		DFUSE_TRA_INFO(ie, "File uid/gid support not enabled");
 		D_GOTO(err, rc = ENOTSUP);
@@ -90,6 +110,9 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 		D_GOTO(err, rc);
 
 	attr->st_ino = ie->ie_stat.st_ino;
+
+	/* Update the size as dfuse knows about it for future use */
+	ie->ie_stat.st_size = attr->st_size;
 
 	DFUSE_REPLY_ATTR(ie, req, attr);
 	return;

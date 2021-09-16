@@ -13,8 +13,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common/proto/convert"
 	ctlpb "github.com/daos-stack/daos/src/control/common/proto/ctl"
-	"github.com/daos-stack/daos/src/control/server/storage/bdev"
-	"github.com/daos-stack/daos/src/control/server/storage/scm"
+	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
 // FirmwareQuery implements the method defined for the control service if
@@ -49,7 +48,7 @@ func (svc *ControlService) FirmwareQuery(parent context.Context, pbReq *ctlpb.Fi
 }
 
 func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.ScmFirmwareQueryResp, error) {
-	queryResp, err := svc.scm.QueryFirmware(scm.FirmwareQueryRequest{
+	queryResp, err := svc.storage.Scm.QueryFirmware(storage.ScmFirmwareQueryRequest{
 		FirmwareRev: pbReq.FirmwareRev,
 		ModelID:     pbReq.ModelID,
 		DeviceUIDs:  pbReq.DeviceIDs,
@@ -78,7 +77,7 @@ func (svc *ControlService) querySCMFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*c
 }
 
 func (svc *ControlService) queryNVMeFirmware(pbReq *ctlpb.FirmwareQueryReq) ([]*ctlpb.NvmeFirmwareQueryResp, error) {
-	queryResp, err := svc.bdev.QueryFirmware(bdev.FirmwareQueryRequest{
+	queryResp, err := svc.storage.QueryBdevFirmware(storage.NVMeFirmwareQueryRequest{
 		FirmwareRev: pbReq.FirmwareRev,
 		ModelID:     pbReq.ModelID,
 		DeviceAddrs: pbReq.DeviceIDs,
@@ -109,7 +108,7 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 
 	instances := svc.harness.Instances()
 	for _, srv := range instances {
-		if srv.isStarted() {
+		if srv.IsStarted() {
 			rank, err := srv.GetRank()
 			if err != nil {
 				return nil, errors.New("unidentified server rank is running")
@@ -138,7 +137,7 @@ func (svc *ControlService) FirmwareUpdate(parent context.Context, pbReq *ctlpb.F
 }
 
 func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
-	updateResp, err := svc.scm.UpdateFirmware(scm.FirmwareUpdateRequest{
+	updateResp, err := svc.storage.Scm.UpdateFirmware(storage.ScmFirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
 		FirmwareRev:  pbReq.FirmwareRev,
 		ModelID:      pbReq.ModelID,
@@ -161,7 +160,7 @@ func (svc *ControlService) updateSCM(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctl
 }
 
 func (svc *ControlService) updateNVMe(pbReq *ctlpb.FirmwareUpdateReq, pbResp *ctlpb.FirmwareUpdateResp) error {
-	updateResp, err := svc.bdev.UpdateFirmware(bdev.FirmwareUpdateRequest{
+	updateResp, err := svc.storage.UpdateBdevFirmware(storage.NVMeFirmwareUpdateRequest{
 		FirmwarePath: pbReq.FirmwarePath,
 		FirmwareRev:  pbReq.FirmwareRev,
 		ModelID:      pbReq.ModelID,

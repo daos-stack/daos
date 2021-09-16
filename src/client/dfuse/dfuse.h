@@ -25,8 +25,6 @@
 
 struct dfuse_info {
 	struct fuse_session		*di_session;
-	char				*di_pool;
-	char				*di_cont;
 	char				*di_group;
 	char				*di_mountpoint;
 	uint32_t			di_thread_count;
@@ -216,13 +214,27 @@ struct dfuse_cont {
 	pthread_mutex_t		dfs_read_mutex;
 };
 
+void
+dfuse_set_default_cont_cache_values(struct dfuse_cont *dfc);
+
+int
+dfuse_cont_open_by_label(struct dfuse_projection_info *fs_handle,
+			 struct dfuse_pool *dfp,
+			 const char *label,
+			 struct dfuse_cont **_dfs);
+
 int
 dfuse_cont_open(struct dfuse_projection_info *fs_handle,
-		struct dfuse_pool *dfp,	uuid_t *cont,
+		struct dfuse_pool *dfp, uuid_t *cont,
 		struct dfuse_cont **_dfs);
 
 int
-dfuse_pool_open(struct dfuse_projection_info *fs_handle, uuid_t *pool,
+dfuse_pool_connect_by_label(struct dfuse_projection_info *fs_handle,
+			const char *label,
+			struct dfuse_pool **_dfp);
+
+int
+dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 		struct dfuse_pool **_dfp);
 
 /* Xattr namespace used by dfuse.
@@ -518,7 +530,11 @@ struct dfuse_inode_entry {
 	/** file was truncated from 0 to a certain size */
 	bool			ie_truncated;
 
+	/** file is the root of a container */
 	bool			ie_root;
+
+	/** File has been unlinked from daos */
+	bool			ie_unlinked;
 };
 
 /* Generate the inode to use for this dfs object.  This is generating a single
@@ -652,6 +668,11 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		  struct fuse_file_info *fi_out,
 		  bool is_new,
 		  fuse_req_t req);
+
+/* Mark object as removed and invalidate any kernel data for it */
+void
+dfuse_oid_unlinked(struct dfuse_projection_info *fs_handle, fuse_req_t req, daos_obj_id_t *oid,
+		   struct dfuse_inode_entry *parent, const char *name);
 
 /* dfuse_cont.c */
 void

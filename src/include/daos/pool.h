@@ -62,7 +62,9 @@ struct dc_pool {
 	uint64_t		dp_capas;
 	pthread_rwlock_t	dp_map_lock;
 	struct pool_map	       *dp_map;
-	uint32_t		dp_ver;
+	tse_task_t	       *dp_map_task;
+	/* highest known pool map version */
+	uint32_t		dp_map_version_known;
 	uint32_t		dp_disconnecting:1,
 				dp_slave:1; /* generated via g2l */
 	/* required/allocated pool map size */
@@ -88,7 +90,6 @@ void dc_pool_put(struct dc_pool *pool);
 int dc_pool_local2global(daos_handle_t poh, d_iov_t *glob);
 int dc_pool_global2local(d_iov_t glob, daos_handle_t *poh);
 int dc_pool_connect(tse_task_t *task);
-int dc_pool_connect_lbl(tse_task_t *task);
 int dc_pool_disconnect(tse_task_t *task);
 int dc_pool_query(tse_task_t *task);
 int dc_pool_query_target(tse_task_t *task);
@@ -104,10 +105,12 @@ int dc_pool_stop_svc(tse_task_t *task);
 int dc_pool_list_cont(tse_task_t *task);
 
 int dc_pool_map_version_get(daos_handle_t ph, unsigned int *map_ver);
-int dc_pool_update_map(daos_handle_t ph, struct pool_map *map);
 int dc_pool_choose_svc_rank(const char *label, uuid_t puuid,
 			    struct rsvc_client *cli, pthread_mutex_t *cli_lock,
 			    struct dc_mgmt_sys *sys,
 			    crt_endpoint_t *ep);
+int dc_pool_create_map_refresh_task(struct dc_pool *pool, uint32_t map_version,
+				    tse_sched_t *sched, tse_task_t **task);
+void dc_pool_abandon_map_refresh_task(tse_task_t *task);
 
 #endif /* __DD_POOL_H__ */

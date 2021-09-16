@@ -11,13 +11,16 @@ package spdk
 
 /*
 #cgo CFLAGS: -I .
-#cgo LDFLAGS: -L . -lnvme_control -lspdk
+#cgo LDFLAGS: -L . -lnvme_control
+#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
+#cgo LDFLAGS: -lrte_mempool_ring -lrte_bus_pci
 
 #include "stdlib.h"
 #include "daos_srv/control.h"
 #include "spdk/stdinc.h"
-#include "spdk/nvme.h"
+#include "spdk/string.h"
 #include "spdk/env.h"
+#include "spdk/nvme.h"
 #include "include/nvme_control.h"
 #include "include/nvme_control_common.h"
 */
@@ -33,7 +36,7 @@ import (
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
-const lockfilePathPrefix = "/tmp/spdk_pci_lock_"
+const lockfilePathPrefix = "/var/tmp/spdk_pci_lock_"
 
 // Nvme is the interface that provides SPDK NVMe functionality.
 type Nvme interface {
@@ -162,22 +165,41 @@ func c2GoController(ctrlr *C.struct_ctrlr_t) *storage.NvmeController {
 }
 
 // c2GoDeviceHealth is a private translation function.
-func c2GoDeviceHealth(health *C.struct_nvme_stats) *storage.NvmeHealth {
+func c2GoDeviceHealth(hs *C.struct_nvme_stats) *storage.NvmeHealth {
 	return &storage.NvmeHealth{
-		TempWarnTime:    uint32(health.warn_temp_time),
-		TempCritTime:    uint32(health.crit_temp_time),
-		CtrlBusyTime:    uint64(health.ctrl_busy_time),
-		PowerCycles:     uint64(health.power_cycles),
-		PowerOnHours:    uint64(health.power_on_hours),
-		UnsafeShutdowns: uint64(health.unsafe_shutdowns),
-		MediaErrors:     uint64(health.media_errs),
-		ErrorLogEntries: uint64(health.err_log_entries),
-		Temperature:     uint32(health.temperature),
-		TempWarn:        bool(health.temp_warn),
-		AvailSpareWarn:  bool(health.avail_spare_warn),
-		ReliabilityWarn: bool(health.dev_reliability_warn),
-		ReadOnlyWarn:    bool(health.read_only_warn),
-		VolatileWarn:    bool(health.volatile_mem_warn),
+		TempWarnTime:            uint32(hs.warn_temp_time),
+		TempCritTime:            uint32(hs.crit_temp_time),
+		CtrlBusyTime:            uint64(hs.ctrl_busy_time),
+		PowerCycles:             uint64(hs.power_cycles),
+		PowerOnHours:            uint64(hs.power_on_hours),
+		UnsafeShutdowns:         uint64(hs.unsafe_shutdowns),
+		MediaErrors:             uint64(hs.media_errs),
+		ErrorLogEntries:         uint64(hs.err_log_entries),
+		Temperature:             uint32(hs.temperature),
+		TempWarn:                bool(hs.temp_warn),
+		AvailSpareWarn:          bool(hs.avail_spare_warn),
+		ReliabilityWarn:         bool(hs.dev_reliability_warn),
+		ReadOnlyWarn:            bool(hs.read_only_warn),
+		VolatileWarn:            bool(hs.volatile_mem_warn),
+		ProgFailCntNorm:         uint8(hs.program_fail_cnt_norm),
+		ProgFailCntRaw:          uint64(hs.program_fail_cnt_raw),
+		EraseFailCntNorm:        uint8(hs.erase_fail_cnt_norm),
+		EraseFailCntRaw:         uint64(hs.erase_fail_cnt_raw),
+		WearLevelingCntNorm:     uint8(hs.wear_leveling_cnt_norm),
+		WearLevelingCntMin:      uint16(hs.wear_leveling_cnt_min),
+		WearLevelingCntMax:      uint16(hs.wear_leveling_cnt_max),
+		WearLevelingCntAvg:      uint16(hs.wear_leveling_cnt_avg),
+		EndtoendErrCntRaw:       uint64(hs.endtoend_err_cnt_raw),
+		CrcErrCntRaw:            uint64(hs.crc_err_cnt_raw),
+		MediaWearRaw:            uint64(hs.media_wear_raw),
+		HostReadsRaw:            uint64(hs.host_reads_raw),
+		WorkloadTimerRaw:        uint64(hs.workload_timer_raw),
+		ThermalThrottleStatus:   uint8(hs.thermal_throttle_status),
+		ThermalThrottleEventCnt: uint64(hs.thermal_throttle_event_cnt),
+		RetryBufferOverflowCnt:  uint64(hs.retry_buffer_overflow_cnt),
+		PllLockLossCnt:          uint64(hs.pll_lock_loss_cnt),
+		NandBytesWritten:        uint64(hs.nand_bytes_written),
+		HostBytesWritten:        uint64(hs.host_bytes_written),
 	}
 }
 
@@ -209,20 +231,28 @@ func clean(retPtr *C.struct_ret_t) {
 	C.free(unsafe.Pointer(retPtr))
 }
 
-// collectCtrlrs parses return struct to collect slice of nvme.Controller.
-func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeControllers, err error) {
+// checkRet returns early if return struct is nil or rc is non-zero.
+func checkRet(retPtr *C.struct_ret_t, failMsg string) error {
 	if retPtr == nil {
-		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
+		return errors.Wrap(FaultBindingRetNull, failMsg)
 	}
-
-	defer clean(retPtr)
 
 	if retPtr.rc != 0 {
-		err = errors.Wrap(FaultBindingFailed(int(retPtr.rc),
-			C.GoString(&retPtr.info[0])), failMsg)
+		clean(retPtr)
 
-		return
+		return errors.Wrap(FaultBindingFailed(int(retPtr.rc),
+			C.GoString(&retPtr.info[0])), failMsg)
 	}
+
+	return nil
+}
+
+// collectCtrlrs parses return struct to collect slice of nvme.Controller.
+func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeControllers, err error) {
+	if err := checkRet(retPtr, failMsg); err != nil {
+		return nil, err
+	}
+	defer clean(retPtr)
 
 	ctrlrPtr := retPtr.ctrlrs
 	for ctrlrPtr != nil {
@@ -255,16 +285,10 @@ func collectCtrlrs(retPtr *C.struct_ret_t, failMsg string) (ctrlrs storage.NvmeC
 // collectFormatResults parses return struct to collect slice of
 // nvme.FormatResult.
 func collectFormatResults(retPtr *C.struct_ret_t, failMsg string) ([]*FormatResult, error) {
-	if retPtr == nil {
-		return nil, errors.Wrap(FaultBindingRetNull, failMsg)
+	if err := checkRet(retPtr, failMsg); err != nil {
+		return nil, err
 	}
-
 	defer clean(retPtr)
-
-	if retPtr.rc != 0 {
-		return nil, errors.Wrap(FaultBindingFailed(int(retPtr.rc),
-			C.GoString(&retPtr.info[0])), failMsg)
-	}
 
 	var fmtResults []*FormatResult
 	fmtResult := retPtr.wipe_results

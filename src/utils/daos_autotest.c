@@ -17,6 +17,8 @@
 
 #include <daos.h>
 #include <daos/common.h>
+#include <daos/placement.h>
+#include <daos/pool.h>
 
 #include "daos_hdlr.h"
 
@@ -31,24 +33,49 @@ clock_t	start;
 clock_t	end;
 
 /** generated container UUID */
-uuid_t		cuuid;
+const char	*cuuid;
+
+/** generated label for aux containers */
+const char	*cuuid2;
+const char	*cuuid3;
+
 /** initial object ID */
 uint64_t	oid_hi = 1;
 daos_obj_id_t	oid = { .hi = 1, .lo = 1 }; /** object ID */
+daos_obj_id_t	oid2 = { .hi = 1, .lo = 1 }; /** object ID */
+daos_obj_id_t	oid3 = { .hi = 1, .lo = 1 }; /** object ID */
 
 /** pool handle */
 daos_handle_t	poh = DAOS_HDL_INVAL;
 /** container handle */
 daos_handle_t	coh = DAOS_HDL_INVAL;
+daos_handle_t	coh2 = DAOS_HDL_INVAL;
+daos_handle_t	coh3 = DAOS_HDL_INVAL;
 
 /** force cleanup */
 int force;
+
+int domain_nr;
 
 static inline void
 new_oid(void)
 {
 	oid.hi = ++oid_hi;
 	oid.lo = 1;
+}
+
+static inline void
+new_oid2(void)
+{
+	oid2.hi = ++oid_hi;
+	oid2.lo = 1;
+}
+
+static inline void
+new_oid3(void)
+{
+	oid3.hi = ++oid_hi;
+	oid3.lo = 1;
 }
 
 static inline float
@@ -64,13 +91,13 @@ step_print(const char *status, const char *comment, va_list ap)
 	int	i;
 
 	end = clock();
-	printf("  %s    ", status);
+	fprintf(autotest_ap->outstream, "  %s    ", status);
 	sprintf(timing, "%03.3f", duration());
 	for (i = strlen(timing); i < 7; i++)
-		printf(" ");
-	printf("%s  ", timing);
-	vprintf(comment, ap);
-	printf("\n");
+		fprintf(autotest_ap->outstream, " ");
+	fprintf(autotest_ap->outstream, "%s  ", timing);
+	vfprintf(autotest_ap->outstream, comment, ap);
+	fprintf(autotest_ap->outstream, "\n");
 }
 
 static inline void
@@ -79,7 +106,7 @@ step_success(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;32mOK\033[0m",comment, ap);
+	step_print("\033[0;32mOK\033[0m", comment, ap);
 	va_end(ap);
 }
 
@@ -89,27 +116,35 @@ step_fail(const char *comment, ...)
 	va_list	ap;
 
 	va_start(ap, comment);
-	step_print("\033[0;31mKO\033[0m",comment, ap);
+	step_print("\033[0;31mKO\033[0m", comment, ap);
 	va_end(ap);
 }
+static inline void
+step_skip(const char *comment, ...)
+{
+	va_list ap;
 
+	va_start(ap, comment);
+	step_print("\033[0;37mSK\033[0m", comment, ap);
+	va_end(ap);
+}
 static inline void
 step_new(int step, char *msg)
 {
 	int i;
 
-	printf("%3d  %s", step, msg);
+	fprintf(autotest_ap->outstream, "%3d  %s", step, msg);
 	for (i = strlen(msg); i < 25; i++)
-		printf(" ");
-	fflush(stdout);
+		fprintf(autotest_ap->outstream, " ");
 	start = clock();
 }
 
 static inline void
 step_init(void)
 {
-	printf("\033[1;35mStep Operation               ");
-	printf("Status Time(sec) Comment\033[0m\n");
+	fprintf(autotest_ap->outstream,
+		"\033[1;35mStep Operation               ");
+	fprintf(autotest_ap->outstream, "Status Time(sec) Comment\033[0m\n");
 }
 
 static int
@@ -139,6 +174,18 @@ pconnect(void)
 		return -1;
 	}
 
+	/** gather domain_nr for poh */
+	struct dc_pool		*pool;
+	struct pl_map_attr	attr;
+
+	pool = dc_hdl2pool(poh);
+	D_ASSERT(pool);
+
+	rc = pl_map_query(pool->dp_pool, &attr);
+	D_ASSERT(rc == 0);
+	dc_pool_put(pool);
+	domain_nr = attr.pa_domain_nr;
+
 	step_success("");
 	return 0;
 }
@@ -149,15 +196,41 @@ ccreate(void)
 	int rc;
 
 	/** Create container */
-	uuid_generate(cuuid);
-	rc = daos_cont_create(poh, cuuid, NULL, NULL);
-	if (rc) {
-		step_fail(d_errdesc(rc));
-		return -1;
-	}
+	cuuid = "autotest_cont_def";
+	rc = daos_cont_create_with_label(poh, cuuid, NULL, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
 
-	step_success("uuid = "DF_UUIDF, DP_UUID(cuuid));
+	/** Create container with RF=1 */
+	daos_prop_t	*prop;
+
+	prop = daos_prop_alloc(1);
+	prop->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF1;
+
+	cuuid2 = "autotest_cont_rf1";
+	rc = daos_cont_create_with_label(poh, cuuid2, prop, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	/** Create container with RF=2 */
+	daos_prop_t	*prop2;
+
+	prop2 = daos_prop_alloc(1);
+	prop2->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
+	prop2->dpp_entries[0].dpe_val = DAOS_PROP_CO_REDUN_RF2;
+
+	cuuid3 = "autotest_cont_rf2";
+	rc = daos_cont_create_with_label(poh, cuuid3, prop2, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	step_success("");
 	return 0;
+
+fail:
+	step_fail(d_errdesc(rc));
+	return -1;
 }
 
 static int
@@ -167,13 +240,23 @@ copen(void)
 
 	/** Open container */
 	rc = daos_cont_open(poh, cuuid, DAOS_COO_RW, &coh, NULL, NULL);
-	if (rc) {
-		step_fail(d_errdesc(rc));
-		return -1;
-	}
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_open(poh, cuuid2, DAOS_COO_RW, &coh2, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_open(poh, cuuid3, DAOS_COO_RW, &coh3, NULL, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
 
 	step_success("");
 	return 0;
+
+fail:
+	step_fail(d_errdesc(rc));
+	return -1;
 }
 
 static int
@@ -184,7 +267,7 @@ oS1(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, 0, OC_S1, 0, 0);
+	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
 	for (i = 0; i < 1000000; i++) {
 
@@ -213,7 +296,7 @@ oSX(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, 0, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, 0, 0, 0, 0);
 
 	for (i = 0; i < 10000; i++) {
 
@@ -248,9 +331,8 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
-	if (rc) {
+	if (rc)
 		return rc;
-	}
 
 	/** allocate buffer to store value */
 	D_ALLOC(val, size * MAX_INFLIGHT);
@@ -269,9 +351,9 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 			/** Haven't reached max request in flight yet */
 			evp = &ev_array[i];
 			rc = daos_event_init(evp, eq, NULL);
-			if (rc) {
+			if (rc)
 				break;
-			}
+
 			key_cur = key[i];
 			val_cur = val + size * i;
 		} else {
@@ -310,9 +392,8 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 		/** Insert kv pair */
 		rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_cur, size, val_cur,
 				evp);
-		if (rc) {
+		if (rc)
 			break;
-		}
 	}
 
 	/** Wait for completion of all in-flight requests */
@@ -355,9 +436,8 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 
 	/** Create event queue to manage asynchronous I/Os */
 	rc = daos_eq_create(&eq);
-	if (rc) {
+	if (rc)
 		return rc;
-	}
 
 	/** allocate buffer to store value */
 	D_ALLOC(val, size * MAX_INFLIGHT);
@@ -376,9 +456,9 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 			/** Haven't reached max request in flight yet */
 			evp = &ev_array[i];
 			rc = daos_event_init(evp, eq, NULL);
-			if (rc) {
+			if (rc)
 				break;
-			}
+
 			key_cur = key[i];
 			val_cur = val + size * i;
 			val_sz_cur = &val_sz[i];
@@ -479,7 +559,7 @@ kv_insert128(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -521,7 +601,7 @@ kv_read128(void)
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
-		step_fail("failed to insert: %s", d_errdesc(get_rc));
+		step_fail("failed to read: %s", d_errdesc(get_rc));
 		return -1;
 	}
 
@@ -578,7 +658,7 @@ kv_insert4k(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RO, &oh, NULL);
 	if (rc) {
@@ -620,7 +700,7 @@ kv_read4k(void)
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
-		step_fail("failed to insert: %s", d_errdesc(get_rc));
+		step_fail("failed to read: %s", d_errdesc(get_rc));
 		return -1;
 	}
 
@@ -641,7 +721,7 @@ kv_insert1m(void)
 	int		rc;
 
 	new_oid();
-	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, OC_SX, 0, 0);
+	daos_obj_generate_oid(coh, &oid, DAOS_OF_KV_FLAT, 0, 0, 0);
 
 	rc = daos_kv_open(coh, oid, DAOS_OO_RW, &oh, NULL);
 	if (rc) {
@@ -697,17 +777,180 @@ kv_read1m(void)
 }
 
 static int
+kv_insertrf1(void)
+{
+	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	int		put_rc;
+	int		rc;
+
+	if (domain_nr < 2)
+		D_GOTO(skip_step, rc = -DER_INVAL);
+
+	new_oid2();
+	daos_obj_generate_oid(coh2, &oid2, DAOS_OF_KV_FLAT, 0, 0, 0);
+
+	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return -1;
+	}
+	put_rc = kv_put(oh, 128, 1000000);
+	rc = daos_kv_close(oh, NULL);
+
+	if (put_rc) {
+		step_fail("failed to insert: %s", d_errdesc(put_rc));
+		return -1;
+	}
+
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return -1;
+	}
+	step_success("");
+	return 0;
+
+skip_step:
+	step_skip("Group size(2) is larger than domain_nr(%d)", domain_nr);
+	return 0;
+}
+
+static int
+kv_readrf1(void)
+{
+	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	int		get_rc;
+	int		rc;
+
+	if (domain_nr < 2)
+		D_GOTO(skip_step, rc = -DER_INVAL);
+
+	rc = daos_kv_open(coh2, oid2, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return -1;
+	}
+
+	get_rc = kv_get(oh, 128, 1000000);
+	rc = daos_kv_close(oh, NULL);
+
+	if (get_rc) {
+		step_fail("failed to read: %s", d_errdesc(get_rc));
+		return -1;
+	}
+
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return -1;
+	}
+
+	step_success("");
+	return 0;
+
+skip_step:
+	step_skip("Group size(2) is larger than domain_nr(%d)", domain_nr);
+	return 0;
+}
+
+static int
+kv_insertrf2(void)
+{
+	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	int		put_rc;
+	int		rc;
+
+	if (domain_nr < 3)
+		D_GOTO(skip_step, rc = -DER_INVAL);
+
+	new_oid3();
+	daos_obj_generate_oid(coh3, &oid3, DAOS_OF_KV_FLAT, 0, 0, 0);
+
+	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return -1;
+	}
+
+	put_rc = kv_put(oh, 128, 1000000);
+	rc = daos_kv_close(oh, NULL);
+
+	if (put_rc) {
+		step_fail("failed to insert: %s", d_errdesc(put_rc));
+		return -1;
+	}
+
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return -1;
+	}
+
+	step_success("");
+	return 0;
+
+skip_step:
+	step_skip("Group size(3) is larger than domain_nr(%d)", domain_nr);
+	return 0;
+}
+
+static int
+kv_readrf2(void)
+{
+	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	int		get_rc;
+	int		rc;
+
+	if (domain_nr < 3)
+		D_GOTO(skip_step, rc = -DER_INVAL);
+
+	rc = daos_kv_open(coh3, oid3, DAOS_OO_RW, &oh, NULL);
+	if (rc) {
+		step_fail("failed to open object: %s", d_errdesc(rc));
+		return -1;
+	}
+
+	get_rc = kv_get(oh, 128, 1000000);
+	rc = daos_kv_close(oh, NULL);
+
+	if (get_rc) {
+		step_fail("failed to read: %s", d_errdesc(get_rc));
+		return -1;
+	}
+
+	if (rc) {
+		step_fail("failed to close object: %s", d_errdesc(rc));
+		return -1;
+	}
+
+	step_success("");
+	return 0;
+
+skip_step:
+	step_skip("Group size(3) is larger than domain_nr(%d)", domain_nr);
+	return 0;
+}
+
+static int
 cclose(void)
 {
 	int rc;
 
 	rc = daos_cont_close(coh, NULL);
-	if (rc) {
-		step_fail(d_errdesc(rc));
-		return -1;
-	}
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_close(coh2, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_close(coh3, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
 	step_success("");
 	return 0;
+
+fail:
+	step_fail(d_errdesc(rc));
+	return -1;
 }
 
 static int
@@ -716,12 +959,23 @@ cdestroy(void)
 	int rc;
 
 	rc = daos_cont_destroy(poh, cuuid, force, NULL);
-	if (rc) {
-		step_fail(d_errdesc(rc));
-		return -1;
-	}
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_destroy(poh, cuuid2, force, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
+	rc = daos_cont_destroy(poh, cuuid3, force, NULL);
+	if (rc)
+		D_GOTO(fail, rc);
+
 	step_success("");
 	return 0;
+
+fail:
+	step_fail(d_errdesc(rc));
+	return -1;
 }
 
 static int
@@ -761,37 +1015,46 @@ struct step {
 
 static struct step steps[] = {
 	/** Set up */
-	{ 0,	"Initializing DAOS",		init ,		100 },
-	{ 1,	"Connecting to pool",		pconnect,	99 },
-	{ 2,	"Creating container",		ccreate,	98 },
-	{ 3,	"Opening container",		copen,		97 },
+	{ 0,	"Initializing DAOS",			init,		100 },
+	{ 1,	"Connecting to pool",			pconnect,	99 },
+	{ 2,	"Creating containers",			ccreate,	98 },
+	{ 3,	"Opening container",			copen,		97 },
 
 	/** Layout generation tests */
-	{ 10,	"Generating 1M S1 layouts",	oS1,		96 },
-	{ 11,	"Generating 10K SX layouts",	oSX,		96 },
+	{ 10,	"Generating 1M S1 layouts",		oS1,		96 },
+	{ 11,	"Generating 10K SX layouts",		oSX,		96 },
 
 	/** KV tests */
-	{ 20,	"Inserting 1M 128B values",	kv_insert128,	96 },
-	{ 21,	"Reading 128B values back",	kv_read128,	96 },
-	//{ 22,	"Listing keys",			kv_list,	96 },
-	//{ 23,	"Punching object",		kv_punch,	96 },
-	{ 24,	"Inserting 1M 4KB values",	kv_insert4k,	96 },
-	{ 25,	"Reading 4KB values back",	kv_read4k,	96 },
-	//{ 26,	"Listing keys",			kv_list,	96 },
-	//{ 27,	"Punching object",		kv_punch,	96 },
-	{ 28,	"Inserting 100K 1MB values",	kv_insert1m,	96 },
-	{ 29,	"Reading 1MB values back",	kv_read1m,	96 },
-	//{ 30,	"Listing keys",			kv_list,	96 },
-	//{ 31,	"Punching object",		kv_punch,	96 },
+	{ 20,	"Inserting 1M 128B values",		kv_insert128,	96 },
+	{ 21,	"Reading 128B values back",		kv_read128,	96 },
+	/** { 22,	"Listing keys",				kv_list,	96 },
+	* { 23,	"Punching object",			kv_punch,	96 },
+	*/
+	{ 24,	"Inserting 1M 4KB values",		kv_insert4k,	96 },
+	{ 25,	"Reading 4KB values back",		kv_read4k,	96 },
+	/** { 26,	"Listing keys",				kv_list,	96 },
+	* { 27,	"Punching object",			kv_punch,	96 },
+	*/
+	{ 28,	"Inserting 100K 1MB values",		kv_insert1m,	96 },
+	{ 29,	"Reading 1MB values back",		kv_read1m,	96 },
+	/** { 30,	"Listing keys",				kv_list,	96 },
+	* { 31,	"Punching object",			kv_punch,	96 },
+	*/
+
+	/** Test aux containers */
+	{ 40,	"Inserting into RF1 cont",		kv_insertrf1,	96 },
+	{ 41,	"Reading RF1 values back",		kv_readrf1,	96 },
+	{ 42,	"Inserting into RF2 cont",		kv_insertrf2,	96 },
+	{ 43,	"Reading RF2 values back",		kv_readrf2,	96 },
 
 	/** Array tests */
 
 	/** Tear down */
-	{ 96,	"Closing container",		cclose,		97 },
-	{ 97,	"Destroying container",		cdestroy,	98 },
-	{ 98,	"Disconnecting from pool",	pdisconnect,	99 },
-	{ 99,	"Tearing down DAOS",		fini,		100 },
-	{ 100,	"",				NULL,		100 }
+	{ 96,	"Closing containers",			cclose,		97 },
+	{ 97,	"Destroying containers",		cdestroy,	98 },
+	{ 98,	"Disconnecting from pool",		pdisconnect,	99 },
+	{ 99,	"Tearing down DAOS",			fini,		100 },
+	{ 100,	"",					NULL,		100 }
 };
 
 int
@@ -820,10 +1083,12 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 	}
 
 	if (force) {
-		printf("\nSome steps \033[0;31mfailed\033[0m.\n");
+		fprintf(ap->outstream,
+			"\nSome steps \033[0;31mfailed\033[0m.\n");
 		rc = 1;
 	} else {
-		printf("\nAll steps \033[0;32mpassed\033[0m.\n");
+		fprintf(ap->outstream,
+			"\nAll steps \033[0;32mpassed\033[0m.\n");
 		rc = 0;
 	}
 

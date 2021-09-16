@@ -29,6 +29,9 @@ crt_proc_msg_requestvote_response_t(crt_proc_t proc, crt_proc_op_t proc_op,
 	rc = crt_proc_int32_t(proc, proc_op, &p->vote_granted);
 	if (unlikely(rc))
 		return rc;
+	rc = crt_proc_int32_t(proc, proc_op, &p->prevote);
+	if (unlikely(rc))
+		return rc;
 
 	return 0;
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
@@ -32,22 +33,22 @@ type (
 	// PoolServiceStorage holds information about the pool storage.
 	PoolServiceStorage struct {
 		sync.Mutex
-		CreationRankStr string   // string rankset set at creation
-		creationRanks   *RankSet // used to reconstitute the rankset
-		CurrentRankStr  string   // string rankset representing current ranks
-		currentRanks    *RankSet // used to reconstitute the rankset
-		ScmPerRank      uint64   // scm per rank allocated during creation
-		NVMePerRank     uint64   // nvme per rank allocated during creation
+		CreationRankStr    string   // string rankset set at creation
+		creationRanks      *RankSet // used to reconstitute the rankset
+		CurrentRankStr     string   // string rankset representing current ranks
+		currentRanks       *RankSet // used to reconstitute the rankset
+		PerRankTierStorage []uint64 // storage allocated to each tier on a rank
 	}
 
 	// PoolService represents a pool service created to manage metadata
 	// for a DAOS Pool.
 	PoolService struct {
-		PoolUUID  uuid.UUID
-		PoolLabel string
-		State     PoolServiceState
-		Replicas  []Rank
-		Storage   *PoolServiceStorage
+		PoolUUID   uuid.UUID
+		PoolLabel  string
+		State      PoolServiceState
+		Replicas   []Rank
+		Storage    *PoolServiceStorage
+		LastUpdate time.Time
 	}
 
 	// PoolRankMap provides a map of Rank->[]*PoolService.
@@ -67,16 +68,15 @@ type (
 )
 
 // NewPoolService returns a properly-initialized *PoolService.
-func NewPoolService(uuid uuid.UUID, rankScm, rankNvme uint64, ranks []Rank) *PoolService {
+func NewPoolService(uuid uuid.UUID, tierStorage []uint64, ranks []Rank) *PoolService {
 	rs := RankSetFromRanks(ranks)
 	return &PoolService{
 		PoolUUID: uuid,
 		State:    PoolServiceStateCreating,
 		Storage: &PoolServiceStorage{
-			ScmPerRank:      rankScm,
-			NVMePerRank:     rankNvme,
-			CreationRankStr: rs.RangedString(),
-			CurrentRankStr:  rs.RangedString(),
+			PerRankTierStorage: tierStorage,
+			CreationRankStr:    rs.RangedString(),
+			CurrentRankStr:     rs.RangedString(),
 		},
 	}
 }
@@ -117,14 +117,24 @@ func (pss *PoolServiceStorage) CurrentRanks() []Rank {
 // the pool, calculated from the current set of ranks multiplied
 // by the per-rank SCM allocation made at creation time.
 func (pss *PoolServiceStorage) TotalSCM() uint64 {
-	return uint64(len(pss.CurrentRanks())) * pss.ScmPerRank
+	if len(pss.PerRankTierStorage) >= 1 {
+		return uint64(len(pss.CurrentRanks())) * pss.PerRankTierStorage[0]
+	}
+	return 0
 }
 
 // TotalNVMe returns the total amount of NVMe storage allocated to
 // the pool, calculated from the current set of ranks multiplied
 // by the per-rank NVMe allocation made at creation time.
 func (pss *PoolServiceStorage) TotalNVMe() uint64 {
-	return uint64(len(pss.CurrentRanks())) * pss.NVMePerRank
+	if len(pss.PerRankTierStorage) >= 2 {
+		sum := uint64(0)
+		for _, tierStorage := range pss.PerRankTierStorage[1:] {
+			sum += uint64(len(pss.CurrentRanks())) * tierStorage
+		}
+		return sum
+	}
+	return 0
 }
 
 func (pss *PoolServiceStorage) String() string {
@@ -244,6 +254,7 @@ func (pdb *PoolDatabase) updateService(cur, new *PoolService) {
 		panic("PoolDatabase.updateService() called with non-member pointer")
 	}
 	cur.State = new.State
+	cur.LastUpdate = new.LastUpdate
 
 	// TODO: Update svc rank map
 	cur.Replicas = new.Replicas

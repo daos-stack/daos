@@ -331,6 +331,50 @@ struct daos_oc_ec_codec {
 
 static struct daos_oc_ec_codec	*oc_ec_codecs;
 static int			 oc_ec_codec_nr;
+/* for binary search */
+static struct daos_oc_ec_codec **ecc_array;
+
+static void
+ecc_sop_swap(void *array, int a, int b)
+{
+	struct daos_oc_ec_codec **ecc = (struct daos_oc_ec_codec **)array;
+	struct daos_oc_ec_codec  *tmp;
+
+	tmp = ecc[a];
+	ecc[a] = ecc[b];
+	ecc[b] = tmp;
+}
+
+static int
+ecc_sop_cmp(void *array, int a, int b)
+{
+	struct daos_oc_ec_codec **ecc = (struct daos_oc_ec_codec **)array;
+
+	if (ecc[a]->ec_oc_id > ecc[b]->ec_oc_id)
+		return 1;
+	if (ecc[a]->ec_oc_id < ecc[b]->ec_oc_id)
+		return -1;
+	return 0;
+}
+
+static int
+ecc_sop_cmp_key(void *array, int i, uint64_t key)
+{
+	struct daos_oc_ec_codec **ecc = (struct daos_oc_ec_codec **)array;
+	unsigned int		  id  = (unsigned int)key;
+
+	if (ecc[i]->ec_oc_id > id)
+		return 1;
+	if (ecc[i]->ec_oc_id < id)
+		return -1;
+	return 0;
+}
+
+static daos_sort_ops_t	ecc_sort_ops = {
+	.so_swap	= ecc_sop_swap,
+	.so_cmp		= ecc_sop_cmp,
+	.so_cmp_key	= ecc_sop_cmp_key,
+};
 
 void
 obj_ec_codec_fini(void)
@@ -339,6 +383,11 @@ obj_ec_codec_fini(void)
 	struct daos_obj_class	*oc;
 	int			 ocnr = 0;
 	int			 i;
+
+	if (ecc_array) {
+		D_FREE(ecc_array);
+		ecc_array = NULL;
+	}
 
 	if (oc_ec_codecs == NULL)
 		return;
@@ -386,18 +435,21 @@ obj_ec_codec_init()
 	if (ocnr == 0)
 		return 0;
 
+	oc_ec_codec_nr = ocnr;
 	D_ALLOC_ARRAY(oc_ec_codecs, ocnr);
 	if (oc_ec_codecs == NULL)
 		D_GOTO(failed, rc = -DER_NOMEM);
-	oc_ec_codec_nr = ocnr;
 
-	i = 0;
-	for (oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
+	D_ALLOC_ARRAY(ecc_array, ocnr);
+	if (ecc_array == NULL)
+		D_GOTO(failed, rc = -DER_NOMEM);
+
+	for (i = 0, oc = &daos_obj_classes[0]; oc->oc_id != OC_UNKNOWN; oc++) {
 		if (!daos_oclass_is_ec(&oc->oc_attr))
 			continue;
 
 		oc_ec_codecs[i].ec_oc_id = oc->oc_id;
-		ec_codec = &oc_ec_codecs[i++].ec_codec;
+		ec_codec = &oc_ec_codecs[i].ec_codec;
 		k = oc->oc_attr.ca_ec_k;
 		p = oc->oc_attr.ca_ec_p;
 		if (k > OBJ_EC_MAX_K || p > OBJ_EC_MAX_P) {
@@ -431,9 +483,14 @@ obj_ec_codec_init()
 		/* Initialize gf tables from encode matrix */
 		ec_init_tables(k, p, &encode_matrix[k * k],
 			       ec_codec->ec_gftbls);
-	}
 
+		ecc_array[i] = &oc_ec_codecs[i];
+		i++;
+	}
 	D_ASSERT(i == ocnr);
+
+	rc = daos_array_sort(ecc_array, oc_ec_codec_nr, true, &ecc_sort_ops);
+	D_ASSERT(rc == 0);
 	return 0;
 
 failed:
@@ -444,22 +501,14 @@ failed:
 struct obj_ec_codec *
 obj_ec_codec_get(daos_oclass_id_t oc_id)
 {
-	struct daos_oc_ec_codec *oc_ec_codec;
-	int			 i;
+	int	idx;
 
-	if (oc_ec_codecs == NULL)
+	D_ASSERT(ecc_array);
+	idx = daos_array_find(ecc_array, oc_ec_codec_nr, oc_id, &ecc_sort_ops);
+	if (idx < 0)
 		return NULL;
 
-	D_ASSERT(oc_ec_codec_nr >= 1);
-	for (i = 0; i < oc_ec_codec_nr; i++) {
-		oc_ec_codec = &oc_ec_codecs[i];
-		D_ASSERT(oc_ec_codec->ec_codec.ec_en_matrix != NULL);
-		D_ASSERT(oc_ec_codec->ec_codec.ec_gftbls != NULL);
-		if (oc_ec_codec->ec_oc_id == oc_id)
-			return &oc_ec_codec->ec_codec;
-	}
-
-	return NULL;
+	return &ecc_array[idx]->ec_codec;
 }
 
 static void

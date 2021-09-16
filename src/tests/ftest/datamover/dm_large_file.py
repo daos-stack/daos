@@ -8,7 +8,7 @@ from data_mover_test_base import DataMoverTestBase
 from os.path import basename
 
 # pylint: disable=too-many-ancestors
-class DmPosixLargeFile(DataMoverTestBase):
+class DmvrPosixLargeFile(DataMoverTestBase):
     """Test class Description: Add datamover test to copy a large file amongst
                                daos containers and external file system.
 
@@ -60,38 +60,42 @@ class DmPosixLargeFile(DataMoverTestBase):
             "DAOS", "/", self.pool[0], self.container[0],
             "DAOS", "/", self.pool[0], self.container[1])
 
+        # TODO: commenting out for now until we have a POSIX shared filesystem
+        # to write to for large file tests. These used to work but do not
+        # anymore because duns now resolves dfuse mount points
+
         # create cont3 for dfuse (posix)
-        self.create_cont(self.pool[0])
+        #self.create_cont(self.pool[0])
 
         # start dfuse on cont3
-        self.start_dfuse(self.dfuse_hosts, self.pool[0], self.container[2])
+        #self.start_dfuse(self.dfuse_hosts, self.pool[0], self.container[2])
 
         # dcp treats a trailing slash on the source as /*
         # so strip trailing slash from posix path so dcp
         # behaves similar to "cp"
-        posix_path = self.dfuse.mount_dir.value.rstrip("/")
+        #posix_path = self.dfuse.mount_dir.value.rstrip("/")
 
         # copy from daos cont2 to posix file system (dfuse)
-        self.run_datamover(
-            self.test_id + " (cont2 to posix)",
-            "DAOS", "/", self.pool[0], self.container[1],
-            "POSIX", posix_path)
+        #self.run_datamover(
+        #    self.test_id + " (cont2 to posix)",
+        #    "DAOS", "/", self.pool[0], self.container[1],
+        #    "POSIX", posix_path)
 
         # create cont4
-        self.create_cont(self.pool[0])
+        #self.create_cont(self.pool[0])
 
         # copy from posix file system to daos cont4
-        self.run_datamover(
-            self.test_id + " (posix to cont4)",
-            "POSIX", posix_path, None, None,
-            "DAOS", "/", self.pool[0], self.container[3])
+        #self.run_datamover(
+        #    self.test_id + " (posix to cont4)",
+        #    "POSIX", posix_path, None, None,
+        #    "DAOS", "/", self.pool[0], self.container[3])
 
         # the result is that a NEW directory is created in the destination
-        daos_path = "/" + basename(posix_path) + self.ior_cmd.test_file.value
+        #daos_path = "/" + basename(posix_path) + self.ior_cmd.test_file.value
 
-        # update ior params, read back and verify data from cont4
+        # update ior params, read back and verify data from cont2
         self.run_ior_with_params(
-            "DAOS", daos_path, self.pool[0], self.container[3],
+            "DAOS", self.ior_cmd.test_file.value, self.pool[0], self.container[1],
             flags="-r -R")
 
     def test_dm_large_file_dcp(self):

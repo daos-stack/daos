@@ -20,7 +20,7 @@ import (
 type PoolGetACLReq struct {
 	unaryRequest
 	msRequest
-	UUID string // pool UUID
+	ID string // pool ID
 }
 
 // PoolGetACLResp contains the output results for PoolGetACL
@@ -30,13 +30,10 @@ type PoolGetACLResp struct {
 
 // PoolGetACL gets the Access Control List for the pool.
 func PoolGetACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetACLReq) (*PoolGetACLResp, error) {
-	if err := checkUUID(req.UUID); err != nil {
-		return nil, err
-	}
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolGetACL(ctx, &mgmtpb.GetACLReq{
-			Sys:  req.getSystem(rpcClient),
-			Uuid: req.UUID,
+			Sys: req.getSystem(rpcClient),
+			Id:  req.ID,
 		})
 	})
 
@@ -57,8 +54,8 @@ func PoolGetACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolGetACLReq)
 type PoolOverwriteACLReq struct {
 	unaryRequest
 	msRequest
-	UUID string             // pool UUID
-	ACL  *AccessControlList // new ACL for the pool
+	ID  string             // pool UUID or label
+	ACL *AccessControlList // new ACL for the pool
 }
 
 // PoolOverwriteACLResp returns the updated ACL for the pool
@@ -70,18 +67,15 @@ type PoolOverwriteACLResp struct {
 // with a new one. If it succeeds, it returns the updated ACL. If not, it returns
 // an error.
 func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOverwriteACLReq) (*PoolOverwriteACLResp, error) {
-	if err := checkUUID(req.UUID); err != nil {
-		return nil, err
-	}
 	if req.ACL.Empty() {
 		return nil, errors.New("empty ACL on modify")
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolOverwriteACL(ctx, &mgmtpb.ModifyACLReq{
-			Sys:  req.getSystem(rpcClient),
-			Uuid: req.UUID,
-			ACL:  req.ACL.Entries,
+			Sys: req.getSystem(rpcClient),
+			Id:  req.ID,
+			ACL: req.ACL.Entries,
 		})
 	})
 
@@ -103,8 +97,8 @@ func PoolOverwriteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolOver
 type PoolUpdateACLReq struct {
 	unaryRequest
 	msRequest
-	UUID string             // pool UUID
-	ACL  *AccessControlList // ACL entries to add to the pool
+	ID  string             // pool UUID or label
+	ACL *AccessControlList // ACL entries to add to the pool
 }
 
 // PoolUpdateACLResp returns the updated ACL for the pool
@@ -116,18 +110,15 @@ type PoolUpdateACLResp struct {
 // in a pool's Access Control List. If it succeeds, it returns the updated ACL.
 // If not, it returns an error.
 func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateACLReq) (*PoolUpdateACLResp, error) {
-	if err := checkUUID(req.UUID); err != nil {
-		return nil, err
-	}
 	if req.ACL.Empty() {
 		return nil, errors.New("empty ACL on modify")
 	}
 
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolUpdateACL(ctx, &mgmtpb.ModifyACLReq{
-			Sys:  req.getSystem(rpcClient),
-			Uuid: req.UUID,
-			ACL:  req.ACL.Entries,
+			Sys: req.getSystem(rpcClient),
+			Id:  req.ID,
+			ACL: req.ACL.Entries,
 		})
 	})
 
@@ -148,7 +139,7 @@ func PoolUpdateACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolUpdateA
 type PoolDeleteACLReq struct {
 	unaryRequest
 	msRequest
-	UUID      string // UUID of the pool
+	ID        string // UUID or label of the pool
 	Principal string // Principal whose entry will be removed
 }
 
@@ -165,14 +156,10 @@ func PoolDeleteACL(ctx context.Context, rpcClient UnaryInvoker, req *PoolDeleteA
 		return nil, errors.New("no principal provided")
 	}
 
-	if err := checkUUID(req.UUID); err != nil {
-		return nil, err
-	}
-
 	req.setRPC(func(ctx context.Context, conn *grpc.ClientConn) (proto.Message, error) {
 		return mgmtpb.NewMgmtSvcClient(conn).PoolDeleteACL(ctx, &mgmtpb.DeleteACLReq{
 			Sys:       req.getSystem(rpcClient),
-			Uuid:      req.UUID,
+			Id:        req.ID,
 			Principal: req.Principal,
 		})
 	})

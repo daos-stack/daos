@@ -13,6 +13,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import io.daos.*;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,11 +23,6 @@ import org.slf4j.LoggerFactory;
  * <li>call DFS methods, including release DFS files in the cleaner executor</li>
  * <li>construct {@link DaosFile} instance</li>
  * It registers itself to shutdown manager in {@link DaosClient} to release resources in case of abnormal shutdown.
- *
- * <p>
- * If you have <code>poolId</code> specified, but no <code>containerId</code>, DAOS FS will be mounted on
- * non-readonly root container with UUID {@link #ROOT_CONT_UUID}. Thus, you need to make sure the pool
- * doesn't have root container yet.
  *
  * <p>
  * User cannot instantiate this class directly since we need to make sure single instance of
@@ -67,8 +63,6 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
 
   private long contPtr;
 
-  public static final String ROOT_CONT_UUID = "ffffffff-ffff-ffff-ffff-ffffffffffff";
-
   private static final Logger log = LoggerFactory.getLogger(DaosFsClient.class);
 
   static {
@@ -95,19 +89,10 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
     DaosFsClientBuilder builder = getBuilder();
     setClient(builder.buildDaosClient());
     DaosClient client = getClient();
-    if (builder.getContId() != null && !ROOT_CONT_UUID.equals(builder.getContId())) {
-      contPtr = client.getContPtr();
-      dfsPtr = mountFileSystem(client.getPoolPtr(), contPtr, builder.readOnlyFs);
-      if (log.isDebugEnabled()) {
-        log.debug("mounted FS {}", dfsPtr);
-      }
-    } else {
-      setContId(ROOT_CONT_UUID);
-      contPtr = -1;
-      dfsPtr = mountFileSystem(client.getPoolPtr(), -1, builder.readOnlyFs);
-      if (log.isDebugEnabled()) {
-        log.debug("mounted FS {} on root container", dfsPtr);
-      }
+    contPtr = client.getContPtr();
+    dfsPtr = mountFileSystem(client.getPoolPtr(), contPtr, builder.readOnlyFs);
+    if (log.isDebugEnabled()) {
+      log.debug("mounted FS {}", dfsPtr);
     }
 
     cleanerExe.execute(new Cleaner.CleanerTask());
@@ -142,10 +127,7 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
    * {@link DaosIOException}
    */
   public static synchronized long mountFileSystem(long poolPtr, long contPtr, boolean readOnly) throws IOException {
-    if (contPtr != -1) {
-      return dfsMountFs(poolPtr, contPtr, readOnly);
-    }
-    return dfsMountFsOnRoot(poolPtr);
+    return dfsMountFs(poolPtr, contPtr, readOnly);
   }
 
   /**
@@ -177,22 +159,13 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
     DaosFsClientBuilder builder = getBuilder();
     if (force || getRefCnt() <= 0) {
       if (isInited() && dfsPtr != 0) {
-        log.debug("dfsptr: " + dfsPtr);
         cleanerExe.shutdownNow();
         if (log.isDebugEnabled()) {
           log.debug("cleaner stopped");
         }
-        log.debug("dfsptr: " + dfsPtr);
-        if (contPtr == -1) {
-          dfsUnmountFsOnRoot(dfsPtr);
-          if (log.isDebugEnabled()) {
-            log.debug("FS unmounted {} from root container", dfsPtr);
-          }
-        } else {
-          dfsUnmountFs(dfsPtr);
-          if (log.isDebugEnabled()) {
-            log.debug("FS unmounted {}", dfsPtr);
-          }
+        dfsUnmountFs(dfsPtr);
+        if (log.isDebugEnabled()) {
+          log.debug("FS unmounted {}", dfsPtr);
         }
         if (force) {
           getClient().forceClose();
@@ -821,27 +794,6 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
   static native long dfsMountFs(long poolPtr, long contPtr, boolean readOnly) throws IOException;
 
   /**
-   * mount FS on non-readonly root container.
-   *
-   * @param poolPtr
-   * pointer to pool
-   * @return pointer to dfs object
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native long dfsMountFsOnRoot(long poolPtr) throws IOException;
-
-  /**
-   * unmount FS from root container.
-   *
-   * @param poolPtr
-   * pointer to pool
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native void dfsUnmountFsOnRoot(long poolPtr) throws IOException;
-
-  /**
    * unmount FS.
    *
    * @param dfsPtr
@@ -850,26 +802,6 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
    * {@link DaosIOException}
    */
   static native void dfsUnmountFs(long dfsPtr) throws IOException;
-
-  /**
-   * create UNS path with given data in <code>bufferAddress</code> in pool <code>poolHandle</code>.
-   * A new container will be created with some properties from <code>attribute</code>.
-   * Object type, pool UUID and container UUID are set to extended attribute of <code>path</code>.
-   *
-   * @param poolHandle
-   * handle of pool
-   * @param path
-   * OS file path to set duns attributes. make sure file not existing
-   * @param bufferAddress
-   * buffer memory address of direct buffer which holds <code>DunsAttribute</code> data serialized by
-   *     protocol buffer
-   * @param buffLen
-   * length of buffer
-   * @return UUID of container
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native String dunsCreatePath(long poolHandle, String path, long bufferAddress, int buffLen) throws IOException;
 
   /**
    * extract and parse extended attributes from given <code>path</code>.
@@ -911,18 +843,6 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
    * {@link DaosIOException}
    */
   static native void dunsSetAppInfo(String path, String attrName, String value) throws IOException;
-
-  /**
-   * Destroy a container and remove the path associated with it in the UNS.
-   *
-   * @param poolHandle
-   * pool handle
-   * @param path
-   * OS file path
-   * @throws IOException
-   * {@link DaosIOException}
-   */
-  static native void dunsDestroyPath(long poolHandle, String path) throws IOException;
 
   /**
    * parse input string to UNS attribute.
@@ -1084,11 +1004,8 @@ public final class DaosFsClient extends ShareableClient implements ForceCloseabl
         fsClient = new DaosFsClient(poolId, contId, builder);
       } else {
         //check existing client
-        if (poolId == null) {
-          throw new IllegalArgumentException("need pool UUID.");
-        }
-        if (contId == null) {
-          contId = ROOT_CONT_UUID;
+        if (poolId == null || contId == null) {
+          throw new IllegalArgumentException("need pool UUID/label and container UUID/label");
         }
         String key = poolId + contId;
         fsClient = pcFsMap.get(key);

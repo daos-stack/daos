@@ -20,7 +20,7 @@ class DaosAgentTransportCredentials(TransportCredentials):
 
         # Additional daos_agent transport credential parameters:
         #   - server_name: <str>, e.g. "daos_server"
-        #       Name of server accodring to its certificate [daos_agent only]
+        #       Name of server according to its certificate [daos_agent only]
         #
         self.server_name = BasicParameter(None, None)
         self.cert = LogParameter(log_dir, None, "agent.crt")

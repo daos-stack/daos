@@ -5,57 +5,62 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import uuid
-from apricot import TestWithServers, skipForTicket
+
+from apricot import TestWithServers
 from pydaos.raw import DaosApiError, c_uuid_to_str
-from command_utils_base import CommandFailure
-from test_utils_pool import TestPool
 from test_utils_container import TestContainer
-from general_utils import create_string_buffer
 
 
 class EvictTests(TestWithServers):
     """
-
     Tests DAOS client eviction from a pool that the client is using.
 
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize an EvictTests object."""
+        super().__init__(*args, **kwargs)
+        self.start_agents_once = False
+        self.start_servers_once = False
+
     def connected_pool(self, hostlist, targets=None):
         # pylint: disable=unused-argument
-        """Connect to pool.
+        """Create and connect to a pool.
 
         Args:
             hostlist (list): list of daos server nodes
             targets (list): List of targets for pool create
 
-        Returns:
-            TestPool: a TestPool objectfor the created pool
-
         """
-        pool = TestPool(self.context, self.get_dmg_command())
-        pool.get_params(self)
+        pool = self.get_pool(create=False)
+
         if targets is not None:
-            pool.target_list.value = targets
+            pool.target_list.update(targets)
+
         # create pool
         pool.create()
+
         # Commented out due to DAOS-3836. Remove the pylint disable at the top
         # of this method when the following lines are uncommented.
         # Check that the pool was created
         # status = pool.check_files(hostlist)
         # if not status:
         #    self.fail("Invalid pool - pool data not detected on servers")
+
         # Connect to the pool
         status = pool.connect()
         if not status:
             self.fail("Pool connect failed or already connected")
+
         # Return connected pool
         return pool
 
-    def pool_handle_exist(self, test_param):
+    def pool_handle_exist(self, pool, test_param):
         """Check if pool handle still exists.
 
         Args:
+            pool (TestPool): Pool to check the handle.
             test_param (str): invalid UUID
 
         Returns:
@@ -63,14 +68,14 @@ class EvictTests(TestWithServers):
 
         """
         status = True
-        if int(self.pool.pool.handle.value) == 0:
+        if int(pool.pool.handle.value) == 0:
             self.log.error(
                 "Pool handle was removed when doing an evict with %s",
                 test_param)
             status &= False
         return status
 
-    def evict_badparam(self, test_param):
+    def evict_bad_param(self, test_param):
         """Connect to pool, connect and try to evict with a bad param.
 
         Args:
@@ -87,32 +92,39 @@ class EvictTests(TestWithServers):
             "Pool UUID: %s\n Pool handle: %s\n",
             self.pool.uuid, self.pool.pool.handle.value,)
 
+        original_uuid = self.pool.uuid
+
         if test_param == "invalid_uuid":
             # Attempt to evict pool with invalid UUID
             bogus_uuid = self.pool.uuid
             # in case uuid4() generates pool.uuid
             while bogus_uuid == self.pool.uuid:
                 bogus_uuid = str(uuid.uuid4())
-            # set the UUID directly
-            self.pool.pool.set_uuid_str(bogus_uuid)
+
+            # Set the bogus UUID to the pool.
+            self.pool.uuid = bogus_uuid
+
             self.log.info(
-                "Evicting pool with Invalid Pool UUID:  %s",
-                self.pool.pool.get_uuid_str())
+                "Evicting pool with Invalid Pool UUID: %s", self.pool.uuid)
         else:
             self.fail("Invalid yaml parameters - check \"params\" values")
-        try:
-            # call dmg pool_evict directly
-            self.pool.dmg.pool_evict(pool=self.pool.pool.get_uuid_str())
-        # exception is expected
-        except CommandFailure as result:
+
+        # Make it not fail at CommandFailure and call.
+        self.pool.dmg.exit_status_exception = False
+        self.pool.use_label = False
+        self.pool.evict()
+
+        # Restore the original UUID.
+        self.pool.uuid = original_uuid
+
+        result = self.pool.dmg.result
+        if result.exit_status != 0:
             self.log.info("Expected exception - invalid param %s\n %s\n",
                           test_param, str(result))
 
             # verify that pool still exists and the handle is still valid.
             self.log.info("Check if pool handle still exist")
-            return self.pool_handle_exist(test_param)
-        finally:
-            self.pool.pool.set_uuid_str(self.pool.uuid)
+            return self.pool_handle_exist(self.pool, test_param)
 
         # if here then pool-evict did not raise an exception as expected
         # restore the valid server group name and check if valid pool
@@ -122,7 +134,7 @@ class EvictTests(TestWithServers):
             " - evict from pool with %s", test_param)
 
         # check if pool handle still exists
-        self.pool_handle_exist(test_param)
+        self.pool_handle_exist(self.pool, test_param)
 
         # Commented out due to DAOS-3836.
         # if self.pool.check_files(self.hostlist_servers):
@@ -133,7 +145,6 @@ class EvictTests(TestWithServers):
                        "evicting a pool with bad param: %s", test_param)
         return False
 
-    @skipForTicket("DAOS-7377")
     def test_evict(self):
         """
         Test evicting a client from a pool.
@@ -145,14 +156,17 @@ class EvictTests(TestWithServers):
         The handle is removed.
         The test verifies that the other two pools were not affected
         by the evict
+
         :avocado: tags=all,pr,daily_regression,full_regression
         :avocado: tags=small
-        :avocado: tags=pool,poolevict
+        :avocado: tags=pool,pool_evict,pool_evict_basic
         :avocado: tags=DAOS_5610
         """
+        # Do not use self.pool. It will cause -1002 error when disconnecting.
         pool = []
         container = []
         # non_pool_servers = []
+
         # Target list is configured so that the pools are across all servers
         # except the pool under test is created on half of the servers
         pool_tgt = list(range(len(self.hostlist_servers)))
@@ -160,6 +174,7 @@ class EvictTests(TestWithServers):
         tlist = [pool_tgt, pool_tgt, pool_tgt_ut]
         pool_servers = [self.hostlist_servers[:len(tgt)] for tgt in tlist]
         # non_pool_servers = [self.hostlist_servers[len(tgt):] for tgt in tlist]
+
         # Create Connected TestPool
         for count, target_list in enumerate(tlist):
             pool.append(self.connected_pool(pool_servers[count], target_list))
@@ -170,24 +185,23 @@ class EvictTests(TestWithServers):
             #        "Pool # {} data detected on non pool servers {} ".format(
             #            count+1, non_pool_servers[count]))
 
-            self.log.info("Pool # %s is connected with handle %s",
-                          count+1, pool[count].pool.handle.value)
+            self.log.info(
+                "Pool # %s is connected with handle %s", count + 1,
+                pool[-1].pool.handle.value)
 
-            container.append(TestContainer(pool[count]))
+            container.append(TestContainer(pool[-1]))
             container[count].get_params(self)
             container[count].create()
             container[count].write_objects(target_list[-1])
 
         try:
-            self.log.info(
-                "Attempting to evict clients from pool with UUID: %s",
-                pool[-1].uuid)
-            # Evict the last pool in the list
-            pool[-1].dmg.pool_evict(pool=pool[-1].pool.get_uuid_str())
-        except CommandFailure as result:
-            self.fail(
-                "Detected exception while evicting a client {}".format(
-                    str(result)))
+            pool[-1].dmg.exit_status_exception = False
+            pool[-1].evict()
+        finally:
+            pool[-1].dmg.exit_status_exception = True
+
+        if pool[-1].dmg.result.exit_status != 0:
+            self.fail("Pool evict failed!")
 
         for count in range(len(tlist)):
             # Commented out due to DAOS-3836.
@@ -237,9 +251,9 @@ class EvictTests(TestWithServers):
         """
         Test evicting a pool using an invalid uuid.
 
-        :avocado: tags=all,pool,pr,daily_regression,full_regression,small
-        :avocado: tags=poolevict
-        :avocado: tags=poolevict_bad_uuid,DAOS_5610
+        :avocado: tags=all,pool,pr,daily_regression,full_regression
+        :avocado: tags=small
+        :avocado: tags=pool_evict,pool_evict_bad_uuid,DAOS_5610
         """
         test_param = self.params.get("uuid", '/run/badparams/*')
-        self.assertTrue(self.evict_badparam(test_param))
+        self.assertTrue(self.evict_bad_param(test_param))
