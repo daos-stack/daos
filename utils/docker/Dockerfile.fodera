@@ -130,6 +130,7 @@ RUN dnf -y upgrade && \
         hwloc-devel \
         ipmctl \
         java-1.8.0-openjdk \
+	java-1.8.0-openjdk-devel \
         json-c-devel \
         libaio-devel \
         libcmocka-devel \
@@ -144,7 +145,6 @@ RUN dnf -y upgrade && \
         Lmod \
         lz4-devel \
         make \
-        maven \
         meson \
         ndctl \
         ninja-build \
@@ -165,6 +165,7 @@ RUN dnf -y upgrade && \
         python3-yaml \
         sg3_utils \
         sudo \
+	wget \
         valgrind-devel \
         yasm && \
     dnf clean all
@@ -307,13 +308,14 @@ RUN echo -e "<settings>\n\
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
 
-RUN CHOICE=$(echo "" | sudo alternatives --config java | grep "java-1.8" | tr -cd '[[:digit:]]') && \
-        echo ${CHOICE:0:1} | sudo alternatives --config java
+USER root:root
 
-RUN java -version
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || ( wget https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz && tar -xf apache-maven-3.6.3-bin.tar.gz && find ./ -name "mvn" | { read d; f=$(dirname $d); cp -r $(readlink -f $f)/../* /usr/local; } )
+
+USER daos_server:daos_server
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
-    ( sh daos-java/find_java_home.sh | { read v; echo "export JAVA_HOME=$v" >> ~/.mavenrc; } && mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos )
+    mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
 
 WORKDIR /home/daos
 
