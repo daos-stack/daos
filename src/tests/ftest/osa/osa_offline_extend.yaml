@@ -8,7 +8,7 @@ extra_servers:
   test_servers:
     - server-C
     - server-D
-timeout: 1000
+timeout: 1100
 setup:
   start_servers_once: False
 server_config:
