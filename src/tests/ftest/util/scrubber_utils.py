@@ -10,46 +10,27 @@ from telemetry_utils import TelemetryUtils
 
 
 class ScrubberUtils(TelemetryUtils):
-    def __init__(self, dmg, servers):
-        """Create a ScrubberUtils object.
+    # pylint: disable=too-few-public-methods, too-many-ancestors
+    """Class for Scrubber Utils."""
 
-        Args:
-            dmg (DmgCommand): the DmgCommand object configured to communicate
-                with the servers
-            servers (list): a list of server host names
+    def setUp(self):
+        """Set up for test case."""
+        super().setUp()
+
+    def is_scrubber_started(self):
+        """This method is used to check whether scrubber is
+          started.
         """
-        self.log = getLogger(__name__)
-        self.dmg = dmg
-        self.hosts = NodeSet.fromlist(servers)
-
-    def is_scrubber_started(self, host=None):
-        TEST_METRICS = ["engine_pool_scrubber_scrubber_started",
-                        "engine_pool_scrubber_csums_total"]
-        if host is None:
-            # Use the first host
-            host = self.hosts[0]
-        else:
-            host = host
+        TEST_METRICS = "engine_pool_scrubber_scrubber_started"
         info = self.get_metrics(TEST_METRICS)
         self.log.info(info)
 
-    def get_scrub_corrupt_metrics(self, host=None):
+    def get_scrub_corrupt_metrics(self):
         CORRUPT_METRICS = "engine_pool_scrubber_corruption_current"
-        if host is None:
-            # Use the first host
-            host = self.hosts[0]
-        else:
-            host = host
         info = self.get_metrics(CORRUPT_METRICS)
         self.log.info(info)
 
-    def get_csum_total_metrics(self, host=None):
+    def get_csum_total_metrics(self):
         CSUM_METRICS = "engine_pool_scrubber_csums_total"
-        if host is None:
-            # Use the first host
-            host = self.hosts[0]
-        else:
-            host = host
         info = self.get_metrics(CSUM_METRICS)
         self.log.info(info)
-

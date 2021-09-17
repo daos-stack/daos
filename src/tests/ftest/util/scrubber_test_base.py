@@ -11,6 +11,7 @@ from ior_test_base import IorTestBase
 
 
 class TestWithScrubber(IorTestBase):
+    # pylint: disable=too-few-public-methods,too-many-ancestors
     """Test with scrubber enabled.
 
     :avocado: recursive
@@ -24,13 +25,20 @@ class TestWithScrubber(IorTestBase):
     def setUp(self):
         """Set up each test case."""
         super().setUp()
-        self.scrubber = ScrubberUtils(
-            self.get_dmg_command(), self.server_managers[0].hosts)
+        self.scrubber = ScrubberUtils()
         self.daos_cmd = self.get_daos_command()
         self.sc_pool = None
         self.sc_container = None
 
     def create_pool_cont_with_scrubber(self, pool_prop=None, cont_prop=None):
+        """Create a pool with container with scrubber enabled.
+
+        Args:
+            pool_prop (str, optional): pool properties string. 
+                Defaults to None.
+            cont_prop (str, optional): container properties string. 
+                Defaults to None.
+        """
         self.add_pool()
         self.add_container(pool=self.pool, create=False)
         if pool_prop is None:
@@ -50,6 +58,13 @@ class TestWithScrubber(IorTestBase):
         self.log.info(values)
 
     def run_ior_and_check_scruber_status(self, pool, cont, fail_on_warning=True):
+        """Run IOR and get scrubber metrics
+
+        Args:
+            pool (object): Pool object
+            cont (object): Container object within the pool.
+            fail_on_warning (bool, optional): [description]. Defaults to True.
+        """
         self.scrubber.get_csum_total_metrics()
         self.pool = pool
         self.container = cont
