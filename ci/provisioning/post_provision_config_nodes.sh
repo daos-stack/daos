@@ -4,7 +4,7 @@ set -eux
 
 : "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
 : "${DAOS_STACK_RETRY_COUNT:=3}"
-: "${DAOS_STACK_MONITOR_SECONDS:=600}"
+: "${DAOS_STACK_MONITOR_SECONDS:=100}"
 : "${BUILD_URL:=Not_in_jenkins}"
 : "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
@@ -97,15 +97,15 @@ send_mail() {
 monitor_cmd() {
     local start="$SECONDS"
     local duration=0
-    if time "$@"; then
-        ((duration = SECONDS - start))
-        if [ "$duration" -gt "$DAOS_STACK_MONITOR_SECONDS" ]; then
-            send_mail "Command exceeded ${DAOS_STACK_MONITOR_SECONDS}s in $STAGE_NAME" \
-                      "Command:  $*\nReal time: $duration"
-        fi
-        return 0
+    if ! time "$@"; then
+        return "${PIPESTATUS[0]}"
     fi
-    return 1
+    ((duration = SECONDS - start))
+    if [ "$duration" -gt "$DAOS_STACK_MONITOR_SECONDS" ]; then
+        send_mail "Command exceeded ${DAOS_STACK_MONITOR_SECONDS}s in $STAGE_NAME" \
+                    "Command:  $*\nReal time: $duration"
+    fi
+    return 0
 }
 
 retry_cmd() {
