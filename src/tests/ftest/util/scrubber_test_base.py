@@ -34,9 +34,9 @@ class TestWithScrubber(IorTestBase):
         """Create a pool with container with scrubber enabled.
 
         Args:
-            pool_prop (str, optional): pool properties string. 
+            pool_prop (str, optional): pool properties string.
                 Defaults to None.
-            cont_prop (str, optional): container properties string. 
+            cont_prop (str, optional): container properties string.
                 Defaults to None.
         """
         self.add_pool()
