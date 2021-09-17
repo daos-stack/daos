@@ -87,9 +87,9 @@ post_provision_config_nodes() {
     fi
     if [ -n "$INST_RPMS" ]; then
         # Remove the mellanox packages first to allow the distro packages to be installed
-        ls -d /usr/mpi/gcc/openmpi-* || true
-        rpm -q openmpi opensm-libs
-        dnf -y erase openmpi opensm-libs
+        if ls -d /usr/mpi/gcc/openmpi-*; then
+            dnf -y erase openmpi opensm-libs
+        fi
         # shellcheck disable=SC2086
         time dnf -y erase $INST_RPMS
     fi
