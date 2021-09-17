@@ -81,7 +81,6 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 # container destroy
                 self.container.destroy()
 
-    @skipForTicket("DAOS-7287")
     def test_largefilecount_rc(self):
         """Jira ID: DAOS-3845.
         Test Description:
