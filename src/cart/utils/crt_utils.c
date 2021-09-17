@@ -372,9 +372,6 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 	for (i = 0; i < crt_net_cfg_resp->n_rank_uris; i++) {
 		rank_uri = crt_net_cfg_resp->rank_uris[i];
 
-		/* Init eq ref count to 1 */
-		daos_eq_ref_set(1);
-
 		rc = crt_group_primary_rank_add(context, group,
 						rank_uri->rank,
 						rank_uri->uri);
