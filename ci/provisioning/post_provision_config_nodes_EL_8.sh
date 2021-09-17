@@ -34,9 +34,6 @@ distro_custom() {
 
     dnf config-manager --disable powertools
 
-    # Remove the mellanox packages
-    dnf -y erase openmpi opensm-libs
-
 }
 
 post_provision_config_nodes() {
@@ -89,6 +86,10 @@ post_provision_config_nodes() {
         done
     fi
     if [ -n "$INST_RPMS" ]; then
+        # Remove the mellanox packages first to allow the distro packages to be installed
+        ls -d /usr/mpi/gcc/openmpi-* || true
+        rpm -q openmpi opensm-libs
+        dnf -y erase openmpi opensm-libs
         # shellcheck disable=SC2086
         time dnf -y erase $INST_RPMS
     fi
