@@ -14,13 +14,17 @@
 /* Estimate of bytes per typical metric node */
 #define NODE_BYTES		(sizeof(struct d_tm_node_t) + \
 				 sizeof(struct d_tm_metric_t) + \
-				 128 /* buffer for metadata */)
+				 64 /* buffer for metadata */)
 /* Estimate of bytes per histogram bucket */
 #define BUCKET_BYTES		(sizeof(struct d_tm_bucket_t) + NODE_BYTES)
-/* Generous estimate of bytes per metric */
+/*
+   Estimate of bytes per metric.
+   This is a generous high-water mark assuming most metrics are not using
+   histograms. May need adjustment if the balance of metrics changes.
+*/
 #define PER_METRIC_BYTES	(NODE_BYTES + sizeof(struct d_tm_stats_t) + \
 				 sizeof(struct d_tm_histogram_t) + \
-				 BUCKET_BYTES * 5)
+				 BUCKET_BYTES)
 
 /**
  * Initializes the pool metrics
