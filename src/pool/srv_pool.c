@@ -5566,13 +5566,18 @@ out:
 	crt_reply_send(rpc);
 }
 
+/**
+ * Get leader shard_id and target id(from pool map) for the current object.
+ */
 int
 ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 			 uint32_t version, int *tgt_id)
 {
+	struct daos_oclass_attr *oca;
 	struct pl_map		*map;
-	struct pl_obj_layout	*layout;
+	struct pl_obj_layout	*layout = NULL;
 	struct daos_obj_md	 md = { 0 };
+	int			leader_idx;
 	int			 rc = 0;
 
 	map = pl_map_find(pool->sp_uuid, oid->id_pub);
@@ -5588,16 +5593,25 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc != 0)
 		goto out;
 
-	rc = pl_select_leader(oid->id_pub, oid->id_shard / layout->ol_grp_size,
-			      layout->ol_grp_size, tgt_id,
-			      pl_obj_get_shard, layout);
-	pl_obj_layout_free(layout);
-	if (rc < 0)
+	oca = daos_oclass_attr_find(oid->id_pub, NULL);
+	leader_idx = pl_select_leader(oid->id_pub, oid->id_shard / daos_oclass_grp_size(oca),
+				      layout->ol_grp_size, tgt_id, pl_obj_get_shard, layout);
+	if (leader_idx < 0) {
 		D_WARN("Failed to select leader for "DF_UOID
 		       "version = %d: rc = %d\n",
-		       DP_UOID(*oid), version, rc);
+		       DP_UOID(*oid), version, leader_idx);
+		D_GOTO(out, rc = leader_idx);
+	}
 
+	/* Convert the leader shard idx to shard id */
+	D_ASSERTF(leader_idx % layout->ol_grp_size <= daos_oclass_grp_size(oca),
+		  "leader %d grp_size %u class grp size %u\n", leader_idx, layout->ol_grp_size,
+		  daos_oclass_grp_size(oca));
+	rc = (leader_idx / layout->ol_grp_size) * daos_oclass_grp_size(oca) +
+	      leader_idx % layout->ol_grp_size;
 out:
+	if (layout != NULL)
+		pl_obj_layout_free(layout);
 	pl_map_decref(map);
 	return rc;
 }
