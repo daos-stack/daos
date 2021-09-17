@@ -73,7 +73,7 @@ crtu_load_group_from_file(const char *grp_cfg_file, crt_context_t ctx,
 
 int
 crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
-		    crt_context_t *context);
+			      crt_context_t *context);
 int
 crtu_dc_mgmt_net_cfg_setenv(const char *name);
 

@@ -197,7 +197,7 @@ free_get_attach_info_resp(Mgmt__GetAttachInfoResp *resp)
 	mgmt__get_attach_info_resp__free_unpacked(resp, &alloc.alloc);
 }
 
-void
+static void
 put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 {
 	if (resp != NULL)
@@ -205,12 +205,18 @@ put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
 	d_rank_list_free(info->ms_ranks);
 }
 
+void
+dc_put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp)
+{
+	return put_attach_info(info, resp);
+}
+
 /*
  * Get the attach info (i.e., rank URIs) for name. To avoid duplicating the
  * rank URIs, we return the GetAttachInfo response directly. Callers are
  * responsible for finalizing info and respp using put_attach_info.
  */
-int
+static int
 get_attach_info(const char *name, bool all_ranks, struct dc_mgmt_sys_info *info,
 		Mgmt__GetAttachInfoResp **respp)
 {
@@ -301,6 +307,13 @@ out_ctx:
 	drpc_close(ctx);
 out:
 	return rc;
+}
+
+int
+dc_get_attach_info(const char *name, bool all_ranks,
+		   struct dc_mgmt_sys_info *info,
+		   Mgmt__GetAttachInfoResp **respp) {
+	return get_attach_info(name, all_ranks, info, respp);
 }
 
 #define SYS_INFO_BUF_SIZE 16

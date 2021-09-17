@@ -65,9 +65,11 @@ int dc_mgmt_notify_pool_connect(struct dc_pool *pool);
 int dc_mgmt_notify_pool_disconnect(struct dc_pool *pool);
 int dc_mgmt_notify_exit(void);
 
-int get_attach_info(const char *name, bool all_ranks,
-	struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp **respp);
-void
-put_attach_info(struct dc_mgmt_sys_info *info, Mgmt__GetAttachInfoResp *resp);
+int dc_get_attach_info(const char *name, bool all_ranks,
+		       struct dc_mgmt_sys_info *info,
+		       Mgmt__GetAttachInfoResp **respp);
+
+void dc_put_attach_info(struct dc_mgmt_sys_info *info,
+			Mgmt__GetAttachInfoResp *resp);
 
 #endif
