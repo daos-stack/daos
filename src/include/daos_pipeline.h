@@ -37,6 +37,7 @@ typedef struct {
 	 *          DAOS_FILTER_FUNC_ISNOTNULL:		!=NULL
 	 *          DAOS_FILTER_FUNC_AND:		&&
 	 *          DAOS_FILTER_FUNC_OR:		||
+	 *          DAOS_FILTER_FUNC_NOT:		!
 	 *      - artihmetic functions:
 	 *          DAOS_FILTER_FUNC_ADD:		+
 	 *          DAOS_FILTER_FUNC_SUB:		-
