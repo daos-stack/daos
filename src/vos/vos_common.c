@@ -440,6 +440,12 @@ vos_mod_init(void)
 	if (vos_start_epoch == DAOS_EPOCH_MAX)
 		vos_start_epoch = crt_hlc_get();
 
+	rc = vos_pool_settings_init();
+	if (rc != 0) {
+		D_ERROR("VOS pool setting initialization error\n");
+		return rc;
+	}
+
 	rc = vos_cont_tab_register();
 	if (rc) {
 		D_ERROR("VOS CI btree initialization error\n");
@@ -575,12 +581,6 @@ vos_self_init(const char *db_path)
 	if (self_mode.self_ref) {
 		self_mode.self_ref++;
 		D_GOTO(out, rc);
-	}
-
-	rc = vos_pool_settings_init();
-	if (rc != 0) {
-		D_MUTEX_UNLOCK(&self_mode.self_lock);
-		return rc;
 	}
 
 	rc = ABT_init(0, NULL);
