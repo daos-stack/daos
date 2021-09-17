@@ -25,7 +25,7 @@ distro_custom() {
     pip3 install clustershell
 
     if ! rpm -q nfs-utils; then
-        timeout_cmd 5m dnf -y install nfs-utils
+        timeout_cmd 10m dnf -y install nfs-utils
     fi
 
     # CORCI-1096
@@ -91,11 +91,11 @@ post_provision_config_nodes() {
     fi
     rm -f /etc/profile.d/openmpi.sh
     rm -f /tmp/daos_control.log
-    timeout_cmd 5m dnf -y install $LSB_RELEASE
+    timeout_cmd 10m dnf -y install $LSB_RELEASE
 
     # shellcheck disable=SC2086
     if [ -n "$INST_RPMS" ] &&
-       ! timeout_cmd 5m dnf -y install $INST_RPMS; then
+       ! timeout_cmd 10m dnf -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
@@ -104,7 +104,7 @@ post_provision_config_nodes() {
     distro_custom
 
     # now make sure everything is fully up-to-date
-    if ! timeout_cmd 5m dnf -y upgrade \
+    if ! timeout_cmd 10m dnf -y upgrade \
                   --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1

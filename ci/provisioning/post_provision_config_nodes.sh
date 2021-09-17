@@ -106,7 +106,7 @@ retry_cmd() {
         fi
     done
     if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry successful in $BUILD_URL after $attempt attempts" \
+        send_mail "Command retry failed in $BUILD_URL after $attempt attempts" \
                   "Host:    $HOSTNAME\nCommand: time $*\nStatus:  $rc"
     fi
     return 1
