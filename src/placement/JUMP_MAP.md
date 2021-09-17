@@ -53,7 +53,7 @@ This section details the state transitions that the jump map handles as part of 
 
 <a id="state_transitions"></a>
 **Pool component state transition diagram**
-![../../doc/graph/pool_component_state_transition_diagram.png](../../doc/graph/pool_component_state_transition_diagram.png "Pool component state transition diagram")
+![../../docs/graph/pool_component_state_transition_diagram.png](../../docs/graph/pool_component_state_transition_diagram.png "Pool component state transition diagram")
 
 ### Drain
 

@@ -25,11 +25,6 @@
 
 #include "obj_ec.h"
 
-/* It cannot exceed the mercury unexpected msg size (4KB), reserves half-KB
- * for other RPC fields and cart/HG headers.
- */
-#define OBJ_BULK_LIMIT	(3584) /* (3K + 512) bytes */
-
 /*
  * RPC operation codes
  *
@@ -166,6 +161,8 @@ enum obj_rpc_flags {
 	ORF_EC_RECOV		= (1 << 17),
 	/* EC data recovery from snapshot */
 	ORF_EC_RECOV_SNAP	= (1 << 18),
+	/* EC data recovery from parity */
+	ORF_EC_RECOV_FROM_PARITY = (1 << 19),
 };
 
 /* common for update/fetch */

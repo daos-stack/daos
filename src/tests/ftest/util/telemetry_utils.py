@@ -18,6 +18,8 @@ class TelemetryUtils():
         "engine_pool_ops_cont_destroy",
         "engine_pool_ops_cont_open"]
     ENGINE_POOL_METRICS = [
+        "engine_pool_entries_dtx_batched_degree",
+        "engine_pool_entries_dtx_batched_total",
         "engine_pool_ops_akey_enum",
         "engine_pool_ops_akey_punch",
         "engine_pool_ops_compound",

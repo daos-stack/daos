@@ -263,9 +263,12 @@ extern "C" {
 	/** Communicatin issue with agent. */				\
 	ACTION(DER_AGENT_COMM,		(DER_ERR_DAOS_BASE + 34),	\
 		Agent communication error)				\
+	/** ID mismatch */						\
+	ACTION(DER_ID_MISMATCH,		(DER_ERR_DAOS_BASE + 35),	\
+	       ID mismatch)						\
 	/** Division by zero. */					\
-	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 35),	\
-	       Divison by zero)
+	ACTION(DER_DIV_BY_ZERO,		(DER_ERR_DAOS_BASE + 36),	\
+	       Divison by zero)						\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

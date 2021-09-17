@@ -144,7 +144,7 @@ ds_notify_ras_event(ras_event_t id, char *msg, ras_type_t type, ras_sev_t sev,
  * with a '$' to indicate so. See ds_notify_ras_event for parameter
  * documentation.
  */
-void
+void __attribute__((__format__(__printf__, 13, 14)))
 ds_notify_ras_eventf(ras_event_t id, ras_type_t type, ras_sev_t sev, char *hwid,
 		     d_rank_t *rank, uint64_t *inc, char *jobid, uuid_t *pool,
 		     uuid_t *cont, daos_obj_id_t *objid, char *ctlop, char *data,

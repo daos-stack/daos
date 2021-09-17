@@ -164,10 +164,6 @@ fio_smoke:
         mount_dir: "/tmp/daos_dfuse/fio/"
 daos_racer:
     runtime: 120
-    container:
-        type: POSIX
-        control_method: daos
-        oclass: 'SX'
 mdtest_smoke:
     # maximum timeout for a single job in test in minutes
     job_timeout: 10
@@ -208,3 +204,4 @@ monitor:
     - "/usr/bin/free -h"
     - "/usr/bin/vmstat -w"
     - "ps -C daos_engine -o %mem,%cpu,cmd"
+enable_telemetry: True
