@@ -116,10 +116,17 @@ dtx_metrics_free(void *data)
 	D_FREE(data);
 }
 
+static int
+dtx_metrics_count(void)
+{
+	return (sizeof(struct dtx_pool_metrics) / sizeof(struct d_tm_node_t *)) * dss_tgt_nr;
+}
+
 struct dss_module_metrics dtx_metrics = {
 	.dmm_tags = DAOS_TGT_TAG,
 	.dmm_init = dtx_metrics_alloc,
 	.dmm_fini = dtx_metrics_free,
+	.dmm_nr_metrics = dtx_metrics_count,
 };
 
 static void
