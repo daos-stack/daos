@@ -4,7 +4,9 @@ set -eux
 
 : "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
 : "${DAOS_STACK_RETRY_COUNT:=3}"
+: "${DAOS_STACK_MONITOR_SECONDS:=600}"
 : "${BUILD_URL:=Not_in_jenkins}"
+: "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
 
 # functions common to more than one distro specific provisioning
@@ -82,19 +84,39 @@ send_mail() {
     local subject="$1"
     local message="$2"
     set +x
-    echo -e "$message" 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
+    {
+        echo "Build: $BUILD_URL"
+        echo "Stage: $STAGE_NAME"
+        echo "Host:  $HOSTNAME"
+        echo ""
+        echo -e "$message"
+    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
     set -x
+}
+
+monitor_cmd() {
+    local start="$SECONDS"
+    local duration=0
+    if time "$@"; then
+        ((duration = SECONDS - start))
+        if [ "$duration" -gt "$DAOS_STACK_MONITOR_SECONDS" ]; then
+            send_mail "Command exceeded ${DAOS_STACK_MONITOR_SECONDS}s in $STAGE_NAME" \
+                      "Command:  $*\nReal time: $duration"
+        fi
+        return 0
+    fi
+    return 1
 }
 
 retry_cmd() {
     local attempt=0
     local rc=0
     while [ $attempt -lt $DAOS_STACK_RETRY_COUNT ]; do
-        if time "$@"; then
+        if monitor_cmd "$@"; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
-                send_mail "Command retry successful in $BUILD_URL after $attempt attempts" \
-                          "Host:    $HOSTNAME\nCommand: time $*\nStatus:  0"
+                send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
+                          "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
             fi
             return 0
         fi
@@ -106,8 +128,8 @@ retry_cmd() {
         fi
     done
     if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry failed in $BUILD_URL after $attempt attempts" \
-                  "Host:    $HOSTNAME\nCommand: time $*\nStatus:  $rc"
+        send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
+                  "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
     fi
     return 1
 }
