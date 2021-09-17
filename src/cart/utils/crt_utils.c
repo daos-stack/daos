@@ -355,10 +355,11 @@ int
 crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 		    crt_context_t *context)
 {
-	int			 i;
-	int			 rc = 0;
-	struct dc_mgmt_sys_info  crt_net_cfg_info;
-	Mgmt__GetAttachInfoResp *crt_net_cfg_resp;
+	int			 	  i;
+	int			 	  rc = 0;
+	struct dc_mgmt_sys_info  	  crt_net_cfg_info;
+	Mgmt__GetAttachInfoResp 	 *crt_net_cfg_resp;
+	Mgmt__GetAttachInfoResp__RankUri *rank_uri;
 
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = dc_get_attach_info(name,
@@ -369,17 +370,21 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
 	for (i = 0; i < crt_net_cfg_resp->n_rank_uris; i++) {
-		Mgmt__GetAttachInfoResp__RankUri *rank_uri = crt_net_cfg_resp->rank_uris[i];
+		rank_uri = crt_net_cfg_resp->rank_uris[i];
 
 		/* Init eq ref count to 1 */
 		daos_eq_ref_set(1);
 
 		rc = crt_group_primary_rank_add(context, group,
-						rank_uri->rank, rank_uri->uri);
+						rank_uri->rank,
+					        rank_uri->uri);
 
 		if (rc != 0) {
 			D_ERROR("failed to add rank %u URI %s to group %s: "
-				DF_RC"\n", rank_uri->rank, rank_uri->uri, name,
+				DF_RC"\n",
+			        rank_uri->rank,
+			        rank_uri->uri,
+			        name,
 				DP_RC(rc));
 			goto err_group;
 		}
@@ -535,8 +540,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			}
 			if (opts.assert_on_error) {
 				D_ASSERTF(rc == 0,
-					  "crt_group_attach failed,
-					  rc: %d\n",
+					  "crt_group_attach failed, rc: %d\n",
 					  rc);
 				D_ASSERTF(*grp != NULL,
 					  "NULL attached remote grp\n");
@@ -641,8 +645,7 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 	}
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0,
-			  "crt_init() failed,
-			  rc: %d\n",
+			  "crt_init() failed, rc: %d\n",
 			  rc);
 
 	*grp = crt_group_lookup(NULL);
