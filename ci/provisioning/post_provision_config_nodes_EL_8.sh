@@ -5,8 +5,6 @@ DISTRO_NAME=centos8
 LSB_RELEASE=redhat-lsb-core
 EXCLUDE_UPGRADE=dpdk,fuse,mercury,daos,daos-\*
 
-sleep 600
-
 bootstrap_dnf() {
     :
 }
@@ -35,6 +33,9 @@ distro_custom() {
     sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
 
     dnf config-manager --disable powertools
+
+    # Remove the mellanox packages
+    dnf -y erase openmpi opensm-libs
 
 }
 
@@ -99,6 +100,7 @@ post_provision_config_nodes() {
     if [ -n "$INST_RPMS" ] && ! retry_cmd 360 dnf -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         dump_repos
+        sleep 600
         exit "$rc"
     fi
 
