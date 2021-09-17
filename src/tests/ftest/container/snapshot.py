@@ -454,9 +454,9 @@ class Snapshot(TestWithServers):
 
         # (6)Destroy the individual snapshot
             self.log.info("=(6.%s)Destroy the snapshot epoch: %s",
-                          ss_number, snapshot.epoch)
+                          ss_number, current_ss.epoch)
             try:
-                snapshot.destroy(coh, snapshot.epoch)
+                snapshot.destroy(coh, current_ss.epoch)
                 self.log.info(
                     "  ==snapshot.epoch %s successfully destroyed",
                     snapshot.epoch)
