@@ -4,15 +4,12 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import os
-
 from apricot import TestWithServers
 
 from command_utils_base import \
     EnvironmentVariables, FormattedParameter, CommandFailure
 from command_utils import ExecutableCommand
 from job_manager_utils import Orterun
-from general_utils import get_log_file
 
 class CartSelfTest(TestWithServers):
     """Runs a few variations of CaRT self-test.

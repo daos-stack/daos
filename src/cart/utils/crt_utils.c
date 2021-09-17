@@ -37,7 +37,7 @@ struct test_options *crtu_get_opts()
 
 void
 crtu_test_init(d_rank_t rank, int num_attach_retries, bool is_server,
-	     bool assert_on_error)
+	       bool assert_on_error)
 {
 	opts.is_initialized	= true;
 	opts.self_rank		= rank;
@@ -355,17 +355,17 @@ int
 crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 		    crt_context_t *context)
 {
-	int			 	  i;
-	int			 	  rc = 0;
-	struct dc_mgmt_sys_info  	  crt_net_cfg_info;
-	Mgmt__GetAttachInfoResp 	 *crt_net_cfg_resp;
+	int				  i;
+	int				  rc = 0;
+	struct dc_mgmt_sys_info		  crt_net_cfg_info;
+	Mgmt__GetAttachInfoResp		 *crt_net_cfg_resp;
 	Mgmt__GetAttachInfoResp__RankUri *rank_uri;
 
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = dc_get_attach_info(name,
-			        true /* all_ranks */,
-			        &crt_net_cfg_info,
-			        &crt_net_cfg_resp);
+				true /* all_ranks */,
+				&crt_net_cfg_info,
+				&crt_net_cfg_resp);
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
@@ -377,14 +377,14 @@ crtu_dc_mgmt_net_cfg_rank_add(const char *name, crt_group_t *group,
 
 		rc = crt_group_primary_rank_add(context, group,
 						rank_uri->rank,
-					        rank_uri->uri);
+						rank_uri->uri);
 
 		if (rc != 0) {
 			D_ERROR("failed to add rank %u URI %s to group %s: "
 				DF_RC"\n",
-			        rank_uri->rank,
-			        rank_uri->uri,
-			        name,
+				rank_uri->rank,
+				rank_uri->uri,
+				name,
 				DP_RC(rc));
 			goto err_group;
 		}
@@ -413,9 +413,9 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 
 	/* Query the agent for the CaRT network configuration parameters */
 	rc = dc_get_attach_info(name,
-			        true /* all_ranks */,
-			        &crt_net_cfg_info,
-			        &crt_net_cfg_resp);
+				true /* all_ranks */,
+				&crt_net_cfg_info,
+				&crt_net_cfg_resp);
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
@@ -549,7 +549,7 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 			rc = crt_group_view_create(srv_group_name, grp);
 			if (!*grp || rc != 0) {
 				D_ERROR("Failed to create group view; rc=%d\n",
-				        rc);
+					rc);
 				assert(0);
 			}
 
@@ -682,7 +682,7 @@ crtu_srv_start_basic(char *srv_group_name, crt_context_t *crt_ctx,
 
 	/* load group info from a config file and delete file upon return */
 	rc = crtu_load_group_from_file(grp_cfg_file, crt_ctx[0], *grp, my_rank,
-				     true);
+				       true);
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0,
 			  "crtu_load_group_from_file() failed; rc=%d\n",
