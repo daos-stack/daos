@@ -103,6 +103,9 @@ class LargeFileCount(MdtestBase, IorTestBase):
         # update mdtest file count
         self.mdtest_cmd.num_of_files_dirs.update(num_of_files_dirs_rc)
 
+        # create pool
+        self.add_pool(connect=False)
+
         for oclass in object_class:
             self.ior_cmd.dfs_oclass.update(oclass)
             self.mdtest_cmd.dfs_oclass.update(oclass)
