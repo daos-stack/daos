@@ -151,7 +151,7 @@ class NvmePoolExclude(OSAUtils):
     def test_nvme_pool_exclude_with_ec_class(self):
         """Test ID: DAOS-7338
         Test Description: This test performs
-        NVME pool exclude testing using 
+        NVME pool exclude testing using
         different EC object class.
 
         :avocado: tags=all,full_regression

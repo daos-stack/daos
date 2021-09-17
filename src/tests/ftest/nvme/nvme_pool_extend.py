@@ -87,14 +87,14 @@ class NvmePoolExtend(OSAUtils):
                                             kwargs={"action": "Write",
                                                     "oclass": oclass,
                                                     "test": test,
-                                                    "pool": self.pool[val]}))
+                                                    "pool": self.pool}))
             # Launch the IOR threads
             for thrd in threads:
                 self.log.info("Thread : %s", thrd)
                 thrd.start()
                 time.sleep(1)
 
-            self.pool[val].display_pool_daos_space("Pool space: Beginning")
+            self.pool.display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
 
             # Start the additional servers and extend the pool
@@ -112,7 +112,7 @@ class NvmePoolExtend(OSAUtils):
             self.log.info("Pool Version at the beginning %s", pver_begin)
             # Extend ranks (4,5), (6,7), (8,9)
             ranks_extended = "{},{}".format((val * 2) + 4, (val * 2) + 5)
-            output = self.dmg_command.pool_extend(self.pool[val].uuid,
+            output = self.dmg_command.pool_extend(self.pool.uuid,
                                                   ranks_extended)
             self.print_and_assert_on_rebuild_failure(output)
             pver_extend = self.get_pool_version()
@@ -129,9 +129,9 @@ class NvmePoolExtend(OSAUtils):
             self.run_ior_thread("Read", oclass, test)
             # Get the pool space at the end of the test
             display_string = "Pool{} space at the End".format(val)
-            self.pool[val].display_pool_daos_space(display_string)
-            self.container = self.pool_cont_dict[self.pool[val]][0]
-            kwargs = {"pool": self.pool[val].uuid,
+            self.pool.display_pool_daos_space(display_string)
+            self.container = self.pool_cont_dict[self.pool][0]
+            kwargs = {"pool": self.pool.uuid,
                       "cont": self.container.uuid}
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
