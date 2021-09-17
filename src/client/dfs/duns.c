@@ -409,6 +409,9 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	ssize_t		s;
 	char		str[DUNS_MAX_XATTR_LEN];
 	struct statfs	fs;
+#ifdef LUSTRE_INCLUDE
+	char		*dir, *dirp;
+#endif
 	bool		pool_only = false;
 	bool		no_prefix = false;
 	char		*realp = NULL;
@@ -441,17 +444,32 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 
 	/** no match for direct format, do the UNS fs check */
 
+#ifdef LUSTRE_INCLUDE
+	/* since statfs follows symlinks need to use directory to
+	 * determine FS type
+	 */
+	dir = strdup(path);
+	if (dir == NULL) {
+	        D_ERROR("Failed to copy path\n");
+	        return ENOMEM;
+	}
+
+	dirp = dirname(dir);
+	rc = statfs(dirp, &fs);
+#else
 	rc = statfs(path, &fs);
+#endif
+
 	if (rc == -1) {
 		int err = errno;
 
 		D_INFO("Failed to statfs %s: %s\n", path, strerror(errno));
-		return err;
+		D_GOTO(out, rc = err);
 	}
 
 	D_REALPATH(realp, path);
 	if (realp == NULL)
-		return errno;
+		D_GOTO(out, rc = errno);
 
 	path_len = strnlen(realp, PATH_MAX);
 	if (path_len > PATH_MAX - 1)
@@ -470,7 +488,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	while (1) {
 #ifdef LUSTRE_INCLUDE
 		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_resolve_lustre_path(dir_path, attr);
+			rc = duns_resolve_lustre_path(path, attr);
 			if (rc == 0)
 				D_GOTO(out, rc);
 
@@ -530,6 +548,9 @@ parse:
 	}
 
 out:
+#ifdef LUSTRE_INCLUDE
+	D_FREE(dir);
+#endif
 	D_FREE(rel_path);
 	D_FREE(dir_path);
 	D_FREE(realp);
