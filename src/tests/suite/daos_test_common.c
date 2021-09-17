@@ -212,8 +212,14 @@ test_setup_cont_create(void **state, daos_prop_t *co_prop)
 
 	if (arg->myrank == 0) {
 		print_message("setup: creating container\n");
-		rc = daos_cont_create_with_label(arg->pool.poh, "daos_test", co_prop,
-						 &arg->co_uuid, NULL);
+
+		/** use daos_test label if none is provided */
+		if (!co_prop || daos_prop_entry_get(co_prop, DAOS_PROP_CO_LABEL) == NULL)
+			rc = daos_cont_create_with_label(arg->pool.poh, "daos_test", co_prop,
+							 &arg->co_uuid, NULL);
+		else
+			rc = daos_cont_create(arg->pool.poh, &arg->co_uuid, co_prop, NULL);
+
 		if (rc) {
 			print_message("daos_cont_create failed, rc: %d\n", rc);
 		} else {
@@ -495,6 +501,9 @@ test_teardown_cont(test_arg_t *arg)
 	if (rc)
 		print_message("failed to destroy container "DF_UUIDF
 			      ": %d\n", DP_UUID(arg->co_uuid), rc);
+	else
+		print_message("teardown: container "DF_UUIDF" destroyed\n",
+			      DP_UUID(arg->co_uuid));
 
 	uuid_clear(arg->co_uuid);
 	arg->setup_state = SETUP_POOL_CONNECT;
