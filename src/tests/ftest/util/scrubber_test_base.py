@@ -25,7 +25,8 @@ class TestWithScrubber(IorTestBase):
     def setUp(self):
         """Set up each test case."""
         super().setUp()
-        self.scrubber = ScrubberUtils()
+        self.scrubber = ScrubberUtils(self.get_dmg_command(),
+                                      self.server_managers[0].hosts)
         self.daos_cmd = self.get_daos_command()
         self.sc_pool = None
         self.sc_container = None
