@@ -298,7 +298,7 @@ func TestFlags_ContTypeFlag(t *testing.T) {
 			expErr: errors.New("unknown container type"),
 		},
 		"valid": {
-			arg: "POSIX",
+			arg: "pOsIx",
 			expFlag: &ContTypeFlag{
 				Set:  true,
 				Type: 1,
