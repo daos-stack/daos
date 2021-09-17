@@ -170,7 +170,7 @@ class ZeroConfigTest(TestWithServers):
         """
         env_state = self.params.get("env_state", '/run/zero_config/*')
         dev_info = {"ib0": 0, "ib1": 1}
-        exp_iface = random.choice(list(dev_info.keys()))
+        exp_iface = random.choice(list(dev_info.keys())) #nosec
 
         # Configure the daos server
         self.add_server_manager()

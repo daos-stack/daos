@@ -55,7 +55,7 @@ class NvmePoolExclude(OSAUtils):
         target_list = []
 
         # Exclude target : random two targets (target idx : 0-7)
-        n = random.randint(0, 6)
+        n = random.randint(0, 6) #nosec
         target_list.append(n)
         target_list.append(n+1)
         t_string = "{},{}".format(target_list[0], target_list[1])
@@ -93,7 +93,7 @@ class NvmePoolExclude(OSAUtils):
                 self.pool.display_pool_daos_space("Pool space: Before Exclude")
                 pver_begin = self.get_pool_version()
 
-                index = random.randint(1, len(rank_list))
+                index = random.randint(1, len(rank_list)) #nosec
                 rank = rank_list.pop(index-1)
                 self.log.info("Removing rank %d", rank)
 

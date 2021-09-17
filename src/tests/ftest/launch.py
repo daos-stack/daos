@@ -15,14 +15,14 @@ import json
 import os
 import re
 import socket
-import subprocess
+import subprocess #nosec
 import site
 import sys
 import time
 import yaml
 import errno
-import xml.etree.ElementTree as ET
-from xml.dom import minidom
+import defusedxml.ElementTree as ET
+from defusedxml import minidom
 
 from avocado.utils.distro import detect
 from ClusterShell.NodeSet import NodeSet

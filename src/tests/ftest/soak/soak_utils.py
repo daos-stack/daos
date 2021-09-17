@@ -436,7 +436,7 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
         targets = self.params.get("targets_exclude", "/run/soak_harassers/*", 8)
         exclude_servers = len(self.hostlist_servers) - 1
         # Exclude one rank : other than rank 0 and 1.
-        rank = random.randint(2, exclude_servers)
+        rank = random.randint(2, exclude_servers) #nosec
         if targets >= 8:
             tgt_idx = None
         else:
@@ -510,7 +510,7 @@ def launch_server_stop_start(self, pools, name, results, args):
     if name == "SVR_STOP":
         exclude_servers = len(self.hostlist_servers) - 1
         # Exclude one rank : other than rank 0 and 1.
-        rank = random.randint(2, exclude_servers)
+        rank = random.randint(2, exclude_servers) #nosec
         # init the status dictionary
         params = {"name": name,
                   "status": status,
