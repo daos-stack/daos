@@ -783,7 +783,7 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
-		rc = -DER_IO;
+		rc = -DER_ID_MISMATCH;
 		goto out;
 	}
 
