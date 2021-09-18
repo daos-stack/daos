@@ -11,7 +11,7 @@
 static uuid_t		co_uuid;
 static daos_handle_t	co_hdl;
 static dfs_t		*dfs_mt;
-
+static bool		no_dtx;
 static int
 check_one_success(int rc, int err, MPI_Comm comm)
 {
@@ -64,6 +64,11 @@ test_cond_helper(test_arg_t *arg, int rf)
 		assert_non_null(attr.da_props);
 		attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		attr.da_props->dpp_entries[0].dpe_val = rf;
+
+		if (no_dtx)
+			attr.da_mode = DFS_RELAXED;
+		else
+			attr.da_mode = DFS_BALANCED;
 
 		uuid_generate(cuuid);
 		rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, &coh, &dfs);
@@ -121,10 +126,7 @@ test_cond_helper(test_arg_t *arg, int rf)
 	MPI_Barrier(MPI_COMM_WORLD);
 
 	/** test atomic rename with DFS DTX mode */
-	bool use_dtx;
-
-	d_getenv_bool("DFS_USE_DTX", &use_dtx);
-	if (!use_dtx)
+	if (no_dtx)
 		return;
 	if (arg->myrank == 0) {
 		print_message("All ranks rename the same file\n");
@@ -650,6 +652,7 @@ dfs_test_cont_atomic(void **state)
 	daos_cont_info_t	co_info;
 	daos_handle_t		coh;
 	dfs_t			*dfs;
+	dfs_attr_t		attr = {};
 	int			rc, op_rc;
 
 	if (arg->myrank == 0)
@@ -661,7 +664,12 @@ dfs_test_cont_atomic(void **state)
 	if (arg->myrank == 0)
 		print_message("All ranks create the same POSIX container\n");
 
-	op_rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+	if (no_dtx)
+		attr.da_mode = DFS_RELAXED;
+	else
+		attr.da_mode = DFS_BALANCED;
+
+	op_rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, NULL, NULL);
 	rc = check_one_success(op_rc, EEXIST, MPI_COMM_WORLD);
 	assert_int_equal(rc, 0);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -713,6 +721,11 @@ file_atomicity_test_helper(test_arg_t *arg, int rf)
 		assert_non_null(attr.da_props);
 		attr.da_props->dpp_entries[0].dpe_type = DAOS_PROP_CO_REDUN_FAC;
 		attr.da_props->dpp_entries[0].dpe_val = rf;
+
+		if (no_dtx)
+			attr.da_mode = DFS_RELAXED;
+		else
+			attr.da_mode = DFS_BALANCED;
 
 		uuid_generate(cuuid);
 		rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, &coh, &dfs);
@@ -853,6 +866,113 @@ dfs_test_file_create_atomicity(void **state)
 	}
 }
 
+#define NUM_OBJS 3
+
+static void
+dfs_test_rename_mdtest(void **state)
+{
+	test_arg_t		*arg = *state;
+	char			*dirname = "testdir";
+	char			old_name[64], new_name[64];
+	dfs_obj_t		*tree1, *tree2, *tree3;
+	int			i;
+	int			rc;
+
+	if (arg->myrank == 0)
+		print_message("All ranks rename unique directories\n");
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	/** create a nested dir tree like mdtest does */
+	if (arg->myrank == 0) {
+		rc = dfs_mkdir(dfs_mt, NULL, "tree1", S_IWUSR | S_IRUSR, 0);
+		assert_int_equal(rc, 0);
+		rc = dfs_lookup(dfs_mt, "/tree1", O_RDWR, &tree1, NULL, NULL);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_mkdir(dfs_mt, tree1, "tree2", S_IWUSR | S_IRUSR, 0);
+		assert_int_equal(rc, 0);
+		rc = dfs_lookup(dfs_mt, "/tree1/tree2", O_RDWR, &tree2, NULL, NULL);
+		assert_int_equal(rc, 0);
+
+		rc = dfs_mkdir(dfs_mt, tree2, "tree3", S_IWUSR | S_IRUSR, 0);
+		assert_int_equal(rc, 0);
+		rc = dfs_lookup(dfs_mt, "/tree1/tree2/tree3", O_RDWR, &tree3, NULL, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+	if (arg->myrank != 0) {
+		rc = dfs_lookup(dfs_mt, "/tree1", O_RDWR, &tree1, NULL, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_lookup(dfs_mt, "/tree1/tree2", O_RDWR, &tree2, NULL, NULL);
+		assert_int_equal(rc, 0);
+		rc = dfs_lookup(dfs_mt, "/tree1/tree2/tree3", O_RDWR, &tree3, NULL, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0; i < NUM_OBJS; i++) {
+		sprintf(old_name, "%s_%d.%d", dirname, i, arg->myrank);
+		rc = dfs_mkdir(dfs_mt, tree1, old_name, S_IWUSR | S_IRUSR, 0);
+		assert_int_equal(rc, 0);
+	}
+	for (; i < NUM_OBJS * 2; i++) {
+		sprintf(old_name, "%s_%d.%d", dirname, i, arg->myrank);
+		rc = dfs_mkdir(dfs_mt, tree2, old_name, S_IWUSR | S_IRUSR, 0);
+		assert_int_equal(rc, 0);
+	}
+	for (; i < NUM_OBJS * 3; i++) {
+		sprintf(old_name, "%s_%d.%d", dirname, i, arg->myrank);
+		rc = dfs_mkdir(dfs_mt, tree3, old_name, S_IWUSR | S_IRUSR, 0);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	for (i = 0; i < NUM_OBJS; i++) {
+		sprintf(old_name, "%s_%d.%d", dirname, i, arg->myrank);
+		if (i == 0)
+			sprintf(new_name, "%s_%d-XX.%d", dirname, i, arg->myrank);
+		else
+			sprintf(new_name, "%s_%d.%d", dirname, i-1, arg->myrank);
+
+		rc = dfs_move(dfs_mt, tree1, old_name, tree1, new_name, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	sprintf(old_name, "%s_%d.%d", dirname, i, arg->myrank);
+	sprintf(new_name, "%s_%d.%d", dirname, i-1, arg->myrank);
+	rc = dfs_move(dfs_mt, tree2, old_name, tree1, new_name, NULL);
+	assert_int_equal(rc, 0);
+	i++;
+
+	for (; i < NUM_OBJS * 2; i++) {
+		sprintf(old_name, "%s_%d.%d", dirname, i, arg->myrank);
+		sprintf(new_name, "%s_%d.%d", dirname, i-1, arg->myrank);
+		rc = dfs_move(dfs_mt, tree2, old_name, tree2, new_name, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	sprintf(old_name, "%s_%d.%d", dirname, i, arg->myrank);
+	sprintf(new_name, "%s_%d.%d", dirname, i-1, arg->myrank);
+	rc = dfs_move(dfs_mt, tree3, old_name, tree2, new_name, NULL);
+	assert_int_equal(rc, 0);
+	i++;
+
+	for (; i < NUM_OBJS * 3; i++) {
+		sprintf(old_name, "%s_%d.%d", dirname, i, arg->myrank);
+		sprintf(new_name, "%s_%d.%d", dirname, i-1, arg->myrank);
+		rc = dfs_move(dfs_mt, tree3, old_name, tree3, new_name, NULL);
+		assert_int_equal(rc, 0);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	rc = dfs_release(tree1);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(tree2);
+	assert_int_equal(rc, 0);
+	rc = dfs_release(tree3);
+	assert_int_equal(rc, 0);
+}
+
 static const struct CMUnitTest dfs_par_tests[] = {
 	{ "DFS_PAR_TEST1: Conditional OPs",
 	  dfs_test_cond, async_disable, test_case_teardown},
@@ -866,6 +986,8 @@ static const struct CMUnitTest dfs_par_tests[] = {
 	  dfs_test_cont_atomic, async_disable, test_case_teardown},
 	{ "DFS_PAR_TEST6: DFS File create (without O_EXCL) atomicity",
 	  dfs_test_file_create_atomicity, async_disable, test_case_teardown},
+	{ "DFS_PAR_TEST7: DFS Rename (mdtest branching)",
+	  dfs_test_rename_mdtest, async_disable, test_case_teardown},
 };
 
 static int
@@ -881,7 +1003,16 @@ dfs_setup(void **state)
 	arg = *state;
 
 	if (arg->myrank == 0) {
-		dfs_attr_t attr = {};
+		dfs_attr_t	attr = {};
+
+		d_getenv_bool("DFS_NO_DTX", &no_dtx);
+		if (no_dtx) {
+			print_message("Testing DFS in Relaxed mode\n");
+			attr.da_mode = DFS_RELAXED;
+		} else {
+			print_message("Testing DFS in Balanced mode\n");
+			attr.da_mode = DFS_BALANCED;
+		}
 
 		uuid_generate(co_uuid);
 		rc = dfs_cont_create(arg->pool.poh, co_uuid, &attr, &co_hdl, &dfs_mt);
