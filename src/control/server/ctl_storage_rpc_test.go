@@ -67,7 +67,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 		expErr       error
 		expResp      *ctlpb.StorageScanResp
 	}{
-		"scan with no bdevs in config; scm namespaces": {
+		"successful scan; scm namespaces": {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{
@@ -76,7 +76,6 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 					},
 				},
 			},
-			noBdevsInCfg: true,
 			smbc: &scm.MockBackendConfig{
 				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
 				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
@@ -95,31 +94,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
-		"bdev devices filtered by config assignment": {
-			bmbc: &bdev.MockBackendConfig{
-				ScanRes: &storage.BdevScanResponse{
-					Controllers: storage.NvmeControllers{
-						ctrlr,
-						storage.MockNvmeController(2),
-					},
-				},
-			},
-			smbc: &scm.MockBackendConfig{
-				DiscoverRes:         storage.ScmModules{storage.MockScmModule()},
-				GetPmemNamespaceRes: storage.ScmNamespaces{storage.MockScmNamespace()},
-			},
-			expResp: &ctlpb.StorageScanResp{
-				Nvme: &ctlpb.ScanNvmeResp{
-					Ctrlrs: proto.NvmeControllers{ctrlrPB},
-					State:  new(ctlpb.ResponseState),
-				},
-				Scm: &ctlpb.ScanScmResp{
-					Namespaces: proto.ScmNamespaces{proto.MockScmNamespace()},
-					State:      new(ctlpb.ResponseState),
-				},
-			},
-		},
-		"successful scan no scm namespaces": {
+		"successful scan; no scm namespaces": {
 			bmbc: &bdev.MockBackendConfig{
 				ScanRes: &storage.BdevScanResponse{
 					Controllers: storage.NvmeControllers{ctrlr},
@@ -204,7 +179,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
-		"scan bdev health with single engine down": {
+		"scan bdev health; single engine down": {
 			req: &ctlpb.StorageScanReq{
 				Scm: &ctlpb.ScanScmReq{},
 				Nvme: &ctlpb.ScanNvmeReq{
@@ -226,7 +201,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
-		"scan bdev health with multiple engines down": {
+		"scan bdev health; multiple engines down": {
 			multiEngine: true,
 			req: &ctlpb.StorageScanReq{
 				Scm: &ctlpb.ScanScmReq{},
@@ -250,7 +225,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
-		"scan bdev meta with engines down": {
+		"scan bdev meta; engines down": {
 			req: &ctlpb.StorageScanReq{
 				Scm: &ctlpb.ScanScmReq{},
 				Nvme: &ctlpb.ScanNvmeReq{
@@ -272,7 +247,7 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 				},
 			},
 		},
-		"scan bdev with nvme basic set": {
+		"scan bdev; nvme basic set": {
 			req: &ctlpb.StorageScanReq{
 				Scm: &ctlpb.ScanScmReq{},
 				Nvme: &ctlpb.ScanNvmeReq{
@@ -299,10 +274,10 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			tCfg := storage.NewTierConfig().WithBdevClass(storage.ClassNvme.String())
-			if !tc.noBdevsInCfg {
-				tCfg = tCfg.WithBdevDeviceList(storage.MockNvmeController().PciAddr)
-			}
+			tCfg := storage.NewTierConfig().
+				WithBdevClass(storage.ClassNvme.String()).
+				WithBdevDeviceList(storage.MockNvmeController().PciAddr)
+
 			engineCfg := engine.NewConfig().WithStorage(tCfg)
 			engineCfgs := []*engine.Config{engineCfg}
 			if tc.multiEngine {
@@ -786,7 +761,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				},
 			},
 		},
-		"scan scm usage with pmem not in instance device list": {
+		"scan scm usage; pmem not in instance device list": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  &ctlpb.ScanScmReq{Usage: true},
 				Nvme: new(ctlpb.ScanNvmeReq),
@@ -826,7 +801,7 @@ func TestServer_CtlSvc_StorageScan_PostEngineStart(t *testing.T) {
 				},
 			},
 		},
-		"scan scm usage with class ram": {
+		"scan scm usage; class ram": {
 			req: &ctlpb.StorageScanReq{
 				Scm:  &ctlpb.ScanScmReq{Usage: true},
 				Nvme: new(ctlpb.ScanNvmeReq),

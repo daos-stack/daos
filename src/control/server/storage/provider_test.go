@@ -35,44 +35,6 @@ func Test_scanBdevs(t *testing.T) {
 		expResp  *BdevScanResponse
 		expErr   error
 	}{
-		"scan error": {
-			scanReq: BdevScanRequest{},
-			scanErr: errors.New("fail"),
-			expErr:  errors.New("fail"),
-		},
-		"nil scan response": {
-			scanReq:  BdevScanRequest{},
-			scanResp: nil,
-			expErr:   errors.New("nil response"),
-		},
-		"nil devices": {
-			scanReq:  BdevScanRequest{},
-			scanResp: new(BdevScanResponse),
-			expResp: &BdevScanResponse{
-				Controllers: NvmeControllers{},
-			},
-		},
-		"no devices": {
-			scanReq: BdevScanRequest{},
-			scanResp: &BdevScanResponse{
-				Controllers: NvmeControllers{},
-			},
-			expResp: &BdevScanResponse{
-				Controllers: NvmeControllers{},
-			},
-		},
-		"use cache": {
-			scanReq: BdevScanRequest{},
-			cache: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(2),
-			},
-			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
-			},
-		},
 		"bypass cache": {
 			scanReq: BdevScanRequest{BypassCache: true},
 			cache: &BdevScanResponse{
@@ -84,6 +46,17 @@ func Test_scanBdevs(t *testing.T) {
 			expResp: &BdevScanResponse{
 				Controllers: MockNvmeControllers(2),
 			},
+		},
+		"bypass cache; scan error": {
+			scanReq: BdevScanRequest{BypassCache: true},
+			cache: &BdevScanResponse{
+				Controllers: MockNvmeControllers(3),
+			},
+			scanResp: &BdevScanResponse{
+				Controllers: MockNvmeControllers(2),
+			},
+			scanErr: errors.New("fail"),
+			expErr:  errors.New("fail"),
 		},
 		"ignore nil cache": {
 			scanReq: BdevScanRequest{},
@@ -104,32 +77,25 @@ func Test_scanBdevs(t *testing.T) {
 				Controllers: MockNvmeControllers(3),
 			},
 		},
-		"filtered devices from backend scan": {
-			scanReq: BdevScanRequest{
-				DeviceList: []string{
-					MockNvmeController(0).PciAddr,
-					MockNvmeController(1).PciAddr,
-				},
-			},
+		"ignore nil cache; no devices in scan": {
+			scanReq: BdevScanRequest{},
 			scanResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(3),
+				Controllers: NvmeControllers{},
 			},
 			expResp: &BdevScanResponse{
-				Controllers: MockNvmeControllers(2),
+				Controllers: NvmeControllers{},
 			},
 		},
-		"filtered devices from cache": {
-			scanReq: BdevScanRequest{
-				DeviceList: []string{
-					MockNvmeController(0).PciAddr,
-					MockNvmeController(1).PciAddr,
-				},
-			},
+		"use cache": {
+			scanReq: BdevScanRequest{},
 			cache: &BdevScanResponse{
 				Controllers: MockNvmeControllers(3),
 			},
-			expResp: &BdevScanResponse{
+			scanResp: &BdevScanResponse{
 				Controllers: MockNvmeControllers(2),
+			},
+			expResp: &BdevScanResponse{
+				Controllers: MockNvmeControllers(3),
 			},
 		},
 	} {
