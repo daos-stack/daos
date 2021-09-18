@@ -31,8 +31,6 @@ type (
 	spdkWrapper struct {
 		spdk.Env
 		spdk.Nvme
-
-		vmdEnabled bool
 	}
 
 	spdkBackend struct {

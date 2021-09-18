@@ -17,6 +17,7 @@ import (
 
 	"github.com/daos-stack/daos/src/control/common"
 	"github.com/daos-stack/daos/src/control/logging"
+	"github.com/daos-stack/daos/src/control/provider/system"
 	"github.com/daos-stack/daos/src/control/server/storage"
 )
 
@@ -115,10 +116,19 @@ func substituteVMDAddresses(log logging.Logger, inPCIAddrs []string, bdevCache *
 // detectVMD returns whether VMD devices have been found and a slice of VMD
 // PCI addresses if found.
 func detectVMD() ([]string, error) {
+	distro := system.GetDistribution()
+	var lspciCmd *exec.Cmd
+
 	// Check available VMD devices with command:
-	// "$lspci | grep  -i -E "201d | Volume Management Device"
-	lspciCmd := exec.Command("lspci")
-	vmdCmd := exec.Command("grep", "-i", "-E", "201d|Volume Management Device")
+	// "$lspci | grep  -i -E "Volume Management Device"
+	switch {
+	case distro.ID == "opensuse-leap" || distro.ID == "opensuse" || distro.ID == "sles":
+		lspciCmd = exec.Command("/sbin/lspci")
+	default:
+		lspciCmd = exec.Command("lspci")
+	}
+
+	vmdCmd := exec.Command("grep", "-i", "-E", "Volume Management Device")
 	var cmdOut bytes.Buffer
 	var prefixIncluded bool
 
@@ -137,9 +147,6 @@ func detectVMD() ([]string, error) {
 		// sometimes the output may not include "0000:" prefix
 		// usually when muliple devices are in PCI_ALLOWED
 		vmdCount = bytes.Count(cmdOut.Bytes(), []byte("Volume"))
-		if vmdCount == 0 {
-			vmdCount = bytes.Count(cmdOut.Bytes(), []byte("201d"))
-		}
 	} else {
 		prefixIncluded = true
 	}
