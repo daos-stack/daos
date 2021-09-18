@@ -256,13 +256,12 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * Kill a VOS pool before destroy
  * It deletes SPDK blob of this pool and detaches it from VOS GC
  *
- * \param uuid	[IN]	Pool UUID
- * \param force [IN]	Delete blob even if it has open refcount
+ * \param uuid		[IN]	Pool UUID
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_kill(uuid_t uuid, bool force);
+vos_pool_kill(uuid_t uuid);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
