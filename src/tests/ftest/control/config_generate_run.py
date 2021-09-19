@@ -59,9 +59,6 @@ class ConfigGenerateRun(TestWithServers):
         except yaml.YAMLError as error:
             raise CommandFailure("Error loading dmg generated config!")
 
-        # Remove this line when DAOS-7861 is fixed.
-        generated_yaml["nr_hugepages"] = 4096
-
         # Stop and restart daos_server. self.start_server_managers() has the
         # server startup check built into it, so if there's something wrong,
         # it'll throw an error.

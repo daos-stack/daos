@@ -796,6 +796,7 @@ class DaosServerManager(SubprocessManager):
                 per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
                 per_engine_yaml_parameters.scm_size.update(None)
                 per_engine_yaml_parameters.scm_list.update(storage_tier["scm_list"])
+                per_engine_yaml_parameters.reset_yaml_data_updated()
 
                 self.manager.job.yaml.engine_params.append(
                     per_engine_yaml_parameters)
