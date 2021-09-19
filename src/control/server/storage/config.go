@@ -168,34 +168,34 @@ func (sc *Config) Validate() error {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
-	// set persistent location for engine bdev config file to be consumed by
-	// provider backend, set to empty when no devices specified
-	sc.ConfigOutputPath = ""
-	scmCfgs := sc.Tiers.ScmConfigs()
-	if len(scmCfgs) > 0 && sc.Tiers.CfgHasBdevs() {
-		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
-	}
-
 	var pruned TierConfigs
 	for _, tier := range sc.Tiers {
 		if tier.IsBdev() && len(tier.Bdev.DeviceList) == 0 {
-			continue
+			continue // prune empty bdev tier
 		}
 		pruned = append(pruned, tier)
 	}
 	sc.Tiers = pruned
 
-	// set the VOS env:
+	scmCfgs := sc.Tiers.ScmConfigs()
 	bdevCfgs := sc.Tiers.BdevConfigs()
+
+	if len(scmCfgs) == 0 {
+		return errors.New("missing scm storage tier in config")
+	}
+
+	// set persistent location for engine bdev config file to be consumed by
+	// provider backend, set to empty when no devices specified
+	sc.ConfigOutputPath = ""
 	if len(bdevCfgs) > 0 {
+		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
 		switch bdevCfgs[0].Class {
 		case ClassFile, ClassKdev:
 			sc.VosEnv = "AIO"
 		case ClassNvme:
 			sc.VosEnv = "NVME"
 		}
-
-		return nil
 	}
 
 	return nil
