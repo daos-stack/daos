@@ -172,12 +172,21 @@ func (sc *Config) Validate() error {
 	// provider backend, set to empty when no devices specified
 	sc.ConfigOutputPath = ""
 	scmCfgs := sc.Tiers.ScmConfigs()
-	bdevCfgs := sc.Tiers.BdevConfigs()
 	if len(scmCfgs) > 0 && sc.Tiers.CfgHasBdevs() {
 		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
 	}
 
+	var pruned TierConfigs
+	for _, tier := range sc.Tiers {
+		if tier.IsBdev() && len(tier.Bdev.DeviceList) == 0 {
+			continue
+		}
+		pruned = append(pruned, tier)
+	}
+	sc.Tiers = pruned
+
 	// set the VOS env:
+	bdevCfgs := sc.Tiers.BdevConfigs()
 	if len(bdevCfgs) > 0 {
 		switch bdevCfgs[0].Class {
 		case ClassFile, ClassKdev:
@@ -185,6 +194,8 @@ func (sc *Config) Validate() error {
 		case ClassNvme:
 			sc.VosEnv = "NVME"
 		}
+
+		return nil
 	}
 
 	return nil
