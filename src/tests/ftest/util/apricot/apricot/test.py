@@ -10,7 +10,6 @@
 import os
 import json
 import re
-from tempfile import TemporaryDirectory
 
 from avocado import Test as avocadoTest
 from avocado import skip, TestFail, fail_on
@@ -28,7 +27,7 @@ from cart_ctl_utils import CartCtl
 from server_utils import DaosServerManager
 from general_utils import \
     get_partition_hosts, stop_processes, get_job_manager_class, \
-    get_default_config_file, pcmd, get_file_listing, run_command
+    get_default_config_file, pcmd, get_file_listing
 from logger_utils import TestLogger
 from test_utils_pool import TestPool, LabelGenerator
 from test_utils_container import TestContainer
@@ -733,22 +732,15 @@ class TestWithServers(TestWithoutServers):
             message (str): message to write to log file.
         """
         if self.server_managers and self.agent_managers:
-            temp_dir = TemporaryDirectory()
-
             # Compose and run cart_ctl command
             cart_ctl = CartCtl()
             cart_ctl.add_log_msg.value = "add_log_msg"
             cart_ctl.rank.value = "all"
-            cart_ctl.cfg_path.value = temp_dir.name
             cart_ctl.m.value = message
             cart_ctl.n.value = None
+            cart_ctl.use_daos_agent_env.value = True
 
             for manager in self.agent_managers:
-                # Fetch attachinfo data from server via the agent
-                attachinfo_file = manager.get_attachinfo_file()
-                cp_command = "sudo cp {} {}".format(
-                    attachinfo_file, temp_dir.name)
-                run_command(cp_command, verbose=True, raise_exception=False)
                 cart_ctl.group_name.value = manager.get_config_value("name")
                 cart_ctl.run()
         else:

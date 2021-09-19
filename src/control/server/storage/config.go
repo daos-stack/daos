@@ -266,9 +266,6 @@ func (sc *ScmConfig) Validate(class Class) error {
 	if sc.MountPoint == "" {
 		return errors.New("no scm_mount set")
 	}
-	if sc.RamdiskSize < 0 {
-		return errors.New("negative scm_size")
-	}
 
 	switch class {
 	case ClassDcpm:
