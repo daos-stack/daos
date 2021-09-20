@@ -22,6 +22,8 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
     def __init__(self, *args, **kwargs):
         """Initialize a TelemetryPoolMetrics object."""
         super().__init__(*args, **kwargs)
+        # remove this variable and it's use from the code,
+        # once DAOS-8592 is resolved.
         self.threshold_percent = None
 
     def check_range(self, expected_value, actual_value, threshold_percent):
