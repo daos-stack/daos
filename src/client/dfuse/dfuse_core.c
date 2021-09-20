@@ -488,9 +488,11 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 			DP_UUID(pool));
 
 	if (uuid_is_null(*pool) == 0) {
-		uuid_copy(dfp->dfp_pool, *pool);
+		char uuid_str[37];
 
-		rc = daos_pool_connect(dfp->dfp_pool,
+		uuid_copy(dfp->dfp_pool, *pool);
+		uuid_unparse(dfp->dfp_pool, uuid_str);
+		rc = daos_pool_connect(uuid_str,
 				       fs_handle->dpi_info->di_group,
 				       DAOS_PC_RW,
 				       &dfp->dfp_poh, NULL, NULL);
@@ -851,11 +853,13 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		dfc->dfc_ndentry_timeout = 5;
 
 	} else if (*_dfc == NULL) {
+		char	str[37];
+
 		dfc->dfs_ops = &dfuse_dfs_ops;
 		uuid_copy(dfc->dfs_cont, *cont);
-		rc = daos_cont_open(dfp->dfp_poh, dfc->dfs_cont,
-				    DAOS_COO_RW, &dfc->dfs_coh,
-				    NULL, NULL);
+		uuid_unparse(dfc->dfs_cont, str);
+		rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW,
+				    &dfc->dfs_coh, NULL, NULL);
 		if (rc == -DER_NONEXIST) {
 			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: "DF_RC,
 				       DP_RC(rc));
