@@ -1441,9 +1441,9 @@ class posix_tests():
                               use_json=True)
             print(rc)
             assert rc.returncode == 0, rc
-            # Don't use JSON here because of https://jira.hpdd.intel.com/browse/DAOS-8330
             rc = run_daos_cmd(self.conf,
-                              ['fs', 'get-attr', '--path', check_path])
+                              ['fs', 'get-attr', '--path', check_path],
+                              use_json=True)
             print(rc)
             assert rc.returncode == 0, rc
 
