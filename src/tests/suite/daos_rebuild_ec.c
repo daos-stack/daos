@@ -536,6 +536,7 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	dfs_t		*dfs_mt;
 	daos_handle_t	co_hdl;
 	uuid_t		co_uuid;
+	char		str[37];
 	test_arg_t	*arg = *state;
 	d_sg_list_t	sgl;
 	d_iov_t		iov;
@@ -556,8 +557,7 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	int		i;
 	int		rc;
 
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl,
 			     &dfs_mt);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
@@ -654,7 +654,8 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 
 #if 0
