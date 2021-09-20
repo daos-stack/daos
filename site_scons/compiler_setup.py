@@ -1,5 +1,6 @@
 """Common DAOS library for setting up the compiler"""
 
+import sys
 from SCons.Script import GetOption, Exit, Configure
 
 DESIRED_FLAGS = ['-Wno-gnu-designator',
@@ -20,6 +21,30 @@ DESIRED_FLAGS.extend(['-fstack-protector-strong', '-fstack-clash-protection'])
 
 PP_ONLY_FLAGS = ['-Wno-parentheses-equality', '-Wno-builtin-requires-header',
                  '-Wno-unused-function']
+
+SOURCE_FILE = """
+int main(int argc, char **argv)
+{
+    return 0;
+}
+"""
+
+def check_asan_helper(context):
+    """configure callback to check for address sanitizer"""
+    context.Message("Checking for AddressSanitizer...")
+    ret = context.TryLink(SOURCE_FILE, ".c")
+    context.Result(ret)
+    return ret
+
+def check_asan(env):
+    """Check for address sanitizer support"""
+    result = False
+    cenv = env.Clone()
+    config = Configure(cenv, custom_tests={'CheckASan' : check_asan_helper})
+    if config.CheckASan():
+        result = True
+    config.Finish()
+    return result
 
 def base_setup(env, prereqs=None):
     """Setup the scons environment for the compiler
@@ -58,6 +83,16 @@ def base_setup(env, prereqs=None):
             env.AppendUnique(CCFLAGS=['-Og'])
         else:
             env.AppendUnique(CCFLAGS=['-O0'])
+    elif build_type == 'asan':
+        cflags = ['-fno-omit-frame-pointer']
+        common = ['-fsanitize=address', '-O1']
+        env.AppendUnique(CCFLAGS=cflags + common)
+        env.AppendUnique(LINKFLAGS=common)
+        env.AppendENVPath('CGO_LDFLAGS', " ".join(common))
+        if not check_asan(env):
+            print("AddressSanitizer is not supported with this platform/compiler.")
+            sys.stdout.flush()
+            Exit(1)
     else:
         if build_type == 'release':
             env.AppendUnique(CPPDEFINES='DAOS_BUILD_RELEASE')
