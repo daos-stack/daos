@@ -193,3 +193,32 @@ func (f *ConsModeFlag) UnmarshalFlag(fv string) error {
 	f.Set = true
 	return nil
 }
+
+type ContTypeFlag struct {
+	Set  bool
+	Type C.ushort
+}
+
+func (f *ContTypeFlag) String() string {
+	cTypeStr := [16]C.char{}
+	C.daos_unparse_ctype(f.Type, &cTypeStr[0])
+
+	return C.GoString(&cTypeStr[0])
+}
+
+func (f *ContTypeFlag) UnmarshalFlag(fv string) error {
+	if fv == "" {
+		return errors.New("empty container type")
+	}
+
+	cTypeStr := C.CString(strings.ToUpper(fv))
+	defer freeString(cTypeStr)
+
+	C.daos_parse_ctype(cTypeStr, &f.Type)
+	if f.Type == C.DAOS_PROP_CO_LAYOUT_UNKNOWN {
+		return errors.Errorf("unknown container type %q", fv)
+	}
+
+	f.Set = true
+	return nil
+}
