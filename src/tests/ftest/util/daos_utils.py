@@ -15,13 +15,7 @@ class DaosCommand(DaosCommandBase):
     """Defines a object representing a daos command."""
 
     METHOD_REGEX = {
-        "run": r"(.*)",
-        "container_query":
-            r"Pool UUID:\s+([0-9a-f-]+)\n" +
-            r"Container UUID:\s+([0-9a-f-]+)\n" +
-            r"Number of snapshots:\s+(\d+)\n" +
-            r"Latest Persistent Snapshot:\s+(\d+)\n" +
-            r"Highest Aggregated Epoch:\s+(\d+)",
+        "run": r"(.*)"
     }
 
     def pool_query(self, pool, sys_name=None, sys=None):
@@ -34,8 +28,7 @@ class DaosCommand(DaosCommandBase):
             sys (str, optional): [description]. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool query command fails.
@@ -302,8 +295,7 @@ class DaosCommand(DaosCommandBase):
             sys_name (str): DAOS system name. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool query command fails.
@@ -322,8 +314,7 @@ class DaosCommand(DaosCommandBase):
                 to False.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool list-attrs command fails.
@@ -343,8 +334,7 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             dict: the dmg json command output converted to a python dictionary
@@ -449,7 +439,7 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            dict: the dmg json command output converted to a python dictionary
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos get-attr command fails.
@@ -469,7 +459,7 @@ class DaosCommand(DaosCommandBase):
             verbose (bool, optional): True - fetch values of all attributes.
 
         Returns:
-            dict: the dmg json command output converted to a python dictionary
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container list-attrs command fails.
