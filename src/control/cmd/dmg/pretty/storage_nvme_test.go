@@ -94,8 +94,8 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
        Avg:%d
     End-to-End Error Detection Count:%d
     CRC Error Count:%d
-    Timed Workload, Media Wear:%d%s
-    Timed Workload, Host Reads:%d
+    Timed Workload, Media Wear:%d
+    Timed Workload, Host Read/Write Ratio:%d
     Timed Workload, Timer:%d
     Thermal Throttle Status:%d%s
     Thermal Throttle Event Count:%d
@@ -135,8 +135,8 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
        Avg:%d
     End-to-End Error Detection Count:%d
     CRC Error Count:%d
-    Timed Workload, Media Wear:%d%s
-    Timed Workload, Host Reads:%d
+    Timed Workload, Media Wear:%d
+    Timed Workload, Host Read/Write Ratio:%d
     Timed Workload, Timer:%d
     Thermal Throttle Status:%d%s
     Thermal Throttle Event Count:%d
@@ -159,7 +159,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerA.HealthStats.WearLevelingCntNorm, "%", controllerA.HealthStats.WearLevelingCntMin,
 				controllerA.HealthStats.WearLevelingCntMax, controllerA.HealthStats.WearLevelingCntAvg,
 				controllerA.HealthStats.EndtoendErrCntRaw, controllerA.HealthStats.CrcErrCntRaw,
-				controllerA.HealthStats.MediaWearRaw, "%", controllerA.HealthStats.HostReadsRaw,
+				controllerA.HealthStats.MediaWearRaw, controllerA.HealthStats.HostReadsRaw,
 				controllerA.HealthStats.WorkloadTimerRaw,
 				controllerA.HealthStats.ThermalThrottleStatus, "%", controllerA.HealthStats.ThermalThrottleEventCnt,
 				controllerA.HealthStats.RetryBufferOverflowCnt,
@@ -179,7 +179,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerB.HealthStats.WearLevelingCntNorm, "%", controllerB.HealthStats.WearLevelingCntMin,
 				controllerB.HealthStats.WearLevelingCntMax, controllerB.HealthStats.WearLevelingCntAvg,
 				controllerB.HealthStats.EndtoendErrCntRaw, controllerB.HealthStats.CrcErrCntRaw,
-				controllerB.HealthStats.MediaWearRaw, "%", controllerB.HealthStats.HostReadsRaw,
+				controllerB.HealthStats.MediaWearRaw, controllerB.HealthStats.HostReadsRaw,
 				controllerB.HealthStats.WorkloadTimerRaw,
 				controllerB.HealthStats.ThermalThrottleStatus, "%", controllerB.HealthStats.ThermalThrottleEventCnt,
 				controllerB.HealthStats.RetryBufferOverflowCnt,
@@ -238,8 +238,8 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
        Avg:%d
     End-to-End Error Detection Count:%d
     CRC Error Count:%d
-    Timed Workload, Media Wear:%d%s
-    Timed Workload, Host Reads:%d
+    Timed Workload, Media Wear:%d
+    Timed Workload, Host Read/Write Ratio:%d
     Timed Workload, Timer:%d
     Thermal Throttle Status:%d%s
     Thermal Throttle Event Count:%d
@@ -264,7 +264,7 @@ PCI:%s Model:%s FW:%s Socket:%d Capacity:%s
 				controllerAwTS.HealthStats.WearLevelingCntNorm, "%", controllerAwTS.HealthStats.WearLevelingCntMin,
 				controllerAwTS.HealthStats.WearLevelingCntMax, controllerAwTS.HealthStats.WearLevelingCntAvg,
 				controllerAwTS.HealthStats.EndtoendErrCntRaw, controllerAwTS.HealthStats.CrcErrCntRaw,
-				controllerAwTS.HealthStats.MediaWearRaw, "%", controllerAwTS.HealthStats.HostReadsRaw,
+				controllerAwTS.HealthStats.MediaWearRaw, controllerAwTS.HealthStats.HostReadsRaw,
 				controllerAwTS.HealthStats.WorkloadTimerRaw,
 				controllerAwTS.HealthStats.ThermalThrottleStatus, "%", controllerAwTS.HealthStats.ThermalThrottleEventCnt,
 				controllerAwTS.HealthStats.RetryBufferOverflowCnt,

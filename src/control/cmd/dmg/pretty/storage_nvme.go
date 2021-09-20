@@ -136,9 +136,9 @@ func printNvmeHealth(stat *storage.NvmeHealth, out io.Writer, opts ...PrintConfi
 			uint64(stat.EndtoendErrCntRaw))
 		fmt.Fprintf(iw, "CRC Error Count:%d\n",
 			uint64(stat.CrcErrCntRaw))
-		fmt.Fprintf(iw, "Timed Workload, Media Wear:%d%%\n",
+		fmt.Fprintf(iw, "Timed Workload, Media Wear:%d\n",
 			uint64(stat.MediaWearRaw))
-		fmt.Fprintf(iw, "Timed Workload, Host Reads:%d\n",
+		fmt.Fprintf(iw, "Timed Workload, Host Read/Write Ratio:%d\n",
 			uint64(stat.HostReadsRaw))
 		fmt.Fprintf(iw, "Timed Workload, Timer:%d\n",
 			uint64(stat.WorkloadTimerRaw))
