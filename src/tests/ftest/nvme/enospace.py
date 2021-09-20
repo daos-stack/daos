@@ -53,7 +53,7 @@ class NvmeEnospace(ServerFillUp):
             "-1007", self.hostlist_clients, self.client_log)
 
         #Get the DER_NO_HDL and other error count from log
-        der_nohdl_count, other_nohdl_errors = error_count(
+        der_nohdl_count = error_count(
             "-1002", self.hostlist_clients, self.client_log)
 
         #Check there are no other errors in log file except DER_NO_HDL

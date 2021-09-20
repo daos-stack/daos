@@ -353,7 +353,7 @@ nvme_test_verify_device_stats(void **state)
 	print_message("server_config_file = %s\n", server_config_file);
 
 	get_log_file(devices[rank_pos].host, server_config_file,
-		     " log_file", log_file);
+		     "control_log_file", log_file);
 	rc = verify_server_log_mask(devices[rank_pos].host,
 				    server_config_file, "DEBUG");
 	if (rc) {
