@@ -12,22 +12,9 @@ import write_host_file
 
 # pylint: disable=attribute-defined-outside-init
 class LargeFileCount(MdtestBase, IorTestBase):
-    """Test class Description: Runs IOR and MDTEST to create large number
-                               of files.
+    """Test class Description: Runs IOR and MDTEST to create large number of files.
     :avocado: recursive
     """
-
-    def single_client(self, api):
-        """Use one client only for POSIX api until DAOS-3320
-           is resolved.
-        Arguments:
-            api (str): IOR or MDTEST api to be used
-        """
-        if api == "POSIX":
-            self.hostlist_clients = [self.hostlist_clients[0]]
-            self.hostfile_clients = write_host_file.write_host_file(
-                self.hostlist_clients, self.workdir,
-                self.hostfile_clients_slots)
 
     def create_cont(self, oclass):
         """Override container create method
@@ -66,10 +53,6 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 # update test_dir for mdtest if api is DFS
                 if api == "DFS":
                     self.mdtest_cmd.test_dir.update("/")
-                # Until DAOS-3320 is resolved run IOR for POSIX
-                # with single client node
-                self.single_client(api)
-
                 # create container for mdtest
                 self.create_cont(oclass)
                 # run mdtest and ior
@@ -115,10 +98,6 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 # update test_dir for mdtest if api is DFS
                 if api == "DFS":
                     self.mdtest_cmd.test_dir.update("/")
-                # Until DAOS-3320 is resolved run IOR for POSIX
-                # with single client node
-                self.single_client(api)
-
                 # create container for mdtest
                 self.create_cont(oclass)
                 # run mdtest and ior
