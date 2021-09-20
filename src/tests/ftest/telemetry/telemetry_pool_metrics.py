@@ -19,6 +19,11 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
     :avocado: recursive
     """
 
+    def __init__(self, *args, **kwargs):
+        """Initialize a TelemetryPoolMetrics object."""
+        super().__init__(*args, **kwargs)
+        self.threshold_percent = None
+
     def check_range(self, expected_value, actual_value, threshold_percent):
         """Check if actual value is within expected
            range of expected value

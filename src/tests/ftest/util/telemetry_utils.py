@@ -575,7 +575,7 @@ class TelemetryUtils():
                                     host, rank, target, metric["value"])
         return data
 
-    def get_metrics_data(self, test_metrics=None):
+    def get_io_metrics(self, test_metrics=None):
         """Get the io telemetry metrics.
 
         Args:
