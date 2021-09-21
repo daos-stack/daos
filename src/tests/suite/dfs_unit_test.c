@@ -18,6 +18,7 @@ static void
 dfs_test_mount(void **state)
 {
 	test_arg_t		*arg = *state;
+	char			str[37];
 	uuid_t			cuuid;
 	daos_cont_info_t	co_info;
 	daos_handle_t		coh;
@@ -28,11 +29,11 @@ dfs_test_mount(void **state)
 		return;
 
 	/** create & open a non-posix container */
-	uuid_generate(cuuid);
-	rc = daos_cont_create(arg->pool.poh, cuuid, NULL, NULL);
+	rc = daos_cont_create(arg->pool.poh, &cuuid, NULL, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Created non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	uuid_unparse(cuuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_rc_equal(rc, 0);
 
 	/** try to mount DFS on it, should fail. */
@@ -41,7 +42,7 @@ dfs_test_mount(void **state)
 
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed non-POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 
@@ -74,10 +75,11 @@ dfs_test_mount(void **state)
 	assert_rc_equal(rc, 0);
 
 	/** create a DFS container with POSIX layout */
-	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+	rc = dfs_cont_create(arg->pool.poh, &cuuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
 	print_message("Created POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	uuid_unparse(cuuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	assert_rc_equal(rc, 0);
 
 	rc = dfs_mount(arg->pool.poh, coh, O_RDWR, &dfs);
@@ -87,7 +89,7 @@ dfs_test_mount(void **state)
 	assert_int_equal(rc, 0);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 	print_message("Destroyed POSIX Container "DF_UUIDF"\n", DP_UUID(cuuid));
 }
@@ -96,6 +98,7 @@ static void
 dfs_test_modes(void **state)
 {
 	test_arg_t		*arg = *state;
+	char			str[37];
 	uuid_t			cuuid;
 	daos_cont_info_t	co_info;
 	daos_handle_t		coh;
@@ -106,13 +109,12 @@ dfs_test_modes(void **state)
 	if (arg->myrank != 0)
 		return;
 
-	uuid_generate(cuuid);
-
 	/** create a DFS container in Relaxed mode */
 	attr.da_mode = DFS_RELAXED;
-	rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, NULL, NULL);
+	rc = dfs_cont_create(arg->pool.poh, &cuuid, &attr, NULL, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+	uuid_unparse(cuuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
 	/** mount in Relaxed mode should succeed */
@@ -136,14 +138,15 @@ dfs_test_modes(void **state)
 	/** destroy */
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_int_equal(rc, 0);
 
 	/** create a DFS container in Balanced mode */
 	attr.da_mode = DFS_BALANCED;
-	rc = dfs_cont_create(arg->pool.poh, cuuid, &attr, NULL, NULL);
+	rc = dfs_cont_create(arg->pool.poh, &cuuid, &attr, NULL, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+	uuid_unparse(cuuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
 	/** mount in Relaxed mode should fail with EPERM */
@@ -162,13 +165,14 @@ dfs_test_modes(void **state)
 	/** destroy */
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_int_equal(rc, 0);
 
 	/** create a DFS container with no mode specified */
-	rc = dfs_cont_create(arg->pool.poh, cuuid, NULL, NULL, NULL);
+	rc = dfs_cont_create(arg->pool.poh, &cuuid, NULL, NULL, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_open(arg->pool.poh, cuuid, DAOS_COO_RW,
+	uuid_unparse(cuuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW,
 			    &coh, &co_info, NULL);
 	assert_int_equal(rc, 0);
 	/** mount in Relaxed mode should succeed */
@@ -183,7 +187,7 @@ dfs_test_modes(void **state)
 	/** destroy */
 	rc = daos_cont_close(coh, NULL);
 	assert_int_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, cuuid, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_int_equal(rc, 0);
 }
 
@@ -990,11 +994,11 @@ dfs_test_compat(void **state)
 	dfs_t		*dfs;
 	int		rc;
 
-	if (arg->myrank != 0)
-		return;
-
 	uuid_generate(uuid1);
 	uuid_clear(uuid2);
+
+	if (arg->myrank != 0)
+		return;
 
 	print_message("creating DFS container with set uuid "DF_UUIDF" ...\n", DP_UUID(uuid1));
 	rc = dfs_cont_create(arg->pool.poh, uuid1, NULL, NULL, NULL);
@@ -1072,8 +1076,7 @@ dfs_setup(void **state)
 	arg = *state;
 
 	if (arg->myrank == 0) {
-		uuid_generate(co_uuid);
-		rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs_mt);
+		rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
 		assert_int_equal(rc, 0);
 		printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 	}
@@ -1097,7 +1100,10 @@ dfs_teardown(void **state)
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+		char str[37];
+
+		uuid_unparse(co_uuid, str);
+		rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 		assert_rc_equal(rc, 0);
 		print_message("Destroyed DFS Container "DF_UUIDF"\n",
 			      DP_UUID(co_uuid));
