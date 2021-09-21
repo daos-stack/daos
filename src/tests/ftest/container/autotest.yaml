@@ -10,7 +10,7 @@ hosts:
         - server-C
         - server-D
   test_clients:
-    - client-E
+    - client-A
 timeout: 360
 server_config:
   name: daos_server
