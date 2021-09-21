@@ -33,7 +33,7 @@ import (
 const (
 	sConfigUncomment = "daos_server_uncomment.yml"
 	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
-	verbsExample      = "../../../../utils/config/examples/daos_server_verbs.yml"
+	verbsExample     = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
@@ -132,7 +132,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 	}{
 		"uncommented default config": {inPath: "uncommentedDefault"},
 		"socket example config":      {inPath: socketsExample},
-		"verbs example config":        {inPath: verbsExample},
+		"verbs example config":       {inPath: verbsExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
 			inPath: "/foo/bar/baz.yml",
@@ -245,7 +245,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithSocketDir("./.daos/daos_server").
 			WithRank(0).
 			WithTargetCount(16).
-			WithHelperStreamCount(6).
+			WithHelperStreamCount(4).
 			WithServiceThreadCore(0).
 			WithStorage(
 				storage.NewTierConfig().
@@ -256,7 +256,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithBdevClass("nvme").
 					WithBdevDeviceList("0000:81:00.0"),
 			).
-			WithFabricInterface("qib0").
+			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(1).
@@ -272,7 +272,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithSocketDir("./.daos/daos_server").
 			WithRank(1).
 			WithTargetCount(16).
-			WithHelperStreamCount(6).
+			WithHelperStreamCount(4).
 			WithServiceThreadCore(22).
 			WithStorage(
 				storage.NewTierConfig().
@@ -284,7 +284,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 					WithBdevDeviceList("/tmp/daos-bdev1", "/tmp/daos-bdev2").
 					WithBdevFileSize(16),
 			).
-			WithFabricInterface("qib1").
+			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
 			WithCrtCtxShareAddr(1).
@@ -611,7 +611,7 @@ func TestServerConfig_Parsing(t *testing.T) {
 			extraConfig: func(c *Server) *Server {
 				return c.WithEngines(
 					engine.NewConfig().
-						WithFabricInterface("qib0").
+						WithFabricInterface("ib0").
 						WithFabricInterfacePort(20000).
 						WithStorage(
 							storage.NewTierConfig().
