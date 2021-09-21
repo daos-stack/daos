@@ -35,27 +35,16 @@ Java_io_daos_DaosClient_daosOpenPool(JNIEnv *env,
 	const char *pool_str = (*env)->GetStringUTFChars(env, poolId, 0);
 	const char *server_group = (*env)->GetStringUTFChars(env, serverGroup,
 								0);
-	uuid_t pool_uuid;
 	jlong ret;
 	daos_handle_t poh;
 	int rc;
 
-	if (!uuid_parse(pool_str, pool_uuid)) {
-		rc = daos_pool_connect(pool_uuid,
-				       server_group,
-				       flags,
-				       &poh /* returned pool handle */,
-				       NULL /* returned pool info */,
-				       NULL /* event */);
-	} else {
-		rc = daos_pool_connect(pool_str,
-				       server_group,
-				       flags,
-				       &poh /* returned pool handle */,
-				       NULL /* returned pool info */,
-				       NULL /* event */);
-	}
-
+	rc = daos_pool_connect(pool_str,
+			       server_group,
+			       flags,
+			       &poh /* returned pool handle */,
+			       NULL /* returned pool info */,
+			       NULL /* event */);
 	if (rc) {
 		char *msg = NULL;
 
@@ -123,12 +112,7 @@ Java_io_daos_DaosClient_daosOpenCont(JNIEnv *env,
 	int rc;
 
 	memcpy(&poh, &poolHandle, sizeof(poh));
-	if (!uuid_parse(cont_str, cont_uuid)) {
-		rc = daos_cont_open(poh, cont_uuid, mode, &coh, &co_info, NULL);
-	} else {
-		rc = daos_cont_open(poh, cont_str, mode, &coh, &co_info, NULL);
-	}
-
+	rc = daos_cont_open(poh, cont_str, mode, &coh, &co_info, NULL);
 	if (rc) {
 		char *msg = NULL;
 
