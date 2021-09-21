@@ -33,7 +33,7 @@ import (
 const (
 	sConfigUncomment = "daos_server_uncomment.yml"
 	socketsExample   = "../../../../utils/config/examples/daos_server_sockets.yml"
-	psm2Example      = "../../../../utils/config/examples/daos_server_psm2.yml"
+	verbsExample      = "../../../../utils/config/examples/daos_server_verbs.yml"
 	defaultConfig    = "../../../../utils/config/daos_server.yml"
 	legacyConfig     = "../../../../utils/config/examples/daos_server_unittests.yml"
 )
@@ -132,7 +132,7 @@ func TestServerConfig_MarshalUnmarshal(t *testing.T) {
 	}{
 		"uncommented default config": {inPath: "uncommentedDefault"},
 		"socket example config":      {inPath: socketsExample},
-		"psm2 example config":        {inPath: psm2Example},
+		"verbs example config":        {inPath: verbsExample},
 		"default empty config":       {inPath: defaultConfig},
 		"nonexistent config": {
 			inPath: "/foo/bar/baz.yml",
