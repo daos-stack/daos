@@ -409,9 +409,6 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	ssize_t		s;
 	char		str[DUNS_MAX_XATTR_LEN];
 	struct statfs	fs;
-#ifdef LUSTRE_INCLUDE
-	char		*dir, *dirp;
-#endif
 	bool		pool_only = false;
 	bool		no_prefix = false;
 	char		*realp = NULL;
@@ -421,6 +418,9 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	size_t		cur_idx;
 	size_t		rel_len = 0;
 	int		rc;
+#ifdef LUSTRE_INCLUDE
+	char *dir;
+#endif
 
 	if (path == NULL || strlen(path) == 0)
 		return EINVAL;
@@ -444,20 +444,37 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 
 	/** no match for direct format, do the UNS fs check */
 
-#ifdef LUSTRE_INCLUDE
-	/* since statfs follows symlinks need to use directory to
-	 * determine FS type
-	 */
-	dir = strdup(path);
-	if (dir == NULL) {
-	        D_ERROR("Failed to copy path\n");
-	        return ENOMEM;
-	}
-
-	dirp = dirname(dir);
-	rc = statfs(dirp, &fs);
-#else
 	rc = statfs(path, &fs);
+
+#ifdef LUSTRE_INCLUDE
+	/* since statfs follows symlinks, may need to use directory to
+	 * determine FS type, if on Lustre and path is a foreign symlink
+	 */
+	if (rc == -1 || fs.f_type != LL_SUPER_MAGIC) {
+		int errno_save = errno;
+		struct statfs fs2;
+		char *dirp;
+		int rc2;
+
+		dir = strdup(path);
+		if (dir == NULL) {
+		        D_ERROR("Failed to copy path\n");
+		        return ENOMEM;
+		}
+
+		dirp = dirname(dir);
+		rc2 = statfs(dirp, &fs2);
+		if (rc2 == 0 && fs2.f_type == LL_SUPER_MAGIC) {
+			rc2 = duns_resolve_lustre_path(path, attr);
+			if (rc2 == 0)
+				D_GOTO(out, rc = rc2);
+
+			/* if Lustre specific method fails, fallback to try the
+			 * normal way...
+			 */
+		}
+		errno = errno_save;
+	}
 #endif
 
 	if (rc == -1) {
@@ -486,17 +503,6 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	cur_idx = path_len;
 
 	while (1) {
-#ifdef LUSTRE_INCLUDE
-		if (fs.f_type == LL_SUPER_MAGIC) {
-			rc = duns_resolve_lustre_path(path, attr);
-			if (rc == 0)
-				D_GOTO(out, rc);
-
-			/* if Lustre specific method fails, fallback to try the
-			 * normal way...
-			 */
-		}
-#endif
 
 		s = lgetxattr(dir_path, DUNS_XATTR_NAME, &str,
 			      DUNS_MAX_XATTR_LEN);
