@@ -49,7 +49,7 @@ the pool map is eagerly pushed to all storage targets. At this point, the pool
 enters a degraded mode that might require extra processing on access (e.g.
 reconstructing data out of erasure code). Consequently, DAOS client and storage
 nodes retry an RPC until they find an alternative replacement target
-from the new pool map or experiences an RPC timeout. At this point, 
+from the new pool map or experiences an RPC timeout. At this point,
 all outstanding communications with the
 evicted target are aborted, and no further messages should be sent to the
 target until it is explicitly reintegrated (possibly only after maintenance
