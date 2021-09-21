@@ -4,7 +4,7 @@ set -eux
 
 : "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
 : "${DAOS_STACK_RETRY_COUNT:=3}"
-: "${DAOS_STACK_MONITOR_SECONDS:=100}"
+: "${DAOS_STACK_MONITOR_SECONDS:=600}"
 : "${BUILD_URL:=Not_in_jenkins}"
 : "${STAGE_NAME:=Unknown_Stage}"
 : "${OPERATIONS_EMAIL:=$USER@localhost}"
