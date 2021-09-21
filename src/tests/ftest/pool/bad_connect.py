@@ -68,7 +68,7 @@ class BadConnectTest(TestWithServers):
             if expected_result in ['FAIL']:
                 self.fail("Test was expected to fail but it passed.\n")
 
-        except (TestFail, TypeError) as excep:
+        except TestFail as excep:
             print(excep)
             print(traceback.format_exc())
             if expected_result in ['PASS']:
