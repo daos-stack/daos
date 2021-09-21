@@ -275,7 +275,7 @@ Download daos source code using the following command:
 
 ## Building DAOS & Dependencies
 
-!!! note 
+!!! note
 	Once the sources are downloaded, the pre-requisites to build the source
 	code can be installed by the following applicable commands.
 
