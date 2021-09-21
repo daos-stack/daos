@@ -127,13 +127,13 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         Steps:
             Create Pool
             Create Container
-            Generate deterministic workload. Usinf ior to write 512M
+            Generate deterministic workload. Using ior to write 512M
             of data with 1M chunk size and 1M transfer size.
             Use telemetry command to get values of 4 parameters
             "engine_pool_ops_fetch", "engine_pool_ops_update",
             "engine_pool_xferred_fetch", "engine_pool_xferred_update"
             for all targets.
-            Verify the sum of all parameter metrics matches the the workload.
+            Verify the sum of all parameter metrics matches the workload.
             Do this with RF=0 and RF2(but RP_2GX).
             For RF=0 the sum should be exactly equal to the expected workload
             and for RF=2 (with RP_2GX) sum should be double the size of
