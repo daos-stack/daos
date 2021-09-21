@@ -22,7 +22,7 @@ hosts:
   test_clients:
     - client-A
     - client-B
-timeout: 2500
+timeout: 600
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -72,8 +72,7 @@ ior:
   chunk_block_transfer_sizes:
    # [ChunkSize, BlocksSize, TransferSize]
    - [32M, 128M, 8M]       # Full Striped
-   # Remove this line when DAOS-8502 defect is resolved.
-   #- [32M, 16M, 2K]       # Partial Striped
+   - [32M, 16M, 2K]        # Partial Striped
   objectclass:
    dfs_oclass_list:
     #- [EC_Object_Class, Minimum number of servers]
