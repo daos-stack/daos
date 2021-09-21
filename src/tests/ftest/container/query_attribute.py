@@ -5,7 +5,6 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
-from daos_utils import DaosCommand
 import base64
 
 
@@ -54,7 +53,7 @@ class ContainerQueryAttributeTest(TestWithServers):
         self.add_pool()
         self.add_container(pool=self.pool)
 
-        self.daos_cmd = DaosCommand(self.bin)
+        self.daos_cmd = self.get_daos_command()
 
         # Call daos container query, obtain pool and container UUID, and
         # compare against those used when creating the pool and the container.
