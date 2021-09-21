@@ -4,8 +4,8 @@ hosts:
     - server-B
     - server-C
     - server-D
-    - server-E
   test_clients:
+    - client-E
     - client-F
     - client-G
     - client-H
@@ -33,7 +33,7 @@ largefilecount:
     - SX
     - RP_3GX
 ior:
-  np: 30
+  np: 48
   dfs_destroy: False
   iorflags:
     sequential:
@@ -50,9 +50,9 @@ dfuse:
 
 mdtest:
   client_processes:
-    np: 30
-  num_of_files_dirs: 1667         # creating total of 50K files
-  num_of_files_dirs_rc: 33334    # creating total of 1M files
+    np: 48
+  num_of_files_dirs: 1041         # creating total of 50K files
+  num_of_files_dirs_rc: 20833     # creating total of 1M files
   test_dir: "/"
   iteration: 1
   dfs_destroy: True
