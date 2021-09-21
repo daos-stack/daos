@@ -1,288 +1,297 @@
-Build from scratch
-==================
+# Build from scratch
 
-Install pre-requisites
-----------------------
+The following instructions describe how to build DAOS from source code. The following steps are required:
 
-CentOS
+1. Install dependencies
+2. Download source code
+3. Build
+4. Environment setup
 
-**git clone**
 
-\# Run as root
+The approximate time to read and execute the steps on this guide is approximately 25 minutes per OS.
 
-yum clean all && \\
 
-yum -y install epel-release && \\
+## Installation of pre-requisites
 
-yum -y upgrade && \\
+The following packages are required
 
-yum -y install \\
+### CentOS Build Installation Prerequisites
 
-boost-python36-devel \\
+		**git clone**
 
-clang-analyzer \\
+		\# Run as root
 
-cmake \\
+		yum clean all && \\
 
-CUnit-devel \\
+		yum -y install epel-release && \\
 
-doxygen \\
+		yum -y upgrade && \\
 
-e2fsprogs \\
+		yum -y install \\
 
-file \\
+		boost-python36-devel \\
 
-flex \\
+		clang-analyzer \\
 
-fuse3-devel \\
+		cmake \\
 
-gcc \\
+		CUnit-devel \\
 
-gcc-c++ \\
+		doxygen \\
 
-git \\
+		e2fsprogs \\
 
-golang \\
+		file \\
 
-graphviz \\
+		flex \\
 
-hwloc-devel \\
+		fuse3-devel \\
 
-ipmctl \\
+		gcc \\
 
-java-1.8.0-openjdk \\
+		gcc-c++ \\
 
-json-c-devel \\
+		git \\
 
-lcov \\
+		golang \\
 
-libaio-devel \\
+		graphviz \\
 
-libcmocka-devel \\
+		hwloc-devel \\
 
-libevent-devel \\
+		ipmctl \\
 
-libipmctl-devel \\
+		java-1.8.0-openjdk \\
 
-libiscsi-devel \\
+		json-c-devel \\
 
-libtool \\
+		lcov \\
 
-libtool-ltdl-devel \\
+		libaio-devel \\
 
-libunwind-devel \\
+		libcmocka-devel \\
 
-libuuid-devel \\
+		libevent-devel \\
 
-libyaml-devel \\
+		libipmctl-devel \\
 
-Lmod \\
+		libiscsi-devel \\
 
-lz4-devel \\
+		libtool \\
 
-make \\
+		libtool-ltdl-devel \\
 
-man \\
+		libunwind-devel \\
 
-maven \\
+		libuuid-devel \\
 
-nasm \\
+		libyaml-devel \\
 
-ndctl \\
+		Lmod \\
 
-numactl-devel \\
+		lz4-devel \\
 
-openssl-devel \\
+		make \\
 
-pandoc \\
+		man \\
 
-patch \\
+		maven \\
 
-patchelf \\
+		nasm \\
 
-pciutils \\
+		ndctl \\
 
-python3-pip \\
+		numactl-devel \\
 
-python36-Cython \\
+		openssl-devel \\
 
-python36-devel \\
+		pandoc \\
 
-python36-distro \\
+		patch \\
 
-python36-jira \\
+		patchelf \\
 
-python36-numpy \\
+		pciutils \\
 
-python36-paramiko \\
+		python3-pip \\
 
-python36-pylint \\
+		python36-Cython \\
 
-python36-requests \\
+		python36-devel \\
 
-python36-requests \\
+		python36-distro \\
 
-python36-tabulate \\
+		python36-jira \\
 
-python36-pyxattr \\
+		python36-numpy \\
 
-python36-scons \\
+		python36-paramiko \\
 
-sg3\_utils \\
+		python36-pylint \\
 
-valgrind-devel \\
+		python36-requests \\
 
-yasm && \\
+		python36-requests \\
 
-yum clean all
+		python36-tabulate \\
 
-yum -y install openmpi3-devel && yum clean all
+		python36-pyxattr \\
 
-SuSE
+		python36-scons \\
 
-**git clone**
+		sg3\_utils \\
 
-\# Run as root
+		valgrind-devel \\
 
-zypper \--non-interactive update && \\
+		yasm && \\
 
-zypper \--non-interactive install \\
+		yum clean all
 
-boost-devel \\
+		yum -y install openmpi3-devel && yum clean all
 
-clang \\
+### openSUSE Build Installation Prerequisites
 
-cmake \\
+		**git clone**
 
-cunit-devel \\
+		\# Run as root
 
-curl \\
+		zypper \--non-interactive update && \\
 
-doxygen \\
+		zypper \--non-interactive install \\
 
-flex \\
+		boost-devel \\
 
-fuse3-devel \\
+		clang \\
 
-gcc \\
+		cmake \\
 
-gcc-c++ \\
+		cunit-devel \\
 
-git \\
+		curl \\
 
-graphviz \\
+		doxygen \\
 
-gzip \\
+		flex \\
 
-hwloc-devel \\
+		fuse3-devel \\
 
-java-1\_8\_0-openjdk-devel \\
+		gcc \\
 
-libaio-devel \\
+		gcc-c++ \\
 
-libcmocka-devel \\
+		git \\
 
-libevent-devel \\
+		graphviz \\
 
-libiscsi-devel \\
+		gzip \\
 
-libjson-c-devel \\
+		hwloc-devel \\
 
-libltdl7 \\
+		java-1\_8\_0-openjdk-devel \\
 
-liblz4-devel \\
+		libaio-devel \\
 
-libnuma-devel \\
+		libcmocka-devel \\
 
-libopenssl-devel \\
+		libevent-devel \\
 
-libtool \\
+		libiscsi-devel \\
 
-libunwind-devel \\
+		libjson-c-devel \\
 
-libuuid-devel \\
+		libltdl7 \\
 
-libyaml-devel \\
+		liblz4-devel \\
 
-lua-lmod \\
+		libnuma-devel \\
 
-make \\
+		libopenssl-devel \\
 
-man \\
+		libtool \\
 
-maven \\
+		libunwind-devel \\
 
-nasm \\
+		libuuid-devel \\
 
-openmpi3-devel \\
+		libyaml-devel \\
 
-pandoc \\
+		lua-lmod \\
 
-patch \\
+		make \\
 
-patchelf \\
+		man \\
 
-python3-devel \\
+		maven \\
 
-python3-distro \\
+		nasm \\
 
-python3-pip \\
+		openmpi3-devel \\
 
-python3-pyxattr \\
+		pandoc \\
 
-python3-PyYAML \\
+		patch \\
 
-python3-tabulate \\
+		patchelf \\
 
-scons \\
+		python3-devel \\
 
-sg3\_utils \\
+		python3-distro \\
 
-valgrind-devel \\
+		python3-pip \\
 
-which \\
+		python3-pyxattr \\
 
-yasm && \\
+		python3-PyYAML \\
 
-zypper clean \--all
+		python3-tabulate \\
 
-update-ca-certificates
+		scons \\
 
-zypper \--non-interactive \--no-gpg-checks install \--allow-unsigned-rpm
-lua-lmod
+		sg3\_utils \\
 
-zypper \--non-interactive install -y ipmctl-devel go1.14 go1.14-race
+		valgrind-devel \\
 
-Daos source code
-----------------
+		which \\
+
+		yasm && \\
+
+		zypper clean \--all
+
+		update-ca-certificates
+
+		zypper \--non-interactive \--no-gpg-checks install \--allow-unsigned-rpm
+		lua-lmod
+
+		zypper \--non-interactive install -y ipmctl-devel go1.14 go1.14-race
+
+## DAOS source code
 
 Download daos source code using the following command:
 
-**git clone**
+		**git clone**
 
-git clone \--recurse-submodules -b v1.2-rc1
-https://github.com/daos-stack/daos.git
+		git clone \--recurse-submodules -b v1.2-rc1
+		https://github.com/daos-stack/daos.git
 
-Building DAOS & Dependencies
-----------------------------
+## Building DAOS & Dependencies
 
-Once the sources are downloaded, the pre-requisites to build the source
-code can be installed by:
+!!! note 
+	Once the sources are downloaded, the pre-requisites to build the source
+	code can be installed by the following applicable commands.
 
-Note:
 
-CentOS
+### CentOS
 
-**git clone**
+		**git clone**
 
-cd daos
+		cd daos
 
-scons-3 \--config=force \--build-deps=yes install
+		scons-3 \--config=force \--build-deps=yes install
 
-SuSE
+### SuSE
 
-**git clone**
+		**git clone**
 
-cd daos
+		cd daos
 
-scons \--config=force \--build-deps=yes install
+		scons \--config=force \--build-deps=yes install

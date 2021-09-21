@@ -21,7 +21,7 @@ membership must be supplied by an external database used by DAOS to
 generate the pool map.
 
 Pool metadata are replicated on several nodes from different high-level
-fault domains for high availability, whereas object data is replicated
+fault domains for high availability, whereas object data can be replicated
 or erasure-coded over a variable number of fault domains depending on
 the selected object class.
 
@@ -48,8 +48,9 @@ by the administrator or automatically. Upon exclusion, the new version of
 the pool map is eagerly pushed to all storage targets. At this point, the pool
 enters a degraded mode that might require extra processing on access (e.g.
 reconstructing data out of erasure code). Consequently, DAOS client and storage
-nodes retry RPC indefinitely until they find an alternative replacement target
-from the new pool map. At this point, all outstanding communications with the
+nodes retry an RPC until they find an alternative replacement target
+from the new pool map or experiences an RPC timeout. At this point, 
+all outstanding communications with the
 evicted target are aborted, and no further messages should be sent to the
 target until it is explicitly reintegrated (possibly only after maintenance
 action).
