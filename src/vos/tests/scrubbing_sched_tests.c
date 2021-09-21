@@ -17,80 +17,79 @@
 #include <fcntl.h>
 #include <daos/tests_lib.h>
 
-static void
-off_always_returns_0(void **state)
-{
-	struct timespec  start_time;
-
-	d_gettime(&start_time);
-
-	assert_int_equal(0, vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_OFF,
-							start_time, 0, 0));
-	assert_int_equal(0, vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_OFF,
-							start_time, 100, 100));
-
-}
+#define assert_ms_eq(exp, duration, periods, curr, elapsed_ns) do {  \
+	struct timespec start;                                       \
+	struct timespec elapsed;                                     \
+	d_gettime(&start); elapsed = start;                          \
+	d_timeinc(&elapsed, elapsed_ns);                             \
+	assert_int_equal(exp,                                        \
+		get_ms_between_periods(start, elapsed, duration,     \
+		periods, curr));                                     \
+	} while (false)
 
 static void
-wait_always_returns_0(void **state)
+ms_between_periods_tests(void **state)
 {
-	struct timespec  start_time;
+#define ONE_SECOND_NS (1e+9)
+#define HALF_SECOND_NS (5e+8)
 
-	d_gettime(&start_time);
-
-	assert_int_equal(0,
-			 vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_RUN_WAIT,
-						     start_time, 0, 0));
-	assert_int_equal(0,
-			 vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_RUN_WAIT,
-						     start_time, 100, 100));
-}
-
-#define assert_continuous(expected, st, csum_count, freq) \
-	assert_int_equal(expected, \
-		vos_scrub_wait_between_msec(DAOS_SCRUB_SCHED_CONTINUOUS, \
-				st, csum_count, freq))
-static void
-continuous_start_now_calcs_ms(void **state)
-{
-	struct timespec  st;
-
-	d_gettime(&st);
-	/* basic math for these is:
-	 * ```freq_sec * 1000 (convert to ms) / last csum count```
-	 * Plug in different numbers for freq and last csum count to see
-	 * expected values. Make freq big and last csum count small, vice versa,
-	 * how are really large values handled ...
-	 *
-	 * All these tests have a start time of now.
+	/*
+	 * ---------------------------------------------------------
+	 * assert_ms_eq takes the following values in this order:
+	 * Expected, duration, periods, current period, elapsed ns
+	 * ---------------------------------------------------------
 	 */
-	assert_continuous(1000, st, 10, 10);
-	assert_continuous(500, st, 10, 5);
-	assert_continuous(1, st, 10000, 10);
-	assert_continuous(0, st, 10001, 10); /* can't sleep less than 1 ms */
-	assert_continuous(2419200, st, 250, 3600 * 24 * 7); /* 7 days */
-	assert_continuous(2419200, st, 250, 3600 * 24 * 7); /* 7 days */
-	/* infinite (almost) */
-	assert_continuous(UINT64_MAX / 100, st, 100, UINT64_MAX);
-}
 
-static void
-continuous_start_10_sec_ago_calcs_ms(void **state)
-{
-	struct timespec  st;
-
-	d_gettime(&st);
-	st.tv_sec -= 10;
-
-	/* ten seconds have passed an freq is 10 seconds, so should not wait
-	 * any longer in between checksums
+	/*
+	 * First period, no time has elapsed, total of 10 periods in 10 seconds.
+	 * Should be 1 second.
 	 */
-	assert_continuous(0, st, 10, 10);
-	assert_continuous(500, st, 10, 15); /* 5 seconds left */
+	assert_ms_eq(1000, 10, 10, 0, 0);
 
-	st.tv_sec -= 10000;
-	/* Should have finished a long time ago */
-	assert_continuous(0, st, 10, 15);
+	/*
+	 * With 10 periods and 10 second duration, then each period should
+	 * take 1 second.
+	 * if half a second has elapsed already for the first period, then only
+	 * need to wait another half second
+	 */
+	assert_ms_eq(500, 10, 10, 0, HALF_SECOND_NS);
+
+
+	/*
+	 * With 10 periods and 10 second duration, then each period should
+	 * take 1 second.
+	 * if one second (or more) has elapsed already for the first period,
+	 * then shouldn't wait at all
+	 */
+	assert_ms_eq(0, 10, 10, 0, ONE_SECOND_NS);
+	assert_ms_eq(0, 10, 10, 0, ONE_SECOND_NS + HALF_SECOND_NS);
+
+	/*
+	 * With 10 periods and 10 second duration, then each period should
+	 * take 1 second.
+	 * if one and a half second has elapsed and in the second period,
+	 * then should wait half a second
+	 */
+	assert_ms_eq(500, 10, 10, 1, ONE_SECOND_NS + HALF_SECOND_NS);
+
+	/*
+	 * Multiple tests with 5 periods into a 10 second duration
+	 */
+	assert_ms_eq(2000, 10, 5, 0, 0);
+	assert_ms_eq(1750, 10, 5, 0, HALF_SECOND_NS / 2);
+	assert_ms_eq(3750, 10, 5, 1, HALF_SECOND_NS / 2);
+
+	/* No time has elapsed, but already done with all periods, plus
+	 * some. Should wait full 10 seconds now, but not more
+	 */
+	assert_ms_eq(10000, 10, 5, 6, 0);
+	assert_ms_eq(10000, 10, 5, 100, 0);
+
+	/* What should wait be if duration isn't set and periods are not set */
+	assert_ms_eq(0, 0, 0, 0, 0);
+
+	/* periods is larger than duration in seconds */
+	assert_ms_eq(908, 10, 11, 0, 1);
 }
 
 static uint32_t test_sleep_fn_call_count;
@@ -174,9 +173,16 @@ free_ctx(struct scrub_ctx *ctx)
 	D_FREE(ctx->sc_pool);
 }
 
-void run_sched_control(struct scrub_ctx *ctx)
+static void
+run_yield_or_sleep_while_running(struct scrub_ctx *ctx)
 {
-	sc_scrub_sched_control(ctx);
+	sc_yield_sleep_while_running(ctx);
+}
+
+static void
+run_yield_or_sleep(struct scrub_ctx *ctx)
+{
+	sc_yield_or_sleep(ctx);
 }
 
 static void
@@ -193,13 +199,13 @@ when_sched_run_wait_credits_are_consumed__should_yield(void **state)
 		.tst_scrub_cred = orig_credits
 	});
 
-	run_sched_control(&ctx);
+	run_yield_or_sleep_while_running(&ctx);
 	/* don't yield until all credits are consumed */
 	assert_int_equal(1, ctx.sc_credits_left);
 	assert_int_equal(0, test_yield_fn_call_count);
 
 	/* credits are consumed */
-	run_sched_control(&ctx);
+	run_yield_or_sleep_while_running(&ctx);
 	/* yielded and reset credits */
 	assert_int_equal(1, test_yield_fn_call_count);
 	assert_int_equal(orig_credits, ctx.sc_credits_left);
@@ -227,13 +233,13 @@ each_schedule__credits_are_consumed_and_wrap(void **state)
 			.tst_already_run_sec = 0,
 		});
 
-		run_sched_control(&ctx);
+		run_yield_or_sleep_while_running(&ctx);
 		assert_int_equal(2, ctx.sc_credits_left);
 
-		run_sched_control(&ctx);
+		run_yield_or_sleep_while_running(&ctx);
 		assert_int_equal(1, ctx.sc_credits_left);
 
-		run_sched_control(&ctx);
+		run_yield_or_sleep_while_running(&ctx);
 		assert_int_equal(3, ctx.sc_credits_left);
 
 		free_ctx(&ctx);
@@ -254,23 +260,20 @@ when_sched_continuous_credits_1__sleeps_and_yield_appropriately(void **state)
 		.tst_scrub_freq_sec = 10,
 		});
 
-	run_sched_control(&ctx);
+	run_yield_or_sleep_while_running(&ctx);
 	assert_int_equal(1, test_sleep_fn_call_count);
-	assert_int_equal(1000, test_sleep_fn_msec);
 
 	/* simulate 1 second passing and 1 csum calculated */
 	ctx.sc_pool_start_scrub.tv_sec--;
 	ctx.sc_pool_csum_calcs++;
-	run_sched_control(&ctx);
+	run_yield_or_sleep_while_running(&ctx);
 	assert_int_equal(2, test_sleep_fn_call_count);
-	assert_int_equal(1000, test_sleep_fn_msec);
 
 	/* simulate 1 second passing and 1 csum calculated */
 	ctx.sc_pool_start_scrub.tv_sec--;
 	ctx.sc_pool_csum_calcs++;
-	run_sched_control(&ctx);
+	run_yield_or_sleep_while_running(&ctx);
 	assert_int_equal(3, test_sleep_fn_call_count);
-	assert_int_equal(1000, test_sleep_fn_msec);
 
 	/*
 	 * simulate 1 minute passing and still going (even though have
@@ -278,7 +281,7 @@ when_sched_continuous_credits_1__sleeps_and_yield_appropriately(void **state)
 	 */
 	ctx.sc_pool_start_scrub.tv_sec -= 60;
 	ctx.sc_pool_csum_calcs += 100;
-	run_sched_control(&ctx);
+	run_yield_or_sleep_while_running(&ctx);
 	assert_int_equal(3, test_sleep_fn_call_count);
 	assert_int_equal(1, test_yield_fn_call_count);
 
@@ -299,7 +302,7 @@ when_sched_continuous_have_run_half_freq__should_sleep(void **state)
 		.tst_scrub_status = SCRUB_STATUS_NOT_RUNNING
 		});
 
-	run_sched_control(&ctx);
+	run_yield_or_sleep(&ctx);
 	/*
 	 * Should sleep 5 seconds because half way through the 10
 	 * second frequency
@@ -322,30 +325,11 @@ when_sched_continuous_past_freq__should_yield(void **state)
 		.tst_scrub_status = SCRUB_STATUS_NOT_RUNNING
 		});
 
-	run_sched_control(&ctx);
+	run_yield_or_sleep(&ctx);
 
 	assert_int_equal(0, test_sleep_fn_msec);
 	assert_int_equal(0, test_sleep_fn_call_count);
 	assert_int_equal(1, test_yield_fn_call_count);
-
-	free_ctx(&ctx);
-}
-
-/* By default, the ULT should sleep 5 seconds if the schedule is off before
- * checking again.
- */
-static void
-when_sched_off__should_sleep_5_sec(void **state)
-{
-	struct scrub_ctx	ctx = {0};
-
-	INIT_CTX_FOR_TESTS(&ctx, {
-		.tst_scrub_sched = DAOS_SCRUB_SCHED_OFF,
-		.tst_scrub_status = SCRUB_STATUS_NOT_RUNNING
-		});
-
-	run_sched_control(&ctx);
-	assert_int_equal(1000 * 5, test_sleep_fn_msec);
 
 	free_ctx(&ctx);
 }
@@ -364,19 +348,13 @@ static int scrub_test_setup(void **state)
 #define TS(x) { "SCRUB_SCHED_" STR(__COUNTER__) ": " #x, x, scrub_test_setup, \
 		NULL, NULL }
 
-static const struct CMUnitTest wait_between_tests[] = {
-	TS(off_always_returns_0),
-	TS(when_sched_off__should_sleep_5_sec),
-	TS(wait_always_returns_0),
-	TS(continuous_start_now_calcs_ms),
-	TS(continuous_start_10_sec_ago_calcs_ms),
-};
-
 static const struct CMUnitTest scrubbing_sched_tests[] = {
+	TS(ms_between_periods_tests),
 	TS(when_sched_run_wait_credits_are_consumed__should_yield),
 	TS(each_schedule__credits_are_consumed_and_wrap),
 	TS(when_sched_continuous_credits_1__sleeps_and_yield_appropriately),
 	TS(when_sched_continuous_have_run_half_freq__should_sleep),
+	TS(when_sched_continuous_past_freq__should_yield),
 	TS(when_sched_continuous_past_freq__should_yield),
 };
 
@@ -385,10 +363,6 @@ run_scrubbing_sched_tests()
 {
 	int rc = 0;
 
-	rc += cmocka_run_group_tests_name(
-		"Test calculations and logic for how long to wait when credits "
-		"are consumed.",
-		wait_between_tests, NULL, NULL);
 	rc += cmocka_run_group_tests_name(
 		"Test logic for how the schedule is controlled (sleeping vs "
 		"yield) based on schedules, where at in scrubbing process, etc",
