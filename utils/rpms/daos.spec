@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       2.1.100
-Release:       5%{?relval}%{?dist}
+Release:       6%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -516,10 +516,8 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 # No files in a meta-package
 
 %changelog
-* Tue Oct 26 2021 Brian J. Murrell <brian.murrell@intel.com> 2.1.100-5
-- Create new daos-{client,server}tests-openmpi and daos-server-tests subpackages
-- Rename daos-tests daos-client-tests and make daos-tests require all
-  other test suites to maintain existing behavior
+* Mon Oct 28 2021 Danielle M. Sikich <danielle.sikich@intel.com> 2.1.100-6
+- Fix name of daos serialize package
 
 * Mon Oct 25 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 2.1.100-4
 - Update mercury to v2.1.0rc2
