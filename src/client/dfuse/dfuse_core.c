@@ -81,7 +81,7 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 	if (matched == 2) {
 		if (c == 'm' || c == 'M')
 			out *= 60;
-		if (c == 's' || c == 'S')
+		else if (c == 's' || c == 'S')
 			true;
 		else
 			return EINVAL;
@@ -953,6 +953,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 	if (!fs_handle)
 		return -DER_NOMEM;
 
+	D_MUTEX_INIT(&fs_handle->dpi_op_lock, NULL);
 	DFUSE_TRA_UP(fs_handle, dfuse_info, "fs_handle");
 
 	fs_handle->dpi_info = dfuse_info;
@@ -1084,6 +1085,8 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	ie->ie_stat.st_gid = getegid();
 	ie->ie_stat.st_mode = 0700 | S_IFDIR;
 	dfs->dfs_ino = ie->ie_stat.st_ino;
+
+	D_INIT_LIST_HEAD(&ie->ie_odir_list);
 
 	if (dfs->dfs_ops == &dfuse_dfs_ops) {
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,

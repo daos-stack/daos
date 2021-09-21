@@ -73,10 +73,12 @@ dfuse_cb_setattr(fuse_req_t req, struct dfuse_inode_entry *ie,
 	 * caching might be enabled for the container.
 	 */
 	if (to_set & FUSE_SET_ATTR_CTIME) {
+#if 0
 		if (!ie->ie_dfs->dfc_data_caching) {
 			DFUSE_TRA_INFO(ie, "CTIME set without data caching");
 			D_GOTO(err, rc = ENOTSUP);
 		}
+#endif
 		DFUSE_TRA_DEBUG(ie, "ctime %#lx", attr->st_ctime);
 		to_set &= ~FUSE_SET_ATTR_CTIME;
 		attr->st_mtime = attr->st_ctime;

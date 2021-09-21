@@ -33,8 +33,28 @@ dfuse_cb_opendir(fuse_req_t req, struct dfuse_inode_entry *ie,
 	fi_out.fh = (uint64_t)oh;
 
 #if HAVE_CACHE_READDIR
-	if (ie->ie_dfs->dfc_dentry_timeout > 0)
+	if (ie->ie_dfs->dfc_dentry_timeout > 0) {
+		struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+
+		DFUSE_TRA_INFO(ie, "Caching readdir");
 		fi_out.cache_readdir = 1;
+		fi_out.keep_cache = 1;
+
+		/* If there are open directory handles already then save this opendir request and
+		 * reply to it later after the closedir has completed.
+		 */
+		D_MUTEX_LOCK(&fs_handle->dpi_op_lock);
+
+		if (oh->doh_ie->ie_odir) {
+			DFUSE_TRA_WARNING(oh, "Delaying opendir reply");
+			oh->doh_od_req = req;
+			d_list_add_tail(&oh->doh_dir_list, &ie->ie_odir_list);
+			D_MUTEX_UNLOCK(&fs_handle->dpi_op_lock);
+			return;
+		}
+		oh->doh_ie->ie_odir = true;
+		D_MUTEX_UNLOCK(&fs_handle->dpi_op_lock);
+	}
 #endif
 
 	DFUSE_REPLY_OPEN(oh, req, &fi_out);
@@ -48,8 +68,9 @@ void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 		    struct fuse_file_info *fi)
 {
-	struct dfuse_obj_hdl	*oh = (struct dfuse_obj_hdl *)fi->fh;
-	int			rc;
+	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
+	int				rc;
 
 	rc = dfs_release(oh->doh_obj);
 	if (rc == 0)
@@ -57,5 +78,29 @@ dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 	else
 		DFUSE_REPLY_ERR_RAW(oh, req, rc);
 	D_FREE(oh->doh_dre);
+
+#if HAVE_CACHE_READDIR
+	D_MUTEX_LOCK(&fs_handle->dpi_op_lock);
+	if (oh->doh_ie->ie_odir) {
+		struct dfuse_obj_hdl	*qoh, *next;
+		struct fuse_file_info	fi_out = {0};
+
+		fi_out.cache_readdir = 1;
+		fi_out.keep_cache = 1;
+		d_list_for_each_entry_safe(qoh, next, &oh->doh_ie->ie_odir_list, doh_dir_list) {
+			DFUSE_TRA_WARNING(oh, "Late opendir reply");
+			fi_out.fh = (uint64_t)qoh;
+			/* Once the reply is sent this thread might not schedule again until after
+			 * the closedir of the other directory, so do the list_del() before the
+			 * reply.
+			 */
+			d_list_del_init(&qoh->doh_dir_list);
+			DFUSE_REPLY_OPEN(qoh, qoh->doh_od_req, &fi_out);
+		}
+		oh->doh_ie->ie_odir = false;
+	}
+	D_MUTEX_UNLOCK(&fs_handle->dpi_op_lock);
+#endif
+
 	D_FREE(oh);
 };

@@ -37,6 +37,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 	ie->ie_root = (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino);
 
+	D_INIT_LIST_HEAD(&ie->ie_odir_list);
+
 	entry.attr = ie->ie_stat;
 	entry.generation = 1;
 	entry.ino = entry.attr.st_ino;

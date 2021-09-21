@@ -108,6 +108,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	ie->ie_obj = obj;
 	ie->ie_stat = entry->attr;
 
+	D_INIT_LIST_HEAD(&ie->ie_odir_list);
+
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);
 
 	entry->attr_timeout = parent->ie_dfs->dfc_attr_timeout;
