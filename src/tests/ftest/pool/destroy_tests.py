@@ -6,10 +6,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
-from server_utils import ServerFailed
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from test_utils_base import CallbackHandler
 from general_utils import get_default_config_file
 from dmg_utils import get_dmg_command
 
