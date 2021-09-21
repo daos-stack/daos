@@ -257,6 +257,7 @@ class DestroyTests(TestWithServers):
         valid_uuid = self.pool.uuid
         invalid_uuid = "81ef94d7-a59d-4a5e-935b-abfbd12f2105"
         self.pool.uuid = invalid_uuid
+        self.pool.use_label = False
 
         # Attempt to destroy the pool with an invalid UUID
         self.validate_pool_destroy(
@@ -268,6 +269,7 @@ class DestroyTests(TestWithServers):
         # Restore the valid uuid to allow tearDown() to pass
         self.log.info("Restoring the pool's valid uuid: %s", valid_uuid)
         self.pool.uuid = valid_uuid
+        self.pool.use_label = True
 
     def test_destroy_invalid_group(self):
         """Test destroying a pool with invalid server group.
