@@ -1145,14 +1145,12 @@ ino_flush(d_list_t *rlink, void *arg)
 						  ie_htl);
 	int rc;
 
-	/* Only evict entries that are direct children of the root, the kernel
-	 * will walk the tree for us
-	 */
-	if (ie->ie_parent != 1)
-		return 0;
-
 	/* Do not evict root itself */
 	if (ie->ie_stat.st_ino == 1)
+		return 0;
+
+	/* Evict all entries that are either the root of a container, or a child of the fs root */
+	if (ie->ie_parent != 1 || !ie->ie_root)
 		return 0;
 
 	rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
@@ -1240,14 +1238,18 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
+	/* Do an initial debug */
+	d_hash_table_debug(&fs_handle->dpi_iet);
+
+	/* Flush anything we can */
+	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
+
 	fs_handle->dpi_shutdown = true;
 	sem_post(&fs_handle->dpi_sem);
 
 	pthread_join(fs_handle->dpi_thread, NULL);
 
 	sem_destroy(&fs_handle->dpi_sem);
-
-	rc = d_hash_table_traverse(&fs_handle->dpi_iet, ino_flush, fs_handle);
 
 	DFUSE_TRA_INFO(fs_handle, "Flush complete: "DF_RC, DP_RC(rc));
 
