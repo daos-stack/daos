@@ -6,10 +6,8 @@ SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 import os
 
-from server_utils import ServerFailed
 from apricot import TestWithServers
 from avocado.core.exceptions import TestFail
-from test_utils_base import CallbackHandler
 from general_utils import get_default_config_file
 from dmg_utils import get_dmg_command
 
@@ -269,6 +267,7 @@ class DestroyTests(TestWithServers):
         # Restore the valid uuid to allow tearDown() to pass
         self.log.info("Restoring the pool's valid uuid: %s", valid_uuid)
         self.pool.uuid = valid_uuid
+        self.pool.use_label = True
 
     def test_destroy_invalid_label(self):
         """Test destroying a pool label that doesn't exist.
