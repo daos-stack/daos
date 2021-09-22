@@ -849,13 +849,13 @@ dfuse_check_valid_path(const char *path)
 }
 
 DFUSE_PUBLIC int
-dfuse_open64_2(const char *pathname, int flags)
+dfuse___open64_2(const char *pathname, int flags)
 {
 	struct fd_entry entry = {0};
 	int fd;
 	int status;
 
-	fd = __real_open64_2(pathname, flags);
+	fd = __real___open64_2(pathname, flags);
 
 	if (!ioil_iog.iog_initialized || (fd == -1)) {
 		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring with failure %d %d",
