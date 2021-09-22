@@ -599,124 +599,6 @@ err:
 	return rc;
 }
 
-static int
-create_cont(daos_handle_t poh, struct duns_attr_t *attrp, bool create_with_label)
-{
-	int rc;
-
-	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
-		dfs_attr_t dfs_attr = {};
-
-		/** TODO: set Lustre FID here. */
-		dfs_attr.da_id = 0;
-		dfs_attr.da_oclass_id = attrp->da_oclass_id;
-		dfs_attr.da_chunk_size = attrp->da_chunk_size;
-		dfs_attr.da_props = attrp->da_props;
-		if (create_with_label)
-			rc = dfs_cont_create_with_label(poh, attrp->da_cont, &dfs_attr,
-							&attrp->da_cuuid, NULL, NULL);
-		else if (!uuid_is_null(attrp->da_cuuid))
-			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr, NULL, NULL);
-		else
-			rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, NULL, NULL);
-	} else {
-		daos_prop_t	*prop;
-		int		 nr = 1;
-
-		if (attrp->da_props != NULL)
-			nr = attrp->da_props->dpp_nr + 1;
-
-		prop = daos_prop_alloc(nr);
-		if (prop == NULL) {
-			D_ERROR("Failed to allocate container prop.");
-			return ENOMEM;
-		}
-		if (attrp->da_props != NULL) {
-			rc = daos_prop_copy(prop, attrp->da_props);
-			if (rc) {
-				daos_prop_free(prop);
-				D_ERROR("failed to copy properties "DF_RC"\n", DP_RC(rc));
-				return daos_der2errno(rc);
-			}
-		}
-		prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
-		prop->dpp_entries[prop->dpp_nr - 1].dpe_val = attrp->da_type;
-		if (create_with_label)
-			rc = daos_cont_create_with_label(poh, attrp->da_cont, prop,
-							 &attrp->da_cuuid, NULL);
-		else if (!uuid_is_null(attrp->da_cuuid))
-			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
-		else
-			rc = daos_cont_create(poh, &attrp->da_cuuid, prop, NULL);
-		if (rc)
-			rc = daos_der2errno(rc);
-		daos_prop_free(prop);
-	}
-	if (rc == 0 && !create_with_label)
-		uuid_unparse(attrp->da_cuuid, attrp->da_cont);
-	return rc;
-}
-
-#ifdef LUSTRE_INCLUDE
-static int
-duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *path,
-			struct duns_attr_t *attrp)
-{
-	char			oclass[10], type[10];
-	char			str[DUNS_MAX_XATTR_LEN + 1];
-	int			len;
-	int			rc, rc2;
-
-	/* XXX pool must already be created, and associated DFuse-mount should already be mounted */
-
-	/* XXX if liblustreapi is not binded, do it now ! */
-	if (liblustre_binded == false && liblustre_notfound == false) {
-		rc = bind_liblustre();
-		if (rc)
-			return EINVAL;
-	}
-
-	uuid_unparse(info.pi_uuid, attrp->da_pool);
-	daos_oclass_id2name(attrp->da_oclass_id, oclass);
-	daos_unparse_ctype(attrp->da_type, type);
-
-	/* create container */
-	rc = create_cont(poh, attrp, false);
-	if (rc) {
-		D_ERROR("Failed to create container (%s)\n", strerror(rc));
-		D_GOTO(err, rc);
-	}
-
-	/* XXX should file with foreign LOV be expected/supoorted here ? */
-
-	/** create dir and store the daos attributes in the path LMV */
-	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type,
-		       attrp->da_pool, attrp->da_cont);
-	if (len < 0) {
-		D_ERROR("Failed to create LMV value\n");
-		D_GOTO(err_cont, rc = EINVAL);
-	}
-
-	rc = (*dir_create_foreign)(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH,
-				   LU_FOREIGN_TYPE_SYMLINK, 0xda05, str);
-	if (rc) {
-		D_ERROR("Failed to create Lustre dir '%s' with foreign "
-			"LMV '%s' (rc = %d).\n", path, str, rc);
-		D_GOTO(err_cont, rc = EINVAL);
-	}
-
-	return rc;
-
-err_cont:
-	rc2 = daos_cont_destroy(poh, attrp->da_cont, 1, NULL);
-	if (rc2)
-		D_ERROR("Failed to cleanup created container %s "DF_RC"\n", attrp->da_cont,
-			DP_RC(rc2));
-err:
-	return rc;
-}
-#endif
-
 #define PW_BUF_SIZE 1024
 
 static int
@@ -796,22 +678,34 @@ out_buf:
 }
 
 static int
-create_cont(daos_handle_t poh, struct duns_attr_t *attrp,
-	    const char *path, bool backend_dfuse)
+create_cont(daos_handle_t poh,
+	    struct duns_attr_t *attrp,
+	    bool create_with_label,
+	    bool backend_dfuse,
+	    const char *path)
 {
 	int rc;
 
 	if (attrp->da_type == DAOS_PROP_CO_LAYOUT_POSIX) {
 		dfs_attr_t dfs_attr = {};
 		daos_handle_t   coh;
+		daos_handle_t *ch = NULL;
+
+		if (backend_dfuse)
+			ch = &coh;
 
 		/** TODO: set Lustre FID here. */
 		dfs_attr.da_id = 0;
 		dfs_attr.da_oclass_id = attrp->da_oclass_id;
 		dfs_attr.da_chunk_size = attrp->da_chunk_size;
 		dfs_attr.da_props = attrp->da_props;
-		rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr,
-				     backend_dfuse ? &coh : NULL, NULL);
+		if (create_with_label)
+			rc = dfs_cont_create_with_label(poh, attrp->da_cont, &dfs_attr,
+							&attrp->da_cuuid, ch, NULL);
+		else if (!uuid_is_null(attrp->da_cuuid))
+			rc = dfs_cont_create(poh, attrp->da_cuuid, &dfs_attr, ch, NULL);
+		else
+			rc = dfs_cont_create(poh, &attrp->da_cuuid, &dfs_attr, ch, NULL);
 		if (rc == -DER_SUCCESS && backend_dfuse) {
 			rc = duns_set_fuse_acl(path, coh);
 			daos_cont_close(coh, NULL);
@@ -832,20 +726,87 @@ create_cont(daos_handle_t poh, struct duns_attr_t *attrp,
 			rc = daos_prop_copy(prop, attrp->da_props);
 			if (rc) {
 				daos_prop_free(prop);
-				D_ERROR("failed to copy properties (%d)\n", rc);
+				D_ERROR("failed to copy properties "DF_RC"\n", DP_RC(rc));
 				return daos_der2errno(rc);
 			}
 		}
 		prop->dpp_entries[prop->dpp_nr - 1].dpe_type = DAOS_PROP_CO_LAYOUT_TYPE;
 		prop->dpp_entries[prop->dpp_nr - 1].dpe_val = attrp->da_type;
-		rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
+		if (create_with_label)
+			rc = daos_cont_create_with_label(poh, attrp->da_cont, prop,
+							 &attrp->da_cuuid, NULL);
+		else if (!uuid_is_null(attrp->da_cuuid))
+			rc = daos_cont_create(poh, attrp->da_cuuid, prop, NULL);
+		else
+			rc = daos_cont_create(poh, &attrp->da_cuuid, prop, NULL);
 		if (rc)
 			rc = daos_der2errno(rc);
 		daos_prop_free(prop);
 	}
-
+	if (rc == 0 && !create_with_label)
+		uuid_unparse(attrp->da_cuuid, attrp->da_cont);
 	return rc;
 }
+
+#ifdef LUSTRE_INCLUDE
+static int
+duns_create_lustre_path(daos_handle_t poh, daos_pool_info_t info, const char *path,
+			struct duns_attr_t *attrp)
+{
+	char			oclass[10], type[10];
+	char			str[DUNS_MAX_XATTR_LEN + 1];
+	int			len;
+	int			rc, rc2;
+
+	/* XXX pool must already be created, and associated DFuse-mount should already be mounted */
+
+	/* XXX if liblustreapi is not binded, do it now ! */
+	if (liblustre_binded == false && liblustre_notfound == false) {
+		rc = bind_liblustre();
+		if (rc)
+			return EINVAL;
+	}
+
+	uuid_unparse(info.pi_uuid, attrp->da_pool);
+	daos_oclass_id2name(attrp->da_oclass_id, oclass);
+	daos_unparse_ctype(attrp->da_type, type);
+
+	/* create container */
+	rc = create_cont(poh, attrp, false, false, NULL);
+	if (rc) {
+		D_ERROR("Failed to create container (%s)\n", strerror(rc));
+		D_GOTO(err, rc);
+	}
+
+	/* XXX should file with foreign LOV be expected/supoorted here ? */
+
+	/** create dir and store the daos attributes in the path LMV */
+	len = snprintf(str, DUNS_MAX_XATTR_LEN, DUNS_XATTR_FMT, type,
+		       attrp->da_pool, attrp->da_cont);
+	if (len < 0) {
+		D_ERROR("Failed to create LMV value\n");
+		D_GOTO(err_cont, rc = EINVAL);
+	}
+
+	rc = (*dir_create_foreign)(path, S_IRWXU | S_IRWXG | S_IROTH | S_IWOTH,
+				   LU_FOREIGN_TYPE_SYMLINK, 0xda05, str);
+	if (rc) {
+		D_ERROR("Failed to create Lustre dir '%s' with foreign "
+			"LMV '%s' (rc = %d).\n", path, str, rc);
+		D_GOTO(err_cont, rc = EINVAL);
+	}
+
+	return rc;
+
+err_cont:
+	rc2 = daos_cont_destroy(poh, attrp->da_cont, 1, NULL);
+	if (rc2)
+		D_ERROR("Failed to cleanup created container %s "DF_RC"\n", attrp->da_cont,
+			DP_RC(rc2));
+err:
+	return rc;
+}
+#endif
 
 int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
@@ -884,9 +845,9 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 		}
 
 		if (daos_label_is_valid(attrp->da_cont))
-			rc = create_cont(poh, attrp, NULL, true);
+			rc = create_cont(poh, attrp, true, false, NULL);
 		else
-			rc = create_cont(poh, attrp, NULL, false);
+			rc = create_cont(poh, attrp, false, false, NULL);
 		if (rc)
 			D_ERROR("Failed to create container (%d)\n", rc);
 		return rc;
@@ -972,7 +933,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 	daos_unparse_ctype(attrp->da_type, type);
 
 	/** Create container */
-	rc = create_cont(poh, attrp, false);
+	rc = create_cont(poh, attrp, false, backend_dfuse, path);
 	if (rc) {
 		D_ERROR("Failed to create container (%s)\n", strerror(rc));
 		D_GOTO(err_link, rc);
@@ -1018,7 +979,7 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			goto err_link;
 		}
 
-		rc = create_cont(poh, attrp, path, true);
+		rc = create_cont(poh, attrp, false, true, path);
 		if (rc == -DER_SUCCESS && backend_dfuse) {
 			/* This next setxattr will cause dfuse to lookup the entry point and perform
 			 * a container connect, therefore this xattr will be set in the root of the
