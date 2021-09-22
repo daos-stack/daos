@@ -94,6 +94,25 @@ pool_hlink2ptr(struct d_ulink *hlink)
 }
 
 static void
+vos_delete_blob(uuid_t pool_uuid)
+{
+	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
+	int			 rc;
+
+	/* NVMe device isn't configured */
+	if (!bio_nvme_configured() || xs_ctxt == NULL)
+		return;
+
+	D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
+		xs_ctxt, DP_UUID(pool_uuid));
+
+	rc = bio_blob_delete(pool_uuid, xs_ctxt);
+	if (rc)
+		D_ERROR("Deleting blob for xs:%p pool="DF_UUID" failed: "DF_RC"\n",
+			xs_ctxt, DP_UUID(pool_uuid), DP_RC(rc));
+}
+
+static void
 pool_hop_free(struct d_ulink *hlink)
 {
 	struct vos_pool	*pool = pool_hlink2ptr(hlink);
@@ -125,6 +144,9 @@ pool_hop_free(struct d_ulink *hlink)
 		vos_pmemobj_close(pool->vp_uma.uma_pool);
 
 	vos_dedup_fini(pool);
+
+	if (pool->vp_dying)
+		vos_delete_blob(pool->vp_id);
 
 	D_FREE(pool);
 }
@@ -261,8 +283,8 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	rc = pool_lookup(&ukey, &pool);
 	if (rc == 0) {
 		D_ASSERT(pool != NULL);
-		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
-			pool->vp_opened, pool);
+		D_ERROR("Found already opened(%d) pool:%p dying(%d)\n",
+			pool->vp_opened, pool, pool->vp_dying);
 		vos_pool_decref(pool);
 		return -DER_EXIST;
 	}
@@ -409,11 +431,10 @@ close:
  * - detach from GC, delete SPDK blob
  */
 int
-vos_pool_kill(uuid_t uuid, bool force)
+vos_pool_kill(uuid_t uuid)
 {
-	struct bio_xs_context	*xs_ctxt = vos_xsctxt_get();
-	struct d_uuid		 ukey;
-	int			 rc;
+	struct d_uuid	ukey;
+	int		rc;
 
 	uuid_copy(ukey.uuid, uuid);
 	while (1) {
@@ -427,7 +448,6 @@ vos_pool_kill(uuid_t uuid, bool force)
 		}
 
 		D_ASSERT(pool != NULL);
-		pool->vp_dying = 1;
 		if (gc_have_pool(pool)) {
 			/* still pinned by GC, un-pin it because there is no
 			 * need to run GC for this pool anymore.
@@ -436,31 +456,17 @@ vos_pool_kill(uuid_t uuid, bool force)
 			vos_pool_decref(pool); /* -1 for lookup */
 			continue;	/* try again */
 		}
+		pool->vp_dying = 1;
 		vos_pool_decref(pool); /* -1 for lookup */
 
-		if (force) {
-			D_ERROR("Open reference exists, force kill\n");
-			/* NB: rebuild might still take refcount vos_pool,
-			 * we don't want to fail destroy or locking space.
-			 */
-			break;
-		}
-		D_ERROR("Open reference exists, cannot kill pool\n");
+		D_ERROR(DF_UUID": Open reference exists, pool deletion is deferred\n",
+			DP_UUID(uuid));
+		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
 	D_DEBUG(DB_MGMT, "No open handles, OK to delete\n");
 
-	/* NVMe device is configured */
-	if (bio_nvme_configured() && xs_ctxt) {
-		D_DEBUG(DB_MGMT, "Deleting blob for xs:%p pool:"DF_UUID"\n",
-			xs_ctxt, DP_UUID(uuid));
-		rc = bio_blob_delete(uuid, xs_ctxt);
-		if (rc) {
-			D_ERROR("Destroy blob for pool="DF_UUID" rc=%s\n",
-				DP_UUID(uuid), d_errstr(rc));
-			/* do not return the error, nothing we can do */
-		}
-	}
+	vos_delete_blob(uuid);
 	return 0;
 }
 
@@ -475,7 +481,7 @@ vos_pool_destroy(const char *path, uuid_t uuid)
 	D_DEBUG(DB_MGMT, "delete path: %s UUID: "DF_UUID"\n",
 		path, DP_UUID(uuid));
 
-	rc = vos_pool_kill(uuid, false);
+	rc = vos_pool_kill(uuid);
 	if (rc)
 		return rc;
 
@@ -740,6 +746,11 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 		D_ASSERT(pool != NULL);
 		D_DEBUG(DB_MGMT, "Found already opened(%d) pool : %p\n",
 			pool->vp_opened, pool);
+		if (pool->vp_dying) {
+			D_ERROR("Found dying pool : %p\n", pool);
+			vos_pool_decref(pool);
+			return -DER_BUSY;
+		}
 		if ((flags & VOS_POF_EXCL) || pool->vp_excl) {
 			vos_pool_decref(pool);
 			return -DER_BUSY;
@@ -785,7 +796,7 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	if (uuid_compare(uuid, pool_df->pd_id)) {
 		D_ERROR("Mismatch uuid, user="DF_UUIDF", pool="DF_UUIDF"\n",
 			DP_UUID(uuid), DP_UUID(pool_df->pd_id));
-		rc = -DER_IO;
+		rc = -DER_ID_MISMATCH;
 		goto out;
 	}
 
@@ -869,8 +880,12 @@ vos_pool_query_space(uuid_t pool_id, struct vos_pool_space *vps)
 
 	uuid_copy(ukey.uuid, pool_id);
 	rc = pool_lookup(&ukey, &pool);
-	if (rc)
+	if (rc) {
 		return rc;
+	} else if (pool->vp_dying) {
+		vos_pool_decref(pool);
+		return -DER_NONEXIST;
+	}
 
 	D_ASSERT(pool != NULL);
 	rc = vos_space_query(pool, vps, false);

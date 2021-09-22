@@ -857,6 +857,25 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
+                stage('Functional on CentOS 7 with Valgrind') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_FUNCTIONAL_VM9_LABEL
+                    }
+                    steps {
+                        functionalTest inst_repos: daosRepos(),
+                                       inst_rpms: functionalPackages(1, next_version),
+                                       test_function: 'runTestFunctionalV2'
+                    }
+                    post {
+                        always {
+                            functionalTestPostV2()
+                        }
+                    }
+                } // stage('Functional on CentOS 7 with Valgrind')
                 stage('Functional on CentOS 8') {
                     when {
                         beforeAgent true
@@ -927,6 +946,46 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
+                stage('Test CentOS 8.3.2011 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                target: 'el8.3',
+                                daos_pkg_version: daosPackagesVersion("centos8", next_version)
+                   }
+                } // stage('Test CentOS 7 RPMs')
+                stage('Test CentOS 8 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                daos_pkg_version: daosPackagesVersion(next_version)
+                   }
+                } // stage('Test CentOS 8 RPMs')
+                stage('Test Leap 15 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        testRpm inst_repos: daosRepos(),
+                                daos_pkg_version: daosPackagesVersion(next_version)
+                   }
+                } // stage('Test Leap 15 RPMs')
                 stage('Scan CentOS 7 RPMs') {
                     when {
                         beforeAgent true

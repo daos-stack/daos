@@ -14,6 +14,7 @@
 #include <daos_srv/container.h>
 #include <daos_srv/vos.h>
 #include <daos_srv/dtx_srv.h>
+#include <gurt/telemetry_consumer.h>
 #include "dtx_internal.h"
 
 #define DTX_YIELD_CYCLE		(DTX_THRESHOLD_COUNT >> 3)
@@ -79,6 +80,22 @@ dtx_metrics_alloc(const char *path, int tgt_id)
 	if (metrics == NULL)
 		return NULL;
 
+	rc = d_tm_add_metric(&metrics->dpm_batched_degree, D_TM_COUNTER,
+			     "degree of DTX entries per batched commit RPC",
+			     "entries", "%s/entries/dtx_batched_degree/tgt_%u",
+			     path, tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX batched degree metric: "DF_RC"\n",
+		       DP_RC(rc));
+
+	rc = d_tm_add_metric(&metrics->dpm_batched_total, D_TM_COUNTER,
+			     "total DTX entries via batched commit RPC",
+			     "entries", "%s/entries/dtx_batched_total/tgt_%u",
+			     path, tgt_id);
+	if (rc != DER_SUCCESS)
+		D_WARN("Failed to create DTX batched total metric: "DF_RC"\n",
+		       DP_RC(rc));
+
 	/** Register different per-opcode counters */
 	for (opc = 0; opc < DTX_PROTO_SRV_RPC_COUNT; opc++) {
 		rc = d_tm_add_metric(&metrics->dpm_total[opc], D_TM_COUNTER,
@@ -108,7 +125,7 @@ struct dss_module_metrics dtx_metrics = {
 static void
 dtx_handler(crt_rpc_t *rpc)
 {
-	struct dtx_pool_metrics	*dpm;
+	struct dtx_pool_metrics	*dpm = NULL;
 	struct dtx_in		*din = crt_req_get(rpc);
 	struct dtx_out		*dout = crt_reply_get(rpc);
 	struct ds_cont_child	*cont = NULL;
@@ -132,8 +149,13 @@ dtx_handler(crt_rpc_t *rpc)
 		goto out;
 	}
 
+	dpm = cont->sc_pool->spc_metrics[DAOS_DTX_MODULE];
+
 	switch (opc) {
-	case DTX_COMMIT:
+	case DTX_COMMIT: {
+		uint64_t	opc_cnt = 0;
+		uint64_t	ent_cnt = 0;
+
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_COMMIT))
 			break;
 
@@ -148,7 +170,20 @@ dtx_handler(crt_rpc_t *rpc)
 
 			i += count;
 		}
+
+		d_tm_inc_counter(dpm->dpm_batched_total,
+				 din->di_dtx_array.ca_count);
+		rc1 = d_tm_get_counter(NULL, &ent_cnt, dpm->dpm_batched_total);
+		D_ASSERT(rc1 == DER_SUCCESS);
+
+		rc1 = d_tm_get_counter(NULL, &opc_cnt, dpm->dpm_total[opc]);
+		D_ASSERT(rc1 == DER_SUCCESS);
+
+		d_tm_set_counter(dpm->dpm_batched_degree,
+				 ent_cnt / (opc_cnt + 1));
+
 		break;
+	}
 	case DTX_ABORT:
 		if (DAOS_FAIL_CHECK(DAOS_DTX_MISS_ABORT))
 			break;
@@ -235,10 +270,8 @@ out:
 		D_ERROR("send reply failed for DTX rpc %u: rc = "DF_RC"\n", opc,
 			DP_RC(rc));
 
-	if (likely(cont != NULL)) {
-		dpm = cont->sc_pool->spc_metrics[DAOS_DTX_MODULE];
+	if (likely(dpm != NULL))
 		d_tm_inc_counter(dpm->dpm_total[opc], 1);
-	}
 
 	if (opc == DTX_REFRESH && rc1 > 0) {
 		struct dtx_entry	 dtes[DTX_REFRESH_MAX] = { 0 };
@@ -286,7 +319,50 @@ out:
 static int
 dtx_init(void)
 {
-	int	rc;
+	const char	*str;
+	int		 rc;
+
+	str = getenv("DTX_AGG_THD_CNT");
+	if (str != NULL) {
+		dtx_agg_thd_cnt_up = atoi(str);
+		if (dtx_agg_thd_cnt_up < DTX_AGG_THD_CNT_MIN ||
+		    dtx_agg_thd_cnt_up > DTX_AGG_THD_CNT_MAX) {
+			D_WARN("Invalid DTX aggregation count threshold %d, "
+			       "the valid range is [%d, %d], use the "
+			       "default value %d\n",
+			       dtx_agg_thd_cnt_up, DTX_AGG_THD_CNT_MIN,
+			       DTX_AGG_THD_CNT_MAX, DTX_AGG_THD_CNT_DEF);
+			dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
+		}
+	} else {
+		dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
+	}
+
+	dtx_agg_thd_cnt_lo = dtx_agg_thd_cnt_up * 6 / 7;
+
+	D_INFO("Set DTX aggregation count threshold as %d (entries)\n",
+	       dtx_agg_thd_cnt_up);
+
+	str = getenv("DTX_AGG_THD_AGE");
+	if (str != NULL) {
+		dtx_agg_thd_age_up = atoi(str);
+		if (dtx_agg_thd_age_up < DTX_AGG_THD_AGE_MIN ||
+		    dtx_agg_thd_age_up > DTX_AGG_THD_AGE_MAX) {
+			D_WARN("Invalid DTX aggregation age threshold %d, "
+			       "the valid range is [%d, %d], use the "
+			       "default value %d\n",
+			       dtx_agg_thd_age_up, DTX_AGG_THD_AGE_MIN,
+			       DTX_AGG_THD_AGE_MAX, DTX_AGG_THD_AGE_DEF);
+			dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
+		}
+	} else {
+		dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
+	}
+
+	dtx_agg_thd_age_lo = dtx_agg_thd_age_up * 6 / 7;
+
+	D_INFO("Set DTX aggregation time threshold as %d (seconds)\n",
+	       dtx_agg_thd_age_up);
 
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,

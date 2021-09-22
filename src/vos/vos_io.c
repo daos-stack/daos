@@ -75,7 +75,8 @@ struct vos_io_context {
 				 ic_read_ts_only:1,
 				 ic_check_existence:1,
 				 ic_remove:1,
-				 ic_skip_fetch:1;
+				 ic_skip_fetch:1,
+				 ic_ec:1; /**< see VOS_OF_EC */
 	/**
 	 * Input shadow recx lists, one for each iod. Now only used for degraded
 	 * mode EC obj fetch handling.
@@ -659,8 +660,8 @@ vos_ioc_create(daos_handle_t coh, daos_unit_oid_t oid, bool read_only,
 		ioc->ic_read_ts_only = ioc->ic_check_existence = 1;
 	else if (vos_flags & VOS_OF_FETCH_SET_TS_ONLY)
 		ioc->ic_read_ts_only = 1;
-	ioc->ic_remove =
-		((vos_flags & VOS_OF_REMOVE) != 0);
+	ioc->ic_remove = ((vos_flags & VOS_OF_REMOVE) != 0);
+	ioc->ic_ec = ((vos_flags & VOS_OF_EC) != 0);
 	ioc->ic_umoffs_cnt = ioc->ic_umoffs_at = 0;
 	ioc->iod_csums = iod_csums;
 	vos_ilog_fetch_init(&ioc->ic_dkey_info);
@@ -1743,10 +1744,12 @@ akey_update(struct vos_io_context *ioc, uint32_t pm_ver, daos_handle_t ak_toh,
 	}
 
 	if (iod->iod_type == DAOS_IOD_SINGLE) {
-		uint64_t	gsize;
+		uint64_t	gsize = iod->iod_size;
 
-		gsize = (iod->iod_recxs == NULL) ? iod->iod_size :
-						   (uintptr_t)iod->iod_recxs;
+		/* See obj_singv_ec_rw_filter. */
+		if (ioc->ic_ec && iod->iod_recxs != NULL)
+			gsize = (uintptr_t)iod->iod_recxs;
+
 		rc = akey_update_single(toh, pm_ver, iod->iod_size, gsize, ioc,
 					minor_epc);
 		if (rc)
@@ -2225,10 +2228,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
-	uint64_t		 time = 0;
 	bool			 tx_started = false;
 
-	VOS_TIME_START(time, VOS_UPDATE_END);
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
 
@@ -2326,7 +2327,6 @@ abort:
 	if (err != 0)
 		update_cancel(ioc);
 
-	VOS_TIME_END(time, VOS_UPDATE_END);
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
 
 	if (size != NULL && err == 0)
