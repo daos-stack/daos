@@ -8,7 +8,7 @@
 ## Name associated with the DAOS system.
 ## Immutable after reformat.
 #
-## NOTE: Changing the name is not supported in DAOS 1.0, it must not be changed
+## NOTE: Changing the name is not supported yet, it must not be changed
 ##       from the default "daos_server".
 #
 ## default: daos_server
@@ -68,7 +68,7 @@
 #fault_cb: ./.daos/fd_callback
 #
 #
-## Use specific OFI provider
+## Use specific network provider
 #
 ## Force a specific provider to be used by all the engines.
 ## The default provider depends on the interfaces that will be auto-detected:
@@ -78,15 +78,17 @@
 #provider: ofi+verbs;ofi_rxm
 #
 #
-## global CRT_CTX_SHARE_ADDR shared with client
-#crt_ctx_share_addr: 1
+## Whether to enable share address in the network stack
+## (also known as scalable endpoint)
+## parameters shared with client..
+#crt_ctx_share_addr: 0
 #
 #
-## global CRT_TIMEOUT shared with client
+## global RPC timeout shared with client
 #crt_timeout: 30
 #
 #
-## NVMe SSD whitelist
+## NVMe SSD inclusion list
 #
 ## Only use NVMe controllers with specific PCI addresses.
 ## Immutable after reformat, colons replaced by dots in PCI identifiers.
@@ -96,7 +98,7 @@
 #bdev_include: ["0000:81:00.1","0000:81:00.2","0000:81:00.3"]
 #
 #
-## NVMe SSD blacklist
+## NVMe SSD exclusion list
 #
 ## Only use NVMe controllers with specific PCI addresses. Overrides drives
 ## listed in bdev_include and forces auto-detection to skip those drives.
@@ -134,8 +136,9 @@
 ## Use Hyperthreads
 #
 ## When Hyperthreading is enabled and supported on the system, this parameter
-## defines whether the DAOS service thread should only be bound to different
-## physical cores (value 0) or hyperthreads (value 1).
+## defines whether the DAOS service should try to take advantage of
+## hyperthreading to scheduling different task on each hardware thread.
+## Not supported yet.
 #
 ## default: false
 #hyperthreads: true
@@ -208,17 +211,18 @@
 #
 #  targets: 16
 #
+#  # Number of additional offload service threads to accelerate checksum
+#  # and server-side RPC dispatch per engine.
+#  # Immutable after reformat.
+#
+#  nr_xs_helpers: 4
+#
 #  # Pin this engine instance to cores and memory that are related to the
 #  # NUMA node ID specified with this value. For best performance, it is
 #  # necessary to select a NUMA node that matches that of the fabric_iface.
 #  # Optional parameter, set either this option or first_core but not both.
 #
 #  pinned_numa_node: 0
-#
-#  # A boolean that instructs the I/O Engine instance to bypass the NVME
-#  # health check.  This eliminates the check and related log output for those
-#  # systems with NVME that do not support the device health data query.
-#  bypass_health_chk: true
 #
 #  # Offset of the first core to be used for I/O service threads.
 #  # Immutable after reformat.
@@ -227,11 +231,11 @@
 #
 #  first_core: 0
 #
-#  # Number of additional offload service threads to accelerate checksum
-#  # and server-side RPC dispatch per engine.
-#  # Immutable after reformat.
+#  # A boolean that instructs the I/O Engine instance to bypass the NVME
+#  # health check.  This eliminates the check and related log output for those
+#  # systems with NVME that do not support the device health data query.
 #
-#  nr_xs_helpers: 6
+#  bypass_health_chk: true
 #
 #  # Use specific network interface.
 #  # Specify the fabric network interface that will be used by this engine.
@@ -239,17 +243,17 @@
 #  # by this engine but please only if you have a specific need, this will
 #  # normally be chosen automatically.
 #
-#  fabric_iface: qib0
+#  fabric_iface: ib0
 #  fabric_iface_port: 20000
 #
-#  # Force specific debug mask (D_LOG_MASK) at start up time.
+#  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #
 #  # default: ERR
 #  log_mask: WARN
 #
-#  # Force specific path for DAOS debug logs (D_LOG_FILE).
+#  # Force specific path for DAOS debug logs.
 #
 #  # default: /tmp/daos.log
 #  log_file: /tmp/daos_engine.0.log
@@ -317,6 +321,12 @@
 #
 #  targets: 16
 #
+#  # Number of additional offload service threads to accelerate checksum
+#  # and server-side RPC dispatch per engine.
+#  # Immutable after reformat.
+#
+#  nr_xs_helpers: 4
+#
 #  # Pin this engine instance to cores and memory that are related to the
 #  # NUMA node ID specified with this value. For best performance, it is
 #  # necessary to select a NUMA node that matches that of the fabric_iface.
@@ -331,22 +341,16 @@
 #
 #  first_core: 22
 #
-#  # Number of additional offload service threads to accelerate checksum
-#  # and server-side RPC dispatch per engine.
-#  # Immutable after reformat.
-#
-#  nr_xs_helpers: 6
-#
-#  # Use specific OFI interfaces.
+#  # Use specific network interface.
 #  # Specify the fabric network interface that will be used by this engine.
 #  # Optionally specify the fabric network interface port that will be used
 #  # by this engine but please only if you have a specific need, this will
 #  # normally be chosen automatically.
 #
-#  fabric_iface: qib1
+#  fabric_iface: ib1
 #  fabric_iface_port: 20000
 #
-#  # Force specific debug mask (D_LOG_MASK) at start up time.
+#  # Force specific debug mask for the engine at start up time.
 #  # By default, just use the default debug mask used by DAOS.
 #  # Mask specifies minimum level of message significance to pass to logger.
 #

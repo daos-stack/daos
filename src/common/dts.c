@@ -47,6 +47,7 @@ engine_pool_init(struct credit_context *tsc)
 
 	if (tsc->tsc_mpi_rank == 0) {
 		d_rank_list_t	*svc = &tsc->tsc_svc;
+		char		str[37];
 
 		if (tsc_create_pool(tsc)) {
 			rc = dmg_pool_create(dmg_config_file, geteuid(),
@@ -58,8 +59,8 @@ engine_pool_init(struct credit_context *tsc)
 				goto bcast;
 		}
 
-		rc = daos_pool_connect(tsc->tsc_pool_uuid, NULL,
-				       DAOS_PC_EX, &poh, NULL, NULL);
+		uuid_unparse(tsc->tsc_pool_uuid, str);
+		rc = daos_pool_connect(str, NULL, DAOS_PC_EX, &poh, NULL, NULL);
 		if (rc)
 			goto bcast;
 	}
@@ -101,13 +102,16 @@ engine_cont_init(struct credit_context *tsc)
 	int		rc = 0;
 
 	if (tsc->tsc_mpi_rank == 0) {
+		char str[37];
+
 		if (tsc_create_cont(tsc)) {
-			rc = daos_cont_create(tsc->tsc_poh, tsc->tsc_cont_uuid,
+			rc = daos_cont_create(tsc->tsc_poh, &tsc->tsc_cont_uuid,
 					      NULL, NULL);
 			if (rc != 0)
 				goto bcast;
 		}
-		rc = daos_cont_open(tsc->tsc_poh, tsc->tsc_cont_uuid,
+		uuid_unparse(tsc->tsc_cont_uuid, str);
+		rc = daos_cont_open(tsc->tsc_poh, str,
 				    DAOS_COO_RW, &coh, NULL, NULL);
 		if (rc != 0)
 			goto bcast;

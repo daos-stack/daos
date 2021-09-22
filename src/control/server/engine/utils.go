@@ -49,7 +49,7 @@ const (
 )
 
 var logMasksValidLevels = []string{
-	"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERR", "CRIT", "ALRT", "EMRG", "EMIT",
+	"DEBUG", "DBUG", "INFO", "NOTE", "WARN", "ERROR", "ERR", "CRIT", "ALRT", "EMRG", "EMIT",
 }
 
 func isValidLevel(level string) bool {
