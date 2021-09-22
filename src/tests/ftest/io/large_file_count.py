@@ -14,17 +14,6 @@ class LargeFileCount(MdtestBase, IorTestBase):
     :avocado: recursive
     """
 
-    def create_cont(self, oclass):
-        """Override container create method.
-
-          Args:
-            oclass(str): Object class type
-        """
-        # create container
-        self.add_container(self.pool, create=False)
-        self.container.oclass.update(oclass)
-        self.container.create()
-
     def run_largefile_count(self, rc=False):
         """Run the large file count test.
 
@@ -32,30 +21,28 @@ class LargeFileCount(MdtestBase, IorTestBase):
             rc (bool, optional): If release candidate set to true. Defaults to False.
         """
         apis = self.params.get("api", "/run/largefilecount/*")
-        object_class = self.params.get("object_class", '/run/largefilecount/*')
 
         if rc:
             # update mdtest file count
             num_of_files_dirs = self.params.get("num_of_files_dirs_rc", "/run/mdtest/*")
             self.mdtest_cmd.num_of_files_dirs.update(num_of_files_dirs)
+            block_size = self.params.get("block_size_rc", "/run/ior/*")
+            self.ior_cmd.block_size.update(block_size)
 
-        for oclass in object_class:
-            self.ior_cmd.dfs_oclass.update(oclass)
-            self.mdtest_cmd.dfs_oclass.update(oclass)
-            for api in apis:
-                self.ior_cmd.api.update(api)
-                self.mdtest_cmd.api.update(api)
-                # update test_dir for mdtest if api is DFS
-                if api == "DFS":
-                    self.mdtest_cmd.test_dir.update("/")
-                # create container for mdtest
-                self.create_cont(oclass)
-                # run mdtest and ior
-                self.execute_mdtest()
-                # create container for ior
-                self.create_cont(oclass)
-                self.update_ior_cmd_with_pool(False)
-                self.run_ior_with_pool(create_pool=False)
+        for api in apis:
+            self.ior_cmd.api.update(api)
+            self.mdtest_cmd.api.update(api)
+            # update test_dir for mdtest if api is DFS
+            if api == "DFS":
+                self.mdtest_cmd.test_dir.update("/")
+            # create container for mdtest
+            self.add_container(self.pool)
+            # run mdtest and ior
+            self.execute_mdtest()
+            # create container for ior
+            self.add_container(self.pool)
+            self.update_ior_cmd_with_pool(False)
+            self.run_ior_with_pool(create_pool=False)
 
     def test_largefilecount(self):
         """Jira ID: DAOS-3845.
@@ -63,8 +50,8 @@ class LargeFileCount(MdtestBase, IorTestBase):
         Test Description:
             Run IOR and MDTEST with 48 clients.
         Use Cases:
-            Run IOR for 5 mints with DFS and POSIX
-            Run MDTEST to create 25K files with DFS and POSIX
+            Run IOR for 5 mints with DFS and POSIX and create 1OOGB file
+            Run MDTEST to create 50K files with DFS and POSIX
         :avocado: tags=all,daosio,full_regression
         :avocado: tags=hw,large,dfuse
         :avocado: tags=largefilecount
@@ -81,8 +68,8 @@ class LargeFileCount(MdtestBase, IorTestBase):
             This test is not supposed to run as part of pr or weekly runs.
             This should only be run before release as desired.
         Use Cases:
-            Run IOR for 5 mints with DFS and POSIX
-            Run MDTEST to create 25K files with DFS and POSIX
+            Run IOR for 5 mints with DFS and POSIX and create 1TB file
+            Run MDTEST to create 1B files with DFS and POSIX
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
         :avocado: tags=daosio,dfuse
