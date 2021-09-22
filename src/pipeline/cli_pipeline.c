@@ -104,16 +104,26 @@ pipeline_filter_like(d_iov_t *left, d_iov_t *right)
 }
 
 static int
-pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
+pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right,
+		    size_t offset_left, size_t size_left,
+		    size_t offset_right, size_t size_right,
+		    const char *data_type)
 {
 	size_t cmp_size;
+	char *left_s, *right_s;
+
+	left_s  = (char *) d_left->iov_buf;
+	right_s = (char *) d_right->iov_buf;
+	left_s  = &left_s[offset_left];
+	right_s = &right_s[offset_right];
+	cmp_size = (size_left <= size_right) ? size_left : size_right;
 
 	/** Typed comparison */
 	if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER1"))
 	{
 		signed char *left_i, *right_i;
-		left_i  = (signed char *) d_left->iov_buf;
-		right_i = (signed char *) d_right->iov_buf;
+		left_i  = (signed char *) left_s;
+		right_i = (signed char *) right_s;
 		if      (*left_i < *right_i)  return -1;
 		else if (*left_i == *right_i) return 0;
 		else                          return 1;
@@ -121,8 +131,8 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
 	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER2"))
 	{
 		short int *left_i, *right_i;
-		left_i  = (short int *) d_left->iov_buf;
-		right_i = (short int *) d_right->iov_buf;
+		left_i  = (short int *) left_s;
+		right_i = (short int *) right_s;
 		if      (*left_i < *right_i)  return -1;
 		else if (*left_i == *right_i) return 0;
 		else                          return 1;
@@ -130,8 +140,8 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
 	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER4"))
 	{
 		int *left_i, *right_i;
-		left_i  = (int *) d_left->iov_buf;
-		right_i = (int *) d_right->iov_buf;
+		left_i  = (int *) left_s;
+		right_i = (int *) right_s;
 		if      (*left_i < *right_i)  return -1;
 		else if (*left_i == *right_i) return 0;
 		else                          return 1;
@@ -139,36 +149,34 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right, const char *data_type)
 	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER8"))
 	{
 		long long int *left_i, *right_i;
-		left_i  = (long long int *) d_left->iov_buf;
-		right_i = (long long int *) d_right->iov_buf;
+		left_i  = (long long int *) left_s;
+		right_i = (long long int *) right_s;
 		if      (*left_i < *right_i)  return -1;
 		else if (*left_i == *right_i) return 0;
 		else                          return 1;
 	}
 	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_REAL4"))
 	{
-		float *left_i, *right_i;
-		left_i  = (float *) d_left->iov_buf;
-		right_i = (float *) d_right->iov_buf;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
+		float *left_f, *right_f;
+		left_f  = (float *) left_s;
+		right_f = (float *) right_s;
+		if      (*left_f < *right_f)  return -1;
+		else if (*left_f == *right_f) return 0;
 		else                          return 1;
 	}
 	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_REAL8"))
 	{
-		double *left_i, *right_i;
-		left_i  = (double *) d_left->iov_buf;
-		right_i = (double *) d_right->iov_buf;
-		if      (*left_i < *right_i)  return -1;
-		else if (*left_i == *right_i) return 0;
+		double *left_f, *right_f;
+		left_f  = (double *) left_s;
+		right_f = (double *) right_s;
+		if      (*left_f < *right_f)  return -1;
+		else if (*left_f == *right_f) return 0;
 		else                          return 1;
 	}
 
 	/** -- Raw cmp byte by byte */
 
-	cmp_size = (d_left->iov_len <= d_right->iov_len) ?
-					d_left->iov_len : d_right->iov_len;
-	return memcmp(d_left->iov_buf, d_right->iov_buf, cmp_size);
+	return memcmp(left_s, right_s, cmp_size);
 }
 
 static int
@@ -207,11 +215,16 @@ pipeline_filter_func(daos_filter_t *filter, d_iov_t *dkey, uint32_t nr_iods,
 		{
 			return -DER_INVAL;
 		}
-
+		if (strcmp(left->data_type, right->data_type))
+		{
+			return -DER_INVAL;
+		}
 		if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_LIKE"))
 		{
 			/** filter 'LIKE' only works for strings */
-			if (strcmp(part->data_type,
+			if (strcmp(left->data_type,
+				   "DAOS_FILTER_TYPE_STRING") ||
+			    strcmp(right->data_type,
 				   "DAOS_FILTER_TYPE_STRING"))
 			{
 				return -DER_INVAL;
@@ -221,7 +234,11 @@ pipeline_filter_func(daos_filter_t *filter, d_iov_t *dkey, uint32_t nr_iods,
 		else
 		{
 			rc = pipeline_filter_cmp(d_left, d_right,
-						 part->data_type);
+						 left->data_offset,
+						 left->data_len,
+						 right->data_offset,
+						 right->data_len,
+						 left->data_type);
 		}
 
 		if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_EQ") ||
