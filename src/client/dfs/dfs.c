@@ -1275,6 +1275,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	daos_cont_info_t	co_info;
 	dfs_t			*dfs;
 	dfs_attr_t		dattr;
+	char			str[37];
 	struct daos_prop_co_roots roots;
 	int			rc;
 
@@ -1365,7 +1366,8 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
-	rc = daos_cont_open(poh, *cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	uuid_unparse(*cuuid, str);
+	rc = daos_cont_open(poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
@@ -1436,7 +1438,7 @@ err_destroy:
 	 * process might have created it.
 	 */
 	if (rc != EEXIST)
-		daos_cont_destroy(poh, *cuuid, 1, NULL);
+		daos_cont_destroy(poh, str, 1, NULL);
 err_prop:
 	daos_prop_free(prop);
 	return rc;

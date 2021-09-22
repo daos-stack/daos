@@ -346,6 +346,7 @@ btr_trace_set(struct btr_context *tcx, int level,
 
 	D_DEBUG(DB_TRACE, "trace[%d] "DF_X64"/%d\n", level, nd_off, at);
 
+	D_ASSERT(nd_off != UMOFF_NULL);
 	tcx->tc_trace[level].tr_node = nd_off;
 	tcx->tc_trace[level].tr_at = at;
 }
@@ -1658,6 +1659,7 @@ btr_probe_next(struct btr_context *tcx)
 		tmp = btr_node_child_at(tcx, trace->tr_node, trace->tr_at);
 		trace++;
 		trace->tr_at = 0;
+		D_ASSERT(tmp != UMOFF_NULL);
 		trace->tr_node = tmp;
 	}
 
@@ -1711,6 +1713,7 @@ btr_probe_prev(struct btr_context *tcx)
 		tmp = btr_node_child_at(tcx, trace->tr_node, trace->tr_at);
 
 		trace++;
+		D_ASSERT(tmp != UMOFF_NULL);
 		trace->tr_node = tmp;
 		leaf = btr_node_is_leaf(tcx, trace->tr_node);
 
@@ -2745,6 +2748,7 @@ btr_root_del_rec(struct btr_context *tcx, struct btr_trace *trace, void *args)
 			}
 
 			root->tr_depth--;
+			D_ASSERT(node->tn_child != UMOFF_NULL);
 			root->tr_node = node->tn_child;
 
 			btr_context_set_depth(tcx, root->tr_depth);
