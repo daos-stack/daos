@@ -37,5 +37,11 @@ EOF
 # Install DAOS RPMs
 yum install -y daos-server
 
+# Upgrade SPDK to work around the GCP NVMe bug with number of qpairs
+yum install -y wget
+wget https://packages.daos.io/v1.2/CentOS7/spdk/x86_64/spdk-20.01.2-2.el7.x86_64.rpm
+wget https://packages.daos.io/v1.2/CentOS7/spdk/x86_64/spdk-tools-20.01.2-2.el7.noarch.rpm
+rpm -Uvh ./spdk-20.01.2-2.el7.x86_64.rpm ./spdk-tools-20.01.2-2.el7.noarch.rpm
+
 # TODO:
 # - enable gvnic

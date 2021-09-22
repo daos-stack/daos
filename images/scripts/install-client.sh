@@ -16,16 +16,6 @@
 
 echo "Installing DAOS version ${DAOS_VERSION}"
 
-# Install 1.1.4 from non-official site for now
-tee /etc/yum.repos.d/daos.repo > /dev/null <<EOF
-[daos]
-name=daos (packages.daos.io)
-baseurl=http://packages.daos.io/private/1c648136-2100-486b-83b4-002222a45bee/v1.1.4/CentOS7/
-enabled=1
-gpgcheck=0
-repo_gpgcheck=0
-EOF
-
 # Install 1.2.0 RPMs from official site
 tee /etc/yum.repos.d/daos.repo > /dev/null <<EOF
 [daos-packages]
