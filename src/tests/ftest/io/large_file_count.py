@@ -14,12 +14,28 @@ class LargeFileCount(MdtestBase, IorTestBase):
     :avocado: recursive
     """
 
+    def add_containers(self, path="/run/container/*"):
+        """Create a list of containers that the various jobs use for storage.
+
+        Args:
+            pool: pool to create container
+            oclass: object class of container
+
+
+        """
+        # Create a container and add it to the overall list of containers
+        self.container.append(self.get_container(self.pool))
+        self.container[-1].namespace = path
+        self.container[-1].get_params(self)
+        self.container[-1].create()
+
     def run_largefile_count(self, rc=False):
         """Run the large file count test.
 
         Args:
             rc (bool, optional): If release candidate set to true. Defaults to False.
         """
+        saved_container = []
         apis = self.params.get("api", "/run/largefilecount/*")
 
         if rc:
@@ -35,14 +51,16 @@ class LargeFileCount(MdtestBase, IorTestBase):
             # update test_dir for mdtest if api is DFS
             if api == "DFS":
                 self.mdtest_cmd.test_dir.update("/")
-            # create container for mdtest
-            self.add_container(self.pool)
-            # run mdtest and ior
+            # run mdtest
             self.execute_mdtest()
-            # create container for ior
-            self.add_container(self.pool)
-            self.update_ior_cmd_with_pool(False)
+            # save the current container; to be destroyed later
+            saved_container.append(self.container)
+            # run ior
             self.run_ior_with_pool(create_pool=False)
+            # save the current container
+            saved_container.append(self.container)
+        # copy saved containers to self.container
+        self.container = saved_container
 
     def test_largefilecount(self):
         """Jira ID: DAOS-3845.
