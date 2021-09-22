@@ -95,24 +95,28 @@ send_mail() {
 }
 
 monitor_cmd() {
-    local start="$SECONDS"
+    local threshold="$1"
+    shift
     local duration=0
+    local start="$SECONDS"
     if ! time "$@"; then
         return "${PIPESTATUS[0]}"
     fi
     ((duration = SECONDS - start))
-    if [ "$duration" -gt "$DAOS_STACK_MONITOR_SECONDS" ]; then
-        send_mail "Command exceeded ${DAOS_STACK_MONITOR_SECONDS}s in $STAGE_NAME" \
+    if [ "$duration" -gt "$threshold" ]; then
+        send_mail "Command exceeded ${threshold}s in $STAGE_NAME" \
                     "Command:  $*\nReal time: $duration"
     fi
     return 0
 }
 
 retry_cmd() {
+    local monitor_threshold="$1"
+    shift
     local attempt=0
     local rc=0
     while [ $attempt -lt $DAOS_STACK_RETRY_COUNT ]; do
-        if monitor_cmd "$@"; then
+        if monitor_cmd "$monitor_threshold" "$@"; then
             # Command succeeded, return with success
             if [ $attempt -gt 0 ]; then
                 send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
@@ -137,7 +141,7 @@ retry_cmd() {
 timeout_cmd() {
     local timeout="$1"
     shift
-    retry_cmd timeout "$timeout" "$@"
+    retry_cmd "$DAOS_STACK_MONITOR_SECONDS" timeout "$timeout" "$@"
 }
 
 env > /root/last_run-env.txt
