@@ -16,7 +16,7 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
-func TestSpdk_revertBackingToVmd(t *testing.T) {
+func TestSpdk_backingAddress2VMD(t *testing.T) {
 	for name, tc := range map[string]struct {
 		inAddrs     []string
 		expOutAddrs []string
@@ -35,26 +35,27 @@ func TestSpdk_revertBackingToVmd(t *testing.T) {
 			inAddrs:     []string{"5d0505:01:00.0", "5d0505:03:00.0"},
 			expOutAddrs: []string{"0000:5d:05.5"},
 		},
-		"invalid pci address": {
-			inAddrs: []string{"0000:gg:00.0"},
-			expErr:  errors.New("parsing \"gg\""),
-		},
 		"invalid vmd domain in address": {
 			inAddrs: []string{"5d055:01:00.0"},
-			expErr:  errors.New("unexpected length of domain"),
+			expErr:  errors.New("unexpected length of vmd domain"),
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			log, buf := logging.NewTestLogger(t.Name())
 			defer common.ShowBufferOnFailure(t, buf)
 
-			gotAddrs, gotErr := revertBackingToVmd(log, tc.inAddrs)
+			addrList, err := common.NewPCIAddressList(tc.inAddrs...)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			gotAddrs, gotErr := backingAddress2VMD(log, addrList)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {
 				return
 			}
 
-			if diff := cmp.Diff(tc.expOutAddrs, gotAddrs); diff != "" {
+			if diff := cmp.Diff(tc.expOutAddrs, gotAddrs.Strings()); diff != "" {
 				t.Fatalf("(-want, +got): %s", diff)
 			}
 		})

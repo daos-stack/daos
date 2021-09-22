@@ -53,6 +53,8 @@ import (
 	"github.com/daos-stack/daos/src/control/logging"
 )
 
+const vmdDomainLen = 6
+
 // Env is the interface that provides SPDK environment management.
 type Env interface {
 	InitSPDKEnv(logging.Logger, *EnvOptions) error
@@ -67,18 +69,54 @@ func Rc2err(label string, rc C.int) error {
 	return fmt.Errorf("%s: %d", label, rc)
 }
 
+// backingAddress2VMD converts VMD backing device PCI addresses (with the VMD
+// address encoded in the domain component of the PCI address) back to the PCI
+// address of the VMD e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
+//
+// Many assumptions are made as to the input and output PCI address structure in
+// the conversion.
+func backingAddress2VMD(log logging.Logger, pciAddrs *common.PCIAddressList) (*common.PCIAddressList, error) {
+	if pciAddrs == nil {
+		return nil, errors.New("revertBackingToVMD: nil pci address list")
+	}
+
+	outAddrs := common.PCIAddressList{}
+
+	for _, inAddr := range *pciAddrs {
+		if inAddr.Domain == "0000" {
+			outAddrs.Add(*inAddr)
+			continue
+		}
+
+		// assume non-zero pci address domain field indicates a vmd backing device with
+		// fixed length field
+		if len(inAddr.Domain) != vmdDomainLen {
+			return nil, errors.New("unexpected length of vmd domain")
+		}
+
+		vmdAddr := fmt.Sprintf("0000:%s:%s.%s", inAddr.Domain[:2], inAddr.Domain[2:4],
+			inAddr.Domain[5:])
+		if err := outAddrs.AddStrings(vmdAddr); err != nil {
+			log.Debugf("replacing backing device %s with vmd %s", inAddr, vmdAddr)
+			return nil, err
+		}
+	}
+
+	return &outAddrs, nil
+}
+
 // EnvOptions describe parameters to be used when initializing a processes
 // SPDK environment.
 type EnvOptions struct {
-	PCIAllowList []string // restrict SPDK device access
-	EnableVMD    bool     // flag if VMD functionality should be enabled
+	PCIAllowList *common.PCIAddressList // restrict SPDK device access
+	EnableVMD    bool                   // flag if VMD functionality should be enabled
 }
 
 func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
 	if o.EnableVMD {
 		// DPDK will not accept VMD backing device addresses
-		// so convert to VMD address
-		newAllowList, err := revertBackingToVmd(log, o.PCIAllowList)
+		// so convert to VMD addresses
+		newAllowList, err := backingAddress2VMD(log, o.PCIAllowList)
 		if err != nil {
 			return err
 		}
@@ -86,41 +124,6 @@ func (o *EnvOptions) sanitizeAllowList(log logging.Logger) error {
 	}
 
 	return nil
-}
-
-// revertBackingToVmd converts VMD backing device PCI addresses (with the VMD
-// address encoded in the domain component of the PCI address) back to the PCI
-// address of the VMD e.g. [5d0505:01:00.0, 5d0505:03:00.0] -> [0000:5d:05.5].
-//
-// Many assumptions are made as to the input and output PCI address structure in
-// the conversion.
-func revertBackingToVmd(log logging.Logger, pciAddrs []string) ([]string, error) {
-	var outAddrs []string
-
-	for _, inAddr := range pciAddrs {
-		domain, _, _, _, err := common.ParsePCIAddress(inAddr)
-		if err != nil {
-			return nil, err
-		}
-		if domain == 0 {
-			outAddrs = append(outAddrs, inAddr)
-			continue
-		}
-
-		domainStr := fmt.Sprintf("%x", domain)
-		if len(domainStr) != 6 {
-			return nil, errors.New("unexpected length of domain")
-		}
-
-		outAddr := fmt.Sprintf("0000:%s:%s.%s",
-			domainStr[:2], domainStr[2:4], domainStr[5:])
-		if !common.Includes(outAddrs, outAddr) {
-			log.Debugf("replacing backing device %s with vmd %s", inAddr, outAddr)
-			outAddrs = append(outAddrs, outAddr)
-		}
-	}
-
-	return outAddrs, nil
 }
 
 // InitSPDKEnv initializes the SPDK environment.
@@ -139,16 +142,16 @@ func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	}
 
 	// Build C array in Go from opts.PCIAllowList []string
-	cAllowList := C.makeCStringArray(C.int(len(opts.PCIAllowList)))
-	defer C.freeCStringArray(cAllowList, C.int(len(opts.PCIAllowList)))
+	cAllowList := C.makeCStringArray(C.int(opts.PCIAllowList.Len()))
+	defer C.freeCStringArray(cAllowList, C.int(opts.PCIAllowList.Len()))
 
-	for i, s := range opts.PCIAllowList {
+	for i, s := range opts.PCIAllowList.Strings() {
 		C.setArrayString(cAllowList, C.CString(s), C.int(i))
 	}
 
 	envCtx := C.dpdk_cli_override_opts
 
-	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(len(opts.PCIAllowList)),
+	retPtr := C.daos_spdk_init(0, envCtx, C.ulong(opts.PCIAllowList.Len()),
 		cAllowList)
 	if err := checkRet(retPtr, "daos_spdk_init()"); err != nil {
 		return err
