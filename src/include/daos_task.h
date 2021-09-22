@@ -135,42 +135,6 @@ typedef struct {
 	uint64_t		value_extra;
 } daos_set_params_t;
 
-/** pool create params */
-typedef struct {
-	/** Capabilities permitted for the pool. */
-	uint32_t		mode;
-	/** User owning the pool */
-	uid_t			uid;
-	/** Group owning the pool */
-	gid_t			gid;
-	/** Process set name of the DAOS servers managing the pool. */
-	const char		*grp;
-	/** Optional, allocate targets on this list of ranks. */
-	const d_rank_list_t	*tgts;
-	/** String identifying the target devices to use. */
-	const char		*dev;
-	/** Target SCM (Storage Class Memory) size in bytes. */
-	daos_size_t		scm_size;
-	/** Target NVMe (Non-Volatile Memory express) size in bytes. */
-	daos_size_t		nvme_size;
-	/** Optional, pool properties. */
-	daos_prop_t		*prop;
-	/** Number of desired pool service replicas. */
-	d_rank_list_t		*svc;
-	/** UUID of the pool created */
-	unsigned char		*uuid;
-} daos_pool_create_t;
-
-/** pool destroy args */
-typedef struct {
-	/** UUID of the pool to destroy. */
-	uuid_t			uuid;
-	/** Process set name of the DAOS servers managing the pool */
-	const char		*grp;
-	/** Force destruction even if there are active connections */
-	int			force;
-} daos_pool_destroy_t;
-
 /** pool connect by UUID args */
 typedef struct {
 	/**
@@ -301,16 +265,6 @@ typedef struct {
 	/** Optional, list of ranks which could not be added/removed. */
 	d_rank_list_t		*failed;
 } daos_pool_replicas_t;
-
-/** pool management pool list args */
-typedef struct {
-	/** Process set name of the DAOS servers managing the pool */
-	const char		*grp;
-	/** Array of pool mgmt information structures. */
-	daos_mgmt_pool_info_t	*pools;
-	/** length of array */
-	daos_size_t		*npools;
-} daos_mgmt_list_pools_t;
 
 /** Blobstore state query args */
 typedef struct {
