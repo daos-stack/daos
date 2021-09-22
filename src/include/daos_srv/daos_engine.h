@@ -372,6 +372,17 @@ uint64_t sched_cur_msec(void);
  */
 uint64_t sched_cur_seq(void);
 
+/**
+ * Get current ULT/Task execution time. The execution time is the elapsed
+ * time since current ULT/Task was scheduled last time.
+ *
+ * \param[out]	msecs		executed time in milli-second
+ * \param[in]	ult_name	ULT name (optional)
+ *
+ * \retval			-DER_NOSYS or 0 on success.
+ */
+int sched_exec_time(uint64_t *msecs, const char *ult_name);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
