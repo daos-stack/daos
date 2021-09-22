@@ -112,7 +112,7 @@ class ProcessManager():
         self._log.info("Adding process %d for %s", self.quantity + 1, method)
         kwargs["queue"] = self._queue
         kwargs["method"] = method
-        self._processes.append(self._context.Process(target=run_method, **kwargs))
+        self._processes.append(self._context.Process(target=run_method, kwargs=kwargs))
 
     def start(self):
         """Start each process."""
