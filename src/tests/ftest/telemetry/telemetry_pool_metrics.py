@@ -101,7 +101,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 # write operation.
                 if "update" in name:
                     expected_total_amount_written = (self.ior_cmd.block_size.value *
-                                            int(replication))
+                                                     int(replication))
                 else:
                     expected_total_amount_written = self.ior_cmd.block_size.value
                 # get difference between actual written value and expected
