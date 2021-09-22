@@ -228,7 +228,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 		WithSystemName("daos_server").
 		WithSocketDir("./.daos/daos_server").
 		WithFabricProvider("ofi+verbs;ofi_rxm").
-		WithCrtCtxShareAddr(1).
+		WithCrtCtxShareAddr(0).
 		WithCrtTimeout(30).
 		WithAccessPoints("hostname1").
 		WithFaultCb("./.daos/fd_callback").
@@ -259,7 +259,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricInterface("ib0").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
-			WithCrtCtxShareAddr(1).
+			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(&numaNode0).
 			WithBypassHealthChk(&bypass).
@@ -287,7 +287,7 @@ func TestServerConfig_Constructed(t *testing.T) {
 			WithFabricInterface("ib1").
 			WithFabricInterfacePort(20000).
 			WithFabricProvider("ofi+verbs;ofi_rxm").
-			WithCrtCtxShareAddr(1).
+			WithCrtCtxShareAddr(0).
 			WithCrtTimeout(30).
 			WithPinnedNumaNode(&numaNode1).
 			WithEnvVars("CRT_TIMEOUT=100").
