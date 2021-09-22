@@ -4,8 +4,8 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 from ior_test_base import IorTestBase
+
 
 class MultipleContainerDelete(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -30,22 +30,21 @@ class MultipleContainerDelete(IorTestBase):
             times.
             Verify both the SCM and SSD pool spaces are recovered
 
-        :avocado: tags=all,hw,large,full_regression,container
-        :avocado: tags=multicontainerdelete
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large
+        :avocado: tags=container,multi_container_delete
         """
-
-        if self.pool is None:
-            self.create_pool()
-        self.pool.connect()
+        self.add_pool(connect=False)
 
         out = []
 
         initial_scm_fs, initial_ssd_fs = self.get_pool_space()
 
-        for i in range(1000):
+        for i in range(500):
+            self.log.info("Create-Write-Destroy Iteration %d", i)
             self.create_cont()
-            self.ior_cmd.set_daos_params(self.server_group, self.pool,
-                                         self.container.uuid)
+            self.ior_cmd.set_daos_params(
+                self.server_group, self.pool, self.container.uuid)
             # If the transfer size is less than 4K, the objects are
             # inserted into SCM and anything greater goes to SSD
             self.run_ior_with_pool()
@@ -77,7 +76,8 @@ class MultipleContainerDelete(IorTestBase):
         """Get scm and ssd pool free space
 
         Returns:
-            (scm_free_space (int), ssd_free_space (int))
+            tuple: (scm_free_space (int), ssd_free_space (int))
+
         """
         if self.pool is not None:
             scm_index, ssd_index = 0, 1
