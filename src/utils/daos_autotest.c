@@ -341,6 +341,7 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	while (true) {
 		char *key_cur;
 		char *val_cur;
+
 		if (deadline_count < MAX_INFLIGHT) {
 			/** Haven't reached max request in flight yet */
 			evp = &ev_array[deadline_count];
@@ -800,6 +801,26 @@ kv_insertaux(void)
 
 	if (rc)
 		D_GOTO(fail_close, rc);
+
+fail_open:
+	step_fail("failed to open object: %s", d_errdesc(rc));
+	return -1;
+
+fail_insert:
+	step_fail("failed to insert: %s", d_errdesc(put_rc));
+	return -1;
+
+fail_close:
+	step_fail("failed to close object: %s", d_errdesc(rc));
+	return -1;
+}
+
+static int
+kv_insertaux2(void)
+{
+	daos_handle_t	oh = DAOS_HDL_INVAL; /** object handle */
+	int		put_rc;
+	int		rc;
 
 	oh = DAOS_HDL_INVAL;
 	new_oid3();
