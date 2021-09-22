@@ -58,14 +58,11 @@ func TestServer_CtlSvc_StorageScan_PreEngineStart(t *testing.T) {
 	ctrlrPBBasic.Model = ""
 
 	for name, tc := range map[string]struct {
-		multiEngine  bool
-		req          *ctlpb.StorageScanReq
-		bmbc         *bdev.MockBackendConfig
-		smbc         *scm.MockBackendConfig
-		noBdevsInCfg bool
-		expSetupErr  error
-		expErr       error
-		expResp      *ctlpb.StorageScanResp
+		multiEngine bool
+		req         *ctlpb.StorageScanReq
+		bmbc        *bdev.MockBackendConfig
+		smbc        *scm.MockBackendConfig
+		expResp     *ctlpb.StorageScanResp
 	}{
 		"successful scan; scm namespaces": {
 			bmbc: &bdev.MockBackendConfig{

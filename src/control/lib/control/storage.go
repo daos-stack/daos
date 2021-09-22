@@ -72,7 +72,7 @@ type HostStorageSet struct {
 }
 
 func (hss *HostStorageSet) String() string {
-	return fmt.Sprintf("hosts %s, storage %+v\n", hss.HostSet, hss.HostStorage)
+	return fmt.Sprintf("hosts %s, storage %+v", hss.HostSet, hss.HostStorage)
 }
 
 // NewHostStorageSet returns an initialized HostStorageSet for the given
@@ -96,7 +96,7 @@ func (hsm HostStorageMap) String() string {
 	for _, hss := range hsm {
 		strs = append(strs, hss.String())
 	}
-	return strings.Join(strs, "")
+	return strings.Join(strs, "\n")
 }
 
 // Add inserts the given host address to a matching HostStorageSet or

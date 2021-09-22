@@ -53,22 +53,6 @@ func mapVMDToBackingAddrs(foundCtrlrs storage.NvmeControllers) map[string][]stri
 	return vmds
 }
 
-// mapVMDToBackingDevs stores found vmd backing devices under vmd address key.
-func mapVMDToBackingDevs(foundCtrlrs storage.NvmeControllers) map[string]storage.NvmeControllers {
-	vmds := make(map[string]storage.NvmeControllers)
-
-	for _, ctrlr := range foundCtrlrs {
-		// find backing device addresses from vmd address
-		vmdAddr, isVMDBackingAddr := backingAddrToVMD(ctrlr.PciAddr)
-		if isVMDBackingAddr {
-			cn := *ctrlr
-			vmds[vmdAddr] = append(vmds[vmdAddr], &cn)
-		}
-	}
-
-	return vmds
-}
-
 // substVMDAddrs replaces VMD PCI addresses in input device list with the PCI
 // addresses of the backing devices behind the VMD.
 //

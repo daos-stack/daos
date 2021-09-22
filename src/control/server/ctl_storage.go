@@ -64,22 +64,16 @@ func (c *StorageControlService) Setup() {
 		c.log.Debugf("%s\n", errors.Wrap(err, "Warning, SCM Scan"))
 	}
 
-	var isNotNVME bool
 	var cfgBdevs []string
 
 	for _, storageCfg := range c.instanceStorage {
 		for _, tierCfg := range storageCfg.Tiers.BdevConfigs() {
 			if tierCfg.Class != storage.ClassNvme {
-				isNotNVME = true
-				continue
+				// don't scan if any tier is using emulated NVMe
+				return
 			}
 			cfgBdevs = append(cfgBdevs, tierCfg.Bdev.DeviceList...)
 		}
-	}
-
-	if isNotNVME {
-		// don't scan if using emulated NVMe
-		return
 	}
 
 	nvmeScanResp, err := c.NvmeScan(storage.BdevScanRequest{

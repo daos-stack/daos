@@ -241,15 +241,22 @@ func groomDiscoveredBdevs(req storage.BdevScanRequest, discovered storage.NvmeCo
 
 	var missing []string
 	out := make(storage.NvmeControllers, 0)
-	vmds := mapVMDToBackingDevs(discovered)
+	vmds := make(map[string]storage.NvmeControllers)
+
+	// store discovered VMD backing devices under vmd address key
+	for _, ctrlr := range discovered {
+		vmdAddr, isVMDBackingAddr := backingAddrToVMD(ctrlr.PciAddr)
+		if isVMDBackingAddr {
+			vmds[vmdAddr] = append(vmds[vmdAddr], ctrlr)
+		}
+	}
 
 	for _, want := range req.DeviceList {
 		found := false
 		for _, got := range discovered {
 			// check if discovered ctrlr is in device list
 			if got.PciAddr == want {
-				cn := *got
-				out = append(out, &cn)
+				out = append(out, got)
 				found = true
 				break
 			}
