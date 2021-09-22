@@ -86,12 +86,6 @@ func (c *StorageControlService) Setup() error {
 	return nil
 }
 
-func (c *StorageControlService) defaultProvider() *storage.Provider {
-	return storage.DefaultProvider(c.log, 0, &storage.Config{
-		Tiers: nil,
-	})
-}
-
 func findPMemInScan(ssr *storage.ScmScanResponse, pmemDevs []string) *storage.ScmNamespace {
 	for _, scanned := range ssr.Namespaces {
 		for _, path := range pmemDevs {

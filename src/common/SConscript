@@ -48,6 +48,7 @@ def build_dts_library(env):
     # Add runtime paths for daos libraries
     denv.AppendUnique(LIBPATH=["../client/api"])
     denv.AppendUnique(CPPPATH=["../tests/suite"])
+    denv.AppendUnique(CPPPATH=["../mgmt"])
 
     denv.Replace(SHOBJPREFIX='mpi_')
     mpi_cmd_parser = denv.SharedObject(['cmd_parser.c'])

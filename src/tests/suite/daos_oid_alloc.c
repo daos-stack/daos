@@ -27,13 +27,13 @@ reconnect(test_arg_t *arg) {
 
 	flags = (DAOS_COO_RW | DAOS_COO_FORCE);
 	if (arg->myrank == 0) {
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW,
 				       &arg->pool.poh, &arg->pool.pool_info,
 				       NULL /* ev */);
 		if (rc)
 			goto bcast;
-		rc = daos_cont_open(arg->pool.poh, arg->co_uuid, flags,
+		rc = daos_cont_open(arg->pool.poh, arg->co_str, flags,
 				    &arg->coh, &arg->co_info, NULL);
 	}
 bcast:
@@ -92,20 +92,20 @@ multi_cont_oid_allocator(void **state)
 
 	for (i = 0; i < 10; i++) {
 		uuid_t		co_uuid;
+		char		str[37];
 		daos_handle_t	coh;
 		daos_cont_info_t co_info;
 
 		print_message("Cont %d ---------------------\n", i);
 
-		uuid_clear(co_uuid);
-		uuid_generate(co_uuid);
-		rc = daos_cont_create(arg->pool.poh, co_uuid, NULL, NULL);
+		rc = daos_cont_create(arg->pool.poh, &co_uuid, NULL, NULL);
 		if (rc) {
 			print_message("Cont create failed\n");
 			goto verify_rc;
 		}
 
-		rc = daos_cont_open(arg->pool.poh, co_uuid, DAOS_COO_RW,
+		uuid_unparse(co_uuid, str);
+		rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW,
 				    &coh, &co_info, NULL);
 		if (rc) {
 			print_message("Cont Open failed\n");
@@ -133,7 +133,7 @@ multi_cont_oid_allocator(void **state)
 		if (rc)
 			goto verify_rc;
 
-		rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+		rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 		if (rc)
 			goto verify_rc;
 	}
@@ -341,6 +341,7 @@ cont_oid_prop(void **state)
 	daos_prop_t		*prop;
 	uint64_t		oid, alloced_oid;
 	uuid_t			co_uuid;
+	char			str[37];
 	daos_handle_t		coh;
 	daos_cont_info_t	co_info;
 	int			rc = 0;
@@ -349,7 +350,6 @@ cont_oid_prop(void **state)
 		return;
 
 	uuid_clear(co_uuid);
-	uuid_generate(co_uuid);
 
 	/** set max oid to 2 x 1024 x 1024 */
 	alloced_oid = 2 * 1024 * 1024;
@@ -359,10 +359,11 @@ cont_oid_prop(void **state)
 
 	print_message("Create a container with alloced_oid "DF_U64"\n",
 		      alloced_oid);
-	rc = daos_cont_create(arg->pool.poh, co_uuid, prop, NULL);
+	rc = daos_cont_create(arg->pool.poh, &co_uuid, prop, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_open(arg->pool.poh, co_uuid, DAOS_COO_RW, &coh,
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_open(arg->pool.poh, str, DAOS_COO_RW, &coh,
 			    &co_info, NULL);
 	assert_rc_equal(rc, 0);
 
@@ -387,7 +388,7 @@ cont_oid_prop(void **state)
 	daos_prop_free(prop);
 	rc = daos_cont_close(coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 }
 
