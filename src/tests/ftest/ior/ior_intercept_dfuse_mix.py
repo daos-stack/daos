@@ -51,22 +51,29 @@ class IorInterceptDfuseMix(IorTestBase):
         self.add_container(self.pool)
 
         # Run 2 IOR threads; one with IL and the other without.
-        results = dict()
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
         client_count = len(self.hostlist_clients)
         w_clients = self.hostlist_clients[0:int(client_count / 2)]
         wo_clients = self.hostlist_clients[int(client_count / 2):]
-        self.run_ior_threads_il(
-            results=results, intercept=intercept, with_clients=w_clients,
-            without_clients=wo_clients)
+        results = self.run_ior_in_parallel([w_clients, wo_clients], intercept)
+        failed = 0
+        for name in sorted(results):
+            if results[name].error is None:
+                IorCommand.log_metrics(self.log, name, results[name].result)
+            else:
+                self.log.info(str(results[name]))
+                failed += 1
+        if failed:
+            self.fail("%d IOR commands failed!", failed)
+        self.log.info("Test passed!")
 
-        # Print the raw results from the IOR stdout.
-        IorCommand.log_metrics(
-            self.log, "{} clients - with interception library".format(
-                len(w_clients)), results[1])
-        IorCommand.log_metrics(
-            self.log, "{} clients - without interception library".format(
-                len(wo_clients)), results[2])
+        # # Print the raw results from the IOR stdout.
+        # IorCommand.log_metrics(
+        #     self.log, "{} clients - with interception library".format(
+        #         len(w_clients)), results[1])
+        # IorCommand.log_metrics(
+        #     self.log, "{} clients - without interception library".format(
+        #         len(wo_clients)), results[2])
 
         # Get Max, Min, and Mean throughput values for Write and Read.
         w_write_results = results[1][0]

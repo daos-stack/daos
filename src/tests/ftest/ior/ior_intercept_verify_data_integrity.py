@@ -42,16 +42,22 @@ class IorInterceptVerifyDataIntegrity(IorTestBase):
         self.add_container(self.pool)
 
         intercept = os.path.join(self.prefix, 'lib64', 'libioil.so')
-        results = dict()
         client_count = len(self.hostlist_clients)
         w_clients = self.hostlist_clients[0:client_count - 1]
         wo_clients = [self.hostlist_clients[-1]]
+        results = self.run_ior_in_parallel([w_clients, wo_clients], intercept)
+        failed = 0
+        for name in sorted(results):
+            if results[name].error is None:
+                IorCommand.log_metrics(self.log, name, results[name].result)
+            else:
+                self.log.info(str(results[name]))
+                failed += 1
+        if failed:
+            self.fail("%d IOR commands failed!", failed)
+        self.log.info("Test passed!")
 
-        self.run_ior_threads_il(
-            results=results, intercept=intercept, with_clients=w_clients,
-            without_clients=wo_clients)
-
-        IorCommand.log_metrics(
-            self.log, "5 clients - with interception library", results[1])
-        IorCommand.log_metrics(
-            self.log, "1 client - without interception library", results[2])
+        # IorCommand.log_metrics(
+        #     self.log, "5 clients - with interception library", results[1])
+        # IorCommand.log_metrics(
+        #     self.log, "1 client - without interception library", results[2])
