@@ -77,9 +77,9 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         TestContainer(pool, daos_command=self.get_daos_command()))
     self.container[-1].namespace = path
     self.container[-1].get_params(self)
-    # don't include oclass in daos cont cmd; include rf based on the class
+    # include rf based on the class
     if oclass:
-        self.container[-1].oclass.update(None)
+        self.container[-1].oclass.update(oclass)
         redundancy_factor = get_rf(oclass)
         rf = 'rf:{}'.format(str(redundancy_factor))
     properties = self.container[-1].properties.value
@@ -586,7 +586,7 @@ def launch_server_stop_start(self, pools, name, results, args):
                 self.dmg_command.pool_query(pool.uuid)
             if status:
                 # Wait ~ 30 sec before issuing the reintegrate
-                time.sleep(180)
+                time.sleep(30)
                 # reintegrate ranks
                 reintegrate_status = True
                 for pool in pools:
@@ -1083,12 +1083,12 @@ def build_job_script(self, commands, job, nodesperjob):
     # if additional cmds are needed in the batch script
     prepend_cmds = [
         "set -e",
-        "daos pool query --pool {} ".format(self.pool[1].uuid),
-        "daos pool query --pool {} ".format(self.pool[0].uuid)
+        "daos pool query {} ".format(self.pool[1].uuid),
+        "daos pool query {} ".format(self.pool[0].uuid)
         ]
     append_cmds = [
-        "daos pool query --pool {} ".format(self.pool[1].uuid),
-        "daos pool query --pool {} ".format(self.pool[0].uuid)
+        "daos pool query {} ".format(self.pool[1].uuid),
+        "daos pool query {} ".format(self.pool[0].uuid)
         ]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines
