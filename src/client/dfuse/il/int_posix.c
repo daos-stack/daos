@@ -849,6 +849,48 @@ dfuse_check_valid_path(const char *path)
 }
 
 DFUSE_PUBLIC int
+dfuse_open64_2(const char *pathname, int flags)
+{
+	struct fd_entry entry = {0};
+	int fd;
+	int status;
+
+	fd = __real_open64_2(pathname, flags);
+
+	if (!ioil_iog.iog_initialized || (fd == -1)) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring with failure %d %d",
+				pathname, ioil_iog.iog_initialized, fd);
+		return fd;
+	}
+
+	if (!dfuse_check_valid_path(pathname)) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path",
+				pathname);
+		return fd;
+	}
+
+	status = DFUSE_IO_BYPASS;
+	/* Disable bypass for O_APPEND|O_PATH */
+	if ((flags & (O_PATH | O_APPEND)) != 0)
+		status = DFUSE_IO_DIS_FLAG;
+
+	if (!check_ioctl_on_open(fd, &entry, flags, status)) {
+		DFUSE_LOG_DEBUG("open_2(pathname=%s) interception not possible",
+				pathname);
+		return fd;
+	}
+
+	atomic_fetch_add_relaxed(&ioil_iog.iog_file_count, 1);
+
+	DFUSE_LOG_DEBUG("open_2(pathname=%s, flags=0%o) = "
+			"%d. intercepted, fstat=%d, bypass=%s",
+			pathname, flags, fd, entry.fd_fstat,
+			bypass_status[entry.fd_status]);
+
+	return fd;
+}
+
+DFUSE_PUBLIC int
 dfuse_open(const char *pathname, int flags, ...)
 {
 	struct fd_entry entry = {0};
