@@ -15,7 +15,13 @@ class DaosCommand(DaosCommandBase):
     """Defines a object representing a daos command."""
 
     METHOD_REGEX = {
-        "run": r"(.*)"
+        "run": r"(.*)",
+        "container_query":
+            r"Pool UUID:\s+([0-9a-f-]+)\n" +
+            r"Container UUID:\s+([0-9a-f-]+)\n" +
+            r"Number of snapshots:\s+(\d+)\n" +
+            r"Latest Persistent Snapshot:\s+(\d+)\n" +
+            r"Highest Aggregated Epoch:\s+(\d+)",
     }
 
     def pool_query(self, pool, sys_name=None, sys=None):
