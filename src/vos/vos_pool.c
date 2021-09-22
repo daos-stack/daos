@@ -268,7 +268,7 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
 	daos_handle_t		 hdl;
 	struct d_uuid		 ukey;
 	struct vos_pool		*pool = NULL;
-	int			 rc = 0, rc_pool_open = 0, enabled = 1;
+	int			 rc = 0, enabled = 1;
 
 	if (!path || uuid_is_null(uuid))
 		return -DER_INVAL;
@@ -412,18 +412,16 @@ open:
 		goto close;
 
 	/* Create a VOS pool handle using ph. */
-	rc_pool_open = pool_open(ph, pool_df, uuid, flags, poh);
-	if (rc_pool_open != 0)
-		goto close;
+	rc = pool_open(ph, pool_df, uuid, flags, poh);
 	ph = NULL;
 
 close:
-	/* Close this local handle, if it hasn't been consumed by pool_open
-	 * nor already been closed by pool_open upon error.
+	/* Close this local handle, if it hasn't been consumed nor already
+	 * been closed by pool_open upon error.
 	 */
-	if (ph != NULL && rc_pool_open == 0)
+	if (ph != NULL)
 		vos_pmemobj_close(ph);
-	return rc ? rc : rc_pool_open;
+	return rc;
 }
 
 /**
@@ -619,8 +617,8 @@ vos_register_slabs(struct umem_attr *uma)
 }
 
 /*
- * If successful, this function consumes ph, which the caller shall not close
- * in this case.
+ * If successful, this function consumes ph, and closes it upon any error.
+ * So the caller shall not close ph in any case.
  */
 static int
 pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
@@ -636,6 +634,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	rc = pool_alloc(uuid, &pool); /* returned with refcount=1 */
 	if (rc != 0) {
 		D_ERROR("Error allocating pool handle\n");
+		vos_pmemobj_close(ph);
 		return rc;
 	}
 
@@ -727,7 +726,7 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	struct vos_pool		*pool = NULL;
 	struct d_uuid		 ukey;
 	PMEMobjpool		*ph;
-	int			 rc, rc_pool_open = 0, enabled = 1;
+	int			 rc, enabled = 1;
 
 	if (path == NULL || poh == NULL) {
 		D_ERROR("Invalid parameters.\n");
@@ -800,18 +799,16 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 		goto out;
 	}
 
-	rc_pool_open = pool_open(ph, pool_df, uuid, flags, poh);
-	if (rc_pool_open != 0)
-		goto out;
+	rc = pool_open(ph, pool_df, uuid, flags, poh);
 	ph = NULL;
 
 out:
-	/* Close this local handle, if it hasn't been consumed by pool_open
-	 * nor already been closed by pool_open upon error.
+	/* Close this local handle, if it hasn't been consumed nor already
+	 * been closed by pool_open upon error.
 	 */
-	if (ph != NULL && rc_pool_open == 0)
+	if (ph != NULL)
 		vos_pmemobj_close(ph);
-	return rc ? rc : rc_pool_open;
+	return rc;
 }
 
 /**
