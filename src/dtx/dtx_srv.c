@@ -319,7 +319,50 @@ out:
 static int
 dtx_init(void)
 {
-	int	rc;
+	const char	*str;
+	int		 rc;
+
+	str = getenv("DTX_AGG_THD_CNT");
+	if (str != NULL) {
+		dtx_agg_thd_cnt_up = atoi(str);
+		if (dtx_agg_thd_cnt_up < DTX_AGG_THD_CNT_MIN ||
+		    dtx_agg_thd_cnt_up > DTX_AGG_THD_CNT_MAX) {
+			D_WARN("Invalid DTX aggregation count threshold %d, "
+			       "the valid range is [%d, %d], use the "
+			       "default value %d\n",
+			       dtx_agg_thd_cnt_up, DTX_AGG_THD_CNT_MIN,
+			       DTX_AGG_THD_CNT_MAX, DTX_AGG_THD_CNT_DEF);
+			dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
+		}
+	} else {
+		dtx_agg_thd_cnt_up = DTX_AGG_THD_CNT_DEF;
+	}
+
+	dtx_agg_thd_cnt_lo = dtx_agg_thd_cnt_up * 6 / 7;
+
+	D_INFO("Set DTX aggregation count threshold as %d (entries)\n",
+	       dtx_agg_thd_cnt_up);
+
+	str = getenv("DTX_AGG_THD_AGE");
+	if (str != NULL) {
+		dtx_agg_thd_age_up = atoi(str);
+		if (dtx_agg_thd_age_up < DTX_AGG_THD_AGE_MIN ||
+		    dtx_agg_thd_age_up > DTX_AGG_THD_AGE_MAX) {
+			D_WARN("Invalid DTX aggregation age threshold %d, "
+			       "the valid range is [%d, %d], use the "
+			       "default value %d\n",
+			       dtx_agg_thd_age_up, DTX_AGG_THD_AGE_MIN,
+			       DTX_AGG_THD_AGE_MAX, DTX_AGG_THD_AGE_DEF);
+			dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
+		}
+	} else {
+		dtx_agg_thd_age_up = DTX_AGG_THD_AGE_DEF;
+	}
+
+	dtx_agg_thd_age_lo = dtx_agg_thd_age_up * 6 / 7;
+
+	D_INFO("Set DTX aggregation time threshold as %d (seconds)\n",
+	       dtx_agg_thd_age_up);
 
 	rc = dbtree_class_register(DBTREE_CLASS_DTX_CF,
 				   BTR_FEAT_UINT_KEY | BTR_FEAT_DYNAMIC_ROOT,
