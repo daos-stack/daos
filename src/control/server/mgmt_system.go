@@ -814,7 +814,9 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 				svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
 			}
 		}
-		svc.eraseAndRestart(false)
+		if err := svc.eraseAndRestart(false); err != nil {
+			return nil, errors.Wrap(err, "erasing and restarting non-leader")
+		}
 	}
 
 	// On the leader, we should first tell all servers to prepare for
@@ -860,6 +862,5 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 	}
 
 	// Finally, take care of the leader on the way out.
-	svc.eraseAndRestart(true)
-	return pbResp, nil
+	return pbResp, errors.Wrap(svc.eraseAndRestart(true), "erasing and restarting leader")
 }
