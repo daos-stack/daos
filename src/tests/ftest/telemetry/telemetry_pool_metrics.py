@@ -67,21 +67,22 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
 
         """
         # initializing method params
-        total = []
         final_value = []
         # collecting data to be verified
         for name in sorted(pool_metrics_list):
             self.log.debug("  --telemetry metric: %s", name)
+            total = []
             for key in sorted(metrics_data):
                 m_data = metrics_data[key]
-                total.append(0)
-                total[key] = 0
+                # temporary variable to hold total value
+                temp = 0
                 for host in sorted(m_data[name]):
                     for rank in sorted(m_data[name][host]):
                         for target in sorted(m_data[name][host][rank]):
                             value = m_data[name][host][rank][target]
                             # collecting total value for all targets
-                            total[key] = total[key] + value
+                            temp = temp + value
+                total.append(temp)
             # subtracting the total value after read/write from total value
             # before read/write
             final_value.append(total[1] - total[0])
@@ -99,14 +100,16 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
                 # to get total expected written amount for only
                 # write operation.
                 if "update" in name:
-                    total_amount_written = (self.ior_cmd.block_size.value *
+                    expected_total_amount_written = (self.ior_cmd.block_size.value *
                                             int(replication))
                 else:
-                    total_amount_written = self.ior_cmd.block_size.value
+                    expected_total_amount_written = self.ior_cmd.block_size.value
                 # get difference between actual written value and expected
-                # written value
-                final_value[-1] = final_value[-1] - total_amount_written
-                # perform check
+                # total written value.
+                final_value[-1] = final_value[-1] - expected_total_amount_written
+                # check whether the difference obtained in previous step is
+                # less thank the chunk size as expected_values[1] carries the
+                # chunk size value.
                 if final_value[-1] > expected_values[1]:
                     self.fail("Aggregated Value for {} of all the targets "
                               "is greater than expected value of {}"
@@ -174,6 +177,7 @@ class TelemetryPoolMetrics(IorTestBase, TestWithTelemetry):
         # collect data for expected values
         expected_total_objects = (self.ior_cmd.block_size.value /
                                   self.ior_cmd.dfs_chunk.value) + 1
+        #     Number of expected total objects, Chunk Size
         check_values = [expected_total_objects, self.ior_cmd.dfs_chunk.value]
         # perform verification check
         self.verify_pool_metrics(metric_list, metrics_data, check_values)
