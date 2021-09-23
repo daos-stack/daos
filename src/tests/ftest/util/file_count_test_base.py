@@ -78,6 +78,15 @@ class FileCountTestBase(MdtestBase, IorTestBase):
         for oclass in object_class:
             self.ior_cmd.dfs_oclass.update(oclass)
             self.mdtest_cmd.dfs_oclass.update(oclass)
+            self.ior_cmd.dfs_dir_oclass.update(oclass)
+            # oclass_dir can not be EC must be RP based on rf
+            rf = get_rf(oclass)
+            if rf >= 2:
+                self.mdtest_cmd.dfs_dir_oclass.update("RP_3G1")
+            elif rf == 1:
+                self.mdtest_cmd.dfs_dir_oclass.update("RP_2G1")
+            else:
+                self.mdtest_cmd.dfs_dir_oclass.update("SX")
             for api in apis:
                 self.ior_cmd.api.update(api)
                 self.mdtest_cmd.api.update(api)
