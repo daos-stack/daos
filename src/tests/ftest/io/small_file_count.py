@@ -22,7 +22,7 @@ class SmallFileCount(FileCountTestBase):
         Test Description:
             Run IOR and MDTEST with 30 clients with smaller file counts.
         Use Cases:
-            Run IOR for 5 mints with DFS and POSIX and create 30 2G files
+            Run IOR for 5 mints with DFS and POSIX and create 30 x 2G files
             Run MDTEST to create 50K files with DFS and POSIX
         :avocado: tags=all,daily_regression
         :avocado: tags=hw,large

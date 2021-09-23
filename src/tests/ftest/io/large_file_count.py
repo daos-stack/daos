@@ -23,7 +23,7 @@ class LargeFileCount(FileCountTestBase):
             Run IOR and MDTEST with 30 clients with very large file counts.
             This test is run as part of weekly runs.
         Use Cases:
-            Run IOR for 5 mints with DFS and POSIX and create 600GB file
+            Run IOR with DFS and POSIX and create 30 X 10GB files
             Run MDTEST to create 1M files with DFS and POSIX
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large

@@ -39,7 +39,7 @@ ior:
   test_file: /testFile
   repetitions: 1
   transfer_size: '1M'
-  block_size: '20G'
+  block_size: '10G'
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
   disable_caching: True
