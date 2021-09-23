@@ -511,6 +511,20 @@ obj_get_grp_size(struct dc_object *obj)
 }
 
 int
+dc_obj_get_grp_size(daos_handle_t oh, int *grp_size)
+{
+	struct dc_object        *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
+	*grp_size = obj_get_grp_size(obj);
+	obj_decref(obj);
+	return 0;
+}
+
+int
 obj_get_grp_nr(struct dc_object *obj)
 {
 	return obj->cob_grp_nr;
