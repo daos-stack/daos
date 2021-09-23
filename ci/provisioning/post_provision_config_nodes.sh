@@ -2,13 +2,6 @@
 
 set -eux
 
-: "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
-: "${DAOS_STACK_RETRY_COUNT:=3}"
-: "${DAOS_STACK_MONITOR_SECONDS:=600}"
-: "${BUILD_URL:=Not_in_jenkins}"
-: "${STAGE_NAME:=Unknown_Stage}"
-: "${OPERATIONS_EMAIL:=$USER@localhost}"
-
 # functions common to more than one distro specific provisioning
 url_to_repo() {
     local url="$1"
@@ -78,70 +71,6 @@ dump_repos() {
             echo "---- $file ----"
             cat "$file"
         done
-}
-
-send_mail() {
-    local subject="$1"
-    local message="$2"
-    set +x
-    {
-        echo "Build: $BUILD_URL"
-        echo "Stage: $STAGE_NAME"
-        echo "Host:  $HOSTNAME"
-        echo ""
-        echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
-    set -x
-}
-
-monitor_cmd() {
-    local threshold="$1"
-    shift
-    local duration=0
-    local start="$SECONDS"
-    if ! time "$@"; then
-        return "${PIPESTATUS[0]}"
-    fi
-    ((duration = SECONDS - start))
-    if [ "$duration" -gt "$threshold" ]; then
-        send_mail "Command exceeded ${threshold}s in $STAGE_NAME" \
-                    "Command:  $*\nReal time: $duration"
-    fi
-    return 0
-}
-
-retry_cmd() {
-    local monitor_threshold="$1"
-    shift
-    local attempt=0
-    local rc=0
-    while [ $attempt -lt $DAOS_STACK_RETRY_COUNT ]; do
-        if monitor_cmd "$monitor_threshold" "$@"; then
-            # Command succeeded, return with success
-            if [ $attempt -gt 0 ]; then
-                send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
-                          "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
-            fi
-            return 0
-        fi
-        # Command failed, retry
-        rc=${PIPESTATUS[0]}
-        (( attempt++ ))
-        if [ "$attempt" -gt 0 ]; then
-            sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
-        fi
-    done
-    if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
-                  "Command:  $*\nAttempts: $attempt\nStatus:   $rc"
-    fi
-    return 1
-}
-
-timeout_cmd() {
-    local timeout="$1"
-    shift
-    retry_cmd "$DAOS_STACK_MONITOR_SECONDS" timeout "$timeout" "$@"
 }
 
 env > /root/last_run-env.txt

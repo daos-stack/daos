@@ -12,53 +12,8 @@ host wolf-*
     LogLevel error
 EOF
 
-: "${DAOS_STACK_RETRY_DELAY_SECONDS:=60}"
-: "${DAOS_STACK_RETRY_COUNT:=3}"
-: "${BUILD_URL:=Not_in_jenkins}"
-: "${STAGE_NAME:=Unknown_Stage}"
-: "${OPERATIONS_EMAIL:=$USER@localhost}"
-
-send_mail() {
-    local subject="$1"
-    local message="$2"
-    set +x
-    {
-        echo "Build: $BUILD_URL"
-        echo "Stage: $STAGE_NAME"
-        echo "Host:  $HOSTNAME"
-        echo ""
-        echo -e "$message"
-    } 2>&1 | mail -s "$subject" -r "$HOSTNAME"@intel.com "$OPERATIONS_EMAIL"
-    set -x
-}
-
-retry_cmd() {
-    local command="$1"
-    shift
-
-    local attempt=0
-    while [ $attempt -lt $DAOS_STACK_RETRY_COUNT ]; do
-        if time $command "$@"; then
-            # succeeded, return with success
-            if [ $attempt -gt 0 ]; then
-                send_mail "Command retry successful in $STAGE_NAME after $attempt attempts" \
-                          "Command:  $command $*\nAttempts: $attempt\nStatus:   0"
-            fi
-            return 0
-        fi
-        # We hit an error
-        rc=${PIPESTATUS[0]}
-        (( attempt++ ))
-        if [ "$attempt" -gt 0 ]; then
-            sleep "$DAOS_STACK_RETRY_DELAY_SECONDS"
-        fi
-    done
-    if [ "$rc" -ne 0 ]; then
-        send_mail "Command retry failed in $STAGE_NAME after $attempt attempts" \
-                  "Command:  $command $*\nAttempts: $attempt\nStatus:   $rc"
-    fi
-    return 1
-}
+# shellcheck disable=SC1091
+source post_provision_config_common.sh
 
 : "${DISTRO:=EL_7}"
 DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
@@ -74,9 +29,9 @@ DSA_REPO_var="DAOS_STACK_${DISTRO}_APPSTREAM_REPO"
 : "${REPOSITORY_URL:=}"
 : "${JENKINS_URL:=}"
 
-retry_cmd clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
+retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 
-retry_cmd clush -B -S -l root -w "$NODESTRING" \
+retry_cmd 12600 clush -B -S -l root -w "$NODESTRING" \
            "MY_UID=$(id -u)
            CONFIG_POWER_ONLY=$CONFIG_POWER_ONLY
            INST_REPOS=\"$INST_REPOS\"
@@ -94,13 +49,14 @@ retry_cmd clush -B -S -l root -w "$NODESTRING" \
            STAGE_NAME=\"${STAGE_NAME}\"
            OPERATIONS_EMAIL=\"${OPERATIONS_EMAIL}\"
            $(cat ci/stacktrace.sh)
+           $(cat ci/provisioning/post_provision_config_common.sh)
            $(cat ci/provisioning/post_provision_config_nodes_"${DISTRO}".sh)
            $(cat ci/provisioning/post_provision_config_nodes.sh)"
 
 git log --format=%s -n 1 HEAD | \
-  retry_cmd ssh -i ci_key -l jenkins "${NODELIST%%,*}" \
+  retry_cmd 60 ssh -i ci_key -l jenkins "${NODELIST%%,*}" \
                                      "cat >/tmp/commit_title"
 git log --pretty=format:%h --abbrev-commit --abbrev=7 |
-  retry_cmd ssh -i ci_key -l jenkins "${NODELIST%%,*}" "cat >/tmp/commit_list"
-retry_cmd ssh root@"${NODELIST%%,*}" "mkdir -p /scratch && " \
-                                     "mount wolf-2:/export/scratch /scratch"
+  retry_cmd 60 ssh -i ci_key -l jenkins "${NODELIST%%,*}" "cat >/tmp/commit_list"
+retry_cmd 600 ssh root@"${NODELIST%%,*}" "mkdir -p /scratch && " \
+                                        "mount wolf-2:/export/scratch /scratch"
