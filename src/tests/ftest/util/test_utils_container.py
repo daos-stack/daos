@@ -315,9 +315,10 @@ class TestContainer(TestDaosApiBase):
             acl_file (str, optional): path of the ACL file. Defaults to None.
         """
         self.destroy()
-        self.log.info(
-            "Creating a container with pool handle %s",
-            self.pool.pool.handle.value)
+        if not self.silent.value:
+            self.log.info(
+                "Creating a container with pool handle %s",
+                self.pool.pool.handle.value)
         self.container = DaosContainer(self.pool.context)
 
         if self.control_method.value == self.USE_API:
@@ -356,8 +357,12 @@ class TestContainer(TestDaosApiBase):
             }
 
             self._log_method("daos.container_create", kwargs)
-            uuid = self.daos.get_output("container_create", **kwargs)[0]
-
+            try:
+                uuid = self.daos.container_create(
+                    **kwargs)["response"]["container_uuid"]
+            except KeyError as error:
+                raise CommandFailure(
+                    "Error: Unexpected daos container create output") from error
             # Populate the empty DaosContainer object with the properties of the
             # container created with daos container create.
             self.container.uuid = str_to_c_uuid(uuid)
@@ -373,7 +378,8 @@ class TestContainer(TestDaosApiBase):
                 self.control_method.value)
 
         self.uuid = self.container.get_uuid_str()
-        self.log.info("  Container created with uuid %s", self.uuid)
+        if not self.silent.value:
+            self.log.info("  Container created with uuid %s", self.uuid)
 
     @fail_on(DaosApiError)
     @fail_on(CommandFailure)
@@ -511,7 +517,8 @@ class TestContainer(TestDaosApiBase):
         status = False
         if self.container:
             self.close()
-            self.log.info("Destroying container %s", self.uuid)
+            if not self.silent.value:
+                self.log.info("Destroying container %s", self.uuid)
             if self.container.attached:
                 kwargs = {"force": force}
 
@@ -595,6 +602,30 @@ class TestContainer(TestDaosApiBase):
             for key, val in list(locals().items())
             if key != "self" and val is not None]
         return self._check_info(checks)
+
+    def write_objects_wo_failon(self, rank=None, obj_class=None):
+        """Write objects to the container without fail_on DaosTestError,
+           for negative test on container write_objects.
+
+        Args:
+            rank (int, optional): server rank. Defaults to None.
+            obj_class (int, optional): daos object class. Defaults to None.
+
+        """
+        self.open()
+        self.log.info(
+            "Writing %s object(s), with %s record(s) of %s bytes(s) each, in "
+            "container %s%s%s",
+            self.object_qty.value, self.record_qty.value, self.data_size.value,
+            self.uuid, " on rank {}".format(rank) if rank is not None else "",
+            " with object class {}".format(obj_class)
+            if obj_class is not None else "")
+        for _ in range(self.object_qty.value):
+            self.written_data.append(TestContainerData(self.debug.value))
+            self.written_data[-1].write_object(
+                self, self.record_qty.value, self.akey_size.value,
+                self.dkey_size.value, self.data_size.value, rank, obj_class,
+                self.data_array_size.value)
 
     @fail_on(DaosTestError)
     def write_objects(self, rank=None, obj_class=None):

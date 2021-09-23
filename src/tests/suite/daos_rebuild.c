@@ -22,7 +22,6 @@
 #define OBJ_CLS		OC_RP_3G1
 #define OBJ_REPLICAS	3
 #define DEFAULT_FAIL_TGT 0
-#define REBUILD_POOL_SIZE	(4ULL << 30)
 
 /* Destroy the pool for the sub test */
 static void
@@ -280,7 +279,7 @@ rebuild_destroy_container_cb(void *data)
 		return rc;
 
 	while (arg->myrank == 0) {
-		rc = daos_cont_destroy(arg->pool.poh, arg->co_uuid, 1, NULL);
+		rc = daos_cont_destroy(arg->pool.poh, arg->co_str, 1, NULL);
 		if (rc == -DER_BUSY || rc == -DER_IO) {
 			print_message("Container is busy, wait\n");
 			sleep(1);

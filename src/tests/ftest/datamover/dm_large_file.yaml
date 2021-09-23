@@ -21,8 +21,8 @@ server_config:
 pool:
   mode: 146
   name: daos_server
-  scm_size: 42000000000       # 42G
-  nvme_size: 700000000000     # 700G
+  scm_size: 95%
+  nvme_size: 90%
   svcn: 1
   control_method: dmg
 container:

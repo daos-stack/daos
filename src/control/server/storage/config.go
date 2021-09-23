@@ -34,6 +34,7 @@ const (
 	maxScmDeviceLen = 1
 )
 
+// Class indicates a specific type of storage.
 type Class string
 
 func (c *Class) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -56,6 +57,7 @@ func (s Class) String() string {
 	return string(s)
 }
 
+// Class type definitions.
 const (
 	ClassNone Class = ""
 	ClassDcpm Class = "dcpm"
@@ -253,9 +255,6 @@ func (sc *ScmConfig) Validate(class Class) error {
 	if sc.MountPoint == "" {
 		return errors.New("no scm_mount set")
 	}
-	if sc.RamdiskSize < 0 {
-		return errors.New("negative scm_size")
-	}
 
 	switch class {
 	case ClassDcpm:
@@ -283,7 +282,6 @@ func (sc *ScmConfig) Validate(class Class) error {
 // BdevConfig represents a Block Device (NVMe, etc.) configuration entry.
 type BdevConfig struct {
 	DeviceList  []string `yaml:"bdev_list,omitempty"`
-	VmdDisabled bool     `yaml:"-"` // set during start-up
 	DeviceCount int      `yaml:"bdev_number,omitempty"`
 	FileSize    int      `yaml:"bdev_size,omitempty"`
 }
@@ -345,4 +343,5 @@ type Config struct {
 	Tiers            TierConfigs `yaml:"storage" cmdLongFlag:"--storage_tiers,nonzero" cmdShortFlag:"-T,nonzero"`
 	ConfigOutputPath string      `yaml:"-" cmdLongFlag:"--nvme" cmdShortFlag:"-n"`
 	VosEnv           string      `yaml:"-" cmdEnv:"VOS_BDEV_CLASS"`
+	EnableHotplug    bool        `yaml:"-"`
 }

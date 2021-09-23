@@ -585,6 +585,12 @@ func (svc *mgmtSvc) SystemQuery(ctx context.Context, req *mgmtpb.SystemQueryReq)
 		Absenthosts: missHosts.String(),
 	}
 	if hitRanks.Count() == 0 {
+		// If the membership is empty, this replica is likely waiting
+		// for logs from peers, so we should indicate to the client
+		// that it should try a different replica.
+		if req.Ranks == "" && req.Hosts == "" {
+			return nil, system.ErrRaftUnavail
+		}
 		return resp, nil
 	}
 
@@ -808,7 +814,9 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 				svc.log.Errorf("instance %d failed to remove superblock: %s", engine.Index(), err)
 			}
 		}
-		svc.eraseAndRestart(false)
+		if err := svc.eraseAndRestart(false); err != nil {
+			return nil, errors.Wrap(err, "erasing and restarting non-leader")
+		}
 	}
 
 	// On the leader, we should first tell all servers to prepare for
@@ -846,7 +854,7 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 		peerReq.AddHost(peer.String())
 
 		if _, err := control.SystemErase(ctx, svc.rpcClient, peerReq); err != nil {
-			if control.IsConnectionError(err) {
+			if control.IsRetryableConnErr(err) {
 				continue
 			}
 			return nil, err
@@ -854,6 +862,5 @@ func (svc *mgmtSvc) SystemErase(ctx context.Context, pbReq *mgmtpb.SystemEraseRe
 	}
 
 	// Finally, take care of the leader on the way out.
-	svc.eraseAndRestart(true)
-	return pbResp, nil
+	return pbResp, errors.Wrap(svc.eraseAndRestart(true), "erasing and restarting leader")
 }

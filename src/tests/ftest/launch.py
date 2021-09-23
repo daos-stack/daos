@@ -763,10 +763,50 @@ def get_vmd_replacement(args):
 
     # Get the list of NVMe PCI addresses found in the output
     output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
-    devices = find_pci_address(output_str)
-    print("Auto-detected VMD/NVMe devices on {}: {}".format(host_list, devices))
+    all_vmd_devices = find_pci_address(output_str)
+
+    # Get the only VMD device addresses which has NVMe device connected.
+    devices = get_vmd_address_backed_nvme(host_list, all_vmd_devices)
+    print("Auto-detected VMD device which has NVMe devices connected {}: {}"
+          .format(host_list, devices))
+
     return ",".join(devices), vmd_include_flag
 
+def get_vmd_address_backed_nvme(host_list, value):
+    """Find valid VMD address which has backing NVMe.
+
+    Args:
+        host_list (list): list of hosts
+        value (list): list of all PCI address.
+
+    Returns:
+        list: a list of the VMD PCI addresses only which has connected NVMe
+              devices.
+
+    """
+    command = "ls -l /sys/block/ | grep nvme | cut -d\' \' -f11"
+
+    task = get_remote_output(host_list, command)
+
+    # Verify the command was successful on each server host
+    if not check_remote_output(task, command):
+        print("ERROR: Issuing commands ls -l /sys/block/")
+        sys.exit(1)
+
+    # Verify each server host has the same NVMe device behind VMD addresses.
+    output_data = list(task.iter_buffers())
+    if len(output_data) > 1:
+        print("ERROR: Non-homogeneous NVMe device behind VMD addresses.")
+        sys.exit(1)
+
+    output_str = "\n".join([line.decode("utf-8") for line in output_data[0][0]])
+
+    # Remove the VMD PCI address if no NVMe is backed-up and connected.
+    for device in value:
+        if device not in output_str:
+            value.remove(device)
+
+    return value
 
 def find_pci_address(value):
     """Find PCI addresses in the specified string.
@@ -1156,6 +1196,18 @@ def run_tests(test_files, tag_filter, args):
                 # Compress any log file that haven't been remotely compressed.
                 compress_log_files(avocado_logs_dir, args)
 
+                valgrind_logs_dir = os.environ.get("DAOS_TEST_SHARED_DIR",
+                                                   os.environ['HOME'])
+
+                # Archive valgrind log files from shared dir
+                return_code |= archive_files(
+                    "valgrind log files",
+                    os.path.join(avocado_logs_dir, "latest", "valgrind_logs"),
+                    [test_hosts[0]],
+                    "{}/valgrind*".format(valgrind_logs_dir),
+                    args,
+                    avocado_logs_dir)
+
             # Optionally rename the test results directory for this test
             if args.rename:
                 return_code |= rename_logs(
@@ -1343,7 +1395,6 @@ def archive_files(description, destination, hosts, source_files, args,
         destination (str): path in which to archive files
         hosts (list): hosts from which to archive files
         source_files (str): remote files to archive
-        cart (str): enable running cart_logtest.py
         args (argparse.Namespace): command line arguments for this program
         avocado_logs_dir (optional, str): path to the avocado log files.
             Required for checking for large log files - see 'test_name'.
