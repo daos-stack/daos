@@ -4,8 +4,8 @@ hosts:
     - server-B
     - server-C
     - server-D
+    - server-E
   test_clients:
-    - client-E
     - client-F
     - client-G
     - client-H
@@ -25,35 +25,31 @@ pool:
 container:
   type: POSIX
   control_method: daos
-  rf_properties: !mux
-    rf0:
-        properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:0
-    rf1:
-        properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:1
-    rf2:
-        properties: cksum:crc16,cksum_size:16384,srv_cksum:on,rf:2
 largefilecount:
   api:
     - DFS
     - POSIX
+  object_class:
+    - SX
+    - EC_3P1GX
 ior:
-  np: 32
+  np: 30
   dfs_destroy: False
   flags: "-v -D 300 -W -w -r -R"
   test_file: /testFile
   repetitions: 1
   transfer_size: '1M'
-  block_size: '3G'
-  block_size_rc: '30G'
+  block_size: '2G'
+  block_size_rc: '20G'
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
   disable_caching: True
 
 mdtest:
   client_processes:
-    np: 32
-  num_of_files_dirs: 1562             # creating total of 50K files
-  num_of_files_dirs_rc: 31250000      # creating total of 1B files
+    np: 30
+  num_of_files_dirs: 1667          # creating total of 50K files
+  num_of_files_dirs_rc: 33334      # creating total of 1M files
   test_dir: "/"
   iteration: 1
   dfs_destroy: True
