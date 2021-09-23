@@ -55,7 +55,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl,cont_user_sec,cont_group_seccont_sec
+        :avocado: tags=security,container_acl,cont_user_sec,cont_group_sec,cont_sec
         """
 
         #(1)Setup
