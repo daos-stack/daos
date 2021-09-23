@@ -13,7 +13,7 @@ host wolf-*
 EOF
 
 # shellcheck disable=SC1091
-source post_provision_config_common.sh
+source ci/provisioning/post_provision_config_common.sh
 
 : "${DISTRO:=EL_7}"
 DSL_REPO_var="DAOS_STACK_${DISTRO}_LOCAL_REPO"
@@ -59,4 +59,4 @@ git log --format=%s -n 1 HEAD | \
 git log --pretty=format:%h --abbrev-commit --abbrev=7 |
   retry_cmd 60 ssh -i ci_key -l jenkins "${NODELIST%%,*}" "cat >/tmp/commit_list"
 retry_cmd 600 ssh root@"${NODELIST%%,*}" "mkdir -p /scratch && " \
-                                        "mount wolf-2:/export/scratch /scratch"
+                                         "mount wolf-2:/export/scratch /scratch"
