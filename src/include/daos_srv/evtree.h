@@ -410,6 +410,7 @@ evt_vis2dbg(int flag)
 
 	switch (flag & flags) {
 	default:
+		printf("flag = %x\n", flag);
 		D_ASSERT(0);
 	case 0:
 		break;
@@ -669,6 +670,8 @@ enum {
 	EVT_ITER_FOR_DISCARD	= (1 << 7),
 	/** Skip visible data (Only valid with EVT_ITER_VISIBLE) */
 	EVT_ITER_SKIP_DATA	= (1 << 8),
+	/** Only process removals */
+	EVT_ITER_REMOVALS	= (1 << 9),
 };
 
 D_CASSERT((int)EVT_VISIBLE == (int)EVT_ITER_VISIBLE);
