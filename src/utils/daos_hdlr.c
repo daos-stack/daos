@@ -2643,11 +2643,14 @@ dm_connect(struct cmd_args_s *ap,
 		/* try to open container if this is a filesystem copy, and if it fails try to create
 		 * a destination, then attempt to open again
 		 */
-		if (dst_cont_passed)
+		if (dst_cont_passed) {
 			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
-		else
+			if (rc != 0 && rc != -DER_NONEXIST)
+				D_GOTO(err, rc);
+		} else {
 			rc = -DER_NONEXIST;
+		}
 		if (rc == -DER_NONEXIST) {
 			uuid_t cuuid;
 
