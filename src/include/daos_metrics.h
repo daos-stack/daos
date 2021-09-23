@@ -18,8 +18,9 @@
 extern "C" {
 #endif
 
-/** DAOS Metrics Major and Minor Version */
+/** DAOS Metrics Major Version */
 #define DAOS_METRICS_MAJOR_VERSION	0x1
+/** DAOS Metrics Minor Version */
 #define DAOS_METRICS_MINOR_VERSION	0x0
 
 /** counters */
@@ -145,11 +146,13 @@ typedef struct {
 	enum daos_metrics_stats_grp ms_grp;
 	unsigned int resrv;
 	union {
-		/** ms_grp == DAOS_METRICS_OBJ_UPDATE_STATS
+		/**
+		 * ms_grp == DAOS_METRICS_OBJ_UPDATE_STATS
 		 * i/o stat for object update ops
 		 */
 		daos_metrics_stat_t st_obj_update;
-		/** ms_grp == DAOS_METRICS_OBJ_UPDATE_STATS
+		/**
+		 * ms_grp == DAOS_METRICS_OBJ_UPDATE_STATS
 		 * i/o stat for object fetch ops
 		 */
 		daos_metrics_stat_t st_obj_fetch;
@@ -164,110 +167,105 @@ typedef struct {
  * and less than Y.
  */
 enum {
-	DAOS_METRICS_IO_0_1K = 0,
-	DAOS_METRICS_IO_1K_2K = 1,
-	DAOS_METRICS_IO_2K_4K,
-	DAOS_METRICS_IO_4K_8K,
-	DAOS_METRICS_IO_8K_16K,
-	DAOS_METRICS_IO_16K_32K,
-	DAOS_METRICS_IO_32K_64K,
-	DAOS_METRICS_IO_64K_128K,
-	DAOS_METRICS_IO_128K_256K,
-	DAOS_METRICS_IO_256K_512K,
-	DAOS_METRICS_IO_512K_1M,
-	DAOS_METRICS_IO_1M_2M,
-	DAOS_METRICS_IO_2M_4M,
-	DAOS_METRICS_IO_4M_INF,
-	DAOS_METRICS_IO_BYSIZE_COUNT,
+	DAOS_METRICS_DIST_IO_0_1K = 0,
+	DAOS_METRICS_DIST_IO_1K_2K,
+	DAOS_METRICS_DIST_IO_2K_4K,
+	DAOS_METRICS_DIST_IO_4K_8K,
+	DAOS_METRICS_DIST_IO_8K_16K,
+	DAOS_METRICS_DIST_IO_16K_32K,
+	DAOS_METRICS_DIST_IO_32K_64K,
+	DAOS_METRICS_DIST_IO_64K_128K,
+	DAOS_METRICS_DIST_IO_128K_256K,
+	DAOS_METRICS_DIST_IO_256K_512K,
+	DAOS_METRICS_DIST_IO_512K_1M,
+	DAOS_METRICS_DIST_IO_1M_2M,
+	DAOS_METRICS_DIST_IO_2M_4M,
+	DAOS_METRICS_DIST_IO_4M_INF,
+	DAOS_METRICS_DIST_IO_BKT_COUNT,
 };
 
 /** Distribution of i/o rpc calls based on size */
 typedef struct {
-	/** Total size of data updated onto daos server */
-	unsigned long	ids_updatesz;
-	/** Total size of data fetched from daos server */
-	unsigned long	ids_fetchsz;
-	/** Count of update rpc calls made for various size ranges */
-	unsigned long	ids_updatecnt_bkt[DAOS_METRICS_IO_BYSIZE_COUNT];
-	/** Count of fetch rpc calls made for various size ranges */
-	unsigned long	ids_fetchcnt_bkt[DAOS_METRICS_IO_BYSIZE_COUNT];
-} daos_metrics_iodist_bsz_t;
+	/** Count of update rpc calls */
+	unsigned long	ids_updatecnt;
+	/** Count of fetch rpc calls */
+	unsigned long	ids_fetchcnt;
+} daos_metrics_iodist_sz_t;
 
-/** Distribution ids for update rpc calls based on protection/replication type */
+/** Distribution ids for RP based update rpc calls. */
 enum {
-	/** No Protection */
-	DAOS_METRICS_IO_NO_PROT = 0,
-	/** Replication
-	 * Eg. DAOS_METRICS_IO_RPX where X indicates replication factor
-	 */
-	DAOS_METRICS_IO_RP2,
-	DAOS_METRICS_IO_RP3,
-	DAOS_METRICS_IO_RP4,
-	DAOS_METRICS_IO_RP6,
-	DAOS_METRICS_IO_RP8,
-	DAOS_METRICS_IO_RP12,
-	DAOS_METRICS_IO_RP16,
-	DAOS_METRICS_IO_RP24,
-	DAOS_METRICS_IO_RP32,
-	DAOS_METRICS_IO_RP48,
-	DAOS_METRICS_IO_RP64,
-	DAOS_METRICS_IO_RP128,
-	/** User defined replication factor */
-	DAOS_METRICS_IO_RPU,
-	/** Erasure coding predefined settings
-	 * DAOS_METRICS_IO_EC_XPY_PART Partial stripe update with X data cells and Y parity cells.
-	 * DAOS_METRICS_IO_EC_XPY_FULL Full stripe update with X data cells and Y parity cells.
-	 */
-	DAOS_METRICS_IO_EC2P1_PART,
-	DAOS_METRICS_IO_EC2P2_PART,
-	DAOS_METRICS_IO_EC2P1_FULL,
-	DAOS_METRICS_IO_EC2P2_FULL,
-	DAOS_METRICS_IO_EC4P1_PART,
-	DAOS_METRICS_IO_EC4P2_PART,
-	DAOS_METRICS_IO_EC4P1_FULL,
-	DAOS_METRICS_IO_EC4P2_FULL,
-	DAOS_METRICS_IO_EC8P1_PART,
-	DAOS_METRICS_IO_EC8P2_PART,
-	DAOS_METRICS_IO_EC8P1_FULL,
-	DAOS_METRICS_IO_EC8P2_FULL,
-	DAOS_METRICS_IO_EC16P1_PART,
-	DAOS_METRICS_IO_EC16P2_PART,
-	DAOS_METRICS_IO_EC16P1_FULL,
-	DAOS_METRICS_IO_EC16P2_FULL,
+	DAOS_METRICS_DIST_NORP = 0,
+	DAOS_METRICS_DIST_RP2,
+	DAOS_METRICS_DIST_RP3,
+	DAOS_METRICS_DIST_RP4,
+	DAOS_METRICS_DIST_RP6,
+	DAOS_METRICS_DIST_RP8,
+	DAOS_METRICS_DIST_RP12,
+	DAOS_METRICS_DIST_RP16,
+	DAOS_METRICS_DIST_RP24,
+	DAOS_METRICS_DIST_RP32,
+	DAOS_METRICS_DIST_RP48,
+	DAOS_METRICS_DIST_RP64,
+	DAOS_METRICS_DIST_RP128,
 	/** User defined EC settings */
-	DAOS_METRICS_IO_ECU_PART,
-	DAOS_METRICS_IO_ECU_FULL,
-	DAOS_METRICS_IO_BYPTYPE_COUNT,
+	DAOS_METRICS_DIST_RPU,
+	DAOS_METRICS_DIST_RP_BKT_COUNT,
 };
 
-/** Distribution of i/o rpc calls based on protection type */
+/** Distribution stats for RP based update calls */
 typedef struct {
-	/** Total size of data updated onto daos server */
-	unsigned long	idp_updatesz;
-	/** Count of update rpc calls made against objects of various protection types */
-	unsigned long	idp_updatecnt_bkt[DAOS_METRICS_IO_BYPTYPE_COUNT];
-	/** Total size of data transferred as part of update rpc calls made against
-	 * objects of various protection types
-	 */
-	unsigned long	idp_updatesz_bkt[DAOS_METRICS_IO_BYPTYPE_COUNT];
-} daos_metrics_iodist_bpt_t;
+	/** Count of update calls */
+	unsigned long udrp_updatecnt;
+	/** Total bytes transferred as part of update */
+	unsigned long udrp_updatesz;
+} daos_metrics_updist_rp_t;
+
+/** Distribution ids for EC based update rpc calls. */
+enum {
+	DAOS_METRICS_DIST_EC2P1 = 0,
+	DAOS_METRICS_DIST_EC2P2,
+	DAOS_METRICS_DIST_EC4P1,
+	DAOS_METRICS_DIST_EC4P2,
+	DAOS_METRICS_DIST_EC8P1,
+	DAOS_METRICS_DIST_EC8P2,
+	DAOS_METRICS_DIST_EC16P1,
+	DAOS_METRICS_DIST_EC16P2,
+	/** User defined EC settings */
+	DAOS_METRICS_DIST_ECU,
+	DAOS_METRICS_DIST_EC_BKT_COUNT,
+};
+
+/** Distribution stats for EC based update calls */
+typedef struct {
+	/** Count of update calls that do not require EC aggregation */
+	unsigned long udec_full_updatecnt;
+	/** Total bytes transferred as part of full update */
+	unsigned long udec_full_updatesz;
+	/** Count of update that requires EC aggregation */
+	unsigned long udec_part_updatecnt;
+	/** Total bytes transferred as part of partial update */
+	unsigned long udec_part_updatesz;
+} daos_metrics_updist_ec_t;
 
 /** Distribution metrics groups */
 enum daos_metrics_dist_grp {
-	DAOS_METRICS_DIST_IO_BSZ,
-	DAOS_METRICS_DIST_IO_BPT,
+	DAOS_METRICS_IO_DIST_SZ,
+	DAOS_METRICS_UP_DIST_RP,
+	DAOS_METRICS_UP_DIST_EC,
 };
 
-/** Structure to be used to obtain the daos client distribution metrics */
+/** DAOS client distribution metrics */
 typedef struct {
 	/** Distribution metric group id */
 	enum daos_metrics_dist_grp md_grp;
 	unsigned int resrv;
 	union {
-		/** md_grp == DAOS_METRICS_DIST_IO_BSZ */
-		daos_metrics_iodist_bsz_t dt_bsz;
-		/** md_grp == DAOS_METRICS_DIST_IO_BPT */
-		daos_metrics_iodist_bpt_t dt_bpt;
+		/** md_grp == DAOS_METRICS_IO_DIST_SZ */
+		daos_metrics_iodist_sz_t md_iosz[DAOS_METRICS_DIST_IO_BKT_COUNT];
+		/** md_grp == DAOS_METRICS_UP_DIST_RP */
+		daos_metrics_updist_rp_t md_uprp[DAOS_METRICS_DIST_RP_BKT_COUNT];
+		/** md_grp == DAOS_METRICS_UP_DIST_EC */
+		daos_metrics_updist_ec_t md_upec[DAOS_METRICS_DIST_EC_BKT_COUNT];
 	} u;
 } daos_metrics_udists_t;
 

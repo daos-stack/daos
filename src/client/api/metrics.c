@@ -27,7 +27,7 @@ pthread_key_t metrics_tls_key;
 static dc_metrics_tls_data_t metrics_tls_agg;
 
 #define	RPDIST_ENUM_IDX_CNT	129
-#define	ECDIST_ENUM_IDX_CNT	17
+#define	ECDIST_ENUM_IDX_CNT	18
 static int rpdist_enum_idx[RPDIST_ENUM_IDX_CNT];
 static int ecdist_enum_idx[ECDIST_ENUM_IDX_CNT];
 
@@ -80,8 +80,9 @@ dc_metrics_reset_tls_data()
 		entry->update_stat.st_min = ULONG_MAX;
 		memset(&entry->fetch_stat, 0, sizeof(entry->fetch_stat));
 		entry->fetch_stat.st_min = ULONG_MAX;
-		memset(&entry->ids, 0, sizeof(entry->ids));
-		memset(&entry->idp, 0, sizeof(entry->idp));
+		memset(&entry->idsz, 0, sizeof(entry->idsz));
+		memset(&entry->udrp, 0, sizeof(entry->udrp));
+		memset(&entry->udec, 0, sizeof(entry->udec));
 	}
 	D_MUTEX_UNLOCK(&metrics_tls_lock);
 }
@@ -110,18 +111,23 @@ dc_metrics_tls_aggr(dc_metrics_tls_data_t *value)
 	dc_metrics_aggr_stats(&metrics_tls_agg.fetch_stat, &value->fetch_stat);
 
 	/** io distribution by size */
-	metrics_tls_agg.ids.ids_updatesz += value->ids.ids_updatesz;
-	metrics_tls_agg.ids.ids_fetchsz += value->ids.ids_fetchsz;
-	for (i = 0; i < DAOS_METRICS_IO_BYSIZE_COUNT; i++) {
-		metrics_tls_agg.ids.ids_updatecnt_bkt[i] += value->ids.ids_updatecnt_bkt[i];
-		metrics_tls_agg.ids.ids_fetchcnt_bkt[i]  += value->ids.ids_fetchcnt_bkt[i];
+	for (i = 0; i < DAOS_METRICS_DIST_IO_BKT_COUNT; i++) {
+		metrics_tls_agg.idsz[i].ids_updatecnt += value->idsz[i].ids_updatecnt;
+		metrics_tls_agg.idsz[i].ids_fetchcnt  += value->idsz[i].ids_fetchcnt;
 	}
 
-	/** io distribution by protection type */
-	metrics_tls_agg.idp.idp_updatesz += value->idp.idp_updatesz;
-	for (i = 0; i < DAOS_METRICS_IO_BYPTYPE_COUNT; i++) {
-		metrics_tls_agg.idp.idp_updatecnt_bkt[i] += value->idp.idp_updatecnt_bkt[i];
-		metrics_tls_agg.idp.idp_updatesz_bkt[i]  += value->idp.idp_updatesz_bkt[i];
+	/** update distribution for RP based protection type */
+	for (i = 0; i < DAOS_METRICS_DIST_RP_BKT_COUNT; i++) {
+		metrics_tls_agg.udrp[i].udrp_updatecnt += value->udrp[i].udrp_updatecnt;
+		metrics_tls_agg.udrp[i].udrp_updatesz += value->udrp[i].udrp_updatesz;
+	}
+
+	/** update distribution for EC based protection type */
+	for (i = 0; i < DAOS_METRICS_DIST_EC_BKT_COUNT; i++) {
+		metrics_tls_agg.udec[i].udec_full_updatecnt += value->udec[i].udec_full_updatecnt;
+		metrics_tls_agg.udec[i].udec_full_updatesz += value->udec[i].udec_full_updatesz;
+		metrics_tls_agg.udec[i].udec_part_updatecnt += value->udec[i].udec_part_updatecnt;
+		metrics_tls_agg.udec[i].udec_part_updatesz += value->udec[i].udec_part_updatesz;
 	}
 }
 
@@ -177,27 +183,31 @@ dc_metrics_init()
 	}
 
 	for (i = 0; i < RPDIST_ENUM_IDX_CNT; i++)
-		rpdist_enum_idx[i] = DAOS_METRICS_IO_RPU;
+		rpdist_enum_idx[i] = DAOS_METRICS_DIST_RPU;
 
-	rpdist_enum_idx[1] = DAOS_METRICS_IO_NO_PROT;
-	rpdist_enum_idx[2] = DAOS_METRICS_IO_RP2;
-	rpdist_enum_idx[3] = DAOS_METRICS_IO_RP3;
-	rpdist_enum_idx[4] = DAOS_METRICS_IO_RP4;
-	rpdist_enum_idx[6] = DAOS_METRICS_IO_RP6;
-	rpdist_enum_idx[8] = DAOS_METRICS_IO_RP8;
-	rpdist_enum_idx[12] = DAOS_METRICS_IO_RP12;
-	rpdist_enum_idx[16] = DAOS_METRICS_IO_RP16;
-	rpdist_enum_idx[32] = DAOS_METRICS_IO_RP32;
-	rpdist_enum_idx[48] = DAOS_METRICS_IO_RP48;
-	rpdist_enum_idx[64] = DAOS_METRICS_IO_RP64;
-	rpdist_enum_idx[128] = DAOS_METRICS_IO_RP128;
+	rpdist_enum_idx[1] = DAOS_METRICS_DIST_NORP;
+	rpdist_enum_idx[2] = DAOS_METRICS_DIST_RP2;
+	rpdist_enum_idx[3] = DAOS_METRICS_DIST_RP3;
+	rpdist_enum_idx[4] = DAOS_METRICS_DIST_RP4;
+	rpdist_enum_idx[6] = DAOS_METRICS_DIST_RP6;
+	rpdist_enum_idx[8] = DAOS_METRICS_DIST_RP8;
+	rpdist_enum_idx[12] = DAOS_METRICS_DIST_RP12;
+	rpdist_enum_idx[16] = DAOS_METRICS_DIST_RP16;
+	rpdist_enum_idx[32] = DAOS_METRICS_DIST_RP32;
+	rpdist_enum_idx[48] = DAOS_METRICS_DIST_RP48;
+	rpdist_enum_idx[64] = DAOS_METRICS_DIST_RP64;
+	rpdist_enum_idx[128] = DAOS_METRICS_DIST_RP128;
 
 	for (i = 0; i < ECDIST_ENUM_IDX_CNT; i++)
-		ecdist_enum_idx[i] = DAOS_METRICS_IO_ECU_PART;
-	ecdist_enum_idx[2] = DAOS_METRICS_IO_EC2P1_PART;
-	ecdist_enum_idx[4] = DAOS_METRICS_IO_EC4P1_PART;
-	ecdist_enum_idx[8] = DAOS_METRICS_IO_EC8P1_PART;
-	ecdist_enum_idx[16] = DAOS_METRICS_IO_EC16P1_PART;
+		ecdist_enum_idx[i] = DAOS_METRICS_DIST_ECU;
+	ecdist_enum_idx[2] = DAOS_METRICS_DIST_EC2P1;
+	ecdist_enum_idx[3] = DAOS_METRICS_DIST_EC2P2;
+	ecdist_enum_idx[4] = DAOS_METRICS_DIST_EC4P1;
+	ecdist_enum_idx[5] = DAOS_METRICS_DIST_EC4P2;
+	ecdist_enum_idx[8] = DAOS_METRICS_DIST_EC8P1;
+	ecdist_enum_idx[9] = DAOS_METRICS_DIST_EC8P2;
+	ecdist_enum_idx[16] = DAOS_METRICS_DIST_EC16P1;
+	ecdist_enum_idx[17] = DAOS_METRICS_DIST_EC16P2;
 
 	D_GOTO(out, rc);
 out_tls:
@@ -251,51 +261,48 @@ dc_metrics_update_iostats(int is_update, size_t size)
 
 static void
 dc_metrics_update_iodist(int is_update, size_t size, struct daos_oclass_attr *ptype,
-				int is_full_stripe)
+				int is_part_stripe)
 {
 	int idx, num, dcells, kcells;
 	dc_metrics_tls_data_t *ptr = metrics_tls;
 	size_t bsize = 4*1024*1024;
 
-	idx = DAOS_METRICS_IO_BYSIZE_COUNT-1;
+	idx = DAOS_METRICS_DIST_IO_BKT_COUNT-1;
 	while ((size < bsize) && (idx > 0)) {
 		idx--;
 		bsize >>= 1;
 	}
 	if (is_update) {
-		ptr->ids.ids_updatesz += size;
-		ptr->ids.ids_updatecnt_bkt[idx]++;
+		ptr->idsz[idx].ids_updatecnt++;
 	} else {
-		ptr->ids.ids_fetchsz += size;
-		ptr->ids.ids_fetchcnt_bkt[idx]++;
+		ptr->idsz[idx].ids_fetchcnt++;
 	}
 
 	if (is_update) {
-		ptr->idp.idp_updatesz += size;
 		if (ptype->ca_resil == DAOS_RES_REPL) {
 			num = ptype->u.rp.r_num;
 			if (num < RPDIST_ENUM_IDX_CNT) {
-				ptr->idp.idp_updatecnt_bkt[rpdist_enum_idx[num]]++;
-				ptr->idp.idp_updatesz_bkt[rpdist_enum_idx[num]] += size;
+				ptr->udrp[rpdist_enum_idx[num]].udrp_updatecnt++;
+				ptr->udrp[rpdist_enum_idx[num]].udrp_updatesz += size;
 			} else {
-				ptr->idp.idp_updatecnt_bkt[DAOS_METRICS_IO_RPU]++;
-				ptr->idp.idp_updatesz_bkt[DAOS_METRICS_IO_RPU] += size;
+				ptr->udrp[DAOS_METRICS_DIST_RPU].udrp_updatecnt++;
+				ptr->udrp[DAOS_METRICS_DIST_RPU].udrp_updatesz += size;
 			}
 		} else if (ptype->ca_resil == DAOS_RES_EC) {
 			dcells = ptype->u.ec.e_k;
 			kcells = ptype->u.ec.e_p;
 
-			idx = DAOS_METRICS_IO_ECU_PART;
+			idx = DAOS_METRICS_DIST_ECU;
 			if ((dcells < ECDIST_ENUM_IDX_CNT) && (kcells < 3))
 				idx = ecdist_enum_idx[dcells];
-			if (idx == DAOS_METRICS_IO_ECU_PART) {
-				idx = DAOS_METRICS_IO_ECU_PART+is_full_stripe;
-				ptr->idp.idp_updatecnt_bkt[idx]++;
-				ptr->idp.idp_updatesz_bkt[idx] += size;
+			if (idx != DAOS_METRICS_DIST_ECU)
+				idx += (kcells - 1);
+			if (is_part_stripe) {
+				ptr->udec[idx].udec_part_updatecnt++;
+				ptr->udec[idx].udec_part_updatesz += size;
 			} else {
-				idx = idx + is_full_stripe*2 + kcells - 1;
-				ptr->idp.idp_updatecnt_bkt[idx]++;
-				ptr->idp.idp_updatesz_bkt[idx] += size;
+				ptr->udec[idx].udec_full_updatecnt++;
+				ptr->udec[idx].udec_full_updatesz += size;
 			}
 		}
 	}
@@ -303,7 +310,7 @@ dc_metrics_update_iodist(int is_update, size_t size, struct daos_oclass_attr *pt
 
 int
 dc_metrics_update_ioinfo(int is_update, size_t size, struct daos_oclass_attr *ptype,
-				int is_full_stripe)
+				int is_part_stripe)
 {
 	int rc = 0;
 
@@ -316,7 +323,7 @@ dc_metrics_update_ioinfo(int is_update, size_t size, struct daos_oclass_attr *pt
 			D_GOTO(out, rc);
 	}
 	dc_metrics_update_iostats(is_update, size);
-	dc_metrics_update_iodist(is_update, size, ptype, is_full_stripe);
+	dc_metrics_update_iodist(is_update, size, ptype, is_part_stripe);
 
 out:
 	return rc;
@@ -495,28 +502,36 @@ daos_metrics_get_dist(enum daos_metrics_dist_grp md_grp, daos_metrics_udists_t *
 	memset(dist, 0, sizeof(*dist));
 	D_MUTEX_LOCK(&metrics_tls_lock);
 	switch (md_grp) {
-	case DAOS_METRICS_DIST_IO_BSZ:
-		dist->md_grp = DAOS_METRICS_DIST_IO_BSZ;
+	case DAOS_METRICS_IO_DIST_SZ:
+		dist->md_grp = DAOS_METRICS_IO_DIST_SZ;
 		d_list_for_each_entry(entry, &metrics_list, list) {
-			dist->u.dt_bsz.ids_updatesz += entry->ids.ids_updatesz;
-			dist->u.dt_bsz.ids_fetchsz  += entry->ids.ids_fetchsz;
-			for (i = 0; i < DAOS_METRICS_IO_BYSIZE_COUNT; i++) {
-				dist->u.dt_bsz.ids_updatecnt_bkt[i] +=
-					entry->ids.ids_updatecnt_bkt[i];
-				dist->u.dt_bsz.ids_fetchcnt_bkt[i]  +=
-					entry->ids.ids_fetchcnt_bkt[i];
+			for (i = 0; i < DAOS_METRICS_DIST_IO_BKT_COUNT; i++) {
+				dist->u.md_iosz[i].ids_updatecnt += entry->idsz[i].ids_updatecnt;
+				dist->u.md_iosz[i].ids_fetchcnt += entry->idsz[i].ids_fetchcnt;
 			}
 		}
 		break;
-	case DAOS_METRICS_DIST_IO_BPT:
-		dist->md_grp = DAOS_METRICS_DIST_IO_BPT;
+	case DAOS_METRICS_UP_DIST_RP:
+		dist->md_grp = DAOS_METRICS_UP_DIST_RP;
 		d_list_for_each_entry(entry, &metrics_list, list) {
-			dist->u.dt_bpt.idp_updatesz += entry->idp.idp_updatesz;
-			for (i = 0; i < DAOS_METRICS_IO_BYPTYPE_COUNT; i++) {
-				dist->u.dt_bpt.idp_updatecnt_bkt[i] +=
-					entry->idp.idp_updatecnt_bkt[i];
-				dist->u.dt_bpt.idp_updatesz_bkt[i]  +=
-					entry->idp.idp_updatesz_bkt[i];
+			for (i = 0; i < DAOS_METRICS_DIST_RP_BKT_COUNT; i++) {
+				dist->u.md_uprp[i].udrp_updatecnt += entry->udrp[i].udrp_updatecnt;
+				dist->u.md_uprp[i].udrp_updatesz += entry->udrp[i].udrp_updatesz;
+			}
+		}
+		break;
+	case DAOS_METRICS_UP_DIST_EC:
+		dist->md_grp = DAOS_METRICS_UP_DIST_EC;
+		d_list_for_each_entry(entry, &metrics_list, list) {
+			for (i = 0; i < DAOS_METRICS_DIST_EC_BKT_COUNT; i++) {
+				dist->u.md_upec[i].udec_full_updatecnt +=
+					entry->udec[i].udec_full_updatecnt;
+				dist->u.md_upec[i].udec_full_updatesz +=
+					entry->udec[i].udec_full_updatesz;
+				dist->u.md_upec[i].udec_part_updatecnt +=
+					entry->udec[i].udec_part_updatecnt;
+				dist->u.md_upec[i].udec_part_updatesz +=
+					entry->udec[i].udec_part_updatesz;
 			}
 		}
 		break;
@@ -714,7 +729,7 @@ dump_obj_stats(FILE *fp)
 		D_GOTO(out, rc);
 	}
 
-	fprintf(fp, "***************  Dumping Object IO Stats ******************\n");
+	fprintf(fp, "***************  Dumping Object IO Stats ***************************\n");
 	fprintf(fp, "%-10s\t%12s\t%16s\t%20s\t%12s\t%12s\n", "Name", "Count", "Sum Size",
 			"Sum of Sqrs Size", "Min", "Max");
 
@@ -773,20 +788,18 @@ dump_obj_iodist_bysize(FILE *fp)
 		D_GOTO(out, rc);
 	}
 
-	rc = daos_metrics_get_dist(DAOS_METRICS_DIST_IO_BSZ, dist);
+	rc = daos_metrics_get_dist(DAOS_METRICS_IO_DIST_SZ, dist);
 	if (rc != 0) {
 		D_ERROR("Failed to dump io distribution by size, rc = %d\n", rc);
 		D_GOTO(alloc_out, rc);
 	}
 
 	fprintf(fp, "***************  Dumping i/o Distribution by Size ******************\n");
-	fprintf(fp, "Total bytes updated - %lu\n", dist->u.dt_bsz.ids_updatesz);
-	fprintf(fp, "Total bytes fetched - %lu\n", dist->u.dt_bsz.ids_fetchsz);
 	fprintf(fp, "%-16s\t%12s\t%12s\n", "Name", "update cnt", "fetch cnt");
-	for (i = 0; i < DAOS_METRICS_IO_BYSIZE_COUNT; i++) {
+	for (i = 0; i < DAOS_METRICS_DIST_IO_BKT_COUNT; i++) {
 		fprintf(fp, "%-16s\t%12lu\t%12lu\n", distname_bysize[i],
-				dist->u.dt_bsz.ids_updatecnt_bkt[i],
-				dist->u.dt_bsz.ids_fetchcnt_bkt[i]);
+				dist->u.md_iosz[i].ids_updatecnt,
+				dist->u.md_iosz[i].ids_fetchcnt);
 	}
 	fflush(fp);
 alloc_out:
@@ -795,43 +808,37 @@ out:
 	return rc;
 }
 
-const char * const distname_byptype[] = {
-	"IO_NO_PROT",
-	"IO_RP2",
-	"IO_RP3",
-	"IO_RP4",
-	"IO_RP6",
-	"IO_RP8",
-	"IO_RP12",
-	"IO_RP16",
-	"IO_RP24",
-	"IO_RP32",
-	"IO_RP48",
-	"IO_RP64",
-	"IO_RP128",
-	"IO_RPU",
-	"IO_EC2P1_PART",
-	"IO_EC2P2_PART",
-	"IO_EC2P1_FULL",
-	"IO_EC2P2_FULL",
-	"IO_EC4P1_PART",
-	"IO_EC4P2_PART",
-	"IO_EC4P1_FULL",
-	"IO_EC4P2_FULL",
-	"IO_EC8P1_PART",
-	"IO_EC8P2_PART",
-	"IO_EC8P1_FULL",
-	"IO_EC8P2_FULL",
-	"IO_EC16P1_PART",
-	"IO_EC16P2_PART",
-	"IO_EC16P1_FULL",
-	"IO_EC16P2_FULL",
-	"IO_ECU_PART",
-	"IO_ECU_FULL",
+const char * const distname_rp[] = {
+	"NO_RP",
+	"RP2",
+	"RP3",
+	"RP4",
+	"RP6",
+	"RP8",
+	"RP12",
+	"RP16",
+	"RP24",
+	"RP32",
+	"RP48",
+	"RP64",
+	"RP128",
+	"RPU",
+};
+
+const char * const distname_ec[] = {
+	"IO_EC2P1",
+	"IO_EC2P2",
+	"IO_EC4P1",
+	"IO_EC4P2",
+	"IO_EC8P1",
+	"IO_EC8P2",
+	"IO_EC16P1",
+	"IO_EC16P2",
+	"IO_ECU",
 };
 
 static int
-dump_obj_iodist_byptype(FILE *fp)
+dump_obj_updist_rp(FILE *fp)
 {
 	int rc, i;
 	daos_metrics_udists_t *dist;
@@ -842,19 +849,53 @@ dump_obj_iodist_byptype(FILE *fp)
 		D_GOTO(out, rc);
 	}
 
-	rc = daos_metrics_get_dist(DAOS_METRICS_DIST_IO_BPT, dist);
+	rc = daos_metrics_get_dist(DAOS_METRICS_UP_DIST_RP, dist);
 	if (rc != 0) {
 		D_ERROR("Failed to dump io distribution by size, rc = %d\n", rc);
 		D_GOTO(alloc_out, rc);
 	}
 
-	fprintf(fp, "***************  Dumping i/o Distribution by Protection Type *************\n");
-	fprintf(fp, "Total bytes updated - %lu\n", dist->u.dt_bpt.idp_updatesz);
+	fprintf(fp, "**********  Dumping update call Distribution for RP ***************\n");
 	fprintf(fp, "%-16s\t%12s\t%12s\n", "Name", "update cnt", "size");
-	for (i = 0; i < DAOS_METRICS_IO_BYPTYPE_COUNT; i++) {
-		fprintf(fp, "%-16s\t%12lu\t%12lu\n", distname_byptype[i],
-				dist->u.dt_bpt.idp_updatecnt_bkt[i],
-				dist->u.dt_bpt.idp_updatesz_bkt[i]);
+	for (i = 0; i < DAOS_METRICS_DIST_RP_BKT_COUNT; i++) {
+		fprintf(fp, "%-16s\t%12lu\t%12lu\n", distname_rp[i],
+				dist->u.md_uprp[i].udrp_updatecnt,
+				dist->u.md_uprp[i].udrp_updatesz);
+	}
+	fflush(fp);
+alloc_out:
+	daos_metrics_free_distbuf(dist);
+out:
+	return rc;
+}
+
+static int
+dump_obj_updist_ec(FILE *fp)
+{
+	int rc, i;
+	daos_metrics_udists_t *dist;
+
+	rc = daos_metrics_alloc_distbuf(&dist);
+	if (rc != 0) {
+		D_ERROR("Failed to dump io distribution by size rc = %d\n", rc);
+		D_GOTO(out, rc);
+	}
+
+	rc = daos_metrics_get_dist(DAOS_METRICS_UP_DIST_EC, dist);
+	if (rc != 0) {
+		D_ERROR("Failed to dump io distribution by size, rc = %d\n", rc);
+		D_GOTO(alloc_out, rc);
+	}
+
+	fprintf(fp, "**********  Dumping update call Distribution for EC ***************\n");
+	fprintf(fp, "%-16s\t%12s\t%12s\t%12s\t%12s\n", "Name", "fstripe/sng cnt", "size",
+			"pstripe cnt", "size");
+	for (i = 0; i < DAOS_METRICS_DIST_EC_BKT_COUNT; i++) {
+		fprintf(fp, "%-16s\t%12lu\t%12lu\t%12lu\t%12lu\n", distname_ec[i],
+				dist->u.md_upec[i].udec_full_updatecnt,
+				dist->u.md_upec[i].udec_full_updatesz,
+				dist->u.md_upec[i].udec_part_updatecnt,
+				dist->u.md_upec[i].udec_part_updatesz);
 	}
 	fflush(fp);
 alloc_out:
@@ -885,7 +926,10 @@ daos_metrics_dump(FILE *fp)
 	rc = dump_obj_iodist_bysize(fp);
 	if (rc != 0)
 		D_GOTO(out, rc);
-	rc = dump_obj_iodist_byptype(fp);
+	rc = dump_obj_updist_rp(fp);
+	if (rc != 0)
+		D_GOTO(out, rc);
+	rc = dump_obj_updist_ec(fp);
 	if (rc != 0)
 		D_GOTO(out, rc);
 out:

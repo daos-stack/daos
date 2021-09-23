@@ -12,6 +12,7 @@
 #include "daos_test.h"
 
 #include "daos_iotest.h"
+#include "../../object/obj_ec.h"
 #include <daos_types.h>
 #include <daos/checksum.h>
 #include <daos/placement.h>
@@ -29,63 +30,54 @@ daos_metrics_ucntrs_t   *cal_cont_cntrs;
 daos_metrics_ucntrs_t   *cal_obj_cntrs;
 daos_metrics_ustats_t   *cal_obj_up_stat;
 daos_metrics_ustats_t   *cal_obj_fh_stat;
-daos_metrics_udists_t   *cal_obj_iodbz;
-daos_metrics_udists_t   *cal_obj_iodbp;
+daos_metrics_udists_t   *cal_obj_dist_iosz;
+daos_metrics_udists_t   *cal_obj_dist_uprp;
+daos_metrics_udists_t   *cal_obj_dist_upec;
 
 daos_metrics_ucntrs_t   *act_pool_cntrs;
 daos_metrics_ucntrs_t   *act_cont_cntrs;
 daos_metrics_ucntrs_t   *act_obj_cntrs;
 daos_metrics_ustats_t   *act_obj_up_stat;
 daos_metrics_ustats_t   *act_obj_fh_stat;
-daos_metrics_udists_t   *act_obj_iodbz;
-daos_metrics_udists_t   *act_obj_iodbp;
+daos_metrics_udists_t   *act_obj_dist_iosz;
+daos_metrics_udists_t   *act_obj_dist_uprp;
+daos_metrics_udists_t   *act_obj_dist_upec;
 
 struct prot_info {
 	int oclass;
 	int mclass;
 	int num_nodes;
+	int parity_info;
 };
 
 struct prot_info prot_rp[] = {
-	{ OC_SX, DAOS_METRICS_IO_NO_PROT, 1 },
-	{ OC_RP_2GX, DAOS_METRICS_IO_RP2, 2 },
-	{ OC_RP_3GX, DAOS_METRICS_IO_RP3, 3 },
-	{ OC_RP_4GX, DAOS_METRICS_IO_RP4, 4 },
-	{ OC_RP_6GX, DAOS_METRICS_IO_RP6, 6 },
-	{ OC_RP_8GX, DAOS_METRICS_IO_RP8, 8 },
-	{ OC_RP_12G1, DAOS_METRICS_IO_RP12, 12 },
-	{ OC_RP_16G1, DAOS_METRICS_IO_RP16, 16 },
-	{ OC_RP_24G1, DAOS_METRICS_IO_RP24, 24 },
-	{ OC_RP_32G1, DAOS_METRICS_IO_RP32, 32 },
-	{ OC_RP_48G1, DAOS_METRICS_IO_RP48, 48 },
-	{ OC_RP_64G1, DAOS_METRICS_IO_RP64, 64 },
-	{ OC_RP_128G1, DAOS_METRICS_IO_RP128, 128 }
+	{ OC_SX, DAOS_METRICS_DIST_NORP, 1, 0 },
+	{ OC_RP_2GX, DAOS_METRICS_DIST_RP2, 2, 0 },
+	{ OC_RP_3GX, DAOS_METRICS_DIST_RP3, 3, 0 },
+	{ OC_RP_4GX, DAOS_METRICS_DIST_RP4, 4, 0 },
+	{ OC_RP_6GX, DAOS_METRICS_DIST_RP6, 6, 0 },
+	{ OC_RP_8GX, DAOS_METRICS_DIST_RP8, 8, 0 },
+	{ OC_RP_12G1, DAOS_METRICS_DIST_RP12, 12, 0 },
+	{ OC_RP_16G1, DAOS_METRICS_DIST_RP16, 16, 0 },
+	{ OC_RP_24G1, DAOS_METRICS_DIST_RP24, 24, 0 },
+	{ OC_RP_32G1, DAOS_METRICS_DIST_RP32, 32, 0 },
+	{ OC_RP_48G1, DAOS_METRICS_DIST_RP48, 48, 0 },
+	{ OC_RP_64G1, DAOS_METRICS_DIST_RP64, 64, 0 },
+	{ OC_RP_128G1, DAOS_METRICS_DIST_RP128, 128 }
 };
 #define N_RP		(sizeof(prot_rp)/sizeof(struct prot_info))
 
-struct prot_info prot_ec_fstripe[] = {
-	{ OC_EC_2P1GX, DAOS_METRICS_IO_EC2P1_FULL, 3 },
-	{ OC_EC_2P2GX, DAOS_METRICS_IO_EC2P2_FULL, 4 },
-	{ OC_EC_4P1GX, DAOS_METRICS_IO_EC4P1_FULL, 5 },
-	{ OC_EC_4P2GX, DAOS_METRICS_IO_EC4P2_FULL, 6 },
-	{ OC_EC_8P1GX, DAOS_METRICS_IO_EC8P1_FULL, 9 },
-	{ OC_EC_8P2GX, DAOS_METRICS_IO_EC8P2_FULL, 10 },
-	{ OC_EC_16P1GX, DAOS_METRICS_IO_EC16P1_FULL, 17 },
-	{ OC_EC_16P2GX, DAOS_METRICS_IO_EC16P2_FULL, 18 }
+struct prot_info prot_ec[] = {
+	{ OC_EC_2P1GX, DAOS_METRICS_DIST_EC2P1, 3, 1 },
+	{ OC_EC_2P2GX, DAOS_METRICS_DIST_EC2P2, 4, 2 },
+	{ OC_EC_4P1GX, DAOS_METRICS_DIST_EC4P1, 5, 1 },
+	{ OC_EC_4P2GX, DAOS_METRICS_DIST_EC4P2, 6, 2 },
+	{ OC_EC_8P1GX, DAOS_METRICS_DIST_EC8P1, 9, 1 },
+	{ OC_EC_8P2GX, DAOS_METRICS_DIST_EC8P2, 10, 2 },
+	{ OC_EC_16P1GX, DAOS_METRICS_DIST_EC16P1, 17, 1 },
+	{ OC_EC_16P2GX, DAOS_METRICS_DIST_EC16P2, 18, 2 }
 };
-#define N_EC_FULL	(sizeof(prot_ec_fstripe)/sizeof(struct prot_info))
-
-struct prot_info prot_ec_pstripe[] = {
-	{ OC_EC_2P1GX, DAOS_METRICS_IO_EC2P1_PART, 3 },
-	{ OC_EC_2P2GX, DAOS_METRICS_IO_EC2P2_PART, 4 },
-	{ OC_EC_4P1GX, DAOS_METRICS_IO_EC4P1_PART, 5 },
-	{ OC_EC_4P2GX, DAOS_METRICS_IO_EC4P2_PART, 6 },
-	{ OC_EC_8P1GX, DAOS_METRICS_IO_EC8P1_PART, 9 },
-	{ OC_EC_8P2GX, DAOS_METRICS_IO_EC8P2_PART, 10 },
-	{ OC_EC_16P1GX, DAOS_METRICS_IO_EC16P1_PART, 17 },
-	{ OC_EC_16P2GX, DAOS_METRICS_IO_EC16P2_PART, 18 }
-};
-#define N_EC_PART	(sizeof(prot_ec_pstripe)/sizeof(struct prot_info))
+#define N_EC	(sizeof(prot_ec)/sizeof(struct prot_info))
 
 static int
 is_metrics_enabled()
@@ -140,13 +132,17 @@ test_metrics_init()
 	assert_rc_equal(rc, 0);
 	rc = daos_metrics_alloc_statsbuf(&act_obj_fh_stat);
 	assert_rc_equal(rc, 0);
-	rc = daos_metrics_alloc_distbuf(&cal_obj_iodbz);
+	rc = daos_metrics_alloc_distbuf(&cal_obj_dist_iosz);
 	assert_rc_equal(rc, 0);
-	rc = daos_metrics_alloc_distbuf(&act_obj_iodbz);
+	rc = daos_metrics_alloc_distbuf(&act_obj_dist_iosz);
 	assert_rc_equal(rc, 0);
-	rc = daos_metrics_alloc_distbuf(&cal_obj_iodbp);
+	rc = daos_metrics_alloc_distbuf(&cal_obj_dist_uprp);
 	assert_rc_equal(rc, 0);
-	rc = daos_metrics_alloc_distbuf(&act_obj_iodbp);
+	rc = daos_metrics_alloc_distbuf(&act_obj_dist_uprp);
+	assert_rc_equal(rc, 0);
+	rc = daos_metrics_alloc_distbuf(&cal_obj_dist_upec);
+	assert_rc_equal(rc, 0);
+	rc = daos_metrics_alloc_distbuf(&act_obj_dist_upec);
 	assert_rc_equal(rc, 0);
 	return 0;
 }
@@ -167,10 +163,12 @@ test_metrics_fini()
 	daos_metrics_free_statsbuf(act_obj_up_stat);
 	daos_metrics_free_statsbuf(cal_obj_fh_stat);
 	daos_metrics_free_statsbuf(act_obj_fh_stat);
-	daos_metrics_free_distbuf(cal_obj_iodbz);
-	daos_metrics_free_distbuf(act_obj_iodbz);
-	daos_metrics_free_distbuf(cal_obj_iodbp);
-	daos_metrics_free_distbuf(act_obj_iodbp);
+	daos_metrics_free_distbuf(cal_obj_dist_iosz);
+	daos_metrics_free_distbuf(act_obj_dist_iosz);
+	daos_metrics_free_distbuf(cal_obj_dist_uprp);
+	daos_metrics_free_distbuf(act_obj_dist_uprp);
+	daos_metrics_free_distbuf(cal_obj_dist_upec);
+	daos_metrics_free_distbuf(act_obj_dist_upec);
 }
 
 static void
@@ -190,9 +188,11 @@ test_metrics_snapshot()
 	rc = daos_metrics_get_stats(DAOS_METRICS_OBJ_FETCH_STATS, cal_obj_fh_stat);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_metrics_get_dist(DAOS_METRICS_DIST_IO_BSZ, cal_obj_iodbz);
+	rc = daos_metrics_get_dist(DAOS_METRICS_IO_DIST_SZ, cal_obj_dist_iosz);
 	assert_rc_equal(rc, 0);
-	rc = daos_metrics_get_dist(DAOS_METRICS_DIST_IO_BPT, cal_obj_iodbp);
+	rc = daos_metrics_get_dist(DAOS_METRICS_UP_DIST_RP, cal_obj_dist_uprp);
+	assert_rc_equal(rc, 0);
+	rc = daos_metrics_get_dist(DAOS_METRICS_UP_DIST_EC, cal_obj_dist_upec);
 	assert_rc_equal(rc, 0);
 }
 
@@ -211,7 +211,7 @@ compare_pool_counters()
 {
 	int rc;
 
-	print_message("validating the pool counters metrics\n");
+	print_message("validating the pool counters\n");
 	daos_metrics_pool_rpc_cntrs_t *pool_act = &act_pool_cntrs->u.arc_pool_cntrs;
 	daos_metrics_pool_rpc_cntrs_t *pool_cal = &cal_pool_cntrs->u.arc_pool_cntrs;
 
@@ -230,7 +230,7 @@ compare_cont_counters()
 {
 	int rc;
 
-	print_message("validating the container counters metrics\n");
+	print_message("validating the container counters\n");
 	daos_metrics_cont_rpc_cntrs_t *cont_act = &act_cont_cntrs->u.arc_cont_cntrs;
 	daos_metrics_cont_rpc_cntrs_t *cont_cal = &cal_cont_cntrs->u.arc_cont_cntrs;
 
@@ -258,7 +258,7 @@ compare_obj_counters()
 {
 	int rc;
 
-	print_message("validating the object counters metrics\n");
+	print_message("validating the object counters\n");
 	daos_metrics_obj_rpc_cntrs_t *obj_act = &act_obj_cntrs->u.arc_obj_cntrs;
 	daos_metrics_obj_rpc_cntrs_t *obj_cal = &cal_obj_cntrs->u.arc_obj_cntrs;
 
@@ -325,33 +325,33 @@ static int
 get_io_bktbsz(size_t size)
 {
 	if (size < 1024)
-		return DAOS_METRICS_IO_0_1K;
+		return DAOS_METRICS_DIST_IO_0_1K;
 	else if (size < 2*1024)
-		return DAOS_METRICS_IO_1K_2K;
+		return DAOS_METRICS_DIST_IO_1K_2K;
 	else if (size < 4*1024)
-		return DAOS_METRICS_IO_2K_4K;
+		return DAOS_METRICS_DIST_IO_2K_4K;
 	else if (size < 8*1024)
-		return DAOS_METRICS_IO_4K_8K;
+		return DAOS_METRICS_DIST_IO_4K_8K;
 	else if (size < 16*1024)
-		return DAOS_METRICS_IO_8K_16K;
+		return DAOS_METRICS_DIST_IO_8K_16K;
 	else if (size < 32*1024)
-		return DAOS_METRICS_IO_16K_32K;
+		return DAOS_METRICS_DIST_IO_16K_32K;
 	else if (size < 64*1024)
-		return DAOS_METRICS_IO_32K_64K;
+		return DAOS_METRICS_DIST_IO_32K_64K;
 	else if (size < 128*1024)
-		return DAOS_METRICS_IO_64K_128K;
+		return DAOS_METRICS_DIST_IO_64K_128K;
 	else if (size < 256*1024)
-		return DAOS_METRICS_IO_128K_256K;
+		return DAOS_METRICS_DIST_IO_128K_256K;
 	else if (size < 512*1024)
-		return DAOS_METRICS_IO_256K_512K;
+		return DAOS_METRICS_DIST_IO_256K_512K;
 	else if (size < 1024*1024)
-		return DAOS_METRICS_IO_512K_1M;
+		return DAOS_METRICS_DIST_IO_512K_1M;
 	else if (size < 1024*1024*2)
-		return DAOS_METRICS_IO_1M_2M;
+		return DAOS_METRICS_DIST_IO_1M_2M;
 	else if (size < 1024*1024*4)
-		return DAOS_METRICS_IO_2M_4M;
+		return DAOS_METRICS_DIST_IO_2M_4M;
 	else
-		return DAOS_METRICS_IO_4M_INF;
+		return DAOS_METRICS_DIST_IO_4M_INF;
 }
 
 static int
@@ -360,29 +360,42 @@ compare_obj_iodist()
 	int rc, i;
 
 	print_message("validating the io distribution metrics\n");
-	daos_metrics_iodist_bsz_t *iodbz_act = &act_obj_iodbz->u.dt_bsz;
-	daos_metrics_iodist_bsz_t *iodbz_cal = &cal_obj_iodbz->u.dt_bsz;
-	daos_metrics_iodist_bpt_t *iodbp_act = &act_obj_iodbp->u.dt_bpt;
-	daos_metrics_iodist_bpt_t *iodbp_cal = &cal_obj_iodbp->u.dt_bpt;
+	daos_metrics_iodist_sz_t *iodsz_act = act_obj_dist_iosz->u.md_iosz;
+	daos_metrics_iodist_sz_t *iodsz_cal = cal_obj_dist_iosz->u.md_iosz;
+	daos_metrics_updist_rp_t *updrp_act = act_obj_dist_uprp->u.md_uprp;
+	daos_metrics_updist_rp_t *updrp_cal = cal_obj_dist_uprp->u.md_uprp;
+	daos_metrics_updist_ec_t *updec_act = act_obj_dist_upec->u.md_upec;
+	daos_metrics_updist_ec_t *updec_cal = cal_obj_dist_upec->u.md_upec;
 
-	rc = daos_metrics_get_dist(DAOS_METRICS_DIST_IO_BSZ, act_obj_iodbz);
+	rc = daos_metrics_get_dist(DAOS_METRICS_IO_DIST_SZ, act_obj_dist_iosz);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(act_obj_iodbz->md_grp, DAOS_METRICS_DIST_IO_BSZ);
+	assert_int_equal(act_obj_dist_iosz->md_grp, DAOS_METRICS_IO_DIST_SZ);
 
-	assert_int_equal(iodbz_act->ids_updatesz, iodbz_cal->ids_updatesz);
-	assert_int_equal(iodbz_act->ids_fetchsz, iodbz_cal->ids_fetchsz);
-	for (i = 0; i < DAOS_METRICS_IO_BYSIZE_COUNT; i++) {
-		assert_int_equal(iodbz_act->ids_updatecnt_bkt[i], iodbz_act->ids_updatecnt_bkt[i]);
-		assert_int_equal(iodbz_act->ids_fetchcnt_bkt[i], iodbz_act->ids_fetchcnt_bkt[i]);
+	for (i = 0; i < DAOS_METRICS_DIST_IO_BKT_COUNT; i++) {
+		assert_int_equal(iodsz_act[i].ids_updatecnt, iodsz_cal[i].ids_updatecnt);
+		assert_int_equal(iodsz_act[i].ids_fetchcnt, iodsz_cal[i].ids_fetchcnt);
 	}
 
-	rc = daos_metrics_get_dist(DAOS_METRICS_DIST_IO_BPT, act_obj_iodbp);
+	rc = daos_metrics_get_dist(DAOS_METRICS_UP_DIST_RP, act_obj_dist_uprp);
 	assert_rc_equal(rc, 0);
-	assert_int_equal(act_obj_iodbp->md_grp, DAOS_METRICS_DIST_IO_BPT);
-	assert_int_equal(iodbp_act->idp_updatesz, iodbp_cal->idp_updatesz);
-	for (i = 0; i < DAOS_METRICS_IO_BYSIZE_COUNT; i++) {
-		assert_int_equal(iodbp_act->idp_updatecnt_bkt[i], iodbp_act->idp_updatecnt_bkt[i]);
-		assert_int_equal(iodbp_act->idp_updatesz_bkt[i], iodbp_act->idp_updatesz_bkt[i]);
+	assert_int_equal(act_obj_dist_uprp->md_grp, DAOS_METRICS_UP_DIST_RP);
+	for (i = 0; i < DAOS_METRICS_DIST_RP_BKT_COUNT; i++) {
+		assert_int_equal(updrp_act[i].udrp_updatecnt, updrp_cal[i].udrp_updatecnt);
+		assert_int_equal(updrp_act[i].udrp_updatesz, updrp_cal[i].udrp_updatesz);
+	}
+
+	rc = daos_metrics_get_dist(DAOS_METRICS_UP_DIST_EC, act_obj_dist_upec);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(act_obj_dist_upec->md_grp, DAOS_METRICS_UP_DIST_EC);
+	for (i = 0; i < DAOS_METRICS_DIST_EC_BKT_COUNT; i++) {
+		assert_int_equal(updec_act[i].udec_full_updatecnt,
+					updec_cal[i].udec_full_updatecnt);
+		assert_int_equal(updec_act[i].udec_part_updatecnt,
+					updec_cal[i].udec_part_updatecnt);
+		assert_int_equal(updec_act[i].udec_full_updatesz,
+					updec_cal[i].udec_full_updatesz);
+		assert_int_equal(updec_act[i].udec_part_updatesz,
+					updec_cal[i].udec_part_updatesz);
 	}
 	return 0;
 }
@@ -406,34 +419,34 @@ test_metrics_compare()
 }
 
 static int
-get_rp_factor(int ptype)
+get_rp_factor(int factor)
 {
-	assert_int_equal(ptype == DAOS_METRICS_IO_RPU, 0);
-	switch (ptype) {
+	assert_int_equal(factor == DAOS_METRICS_DIST_RPU, 0);
+	switch (factor) {
 
-	case DAOS_METRICS_IO_RP2:
+	case DAOS_METRICS_DIST_RP2:
 		return 2;
-	case DAOS_METRICS_IO_RP3:
+	case DAOS_METRICS_DIST_RP3:
 		return 3;
-	case DAOS_METRICS_IO_RP4:
+	case DAOS_METRICS_DIST_RP4:
 		return 4;
-	case DAOS_METRICS_IO_RP6:
+	case DAOS_METRICS_DIST_RP6:
 		return 6;
-	case DAOS_METRICS_IO_RP8:
+	case DAOS_METRICS_DIST_RP8:
 		return 8;
-	case DAOS_METRICS_IO_RP12:
+	case DAOS_METRICS_DIST_RP12:
 		return 12;
-	case DAOS_METRICS_IO_RP16:
+	case DAOS_METRICS_DIST_RP16:
 		return 16;
-	case DAOS_METRICS_IO_RP24:
+	case DAOS_METRICS_DIST_RP24:
 		return 24;
-	case DAOS_METRICS_IO_RP32:
+	case DAOS_METRICS_DIST_RP32:
 		return 32;
-	case DAOS_METRICS_IO_RP48:
+	case DAOS_METRICS_DIST_RP48:
 		return 48;
-	case DAOS_METRICS_IO_RP64:
+	case DAOS_METRICS_DIST_RP64:
 		return 64;
-	case DAOS_METRICS_IO_RP128:
+	case DAOS_METRICS_DIST_RP128:
 		return 128;
 	default:
 		break;
@@ -442,12 +455,54 @@ get_rp_factor(int ptype)
 	return 1;
 }
 
+static inline daos_size_t
+get_ec_singlevalue_size(int size, int k , int p)
+{
+	if (size <= OBJ_EC_SINGV_EVENDIST_SZ(k))
+		return (p + 1) * size;
+	else
+		return ((size * (p + k)) / k);
+};
+
+static daos_size_t
+get_ec_factored_size(daos_size_t size, int factor)
+{
+	assert_int_equal(factor == DAOS_METRICS_DIST_ECU, 0);
+	switch (factor) {
+		case DAOS_METRICS_DIST_EC2P1:
+			return get_ec_singlevalue_size(size, 2, 1);
+		case DAOS_METRICS_DIST_EC2P2:
+			return get_ec_singlevalue_size(size, 2, 2);
+		case DAOS_METRICS_DIST_EC4P1:
+			return get_ec_singlevalue_size(size, 4, 1);
+		case DAOS_METRICS_DIST_EC4P2:
+			return get_ec_singlevalue_size(size, 4, 2);
+		case DAOS_METRICS_DIST_EC8P1:
+			return get_ec_singlevalue_size(size, 8, 1);
+		case DAOS_METRICS_DIST_EC8P2:
+			return get_ec_singlevalue_size(size, 8, 2);
+		case DAOS_METRICS_DIST_EC16P1:
+			return get_ec_singlevalue_size(size, 16, 1);
+		case DAOS_METRICS_DIST_EC16P2:
+			return get_ec_singlevalue_size(size, 16, 2);
+		default:
+			assert_int_equal(factor == DAOS_METRICS_DIST_ECU, 1);
+			break;
+	}
+	/* won't reach here */
+	return 0;
+
+}
+
 static void
-acct_obj_update(int cnt, daos_size_t size, int ptype)
+acct_obj_update(int cnt, daos_size_t size, int ptype, int factor, int is_part)
 {
 	int bkt;
 
-	size *= get_rp_factor(ptype);
+	if (ptype == 0)
+		size *= get_rp_factor(factor);
+	else if (ptype == 1) /* EC Single Value */
+		size = get_ec_factored_size(size, factor);
 
 	cal_obj_cntrs->u.arc_obj_cntrs.orc_update_cnt.mc_success += cnt;
 
@@ -461,13 +516,21 @@ acct_obj_update(int cnt, daos_size_t size, int ptype)
 	cal_obj_up_stat->u.st_obj_update.st_sum += size*cnt;
 	cal_obj_up_stat->u.st_obj_update.st_sum_of_squares += size*size*cnt*cnt;
 
-	cal_obj_iodbz->u.dt_bsz.ids_updatesz += size*cnt;
 	bkt = get_io_bktbsz(size);
-	cal_obj_iodbz->u.dt_bsz.ids_updatecnt_bkt[bkt] += cnt;
+	cal_obj_dist_iosz->u.md_iosz[bkt].ids_updatecnt += cnt;
 
-	cal_obj_iodbp->u.dt_bpt.idp_updatesz += size;
-	cal_obj_iodbp->u.dt_bpt.idp_updatecnt_bkt[ptype] += cnt;
-	cal_obj_iodbp->u.dt_bpt.idp_updatesz_bkt[ptype] += size*cnt;
+	if (ptype == 0) { /* RP */
+		cal_obj_dist_uprp->u.md_uprp[factor].udrp_updatecnt += cnt;
+		cal_obj_dist_uprp->u.md_uprp[factor].udrp_updatesz += size*cnt;
+	} else { /* EC ptype == 1 => single value, ptype == 2 => array*/
+		if (is_part) {
+			cal_obj_dist_upec->u.md_upec[factor].udec_part_updatecnt += cnt;
+			cal_obj_dist_upec->u.md_upec[factor].udec_part_updatesz += size*cnt;
+		} else {
+			cal_obj_dist_upec->u.md_upec[factor].udec_full_updatecnt += cnt;
+			cal_obj_dist_upec->u.md_upec[factor].udec_full_updatesz += size*cnt;
+		}
+	}
 }
 
 static void
@@ -487,9 +550,8 @@ acct_obj_fetch(int cnt, daos_size_t size, int ptype)
 	cal_obj_fh_stat->u.st_obj_fetch.st_sum += size*cnt;
 	cal_obj_fh_stat->u.st_obj_fetch.st_sum_of_squares += size*size*cnt;
 
-	cal_obj_iodbz->u.dt_bsz.ids_fetchsz += size*cnt;
 	bkt = get_io_bktbsz(size);
-	cal_obj_iodbz->u.dt_bsz.ids_fetchcnt_bkt[bkt] += cnt;
+	cal_obj_dist_iosz->u.md_iosz[bkt].ids_fetchcnt += cnt;
 }
 
 /** Pool Tests */
@@ -2061,7 +2123,7 @@ co_snapshot(void **state)
 		printf("Creating snap %d\n", i);
 		insert_single("dkey1", "akey1", 0, "data",
 		       strlen("data") + 1, DAOS_TX_NONE, &req);
-		acct_obj_update(1, strlen("data")+1, DAOS_METRICS_IO_RP2);
+		acct_obj_update(1, strlen("data")+1, 0, DAOS_METRICS_DIST_RP2, 0);
 		if (i & 0x1) {
 			rc = daos_cont_create_snap(arg->coh, &epoch_in[i], NULL, NULL);
 			assert_rc_equal(rc, 0);
@@ -2075,7 +2137,7 @@ co_snapshot(void **state)
 	}
 	insert_single("dkey1", "akey1", 0, "data",
 	       strlen("DATA") + 1, DAOS_TX_NONE, &req);
-	acct_obj_update(1, strlen("data")+1, DAOS_METRICS_IO_RP2);
+	acct_obj_update(1, strlen("data")+1, 0, DAOS_METRICS_DIST_RP2, 0);
 
 	epr.epr_lo = epoch_in[2];
 	epr.epr_hi = epoch_in[2];
@@ -2148,13 +2210,13 @@ io_var_idx_offset(void **state)
 		/** Insert */
 		insert_single("var_idx_off_d", "var_idx_off_a", offset, "data",
 		       strlen("data") + 1, DAOS_TX_NONE, &req);
-		acct_obj_update(1, strlen("data")+1, DAOS_METRICS_IO_RP2);
+		acct_obj_update(1, strlen("data")+1, 0, DAOS_METRICS_DIST_RP2, 0);
 
 		/** Lookup */
 		memset(buf, 0, 10);
 		lookup_single("var_idx_off_d", "var_idx_off_a", offset,
 			      buf, 10, DAOS_TX_NONE, &req);
-		acct_obj_fetch(1, strlen("data")+1, DAOS_METRICS_IO_RP2);
+		acct_obj_fetch(1, strlen("data")+1, DAOS_METRICS_DIST_RP2);
 		assert_int_equal(req.iod[0].iod_size, strlen(buf) + 1);
 
 		/** Verify data consistency */
@@ -2219,7 +2281,7 @@ io_var_rec_size(void **state)
 		insert_single(dkey, "var_rec_size_a", 0, update_buf,
 			      size, DAOS_TX_NONE, &req);
 
-		acct_obj_update(1, size, DAOS_METRICS_IO_RP2);
+		acct_obj_update(1, size, 0, DAOS_METRICS_DIST_RP2, 0);
 
 		/** Lookup */
 		memset(fetch_buf, 0, max_size);
@@ -2230,7 +2292,7 @@ io_var_rec_size(void **state)
 		/** Verify data consistency */
 		assert_memory_equal(update_buf, fetch_buf, size);
 
-		acct_obj_fetch(1, size, DAOS_METRICS_IO_RP2);
+		acct_obj_fetch(1, size, DAOS_METRICS_DIST_RP2);
 	}
 
 	D_FREE(update_buf);
@@ -2285,12 +2347,12 @@ mio_simple_internal(void **state, daos_obj_id_t oid, unsigned int size,
 static void
 mio_simple_internal_acct(unsigned int size)
 {
-	int ptype = DAOS_METRICS_IO_RP2;
+	int factor = DAOS_METRICS_DIST_RP2;
 
 	if (mdts_obj_class == OC_S1)
-		ptype = DAOS_METRICS_IO_NO_PROT;
-	acct_obj_update(1, size, ptype);
-	acct_obj_fetch(1, size, ptype);
+		factor = DAOS_METRICS_DIST_NORP;
+	acct_obj_update(1, size, 0, factor, 0);
+	acct_obj_fetch(1, size, factor);
 	cal_obj_cntrs->u.arc_obj_cntrs.orc_dkey_punch_cnt.mc_success += 1;
 }
 
@@ -2370,7 +2432,7 @@ insert_records(daos_obj_id_t oid, struct ioreq *req, char *data_buf,
 		insert_single_with_rxnr("d_key", "a_rec", idx, data_buf,
 					ENUM_IOD_SIZE, num_rec_exts,
 					DAOS_TX_NONE, req);
-		acct_obj_update(1, ENUM_IOD_SIZE*num_rec_exts, DAOS_METRICS_IO_RP2);
+		acct_obj_update(1, ENUM_IOD_SIZE*num_rec_exts, 0, DAOS_METRICS_DIST_RP2, 0);
 		idx += num_rec_exts;
 		/* Prevent records coalescing on aggregation */
 		idx += 1;
@@ -2478,12 +2540,12 @@ enumerate_simple(void **state)
 			print_message("Insert (i=%d) dkey=LARGE_KEY\n", i);
 			insert_single(large_key, "a_key", 0, "data",
 				      strlen("data") + 1, DAOS_TX_NONE, &req);
-			acct_obj_update(1, strlen("data") + 1, DAOS_METRICS_IO_RP2);
+			acct_obj_update(1, strlen("data") + 1, 0, DAOS_METRICS_DIST_RP2, 0);
 		} else {
 			/* Insert dkeys 0-999 */
 			insert_single(key, "a_key", 0, "data",
 				      strlen("data") + 1, DAOS_TX_NONE, &req);
-			acct_obj_update(1, strlen("data") + 1, DAOS_METRICS_IO_RP2);
+			acct_obj_update(1, strlen("data") + 1, 0, DAOS_METRICS_DIST_RP2, 0);
 		}
 	}
 
@@ -2560,12 +2622,12 @@ enumerate_simple(void **state)
 			print_message("Insert (i=%d) akey=LARGE_KEY\n", i);
 			insert_single("d_key", large_key, 0, "data",
 				      strlen("data") + 1, DAOS_TX_NONE, &req);
-			acct_obj_update(1, strlen("data") + 1, DAOS_METRICS_IO_RP2);
+			acct_obj_update(1, strlen("data") + 1, 0, DAOS_METRICS_DIST_RP2, 0);
 		} else {
 			/* Insert akeys 0-999 */
 			insert_single("d_key", key, 0, "data",
 				      strlen("data") + 1, DAOS_TX_NONE, &req);
-			acct_obj_update(1, strlen("data") + 1, DAOS_METRICS_IO_RP2);
+			acct_obj_update(1, strlen("data") + 1, 0, DAOS_METRICS_DIST_RP2, 0);
 		}
 	}
 
@@ -2658,7 +2720,7 @@ enumerate_simple(void **state)
 		insert_single_with_rxnr("d_key", "a_lrec", i * 128 * 1024,
 					data_buf, 1, 128 * 1024, DAOS_TX_NONE,
 					&req);
-		acct_obj_update(1, 128 * 1024*1, DAOS_METRICS_IO_RP2);
+		acct_obj_update(1, 128 * 1024*1, 0, DAOS_METRICS_DIST_RP2, 0);
 	}
 	key_nr = iterate_records(&req, "d_key", "a_lrec", 1);
 	print_message("key_nr = %d\n", key_nr);
@@ -2718,7 +2780,7 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		insert_single_with_rxnr(dkeys[i], "akey",/*idx*/ 0, data_buf,
 					PUNCH_IOD_SIZE, num_rec_exts,
 					DAOS_TX_NONE, &req);
-		acct_obj_update(1, num_rec_exts*PUNCH_IOD_SIZE, DAOS_METRICS_IO_RP2);
+		acct_obj_update(1, num_rec_exts*PUNCH_IOD_SIZE, 0, DAOS_METRICS_DIST_RP2, 0);
 	}
 	/* Insert a few more unique akeys at the first dkey */
 	num_rec_exts = PUNCH_NVME_NUM_EXTS;
@@ -2727,13 +2789,13 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 	insert_single_with_rxnr(dkeys[0], "akey0",/*idx*/ 0, data_buf,
 				PUNCH_IOD_SIZE, num_rec_exts, DAOS_TX_NONE,
 				&req);
-	acct_obj_update(1, num_rec_exts*PUNCH_IOD_SIZE, DAOS_METRICS_IO_RP2);
+	acct_obj_update(1, num_rec_exts*PUNCH_IOD_SIZE, 0, DAOS_METRICS_DIST_RP2, 0);
 	print_message("\tinsert dkey:%s, akey:'akey1', rx_nr:%d\n",
 		      dkeys[0], num_rec_exts);
 	insert_single_with_rxnr(dkeys[0], "akey1",/*idx*/ 0, data_buf,
 				PUNCH_IOD_SIZE, num_rec_exts, DAOS_TX_NONE,
 				&req);
-	acct_obj_update(1, num_rec_exts*PUNCH_IOD_SIZE, DAOS_METRICS_IO_RP2);
+	acct_obj_update(1, num_rec_exts*PUNCH_IOD_SIZE, 0, DAOS_METRICS_DIST_RP2, 0);
 
 	/**
 	 * Punch records.
@@ -2744,12 +2806,12 @@ punch_simple_internal(void **state, daos_obj_id_t oid)
 		      dkeys[0], num_rec_exts);
 	punch_rec_with_rxnr(dkeys[0], "akey0", /*idx*/0, num_rec_exts,
 			    DAOS_TX_NONE, &req);
-	acct_obj_update(1, 0, DAOS_METRICS_IO_RP2);
+	acct_obj_update(1, 0, 0, DAOS_METRICS_DIST_RP2, 0);
 	print_message("\tpunch dkey:%s, akey:'akey1', rx_nr:%d\n",
 			dkeys[0], num_rec_exts);
 	punch_rec_with_rxnr(dkeys[0], "akey1", /*idx*/0, num_rec_exts,
 			    DAOS_TX_NONE, &req);
-	acct_obj_update(1, 0, DAOS_METRICS_IO_RP2);
+	acct_obj_update(1, 0, 0, DAOS_METRICS_DIST_RP2, 0);
 
 	/**
 	 * Punch akeys (along with 50% of records) from object.
@@ -2849,12 +2911,12 @@ io_manyrec_internal(void **state, daos_obj_id_t oid, unsigned int size,
 	/** Insert */
 	insert(dkey, MANYREC_NUMRECS, (const char **)akeys,
 	       rec_size, rx_nr, offset, (void **)rec, DAOS_TX_NONE, &req, 0);
-	acct_obj_update(1, tsize, DAOS_METRICS_IO_RP2);
+	acct_obj_update(1, tsize, 0, DAOS_METRICS_DIST_RP2, 0);
 
 	/** Lookup */
 	lookup(dkey, MANYREC_NUMRECS, (const char **)akeys, offset, rec_size,
 	       (void **)val, val_size, DAOS_TX_NONE, &req, false);
-	acct_obj_fetch(1, tsize, DAOS_METRICS_IO_RP2);
+	acct_obj_fetch(1, tsize, DAOS_METRICS_DIST_RP2);
 
 	/** Verify data consistency */
 	for (i = 0; i < MANYREC_NUMRECS; i++) {
@@ -2961,17 +3023,17 @@ io_obj_key_query(void **state)
 	test_metrics_snapshot();
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
-	acct_obj_update(1, sizeof(update_var), DAOS_METRICS_IO_NO_PROT);
+	acct_obj_update(1, sizeof(update_var), 0, DAOS_METRICS_DIST_NORP, 0);
 
 	dkey_val = 10;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
-	acct_obj_update(1, sizeof(update_var), DAOS_METRICS_IO_NO_PROT);
+	acct_obj_update(1, sizeof(update_var), 0, DAOS_METRICS_DIST_NORP, 0);
 
 	recx.rx_idx = 50;
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
 	assert_rc_equal(rc, 0);
-	acct_obj_update(1, sizeof(update_var), DAOS_METRICS_IO_NO_PROT);
+	acct_obj_update(1, sizeof(update_var), 0, DAOS_METRICS_DIST_NORP, 0);
 
 	/*
 	 * Not essential to this test, opening a TX helps us exercise
@@ -3078,8 +3140,9 @@ io_obj_mt(void **state)
 	daos_metrics_ucntrs_t    obj_cntrs;
 	daos_metrics_ustats_t    obj_up_stat;
 	daos_metrics_ustats_t    obj_fh_stat;
-	daos_metrics_udists_t    obj_iodbz;
-	daos_metrics_udists_t    obj_iodbp;
+	daos_metrics_udists_t    obj_dist_iosz;
+	daos_metrics_udists_t    obj_dist_uprp;
+	daos_metrics_udists_t    obj_dist_upec;
 
 	if (metrics_disabled)
 		skip();
@@ -3106,8 +3169,9 @@ io_obj_mt(void **state)
 	memcpy(&obj_cntrs, cal_obj_cntrs, sizeof(daos_metrics_ucntrs_t));
 	memcpy(&obj_up_stat, cal_obj_up_stat, sizeof(daos_metrics_ustats_t));
 	memcpy(&obj_fh_stat, cal_obj_fh_stat, sizeof(daos_metrics_ustats_t));
-	memcpy(&obj_iodbz, cal_obj_iodbz, sizeof(daos_metrics_udists_t));
-	memcpy(&obj_iodbp, cal_obj_iodbp, sizeof(daos_metrics_udists_t));
+	memcpy(&obj_dist_iosz, cal_obj_dist_iosz, sizeof(daos_metrics_udists_t));
+	memcpy(&obj_dist_uprp, cal_obj_dist_uprp, sizeof(daos_metrics_udists_t));
+	memcpy(&obj_dist_upec, cal_obj_dist_upec, sizeof(daos_metrics_udists_t));
 	test_metrics_snapshot();
 	pthread_barrier_wait(&bar);
 	print_message("Waiting for threads to exit\n");
@@ -3124,12 +3188,13 @@ io_obj_mt(void **state)
 	memcpy(cal_obj_cntrs, &obj_cntrs, sizeof(daos_metrics_ucntrs_t));
 	memcpy(cal_obj_up_stat, &obj_up_stat, sizeof(daos_metrics_ustats_t));
 	memcpy(cal_obj_fh_stat, &obj_fh_stat, sizeof(daos_metrics_ustats_t));
-	memcpy(cal_obj_iodbz, &obj_iodbz, sizeof(daos_metrics_udists_t));
-	memcpy(cal_obj_iodbp, &obj_iodbp, sizeof(daos_metrics_udists_t));
+	memcpy(cal_obj_dist_iosz, &obj_dist_iosz, sizeof(daos_metrics_udists_t));
+	memcpy(cal_obj_dist_uprp, &obj_dist_uprp, sizeof(daos_metrics_udists_t));
+	memcpy(cal_obj_dist_upec, &obj_dist_upec, sizeof(daos_metrics_udists_t));
 	test_metrics_compare();
 }
 
-void
+static void
 io_obj_rp(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -3142,11 +3207,17 @@ io_obj_rp(void **state)
 	daos_size_t	 size;
 	daos_obj_id_t	 oid;
 
+	if (metrics_disabled)
+		skip();
+	if (arg->myrank != 0)
+		return;
+
 	for (i = 0; i < N_RP; i++) {
 		test_metrics_snapshot();
 		if (prot_rp[i].num_nodes > total_nodes)
 			break;
-		print_message("Testing io with RP nodes set to %d\n", prot_rp[i].num_nodes);
+		print_message("Testing io (single value single target) with RP nodes set to %d\n",
+				prot_rp[i].num_nodes);
 		size = IO_SIZE_NVME + random()%IO_SIZE_NVME;
 		oid = daos_test_oid_gen(arg->coh, prot_rp[i].oclass, 0, 0, arg->myrank);
 		ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
@@ -3159,7 +3230,7 @@ io_obj_rp(void **state)
 
 		/** Insert */
 		insert_single(dkey, akey, 0, update_buf, size, DAOS_TX_NONE, &req);
-		acct_obj_update(1, size, prot_rp[i].mclass);
+		acct_obj_update(1, size, 0, prot_rp[i].mclass, 0);
 
 		/** Lookup */
 		memset(fetch_buf, 0, size);
@@ -3177,6 +3248,190 @@ io_obj_rp(void **state)
 		ioreq_fini(&req);
 		test_metrics_compare();
 	}
+}
+
+static void
+io_obj_ec_single(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	 req;
+	int		 i;
+	char		*fetch_buf;
+	char		*update_buf;
+	char		*akey = "akey";
+	char		*dkey = "dkey";
+	daos_size_t	 size;
+	daos_obj_id_t	 oid;
+
+	if (metrics_disabled)
+		skip();
+	if (arg->myrank != 0)
+		return;
+
+	for (i = 0; i < N_EC; i++) {
+		test_metrics_snapshot();
+		if (prot_ec[i].num_nodes > total_nodes)
+			break;
+		print_message("Testing io (single value) with EC nodes set to %d\n",
+				prot_ec[i].num_nodes);
+		/** Testing small size */
+		size = 32;
+		oid = daos_test_oid_gen(arg->coh, prot_ec[i].oclass, 0, 0, arg->myrank);
+		ioreq_init(&req, arg->coh, oid, DAOS_IOD_SINGLE, arg);
+
+		D_ALLOC(fetch_buf, size);
+		assert_non_null(fetch_buf);
+		D_ALLOC(update_buf, size);
+		assert_non_null(update_buf);
+		dts_buf_render(update_buf, size);
+
+		/** Insert */
+		insert_single(dkey, akey, 0, update_buf, size, DAOS_TX_NONE, &req);
+		acct_obj_update(1, size, 1, prot_ec[i].mclass, 0);
+
+		/** Lookup */
+		memset(fetch_buf, 0, size);
+		lookup_single(dkey, akey, 0, fetch_buf, size, DAOS_TX_NONE, &req);
+		acct_obj_fetch(1, size, prot_ec[i].mclass);
+
+		/** Verify data consistency */
+		if (!daos_obj_is_echo(oid)) {
+			assert_int_equal(req.iod[0].iod_size, size);
+			assert_memory_equal(update_buf, fetch_buf, size);
+		}
+
+		D_FREE(update_buf);
+		D_FREE(fetch_buf);
+		ioreq_fini(&req);
+		test_metrics_compare();
+	}
+
+}
+
+static void
+io_obj_ec_array(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	 req;
+	int		 i;
+	char		*fetch_buf;
+	char		*update_buf;
+	char		*akey = "akey";
+	char		*dkey = "dkey";
+	daos_size_t	 size;
+	daos_obj_id_t	 oid;
+	daos_prop_t	*props;
+	daos_recx_t	 recxs;
+	uuid_t		 uuid;
+	daos_handle_t	 coh;
+	daos_cont_info_t info;
+	int		 rc;
+
+	if (metrics_disabled)
+		skip();
+	if (arg->myrank != 0)
+		return;
+
+	/* Set the container propery for ec cell to 4K */
+	props = daos_prop_alloc(1);
+	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_EC_CELL_SZ;
+	props->dpp_entries[0].dpe_val = (4 << 10);
+
+	/** container uuid */
+        uuid_generate(uuid);
+	rc = daos_cont_create(arg->pool.poh, uuid, props, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_open(arg->pool.poh, uuid, DAOS_COO_RW, &coh, &info, NULL);
+	assert_rc_equal(rc, 0);
+
+	for (i = 0; i < N_EC; i++) {
+		test_metrics_snapshot();
+		if (prot_ec[i].num_nodes > total_nodes)
+			break;
+		print_message("Testing array partial stripe update with EC set to %d + %d \n",
+				prot_ec[i].num_nodes - prot_ec[i].parity_info,
+				prot_ec[i].parity_info);
+		/** Testing Partial stripe */
+		size = (4 << 10);
+		recxs.rx_idx = 0;
+		recxs.rx_nr = size;
+		oid = daos_test_oid_gen(coh, prot_ec[i].oclass, 0, 0, arg->myrank);
+		ioreq_init(&req, coh, oid, DAOS_IOD_ARRAY, arg);
+
+		D_ALLOC(fetch_buf, size);
+		assert_non_null(fetch_buf);
+		D_ALLOC(update_buf, size);
+		assert_non_null(update_buf);
+		dts_buf_render(update_buf, size);
+
+		/** Insert */
+		insert_single_with_rxnr(dkey, akey, 0, update_buf, 1, size, DAOS_TX_NONE, &req);
+		acct_obj_update(1, size * (1 + prot_ec[i].parity_info), 2, prot_ec[i].mclass, 1);
+
+		/** Lookup */
+		memset(fetch_buf, 0, size);
+		lookup_recxs(dkey, akey, 1, DAOS_TX_NONE, &recxs, 1, fetch_buf, size, &req);
+		acct_obj_fetch(1, size, prot_ec[i].mclass);
+
+		/** Verify data consistency */
+		if (!daos_obj_is_echo(oid)) {
+			/*assert_int_equal(req.iod[0].iod_size, size); */
+			assert_memory_equal(update_buf, fetch_buf, size);
+		}
+
+		D_FREE(update_buf);
+		D_FREE(fetch_buf);
+		ioreq_fini(&req);
+		test_metrics_compare();
+	}
+
+	for (i = 0; i < N_EC; i++) {
+		test_metrics_snapshot();
+		if (prot_ec[i].num_nodes > total_nodes)
+			break;
+		print_message("Testing array full stripe update with EC set to %d + %d \n",
+				prot_ec[i].num_nodes - prot_ec[i].parity_info,
+				prot_ec[i].parity_info);
+		/** Testing Full stripe */
+		size = (4ul << 10) * (prot_ec[i].num_nodes - prot_ec[i].parity_info);
+		recxs.rx_idx = 0;
+		recxs.rx_nr = size;
+		oid = daos_test_oid_gen(coh, prot_ec[i].oclass, 0, 0, arg->myrank);
+		ioreq_init(&req, coh, oid, DAOS_IOD_ARRAY, arg);
+
+		D_ALLOC(fetch_buf, size);
+		assert_non_null(fetch_buf);
+		D_ALLOC(update_buf, size);
+		assert_non_null(update_buf);
+		dts_buf_render(update_buf, size);
+
+		/** Insert */
+		insert_single_with_rxnr(dkey, akey, 0, update_buf, 1, size, DAOS_TX_NONE, &req);
+		acct_obj_update(1, (4ul << 10) * prot_ec[i].num_nodes, 2, prot_ec[i].mclass, 0);
+
+		/** Lookup */
+		memset(fetch_buf, 0, size);
+		lookup_recxs(dkey, akey, 1, DAOS_TX_NONE, &recxs, 1, fetch_buf, size, &req);
+		/** Lookup fetches from all data nodes */
+		acct_obj_fetch((prot_ec[i].num_nodes - prot_ec[i].parity_info), (4ul << 10),
+				prot_ec[i].mclass);
+
+		/** Verify data consistency */
+		if (!daos_obj_is_echo(oid)) {
+			/*assert_int_equal(req.iod[0].iod_size, size); */
+			assert_memory_equal(update_buf, fetch_buf, size);
+		}
+
+		D_FREE(update_buf);
+		D_FREE(fetch_buf);
+		ioreq_fini(&req);
+		test_metrics_compare();
+	}
+	rc = daos_cont_close(coh, NULL);
+	assert_rc_equal(rc, 0);
+	rc = daos_cont_destroy(arg->pool.poh, uuid, 1, NULL);
+	assert_rc_equal(rc, 0);
+
 }
 
 static const struct CMUnitTest cm_tests[] = {
@@ -3227,7 +3482,11 @@ static const struct CMUnitTest cm_tests[] = {
 	{ "M_IO9: testing io multithreaded ",
 	  io_obj_mt, async_disable, test_case_teardown},
 	{ "M_IO10: testing io stats with rp",
-	  io_obj_rp, async_disable, test_case_teardown}
+	  io_obj_rp, async_disable, test_case_teardown},
+	{ "M_IO11: testing io stats single obj with ec",
+	  io_obj_ec_single, async_disable, test_case_teardown},
+	{ "M_IO12: testing io stats array obj with ec",
+	  io_obj_ec_array, async_disable, test_case_teardown}
 };
 
 static int

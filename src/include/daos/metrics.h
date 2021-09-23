@@ -20,8 +20,9 @@ typedef struct {
 	d_list_t			list;
 	daos_metrics_stat_t		update_stat;
 	daos_metrics_stat_t		fetch_stat;
-	daos_metrics_iodist_bsz_t	ids;
-	daos_metrics_iodist_bpt_t	idp;
+	daos_metrics_iodist_sz_t	idsz[DAOS_METRICS_DIST_IO_BKT_COUNT];
+	daos_metrics_updist_rp_t	udrp[DAOS_METRICS_DIST_RP_BKT_COUNT];
+	daos_metrics_updist_ec_t	udec[DAOS_METRICS_DIST_EC_BKT_COUNT];
 } dc_metrics_tls_data_t;
 
 static inline void

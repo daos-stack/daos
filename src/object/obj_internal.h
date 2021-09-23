@@ -175,7 +175,7 @@ struct obj_reasb_req {
 	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
 					 orr_fail_alloc:1,
 	/* for use by daos client side metrics */
-					 orr_full_stripe_only:1;
+					 orr_part_stripe:1;
 };
 
 static inline void
