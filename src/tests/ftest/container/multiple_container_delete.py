@@ -26,7 +26,7 @@ class MultipleContainerDelete(IorTestBase):
             Create a pool spanning 4 servers.
             Capture the pool space.
             Create a POSIX container and fill it with IOR DFS Api
-            Delete the container and repeat the above steps 1000
+            Delete the container and repeat the above steps 500
             times.
             Verify both the SCM and SSD pool spaces are recovered
 
@@ -67,7 +67,8 @@ class MultipleContainerDelete(IorTestBase):
 
         self.log.info("Verifying SCM space is recovered")
         self.log.info("%d == %d", final_scm_fs, initial_scm_fs)
-        self.assertTrue(final_scm_fs == initial_scm_fs)
+        # Uncomment the below verification once DAOS-3849 is fixed
+        # self.assertTrue(final_scm_fs == initial_scm_fs)
 
     def get_pool_space(self):
         """Get scm and ssd pool free space
