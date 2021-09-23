@@ -539,16 +539,100 @@ allocate_rmv_ent(const struct evt_extent *ext, daos_epoch_t epoch, uint16_t mino
 	return rm_ent;
 }
 
-static struct agg_rmv_ent *
+static inline void
+recx2ext(const daos_recx_t *recx, struct evt_extent *ext)
+{
+	D_ASSERT(recx->rx_nr > 0);
+	ext->ex_lo = recx->rx_idx;
+	ext->ex_hi = recx->rx_idx + recx->rx_nr - 1;
+}
+
+static inline int
+delete_evt_entry(struct vos_obj_iter *oiter, const vos_iter_entry_t *entry,
+		 const char *desc)
+{
+	struct evt_rect	rect;
+	int		rc;
+
+	recx2ext(&entry->ie_orig_recx, &rect.rc_ex);
+	rect.rc_epc = entry->ie_epoch;
+	rect.rc_minor_epc = entry->ie_minor_epc;
+
+	rc = evt_delete(oiter->it_hdl, &rect, NULL);
+	if (rc)
+		D_ERROR("Delete %s EV entry "DF_RECT" error: "DF_RC"\n",
+			desc, DP_RECT(&rect), DP_RC(rc));
+	return rc;
+}
+
+static int
+delete_removals(struct agg_merge_window *mw, struct vos_obj_iter *oiter, struct agg_rmv_ent *rm_ent)
+{
+	struct agg_rmv_ent	*rm_cont, *rm_tmp;
+	struct evt_rect		 rect;
+	int			 rc = 0;
+
+	rect = rm_ent->re_rect;
+
+	if (d_list_empty(&rm_ent->re_contained)) {
+		D_DEBUG(DB_EPC, "Removing physical removal record: "DF_RECT"\n",
+			DP_RECT(&rm_ent->re_rect));
+		rc = evt_delete(oiter->it_hdl, &rect, NULL);
+	} else {
+		D_DEBUG(DB_EPC, "Removing logical removal record: "DF_RECT"\n",
+			DP_RECT(&rm_ent->re_rect));
+		d_list_for_each_entry_safe(rm_cont, rm_tmp, &mw->mw_rmv_ents, re_link) {
+			D_DEBUG(DB_EPC, "Removing physical removal record: "DF_RECT"\n",
+				DP_RECT(&rm_cont->re_rect));
+			rc = evt_delete(oiter->it_hdl, &rm_cont->re_rect, NULL);
+			if (rc != 0)
+				break;
+			d_list_del(&rm_cont->re_link);
+			D_FREE(rm_cont);
+		}
+	}
+
+	if (rc) {
+		D_ERROR("Remove "DF_RECT" error: "DF_RC"\n",
+			DP_RECT(&rect), DP_RC(rc));
+		return rc;
+	}
+
+	d_list_del(&rm_ent->re_link);
+	D_FREE(rm_ent);
+	D_ASSERT(mw->mw_rmv_cnt > 0);
+	mw->mw_rmv_cnt--;
+
+	return 0;
+}
+
+static int
 enqueue_rmv_ent(struct agg_merge_window *mw, const struct evt_extent *ext,
-		const vos_iter_entry_t *entry)
+		const vos_iter_entry_t *entry, struct vos_obj_iter *oiter)
 {
 	struct agg_rmv_ent	*rm_ent, *rm_ent2, *rm_ent3;
 	d_list_t		*list = &mw->mw_rmv_ents;
+	int			 rc;
+
+	if (mw->mw_phy_cnt == 0) {
+		/** Keep this simple for now.   If we have no physical extents in current window,
+		 *  we can immediately delete removal records that are no longer relevant.  We
+		 *  can potentially make this better.
+		 */
+		d_list_for_each_entry_safe(rm_ent, rm_ent2, &mw->mw_rmv_ents, re_link) {
+			if (rm_ent->re_rect.rc_ex.ex_hi >= ext->ex_lo)
+				break;
+
+			rc = delete_removals(mw, oiter, rm_ent);
+
+			if (rc != 0)
+				return rc;
+		}
+	}
 
 	rm_ent = allocate_rmv_ent(ext, entry->ie_epoch, entry->ie_minor_epc);
 	if (rm_ent == NULL)
-		return NULL;
+		return -DER_NOMEM;
 
 	d_list_for_each_entry_reverse(rm_ent2, &mw->mw_rmv_ents, re_link) {
 		if (rm_ent->re_rect.rc_epc != rm_ent2->re_rect.rc_epc)
@@ -566,7 +650,7 @@ enqueue_rmv_ent(struct agg_merge_window *mw, const struct evt_extent *ext,
 						   rm_ent2->re_rect.rc_minor_epc);
 			if (rm_ent3 == NULL) {
 				D_FREE(rm_ent);
-				return NULL;
+				return -DER_NOMEM;
 			}
 			D_DEBUG(DB_EPC, "Removal record "DF_RECT" duplicated\n",
 				DP_RECT(&rm_ent2->re_rect));
@@ -581,7 +665,7 @@ enqueue_rmv_ent(struct agg_merge_window *mw, const struct evt_extent *ext,
 enqueue:
 	d_list_add_tail(&rm_ent->re_link, list);
 
-	return rm_ent;
+	return 0;
 }
 
 static inline bool
@@ -1341,7 +1425,8 @@ insert_segments(daos_handle_t ih, struct agg_merge_window *mw,
 		if (phy_ent->pe_off != 0)
 			rect.rc_ex.ex_lo += phy_ent->pe_off;
 
-		D_ASSERT(rect.rc_ex.ex_lo <= rect.rc_ex.ex_hi);
+		D_ASSERTF(rect.rc_ex.ex_lo <= rect.rc_ex.ex_hi, "phy_ent "DF_RECT" off="DF_X64"\n",
+			  DP_RECT(&phy_ent->pe_rect), phy_ent->pe_off);
 		D_ASSERT(phy_ent->pe_remove || rect.rc_ex.ex_lo <= mw->mw_ext.ex_hi);
 
 		/*
@@ -1688,14 +1773,6 @@ enqueue_lgc_ent(struct agg_merge_window *mw, struct evt_extent *lgc_ext,
 	return 0;
 }
 
-static inline void
-recx2ext(daos_recx_t *recx, struct evt_extent *ext)
-{
-	D_ASSERT(recx->rx_nr > 0);
-	ext->ex_lo = recx->rx_idx;
-	ext->ex_hi = recx->rx_idx + recx->rx_nr - 1;
-}
-
 static void
 close_merge_window(struct agg_merge_window *mw, int rc)
 {
@@ -1762,24 +1839,6 @@ lookup_phy_ent(struct agg_merge_window *mw, const struct evt_extent *phy_ext,
 	return NULL;
 }
 
-static inline int
-delete_evt_entry(struct vos_obj_iter *oiter, vos_iter_entry_t *entry,
-		 unsigned int *acts, const char *desc)
-{
-	struct evt_rect	rect;
-	int		rc;
-
-	recx2ext(&entry->ie_orig_recx, &rect.rc_ex);
-	rect.rc_epc = entry->ie_epoch;
-	rect.rc_minor_epc = entry->ie_minor_epc;
-
-	rc = evt_delete(oiter->it_hdl, &rect, NULL);
-	if (rc)
-		D_ERROR("Delete %s EV entry "DF_RECT" error: "DF_RC"\n",
-			desc, DP_RECT(&rect), DP_RC(rc));
-	return rc;
-}
-
 static int
 join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		  vos_iter_entry_t *entry, unsigned int *acts)
@@ -1808,7 +1867,7 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 		D_DEBUG(DB_EPC, "Delete aborted EV entry "DF_EXT"@"DF_X64"\n",
 			DP_EXT(&phy_ext), entry->ie_epoch);
 
-		rc = delete_evt_entry(oiter, entry, acts, "aborted");
+		rc = delete_evt_entry(oiter, entry, "aborted");
 		if (rc)
 			return rc;
 		/** We just need an alternative error code.  Use -DER_TX_RESTART
@@ -1845,19 +1904,16 @@ join_merge_window(daos_handle_t ih, struct agg_merge_window *mw,
 			  DP_EXT(&lgc_ext), DP_EXT(&phy_ext));
 		D_ASSERT(entry->ie_vis_flags & VOS_VIS_FLAG_COVERED);
 
-		rc = delete_evt_entry(oiter, entry, acts, "covered");
+		rc = delete_evt_entry(oiter, entry, "covered");
 		if (rc)
 			return rc;
 		goto out;
 	}
 
 	if (remove) {
-		struct agg_rmv_ent	*rm_ent;
-
 		/* Enqueue removal record */
-		rm_ent = enqueue_rmv_ent(mw, &phy_ext, entry);
-		if (rm_ent == NULL) {
-			rc = -DER_NOMEM;
+		rc = enqueue_rmv_ent(mw, &phy_ext, entry, oiter);
+		if (rc != 0) {
 			D_ERROR("Enqueue rm_ent win:"DF_EXT", ent:"DF_EXT" "
 				"error: "DF_RC"\n", DP_EXT(&mw->mw_ext),
 				DP_EXT(&phy_ext), DP_RC(rc));
@@ -1990,7 +2046,7 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 		 * logical entry
 		 */
 		if (phy_ext.ex_lo == lgc_ext.ex_lo)
-			rc = delete_evt_entry(oiter, entry, acts, "discarded");
+			rc = delete_evt_entry(oiter, entry, "discarded");
 
 		/*
 		 * Sorted iteration doesn't support tree empty check, so we
