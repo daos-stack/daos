@@ -365,6 +365,13 @@ void sched_cond_wait(ABT_cond cond, ABT_mutex mutex);
  */
 uint64_t sched_cur_msec(void);
 
+/**
+ * Get current schedule sequence, by comparing the results of two
+ * sched_cur_seq() calls, we can tell if an ULT was yielding between
+ * these two calls.
+ */
+uint64_t sched_cur_seq(void);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
