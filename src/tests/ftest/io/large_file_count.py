@@ -6,7 +6,7 @@
 import re
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-
+from avocado.core.exceptions import TestFail
 
 def get_rf(oclass):
     """Return redundancy factor based on the oclass.
@@ -68,6 +68,7 @@ class LargeFileCount(MdtestBase, IorTestBase):
             rc (bool, optional): If release candidate set to true. Defaults to False.
         """
         saved_container = []
+        results = []
         apis = self.params.get("api", "/run/largefilecount/*")
         object_class = self.params.get("object_class", '/run/largefilecount/*')
         # create pool
@@ -89,20 +90,38 @@ class LargeFileCount(MdtestBase, IorTestBase):
                 if api == "DFS":
                     self.mdtest_cmd.test_dir.update("/")
                 # run mdtest
+                self.log.info("=======>>>Starting MDTEST with %s and %s", api, oclass)
                 self.container = self.add_containers(oclass)
-                self.log.info("Starting MDTEST with %s and %s", api, oclass)
-                self.execute_mdtest()
+                try:
+                    self.execute_mdtest()
+                    results.append(["PASS", str(self.mdtest_cmd)])
+                except TestFail:
+                    results.append(["FAIL", str(self.mdtest_cmd)])
                 # save the current container; to be destroyed later
-                saved_container.append(self.container)
+                if self.container is not None:
+                    saved_container.append(self.container)
                 # run ior
+                self.log.info("=======>>>Starting IOR with %s and %s", api, oclass)
                 self.container = self.add_containers(oclass)
                 self.update_ior_cmd_with_pool(False)
-                self.log.info("Starting IOR with %s and %s", api, oclass)
-                self.run_ior_with_pool(create_pool=False)
+                try:
+                    self.run_ior_with_pool(create_pool=False)
+                    results.append(["PASS", str(self.ior_cmd)])
+                except TestFail:
+                    results.append(["FAIL", str(self.ior_cmd)])
                 # save the current container
-                saved_container.append(self.container)
+                if self.container is not None:
+                    saved_container.append(self.container)
         # copy saved containers to self.container
         self.container = saved_container
+        self.log.info("=======>>>Summary of Large File Count test results:")
+        errors = False
+        for item in results:
+            self.log.info("  %s  %s", item[0], item[1])
+            if item[0] == "FAIL":
+                errors = True
+        if errors:
+            self.fail("Test FAILED")
 
     def test_largefilecount(self):
         """Jira ID: DAOS-3845.
