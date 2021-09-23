@@ -186,14 +186,13 @@ main(int argc, char **argv)
 		int j;
 
 		for (j = 0; j < handles_per_pool; j++) {
-			rc = daos_pool_connect(pool_uuids[i], NULL, DAOS_PC_RW,
+			char str[37];
+
+			uuid_unparse(pool_uuids[i], str);
+			rc = daos_pool_connect(str, NULL, DAOS_PC_RW,
 					       &pool_handles[i][j], NULL, NULL);
 			if (rc != 0) {
-				char		uuid_str[64];
-
-				uuid_unparse(pool_uuids[i], uuid_str);
-				printf("Unable to connect to %s rc: %d",
-				       uuid_str, rc);
+				printf("Unable to connect to %s rc: %d", str, rc);
 				/* Force well behaved cleanup since we're
 				 * erroring out
 				 */
@@ -213,10 +212,9 @@ main(int argc, char **argv)
 		for (j = 0; j < handles_per_pool; j++) {
 			uuid_t c_uuid;
 
-			uuid_generate(c_uuid);
 			printf("Creating container using handle %" PRIu64 "\n",
 			       pool_handles[i][j].cookie);
-			rc = daos_cont_create(pool_handles[i][j], c_uuid, NULL,
+			rc = daos_cont_create(pool_handles[i][j], &c_uuid, NULL,
 					      NULL);
 			if (rc != 0) {
 				printf("Unable to create container using handle"

@@ -2228,10 +2228,8 @@ vos_update_end(daos_handle_t ioh, uint32_t pm_ver, daos_key_t *dkey, int err,
 	struct vos_dtx_cmt_ent	**dces = NULL;
 	struct vos_io_context	*ioc = vos_ioh2ioc(ioh);
 	struct umem_instance	*umem;
-	uint64_t		 time = 0;
 	bool			 tx_started = false;
 
-	VOS_TIME_START(time, VOS_UPDATE_END);
 	D_ASSERT(ioc->ic_update);
 	vos_dedup_verify_fini(ioh);
 
@@ -2329,7 +2327,6 @@ abort:
 	if (err != 0)
 		update_cancel(ioc);
 
-	VOS_TIME_END(time, VOS_UPDATE_END);
 	vos_space_unhold(vos_cont2pool(ioc->ic_cont), &ioc->ic_space_held[0]);
 
 	if (size != NULL && err == 0)

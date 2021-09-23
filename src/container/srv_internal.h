@@ -275,6 +275,7 @@ int cont_iv_entry_delete(void *ns, uuid_t pool_uuid, uuid_t cont_uuid);
 /* srv_metrics.c*/
 void *ds_cont_metrics_alloc(const char *path, int tgt_id);
 void ds_cont_metrics_free(void *data);
+int ds_cont_metrics_count(void);
 
 int cont_child_gather_oids(struct ds_cont_child *cont, uuid_t coh_uuid,
 			   daos_epoch_t epoch);
