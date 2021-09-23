@@ -2423,7 +2423,7 @@ dtx_35(void **state)
 	MPI_Barrier(MPI_COMM_WORLD);
 	if (arg->myrank == 0) {
 		print_message("reopening container to trigger DTX resync\n");
-		MUST(daos_cont_open(arg->pool.poh, arg->co_uuid, DAOS_COO_RW,
+		MUST(daos_cont_open(arg->pool.poh, arg->co_str, DAOS_COO_RW,
 				    &arg->coh, &arg->co_info, NULL));
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
