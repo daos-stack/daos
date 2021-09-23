@@ -512,11 +512,6 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 		D_ASSERTF(rc == 0, "d_log_init failed, rc=%d\n", rc);
 
 	if (use_daos_agent_env) {
-		rc = crt_group_view_create(srv_group_name, grp);
-		if (!*grp || rc != 0) {
-			D_ERROR("Failed to create group view; rc=%d\n", rc);
-			assert(0);
-		}
 		rc = crtu_dc_mgmt_net_cfg_setenv(srv_group_name);
 		if (opts.assert_on_error)
 			D_ASSERTF(rc == 0,
@@ -578,6 +573,12 @@ crtu_cli_start_basic(char *local_group_name, char *srv_group_name,
 					  "rc=%d\n", rc);
 		}
 	} else {
+		rc = crt_group_view_create(srv_group_name, grp);
+		if (!*grp || rc != 0) {
+			D_ERROR("Failed to create group view; rc=%d\n", rc);
+			assert(0);
+		}
+
 		rc = crtu_dc_mgmt_net_cfg_rank_add(srv_group_name,
 						   *grp,
 						   *crt_ctx);
