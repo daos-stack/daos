@@ -415,6 +415,11 @@ struct dss_module_metrics {
 	 */
 	void	*(*dmm_init)(const char *path, int tgt_id);
 	void	 (*dmm_fini)(void *data);
+
+	/**
+	 * Get the number of metrics allocated by this module in total (including all targets).
+	 */
+	int	 (*dmm_nr_metrics)(void);
 };
 
 /**
@@ -594,6 +599,7 @@ struct dss_module *dss_module_get(int mod_id);
 void dss_module_fini_metrics(enum dss_module_tag tag, void **metrics);
 int dss_module_init_metrics(enum dss_module_tag tag, void **metrics,
 			    const char *path, int tgt_id);
+int dss_module_nr_pool_metrics(void);
 
 /* Convert Argobots errno to DAOS ones. */
 static inline int

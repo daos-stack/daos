@@ -177,7 +177,7 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			D_GOTO(out, rc = -DER_DATA_LOSS);
 		case -DER_NONEXIST:
 			if (dtx_hlc_age2sec(dsp->dsp_epoch) >
-			    DTX_AGG_THD_AGE_LO ||
+			    dtx_agg_thd_age_lo ||
 			    DAOS_FAIL_CHECK(DAOS_DTX_UNCERTAIN)) {
 
 				/* Related DTX entry on leader does not exist.
