@@ -54,23 +54,20 @@ class MultipleContainerDelete(IorTestBase):
                 i+1, scm_fs, ssd_fs))
 
         self.log.info("Initial Free Space")
-        self.log.info("SCM = {}, SSD = {}".format(
-            initial_scm_fs, initial_ssd_fs))
+        self.log.info("SCM = %d, SSD = %d", initial_scm_fs, initial_ssd_fs)
         self.log.info("Free space after each cont create/del iteration")
         self.log.info("\n".join(out))
         final_scm_fs, final_ssd_fs = self.get_pool_space()
         self.log.info("Final free Space after all iters")
-        self.log.info("SCM = {}, SSD = {}".format(
-            final_scm_fs, final_ssd_fs))
+        self.log.info("SCM = %d, SSD = %d", final_scm_fs, final_ssd_fs)
 
         self.log.info("Verifying SSD space is recovered")
-        self.log.info("{} == {}".format(final_ssd_fs, initial_ssd_fs))
+        self.log.info("%d == %d", final_ssd_fs, initial_ssd_fs)
         self.assertTrue(final_ssd_fs == initial_ssd_fs)
 
-        # Uncomment the below verification once DAOS-3849 is fixed
-        #self.log.info("Verifying SCM space is recovered")
-        #self.log.info("{} == {}".format(final_scm_fs, initial_scm_fs)))
-        #self.assertTrue(final_scm_fs == initial_scm_fs)
+        self.log.info("Verifying SCM space is recovered")
+        self.log.info("%d == %d", final_scm_fs, initial_scm_fs)
+        self.assertTrue(final_scm_fs == initial_scm_fs)
 
     def get_pool_space(self):
         """Get scm and ssd pool free space
@@ -86,6 +83,6 @@ class MultipleContainerDelete(IorTestBase):
             scm_fs = pool_info.pi_space.ps_space.s_free[scm_index]
             ssd_fs = pool_info.pi_space.ps_space.s_free[ssd_index]
             return scm_fs, ssd_fs
-        else:
-            self.log.error("****POOL is NONE*****")
-            return 0, 0
+
+        self.log.error("****POOL is NONE*****")
+        return 0, 0
