@@ -498,7 +498,6 @@ class DaosCommand(DaosCommandBase):
             ("container", "create-snap"), pool=pool, cont=cont,
             sys_name=sys_name, snap=snap_name, epc=epoch)
 
-        # TODO: get snapshot from JSON output when available
         # Sample create-snap output.
         # snapshot/epoch 0x51e719907180000 has been created
         data = {}
@@ -556,12 +555,11 @@ class DaosCommand(DaosCommandBase):
         self._get_result(
             ("container", "list-snaps"), pool=pool, cont=cont)
 
-        # TODO: get snapshots from JSON output when available
         # Sample container list-snaps output.
         # Container's snapshots :
-        # 0x51ebe2f21500000 
-        # 0x51ebe4f5b6c0000 
-        # 0x51ebe5233780000 
+        # 0x51ebe2f21500000
+        # 0x51ebe4f5b6c0000
+        # 0x51ebe5233780000
         data = {}
         match = re.findall(r"(0x[0-9a-fA-F]+)", self.result.stdout_text)
 
