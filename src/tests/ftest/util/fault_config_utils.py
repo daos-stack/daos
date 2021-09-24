@@ -8,6 +8,9 @@
 import os
 import io
 import yaml
+from avocado import Test
+from general_utils import distribute_files, run_command, \
+                          get_clush_command
 
 # a lookup table of predefined faults
 FAULTS = {
@@ -211,34 +214,70 @@ class FaultInjectionFailed(Exception):
     """Raise if FI failed."""
 
 
-def write_fault_file(path, fault_list=None, on_the_fly_fault=None):
-    """ Write out a fault injection config file.
+class FaultInjection(Test):
+    """Fault Injection
 
-        path             --where to write the file
-        fault_list       --a list of strings identifying which predefined
-                            faults to write out
-        on_the_fly_fault --a fault dictionary that isn't predefined
-
-        Returns the name of the file.
+    :avocado: recursive
     """
-    if fault_list is None and on_the_fly_fault is None:
-        raise FaultInjectionFailed("bad parameters")
+    def __init__(self, test, fault_file):
+        super().__init__(test, fault_file)
+        self._test = test
+        self._hosts = None
+        self._fault_file = fault_file
 
-    if not os.path.exists(path):
-        os.makedirs(path)
-    fi_config = path + '/fi.yaml'
+    def write_fault_file(path, fault_list=None, on_the_fly_fault=None):
+        """ Write out a fault injection config file.
 
-    with io.open(fi_config, 'w', encoding='utf8') as outfile:
-        yaml.dump({'seed': '123'}, outfile, default_flow_style=False,
-                  allow_unicode=True)
+            path             --where to write the file
+            fault_list       --a list of strings identifying which predefined
+                                faults to write out
+            on_the_fly_fault --a fault dictionary that isn't predefined
 
-        fault_config = []
-        if fault_list is not None:
-            for fault in fault_list:
-                fault_config.append(FAULTS[fault])
-        if on_the_fly_fault is not None:
-            fault_config.append(on_the_fly_fault)
-        yaml.dump({'fault_config': fault_config}, outfile,
-                  default_flow_style=False, allow_unicode=True)
+            Returns the name of the file.
+        """
+        if fault_list is None and on_the_fly_fault is None:
+            raise FaultInjectionFailed("bad parameters")
 
-    return fi_config
+        if not os.path.exists(path):
+            os.makedirs(path)
+        fi_config = path + '/fi.yaml'
+
+        with io.open(fi_config, 'w', encoding='utf8') as outfile:
+            yaml.dump({'seed': '123'}, outfile, default_flow_style=False,
+                      allow_unicode=True)
+
+            fault_config = []
+            if fault_list is not None:
+                for fault in fault_list:
+                    fault_config.append(FAULTS[fault])
+            if on_the_fly_fault is not None:
+                fault_config.append(on_the_fly_fault)
+            yaml.dump({'fault_config': fault_config}, outfile,
+                      default_flow_style=False, allow_unicode=True)
+
+        return fi_config
+
+    def start(self):
+        # setup fau]lt injection, this MUST be before API setup
+        if self._fault_file is None:
+            fault_list = self.params.get("fault_list", '/run/faults/*')
+            if fault_list:
+                # not using workdir because the huge path was messing up
+                # orterun or something, could re-evaluate this later
+                self._fault_file = self.write_fault_file(self.tmp,
+                                                         fault_list,
+                                                         None)
+
+    def copy_fault_files(self, hosts):
+        if os.path.exists(self._fault_file):
+            self._hosts = list(hosts)
+            distribute_files(self._hosts, self._fault_file, self.tmp)
+
+    def stop(self):
+        # setup fault injection, this MUST be before API setup
+        fault_list = self.params.get("fault_list", '/run/faults/*')
+        if fault_list:
+            # Remove the fault injection files on the hosts.
+            rm_command = "{} rm -f {}".format(
+                         get_clush_command(self._hosts, "-S -v", True), self.tmp)
+            run_command(rm_command, verbose=True, raise_exception=False)

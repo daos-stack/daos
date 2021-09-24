@@ -17,7 +17,7 @@ from avocado.utils.distro import detect
 from avocado.core import exceptions
 from ast import literal_eval
 
-import fault_config_utils
+from fault_config_utils import FaultInjection
 from pydaos.raw import DaosContext, DaosLog, DaosApiError
 from command_utils_base import CommandFailure, EnvironmentVariables
 from agent_utils import DaosAgentManager, include_local_host
@@ -395,9 +395,9 @@ class TestWithoutServers(Test):
         self.cart_bin = None
         self.tmp = None
         self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
-        self.fault_file = None
         self.context = None
         self.d_log = None
+        self.fault_injection = None
 
         # Create a default TestLogger w/o a DaosLog object to prevent errors in
         # tearDown() if setUp() is not completed.  The DaosLog is added upon the
@@ -435,15 +435,11 @@ class TestWithoutServers(Test):
         self.log.debug("Shared test directory: %s", self.tmp)
         self.log.debug("Common test directory: %s", self.test_dir)
 
+
         # setup fault injection, this MUST be before API setup
-        fault_list = self.params.get("fault_list", '/run/faults/*')
-        if fault_list:
-            # not using workdir because the huge path was messing up
-            # orterun or something, could re-evaluate this later
-            self.fault_file = fault_config_utils.write_fault_file(self.tmp,
-                                                                  fault_list,
-                                                                  None)
-            os.environ["D_FI_CONFIG"] = self.fault_file
+        self.fault_injection = FaultInjection(self.test_id, None)
+        self.fault_injection.start()
+
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
@@ -452,14 +448,7 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-
-        if self.fault_file:
-            try:
-                os.remove(self.fault_file)
-            except OSError as error:
-                self._teardown_errors.append(
-                    "Error running inherited teardown(): {}".format(error))
-
+        self.fault_injection.stop()
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
@@ -646,6 +635,8 @@ class TestWithServers(TestWithoutServers):
         self.log.info("client_reservation:  %s", self.client_reservation)
         self.log.info("access_points:       %s", self.access_points)
 
+        # Copy the fault injection files to the hosts.
+        self.fault_injection.copy_fault_files(self.hostfile_clients + self.hostlist_servers)
         # List common test directory contents before running the test
         self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
@@ -1306,8 +1297,6 @@ class TestWithServers(TestWithoutServers):
                         self.test_log.info("  {}".format(error))
                         error_list.append(
                             "Error destroying pool: {}".format(error))
-
-
         return error_list
 
     def search_and_destroy_pools(self):
