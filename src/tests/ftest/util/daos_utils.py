@@ -555,7 +555,7 @@ class DaosCommand(DaosCommandBase):
         self._get_result(
             ("container", "list-snaps"), pool=pool, cont=cont)
 
-        # Sample container list-snaps output (no snapshots).
+        # Sample container list-snaps output.
         # Container's snapshots :
         # 0x51ebe2f21500000 
         # 0x51ebe4f5b6c0000 
