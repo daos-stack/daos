@@ -86,10 +86,6 @@ post_provision_config_nodes() {
         done
     fi
     if [ -n "$INST_RPMS" ]; then
-        # Remove the mellanox packages first to allow the distro packages to be installed
-        if ls -d /usr/mpi/gcc/openmpi-*; then
-            dnf -y erase openmpi opensm-libs
-        fi
         # shellcheck disable=SC2086
         time dnf -y erase $INST_RPMS
     fi
@@ -98,11 +94,17 @@ post_provision_config_nodes() {
     retry_cmd 360 dnf -y install $LSB_RELEASE
 
     # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ] && ! retry_cmd 360 dnf -y install $INST_RPMS; then
-        rc=${PIPESTATUS[0]}
-        dump_repos
-        sleep 600
-        exit "$rc"
+    if [ -n "$INST_RPMS" ]; then
+        # Install the rebuilt MLNX openmpi RPM
+        if ls -d /usr/mpi/gcc/openmpi-*; then
+            dnf -y install https://repo.dc.hpdd.intel.com/repository/raw-internal/mlnx_ofed/openmpi-4.1.2a1-1.el8.54103.x86_64.rpm
+        fi
+        if ! retry_cmd 360 dnf -y install $INST_RPMS; then
+            rc=${PIPESTATUS[0]}
+            dump_repos
+            #sleep 600
+            exit "$rc"
+        fi
     fi
 
     distro_custom
