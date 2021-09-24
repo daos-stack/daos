@@ -3930,6 +3930,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				obj_auxi_free_failed_tgt_list(obj_auxi);
 				obj_reasb_req_fini(&obj_auxi->reasb_req,
 						   obj_auxi->iod_nr);
+				obj_bulk_fini(obj_auxi);
 				memset(obj_auxi, 0, sizeof(*obj_auxi));
 			} else {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
@@ -3937,6 +3938,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				task->dt_result = 0;
 				obj_ec_recov_cb(task, obj, obj_auxi,
 						args->csum_iov);
+				obj_bulk_fini(obj_auxi);
 			}
 		} else {
 			if (obj_auxi->is_ec_obj &&
