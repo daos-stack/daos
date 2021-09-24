@@ -48,24 +48,24 @@ func TestFlags_EpochFlag(t *testing.T) {
 		"valid value hex with prefix": {
 			arg: "0x71b0717086c0000",
 			expFlag: &EpochFlag{
-				Set: true,
-				Ev:  512010778143621120,
+				Set:   true,
+				Value: 512010778143621120,
 			},
 			expString: "0x71b0717086c0000",
 		},
 		"valid value": {
 			arg: "512010778143621120",
 			expFlag: &EpochFlag{
-				Set: true,
-				Ev:  512010778143621120,
+				Set:   true,
+				Value: 512010778143621120,
 			},
 			expString: "0x71b0717086c0000",
 		},
 		"valid value large hex": {
 			arg: "0xfffffffffffffffe",
 			expFlag: &EpochFlag{
-				Set: true,
-				Ev:  18446744073709551614,
+				Set:   true,
+				Value: 18446744073709551614,
 			},
 			expString: "0xfffffffffffffffe",
 		},

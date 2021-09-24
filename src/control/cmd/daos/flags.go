@@ -34,16 +34,16 @@ func flagTestInit() (func(), error) {
 }
 
 type EpochFlag struct {
-	Set bool
-	Ev  uint64
+	Set   bool
+	Value uint64
 }
 
 func (f *EpochFlag) String() string {
-	return fmt.Sprintf("%#x", f.Ev)
+	return fmt.Sprintf("%#x", f.Value)
 }
 
 func (f *EpochFlag) UnmarshalFlag(fv string) (err error) {
-	f.Ev, err = strconv.ParseUint(fv, 0, 64)
+	f.Value, err = strconv.ParseUint(fv, 0, 64)
 	if err != nil {
 		return errors.Errorf("failed to parse %q as uint64\n", fv)
 	}
