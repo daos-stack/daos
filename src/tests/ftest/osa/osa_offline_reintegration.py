@@ -97,7 +97,7 @@ class OSAOfflineReintegration(OSAUtils):
                     # one target on a rank. Don't exclude a rank(s).
                     if (self.test_with_rf is True and val == 0):
                         output = self.dmg_command.pool_exclude(self.pool.uuid,
-                                                               rank[val], "2")
+                                                               rank[val])
                     elif (self.test_with_rf is True and val > 0):
                         continue
                     else:
@@ -134,7 +134,7 @@ class OSAOfflineReintegration(OSAUtils):
                                                                "0,2")
                 elif (self.test_with_rf is True and val == 0):
                     output = self.dmg_command.pool_reintegrate(self.pool.uuid,
-                                                               rank[val], "2")
+                                                               rank[val])
                 elif (self.test_with_rf is True and val > 0):
                     continue
                 else:
