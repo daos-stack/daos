@@ -9,12 +9,10 @@ import distro
 from avocado.core.exceptions import TestFail
 from dfuse_test_base import DfuseTestBase
 from env_modules import load_mpi
-from general_utils import DaosTestError
-from general_utils import run_command
+from general_utils import DaosTestError, run_command
 
 
 class PosixSimul(DfuseTestBase):
-    # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-ancestors
     """Tests a posix container with simul
 
