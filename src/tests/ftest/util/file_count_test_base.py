@@ -35,7 +35,7 @@ def get_rf(oclass):
 # pylint: disable=attribute-defined-outside-init
 class FileCountTestBase(MdtestBase, IorTestBase):
     # pylint: disable=too-many-ancestors
-    """Test class Description: Runs IOR and MDTEST to create large number of files.
+    """Test class Description: Runs IOR and MDTEST to create specified number of files.
 
     :avocado: recursive
     """
@@ -44,7 +44,6 @@ class FileCountTestBase(MdtestBase, IorTestBase):
         """Create a list of containers that the various jobs use for storage.
 
         Args:
-            pool: pool to create container
             oclass: object class of container
 
 
@@ -64,12 +63,8 @@ class FileCountTestBase(MdtestBase, IorTestBase):
         return container
 
     def run_file_count(self):
-        """Run the large file count test.
-
-        Args:
-            rc (bool, optional): If release candidate set to true. Defaults to False.
-        """
-        saved_container = []
+        """Run the file count test."""
+        saved_containers = []
         results = []
         apis = self.params.get("api", "/run/largefilecount/*")
         object_class = self.params.get("object_class", '/run/largefilecount/*')
@@ -104,7 +99,7 @@ class FileCountTestBase(MdtestBase, IorTestBase):
                     results.append(["FAIL", str(self.mdtest_cmd)])
                 # save the current container; to be destroyed later
                 if self.container is not None:
-                    saved_container.append(self.container)
+                    saved_containers.append(self.container)
                 # run ior
                 self.log.info("=======>>>Starting IOR with %s and %s", api, oclass)
                 self.container = self.add_containers(oclass)
@@ -116,9 +111,9 @@ class FileCountTestBase(MdtestBase, IorTestBase):
                     results.append(["FAIL", str(self.ior_cmd)])
                 # save the current container
                 if self.container is not None:
-                    saved_container.append(self.container)
+                    saved_containers.append(self.container)
         # copy saved containers to self.container
-        self.container = saved_container
+        self.container = saved_containers
         self.log.info("=======>>>Summary of Large File Count test results:")
         errors = False
         for item in results:
