@@ -13,13 +13,14 @@ package spdk
 /*
 #cgo CFLAGS: -I .
 #cgo LDFLAGS: -L . -lnvme_control
-#cgo LDFLAGS: -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
+#cgo LDFLAGS: -lspdk_log -lspdk_env_dpdk -lspdk_nvme -lspdk_vmd -lrte_mempool
 #cgo LDFLAGS: -lrte_mempool_ring -lrte_bus_pci
 
 #include "stdlib.h"
 #include "daos_srv/control.h"
 #include "spdk/stdinc.h"
 #include "spdk/string.h"
+#include "spdk/log.h"
 #include "spdk/env.h"
 #include "spdk/nvme.h"
 #include "spdk/vmd.h"
@@ -129,6 +130,9 @@ func revertBackingToVmd(log logging.Logger, pciAddrs []string) ([]string, error)
 // The library must be initialized first.
 func (e *EnvImpl) InitSPDKEnv(log logging.Logger, opts *EnvOptions) error {
 	log.Debugf("spdk init go opts: %+v", opts)
+
+	// Only print error and more severe to stderr.
+	C.spdk_log_set_print_level(C.SPDK_LOG_ERROR)
 
 	if err := opts.sanitizeAllowList(log); err != nil {
 		return errors.Wrap(err, "sanitizing PCI include list")
