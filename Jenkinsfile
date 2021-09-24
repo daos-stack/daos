@@ -585,19 +585,8 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release",
                                    build_deps: "no"
-                        sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos7.release --test cont_copy""",
-                            label: 'Run NLT smoke test')
                     }
                     post {
-                        always {
-                            recordIssues enabledForFailure: true,
-                                         aggregatingResults: true,
-                                         tool: gcc4(pattern: 'centos7-gcc-release-build.log',
-                                                    id: "analysis-gcc-centos7-release")
-                            junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.release/',
-                                             allowEmptyArchive: true
-                        }
                         unsuccessful {
                             sh """if [ -f config.log ]; then
                                       mv config.log config.log-centos7-gcc-release
@@ -1017,7 +1006,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
-                        sh (script:"""sudo ./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
+                        sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
                             label: 'Fault injection testing using NLT')
                     }
                     post {

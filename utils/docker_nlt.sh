@@ -8,6 +8,12 @@ set -e
 
 . utils/sl/setup_local.sh
 
-./utils/setup_daos_admin.sh
+sudo --preserve-env=SL_PREFIX ./utils/setup_daos_admin.sh
 
-./utils/node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
+mkdir /tmp/n
+
+cp utils/node_local_test.py utils/nlt_server.yaml utils/nlt_agent.yaml .build_vars.json src/tests/ftest/cart/util/cart_logparse.py src/tests/ftest/cart/util/cart_logtest.py /tmp/n
+
+cd /tmp/n
+
+./node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
