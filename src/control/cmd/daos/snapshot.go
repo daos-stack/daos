@@ -18,8 +18,9 @@ import "C"
 type containerSnapshotCreateCmd struct {
 	existingContainerCmd
 
-	Epoch uint64 `long:"epc" short:"e" description:"epoch to use for snapshot"`
-	Name  string `long:"snap" short:"s" description:"snapshot name"`
+	// FIXME: epoch is not an input for snapshot create
+	Epoch EpochFlag `long:"epc" short:"e" description:"epoch to use for snapshot"`
+	Name  string    `long:"snap" short:"s" description:"snapshot name"`
 }
 
 func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
@@ -35,8 +36,8 @@ func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	if cmd.Epoch > 0 {
-		ap.epc = C.uint64_t(cmd.Epoch)
+	if cmd.Epoch.Set {
+		ap.epc = C.uint64_t(cmd.Epoch.Ev)
 	}
 	if cmd.Name != "" {
 		ap.snapname_str = C.CString(cmd.Name)
@@ -55,7 +56,7 @@ func (cmd *containerSnapshotCreateCmd) Execute(args []string) error {
 type containerSnapshotDestroyCmd struct {
 	existingContainerCmd
 
-	Epoch      uint64         `long:"epc" short:"e" description:"snapshot epoch to delete"`
+	Epoch      EpochFlag      `long:"epc" short:"e" description:"snapshot epoch to delete"`
 	EpochRange EpochRangeFlag `long:"epcrange" short:"r" description:"range of snapshot epochs to delete"`
 	Name       string         `long:"snap" short:"s" description:"snapshot name"`
 }
@@ -72,13 +73,13 @@ func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
 		if cmd.EpochRange.Set {
 			return errors.New("cannot specify both snapshot name and epoch range")
 		}
-		if cmd.Epoch > 0 {
+		if cmd.Epoch.Set {
 			return errors.New("cannot specify both snapshot name and epoch")
 		}
 
 		ap.snapname_str = C.CString(cmd.Name)
 		defer freeString(ap.snapname_str)
-	case cmd.Epoch > 0:
+	case cmd.Epoch.Set:
 		if cmd.EpochRange.Set {
 			return errors.New("cannot specify both snapshot epoch and epoch range")
 		}
@@ -86,12 +87,12 @@ func (cmd *containerSnapshotDestroyCmd) Execute(args []string) error {
 			return errors.New("cannot specify both snapshot epoch and name")
 		}
 
-		ap.epc = C.uint64_t(cmd.Epoch)
+		ap.epc = C.uint64_t(cmd.Epoch.Ev)
 	case cmd.EpochRange.Set:
 		if cmd.Name != "" {
 			return errors.New("cannot specify both snapshot epoch range and name")
 		}
-		if cmd.Epoch > 0 {
+		if cmd.Epoch.Set {
 			return errors.New("cannot specify both snapshot epoch range and epoch")
 		}
 
@@ -146,8 +147,8 @@ func (cmd *containerSnapshotListCmd) Execute(args []string) error {
 type containerSnapshotRollbackCmd struct {
 	existingContainerCmd
 
-	Epoch uint64 `long:"epc" short:"e" description:"epoch to use for snapshot"`
-	Name  string `long:"snap" short:"s" description:"snapshot name"`
+	Epoch EpochFlag `long:"epc" short:"e" description:"epoch to use for snapshot"`
+	Name  string    `long:"snap" short:"s" description:"snapshot name"`
 }
 
 func (cmd *containerSnapshotRollbackCmd) Execute(args []string) error {
@@ -163,8 +164,8 @@ func (cmd *containerSnapshotRollbackCmd) Execute(args []string) error {
 	}
 	defer cleanup()
 
-	if cmd.Epoch > 0 {
-		ap.epc = C.uint64_t(cmd.Epoch)
+	if cmd.Epoch.Set {
+		ap.epc = C.uint64_t(cmd.Epoch.Ev)
 	}
 	if cmd.Name != "" {
 		ap.snapname_str = C.CString(cmd.Name)
