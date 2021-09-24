@@ -456,9 +456,9 @@ kv_put(daos_handle_t oh, daos_size_t size)
 		}
 
 		if (rc)
-		  break;
+			break;
 
-    deadline_count++;
+		deadline_count++;
 		increment_progress(i);
 	}
 
