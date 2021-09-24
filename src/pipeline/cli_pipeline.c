@@ -406,36 +406,38 @@ pipeline_filters(daos_pipeline_t *pipeline, d_iov_t *dkey, uint32_t *nr_iods,
 }
 
 static int
-read_iov_as_double(void *data, char *type, double *result)
+read_iov_as_double(char *data, size_t offset, char *type, double *result)
 {
+	char *data_ = &data[offset];
+
 	if (!strcmp(type, "DAOS_FILTER_TYPE_INTEGER1"))
 	{
-		signed char *val = (signed char *) data;
+		signed char *val = (signed char *) data_;
 		*result = (double) *val;
 	}
 	else if (!strcmp(type, "DAOS_FILTER_TYPE_INTEGER2"))
 	{
-		short int *val = (short int *) data;
+		short int *val = (short int *) data_;
 		*result = (double) *val;
 	}
 	else if (!strcmp(type, "DAOS_FILTER_TYPE_INTEGER4"))
 	{
-		int *val = (int *) data;
+		int *val = (int *) data_;
 		*result = (double) *val;
 	}
 	else if (!strcmp(type, "DAOS_FILTER_TYPE_INTEGER8"))
 	{
-		long long int *val = (long long int *) data;
+		long long int *val = (long long int *) data_;
 		*result = (double) *val;
 	}
 	else if (!strcmp(type, "DAOS_FILTER_TYPE_REAL4"))
 	{
-		float *val = (float *) data;
+		float *val = (float *) data_;
 		*result = (double) *val;
 	}
 	else if (!strcmp(type, "DAOS_FILTER_TYPE_REAL8"))
 	{
-		double *val = (double *) data;
+		double *val = (double *) data_;
 		*result = *val;
 	}
 	else
@@ -474,7 +476,8 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 
 		pipeline_filter_get_data(part, dkey, *nr_iods, iods, akeys, 0,
 					 &data);
-		if ((rc = read_iov_as_double(data->iov_buf,
+		if ((rc = read_iov_as_double((char *) data->iov_buf,
+					     part->data_offset,
 					     part->data_type, total)))
 		{
 			return rc; /** error */
@@ -565,6 +568,7 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 	{
 		return -DER_NOSYS; /** Unsupported function. */
 	}
+
 	return 0;
 }
 
