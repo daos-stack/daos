@@ -91,8 +91,6 @@ increment_progress(int progress)
 		fprintf(autotest_ap->outstream, "\b\b\b\b");
 		fprintf(autotest_ap->outstream, "% 4d", percentage);
 		fflush(autotest_ap->outstream);
-
-		//printf("progress:=%d tick_size:=%d percentage:=%d total_nr=%d\n", progress, tick_size, percentage, total_nr);
 	}
 }
 
