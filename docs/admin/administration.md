@@ -345,22 +345,22 @@ boro-11
         Volatile Memory Backup: OK
       Intel Vendor SMART Attributes:
         Program Fail Count:
-           Normalized(%%):100
+           Normalized:100%
            Raw:0
         Erase Fail Count:
-           Normalized(%%):100
+           Normalized:100%
            Raw:0
         Wear Leveling Count:
-           Normalized(%%):100
+           Normalized:100%
            Min:24
            Max:25
            Avg:24
         End-to-End Error Detection Count:0
         CRC Error Count:0
-        Timed Workload, Media Wear(%%):63
+        Timed Workload, Media Wear:63%
         Timed Workload, Host Reads:65535
         Timed Workload, Timer:65535
-        Thermal Throttle Status(%%):0
+        Thermal Throttle Status:0%
         Thermal Throttle Event Count:0
         Retry Buffer Overflow Counter:0
         PLL Lock Loss Count:0
