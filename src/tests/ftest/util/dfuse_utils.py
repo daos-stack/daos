@@ -124,8 +124,8 @@ class Dfuse(DfuseCommand):
                 else:
                     command = "cat /proc/mounts | grep dfuse"
                     retcodes = pcmd([host], command, expect_rc=None)
-                    for ret_code, nodes in list(retcodes.items()):
-                        for node in nodes:
+                    for ret_code, host_names in list(retcodes.items()):
+                        for node in host_names:
                             if ret_code == 0:
                                 check_mounted.add(node)
                             else:
