@@ -159,25 +159,6 @@ struct vos_agg_param {
 	bool			 ap_skip_obj;
 };
 
-static inline void
-mark_yield(bio_addr_t *addr, unsigned int *acts)
-{
-	/*
-	 * When read/write or reserve/delete a NVMe record, the BIO or VEA
-	 * call might yield (BIO read/write yield and wait for NVMe DMA done,
-	 * VEA reserve/free may trigger free extents reclaiming then yield
-	 * and wait on blob unmap done).
-	 *
-	 * But we can't tell if it really yield or not (BIO read/write could
-	 * skip DMA transfer on certain cases, free extents reclaiming isn't
-	 * necessarily being triggered on every VEA call), to ensure the
-	 * correctness, we always inform vos_iterate() yield, which may result
-	 * in some unnecessary re-probe.
-	 */
-	if (addr->ba_type == DAOS_MEDIA_NVME)
-		*acts |= VOS_ITER_CB_YIELD;
-}
-
 static int
 agg_del_entry(daos_handle_t ih, struct umem_instance *umm,
 	      vos_iter_entry_t *entry, unsigned int *acts)
@@ -190,8 +171,6 @@ agg_del_entry(daos_handle_t ih, struct umem_instance *umm,
 	rc = umem_tx_begin(umm, NULL);
 	if (rc)
 		return rc;
-
-	mark_yield(&entry->ie_biov.bi_addr, acts);
 
 	rc = vos_iter_delete(ih, NULL);
 	if (rc != 0)
@@ -1093,7 +1072,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 		D_ASSERT(!bio_addr_is_hole(&addr_src));
 		D_ASSERT(iov.iov_buf_len >= copy_size);
 
-		mark_yield(&addr_src, acts);
 		D_ASSERT(biov_idx < bsgl.bs_nr);
 		bio_iov_set(&bsgl.bs_iovs[biov_idx], addr_src, copy_size);
 
@@ -1192,7 +1170,6 @@ fill_one_segment(daos_handle_t ih, struct agg_merge_window *mw,
 
 	addr_dst = ent_in->ei_addr;
 	D_ASSERT(!bio_addr_is_hole(&addr_dst));
-	mark_yield(&addr_dst, acts);
 
 	iov.iov_buf = io->ic_buf;
 	iov.iov_buf_len = io->ic_buf_len;
@@ -1795,7 +1772,6 @@ delete_evt_entry(struct vos_obj_iter *oiter, vos_iter_entry_t *entry,
 	recx2ext(&entry->ie_orig_recx, &rect.rc_ex);
 	rect.rc_epc = entry->ie_epoch;
 	rect.rc_minor_epc = entry->ie_minor_epc;
-	mark_yield(&entry->ie_biov.bi_addr, acts);
 
 	rc = evt_delete(oiter->it_hdl, &rect, NULL);
 	if (rc)
@@ -2028,10 +2004,8 @@ vos_agg_ev(daos_handle_t ih, vos_iter_entry_t *entry,
 	}
 
 	/* Aggregation Yield for testing purpose */
-	while (DAOS_FAIL_CHECK(DAOS_VOS_AGG_BLOCKED)) {
+	while (DAOS_FAIL_CHECK(DAOS_VOS_AGG_BLOCKED))
 		ABT_thread_yield();
-		*acts |= VOS_ITER_CB_YIELD;
-	}
 
 	/* Aggregation */
 	D_DEBUG(DB_EPC, "oid:"DF_UOID", lgc_ext:"DF_EXT", "
@@ -2141,7 +2115,6 @@ vos_aggregate_pre_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			type, *acts);
 
 		agg_param->ap_credits = 0;
-		*acts |= VOS_ITER_CB_YIELD;
 
 		/*
 		 * Reset position if we yield while iterating in object, dkey

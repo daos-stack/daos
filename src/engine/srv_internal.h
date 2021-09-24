@@ -35,6 +35,7 @@ struct sched_stats {
 
 struct sched_info {
 	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
+	uint64_t		 si_cur_seq;	/* Current schedule sequence */
 	struct sched_stats	 si_stats;	/* Sched stats */
 	d_list_t		 si_idle_list;	/* All unused requests */
 	d_list_t		 si_sleep_list;	/* All sleeping requests */
