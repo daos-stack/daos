@@ -124,12 +124,12 @@ class Dfuse(DfuseCommand):
                 else:
                     command = "cat /proc/mounts | grep dfuse"
                     retcodes = pcmd([host], command, expect_rc=None)
-                    for retcode, hosts in list(retcodes.items()):
-                        for host in hosts:
-                            if retcode == 0:
-                                check_mounted.add(host)
+                    for ret_code, nodes in list(retcodes.items()):
+                        for node in nodes:
+                            if ret_code == 0:
+                                check_mounted.add(node)
                             else:
-                                state["nodirectory"].add(host)
+                                state["nodirectory"].add(node)
 
         if check_mounted:
             # Detect which hosts with mount point directories have it mounted as
