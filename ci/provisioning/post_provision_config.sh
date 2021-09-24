@@ -31,7 +31,7 @@ DSA_REPO_var="DAOS_STACK_${DISTRO}_APPSTREAM_REPO"
 
 retry_cmd 300 clush -B -S -l root -w "$NODESTRING" -c ci_key* --dest=/tmp/
 
-retry_cmd 12600 clush -B -S -l root -w "$NODESTRING" \
+retry_cmd 2400 clush -B -S -l root -w "$NODESTRING" \
            "MY_UID=$(id -u)
            CONFIG_POWER_ONLY=$CONFIG_POWER_ONLY
            INST_REPOS=\"$INST_REPOS\"
