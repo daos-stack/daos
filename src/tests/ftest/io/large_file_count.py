@@ -3,14 +3,11 @@
   (C) Copyright 2020-2021 Intel Corporation.
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import re
-from ior_test_base import IorTestBase
-from mdtest_test_base import MdtestBase
-from avocado.core.exceptions import TestFail
 from file_count_test_base import FileCountTestBase
 
 
 class LargeFileCount(FileCountTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR and MDTEST to create large number of files.
 
     :avocado: recursive

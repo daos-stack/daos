@@ -34,6 +34,7 @@ def get_rf(oclass):
 
 # pylint: disable=attribute-defined-outside-init
 class FileCountTestBase(MdtestBase, IorTestBase):
+    # pylint: disable=too-many-ancestors
     """Test class Description: Runs IOR and MDTEST to create large number of files.
 
     :avocado: recursive
