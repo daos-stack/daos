@@ -427,6 +427,7 @@ sched_info_init(struct dss_xstream *dx)
 	int			 rc;
 
 	info->si_cur_ts = daos_getmtime_coarse();
+	info->si_cur_seq = 0;
 	info->si_stats.ss_tot_time = 0;
 	info->si_stats.ss_relax_time = 0;
 	info->si_stats.ss_busy_ts = info->si_cur_ts;
@@ -1113,7 +1114,11 @@ wakeup_all(struct dss_xstream *dx)
 
 	/* Update current ts stored in sched_info */
 	cur_ts = daos_getmtime_coarse();
-	D_ASSERT(cur_ts >= info->si_cur_ts);
+	if (cur_ts < info->si_cur_ts) {
+		D_WARN("Backwards time: cur_ts:"DF_U64", si_cur_ts:"DF_U64"\n",
+		       cur_ts, info->si_cur_ts);
+		cur_ts = info->si_cur_ts;
+	}
 	info->si_stats.ss_tot_time += (cur_ts - info->si_cur_ts);
 	info->si_cur_ts = cur_ts;
 
@@ -1198,6 +1203,24 @@ sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
 	ABT_cond_wait(cond, mutex);
 	D_ASSERT(info->si_wait_cnt > 0);
 	info->si_wait_cnt -= 1;
+}
+
+uint64_t
+sched_cur_msec(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	return info->si_cur_ts;
+}
+
+uint64_t
+sched_cur_seq(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	return info->si_cur_seq;
 }
 
 /*
@@ -1611,18 +1634,28 @@ sched_watchdog_post(struct dss_xstream *dx, struct sched_unit *su)
 	unsigned int		 elapsed;
 	char			**strings;
 
+	/* A ULT is just scheduled, increase schedule seq */
+	info->si_cur_seq++;
+
 	if (!watchdog_enabled(dx))
 		return;
 
 	cur = daos_getmtime_coarse();
-	D_ASSERT(cur >= su->su_start);
-	elapsed = cur - su->su_start;
+	if (cur < su->su_start) {
+		D_WARN("Backwards time, cur:"DF_U64", start:"DF_U64"\n",
+		       cur, su->su_start);
+		return;
+	}
 
+	elapsed = cur - su->su_start;
 	if (elapsed <= sched_unit_runtime_max)
 		return;
 
 	/* Throttle printing a bit */
-	D_ASSERT(cur >= info->si_stats.ss_watchdog_ts);
+	D_ASSERTF(cur >= info->si_stats.ss_watchdog_ts,
+		  "cur:"DF_U64" < watchdog_ts:"DF_U64"\n",
+		  cur, info->si_stats.ss_watchdog_ts);
+
 	if (info->si_stats.ss_last_unit == su->su_func_addr &&
 	    (cur - info->si_stats.ss_watchdog_ts) <= 2000)
 		return;

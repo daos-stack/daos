@@ -9,7 +9,8 @@ def scons():
 
     env.Install(ftest_install_dir, Glob('*.*'))
 
-    dirs = ['aggregation', 'checksum', 'container', 'control',
+    dirs = ['aggregation', 'cart_fault_injection', 'checksum',
+            'container', 'control',
             'daos_perf', 'daos_racer', 'daos_vol',
             'daos_test', 'data', 'fault_domain', 'io', 'ior',
             'mdtest', 'network', 'nvme',
