@@ -21,7 +21,7 @@
 #include <daos/pool.h>
 
 #include "daos_hdlr.h"
-
+#include "math.h"
 /** Input arguments passed to daos utility */
 struct cmd_args_s *autotest_ap;
 
@@ -60,7 +60,7 @@ int skip_steps[] = {28, 29};
 
 /** deadline/time limit */
 uint64_t	deadline_count;
-clock_t		deadline_limit = 360 * CLOCKS_PER_SEC;
+clock_t		deadline_limit = 30 * CLOCKS_PER_SEC;
 
 int domain_nr;
 
@@ -87,10 +87,12 @@ increment_progress(int progress)
 	if (progress % tick_size == 0) {
 		int percentage;
 
-		percentage = (double) progress / (double) total_nr * 100.0;
+		percentage = ceil((double) progress / (double) total_nr * 100.0);
 		fprintf(autotest_ap->outstream, "\b\b\b\b");
 		fprintf(autotest_ap->outstream, "% 4d", percentage);
 		fflush(autotest_ap->outstream);
+
+		//printf("progress:=%d tick_size:=%d percentage:=%d total_nr=%d\n", progress, tick_size, percentage, total_nr);
 	}
 }
 
@@ -382,10 +384,13 @@ kv_put(daos_handle_t oh, daos_size_t size)
 	daos_event_t	*evp;
 	int		rc;
 	int		eq_rc;
+	double		timeout;
+	double		step_adj;
+	double		t;
 
 	deadline_count = 1;
 
-	total_nr = nr;
+	total_nr = ticks;
 	setup_progress();
 
 	/** Create event queue to manage asynchronous I/Os */
@@ -459,7 +464,11 @@ kv_put(daos_handle_t oh, daos_size_t size)
 			break;
 
 		deadline_count++;
-		increment_progress(i);
+
+		timeout = deadline_limit / CLOCKS_PER_SEC;
+		step_adj = ticks / timeout;
+		t = ((start + deadline_limit) - clock()) / CLOCKS_PER_SEC;
+		increment_progress((int)((timeout - t) * step_adj));
 	}
 
 	/** Wait for completion of all in-flight requests */
@@ -501,7 +510,7 @@ kv_get(daos_handle_t oh, daos_size_t size)
 	int		rc;
 	int		eq_rc;
 
-	total_nr = nr;
+	total_nr = deadline_count;
 	setup_progress();
 
 	/** Create event queue to manage asynchronous I/Os */
@@ -903,7 +912,7 @@ kv_readrf1(void)
 		return -1;
 	}
 
-	get_rc = kv_get(oh, 128, 1000000);
+	get_rc = kv_get(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
