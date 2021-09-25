@@ -313,7 +313,10 @@ health data, including NVMe SSD health stats and in-memory I/O error and checksu
 error counters. The server rank and device state are also listed. The device health
 data can either be queried by device UUID (device-health command) or by VOS target ID
 along with the server rank (target-health command). The same device health information
-is displayed with both command options.
+is displayed with both command options. Additionally, vendor-specific SMART stats are
+displayed, currently for Intel devices only. Note: A reasonable timed workload > 60 min
+must be ran for the SMART stats to register (Raw values are 65535). Media wear percentage
+can be calculated by dividing by 1024 to find the percentage of the maximum rated cycles.
 ```bash
 $ dmg -l boro-11 storage query device-health --uuid=5bd91603-d3c7-4fb7-9a71-76bc25690c19
 or
@@ -345,22 +348,22 @@ boro-11
         Volatile Memory Backup: OK
       Intel Vendor SMART Attributes:
         Program Fail Count:
-           Normalized(%%):100
+           Normalized:100%
            Raw:0
         Erase Fail Count:
-           Normalized(%%):100
+           Normalized:100%
            Raw:0
         Wear Leveling Count:
-           Normalized(%%):100
+           Normalized:100%
            Min:24
            Max:25
            Avg:24
         End-to-End Error Detection Count:0
         CRC Error Count:0
-        Timed Workload, Media Wear(%%):63
-        Timed Workload, Host Reads:65535
+        Timed Workload, Media Wear:65535
+        Timed Workload, Host Read/Write Ratio:65535
         Timed Workload, Timer:65535
-        Thermal Throttle Status(%%):0
+        Thermal Throttle Status:0%
         Thermal Throttle Event Count:0
         Retry Buffer Overflow Counter:0
         PLL Lock Loss Count:0
