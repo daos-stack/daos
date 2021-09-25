@@ -26,8 +26,7 @@ class MultipleContainerDelete(IorTestBase):
             Create a pool spanning 4 servers.
             Capture the pool space.
             Create a POSIX container and fill it with IOR DFS Api
-            Delete the container and repeat the above steps 500
-            times.
+            Delete the container and repeat the above steps 50 times.
             Verify both the SCM and SSD pool spaces are recovered
 
         :avocado: tags=all,full_regression
@@ -40,7 +39,7 @@ class MultipleContainerDelete(IorTestBase):
 
         initial_scm_fs, initial_ssd_fs = self.get_pool_space()
 
-        for i in range(500):
+        for i in range(50):
             self.log.info("Create-Write-Destroy Iteration %d", i)
             self.create_cont()
             self.ior_cmd.set_daos_params(
