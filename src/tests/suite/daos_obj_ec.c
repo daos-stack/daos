@@ -1200,12 +1200,12 @@ ec_singv_overwrite_oc(void **state, unsigned int ec_oc)
 		iod[i].iod_size		= size;
 		iod[i].iod_recxs	= NULL;
 		iod[i].iod_type		= DAOS_IOD_SINGLE;
-
-		D_FREE(buf[i]);
 	}
 	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, NUM_AKEYS, iod, sgl,
 			     NULL);
 	assert_rc_equal(rc, 0);
+	for (i = 0; i < NUM_AKEYS; i++)
+		D_FREE(buf[i]);
 
 	/** overwrite record with different size (smaller or larger) */
 	for (i = 0; i < NUM_AKEYS; i++) {
@@ -1300,6 +1300,155 @@ ec_singv_overwrite(void **state)
 	ec_singv_overwrite_oc(state, OC_EC_4P2G1);
 }
 
+
+static void
+ec_singv_size_fetch_oc(void **state, unsigned int ec_oc, uint32_t old_len, uint32_t new_len)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	 oid;
+	daos_handle_t	 oh;
+	d_iov_t		 dkey;
+	d_sg_list_t	 sgl;
+	d_iov_t		 sg_iov;
+	daos_iod_t	 iod;
+	char		*buf;
+	char		*akey = "akey_singv_test";
+	char		*fetch_buf;
+	uint32_t	 length;
+	daos_size_t	 size;
+	int		 rc;
+
+	/** open object */
+	oid = daos_test_oid_gen(arg->coh, ec_oc, 0, 0, arg->myrank);
+	rc = daos_obj_open(arg->coh, oid, 0, &oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	/** init dkey */
+	d_iov_set(&dkey, "dkey", strlen("dkey"));
+
+	/** firstly update with old_len, then overwrite with new_len */
+	size = old_len;
+	D_ALLOC(buf, size);
+	assert_non_null(buf);
+	dts_buf_render(buf, size);
+	d_iov_set(&sg_iov, buf, size);
+	sgl.sg_nr	= 1;
+	sgl.sg_nr_out	= 0;
+	sgl.sg_iovs	= &sg_iov;
+	d_iov_set(&iod.iod_name, akey, strlen(akey));
+	iod.iod_nr	= 1;
+	iod.iod_size	= size;
+	iod.iod_recxs	= NULL;
+	iod.iod_type	= DAOS_IOD_SINGLE;
+	rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+	assert_rc_equal(rc, 0);
+
+	if (new_len != 0) {
+		D_FREE(buf);
+		size = new_len;
+		D_ALLOC(buf, size);
+		assert_non_null(buf);
+		dts_buf_render(buf, size);
+		d_iov_set(&sg_iov, buf, size);
+		iod.iod_size	= size;
+		rc = daos_obj_update(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL);
+		assert_rc_equal(rc, 0);
+		length = new_len;
+	} else {
+		length = old_len;
+	}
+
+	/** fetch record size */
+	print_message("fetch iod_size with NULL sgl\n");
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, NULL, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, size);
+
+	/** fetch with larger buffer */
+	size = length + 17 * 1024;
+	D_ALLOC(fetch_buf, size);
+	assert_non_null(fetch_buf);
+
+	/* fetch with UNKNOWN iod_size */
+	print_message("fetch with zero iod_size and larger buffer\n");
+	d_iov_set(&sg_iov, fetch_buf, size);
+	iod.iod_size	= DAOS_REC_ANY;
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, length);
+	assert_memory_equal(buf, fetch_buf, length);
+	/* extra buffer should not be touched by the fetch, not required for now */
+	/*
+	 * for (i = 0; i < size - length; i++)
+	 *	D_ASSERTF(fetch_buf[length + i] == 0, "fetch_buf[%d]: %d\n",
+	 *		  length + i, fetch_buf[length + i]);
+	 */
+	memset(fetch_buf, 0, size);
+
+	/* fetch with incorrect smaller iod_size */
+	d_iov_set(&sg_iov, fetch_buf, size);
+	iod.iod_size	= 7;
+	print_message("fetch with smaller incorrect iod_size\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, -DER_REC2BIG);
+	memset(fetch_buf, 0, size);
+
+	print_message("fetch with replied correct iod_size\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_memory_equal(buf, fetch_buf, length);
+	memset(fetch_buf, 0, size);
+
+	/* fetch with incorrect larger iod_size */
+	d_iov_set(&sg_iov, fetch_buf, size);
+	iod.iod_size	= length + 111;
+	print_message("fetch with larger incorrect iod_size\n");
+	rc = daos_obj_fetch(oh, DAOS_TX_NONE, 0, &dkey, 1, &iod, &sgl, NULL, NULL);
+	assert_rc_equal(rc, 0);
+	assert_int_equal(iod.iod_size, length);
+	assert_memory_equal(buf, fetch_buf, length);
+	memset(fetch_buf, 0, size);
+
+	/** close object */
+	rc = daos_obj_close(oh, NULL);
+	assert_rc_equal(rc, 0);
+
+	D_FREE(buf);
+	D_FREE(fetch_buf);
+}
+
+static void
+ec_singv_diff_size_fetch(void **state)
+{
+	test_arg_t	*arg = *state;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	print_message("test OC_EC_2P1G1, small singv 511B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 511, 0);
+	print_message("test OC_EC_2P1G1, long singv 16KB\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 16 * 1024, 0);
+	print_message("test OC_EC_2P1G1, singv 4103B overwritten by 4095B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 4103, 4095);
+	print_message("test OC_EC_2P1G1, singv 16KB overwritten by 11B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 16 * 1024, 11);
+	print_message("test OC_EC_2P1G1, singv 133B overwritten by 17KB\n");
+	ec_singv_size_fetch_oc(state, OC_EC_2P1G1, 133, 17 * 1024);
+
+	print_message("test OC_EC_4P2G1, small singv 127B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 127, 0);
+	print_message("test OC_EC_4P2G1, long singv 16389B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 16389, 0);
+	print_message("test OC_EC_4P2G1, singv 4103B overwritten by 4095B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 4103, 4095);
+	print_message("test OC_EC_4P2G1, singv 16KB overwritten by 11B\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 16 * 1024, 11);
+	print_message("test OC_EC_4P2G1, singv 133B overwritten by 17KB\n");
+	ec_singv_size_fetch_oc(state, OC_EC_4P2G1, 133, 17 * 1024);
+}
+
 static int
 ec_setup(void  **state)
 {
@@ -1357,6 +1506,8 @@ static const struct CMUnitTest ec_tests[] = {
 	{"EC15: ec punch and check_size", ec_punch_check_size, async_disable,
 	 test_case_teardown},
 	{"EC16: ec single-value overwrite", ec_singv_overwrite, async_disable,
+	 test_case_teardown},
+	{"EC17: ec single-value different size fetch", ec_singv_diff_size_fetch, async_disable,
 	 test_case_teardown},
 };
 
