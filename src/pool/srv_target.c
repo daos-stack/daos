@@ -1060,13 +1060,15 @@ ds_pool_tgt_connect(struct ds_pool *pool, struct pool_iv_conn *pic)
 	ds_pool_get(pool);
 	hdl->sph_pool = pool;
 
-	cred_iov.iov_len = pic->pic_cred_size;
-	cred_iov.iov_buf_len = pic->pic_cred_size;
-	cred_iov.iov_buf = &pic->pic_creds[0];
-	rc = daos_iov_copy(&hdl->sph_cred, &cred_iov);
-	if (rc != 0) {
-		ds_pool_put(pool);
-		D_GOTO(out, rc);
+	if (pic->pic_cred_size) {
+		cred_iov.iov_len = pic->pic_cred_size;
+		cred_iov.iov_buf_len = pic->pic_cred_size;
+		cred_iov.iov_buf = &pic->pic_creds[0];
+		rc = daos_iov_copy(&hdl->sph_cred, &cred_iov);
+		if (rc != 0) {
+			ds_pool_put(pool);
+			D_GOTO(out, rc);
+		}
 	}
 
 	rc = pool_hdl_add(hdl);
