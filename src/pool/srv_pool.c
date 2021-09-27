@@ -18,6 +18,8 @@
 
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <gurt/telemetry_common.h>
+#include <gurt/telemetry_producer.h>
 #include <daos_api.h> /* for daos_prop_alloc/_free() */
 #include <daos/pool_map.h>
 #include <daos/rpc.h>
@@ -35,8 +37,6 @@
 #include "srv_internal.h"
 #include "srv_layout.h"
 #include "srv_pool_map.h"
-#include "gurt/telemetry_common.h"
-#include "gurt/telemetry_producer.h"
 
 /* Pool service */
 struct pool_svc {
@@ -193,42 +193,6 @@ out:
 	return rc;
 }
 
-/* Load uuid from file path. */
-static int
-uuid_load(const char *path, uuid_t uuid)
-{
-	int	fd;
-	int	rc;
-
-	/* Open the UUID file. */
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		if (errno == ENOENT)
-			D_DEBUG(DB_MD, "failed to open uuid file %s: %d\n",
-				path, errno);
-		else
-			D_ERROR("failed to open uuid file %s: %d\n", path,
-				errno);
-		rc = daos_errno2der(errno);
-		goto out;
-	}
-
-	/* Read the UUID. */
-	rc = read(fd, uuid, sizeof(uuid_t));
-	if (rc == sizeof(uuid_t)) {
-		rc = 0;
-	} else {
-		if (rc != -1)
-			errno = EIO;
-		D_ERROR("failed to read %s: %d %d\n", path, rc, errno);
-		rc = daos_errno2der(errno);
-	}
-
-	close(fd);
-out:
-	return rc;
-}
-
 static char *
 pool_svc_rdb_path_common(const uuid_t pool_uuid, const char *suffix)
 {
@@ -251,13 +215,6 @@ static char *
 pool_svc_rdb_path(const uuid_t pool_uuid)
 {
 	return pool_svc_rdb_path_common(pool_uuid, "");
-}
-
-/* Return a pool service RDB UUID file path. This file stores the RDB UUID. */
-static char *
-pool_svc_rdb_uuid_path(const uuid_t pool_uuid)
-{
-	return pool_svc_rdb_path_common(pool_uuid, "-uuid");
 }
 
 /*
@@ -643,7 +600,6 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 		   daos_prop_t *prop, d_rank_list_t *svc_addrs)
 {
 	d_rank_list_t	       *ranks;
-	uuid_t			rdb_uuid;
 	d_iov_t			psid;
 	struct rsvc_client	client;
 	struct dss_module_info *info = dss_get_module_info();
@@ -662,11 +618,9 @@ ds_pool_svc_create(const uuid_t pool_uuid, int ntargets, uuid_t target_uuids[],
 	if (rc != 0)
 		D_GOTO(out, rc);
 
-	uuid_generate(rdb_uuid);
 	d_iov_set(&psid, (void *)pool_uuid, sizeof(uuid_t));
-	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, rdb_uuid, ranks,
-				true /* create */, true /* bootstrap */,
-				ds_rsvc_get_md_cap());
+	rc = ds_rsvc_dist_start(DS_RSVC_CLASS_POOL, &psid, pool_uuid, ranks, true /* create */,
+				true /* bootstrap */, ds_rsvc_get_md_cap());
 	if (rc != 0)
 		D_GOTO(out_ranks, rc);
 
@@ -772,59 +726,6 @@ pool_svc_name_cb(d_iov_t *id, char **name)
 	s[8] = '\0'; /* strlen(DF_UUID) */
 	*name = s;
 	return 0;
-}
-
-static int
-pool_svc_load_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	char   *path;
-	int	rc;
-
-	if (id->iov_len != sizeof(uuid_t))
-		return -DER_INVAL;
-	path = pool_svc_rdb_uuid_path(id->iov_buf);
-	if (path == NULL)
-		return -DER_NOMEM;
-	rc = uuid_load(path, db_uuid);
-	D_FREE(path);
-	return rc;
-}
-
-static int
-pool_svc_store_uuid_cb(d_iov_t *id, uuid_t db_uuid)
-{
-	char   *path;
-	int	rc;
-
-	if (id->iov_len != sizeof(uuid_t))
-		return -DER_INVAL;
-	path = pool_svc_rdb_uuid_path(id->iov_buf);
-	if (path == NULL)
-		return -DER_NOMEM;
-	rc = uuid_store(path, db_uuid);
-	D_FREE(path);
-	return rc;
-}
-
-static int
-pool_svc_delete_uuid_cb(d_iov_t *id)
-{
-	char   *path;
-	int	rc;
-
-	if (id->iov_len != sizeof(uuid_t))
-		return -DER_INVAL;
-	path = pool_svc_rdb_uuid_path(id->iov_buf);
-	if (path == NULL)
-		return -DER_NOMEM;
-	rc = remove(path);
-	if (rc != 0) {
-		D_ERROR(DF_UUID": failed to remove %s: %d\n",
-			DP_UUID(id->iov_buf), path, errno);
-		rc = daos_errno2der(errno);
-	}
-	D_FREE(path);
-	return rc;
 }
 
 static int
@@ -1404,9 +1305,6 @@ out:
 
 static struct ds_rsvc_class pool_svc_rsvc_class = {
 	.sc_name	= pool_svc_name_cb,
-	.sc_load_uuid	= pool_svc_load_uuid_cb,
-	.sc_store_uuid	= pool_svc_store_uuid_cb,
-	.sc_delete_uuid	= pool_svc_delete_uuid_cb,
 	.sc_locate	= pool_svc_locate_cb,
 	.sc_alloc	= pool_svc_alloc_cb,
 	.sc_free	= pool_svc_free_cb,
@@ -1527,9 +1425,8 @@ start_one(uuid_t uuid, void *varg)
 	}
 
 	d_iov_set(&id, uuid, sizeof(uuid_t));
-	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, NULL /* db_uuid */,
-		      false /* create */, 0 /* size */, NULL /* replicas */,
-		      NULL /* arg */);
+	ds_rsvc_start(DS_RSVC_CLASS_POOL, &id, uuid, false /* create */, 0 /* size */,
+		      NULL /* replicas */, NULL /* arg */);
 	return 0;
 }
 
@@ -4523,7 +4420,7 @@ pool_extend_map(struct rdb_tx *tx, struct pool_svc *svc,
 	if (rc != 0) {
 		D_DEBUG(DB_MD, DF_UUID": failed to commit: "DF_RC"\n",
 			DP_UUID(svc->ps_uuid), DP_RC(rc));
-			D_GOTO(out_map, rc);
+		D_GOTO(out_map, rc);
 	}
 
 	updated = true;
@@ -4548,7 +4445,6 @@ out_map:
 		else
 			*map_version_p = pool_map_get_version(map);
 	}
-	rdb_tx_end(tx);
 
 out_map_buf:
 	if (map_buf != NULL)
@@ -4612,6 +4508,7 @@ pool_extend_internal(uuid_t pool_uuid, struct rsvc_hint *hint,
 
 out_lock:
 	ABT_rwlock_unlock(svc->ps_lock);
+	rdb_tx_end(&tx);
 
 out_svc:
 	pool_target_id_list_free(&tgts);
@@ -5300,7 +5197,7 @@ ds_pool_svc_stop_handler(crt_rpc_t *rpc)
 {
 	struct pool_svc_stop_in	       *in = crt_req_get(rpc);
 	struct pool_svc_stop_out       *out = crt_reply_get(rpc);
-	d_iov_t			id;
+	d_iov_t				id;
 	int				rc;
 
 	D_DEBUG(DF_DSMS, DF_UUID": processing rpc %p\n",
@@ -5566,13 +5463,18 @@ out:
 	crt_reply_send(rpc);
 }
 
+/**
+ * Get leader shard_id and target id(from pool map) for the current object.
+ */
 int
 ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 			 uint32_t version, int *tgt_id)
 {
+	struct daos_oclass_attr *oca;
 	struct pl_map		*map;
-	struct pl_obj_layout	*layout;
+	struct pl_obj_layout	*layout = NULL;
 	struct daos_obj_md	 md = { 0 };
+	int			leader_idx;
 	int			 rc = 0;
 
 	map = pl_map_find(pool->sp_uuid, oid->id_pub);
@@ -5588,16 +5490,25 @@ ds_pool_elect_dtx_leader(struct ds_pool *pool, daos_unit_oid_t *oid,
 	if (rc != 0)
 		goto out;
 
-	rc = pl_select_leader(oid->id_pub, oid->id_shard / layout->ol_grp_size,
-			      layout->ol_grp_size, tgt_id,
-			      pl_obj_get_shard, layout);
-	pl_obj_layout_free(layout);
-	if (rc < 0)
+	oca = daos_oclass_attr_find(oid->id_pub, NULL);
+	leader_idx = pl_select_leader(oid->id_pub, oid->id_shard / daos_oclass_grp_size(oca),
+				      layout->ol_grp_size, tgt_id, pl_obj_get_shard, layout);
+	if (leader_idx < 0) {
 		D_WARN("Failed to select leader for "DF_UOID
 		       "version = %d: rc = %d\n",
-		       DP_UOID(*oid), version, rc);
+		       DP_UOID(*oid), version, leader_idx);
+		D_GOTO(out, rc = leader_idx);
+	}
 
+	/* Convert the leader shard idx to shard id */
+	D_ASSERTF(leader_idx % layout->ol_grp_size <= daos_oclass_grp_size(oca),
+		  "leader %d grp_size %u class grp size %u\n", leader_idx, layout->ol_grp_size,
+		  daos_oclass_grp_size(oca));
+	rc = (leader_idx / layout->ol_grp_size) * daos_oclass_grp_size(oca) +
+	      leader_idx % layout->ol_grp_size;
 out:
+	if (layout != NULL)
+		pl_obj_layout_free(layout);
 	pl_map_decref(map);
 	return rc;
 }

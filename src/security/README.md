@@ -23,13 +23,13 @@ are outlined
 This section covers the implementation details of pool and container access
 control.
 
-See the [security overview](/doc/overview/security.md#access-control-lists) for
+See the [security overview](/docs/overview/security.md#access-control-lists) for
 background on DAOS Access Control Lists.
 
-See the [Admin Guide](/doc/admin/pool_operations.md#access-control-lists)
+See the [Admin Guide](/docs/admin/pool_operations.md#access-control-lists)
 for a higher-level view of pool access control.
 
-See the [User Guide](/doc/user/container.md#access-control-lists)
+See the [User Guide](/docs/user/container.md#access-control-lists)
 for a higher-level view of container access control.
 
 ### Pool Access

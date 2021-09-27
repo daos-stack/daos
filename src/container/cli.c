@@ -778,8 +778,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
-	/* TODO */
-	arg->coa_info->ci_lsnapshot = 0;
+	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1170,8 +1169,7 @@ cont_query_complete(tse_task_t *task, void *data)
 	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
-	/* TODO */
-	arg->cqa_info->ci_lsnapshot = 0;
+	arg->cqa_info->ci_lsnapshot = out->cqo_lsnapshot;
 
 out:
 	crt_req_decref(arg->rpc);

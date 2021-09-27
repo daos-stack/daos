@@ -846,7 +846,7 @@ cont_list_snaps_hdlr(struct cmd_args_s *ap)
 
 	if (ap->snapname_str == NULL && ap->epc == 0) {
 		for (i = 0; i < min(expected_count, snaps_count); i++)
-			D_PRINT(DF_U64" %s\n", epochs[i], names[i]);
+			D_PRINT(DF_X64" %s\n", epochs[i], names[i]);
 	} else {
 		for (i = 0; i < min(expected_count, snaps_count); i++)
 			if (ap->snapname_str != NULL &&
@@ -1754,8 +1754,7 @@ cont_query_hdlr(struct cmd_args_s *ap)
 	printf("Pool UUID:\t%s\n", ap->pool_str);
 	printf("Container UUID:\t"DF_UUIDF"\n", DP_UUID(cont_info.ci_uuid));
 	printf("Number of snapshots: %i\n", (int)cont_info.ci_nsnapshots);
-	printf("Latest Persistent Snapshot: %i\n",
-		(int)cont_info.ci_lsnapshot);
+	printf("Latest Persistent Snapshot: "DF_X64"\n", cont_info.ci_lsnapshot);
 	printf("Container redundancy factor: %d\n", cont_info.ci_redun_fac);
 	daos_unparse_ctype(cont_type, type);
 	printf("Container Type:\t%s\n", type);
@@ -1806,7 +1805,7 @@ cont_destroy_hdlr(struct cmd_args_s *ap)
 				ap->path, strerror(rc));
 		else
 			fprintf(ap->outstream, "Successfully destroyed path %s\n", ap->path);
-		return rc;
+		return daos_errno2der(rc);
 	}
 
 	rc = daos_cont_destroy(ap->pool, ap->cont_str, ap->force, NULL);
@@ -2644,11 +2643,14 @@ dm_connect(struct cmd_args_s *ap,
 		/* try to open container if this is a filesystem copy, and if it fails try to create
 		 * a destination, then attempt to open again
 		 */
-		if (dst_cont_passed)
+		if (dst_cont_passed) {
 			rc = daos_cont_open(ca->dst_poh, ca->dst_cont, DAOS_COO_RW, &ca->dst_coh,
 					    dst_cont_info, NULL);
-		else
+			if (rc != 0 && rc != -DER_NONEXIST)
+				D_GOTO(err, rc);
+		} else {
 			rc = -DER_NONEXIST;
+		}
 		if (rc == -DER_NONEXIST) {
 			uuid_t cuuid;
 

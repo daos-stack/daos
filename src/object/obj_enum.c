@@ -568,8 +568,12 @@ fill_rec(daos_handle_t ih, vos_iter_entry_t *key_ent, struct dss_enum_arg *arg,
 	}
 
 	/* Inline the data? A 0 threshold disables this completely. */
+	/*
+	 * FIXME: transferring data from NVMe will yield, current recursive
+	 * enum pack implementation doesn't support yield & re-probe.
+	 */
 	if (arg->inline_thres > 0 && data_size <= arg->inline_thres &&
-	    data_size > 0) {
+	    data_size > 0 && bio_iov2media(&key_ent->ie_biov) != DAOS_MEDIA_NVME) {
 		inline_data = true;
 		size += data_size;
 	}

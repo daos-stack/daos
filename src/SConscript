@@ -82,6 +82,9 @@ def scons():
     SConscript('rebuild/SConscript')
     SConscript('security/SConscript')
 
+    # Build cart utilities library
+    SConscript('cart/utils/SConscript')
+
     # Build DAOS client libraries
     SConscript('client/SConscript')
 
