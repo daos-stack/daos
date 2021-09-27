@@ -6,4 +6,4 @@ server_config:
   name: daos_server
 pool:
   control_method: dmg
-  size: 150MB
+  size: 300MB

@@ -737,6 +737,27 @@ func TestControl_AutoConfig_genConfig(t *testing.T) {
 			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
 			expErr:         config.FaultConfigBadControlPort,
 		},
+		"single pmem zero ssds": {
+			engineCount:    1,
+			accessPoints:   []string{"hostX:10002"},
+			numaPMems:      numaPMemsMap{0: []string{"/dev/pmem0"}},
+			numaIfaces:     numaNetIfaceMap{0: ib0},
+			numaSSDs:       numaSSDsMap{0: []string{}},
+			numaCoreCounts: numaCoreCountsMap{0: &coreCounts{16, 7}},
+			expCfg: baseConfig("ofi+psm2").WithAccessPoints("hostX:10002").WithNrHugePages(8192).WithEngines(
+				defaultEngineCfg(0).
+					WithFabricInterface("ib0").
+					WithFabricInterfacePort(defaultFiPort).
+					WithFabricProvider("ofi+psm2").
+					WithPinnedNumaNode(&numa0).
+					WithStorage(
+						storage.NewTierConfig().
+							WithScmClass(storage.ClassDcpm.String()).
+							WithScmDeviceList("/dev/pmem0").
+							WithScmMountPoint("/mnt/daos0"),
+					).
+					WithHelperStreamCount(7)),
+		},
 		"single pmem single ssd": {
 			engineCount:    1,
 			accessPoints:   []string{"hostX:10002"},
