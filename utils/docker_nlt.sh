@@ -23,7 +23,7 @@ set +e
 id
 ls -l
 
-./node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
+sudo ./node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
 
 RC=$?
 set -e
