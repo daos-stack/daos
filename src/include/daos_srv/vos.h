@@ -256,13 +256,12 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * Kill a VOS pool before destroy
  * It deletes SPDK blob of this pool and detaches it from VOS GC
  *
- * \param uuid	[IN]	Pool UUID
- * \param force [IN]	Delete blob even if it has open refcount
+ * \param uuid		[IN]	Pool UUID
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_kill(uuid_t uuid, bool force);
+vos_pool_kill(uuid_t uuid);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
@@ -1150,6 +1149,14 @@ vos_dedup_verify(daos_handle_t ioh);
 void
 vos_report_layout_incompat(const char *type, int version, int min_version,
 			   int max_version, uuid_t *uuid);
+
+#define VOS_NOTIFY_RAS_EVENTF(...)			\
+	do {						\
+		if (ds_notify_ras_eventf == NULL)	\
+			break;				\
+		ds_notify_ras_eventf(__VA_ARGS__);	\
+	} while (0)					\
+
 
 struct sys_db *vos_db_get(void);
 /**

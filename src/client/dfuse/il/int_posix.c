@@ -652,15 +652,18 @@ ioil_open_cont_handles(int fd, struct dfuse_il_reply *il_reply,
 {
 	int			rc;
 	struct ioil_pool       *pool = cont->ioc_pool;
+	char			uuid_str[37];
 
 	if (daos_handle_is_inval(pool->iop_poh)) {
-		rc = daos_pool_connect(il_reply->fir_pool, NULL,
+		uuid_unparse(il_reply->fir_pool, uuid_str);
+		rc = daos_pool_connect(uuid_str, NULL,
 				       DAOS_PC_RW, &pool->iop_poh, NULL, NULL);
 		if (rc)
 			return false;
 	}
 
-	rc = daos_cont_open(pool->iop_poh, il_reply->fir_cont, DAOS_COO_RW,
+	uuid_unparse(il_reply->fir_cont, uuid_str);
+	rc = daos_cont_open(pool->iop_poh, uuid_str, DAOS_COO_RW,
 			    &cont->ioc_coh, NULL, NULL);
 	if (rc)
 		return false;

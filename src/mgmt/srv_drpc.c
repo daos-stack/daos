@@ -550,6 +550,8 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 	d_rank_list_t		*svc_ranks = NULL;
 	uint8_t			*body;
 	size_t			 len;
+	uint32_t		 destroy = 0;
+	uint32_t		 force_destroy = 0;
 	int			 rc;
 	int			 i;
 
@@ -593,17 +595,20 @@ ds_mgmt_drpc_pool_evict(Drpc__Call *drpc_req, Drpc__Response *drpc_resp)
 			}
 		}
 		n_handles = req->n_handles;
+	} else if (req->destroy) {
+		handles = NULL;
+		n_handles = 0;
+		destroy = 1;
+		force_destroy = (req->force_destroy ? 1 : 0);
 	} else {
 		handles = NULL;
 		n_handles = 0;
 	}
 
-	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, req->sys);
-
-	if (rc != 0) {
-		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n",
-			req->id, DP_RC(rc));
-	}
+	rc = ds_mgmt_evict_pool(uuid, svc_ranks, handles, n_handles, destroy, force_destroy,
+				req->sys);
+	if (rc != 0)
+		D_ERROR("Failed to evict pool connections %s: "DF_RC"\n", req->id, DP_RC(rc));
 
 out_free:
 	d_rank_list_free(svc_ranks);
