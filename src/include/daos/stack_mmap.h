@@ -64,6 +64,8 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 					ABT_thread *newthread);
 
 #define daos_abt_thread_create mmap_stack_thread_create
+#define daos_abt_thread_create_on_xstream mmap_stack_thread_create_on_xstream
 #else
 #define daos_abt_thread_create ABT_thread_create
+#define daos_abt_thread_create_on_xstream ABT_thread_create_on_xstream
 #endif
