@@ -77,6 +77,8 @@ class Test(avocadoTest):
         # Define a test ID using the test_* method name
         self.test_id = self.get_test_name()
 
+        self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
+
         # Support specifying timeout values with units, e.g. "1d 2h 3m 4s".
         # Any unit combination may be used, but they must be specified in
         # descending order. Spaces can optionally be used between units and
@@ -394,7 +396,6 @@ class TestWithoutServers(Test):
         self.cart_prefix = None
         self.cart_bin = None
         self.tmp = None
-        self.test_dir = os.getenv("DAOS_TEST_LOG_DIR", "/tmp")
         self.context = None
         self.d_log = None
         self.fault_injection = None
@@ -435,11 +436,9 @@ class TestWithoutServers(Test):
         self.log.debug("Shared test directory: %s", self.tmp)
         self.log.debug("Common test directory: %s", self.test_dir)
 
-
         # setup fault injection, this MUST be before API setup
-        self.fault_injection = FaultInjection(self.test_id, None)
-        self.fault_injection.start()
-
+        self.fault_injection = FaultInjection()
+        self.fault_injection.start(self.params.get("fault_list", '/run/faults/*'), self.test_dir)
 
         self.context = DaosContext(self.prefix + '/lib64/')
         self.d_log = DaosLog(self.context)
@@ -448,7 +447,7 @@ class TestWithoutServers(Test):
     def tearDown(self):
         """Tear down after each test case."""
         self.report_timeout()
-        self.fault_injection.stop()
+        self._teardown_errors.extend(self.fault_injection.stop())
         super().tearDown()
 
     def stop_leftover_processes(self, processes, hosts):
@@ -635,14 +634,14 @@ class TestWithServers(TestWithoutServers):
         self.log.info("client_reservation:  %s", self.client_reservation)
         self.log.info("access_points:       %s", self.access_points)
 
-        # Copy the fault injection files to the hosts.
-        self.fault_injection.copy_fault_files(self.hostfile_clients + self.hostlist_servers)
         # List common test directory contents before running the test
         self.log.info("-" * 100)
         self.log.debug("Common test directory (%s) contents:", self.test_dir)
         hosts = list(self.hostlist_servers)
         if self.hostlist_clients:
             hosts.extend(self.hostlist_clients)
+        # Copy the fault injection files to the hosts.
+        self.fault_injection.copy_fault_files(hosts)
         lines = get_file_listing(hosts, self.test_dir).stdout_text.splitlines()
         for line in lines:
             self.log.debug("  %s", line)

@@ -8,15 +8,19 @@
 import os
 import io
 import yaml
-from avocado import Test
-from general_utils import distribute_files, run_command, \
-                          get_clush_command
+from general_utils import distribute_files, run_command, get_clush_command, DaosTestError
 
 # a lookup table of predefined faults
 FAULTS = {
-    'DAOS_CHECKSUM_UPDATE_FAIL': {
-        'id': '65568',
+    'DAOS_CSUM_CORRUPT_DISK': {
+        'id': '65574',
         'probability_x': '100',
+        'probability_y': '100',
+        'interval': '5',
+        'max_faults': '10'},
+    'DAOS_CSUM_CORRUPT_UPDATE': {
+        'id': '65568',
+        'probability_x': '20',
         'probability_y': '100',
         'interval': '1',
         'max_faults': '1'},
@@ -214,70 +218,79 @@ class FaultInjectionFailed(Exception):
     """Raise if FI failed."""
 
 
-class FaultInjection(Test):
+class FaultInjection():
     """Fault Injection
 
     :avocado: recursive
     """
-    def __init__(self, test, fault_file):
-        super().__init__(test, fault_file)
-        self._test = test
-        self._hosts = None
-        self._fault_file = fault_file
+    def __init__(self):
+        super().__init__()
+        self._hosts = []
+        self._fault_file = None
+        self._test_dir = None
+        self._fault_list = []
 
-    def write_fault_file(path, fault_list=None, on_the_fly_fault=None):
+    def write_fault_file(self, on_the_fly_fault=None):
         """ Write out a fault injection config file.
 
-            path             --where to write the file
-            fault_list       --a list of strings identifying which predefined
-                                faults to write out
+        Args:
             on_the_fly_fault --a fault dictionary that isn't predefined
-
-            Returns the name of the file.
         """
-        if fault_list is None and on_the_fly_fault is None:
+        if self._fault_list is None and on_the_fly_fault is None:
             raise FaultInjectionFailed("bad parameters")
 
-        if not os.path.exists(path):
-            os.makedirs(path)
-        fi_config = path + '/fi.yaml'
+        fi_config = os.path.join(self._test_dir, "fi.yaml")
 
         with io.open(fi_config, 'w', encoding='utf8') as outfile:
-            yaml.dump({'seed': '123'}, outfile, default_flow_style=False,
-                      allow_unicode=True)
-
+            yaml.dump({'seed': '123'}, outfile, default_flow_style=False, allow_unicode=True)
             fault_config = []
-            if fault_list is not None:
-                for fault in fault_list:
+            if self._fault_list is not None:
+                for fault in self._fault_list:
                     fault_config.append(FAULTS[fault])
             if on_the_fly_fault is not None:
                 fault_config.append(on_the_fly_fault)
             yaml.dump({'fault_config': fault_config}, outfile,
-                      default_flow_style=False, allow_unicode=True)
+                        default_flow_style=False, allow_unicode=True)
 
-        return fi_config
+        os.environ["D_FI_CONFIG"] = fi_config
 
-    def start(self):
-        # setup fau]lt injection, this MUST be before API setup
-        if self._fault_file is None:
-            fault_list = self.params.get("fault_list", '/run/faults/*')
-            if fault_list:
-                # not using workdir because the huge path was messing up
-                # orterun or something, could re-evaluate this later
-                self._fault_file = self.write_fault_file(self.tmp,
-                                                         fault_list,
-                                                         None)
+        self._fault_file = fi_config
+
+    def start(self, fault_list, test_dir):
+        """Create the fault injection file to inject DAOS faults.
+
+        Args:
+            fault_list (list): List of faults to inject.
+            test_dir(str) : Path to create the fault injection file.
+        """
+        self._fault_list = fault_list
+        self._test_dir = test_dir
+        if self._fault_list:
+            # not using workdir because the huge path was messing up
+            # orterun or something, could re-evaluate this later
+            self.write_fault_file(None)
 
     def copy_fault_files(self, hosts):
-        if os.path.exists(self._fault_file):
-            self._hosts = list(hosts)
-            distribute_files(self._hosts, self._fault_file, self.tmp)
+        """Copy the fault injection file to all test hosts.
+
+        Args:
+            hosts (list): list of hosts to copy the fault injection file
+        """
+        if self._fault_list:
+            self._hosts = hosts
+            distribute_files(self._hosts, self._fault_file, self._fault_file)
 
     def stop(self):
-        # setup fault injection, this MUST be before API setup
-        fault_list = self.params.get("fault_list", '/run/faults/*')
-        if fault_list:
-            # Remove the fault injection files on the hosts.
-            rm_command = "{} rm -f {}".format(
-                         get_clush_command(self._hosts, "-S -v", True), self.tmp)
+        """Remove the fault injection file created during testing.
+        Returns:
+           error_list (list) : Errors during removing fault files (if any).
+        """
+        # Remove the fault injection files on the hosts.
+        error_list = []
+        rm_command = "{} rm -f {}".format(
+                        get_clush_command(self._hosts, "-S -v", True), self._fault_file)
+        try:
             run_command(rm_command, verbose=True, raise_exception=False)
+        except DaosTestError as error:
+            error_list.append(error)
+        return error_list
