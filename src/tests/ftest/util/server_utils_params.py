@@ -148,10 +148,10 @@ class DaosServerYamlParameters(YamlParameters):
         # Create the requested number of single server parameters
         if isinstance(self.engines_per_host.value, int):
             self.engine_params = [
-                self.PerEngineYamlParameters(index)
+                self.PerEngineYamlParameters(index, self.provider.value)
                 for index in range(self.engines_per_host.value)]
         else:
-            self.engine_params = [self.PerEngineYamlParameters()]
+            self.engine_params = [self.PerEngineYamlParameters(None, self.provider.value)]
 
         for engine_params in self.engine_params:
             engine_params.get_params(test)
@@ -321,7 +321,7 @@ class DaosServerYamlParameters(YamlParameters):
     class PerEngineYamlParameters(YamlParameters):
         """Defines the configuration yaml parameters for a single server."""
 
-        def __init__(self, index=None):
+        def __init__(self, index=None, provider=None):
             """Create a SingleServerConfig object.
 
             Args:
@@ -332,12 +332,15 @@ class DaosServerYamlParameters(YamlParameters):
             if isinstance(index, int):
                 namespace = "/run/server_config/servers/{}/*".format(index)
             super().__init__(namespace)
+            if provider is not None:
+                self._provider = provider
+            else:
+                self._provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
             # Use environment variables to get default parameters
             default_interface = os.environ.get("OFI_INTERFACE", "eth0")
             default_port = int(os.environ.get("OFI_PORT", 31416))
             default_share_addr = int(os.environ.get("CRT_CTX_SHARE_ADDR", 0))
-            default_provider = os.environ.get("CRT_PHY_ADDR_STR", "ofi+sockets")
 
             # All log files should be placed in the same directory on each host
             # to enable easy log file archiving by launch.py
@@ -373,13 +376,13 @@ class DaosServerYamlParameters(YamlParameters):
                 "D_LOG_FILE_APPEND_PID=1",
                 "COVFILE=/tmp/test.cov"
             ]
-            if default_provider == "ofi+sockets":
+            if self._provider == "ofi+sockets":
                 default_env_vars.extend([
                     "FI_SOCKETS_MAX_CONN_RETRY=5",
                     "FI_SOCKETS_CONN_TIMEOUT=2000",
                     "CRT_SWIM_RPC_TIMEOUT=10"
                 ])
-            elif "ofi_rxm" in default_provider:
+            elif "ofi_rxm" in self._provider:
                 default_env_vars.append("FI_OFI_RXM_USE_SRX=1")
             self.env_vars = BasicParameter(None, default_env_vars)
 
@@ -448,6 +451,27 @@ class DaosServerYamlParameters(YamlParameters):
             # Override the log file file name with the test log file name
             if hasattr(test, "server_log") and test.server_log is not None:
                 self.log_file.value = test.server_log
+
+            # Force required env vars
+            forced_env_vars = {
+                "D_LOG_FILE_APPEND_PID": 1,
+                "COVFILE": "/tmp/test.cov"
+            }
+            if self._provider == "ofi+sockets":
+                forced_env_vars["FI_SOCKETS_MAX_CONN_RETRY"] = 5
+                forced_env_vars["FI_SOCKETS_CONN_TIMEOUT"] = 2000
+                forced_env_vars["CRT_SWIM_RPC_TIMEOUT"] = 10
+            elif "ofi_rxm" in self._provider:
+                forced_env_vars["FI_OFI_RXM_USE_SRX"] = 1
+            env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
+            update = False
+            for key in sorted(forced_env_vars):
+                if key in env_var_dict:
+                    env_var_dict[key] = forced_env_vars[key]
+                    update = True
+            if update:
+                new_env_vars = ["=".join(key, value) for key, value in env_var_dict.items()]
+                self.env_vars.update(new_env_vars, "env_var")
 
             # Ignore the scm_size param when using dcpm
             if self.using_dcpm:
