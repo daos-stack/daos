@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.105
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -211,9 +211,11 @@ Requires: %{name}-server%{?_isa} = %{version}-%{release}
 %if (0%{?rhel} >= 7) && (0%{?rhel} < 8)
 Requires: python36-distro
 Requires: python36-tabulate
+Requires: python36-defusedxml
 %else
 Requires: python3-distro
 Requires: python3-tabulate
+Requires: python3-defusedxml
 %endif
 Requires: fio
 Requires: dbench
@@ -478,6 +480,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Mon Sep 27 2021 David Quigley <david.quigley@intel.com> 1.3.105-4
+- Add defusedxml as a required dependency for the test package.
+
 * Wed Sep 15 2021 Li Wei <wei.g.li@intel.com> 1.3.105-3
 - Update raft to fix InstallSnapshot performance as well as to avoid some
   incorrect 0.8.0 RPMs
