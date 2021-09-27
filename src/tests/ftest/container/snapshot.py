@@ -313,6 +313,8 @@ class Snapshot(TestWithServers):
                    ==>Repeat step(1) to step(4) for multiple snapshot tests.
                 (5)Verify the snapshots data.
                 (6)Destroy the snapshot individually.
+                   ==>Loop step(5) and step(6) to perform multiple snapshots
+                   data verification and snapshot destroy test.
                 (7)Check if still able to Open the destroyed snapshot and
                    Verify the snapshot removed from the snapshot list.
         Use Cases: Require 1 client and 1 server to run snapshot test.
@@ -425,6 +427,9 @@ class Snapshot(TestWithServers):
                           "still available", num_transactions)
 
         # (5)Verify the snapshots data
+        #    Step(5) and (6), test loop to perform multiple snapshots data
+        #    verification and snapshot destroy.
+        #    Use current_ss for the individual snapshot object.
         for ss_number in range(snapshot_loop-1, 0, -1):
             ind = ss_number - 1
             self.log.info("=(5.%s)Verify the snapshot number %s:"
