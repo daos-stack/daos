@@ -17,14 +17,14 @@ from io_utilities import DirTree
 from apricot import skipForTicket
 
 
-class FindCmd(DfuseTestBase):
+class Cmd(DfuseTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
     """Base FindCmd test class.
 
     :avocado: recursive
     """
 
-    def test_findcmd(self):
+    def test_find(self):
         """Jira ID: DAOS-5563.
 
         Test Description:
@@ -44,7 +44,7 @@ class FindCmd(DfuseTestBase):
         self._test_findcmd()
 
     @skipForTicket("DAOS-6530")
-    def test_findcmd_perf(self):
+    def test_find_perf(self):
         """Jira ID: DAOS-5563.
 
         Test Description:
