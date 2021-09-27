@@ -315,7 +315,6 @@ class Snapshot(TestWithServers):
                 (6)Destroy the snapshot individually.
                 (7)Check if still able to Open the destroyed snapshot and
                    Verify the snapshot removed from the snapshot list.
-                (8)Destroy the container snapshot.
         Use Cases: Require 1 client and 1 server to run snapshot test.
                    1 pool and 1 container is used, num_of_snapshot defined
                    in the snapshot.yaml will be performed and verified.
@@ -426,8 +425,8 @@ class Snapshot(TestWithServers):
                           "still available", num_transactions)
 
         # (5)Verify the snapshots data
-        for ind, _ in enumerate(test_data):
-            ss_number = ind + 1
+        for ss_number in range(snapshot_loop-1, 0, -1):
+            ind = ss_number - 1
             self.log.info("=(5.%s)Verify the snapshot number %s:"
                           , ss_number, ss_number)
             self.display_snapshot_test_data(test_data, ss_number)
@@ -438,7 +437,7 @@ class Snapshot(TestWithServers):
             datasize = len(tst_data) + 1
             try:
                 obj.open()
-                snap_handle5 = snapshot.open(coh, current_ss.epoch)
+                snap_handle5 = current_ss.open(coh, current_ss.epoch)
                 thedata5 = self.container.read_an_obj(
                     datasize, dkey, akey, obj, txn=snap_handle5.value)
                 obj.close()
@@ -454,14 +453,14 @@ class Snapshot(TestWithServers):
 
         # (6)Destroy the individual snapshot
             self.log.info("=(6.%s)Destroy the snapshot epoch: %s",
-                          ss_number, snapshot.epoch)
+                          ss_number, current_ss.epoch)
             try:
-                snapshot.destroy(coh, snapshot.epoch)
+                current_ss.destroy(coh, current_ss.epoch)
                 self.log.info(
                     "  ==snapshot.epoch %s successfully destroyed",
-                    snapshot.epoch)
+                    current_ss.epoch)
             except Exception as error:
-                self.fail("##(6)Error on snapshot.destroy: {}"
+                self.fail("##(6)Error on current_ss.destroy: {}"
                           .format(str(error)))
 
         # (7)Check if still able to Open the destroyed snapshot and
@@ -488,11 +487,3 @@ class Snapshot(TestWithServers):
             self.fail("##(7)Error when calling the snapshot list: {}"
                       .format(str(error)))
 
-        # (8)Destroy the snapshot on the container
-        try:
-            snapshot.destroy(coh)
-            self.log.info("=(8)Container snapshot destroyed successfully.")
-        except Exception as error:
-            self.fail("##(8)Error on snapshot.destroy. {}"
-                      .format(str(error)))
-        self.log.info("===DAOS container Multiple snapshots test passed.")
