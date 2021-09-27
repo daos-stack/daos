@@ -12,7 +12,7 @@ from general_utils import get_remote_file_size
 from ior_test_base import IorTestBase
 
 
-class DfuseSparseFile(IorTestBase):
+class SparseFile(IorTestBase):
     # pylint: disable=too-many-ancestors,too-few-public-methods
     """Dfuse Sparse File base class.
 
@@ -24,7 +24,7 @@ class DfuseSparseFile(IorTestBase):
         super().__init__(*args, **kwargs)
         self.space_before = None
 
-    def test_dfusesparsefile(self):
+    def test_sparsefile(self):
         """Jira ID: DAOS-3768.
 
         Test Description:
