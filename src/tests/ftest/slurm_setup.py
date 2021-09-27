@@ -31,7 +31,7 @@ elif "centos" in distro_info.name.lower() and distro_info.version == "7":
 elif "centos" in distro_info.name.lower() and distro_info.version == "8":
     distro = "el8"
 
-PACKAGE_VERSION = "21.08.1-1.{}.x86_64".format(distro)
+PACKAGE_VERSION = "21.08.1.1-1.{}.x86_64".format(distro)
 
 COPY_LIST = ["cp /etc/slurm/slurm.conf.example /etc/slurm/slurm.conf",
              "cp /etc/slurm/cgroup.conf.example /etc/slurm/cgroup.conf",
@@ -73,7 +73,7 @@ def update_config_cmdlist(args):
     cmd_list = [
         "sed -i -e 's/SlurmctldHost=linux0/SlurmctldHost={}/g' {}".format(
             args.control, SLURM_CONF),
-        "sed -i -e 's/ClusterName=linux/ClusterName=ci_cluster/g' {}".format(
+        "sed -i -e 's/ClusterName=cluster/ClusterName=ci_cluster/g' {}".format(
             SLURM_CONF),
         "sed -i -e 's/SlurmUser=slurm/SlurmUser={}/g' {}".format(
             args.user, SLURM_CONF),
