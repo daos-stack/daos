@@ -1488,8 +1488,8 @@ host1
            Avg:%d
         End-to-End Error Detection Count:%d
         CRC Error Count:%d
-        Timed Workload, Media Wear:%d%s
-        Timed Workload, Host Reads:%d
+        Timed Workload, Media Wear:%d
+        Timed Workload, Host Read/Write Ratio:%d
         Timed Workload, Timer:%d
         Thermal Throttle Status:%d%s
         Thermal Throttle Event Count:%d
@@ -1510,7 +1510,7 @@ host1
 				mockController.HealthStats.WearLevelingCntNorm, "%", mockController.HealthStats.WearLevelingCntMin,
 				mockController.HealthStats.WearLevelingCntMax, mockController.HealthStats.WearLevelingCntAvg,
 				mockController.HealthStats.EndtoendErrCntRaw, mockController.HealthStats.CrcErrCntRaw,
-				mockController.HealthStats.MediaWearRaw, "%", mockController.HealthStats.HostReadsRaw,
+				mockController.HealthStats.MediaWearRaw, mockController.HealthStats.HostReadsRaw,
 				mockController.HealthStats.WorkloadTimerRaw,
 				mockController.HealthStats.ThermalThrottleStatus, "%", mockController.HealthStats.ThermalThrottleEventCnt,
 				mockController.HealthStats.RetryBufferOverflowCnt,
