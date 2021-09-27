@@ -356,10 +356,16 @@ class IorTestBase(DfuseTestBase):
 
         self.stop_dfuse()
 
+        # Basic verification of the thread results
         status = True
         for key in sorted(results):
             if not results[key].pop(0):
                 self.log.error("IOR Thread %d: %s", key, results[key][0])
+                status = False
+            if len(results[key]) != 2:
+                self.log.error(
+                    "IOR Thread %d: expecting 2 results; %d found: %s",
+                    key, len(results[key]), results[key])
                 status = False
         if not status:
             self.fail("At least one IOR thread failed!")
@@ -422,7 +428,7 @@ class IorTestBase(DfuseTestBase):
         try:
             ior_output = manager.run()
             results[job_num] = [True]
-            results[job_num].append(IorCommand.get_ior_metrics(ior_output))
+            results[job_num].extend(IorCommand.get_ior_metrics(ior_output))
         except CommandFailure as error:
             results[job_num] = [False, "IOR failed: {}".format(error)]
         finally:
