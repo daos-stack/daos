@@ -514,8 +514,8 @@ PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
        Avg:3
     End-to-End Error Detection Count:0
     CRC Error Count:0
-    Timed Workload, Media Wear:63%
-    Timed Workload, Host Reads:65535
+    Timed Workload, Media Wear:65535
+    Timed Workload, Host Read/Write Ratio:65535
     Timed Workload, Timer:65535
     Thermal Throttle Status:0%
     Thermal Throttle Event Count:0
@@ -558,8 +558,8 @@ PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010325 Socket:1 Capacity:750 GB
        Avg:3
     End-to-End Error Detection Count:0
     CRC Error Count:0
-    Timed Workload, Media Wear:63%
-    Timed Workload, Host Reads:65535
+    Timed Workload, Media Wear:65535
+    Timed Workload, Host Read/Write Ratio:65535
     Timed Workload, Timer:65535
     Thermal Throttle Status:0%
     Thermal Throttle Event Count:0
@@ -605,8 +605,8 @@ PCI:0000:81:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
        Avg:3
     End-to-End Error Detection Count:0
     CRC Error Count:0
-    Timed Workload, Media Wear:63%
-    Timed Workload, Host Reads:65535
+    Timed Workload, Media Wear:65535
+    Timed Workload, Host Read/Write Ratio:65535
     Timed Workload, Timer:65535
     Thermal Throttle Status:0%
     Thermal Throttle Event Count:0
@@ -649,8 +649,8 @@ PCI:0000:da:00.0 Model:INTEL SSDPED1K750GA  FW:E2010435 Socket:1 Capacity:750 GB
        Avg:3
     End-to-End Error Detection Count:0
     CRC Error Count:0
-    Timed Workload, Media Wear:63%
-    Timed Workload, Host Reads:65535
+    Timed Workload, Media Wear:65535
+    Timed Workload, Host Read/Write Ratio:65535
     Timed Workload, Timer:65535
     Thermal Throttle Status:0%
     Thermal Throttle Event Count:0

@@ -369,7 +369,7 @@ populate_intel_smart_stats(struct bio_dev_health *bdh)
 			atb = isp->attributes[i];
 			/* divide raw value by 1024 to derive the percentage */
 			stats->media_wear_raw =
-				extend_to_uint64(atb.raw_value, 6) >> 10;
+					extend_to_uint64(atb.raw_value, 6);
 			d_tm_set_counter(bdh->bdh_media_wear_raw,
 					 stats->media_wear_raw);
 		}
