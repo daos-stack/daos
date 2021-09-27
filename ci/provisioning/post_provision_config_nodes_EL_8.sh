@@ -97,6 +97,7 @@ post_provision_config_nodes() {
     if [ -n "$INST_RPMS" ]; then
         # Install the rebuilt MLNX openmpi RPM
         if ls -d /usr/mpi/gcc/openmpi-*; then
+            dnf -y erase mpitests_openmpi
             dnf -y install https://repo.dc.hpdd.intel.com/repository/raw-internal/mlnx_ofed/openmpi-4.1.2a1-1.el8.54103.x86_64.rpm
         fi
         if ! retry_cmd 360 dnf -y install $INST_RPMS; then
