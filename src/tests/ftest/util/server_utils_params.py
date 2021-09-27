@@ -453,6 +453,11 @@ class DaosServerYamlParameters(YamlParameters):
                 self.log.debug("Ignoring the scm_size when scm_class is 'dcpm'")
                 self.scm_size.update(None, "scm_size")
 
+            # Include fault injection settings if configured
+            fault_file = os.environ.get("D_FI_CONFIG")
+            if fault_file and fault_file not in self.env_vars.value:
+                self.env_vars.update("D_FI_CONFIG={}".format(fault_file), "env_vars", True)
+
         @property
         def using_nvme(self):
             """Is the configuration file setup to use NVMe devices.

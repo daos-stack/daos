@@ -16,7 +16,7 @@ class TestWithScrubberBasic(TestWithScrubber):
     """
 
     def test_scrubber_basic(self):
-        """JIRA ID: DAOS-8099
+        """JIRA ID: DAOS-7371
 
             1. Enable scrubber on a test pool and gather
                scrubber statistics
