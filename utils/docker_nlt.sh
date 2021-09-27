@@ -6,14 +6,32 @@
 
 set -e
 
+set -x
+
 . utils/sl/setup_local.sh
 
 sudo --preserve-env=SL_PREFIX ./utils/setup_daos_admin.sh
 
-mkdir /tmp/n
+TMP_DIR=`mktemp`
 
-cp utils/node_local_test.py utils/nlt_server.yaml utils/nlt_agent.yaml .build_vars.json src/tests/ftest/cart/util/cart_logparse.py src/tests/ftest/cart/util/cart_logtest.py /tmp/n
+cp utils/node_local_test.py utils/nlt_server.yaml utils/nlt_agent.yaml .build_vars.json src/tests/ftest/cart/util/cart_logparse.py src/tests/ftest/cart/util/cart_logtest.py $TMP_DIR
 
-cd /tmp/n
+pushd $TMP_DIR
+
+set +e
+
+id
+ls -l
 
 ./node_local_test.py --no-root --memcheck no --server-debug WARN "$@"
+
+RC=$?
+set -e
+popd
+
+cp $TMP_DIR/*.json .
+cp $TMP_DIR/*.xml .
+
+ls
+
+exit $RC
