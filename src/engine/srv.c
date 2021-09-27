@@ -440,15 +440,9 @@ dss_srv_handler(void *arg)
 			D_GOTO(nvme_fini, rc = dss_abterr2der(rc));
 		}
 
-#ifdef ULT_MMAP_STACK
-		rc = mmap_stack_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
-					      dss_nvme_poll_ult, attr,
-					      ABT_THREAD_ATTR_NULL, NULL);
-#else
-		rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
-				       dss_nvme_poll_ult, attr,
-				       ABT_THREAD_ATTR_NULL, NULL);
-#endif
+		rc = daos_abt_thread_create(dx->dx_pools[DSS_POOL_NVME_POLL],
+					    dss_nvme_poll_ult, attr,
+					    ABT_THREAD_ATTR_NULL, NULL);
 		ABT_thread_attr_free(&attr);
 		if (rc != ABT_SUCCESS) {
 			D_ERROR("create NVMe poll ULT failed: %d\n", rc);
@@ -679,15 +673,9 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	}
 
 	/** start progress ULT */
-#ifdef ULT_MMAP_STACK
-	rc = mmap_stack_thread_create(dx->dx_pools[DSS_POOL_NET_POLL],
-				      dss_srv_handler, dx, attr,
-				      &dx->dx_progress);
-#else
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_NET_POLL],
-			       dss_srv_handler, dx, attr,
-			       &dx->dx_progress);
-#endif
+	rc = daos_abt_thread_create(dx->dx_pools[DSS_POOL_NET_POLL],
+				    dss_srv_handler, dx, attr,
+				    &dx->dx_progress);
 	if (rc != ABT_SUCCESS) {
 		D_ERROR("create progress ULT failed: %d\n", rc);
 		D_GOTO(out_xstream, rc = dss_abterr2der(rc));

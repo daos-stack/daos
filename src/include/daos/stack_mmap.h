@@ -9,6 +9,22 @@
  * src/include/daos/stack_mmap.h
  */
 
+/*
+ * Implementation of an alternate and external way to allocate a stack
+ * area for any Argobots ULT.
+ * This aims to allow for a better way to detect/protect against stack
+ * overflow situations along with automatic growth capability.
+ * Each individual stack will be mmap()'ed with MAP_GROWSDOWN causing
+ * the Kernel to reserve stack_guard_gap number of prior additional pages 
+ * that will be reserved for no other mapping and prevented to be accessed.
+ * The stacks are managed as a pool, using the mmap_stack_desc_t struct
+ * being located at the bottom (upper addresses) of each stack and being
+ * linked as a list upon ULT exit for future re-use by a new ULT, based on
+ * the requested stack size.
+ * The free stacks list is drained upon a certain number of free stacks or
+ * upon a certain percentage of free stacks.
+ */
+
 #ifdef ULT_MMAP_STACK
 #include <sys/mman.h>
 #include <abt.h>
@@ -46,4 +62,8 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 					void (*thread_func)(void *),
 					void *thread_arg, ABT_thread_attr attr,
 					ABT_thread *newthread);
+
+#define daos_abt_thread_create mmap_stack_thread_create
+#else
+#define daos_abt_thread_create ABT_thread_create
 #endif

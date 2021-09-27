@@ -9,7 +9,7 @@
  * This file is part of the DAOS server. It implements an alternate way
  * for ULTs stacks allocation, based on mmap() of MAP_STACK|MAP_GROWSDOWN
  * regions, in order to allow overrun detection along with automatic growth
- * possibility.
+ * capability.
  */
 
 #ifdef ULT_MMAP_STACK
@@ -59,9 +59,10 @@ void free_stack(void *arg)
 	if (do_munmap) {
 		int rc;
 
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack of size %zd is being munmap()'ed, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
-			desc->stack, desc->stack_size, shadow_alloced_stacks,
-			shadow_free_stacks);
+		D_DEBUG(DB_MEM,
+			"%p mmap()'ed stack of size %zd munmap()'ed, alloced="DF_U64", free="
+			DF_U64"\n", desc->stack, desc->stack_size,
+			shadow_alloced_stacks, shadow_free_stacks);
 		rc = munmap(desc->stack, desc->stack_size);
 		/* XXX
 		 * should we re-queue it on free list instead to leak it ?
@@ -70,14 +71,15 @@ void free_stack(void *arg)
 			D_ERROR("Failed to munmap() %p stack of size %zd : %s\n",
 				desc->stack, desc->stack_size, strerror(errno));
 	} else {
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack of size %zd has been put on stack free list, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
-			desc->stack, desc->stack_size, shadow_alloced_stacks,
-			shadow_free_stacks);
+		D_DEBUG(DB_MEM,
+			"%p mmap()'ed stack of size %zd on free list, alloced="DF_U64",free="
+			DF_U64"\n", desc->stack, desc->stack_size,
+			shadow_alloced_stacks, shadow_free_stacks);
 	}
 }
 
 /* wrapper for ULT main function, mainly to register mmap()'ed stack
- * descriptor as ABT_key to ensure stack munmap() upon ULT exit
+ * descriptor as ABT_key to ensure stack pooling or munmap() upon ULT exit
  */
 static void mmap_stack_wrapper(void *arg)
 {
@@ -88,7 +90,7 @@ static void mmap_stack_wrapper(void *arg)
 }
 
 /* XXX
- * presently ABT_thread_create_many() is not used in DAOS code, but if it
+ * presently ABT_thread_create_[to,many]() are not used in DAOS code, but if it
  * becomes we will also have to introduce a corresponding wrapper
  */
 
@@ -135,6 +137,11 @@ int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
 			mmap_stack_desc = container_of(cur_stack,
 						       mmap_stack_desc_t,
 						       stack_list);
+			/* XXX
+			 * we may want to look for the best possible fit
+			 * regarding the requested size, but will need to
+			 * scan the full free list to do so ...
+			 */
 			if (mmap_stack_desc->stack_size >= stack_size)
 				break;
 		}
@@ -151,8 +158,9 @@ int mmap_stack_thread_create(ABT_pool pool, void (*thread_func)(void *),
 		D_MUTEX_UNLOCK(&stack_free_list_lock);
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack of size %zd has been taken from free list, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
-			stack, stack_size, shadow_alloced_stacks,
+		D_DEBUG(DB_MEM,
+			"%p mmap()'ed stack of size %zd from free list, alloced="DF_U64", free="
+			DF_U64"\n", stack, stack_size, shadow_alloced_stacks,
 			shadow_free_stacks);
 	} else {
 		D_ASSERT(free_stacks == 0);
@@ -163,8 +171,8 @@ mmap_alloc:
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
 		if (stack == MAP_FAILED) {
-			D_ERROR("Failed to mmap() ULT stack of size %zd : %s, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
-				stack_size, strerror(errno),
+			D_ERROR("Failed mmap() stack of size %zd : %s, alloced="DF_U64", free="
+				DF_U64"\n", stack_size, strerror(errno),
 				shadow_alloced_stacks, shadow_free_stacks);
 			/* should be safe to decrease with no lock here */
 			--alloced_stacks;
@@ -180,8 +188,9 @@ mmap_alloc:
 		mmap_stack_desc->stack = stack;
 		mmap_stack_desc->stack_size = stack_size;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack of size %zd has been allocated, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
-			stack, stack_size, shadow_alloced_stacks,
+		D_DEBUG(DB_MEM,
+			"%p mmap()'ed stack of size %zd allocated, alloced="DF_U64", free="
+			DF_U64"\n", stack, stack_size, shadow_alloced_stacks,
 			shadow_free_stacks);
 	}
 
@@ -276,8 +285,9 @@ int mmap_stack_thread_create_on_xstream(ABT_xstream xstream,
 		D_MUTEX_UNLOCK(&stack_free_list_lock);
 		stack = mmap_stack_desc->stack;
 		stack_size = mmap_stack_desc->stack_size;
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack of size %zd has been taken from free list, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
-			stack, stack_size, shadow_alloced_stacks,
+		D_DEBUG(DB_MEM,
+			"%p mmap()'ed stack of size %zd from free list, alloced="DF_U64", free="
+			DF_U64"\n", stack, stack_size, shadow_alloced_stacks,
 			shadow_free_stacks);
 	} else {
 		D_ASSERT(free_stacks == 0);
@@ -288,8 +298,8 @@ mmap_alloc:
 			     MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK | MAP_GROWSDOWN,
 			     -1, 0);
 		if (stack == MAP_FAILED) {
-			D_ERROR("Failed to mmap() ULT stack of size %zd : %s, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
-				stack_size, strerror(errno),
+			D_ERROR("Failed to mmap() stack of size %zd : %s, alloced="DF_U64", free="
+				DF_U64"\n", stack_size, strerror(errno),
 				shadow_alloced_stacks, shadow_free_stacks);
 			/* should be safe to decrease with no lock here */
 			--alloced_stacks;
@@ -305,8 +315,9 @@ mmap_alloc:
 		mmap_stack_desc->stack = stack;
 		mmap_stack_desc->stack_size = stack_size;
 		D_INIT_LIST_HEAD(&mmap_stack_desc->stack_list);
-		D_DEBUG(DB_MEM, "%p mmap()'ed stack of size %zd has been allocated, with alloced_stacks="DF_U64" and free_stacks="DF_U64"\n",
-			stack, stack_size, shadow_alloced_stacks,
+		D_DEBUG(DB_MEM,
+			"%p mmap()'ed stack of size %zd has been allocated, alloced="DF_U64", free="
+			DF_U64"\n", stack, stack_size, shadow_alloced_stacks,
 			shadow_free_stacks);
 	}
 

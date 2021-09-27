@@ -48,14 +48,9 @@ dsc_progress_start(void)
 	if (dx->dx_dsc_started)
 		return 0;
 
-#ifdef ULT_MMAP_STACK
-	rc = mmap_stack_thread_create(dx->dx_pools[DSS_POOL_GENERIC],
-				      dsc_progress, dx, ABT_THREAD_ATTR_NULL,
-				      NULL);
-#else
-	rc = ABT_thread_create(dx->dx_pools[DSS_POOL_GENERIC], dsc_progress,
-			       dx, ABT_THREAD_ATTR_NULL, NULL);
-#endif
+	rc = daos_abt_thread_create(dx->dx_pools[DSS_POOL_GENERIC],
+				    dsc_progress, dx, ABT_THREAD_ATTR_NULL,
+				    NULL);
 	if (rc != ABT_SUCCESS)
 		return dss_abterr2der(rc);
 

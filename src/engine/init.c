@@ -516,15 +516,14 @@ static void
 abt_fini(void)
 {
 #ifdef ULT_MMAP_STACK
+	mmap_stack_desc_t *mmap_stack_desc;
+
 	ABT_key_free(&stack_key);
 
 	D_MUTEX_LOCK(&stack_free_list_lock);
-	while (!d_list_empty(&stack_free_list)) {
-		mmap_stack_desc_t *mmap_stack_desc;
-
-		mmap_stack_desc = container_of(stack_free_list.next,
-					       mmap_stack_desc_t, stack_list);
-		d_list_del_init(stack_free_list.next);
+	while ((mmap_stack_desc = d_list_pop_entry(&stack_free_list,
+						   mmap_stack_desc_t,
+						   stack_list)) != NULL) {
 		D_MUTEX_UNLOCK(&stack_free_list_lock);
 		munmap(mmap_stack_desc->stack, mmap_stack_desc->stack_size);
 		D_MUTEX_LOCK(&stack_free_list_lock);
