@@ -860,11 +860,8 @@ dfuse___open64_2(const char *pathname, int flags)
 
 	fd = __real___open64_2(pathname, flags);
 
-	if (!ioil_iog.iog_initialized || (fd == -1)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring with failure %d %d",
-				pathname, ioil_iog.iog_initialized, fd);
+	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
-	}
 
 	if (!dfuse_check_valid_path(pathname)) {
 		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path",
@@ -902,11 +899,8 @@ dfuse___open_2(const char *pathname, int flags)
 
 	fd = __real___open_2(pathname, flags);
 
-	if (!ioil_iog.iog_initialized || (fd == -1)) {
-		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring with failure %d %d",
-				pathname, ioil_iog.iog_initialized, fd);
+	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
-	}
 
 	if (!dfuse_check_valid_path(pathname)) {
 		DFUSE_LOG_DEBUG("open_2(pathname=%s) ignoring by path",
@@ -958,11 +952,8 @@ dfuse_open(const char *pathname, int flags, ...)
 		mode = 0;
 	}
 
-	if (!ioil_iog.iog_initialized || (fd == -1)) {
-		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring with failure %d %d",
-				pathname, ioil_iog.iog_initialized, fd);
+	if (!ioil_iog.iog_initialized || (fd == -1))
 		return fd;
-	}
 
 	if (!dfuse_check_valid_path(pathname)) {
 		DFUSE_LOG_DEBUG("open(pathname=%s) ignoring by path",
@@ -1058,8 +1049,6 @@ dfuse_read(int fd, void *buf, size_t len)
 	off_t oldpos;
 	int rc;
 
-	DFUSE_LOG_DEBUG("read(fd=%d) checking file", fd);
-
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)
 		goto do_real_read;
@@ -1092,8 +1081,6 @@ dfuse_pread(int fd, void *buf, size_t count, off_t offset)
 	struct fd_entry *entry;
 	ssize_t bytes_read;
 	int rc;
-
-	DFUSE_LOG_DEBUG("pread(fd=%d) checking file", fd);
 
 	rc = vector_get(&fd_table, fd, &entry);
 	if (rc != 0)

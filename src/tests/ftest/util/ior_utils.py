@@ -119,8 +119,6 @@ class IorCommand(ExecutableCommand):
         self.pattern = None
         self.pattern_count = 1
 
-        self._pre_command = 'strace -e read -c'
-
     def get_param_names(self):
         """Get a sorted list of the defined IorCommand parameters."""
         # Sort the IOR parameter names to generate consistent ior commands
