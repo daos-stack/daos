@@ -486,4 +486,3 @@ class Snapshot(TestWithServers):
         except Exception as error:
             self.fail("##(7)Error when calling the snapshot list: {}"
                       .format(str(error)))
-
