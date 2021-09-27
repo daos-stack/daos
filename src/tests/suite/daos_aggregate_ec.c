@@ -119,14 +119,14 @@ ec_setup_from_test_args(struct ec_agg_test_ctx *ctx, test_arg_t *state)
 static void
 ec_setup_cont_obj(struct ec_agg_test_ctx *ctx, daos_oclass_id_t oclass)
 {
-	int		 rc;
+	char	str[37];
+	int	rc;
 
-	uuid_generate(ctx->uuid);
-
-	rc = daos_cont_create(ctx->poh, ctx->uuid, NULL, NULL);
+	rc = daos_cont_create(ctx->poh, &ctx->uuid, NULL, NULL);
 	assert_success(rc);
 
-	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_open(ctx->poh, str, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
 	assert_success(rc);
 
@@ -271,11 +271,13 @@ incremental_fill(void **statep)
 static void
 ec_cleanup_cont(struct ec_agg_test_ctx *ctx)
 {
-	int rc;
+	char	str[37];
+	int	rc;
 
 	/* Close & Destroy Container */
 	rc = daos_cont_close(ctx->coh, NULL);
 	assert_rc_equal(rc, 0);
+	uuid_unparse(ctx->uuid, str);
 	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
 	assert_rc_equal(rc, 0);
 }
