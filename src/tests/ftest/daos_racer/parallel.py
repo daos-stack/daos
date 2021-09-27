@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 """
 (C) Copyright 2021 Intel Corporation.
 
@@ -10,13 +10,13 @@ from command_utils import CommandFailure
 from daos_racer_utils import DaosRacerCommand
 
 
-class DaosRacerMultiTest(TestWithServers):
+class DaosRacerTest(TestWithServers):
     """Test cases that utilize the daos_racer tool.
 
     :avocado: recursive
     """
 
-    def test_daos_racer_multi(self):
+    def test_parallel(self):
         """JIRA-8445: multi-client daos_racer/consistency checker test.
 
         Test Description:
@@ -32,7 +32,7 @@ class DaosRacerMultiTest(TestWithServers):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,large
-        :avocado: tags=io,daosracer,daos_racer_multi
+        :avocado: tags=io,daosracer,daos_racer_parallel
         """
         # Create the dmg command
         daos_racer = DaosRacerCommand(self.bin, self.hostlist_clients[0], self.get_dmg_command())
