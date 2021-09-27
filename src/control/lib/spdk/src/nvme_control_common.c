@@ -360,7 +360,7 @@ populate_dev_health(struct nvme_stats *stats,
 				SPDK_NVME_INTEL_SMART_MEDIA_WEAR) {
 			atb = isp->attributes[i];
 			stats->media_wear_raw =
-				extend_to_uint64(atb.raw_value, 6) >> 10;
+					extend_to_uint64(atb.raw_value, 6);
 		}
 		if (isp->attributes[i].code ==
 				SPDK_NVME_INTEL_SMART_HOST_READ_PERCENTAGE) {
