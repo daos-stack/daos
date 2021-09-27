@@ -266,6 +266,9 @@ extern "C" {
 	/** ID mismatch */						\
 	ACTION(DER_ID_MISMATCH,		(DER_ERR_DAOS_BASE + 35),	\
 	       ID mismatch)						\
+	/** Retry with other target, an internal error code used in EC deg-fetch. */ \
+	ACTION(DER_TGT_RETRY,		(DER_ERR_DAOS_BASE + 36),	\
+		Retry with other target)				\
 
 /** Defines the gurt error codes */
 #define D_FOREACH_ERR_RANGE(ACTION)	\

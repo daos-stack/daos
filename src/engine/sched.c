@@ -427,6 +427,7 @@ sched_info_init(struct dss_xstream *dx)
 	int			 rc;
 
 	info->si_cur_ts = daos_getmtime_coarse();
+	info->si_cur_seq = 0;
 	info->si_stats.ss_tot_time = 0;
 	info->si_stats.ss_relax_time = 0;
 	info->si_stats.ss_busy_ts = info->si_cur_ts;
@@ -1213,6 +1214,15 @@ sched_cur_msec(void)
 	return info->si_cur_ts;
 }
 
+uint64_t
+sched_cur_seq(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	return info->si_cur_seq;
+}
+
 /*
  * A schedule cycle consists of three stages:
  * 1. Starting with a network poll ULT, number of ULTs to be executed in this
@@ -1623,6 +1633,9 @@ sched_watchdog_post(struct dss_xstream *dx, struct sched_unit *su)
 	uint64_t		 cur;
 	unsigned int		 elapsed;
 	char			**strings;
+
+	/* A ULT is just scheduled, increase schedule seq */
+	info->si_cur_seq++;
 
 	if (!watchdog_enabled(dx))
 		return;
