@@ -189,7 +189,6 @@ func runCmdTests(t *testing.T, cmdTests []cmdTest) {
 				testExpectedError(t, st.expectedErr, err)
 				return
 			}
-
 			if diff := cmp.Diff(st.expectedCalls, strings.Join(conn.called, " ")); diff != "" {
 				t.Fatalf("unexpected function calls (-want, +got):\n%s\n", diff)
 			}
