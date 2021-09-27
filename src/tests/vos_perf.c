@@ -24,9 +24,7 @@
 #include <daos_test.h>
 #include <daos/dts.h>
 #include "perf_internal.h"
-#ifdef ULT_MMAP_STACK
 #include <daos/stack_mmap.h>
-#endif
 
 uint64_t	ts_flags;
 
