@@ -42,7 +42,10 @@ class SparseFile(IorTestBase):
             Verify, the bytes between 1st byte and 1024th byte are empty.
             Now try to read the file from it's last 512 bytes till EOF.
             This should return EOF, otherwise fail the test.
-        :avocado: tags=all,hw,daosio,small,full_regression,dfusesparsefile
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,small
+        :avocado: tags=daosio,dfuse
+        :avocado: tags=dfusesparsefile
         """
         # Create a pool, container and start dfuse.
         self.create_pool()
