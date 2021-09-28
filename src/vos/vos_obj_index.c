@@ -556,6 +556,7 @@ oi_iter_probe(struct vos_iterator *iter, daos_anchor_t *anchor)
 	/* NB: these probe cannot guarantee the returned entry is within
 	 * the condition epoch range.
 	 */
+	vos_ilog_fetch_invalidate(&oiter->oit_ilog_info);
 	rc = oi_iter_match_probe(iter);
  out:
 	return rc;

@@ -74,6 +74,10 @@ vos_ilog_init(void);
 void
 vos_ilog_fetch_init(struct vos_ilog_info *info);
 
+/** Invalidate incarnation log information */
+void
+vos_ilog_fetch_invalidate(struct vos_ilog_info *info);
+
 /** Move ilog information from src to dest, clearing src */
 void
 vos_ilog_fetch_move(struct vos_ilog_info *dest, struct vos_ilog_info *src);

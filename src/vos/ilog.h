@@ -215,6 +215,13 @@ ilog_aggregate(struct umem_instance *umm, struct ilog_df *root,
 void
 ilog_fetch_init(struct ilog_entries *entries);
 
+/** Invalidate the ilog_entries struct for fetch
+ *
+ *  \param	entries[in]	Allocated structure where entries are stored
+ */
+void
+ilog_fetch_invalidate(struct ilog_entries *entries);
+
 /** Assuming src has already been copied to dest, just fix up internal pointers
  *  and reset src
  *

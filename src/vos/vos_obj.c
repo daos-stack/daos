@@ -864,6 +864,7 @@ key_iter_probe(struct vos_obj_iter *oiter, daos_anchor_t *anchor)
 	if (rc)
 		D_GOTO(out, rc);
 
+	vos_ilog_fetch_invalidate(&oiter->it_ilog_info);
 	rc = key_iter_match_probe(oiter);
 	if (rc)
 		D_GOTO(out, rc);

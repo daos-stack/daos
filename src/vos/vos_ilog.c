@@ -544,6 +544,13 @@ vos_ilog_fetch_init(struct vos_ilog_info *info)
 }
 
 void
+vos_ilog_fetch_invalidate(struct vos_ilog_info *info)
+{
+	ilog_fetch_invalidate(&info->ii_entries);
+}
+
+
+void
 vos_ilog_fetch_move(struct vos_ilog_info *dest, struct vos_ilog_info *src)
 {
 	memcpy(dest, src, sizeof(*dest));

@@ -1068,6 +1068,15 @@ ilog_fetch_init(struct ilog_entries *entries)
 }
 
 void
+ilog_fetch_invalidate(struct ilog_entries *entries)
+{
+	struct ilog_priv	*priv = ilog_ent2priv(entries);
+
+	/** Make sure we don't happen to get same address on subsequent check */
+	priv->ip_lctx.ic_root = NULL;
+}
+
+void
 ilog_fetch_move(struct ilog_entries *dest, struct ilog_entries *src)
 {
 	struct ilog_priv	*priv_dest = ilog_ent2priv(dest);
