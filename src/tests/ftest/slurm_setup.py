@@ -12,6 +12,7 @@ import logging
 import re
 import socket
 import sys
+from time import sleep
 from ClusterShell.NodeSet import NodeSet
 from util.general_utils import pcmd, run_task
 from avocado.utils.distro import detect
@@ -46,9 +47,17 @@ SLURMCTLD_STARTUP = [
     "systemctl restart slurmctld",
     "systemctl enable slurmctld"]
 
+SLURMCTLD_STARTUP_DEBUG = [
+    "cat /var/log/slurmctld.log",
+    "grep -v '^#' /etc/slurm/slurm.conf"]
+
 SLURMD_STARTUP = [
     "systemctl restart slurmd",
     "systemctl enable slurmd"]
+
+SLURMD_STARTUP_DEBUG = [
+    "cat /var/log/slurmd.log",
+    "grep -v '^#' /etc/slurm/slurm.conf"]
 
 
 def update_config_cmdlist(args):
@@ -102,7 +111,7 @@ def update_config_cmdlist(args):
                             info["Core"], info["Thread"], sudo, SLURM_CONF))
 
     #
-    cmd_list.append("echo \"PartitionName= {} Nodes={} Default=YES "
+    cmd_list.append("echo \"PartitionName={} Nodes={} Default=YES "
                     "MaxTime=INFINITE State=UP\" |{} tee -a {}".format(
                         args.partition, args.nodes, sudo, SLURM_CONF))
 
@@ -217,24 +226,35 @@ def start_slurm(args):
         "chown {}. {}".format(args.user, "/var/log/slurm"),
         "mkdir -p /var/spool/slurm/d",
         "mkdir -p /var/spool/slurm/ctld",
-        "chown {}. {}/ctld".format(args.user, "/var/spool/slurm")
+        "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
+        "rm -f /var/spool/slurmctld/clustername"
         ]
 
     if execute_cluster_cmds(all_nodes, cmd_list, args.sudo) > 0:
         return 1
 
-    # Startup the slurm control service
-    if execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo) > 0:
+    # Startup the slurm service
+    if execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo) > 0 or args.debug:
+        execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
         return 1
 
-    # Startup the slurm service
-    if execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo) > 0:
+
+    # Startup the slurm control service
+    if execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo) > 0 or args.debug:
+        execute_cluster_cmds(args.control, SLURMCTLD_STARTUP_DEBUG, args.sudo)
         return 1
+    # wait 30 sec for the slurmd to start
+    sleep(30)
 
     # ensure that the nodes are in the idle state
-    cmd_list = ["scontrol update nodename={} state=idle".format(
-        all_nodes)]
-    return execute_cluster_cmds(args.control, cmd_list, args.sudo)
+    cmd_list = ["scontrol update nodename={} state=idle".format(all_nodes)]
+    if execute_cluster_cmds(args.nodes, cmd_list, args.sudo) > 0 or args.debug:
+        cmd_list = (SLURMCTLD_STARTUP_DEBUG)
+        execute_cluster_cmds(args.control, cmd_list, args.sudo)
+        cmd_list = (SLURMD_STARTUP_DEBUG)
+        execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
+        return 1
+    return 0
 
 
 def main():
@@ -273,6 +293,10 @@ def main():
         "-s", "--sudo",
         action="store_true",
         help="Run all commands with privileges")
+    parser.add_argument(
+        "-d", "--debug",
+        action="store_true",
+        help="Run all debug commands")
 
     args = parser.parse_args()
     logging.info("Arguments: %s", args)
