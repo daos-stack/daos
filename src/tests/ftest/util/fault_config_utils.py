@@ -288,7 +288,7 @@ class FaultInjection():
         # Remove the fault injection files on the hosts.
         error_list = []
         commands = ["rm -f {}".format(self._fault_file)]
-        if self._host_list:
+        if self._hosts:
             commands.insert(0, get_clush_command(self._hosts, "-S -v", True))
         try:
             run_command(" ".join(commands), verbose=True, raise_exception=False)
