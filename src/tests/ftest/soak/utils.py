@@ -822,7 +822,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     ior_cmd.set_daos_params(
                         self.server_group, pool, self.container[-1].uuid)
                     env = ior_cmd.get_default_env("srun")
-                    sbatch_cmds = ["module load -q {}".format(mpi_module)]
+                    sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
                     # include dfuse cmdlines
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                         job_spec, api, b_size, t_size, o_type,
@@ -925,7 +925,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             self.container[-1].uuid)
                         env = mdtest_cmd.get_default_env("srun")
                         sbatch_cmds = [
-                            "module load -q {}".format(mpi_module)]
+                            "module purge", "module load {}".format(mpi_module)]
                         # include dfuse cmdlines
                         log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
                             job_spec, api, write_bytes, read_bytes, depth,

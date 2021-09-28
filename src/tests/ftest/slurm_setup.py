@@ -233,7 +233,7 @@ def start_slurm(args):
 
     # ensure that the nodes are in the idle state
     cmd_list = ["scontrol update nodename={} state=idle".format(
-        args.nodes)]
+        all_nodes)]
     return execute_cluster_cmds(args.control, cmd_list, args.sudo)
 
 
