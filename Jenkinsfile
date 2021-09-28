@@ -1018,8 +1018,7 @@ pipeline {
                                                         name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/',
-                                             allowEmptyArchive: true
+                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
                         }
                     }
                 } // stage('Fault inection testing')

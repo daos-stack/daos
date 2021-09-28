@@ -3624,9 +3624,9 @@ def run(wf, args):
             # list-container test.
             fatal_errors.add_result(test_alloc_fail(server, conf))
 
-            # Container attribute tests, work but disabled because of failures.
-            # fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
-            # fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
+            # Container attribute tests, work but currently identify failures.
+            fatal_errors.add_result(test_fi_get_attr(server, conf, wf_client))
+            fatal_errors.add_result(test_fi_list_attr(server, conf, wf_client))
 
             # filesystem copy test.
             fatal_errors.add_result(test_alloc_fail_copy(server, conf, wf_client))
