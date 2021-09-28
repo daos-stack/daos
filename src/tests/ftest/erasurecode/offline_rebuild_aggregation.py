@@ -37,8 +37,8 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
         self.pool.connect()
-        print("pool_percentage Before = {} ".format(
-            self.pool.pool_percentage_used()))
+        self.log.info("pool_percentage Before = %s",
+                      self.pool.pool_percentage_used())
 
         # Write the IOR data set with given all the EC object type
         self.ior_write_dataset()
@@ -96,8 +96,9 @@ class EcodAggregationOffRebuild(ErasureCodeIor):
         :avocado: tags=ec_offline_rebuild_agg_default
         """
         self.pool.connect()
-        print("pool_percentage Before = {} ".format(
-            self.pool.pool_percentage_used()))
+
+        self.log.info("pool_percentage Before = %s",
+                      self.pool.pool_percentage_used())
 
         # Write the IOR data set with given all the EC object type
         self.ior_write_dataset()

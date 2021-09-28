@@ -42,12 +42,5 @@ def scons():
 
     Export('daos_hdlrs_lib')
 
-    Import('cmd_parser', 'dc_credit')
-    daos_obj = [cmd_parser, dc_credit]
-    daos_src = ['daos.c', 'daos_obj_ctl.c']
-
-    daos = daos_build.program(denv, 'daos_old', [daos_src, daos_obj], LIBS=libs)
-    denv.Install('$PREFIX/bin/', daos)
-
 if __name__ == "SCons.Script":
     scons()

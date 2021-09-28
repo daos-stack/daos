@@ -280,10 +280,17 @@ obj_metrics_free(void *data)
 	D_FREE(data);
 }
 
+static int
+obj_metrics_count(void)
+{
+	return (sizeof(struct obj_pool_metrics) / sizeof(struct d_tm_node_t *)) * dss_tgt_nr;
+}
+
 struct dss_module_metrics obj_metrics = {
 	.dmm_tags = DAOS_TGT_TAG,
 	.dmm_init = obj_metrics_alloc,
 	.dmm_fini = obj_metrics_free,
+	.dmm_nr_metrics = obj_metrics_count,
 };
 
 struct dss_module obj_module =  {

@@ -421,3 +421,28 @@ dss_module_fini_metrics(enum dss_module_tag tag, void **metrics)
 		met->dmm_fini(metrics[mod->lm_dss_mod->sm_mod_id]);
 	}
 }
+
+/**
+ * Query all modules for the number of per-pool metrics they create.
+ *
+ * \return Total number of metrics for all modules
+ */
+int
+dss_module_nr_pool_metrics(void)
+{
+	struct loaded_mod	*mod;
+	int			 total = 0;
+
+	d_list_for_each_entry(mod, &loaded_mod_list, lm_lk) {
+		struct dss_module_metrics *met = mod->lm_dss_mod->sm_metrics;
+
+		if (met == NULL)
+			continue;
+		if (met->dmm_nr_metrics == NULL)
+			continue;
+
+		total += met->dmm_nr_metrics();
+	}
+
+	return total;
+}
