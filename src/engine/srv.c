@@ -918,6 +918,7 @@ dss_xstreams_init(void)
 	       sched_relax_mode2str(sched_relax_mode));
 
 	d_getenv_int("DAOS_SCHED_UNIT_RUNTIME_MAX", &sched_unit_runtime_max);
+	d_getenv_bool("DAOS_SCHED_WATCHDOG_ALL", &sched_watchdog_all);
 
 	/* start the execution streams */
 	D_DEBUG(DB_TRACE,
