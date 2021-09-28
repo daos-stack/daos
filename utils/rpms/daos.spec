@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.0.1-1%{?dist}
-%global libfabric_version 1.12.0
+%global libfabric_version 1.12.0-2
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.105
-Release:       3%{?relval}%{?dist}
+Release:       4%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -478,6 +478,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Tue Sep 28 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.3.105-4
+- Update to libfabric e7b4dccbc9d194965b60707d3689c73ab94eb2ae to pick rxm fixes
+
 * Wed Sep 15 2021 Li Wei <wei.g.li@intel.com> 1.3.105-3
 - Update raft to fix InstallSnapshot performance as well as to avoid some
   incorrect 0.8.0 RPMs
