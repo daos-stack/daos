@@ -548,7 +548,9 @@ func TestServer_Harness_CallDrpc(t *testing.T) {
 
 			h := NewEngineHarness(log)
 			for _, mic := range tc.mics {
-				h.AddInstance(NewMockInstance(mic))
+				if err := h.AddInstance(NewMockInstance(mic)); err != nil {
+					t.Fatal(err)
+				}
 			}
 
 			ctx, cancel := context.WithCancel(context.Background())
