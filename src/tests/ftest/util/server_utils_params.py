@@ -470,7 +470,7 @@ class DaosServerYamlParameters(YamlParameters):
                     env_var_dict[key] = forced_env_vars[key]
                     update = True
             if update:
-                new_env_vars = ["=".join([key, value]) for key, value in env_var_dict.items()]
+                new_env_vars = ["=".join([key, str(value)]) for key, value in env_var_dict.items()]
                 self.env_vars.update(new_env_vars, "env_var")
 
             # Ignore the scm_size param when using dcpm
