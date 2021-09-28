@@ -220,7 +220,7 @@ class Test(avocadoTest):
                     except Exception as excpt: # pylint: disable=broad-except
                         skip_process_error("Unable to read commit list: "
                                            "{}".format(excpt))
-                        commits = None
+                        return
                     if commits and vals[1] in commits:
                         # fix is in this code base
                         self.log.info("This test variant is included in the "

@@ -1476,6 +1476,8 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 out:
+	if (targets)
+		D_FREE(targets);
 	return rc;
 }
 
@@ -1490,7 +1492,7 @@ agg_process_holes_ult(void *arg)
 	d_iov_t			 tmp_csum_iov;
 	struct ec_agg_entry	*entry = stripe_ud->asu_agg_entry;
 	struct ec_agg_extent	*agg_extent;
-	struct pool_target	*targets;
+	struct pool_target	*targets = NULL;
 	struct ec_agg_param	*agg_param;
 	struct obj_ec_rep_in	*ec_rep_in = NULL;
 	struct obj_ec_rep_out	*ec_rep_out = NULL;
@@ -1628,30 +1630,25 @@ fetch_again:
 	}
 
 	agg_param = container_of(entry, struct ec_agg_param, ap_agg_entry);
+	rc = pool_map_find_failed_tgts(agg_param->ap_pool_info.api_pool->sp_map,
+				       &targets, &failed_tgts_cnt);
+	if (rc) {
+		D_ERROR(DF_UOID" pool_map_find_failed_tgts failed: "
+			DF_RC"\n", DP_UOID(entry->ae_oid), DP_RC(rc));
+		goto out;
+	}
+
 	/* Invoke peer re-replicate */
 	for (peer = 0; peer < p; peer++) {
 		if (pidx == peer)
 			continue;
-		rc = pool_map_find_failed_tgts(
-			agg_param->ap_pool_info.api_pool->sp_map,
-			&targets, &failed_tgts_cnt);
-		if (rc) {
-			D_ERROR(DF_UOID" pool_map_find_failed_tgts failed: "
-				DF_RC"\n", DP_UOID(entry->ae_oid), DP_RC(rc));
-			goto out;
-		}
 
-		if (targets != NULL) {
-			for (i = 0; i < failed_tgts_cnt; i++) {
-				if (targets[i].ta_comp.co_rank ==
-				    entry->ae_peer_pshards[peer].sd_rank) {
-					D_ERROR(DF_UOID" peer %d parity tgt "
-						"failed\n",
-						DP_UOID(entry->ae_oid),
-						peer);
-					rc = -1;
-					goto out;
-				}
+		for (i = 0; targets && i < failed_tgts_cnt; i++) {
+			if (targets[i].ta_comp.co_rank == entry->ae_peer_pshards[peer].sd_rank) {
+				D_ERROR(DF_UOID" peer %d parity tgt failed\n",
+					DP_UOID(entry->ae_oid), peer);
+				rc = -1;
+				goto out;
 			}
 		}
 
@@ -1703,6 +1700,8 @@ fetch_again:
 	}
 
 out:
+	if (targets)
+		D_FREE(targets);
 	if (rpc)
 		crt_req_decref(rpc);
 	if (bulk_hdl)
