@@ -168,17 +168,28 @@ func (sc *Config) Validate() error {
 		return errors.Wrap(err, "storage config validation failed")
 	}
 
+	var pruned TierConfigs
+	for _, tier := range sc.Tiers {
+		if tier.IsBdev() && len(tier.Bdev.DeviceList) == 0 {
+			continue // prune empty bdev tier
+		}
+		pruned = append(pruned, tier)
+	}
+	sc.Tiers = pruned
+
+	scmCfgs := sc.Tiers.ScmConfigs()
+	bdevCfgs := sc.Tiers.BdevConfigs()
+
+	if len(scmCfgs) == 0 {
+		return errors.New("missing scm storage tier in config")
+	}
+
 	// set persistent location for engine bdev config file to be consumed by
 	// provider backend, set to empty when no devices specified
 	sc.ConfigOutputPath = ""
-	scmCfgs := sc.Tiers.ScmConfigs()
-	bdevCfgs := sc.Tiers.BdevConfigs()
-	if len(scmCfgs) > 0 && sc.Tiers.CfgHasBdevs() {
-		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
-	}
-
-	// set the VOS env:
 	if len(bdevCfgs) > 0 {
+		sc.ConfigOutputPath = filepath.Join(scmCfgs[0].Scm.MountPoint, BdevOutConfName)
+
 		switch bdevCfgs[0].Class {
 		case ClassFile, ClassKdev:
 			sc.VosEnv = "AIO"
@@ -254,9 +265,6 @@ type ScmConfig struct {
 func (sc *ScmConfig) Validate(class Class) error {
 	if sc.MountPoint == "" {
 		return errors.New("no scm_mount set")
-	}
-	if sc.RamdiskSize < 0 {
-		return errors.New("negative scm_size")
 	}
 
 	switch class {

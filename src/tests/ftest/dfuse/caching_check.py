@@ -9,7 +9,7 @@ from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 from general_utils import pcmd
 
-class DfuseCachingCheck(IorTestBase):
+class CachingCheck(IorTestBase):
     # pylint: disable=too-many-ancestors
     """Test class Description: Check dfuse read performance with and
        without caching on a single server and single client setting with
@@ -18,7 +18,7 @@ class DfuseCachingCheck(IorTestBase):
     :avocado: recursive
     """
 
-    def test_dfuse_caching_check(self):
+    def test_caching_check(self):
         """Jira ID: DAOS-4874.
 
         Test Description:

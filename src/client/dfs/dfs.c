@@ -1275,6 +1275,7 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 	daos_cont_info_t	co_info;
 	dfs_t			*dfs;
 	dfs_attr_t		dattr;
+	char			str[37];
 	struct daos_prop_co_roots roots;
 	int			rc;
 
@@ -1365,7 +1366,8 @@ dfs_cont_create_int(daos_handle_t poh, uuid_t *cuuid, bool uuid_is_set, uuid_t i
 		D_GOTO(err_prop, rc = daos_der2errno(rc));
 	}
 
-	rc = daos_cont_open(poh, *cuuid, DAOS_COO_RW, &coh, &co_info, NULL);
+	uuid_unparse(*cuuid, str);
+	rc = daos_cont_open(poh, str, DAOS_COO_RW, &coh, &co_info, NULL);
 	if (rc) {
 		D_ERROR("daos_cont_open() failed "DF_RC"\n", DP_RC(rc));
 		D_GOTO(err_destroy, rc = daos_der2errno(rc));
@@ -1436,7 +1438,7 @@ err_destroy:
 	 * process might have created it.
 	 */
 	if (rc != EEXIST)
-		daos_cont_destroy(poh, *cuuid, 1, NULL);
+		daos_cont_destroy(poh, str, 1, NULL);
 err_prop:
 	daos_prop_free(prop);
 	return rc;
@@ -3276,6 +3278,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	uuid_copy(obj_glob->coh_uuid, coh_uuid);
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
 	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME + 1);
+	obj_glob->name[DFS_MAX_NAME] = 0;
 	rc = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
 	if (rc)
 		return rc;

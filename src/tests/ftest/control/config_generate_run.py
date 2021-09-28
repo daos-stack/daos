@@ -59,9 +59,6 @@ class ConfigGenerateRun(TestWithServers):
         except yaml.YAMLError as error:
             raise CommandFailure("Error loading dmg generated config!")
 
-        # Remove this line when DAOS-7861 is fixed.
-        generated_yaml["nr_hugepages"] = 4096
-
         # Stop and restart daos_server. self.start_server_managers() has the
         # server startup check built into it, so if there's something wrong,
         # it'll throw an error.
@@ -80,7 +77,7 @@ class ConfigGenerateRun(TestWithServers):
         try:
             agent_force = self.start_server_managers(force=True)
         except ServerFailed as error:
-            self.fail("Restarting server failed! %s", error)
+            self.fail("Restarting server failed! {}".format(error))
 
         # We don't need agent for this test. However, when we stop the server,
         # agent is also stopped. Then the harness checks that the agent is

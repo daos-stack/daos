@@ -77,9 +77,9 @@ def add_containers(self, pool, oclass=None, path="/run/container/*"):
         TestContainer(pool, daos_command=self.get_daos_command()))
     self.container[-1].namespace = path
     self.container[-1].get_params(self)
-    # don't include oclass in daos cont cmd; include rf based on the class
+    # include rf based on the class
     if oclass:
-        self.container[-1].oclass.update(None)
+        self.container[-1].oclass.update(oclass)
         redundancy_factor = get_rf(oclass)
         rf = 'rf:{}'.format(str(redundancy_factor))
     properties = self.container[-1].properties.value
@@ -275,13 +275,16 @@ def run_metrics_check(self, logging=True, prefix=None):
             if prefix:
                 name = prefix + "_metrics_{}.csv".format(engine)
             destination = self.outputsoakdir
-            output = run_pcmd(hosts=self.hostlist_servers,
-                              command="sudo daos_metrics -S {} --csv".format(
-                                  engine),
-                              verbose=(not logging),
-                              timeout=60)
+            results = run_pcmd(hosts=self.hostlist_servers,
+                               command="sudo daos_metrics -S {} --csv".format(
+                                   engine),
+                               verbose=(not logging),
+                               timeout=60)
             if logging:
-                write_logfile(output[0]["stdout"], name, destination)
+                for result in results:
+                    hosts = result["hosts"]
+                    log_name = name + "-" + str(hosts)
+                    write_logfile(result["stdout"], log_name, destination)
 
 
 def get_harassers(harasser):
@@ -319,8 +322,8 @@ def wait_for_pool_rebuild(self, pool, name):
     self.log.info(
         "<<Wait for %s rebuild on %s>> at %s", name, pool.uuid, time.ctime())
     try:
-        # Wait for rebuild to start
-        pool.wait_for_rebuild(True)
+        # # Wait for rebuild to start
+        # pool.wait_for_rebuild(True)
         # Wait for rebuild to complete
         pool.wait_for_rebuild(False)
         rebuild_status = True
@@ -431,9 +434,12 @@ def launch_exclude_reintegrate(self, pool, name, results, args):
     tgt_idx = None
     if name == "EXCLUDE":
         targets = self.params.get("targets_exclude", "/run/soak_harassers/*", 8)
-        exclude_servers = len(self.hostlist_servers) - 1
-        # Exclude one rank : other than rank 0 and 1.
-        rank = random.randint(2, exclude_servers)
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        exclude_servers = (
+            len(self.hostlist_servers) * int(engine_count)) - 1
+        # Exclude one rank.
+        rank = random.randint(0, exclude_servers)
         if targets >= 8:
             tgt_idx = None
         else:
@@ -505,9 +511,12 @@ def launch_server_stop_start(self, pools, name, results, args):
     rank = None
     drain = self.params.get("enable_drain", "/run/soak_harassers/*", False)
     if name == "SVR_STOP":
-        exclude_servers = len(self.hostlist_servers) - 1
-        # Exclude one rank : other than rank 0 and 1.
-        rank = random.randint(2, exclude_servers)
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        exclude_servers = (
+            len(self.hostlist_servers) * int(engine_count)) - 1
+        # Exclude one rank.
+        rank = random.randint(0, exclude_servers)
         # init the status dictionary
         params = {"name": name,
                   "status": status,
@@ -539,6 +548,11 @@ def launch_server_stop_start(self, pools, name, results, args):
                 self.log.error(
                     "<<<FAILED:dmg system stop failed", exc_info=error)
                 status = False
+            if not drain:
+                rebuild_status = True
+                for pool in pools:
+                    rebuild_status &= wait_for_pool_rebuild(self, pool, name)
+                status = rebuild_status
     elif name == "SVR_START":
         if self.harasser_results["SVR_STOP"]:
             rank = self.harasser_args["SVR_STOP"]["rank"]
@@ -568,7 +582,11 @@ def launch_server_stop_start(self, pools, name, results, args):
                 self.log.error(
                     "<<<FAILED:dmg system start failed", exc_info=error)
                 status = False
+            for pool in pools:
+                self.dmg_command.pool_query(pool.uuid)
             if status:
+                # Wait ~ 30 sec before issuing the reintegrate
+                time.sleep(30)
                 # reintegrate ranks
                 reintegrate_status = True
                 for pool in pools:
@@ -1065,12 +1083,12 @@ def build_job_script(self, commands, job, nodesperjob):
     # if additional cmds are needed in the batch script
     prepend_cmds = [
         "set -e",
-        "/usr/bin/daos pool query --pool {} ".format(self.pool[1].uuid),
-        "/usr/bin/daos pool query --pool {} ".format(self.pool[0].uuid)
+        "daos pool query {} ".format(self.pool[1].uuid),
+        "daos pool query {} ".format(self.pool[0].uuid)
         ]
     append_cmds = [
-        "/usr/bin/daos pool query --pool {} ".format(self.pool[1].uuid),
-        "/usr/bin/daos pool query --pool {} ".format(self.pool[0].uuid)
+        "daos pool query {} ".format(self.pool[1].uuid),
+        "daos pool query {} ".format(self.pool[0].uuid)
         ]
     exit_cmd = ["exit $status"]
     # Create the sbatch script for each list of cmdlines
