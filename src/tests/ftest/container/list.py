@@ -39,7 +39,7 @@ class ListContainerTest(TestWithServers):
         # Create containers and store the container UUIDs into expected_uuids.
         for _ in range(count):
             expected_uuids.append(
-                self.daos_cmd.get_output("container_create", pool=pool_uuid)[0])
+                self.daos_cmd.container_create(pool=pool_uuid)["response"]["container_uuid"])
         expected_uuids.sort()
 
         # Call container list and collect the UUIDs.
@@ -51,7 +51,7 @@ class ListContainerTest(TestWithServers):
 
         self.assertEqual(expected_uuids, actual_uuids)
 
-    def test_list_container(self):
+    def test_list_containers(self):
         """Jira ID: DAOS-3629
 
         Test Description:

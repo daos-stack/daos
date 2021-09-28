@@ -50,12 +50,15 @@ nav:
         - 'Architecture': 'overview/architecture.md'
         - 'Storage Model': 'overview/storage.md'
         - 'Transaction Model': 'overview/transaction.md'
+        - 'Data Integrity': 'overview/data_integrity.md'
         - 'Fault Model': 'overview/fault.md'
         - 'Security Model': 'overview/security.md'
+        - 'Use Cases': 'overview/use_cases.md'
         - 'Terminology': 'overview/terminology.md'
     - Installation and Setup:
         - 'CentOS': 'QSG/setup.md'
         - 'openSUSE': 'QSG/suse_setup.md'
+        - 'Build from Scratch': 'QSG/scratch.md'
         - 'Admin/Client Tools': 'QSG/tour.md'
     - Administration Guide:
         - 'Hardware Requirements': 'admin/hardware.md'
@@ -83,6 +86,7 @@ nav:
         - 'File System': 'user/filesystem.md'
         - 'MPI-IO Support': 'user/mpi-io.md'
         - 'HDF5 Support': 'user/hdf5.md'
+        - 'Python Support': 'user/python.md'
         - 'Spark and Hadoop': 'user/spark.md'
         - 'Data Mover': 'user/datamover.md'
         - 'Native Programming Interface': 'user/interface.md'
