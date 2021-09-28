@@ -5,7 +5,9 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
+from apricot import skipForTicket
 from ior_test_base import IorTestBase
+
 
 class MultipleContainerDelete(IorTestBase):
     # pylint: disable=too-many-ancestors
@@ -16,6 +18,7 @@ class MultipleContainerDelete(IorTestBase):
     :avocado: recursive
     """
 
+    @skipForTicket("DAOS-8672")
     def test_multiple_container_delete(self):
         """Jira ID: DAOS-3673
 
