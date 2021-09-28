@@ -27,11 +27,8 @@ elif [[ $distro = el* ]] || [[ $distro = centos* ]] ||
           testmpio                     \
           python$pyver-mpi4py-tests    \
           hdf5-mpich-tests             \
-          hdf5-$openmpi-tests          \
-          hdf5-vol-daos-$openmpi-tests \
           hdf5-vol-daos-mpich-tests    \
           MACSio-mpich                 \
-          MACSio-$openmpi              \
           mpifileutils-mpich"
 else
     echo "I don't know which packages should be installed for distro"
