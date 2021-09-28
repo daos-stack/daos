@@ -70,7 +70,7 @@ class CartCtl(CartCtlCommand):
 
     def __init__(self):
         """Create a CartCtl object."""
-        # super().__init__("/run/CartCtl/*", "cart_ctl")
+        super().__init__("/run/CartCtl/*", "cart_ctl")
 
     def run(self):
         # pylint: disable=arguments-differ
@@ -82,4 +82,4 @@ class CartCtl(CartCtlCommand):
         """
         self.log.info('Starting CartCtl')
 
-        # super().run()
+        super().run()
