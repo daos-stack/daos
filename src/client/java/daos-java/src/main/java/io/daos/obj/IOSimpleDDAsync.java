@@ -147,10 +147,6 @@ public class IOSimpleDDAsync extends IODataDescBase implements DaosEventQueue.At
     return retCode == RET_CODE_SUCCEEDED;
   }
 
-  public int getReturnCode() {
-    return retCode;
-  }
-
   @Override
   public IODataDesc duplicate() {
     throw new UnsupportedOperationException("duplicate is not supported");

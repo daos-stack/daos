@@ -6,7 +6,7 @@
 #
 
 # Pull base image
-ARG BASE_DISTRO=centos:8
+ARG BASE_DISTRO=fedora:34
 FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
@@ -307,10 +307,10 @@ RUN echo -e "<settings>\n\
 </settings>" > /home/daos/.m2/settings.xml
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-
+ARG MAVEN_VERSION=3.6.3
 USER root:root
 
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || ( wget https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz && tar -xf apache-maven-3.6.3-bin.tar.gz && find ./ -name "mvn" | { read d; f=$(dirname $d); cp -r $(readlink -f $f)/../* /usr/local; } )
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || ( wget https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz && tar -xf apache-maven-$MAVEN_VERSION-bin.tar.gz && find ./ -name "mvn" | { read d; f=$(dirname $d); cp -r $(readlink -f $f)/../* /usr/local; } )
 
 USER daos_server:daos_server
 
