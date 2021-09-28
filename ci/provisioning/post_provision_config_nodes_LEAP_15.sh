@@ -83,8 +83,7 @@ post_provision_config_nodes() {
     rm -f /tmp/daos_control.log
 
     # shellcheck disable=SC2086
-    if [ -n "$INST_RPMS" ] &&
-       ! time dnf -y install $INST_RPMS; then
+    if [ -n "$INST_RPMS" ] && ! retry_cmd 360 dnf -y install $INST_RPMS; then
         rc=${PIPESTATUS[0]}
         dump_repos
         exit "$rc"
@@ -93,8 +92,7 @@ post_provision_config_nodes() {
     distro_custom
 
     # now make sure everything is fully up-to-date
-    if ! time dnf -y upgrade \
-                  --exclude "$EXCLUDE_UPGRADE"; then
+    if ! retry_cmd 600 dnf -y upgrade --exclude "$EXCLUDE_UPGRADE"; then
         dump_repos
         exit 1
     fi
