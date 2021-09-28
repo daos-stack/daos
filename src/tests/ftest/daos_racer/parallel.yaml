@@ -38,7 +38,7 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
-job_manager_class_name: Mpirun
+job_manager_class_name: Orterun
 job_manager_mpi_type: openmpi
 job_manager_timeout: 630
 daos_racer:
