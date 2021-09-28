@@ -385,7 +385,14 @@ dss_srv_handler(void *arg)
 		dx->dx_ctx_id = dmi->dmi_ctx_id;
 		/** verify CART assigned the ctx_id ascendantly start from 0 */
 		if (dx->dx_xs_id < dss_sys_xs_nr) {
-			D_ASSERT(dx->dx_ctx_id == dx->dx_xs_id);
+			/*
+			 * xs_id: 0 => SYS  XS: ctx_id: 0
+			 * xs_id: 1 => DRPC XS: no ctx_id
+			 * xs_id: 2 => SWIM XS: ctx_id: 1
+			 */
+			D_ASSERTF(dx->dx_ctx_id == (dx->dx_xs_id / 2),
+				  "incorrect ctx_id %d for xs_id %d\n",
+				  dx->dx_ctx_id, dx->dx_xs_id);
 		} else {
 			if (dx->dx_main_xs) {
 				D_ASSERTF(dx->dx_ctx_id ==
