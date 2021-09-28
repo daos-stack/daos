@@ -578,7 +578,6 @@ server_init(int argc, char *argv[])
 {
 	uint64_t		bound;
 	unsigned int		ctx_nr;
-	int			crt_swim_idx;
 	int			rc;
 	struct engine_metrics	*metrics;
 
@@ -637,10 +636,9 @@ server_init(int argc, char *argv[])
 
 	/* initialize the network layer */
 	ctx_nr = dss_ctx_nr_get();
-	crt_swim_idx = dss_ctx_get_swim_ctx();
 	rc = crt_init_opt(daos_sysname,
 			  CRT_FLAG_BIT_SERVER,
-			  daos_crt_init_opt_get(true, ctx_nr, crt_swim_idx));
+			  daos_crt_init_opt_get(true, ctx_nr));
 	if (rc)
 		D_GOTO(exit_mod_init, rc);
 	D_INFO("Network successfully initialized\n");

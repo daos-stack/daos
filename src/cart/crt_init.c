@@ -163,10 +163,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
-	if (opt && opt->cio_swim_crt_idx)
-		crt_gdata.cg_swim_crt_idx = opt->cio_swim_crt_idx;
-	else
-		crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
+	crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
 
 	D_DEBUG(DB_ALL, "SWIM context idx=%d\n", crt_gdata.cg_swim_crt_idx);
 

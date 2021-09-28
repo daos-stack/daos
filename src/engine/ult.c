@@ -312,9 +312,9 @@ sched_ult2xs(int xs_type, int tgt_id)
 		return DSS_XS_SELF;
 	case DSS_XS_SYS:
 		return 0;
-	case DSS_XS_SWIM:
-		return 1;
 	case DSS_XS_DRPC:
+		return 1;
+	case DSS_XS_SWIM:
 		return 2;
 	case DSS_XS_IOFW:
 		if (!dss_helper_pool) {

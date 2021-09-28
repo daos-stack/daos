@@ -644,13 +644,12 @@ daos_hhash_link_delete(struct d_hlink *hlink)
  *
  * \param server [IN]	true for server
  * \param ctx_nr [IN]	number of contexts
- * \param swim_ctx [IN]	swim ctx index
  *
  * \return		the pointer to crt_init_options_t (NULL if not needed)
  */
 crt_init_options_t daos_crt_init_opt;
 crt_init_options_t *
-daos_crt_init_opt_get(bool server, int ctx_nr, int swim_ctx)
+daos_crt_init_opt_get(bool server, int ctx_nr)
 {
 	crt_phy_addr_t	addr_env;
 	bool		sep = false;
@@ -663,9 +662,6 @@ daos_crt_init_opt_get(bool server, int ctx_nr, int swim_ctx)
 	daos_crt_init_opt.cio_max_expected_size = DAOS_RPC_SIZE;
 	daos_crt_init_opt.cio_use_unexpected_size = 1;
 	daos_crt_init_opt.cio_max_unexpected_size = DAOS_RPC_SIZE;
-
-	/** specify which context index use for SWIM */
-	daos_crt_init_opt.cio_swim_crt_idx = swim_ctx;
 
 	/** Scalable EndPoint-related settings */
 	d_getenv_bool("CRT_CTX_SHARE_ADDR", &sep);

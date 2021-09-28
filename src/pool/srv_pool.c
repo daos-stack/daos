@@ -844,13 +844,12 @@ ds_pool_enable_exclude(void)
 static void
 pool_exclude_rank_ult(void *data)
 {
-	struct ds_pool_exclude_arg     *arg = data;
+	struct ds_pool_exclude_arg *arg = data;
 	daos_prop_t		prop = { 0 };
 	struct daos_prop_entry	*entry;
 	struct pool_svc		*svc;
 	int			rc = 0;
 
-	pool_svc_get_leader(arg->svc);
 	svc = arg->svc;
 	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
 	if (rc)
@@ -887,12 +886,15 @@ pool_exclude_rank(struct pool_svc *svc, d_rank_t rank)
 	if (ult_arg == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	pool_svc_get_leader(svc);
 	ult_arg->svc = svc;
 	ult_arg->rank = rank;
 	rc = dss_ult_create(pool_exclude_rank_ult, ult_arg, DSS_XS_SYS,
 			    0, 0, NULL);
-	if (rc)
+	if (rc) {
+		pool_svc_put_leader(svc);
 		D_FREE_PTR(ult_arg);
+	}
 out:
 	if (rc)
 		D_ERROR("exclude ult failed: rc %d\n", rc);

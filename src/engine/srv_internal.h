@@ -138,7 +138,6 @@ void dss_dump_ABT_state(FILE *fp);
 void dss_xstreams_open_barrier(void);
 struct dss_xstream *dss_get_xstream(int stream_id);
 int dss_xstream_cnt(void);
-int dss_ctx_get_swim_ctx(void);
 
 /* srv_metrics.c */
 int dss_engine_metrics_init(void);
