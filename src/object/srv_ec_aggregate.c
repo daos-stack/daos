@@ -303,7 +303,7 @@ agg_clear_extents(struct ec_agg_entry *entry)
 
 		d_list_del(&extent->ae_link);
 		entry->ae_cur_stripe.as_extent_cnt--;
-		D_FREE_PTR(extent);
+		D_FREE(extent);
 	}
 
 	entry->ae_cur_stripe.as_offset = 0U;
@@ -432,7 +432,6 @@ agg_prep_sgl(struct ec_agg_entry *entry)
 out:
 	d_sgl_fini(&entry->ae_sgl, true);
 	return rc;
-
 }
 
 /* Determines if an extent overlaps a cell.
@@ -589,10 +588,8 @@ agg_fetch_odata_cells(struct ec_agg_entry *entry, uint8_t *bit_map,
 		D_ERROR("dsc_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
 out:
-	if (recxs)
-		D_FREE(recxs);
-	if (sgl.sg_iovs)
-		D_FREE(sgl.sg_iovs);
+	D_FREE(recxs);
+	D_FREE(sgl.sg_iovs);
 	return rc;
 }
 
@@ -704,7 +701,6 @@ ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 out:
 	return rc;
-
 }
 
 /* Driver function for full_stripe encode. Fetches the data and then invokes
@@ -908,10 +904,8 @@ agg_fetch_local_extents(struct ec_agg_entry *entry, uint8_t *bit_map,
 		D_ERROR("vos_obj_fetch failed: "DF_RC"\n", DP_RC(rc));
 
 out:
-	if (recxs != NULL)
-		D_FREE(recxs);
-	if (sgl.sg_iovs != NULL)
-		D_FREE(sgl.sg_iovs);
+	D_FREE(recxs);
+	D_FREE(sgl.sg_iovs);
 	return rc;
 }
 
@@ -1134,7 +1128,6 @@ agg_process_partial_stripe_ult(void *arg)
 
 out:
 	ABT_eventual_set(stripe_ud->asu_eventual, (void *)&rc, sizeof(rc));
-
 }
 
 /* Driver function for partial stripe update. Fetches the data and then invokes
@@ -1476,8 +1469,7 @@ agg_peer_update(struct ec_agg_entry *entry, bool write_parity)
 ev_out:
 	ABT_eventual_free(&stripe_ud.asu_eventual);
 out:
-	if (targets)
-		D_FREE(targets);
+	D_FREE(targets);
 	return rc;
 }
 
@@ -1500,7 +1492,7 @@ agg_process_holes_ult(void *arg)
 	crt_bulk_t		 bulk_hdl = NULL;
 	uint32_t		 len = ec_age2cs(entry);
 	uint64_t		 cell_b = ec_age2cs_b(entry);
-	uint32_t		 k = ec_age2k(entry);
+	uint64_t		 k = ec_age2k(entry);
 	uint32_t		 p = ec_age2p(entry);
 	uint64_t		 ss = entry->ae_cur_stripe.as_stripenum *
 					k * len;
@@ -1700,8 +1692,7 @@ fetch_again:
 	}
 
 out:
-	if (targets)
-		D_FREE(targets);
+	D_FREE(targets);
 	if (rpc)
 		crt_req_decref(rpc);
 	if (bulk_hdl)
@@ -1791,8 +1782,7 @@ ev_out:
 out:
 	D_FREE(stripe_ud.asu_recxs);
 	daos_csummer_free_ic(stripe_ud.asu_csummer, &stripe_ud.asu_iod_csums);
-	if (stripe_ud.asu_csum_iov.iov_buf)
-		D_FREE(stripe_ud.asu_csum_iov.iov_buf);
+	D_FREE(stripe_ud.asu_csum_iov.iov_buf);
 	daos_csummer_destroy(&stripe_ud.asu_csummer);
 	return rc;
 }

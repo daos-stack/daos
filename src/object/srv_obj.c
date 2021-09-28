@@ -717,8 +717,7 @@ obj_echo_rw(crt_rpc_t *rpc, daos_iod_t *split_iods, uint64_t *split_offs)
 
 		/* Check each vector */
 		if (p_sgl->sg_iovs[i].iov_buf_len < size) {
-			if (p_sgl->sg_iovs[i].iov_buf != NULL)
-				D_FREE(p_sgl->sg_iovs[i].iov_buf);
+			D_FREE(p_sgl->sg_iovs[i].iov_buf);
 
 			D_ALLOC(p_sgl->sg_iovs[i].iov_buf, size);
 			/* obj_tls_fini() will free these buffer */
@@ -1542,7 +1541,6 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				D_ERROR(DF_UOID" fetch verify failed: %d.\n",
 					DP_UOID(orw->orw_oid), rc);
 				goto post;
-
 			}
 		}
 	}
@@ -2195,6 +2193,7 @@ ds_obj_tgt_update_handler(crt_rpc_t *rpc)
 
 	if (DAOS_FAIL_CHECK(DAOS_VC_DIFF_DKEY)) {
 		unsigned char	*buf = dkey->iov_buf;
+
 		buf[0] += orw->orw_oid.id_shard + 1;
 		orw->orw_dkey_hash = obj_dkey2hash(orw->orw_oid.id_pub, dkey);
 	}
@@ -2312,7 +2311,7 @@ obj_tgt_update(struct dtx_leader_handle *dlh, void *arg, int idx,
 			D_GOTO(comp, rc = -DER_IO);
 
 		/* No need re-exec local update */
-		if (dlh != NULL && dlh->dlh_handle.dth_prepared)
+		if (dlh->dlh_handle.dth_prepared)
 			goto comp;
 
 		/* XXX: For non-solo DTX, leader and non-leader will make each
@@ -2986,7 +2985,6 @@ obj_enum_reply_bulk(crt_rpc_t *rpc)
 			       DAOS_HDL_INVAL, sgls, idx, NULL);
 	if (oei->oei_kds_bulk) {
 		D_FREE(oeo->oeo_kds.ca_arrays);
-		oeo->oeo_kds.ca_arrays = NULL;
 		oeo->oeo_kds.ca_count = 0;
 	}
 
@@ -3359,7 +3357,7 @@ obj_tgt_punch(struct dtx_leader_handle *dlh, void *arg, int idx,
 		if (DAOS_FAIL_CHECK(DAOS_DTX_LEADER_ERROR))
 			D_GOTO(comp, rc = -DER_IO);
 
-		if (dlh != NULL && dlh->dlh_handle.dth_prepared)
+		if (dlh->dlh_handle.dth_prepared)
 			goto comp;
 
 		rc = obj_local_punch(opi, opc_get(rpc->cr_opc), exec_arg->ioc,
@@ -4162,7 +4160,6 @@ out:
 				if (biods[i] != NULL)
 					bio_iod_post(biods[i]);
 			}
-
 		}
 
 		if (iohs != NULL) {
