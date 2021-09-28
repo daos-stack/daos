@@ -1102,7 +1102,8 @@ def build_job_script(self, commands, job, nodesperjob):
             "time": str(job_timeout) + ":00",
             "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
             "error": str(error),
-            "export": "ALL"
+            "export": "ALL",
+            "exclusive": None
         }
         # include the cluster specific params
         sbatch.update(self.srun_params)
