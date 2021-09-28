@@ -1435,12 +1435,14 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		map_comp.co_type = PO_COMP_TP_NODE;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
+		map_comp.co_padding = 0;
 		map_comp.co_id = node.fdn_val.dom->fd_id;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
 		map_comp.co_fseq = 1;
+		map_comp.co_out_ver = map_version;
+		map_comp.co_flags = 0;
 		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
-		map_comp.co_padding = 0;
 
 		if (map != NULL) {
 			struct pool_domain	*current;
