@@ -102,7 +102,6 @@ interfaces need to be on the same subnet or routing capabilities across the
 different subnet must be configured.
 
 
-
 ## Runtime Directory Setup
 
 DAOS uses a series of Unix Domain Sockets to communicate between its
@@ -122,10 +121,10 @@ Unable to create socket directory: /var/run/daos_server
 By default, daos_server and daos_agent will use the directories
 /var/run/daos_server and /var/run/daos_agent respectively. To change
 the default location that daos_server uses for its runtime directory,
-either uncomment and set the socket_dir configuration value in
-install/etc/daos_server.yml, or pass the location to daos_server on
-the command line using the -d flag (`daos_server start -d /tmp/daos_server`). For the daos_agent, an alternate
-location can be passed on the command line using the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
+uncomment and set the socket_dir configuration value in /etc/daos/daos_server.yml.
+For the daos_agent, either uncomment and set the runtime_dir configuration value in
+/etc/daos/daos_agent.yml or a location can be passed on the command line using
+the --runtime_dir flag (`daos_agent -d /tmp/daos_agent`).
 
 ### Default Directory (non-persistent)
 
@@ -151,6 +150,8 @@ $ chown user:user /var/run/daos_agent (where user is the user you
 ```
 
 ### Default Directory (persistent)
+
+The following steps are not necessary if DAOS is installed from rpms.
 
 If the server hosting `daos_server` or `daos_agent` will be rebooted often,
 systemd provides a persistent mechanism for creating the required

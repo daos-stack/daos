@@ -96,6 +96,10 @@ func (svc *ControlService) querySmdDevices(ctx context.Context, req *ctlpb.SmdQu
 		}
 
 		for _, dev := range rResp.Devices {
+			/* Skip health query if the device is in "NEW" state */
+			if dev.State == "NEW" {
+				continue
+			}
 			health, err := srv.GetBioHealth(ctx, &ctlpb.BioHealthReq{
 				DevUuid: dev.Uuid,
 			})
