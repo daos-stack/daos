@@ -287,10 +287,11 @@ class FaultInjection():
         """
         # Remove the fault injection files on the hosts.
         error_list = []
-        rm_command = "{} rm -f {}".format(
-                        get_clush_command(self._hosts, "-S -v", True), self._fault_file)
+        commands = ["rm -f {}".format(self._fault_file)]
+        if self._host_list:
+            commands.insert(0, get_clush_command(self._hosts, "-S -v", True))
         try:
-            run_command(rm_command, verbose=True, raise_exception=False)
+            run_command(" ".join(commands), verbose=True, raise_exception=False)
         except DaosTestError as error:
             error_list.append(error)
         return error_list
