@@ -136,7 +136,7 @@ would pass `daos:/dir1/file' to MPI_File_open().
 This mode is meant just for quick testing to use the MPIIO DAOS driver bypassing the UNS and setting
 direct access with pool and container environment variables. At the client side, the following
 environment variables need to be set:
-`export DAOS_POOL=puuid; export DAOS_CONT=cuuid; export DAOS_BYPASS_DUNS=1`.
+`export DAOS_POOL={uuid/label}; export DAOS_CONT={uuid/label}; export DAOS_BYPASS_DUNS=1`.
 The user still need to append the `daos:` prefix to the file being passed to MPI_File_open().
 
 ## Known limitations
