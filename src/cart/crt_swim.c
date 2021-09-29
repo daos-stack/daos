@@ -713,6 +713,7 @@ static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout, void
 		swim_self_set(ctx, SWIM_ID_INVALID);
 	} else if (rc == -DER_TIMEDOUT || rc != -DER_CANCELED) {
 		uint64_t now = swim_now_ms();
+
 		if (now < ctx->sc_next_event)
 			timeout = ctx->sc_next_event - now;
 	} else if (rc) {
