@@ -119,7 +119,6 @@ class PoolServicesFaultInjection(TestWithServers):
         dmg_command = self.get_dmg_command()
         pool_namespace = self.params.get("pool", "/run/*")
         number_pools = self.params.get("number_pools", "/run/*")
-
         for _ in range(number_pools):
             try:
                 # Create pool
