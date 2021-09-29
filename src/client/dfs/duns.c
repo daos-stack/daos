@@ -458,11 +458,16 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 
 		dir = strdup(path);
 		if (dir == NULL) {
-		        D_ERROR("Failed to copy path\n");
-		        return ENOMEM;
+			D_ERROR("Failed to copy path\n");
+			return ENOMEM;
 		}
 
 		dirp = dirname(dir);
+		/* need to statfs() at the directory level to catch the
+		 * case where leaf of path is a Lustre foreign symlink
+		 * which would have acted as a real symlink for previous
+		 * statfs()
+		 */
 		rc2 = statfs(dirp, &fs2);
 		if (rc2 == 0 && fs2.f_type == LL_SUPER_MAGIC) {
 			rc2 = duns_resolve_lustre_path(path, attr);
