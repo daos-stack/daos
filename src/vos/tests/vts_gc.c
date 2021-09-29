@@ -555,6 +555,7 @@ static int
 gc_setup(void **state)
 {
 	struct credit_context	*tc = &gc_args.gc_ctx;
+	int rc;
 
 	memset(&gc_stat, 0, sizeof(gc_stat));
 	memset(&gc_args, 0, sizeof(gc_args));
@@ -569,7 +570,8 @@ gc_setup(void **state)
 	uuid_generate(tc->tsc_cont_uuid);
 	vts_pool_fallocate(&tc->tsc_pmem_file);
 
-	dts_ctx_init(&gc_args.gc_ctx);
+	rc = dts_ctx_init(&gc_args.gc_ctx);
+	assert_rc_equal(rc, 0);
 
 	gc_args.gc_array = false;
 	*state = &gc_args;
