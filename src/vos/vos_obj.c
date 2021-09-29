@@ -1219,6 +1219,8 @@ recx_get_flags(struct vos_obj_iter *oiter)
 		options |= EVT_ITER_REVERSE;
 	if (oiter->it_flags & VOS_IT_FOR_PURGE)
 		options |= EVT_ITER_FOR_PURGE;
+	if (oiter->it_flags & VOS_IT_FOR_DISCARD)
+		options |= EVT_ITER_FOR_DISCARD;
 	if (oiter->it_flags & VOS_IT_FOR_MIGRATION)
 		options |= EVT_ITER_FOR_MIGRATION;
 	return options;
@@ -1401,6 +1403,8 @@ vos_obj_iter_prep(vos_iter_type_t type, vos_iter_param_t *param,
 	oiter->it_recx = param->ip_recx;
 	if (param->ip_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
+	if (param->ip_flags & VOS_IT_FOR_DISCARD)
+		oiter->it_iter.it_for_discard = 1;
 	if (param->ip_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
 	if (param->ip_flags == VOS_IT_KEY_TREE) {
@@ -1593,6 +1597,8 @@ vos_obj_iter_nested_prep(vos_iter_type_t type, struct vos_iter_info *info,
 		oiter->it_obj = obj;
 	if (info->ii_flags & VOS_IT_FOR_PURGE)
 		oiter->it_iter.it_for_purge = 1;
+	if (info->ip_flags & VOS_IT_FOR_DISCARD)
+		oiter->it_iter.it_for_discard = 1;
 	if (info->ii_flags & VOS_IT_FOR_MIGRATION)
 		oiter->it_iter.it_for_migration = 1;
 

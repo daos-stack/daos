@@ -1233,8 +1233,8 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_AVAILABLE_CLEAN;
 	}
 
-	/* Committed */
-	if (entry == DTX_LID_COMMITTED)
+	/* Committed -or- being discarded */
+	if (entry == DTX_LID_COMMITTED || intent == DAOS_INTENT_DISCARD)
 		return ALB_AVAILABLE_CLEAN;
 
 	/* Aborted */
