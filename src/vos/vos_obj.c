@@ -473,6 +473,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 
 	rc = umem_tx_end(umm, rc);
 
+out:
 	vos_obj_release(occ, obj, true);
 	return rc;
 }
