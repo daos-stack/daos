@@ -32,6 +32,7 @@ struct rebuild_send_arg {
 	struct rebuild_tgt_pool_tracker *rpt;
 	daos_unit_oid_t			*oids;
 	daos_epoch_t			*ephs;
+	daos_epoch_t			*punched_ephs;
 	uuid_t				cont_uuid;
 	unsigned int			*shards;
 	int				count;
@@ -40,6 +41,7 @@ struct rebuild_send_arg {
 
 struct rebuild_obj_val {
 	daos_epoch_t    eph;
+	daos_epoch_t	punched_eph;
 	uint32_t	shard;
 	uint32_t        tgt_id;
 };
@@ -51,6 +53,7 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	struct rebuild_send_arg *arg = data;
 	daos_unit_oid_t		*oids = arg->oids;
 	daos_epoch_t		*ephs = arg->ephs;
+	daos_epoch_t		*punched_ephs = arg->punched_ephs;
 	daos_unit_oid_t		*oid = key_iov->iov_buf;
 	struct rebuild_obj_val	*obj_val = val_iov->iov_buf;
 	unsigned int		*shards = arg->shards;
@@ -67,6 +70,7 @@ rebuild_obj_fill_buf(daos_handle_t ih, d_iov_t *key_iov,
 	D_ASSERT(count < REBUILD_SEND_LIMIT);
 	oids[count] = *oid;
 	ephs[count] = obj_val->eph;
+	punched_ephs[count] = obj_val->punched_eph;
 	shards[count] = obj_val->shard;
 	arg->count++;
 
@@ -120,7 +124,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 				       rpt->rt_coh_uuid, arg->cont_uuid,
 				       arg->tgt_id, rpt->rt_rebuild_ver,
 				       rpt->rt_stable_epoch, arg->oids,
-				       arg->ephs, arg->shards, arg->count,
+				       arg->ephs, arg->punched_ephs, arg->shards,
+				       arg->count,
 				       /* Delete local objects for reint */
 				       rpt->rt_rebuild_op == RB_OP_REINT);
 		/* If it does not need retry */
@@ -193,6 +198,7 @@ rebuild_objects_send_ult(void *data)
 	struct rebuild_pool_tls		*tls;
 	daos_unit_oid_t			*oids = NULL;
 	daos_epoch_t			*ephs = NULL;
+	daos_epoch_t			*punched_ephs = NULL;
 	unsigned int			*shards = NULL;
 	int				rc = 0;
 
@@ -211,21 +217,24 @@ rebuild_objects_send_ult(void *data)
 	if (ephs == NULL)
 		D_GOTO(out, rc = -DER_NOMEM);
 
+	D_ALLOC_ARRAY(punched_ephs, REBUILD_SEND_LIMIT);
+	if (ephs == NULL)
+		D_GOTO(out, rc = -DER_NOMEM);
+
 	arg.count = 0;
 	arg.oids = oids;
 	arg.shards = shards;
 	arg.ephs = ephs;
+	arg.punched_ephs = punched_ephs;
 	arg.rpt = rpt;
-	while (!tls->rebuild_pool_scan_done ||
-	       !dbtree_is_empty(tls->rebuild_tree_hdl)) {
+	while (!tls->rebuild_pool_scan_done || !dbtree_is_empty(tls->rebuild_tree_hdl)) {
 		if (rpt->rt_stable_epoch == 0) {
 			ABT_thread_yield();
 			continue;
 		}
 
 		/* walk through the rebuild tree and send the rebuild objects */
-		rc = dbtree_iterate(tls->rebuild_tree_hdl,
-				    DAOS_INTENT_MIGRATION,
+		rc = dbtree_iterate(tls->rebuild_tree_hdl, DAOS_INTENT_MIGRATION,
 				    false, rebuild_cont_send_cb, &arg);
 		if (rc < 0) {
 			D_ERROR("dbtree iterate failed: "DF_RC"\n", DP_RC(rc));
@@ -243,6 +252,8 @@ out:
 		D_FREE(shards);
 	if (ephs != NULL)
 		D_FREE(ephs);
+	if (punched_ephs != NULL)
+		D_FREE(punched_ephs);
 	if (rc != 0 && tls->rebuild_pool_status == 0)
 		tls->rebuild_pool_status = rc;
 
@@ -269,7 +280,7 @@ rebuild_scan_done(void *data)
 static int
 rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 		      unsigned int tgt_id, unsigned int shard, uuid_t co_uuid,
-		      daos_unit_oid_t oid, daos_epoch_t epoch)
+		      daos_unit_oid_t oid, daos_epoch_t epoch, daos_epoch_t punched_epoch)
 {
 	struct rebuild_pool_tls *tls;
 	struct rebuild_obj_val	val;
@@ -282,6 +293,7 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 
 	tls->rebuild_pool_obj_count++;
 	val.eph = epoch;
+	val.punched_eph = punched_epoch;
 	val.shard = shard;
 	val.tgt_id = tgt_id;
 	d_iov_set(&val_iov, &val, sizeof(struct rebuild_obj_val));
@@ -300,8 +312,8 @@ rebuild_object_insert(struct rebuild_tgt_pool_tracker *rpt,
 		}
 
 	}
-	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u: "DF_RC"\n",
-		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, DP_RC(rc));
+	D_DEBUG(DB_REBUILD, "insert "DF_UOID"/"DF_UUID" tgt %u "DF_U64"/"DF_U64": "DF_RC"\n",
+		DP_UOID(oid), DP_UUID(co_uuid), tgt_id, epoch, punched_epoch, DP_RC(rc));
 
 	return rc;
 }
@@ -595,16 +607,24 @@ rebuild_obj_scan_cb(daos_handle_t ch, vos_iter_entry_t *ent,
 		struct pool_target *target;
 
 		D_DEBUG(DB_REBUILD, "rebuild obj "DF_UOID"/"DF_UUID"/"DF_UUID
-			" on %d for shard %d\n", DP_UOID(oid),
+			" on %d for shard %d eph "DF_U64" visiable %s \n", DP_UOID(oid),
 			DP_UUID(rpt->rt_pool_uuid), DP_UUID(arg->co_uuid),
-			tgts[i], shards[i]);
+			tgts[i], shards[i], ent->ie_epoch,
+			ent->ie_vis_flags & VOS_VIS_FLAG_COVERED ? "no" : "yes");
 
 		rc = pool_map_find_target(map->pl_poolmap, tgts[i], &target);
 		D_ASSERT(rc == 1);
 
-		rc = rebuild_object_insert(rpt, tgts[i], shards[i],
-					   arg->co_uuid,
-					   oid, ent->ie_epoch);
+		if (ent->ie_vis_flags & VOS_VIS_FLAG_COVERED) {
+			rc = rebuild_object_insert(rpt, tgts[i], shards[i],
+						   arg->co_uuid, oid, 0,
+						   ent->ie_epoch);
+		} else {
+			rc = rebuild_object_insert(rpt, tgts[i], shards[i],
+						   arg->co_uuid, oid, ent->ie_epoch,
+						   0);
+		}
+
 		if (rc)
 			D_GOTO(out, rc);
 	}
@@ -686,26 +706,23 @@ rebuild_scanner(void *data)
 	struct vos_iter_anchors		anchor = { 0 };
 	ABT_thread			ult_send = ABT_THREAD_NULL;
 	struct umem_attr		uma;
-	int				rc;
+	int				rc = 0;
 
-	if (rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT |
-				      PO_COMP_ST_DOWN |
+	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
+	D_ASSERT(tls != NULL);
+
+	if (rebuild_status_match(rpt, PO_COMP_ST_DOWNOUT | PO_COMP_ST_DOWN |
 				      PO_COMP_ST_NEW) ||
 	    (!rebuild_status_match(rpt, PO_COMP_ST_DRAIN) &&
 	     rpt->rt_rebuild_op == RB_OP_DRAIN)) {
-		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n",
-			DP_UUID(rpt->rt_pool_uuid));
-		return 0;
+		D_DEBUG(DB_TRACE, DF_UUID" skip scan\n", DP_UUID(rpt->rt_pool_uuid));
+		D_GOTO(out, rc = 0);
 	}
 
 	while (daos_fail_check(DAOS_REBUILD_TGT_SCAN_HANG)) {
 		D_DEBUG(DB_REBUILD, "sleep 2 seconds then retry\n");
 		dss_sleep(2 * 1000);
 	}
-
-	tls = rebuild_pool_tls_lookup(rpt->rt_pool_uuid, rpt->rt_rebuild_ver);
-	D_ASSERT(tls != NULL);
-
 	D_ASSERT(daos_handle_is_inval(tls->rebuild_tree_hdl));
 	/* Create object tree root */
 	memset(&uma, 0, sizeof(uma));

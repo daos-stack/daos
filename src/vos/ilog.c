@@ -915,6 +915,8 @@ ilog_modify(daos_handle_t loh, const struct ilog_id *id_in,
 		tmp.lr_magic = ilog_ver_inc(lctx);
 		tmp.lr_ts_idx = root->lr_ts_idx;
 		tmp.lr_id = *id_in;
+		D_ASSERTF(id_in->id_epoch != 0, "epoch "DF_U64" opc %d\n",
+			  id_in->id_epoch, opc);
 		rc = ilog_ptr_set(lctx, root, &tmp);
 		if (rc != 0)
 			goto done;
