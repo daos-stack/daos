@@ -35,6 +35,7 @@ from env_modules import load_mpi
 from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
+import pprint
 
 def skipForTicket(ticket): # pylint: disable=invalid-name
     """Skip a test with a comment about a ticket."""
@@ -731,6 +732,12 @@ class TestWithServers(TestWithoutServers):
         Args:
             message (str): message to write to log file.
         """
+
+        ############################################################
+        self.log.debug('DEBUG log: line 737, self = ', self)
+        self.log.debug(pprint.pformat(vars(self)))
+        ############################################################
+
         if self.server_managers and self.agent_managers:
             # Compose and run cart_ctl command
             cart_ctl = CartCtl()
