@@ -31,8 +31,8 @@ class EcodAggregationOff(ErasureCodeIor):
         # Disable the aggregation
         self.pool.set_property("reclaim", "disabled")
         self.pool.connect()
-        print("pool_percentage Before = {} ".format(
-            self.pool.pool_percentage_used()))
+        self.log.info("pool_percentage Before = {} ".format(
+                       self.pool.pool_percentage_used()))
 
         # Write the IOR data set with given all the EC object type
         self.ior_write_dataset()
@@ -60,8 +60,8 @@ class EcodAggregationOff(ErasureCodeIor):
         :avocado: tags=ec_aggregation_default
         """
         self.pool.connect()
-        print("pool_percentage Before = {} ".format(
-            self.pool.pool_percentage_used()))
+        self.log.info("pool_percentage Before = {} ".format(
+                       self.pool.pool_percentage_used()))
 
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
@@ -93,8 +93,8 @@ class EcodAggregationOff(ErasureCodeIor):
         # Set time mode aggregation
         self.pool.set_property("reclaim", "time")
         self.pool.connect()
-        print("pool_percentage Before = {} ".format(
-            self.pool.pool_percentage_used()))
+        self.log.info("pool_percentage Before = {} ".format(
+                       self.pool.pool_percentage_used()))
 
         # Write the IOR data set with given all the EC object type
         self.ior_write_dataset()
