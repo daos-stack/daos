@@ -1061,7 +1061,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages("centos8", 1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
@@ -1082,7 +1082,7 @@ pipeline {
                     steps {
                         functionalTest target: hwDistroTarget(),
                                        inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages("centos8", 1, next_version),
                                        test_function: 'runTestFunctionalV2'
                    }
                     post {
@@ -1103,7 +1103,7 @@ pipeline {
                     steps {
                         functionalTest target: hwDistroTarget(),
                                        inst_repos: daosRepos(),
-                                       inst_rpms: functionalPackages(1, next_version),
+                                       inst_rpms: functionalPackages("centos8", 1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
