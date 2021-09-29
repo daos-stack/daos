@@ -224,9 +224,9 @@ def start_slurm(args):
     cmd_list = [
         "mkdir -p /var/log/slurm",
         "chown {}. {}".format(args.user, "/var/log/slurm"),
-        "mkdir -p /var/spool/slurm/d",
-        "mkdir -p /var/spool/slurm/ctld",
-        "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
+        # "mkdir -p /var/spool/slurm/d",
+        # "mkdir -p /var/spool/slurm/ctld",
+        # "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
         "rm -f /var/spool/slurmctld/clustername"
         ]
 
@@ -237,7 +237,6 @@ def start_slurm(args):
     if execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo) > 0 or args.debug:
         execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
         return 1
-
 
     # Startup the slurm control service
     if execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo) > 0 or args.debug:
