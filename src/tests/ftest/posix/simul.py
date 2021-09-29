@@ -81,10 +81,14 @@ class PosixSimul(DfuseTestBase):
         """
         # Assuming all vms use the same OS
         host_os = distro.linux_distribution()[0].lower()
+        version_os = distro.linux_distribution()[1]
         dfuse_hosts = self.agent_managers[0].hosts
 
         if "centos" in host_os:
-            simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul"}
+            if version_os == "8":
+                simul_dict = {"openmpi": "/usr/lib64/openmpi/bin/simul"}
+            else:
+                simul_dict = {"openmpi": "/usr/lib64/openmpi3/bin/simul"}
         elif "suse" in host_os:
             simul_dict = {"openmpi": "/usr/lib64/mpi/gcc/openmpi3/bin/simul"}
         else:
