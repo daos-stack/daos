@@ -340,8 +340,12 @@ swim_member_dead(struct swim_context *ctx, swim_id_t from,
 		D_GOTO(out, rc);
 	}
 
-	if (id_state.sms_status == SWIM_MEMBER_INACTIVE)
-		D_GOTO(out, rc = 0);
+	if (id_state.sms_status == SWIM_MEMBER_INACTIVE) {
+		if (ctx->sc_glitch)
+			D_GOTO(update, rc = 0);
+		else
+			D_GOTO(out, rc = 0);
+	}
 
 	if (nr > id_state.sms_incarnation)
 		D_GOTO(update, rc = 0);
@@ -447,7 +451,8 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now,
 			rc = ctx->sc_ops->get_member_state(ctx,
 							   item->si_id,
 							   &id_state);
-			if (rc) { /* this member was removed already */
+			if (rc || (id_state.sms_status != SWIM_MEMBER_SUSPECT)) {
+				/* this member was removed or updated already */
 				TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
 				D_FREE(item);
 				D_GOTO(next_item, rc = 0);

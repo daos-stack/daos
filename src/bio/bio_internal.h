@@ -349,6 +349,7 @@ struct bio_xs_context {
 	struct spdk_io_channel	*bxc_io_channel;
 	struct bio_dma_buffer	*bxc_dma_buf;
 	d_list_t		 bxc_io_ctxts;
+	unsigned int		 bxc_ready:1;	/* xstream setup finished */
 };
 
 /* Per VOS instance I/O context */

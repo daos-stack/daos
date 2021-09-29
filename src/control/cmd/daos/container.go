@@ -190,7 +190,7 @@ func (cmd *containerBaseCmd) connectPool(flags C.uint, ap *C.struct_cmd_args_s) 
 type containerCreateCmd struct {
 	containerBaseCmd
 
-	Type        string               `long:"type" short:"t" description:"container type"`
+	Type        ContTypeFlag         `long:"type" short:"t" description:"container type"`
 	Path        string               `long:"path" short:"d" description:"container namespace path"`
 	ChunkSize   ChunkSizeFlag        `long:"chunk-size" short:"z" description:"container chunk size"`
 	ObjectClass ObjClassFlag         `long:"oclass" short:"o" description:"default object class"`
@@ -266,13 +266,9 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		ap.props = cmd.Properties.props
 	}
 
-	// convert the container type string to a DAOS_PROP_CO_LAYOUT_* value
-	cType := C.CString(cmd.Type)
-	defer freeString(cType)
-	C.daos_parse_ctype(cType, &ap._type)
-
-	switch cmd.Type {
-	case "POSIX":
+	ap._type = cmd.Type.Type
+	switch ap._type {
+	case C.DAOS_PROP_CO_LAYOUT_POSIX:
 		// POSIX containers have extra attributes
 		if cmd.ChunkSize.Set {
 			ap.chunk_size = cmd.ChunkSize.Size
@@ -317,15 +313,21 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 	}
 	defer cmd.closeContainer()
 
-	ci, err := cmd.queryContainer()
+	var ci *containerInfo
+	ci, err = cmd.queryContainer()
 	if err != nil {
-		// Special case for creating a container without permission to query it.
-		if errors.Cause(err) == drpc.DaosNoPermission {
-			cmd.log.Errorf("container %s was created, but query failed", co_id)
-			return nil
+		if errors.Cause(err) != drpc.DaosNoPermission {
+			return errors.Wrapf(err, "failed to query new container %s", co_id)
 		}
 
-		return errors.Wrapf(err, "failed to query new container %s", co_id)
+		// Special case for creating a container without permission to query it.
+		cmd.log.Errorf("container %s was created, but query failed", co_id)
+
+		ci = new(containerInfo)
+		ci.PoolUUID = &cmd.poolUUID
+		ci.Type = cmd.Type.String()
+		ci.ContainerUUID = &cmd.contUUID
+		ci.ContainerLabel = cmd.Label
 	}
 
 	if cmd.jsonOutputEnabled() {
@@ -653,7 +655,7 @@ func printContainerInfo(out io.Writer, ci *containerInfo, verbose bool) error {
 		rows = append(rows, []txtfmt.TableRow{
 			{"Pool UUID": ci.PoolUUID.String()},
 			{"Number of snapshots": fmt.Sprintf("%d", *ci.NumSnapshots)},
-			{"Latest Persistent Snapshot": fmt.Sprintf("%x", *ci.LatestSnapshot)},
+			{"Latest Persistent Snapshot": fmt.Sprintf("%#x", *ci.LatestSnapshot)},
 			{"Container redundancy factor": fmt.Sprintf("%d", *ci.RedundancyFactor)},
 		}...)
 
