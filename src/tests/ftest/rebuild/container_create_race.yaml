@@ -10,6 +10,8 @@ hosts:
 timeout: 700
 server_config:
   name: daos_server
+  servers:
+      targets: 2
 pool:
   mode: 511
   name: daos_server
@@ -25,6 +27,7 @@ container:
   akey_size: 4
   dkey_size: 4
   data_size: 64
+  properties: rf:2
 ior:
   api: DFS
   block_size: 16m
