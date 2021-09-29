@@ -422,21 +422,17 @@ ivc_on_fetch(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 
 	if (entry->iv_class->iv_class_ops &&
 	    entry->iv_class->iv_class_ops->ivc_ent_fetch)
-		rc = entry->iv_class->iv_class_ops->ivc_ent_fetch(entry, &key,
-								  iv_value,
-								  priv);
+		rc = entry->iv_class->iv_class_ops->ivc_ent_fetch(entry, &key, iv_value, priv);
 	else
 		rc = daos_sgl_copy_data(iv_value, &entry->iv_value);
 
-	/* store the value of the result */
-	if (flags & CRT_IV_FLAG_PENDING_FETCH &&
-	    rc == -DER_IVCB_FORWARD) {
-		D_DEBUG(DB_MD, "[%d:%d] reset to 0 during IV aggregation.\n",
-			key.rank, key.class_id);
-		rc = 0;
+output:
+	if (flags & CRT_IV_FLAG_PENDING_FETCH && rc == -DER_IVCB_FORWARD) {
+		/* For pending fetch request, let's reset to DER_NOTLEADER for retry */
+		D_DEBUG(DB_MD, "[%d:%d] reset NOTLEADER to retry.\n", key.rank, key.class_id);
+		rc = -DER_NOTLEADER;
 	}
 
-output:
 	ds_iv_ns_put(ns);
 	return rc;
 }
@@ -1108,6 +1104,10 @@ retry:
 		}
 
 		/* otherwise retry and wait for others to update the ns. */
+		/* IV fetch might return IVCB_FORWARD if the IV fetch forward RPC is queued,
+		 * but inflight fetch request return IVCB_FORWARD, then queued RPC will
+		 * reply IVCB_FORWARD.
+		 */
 		D_WARN("retry upon %d for class %d opc %d\n", rc,
 		       key->class_id, opc);
 		/* Yield to avoid hijack the cycle if IV RPC is not sent */
