@@ -26,6 +26,7 @@ distro_custom() {
 
     # Mellanox OFED hack
     if ls -d /usr/mpi/gcc/openmpi-*; then
+        mkdir -p /etc/modulefiles/mpi/
         cat <<EOF > /etc/modulefiles/mpi/mlnx_openmpi-x86_64
 #%Module 1.0
 #
@@ -51,12 +52,7 @@ setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.2a
 EOF
     fi
 
-    if ! rpm -q nfs-utils; then
-        retry_cmd 360 dnf -y install nfs-utils
-    fi
-
     # CORCI-1096
-    dnf -y install esmtp
     sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
 
     dnf config-manager --disable powertools
