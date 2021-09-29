@@ -246,7 +246,8 @@
    Memcheck:Param
    sendmsg(msg.msg_iov[1])
    obj:*
-   fun:tcpx_send_msg
+   fun:ofi_bsock_sendv
    ...
-   fun:HG_Core_progress
+   fun:fi_tsend
+   ...
 }
