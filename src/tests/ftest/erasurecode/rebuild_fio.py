@@ -1,0 +1,117 @@
+#!/usr/bin/python3
+'''
+  (C) Copyright 2019-2021 Intel Corporation.
+
+  SPDX-License-Identifier: BSD-2-Clause-Patent
+'''
+from ec_utils import ErasureCodeFio, check_aggregation_status
+from apricot import skipForTicket
+
+class EcodFioRebuild(ErasureCodeFio):
+    # pylint: disable=too-many-ancestors
+    # pylint: disable=protected-access
+    """Test class Description: Runs Fio with EC object type over POSIX and
+        verify on-line, off-line for rebuild does not corrupt the data.
+
+    :avocado: recursive
+    """
+    def __init__(self, *args, **kwargs):
+        """Initialize a EcodFioRebuild object."""
+        super().__init__(*args, **kwargs)
+        self.set_online_rebuild = False
+        self.rank_to_kill = None
+        self.read_option = self.params.get("rw_read", "/run/fio/test/read_write/*")
+
+    @skipForTicket("DAOS-8082")
+    def test_ec_online_rebuild_fio(self):
+        """Jira ID: DAOS-7320.
+
+        Test Description:
+            Verify the EC works for Fio for on-line rebuild.
+
+        Use Cases:
+            Create the container with RF:1 and 2
+            Create the Fio data file with verify pattern over Fuse
+            Kill the server when Write is in progress
+            Verify the write finish without any error
+            Wait and verify Aggregation is getting triggered.
+            Read and verify the data after Aggregation.
+            Kill one more rank and verify the data after rebuild finish.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large,ib2
+        :avocado: tags=ec,ec_array,fio,ec_online_rebuild
+        :avocado: tags=ec_online_rebuild_fio
+        """
+        # Enabled on-line rebuild for the test
+        self.set_online_rebuild = True
+
+        # Kill last server rank
+        self.rank_to_kill = self.server_count - 1
+
+        # Write the Fio data and kill server while it's writing
+        self.start_online_fio()
+
+        # Verify Aggregation should start for Partial stripes IO
+        if not any(check_aggregation_status(self.pool).values()):
+            self.fail("Aggregation failed to start..")
+
+        # Read and verify the original data.
+        self.fio_cmd._jobs['test'].rw.value = self.read_option
+        self.fio_cmd.run()
+
+        # If RF is 2 kill one more server and validate the data is not corrupted.
+        if int(self.container.properties.value.split(":")[1]) == 2:
+            self.log.info("RF is 2,So kill another server and verify data")
+            # Kill one more server rank
+            self.server_managers[0].stop_ranks([self.server_count - 2],
+                                               self.d_log, force=True)
+            # Read and verify the original data.
+            self.fio_cmd.run()
+
+    @skipForTicket("DAOS-8612")
+    def test_ec_offline_rebuild_fio(self):
+        """Jira ID: DAOS-7320.
+
+        Test Description:
+            Verify the truncate on EC object class works fine over fuse.
+
+        Use Cases:
+            Create the container with RF:1 and 2
+            Create the Fio data file with verify pattern over Fuse
+            Kill the server and wait for rebuild to finish.
+            Wait and verify Aggregation is getting triggered.
+            Kill one more rank and verify the data after rebuild finish.
+
+        :avocado: tags=all,full_regression
+        :avocado: tags=hw,large,ib2
+        :avocado: tags=ec,ec_array,fio,ec_offline_rebuild
+        :avocado: tags=ec_offline_rebuild_fio
+        """
+        # Kill last server rank
+        self.rank_to_kill = self.server_count - 1
+
+        # Write the Fio data with verify data pattern
+        self.start_online_fio()
+
+        # Verify Aggregation should start for Partial stripes IO
+        if not any(check_aggregation_status(self.pool).values()):
+            self.fail("Aggregation failed to start..")
+
+        # Kill last server rank
+        self.server_managers[0].stop_ranks(
+            [self.server_count - 1], self.d_log, force=True)
+
+        # Read and verify the original data.
+        self.fio_cmd._jobs['test'].rw.value = self.read_option
+        self.fio_cmd.run()
+
+        # If RF is 2 kill one more server and validate the data is not corrupted.
+        if int(self.container.properties.value.split(":")[1]) == 2:
+            self.log.info("RF is 2,So kill another server and verify data")
+            # Kill one more server rank
+            self.server_managers[0].stop_ranks([self.server_count - 2],
+                                               self.d_log, force=True)
+
+            # Read and verify the original data.
+            self.fio_cmd.run()

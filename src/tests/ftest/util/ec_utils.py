@@ -14,6 +14,7 @@ from daos_utils import DaosCommand
 from test_utils_container import TestContainer
 from apricot import TestWithServers
 from mdtest_test_base import MdtestBase
+from fio_test_base import FioBase
 from pydaos.raw import DaosApiError
 from command_utils_base import CommandFailure
 from general_utils import DaosTestError
@@ -426,4 +427,71 @@ class ErasureCodeMdtest(MdtestBase):
         # Verify the queue result and make sure test has no failure
         while not self.out_queue.empty():
             if self.out_queue.get() == "Mdtest Failed":
+                self.fail("FAIL")
+
+class ErasureCodeFio(FioBase):
+    # pylint: disable=too-many-ancestors
+    """
+    Class to use for EC testing with Fio Benchmark.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a FioBase object."""
+        super().__init__(*args, **kwargs)
+        self.server_count = None
+        self.set_online_rebuild = False
+        self.rank_to_kill = None
+
+    def setUp(self):
+        """Set up each test case."""
+        super().setUp()
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        self.server_count = len(self.hostlist_servers) * engine_count
+
+        # Create Pool
+        self.add_pool()
+        self.out_queue = queue.Queue()
+
+    def write_single_fio_dataset(self, results):
+        """Run Fio Benchmark.
+
+        Args:
+            results (queue): queue for returning thread results
+        """
+        try:
+            self.execute_fio(stop_dfuse=False)
+            if results is not None:
+                results.put("PASS")
+        except (CommandFailure, DaosApiError, DaosTestError) as _error:
+            if results is not None:
+                results.put("FAIL")
+                raise
+
+    def start_online_fio(self):
+        """Run Fio operation with thread in background. Trigger the server
+           failure while Fio is running
+        """
+        # Create the Fio run thread
+        job = threading.Thread(target=self.write_single_fio_dataset,
+                               kwargs={"results": self.out_queue})
+
+        # Launch the Fio thread
+        job.start()
+
+        # Kill the server rank while IO operation in progress
+        if self.set_online_rebuild:
+            time.sleep(30)
+            # Kill the server rank
+            if self.rank_to_kill is not None:
+                self.server_managers[0].stop_ranks([self.rank_to_kill],
+                                                   self.d_log,
+                                                   force=True)
+
+        # Wait to finish the thread
+        job.join()
+
+        # Verify the queue result and make sure test has no failure
+        while not self.out_queue.empty():
+            if self.out_queue.get() == "FAIL":
                 self.fail("FAIL")
