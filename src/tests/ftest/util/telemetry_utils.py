@@ -372,31 +372,35 @@ class TelemetryUtils():
         "process_start_time_seconds",
         "process_virtual_memory_bytes",
         "process_virtual_memory_max_bytes"]
-    ENGINE_NVME_METRICS = [
-        "engine_nvme_<id>_commands_checksum_mismatch",
-        "engine_nvme_<id>_commands_ctrl_busy_time",
-        "engine_nvme_<id>_commands_data_units_read",
+    ENGINE_NVME_HEALTH_METRICS = [
         "engine_nvme_<id>_commands_data_units_written",
-        "engine_nvme_<id>_commands_host_read_cmds",
+        "engine_nvme_<id>_commands_data_units_read",
         "engine_nvme_<id>_commands_host_write_cmds",
+        "engine_nvme_<id>_commands_host_read_cmds",
         "engine_nvme_<id>_commands_media_errs",
         "engine_nvme_<id>_commands_read_errs",
-        "engine_nvme_<id>_commands_unmap_errs",
         "engine_nvme_<id>_commands_write_errs",
+        "engine_nvme_<id>_commands_unmap_errs",
+        "engine_nvme_<id>_commands_checksum_mismatch",
         "engine_nvme_<id>_power_cycles",
+        "engine_nvme_<id>_commands_ctrl_busy_time",
         "engine_nvme_<id>_power_on_hours",
-        "engine_nvme_<id>_read_only_warn",
-        "engine_nvme_<id>_reliability_avail_spare",
-        "engine_nvme_<id>_reliability_avail_spare_threshold",
-        "engine_nvme_<id>_reliability_avail_spare_warn",
-        "engine_nvme_<id>_reliability_percentage_used",
-        "engine_nvme_<id>_reliability_reliability_warn",
-        "engine_nvme_<id>_temp_crit_time",
-        "engine_nvme_<id>_temp_current",
-        "engine_nvme_<id>_temp_warn",
+        "engine_nvme_<id>_unsafe_shutdowns"]
+    ENGINE_NVME_TEMP_METRICS = [
+        "engine_nvme_<id>_temp_current"]
+    ENGINE_NVME_TEMP_TIME_METRICS = [
         "engine_nvme_<id>_temp_warn_time",
-        "engine_nvme_<id>_unsafe_shutdowns",
-        "engine_nvme_<id>_volatile_mem_warn",
+        "engine_nvme_<id>_temp_crit_time"]
+    ENGINE_NVME_RELIABILITY_METRICS = [
+        "engine_nvme_<id>_reliability_avail_spare",
+        "engine_nvme_<id>_reliability_avail_spare_threshold"]
+    ENGINE_NVME_CRIT_WARN_METRICS = [
+        "engine_nvme_<id>_reliability_avail_spare_warn",
+        "engine_nvme_<id>_reliability_reliability_warn",
+        "engine_nvme_<id>_temp_warn",
+        "engine_nvme_<id>_read_only_warn",
+        "engine_nvme_<id>_volatile_mem_warn"]
+    ENGINE_NVME_INTEL_VENDOR_METRICS = [
         "engine_nvme_<id>_vendor_program_fail_cnt_norm",
         "engine_nvme_<id>_vendor_program_fail_cnt_raw",
         "engine_nvme_<id>_vendor_erase_fail_cnt_norm",
@@ -416,6 +420,12 @@ class TelemetryUtils():
         "engine_nvme_<id>_vendor_pll_lock_loss_cnt",
         "engine_nvme_<id>_vendor_nand_bytes_written",
         "engine_nvme_<id>_vendor_host_bytes_written"]
+    ENGINE_NVME_METRICS = ENGINE_NVME_HEALTH_METRICS +\
+        ENGINE_NVME_TEMP_METRICS +\
+        ENGINE_NVME_TEMP_TIME_METRICS +\
+        ENGINE_NVME_RELIABILITY_METRICS +\
+        ENGINE_NVME_CRIT_WARN_METRICS +\
+        ENGINE_NVME_INTEL_VENDOR_METRICS
 
     def __init__(self, dmg, servers):
         """Create a TelemetryUtils object.
@@ -678,3 +688,57 @@ class TelemetryUtils():
                 else:
                     errors.append("No {} data for {}".format(name, host))
         return errors
+
+    def get_nvme_metrics(self, server, specific_metrics=None):
+        """Get the NVMe telemetry metrics.
+
+        Args:
+            specific_metrics(list): list of specific NVMe metrics
+        Returns:
+            dict: dictionary of dictionaries of NVMe metric names and
+                values per server host key
+
+        """
+        data = {}
+        all_nvme_metrics = []
+        if specific_metrics is None:
+            specific_metrics = self.ENGINE_NVME_METRICS
+
+        # Add NVMe metrics for any NVMe devices configured for this server
+        for nvme_list in server.manager.job.get_engine_values("bdev_list"):
+            for nvme in nvme_list if nvme_list is not None else []:
+                # Replace the '<id>' placeholder with the actual NVMe ID
+                nvme_id = nvme.replace(":", "_").replace(".", "_")
+                nvme_metrics = [
+                    name.replace("<id>", nvme_id)
+                    for name in specific_metrics]
+                all_nvme_metrics.extend(nvme_metrics)
+
+        info = self.get_metrics(",".join(all_nvme_metrics))
+        self.log.info("NVMe Telemetry Information")
+        for name in all_nvme_metrics:
+            for index, host in enumerate(info):
+                if name in info[host]:
+                    if index == 0:
+                        self.log.info(
+                            "  %s (%s):",
+                            name, info[host][name]["description"])
+                        self.log.info(
+                            "    %-12s %-4s %s",
+                            "Host", "Rank", "Value")
+                    if name not in data:
+                        data[name] = {}
+                    if host not in data[name]:
+                        data[name][host] = {}
+                    for metric in info[host][name]["metrics"]:
+                        if "labels" in metric:
+                            if "rank" in metric["labels"]:
+                                rank = metric["labels"]["rank"]
+                                if rank not in data[name][host]:
+                                    data[name][host][rank] = {}
+                                data[name][host][rank] = \
+                                    metric["value"]
+                                self.log.info(
+                                    "    %-12s %-4s %s",
+                                    host, rank, metric["value"])
+        return data
