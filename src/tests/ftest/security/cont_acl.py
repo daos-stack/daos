@@ -55,7 +55,7 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=vm
-        :avocado: tags=security,container_acl,cont_user_sec,cont_group_seccont_sec
+        :avocado: tags=security,container_acl,cont_user_sec,cont_group_sec,cont_sec
         """
 
         #(1)Setup
@@ -195,8 +195,13 @@ class DaosContainterSecurityTest(ContSecurityTestBase, PoolSecurityTestBase):
         self.update_pool_acl_entry(
             "update", secTestBase.acl_entry("user", "OWNER", p_permission))
         self.verify_cont_delete(expect)
+        if expect == "pass": # Container deleted
+            self.container = None
 
         #(8)Cleanup
+        # Restore pool permissions in case they were altered
+        self.update_pool_acl_entry(
+            "update", secTestBase.acl_entry("user", "OWNER", "rctd"))
         secTestBase.add_del_user(
             self.hostlist_clients, "userdel", new_test_user)
         secTestBase.add_del_user(
