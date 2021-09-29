@@ -740,6 +740,7 @@ enum {
  * This fault simulates the EC parity epoch difference in EC data recovery.
  */
 #define DAOS_FAIL_PARITY_EPOCH_DIFF	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x29)
+#define DAOS_FAIL_SHARD_NONEXIST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2a)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)

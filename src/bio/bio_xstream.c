@@ -1021,6 +1021,7 @@ init_blobstore_ctxt(struct bio_xs_context *ctxt, int tgt_id)
 	bool			 assigned = false;
 	int			 rc;
 
+	D_ASSERT(!ctxt->bxc_ready);
 	D_ASSERT(ctxt->bxc_blobstore == NULL);
 	D_ASSERT(ctxt->bxc_io_channel == NULL);
 
@@ -1144,6 +1145,7 @@ retry:
 		rc = -DER_NOMEM;
 		goto out;
 	}
+	ctxt->bxc_ready = 1;
 
 out:
 	D_ASSERT(dev_info != NULL);
@@ -1167,6 +1169,7 @@ bio_xsctxt_free(struct bio_xs_context *ctxt)
 	if (ctxt == NULL)
 		return;
 
+	ctxt->bxc_ready = 0;
 	if (ctxt->bxc_io_channel != NULL) {
 		spdk_bs_free_io_channel(ctxt->bxc_io_channel);
 		ctxt->bxc_io_channel = NULL;
