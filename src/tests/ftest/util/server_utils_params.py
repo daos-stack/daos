@@ -454,9 +454,10 @@ class DaosServerYamlParameters(YamlParameters):
                 self.scm_size.update(None, "scm_size")
 
             # Include fault injection settings if configured
-            fault_file = os.environ.get("D_FI_CONFIG")
-            if fault_file and fault_file not in self.env_vars.value:
-                self.env_vars.update("D_FI_CONFIG={}".format(fault_file), "env_vars", True)
+            if test.fault_injection.fault_file:
+                fault_setting = "D_FI_CONFIG={}".format(test.fault_injection.fault_file)
+                if fault_setting not in self.env_vars.value:
+                    self.env_vars.update(fault_setting, "env_vars", True)
 
         @property
         def using_nvme(self):
