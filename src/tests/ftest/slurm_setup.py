@@ -12,7 +12,6 @@ import logging
 import re
 import socket
 import sys
-from time import sleep
 from ClusterShell.NodeSet import NodeSet
 from util.general_utils import pcmd, run_task
 from avocado.utils.distro import detect
@@ -234,25 +233,29 @@ def start_slurm(args):
         return 1
 
     # Startup the slurm service
-    if execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo) > 0 or args.debug:
+    status = execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
+    if status > 0 or args.debug:
         execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
-        return 1
+        if status > 0:
+            return 1
 
     # Startup the slurm control service
-    if execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo) > 0 or args.debug:
+    status = execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo)
+    if status > 0 or args.debug:
         execute_cluster_cmds(args.control, SLURMCTLD_STARTUP_DEBUG, args.sudo)
-        return 1
-    # wait 30 sec for the slurmd to start
-    sleep(30)
+        if status > 0:
+            return 1
 
     # ensure that the nodes are in the idle state
-    cmd_list = ["scontrol update nodename={} state=idle".format(all_nodes)]
-    if execute_cluster_cmds(args.nodes, cmd_list, args.sudo) > 0 or args.debug:
+    cmd_list = ["scontrol update nodename={} state=idle".format(args.nodes)]
+    status = execute_cluster_cmds(args.nodes, cmd_list, args.sudo)
+    if status > 0 or args.debug:
         cmd_list = (SLURMCTLD_STARTUP_DEBUG)
         execute_cluster_cmds(args.control, cmd_list, args.sudo)
         cmd_list = (SLURMD_STARTUP_DEBUG)
         execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
-        return 1
+        if status > 0:
+            return 1
     return 0
 
 
