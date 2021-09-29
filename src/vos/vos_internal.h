@@ -1098,8 +1098,8 @@ gc_reserve_space(daos_size_t *rsrvd);
  * Aggregate the creation/punch records in the current entry of the object
  * iterator
  *
- * \param ih[IN]	Iterator handle
- * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param ih[IN]		Iterator handle
+ * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1107,14 +1107,14 @@ gc_reserve_space(daos_size_t *rsrvd);
  *			negative value otherwise
  */
 int
-oi_iter_aggregate(daos_handle_t ih, bool discard);
+oi_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /**
  * Aggregate the creation/punch records in the current entry of the key
  * iterator
  *
- * \param ih[IN]	Iterator handle
- * \param discard[IN]	Discard all entries (within the iterator epoch range)
+ * \param ih[IN]		Iterator handle
+ * \param range_discard[IN]	Discard only uncommitted ilog entries (for reintegration)
  *
  * \return		Zero on Success
  *			1 if a reprobe is needed (entry is removed or not
@@ -1122,7 +1122,7 @@ oi_iter_aggregate(daos_handle_t ih, bool discard);
  *			negative value otherwise
  */
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard);
+vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard);
 
 /** Internal bit for initializing iterator from open tree handle */
 #define VOS_IT_KEY_TREE	(1 << 31)
