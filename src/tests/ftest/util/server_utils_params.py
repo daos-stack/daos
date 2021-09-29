@@ -453,23 +453,25 @@ class DaosServerYamlParameters(YamlParameters):
                 self.log_file.value = test.server_log
 
             # Force required env vars
-            forced_env_vars = {
+            required_env_vars = {
                 "D_LOG_FILE_APPEND_PID": 1,
                 "COVFILE": "/tmp/test.cov"
             }
             if self._provider == "ofi+sockets":
-                forced_env_vars["FI_SOCKETS_MAX_CONN_RETRY"] = 5
-                forced_env_vars["FI_SOCKETS_CONN_TIMEOUT"] = 2000
-                forced_env_vars["CRT_SWIM_RPC_TIMEOUT"] = 10
+                required_env_vars["FI_SOCKETS_MAX_CONN_RETRY"] = 5
+                required_env_vars["FI_SOCKETS_CONN_TIMEOUT"] = 2000
+                required_env_vars["CRT_SWIM_RPC_TIMEOUT"] = 10
             elif "ofi_rxm" in self._provider:
-                forced_env_vars["FI_OFI_RXM_USE_SRX"] = 1
+                required_env_vars["FI_OFI_RXM_USE_SRX"] = 1
             env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
             update = False
-            for key in sorted(forced_env_vars):
-                if key in env_var_dict:
-                    env_var_dict[key] = forced_env_vars[key]
+            for key in sorted(required_env_vars):
+                if key not in env_var_dict or env_var_dict[key] != required_env_vars[key]:
+                    env_var_dict[key] = required_env_vars[key]
                     update = True
+
             if update:
+                self.log.debug("Assigning required env_vars")
                 new_env_vars = ["=".join([key, str(value)]) for key, value in env_var_dict.items()]
                 self.env_vars.update(new_env_vars, "env_var")
 
