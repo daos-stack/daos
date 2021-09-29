@@ -15,14 +15,9 @@ group_repo_post() {
 }
 
 distro_custom() {
-    # force install of avocado 69.x
-    dnf -y erase avocado{,-common}                                              \
-                 python2-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
-                 python3-pyyaml
-    pip3 install "avocado-framework<70.0"
-    pip3 install "avocado-framework-plugin-result-html<70.0"
-    pip3 install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
-    pip3 install clustershell
+    # install avocado
+    dnf -y install python3-avocado{,-plugins-{output-html,varianter-yaml-to-mux}} \
+                   clustershell
 
     # Mellanox OFED hack
     if ls -d /usr/mpi/gcc/openmpi-*; then
@@ -51,9 +46,6 @@ setenv			MPI_SUFFIX	_openmpi
 setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.2a
 EOF
     fi
-
-    # CORCI-1096
-    sed -e 's/^\(hostname *= *\)[^ ].*$/\1 mail.wolf.hpdd.intel.com:25/' < /usr/share/doc/esmtp/sample.esmtprc > /etc/esmtprc
 
     dnf config-manager --disable powertools
 
