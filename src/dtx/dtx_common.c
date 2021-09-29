@@ -19,6 +19,10 @@
 
 uint64_t dtx_agg_gen;
 struct dtx_batched_cont_args;
+uint32_t dtx_agg_thd_cnt_up;
+uint32_t dtx_agg_thd_cnt_lo;
+uint32_t dtx_agg_thd_age_up;
+uint32_t dtx_agg_thd_age_lo;
 
 struct dtx_batched_pool_args {
 	/* Link to dss_module_info::dmi_dtx_batched_pool_list. */
@@ -291,9 +295,9 @@ dtx_aggregate(void *arg)
 
 		if (stat.dtx_cont_cmt_count == 0 ||
 		    stat.dtx_first_cmt_blob_time_lo == 0 ||
-		    (stat.dtx_cont_cmt_count <= DTX_AGG_THD_CNT_LO &&
+		    (stat.dtx_cont_cmt_count <= dtx_agg_thd_cnt_lo &&
 		     dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) <=
-		     DTX_AGG_THD_AGE_LO))
+		     dtx_agg_thd_age_lo))
 			break;
 	}
 
@@ -346,11 +350,11 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 		    stat.dtx_first_cmt_blob_time_lo == 0)
 			continue;
 
-		if (stat.dtx_cont_cmt_count >= DTX_AGG_THD_CNT_UP ||
-		    ((stat.dtx_cont_cmt_count > DTX_AGG_THD_CNT_LO ||
-		      stat.dtx_pool_cmt_count >= DTX_AGG_THD_CNT_UP) &&
+		if (stat.dtx_cont_cmt_count >= dtx_agg_thd_cnt_up ||
+		    ((stat.dtx_cont_cmt_count > dtx_agg_thd_cnt_lo ||
+		      stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up) &&
 		     (dtx_hlc_age2sec(stat.dtx_first_cmt_blob_time_lo) >=
-		      DTX_AGG_THD_AGE_UP))) {
+		      dtx_agg_thd_age_up))) {
 			dtx_get_dbca(dbca);
 			rc = dss_ult_create(dtx_aggregate, dbca,
 					    DSS_XS_SELF, 0, 0, &child);
@@ -393,10 +397,10 @@ dtx_aggregation_pool(struct dtx_batched_pool_args *dbpa)
 	}
 
 	if (dbpa->dbpa_aggregating || dbpa->dbpa_victim == NULL ||
-	    dbpa->dbpa_stat.dtx_pool_cmt_count <= DTX_AGG_THD_CNT_LO ||
+	    dbpa->dbpa_stat.dtx_pool_cmt_count <= dtx_agg_thd_cnt_lo ||
 	    dbpa->dbpa_stat.dtx_first_cmt_blob_time_lo == 0 ||
 	    dtx_hlc_age2sec(dbpa->dbpa_stat.dtx_first_cmt_blob_time_lo) <=
-	    DTX_AGG_THD_AGE_LO)
+	    dtx_agg_thd_age_lo)
 		return;
 
 	/* No single pool exceeds DTX thresholds, but the whole pool does,
@@ -490,7 +494,7 @@ dtx_batched_commit_one(void *arg)
 
 		dtx_stat(cont, &stat);
 
-		if (stat.dtx_pool_cmt_count >= DTX_AGG_THD_CNT_UP &&
+		if (stat.dtx_pool_cmt_count >= dtx_agg_thd_cnt_up &&
 		    !dbca->dbca_pool->dbpa_aggregating)
 			sched_req_wakeup(dmi->dmi_dtx_agg_req);
 
@@ -1604,7 +1608,7 @@ dtx_handle_resend(daos_handle_t coh,  struct dtx_id *dti,
 		return -DER_DATA_LOSS;
 	case -DER_NONEXIST:
 		age = dtx_hlc_age2sec(dti->dti_hlc);
-		if (age > DTX_AGG_THD_AGE_LO ||
+		if (age > dtx_agg_thd_age_lo ||
 		    DAOS_FAIL_CHECK(DAOS_DTX_LONG_TIME_RESEND)) {
 			D_ERROR("Not sure about whether the old RPC "DF_DTI
 				" is resent or not. Age="DF_U64" s.\n",

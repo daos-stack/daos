@@ -281,7 +281,7 @@ class IorTestBase(DfuseTestBase):
 
             for line in out.stdout_text.splitlines():
                 if 'WARNING' in line:
-                    report_warning("IOR command issued warnings.\n")
+                    report_warning("IOR command issued warnings.")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
