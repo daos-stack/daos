@@ -464,7 +464,7 @@ class DaosServerYamlParameters(YamlParameters):
                 env.split("=")[0]: env.split("=")[1] for env in self.REQUIRED_ENV_VARS["common"]}
             for provider in self._provider.split(";"):
                 if provider in self.REQUIRED_ENV_VARS:
-                    required_env_vars.append({
+                    required_env_vars.update({
                         env.split("=")[0]: env.split("=")[1]
                         for env in self.REQUIRED_ENV_VARS[provider]})
             env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
