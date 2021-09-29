@@ -321,6 +321,19 @@ class DaosServerYamlParameters(YamlParameters):
     class PerEngineYamlParameters(YamlParameters):
         """Defines the configuration yaml parameters for a single server."""
 
+        # Engine environment variables that are required by provider type.
+        REQUIRED_ENV_VARS = {
+            "common": [
+                "D_LOG_FILE_APPEND_PID=1",
+                "COVFILE=/tmp/test.cov"],
+            "ofi+sockets": [
+                "FI_SOCKETS_MAX_CONN_RETRY=5",
+                "FI_SOCKETS_CONN_TIMEOUT=2000",
+                "CRT_SWIM_RPC_TIMEOUT=10"],
+            "ofi_rxm": [
+                "FI_OFI_RXM_USE_SRX=1"],
+        }
+
         def __init__(self, index=None, provider=None):
             """Create a SingleServerConfig object.
 
@@ -367,23 +380,17 @@ class DaosServerYamlParameters(YamlParameters):
             self.log_mask = BasicParameter(None, "INFO")
             self.log_file = LogParameter(log_dir, None, "daos_server.log")
 
-            # Set extra environment variables for sockets provider
+            # Set default environment variables
             default_env_vars = [
                 "ABT_ENV_MAX_NUM_XSTREAMS=100",
                 "ABT_MAX_NUM_XSTREAMS=100",
                 "DAOS_MD_CAP=1024",
                 "DD_MASK=mgmt,io,md,epc,rebuild",
-                "D_LOG_FILE_APPEND_PID=1",
-                "COVFILE=/tmp/test.cov"
             ]
-            if self._provider == "ofi+sockets":
-                default_env_vars.extend([
-                    "FI_SOCKETS_MAX_CONN_RETRY=5",
-                    "FI_SOCKETS_CONN_TIMEOUT=2000",
-                    "CRT_SWIM_RPC_TIMEOUT=10"
-                ])
-            elif "ofi_rxm" in self._provider:
-                default_env_vars.append("FI_OFI_RXM_USE_SRX=1")
+            default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
+            for provider in self._provider.split(";"):
+                if provider in self.REQUIRED_ENV_VARS:
+                    default_env_vars.extend(self.REQUIRED_ENV_VARS[provider])
             self.env_vars = BasicParameter(None, default_env_vars)
 
             # global CRT_CTX_SHARE_ADDR shared with client
@@ -452,24 +459,20 @@ class DaosServerYamlParameters(YamlParameters):
             if hasattr(test, "server_log") and test.server_log is not None:
                 self.log_file.value = test.server_log
 
-            # Force required env vars
+            # Force required env vars if the value has not been specified or is different
             required_env_vars = {
-                "D_LOG_FILE_APPEND_PID": 1,
-                "COVFILE": "/tmp/test.cov"
-            }
-            if self._provider == "ofi+sockets":
-                required_env_vars["FI_SOCKETS_MAX_CONN_RETRY"] = 5
-                required_env_vars["FI_SOCKETS_CONN_TIMEOUT"] = 2000
-                required_env_vars["CRT_SWIM_RPC_TIMEOUT"] = 10
-            elif "ofi_rxm" in self._provider:
-                required_env_vars["FI_OFI_RXM_USE_SRX"] = 1
+                env.split("=")[0]: env.split("=")[1] for env in self.REQUIRED_ENV_VARS["common"]}
+            for provider in self._provider.split(";"):
+                if provider in self.REQUIRED_ENV_VARS:
+                    required_env_vars.append({
+                        env.split("=")[0]: env.split("=")[1]
+                        for env in self.REQUIRED_ENV_VARS[provider]})
             env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
             update = False
             for key in sorted(required_env_vars):
                 if key not in env_var_dict or env_var_dict[key] != required_env_vars[key]:
                     env_var_dict[key] = required_env_vars[key]
                     update = True
-
             if update:
                 self.log.debug("Assigning required env_vars")
                 new_env_vars = ["=".join([key, str(value)]) for key, value in env_var_dict.items()]
