@@ -18,6 +18,12 @@ pool:
   size: 12G
   nranks: 4
 container:
+  object_qty: 100
+  record_qty: 100
+  data_size: 10
+  akey_size: 10
+  dkey_size: 10
+  data_array: 10
   control_method: daos
 object_class: OC_RP_3G1
 number_pools: 5
