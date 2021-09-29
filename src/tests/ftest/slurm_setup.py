@@ -48,7 +48,7 @@ SLURMCTLD_STARTUP = [
 
 SLURMCTLD_STARTUP_DEBUG = [
     "cat /var/log/slurmctld.log",
-    "grep -v '^#' /etc/slurm/slurm.conf"]
+    "grep -v \"^#\\w\" /etc/slurm/slurm.conf"]
 
 SLURMD_STARTUP = [
     "systemctl restart slurmd",
@@ -56,7 +56,7 @@ SLURMD_STARTUP = [
 
 SLURMD_STARTUP_DEBUG = [
     "cat /var/log/slurmd.log",
-    "grep -v '^#' /etc/slurm/slurm.conf"]
+    "grep -v \"^#\\w\" /etc/slurm/slurm.conf"]
 
 
 def update_config_cmdlist(args):
@@ -226,6 +226,7 @@ def start_slurm(args):
         "mkdir -p /var/spool/slurmd",
         "mkdir -p /var/spool/slurmctld",
         "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
+        "chmod 775 {}".format("/var/spool/slurmctld"),
         "rm -f /var/spool/slurmctld/clustername"
         ]
 
@@ -236,15 +237,15 @@ def start_slurm(args):
     status = execute_cluster_cmds(all_nodes, SLURMD_STARTUP, args.sudo)
     if status > 0 or args.debug:
         execute_cluster_cmds(all_nodes, SLURMD_STARTUP_DEBUG, args.sudo)
-        if status > 0:
-            return 1
+    if status > 0:
+        return 1
 
     # Startup the slurm control service
     status = execute_cluster_cmds(args.control, SLURMCTLD_STARTUP, args.sudo)
     if status > 0 or args.debug:
         execute_cluster_cmds(args.control, SLURMCTLD_STARTUP_DEBUG, args.sudo)
-        if status > 0:
-            return 1
+    if status > 0:
+        return 1
 
     # ensure that the nodes are in the idle state
     cmd_list = ["scontrol update nodename={} state=idle".format(args.nodes)]
@@ -254,8 +255,8 @@ def start_slurm(args):
         execute_cluster_cmds(args.control, cmd_list, args.sudo)
         cmd_list = (SLURMD_STARTUP_DEBUG)
         execute_cluster_cmds(all_nodes, cmd_list, args.sudo)
-        if status > 0:
-            return 1
+    if status > 0:
+        return 1
     return 0
 
 
