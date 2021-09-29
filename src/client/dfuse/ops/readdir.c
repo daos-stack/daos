@@ -134,7 +134,8 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	entry->generation = 1;
 	entry->ino = entry->attr.st_ino;
 
-	strncpy(ie->ie_name, name, NAME_MAX + 1);
+	strncpy(ie->ie_name, name, NAME_MAX);
+	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
