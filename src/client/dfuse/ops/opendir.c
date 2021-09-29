@@ -68,7 +68,9 @@ void
 dfuse_cb_releasedir(fuse_req_t req, struct dfuse_inode_entry *ino,
 		    struct fuse_file_info *fi)
 {
+#if HAVE_CACHE_READDIR
 	struct dfuse_projection_info	*fs_handle = fuse_req_userdata(req);
+#endif
 	struct dfuse_obj_hdl		*oh = (struct dfuse_obj_hdl *)fi->fh;
 	int				rc;
 
