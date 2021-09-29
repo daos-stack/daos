@@ -134,7 +134,7 @@ create_entry(struct dfuse_projection_info *fs_handle,
 	entry->generation = 1;
 	entry->ino = entry->attr.st_ino;
 
-	strncpy(ie->ie_name, name, NAME_MAX);
+	strncpy(ie->ie_name, name, NAME_MAX + 1);
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	DFUSE_TRA_DEBUG(ie, "Inserting inode %#lx mode 0%o",
@@ -175,7 +175,7 @@ create_entry(struct dfuse_projection_info *fs_handle,
 						rc);
 		}
 		inode->ie_parent = ie->ie_parent;
-		strncpy(inode->ie_name, ie->ie_name, NAME_MAX);
+		strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(fs_handle, ie);

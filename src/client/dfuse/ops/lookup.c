@@ -112,7 +112,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 			wipe_name[NAME_MAX] = '\0';
 
 			inode->ie_parent = ie->ie_parent;
-			strncpy(inode->ie_name, ie->ie_name, NAME_MAX);
+			strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
 		}
 		atomic_fetch_sub_relaxed(&ie->ie_ref, 1);
 		dfuse_ie_close(fs_handle, ie);
