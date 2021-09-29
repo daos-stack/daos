@@ -117,8 +117,8 @@ rebuild_obj_send_cb(struct tree_cache_root *root, struct rebuild_send_arg *arg)
 		D_GOTO(out, rc = -DER_IO);
 
 	D_DEBUG(DB_REBUILD, "send rebuild objects "DF_UUID" to tgt %d"
-		" cnt %d\n", DP_UUID(rpt->rt_pool_uuid), arg->tgt_id,
-		arg->count);
+		" cnt %d stable epoch "DF_U64"\n", DP_UUID(rpt->rt_pool_uuid), arg->tgt_id,
+		arg->count, rpt->rt_stable_epoch);
 	while (1) {
 		rc = ds_object_migrate(rpt->rt_pool, rpt->rt_poh_uuid,
 				       rpt->rt_coh_uuid, arg->cont_uuid,
@@ -908,6 +908,9 @@ rebuild_tgt_scan_handler(crt_rpc_t *rpc)
 		rpt_put(rpt);
 		D_GOTO(out, rc);
 	}
+
+	if (rpt->rt_rebuild_op == RB_OP_REINT)
+		rpt->rt_pool->sp_reintegrating++; /* reset in rebuild_tgt_fini */
 
 	rpt_get(rpt);
 	/* step-3: start scan leader */

@@ -1822,6 +1822,10 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_DEBUG(DB_REBUILD, "Finalize rebuild for "DF_UUID", map_ver=%u\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 
+	if (rpt->rt_rebuild_op == RB_OP_REINT) {
+		D_ASSERT(rpt->rt_pool->sp_reintegrating > 0);
+		rpt->rt_pool->sp_reintegrating--;
+	}
 	ABT_mutex_lock(rpt->rt_lock);
 	D_ASSERT(rpt->rt_refcount > 0);
 	d_list_del_init(&rpt->rt_list);

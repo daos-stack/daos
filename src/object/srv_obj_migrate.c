@@ -2609,6 +2609,7 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		     daos_unit_oid_t *oid, uuid_t cont_uuid)
 {
 	struct ds_cont_child *cont;
+	daos_epoch_range_t   epr;
 	int rc;
 
 	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont);
@@ -2625,7 +2626,24 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		return rc;
 	}
 
-	rc = vos_obj_delete(cont->sc_hdl, *oid);
+	/* Wait until container aggregation are stopped */
+	while (cont->sc_vos_agg_active && !tls->mpt_fini && !cont->sc_stopping) {
+		D_DEBUG(DB_REBUILD, "wait for "DF_UUID"/"DF_UUID"/%u vos aggregation"
+			" to be inactive\n", DP_UUID(tls->mpt_pool_uuid),
+			DP_UUID(cont_uuid), tls->mpt_version);
+		dss_sleep(2 * 1000);
+	}
+
+	if (tls->mpt_fini || cont->sc_stopping) {
+		D_DEBUG(DB_REBUILD, DF_UUID "container migration is aborted.\n",
+			DP_UUID(cont_uuid));
+		ds_cont_child_put(cont);
+		return 0;
+	}
+
+	epr.epr_hi = tls->mpt_max_eph;
+	epr.epr_lo = 0;
+	rc = vos_discard(cont->sc_hdl, oid, &epr, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Migrate failed to destroy object prior to "
 			"reintegration: pool/object "DF_UUID"/"DF_UOID
@@ -3058,7 +3076,7 @@ migrate_ult(void *arg)
  * tree to see if the objects being migrated already.
  */
 static int
-migrate_del_object_tree(struct migrate_pool_tls *tls)
+migrate_try_create_object_tree(struct migrate_pool_tls *tls)
 {
 	struct umem_attr uma;
 	int rc;
@@ -3211,7 +3229,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* NB: only create this tree on xstream 0 */
-	rc = migrate_del_object_tree(pool_tls);
+	rc = migrate_try_create_object_tree(pool_tls);
 	if (rc)
 		D_GOTO(out, rc);
 
