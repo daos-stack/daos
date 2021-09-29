@@ -11,7 +11,7 @@ class EcodFioRebuild(ErasureCodeFio):
     # pylint: disable=too-many-ancestors
     # pylint: disable=protected-access
     """Test class Description: Runs Fio with EC object type over POSIX and
-        verify on-line, off-line for rebuild does not corrupt the data.
+        verify on-line, off-line for rebuild and verify the data.
 
     :avocado: recursive
     """
@@ -27,13 +27,13 @@ class EcodFioRebuild(ErasureCodeFio):
         """Jira ID: DAOS-7320.
 
         Test Description:
-            Verify the EC works for Fio for on-line rebuild.
+            Verify the EC works for Fio during on-line rebuild.
 
         Use Cases:
-            Create the container with RF:1 and 2
-            Create the Fio data file with verify pattern over Fuse
-            Kill the server when Write is in progress
-            Verify the write finish without any error
+            Create the container with RF:1 or 2.
+            Create the Fio data file with verify pattern over Fuse.
+            Kill the server when Write is in progress.
+            Verify the Fio write finish without any error.
             Wait and verify Aggregation is getting triggered.
             Read and verify the data after Aggregation.
             Kill one more rank and verify the data after rebuild finish.
@@ -74,11 +74,11 @@ class EcodFioRebuild(ErasureCodeFio):
         """Jira ID: DAOS-7320.
 
         Test Description:
-            Verify the truncate on EC object class works fine over fuse.
+            Verify the EC works for Fio, for off-line rebuild.
 
         Use Cases:
-            Create the container with RF:1 and 2
-            Create the Fio data file with verify pattern over Fuse
+            Create the container with RF:1 or 2.
+            Create the Fio data file with verify pattern over Fuse.
             Kill the server and wait for rebuild to finish.
             Wait and verify Aggregation is getting triggered.
             Kill one more rank and verify the data after rebuild finish.
@@ -88,9 +88,6 @@ class EcodFioRebuild(ErasureCodeFio):
         :avocado: tags=ec,ec_array,fio,ec_offline_rebuild
         :avocado: tags=ec_offline_rebuild_fio
         """
-        # Kill last server rank
-        self.rank_to_kill = self.server_count - 1
-
         # Write the Fio data with verify data pattern
         self.start_online_fio()
 
@@ -99,6 +96,7 @@ class EcodFioRebuild(ErasureCodeFio):
             self.fail("Aggregation failed to start..")
 
         # Kill last server rank
+        self.rank_to_kill = self.server_count - 1
         self.server_managers[0].stop_ranks(
             [self.server_count - 1], self.d_log, force=True)
 

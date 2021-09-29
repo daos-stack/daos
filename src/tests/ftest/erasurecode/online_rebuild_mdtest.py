@@ -21,7 +21,7 @@ class EcodOnlineRebuildMdtest(ErasureCodeMdtest):
         super().__init__(*args, **kwargs)
         self.set_online_rebuild = True
 
-    @skipForTicket("DAOS-7583")
+    @skipForTicket("DAOS-8583")
     def test_ec_online_rebuild_mdtest(self):
         """Jira ID: DAOS-7320.
 
