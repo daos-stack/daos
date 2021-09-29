@@ -271,3 +271,12 @@
    fun:HG_Init_opt
    ...
 }
+{
+   Tcp provider with ofi rxm
+   Memcheck:Param
+   sendmsg(msg.msg_iov[1])
+   obj:*
+   fun:tcpx_send_msg
+   ...
+   fun:HG_Core_progress
+}
