@@ -511,6 +511,20 @@ obj_get_grp_size(struct dc_object *obj)
 }
 
 int
+dc_obj_get_grp_size(daos_handle_t oh, int *grp_size)
+{
+	struct dc_object        *obj;
+
+	obj = obj_hdl2ptr(oh);
+	if (obj == NULL)
+		return -DER_NO_HDL;
+
+	*grp_size = obj_get_grp_size(obj);
+	obj_decref(obj);
+	return 0;
+}
+
+int
 obj_get_grp_nr(struct dc_object *obj)
 {
 	return obj->cob_grp_nr;
@@ -937,6 +951,8 @@ shard_open:
 			} else {
 				if (obj_auxi->opc == DAOS_OBJ_RPC_FETCH)
 					ec_degrade = true;
+				else
+					shard_tgt->st_rank = DAOS_TGT_IGNORE;
 			}
 		} else {
 			D_ERROR(DF_OID" obj_shard_open %u, rc "DF_RC".\n",
@@ -974,7 +990,7 @@ ec_deg_get:
 				DP_OID(obj->cob_md.omd_id), shard,
 				obj_auxi->ec_in_recov,
 				obj_auxi->reasb_req.orr_singv_only);
-			D_GOTO(out, rc = -DER_BAD_TARGET);
+			D_GOTO(out, rc = -DER_TGT_RETRY);
 		}
 		shard = start_shard + ec_deg_tgt;
 		D_DEBUG(DB_IO, DF_OID" shard %d fetch re-direct to shard %d.\n",
@@ -1085,6 +1101,8 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 	req_tgts->ort_grp_size = (shard_nr == shard_cnt) ? grp_size : shard_nr;
 	for (i = 0; i < grp_nr; i++) {
 		struct daos_shard_tgt	*head;
+		struct daos_oclass_attr	*oca;
+		uint32_t		 fail_nr;
 
 		shard_idx = start_shard + i * grp_size;
 		head = tgt = req_tgts->ort_shard_tgts + i * grp_size;
@@ -1111,14 +1129,27 @@ obj_shards_2_fwtgts(struct dc_object *obj, uint32_t map_ver, uint8_t *bit_map,
 				continue;
 		}
 
-		for (j = 0; j < grp_size; j++, shard_idx++) {
+		for (j = 0, fail_nr = 0; j < grp_size; j++, shard_idx++) {
 			if (shard_idx == leader_shard ||
 			    (bit_map != NIL_BITMAP && isclr(bit_map, j)))
 				continue;
 			rc = obj_shard_tgts_query(obj, map_ver, shard_idx,
 						  shard_idx - start_shard,
 						  tgt++, obj_auxi);
-			if (rc != 0)
+			if (unlikely(DAOS_FAIL_CHECK(DAOS_FAIL_SHARD_NONEXIST)))
+				rc = -DER_NONEXIST;
+			if (rc == -DER_NONEXIST && obj_auxi->is_ec_obj) {
+				fail_nr++;
+				rc = 0;
+				oca = obj_get_oca(obj);
+				if (fail_nr > obj_ec_parity_tgt_nr(oca)) {
+					rc = -DER_IO;
+					D_ERROR(DF_OID" #failed_shard %d, exceed %d, "DF_RC"\n",
+						DP_OID(obj->cob_md.omd_id), fail_nr,
+						obj_ec_parity_tgt_nr(oca), DP_RC(rc));
+					return rc;
+				}
+			} else if (rc != 0)
 				return rc;
 
 			if (req_tgts->ort_srv_disp) {
@@ -2437,7 +2468,7 @@ obj_req_get_tgts(struct dc_object *obj, int *shard, daos_key_t *dkey,
 	rc = obj_shards_2_fwtgts(obj, map_ver, bit_map, shard_idx,
 				 shard_cnt, grp_nr, flags, obj_auxi);
 	if (rc != 0) {
-		if (rc != -DER_SHARDS_OVERLAP && rc != -DER_BAD_TARGET)
+		if (rc != -DER_SHARDS_OVERLAP && rc != -DER_TGT_RETRY)
 			D_ERROR("opc %d "DF_OID", obj_shards_2_fwtgts failed "
 				DF_RC"\n", opc, DP_OID(obj->cob_md.omd_id),
 				DP_RC(rc));
@@ -3321,6 +3352,12 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 		D_DEBUG(DB_IO, "shard %d ret %d.\n", shard_auxi->shard, ret);
 		if (obj_auxi->result == 0)
 			obj_auxi->result = ret;
+	} else if (ret == -DER_TGT_RETRY) {
+		/* some special handing for DER_TGT_RETRY, as we use that errno for
+		 * some retry cases.
+		 */
+		if (obj_auxi->result == 0 || obj_retry_error(obj_auxi->result))
+			obj_auxi->result = ret;
 	} else {
 		/* for un-retryable failure, set the err to whole obj IO */
 		D_DEBUG(DB_IO, "shard %d ret %d.\n", shard_auxi->shard, ret);
@@ -3768,12 +3805,12 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 * are some other cases we need to retry the RPC with current
 		 * shard, such as -DER_TIMEDOUT or daos_crt_network_error().
 		 */
-
-		if ((!obj_auxi->spec_shard && !obj_auxi->spec_group &&
-		     !obj_auxi->no_retry) ||
-		    (task->dt_result != -DER_INPROGRESS &&
-		     task->dt_result != -DER_TX_BUSY))
-			obj_auxi->io_retry = 1;
+		obj_auxi->io_retry = 1;
+		if (obj_auxi->no_retry ||
+		    (obj_auxi->spec_shard && (task->dt_result == -DER_INPROGRESS ||
+		     task->dt_result == -DER_TX_BUSY || task->dt_result == -DER_EXCLUDED ||
+		     task->dt_result == -DER_CSUM)))
+			obj_auxi->io_retry = 0;
 
 		if (task->dt_result == -DER_CSUM ||
 		    task->dt_result == -DER_TX_UNCERTAIN) {
@@ -3821,9 +3858,13 @@ obj_comp_cb(tse_task_t *task, void *data)
 	    DAOS_FAIL_CHECK(DAOS_DTX_NO_RETRY))
 		obj_auxi->io_retry = 0;
 
-	if (!obj_auxi->no_retry && (pm_stale || obj_auxi->io_retry))
-		obj_retry_cb(task, obj, obj_auxi, pm_stale,
-			     obj_auxi->map_ver_reply);
+	if (!obj_auxi->no_retry && (pm_stale || obj_auxi->io_retry)) {
+		rc = obj_retry_cb(task, obj, obj_auxi, pm_stale, obj_auxi->map_ver_reply);
+		if (rc) {
+			D_ERROR(DF_OID "retry io failed: %d\n", DP_OID(obj->cob_md.omd_id), rc);
+			D_ASSERT(obj_auxi->io_retry == 0);
+		}
+	}
 
 	if (!obj_auxi->io_retry) {
 		struct obj_ec_fail_info	*fail_info;
@@ -3908,7 +3949,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 
 		fail_info = obj_auxi->reasb_req.orr_fail;
 		new_tgt_fail = obj_auxi->ec_wait_recov &&
-			       task->dt_result == -DER_BAD_TARGET;
+			       task->dt_result == -DER_TGT_RETRY;
 		/* for original failed EC obj fetch task, try with EC recovery
 		 * 1. create EC recovery task (with ec_in_recov flag) and mark
 		 *    original obj fetch task with ec_wait_recov flag.
@@ -3917,7 +3958,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 		 */
 		if (fail_info != NULL && !obj_auxi->ec_in_recov &&
 		    ((obj_auxi->reasb_req.orr_singv_only &&
-		     (task->dt_result == -DER_BAD_TARGET ||
+		     (task->dt_result == -DER_TGT_RETRY ||
 		      task->dt_result == 0)) ||
 		     (fail_info->efi_nrecx_lists > 0 &&
 		      (task->dt_result == 0 ||  new_tgt_fail)))) {
@@ -3930,6 +3971,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				obj_auxi_free_failed_tgt_list(obj_auxi);
 				obj_reasb_req_fini(&obj_auxi->reasb_req,
 						   obj_auxi->iod_nr);
+				obj_bulk_fini(obj_auxi);
 				memset(obj_auxi, 0, sizeof(*obj_auxi));
 			} else {
 				daos_obj_fetch_t *args = dc_task_get_args(task);
@@ -3937,6 +3979,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 				task->dt_result = 0;
 				obj_ec_recov_cb(task, obj, obj_auxi,
 						args->csum_iov);
+				obj_bulk_fini(obj_auxi);
 			}
 		} else {
 			if (obj_auxi->is_ec_obj &&
@@ -3962,6 +4005,7 @@ obj_comp_cb(tse_task_t *task, void *data)
 			memset(obj_auxi, 0, sizeof(*obj_auxi));
 		}
 	} else {
+		D_ASSERT(!obj_auxi->no_retry);
 		if (!obj_auxi->ec_in_recov)
 			obj_ec_fail_info_reset(&obj_auxi->reasb_req);
 	}
@@ -4452,6 +4496,10 @@ dc_obj_update(tse_task_t *task, struct dtx_epoch *epoch, uint32_t map_ver,
 			goto out_task;
 		}
 
+		if (obj_auxi->is_ec_obj && obj_auxi->req_reasbed) {
+			args->iods = obj_auxi->reasb_req.orr_uiods;
+			args->sgls = obj_auxi->reasb_req.orr_usgls;
+		}
 		/* For OSA case, 2 or more shards locate on the same
 		 * VOS target. We will handle such case via internal
 		 * transaction.
