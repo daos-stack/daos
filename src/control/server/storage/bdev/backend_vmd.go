@@ -229,14 +229,18 @@ func getVMDPrepReq(log logging.Logger, req *storage.BdevPrepareRequest, vmdDetec
 
 	vmdReq := vmdProcessFilters(req, vmdPCIAddrs)
 
-	if req.PCIAllowList != "" && vmdReq.PCIAllowList == "" {
-		log.Debugf("vmd prep: %v devices not allowed", vmdPCIAddrs)
-		return nil, nil
+	// No addrs left after filtering
+	if vmdReq.PCIAllowList == "" {
+		if req.PCIAllowList != "" {
+			log.Debugf("vmd prep: %v devices not allowed", vmdPCIAddrs)
+			return nil, nil
+		}
+		if req.PCIBlockList != "" {
+			log.Debugf("vmd prep: %v devices blocked", vmdPCIAddrs)
+			return nil, nil
+		}
 	}
-	if req.PCIBlockList != "" && vmdReq.PCIAllowList == "" {
-		log.Debugf("vmd prep: %v devices blocked", vmdPCIAddrs)
-		return nil, nil
-	}
+
 	log.Debugf("volume management devices selected: %v", vmdReq.PCIAllowList)
 
 	return &vmdReq, nil
