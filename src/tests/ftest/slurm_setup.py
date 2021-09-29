@@ -224,9 +224,9 @@ def start_slurm(args):
     cmd_list = [
         "mkdir -p /var/log/slurm",
         "chown {}. {}".format(args.user, "/var/log/slurm"),
-        # "mkdir -p /var/spool/slurm/d",
-        # "mkdir -p /var/spool/slurm/ctld",
-        # "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
+        "mkdir -p /var/spool/slurmd",
+        "mkdir -p /var/spool/slurmctld",
+        "chown {}. {}".format(args.user, "/var/spool/slurm"),
         "rm -f /var/spool/slurmctld/clustername"
         ]
 
