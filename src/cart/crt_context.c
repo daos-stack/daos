@@ -210,12 +210,6 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 		D_GOTO(out, rc);
 	}
 
-	/*******************************************/
-	/* Intentionally crash to get a stacktrace */
-	int * crash = NULL;
-	*crash = 1;
-	/*******************************************/
-
 	D_RWLOCK_WRLOCK(&crt_gdata.cg_rwlock);
 
 	rc = crt_hg_ctx_init(&ctx->cc_hg_ctx, provider, cur_ctx_num);
