@@ -500,6 +500,77 @@ degrade_ec_partial_update_agg(void **state)
 }
 
 static void
+degrade_fetch_small_io(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	int		i;
+	char		*data;
+	char		*verify_data;
+	int		 write_size, write_cnt;
+	int		 read_size, read_cnt;
+	char		 akey[16] = {0};
+	daos_recx_t	 recx;
+	uint16_t	 fail_shards[2];
+
+	if (!test_runable(arg, 6))
+		return;
+
+	snprintf(akey, 15, "a_key%4d", arg->myrank);
+	write_size = 128;
+	write_cnt = 1024 * 128;
+	data = (char *)malloc(write_size);
+	assert_true(data != NULL);
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P2G1, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < write_cnt; i++) {
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_idx = i * write_size;
+		recx.rx_nr = write_size;
+		memset(data, 'a' + i, write_size);
+		insert_recxs("d_key", akey, 1, DAOS_TX_NONE, &recx, 1,
+			     data, write_size, &req);
+		if (i > 0 && i % (1024 * 8) == 0)
+			print_message("inserted %d recx, each write_size %d\n", i, write_size);
+	}
+
+	/* wait EC aggregation. */
+	if (arg->myrank == 0) {
+		daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+		print_message("sleep 40 seconds for aggregation");
+		sleep(40);
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	fail_shards[0] = 2;
+	fail_shards[1] = 1;
+	daos_fail_value_set(daos_shard_fail_value(fail_shards, 2));
+	daos_fail_loc_set(DAOS_FAIL_SHARD_FETCH | DAOS_FAIL_ALWAYS);
+
+	read_size = EC_CELL_SIZE;
+	read_cnt = (write_size * write_cnt) / read_size;
+	verify_data = (char *)malloc(read_size);
+	assert_true(verify_data != NULL);
+	for (i = 0; i < read_cnt; i++) {
+		daos_off_t offset = i * read_size;
+
+		recx.rx_idx = offset;
+		recx.rx_nr = read_size;
+		memset(verify_data, 0, read_size);
+		lookup_recxs("d_key", akey, 1, DAOS_TX_NONE, &recx, 1,
+			     verify_data, read_size, &req);
+		if (i > 0 && (i % 8) == 0)
+			print_message("read %d recx, each read_size %d\n", i, read_size);
+	}
+
+	daos_fail_value_set(0);
+	daos_fail_loc_set(0);
+	free(data);
+	free(verify_data);
+}
+
+static void
 degrade_ec_agg(void **state)
 {
 	test_arg_t	*arg = *state;
@@ -638,6 +709,8 @@ static const struct CMUnitTest degrade_tests[] = {
 	 degrade_ec_partial_update_agg, degrade_sub_setup, test_teardown},
 	{"DEGRADE25: degrade ec aggregation",
 	 degrade_ec_agg, degrade_sub_setup, test_teardown},
+	{"DEGRADE26: lots of small update, degrade fetch after agg",
+	 degrade_fetch_small_io, degrade_sub_setup, test_teardown},
 };
 
 int
