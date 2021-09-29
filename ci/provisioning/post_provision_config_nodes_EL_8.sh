@@ -131,5 +131,7 @@ post_provision_config_nodes() {
     fi
     cat /etc/os-release
 
+    rpm -qa | sort
+
     exit 0
 }
