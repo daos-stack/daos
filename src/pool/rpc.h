@@ -273,19 +273,6 @@ CRT_RPC_DECLARE(pool_replicas_add, DAOS_ISEQ_POOL_MEMBERSHIP,
 CRT_RPC_DECLARE(pool_replicas_remove, DAOS_ISEQ_POOL_MEMBERSHIP,
 		DAOS_OSEQ_POOL_MEMBERSHIP)
 
-/** Target address for each pool target */
-struct pool_target_addr {
-	/** rank of the node where the target resides */
-	d_rank_t	pta_rank;
-	/** target index in each node */
-	uint32_t	pta_target;
-};
-
-struct pool_target_addr_list {
-	int			 pta_number;
-	struct pool_target_addr	*pta_addrs;
-};
-
 #define DAOS_ISEQ_POOL_TGT_UPDATE /* input fields */		 \
 	((struct pool_op_in)	(pti_op)		CRT_VAR) \
 	((struct pool_target_addr) (pti_addr_list)	CRT_ARRAY)
@@ -458,15 +445,6 @@ pool_req_create(crt_context_t crt_ctx, crt_endpoint_t *tgt_ep, crt_opcode_t opc,
 
 	return crt_req_create(crt_ctx, tgt_ep, opcode, req);
 }
-
-int
-pool_target_addr_list_alloc(unsigned int num,
-			    struct pool_target_addr_list *list);
-int
-pool_target_addr_list_append(struct pool_target_addr_list *dst_list,
-			     struct pool_target_addr *src);
-void
-pool_target_addr_list_free(struct pool_target_addr_list *list);
 
 uint64_t
 pool_query_bits(daos_pool_info_t *po_info, daos_prop_t *prop);

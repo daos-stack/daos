@@ -8,11 +8,16 @@ package bdev
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/dustin/go-humanize"
 
 	"github.com/daos-stack/daos/src/control/logging"
 	"github.com/daos-stack/daos/src/control/server/storage"
+)
+
+const (
+	hotplugPeriod = 5 * time.Second
 )
 
 // SPDK bdev subsystem configuration method name definitions.
@@ -119,9 +124,7 @@ func defaultSpdkConfig() *SpdkConfig {
 		},
 		{
 			Method: SpdkBdevNvmeSetHotplug,
-			Params: NvmeSetHotplugParams{
-				PeriodUsec: 10 * 1000 * 1000,
-			},
+			Params: NvmeSetHotplugParams{},
 		},
 	}
 
@@ -232,6 +235,31 @@ func newSpdkConfig(log logging.Logger, req *storage.BdevWriteConfigRequest) (*Sp
 		for _, tp := range req.TierProps {
 			if tp.Class == storage.ClassNvme {
 				sc.WithVMDEnabled()
+				break
+			}
+		}
+	}
+
+	if req.HotplugEnabled {
+		var found bool
+		for _, ss := range sc.Subsystems {
+			if ss.Name != "bdev" {
+				continue
+			}
+
+			for _, bsc := range ss.Configs {
+				if bsc.Method == SpdkBdevNvmeSetHotplug {
+					bsc.Params = NvmeSetHotplugParams{
+						Enable:     true,
+						PeriodUsec: uint64(hotplugPeriod.Microseconds()),
+					}
+					found = true
+
+					break
+				}
+			}
+
+			if found {
 				break
 			}
 		}

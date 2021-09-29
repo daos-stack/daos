@@ -92,7 +92,7 @@ class IorTestBase(DfuseTestBase):
                           test_file="daos:testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
-                          mount_dir=None, out_queue=None):
+                          mount_dir=None, out_queue=None, env=None):
         # pylint: disable=too-many-arguments
         """Execute ior with optional overrides for ior flags and object_class.
 
@@ -120,6 +120,8 @@ class IorTestBase(DfuseTestBase):
             mount_dir (str, optional): Create specific mount point
             out_queue (queue, optional): Pass the exception to the queue.
                 Defaults to None
+            env (EnvironmentVariables, optional): Pass the environment to be
+                used when calling run_ior. Defaults to None
 
         Returns:
             CmdResult: result of the ior command execution
@@ -152,7 +154,7 @@ class IorTestBase(DfuseTestBase):
             out = self.run_ior(job_manager, self.processes,
                                intercept, plugin_path=plugin_path,
                                fail_on_warning=fail_on_warning,
-                               out_queue=out_queue)
+                               out_queue=out_queue, env=env)
         finally:
             if stop_dfuse:
                 self.stop_dfuse()
@@ -220,7 +222,7 @@ class IorTestBase(DfuseTestBase):
 
     def run_ior(self, manager, processes, intercept=None, display_space=True,
                 plugin_path=None, fail_on_warning=False, pool=None,
-                out_queue=None):
+                out_queue=None, env=None):
         """Run the IOR command.
 
         Args:
@@ -238,12 +240,17 @@ class IorTestBase(DfuseTestBase):
                 Default is self.pool.
             out_queue (queue, optional): Pass the exception to the queue.
                 Defaults to None.
+            env (EnvironmentVariables, optional): Environment to be used
+             when running ior. Defaults to None
         """
-        env = self.ior_cmd.get_default_env(str(manager), self.client_log)
+        if not env:
+            env = self.ior_cmd.get_default_env(str(manager), self.client_log)
         if intercept:
             env['LD_PRELOAD'] = intercept
             env['D_LOG_MASK'] = 'INFO'
-            env['D_IL_REPORT'] = '1'
+            if env.get('D_IL_REPORT', None) is None:
+                env['D_IL_REPORT'] = '1'
+
             #env['D_LOG_MASK'] = 'INFO,IL=DEBUG'
             #env['DD_MASK'] = 'all'
             #env['DD_SUBSYS'] = 'all'
@@ -274,7 +281,7 @@ class IorTestBase(DfuseTestBase):
 
             for line in out.stdout_text.splitlines():
                 if 'WARNING' in line:
-                    report_warning("IOR command issued warnings.\n")
+                    report_warning("IOR command issued warnings.")
             return out
         except CommandFailure as error:
             self.log.error("IOR Failed: %s", str(error))
@@ -307,8 +314,9 @@ class IorTestBase(DfuseTestBase):
 
     def run_ior_threads_il(self, results, intercept, with_clients,
                            without_clients):
-        """Execute 2 IOR threads in parallel. One thread with interception
-        library (IL) and one without.
+        """Execute 2 IOR threads in parallel.
+
+        One thread is run with the interception library (IL) and one without.
 
         Args:
             results (dict): Dictionary to store the IOR results that gets
@@ -347,6 +355,20 @@ class IorTestBase(DfuseTestBase):
         thread2.join()
 
         self.stop_dfuse()
+
+        # Basic verification of the thread results
+        status = True
+        for key in sorted(results):
+            if not results[key].pop(0):
+                self.log.error("IOR Thread %d: %s", key, results[key][0])
+                status = False
+            if len(results[key]) != 2:
+                self.log.error(
+                    "IOR Thread %d: expecting 2 results; %d found: %s",
+                    key, len(results[key]), results[key])
+                status = False
+        if not status:
+            self.fail("At least one IOR thread failed!")
 
     def create_ior_thread(self, ior_command, clients, job_num, results,
                           intercept=None):
@@ -400,15 +422,15 @@ class IorTestBase(DfuseTestBase):
             clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(procs)
         manager.assign_environment(env)
-        self.display_pool_space()
 
         self.log.info("--- IOR Thread %d: Starting IOR ---", job_num)
+        self.display_pool_space()
         try:
             ior_output = manager.run()
-            results[job_num] = IorCommand.get_ior_metrics(ior_output)
+            results[job_num] = [True]
+            results[job_num].extend(IorCommand.get_ior_metrics(ior_output))
         except CommandFailure as error:
-            self.log.error("IOR Failed: %s", str(error))
-            self.fail("IOR thread failed!")
+            results[job_num] = [False, "IOR failed: {}".format(error)]
         finally:
             self.display_pool_space()
 
