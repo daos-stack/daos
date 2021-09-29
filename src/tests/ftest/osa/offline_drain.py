@@ -169,6 +169,7 @@ class OSAOfflineDrain(OSAUtils):
         self.log.info("Offline Drain : During Aggregation")
         self.run_offline_drain_test(1, data=True)
 
+    @skipForTicket("DAOS-8609")
     def test_osa_offline_drain_oclass(self):
         """Test ID: DAOS-7159
         Test Description: Validate Offline Drain
