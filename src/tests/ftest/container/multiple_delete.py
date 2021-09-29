@@ -4,6 +4,7 @@
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
+import time
 from ior_test_base import IorTestBase
 
 
@@ -39,7 +40,7 @@ class MultipleContainerDelete(IorTestBase):
 
         initial_scm_fs, initial_ssd_fs = self.get_pool_space()
 
-        for i in range(50):
+        for i in range(5):
             self.log.info("Create-Write-Destroy Iteration %d", i)
             self.create_cont()
             self.ior_cmd.set_daos_params(
@@ -48,6 +49,9 @@ class MultipleContainerDelete(IorTestBase):
             # inserted into SCM and anything greater goes to SSD
             self.run_ior_with_pool()
             self.container.destroy()
+
+            self.log.debug("## Wait 30 sec for aggregation to occur")
+            time.sleep(60)
             scm_fs, ssd_fs = self.get_pool_space()
             out.append("iter = {}, scm = {}, ssd = {}".format(
                 i+1, scm_fs, ssd_fs))
