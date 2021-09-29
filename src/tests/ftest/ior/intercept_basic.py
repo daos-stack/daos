@@ -6,7 +6,6 @@
 """
 
 import os
-from apricot import skipForTicket
 from ior_test_base import IorTestBase
 from ior_utils import IorCommand, IorMetrics
 
@@ -21,7 +20,6 @@ class IorIntercept(IorTestBase):
     :avocado: recursive
     """
 
-    @skipForTicket("DAOS-5857")
     def test_ior_intercept(self):
         """Jira ID: DAOS-3498.
 

@@ -79,9 +79,13 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 		return EINVAL;
 
 	if (matched == 2) {
-		if (c == 'm' || c == 'M')
+		if (c == 'd' || c == 'D')
+			out *= 60 * 60 * 24;
+		else if (c == 'h' || c == 'H')
+			out *= 60 * 60;
+		else if (c == 'm' || c == 'M')
 			out *= 60;
-		if (c == 's' || c == 'S')
+		else if (c == 's' || c == 'S')
 			true;
 		else
 			return EINVAL;
