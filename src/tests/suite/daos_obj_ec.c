@@ -660,6 +660,7 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 	daos_size_t	buf_size = 10 * 1024;
 	daos_size_t	chunk_size = 32 * 1024 * 4;
 	uuid_t		co_uuid;
+	char		str[37];
 	char		filename[32];
 	struct stat	st;
 	char		*buf;
@@ -667,8 +668,7 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 	daos_obj_id_t	oid;
 	int		rc;
 
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs_mt);
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -754,7 +754,8 @@ dfs_ec_check_size_internal(void **state, unsigned fail_loc)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 }
 
@@ -1058,6 +1059,7 @@ ec_punch_check_size(void **state)
 	daos_size_t	buf_size = 256 * 1024;
 	daos_size_t	chunk_size = 128 * 1024;
 	uuid_t		co_uuid;
+	char		str[37];
 	char		filename[32];
 	struct stat	st;
 	char		*buf;
@@ -1065,8 +1067,7 @@ ec_punch_check_size(void **state)
 	daos_obj_id_t	oid;
 	int		rc;
 
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl, &dfs_mt);
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl, &dfs_mt);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
 
@@ -1138,7 +1139,8 @@ ec_punch_check_size(void **state)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 }
 

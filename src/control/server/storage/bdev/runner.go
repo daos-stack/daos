@@ -90,24 +90,6 @@ func defaultScriptRunner(log logging.Logger) *spdkSetupScript {
 	}
 }
 
-func (s *spdkSetupScript) prepare(req *storage.BdevPrepareRequest, op string, extraEnvs []string) error {
-	env := []string{
-		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-	}
-	env = append(env, extraEnvs...)
-
-	args := []string{}
-	if op == "reset" {
-		args = append(args, "reset")
-	}
-
-	s.log.Debugf("spdk %s env: %v", op, env)
-	out, err := s.runCmd(s.log, env, s.scriptPath, args...)
-	s.log.Debugf("spdk %s stdout:\n%s\n", op, out)
-
-	return errors.Wrapf(err, "spdk %s failed (%s)", op, out)
-}
-
 // Prepare executes setup script to allocate hugepages and unbind PCI devices
 // (that don't have active mountpoints) from generic kernel driver to be
 // used with SPDK. Either all PCI devices will be unbound by default if allow list

@@ -280,14 +280,6 @@ func (mi *MockInstance) newCret(_ string, _ error) *ctlpb.NvmeControllerResult {
 	return nil
 }
 
-func (mi *MockInstance) bdevConfig() storage.BdevConfig {
-	return storage.BdevConfig{}
-}
-
-func (mi *MockInstance) scmConfig() storage.ScmConfig {
-	return storage.ScmConfig{}
-}
-
 func (mi *MockInstance) tryDrpc(_ context.Context, _ drpc.Method) *system.MemberResult {
 	return nil
 }

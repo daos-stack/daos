@@ -884,11 +884,6 @@ func TestServer_MgmtSvc_PoolDestroy(t *testing.T) {
 				tc.req.Sys = build.DefaultSystemName
 			}
 
-			expDrpcReq := tc.expDrpcReq
-			if expDrpcReq == nil {
-				expDrpcReq = tc.req
-			}
-
 			gotResp, gotErr := tc.mgmtSvc.PoolDestroy(context.TODO(), tc.req)
 			common.CmpErr(t, tc.expErr, gotErr)
 			if tc.expErr != nil {

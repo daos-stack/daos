@@ -324,7 +324,7 @@ vos_obj_punch(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 		bound = epoch;
 	}
 
-	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_U64"\n",
+	D_DEBUG(DB_IO, "Punch "DF_UOID", epoch "DF_X64"\n",
 		DP_UOID(oid), epr.epr_hi);
 
 	vos_dth_set(dth);
