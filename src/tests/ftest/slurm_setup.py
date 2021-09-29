@@ -226,7 +226,7 @@ def start_slurm(args):
         "chown {}. {}".format(args.user, "/var/log/slurm"),
         "mkdir -p /var/spool/slurmd",
         "mkdir -p /var/spool/slurmctld",
-        "chown {}. {}".format(args.user, "/var/spool/slurm"),
+        "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
         "rm -f /var/spool/slurmctld/clustername"
         ]
 
