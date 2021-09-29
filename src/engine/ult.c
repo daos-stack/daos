@@ -312,9 +312,9 @@ sched_ult2xs(int xs_type, int tgt_id)
 		return DSS_XS_SELF;
 	case DSS_XS_SYS:
 		return 0;
-	case DSS_XS_DRPC:
-		return 1;
 	case DSS_XS_SWIM:
+		return 1;
+	case DSS_XS_DRPC:
 		return 2;
 	case DSS_XS_IOFW:
 		if (!dss_helper_pool) {
@@ -325,6 +325,29 @@ sched_ult2xs(int xs_type, int tgt_id)
 			break;
 		}
 
+		/*
+		 * Comment from @liuxuezhao:
+		 *
+		 * This is the case that no helper XS, so for IOFW,
+		 * we either use itself, or use neighbor XS.
+		 *
+		 * Why original code select neighbor XS rather than itself
+		 * is because, when the code is called, I know myself is on
+		 * processing IO request and need IO forwarding, now I am
+		 * processing IO, so likely there is not only one IO (possibly
+		 * more than one IO for specific dkey), I am busy so likely my
+		 * neighbor is not busy (both busy seems only in some special
+		 * multiple dkeys used at same time) can help me do the IO
+		 * forwarding?
+		 *
+		 * But this is just original intention, you guys think it is
+		 * not reasonable? prefer another way that I am processing IO
+		 * and need IO forwarding, OK, just let myself do it ...
+		 *
+		 * Note that we first do IO forwarding and then serve local IO,
+		 * ask neighbor to do IO forwarding seems is helpful to make
+		 * them concurrent, right?
+		 */
 		if (dss_tgt_offload_xs_nr >= dss_tgt_nr)
 			xs_id = dss_sys_xs_nr + dss_tgt_nr + tgt_id;
 		else if (dss_tgt_offload_xs_nr > 0)

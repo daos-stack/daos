@@ -387,10 +387,10 @@ dss_srv_handler(void *arg)
 		if (dx->dx_xs_id < dss_sys_xs_nr) {
 			/*
 			 * xs_id: 0 => SYS  XS: ctx_id: 0
-			 * xs_id: 1 => DRPC XS: no ctx_id
-			 * xs_id: 2 => SWIM XS: ctx_id: 1
+			 * xs_id: 1 => SWIM XS: ctx_id: 1
+			 * xs_id: 2 => DRPC XS: no ctx_id
 			 */
-			D_ASSERTF(dx->dx_ctx_id == (dx->dx_xs_id / 2),
+			D_ASSERTF(dx->dx_ctx_id == dx->dx_xs_id,
 				  "incorrect ctx_id %d for xs_id %d\n",
 				  dx->dx_ctx_id, dx->dx_xs_id);
 		} else {
@@ -610,7 +610,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 	 */
 	if (dss_helper_pool) {
 		comm =  (xs_id == 0) || /* DSS_XS_SYS */
-			(xs_id == 2) || /* DSS_XS_SWIM */
+			(xs_id == 1) || /* DSS_XS_SWIM */
 			(xs_id >= dss_sys_xs_nr &&
 			 xs_id < (dss_sys_xs_nr + 2 * dss_tgt_nr));
 	} else {
@@ -628,7 +628,7 @@ dss_start_one_xstream(hwloc_cpuset_t cpus, int xs_id)
 			xs_offset = -1;
 
 		comm =  (xs_id == 0) ||		/* DSS_XS_SYS */
-			(xs_id == 2) ||		/* DSS_XS_SWIM */
+			(xs_id == 1) ||		/* DSS_XS_SWIM */
 			(xs_offset == 0) ||	/* main XS */
 			(xs_offset == 1);	/* first offload XS */
 	}
@@ -826,15 +826,8 @@ dss_start_xs_id(int xs_id)
 	hwloc_obj_t	obj;
 	int		rc;
 	int		xs_core_offset;
-	int		xs_allocate_core_start;
 	unsigned	idx;
 	char		*cpuset;
-
-	/* All system XS will reuse the first XS' core */
-	xs_allocate_core_start = dss_sys_xs_nr - 1;
-	/* The SWIM XS will use separate core if enough cores */
-	if (dss_core_nr > dss_tgt_nr)
-		xs_allocate_core_start--;
 
 	D_DEBUG(DB_TRACE, "start xs_id called for %d.  ", xs_id);
 	/* if we are NUMA aware, use the NUMA information */
@@ -846,7 +839,11 @@ dss_start_xs_id(int xs_id)
 		}
 		D_DEBUG(DB_TRACE,
 			"Choosing next available core index %d.", idx);
-		if (xs_id >= xs_allocate_core_start)
+		/*
+		 * All system XS will reuse the first XS' core, but
+		 * the SWIM and DRPC XS will use separate core if enough cores
+		 */
+		if (xs_id > 1 || (xs_id == 0 && dss_core_nr > dss_tgt_nr))
 			hwloc_bitmap_clr(core_allocation_bitmap, idx);
 
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth, idx);
@@ -860,8 +857,14 @@ dss_start_xs_id(int xs_id)
 		free(cpuset);
 	} else {
 		D_DEBUG(DB_TRACE, "Using non-NUMA aware core allocation\n");
-		if (xs_id >= xs_allocate_core_start)
-			xs_core_offset = 1 + xs_id - xs_allocate_core_start;
+		/*
+		 * All system XS will use the first core, but
+		 * the SWIM XS will use separate core if enough cores
+		 */
+		if (xs_id > 2)
+			xs_core_offset = xs_id - ((dss_core_nr > dss_tgt_nr) ? 1 : 2);
+		else if (xs_id == 1)
+			xs_core_offset = (dss_core_nr > dss_tgt_nr) ? 1 : 0;
 		else
 			xs_core_offset = 0;
 		obj = hwloc_get_obj_by_depth(dss_topo, dss_core_depth,

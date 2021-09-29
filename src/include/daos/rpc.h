@@ -114,7 +114,7 @@ daos_rpc_tag(int req_type, int tgt_idx)
 	case DAOS_REQ_TGT:
 		return DAOS_IO_CTX_ID(tgt_idx);
 	case DAOS_REQ_SWIM:
-		return 2;
+		return 1;
 	/* target tag 0 is to handle below requests */
 	case DAOS_REQ_MGMT:
 	case DAOS_REQ_POOL:

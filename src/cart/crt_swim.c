@@ -689,17 +689,16 @@ static void crt_swim_new_incarnation(struct swim_context *ctx,
 	state->sms_incarnation = incarnation;
 }
 
-static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
+static int64_t crt_swim_progress_cb(crt_context_t crt_ctx, int64_t timeout, void *arg)
 {
 	struct crt_grp_priv	*grp_priv = crt_gdata.cg_grp->gg_primary_grp;
 	struct crt_swim_membs	*csm = &grp_priv->gp_membs_swim;
 	struct swim_context	*ctx = csm->csm_ctx;
 	swim_id_t		 self_id = swim_self_get(ctx);
-	int64_t			 timeout = csm->csm_crt_ctx_idx ? CRT_SWIM_PROGRESS_TIMEOUT : 0;
 	int			 rc;
 
 	if (self_id == SWIM_ID_INVALID)
-		return;
+		return timeout;
 
 	if (crt_swim_fail_hlc && crt_hlc_get() >= crt_swim_fail_hlc) {
 		crt_swim_should_fail = true;
@@ -712,9 +711,15 @@ static void crt_swim_progress_cb(crt_context_t crt_ctx, void *arg)
 		if (grp_priv->gp_size > 1)
 			D_ERROR("SWIM shutdown\n");
 		swim_self_set(ctx, SWIM_ID_INVALID);
-	} else if (rc && rc != -DER_TIMEDOUT) {
+	} else if (rc == -DER_TIMEDOUT || rc != -DER_CANCELED) {
+		uint64_t now = swim_now_ms();
+		if (now < ctx->sc_next_event)
+			timeout = ctx->sc_next_event - now;
+	} else if (rc) {
 		D_ERROR("swim_progress(): "DF_RC"\n", DP_RC(rc));
 	}
+
+	return timeout;
 }
 
 void crt_swim_fini(void)

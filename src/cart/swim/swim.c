@@ -827,12 +827,9 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 		D_GOTO(out_err, rc = 0); /* Ignore this update */
 
 	now = swim_now_ms();
-	if (timeout > 0) {
+	if (timeout > 0)
 		end = now + timeout;
-		ctx->sc_next_event = end;
-	} else {
-		ctx->sc_next_event = now;
-	}
+	ctx->sc_next_event = now + swim_period_get() / 3;
 
 	if (now > ctx->sc_expect_progress_time &&
 	    0  != ctx->sc_expect_progress_time) {
@@ -899,8 +896,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				ctx->sc_next_tick_time = now
 							 + swim_period_get();
 				ctx->sc_deadline = now + delay;
-				if (ctx->sc_deadline < ctx->sc_next_event)
-					ctx->sc_next_event = ctx->sc_deadline;
+				ctx->sc_next_event = ctx->sc_deadline;
 				ctx_state = SCS_PINGED;
 			} else {
 				if (ctx->sc_next_tick_time < ctx->sc_next_event)
@@ -982,7 +978,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				D_GOTO(out, rc = -DER_SHUTDOWN);
 			}
 
-			ctx->sc_next_event = now;
+			ctx->sc_next_event = ctx->sc_next_tick_time;
 			ctx_state = SCS_BEGIN;
 			break;
 		}
@@ -999,8 +995,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				D_GOTO(out, rc);
 			}
 			send_updates = false;
-		} else if (ctx->sc_next_event > now) {
-			usleep((ctx->sc_next_event - now) * 1000);
+		} else if (end > 0 && end < ctx->sc_next_event) {
+			break;
 		}
 	}
 	rc = (now > end) ? -DER_TIMEDOUT : -DER_CANCELED;
