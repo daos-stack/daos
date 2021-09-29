@@ -421,6 +421,11 @@ crt_init_opt(crt_group_id_t grpid, uint32_t flags, crt_init_options_t *opt)
 			D_GOTO(out, rc = -DER_NONEXIST);
 		}
 do_init:
+		if (crt_gdata.cg_init_prov == CRT_NA_OFI_SOCKETS) {
+			D_INFO("Overriding to use tcp;rxm provider\n");
+			crt_gdata.cg_init_prov = CRT_NA_OFI_TCP_RXM;
+		}
+
 		prov = crt_gdata.cg_init_prov;
 
 		if (opt && opt->cio_sep_override) {
