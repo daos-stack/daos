@@ -49,6 +49,8 @@ setenv			MPI_COMPILER	openmpi-x86_64
 setenv			MPI_SUFFIX	_openmpi
 setenv	 		MPI_HOME	/usr/mpi/gcc/openmpi-4.1.2a
 EOF
+    fi
+
     if ! rpm -q nfs-utils; then
         retry_cmd 360 dnf -y install nfs-utils
     fi
