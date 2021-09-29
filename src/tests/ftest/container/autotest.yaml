@@ -8,7 +8,6 @@ hosts:
         - server-A
         - server-B
         - server-C
-        - server-D
   test_clients:
     - client-A
 timeout: 360
