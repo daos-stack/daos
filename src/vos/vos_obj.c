@@ -1811,7 +1811,7 @@ exit:
 }
 
 int
-vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
+vos_obj_iter_aggregate(daos_handle_t ih, bool range_discard)
 {
 	struct vos_iterator	*iter = vos_hdl2iter(ih);
 	struct vos_obj_iter	*oiter = vos_iter2oiter(iter);
@@ -1843,7 +1843,7 @@ vos_obj_iter_aggregate(daos_handle_t ih, bool discard)
 		goto exit;
 
 	rc = vos_ilog_aggregate(vos_cont2hdl(obj->obj_cont), &krec->kr_ilog,
-				&oiter->it_epr, discard,
+				&oiter->it_epr, iter->it_for_discard, range_discard,
 				&oiter->it_punched, &oiter->it_ilog_info);
 
 	if (rc == 1) {
