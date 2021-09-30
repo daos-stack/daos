@@ -11,7 +11,6 @@ import threading
 from write_host_file import write_host_file
 from osa_utils import OSAUtils
 from daos_utils import DaosCommand
-from apricot import skipForTicket
 
 
 class OSAOnlineDrain(OSAUtils):
@@ -117,7 +116,6 @@ class OSAOnlineDrain(OSAUtils):
             output = self.daos_command.container_check(**kwargs)
             self.log.info(output)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain(self):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain with checksum
@@ -131,7 +129,6 @@ class OSAOnlineDrain(OSAUtils):
         self.log.info("Online Drain : With Checksum")
         self.run_online_drain_test(1)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain_no_csum(self):
         """Test ID: DAOS-6909
         Test Description: Validate Online drain without enabling
@@ -147,7 +144,6 @@ class OSAOnlineDrain(OSAUtils):
                                                   '/run/checksum/*')
         self.run_online_drain_test(1)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain_oclass(self):
         """Test ID: DAOS-6909
         Test Description: Validate Online drain with different
@@ -162,7 +158,6 @@ class OSAOnlineDrain(OSAUtils):
         for oclass in self.test_oclass:
             self.run_online_drain_test(1, oclass=oclass)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain_with_aggregation(self):
         """Test ID: DAOS-6909
         Test Description: Validate Online drain with different
@@ -178,7 +173,6 @@ class OSAOnlineDrain(OSAUtils):
                                                        '/run/aggregation/*')
         self.run_online_drain_test(1)
 
-    @skipForTicket("DAOS-7289")
     def test_osa_online_drain_mdtest(self):
         """Test ID: DAOS-4750
         Test Description: Validate Online drain with mdtest
