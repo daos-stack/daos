@@ -86,7 +86,7 @@ pipeline {
                defaultValue: '',
                description: 'Package version to use instead of building. example: 1.3.103-1, 1.2-2')
         string(name: 'CI_HARDWARE_DISTRO',
-               defaultValue: 'centos7',
+               defaultValue: '',
                description: 'Distribution to use for CI Hardware Tests')
         string(name: 'CI_CENTOS7_TARGET',
                defaultValue: 'el7',
@@ -860,7 +860,7 @@ pipeline {
                         }
                     }
                 } // stage('Functional on CentOS 7')
-                stage('Functional on CentOS 7 with Valgrind') {
+                stage('Functional on CentOS 8 with Valgrind') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -878,7 +878,7 @@ pipeline {
                             functionalTestPostV2()
                         }
                     }
-                } // stage('Functional on CentOS 7 with Valgrind')
+                } // stage('Functional on CentOS 8 with Valgrind')
                 stage('Functional on CentOS 8') {
                     when {
                         beforeAgent true
@@ -963,19 +963,6 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion("centos8", next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
-                stage('Test CentOS 8 RPMs') {
-                    when {
-                        beforeAgent true
-                        expression { ! skipStage() }
-                    }
-                    agent {
-                        label params.CI_UNIT_VM1_LABEL
-                    }
-                    steps {
-                        testRpm inst_repos: daosRepos(),
-                                daos_pkg_version: daosPackagesVersion(next_version)
-                   }
-                } // stage('Test CentOS 8 RPMs')
                 stage('Test Leap 15 RPMs') {
                     when {
                         beforeAgent true
@@ -999,10 +986,7 @@ pipeline {
                     }
                     steps {
                         scanRpms inst_repos: daosRepos(),
-                                 daos_pkg_version: daosPackagesVersion(next_version),
-                                 inst_rpms: 'clamav clamav-devel',
-                                 test_script: 'ci/rpm/scan_daos.sh',
-                                 junit_files: 'maldetect.xml'
+                                 daos_pkg_version: daosPackagesVersion(next_version)
                     }
                     post {
                         always {
@@ -1010,6 +994,44 @@ pipeline {
                         }
                     }
                 } // stage('Scan CentOS 7 RPMs')
+                /* method code too large
+                stage('Scan CentOS 8 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        scanRpms inst_repos: daosRepos(),
+                                 daos_pkg_version: daosPackagesVersion(next_version)
+                    }
+                    post {
+                        always {
+                            junit 'maldetect.xml'
+                        }
+                    }
+                } // stage('Scan CentOS 8 RPMs')
+                method code too large */
+                stage('Scan Leap 15 RPMs') {
+                    when {
+                        beforeAgent true
+                        expression { ! skipStage() }
+                    }
+                    agent {
+                        label params.CI_UNIT_VM1_LABEL
+                    }
+                    steps {
+                        scanRpms inst_repos: daosRepos(),
+                                 daos_pkg_version: daosPackagesVersion(next_version)
+                    }
+                    post {
+                        always {
+                            junit 'maldetect.xml'
+                        }
+                    }
+                } // stage('Scan Leap 15 RPMs')
             } // parallel
         } // stage('Test')
         stage('Test Storage Prep') {

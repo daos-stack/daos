@@ -207,7 +207,7 @@ nvme_fault_reaction(void **state, int mode)
 		* Connect the pool for query check.
 		 */
 		print_message("Connect the pool to get the pool query\n");
-		rc = daos_pool_connect(arg->pool.pool_uuid, arg->group,
+		rc = daos_pool_connect(arg->pool.pool_str, arg->group,
 				       DAOS_PC_RW, &arg->pool.poh,
 				       &arg->pool.pool_info, NULL /* ev */);
 		assert_rc_equal(rc, 0);
@@ -353,7 +353,7 @@ nvme_test_verify_device_stats(void **state)
 	print_message("server_config_file = %s\n", server_config_file);
 
 	get_log_file(devices[rank_pos].host, server_config_file,
-		     " log_file", log_file);
+		     "control_log_file", log_file);
 	rc = verify_server_log_mask(devices[rank_pos].host,
 				    server_config_file, "DEBUG");
 	if (rc) {

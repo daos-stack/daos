@@ -39,13 +39,6 @@ var (
 		Netdevclass: 32,
 		Priority:    2,
 	}
-	eth1Native = netdetect.FabricScan{
-		Provider:    "ofi+psm",
-		DeviceName:  "eth1",
-		NUMANode:    1,
-		NetDevClass: 1,
-		Priority:    1,
-	}
 )
 
 func TestServer_ConvertFabricInterface(t *testing.T) {

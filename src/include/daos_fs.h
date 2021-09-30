@@ -21,6 +21,7 @@ extern "C" {
 #endif
 
 #include <dirent.h>
+#include <sys/stat.h>
 
 /** Maximum Name length */
 #define DFS_MAX_NAME		NAME_MAX
