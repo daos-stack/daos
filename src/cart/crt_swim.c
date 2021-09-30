@@ -221,10 +221,31 @@ static void crt_swim_srv_cb(crt_rpc_t *rpc)
 					   rpc_in->upds.ca_arrays,
 					   rpc_in->upds.ca_count);
 
-	if (rcv_delay > max_delay)
-		swim_net_glitch_update(ctx, self_id, rcv_delay - max_delay);
-	if (snd_delay > max_delay)
-		swim_net_glitch_update(ctx, from_id, snd_delay - max_delay);
+	if (rcv_delay > max_delay || snd_delay > max_delay) {
+		csm->csm_nglitches++;
+		if (rcv_delay > max_delay)
+			swim_net_glitch_update(ctx, self_id, rcv_delay - max_delay);
+		if (snd_delay > max_delay)
+			swim_net_glitch_update(ctx, from_id, snd_delay - max_delay);
+	} else {
+		csm->csm_nmessages++;
+	}
+
+	if (csm->csm_nmessages > CRT_SWIM_NMESSAGES_TRESHOLD) {
+		csm->csm_nglitches = 0;
+		csm->csm_nmessages = 0;
+	}
+
+	if (csm->csm_nglitches > CRT_SWIM_NGLITCHES_TRESHOLD) {
+		D_ERROR("Too many network glitches are detected, "
+			"therefore increase SWIM timeouts by twice.\n");
+
+		swim_suspect_timeout_set(swim_suspect_timeout_get() * 2);
+		swim_ping_timeout_set(swim_ping_timeout_get() * 2);
+		swim_period_set(swim_period_get() * 2);
+		csm->csm_ctx->sc_default_ping_timeout *= 2;
+		csm->csm_nglitches = 0;
+	}
 
 	if (CRT_SWIM_SHOULD_FAIL(d_fa_swim_drop_rpc, self_id)) {
 		rc = d_fa_swim_drop_rpc->fa_err_code;
@@ -763,6 +784,8 @@ int crt_swim_init(int crt_ctx_idx)
 
 	grp_membs = grp_priv_get_membs(grp_priv);
 	csm->csm_crt_ctx_idx = crt_ctx_idx;
+	csm->csm_nglitches = 0;
+	csm->csm_nmessages = 0;
 	/*
 	 * Because daos needs to call crt_self_incarnation_get before it calls
 	 * crt_rank_self_set, we choose the self incarnation here instead of in
@@ -965,6 +988,7 @@ void crt_swim_suspend_all(void)
 	if (!crt_gdata.cg_swim_inited)
 		return;
 
+	csm->csm_ctx->sc_glitch = 1;
 	self_id = swim_self_get(csm->csm_ctx);
 	crt_swim_csm_lock(csm);
 	D_CIRCLEQ_FOREACH(cst, &csm->csm_head, cst_link) {
