@@ -119,6 +119,7 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right,
 	cmp_size = (size_left <= size_right) ? size_left : size_right;
 
 	/** Typed comparison */
+
 	if (!strcmp(data_type, "DAOS_FILTER_TYPE_INTEGER1"))
 	{
 		signed char *left_i, *right_i;
@@ -199,6 +200,7 @@ pipeline_filter_func(daos_filter_t *filter, d_iov_t *dkey, uint32_t nr_iods,
 	right = filter->parts[*part_idx];
 
 	/** -- Check if we have multiple constants to check */
+
 	if (!strcmp(right->part_type, "DAOS_FILTER_CONST") &&
 	    right->num_constants > 1)
 	{
@@ -455,7 +457,8 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 	int			rc;
 	daos_filter_part_t	*part = filter->parts[*part_idx];
 
-	if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_SUM"))
+	if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_SUM") ||
+	    !strcmp(part->part_type, "DAOS_FILTER_FUNC_AVG"))
 	{
 		double total_rec;
 
@@ -601,6 +604,25 @@ pipeline_aggregations(daos_pipeline_t *pipeline, d_iov_t *dkey,
 	return 0;
 }
 
+static void
+pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total,
+			      d_sg_list_t *sgl_agg)
+{
+	uint32_t		i;
+	double			*buf;
+	daos_filter_part_t	*part;
+
+	for (i = 0; i < pipeline->num_aggr_filters; i++)
+	{
+		part = pipeline->aggr_filters[i]->parts[0];
+		if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_AVG"))
+		{
+			buf = (double *) sgl_agg[i].sg_iovs->iov_buf;
+			*buf = *buf / total;
+		}
+	}
+}
+
 static uint32_t
 pipeline_part_nops(const char *part_type)
 {
@@ -612,13 +634,18 @@ pipeline_part_nops(const char *part_type)
 	    !strcmp(part_type, "DAOS_FILTER_FUNC_GE")  ||
 	    !strcmp(part_type, "DAOS_FILTER_FUNC_GT")  ||
 	    !strcmp(part_type, "DAOS_FILTER_FUNC_AND") ||
-	    !strcmp(part_type, "DAOS_FILTER_FUNC_OR"))
+	    !strcmp(part_type, "DAOS_FILTER_FUNC_OR")  ||
+	    !strcmp(part_type, "DAOS_FILTER_FUNC_ADD") ||
+	    !strcmp(part_type, "DAOS_FILTER_FUNC_SUB") ||
+	    !strcmp(part_type, "DAOS_FILTER_FUNC_MUL") ||
+	    !strcmp(part_type, "DAOS_FILTER_FUNC_DIV"))
 	{
 		return 2;
 	}
 	else if (!strcmp(part_type, "DAOS_FILTER_FUNC_LIKE")      ||
 		 !strcmp(part_type, "DAOS_FILTER_FUNC_ISNULL")    ||
 		 !strcmp(part_type, "DAOS_FILTER_FUNC_ISNOTNULL") ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_NOT")       ||
 		 !strcmp(part_type, "DAOS_FILTER_FUNC_SUM")       ||
 		 !strcmp(part_type, "DAOS_FILTER_FUNC_MIN")       ||
 		 !strcmp(part_type, "DAOS_FILTER_FUNC_MAX")       ||
@@ -658,7 +685,6 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 			}
 		}
 	}
-
 	/** -- Rest of the checks are done for each filter */
 	for (i = 0;
 	     i < pipeline->num_filters + pipeline->num_aggr_filters;
@@ -681,6 +707,7 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 		{
 			num_parts = 1;
 		}
+
 		for (p = 0; p < ftr->num_parts; p++) {
 			/**
 			 * -- Check 2: Check that all parts have a correct
@@ -689,6 +716,7 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 			 */
 			daos_filter_part_t *part = ftr->parts[p];
 			num_operands = pipeline_part_nops(part->part_type);
+
 			if (num_operands != part->num_operands)
 			{
 				return -DER_INVAL;
@@ -933,6 +961,12 @@ dc_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 			}
 		}
 	}
+	/** -- fixing averages: during aggregation, we don't know how many
+	 *     records will pass the filters*/
+
+	pipeline_aggregations_fixavgs(&pipeline, (double) nr_kds_pass, sgl_agg);
+
+	/* -- umber of records returned */
 
 	if (*nr_kds != 0 && pipeline.num_aggr_filters == 0)
 	{
