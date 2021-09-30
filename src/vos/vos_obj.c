@@ -472,8 +472,7 @@ vos_obj_delete(daos_handle_t coh, daos_unit_oid_t oid)
 		D_ERROR("Failed to delete object: %s\n", d_errstr(rc));
 
 	rc = umem_tx_end(umm, rc);
-	if (rc)
-		goto out;
+
 out:
 	vos_obj_release(occ, obj, true);
 	return rc;
