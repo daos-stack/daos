@@ -216,6 +216,10 @@ need_aggregate(struct vos_agg_param *agg_param, vos_iter_entry_t *entry)
 		cont->vc_cont_df->cd_hae, entry->ie_last_update,
 		entry->ie_vis_flags);
 
+	/** Don't skip for discard */
+	if (agg_param->ap_discard_obj || agg_param->ap_discard)
+		return true;
+
 	/* Don't skip aggregation for full scan */
 	if (agg_param->ap_full_scan)
 		return true;
