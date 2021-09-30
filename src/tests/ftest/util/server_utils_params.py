@@ -459,7 +459,12 @@ class DaosServerYamlParameters(YamlParameters):
             if hasattr(test, "server_log") and test.server_log is not None:
                 self.log_file.value = test.server_log
 
-            # Force required env vars if the value has not been specified or is different
+            # Ignore the scm_size param when using dcpm
+            if self.using_dcpm:
+                self.log.debug("Ignoring the scm_size when scm_class is 'dcpm'")
+                self.scm_size.update(None, "scm_size")
+
+            # Define any required env vars
             required_env_vars = {
                 env.split("=")[0]: env.split("=")[1] for env in self.REQUIRED_ENV_VARS["common"]}
             for provider in self._provider.split(";"):
@@ -467,8 +472,15 @@ class DaosServerYamlParameters(YamlParameters):
                     required_env_vars.update({
                         env.split("=")[0]: env.split("=")[1]
                         for env in self.REQUIRED_ENV_VARS[provider]})
-            env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
+
+            # Enable fault injection if configured
+            if test.fault_injection.fault_file is not None:
+                self.log.debug("Enabling fault injection")
+                required_env_vars["D_FI_CONFIG"] = test.fault_injection.fault_file
+
+            # Update the env vars with any missing or different required setting
             update = False
+            env_var_dict = {env.split("=")[0]: env.split("=")[1] for env in self.env_vars.value}
             for key in sorted(required_env_vars):
                 if key not in env_var_dict or env_var_dict[key] != required_env_vars[key]:
                     env_var_dict[key] = required_env_vars[key]
@@ -477,17 +489,6 @@ class DaosServerYamlParameters(YamlParameters):
                 self.log.debug("Assigning required env_vars")
                 new_env_vars = ["=".join([key, str(value)]) for key, value in env_var_dict.items()]
                 self.env_vars.update(new_env_vars, "env_var")
-
-            # Ignore the scm_size param when using dcpm
-            if self.using_dcpm:
-                self.log.debug("Ignoring the scm_size when scm_class is 'dcpm'")
-                self.scm_size.update(None, "scm_size")
-
-            # Include fault injection settings if configured
-            if test.fault_injection.fault_file:
-                fault_setting = "D_FI_CONFIG={}".format(test.fault_injection.fault_file)
-                if fault_setting not in self.env_vars.value:
-                    self.env_vars.update(fault_setting, "env_vars", True)
 
         @property
         def using_nvme(self):
