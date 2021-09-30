@@ -43,6 +43,7 @@ class DaosRacerTest(TestWithServers):
         self.job_manager.assign_processes(len(self.hostlist_clients))
         self.job_manager.assign_environment(daos_racer.get_environment(self.server_managers[0]))
         self.job_manager.job = daos_racer
+        self.job_manager.check_results_list = ["<stderr>"]
         self.log.info("Multi-process command: %s", str(self.job_manager))
 
         # Run the daos_perf command and check for errors
