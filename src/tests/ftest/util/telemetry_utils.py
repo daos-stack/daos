@@ -330,7 +330,7 @@ class TelemetryUtils():
     ENGINE_NET_METRICS = [
         "engine_net_ofi_tcp_ofi_rxm_failed_addr",
         "engine_net_ofi_tcp_ofi_rxm_req_timeout",
-        "engine_net_ofi_tcp_ofi_rxm_lookup_timeout",
+        "engine_net_ofi_tcp_ofi_rxm_uri_lookup_timeout",
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
