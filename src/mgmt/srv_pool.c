@@ -300,15 +300,6 @@ ds_mgmt_destroy_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		return -DER_INVAL;
 	}
 
-	/* Check active pool connections, evict only if force */
-	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, NULL, 0, true,
-				     force);
-	if (rc != 0) {
-		D_ERROR("Failed to check/evict pool handles " DF_UUID ", "
-			DF_RC "\n",  DP_UUID(pool_uuid), DP_RC(rc));
-		goto out;
-	}
-
 	/* Ask PS for list of storage ranks (tgt corpc destinations) */
 	rc = ds_pool_svc_ranks_get(pool_uuid, svc_ranks, &ranks);
 	if (rc) {
@@ -392,8 +383,8 @@ out:
 }
 
 int
-ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-		   uuid_t *handles, size_t n_handles, const char *group)
+ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks, uuid_t *handles, size_t n_handles,
+		   uint32_t destroy, uint32_t force_destroy, const char *group)
 {
 	int		 rc;
 
@@ -401,7 +392,7 @@ ds_mgmt_evict_pool(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 
 	/* Evict active pool connections if they exist*/
 	rc = ds_pool_svc_check_evict(pool_uuid, svc_ranks, handles, n_handles,
-				     false, false);
+				     destroy, force_destroy);
 	if (rc != 0) {
 		D_ERROR("Failed to evict pool handles"DF_UUID" rc: %d\n",
 			DP_UUID(pool_uuid), rc);
@@ -416,8 +407,7 @@ out:
 
 int
 ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
-				 uint32_t rank,
-				 struct pool_target_id_list *target_list,
+				 struct pool_target_addr_list *target_addrs,
 				 pool_comp_state_t state)
 {
 	int			rc;
@@ -433,7 +423,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		 * than allocating an actual list array and populating it
 		 */
 		reint_ranks.rl_nr = 1;
-		reint_ranks.rl_ranks = &rank;
+		reint_ranks.rl_ranks = &target_addrs->pta_addrs[0].pta_rank;
 
 		/* TODO: The size information and "pmem" type need to be
 		 * determined automatically, perhaps by querying the pool leader
@@ -455,8 +445,7 @@ ds_mgmt_pool_target_update_state(uuid_t pool_uuid, d_rank_list_t *svc_ranks,
 		}
 	}
 
-	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, rank,
-					 target_list, state);
+	rc = ds_pool_target_update_state(pool_uuid, svc_ranks, target_addrs, state);
 
 	return rc;
 }

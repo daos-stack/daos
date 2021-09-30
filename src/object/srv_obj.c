@@ -116,7 +116,7 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (rc != 0) {
 			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
 				 rc == -DER_TX_RESTART || rc == -DER_EXIST ||
-				 rc == -DER_NONEXIST,
+				 rc == -DER_NONEXIST || rc == -DER_ALREADY,
 				 DLOG_DBG, DLOG_ERR,
 				 DF_UOID " %s end failed: "DF_RC"\n",
 				 DP_UOID(orwi->orw_oid),
@@ -845,8 +845,7 @@ csum_verify_keys(struct daos_csummer *csummer, daos_key_t *dkey,
 		rc = daos_csummer_verify_key(csummer, dkey, dkey_csum);
 		if (rc != 0) {
 			D_ERROR("daos_csummer_verify_key error for dkey: "
-					DF_RC"\n",
-				DP_RC(rc));
+				DF_RC"\n", DP_RC(rc));
 			return rc;
 		}
 	}
@@ -1280,6 +1279,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	daos_iod_t			*iods;
 	uint64_t			*offs;
 	uint64_t			 cond_flags;
+	uint64_t			 sched_seq = sched_cur_seq();
 	daos_iod_t			*iods_dup = NULL; /* for EC deg fetch */
 	bool				 get_parity_list = false;
 	struct daos_recx_ep_list	*parity_list = NULL;
@@ -1340,6 +1340,9 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (ioc->ioc_coc->sc_props.dcp_dedup_verify)
 				cond_flags |= VOS_OF_DEDUP_VERIFY;
 		}
+
+		if (orw->orw_flags & ORF_EC)
+			cond_flags |= VOS_OF_EC;
 
 		rc = vos_update_begin(ioc->ioc_vos_coh, orw->orw_oid,
 			      orw->orw_epoch, cond_flags, dkey,
@@ -1425,12 +1428,14 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 				goto out;
 			}
 			iod_converted = true;
+
+			if (orw->orw_flags & ORF_EC_RECOV_FROM_PARITY)
+				fetch_flags |= VOS_OF_SKIP_FETCH;
 		}
 
 		rc = vos_fetch_begin(ioc->ioc_vos_coh, orw->orw_oid,
 				     orw->orw_epoch, dkey, orw->orw_nr, iods,
-				     cond_flags | fetch_flags, shadows, &ioh,
-				     dth);
+				     cond_flags | fetch_flags, shadows, &ioh, dth);
 		daos_recx_ep_list_free(shadows, orw->orw_nr);
 		if (rc) {
 			D_CDEBUG(rc == -DER_INPROGRESS || rc == -DER_NONEXIST ||
@@ -1465,6 +1470,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			if (rc)
 				goto out;
 		}
+
 		if (ec_deg_fetch) {
 			D_ASSERT(!get_parity_list);
 			recov_lists = vos_ioh2recx_list(ioh);
@@ -1614,10 +1620,34 @@ post:
 	err = bio_iod_post(biod);
 	rc = rc ? : err;
 out:
+	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
+	 * Let's check resent again before further process.
+	 */
+	if (rc == 0 && obj_rpc_is_update(rpc) && !dth->dth_pinned && sched_cur_seq() != sched_seq) {
+		daos_epoch_t	epoch = 0;
+		int		rc1;
+
+		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &orw->orw_dti, &epoch, NULL);
+		switch (rc1) {
+		case 0:
+			orw->orw_epoch = epoch;
+			/* Fall through */
+		case -DER_ALREADY:
+			rc = -DER_ALREADY;
+			break;
+		case -DER_NONEXIST:
+		case -DER_EP_OLD:
+			break;
+		default:
+			rc = rc1;
+			break;
+		}
+	}
+
 	rc = obj_rw_complete(rpc, ioc, ioh, rc, dth);
 	if (iods_dup != NULL)
 		daos_iod_recx_free(iods_dup, orw->orw_nr);
-	return rc;
+	return unlikely(rc == -DER_ALREADY) ? 0 : rc;
 }
 
 static int
@@ -1636,7 +1666,20 @@ again:
 
 	rc = obj_local_rw_internal(rpc, ioc, split_iods, split_csums,
 				   split_offs, dth);
-	if (obj_dtx_need_refresh(dth, rc)) {
+	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
+		if (!dth->dth_pinned) {
+			int	rc1;
+
+			/* There will be CPU yield during DTX refresh. We need
+			 * to pin current DTX before refreshing other DTX(es),
+			 * that will avoid race with the resent RPC during the
+			 * DTX refresh.
+			 */
+			rc1 = vos_dtx_pin(dth, false);
+			if (rc1 != 0)
+				return -DER_INPROGRESS;
+		}
+
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
@@ -1678,7 +1721,7 @@ obj_ioc_init(uuid_t pool_uuid, uuid_t coh_uuid, uuid_t cont_uuid, int opc,
 	     struct obj_io_context *ioc)
 {
 	struct ds_cont_hdl   *coh;
-	struct ds_cont_child *coc;
+	struct ds_cont_child *coc = NULL;
 	int		      rc;
 
 	D_ASSERT(ioc != NULL);
@@ -1737,6 +1780,8 @@ out:
 	ioc->ioc_coh	 = coh;
 	return 0;
 failed:
+	if (coc != NULL)
+		ds_cont_child_put(coc);
 	ds_cont_hdl_put(coh);
 	return rc;
 }
@@ -2546,7 +2591,8 @@ again2:
 		rc = obj_ec_rw_req_split(orw->orw_oid, &orw->orw_iod_array,
 					 orw->orw_nr, orw->orw_start_shard,
 					 orw->orw_tgt_max, PO_COMP_ID_ALL,
-					 NULL, 0, orw->orw_shard_tgts.ca_count,
+					 NULL, 0, &ioc.ioc_oca,
+					 orw->orw_shard_tgts.ca_count,
 					 orw->orw_shard_tgts.ca_arrays,
 					 &split_req);
 		if (rc != 0) {
@@ -3158,6 +3204,19 @@ again:
 	}
 
 	if (dth != NULL && obj_dtx_need_refresh(dth, rc)) {
+		if (!dth->dth_pinned) {
+			int	rc1;
+
+			/* There will be CPU yield during DTX refresh. We need
+			 * to pin current DTX before refreshing other DTX(es),
+			 * that will avoid race with the resent RPC during the
+			 * DTX refresh.
+			 */
+			rc1 = vos_dtx_pin(dth, false);
+			if (rc1 != 0)
+				return -DER_INPROGRESS;
+		}
+
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
@@ -3824,6 +3883,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	int				  rc = 0;
 	int				  i;
 	uint64_t			  update_flags;
+	uint64_t			  sched_seq = sched_cur_seq();
 
 	if (dth->dth_flags & DTE_LEADER &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_RESTART))
@@ -3935,6 +3995,8 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 			if (ioc->ioc_coc->sc_props.dcp_dedup_verify)
 				update_flags |= VOS_OF_DEDUP_VERIFY;
 		}
+		if (dcu->dcu_flags & ORF_EC)
+			update_flags |= VOS_OF_EC;
 
 		rc = vos_update_begin(ioc->ioc_vos_coh,
 				dcsr->dcsr_oid, dcsh->dcsh_epoch.oe_value,
@@ -4022,49 +4084,71 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		}
 	}
 
-	/* P4: punch and vos_update_end. */
+	/* P4: data verification and copy. */
+	for (i = 0; i < dcde->dcde_write_cnt; i++) {
+		dcsr = &dcsrs[dcri[i].dcri_req_idx];
+		if (dcsr->dcsr_opc != DCSO_UPDATE)
+			continue;
+
+		dcu = &dcsr->dcsr_update;
+		if (dcu->dcu_ec_split_req != NULL) {
+			iods = dcu->dcu_ec_split_req->osr_iods;
+			csums = dcu->dcu_ec_split_req->osr_iod_csums;
+		} else {
+			iods = dcu->dcu_iod_array.oia_iods;
+			csums = dcu->dcu_iod_array.oia_iod_csums;
+		}
+
+		rc = vos_dedup_verify(iohs[i]);
+		if (rc != 0) {
+			D_ERROR("dedup_verify failed for obj "DF_UOID", DTX "DF_DTI": "DF_RC"\n",
+				DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			goto out;
+		}
+
+		rc = obj_verify_bio_csum(dcsr->dcsr_oid.id_pub, iods, csums, biods[i],
+					 ioc->ioc_coc->sc_csummer, dcsr->dcsr_nr);
+		if (rc != 0) {
+			if (rc == -DER_CSUM)
+				obj_log_csum_err();
+			goto out;
+		}
+
+		rc = bio_iod_post(biods[i]);
+		biods[i] = NULL;
+		if (rc != 0) {
+			D_ERROR("iod_post failed for obj "DF_UOID", DTX "DF_DTI": "DF_RC"\n",
+				DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			goto out;
+		}
+	}
+
+	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
+	 * Let's check resent again before further process.
+	 */
+	if (rc == 0 && dth->dth_modification_cnt > 0 && !dth->dth_pinned &&
+	    sched_cur_seq() != sched_seq) {
+		daos_epoch_t	epoch = 0;
+		int		rc1;
+
+		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &epoch, NULL);
+		switch (rc1) {
+		case 0:
+		case -DER_ALREADY:
+			D_GOTO(out, rc = -DER_ALREADY);
+		case -DER_NONEXIST:
+		case -DER_EP_OLD:
+			break;
+		default:
+			D_GOTO(out, rc = rc1);
+		}
+	}
+
+	/* P5: punch and vos_update_end. */
 	for (i = 0; i < dcde->dcde_write_cnt; i++) {
 		dcsr = &dcsrs[dcri[i].dcri_req_idx];
 
 		if (dcsr->dcsr_opc == DCSO_UPDATE) {
-			dcu = &dcsr->dcsr_update;
-			if (dcu->dcu_ec_split_req != NULL) {
-				iods = dcu->dcu_ec_split_req->osr_iods;
-				csums = dcu->dcu_ec_split_req->osr_iod_csums;
-			} else {
-				iods = dcu->dcu_iod_array.oia_iods;
-				csums = dcu->dcu_iod_array.oia_iod_csums;
-			}
-
-			rc = vos_dedup_verify(iohs[i]);
-			if (rc != 0) {
-				D_ERROR("dedup_verify failed for obj "
-					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
-					DP_UOID(dcsr->dcsr_oid),
-					DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
-					goto out;
-			}
-
-			rc = obj_verify_bio_csum(dcsr->dcsr_oid.id_pub,
-						 iods, csums, biods[i],
-						 ioc->ioc_coc->sc_csummer,
-						 dcsr->dcsr_nr);
-			if (rc != 0) {
-				if (rc == -DER_CSUM)
-					obj_log_csum_err();
-				goto out;
-			}
-
-			rc = bio_iod_post(biods[i]);
-			biods[i] = NULL;
-			if (rc != 0) {
-				D_ERROR("iod_post failed for obj "DF_UOID
-					", DTX "DF_DTI": "DF_RC"\n",
-					DP_UOID(dcsr->dcsr_oid),
-					DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
-				goto out;
-			}
-
 			rc = dtx_sub_init(dth, &dcsr->dcsr_oid,
 					  dcsr->dcsr_dkey_hash);
 			if (rc != 0)
@@ -4146,7 +4230,7 @@ out:
 	D_FREE(biods);
 	D_FREE(bulks);
 
-	return rc;
+	return unlikely(rc == -DER_ALREADY) ? 0 : rc;
 }
 
 static int
@@ -4166,6 +4250,19 @@ again:
 	}
 
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
+	if (!dth->dth_pinned) {
+		int	rc1;
+
+		/* There will be CPU yield during DTX refresh. We need
+		 * to pin current DTX before refreshing other DTX(es),
+		 * that will avoid race with the resent RPC during the
+		 * DTX refresh.
+		 */
+		rc1 = vos_dtx_pin(dth, false);
+		if (rc1 != 0)
+			return -DER_INPROGRESS;
+	}
+
 	if (obj_dtx_need_refresh(dth, rc)) {
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
@@ -4349,7 +4446,7 @@ ds_obj_dtx_leader_prep_handle(struct daos_cpd_sub_head *dcsh,
 					 dcsr->dcsr_nr, dcu->dcu_start_shard, 0,
 					 ddt->ddt_id,
 					 dcu->dcu_ec_tgts, dcsr->dcsr_ec_tgt_nr,
-					 tgt_cnt, tgts, &dcu->dcu_ec_split_req);
+					 NULL, tgt_cnt, tgts, &dcu->dcu_ec_split_req);
 		if (rc != 0) {
 			D_ERROR("obj_ec_rw_req_split failed for obj "
 				DF_UOID", DTX "DF_DTI": "DF_RC"\n",

@@ -382,7 +382,7 @@ class OSAUtils(MdtestBase, IorTestBase):
         self.container.properties.value = cont_prop
 
     def set_cont_class_properties(self, oclass="S1"):
-        """Update the container class to match the IOR object
+        """Update the container class to match the IOR/Mdtest object
         class. Fix the rf factor based on object replica value.
         Also, remove the redundancy factor for S type
         object class.
@@ -554,14 +554,17 @@ class OSAUtils(MdtestBase, IorTestBase):
         """
         # Create container only
         self.mdtest_cmd.dfs_destroy = False
+        create_container = 0
         if self.container is None:
             self.add_container(self.pool, create=False)
-            self.mdtest_cmd.dfs_oclass.update(oclass)
-            self.set_cont_class_properties(self.mdtest_cmd.dfs_oclass)
-            if self.test_with_checksum is False:
-                tmp = self.get_object_replica_value(self.mdtest_cmd.dfs_oclass)
-                rf_value = "rf:{}".format(tmp - 1)
-                self.update_cont_properties(rf_value)
+            create_container = 1
+        self.mdtest_cmd.dfs_oclass.update(oclass)
+        self.set_cont_class_properties(oclass)
+        if self.test_with_checksum is False:
+            tmp = self.get_object_replica_value(oclass)
+            rf_value = "rf:{}".format(tmp - 1)
+            self.update_cont_properties(rf_value)
+        if create_container == 1:
             self.container.create()
         job_manager = self.get_mdtest_job_manager_command(self.manager)
         job_manager.job.dfs_cont.update(self.container.uuid)

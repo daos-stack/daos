@@ -1060,7 +1060,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		 * dc_tx_cleanup().
 		 */
 		dcsr->dcsr_reasb = reasb_req;
-		rc = obj_reasb_req_init(dcsr->dcsr_reasb,
+		rc = obj_reasb_req_init(dcsr->dcsr_reasb, obj,
 					dcu->dcu_iod_array.oia_iods,
 					dcsr->dcsr_nr, oca);
 		if (rc != 0)
@@ -1182,6 +1182,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
+			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
@@ -1401,7 +1402,12 @@ dc_tx_reduce_rdgs(d_list_t *dtr_list, uint32_t *grp_cnt, uint32_t *mod_cnt)
 	d_list_for_each_entry_safe(dtr, next, dtr_list, dtr_link) {
 		if (dc_tx_same_rdg(&leader->dtr_group, &dtr->dtr_group)) {
 			d_list_del(&dtr->dtr_link);
-			D_FREE(dtr);
+			if (leader->dtr_group.drg_flags & DGF_RDONLY) {
+				D_FREE(leader);
+				leader = dtr;
+			} else {
+				D_FREE(dtr);
+			}
 		}
 	}
 
@@ -1532,7 +1538,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			if (rc < 0)
 				goto out;
 
-			if (rc > (OBJ_BULK_LIMIT >> 2)) {
+			if (rc > (DAOS_BULK_LIMIT >> 2)) {
 				rc = tx_bulk_prepare(dcsr, task);
 				if (rc != 0)
 					goto out;
@@ -1619,7 +1625,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 		leader_oid.id_pub = obj->cob_md.omd_id;
 		leader_oid.id_shard = i;
 		leader_dtrg_idx = obj_get_shard(obj, i)->po_target;
-		if (!obj_is_ec(obj))
+		if (!obj_is_ec(obj) && act_grp_cnt == 1)
 			mbs->dm_flags |= DMF_SRDG_REP;
 
 		/* If there is only one redundancy group to be modified,
