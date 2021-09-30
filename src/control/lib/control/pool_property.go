@@ -68,7 +68,7 @@ func PoolProperties() PoolPropertyMap {
 					if err != nil {
 						return nil, rbErr
 					}
-					if rsPct < 0 || rsPct > 100 {
+					if rsPct > 100 {
 						return nil, rbErr
 					}
 					return &PoolPropertyValue{rsPct}, nil

@@ -960,10 +960,16 @@ again:
 						      pool->sp_map_version,
 						      &tgt);
 			if (rc < 0) {
-				D_ERROR("Failed to find DTX leader for "
-					DF_DTI", ver %d: "DF_RC"\n",
-					DP_DTI(&dsp->dsp_xid),
-					pool->sp_map_version, DP_RC(rc));
+				/* Currently, for EC object, if parity node is
+				 * in rebuilding, we will get -DER_STALE, that
+				 * is not fatal, the caller or related request
+				 * sponsor can retry sometime later.
+				 */
+				D_CDEBUG(rc == -DER_STALE, DB_TRACE, DLOG_WARN,
+					 "Failed to find DTX leader for "
+					 DF_DTI", ver %d: "DF_RC"\n",
+					 DP_DTI(&dsp->dsp_xid),
+					 pool->sp_map_version, DP_RC(rc));
 
 				if (failout)
 					goto out;

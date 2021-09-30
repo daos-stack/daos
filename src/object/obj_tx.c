@@ -1182,6 +1182,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
+			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
