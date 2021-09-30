@@ -812,7 +812,7 @@ int
 duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 {
 	char			oclass[10], type[10];
-	daos_pool_info_t	info;
+	daos_pool_info_t	info = {0};
 	char			str[DUNS_MAX_XATTR_LEN];
 	int			len;
 	bool			no_prefix = false;
