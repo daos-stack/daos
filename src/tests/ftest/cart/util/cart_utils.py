@@ -449,9 +449,10 @@ class CartTest(TestWithoutServers):
 
         if memcheck_errors > 0:
             self.log.info(
-                "Found " + str(memcheck_errors) +
-                 " <error> element(s) in the memcheck XML log file(s): [" +
-                ", ".join(memcheck_files) + "]")
+                "Found %s <error> element(s) in the " +
+                "memcheck XML log file(s): [%s]",
+                str(memcheck_errors),
+                ", ".join(memcheck_files))
 
         saved_cwd = os.getcwd()
         os.chdir(daos_test_shared_dir)
