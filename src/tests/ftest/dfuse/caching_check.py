@@ -38,7 +38,7 @@ class CachingCheck(IorTestBase):
             the first one.
 
         :avocado: tags=all,full_regression
-        :avocado: tags=hw,medium
+        :avocado: tags=hw,medium,ib2
         :avocado: tags=daosio,dfuse
         :avocado: tags=dfusecachingcheck
         """
