@@ -418,6 +418,50 @@ class CartTest(TestWithoutServers):
 
         return tst_cmd
 
+    @staticmethod
+    def log_check_valgrind_memcheck(self):
+        """Check valgrind memcheck log files for errors."""
+
+        logparse = self.params.get("logparse", "/run/tests/*/")
+
+        memcheck_errors = 0
+
+        strict_test = False
+        self.log.info("Parsing log path %s", self.log_path)
+        if not os.path.exists(self.log_path):
+            self.log.info("Path does not exist")
+            return
+
+        xml_filename_fmt = r"^valgrind\.\S+\.memcheck$"
+        memcheck_files = list(filter(lambda x: re.match(xml_filename_fmt, x),
+                                os.listdir(self.log_path)))
+
+        for filename in memcheck_files:
+
+            log_file = os.path.join(self.log_path, filename)
+
+            file1 = open(log_file, 'r')
+            lines = file1.readlines()
+
+            for line in lines:
+                if line.find('<error>') != -1:
+                    memcheck_errors += 1
+
+        if memcheck_errors > 0:
+            self.log.info(
+                "Failed, found " + str(memcheck_errors) +
+                " <error> element(s) in the " +
+                " memcheck XML log file(s): [" +
+                ", ".join(memcheck_files) + "]")
+
+        # Rename the file so it's not checked again for memcheck errors
+        saved_cwd = os.getcwd()
+        os.chdir(self.log_path)
+        os.rename(filename, filename + "-checked")
+        os.chdir(saved_cwd)
+
+        return 0
+
     def convert_xml(self, xml_file):
         """Modify the xml file"""
 
@@ -472,6 +516,7 @@ class CartTest(TestWithoutServers):
                 "Failed, return codes client {} server {}".format(
                     cli_rtn, srv_rtn))
 
+        self.log_check_valgrind_memcheck(self)
         self.convert_xml_files()
 
         return 0
@@ -491,6 +536,7 @@ class CartTest(TestWithoutServers):
                 self.stop_process(srv2)
             self.fail("Failed, return codes {}".format(rtn))
 
+        self.log_check_valgrind_memcheck(self)
         self.convert_xml_files()
 
         return rtn
@@ -506,6 +552,7 @@ class CartTest(TestWithoutServers):
             self.fail("Failed to start command\n")
             return -1
 
+        self.log_check_valgrind_memcheck(self)
         self.convert_xml_files()
 
         return rtn
