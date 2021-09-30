@@ -978,20 +978,6 @@ duns_create_path(daos_handle_t poh, const char *path, struct duns_attr_t *attrp)
 			}
 			goto err_link;
 		}
-
-		rc = create_cont(poh, attrp, false, true, path);
-		if (rc == -DER_SUCCESS && backend_dfuse) {
-			/* This next setxattr will cause dfuse to lookup the entry point and perform
-			 * a container connect, therefore this xattr will be set in the root of the
-			 * new container, not the directory.
-			 */
-			rc = lsetxattr(path, DUNS_XATTR_NAME, str, len + 1, XATTR_CREATE);
-			if (rc) {
-				rc = errno;
-				D_ERROR("Failed to set DAOS xattr: %s\n", strerror(rc));
-				goto err_link;
-			}
-		}
 	}
 
 	return rc;
