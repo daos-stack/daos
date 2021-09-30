@@ -2563,7 +2563,7 @@ re_fetch:
 
 again1:
 		opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
-		d_tm_inc_counter(opm->opm_update_resent, 1);
+		d_tm_inc_counter(opm->opm_resent, 1);
 		e = 0;
 		rc = dtx_handle_resend(ioc.ioc_vos_coh, &orw->orw_dti,
 				       &e, &version);
@@ -2695,7 +2695,14 @@ again2:
 	    DAOS_FAIL_CHECK(DAOS_DTX_LOST_RPC_REPLY))
 		ioc.ioc_lost_reply = 1;
 out:
-	if (rc != 0 && need_abort) {
+	if (unlikely(rc == -DER_INPROGRESS && ioc.ioc_coc != NULL)) {
+		struct obj_pool_metrics	*m;
+
+		m = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
+		d_tm_inc_counter(m->opm_inprogress, 1);
+	}
+
+	if (unlikely(rc != 0 && need_abort)) {
 		struct dtx_entry	 dte;
 		struct dtx_entry	*pdte;
 		int			 rc1;

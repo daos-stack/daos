@@ -247,12 +247,20 @@ obj_metrics_alloc(const char *path, int tgt_id)
 		D_WARN("Failed to create restarted cnt sensor: "DF_RC"\n",
 		       DP_RC(rc));
 
-	/** Total number of resent updates, of type counter */
-	rc = d_tm_add_metric(&metrics->opm_update_resent, D_TM_COUNTER,
-			     "total number of resent update RPCs", "updates",
+	/** Total number of resent I/Os, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_resent, D_TM_COUNTER,
+			     "total number of resent I/O RPCs", "rpcs",
 			     "%s/resent/tgt_%u", path, tgt_id);
 	if (rc)
 		D_WARN("Failed to create resent cnt sensor: "DF_RC"\n",
+		       DP_RC(rc));
+
+	/** Total number of I/O RPCs that failed with DER_INPROGRESS, of type counter */
+	rc = d_tm_add_metric(&metrics->opm_inprogress, D_TM_COUNTER,
+			     "total number of I/O RPCs retried due to uncommitted updates",
+			     "rpcs", "%s/uncommitted_retry/tgt_%u", path, tgt_id);
+	if (rc)
+		D_WARN("Failed to create inprogress cnt sensor: "DF_RC"\n",
 		       DP_RC(rc));
 
 	/** Total bytes read */

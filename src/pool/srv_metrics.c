@@ -42,12 +42,6 @@ ds_pool_metrics_alloc(const char *path, int tgt_id)
 	if (metrics == NULL)
 		return NULL;
 
-	rc = d_tm_add_metric(&metrics->open_hdl_gauge, D_TM_GAUGE,
-			     "Number of open pool handles", "hdls",
-			     "%s/pool_handles", path);
-	if (rc != 0)
-		D_ERROR("Couldn't add open handle gauge: "DF_RC"\n", DP_RC(rc));
-
 	rc = d_tm_add_metric(&started, D_TM_TIMESTAMP,
 			     "Last time the pool started", NULL,
 			     "%s/started_at", path);
@@ -56,6 +50,36 @@ ds_pool_metrics_alloc(const char *path, int tgt_id)
 			 DP_RC(rc));
 	else
 		d_tm_record_timestamp(started);
+
+	rc = d_tm_add_metric(&metrics->handle_eviction, D_TM_COUNTER,
+			     "Total number of evicted pool handles", "hdls",
+			     "%s/evicted_handles", path);
+	if (rc != 0)
+		D_ERROR("Couldn't add pool evicted hdl counter: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&metrics->connect_total, D_TM_COUNTER,
+			     "Total number of processed pool connect operations", "ops",
+			     "%s/ops/pool_connect", path);
+	if (rc != 0)
+		D_ERROR("Couldn't add pool connect counter: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&metrics->disconnect_total, D_TM_COUNTER,
+			     "Total number of processed pool disconnect operations", "ops",
+			     "%s/ops/pool_disconnect", path);
+	if (rc != 0)
+		D_ERROR("Couldn't add pool disconnect counter: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&metrics->query_total, D_TM_COUNTER,
+			     "Total number of processed pool query operations", "ops",
+			     "%s/ops/pool_query", path);
+	if (rc != 0)
+		D_ERROR("Couldn't add pool query counter: "DF_RC"\n", DP_RC(rc));
+
+	rc = d_tm_add_metric(&metrics->query_space_total, D_TM_COUNTER,
+			     "Total number of processed pool query (with space) operations", "ops",
+			     "%s/ops/pool_query_space", path);
+	if (rc != 0)
+		D_ERROR("Couldn't add pool query space counter: "DF_RC"\n", DP_RC(rc));
 
 	return metrics;
 }
