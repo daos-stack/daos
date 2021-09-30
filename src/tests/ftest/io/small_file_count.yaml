@@ -9,47 +9,50 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 600
+timeout: 750
 server_config:
   name: daos_server
   servers:
-    log_mask: ERR
     bdev_class: nvme
-    bdev_list: ["0000:81:00.0"]
+    bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
     scm_class: dcpm
     scm_list: ["/dev/pmem0"]
 pool:
-  mode: 146
   name: daos_server
-  scm_size: 95%
-  nvme_size: 90%
-  svcn: 1
+  scm_size: 40G
+  nvme_size: 400G
   control_method: dmg
 container:
   type: POSIX
   control_method: daos
+largefilecount:
+  api:
+    - DFS
+    - POSIX
+  object_class:
+    - SX
+    - EC_2P1GX
 ior:
-  client_processes:
-    dcp: 30
-    fs_copy: 10
-  api: DFS
-  flags: "-w -k"
+  np: 30
   dfs_destroy: False
+  flags: "-v -D 300 -W -w -r -R -F"
   test_file: /testFile
   repetitions: 1
-  signature: 5
-  transfersize_blocksize:
-    1M:
-      transfer_size: '1M'
-      block_size: '5G'        # aggregate of 150G for dcp and 50G for fs_copy
-  objectclass:
-    EC_4P1GX:
-      dfs_oclass: "EC_4P1GX"
+  transfer_size: '1M'
+  block_size: '2G'
 dfuse:
   mount_dir: "/tmp/daos_dfuse/"
   disable_caching: True
-dcp:
-  bufsize: "64MB"
-  chunksize: "128MB"
+
+mdtest:
   client_processes:
-    np: 16
+    np: 30
+  num_of_files_dirs: 1667      # creating total of 50K files
+  test_dir: "/"
+  iteration: 1
+  dfs_destroy: False
+  manager: "MPICH"
+  flags: "-F -C"
+  write_bytes: 4096
+  read_bytes: 4096
+  depth: 0

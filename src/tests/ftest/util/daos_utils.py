@@ -499,10 +499,9 @@ class DaosCommand(DaosCommandBase):
             sys_name=sys_name, snap=snap_name, epc=epoch)
 
         # Sample create-snap output.
-        # snapshot/epoch 1582610056530034697 has been created
+        # snapshot/epoch 0x51e719907180000 has been created
         data = {}
-        match = re.findall(
-            r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout_text)
+        match = re.findall(r"[A-Za-z\/]+\s(0x[0-9a-fA-F]+)\s[a-z\s]+", self.result.stdout_text)
         if match:
             data["epoch"] = match[0]
 
@@ -558,9 +557,12 @@ class DaosCommand(DaosCommandBase):
 
         # Sample container list-snaps output.
         # Container's snapshots :
-        # 1598478249040609297 1598478258840600594 1598478287952543761
+        # 0x51ebe2f21500000
+        # 0x51ebe4f5b6c0000
+        # 0x51ebe5233780000
         data = {}
-        match = re.findall(r"(\d+)", self.result.stdout_text)
+        match = re.findall(r"(0x[0-9a-fA-F]+)", self.result.stdout_text)
+
         if match:
             data["epochs"] = match
         return data
