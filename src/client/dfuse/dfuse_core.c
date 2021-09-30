@@ -1072,7 +1072,7 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 		D_GOTO(err, rc = -DER_NOMEM);
 
 	if (dfs->dfs_multi_user) {
-		args.argv[5] = strndup("-oallow_other", 32);
+		args.argv[5] = strdup("-oallow_other");
 		if (!args.argv[5])
 			D_GOTO(err, rc = -DER_NOMEM);
 	}
