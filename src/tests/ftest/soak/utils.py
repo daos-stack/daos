@@ -15,7 +15,7 @@ from mdtest_utils import MdtestCommand
 from daos_racer_utils import DaosRacerCommand
 from data_mover_utils import FsCopy
 from dfuse_utils import Dfuse
-from job_manager_utils import Srun
+from job_manager_utils import Srun, Mpirun
 from general_utils import get_host_data, get_random_string, \
     run_command, DaosTestError, pcmd, get_random_bytes, run_pcmd
 import slurm_utils
@@ -770,7 +770,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
     ior_params = os.path.join(os.sep, "run", job_spec, "*")
     ior_timeout = self.params.get("job_timeout", ior_params, 10)
     mpi_module = self.params.get(
-        "mpi_module", "/run/*", default="mpi/mpich-x86_64")
+        "mpi_module", ior_params, default="mpi/mpich-x86_64")
     # IOR job specs with a list of parameters; update each value
     api_list = self.params.get("api", ior_params)
     tsize_list = self.params.get("transfer_size", ior_params)
@@ -822,7 +822,7 @@ def create_ior_cmdline(self, job_spec, pool, ppn, nodesperjob):
                     ior_cmd.set_daos_params(
                         self.server_group, pool, self.container[-1].uuid)
                     env = ior_cmd.get_default_env("srun")
-                    sbatch_cmds = ["module load -q {}".format(mpi_module)]
+                    sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
                     # include dfuse cmdlines
                     log_name = "{}_{}_{}_{}_{}_{}_{}_{}".format(
                         job_spec, api, b_size, t_size, o_type,
@@ -875,7 +875,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
     commands = []
     mdtest_params = os.path.join(os.sep, "run", job_spec, "*")
     mpi_module = self.params.get(
-        "mpi_module", "/run/*", default="mpi/mpich-x86_64")
+        "mpi_module", mdtest_params, default="mpi/mpich-x86_64")
     # mdtest job specs with a list of parameters; update each value
     api_list = self.params.get("api", mdtest_params)
     write_bytes_list = self.params.get("write_bytes", mdtest_params)
@@ -925,7 +925,7 @@ def create_mdtest_cmdline(self, job_spec, pool, ppn, nodesperjob):
                             self.container[-1].uuid)
                         env = mdtest_cmd.get_default_env("srun")
                         sbatch_cmds = [
-                            "module load -q {}".format(mpi_module)]
+                            "module purge", "module load {}".format(mpi_module)]
                         # include dfuse cmdlines
                         log_name = "{}_{}_{}_{}_{}_{}_{}_{}_{}".format(
                             job_spec, api, write_bytes, read_bytes, depth,
@@ -1065,6 +1065,59 @@ def create_fio_cmdline(self, job_spec, pool):
     return commands
 
 
+def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
+    """Create the srun cmdline to run app.
+
+    This method will use a cmdline specified in the yaml file to
+    execute a local binary until the rpms are available
+    Args:
+        self (obj):       soak obj
+        job_spec (str):   job in yaml to run
+        pool (obj):       TestPool obj
+        ppn(int):         number of tasks to run on each node
+        nodesperjob(int): number of nodes per job
+    Returns:
+        cmd(list): list of cmdlines
+
+    """
+    commands = []
+    run_cmd = []
+    sbatch_cmds = []
+    app_params = os.path.join(os.sep, "run", job_spec, "*")
+    mpi_module = self.params.get(
+        "mpi_module", app_params, default="mpi/latest")
+    app_cmd = self.params.get("cmdline", app_params, default=None)
+
+    if app_cmd is None:
+        self.log.info(
+            "<<{} command line not specified in yaml; job will not be run>>".format(job_spec))
+        return
+    oclass_list = self.params.get("oclass", app_params)
+    for oclass in oclass_list:
+        add_containers(self, pool, oclass)
+        sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
+        # include dfuse cmdlines
+        log_name = "{}_{}_{}_{}_{}".format(
+            job_spec, oclass, nodesperjob * ppn, nodesperjob, ppn)
+        dfuse, dfuse_start_cmdlist = start_dfuse(
+            self, pool, self.container[-1], nodesperjob, "SLURM", name=log_name,
+            job_spec=job_spec)
+        sbatch_cmds.extend(dfuse_start_cmdlist)
+        run_cmd = Mpirun(app_cmd, False, "intelmpi")
+        run_cmd.assign_processes(nodesperjob * ppn)
+        run_cmd.ppn.update(ppn)
+        run_cmd.working_dir.update(dfuse.mount_dir.value)
+        cmdline = "{}".format(str(run_cmd))
+        sbatch_cmds.append(str(cmdline))
+        sbatch_cmds.append("status=$?")
+        sbatch_cmds.extend(stop_dfuse(dfuse, nodesperjob, "SLURM"))
+        commands.append([sbatch_cmds, log_name])
+        self.log.info("<<{} cmdlines>>:".format(job_spec))
+        for cmd in sbatch_cmds:
+            self.log.info("%s", cmd)
+    return commands
+
+
 def build_job_script(self, commands, job, nodesperjob):
     """Create a slurm batch script that will execute a list of cmdlines.
 
@@ -1102,7 +1155,8 @@ def build_job_script(self, commands, job, nodesperjob):
             "time": str(job_timeout) + ":00",
             "exclude": NodeSet.fromlist(self.exclude_slurm_nodes),
             "error": str(error),
-            "export": "ALL"
+            "export": "ALL",
+            "exclusive": None
         }
         # include the cluster specific params
         sbatch.update(self.srun_params)
