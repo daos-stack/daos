@@ -512,18 +512,12 @@ def launch_server_stop_start(self, pools, name, results, args):
     rank = None
     drain = self.params.get("enable_drain", "/run/soak_harassers/*", False)
     if name == "SVR_STOP":
-<<<<<<< HEAD:src/tests/ftest/soak/soak_utils.py
-        exclude_servers = len(self.hostlist_servers) - 1
-        # Exclude one rank : other than rank 0 and 1.
-        rank = random.randint(2, exclude_servers) #nosec
-=======
         engine_count = self.server_managers[0].get_config_value(
             "engines_per_host")
         exclude_servers = (
             len(self.hostlist_servers) * int(engine_count)) - 1
         # Exclude one rank.
-        rank = random.randint(0, exclude_servers)
->>>>>>> origin/master:src/tests/ftest/soak/utils.py
+        rank = random.randint(0, exclude_servers) #nosec
         # init the status dictionary
         params = {"name": name,
                   "status": status,
