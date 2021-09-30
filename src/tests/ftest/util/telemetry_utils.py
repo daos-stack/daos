@@ -328,9 +328,9 @@ class TelemetryUtils():
         ENGINE_IO_OPS_TGT_UPDATE_ACTIVE_METRICS +\
         ENGINE_IO_OPS_UPDATE_ACTIVE_METRICS
     ENGINE_NET_METRICS = [
-        "engine_net_ofi_sockets_failed_addr",
-        "engine_net_ofi_sockets_req_timeout",
-        "engine_net_ofi_sockets_uri_lookup_timeout",
+        "engine_net_ofi_tcp_ofi_rxm_failed_addr",
+        "engine_net_ofi_tcp_ofi_rxm_req_timeout",
+        "engine_net_ofi_tcp_ofi_rxm_lookup_timeout",
         "engine_net_uri_lookup_other",
         "engine_net_uri_lookup_self"]
     ENGINE_RANK_METRICS = [
