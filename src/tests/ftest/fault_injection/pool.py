@@ -86,11 +86,13 @@ class PoolServicesFaultInjection(TestWithServers):
         """Destroy container and pool
         Look for missed request on each executed command
         """
-        self.container.destroy()
-        self.look_missed_request(
-            self.container.daos.result.stderr)
-        self.pool.destroy(force=1)
-        self.look_missed_request(self.pool.dmg.result.stderr)
+        if self.container:
+            self.container.destroy()
+            self.look_missed_request(
+                self.container.daos.result.stderr)
+        if self.pool:
+            self.pool.destroy(force=1)
+            self.look_missed_request(self.pool.dmg.result.stderr)
 
     def test_pool_services(self):
         """ Test the following pool commands:
