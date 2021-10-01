@@ -1109,7 +1109,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             self, pool, self.container[-1], nodesperjob, "SLURM", name=log_name,
             job_spec=job_spec)
         sbatch_cmds.extend(dfuse_start_cmdlist)
-        mpi_cmd = Mpirun(app_cmd, False, "intelmpi")
+        mpi_cmd = Mpirun(app_cmd, False, "mpich")
         mpi_cmd.assign_processes(nodesperjob * ppn)
         mpi_cmd.ppn.update(ppn)
         mpi_cmd.working_dir.update(dfuse.mount_dir.value)
