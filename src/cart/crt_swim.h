@@ -14,6 +14,8 @@
 #include "cart/swim.h"
 #include "swim/swim_internal.h"
 
+#define CRT_SWIM_NGLITCHES_TRESHOLD	10
+#define CRT_SWIM_NMESSAGES_TRESHOLD	1000
 #define CRT_SWIM_FLUSH_ATTEMPTS		100
 #define CRT_SWIM_PROGRESS_TIMEOUT	0	/* minimal progressing time */
 #define CRT_DEFAULT_PROGRESS_CTX_IDX	0
@@ -29,8 +31,10 @@ struct crt_swim_membs {
 	D_CIRCLEQ_HEAD(, crt_swim_target) csm_head;
 	struct crt_swim_target		*csm_target;
 	struct swim_context		*csm_ctx;
-	int				 csm_crt_ctx_idx;
 	uint64_t			 csm_incarnation;
+	int				 csm_crt_ctx_idx;
+	int				 csm_nglitches;
+	int				 csm_nmessages;
 };
 
 static inline void

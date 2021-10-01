@@ -128,8 +128,6 @@ func TestConstructedConfig(t *testing.T) {
 	// just set all values regardless of validity
 	constructed := NewConfig().
 		WithRank(37).
-		WithSystemName("foo").
-		WithSocketDir("/foo/bar").
 		WithFabricProvider("foo+bar").
 		WithFabricInterface("qib42").
 		WithFabricInterfacePort(100).
