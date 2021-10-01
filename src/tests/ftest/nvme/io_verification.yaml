@@ -15,6 +15,11 @@ server_config:
  servers:
    bdev_class: nvme
    bdev_list: ["0000:81:00.0"]
+   0:
+     scm_mount: /mnt/daos0
+     log_mask: DEBUG,MEM=ERR
+     env_vars:
+       - DD_MASK=mgmt,md,dsms,any
 pool:
  mode: 511
  name: daos_server
@@ -54,6 +59,7 @@ ior:
 #   - [scmsize, nvmesize]
     - [500M, 10G]
     - [500M, 50G]
-    - [3G, 500G]
+    - [3G, 300G]
 # Uncomment this once DAOS-3339 is resolved
+# but probably not 800G nvmesize if test systems don't have that capacity
 #    - [3000000000, 800000000000]     #[3G, 800G]

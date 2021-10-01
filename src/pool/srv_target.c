@@ -595,6 +595,8 @@ ds_pool_tgt_ec_eph_query_abort(struct ds_pool *pool)
 	sched_req_wait(pool->sp_ec_ephs_req, true);
 	sched_req_put(pool->sp_ec_ephs_req);
 	pool->sp_ec_ephs_req = NULL;
+	D_DEBUG(DB_MD, DF_UUID": Stopped EC query ULT\n",
+		DP_UUID(pool->sp_uuid));
 }
 
 static void
@@ -703,13 +705,20 @@ ds_pool_stop(uuid_t uuid)
 	pool->sp_stopping = 1;
 
 	ds_iv_ns_stop(pool->sp_iv_ns);
+	D_DEBUG(DF_DSMS, DF_UUID": stopped iv ns\n", DP_UUID(uuid));
 	ds_pool_tgt_ec_eph_query_abort(pool);
+	D_DEBUG(DF_DSMS, DF_UUID": tgt_ec_eph_query_abort done\n", DP_UUID(uuid));
 	pool_fetch_hdls_ult_abort(pool);
+	D_DEBUG(DF_DSMS, DF_UUID": pool_fetch_hdls_ult_abort() done\n", DP_UUID(uuid));
 
 	ds_rebuild_abort(pool->sp_uuid, -1);
+	D_DEBUG(DF_DSMS, DF_UUID": ds_rebuild_abort() done\n", DP_UUID(uuid));
 	ds_migrate_abort(pool->sp_uuid, -1);
+	D_DEBUG(DF_DSMS, DF_UUID": ds_migrate_abort() done\n", DP_UUID(uuid));
 	ds_pool_put(pool); /* held by ds_pool_start */
+	D_DEBUG(DF_DSMS, DF_UUID": ds_pool_put() 1 done\n", DP_UUID(uuid));
 	ds_pool_put(pool);
+	D_DEBUG(DF_DSMS, DF_UUID": ds_pool_put() 2 done - ds_pool_stop() done\n", DP_UUID(uuid));
 }
 
 /* ds_pool_hdl ****************************************************************/
