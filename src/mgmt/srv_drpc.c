@@ -287,7 +287,6 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 {
 	char		*out_owner = NULL;
 	char		*out_owner_grp = NULL;
-	char		*out_label = NULL;
 	struct daos_acl	*out_acl = NULL;
 	daos_prop_t	*new_prop = NULL;
 	uint32_t	entries = 0;
@@ -339,12 +338,6 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 		idx++;
 	}
 
-	if (out_label != NULL) {
-		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_LABEL;
-		new_prop->dpp_entries[idx].dpe_val_ptr = out_label;
-		idx++;
-	}
-
 	if (out_acl != NULL) {
 		new_prop->dpp_entries[idx].dpe_type = DAOS_PROP_PO_ACL;
 		new_prop->dpp_entries[idx].dpe_val_ptr = out_acl;
@@ -358,7 +351,6 @@ create_pool_props(daos_prop_t **out_prop, char *owner, char *owner_grp,
 err_out:
 	daos_prop_free(new_prop);
 	daos_acl_free(out_acl);
-	D_FREE(out_label);
 	D_FREE(out_owner_grp);
 	D_FREE(out_owner);
 	return rc;

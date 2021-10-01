@@ -981,7 +981,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
 	if (rc != 0)
-		D_GOTO(err_eq, 0);
+		D_GOTO(err_eq, rc = daos_errno2der(errno));
 
 	fs_handle->dpi_shutdown = false;
 	*_fsh = fs_handle;

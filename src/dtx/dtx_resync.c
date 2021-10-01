@@ -433,6 +433,9 @@ out:
 		/* Drain old committable DTX to help subsequent rebuild. */
 		err = dtx_obj_sync(cont, NULL, dra->epoch);
 
+	if (err == -DER_NONEXIST)
+		err = 0;
+
 	return err;
 }
 

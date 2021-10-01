@@ -1240,8 +1240,6 @@ ilog_fetch(struct umem_instance *umm, struct ilog_df *root_df,
 		if (status != -DER_INPROGRESS && status < 0)
 			D_GOTO(fail, rc = status);
 		set_entry(entries, i, status);
-		if (rc != 0)
-			goto fail;
 	}
 
 out:

@@ -36,7 +36,7 @@ dfuse_oid_moved(struct dfuse_projection_info *fs_handle, daos_obj_id_t *oid,
 
 	/* If the move is not from where we thought the file was then invalidate the old entry */
 	if ((ie->ie_parent != parent->ie_stat.st_ino) ||
-		(strncmp(ie->ie_name, name, NAME_MAX + 1) != 0)) {
+		(strncmp(ie->ie_name, name, NAME_MAX) != 0)) {
 		DFUSE_TRA_DEBUG(ie, "Invalidating old name");
 
 		rc = fuse_lowlevel_notify_inval_entry(fs_handle->dpi_info->di_session,
