@@ -236,6 +236,7 @@ class Orterun(JobManager):
         self.tag_output = FormattedParameter("--tag-output", True)
         self.ompi_server = FormattedParameter("--ompi-server {}", None)
         self.working_dir = FormattedParameter("-wdir {}", None)
+        self.tmpdir = FormattedParameter("--tmpdir {}", None)
 
     def assign_hosts(self, hosts, path=None, slots=None):
         """Assign the hosts to use with the command (--hostfile).
