@@ -410,8 +410,7 @@ evt_vis2dbg(int flag)
 
 	switch (flag & flags) {
 	default:
-		printf("flag = %x\n", flag);
-		D_ASSERT(0);
+		D_ASSERTF(0, "unexpected flag %x\n", flag);
 	case 0:
 		break;
 	case EVT_PARTIAL:
