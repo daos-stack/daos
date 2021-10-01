@@ -3,7 +3,7 @@
 REPOS_DIR=/etc/yum.repos.d
 DISTRO_NAME=centos7
 LSB_RELEASE=redhat-lsb-core
-EXCLUDE_UPGRADE=fuse,mercury,daos,daos-\*
+EXCLUDE_UPGRADE=fuse,mercury,mpich,daos,daos-\*
 
 timeout_yum() {
     local timeout="$1"
