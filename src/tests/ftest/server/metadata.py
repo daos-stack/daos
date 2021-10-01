@@ -385,6 +385,7 @@ class ObjectMetadata(TestWithServers):
                 manager.assign_hosts(self.hostlist_clients, self.workdir, None)
                 manager.assign_processes(processes)
                 manager.assign_environment(env)
+                manager.tmpdir.update(self.test_dir, "tmpdir")
 
                 # Add a thread for these IOR arguments
                 threads.append(
