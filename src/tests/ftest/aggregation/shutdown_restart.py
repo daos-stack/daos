@@ -24,7 +24,7 @@ class IoAggregation(IorTestBase):
         return free_space
 
     def test_ioaggregation(self):
-        """Jira ID: DAOS-4332.
+        """Jira ID: DAOS-3752.
 
         Test Description:
             Verify Aggregation across system shutdown.
@@ -48,7 +48,7 @@ class IoAggregation(IorTestBase):
 
         :avocado: tags=all,full_regression
         :avocado: tags=hw,small
-        :avocado: tags=daosio,ioaggregation,tx
+        :avocado: tags=daosio,io_aggregation,tx
         """
         # update ior signature option
         self.ior_cmd.signature.update("123")
@@ -81,8 +81,7 @@ class IoAggregation(IorTestBase):
         if not check_system_query_status(scan_info):
             self.fail("One or more servers crashed")
 
-        # Now check if the space is returned back and Highest epoch value
-        # is higher than the the value just before snapshot destroy.
+        # Now check if the space is returned back.
         counter = 1
         returned_space = (self.get_nvme_free_space() -
                           free_space_before_snap_destroy)
