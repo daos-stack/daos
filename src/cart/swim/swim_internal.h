@@ -105,6 +105,8 @@ struct swim_context {
 	uint64_t		 sc_deadline;
 
 	uint64_t		 sc_piggyback_tx_max;
+
+	unsigned int		 sc_glitch:1;
 };
 
 static inline int
