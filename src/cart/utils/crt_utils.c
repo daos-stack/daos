@@ -416,6 +416,11 @@ crtu_dc_mgmt_net_cfg_setenv(const char *name)
 	if (opts.assert_on_error)
 		D_ASSERTF(rc == 0, "dc_get_attach_info() failed, rc=%d\n", rc);
 
+	if (rc != 0) {
+		D_ERROR("dc_get_attach_info() failed, rc=%d\n", rc);
+		D_GOTO(cleanup, rc = d_errno2der(errno));
+	}
+
 	/* These two are always set */
 	rc = setenv("CRT_PHY_ADDR_STR", crt_net_cfg_info.provider, 1);
 	if (rc != 0)

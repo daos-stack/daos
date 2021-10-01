@@ -688,7 +688,7 @@ class TestWithServers(TestWithoutServers):
             self.start_agents(force=force_agent_start)
 
         # If there's no server started, then there's no server log to write to.
-        if self.setup_start_servers:
+        if self.setup_start_servers and self.setup_start_agents:
             # Write an ID string to the log file for cross-referencing logs
             # with test ID
             id_str = '"Test.name: ' + str(self) + '"'
