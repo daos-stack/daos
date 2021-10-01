@@ -2349,6 +2349,10 @@ def main():
 
     # Setup the user environment
     set_test_environment(args)
+
+    # Force log messages to stdout
+    del os.environ["D_LOG_FILE"]
+
     vmd_flag = False
     # Auto-detect nvme test yaml replacement values if requested
     if args.nvme and args.nvme.startswith("auto_vmd"):
