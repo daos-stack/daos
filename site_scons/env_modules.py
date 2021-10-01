@@ -34,7 +34,7 @@ class _env_module(): # pylint: disable=invalid-name
     _mpi_map = {"mpich":['mpi/mpich-x86_64', 'gnu-mpich'],
                 "openmpi":['mpi/mlnx_openmpi-x86_64', 'mpi/openmpi3-x86_64',
                            'gnu-openmpi', 'mpi/openmpi-x86_64'],
-                "intel_mpi":['mpi/latest']}
+                "intelmpi":['mpi/latest']}
 
     def __init__(self):
         """Load Modules for initializing envirables"""
