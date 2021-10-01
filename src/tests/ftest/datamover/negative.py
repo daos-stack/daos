@@ -248,7 +248,7 @@ class DmvrNegativeTest(DataMoverTestBase):
             DAOS-5515: destination pool does not have enough space.
             DAOS-6387: posix filesystem does not have enough space.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=datamover,dcp
         :avocado: tags=dm_negative,dm_negative_space_dcp
         """
         self.set_tool("DCP")
@@ -278,9 +278,6 @@ class DmvrNegativeTest(DataMoverTestBase):
         # Create another pool and container
         pool2 = self.create_pool()
         cont2 = self.create_cont(pool2)
-
-        # Start dfuse on pool2/cont2
-        self.start_dfuse(self.dfuse_hosts, pool2, cont2)
 
         # Try to copy. For now, we expect this to just abort.
         self.run_datamover(
