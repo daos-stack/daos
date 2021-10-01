@@ -33,7 +33,6 @@ dfuse_cb_mknod(fuse_req_t req, struct dfuse_inode_entry *parent,
 		D_GOTO(err, rc);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_dfs = parent->ie_dfs;
 	ie->ie_truncated = false;
