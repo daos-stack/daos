@@ -1097,8 +1097,9 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         add_containers(self, pool, oclass)
         #sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
         sbatch_cmds = ["export LD_LIBRARY_PATH=/opt/intel/oneapi/mpi/latest/lib",
-                        "export PATH=/opt/intel/oneapi/mpi/latest/bin",
-                        "echo $MODULEPATH"]
+                       "export PATH=/opt/intel/oneapi/mpi/latest/bin",
+                       "echo $MODULEPATH",
+                       "module avail"]
         # include dfuse cmdlines
         log_name = "{}_{}_{}_{}_{}".format(
             job_spec, oclass, nodesperjob * ppn, nodesperjob, ppn)
