@@ -69,16 +69,16 @@ class PoolServicesFaultInjection(TestWithServers):
         we can only get the last dmg command output.
         """
         server_to_exclude = randint(0, len(self.hostlist_servers) - 1)
+
         self.pool.exclude([server_to_exclude])
         self.look_missed_request(self.pool.dmg.result.stderr)
 
-        self.pool.wait_for_rebuild(True)
-        self.look_missed_request(self.pool.dmg.result.stderr)
         self.pool.wait_for_rebuild(False)
         self.look_missed_request(self.pool.dmg.result.stderr)
+
         self.pool.reintegrate(str(server_to_exclude))
-        self.pool.wait_for_rebuild(True)
         self.look_missed_request(self.pool.dmg.result.stderr)
+
         self.pool.wait_for_rebuild(False)
         self.look_missed_request(self.pool.dmg.result.stderr)
 
