@@ -484,6 +484,20 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 			*total = total_rec;
 		}
 	}
+	else if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_MIN"))
+	{
+		*part_idx += 1;
+		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
+					       akeys, part_idx,
+					       &total_rec)))
+		{
+			return rc; /** error */
+		}
+		if (total_rec < *total)
+		{
+			*total = total_rec;
+		}
+	}
 	else if (!strcmp(part->part_type, "DAOS_FILTER_DKEY") ||
 		 !strcmp(part->part_type, "DAOS_FILTER_AKEY") ||
 		 !strcmp(part->part_type, "DAOS_FILTER_CONST"))
