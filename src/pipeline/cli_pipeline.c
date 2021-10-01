@@ -456,12 +456,11 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 {
 	int			rc;
 	daos_filter_part_t	*part = filter->parts[*part_idx];
+	double			total_rec;
 
 	if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_SUM") ||
 	    !strcmp(part->part_type, "DAOS_FILTER_FUNC_AVG"))
 	{
-		double total_rec;
-
 		*part_idx += 1;
 		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
 					       akeys, part_idx,
@@ -470,6 +469,20 @@ pipeline_aggregation(daos_filter_t *filter, d_iov_t *dkey, uint32_t *nr_iods,
 			return rc; /** error */
 		}
 		*total += total_rec;
+	}
+	else if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_MAX"))
+	{
+		*part_idx += 1;
+		if ((rc = pipeline_aggregation(filter, dkey, nr_iods, iods,
+					       akeys, part_idx,
+					       &total_rec)))
+		{
+			return rc; /** error */
+		}
+		if (total_rec > *total)
+		{
+			*total = total_rec;
+		}
 	}
 	else if (!strcmp(part->part_type, "DAOS_FILTER_DKEY") ||
 		 !strcmp(part->part_type, "DAOS_FILTER_AKEY") ||
