@@ -1631,8 +1631,10 @@ obj_local_rw(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	     uint64_t *split_offs, struct dtx_handle *dth, bool pin)
 {
 	int	rc;
+	struct obj_pool_metrics *opm;
 
 again:
+	opm = ioc->ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
 	if (pin) {
 		rc = vos_dtx_pin(dth, false);
 		if (rc != 0)
@@ -1656,8 +1658,10 @@ again:
 		}
 
 		rc = dtx_refresh(dth, ioc->ioc_coc);
-		if (rc == -DER_AGAIN)
+		if (rc == -DER_AGAIN) {
+			d_tm_inc_counter(opm->opm_fetch_resent, 1);
 			goto again;
+		}
 	}
 
 	return rc;
@@ -2430,6 +2434,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 	struct dtx_epoch		epoch = {0};
 	int				rc;
 	bool				need_abort = false;
+	struct obj_pool_metrics		*opm;
 
 	D_ASSERT(orw != NULL);
 	D_ASSERT(orwo != NULL);
@@ -2482,6 +2487,7 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 			dtx_flags |= DTX_FORCE_REFRESH;
 
 re_fetch:
+		opm = ioc.ioc_coc->sc_pool->spc_metrics[DAOS_OBJ_MODULE];
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
 			       orw->orw_map_ver, &orw->orw_oid,
 			       NULL, 0, dtx_flags, NULL, &dth);
@@ -2506,6 +2512,7 @@ re_fetch:
 				DF_UOID" (%d)\n", DP_UOID(orw->orw_oid), retry);
 			ABT_thread_yield();
 
+			d_tm_inc_counter(opm->opm_fetch_restart, 1);
 			goto re_fetch;
 		}
 
@@ -2532,7 +2539,6 @@ re_fetch:
 	/* Handle resend. */
 	if (orw->orw_flags & ORF_RESEND) {
 		daos_epoch_t		 e;
-		struct obj_pool_metrics	*opm;
 
 		dtx_flags |= DTX_RESEND;
 

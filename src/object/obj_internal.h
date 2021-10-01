@@ -285,6 +285,11 @@ struct obj_pool_metrics {
 	struct d_tm_node_t	*opm_update_restart;
 	/** Total number of resent update operations (type = counter) */
 	struct d_tm_node_t	*opm_update_resent;
+
+	/** Total number of silently restarted fetch (type = counter) */
+	struct d_tm_node_t	*opm_fetch_restart;
+	/** Total number of resent fetch operations (type = counter) */
+	struct d_tm_node_t	*opm_fetch_resent;
 };
 
 struct obj_tls {

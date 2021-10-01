@@ -20,6 +20,8 @@ class TelemetryUtils():
     ENGINE_POOL_METRICS = [
         "engine_pool_entries_dtx_batched_degree",
         "engine_pool_entries_dtx_batched_total",
+        "engine_pool_fetch_resent",
+        "engine_pool_fetch_restarted",
         "engine_pool_ops_akey_enum",
         "engine_pool_ops_akey_punch",
         "engine_pool_ops_compound",
