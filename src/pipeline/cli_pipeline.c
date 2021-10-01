@@ -7,7 +7,7 @@
 
 #include <daos_pipeline.h>
 #include <daos_api.h>
-
+#include <math.h>
 
 static void
 pipeline_filter_get_data(daos_filter_part_t *part, d_iov_t *dkey,
@@ -636,6 +636,33 @@ pipeline_aggregations_fixavgs(daos_pipeline_t *pipeline, double total,
 	}
 }
 
+static void
+pipeline_aggregations_init(daos_pipeline_t *pipeline, d_sg_list_t *sgl_agg)
+{
+	uint32_t		i;
+	double			*buf;
+	daos_filter_part_t	*part;
+
+	for (i = 0; i < pipeline->num_aggr_filters; i++)
+	{
+		part = pipeline->aggr_filters[i]->parts[0];
+		buf  = (double *) sgl_agg[i].sg_iovs->iov_buf;
+
+		if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_MAX"))
+		{
+			*buf = -INFINITY;
+		}
+		else if (!strcmp(part->part_type, "DAOS_FILTER_FUNC_MIN"))
+		{
+			*buf = INFINITY;
+		}
+		else
+		{
+			*buf = 0;
+		}
+	}
+}
+
 static uint32_t
 pipeline_part_nops(const char *part_type)
 {
@@ -856,14 +883,9 @@ dc_pipeline_run(daos_handle_t coh, daos_handle_t oh, daos_pipeline_t pipeline,
 	}
 
 	/**
-	 * -- Seting all aggregation counters to zero.
+	 * -- Init all aggregation counters.
 	 */
-
-	for (i = 0; i < pipeline.num_aggr_filters; i++)
-	{
-		bzero(sgl_agg[i].sg_iovs->iov_buf,
-		      sgl_agg[i].sg_iovs->iov_buf_len);
-	}
+	pipeline_aggregations_init(&pipeline, sgl_agg);
 
 	/**
 	 * -- Iterating over dkeys and doing filtering and aggregation. The
