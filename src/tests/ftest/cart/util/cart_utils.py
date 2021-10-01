@@ -437,7 +437,6 @@ class CartTest(TestWithoutServers):
                                 os.listdir(daos_test_shared_dir)))
 
         for filename in memcheck_files:
-
             log_file = os.path.join(daos_test_shared_dir, filename)
 
             with open(log_file, 'r') as file1:
