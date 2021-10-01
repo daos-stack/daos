@@ -453,14 +453,10 @@ class CartTest(TestWithoutServers):
                 str(memcheck_errors),
                 ", ".join(memcheck_files))
 
-        saved_cwd = os.getcwd()
-        os.chdir(daos_test_shared_dir)
-
         # Rename the file so it's not checked again for memcheck errors
         for filename in memcheck_files:
-            os.rename(filename, filename + "-checked")
-
-        os.chdir(saved_cwd)
+            log_file = os.path.join(daos_test_shared_dir, filename)
+            os.rename(log_file, log_file + "-checked")
 
         return 0
 
