@@ -4,12 +4,10 @@
 
    SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-
 import time
 
 from ior_test_base import IorTestBase
 from dmg_utils import check_system_query_status
-from daos_utils import DaosCommand
 
 
 class IoAggregation(IorTestBase):
@@ -18,35 +16,12 @@ class IoAggregation(IorTestBase):
 
     :avocado: recursive
     """
-
-    def setUp(self):
-        """Set up test before executing."""
-        super().setUp()
-        self.dmg = self.get_dmg_command()
-        self.daos_cmd = DaosCommand(self.bin)
-
     def get_nvme_free_space(self):
         """Display pool free space."""
         free_space = self.pool.get_pool_free_space("nvme")
         self.log.info("Free nvme space: %s", free_space)
 
         return free_space
-
-    def highest_epoch(self, kwargs):
-        """Return the Highest Epoch for the container.
-
-        Args:
-          kwargs (dict): Dictionary of arguments to be passed to
-                         container_query method.
-
-        Returns:
-          Highest epoch value for a given container.
-
-        """
-        highest_epoch = self.daos_cmd.get_output(
-            "container_query", **kwargs)[0][4]
-
-        return highest_epoch
 
     def test_ioaggregation(self):
         """Jira ID: DAOS-4332.
@@ -63,13 +38,10 @@ class IoAggregation(IorTestBase):
             Write to the same ior file and same amount of data,
             without overwriting the previous data.
             Capture free space again, after second ior write.
-            Capture Highest epoch ID before snapshot destroy.
             Destroy the snapshot which was created.
             Shut down the servers and restart them again.
             After servers have successfully restarted, Look for
-            aggregation to finish by checking the free space available
-            and value of highest epoch which should be higher than
-            the value of highest epoch before snapshot destroy.
+            aggregation to finish by checking the free space available.
             If current free space is equal to free space after first
             ior write, then pass otherwise fail the test after waiting
             for 4 attempts.
@@ -96,13 +68,6 @@ class IoAggregation(IorTestBase):
         # capture free space after second ior write
         free_space_before_snap_destroy = self.get_nvme_free_space()
 
-        # obtain highest epoch before snapshot destroy via container query
-        kwargs = {
-            "pool": self.pool.uuid,
-            "cont": self.container.uuid
-        }
-        highest_epc_before_snap_destroy = self.highest_epoch(kwargs)
-
         # delete snapshot
         self.container.destroy_snap(epc=self.container.epoch)
 
@@ -121,8 +86,8 @@ class IoAggregation(IorTestBase):
         counter = 1
         returned_space = (self.get_nvme_free_space() -
                           free_space_before_snap_destroy)
-        while returned_space < int(self.ior_cmd.block_size.value) or \
-                highest_epc_before_snap_destroy >= self.highest_epoch(kwargs):
+
+        while returned_space < int(self.ior_cmd.block_size.value):
             # try to wait for 4 x 60 secs for aggregation to be completed or
             # else exit the test with a failure.
             if counter > 4:
@@ -130,11 +95,8 @@ class IoAggregation(IorTestBase):
                               free_space_before_snap_destroy)
                 self.log.info("Free space when test terminated: %s",
                               self.get_nvme_free_space())
-                self.log.info("Highest Epoch before IO Aggregation: %s",
-                              highest_epc_before_snap_destroy)
-                self.log.info("Highest Epoch when test terminated: %s",
-                              self.highest_epoch(kwargs))
                 self.fail("Aggregation did not complete as expected")
+
             time.sleep(60)
             returned_space = (self.get_nvme_free_space() -
                               free_space_before_snap_destroy)

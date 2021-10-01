@@ -59,15 +59,15 @@ type Server struct {
 	ControlLogJSON      bool             `yaml:"control_log_json,omitempty"`
 	HelperLogFile       string           `yaml:"helper_log_file"`
 	FWHelperLogFile     string           `yaml:"firmware_helper_log_file"`
-	RecreateSuperblocks bool             `yaml:"recreate_superblocks"`
+	RecreateSuperblocks bool             `yaml:"recreate_superblocks,omitempty"`
 	FaultPath           string           `yaml:"fault_path"`
-	TelemetryPort       int              `yaml:"telemetry_port"`
+	TelemetryPort       int              `yaml:"telemetry_port,omitempty"`
 
 	// duplicated in engine.Config
 	SystemName string              `yaml:"name"`
 	SocketDir  string              `yaml:"socket_dir"`
 	Fabric     engine.FabricConfig `yaml:",inline"`
-	Modules    string
+	Modules    string              `yaml:"-"`
 
 	AccessPoints []string `yaml:"access_points"`
 
@@ -75,7 +75,7 @@ type Server struct {
 	FaultCb      string `yaml:"fault_cb"`
 	Hyperthreads bool   `yaml:"hyperthreads"`
 
-	Path string // path to config file
+	Path string `yaml:"-"` // path to config file
 
 	// pointer to a function that validates the chosen provider
 	validateProviderFn networkProviderValidation

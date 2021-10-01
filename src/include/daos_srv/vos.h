@@ -432,15 +432,20 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  * the caller.
  *
  * \param coh		[IN]	Container open handle
- * \param epr		[IN]	The epoch range to discard
- *				keys to discard
+ * \param oidp		[IN]	Optional oid for oid specific discard.  Aggregation should be
+ *				disabled before calling this function in this mode.  This simply
+ *				removes values in the specified epoch range.  It doesn't discard
+ *				any ilog entries. The expectation is the removed data will
+ *				be replaced at the same epoch (or snapshot).  If that is not the
+ *				case, any orphaned entries will be inaccessible.
+ * \param epr		[IN]	The epoch range to discard keys to discard
  * \param yield_func	[IN]	Pointer to customized yield function
  * \param yield_arg	[IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    bool (*yield_func)(void *arg), void *yield_arg);
 
 /**
@@ -1149,6 +1154,14 @@ vos_dedup_verify(daos_handle_t ioh);
 void
 vos_report_layout_incompat(const char *type, int version, int min_version,
 			   int max_version, uuid_t *uuid);
+
+#define VOS_NOTIFY_RAS_EVENTF(...)			\
+	do {						\
+		if (ds_notify_ras_eventf == NULL)	\
+			break;				\
+		ds_notify_ras_eventf(__VA_ARGS__);	\
+	} while (0)					\
+
 
 struct sys_db *vos_db_get(void);
 /**
