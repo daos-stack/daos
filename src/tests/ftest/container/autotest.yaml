@@ -3,7 +3,7 @@ hosts:
     1_server:
       test_servers:
         - server-A
-    4_servers:
+    3_servers:
       test_servers:
         - server-A
         - server-B
