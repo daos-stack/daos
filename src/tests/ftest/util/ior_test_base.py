@@ -314,8 +314,9 @@ class IorTestBase(DfuseTestBase):
 
     def run_ior_threads_il(self, results, intercept, with_clients,
                            without_clients):
-        """Execute 2 IOR threads in parallel. One thread with interception
-        library (IL) and one without.
+        """Execute 2 IOR threads in parallel.
+
+        One thread is run with the interception library (IL) and one without.
 
         Args:
             results (dict): Dictionary to store the IOR results that gets
@@ -354,6 +355,20 @@ class IorTestBase(DfuseTestBase):
         thread2.join()
 
         self.stop_dfuse()
+
+        # Basic verification of the thread results
+        status = True
+        for key in sorted(results):
+            if not results[key].pop(0):
+                self.log.error("IOR Thread %d: %s", key, results[key][0])
+                status = False
+            if len(results[key]) != 2:
+                self.log.error(
+                    "IOR Thread %d: expecting 2 results; %d found: %s",
+                    key, len(results[key]), results[key])
+                status = False
+        if not status:
+            self.fail("At least one IOR thread failed!")
 
     def create_ior_thread(self, ior_command, clients, job_num, results,
                           intercept=None):
@@ -407,15 +422,15 @@ class IorTestBase(DfuseTestBase):
             clients, self.workdir, self.hostfile_clients_slots)
         manager.assign_processes(procs)
         manager.assign_environment(env)
-        self.display_pool_space()
 
         self.log.info("--- IOR Thread %d: Starting IOR ---", job_num)
+        self.display_pool_space()
         try:
             ior_output = manager.run()
-            results[job_num] = IorCommand.get_ior_metrics(ior_output)
+            results[job_num] = [True]
+            results[job_num].extend(IorCommand.get_ior_metrics(ior_output))
         except CommandFailure as error:
-            self.log.error("IOR Failed: %s", str(error))
-            self.fail("IOR thread failed!")
+            results[job_num] = [False, "IOR failed: {}".format(error)]
         finally:
             self.display_pool_space()
 
