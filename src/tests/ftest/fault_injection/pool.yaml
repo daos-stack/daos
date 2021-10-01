@@ -17,6 +17,8 @@ pool:
   control_method: dmg
   size: 12G
   nranks: 4
+  rebuild_timeout: 240
+  pool_query_timeout: 120
 container:
   object_qty: 100
   record_qty: 100
