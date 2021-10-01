@@ -475,8 +475,8 @@ do_init:
 			crt_provider_set_sep(prov, false);
 		}
 
-		if (prov == CRT_NA_OFI_VERBS_RXM ||
-		    prov == CRT_NA_OFI_TCP_RXM) {
+		/* TODO: For now do not set it for TCP_RXM to avoid experiment failures */
+		if (prov == CRT_NA_OFI_VERBS_RXM) {
 			char *srx_env;
 
 			srx_env = getenv("FI_OFI_RXM_USE_SRX");
