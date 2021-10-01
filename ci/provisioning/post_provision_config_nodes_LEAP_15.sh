@@ -92,10 +92,10 @@ post_provision_config_nodes() {
     distro_custom
 
     # now make sure everything is fully up-to-date
-    if ! retry_cmd 600 dnf -y upgrade --exclude "$EXCLUDE_UPGRADE"; then
-        dump_repos
-        exit 1
-    fi
+    #if ! retry_cmd 600 dnf -y upgrade --exclude "$EXCLUDE_UPGRADE"; then
+    #    dump_repos
+    #    exit 1
+    #fi
 
     if [ -f /etc/do-release ]; then
         cat /etc/do-release
