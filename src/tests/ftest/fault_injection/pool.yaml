@@ -4,7 +4,6 @@ hosts:
     - server-B
     - server-C
     - server-D
-    - server-E
   test_clients:
     - client-H
 timeout: 600
@@ -29,17 +28,17 @@ container:
   control_method: daos
 object_class: OC_RP_3G1
 number_pools: 5
-# faults:
-#     fault_list:
-#       - DAOS_POOL_CREATE_FAIL_CORPC
-#       - DAOS_POOL_DESTROY_FAIL_CORPC
-#       - DAOS_POOL_CONNECT_FAIL_CORPC
-#       - DAOS_POOL_DISCONNECT_FAIL_CORPC
-#       - DAOS_POOL_QUERY_FAIL_CORPC
-#       - DAOS_CONT_DESTROY_FAIL_CORPC
-#       - DAOS_CONT_CLOSE_FAIL_CORPC
-#       - DAOS_CONT_QUERY_FAIL_CORPC
-#       #- DAOS_CONT_OPEN_FAIL
+faults:
+    fault_list:
+      - DAOS_POOL_CREATE_FAIL_CORPC
+      - DAOS_POOL_DESTROY_FAIL_CORPC
+      - DAOS_POOL_CONNECT_FAIL_CORPC
+      - DAOS_POOL_DISCONNECT_FAIL_CORPC
+      - DAOS_POOL_QUERY_FAIL_CORPC
+      - DAOS_CONT_DESTROY_FAIL_CORPC
+      - DAOS_CONT_CLOSE_FAIL_CORPC
+      - DAOS_CONT_QUERY_FAIL_CORPC
+#       - DAOS_CONT_OPEN_FAIL
 #       - DAOS_REBUILD_DROP_SCAN
 #       - DAOS_REBUILD_NO_HDL
 #       - DAOS_REBUILD_DROP_OBJ
