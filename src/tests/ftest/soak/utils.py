@@ -1095,9 +1095,11 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
     oclass_list = self.params.get("oclass", app_params)
     for oclass in oclass_list:
         add_containers(self, pool, oclass)
-        #sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
+        # sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
         sbatch_cmds = ["export LD_LIBRARY_PATH=/opt/intel/oneapi/mpi/latest/lib",
                        "export PATH=/opt/intel/oneapi/mpi/latest/bin",
+                       "source /opt/intel/oneapi/setvars.sh",
+                       "/opt/intel/oneapi/modulefiles-setup.sh --force"
                        "echo $MODULEPATH",
                        "module avail"]
         # include dfuse cmdlines
@@ -1107,7 +1109,7 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
             self, pool, self.container[-1], nodesperjob, "SLURM", name=log_name,
             job_spec=job_spec)
         sbatch_cmds.extend(dfuse_start_cmdlist)
-        mpi_cmd = Mpirun(app_cmd, False, "mpich")
+        mpi_cmd = Mpirun(app_cmd, False, "intelmpi")
         mpi_cmd.assign_processes(nodesperjob * ppn)
         mpi_cmd.ppn.update(ppn)
         mpi_cmd.working_dir.update(dfuse.mount_dir.value)

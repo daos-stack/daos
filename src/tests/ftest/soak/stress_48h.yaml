@@ -30,6 +30,7 @@ server_config:
     nr_hugepages: 8192
     control_log_mask: INFO
     control_log_file: daos_control0.log
+    crt_timeout: 60
     servers:
         0:
             pinned_numa_node: 0
