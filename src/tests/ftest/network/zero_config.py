@@ -241,10 +241,12 @@ class ZeroConfigTest(TestWithServers):
                 "access_points": self.access_points}
         }
         self.start_agents(agent_groups)
-        self.write_string_to_logfile('"Test.name: ' + str(self) + '"')
         self.log.info("-" * 100)
 
         # Verify
         if not self.verify_client_run(exp_iface, env_state):
             self.fail("Failed run with expected dev: {}".format(exp_iface))
+
+        self.write_string_to_logfile('"Test.name: ' + str(self) + '"')
+
         self.log.info("Test passed!")
