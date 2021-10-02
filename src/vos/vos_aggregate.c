@@ -211,6 +211,10 @@ need_aggregate(struct vos_agg_param *agg_param, vos_iter_entry_t *entry)
 {
 	struct vos_container	*cont = vos_hdl2cont(agg_param->ap_coh);
 
+	/** Skip this check for discard */
+	if (agg_param->ap_discard_obj || agg_param->ap_discard)
+		return true;
+
 	D_DEBUG(DB_EPC, "full_scan:%d, hae:"DF_U64", last_update:"DF_U64", "
 		"flags:%u\n", agg_param->ap_full_scan,
 		cont->vc_cont_df->cd_hae, entry->ie_last_update,
@@ -2158,9 +2162,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_obj = false;
 			break;
 		}
-		if (agg_param->ap_discard_obj)
-			return 0;
-		rc = oi_iter_aggregate(ih, agg_param->ap_discard);
+		rc = oi_iter_aggregate(ih, agg_param->ap_discard_obj);
 		break;
 	case VOS_ITER_DKEY:
 		if (agg_param->ap_skip_dkey) {
@@ -2172,9 +2174,7 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 			agg_param->ap_skip_akey = false;
 			break;
 		}
-		if (agg_param->ap_discard_obj)
-			return 0;
-		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard);
+		rc = vos_obj_iter_aggregate(ih, agg_param->ap_discard_obj);
 		break;
 	case VOS_ITER_SINGLE:
 		return 0;
@@ -2220,19 +2220,36 @@ vos_aggregate_post_cb(daos_handle_t ih, vos_iter_entry_t *entry,
 	return rc;
 }
 
+enum {
+	AGG_MODE_AGGREGATE,
+	AGG_MODE_DISCARD,
+	AGG_MODE_OBJ_DISCARD,
+};
+
 static int
-aggregate_enter(struct vos_container *cont, bool discard,
+aggregate_enter(struct vos_container *cont, int agg_mode,
 		daos_epoch_range_t *epr)
 {
-	if (discard) {
+	switch (agg_mode) {
+	default:
+		D_ASSERT(0);
+		break;
+	case AGG_MODE_DISCARD:
 		if (cont->vc_in_discard) {
-			D_ERROR(DF_CONT": Already in discard\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
+			D_ERROR(DF_CONT": Already in discard epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
 			return -DER_BUSY;
 		}
 
-		if (cont->vc_in_aggregation &&
-		    cont->vc_epr_aggregation.epr_hi >= epr->epr_lo) {
+		if (cont->vc_in_obj_discard) {
+			D_ERROR(DF_CONT": In object discard epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
+			return -DER_BUSY;
+		}
+
+		if (cont->vc_in_aggregation && cont->vc_epr_aggregation.epr_hi >= epr->epr_lo) {
 			D_ERROR(DF_CONT": Aggregate epr["DF_U64", "DF_U64"], "
 				"discard epr["DF_U64", "DF_U64"]\n",
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
@@ -2244,10 +2261,19 @@ aggregate_enter(struct vos_container *cont, bool discard,
 
 		cont->vc_in_discard = 1;
 		cont->vc_epr_discard = *epr;
-	} else {
+		break;
+	case AGG_MODE_AGGREGATE:
 		if (cont->vc_in_aggregation) {
-			D_ERROR(DF_CONT": Already in aggregation\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id));
+			D_ERROR(DF_CONT": Already in aggregation epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_aggregation.epr_lo, cont->vc_epr_aggregation.epr_hi);
+			return -DER_BUSY;
+		}
+
+		if (cont->vc_in_obj_discard) {
+			D_ERROR(DF_CONT": In object discard epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
 			return -DER_BUSY;
 		}
 
@@ -2264,24 +2290,62 @@ aggregate_enter(struct vos_container *cont, bool discard,
 
 		cont->vc_in_aggregation = 1;
 		cont->vc_epr_aggregation = *epr;
+		break;
+	case AGG_MODE_OBJ_DISCARD:
+		if (cont->vc_in_obj_discard) {
+			D_ERROR(DF_CONT": Already in object discard epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
+			return -DER_BUSY;
+		}
+
+		if (cont->vc_in_discard) {
+			D_ERROR(DF_CONT": In discard epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
+			return -DER_BUSY;
+		}
+
+		if (cont->vc_in_aggregation) {
+			D_ERROR(DF_CONT": In aggregation epr["DF_U64", "DF_U64"]\n",
+				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
+				cont->vc_epr_aggregation.epr_lo, cont->vc_epr_aggregation.epr_hi);
+			return -DER_BUSY;
+		}
+
+		cont->vc_in_obj_discard = 1;
+		cont->vc_epr_discard = *epr;
+		break;
 	}
 
 	return 0;
 }
 
 static void
-aggregate_exit(struct vos_container *cont, bool discard)
+aggregate_exit(struct vos_container *cont, int agg_mode)
 {
-	if (discard) {
+	switch (agg_mode) {
+	default:
+		D_ASSERT(0);
+		break;
+	case AGG_MODE_DISCARD:
 		D_ASSERT(cont->vc_in_discard);
 		cont->vc_in_discard = 0;
 		cont->vc_epr_discard.epr_lo = 0;
 		cont->vc_epr_discard.epr_hi = 0;
-	} else {
+		break;
+	case AGG_MODE_AGGREGATE:
 		D_ASSERT(cont->vc_in_aggregation);
 		cont->vc_in_aggregation = 0;
 		cont->vc_epr_aggregation.epr_lo = 0;
 		cont->vc_epr_aggregation.epr_hi = 0;
+		break;
+	case AGG_MODE_OBJ_DISCARD:
+		D_ASSERT(cont->vc_in_obj_discard);
+		cont->vc_in_obj_discard = 0;
+		cont->vc_epr_discard.epr_lo = 0;
+		cont->vc_epr_discard.epr_hi = 0;
+		break;
 	}
 }
 
@@ -2321,7 +2385,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	if (ad == NULL)
 		return -DER_NOMEM;
 
-	rc = aggregate_enter(cont, false, epr);
+	rc = aggregate_enter(cont, AGG_MODE_AGGREGATE, epr);
 	if (rc)
 		goto free_agg_data;
 
@@ -2369,7 +2433,7 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
 	if (cont->vc_cont_df->cd_hae < epr->epr_hi)
 		cont->vc_cont_df->cd_hae = epr->epr_hi;
 exit:
-	aggregate_exit(cont, false);
+	aggregate_exit(cont, AGG_MODE_AGGREGATE);
 
 	if (ad->ad_agg_param.ap_window.mw_csum_support)
 		D_FREE(ad->ad_agg_param.ap_window.mw_io_ctxt.ic_csum_buf);
@@ -2391,6 +2455,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	struct agg_data		*ad;
 	int			 type = VOS_ITER_OBJ;
 	int			 rc;
+	int			 mode = oidp == NULL ? AGG_MODE_DISCARD : AGG_MODE_OBJ_DISCARD;
 
 	D_ASSERT(epr != NULL);
 	D_ASSERTF(epr->epr_lo <= epr->epr_hi,
@@ -2401,7 +2466,7 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	if (ad == NULL)
 		return -DER_NOMEM;
 
-	rc = aggregate_enter(cont, true, epr);
+	rc = aggregate_enter(cont, mode, epr);
 	if (rc != 0)
 		goto free_agg_data;
 
@@ -2438,12 +2503,12 @@ vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	ad->ad_agg_param.ap_yield_func = yield_func;
 	ad->ad_agg_param.ap_yield_arg = yield_arg;
 
-	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_PURGE;
+	ad->ad_iter_param.ip_flags |= VOS_IT_FOR_DISCARD;
 	rc = vos_iterate(&ad->ad_iter_param, type, true, &ad->ad_anchors,
 			 vos_aggregate_pre_cb, vos_aggregate_post_cb,
 			 &ad->ad_agg_param, NULL);
 
-	aggregate_exit(cont, true);
+	aggregate_exit(cont, mode);
 
 free_agg_data:
 	D_FREE(ad);

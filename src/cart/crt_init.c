@@ -174,7 +174,7 @@ static int data_init(int server, crt_init_options_t *opt)
 	/* This is a workaround for CART-871 if universe size is not set */
 	d_getenv_int("FI_UNIVERSE_SIZE", &fi_univ_size);
 	if (fi_univ_size == 0) {
-		D_WARN("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
+		D_INFO("FI_UNIVERSE_SIZE was not set; setting to 2048\n");
 		setenv("FI_UNIVERSE_SIZE", "2048", 1);
 	}
 
@@ -295,7 +295,8 @@ crt_plugin_fini(void)
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
+		if (crt_plugin_gdata.cpg_prog_cbs_old[i])
+			D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
 	}
 
 	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
@@ -466,7 +467,7 @@ do_init:
 		     prov == CRT_NA_OFI_TCP_RXM) &&
 		    crt_provider_is_sep(prov)) {
 			D_WARN("set CRT_CTX_SHARE_ADDR as 1 is invalid "
-			       "for current provider, ignore it.\n");
+			       "for current provider, ignoring it.\n");
 			crt_provider_set_sep(prov, false);
 		}
 
@@ -476,7 +477,7 @@ do_init:
 
 			srx_env = getenv("FI_OFI_RXM_USE_SRX");
 			if (srx_env == NULL) {
-				D_WARN("FI_OFI_RXM_USE_SRX not set, set=1\n");
+				D_INFO("FI_OFI_RXM_USE_SRX not set, set=1\n");
 				setenv("FI_OFI_RXM_USE_SRX", "1", true);
 			}
 		}
@@ -856,7 +857,10 @@ int crt_na_ofi_config_init(int provider)
 		} else {
 			port = atoi(port_str);
 
-			crt_port_range_verify(port);
+			if (provider == CRT_NA_OFI_SOCKETS ||
+			    provider == CRT_NA_OFI_VERBS_RXM ||
+			    provider == CRT_NA_OFI_TCP_RXM)
+				crt_port_range_verify(port);
 
 			if (provider == CRT_NA_OFI_PSM2)
 				port = (uint16_t)port << 8;
