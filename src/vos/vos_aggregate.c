@@ -2242,7 +2242,7 @@ aggregate_enter(struct vos_container *cont, int agg_mode,
 			return -DER_BUSY;
 		}
 
-		if (cont->vc_in_obj_discard) {
+		if (cont->vc_obj_discard_count != 0) {
 			D_ERROR(DF_CONT": In object discard epr["DF_U64", "DF_U64"]\n",
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
 				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
@@ -2270,7 +2270,7 @@ aggregate_enter(struct vos_container *cont, int agg_mode,
 			return -DER_BUSY;
 		}
 
-		if (cont->vc_in_obj_discard) {
+		if (cont->vc_obj_discard_count != 0) {
 			D_ERROR(DF_CONT": In object discard epr["DF_U64", "DF_U64"]\n",
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
 				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
@@ -2292,13 +2292,6 @@ aggregate_enter(struct vos_container *cont, int agg_mode,
 		cont->vc_epr_aggregation = *epr;
 		break;
 	case AGG_MODE_OBJ_DISCARD:
-		if (cont->vc_in_obj_discard) {
-			D_ERROR(DF_CONT": Already in object discard epr["DF_U64", "DF_U64"]\n",
-				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
-				cont->vc_epr_discard.epr_lo, cont->vc_epr_discard.epr_hi);
-			return -DER_BUSY;
-		}
-
 		if (cont->vc_in_discard) {
 			D_ERROR(DF_CONT": In discard epr["DF_U64", "DF_U64"]\n",
 				DP_CONT(cont->vc_pool->vp_id, cont->vc_id),
@@ -2313,8 +2306,8 @@ aggregate_enter(struct vos_container *cont, int agg_mode,
 			return -DER_BUSY;
 		}
 
-		cont->vc_in_obj_discard = 1;
-		cont->vc_epr_discard = *epr;
+		/** Allow discard from multiple objects */
+		cont->vc_obj_discard_count++;
 		break;
 	}
 
@@ -2341,10 +2334,8 @@ aggregate_exit(struct vos_container *cont, int agg_mode)
 		cont->vc_epr_aggregation.epr_hi = 0;
 		break;
 	case AGG_MODE_OBJ_DISCARD:
-		D_ASSERT(cont->vc_in_obj_discard);
-		cont->vc_in_obj_discard = 0;
-		cont->vc_epr_discard.epr_lo = 0;
-		cont->vc_epr_discard.epr_hi = 0;
+		D_ASSERT(cont->vc_obj_discard_count > 0);
+		cont->vc_obj_discard_count--;
 		break;
 	}
 }
