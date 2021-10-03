@@ -1098,8 +1098,10 @@ def create_app_cmdline(self, job_spec, pool, ppn, nodesperjob):
         # sbatch_cmds = ["module purge", "module load {}".format(mpi_module)]
         sbatch_cmds = ["export LD_LIBRARY_PATH=/opt/intel/oneapi/mpi/latest/lib",
                        "export PATH=/opt/intel/oneapi/mpi/latest/bin",
+                       "sudo dnf repolist",
+                       "ls -la /opt/intel/oneapi/",
                        "source /opt/intel/oneapi/setvars.sh",
-                       "/opt/intel/oneapi/modulefiles-setup.sh --force"
+                       "/opt/intel/oneapi/modulefiles-setup.sh --force",
                        "echo $MODULEPATH",
                        "module avail"]
         # include dfuse cmdlines
