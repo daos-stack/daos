@@ -12,6 +12,7 @@ import logging
 import re
 import socket
 import sys
+from time import sleep
 from ClusterShell.NodeSet import NodeSet
 from util.general_utils import pcmd, run_task
 from avocado.utils.distro import detect
@@ -246,6 +247,8 @@ def start_slurm(args):
         execute_cluster_cmds(args.control, SLURMCTLD_STARTUP_DEBUG, args.sudo)
     if status > 0:
         return 1
+    # wait until the ctl node updates the slurm state from unknown to idle
+    sleep(20)
 
     # ensure that the nodes are in the idle state
     cmd_list = ["scontrol update nodename={} state=idle".format(args.nodes)]
