@@ -421,7 +421,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 		    "Discard" : "Aggregate", epr_a->epr_lo, epr_a->epr_hi);
 
 	if (ds->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
+		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
 				   ds_csum_agg_recalc, NULL, NULL, false);
@@ -607,7 +607,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		    "Discard" : "Aggregate");
 
 	if (ds_sample->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
+		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL,
 				   false);
@@ -1159,7 +1159,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 
 	for (i = 0; i < 2; i++) {
 		if (discard)
-			rc = vos_discard(arg->ctx.tc_co_hdl, &epr, NULL, NULL);
+			rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, &epr, NULL, NULL);
 		else
 			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
 					   NULL, NULL, false);
@@ -1259,6 +1259,138 @@ static void
 discard_15(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, true);
+	cleanup();
+}
+
+static void
+discard_obj_test(void **state, bool empty)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 oid;
+	daos_epoch_range_t	 epr = {1, DAOS_EPOCH_MAX - 1};
+	daos_epoch_t		 epoch;
+	int			 rc;
+	char			 first_val = 'f';
+	char			 last_val = 'l';
+	char			 middle_val = 'm';
+	char			 fetch_val;
+	char			 expected;
+	char			 dkey[2] = "a";
+	char			 akey[2] = "b";
+	char			 akey2[2] = "c";
+	int			 old_flags = arg->ta_flags;
+	daos_recx_t		 recx = {0, 1};
+
+	oid = dts_unit_oid_gen(0, 0, 0);
+
+	arg->ta_flags = TF_USE_VAL;
+
+	if (!empty) {
+		update_value(arg, oid, epr.epr_lo++, 0, dkey, akey,
+			     DAOS_IOD_SINGLE, sizeof(first_val), &recx,
+			     &first_val);
+
+		update_value(arg, oid, epr.epr_lo++, 0, dkey, akey2,
+			     DAOS_IOD_ARRAY, sizeof(first_val), &recx,
+			     &first_val);
+
+	}
+
+	epoch = epr.epr_lo;
+
+	update_value(arg, oid, epoch++, 0, dkey, akey,
+		     DAOS_IOD_SINGLE, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	update_value(arg, oid, epoch++, 0, dkey, akey2,
+		     DAOS_IOD_ARRAY, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	epr.epr_hi = epoch++;
+
+	update_value(arg, oid, epoch++, 0, dkey, akey,
+		     DAOS_IOD_SINGLE, sizeof(last_val), &recx,
+		     &last_val);
+
+	update_value(arg, oid, epoch++, 0, dkey, akey2,
+		     DAOS_IOD_ARRAY, sizeof(last_val), &recx,
+		     &last_val);
+
+	rc = vos_discard(arg->ctx.tc_co_hdl, &oid, &epr, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Middle value should now be gone.  If empty, it will be 0, otherwise will be first
+	 * value
+	 */
+	expected = 0;
+	fetch_val = 0;
+	if (!empty)
+		expected = first_val;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, DAOS_IOD_SINGLE,
+		    sizeof(first_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+	fetch_val = 0;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey2, DAOS_IOD_ARRAY,
+		    sizeof(first_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+
+	/** last value should still be there too since it's after the discard range */
+	expected = last_val;
+	fetch_val = 0;
+	fetch_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_SINGLE,
+		    sizeof(last_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+	fetch_val = 0;
+	fetch_value(arg, oid, epoch, 0, dkey, akey2, DAOS_IOD_ARRAY,
+		    sizeof(last_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+
+	/** Restore the middle values */
+	update_value(arg, oid, epr.epr_lo, 0, dkey, akey,
+		     DAOS_IOD_SINGLE, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	update_value(arg, oid, epr.epr_lo + 1, 0, dkey, akey2,
+		     DAOS_IOD_ARRAY, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	/** Now check middle value again */
+	expected = middle_val;
+	fetch_val = 0;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, DAOS_IOD_SINGLE,
+		    sizeof(middle_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+	fetch_val = 0;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey2, DAOS_IOD_ARRAY,
+		    sizeof(middle_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+
+	/** And check last value again */
+	expected = last_val;
+	fetch_val = 0;
+	fetch_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_SINGLE,
+		    sizeof(last_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+	fetch_val = 0;
+	fetch_value(arg, oid, epoch, 0, dkey, akey2, DAOS_IOD_ARRAY,
+		    sizeof(last_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+
+	arg->ta_flags = old_flags;
+
+}
+
+static void
+discard_16(void **state)
+{
+	discard_obj_test(state, true);
+	cleanup();
+}
+
+static void
+discard_17(void **state)
+{
+	discard_obj_test(state, false);
 	cleanup();
 }
 
@@ -2623,6 +2755,10 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_14, NULL, agg_tst_teardown },
 	{ "VOS465: Discard object/key punches array",
 	  discard_15, NULL, agg_tst_teardown },
+	{ "VOS466: Object specific discard (empty obj)",
+	  discard_16, NULL, agg_tst_teardown },
+	{ "VOS467: Object specific discard (non-empty obj)",
+	  discard_17, NULL, agg_tst_teardown },
 };
 
 static const struct CMUnitTest aggregate_tests[] = {

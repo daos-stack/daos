@@ -2779,6 +2779,8 @@ obj_ec_tgt_oiod_init(struct obj_io_desc *r_oiods, uint32_t iod_nr,
 		for (j = 0; j < r_oiod->oiod_nr; j++) {
 			r_siod = &r_oiod->oiod_siods[j];
 			tgt = r_siod->siod_tgt_idx;
+			if (isclr(tgt_bitmap, tgt))
+				continue;
 			tgt_oiod = obj_ec_tgt_oiod_get(tgt_oiods, tgt_nr, tgt);
 			D_ASSERT(tgt_oiod && tgt_oiod->oto_tgt_idx == tgt);
 			tgt_oiod->oto_offs[i] = r_siod->siod_off;
