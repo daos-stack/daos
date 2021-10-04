@@ -520,8 +520,8 @@ def get_test_list(tags):
             # then and faults are enabled
             pass
     for tag in tags:
-        if ".py" in tag:
-            # Assume '.py' indicates a test and just add it to the list
+        if os.path.isfile(tag):
+            # Assume an existing file is a test and just add it to the list
             test_list.append(tag)
             fault_filter = "--filter-by-tags=-faults"
             if faults_disabled and fault_filter not in test_tags:
