@@ -501,7 +501,7 @@ class SoakTestBase(TestWithServers):
             "single_test_pool", test_param + "*", True)
         harassers = self.params.get("harasserlist", test_param + "*")
         job_list = self.params.get("joblist", test_param + "*")
-        ignore_soak_errors = self.params.get("ignore_soak_errors", /run/*, False)
+        ignore_soak_errors = self.params.get("ignore_soak_errors", "/run/*/", False)
         if harassers:
             run_harasser = True
             self.log.info("<< Initial harasser list = %s>>", harassers)
