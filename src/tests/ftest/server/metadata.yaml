@@ -50,6 +50,7 @@ server_config:
       env_vars:
         - DAOS_MD_CAP=128
         - DD_MASK=mgmt,md,dsms,any
+job_manager_class_name: Orterun
 pool:
   name: daos_server
   svcn: 3
