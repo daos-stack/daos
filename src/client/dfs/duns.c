@@ -451,12 +451,12 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 	 * determine FS type, if on Lustre and path is a foreign symlink
 	 */
 	if (rc == -1 || fs.f_type != LL_SUPER_MAGIC) {
-		int errno_save = errno;
-		struct statfs fs2;
-		char *dirp;
-		int rc2;
+		int		errno_save = errno;
+		struct statfs	fs2;
+		char		*dirp;
+		int		rc2;
 
-		dir = strdup(path);
+		D_STRNDUP(dir, path, PATH_MAX);
 		if (dir == NULL) {
 			D_ERROR("Failed to copy path\n");
 			return ENOMEM;
