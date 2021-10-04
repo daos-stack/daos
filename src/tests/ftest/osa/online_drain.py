@@ -70,14 +70,17 @@ class OSAOnlineDrain(OSAUtils):
             # Instantiate aggregation
             if self.test_during_aggregation is True:
                 for _ in range(0, 2):
-                    self.run_ior_thread("Write", oclass, test_seq)
+                    self.run_ior_thread("Write", oclass, test_seq,
+                                        pool=self.pool[val])
                 self.delete_extra_container(self.pool[val])
             # The following thread runs while performing osa operations.
             if app_name == "ior":
                 threads.append(threading.Thread(target=self.run_ior_thread,
                                                 kwargs={"action": "Write",
                                                         "oclass": oclass,
-                                                        "test": test_seq}))
+                                                        "test": test_seq,
+                                                        "pool": self.pool[val]}
+                                                ))
             else:
                 threads.append(threading.Thread(target=self.run_mdtest_thread))
 
@@ -109,7 +112,7 @@ class OSAOnlineDrain(OSAUtils):
         for val in range(0, num_pool):
             display_string = "Pool{} space at the End".format(val)
             self.pool[val].display_pool_daos_space(display_string)
-            self.run_ior_thread("Read", oclass, test_seq)
+            self.run_ior_thread("Read", oclass, test_seq, pool=self.pool[val])
             self.container = self.pool_cont_dict[self.pool[val]][0]
             kwargs = {"pool": self.pool[val].uuid,
                       "cont": self.container.uuid}
