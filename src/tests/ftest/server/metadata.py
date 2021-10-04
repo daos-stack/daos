@@ -14,7 +14,6 @@ from avocado.core.exceptions import TestFail
 from apricot import TestWithServers
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
-from job_manager_utils import Orterun
 
 
 def ior_runner_thread(manager, uuids, results):
@@ -366,6 +365,10 @@ class ObjectMetadata(TestWithServers):
             [str(uuid.uuid4()) for _ in range(files_per_thread)]
             for _ in range(total_ior_threads)]
 
+        # Setup the orterun command used to run the ior command
+        self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
+        self.job_manager.assign_processes(processes)
+
         # Launch threads to run IOR to write data, restart the agents and
         # servers, and then run IOR to read the data
         for operation in ("write", "read"):
@@ -379,20 +382,16 @@ class ObjectMetadata(TestWithServers):
                 ior_cmd.flags.value = self.params.get(
                     "F", "/run/ior/ior{}flags/".format(operation))
 
-                # Define the job manager for the IOR command
-                manager = Orterun(ior_cmd)
-                env = ior_cmd.get_default_env(str(manager))
-                manager.assign_hosts(self.hostlist_clients, self.workdir, None)
-                manager.assign_processes(processes)
-                manager.assign_environment(env)
-                manager.tmpdir.update(self.test_dir, "tmpdir")
+                # Update the environment variables for the IOR command's job manager
+                env = ior_cmd.get_default_env(str(self.job_manager))
+                self.job_manager.assign_environment(env)
 
                 # Add a thread for these IOR arguments
                 threads.append(
                     threading.Thread(
                         target=ior_runner_thread,
                         kwargs={
-                            "manager": manager,
+                            "manager": self.job_manager,
                             "uuids": list_of_uuid_lists[index],
                             "results": self.out_queue}))
 
