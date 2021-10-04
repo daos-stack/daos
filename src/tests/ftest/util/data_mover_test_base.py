@@ -223,10 +223,6 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         else:
             path = join(self.tmp, dir_name)
 
-        # add mount_dir to list for use when umounting 
-        if mount_dir:
-            self.mounted_posix_test_paths.append(path)
-
         # Add to the list of posix paths
         self.posix_test_paths.append(path)
 
@@ -234,6 +230,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             # Create the directory
             cmd = "mkdir -p '{}'".format(path)
             self.execute_cmd(cmd)
+
+        # mount small tmpfs filesystem on posix path, using size required sudo
+        # add mount_dir to mounted list for use when umounting 
+        if mount_dir:
+            self.mounted_posix_test_paths.append(path)
+            self.execute_cmd("sudo mount -t tmpfs none '{}' -o size=128M".format(path))
 
         return path
 

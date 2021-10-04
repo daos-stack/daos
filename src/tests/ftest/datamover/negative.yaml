@@ -9,7 +9,7 @@ server_config:
 pool:
     mode: 146
     name: daos_server
-    scm_size: 6G
+    scm_size: 5.1G
     control_method: dmg
 container:
     type: POSIX
@@ -19,7 +19,7 @@ ior:
         np: 1
     test_file: testFile
     flags: "-v -w -k"
-    block_size_large: '6500M' # Over 6G
+    block_size_large: '5200M' # Over 5.1G
     block_size: '1K'
     transfer_size: '1K'
     signature: 5

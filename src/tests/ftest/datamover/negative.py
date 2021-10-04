@@ -255,7 +255,6 @@ class DmvrNegativeTest(DataMoverTestBase):
 
         # mount small tmpfs filesystem on posix path, using size required sudo
         dst_posix_path = self.new_posix_test_path(mount_dir=True)
-        self.execute_cmd("sudo mount -t tmpfs none '{}' -o size=128M".format(dst_posix_path))
 
         # Create a large test file in POSIX
         block_size_large = self.params.get(
@@ -274,10 +273,6 @@ class DmvrNegativeTest(DataMoverTestBase):
             "DAOS_UUID", "/", pool1, cont1,
             expected_rc=1,
             expected_output=[self.MFU_ERR_DCP_COPY, "errno=28"])
-
-        # Create another pool and container
-        pool2 = self.create_pool()
-        cont2 = self.create_cont(pool2)
 
         # Try to copy. For now, we expect this to just abort.
         self.run_datamover(
