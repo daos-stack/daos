@@ -192,6 +192,8 @@ evt_iter_intent(struct evt_iterator *iter)
 {
 	if (iter->it_options & EVT_ITER_FOR_PURGE)
 		return DAOS_INTENT_PURGE;
+	if (iter->it_options & EVT_ITER_FOR_DISCARD)
+		return DAOS_INTENT_DISCARD;
 	if (iter->it_options & EVT_ITER_FOR_MIGRATION)
 		return DAOS_INTENT_MIGRATION;
 	return DAOS_INTENT_DEFAULT;

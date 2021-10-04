@@ -165,10 +165,9 @@ static void
 setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	       int chunksize, daos_oclass_id_t oclass)
 {
+	char		str[37];
 	daos_prop_t	*props = daos_prop_alloc(3);
 	int		 rc;
-
-	uuid_generate(ctx->uuid);
 
 	assert_non_null(props);
 	props->dpp_entries[0].dpe_type = DAOS_PROP_CO_CSUM;
@@ -179,11 +178,12 @@ setup_cont_obj(struct csum_test_ctx *ctx, int csum_prop_type, bool csum_sv,
 	props->dpp_entries[2].dpe_type = DAOS_PROP_CO_CSUM_CHUNK_SIZE;
 	props->dpp_entries[2].dpe_val = chunksize != 0 ? chunksize : 1024*16;
 
-	rc = daos_cont_create(ctx->poh, ctx->uuid, props, NULL);
+	rc = daos_cont_create(ctx->poh, &ctx->uuid, props, NULL);
 	daos_prop_free(props);
 	assert_success(rc);
 
-	rc = daos_cont_open(ctx->poh, ctx->uuid, DAOS_COO_RW,
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_open(ctx->poh, str, DAOS_COO_RW,
 			    &ctx->coh, &ctx->info, NULL);
 	assert_success(rc);
 
@@ -315,7 +315,8 @@ setup_multiple_extent_data(struct csum_test_ctx *ctx)
 static void
 cleanup_cont_obj(struct csum_test_ctx *ctx)
 {
-	int rc;
+	int	rc;
+	char	str[37];
 
 	/** close object */
 	rc = daos_obj_close(ctx->oh, NULL);
@@ -324,7 +325,8 @@ cleanup_cont_obj(struct csum_test_ctx *ctx)
 	/** Close & Destroy Container */
 	rc = daos_cont_close(ctx->coh, NULL);
 	assert_rc_equal(rc, 0);
-	rc = daos_cont_destroy(ctx->poh, ctx->uuid, true, NULL);
+	uuid_unparse(ctx->uuid, str);
+	rc = daos_cont_destroy(ctx->poh, str, true, NULL);
 	assert_rc_equal(rc, 0);
 }
 

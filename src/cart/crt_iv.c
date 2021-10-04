@@ -2354,9 +2354,8 @@ exit:
 
 		update_comp_cb(ivns_internal, class_id, iv_key, NULL, iv_value,
 			       update_rc, cb_arg);
-
-		/* on_get() done in crt_iv_update_internal */
-		iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
+		if (rc == 0)
+			iv_ops->ivo_on_put(ivns_internal, NULL, user_priv);
 	}
 
 	if (rc != 0) {
@@ -2369,8 +2368,6 @@ exit:
 			D_FREE(iv_sync_cb->isc_iv_key.iov_buf);
 			D_FREE(iv_sync_cb);
 		}
-		if (sync_type->ivs_comp_cb)
-			sync_type->ivs_comp_cb(sync_type->ivs_comp_cb_arg, rc);
 	}
 	return rc;
 }
@@ -2583,10 +2580,16 @@ handle_ivupdate_response(const struct crt_cb_info *cb_info)
 					  iv_info->uci_cb_arg,
 					  iv_info->uci_user_priv,
 					  rc);
-		if (rc != 0)
+		if (rc != 0) {
 			rc = iv_ops->ivo_on_put(iv_info->uci_ivns_internal,
 						tmp_iv_value,
 						iv_info->uci_user_priv);
+			if (iv_info->uci_sync_type.ivs_comp_cb)
+				iv_info->uci_sync_type.ivs_comp_cb(iv_info->
+								   uci_sync_type.
+								   ivs_comp_cb_arg,
+								   rc);
+		}
 	}
 
 	if (iv_info->uci_bulk_hdl != CRT_BULK_NULL)

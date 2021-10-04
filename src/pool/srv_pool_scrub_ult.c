@@ -46,12 +46,6 @@ sleep_fn(void *arg, uint32_t msec)
 	return 0;
 }
 
-static inline int
-sc_schedule(struct scrub_ctx *ctx)
-{
-	return ctx->sc_pool->sp_scrub_sched;
-}
-
 static int
 cont_lookup_cb(uuid_t pool_uuid, uuid_t cont_uuid, void *arg,
 	       struct cont_scrub *cont)
