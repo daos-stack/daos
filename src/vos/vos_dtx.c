@@ -218,8 +218,6 @@ static void
 dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		    struct dtx_handle *dth, bool evict)
 {
-	D_FREE(dae->dae_records);
-
 	if (evict) {
 		daos_unit_oid_t	*oids;
 		int		 count;
@@ -250,6 +248,10 @@ dtx_act_ent_cleanup(struct vos_container *cont, struct vos_dtx_act_ent *dae,
 		D_FREE(dae->dae_oids);
 		dae->dae_oid_cnt = 0;
 	}
+
+	D_FREE(dae->dae_records);
+	dae->dae_rec_cap = 0;
+	DAE_REC_CNT(dae) = 0;
 }
 
 static int
@@ -1233,8 +1235,8 @@ vos_dtx_check_availability(daos_handle_t coh, uint32_t entry,
 		return ALB_AVAILABLE_CLEAN;
 	}
 
-	/* Committed */
-	if (entry == DTX_LID_COMMITTED)
+	/* Committed -or- being discarded */
+	if (entry == DTX_LID_COMMITTED || intent == DAOS_INTENT_DISCARD)
 		return ALB_AVAILABLE_CLEAN;
 
 	/* Aborted */
@@ -2682,6 +2684,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 	struct vos_container	*cont;
 	struct vos_dtx_act_ent	*dae = NULL;
 	d_iov_t			 kiov;
+	d_iov_t			 riov;
 	int			 rc;
 
 	if (!dtx_is_valid_handle(dth) ||
@@ -2701,8 +2704,15 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 		dtx_act_ent_cleanup(cont, dae, dth, true);
 	} else {
 		d_iov_set(&kiov, &dth->dth_xid, sizeof(dth->dth_xid));
-		rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_EQ, &kiov,
-				   &dae);
+		d_iov_set(&riov, NULL, 0);
+		rc = dbtree_lookup(cont->vc_dtx_active_hdl, &kiov, &riov);
+		if (rc == -DER_NONEXIST) {
+			rc = dbtree_lookup(cont->vc_dtx_committed_hdl, &kiov, &riov);
+			/* Cannot cleanup 'committed' DTX entry. */
+			if (rc == 0)
+				goto out;
+		}
+
 		if (rc != 0) {
 			if (rc != -DER_NONEXIST)
 				D_ERROR("Fail to remove DTX entry "DF_DTI":"
@@ -2712,6 +2722,14 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 			dae = dth->dth_ent;
 			if (dae != NULL)
 				dae->dae_aborted = 1;
+		} else {
+			dae = (struct vos_dtx_act_ent *)riov.iov_buf;
+			/* Cannot cleanup 'prepared' or 'committed' DTX entry. */
+			if (dae->dae_prepared || dae->dae_committed)
+				goto out;
+
+			rc = dbtree_delete(cont->vc_dtx_active_hdl, BTR_PROBE_BYPASS, &kiov, &dae);
+			D_ASSERT(rc == 0);
 		}
 
 		if (dae != NULL) {
@@ -2720,6 +2738,7 @@ vos_dtx_cleanup_internal(struct dtx_handle *dth)
 				dtx_evict_lid(cont, dae);
 		}
 
+out:
 		dth->dth_ent = NULL;
 	}
 }
