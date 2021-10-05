@@ -116,6 +116,7 @@ insert_example_records(void)
 			iods[j].iod_type	= DAOS_IOD_SINGLE;
 		}
 		int *intdata = (int *) data[NR_IODS-1];
+
 		printf("%s(akey)=%d\n", fields[NR_IODS-1], intdata[i]);
 		/** akeys */
 		sgls[NR_IODS-1].sg_nr		= 1;
@@ -198,7 +199,8 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	eqfunc_ft->data_offset   = 0;
 	eqfunc_ft->data_len      = 0;
 
-	/** building a pipeline condition filter:
+	/**
+	 * building a pipeline condition filter:
 	 *    the order of operands is prefix:
 	 *         "Owner == Benny"  ->  |(func=eq)|(akey=Owner)|(const=Benny)|
 	 */
@@ -213,8 +215,10 @@ build_pipeline_one(daos_pipeline_t *pipeline)
 	rc = daos_filter_add(comp_eq, const_ft);
 	ASSERT(rc == 0, "Filter add failed with %d", rc);
 
-	/** adding the filter to the pipeline. This pipeline has only one
-	 *  filter  */
+	/**
+	 * adding the filter to the pipeline. This pipeline has only one
+	 * filter
+	 */
 	rc = daos_pipeline_add(pipeline, comp_eq);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 }
@@ -327,7 +331,8 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	andfunc_ft->data_offset   = 0;
 	andfunc_ft->data_len      = 0;
 
-	/** building a pipeline condition filter:
+	/** 
+	 * building a pipeline condition filter:
 	 *    the order of operands is prefix:
 	 *         "Owner == Benny AND Species == dog"  ->
 * |(func=and)|(func=eq)|(akey=Owner)|(const=Benny)|(func=eq)|(akey=Species)|(const=dog)|
@@ -351,8 +356,10 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	rc = daos_filter_add(comp_and, const2_ft);
 	ASSERT(rc == 0, "Filter add failed with %d", rc);
 
-	/** adding the filter to the pipeline. This pipeline has only one
-	 *  filter  */
+	/**
+	 * adding the filter to the pipeline. This pipeline has only one
+	 * filter
+	 */
 	rc = daos_pipeline_add(pipeline, comp_and);
 	ASSERT(rc == 0, "Pipeline add failed with %d", rc);
 }
