@@ -356,24 +356,6 @@ daos_obj_id2class(daos_obj_id_t oid)
 	return ocid;
 }
 
-static inline daos_ofeat_t
-daos_obj_id2feat(daos_obj_id_t oid)
-{
-	daos_ofeat_t ofeat;
-
-	ofeat = (oid.hi & OID_FMT_FEAT_MASK) >> OID_FMT_FEAT_SHIFT;
-	return ofeat;
-}
-
-static inline uint8_t
-daos_obj_id2ver(daos_obj_id_t oid)
-{
-	uint8_t version;
-
-	version = (oid.hi & OID_FMT_VER_MASK) >> OID_FMT_VER_SHIFT;
-	return version;
-}
-
 static inline bool
 daos_obj_id_is_nil(daos_obj_id_t oid)
 {
