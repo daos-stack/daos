@@ -100,7 +100,7 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 		if (ie->ie_stat.st_ino == ie->ie_dfs->dfs_ino) {
 			DFUSE_TRA_DEBUG(inode, "Not updating parent");
 		} else if ((inode->ie_parent != ie->ie_parent) ||
-			(strncmp(inode->ie_name, ie->ie_name, NAME_MAX + 1) != 0)) {
+			(strncmp(inode->ie_name, ie->ie_name, NAME_MAX) != 0)) {
 			DFUSE_TRA_DEBUG(inode, "File has moved from '%s to '%s'",
 					inode->ie_name, ie->ie_name);
 
@@ -108,7 +108,8 @@ dfuse_reply_entry(struct dfuse_projection_info *fs_handle,
 
 			/* Save the old name so that we can invalidate it in later */
 			wipe_parent = inode->ie_parent;
-			strncpy(wipe_name, inode->ie_name, NAME_MAX + 1);
+			strncpy(wipe_name, inode->ie_name, NAME_MAX);
+			wipe_name[NAME_MAX] = '\0';
 
 			inode->ie_parent = ie->ie_parent;
 			strncpy(inode->ie_name, ie->ie_name, NAME_MAX + 1);
@@ -249,7 +250,6 @@ dfuse_cb_lookup(fuse_req_t req, struct dfuse_inode_entry *parent,
 	DFUSE_TRA_DEBUG(ie, "Attr len is %zi", attr_len);
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_name[NAME_MAX] = '\0';
 	atomic_store_relaxed(&ie->ie_ref, 1);
 
 	dfs_obj2id(ie->ie_obj, &ie->ie_oid);

@@ -39,8 +39,18 @@ dfuse_show_flags(void *handle, unsigned int in)
 	SHOW_FLAG(handle, in, FUSE_CAP_POSIX_ACL);
 	SHOW_FLAG(handle, in, FUSE_CAP_HANDLE_KILLPRIV);
 
+#ifdef FUSE_CAP_CACHE_SYMLINKS
+	SHOW_FLAG(handle, in, FUSE_CAP_CACHE_SYMLINKS);
+#endif
+#ifdef FUSE_CAP_NO_OPENDIR_SUPPORT
+	SHOW_FLAG(handle, in, FUSE_CAP_NO_OPENDIR_SUPPORT);
+#endif
+#ifdef FUSE_CAP_EXPLICIT_INVAL_DATA
+	SHOW_FLAG(handle, in, FUSE_CAP_EXPLICIT_INVAL_DATA);
+#endif
+
 	if (in)
-		DFUSE_TRA_ERROR(handle, "Unknown flags %#x", in);
+		DFUSE_TRA_WARNING(handle, "Unknown flags %#x", in);
 }
 
 /* Called on filesystem init.  It has the ability to both observe configuration

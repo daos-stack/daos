@@ -365,6 +365,24 @@ void sched_cond_wait(ABT_cond cond, ABT_mutex mutex);
  */
 uint64_t sched_cur_msec(void);
 
+/**
+ * Get current schedule sequence, by comparing the results of two
+ * sched_cur_seq() calls, we can tell if an ULT was yielding between
+ * these two calls.
+ */
+uint64_t sched_cur_seq(void);
+
+/**
+ * Get current ULT/Task execution time. The execution time is the elapsed
+ * time since current ULT/Task was scheduled last time.
+ *
+ * \param[out]	msecs		executed time in milli-second
+ * \param[in]	ult_name	ULT name (optional)
+ *
+ * \retval			-DER_NOSYS or 0 on success.
+ */
+int sched_exec_time(uint64_t *msecs, const char *ult_name);
+
 static inline bool
 dss_ult_exiting(struct sched_request *req)
 {
@@ -415,6 +433,11 @@ struct dss_module_metrics {
 	 */
 	void	*(*dmm_init)(const char *path, int tgt_id);
 	void	 (*dmm_fini)(void *data);
+
+	/**
+	 * Get the number of metrics allocated by this module in total (including all targets).
+	 */
+	int	 (*dmm_nr_metrics)(void);
 };
 
 /**
@@ -479,8 +502,10 @@ enum dss_xs_type {
 	DSS_XS_OFFLOAD	= 2,
 	/** pool service, RDB, drpc handler */
 	DSS_XS_SYS	= 3,
+	/** SWIM operations */
+	DSS_XS_SWIM	= 4,
 	/** drpc listener */
-	DSS_XS_DRPC	= 4,
+	DSS_XS_DRPC	= 5,
 };
 
 int dss_parameters_set(unsigned int key_id, uint64_t value);
@@ -594,6 +619,7 @@ struct dss_module *dss_module_get(int mod_id);
 void dss_module_fini_metrics(enum dss_module_tag tag, void **metrics);
 int dss_module_init_metrics(enum dss_module_tag tag, void **metrics,
 			    const char *path, int tgt_id);
+int dss_module_nr_pool_metrics(void);
 
 /* Convert Argobots errno to DAOS ones. */
 static inline int

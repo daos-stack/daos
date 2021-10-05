@@ -17,8 +17,8 @@ def scons():
 
     tenv = env.Clone(LIBS=[])
 
-    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm'])
-    prereqs.require(tenv, 'mercury')
+    tenv.AppendUnique(LIBS=['cart', 'gurt', 'pthread', 'm', 'daos', 'daos_common'])
+    prereqs.require(tenv, 'mercury', 'protobufc')
     tenv.AppendUnique(FLAGS='-pthread')
 
     self_test = daos_build.program(tenv, [SELF_TEST, cart_utils_objs])
