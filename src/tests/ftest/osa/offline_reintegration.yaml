@@ -117,3 +117,6 @@ blank_node:
   test_with_blank_node: True
 snapshot:
   test_with_snapshot: True
+pool_capacity:
+  pool_fillup: 90
+  pool_test_oclass: RP_2G8

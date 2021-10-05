@@ -68,9 +68,18 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             self.pool.set_property("reclaim", "disabled")
             test_seq = self.ior_test_sequence[0]
             if data:
+                # if pool_fillup is greater than 0, then
+                # use start_ior_load method from nvme_utils.py.
+                # Otherwise, use the osa_utils.py run_ior_thread
+                # method.
                 if pool_fillup > 0:
+                    self.ior_cmd.dfs_oclass.update(oclass)
+                    self.ior_cmd.dfs_dir_oclass.update(oclass)
+                    self.ior_default_flags = self.ior_w_flags
+                    self.ior_cmd.transfer_size.update(test_seq[2])
+                    self.ior_scm_xfersize = self.ior_cmd.transfer_size.value
                     self.log.info(self.pool.pool_percentage_used())
-                    self.start_ior_load(storage='NVMe', percent=pool_fillup)
+                    self.start_ior_load(storage='SCM', percent=pool_fillup)
                     self.log.info(self.pool.pool_percentage_used())
                 else:
                     self.run_ior_thread("Write", oclass, test_seq)
@@ -166,7 +175,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             self.pool = pool[val]
             if data:
                 if pool_fillup > 0:
-                    self.start_ior_load(storage='NVMe', operation='Read', percent=pool_fillup)
+                    self.start_ior_load(storage='SCM', operation='Read', percent=pool_fillup)
                 else:
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
@@ -311,7 +320,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.run_offline_reintegration_test(1, data=True)
 
     def test_osa_offline_reintegrate_with_less_pool_space(self):
-        """Test ID: DAOS-8057
+        """Test ID: DAOS-7160
         Test Description: Reintegrate rank after taking snapshot.
 
         :avocado: tags=all,daily_regression,hw,medium,ib2
@@ -319,4 +328,6 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=offline_reintegrate_with_less_pool_space
         """
         self.log.info("Offline Reintegration : Test with 10 percent pool space")
-        self.run_offline_reintegration_test(1, data=True, pool_fillup=90)
+        oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
+        pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
+        self.run_offline_reintegration_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)

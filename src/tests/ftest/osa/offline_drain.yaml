@@ -116,3 +116,6 @@ snapshot:
   test_with_snapshot: True
 test_ranks:
   rank_list: ["2","5"]
+pool_capacity:
+  pool_fillup: 90
+  pool_test_oclass: RP_2G8
