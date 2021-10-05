@@ -34,7 +34,7 @@ do {						\
 #define STRING_LEN	10
 
 static char	*fields[NR_IODS]	= {"Owner", "Species", "Sex", "Age"};
-int 		nr_aggr			= 0;
+int		nr_aggr;
 
 
 void
@@ -98,6 +98,7 @@ insert_example_records(void)
 
 		for (j = 0; j < NR_IODS-1; j++) { /** str fields */
 			char **strdata = (char **) data[j];
+
 			printf("%s(akey)=%s%*c", fields[j], strdata[i],
 					  (int) (STRING_LEN-strlen(strdata[i])),
 					  ' ');
@@ -568,10 +569,12 @@ run_pipeline(daos_pipeline_t *pipeline)
 		/** process nr_kds fetched records */
 		for (i = 0; i < nr_kds; i++) {
 			char *dkey = (char *) sgl_keys[i].sg_iovs->iov_buf;
+
 			printf("\tname(dkey)=%s%*c", dkey,
 					(int)(STRING_LEN-strlen(dkey)), ' ');
 			for (j = 0; j < nr_iods-1; j++) {
 				char *akey;
+
 				l = i*nr_iods+j;
 				akey = (char *) sgl_recx[l].sg_iovs->iov_buf;
 				printf("%.*s(akey)=%s%*c",
@@ -581,6 +584,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 					 (int)(STRING_LEN-strlen(akey)), ' ');
 			}
 			int *akey;
+
 			l = i*nr_iods+(nr_iods-1);
 			akey = (int *) sgl_recx[l].sg_iovs->iov_buf;
 			printf("%.*s(akey)=%d\n",
@@ -592,7 +596,8 @@ run_pipeline(daos_pipeline_t *pipeline)
 	printf("\n");
 	for (i = 0; i < nr_aggr; i++) {
 		double *res = (double *) sgl_aggr[i].sg_iovs->iov_buf;
-		printf("  ---result[%u]=%f---\n",i,*res);
+
+		printf("  ---result[%u]=%f---\n", i, *res);
 	}
 	printf("\n");
 
@@ -654,6 +659,7 @@ main(int argc, char **argv)
 	insert_example_records();
 
 	/** init pipeline1 object */
+	nr_aggr = 0;
 	daos_pipeline_init(&pipeline1);
 	/** FILTER "Owner == Benny" */
 	build_pipeline_one(&pipeline1);
@@ -689,7 +695,7 @@ main(int argc, char **argv)
 	nr_aggr = 0;
 
 	/** Freeing used memory */
-	//...
+	/*...*/
 
 	return 0;
 }
