@@ -238,6 +238,9 @@ def start_slurm(args):
         "chown {}. {}".format(args.user, "/var/log/slurm"),
         "mkdir -p /var/spool/slurmd",
         "mkdir -p /var/spool/slurmctld",
+        "mkdir -p /var/spool/slurm/d",
+        "mkdir -p /var/spool/slurm/ctld",
+        "chown {}. {}/ctld".format(args.user, "/var/spool/slurm"),
         "chown {}. {}".format(args.user, "/var/spool/slurmctld"),
         "chmod 775 {}".format("/var/spool/slurmctld"),
         "rm -f /var/spool/slurmctld/clustername"
