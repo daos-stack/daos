@@ -170,6 +170,8 @@ daos_prop_merge(daos_prop_t *old_prop, daos_prop_t *new_prop)
 			D_ASSERT(result_i < result_nr);
 			entry = &result->dpp_entries[result_i];
 			result_i++;
+		} else {
+			daos_prop_entry_free_value(entry);
 		}
 		rc = daos_prop_entry_copy(&new_prop->dpp_entries[i], entry);
 		if (rc != 0)
