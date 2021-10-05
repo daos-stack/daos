@@ -342,7 +342,14 @@ pool_rsvc_client_complete_rpc(struct dc_pool *pool, const crt_endpoint_t *ep,
 	D_MUTEX_UNLOCK(&pool->dp_client_lock);
 	if (rc == RSVC_CLIENT_RECHOOSE ||
 	    (rc == RSVC_CLIENT_PROCEED && daos_rpc_retryable_rc(out->po_rc))) {
-		rc = tse_task_reinit(task);
+		uint64_t delay = 0;
+
+		if (daos_rpc_retryable_rc(out->po_rc) || daos_rpc_retryable_rc(rc_crt)) {
+			D_DEBUG(DF_DSMC, "delay reinit RPC by 1 sec\n");
+			delay = 1e6; /* 1 s */
+		}
+
+		rc = tse_task_reinit_with_delay(task, delay);
 		if (rc != 0)
 			return rc;
 		return RSVC_CLIENT_RECHOOSE;
