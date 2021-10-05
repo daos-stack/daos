@@ -218,7 +218,7 @@ class Test(avocadoTest):
                     except Exception as excpt: # pylint: disable=broad-except
                         skip_process_error("Unable to read commit list: "
                                            "{}".format(excpt))
-                        commits = None
+                        return
                     if commits and vals[1] in commits:
                         # fix is in this code base
                         self.log.info("This test variant is included in the "
@@ -742,7 +742,7 @@ class TestWithServers(TestWithoutServers):
 
             for manager in self.agent_managers:
                 cart_ctl.group_name.value = manager.get_config_value("name")
-                cart_ctl.run()
+                # cart_ctl.run()
         else:
             self.log.info(
                 "Unable to write message to the server log: %d servers groups "

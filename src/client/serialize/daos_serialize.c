@@ -621,7 +621,7 @@ deserialize_props(daos_handle_t poh, hid_t file_id, daos_prop_t **_prop,
 	char			*label = NULL;
 	daos_prop_t		*prop = NULL;
 	struct daos_prop_entry	*entry;
-	daos_handle_t		coh;
+	daos_handle_t		coh = DAOS_HDL_INVAL;
 	daos_cont_info_t	cont_info = {0};
 	int			prop_num = 0;
 	uint32_t		type;
@@ -860,6 +860,8 @@ out:
 	/* close container after checking if label exists in pool */
 	if (close_cont)
 		daos_cont_close(coh, NULL);
+	if (rc != 0 && prop != NULL)
+		daos_prop_free(prop);
 	D_FREE(label);
 	return rc;
 }
@@ -965,6 +967,9 @@ deserialize_attrs(hid_t file_id, uint64_t *_num_attrs,
 	*_buffers = buffers;
 	*_sizes = sizes;
 out:
+	D_FREE(names);
+	D_FREE(buffers);
+	D_FREE(sizes);
 	D_FREE(attr_data);
 	if (dset > 0)
 		H5Dclose(dset);
