@@ -1451,11 +1451,11 @@ err_prop:
 int
 dfs_cont_create(daos_handle_t poh, uuid_t *cuuid, dfs_attr_t *attr, daos_handle_t *coh, dfs_t **dfs)
 {
-	const unsigned char     *uuid = (const unsigned char *) cuuid;
+	const unsigned char     *uuid = (const unsigned char *)cuuid;
 	uuid_t			co_uuid;
 
 	if (!daos_uuid_valid(uuid))
-		return -DER_INVAL;
+		return EINVAL;
 
 	uuid_copy(co_uuid, uuid);
 	return dfs_cont_create_int(poh, cuuid, true, co_uuid, attr, coh, dfs);
@@ -3278,6 +3278,7 @@ dfs_obj_local2global(dfs_t *dfs, dfs_obj_t *obj, d_iov_t *glob)
 	uuid_copy(obj_glob->coh_uuid, coh_uuid);
 	uuid_copy(obj_glob->cont_uuid, cont_uuid);
 	strncpy(obj_glob->name, obj->name, DFS_MAX_NAME + 1);
+	obj_glob->name[DFS_MAX_NAME] = 0;
 	rc = dfs_get_chunk_size(obj, &obj_glob->chunk_size);
 	if (rc)
 		return rc;

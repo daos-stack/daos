@@ -158,18 +158,18 @@ Java_io_daos_DaosClient_daosListContAttrs(JNIEnv *env,
 {
 	daos_handle_t coh;
 	char *buffer = (char *)address;
-	int buffer_size;
+	size_t buffer_size;
 	int rc;
 
-	memcpy(&buffer_size, buffer, 4);
-	buffer += 4;
+	memcpy(&buffer_size, buffer, 8);
+	buffer += 8;
 	memcpy(&coh, &contHandle, sizeof(coh));
 	rc = daos_cont_list_attr(coh, buffer, &buffer_size, NULL);
 	if (rc) {
 		throw_base(env, "Failed to list attributes from container", rc, 0, 0);
 	} else {
-		buffer -= 4;
-		memcpy(buffer, &buffer_size, 4);
+		buffer -= 8;
+		memcpy(buffer, &buffer_size, 8);
 	}
 }
 

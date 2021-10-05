@@ -594,6 +594,21 @@ need_reprobe(vos_iter_type_t type, struct vos_iter_anchors *anchors)
 	return reprobe;
 }
 
+static inline int
+vos_iter_cb(vos_iter_cb_t iter_cb, daos_handle_t ih, vos_iter_entry_t *iter_ent,
+	    vos_iter_type_t type, vos_iter_param_t *param, void *arg, unsigned int *acts)
+{
+	uint64_t	start_seq = vos_sched_seq();
+	int		rc;
+
+	D_ASSERT(iter_cb != NULL);
+	rc = iter_cb(ih, iter_ent, type, param, arg, acts);
+	if (start_seq != vos_sched_seq())
+		*acts |= VOS_ITER_CB_YIELD;
+
+	return rc;
+}
+
 /**
  * Iterate VOS entries (i.e., containers, objects, dkeys, etc.) and call \a
  * cb(\a arg) for each entry.
@@ -674,7 +689,7 @@ probe:
 		skipped = false;
 		if (pre_cb) {
 			acts = 0;
-			rc = pre_cb(ih, &iter_ent, type, param, arg, &acts);
+			rc = vos_iter_cb(pre_cb, ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
 
@@ -745,7 +760,7 @@ probe:
 
 		if (post_cb) {
 			acts = 0;
-			rc = post_cb(ih, &iter_ent, type, param, arg, &acts);
+			rc = vos_iter_cb(post_cb, ih, &iter_ent, type, param, arg, &acts);
 			if (rc != 0)
 				break;
 

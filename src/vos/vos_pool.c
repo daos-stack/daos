@@ -413,12 +413,12 @@ open:
 
 	/* Create a VOS pool handle using ph. */
 	rc = pool_open(ph, pool_df, uuid, flags, poh);
-	if (rc != 0)
-		goto close;
 	ph = NULL;
 
 close:
-	/* Close this local handle, if it hasn't been consumed by pool_open. */
+	/* Close this local handle, if it hasn't been consumed nor already
+	 * been closed by pool_open upon error.
+	 */
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
 	return rc;
@@ -457,8 +457,11 @@ vos_pool_kill(uuid_t uuid)
 		pool->vp_dying = 1;
 		vos_pool_decref(pool); /* -1 for lookup */
 
-		D_ERROR(DF_UUID": Open reference exists, pool deletion is deferred\n",
-			DP_UUID(uuid));
+		D_WARN(DF_UUID": Open reference exists, pool destroy is deferred\n",
+		       DP_UUID(uuid));
+		VOS_NOTIFY_RAS_EVENTF(RAS_POOL_DEFER_DESTROY, RAS_TYPE_INFO, RAS_SEV_WARNING,
+				      NULL, NULL, NULL, NULL, &ukey.uuid, NULL, NULL, NULL, NULL,
+				      "pool:"DF_UUID" destroy is deferred", DP_UUID(uuid));
 		/* Blob destroy will be deferred to last vos_pool ref drop */
 		return -DER_BUSY;
 	}
@@ -617,8 +620,8 @@ vos_register_slabs(struct umem_attr *uma)
 }
 
 /*
- * If successful, this function consumes ph, which the caller shall not close
- * in this case.
+ * If successful, this function consumes ph, and closes it upon any error.
+ * So the caller shall not close ph in any case.
  */
 static int
 pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
@@ -634,6 +637,7 @@ pool_open(PMEMobjpool *ph, struct vos_pool_df *pool_df, uuid_t uuid,
 	rc = pool_alloc(uuid, &pool); /* returned with refcount=1 */
 	if (rc != 0) {
 		D_ERROR("Error allocating pool handle\n");
+		vos_pmemobj_close(ph);
 		return rc;
 	}
 
@@ -799,12 +803,12 @@ vos_pool_open(const char *path, uuid_t uuid, unsigned int flags,
 	}
 
 	rc = pool_open(ph, pool_df, uuid, flags, poh);
-	if (rc != 0)
-		goto out;
 	ph = NULL;
 
 out:
-	/* Close this local handle, if it hasn't been consumed by pool_open. */
+	/* Close this local handle, if it hasn't been consumed nor already
+	 * been closed by pool_open upon error.
+	 */
 	if (ph != NULL)
 		vos_pmemobj_close(ph);
 	return rc;

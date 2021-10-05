@@ -222,12 +222,23 @@ out:
 	if (prop)
 		daos_prop_free(prop);
 	if (rc) {
-		if (daos_handle_is_valid(oh))
-			daos_kv_close(oh, NULL);
-		if (daos_handle_is_valid(coh))
-			daos_cont_close(coh, NULL);
-		if (daos_handle_is_valid(poh))
-			daos_pool_disconnect(poh, NULL);
+		int	rc2;
+
+		if (daos_handle_is_valid(oh)) {
+			rc2 = daos_kv_close(oh, NULL);
+			if (rc2)
+				D_ERROR("daos_kv_close() Failed "DF_RC"\n", DP_RC(rc2));
+		}
+		if (daos_handle_is_valid(coh)) {
+			rc2 = daos_cont_close(coh, NULL);
+			if (rc2)
+				D_ERROR("daos_cont_close() Failed "DF_RC"\n", DP_RC(rc2));
+		}
+		if (daos_handle_is_valid(poh)) {
+			rc2 = daos_pool_disconnect(poh, NULL);
+			if (rc2)
+				D_ERROR("daos_pool_disconnect() Failed "DF_RC"\n", DP_RC(rc2));
+		}
 	}
 
 	/* Populate return list */
