@@ -340,8 +340,12 @@ swim_member_dead(struct swim_context *ctx, swim_id_t from,
 		D_GOTO(out, rc);
 	}
 
-	if (id_state.sms_status == SWIM_MEMBER_INACTIVE)
-		D_GOTO(out, rc = 0);
+	if (id_state.sms_status == SWIM_MEMBER_INACTIVE) {
+		if (ctx->sc_glitch)
+			D_GOTO(update, rc = 0);
+		else
+			D_GOTO(out, rc = 0);
+	}
 
 	if (nr > id_state.sms_incarnation)
 		D_GOTO(update, rc = 0);
@@ -447,7 +451,8 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now,
 			rc = ctx->sc_ops->get_member_state(ctx,
 							   item->si_id,
 							   &id_state);
-			if (rc) { /* this member was removed already */
+			if (rc || (id_state.sms_status != SWIM_MEMBER_SUSPECT)) {
+				/* this member was removed or updated already */
 				TAILQ_REMOVE(&ctx->sc_suspects, item, si_link);
 				D_FREE(item);
 				D_GOTO(next_item, rc = 0);
@@ -480,6 +485,9 @@ swim_member_update_suspected(struct swim_context *ctx, uint64_t now,
 						 id_state.sms_incarnation);
 				D_FREE(item);
 			}
+		} else {
+			if (item->u.si_deadline < ctx->sc_next_event)
+				ctx->sc_next_event = item->u.si_deadline;
 		}
 next_item:
 		item = next;
@@ -524,6 +532,9 @@ swim_ipings_update(struct swim_context *ctx, uint64_t now,
 		if (now > item->u.si_deadline) {
 			TAILQ_REMOVE(&ctx->sc_ipings, item, si_link);
 			TAILQ_INSERT_TAIL(&targets, item, si_link);
+		} else {
+			if (item->u.si_deadline < ctx->sc_next_event)
+				ctx->sc_next_event = item->u.si_deadline;
 		}
 		item = next;
 	}
@@ -823,6 +834,7 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 	now = swim_now_ms();
 	if (timeout > 0)
 		end = now + timeout;
+	ctx->sc_next_event = now + swim_period_get() / 3;
 
 	if (now > ctx->sc_expect_progress_time &&
 	    0  != ctx->sc_expect_progress_time) {
@@ -889,7 +901,12 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				ctx->sc_next_tick_time = now
 							 + swim_period_get();
 				ctx->sc_deadline = now + delay;
+				if (ctx->sc_deadline < ctx->sc_next_event)
+					ctx->sc_next_event = ctx->sc_deadline;
 				ctx_state = SCS_PINGED;
+			} else {
+				if (ctx->sc_next_tick_time < ctx->sc_next_event)
+					ctx->sc_next_event = ctx->sc_next_tick_time;
 			}
 			break;
 		case SCS_PINGED:
@@ -912,6 +929,10 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 					 */
 					ctx_state = SCS_SELECT;
 				}
+				ctx->sc_next_event = now;
+			} else {
+				if (ctx->sc_deadline < ctx->sc_next_event)
+					ctx->sc_next_event = ctx->sc_deadline;
 			}
 			break;
 		case SCS_TIMEDOUT:
@@ -963,6 +984,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				D_GOTO(out, rc = -DER_SHUTDOWN);
 			}
 
+			if (ctx->sc_next_tick_time < ctx->sc_next_event)
+				ctx->sc_next_event = ctx->sc_next_tick_time;
 			ctx_state = SCS_BEGIN;
 			break;
 		}
@@ -979,6 +1002,8 @@ swim_progress(struct swim_context *ctx, int64_t timeout)
 				D_GOTO(out, rc);
 			}
 			send_updates = false;
+		} else if (now + 100 < ctx->sc_next_event) {
+			break;
 		}
 	}
 	rc = (now > end) ? -DER_TIMEDOUT : -DER_CANCELED;
