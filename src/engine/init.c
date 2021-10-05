@@ -576,9 +576,9 @@ server_id_cb(uint32_t *tid, uint64_t *uid)
 static int
 server_init(int argc, char *argv[])
 {
-	uint64_t		 bound;
-	unsigned int		 ctx_nr;
-	int			 rc;
+	uint64_t		bound;
+	unsigned int		ctx_nr;
+	int			rc;
 	struct engine_metrics	*metrics;
 
 	/*
