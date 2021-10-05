@@ -163,6 +163,10 @@ static int data_init(int server, crt_init_options_t *opt)
 	D_DEBUG(DB_ALL, "set the global timeout value as %d second.\n",
 		crt_gdata.cg_timeout);
 
+	crt_gdata.cg_swim_crt_idx = CRT_DEFAULT_PROGRESS_CTX_IDX;
+
+	D_DEBUG(DB_ALL, "SWIM context idx=%d\n", crt_gdata.cg_swim_crt_idx);
+
 	/* Override defaults and environment if option is set */
 	if (opt && opt->cio_use_credits) {
 		credits = opt->cio_ep_credits;
@@ -295,7 +299,8 @@ crt_plugin_fini(void)
 
 	for (i = 0; i < CRT_SRV_CONTEXT_NUM; i++) {
 		D_FREE(crt_plugin_gdata.cpg_prog_cbs[i]);
-		D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
+		if (crt_plugin_gdata.cpg_prog_cbs_old[i])
+			D_FREE(crt_plugin_gdata.cpg_prog_cbs_old[i]);
 	}
 
 	D_FREE(crt_plugin_gdata.cpg_timeout_cbs);
@@ -537,7 +542,6 @@ do_init:
 		D_ASSERT(crt_gdata.cg_opc_map != NULL);
 
 		crt_gdata.cg_inited = 1;
-
 	} else {
 		if (crt_gdata.cg_server == false && server == true) {
 			D_ERROR("CRT initialized as client, cannot set as "
