@@ -5,7 +5,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 800
+timeout: 900
 setup:
   start_servers_once: False
 server_config:
@@ -103,6 +103,7 @@ test_obj_class:
     - RP_3G6
     - RP_4G1
     - S1
+    - EC_2P1G1
 loop_test:
   iterations: 3
 aggregation:

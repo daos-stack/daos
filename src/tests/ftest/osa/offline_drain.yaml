@@ -7,7 +7,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 1100
+timeout: 1200
 setup:
   start_servers_once: False
 server_config:
@@ -106,6 +106,7 @@ test_obj_class:
     - RP_2G8
     - RP_3G6
     - RP_4G1
+    - EC_2P1G1
 aggregation:
   test_with_aggregation: True
 rebuild:
