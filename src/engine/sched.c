@@ -1626,7 +1626,6 @@ sched_exec_time(uint64_t *msecs, const char *ult_name)
 	if (*msecs > sched_unit_runtime_max && ult_name != NULL)
 		D_WARN("ULT:%s executed "DF_U64" msecs\n", ult_name, *msecs);
 	return 0;
-
 }
 
 static void
