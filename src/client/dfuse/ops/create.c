@@ -101,7 +101,6 @@ dfuse_cb_create(fuse_req_t req, struct dfuse_inode_entry *parent,
 	fi_out.fh = (uint64_t)oh;
 
 	strncpy(ie->ie_name, name, NAME_MAX);
-	ie->ie_name[NAME_MAX] = '\0';
 	ie->ie_parent = parent->ie_stat.st_ino;
 	ie->ie_truncated = false;
 	atomic_store_relaxed(&ie->ie_ref, 1);
