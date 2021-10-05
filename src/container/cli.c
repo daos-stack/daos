@@ -2492,12 +2492,15 @@ dc_cont_get_attr(tse_task_t *task)
 	 * name in heap
 	 */
 	D_ALLOC_ARRAY(new_names, args->n);
-	if (!new_names)
+	if (!new_names) {
+		cont_req_cleanup(CLEANUP_RPC, &cb_args);
 		D_GOTO(out, rc = -DER_NOMEM);
+	}
 	rc = tse_task_register_comp_cb(task, free_heap_copy, &new_names,
 				       sizeof(char *));
 	if (rc) {
 		D_FREE(new_names);
+		cont_req_cleanup(CLEANUP_RPC, &cb_args);
 		D_GOTO(out, rc);
 	}
 	for (i = 0 ; i < args->n ; i++) {
@@ -2506,11 +2509,14 @@ dc_cont_get_attr(tse_task_t *task)
 		len = strnlen(args->names[i], DAOS_ATTR_NAME_MAX);
 		in->cagi_key_length += len + 1;
 		D_STRNDUP(new_names[i], args->names[i], len);
-		if (new_names[i] == NULL)
+		if (new_names[i] == NULL) {
+			cont_req_cleanup(CLEANUP_RPC, &cb_args);
 			D_GOTO(out, rc = -DER_NOMEM);
+		}
 		rc = tse_task_register_comp_cb(task, free_heap_copy,
 					       &new_names[i], sizeof(char *));
 		if (rc) {
+			cont_req_cleanup(CLEANUP_RPC, &cb_args);
 			D_FREE(new_names[i]);
 			D_GOTO(out, rc);
 		}

@@ -24,10 +24,10 @@ static __thread bool		ev_thpriv_is_init;
 
 #if !defined(EQ_WITH_CRT)
 
-#define crt_init(a,b,c)			({0;})
-#define crt_finalize()			({0;})
-#define crt_context_create(a, b)	({0;})
-#define crt_context_destroy(a, b)	({0;})
+#define crt_init(a, b, c)			({0; })
+#define crt_finalize()			({0; })
+#define crt_context_create(a, b)	({0; })
+#define crt_context_destroy(a, b)	({0; })
 #define crt_progress_cond(ctx, timeout, cb, args)	\
 ({							\
 	int __rc = cb(args);				\
@@ -619,9 +619,10 @@ daos_eq_create(daos_handle_t *eqh)
 	eqx = daos_eq2eqx(eq);
 
 	rc = crt_context_create(&eqx->eqx_ctx);
-	if (rc) {
-		D_WARN("Failed to create CART context; using the global one "
-		       "("DF_RC")\n", DP_RC(rc));
+	if (rc == -DER_NOMEM) {
+		D_GOTO(out, 0);
+	} else if (rc) {
+		D_WARN("Failed to create CART context; using the global one "DF_RC"\n", DP_RC(rc));
 		eqx->eqx_ctx = daos_eq_ctx;
 	}
 
@@ -630,6 +631,7 @@ daos_eq_create(daos_handle_t *eqh)
 
 	rc = tse_sched_init(&eqx->eqx_sched, NULL, eqx->eqx_ctx);
 
+out:
 	daos_eq_putref(eqx);
 	return rc;
 }

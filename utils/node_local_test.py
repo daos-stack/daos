@@ -2496,11 +2496,12 @@ def log_test(conf,
                            fi_signal)
 
     if skip_fi:
-        if not show_memleaks:
-            for wf in wf_list:
-                wf.explain(lto.fi_location,
-                           os.path.basename(filename),
-                           fi_signal)
+        if show_memleaks:
+            if lto.fi_location:
+                for wf in wf_list:
+                    wf.explain(lto.fi_location,
+                               os.path.basename(filename),
+                               fi_signal)
         if not lto.fi_triggered:
             compress_file(filename)
             raise NLTestNoFi
@@ -3129,20 +3130,24 @@ class AllocFailTestRun():
     def start(self):
         """Start the command"""
         fc = {}
+
+        fc['fault_config'] = [{'id': 100,
+                               'probability_x': 1,
+                               'probability_y': 1}]
+
         if self.loc:
-            fc['fault_config'] = [{'id': 0,
-                                   'probability_x': 1,
-                                   'probability_y': 1,
-                                   'interval': self.loc,
-                                   'max_faults': 1}]
+            fc['fault_config'].append({'id': 0,
+                                       'probability_x': 1,
+                                       'probability_y': 1,
+                                       'interval': self.loc,
+                                       'max_faults': 1})
 
-            self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_',
-                                                        suffix='.yaml')
+        self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_', suffix='.yaml')
 
-            self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
-            self._fi_file.flush()
+        self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
+        self._fi_file.flush()
 
-            self.env['D_FI_CONFIG'] = self._fi_file.name
+        self.env['D_FI_CONFIG'] = self._fi_file.name
 
         if self.vh:
             exec_cmd = self.vh.get_cmd_prefix()
@@ -3197,12 +3202,16 @@ class AllocFailTestRun():
             fi_signal = -rc
 
         try:
+            if self.loc:
+                wf = self.aft.wf
+            else:
+                wf = None
             self.fi_loc = log_test(self.aft.conf,
                                    self.log_file,
                                    show_memleaks=show_memleaks,
                                    quiet=True,
                                    skip_fi=True,
-                                   leak_wf=self.aft.wf,
+                                   leak_wf=wf,
                                    fi_signal=fi_signal)
             self.fault_injected = True
             assert self.fi_loc
@@ -3408,6 +3417,30 @@ class AllocFailTest():
 
         return aftf
 
+def test_dfuse_start(server, conf, wf):
+
+    pool = server.get_test_pool()
+
+    container = create_cont(conf, pool, ctype='POSIX')
+
+    mount_point = os.path.join(conf.dfuse_parent_dir, 'fi-mount')
+
+    os.mkdir(mount_point)
+
+    cmd = [os.path.join(conf['PREFIX'], 'bin', 'dfuse'),
+           '--mountpoint', mount_point,
+           '--pool', pool, '--cont', container, '--foreground', '--singlethread']
+
+    test_cmd = AllocFailTest(conf, 'dfuse', cmd)
+    test_cmd.wf = wf
+    test_cmd.check_daos_stderr = True
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = True
+
+    rc = test_cmd.launch()
+    os.rmdir(mount_point)
+    return rc
+
 def test_alloc_fail_copy(server, conf, wf):
     """Run container (filesystem) copy under fault injection.
 
@@ -3532,6 +3565,10 @@ def test_fi_get_attr(server, conf, wf):
     test_cmd = AllocFailTest(conf, 'cont-get-attr', cmd)
     test_cmd.wf = wf
 
+    test_cmd.check_daos_stderr = True
+    test_cmd.check_post_stdout = False
+    test_cmd.check_stderr = True
+
     rc = test_cmd.launch()
     destroy_container(conf, pool, container)
     return rc
@@ -3641,6 +3678,10 @@ def run(wf, args):
             # so can be performed in parallel.
 
             wf_client = WarningsFactory('nlt-client-leaks.json')
+
+            # dfuse startup, uses custom fault to force exit if no other faults injected.
+            fatal_errors.add_result(test_dfuse_start(server, conf, wf_client))
+
             # list-container test.
             fatal_errors.add_result(test_alloc_fail(server, conf))
 

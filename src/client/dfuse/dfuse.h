@@ -51,7 +51,7 @@ struct dfuse_projection_info {
 };
 
 /* Launch fuse, and do not return until complete */
-bool
+int
 dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
 		  struct fuse_lowlevel_ops *flo,
 		  struct fuse_args *args);
@@ -253,7 +253,10 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 /* Start a dfuse projection */
 int
-dfuse_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs);
+dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs);
+
+int
+dfuse_fs_stop(struct dfuse_projection_info *fs_handle);
 
 /* Drain and free resources used by a projection */
 int

@@ -655,12 +655,6 @@ err:
 	DFUSE_REPLY_ERR_RAW(fs_handle, req, rc);
 }
 
-static void
-dfuse_fuse_destroy(void *userdata)
-{
-	D_FREE(userdata);
-}
-
 /* dfuse ops that are used for accessing dfs mounts */
 struct dfuse_inode_ops dfuse_dfs_ops = {
 	.lookup		= dfuse_cb_lookup,
@@ -726,7 +720,6 @@ struct fuse_lowlevel_ops
 	fuse_ops->init = dfuse_fuse_init;
 	fuse_ops->forget = dfuse_cb_forget;
 	fuse_ops->forget_multi = dfuse_cb_forget_multi;
-	fuse_ops->destroy = dfuse_fuse_destroy;
 
 	/* Ops that do not support per-inode indirection
 	 *

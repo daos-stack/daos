@@ -390,6 +390,11 @@ class LogTest():
                             # than daos, so allow ENOMEM as well as
                             # -DER_NOMEM
                             show = False
+                        elif line.get_msg().endswith(': 12 (Cannot allocate memory)'):
+                            # dfs and dfuse use system error numbers, rather
+                            # than daos, so allow ENOMEM as well as
+                            # -DER_NOMEM
+                            show = False
                     elif line.rpc:
                         # Ignore the SWIM RPC opcode, as this often sends RPCs
                         # that fail during shutdown.
@@ -552,16 +557,15 @@ class LogTest():
             for (_, line) in list(regions.items()):
                 pointer = line.get_field(-1).rstrip('.')
                 if pointer in active_desc:
-                    show_line(line, 'NORMAL', 'descriptor not freed')
+                    show_line(line, 'NORMAL', 'descriptor not freed', custom=leak_wf)
                     del active_desc[pointer]
                 else:
-                    show_line(line, 'NORMAL', 'memory not freed',
-                              custom=leak_wf)
+                    show_line(line, 'NORMAL', 'memory not freed', custom=leak_wf)
                 lost_memory = True
 
         if active_desc:
             for (_, line) in list(active_desc.items()):
-                show_line(line, 'NORMAL', 'desc not deregistered')
+                show_line(line, 'NORMAL', 'desc not deregistered', custom=leak_wf)
             raise ActiveDescriptors()
 
         if active_rpcs:

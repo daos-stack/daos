@@ -539,7 +539,7 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		/** On success, parse the attribute */
 		rc = duns_parse_attr(&str[0], s, attr);
 		if (rc) {
-			D_ERROR("Invalid xattr format\n");
+			D_ERROR("Invalid xattr format: %d\n", rc);
 			D_GOTO(out, rc);
 		}
 		/** if the xattr parsing succeeds, break */

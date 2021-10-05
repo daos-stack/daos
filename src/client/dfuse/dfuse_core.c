@@ -266,6 +266,8 @@ _ph_free(struct dfuse_pool *dfp)
 
 	if (daos_handle_is_valid(dfp->dfp_poh)) {
 		rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
+		if (rc == -DER_NOMEM)
+			rc = daos_pool_disconnect(dfp->dfp_poh, NULL);
 		if (rc != -DER_SUCCESS)
 			DFUSE_TRA_ERROR(dfp,
 					"daos_pool_disconnect() failed: "DF_RC,
@@ -355,13 +357,13 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 
 		rc = dfs_umount(dfc->dfs_ns);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "dfs_umount() failed, "DF_RC,
-					DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "dfs_umount() failed");
 
 		rc = daos_cont_close(dfc->dfs_coh, NULL);
+		if (rc == -DER_NOMEM)
+			rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "dfs_cont_close() failed, "DF_RC,
-					DP_RC(rc));
+			DFUSE_TRA_ERROR(dfc, "daos_cont_close() failed, "DF_RC, DP_RC(rc));
 	}
 
 	d_hash_rec_decref(&fs_handle->dpi_pool_table, &dfc->dfs_dfp->dfp_entry);
@@ -877,9 +879,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		rc = dfs_mount(dfp->dfp_poh, dfc->dfs_coh, O_RDWR,
 			       &dfc->dfs_ns);
 		if (rc) {
-			DFUSE_TRA_ERROR(dfc,
-					"dfs_mount() failed: (%s)",
-					strerror(rc));
+			DFUSE_TRA_ERROR(dfc, "dfs_mount() failed: %d (%s)", rc, strerror(rc));
 			D_GOTO(err_close, rc);
 		}
 
@@ -894,7 +894,7 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 				dfuse_set_default_cont_cache_values(dfc);
 				rc = 0;
 			} else if (rc != 0) {
-				D_GOTO(err_close, rc);
+				D_GOTO(err_umount, rc);
 			}
 		} else {
 			DFUSE_TRA_INFO(dfc,
@@ -937,7 +937,8 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 	*_dfc = dfc;
 
 	return rc;
-
+err_umount:
+	dfs_umount(dfc->dfs_ns);
 err_close:
 	daos_cont_close(dfc->dfs_coh, NULL);
 err_free:
@@ -1013,6 +1014,8 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 
 	if (ie->ie_obj) {
 		rc = dfs_release(ie->ie_obj);
+		if (rc == ENOMEM)
+			rc = dfs_release(ie->ie_obj);
 		if (rc) {
 			DFUSE_TRA_ERROR(ie, "dfs_release() failed: (%s)",
 					strerror(rc));
@@ -1034,8 +1037,8 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 }
 
 int
-dfuse_start(struct dfuse_projection_info *fs_handle,
-	    struct dfuse_cont *dfs)
+dfuse_fs_start(struct dfuse_projection_info *fs_handle,
+	       struct dfuse_cont *dfs)
 {
 	struct fuse_args		args = {0};
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
@@ -1093,8 +1096,8 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
 				NULL, NULL);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: (%s)",
-					strerror(rc));
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)",
+					rc, strerror(rc));
 			D_GOTO(err, rc = daos_errno2der(rc));
 		}
 	}
@@ -1113,19 +1116,15 @@ dfuse_start(struct dfuse_projection_info *fs_handle,
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);
 	if (rc != 0)
-		D_GOTO(err_ie_remove, 0);
+		D_GOTO(err_ie_remove, rc = daos_errno2der(rc));
 
 	pthread_setname_np(fs_handle->dpi_thread, "dfuse_progress");
 
 	rc = dfuse_launch_fuse(fs_handle, fuse_ops, &args);
+	fuse_opt_free_args(&args);
 	D_FREE(fuse_ops);
-	if (!rc) {
-		(void)dfuse_fs_fini(fs_handle);
-		DFUSE_TRA_ERROR(fs_handle, "Unable to register FUSE fs");
-		return -DER_INVAL;
-	}
-
-	return -DER_SUCCESS;
+	if (rc == -DER_SUCCESS)
+		return rc;
 
 err_ie_remove:
 	d_hash_rec_delete_at(&fs_handle->dpi_iet, &ie->ie_htl);
@@ -1229,15 +1228,16 @@ dfuse_pool_close_cb(d_list_t *rlink, void *handle)
 	return 0;
 }
 
-/* Called once per projection, after the FUSE filesystem has been torn down */
+/* Called as part of shutdown, if the startup was successful.  Releases resources created during
+ * operation.
+ */
 int
-dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
+dfuse_fs_stop(struct dfuse_projection_info *fs_handle)
 {
 	d_list_t	*rlink;
 	uint64_t	refs = 0;
 	int		handles = 0;
 	int		rc;
-	int		rcp = 0;
 
 	DFUSE_TRA_INFO(fs_handle, "Flushing inode table");
 
@@ -1273,34 +1273,42 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 		handles++;
 	} while (rlink);
 
-	if (handles && rc != -DER_SUCCESS && rc != -DER_NO_HDL) {
-		DFUSE_TRA_WARNING(fs_handle, "dropped %lu refs on %u inodes",
-				  refs, handles);
-	} else {
-		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes",
-			       refs, handles);
-	}
+	if (handles && rc != -DER_SUCCESS && rc != -DER_NO_HDL)
+		DFUSE_TRA_WARNING(fs_handle, "dropped %lu refs on %u inodes", refs, handles);
+	else
+		DFUSE_TRA_INFO(fs_handle, "dropped %lu refs on %u inodes", refs, handles);
 
-	rc = daos_eq_destroy(fs_handle->dpi_eq, 0);
-	if (rc) {
+	d_hash_table_traverse(&fs_handle->dpi_pool_table, dfuse_pool_close_cb, NULL);
+
+	return 0;
+}
+
+/* Called as part of shutdown, after fs_stop(), and regardless of if dfuse started or not.
+ * Releases core resources.
+ */
+int
+dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
+{
+	int	rc;
+	int	rc2 = -DER_SUCCESS;
+
+	rc2 = daos_eq_destroy(fs_handle->dpi_eq, 0);
+	if (rc2)
 		DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
-		rcp = EINVAL;
-	}
 
 	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
-		rcp = EINVAL;
+		if (rc2 == -DER_SUCCESS)
+			rc2 = rc;
 	}
-
-	d_hash_table_traverse(&fs_handle->dpi_pool_table,
-			      dfuse_pool_close_cb, NULL);
 
 	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_pool_table, false);
 	if (rc) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close pools");
-		rcp = EINVAL;
+		if (rc2 == -DER_SUCCESS)
+			rc2 = rc;
 	}
 
-	return rcp;
+	return rc2;
 }
