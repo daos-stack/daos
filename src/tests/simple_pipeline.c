@@ -331,7 +331,7 @@ build_pipeline_two(daos_pipeline_t *pipeline)
 	andfunc_ft->data_offset   = 0;
 	andfunc_ft->data_len      = 0;
 
-	/** 
+	/**
 	 * building a pipeline condition filter:
 	 *    the order of operands is prefix:
 	 *         "Owner == Benny AND Species == dog"  ->
@@ -534,7 +534,7 @@ run_pipeline(daos_pipeline_t *pipeline)
 		sgl_keys[i].sg_nr_out	= 0;
 		sgl_keys[i].sg_iovs	= &iovs_keys[i];
 		d_iov_set(&iovs_keys[i], &(buf_keys[i*STRING_LEN]), STRING_LEN);
-	}	
+	}
 
 	/** sgl_recx: to store the retrieved data for the akeys of each dkey */
 	sgl_recx	= malloc(sizeof(d_sg_list_t)*nr_kds*nr_iods);
