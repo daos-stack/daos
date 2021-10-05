@@ -509,9 +509,8 @@ punch_log:
 }
 
 int
-vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
-		   const daos_epoch_range_t *epr,
-		   bool discard, const struct vos_punch_record *parent_punch,
+vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog, const daos_epoch_range_t *epr,
+		   bool discard, bool uncommitted_only, const struct vos_punch_record *parent_punch,
 		   struct vos_ilog_info *info)
 {
 	struct vos_container	*cont = vos_hdl2cont(coh);
@@ -526,7 +525,7 @@ vos_ilog_aggregate(daos_handle_t coh, struct ilog_df *ilog,
 	vos_ilog_desc_cbs_init(&cbs, coh);
 	D_DEBUG(DB_TRACE, "log="DF_X64"\n", umem_ptr2off(umm, ilog));
 
-	rc = ilog_aggregate(umm, ilog, &cbs, epr, discard, punch_rec.pr_epc,
+	rc = ilog_aggregate(umm, ilog, &cbs, epr, discard, uncommitted_only, punch_rec.pr_epc,
 			    punch_rec.pr_minor_epc, &info->ii_entries);
 
 	if (rc != 0)
