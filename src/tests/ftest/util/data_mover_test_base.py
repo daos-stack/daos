@@ -167,6 +167,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # cleanup local paths
         if self.posix_local_test_paths:
+            print("deleting LOCAL paths\n")
             command = "rm -rf {}".format(self._get_posix_test_path_string())
             try:
                 self._execute_command(command)
@@ -175,6 +176,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # cleanup shared paths (only runs on one node in job)
         if self.posix_shared_test_paths:
+            print("deleting SHARED paths\n")
             command = "rm -rf {}".format(self._get_posix_test_path_string(path=self.posix_shared_test_paths))
             try:
 	        # only call rm on one client since this is cleaning up shared dir
@@ -271,8 +273,10 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # Add to the list of posix paths
         if shared:
+            print("adding SHARED paths\n")
             self.posix_shared_test_paths.append(path)
         else:
+            print("adding LOCAL paths\n")
             self.posix_local_test_paths.append(path)
 
         if create:

@@ -77,7 +77,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
         # behaves similar to "cp"
         if 'DAOS_TEST_SHARED_DIR' in os.environ:
             shared_dir = os.environ['DAOS_TEST_SHARED_DIR'].rstrip("/")
-            posix_path = self.new_posix_test_path(create=True, parent=shared_dir)
+            posix_path = self.new_posix_test_path(shared=True, parent=shared_dir)
             #posix_path = TemporaryDirectory(shared_dir)
         #posix_path = self.dfuse.mount_dir.value.rstrip("/")
 
