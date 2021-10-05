@@ -457,10 +457,8 @@ duns_resolve_path(const char *path, struct duns_attr_t *attr)
 		int		rc2;
 
 		D_STRNDUP(dir, path, PATH_MAX);
-		if (dir == NULL) {
-			D_ERROR("Failed to copy path\n");
+		if (dir == NULL)
 			return ENOMEM;
-		}
 
 		dirp = dirname(dir);
 		/* need to statfs() at the directory level to catch the
