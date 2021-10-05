@@ -1,6 +1,7 @@
 {
     "variables": {
-        "DAOS_VERSION": "1.2.0"
+        "DAOS_VERSION": "1.2.0",
+        "IO500_INSTALL_DIR": "/usr/local"
     },
     "builders": [
     {
@@ -36,6 +37,18 @@
       "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
       "environment_vars": "DAOS_VERSION={{user `DAOS_VERSION`}}",
       "script": "./scripts/install-client.sh"
+    },
+    {
+      "type": "shell",
+      "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
+      "environment_vars": "IO500_INSTALL_DIR={{user `IO500_INSTALL_DIR`}}",
+      "script": "./scripts/mfu_install.sh"
+    },
+    {
+      "type": "shell",
+      "execute_command": "echo 'packer' | sudo -S env {{ .Vars }} {{ .Path }}",
+      "environment_vars": "IO500_INSTALL_DIR={{user `IO500_INSTALL_DIR`}}",
+      "script": "./scripts/io500_install.sh"
     }
   ]
 }

@@ -1,0 +1,19 @@
+# Local .terraform directories
+**/.terraform/
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Ignore Terraform lock files
+.terraform.lock.hcl
+
+# Ignore Terraform plan file
+tfplan
+
+# Ignore other files
+id_rsa*
+hosts
+*.flag
+keys.txt
