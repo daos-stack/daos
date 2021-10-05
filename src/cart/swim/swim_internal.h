@@ -102,7 +102,6 @@ struct swim_context {
 	uint64_t		 sc_expect_progress_time;
 	uint64_t		 sc_last_success_time;
 	uint64_t		 sc_next_tick_time;
-	uint64_t		 sc_next_event;
 	uint64_t		 sc_deadline;
 
 	uint64_t		 sc_piggyback_tx_max;

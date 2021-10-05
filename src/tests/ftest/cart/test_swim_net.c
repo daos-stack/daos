@@ -275,7 +275,7 @@ static void *srv_progress(void *data)
 	return NULL;
 }
 
-static int64_t swim_progress_cb(crt_context_t ctx, int64_t timeout, void *arg)
+static void swim_progress_cb(crt_context_t ctx, void *arg)
 {
 	struct swim_global_srv *srv = arg;
 	swim_id_t self_id = swim_self_get(srv->swim_ctx);
@@ -293,7 +293,6 @@ static int64_t swim_progress_cb(crt_context_t ctx, int64_t timeout, void *arg)
 		D_ERROR("swim_progress() failed rc=%d\n", rc);
 out:
 	dbg("<---%s---", __func__);
-	return timeout;
 }
 
 static void srv_fini(void)
