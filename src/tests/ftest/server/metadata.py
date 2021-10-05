@@ -6,36 +6,32 @@
 """
 import traceback
 import uuid
-import threading
-import queue
 
 from avocado.core.exceptions import TestFail
 
 from apricot import TestWithServers
 from ior_utils import IorCommand
 from command_utils_base import CommandFailure
+from thread_manager import ThreadManager
 
 
-def ior_runner_thread(manager, uuids, results):
-    """IOR run thread method.
+def run_ior_loop(manager, uuids):
+    """IOR run for each UUID provided.
 
     Args:
         manager (str): mpi job manager command
-        uuids (list): [description]
-        results (queue): queue for returning thread results
+        uuids (list): list of container UUIDs
     """
+    errors = []
     for index, cont_uuid in enumerate(uuids):
         manager.job.dfs_cont.update(cont_uuid, "ior.cont_uuid")
         try:
             manager.run()
         except CommandFailure as error:
-            print(
-                "--- FAIL --- Thread-{0} Failed to run IOR {1}: "
-                "Exception {2}".format(
-                    index,
-                    "read" if "-r" in manager.job.flags.value else "write",
-                    str(error)))
-            results.put("FAIL")
+            errors.append("IOR Loop {}/{} failed: {}".format(index, len(uuids), error))
+    if errors:
+        raise CommandFailure(
+            "IOR failed in {}/{} loops: {}".format(len(errors), len(uuids), "\n".join(errors)))
 
 
 class ObjectMetadata(TestWithServers):
@@ -52,11 +48,6 @@ class ObjectMetadata(TestWithServers):
 
     # Number of created containers that should not be possible
     CREATED_CONTAINERS_LIMIT = 3500
-
-    def __init__(self, *args, **kwargs):
-        """Initialize a ObjectMetadata object."""
-        super().__init__(*args, **kwargs)
-        self.out_queue = None
 
     def create_pool(self):
         """Create a pool and display the svc ranks."""
@@ -160,30 +151,6 @@ class ObjectMetadata(TestWithServers):
                 self.log.error("  %s", error)
         self.container = []
         return len(errors) == 0
-
-    def thread_control(self, threads, operation):
-        """Start threads and wait until all threads are finished.
-
-        Args:
-            threads (list): list of threads to execute
-            operation (str): IOR operation, e.g. "read" or "write"
-
-        Returns:
-            str: "PASS" if all threads completed successfully; "FAIL" otherwise
-
-        """
-        self.create_pool()
-        self.d_log.debug("IOR {0} Threads Started -----".format(operation))
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
-
-        while not self.out_queue.empty():
-            if self.out_queue.get() == "FAIL":
-                return "FAIL"
-        self.d_log.debug("IOR {0} Threads Finished -----".format(operation))
-        return "PASS"
 
     def test_metadata_fillup(self):
         """JIRA ID: DAOS-1512.
@@ -357,13 +324,15 @@ class ObjectMetadata(TestWithServers):
         self.create_pool()
         files_per_thread = 400
         total_ior_threads = 5
-        self.out_queue = queue.Queue()
 
         processes = self.params.get("slots", "/run/ior/clientslots/*")
 
         list_of_uuid_lists = [
             [str(uuid.uuid4()) for _ in range(files_per_thread)]
             for _ in range(total_ior_threads)]
+
+        # Setup the thread manager
+        thread_manager = ThreadManager(self.run_ior_loop, self.timeout - 30)
 
         # Setup the orterun command used to run the ior command
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
@@ -373,7 +342,6 @@ class ObjectMetadata(TestWithServers):
         # servers, and then run IOR to read the data
         for operation in ("write", "read"):
             # Create the IOR threads
-            threads = []
             for index in range(total_ior_threads):
                 # Define the arguments for the ior_runner_thread method
                 ior_cmd = IorCommand()
@@ -387,20 +355,15 @@ class ObjectMetadata(TestWithServers):
                 self.job_manager.assign_environment(env)
 
                 # Add a thread for these IOR arguments
-                threads.append(
-                    threading.Thread(
-                        target=ior_runner_thread,
-                        kwargs={
-                            "manager": self.job_manager,
-                            "uuids": list_of_uuid_lists[index],
-                            "results": self.out_queue}))
-
+                thread_manager.add(manager=self.job_manager, uuids=list_of_uuid_lists[index])
                 self.log.info(
                     "Created %s thread %s with container uuids %s", operation,
                     index, list_of_uuid_lists[index])
 
             # Launch the IOR threads
-            if self.thread_control(threads, operation) == "FAIL":
+            self.log.info("Launching %d IOR %s threads", len(threads), operation)
+            results = thread_manager.run()
+            if len(results["FAIL"]) > 0:
                 self.d_log.error("IOR {} Thread FAIL".format(operation))
                 self.fail("IOR {} Thread FAIL".format(operation))
 
