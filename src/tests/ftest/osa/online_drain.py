@@ -73,7 +73,7 @@ class OSAOnlineDrain(OSAUtils):
                     self.run_ior_thread("Write", oclass, test_seq,
                                         pool=self.pool[val])
                 self.delete_extra_container(self.pool[val])
-            # The following thread runs while performing osa operations.
+            # The following thread runs while performing osa operations
             if app_name == "ior":
                 threads.append(threading.Thread(target=self.run_ior_thread,
                                                 kwargs={"action": "Write",
@@ -89,7 +89,7 @@ class OSAOnlineDrain(OSAUtils):
                 self.log.info("Thread : %s", thrd)
                 thrd.start()
                 time.sleep(1)
-            # Wait the threads to write some data before drain.
+            # Wait the threads to write some data before drain
             time.sleep(5)
             self.pool[val].display_pool_daos_space("Pool space: Beginning")
             pver_begin = self.get_pool_version()
