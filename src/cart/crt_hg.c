@@ -76,7 +76,7 @@ crt_hg_parse_uri(const char *uri, enum crt_na_type *prov, char *addr)
 	 * Addresses have a form of "provider://[address]
 	 * For auto_sm feature address will be "provider://[address] na+sm://[sm_addr]"
 	 * We only care about parsing out main provider address for now
-	 * */
+	 */
 	provider_str = strtok_r(copy_uri, "://", &track);
 	if (!provider_str) {
 		D_ERROR("Failed to parse provider string from uri=%s\n", uri);

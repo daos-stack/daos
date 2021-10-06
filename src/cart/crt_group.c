@@ -278,7 +278,7 @@ static int
 generate_cxi_uris(int prov_type, char *addr, int tag, struct crt_uri_item *ui)
 {
 	char		tmp_addr[CRT_ADDR_STR_MAX_LEN];
-	int		i,k;
+	int		i, k;
 	uint32_t	raw_addr;
 	uint32_t	raw_tag0_addr;
 	int		rc = 0;
@@ -323,7 +323,7 @@ generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri
 	char	tmp_addr[CRT_ADDR_STR_MAX_LEN];
 	int	base_port;
 	char	*p;
-	int	i,k;
+	int	i, k;
 	char	*prov_name;
 	int	rc = 0;
 
@@ -331,7 +331,6 @@ generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri
 
 	 /*
 	 * Port-based providers have form of string:port
-	 *
 	 * Parse both parts out
 	 */
 	p = strrchr(tmp_addr, ':');
