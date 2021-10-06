@@ -9,7 +9,7 @@ hosts:
     - client-F
     - client-G
     - client-H
-timeout: 1600 
+timeout: 1600
 server_config:
   name: daos_server
   servers:
@@ -38,12 +38,12 @@ mdtest:
   manager: "MPICH"
   mux_dataset: !mux
     many_files:                # total 15K files for dcp
-      num_of_files_dirs: 500 
+      num_of_files_dirs: 500
       mdtest_flags:
         - "-F -C"
         - "-F -E"
     many_files_and_dirs:       # total 15K files and 15K dirs for dcp
-      num_of_files_dirs: 500 
+      num_of_files_dirs: 500
       mdtest_flags:
         - "-C"
         - "-E"

@@ -13,7 +13,6 @@ from mdtest_test_base import MdtestBase
 from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
 from data_mover_utils import DserializeCommand, DdeserializeCommand
 from data_mover_utils import format_daos_path, uuid_from_obj
-import os
 from os.path import join
 import uuid
 import re
@@ -135,12 +134,11 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of error strings to report at the end of tearDown().
 
         """
-        """ doesn't append to error list because it would report an error if all
-	 processes completed successfully (nothing to stop), but this call is
-	 necessary in the case that mpi processes are ran across multiple nodes
-	 and a timeout occurs. If this happens then cleanup on shared posix
-	 directories causes errors (because an MPI process might still have it open)
-        """
+        # doesn't append to error list because it reports an error if all
+        # processes completed successfully (nothing to stop), but this call is
+        # necessary in the case that mpi processes are ran across multiple nodes
+        # and a timeout occurs. If this happens then cleanup on shared posix
+        # directories causes errors (because an MPI process might still have it open)
         error_list = []
 
         if self.job_manager:
@@ -218,16 +216,8 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of quoted posix test path strings
 
         """
-<<<<<<< HEAD
-        # default
-        if path_list == None:
-            path_list = self.posix_test_paths
-
-        return ["'{}'".format(item) for item in path_list]
-=======
         if path_list == None:
             path_list = self.posix_local_test_paths
->>>>>>> run reduced large file test in VM
 
         return ["'{}'".format(item) for item in path_list]
 
@@ -240,11 +230,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """
         return " ".join(self._get_posix_test_path_list(path_list=path))
 
-<<<<<<< HEAD
-    def new_posix_test_path(self, create=True, parent=None, mount_dir=False):
-=======
-    def new_posix_test_path(self, shared=False, create=True, parent=None):
->>>>>>> run reduced large file test in VM
+    def new_posix_test_path(self, shared=False, create=True, parent=None, mount_dir=False):
         """Generate a new, unique posix path.
 
         Args:

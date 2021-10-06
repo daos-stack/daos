@@ -5,9 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 '''
 from data_mover_test_base import DataMoverTestBase
-from os.path import basename
 import os
-from tempfile import TemporaryDirectory
 
 # pylint: disable=too-many-ancestors
 class DmvrPosixLargeFile(DataMoverTestBase):
@@ -75,10 +73,10 @@ class DmvrPosixLargeFile(DataMoverTestBase):
         # dcp treats a trailing slash on the source as /*
         # so strip trailing slash from posix path so dcp
         # behaves similar to "cp"
-        if 'DAOS_TEST_SHARED_DIR' in os.environ:
-            shared_dir = os.environ['DAOS_TEST_SHARED_DIR'].rstrip("/")
-            posix_path = self.new_posix_test_path(shared=True, parent=shared_dir)
-            #posix_path = TemporaryDirectory(shared_dir)
+        #if 'DAOS_TEST_SHARED_DIR' in environ:
+        shared_dir = os.environ['DAOS_TEST_SHARED_DIR'].rstrip("/")
+        posix_path = self.new_posix_test_path(shared=True, parent=shared_dir)
+        #posix_path = TemporaryDirectory(shared_dir)
         #posix_path = self.dfuse.mount_dir.value.rstrip("/")
 
         # copy from daos cont2 to posix file system (dfuse)
@@ -97,7 +95,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
             "DAOS", "/", self.pool[0], self.container[2])
 
         # the result is that a NEW directory is created in the destination
-        daos_path = "/" + basename(posix_path) + self.ior_cmd.test_file.value
+        daos_path = "/" + os.path.basename(posix_path) + self.ior_cmd.test_file.value
 
         # update ior params, read back and verify data from cont2
         self.run_ior_with_params(
