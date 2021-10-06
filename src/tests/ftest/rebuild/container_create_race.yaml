@@ -28,7 +28,7 @@ container:
   akey_size: 4
   dkey_size: 4
   data_size: 64
-  properties: rf:2
+  properties: rf:1
 ior:
   api: DFS
   block_size: 16m
