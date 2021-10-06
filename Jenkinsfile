@@ -352,7 +352,7 @@ pipeline {
                         }
                     }
                     steps {
-                        buildRpm()
+                        buildRpm target: 'el8.3'
                     }
                     post {
                         success {
@@ -817,6 +817,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
+                                       target: 'el8.4',
                                        inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
@@ -856,6 +857,7 @@ pipeline {
                     }
                     steps {
                         functionalTest inst_repos: daosRepos(),
+                                       target: 'leap15.3',
                                        inst_rpms: functionalPackages(1, next_version),
                                        test_function: 'runTestFunctionalV2'
                     }
@@ -897,7 +899,7 @@ pipeline {
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test CentOS 7 RPMs')
-                stage('Test CentOS 8.3.2011 RPMs') {
+                stage('Test CentOS RPMs on 8.3.2011') {
                     when {
                         beforeAgent true
                         expression { ! skipStage() }
@@ -921,7 +923,7 @@ pipeline {
                     }
                     steps {
                         testRpm inst_repos: daosRepos(),
-                                target: 'leap15.3',
+                                target: 'leap15.2',
                                 daos_pkg_version: daosPackagesVersion(next_version)
                    }
                 } // stage('Test Leap 15 RPMs')
