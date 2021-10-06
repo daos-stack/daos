@@ -278,7 +278,7 @@ if "${COMPRESS:-false}"; then
     retries=1
     while [ $retries -gt 0 ]; do
         (( retries-- ))
-        if output=$(dmesg); then
+        if output=$(sudo dmesg 2>&1); then
             if ! grep -q "${check_str}" <<< "${output}" ||
                "${EXCLUDE_ZIP:-false}"; then
                 if ! compress_files "${FILES_TO_PROCESS}"; then
@@ -289,6 +289,7 @@ if "${COMPRESS:-false}"; then
                 echo "VM system detected, skipping compression ..."
             fi
         else
+            dmesg_rc=${PIPESTATUS[0]}
             if ! command -v dmesg; then
                 echo "dmesg not found in $PATH"
                 if ! rpm=$(dnf repoquery -f \*/bin/dmesg); then
@@ -309,7 +310,7 @@ if "${COMPRESS:-false}"; then
                     fi
                 fi
             else
-                echo "Error: unknown dmesg command failure: ${output}, rc=${PIPESTATUS[0]}"
+                echo "Error: unknown dmesg command failure: ${output}, rc=$dmesg_rc"
             fi
             rc=1
         fi
