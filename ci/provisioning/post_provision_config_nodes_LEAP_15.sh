@@ -11,7 +11,7 @@ bootstrap_dnf() {
     grep type= /etc/zypp/repos.d/*.repo
     # shellcheck disable=SC2207
     if broken_files=($(grep -l type=NONE /etc/zypp/repos.d/*.repo)); then
-        sed -i -e '/type=NONE/s/NONE=rpm-md/' "${broken_files[@]}"
+        sed -i -e '/type=NONE/s/NONE/rpm-md/' "${broken_files[@]}"
     fi
 }
 
