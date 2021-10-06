@@ -119,6 +119,8 @@ soak_harassers:
     harasser_to: 600
     # drain rank from all pools before stopping server
     enable_drain: True
+    # continue test if container destroy fails
+    ignore_soak_errors: True
 # Commandline parameters
 # Benchmark and application params
 # IOR params -a DFS and -a MPIIO
