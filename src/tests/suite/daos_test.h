@@ -88,6 +88,7 @@ extern int daos_event_priv_reset(void);
 /* the pool used for daos test suite */
 struct test_pool {
 	d_rank_t		ranks[TEST_RANKS_MAX_NUM];
+	char			pool_str[64];
 	uuid_t			pool_uuid;
 	daos_handle_t		poh;
 	daos_pool_info_t	pool_info;
@@ -129,6 +130,7 @@ typedef struct {
 	struct test_pool	pool;
 	char			*pool_label;
 	uuid_t			co_uuid;
+	char			co_str[64];
 	char			*cont_label;
 	unsigned int		uid;
 	unsigned int		gid;

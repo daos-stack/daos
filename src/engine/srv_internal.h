@@ -35,6 +35,9 @@ struct sched_stats {
 
 struct sched_info {
 	uint64_t		 si_cur_ts;	/* Current timestamp (ms) */
+	uint64_t		 si_cur_seq;	/* Current schedule sequence */
+	uint64_t		 si_ult_start;	/* Start time of last executed unit */
+	void			*si_ult_func;	/* Function addr of last executed unit */
 	struct sched_stats	 si_stats;	/* Sched stats */
 	d_list_t		 si_idle_list;	/* All unused requests */
 	d_list_t		 si_sleep_list;	/* All sleeping requests */
@@ -185,6 +188,7 @@ extern unsigned int sched_stats_intvl;
 extern unsigned int sched_relax_intvl;
 extern unsigned int sched_relax_mode;
 extern unsigned int sched_unit_runtime_max;
+extern bool sched_watchdog_all;
 
 void dss_sched_fini(struct dss_xstream *dx);
 int dss_sched_init(struct dss_xstream *dx);
