@@ -1,0 +1,72 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+  test_clients:
+    - client-E
+    - client-F
+    - client-G
+    - client-H
+timeout: 200
+server_config:
+  name: daos_server
+  servers:
+    bdev_class: nvme
+    bdev_list: ["0000:81:00.0","0000:da:00.0"]
+    scm_class: dcpm
+    scm_list: ["/dev/pmem0"]
+job_manager_class_name: Orterun
+pool_0_0:
+  control_method: dmg
+  name: daos_server
+  scm_size: 1T
+  nvme_size: 1T
+  target_list: [0]
+pool_1_0:
+  control_method: dmg
+  name: daos_server
+  scm_size: 800G
+  nvme_size: 800G
+  target_list: [1]
+pool_1_1:
+  control_method: dmg
+  name: daos_server
+  scm_size: 100G
+  nvme_size: 100G
+  target_list: [1]
+pool_1_2:
+  control_method: dmg
+  name: daos_server
+  scm_size: 300G
+  nvme_size: 300G
+  target_list: [1]
+pool_2_0:
+  control_method: dmg
+  name: daos_server
+  scm_size: 150G
+  nvme_size: 150G
+  target_list: [2, 3]
+pool_3_0:
+  control_method: dmg
+  name: daos_server
+  scm_size: 50G
+  nvme_size: 50G
+  target_list: [0, 1, 2, 3]
+pool_3_1:
+  control_method: dmg
+  name: daos_server
+  scm_size: 60G
+  nvme_size: 60G
+  target_list: [0, 1, 2, 3]
+container:
+  control_method: daos
+  type: POSIX
+ior_0:
+  api: DFS
+  transfer_size: '1M'
+  block_size: '8G'
+  flags: "-v -w -W -r -R -k"
+  repetitions: 1
+  dfs_destroy: False

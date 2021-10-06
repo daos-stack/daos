@@ -4,10 +4,10 @@
 
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
-import agent_utils as agu
 from ClusterShell.NodeSet import NodeSet
 
 from apricot import TestWithServers
+from agent_utils import include_local_host
 from command_utils_base import CommandFailure
 from dfuse_utils import Dfuse
 
@@ -24,11 +24,12 @@ class DfuseTestBase(TestWithServers):
         self.dfuse = None
 
     def setUp(self):
-        """Setup Test Case"""
+        """Set up each test case."""
         super().setUp()
-        # using localhost as client if client list is empty
         if self.hostlist_clients is None:
-            self.hostlist_clients = agu.include_local_host(None)
+            self.hostlist_clients = include_local_host(None)
+        self.dfuse = Dfuse(self.hostlist_clients)
+        self.dfuse.get_params(self)
 
     def stop_job_managers(self):
         """Stop the test job manager followed by dfuse.
@@ -45,7 +46,7 @@ class DfuseTestBase(TestWithServers):
         return error_list
 
     def start_dfuse(self, hosts, pool=None, container=None, mount_dir=None):
-        """Create a DfuseCommand object and use it to start Dfuse.
+        """Create a Dfuse object and use it to start Dfuse.
 
         Args:
             hosts (list): list of hosts on which to start Dfuse
@@ -53,21 +54,11 @@ class DfuseTestBase(TestWithServers):
             container (TestContainer, optional): container to use with Dfuse
             mount_dir (str, optional): updated mount dir name. Defaults to None.
         """
-        self.dfuse = Dfuse(hosts, self.tmp)
-        self.dfuse.get_params(self)
-
-        # Update dfuse params
+        self.dfuse.hosts = hosts
         if mount_dir:
             self.dfuse.mount_dir.update(mount_dir)
-        if pool:
-            self.dfuse.set_dfuse_params(pool)
-        if container:
-            self.dfuse.set_dfuse_cont_param(container)
-        self.dfuse.set_dfuse_exports(self.server_managers[0], self.client_log)
-
         try:
-            # Start dfuse
-            self.dfuse.run()
+            self.dfuse.start(self.server_managers[0], self.client_log, pool, container)
         except CommandFailure as error:
             self.log.error(
                 "Dfuse command %s failed on hosts %s", str(self.dfuse),
@@ -76,6 +67,5 @@ class DfuseTestBase(TestWithServers):
 
     def stop_dfuse(self):
         """Stop Dfuse and unset the DfuseCommand object."""
-        if self.dfuse:
+        if self.dfuse.started:
             self.dfuse.stop()
-            self.dfuse = None
