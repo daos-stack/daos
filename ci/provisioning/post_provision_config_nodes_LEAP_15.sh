@@ -7,6 +7,12 @@ EXCLUDE_UPGRADE=fuse,fuse-libs,fuse-devel,mercury,daos,daos-\*
 bootstrap_dnf() {
     rm -rf "$REPOS_DIR"
     ln -s ../zypp/repos.d "$REPOS_DIR"
+
+    grep type= /etc/zypp/repos.d/*.repo
+    # shellcheck disable=SC2207
+    if broken_files=($(grep -l type=NONE /etc/zypp/repos.d/*.repo)); then
+        sed -i -e '/type=NONE/s/NONE=rpm-md/' "${broken_files[@]}"
+    fi
 }
 
 group_repo_post() {
@@ -30,12 +36,6 @@ distro_custom() {
     python3 -m pip install "avocado-framework<70.0"
     python3 -m pip install "avocado-framework-plugin-result-html<70.0"
     python3 -m pip install "avocado-framework-plugin-varianter-yaml-to-mux<70.0"
-
-    grep type= /etc/zypp/repos.d/*.repo
-    # shellcheck disable=SC2207
-    if broken_files=($(grep -l type=NONE /etc/zypp/repos.d/*.repo)); then
-        sed -i -e '/type=NONE/s/NONE=rpm-md/' "${broken_files[@]}"
-    fi
 }
 
 post_provision_config_nodes() {
