@@ -242,17 +242,19 @@ class DmvrNegativeTest(DataMoverTestBase):
             "POSIX", "/fake/fake/fake",
             expected_rc=1)
 
-    @skipForTicket("DAOS-6871")
     def test_dm_negative_space_dcp(self):
         """Jira ID: DAOS-5515
         Test Description:
             DAOS-5515: destination pool does not have enough space.
             DAOS-6387: posix filesystem does not have enough space.
         :avocado: tags=all,full_regression
-        :avocado: tags=datamover,dcp,dfuse
+        :avocado: tags=datamover,dcp
         :avocado: tags=dm_negative,dm_negative_space_dcp
         """
         self.set_tool("DCP")
+
+        # mount small tmpfs filesystem on posix path, using size required sudo
+        dst_posix_path = self.new_posix_test_path(mount_dir=True)
 
         # Create a large test file in POSIX
         block_size_large = self.params.get(
@@ -272,18 +274,11 @@ class DmvrNegativeTest(DataMoverTestBase):
             expected_rc=1,
             expected_output=[self.MFU_ERR_DCP_COPY, "errno=28"])
 
-        # Create another pool and container
-        pool2 = self.create_pool()
-        cont2 = self.create_cont(pool2)
-
-        # Start dfuse on pool2/cont2
-        self.start_dfuse(self.dfuse_hosts, pool2, cont2)
-
         # Try to copy. For now, we expect this to just abort.
         self.run_datamover(
             self.test_id + " (dst posix out of space)",
             "POSIX", self.posix_test_paths[0], None, None,
-            "POSIX", self.dfuse.mount_dir.value,
+            "POSIX", dst_posix_path,
             expected_rc=255,
             expected_err=["errno=28"])
 
