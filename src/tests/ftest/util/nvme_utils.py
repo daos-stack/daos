@@ -81,7 +81,9 @@ class ServerFillUp(IorTestBase):
         super().setUp()
         self.hostfile_clients = None
         self.ior_default_flags = self.ior_cmd.flags.value
-        self.ior_scm_xfersize = self.ior_cmd.transfer_size.value
+        self.ior_scm_xfersize = self.params.get(
+            "transfer_size", '/run/ior/transfersize_blocksize/*',
+            '2048')
         self.ior_read_flags = self.params.get("read_flags",
                                               '/run/ior/iorflags/*',
                                               '-r -R -k -G 1')
@@ -103,13 +105,14 @@ class ServerFillUp(IorTestBase):
         """
         self.ior_cmd.flags.value = self.ior_default_flags
 
-        # For IOR Other operation, calculate the block size based on server %
-        # to fill up. Store the container UUID for future reading operation.
-        if operation == 'Write':
+        # For IOR only Write/Read operation, calculate the block size based on
+        # server % to fill up. Store the container UUID for future reading operation.
+        if operation == 'Write' or operation == 'Read':
             block_size = self.calculate_ior_block_size()
             self.ior_cmd.block_size.update('{}'.format(block_size))
+
         # For IOR Read only operation, retrieve the stored container UUID
-        elif operation == 'Read':
+        if operation == 'Read':
             create_cont = False
             self.ior_cmd.flags.value = self.ior_read_flags
 
@@ -121,6 +124,7 @@ class ServerFillUp(IorTestBase):
             results.put("PASS")
         except (CommandFailure, TestFail) as _error:
             results.put("FAIL")
+            pass
 
     def calculate_ior_block_size(self):
         """Calculate IOR Block size to fill up the Server.
@@ -129,17 +133,6 @@ class ServerFillUp(IorTestBase):
             block_size(int): IOR Block size
 
         """
-        # Check the replica for IOR object to calculate the correct block size.
-        _replica = re.findall(r'_(.+?)G', self.ior_cmd.dfs_oclass.value)
-        if not _replica:
-            replica_server = 1
-        # This is for EC Parity
-        elif 'P' in _replica[0]:
-            replica_server = re.findall(r'\d+', _replica[0])[0]
-        else:
-            replica_server = _replica[0]
-
-        print('Replica Server = {}'.format(replica_server))
         if self.scm_fill:
             free_space = self.pool.get_pool_daos_space()["s_total"][0]
             self.ior_cmd.transfer_size.value = self.ior_scm_xfersize
@@ -151,18 +144,43 @@ class ServerFillUp(IorTestBase):
 
         # Get the block size based on the capacity to be filled. For example
         # If nvme_free_space is 100G and to fill 50% of capacity.
-        # Formula : (107374182400 / 100) * 50.This will give 50% of space to be
-        # filled. Divide with total number of process, 16 process means each
-        # process will write 3.12Gb.last, if there is replica set, For RP_2G1
-        # will divide the individual process size by number of replica.
-        # 3.12G (Single process size)/2 (No of Replica) = 1.56G
-        # To fill 50 % of 100GB pool with total 16 process and replica 2, IOR
-        # single process size will be 1.56GB.
-        _tmp_block_size = (((free_space/100)*self.capacity)/self.processes)
-        _tmp_block_size = int(_tmp_block_size / int(replica_server))
+        # Formula : (107374182400 / 100) * 50.This will give 50%(50G) of space
+        # to be filled.
+        _tmp_block_size = (((free_space/100)*self.capacity))
+
+        # Check the IOR object type to calculate the correct block size.
+        _replica = re.findall(r'_(.+?)G', self.ior_cmd.dfs_oclass.value)
+
+        # This is for non replica and EC class where _tmp_block_size will not 
+        # change.
+        if not _replica:
+            pass
+
+        # If it's EC object, Calculate the tmp block size based on number of
+        # data + parity targets. And calculate the write data size for the
+        # total number data targets.
+        # For example: 100Gb of total pool to be filled 10% in total:
+        # For EC_4P1GX,  Get the data target fill size = 8G, which will fill
+        # 8G of data and 2G of Parity. So total 10G (10% of 100G of pool size)
+        elif 'P' in _replica[0]:
+            replica_server = re.findall(r'\d+', _replica[0])[0]
+            parity_count = re.findall(r'\d+', _replica[0])[1]
+            _tmp_block_size = int(_tmp_block_size /
+                                  (int(replica_server) + int(parity_count)))
+            _tmp_block_size = int(_tmp_block_size) * int(replica_server)
+
+        # This is Replica type object class
+        else:
+            _tmp_block_size = int(_tmp_block_size / int(_replica[0]))
+
+        # Last divide the Total sized with IOR number of process
+        _tmp_block_size = int(_tmp_block_size) / self.processes
+
+        # Calculate the Final block size of IOR multiple of Transfer size.
         block_size = (
             int(_tmp_block_size / int(self.ior_cmd.transfer_size.value)) *
             int(self.ior_cmd.transfer_size.value))
+
         return block_size
 
     def set_device_faulty(self, server, disk_id):

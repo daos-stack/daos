@@ -34,12 +34,14 @@ def get_data_parity_number(log, oclass):
     tmp = re.findall(r'\d+', oclass)
     return {'data': tmp[0], 'parity': tmp[1]}
 
-def check_aggregation_status(pool, quick_check=True):
+def check_aggregation_status(pool, quick_check=True, attempt=20):
     """EC Aggregation triggered status.
     Args:
         pool(object): pool object to get the query.
         quick_check(bool): Return immediately when Aggregation starts for any
                            storage type.
+        attempt(int): Number of attempts to do pool query at interval of 5 seconds.
+                      default is 20 attempts.
     return:
         result(dic): Storage Aggregation stats SCM/NVMe True/False.
     """
@@ -47,7 +49,7 @@ def check_aggregation_status(pool, quick_check=True):
     pool.connect()
     initial_usage = pool.pool_percentage_used()
 
-    for _tmp in range(20):
+    for _tmp in range(attempt):
         current_usage = pool.pool_percentage_used()
         print("pool_percentage during Aggregation = {}".format(current_usage))
         for storage_type in ['scm', 'nvme']:
@@ -118,21 +120,27 @@ class ErasureCodeIor(ServerFillUp):
             oclass(list): list of the obj class to use with IOR
             sizes(list): Update Transfer, Chunk and Block sizes
         """
+        self.ior_cmd.dfs_chunk.update(sizes[0])
         self.ior_cmd.block_size.update(sizes[1])
         self.ior_cmd.transfer_size.update(sizes[2])
         self.ior_cmd.dfs_oclass.update(oclass[0])
         self.ior_cmd.dfs_dir_oclass.update(oclass[0])
-        self.ior_cmd.dfs_chunk.update(sizes[0])
 
-    def ior_write_single_dataset(self, oclass, sizes, percent=1):
+    def ior_write_single_dataset(self, oclass, sizes, storage='NVMe',
+                                 operation="WriteRead", percent=1):
+        # pylint: disable=too-many-arguments
         """Write IOR single data set with EC object.
 
         Args:
             oclass(list): list of the obj class to use with IOR
             sizes(list): Update Transfer, Chunk and Block sizes
+            storage(str): Data to be written on storage,default to NVMe.
+            operation(str): Data to be Written only or Write and Read both.
+                            default to WriteRead both
             percent(int): %of storage to be filled. Default it will use the
                           given parameters in yaml file.
         """
+        self.log.info(self.pool.pool_percentage_used())
         self.ior_param_update(oclass, sizes)
 
         # Create the new container with correct redundancy factor for EC
@@ -141,39 +149,49 @@ class ErasureCodeIor(ServerFillUp):
 
         # Start IOR Write
         self.container.uuid = self.ec_container.uuid
-        self.start_ior_load(operation="WriteRead", percent=percent,
-                            create_cont=False)
+        self.start_ior_load(storage, operation, percent, create_cont=False)
         self.cont_uuid.append(self.ior_cmd.dfs_cont.value)
 
-    def ior_write_dataset(self, percent=1):
-        """Write IOR data set with different EC object and different sizes."""
+    def ior_write_dataset(self, storage='NVMe', operation="WriteRead",
+                          percent=1):
+        """Write IOR data set with different EC object and different sizes.
+
+        Args:
+            storage(str): Data to be written on storage, default to NVMe
+            operation(str): Data to be Written only or Write and Read both.
+                            default to WriteRead both
+            percent(int): %of storage to be filled. Default it's 1%.
+        """
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
                 # Skip the object type if server count does not meet the
                 # minimum EC object server count
                 if oclass[1] > self.server_count:
                     continue
-                self.ior_write_single_dataset(oclass, sizes, percent)
+                self.ior_write_single_dataset(oclass, sizes, storage,
+                                              operation, percent)
 
-    def ior_read_single_dataset(self, oclass, sizes, percent=1):
+    def ior_read_single_dataset(self, oclass, sizes, storage, percent=1):
         """Read IOR single data set with EC object.
 
         Args:
             oclass(list): list of the obj class to use with IOR
             sizes(list): Update Transfer, Chunk and Block sizes
-            percent(int): %of storage to be filled. Default it will use the
-                          given parameters in yaml file
+            storage(str): Data to be written on which storage
+            percent(int): %of storage to be filled. Default it's 1%.
         """
         self.ior_param_update(oclass, sizes)
         # Start IOR Read
-        self.start_ior_load(operation='Read', percent=percent,
+        self.start_ior_load(storage, operation='Read', percent=percent,
                             create_cont=False)
 
-    def ior_read_dataset(self, parity=1):
+    def ior_read_dataset(self, storage='NVMe', percent=1, parity=1):
         """Read IOR data and verify for different EC object and different sizes
 
         Args:
-           data_parity(str): object parity type for reading, default All.
+            storage(str): Data to be written on storage, default to NVMe
+            percent(int): %of storage to be filled. Default it's 1%.
+            parity(int): object parity type for reading data, default is 1.
         """
         con_count = 0
         for oclass in self.obj_class:
@@ -190,11 +208,12 @@ class ErasureCodeIor(ServerFillUp):
                     con_count += 1
                     continue
                 self.container.uuid = self.cont_uuid[con_count]
-                self.ior_read_single_dataset(oclass, sizes, parity)
+                self.ior_read_single_dataset(oclass, sizes, storage, percent)
                 con_count += 1
 
 class ErasureCodeSingle(TestWithServers):
     # pylint: disable=too-many-ancestors
+    # pylint: disable=too-many-instance-attributes
     """
     Class to used for EC testing for single type data.
     """
