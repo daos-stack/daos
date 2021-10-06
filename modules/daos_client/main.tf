@@ -44,6 +44,11 @@ resource "google_compute_instance_template" "daos_sig_template" {
   service_account {
     scopes = var.daos_service_account_scopes
   }
+
+  scheduling {
+    preemptible = var.preemptible
+    automatic_restart = false
+  }
 }
 
 resource "google_compute_instance_group_manager" "daos_sig" {
