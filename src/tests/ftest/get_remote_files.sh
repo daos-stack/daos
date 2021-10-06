@@ -275,20 +275,45 @@ fi
 if "${COMPRESS:-false}"; then
     echo "Compressing files larger than 1M ..."
     check_str="Hypervisor detected"
-    if output=$(dmesg); then
-        if ! grep -q "${check_str}" <<< "${output}" || "${EXCLUDE_ZIP:-false}";
-        then
-            if ! compress_files "${FILES_TO_PROCESS}"; then
-                echo "  Error detected compressing files"
-                rc=1
+    retries=1
+    while [ $retries -gt 0 ]; do
+        (( retries-- ))
+        if output=$(dmesg); then
+            if ! grep -q "${check_str}" <<< "${output}" ||
+               "${EXCLUDE_ZIP:-false}"; then
+                if ! compress_files "${FILES_TO_PROCESS}"; then
+                    echo "  Error detected compressing files"
+                    rc=1
+                fi
+            elif ! "${EXCLUDE_ZIP:-false}"; then
+                echo "VM system detected, skipping compression ..."
             fi
-        elif ! "${EXCLUDE_ZIP:-false}"; then
-            echo "VM system detected, skipping compression ..."
+        else
+            if ! command -v dmesg; then
+                echo "dmesg not found in $PATH"
+                if ! rpm=$(dnf repoquery -f \*/bin/dmesg); then
+                    echo "but dnf repoquery couldn't find the package it's in"
+                else
+                    if ! rpm -q "$rpm"; then
+                        state=" not"
+                    fi
+                    echo "dnf repoqery says it's in $rpm and $rpm is$state installed"
+                    if [ "$state" = " not" ]; then
+                        echo "trying to install $rpm..."
+                        if sudo dnf -y install "$rpm"; then
+                            echo "successfully installed $rpm, retrying dmesg..."
+                            (( retries++ ))
+                        else
+                            echo "Failed trying to install $rpm, erroring out"
+                        fi
+                    fi
+                fi
+            else
+                echo "Error: unknown dmesg command failure: ${output}, rc=${PIPESTATUS[0]}"
+            fi
+            rc=1
         fi
-    else
-        echo "Error: dmesg command failure: ${output}"
-        rc=1
-    fi
+    done
 fi
 
 # Scp files specified in FILES_TO_PROCESS to ARCHIVE_DEST
