@@ -13,7 +13,6 @@ from daos_utils import DaosCommand
 from dmg_utils import check_system_query_status
 from command_utils import CommandFailure
 from test_utils_pool import TestPool, LabelGenerator
-from apricot import skipForTicket
 import queue
 
 
@@ -261,7 +260,6 @@ class OSAOfflineParallelTest(OSAUtils):
         self.log.info("Offline Parallel Test: Restart a rank")
         self.run_offline_parallel_test(1, data=True)
 
-    @skipForTicket("DAOS-7195,DAOS-7247")
     def test_osa_offline_parallel_test_with_aggregation(self):
         """
         JIRA ID: DAOS-7161

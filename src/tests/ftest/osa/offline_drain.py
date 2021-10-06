@@ -200,7 +200,6 @@ class OSAOfflineDrain(OSAUtils):
         self.log.info("Offline Drain : Multiple Pools")
         self.run_offline_drain_test(2, data=True)
 
-    @skipForTicket("DAOS-7186")
     def test_osa_offline_drain_during_rebuild(self):
         """Test ID: DAOS-7159
         Test Description: Validate Offline Drain
