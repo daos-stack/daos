@@ -790,7 +790,7 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_DKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= BTR_FEAT_UINT_KEY |
+		.ta_feats	= VOS_KEY_CMP_LEXICAL | BTR_FEAT_UINT_KEY |
 				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_dkey",
 		.ta_ops		= &key_btr_ops,
@@ -798,7 +798,7 @@ static struct vos_btr_attr vos_btr_attrs[] = {
 	{
 		.ta_class	= VOS_BTR_AKEY,
 		.ta_order	= VOS_KTR_ORDER,
-		.ta_feats	= BTR_FEAT_UINT_KEY |
+		.ta_feats	= VOS_KEY_CMP_LEXICAL | BTR_FEAT_UINT_KEY |
 				  BTR_FEAT_DIRECT_KEY | BTR_FEAT_DYNAMIC_ROOT,
 		.ta_name	= "vos_akey",
 		.ta_ops		= &key_btr_ops,
