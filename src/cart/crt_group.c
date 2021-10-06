@@ -285,6 +285,7 @@ generate_cxi_uris(int prov_type, char *addr, int tag, struct crt_uri_item *ui)
 	int		parsed = 0;
 	char		*prov_name;
 
+	memset(tmp_addr, 0x0, CRT_ADDR_STR_MAX_LEN);
 	strncpy(tmp_addr, addr, CRT_ADDR_STR_MAX_LEN - 1);
 
 	parsed = sscanf(tmp_addr, "0x%x", &raw_addr);
@@ -327,6 +328,7 @@ generate_port_based_uris(int prov_type, char *base_addr, int tag, struct crt_uri
 	char	*prov_name;
 	int	rc = 0;
 
+	memset(tmp_addr, 0x0, CRT_ADDR_STR_MAX_LEN);
 	strncpy(tmp_addr, base_addr, CRT_ADDR_STR_MAX_LEN - 1);
 
 	 /*
