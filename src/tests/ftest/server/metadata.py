@@ -332,7 +332,7 @@ class ObjectMetadata(TestWithServers):
             for _ in range(total_ior_threads)]
 
         # Setup the thread manager
-        thread_manager = ThreadManager(self.run_ior_loop, self.timeout - 30)
+        thread_manager = ThreadManager(run_ior_loop, self.timeout - 30)
 
         # Setup the orterun command used to run the ior command
         self.job_manager.assign_hosts(self.hostlist_clients, self.workdir, None)
