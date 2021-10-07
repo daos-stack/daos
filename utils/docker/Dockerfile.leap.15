@@ -112,8 +112,8 @@ RUN zypper --non-interactive --gpg-auto-import-keys --no-gpg-checks ref && \
         patch \
         patchelf \
         pciutils \
+        python3-defusedxml \
         python3-devel \
-	python3-defusedxml \
         python3-distro \
         python3-junit-xml \
         python3-pyxattr  \
