@@ -97,6 +97,9 @@ EOF
     mount \"$DAOS_BASE\"
 fi"
 
+# For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for sockets
+sudo sysctl -w net.ipv4.conf.all.rp_filter=2
+
 if ! $TEST_RPMS; then
     # set up symlinks to spdk scripts (none of this would be
     # necessary if we were testing from RPMs) in order to
