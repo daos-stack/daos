@@ -155,10 +155,13 @@ char *d_realpath(const char *path, char *resolved_path);
 	do {								\
 		int _size;						\
 		(ptr) = d_realpath((path), NULL);			\
-		_size = (ptr) != NULL ?					\
-			strnlen((ptr), PATH_MAX + 1) + 1 : 0;		\
-		D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,		\
-			      0, #ptr, 0);				\
+		if ((ptr) != NULL) {					\
+			_size = strnlen((ptr), PATH_MAX + 1) + 1 ;	\
+			D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	\
+				0, #ptr, 0);				\
+			if ((ptr) == NULL)				\
+				errno = ENOMEM;				\
+		}							\
 	} while (0)
 
 #define D_ALIGNED_ALLOC(ptr, alignment, size)				\
