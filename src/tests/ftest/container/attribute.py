@@ -54,11 +54,11 @@ class ContainerAttributeTest(TestWithServers):
             data_set[key] = get_random_bytes(size)
         return data_set
 
-    def verify_list_attr(self, indata, outdata, mode="sync"):
+    def verify_list_attr(self, indata, attributes_list, mode="sync"):
         """
         Args:
             indata: Dict used to set attr
-            outdata: Dict obtained from list attr
+            attributes_list: List obtained from list attr
             mode: sync or async
 
         Verify the length of the Attribute names
@@ -70,7 +70,6 @@ class ContainerAttributeTest(TestWithServers):
         if mode == "async":
             length += 1
 
-        attributes_list = list(outdata.keys())
         size = 0
         for attr in attributes_list:
             size += len(attr)
