@@ -611,21 +611,29 @@ ivc_on_get(crt_iv_namespace_t ivns, crt_iv_key_t *iv_key,
 	*priv = priv_entry;
 
 out:
-	if (rc && alloc_entry) {
-		d_list_del(&entry->iv_link);
-		iv_entry_free(entry);
+	if (rc) {
+		if (alloc_entry) {
+			d_list_del(&entry->iv_link);
+			iv_entry_free(entry);
+		}
+		ds_iv_ns_put(ns);
 	}
 
-	ds_iv_ns_put(ns);
-	return 0;
+	return rc;
 }
 
 static int
 ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 {
+	struct ds_iv_ns		*ns = NULL;
 	struct iv_priv_entry	*priv_entry = priv;
 	struct ds_iv_entry	*entry;
 	int			 rc;
+
+	rc = iv_ns_lookup_by_ivns(ivns, &ns);
+	if (rc != 0)
+		return rc;
+	D_ASSERT(ns != NULL);
 
 	D_ASSERT(priv_entry != NULL);
 
@@ -635,20 +643,24 @@ ivc_on_put(crt_iv_namespace_t ivns, d_sg_list_t *iv_value, void *priv)
 	/* Let's deal with iv_value first */
 	d_sgl_fini(iv_value, true);
 
-	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry,
-							priv_entry->priv);
+	rc = entry->iv_class->iv_class_ops->ivc_ent_put(entry, priv_entry->priv);
 	if (rc)
-		return rc;
+		D_GOTO(put, rc);
 
 	D_FREE(priv_entry);
 	D_DEBUG(DB_TRACE, "Put entry %p/%d\n", entry, entry->iv_ref - 1);
 	if (--entry->iv_ref > 0)
-		return 0;
+		D_GOTO(put, rc);
 
 	d_list_del(&entry->iv_link);
 	iv_entry_free(entry);
 
-	return 0;
+put:
+	/* one for lookup, the other one for balanced the get */
+	ds_iv_ns_put(ns);
+	ds_iv_ns_put(ns);
+
+	return rc;
 }
 
 static int
