@@ -115,7 +115,6 @@ extern unsigned int	dss_tgt_offload_xs_nr;
 extern unsigned int	dss_sys_xs_nr;
 /** Flag of helper XS as a pool */
 extern bool		dss_helper_pool;
-
 /** Shadow dss_get_module_info */
 struct dss_module_info *get_module_info(void);
 
@@ -273,11 +272,10 @@ void ds_iv_fini(void);
 	 (dss_tgt_offload_xs_nr > dss_tgt_nr ? dss_tgt_nr :	\
 	  dss_tgt_offload_xs_nr))
 /** main XS id of (vos) tgt_id */
-#define DSS_MAIN_XS_ID(tgt_id)					\
-	(dss_helper_pool ? ((tgt_id) + dss_sys_xs_nr) :		\
-			   ((tgt_id) * ((dss_tgt_offload_xs_nr /\
+#define DSS_MAIN_XS_ID(tgt_id)						\
+	(dss_helper_pool ? ((tgt_id) + dss_sys_xs_nr) :			\
+			   ((tgt_id) * ((dss_tgt_offload_xs_nr /	\
 			      dss_tgt_nr) + 1) + dss_sys_xs_nr))
-
 
 /**
  * get the VOS target ID of xstream.
