@@ -135,7 +135,7 @@ agent_config_val: !mux
     config_val:
        - "server_name"
        - "! @#$%^&*()_+{}|:<>?-=[];',./"
-       - "PASS"
+       - "FAIL"
   server_name_list:
     config_val:
       - "server_name"
