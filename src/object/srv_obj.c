@@ -87,7 +87,6 @@ obj_rw_complete(struct obj_io_context *ioc, crt_rpc_t *rpc,
 {
 	struct obj_rw_in	*orwi = crt_req_get(rpc);
 	daos_ofeat_t             ofeat = daos_obj_id2feat(orwi->orw_oid.id_pub);
-	int			 rc;
 
 	if (!daos_handle_is_inval(ioh)) {
 		bool update = obj_rpc_is_update(rpc);
@@ -666,7 +665,7 @@ obj_echo_rw(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	orwo->orw_sgls.ca_count = 0;
 	orwo->orw_sgls.ca_arrays = NULL;
 	if (obj_rpc_is_fetch(rpc)) {
-		rc = obj_set_reply_nrs(ioc, DAOS_HDL_INVAL, p_sgl);
+		rc = obj_set_reply_nrs(ioc, rpc, DAOS_HDL_INVAL, p_sgl);
 		if (rc != 0)
 			D_GOTO(out, rc);
 		bulk_op = CRT_BULK_PUT;
@@ -1266,7 +1265,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 
 	if (daos_obj_is_echo(orw->orw_oid.id_pub) ||
 	    (daos_io_bypass & IOBP_TARGET)) {
-		obj_echo_rw(ioc, split_iods, split_offs);
+		obj_echo_rw(ioc, rpc, split_iods, split_offs);
 		D_GOTO(out, rc = 0);
 	}
 
@@ -1411,7 +1410,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 			orwo->orw_sgls.ca_count = 0;
 			orwo->orw_sgls.ca_arrays = NULL;
 
-			rc = obj_set_reply_nrs(ioc, ioh, NULL);
+			rc = obj_set_reply_nrs(ioc, rpc, ioh, NULL);
 			if (rc != 0)
 				goto out;
 		} else {

@@ -1027,6 +1027,7 @@ bio_iod_copy(struct bio_desc *biod, bool zc_fetch,
 	int rc = iterate_biov(biod, copy_one, &arg);
 	d_iov_t *iov;
 	iov = arg.ca_sgls->sg_iovs;
+	D_DEBUG(DB_IO, "buf %s", (char *)iov->iov_buf);
 	return rc;
 
 
