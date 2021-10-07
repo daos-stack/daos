@@ -246,6 +246,7 @@ ccreate(void)
 
 	cuuid2 = "autotest_cont_rf1";
 	rc = daos_cont_create_with_label(poh, cuuid2, prop, NULL, NULL);
+	daos_prop_free(prop);
 	if (rc)
 		D_GOTO(fail, rc);
 
@@ -258,6 +259,7 @@ ccreate(void)
 
 	cuuid3 = "autotest_cont_rf2";
 	rc = daos_cont_create_with_label(poh, cuuid3, prop2, NULL, NULL);
+	daos_prop_free(prop2);
 	if (rc)
 		D_GOTO(fail, rc);
 
