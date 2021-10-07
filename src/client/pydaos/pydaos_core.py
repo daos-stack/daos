@@ -42,12 +42,12 @@ class DCont():
 
     Attributes
     ----------
-    path : string
-        Path for container representation in unified namespace
     pool : string
         Pool label or UUID string
     cont : string
         Container label or UUID string
+    path : string
+        Path for container representation in unified namespace
 
     Methods
     -------
