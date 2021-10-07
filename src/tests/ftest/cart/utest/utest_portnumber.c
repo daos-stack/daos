@@ -87,7 +87,7 @@ run_test_fork(void **state)
 	/* fork first child process */
 	pid1 = fork();
 	if (pid1 == 0) {
-		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
+		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 		if (rc != 0) {
 			sem_post(child2_sem);
 			rc = CHILD1_INIT_ERR;
@@ -137,7 +137,7 @@ child1_error1:
 			goto child2_error;
 		}
 
-		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER);
+		rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 		if (rc != 0) {
 			rc = CHILD2_INIT_ERR;
 			goto child2_error;
