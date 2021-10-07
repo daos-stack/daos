@@ -60,8 +60,6 @@ struct dtx_req_args {
 	struct ds_cont_child		*dra_cont;
 	/* Pointer to the committed DTX list, used for DTX_REFRESH case. */
 	d_list_t			*dra_cmt_list;
-	/* Pointer to the aborted DTX list, used for DTX_REFRESH case. */
-	d_list_t			*dra_abt_list;
 	/* Pointer to the active DTX list, used for DTX_REFRESH case. */
 	d_list_t			*dra_act_list;
 };
@@ -204,16 +202,24 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 				break;
 			}
 
-			/* The leader does not have related DTX info,
-			 * we may miss related DTX abort request, so
-			 * let's abort it locally.
+			/* XXX: It is also possible that the RPC handler on the
+			 *	leader yield CPU before related local DTX entry
+			 *	pinned because of NVMe data copy/movement. Then
+			 *	refresh such DTX from the leader cannot find it.
+			 *
+			 *	Under such case, we need to keep such DTX entry
+			 *	on non-leader instead of abort it; Otherwise it
+			 *	may break leader's local modification or commit.
+			 *
+			 *	Then we will handle it as an active entry, that
+			 *	may cause current operation to be retried again
+			 *	and again until such DTX is committed or marked
+			 *	as 'orphan'. It is not perfect solution, but it
+			 *	will not cause consistency trouble.
 			 */
-			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl,
-					    DAOS_EPOCH_MAX, &dsp->dsp_xid, 1);
-			if (rc1 < 0 && rc1 != -DER_NONEXIST &&
-			    dra->dra_abt_list != NULL)
+			if (dra->dra_act_list != NULL)
 				d_list_add_tail(&dsp->dsp_link,
-						dra->dra_abt_list);
+						dra->dra_act_list);
 			else
 				D_FREE(dsp);
 			break;
@@ -364,7 +370,7 @@ static int
 dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 		  int len, uuid_t po_uuid, uuid_t co_uuid, daos_epoch_t epoch,
 		  struct ds_cont_child *cont, d_list_t *cmt_list,
-		  d_list_t *abt_list, d_list_t *act_list)
+		  d_list_t *act_list)
 {
 	ABT_future		 future;
 	struct dtx_req_rec	*drr;
@@ -378,7 +384,6 @@ dtx_req_list_send(struct dtx_req_args *dra, crt_opcode_t opc, d_list_t *head,
 	dra->dra_result = 0;
 	dra->dra_cont = cont;
 	dra->dra_cmt_list = cmt_list;
-	dra->dra_abt_list = abt_list;
 	dra->dra_act_list = act_list;
 
 	rc = ABT_future_create(len, dtx_req_list_cb, &future);
@@ -621,7 +626,7 @@ dtx_commit_internal(struct ds_cont_child *cont, d_list_t *head,
 
 	return dtx_req_list_send(dra, DTX_COMMIT, head, length,
 				 cont->sc_pool->spc_pool->sp_uuid,
-				 cont->sc_uuid, 0, NULL, NULL, NULL, NULL);
+				 cont->sc_uuid, 0, NULL, NULL, NULL);
 }
 
 static void
@@ -807,7 +812,7 @@ dtx_abort(struct ds_cont_child *cont, daos_epoch_t epoch,
 	if (rc == 0 && !d_list_empty(&head)) {
 		rc = dtx_req_list_send(&dra, DTX_ABORT, &head, length,
 				       pool->sp_uuid, cont->sc_uuid, epoch,
-				       NULL, NULL, NULL, NULL);
+				       NULL, NULL, NULL);
 		if (rc != 0)
 			goto out;
 
@@ -914,7 +919,7 @@ dtx_check(struct ds_cont_child *cont, struct dtx_entry *dte, daos_epoch_t epoch)
 	}
 
 	rc = dtx_req_list_send(&dra, DTX_CHECK, &head, length, pool->sp_uuid,
-			       cont->sc_uuid, epoch, NULL, NULL, NULL, NULL);
+			       cont->sc_uuid, epoch, NULL, NULL, NULL);
 	if (rc == 0)
 		rc = dtx_req_wait(&dra);
 
@@ -1075,7 +1080,7 @@ next:
 	if (len > 0) {
 		rc = dtx_req_list_send(&dra, DTX_REFRESH, &head, len,
 				       pool->sp_uuid, cont->sc_uuid, 0, cont,
-				       cmt_list, abt_list, act_list);
+				       cmt_list, act_list);
 		if (rc == 0)
 			rc = dtx_req_wait(&dra);
 
