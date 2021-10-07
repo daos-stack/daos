@@ -21,6 +21,16 @@ class ThreadManager():
         self.timeout = timeout
         self.job_kwargs = []
 
+    @property
+    def qty(self):
+        """Get the number of threads.
+
+        Returns:
+            int: number of threads
+
+        """
+        return len(self.job_kwargs)
+
     def add(self, **kwargs):
         """Add a thread to run by specifying the keyword arguments for the thread method."""
         self.job_kwargs.append(kwargs)
