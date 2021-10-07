@@ -35,8 +35,6 @@ from env_modules import load_mpi
 from distutils.spawn import find_executable
 from write_host_file import write_host_file
 
-import pprint
-
 def skipForTicket(ticket): # pylint: disable=invalid-name
     """Skip a test with a comment about a ticket."""
     return skip("Skipping until {} is fixed.".format(ticket))
