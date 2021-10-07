@@ -361,7 +361,7 @@ class ObjectMetadata(TestWithServers):
                     index, list_of_uuid_lists[index])
 
             # Launch the IOR threads
-            self.log.info("Launching %d IOR %s threads", len(threads), operation)
+            self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)
             results = thread_manager.run()
             if len(results["FAIL"]) > 0:
                 self.d_log.error("IOR {} Thread FAIL".format(operation))
