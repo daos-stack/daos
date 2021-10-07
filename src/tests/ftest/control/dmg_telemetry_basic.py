@@ -159,4 +159,4 @@ class TestWithTelemetryBasic(TestWithTelemetry):
                 loop + 1, len(self.container))
             self.check_metrics()
 
-        self.log.info("Test PASSED")
+        self.log.info("Test passed!")
