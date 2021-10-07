@@ -199,20 +199,20 @@ int fs_dfs_get_attr_hdlr(struct cmd_args_s *ap, dfs_obj_info_t *attrs);
 int parse_filename_dfs(const char *path, char **_obj_name, char **_cont_name);
 
 /* Container operations */
-int cont_rollback_hdlr(struct cmd_args_s *ap);
-int cont_list_snaps_hdlr(struct cmd_args_s *ap);
-int cont_create_snap_hdlr(struct cmd_args_s *ap);
-int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
 int cont_create_hdlr(struct cmd_args_s *ap);
-int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
-int cont_delete_acl_hdlr(struct cmd_args_s *ap);
-int cont_set_owner_hdlr(struct cmd_args_s *ap);
-int cont_update_acl_hdlr(struct cmd_args_s *ap);
+int cont_create_uns_hdlr(struct cmd_args_s *ap);
 int cont_check_hdlr(struct cmd_args_s *ap);
 int cont_clone_hdlr(struct cmd_args_s *ap);
-int cont_create_uns_hdlr(struct cmd_args_s *ap);
-int cont_list_objs_hdlr(struct cmd_args_s *ap);
 int cont_set_prop_hdlr(struct cmd_args_s *ap);
+int cont_create_snap_hdlr(struct cmd_args_s *ap);
+int cont_list_snaps_hdlr(struct cmd_args_s *ap);
+int cont_destroy_snap_hdlr(struct cmd_args_s *ap);
+int cont_overwrite_acl_hdlr(struct cmd_args_s *ap);
+int cont_update_acl_hdlr(struct cmd_args_s *ap);
+int cont_delete_acl_hdlr(struct cmd_args_s *ap);
+int cont_set_owner_hdlr(struct cmd_args_s *ap);
+int cont_rollback_hdlr(struct cmd_args_s *ap);
+int cont_list_objs_hdlr(struct cmd_args_s *ap);
 
 /* TODO implement the following container op functions
  * all with signatures similar to this:
