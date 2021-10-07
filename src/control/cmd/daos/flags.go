@@ -33,6 +33,25 @@ func flagTestInit() (func(), error) {
 	}, nil
 }
 
+type EpochFlag struct {
+	Set   bool
+	Value uint64
+}
+
+func (f *EpochFlag) String() string {
+	return fmt.Sprintf("%#x", f.Value)
+}
+
+func (f *EpochFlag) UnmarshalFlag(fv string) (err error) {
+	f.Value, err = strconv.ParseUint(fv, 0, 64)
+	if err != nil {
+		return errors.Errorf("failed to parse %q as uint64\n", fv)
+	}
+
+	f.Set = true
+	return nil
+}
+
 type EpochRangeFlag struct {
 	Set   bool
 	Begin C.uint64_t
@@ -40,7 +59,7 @@ type EpochRangeFlag struct {
 }
 
 func (f *EpochRangeFlag) String() string {
-	return fmt.Sprintf("%d-%d", f.Begin, f.End)
+	return fmt.Sprintf("%#x-%#x", f.Begin, f.End)
 }
 
 func (f *EpochRangeFlag) UnmarshalFlag(fv string) error {
@@ -49,12 +68,12 @@ func (f *EpochRangeFlag) UnmarshalFlag(fv string) error {
 		return errors.Errorf("failed to parse %q as epoch range (expected A-B)", fv)
 	}
 
-	val, err := strconv.ParseUint(comps[0], 10, 64)
+	val, err := strconv.ParseUint(comps[0], 0, 64)
 	if err != nil {
 		return errors.Errorf("failed to parse %q as uint64", comps[0])
 	}
 	f.Begin = C.uint64_t(val)
-	val, err = strconv.ParseUint(comps[1], 10, 64)
+	val, err = strconv.ParseUint(comps[1], 0, 64)
 	if err != nil {
 		return errors.Errorf("failed to parse %q as uint64", comps[1])
 	}

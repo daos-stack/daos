@@ -12,9 +12,9 @@ from dfuse_test_base import DfuseTestBase
 from command_utils import CommandFailure
 
 
-class BashCmd(DfuseTestBase):
+class Cmd(DfuseTestBase):
     # pylint: disable=too-few-public-methods,too-many-ancestors
-    """Base BashCmd test class.
+    """Base Cmd test class.
 
     :avocado: recursive
     """
@@ -49,9 +49,9 @@ class BashCmd(DfuseTestBase):
               Remove renamed file
               Remove a directory
 
-        :avocado: tags=all,full_regression
+        :avocado: tags=all,daily_regression,pr
         :avocado: tags=hw,small
-        :avocado: tags=daosio,dfuse
+        :avocado: tags=dfuse
         :avocado: tags=bashcmd
         """
         dir_name = self.params.get("dirname", '/run/bashcmd/*')
