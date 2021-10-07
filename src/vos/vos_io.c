@@ -1450,6 +1450,7 @@ vos_fetch_begin(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
 
 	rc = vos_ts_set_add(ioc->ic_ts_set, ioc->ic_cont->vc_ts_idx, NULL, 0);
 	D_ASSERT(rc == 0);
+	struct vos_container *cont = ioc->ic_cont;
 
 	rc = vos_obj_hold(vos_obj_cache_current(), ioc->ic_cont, oid,
 			  &ioc->ic_epr, ioc->ic_bound, VOS_OBJ_VISIBLE,
@@ -2800,7 +2801,7 @@ vos_obj_copy(struct vos_io_context *ioc, d_sg_list_t *sgls,
 	if (rc)
 		return rc;
 
-	err = bio_iod_copy(ioc->ic_biod, sgls, sgl_nr);
+	err = bio_iod_copy(ioc->ic_biod, false, sgls, sgl_nr);
 	rc = bio_iod_post(ioc->ic_biod);
 
 	return err ? err : rc;
