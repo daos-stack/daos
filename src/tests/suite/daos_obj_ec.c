@@ -946,7 +946,7 @@ ec_full_stripe_snapshot(void **state)
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	stripe_size = ec_data_nr_get(oid) * EC_CELL_SIZE;
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)EC_CELL_SIZE;
 	data = (char *)malloc(stripe_size);
 	assert_true(data != NULL);
 	verify_data = (char *)malloc(stripe_size);
@@ -995,7 +995,7 @@ ec_partial_stripe_snapshot_internal(void **state, int data_size)
 	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
 	oid = daos_test_oid_gen(arg->coh, ec_obj_class, 0, 0, arg->myrank);
 	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
-	stripe_size = ec_data_nr_get(oid) * data_size;
+	stripe_size = ec_data_nr_get(oid) * (daos_size_t)data_size;
 	data = (char *)malloc(stripe_size);
 	assert_true(data != NULL);
 	verify_data = (char *)malloc(stripe_size);
