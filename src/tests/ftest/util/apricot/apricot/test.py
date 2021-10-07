@@ -723,11 +723,6 @@ class TestWithServers(TestWithoutServers):
             message (str): message to write to log file.
         """
 
-        ############################################################
-        self.log.debug('DEBUG log: line 737, self = ', self)
-        self.log.debug(pprint.pformat(vars(self)))
-        ############################################################
-
         if self.server_managers and self.agent_managers:
             # Compose and run cart_ctl command
             cart_ctl = CartCtl()
