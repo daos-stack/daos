@@ -29,6 +29,7 @@ noop_handler(int arg) {
 }
 
 static int bg_fd;
+static struct d_fault_attr_t *start_fault_attr;
 
 /* Send a message to the foreground thread */
 static int
@@ -156,8 +157,6 @@ dfuse_bg(struct dfuse_info *dfuse_info)
 	exit(2);
 }
 
-static struct d_fault_attr_t *start_fault_attr;
-
 /*
  * Creates a fuse filesystem for any plugin that needs one.
  *
@@ -172,8 +171,6 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
 {
 	struct dfuse_info	*dfuse_info;
 	int			rc;
-
-	start_fault_attr = d_fault_attr_lookup(100);
 
 	dfuse_info = fs_handle->dpi_info;
 
@@ -444,6 +441,8 @@ main(int argc, char **argv)
 	rc = daos_init();
 	if (rc != -DER_SUCCESS)
 		D_GOTO(out_debug, rc);
+
+	start_fault_attr = d_fault_attr_lookup(100);
 
 	DFUSE_TRA_ROOT(dfuse_info, "dfuse_info");
 

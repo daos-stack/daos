@@ -2491,17 +2491,12 @@ def log_test(conf,
     except lt.LogCheckError:
         if lto.fi_location:
             for wf in wf_list:
-                wf.explain(lto.fi_location,
-                           os.path.basename(filename),
-                           fi_signal)
+                wf.explain(lto.fi_location, os.path.basename(filename), fi_signal)
 
     if skip_fi:
-        if show_memleaks:
-            if lto.fi_location:
-                for wf in wf_list:
-                    wf.explain(lto.fi_location,
-                               os.path.basename(filename),
-                               fi_signal)
+        if lto.fi_location:
+            for wf in wf_list:
+                wf.explain(lto.fi_location, os.path.basename(filename), fi_signal)
         if not lto.fi_triggered:
             compress_file(filename)
             raise NLTestNoFi
@@ -3142,6 +3137,7 @@ class AllocFailTestRun():
                                        'interval': self.loc,
                                        'max_faults': 1})
 
+        # pylint: disable=consider-using-with
         self._fi_file = tempfile.NamedTemporaryFile(prefix='fi_', suffix='.yaml')
 
         self._fi_file.write(yaml.dump(fc, encoding='utf=8'))
@@ -3418,7 +3414,13 @@ class AllocFailTest():
         return aftf
 
 def test_dfuse_start(server, conf, wf):
+    """Start dfuse under fault injection
 
+    This test will check error paths for faults that can occur whilst starting
+    dfuse.  To do this it injects a fault into dfuse just before dfuse_session_mount
+    so that it always returns immediately rather than registering with the kernel
+    and then it runs dfuse up to this point checking the error paths.
+    """
     pool = server.get_test_pool()
 
     container = create_cont(conf, pool, ctype='POSIX')

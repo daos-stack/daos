@@ -1047,8 +1047,7 @@ dfuse_ie_close(struct dfuse_projection_info *fs_handle,
 }
 
 int
-dfuse_fs_start(struct dfuse_projection_info *fs_handle,
-	       struct dfuse_cont *dfs)
+dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 {
 	struct fuse_args		args = {0};
 	struct fuse_lowlevel_ops	*fuse_ops = NULL;
