@@ -395,38 +395,33 @@ ult_create_internal(void (*func)(void *), void *arg, int xs_type, int tgt_idx,
 	if (dx == NULL)
 		return -DER_NONEXIST;
 
-	if (stack_size > 0) {
-		rc = ABT_thread_attr_create(&attr);
-		if (rc != ABT_SUCCESS)
-			return dss_abterr2der(rc);
+	if (stack_size == 0)
+		stack_size = DSS_DEFAULT_STACK_SZ;
 
-		rc = ABT_thread_attr_set_stacksize(attr, stack_size);
-		if (rc != ABT_SUCCESS)
-			D_GOTO(free, rc = dss_abterr2der(rc));
+	rc = ABT_thread_attr_create(&attr);
+	if (rc != ABT_SUCCESS)
+		return dss_abterr2der(rc);
 
-		D_DEBUG(DB_TRACE, "Create ult stacksize is %zd\n", stack_size);
-	} else {
-		attr = ABT_THREAD_ATTR_NULL;
-	}
+	rc = ABT_thread_attr_set_stacksize(attr, stack_size);
+	if (rc != ABT_SUCCESS)
+		rc = dss_abterr2der(rc);
+	else
+		rc = sched_create_thread(dx, func, arg, attr, ult, flags);
 
-	rc = sched_create_thread(dx, func, arg, attr, ult, flags);
+	D_DEBUG(DB_TRACE, "Create ult with stacksize %zd: "DF_RC"\n", stack_size, DP_RC(rc));
 
-free:
-	if (attr != ABT_THREAD_ATTR_NULL) {
-		rc1 = ABT_thread_attr_free(&attr);
-		if (rc1 != ABT_SUCCESS)
-			/* The child ULT has already been created,
-			 * we should not return the error for the
-			 * ABT_thread_attr_free() failure; otherwise,
-			 * the caller will free the parameters ("arg")
-			 * that is being used by the child ULT.
-			 *
-			 * So let's ignore the failure, the worse case
-			 * is that we may leak some DRAM.
-			 */
-			D_ERROR("ABT_thread_attr_free failed: %d\n",
-				dss_abterr2der(rc1));
-	}
+	rc1 = ABT_thread_attr_free(&attr);
+	if (rc1 != ABT_SUCCESS)
+		/* The child ULT has already been created,
+		 * we should not return the error for the
+		 * ABT_thread_attr_free() failure; otherwise,
+		 * the caller will free the parameters ("arg")
+		 * that is being used by the child ULT.
+		 *
+		 * So let's ignore the failure, the worse case
+		 * is that we may leak some DRAM.
+		 */
+		D_ERROR("ABT_thread_attr_free failed: %d\n", dss_abterr2der(rc1));
 
 	return rc;
 }

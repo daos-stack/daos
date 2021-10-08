@@ -490,6 +490,7 @@ struct dss_module {
  * Stack size used for ULTs with deep stack
  */
 #define DSS_DEEP_STACK_SZ	65536
+#define DSS_DEFAULT_STACK_SZ	(DSS_DEEP_STACK_SZ >> 1)
 
 enum dss_xs_type {
 	/** current xstream */
