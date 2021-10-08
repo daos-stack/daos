@@ -33,7 +33,7 @@ class IorSmall(IorTestBase):
                 multiple client processes in two separate nodes.
 
         :avocado: tags=all,pr,daily_regression
-        :avocado: tags=hw,large
+        :avocado: tags=hw,small
         :avocado: tags=daosio,checksum,mpich,dfuse,DAOS_5610
         :avocado: tags=iorsmall
         """
