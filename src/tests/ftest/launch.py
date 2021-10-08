@@ -20,7 +20,7 @@ import subprocess #nosec
 import site
 import sys
 import time
-from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.etree.ElementTree import Element, SubElement, tostring #nosec
 import yaml
 from defusedxml import minidom
 import defusedxml.ElementTree as ET
