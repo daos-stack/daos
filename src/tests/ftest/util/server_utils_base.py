@@ -31,7 +31,7 @@ class DaosServerCommand(YamlCommand):
 
     DEFAULT_CONFIG_FILE = os.path.join(os.sep, "etc", "daos", "daos_server.yml")
 
-    def __init__(self, path="", yaml_cfg=None, timeout=30):
+    def __init__(self, path="", yaml_cfg=None, timeout=60):
         """Create a daos_server command object.
 
         Args:

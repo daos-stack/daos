@@ -2,14 +2,15 @@ hosts:
   test_servers:
     - server-A
     - server-B
+    - server-C
   test_clients:
-    - client-A
+    - client-B
 timeout: 240
 server_config:
   name: daos_server
   servers:
     bdev_class: nvme
-    bdev_list: ["aaaa:aa:aa.a"]
+    bdev_list: ["0000:81:00.0"]
 pool:
   mode: 146
   name: daos_server

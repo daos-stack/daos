@@ -308,7 +308,7 @@ class DaosServerManager(SubprocessManager):
             cmd.sub_command_class.sub_command_class.hugepages.value = hugepages
 
         self.log.info("Preparing DAOS server storage: %s", str(cmd))
-        results = run_pcmd(self._hosts, str(cmd), timeout=40)
+        results = run_pcmd(self._hosts, str(cmd), timeout=60)
 
         # gratuitously lifted from pcmd() and get_current_state()
         result = {}
@@ -478,7 +478,7 @@ class DaosServerManager(SubprocessManager):
             "<SERVER> Formatting hosts: <%s>", self.dmg.hostlist)
         # Temporarily increasing timeout to avoid CI errors until DAOS-5764 can
         # be further investigated.
-        self.dmg.storage_format(timeout=40)
+        self.dmg.storage_format(timeout=60)
 
         # Wait for all the engines to start
         self.detect_engine_start()

@@ -238,7 +238,7 @@ class DmgCommand(DmgCommandBase):
         # }
         return self._get_json_result(("storage", "scan"), verbose=verbose)
 
-    def storage_format(self, reformat=False, timeout=30, verbose=False,
+    def storage_format(self, reformat=False, timeout=60, verbose=False,
                        force=False):
         """Get the result of the dmg storage format command.
 

@@ -1056,7 +1056,7 @@ pipeline {
                         label params.CI_NVME_VMD_LABEL
                     }
                     steps {
-                        functionalTest target: "leap15",
+                        functionalTest target: "leap15.2",
                                        inst_repos: daosRepos(),
                                        inst_rpms: functionalPackages('leap15', 1, next_version),
                                        test_function: 'runTestFunctionalV2',
