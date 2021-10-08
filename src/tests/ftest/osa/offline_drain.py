@@ -93,10 +93,6 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         for val in range(0, num_pool):
             # Drain ranks provided in YAML file
             for index, rank in enumerate(self.ranks):
-                # With pool filled up, we can drain only a single rank
-                # with 8 targets.
-                if pool_fillup > 0 and index > 0:
-                    continue
                 self.pool = pool[val]
                 # If we are testing using multiple pools, reintegrate
                 # the rank back and then drain.

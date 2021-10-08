@@ -98,8 +98,6 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         random_pool = random.randint(0, (num_pool-1))
         for _ in range(0, self.loop_test_cnt):
             for val, _ in enumerate(rank):
-                if pool_fillup > 0 and val > 0:
-                    continue
                 self.pool = pool[random_pool]
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.get_pool_version()
@@ -145,10 +143,6 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
             # Reintegrate the ranks which was excluded
             for val, _ in enumerate(rank):
-                # With pool filled up, we can exclude/reintegrate only a single rank
-                # with 8 targets.
-                if pool_fillup > 0 and val > 0:
-                    continue
                 if self.test_with_blank_node is True:
                     ip_addr, p_num = self.get_ipaddr_for_rank(rank[val])
                     self.remove_pool_dir(ip_addr, p_num)
