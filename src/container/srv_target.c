@@ -258,7 +258,8 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	 */
 	epoch_max = hlc - interval;
 
-	if (epoch_min > epoch_max) {
+	/* Make sure aggregation will not be executed too often, at least every interval */
+	if (epoch_min >= epoch_max) {
 		/* Nothing can be aggregated */
 		*msecs = max(*msecs, crt_hlc2msec(epoch_min - epoch_max));
 		return 0;
@@ -272,29 +273,21 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		return 0;
 	}
 
-	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch_max "DF_X64" agg max "DF_X64"\n",
-		hlc, epoch_max, cont->sc_aggregation_max);
-	/* Cap the aggregation upper bound to the snapshot in creating */
+	/* Adjust aggregation top boundary */
 	if (epoch_max >= cont->sc_aggregation_max)
 		epoch_max = cont->sc_aggregation_max - 1;
 
-	if (param->ap_max_eph_get) {
-		uint64_t max_eph = param->ap_max_eph_get(cont);
+	if (param->ap_max_eph_get)
+		epoch_max = min(epoch_max, param->ap_max_eph_get(cont));
 
-		epoch_max = min(epoch_max, max_eph);
-		if (epoch_min >= epoch_max) {
-			/**
-			 * For VOS aggregation, max might be 0, if EC
-			 * aggregation does not broadcast boundary yet.
-			 **/
-			D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n",
-				epoch_min, epoch_max);
-			return 0;
-		}
+	/* Check the min/max epoch again after adjustment */
+	if (epoch_min >= epoch_max) {
+		D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n", epoch_min, epoch_max);
+		return 0;
 	}
 
-	D_ASSERTF(epoch_min < epoch_max, "Min "DF_X64", Max "DF_X64"\n",
-		  epoch_min, epoch_max);
+	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n",
+		hlc, epoch_max, epoch_min, cont->sc_aggregation_max);
 
 	if (cont->sc_snapshots_nr + 1 < MAX_SNAPSHOT_LOCAL) {
 		snapshots = snapshots_local;
