@@ -74,10 +74,8 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
                     self.ior_cmd.dfs_oclass.update(oclass)
                     self.ior_cmd.dfs_dir_oclass.update(oclass)
                     self.ior_default_flags = self.ior_w_flags
-                    self.ior_cmd.transfer_size.update(test_seq[2])
-                    self.ior_scm_xfersize = self.ior_cmd.transfer_size.value
                     self.log.info(self.pool.pool_percentage_used())
-                    self.start_ior_load(storage='SCM', percent=pool_fillup)
+                    self.start_ior_load(storage='NVMe', percent=pool_fillup)
                     self.log.info(self.pool.pool_percentage_used())
                 else:
                     self.run_ior_thread("Write", oclass, test_seq)
@@ -95,6 +93,10 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         for val in range(0, num_pool):
             # Drain ranks provided in YAML file
             for index, rank in enumerate(self.ranks):
+                # With pool filled up, we can drain only a single rank
+                # with 8 targets.
+                if pool_fillup > 0 and index > 0:
+                    continue
                 self.pool = pool[val]
                 # If we are testing using multiple pools, reintegrate
                 # the rank back and then drain.
@@ -133,7 +135,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
             pool[val].display_pool_daos_space(display_string)
             if data:
                 if pool_fillup > 0:
-                    self.start_ior_load(storage='SCM', operation='Read', percent=pool_fillup)
+                    self.start_ior_load(storage='NVMe', operation='Read', percent=pool_fillup)
                 else:
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
@@ -257,7 +259,7 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         :avocado: tags=osa,offline_drain_full
         :avocado: tags=offline_drain_with_less_pool_space
         """
-        self.log.info("Offline Drain : Test with 10 percent pool space")
+        self.log.info("Offline Drain : Test with less pool space")
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
         pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
         self.run_offline_drain_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)

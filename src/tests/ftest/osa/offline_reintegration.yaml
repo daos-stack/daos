@@ -82,7 +82,7 @@ ior:
 mdtest:
   api: DFS
   client_processes:
-    np: 2
+    np: 16
   num_of_files_dirs: 100
   test_dir: "/"
   iteration: 1
@@ -119,5 +119,7 @@ blank_node:
 snapshot:
   test_with_snapshot: True
 pool_capacity:
-  pool_fillup: 90
-  pool_test_oclass: RP_2G8
+  pool_fillup: 60
+  pool_test_oclass: RP_2G24
+  pool_test_repetitions: 1
+

@@ -30,6 +30,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.ior_test_sequence = self.params.get("ior_test_sequence",
                                                  '/run/ior/iorflags/*')
         self.test_oclass = self.params.get("oclass", '/run/test_obj_class/*')
+        self.ior_test_repetitions = self.params.get("pool_test_repetitions",
+                                                    '/run/pool_capacity/*')
         self.loop_test_cnt = 1
         # Recreate the client hostfile without slots defined
         self.hostfile_clients = write_host_file(
@@ -76,10 +78,9 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
                     self.ior_cmd.dfs_oclass.update(oclass)
                     self.ior_cmd.dfs_dir_oclass.update(oclass)
                     self.ior_default_flags = self.ior_w_flags
-                    self.ior_cmd.transfer_size.update(test_seq[2])
-                    self.ior_scm_xfersize = self.ior_cmd.transfer_size.value
+                    self.ior_cmd.repetitions.update(self.ior_test_repetitions)
                     self.log.info(self.pool.pool_percentage_used())
-                    self.start_ior_load(storage='SCM', percent=pool_fillup)
+                    self.start_ior_load(storage='NVMe', percent=pool_fillup)
                     self.log.info(self.pool.pool_percentage_used())
                 else:
                     self.run_ior_thread("Write", oclass, test_seq)
@@ -97,6 +98,8 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         random_pool = random.randint(0, (num_pool-1))
         for _ in range(0, self.loop_test_cnt):
             for val, _ in enumerate(rank):
+                if pool_fillup > 0 and val > 0: 
+                    continue
                 self.pool = pool[random_pool]
                 self.pool.display_pool_daos_space("Pool space: Beginning")
                 pver_begin = self.get_pool_version()
@@ -142,6 +145,10 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
             # Reintegrate the ranks which was excluded
             for val, _ in enumerate(rank):
+                # With pool filled up, we can exclude/reintegrate only a single rank
+                # with 8 targets.
+                if pool_fillup > 0 and val > 0: 
+                    continue
                 if self.test_with_blank_node is True:
                     ip_addr, p_num = self.get_ipaddr_for_rank(rank[val])
                     self.remove_pool_dir(ip_addr, p_num)
@@ -175,7 +182,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
             self.pool = pool[val]
             if data:
                 if pool_fillup > 0:
-                    self.start_ior_load(storage='SCM', operation='Read', percent=pool_fillup)
+                    self.start_ior_load(storage='NVMe', operation='Read', percent=pool_fillup)
                 else:
                     self.run_ior_thread("Read", oclass, test_seq)
                     self.run_mdtest_thread(oclass)
@@ -327,7 +334,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         :avocado: tags=osa,offline_reintegration_full
         :avocado: tags=offline_reintegrate_with_less_pool_space
         """
-        self.log.info("Offline Reintegration : Test with 10 percent pool space")
+        self.log.info("Offline Reintegration : Test with less pool space")
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
         pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
         self.run_offline_reintegration_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)
