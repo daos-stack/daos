@@ -5,9 +5,6 @@
 # environment for building the DAOS project.
 #
 
-# Pull base image
-ARG BASE_DISTRO=centos:8
-FROM $BASE_DISTRO
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
@@ -306,10 +303,6 @@ RUN echo -e "<settings>\n\
 </settings>" > /home/daos/.m2/settings.xml
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-
-RUN CHOICE=$(echo "" | sudo alternatives --config java | grep "java-1.8" | tr -cd '[[:digit:]]') && \
-        echo ${CHOICE:0:1} | sudo alternatives --config java
-RUN java -version
 
 RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || \
     mvn clean install -T 1C -DskipITs -Dgpg.skip -Ddaos.install.path=/opt/daos
