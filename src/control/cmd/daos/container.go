@@ -229,6 +229,28 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		}
 	}
 
+	if cmd.PoolID().Empty() {
+		if cmd.Path == "" {
+			return errors.New("no pool ID or dfs path supplied")
+		}
+
+		ap.path = C.CString(cmd.Path)
+		rc := C.resolve_duns_pool(ap)
+		freeString(ap.path)
+		if err := daosError(rc); err != nil {
+			if rc == -C.DER_INVAL {
+				return errors.Errorf("invalid dfs path %q", cmd.Path)
+			}
+			return err
+		}
+
+		pu, err := uuidFromC(ap.p_uuid)
+		if err != nil {
+			return err
+		}
+		cmd.poolBaseCmd.Args.Pool.UUID = pu
+	}
+
 	disconnectPool, err := cmd.connectPool(C.DAOS_PC_RW, ap)
 	if err != nil {
 		return err

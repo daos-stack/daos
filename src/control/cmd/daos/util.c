@@ -3,6 +3,8 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause-Patent
  */
+#include <libgen.h>
+
 #include "util.h"
 
 static int
@@ -96,4 +98,30 @@ out:
 	D_FREE(dir_name);
 	D_FREE(name);
 	return daos_errno2der(rc);
+}
+
+int
+resolve_duns_pool(struct cmd_args_s *ap)
+{
+	int			 rc = 0;
+	char			*path = NULL;
+	char			*dir = NULL;
+	struct dfuse_il_reply	 il_reply = {0};
+
+	if (ap->path == NULL)
+		return -DER_INVAL;
+
+	D_STRNDUP(path, ap->path, strlen(ap->path));
+	if (path == NULL)
+		return -DER_NOMEM;
+	dir = dirname(path);
+
+	rc = call_dfuse_ioctl(dir, &il_reply);
+	D_FREE(path);
+	if (rc != 0)
+		return -DER_INVAL;
+
+	uuid_copy(ap->p_uuid, il_reply.fir_pool);
+
+	return 0;
 }
