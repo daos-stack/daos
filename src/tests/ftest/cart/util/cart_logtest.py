@@ -362,9 +362,9 @@ class LogTest():
                     if self.hide_fi_calls:
                         if line.is_fi_site():
                             show = False
-                            self.fi_triggered = True
                         elif line.is_fi_alloc_fail():
                             show = False
+                            self.fi_triggered = True
                             self.fi_location = line
                         elif '-1009' in line.get_msg():
 
