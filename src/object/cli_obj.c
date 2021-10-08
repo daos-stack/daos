@@ -3399,6 +3399,20 @@ obj_shard_comp_cb(struct shard_auxi_args *shard_auxi,
 					shard_auxi->target, new_tgt);
 			}
 		} else {
+			if (ret == -DER_KEY2BIG && obj_is_enum_opc(obj_auxi->opc)) {
+				daos_obj_list_t		*obj_arg;
+				struct shard_list_args	*shard_arg;
+
+				/* For KEY2BIG case, kds[0] from obj_arg will store the required KDS
+				 * size, so let's copy it from shard to object kds.
+				 */
+				obj_arg = dc_task_get_args(obj_auxi->obj_task);
+				shard_arg = container_of(shard_auxi,
+							 struct shard_list_args, la_auxi);
+				if (obj_arg->kds != shard_arg->la_kds)
+					obj_arg->kds[0] = shard_arg->la_kds[0];
+			}
+
 			iter_arg->retry = false;
 		}
 		return ret;
