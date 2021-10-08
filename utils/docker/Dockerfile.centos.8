@@ -4,7 +4,8 @@
 # 'recipe' for Docker to build an image of centOS 8 based
 # environment for building the DAOS project.
 #
-
+# Pull base image
+FROM centos:8
 LABEL maintainer="daos@daos.groups.io"
 
 # Intermittent cache-bust.  Used to reduce load on the actual CACHEBUST later.
