@@ -90,7 +90,7 @@ class DmvrLargeDir(DataMoverTestBase):
         # the result is that a NEW directory is created in the destination
         daos_path = "/" + os.path.basename(posix_path) + self.mdtest_cmd.test_dir.value
 
-        # update mdtest params, read back and verify data from cont2
+        # update mdtest params, read back and verify data from cont3
         self.mdtest_cmd.read_bytes.update(file_size)
         self.run_mdtest_with_params(
             "DAOS", daos_path, self.pool[0], self.container[2],

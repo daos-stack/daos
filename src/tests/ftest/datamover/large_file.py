@@ -84,7 +84,7 @@ class DmvrPosixLargeFile(DataMoverTestBase):
         # the result is that a NEW directory is created in the destination
         daos_path = "/" + os.path.basename(posix_path) + self.ior_cmd.test_file.value
 
-        # update ior params, read back and verify data from cont2
+        # update ior params, read back and verify data from cont3
         self.run_ior_with_params(
             "DAOS", daos_path, self.pool[0], self.container[2],
             flags="-r -R")
