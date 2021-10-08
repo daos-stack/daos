@@ -74,7 +74,7 @@ ior:
    - [32M, 128M, 2K]       # Partial Striped
   objectclass:
    dfs_oclass_list:
-    #- [EC_Object_Class, Minimum number of servers]
+    # - [EC_Object_Class, Minimum number of servers]
     - ["EC_2P1G1", 4]
     - ["EC_4P1G1", 6]
     - ["EC_4P2G1", 6]
