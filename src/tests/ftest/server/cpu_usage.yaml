@@ -5,6 +5,7 @@ hosts:
     - client-A
 timeout: 130
 server_config:
+  nr_hugepages: 8192
   servers:
     # 16 targets and 16 nr_xs_helpers are the requirements.
     targets: 16

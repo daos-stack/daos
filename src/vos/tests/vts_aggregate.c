@@ -421,7 +421,7 @@ aggregate_basic_lb(struct io_test_args *arg, struct agg_tst_dataset *ds, int pun
 		    "Discard" : "Aggregate", epr_a->epr_lo, epr_a->epr_hi);
 
 	if (ds->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
+		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a,
 				   ds_csum_agg_recalc, NULL, NULL, false);
@@ -607,7 +607,7 @@ aggregate_multi(struct io_test_args *arg, struct agg_tst_dataset *ds_sample)
 		    "Discard" : "Aggregate");
 
 	if (ds_sample->td_discard)
-		rc = vos_discard(arg->ctx.tc_co_hdl, epr_a, NULL, NULL);
+		rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, epr_a, NULL, NULL);
 	else
 		rc = vos_aggregate(arg->ctx.tc_co_hdl, epr_a, NULL, NULL, NULL,
 				   false);
@@ -1159,7 +1159,7 @@ agg_punches_test_helper(void **state, int record_type, int type, bool discard,
 
 	for (i = 0; i < 2; i++) {
 		if (discard)
-			rc = vos_discard(arg->ctx.tc_co_hdl, &epr, NULL, NULL);
+			rc = vos_discard(arg->ctx.tc_co_hdl, NULL /* objp */, &epr, NULL, NULL);
 		else
 			rc = vos_aggregate(arg->ctx.tc_co_hdl, &epr, NULL,
 					   NULL, NULL, false);
@@ -1259,6 +1259,138 @@ static void
 discard_15(void **state)
 {
 	agg_punches_test(state, DAOS_IOD_ARRAY, true);
+	cleanup();
+}
+
+static void
+discard_obj_test(void **state, bool empty)
+{
+	struct io_test_args	*arg = *state;
+	daos_unit_oid_t		 oid;
+	daos_epoch_range_t	 epr = {1, DAOS_EPOCH_MAX - 1};
+	daos_epoch_t		 epoch;
+	int			 rc;
+	char			 first_val = 'f';
+	char			 last_val = 'l';
+	char			 middle_val = 'm';
+	char			 fetch_val;
+	char			 expected;
+	char			 dkey[2] = "a";
+	char			 akey[2] = "b";
+	char			 akey2[2] = "c";
+	int			 old_flags = arg->ta_flags;
+	daos_recx_t		 recx = {0, 1};
+
+	oid = dts_unit_oid_gen(0, 0, 0);
+
+	arg->ta_flags = TF_USE_VAL;
+
+	if (!empty) {
+		update_value(arg, oid, epr.epr_lo++, 0, dkey, akey,
+			     DAOS_IOD_SINGLE, sizeof(first_val), &recx,
+			     &first_val);
+
+		update_value(arg, oid, epr.epr_lo++, 0, dkey, akey2,
+			     DAOS_IOD_ARRAY, sizeof(first_val), &recx,
+			     &first_val);
+
+	}
+
+	epoch = epr.epr_lo;
+
+	update_value(arg, oid, epoch++, 0, dkey, akey,
+		     DAOS_IOD_SINGLE, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	update_value(arg, oid, epoch++, 0, dkey, akey2,
+		     DAOS_IOD_ARRAY, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	epr.epr_hi = epoch++;
+
+	update_value(arg, oid, epoch++, 0, dkey, akey,
+		     DAOS_IOD_SINGLE, sizeof(last_val), &recx,
+		     &last_val);
+
+	update_value(arg, oid, epoch++, 0, dkey, akey2,
+		     DAOS_IOD_ARRAY, sizeof(last_val), &recx,
+		     &last_val);
+
+	rc = vos_discard(arg->ctx.tc_co_hdl, &oid, &epr, NULL, NULL);
+	assert_int_equal(rc, 0);
+
+	/* Middle value should now be gone.  If empty, it will be 0, otherwise will be first
+	 * value
+	 */
+	expected = 0;
+	fetch_val = 0;
+	if (!empty)
+		expected = first_val;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, DAOS_IOD_SINGLE,
+		    sizeof(first_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+	fetch_val = 0;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey2, DAOS_IOD_ARRAY,
+		    sizeof(first_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+
+	/** last value should still be there too since it's after the discard range */
+	expected = last_val;
+	fetch_val = 0;
+	fetch_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_SINGLE,
+		    sizeof(last_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+	fetch_val = 0;
+	fetch_value(arg, oid, epoch, 0, dkey, akey2, DAOS_IOD_ARRAY,
+		    sizeof(last_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+
+	/** Restore the middle values */
+	update_value(arg, oid, epr.epr_lo, 0, dkey, akey,
+		     DAOS_IOD_SINGLE, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	update_value(arg, oid, epr.epr_lo + 1, 0, dkey, akey2,
+		     DAOS_IOD_ARRAY, sizeof(middle_val), &recx,
+		     &middle_val);
+
+	/** Now check middle value again */
+	expected = middle_val;
+	fetch_val = 0;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, DAOS_IOD_SINGLE,
+		    sizeof(middle_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+	fetch_val = 0;
+	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey2, DAOS_IOD_ARRAY,
+		    sizeof(middle_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+
+	/** And check last value again */
+	expected = last_val;
+	fetch_val = 0;
+	fetch_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_SINGLE,
+		    sizeof(last_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+	fetch_val = 0;
+	fetch_value(arg, oid, epoch, 0, dkey, akey2, DAOS_IOD_ARRAY,
+		    sizeof(last_val), &recx, &fetch_val);
+	assert_int_equal(fetch_val, expected);
+
+	arg->ta_flags = old_flags;
+
+}
+
+static void
+discard_16(void **state)
+{
+	discard_obj_test(state, true);
+	cleanup();
+}
+
+static void
+discard_17(void **state)
+{
+	discard_obj_test(state, false);
 	cleanup();
 }
 
@@ -2584,6 +2716,56 @@ aggregate_32(void **state)
 	cleanup();
 }
 
+static void
+aggregate_33(void **state)
+{
+	struct io_test_args	*arg = *state;
+	struct agg_tst_dataset	 ds = { 0 };
+	daos_recx_t		 recx_arr[10];
+	daos_epoch_t		 punch_epochs[] = {2, 4, 6, 8, 10, 12};
+	int			 iod_size = 1024, end_idx;
+
+	end_idx = (VOS_MW_FLUSH_THRESH + iod_size - 1) / iod_size;
+	assert_true(end_idx > 5);
+
+	/* Insert a record */
+	recx_arr[0].rx_idx = 0;
+	recx_arr[0].rx_nr = 2;
+	recx_arr[1].rx_idx = 0;
+	recx_arr[1].rx_nr = 2;
+	recx_arr[2].rx_idx = 2;
+	recx_arr[2].rx_nr = 2;
+	recx_arr[3].rx_idx = 1;
+	recx_arr[3].rx_nr = 2;
+	recx_arr[4].rx_idx = 4;
+	recx_arr[4].rx_nr = 2;
+	recx_arr[5].rx_idx = 4;
+	recx_arr[5].rx_nr = 2;
+	recx_arr[6].rx_idx = 6;
+	recx_arr[6].rx_nr = 2;
+	recx_arr[7].rx_idx = 6;
+	recx_arr[7].rx_nr = 2;
+	recx_arr[8].rx_idx = 12;
+	recx_arr[8].rx_nr = 20;
+	recx_arr[9].rx_idx = 12;
+	recx_arr[9].rx_nr = 2;
+
+	ds.td_type = DAOS_IOD_ARRAY;
+	ds.td_iod_size = iod_size;
+	ds.td_recx_nr = ARRAY_SIZE(recx_arr);
+	ds.td_recx = &recx_arr[0];
+	ds.td_expected_recs = 2;
+	ds.td_upd_epr.epr_lo = 1;
+	ds.td_upd_epr.epr_hi = ARRAY_SIZE(recx_arr);
+	ds.td_agg_epr.epr_lo = 0;
+	ds.td_agg_epr.epr_hi = ARRAY_SIZE(recx_arr) + 1;
+	ds.td_discard = false;
+	ds.td_delete = true;
+
+	aggregate_basic(arg, &ds, ARRAY_SIZE(punch_epochs), &punch_epochs[0]);
+	cleanup();
+}
+
 static int
 agg_tst_teardown(void **state)
 {
@@ -2623,9 +2805,33 @@ static const struct CMUnitTest discard_tests[] = {
 	  discard_14, NULL, agg_tst_teardown },
 	{ "VOS465: Discard object/key punches array",
 	  discard_15, NULL, agg_tst_teardown },
+	{ "VOS466: Object specific discard (empty obj)",
+	  discard_16, NULL, agg_tst_teardown },
+	{ "VOS467: Object specific discard (non-empty obj)",
+	  discard_17, NULL, agg_tst_teardown },
 };
 
 static const struct CMUnitTest aggregate_tests[] = {
+	{ "VOS424: Aggregate extents not fully covered by delete record",
+	  aggregate_24, NULL, agg_tst_teardown },
+	{ "VOS425: Aggregate delete of end of merge window",
+	  aggregate_25, NULL, agg_tst_teardown },
+	{ "VOS426: Consecutive removed extents",
+	  aggregate_26, NULL, agg_tst_teardown },
+	{ "VOS427: Consecutive removed extents, no logical extents",
+	  aggregate_27, NULL, agg_tst_teardown },
+	{ "VOS428: Logical extent followed by consecutive removed extents",
+	  aggregate_28, NULL, agg_tst_teardown },
+	{ "VOS429: Logical extent followed by disjoint removed extents",
+	  aggregate_29, NULL, agg_tst_teardown },
+	{ "VOS430: Removal stress test",
+	  aggregate_30, NULL, agg_tst_teardown },
+	{ "VOS431: Removal spans windows, flush with no physical records",
+	  aggregate_31, NULL, agg_tst_teardown },
+	{ "VOS432: Overlapping removals",
+	  aggregate_32, NULL, agg_tst_teardown },
+	{ "VOS433: Many small removals",
+	  aggregate_33, NULL, agg_tst_teardown },
 	{ "VOS401: Aggregate SV with confined epr",
 	  aggregate_1, NULL, agg_tst_teardown },
 	{ "VOS402: Aggregate SV with punch records",
@@ -2672,24 +2878,6 @@ static const struct CMUnitTest aggregate_tests[] = {
 	  aggregate_22, NULL, agg_tst_teardown },
 	{ "VOS423: Aggregate deleted records spanning window end",
 	  aggregate_23, NULL, agg_tst_teardown },
-	{ "VOS424: Aggregate extents not fully covered by delete record",
-	  aggregate_24, NULL, agg_tst_teardown },
-	{ "VOS425: Aggregate delete of end of merge window",
-	  aggregate_25, NULL, agg_tst_teardown },
-	{ "VOS426: Consecutive removed extents",
-	  aggregate_26, NULL, agg_tst_teardown },
-	{ "VOS427: Consecutive removed extents, no logical extents",
-	  aggregate_27, NULL, agg_tst_teardown },
-	{ "VOS428: Logical extent followed by consecutive removed extents",
-	  aggregate_28, NULL, agg_tst_teardown },
-	{ "VOS429: Logical extent followed by disjoint removed extents",
-	  aggregate_29, NULL, agg_tst_teardown },
-	{ "VOS430: Removal stress test",
-	  aggregate_30, NULL, agg_tst_teardown },
-	{ "VOS431: Removal spans windows, flush with no physical records",
-	  aggregate_31, NULL, agg_tst_teardown },
-	{ "VOS432: Overlapping removals",
-	  aggregate_32, NULL, agg_tst_teardown },
 };
 
 int
