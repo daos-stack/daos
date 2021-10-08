@@ -119,7 +119,7 @@ resolve_duns_pool(struct cmd_args_s *ap)
 	rc = call_dfuse_ioctl(dir, &il_reply);
 	D_FREE(path);
 	if (rc != 0)
-		return -DER_INVAL;
+		return daos_errno2der(rc);
 
 	uuid_copy(ap->p_uuid, il_reply.fir_pool);
 

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"unsafe"
 
@@ -238,10 +239,7 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		rc := C.resolve_duns_pool(ap)
 		freeString(ap.path)
 		if err := daosError(rc); err != nil {
-			if rc == -C.DER_INVAL {
-				return errors.Errorf("invalid dfs path %q", cmd.Path)
-			}
-			return err
+			return errors.Wrapf(err, "failed to resolve pool id from %q", filepath.Dir(cmd.Path))
 		}
 
 		pu, err := uuidFromC(ap.p_uuid)
