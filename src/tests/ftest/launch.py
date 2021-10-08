@@ -11,6 +11,7 @@
 
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from datetime import datetime
+import errno
 import json
 import os
 import re
@@ -19,10 +20,16 @@ import subprocess #nosec
 import site
 import sys
 import time
+from xml.etree.ElementTree import Element, SubElement, tostring
 import yaml
-import errno
-import defusedxml.ElementTree as ET
 from defusedxml import minidom
+import defusedxml.ElementTree as ET
+
+# Graft some functions from xml.etree into defusedxml etree.
+ET.Element = Element
+ET.SubElement = SubElement
+ET.tostring = tostring
+
 
 from avocado.utils.distro import detect
 from ClusterShell.NodeSet import NodeSet

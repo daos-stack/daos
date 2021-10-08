@@ -480,7 +480,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Mon Sep 27 2021 David Quigley <david.quigley@intel.com> 1.3.105-4
+* Mon Oct 8 2021 David Quigley <david.quigley@intel.com> 1.3.105-4
 - Add defusedxml as a required dependency for the test package.
 
 * Wed Sep 15 2021 Li Wei <wei.g.li@intel.com> 1.3.105-3
