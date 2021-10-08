@@ -250,9 +250,9 @@ class OSAOfflineDrain(OSAUtils, ServerFillUp):
         self.log.info("Offline Drain : After taking snapshot")
         self.run_offline_drain_test(1, data=True)
 
-    def test_osa_offline_reintegrate_with_less_pool_space(self):
+    def test_osa_offline_drain_with_less_pool_space(self):
         """Test ID: DAOS-7160
-        Test Description: Reintegrate rank after taking snapshot.
+        Test Description: Drain rank after with less pool space.
 
         :avocado: tags=all,daily_regression,hw,medium,ib2
         :avocado: tags=osa,offline_drain_full

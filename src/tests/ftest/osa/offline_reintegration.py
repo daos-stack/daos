@@ -328,7 +328,7 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
 
     def test_osa_offline_reintegrate_with_less_pool_space(self):
         """Test ID: DAOS-7160
-        Test Description: Reintegrate rank after taking snapshot.
+        Test Description: Reintegrate rank will less pool space.
 
         :avocado: tags=all,daily_regression,hw,medium,ib2
         :avocado: tags=osa,offline_reintegration_full
