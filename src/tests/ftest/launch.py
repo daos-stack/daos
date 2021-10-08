@@ -784,7 +784,7 @@ def get_vmd_address_backed_nvme(host_list, value):
               devices.
 
     """
-    command = "ls -l /sys/block/ | grep nvme | cut -d\' \' -f11"
+    command = "ls -l /sys/block/ | grep nvme | cut -d\' \' -f12 | cut -d'/' -f4"
 
     task = get_remote_output(host_list, command)
 
