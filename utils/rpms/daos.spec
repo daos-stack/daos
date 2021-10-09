@@ -434,6 +434,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/pl_bench
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
+%{_bindir}/vea_stress
 %{_bindir}/daos_perf
 %{_bindir}/vos_perf
 %{_bindir}/daos_racer
