@@ -172,13 +172,43 @@ dss_collective_reduce_internal(struct dss_coll_ops *ops,
 		}
 
 		dx = dss_get_xstream(DSS_MAIN_XS_ID(tid));
-		if (create_ult)
-			rc = sched_create_thread(dx, collective_func, stream,
-						 ABT_THREAD_ATTR_NULL, NULL,
-						 flags);
-		else
-			rc = sched_create_task(dx, collective_func, stream,
-					       NULL, flags);
+		if (create_ult) {
+			ABT_thread_attr		attr;
+			int			rc1;
+
+			if (flags & DSS_ULT_DEEP_STACK) {
+				rc = ABT_thread_attr_create(&attr);
+				if (rc != ABT_SUCCESS) {
+					rc = dss_abterr2der(rc);
+					D_DEBUG(DB_TRACE, "Failed to set stack size for tgt %d(1): "
+						DF_RC"\n", tid, DP_RC(rc));
+					goto next;
+				}
+
+				rc = ABT_thread_attr_set_stacksize(attr, DSS_DEEP_STACK_SZ);
+				if (rc != ABT_SUCCESS) {
+					rc1 = ABT_thread_attr_free(&attr);
+					D_ASSERTF(rc1 == ABT_SUCCESS, "%d\n", rc1);
+
+					rc = dss_abterr2der(rc);
+					D_DEBUG(DB_TRACE, "Failed to set stack size for tgt %d(2): "
+						DF_RC"\n", tid, DP_RC(rc));
+					goto next;
+				}
+			} else {
+				attr = ABT_THREAD_ATTR_NULL;
+			}
+
+			rc = sched_create_thread(dx, collective_func, stream, attr, NULL, flags);
+			if (attr != ABT_THREAD_ATTR_NULL) {
+				rc1 = ABT_thread_attr_free(&attr);
+				D_ASSERTF(rc1 == ABT_SUCCESS, "%d\n", rc1);
+			}
+		} else {
+			rc = sched_create_task(dx, collective_func, stream, NULL, flags);
+		}
+
+next:
 		if (rc != 0) {
 			stream->st_rc = rc;
 			rc = ABT_future_set(future, (void *)stream);

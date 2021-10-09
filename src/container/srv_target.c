@@ -1572,7 +1572,7 @@ ds_cont_local_open(uuid_t pool_uuid, uuid_t cont_hdl_uuid, uuid_t cont_uuid,
 		ddra->pool = ds_pool_child_get(hdl->sch_cont->sc_pool);
 		uuid_copy(ddra->co_uuid, cont_uuid);
 		rc = dss_ult_create(ds_dtx_resync, ddra, DSS_XS_SELF,
-				    0, 0, NULL);
+				    0, DSS_DEEP_STACK_SZ, NULL);
 		if (rc != 0) {
 			ds_pool_child_put(hdl->sch_cont->sc_pool);
 			D_FREE(ddra);
