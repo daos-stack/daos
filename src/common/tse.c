@@ -233,6 +233,14 @@ tse_task_decref_locked(struct tse_task_private *dtp)
 }
 
 void
+tse_task_set_exec_exclude(tse_task_t *task)
+{
+	struct tse_task_private  *dtp = tse_task2priv(task);
+
+	dtp->dtp_exec_exclude = 1;
+}
+
+void
 tse_task_addref(tse_task_t *task)
 {
 	struct tse_task_private  *dtp = tse_task2priv(task);
@@ -585,8 +593,11 @@ tse_sched_process_init(struct tse_sched_private *dsp)
 				continue;
 			}
 			D_ASSERT(dtp->dtp_func != NULL);
-			if (!dtp->dtp_completed)
+			if (!dtp->dtp_completed) {
+				dtp->dtp_executing = 1;
 				dtp->dtp_func(task);
+				dtp->dtp_executing = 0;
+			}
 		}
 		if (bumped)
 			tse_task_decref(task);
@@ -636,10 +647,13 @@ tse_task_post_process(tse_task_t *task)
 		dtp_tmp->dtp_dep_cnt--;
 		D_DEBUG(DB_TRACE, "daos task %p dep_cnt %d\n", dtp_tmp,
 			dtp_tmp->dtp_dep_cnt);
+
 		if (!dsp->dsp_cancelling && dtp_tmp->dtp_dep_cnt == 0 &&
-		    dtp_tmp->dtp_running) {
+		    dtp_tmp->dtp_running && !(dtp_tmp->dtp_executing && dtp_tmp->dtp_exec_exclude)) {
+		    // /* lxz */ dtp_tmp->dtp_running) {
 			bool done;
 
+			//D_ASSERT(!dtp_tmp->dtp_executing);
 			/*
 			 * If the task is already running, let's mark it
 			 * complete. This happens when we create subtasks in the
@@ -837,6 +851,7 @@ tse_task_complete(tse_task_t *task, int ret)
 	struct tse_sched_private	*dsp	= dtp->dtp_sched;
 	bool				done;
 
+	dtp->dtp_executing = 0;
 	if (dtp->dtp_completed)
 		return;
 
@@ -1028,7 +1043,9 @@ tse_task_schedule_with_delay(tse_task_t *task, bool instant, uint64_t delay)
 	 * function now.
 	 */
 	if (instant) {
+		dtp->dtp_executing = 1;
 		dtp->dtp_func(task);
+		dtp->dtp_executing = 0;
 
 		/** If task was completed return the task result */
 		if (dtp->dtp_completed)

@@ -55,7 +55,10 @@ struct tse_task_private {
 					 dtp_completing:1,
 					/* task is in running state */
 					 dtp_running:1,
-					 dtp_dep_cnt:29;
+					/* task function body is executing */
+					 dtp_executing:1,
+					 dtp_exec_exclude:1,
+					 dtp_dep_cnt:27;
 	/* refcount of the task */
 	uint32_t			 dtp_refcnt;
 	/**

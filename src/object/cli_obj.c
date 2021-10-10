@@ -1615,6 +1615,7 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 
 	if (obj_auxi->io_retry) {
 		/* Let's reset task result before retry */
+		tse_task_set_exec_exclude(task); /* lxz */
 		rc = dc_task_resched(task);
 		if (rc != 0) {
 			D_ERROR("Failed to re-init task (%p)\n", task);

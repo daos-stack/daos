@@ -355,6 +355,9 @@ tse_task_addref(tse_task_t *task);
 void
 tse_task_decref(tse_task_t *task);
 
+void
+tse_task_set_exec_exclude(tse_task_t *task);
+
 /**
  * Add a newly created task to a list. It returns error if the task is already
  * running or completed.
