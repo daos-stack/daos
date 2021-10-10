@@ -7,7 +7,7 @@
 from collections import defaultdict
 import yaml
 
-from apricot import TestWithServers, skipForTicket
+from apricot import TestWithServers
 from command_utils import CommandFailure
 from dmg_utils import DmgCommand
 
@@ -252,7 +252,6 @@ class ConfigGenerateOutput(TestWithServers):
 
         self.check_errors(errors)
 
-    @skipForTicket("DAOS-7792")
     def test_access_points_odd(self):
         """Test --access-points with odd number of APs.
 
