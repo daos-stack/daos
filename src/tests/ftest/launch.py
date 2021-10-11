@@ -1508,6 +1508,10 @@ def rename_logs(avocado_logs_dir, test_file, loop, args):
             status |= 1024
             return status
 
+        # save it for the Launchable [de-]mangle
+        org_xml_data = xml_data
+
+        # First, mangle the in-place file for Jenkins to consume
         test_dir = os.path.split(os.path.dirname(test_file))[-1]
         org_class = "classname=\""
         new_class = "{}FTEST_{}.".format(org_class, test_dir)
@@ -1520,6 +1524,20 @@ def rename_logs(avocado_logs_dir, test_file, loop, args):
             print("Error writing {}: {}".format(xml_file, str(error)))
             status |= 1024
 
+        # Now mangle (or rather unmangle back to canonical xunit1 format)
+        # another copy for Launchable
+        xml_data = org_xml_data
+        org_name = r'(name=")\d+-\.\/.+.(test_[^;]+);[^"]+(")'
+        new_name = r'\1\2\3 file="{}"'.format(test_file)
+        xml_data = re.sub(org_name, new_name, xml_data)
+        xml_file = xml_file[0:-11] + "xunit1_results.xml"
+
+        try:
+            with open(xml_file, "w") as xml_buffer:
+                xml_buffer.write(xml_data)
+        except OSError as error:
+            print("Error writing {}: {}".format(xml_file, str(error)))
+            status |= 1024
     return status
 
 
