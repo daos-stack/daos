@@ -98,6 +98,10 @@ EOF
 fi"
 
 # For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for sockets
+sudo sysctl -w net.ipv4.conf.all.accept_local=1
+sudo sysctl -w net.ipv4.conf.all.arp_ignore=2
+sudo sysctl -w net.ipv4.conf.ib0.rp_filter=2
+sudo sysctl -w net.ipv4.conf.ib1.rp_filter=2
 sudo sysctl -w net.ipv4.conf.all.rp_filter=2
 
 if ! $TEST_RPMS; then
