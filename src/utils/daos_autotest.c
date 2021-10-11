@@ -21,7 +21,7 @@
 #include <daos/pool.h>
 
 #include "daos_hdlr.h"
-
+#include "math.h"
 /** Input arguments passed to daos utility */
 struct cmd_args_s *autotest_ap;
 
@@ -55,6 +55,13 @@ daos_handle_t	coh3 = DAOS_HDL_INVAL;
 /** force cleanup */
 int force;
 
+/** skip big steps */
+int skip_steps[] = {28, 29};
+
+/** deadline/time limit */
+uint64_t	deadline_count;
+clock_t		deadline_limit = 30 * CLOCKS_PER_SEC;
+
 int domain_nr;
 
 /** total number of records for progress bar */
@@ -80,7 +87,7 @@ increment_progress(int progress)
 	if (progress % tick_size == 0) {
 		int percentage;
 
-		percentage = (double) progress / (double) total_nr * 100.0;
+		percentage = ceil((double) progress / (double) total_nr * 100.0);
 		fprintf(autotest_ap->outstream, "\b\b\b\b");
 		fprintf(autotest_ap->outstream, "% 4d", percentage);
 		fflush(autotest_ap->outstream);
@@ -92,6 +99,7 @@ finish_progress()
 {
 	fprintf(autotest_ap->outstream, "\b\b\b\b");
 }
+
 
 static inline void
 new_oid(void)
@@ -155,6 +163,7 @@ step_fail(const char *comment, ...)
 	step_print("\033[0;31mKO\033[0m", comment, ap);
 	va_end(ap);
 }
+
 static inline void
 step_skip(const char *comment, ...)
 {
@@ -246,6 +255,7 @@ ccreate(void)
 
 	cuuid2 = "autotest_cont_rf1";
 	rc = daos_cont_create_with_label(poh, cuuid2, prop, NULL, NULL);
+	daos_prop_free(prop);
 	if (rc)
 		D_GOTO(fail, rc);
 
@@ -258,6 +268,7 @@ ccreate(void)
 
 	cuuid3 = "autotest_cont_rf2";
 	rc = daos_cont_create_with_label(poh, cuuid3, prop2, NULL, NULL);
+	daos_prop_free(prop2);
 	if (rc)
 		D_GOTO(fail, rc);
 
@@ -364,18 +375,22 @@ oSX(void)
 }
 
 static int
-kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
+kv_put(daos_handle_t oh, daos_size_t size)
 {
 	daos_handle_t	eq;
 	daos_event_t	ev_array[MAX_INFLIGHT];
 	char		key[MAX_INFLIGHT][10];
 	char		*val;
 	daos_event_t	*evp;
-	uint64_t	i;
 	int		rc;
 	int		eq_rc;
+	double		timeout;
+	double		step_adj;
+	double		t;
 
-	total_nr = nr;
+	deadline_count = 1;
+
+	total_nr = ticks;
 	setup_progress();
 
 	/** Create event queue to manage asynchronous I/Os */
@@ -392,19 +407,18 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	memset(val, 'D', size * MAX_INFLIGHT);
 
 	/** Issue actual I/Os */
-	for (i = 1; i < nr + 1; i++) {
+	while (true) {
 		char *key_cur;
 		char *val_cur;
 
-		if (i < MAX_INFLIGHT) {
+		if (deadline_count < MAX_INFLIGHT) {
 			/** Haven't reached max request in flight yet */
-			evp = &ev_array[i];
+			evp = &ev_array[deadline_count];
 			rc = daos_event_init(evp, eq, NULL);
 			if (rc)
 				break;
-
-			key_cur = key[i];
-			val_cur = val + size * i;
+			key_cur = key[deadline_count];
+			val_cur = val + size * (deadline_count);
 		} else {
 			int slot;
 
@@ -434,17 +448,27 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 		}
 
 		/** key = insert sequence ID */
-		sprintf(key_cur, "%ld", i);
+		sprintf(key_cur, "%ld", deadline_count);
 		/** value = sequend ID + DDDDDDD... */
-		*((uint64_t *)val_cur) = i;
+		*((uint64_t *)val_cur) = deadline_count;
 
 		/** Insert kv pair */
 		rc = daos_kv_put(oh, DAOS_TX_NONE, 0, key_cur, size, val_cur,
 				evp);
+
+		if (start + deadline_limit <= clock()) {
+			break;
+		}
+
 		if (rc)
 			break;
 
-		increment_progress(i);
+		deadline_count++;
+
+		timeout = deadline_limit / CLOCKS_PER_SEC;
+		step_adj = ticks / timeout;
+		t = ((start + deadline_limit) - clock()) / CLOCKS_PER_SEC;
+		increment_progress((int)((timeout - t) * step_adj));
 	}
 
 	/** Wait for completion of all in-flight requests */
@@ -473,7 +497,7 @@ kv_put(daos_handle_t oh, daos_size_t size, uint64_t nr)
 }
 
 static int
-kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
+kv_get(daos_handle_t oh, daos_size_t size)
 {
 	daos_handle_t	eq;
 	daos_event_t	ev_array[MAX_INFLIGHT];
@@ -486,7 +510,7 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	int		rc;
 	int		eq_rc;
 
-	total_nr = nr;
+	total_nr = deadline_count;
 	setup_progress();
 
 	/** Create event queue to manage asynchronous I/Os */
@@ -502,7 +526,7 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 	}
 
 	/** Issue actual I/Os */
-	for (i = 1; i < nr + 1; i++) {
+	for (i = 1; i < deadline_count + 1; i++) {
 		char		*key_cur;
 		char		*val_cur;
 		daos_size_t	*val_sz_cur;
@@ -600,8 +624,8 @@ kv_get(daos_handle_t oh, daos_size_t size, uint64_t nr)
 			return eq_rc;
 	}
 
-	/** verify that we got the sum of all integers from 1 to nr */
-	if (res != nr * (nr + 1) / 2)
+	/** verify that we got the sum of all integers from 1 to deadline_count */
+	if (res != deadline_count * (deadline_count + 1) / 2)
 		rc = -DER_MISMATCH;
 
 	finish_progress();
@@ -624,7 +648,7 @@ kv_insert128(void)
 		return -1;
 	}
 
-	put_rc = kv_put(oh, 128, 1000000);
+	put_rc = kv_put(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -654,7 +678,7 @@ kv_read128(void)
 		return -1;
 	}
 
-	get_rc = kv_get(oh, 128, 1000000);
+	get_rc = kv_get(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -723,7 +747,7 @@ kv_insert4k(void)
 		return -1;
 	}
 
-	put_rc = kv_put(oh, 4096, 1000000);
+	put_rc = kv_put(oh, 4096);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -753,7 +777,7 @@ kv_read4k(void)
 		return -1;
 	}
 
-	get_rc = kv_get(oh, 4096, 1000000);
+	get_rc = kv_get(oh, 4096);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -786,7 +810,7 @@ kv_insert1m(void)
 		return -1;
 	}
 
-	put_rc = kv_put(oh, 1048576, 100000);
+	put_rc = kv_put(oh, 1048576);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -816,7 +840,7 @@ kv_read1m(void)
 		return -1;
 	}
 
-	get_rc = kv_get(oh, 1048576, 100000);
+	get_rc = kv_get(oh, 1048576);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -852,7 +876,7 @@ kv_insertrf1(void)
 		return -1;
 	}
 
-	put_rc = kv_put(oh, 128, 1000000);
+	put_rc = kv_put(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -888,7 +912,7 @@ kv_readrf1(void)
 		return -1;
 	}
 
-	get_rc = kv_get(oh, 128, 1000000);
+	get_rc = kv_get(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -928,7 +952,7 @@ kv_insertrf2(void)
 		return -1;
 	}
 
-	put_rc = kv_put(oh, 128, 1000000);
+	put_rc = kv_put(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (put_rc) {
@@ -965,7 +989,7 @@ kv_readrf2(void)
 		return -1;
 	}
 
-	get_rc = kv_get(oh, 128, 1000000);
+	get_rc = kv_get(oh, 128);
 	rc = daos_kv_close(oh, NULL);
 
 	if (get_rc) {
@@ -1083,17 +1107,17 @@ static struct step steps[] = {
 	{ 11,	"Generating 10K SX layouts",		oSX,		96 },
 
 	/** KV tests */
-	{ 20,	"Inserting 1M 128B values",		kv_insert128,	96 },
+	{ 20,	"Inserting 128B values",		kv_insert128,	96 },
 	{ 21,	"Reading 128B values back",		kv_read128,	96 },
 	/** { 22,	"Listing keys",				kv_list,	96 },
 	* { 23,	"Punching object",			kv_punch,	96 },
 	*/
-	{ 24,	"Inserting 1M 4KB values",		kv_insert4k,	96 },
+	{ 24,	"Inserting 4KB values",			kv_insert4k,	96 },
 	{ 25,	"Reading 4KB values back",		kv_read4k,	96 },
 	/** { 26,	"Listing keys",				kv_list,	96 },
 	* { 27,	"Punching object",			kv_punch,	96 },
 	*/
-	{ 28,	"Inserting 100K 1MB values",		kv_insert1m,	96 },
+	{ 28,	"Inserting 1MB values",			kv_insert1m,	96 },
 	{ 29,	"Reading 1MB values back",		kv_read1m,	96 },
 	/** { 30,	"Listing keys",				kv_list,	96 },
 	* { 31,	"Punching object",			kv_punch,	96 },
@@ -1127,13 +1151,34 @@ pool_autotest_hdlr(struct cmd_args_s *ap)
 
 	autotest_ap = ap;
 
+	if (autotest_ap->deadline_limit)
+		deadline_limit = autotest_ap->deadline_limit * CLOCKS_PER_SEC;
+
 	step_init();
 
 	for (s = steps; s->func != NULL; s++) {
 		if (s->id < resume)
 			continue;
 		step_new(s->id, s->op);
-		rc = (s->func)();
+
+		int	i;
+		bool	found = false;
+
+		if (ap->skip_big) {
+			for (i = 0; i < sizeof(skip_steps) / sizeof(int); i++) {
+				if (s->id == skip_steps[i]) {
+					found = true;
+					break;
+				}
+			}
+		}
+		if (found) {
+			step_skip("skipped");
+			rc = 0;
+		} else {
+			rc = (s->func)();
+		}
+
 		if (rc) {
 			force = 1;
 			resume = s->clean_step;

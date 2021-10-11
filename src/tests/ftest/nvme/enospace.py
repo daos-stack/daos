@@ -10,7 +10,6 @@ import threading
 from nvme_utils import ServerFillUp
 from avocado.core.exceptions import TestFail
 from daos_utils import DaosCommand
-from apricot import skipForTicket
 from mpio_utils import MpioUtils
 from job_manager_utils import Mpirun
 from ior_utils import IorCommand, IorMetrics
@@ -317,7 +316,6 @@ class NvmeEnospace(ServerFillUp):
         #Run last IO
         self.start_ior_load(storage='SCM', percent=1)
 
-    @skipForTicket("DAOS-5403")
     def test_performance_storage_full(self):
         """Jira ID: DAOS-4756.
 

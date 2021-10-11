@@ -15,11 +15,6 @@ class DaosVol(VolTestBase):
     :avocado: recursive
     """
 
-    # Test variants that should be skipped
-    CANCEL_FOR_TICKET = [
-        ["DAOS-6654", "testname", "h5_partest_t_bigio"],
-    ]
-
     def test_daos_vol_bigio(self):
         """Jira ID: DAOS-3656.
 
