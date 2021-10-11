@@ -1614,13 +1614,6 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 	}
 
 	if (obj_auxi->io_retry) {
-		/* Let's reset task result before retry */
-		rc = dc_task_resched(task);
-		if (rc != 0) {
-			D_ERROR("Failed to re-init task (%p)\n", task);
-			D_GOTO(err, rc);
-		}
-
 		if (pool_task != NULL) {
 			rc = dc_task_depend(task, 1, &pool_task);
 			if (rc != 0) {
@@ -1628,6 +1621,12 @@ obj_retry_cb(tse_task_t *task, struct dc_object *obj,
 					 "query task (%p)\n", pool_task);
 				D_GOTO(err, rc);
 			}
+		}
+
+		rc = dc_task_resched(task);
+		if (rc != 0) {
+			D_ERROR("Failed to re-init task (%p)\n", task);
+			D_GOTO(err, rc);
 		}
 	} else if (obj_auxi->spec_shard || obj_auxi->spec_group) {
 		/* If the RPC sponsor specifies shard or group, we will NOT
