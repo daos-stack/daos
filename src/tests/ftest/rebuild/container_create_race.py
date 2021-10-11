@@ -201,9 +201,7 @@ class RbldContainerCreate(TestWithServers):
                     self.job_manager.job.dfs_cont.value)
                 self.run_ior(loop_id, self.job_manager)
             else:
-                self.container.append(TestContainer(self.pool[0]))
-                self.container[-1].get_params(self)
-                self.container[-1].create()
+                self.container.append(self.get_container(self.pool[0]))
                 self.log.info(
                     "%s: Writing to pool %s to fill container %s with data",
                     loop_id, self.pool[0].uuid, self.container[-1].uuid)
