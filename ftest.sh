@@ -65,7 +65,7 @@ if [[ "${LAUNCH_OPT_ARGS}" == "auto:Optane" ]]; then
 fi
 
 # Log size threshold
-LOGS_THRESHOLD="1G"
+LOGS_THRESHOLD="100M"
 
 # For nodes that are only rebooted between CI nodes left over mounts
 # need to be cleaned up.
