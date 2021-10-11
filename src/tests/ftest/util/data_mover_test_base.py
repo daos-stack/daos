@@ -217,8 +217,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             list: a list of quoted posix test path strings
 
         """
-        if path_list == None:
-            path_list = self.posix_local_test_paths
+        # default
+        if path_list is None:
+            path_list = self.posix_test_paths
 
         return ["'{}'".format(item) for item in path_list]
 
@@ -269,7 +270,7 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             self.execute_cmd(cmd)
 
         # mount small tmpfs filesystem on posix path, using size required sudo
-        # add mount_dir to mounted list for use when umounting 
+        # add mount_dir to mounted list for use when umounting
         if mount_dir:
             self.mounted_posix_test_paths.append(path)
             self.execute_cmd("sudo mount -t tmpfs none '{}' -o size=128M".format(path))
