@@ -174,6 +174,10 @@ pipeline_filter_cmp(d_iov_t *d_left, d_iov_t *d_right,
 		else if (*left_f == *right_f) return 0;
 		else                          return 1;
 	}
+	else if (!strcmp(data_type, "DAOS_FILTER_TYPE_STRING"))
+	{
+		return strcmp(left_s, right_s);
+	}
 
 	/** -- Raw cmp byte by byte */
 
