@@ -89,7 +89,7 @@ class IorTestBase(DfuseTestBase):
             pool.set_query_data()
 
     def run_ior_with_pool(self, intercept=None, test_file_suffix="",
-                          test_file="daos:testFile", create_pool=True,
+                          test_file="daos:/testFile", create_pool=True,
                           create_cont=True, stop_dfuse=True, plugin_path=None,
                           timeout=None, fail_on_warning=False,
                           mount_dir=None, out_queue=None, env=None):
@@ -105,7 +105,7 @@ class IorTestBase(DfuseTestBase):
             test_file_suffix (str, optional): suffix to add to the end of the
                 test file name. Defaults to "".
             test_file (str, optional): ior test file name. Defaults to
-                "daos:testFile". Is ignored when using POSIX through DFUSE.
+                "daos:/testFile". Is ignored when using POSIX through DFUSE.
             create_pool (bool, optional): If it is true, create pool and
                 container else just run the ior. Defaults to True.
             create_cont (bool, optional): Create new container. Default is True
