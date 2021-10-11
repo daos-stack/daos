@@ -100,9 +100,12 @@ fi"
 # For verbs enable servers in dual-nic setups to talk to each other; no adverse effect for sockets
 sudo sysctl -w net.ipv4.conf.all.accept_local=1
 sudo sysctl -w net.ipv4.conf.all.arp_ignore=2
-sudo sysctl -w net.ipv4.conf.ib0.rp_filter=2
-sudo sysctl -w net.ipv4.conf.ib1.rp_filter=2
 sudo sysctl -w net.ipv4.conf.all.rp_filter=2
+sudo bash -c "set -ex
+devs=$(ls -1 /sys/class/net | grep ib)
+for dev in $devs; do
+    sudo sysctl -w net.ipv4.conf.${dev}.rp_filter=2
+fi"
 
 if ! $TEST_RPMS; then
     # set up symlinks to spdk scripts (none of this would be
