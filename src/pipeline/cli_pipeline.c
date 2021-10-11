@@ -710,6 +710,46 @@ pipeline_part_nops(const char *part_type)
 	return 0; /** Everything else has zero operands */
 }
 
+static bool
+pipeline_part_checkop(const char *part_type, const char *operand_type)
+{
+	if (!strcmp(part_type, "DAOS_FILTER_FUNC_NOT") ||
+	    !strcmp(part_type, "DAOS_FILTER_FUNC_AND") ||
+	    !strcmp(part_type, "DAOS_FILTER_FUNC_OR"))
+	{
+		return !strncmp(operand_type, "DAOS_FILTER_FUNC",
+				strlen("DAOS_FILTER_FUNC"));
+	}
+	else if (!strcmp(part_type, "DAOS_FILTER_FUNC_EQ")  ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_IN")  ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_NE")  ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_LT")  ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_LE")  ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_GE")  ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_GT"))
+	{
+		return strncmp(operand_type, "DAOS_FILTER_FUNC",
+				strlen("DAOS_FILTER_FUNC"));
+	}
+	else if (!strcmp(part_type, "DAOS_FILTER_FUNC_SUM") ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_MIN") ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_MAX") ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_AVG") ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_ADD") ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_SUB") ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_MUL") ||
+		 !strcmp(part_type, "DAOS_FILTER_FUNC_DIV"))
+	{
+		return strncmp(operand_type, "DAOS_FILTER_FUNC",
+				strlen("DAOS_FILTER_FUNC"))           ||
+			!strcmp(operand_type, "DAOS_FILTER_FUNC_ADD") ||
+			!strcmp(operand_type, "DAOS_FILTER_FUNC_SUB") ||
+			!strcmp(operand_type, "DAOS_FILTER_FUNC_MUL") ||
+			!strcmp(operand_type, "DAOS_FILTER_FUNC_DIV");
+	}
+	return false; /** we should not reach this ever */
+}
+
 int dc_pipeline_check(daos_pipeline_t *pipeline)
 {
 	size_t i;
@@ -745,9 +785,10 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 	     i++)
 	{
 		daos_filter_t *ftr;
-		size_t p;
+		size_t p, o;
 		size_t num_parts = 0;
 		uint32_t num_operands;
+		bool res;
 
 		if (i < pipeline->num_filters)
 		{
@@ -769,13 +810,33 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 			 *             number of total parts is correct.
 			 */
 			daos_filter_part_t *part = ftr->parts[p];
-			num_operands = pipeline_part_nops(part->part_type);
 
+			num_operands = pipeline_part_nops(part->part_type);
 			if (num_operands != part->num_operands)
 			{
 				return -DER_INVAL;
 			}
 			num_parts += part->num_operands;
+			if (num_parts > ftr->num_parts)
+			{
+				return -DER_INVAL;
+			}
+
+			/**
+			 * -- Check 3: Check that all parts have the right
+			 *             type of operands.
+			 */
+			for (o = 1; o <= part->num_operands; o++)
+			{
+				daos_filter_part_t *operand = ftr->parts[p+o];
+
+				res = pipeline_part_checkop(part->part_type,
+							    operand->part_type);
+				if (res == false)
+				{
+					return -DER_INVAL;
+				}
+			}
 		}
 		if (num_parts != ftr->num_parts)
 		{
