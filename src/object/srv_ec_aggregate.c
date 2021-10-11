@@ -90,7 +90,6 @@ struct ec_agg_stripe {
 	daos_off_t	as_stripenum;   /* ordinal of stripe, offset/(k*len) */
 	daos_epoch_t	as_hi_epoch;    /* highest epoch  in stripe          */
 	d_list_t	as_dextents;    /* list of stripe's data extents     */
-	d_list_t	as_hoextents;   /* list of hold-over extents         */
 	daos_off_t	as_stripe_fill; /* amount of stripe covered by data  */
 	unsigned int	as_extent_cnt;  /* number of replica extents         */
 	unsigned int	as_offset;      /* start offset in stripe            */
@@ -290,6 +289,9 @@ agg_clear_extents(struct ec_agg_entry *entry)
 	struct ec_agg_extent	*extent, *ext_tmp;
 	uint64_t		 tail;
 	bool			 carry_is_hole = false;
+
+	if (entry->ae_cur_stripe.as_extent_cnt == 0)
+		return;
 
 	d_list_for_each_entry_safe(extent, ext_tmp,
 				   &entry->ae_cur_stripe.as_dextents,
@@ -2343,11 +2345,15 @@ out:
 static void
 ec_agg_param_fini(struct ec_agg_param *agg_param)
 {
+	struct ec_agg_entry	*agg_entry = &agg_param->ap_agg_entry;
+
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_cont_hdl))
 		dsc_cont_close(agg_param->ap_pool_info.api_pool_hdl,
 			       agg_param->ap_pool_info.api_cont_hdl);
 
-	d_sgl_fini(&agg_param->ap_agg_entry.ae_sgl, true);
+	D_ASSERT(agg_entry->ae_sgl.sg_nr == AGG_IOV_CNT || agg_entry->ae_sgl.sg_nr == 0);
+	d_sgl_fini(&agg_entry->ae_sgl, true);
+	agg_clear_extents(agg_entry);
 	if (daos_handle_is_valid(agg_param->ap_pool_info.api_pool_hdl))
 		dsc_pool_close(agg_param->ap_pool_info.api_pool_hdl);
 
@@ -2377,7 +2383,6 @@ ec_agg_param_init(struct ds_cont_child *cont, struct agg_param *param)
 	agg_param->ap_yield_arg		= param;
 	agg_param->ap_credits_max	= EC_AGG_ITERATION_MAX;
 	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_dextents);
-	D_INIT_LIST_HEAD(&agg_param->ap_agg_entry.ae_cur_stripe.as_hoextents);
 
 	rc = ABT_eventual_create(sizeof(*status), &eventual);
 	if (rc != ABT_SUCCESS)
