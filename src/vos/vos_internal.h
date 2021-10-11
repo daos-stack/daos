@@ -213,8 +213,8 @@ struct vos_container {
 	/* Various flags */
 	unsigned int		vc_in_aggregation:1,
 				vc_in_discard:1,
-				vc_in_obj_discard:1,
 				vc_reindex_cmt_dtx:1;
+	unsigned int		vc_obj_discard_count;
 	unsigned int		vc_open_count;
 };
 

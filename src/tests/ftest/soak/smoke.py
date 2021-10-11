@@ -5,7 +5,7 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 
-from soak_test_base import SoakTestBase
+from test_base import SoakTestBase
 
 
 class SoakSmoke(SoakTestBase):

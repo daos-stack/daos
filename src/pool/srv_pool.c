@@ -38,6 +38,27 @@
 #include "srv_layout.h"
 #include "srv_pool_map.h"
 
+/* Pool service crt event */
+struct pool_svc_event {
+	d_list_t		psv_link;
+	d_rank_t		psv_rank;
+	uint64_t		psv_incarnation;
+	enum crt_event_source	psv_src;
+	enum crt_event_type	psv_type;
+};
+
+#define DF_PS_EVENT	"rank=%u inc="DF_U64" src=%d type=%d"
+#define DP_PS_EVENT(e)	e->psv_rank, e->psv_incarnation, e->psv_src, e->psv_type
+
+/* Pool service crt-event-handling state */
+struct pool_svc_events {
+	ABT_mutex		pse_mutex;
+	ABT_cond		pse_cv;
+	d_list_t		pse_queue;
+	ABT_thread		pse_handler;
+	bool			pse_stop;
+};
+
 /* Pool service */
 struct pool_svc {
 	struct ds_rsvc		ps_rsvc;
@@ -48,6 +69,7 @@ struct pool_svc {
 	rdb_path_t		ps_handles;	/* pool handle KVS */
 	rdb_path_t		ps_user;	/* pool user attributes KVS */
 	struct ds_pool	       *ps_pool;
+	struct pool_svc_events	ps_events;
 };
 
 static bool pool_disable_exclude = false;
@@ -762,6 +784,8 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 	d_iov_set(&svc->ps_rsvc.s_id, svc->ps_uuid, sizeof(uuid_t));
 
 	uuid_copy(svc->ps_uuid, id->iov_buf);
+	D_INIT_LIST_HEAD(&svc->ps_events.pse_queue);
+	svc->ps_events.pse_handler = ABT_THREAD_NULL;
 
 	rc = ABT_rwlock_create(&svc->ps_lock);
 	if (rc != ABT_SUCCESS) {
@@ -791,14 +815,30 @@ pool_svc_alloc_cb(d_iov_t *id, struct ds_rsvc **rsvc)
 	if (rc != 0)
 		goto err_user;
 
+	rc = ABT_mutex_create(&svc->ps_events.pse_mutex);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto err_user;
+	}
+
+	rc = ABT_cond_create(&svc->ps_events.pse_cv);
+	if (rc != ABT_SUCCESS) {
+		rc = dss_abterr2der(rc);
+		goto err_events_mutex;
+	}
+
 	rc = ds_cont_svc_init(&svc->ps_cont_svc, svc->ps_uuid, 0 /* id */,
 			      &svc->ps_rsvc);
 	if (rc != 0)
-		goto err_user;
+		goto err_events_cv;
 
 	*rsvc = &svc->ps_rsvc;
 	return 0;
 
+err_events_cv:
+	ABT_cond_free(&svc->ps_events.pse_cv);
+err_events_mutex:
+	ABT_mutex_free(&svc->ps_events.pse_mutex);
 err_user:
 	rdb_path_fini(&svc->ps_user);
 err_handles:
@@ -819,30 +859,6 @@ pool_svc_put(struct pool_svc *svc)
 	ds_rsvc_put(&svc->ps_rsvc);
 }
 
-struct ds_pool_exclude_arg {
-	struct pool_svc *svc;
-	d_rank_t	rank;
-};
-
-static int pool_svc_exclude_rank(struct pool_svc *svc, d_rank_t rank);
-static void pool_svc_get_leader(struct pool_svc *svc);
-static void pool_svc_put_leader(struct pool_svc *svc);
-
-static void
-pool_exclude_rank_ult(void *data)
-{
-	struct ds_pool_exclude_arg     *arg = data;
-	int				rc;
-
-	rc = pool_svc_exclude_rank(arg->svc, arg->rank);
-
-	D_DEBUG(DB_MGMT, DF_UUID" exclude rank %u : rc %d\n",
-		DP_UUID(arg->svc->ps_uuid), arg->rank, rc);
-
-	pool_svc_put_leader(arg->svc);
-	D_FREE_PTR(arg);
-}
-
 /* Disable all pools exclusion */
 void
 ds_pool_disable_exclude(void)
@@ -857,65 +873,210 @@ ds_pool_enable_exclude(void)
 }
 
 static int
-pool_exclude_rank(struct pool_svc *svc, d_rank_t rank)
+queue_event(struct pool_svc *svc, d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
+	    enum crt_event_type type)
 {
-	struct ds_pool_exclude_arg	*ult_arg;
-	int				rc;
+	struct pool_svc_events *events = &svc->ps_events;
+	struct pool_svc_event  *event;
 
-	D_ALLOC_PTR(ult_arg);
-	if (ult_arg == NULL)
-		D_GOTO(out, rc = -DER_NOMEM);
+	D_ALLOC_PTR(event);
+	if (event == NULL)
+		return -DER_NOMEM;
 
-	pool_svc_get_leader(svc);
-	ult_arg->svc = svc;
-	ult_arg->rank = rank;
-	rc = dss_ult_create(pool_exclude_rank_ult, ult_arg, DSS_XS_SELF,
-			    0, 0, NULL);
-	if (rc) {
-		pool_svc_put_leader(svc);
-		D_FREE_PTR(ult_arg);
+	event->psv_rank = rank;
+	event->psv_incarnation = incarnation;
+	event->psv_src = src;
+	event->psv_type = type;
+
+	D_DEBUG(DB_MD, DF_UUID": queuing event: "DF_PS_EVENT"\n", DP_UUID(svc->ps_uuid),
+		DP_PS_EVENT(event));
+
+	ABT_mutex_lock(events->pse_mutex);
+	d_list_add_tail(&event->psv_link, &events->pse_queue);
+	ABT_cond_broadcast(events->pse_cv);
+	ABT_mutex_unlock(events->pse_mutex);
+	return 0;
+}
+
+static void
+discard_events(d_list_t *queue)
+{
+	struct pool_svc_event  *event;
+	struct pool_svc_event  *tmp;
+
+	d_list_for_each_entry_safe(event, tmp, queue, psv_link) {
+		D_DEBUG(DB_MD, "discard event: "DF_PS_EVENT"\n", DP_PS_EVENT(event));
+		d_list_del_init(&event->psv_link);
+		D_FREE(event);
 	}
+}
+
+static int pool_svc_exclude_rank(struct pool_svc *svc, d_rank_t rank);
+
+static void
+handle_event(struct pool_svc *svc, struct pool_svc_event *event)
+{
+	daos_prop_t		prop = {0};
+	struct daos_prop_entry *entry;
+	int			rc;
+
+	/* Only used for exclude the rank for the moment */
+	if ((event->psv_src != CRT_EVS_GRPMOD && event->psv_src != CRT_EVS_SWIM) ||
+	    event->psv_type != CRT_EVT_DEAD || pool_disable_exclude) {
+		D_DEBUG(DB_MD, "ignore event: "DF_PS_EVENT" exclude=%d\n", DP_PS_EVENT(event),
+			pool_disable_exclude);
+		goto out;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID": handling event: "DF_PS_EVENT"\n", DP_UUID(svc->ps_uuid),
+		DP_PS_EVENT(event));
+
+	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to fetch properties: "DF_RC"\n", DP_UUID(svc->ps_uuid),
+			DP_RC(rc));
+		goto out;
+	}
+
+	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
+	D_ASSERT(entry != NULL);
+	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
+		D_DEBUG(DB_MD, DF_UUID": self healing is disabled\n", DP_UUID(svc->ps_uuid));
+		goto out_prop;
+	}
+
+	rc = pool_svc_exclude_rank(svc, event->psv_rank);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to exclude rank %u: "DF_RC"\n", DP_UUID(svc->ps_uuid),
+			event->psv_rank, DP_RC(rc));
+		goto out_prop;
+	}
+
+	D_DEBUG(DB_MD, DF_UUID": excluded rank %u\n", DP_UUID(svc->ps_uuid), event->psv_rank);
+out_prop:
+	daos_prop_fini(&prop);
 out:
-	if (rc)
-		D_ERROR("exclude ult failed: rc %d\n", rc);
-	return rc;
+	return;
+}
+
+static void
+events_handler(void *arg)
+{
+	struct pool_svc	       *svc = arg;
+	struct pool_svc_events *events = &svc->ps_events;
+
+	D_DEBUG(DB_MD, DF_UUID": starting\n", DP_UUID(svc->ps_uuid));
+
+	for (;;) {
+		struct pool_svc_event  *event;
+		bool			stop;
+
+		ABT_mutex_lock(events->pse_mutex);
+		for (;;) {
+			stop = events->pse_stop;
+			if (stop) {
+				discard_events(&events->pse_queue);
+				break;
+			}
+			if (!d_list_empty(&events->pse_queue)) {
+				event = d_list_entry(events->pse_queue.next, struct pool_svc_event,
+						     psv_link);
+				d_list_del_init(&event->psv_link);
+				break;
+			}
+			ABT_cond_wait(events->pse_cv, events->pse_mutex);
+		}
+		ABT_mutex_unlock(events->pse_mutex);
+		if (stop)
+			break;
+
+		handle_event(svc, event);
+
+		D_FREE(event);
+		ABT_thread_yield();
+	}
+
+	D_DEBUG(DB_MD, DF_UUID": stopping\n", DP_UUID(svc->ps_uuid));
 }
 
 static void
 ds_pool_crt_event_cb(d_rank_t rank, uint64_t incarnation, enum crt_event_source src,
 		     enum crt_event_type type, void *arg)
 {
-	daos_prop_t		prop = { 0 };
-	struct daos_prop_entry	*entry;
-	struct pool_svc		*svc = arg;
-	int			rc = 0;
+	struct pool_svc	       *svc = arg;
+	int			rc;
 
-	/* Only used for exclude the rank for the moment */
-	if ((src != CRT_EVS_GRPMOD && src != CRT_EVS_SWIM) ||
-	    type != CRT_EVT_DEAD ||
-	    pool_disable_exclude) {
-		D_DEBUG(DB_MGMT, "ignore src/type/exclude %u/%u/%d\n",
-			src, type, pool_disable_exclude);
-		return;
+	rc = queue_event(svc, rank, incarnation, src, type);
+	if (rc != 0)
+		D_ERROR(DF_UUID": failed to queue event: "DF_PS_EVENT": "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), rank, incarnation, src, type, DP_RC(rc));
+}
+
+static int pool_svc_check_node_status(struct pool_svc *svc);
+
+static int
+init_events(struct pool_svc *svc)
+{
+	struct pool_svc_events *events = &svc->ps_events;
+	int			rc;
+
+	D_ASSERT(d_list_empty(&events->pse_queue));
+	D_ASSERT(events->pse_handler == ABT_THREAD_NULL);
+
+	rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to register event callback: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto err;
 	}
 
-	rc = ds_pool_iv_prop_fetch(svc->ps_pool, &prop);
-	if (rc)
-		D_GOTO(out, rc);
-
-	entry = daos_prop_entry_get(&prop, DAOS_PROP_PO_SELF_HEAL);
-	D_ASSERT(entry != NULL);
-	if (!(entry->dpe_val & DAOS_SELF_HEAL_AUTO_EXCLUDE)) {
-		D_DEBUG(DB_MGMT, "self healing is disabled\n");
-		D_GOTO(out, rc);
+	/*
+	 * Note that events happened during the status-based recovery may
+	 * appear twice in the event queue: one queued by the event callback,
+	 * and one queued by the recovery.
+	 */
+	rc = pool_svc_check_node_status(svc);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create event handler: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto err_cb;
 	}
 
-	rc = pool_exclude_rank(svc, rank);
-out:
-	if (rc)
-		D_ERROR("pool "DF_UUID" event %d failed: rc %d\n",
-			DP_UUID(svc->ps_uuid), src, rc);
-	daos_prop_fini(&prop);
+	rc = dss_ult_create(events_handler, svc, DSS_XS_SELF, 0, 0, &events->pse_handler);
+	if (rc != 0) {
+		D_ERROR(DF_UUID": failed to create event handler: "DF_RC"\n",
+			DP_UUID(svc->ps_uuid), DP_RC(rc));
+		goto err_cb;
+	}
+
+	return 0;
+
+err_cb:
+	crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
+	discard_events(&events->pse_queue);
+err:
+	return rc;
+}
+
+static void
+fini_events(struct pool_svc *svc)
+{
+	struct pool_svc_events *events = &svc->ps_events;
+	int			rc;
+
+	D_ASSERT(events->pse_handler != ABT_THREAD_NULL);
+
+	crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
+
+	ABT_mutex_lock(events->pse_mutex);
+	events->pse_stop = true;
+	ABT_cond_broadcast(events->pse_cv);
+	ABT_mutex_unlock(events->pse_mutex);
+
+	rc = ABT_thread_join(events->pse_handler);
+	D_ASSERTF(rc == 0, DF_RC"\n", DP_RC(rc));
+	ABT_thread_free(&events->pse_handler);
+	events->pse_handler = ABT_THREAD_NULL;
 }
 
 static void
@@ -924,6 +1085,8 @@ pool_svc_free_cb(struct ds_rsvc *rsvc)
 	struct pool_svc *svc = pool_svc_obj(rsvc);
 
 	ds_cont_svc_fini(&svc->ps_cont_svc);
+	ABT_cond_free(&svc->ps_events.pse_cv);
+	ABT_mutex_free(&svc->ps_events.pse_mutex);
 	rdb_path_fini(&svc->ps_user);
 	rdb_path_fini(&svc->ps_handles);
 	rdb_path_fini(&svc->ps_root);
@@ -1123,9 +1286,10 @@ pool_svc_check_node_status(struct pool_svc *svc)
 		D_DEBUG(DB_REBUILD, "rank/state %d/%d\n",
 			doms[i].do_comp.co_rank,
 			rc == -DER_NONEXIST ? -1 : state.sms_status);
-		if (rc == -DER_NONEXIST ||
-		    state.sms_status == SWIM_MEMBER_DEAD) {
-			rc = pool_exclude_rank(svc, doms[i].do_comp.co_rank);
+		if (rc == -DER_NONEXIST || state.sms_status == SWIM_MEMBER_DEAD) {
+			rc = queue_event(svc, doms[i].do_comp.co_rank, 0 /* incarnation */,
+					 rc == -DER_NONEXIST ? CRT_EVS_GRPMOD : CRT_EVS_SWIM,
+					 CRT_EVT_DEAD);
 			if (rc) {
 				D_ERROR("failed to exclude rank %u: %d\n",
 					doms[i].do_comp.co_rank, rc);
@@ -1147,7 +1311,7 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 	uuid_t			cont_hdl_uuid;
 	daos_prop_t	       *prop = NULL;
 	bool			cont_svc_up = false;
-	bool			event_cb_registered = false;
+	bool			events_initialized = false;
 	d_rank_t		rank;
 	int			rc;
 
@@ -1187,20 +1351,16 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		goto out;
 	cont_svc_up = true;
 
-	rc = crt_register_event_cb(ds_pool_crt_event_cb, svc);
-	if (rc)
+	rc = init_events(svc);
+	if (rc != 0)
 		goto out;
-	event_cb_registered = true;
+	events_initialized = true;
 
 	rc = ds_pool_iv_prop_update(svc->ps_pool, prop);
 	if (rc) {
 		D_ERROR("ds_pool_iv_prop_update failed %d.\n", rc);
 		D_GOTO(out, rc);
 	}
-
-	rc = pool_svc_check_node_status(svc);
-	if (rc)
-		D_GOTO(out, rc);
 
 	if (!uuid_is_null(svc->ps_pool->sp_srv_cont_hdl)) {
 		uuid_copy(pool_hdl_uuid, svc->ps_pool->sp_srv_pool_hdl);
@@ -1231,8 +1391,8 @@ pool_svc_step_up_cb(struct ds_rsvc *rsvc)
 		DP_UUID(svc->ps_uuid), rank, svc->ps_rsvc.s_term);
 out:
 	if (rc != 0) {
-		if (event_cb_registered)
-			crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
+		if (events_initialized)
+			fini_events(svc);
 		if (cont_svc_up)
 			ds_cont_svc_step_down(svc->ps_cont_svc);
 		if (svc->ps_pool != NULL)
@@ -1252,9 +1412,9 @@ pool_svc_step_down_cb(struct ds_rsvc *rsvc)
 	d_rank_t		rank;
 	int			rc;
 
-	crt_unregister_event_cb(ds_pool_crt_event_cb, svc);
-
 	ds_pool_iv_srv_hdl_invalidate(svc->ps_pool);
+
+	fini_events(svc);
 	ds_cont_svc_step_down(svc->ps_cont_svc);
 	fini_svc_pool(svc);
 
@@ -1355,12 +1515,6 @@ pool_svc_lookup_leader(uuid_t uuid, struct pool_svc **svcp,
 		return rc;
 	*svcp = pool_svc_obj(rsvc);
 	return 0;
-}
-
-static void
-pool_svc_get_leader(struct pool_svc *svc)
-{
-	ds_rsvc_get_leader(&svc->ps_rsvc);
 }
 
 static void

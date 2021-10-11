@@ -110,6 +110,7 @@ struct iter_obj_arg {
 	uuid_t			cont_uuid;
 	daos_unit_oid_t		oid;
 	daos_epoch_t		epoch;
+	daos_epoch_t		punched_epoch;
 	unsigned int		shard;
 	unsigned int		tgt_idx;
 	uint64_t		*snaps;
@@ -2234,7 +2235,7 @@ migrate_enum_unpack_cb(struct dss_enum_unpack_io *io, void *data)
 	return rc;
 }
 
-static int
+static void
 migrate_obj_punch_one(void *data)
 {
 	struct migrate_pool_tls *tls;
@@ -2248,23 +2249,23 @@ migrate_obj_punch_one(void *data)
 		       DP_UUID(arg->pool_uuid));
 		D_GOTO(put, rc = 0);
 	}
-	D_DEBUG(DB_REBUILD, "tls %p "DF_UUID" version %d punch "DF_UOID"\n",
-		tls, DP_UUID(tls->mpt_pool_uuid), arg->version,
+	D_DEBUG(DB_REBUILD, "tls %p "DF_UUID" version %d punch "DF_U64" "DF_UOID"\n",
+		tls, DP_UUID(tls->mpt_pool_uuid), arg->version, arg->punched_epoch,
 		DP_UOID(arg->oid));
 	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, arg->cont_uuid, &cont);
 	D_ASSERT(rc == 0);
 
-	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->epoch,
+	D_ASSERT(arg->punched_epoch != 0);
+	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->punched_epoch,
 			   tls->mpt_version, VOS_OF_REPLAY_PC,
 			   NULL, 0, NULL, NULL);
 	ds_cont_child_put(cont);
-	if (rc)
-		D_ERROR(DF_UOID" migrate punch failed: "DF_RC"\n",
-			DP_UOID(arg->oid), DP_RC(rc));
 put:
 	if (tls)
 		migrate_pool_tls_put(tls);
-	return rc;
+	if (rc)
+		D_ERROR(DF_UOID" migrate punch failed: "DF_RC"\n",
+			DP_UOID(arg->oid), DP_RC(rc));
 }
 
 static int
@@ -2342,6 +2343,12 @@ migrate_one_epoch_object(daos_epoch_range_t *epr, struct migrate_pool_tls *tls,
 	D_DEBUG(DB_REBUILD, "migrate obj "DF_UOID" for shard %u eph "
 		DF_U64"-"DF_U64"\n", DP_UOID(arg->oid), arg->shard, epr->epr_lo,
 		epr->epr_hi);
+
+	if (tls->mpt_fini) {
+		D_DEBUG(DB_REBUILD, DF_UUID "migration is aborted.\n",
+			DP_UUID(tls->mpt_pool_uuid));
+		return 0;
+	}
 
 	rc = dsc_pool_open(tls->mpt_pool_uuid, tls->mpt_poh_uuid, 0,
 			   NULL, tls->mpt_pool->spc_pool->sp_map,
@@ -2596,7 +2603,8 @@ ds_migrate_abort(uuid_t pool_uuid, unsigned int version)
 static int
 migrate_obj_punch(struct iter_obj_arg *arg)
 {
-	return dss_task_collective(migrate_obj_punch_one, arg, 0);
+	return dss_ult_create(migrate_obj_punch_one, arg, DSS_XS_VOS,
+			      arg->tgt_idx, MIGRATE_STACK_SIZE, NULL);
 }
 
 /* Destroys an object prior to migration. Called exactly once per object ID per
@@ -2607,6 +2615,7 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		     daos_unit_oid_t *oid, uuid_t cont_uuid)
 {
 	struct ds_cont_child *cont;
+	daos_epoch_range_t   epr;
 	int rc;
 
 	rc = ds_cont_child_open_create(tls->mpt_pool_uuid, cont_uuid, &cont);
@@ -2623,7 +2632,24 @@ destroy_existing_obj(struct migrate_pool_tls *tls, unsigned int tgt_idx,
 		return rc;
 	}
 
-	rc = vos_obj_delete(cont->sc_hdl, *oid);
+	/* Wait until container aggregation are stopped */
+	while (cont->sc_vos_agg_active && !tls->mpt_fini && !cont->sc_stopping) {
+		D_DEBUG(DB_REBUILD, "wait for "DF_UUID"/"DF_UUID"/%u vos aggregation"
+			" to be inactive\n", DP_UUID(tls->mpt_pool_uuid),
+			DP_UUID(cont_uuid), tls->mpt_version);
+		dss_sleep(2 * 1000);
+	}
+
+	if (tls->mpt_fini || cont->sc_stopping) {
+		D_DEBUG(DB_REBUILD, DF_UUID "container migration is aborted.\n",
+			DP_UUID(cont_uuid));
+		ds_cont_child_put(cont);
+		return 0;
+	}
+
+	epr.epr_hi = tls->mpt_max_eph;
+	epr.epr_lo = 0;
+	rc = vos_discard(cont->sc_hdl, oid, &epr, NULL, NULL);
 	if (rc != 0) {
 		D_ERROR("Migrate failed to destroy object prior to "
 			"reintegration: pool/object "DF_UUID"/"DF_UOID
@@ -2663,7 +2689,7 @@ migrate_obj_ult(void *data)
 	struct migrate_pool_tls	*tls = NULL;
 	daos_epoch_range_t	 epr;
 	int			 i;
-	int			 rc;
+	int			 rc = 0;
 
 	tls = migrate_pool_tls_lookup(arg->pool_uuid, arg->version);
 	if (tls == NULL || tls->mpt_fini) {
@@ -2689,12 +2715,6 @@ migrate_obj_ult(void *data)
 		}
 	}
 
-	if (arg->epoch != DAOS_EPOCH_MAX) {
-		rc = migrate_obj_punch(arg);
-		if (rc)
-			D_GOTO(free, rc);
-	}
-
 	for (i = 0; i < arg->snap_cnt; i++) {
 		epr.epr_lo = i > 0 ? arg->snaps[i-1] + 1 : 0;
 		epr.epr_hi = arg->snaps[i];
@@ -2703,11 +2723,24 @@ migrate_obj_ult(void *data)
 			D_GOTO(free, rc);
 	}
 
+	if (arg->snap_cnt > 0 && arg->punched_epoch != 0) {
+		rc = migrate_obj_punch(arg);
+		if (rc)
+			D_GOTO(free, rc);
+	}
+
 	epr.epr_lo = arg->snaps ? arg->snaps[arg->snap_cnt - 1] + 1 : 0;
 	D_ASSERT(tls->mpt_max_eph != 0);
 	epr.epr_hi = tls->mpt_max_eph;
-	rc = migrate_one_epoch_object(&epr, tls, arg);
-
+	if (arg->epoch > 0) {
+		rc = migrate_one_epoch_object(&epr, tls, arg);
+	} else {
+		/* The obj has been punched for this range */
+		D_DEBUG(DB_REBUILD, "punched obj "DF_UOID" epoch"
+			" "DF_U64"/"DF_U64"/"DF_U64"\n", DP_UOID(arg->oid),
+			arg->epoch, arg->punched_epoch, epr.epr_hi);
+		arg->epoch = DAOS_EPOCH_MAX;
+	}
 free:
 	if (arg->epoch == DAOS_EPOCH_MAX)
 		tls->mpt_obj_count++;
@@ -2750,14 +2783,15 @@ free_notls:
 
 struct migrate_obj_val {
 	daos_epoch_t	epoch;
+	daos_epoch_t	punched_epoch;
 	uint32_t	shard;
 	uint32_t	tgt_idx;
 };
 
 /* This is still running on the main migration ULT */
 static int
-migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
-		   unsigned int tgt_idx, void *data)
+migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, daos_epoch_t punched_eph,
+		   unsigned int shard, unsigned int tgt_idx, void *data)
 {
 	struct iter_cont_arg	*cont_arg = data;
 	struct iter_obj_arg	*obj_arg;
@@ -2777,6 +2811,7 @@ migrate_one_object(daos_unit_oid_t oid, daos_epoch_t eph, unsigned int shard,
 	obj_arg->oid = oid;
 	obj_arg->epoch = eph;
 	obj_arg->shard = shard;
+	obj_arg->punched_epoch = punched_eph;
 	obj_arg->tgt_idx = tgt_idx;
 	uuid_copy(obj_arg->pool_uuid, cont_arg->pool_tls->mpt_pool_uuid);
 	uuid_copy(obj_arg->cont_uuid, cont_arg->cont_uuid);
@@ -2842,13 +2877,13 @@ free:
 #define DEFAULT_YIELD_FREQ	128
 
 static int
-migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov,
-		    void *data)
+migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov, void *data)
 {
 	struct iter_cont_arg		*arg = data;
 	daos_unit_oid_t			*oid = key_iov->iov_buf;
 	struct migrate_obj_val		*obj_val = val_iov->iov_buf;
 	daos_epoch_t			epoch = obj_val->epoch;
+	daos_epoch_t			punched_epoch = obj_val->punched_epoch;
 	unsigned int			tgt_idx = obj_val->tgt_idx;
 	unsigned int			shard = obj_val->shard;
 	int				rc;
@@ -2860,7 +2895,7 @@ migrate_obj_iter_cb(daos_handle_t ih, d_iov_t *key_iov, d_iov_t *val_iov,
 		" eph "DF_U64" start\n", DP_UUID(arg->cont_uuid), DP_UOID(*oid),
 		ih.cookie, epoch);
 
-	rc = migrate_one_object(*oid, epoch, shard, tgt_idx, arg);
+	rc = migrate_one_object(*oid, epoch, punched_epoch, shard, tgt_idx, arg);
 	if (rc != 0) {
 		D_ERROR("obj "DF_UOID" migration failed: "DF_RC"\n",
 			DP_UOID(*oid), DP_RC(rc));
@@ -3047,7 +3082,7 @@ migrate_ult(void *arg)
  * tree to see if the objects being migrated already.
  */
 static int
-migrate_del_object_tree(struct migrate_pool_tls *tls)
+migrate_try_create_object_tree(struct migrate_pool_tls *tls)
 {
 	struct umem_attr uma;
 	int rc;
@@ -3088,7 +3123,8 @@ migrate_del_object_tree(struct migrate_pool_tls *tls)
 static int
 migrate_try_obj_insert(struct migrate_pool_tls *tls, uuid_t co_uuid,
 		       daos_unit_oid_t oid, daos_epoch_t epoch,
-		       unsigned int shard, unsigned int tgt_idx)
+		       daos_epoch_t punched_epoch, unsigned int shard,
+		       unsigned int tgt_idx)
 {
 	struct migrate_obj_val	val;
 	daos_handle_t		toh = tls->mpt_root_hdl;
@@ -3100,11 +3136,12 @@ migrate_try_obj_insert(struct migrate_pool_tls *tls, uuid_t co_uuid,
 	D_ASSERT(daos_handle_is_valid(migrated_toh));
 
 	val.epoch = epoch;
+	val.punched_epoch = punched_epoch;
 	val.shard = shard;
 	val.tgt_idx = tgt_idx;
-	D_DEBUG(DB_REBUILD, "Insert migrate "DF_UUID"/"DF_UOID" "DF_U64
-		"/%d/%d\n", DP_UUID(co_uuid), DP_UOID(oid), epoch, shard,
-		tgt_idx);
+	D_DEBUG(DB_REBUILD, "Insert migrate "DF_UUID"/"DF_UOID" "DF_U64"/"DF_U64
+		"/%d/%d\n", DP_UUID(co_uuid), DP_UOID(oid), epoch, punched_epoch,
+		shard, tgt_idx);
 
 	d_iov_set(&val_iov, &val, sizeof(struct migrate_obj_val));
 	rc = obj_tree_lookup(toh, co_uuid, oid, &val_iov);
@@ -3138,6 +3175,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	daos_unit_oid_t		*oids;
 	unsigned int		oids_count;
 	daos_epoch_t		*ephs;
+	daos_epoch_t		*punched_ephs;
 	unsigned int		ephs_count;
 	uint32_t		*shards;
 	unsigned int		shards_count;
@@ -3153,6 +3191,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	oids = migrate_in->om_oids.ca_arrays;
 	oids_count = migrate_in->om_oids.ca_count;
 	ephs = migrate_in->om_ephs.ca_arrays;
+	punched_ephs = migrate_in->om_punched_ephs.ca_arrays;
 	ephs_count = migrate_in->om_ephs.ca_count;
 	shards = migrate_in->om_shards.ca_arrays;
 	shards_count = migrate_in->om_shards.ca_count;
@@ -3196,7 +3235,7 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 		D_GOTO(out, rc = -DER_NOMEM);
 
 	/* NB: only create this tree on xstream 0 */
-	rc = migrate_del_object_tree(pool_tls);
+	rc = migrate_try_create_object_tree(pool_tls);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -3204,7 +3243,8 @@ ds_obj_migrate_handler(crt_rpc_t *rpc)
 	for (i = 0; i < oids_count; i++) {
 		/* firstly insert/check rebuilt tree */
 		rc = migrate_try_obj_insert(pool_tls, co_uuid, oids[i], ephs[i],
-					    shards[i], migrate_in->om_tgt_idx);
+					    punched_ephs[i], shards[i],
+					    migrate_in->om_tgt_idx);
 		if (rc == -DER_EXIST) {
 			D_DEBUG(DB_TRACE, DF_UOID"/"DF_UUID"exists.\n",
 				DP_UOID(oids[i]), DP_UUID(co_uuid));
@@ -3351,6 +3391,7 @@ out:
  * param max_eph [in]		maxim epoch of the migration.
  * param oids [in]		array of the objects to be migrated.
  * param ephs [in]		epoch of the objects.
+ * param punched_ephs [in]	punched_epoch of objects.
  * param shards [in]		it can be NULL, otherwise it indicates
  *				the source shard of the migration, so it
  *				is only used for replicate objects.
@@ -3363,8 +3404,8 @@ int
 ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 		  uuid_t cont_hdl_uuid, uuid_t cont_uuid, int tgt_id,
 		  uint32_t version, uint64_t max_eph, daos_unit_oid_t *oids,
-		  daos_epoch_t *ephs, unsigned int *shards, int cnt,
-		  int del_local_objs)
+		  daos_epoch_t *ephs, daos_epoch_t *punched_ephs,
+		  unsigned int *shards, int cnt, int del_local_objs)
 {
 	struct obj_migrate_in	*migrate_in = NULL;
 	struct obj_migrate_out	*migrate_out = NULL;
@@ -3421,6 +3462,8 @@ ds_object_migrate(struct ds_pool *pool, uuid_t pool_hdl_uuid,
 	migrate_in->om_oids.ca_count = cnt;
 	migrate_in->om_ephs.ca_arrays = ephs;
 	migrate_in->om_ephs.ca_count = cnt;
+	migrate_in->om_punched_ephs.ca_arrays = punched_ephs;
+	migrate_in->om_punched_ephs.ca_count = cnt;
 
 	if (shards) {
 		migrate_in->om_shards.ca_arrays = shards;
