@@ -24,7 +24,6 @@ import signal
 import stat
 import argparse
 import tabulate
-import errno
 import functools
 import traceback
 import subprocess
@@ -1105,7 +1104,6 @@ class DFuse():
             return fatal_errors
 
         print('Stopping fuse')
-        self._close_files()
         ret = umount(self.dir)
         if ret:
             umount(self.dir, bg=True)
@@ -1368,24 +1366,6 @@ def needs_dfuse_with_cache(method):
         self.dfuse = DFuse(self.server,
                            self.conf,
                            caching=True,
-                           pool=self.pool.dfuse_mount_name(),
-                           container=self.container)
-        self.dfuse.start(v_hint=method.__name__)
-        try:
-            rc = method(self)
-        finally:
-            if self.dfuse.stop():
-                self.fatal_errors = True
-        return rc
-    return _helper
-
-def needs_dfuse_no_cache(method):
-    """Decorator function for starting dfuse under posix_tests class"""
-    @functools.wraps(method)
-    def _helper(self):
-        self.dfuse = DFuse(self.server,
-                           self.conf,
-                           caching=False,
                            pool=self.pool.dfuse_mount_name(),
                            container=self.container)
         self.dfuse.start(v_hint=method.__name__)
@@ -1975,48 +1955,6 @@ class posix_tests():
 
         if dfuse.stop():
             self.fatal_errors = True
-
-    @needs_dfuse_no_cache
-    def test_file_nospace(self):
-        """Test for file size accounting a correct ENOSPACE handling"""
-
-        filename = os.path.join(self.dfuse.dir, 'new_file')
-
-        fd = open(filename, 'wb', buffering=0)
-        write_size = 1024 * 128
-        data = bytearray(write_size)
-        file_size = 0
-        while True:
-            stat_pre = os.fstat(fd.fileno())
-            print(stat_pre)
-            assert stat_pre.st_size == file_size
-            try:
-                fd.write(data)
-                file_size += write_size
-            except OSError as e:
-                if e.errno != errno.ENOSPC:
-                    raise
-                print('File write returned ENOSPACE')
-                stat_post = os.fstat(fd.fileno())
-                print(stat_pre)
-                print(stat_post)
-                print(file_size)
-                # Check that the failed write didn't change the file size.
-                assert stat_pre.st_size == stat_post.st_size
-                break
-
-        my_stat = os.fstat(fd.fileno())
-        print(my_stat)
-
-        # larger pools should be able to handle this by reserving space, however NLT runs with
-        # smaller pools so the close and unlink can both fail with ENOSPACE, so guard against
-        # that.  The container will be destroyed after the test anyway.
-        try:
-            fd.close()
-            os.unlink(filename)
-        except OSError as e:
-            if e.errno != errno.ENOSPC:
-                raise
 
     def test_uns_basic(self):
         """Create a UNS entry point and access it via both EP and path"""
