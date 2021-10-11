@@ -24,8 +24,7 @@ test_swim(void **state)
 {
 	int rc;
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			    CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert_int_equal(rc, 0);
 
 	rc = crt_swim_init(0);
