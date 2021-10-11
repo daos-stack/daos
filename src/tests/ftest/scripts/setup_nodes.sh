@@ -102,7 +102,7 @@ sudo sysctl -w net.ipv4.conf.all.accept_local=1
 sudo sysctl -w net.ipv4.conf.all.arp_ignore=2
 sudo sysctl -w net.ipv4.conf.all.rp_filter=2
 sudo bash -c "set -ex
-for dev in $(find /sys/class/net/ -name 'ib*'); do
+for dev in $(find /sys/class/net/ -name 'ib*' -print0 | xargs -0); do
     sudo sysctl -w net.ipv4.conf.${dev:?}.rp_filter=2
 done"
 
