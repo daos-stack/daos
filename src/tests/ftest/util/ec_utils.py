@@ -13,6 +13,8 @@ from nvme_utils import ServerFillUp
 from daos_utils import DaosCommand
 from test_utils_container import TestContainer
 from apricot import TestWithServers
+from mdtest_test_base import MdtestBase
+from fio_test_base import FioBase
 from pydaos.raw import DaosApiError
 from command_utils_base import CommandFailure
 from general_utils import DaosTestError
@@ -78,6 +80,7 @@ class ErasureCodeIor(ServerFillUp):
         self.server_count = None
         self.ec_container = None
         self.cont_uuid = []
+        self.con_count = 0
 
     def setUp(self):
         """Set up each test case."""
@@ -171,21 +174,25 @@ class ErasureCodeIor(ServerFillUp):
                 self.ior_write_single_dataset(oclass, sizes, storage,
                                               operation, percent)
 
-    def ior_read_single_dataset(self, oclass, sizes, storage, percent=1):
+    def ior_read_single_dataset(self, oclass, sizes, storage,
+                                operation="Read", percent=1):
+        # pylint: disable=too-many-arguments
         """Read IOR single data set with EC object.
 
         Args:
             oclass(list): list of the obj class to use with IOR
             sizes(list): Update Transfer, Chunk and Block sizes
             storage(str): Data to be written on which storage
+            operation(str): Data to be Read only or Read with auto selection of
+                            IOR blocksize.
             percent(int): %of storage to be filled. Default it's 1%.
         """
         self.ior_param_update(oclass, sizes)
         # Start IOR Read
-        self.start_ior_load(storage, operation='Read', percent=percent,
-                            create_cont=False)
+        self.start_ior_load(storage, operation, percent, create_cont=False)
 
-    def ior_read_dataset(self, storage='NVMe', percent=1, parity=1):
+    def ior_read_dataset(self, storage='NVMe', operation="Read",
+                         percent=1, parity=1):
         """Read IOR data and verify for different EC object and different sizes
 
         Args:
@@ -193,7 +200,6 @@ class ErasureCodeIor(ServerFillUp):
             percent(int): %of storage to be filled. Default it's 1%.
             parity(int): object parity type for reading data, default is 1.
         """
-        con_count = 0
         for oclass in self.obj_class:
             for sizes in self.ior_chu_trs_blk_size:
                 # Skip the object type if server count does not meet the
@@ -205,11 +211,12 @@ class ErasureCodeIor(ServerFillUp):
                 if parity != 1 and parity_set not in oclass[0]:
                     print("Skipping Read as object type is {}"
                           .format(oclass[0]))
-                    con_count += 1
+                    self.con_count += 1
                     continue
-                self.container.uuid = self.cont_uuid[con_count]
-                self.ior_read_single_dataset(oclass, sizes, storage, percent)
-                con_count += 1
+                self.container.uuid = self.cont_uuid[self.con_count]
+                self.ior_read_single_dataset(oclass, sizes, storage, operation,
+                                             percent)
+                self.con_count += 1
 
 class ErasureCodeSingle(TestWithServers):
     # pylint: disable=too-many-ancestors
@@ -379,6 +386,136 @@ class ErasureCodeSingle(TestWithServers):
         job.join()
 
         # Verify the queue and make sure no FAIL for any run
+        while not self.out_queue.empty():
+            if self.out_queue.get() == "FAIL":
+                self.fail("FAIL")
+
+class ErasureCodeMdtest(MdtestBase):
+    # pylint: disable=too-many-ancestors
+    """
+    Class to used for EC testing for MDtest Benchmark.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a MdtestBase object."""
+        super().__init__(*args, **kwargs)
+        self.server_count = None
+        self.set_online_rebuild = False
+        self.rank_to_kill = None
+        self.obj_class = None
+
+    def setUp(self):
+        """Set up each test case."""
+        super().setUp()
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        self.server_count = len(self.hostlist_servers) * engine_count
+        self.obj_class = self.params.get("dfs_oclass_list",
+                                         '/run/mdtest/objectclass/*')
+        # Create Pool
+        self.add_pool()
+        self.out_queue = queue.Queue()
+
+    def write_single_mdtest_dataset(self):
+        """Run MDtest with EC object type.
+        """
+        # Update the MDtest obj class
+        self.mdtest_cmd.dfs_oclass.update(self.obj_class)
+
+        # Write the MDtest data
+        self.execute_mdtest(self.out_queue)
+
+    def start_online_mdtest(self):
+        """Run MDtest operation with thread in background. Trigger the server
+           failure while MDtest is running
+
+        """
+        # Create the MDtest run thread
+        job = threading.Thread(target=self.write_single_mdtest_dataset)
+
+        # Launch the MDtest thread
+        job.start()
+
+        # Kill the server rank while IO operation in progress
+        if self.set_online_rebuild:
+            time.sleep(30)
+            # Kill the server rank
+            if self.rank_to_kill is not None:
+                self.server_managers[0].stop_ranks([self.rank_to_kill],
+                                                   self.d_log,
+                                                   force=True)
+
+        # Wait to finish the thread
+        job.join()
+
+        # Verify the queue result and make sure test has no failure
+        while not self.out_queue.empty():
+            if self.out_queue.get() == "Mdtest Failed":
+                self.fail("FAIL")
+
+class ErasureCodeFio(FioBase):
+    # pylint: disable=too-many-ancestors
+    """
+    Class to use for EC testing with Fio Benchmark.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """Initialize a FioBase object."""
+        super().__init__(*args, **kwargs)
+        self.server_count = None
+        self.set_online_rebuild = False
+        self.rank_to_kill = None
+
+    def setUp(self):
+        """Set up each test case."""
+        super().setUp()
+        engine_count = self.server_managers[0].get_config_value(
+            "engines_per_host")
+        self.server_count = len(self.hostlist_servers) * engine_count
+
+        # Create Pool
+        self.add_pool()
+        self.out_queue = queue.Queue()
+
+    def write_single_fio_dataset(self, results):
+        """Run Fio Benchmark.
+
+        Args:
+            results (queue): queue for returning thread results
+        """
+        try:
+            self.execute_fio(stop_dfuse=False)
+            if results is not None:
+                results.put("PASS")
+        except (CommandFailure, DaosApiError, DaosTestError) as _error:
+            if results is not None:
+                results.put("FAIL")
+                raise
+
+    def start_online_fio(self):
+        """Run Fio operation with thread in background. Trigger the server
+           failure while Fio is running
+        """
+        # Create the Fio run thread
+        job = threading.Thread(target=self.write_single_fio_dataset,
+                               kwargs={"results": self.out_queue})
+
+        # Launch the Fio thread
+        job.start()
+
+        # Kill the server rank while IO operation in progress
+        if self.set_online_rebuild:
+            time.sleep(30)
+            # Kill the server rank
+            if self.rank_to_kill is not None:
+                self.server_managers[0].stop_ranks([self.rank_to_kill],
+                                                   self.d_log,
+                                                   force=True)
+
+        # Wait to finish the thread
+        job.join()
+
+        # Verify the queue result and make sure test has no failure
         while not self.out_queue.empty():
             if self.out_queue.get() == "FAIL":
                 self.fail("FAIL")

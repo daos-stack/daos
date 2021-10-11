@@ -31,10 +31,10 @@ class EcodServerRestart(ErasureCodeIor):
                        and restart the servers.
         """
         # Write all EC object data to NVMe
-        self.ior_write_dataset(operation="Write", percent=self.percent)
+        self.ior_write_dataset(operation="Auto_Write", percent=self.percent)
         self.log.info(self.pool.pool_percentage_used())
         # Write all EC object data to SCM
-        self.ior_write_dataset(storage='SCM', operation="Write",
+        self.ior_write_dataset(storage='SCM', operation="Auto_Write",
                                percent=self.percent)
         self.log.info(self.pool.pool_percentage_used())
 
@@ -63,9 +63,10 @@ class EcodServerRestart(ErasureCodeIor):
                 self.fail("Aggregation failed to start After server restart..")
 
         # Read all EC object data from NVMe
-        self.ior_read_dataset(percent=self.percent)
+        self.ior_read_dataset(operation="Auto_Read", percent=self.percent)
         # Read all EC object data which was written on SCM
-        self.ior_read_dataset(storage='SCM', percent=self.percent)
+        self.ior_read_dataset(storage='SCM', operation="Auto_Read",
+                              percent=self.percent)
 
     def test_ec_restart_before_agg(self):
         """Jira ID: DAOS-7337.

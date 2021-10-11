@@ -94,25 +94,26 @@ class ServerFillUp(IorTestBase):
         self.engines = (self.server_managers[0].manager.job.yaml.engine_params)
         self.out_queue = queue.Queue()
 
-    def start_ior_thread(self, results, create_cont, operation='WriteRead'):
+    def start_ior_thread(self, results, create_cont, operation):
         """Start IOR write/read threads and wait until all threads are finished.
 
         Args:
             results (queue): queue for returning thread results
-            operation (str): IOR operation for read/write.
-                             Default it will do whatever mention in ior_flags
-                             set.
+            create_cont (Bool): To create the new container or not.
+            operation (str): IOR operation for read/write or Both.
+                             Auto will calculate the IOR block size based on
+                             requested storage %.
         """
         self.ior_cmd.flags.value = self.ior_default_flags
 
         # For IOR only Write/Read operation, calculate the block size based on
         # server % to fill up. Store the container UUID for future reading operation.
-        if operation == 'Write' or operation == 'Read':
+        if 'Auto' in operation:
             block_size = self.calculate_ior_block_size()
             self.ior_cmd.block_size.update('{}'.format(block_size))
 
         # For IOR Read only operation, retrieve the stored container UUID
-        if operation == 'Read':
+        if 'Auto_Read' in operation or operation == "Read":
             create_cont = False
             self.ior_cmd.flags.value = self.ior_read_flags
 
@@ -262,8 +263,8 @@ class ServerFillUp(IorTestBase):
         # Create the Pool
         self.pool.create()
 
-    def start_ior_load(self, storage='NVMe', operation="Write", percent=1,
-                       create_cont=True):
+    def start_ior_load(self, storage='NVMe', operation="WriteRead",
+                       percent=1, create_cont=True):
         """Fill up the server either SCM or NVMe.
 
         Fill up based on percent amount given using IOR.
