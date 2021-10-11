@@ -5,6 +5,7 @@
   SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from apricot import TestWithServers
+import base64
 
 
 class QueryAttributeTest(TestWithServers):
@@ -85,7 +86,7 @@ class QueryAttributeTest(TestWithServers):
         # List the attribute names and compare against those set.
         attrs = daos_cmd.pool_list_attrs(pool=self.pool.uuid)
         for attr in attrs["response"]:
-            actual_attrs.append(attr["name"])
+            actual_attrs.append(attr)
 
         actual_attrs.sort()
         expected_attrs.sort()
@@ -100,7 +101,7 @@ class QueryAttributeTest(TestWithServers):
         for i in range(5):
             output = daos_cmd.pool_get_attr(
                 pool=self.pool.uuid, attr=sample_attrs[i])
-            actual_val = output["response"]["value"]
+            actual_val = base64.b64decode(output["response"]["value"]).decode()
             if sample_vals[i] != actual_val:
                 msg = "Unexpected attribute value! " +\
                     "Expected = {}; Actual = {}".format(
