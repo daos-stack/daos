@@ -1435,12 +1435,14 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		map_comp.co_type = PO_COMP_TP_NODE;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
+		map_comp.co_padding = 0;
 		map_comp.co_id = node.fdn_val.dom->fd_id;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
+		map_comp.co_in_ver = map_version;
 		map_comp.co_fseq = 1;
+		map_comp.co_flags = PO_COMPF_NONE;
 		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
-		map_comp.co_padding = 0;
 
 		if (map != NULL) {
 			struct pool_domain	*current;
@@ -1536,6 +1538,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		map_comp.co_type = PO_COMP_TP_RANK;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
+		map_comp.co_padding = 0;
 		map_comp.co_id = (p - uuids) + num_comps;
 		map_comp.co_rank = target_addrs->rl_ranks[i];
 		map_comp.co_ver = map_version;
@@ -1568,6 +1571,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 			map_comp.co_type = PO_COMP_TP_TARGET;
 			map_comp.co_status = new_status;
 			map_comp.co_index = j;
+			map_comp.co_padding = 0;
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
 			map_comp.co_rank = target_addrs->rl_ranks[i];
 			map_comp.co_ver = map_version;

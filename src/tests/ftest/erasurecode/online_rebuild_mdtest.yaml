@@ -1,26 +1,31 @@
 hosts:
   servers: !mux
-    4_server:
-      test_servers:
-        - server-A
-        - server-B
     6_server:
       test_servers:
         - server-A
         - server-B
         - server-C
-    10_server:
+    8_server:
+      test_servers:
+        - server-A
+        - server-B
+        - server-C
+        - server-D
+    12_server:
       test_servers:
         - server-A
         - server-B
         - server-C
         - server-D
         - server-E
+        - server-F
   test_clients:
     - client-A
     - client-B
-    - client-C
-timeout: 3500
+timeout: 500
+setup:
+  start_agents_once: False
+  start_servers_once: False
 server_config:
   engines_per_host: 2
   name: daos_server
@@ -48,35 +53,36 @@ server_config:
       scm_list: ["/dev/pmem1"]
       scm_mount: /mnt/daos1
 pool:
-    mode: 146
     name: daos_server
+    control_method: dmg
     scm_size: 25%
     nvme_size: 93%
-    svcn: 1
-    control_method: dmg
-    pool_query_timeout: 30
 container:
     type: POSIX
     control_method: daos
-    properties: rf:0
-ior:
-  api: "DFS"
+    properties: rf:2
+mdtest:
   client_processes:
-   np: 48
-  dfs_destroy: False
-  iorflags:
-   flags: "-w -W -F -k -G 1 -vv"
-   read_flags: "-r -R -F -k -G 1 -vv"
-  test_file: /testFile
-  repetitions: 1
-  chunk_block_transfer_sizes:
-   # [ChunkSize, BlocksSize, TransferSize]
-   - [32M, 128M, 8M]       # Full Striped
-   - [32M, 128M, 2K]       # Partial Striped
+    np_48:
+      np: 48
+      num_of_files_dirs: 50
+  mdtest_api:
+    dfs:
+      api: 'DFS'
+  test_dir: "/"
+  iteration: 3
+  dfs_destroy: True
+  manager: "MPICH"
+  flags: "-u"
+  write_bytes: 4194304
+  read_bytes: 4194304
+  depth: 10
+  # EC does not supported for directory so for now running with RP
+  dfs_dir_oclass: "RP_3G1"
   objectclass:
    dfs_oclass_list:
     #- [EC_Object_Class, Minimum number of servers]
-    - ["EC_2P1G1", 4]
-    - ["EC_4P1G1", 6]
-    - ["EC_4P2G1", 6]
-    - ["EC_8P2G1", 10]
+    - ["EC_2P2GX", 6]
+    - ["EC_4P2GX", 8]
+    - ["EC_8P2GX", 12]
+
