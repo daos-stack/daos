@@ -247,6 +247,4 @@ class ZeroConfigTest(TestWithServers):
         if not self.verify_client_run(exp_iface, env_state):
             self.fail("Failed run with expected dev: {}".format(exp_iface))
 
-        self.write_string_to_logfile('"Test.name: ' + str(self) + '"')
-
         self.log.info("Test passed!")
