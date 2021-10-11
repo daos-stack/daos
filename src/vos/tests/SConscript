@@ -31,5 +31,12 @@ def scons():
     denv.Install('$PREFIX/bin/', [vos_tests, evt_ctl])
     denv.Install(conf_dir, ['vos_size_input.yaml'])
 
+    dsaenv = vtsenv.Clone()
+    prereqs.require(dsaenv, 'dml')
+    vos_agg = daos_build.program(dsaenv, "vos_agg", ['vos_agg.c', 'vts_common.c',
+                                                     '../../container/srv_csum_recalc.c'],
+                                 LIBS=libraries + ['dml', 'dl'], OBJPREFIX="vb_")
+    denv.Install('$PREFIX/bin', [vos_agg])
+
 if __name__ == "SCons.Script":
     scons()

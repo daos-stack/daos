@@ -415,8 +415,8 @@ vos_cont_query(daos_handle_t coh, vos_cont_info_t *cinfo);
  */
 int
 vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
-	      void (*csum_func)(void *), bool (*yield_func)(void *arg),
-	      void *yield_arg, bool full_scan);
+	      void (*csum_func)(void *), int (*wait_func)(int), bool (*yield_func)(void *arg), void *yield_arg,
+	      bool full_scan);
 
 /**
  * Discards changes in all epochs with the epoch range \a epr

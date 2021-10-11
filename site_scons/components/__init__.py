@@ -273,6 +273,20 @@ def define_components(reqs):
                           'make $JOBS_OPT', 'make install'],
                 libs=['isal_crypto'])
 
+    retriever = GitRepoRetriever("https://github.com/intel/DML.git")
+
+    dml_build = ['cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=on '
+                 '-DDML_HW=ON -DLIB_ACCEL_3_2=ON '
+                 '-DCMAKE_INSTALL_PREFIX=$DML_PREFIX ../dml',
+                 'cmake --build . --target install $JOBS_OPT']
+
+    reqs.define('dml',
+                retriever=retriever,
+                commands=dml_build,
+                libs=["dml"],
+                headers=['dml.h'],
+                out_of_src_build=True,
+                extra_include_path=['include/dml'])
 
     retriever = GitRepoRetriever("https://github.com/pmem/pmdk.git")
 

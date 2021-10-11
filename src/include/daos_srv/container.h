@@ -248,6 +248,9 @@ struct csum_recalc_args {
 	int			 cra_tgt_id;	/* VOS target ID */
 	int			 cra_rc;	/* return code */
 	ABT_eventual		 csum_eventual;
+	struct bio_io_context	*bio_ctx;
+	bool			 is_write;
+	d_iov_t			 *iov;
 };
 
 /* Callback function to pass to vos_aggregation */

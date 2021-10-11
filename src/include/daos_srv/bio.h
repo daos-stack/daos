@@ -507,6 +507,9 @@ int bio_ioctxt_open(struct bio_io_context **pctxt,
 		    struct bio_xs_context *xs_ctxt,
 		    struct umem_instance *umem, uuid_t uuid, bool skip_blob);
 
+void *
+bio_addr2ptr(struct bio_io_context *ctxt, bio_addr_t addr);
+
 /*
  * Finalize per VOS instance I/O context.
  *

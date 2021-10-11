@@ -498,7 +498,7 @@ cont_vos_aggregate_cb(struct ds_cont_child *cont, daos_epoch_range_t *epr,
 {
 	int rc;
 
-	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc,
+	rc = vos_aggregate(cont->sc_hdl, epr, ds_csum_recalc, NULL,
 			   agg_rate_ctl, param, full_scan);
 
 	/* Suppress csum error and continue on other epoch ranges */

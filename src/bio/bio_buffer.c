@@ -670,6 +670,12 @@ iod_pad_region(struct bio_iov *biov, struct bio_rsrvd_region *last_rg, unsigned 
 	return true;
 }
 
+void *
+bio_addr2ptr(struct bio_io_context *ctxt, bio_addr_t addr)
+{
+	return umem_off2ptr(ctxt->bic_umem, addr.ba_off);
+}
+
 /* Convert offset of @biov into memory pointer */
 int
 dma_map_one(struct bio_desc *biod, struct bio_iov *biov, void *arg)
