@@ -134,8 +134,7 @@ int main(void)
 	rc = d_log_init();
 	assert(rc == 0);
 
-	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER |
-			CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
+	rc = crt_init(NULL, CRT_FLAG_BIT_SERVER | CRT_FLAG_BIT_AUTO_SWIM_DISABLE);
 	assert(rc == 0);
 
 	rc = crt_proto_register(&my_proto_fmt_basic_corpc);

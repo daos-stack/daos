@@ -3,7 +3,7 @@
 %define agent_svc_name daos_agent.service
 
 %global mercury_version 2.0.1-1%{?dist}
-%global libfabric_version 1.12.0
+%global libfabric_version 1.13.2~rc1-1
 %global __python %{__python3}
 
 %if (0%{?rhel} >= 8)
@@ -14,7 +14,7 @@
 
 Name:          daos
 Version:       1.3.105
-Release:       4%{?relval}%{?dist}
+Release:       5%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -480,8 +480,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Mon Oct 8 2021 David Quigley <david.quigley@intel.com> 1.3.105-4
+* Mon Oct 11 2021 David Quigley <david.quigley@intel.com> 1.3.105-5
 - Add defusedxml as a required dependency for the test package.
+
+* Wed Oct 8 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.13.105-4
+- Update OFI to v1.13.2rc1
 
 * Wed Sep 15 2021 Li Wei <wei.g.li@intel.com> 1.3.105-3
 - Update raft to fix InstallSnapshot performance as well as to avoid some
