@@ -37,6 +37,10 @@ struct fd_entry {
 	int			fd_ino;
 	int			fd_dev;
 	bool			fd_fstat;
+
+	/* Used for streaming I/O only */
+	bool			fd_eof;
+	int			fd_err;
 };
 
 ssize_t
