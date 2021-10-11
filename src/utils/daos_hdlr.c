@@ -39,34 +39,9 @@
 #include "daos_fs_sys.h"
 
 #include "daos_hdlr.h"
+#include "daos_datamover.h"
 
 #define OID_ARR_SIZE 8
-
-struct file_dfs {
-	enum {POSIX, DAOS} type;
-	int fd;
-	daos_off_t offset;
-	dfs_obj_t *obj;
-	dfs_sys_t *dfs_sys;
-};
-
-struct dm_args {
-	char		*src;
-	char		*dst;
-	char		src_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
-	char		src_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
-	char		dst_pool[DAOS_PROP_LABEL_MAX_LEN + 1];
-	char		dst_cont[DAOS_PROP_LABEL_MAX_LEN + 1];
-	daos_handle_t	src_poh;
-	daos_handle_t	src_coh;
-	daos_handle_t	dst_poh;
-	daos_handle_t	dst_coh;
-	uint32_t	cont_prop_oid;
-	uint32_t	cont_prop_layout;
-	uint64_t	cont_layout;
-	uint64_t	cont_oid;
-
-};
 
 struct fs_copy_stats {
 	uint64_t		num_dirs;
@@ -1722,7 +1697,7 @@ out:
 	return rc;
 }
 
-static int
+int
 dm_deserialize_cont_md(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props,
 		       daos_prop_t **props)
 {
@@ -1747,7 +1722,7 @@ out:
 	return rc;
 }
 
-static int
+int
 dm_deserialize_cont_attrs(struct cmd_args_s *ap, struct dm_args *ca, char *preserve_props)
 {
 	int		rc = 0;
@@ -2119,7 +2094,7 @@ dm_disconnect(struct cmd_args_s *ap,
 * Modifies "path" to be the relative container path, defaulting to "/".
 * Returns 0 if a daos path was successfully parsed, a error number if not.
 */
-static int
+int
 dm_parse_path(struct file_dfs *file, char *path, size_t path_len, char (*pool_str)[],
 	      char (*cont_str)[])
 {

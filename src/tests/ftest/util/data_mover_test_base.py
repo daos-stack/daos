@@ -15,7 +15,7 @@ from test_utils_container import TestContainer
 from pydaos.raw import str_to_c_uuid, DaosContainer, DaosObj, IORequest
 from ior_test_base import IorTestBase
 from mdtest_test_base import MdtestBase
-from data_mover_utils import DcpCommand, DsyncCommand, FsCopy, ContClone
+from data_mover_utils import DcpCommand,DsyncCommand,FsCopy,ContClone,ContSerialize,ContDeserialize
 from data_mover_utils import DserializeCommand, DdeserializeCommand
 from data_mover_utils import uuid_from_obj
 from duns_utils import format_path
@@ -57,11 +57,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
     # The valid datamover tools that can be used
     TOOLS = (
-        "DCP",        # mpifileutils dcp
-        "DSYNC",      # mpifileutils dsync
-        "DSERIAL",    # mpifileutils daos-serialize + daos-deserialize
-        "FS_COPY",    # daos filesystem copy
-        "CONT_CLONE"  # daos container clone
+        "DCP",           # mpifileutils dcp
+        "DSYNC",         # mpifileutils dsync
+        "DSERIAL",       # mpifileutils daos-serialize + daos-deserialize
+        "FS_COPY",       # daos filesystem copy
+        "CONT_CLONE",    # daos container clone
+        "CONT_SERIALIZE" # daos container serialize
     )
 
     def __init__(self, *args, **kwargs):
@@ -76,6 +77,14 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         self.ddeserialize_cmd = None
         self.fs_copy_cmd = None
         self.cont_clone_cmd = None
+        self.cont_serialize_cmd = None
+        self.cont_deserialize_cmd = None
+        self.ior_processes = None
+        self.mdtest_processes = None
+        self.dcp_processes = None
+        self.dsync_processes = None
+        self.dserialize_processes = None
+        self.ddeserialize_processes = None
         self.pool = []
         self.container = []
         self.uuids = []
@@ -102,6 +111,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         # Temp directory for serialize/deserialize
         self.serial_tmp_dir = self.tmp
+
+        # Temp file for serialize/deserialize (daos cont serialize/deserialize)
+        self.serial_file_path = None
 
         self.preserve_props_path = None
 
@@ -644,7 +656,19 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         elif self.tool == "FS_COPY":
             self._set_fs_copy_params(src, dst)
         elif self.tool == "CONT_CLONE":
-            self._set_cont_clone_params(src, dst)
+            assert src_type in (None, "DAOS", "DAOS_UUID") # nosec
+            assert src_path is None # nosec
+            assert dst_type in (None, "DAOS", "DAOS_UUID") # nosec
+            assert dst_path is None # nosec
+            self._set_cont_clone_params(src_pool, src_cont,
+                                        dst_pool, dst_cont)
+        elif self.tool == "CONT_SERIALIZE":
+            assert src_type in (None, "DAOS", "DAOS_UUID") # nosec
+            assert src_path is None # nosec
+            assert dst_type in (None, "DAOS", "DAOS_UUID") # nosec
+            assert dst_path is None # nosec
+            assert dst_cont is None #nosec
+            self._set_cont_serialize_params(src_pool, src_cont, dst_pool)
         else:
             self.fail("Invalid tool: {}".format(self.tool))
 
@@ -784,7 +808,38 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         if dst is not None:
             self.cont_clone_cmd.set_params(dst=dst)
 
-    def _set_dserial_params(self, src=None, dst_pool=None):
+    def _set_cont_serialize_params(self, src_pool=None, src_cont=None, dst_pool=None):
+        """Set the params for daos cont serialize and deserialize.
+
+        Args:
+            src_pool (TestPool, optional): the source pool or uuid.
+            src_cont (TestContainer, optional): the source cont or uuid.
+            dst_pool (TestPool, optional): the destination pool or uuid.
+
+        """
+
+        # First, initialize a new cont serialize and deserialize command
+        self.cont_serialize_cmd = ContSerialize(self.daos_cmd, self.log)
+        self.cont_deserialize_cmd = ContDeserialize(self.daos_cmd, self.log)
+
+        # Get an intermediate path for HDF5 file(s)
+        tmp_path = self.new_posix_test_path(create=False, parent=self.serial_tmp_dir)
+
+        # pass tmp_path + src_cont.uuid + .h5 to deserialize for --file, since
+	# the daos deserialize utility only takes a file, not a directory
+        self.serial_file_path = join(tmp_path, "{}{}".format(src_cont.uuid, ".h5"))
+
+        # Set the source params
+        if src_pool or src_cont:
+            self.cont_serialize_cmd.set_cont_serialize_params(src=format_daos_path(src_pool,
+	                                                      src_cont), output_path=tmp_path)
+        if dst_pool:
+            self.cont_deserialize_cmd.set_cont_deserialize_params(file_path=self.serial_file_path,
+                                                                  pool=uuid_from_obj(dst_pool))
+
+    def _set_dserial_params(self,
+                            src_pool=None, src_cont=None,
+                            dst_pool=None):
         """Set the params for daos-serialize and daos-deserialize.
 
         This uses a temporary POSIX path as the intermediate step
@@ -1045,6 +1100,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
                 result = self.fs_copy_cmd.run()
             elif self.tool == "CONT_CLONE":
                 result = self.cont_clone_cmd.run()
+            elif self.tool == "CONT_SERIALIZE":
+                result = self.cont_serialize_cmd.run()
+                result = self.cont_deserialize_cmd.run()
             else:
                 self.fail("Invalid tool: {}".format(str(self.tool)))
         except CommandFailure as error:

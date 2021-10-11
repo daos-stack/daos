@@ -34,6 +34,8 @@ import "C"
 
 type containerCmd struct {
 	Create      containerCreateCmd      `command:"create" description:"create a container"`
+	Serialize   containerSerializeCmd   `command:"serialize" description:"serialize a container"`
+	Deserialize containerDeserializeCmd `command:"deserialize" description:"deserialize a container"`
 	List        containerListCmd        `command:"list" alias:"ls" description:"list all containers in pool"`
 	Destroy     containerDestroyCmd     `command:"destroy" description:"destroy a container"`
 	ListObjects containerListObjectsCmd `command:"list-objects" alias:"list-obj" description:"list all objects in container"`
@@ -349,6 +351,73 @@ func (cmd *containerCreateCmd) Execute(_ []string) (err error) {
 		return err
 	}
 	cmd.Info(bld.String())
+
+	return nil
+}
+
+type containerSerializeCmd struct {
+	daosCmd
+
+	Source string `long:"src" short:"s" description:"container to be serialized" required:"1"`
+	Output string `long:"output-path" short:"o" description:"path to output serialized HDF5 files" required:"0"`
+}
+
+func (cmd *containerSerializeCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	ap.src = C.CString(cmd.Source)
+	defer freeString(ap.src)
+	if cmd.Output != "" {
+		ap.output_path = C.CString(cmd.Output)
+		defer freeString(ap.output_path)
+	}
+
+	ap.c_op = C.CONT_SERIALIZE
+	rc := C.cont_serialize_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to serialize %s -> %s", cmd.Source)
+	}
+
+	return nil
+}
+
+type containerDeserializeCmd struct {
+	daosCmd
+
+	File  string `long:"file" short:"f" description:"Path to serialized HDF5 file" required:"1"`
+	Pool  string `long:"pool" short:"p" description:"Pool where container will be deserialized" required:"1"`
+	Label string `long:"cont-label" short:"l" description:"Create container with specified container label" required:"0"`
+}
+
+func (cmd *containerDeserializeCmd) Execute(_ []string) error {
+	ap, deallocCmdArgs, err := allocCmdArgs(cmd.log)
+	if err != nil {
+		return err
+	}
+	defer deallocCmdArgs()
+
+	ap.path = C.CString(cmd.File)
+	defer freeString(ap.path)
+	cPool := C.CString(cmd.Pool)
+	defer freeString(cPool)
+	C.strncpy(&ap.pool_str[0], cPool, C.DAOS_PROP_LABEL_MAX_LEN)
+	if cmd.Label != "" {
+		cLabel := C.CString(cmd.Label)
+		defer freeString(cLabel)
+		C.strncpy(&ap.cont_str[0], cLabel, C.DAOS_PROP_LABEL_MAX_LEN)
+	}
+
+	ap.c_op = C.CONT_DESERIALIZE
+	rc := C.cont_deserialize_hdlr(ap)
+	if err := daosError(rc); err != nil {
+		return errors.Wrapf(err,
+			"failed to deserialize %s -> %s", cmd.File)
+	}
 
 	return nil
 }
