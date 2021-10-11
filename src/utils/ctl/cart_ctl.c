@@ -738,7 +738,7 @@ main(int argc, char **argv)
 	D_ASSERTF(rc == 0, "parse_args() failed. rc %d\n", rc);
 
 	/* rank, num_attach_retries, is_server, assert_on_error */
-	crtu_test_init(0, 40, false, true);
+	crtu_test_init(0, 40, false, false);
 
 	if (ctl_gdata.cg_use_daos_agent_env) {
 		rc = dc_agent_init();
