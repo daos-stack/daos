@@ -102,10 +102,9 @@ sudo sysctl -w net.ipv4.conf.all.accept_local=1
 sudo sysctl -w net.ipv4.conf.all.arp_ignore=2
 sudo sysctl -w net.ipv4.conf.all.rp_filter=2
 sudo bash -c "set -ex
-devs=$(ls -1 /sys/class/net | grep ib)
-for dev in $devs; do
-    sudo sysctl -w net.ipv4.conf.${dev}.rp_filter=2
-fi"
+for dev in $(find /sys/class/net/ -name 'ib*'); do
+    sudo sysctl -w net.ipv4.conf.${dev:?}.rp_filter=2
+done"
 
 if ! $TEST_RPMS; then
     # set up symlinks to spdk scripts (none of this would be

@@ -388,9 +388,9 @@ class DaosServerYamlParameters(YamlParameters):
                 "DD_MASK=mgmt,io,md,epc,rebuild",
             ]
             default_env_vars.extend(self.REQUIRED_ENV_VARS["common"])
-            for provider in self._provider.split(";"):
-                if provider in self.REQUIRED_ENV_VARS:
-                    default_env_vars.extend(self.REQUIRED_ENV_VARS[provider])
+            for name in self._provider.split(";"):
+                if name in self.REQUIRED_ENV_VARS:
+                    default_env_vars.extend(self.REQUIRED_ENV_VARS[name])
             self.env_vars = BasicParameter(None, default_env_vars)
 
             # global CRT_CTX_SHARE_ADDR shared with client
@@ -465,13 +465,14 @@ class DaosServerYamlParameters(YamlParameters):
                 self.scm_size.update(None, "scm_size")
 
             # Define any required env vars
-            required_env_vars = {
-                env.split("=")[0]: env.split("=")[1] for env in self.REQUIRED_ENV_VARS["common"]}
-            for provider in self._provider.split(";"):
-                if provider in self.REQUIRED_ENV_VARS:
+            required_env_vars = {}
+            for env in self.REQUIRED_ENV_VARS["common"]:
+                required_env_vars[env.split("=")[0]] = env.split("=", maxsplit=1)[1]
+            for name in self._provider.split(";"):
+                if name in self.REQUIRED_ENV_VARS:
                     required_env_vars.update({
                         env.split("=")[0]: env.split("=")[1]
-                        for env in self.REQUIRED_ENV_VARS[provider]})
+                        for env in self.REQUIRED_ENV_VARS[name]})
 
             # Enable fault injection if configured
             if test.fault_injection.fault_file is not None:
