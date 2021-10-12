@@ -63,8 +63,8 @@
 	ACTION(long,    ftell,     (FILE *))                                  \
 	ACTION(void,    rewind,    (FILE *))                                  \
 	ACTION(off_t,   ftello,    (FILE *))                                  \
-	ACTION(size_t,  fread,     (void *restrict, size_t, size_t, FILE *restrict)) \
-	ACTION(size_t,  fwrite,    (const void *restrict ptr, size_t size, size_t nmemb, FILE *restrict stream))
+	ACTION(size_t,  fread,     (void *, size_t, size_t, FILE *)) \
+	ACTION(size_t,  fwrite,    (const void *ptr, size_t size, size_t nmemb, FILE *stream))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \

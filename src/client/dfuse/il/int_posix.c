@@ -1932,7 +1932,7 @@ do_real_fclose:
 }
 
 DFUSE_PUBLIC size_t
-dfuse_fread(void *restrict ptr, size_t size, size_t nmemb, FILE *restrict stream)
+dfuse_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
 	struct fd_entry	*entry = NULL;
 	ssize_t bytes_read;
@@ -1985,7 +1985,7 @@ do_real_fread:
 }
 
 DFUSE_PUBLIC size_t
-dfuse_fwrite(const void *restrict ptr, size_t size, size_t nmemb, FILE *restrict stream)
+dfuse_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
 	struct fd_entry	*entry = NULL;
 	size_t len;
