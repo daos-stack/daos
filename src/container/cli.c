@@ -1748,13 +1748,13 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		rc = dc_task_resched(task);
+		rc = dc_task_depend(task, 1, &ptask);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
 		}
 
-		rc = dc_task_depend(task, 1, &ptask);
+		rc = dc_task_resched(task);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
