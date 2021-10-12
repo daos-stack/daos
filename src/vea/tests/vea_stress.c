@@ -279,7 +279,7 @@ vs_update(struct vea_stress_pool *vs_pool)
 		rc = vea_reserve(vs_pool->vsp_vsi, blk_cnt, hint, &r_list);
 		if (rc != 0) {
 			fprintf(stderr, "failed to reserve %u blks for io\n", blk_cnt);
-			return rc;
+			goto error;
 		}
 
 		/*
@@ -291,7 +291,8 @@ vs_update(struct vea_stress_pool *vs_pool)
 		D_ALLOC_PTR(dup);
 		if (dup == NULL) {
 			fprintf(stderr, "failed to alloc dup ext\n");
-			return -DER_NOMEM;
+			rc = -DER_NOMEM;
+			goto error;
 		}
 
 		D_INIT_LIST_HEAD(&dup->vre_link);
@@ -321,6 +322,14 @@ vs_update(struct vea_stress_pool *vs_pool)
 		d_list_add_tail(&vs_obj->vso_link, &vs_pool->vsp_objs);
 
 	return rc;
+error:
+	vea_cancel(vs_pool->vsp_vsi, hint, &r_list);
+	d_list_for_each_entry_safe(rsrvd, dup, &a_list, vre_link) {
+		d_list_del_init(&rsrvd->vre_link);
+		D_FREE(rsrvd);
+	}
+
+	return rc;
 }
 
 /* Free few punched extents */
@@ -346,6 +355,7 @@ vs_reclaim(struct vea_stress_pool *vs_pool)
 		rc = vea_free(vs_pool->vsp_vsi, rsrvd->vre_blk_off, rsrvd->vre_blk_cnt);
 		D_ASSERT(rc == 0);
 		vs_pool->vsp_free_blks += rsrvd->vre_blk_cnt;
+		D_FREE(rsrvd);
 	}
 	rc = umem_tx_commit(&vs_pool->vsp_umm);
 	D_ASSERT(rc == 0);
@@ -410,7 +420,8 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 	D_ALLOC_PTR(dup);
 	if (dup == NULL) {
 		fprintf(stderr, "failed to alloc dup ext\n");
-		return -DER_NOMEM;
+		rc = -DER_NOMEM;
+		goto error;
 	}
 	D_INIT_LIST_HEAD(&dup->vre_link);
 	dup->vre_blk_off = rsrvd->vre_blk_off;
@@ -422,8 +433,10 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 
 	/* Free old allocated extents */
 	d_list_for_each_entry_safe(rsrvd, tmp, &f_list, vre_link) {
+		d_list_del_init(&rsrvd->vre_link);
 		rc = vea_free(vs_pool->vsp_vsi, rsrvd->vre_blk_off, rsrvd->vre_blk_cnt);
 		D_ASSERT(rc == 0);
+		D_FREE(rsrvd);
 	}
 
 	/* Publish coalesced extent */
@@ -434,6 +447,13 @@ vs_coalesce(struct vea_stress_pool *vs_pool)
 	D_ASSERT(rc == 0);
 
 	vs_list_insert(&a_list, 1, &vs_obj->vso_alloc_list);
+	return rc;
+error:
+	vea_cancel(vs_pool->vsp_vsi, hint, &r_list);
+	d_list_for_each_entry_safe(rsrvd, tmp, &f_list, vre_link) {
+		d_list_del_init(&rsrvd->vre_link);
+		D_FREE(rsrvd);
+	}
 	return rc;
 }
 
