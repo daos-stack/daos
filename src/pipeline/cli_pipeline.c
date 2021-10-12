@@ -754,17 +754,48 @@ pipeline_part_checkop(const char *part_type, const char *operand_type)
 	return false; /** we should not reach this ever */
 }
 
+static bool
+pipeline_filter_checkops(daos_filter_t *ftr, size_t *p)
+{
+	uint32_t	i;
+	uint32_t	num_operands;
+	bool		res;
+	char		*part_type;
+	char		*child_part_type;
+
+	num_operands 	= ftr->parts[*p]->num_operands;
+	part_type	= ftr->parts[*p]->part_type;
+	for (i = 0; i < num_operands; i++)
+	{
+		*p		+= 1;
+		child_part_type	= ftr->parts[*p]->part_type;
+		res = pipeline_part_checkop(part_type, child_part_type);
+		if (res == false)
+		{
+			return res;
+		}
+		res = pipeline_filter_checkops(ftr, p);
+		if (res == false)
+		{
+			return res;
+		}
+	}
+	return true;
+}
+
 int dc_pipeline_check(daos_pipeline_t *pipeline)
 {
 	size_t i;
 
 	/** -- Check 0: Check that pipeline is not NULL. */
+
 	if (pipeline == NULL)
 	{
 		return -DER_INVAL;
 	}
 
 	/** -- Check 1: Check that filters are chained together correctly. */
+
 	{
 		for (i = 0; i < pipeline->num_filters; i++)
 		{
@@ -784,12 +815,13 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 		}
 	}
 	/** -- Rest of the checks are done for each filter */
+
 	for (i = 0;
 	     i < pipeline->num_filters + pipeline->num_aggr_filters;
 	     i++)
 	{
 		daos_filter_t *ftr;
-		size_t p, o;
+		size_t p;
 		size_t num_parts = 0;
 		uint32_t num_operands;
 		bool res;
@@ -807,12 +839,14 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 			num_parts = 1;
 		}
 
-		for (p = 0; p < ftr->num_parts; p++) {
+		for (p = 0; p < ftr->num_parts; p++)
+		{
 			/**
 			 * -- Check 2: Check that all parts have a correct
 			 *             number of operands and also that the
 			 *             number of total parts is correct.
 			 */
+
 			daos_filter_part_t *part = ftr->parts[p];
 
 			num_operands = pipeline_part_nops(part->part_type);
@@ -821,28 +855,20 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 				return -DER_INVAL;
 			}
 			num_parts += part->num_operands;
-			if (num_parts > ftr->num_parts)
-			{
-				return -DER_INVAL;
-			}
-
-			/**
-			 * -- Check 3: Check that all parts have the right
-			 *             type of operands.
-			 */
-			for (o = 1; o <= part->num_operands; o++)
-			{
-				daos_filter_part_t *operand = ftr->parts[p+o];
-
-				res = pipeline_part_checkop(part->part_type,
-							    operand->part_type);
-				if (res == false)
-				{
-					return -DER_INVAL;
-				}
-			}
 		}
 		if (num_parts != ftr->num_parts)
+		{
+			return -DER_INVAL;
+		}
+
+		/**
+		 * -- Check 3: Check that all parts have the right
+		 *             type of operands.
+		 */
+
+		p = 0;
+		res = pipeline_filter_checkops(ftr, &p);
+		if (res == false)
 		{
 			return -DER_INVAL;
 		}
