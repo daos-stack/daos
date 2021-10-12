@@ -129,7 +129,7 @@ RUN dnf -y upgrade && \
         hwloc-devel \
         ipmctl \
         java-1.8.0-openjdk \
-	java-1.8.0-openjdk-devel \
+        java-1.8.0-openjdk-devel \
         json-c-devel \
         libaio-devel \
         libcmocka-devel \
@@ -164,7 +164,6 @@ RUN dnf -y upgrade && \
         python3-yaml \
         sg3_utils \
         sudo \
-	wget \
         valgrind-devel \
         yasm && \
     dnf clean all
@@ -306,10 +305,9 @@ RUN echo -e "<settings>\n\
 </settings>" > /home/daos/.m2/settings.xml
 
 ARG DAOS_JAVA_BUILD=$DAOS_BUILD
-ARG MAVEN_VERSION=3.6.3
 USER root:root
 
-RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || ( wget https://archive.apache.org/dist/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz && tar -xf apache-maven-$MAVEN_VERSION-bin.tar.gz && find ./ -name "mvn" | { read d; f=$(dirname $d); cp -r $(readlink -f $f)/../* /usr/local; } )
+RUN [ "$DAOS_JAVA_BUILD" != "yes" ] || ( curl --output ./apache-maven-3.6.3-bin.tar.gz https://archive.apache.org/dist/maven/maven-3/3.6.3/binaries/apache-maven-3.6.3-bin.tar.gz && tar -xf apache-maven-3.6.3-bin.tar.gz && find ./ -name "mvn" | { read d; f=$(dirname $d); cp -r $(readlink -f $f)/../* /usr/local; } )
 
 USER daos_server:daos_server
 
