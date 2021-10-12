@@ -49,7 +49,7 @@ cont_iv_ent_init(struct ds_iv_key *iv_key, void *data,
 	int		 rc;
 
 	uma.uma_id = UMEM_CLASS_VMEM;
-	rc = dbtree_create(DBTREE_CLASS_NV, 0, 4, &uma, NULL, &root_hdl);
+	rc = dbtree_create(DBTREE_CLASS_UV, 0, 4, &uma, NULL, &root_hdl);
 	if (rc != 0) {
 		D_ERROR("failed to create tree: "DF_RC"\n", DP_RC(rc));
 		return rc;
