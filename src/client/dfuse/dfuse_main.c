@@ -205,8 +205,7 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
 		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
 		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d %s",
-				rc, strerror(rc));
+				"Fuse loop exited with return code: %d %s", rc, strerror(rc));
 
 	fuse_session_unmount(dfuse_info->di_session);
 

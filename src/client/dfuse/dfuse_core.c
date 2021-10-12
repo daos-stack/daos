@@ -1105,8 +1105,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 		rc = dfs_lookup(dfs->dfs_ns, "/", O_RDWR, &ie->ie_obj,
 				NULL, NULL);
 		if (rc) {
-			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)",
-					rc, strerror(rc));
+			DFUSE_TRA_ERROR(ie, "dfs_lookup() failed: %d (%s)", rc, strerror(rc));
 			D_GOTO(err, rc = daos_errno2der(rc));
 		}
 	}
@@ -1116,11 +1115,7 @@ dfuse_fs_start(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfs)
 			       sizeof(ie->ie_stat.st_ino),
 			       &ie->ie_htl,
 			       false);
-	if (rc != -DER_SUCCESS) {
-		DFUSE_TRA_ERROR(fs_handle, "hash_insert() failed: %d",
-				rc);
-		D_GOTO(err, 0);
-	}
+	D_ASSERT(rc == -DER_SUCCESS);
 
 	rc = pthread_create(&fs_handle->dpi_thread, NULL,
 			    dfuse_progress_thread, fs_handle);

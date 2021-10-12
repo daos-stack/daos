@@ -2479,10 +2479,6 @@ def log_test(conf,
 
     lto.hide_fi_calls = skip_fi
 
-    wf_list = [conf.wf]
-    if leak_wf:
-        wf_list.append(leak_wf)
-
     try:
         lto.check_log_file(abort_on_warning=True,
                            show_memleaks=show_memleaks,
