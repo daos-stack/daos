@@ -7,7 +7,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 1800
+timeout: 2000
 setup:
   start_servers_once: False
 server_config:
@@ -49,6 +49,7 @@ pool:
     nvme_size: 108000000000
     svcn: 4
     control_method: dmg
+    rebuild_timeout: 240
 container:
     type: POSIX
     control_method: daos
