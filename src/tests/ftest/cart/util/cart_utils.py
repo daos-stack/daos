@@ -208,7 +208,7 @@ class CartTest(TestWithoutServers):
                                          os.getenv('HOME'))
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
-	log_path = log_path.replace(";", "_")
+        log_path = log_path.replace(";", "_")
 
         log_file = os.path.join(log_path, log_dir,
                                 test_name + "_" + \
