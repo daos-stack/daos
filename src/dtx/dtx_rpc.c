@@ -175,45 +175,29 @@ dtx_req_cb(const struct crt_cb_info *cb_info)
 			/* The DTX entry is corrupted. */
 			D_FREE(dsp);
 			D_GOTO(out, rc = -DER_DATA_LOSS);
-		case -DER_NONEXIST:
-			if (dtx_hlc_age2sec(dsp->dsp_epoch) >
-			    dtx_agg_thd_age_lo ||
-			    DAOS_FAIL_CHECK(DAOS_DTX_UNCERTAIN)) {
-
-				/* Related DTX entry on leader does not exist.
-				 * We do not know whether it has been aborted
-				 * or committed (then aggregated). Then has to
-				 * mark it as 'orphan' that will be handled via
-				 * some special DAOS tools in the future.
-				 */
-
-				rc = vos_dtx_set_flags(dra->dra_cont->sc_hdl,
-						       &dsp->dsp_xid, 1,
-						       DTE_ORPHAN);
-
-				D_ERROR("Hit uncertain leaked DTX "DF_DTI
-					", mark it as orphan: %d\n",
-					DP_DTI(&dsp->dsp_xid), rc);
-
-				if (rc == -DER_NONEXIST)
-					rc = 0;
-				else
-					rc = -DER_TX_UNCERTAIN;
-
-				D_FREE(dsp);
-				break;
-			}
-
-			/* The leader does not have related DTX info,
-			 * we may miss related DTX abort request, so
-			 * let's abort it locally.
+		case -DER_TX_UNCERTAIN:
+			/* Related DTX entry on leader does not exist. We do not know whether it has
+			 * been aborted or committed (then removed by DTX aggregation). Then mark it
+			 * as 'orphan' that will be handled via some special DAOS tools in future.
 			 */
-			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl,
-					    DAOS_EPOCH_MAX, &dsp->dsp_xid, 1);
-			if (rc1 < 0 && rc1 != -DER_NONEXIST &&
-			    dra->dra_abt_list != NULL)
-				d_list_add_tail(&dsp->dsp_link,
-						dra->dra_abt_list);
+			rc1 = vos_dtx_set_flags(dra->dra_cont->sc_hdl, &dsp->dsp_xid,
+						1, DTE_ORPHAN);
+			D_ERROR("Hit uncertain leaked DTX "DF_DTI", mark it as orphan: "DF_RC"\n",
+				DP_DTI(&dsp->dsp_xid), DP_RC(rc1));
+			D_FREE(dsp);
+
+			if (rc1 == -DER_NONEXIST)
+				break;
+
+			D_GOTO(out, rc = -DER_TX_UNCERTAIN);
+		case -DER_NONEXIST:
+			/* The leader does not have related DTX info, we may miss related DTX abort
+			 * request, let's abort it locally.
+			 */
+			rc1 = vos_dtx_abort(dra->dra_cont->sc_hdl, DAOS_EPOCH_MAX,
+					    &dsp->dsp_xid, 1);
+			if (rc1 < 0 && rc1 != -DER_NONEXIST && dra->dra_abt_list != NULL)
+				d_list_add_tail(&dsp->dsp_link, dra->dra_abt_list);
 			else
 				D_FREE(dsp);
 			break;
