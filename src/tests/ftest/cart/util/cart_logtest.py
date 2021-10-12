@@ -385,11 +385,6 @@ class LogTest():
                             # this highlights other errors and lines which
                             # report an error, but not a fault code.
                             show = False
-                        elif line.get_msg().endswith(' 12'):
-                            # dfs and dfuse use system error numbers, rather
-                            # than daos, so allow ENOMEM as well as
-                            # -DER_NOMEM
-                            show = False
                         elif line.get_msg().endswith(': 12 (Cannot allocate memory)'):
                             # dfs and dfuse use system error numbers, rather
                             # than daos, so allow ENOMEM as well as

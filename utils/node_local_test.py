@@ -263,7 +263,6 @@ class WarningsFactory():
             count += 1
 
         if count == 0:
-            print('Nothing to explain')
             return
 
         for (sline, smessage) in self.pending:
@@ -2489,14 +2488,9 @@ def log_test(conf,
                            show_memleaks=show_memleaks,
                            leak_wf=leak_wf)
     except lt.LogCheckError:
-        if lto.fi_location:
-            for wf in wf_list:
-                wf.explain(lto.fi_location, os.path.basename(filename), fi_signal)
+        pass
 
     if skip_fi:
-        if lto.fi_location:
-            for wf in wf_list:
-                wf.explain(lto.fi_location, os.path.basename(filename), fi_signal)
         if not lto.fi_triggered:
             compress_file(filename)
             raise NLTestNoFi
@@ -3181,6 +3175,9 @@ class AllocFailTestRun():
         This is where all the checks are performed.
         """
 
+        def _explain():
+            self.aft.wf.explain(self.fi_loc, os.path.basename(self.log_file), fi_signal)
+            self.aft.conf.wf.explain(self.fi_loc, os.path.basename(self.log_file), fi_signal)
         # Put in a new-line.
         print()
         self.returncode = rc
@@ -3225,8 +3222,10 @@ class AllocFailTestRun():
         if self.vh:
             self.vh.convert_xml()
         if not self.fault_injected:
+            _explain()
             return
         if not self.aft.check_stderr:
+            _explain()
             return
 
         # Check stderr from a daos command.
@@ -3261,6 +3260,7 @@ class AllocFailTestRun():
                                 'NORMAL',
                                 "Unexpected stderr '{}'".format(line),
                                 mtype='Unrecognised error')
+            _explain()
             return
 
         if self.returncode == 0:
@@ -3284,6 +3284,7 @@ class AllocFailTestRun():
                             'NORMAL',
                             "Incorrect stderr '{}'".format(stderr),
                             mtype='Out of memory not reported correctly via stderr')
+        _explain()
 
 class AllocFailTest():
     """Class to describe fault injection command"""
