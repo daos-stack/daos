@@ -53,6 +53,7 @@ class Enospace(DfuseTestBase):
         # space.
         target_file = os.path.join(self.dfuse.mount_dir.value, "file.txt")
 
+        # pylint: disable=consider-using-with
         fd = open(target_file, 'wb', buffering=0)
 
         # Use a write size of 128.  On CentOS 8 this could be 1MiB, however older kernels use
