@@ -23,6 +23,10 @@ server_config:
       scm_class: dcpm
       scm_list: ["/dev/pmem0"]
       scm_mount: /mnt/daos0
+      log_mask: DEBUG
+      env_vars:
+        - DD_MASK=all
+        - DD_SUBSYS=all
 pool_1:
   name: daos_server
   control_method: dmg
