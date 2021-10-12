@@ -16,7 +16,6 @@ class DaosCommand(DaosCommandBase):
 
     METHOD_REGEX = {
         "run": r"(.*)",
-        "container_create": r"container ([0-9a-f-]+)",
         "container_query":
             r"Pool UUID:\s+([0-9a-f-]+)\n" +
             r"Container UUID:\s+([0-9a-f-]+)\n" +
@@ -35,8 +34,7 @@ class DaosCommand(DaosCommandBase):
             sys (str, optional): [description]. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool query command fails.
@@ -84,14 +82,13 @@ class DaosCommand(DaosCommandBase):
             acl_file (str, optional): ACL file. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container create command fails.
 
         """
-        return self._get_result(
+        return self._get_json_result(
             ("container", "create"), pool=pool, sys_name=sys_name,
             cont=cont, path=path, type=cont_type, oclass=oclass,
             chunk_size=chunk_size, properties=properties, acl_file=acl_file)
@@ -304,8 +301,7 @@ class DaosCommand(DaosCommandBase):
             sys_name (str): DAOS system name. Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool query command fails.
@@ -324,8 +320,7 @@ class DaosCommand(DaosCommandBase):
                 to False.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             CommandFailure: if the daos pool list-attrs command fails.
@@ -345,8 +340,7 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            CmdResult: Object that contains exit status, stdout, and other
-                information.
+            dict: JSON output
 
         Raises:
             dict: the dmg json command output converted to a python dictionary
@@ -451,7 +445,7 @@ class DaosCommand(DaosCommandBase):
                 Defaults to None.
 
         Returns:
-            dict: the dmg json command output converted to a python dictionary
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos get-attr command fails.
@@ -471,7 +465,7 @@ class DaosCommand(DaosCommandBase):
             verbose (bool, optional): True - fetch values of all attributes.
 
         Returns:
-            dict: the dmg json command output converted to a python dictionary
+            dict: the daos json command output converted to a python dictionary
 
         Raises:
             CommandFailure: if the daos container list-attrs command fails.
@@ -505,10 +499,9 @@ class DaosCommand(DaosCommandBase):
             sys_name=sys_name, snap=snap_name, epc=epoch)
 
         # Sample create-snap output.
-        # snapshot/epoch 1582610056530034697 has been created
+        # snapshot/epoch 0x51e719907180000 has been created
         data = {}
-        match = re.findall(
-            r"[A-Za-z\/]+\s([0-9]+)\s[a-z\s]+", self.result.stdout_text)
+        match = re.findall(r"[A-Za-z\/]+\s(0x[0-9a-fA-F]+)\s[a-z\s]+", self.result.stdout_text)
         if match:
             data["epoch"] = match[0]
 
@@ -564,9 +557,12 @@ class DaosCommand(DaosCommandBase):
 
         # Sample container list-snaps output.
         # Container's snapshots :
-        # 1598478249040609297 1598478258840600594 1598478287952543761
+        # 0x51ebe2f21500000
+        # 0x51ebe4f5b6c0000
+        # 0x51ebe5233780000
         data = {}
-        match = re.findall(r"(\d+)", self.result.stdout_text)
+        match = re.findall(r"(0x[0-9a-fA-F]+)", self.result.stdout_text)
+
         if match:
             data["epochs"] = match
         return data

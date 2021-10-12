@@ -123,6 +123,8 @@ struct obj_reasb_req {
 	daos_obj_id_t			 orr_oid;
 	/* epoch for IO (now only used for fetch */
 	struct dtx_epoch		 orr_epoch;
+	/* original obj IO API args */
+	daos_obj_rw_t			*orr_args;
 	/* original user input iods/sgls */
 	daos_iod_t			*orr_uiods;
 	d_sg_list_t			*orr_usgls;
@@ -148,6 +150,8 @@ struct obj_reasb_req {
 	 * parity cell.
 	 */
 	uint8_t				*tgt_bitmap;
+	/* iod_size is set by IO reply, one per iod */
+	daos_size_t			*orr_size_set;
 	struct obj_tgt_oiod		*tgt_oiods;
 	/* IO failure information */
 	struct obj_ec_fail_info		*orr_fail;
@@ -170,8 +174,6 @@ struct obj_reasb_req {
 					 orr_singv_only:1,
 	/* the flag of IOM re-allocable (used for EC IOM merge) */
 					 orr_iom_realloc:1,
-	/* iod_size is set by IO reply */
-					 orr_size_set:1,
 	/* orr_fail allocated flag, recovery task's orr_fail is inherited */
 					 orr_fail_alloc:1;
 };
@@ -506,9 +508,8 @@ int dc_obj_verify_rdg(struct dc_object *obj, struct dc_obj_verify_args *dova,
 bool obj_op_is_ec_fetch(struct obj_auxi_args *obj_auxi);
 int obj_recx_ec2_daos(struct daos_oclass_attr *oca, int shard, daos_recx_t **recxs_p,
 		      daos_epoch_t **recx_ephs_p, unsigned int *nr, bool convert_parity);
-
-int obj_reasb_req_init(struct obj_reasb_req *reasb_req, daos_iod_t *iods,
-		       uint32_t iod_nr, struct daos_oclass_attr *oca);
+int obj_reasb_req_init(struct obj_reasb_req *reasb_req, struct dc_object *obj,
+		       daos_iod_t *iods, uint32_t iod_nr, struct daos_oclass_attr *oca);
 void obj_reasb_req_fini(struct obj_reasb_req *reasb_req, uint32_t iod_nr);
 int obj_bulk_prep(d_sg_list_t *sgls, unsigned int nr, bool bulk_bind,
 		  crt_bulk_perm_t bulk_perm, tse_task_t *task,

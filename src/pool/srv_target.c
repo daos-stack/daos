@@ -488,7 +488,7 @@ ds_pool_lookup(const uuid_t uuid)
 
 	pool = pool_obj(llink);
 	if (pool->sp_stopping) {
-		D_ERROR(DF_UUID": is in stopping\n", DP_UUID(uuid));
+		D_DEBUG(DB_MD, DF_UUID": is in stopping\n", DP_UUID(uuid));
 		ds_pool_put(pool);
 		return NULL;
 	}
@@ -563,7 +563,7 @@ ds_pool_start_ec_eph_query_ult(struct ds_pool *pool)
 		return 0;
 
 	rc = dss_ult_create(tgt_ec_eph_query_ult, pool, DSS_XS_SYS, 0,
-			    131072, &ec_eph_query_ult);
+			    DSS_DEEP_STACK_SZ, &ec_eph_query_ult);
 	if (rc != 0) {
 		D_ERROR(DF_UUID": failed create ec eph equery ult: %d\n",
 			DP_UUID(pool->sp_uuid), rc);

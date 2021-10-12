@@ -187,13 +187,13 @@ class LogLine():
             try:
                 (filename, _) = self._fields[0].split(':')
                 return filename
-            except ValueError:
+            except (IndexError, ValueError):
                 pass
         elif attr == 'lineno':
             try:
                 (_, lineno) = self._fields[0].split(':')
                 return int(lineno)
-            except ValueError:
+            except (IndexError, ValueError):
                 pass
         raise AttributeError
 
@@ -504,7 +504,7 @@ class LogIter():
 
         # Force check encoding for smaller files.
         i = os.stat(fname)
-        if i.st_size < (1024*1024*20):
+        if i.st_size < (1024*1024*5):
             check_encoding = True
 
         if fname.endswith('.bz2'):
@@ -537,7 +537,7 @@ class LogIter():
         self._data = []
 
         i = os.fstat(self._fd.fileno())
-        self.__from_file = bool(i.st_size > (1024*1024*20)) or self.bz2
+        self.__from_file = bool(i.st_size > (1024*1024*100)) or self.bz2
 
         if self.__from_file:
             self._load_pids()
@@ -563,7 +563,7 @@ class LogIter():
 
         index = 0
         for line in self._fd:
-            fields = line.split(' ', 8)
+            fields = line.split(None, 8)
             index += 1
             l_pid = None
             if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
@@ -588,7 +588,7 @@ class LogIter():
         index = 0
         position = 0
         for line in self._fd:
-            fields = line.split(' ', 8)
+            fields = line.split(None, 8)
             index += 1
             l_pid = None
             if len(fields) < 6 or len(fields[0]) != 17:
@@ -669,7 +669,7 @@ class LogIter():
             line = self._fd.readline()
             if not line:
                 raise StopIteration
-            fields = line.split(' ', 8)
+            fields = line.split(None, 8)
             if len(fields) < 6 or len(fields[0]) != 17 or fields[0][2] != '/':
                 return LogRaw(line)
             return LogLine(line)

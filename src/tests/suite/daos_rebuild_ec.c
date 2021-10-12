@@ -536,6 +536,7 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	dfs_t		*dfs_mt;
 	daos_handle_t	co_hdl;
 	uuid_t		co_uuid;
+	char		str[37];
 	test_arg_t	*arg = *state;
 	d_sg_list_t	sgl;
 	d_iov_t		iov;
@@ -556,8 +557,7 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	int		i;
 	int		rc;
 
-	uuid_generate(co_uuid);
-	rc = dfs_cont_create(arg->pool.poh, co_uuid, NULL, &co_hdl,
+	rc = dfs_cont_create(arg->pool.poh, &co_uuid, NULL, &co_hdl,
 			     &dfs_mt);
 	assert_int_equal(rc, 0);
 	printf("Created DFS Container "DF_UUIDF"\n", DP_UUID(co_uuid));
@@ -654,7 +654,8 @@ dfs_ec_seq_fail(void **state, int *shards, int shards_nr)
 	rc = daos_cont_close(co_hdl, NULL);
 	assert_rc_equal(rc, 0);
 
-	rc = daos_cont_destroy(arg->pool.poh, co_uuid, 1, NULL);
+	uuid_unparse(co_uuid, str);
+	rc = daos_cont_destroy(arg->pool.poh, str, 1, NULL);
 	assert_rc_equal(rc, 0);
 
 #if 0
@@ -844,6 +845,113 @@ rebuild_ec_dkey_enumeration(void **state)
 	ioreq_fini(&req);
 }
 
+static void
+rebuild_ec_parity_multi_group(void **state)
+{
+	test_arg_t	*arg = *state;
+	struct ioreq	req;
+	daos_obj_id_t	oid;
+	d_rank_t	rank;
+	int		i;
+
+	if (!test_runable(arg, 8))
+		return;
+
+	oid = daos_test_oid_gen(arg->coh, OC_EC_4P1G8, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	for (i = 0; i < 100; i++) {
+		char dkey[32];
+
+		/* Make dkey on different shards */
+		req.iod_type = DAOS_IOD_ARRAY;
+		sprintf(dkey, "dkey_%d", i);
+		insert_single(dkey, "a_key", 0, "data", strlen("data") + 1,
+			      DAOS_TX_NONE, &req);
+	}
+
+	rank = get_rank_by_oid_shard(arg, oid, 9);
+	rebuild_single_pool_rank(arg, rank, false);
+
+	reintegrate_single_pool_rank(arg, rank);
+	ioreq_fini(&req);
+}
+
+#define SNAP_CNT	20
+#define EC_CELL_SIZE	1048576
+static void
+rebuild_ec_snapshot(void **state, daos_oclass_id_t oclass, int shard)
+{
+	test_arg_t	*arg = *state;
+	daos_obj_id_t	oid;
+	struct ioreq	req;
+	daos_epoch_t	snap_epoch[SNAP_CNT];
+	daos_size_t	data_size;
+	d_rank_t	rank;
+	char		*data;
+	char		*verify_data;
+	int		rc;
+	int		i;
+
+	if (!test_runable(arg, 6))
+		return;
+
+	daos_pool_set_prop(arg->pool.pool_uuid, "reclaim", "time");
+	oid = daos_test_oid_gen(arg->coh, oclass, 0, 0, arg->myrank);
+	ioreq_init(&req, arg->coh, oid, DAOS_IOD_ARRAY, arg);
+	data_size = ec_data_nr_get(oid) * EC_CELL_SIZE + 1000;
+	data = (char *)malloc(data_size);
+	assert_true(data != NULL);
+	verify_data = (char *)malloc(data_size);
+	assert_true(verify_data != NULL);
+
+	for (i = 0; i < SNAP_CNT; i++) {
+		daos_recx_t recx;
+
+		req.iod_type = DAOS_IOD_ARRAY;
+		recx.rx_nr = data_size;
+		recx.rx_idx = 0;
+		memset(data, 'a' + i, data_size);
+		insert_recxs("d_key", "a_key", 1, DAOS_TX_NONE, &recx, 1,
+			     data, data_size, &req);
+		daos_cont_create_snap(arg->coh, &snap_epoch[i], NULL, NULL);
+	}
+
+	rank = get_rank_by_oid_shard(arg, oid, shard);
+	rebuild_single_pool_rank(arg, rank, false);
+
+	for (i = 0; i < SNAP_CNT; i++) {
+		daos_handle_t		th_open;
+		daos_epoch_range_t	epr;
+
+		daos_tx_open_snap(arg->coh, snap_epoch[i], &th_open, NULL);
+		memset(verify_data, 'a' + i, data_size);
+		ec_verify_parity_data(&req, "d_key", "a_key", 0, data_size,
+				      verify_data, th_open, false);
+		daos_tx_close(th_open, NULL);
+
+		epr.epr_hi = epr.epr_lo = snap_epoch[i];
+		rc = daos_cont_destroy_snap(arg->coh, epr, NULL);
+		assert_int_equal(rc, 0);
+	}
+
+	reintegrate_single_pool_rank(arg, rank);
+	free(data);
+	free(verify_data);
+	ioreq_fini(&req);
+}
+
+static void
+rebuild_ec_snapshot_data_shard(void **state)
+{
+	rebuild_ec_snapshot(state, OC_EC_4P2G1, 0);
+}
+
+static void
+rebuild_ec_snapshot_parity_shard(void **state)
+{
+	rebuild_ec_snapshot(state, OC_EC_4P2G1, 5);
+}
+
 /** create a new pool/container for each test */
 static const struct CMUnitTest rebuild_tests[] = {
 	{"REBUILD0: rebuild partial update with data tgt fail",
@@ -954,6 +1062,15 @@ static const struct CMUnitTest rebuild_tests[] = {
 	 test_teardown},
 	{"REBUILD38: rebuild EC multi-stripes @ different epochs",
 	 rebuild_ec_multi_stripes, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD39: rebuild EC parity with multiple group",
+	 rebuild_ec_parity_multi_group, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD40: rebuild EC snapshot with data shard",
+	 rebuild_ec_snapshot_data_shard, rebuild_ec_8nodes_setup,
+	 test_teardown},
+	{"REBUILD41: rebuild EC snapshot with parity shard",
+	 rebuild_ec_snapshot_parity_shard, rebuild_ec_8nodes_setup,
 	 test_teardown},
 };
 

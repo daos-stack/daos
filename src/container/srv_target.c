@@ -153,7 +153,8 @@ done:
 }
 
 static bool
-cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req)
+cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
+			struct agg_param *param)
 {
 	struct ds_pool	*pool = cont->sc_pool->spc_pool;
 
@@ -167,6 +168,24 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req)
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			pool->sp_stopping);
 		return false;
+	}
+
+	if (param->ap_vos_agg) {
+		/* Parse aggregation until reintegrating finish, because
+		 * vos_discard may cause issue if reintegration happened
+		 * at the same time.
+		 */
+		if (pool->sp_reintegrating) {
+			cont->sc_vos_agg_active = 0;
+			D_DEBUG(DB_EPC, DF_CONT": skip aggregation during reintegration %d.\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				pool->sp_reintegrating);
+			return false;
+		}
+		if (!cont->sc_vos_agg_active)
+			D_DEBUG(DB_EPC, DF_CONT": resume aggregation after reintegration.\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		cont->sc_vos_agg_active = 1;
 	}
 
 	if (!cont->sc_props_fetched)
@@ -226,7 +245,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 
 	/* Check if it's ok to start aggregation in every 2 seconds */
 	*msecs = 2ULL * 1000;
-	if (!cont_aggregate_runnable(cont, req))
+	if (!cont_aggregate_runnable(cont, req, param))
 		return 0;
 
 	change_hlc = max(cont->sc_snapshot_delete_hlc,
@@ -258,7 +277,8 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 	 */
 	epoch_max = hlc - interval;
 
-	if (epoch_min > epoch_max) {
+	/* Make sure aggregation will not be executed too often, at least every interval */
+	if (epoch_min >= epoch_max) {
 		/* Nothing can be aggregated */
 		*msecs = max(*msecs, crt_hlc2msec(epoch_min - epoch_max));
 		return 0;
@@ -272,29 +292,21 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 		return 0;
 	}
 
-	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch_max "DF_X64" agg max "DF_X64"\n",
-		hlc, epoch_max, cont->sc_aggregation_max);
-	/* Cap the aggregation upper bound to the snapshot in creating */
+	/* Adjust aggregation top boundary */
 	if (epoch_max >= cont->sc_aggregation_max)
 		epoch_max = cont->sc_aggregation_max - 1;
 
-	if (param->ap_max_eph_get) {
-		uint64_t max_eph = param->ap_max_eph_get(cont);
+	if (param->ap_max_eph_get)
+		epoch_max = min(epoch_max, param->ap_max_eph_get(cont));
 
-		epoch_max = min(epoch_max, max_eph);
-		if (epoch_min >= epoch_max) {
-			/**
-			 * For VOS aggregation, max might be 0, if EC
-			 * aggregation does not broadcast boundary yet.
-			 **/
-			D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n",
-				epoch_min, epoch_max);
-			return 0;
-		}
+	/* Check the min/max epoch again after adjustment */
+	if (epoch_min >= epoch_max) {
+		D_DEBUG(DB_EPC, "epoch min "DF_X64" > max "DF_X64"\n", epoch_min, epoch_max);
+		return 0;
 	}
 
-	D_ASSERTF(epoch_min < epoch_max, "Min "DF_X64", Max "DF_X64"\n",
-		  epoch_min, epoch_max);
+	D_DEBUG(DB_EPC, "hlc "DF_X64" epoch "DF_X64"/"DF_X64" agg max "DF_X64"\n",
+		hlc, epoch_max, epoch_min, cont->sc_aggregation_max);
 
 	if (cont->sc_snapshots_nr + 1 < MAX_SNAPSHOT_LOCAL) {
 		snapshots = snapshots_local;
@@ -538,6 +550,8 @@ cont_agg_ult(void *arg)
 	param.ap_start_eph_get = cont_agg_start_eph_get;
 	param.ap_req = cont->sc_agg_req;
 	param.ap_cont = cont;
+	param.ap_vos_agg = 1;
+	cont->sc_vos_agg_active = 1;
 
 	cont_aggregate_interval(cont, cont_vos_aggregate_cb, &param);
 }
@@ -1247,14 +1261,25 @@ cont_delete_ec_agg(uuid_t pool_uuid, uuid_t cont_uuid);
 int
 ds_cont_tgt_destroy(uuid_t pool_uuid, uuid_t cont_uuid)
 {
+	struct ds_pool	*pool;
 	struct cont_tgt_destroy_in in;
 	int rc;
+
+	pool = ds_pool_lookup(pool_uuid);
+	if (pool == NULL) {
+		rc = -DER_NO_HDL;
+		goto out;
+	}
 
 	uuid_copy(in.tdi_pool_uuid, pool_uuid);
 	uuid_copy(in.tdi_uuid, cont_uuid);
 
 	cont_delete_ec_agg(pool_uuid, cont_uuid);
+	cont_iv_entry_delete(pool->sp_iv_ns, pool_uuid, cont_uuid);
+	ds_pool_put(pool);
+
 	rc = dss_thread_collective(cont_child_destroy_one, &in, 0);
+out:
 	return rc;
 }
 
@@ -2004,10 +2029,11 @@ cont_snap_notify_one(void *vin)
 		rc = cont_child_gather_oids(cont, args->coh_uuid,
 					    args->snap_epoch);
 		if (rc)
-			return rc;
+			goto out_cont;
 	}
 
 	cont->sc_aggregation_max = crt_hlc_get();
+out_cont:
 	ds_cont_child_put(cont);
 	return rc;
 }
@@ -2201,9 +2227,8 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 	sgl.sg_nr_out = 0;
 	sgl.sg_iovs = &iov;
 
-	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns,
-			    in->coai_op.ci_pool_hdl, in->coai_op.ci_uuid,
-			    in->coai_op.ci_hdl, in->num_oids, &sgl);
+	rc = oid_iv_reserve(pool_hdl->sph_pool->sp_iv_ns, pool_hdl->sph_pool->sp_uuid,
+			    in->coai_op.ci_uuid, in->num_oids, &sgl);
 	if (rc)
 		D_GOTO(out, rc);
 
@@ -2212,8 +2237,7 @@ cont_oid_alloc(struct ds_pool_hdl *pool_hdl, crt_rpc_t *rpc)
 out:
 	out->coao_op.co_rc = rc;
 	D_DEBUG(DF_DSMS, DF_CONT": replying rpc %p: "DF_RC"\n",
-		 DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid),
-		 rpc, DP_RC(rc));
+		DP_CONT(pool_hdl->sph_pool->sp_uuid, in->coai_op.ci_uuid), rpc, DP_RC(rc));
 
 	return rc;
 }

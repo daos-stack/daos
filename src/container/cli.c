@@ -771,8 +771,7 @@ cont_open_complete(tse_task_t *task, void *data)
 	arg->coa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	arg->coa_info->ci_nsnapshots = out->coo_snap_count;
-	/* TODO */
-	arg->coa_info->ci_lsnapshot = 0;
+	arg->coa_info->ci_lsnapshot = out->coo_lsnapshot;
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1159,8 +1158,7 @@ cont_query_complete(tse_task_t *task, void *data)
 	arg->cqa_info->ci_redun_fac = cont->dc_props.dcp_redun_fac;
 
 	arg->cqa_info->ci_nsnapshots = out->cqo_snap_count;
-	/* TODO */
-	arg->cqa_info->ci_lsnapshot = 0;
+	arg->cqa_info->ci_lsnapshot = out->cqo_lsnapshot;
 
 out:
 	crt_req_decref(arg->rpc);
@@ -1750,13 +1748,13 @@ cont_oid_alloc_complete(tse_task_t *task, void *data)
 		if (rc != 0)
 			D_GOTO(out, rc);
 
-		rc = dc_task_resched(task);
+		rc = dc_task_depend(task, 1, &ptask);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);
 		}
 
-		rc = dc_task_depend(task, 1, &ptask);
+		rc = dc_task_resched(task);
 		if (rc != 0) {
 			dc_pool_abandon_map_refresh_task(ptask);
 			D_GOTO(out, rc);

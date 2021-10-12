@@ -63,6 +63,7 @@ unsigned int	sched_stats_intvl;
 unsigned int	sched_relax_intvl = SCHED_RELAX_INTVL_DEFAULT;
 unsigned int	sched_relax_mode;
 unsigned int	sched_unit_runtime_max = 32; /* ms */
+bool		sched_watchdog_all;
 
 enum {
 	/* All requests for various pools are processed in FIFO */
@@ -427,6 +428,7 @@ sched_info_init(struct dss_xstream *dx)
 	int			 rc;
 
 	info->si_cur_ts = daos_getmtime_coarse();
+	info->si_cur_seq = 0;
 	info->si_stats.ss_tot_time = 0;
 	info->si_stats.ss_relax_time = 0;
 	info->si_stats.ss_busy_ts = info->si_cur_ts;
@@ -1113,7 +1115,11 @@ wakeup_all(struct dss_xstream *dx)
 
 	/* Update current ts stored in sched_info */
 	cur_ts = daos_getmtime_coarse();
-	D_ASSERT(cur_ts >= info->si_cur_ts);
+	if (cur_ts < info->si_cur_ts) {
+		D_WARN("Backwards time: cur_ts:"DF_U64", si_cur_ts:"DF_U64"\n",
+		       cur_ts, info->si_cur_ts);
+		cur_ts = info->si_cur_ts;
+	}
 	info->si_stats.ss_tot_time += (cur_ts - info->si_cur_ts);
 	info->si_cur_ts = cur_ts;
 
@@ -1198,6 +1204,24 @@ sched_cond_wait(ABT_cond cond, ABT_mutex mutex)
 	ABT_cond_wait(cond, mutex);
 	D_ASSERT(info->si_wait_cnt > 0);
 	info->si_wait_cnt -= 1;
+}
+
+uint64_t
+sched_cur_msec(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	return info->si_cur_ts;
+}
+
+uint64_t
+sched_cur_seq(void)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+
+	return info->si_cur_seq;
 }
 
 /*
@@ -1572,67 +1596,97 @@ sched_start_cycle(struct sched_data *data, ABT_pool *pools)
 	}
 }
 
-struct sched_unit {
-	uint64_t	 su_start;
-	void		*su_func_addr;
-};
-
 static inline bool
 watchdog_enabled(struct dss_xstream *dx)
 {
-	/* Enable watchdog for sys xstream only */
-	return sched_unit_runtime_max != 0 && dx->dx_xs_id == 0;
+	if (sched_unit_runtime_max == 0)
+		return false;
+
+	return dx->dx_xs_id == 0 || (sched_watchdog_all && dx->dx_main_xs);
+}
+
+int
+sched_exec_time(uint64_t *msecs, const char *ult_name)
+{
+	struct dss_xstream	*dx = dss_current_xstream();
+	struct sched_info	*info = &dx->dx_sched_info;
+	uint64_t		 cur;
+
+	if (!watchdog_enabled(dx))
+		return -DER_NOSYS;
+
+	cur = daos_getmtime_coarse();
+	if (cur < info->si_ult_start) {
+		D_WARN("cur:"DF_U64" < start:"DF_U64"\n", cur, info->si_ult_start);
+		*msecs = 0;
+		return 0;
+	}
+
+	*msecs = cur - info->si_ult_start;
+	if (*msecs > sched_unit_runtime_max && ult_name != NULL)
+		D_WARN("ULT:%s executed "DF_U64" msecs\n", ult_name, *msecs);
+	return 0;
 }
 
 static void
-sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit,
-		    struct sched_unit *su)
+sched_watchdog_prep(struct dss_xstream *dx, ABT_unit unit)
 {
-	ABT_thread	thread;
-	void		(*thread_func)(void *);
-	int		rc;
+	struct sched_info	*info = &dx->dx_sched_info;
+	ABT_thread		 thread;
+	void			 (*thread_func)(void *);
+	int			 rc;
 
 	if (!watchdog_enabled(dx))
 		return;
 
-	su->su_start = daos_getmtime_coarse();
+	info->si_ult_start = daos_getmtime_coarse();
 	rc = ABT_unit_get_thread(unit, &thread);
 	D_ASSERT(rc == ABT_SUCCESS);
 	rc = ABT_thread_get_thread_func(thread, &thread_func);
 	D_ASSERT(rc == ABT_SUCCESS);
-	su->su_func_addr = thread_func;
+	info->si_ult_func = thread_func;
 }
 
 static void
-sched_watchdog_post(struct dss_xstream *dx, struct sched_unit *su)
+sched_watchdog_post(struct dss_xstream *dx)
 {
 	struct sched_info	*info = &dx->dx_sched_info;
 	uint64_t		 cur;
 	unsigned int		 elapsed;
 	char			**strings;
 
+	/* A ULT is just scheduled, increase schedule seq */
+	info->si_cur_seq++;
+
 	if (!watchdog_enabled(dx))
 		return;
 
 	cur = daos_getmtime_coarse();
-	D_ASSERT(cur >= su->su_start);
-	elapsed = cur - su->su_start;
+	if (cur < info->si_ult_start) {
+		D_WARN("Backwards time, cur:"DF_U64", start:"DF_U64"\n",
+		       cur, info->si_ult_start);
+		return;
+	}
 
+	elapsed = cur - info->si_ult_start;
 	if (elapsed <= sched_unit_runtime_max)
 		return;
 
 	/* Throttle printing a bit */
-	D_ASSERT(cur >= info->si_stats.ss_watchdog_ts);
-	if (info->si_stats.ss_last_unit == su->su_func_addr &&
+	D_ASSERTF(cur >= info->si_stats.ss_watchdog_ts,
+		  "cur:"DF_U64" < watchdog_ts:"DF_U64"\n",
+		  cur, info->si_stats.ss_watchdog_ts);
+
+	if (info->si_stats.ss_last_unit == info->si_ult_func &&
 	    (cur - info->si_stats.ss_watchdog_ts) <= 2000)
 		return;
 
-	info->si_stats.ss_last_unit = su->su_func_addr;
+	info->si_stats.ss_last_unit = info->si_ult_func;
 	info->si_stats.ss_watchdog_ts = cur;
 
-	strings = backtrace_symbols(&su->su_func_addr, 1);
+	strings = backtrace_symbols(&info->si_ult_func, 1);
 	D_ERROR("WATCHDOG: XS(%d) Thread %p took %u ms. symbol:%s\n",
-		dx->dx_xs_id, su->su_func_addr, elapsed,
+		dx->dx_xs_id, info->si_ult_func, elapsed,
 		strings != NULL ? strings[0] : NULL);
 
 	free(strings);
@@ -1648,7 +1702,6 @@ sched_run(ABT_sched sched)
 	ABT_pool		 pool;
 	ABT_unit		 unit;
 	uint32_t		 work_count = 0;
-	struct sched_unit	 su = { 0 };
 	int			 ret;
 
 	ABT_sched_get_data(sched, (void **)&data);
@@ -1691,11 +1744,11 @@ sched_run(ABT_sched sched)
 		goto check_event;
 execute:
 		D_ASSERT(pool != ABT_POOL_NULL);
-		sched_watchdog_prep(dx, unit, &su);
+		sched_watchdog_prep(dx, unit);
 
 		ABT_xstream_run_unit(unit, pool);
 
-		sched_watchdog_post(dx, &su);
+		sched_watchdog_post(dx);
 start_cycle:
 		if (cycle->sc_new_cycle) {
 			sched_start_cycle(data, pools);

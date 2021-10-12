@@ -1435,10 +1435,13 @@ add_domains_to_pool_buf(struct pool_map *map, struct pool_buf *map_buf,
 		map_comp.co_type = PO_COMP_TP_NODE;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
+		map_comp.co_padding = 0;
 		map_comp.co_id = node.fdn_val.dom->fd_id;
 		map_comp.co_rank = 0;
 		map_comp.co_ver = map_version;
+		map_comp.co_in_ver = map_version;
 		map_comp.co_fseq = 1;
+		map_comp.co_flags = PO_COMPF_NONE;
 		map_comp.co_nr = node.fdn_val.dom->fd_children_nr;
 
 		if (map != NULL) {
@@ -1535,6 +1538,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 		map_comp.co_type = PO_COMP_TP_RANK;
 		map_comp.co_status = new_status;
 		map_comp.co_index = i + num_comps;
+		map_comp.co_padding = 0;
 		map_comp.co_id = (p - uuids) + num_comps;
 		map_comp.co_rank = target_addrs->rl_ranks[i];
 		map_comp.co_ver = map_version;
@@ -1567,6 +1571,7 @@ gen_pool_buf(struct pool_map *map, struct pool_buf **map_buf_out,
 			map_comp.co_type = PO_COMP_TP_TARGET;
 			map_comp.co_status = new_status;
 			map_comp.co_index = j;
+			map_comp.co_padding = 0;
 			map_comp.co_id = (i * dss_tgt_nr + j) + num_comps;
 			map_comp.co_rank = target_addrs->rl_ranks[i];
 			map_comp.co_ver = map_version;
@@ -2455,6 +2460,8 @@ pmap_fail_node_add_tgt(struct pmap_fail_stat *fstat,
 	}
 	if (comp->co_fseq > fstat->pf_last_ver)
 		fnode->pf_new_fail = 1;
+	else
+		fnode->pf_new_fail = 0;
 
 	for (i = 0; i < fnode->pf_ver_nr; i++) {
 		tmp = &fnode->pf_vers[i];
@@ -2528,7 +2535,7 @@ pmap_node_check(struct pool_domain *node_dom, struct pmap_fail_stat *fstat)
 		fstat->pf_newfail_nr++;
 	if ((fstat->pf_down_nr > fstat->pf_rf) && (fstat->pf_newfail_nr > 0)) {
 		rc = -DER_RF;
-		D_DEBUG(DB_TRACE, "RF broken, found %d DOWN node, "
+		D_ERROR("RF broken, found %d DOWN node, "
 			"newly fail %d, rf %d, "DF_RC"\n", fstat->pf_down_nr,
 			fstat->pf_newfail_nr, fstat->pf_rf, DP_RC(rc));
 	}
@@ -2606,7 +2613,7 @@ pmap_fail_stat_check(struct pmap_fail_stat *fstat)
 
 fail:
 	if (rc == -DER_RF) {
-		D_DEBUG(DB_TRACE, "RF broken, found %d fail, DOWN %d, newly "
+		D_ERROR("RF broken, found %d fail, DOWN %d, newly "
 			"fail %d, max_overlapped %d, rf %d, "DF_RC"\n",
 			fstat->pf_node_nr, fstat->pf_down_nr,
 			fstat->pf_newfail_nr, max_fail_nr,

@@ -58,6 +58,12 @@ ds_cont_metrics_alloc(const char *path, int tgt_id)
 	return metrics;
 }
 
+int
+ds_cont_metrics_count(void)
+{
+	return (sizeof(struct cont_pool_metrics) / sizeof(struct d_tm_node_t *));
+}
+
 /**
  * Finalize global metrics used in the server container module.
  */

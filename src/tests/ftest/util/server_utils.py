@@ -288,6 +288,10 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.target_user.value = user
         cmd.sub_command_class.sub_command_class.force.value = True
 
+        # Additionally try to prepare any discovered VMD NVMe devices.
+        if "True" in os.environ["DAOS_ENABLE_VMD"]:
+            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
+
         # Use the configuration file settings if no overrides specified
         if using_dcpm is None:
             using_dcpm = self.manager.job.using_dcpm
@@ -389,6 +393,10 @@ class DaosServerManager(SubprocessManager):
         cmd.sub_command_class.sub_command_class.nvme_only.value = True
         cmd.sub_command_class.sub_command_class.reset.value = True
         cmd.sub_command_class.sub_command_class.force.value = True
+
+        # Use VMD option when resetting storage if it's prepared with VMD.
+        if "True" in os.environ["DAOS_ENABLE_VMD"]:
+            cmd.sub_command_class.sub_command_class.enable_vmd.value = True
 
         self.log.info("Resetting DAOS server storage: %s", str(cmd))
         result = pcmd(self._hosts, str(cmd), timeout=120)
@@ -774,19 +782,24 @@ class DaosServerManager(SubprocessManager):
         engines = generated_yaml["engines"]
         for i, engine in enumerate(engines):
             self.log.info("engine %d", i)
-            self.log.info("scm_mount = %s", engine["scm_mount"])
-            self.log.info("scm_class = %s", engine["scm_class"])
-            self.log.info("scm_list = %s", engine["scm_list"])
+            for storage_tier in engine["storage"]:
+                if storage_tier["class"] != "dcpm":
+                    continue
 
-            per_engine_yaml_parameters =\
-                DaosServerYamlParameters.PerEngineYamlParameters(i)
-            per_engine_yaml_parameters.scm_mount.update(engine["scm_mount"])
-            per_engine_yaml_parameters.scm_class.update(engine["scm_class"])
-            per_engine_yaml_parameters.scm_size.update(None)
-            per_engine_yaml_parameters.scm_list.update(engine["scm_list"])
+                self.log.info("scm_mount = %s", storage_tier["scm_mount"])
+                self.log.info("class = %s", storage_tier["class"])
+                self.log.info("scm_list = %s", storage_tier["scm_list"])
 
-            self.manager.job.yaml.engine_params.append(
-                per_engine_yaml_parameters)
+                per_engine_yaml_parameters =\
+                    DaosServerYamlParameters.PerEngineYamlParameters(i)
+                per_engine_yaml_parameters.scm_mount.update(storage_tier["scm_mount"])
+                per_engine_yaml_parameters.scm_class.update(storage_tier["class"])
+                per_engine_yaml_parameters.scm_size.update(None)
+                per_engine_yaml_parameters.scm_list.update(storage_tier["scm_list"])
+                per_engine_yaml_parameters.reset_yaml_data_updated()
+
+                self.manager.job.yaml.engine_params.append(
+                    per_engine_yaml_parameters)
 
     def get_host_ranks(self, hosts):
         """Get the list of ranks for the specified hosts.

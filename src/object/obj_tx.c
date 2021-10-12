@@ -1060,7 +1060,7 @@ dc_tx_classify_update(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 		 * dc_tx_cleanup().
 		 */
 		dcsr->dcsr_reasb = reasb_req;
-		rc = obj_reasb_req_init(dcsr->dcsr_reasb,
+		rc = obj_reasb_req_init(dcsr->dcsr_reasb, obj,
 					dcu->dcu_iod_array.oia_iods,
 					dcsr->dcsr_nr, oca);
 		if (rc != 0)
@@ -1182,6 +1182,7 @@ dc_tx_classify_common(struct dc_tx *tx, struct daos_cpd_sub_req *dcsr,
 
 		rc = obj_shard_open(obj, idx, tx->tx_pm_ver, &shard);
 		if (rc == -DER_NONEXIST) {
+			rc = 0;
 			if (daos_oclass_is_ec(oca) && !all) {
 				if (idx >= start + obj->cob_grp_size -
 							oca->u.ec.e_p)
@@ -1537,7 +1538,7 @@ dc_tx_commit_prepare(struct dc_tx *tx, tse_task_t *task)
 			if (rc < 0)
 				goto out;
 
-			if (rc > (OBJ_BULK_LIMIT >> 2)) {
+			if (rc > (DAOS_BULK_LIMIT >> 2)) {
 				rc = tx_bulk_prepare(dcsr, task);
 				if (rc != 0)
 					goto out;

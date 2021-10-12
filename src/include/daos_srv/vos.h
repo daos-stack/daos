@@ -256,13 +256,12 @@ vos_pool_create(const char *path, uuid_t uuid, daos_size_t scm_sz,
  * Kill a VOS pool before destroy
  * It deletes SPDK blob of this pool and detaches it from VOS GC
  *
- * \param uuid	[IN]	Pool UUID
- * \param force [IN]	Delete blob even if it has open refcount
+ * \param uuid		[IN]	Pool UUID
  *
  * \return		Zero on success, negative value if error
  */
 int
-vos_pool_kill(uuid_t uuid, bool force);
+vos_pool_kill(uuid_t uuid);
 
 /**
  * Destroy a Versioned Object Storage Pool (VOSP)
@@ -433,15 +432,20 @@ vos_aggregate(daos_handle_t coh, daos_epoch_range_t *epr,
  * the caller.
  *
  * \param coh		[IN]	Container open handle
- * \param epr		[IN]	The epoch range to discard
- *				keys to discard
+ * \param oidp		[IN]	Optional oid for oid specific discard.  Aggregation should be
+ *				disabled before calling this function in this mode.  This simply
+ *				removes values in the specified epoch range.  It doesn't discard
+ *				any ilog entries. The expectation is the removed data will
+ *				be replaced at the same epoch (or snapshot).  If that is not the
+ *				case, any orphaned entries will be inaccessible.
+ * \param epr		[IN]	The epoch range to discard keys to discard
  * \param yield_func	[IN]	Pointer to customized yield function
  * \param yield_arg	[IN]	Argument of yield function
  *
  * \return			Zero on success, negative value if error
  */
 int
-vos_discard(daos_handle_t coh, daos_epoch_range_t *epr,
+vos_discard(daos_handle_t coh, daos_unit_oid_t *oidp, daos_epoch_range_t *epr,
 	    bool (*yield_func)(void *arg), void *yield_arg);
 
 /**
@@ -520,7 +524,10 @@ vos_obj_fetch_ex(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -555,7 +562,10 @@ vos_obj_update(daos_handle_t coh, daos_unit_oid_t oid, daos_epoch_t epoch,
  * \param flags	[IN]	Update flags
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr [IN]	Number of I/O descriptors in \a iods.
- * \param iods [IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -716,6 +726,10 @@ vos_fetch_end(daos_handle_t ioh, daos_size_t *size, int err);
  * \param dkey	[IN]	Distribution key.
  * \param iod_nr	[IN]	Number of I/O descriptors in \a iods.
  * \param iods	[IN]	Array of I/O descriptors.
+ * \param iods	[IN]	Array of I/O descriptors. If \a flags includes
+ *			VOS_OF_EC, then the iod_recxs field of every single
+ *			value iod in \a iods must contain the "gsize" instead
+ *			of a memory address.
  * \param iods_csums [IN]
  *			Array of iod_csums (1 for each iod). Will be NULL
  *			if csums are disabled.
@@ -993,7 +1007,7 @@ vos_iterate(vos_iter_param_t *param, vos_iter_type_t type, bool recursive,
  * object. If object does not have an array value, 0 is returned in extent. User
  * has to specify what is being queried (dkey, akey, and/or recx) along with the
  * query type (max or min) in flags. If one of those is not provided the
- * function will fail. If the dkey or akey are not being queried, there value
+ * function will fail. If the dkey or akey are not being queried, their values
  * must be provided by the user.
  *
  * If searching in a particular dkey for the max akey and max offset in that
@@ -1140,6 +1154,14 @@ vos_dedup_verify(daos_handle_t ioh);
 void
 vos_report_layout_incompat(const char *type, int version, int min_version,
 			   int max_version, uuid_t *uuid);
+
+#define VOS_NOTIFY_RAS_EVENTF(...)			\
+	do {						\
+		if (ds_notify_ras_eventf == NULL)	\
+			break;				\
+		ds_notify_ras_eventf(__VA_ARGS__);	\
+	} while (0)					\
+
 
 struct sys_db *vos_db_get(void);
 /**

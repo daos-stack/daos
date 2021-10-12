@@ -18,6 +18,8 @@ class TelemetryUtils():
         "engine_pool_ops_cont_destroy",
         "engine_pool_ops_cont_open"]
     ENGINE_POOL_METRICS = [
+        "engine_pool_entries_dtx_batched_degree",
+        "engine_pool_entries_dtx_batched_total",
         "engine_pool_ops_akey_enum",
         "engine_pool_ops_akey_punch",
         "engine_pool_ops_compound",
@@ -533,6 +535,52 @@ class TelemetryUtils():
                         data[host][name] = metric["value"]
         return data
 
+    def get_pool_metrics(self, specific_metrics=None):
+        """Get the pool telemetry metrics.
+
+        Args:
+            specific_metrics(list): list of specific pool metrics
+        Returns:
+            dict: dictionary of dictionaries of pool metric names and
+                values per server host key
+
+        """
+        data = {}
+        if specific_metrics is None:
+            specific_metrics = self.ENGINE_POOL_METRICS
+        info = self.get_metrics(",".join(specific_metrics))
+        self.log.info("Pool Telemetry Information")
+        for name in specific_metrics:
+            for index, host in enumerate(info):
+                if name in info[host]:
+                    if index == 0:
+                        self.log.info(
+                            "  %s (%s):",
+                            name, info[host][name]["description"])
+                        self.log.info(
+                            "    %-12s %-4s %-6s %s",
+                            "Host", "Rank", "Target", "Value")
+                    if name not in data:
+                        data[name] = {}
+                    if host not in data[name]:
+                        data[name][host] = {}
+                    for metric in info[host][name]["metrics"]:
+                        if "labels" in metric:
+                            if ("rank" in metric["labels"]
+                                    and "target" in metric["labels"]):
+                                rank = metric["labels"]["rank"]
+                                target = metric["labels"]["target"]
+                                if rank not in data[name][host]:
+                                    data[name][host][rank] = {}
+                                if target not in data[name][host][rank]:
+                                    data[name][host][rank][target] = {}
+                                data[name][host][rank][target] = \
+                                    metric["value"]
+                                self.log.info(
+                                    "    %-12s %-4s %-6s %s",
+                                    host, rank, target, metric["value"])
+        return data
+
     def get_io_metrics(self, test_metrics=None):
         """Get the io telemetry metrics.
 
@@ -548,11 +596,10 @@ class TelemetryUtils():
         """
         data = {}
         if test_metrics is None:
-            info = self.get_metrics(",".join(self.ENGINE_IO_METRICS))
-        else:
-            info = self.get_metrics(",".join(test_metrics))
-        self.log.info("I/O Telemetry Information")
-        for name in self.ENGINE_IO_METRICS:
+            test_metrics = self.ENGINE_IO_METRICS
+        info = self.get_metrics(",".join(test_metrics))
+        self.log.info("Telemetry Information")
+        for name in test_metrics:
             for index, host in enumerate(info):
                 if name in info[host]:
                     if index == 0:
@@ -584,7 +631,7 @@ class TelemetryUtils():
                                     "    %-12s %-4s %-6s %-6s %s",
                                     host, rank, target, size, metric["value"])
                             elif ("rank" in metric["labels"]
-                                    and "target" in metric["labels"]):
+                                  and "target" in metric["labels"]):
                                 rank = metric["labels"]["rank"]
                                 target = metric["labels"]["target"]
                                 if rank not in data[name][host]:
