@@ -14,7 +14,6 @@ from ClusterShell.NodeSet import NodeSet
 from dfuse_test_base import DfuseTestBase
 from command_utils import CommandFailure
 from io_utilities import DirTree
-from apricot import skipForTicket
 
 
 class Cmd(DfuseTestBase):
@@ -43,7 +42,6 @@ class Cmd(DfuseTestBase):
         """
         self._test_findcmd()
 
-    @skipForTicket("DAOS-6530")
     def test_find_perf(self):
         """Jira ID: DAOS-5563.
 

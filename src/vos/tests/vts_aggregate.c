@@ -1271,7 +1271,6 @@ discard_obj_test(void **state, bool empty)
 	daos_epoch_t		 epoch;
 	int			 rc;
 	char			 first_val = 'f';
-	char			 last_val = 'l';
 	char			 middle_val = 'm';
 	char			 fetch_val;
 	char			 expected;
@@ -1286,17 +1285,17 @@ discard_obj_test(void **state, bool empty)
 	arg->ta_flags = TF_USE_VAL;
 
 	if (!empty) {
-		update_value(arg, oid, epr.epr_lo++, 0, dkey, akey,
+		update_value(arg, oid, epr.epr_lo, 0, dkey, akey,
 			     DAOS_IOD_SINGLE, sizeof(first_val), &recx,
 			     &first_val);
 
-		update_value(arg, oid, epr.epr_lo++, 0, dkey, akey2,
+		update_value(arg, oid, epr.epr_lo + 1, 0, dkey, akey2,
 			     DAOS_IOD_ARRAY, sizeof(first_val), &recx,
 			     &first_val);
 
 	}
 
-	epoch = epr.epr_lo;
+	epoch = epr.epr_lo + 2;
 
 	update_value(arg, oid, epoch++, 0, dkey, akey,
 		     DAOS_IOD_SINGLE, sizeof(middle_val), &recx,
@@ -1306,15 +1305,7 @@ discard_obj_test(void **state, bool empty)
 		     DAOS_IOD_ARRAY, sizeof(middle_val), &recx,
 		     &middle_val);
 
-	epr.epr_hi = epoch++;
-
-	update_value(arg, oid, epoch++, 0, dkey, akey,
-		     DAOS_IOD_SINGLE, sizeof(last_val), &recx,
-		     &last_val);
-
-	update_value(arg, oid, epoch++, 0, dkey, akey2,
-		     DAOS_IOD_ARRAY, sizeof(last_val), &recx,
-		     &last_val);
+	epr.epr_hi = epoch;
 
 	rc = vos_discard(arg->ctx.tc_co_hdl, &oid, &epr, NULL, NULL);
 	assert_int_equal(rc, 0);
@@ -1324,60 +1315,15 @@ discard_obj_test(void **state, bool empty)
 	 */
 	expected = 0;
 	fetch_val = 0;
-	if (!empty)
-		expected = first_val;
 	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, DAOS_IOD_SINGLE,
 		    sizeof(first_val), &recx, &fetch_val);
 	assert_int_equal(fetch_val, expected);
 	fetch_val = 0;
 	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey2, DAOS_IOD_ARRAY,
 		    sizeof(first_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-
-	/** last value should still be there too since it's after the discard range */
-	expected = last_val;
-	fetch_val = 0;
-	fetch_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_SINGLE,
-		    sizeof(last_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-	fetch_val = 0;
-	fetch_value(arg, oid, epoch, 0, dkey, akey2, DAOS_IOD_ARRAY,
-		    sizeof(last_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-
-	/** Restore the middle values */
-	update_value(arg, oid, epr.epr_lo, 0, dkey, akey,
-		     DAOS_IOD_SINGLE, sizeof(middle_val), &recx,
-		     &middle_val);
-
-	update_value(arg, oid, epr.epr_lo + 1, 0, dkey, akey2,
-		     DAOS_IOD_ARRAY, sizeof(middle_val), &recx,
-		     &middle_val);
-
-	/** Now check middle value again */
-	expected = middle_val;
-	fetch_val = 0;
-	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey, DAOS_IOD_SINGLE,
-		    sizeof(middle_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-	fetch_val = 0;
-	fetch_value(arg, oid, epr.epr_hi, 0, dkey, akey2, DAOS_IOD_ARRAY,
-		    sizeof(middle_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-
-	/** And check last value again */
-	expected = last_val;
-	fetch_val = 0;
-	fetch_value(arg, oid, epoch, 0, dkey, akey, DAOS_IOD_SINGLE,
-		    sizeof(last_val), &recx, &fetch_val);
-	assert_int_equal(fetch_val, expected);
-	fetch_val = 0;
-	fetch_value(arg, oid, epoch, 0, dkey, akey2, DAOS_IOD_ARRAY,
-		    sizeof(last_val), &recx, &fetch_val);
 	assert_int_equal(fetch_val, expected);
 
 	arg->ta_flags = old_flags;
-
 }
 
 static void
