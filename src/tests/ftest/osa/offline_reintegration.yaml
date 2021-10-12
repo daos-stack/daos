@@ -82,7 +82,7 @@ ior:
 mdtest:
   api: DFS
   client_processes:
-    np: 16
+    np: 2
   num_of_files_dirs: 100
   test_dir: "/"
   iteration: 1
