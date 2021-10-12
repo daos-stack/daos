@@ -367,7 +367,7 @@ _ch_free(struct dfuse_projection_info *fs_handle, struct dfuse_cont *dfc)
 
 		rc = dfs_umount(dfc->dfs_ns);
 		if (rc != 0)
-			DFUSE_TRA_ERROR(dfc, "dfs_umount() failed");
+			DFUSE_TRA_ERROR(dfc, "dfs_umount() failed: %d (%s)", rc, strerror(rc));
 
 		rc = daos_cont_close(dfc->dfs_coh, NULL);
 		if (rc == -DER_NOMEM)
@@ -1296,23 +1296,23 @@ dfuse_fs_fini(struct dfuse_projection_info *fs_handle)
 	int	rc;
 	int	rc2 = -DER_SUCCESS;
 
-	rc2 = daos_eq_destroy(fs_handle->dpi_eq, 0);
-	if (rc2)
+	rc = daos_eq_destroy(fs_handle->dpi_eq, 0);
+	if (rc)
 		DFUSE_TRA_WARNING(fs_handle, "Failed to destroy EQ");
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
-	if (rc) {
+	rc2 = d_hash_table_destroy_inplace(&fs_handle->dpi_iet, false);
+	if (rc2) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close inode handles");
-		if (rc2 == -DER_SUCCESS)
-			rc2 = rc;
+		if (rc == -DER_SUCCESS)
+			rc = rc2;
 	}
 
-	rc = d_hash_table_destroy_inplace(&fs_handle->dpi_pool_table, false);
-	if (rc) {
+	rc2 = d_hash_table_destroy_inplace(&fs_handle->dpi_pool_table, false);
+	if (rc2) {
 		DFUSE_TRA_WARNING(fs_handle, "Failed to close pools");
-		if (rc2 == -DER_SUCCESS)
-			rc2 = rc;
+		if (rc == -DER_SUCCESS)
+			rc = rc2;
 	}
 
-	return rc2;
+	return rc;
 }

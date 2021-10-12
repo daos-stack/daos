@@ -183,6 +183,12 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
 		return -DER_INVAL;
 	}
 
+	/* This is used by the fault injection testing to simulate starting dfuse and test the
+	 * error paths.  This testing is harder if we allow the mount to happen, so for the
+	 * purposes of the test allow dfuse to cleanly return and exit at this point.  An
+	 * added advantage here is that it allows us to run dfuse startup tests in docker
+	 * containers, without the fuse devices present
+	 */
 	if (D_SHOULD_FAIL(start_fault_attr))
 		return -DER_SUCCESS;
 
@@ -205,7 +211,7 @@ dfuse_launch_fuse(struct dfuse_projection_info *fs_handle,
 		rc = fuse_session_loop(dfuse_info->di_session);
 	if (rc != 0)
 		DFUSE_TRA_ERROR(dfuse_info,
-				"Fuse loop exited with return code: %d %s", rc, strerror(rc));
+				"Fuse loop exited with return code: %d (%s)", rc, strerror(rc));
 
 	fuse_session_unmount(dfuse_info->di_session);
 
@@ -470,7 +476,7 @@ main(int argc, char **argv)
 			 * because the path is supposed to provide
 			 * pool/container details and it's an error if it can't.
 			 */
-			printf("Error reading attr from path %d %s\n", rc, strerror(rc));
+			printf("Error reading attr from path (%d) %s\n", rc, strerror(rc));
 			D_GOTO(out_daos, rc = daos_errno2der(rc));
 		}
 
