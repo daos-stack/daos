@@ -825,7 +825,6 @@ pipeline {
                             functionalTestPostV2()
                             unitTestPost artifacts: ['valgrind_logs/*'],
                                          testResults: 'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
-                                         always_script: 'ci/unit/test_cart_valgrind_post.sh',
                                          valgrind_stash: 'centos7-gcc-cart-memcheck'
                             recordIssues enabledForFailure: true,
                                          failOnError: false,
