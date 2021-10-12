@@ -38,9 +38,7 @@
 	ACTION(int,     fseeko,    (FILE *, off_t, int))                      \
 	ACTION(ssize_t, preadv,    (int, const struct iovec *, int, off_t))   \
 	ACTION(ssize_t, pwritev,   (int, const struct iovec *, int, off_t))   \
-	ACTION(void *,  mmap,      (void *, size_t, int, int, int, off_t))    \
-	ACTION(size_t,  fread,     (void *restrict, size_t, size_t, FILE * restrict)) \
-	ACTION(size_t,  fwrite,    (const void *restrict, size_t, size_t, FILE * restrict))
+	ACTION(void *,  mmap,      (void *, size_t, int, int, int, off_t))
 
 #define FOREACH_SINGLE_INTERCEPT(ACTION)                                      \
 	ACTION(int,     fclose,    (FILE *))                                  \
@@ -64,7 +62,9 @@
 	ACTION(int,     feof,      (FILE *))                                  \
 	ACTION(long,    ftell,     (FILE *))                                  \
 	ACTION(void,    rewind,    (FILE *))                                  \
-	ACTION(off_t,   ftello,    (FILE *))
+	ACTION(off_t,   ftello,    (FILE *))                                  \
+	ACTION(size_t,  fread,     (void *restrict, size_t, size_t, FILE *restrict)) \
+	ACTION(size_t,  fwrite,    (const void *restrict ptr, size_t size, size_t nmemb, FILE *restrict stream))
 
 #define FOREACH_INTERCEPT(ACTION)            \
 	FOREACH_SINGLE_INTERCEPT(ACTION)     \
