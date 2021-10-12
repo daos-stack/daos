@@ -87,6 +87,9 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         # List of test paths to create and remove
         self.posix_test_paths = []
 
+        # paths to unmount in teardown
+        self.mounted_posix_test_paths = []
+
         # List of daos test paths to keep track of
         self.daos_test_paths = []
 
@@ -128,14 +131,27 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
 
         """
         error_list = []
-        # Remove the created directories
+
+        if self.mounted_posix_test_paths:
+            path_list = self._get_posix_test_path_list(path_list=self.mounted_posix_test_paths)
+            for item in path_list:
+                # need to remove contents before umount
+                rm_cmd = "rm -rf {}/*".format(item)
+                try:
+                    self._execute_command(rm_cmd)
+                except CommandFailure as error:
+                    error_list.append("Error removing directory contents: {}".format(error))
+                umount_cmd = "sudo umount -f {}".format(item)
+                try:
+                    self._execute_command(umount_cmd)
+                except CommandFailure as error:
+                    error_list.append("Error umounting posix test directory: {}".format(error))
         if self.posix_test_paths:
             command = "rm -rf {}".format(self._get_posix_test_path_string())
             try:
                 self._execute_command(command)
             except CommandFailure as error:
-                error_list.append(
-                    "Error removing created directories: {}".format(error))
+                error_list.append("Error removing created directories: {}".format(error))
         return error_list
 
     def set_api(self, api):
@@ -163,14 +179,18 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         else:
             self.fail("Invalid tool: {}".format(_tool))
 
-    def _get_posix_test_path_list(self):
+    def _get_posix_test_path_list(self, path_list=None):
         """Get a list of quoted posix test path strings.
 
         Returns:
             list: a list of quoted posix test path strings
 
         """
-        return ["'{}'".format(item) for item in self.posix_test_paths]
+        # default
+        if path_list == None:
+            path_list = self.posix_test_paths
+
+        return ["'{}'".format(item) for item in path_list]
 
     def _get_posix_test_path_string(self):
         """Get a string of all of the quoted posix test path strings.
@@ -181,12 +201,14 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
         """
         return " ".join(self._get_posix_test_path_list())
 
-    def new_posix_test_path(self, create=True, parent=None):
+    def new_posix_test_path(self, create=True, parent=None, mount_dir=False):
         """Generate a new, unique posix path.
 
         Args:
             create (bool): Whether to create the directory.
                 Defaults to True.
+            mount_dir (bool): Whether or not posix directory will be manually
+	        mounted in tmpfs.
             parent (str, optional): The parent directory to create the
                 path in. Defaults to self.tmp.
 
@@ -208,6 +230,12 @@ class DataMoverTestBase(IorTestBase, MdtestBase):
             # Create the directory
             cmd = "mkdir -p '{}'".format(path)
             self.execute_cmd(cmd)
+
+        # mount small tmpfs filesystem on posix path, using size required sudo
+        # add mount_dir to mounted list for use when umounting 
+        if mount_dir:
+            self.mounted_posix_test_paths.append(path)
+            self.execute_cmd("sudo mount -t tmpfs none '{}' -o size=128M".format(path))
 
         return path
 

@@ -116,7 +116,7 @@ obj_rw_complete(crt_rpc_t *rpc, struct obj_io_context *ioc,
 		if (rc != 0) {
 			D_CDEBUG(rc == -DER_REC2BIG || rc == -DER_INPROGRESS ||
 				 rc == -DER_TX_RESTART || rc == -DER_EXIST ||
-				 rc == -DER_NONEXIST,
+				 rc == -DER_NONEXIST || rc == -DER_ALREADY,
 				 DLOG_DBG, DLOG_ERR,
 				 DF_UOID " %s end failed: "DF_RC"\n",
 				 DP_UOID(orwi->orw_oid),
@@ -359,9 +359,21 @@ bulk_transfer_sgl(daos_handle_t ioh, crt_rpc_t *rpc, crt_bulk_t remote_bulk,
 
 		local_bulk = vos_iod_bulk_at(ioh, sgl_idx, iov_idx, &local_off);
 		if (local_bulk != NULL) {
+			unsigned int tmp_off;
+
 			length = sgl->sg_iovs[iov_idx].iov_len;
 			iov_idx++;
 			cached_bulk = true;
+
+			/* Check if following IOVs are sharing same bulk handle */
+			while (iov_idx < sgl->sg_nr_out &&
+			       sgl->sg_iovs[iov_idx].iov_buf != NULL &&
+			       vos_iod_bulk_at(ioh, sgl_idx, iov_idx,
+						&tmp_off) == local_bulk) {
+				D_ASSERT(tmp_off == 0);
+				length += sgl->sg_iovs[iov_idx].iov_len;
+				iov_idx++;
+			};
 		} else {
 			start = iov_idx;
 			sgl_sent.sg_iovs = &sgl->sg_iovs[start];
@@ -1278,6 +1290,7 @@ obj_local_rw_internal(crt_rpc_t *rpc, struct obj_io_context *ioc,
 	daos_iod_t			*iods;
 	uint64_t			*offs;
 	uint64_t			 cond_flags;
+	uint64_t			 sched_seq = sched_cur_seq();
 	daos_iod_t			*iods_dup = NULL; /* for EC deg fetch */
 	bool				 get_parity_list = false;
 	struct daos_recx_ep_list	*parity_list = NULL;
@@ -1617,10 +1630,34 @@ post:
 	err = bio_iod_post(biod);
 	rc = rc ? : err;
 out:
+	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
+	 * Let's check resent again before further process.
+	 */
+	if (rc == 0 && obj_rpc_is_update(rpc) && !dth->dth_pinned && sched_cur_seq() != sched_seq) {
+		daos_epoch_t	epoch = 0;
+		int		rc1;
+
+		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &orw->orw_dti, &epoch, NULL);
+		switch (rc1) {
+		case 0:
+			orw->orw_epoch = epoch;
+			/* Fall through */
+		case -DER_ALREADY:
+			rc = -DER_ALREADY;
+			break;
+		case -DER_NONEXIST:
+		case -DER_EP_OLD:
+			break;
+		default:
+			rc = rc1;
+			break;
+		}
+	}
+
 	rc = obj_rw_complete(rpc, ioc, ioh, rc, dth);
 	if (iods_dup != NULL)
 		daos_iod_recx_free(iods_dup, orw->orw_nr);
-	return rc;
+	return unlikely(rc == -DER_ALREADY) ? 0 : rc;
 }
 
 static int
@@ -1678,8 +1715,10 @@ obj_capa_check(struct ds_cont_hdl *coh, bool is_write, bool is_agg_migrate)
 		return -DER_NO_PERM;
 	}
 
-	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled)
+	if (!is_agg_migrate && coh->sch_cont && coh->sch_cont->sc_rw_disabled) {
+		D_ERROR("cont hdl "DF_UUID" exceeds rf\n", DP_UUID(coh->sch_uuid));
 		return -DER_RF;
+	}
 
 	return 0;
 }
@@ -2461,7 +2500,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 
 	if (obj_rpc_is_fetch(rpc)) {
 		struct dtx_handle dth = {0};
-		int		  retry = 0;
 
 		if (orw->orw_flags & ORF_CSUM_REPORT) {
 			obj_log_csum_err();
@@ -2480,7 +2518,6 @@ ds_obj_rw_handler(crt_rpc_t *rpc)
 		if (orw->orw_flags & ORF_DTX_REFRESH)
 			dtx_flags |= DTX_FORCE_REFRESH;
 
-re_fetch:
 		rc = dtx_begin(ioc.ioc_vos_coh, &orw->orw_dti, &epoch, 0,
 			       orw->orw_map_ver, &orw->orw_oid,
 			       NULL, 0, dtx_flags, NULL, &dth);
@@ -2489,24 +2526,6 @@ re_fetch:
 
 		rc = obj_local_rw(rpc, &ioc, NULL, NULL, NULL, &dth, false);
 		rc = dtx_end(&dth, ioc.ioc_coc, rc);
-
-		if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-			if (++retry > 5)
-				D_GOTO(out, rc = -DER_TX_BUSY);
-
-			/* XXX: Currently, we commit the distributed transaction
-			 *	synchronously. Normally it will be very quickly.
-			 *	So let's yield then retry. If related
-			 *	distributed transaction is still not committed
-			 *	after several cycles, replies '-DER_TX_BUSY' to
-			 *	the client.
-			 */
-			D_DEBUG(DB_IO, "Hit non-commit DTX when fetch "
-				DF_UOID" (%d)\n", DP_UOID(orw->orw_oid), retry);
-			ABT_thread_yield();
-
-			goto re_fetch;
-		}
 
 		D_GOTO(out, rc);
 	}
@@ -2758,7 +2777,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	struct dss_enum_arg	saved_arg;
 	struct obj_key_enum_in	*oei = crt_req_get(rpc);
 	uint32_t		flags = 0;
-	int			retry = 0;
 	int			opc = opc_get(rpc->cr_opc);
 	int			type;
 	int			rc;
@@ -2865,7 +2883,6 @@ obj_local_enum(struct obj_io_context *ioc, crt_rpc_t *rpc,
 	if (oei->oei_flags & ORF_DTX_REFRESH)
 		flags |= DTX_FORCE_REFRESH;
 
-again:
 	rc = dtx_begin(ioc->ioc_vos_coh, &oei->oei_dti, &epoch, 0,
 		       oei->oei_map_ver, &oei->oei_oid, NULL, 0, flags,
 		       NULL, &dth);
@@ -2906,27 +2923,6 @@ re_pack:
 	if (rc_tmp != 0)
 		rc = rc_tmp;
 
-	if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-		if (++retry > 5)
-			D_GOTO(out, rc = -DER_TX_BUSY);
-
-		/* XXX: Currently, we commit the distributed transaction
-		 *	synchronously. Normally it will be very quickly.
-		 *	So let's yield then retry. If related distributed
-		 *	transaction is still not committed after several
-		 *	cycles, replies '-DER_TX_BUSY' to the client.
-		 */
-		D_DEBUG(DB_IO, "Hit non-commit DTX when enum "
-			DF_UOID" (%d)\n", DP_UOID(oei->oei_oid), retry);
-		ABT_thread_yield();
-
-		*anchors = saved_anchors;
-		obj_restore_enum_args(rpc, enum_arg, &saved_arg);
-
-		goto again;
-	}
-
-out:
 	if (type == VOS_ITER_SINGLE)
 		anchors->ia_ev = anchors->ia_sv;
 
@@ -3591,7 +3587,6 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 	uint64_t			 stripe_size = 0;
 	daos_recx_t			 ec_recx[3] = {0};
 	daos_recx_t			*query_recx;
-	int				 retry = 0;
 	int				 rc;
 
 	okqi = crt_req_get(rpc);
@@ -3606,14 +3601,13 @@ ds_obj_query_key_handler(crt_rpc_t *rpc)
 			   okqi->okqi_co_uuid, opc_get(rpc->cr_opc),
 			   okqi->okqi_flags, &ioc);
 	if (rc)
-		D_GOTO(out, rc);
+		D_GOTO(failed, rc);
 
 	rc = process_epoch(&okqi->okqi_epoch, &okqi->okqi_epoch_first,
 			   &okqi->okqi_flags);
 	if (rc == PE_OK_LOCAL)
 		okqi->okqi_flags &= ~ORF_EPOCH_UNCERTAIN;
 
-again:
 	dkey = &okqi->okqi_dkey;
 	akey = &okqi->okqi_akey;
 	d_iov_set(&okqo->okqo_akey, NULL, 0);
@@ -3631,7 +3625,7 @@ again:
 		       okqi->okqi_map_ver, &okqi->okqi_oid, NULL, 0, 0, NULL,
 		       &dth);
 	if (rc != 0)
-		goto out;
+		goto failed;
 
 	query_flags = okqi->okqi_api_flags;
 	if ((okqi->okqi_flags & ORF_EC) &&
@@ -3659,24 +3653,6 @@ re_query:
 	}
 
 	rc = dtx_end(&dth, ioc.ioc_coc, rc);
-
-out:
-	if (rc == -DER_INPROGRESS && dth.dth_local_retry) {
-		if (++retry > 5)
-			D_GOTO(failed, rc = -DER_TX_BUSY);
-
-		/* XXX: Currently, we commit the distributed transaction
-		 *	synchronously. Normally it will be very quickly.
-		 *	So let's yield then retry. If related distributed
-		 *	transaction is still not committed after several
-		 *	cycles, then replies '-DER_TX_BUSY' to the client.
-		 */
-		D_DEBUG(DB_IO, "Hit non-commit DTX when query "
-			DF_UOID" (%d)\n", DP_UOID(okqi->okqi_oid), retry);
-		ABT_thread_yield();
-
-		goto again;
-	}
 
 failed:
 	obj_reply_set_status(rpc, rc);
@@ -3856,6 +3832,7 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 	int				  rc = 0;
 	int				  i;
 	uint64_t			  update_flags;
+	uint64_t			  sched_seq = sched_cur_seq();
 
 	if (dth->dth_flags & DTE_LEADER &&
 	    DAOS_FAIL_CHECK(DAOS_DTX_RESTART))
@@ -4056,49 +4033,71 @@ ds_cpd_handle_one(crt_rpc_t *rpc, struct daos_cpd_sub_head *dcsh,
 		}
 	}
 
-	/* P4: punch and vos_update_end. */
+	/* P4: data verification and copy. */
+	for (i = 0; i < dcde->dcde_write_cnt; i++) {
+		dcsr = &dcsrs[dcri[i].dcri_req_idx];
+		if (dcsr->dcsr_opc != DCSO_UPDATE)
+			continue;
+
+		dcu = &dcsr->dcsr_update;
+		if (dcu->dcu_ec_split_req != NULL) {
+			iods = dcu->dcu_ec_split_req->osr_iods;
+			csums = dcu->dcu_ec_split_req->osr_iod_csums;
+		} else {
+			iods = dcu->dcu_iod_array.oia_iods;
+			csums = dcu->dcu_iod_array.oia_iod_csums;
+		}
+
+		rc = vos_dedup_verify(iohs[i]);
+		if (rc != 0) {
+			D_ERROR("dedup_verify failed for obj "DF_UOID", DTX "DF_DTI": "DF_RC"\n",
+				DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			goto out;
+		}
+
+		rc = obj_verify_bio_csum(dcsr->dcsr_oid.id_pub, iods, csums, biods[i],
+					 ioc->ioc_coc->sc_csummer, dcsr->dcsr_nr);
+		if (rc != 0) {
+			if (rc == -DER_CSUM)
+				obj_log_csum_err();
+			goto out;
+		}
+
+		rc = bio_iod_post(biods[i]);
+		biods[i] = NULL;
+		if (rc != 0) {
+			D_ERROR("iod_post failed for obj "DF_UOID", DTX "DF_DTI": "DF_RC"\n",
+				DP_UOID(dcsr->dcsr_oid), DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
+			goto out;
+		}
+	}
+
+	/* There is CPU yield after DTX start, and the resent RPC may be handled during that.
+	 * Let's check resent again before further process.
+	 */
+	if (rc == 0 && dth->dth_modification_cnt > 0 && !dth->dth_pinned &&
+	    sched_cur_seq() != sched_seq) {
+		daos_epoch_t	epoch = 0;
+		int		rc1;
+
+		rc1 = dtx_handle_resend(ioc->ioc_vos_coh, &dcsh->dcsh_xid, &epoch, NULL);
+		switch (rc1) {
+		case 0:
+		case -DER_ALREADY:
+			D_GOTO(out, rc = -DER_ALREADY);
+		case -DER_NONEXIST:
+		case -DER_EP_OLD:
+			break;
+		default:
+			D_GOTO(out, rc = rc1);
+		}
+	}
+
+	/* P5: punch and vos_update_end. */
 	for (i = 0; i < dcde->dcde_write_cnt; i++) {
 		dcsr = &dcsrs[dcri[i].dcri_req_idx];
 
 		if (dcsr->dcsr_opc == DCSO_UPDATE) {
-			dcu = &dcsr->dcsr_update;
-			if (dcu->dcu_ec_split_req != NULL) {
-				iods = dcu->dcu_ec_split_req->osr_iods;
-				csums = dcu->dcu_ec_split_req->osr_iod_csums;
-			} else {
-				iods = dcu->dcu_iod_array.oia_iods;
-				csums = dcu->dcu_iod_array.oia_iod_csums;
-			}
-
-			rc = vos_dedup_verify(iohs[i]);
-			if (rc != 0) {
-				D_ERROR("dedup_verify failed for obj "
-					DF_UOID", DTX "DF_DTI": "DF_RC"\n",
-					DP_UOID(dcsr->dcsr_oid),
-					DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
-					goto out;
-			}
-
-			rc = obj_verify_bio_csum(dcsr->dcsr_oid.id_pub,
-						 iods, csums, biods[i],
-						 ioc->ioc_coc->sc_csummer,
-						 dcsr->dcsr_nr);
-			if (rc != 0) {
-				if (rc == -DER_CSUM)
-					obj_log_csum_err();
-				goto out;
-			}
-
-			rc = bio_iod_post(biods[i]);
-			biods[i] = NULL;
-			if (rc != 0) {
-				D_ERROR("iod_post failed for obj "DF_UOID
-					", DTX "DF_DTI": "DF_RC"\n",
-					DP_UOID(dcsr->dcsr_oid),
-					DP_DTI(&dcsh->dcsh_xid), DP_RC(rc));
-				goto out;
-			}
-
 			rc = dtx_sub_init(dth, &dcsr->dcsr_oid,
 					  dcsr->dcsr_dkey_hash);
 			if (rc != 0)
@@ -4179,7 +4178,7 @@ out:
 	D_FREE(biods);
 	D_FREE(bulks);
 
-	return rc;
+	return unlikely(rc == -DER_ALREADY) ? 0 : rc;
 }
 
 static int
