@@ -208,6 +208,8 @@ class CartTest(TestWithoutServers):
                                          os.getenv('HOME'))
 
         log_path = os.environ['DAOS_TEST_LOG_DIR']
+	log_path = log_path.replace(";", "_")
+
         log_file = os.path.join(log_path, log_dir,
                                 test_name + "_" + \
                                 env_CCSA + "_" + \
@@ -242,7 +244,7 @@ class CartTest(TestWithoutServers):
                        env_PHY_ADDR_STR + "_" + \
                        "output.orterun_log"
 
-        output_filename_path = os.path.join(log_path, log_dir, log_filename)
+        output_filename_path = os.path.join(log_path, log_dir, log_filename).replace(";", "_")
         env = " --output-filename {!s}".format(output_filename_path)
         env += " -x D_LOG_FILE={!s}".format(log_file)
         env += " -x D_LOG_FILE_APPEND_PID=1"
