@@ -537,7 +537,6 @@ daos_errno2der(int err)
 	case ETIMEDOUT:		return -DER_TIMEDOUT;
 	case EWOULDBLOCK:	return -DER_AGAIN;
 	case EPROTO:		return -DER_PROTO;
-	case ENOTTY:
 	case EINVAL:		return -DER_INVAL;
 	case ENOTDIR:		return -DER_NOTDIR;
 	case EIO:		return -DER_IO;

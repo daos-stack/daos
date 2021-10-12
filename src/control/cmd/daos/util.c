@@ -15,7 +15,7 @@ call_dfuse_ioctl(char *path, struct dfuse_il_reply *reply)
 
 	fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
 	if (fd < 0)
-		return ENOENT;
+		return errno;
 
 	errno = 0;
 	rc = ioctl(fd, DFUSE_IOCTL_IL, reply);
@@ -118,8 +118,15 @@ resolve_duns_pool(struct cmd_args_s *ap)
 
 	rc = call_dfuse_ioctl(dir, &il_reply);
 	D_FREE(path);
-	if (rc != 0)
+
+	switch (rc) {
+	case 0:
+		break;
+	case -ENOTTY: /* can happen if the path is not in a dfuse mount */
+		return -DER_INVAL;
+	default:
 		return daos_errno2der(rc);
+	}
 
 	uuid_copy(ap->p_uuid, il_reply.fir_pool);
 
