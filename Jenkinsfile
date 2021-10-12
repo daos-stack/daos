@@ -12,7 +12,7 @@
 
 // To use a test branch (i.e. PR) until it lands to master
 // I.e. for testing library changes
-//@Library(value="pipeline-lib@your_branch") _
+@Library(value="pipeline-lib@jenkins_plugin_for_cart_valgrind")
 
 // For master, this is just some wildly high number
 next_version = "1000"
@@ -821,8 +821,21 @@ pipeline {
                                        test_function: 'runTestFunctionalV2'
                     }
                     post {
-                        always {
+                      always {
                             functionalTestPostV2()
+                            unitTestPost artifacts: ['valgrind_logs/*'],
+                                         testResults: 'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
+                                         always_script: 'ci/unit/test_cart_valgrind_post.sh',
+                                         valgrind_stash: 'centos7-gcc-cart-memcheck'
+                            recordIssues enabledForFailure: true,
+                                         failOnError: false,
+                                         ignoreFailedBuilds: false,
+                                         ignoreQualityGate: true,
+                                         name: "CaRT Valgrind leaks",
+                                         qualityGates: [[threshold: 1, type: 'TOTAL', unstable: true]],
+                                         tool: issues(pattern: 'Functional on CentOS 8 with Valgrind/cart/*/valgrind_logs/valgrind.*.memcheck.xml',
+                                           name: 'CaRT Valgrind results',
+                                           id: 'CaRT_Valgrind_server')
                         }
                     }
                 } // stage('Functional on CentOS 8 with Valgrind')
@@ -1143,7 +1156,8 @@ pipeline {
     post {
         always {
             valgrindReportPublish valgrind_stashes: ['centos7-gcc-nlt-memcheck',
-                                                     'centos7-gcc-unit-memcheck']
+                                                     'centos7-gcc-unit-memcheck',
+                                                     'centos7-gcc-cart-memcheck']
         }
         unsuccessful {
             notifyBrokenBranch branches: target_branch

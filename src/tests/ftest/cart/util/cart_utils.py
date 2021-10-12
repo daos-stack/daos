@@ -326,7 +326,7 @@ class CartTest(TestWithoutServers):
         if env_CCSA is None:
             env_CCSA = ""
 
-        f = r"{}/valgrind.%q\{{PMIX_ID\}}_{}-{}.memcheck"
+        f = r"{}/valgrind.%q\{{PMIX_ID\}}_{}-{}.memcheck.xml"
         memcheck_xml = f.format(daos_test_shared_dir,
                                 test_name,
                                 env_CCSA)
