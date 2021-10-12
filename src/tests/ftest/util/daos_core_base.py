@@ -15,6 +15,7 @@ from env_modules import load_mpi
 from general_utils import get_log_file
 from command_utils import CommandFailure
 from agent_utils import include_local_host
+from general_utils import run_pcmd, colate_results
 
 
 class DaosCoreBase(TestWithServers):
@@ -170,10 +171,19 @@ class DaosCoreBase(TestWithServers):
         except process.CmdError as result:
             if result.result.exit_status != 0:
                 # fake a JUnit failure output
-                self.create_results_xml(self.subtest_name, result)
+                # Add some debug about what was attempted to run
+                command = "exec 2>&1; " + \
+                          "ls -l {0} || true; " + \
+                          "ldd {0} || true; " + \
+                          "module list || true; " + \
+                          "module avail || true".format(self.daos_test)
+                results = run_pcmd(self.hostlist_clients, command, expect_rc=None)
+                self.create_results_xml(self.subtest_name, result + "\n{}".format(
+                    colate_results(command, results)))
                 self.fail(
                     "{0} failed with return code={1}.\n".format(
                         cmd, result.result.exit_status))
+
 
     def create_results_xml(self, testname, result):
         """Create a JUnit result.xml file for the failed command.
