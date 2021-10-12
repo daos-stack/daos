@@ -101,7 +101,7 @@ fi"
 sudo sysctl -w net.ipv4.conf.all.accept_local=1
 sudo sysctl -w net.ipv4.conf.all.arp_ignore=2
 sudo sysctl -w net.ipv4.conf.all.rp_filter=2
-find /sys/class/net/ -name 'ib*' -print0 | xargs -t -i basename {} | \
+find /sys/class/net/ -maxdepth 1 -name 'ib*' -print0 | xargs -t -i --null basename {} | \
     xargs -t -i sudo sysctl -w net.ipv4.conf.{}.rp_filter=2
 
 if ! $TEST_RPMS; then
