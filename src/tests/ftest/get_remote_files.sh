@@ -98,7 +98,7 @@ list_tag_files() {
 #######################################
 compress_files() {
     # shellcheck disable=SC2086
-    find \'${1}\' -maxdepth 0 -type f -size +1M -print0 | sudo xargs -r0 lbzip2 -v
+    find ${1} -maxdepth 0 -type f -size +1M -print0 | sudo xargs -r0 lbzip2 -v
     return $?
 }
 
@@ -119,12 +119,12 @@ scp_files() {
     do
         file_name=${file##*/}
         archive_name="${file_name%%.*}.$(hostname -s).${file_name#*.}"
-        if scp -r \'"${file}"\' "${2}"/"${archive_name}"; then
+        if scp -r "${file}" "${2}"/"${archive_name}"; then
             copied+=("${file}")
             if [[ ! "${file}" =~ /etc/daos/ ]] && \
                [[ ! "${file}" =~ daos_dump ]] && \
                [[ ! "${file}" =~ test.cov ]]; then
-                if ! rm -fr \'"${file}"\'; then
+                if ! rm -fr "${file}"; then
                     echo "  Error removing ${file}"
                     echo "    $(ls -al ${file})"
                     rc=1
@@ -158,9 +158,9 @@ run_cartlogtest() {
         # shellcheck disable=SC2045,SC2086
         for file in $(ls -d ${1})
         do
-            if [ -f "${file}" ] && [[ ! "${file}" == *".cart_logtest."* ]]; then
+            if [ -f ${file} ] && [[ ! ${file} == *".cart_logtest."* ]]; then
                 logtest_log="${file%.*}.cart_logtest.${file##*.}"
-                if ! ${CART_LOGTEST_PATH} \"${file}\" > ${logtest_log} 2>&1; then
+                if ! ${CART_LOGTEST_PATH} ${file} > ${logtest_log} 2>&1; then
                     echo "  Error: details in ${file}_cart_testlog"
                     rc=1
                 fi
@@ -294,13 +294,13 @@ fi
 # Scp files specified in FILES_TO_PROCESS to ARCHIVE_DEST
 if [ -n "${ARCHIVE_DEST}" ]; then
     echo "Archiving logs to ${ARCHIVE_DEST} ..."
-    if ! scp_files \'"${FILES_TO_PROCESS}"\' "${ARCHIVE_DEST}"; then
+    if ! scp_files "${FILES_TO_PROCESS}" "${ARCHIVE_DEST}"; then
         rc=1
     fi
 
     if ! "${VERBOSE}"; then
         # Finally archive this script's log file
-        if ! scp_files \'"${log_file}"\' "${ARCHIVE_DEST}"; then
+        if ! scp_files "${log_file}" "${ARCHIVE_DEST}"; then
             rc=1
         fi
     fi
