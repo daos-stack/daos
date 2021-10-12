@@ -17,6 +17,8 @@ server_config:
 pool:
   scm_size: 14G
   control_method: dmg
+container:
+  properties: rf:1
 gen_io_conf:
   no_of_ranks: !mux
     default_single_rank:
