@@ -274,8 +274,8 @@ crt_context_provider_create(crt_context_t *crt_ctx, int provider)
 
 	if (crt_is_service() &&
 	    crt_gdata.cg_auto_swim_disable == 0 &&
-	    ctx->cc_idx == CRT_DEFAULT_PROGRESS_CTX_IDX) {
-		rc = crt_swim_init(CRT_DEFAULT_PROGRESS_CTX_IDX);
+	    ctx->cc_idx == crt_gdata.cg_swim_crt_idx) {
+		rc = crt_swim_init(crt_gdata.cg_swim_crt_idx);
 		if (rc) {
 			D_ERROR("crt_swim_init() failed rc: %d.\n", rc);
 			crt_context_destroy(ctx, true);
@@ -1352,23 +1352,23 @@ crt_context_empty(int provider, int locked)
 	return rc;
 }
 
-static void
-crt_exec_progress_cb(struct crt_context *ctx)
+static int64_t
+crt_exec_progress_cb(struct crt_context *ctx, int64_t timeout)
 {
 	struct crt_prog_cb_priv	*cbs_prog;
 	crt_progress_cb		 cb_func;
 	void			*cb_args;
-	size_t i, cbs_size;
-	int ctx_idx;
-	int rc;
+	size_t			 cbs_size, i;
+	int			 ctx_idx;
+	int			 rc;
 
 	if (unlikely(crt_plugin_gdata.cpg_inited == 0 || ctx == NULL))
-		return;
+		return timeout;
 
 	rc = crt_context_idx(ctx, &ctx_idx);
 	if (unlikely(rc)) {
 		D_ERROR("crt_context_idx() failed, rc: %d.\n", rc);
-		return;
+		return timeout;
 	}
 
 	cbs_size = crt_plugin_gdata.cpg_prog_size[ctx_idx];
@@ -1379,8 +1379,10 @@ crt_exec_progress_cb(struct crt_context *ctx)
 		cb_args = cbs_prog[i].cpcp_args;
 		/* check for and execute progress callbacks here */
 		if (cb_func != NULL)
-			cb_func(ctx, cb_args);
+			timeout = cb_func(ctx, timeout, cb_args);
 	}
+
+	return timeout;
 }
 
 int
@@ -1414,23 +1416,9 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	ctx = crt_ctx;
 
 	/** Progress with callback and non-null timeout */
-	if (timeout < 0) {
-		/**
-		 * For infinite timeout, use a mercury timeout of 1 ms to avoid
-		 * being blocked indefinitely if another thread has called
-		 * crt_hg_progress() behind our back
-		 */
-		hg_timeout = 1000;
-	} else if (timeout == 0) {
-		hg_timeout = 0;
-	} else { /** timeout > 0 */
+	if (timeout > 0) {
 		now = d_timeus_secdiff(0);
 		end = now + timeout;
-		/** similarly, probe more frequently if timeout is large */
-		if (timeout > 1000 * 1000)
-			hg_timeout = 1000 * 1000;
-		else
-			hg_timeout = timeout;
 	}
 
 	/**
@@ -1446,7 +1434,24 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 	/** loop until callback returns non-null value */
 	while ((rc = cond_cb(arg)) == 0) {
 		crt_context_timeout_check(ctx);
-		crt_exec_progress_cb(ctx);
+		timeout = crt_exec_progress_cb(ctx, timeout);
+
+		if (timeout < 0) {
+			/**
+			 * For infinite timeout, use a mercury timeout of 1 ms to avoid
+			 * being blocked indefinitely if another thread has called
+			 * crt_hg_progress() behind our back
+			 */
+			hg_timeout = 1000;
+		} else if (timeout == 0) {
+			hg_timeout = 0;
+		} else { /** timeout > 0 */
+			/** similarly, probe more frequently if timeout is large */
+			if (timeout > 1000 * 1000)
+				hg_timeout = 1000 * 1000;
+			else
+				hg_timeout = timeout;
+		}
 
 		rc = crt_hg_progress(&ctx->cc_hg_ctx, hg_timeout);
 		if (unlikely(rc && rc != -DER_TIMEDOUT)) {
@@ -1466,12 +1471,6 @@ crt_progress_cond(crt_context_t crt_ctx, int64_t timeout,
 				break;
 			return -DER_TIMEDOUT;
 		}
-
-		/** adjust timeout */
-		if (end - now > 1000 * 1000)
-			hg_timeout = 1000 * 1000;
-		else
-			hg_timeout = end - now;
 	}
 
 	if (rc > 0)
@@ -1507,7 +1506,7 @@ crt_progress(crt_context_t crt_ctx, int64_t timeout)
 	 * progress
 	 */
 	crt_context_timeout_check(ctx);
-	crt_exec_progress_cb(ctx);
+	timeout = crt_exec_progress_cb(ctx, timeout);
 
 	if (timeout != 0 && (rc == 0 || rc == -DER_TIMEDOUT)) {
 		/** call progress once again with the real timeout */

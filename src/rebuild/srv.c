@@ -458,22 +458,30 @@ ds_rebuild_query(uuid_t pool_uuid, struct daos_rebuild_status *status)
 		rgt_put(rgt);
 	}
 
-	/* If there are still rebuild task queued for the pool, let's reset
+	/* If there are still rebuild task queued/running for the pool, let's reset
 	 * the done status.
 	 */
 	if (status->rs_done == 1 &&
-	    !d_list_empty(&rebuild_gst.rg_queue_list)) {
+	    (!d_list_empty(&rebuild_gst.rg_queue_list) ||
+	     !d_list_empty(&rebuild_gst.rg_running_list))) {
 		struct rebuild_task *task;
 
-		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list,
-				      dst_list) {
+		d_list_for_each_entry(task, &rebuild_gst.rg_queue_list, dst_list) {
 			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
 				status->rs_done = 0;
-				break;
+				D_GOTO(out, rc);
+			}
+		}
+
+		d_list_for_each_entry(task, &rebuild_gst.rg_running_list, dst_list) {
+			if (uuid_compare(task->dst_pool_uuid, pool_uuid) == 0) {
+				status->rs_done = 0;
+				D_GOTO(out, rc);
 			}
 		}
 	}
 
+out:
 	D_DEBUG(DB_REBUILD, "rebuild "DF_UUID" done %s rec "DF_U64" obj "
 		DF_U64" ver %d err %d\n", DP_UUID(pool_uuid),
 		status->rs_done ? "yes" : "no", status->rs_rec_nr,
@@ -1822,6 +1830,10 @@ rebuild_tgt_fini(struct rebuild_tgt_pool_tracker *rpt)
 	D_DEBUG(DB_REBUILD, "Finalize rebuild for "DF_UUID", map_ver=%u\n",
 		DP_UUID(rpt->rt_pool_uuid), rpt->rt_rebuild_ver);
 
+	if (rpt->rt_rebuild_op == RB_OP_REINT) {
+		D_ASSERT(rpt->rt_pool->sp_reintegrating > 0);
+		rpt->rt_pool->sp_reintegrating--;
+	}
 	ABT_mutex_lock(rpt->rt_lock);
 	D_ASSERT(rpt->rt_refcount > 0);
 	d_list_del_init(&rpt->rt_list);
