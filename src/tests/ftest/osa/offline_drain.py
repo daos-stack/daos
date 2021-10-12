@@ -9,7 +9,6 @@ from osa_utils import OSAUtils
 from daos_utils import DaosCommand
 from test_utils_pool import TestPool
 from write_host_file import write_host_file
-from apricot import skipForTicket
 
 
 class OSAOfflineDrain(OSAUtils):
@@ -199,7 +198,6 @@ class OSAOfflineDrain(OSAUtils):
         self.log.info("Offline Drain : Multiple Pools")
         self.run_offline_drain_test(2, data=True)
 
-    @skipForTicket("DAOS-7186")
     def test_osa_offline_drain_during_rebuild(self):
         """Test ID: DAOS-7159
         Test Description: Validate Offline Drain
