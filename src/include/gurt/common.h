@@ -154,12 +154,14 @@ char *d_realpath(const char *path, char *resolved_path);
 #define D_REALPATH(ptr, path)						\
 	do {								\
 		int _size;						\
+		void *_ptr;						\
 		(ptr) = d_realpath((path), NULL);			\
+		_ptr = (ptr);						\
+		_size = strnlen((ptr), PATH_MAX + 1) + 1 ;		\
 		if ((ptr) != NULL) {					\
-			_size = strnlen((ptr), PATH_MAX + 1) + 1 ;	\
 			D_CHECK_ALLOC(realpath, true, ptr, #ptr, _size,	\
 				0, #ptr, 0);				\
-			if ((ptr) == NULL)				\
+			if (((ptr) == NULL) && _ptr != NULL)		\
 				errno = ENOMEM;				\
 		}							\
 	} while (0)
