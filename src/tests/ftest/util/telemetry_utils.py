@@ -694,13 +694,15 @@ class TelemetryUtils():
 
         Args:
             specific_metrics(list): list of specific NVMe metrics
+            server (DaosServerCommand): the server from which to determine what metrics
+                                        will be available
+
         Returns:
             dict: dictionary of dictionaries of NVMe metric names and
                 values per server host key
 
         """
         data = {}
-        all_nvme_metrics = []
         if specific_metrics is None:
             specific_metrics = self.ENGINE_NVME_METRICS
 
@@ -709,14 +711,13 @@ class TelemetryUtils():
             for nvme in nvme_list if nvme_list is not None else []:
                 # Replace the '<id>' placeholder with the actual NVMe ID
                 nvme_id = nvme.replace(":", "_").replace(".", "_")
-                nvme_metrics = [
+                specific_metrics = [
                     name.replace("<id>", nvme_id)
                     for name in specific_metrics]
-                all_nvme_metrics.extend(nvme_metrics)
 
-        info = self.get_metrics(",".join(all_nvme_metrics))
+        info = self.get_metrics(",".join(specifics_metrics))
         self.log.info("NVMe Telemetry Information")
-        for name in all_nvme_metrics:
+        for name in specifics_metrics:
             for index, host in enumerate(info):
                 if name in info[host]:
                     if index == 0:
@@ -742,3 +743,41 @@ class TelemetryUtils():
                                     "    %-12s %-4s %s",
                                     host, rank, metric["value"])
         return data
+
+    def verify_metric_value(self, metrics_data, min_value=None, max_value=None):
+        """ Verify telemetry metrics from metrics_data.
+
+        Args:
+            metrics_data (dict): a dictionary of host keys linked to a list of metric names.
+            min_value (int): minimum value of test metrics threshold, 0 if not set
+            max_value (int): maximum value of test metrics threshold
+
+            Returns:
+                bool: True if all metrics are verified, False if any metrics are out of the
+                      allowable range or less than 0
+        """
+        self.log.info("Verify threshold of metrics")
+        status = True
+        invalid = ""
+        if min_value is None and max_value is None:
+            # Verify that the metric value is >0 if a range is not provided
+            min_value = 0
+
+        for name in sorted(metrics_data):
+            self.log.info("    --telemetry metric: %s", name)
+            self.log.info("    %-12s %-4s %s", "Host", "Rank", "Value")
+            for host in sorted(metrics_data[name]):
+                for rank in sorted(metrics_data[name][host]):
+                    value = metrics_data[name][host][rank]
+                    invalid = "Metric value in range"
+                    #Verify metrics are within allowable threshold
+                    if min_value is not None and value < min_value:
+                        status = False
+                        invalid = "Metric value is smaller than {}: {}".format(min_value, value)
+                    if max_value is not None and value > max_value:
+                        status = False
+                        invalid = "Metric value is larger than {}: {}".format(max_value, value)
+
+                    self.log.info("    %-12s %-4s %s %s",
+                                  host, rank, value, invalid)
+        return status

@@ -9,7 +9,7 @@ server_config:
     bdev_class: nvme
     bdev_list: ["aaaa:aa:aa.a", "bbbb:bb:bb.b"]
 telemetry_metrics:
-  nvme_test_crit_warn_metrics_valid: [0, 1]
-  nvme_test_temp_metrics_valid: [280, 350]
-  nvme_test_temp_time_metrics_valid: [0, 4294967295]
-  nvme_test_reliability_metrics_valid: [0, 100]
+  nvme_crit_warn_metrics_valid: [0, 1]
+  nvme_temp_metrics_valid: [280, 350]
+  nvme_temp_time_metrics_valid: [0, 4294967295]
+  nvme_reliability_metrics_valid: [0, 100]
