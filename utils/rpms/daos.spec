@@ -13,7 +13,7 @@
 %endif
 
 Name:          daos
-Version:       1.3.106
+Version:       2.1.100
 Release:       1%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
@@ -479,6 +479,9 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
+* Wed Oct 13 2021 Johann Lombardi <johann.lombardi@intel.com> 2.1.100-1
+- Switch version to 2.1.100 for 2.2 test builds
+
 * Tue Oct 12 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.106-1
 - Version bump to 1.3.106 for 2.0 test build 6
 
