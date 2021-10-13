@@ -2253,7 +2253,21 @@ migrate_obj_punch_one(void *data)
 		tls, DP_UUID(tls->mpt_pool_uuid), arg->version, arg->punched_epoch,
 		DP_UOID(arg->oid));
 	rc = ds_cont_child_lookup(tls->mpt_pool_uuid, arg->cont_uuid, &cont);
-	D_ASSERT(rc == 0);
+	if (rc != 0 || cont->sc_stopping) {
+		D_DEBUG(DB_REBUILD, DF_UUID" status %d:%d\n", DP_UUID(arg->cont_uuid), rc,
+			cont ? cont->sc_stopping : -1);
+
+		/**
+		 * If the current container is being destroyed, let's
+		 * ignore the failure.
+		 */
+		if (rc == -DER_NONEXIST || (cont != NULL && cont->sc_stopping))
+			rc = 0;
+		if (cont)
+			ds_cont_child_put(cont);
+
+		D_GOTO(put, rc);
+	}
 
 	D_ASSERT(arg->punched_epoch != 0);
 	rc = vos_obj_punch(cont->sc_hdl, arg->oid, arg->punched_epoch,
@@ -2261,11 +2275,14 @@ migrate_obj_punch_one(void *data)
 			   NULL, 0, NULL, NULL);
 	ds_cont_child_put(cont);
 put:
-	if (tls)
-		migrate_pool_tls_put(tls);
 	if (rc)
 		D_ERROR(DF_UOID" migrate punch failed: "DF_RC"\n",
 			DP_UOID(arg->oid), DP_RC(rc));
+	if (tls) {
+		if (tls->mpt_status == 0 && rc != 0)
+			tls->mpt_status = rc;
+		migrate_pool_tls_put(tls);
+	}
 }
 
 static int
