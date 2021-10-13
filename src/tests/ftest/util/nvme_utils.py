@@ -35,9 +35,7 @@ def get_device_ids(dmg, servers):
         try:
             result = dmg.run()
         except CommandFailure as _error:
-            raise CommandFailure(
-                "dmg list-devices failed with error {}".format(
-                    _error)) from _error
+            raise CommandFailure("dmg list-devices failed with error {}".format(_error)) from _error
         drive_list = []
         for line in result.stdout_text.split('\n'):
             if 'UUID' in line:
@@ -81,17 +79,13 @@ class ServerFillUp(IorTestBase):
         super().setUp()
         self.hostfile_clients = None
         self.ior_default_flags = self.ior_cmd.flags.value
-        self.ior_scm_xfersize = self.params.get(
-            "transfer_size", '/run/ior/transfersize_blocksize/*',
-            '2048')
-        self.ior_read_flags = self.params.get("read_flags",
-                                              '/run/ior/iorflags/*',
-                                              '-r -R -k -G 1')
-        self.ior_nvme_xfersize = self.params.get(
-            "nvme_transfer_size", '/run/ior/transfersize_blocksize/*',
-            '16777216')
+        self.ior_scm_xfersize = self.params.get("transfer_size",
+                                                '/run/ior/transfersize_blocksize/*', '2048')
+        self.ior_read_flags = self.params.get("read_flags", '/run/ior/iorflags/*', '-r -R -k -G 1')
+        self.ior_nvme_xfersize = self.params.get("nvme_transfer_size",
+                                                 '/run/ior/transfersize_blocksize/*', '16777216')
         # Get the number of daos_engine
-        self.engines = (self.server_managers[0].manager.job.yaml.engine_params)
+        self.engines = self.server_managers[0].manager.job.yaml.engine_params
         self.out_queue = queue.Queue()
 
     def start_ior_thread(self, results, create_cont, operation):
@@ -100,19 +94,20 @@ class ServerFillUp(IorTestBase):
         Args:
             results (queue): queue for returning thread results
             create_cont (Bool): To create the new container or not.
-            operation (str): IOR operation for read/write or Both.
-                             Auto will calculate the IOR block size based on
-                             requested storage %.
+            operation (str):
+                Write/WriteRead: It will Write or Write/Read base on IOR parameter in yaml file.
+                Auto_Write/Auto_Read: It will calculate the IOR block size based on requested
+                                        storage % to be fill.
         """
+        # IOR flag can be Write only or Write/Read based on test yaml
         self.ior_cmd.flags.value = self.ior_default_flags
 
-        # For IOR only Write/Read operation, calculate the block size based on
-        # server % to fill up. Store the container UUID for future reading operation.
+        # Calculate the block size based on server % to fill up.
         if 'Auto' in operation:
             block_size = self.calculate_ior_block_size()
             self.ior_cmd.block_size.update('{}'.format(block_size))
 
-        # For IOR Read only operation, retrieve the stored container UUID
+        # For IOR Read operation update the read flax from yaml file.
         if 'Auto_Read' in operation or operation == "Read":
             create_cont = False
             self.ior_cmd.flags.value = self.ior_read_flags
@@ -145,29 +140,25 @@ class ServerFillUp(IorTestBase):
 
         # Get the block size based on the capacity to be filled. For example
         # If nvme_free_space is 100G and to fill 50% of capacity.
-        # Formula : (107374182400 / 100) * 50.This will give 50%(50G) of space
-        # to be filled.
-        _tmp_block_size = (((free_space/100)*self.capacity))
+        # Formula : (107374182400 / 100) * 50.This will give 50%(50G) of space to be filled.
+        _tmp_block_size = ((free_space/100)*self.capacity)
 
         # Check the IOR object type to calculate the correct block size.
         _replica = re.findall(r'_(.+?)G', self.ior_cmd.dfs_oclass.value)
 
-        # This is for non replica and EC class where _tmp_block_size will not 
-        # change.
+        # This is for non replica and EC class where _tmp_block_size will not change.
         if not _replica:
             pass
 
-        # If it's EC object, Calculate the tmp block size based on number of
-        # data + parity targets. And calculate the write data size for the
-        # total number data targets.
-        # For example: 100Gb of total pool to be filled 10% in total:
-        # For EC_4P1GX,  Get the data target fill size = 8G, which will fill
-        # 8G of data and 2G of Parity. So total 10G (10% of 100G of pool size)
+        # If it's EC object, Calculate the tmp block size based on number of data + parity
+        # targets. And calculate the write data size for the total number data targets.
+        # For example: 100Gb of total pool to be filled 10% in total: For EC_4P1GX,  Get the data
+        # target fill size = 8G, which will fill 8G of data and 2G of Parity. So total 10G (10%
+        # of 100G of pool size)
         elif 'P' in _replica[0]:
             replica_server = re.findall(r'\d+', _replica[0])[0]
             parity_count = re.findall(r'\d+', _replica[0])[1]
-            _tmp_block_size = int(_tmp_block_size /
-                                  (int(replica_server) + int(parity_count)))
+            _tmp_block_size = int(_tmp_block_size / (int(replica_server) + int(parity_count)))
             _tmp_block_size = int(_tmp_block_size) * int(replica_server)
 
         # This is Replica type object class
@@ -178,9 +169,8 @@ class ServerFillUp(IorTestBase):
         _tmp_block_size = int(_tmp_block_size) / self.processes
 
         # Calculate the Final block size of IOR multiple of Transfer size.
-        block_size = (
-            int(_tmp_block_size / int(self.ior_cmd.transfer_size.value)) *
-            int(self.ior_cmd.transfer_size.value))
+        block_size = (int(_tmp_block_size / int(self.ior_cmd.transfer_size.value)) * int(
+            self.ior_cmd.transfer_size.value))
 
         return block_size
 
@@ -196,8 +186,8 @@ class ServerFillUp(IorTestBase):
         result = self.dmg.storage_query_device_health(disk_id)
         # Check if device state changed to EVICTED.
         if 'State:EVICTED' not in result.stdout_text:
-            self.fail("device State {} on host {} suppose to be EVICTED"
-                      .format(disk_id, server))
+            self.fail("device State {} on host {} suppose to be EVICTED".format(disk_id, server))
+
         # Wait for rebuild to start
         self.pool.wait_for_rebuild(True)
         # Wait for rebuild to complete
@@ -208,8 +198,8 @@ class ServerFillUp(IorTestBase):
         # Get the device ids from all servers and try to eject the disks
         device_ids = get_device_ids(self.dmg, self.hostlist_servers)
 
-        # no_of_servers and no_of_drives can be set from test yaml.
-        # 1 Server, 1 Drive = Remove single drive from single server
+        # no_of_servers and no_of_drives can be set from test yaml. 1 Server, 1 Drive = Remove
+        # single drive from single server
         for num in range(0, self.no_of_servers):
             server = self.hostlist_servers[num]
             for disk_id in range(0, self.no_of_drives):
@@ -228,8 +218,7 @@ class ServerFillUp(IorTestBase):
         except (ServerFailed, KeyError) as error:
             self.fail(error)
 
-        # Return the 96% of storage space as it won't be used 100%
-        # for pool creation.
+        # Return the 96% of storage space as it won't be used 100% for pool creation.
         for index, _size in enumerate(sizes):
             sizes[index] = int(sizes[index] * 0.96)
 
@@ -242,9 +231,8 @@ class ServerFillUp(IorTestBase):
             scm (bool): To create the pool with max SCM size or not.
             nvme (bool): To create the pool with max NVMe size or not.
 
-        Note: Method to Fill up the server. It will get the maximum Storage
-              space and create the pool.
-              Replace with dmg options in future when it's available.
+        Note: Method to Fill up the server. It will get the maximum Storage space and create the
+              pool. Replace with dmg options in future when it's available.
         """
         # Create a pool
         self.add_pool(create=False)
@@ -281,10 +269,9 @@ class ServerFillUp(IorTestBase):
         self.scm_fill = 'SCM' in storage
 
         # Create the IOR threads
-        job = threading.Thread(target=self.start_ior_thread,
-                               kwargs={"results": self.out_queue,
-                                       "create_cont": create_cont,
-                                       "operation": operation})
+        job = threading.Thread(target=self.start_ior_thread, kwargs={"results": self.out_queue,
+                                                                     "create_cont": create_cont,
+                                                                     "operation": operation})
         # Launch the IOR thread
         job.start()
 
