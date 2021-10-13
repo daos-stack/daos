@@ -364,6 +364,8 @@ daos_test_cb_exclude(test_arg_t *arg, struct test_op_record *op,
 				    arg->dmg_config,
 				    op->ae_arg.ua_rank, op->ae_arg.ua_tgt);
 	}
+
+	daos_cont_status_clear(arg->coh, NULL);
 	return 0;
 }
 
@@ -403,7 +405,7 @@ static int
 test_cb_noop(test_arg_t *arg, struct test_op_record *op,
 	     char **rbuf, daos_size_t *rbuf_size)
 {
-	return -DER_NOSYS;
+	return 0;
 }
 
 struct test_op_dict op_dict[] = {
@@ -1475,6 +1477,8 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 		return daos_errno2der(errno);
 	}
 
+	int line_nr = 0;
+
 	do {
 		size_t	cmd_size;
 
@@ -1497,6 +1501,7 @@ io_conf_run(test_arg_t *arg, const char *io_conf)
 
 		if (op != NULL) {
 			op->snap_epoch = &sn_epoch[op->tx];
+			print_message("will run cmd_line %s, line_nr %d\n", cmd_line, ++line_nr);
 			rc = cmd_line_run(arg, op);
 			if (rc) {
 				print_message("run cmd_line %s failed, "
