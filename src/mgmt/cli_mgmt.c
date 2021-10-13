@@ -924,7 +924,11 @@ dc_mgmt_init()
 void
 dc_mgmt_fini()
 {
-	daos_rpc_unregister(&mgmt_proto_fmt);
+	int rc;
+
+	rc = daos_rpc_unregister(&mgmt_proto_fmt);
+	if (rc != 0)
+		D_ERROR("failed to unregister mgmt RPCs: "DF_RC"\n", DP_RC(rc));
 }
 
 int dc2_mgmt_svc_rip(tse_task_t *task)
