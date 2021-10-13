@@ -715,9 +715,9 @@ class TelemetryUtils():
                     name.replace("<id>", nvme_id)
                     for name in specific_metrics]
 
-        info = self.get_metrics(",".join(specifics_metrics))
+        info = self.get_metrics(",".join(specific_metrics))
         self.log.info("NVMe Telemetry Information")
-        for name in specifics_metrics:
+        for name in specific_metrics:
             for index, host in enumerate(info):
                 if name in info[host]:
                     if index == 0:
