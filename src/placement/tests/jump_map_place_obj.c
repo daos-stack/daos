@@ -1622,7 +1622,10 @@ placement_handles_multiple_states(void **state)
 	 */
 	ver_after_drain = ctx.ver;
 
-	is_false(jtc_layout_has_duplicate(&ctx));
+	/* During drain or extending, some targets might be in both original
+	 * and extending area.
+	 */
+	/* is_false(jtc_layout_has_duplicate(&ctx)); */
 
 	/*
 	 * Compute placement in this state. All three shards should
