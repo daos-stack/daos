@@ -203,11 +203,6 @@ if (!env.CHANGE_ID &&
 pipeline {
     agent { label 'lightweight' }
 
-    triggers {
-        cron(env.BRANCH_NAME == 'master' ? '0 0 * * *\n' : '' +
-             env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6' : '')
-    }
-
     environment {
         UID = sh script: "id -u", returnStdout: true
         SSH_KEY_ARGS = "-ici_key"

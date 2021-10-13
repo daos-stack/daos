@@ -1,0 +1,10 @@
+.sconf_temp
+.vagrant/
+utils/rpms/_topdir/
+/build/
+/install/
+*.tar.gz
+*.pyc
+src/tests/ftest/avocado/
+__pycache__
+src/client/java/daos-java/build/
