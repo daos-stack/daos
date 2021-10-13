@@ -494,7 +494,6 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 	return 0;
 }
 
-
 /* to be called only in crt_init */
 int
 crt_hg_init(void)
@@ -510,10 +509,8 @@ crt_hg_init(void)
 	#define EXT_FAC DD_FAC(external)
 
 	env = getenv("HG_LOG_SUBSYS");
-	if (!env) {
-		setenv("HG_LOG_SUBSYS", "hg", 1);
+	if (!env)
 		HG_Set_log_subsys("hg,na");
-	}
 
 	env = getenv("HG_LOG_LEVEL");
 	if (!env) {
