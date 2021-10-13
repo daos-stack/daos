@@ -128,7 +128,7 @@ dfuse_loop(struct dfuse_info *dfuse_info)
 
 	rc = sem_init(&dtm->tm_finish, 0, 0);
 	if (rc != 0)
-		D_GOTO(out, errno);
+		D_GOTO(out, rc = errno);
 	rc = D_MUTEX_INIT(&dtm->tm_lock, NULL);
 	if (rc != 0)
 		D_GOTO(out_sem, daos_der2errno(rc));
