@@ -13,8 +13,8 @@
 %endif
 
 Name:          daos
-Version:       1.3.105
-Release:       5%{?relval}%{?dist}
+Version:       1.3.106
+Release:       2%{?relval}%{?dist}
 Summary:       DAOS Storage Engine
 
 License:       BSD-2-Clause-Patent
@@ -436,6 +436,7 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_bindir}/pl_bench
 %{_bindir}/smd_ut
 %{_bindir}/vea_ut
+%{_bindir}/vea_stress
 %{_bindir}/daos_perf
 %{_bindir}/vos_perf
 %{_bindir}/daos_racer
@@ -480,8 +481,11 @@ getent passwd daos_agent >/dev/null || useradd -s /sbin/nologin -r -g daos_agent
 %{_libdir}/libdaos_serialize.so
 
 %changelog
-* Mon Oct 11 2021 David Quigley <david.quigley@intel.com> 1.3.105-5
+* Mon Oct 13 2021 David Quigley <david.quigley@intel.com> 1.3.106-2
 - Add defusedxml as a required dependency for the test package.
+
+* Tue Oct 12 2021 Johann Lombardi <johann.lombardi@intel.com> 1.3.106-1
+- Version bump to 1.3.106 for 2.0 test build 6
 
 * Wed Oct 8 2021 Alexander Oganezov <alexander.a.oganezov@intel.com> 1.13.105-4
 - Update OFI to v1.13.2rc1

@@ -153,7 +153,8 @@ done:
 }
 
 static bool
-cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req)
+cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req,
+			struct agg_param *param)
 {
 	struct ds_pool	*pool = cont->sc_pool->spc_pool;
 
@@ -167,6 +168,24 @@ cont_aggregate_runnable(struct ds_cont_child *cont, struct sched_request *req)
 			DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
 			pool->sp_stopping);
 		return false;
+	}
+
+	if (param->ap_vos_agg) {
+		/* Parse aggregation until reintegrating finish, because
+		 * vos_discard may cause issue if reintegration happened
+		 * at the same time.
+		 */
+		if (pool->sp_reintegrating) {
+			cont->sc_vos_agg_active = 0;
+			D_DEBUG(DB_EPC, DF_CONT": skip aggregation during reintegration %d.\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid),
+				pool->sp_reintegrating);
+			return false;
+		}
+		if (!cont->sc_vos_agg_active)
+			D_DEBUG(DB_EPC, DF_CONT": resume aggregation after reintegration.\n",
+				DP_CONT(cont->sc_pool->spc_uuid, cont->sc_uuid));
+		cont->sc_vos_agg_active = 1;
 	}
 
 	if (!cont->sc_props_fetched)
@@ -226,7 +245,7 @@ cont_child_aggregate(struct ds_cont_child *cont, cont_aggregate_cb_t agg_cb,
 
 	/* Check if it's ok to start aggregation in every 2 seconds */
 	*msecs = 2ULL * 1000;
-	if (!cont_aggregate_runnable(cont, req))
+	if (!cont_aggregate_runnable(cont, req, param))
 		return 0;
 
 	change_hlc = max(cont->sc_snapshot_delete_hlc,
@@ -531,6 +550,8 @@ cont_agg_ult(void *arg)
 	param.ap_start_eph_get = cont_agg_start_eph_get;
 	param.ap_req = cont->sc_agg_req;
 	param.ap_cont = cont;
+	param.ap_vos_agg = 1;
+	cont->sc_vos_agg_active = 1;
 
 	cont_aggregate_interval(cont, cont_vos_aggregate_cb, &param);
 }
