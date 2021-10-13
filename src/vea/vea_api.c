@@ -88,7 +88,7 @@ vea_format(struct umem_instance *umem, struct umem_tx_stage_data *txd,
 	 * Extent block count is represented by uint32_t, make sure the
 	 * largest extent won't overflow.
 	 */
-	if (tot_blks >= UINT32_MAX) {
+	if (tot_blks > UINT32_MAX) {
 		D_ERROR("Capacity "DF_U64" is too large.\n", capacity);
 		return -DER_INVAL;
 	}
