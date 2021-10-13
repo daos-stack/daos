@@ -79,9 +79,13 @@ dfuse_parse_time(char *buff, size_t len, unsigned int *_out)
 		return EINVAL;
 
 	if (matched == 2) {
-		if (c == 'm' || c == 'M')
+		if (c == 'd' || c == 'D')
+			out *= 60 * 60 * 24;
+		else if (c == 'h' || c == 'H')
+			out *= 60 * 60;
+		else if (c == 'm' || c == 'M')
 			out *= 60;
-		if (c == 's' || c == 'S')
+		else if (c == 's' || c == 'S')
 			true;
 		else
 			return EINVAL;
@@ -488,9 +492,11 @@ dfuse_pool_connect(struct dfuse_projection_info *fs_handle, uuid_t *pool,
 			DP_UUID(pool));
 
 	if (uuid_is_null(*pool) == 0) {
-		uuid_copy(dfp->dfp_pool, *pool);
+		char uuid_str[37];
 
-		rc = daos_pool_connect(dfp->dfp_pool,
+		uuid_copy(dfp->dfp_pool, *pool);
+		uuid_unparse(dfp->dfp_pool, uuid_str);
+		rc = daos_pool_connect(uuid_str,
 				       fs_handle->dpi_info->di_group,
 				       DAOS_PC_RW,
 				       &dfp->dfp_poh, NULL, NULL);
@@ -851,11 +857,13 @@ dfuse_cont_open(struct dfuse_projection_info *fs_handle, struct dfuse_pool *dfp,
 		dfc->dfc_ndentry_timeout = 5;
 
 	} else if (*_dfc == NULL) {
+		char	str[37];
+
 		dfc->dfs_ops = &dfuse_dfs_ops;
 		uuid_copy(dfc->dfs_cont, *cont);
-		rc = daos_cont_open(dfp->dfp_poh, dfc->dfs_cont,
-				    DAOS_COO_RW, &dfc->dfs_coh,
-				    NULL, NULL);
+		uuid_unparse(dfc->dfs_cont, str);
+		rc = daos_cont_open(dfp->dfp_poh, str, DAOS_COO_RW,
+				    &dfc->dfs_coh, NULL, NULL);
 		if (rc == -DER_NONEXIST) {
 			DFUSE_TRA_INFO(dfc, "daos_cont_open() failed: "DF_RC,
 				       DP_RC(rc));
@@ -973,7 +981,7 @@ dfuse_fs_init(struct dfuse_info *dfuse_info,
 
 	rc = sem_init(&fs_handle->dpi_sem, 0, 0);
 	if (rc != 0)
-		D_GOTO(err_eq, 0);
+		D_GOTO(err_eq, rc = daos_errno2der(errno));
 
 	fs_handle->dpi_shutdown = false;
 	*_fsh = fs_handle;

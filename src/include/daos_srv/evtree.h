@@ -665,8 +665,10 @@ enum {
 	EVT_ITER_FOR_PURGE	= (1 << 5),
 	/** The iterator is for data migration scan */
 	EVT_ITER_FOR_MIGRATION	= (1 << 6),
+	/** The iterator is for data discard */
+	EVT_ITER_FOR_DISCARD	= (1 << 7),
 	/** Skip visible data (Only valid with EVT_ITER_VISIBLE) */
-	EVT_ITER_SKIP_DATA	= (1 << 7),
+	EVT_ITER_SKIP_DATA	= (1 << 8),
 };
 
 D_CASSERT((int)EVT_VISIBLE == (int)EVT_ITER_VISIBLE);

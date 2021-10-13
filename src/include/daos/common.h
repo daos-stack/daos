@@ -232,7 +232,7 @@ daos_get_ntime(void)
 	struct timespec	tv;
 
 	d_gettime(&tv);
-	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+	return ((uint64_t)tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec);
 }
 
 static inline uint64_t
@@ -241,7 +241,7 @@ daos_getntime_coarse(void)
 	struct timespec	tv;
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
-	return (tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec); /* nano seconds */
+	return ((uint64_t)tv.tv_sec * NSEC_PER_SEC + tv.tv_nsec);
 }
 
 static inline uint64_t
@@ -263,7 +263,10 @@ daos_wallclock_secs(void)
 static inline uint64_t
 daos_getmtime_coarse(void)
 {
-	return daos_getntime_coarse() / NSEC_PER_MSEC;
+	struct timespec tv;
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &tv);
+	return ((uint64_t)tv.tv_sec * 1000 + tv.tv_nsec / NSEC_PER_MSEC);
 }
 
 static inline uint64_t
@@ -737,6 +740,7 @@ enum {
  * This fault simulates the EC parity epoch difference in EC data recovery.
  */
 #define DAOS_FAIL_PARITY_EPOCH_DIFF	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x29)
+#define DAOS_FAIL_SHARD_NONEXIST	(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x2a)
 
 #define DAOS_DTX_COMMIT_SYNC		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x30)
 #define DAOS_DTX_LEADER_ERROR		(DAOS_FAIL_UNIT_TEST_GROUP_LOC | 0x31)

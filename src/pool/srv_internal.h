@@ -189,6 +189,7 @@ int ds_pool_iv_srv_hdl_fetch_non_sys(struct ds_pool *pool,
  */
 void *ds_pool_metrics_alloc(const char *path, int tgt_id);
 void ds_pool_metrics_free(void *data);
+int ds_pool_metrics_count(void);
 int ds_pool_metrics_start(struct ds_pool *pool);
 void ds_pool_metrics_stop(struct ds_pool *pool);
 

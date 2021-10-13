@@ -1,0 +1,75 @@
+hosts:
+  test_servers:
+    - server-A
+    - server-B
+    - server-C
+    - server-D
+  test_clients:
+    - client-E
+    - client-F
+    - client-G
+    - client-H
+timeout: 540
+job_manager_class_name: Orterun
+job_manager_mpi_type: openmpi
+job_manager_timeout: 480
+pool:
+    size: 500GB
+    control_method: dmg
+container:
+    type: POSIX
+    control_method: daos
+server_config:
+    name: daos_server
+    servers:
+      bdev_class: nvme
+      bdev_list: ["aaaa:aa:aa.a","bbbb:bb:bb.b"]
+      scm_class: dcpm
+      scm_list: [ "/dev/pmem0" ]
+      scm_mount: /mnt/daos0
+    transport_config:
+      allow_insecure: True
+agent_config:
+    transport_config:
+      allow_insecure: True
+dmg:
+    transport_config:
+      allow_insecure: True
+daos_perf:
+  test_command: 'U;p F;p V O;p'
+  test_type: daos
+  processes_mux: !mux
+    4_process:
+      processes: 4
+      akey_use_array_mux: !mux
+        single_value:
+          akey_use_array: False
+          dkeys: 512
+          akeys: 128
+          object_class_mux: !mux
+            LARGE_VALUE:
+              object_class: LARGE
+            R2S_value:
+              object_class: R2S
+            EC2P1_value:
+              object_class: EC2P1
+        array_value:
+          akey_use_array: True
+          objects: 1
+          dkeys: 1
+          akeys: 1
+    16_processes:
+      processes: 16
+      akey_use_array_mux: !mux
+        single_value:
+          akey_use_array: False
+          dkeys: 256
+          akeys: 64
+          object_class_mux: !mux
+            LARGE_VALUE:
+              object_class: LARGE
+            R2S_value:
+              object_class: R2S
+            EC2P1_value:
+              object_class: EC2P1
+
