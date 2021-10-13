@@ -15,9 +15,9 @@
 //@Library(value="pipeline-lib@your_branch") _
 
 // Should try to figure this out automatically
-String base_branch = "master"
+String base_branch = "release/2.0"
 // For master, this is just some wildly high number
-next_version = "1000"
+next_version = "2.1.0"
 
 // Don't define this as a type or it loses it's global scope
 target_branch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME
@@ -37,7 +37,7 @@ pipeline {
 
     triggers {
         cron(env.BRANCH_NAME == 'master' ? 'TZ=America/Toronto\n0 0 * * *\n' : '' +
-             env.BRANCH_NAME == 'release/1.2' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
+             env.BRANCH_NAME == 'release/2.0' ? 'TZ=America/Toronto\n0 12 * * *\n' : '' +
              env.BRANCH_NAME.startsWith('weekly-testing') ? 'H 0 * * 6' : '')
     }
 
