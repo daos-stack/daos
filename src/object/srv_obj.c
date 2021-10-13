@@ -4195,20 +4195,19 @@ again:
 	}
 
 	rc = ds_cpd_handle_one(rpc, dcsh, dcde, dcsrs, ioc, dth);
-	if (!dth->dth_pinned) {
-		int	rc1;
-
-		/* There will be CPU yield during DTX refresh. We need
-		 * to pin current DTX before refreshing other DTX(es),
-		 * that will avoid race with the resent RPC during the
+	if (obj_dtx_need_refresh(dth, rc)) {
+		/* There will be CPU yield during DTX refresh. We need to pin current DTX before
+		 * refreshing other DTX(es), that will avoid race with the resent RPC during the
 		 * DTX refresh.
 		 */
-		rc1 = vos_dtx_pin(dth, false);
-		if (rc1 != 0)
-			return -DER_INPROGRESS;
-	}
+		if (!dth->dth_pinned) {
+			int	rc1;
 
-	if (obj_dtx_need_refresh(dth, rc)) {
+			rc1 = vos_dtx_pin(dth, false);
+			if (rc1 != 0)
+				return -DER_INPROGRESS;
+		}
+
 		rc = dtx_refresh(dth, ioc->ioc_coc);
 		if (rc == -DER_AGAIN)
 			goto again;
