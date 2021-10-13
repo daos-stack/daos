@@ -5,6 +5,9 @@
 SPDX-License-Identifier: BSD-2-Clause-Patent
 """
 from concurrent.futures import ThreadPoolExecutor, as_completed, CancelledError, TimeoutError
+from logging import getLogger
+
+from avocado.utils import CmdResult
 
 
 class ThreadManager():
@@ -17,6 +20,7 @@ class ThreadManager():
             method (callable): [description]
             timeout (int, optional): [description]. Defaults to None.
         """
+        self.log = getLogger()
         self.method = method
         self.timeout = timeout
         self.job_kwargs = []
@@ -45,6 +49,7 @@ class ThreadManager():
         """
         results = {"PASS": [], "FAIL": []}
         with ThreadPoolExecutor() as thread_executor:
+            self.log.info("Submitting %d threads ...", len(self.job_kwargs))
             futures = {thread_executor.submit(self.method, **kwargs) for kwargs in self.job_kwargs}
             for future in as_completed(futures, self.timeout):
                 try:
@@ -56,3 +61,41 @@ class ThreadManager():
                 except Exception as error:
                     results["FAIL"].append("{} failed with an exception: {}".format(future, error))
         return results
+
+    def check_results(self, results):
+        """Display the results from self.run() and indicate if any threads failed.
+
+        Args:
+            results (dict): results return from self.run()
+
+        Returns:
+            bool: True if any threads failed; false otherwise.
+
+        """
+        for key in sorted(results):
+            self.log.info("Results from threads that %sED", key)
+            for entry in results[key]:
+                if isinstance(entry, CmdResult):
+                    self.log.info(" command: %s", entry.command)
+                    self.log.info(
+                        " exit_status: %s, duration: %s, interrupted: %s",
+                        entry.exit_status, entry.duration, str(entry.interrupted))
+                    self.log.info(" stdout:")
+                    for line in entry.stdout_text.splitlines():
+                        self.log.info("    %s", line)
+                    self.log.info(" stderr:")
+                    for line in entry.stderr_text.splitlines():
+                        self.log.info("    %s", line)
+                else:
+                    for line in str(entry).splitlines():
+                        self.log.info(" %s", line)
+        return len(results["FAIL"]) > 0
+
+    def check_run(self):
+        """Run the threads and check thr result.
+
+        Returns:
+            bool: True if any threads failed; false otherwise.
+
+        """
+        return self.check_results(self.run())
