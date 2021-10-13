@@ -278,8 +278,6 @@ __shim_handle__cont_open_by_path(PyObject *self, PyObject *args)
 	if (rc)
 		goto out;
 
-	if (attr.da_type != DAOS_PROP_CO_LAYOUT_PYTHON)
-		rc = -DER_INVAL;
 out:
 	obj = cont_open(rc, attr.da_pool, attr.da_cont, flags);
 	duns_destroy_attr(&attr);

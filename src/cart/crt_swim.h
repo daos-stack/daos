@@ -17,8 +17,7 @@
 #define CRT_SWIM_NGLITCHES_TRESHOLD	10
 #define CRT_SWIM_NMESSAGES_TRESHOLD	1000
 #define CRT_SWIM_FLUSH_ATTEMPTS		100
-#define CRT_SWIM_PROGRESS_TIMEOUT	0	/* minimal progressing time */
-#define CRT_DEFAULT_PROGRESS_CTX_IDX	0
+#define CRT_DEFAULT_PROGRESS_CTX_IDX	1
 
 struct crt_swim_target {
 	d_circleq_entry(crt_swim_target) cst_link;

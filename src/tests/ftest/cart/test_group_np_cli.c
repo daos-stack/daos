@@ -176,7 +176,8 @@ test_run(void)
 	}
 
 	/* Disable swim */
-	if (test_g.t_disable_swim) {
+	if (test_g.t_disable_swim &&
+	    (rank_list != NULL)) {
 
 		crt_rank_abort_all(NULL);
 
