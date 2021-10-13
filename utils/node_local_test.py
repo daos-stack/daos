@@ -26,10 +26,10 @@ import argparse
 import tabulate
 import functools
 import traceback
-import subprocess
+import subprocess #nosec
 import junit_xml
 import tempfile
-import pickle
+import pickle #nosec
 import xattr
 from collections import OrderedDict
 import yaml
