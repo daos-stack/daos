@@ -814,6 +814,7 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 			}
 		}
 	}
+
 	/** -- Rest of the checks are done for each filter */
 
 	for (i = 0;
@@ -822,7 +823,7 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 	{
 		daos_filter_t *ftr;
 		size_t p;
-		size_t num_parts = 0;
+		uint32_t num_parts = 0;
 		uint32_t num_operands;
 		bool res;
 
@@ -839,17 +840,17 @@ int dc_pipeline_check(daos_pipeline_t *pipeline)
 			num_parts = 1;
 		}
 
+		/**
+		 * -- Check 2: Check that all parts have a correct
+		 *             number of operands and also that the
+		 *             number of total parts is correct.
+		 */
+
 		for (p = 0; p < ftr->num_parts; p++)
 		{
-			/**
-			 * -- Check 2: Check that all parts have a correct
-			 *             number of operands and also that the
-			 *             number of total parts is correct.
-			 */
-
 			daos_filter_part_t *part = ftr->parts[p];
-
 			num_operands = pipeline_part_nops(part->part_type);
+
 			if (num_operands != part->num_operands)
 			{
 				return -DER_INVAL;
