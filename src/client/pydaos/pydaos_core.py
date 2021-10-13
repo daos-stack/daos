@@ -90,7 +90,7 @@ class DCont():
         """ Look up DAOS object associated with name """
 
         (ret, hi, lo, otype) = pydaos_shim.cont_get(DAOS_MAGIC, self._hdl, name)
-        if ret == pydaos_shim.DER_NONEXIST:
+        if ret == -pydaos_shim.DER_NONEXIST:
             raise DObjNotFound(name)
         if ret != pydaos_shim.DER_SUCCESS:
             raise PyDError("failed to look up name", ret)
