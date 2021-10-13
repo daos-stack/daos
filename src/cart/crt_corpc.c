@@ -776,6 +776,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 	if (rpc_priv->crp_fail_hlc)
 		D_GOTO(forward_done, rc = -DER_HLC_SYNC);
 
+	D_INFO("AO: before pre-forward for %p\n", rpc_priv);
+
 	/* Invoke pre-forward callback first if it is registered */
 	if (co_ops && co_ops->co_pre_forward) {
 		rc = co_ops->co_pre_forward(&rpc_priv->crp_pub,
@@ -790,6 +792,7 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		}
 	}
 
+	D_INFO("AO: after pre-forward for %p\n", rpc_priv);
 	/*
 	 * Check the self rank after calling the pre-forward callback, which
 	 * might have changed the self rank from CRT_NO_RANK to a valid value.
@@ -822,6 +825,8 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 				children_rank_list->rl_nr;
 	co_info->co_child_ack_num = 0;
 
+	D_INFO("AO: number of children=%d %p\n", co_info->co_child_num, rpc_priv);
+
 	D_DEBUG(DB_TRACE, "group %s grp_rank %d, co_info->co_child_num: %d.\n",
 		co_info->co_grp_priv->gp_pub.cg_grpid,
 		co_info->co_grp_priv->gp_self, co_info->co_child_num);
@@ -842,6 +847,9 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		tgt_ep.ep_rank = children_rank_list->rl_ranks[i];
 		tgt_ep.ep_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 		tgt_ep.ep_grp = &co_info->co_grp_priv->gp_pub;
+
+		D_INFO("AO: child=%d child_rpc=%p target=%d:%d parent_priv=%p\n",
+		       i, child_rpc, tgt_ep.ep_rank, tgt_ep.ep_tag, rpc_priv);
 
 		rc = crt_req_create_internal(rpc_priv->crp_pub.cr_ctx, &tgt_ep,
 					     rpc_priv->crp_pub.cr_opc,
@@ -870,7 +878,11 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		child_rpc_priv->crp_grp_priv = co_info->co_grp_priv;
 
 		RPC_ADDREF(rpc_priv);
+		D_INFO("AO: before sending rpc for %p (priv=%p), parent_priv=%p\n",
+		       child_rpc, child_rpc_priv, rpc_priv);
 		rc = crt_req_send(child_rpc, crt_corpc_reply_hdlr, rpc_priv);
+		D_INFO("AO: after sending rpc for %p, rc=%d parent_priv=%p\n",
+		       child_rpc, rc, rpc_priv);
 		if (rc != 0) {
 			RPC_ERROR(rpc_priv,
 				  "crt_req_send(tgt_ep: %d) failed: "
@@ -891,8 +903,10 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 
 forward_done:
 	/* NOOP bcast (no child and root excluded) */
-	if (co_info->co_child_num == 0 && co_info->co_root_excluded)
+	if (co_info->co_child_num == 0 && co_info->co_root_excluded) {
+		D_INFO("AO: Completing %p\n", rpc_priv);
 		crt_corpc_complete(rpc_priv);
+	}
 
 	if (co_info->co_root_excluded == 1) {
 		if (co_info->co_grp_priv->gp_self == co_info->co_root) {
@@ -902,8 +916,10 @@ forward_done:
 		D_GOTO(out, rc);
 	}
 
+	D_INFO("AO: Invoke local handler for %p\n", rpc_priv);
 	/* invoke RPC handler on local node */
 	rc = crt_rpc_common_hdlr(rpc_priv);
+	D_INFO("AO: local handler finished with rc=%d for %p\n", rc, rpc_priv);
 	if (rc != 0) {
 		RPC_ERROR(rpc_priv, "crt_rpc_common_hdlr failed: "DF_RC"\n",
 			  DP_RC(rc));

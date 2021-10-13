@@ -512,6 +512,8 @@ crt_hg_init(void)
 	log_subsys = getenv("HG_LOG_SUBSYS");
 	log_level = getenv("HG_LOG_LEVEL");
 
+	HG_Set_log_subsys("hg,na");
+
 	if (!log_level)
 		log_level = "warning";
 

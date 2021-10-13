@@ -3267,6 +3267,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 	struct crt_event_cb_priv	*cbs_event;
 	size_t				cbs_size;
 
+	D_INFO("AO: enter group modification version=%d\n", version);
 	grp_priv = crt_grp_pub2priv(grp);
 
 	if (grp_priv == NULL) {
@@ -3318,6 +3319,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 			D_GOTO(cleanup, rc);
 		}
 
+		D_INFO("AO: version=%d Adding rank=%d, uri='%s'\n", version, rank, uris[uri_idx[i]]);
 		/* TODO: Change for multi-provider support */
 		for (k = 0; k < CRT_SRV_CONTEXT_NUM; k++) {
 			rc = grp_lc_uri_insert_internal_locked(grp_priv,
@@ -3344,6 +3346,7 @@ crt_group_primary_modify(crt_group_t *grp, crt_context_t *ctxs, int num_ctxs,
 		rank = to_remove->rl_ranks[i];
 		crt_group_rank_remove_internal(grp_priv, rank);
 
+		D_INFO("AO: version=%d removing rank=%d\n", version, rank);
 		if (grp_priv->gp_auto_remove) {
 			/* Remove rank from associated secondary groups */
 			crt_grp_remove_from_secondaries(grp_priv, rank);
@@ -3372,6 +3375,7 @@ unlock:
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
 out:
+	D_INFO("AO: Exiting update of version=%d, rc=%d\n", version, rc);
 	return rc;
 
 cleanup:
@@ -3388,6 +3392,7 @@ cleanup:
 
 	D_RWLOCK_UNLOCK(&grp_priv->gp_rwlock);
 
+	D_INFO("AO: Exiting update of version=%d, rc=%d\n", version, rc);
 	return rc;
 }
 
