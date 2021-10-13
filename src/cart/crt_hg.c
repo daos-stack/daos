@@ -494,13 +494,13 @@ crt_hg_log(FILE *stream, const char *fmt, ...)
 	return 0;
 }
 
+
 /* to be called only in crt_init */
 int
 crt_hg_init(void)
 {
-	const char	*log_subsys;
-	char		*log_level;
-	int		rc = 0;
+	int	rc = 0;
+	char	*env;
 
 	if (crt_initialized()) {
 		D_ERROR("CaRT already initialized.\n");
@@ -509,17 +509,17 @@ crt_hg_init(void)
 
 	#define EXT_FAC DD_FAC(external)
 
-	log_subsys = getenv("HG_LOG_SUBSYS");
-	log_level = getenv("HG_LOG_LEVEL");
+	env = getenv("HG_LOG_SUBSYS");
+	if (!env) {
+		setenv("HG_LOG_SUBSYS", "hg", 1);
+		HG_Set_log_subsys("hg,na");
+	}
 
-	if (!log_level)
-		log_level = "warning";
-
-	HG_Set_log_level(log_level);
-
-	/* set default subsystem with the provided log level */
-	if (!log_subsys)
-		HG_Util_set_log_level(log_level);
+	env = getenv("HG_LOG_LEVEL");
+	if (!env) {
+		HG_Set_log_level("warning");
+		HG_Util_set_log_level("warning");
+	}
 
 	/* import HG log */
 	hg_log_set_func(crt_hg_log);
