@@ -986,7 +986,7 @@ pipeline {
                     }
                     agent {
                         dockerfile {
-                            filename 'utils/docker/Dockerfile.centos.7'
+                            filename 'utils/docker/Dockerfile.centos.8'
                             label 'docker_runner'
                             additionalBuildArgs dockerBuildArgs(repo_type: 'stable',
                                                                 deps_build: true)
@@ -998,7 +998,7 @@ pipeline {
                                    scons_exe: 'scons-3',
                                    scons_args: "PREFIX=/opt/daos TARGET_TYPE=release BUILD_TYPE=debug",
                                    build_deps: "no"
-                        sh (script:"""./utils/docker_nlt.sh --class-name centos7.fault-injection fi""",
+                        sh (script:"""./utils/docker_nlt.sh --class-name centos8.fault-injection fi""",
                             label: 'Fault injection testing using NLT')
                     }
                     post {
@@ -1018,7 +1018,7 @@ pipeline {
                                                         name: 'Fault injection leaks',
                                                         id: 'NLT_client')]
                             junit testResults: 'nlt-junit.xml'
-                            archiveArtifacts artifacts: 'nlt_logs/centos7.fault-injection/'
+                            archiveArtifacts artifacts: 'nlt_logs/centos8.fault-injection/'
                         }
                     }
                 } // stage('Fault inection testing')
