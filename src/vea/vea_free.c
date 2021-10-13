@@ -104,9 +104,6 @@ dock_entry(struct vea_space_info *vsi, struct vea_entry *entry,
 {
 	int rc = 0;
 
-	if (type == VEA_TYPE_PERSIST)
-		return rc;
-
 	D_ASSERT(entry != NULL);
 	if (type == VEA_TYPE_COMPOUND) {
 		rc = free_class_add(&vsi->vsi_class, entry);
@@ -245,13 +242,13 @@ done:
 	/* Adjust in-tree offset & length */
 	neighbor->vfe_blk_off = merged.vfe_blk_off;
 	neighbor->vfe_blk_cnt = merged.vfe_blk_cnt;
-	/* Only bump age for aging tree */
-	if (type == VEA_TYPE_AGGREGATE)
-		neighbor->vfe_age = merged.vfe_age;
 
-	rc = dock_entry(vsi, neighbor_entry, type);
-	if (rc < 0)
-		return rc;
+	if (type == VEA_TYPE_AGGREGATE || type == VEA_TYPE_COMPOUND) {
+		neighbor->vfe_age = merged.vfe_age;
+		rc = dock_entry(vsi, neighbor_entry, type);
+		if (rc < 0)
+			return rc;
+	}
 
 	return 1;
 }
