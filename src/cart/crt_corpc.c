@@ -848,12 +848,13 @@ crt_corpc_req_hdlr(struct crt_rpc_priv *rpc_priv)
 		tgt_ep.ep_tag = rpc_priv->crp_pub.cr_ep.ep_tag;
 		tgt_ep.ep_grp = &co_info->co_grp_priv->gp_pub;
 
-		D_INFO("AO: child=%d child_rpc=%p target=%d:%d parent_priv=%p\n",
-		       i, child_rpc, tgt_ep.ep_rank, tgt_ep.ep_tag, rpc_priv);
 
 		rc = crt_req_create_internal(rpc_priv->crp_pub.cr_ctx, &tgt_ep,
 					     rpc_priv->crp_pub.cr_opc,
 					     true /* forward */, &child_rpc);
+
+		D_INFO("AO: req_create child=%d child_rpc=%p target=%d:%d parent_priv=%p rc=%d\n",
+		       i, child_rpc, tgt_ep.ep_rank, tgt_ep.ep_tag, rpc_priv, rc);
 		if (rc != 0) {
 			RPC_ERROR(rpc_priv,
 				  "crt_req_create(tgt_ep: %d) failed: "
