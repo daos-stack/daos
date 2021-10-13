@@ -5,7 +5,7 @@ hosts:
     - server-C
   test_clients:
     - client-D
-timeout: 1300
+timeout: 900
 setup:
   start_servers_once: False
 server_config:
@@ -122,4 +122,4 @@ pool_capacity:
   pool_fillup: 60
   pool_test_oclass: RP_2GX
   pool_test_repetitions: 1
-
+  pool_test_timeout: 1300

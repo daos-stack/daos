@@ -331,4 +331,6 @@ class OSAOfflineReintegration(OSAUtils, ServerFillUp):
         self.log.info("Offline Reintegration : Test with less pool space")
         oclass = self.params.get("pool_test_oclass", '/run/pool_capacity/*')
         pool_fillup = self.params.get("pool_fillup", '/run/pool_capacity/*')
+        test_timeout = self.params.get("pool_test_timeout", '/run/pool_capacity/*')
+        self.timeout = test_timeout
         self.run_offline_reintegration_test(1, data=True, oclass=oclass, pool_fillup=pool_fillup)
