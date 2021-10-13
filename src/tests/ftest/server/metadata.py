@@ -362,21 +362,7 @@ class ObjectMetadata(TestWithServers):
 
             # Launch the IOR threads
             self.log.info("Launching %d IOR %s threads", thread_manager.qty, operation)
-            results = thread_manager.run()
-            for key in sorted(results):
-                self.log.info("IOR results from threads that %sED", key)
-                for entry in results[key]:
-                    self.log.info(" command: %s", entry.command)
-                    self.log.info(
-                        " exit_status: %s, duration: %s, interrupted: %s",
-                        entry.exit_status, entry.duration, str(entry.interrupted))
-                    self.log.info(" stdout:")
-                    for line in entry.stdout_text.splitlines():
-                        self.log.info("    %s", line)
-                    self.log.info(" stderr:")
-                    for line in entry.stderr_text.splitlines():
-                        self.log.info("    %s", line)
-            if len(results["FAIL"]) > 0:
+            if thread_manager.check_run():
                 self.d_log.error("IOR {} Thread FAIL".format(operation))
                 self.fail("IOR {} Thread FAIL".format(operation))
 
