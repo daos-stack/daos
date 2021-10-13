@@ -13,7 +13,6 @@ from large_file import DmvrPosixLargeFile
 
 class BasicCheckout(IorSmall, MdtestSmall, ContainerAutotestTest, EcodIor):
     # pylint: disable=too-many-ancestors
-    # pylint: disable=too-many-nested-blocks
     """Test Class Description: Test class wrapping up tests from four
                                different test classes into one. Intent
                                is to run these tests as a basic checkout
@@ -44,6 +43,7 @@ class BasicCheckout(IorSmall, MdtestSmall, ContainerAutotestTest, EcodIor):
         self.test_container_autotest()
 
 class BasicCheckoutDm(DmvrPosixLargeFile):
+    # pylint: disable=too-many-ancestors
     """Test Class Description: Test class to wrap datamover test to
                                run as part of basic checkout and verify
                                connectivity for lustre FS
