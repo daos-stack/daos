@@ -503,7 +503,6 @@ void
 ds_pool_get(struct ds_pool *pool)
 {
 	D_ASSERT(pool != NULL);
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	daos_lru_ref_add(&pool->sp_entry);
 }
 
@@ -511,7 +510,6 @@ void
 ds_pool_put(struct ds_pool *pool)
 {
 	D_ASSERT(pool != NULL);
-	D_ASSERT(dss_get_module_info()->dmi_xs_id == 0);
 	daos_lru_ref_release(pool_cache, &pool->sp_entry);
 }
 
